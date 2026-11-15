@@ -6,6 +6,7 @@ import pytest
 
 from platform_api.app import create_app
 from platform_api.db import Database
+from platform_api.orchestration.n8n_credentials import Scoped, probe
 from platform_api.orchestration.runs import Pending
 from platform_api.orchestration.store import RunRecord, Store
 from platform_api.orchestration.write_actions import (
@@ -14,6 +15,8 @@ from platform_api.orchestration.write_actions import (
     WriteKey,
     digest,
 )
+from platform_api.practice_jira import PracticeJira, practice_reader_token, practice_token
+from platform_api.settings import N8nKey
 from platform_api.shared import ProposalId, RunId
 from tests.practice import BASE, PracticeKit
 from tests.support import ALICE, LOCAL_ENV, NOW, SPEC
@@ -26,6 +29,7 @@ ACTION = WriteAction("jira", "create_ticket", {"project": "MOCK"}, {"title": "Up
 AS_ALICE = {"X-Dev-User": "alice"}
 AS_BOB = {"X-Dev-User": "bob"}
 AS_CAROL = {"X-Dev-User": "carol"}
+SIGNING = "signing-key-for-tests"
 
 
 @pytest.fixture
@@ -146,3 +150,37 @@ async def test_the_practice_jira_refuses_a_bad_date_in_updated_with_jiras_words(
     )
     assert response.status_code == 400
     assert "field 'updated'" in response.text
+
+
+@pytest.mark.parametrize(("reader", "scoped"), [(True, True), (False, False)])
+async def test_the_practice_jira_s_second_account_may_only_browse(
+    db: Database, reader: bool, scoped: bool
+):
+    """The key the platform makes for n8n's own Jira block (ADR 0045). The platform's own account
+    writes tickets, so its token is refused as such a key."""
+    store = PracticeJira(
+        db, practice_token(SIGNING), "http://localhost:8080", practice_reader_token(SIGNING)
+    )
+    app = create_app(LOCAL_ENV)
+    app.state.practice_jira = store
+    token = store.reader_token if reader else store.token
+    assert token is not None
+    url = "http://test/practice-jira"
+    key = N8nKey("jiraSoftwareServerPatApi", {"domain": url, "personalAccessToken": token}, url)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as c:
+        asked = await probe("jira", key, c)
+        assert isinstance(asked, Scoped) is scoped, asked
+        made = await c.post(
+            "/practice-jira/rest/api/2/issue",
+            json={
+                "fields": {
+                    "project": {"key": "MOCK"},
+                    "summary": "x",
+                    "issuetype": {"name": "Task"},
+                }
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert (made.status_code == 403) is reader, "the second account cannot write"

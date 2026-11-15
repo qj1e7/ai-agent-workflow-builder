@@ -54,6 +54,8 @@
     {
       "name": "Mon 8:00",
       "kind": "schedule",
+      "badge": "n8n",
+      "tag": null,
       "next": [
         {
           "exit": null,
@@ -64,6 +66,8 @@
     {
       "name": "Start from the Portal",
       "kind": "start",
+      "badge": "ours",
+      "tag": null,
       "next": [
         {
           "exit": null,
@@ -74,6 +78,8 @@
     {
       "name": "Read release",
       "kind": "read",
+      "badge": "ours",
+      "tag": null,
       "next": [
         {
           "exit": null,
@@ -84,6 +90,8 @@
     {
       "name": "Compare",
       "kind": "agent",
+      "badge": "ours",
+      "tag": null,
       "next": [
         {
           "exit": null,
@@ -94,6 +102,8 @@
     {
       "name": "Newer?",
       "kind": "branch",
+      "badge": "n8n",
+      "tag": null,
       "next": [
         {
           "exit": "true",
@@ -108,6 +118,8 @@
     {
       "name": "Ask for a yes",
       "kind": "ask",
+      "badge": "ours",
+      "tag": null,
       "next": [
         {
           "exit": "Yes",
@@ -122,11 +134,15 @@
     {
       "name": "Create ticket",
       "kind": "write",
+      "badge": "ours",
+      "tag": null,
       "next": []
     },
     {
       "name": "Nothing to change",
       "kind": "end",
+      "badge": "n8n",
+      "tag": null,
       "next": []
     }
   ],

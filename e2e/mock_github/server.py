@@ -43,6 +43,9 @@ N8N_TAGS = ["n8n@2.4.2", "n8n@2.4.1", "n8n@2.4.0", "n8n@2.3.9"]
 LATEST_PUBLISHED = datetime(2026, 10, 28, 9, 0, tzinfo=UTC)
 
 GOOD_TOKEN = "ghp_mock_good_token"
+READER_TOKEN = "mock-github-reader"
+"""The key the platform makes in n8n for n8n's own GitHub block (ADR 0045): a classic token with no
+scope, which GitHub shows as an empty X-OAuth-Scopes."""
 EXPIRING_TOKEN = "ghp_mock_expiring_token"
 TOKEN_EXPIRES = "2026-11-14 09:00:00 UTC"
 """GitHub sends the expiry of a token that has one in this header, in this format."""
@@ -221,10 +224,22 @@ def make_handler(state: State) -> type[BaseHTTPRequestHandler]:
             headers = {EXPIRY_HEADER: TOKEN_EXPIRES} if token == EXPIRING_TOKEN else None
             self.send_json(200, {"resources": {"core": window}, "rate": window}, headers)
 
+        def send_user(self) -> None:
+            """Who a token is, and in X-OAuth-Scopes what a classic token may do, as GitHub says."""
+            auth = self.headers.get("Authorization") or ""
+            token = auth.partition(" ")[2]
+            if token not in (GOOD_TOKEN, READER_TOKEN):
+                self.send_json(401, {"message": "Bad credentials"})
+                return
+            scopes = "repo" if token == GOOD_TOKEN else ""
+            self.send_json(200, {"login": "mock", "id": 1}, {"X-OAuth-Scopes": scopes})
+
         def do_GET(self) -> None:
             url = urlparse(self.path)
             if url.path == "/healthz":
                 self.send_json(200, {"status": "ok"})
+            elif url.path == "/user":
+                self.send_user()
             elif url.path == "/rate_limit":
                 self.send_rate_limit()
             elif url.path == "/_admin/mode":

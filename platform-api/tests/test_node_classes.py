@@ -9,7 +9,13 @@ from typing import Any
 import pytest
 
 from platform_api.orchestration.n8n_schedule import SCHEDULE_TRIGGER
-from platform_api.orchestration.node_classes import CLASS_FILE, NODE_CLASSES, NodeClasses, Off
+from platform_api.orchestration.node_classes import (
+    CLASS_FILE,
+    NODE_CLASSES,
+    NodeClasses,
+    Off,
+    Runs,
+)
 from platform_api.orchestration.workflow_check import TYPE_OF
 from platform_api.pin_check import main as pin_check
 from tests.support import FIXTURES
@@ -62,15 +68,100 @@ def test_n8n_loads_our_pack_n8n_s_triggers_and_flow_nodes_and_its_data_nodes_and
     } < included
     assert not OFF & included
     assert set(the_file()) > OFF, "each is named off, with why"
-    assert len(included) == 31
+    assert included > SYSTEMS
+    assert len(included) == 37
 
 
-def test_n8n_also_loads_the_ai_tool_it_makes_from_date_and_time_which_is_off():
+SYSTEMS = {
+    f"n8n-nodes-base.{name}"
+    for name in ("jira", "github", "microsoftTeams", "microsoftOutlook", "gmail", "slack")
+}
+"""n8n's own nodes for outside systems that may read or post a notice (ADR 0045, E16)."""
+
+
+def test_n8n_also_loads_the_ai_tools_it_makes_and_each_is_off():
     """n8n makes a tool of each node marked usable by an AI agent after NODES_INCLUDE has picked
-    the nodes, so the list cannot leave it out. It has no main input, and AI agents are off."""
-    tool = "n8n-nodes-base.dateTimeTool"
-    assert set(NODE_CLASSES.loaded()) - set(NODE_CLASSES.included()) == {tool}
-    assert isinstance(NODE_CLASSES.verdict(tool, 2, {}), Off)
+    the nodes, so the list cannot leave it out. AI agents are off (ADR 0023)."""
+    made = set(NODE_CLASSES.loaded()) - set(NODE_CLASSES.included())
+    hitl = {f"{name}HitlTool" for name in SYSTEMS if "jira" not in name and "github" not in name}
+    tools = {f"{name}Tool" for name in SYSTEMS}
+    assert made == {"n8n-nodes-base.dateTimeTool", *tools, *hitl}
+    for tool in made:
+        assert isinstance(NODE_CLASSES.verdict(tool, 2, {}), Off)
+
+
+@pytest.mark.parametrize(
+    ("node_type", "version", "parameters", "on"),
+    [
+        ("jira", 1, {"operation": "getAll"}, "read"),
+        ("jira", 1, {"resource": "issueComment", "operation": "getAll"}, "read"),
+        ("github", 1.1, {"resource": "release", "operation": "getAll"}, "read"),
+        ("github", 1, {"resource": "repository"}, "read"),
+        ("slack", 2.7, {}, "notice"),
+        ("slack", 2, {"resource": "message", "operation": "post"}, "notice"),
+        ("microsoftTeams", 2, {"resource": "channelMessage", "operation": "create"}, "notice"),
+        ("microsoftOutlook", 2, {"operation": "send"}, "notice"),
+        ("gmail", 2.2, {"resource": "message", "operation": "send"}, "notice"),
+    ],
+)
+def test_a_system_block_runs_for_what_its_row_classes(
+    node_type: str, version: float, parameters: dict[str, Any], on: str
+):
+    verdict = NODE_CLASSES.verdict(f"n8n-nodes-base.{node_type}", version, parameters)
+    assert isinstance(verdict, Runs) and verdict.on == on
+    assert verdict.use is not None and verdict.use.approvers_min == 1
+
+
+@pytest.mark.parametrize(
+    ("node_type", "version", "parameters", "off"),
+    [
+        ("jira", 1, {}, Off("operation", "issue create")),
+        ("jira", 1, {"operation": "update"}, Off("operation", "issue update")),
+        ("jira", 1, {"resource": "issueComment"}, Off("operation", "issueComment add")),
+        ("jira", 1, {"resource": "user", "operation": "delete"}, Off("operation", "user delete")),
+        ("jira", 1, {"operation": "={{ $json.op }}"}, Off("expression", "={{ $json.op }}")),
+        (
+            "jira",
+            1,
+            {"resource": "={{ 'issue' }}", "operation": "get"},
+            Off("expression", "={{ 'issue' }}"),
+        ),
+        ("jira", 1, {"resource": "sprint", "operation": "get"}, Off("operation", "sprint")),
+        ("github", 1, {}, Off("operation", "issue create")),
+        (
+            "github",
+            1,
+            {"resource": "workflow", "operation": "dispatch"},
+            Off("operation", "workflow dispatch"),
+        ),
+        ("slack", 2.7, {"operation": "update"}, Off("operation", "message update")),
+        ("slack", 2.7, {"operation": "sendAndWait"}, Off("operation", "message sendAndWait")),
+        (
+            "slack",
+            2.7,
+            {"resource": "channel", "operation": "archive"},
+            Off("operation", "channel archive"),
+        ),
+        ("slack", 1, {}, Off("version", "1")),
+        ("microsoftTeams", 2, {}, Off("operation", "channel create")),
+        ("microsoftTeams", 1.1, {"resource": "channelMessage"}, Off("version", "1.1")),
+        ("microsoftOutlook", 2, {"operation": "delete"}, Off("operation", "message delete")),
+        ("gmail", 2.1, {"operation": "reply"}, Off("operation", "message reply")),
+        ("jira", 1, {"resource": "__CUSTOM_API_CALL__"}, Off("operation", "__CUSTOM_API_CALL__")),
+        (
+            "github",
+            1,
+            {"resource": "release", "operation": "__CUSTOM_API_CALL__"},
+            Off("operation", "release __CUSTOM_API_CALL__"),
+        ),
+    ],
+)
+def test_a_system_block_is_off_for_anything_else(
+    node_type: str, version: float, parameters: dict[str, Any], off: Off
+):
+    """A write on a node classed for reads, or anything its row leaves off, is off, and so is an
+    expression where it picks what it does, which could pick a write when it runs."""
+    assert NODE_CLASSES.verdict(f"n8n-nodes-base.{node_type}", version, parameters) == off
 
 
 def test_the_schedule_block_is_the_type_the_schedule_reader_knows():
@@ -117,6 +208,28 @@ def whole_where_n8n_picks(raw: Raw) -> None:
     raw["n8n-nodes-base.dateTime"]["rows"][0] = {"versions": [2], "class": "read"}
 
 
+def drop_a_resource_operation(raw: Raw) -> None:
+    del raw["n8n-nodes-base.jira"]["rows"][0]["resources"]["issue"]["operations"]["notify"]
+
+
+def drop_a_resource(raw: Raw) -> None:
+    del raw["n8n-nodes-base.slack"]["rows"][0]["resources"]["star"]
+
+
+def change_a_resource_default(raw: Raw) -> None:
+    raw["n8n-nodes-base.slack"]["rows"][0]["resources"]["message"]["default"] = "delete"
+
+
+def by_operation_only(raw: Raw) -> None:
+    row = raw["n8n-nodes-base.gmail"]["rows"][0]
+    message = row.pop("resources")["message"]
+    row.update(by="operation", default=message["default"], operations=message["operations"])
+
+
+def drop_a_made_system_tool(raw: Raw) -> None:
+    del raw["n8n-nodes-base.slackTool"]
+
+
 @pytest.mark.parametrize(
     ("change", "says"),
     [
@@ -132,6 +245,11 @@ def whole_where_n8n_picks(raw: Raw) -> None:
             "n8n-nodes-base.dateTime version 2 picks what it does by operation",
         ),
         (drop_the_made_tool, "n8n loads n8n-nodes-base.dateTimeTool, which the class file"),
+        (drop_a_resource_operation, "n8n-nodes-base.jira version 1 issue can notify, which"),
+        (drop_a_resource, "n8n-nodes-base.slack version 2.7 can star, which the class"),
+        (change_a_resource_default, "n8n's default for n8n-nodes-base.slack version 2 message"),
+        (by_operation_only, "n8n-nodes-base.gmail version 2.2 picks what it does by resource"),
+        (drop_a_made_system_tool, "n8n loads n8n-nodes-base.slackTool, which the class file"),
     ],
     ids=[
         "an-operation",
@@ -143,6 +261,11 @@ def whole_where_n8n_picks(raw: Raw) -> None:
         "a-default",
         "a-whole-class",
         "a-type-n8n-makes",
+        "a-resource-s-operation",
+        "a-resource",
+        "a-resource-s-default",
+        "an-operation-without-its-resource",
+        "a-system-tool-n8n-makes",
     ],
 )
 def test_the_pin_check_fails_when_the_file_and_the_image_disagree(
@@ -232,6 +355,51 @@ def default_unclassed(raw: Raw) -> None:
     raw["n8n-nodes-base.executionData"]["rows"][0]["default"] = "load"
 
 
+def slack_writes(raw: Raw) -> None:
+    raw["n8n-nodes-base.slack"]["rows"][0]["resources"]["message"]["operations"]["update"] = "write"
+
+
+def a_notice_without_its_place(raw: Raw) -> None:
+    raw["n8n-nodes-base.slack"]["rows"][0]["target"] = []
+
+
+def a_notice_without_its_text(raw: Raw) -> None:
+    """The checker reads every word a notice says, so a notice row names where its words are."""
+    raw["n8n-nodes-base.microsoftTeams"]["rows"][0]["text"] = []
+
+
+def reads_and_notices_in_one_row(raw: Raw) -> None:
+    raw["n8n-nodes-base.slack"]["rows"][0]["resources"]["message"]["operations"]["search"] = "read"
+
+
+def a_system_block_that_says_nothing(raw: Raw) -> None:
+    row = raw["n8n-nodes-base.jira"]["rows"][0]
+    for name in ("tag", "says", "target", "approvers_min"):
+        del row[name]
+
+
+def a_tag_without_the_rest(raw: Raw) -> None:
+    del raw["n8n-nodes-base.github"]["rows"][0]["says"]
+
+
+def a_shape_that_says(raw: Raw) -> None:
+    raw["n8n-nodes-base.limit"]["rows"][0].update(
+        tag="Posts", says="Posts", target=["x"], approvers_min=1
+    )
+
+
+def three_approvers(raw: Raw) -> None:
+    raw["n8n-nodes-base.jira"]["rows"][0]["approvers_min"] = 3
+
+
+def a_resource_default_unclassed(raw: Raw) -> None:
+    raw["n8n-nodes-base.jira"]["rows"][0]["default"] = "sprint"
+
+
+def picked_by_three(raw: Raw) -> None:
+    raw["n8n-nodes-base.jira"]["rows"][0]["by"] = ["resource", "mode"]
+
+
 @pytest.mark.parametrize(
     "change",
     [
@@ -245,6 +413,16 @@ def default_unclassed(raw: Raw) -> None:
         twice,
         default_unclassed,
         made_from_an_off_type,
+        slack_writes,
+        a_notice_without_its_place,
+        a_notice_without_its_text,
+        reads_and_notices_in_one_row,
+        a_system_block_that_says_nothing,
+        a_tag_without_the_rest,
+        a_shape_that_says,
+        three_approvers,
+        a_resource_default_unclassed,
+        picked_by_three,
     ],
 )
 def test_the_file_may_not_break_a_safety_rule(change: Callable[[Raw], None], tmp_path: Path):

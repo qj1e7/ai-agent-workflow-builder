@@ -18,12 +18,17 @@ from platform_api.orchestration import (
 )
 from platform_api.orchestration.workflow_check import ERROR_WORKFLOW as ERROR_WORKFLOW_NAME
 from platform_api.orchestration.workflow_check import (
+    OURS_FIRST,
     PLATFORM_SHAPES,
     SELF_TEST,
     check_platform,
     platform_document,
+    unchecked,
 )
 from tests.support import FIXTURES, TEAM_ZONE
+
+PAT = "jiraSoftwareServerPatApi"
+"""The credential type of a Data Center personal access token."""
 
 GOLDEN = Path(__file__).parent / "golden" / "n8n"
 PACK = FIXTURES.parent / "n8n" / "node-types.json"
@@ -510,3 +515,341 @@ def test_a_platform_workflow_out_of_shape_is_named(
     findings = check_platform(document, ERROR_WORKFLOW, TEAM_ZONE)
     assert findings and all(f.grade == "needs_a_fix" for f in findings)
     assert any(says in f.text for f in findings), [f.text for f in findings]
+
+
+SLACK_KEY = "wab-slack-send"
+JIRA_KEY = "wab-jira-read"
+KEYS_MADE = {SLACK_KEY: "slackApi", JIRA_KEY: PAT}
+"""The keys the platform made in n8n, by id, with each one's n8n credential type."""
+
+
+def release_notice() -> Doc:
+    """The release check that tells Slack, from n8n's own Slack block (tests/test_layout.py)."""
+    return json.loads((GOLDEN / "release_notice.json").read_text())
+
+
+def with_keys(keys: dict[str, str] | None = None) -> KnownOptions:
+    return KnownOptions(
+        frozenset({"crd_version_checker"}),
+        {"github_releases": frozenset({"langchain-ai/langgraph"})},
+        {},
+        {"crd_version_checker": {"GitHub repository": None, "Jira project": None}},
+        KEYS_MADE if keys is None else keys,
+    )
+
+
+def notice_findings(document: Doc, keys: dict[str, str] | None = None) -> list[tuple[str, bool]]:
+    graded = grade(document, ERROR_WORKFLOW, TEAM_ZONE, with_keys(keys))
+    return [(f.text, f.runs_anyway) for f in graded.findings]
+
+
+def jira_read(document: Doc, parameters: dict[str, Any], key: str = JIRA_KEY) -> Doc:
+    with_block(document, "n8n-nodes-base.jira", "Read tickets", "Compare", 1, parameters)
+    node(document, "Read tickets")["credentials"] = {PAT: {"id": key, "name": "Jira"}}
+    return document
+
+
+def test_a_slack_notice_with_the_platform_s_key_and_a_fixed_channel_is_safe() -> None:
+    assert notice_findings(release_notice()) == []
+
+
+def test_a_jira_read_with_the_platform_s_key_is_safe() -> None:
+    reads = jira_read(release_notice(), {"jiraVersion": "serverPat", "operation": "getAll"})
+    assert notice_findings(reads) == []
+
+
+@pytest.mark.parametrize(
+    ("channel", "where"),
+    [
+        ({"__rl": True, "value": "={{ $json.channel }}", "mode": "id"}, "channelId"),
+        ("={{ 'user' }}", "select"),
+    ],
+    ids=["a-channel", "who-it-posts-to"],
+)
+def test_a_notice_to_a_place_an_expression_picks_is_off(channel: Any, where: str) -> None:
+    """The Tell rule (ADR 0045, section 4): a notice posts only to a place written in the block.
+    n8n would post it all the same, so it runs anyway and is never set up or turned on."""
+    document = release_notice()
+    node(document, "Tell Slack")["parameters"][where] = channel
+    assert notice_findings(document) == [
+        ('"Tell Slack" posts to a place an expression picks, so it is off.', True)
+    ]
+
+
+@pytest.mark.parametrize(
+    ("where", "value"),
+    [
+        ("text", "={{ $json.summary }} {{ $json.newer }}"),
+        ("text", "={{ '<!' + 'channel>' }}"),
+        ("blocksUi", "={{ JSON.stringify($json.blocks) }}"),
+        ("attachments", [{"text": "={{ $json.summary }}"}]),
+    ],
+    ids=["from-the-run", "built-to-hide-a-mention", "blocks", "an-attachment"],
+)
+def test_a_notice_written_with_an_expression_is_off(where: str, value: Any) -> None:
+    """n8n notice text is written out in this release, so the checker reads every word before
+    anything runs. A notice that says what a run read goes through our Tell."""
+    document = release_notice()
+    node(document, "Tell Slack")["parameters"][where] = value
+    assert notice_findings(document) == [
+        (
+            '"Tell Slack" writes its message with an expression, so it is off. Use our Tell for '
+            "that.",
+            True,
+        )
+    ]
+
+
+def test_a_notice_whose_blocks_the_checker_can_t_read_is_off() -> None:
+    document = release_notice()
+    node(document, "Tell Slack")["parameters"]["blocksUi"] = '{"blocks": [<!channel>'
+    assert notice_findings(document) == [
+        ('"Tell Slack" has a message the checker can\'t read, so it is off.', True)
+    ]
+
+
+def test_an_email_s_copy_to_an_address_an_expression_picks_is_off() -> None:
+    document = release_notice()
+    with_block(
+        document,
+        "n8n-nodes-base.microsoftOutlook",
+        "Email",
+        "Newer?",
+        2,
+        {
+            "operation": "send",
+            "toRecipients": "team@codesparks.test",
+            "additionalFields": {"ccRecipients": "={{ $json.who }}"},
+        },
+    )
+    assert ('"Email" posts to a place an expression picks, so it is off.', True) in (
+        notice_findings(document)
+    )
+
+
+@pytest.mark.parametrize(
+    ("parameters", "says"),
+    [
+        ({"operation": "create"}, '"Read tickets" does something that is off: issue create.'),
+        ({}, '"Read tickets" does something that is off: issue create.'),
+        (
+            {"resource": "issueComment", "operation": "add"},
+            '"Read tickets" does something that is off: issueComment add.',
+        ),
+        (
+            {"operation": "={{ $json.what }}"},
+            '"Read tickets" picks what it does with an expression, so it is off.',
+        ),
+        (
+            {"resource": "={{ 'user' }}", "operation": "get"},
+            '"Read tickets" picks what it does with an expression, so it is off.',
+        ),
+    ],
+    ids=[
+        "a-write",
+        "n8n-s-default-a-write",
+        "a-comment",
+        "an-operation-expression",
+        "a-resource-expression",
+    ],
+)
+def test_a_write_or_an_expression_on_a_block_classed_to_read_is_off(
+    parameters: dict[str, Any], says: str
+) -> None:
+    """n8n's allow list is by type, so it would run the Jira block's write: the finding runs
+    anyway, and the platform's own key could not write anyway (ADR 0045)."""
+    assert notice_findings(jira_read(release_notice(), parameters)) == [(says, True)]
+
+
+def test_a_key_the_platform_did_not_make_needs_a_fix_that_runs_anyway() -> None:
+    """In the platform's project n8n lets a workflow use every key there is, a member's too, so
+    this is the guard (ENGINE-PLAN E15's review)."""
+    document = release_notice()
+    node(document, "Tell Slack")["credentials"] = {"slackApi": {"id": "aliceSlack", "name": "Mine"}}
+    assert notice_findings(document) == [
+        ('"Tell Slack" does not use the platform\'s key.', False),
+        ('"Tell Slack" uses a key the platform did not make.', True),
+    ]
+    reads = jira_read(release_notice(), {"operation": "get"}, key="aliceJira")
+    assert ('"Read tickets" uses a key the platform did not make.', True) in notice_findings(reads)
+
+
+def test_a_key_named_by_name_only_is_not_the_platform_s() -> None:
+    document = release_notice()
+    node(document, "Tell Slack")["credentials"] = {"slackApi": {"name": "The platform's Slack key"}}
+    assert ('"Tell Slack" uses a key the platform did not make.', True) in notice_findings(document)
+
+
+def test_without_the_platform_s_keys_every_key_is_someone_else_s() -> None:
+    """Fail closed: a grade that is not told the platform's keys trusts none."""
+    graded = grade(release_notice(), ERROR_WORKFLOW, TEAM_ZONE)
+    assert [f.text for f in graded.findings] == [
+        '"Tell Slack" has no key: the platform has none for it.',
+        '"Tell Slack" uses a key the platform did not make.',
+    ]
+    assert graded.grade == "needs_a_fix"
+
+
+def test_a_platform_key_in_another_block_s_slot_needs_a_fix() -> None:
+    """n8n refuses to run it, so it needs a fix but does not run anyway."""
+    document = release_notice()
+    node(document, "Tell Slack")["credentials"] = {"slackOAuth2Api": {"id": SLACK_KEY, "name": "x"}}
+    assert notice_findings(document) == [
+        ('"Tell Slack" uses a platform key made for another block.', False)
+    ]
+
+
+def test_a_key_on_one_of_our_own_blocks_is_not_the_platform_s_either() -> None:
+    document = release_notice()
+    node(document, "Compare")["credentials"] = {"slackApi": {"id": "aliceSlack", "name": "x"}}
+    assert ('"Compare" uses a key the platform did not make.', True) in notice_findings(document)
+
+
+def test_a_block_n8n_does_not_load_needs_a_fix_but_never_runs() -> None:
+    document = with_block(release_notice(), "n8n-nodes-base.httpRequest", "Post it", "Newer?", 4.2)
+    assert notice_findings(document) == [
+        ('"Post it" uses a block that is off: n8n-nodes-base.httpRequest.', False)
+    ]
+
+
+@pytest.mark.parametrize(
+    ("block_type", "version"),
+    [
+        ("n8n-nodes-base.slack", 1),
+        ("n8n-nodes-base.microsoftTeams", 1.1),
+        ("n8n-nodes-base.gmail", 1),
+    ],
+)
+def test_an_older_version_of_a_system_block_is_off_and_runs_anyway(
+    block_type: str, version: float
+) -> None:
+    document = with_block(release_notice(), block_type, "Old", "Newer?", version)
+    assert notice_findings(document) == [
+        (f'"Old" uses version {version:g} of {block_type}, which is off.', True)
+    ]
+
+
+def test_a_block_for_a_system_with_no_platform_key_needs_a_fix() -> None:
+    """Teams, Outlook and Gmail have no key the platform can hold (ADR 0045, as amended), so their
+    blocks cannot run. A refused or missing Slack key leaves Slack's the same."""
+    document = with_block(
+        release_notice(),
+        "n8n-nodes-base.microsoftTeams",
+        "Tell Teams",
+        "Newer?",
+        2,
+        {
+            "resource": "channelMessage",
+            "teamId": {"__rl": True, "value": "T1", "mode": "id"},
+            "channelId": {"__rl": True, "value": "C1", "mode": "id"},
+        },
+    )
+    assert notice_findings(document) == [
+        ('"Tell Teams" has no key: the platform has none for it.', False)
+    ]
+    assert notice_findings(release_notice(), {JIRA_KEY: PAT}) == [
+        ('"Tell Slack" has no key: the platform has none for it.', False),
+        ('"Tell Slack" uses a key the platform did not make.', True),
+    ]
+
+
+def test_a_block_with_its_key_taken_off_does_not_use_the_platform_s_key() -> None:
+    document = release_notice()
+    del node(document, "Tell Slack")["credentials"]
+    assert notice_findings(document) == [('"Tell Slack" does not use the platform\'s key.', False)]
+
+
+FIRST = '"{}" runs before any of our steps. Add one of our steps first, so each run is recorded.'
+
+
+def test_one_of_n8n_s_blocks_before_any_of_ours_needs_a_fix_that_runs_anyway() -> None:
+    """Our first block links the run, so it is recorded and shown, and checks the version before
+    n8n reads or posts anything (ADR 0045, as amended)."""
+    document = release_notice()
+    link(document, "Start from the Portal", "Tell Slack")
+    assert notice_findings(document) == [(FIRST.format("Tell Slack"), True)]
+    reads_first = jira_read(release_notice(), {"operation": "getAll"})
+    assert notice_findings(reads_first) == [], "after Read release and Compare"
+    link(reads_first, "Daily 8:00", "Read tickets")
+    assert notice_findings(reads_first) == [(FIRST.format("Read tickets"), True)], (
+        "every way from a trigger counts, the schedule's too"
+    )
+
+
+@pytest.mark.parametrize(
+    ("where", "value"),
+    [
+        ("text", "New release <!channel>"),
+        ("text", "Look <!HERE|here>"),
+        ("text", "heads up @everyone"),
+        ("text", "heads up \uff20channel"),
+        ("blocksUi", '{"blocks": [{"type": "section", "text": {"text": "\\u003c!everyone>"}}]}'),
+        ("attachments", [{"text": "@channel look"}]),
+        ("text", "Look <!subteam^S0123|@devs>"),
+        ("blocksUi", '{"blocks": [{"type": "section", "text": {"text": "<!subteam^S1>"}}]}'),
+    ],
+    ids=[
+        "channel",
+        "here-in-capitals",
+        "at-everyone",
+        "full-width-at",
+        "in-blocks",
+        "attached",
+        "a-user-group",
+        "a-user-group-in-blocks",
+    ],
+)
+def test_a_notice_that_calls_out_a_whole_channel_is_off(where: str, value: Any) -> None:
+    """The Tell rule: a notice tells the people it is for, never a whole channel at once."""
+    document = release_notice()
+    node(document, "Tell Slack")["parameters"][where] = value
+    assert notice_findings(document) == [
+        ('"Tell Slack" calls out a whole channel, so it is off.', True)
+    ]
+
+
+@pytest.mark.parametrize("switch", [True, "={{ true }}"], ids=["on", "an-expression"])
+def test_a_notice_that_links_names_is_off(switch: Any) -> None:
+    """Slack's link_names turns a written @channel into a call to everyone in it."""
+    document = release_notice()
+    node(document, "Tell Slack")["parameters"]["otherOptions"] = {"link_names": switch}
+    assert notice_findings(document) == [
+        ('"Tell Slack" calls out a whole channel, so it is off.', True)
+    ]
+
+
+def test_a_notice_that_names_one_person_or_leaves_link_names_off_is_fine() -> None:
+    document = release_notice()
+    parameters = node(document, "Tell Slack")["parameters"]
+    parameters["text"] = "<@U123> the release is out, see #releases"
+    parameters["otherOptions"] = {"link_names": False}
+    assert notice_findings(document) == []
+
+
+def test_unchecked_names_only_what_n8n_would_run_whatever_the_platform_says() -> None:
+    """The invariant (ADR 0045, as amended): no version with one of these is live in the
+    platform's n8n project, and no draft with one is run."""
+    assert unchecked(release_notice(), KEYS_MADE) == ()
+    document = release_notice()
+    node(document, "Tell Slack")["parameters"]["operation"] = "delete"
+    node(document, "Compare")["credentials"] = {"slackApi": {"id": "aliceSlack", "name": "x"}}
+    with_block(document, "n8n-nodes-base.httpRequest", "Post it", "Newer?", 4.2)
+    assert [f.text for f in unchecked(document, KEYS_MADE)] == [
+        '"Tell Slack" does something that is off: message delete.',
+        '"Compare" uses a key the platform did not make.',
+    ], "a block n8n does not load never runs, so it is not one"
+
+
+def test_unchecked_counts_a_block_before_ours_and_a_key_the_platform_no_longer_holds() -> None:
+    document = release_notice()
+    first = next(n["name"] for n in document["nodes"] if n["type"].endswith("scheduleTrigger"))
+    link(document, first, "Tell Slack")
+    assert [f.text for f in unchecked(document, {})] == [
+        '"Tell Slack" uses a key the platform did not make.',
+        f'"Tell Slack" runs before any of our steps. {OURS_FIRST}',
+    ]
+
+
+def test_a_document_the_checker_can_t_read_counts_as_unchecked() -> None:
+    [found] = unchecked({"nodes": "not a list"}, KEYS_MADE)
+    assert found.runs_anyway

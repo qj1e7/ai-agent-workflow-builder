@@ -86,14 +86,28 @@ class N8nExitView(WireModel):
     to: str = Field(description="The block it leads to, by name.")
 
 
+type N8nBadge = Literal["ours", "n8n"]
+
+
 class N8nBlockView(WireModel):
     name: str = Field(description="The block's name, as n8n, the canvas and the run line show it.")
     kind: N8nBlockKind = Field(
         description="What the block does: schedule, start (Start from the Portal), manual and "
         "error start a run; read, agent, propose, ask (Ask for a yes), write (Make the approved "
         "changes), tell and report are our blocks; branch (IF), merge and end (No Op) are n8n's; "
-        "other is one of n8n's data blocks; off is a block the class file turns off or does not "
-        "know, which never runs."
+        "other is one of n8n's own blocks that shapes the data, reads a system or posts a notice, "
+        "as its tag says; off is a block the class file turns off, or does not know, for what it "
+        "is or what it was asked to do."
+    )
+    badge: N8nBadge = Field(
+        default="ours",
+        description="ours for a block of our node pack, which the sketch badges Our block; n8n "
+        "for one of n8n's own, badged n8n block (ADR 0045, section 3).",
+    )
+    tag: str | None = Field(
+        default=None,
+        description="What one of n8n's own blocks does, by its class: Reads Jira, Posts in Slack, "
+        "Shapes the data. Null for our blocks and n8n's flow blocks, and for a block that is off.",
     )
     next: list[N8nExitView] = Field(description="Where each of its exits leads.")
 

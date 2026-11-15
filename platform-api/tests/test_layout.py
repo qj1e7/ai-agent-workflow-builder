@@ -16,9 +16,12 @@ from platform_api.builder.layout import (
     CREATE_TICKET,
     NEWER,
     LayoutPlan,
+    N8nBlock,
     PlannedAgent,
     agent_cards,
     lay_out,
+    release_notice,
+    slack_notice,
     watchlist,
 )
 from platform_api.builder.n8n_draft import (
@@ -29,7 +32,14 @@ from platform_api.builder.n8n_draft import (
     DraftRefused,
     check_draft,
 )
-from platform_api.orchestration import ASK_EXITS, Schedule, grade
+from platform_api.orchestration import (
+    ASK_EXITS,
+    KEYS,
+    KnownOptions,
+    Schedule,
+    grade,
+    unpinned_notices,
+)
 from tests.support import TEAM_ZONE
 
 GOLDEN = Path(__file__).parent / "golden" / "n8n"
@@ -199,3 +209,76 @@ def test_a_write_the_checker_cannot_put_behind_one_yes_is_never_saved() -> None:
     refused = check_draft(laid, RELEASE_CHECK.use_case_id, ERROR_WORKFLOW, TEAM_ZONE)
     assert isinstance(refused, DraftRefused)
     assert {f.grade for f in refused.findings} == {"needs_a_fix"}
+
+
+SLACK = slack_notice("Tell Slack", "C0123ABCD", "A newer LangGraph release is out.")
+PLATFORM_KEYS = KnownOptions(
+    frozenset({VERSION_CHECKER_ID}),
+    {"github_releases": frozenset({"langchain-ai/langgraph"})},
+    {},
+    {VERSION_CHECKER_ID: {"GitHub repository": None, "Jira project": None}},
+    {KEYS["slack"].id: "slackApi"},
+)
+"""What the editor lists, and the key the platform made for Slack."""
+
+
+def test_the_release_check_may_tell_slack_with_the_platform_s_key_and_needs_no_yes() -> None:
+    """n8n's own Slack block posts to the channel written in it, with the key the platform made,
+    and changes no data, so the checker adds no yes and grades it safe (ADR 0045)."""
+    laid = release_notice(RELEASE_CHECK, "langchain-ai/langgraph", "MOCK", SLACK)
+    checked = check_draft(laid, RELEASE_CHECK.use_case_id, ERROR_WORKFLOW, TEAM_ZONE, PLATFORM_KEYS)
+    assert isinstance(checked, Checked), checked
+    matches_golden("release_notice", checked.document)
+    [slack] = [n for n in checked.document["nodes"] if n["name"] == "Tell Slack"]
+    assert slack["type"] == "n8n-nodes-base.slack"
+    assert slack["credentials"] == {
+        "slackApi": {"id": "wab-slack-send", "name": KEYS["slack"].name}
+    }
+    assert "retryOnFail" not in slack, "a retried post would post twice"
+    assert (NEWER, 0, "Tell Slack") in edges(checked.document)
+    kinds = {node["type"] for node in checked.document["nodes"]}
+    assert "CUSTOM.wabAskForYes" not in kinds
+    assert checked.lines == (
+        ("check", FIT),
+        ("note", 'A test run skips "Tell Slack", so it posts nothing.'),
+    )
+    assert checked.document["pinData"] == {
+        "Tell Slack": [{"json": {"skipped": "Slack notice skipped in the test run."}}]
+    }, "n8n uses the pinned output in a run by hand, a test run, and ignores it in every other run"
+    assert unpinned_notices(checked.document) == []
+    del checked.document["pinData"]
+    assert unpinned_notices(checked.document) == ["Tell Slack"]
+
+
+def test_without_the_platform_s_key_the_slack_notice_is_never_saved() -> None:
+    laid = release_notice(RELEASE_CHECK, "langchain-ai/langgraph", "MOCK", SLACK)
+    refused = check_draft(laid, RELEASE_CHECK.use_case_id, ERROR_WORKFLOW, TEAM_ZONE)
+    assert isinstance(refused, DraftRefused)
+    assert [f.text for f in refused.findings] == [
+        '"Tell Slack" has no key: the platform has none for it.',
+        '"Tell Slack" uses a key the platform did not make.',
+    ]
+
+
+@pytest.mark.parametrize(
+    "parameters",
+    [
+        {"operation": "delete"},
+        {
+            "select": "channel",
+            "channelId": {"__rl": True, "value": "={{ $json.to }}", "mode": "id"},
+        },
+    ],
+    ids=["a-delete", "a-channel-an-expression-picks"],
+)
+def test_a_layout_never_places_an_n8n_block_that_is_off_or_breaks_the_tell_rule(
+    parameters: dict[str, Any],
+) -> None:
+    off = N8nBlock("Off", "n8n-nodes-base.slack", 2.7, parameters, KEYS["slack"], "slackApi")
+    if "operation" in parameters:
+        with pytest.raises(ValueError):
+            release_notice(RELEASE_CHECK, "langchain-ai/langgraph", "MOCK", off)
+        return
+    laid = release_notice(RELEASE_CHECK, "langchain-ai/langgraph", "MOCK", off)
+    refused = check_draft(laid, RELEASE_CHECK.use_case_id, ERROR_WORKFLOW, TEAM_ZONE, PLATFORM_KEYS)
+    assert isinstance(refused, DraftRefused)

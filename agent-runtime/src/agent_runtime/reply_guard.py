@@ -328,6 +328,13 @@ def _found(pattern: re.Pattern[str]) -> Callable[[str], bool]:
     return lambda text: pattern.search(text) is not None
 
 
+def _n8n_block(system: str) -> Callable[[str], bool]:
+    """n8n's own block for a system, which someone adds in n8n, never from the chat."""
+    return _found(
+        re.compile(rf"\bn8n\b[^.?!]{{0,20}}\b{system}\s+(?:blocks?|nodes?)\b", re.IGNORECASE)
+    )
+
+
 NOT_READY: Final[dict[str, Callable[[str], bool]]] = {
     "jira.find_by_detail": _field_named,
     "jira.find_older": _found(PAST_THE_NEWEST),
@@ -393,6 +400,12 @@ NOT_READY: Final[dict[str, Callable[[str], bool]]] = {
             re.IGNORECASE,
         )
     ),
+    "jira.block_read": _n8n_block("jira"),
+    "github.block_read": _n8n_block("github"),
+    "slack.post": _n8n_block("slack"),
+    "teams.block_post": _n8n_block("teams"),
+    "outlook.send": _n8n_block("outlook"),
+    "gmail.send": _n8n_block("gmail"),
 }
 """For each capability the registry marks Planned or Unsupported, whether a piece of text names
 it. A test holds this table to the registry, so a new entry can't be left out."""

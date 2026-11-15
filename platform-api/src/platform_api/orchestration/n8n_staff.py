@@ -15,7 +15,7 @@ import logging
 from collections.abc import Awaitable, Callable, Iterable, Mapping
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
-from typing import Any, Literal
+from typing import Any, Literal, Protocol
 from urllib.parse import urlsplit, urlunsplit
 
 import httpx
@@ -44,6 +44,13 @@ NO_ADDRESS = (
     "Set your n8n password first. Your link can't be shown until the platform knows n8n's "
     "address. Ask the person who runs the platform to set it."
 )
+
+
+class Quarantine(Protocol):
+    async def quarantine(self, project: str, n8n_user_id: str) -> list[str]:
+        """Notes the keys in this space, which n8n moves to the platform's project as the account
+        ends, so the credential sweep keeps them there unused, never as the platform's."""
+        ...
 
 
 @dataclass(frozen=True)
@@ -195,12 +202,15 @@ class StaffAccounts:
         box: KeyBox | None,
         switched_on: bool,
         editor_url: str | None = None,
+        keys: Quarantine | None = None,
     ) -> None:
         self._db = db
         self._api = api
         self._box = box
         self._switched_on = switched_on
         self.editor_url = editor_url
+        self.keys = keys
+        """The platform's keys in n8n, so the keys an ending account leaves are kept unused."""
         self._lock = asyncio.Lock()
         self._nudged = asyncio.Event()
 
@@ -448,6 +458,15 @@ class StaffAccounts:
             log.warning("could not note what an ending n8n account made: %s", type(error).__name__)
             return
         await self.note_made(row.id, row.n8n_user_id, [w.workflow.id for w in left])
+        if self.keys is None:
+            return
+        try:
+            kept = await self.keys.quarantine(space, row.n8n_user_id)
+        except (N8nError, httpx.HTTPError) as error:
+            log.warning("could not note the keys an ending n8n account left: %s", error)
+            return
+        if kept:
+            log.info("kept %d key(s) an ending n8n account left, unused", len(kept))
 
     async def _delete(self, n8n_user_id: str) -> None:
         assert self._api is not None

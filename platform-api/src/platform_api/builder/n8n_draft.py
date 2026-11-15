@@ -15,11 +15,13 @@ from platform_api.orchestration import (
     BlockKind,
     Document,
     Edge,
+    Face,
     Finding,
     Graded,
     KnownOptions,
     Unreadable,
     add_yes,
+    face,
     grade,
     read_flow,
     writes,
@@ -67,6 +69,18 @@ class DraftRefused:
     findings: tuple[Finding, ...]
 
 
+def test_run_skips(name: str) -> str:
+    return f'A test run skips "{name}", so it posts nothing.'
+
+
+def notices_in(document: Mapping[str, Any]) -> list[str]:
+    try:
+        flow = read_flow(document)
+    except Unreadable:
+        return []
+    return [b.name for b in flow.blocks.values() if face(b.type, b.version, b.parameters).notice]
+
+
 def added_line(write: str) -> str:
     return f"Added a yes before {WHAT_IS_WRITTEN.get(write, f'"{write}"')}."
 
@@ -95,6 +109,7 @@ def check_draft(
     lines.extend(("note", added_line(write)) for write in with_yes.added_before)
     if changes:
         lines.append(("check", EVERY_WRITE))
+    lines.extend(("note", test_run_skips(name)) for name in notices_in(with_yes.document))
     return Checked(with_yes.document, graded, tuple(lines))
 
 
@@ -122,21 +137,18 @@ def blocks_of(document: Mapping[str, Any]) -> list[N8nBlockView]:
     order.update(dict.fromkeys(flow.blocks))
     views: list[N8nBlockView] = []
     for name in order:
-        spec = flow.blocks[name].spec
-        kind: N8nBlockKind
-        if spec is None:
-            kind = "off"
-        elif spec.kind == "shape":
-            kind = "other"
-        elif (known := spec.kind) == "note":
+        block = flow.blocks[name]
+        seen = face(block.type, block.version, block.parameters)
+        if seen.kind == "note":
             continue
-        else:
-            kind = known
+        kind = view_kind(seen)
         exits = ASK_EXITS if kind == "ask" else BRANCH_EXITS if kind == "branch" else ()
         views.append(
             N8nBlockView(
                 name=name,
                 kind=kind,
+                badge="ours" if seen.ours else "n8n",
+                tag=seen.tag,
                 next=[
                     N8nExitView(
                         exit=exits[edge.exit] if edge.exit < len(exits) else None, to=edge.target
@@ -146,6 +158,18 @@ def blocks_of(document: Mapping[str, Any]) -> list[N8nBlockView]:
             )
         )
     return views
+
+
+def view_kind(seen: Face) -> N8nBlockKind:
+    """A sticky note, a data block and a system block are all other to the run line, which tells
+    them apart by their tag."""
+    match seen.kind:
+        case None:
+            return "off"
+        case "note" | "shape" | "system":
+            return "other"
+        case known:
+            return known
 
 
 def _exit(edge: Edge) -> int:

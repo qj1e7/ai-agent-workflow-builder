@@ -101,6 +101,157 @@
   },
   "n8n-nodes-base.stopAndError": {"block": "shape", "rows": [{"versions": [1], "class": "read"}]},
 
+  "n8n-nodes-base.jira": {
+    "block": "system",
+    "rows": [
+      {
+        "versions": [1],
+        "by": ["resource", "operation"],
+        "default": "issue",
+        "resources": {
+          "__CUSTOM_API_CALL__": "off",
+          "issue": {"default": "create", "operations": {"changelog": "read", "create": "off", "delete": "off", "get": "read", "getAll": "read", "notify": "off", "transitions": "read", "update": "off", "__CUSTOM_API_CALL__": "off"}},
+          "issueAttachment": {"default": "add", "operations": {"add": "off", "get": "read", "getAll": "read", "remove": "off", "__CUSTOM_API_CALL__": "off"}},
+          "issueComment": {"default": "add", "operations": {"add": "off", "get": "read", "getAll": "read", "remove": "off", "update": "off", "__CUSTOM_API_CALL__": "off"}},
+          "user": {"default": "create", "operations": {"create": "off", "delete": "off", "get": "read", "__CUSTOM_API_CALL__": "off"}}
+        },
+        "tag": "Reads Jira",
+        "says": "Reads Jira issues",
+        "target": ["issueKey", "options.jql"],
+        "approvers_min": 1
+      }
+    ]
+  },
+  "n8n-nodes-base.github": {
+    "block": "system",
+    "rows": [
+      {
+        "versions": [1, 1.1],
+        "by": ["resource", "operation"],
+        "default": "issue",
+        "resources": {
+          "__CUSTOM_API_CALL__": "off",
+          "file": {"default": "create", "operations": {"create": "off", "delete": "off", "edit": "off", "get": "read", "list": "read", "__CUSTOM_API_CALL__": "off"}},
+          "issue": {"default": "create", "operations": {"create": "off", "createComment": "off", "edit": "off", "get": "read", "lock": "off", "__CUSTOM_API_CALL__": "off"}},
+          "organization": {"default": "getRepositories", "operations": {"getRepositories": "read", "getMembers": "read", "__CUSTOM_API_CALL__": "off"}},
+          "pullRequest": {"default": "create", "operations": {"create": "off", "update": "off", "close": "off", "reopen": "off", "get": "read", "createComment": "off", "editComment": "off", "getDiff": "read", "getPatch": "read", "merge": "off", "__CUSTOM_API_CALL__": "off"}},
+          "release": {"default": "create", "operations": {"create": "off", "delete": "off", "get": "read", "getAll": "read", "update": "off", "__CUSTOM_API_CALL__": "off"}},
+          "repository": {"default": "getIssues", "operations": {"get": "read", "getIssues": "read", "getLicense": "read", "getProfile": "read", "getPullRequests": "read", "listPopularPaths": "read", "listReferrers": "read", "__CUSTOM_API_CALL__": "off"}},
+          "review": {"default": "create", "operations": {"create": "off", "get": "read", "getAll": "read", "update": "off", "__CUSTOM_API_CALL__": "off"}},
+          "user": {"default": "getRepositories", "operations": {"getRepositories": "read", "getUserIssues": "read", "invite": "off", "__CUSTOM_API_CALL__": "off"}},
+          "workflow": {"default": "dispatch", "operations": {"disable": "off", "dispatch": "off", "dispatchAndWait": "off", "enable": "off", "get": "read", "getUsage": "read", "list": "read", "__CUSTOM_API_CALL__": "off"}}
+        },
+        "tag": "Reads GitHub",
+        "says": "Reads GitHub",
+        "target": ["owner", "repository"],
+        "approvers_min": 1
+      }
+    ]
+  },
+  "n8n-nodes-base.microsoftTeams": {
+    "block": "system",
+    "rows": [
+      {
+        "versions": [2],
+        "by": ["resource", "operation"],
+        "default": "channel",
+        "resources": {
+          "__CUSTOM_API_CALL__": "off",
+          "activityNotification": {"default": "send", "operations": {"send": "off", "__CUSTOM_API_CALL__": "off"}},
+          "channel": {"default": "create", "operations": {"create": "off", "deleteChannel": "off", "get": "off", "getAll": "off", "update": "off", "__CUSTOM_API_CALL__": "off"}},
+          "channelMessage": {"default": "create", "operations": {"create": "notice", "softDeleteMessage": "off", "get": "off", "getAll": "off", "getAllReplies": "off", "reply": "off", "undoSoftDeleteMessage": "off", "__CUSTOM_API_CALL__": "off"}},
+          "chat": {"default": "create", "operations": {"create": "off", "get": "off", "getAll": "off", "__CUSTOM_API_CALL__": "off"}},
+          "chatMember": {"default": "getAll", "operations": {"add": "off", "getAll": "off", "remove": "off", "__CUSTOM_API_CALL__": "off"}},
+          "chatMessage": {"default": "create", "operations": {"create": "off", "softDeleteMessage": "off", "get": "off", "getAll": "off", "sendAndWait": "off", "undoSoftDeleteMessage": "off", "__CUSTOM_API_CALL__": "off"}},
+          "onlineMeeting": {"default": "create", "operations": {"create": "off", "createOrGet": "off", "deleteMeeting": "off", "get": "off", "update": "off", "__CUSTOM_API_CALL__": "off"}},
+          "task": {"default": "create", "operations": {"create": "off", "deleteTask": "off", "get": "off", "getAll": "off", "update": "off", "__CUSTOM_API_CALL__": "off"}}
+        },
+        "tag": "Posts in Teams",
+        "says": "Posts a message in a Teams channel",
+        "target": ["teamId", "channelId"],
+        "text": ["message"],
+        "approvers_min": 1
+      },
+      {"versions": [1, 1.1], "class": "off"}
+    ]
+  },
+  "n8n-nodes-base.microsoftOutlook": {
+    "block": "system",
+    "rows": [
+      {
+        "versions": [2],
+        "by": ["resource", "operation"],
+        "default": "message",
+        "resources": {
+          "__CUSTOM_API_CALL__": "off",
+          "calendar": {"default": "getAll", "operations": {"create": "off", "delete": "off", "get": "off", "getAll": "off", "update": "off", "__CUSTOM_API_CALL__": "off"}},
+          "contact": {"default": "getAll", "operations": {"create": "off", "delete": "off", "get": "off", "getAll": "off", "update": "off", "__CUSTOM_API_CALL__": "off"}},
+          "draft": {"default": "create", "operations": {"create": "off", "delete": "off", "get": "off", "send": "off", "update": "off", "__CUSTOM_API_CALL__": "off"}},
+          "event": {"default": "getAll", "operations": {"create": "off", "delete": "off", "get": "off", "getAll": "off", "update": "off", "__CUSTOM_API_CALL__": "off"}},
+          "folder": {"default": "create", "operations": {"create": "off", "delete": "off", "get": "off", "getAll": "off", "update": "off", "__CUSTOM_API_CALL__": "off"}},
+          "folderMessage": {"default": "getAll", "operations": {"getAll": "off", "__CUSTOM_API_CALL__": "off"}},
+          "message": {"default": "send", "operations": {"delete": "off", "get": "off", "getAll": "off", "move": "off", "reply": "off", "send": "notice", "sendAndWait": "off", "update": "off", "__CUSTOM_API_CALL__": "off"}},
+          "messageAttachment": {"default": "add", "operations": {"add": "off", "download": "off", "get": "off", "getAll": "off", "__CUSTOM_API_CALL__": "off"}}
+        },
+        "tag": "Emails from Outlook",
+        "says": "Sends an email from Outlook",
+        "target": ["mailbox", "toRecipients", "additionalFields.ccRecipients", "additionalFields.bccRecipients", "additionalFields.replyTo", "additionalFields.from"],
+        "text": ["subject", "bodyContent"],
+        "approvers_min": 1
+      },
+      {"versions": [1], "class": "off"}
+    ]
+  },
+  "n8n-nodes-base.gmail": {
+    "block": "system",
+    "rows": [
+      {
+        "versions": [2, 2.1, 2.2],
+        "by": ["resource", "operation"],
+        "default": "message",
+        "resources": {
+          "message": {"default": "send", "operations": {"addLabels": "off", "delete": "off", "get": "off", "getAll": "off", "markAsRead": "off", "markAsUnread": "off", "removeLabels": "off", "reply": "off", "send": "notice", "sendAndWait": "off"}},
+          "label": {"default": "getAll", "operations": {"create": "off", "delete": "off", "get": "off", "getAll": "off"}},
+          "draft": {"default": "create", "operations": {"create": "off", "delete": "off", "get": "off", "getAll": "off"}},
+          "thread": {"default": "getAll", "operations": {"addLabels": "off", "delete": "off", "get": "off", "getAll": "off", "removeLabels": "off", "reply": "off", "trash": "off", "untrash": "off"}}
+        },
+        "tag": "Emails from Gmail",
+        "says": "Sends an email from Gmail",
+        "target": ["sendTo", "options.ccList", "options.bccList", "options.replyTo"],
+        "text": ["subject", "message"],
+        "approvers_min": 1
+      },
+      {"versions": [1], "class": "off"}
+    ]
+  },
+  "n8n-nodes-base.slack": {
+    "block": "system",
+    "rows": [
+      {
+        "versions": [2, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7],
+        "by": ["resource", "operation"],
+        "default": "message",
+        "resources": {
+          "channel": {"default": "create", "operations": {"archive": "off", "close": "off", "create": "off", "get": "off", "getAll": "off", "history": "off", "invite": "off", "join": "off", "kick": "off", "leave": "off", "member": "off", "open": "off", "rename": "off", "replies": "off", "setPurpose": "off", "setTopic": "off", "unarchive": "off"}},
+          "file": {"default": "upload", "operations": {"get": "off", "getAll": "off", "upload": "off"}},
+          "message": {"default": "post", "operations": {"delete": "off", "deleteScheduled": "off", "getManyScheduled": "off", "getPermalink": "off", "schedule": "off", "search": "off", "post": "notice", "sendAndWait": "off", "update": "off"}},
+          "reaction": {"default": "add", "operations": {"add": "off", "get": "off", "remove": "off"}},
+          "star": {"default": "add", "operations": {"add": "off", "delete": "off", "getAll": "off"}},
+          "user": {"default": "info", "operations": {"info": "off", "getAll": "off", "getProfile": "off", "getPresence": "off", "lookupByEmail": "off", "updateProfile": "off"}},
+          "userGroup": {"default": "create", "operations": {"updateUsers": "off", "create": "off", "disable": "off", "enable": "off", "getAll": "off", "getUsers": "off", "update": "off"}}
+        },
+        "tag": "Posts in Slack",
+        "says": "Posts a message in Slack",
+        "target": ["select", "channelId", "user"],
+        "text": ["text", "blocksUi", "attachments"],
+        "encoded": ["blocksUi"],
+        "quiet": ["otherOptions.link_names"],
+        "approvers_min": 1
+      },
+      {"versions": [1], "class": "off"}
+    ]
+  },
+
   "n8n-nodes-base.httpRequest": {"off": "It can send what a run read to any address (P6 Q5)."},
   "n8n-nodes-base.code": {"off": "It runs code a person writes."},
   "n8n-nodes-base.webhook": {"off": "It opens an address anyone can call. Start from the Portal starts runs instead (D6)."},
@@ -112,5 +263,45 @@
   "n8n-nodes-base.dateTimeTool": {
     "off": "An AI agent's tool, which n8n makes from Date & Time whatever NODES_INCLUDE says. It has no main input, and AI agents are off (ADR 0023).",
     "loaded_with": "n8n-nodes-base.dateTime"
+  },
+  "n8n-nodes-base.jiraTool": {
+    "off": "An AI agent's tool, which n8n makes from Jira whatever NODES_INCLUDE says. AI agents are off (ADR 0023).",
+    "loaded_with": "n8n-nodes-base.jira"
+  },
+  "n8n-nodes-base.githubTool": {
+    "off": "An AI agent's tool, which n8n makes from GitHub whatever NODES_INCLUDE says. AI agents are off (ADR 0023).",
+    "loaded_with": "n8n-nodes-base.github"
+  },
+  "n8n-nodes-base.microsoftTeamsTool": {
+    "off": "An AI agent's tool, which n8n makes from Microsoft Teams whatever NODES_INCLUDE says. AI agents are off (ADR 0023).",
+    "loaded_with": "n8n-nodes-base.microsoftTeams"
+  },
+  "n8n-nodes-base.microsoftOutlookTool": {
+    "off": "An AI agent's tool, which n8n makes from Microsoft Outlook whatever NODES_INCLUDE says. AI agents are off (ADR 0023).",
+    "loaded_with": "n8n-nodes-base.microsoftOutlook"
+  },
+  "n8n-nodes-base.gmailTool": {
+    "off": "An AI agent's tool, which n8n makes from Gmail whatever NODES_INCLUDE says. AI agents are off (ADR 0023).",
+    "loaded_with": "n8n-nodes-base.gmail"
+  },
+  "n8n-nodes-base.slackTool": {
+    "off": "An AI agent's tool, which n8n makes from Slack whatever NODES_INCLUDE says. AI agents are off (ADR 0023).",
+    "loaded_with": "n8n-nodes-base.slack"
+  },
+  "n8n-nodes-base.gmailHitlTool": {
+    "off": "An AI agent's tool that sends and waits for a person's answer, which n8n makes from Gmail whatever NODES_INCLUDE says. AI agents are off (ADR 0023).",
+    "loaded_with": "n8n-nodes-base.gmail"
+  },
+  "n8n-nodes-base.microsoftOutlookHitlTool": {
+    "off": "An AI agent's tool that sends and waits for a person's answer, which n8n makes from Microsoft Outlook whatever NODES_INCLUDE says. AI agents are off (ADR 0023).",
+    "loaded_with": "n8n-nodes-base.microsoftOutlook"
+  },
+  "n8n-nodes-base.microsoftTeamsHitlTool": {
+    "off": "An AI agent's tool that sends and waits for a person's answer, which n8n makes from Microsoft Teams whatever NODES_INCLUDE says. AI agents are off (ADR 0023).",
+    "loaded_with": "n8n-nodes-base.microsoftTeams"
+  },
+  "n8n-nodes-base.slackHitlTool": {
+    "off": "An AI agent's tool that sends and waits for a person's answer, which n8n makes from Slack whatever NODES_INCLUDE says. AI agents are off (ADR 0023).",
+    "loaded_with": "n8n-nodes-base.slack"
   }
 }

@@ -94,6 +94,23 @@ PRACTICE_JIRA_PROJECT = "MOCK"
 """The practice Jira's project, where the watchlist raises tickets unless told otherwise."""
 
 
+type KeySystem = Literal["jira", "github", "slack"]
+"""The systems the platform makes a key in n8n for, so n8n's own blocks can read them or post to
+them (ADR 0045). Teams, Outlook and Gmail have none: see orchestration/n8n_credentials.py."""
+
+
+@dataclass(frozen=True)
+class N8nKey:
+    """One key the platform makes in n8n for n8n's own blocks, from what Key Vault holds."""
+
+    kind: str
+    """n8n's credential type, such as slackApi."""
+    data: Mapping[str, str] = field(repr=False)
+    """What n8n keeps for it, the secret included."""
+    asks: str
+    """Where the platform asks the system what the key may do, before it makes the key."""
+
+
 @dataclass(frozen=True)
 class N8nOwner:
     """n8n's owner account, which the platform signs in as to lay out and publish workflows."""
@@ -147,6 +164,9 @@ class Settings:
     n8n_editor_url: str | None = None
     """N8N_EDITOR_URL, where people open n8n's editor, as ADR 0034's n8n_editor_url output. Each
     password link n8n makes is shown at this address."""
+    n8n_keys: Mapping[KeySystem, N8nKey] = field(default_factory=dict[KeySystem, N8nKey])
+    """The keys the platform makes in n8n for n8n's own blocks, from the N8N_KEY_ settings. A
+    system with none set has no key, so its blocks never pass the check."""
 
 
 def _required(env: Mapping[str, str], name: str) -> str:
@@ -416,6 +436,57 @@ def confluence_from_env(env: Mapping[str, str], jira: JiraSettings) -> Confluenc
     return ConfluenceSettings(base_url, email, token, pages)
 
 
+GITHUB_API = "https://api.github.com"
+SLACK_API = "https://slack.com/api"
+
+
+def _stack_or_https(name: str, value: str) -> str:
+    """A key goes to this address, so it is https, or plain http only to a host with no dot in its
+    name, which is a service on the stack's own network."""
+    parts = urlsplit(value)
+    if parts.scheme == "http" and parts.hostname and "." not in parts.hostname:
+        return _web_address(name, value, https_only=False)
+    return _web_address(name, value, https_only=True)
+
+
+def _secret(env: Mapping[str, str], name: str) -> str | None:
+    value = env.get(name, "").strip()
+    if value and not all(33 <= ord(character) < 127 for character in value):
+        raise ConfigError(
+            f"{name} holds a space, a line break or a character that is not a plain letter, "
+            "digit or symbol. Paste it again."
+        )
+    return value or None
+
+
+def n8n_keys_from_env(env: Mapping[str, str], jira: JiraSettings) -> dict[KeySystem, N8nKey]:
+    """Each N8N_KEY_ secret comes from Key Vault on Azure, and from deploy/.env or the e2e
+    overlay elsewhere. The Jira key reads the platform's Jira unless N8N_KEY_JIRA_URL names
+    another, as the same flavor."""
+    keys: dict[KeySystem, N8nKey] = {}
+    if (token := _secret(env, "N8N_KEY_JIRA_TOKEN")) is not None:
+        raw = env.get("N8N_KEY_JIRA_URL", "").strip() or jira.base_url
+        if raw is None:
+            raise ConfigError("N8N_KEY_JIRA_TOKEN is set, so set N8N_KEY_JIRA_URL too.")
+        url = _stack_or_https("N8N_KEY_JIRA_URL", raw)
+        if jira.flavor == "cloud":
+            email = env.get("N8N_KEY_JIRA_EMAIL", "").strip()
+            if not email:
+                raise ConfigError("A Cloud Jira key signs in with N8N_KEY_JIRA_EMAIL too.")
+            data = {"domain": url, "email": email, "apiToken": token}
+            keys["jira"] = N8nKey("jiraSoftwareCloudApi", data, url)
+        else:
+            data = {"domain": url, "personalAccessToken": token}
+            keys["jira"] = N8nKey("jiraSoftwareServerPatApi", data, url)
+    if (token := _secret(env, "N8N_KEY_GITHUB_TOKEN")) is not None:
+        url = _stack_or_https("N8N_KEY_GITHUB_URL", env.get("N8N_KEY_GITHUB_URL", "") or GITHUB_API)
+        keys["github"] = N8nKey("githubApi", {"server": url, "accessToken": token}, url)
+    if (token := _secret(env, "N8N_KEY_SLACK_TOKEN")) is not None:
+        asks = _stack_or_https("SLACK_API_URL", env.get("SLACK_API_URL", "") or SLACK_API)
+        keys["slack"] = N8nKey("slackApi", {"accessToken": token}, asks)
+    return keys
+
+
 def staff_access_from_env(env: Mapping[str, str], owner: N8nOwner | None) -> bool:
     on = n8n_staff_access_from_env(env)
     if on and (owner is None or not env.get("SETTINGS_ENCRYPTION_KEY")):
@@ -469,6 +540,7 @@ def settings_from_env(env: Mapping[str, str]) -> Settings:
         n8n_owner=n8n_owner,
         n8n_staff_access=staff_access_from_env(env, n8n_owner),
         n8n_editor_url=n8n_editor_url_from_env(env),
+        n8n_keys=n8n_keys_from_env(env, jira),
     )
 
 

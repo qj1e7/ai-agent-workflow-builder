@@ -6,6 +6,9 @@ and this places the blocks. Block names are the sketch's words, so the run line,
 canvas and n8n read the same. A layout leaves out the yes. The safety checker puts it in front
 of the write, which is what the build panel shows ("Added a yes before the ticket.").
 
+A layout may also place one of n8n's own blocks that the class file classes to read or post a
+notice, with the key the platform made for it (ADR 0045). The Planner proposes none yet.
+
 Pure. Ids come from the use case's id, so the same use case always gets the same document.
 """
 
@@ -16,6 +19,7 @@ from typing import Any
 from platform_api.builder.cards import VERSION_CHECKER_ID
 from platform_api.orchestration import (
     GITHUB_RELEASES,
+    KEYS,
     NODE_TYPES,
     NOTHING_TO_CHANGE_BLOCK,
     TYPE_OF,
@@ -24,9 +28,12 @@ from platform_api.orchestration import (
     BlockKind,
     Day,
     Document,
+    KeySpec,
     Schedule,
     block_id,
+    face,
     free_name,
+    skipped_in_tests,
 )
 
 READ_RELEASE = "Read release"
@@ -86,6 +93,30 @@ class PlannedAgent:
 
 
 @dataclass(frozen=True)
+class N8nBlock:
+    """One of n8n's own blocks, as a layout places it, with the platform's key it runs with."""
+
+    name: str
+    node_type: str
+    version: float
+    parameters: Mapping[str, Any]
+    key: KeySpec
+    slot: str
+    """The n8n credential type the block asks for its key by, as its parameters pick it."""
+
+
+def slack_notice(name: str, channel: str, text: str) -> N8nBlock:
+    """n8n's Slack block posting to one channel, written in the block (the Tell rule)."""
+    parameters = {
+        "select": "channel",
+        "channelId": {"__rl": True, "value": channel, "mode": "id"},
+        "text": text,
+        "otherOptions": {},
+    }
+    return N8nBlock(name, KEYS["slack"].node_type, 2.7, parameters, KEYS["slack"], "slackApi")
+
+
+@dataclass(frozen=True)
 class LayoutPlan:
     """What the set-up answer carries: the rows Watch, When and Then, as the cards and their
     values, and the schedule."""
@@ -116,6 +147,9 @@ class _Canvas:
         self.key = key
         self.nodes: list[dict[str, Any]] = []
         self.connections: dict[str, dict[str, list[list[dict[str, Any]]]]] = {}
+        self.pins: dict[str, list[dict[str, Any]]] = {}
+        """Each notice block's output in a test run, which n8n uses in place of running it, so a
+        test run posts nothing. n8n ignores it in every other run."""
 
     def node(
         self,
@@ -140,6 +174,27 @@ class _Canvas:
         self.nodes.append(node)
         return name
 
+    def n8n_block(self, block: N8nBlock, column: int, row: int) -> str:
+        """Only a block the class file lets read or post, so a layout never names one that is
+        off, and never one without the platform's key."""
+        seen = face(block.node_type, block.version, dict(block.parameters))
+        if seen.kind != "system" or seen.tag is None:
+            raise ValueError(f"{block.node_type} does not read or post as its parameters say")
+        self.nodes.append(
+            {
+                "id": block_id(self.key, block.name),
+                "name": block.name,
+                "type": block.node_type,
+                "typeVersion": block.version,
+                "position": [column * STEP, row * ROW],
+                "parameters": dict(block.parameters),
+                "credentials": {block.slot: {"id": block.key.id, "name": block.key.name}},
+            }
+        )
+        if seen.notice:
+            self.pins[block.name] = [{"json": {"skipped": skipped_in_tests(block.key.said)}}]
+        return block.name
+
     def link(self, source: str, target: str, exit_index: int = 0) -> None:
         outputs = self.connections.setdefault(source, {"main": []})["main"]
         while len(outputs) <= exit_index:
@@ -156,6 +211,7 @@ class _Canvas:
                 **SETTINGS,
                 "errorWorkflow": plan.error_workflow,
             },
+            **({"pinData": self.pins} if self.pins else {}),
         }
 
 
@@ -205,6 +261,33 @@ def release_check(plan: LayoutPlan, repo: str, project: str) -> Document:
     canvas.link(read, compare)
     canvas.link(compare, newer)
     canvas.link(newer, write, 0)
+    canvas.link(newer, quiet, 1)
+    return canvas.document(plan)
+
+
+def release_notice(plan: LayoutPlan, repo: str, project: str, notice: N8nBlock) -> Document:
+    """The release check that tells, in place of raising a ticket: a newer release goes on to
+    one of n8n's own notice blocks, such as a post in a Slack channel. It changes no data, so it
+    needs no yes (the Tell rule)."""
+    canvas = _Canvas(plan.use_case_id)
+    _about(canvas, plan, f"Checks {repo} for a new release and tells the team.")
+    starts = _starts(canvas, plan)
+    read = canvas.node(READ_RELEASE, "read", 1, 0, {"source": "github_releases", "place": repo})
+    for start in starts:
+        canvas.link(start, read)
+    compare = canvas.node(
+        COMPARE,
+        "agent",
+        2,
+        0,
+        _agent_parameters(VERSION_CHECKER_ID, [(REPO_INPUT, repo), (PROJECT_INPUT, project)]),
+    )
+    newer = canvas.node(NEWER, "branch", 3, 0, _is_true(plan.use_case_id, "newer"))
+    told = canvas.n8n_block(notice, 4, 0)
+    quiet = canvas.node(NOTHING_TO_CHANGE_BLOCK, "end", 4, 1)
+    canvas.link(read, compare)
+    canvas.link(compare, newer)
+    canvas.link(newer, told, 0)
     canvas.link(newer, quiet, 1)
     return canvas.document(plan)
 

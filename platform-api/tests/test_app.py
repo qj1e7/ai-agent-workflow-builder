@@ -233,6 +233,7 @@ async def test_readiness_is_not_ready_before_bootstrap(db: Database):
         ("activity_log", True),
         ("workflows", False),
         ("self_test", False),
+        ("key_sweep", False),
     ]
 
 

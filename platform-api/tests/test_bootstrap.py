@@ -464,7 +464,9 @@ def test_a_run_on_the_shared_run_workflow_that_has_not_ended_leaves_bootstrap_re
         ),
         (
             list(NODE_CLASSES.included()),
-            "n8n does not load n8n-nodes-base.dateTimeTool, which node_classes.json says it loads",
+            "n8n does not load "
+            + ", ".join(sorted(set(NODE_CLASSES.loaded()) - set(NODE_CLASSES.included())))
+            + ", which node_classes.json says it loads",
         ),
     ],
     ids=["more", "fewer", "without-the-tool-n8n-makes"],

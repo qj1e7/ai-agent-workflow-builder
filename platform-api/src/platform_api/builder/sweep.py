@@ -127,11 +127,17 @@ def grading_mark(error_workflow: str | None, zone: str) -> str:
     return f"{GRADING_RULES} {error_workflow} {zone}"
 
 
-def last_activation(version_id: str, timeline: Sequence[PublishEvent]) -> PublishEvent | None:
+def last_activation(
+    version_id: str, timeline: Sequence[PublishEvent], platform: str | None = None
+) -> PublishEvent | None:
+    """The last time n8n put this version live. One a member put live and the platform put live
+    again, as a workflow came back to its project and passed the check (ADR 0045, as amended),
+    is still the member's."""
     activated = [e for e in timeline if e.version_id == version_id and e.event == "activated"]
-    if not activated:
+    theirs = [e for e in activated if e.user_id != platform] or activated
+    if not theirs:
         return None
-    return max(enumerate(activated), key=lambda pair: (pair[1].at, pair[0]))[1]
+    return max(enumerate(theirs), key=lambda pair: (pair[1].at, pair[0]))[1]
 
 
 async def _restore_asked(uow: UnitOfWork, workflow_id: str) -> bool:
@@ -304,10 +310,11 @@ class VersionsSweep:
         no version on record matches it."""
         use_case_id, workflow_id = row["use_case_id"], row["n8n_workflow_id"]
         timeline = await self._n8n.timeline(workflow_id)
-        activated = last_activation(live, timeline)
+        platform = await self._n8n.platform_user()
+        activated = last_activation(live, timeline, platform)
         if activated is None:
             return None
-        if activated.user_id == await self._n8n.platform_user():
+        if activated.user_id == platform:
             log.warning("n8n has %s of %s live, which the platform has no record of", live, row)
             return None
         document = await self._n8n.kept(workflow_id, live)
@@ -315,7 +322,7 @@ class VersionsSweep:
             log.warning("n8n has %s of %s live but did not show it", live, workflow_id)
             return None
         people = await self._accounts.people_by_n8n_user()
-        publisher = publisher_of(live, "n8n", None, timeline, people)
+        publisher = publisher_of(live, "n8n", None, [activated], people)
         assert publisher is not None
         graded = grade(document, error_workflow, self._zone, known)
         newest = row["current_version"]

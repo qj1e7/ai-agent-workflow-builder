@@ -1,11 +1,20 @@
 """The safety checker's grade for an n8n workflow, and the yes it puts before a write
 (ENGINE-PLAN 2.4 and 2.5, ADR 0027).
 
-The grade is not the barrier. The write gateway checks our records at the moment of each write,
-and n8n's allow list leaves no block that can reach anything else. The grade tells a person,
-before anything runs, whether a workflow will be refused: `writes_refused` when a write can run
-without a yes, `needs_a_fix` when it cannot run as the platform expects at all, as when a block,
-its version or what it was asked to do is off in the class file (ADR 0045).
+For our own blocks the grade is not the barrier. The write gateway checks our records at the
+moment of each write, and n8n's allow list leaves no block that can reach anything else. The
+grade tells a person, before anything runs, whether a workflow will be refused: `writes_refused`
+when a write can run without a yes, `needs_a_fix` when it cannot run as the platform expects at
+all, as when a block, its version or what it was asked to do is off in the class file (ADR 0045).
+
+n8n's own blocks never call our API, so n8n runs them whatever the grade says. A finding about
+one of them `runs_anyway`: a version with such a finding must not run at all. For those blocks
+the grade is the guard, with the platform's keys, which can only read or post, and the
+credential sweep (ADR 0045, section 2): a notice posts only to a place written in the block, and
+every key a block names must be one the platform made.
+
+In the platform's own n8n project n8n lets a workflow use every key there is. So no version with
+a finding that `runs_anyway` is ever live there, and no draft with one is ever run (`unchecked`).
 
 Pure. A document is the n8n workflow JSON as the public API takes it.
 """
@@ -13,10 +22,11 @@ Pure. A document is the n8n workflow JSON as the public API takes it.
 import hashlib
 import json
 import re
+import unicodedata
 import uuid
 from collections.abc import Iterable, Mapping, Sequence
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from itertools import pairwise
 from pathlib import Path
 from typing import Any, cast
@@ -27,7 +37,16 @@ from platform_api.orchestration import n8n_schedule, node_classes
 from platform_api.orchestration.agents import CardInput
 from platform_api.orchestration.n8n_calls import WRITE_TARGETS, Grade, WriteEntry
 from platform_api.orchestration.n8n_schedule import interval_problem, schedule_intervals
-from platform_api.orchestration.node_classes import CLASS_FILE, NODE_CLASSES, BlockKind, Off
+from platform_api.orchestration.node_classes import (
+    CLASS_FILE,
+    NODE_CLASSES,
+    OURS,
+    BlockKind,
+    Off,
+    Runs,
+    Use,
+)
+from platform_api.orchestration.platform_keys import KEY_FOR_TYPE
 
 type Document = dict[str, Any]
 
@@ -85,6 +104,10 @@ class Finding:
     grade: Grade
     block: str | None
     text: str
+    runs_anyway: bool = False
+    """n8n would run the block as it is, since it never calls the platform: one of n8n's own
+    blocks that is off for what it does, posts to a place an expression picks, or uses a key
+    the platform did not make. A version with such a finding is not set up or turned on."""
 
 
 @dataclass(frozen=True)
@@ -105,12 +128,15 @@ class KnownOptions:
     inputs: Mapping[str, Mapping[str, frozenset[str] | None]]
     """Each agent's inputs, and for an input that names where a write lands, the places allowed.
     None allows any value."""
+    keys: Mapping[str, str] = field(default_factory=dict[str, str])
+    """The keys the platform made in n8n, by their id, with each one's n8n credential type."""
 
 
 def known_options(
     agents: Mapping[str, Sequence[CardInput]],
     places: Mapping[str, Iterable[str]],
     writes: Sequence[WriteEntry],
+    keys: Mapping[str, str] | None = None,
 ) -> KnownOptions:
     """The editor's lists as one snapshot, with the same write targets the node calls check."""
     by_connector: dict[str, set[str]] = {}
@@ -132,6 +158,7 @@ def known_options(
         {source: frozenset(listed) for source, listed in places.items()},
         {entry.id: frozenset(o.id for o in entry.places) for entry in writes},
         inputs,
+        dict(keys or {}),
     )
 
 
@@ -154,6 +181,7 @@ class _Node(BaseModel):
     typeVersion: JsonValue = None
     parameters: dict[str, JsonValue] = Field(default_factory=dict[str, JsonValue])
     position: list[float] = Field(default_factory=lambda: [0.0, 0.0])
+    credentials: dict[str, JsonValue] = Field(default_factory=dict[str, JsonValue])
 
 
 class N8nDocument(BaseModel):
@@ -171,6 +199,8 @@ class Block:
     type: str
     parameters: Mapping[str, JsonValue]
     version: JsonValue = None
+    credentials: Mapping[str, JsonValue] = field(default_factory=dict[str, JsonValue])
+    """The keys it names, by the n8n credential type each is for."""
 
     @property
     def spec(self) -> NodeType | None:
@@ -223,7 +253,7 @@ def read_flow(document: Mapping[str, Any]) -> Flow:
     """Raises Unreadable when the document is not an n8n workflow's shape."""
     parsed = parse(document)
     blocks = {
-        node.name: Block(node.name, node.type, node.parameters, node.typeVersion)
+        node.name: Block(node.name, node.type, node.parameters, node.typeVersion, node.credentials)
         for node in parsed.nodes
     }
     edges = tuple(
@@ -257,11 +287,35 @@ def grade(
         *_triggers(flow),
         *_settings(flow, error_workflow, time_zone),
         *_parameters(flow),
+        *_places(flow),
+        *_words(flow),
+        *_keys(flow, {} if known is None else known.keys),
+        *_ours_first(flow),
         *_schedules(flow),
         *(() if known is None else _options(flow, known)),
         *_yes_before_writes(flow),
     ]
     return _graded(findings)
+
+
+def unchecked(document: Mapping[str, Any], keys: Mapping[str, str]) -> tuple[Finding, ...]:
+    """What n8n would run in the document whatever the platform says: one of its own blocks that
+    is off, posts where an expression picks or calls out a whole channel, names a key the platform
+    did not make, or runs before any of ours. `keys` is each key the platform made, by id, with
+    its n8n credential type. A document the checker can't read counts as one, since n8n may still
+    run it."""
+    try:
+        flow = read_flow(document)
+    except Unreadable as unreadable:
+        return (_fix(None, str(unreadable), runs_anyway=True),)
+    found = (
+        *_off_blocks(flow),
+        *_places(flow),
+        *_words(flow),
+        *_keys(flow, keys),
+        *_ours_first(flow),
+    )
+    return tuple(finding for finding in found if finding.runs_anyway)
 
 
 ERROR_WORKFLOW = "run_failure_reporter"
@@ -364,8 +418,8 @@ def _graded(findings: Sequence[Finding]) -> Graded:
     return Graded(worst, tuple(findings))
 
 
-def _fix(block: str | None, text: str) -> Finding:
-    return Finding("needs_a_fix", block, text)
+def _fix(block: str | None, text: str, runs_anyway: bool = False) -> Finding:
+    return Finding("needs_a_fix", block, text, runs_anyway)
 
 
 _UTC_NAMES = frozenset(
@@ -395,7 +449,218 @@ def _off_blocks(flow: Flow) -> Iterable[Finding]:
     for block in flow.blocks.values():
         verdict = NODE_CLASSES.verdict(block.type, block.version, block.parameters)
         if isinstance(verdict, Off):
-            yield _fix(block.name, _off_words(block, verdict))
+            yield _fix(block.name, _off_words(block, verdict), _runs_anyway(block))
+
+
+SHAPES = "Shapes the data"
+"""The tag of one of n8n's data blocks (ADR 0045, section 3)."""
+
+
+@dataclass(frozen=True)
+class Face:
+    """What a block is to a person: what it does, whether it is one of ours or n8n's own, and the
+    tag its class gives it, such as Reads Jira or Posts in Slack."""
+
+    kind: BlockKind | None
+    """None for a block that is off: its type, its version or what it was asked to do."""
+    ours: bool
+    tag: str | None
+    notice: bool = False
+    """One of n8n's own blocks that posts a notice, which a test run must skip."""
+
+
+def face(node_type: str, version: JsonValue, parameters: Mapping[str, JsonValue]) -> Face:
+    ours = node_type.startswith(OURS)
+    spec = NODE_TYPES.get(node_type)
+    if spec is None:
+        return Face(None, ours, None)
+    if spec.kind not in ("shape", "system"):
+        return Face(spec.kind, ours, None)
+    verdict = NODE_CLASSES.verdict(node_type, version, parameters)
+    if isinstance(verdict, Off):
+        return Face(None, ours, None)
+    tag = SHAPES if spec.kind == "shape" else None if verdict.use is None else verdict.use.tag
+    return Face(spec.kind, ours, tag, verdict.on == "notice")
+
+
+def skipped_in_tests(said: str) -> str:
+    """What a notice block's pinned output says, in place of a post, in a test run."""
+    return f"{said} notice skipped in the test run."
+
+
+def unpinned_notices(document: Mapping[str, Any]) -> list[str]:
+    """Each of n8n's own notice blocks whose output is not pinned, which a test run, a manual run
+    by hand, would post from. n8n ignores pinned output in every run that is not by hand."""
+    pinned = cast(Mapping[str, Any], document.get("pinData") or {})
+    return [
+        str(node.get("name"))
+        for node in cast(list[dict[str, Any]], document.get("nodes") or [])
+        if not node.get("disabled")
+        and face(
+            str(node.get("type")), node.get("typeVersion"), node.get("parameters") or {}
+        ).notice
+        and not pinned.get(str(node.get("name")))
+    ]
+
+
+def _runs_anyway(block: Block) -> bool:
+    """n8n loads the type, so it runs the block, and it is not one of ours, so it never asks."""
+    return NODE_CLASSES.loads(block.type) and not block.type.startswith(OURS)
+
+
+CALLS: frozenset[BlockKind] = frozenset({"read", "agent", "propose", "ask", "write", "tell"})
+"""Our blocks that call the platform, so a run that meets one is linked and its version checked
+before anything after it runs."""
+OURS_FIRST = "Add one of our steps first, so each run is recorded."
+
+
+def _ours_first(flow: Flow) -> Iterable[Finding]:
+    """On every way from a trigger, one of our blocks that calls the platform comes before the
+    first of n8n's own blocks for a system. That call links the run, so it is recorded and shown,
+    and checks the version first, so a version that does not pass the check stops there before
+    n8n reads or posts anything."""
+    starts = [b.name for b in flow.blocks.values() if b.spec is not None and b.spec.starts]
+    early: dict[str, None] = {}
+    seen: set[tuple[str, bool]] = set()
+    stack = [(name, False) for name in starts]
+    while stack:
+        name, called = stack.pop()
+        if (name, called) in seen:
+            continue
+        seen.add((name, called))
+        kind = _kind(flow, name)
+        if kind == "system" and not called:
+            early[name] = None
+        called = called or kind in CALLS
+        stack.extend((edge.target, called) for edge in flow.after(name))
+    for name in early:
+        yield _fix(name, f'"{name}" runs before any of our steps. {OURS_FIRST}', runs_anyway=True)
+
+
+def _places(flow: Flow) -> Iterable[Finding]:
+    """The Tell rule for n8n's own notice blocks (ADR 0045, section 4): a notice posts only to a
+    place written in the block, never to one an expression picks from what a run read."""
+    for block in flow.blocks.values():
+        verdict = NODE_CLASSES.verdict(block.type, block.version, block.parameters)
+        if not isinstance(verdict, Runs) or verdict.on != "notice" or verdict.use is None:
+            continue
+        if not all(_literal(_at_path(block.parameters, path)) for path in verdict.use.target):
+            yield _fix(
+                block.name,
+                f'"{block.name}" posts to a place an expression picks, so it is off.',
+                runs_anyway=True,
+            )
+
+
+MASS_MENTION = re.compile(r"<!(?:channel|here|everyone)\b|<!subteam\^|@(?:channel|here|everyone)\b")
+"""Slack's words that call out everyone in a channel, a workspace or a user group, matched on text
+in NFKC and case-folded."""
+SAYS_WHAT_A_RUN_READ = "writes its message with an expression, so it is off. Use our Tell for that"
+UNREADABLE_WORDS = "has a message the checker can't read, so it is off"
+CALLS_EVERYONE = "calls out a whole channel, so it is off"
+
+
+def _words(flow: Flow) -> Iterable[Finding]:
+    """The Tell rule for what a notice says (ADR 0045, as amended): in this release n8n's own
+    notice text is written out in the block, never an expression, so the checker reads all of it
+    before anything runs, and a notice that says what a run read goes through our Tell. It never
+    calls out a whole channel, in its words or by a switch such as Slack's link_names."""
+    for block in flow.blocks.values():
+        verdict = NODE_CLASSES.verdict(block.type, block.version, block.parameters)
+        if not isinstance(verdict, Runs) or verdict.on != "notice" or verdict.use is None:
+            continue
+        problem = _said(block.parameters, verdict.use)
+        if problem is not None:
+            yield _fix(block.name, f'"{block.name}" {problem}.', runs_anyway=True)
+
+
+def _said(parameters: Mapping[str, JsonValue], use: Use) -> str | None:
+    said: list[str] = []
+    for path in use.text:
+        value = _at_path(parameters, path)
+        texts = list(_texts(value))
+        if any(text.startswith("=") for text in texts):
+            return SAYS_WHAT_A_RUN_READ
+        if path in use.encoded and isinstance(value, str):
+            try:
+                texts = list(_texts(json.loads(value)))
+            except ValueError:
+                return UNREADABLE_WORDS
+        said += texts
+    if any(MASS_MENTION.search(unicodedata.normalize("NFKC", text).casefold()) for text in said):
+        return CALLS_EVERYONE
+    if any(_at_path(parameters, path) not in (None, False) for path in use.quiet):
+        return CALLS_EVERYONE
+    return None
+
+
+def _texts(value: JsonValue) -> Iterable[str]:
+    match value:
+        case str():
+            yield value
+        case dict():
+            for inner in value.values():
+                yield from _texts(inner)
+        case list():
+            for inner in value:
+                yield from _texts(inner)
+        case _:
+            return
+
+
+def _at_path(parameters: Mapping[str, JsonValue], path: str) -> JsonValue:
+    value: JsonValue = dict(parameters)
+    for part in path.split("."):
+        if not isinstance(value, dict):
+            return None
+        value = value.get(part)
+    return value
+
+
+def _literal(value: JsonValue) -> bool:
+    """n8n reads a string that starts with = as an expression. A resource locator holds the
+    place in its value."""
+    match value:
+        case str():
+            return not value.startswith("=")
+        case {"__rl": True, **rest}:
+            return _literal(rest.get("value"))
+        case dict():
+            return all(_literal(v) for v in value.values())
+        case list():
+            return all(_literal(v) for v in value)
+        case _:
+            return True
+
+
+def _keys(flow: Flow, keys: Mapping[str, str]) -> Iterable[Finding]:
+    """Only the platform makes keys in n8n (ADR 0045). A block that names any other key would
+    run with it, and in the platform's own n8n project n8n lets a workflow use every key there
+    is, a member's too. A block for a system names the platform's key for it, or it cannot run:
+    Teams, Outlook and Gmail have none."""
+    for block in flow.blocks.values():
+        spec = KEY_FOR_TYPE.get(block.type)
+        runs = NODE_CLASSES.verdict(block.type, block.version, block.parameters)
+        if block.spec is not None and block.spec.kind == "system" and isinstance(runs, Runs):
+            if spec is None or spec.id not in keys:
+                yield _fix(block.name, f'"{block.name}" has no key: the platform has none for it.')
+            elif not any(
+                isinstance(named, dict) and named.get("id") == spec.id
+                for named in block.credentials.values()
+            ):
+                yield _fix(block.name, f'"{block.name}" does not use the platform\'s key.')
+        for kind, named in block.credentials.items():
+            key = named.get("id") if isinstance(named, dict) else None
+            if not isinstance(key, str) or key not in keys:
+                yield _fix(
+                    block.name,
+                    f'"{block.name}" uses a key the platform did not make.',
+                    runs_anyway=True,
+                )
+            elif keys[key] != kind:
+                yield _fix(
+                    block.name, f'"{block.name}" uses a platform key made for another block.'
+                )
 
 
 def _off_words(block: Block, off: Off) -> str:

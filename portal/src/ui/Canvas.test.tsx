@@ -36,11 +36,17 @@ describe('the canvas in each state a run gives a block', () => {
   })
 
   it('names one of n8n’s data blocks an n8n block, and a block that is off “Not allowed”, as the sketch does', () => {
-    const shaped = renderToStaticMarkup(<Canvas blocks={[...BLOCKS, { name: 'Keep fields', kind: 'other', next: [] }]} name="x" />)
+    const shaped = renderToStaticMarkup(<Canvas blocks={[...BLOCKS, { name: 'Keep fields', kind: 'other', badge: 'n8n', next: [] }]} name="x" />)
     expect(shaped).toContain('n8n block')
     expect(shaped).not.toContain('Not allowed')
-    const off = renderToStaticMarkup(<Canvas blocks={[...BLOCKS, { name: 'Send it', kind: 'off', next: [] }]} name="x" />)
+    const off = renderToStaticMarkup(<Canvas blocks={[...BLOCKS, { name: 'Send it', kind: 'off', badge: 'n8n', next: [] }]} name="x" />)
     expect(off).toMatch(/>Send it<\/text><text[^>]*>Not allowed</)
+  })
+
+  it('names what one of n8n’s own blocks does by its tag, without our badge (ADR 0045)', () => {
+    const posts = renderToStaticMarkup(<Canvas blocks={[...BLOCKS, { name: 'Tell Slack', kind: 'other', badge: 'n8n', tag: 'Posts in Slack', next: [] }]} name="x" />)
+    expect(posts).toMatch(/>Tell Slack<\/text><text[^>]*>Posts in Slack</)
+    expect(posts).not.toMatch(/>Our block<\/text>(?:(?!<g class="_node_)[\s\S])*>Tell Slack</)
   })
 
   it('marks a block it waits at with a shape as well as amber, as it marks a stop and a tick', () => {

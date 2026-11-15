@@ -136,6 +136,10 @@ async def test_the_platform_s_key_has_only_the_scopes_it_uses_and_runs_out_in_da
     [asked] = n8n.key_requests
     assert asked["label"] == "platform-api"
     assert sorted(asked["scopes"]) == [
+        "credential:create",
+        "credential:delete",
+        "credential:list",
+        "credential:read",
         "execution:list",
         "execution:read",
         "execution:retry",

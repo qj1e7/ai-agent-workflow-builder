@@ -77,7 +77,7 @@ from platform_api.builder.n8n_draft import (
     blocks_of,
     check_draft,
 )
-from platform_api.builder.n8n_facts import BuilderWorkflowFacts, ReleaseReader
+from platform_api.builder.n8n_facts import BuilderWorkflowFacts, MadeKeys, ReleaseReader
 from platform_api.builder.n8n_holds import HeldInN8n, Holding
 from platform_api.builder.planner import ChangedInN8nReply
 from platform_api.builder.planning import (
@@ -152,6 +152,7 @@ from platform_api.orchestration import (
     next_run,
     read_flow,
     tools_used,
+    unchecked,
     write_tools_used,
 )
 from platform_api.shared import TEAM_TIME_ZONE, Principal, UseCaseId, UserId, new_id
@@ -161,7 +162,7 @@ log = logging.getLogger(__name__)
 _CURRENT_VERSION = """
     SELECT u.use_case_id, u.owner, u.paused_at, u.paused_by, u.deleted_at, u.deleted_by,
            u.draft, u.left_out, u.engine, u.n8n_workflow_id, u.deleted_in_n8n_at,
-           u.move_refused, u.made_in_n8n_by, v.version,
+           u.move_refused, u.made_in_n8n_by, u.n8n_key_finding, v.version,
            v.template, v.name, v.instruction, v.params, v.created_at, v.document,
            v.n8n_version_id, v.grade, v.findings
     FROM builder.use_cases u
@@ -231,6 +232,14 @@ def _next_run_at(row: Mapping[str, Any], now: datetime, team_zone: str) -> datet
     return next_run(document, row["n8n_workflow_id"], now, team_zone)
 
 
+def _grade(row: Mapping[str, Any]) -> Grade | None:
+    """A key the credential sweep removed while someone held the workflow needs a fix too, until
+    the hold ends (ENGINE-PLAN E17)."""
+    if not _own(row):
+        return None
+    return "needs_a_fix" if row["n8n_key_finding"] else row["grade"]
+
+
 def _state(state: Lifecycle) -> UseCaseState:
     """A deleted workflow is never shown, so it has no word of its own."""
     match state:
@@ -286,8 +295,11 @@ def _view(
         last_run=last_run,
         left_out=list(row["left_out"]),
         blocks=[] if row["document"] is None else blocks_of(row["document"]),
-        grade=row["grade"] if _own(row) else None,
-        findings=list(row["findings"] or []),
+        grade=_grade(row),
+        findings=[
+            *(row["findings"] or []),
+            *([row["n8n_key_finding"]] if _own(row) and row["n8n_key_finding"] else []),
+        ],
         deleted_in_n8n_at=row["deleted_in_n8n_at"],
         moving_to_n8n=moving,
         move_refused=None if _own(row) else row["move_refused"],
@@ -354,6 +366,22 @@ class UseCasePaused:
 @dataclass(frozen=True)
 class NotOnYet:
     """A draft runs by hand only as a test run."""
+
+
+@dataclass(frozen=True)
+class NoTestRun:
+    """A test run runs the draft in the platform's n8n project, where n8n lets it use every key
+    there is. So none starts while the draft is held in someone's space, or has a block n8n
+    would run unchecked. The words say why."""
+
+    words: str
+
+
+UNCHECKED_TEST = (
+    "The draft in n8n has a block the platform can't check: {found} Fix it in n8n, then test it."
+)
+UNREAD_TEST = "n8n did not show the draft, so no test run started. Try again in a minute."
+NOT_SHOWN = "n8n did not show this version, so it stayed off. Try again in a minute."
 
 
 @dataclass(frozen=True)
@@ -448,6 +476,7 @@ class Builder:
         open_runs: OpenRuns | None = None,
         holding: Holding | None = None,
         time_zone: ZoneInfo = TEAM_TIME_ZONE,
+        keys: MadeKeys | None = None,
     ) -> None:
         self._db = db
         self._zone = time_zone.key
@@ -461,7 +490,7 @@ class Builder:
         self._history = history
         self._n8n = n8n
         self.public_base_url = public_base_url
-        self.facts = BuilderWorkflowFacts(db, self, releases, writes)
+        self.facts = BuilderWorkflowFacts(db, self, releases, writes, keys)
         """What node calls ask of the builder, and what a draft is graded against."""
         self._requests = requests
         self.holding = holding
@@ -1122,6 +1151,21 @@ class Builder:
         chosen = [(agent.card, agent.values) for agent in pinned]
         return await self._laid_out(use_case_id, row["name"], schedule, chosen)
 
+    async def _unchecked_in_n8n(
+        self, workflow_id: str, version_id: str
+    ) -> NotSafe | N8nNotReady | None:
+        """The version as n8n holds it, checked again now, just before it goes live: the keys the
+        platform holds may have changed since it was graded. One n8n can't show stays off."""
+        assert self._n8n is not None
+        try:
+            version = await self._n8n.kept(workflow_id, version_id)
+        except (N8nError, httpx.HTTPError) as error:
+            log.warning("could not read %s before it goes live: %s", workflow_id, error)
+            version = None
+        if version is None:
+            return N8nNotReady(NOT_SHOWN)
+        return NotSafe() if unchecked(version, (await self.facts.known({})).keys) else None
+
     async def _follow_in_n8n(
         self, row: Mapping[str, Any], after: Lifecycle
     ) -> N8nNotReady | NotSafe | None:
@@ -1139,6 +1183,8 @@ class Builder:
             return N8nNotReady("This version is not saved in n8n. Change when it runs to save it.")
         if is_on(after) and row["grade"] != "safe":
             return NotSafe()
+        if is_on(after) and (refused := await self._unchecked_in_n8n(workflow_id, version_id)):
+            return refused
         try:
             if is_on(after):
                 await self._n8n.go_live(workflow_id, version_id)
@@ -1450,9 +1496,20 @@ class Builder:
         principal: Principal,
         idempotency_key: str,
         test: bool = False,
-    ) -> RunStarted | None | NothingToCheck | NoModelToRun | UseCasePaused | NotOnYet | NotMovedYet:
+    ) -> (
+        RunStarted
+        | None
+        | NothingToCheck
+        | NoModelToRun
+        | UseCasePaused
+        | NotOnYet
+        | NotMovedYet
+        | NoTestRun
+    ):
         """A test run of a draft stops at the approval gate (ADR 0044). Whether it is a draft
-        is read under the lock, so a draft turned on since runs as any test run does."""
+        is read under the lock, so a draft turned on since runs as any test run does. A test run
+        runs the n8n draft, so it starts only when nobody holds it and n8n would run nothing in
+        it unchecked."""
         view = await self.get_use_case(use_case_id)
         # Its first run after a run that held it back runs on its own n8n workflow. Read it again
         # whatever the move answers, since a move may also have landed meanwhile.
@@ -1477,12 +1534,23 @@ class Builder:
             # The shared run workflow is made of blocks the allow list turns off (E11).
             return NotMovedYet(view.move_refused or NOT_MOVED_YET)
         spec = replace(spec, test=test)
+        if test and spec.n8n is not None:
+            checked = await self._checked_draft(use_case_id, spec.n8n)
+            if isinstance(checked, NoTestRun):
+                return checked
+            spec = replace(spec, n8n=replace(spec.n8n, draft_version=checked))
         if isinstance(spec.task, CardsTask) and not await self._planner.has_model():
             return NoModelToRun()
         async with self._db.transaction("builder") as uow:
             # Read the state again under the lock, on this one connection, and hold the lock
             # until the run is inserted, so a pause or delete can't land in between (#56).
             await hold_workflow(uow.conn, use_case_id, alone=False)
+            if test and self.holding is not None:
+                held = await self.holding.refused_while_held(
+                    uow.conn, use_case_id, principal.user_id
+                )
+                if held is not None:
+                    return NoTestRun(held.words)
             match await _lifecycle_now(uow.conn, use_case_id):
                 case None | Deleted():
                     return None
@@ -1495,6 +1563,23 @@ class Builder:
                     return await self._runs.start_run(trial, principal, idempotency_key)
                 case On():
                     return await self._runs.start_run(spec, principal, idempotency_key)
+
+    async def _checked_draft(self, use_case_id: str, target: N8nTarget) -> NoTestRun | str:
+        """The version id of the draft a test run would run, once n8n would run nothing in it
+        unchecked. The run is then held to that draft."""
+        if self._n8n is None:
+            return NoTestRun(UNREAD_TEST)
+        try:
+            draft = await self._n8n.look(target.workflow_id)
+        except (N8nError, httpx.HTTPError) as error:
+            log.warning("could not read the draft of %s before a test run: %s", use_case_id, error)
+            return NoTestRun(UNREAD_TEST)
+        if draft is None:
+            return NoTestRun(UNREAD_TEST)
+        found = unchecked(draft.document, (await self.facts.known({})).keys)
+        if found:
+            return NoTestRun(UNCHECKED_TEST.format(found=found[0].text))
+        return draft.version_id
 
 
 def _bound(card: CardView, values: Mapping[str, str]) -> CardRun:

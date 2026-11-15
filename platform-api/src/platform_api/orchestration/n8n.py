@@ -27,7 +27,8 @@ from platform_api.orchestration.n8n_calls import (
     Publisher,
     TryLater,
 )
-from platform_api.orchestration.workflow_check import ERROR_WORKFLOW
+from platform_api.orchestration.platform_keys import attach_keys
+from platform_api.orchestration.workflow_check import ERROR_WORKFLOW, unpinned_notices
 from platform_api.settings import N8nOwner
 from platform_api.shared import N8nExecutionId, UserId
 
@@ -367,11 +368,17 @@ PLATFORM_API_SCOPES = (
     "user:create",
     "user:read",
     "user:delete",
+    "credential:create",
+    "credential:read",
+    "credential:delete",
+    "credential:list",
 )
 """Only what the platform's calls need, as n8n 2.42.6's public controllers check them: read covers
 history and versions, activate covers publish, move covers transfer, list covers a project's
 workflows (E15), and the retry of an execution has a scope of its own. The user scopes make and
-end staff accounts (ENGINE-PLAN 2.9)."""
+end staff accounts (ENGINE-PLAN 2.9). The credential scopes make the platform's own keys, test
+them, and remove every key the platform did not make (ADR 0045). A key is never changed or moved:
+one that must change is deleted and made anew."""
 KEY_LIFETIME = timedelta(days=3)
 """A key that leaks stops working within days. When n8n refuses it, the platform makes another."""
 STALE_KEY_AGE = timedelta(days=1)
@@ -469,6 +476,20 @@ class HistoryEntry:
     authors: str
     """A display name such as "Alice Tester", never an id (P7 Q4): a hint, never a party."""
     created_at: str
+
+
+@dataclass(frozen=True)
+class N8nCredential:
+    """A key in n8n's credential store, as the owner sees every one. Never its secret."""
+
+    id: str
+    name: str
+    kind: str
+    """n8n's credential type, such as slackApi."""
+    created_at: datetime
+    updated_at: datetime
+    project: str | None
+    """The project that owns it."""
 
 
 @dataclass(frozen=True)
@@ -678,6 +699,30 @@ class _Page[T](_Data):
     data: list[T]
 
 
+class _Sharing(_Data):
+    id: str
+    role: str
+
+
+class _CredentialOut(_Data):
+    id: str
+    name: str
+    type: str
+    created_at: datetime = Field(alias="createdAt")
+    updated_at: datetime = Field(alias="updatedAt")
+    shared: list[_Sharing] = Field(default_factory=list[_Sharing])
+
+
+class _CredentialPage(_Data):
+    data: list[_CredentialOut]
+    next_cursor: str | None = Field(default=None, alias="nextCursor")
+
+
+class _CredentialTest(_Data):
+    status: str
+    message: str = ""
+
+
 class _Rest[T](_Data):
     data: T
 
@@ -690,6 +735,18 @@ def _parse[T](model: type[T], response: httpx.Response) -> T:
             f"{response.request.method} {response.request.url.path} answered in a shape the "
             "platform does not know"
         ) from None
+
+
+def _credential(out: _CredentialOut) -> N8nCredential:
+    owners = [s.id for s in out.shared if s.role == "credential:owner"]
+    return N8nCredential(
+        out.id,
+        out.name,
+        out.type,
+        out.created_at,
+        out.updated_at,
+        owners[0] if owners else None,
+    )
 
 
 def _expect(response: httpx.Response, *ok: int) -> httpx.Response:
@@ -988,9 +1045,23 @@ class N8nApi:
             return
         _expect(await self._public("POST", f"/workflows/{workflow_id}/unpublish", {}))
 
+    async def draft(self, workflow_id: str) -> dict[str, Any] | None:
+        """The workflow as the public API holds it, with its draft's version id. None when n8n no
+        longer has it."""
+        response = await self._public("GET", f"/workflows/{workflow_id}")
+        if response.status_code == 404:
+            return None
+        found: dict[str, Any] = _expect(response).json()
+        return found
+
+    async def unpinned(self, workflow_id: str) -> list[str]:
+        """The draft's notice blocks whose output is not pinned, so a test run would post."""
+        return unpinned_notices(await self.draft(workflow_id) or {})
+
     async def run_draft(self, workflow_id: str, item: Mapping[str, Any]) -> str:
         """/rest: runs the draft by hand from Start from the Portal with this item as its output,
-        and answers the execution's id at once (P7 Q3, body B). n8n runs the stored draft."""
+        and answers the execution's id at once (P7 Q3, body B). n8n runs the stored draft, with
+        the output pinned for each notice block, so a test run posts nothing."""
         body: dict[str, Any] = {
             "triggerToStartFrom": {
                 "name": START_NAME,
@@ -1031,6 +1102,54 @@ class N8nApi:
     async def transfer(self, workflow_id: str, project_id: str) -> None:
         body = {"destinationProjectId": project_id}
         _expect(await self._public("PUT", f"/workflows/{workflow_id}/transfer", body), 200, 204)
+
+    async def credentials(self) -> list[N8nCredential]:
+        """Every key in n8n, in every project, page by page. Only the owner may list them all."""
+        params = {"limit": "250"}
+        found: list[N8nCredential] = []
+        while True:
+            response = _expect(await self._public("GET", "/credentials", params=params))
+            page = _parse(_CredentialPage, response)
+            found.extend(_credential(item) for item in page.data)
+            if not page.next_cursor:
+                return found
+            params = {**params, "cursor": page.next_cursor}
+
+    async def credential(self, credential_id: str) -> N8nCredential | None:
+        response = await self._public("GET", f"/credentials/{credential_id}")
+        if response.status_code == 404:
+            return None
+        return _credential(_parse(_CredentialOut, _expect(response)))
+
+    async def create_credential(
+        self,
+        credential_id: str,
+        name: str,
+        kind: str,
+        data: Mapping[str, str],
+        project_id: str,
+    ) -> N8nCredential:
+        """With the id the platform picks, so a key made again keeps every workflow that names
+        it. n8n answers 409 when a key with that id is there already."""
+        body = {
+            "id": credential_id,
+            "name": name,
+            "type": kind,
+            "data": dict(data),
+            "projectId": project_id,
+        }
+        created = _expect(await self._public("POST", "/credentials", body))
+        return _credential(_parse(_CredentialOut, created))
+
+    async def test_credential(self, credential_id: str) -> tuple[bool, str]:
+        """n8n's own connection test of a stored key: whether n8n reached the system with it, and
+        what n8n said."""
+        response = _expect(await self._public("POST", f"/credentials/{credential_id}/test"))
+        tested = _parse(_CredentialTest, response)
+        return tested.status == "OK", tested.message
+
+    async def delete_credential(self, credential_id: str) -> None:
+        _expect(await self._public("DELETE", f"/credentials/{credential_id}"), 200, 204, 404)
 
     async def execution(self, execution_id: str, data: bool = True) -> ExecutionRecord | None:
         """With data, the start item and a failure's block and words too. Without, its status
@@ -1443,6 +1562,16 @@ class N8nWorkflows:
         """The member's own space, found by n8n's id for them, never by name or email (P7 Q9)."""
         return (await personal_spaces(self._api)).get(n8n_user_id)
 
+    async def own_workflow_ids(self) -> set[str]:
+        """Every workflow the platform recorded as its own, ready or not, so none waits to be set
+        up. M4's copy of the self-test in a member's space is to be recorded here too."""
+        async with self._db.connection("orchestration") as conn:
+            row = await (
+                await conn.execute("SELECT workflows FROM orchestration.engine_status WHERE id = 1")
+            ).fetchone()
+        loaded: list[dict[str, Any]] = [] if row is None else row["workflows"]
+        return {str(w["id"]) for w in loaded}
+
     async def spaces(self) -> dict[str, str]:
         """Each member's own space by n8n's id for the member, as n8n names its creator."""
         return await personal_spaces(self._api)
@@ -1458,6 +1587,18 @@ class N8nWorkflows:
 
     async def triggers_live(self, workflow_id: str, version_id: str) -> None:
         await self._live(workflow_id, version_id)
+
+    async def keep_keys(
+        self, workflow_id: str, expected_draft: str, made: Mapping[str, str]
+    ) -> Written | ChangedInN8n:
+        """Puts the platform's key back on each block for a system in the draft, by the block's
+        type, and takes off every other key, publishing nothing (ADR 0045, as amended)."""
+        return await self._api.write(
+            workflow_id,
+            expected_draft,
+            lambda document: attach_keys(document, made),
+            publish=False,
+        )
 
     async def keep_settings(
         self, workflow_id: str, expected_draft: str, settings: Mapping[str, Any]

@@ -6,16 +6,18 @@ an unsafe one is set up with its writes refused, and its maker and the person wh
 never approve its runs."""
 
 import copy
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from typing import Any
 
 import httpx
 import pytest
 
+from platform_api.bootstrap import LoadedWorkflow, record_status
 from platform_api.builder.cards import VERSION_CHECKER_ID
 from platform_api.builder.made_in_n8n import (
     CHANGED_AS_SET_UP,
     FIX_IN_N8N,
+    FIX_N8N_BLOCKS,
     NOT_READ,
     SET_UP_ALREADY,
     MadeInN8n,
@@ -27,7 +29,7 @@ from platform_api.builder.models import (
     CardInput,
     CardView,
 )
-from platform_api.builder.n8n_holds import NOT_MOVED
+from platform_api.builder.n8n_holds import CHANGED_AS_TAKEN, NOT_MOVED
 from platform_api.builder.n8n_http import SEE_MADE_IN_N8N
 from platform_api.builder.versions import authors_from
 from platform_api.orchestration import (
@@ -49,11 +51,14 @@ from platform_api.orchestration.n8n_calls import (
     version_problem,
 )
 from platform_api.orchestration.n8n_staff import NO_ACCESS, OFF, Ended, StaffAccounts
+from platform_api.orchestration.workflow_check import ERROR_WORKFLOW as ERROR_WORKFLOW_NAME
+from platform_api.orchestration.workflow_check import SELF_TEST
 from platform_api.shared import UseCaseId, UserId
 from tests.fake_n8n import FakeN8n
 from tests.support import ALICE, NOW
 from tests.test_builder_lifecycle import VALUES
 from tests.test_n8n_access import PLATFORM_PROJECT, Staffed, lab, s, staff_for
+from tests.test_n8n_builder import ERROR_WORKFLOW
 from tests.test_n8n_lifecycle import Workflows, made
 
 pytestmark = pytest.mark.anyio
@@ -366,10 +371,12 @@ async def test_an_ended_account_s_workflows_wait_with_the_maker_noted_as_it_ende
 async def test_a_move_n8n_refuses_sets_up_nothing(s: Staffed):
     carol_n8n, carol_space = await space_of(s, "carol")
     workflow_id = s.n8n.make_in(carol_space, named(await laid_out(s), "Stays"), carol_n8n)
+    live = s.n8n.workflows[workflow_id]["activeVersionId"]
     s.n8n.transfer_answers = [500]
     refused = await set_up(s, "carol", workflow_id)
     assert (refused.status_code, refused.json()["detail"]) == (503, NOT_MOVED)
     assert s.n8n.home_of(workflow_id) == carol_space
+    assert s.n8n.workflows[workflow_id]["activeVersionId"] == live, "back on, in her space"
     assert [w["workflow_id"] for w in await waiting(s, "carol")] == [workflow_id]
     assert workflow_id not in await s.staff.makers(), "no note left for a workflow still hers"
 
@@ -511,3 +518,140 @@ async def test_an_account_delete_n8n_refuses_is_tried_again(s: Staffed):
     assert (await s.person("carol"))["n8n_user_id"] == carol_n8n, "still marked for ending"
     assert Ended(CAROL) in await s.settle(), "the next settle ends it"
     assert carol_n8n in [user for user, _ in s.n8n.deleted_users]
+
+
+def posting_with(document: dict[str, Any], key: str) -> dict[str, Any]:
+    """n8n's own Slack block, after the release check's read, posting with this key."""
+    changed = copy.deepcopy(document)
+    changed["nodes"].append(
+        {
+            "id": "slack",
+            "name": "Tell Slack",
+            "type": "n8n-nodes-base.slack",
+            "typeVersion": 2.7,
+            "position": [900, 200],
+            "parameters": {"channelId": {"__rl": True, "value": "C1", "mode": "id"}},
+            "credentials": {"slackApi": {"id": key, "name": "Mine"}},
+        }
+    )
+    changed["connections"]["Read release"]["main"][0].append(
+        {"node": "Tell Slack", "type": "main", "index": 0}
+    )
+    return changed
+
+
+@pytest.mark.parametrize("published", [True, False], ids=["published", "a-draft"])
+async def test_a_workflow_naming_a_member_s_own_key_needs_a_fix_before_set_up(
+    s: Staffed, published: bool
+):
+    """In the platform's project n8n lets a workflow use every key there is, so one that names a
+    key the platform did not make never moves there, published or not (E15's review)."""
+    carol_n8n, space = await space_of(s, "carol")
+    hers = s.n8n.add_credential(space, "slackApi")
+    document = named(posting_with(await laid_out(s), hers), "Posts with mine")
+    workflow_id = s.n8n.make_in(space, document, carol_n8n if published else None)
+    [listed] = [w for w in await waiting(s, "carol") if w["workflow_id"] == workflow_id]
+    assert (listed["grade"], listed["can_set_up"], listed["why_not"]) == (
+        "needs_a_fix",
+        False,
+        FIX_N8N_BLOCKS,
+    )
+    assert '"Tell Slack" uses a key the platform did not make.' in listed["findings"]
+    refused = await set_up(s, "carol", workflow_id)
+    assert (refused.status_code, refused.json()["detail"]) == (409, FIX_N8N_BLOCKS)
+    assert s.n8n.home_of(workflow_id) == space, "never moved where n8n would run it with any key"
+
+
+async def test_a_published_one_changed_to_name_a_member_s_key_as_it_moves_goes_back(
+    s: Staffed, looks: Looks
+):
+    carol_n8n, space = await space_of(s, "carol")
+    workflow_id = s.n8n.make_in(space, named(await laid_out(s), "Morning check"), carol_n8n)
+    hers = s.n8n.add_credential(space, "slackApi")
+    original = looks.workflows_in
+
+    async def changed_after_listing(project_id: str) -> list[ListedWorkflow]:
+        listed = await original(project_id)
+        live = s.n8n.workflows[workflow_id]["activeVersionId"]
+        version = s.n8n.history[workflow_id][live]
+        version.update(posting_with({**version, "settings": {}}, hers))
+        return listed
+
+    looks.workflows_in = changed_after_listing  # type: ignore[method-assign]
+    refused = await set_up(s, "carol", workflow_id)
+    assert (refused.status_code, refused.json()["detail"]) == (409, CHANGED_AS_TAKEN)
+    assert s.n8n.home_of(workflow_id) == space, "never in the platform's project, live"
+
+
+async def test_the_platform_s_own_workflows_never_wait_to_be_set_up(s: Staffed):
+    """Such as the daily self-test's copy in a member's space (M4), found by the id the platform
+    recorded, whatever its name."""
+    carol_n8n, space = await space_of(s, "carol")
+    copy_id = s.n8n.make_in(space, named(await laid_out(s), "Anything"), carol_n8n)
+    record_status(
+        s.postgres.owner,
+        ready=True,
+        detail="d",
+        workflows=[
+            LoadedWorkflow(ERROR_WORKFLOW_NAME, ERROR_WORKFLOW, True, "sha", PLATFORM_PROJECT),
+            LoadedWorkflow(SELF_TEST, copy_id, True, "sha", space),
+        ],
+    )
+    assert copy_id not in {w["workflow_id"] for w in await waiting(s, "carol")}
+    refused = await set_up(s, "carol", copy_id)
+    assert refused.status_code == 404
+
+
+async def published_with_draft(s: Staffed, change: Callable[[dict[str, Any]], None]) -> str:
+    """Carol's published workflow, as checked, whose draft she then changed and saved."""
+    carol_n8n, space = await space_of(s, "carol")
+    workflow_id = s.n8n.make_in(space, named(await laid_out(s), "Draft differs"), carol_n8n)
+    change(s.n8n.workflows[workflow_id])
+    s.n8n.edit(workflow_id)
+    return workflow_id
+
+
+async def test_a_published_one_whose_draft_n8n_would_run_unchecked_waits_for_a_fix(s: Staffed):
+    """A test run runs the draft, in the platform's project, so the draft is checked too."""
+
+    def deletes(workflow: dict[str, Any]) -> None:
+        changed = posting_with(workflow, "any")
+        changed["nodes"][-1]["parameters"]["operation"] = "delete"
+        workflow.update(nodes=changed["nodes"], connections=changed["connections"])
+
+    workflow_id = await published_with_draft(s, deletes)
+    [listed] = [w for w in await waiting(s, "carol") if w["workflow_id"] == workflow_id]
+    assert (listed["can_set_up"], listed["why_not"]) == (False, FIX_N8N_BLOCKS)
+    assert listed["findings"][-1] == (
+        'In its draft: "Tell Slack" does something that is off: message delete.'
+    )
+    refused = await set_up(s, "carol", workflow_id)
+    assert (refused.status_code, refused.json()["detail"]) == (409, FIX_N8N_BLOCKS)
+
+
+async def test_set_up_puts_the_platform_s_keys_back_on_the_draft_it_takes_in(s: Staffed):
+    """Her key in the draft is taken off as it comes in, so no test run could use it."""
+    hers = "her-own-key"
+
+    def posts(workflow: dict[str, Any]) -> None:
+        changed = posting_with(workflow, hers)
+        workflow.update(nodes=changed["nodes"], connections=changed["connections"])
+
+    workflow_id = await published_with_draft(s, posts)
+    assert (await set_up(s, "carol", workflow_id)).status_code == 201
+    [slack] = [n for n in s.n8n.workflows[workflow_id]["nodes"] if n["name"] == "Tell Slack"]
+    assert "credentials" not in slack, "this platform holds no Slack key, so the block has none"
+
+
+async def test_a_move_that_stops_in_the_platform_s_project_leaves_it_off(s: Staffed):
+    """It took her version off to move it. Stuck in the platform's project, where n8n lets it use
+    every key there is, it stays off: nothing goes back on there unchecked."""
+    carol_n8n, carol_space = await space_of(s, "carol")
+    workflow_id = s.n8n.make_in(carol_space, named(await laid_out(s), "Stuck"), carol_n8n)
+    s.n8n.transfer_keeps = lambda settings: {}
+    s.n8n.after_put = s.n8n.edit
+    s.n8n.transfer_answers = [204, 500]
+    refused = await set_up(s, "carol", workflow_id)
+    assert refused.status_code == 503
+    assert s.n8n.home_of(workflow_id) == PLATFORM_PROJECT
+    assert s.n8n.workflows[workflow_id]["activeVersionId"] is None
