@@ -1,6 +1,7 @@
 """The platform's own calls to n8n while it runs (ENGINE-PLAN 2.1 and 2.5), against a fake n8n
 that answers as spike P7 recorded n8n 2.42.6 answering."""
 
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -369,6 +370,29 @@ async def test_an_execution_that_did_not_end_in_an_error_is_no_failure() -> None
     failures = failures_for(n8n)
     for status in ("success", "running", "waiting", "canceled", "gone"):
         assert await failures.failure(N8nExecutionId(status)) is None, status
+
+
+@dataclass
+class UnreadN8n(FakeN8n):
+    """n8n while it restarts: it refuses the connection, or answers 503, for an execution."""
+
+    refused: bool = True
+
+    def handle(self, request: httpx.Request) -> httpx.Response:
+        if "/executions/" not in request.url.path:
+            return super().handle(request)
+        if self.refused:
+            raise httpx.ConnectError("n8n is restarting")
+        return httpx.Response(503, json={"message": "n8n is starting"})
+
+
+@pytest.mark.parametrize("refused", [True, False], ids=["connection-refused", "answered-503"])
+async def test_a_failure_n8n_cannot_be_read_for_is_asked_again_not_refused(refused: bool) -> None:
+    """A report whose failure n8n cannot be read for is answered with a retry, never with "n8n
+    does not say this execution failed", which the block would not send again."""
+    n8n = UnreadN8n(refused=refused)
+    n8n.execution("45", "error", failed=("Read release", "GitHub answered 503."))
+    assert isinstance(await failures_for(n8n).failure(N8nExecutionId("45")), TryLater)
 
 
 async def test_a_draft_runs_by_hand_from_start_from_the_portal_with_our_item() -> None:

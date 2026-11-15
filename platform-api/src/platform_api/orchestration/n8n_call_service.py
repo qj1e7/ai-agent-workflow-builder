@@ -354,9 +354,13 @@ class NodeCalls:
                 return NOT_OUR_ERROR_WORKFLOW
             case True:
                 pass
-        found = await self._failures.failure(failed)
-        if found is None:
-            return NOT_FAILED
+        match await self._failures.failure(failed):
+            case TryLater() as later:
+                return later
+            case None:
+                return NOT_FAILED
+            case found:
+                pass
         match await self._self_test(platform, found.facts.workflow_id):
             case TryLater() as later:
                 return later

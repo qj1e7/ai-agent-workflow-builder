@@ -680,9 +680,10 @@ class N8nFailures(Protocol):
         n8n cannot be read."""
         ...
 
-    async def failure(self, execution_id: N8nExecutionId) -> FailedExecution | None:
+    async def failure(self, execution_id: N8nExecutionId) -> FailedExecution | TryLater | None:
         """The node that failed and its error text, from the execution's data. None unless n8n
-        has the execution and it ended in an error."""
+        has the execution and it ended in an error. TryLater while n8n cannot be read, so the
+        block sends the report again: no sweep finds a failure no block linked."""
         ...
 
 

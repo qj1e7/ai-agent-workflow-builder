@@ -1302,14 +1302,14 @@ class N8nWorkflows:
             return Finished(execution_id)
         return FailedExecution(execution_id, _facts(record), record.failed_node, record.error)
 
-    async def failure(self, execution_id: N8nExecutionId) -> FailedExecution | None:
+    async def failure(self, execution_id: N8nExecutionId) -> FailedExecution | TryLater | None:
         """The block that failed and n8n's words for it, from n8n's own record. None unless n8n
         has the execution and it ended in an error."""
         try:
             record = await self._api.execution(execution_id)
         except (N8nError, httpx.HTTPError) as error:
             log.warning("could not read n8n execution %s: %s", execution_id, error)
-            return None
+            return N8N_UNREADABLE
         if record is None or record.status != "error":
             return None
         return FailedExecution(execution_id, _facts(record), record.failed_node, record.error)

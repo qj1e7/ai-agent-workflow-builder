@@ -76,6 +76,8 @@ class FakeFailures:
     finished: set[str] = field(default_factory=set[str])
     unreadable: set[str] = field(default_factory=set[str])
     """The platform workflows n8n cannot say where it holds just now."""
+    unread: set[str] = field(default_factory=set[str])
+    """The executions n8n cannot be read for just now."""
     where_read: list[str] = field(default_factory=list[str])
 
     async def platform_workflows(self) -> dict[str, PlatformWorkflow]:
@@ -96,10 +98,13 @@ class FakeFailures:
     async def ended(self, execution_id: N8nExecutionId) -> Ended | None:
         if execution_id in self.finished:
             return Finished(execution_id)
-        return await self.failure(execution_id)
+        found = await self.failure(execution_id)
+        return None if isinstance(found, TryLater) else found
 
-    async def failure(self, execution_id: N8nExecutionId) -> FailedExecution | None:
+    async def failure(self, execution_id: N8nExecutionId) -> FailedExecution | TryLater | None:
         self.read.append(execution_id)
+        if execution_id in self.unread:
+            return TryLater("n8n cannot be read.")
         return self.failed.get(execution_id)
 
 
@@ -298,6 +303,20 @@ async def test_a_report_for_a_workflow_that_is_not_ours_makes_no_run(r: Reports)
     r.n8n.executions["101"] = ExecutionFacts("wf_theirs", "trigger", None, None, "v1")
     assert await r.report() == LeftAsIs(NOT_OURS.detail)
     assert await r.runs() == []
+
+
+async def test_a_report_n8n_cannot_be_read_for_is_asked_again_and_fails_the_run_then(
+    r: Reports,
+):
+    """A failure no block linked is found by no sweep, so a brief n8n error must leave the block
+    to send the report again, never answer "n8n does not say this execution failed"."""
+    r.started("101")
+    r.failures.unread.add("101")
+    assert isinstance(await r.report(), TryLater)
+    assert await r.runs() == []
+    r.failures.unread.clear()
+    assert isinstance(await r.report(), FailedRun)
+    assert isinstance(await r.state(), Failed)
 
 
 async def test_a_report_takes_the_block_and_its_words_from_n8n_never_from_the_body(r: Reports):
