@@ -6,6 +6,7 @@ cancelled, with nothing written and the workflow gone from n8n."""
 
 import secrets
 import urllib.parse
+from collections.abc import Callable
 from typing import Any
 
 import httpx
@@ -52,10 +53,21 @@ class Member:
 
     def publish_without_the_yes(self, workflow_id: str) -> str:
         """Deletes Ask for a yes in the editor, saves and publishes, as P7 Q4's member did."""
+
+        def without_the_yes(nodes: list[Json], connections: Json) -> None:
+            nodes[:] = [node for node in nodes if node["name"] != "Ask for a yes"]
+            connections.pop("Ask for a yes")
+            connections["Newer?"]["main"][0] = [
+                {"node": "Create ticket", "type": "main", "index": 0}
+            ]
+
+        return self.publish(workflow_id, without_the_yes)
+
+    def publish(self, workflow_id: str, change: Callable[[list[Json], Json], None]) -> str:
+        """Changes the nodes and connections in the editor, saves and publishes."""
         held = self.call("GET", f"/workflows/{workflow_id}")
-        nodes = [node for node in held["nodes"] if node["name"] != "Ask for a yes"]
-        connections = {k: v for k, v in held["connections"].items() if k != "Ask for a yes"}
-        connections["Newer?"]["main"][0] = [{"node": "Create ticket", "type": "main", "index": 0}]
+        nodes, connections = held["nodes"], held["connections"]
+        change(nodes, connections)
         # The editor sends the settings with every save; without them n8n clears them.
         body = {
             "nodes": nodes,
@@ -66,7 +78,7 @@ class Member:
         self.call("PATCH", f"/workflows/{workflow_id}", body)
         saved = self.call("GET", f"/workflows/{workflow_id}")
         assert saved["versionId"] != held["versionId"], "the edit was saved as a new draft"
-        assert "Ask for a yes" not in [node["name"] for node in saved["nodes"]]
+        assert [node["name"] for node in saved["nodes"]] == [node["name"] for node in nodes]
         activate = {"versionId": saved["versionId"], "expectedChecksum": saved["checksum"]}
         self.call("POST", f"/workflows/{workflow_id}/activate", activate)
         live = N8N_OWNER.call("GET", f"/workflows/{workflow_id}")

@@ -353,14 +353,18 @@ class N8nOwner:
     def call(self, method: str, path: str, body: object = None) -> Any:
         """n8n's answer, as n8n_answer reads it. A call that changes something is checked by
         reading back what it changed, never by its answer alone."""
+        return n8n_answer(self.send(method, f"/rest{path}", body))
+
+    def send(self, method: str, path: str, body: object = None) -> httpx.Response:
+        """n8n's answer as it came, for a path from n8n's root, such as a refusal."""
         if self._client is None:
             self._client = httpx.Client(base_url=N8N_URL, timeout=30)
             self._sign_in(self._client)
-        answer = self._client.request(method, f"/rest{path}", json=body)
+        answer = self._client.request(method, path, json=body)
         if answer.status_code == 401:
             self._sign_in(self._client)
-            answer = self._client.request(method, f"/rest{path}", json=body)
-        return n8n_answer(answer)
+            answer = self._client.request(method, path, json=body)
+        return answer
 
 
 def n8n_answer(answer: httpx.Response) -> Any:
