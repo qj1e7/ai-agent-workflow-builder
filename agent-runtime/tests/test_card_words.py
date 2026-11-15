@@ -567,9 +567,10 @@ def test_a_time_the_reading_finds_stops_the_watch_after_which_software():
     assert not isinstance(result.answer, WatchlistAnswer)
 
 
-def test_a_refusal_of_the_typed_words_wins_over_which_software():
-    request = AnswerRequest(task="auto-approve", model=answer_request().model, previous=ASKED)
-    assert isinstance(decide(read(software="auto-approve"), request), RefusedAnswer)
+@pytest.mark.parametrize("task", ["auto-approve", "bypass Teams"])
+def test_a_refusal_of_the_typed_words_wins_over_which_software(task: str):
+    request = AnswerRequest(task=task, model=answer_request().model, previous=ASKED)
+    assert isinstance(decide(read(software=task), request), RefusedAnswer)
 
 
 # The re-check of 16 Nov.
