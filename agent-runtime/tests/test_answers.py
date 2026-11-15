@@ -45,6 +45,7 @@ from agent_runtime.contract import (
 )
 from agent_runtime.contracts import FOLLOW_UP_TASK, answer_request
 from agent_runtime.edits import commanded
+from agent_runtime.questions import QuestionReply
 from agent_runtime.reading import (
     FILLED_IN,
     NO_TIME_BUT,
@@ -1850,6 +1851,79 @@ def test_what_i_can_do_answers_its_question_and_crosses_the_rest():
     ]
     assert parts(fields, "What's the weather?") == [("What's the weather", "cant", "not_followed")]
     assert parts(fields, "Hello there") == []
+
+
+# A request that is one question is the question the answer was chosen for. Asking it on its own
+# is what the person already did, so it is never crossed that way (the team lead's local test).
+
+ABOUT_THE_APP = [
+    "list me the steps to use this app",
+    "how can i start to use this ?",
+    "help",
+    "Help me",
+    "how does this work?",
+    "How do I use this?",
+    "how do i get started",
+    "what is this app?",
+    "Where do I begin?",
+    "What can you do?",
+]
+
+
+@pytest.mark.parametrize("task", ABOUT_THE_APP)
+def test_one_question_about_the_app_is_ticked_never_crossed(task: str):
+    fields = read(asks_about="abilities")
+    assert isinstance(answer_of(fields, task), AbilitiesAnswer)
+    assert [(mark, reason) for _, mark, reason in parts(fields, task)] == [("will_do", None)]
+
+
+def test_a_question_about_the_app_beside_a_change_is_still_asked_on_its_own():
+    fields = read(asks_about="abilities")
+    assert parts(fields, "how do I start, and pause the morning check") == [
+        ("how do I start", "will_do", None),
+        ("pause the morning check", "cant", "ask_on_its_own"),
+    ]
+
+
+def test_help_beside_a_write_is_never_ticked():
+    task = "help me close all the done tickets"
+    assert "will_do" not in {mark for _, mark, _ in parts(read(asks_about="abilities"), task)}
+
+
+@pytest.mark.parametrize("task", ["list everything I have", "show me what I set up"])
+def test_a_state_answer_ticks_the_one_clause_it_was_chosen_for(task: str):
+    fields = read(asks_about="my_workflows")
+    assert isinstance(answer_of(fields, task), CheckWorkflowsAnswer)
+    assert [(mark, reason) for _, mark, reason in parts(fields, task)] == [("will_do", None)]
+
+
+@pytest.mark.parametrize("task", ["Can you post in Teams?", "Can you send me an email?"])
+def test_a_lone_question_the_cant_answers_keeps_its_cant(task: str):
+    fields = read()
+    assert isinstance(answer_of(fields, task), CantAnswer)
+    assert {reason for _, mark, reason in parts(fields, task) if mark == "cant"} == {"cant_do"}
+
+
+@pytest.mark.parametrize(
+    "task", ["list me the steps to use this app", "how can i start to use this ?"]
+)
+def test_the_route_ticks_a_question_about_the_app_with_the_facts_sent(task: str):
+    facts = PlannerFacts(
+        workflows=[
+            WorkflowFact(
+                name="Morning new-ticket check", state="on", last_run=None, last_run_at=None
+            )
+        ],
+        watchlist_schedule=WatchlistScheduleFact(day="monday", at="09:00"),
+    )
+    chat = ScriptedChat(
+        structured=[read(asks_about="abilities"), QuestionReply(about_their_data=False)]
+    )
+    request = AnswerRequest(task=task, model=answer_request().model, facts=facts)
+    response = make_app(chat).post("/v1/planner/answer", json=json.loads(request.model_dump_json()))
+    result = answer_result_adapter.validate_python(response.json())
+    assert isinstance(result, Answered) and isinstance(result.answer, AbilitiesAnswer)
+    assert [(p.mark, p.reason) for p in result.parts] == [("will_do", None)]
 
 
 def test_a_refusal_keeps_the_question_asked_with_it():
