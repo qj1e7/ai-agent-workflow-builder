@@ -39,6 +39,7 @@ from platform_api.builder.service import (
     N8nNotReady,
     NoModelToRun,
     NothingToCheck,
+    NotMovedYet,
     NotOnYet,
     UseCasePaused,
 )
@@ -213,6 +214,8 @@ async def start_run(
         raise HTTPException(409, "This workflow is paused. Resume it to start a run.")
     if isinstance(started, NotOnYet):
         raise HTTPException(409, NOT_ON_YET)
+    if isinstance(started, NotMovedYet):
+        raise HTTPException(409, started.words)
     if not started.created:
         response.status_code = 200
     return RunStarted(run_id=started.run_id, events_url=f"/api/v1/runs/{started.run_id}/events")
