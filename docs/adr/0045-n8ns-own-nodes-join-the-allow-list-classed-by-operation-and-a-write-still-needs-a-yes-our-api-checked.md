@@ -153,8 +153,14 @@ this ADR gives, or makes it stronger.
    it. Nothing is deleted. A version n8n does not show counts as one that breaks it. Open in n8n
    sweeps keys alone, since it holds the workflow's row and a mark would wait on it. The sweep
    takes off before it marks, and a mark waits at most five seconds on any row, so a lock cycle
-   fails in place of stopping the sweep. A mark that waited too long, or one for a key Open in
-   n8n removed, is made at the next sweep.
+   fails in place of stopping the sweep. The marks come from state, not from what the process
+   remembers: each sweep marks every workflow the records say is on and n8n has off in the
+   platform's project, and clears that mark once it is live again. One paused, a draft, deleted,
+   held or on its way back is off on purpose and left alone. So a mark lost to a lock or a restart
+   is made at the next sweep. A turn-on that lands between the sweep's look and its mark can be
+   marked for one sweep, until the next look sees it live. A key Open in n8n removed is still
+   remembered in the process until the next sweep marks the holder's workflows; a restart in
+   that minute loses only that mark, as the key is already gone.
 7. **A test run posts nothing.** A layout pins the output of each notice block. n8n uses pinned
    output only in a run by hand, which is what a test run is, and ignores it in every other run. A
    test run of a draft whose notice block has no pinned output does not start.

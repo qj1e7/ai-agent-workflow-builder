@@ -20,6 +20,7 @@ from platform_api.builder.key_sweep import (
     KEY_ADDED,
     KEY_CHANGED,
     NOT_BACK_YET,
+    OFF_IN_N8N,
     TAKEN_OFF,
     UNCHECKED_DRAFT,
     KeySweep,
@@ -41,7 +42,7 @@ from tests.test_draft_turn_on import RUNS_PATH
 from tests.test_n8n_access import PLATFORM_PROJECT, Staffed, held, lab, s
 from tests.test_n8n_api import api_for
 from tests.test_n8n_builder import WRITES
-from tests.test_n8n_lifecycle import Workflows
+from tests.test_n8n_lifecycle import Workflows, made
 
 PAT = "jiraSoftwareServerPatApi"
 """The credential type of a Data Center personal access token."""
@@ -1052,9 +1053,12 @@ async def test_a_mark_that_waits_on_a_held_row_never_stops_a_take_off_and_is_mad
     assert await finding(k, use_case_id) == ("needs_a_fix", KEY_ADDED)
 
 
-async def test_a_take_off_whose_mark_waits_on_a_held_row_is_marked_next_sweep(
+async def test_a_take_off_whose_mark_is_lost_to_a_restart_is_marked_from_state(
     k: Keyed, monkeypatch: pytest.MonkeyPatch
 ):
+    """The sweep takes it off at 10:00:00, its mark waits too long on a held row, and the platform
+    restarts at 10:00:30. On in the records and off in n8n, it is marked at the next sweep all the
+    same, so it never shows as on and safe while it does not run (principle 7)."""
     monkeypatch.setattr(key_sweep, "MARK_WAIT", "SET LOCAL lock_timeout = '100ms'")
     await settled(k)
     carol = await k.s.member()
@@ -1064,9 +1068,42 @@ async def test_a_take_off_whose_mark_waits_on_a_held_row_is_marked_next_sweep(
     async with held_row(k, use_case_id):
         assert (await k.sweep.sweep()).taken_off == (workflow_id,)
     view = (await k.s.call("alice", "GET", f"/api/v1/use-cases/{use_case_id}")).json()
-    assert TAKEN_OFF not in view["findings"], "not marked while its row was held"
-    assert (await k.sweep.sweep()).taken_off == ()
-    assert await finding(k, use_case_id) == ("needs_a_fix", TAKEN_OFF)
+    assert view["grade"] == "safe", "not marked while its row was held"
+    restarted = KeySweep(k.s.lab.h.db, k.keys, k.sweep._n8n, k.s.staff)  # pyright: ignore[reportPrivateUsage]
+    assert (await restarted.sweep()).taken_off == ()
+    assert await finding(k, use_case_id) == ("needs_a_fix", OFF_IN_N8N)
+
+
+async def test_a_workflow_turned_off_on_purpose_is_not_marked(k: Keyed):
+    """Paused, or never turned on, it is off in n8n because the records say so."""
+    await settled(k)
+    paused, paused_workflow = await held(k.s)
+    assert (await k.s.lab.move("alice", "pause", paused)).status_code == 200
+    draft, draft_workflow = await made(k.s.own, on=False)
+    k.n8n.workflows[draft_workflow]["shared"] = [
+        {"projectId": PLATFORM_PROJECT, "role": "workflow:owner"}
+    ]
+    for workflow_id in (paused_workflow, draft_workflow):
+        assert k.n8n.workflows[workflow_id]["activeVersionId"] is None
+    await k.sweep.sweep()
+    for use_case_id in (paused, draft):
+        view = (await k.s.call("alice", "GET", f"/api/v1/use-cases/{use_case_id}")).json()
+        assert (view["grade"], view["findings"]) == ("safe", []), view
+
+
+async def test_a_workflow_n8n_has_off_is_marked_until_it_is_live_again(k: Keyed):
+    """Whoever took it off, the records say on, so it shows Needs a fix. Put back on, the mark
+    goes."""
+    await settled(k)
+    use_case_id, workflow_id = await held(k.s)
+    live = k.n8n.workflows[workflow_id]["activeVersionId"]
+    k.n8n.workflows[workflow_id].update(activeVersionId=None, active=False)
+    await k.sweep.sweep()
+    assert await finding(k, use_case_id) == ("needs_a_fix", OFF_IN_N8N)
+    k.n8n.workflows[workflow_id].update(activeVersionId=live, active=True)
+    await k.sweep.sweep()
+    view = (await k.s.call("alice", "GET", f"/api/v1/use-cases/{use_case_id}")).json()
+    assert (view["grade"], view["findings"]) == ("safe", [])
 
 
 async def test_a_key_open_in_n8n_removes_marks_her_other_workflows_at_the_next_sweep(k: Keyed):
