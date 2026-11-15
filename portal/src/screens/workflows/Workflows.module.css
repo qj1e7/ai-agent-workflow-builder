@@ -739,3 +739,39 @@ details.rule > p {
   flex-wrap: wrap;
   gap: 8px;
 }
+
+/* Summary and In n8n, under the heading. */
+.views {
+  margin-bottom: 20px;
+}
+
+/* The In n8n tab, as the sketch's n8n pane: the version line, who holds it, the canvas, then its one action. */
+.inN8n {
+  display: grid;
+  gap: 22px;
+}
+
+.inN8n .banner {
+  margin-bottom: 0;
+}
+
+.cvMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 14px;
+}
+
+.actionProblem {
+  flex-basis: 100%;
+  color: var(--red-ink);
+  font-weight: 600;
+}
+
+/* Who has it open in n8n, where Open in n8n editor would be. */
+.heldLine {
+  align-self: center;
+  color: var(--muted);
+  font-size: 0.875rem;
+}

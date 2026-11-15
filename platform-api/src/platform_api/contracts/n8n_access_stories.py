@@ -5,7 +5,7 @@ it, and a run of it waiting at the yes and then ended, each block's state read."
 from dataclasses import replace
 from datetime import timedelta
 
-from platform_api.builder.n8n_draft import Checked
+from platform_api.builder.n8n_draft import Checked, blocks_of
 from platform_api.builder.n8n_http import HoldOut
 from platform_api.builder.n8n_view import N8nHolderView, RunN8nView, UseCaseN8nView, graph
 from platform_api.contracts.cards_stories import USE_CASE as AGENT_USE_CASE
@@ -32,6 +32,7 @@ IN_N8N = UseCaseN8nView(
     published_by=CAROL.id,
     published_by_name=CAROL.display,
     published_in="portal",
+    published_at=ADDED,
     nodes=NODES,
     edges=EDGES,
     holder=None,
@@ -53,7 +54,13 @@ RUN = RunN8nView(
     n8n_version_id=IN_N8N.n8n_version_id,
     nodes=NODES,
     edges=EDGES,
-    states={"Read release": "done", "Compare": "done", "Ask for a yes": "waiting"},
+    blocks=blocks_of(LAID_OUT.document),
+    states={
+        "Read release": "done",
+        "Compare": "done",
+        "Newer?": "done",
+        "Ask for a yes": "waiting",
+    },
     from_n8n=False,
 )
 RUN_ENDED = RUN.model_copy(

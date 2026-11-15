@@ -4,10 +4,11 @@ import { MemoryRouter } from 'react-router'
 import { describe, expect, it } from 'vitest'
 import aliceHome from '../../../../contracts/fixtures/builder/home.alice.json'
 import versioned from '../../../../contracts/fixtures/builder/use-case.versioned.json'
+import heldInN8n from '../../../../contracts/fixtures/builder/use-case.n8n.held.json'
 import type { ApiClient } from '../../api/client'
 import { ApiProvider } from '../../api/context'
 import { createDevSession } from '../../api/session'
-import type { ChangedInN8nReply, Me, UseCaseView } from '../../api/types'
+import type { ChangedInN8nReply, Me, UseCaseN8nView, UseCaseView } from '../../api/types'
 import { addTheYesBackOptions, rollbackOptions } from '../../api/workflowQueries'
 import { Answer, type Page } from './AnswerCards'
 import { CardMemoryContext, newCardMemory } from './cardMemory'
@@ -20,10 +21,11 @@ const REFUSED = (aliceHome.changed_in_n8n as ChangedInN8nReply[])[0]!
 const SAFE: ChangedInN8nReply = { ...REFUSED, grade: 'safe', findings: [], changes: ['Now runs every day at 7:30.'] }
 const FIX: ChangedInN8nReply = { ...REFUSED, grade: 'needs_a_fix', findings: ['“Send email” is not a block we run.'] }
 
-function draw(reply: ChangedInN8nReply, { me = ALICE, phase }: { me?: Me; phase?: Phase } = {}): string {
+function draw(reply: ChangedInN8nReply, { me = ALICE, phase, inN8n }: { me?: Me; phase?: Phase; inN8n?: UseCaseN8nView } = {}): string {
   const session = createDevSession(null)
   const queryClient = new QueryClient({ defaultOptions: { queries: { retryOnMount: false } } })
   queryClient.setQueryData(['me', session.cacheScope()], me)
+  if (inN8n) queryClient.setQueryData(['use-case', session.cacheScope(), reply.use_case_id, 'n8n'], inN8n)
   const memory = newCardMemory()
   if (phase) memory.changed.keep(phase)
   return renderToStaticMarkup(
@@ -107,6 +109,24 @@ describe('the Changed in n8n card', () => {
     const html = draw({ ...REFUSED, in_use: 6 })
     expect(text(html)).toContain('Version 6 is in use now.')
     expect(buttons(html)).toEqual([])
+  })
+
+  it('names who has it open in n8n, with Take it back in place of Undo and Add the yes back, which would be refused', () => {
+    const held = { ...(heldInN8n as UseCaseN8nView), editor_url: null }
+    const html = draw(REFUSED, { me: { ...ALICE, n8n_access: true }, inN8n: held })
+    expect(text(html)).toMatch(/Carol has it open in n8n since (Tue 10 Nov, )?13:40\. Anyone with n8n access can take it back from Carol\./)
+    expect(buttons(html)).toEqual(['Take it back'])
+    const theirs = draw(REFUSED, { me: { ...ALICE, n8n_access: true }, inN8n: { ...held, can_open: false, why_not: 'Set your n8n password first.' } })
+    expect(buttons(theirs), 'nobody is offered a press the platform would refuse').toEqual([])
+    expect(buttons(draw(REFUSED, { inN8n: held })), 'without n8n access the hold is not read, and Undo stays').toEqual(['Add the yes back', 'Undo the change to FastAPI release check'])
+    expect(buttons(draw({ ...REFUSED, in_use: 6 }, { me: { ...ALICE, n8n_access: true }, inN8n: held })), 'a card about a version no longer in use offers nothing').toEqual([])
+  })
+
+  it('tells an Operator without n8n access who can take it back, with no press she can’t make', () => {
+    const words = 'Carol has it open in n8n since 13:40. Ask Carol, or anyone with n8n access, to take it back.'
+    const html = draw(REFUSED, { phase: { kind: 'refused', words } })
+    expect(text(html)).toContain(words)
+    expect(buttons(html)).not.toContain('Take it back')
   })
 
   it('uses no em dash', () => {

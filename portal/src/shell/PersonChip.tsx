@@ -28,9 +28,9 @@ function Who({ person }: { person: Me }) {
   )
 }
 
-/** "Alice, Operator", as the sketch's top bar names the person. */
+/** "Alice, Operator", or "Alice, Operator, n8n access", as the sketch's top bar names the person. */
 function titleOf(person: Me): string {
-  return `${person.display}, ${rolesLabel(person.roles) || 'No role'}`
+  return `${person.display}, ${rolesLabel(person.roles) || 'No role'}${person.n8n_access === true ? ', n8n access' : ''}`
 }
 
 // Safari does not focus a button on click, so a press on "Sign out" blurs with no related target. Only a move to a real element elsewhere counts as leaving.

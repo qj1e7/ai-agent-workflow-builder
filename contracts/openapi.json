@@ -6921,7 +6921,8 @@
           "branch",
           "merge",
           "end",
-          "other"
+          "other",
+          "off"
         ],
         "type": "string"
       },
@@ -6930,7 +6931,7 @@
         "properties": {
           "kind": {
             "$ref": "#/components/schemas/N8nBlockKind",
-            "description": "What the block does: schedule, start (Start from the Portal), manual and error start a run; read, agent, propose, ask (Ask for a yes), write (Make the approved changes), tell and report are our blocks; branch (IF), merge and end (No Op) are n8n's; other is one of n8n's data blocks, or a block that is off."
+            "description": "What the block does: schedule, start (Start from the Portal), manual and error start a run; read, agent, propose, ask (Ask for a yes), write (Make the approved changes), tell and report are our blocks; branch (IF), merge and end (No Op) are n8n's; other is one of n8n's data blocks; off is a block the class file turns off or does not know, which never runs."
           },
           "name": {
             "description": "The block's name, as n8n, the canvas and the run line show it.",
@@ -7041,7 +7042,7 @@
           },
           "kind": {
             "$ref": "#/components/schemas/N8nBlockKind",
-            "description": "What the block does, as on the set-up card. other is a sticky note, one of n8n's data blocks, or a type the safety checker does not know; type says which."
+            "description": "What the block does, as on the set-up card. other is a sticky note or one of n8n's data blocks, and off a type the class file turns off or does not know; type says which."
           },
           "name": {
             "title": "Name",
@@ -9961,6 +9962,14 @@
       "RunN8nView": {
         "additionalProperties": false,
         "properties": {
+          "blocks": {
+            "description": "The same blocks in the order a run meets them, as the set-up card and a workflow's blocks list them, which the canvas draws.",
+            "items": {
+              "$ref": "#/components/schemas/N8nBlockView"
+            },
+            "title": "Blocks",
+            "type": "array"
+          },
           "edges": {
             "items": {
               "$ref": "#/components/schemas/N8nEdgeView"
@@ -10012,7 +10021,7 @@
             "additionalProperties": {
               "$ref": "#/components/schemas/NodeState"
             },
-            "description": "Each block's state by its name. A block that is not here has not run.",
+            "description": "Each block's state by its name. A block that is not here has not run, or is not known to have run. Until n8n's own record is read, a block that never calls the platform, such as an IF, is done when it is the one way into a block that ran (ENGINE-PLAN section 1, row 9).",
             "title": "States",
             "type": "object"
           },
@@ -10040,6 +10049,7 @@
           "n8n_version_id",
           "nodes",
           "edges",
+          "blocks",
           "states",
           "from_n8n"
         ],
@@ -12486,6 +12496,12 @@
             "title": "Nodes",
             "type": "array"
           },
+          "published_at": {
+            "description": "When the version in use was made, as the versions list says it.",
+            "format": "date-time",
+            "title": "Published At",
+            "type": "string"
+          },
           "published_by": {
             "anyOf": [
               {
@@ -12558,6 +12574,7 @@
           "published_by",
           "published_by_name",
           "published_in",
+          "published_at",
           "nodes",
           "edges",
           "holder",

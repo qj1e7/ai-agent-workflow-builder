@@ -74,6 +74,7 @@ type N8nBlockKind = Literal[
     "merge",
     "end",
     "other",
+    "off",
 ]
 
 
@@ -91,7 +92,8 @@ class N8nBlockView(WireModel):
         description="What the block does: schedule, start (Start from the Portal), manual and "
         "error start a run; read, agent, propose, ask (Ask for a yes), write (Make the approved "
         "changes), tell and report are our blocks; branch (IF), merge and end (No Op) are n8n's; "
-        "other is one of n8n's data blocks, or a block that is off."
+        "other is one of n8n's data blocks; off is a block the class file turns off or does not "
+        "know, which never runs."
     )
     next: list[N8nExitView] = Field(description="Where each of its exits leads.")
 

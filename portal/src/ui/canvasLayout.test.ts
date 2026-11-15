@@ -38,4 +38,24 @@ describe('the canvas laid out from the workflow’s blocks', () => {
     expect(lone.width, 'a block no way out reaches goes after the rest').toBeGreaterThan(laid.width)
     for (const node of laid.nodes) expect(node.x + 84 <= laid.width && node.y + 84 <= laid.height, `${node.name} fits`).toBe(true)
   })
+
+  it('draws a way out to a block below in the same column around the right, clear of the block’s own name', () => {
+    const ask = laid.nodes.find((node) => node.name === 'Ask for a yes')
+    const edge = laid.edges.find((one) => one.from === 'Ask for a yes' && one.to === 'Nothing to change')
+    if (!ask || !edge) throw new Error('the fixture has Ask for a yes and its way to Nothing to change')
+    const [x0, y0, cx1, cy1, cx2, cy2, x3, y3] = (edge.path.match(/-?\d+(\.\d+)?/g) ?? []).map(Number) as [number, number, number, number, number, number, number, number]
+    const at = (t: number) => {
+      const u = 1 - t
+      return { x: u ** 3 * x0 + 3 * u * u * t * cx1 + 3 * u * t * t * cx2 + t ** 3 * x3, y: u ** 3 * y0 + 3 * u * u * t * cy1 + 3 * u * t * t * cy2 + t ** 3 * y3 }
+    }
+    // The name and the kind sit under the box, centred, up to 60 px either side of its middle.
+    const next = laid.nodes.find((node) => node.col === ask.col + 1 && node.row === ask.row)
+    const labels = { top: ask.y + 84, bottom: ask.y + 84 + 44, right: ask.x + 42 + 60, nextLeft: (next?.x ?? Infinity) + 42 - 60 }
+    for (let t = 0; t <= 1; t += 0.02) {
+      const point = at(t)
+      if (point.y < labels.top || point.y > labels.bottom) continue
+      expect(point.x, `at t=${t.toFixed(2)}, past Ask for a yes’s name`).toBeGreaterThan(labels.right)
+      expect(point.x, `at t=${t.toFixed(2)}, short of ${next?.name ?? 'the next'}’s name`).toBeLessThan(labels.nextLeft)
+    }
+  })
 })
