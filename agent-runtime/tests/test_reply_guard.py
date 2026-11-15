@@ -231,7 +231,7 @@ def test_an_unbuilt_ability_fails_the_claims_unbuilt_check(text: str):
         "and create a Jira ticket after an Approver's yes.",
         "I can't post in Teams or send email yet. Run results show here, in the chat.",
         "Email isn't connected yet.",
-        "Checking for known vulnerabilities is planned, not built.",
+        "I can't check for known vulnerabilities yet.",
         "You can list the open bugs in MOCK and put them in one new Jira ticket after an "
         "Approver's yes.",
         "You can pick a time and turn it on.",

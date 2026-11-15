@@ -95,11 +95,15 @@ def sentences(text: str) -> list[str]:
     return [s.strip() for s in re.split(r"(?<=[.!?])\s+|\n+", text) if s.strip()]
 
 
-NEGATION: Final = re.compile(
-    r"\b(?:can['’]?t|cannot|can\s+not|won['’]?t|don['’]?t|doesn['’]?t|isn['’]?t|aren['’]?t|"
-    r"not|never|no|planned|yet)\b",
-    re.IGNORECASE,
+NOT: Final = (
+    r"(?:can['’]?t|cannot|can\s+not|won['’]?t|don['’]?t|doesn['’]?t|isn['’]?t|aren['’]?t|"
+    r"wasn['’]?t|weren['’]?t|hasn['’]?t|haven['’]?t|not|never)"
 )
+NEGATION: Final = re.compile(rf"\b{NOT}\b", re.IGNORECASE)
+"""A negation as an auxiliary says it: "can't", "isn't", "never". "No", "planned" or "yet" never
+counts, so "No problem, ..." clears nothing."""
+RIGHT_BEFORE: Final = re.compile(rf"\b{NOT}\s+$", re.IGNORECASE)
+"""A negation directly before the words it governs, with nothing between, as "never approve"."""
 
 
 CLAUSE_BREAK: Final = re.compile(
@@ -115,6 +119,7 @@ def clauses(sentence: str) -> list[str]:
 
 
 def negated(clause: str) -> bool:
+    """Whether the clause says something can't be done, with an auxiliary negation."""
     return NEGATION.search(clause) is not None
 
 
@@ -265,16 +270,13 @@ SUBORDINATE: Final = re.compile(
 updated"."""
 
 
-GOVERNS: Final = re.compile(r"\b(?:not|never|cannot|\w+n['’]t)\s+(?:\S+\s+){0,2}$", re.IGNORECASE)
-"""A negation that governs the words right after it, as "not created" or "haven't been sent".
-"No problem" or "yet" earlier in the clause governs nothing that follows."""
-
-
 def _says_it_happened(sentence: str) -> bool:
+    """No negation exempts a claim here. The reply is told never to say what was or wasn't
+    done, so an honest "nothing was created" falls back too, on the safe side."""
     for clause in clauses(sentence):
         for found in HAPPENED.finditer(clause):
             before = clause[: found.start()]
-            if not SUBORDINATE.search(before) and not GOVERNS.search(before):
+            if not SUBORDINATE.search(before):
                 return True
     promised = IS_WRITTEN.search(sentence) or WILL_HAPPEN.search(sentence)
     return promised is not None and not CONDITION.search(sentence)
@@ -524,11 +526,12 @@ def keeps_every_yes(reply: Shown, given: Given) -> bool:
     shown = (reply.text, *reply.choices)
     if any(skip_of_a_yes(t) or SKIPS.search(t) for t in shown):
         return False
-    for clause in (c for t in shown for sentence in sentences(t) for c in clauses(sentence)):
-        if not negated(clause) and OWN_YES.search(clause):
+    for t in shown:
+        if any(not RIGHT_BEFORE.search(t[: m.start()]) for m in OWN_YES.finditer(t)):
             return False
     for sentence in sentences(reply.text):
-        made = any(MAKES_A_TICKET.search(c) and not negated(c) for c in clauses(sentence))
+        found = MAKES_A_TICKET.finditer(sentence)
+        made = any(not RIGHT_BEFORE.search(sentence[: m.start()]) for m in found)
         if made and not A_YES.search(sentence):
             return False
     return True
