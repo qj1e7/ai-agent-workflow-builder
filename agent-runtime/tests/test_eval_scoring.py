@@ -608,6 +608,22 @@ def test_a_refusal_and_a_question_are_scored_on_their_kind_and_words():
     assert failed(ANSWER.score(answer_case("why-did-it-stop"), wrong)) == {"names_the_workflow"}
 
 
+def test_a_release_check_that_raises_a_ticket_passes_unless_it_is_refused():
+    read = {
+        "belongs_on_watchlist": True,
+        "watchlist_word": "releases",
+        "software": "LangGraph",
+        "schedule": "Every weekday at 9",
+        "ticket": {"creates": True, "says": "summary", "said": "raise a Jira ticket"},
+    }
+    case = answer_case("release-check-raises-a-ticket")
+    assert failed(ANSWER.score(case, read_answer(**read))) == set()
+    unquoted = read_answer(**read, skips_the_yes={"whose": "an_approver_or_anyone_else"})
+    assert failed(ANSWER.score(case, unquoted)) == set()
+    quoted = {"whose": "an_approver_or_anyone_else", "said": "raise a Jira ticket"}
+    assert "right_kind" in failed(ANSWER.score(case, read_answer(**read, skips_the_yes=quoted)))
+
+
 def test_a_mixed_request_is_scored_on_the_watchlist_and_the_rest():
     read = {
         "belongs_on_watchlist": True,
