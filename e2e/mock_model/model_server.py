@@ -58,6 +58,11 @@ BROKEN: dict[str, Any] = {
     "rows": '[{"kind": "schedule", "text": "Every',
 }
 RELEASE_WORDS = re.compile(r"\b(?:releases?|versions?|upgrades?|patch(?:es)?)\b", re.IGNORECASE)
+WATCH_A_SOFTWARE = re.compile(
+    r"\b(add|watch|track|monitor|follow)\b(?:\s+(?:a|an|another|new|some))*\s+(?:software|tool|app)\b",
+    re.IGNORECASE,
+)
+"""As the real model does: a request to watch a piece of software that names none."""
 VULNERABILITY_WORDS = re.compile(
     r"\b(?:vulnerab\w*|cves?|nvd|advisor(?:y|ies)"
     r"|security (?:fix(?:es)?|patch(?:es)?|alerts?|bulletins?))\b",
@@ -392,6 +397,14 @@ def no_vulnerability_tool(row: dict[str, Any]) -> dict[str, Any]:
 
 
 def understanding(task: str) -> dict[str, Any]:
+    unnamed = WATCH_A_SOFTWARE.search(task)
+    if unnamed is not None and not any(name.lower() in task.lower() for name in SOFTWARE):
+        return {
+            "belongs_on_watchlist": True,
+            "watchlist_word": unnamed.group(1),
+            "software": None,
+            "rows": [],
+        }
     word = RELEASE_WORDS.search(task)
     if word is not None and VULNERABILITY_WORDS.search(task) is None:
         named = next((name for name in SOFTWARE if name.lower() in task.lower()), None)
@@ -517,6 +530,8 @@ def structures(task: str) -> dict[str, Any]:
 
 def reading(task: str) -> dict[str, Any]:
     about = next((kind for pattern, kind in ABOUT if pattern.search(task.strip())), "none")
+    if about == "abilities" and WATCH_A_SOFTWARE.search(task):
+        about = "none"
     change = CHANGE.match(task.strip()) if not task.lower().startswith("set up") else None
     if change is not None:
         about = "change"
@@ -569,6 +584,8 @@ def reading(task: str) -> dict[str, Any]:
         return read
     read["name"] = name_of(task)
     read.update(structures(task))
+    # As the real model does: a name typed alone, as "Redis", is the software it names.
+    read["software"] = next((n for n in SOFTWARE if n.lower() == task.strip(" .!?").lower()), None)
     return read
 
 

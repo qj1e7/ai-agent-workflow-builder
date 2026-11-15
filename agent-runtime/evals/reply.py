@@ -133,17 +133,19 @@ def _before_reply(read: TaskRead, case: ReplyCase, steps: Steps) -> PlannerAnswe
 def shown_for(read: TaskRead, case: ReplyCase, steps: Steps) -> Shown:
     """What the person sees, decided as `answer_task` and `reply_to` decide it."""
     first = _before_reply(read, case, steps)
-    if dead_end(first, parts_of(read, case.task, first, case.facts), case.task) is None:
+    gap = dead_end(first, parts_of(read, case.task, first, case.facts), case.task)
+    if gap is None:
         return Shown(first)
+    fallback = gap.keep or DidntFollowAnswer()
     if steps.envelope is None:
-        return Shown(DidntFollowAnswer(), "call")
+        return Shown(fallback, "call")
     reply = answer_of_envelope(steps.envelope, request_of(case))
     if not isinstance(reply, FreeReplyAnswer):
-        return Shown(DidntFollowAnswer(), reply)
+        return Shown(fallback, reply)
     if reply is STILL_UNCLEAR:
         return Shown(reply)
     flag = flag_of(steps.verdict or UNUSABLE)
-    return Shown(reply) if flag is None else Shown(DidntFollowAnswer(), flag)
+    return Shown(reply) if flag is None else Shown(fallback, flag)
 
 
 def _structured[A: BaseModel](

@@ -10,7 +10,14 @@ import re
 from dataclasses import dataclass
 from typing import Final
 
-from agent_runtime.abilities import change_verbs_in, commands_a_change
+from agent_runtime.abilities import (
+    change_verbs_in,
+    changes_beyond_the_abilities,
+    commands_a_change,
+    orders_only_what_it_can,
+    other_systems,
+    why_not,
+)
 from agent_runtime.contract import (
     AbilitiesAnswer,
     CantAnswer,
@@ -51,11 +58,13 @@ from agent_runtime.reading import (
     TaskRead,
     clauses_of,
     days_asked,
+    instructs_the_planner,
     names_a_yes,
     negated,
     polite,
     schedule_clashes,
     trim,
+    without_runs_by_itself,
 )
 
 NOT_FOLLOWED: Final = "I didn't follow this part."
@@ -401,9 +410,31 @@ def _unmarked(answer: PlannerAnswer, text: str, clause: Span) -> RequestPart:
         case WhichSoftwareAnswer():
             return _part(text, clause, "question")
         case RefusedAnswer():
-            reason: PartReason = "ask_on_its_own" if _asks(text, clause) else "with_a_yes"
-            return _part(text, clause, "cant", reason)
+            if _asks(text, clause):
+                return _part(text, clause, "cant", "ask_on_its_own")
+            if answer.rest:
+                return _part(text, clause, "cant", "with_a_yes")
+            return _not_offered(text, clause)
         case CantAnswer(alternative=None):
             return _part(text, clause, "cant", "needs_the_rest")
         case _:
             return _part(text, clause, "will_do")
+
+
+def _not_offered(text: str, clause: Span) -> RequestPart:
+    """A clause beside a refusal that offers no set-up: the registry's can't for a change no
+    ability makes or a system the platform doesn't reach; "It can't run without the part I
+    can't do" for an order an ability gives, or words that say it runs by itself; and not
+    followed for words that tell the Planner what to say or that name nothing."""
+    words = text[clause[0] : clause[1]]
+    if instructs_the_planner(words):
+        return _part(text, clause, "cant", "not_followed")
+    task = without_runs_by_itself(words)
+    if not task:
+        return _part(text, clause, "cant", "needs_the_rest")
+    note = why_not("schedule", task) or why_not("do", task)
+    if note is not None and (changes_beyond_the_abilities(task) or other_systems(task)):
+        return _part(text, clause, "cant", "cant_do", note)
+    if orders_only_what_it_can([task]):
+        return _part(text, clause, "cant", "needs_the_rest")
+    return _part(text, clause, "cant", "not_followed")

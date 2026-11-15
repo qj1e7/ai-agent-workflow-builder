@@ -1073,7 +1073,8 @@ class RefusedAnswer(WireModel):
     rest: str = Field(
         max_length=2000,
         description="The request without the words that asked to skip a yes, so it can be set "
-        "up with one. Empty when nothing is left.",
+        "up with one. Empty when nothing is left, or when the rest is nothing the platform can "
+        "set up: then the parts say why.",
     )
 
 

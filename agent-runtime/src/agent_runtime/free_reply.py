@@ -7,6 +7,7 @@ failed check, failed call or slow call gives the fixed fallback, `DidntFollowAns
 has no tool and writes nothing."""
 
 import logging
+import re
 import uuid
 from dataclasses import dataclass
 from typing import Final
@@ -23,9 +24,11 @@ from agent_runtime.contract import (
     AnswerRequest,
     CantAnswer,
     CapabilitySpec,
+    CheckWorkflowsAnswer,
     DidntFollowAnswer,
     FreeReplyAnswer,
     ModelProblem,
+    NeedsMeAnswer,
     PartAnswer,
     PlannerAnswer,
     QuestionAnswer,
@@ -64,6 +67,17 @@ NAMED_NO_ABILITY: Final = (
 )
 
 
+HOW_DO_I: Final = re.compile(
+    r"^\s*how\s+(?:do|can|could|should|will|would)\s+(?:i|we)\b", re.IGNORECASE
+)
+"""A question about how to use the app, as "how do I stop a workflow for a while", which the
+guide answers and a list of the person's workflows does not."""
+ASKS_HOW: Final = (
+    "The message asks how to do something in the app, and the rules could only show the "
+    "person's own workflows or what waits for them. Answer it from the guide."
+)
+
+
 def _crosses_only(parts: list[RequestPart]) -> bool:
     return bool(parts) and all(p.mark == "cant" and p.reason in DEAD_END_CROSSES for p in parts)
 
@@ -79,8 +93,9 @@ NOT_READ: Final = "The rules could not read these parts of the message as a task
 def dead_end(answer: PlannerAnswer, parts: list[RequestPart], message: str) -> DeadEnd | None:
     """The dead ends ADR 0047 names, or None when the answer stands: the catch-all list of
     abilities when no part of the message asked what the Planner can do, the question lane's
-    fixed text, and a can't or part card whose only crosses are "I didn't follow this part" or
-    "Ask this on its own", with no part ticked and nothing named it can't do. A question about
+    fixed text, a can't or part card whose only crosses are "I didn't follow this part" or
+    "Ask this on its own", with no part ticked and nothing named it can't do, and a question
+    about how to do something answered with the person's workflows or Needs you. A question about
     how to start is the help lane's: its How to start card is registry-based and reviewed, so
     the free reply never takes it."""
     match answer:
@@ -90,6 +105,8 @@ def dead_end(answer: PlannerAnswer, parts: list[RequestPart], message: str) -> D
             return DeadEnd((CATCH_ALL, *_found_in(message)))
         case QuestionAnswer() if is_fallback(answer):
             return DeadEnd((NOT_IN_THE_FACTS, *_found_in(message)))
+        case CheckWorkflowsAnswer() | NeedsMeAnswer() if HOW_DO_I.match(message):
+            return DeadEnd((ASKS_HOW, *_found_in(message)), answer)
         case CantAnswer(alternative=None) | PartAnswer() if _crosses_only(parts) and all(
             row.needs is None for row in answer.cant
         ):

@@ -608,6 +608,25 @@ test.describe('with the AI model on', () => {
     await context.close()
   })
 
+  test('a watch that names no software asks which one, and the name typed next completes it, waiting for her Add', async ({ browser, backend }) => {
+    await backend.freshWatchlist('alice', [])
+    const context = await devContext(browser, 'alice')
+    const page = await context.newPage()
+    const watch = watchPage(page)
+    await page.goto('/')
+    await ask(page, 'help me add a software')
+    await expect(thread(page)).toContainText('Which software should I watch?')
+    await expect(thread(page), 'a missing name is asked for, never “I didn’t follow”').not.toContainText('I didn’t follow')
+    await ask(page, 'Redis')
+    await expect(thread(page).getByText('Redis is software, so it belongs on the Software watchlist', { exact: false })).toBeVisible()
+    await thread(page).getByRole('button', { name: 'Watch it', exact: true }).click()
+    await expect(thread(page).getByRole('button', { name: 'Add Redis' })).toBeVisible()
+    const { watchlist } = await backend.get<{ watchlist: { software: { name: string }[] } | null }>('alice', '/api/v1/watchlist')
+    expect(watchlist?.software.map((entry) => entry.name) ?? [], 'nothing is added until she presses Add').not.toContain('Redis')
+    assertClean(watch)
+    await context.close()
+  })
+
   test('scenario G: “Monitor Redis releases” ends with Redis on the watchlist, with its GitHub source shown first', async ({ browser, backend }, info) => {
     await backend.freshWatchlist('alice', [])
     const context = await devContext(browser, 'alice')

@@ -4438,5 +4438,90 @@
         "total": 2
       }
     }
+  },
+  {
+    "id": "detail-01",
+    "note": "The team lead's own words, 16 Nov: a missing name is asked, never \"I didn't follow\".",
+    "task": "help me add a software",
+    "group": "vague",
+    "kinds": [
+      "which_software",
+      "reply:clarify"
+    ]
+  },
+  {
+    "id": "detail-02",
+    "note": "A watch with no name.",
+    "task": "i want to add new software",
+    "group": "vague",
+    "kinds": [
+      "which_software",
+      "reply:clarify"
+    ]
+  },
+  {
+    "id": "detail-03",
+    "note": "A watch with no name.",
+    "task": "can you help me watch a software",
+    "group": "vague",
+    "kinds": [
+      "which_software",
+      "reply:clarify"
+    ]
+  },
+  {
+    "id": "detail-04",
+    "note": "A watch with no name, in two words.",
+    "task": "add software",
+    "group": "vague",
+    "kinds": [
+      "which_software",
+      "reply:clarify"
+    ]
+  },
+  {
+    "id": "detail-05",
+    "note": "A tool is software here.",
+    "task": "I need to track a tool",
+    "group": "vague",
+    "kinds": [
+      "which_software",
+      "reply:clarify"
+    ]
+  },
+  {
+    "id": "detail-06",
+    "note": "The name typed after \"Which software should I watch?\" completes the watch.",
+    "task": "LangGraph",
+    "group": "vague",
+    "kinds": [
+      "watchlist"
+    ],
+    "previous": {
+      "request": "help me add a software",
+      "kind": "which_software"
+    }
+  },
+  {
+    "id": "detail-07",
+    "note": "No Jira project: the card asks which one.",
+    "task": "Every Monday at 9am, list the open bugs in one ticket",
+    "group": "write",
+    "kinds": [
+      "setup_card",
+      "part"
+    ],
+    "must_not_refuse": true
+  },
+  {
+    "id": "detail-08",
+    "note": "No time: the card asks it and never fills one in.",
+    "task": "Every Monday, list the open bugs in MOCK in one ticket",
+    "group": "write",
+    "kinds": [
+      "setup_card",
+      "part"
+    ],
+    "must_not_refuse": true
   }
 ]

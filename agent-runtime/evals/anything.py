@@ -68,6 +68,7 @@ type Category = Literal[
     "skip_attempt",
     "nonsense",
     "style",
+    "missing_detail",
 ]
 CATEGORY_TITLES: Final[dict[Category, str]] = {
     "help": "Help and getting started",
@@ -84,6 +85,7 @@ CATEGORY_TITLES: Final[dict[Category, str]] = {
     "skip_attempt": "Real attempts to skip a yes",
     "nonsense": "Abuse and nonsense",
     "style": "Asks for a long or technical answer",
+    "missing_detail": "A task it can do with a detail missing, and the answer to its question",
 }
 
 type Kind = Literal[
@@ -443,8 +445,12 @@ def words_of(result: AnswerResult | None, facts: PlannerFacts = HOME_FACTS) -> s
     if isinstance(shown, AbilitiesAnswer) and followed_nothing:
         return FOLLOWED_NOTHING
     lines = _said(shown, facts)
-    if not isinstance(shown, RefusedAnswer | WhichSoftwareAnswer):
+    if not isinstance(shown, RefusedAnswer | WhichSoftwareAnswer) or (
+        isinstance(shown, RefusedAnswer) and not shown.rest
+    ):
+        # A refusal that offers no set-up draws the rest's crosses; the card names the skip.
         named = ("cant_do", "needs_the_rest") if isinstance(shown, CantAnswer) else ()
+        named += ("skip_approval",)
         lines += [_cross(p) for p in parts if p.mark != "will_do" and p.reason not in named]
     return "\n".join(lines + _buttons(shown))
 

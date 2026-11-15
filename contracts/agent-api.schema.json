@@ -2879,7 +2879,7 @@
           "type": "string"
         },
         "rest": {
-          "description": "The request without the words that asked to skip a yes, so it can be set up with one. Empty when nothing is left.",
+          "description": "The request without the words that asked to skip a yes, so it can be set up with one. Empty when nothing is left, or when the rest is nothing the platform can set up: then the parts say why.",
           "maxLength": 2000,
           "title": "Rest",
           "type": "string"

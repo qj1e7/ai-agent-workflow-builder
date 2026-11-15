@@ -15,6 +15,7 @@ from agent_runtime.contract import AnswerRequest, PlannerAnswer, WatchlistAnswer
 from agent_runtime.planner import visible_words
 
 FOLLOWS: Final = frozenset({"question", "watchlist"})
+ASKED_WHICH_SOFTWARE: Final = "which_software"
 FOLLOW_UP: Final = re.compile(
     r"^\s*(?:and|what\s+about|how\s+about)\s+(?P<name>[^?]{1,60}?)\s*\??\s*$", re.IGNORECASE
 )
@@ -85,3 +86,13 @@ def watch_offer_of(
     if wanted not in (said, (asked or "").strip().casefold()):
         return None
     return WatchlistAnswer(word=VERSION, software=found.name)
+
+
+def named_when_asked(request: AnswerRequest) -> str | None:
+    """The software named in answer to "Which software should I watch?", as "LangGraph" typed in
+    the box. The previous turn only says the question was asked: the name is the typed words, a
+    plausible name and nothing more."""
+    earlier = request.previous
+    if earlier is None or earlier.kind != ASKED_WHICH_SOFTWARE:
+        return None
+    return plausible_name(visible_words(request.task).strip(" .!?"))
