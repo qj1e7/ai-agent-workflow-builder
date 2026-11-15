@@ -1376,9 +1376,38 @@ def one_line_cant(entry: CapabilitySpec) -> str:
     return f"I can't {entry.cant} yet."
 
 
+PERSONS: Final = words(
+    "i i'd i'm i'll i've me my mine myself we we'd we're we've us our ours ourselves you you'd "
+    "you're you've your yours yourself"
+)
+
+
+LEADS: Final = words("bulk mass")
+OPENS_AN_ORDER: Final = CAUSATIVES | words("ensure")
+
+
+def _an_order(what: str, reader: _Reader) -> bool:
+    """Whether the words read as an order after "I can't": a verb, or a verb after an adverb as
+    in "permanently delete", then more words, and no I, me, we or you, which would change whose
+    they are ("I can't send me a summary")."""
+    row = [w for w in _tokens(what) if not w.mark]
+    if len(row) < 2 or any(w.low in PERSONS for w in row):
+        return False
+    first, second = row[0], row[1]
+    lead = first.low.endswith("ly") or first.low in LEADS
+    return (
+        reader.verb(first) is not None
+        or first.low in OPENS_AN_ORDER
+        or (lead and reader.verb(second) is not None)
+    )
+
+
 def _cant_sentence(what: str, reader: _Reader) -> str:
+    """The can't in the Planner's own voice. The card shows the person's words beside it, so
+    words that don't read as an order are said as "this"."""
     yet = "" if _is_unsupported(what) else " yet"
-    return f"I can't {what}{yet}. {reader.can()}"
+    said = what if _an_order(what, reader) else "do this"
+    return f"I can't {said}{yet}. {reader.can()}"
 
 
 def names_no_ability(note: str) -> bool:

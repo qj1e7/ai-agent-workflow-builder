@@ -99,7 +99,7 @@ def test_a_cant_no_entry_names_keeps_the_words_it_had():
 
 def test_a_text_message_is_the_registrys_unsupported_entry():
     note = why_not("do", "send me a text message")
-    assert note is not None and note.startswith("I can't send me a text message.")
+    assert note is not None and note.startswith("I can't do this.")
 
 
 def test_removing_a_label_from_tickets_is_not_deleting_them():
