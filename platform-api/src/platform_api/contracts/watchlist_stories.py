@@ -8,7 +8,7 @@ from platform_api.builder.models import (
     AddressChangeView,
     AddSoftware,
     LastCheckView,
-    ScheduleIn,
+    ScheduleSaveIn,
     ScheduleView,
     SourceView,
     VersionSourceView,
@@ -18,6 +18,7 @@ from platform_api.builder.models import (
 )
 from platform_api.builder.watchlist import attention_first
 from platform_api.contracts.stories import SUCCESS, TICKET_BODY, TICKET_TITLE
+from platform_api.orchestration import held_words
 from platform_api.orchestration.http import PendingView
 from platform_api.practice_jira.http import MockJiraTicket
 from platform_api.shared import ApprovalId, RunId, SoftwareId, UserId
@@ -164,7 +165,7 @@ SCHEDULE = ScheduleView(
     saved_at=ADDED_AT,
     next_at=datetime(2026, 11, 23, 9, 0, tzinfo=SINGAPORE),
 )
-SCHEDULE_IN = ScheduleIn(day="every_day", at="06:30")
+SCHEDULE_IN = ScheduleSaveIn(day="every_day", at="06:30", expected_version=7)
 SCHEDULE_SAVED = ScheduleView(
     day="every_day",
     at="06:30",
@@ -252,7 +253,15 @@ SCHEDULE_SAVED_VIEW = STATUSES.model_copy(update={"schedule": SCHEDULE_SAVED})
 SCHEDULE_OFF_VIEW = STATUSES.model_copy(update={"schedule": None})
 # Alice has left the People list, so her schedule starts no check until an Operator saves it.
 SCHEDULE_HELD_VIEW = STATUSES.model_copy(
-    update={"schedule": SCHEDULE.model_copy(update={"next_at": None, "held": "owner_removed"})}
+    update={
+        "schedule": SCHEDULE.model_copy(
+            update={
+                "next_at": None,
+                "held": "owner_removed",
+                "held_words": held_words("owner_removed", SCHEDULE.owner_name),
+            }
+        )
+    }
 )
 
 SCHEDULED_RUN = PendingView(

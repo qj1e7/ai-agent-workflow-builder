@@ -1631,7 +1631,9 @@ async def test_every_change_answers_for_the_person_who_made_it(front: Front):
         "pause": lambda: front.client.post(f"{base}/pause", headers=ALICE),
         "resume": lambda: front.client.post(f"{base}/resume", headers=ALICE),
         "save the schedule": lambda: front.client.put(
-            f"{base}/schedule", headers=ALICE, json={"day": "friday", "at": "17:30"}
+            f"{base}/schedule",
+            headers=ALICE,
+            json={"day": "friday", "at": "17:30", "expected_version": 1},
         ),
         "delete": lambda: front.client.delete(base, headers=ALICE),
         "restore": lambda: front.client.post(f"{base}/restore", headers=ALICE),

@@ -1,4 +1,5 @@
 {
   "day": "every_day",
-  "at": "06:30"
+  "at": "06:30",
+  "expected_version": 7
 }

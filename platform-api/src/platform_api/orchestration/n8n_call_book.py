@@ -317,6 +317,23 @@ class CallBook:
         ).fetchone()
         return row is not None
 
+    async def quiet(self, uow: UnitOfWork, execution: N8nExecutionId) -> str | None:
+        """Why the execution was ended quietly, if it was."""
+        row = await (
+            await uow.conn.execute(
+                "SELECT why FROM orchestration.quiet_executions WHERE execution_id = %s",
+                (execution,),
+            )
+        ).fetchone()
+        return None if row is None else str(row["why"])
+
+    async def keep_quiet(self, uow: UnitOfWork, execution: N8nExecutionId, why: str) -> None:
+        await uow.conn.execute(
+            "INSERT INTO orchestration.quiet_executions (execution_id, why, quiet_at) "
+            "VALUES (%s, %s, %s) ON CONFLICT (execution_id) DO NOTHING",
+            (execution, why, uow.now),
+        )
+
     async def linked_run(self, uow: UnitOfWork, execution: N8nExecutionId) -> RunId | None:
         row = await (
             await uow.conn.execute(

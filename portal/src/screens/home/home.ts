@@ -8,7 +8,7 @@ import { lineWhen, runWhen } from '../workflows/workflow'
 import type { PanelItem } from '../../ui/sidePanel'
 import { TEST_AGAIN } from '../run/testAgain'
 
-/** Home for an Operator shows the most urgent five, then “N more”. Workflows, and Home for someone who is not an Operator, show everything the platform returned. */
+/** Home for an Operator shows the most urgent five, then “N more”, which leads to Workflows. Workflows, the panel, and Home for someone who is not an Operator show every row, a page at a time with Show more. */
 export const HOME_NEEDS_SHOWN = 5
 
 const CONNECTIONS_PATH = '/settings?tab=connections'
@@ -23,15 +23,9 @@ export type Need =
   | { readonly kind: 'question'; readonly key: string; readonly at: string; readonly item: QuestionItem }
   | { readonly kind: 'reply'; readonly key: string; readonly at: string; readonly item: FollowingUpItem }
 
-export interface LeftOut {
-  readonly approvals: number
-  readonly others: number
-}
-
 export interface Needs {
   readonly shown: readonly Need[]
   readonly total: number
-  readonly more: LeftOut
 }
 
 const KIND_ORDER: Record<Need['kind'], number> = { stopped: 0, approval: 1, question: 2, declined: 3, connection: 4, address: 5, confirmation: 6, reply: 7 }
@@ -66,6 +60,9 @@ export function groupOf(need: Need): NeedGroup {
 
 const GROUP_ORDER: Record<NeedGroup, number> = { now: 0, set: 1 }
 
+/** The keys of the rows in the order Needs you draws them, Do now and then Set up. */
+export const drawnKeys = (needs: readonly Need[]): string[] => NEED_GROUPS.flatMap(([group]) => needs.filter((need) => groupOf(need) === group).map((need) => need.key))
+
 /** No AI model leads Do now, as in the prototype, because nothing that needs the model can run until it is connected. */
 const rankOf = (need: Need): number => (need.kind === 'connection' && noModel(need.item) ? -1 : KIND_ORDER[need.kind])
 
@@ -98,17 +95,12 @@ export function needsOf(home: HomeOut, limit = Infinity): Needs {
     ...home.questions_for_me.map((item): Need => ({ kind: 'question', key: `question:${item.question_id}`, at: item.asked_at, item })),
     ...home.replied.map((item): Need => ({ kind: 'reply', key: `reply:${item.request_id}`, at: item.latest_reply?.replied_at ?? item.asked_at, item })),
   ].sort(urgentFirst)
-  const shown = all.slice(0, limit)
-  const total = needsTotal(home)
-  const approvalsShown = shown.filter((need) => need.kind === 'approval').length
-  const approvals = home.approvals_total - approvalsShown
-  return { shown, total, more: { approvals, others: total - shown.length - approvals } }
+  return { shown: all.slice(0, limit), total: needsTotal(home) }
 }
 
 /** The requests waiting for this person’s yes, from the same list as Needs you, so the two never disagree. */
 export function approvalsOf(home: HomeOut): Needs {
-  const shown = needsOf(home).shown.filter((need) => need.kind === 'approval')
-  return { shown, total: home.approvals_total, more: { approvals: home.approvals_total - shown.length, others: 0 } }
+  return { shown: needsOf(home).shown.filter((need) => need.kind === 'approval'), total: home.approvals_total }
 }
 
 /** What waits for the yes of someone who isn’t an Operator, in the sketch’s words, for the chat’s answer and, with no full stop, his Home’s heading. */
@@ -155,15 +147,6 @@ export function suggestionsOf(watched: number | undefined, capabilities: Capabil
     label: example.text,
     ask: example.kind === 'learn' ? { intent: 'abilities' } : { text: example.text },
   }))
-}
-
-export const SEE_ALL_WORDS = 'See all on Workflows'
-
-export function moreWords({ approvals, others }: LeftOut): string | null {
-  const left = approvals + others
-  if (left === 0) return null
-  if (others === 0) return `${count(approvals, 'more run')} ${approvals === 1 ? 'is' : 'are'} waiting for your yes. The next ones show here as you decide these.`
-  return `${left} more ${left === 1 ? 'thing needs' : 'things need'} you. The next ones show here as you finish these.`
 }
 
 export type Tone = 'wait' | 'bad' | 'tool' | 'info' | 'off'

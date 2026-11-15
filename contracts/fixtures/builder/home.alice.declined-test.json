@@ -6,6 +6,7 @@
   "stopped_total": 0,
   "waiting_on_others": [],
   "waiting_on_others_total": 0,
+  "waiting_on_others_next": null,
   "declined": [
     {
       "run_id": "run_01JD7TS",
@@ -21,9 +22,11 @@
   "declined_total": 1,
   "questions_for_me": [],
   "questions_for_me_total": 0,
+  "needs_next": null,
   "drafts": [],
   "following_up": [],
   "following_up_total": 0,
+  "following_up_next": null,
   "replied": [],
   "coming_up": null,
   "workflows": 1,

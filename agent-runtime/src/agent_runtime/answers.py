@@ -56,6 +56,7 @@ from agent_runtime.contract import (
     PauseAnswer,
     PlannerAnswer,
     PlannerFacts,
+    QuestionAnswer,
     RefusedAnswer,
     ResumeAnswer,
     RowKind,
@@ -71,6 +72,7 @@ from agent_runtime.edits import (
     NEW_WORKFLOW,
     asks,
     asks_for_a_change,
+    changes_a_workflow,
     commanded,
     edit_of,
     left_over,
@@ -730,6 +732,17 @@ def _change_row(clause: str) -> CantRow:
     return CantRow(kind="do", text=text, note=plain(note, NOTE_LIMIT), needs="new_tool")
 
 
+def could_only_read(facts: PlannerFacts) -> QuestionAnswer:
+    """A change to a workflow whose name wasn't among those sent, said plainly rather than crossed:
+    some names were left out of the facts, and the one asked about may be among them."""
+    named, total = len(facts.workflow_names()), facts.workflows_in_all()
+    return QuestionAnswer(
+        text=f"I could only read {named:,} of your {total:,} workflows, so I couldn't find the one "
+        "you named.",
+        looked_at=["workflows"],
+    )
+
+
 def _about(read: TaskRead, request: str) -> PlannerAnswer:
     said = ARTICLES.sub("", visible_words(read.workflow_words))
     words = whole_word_of(request, said)
@@ -817,6 +830,13 @@ def _answer_of(
     edit = edit_of(read, text, facts) if changes_workflows else None
     if edit is not None:
         return edit
+    if (
+        changes_workflows
+        and facts is not None
+        and facts.left_out_workflows
+        and changes_a_workflow(read, text)
+    ):
+        return could_only_read(facts)
     if read.asks_about == "change":
         unchanged = _unchanged(read, text, facts, changes_workflows)
         read = read.model_copy(update={"asks_about": unchanged})
@@ -953,7 +973,7 @@ def _a_question_beside_a_new_workflow(
     lane answers the question from the person's software or workflows, and the task is crossed
     to ask on its own. The first answer stands if the lane says no."""
     facts = request.facts
-    held = facts is not None and bool(_watched_names(request) or facts.workflows)
+    held = facts is not None and bool(_watched_names(request) or facts.workflow_names())
     if not held or not isinstance(answer, CantAnswer | SetupCardAnswer | PartAnswer):
         return False
     clauses = clauses_of(text)
@@ -977,10 +997,13 @@ def _follows(answer: PlannerAnswer) -> bool:
 
 
 def _nothing_stopped(request: AnswerRequest) -> bool:
-    """The workflows section is there and no workflow's last run is Stopped, so the fixed answer
-    has nothing to show. Missing facts keep it."""
-    workflows = None if request.facts is None else request.facts.workflows
-    return workflows is not None and all(w.last_run != "Stopped" for w in workflows)
+    """The workflows section is there, every workflow came with its last run, and none is
+    Stopped, so the fixed answer has nothing to show. Missing facts keep it, and so do workflows
+    whose last run was left out."""
+    facts = request.facts
+    if facts is None or facts.workflows is None or facts.other_workflows:
+        return False
+    return all(w.last_run != "Stopped" for w in facts.workflows)
 
 
 def _state_answer_about_the_watchlist(

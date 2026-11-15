@@ -550,7 +550,7 @@ for (const width of WIDTHS) {
       await editCard(again).getByRole('button', { name: 'Save change' }).click()
       await expect(editCard(again)).toContainText('Saved as version 5.')
       await reread
-      expect((await backend.send('PUT', 'carol', `/api/v1/use-cases/${morning.id}/schedule`, { day: 'sunday', at: '07:00' })).status).toBe(200)
+      expect((await backend.saveWorkflowSchedule('carol', morning.id, { day: 'sunday', at: '07:00' })).status).toBe(200)
       await editCard(again).getByRole('button', { name: /^Undo/ }).click()
       await expect(editCard(again).getByRole('alert')).toContainText('changed again since, so Undo would throw that change away.')
       await check('the edit card after a refused Undo', '409', again)

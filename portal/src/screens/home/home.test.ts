@@ -4,11 +4,12 @@ import bobHome from '../../../../contracts/fixtures/builder/home.bob.json'
 import dayOne from '../../../../contracts/fixtures/builder/home.day-one.json'
 import declinedTest from '../../../../contracts/fixtures/builder/home.alice.declined-test.json'
 import questionForAlice from '../../../../contracts/fixtures/builder/home.alice.question.json'
-import type { AddressItem, ApprovalItem, ConnectionItem, FollowingUpItem, HomeOut, ReplyView, StoppedItem, WaitingItem } from '../../api/types'
+import type { AddressItem, ApprovalItem, ConnectionItem, FollowingUpItem, HomeOut, NeedsPage, ReplyView, StoppedItem, WaitingItem } from '../../api/types'
+import { withNeedsPages } from '../../api/homeQueries'
 import capabilities from '../../../../contracts/fixtures/planner/capabilities.json'
 import { displayName } from '../../api/people'
 import type { CapabilitiesView } from '../../api/types'
-import { actionsOf, approverHeading, approverLine, draftWords, groupOf, HOME_NEEDS_SHOWN, lineOf, moreWords, needsOf, needsTotal, openPathOf, panelItemOf, pinnedOf, retriedFirstWords, retryProblem, suggestionsOf, waitingWords, wordsOf, type Need } from './home'
+import { actionsOf, approverHeading, approverLine, drawnKeys, draftWords, groupOf, HOME_NEEDS_SHOWN, lineOf, needsOf, needsTotal, openPathOf, panelItemOf, pinnedOf, retriedFirstWords, retryProblem, suggestionsOf, waitingWords, wordsOf, type Need } from './home'
 
 const BOB = bobHome as HomeOut
 const ALICE = aliceHome as HomeOut
@@ -123,7 +124,6 @@ describe('the order of what needs you', () => {
     expect(needs.shown).toHaveLength(10 + 1 + BOB.confirmations.length)
     expect(needs.shown[0]?.key).toBe('stopped:run_01JB9')
     expect(needs.total).toBe(53)
-    expect(needs.more).toEqual({ approvals: 40, others: 0 })
   })
 
   it(`shows ${HOME_NEEDS_SHOWN} on Home with the most urgent first, and counts the same total`, () => {
@@ -136,23 +136,46 @@ describe('the order of what needs you', () => {
     expect(onHome.total).toBe(needsTotal(home))
   })
 
-  it('says nothing more when everything fits', () => {
-    expect(needsOf(BOB).more).toEqual({ approvals: 0, others: 0 })
+  it('lists the keys Do now first and Set up after, as the rows are drawn', () => {
+    const needs = needsOf(BOB).shown
+    expect(drawnKeys(needs)).toEqual([...needs.filter((need) => groupOf(need) === 'now'), ...needs.filter((need) => groupOf(need) === 'set')].map((need) => need.key))
   })
 })
 
-describe('how many more are waiting', () => {
-  it('names approvals when only approvals are left out', () => {
-    expect(moreWords({ approvals: 40, others: 0 })).toBe('40 more runs are waiting for your yes. The next ones show here as you decide these.')
-    expect(moreWords({ approvals: 1, others: 0 })).toBe('1 more run is waiting for your yes. The next ones show here as you decide these.')
+describe('Needs you with the pages Show more read', () => {
+  const page = (runs: readonly string[], total: number, next: string | null): NeedsPage => ({
+    approvals: runs.map((run, n) => ask(run, `2026-11-03T01:${String(59 - n).padStart(2, '0')}:00Z`)),
+    approvals_total: total,
+    stopped: [],
+    stopped_total: 0,
+    declined: [],
+    declined_total: 0,
+    questions_for_me: [],
+    questions_for_me_total: 0,
+    next,
+  })
+  const firstTen = Array.from({ length: 10 }, (_, n) => `run_${String(n).padStart(2, '0')}`)
+
+  it('is Home itself until Show more is pressed', () => {
+    const home: HomeOut = { ...BOB, ...page(firstTen, 12, 'c1'), needs_next: 'c1' }
+    expect(withNeedsPages(home, undefined)).toBe(home)
   })
 
-  it('counts everything when other items are left out too', () => {
-    expect(moreWords({ approvals: 2, others: 1 })).toBe('3 more things need you. The next ones show here as you finish these.')
+  it('holds every row of every page read, so the rows reach the count', () => {
+    const home: HomeOut = { ...BOB, ...page(firstTen, 12, 'c1'), needs_next: 'c1' }
+    const merged = withNeedsPages(home, [page(firstTen, 12, 'c1'), page(['run_10', 'run_11'], 12, null)])
+    const needs = needsOf(merged)
+    expect(needs.shown.filter((need) => need.kind === 'approval')).toHaveLength(12)
+    expect(needs.total).toBe(12 + BOB.confirmations.length)
+    expect(needs.shown).toHaveLength(needs.total)
+    expect(merged.needs_next).toBeNull()
   })
 
-  it('says nothing when nothing is left out', () => {
-    expect(moreWords({ approvals: 0, others: 0 })).toBeNull()
+  it('counts from the newest page read, the same read as its rows', () => {
+    const home: HomeOut = { ...BOB, ...page(firstTen, 12, 'c1'), needs_next: 'c1' }
+    const merged = withNeedsPages(home, [page(firstTen, 12, 'c1'), page(['run_10', 'run_11'], 13, 'c2')])
+    expect(merged.approvals_total).toBe(13)
+    expect(merged.needs_next).toBe('c2')
   })
 })
 

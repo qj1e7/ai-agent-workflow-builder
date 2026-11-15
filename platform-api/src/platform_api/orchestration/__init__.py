@@ -1,4 +1,6 @@
 from platform_api.orchestration.agents import (
+    OTHER_WORKFLOWS,
+    WORKFLOW_FACTS,
     AbilitiesAnswer,
     AgentRejected,
     AgentUnavailable,
@@ -157,6 +159,7 @@ from platform_api.orchestration.schedule_store import (
     SavedSchedule,
     ScheduleBook,
     ScheduleHold,
+    held_words,
 )
 from platform_api.orchestration.service import RunDetail
 from platform_api.orchestration.spec import (
@@ -232,6 +235,8 @@ __all__ = [
     "NodeState",
     "RunInN8n",
     "StaffAccess",
+    "OTHER_WORKFLOWS",
+    "WORKFLOW_FACTS",
     "WriteEntry",
     "known_options",
     "block_id",
@@ -410,6 +415,7 @@ __all__ = [
     "Schedule",
     "ScheduleBook",
     "ScheduleHold",
+    "held_words",
     "SoftwareFacts",
     "SoftwareSource",
     "Standing",

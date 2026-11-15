@@ -452,7 +452,7 @@ async def test_a_schedule_edit_is_refused_while_someone_holds_the_workflow(s: St
         "alice",
         "PUT",
         f"/api/v1/use-cases/{use_case_id}/schedule",
-        {"day": "monday", "at": "07:30", "via": "page"},
+        {"day": "monday", "at": "07:30", "via": "page", "expected_version": 1},
     )
     assert saved.status_code == 409
     assert saved.json()["detail"].startswith("Carol has it open in n8n since ")

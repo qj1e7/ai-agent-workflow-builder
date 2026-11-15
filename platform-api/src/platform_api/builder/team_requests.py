@@ -13,6 +13,7 @@ from typing import Annotated, Any, Literal, Protocol, Self
 
 from pydantic import Field, StringConstraints, model_validator
 
+from platform_api.builder.paging import Place, cursor_text
 from platform_api.db import Database, UnitOfWork, json
 from platform_api.orchestration import RequestKind, RequestNotice, TeamsPost
 from platform_api.shared import Principal, RunId, UserId, new_id
@@ -22,6 +23,7 @@ NOTE_LIMIT = 1000
 REPLY_LIMIT = 1000
 LIST_LIMIT = 200
 FOLLOWING_UP_SHOWN = 50
+FOLLOWING_UP = "following_up"
 DONE_STAYS_LISTED = timedelta(days=30)
 """A request marked Done leaves the list after this long. It stays in the record."""
 POSTING_GIVES_UP_AFTER = timedelta(minutes=2)
@@ -136,6 +138,16 @@ class FollowingUpItem(WireModel):
     asked_at: datetime
     status: RequestStatus
     latest_reply: ReplyView | None
+
+
+class FollowingUpPage(WireModel):
+    following_up: list[FollowingUpItem] = Field(
+        description="This person's own requests to the team, the newest first, 50 a page."
+    )
+    following_up_total: int
+    next: str | None = Field(
+        description="Pass it as `after` to read the next page. Null when every row has been sent."
+    )
 
 
 class SeenIn(WireIn):
@@ -492,11 +504,18 @@ class TeamRequests:
             replies = await _replies_of(uow, [request_id])
         return _view(row, replies.get(request_id, []))
 
-    async def following_up(self, asker: Principal) -> tuple[list[FollowingUpItem], int]:
-        """The person's own requests, the newest first, and how many they have in all."""
+    async def following_up(self, asker: Principal, after: Place | None) -> FollowingUpPage:
+        """The person's own requests, the newest first, a page at a time after `after`, and how
+        many they have in all."""
         async with self._db.transaction("builder") as uow:
             since = uow.now - DONE_STAYS_LISTED
-            params = {"who": asker.user_id, "since": since, "limit": FOLLOWING_UP_SHOWN}
+            params = {
+                "who": asker.user_id,
+                "since": since,
+                "at": None if after is None else after.at,
+                "id": None if after is None else after.id,
+                "limit": FOLLOWING_UP_SHOWN + 1,
+            }
             total = await (
                 await uow.conn.execute(
                     f"SELECT count(*) AS n FROM builder.team_requests"
@@ -507,13 +526,22 @@ class TeamRequests:
             rows = await (
                 await uow.conn.execute(
                     f"SELECT * FROM builder.team_requests WHERE asked_by = %(who)s AND {_LISTED}"
+                    " AND (%(at)s::timestamptz IS NULL"
+                    " OR (asked_at, request_id) < (%(at)s::timestamptz, %(id)s::text))"
                     " ORDER BY asked_at DESC, request_id DESC LIMIT %(limit)s",
                     params,
                 )
             ).fetchall()
-            replies = await _replies_of(uow, [r["request_id"] for r in rows])
+            page = rows[:FOLLOWING_UP_SHOWN]
+            replies = await _replies_of(uow, [r["request_id"] for r in page])
         assert total is not None
-        return (
-            [_following(r, (replies.get(r["request_id"]) or [None])[-1]) for r in rows],
-            total["n"],
+        last = page[-1] if len(rows) > FOLLOWING_UP_SHOWN else None
+        return FollowingUpPage(
+            following_up=[
+                _following(r, (replies.get(r["request_id"]) or [None])[-1]) for r in page
+            ],
+            following_up_total=total["n"],
+            next=None
+            if last is None
+            else cursor_text({FOLLOWING_UP: Place(last["asked_at"], last["request_id"])}),
         )

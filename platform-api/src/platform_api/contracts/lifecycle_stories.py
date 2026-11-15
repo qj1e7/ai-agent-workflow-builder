@@ -37,7 +37,7 @@ from platform_api.contracts.stories import (
     USE_CASE_SCHEDULE,
 )
 from platform_api.contracts.watchlist_stories import SCHEDULE, STATUSES
-from platform_api.orchestration import Schedule
+from platform_api.orchestration import Schedule, held_words
 from platform_api.wire import WireModel
 
 PAUSED = USE_CASE.model_copy(update={"state": "paused", "next_run_at": None})
@@ -93,7 +93,12 @@ STOPPED = AGENT_USE_CASE.model_copy(
 HELD = USE_CASE.model_copy(
     update={
         "next_run_at": None,
-        "schedule": USE_CASE_SCHEDULE.model_copy(update={"held": "owner_removed"}),
+        "schedule": USE_CASE_SCHEDULE.model_copy(
+            update={
+                "held": "owner_removed",
+                "held_words": held_words("owner_removed", USE_CASE_SCHEDULE.owner_name),
+            }
+        ),
     }
 )
 PAUSED_WATCHLIST = STATUSES.model_copy(
@@ -250,7 +255,9 @@ def lifecycle_fixtures() -> dict[str, WireModel | list[WireModel]]:
         "builder/use-case.deleted.json": DELETED,
         "builder/draft.in.json": DRAFT_IN,
         "builder/drafts.json": DRAFTS,
-        "builder/schedule.in.json": UseCaseScheduleIn(day="monday", at="08:00", via="chat"),
+        "builder/schedule.in.json": UseCaseScheduleIn(
+            day="monday", at="08:00", via="chat", expected_version=1
+        ),
         "builder/undo.in.json": UndoIn(via="page"),
         "builder/use-case.versioned.json": VERSIONED,
         "builder/use-case.undone.json": UNDONE_USE_CASE,

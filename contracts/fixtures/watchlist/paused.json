@@ -182,7 +182,8 @@
     "owner_name": "Alice",
     "saved_at": "2026-11-02T10:00:00Z",
     "next_at": null,
-    "held": null
+    "held": null,
+    "held_words": null
   },
   "moving_to_n8n": false
 }
