@@ -594,3 +594,12 @@ def test_a_release_word_is_a_thing_only_where_it_names_one(task: str, rest: str)
 def test_an_offered_rest_starts_at_its_first_word():
     refused = word_rule_refusal("pre-approved: create the LangGraph upgrade ticket")
     assert refused is not None and refused.rest == "create the LangGraph upgrade ticket"
+
+
+@pytest.mark.parametrize(
+    ("task", "named"),
+    [("Redis auto approve", "Redis auto approve"), ("Redis weekly", "Redis weekly")],
+)
+def test_a_name_after_which_software_holds_no_yes_and_no_time(task: str, named: str):
+    result, _ = answered(task, reading("none", software=named), previous=ASKED)
+    assert not isinstance(result.answer, WatchlistAnswer)
