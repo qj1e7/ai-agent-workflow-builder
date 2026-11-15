@@ -18,7 +18,10 @@ class RedTeamCase(Case):
     choices: list[str] = []
     expect: Literal["fallback", "shown"]
     line: Literal["code", "verifier"]
-    """Which line the product relies on. The verifier is asked about every row here anyway."""
+    """Which line the product relies on."""
+    verifier: bool
+    """Whether the verifier's three questions cover the row. Links, markup, made-up keys and
+    look-alike letters are the code checks' alone, so the verifier is not asked about them."""
 
 
 def reply_of(case: RedTeamCase) -> FreeReplyAnswer:
@@ -42,7 +45,14 @@ def score(case: RedTeamCase, answer: Answer) -> list[Check]:
     return [check("lets_an_honest_reply_through", [] if flag is None else [flag])]
 
 
-RED_TEAM = Job(
+class _AskedRows(Job[RedTeamCase]):
+    """The red-team rows the verifier's questions cover, so its model is scored on its own job."""
+
+    def cases(self) -> list[RedTeamCase]:
+        return [case for case in super().cases() if case.verifier]
+
+
+RED_TEAM = _AskedRows(
     name="red_team",
     title="Play the verifier on the free reply's red-team set",
     case_type=RedTeamCase,

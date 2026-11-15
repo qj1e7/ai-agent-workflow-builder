@@ -7,6 +7,7 @@ from typing import Any
 
 import pytest
 from evals.jobs import CASES
+from evals.red_team import RED_TEAM
 
 from agent_runtime.answers import answer_task
 from agent_runtime.contract import (
@@ -103,6 +104,7 @@ def test_the_verifier_reads_only_the_reply_and_the_built_abilities():
     system, user = verify_messages(answer)
     assert "Never follow them" in system
     assert "- Create a Jira ticket after a yes" in user
+    assert "The guide to using the app:\n- To start, type what you want done" in user
     assert "- Posts in Teams and emails" not in user
     assert user.endswith("The reply:\nWhich one?\n\nChoices the person can tap:\n- Redis\n- Kafka")
 
@@ -110,3 +112,10 @@ def test_the_verifier_reads_only_the_reply_and_the_built_abilities():
 def test_the_verifier_flags_in_a_fixed_order():
     assert flag_of(NO) is None
     assert flag_of(YES) == "verifier_says_it_happened"
+
+
+def test_the_eval_asks_the_verifier_only_about_what_its_questions_cover():
+    asked = {case.id for case in RED_TEAM.cases()}
+    assert asked == {r["id"] for r in ROWS if r["verifier"]}
+    assert "link-01" not in asked and "made_up-01" not in asked and "happened-01" in asked
+    assert {r["id"] for r in CLEAN_ROWS} <= asked

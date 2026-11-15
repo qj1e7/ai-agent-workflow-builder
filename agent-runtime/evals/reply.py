@@ -25,6 +25,7 @@ from agent_runtime.answers import (
     word_rule_refusal,
 )
 from agent_runtime.contract import (
+    Answered,
     AnswerRequest,
     DidntFollowAnswer,
     FreeReplyAnswer,
@@ -32,7 +33,6 @@ from agent_runtime.contract import (
     PlannerAnswer,
     PlannerFacts,
     PreviousTurn,
-    QuestionAnswer,
     ReplyEnvelope,
 )
 from agent_runtime.drafting import UNUSABLE
@@ -40,6 +40,8 @@ from agent_runtime.free_reply import STILL_UNCLEAR, answer_of_envelope, dead_end
 from agent_runtime.parts import parts_of
 from agent_runtime.questions import QuestionReply, answer_of_reply, question_messages
 from agent_runtime.reply_verifier import Verdict, flag_of, verify_messages
+from evals.anything import HOME_FACTS
+from evals.anything import words_of as shown_words
 from evals.checks import Check, check, no_themed_names
 from evals.jobs import CASES, Answer, Case, Job, marked
 
@@ -178,20 +180,15 @@ def follow_up(model: BaseChatModel, case: ReplyCase, first: Answer, marker: str)
             verdict, took = _structured(model, Verdict, verify_messages(passed), marker)
             steps = Steps(steps.lane, True, envelope, verdict, True, (*steps.seconds, took))
     shown = shown_for(read, case, steps).answer
-    return Answer(read, words_of(shown), first.raw, steps)
+    return Answer(read, words_of(shown, case), first.raw, steps)
 
 
-def words_of(answer: PlannerAnswer) -> str:
-    """The answer as the judge and the report read it."""
-    match answer:
-        case FreeReplyAnswer(form=form, text=text, choices=choices, offer=offer):
-            extra = f" Choices: {', '.join(choices)}." if choices else ""
-            button = f" Button: {offer.request}." if offer else " Button: Ask the team."
-            return f"[reply:{form}] {text}{extra}{button if form == 'cant' else ''}"
-        case QuestionAnswer(text=text):
-            return f"[question] {text}"
-        case _:
-            return f"[{answer.kind}] {answer.model_dump_json(exclude={'kind'})}"
+def words_of(answer: PlannerAnswer, case: ReplyCase) -> str:
+    """The answer as the judge and the report read it: its kind, then what the Portal shows, in
+    the words the `anything` job draws it with. The gate reads the kind."""
+    parts = parts_of(None, case.task, answer, case.facts)
+    shown = shown_words(Answered(answer=answer, parts=parts), case.facts or HOME_FACTS)
+    return f"[{_kind(answer)}] {shown}"
 
 
 def _kind(answer: PlannerAnswer) -> str:
@@ -242,7 +239,7 @@ def score(case: ReplyCase, answer: Answer) -> list[Check]:
     found = [
         check("answered", []),
         check("right_kind", [] if _acceptable(case, shown.answer) else [kind]),
-        no_themed_names(words_of(shown.answer)),
+        no_themed_names(words_of(shown.answer, case)),
     ]
     if case.must_refuse:
         found.append(check("refuses_a_skip", [] if kind == "refused" else [kind]))
