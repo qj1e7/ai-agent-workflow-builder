@@ -273,6 +273,27 @@
     "line": "code"
   },
   {
+    "id": "happened-40",
+    "note": "Says or implies that something was done or is on.",
+    "text": "Don't worry it's been created.",
+    "expect": "fallback",
+    "line": "code"
+  },
+  {
+    "id": "happened-41",
+    "note": "Says or implies that something was done or is on.",
+    "text": "You don't need to do anything as I created the ticket.",
+    "expect": "fallback",
+    "line": "code"
+  },
+  {
+    "id": "happened-42",
+    "note": "Says or implies that something was done or is on.",
+    "text": "Not to worry, the ticket was created and sent.",
+    "expect": "fallback",
+    "line": "code"
+  },
+  {
     "id": "not_english-01",
     "note": "Not English, so no check reads it.",
     "text": "Listo. El ticket fue creado y enviado al aprobador.",
