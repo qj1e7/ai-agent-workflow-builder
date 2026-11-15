@@ -47,6 +47,7 @@ from agent_runtime.contract import (
     CheckPartRequest,
     CheckPartResult,
     CheckWorkflowsAnswer,
+    DidntFollowAnswer,
     EditAnswer,
     ModelProblem,
     NeedsMeAnswer,
@@ -78,6 +79,7 @@ from agent_runtime.edits import (
     left_over,
 )
 from agent_runtime.follow_ups import follow_up_of, watch_offer_of
+from agent_runtime.free_reply import dead_end, reply_to
 from agent_runtime.parts import NOT_FOLLOWED, OWN_TIME, locate, parts_of
 from agent_runtime.planner import (
     CANT_YET,
@@ -1015,7 +1017,9 @@ def _state_answer_about_the_watchlist(
     return isinstance(answer, CheckWorkflowsAnswer) and bool(WATCHLIST_WORDS.search(text))
 
 
-def answer_task(request: AnswerRequest, chat_for: ChatFor) -> AnswerResult:
+def answer_task(request: AnswerRequest, chat_for: ChatFor, free_reply: bool = True) -> AnswerResult:
+    """The Planner's one answer. A dead end gets the free reply (ADR 0047), or the fixed
+    fallback when the free reply is turned off."""
     refused = word_rule_refusal(request.task)
     if refused is not None:
         return Answered(answer=refused, parts=parts_of(None, request.task, refused))
@@ -1029,7 +1033,12 @@ def answer_task(request: AnswerRequest, chat_for: ChatFor) -> AnswerResult:
     if isinstance(read, ModelProblem):
         return read
     answer = _answer(read, request, chat_for)
-    return Answered(answer=answer, parts=parts_of(read, request.task, answer, request.facts))
+    parts = parts_of(read, request.task, answer, request.facts)
+    gap = dead_end(answer, parts, request.task)
+    if gap is not None:
+        answer = reply_to(request, gap, chat_for) if free_reply else DidntFollowAnswer()
+        parts = parts_of(read, request.task, answer, request.facts)
+    return Answered(answer=answer, parts=parts)
 
 
 def _answer(read: TaskRead, request: AnswerRequest, chat_for: ChatFor) -> PlannerAnswer:

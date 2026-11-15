@@ -16,7 +16,9 @@ from agent_runtime.contract import (
     CantAnswer,
     CantRow,
     CheckWorkflowsAnswer,
+    DidntFollowAnswer,
     EditAnswer,
+    FreeReplyAnswer,
     NeedsMeAnswer,
     PartAnswer,
     PartMark,
@@ -102,6 +104,9 @@ def parts_of(
     workflows, as the answer read them."""
     text = visible_words(request)
     clauses = [c for c in clauses_of(text) if not polite(text[c[0] : c[1]])]
+    if isinstance(answer, FreeReplyAnswer | DidntFollowAnswer):
+        mark, reason = _whole_message(answer)
+        return [_part(text, c, mark, reason) for c in clauses]
     if isinstance(answer, STATE_ANSWERS):
         return _answered(text, clauses, _about_state(text, clauses, _names_of(answer)))
     if isinstance(answer, AbilitiesAnswer):
@@ -126,6 +131,23 @@ def parts_of(
         else:
             found.append(_unmarked(answer, text, clause))
     return found
+
+
+def _whole_message(
+    answer: FreeReplyAnswer | DidntFollowAnswer,
+) -> tuple[PartMark, PartReason | None]:
+    """A free reply answers the whole message at once, so every clause gets its one mark: a tick
+    for an answer, the question for a clarifying question, and a cross for a can't. The fallback
+    followed none of it."""
+    match answer:
+        case FreeReplyAnswer(form="answer"):
+            return "will_do", None
+        case FreeReplyAnswer(form="clarify"):
+            return "question", None
+        case FreeReplyAnswer():
+            return "cant", "cant_do"
+        case DidntFollowAnswer():
+            return "cant", "not_followed"
 
 
 def _asks(text: str, clause: Span) -> bool:

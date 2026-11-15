@@ -163,6 +163,9 @@ class Settings:
     model_api_key: str | None
     model_private_hosts: frozenset[str] = frozenset()
     platform_jira_url: str | None = None
+    free_reply: bool = True
+    """PLANNER_FREE_REPLY=off gives every dead end the fixed fallback, with no model call
+    (ADR 0047)."""
 
     @classmethod
     def from_env(cls, env: Mapping[str, str]) -> Self:
@@ -186,6 +189,7 @@ class Settings:
                 if host.strip()
             ),
             platform_jira_url=_platform_jira_url(env, origins),
+            free_reply=env.get("PLANNER_FREE_REPLY", "").strip().casefold() != "off",
         )
 
     @property
@@ -439,7 +443,7 @@ def create_app(
     @app.post("/v1/planner/answer", dependencies=[Depends(require_key)])
     def answer(body: AnswerRequest) -> AnswerResult:
         chat = active.chat_source(body.model)
-        return answer_task(body, chat) if chat else NO_MODEL
+        return answer_task(body, chat, config.free_reply) if chat else NO_MODEL
 
     @app.post("/v1/planner/check-part", dependencies=[Depends(require_key)])
     def check_part(body: CheckPartRequest) -> CheckPartResult:

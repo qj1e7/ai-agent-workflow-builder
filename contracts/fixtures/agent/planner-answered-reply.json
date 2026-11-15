@@ -1,0 +1,20 @@
+{
+  "status": "answered",
+  "answer": {
+    "kind": "reply",
+    "form": "answer",
+    "text": "To start, type what you want done in the box, in your own words, such as Check LangGraph for new releases every Monday at 9am. The Planner shows a card with what it understood. Change anything on it, then turn it on.",
+    "choices": [],
+    "offer": null,
+    "looked_at": []
+  },
+  "parts": [
+    {
+      "text": "how can i start to use this",
+      "mark": "will_do",
+      "reason": null,
+      "note": null,
+      "choices": []
+    }
+  ]
+}
