@@ -302,7 +302,7 @@ class StaffAccounts:
         """Ends the unused account and makes a new one, so the old link opens nothing."""
         await self._end(row)
         made = await self._make(replace(row, n8n_user_id=None, sealed_invite=None))
-        log.info("made a new n8n password link for %s, as the old one went unused", row.id)
+        log.info("replaced the unused n8n invite of %s with a new account", row.id)
         return None if made is None else Reissued(row.id)
 
     async def recheck(self, person: UserId) -> None:
