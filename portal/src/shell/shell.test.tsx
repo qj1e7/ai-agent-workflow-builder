@@ -261,6 +261,11 @@ describe('the person', () => {
     expect(header).toMatch(/aria-hidden="true"[^>]*>A<\/span>/)
   })
 
+  it('adds n8n access for someone who has it, as the sketch’s “Alice, Operator, n8n access”', () => {
+    expect(text(headerOf(render({ me: { id: 'alice', display: 'Alice', roles: ['operator'], n8n_access: true } })))).toContain('Alice, Operator, n8n access')
+    expect(text(headerOf(render()))).not.toContain('n8n access')
+  })
+
   it('shows Bob as an Approver', () => {
     expect(text(headerOf(render({ me: BOB })))).toContain('Bob, Approver')
     expect(text(headerOf(render({ me: BOB })))).not.toContain('Operator')

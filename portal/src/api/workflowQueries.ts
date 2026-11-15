@@ -393,11 +393,68 @@ export async function sendOpenInN8n(client: ApiClient, useCaseId: string) {
   return unwrap(await client.POST('/api/v1/use-cases/{use_case_id}/open-in-n8n', { params: { path: { use_case_id: useCaseId } } }))
 }
 
+/** Moves the workflow to the person's own n8n space. The workflow, and so who holds it, is read again either way. */
 export function useOpenInN8n() {
   const client = useApiClient()
   const queryClient = useQueryClient()
+  const user = useCacheScope()
   return useMutation({
     mutationFn: (useCaseId: string) => sendOpenInN8n(client, useCaseId),
-    onSettled: () => rereadWorkflowsAndWatchlist(queryClient),
+    onSettled: (_held, _error, useCaseId) => {
+      void queryClient.invalidateQueries({ queryKey: keys.useCase(user, useCaseId) })
+      rereadWorkflowsAndWatchlist(queryClient)
+    },
   })
+}
+
+/** Moves the workflow back to the platform's n8n project, from whoever holds it. */
+export function useTakeBack() {
+  const client = useApiClient()
+  const queryClient = useQueryClient()
+  const user = useCacheScope()
+  return useMutation({
+    mutationFn: async (useCaseId: string) =>
+      unwrap(await client.POST('/api/v1/use-cases/{use_case_id}/take-back', { params: { path: { use_case_id: useCaseId } } })),
+    onSettled: (_free, _error, useCaseId) => {
+      void queryClient.invalidateQueries({ queryKey: keys.useCase(user, useCaseId) })
+      rereadWorkflowsAndWatchlist(queryClient)
+    },
+  })
+}
+
+/** The workflow as n8n holds it, with who holds it now. Only people with n8n access may read it. */
+export function useUseCaseInN8n(useCaseId: string, { enabled, poll }: { readonly enabled: boolean; readonly poll?: number }) {
+  const client = useApiClient()
+  const user = useCacheScope()
+  return useQuery({
+    queryKey: keys.useCaseInN8n(user, useCaseId),
+    queryFn: async () => unwrap(await client.GET('/api/v1/use-cases/{use_case_id}/n8n', { params: { path: { use_case_id: useCaseId } } })),
+    enabled,
+    refetchInterval: poll ?? false,
+  })
+}
+
+/** n8n's own record of an ended run can come a moment after the run's last event, so it is asked for a few times more. */
+const RECORD_TRIES = 5
+const RECORD_EVERY_MS = 3_000
+
+/** A run as n8n carried it: read again at each new event of the run, keeping the last answer on screen meanwhile. */
+export function useRunInN8n(runId: string, seq: number, ended: boolean) {
+  const client = useApiClient()
+  const user = useCacheScope()
+  return useQuery({
+    queryKey: keys.runInN8n(user, runId, seq),
+    queryFn: async () => unwrap(await client.GET('/api/v1/runs/{run_id}/n8n', { params: { path: { run_id: runId } } })),
+    placeholderData: (before) => before,
+    refetchInterval: (query) => (ended && query.state.data?.from_n8n === false && query.state.dataUpdateCount < RECORD_TRIES ? RECORD_EVERY_MS : false),
+  })
+}
+
+/** Asks the platform to look in n8n for this workflow now, once, as its In n8n tab opens (ENGINE-PLAN section 1, row 5). */
+export function useSweepOnOpen(useCaseId: string): void {
+  const client = useApiClient()
+  const queryClient = useQueryClient()
+  useEffect(() => {
+    void sweepNow(client, queryClient, useCaseId)
+  }, [client, queryClient, useCaseId])
 }

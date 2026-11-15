@@ -87,6 +87,22 @@ export function dateAndClock(iso: string, zone = TIME_ZONE): string {
   return `${moment.weekday} ${moment.day} ${moment.month}, ${moment.clock}`
 }
 
+/** When a version was made, after "published by Alice": "just now" within the minute, "today, 9:10", or "Tue 3 Nov, 9:10". */
+export function publishedWhen(iso: string, now: Date): string {
+  const at = new Date(iso)
+  if (now.getTime() - at.getTime() < 60_000) return 'just now'
+  const moment = momentOf(at)
+  const today = momentOf(now)
+  return `${sameDay(moment, today) ? 'today' : dayWords(moment, today)}, ${moment.clock}`
+}
+
+/** When a hold began, after "since": "9:10" on the same day, else "Tue 3 Nov, 9:10". */
+export function sinceWhen(iso: string, now: Date): string {
+  const moment = momentOf(new Date(iso))
+  const today = momentOf(now)
+  return sameDay(moment, today) ? moment.clock : `${dayWords(moment, today)}, ${moment.clock}`
+}
+
 /** The list's shorter form: "Today 10:14", or the date alone. */
 export function lineWhen(iso: string, now: Date): string {
   const at = momentOf(new Date(iso))

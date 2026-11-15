@@ -92,6 +92,17 @@
   color: var(--accent-ink);
 }
 
+/* Steps and In n8n, under the heading. */
+.views {
+  margin-top: 16px;
+}
+
+/* The canvas in place of the run line, with the run line's room around it. */
+.inN8n {
+  min-width: 0;
+  margin: 20px 0 24px;
+}
+
 .status {
   min-height: 1.5em;
   margin-top: 8px;

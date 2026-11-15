@@ -7,7 +7,7 @@ import { useLatch } from '../../api/latch'
 import { useDisplayName } from '../../api/people'
 import { useMe, useRuns, useStartRun, useUseCase } from '../../api/queries'
 import type { Me, UseCaseView } from '../../api/types'
-import { useAddTheYesBack, useDeleteWorkflow, useMoveWorkflow, useRereadWorkflow, useRollback, useSweepOnFocus } from '../../api/workflowQueries'
+import { useAddTheYesBack, useDeleteWorkflow, useMoveWorkflow, useRereadWorkflow, useRollback, useSweepOnFocus, useUseCaseInN8n } from '../../api/workflowQueries'
 import { OperatorsNote } from '../../shell/OperatorsNote'
 import { PageHead } from '../../shell/PageHead'
 import { ActionMenu, type MenuItem } from '../../ui/ActionMenu'
@@ -17,6 +17,7 @@ import { useFromChat } from '../../ui/fromChat'
 import { openedFromList } from '../../ui/fromList'
 import { IconChevronLeft, IconPause, IconPlay, IconTrash } from '../../ui/icons'
 import { Toast, type ToastMessage } from '../../ui/Toast'
+import { useView, ViewTabs } from '../../ui/ViewTabs'
 import { RunLine } from '../run/RunLine'
 import { StatusBanner } from './Banner'
 import { useArrivalScroll } from './arrival'
@@ -26,6 +27,8 @@ import { backToVersionToast, needsFix, yesBackToast } from './n8nChange'
 import { StatusPills } from './Status'
 import { Versions } from './Versions'
 import { DraftActions } from './DraftActions'
+import { OpenInN8nEditor, WorkflowInN8n } from './InN8n'
+import { holdOf, mayOpen } from './n8nHold'
 import { When } from './When'
 import {
   bannerOf,
@@ -175,6 +178,12 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
   const [deleteProblem, setDeleteProblem] = useState<string | null>(null)
   const [said, setSaid] = useState<Said | null>(null)
   const switchedTo = useRef<UseCaseView['state'] | null>(null)
+  const n8nAccess = me.n8n_access === true
+  const [view, showView] = useView()
+  const shownView = n8nAccess ? view : 'main'
+  const inN8n = useUseCaseInN8n(id, { enabled: n8nAccess, poll: REFRESH_MS })
+  const hold = n8nAccess && inN8n.data ? holdOf(inN8n.data, useCase, me) : null
+  const openable = hold !== null && mayOpen(hold) ? hold : null
   useArrivalScroll()
   useSweepOnFocus(viewer.operator, id)
 
@@ -256,6 +265,7 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
     }
   })
 
+  const say = (text: string) => setSaid((before) => ({ id: (before?.id ?? 0) + 1, text }))
   const message: ToastMessage | null = said ? { id: said.id, text: said.text } : null
   return (
     <>
@@ -267,71 +277,79 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
         </div>
         <StatusPills state={useCase.state} fact={useCase.last_run ? pillOf(useCase.last_run) : null} test={useCase.last_run?.test === true} large fix={needsFix(useCase)} />
       </div>
-      <p className={styles['sentence']}>{sentenceOf(useCase)}</p>
-      {leftOutWords(useCase.left_out) ? <p className={styles['leftOut']}>{leftOutWords(useCase.left_out)}</p> : null}
-      {viewer.operator ? null : (
-        <p className={styles['opsNote']}>
-          <OperatorsNote what="this workflow" />
-        </p>
-      )}
-      <StatusBanner banner={banner} resuming={move.isPending} onResume={() => pauseOrResume('resume')} onRepublish={republish} republishing={rollback.isPending || addYes.isPending} />
-      {useCase.moving_to_n8n ? (
-        <p className="muted" role="status">
-          Moving to n8n after this run.
-        </p>
-      ) : null}
-      {runNow.error ? (
-        <p className={styles['problem']} role="alert">
-          {words(runNow.error)}
-        </p>
-      ) : null}
-      {problem ? (
-        <p className={styles['problem']} role="alert">
-          {problem}
-        </p>
-      ) : null}
-      <RunLine stations={templateLine(useCase)} arrivedLive={null} settled={null} />
-      <div className={styles['pair']}>
-        <When useCase={useCase} now={now} mayChange={mayChangeSchedule(useCase, viewer)} onSaved={(text) => setSaid((before) => ({ id: (before?.id ?? 0) + 1, text }))} />
-        {gate ? (
-          <section className={styles['section']} aria-labelledby="who-says-yes">
-            <h2 id="who-says-yes">Who says yes</h2>
-            <p>{whoSaysYes(useCase.owner, viewer, nameOf)}</p>
-            <details className={styles['rule']}>
-              <summary>Who can’t say yes</summary>
-              <p>{ownWorkRule(useCase.schedule)}</p>
-            </details>
-          </section>
-        ) : null}
-      </div>
-      {runs.data ? (
-        <RecentRuns runs={recent} now={now} nameOf={nameOf} firstRun={useCase.next_run_at && !paused ? nextRunWords(useCase, now) : null} />
+      {n8nAccess ? <ViewTabs main="Summary" shown={shownView} onShow={showView} className={styles['views']} /> : null}
+      {shownView === 'n8n' ? (
+        <WorkflowInN8n useCase={useCase} inN8n={inN8n} me={me} now={now} say={say} />
       ) : (
-        <section className={styles['section']}>
-          <h2>Recent runs</h2>
-          {runs.isError ? (
-            <p>
-              The runs could not be loaded. <Button onClick={() => void runs.refetch()}>Try again</Button>
-            </p>
-          ) : (
-            <p className="muted" role="status">
-              Loading the runs
+        <>
+          <p className={styles['sentence']}>{sentenceOf(useCase)}</p>
+          {leftOutWords(useCase.left_out) ? <p className={styles['leftOut']}>{leftOutWords(useCase.left_out)}</p> : null}
+          {viewer.operator ? null : (
+            <p className={styles['opsNote']}>
+              <OperatorsNote what="this workflow" />
             </p>
           )}
-        </section>
-      )}
-      <Versions useCase={useCase} now={now} nameOf={nameOf} operator={viewer.operator} say={(text) => setSaid((before) => ({ id: (before?.id ?? 0) + 1, text }))} />
-      <DraftActions useCase={useCase} viewer={viewer} />
-      {mayPause || items.length > 0 ? (
-        <div className={styles['actions']}>
-          {mayPause ? (
-            <Button icon={IconPause} data-place={placeOf('pause')} loading={move.isPending} onClick={() => pauseOrResume('pause')}>
-              Pause
-            </Button>
+          <StatusBanner banner={banner} resuming={move.isPending} onResume={() => pauseOrResume('resume')} onRepublish={republish} republishing={rollback.isPending || addYes.isPending} />
+          {useCase.moving_to_n8n ? (
+            <p className="muted" role="status">
+              Moving to n8n after this run.
+            </p>
           ) : null}
-          {items.length > 0 ? <ActionMenu items={items} buttonRef={moreButton} busy={runNow.pending} place={placeOf('run')} /> : null}
-        </div>
-      ) : null}
+          {runNow.error ? (
+            <p className={styles['problem']} role="alert">
+              {words(runNow.error)}
+            </p>
+          ) : null}
+          {problem ? (
+            <p className={styles['problem']} role="alert">
+              {problem}
+            </p>
+          ) : null}
+          <RunLine stations={templateLine(useCase)} arrivedLive={null} settled={null} />
+          <div className={styles['pair']}>
+            <When useCase={useCase} now={now} mayChange={mayChangeSchedule(useCase, viewer)} onSaved={say} />
+            {gate ? (
+              <section className={styles['section']} aria-labelledby="who-says-yes">
+                <h2 id="who-says-yes">Who says yes</h2>
+                <p>{whoSaysYes(useCase.owner, viewer, nameOf)}</p>
+                <details className={styles['rule']}>
+                  <summary>Who can’t say yes</summary>
+                  <p>{ownWorkRule(useCase.schedule)}</p>
+                </details>
+              </section>
+            ) : null}
+          </div>
+          {runs.data ? (
+            <RecentRuns runs={recent} now={now} nameOf={nameOf} firstRun={useCase.next_run_at && !paused ? nextRunWords(useCase, now) : null} />
+          ) : (
+            <section className={styles['section']}>
+              <h2>Recent runs</h2>
+              {runs.isError ? (
+                <p>
+                  The runs could not be loaded. <Button onClick={() => void runs.refetch()}>Try again</Button>
+                </p>
+              ) : (
+                <p className="muted" role="status">
+                  Loading the runs
+                </p>
+              )}
+            </section>
+          )}
+          <Versions useCase={useCase} now={now} nameOf={nameOf} operator={viewer.operator} say={say} />
+          <DraftActions useCase={useCase} viewer={viewer} />
+          {mayPause || items.length > 0 || openable ? (
+            <div className={styles['actions']}>
+              {mayPause ? (
+                <Button icon={IconPause} data-place={placeOf('pause')} loading={move.isPending} onClick={() => pauseOrResume('pause')}>
+                  Pause
+                </Button>
+              ) : null}
+              {openable ? <OpenInN8nEditor useCaseId={id} hold={openable} variant="secondary" /> : null}
+              {items.length > 0 ? <ActionMenu items={items} buttonRef={moreButton} busy={runNow.pending} place={placeOf('run')} /> : null}
+            </div>
+          ) : null}
+        </>
+      )}
       {asking ? (
         <DeleteDialog
           name={useCase.name}
