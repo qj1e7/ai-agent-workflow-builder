@@ -166,6 +166,7 @@ button, input { font: inherit; color: inherit; }
 .live .stamp { animation: stamp calc(420ms * var(--k)) var(--ease-out) both; }
 @keyframes stamp { from { opacity: 0; transform: translateY(-50%) rotate(-8deg) scale(1.8); } to { opacity: 1; transform: translateY(-50%) rotate(-8deg) scale(1); } }
 .caps { margin: 0; padding-left: 18px; font-size: 0.92rem; display: grid; gap: 2px; }
+.btn.offer { white-space: normal; text-align: start; padding-block: 6px; }
 .card.big { padding: 18px 20px; }
 
 /* Lines: small inside a chat card, large in the side panel */
@@ -1706,7 +1707,10 @@ function buildAsk(t) {
     const f = W.wf[d.soft];
     const [st, ss] = wfState(d.soft);
     W.focus = d.soft;
-    return pushCard(`<div class="card"><div class="c-head"><b>${f.name}</b><span class="pill" data-s="${ss}">${st}</span></div><p>It already watches ${W.soft[d.soft].name}, ${lower(long(f.sched))}.</p><div class="c-foot"><span class="c-act"><button class="btn ghost sm" type="button" data-open="wf:${d.soft}">Open it</button></span></div></div>`, 'lead', 'You already have this one.');
+    const said = d.sched.day !== undefined || d.sched.time ? { day: d.sched.day === undefined ? f.sched.day : d.sched.day, time: d.sched.time || f.sched.time } : null;
+    const move = said && long(said) !== long(f.sched) && canEdit() ? `Make the ${f.name} run ${lower(long(said))}` : '';
+    const offer = move ? `<button class="btn ghost sm offer" type="button" data-say="${move}">${move}</button>` : '';
+    return pushCard(`<div class="card"><div class="c-head"><b>${f.name}</b><span class="pill" data-s="${ss}">${st}</span></div><p>It already watches ${W.soft[d.soft].name}, ${lower(long(f.sched))}.</p><div class="c-foot"><span class="c-act">${offer}<button class="btn ghost sm" type="button" data-open="wf:${d.soft}">Open it</button></span></div></div>`, 'lead', 'You already have this one.');
   }
   W.drafts[d.key] = d;
   const m = pushCard(partsCard(d), 'lead', 'Here’s what I understood.');
