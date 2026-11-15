@@ -93,6 +93,26 @@
   stroke-linecap: round;
 }
 
+.waiting {
+  opacity: 0;
+  transition: opacity var(--dur-small) ease;
+}
+
+.waiting circle {
+  fill: var(--amber-ink);
+}
+
+.waiting path {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 2.6;
+  stroke-linecap: round;
+}
+
+.node[data-state='wait'] .waiting {
+  opacity: 1;
+}
+
 .node[data-state='off'] {
   opacity: 0;
   transition-delay: 0ms;

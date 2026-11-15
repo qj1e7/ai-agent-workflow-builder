@@ -1,7 +1,7 @@
 import { useId, type CSSProperties } from 'react'
 import type { N8nBlockKind, N8nBlockView } from '../api/types'
 import { edgeKey, layOut, NODE, type EdgeState, type NodeState } from './canvasLayout'
-import { IconAlert, IconBell, IconClock, IconCompare, IconFork, IconGate, IconPlay, IconSearch, IconSend, IconStop, IconTicket, IconX, type Icon } from './icons'
+import { IconAlert, IconBell, IconClock, IconCompare, IconFork, IconGate, IconPencil, IconPlay, IconSearch, IconSend, IconStop, IconTicket, IconX, type Icon } from './icons'
 import styles from './Canvas.module.css'
 
 const PICTURE: Readonly<Record<N8nBlockKind, Icon>> = {
@@ -19,7 +19,8 @@ const PICTURE: Readonly<Record<N8nBlockKind, Icon>> = {
   branch: IconFork,
   merge: IconFork,
   end: IconStop,
-  other: IconX,
+  other: IconPencil,
+  off: IconX,
 }
 
 /** What each block is, under its name. A block names its kind, not the system it reaches, so this says the kind. */
@@ -39,6 +40,7 @@ const SUB: Readonly<Record<N8nBlockKind, string>> = {
   merge: 'Merge',
   end: 'Ends the run',
   other: 'n8n block',
+  off: 'Not allowed',
 }
 
 /** What a screen reader hears after a block's name, for the states a run gives it. */
@@ -59,7 +61,7 @@ function blockSaid(name: string, state: NodeState | undefined): string {
 
 /**
  * The workflow drawn as n8n draws it, from its blocks and their ways out: our blocks marked, an IF's true and false named. A block
- * not built yet is hidden, one a run reached gets a tick, one it waits at turns amber, one it stopped at turns red with a mark, and
+ * not built yet is hidden, one a run reached gets a tick, one it waits at turns amber with a mark, one it stopped at turns red with a mark, and
  * dashes flow into the block at work. The states come from the caller.
  */
 export function Canvas({ blocks, name, nodes = {}, edges = {} }: CanvasProps) {
@@ -110,6 +112,10 @@ export function Canvas({ blocks, name, nodes = {}, edges = {} }: CanvasProps) {
               <g className={styles['alert']}>
                 <circle cx={80} cy={4} r={9} />
                 <path d="M80 -0.6v5.2M80 8.4v.2" />
+              </g>
+              <g className={styles['waiting']}>
+                <circle cx={80} cy={4} r={9} />
+                <path d="M76 4h.1M80 4h.1M84 4h.1" />
               </g>
               <text className={styles['label']} x={42} y={104} textAnchor="middle">
                 {node.name}
