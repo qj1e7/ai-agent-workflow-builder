@@ -277,14 +277,15 @@ describe('An Approver’s Home with no AI model (ROLE-offline)', () => {
 })
 
 describe('Home with many runs waiting', () => {
-  it('shows the newest ten and says how many more are waiting', () => {
+  it('shows the newest ten, says how many of how many, and offers Show more for the rest', () => {
     const [ask] = BOB_HOME.approvals as [ApprovalItem]
     const approvals = Array.from({ length: 10 }, (_, n) => ({ ...ask, run_id: `run_${n}`, approval_id: `apr_${n}`, started_at: `2026-11-03T01:${String(n).padStart(2, '0')}:00Z` }))
     const html = mainOf(render(BOB, { ...BOB_HOME, approvals, approvals_total: 50, confirmations: [] }))
     expect(keysOf(html)).toHaveLength(10)
     expect(keysOf(html)[0]).toBe('approval:apr_9')
     expect(headingsOf(html)).toEqual(['50 changes wait for your yes'])
-    expect(text(html)).toContain('40 more runs are waiting for your yes.')
+    expect(html).toMatch(/<p id="[^"]+" role="status"[^>]*>Showing 10 of 50\.<\/p>/)
+    expect(html).toMatch(/<button type="button" aria-describedby="[^"]+"[^>]*>Show more<\/button>/)
   })
 })
 

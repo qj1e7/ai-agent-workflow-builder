@@ -230,7 +230,7 @@
   font-size: 0.875rem;
 }
 
-/* See all on Workflows is a line of small text under WCAG 2.5.8's 24 px, so it gets a full target. */
+/* “N more” is a line of small text under WCAG 2.5.8's 24 px, so it gets a full target. */
 .more a {
   display: inline-flex;
   align-items: center;

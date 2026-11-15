@@ -394,11 +394,14 @@ describe('the rest of the page under Needs you', () => {
     expect(following).toContain('href="/workflows?request=trq_01JD5RP"')
   })
 
-  it('says how many requests Following up shows when there are more than the platform lists, and never offers a link that goes nowhere', () => {
-    const many: HomeOut = { ...HOME, following_up_total: 63 }
-    const html = render({ home: many })
-    expect(text(sectionOf(mainOf(html), 'following'))).toContain('Showing the newest 1 of 63.')
-    expect(text(sectionOf(mainOf(render({ home: HOME })), 'following'))).not.toContain('Showing the newest')
+  it('says how many requests Following up shows of how many, with Show more for the rest, and nothing of the kind when all show', () => {
+    const many: HomeOut = { ...HOME, following_up_total: 63, following_up_next: 'next-page' }
+    const following = sectionOf(mainOf(render({ home: many })), 'following')
+    expect(following).toMatch(/role="status"[^>]*>Showing 1 of 63\.<\/p>/)
+    expect(following).toMatch(/<button type="button"[^>]*>Show more<\/button>/)
+    const all = sectionOf(mainOf(render({ home: HOME })), 'following')
+    expect(text(all)).not.toContain('Showing')
+    expect(all).not.toContain('Show more')
   })
 
   it('shows a reply the person has not opened in Needs you', () => {

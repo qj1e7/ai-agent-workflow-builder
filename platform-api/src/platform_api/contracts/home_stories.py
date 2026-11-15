@@ -94,11 +94,14 @@ def home_for_bob() -> HomeOut:
         declined_total=0,
         questions_for_me=[],
         questions_for_me_total=0,
+        needs_next=None,
         waiting_on_others=[],
         waiting_on_others_total=0,
+        waiting_on_others_next=None,
         drafts=[],
         following_up=[],
         following_up_total=0,
+        following_up_next=None,
         replied=[],
         coming_up=COMING_UP,
         workflows=1,
@@ -149,6 +152,7 @@ def home_for_alice(failure: Timeline) -> HomeOut:
         declined_total=0,
         questions_for_me=[],
         questions_for_me_total=0,
+        needs_next=None,
         waiting_on_others=[
             WaitingItem(
                 run_id=SUCCESS.run_id,
@@ -162,6 +166,7 @@ def home_for_alice(failure: Timeline) -> HomeOut:
             )
         ],
         waiting_on_others_total=1,
+        waiting_on_others_next=None,
         drafts=[
             DraftItem(
                 draft_id="drf-7f3a2c",
@@ -172,6 +177,7 @@ def home_for_alice(failure: Timeline) -> HomeOut:
         ],
         following_up=[SUPPORT_REPORT],
         following_up_total=1,
+        following_up_next=None,
         replied=[SUPPORT_REPORT],
         coming_up=COMING_UP,
         workflows=1,
@@ -243,11 +249,14 @@ DAY_ONE = HomeOut(
     declined_total=0,
     questions_for_me=[],
     questions_for_me_total=0,
+    needs_next=None,
     waiting_on_others=[],
     waiting_on_others_total=0,
+    waiting_on_others_next=None,
     drafts=[],
     following_up=[],
     following_up_total=0,
+    following_up_next=None,
     replied=[],
     coming_up=None,
     workflows=0,

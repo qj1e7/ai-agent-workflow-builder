@@ -545,7 +545,12 @@
   font-size: 0.9rem;
 }
 
-/* See all on Workflows is a line of small text under WCAG 2.5.8's 24 px, so it gets a full target. */
+/* Marks one approval card for Show more, with no box of its own. */
+.cardSlot {
+  display: contents;
+}
+
+/* A link in the line of small text after the cards is under WCAG 2.5.8's 24 px, so it gets a full target. */
 .more a {
   display: inline-flex;
   align-items: center;

@@ -500,10 +500,6 @@
   font-weight: 800;
 }
 
-.moreNote {
-  color: var(--muted);
-}
-
 /* The rows of All workflows, and of the Watchlist, are one bordered list. */
 .list {
   border: 1px solid var(--hair);

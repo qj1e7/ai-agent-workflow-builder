@@ -125,6 +125,56 @@ test('the asker adds a note to her own request and it stays Open, then she marks
   await context.close()
 })
 
+test('Following up reaches every request past the first fifty: Show more by keyboard keeps focus, reads out the count, and lands on the first new row', async ({ browser, backend }, info) => {
+  const tag = randomUUID().slice(0, 6)
+  const made: string[] = []
+  for (let n = 0; n < 51; n += 1) {
+    const asked = await backend.post<{ request_id: string }>('carol', '/api/v1/team-requests', { kind: 'ask_the_team', about: { capability: 'email.send' }, note: `Paging ${tag} ${String(n)}` }, { 'Idempotency-Key': randomUUID() }, [201])
+    made.push(asked.request_id)
+  }
+  const { following_up_total: total } = await backend.get<{ following_up_total: number }>('carol', '/api/v1/home')
+  expect(total, 'more than one page').toBeGreaterThan(50)
+  const context = await devContext(browser, 'carol')
+  const page = await context.newPage()
+  const watch = watchPage(page)
+  await page.goto('/workflows')
+  const following = page.locator('section[data-section="following"]')
+  const rows = following.locator('li[data-request]')
+  const line = following.getByRole('status').filter({ hasText: /^Showing / })
+  const more = following.getByRole('button', { name: 'Show more', exact: true })
+  await expect(rows).toHaveCount(50)
+  await expect(followingRow(page, made[50] ?? '')).toBeVisible()
+  await expect(followingRow(page, made[0] ?? ''), 'the oldest of the 51 is on the next page').toHaveCount(0)
+  await expect(line).toHaveText(`Showing 50 of ${String(total)}.`)
+  await expect(more).toHaveAttribute('aria-describedby', (await line.getAttribute('id')) ?? '')
+  await shot(page, info, 'following-up-first-page')
+
+  await more.focus()
+  let landed: string | null = null
+  while ((await more.count()) > 0) {
+    const before = await rows.count()
+    await page.keyboard.press('Enter')
+    await expect.poll(() => rows.count(), { message: 'the next page joins the same list' }).toBeGreaterThan(before)
+    const now = await rows.count()
+    if (now < total) {
+      await expect(more, 'focus stays on Show more while there is more').toBeFocused()
+      await expect(line, 'the new count is read out').toHaveText(`Showing ${String(now)} of ${String(total)}.`)
+      continue
+    }
+    await expect(more).toHaveCount(0)
+    await expect(line, 'the last count is read out').toHaveText(`Showing all ${String(total)}.`)
+    landed = await page.evaluate(() => document.activeElement?.closest('li[data-request]')?.getAttribute('data-request') ?? null)
+    expect(landed, 'focus lands on a request row').not.toBeNull()
+  }
+  await expect(rows).toHaveCount(total)
+  await expect(followingRow(page, made[0] ?? ''), 'every request can be opened').toBeVisible()
+  if (total === 51) expect(landed, 'the first new row is the 51st newest').toBe(made[0])
+  await expectAccessible(page, path.join(OUT, 'axe'), 'following-up-all')
+  await shot(page, info, 'following-up-all')
+  assertClean(watch)
+  await context.close()
+})
+
 test('a link to a request that does not exist says so plainly', async ({ browser }) => {
   const context = await devContext(browser, 'bob')
   const page = await context.newPage()
