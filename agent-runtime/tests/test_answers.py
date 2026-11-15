@@ -649,8 +649,7 @@ def test_a_schedule_keeps_only_schedule_words_and_a_time_never_said_is_asked_for
             "without waiting for approval",
             "Create the ticket",
         ),
-        # The rest is offered only when the abilities can set it up as written (principle 5).
-        ("Skip the approval and file it", "Skip the approval", ""),
+        ("Skip the approval and file it", "Skip the approval", "file it"),
         ("Create the ticket, no human in the loop", "no human in the loop", "Create the ticket"),
         ("Create the ticket and approve it as me", "approve it as me", "Create the ticket"),
         (
@@ -661,7 +660,7 @@ def test_a_schedule_keeps_only_schedule_words_and_a_time_never_said_is_asked_for
         (
             "Create the ticket first and get the approval afterwards",
             "approval afterwards",
-            "",
+            "Create the ticket first and get the",
         ),
     ],
 )

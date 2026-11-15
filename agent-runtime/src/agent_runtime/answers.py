@@ -21,9 +21,9 @@ from agent_runtime.abilities import (
     changes_beyond_the_abilities,
     commands_a_change,
     names_a_ticket_field,
-    names_an_ability,
     need_of,
     one_line_cant,
+    orders_only_what_it_can,
     other_release_source,
     other_systems,
     release_source_note,
@@ -302,16 +302,16 @@ def _refused(text: str, said: str) -> RefusedAnswer:
 
 def _with_a_yes(rest: str) -> str:
     """The rest of a refused request, offered to set up with a yes only when the platform can:
-    each clause is a schedule or asks for a Ready ability and nothing it can't do, and it tells
-    the Planner nothing. Otherwise empty, and the parts say why (principle 5). An offered rest
-    goes back to the Planner as a new request, which is read and checked whole again."""
+    each clause is a schedule or orders what a Ready ability does, it names no system the
+    platform doesn't reach, and it tells the Planner nothing. Otherwise empty, and the parts say
+    why (principle 5). An offered rest goes back to the Planner as a new request, which is read
+    and checked whole again, so a vague one ("just create it") is still offered."""
     text = plain(rest, 2000)
     tasks = [text[a:b] for a, b in clauses_of(text) if not only_schedule_words(text[a:b])]
     able = (
-        bool(tasks)
-        and names_an_ability(text)
-        and not instructs_the_planner(text)
-        and all(why_not("schedule", c) is None for c in tasks)
+        not instructs_the_planner(text)
+        and not other_systems(text)
+        and orders_only_what_it_can(tasks)
     )
     return text if able else ""
 
@@ -474,6 +474,9 @@ def _left_out(span: Span, searching: bool, unquoted_skip: bool) -> CantRow:
             note = LEFT_OUT_SCHEDULE
     need = need_of(kind, text)
     unreached = need.needs == "new_system" and need.system is not None
+    if unreached and note == LEFT_OUT_PART:
+        # Words that name a system the platform doesn't reach say so, never "didn't follow".
+        note = why_not(kind, text) or note
     if unquoted_skip and note in (LEFT_OUT_PART, LEFT_OUT_DO) and not unreached:
         return CantRow(kind=kind, text=text, note=SKIP_PART_NOTE)
     if note == LEFT_OUT_PART and not unreached:
@@ -562,11 +565,11 @@ def _refused_span(task: _Task, text: str) -> RefusedAnswer | None:
 
 def _offers(task: _Task) -> bool:
     """Whether the task reads something to look for or to do, so a card is worth offering. A
-    search that only asks how many days ("the stale tickets") is one: the card asks it."""
-    return any(
-        r.kind in ("look_for", "do") and (r.state in ACCEPTED or (r.state == "missing" and r.text))
-        for r in task.rows
-    )
+    search that only asks how many days ("the stale tickets") is one beside another part the
+    card holds, as a schedule: the card asks it. Alone it is no card worth offering."""
+    accepted = [r for r in task.rows if r.state in ACCEPTED]
+    asks_days = any(r.kind == "look_for" and r.state == "missing" and r.text for r in task.rows)
+    return any(r.kind in ("look_for", "do") for r in accepted) or (asks_days and bool(accepted))
 
 
 def _from_task(read: TaskRead, task: _Task, text: str) -> PlannerAnswer:

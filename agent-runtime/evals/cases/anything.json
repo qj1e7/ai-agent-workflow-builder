@@ -768,9 +768,10 @@
   "kinds": [
    "watchlist",
    "setup_card",
-   "part"
+   "part",
+   "cant"
   ],
-  "note": "The team lead's own sentence, from a local test on Haiku 4.5. Refused as skipping a yes when it skips none."
+  "note": "The team lead's own sentence, from a local test on Haiku 4.5. Refused as skipping a yes when it skips none. Without the watchlist's own time in the facts, the time is crossed with the watchlist's one schedule, never ticked (principle 4)."
  },
  {
   "id": "more-than-ten",

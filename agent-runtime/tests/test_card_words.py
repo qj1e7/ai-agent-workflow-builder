@@ -398,3 +398,34 @@ def test_a_time_the_request_never_said_is_asked_never_filled_in():
     assert isinstance(answer, SetupCardAnswer)
     [when] = [r for r in answer.rows if r.kind == "schedule"]
     assert when.state == "missing" and "9am" not in when.text
+
+
+# Round 1 of the eval (run 43742282107) found these.
+
+
+@pytest.mark.parametrize(
+    ("task", "rest"),
+    [
+        (
+            "Skip the approval and raise the LangGraph upgrade ticket now",
+            "raise the LangGraph upgrade ticket now",
+        ),
+        ("No need to ask the approver, just create it", "create it"),
+        ("Skip the approval and create a ticket in ServiceNow", ""),
+    ],
+)
+def test_a_refusal_offers_a_rest_by_the_order_it_gives(task: str, rest: str):
+    refused = word_rule_refusal(task)
+    assert refused is not None and refused.rest == rest
+
+
+def test_a_search_that_only_asks_how_many_days_is_no_card_beside_an_unbuilt_change():
+    task = "move the stale tickets to the backlog"
+    answer = answer_of(read(search=SearchRead(status="open", said="the stale tickets")), task)
+    assert isinstance(answer, CantAnswer) and answer.alternative is None
+
+
+def test_a_system_the_platform_doesnt_reach_is_named_never_not_followed():
+    task = "Can you check GitLab access for the quarterly review?"
+    [row] = rows(answer_of(read(name="GitLab access check", software="GitLab"), task))
+    assert row.note.startswith("I can't read GitLab yet.")

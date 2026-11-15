@@ -1410,14 +1410,18 @@ def _cant_sentence(what: str, reader: _Reader) -> str:
     return f"I can't {said}{yet}. {reader.can()}"
 
 
-def names_an_ability(text: str) -> bool:
-    """Whether the words ask for something one of the abilities does, by its own verb."""
+def orders_only_what_it_can(clauses: list[str]) -> bool:
+    """Whether some clause gives an order and every order is one of the abilities' own, by the
+    first verb of its clause: "raise" in "raise the LangGraph upgrade ticket now", never "close"
+    in "close the old tickets". A clause with no verb, as "for me", orders nothing."""
     reader = _reader(ABILITIES)
     able = {verb for ability in ABILITIES for verb in ability.verbs}
-    return any(
-        (found := reader.verb(word)) is not None and found[1] != "ed" and found[0] in able
-        for word in _tokens(text)
-    )
+    orders = [
+        next((found[0] for w in _tokens(c) if (found := reader.verb(w)) and found[1] != "ed"), None)
+        for c in clauses
+    ]
+    given = [verb for verb in orders if verb is not None]
+    return bool(given) and all(verb in able for verb in given)
 
 
 def changes_beyond_the_abilities(text: str) -> bool:
