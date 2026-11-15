@@ -35,9 +35,10 @@ jobs:
   evals:
     runs-on: ubuntu-latest
     timeout-minutes: 90
-    # ADR 0032 keeps the keys in the evals environment, with a rule that only main may use it.
-    # "Run workflow" runs the file from the chosen branch, so a guard in this file could be
-    # deleted on that branch. The environment's branch rule cannot.
+    # ADR 0032 wants the keys in the evals environment, with a rule that only main may use it,
+    # because a guard in this file could be deleted on the branch that runs it. Today
+    # AISG_API_KEY is a repository secret and GitHub made the environment with no rule, so any
+    # branch can run this.
     environment: evals
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
