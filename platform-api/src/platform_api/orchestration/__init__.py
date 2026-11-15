@@ -149,6 +149,7 @@ from platform_api.orchestration.schedule_store import (
     SavedSchedule,
     ScheduleBook,
     ScheduleHold,
+    held_words,
 )
 from platform_api.orchestration.service import RunDetail
 from platform_api.orchestration.spec import (
@@ -393,6 +394,7 @@ __all__ = [
     "Schedule",
     "ScheduleBook",
     "ScheduleHold",
+    "held_words",
     "SoftwareFacts",
     "SoftwareSource",
     "Standing",

@@ -18,6 +18,16 @@ _HELD_WHY: dict[ScheduleHold, str] = {
 }
 
 
+def held_words(hold: ScheduleHold, owner_name: str) -> str:
+    """Why a held schedule starts no run, and how it runs again: the one source of these words,
+    which every view carries and the log of a slot it ended says."""
+    owner = owner_name.strip() or "its owner"
+    return (
+        f"Not running: {owner} {_HELD_WHY[hold]}. "
+        "An Operator can take it over by saving the schedule."
+    )
+
+
 @dataclass(frozen=True)
 class SavedSchedule:
     use_case_id: UseCaseId
@@ -47,15 +57,8 @@ class SavedSchedule:
 
     @property
     def held_words(self) -> str | None:
-        """Why a held schedule starts no run, in the words the Portal shows."""
         hold = self.held
-        if hold is None:
-            return None
-        owner = self.owner_name.strip() or "its owner"
-        return (
-            f"Not running: {owner} {_HELD_WHY[hold]}. "
-            "An Operator can take it over by saving the schedule."
-        )
+        return None if hold is None else held_words(hold, self.owner_name)
 
 
 _WITH_OWNER = (

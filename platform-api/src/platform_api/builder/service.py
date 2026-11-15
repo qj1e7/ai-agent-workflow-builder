@@ -188,6 +188,7 @@ def _schedule_view(saved: SavedSchedule, document: Mapping[str, Any] | None) -> 
         time_zone=schedule.time_zone,
         owner_name=saved.owner_name,
         held=saved.held,
+        held_words=saved.held_words,
     )
 
 

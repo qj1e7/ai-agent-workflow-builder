@@ -311,6 +311,7 @@ def schedule_view(
         saved_at=saved.saved_at,
         next_at=next_at if on and saved.held is None else None,
         held=saved.held,
+        held_words=saved.held_words,
     )
 
 
@@ -727,12 +728,12 @@ class Watchlist:
         return await self._schedule(principal, Schedule(body.day, body.at), body.expected_version)
 
     async def turn_off_schedule(
-        self, principal: Principal
+        self, principal: Principal, expected: int
     ) -> WatchlistView | NoWatchlist | ScheduleRefused:
-        return await self._schedule(principal, None, None)
+        return await self._schedule(principal, None, expected)
 
     async def _schedule(
-        self, principal: Principal, schedule: Schedule | None, expected: int | None
+        self, principal: Principal, schedule: Schedule | None, expected: int
     ) -> WatchlistView | NoWatchlist | ScheduleRefused:
         """On its own n8n workflow, the Schedule Trigger changes first, under the version compare
         (ENGINE-PLAN 2.5). Nothing is saved here when n8n does not take it, or when the change
@@ -741,7 +742,7 @@ class Watchlist:
             record = await self._hold(uow)
             if record is None:
                 return NoWatchlist()
-            if expected is not None and record.version != expected:
+            if record.version != expected:
                 return ChangedSince()
             if record.n8n is not None:
                 refused = await self._schedule_in_n8n(uow, record, record.n8n, principal, schedule)

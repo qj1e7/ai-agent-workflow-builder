@@ -35,6 +35,7 @@ __all__ = ["lab"]
 
 SINGAPORE = ZoneInfo("Asia/Singapore")
 NEVER_LIVE = ["in_progress"] * 200
+MONDAY_NINE = {"day": "monday", "at": "09:00"}
 
 
 class Workflows(N8nWorkflows):
@@ -159,7 +160,7 @@ async def test_a_new_schedule_of_a_workflow_that_is_on_is_published_in_n8n_and_u
 ):
     use_case_id, workflow_id = await made(own, on=True)
     path = f"/api/v1/use-cases/{use_case_id}/schedule"
-    saved = await own.lab.call("carol", "PUT", path, {"day": "monday", "at": "09:00"})
+    saved = await own.lab.call("carol", "PUT", path, {**MONDAY_NINE, "expected_version": 1})
     assert saved.status_code == 200, saved.text
     view = saved.json()
     assert view["version"] == 2
@@ -186,7 +187,9 @@ async def test_a_new_schedule_of_a_workflow_that_is_on_is_published_in_n8n_and_u
 async def test_a_new_schedule_of_a_draft_stays_a_draft_in_n8n(own: N8nLab):
     use_case_id, workflow_id = await made(own)
     path = f"/api/v1/use-cases/{use_case_id}/schedule"
-    saved = await own.lab.call("alice", "PUT", path, {"day": "friday", "at": "17:30"})
+    saved = await own.lab.call(
+        "alice", "PUT", path, {"day": "friday", "at": "17:30", "expected_version": 1}
+    )
     assert saved.status_code == 200, saved.text
     held = own.n8n.workflows[workflow_id]
     assert held["activeVersionId"] is None
@@ -201,7 +204,7 @@ async def test_a_change_made_in_n8n_since_is_never_saved_over(own: N8nLab):
     use_case_id, workflow_id = await made(own, on=True)
     own.n8n.edit(workflow_id)
     path = f"/api/v1/use-cases/{use_case_id}/schedule"
-    saved = await own.lab.call("alice", "PUT", path, {"day": "monday", "at": "09:00"})
+    saved = await own.lab.call("alice", "PUT", path, {**MONDAY_NINE, "expected_version": 1})
     assert saved.status_code == 409
     assert saved.json()["detail"] == "Changed again since, in n8n. Nothing was saved."
     view = (await own.lab.call("alice", "GET", f"/api/v1/use-cases/{use_case_id}")).json()

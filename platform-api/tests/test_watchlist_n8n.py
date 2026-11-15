@@ -107,8 +107,10 @@ def langgraph() -> AddSoftware:
 
 async def watchlist_before_the_move(world: World) -> None:
     """Made before the move, with Carol's Tuesday 07:30 schedule."""
-    await world.shared.add(ALICE, langgraph())
-    await world.shared.save_schedule(CAROL, ScheduleSaveIn(day="tuesday", at="07:30"))
+    added = await world.shared.add(ALICE, langgraph())
+    assert isinstance(added, WatchlistView)
+    tuesday = ScheduleSaveIn(day="tuesday", at="07:30", expected_version=added.version)
+    await world.shared.save_schedule(CAROL, tuesday)
 
 
 async def test_the_move_copies_the_schedule_into_the_trigger_and_puts_it_live(world: World):
@@ -217,7 +219,8 @@ async def test_a_new_schedule_changes_the_trigger_in_n8n_first(world: World):
     moved = await world.on_n8n.move_to_n8n()
     assert isinstance(moved, MovedToN8n)
 
-    saved = await world.on_n8n.save_schedule(ALICE, ScheduleSaveIn(day="friday", at="08:00"))
+    friday = ScheduleSaveIn(day="friday", at="08:00", expected_version=moved.version)
+    saved = await world.on_n8n.save_schedule(ALICE, friday)
 
     assert isinstance(saved, WatchlistView) and saved.version == 3
     assert world.rule(moved.workflow_id) == {
@@ -232,7 +235,7 @@ async def test_a_new_schedule_changes_the_trigger_in_n8n_first(world: World):
     assert stored["published_by"] == ALICE.user_id
     assert saved.schedule is not None and saved.schedule.owner == "alice"
 
-    off = await world.on_n8n.turn_off_schedule(ALICE)
+    off = await world.on_n8n.turn_off_schedule(ALICE, saved.version)
     assert isinstance(off, WatchlistView) and off.schedule is None
     assert world.rule(moved.workflow_id) is None, "nothing in n8n starts it on a schedule"
 
@@ -263,8 +266,9 @@ async def test_a_schedule_change_over_an_edit_in_n8n_saves_nothing(world: World)
     moved = await world.on_n8n.move_to_n8n()
     assert isinstance(moved, MovedToN8n)
     world.n8n.edit(moved.workflow_id)
+    friday = ScheduleSaveIn(day="friday", at="08:00", expected_version=moved.version)
 
-    refused = await world.on_n8n.save_schedule(ALICE, ScheduleSaveIn(day="friday", at="08:00"))
+    refused = await world.on_n8n.save_schedule(ALICE, friday)
 
     assert isinstance(refused, ChangedInN8n)
     view = await world.view()

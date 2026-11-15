@@ -245,7 +245,9 @@ async def test_a_schedule_whose_owner_left_the_list_starts_no_run_until_it_is_ta
 ):
     """n8n's Schedule Trigger still fires for a held schedule, so our API ends its slot quietly,
     as the old tick skipped it: nothing fails in n8n, no run waits on anyone, and the log says
-    why. Once Dave saves it, he owns it, and its next run is his work, which he can't approve."""
+    why. Dave takes it over while that slot's execution is still going, and its later blocks
+    still end quietly, so no run starts from the middle of it. The next slot is Dave's work,
+    which he can't approve."""
     await schedule_owners_listed(wl.h.db, CAROL, DAVE)
     schedules = ScheduleBook(wl.h.db)
     await schedules.save(SPEC.use_case_id, Schedule("tuesday", "07:30"), CAROL)
@@ -256,10 +258,11 @@ async def test_a_schedule_whose_owner_left_the_list_starts_no_run_until_it_is_ta
 
     with caplog.at_level(logging.INFO):
         assert await wl.call("101", READ, "Read the watchlist") == Answer(())
-        assert await wl.call("101", CHECK, "Check the watchlist") == Answer(())
-        asked = await wl.call("101", AskCall(resume_url("101")), "Ask for a yes")
+    await schedules.save(SPEC.use_case_id, Schedule("tuesday", "07:30"), DAVE)
+    checked = await wl.call("101", CHECK, "Check the watchlist")
+    asked = await wl.call("101", AskCall(resume_url("101")), "Ask for a yes")
 
-    assert asked == NothingToChange()
+    assert (checked, asked) == (Answer(()), NothingToChange())
     assert await wl.runs() == []
     assert wl.h.agent.requests == []
     assert (
@@ -267,7 +270,6 @@ async def test_a_schedule_whose_owner_left_the_list_starts_no_run_until_it_is_ta
         "An Operator can take it over by saving the schedule."
     ) in caplog.text
 
-    await schedules.save(SPEC.use_case_id, Schedule("tuesday", "07:30"), DAVE)
     assert isinstance(await check(wl, "102"), Waiting)
     run = await wl.run()
     assert DAVE.user_id in run.parties

@@ -616,8 +616,9 @@ class NodeCalls:
         return refused
 
     def _nothing_to_run(self, call: NodeCall, nothing: NothingToRun) -> CallResult:
-        """Each block gets the answer that ends its path without a fault, and no run is made. It
-        is not kept, since no run holds it, and a repeat gets the same answer."""
+        """Each block gets the answer that ends its path without a fault, and no run is made. The
+        execution is kept as ended quietly, so every later block of it gets the same answer,
+        whatever changed meanwhile."""
         log.info("%s of n8n execution %s: %s", call.node_name, call.execution_id, nothing.why)
         quiet: Answer | AskAnswer | Told | Refused
         match call.kind:
@@ -634,6 +635,9 @@ class NodeCalls:
     async def _link(
         self, uow: UnitOfWork, execution: N8nExecutionId
     ) -> RunId | Refused | TryLater | NothingToRun:
+        quiet = await self._book.quiet(uow, execution)
+        if quiet is not None:
+            return NothingToRun(quiet)
         facts = await self._n8n.execution(execution)
         if facts is None:
             return NO_EXECUTION
@@ -641,7 +645,7 @@ class NodeCalls:
         if own is None:
             return await self._not_ours(uow, execution, facts.workflow_id)
         if isinstance(own, NothingToRun):
-            return own
+            return await self._end_quietly(uow, execution, own)
         retried, version_id = None, facts.version_id
         if facts.retry_of is not None:
             retried = await self._book.linked_run(uow, facts.retry_of)
@@ -677,7 +681,9 @@ class NodeCalls:
                     # Operator takes it over.
                     saved = await saved_schedule(uow.conn, own.spec.use_case_id)
                     if saved is not None and saved.held_words is not None:
-                        return NothingToRun(saved.held_words)
+                        return await self._end_quietly(
+                            uow, execution, NothingToRun(saved.held_words)
+                        )
                     joined = (*joined, *_one(None if saved is None else saved.owner))
                 return await linked(
                     await self._new_run(
@@ -719,6 +725,12 @@ class NodeCalls:
                     case Moved() as moved:
                         await self._commit(uow, record, moved, joined=_one(holder))
                         return await linked(run_id)
+
+    async def _end_quietly(
+        self, uow: UnitOfWork, execution: N8nExecutionId, nothing: NothingToRun
+    ) -> NothingToRun:
+        await self._book.keep_quiet(uow, execution, nothing.why)
+        return nothing
 
     async def _not_ours(
         self, uow: UnitOfWork, execution: N8nExecutionId, workflow_id: str

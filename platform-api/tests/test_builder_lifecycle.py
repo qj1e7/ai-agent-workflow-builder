@@ -32,6 +32,7 @@ from platform_api.builder.lifecycle import (
     to_columns,
 )
 from platform_api.builder.models import UseCaseScheduleIn
+from platform_api.builder.versions import ChangedSince
 from platform_api.builder.watchlist import schedule_view
 from platform_api.db import Database
 from platform_api.orchestration import (
@@ -296,16 +297,21 @@ async def test_a_held_schedule_names_no_next_run_until_an_operator_saves_it_agai
     [listed] = await lab.listed()
     read = (await lab.call("bob", "GET", f"/api/v1/use-cases/{use_case_id}")).json()
 
+    watchlist = (await lab.call("bob", "GET", WATCHLIST)).json()["watchlist"]
     for view in (listed, read):
         assert (view["state"], view["next_run_at"]) == ("on", None)
         assert (view["schedule"]["held"], view["schedule"]["owner_name"]) == (
             "owner_not_an_operator",
             "Alice",
         )
-    body = {"day": "monday", "at": "09:00"}
-    assert (await lab.call("carol", "PUT", "/api/v1/watchlist/schedule", body)).status_code == 200
+    words = f"Not running: Alice can no longer run workflows. {HELD_WORDS}"
+    assert [listed["schedule"]["held_words"], read["schedule"]["held_words"]] == [words, words]
+    assert watchlist["schedule"]["held_words"] == words, "one source of the words, on every view"
+    body = {"day": "monday", "at": "09:00", "expected_version": watchlist["version"]}
+    assert (await lab.call("carol", "PUT", WATCHLIST_SCHEDULE, body)).status_code == 200
     [taken] = await lab.listed()
     assert (taken["schedule"]["held"], taken["schedule"]["owner_name"]) == (None, "Carol")
+    assert taken["schedule"]["held_words"] is None
 
 
 async def test_a_schedule_whose_owner_left_the_list_names_no_next_run_until_it_is_taken_over(
@@ -323,10 +329,69 @@ async def test_a_schedule_whose_owner_left_the_list_names_no_next_run_until_it_i
             "owner_removed",
             "Carol",
         )
-    body = {"day": "monday", "at": "09:00"}
-    assert (await lab.call("alice", "PUT", "/api/v1/watchlist/schedule", body)).status_code == 200
+        assert view["schedule"]["held_words"] == (
+            f"Not running: Carol is no longer on the People list. {HELD_WORDS}"
+        )
+    body = {"day": "monday", "at": "09:00", "expected_version": read["version"]}
+    assert (await lab.call("alice", "PUT", WATCHLIST_SCHEDULE, body)).status_code == 200
     taken = (await lab.call("bob", "GET", f"/api/v1/use-cases/{use_case_id}")).json()
     assert (taken["schedule"]["held"], taken["schedule"]["owner_name"]) == (None, "Alice")
+
+
+WATCHLIST = "/api/v1/watchlist"
+USE_CASES = "/api/v1/use-cases"
+HELD_WORDS = "An Operator can take it over by saving the schedule."
+CHANGED_SINCE_OPENED = {"detail": "Changed since you opened it. Nothing was saved."}
+WATCHLIST_SCHEDULE = "/api/v1/watchlist/schedule"
+
+
+async def test_every_schedule_change_names_the_version_it_was_made_from(lab: Lab):
+    """A change that names no version could overwrite a teammate's later one unseen, so the
+    routes refuse it before reading anything."""
+    use_case_id = await watchlist_workflow(lab)
+    workflow = await scheduled_workflow(lab, "alice")
+    before = [
+        (await lab.call("alice", "GET", p)).json() for p in (WATCHLIST, f"{USE_CASES}/{workflow}")
+    ]
+    friday = {"day": "friday", "at": "08:00"}
+
+    for path in (WATCHLIST_SCHEDULE, f"{USE_CASES}/{workflow}/schedule"):
+        refused = await lab.call("alice", "PUT", path, friday)
+        assert (refused.status_code, refused.json()["detail"][0]["loc"]) == (
+            422,
+            ["body", "expected_version"],
+        ), path
+    off = await lab.call("alice", "DELETE", WATCHLIST_SCHEDULE)
+    assert (off.status_code, off.json()["detail"][0]["loc"]) == (422, ["query", "expected_version"])
+
+    after = [
+        (await lab.call("alice", "GET", p)).json() for p in (WATCHLIST, f"{USE_CASES}/{workflow}")
+    ]
+    assert after == before
+    assert use_case_id == after[0]["watchlist"]["use_case_id"]
+
+
+async def test_turning_the_watchlist_schedule_off_from_an_old_read_changes_nothing(lab: Lab):
+    """Carol added Redis after Alice's page read the watchlist, so Alice's Turn off from that
+    read keeps the schedule. Turned off from the version in use, it goes."""
+    await watchlist_workflow(lab)
+    read = (await lab.call("alice", "GET", WATCHLIST)).json()["watchlist"]
+    assert (await lab.call("carol", "POST", "/api/v1/watchlist/software", REDIS)).status_code == 201
+
+    stale = await lab.call(
+        "alice",
+        "DELETE",
+        f"{WATCHLIST_SCHEDULE}?expected_version={read['version']}",
+        template=WATCHLIST_SCHEDULE,
+    )
+
+    assert (stale.status_code, stale.json()) == (409, CHANGED_SINCE_OPENED)
+    now = (await lab.call("alice", "GET", WATCHLIST)).json()["watchlist"]
+    assert now["schedule"] == read["schedule"]
+    off = await lab.call(
+        "alice", "DELETE", f"{WATCHLIST_SCHEDULE}?expected_version={now['version']}"
+    )
+    assert (off.status_code, off.json()["schedule"]) == (200, None)
 
 
 async def test_a_watchlist_schedule_saved_from_an_old_read_saves_nothing(lab: Lab):
@@ -339,10 +404,7 @@ async def test_a_watchlist_schedule_saved_from_an_old_read_saves_nothing(lab: La
     friday = {"day": "friday", "at": "08:00", "expected_version": read["version"]}
     stale = await lab.call("alice", "PUT", "/api/v1/watchlist/schedule", friday)
 
-    assert (stale.status_code, stale.json()) == (
-        409,
-        {"detail": "Changed since you opened it. Nothing was saved."},
-    )
+    assert (stale.status_code, stale.json()) == (409, CHANGED_SINCE_OPENED)
     now = (await lab.call("alice", "GET", "/api/v1/watchlist")).json()["watchlist"]
     assert now["schedule"] == read["schedule"]
     fresh = {**friday, "expected_version": now["version"]}
@@ -409,6 +471,7 @@ MONDAYS_AT_NINE = {
     "time_zone": "Asia/Singapore",
     "owner_name": "Alice",
     "held": None,
+    "held_words": None,
 }
 
 
@@ -894,15 +957,20 @@ SCHEDULE_PATH = "/api/v1/use-cases/{use_case_id}/schedule"
 EVERY_MONDAY = {"day": "monday", "at": "09:00"}
 
 
+async def version_now(lab: Lab, use_case_id: str) -> int:
+    """The version a page that read the workflow just now holds, or 1 for one it can't read."""
+    read = await lab.call("alice", "GET", f"/api/v1/use-cases/{use_case_id}")
+    return int(read.json()["version"]) if read.status_code == 200 else 1
+
+
 async def save_schedule(
     lab: Lab, user: str | None, use_case_id: str, body: Any = None
 ) -> httpx.Response:
+    """A save made from the version in use now, as from a page that has just read it."""
+    sent = {"expected_version": await version_now(lab, use_case_id)}
+    sent |= EVERY_MONDAY if body is None else body
     return await lab.call(
-        user,
-        "PUT",
-        f"/api/v1/use-cases/{use_case_id}/schedule",
-        EVERY_MONDAY if body is None else body,
-        template=SCHEDULE_PATH,
+        user, "PUT", f"/api/v1/use-cases/{use_case_id}/schedule", sent, template=SCHEDULE_PATH
     )
 
 
@@ -1068,14 +1136,17 @@ async def test_many_saves_at_once_do_not_use_up_a_small_pool(lab: Lab, postgres:
             "http://localhost:8000",
             ModelConnected(),
         )
-        body = UseCaseScheduleIn(day="monday", at="09:00")
+        body = UseCaseScheduleIn(day="monday", at="09:00", expected_version=1)
         saves = [builder.save_schedule(use_case_id, ALICE, body) for _ in range(6)]
         views = await asyncio.wait_for(asyncio.gather(*saves), 10)
     finally:
         await small.close()
 
-    assert [getattr(view, "version", None) for view in views] == [2] * 6, (
+    assert [getattr(view, "version", None) for view in views].count(2) == 1, (
         "the saves take turns, and only the first changes the schedule, so one version is made"
+    )
+    assert sum(isinstance(view, ChangedSince) for view in views) == 5, (
+        "the others were made from version 1, so they change nothing"
     )
 
 
@@ -1287,7 +1358,7 @@ async def test_a_retry_after_a_lost_version_commit_publishes_the_missing_version
     weekdays = {"day": "weekdays", "at": "08:00"}
     with pytest.raises(ConnectionError):
         await losing.save_schedule(
-            use_case_id, CAROL, UseCaseScheduleIn(day="weekdays", at="08:00")
+            use_case_id, CAROL, UseCaseScheduleIn(day="weekdays", at="08:00", expected_version=2)
         )
     [lost] = await lab.listed()
     assert (lost["version"], lost["schedule"]["day"]) == (2, "weekdays"), (
