@@ -264,7 +264,8 @@ function SettingUp({ start }: { start: CardStart }) {
   const [owner] = useState(session.cacheScope)
   const [kept] = useState(memory.kept)
   const [form, setForm] = useState(kept?.form ?? start.form)
-  const [draft, setDraft] = useState(kept ? kept.draft : start.draftId)
+  // A save names the draft before React draws the card again, so Set up and Never mind read the id here, not from the last drawing (#190).
+  const draft = useRef(kept ? kept.draft : start.draftId)
   const [held, act] = useReducer(cardPhase, kept?.phase ?? { kind: 'open' })
   // A press of Set up keeps what it came to under its own key, so a card drawn again while the platform answered settles from it.
   const press = useMadeBySetUp(held.kind === 'creating' ? held.key : null)
@@ -312,18 +313,17 @@ function SettingUp({ start }: { start: CardStart }) {
   const dirty = useRef(false)
   const settingUp = useRef(false)
   const alive = useRef(true)
-  const latest = useRef({ form, plan: null as Planned | null, draft, phase, live })
+  const latest = useRef({ form, plan: null as Planned | null, phase, live })
   useEffect(() => {
-    latest.current = { form, plan: planQuery.data ? { task, answer: planQuery.data } : null, draft, phase, live }
+    latest.current = { form, plan: planQuery.data ? { task, answer: planQuery.data } : null, phase, live }
   })
 
   const persist = (onDone?: (saved: string) => void) => {
     const now = latest.current
     if (now.phase.kind !== 'open' || settingUp.current || session.cacheScope() !== owner) return
-    const saved = now.draft ?? newIdempotencyKey()
-    latest.current = { ...now, draft: saved }
+    const saved = draft.current ?? newIdempotencyKey()
+    draft.current = saved
     memory.keep({ form: now.form, draft: saved, phase: now.phase })
-    setDraft(saved)
     saveDraft.mutate(
       { draftId: saved, draft: { content: draftContent(now.form, now.plan) } },
       { onSuccess: () => onDone?.(saved), onError: (error) => setSaveProblem(words(error)) },
@@ -331,7 +331,7 @@ function SettingUp({ start }: { start: CardStart }) {
   }
 
   useEffect(() => {
-    memory.keep({ form, draft, phase })
+    memory.keep({ form, draft: draft.current, phase })
   })
 
   const made = held.kind === 'creating' ? press.made : undefined
@@ -445,7 +445,7 @@ function SettingUp({ start }: { start: CardStart }) {
     const key = newIdempotencyKey()
     act({ type: 'set_up', key })
     latch.run((settled) => {
-      setUp(form, plan, draft, cards.current, {
+      setUp(form, plan, draft.current, cards.current, {
         savedCard: async (card) => (me.data ? savedCopyOf(await readCards(), me.data.id, card) : null),
         saveCard: async (card) => (await saveCard.mutateAsync({ cardId: null, card })).card_id,
         create: (body) => create.mutateAsync(body),
@@ -474,19 +474,21 @@ function SettingUp({ start }: { start: CardStart }) {
   }
 
   const neverMind = () => {
-    if (start.resumed !== undefined && draft !== null) {
+    const saved = draft.current
+    if (start.resumed !== undefined && saved !== null) {
       setDiscardProblem(null)
       setAsking(true)
       return
     }
-    if (draft !== null) deleteDraft.mutate(draft)
+    if (saved !== null) deleteDraft.mutate(saved)
     leave()
   }
 
   const confirmDiscard = () => {
-    if (draft === null) return
+    const saved = draft.current
+    if (saved === null) return
     latch.run((settled) =>
-      deleteDraft.mutate(draft, {
+      deleteDraft.mutate(saved, {
         onSuccess: () => {
           setAsking(false)
           leave()
