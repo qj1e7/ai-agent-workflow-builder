@@ -4,7 +4,7 @@ import type { PanelItem } from '../../ui/sidePanel'
 import { deskOf, desksReducer, EMPTY_DESK, HISTORY_MAX, panelOf, type DeskAction, type Desks } from './chatState'
 import { isThinking } from './threadState'
 
-const REPLY: PlannerReply = { answer: 'abilities', parts: [] }
+const REPLY: PlannerReply = { answer: 'abilities', how_to_start: false, parts: [] }
 
 const run = (actions: readonly (readonly [string, DeskAction])[], from: Desks = {}): Desks => actions.reduce((desks, [user, action]) => desksReducer(desks, { user, action }), from)
 

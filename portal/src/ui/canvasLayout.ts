@@ -1,11 +1,20 @@
 import type { N8nBlockKind, N8nBlockView } from '../api/types'
 
-/** A block not built yet, built, the step a test run is at, one it reached, or the yes the safety checker added. */
-export type NodeState = 'off' | 'idle' | 'now' | 'ok' | 'added'
+/**
+ * A block not built yet, built, the step a run is at, one it reached, or the yes the safety checker added. A run also waits at a
+ * block, such as Ask for a yes, or stops at one with an error.
+ */
+export type NodeState = 'off' | 'idle' | 'now' | 'ok' | 'added' | 'wait' | 'err'
 /** A way out not built yet, built, the test run flowing along it, or one it took. */
 export type EdgeState = 'off' | 'idle' | 'flow' | 'ok'
 
 export const edgeKey = (from: string, to: string): string => `${from}->${to}`
+
+export interface CanvasState {
+  readonly nodes: Readonly<Record<string, NodeState>>
+  /** Keyed `{from}->{to}`, by the blocks' names. */
+  readonly edges: Readonly<Record<string, EdgeState>>
+}
 
 export const NODE = 84
 const COL = 175
@@ -13,6 +22,8 @@ const ROW = 150
 const PAD_X = 40
 const PAD_TOP = 16
 const LABELS = 50
+/** How far a way out back to its own column swings right of the boxes: past the names under them, short of the next column’s. */
+const LOOP = 90
 
 export interface PlacedNode {
   readonly name: string
@@ -100,12 +111,13 @@ export function layOut(blocks: readonly N8nBlockView[]): Laid {
       if (!a || !b) return []
       const label = block.kind === 'branch' ? exit.exit : null
       if (b.col <= a.col) {
-        // A way out to a block in the same column or before it leaves from the bottom and comes in at the top, so it never loops back across the blocks.
-        const x1 = a.x + NODE / 2
-        const y1 = a.y + NODE
-        const x2 = b.x + NODE / 2
-        const y2 = b.y
-        return [{ from: block.name, to: exit.to, label, path: `M${x1} ${y1} C${x1} ${y1 + 30}, ${x2} ${y2 - 30}, ${x2} ${y2}`, labelAt: { x: x1 + 8, y: y1 + 18 } }]
+        // A way out to a block in the same column or before it loops round the right of both boxes, clear of the names under them.
+        const x1 = a.x + NODE
+        const y1 = a.y + NODE / 2
+        const x2 = b.x + NODE
+        const y2 = b.y + NODE / 2
+        const out = Math.max(x1, x2) + LOOP
+        return [{ from: block.name, to: exit.to, label, path: `M${x1} ${y1} C${out} ${y1}, ${out} ${y2}, ${x2} ${y2}`, labelAt: { x: x1 + 8, y: y1 - 9 } }]
       }
       const x1 = a.x + NODE
       const y1 = a.y + NODE / 2

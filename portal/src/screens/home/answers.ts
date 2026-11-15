@@ -1,5 +1,4 @@
 import type { CantRowView, CapabilitiesView, CapabilityView, OfflineReply, PauseReply, PlannerReply, QuestionReply, ResumeReply, RowKind, UnderstoodRowView } from '../../api/types'
-import { ApiError } from '../../api/client'
 import { count } from '../run/words'
 import { isRunning, type Row } from '../workflows/workflow'
 import { sayChanged } from './changed'
@@ -92,7 +91,7 @@ export const questionActions = (reply: QuestionReply, asker: Asker): readonly st
 export function wordsOnly(reply: PlannerReply, asker: Asker): boolean {
   if (reply.answer === 'question') return questionActions(reply, asker).length === 0
   if (reply.answer === 'pause' || reply.answer === 'resume') return reply.choices.length === 0
-  if (reply.answer === 'n8n') return !(reply.can_open && reply.use_case_id !== null)
+  if (reply.answer === 'n8n') return true
   // A free reply is the Planner's own words, with its chips or button under them inside the same message.
   return reply.answer === 'reply' || reply.answer === 'operators' || (reply.answer === 'offline' && asker === 'approver')
 }
@@ -280,11 +279,15 @@ export function startingPoints(view: CapabilitiesView): readonly string[] {
   return view.examples.filter((example) => example.kind !== 'learn').map((example) => example.text)
 }
 
-/** Why opening n8n was refused, in the platform's own words when it gave them. */
-export function openInN8nWords(error: unknown, otherwise: (error: unknown) => string): string {
-  if (error instanceof ApiError && [403, 409, 503].includes(error.status)) {
-    const detail = (error.body as { detail?: unknown } | null)?.detail
-    if (typeof detail === 'string') return detail
-  }
-  return otherwise(error)
+/** How to start, step by step: the registry’s first example in her words, and Teams named only while the platform can ask for a yes there. */
+export function startSteps(view: CapabilitiesView): readonly string[] {
+  const example = startingPoints(view)[0]
+  const teams = view.capabilities.some((entry) => entry.id === 'teams.ask' && entry.state === 'ready')
+  return [
+    example === undefined ? 'Tell me what should run by itself, in your own words.' : `Tell me what should run by itself, in your own words, like “${example}”.`,
+    'Check the card I make, and change anything I guessed.',
+    'Press Set up. I do a test run, which writes nothing.',
+    'If the test passes, press Turn it on.',
+    teams ? 'Nothing is written until an Approver says yes in Teams.' : 'Nothing is written until an Approver says yes.',
+  ]
 }

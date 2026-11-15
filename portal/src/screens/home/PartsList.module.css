@@ -96,6 +96,13 @@
   border-top: 0;
 }
 
+/* The button that offers her time to the whole watchlist holds her own words, so its label wraps in a narrow column. */
+.offer {
+  padding-block: var(--space-2);
+  text-align: start;
+  white-space: normal;
+}
+
 /* The sketch's card: its three short keys, Watch, When and Then, in a narrow column, with no rule above the first part. */
 .parts[data-short] .part {
   grid-template-columns: 22px 3.75rem minmax(0, 1fr);

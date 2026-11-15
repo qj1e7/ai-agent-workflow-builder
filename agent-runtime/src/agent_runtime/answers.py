@@ -76,11 +76,22 @@ from agent_runtime.edits import (
     changes_a_workflow,
     commanded,
     edit_of,
+    how_often,
     left_over,
 )
 from agent_runtime.follow_ups import follow_up_of, watch_offer_of
 from agent_runtime.free_reply import dead_end, reply_to
-from agent_runtime.parts import NOT_FOLLOWED, OWN_TIME, locate, parts_of
+from agent_runtime.parts import (
+    HOW_OFTEN,
+    NOT_FOLLOWED,
+    OWN_TIME,
+    SKIP_PART_NOTE,
+    a_lone_write,
+    asks_how_to_start,
+    locate,
+    only_about_the_app,
+    parts_of,
+)
 from agent_runtime.planner import (
     CANT_YET,
     NOTE_LIMIT,
@@ -101,6 +112,7 @@ from agent_runtime.reading import (
     Span,
     TaskRead,
     a_statement,
+    clashes_in,
     clauses_of,
     leftovers,
     names_a_person,
@@ -254,7 +266,6 @@ ANSWER_SYSTEM: Final = (
 )
 
 
-SKIP_PART_NOTE = "I can't skip the yes. Nothing is written without a yes."
 TOLD: Final = re.compile(
     r"\blet\s+(?:me|us)\s+know\b|\bkeep\s+(?:me|us)\s+(?:posted|updated|informed)\b",
     re.IGNORECASE,
@@ -399,8 +410,8 @@ def _left_out(span: Span, searching: bool, unquoted_skip: bool) -> CantRow:
     search can't filter by; `TICKET_FIELDS` names it when it knows the field. Words that fit
     no part are listed under what to look for, the contract's catch-all, with a plain note
     that claims no kind for them. Beside a skip the model flagged but couldn't quote, that
-    note says the yes can't be skipped instead, because those words are most likely the
-    skip."""
+    note, and the plain note for an action no line names, say the yes can't be skipped
+    instead, because those words are most likely the skip."""
     text = plain(span.text, TEXT_LIMIT)
     kind: RowKind = span.kind or "look_for"
     if vulnerability_phrase(text) is not None:
@@ -433,10 +444,12 @@ def _left_out(span: Span, searching: bool, unquoted_skip: bool) -> CantRow:
             note = LEFT_OUT_SCHEDULE
     need = need_of(kind, text)
     unreached = need.needs == "new_system" and need.system is not None
+    if unquoted_skip and note in (LEFT_OUT_PART, LEFT_OUT_DO) and not unreached:
+        return CantRow(kind=kind, text=text, note=SKIP_PART_NOTE)
     if note == LEFT_OUT_PART and not unreached:
         # Words the Planner didn't follow name nothing to build, unless they name a system it
         # doesn't reach, as Entra.
-        return CantRow(kind=kind, text=text, note=SKIP_PART_NOTE if unquoted_skip else note)
+        return CantRow(kind=kind, text=text, note=note)
     if need == Need("new_system", None) and span.kind == "look_for" and searching:
         need = Need("new_tool", "Jira")
     return CantRow(
@@ -677,6 +690,12 @@ def _watchlist(
     return CantAnswer(cant=rows, alternative=watching) if rows else watching
 
 
+def _watchlist_holds(schedule: str | None) -> bool:
+    """Whether the watchlist's one schedule could run on the whole schedule the model read, by
+    the edit card's own checks: no frequency it can't run at, and one day and one time."""
+    return schedule is not None and how_often(schedule) is None and not clashes_in(schedule)
+
+
 def _watch_rows(
     read: TaskRead,
     task: _Task | None,
@@ -696,10 +715,12 @@ def _watch_rows(
     watched = _watch_clauses(read, request)
     own = stretch is not None and not _its_schedule(request[stretch[0] : stretch[1]], schedule)
     if own and stretch and any(a <= stretch[0] and stretch[1] <= b for a, b in watched):
-        text = plain(request[stretch[0] : stretch[1]], TEXT_LIMIT)
-        found.append(
-            (stretch, CantRow(kind="schedule", text=text, note=OWN_TIME, needs="new_tool"))
-        )
+        # A time the watchlist's one schedule could hold is offered to the whole watchlist.
+        holds = _watchlist_holds(read.schedule)
+        at = stretch if holds else locate(request, read.schedule or "") or stretch
+        text = plain(request[at[0] : at[1]], TEXT_LIMIT)
+        note = OWN_TIME if holds else HOW_OFTEN
+        found.append((at, CantRow(kind="schedule", text=text, note=note, needs="new_tool")))
     for clause in _change_clauses(changes):
         found.append((_stretch(request, clause), _change_row(clause)))
     # Words beside the watch stand beside no part of a task, so a part is never named for them.
@@ -781,7 +802,13 @@ def _about(read: TaskRead, request: str) -> PlannerAnswer:
         case "needs_me":
             return NeedsMeAnswer()
         case _:
-            return AbilitiesAnswer()
+            return AbilitiesAnswer(how_to_start=asks_how_to_start(request))
+
+
+def _asks_about_the_app(read: TaskRead, text: str) -> bool:
+    """The model read a question about the Planner, and every clause asks what it can do or how
+    to start, so a task's word in it, as "create" in "how do I create a workflow", is no task."""
+    return read.asks_about == "abilities" and only_about_the_app(text)
 
 
 def said_plainly(row: CantRow) -> CantRow:
@@ -871,7 +898,14 @@ def _answer_of(
     covered = [skip.covered] if skip.covered is not None else []
     watched = _watch_clauses(read, text) if read.belongs_on_watchlist else []
     writes = _writes(read, text)
-    if read.asks_about == "none" or task_shaped(read, left_over(read, text, facts)):
+    # A question about the app is no task, but beside a skip the model flagged and couldn't
+    # quote it is read as one, so its words come back crossed, never ticked.
+    as_task = (
+        skip.unquoted
+        if _asks_about_the_app(read, text)
+        else task_shaped(read, left_over(read, text, facts))
+    )
+    if read.asks_about == "none" or as_task:
         task = _read_task(read, text, covered + watched, writes, skip.unquoted)
         refused = _refused_span(task, text) if writes else None
         if refused is not None:
@@ -893,10 +927,12 @@ def _answer_of(
         refused = _refused_span(task, text) if writes else None
         if refused is not None:
             return refused
-    if read.asks_about != "none" and not (read.asks_about == "abilities" and task is not None):
+    if read.asks_about != "none" and not (
+        task is not None and (read.asks_about == "abilities" or a_lone_write(text))
+    ):
         return _about(read, text)
     if task is None:
-        return AbilitiesAnswer()
+        return AbilitiesAnswer(how_to_start=asks_how_to_start(text))
     return _from_task(read, task, text)
 
 

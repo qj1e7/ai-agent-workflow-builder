@@ -744,7 +744,9 @@ class Builder:
                 return decided
             in_n8n = None
             if _own(row) and self.holding is not None:
-                held = await self.holding.refused_while_held(uow.conn, use_case_id)
+                held = await self.holding.refused_while_held(
+                    uow.conn, use_case_id, principal.user_id
+                )
                 if held is not None:
                     return held
             if _own(row):
@@ -854,7 +856,9 @@ class Builder:
             if row["deleted_in_n8n_at"] is not None:
                 return DeletedInN8n()
             if self.holding is not None:
-                held = await self.holding.refused_while_held(uow.conn, use_case_id)
+                held = await self.holding.refused_while_held(
+                    uow.conn, use_case_id, principal.user_id
+                )
                 if held is not None:
                     return held
             versions = await versions_of(uow.conn, use_case_id)
@@ -1046,7 +1050,7 @@ class Builder:
                         if refused is not None:
                             return N8nNotReady(refused.words)
                     elif is_on(after):
-                        return await self.holding.refused_while_held(uow.conn, use_case_id)
+                        return await self.holding.refused_while_held(uow.conn, use_case_id, by)
                 if _own(row) and isinstance(before, Deleted) and not isinstance(after, Deleted):
                     back = await self._bring_back(uow, use_case_id, row)
                     if isinstance(back, N8nNotReady):

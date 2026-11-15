@@ -95,7 +95,8 @@ jobs:
           ANTHROPIC_MODELS: ${{ inputs.anthropic_models || vars.ANTHROPIC_MODELS }}
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
           GOOGLE_MODELS: ${{ vars.GOOGLE_MODELS }}
-          AGENT_MODEL_API_KEY: ${{ secrets.AISG_API_KEY }}
+          # The gateway runs only when its models are asked for: naming only Anthropic models leaves its key out.
+          AGENT_MODEL_API_KEY: ${{ (inputs.models != '' || inputs.anthropic_models == '') && secrets.AISG_API_KEY || '' }}
           GATEWAY_MODELS: ${{ inputs.models || (inputs.anthropic_models == '' && (vars.GATEWAY_MODELS || 'claude-haiku-4-5-20251001')) || '' }}
           EVAL_TEMPERATURE: ${{ vars.EVAL_TEMPERATURE }}
           EVAL_JUDGE: ${{ inputs.judge || vars.EVAL_JUDGE }}

@@ -46,6 +46,13 @@ MOVE_GRACE = timedelta(minutes=2)
 the workflow back."""
 STRAYS_EVERY = timedelta(minutes=1)
 TAKE_IT_BACK = "Take it back to change it here."
+
+
+def ask_for_it(name: str) -> str:
+    """For someone who may not take it back: who can."""
+    return f"Ask {name}, or anyone with n8n access, to take it back."
+
+
 NOT_YOURS = (
     "Only the person who has it open, or someone with n8n access, can take it back. "
     "An admin can add n8n access in Settings."
@@ -206,13 +213,19 @@ class Holding:
     async def words(self, held: Held) -> str:
         return held_words(await self._staff.display_of(held.by), held.since, self._zone)
 
-    async def refused_while_held(self, conn: Connection, use_case_id: str) -> HeldInN8n | None:
+    async def refused_while_held(
+        self, conn: Connection, use_case_id: str, actor: UserId
+    ) -> HeldInN8n | None:
         """Read with the workflow's row locked, so no Open in n8n crosses the write. A workflow
-        a failed move stranded waits too, until it is back."""
+        a failed move stranded waits too, until it is back. The words tell the actor to take it
+        back only when take_back would let them."""
         row = await (await conn.execute(_ROW, (use_case_id,))).fetchone()
         held = None if row is None else held_of(use_case_id, row)
         if held is not None:
-            return HeldInN8n(f"{await self.words(held)} {TAKE_IT_BACK}")
+            name = await self._staff.display_of(held.by)
+            may = actor == held.by or isinstance(await self._staff.access(actor), CanOpen)
+            then = TAKE_IT_BACK if may else ask_for_it(name)
+            return HeldInN8n(f"{held_words(name, held.since, self._zone)} {then}")
         if row is not None and row["n8n_stranded_at"] is not None:
             return HeldInN8n(STRANDED)
         return None

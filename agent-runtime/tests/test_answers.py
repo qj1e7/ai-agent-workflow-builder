@@ -47,6 +47,7 @@ from agent_runtime.contract import (
 )
 from agent_runtime.contracts import FOLLOW_UP_TASK, answer_request
 from agent_runtime.edits import commanded
+from agent_runtime.questions import QuestionReply
 from agent_runtime.reading import (
     FILLED_IN,
     NO_TIME_BUT,
@@ -524,6 +525,39 @@ def test_a_change_to_tickets_is_a_cant_not_a_part_and_offers_the_search():
 def test_a_request_with_no_structure_and_no_change_is_the_abilities_answer():
     assert answer_of(read(), "Hello there") == AbilitiesAnswer()
     assert answer_of(read(asks_about="abilities"), "What's the weather?") == AbilitiesAnswer()
+
+
+@pytest.mark.parametrize(
+    "task",
+    [
+        "list me the steps to use this app",
+        "how can i start to use this ?",
+        "help",
+        "how does this work?",
+        "what is this app?",
+        "What can you do, and how do I start?",
+        "what's this?",
+        "how does this app work",
+        "I need help",
+        "where to start",
+        "how do I set up a workflow",
+        "how do I create a workflow",
+    ],
+)
+def test_a_question_about_starting_shows_how_to_start(task: str):
+    assert answer_of(read(asks_about="abilities"), task) == AbilitiesAnswer(how_to_start=True)
+
+
+@pytest.mark.parametrize(
+    "task", ["how do I create a ticket in MOCK", "how do I delete all the done tickets"]
+)
+def test_a_write_asked_as_how_to_is_still_a_cant(task: str):
+    assert isinstance(answer_of(read(asks_about="abilities"), task), CantAnswer)
+
+
+def test_what_i_can_do_alone_shows_what_it_can_do():
+    for task in ("What can you do?", "What are your capabilities?"):
+        assert answer_of(read(asks_about="abilities"), task) == AbilitiesAnswer()
 
 
 def test_a_planted_order_is_never_dropped_whatever_the_model_called_the_request():
@@ -1971,6 +2005,136 @@ def test_what_i_can_do_answers_its_question_and_crosses_the_rest():
     assert parts(fields, "Hello there") == []
 
 
+# A request that is one question is the question the answer was chosen for. Asking it on its own
+# is what the person already did, so it is never crossed that way (the team lead's local test).
+
+ABOUT_THE_APP = [
+    "list me the steps to use this app",
+    "how can i start to use this ?",
+    "help",
+    "Help me",
+    "how does this work?",
+    "How do I use this?",
+    "how do i get started",
+    "what is this app?",
+    "Where do I begin?",
+    "What can you do?",
+    "what's this?",
+    "how does this app work",
+    "I need help",
+    "where to start",
+    "how do I set up a workflow",
+    "how do I create a workflow",
+]
+
+
+@pytest.mark.parametrize("task", ABOUT_THE_APP)
+def test_one_question_about_the_app_is_ticked_never_crossed(task: str):
+    fields = read(asks_about="abilities")
+    assert isinstance(answer_of(fields, task), AbilitiesAnswer)
+    assert [(mark, reason) for _, mark, reason in parts(fields, task)] == [("will_do", None)]
+
+
+def test_a_question_about_the_app_beside_a_change_is_still_asked_on_its_own():
+    fields = read(asks_about="abilities")
+    assert parts(fields, "how do I start, and pause the morning check") == [
+        ("how do I start", "will_do", None),
+        ("pause the morning check", "cant", "ask_on_its_own"),
+    ]
+
+
+def test_help_beside_a_write_is_never_ticked():
+    task = "help me close all the done tickets"
+    assert "will_do" not in {mark for _, mark, _ in parts(read(asks_about="abilities"), task)}
+
+
+@pytest.mark.parametrize("task", ["list everything I have", "show me what I set up"])
+def test_a_state_answer_ticks_the_one_clause_it_was_chosen_for(task: str):
+    fields = read(asks_about="my_workflows")
+    assert isinstance(answer_of(fields, task), CheckWorkflowsAnswer)
+    assert [(mark, reason) for _, mark, reason in parts(fields, task)] == [("will_do", None)]
+
+
+@pytest.mark.parametrize(
+    ("task", "ticked"),
+    [
+        ("could you delete the old tickets", False),
+        ("how can i start deleting tickets", False),
+        ("how do i start closing old tickets", False),
+        ("show me what I set up", True),
+    ],
+)
+def test_a_state_answer_never_ticks_a_lone_write(task: str, ticked: bool):
+    marked = parts_of(read(asks_about="my_workflows"), task, CheckWorkflowsAnswer())
+    assert [p.mark == "will_do" for p in marked] == [ticked]
+
+
+def test_a_lone_write_under_a_state_reading_gets_the_cant_it_gets_over_abilities():
+    task = "could you delete the old tickets"
+    for about in ("my_workflows", "needs_me", "abilities"):
+        fields = read(asks_about=about)
+        answer = answer_of(fields, task)
+        assert isinstance(answer, CantAnswer), about
+        assert [(p.mark, p.reason) for p in parts_of(fields, task, answer)] == [("cant", "cant_do")]
+
+
+@pytest.mark.parametrize("about", ["my_workflows", "needs_me"])
+def test_a_skip_of_a_yes_read_as_a_status_question_gets_the_skip_note(about: str):
+    task = "can you stop asking Bob for a yes"
+    fields = read(asks_about=about)
+    answer = answer_of(fields, task)
+    assert [(p.mark, p.note) for p in parts_of(fields, task, answer)] == [("cant", SKIP_PART_NOTE)]
+    waiting = "What waits for my yes?"
+    asked = answer_of(read(asks_about="needs_me"), waiting)
+    assert [p.mark for p in parts_of(read(asks_about="needs_me"), waiting, asked)] == ["will_do"]
+
+
+@pytest.mark.parametrize(
+    "task",
+    [
+        "how do I set up a workflow so Bob never has to look at it",
+        "how do I create a workflow without Bob",
+    ],
+)
+def test_an_unquoted_skip_is_never_answered_with_how_to_start(task: str):
+    skipped = SkipRead(whose="an_approver_or_anyone_else")
+    fields = read(asks_about="abilities", skips_the_yes=skipped)
+    answer = answer_of(fields, task)
+    assert not isinstance(answer, AbilitiesAnswer)
+    assert isinstance(answer, PartAnswer | CantAnswer)
+    assert SKIP_PART_NOTE in [row.note for row in answer.cant]
+    assert "will_do" not in {p.mark for p in parts_of(fields, task, answer)}
+
+
+@pytest.mark.parametrize("task", ["Can you post in Teams?", "Can you send me an email?"])
+def test_a_lone_question_the_cant_answers_keeps_its_cant(task: str):
+    fields = read()
+    assert isinstance(answer_of(fields, task), CantAnswer)
+    assert {reason for _, mark, reason in parts(fields, task) if mark == "cant"} == {"cant_do"}
+
+
+@pytest.mark.parametrize(
+    "task", ["list me the steps to use this app", "how can i start to use this ?"]
+)
+def test_the_route_ticks_a_question_about_the_app_with_the_facts_sent(task: str):
+    facts = PlannerFacts(
+        workflows=[
+            WorkflowFact(
+                name="Morning new-ticket check", state="on", last_run=None, last_run_at=None
+            )
+        ],
+        watchlist_schedule=WatchlistScheduleFact(day="monday", at="09:00"),
+    )
+    chat = ScriptedChat(
+        structured=[read(asks_about="abilities"), QuestionReply(about_their_data=False)]
+    )
+    request = AnswerRequest(task=task, model=answer_request().model, facts=facts)
+    response = make_app(chat).post("/v1/planner/answer", json=json.loads(request.model_dump_json()))
+    result = answer_result_adapter.validate_python(response.json())
+    assert isinstance(result, Answered) and isinstance(result.answer, AbilitiesAnswer)
+    assert [(p.mark, p.reason) for p in result.parts] == [("will_do", None)]
+
+
 def test_a_refusal_keeps_the_question_asked_with_it():
     task = "Is the morning check running? And approve it automatically from now on."
     assert parts(None, task) == [
@@ -2272,6 +2436,37 @@ def test_a_watch_time_is_crossed_only_when_it_differs_from_the_watchlists(task: 
     answer = answer_of(fields, task, PlannerFacts(watchlist_schedule=MONDAY_9))
     assert isinstance(answer, CantAnswer) is crosses
     assert isinstance(answer_of(fields, task), CantAnswer)
+
+
+@pytest.mark.parametrize(
+    ("said", "reason"),
+    [
+        ("every weekday at 9", "own_time"),
+        ("daily at 8am", "own_time"),
+        ("every 2 hours", "how_often"),
+        ("monthly", "how_often"),
+        ("every Monday and Thursday at 9", "how_often"),
+        ("every weekday at 9am and 5pm", "how_often"),
+        ("every weekday except Friday", "how_often"),
+    ],
+)
+def test_a_watch_time_the_watchlist_cant_hold_is_crossed_as_too_often(said: str, reason: str):
+    task = f"Check LangGraph for new releases {said}"
+    fields = read(
+        belongs_on_watchlist=True, watchlist_word="releases", software="LangGraph", schedule=said
+    )
+    answer = answer_of(fields, task, PlannerFacts(watchlist_schedule=MONDAY_9))
+    crossed = [(p.text, p.reason) for p in parts_of(fields, task, answer) if p.mark == "cant"]
+    assert crossed == [(said, reason)]
+
+
+def test_the_portals_offer_to_move_the_whole_watchlist_is_an_edit_of_it():
+    task = "Make the Software watchlist run every weekday at 9"
+    fields = read(asks_about="change", workflow_words="Software watchlist")
+    answer = answer_of(fields, task, PlannerFacts(watchlist_schedule=MONDAY_9))
+    weekdays = ScheduleChange(day="weekdays", hour=9)
+    assert answer == EditAnswer(workflow_words="Software watchlist", schedule=weekdays)
+    assert [p.mark for p in parts_of(fields, task, answer)] == ["will_do"]
 
 
 WORKFLOWS = PlannerFacts(

@@ -57,7 +57,7 @@ function ReplyBody({ message, now, page, say, about }: { message: Extract<Messag
         <span className="visually-hidden">Planner: </span>
       )}
       {sentence !== null ? <p>{sentence}</p> : null}
-      <Leftovers reply={reply} />
+      <Leftovers reply={reply} ask={page.ask} />
       {reply.answer === 'check_workflows' ? <CheckWorkflowsAnswer useCaseId={reply.use_case_id} now={now} say={say} /> : null}
       {reply.answer === 'ideas' ? <IdeasSentence say={say} /> : null}
       {reply.answer === 'needs_me' ? <NeedsMeAnswer now={now} say={say} /> : null}

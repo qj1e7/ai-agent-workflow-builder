@@ -772,3 +772,37 @@ def test_an_edit_with_the_wrong_schedule_or_cant_fails_the_check_that_names_it()
         update={"task": "Make the morning check run daily"}
     )
     assert failed(ANSWER.score(case, wrong)) >= {"names_the_change_it_cant_make"}
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    [
+        "help-steps-to-use",
+        "help-how-to-start",
+        "help-alone",
+        "help-how-it-works",
+        "help-whats-this",
+        "help-how-app-works",
+        "help-need-help",
+        "help-where-to-start",
+        "help-set-up-workflow",
+        "help-create-workflow",
+    ],
+)
+def test_a_question_about_starting_passes_on_an_abilities_reading(case_id: str) -> None:
+    assert failed(ANSWER.score(answer_case(case_id), read_answer(asks_about="abilities"))) == set()
+
+
+def test_a_question_about_starting_fails_when_it_is_crossed_or_shows_the_wrong_card() -> None:
+    case = answer_case("help-steps-to-use")
+    crossed = failed(ANSWER.score(case, read_answer(name="Steps list")))
+    assert {"right_kind", "never_gives_the_reason"} <= crossed
+    capabilities = answer_case("what-can-you-do").model_copy(update={"how_to_start": True})
+    assert failed(ANSWER.score(capabilities, read_answer(asks_about="abilities"))) == {
+        "shows_how_to_start"
+    }
+
+
+def test_a_question_beside_an_order_is_still_asked_on_its_own() -> None:
+    case = answer_case("help-what-and-pause")
+    assert failed(ANSWER.score(case, read_answer(asks_about="abilities"))) == set()

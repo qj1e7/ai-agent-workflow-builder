@@ -839,7 +839,9 @@ async def test_the_other_kinds_come_back_as_they_were_read(front: Front):
         "rest": "close every ticket",
     }
     front.answers.result = answered(AbilitiesAnswer())
-    assert await say(front) == {"parts": [], "answer": "abilities"}
+    assert await say(front) == {"parts": [], "answer": "abilities", "how_to_start": False}
+    front.answers.result = answered(AbilitiesAnswer(how_to_start=True))
+    assert await say(front, "help") == {"parts": [], "answer": "abilities", "how_to_start": True}
     front.answers.result = answered(NeedsMeAnswer())
     assert await say(front) == {"parts": [], "answer": "needs_me"}
 

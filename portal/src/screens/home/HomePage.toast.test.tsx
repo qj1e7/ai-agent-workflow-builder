@@ -20,7 +20,7 @@ const noted = (desks: Desks): Desks => desksReducer(desks, { user: 'alice', acti
 const IN_CHAT = noted(
   desksReducer(
     desksReducer({}, { user: 'alice', action: { type: 'sent', text: 'What can you do?' } }),
-    { user: 'alice', action: { type: 'answered', reply: { answer: 'abilities', parts: [] }, typed: 'What can you do?' } },
+    { user: 'alice', action: { type: 'answered', reply: { answer: 'abilities', how_to_start: false, parts: [] }, typed: 'What can you do?' } },
   ),
 )
 const ON_HOME = noted({})

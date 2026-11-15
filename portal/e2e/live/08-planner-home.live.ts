@@ -529,6 +529,43 @@ test.describe('with the AI model on', () => {
     await context.close()
   })
 
+  test('HELP: a question about how to start gets the steps with nothing crossed, and its chip asks the Planner', async ({ browser }, info) => {
+    const context = await devContext(browser, 'alice')
+    const page = await context.newPage()
+    const watch = watchPage(page)
+    const messages = () => thread(page).locator(':scope > li')
+    await page.goto('/')
+    for (const words of ['how can i start to use this ?', 'list me the steps to use this app']) {
+      await ask(page, words)
+      await expect(messages().last().getByRole('heading', { name: 'How to start', exact: true })).toBeVisible()
+      await expect(messages().last().getByRole('list', { name: 'Each part of your request' }), 'the question is answered, never crossed').toHaveCount(0)
+      await expect(messages().last().locator('ol > li')).toHaveCount(5)
+    }
+    await shot(page, info, 'help-how-to-start')
+    const before = await messages().count()
+    await messages().last().getByRole('group', { name: 'Try one' }).getByRole('button', { name: 'Keep track of the LangGraph version' }).click()
+    await expect(messages().nth(before), 'the chip asks in her words').toHaveText(/Keep track of the LangGraph version/)
+    await expect(messages().nth(before + 1)).toHaveAttribute('data-answer', 'true', { timeout: 30_000 })
+    assertClean(watch)
+    await context.close()
+  })
+
+  test('OWN-time: a watch request’s own time is offered to the whole watchlist, and the offer gets the edit card', async ({ browser }) => {
+    const context = await devContext(browser, 'alice')
+    const page = await context.newPage()
+    const watch = watchPage(page)
+    const messages = () => thread(page).locator(':scope > li')
+    await page.goto('/')
+    await ask(page, 'Watch LangGraph releases every Thursday at 7am')
+    const offer = messages().last().getByRole('button', { name: 'Make the Software watchlist run every Thursday at 7am' })
+    await expect(offer).toBeVisible()
+    await offer.click()
+    await expect(editCard(messages().last()), 'the Planner answers the offer with the edit card').toBeVisible({ timeout: 30_000 })
+    await expect(editCard(messages().last()).getByRole('button', { name: 'Save change' }), 'nothing changes until she saves it').toBeVisible()
+    assertClean(watch)
+    await context.close()
+  })
+
   test('a new answer comes into view, from its top when it is taller than the conversation', async ({ browser }, info) => {
     const context = await devContext(browser, 'alice')
     const page = await context.newPage()
