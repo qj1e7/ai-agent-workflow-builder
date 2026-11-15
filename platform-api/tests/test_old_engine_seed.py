@@ -1,6 +1,8 @@
 """Writes e2e/old_engine/seed.json, the database of a platform from before ENGINE-PLAN E10, from
 the platform's own code: two agent workflows on the shared run workflow, one whose run Bob
-declined and one whose run waits for his yes. The e2e test of the move starts a stack from it.
+declined and one that never ran. The e2e test of the move starts a stack from it. No run on it is
+open: from E11 n8n's allow list turns the shared run workflow's blocks off, so bootstrap stops
+for one, and the release before finishes it.
 
 It runs only when asked, as it rewrites the seed:
     WRITE_OLD_ENGINE_SEED=../e2e/old_engine/seed.json uv run pytest tests/test_old_engine_seed.py
@@ -62,11 +64,15 @@ def body(name: str) -> dict[str, Any]:
     }
 
 
-async def waiting_run(lab: Lab, name: str) -> RunId:
-    """Carol set it up, Alice pressed Run now, and the shared run workflow asked for a yes."""
+async def set_up(lab: Lab, name: str) -> str:
     made = await lab.call("carol", "POST", "/api/v1/agent-use-cases", body(name))
     assert made.status_code == 201, made.text
-    use_case_id = made.json()["use_case_id"]
+    return str(made.json()["use_case_id"])
+
+
+async def waiting_run(lab: Lab, name: str) -> RunId:
+    """Carol set it up, Alice pressed Run now, and the shared run workflow asked for a yes."""
+    use_case_id = await set_up(lab, name)
     started = await lab.call("alice", "POST", f"/api/v1/use-cases/{use_case_id}/runs")
     assert started.status_code == 201, started.text
     run_id = RunId(started.json()["run_id"])
@@ -113,7 +119,7 @@ def dump(owner_url: str) -> list[dict[str, Any]]:
 
 async def test_write_the_old_engine_seed(lab: Lab, postgres: PostgresUrls):
     declined = await waiting_run(lab, "Old release check")
-    waiting = await waiting_run(lab, "Old waiting check")
+    await set_up(lab, "Old idle check")
     h = lab.h
     state = await h.state(declined)
     assert isinstance(state, AwaitingApproval)
@@ -122,7 +128,6 @@ async def test_write_the_old_engine_seed(lab: Lab, postgres: PostgresUrls):
     await h.orchestrator.decide(state.approval_id, BOB, 0, Verdict.DECLINE, detail.request.digest)
     await h.orchestrator.tick()
     assert isinstance(await h.state(declined), Rejected)
-    assert isinstance(await h.state(waiting), AwaitingApproval)
     with psycopg.connect(postgres.owner, autocommit=True) as conn:
         # Requests from before ADR 0024 never expired, so the stack's clock decides nothing.
         conn.execute("UPDATE orchestration.approval_requests SET expires_at = NULL")
