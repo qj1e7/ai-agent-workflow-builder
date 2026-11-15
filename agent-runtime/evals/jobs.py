@@ -44,6 +44,8 @@ class Job[C: Case]:
     product's exact messages, so the run's marker is not on them."""
     judge_question: Callable[[C, str], str] | None = None
     """What the judge is asked about a case's answer, in place of accuracy and clarity."""
+    most_calls: int = 1
+    """The most model calls one case makes, so a run stops before it passes its call cap."""
 
     def cases(self) -> list[C]:
         rows = json.loads((CASES / f"{self.name}.json").read_text())

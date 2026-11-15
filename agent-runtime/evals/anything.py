@@ -582,4 +582,5 @@ ANYTHING = Job(
     time_limit_s=ANSWER_TIMEOUT_SECONDS,
     product_call=ask,
     judge_question=judge_question,
+    most_calls=2,
 )

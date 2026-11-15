@@ -24,6 +24,16 @@ on:
         required: false
         default: ''
         type: string
+      max_calls:
+        description: The most model calls the run may make, the judge's included. Empty means 300.
+        required: false
+        default: ''
+        type: string
+      max_dollars:
+        description: The most the run may spend in US dollars, at the prices in pricing.json. Empty means 5.
+        required: false
+        default: ''
+        type: string
 
 permissions:
   contents: read
@@ -86,6 +96,8 @@ jobs:
           EVAL_JUDGE: ${{ inputs.judge || vars.EVAL_JUDGE }}
           EVAL_JOBS: ${{ inputs.jobs }}
           EVAL_MARKER: ${{ inputs.marker }}
+          EVAL_MAX_CALLS: ${{ inputs.max_calls }}
+          EVAL_MAX_DOLLARS: ${{ inputs.max_dollars }}
         run: scripts/evals.sh
 
       - name: Put the report on the run's page

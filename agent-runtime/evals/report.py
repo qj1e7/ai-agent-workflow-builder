@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from evals.anything import ANYTHING, CATEGORY_TITLES, HOME_FACTS, result_of, words_of
+from evals.budget import spent_words
 from evals.jobs import Case
 
 type Cases = Mapping[str, Mapping[str, Case]]
@@ -64,8 +65,15 @@ def _by_job(rows: list[Row]) -> list[str]:
     found: list[list[str]] = []
     for job in dict.fromkeys(r["job"] for r in rows):
         cells = [_cell(rows, m, job) for m in models]
-        found.append([job, *(_rate(c["passed"], c["cases"]) if c else "-" for c in cells)])
+        found.append([job, *(_job_cell(c) for c in cells)])
     return _table(["Job", *(f"`{m}`" for m in models)], found)
+
+
+def _job_cell(row: Row | None) -> str:
+    if row is None:
+        return "-"
+    rate = _rate(row["passed"], row["cases"])
+    return rate if row.get("of", row["cases"]) == row["cases"] else f"{rate}, of {row['of']}"
 
 
 def _category(outcomes: list[dict[str, Any]]) -> str:
@@ -155,11 +163,12 @@ def report(runs: list[dict[str, Any]], cases: Cases) -> str:
         + "."
         for run in runs
     ]
+    lines += [f"- {spent_words(run['spend'])}" for run in runs if "spend" in run]
     lines += [
         f"- Not run: {n['provider']} {n['model'] or ''} ({n['reason']})."
         for run in runs
         for n in run["not_run"]
-        if n["provider"] == "gateway" or n["reason"].startswith("judge")
+        if n["provider"] == "gateway" or n["reason"].startswith(("judge", "stopped"))
     ]
     lines += [
         "",
