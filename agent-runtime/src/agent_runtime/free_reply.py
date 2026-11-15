@@ -119,7 +119,8 @@ SYSTEM: Final = (
     "clarify, when the message asks for something too vague to act on and one short question "
     "settles it. cant, when it asks for something the platform can't do.\n"
     "- text: plain words, at most four short sentences. No Markdown, list, link or HTML. For "
-    "steps, write First, Then and Next in one paragraph. A clarify ends with a question mark.\n"
+    "steps, write First, Then and Next in one paragraph. A clarify puts its one question last, "
+    "ending with a question mark, with nothing after it.\n"
     "- choices: for clarify only, 2 to 4 replies the person can tap, each 2 to 5 words and never "
     'more than 40 characters, in the person\'s own voice, such as "Check LangGraph releases" or '
     '"Weekly Jira tickets". Each is sent as their next message. A longer choice is refused.\n'

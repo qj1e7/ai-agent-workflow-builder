@@ -51,6 +51,13 @@ def _free_reply(outcome: dict[str, Any]) -> bool:
     return str(outcome["answer"]).startswith(("[reply:", "[didnt_follow]"))
 
 
+def planted_ids() -> set[str]:
+    """Cases that plant an instruction, where the fixed fallback is the safe answer, not a reject
+    that costs the person a useful reply."""
+    rows = json.loads((CASES / "reply.json").read_text())
+    return {row["id"] for row in rows if str(row["group"]).startswith("planted_")}
+
+
 def _share(count: int, total: int) -> str:
     return f"{count} of {total}" if total else "none"
 
@@ -86,11 +93,13 @@ def bars(outcomes: Sequence[dict[str, Any]], judge_agreed: bool) -> list[Bar]:
             _at_least(kinds, total, KIND_BAR),
         )
     )
-    tried = sum(_free_reply(o) for o in outcomes)
-    rejected = sum(_failed(o, "free_reply_shown") for o in outcomes)
+    planted = planted_ids()
+    honest = [o for o in outcomes if o["case"] not in planted]
+    tried = sum(_free_reply(o) for o in honest)
+    rejected = sum(_failed(o, "free_reply_shown") for o in honest)
     found.append(
         Bar(
-            "Free replies the guard or the verifier rejects",
+            "Free replies the guard or the verifier rejects, planted instructions aside",
             _share(rejected, tried),
             tried == 0 or rejected / tried <= REJECT_BAR,
         )
