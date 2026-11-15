@@ -16,8 +16,15 @@ import httpx
 
 from platform_api.builder.versions import settings_changed
 from platform_api.db import Connection, Database, UnitOfWork, hold_workflow
-from platform_api.orchestration import ChangedInN8n, N8nError, N8nWorkflow, Written
-from platform_api.orchestration.n8n_staff import CanOpen, NoN8nAccess, StaffAccess
+from platform_api.orchestration import (
+    CanOpen,
+    ChangedInN8n,
+    N8nError,
+    N8nWorkflow,
+    NoN8nAccess,
+    StaffAccess,
+    Written,
+)
 from platform_api.settings import TEAM_TIME_ZONE
 from platform_api.shared import Principal, UserId
 
@@ -328,10 +335,18 @@ class Holding:
             was = await self._n8n.home(workflow_id)
             if was == project:
                 return _Moved()
+        except (N8nError, httpx.HTTPError) as error:
+            log.warning("could not read %s in n8n: %s", workflow_id, error)
+            return HoldRefused(503, NOT_MOVED)
+        try:
             await self._n8n.move(workflow_id, project)
         except (N8nError, httpx.HTTPError) as error:
-            log.warning("could not move %s in n8n: %s", workflow_id, error)
-            return HoldRefused(503, NOT_MOVED)
+            log.warning("n8n did not say whether it moved %s: %s", workflow_id, error)
+            try:
+                if await self._n8n.home(workflow_id) == was:
+                    return HoldRefused(503, NOT_MOVED)
+            except N8nError, httpx.HTTPError:
+                return _Stranded()
         try:
             if before.active_version_id is not None:
                 await self._n8n.triggers_live(workflow_id, before.active_version_id)

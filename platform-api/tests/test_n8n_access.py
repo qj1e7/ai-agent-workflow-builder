@@ -342,6 +342,17 @@ async def test_a_failed_move_that_cannot_go_back_is_stranded_until_release_moves
     assert (await s.lab.move("alice", "resume", use_case_id)).status_code == 200
 
 
+async def test_a_move_whose_answer_was_lost_is_read_back_not_taken_as_failed(s: Staffed):
+    await s.member()
+    use_case_id, workflow_id = await held(s)
+    s.n8n.transfers_lost = 1
+    opened = await s.open("carol", use_case_id)
+    assert (opened.status_code, opened.json()["held_by"]) == (200, "carol")
+    assert s.n8n.home_of(workflow_id) == s.n8n.personal_project(
+        (await s.person("carol"))["n8n_user_id"]
+    ), "n8n moved it, so the platform holds it on record"
+
+
 async def test_the_sweep_names_a_publish_by_the_stored_user_id_after_an_email_change(s: Staffed):
     n8n_user = await s.member()
     use_case_id, workflow_id = await held(s)

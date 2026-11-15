@@ -81,6 +81,8 @@ class FakeN8n:
     """What a transfer leaves of the workflow's settings. Unchanged, as E6 saw live."""
     transfer_answers: list[int] = field(default_factory=list[int])
     """How n8n answers the next transfers, in turn. A transfer it refuses moves nothing."""
+    transfers_lost: int = 0
+    """How many of the next transfers move the workflow but lose their answer."""
 
     def client(self) -> httpx.AsyncClient:
         return httpx.AsyncClient(transport=httpx.MockTransport(self.handle), base_url="http://n8n")
@@ -326,6 +328,9 @@ class FakeN8n:
                 workflow["projectId"] = project
                 workflow["shared"] = [{"projectId": project, "role": "workflow:owner"}]
                 workflow["settings"] = self.transfer_keeps(dict(workflow["settings"]))
+                if self.transfers_lost:
+                    self.transfers_lost -= 1
+                    return httpx.Response(502, json={"message": "the answer was lost"})
                 return httpx.Response(204)
             case "POST", ["users"]:
                 return httpx.Response(

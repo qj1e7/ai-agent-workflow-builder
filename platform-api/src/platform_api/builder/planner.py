@@ -35,9 +35,12 @@ from platform_api.builder.n8n_holds import HeldInN8n
 from platform_api.builder.planning import FALLBACK_WORDS, STARTERS, FallbackWhy
 from platform_api.builder.templates import SOFTWARE_WATCHLIST
 from platform_api.orchestration import (
+    NO_ACCESS,
+    OFF,
     AbilitiesAnswer,
     Answered,
     AnswerResult,
+    CanOpen,
     CantAnswer,
     CantRow,
     CapabilityList,
@@ -70,12 +73,12 @@ from platform_api.orchestration import (
     RowKind,
     RuntimeDown,
     SetupCardAnswer,
+    StaffAccess,
     UnderstoodRow,
     WatchlistAnswer,
     WhichSoftwareAnswer,
     WhyStoppedAnswer,
 )
-from platform_api.orchestration.n8n_staff import NO_ACCESS, OFF, CanOpen, StaffAccess
 from platform_api.shared import Principal, Role, UserId
 from platform_api.wire import WireIn, WireModel
 

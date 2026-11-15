@@ -8,7 +8,7 @@ from platform_api.auth import OPERATORS_ONLY, SIGNED_IN, CurrentPrincipal
 from platform_api.builder.http import NO_SUCH, NOT_FOUND, WorkflowOperator
 from platform_api.builder.n8n_holds import Free, Held, Holding, HoldRefused
 from platform_api.builder.n8n_view import InN8nViews, RunN8nView, UseCaseN8nView
-from platform_api.orchestration.n8n_staff import NO_ACCESS, OFF
+from platform_api.orchestration import NO_ACCESS, OFF
 from platform_api.shared import Principal, RunId, UserId
 from platform_api.wire import WireModel, error_response
 
