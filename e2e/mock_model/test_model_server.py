@@ -469,6 +469,8 @@ class ReadTest(unittest.TestCase):
             ("Anything to approve?", "needs_me", None),
             ("What can you do?", "abilities", None),
             ("What's the weather?", "abilities", None),
+            ("list me the steps to use this app", "abilities", None),
+            ("how can i start to use this ?", "abilities", None),
         ):
             with self.subTest(task=task):
                 read = server.reading(task)

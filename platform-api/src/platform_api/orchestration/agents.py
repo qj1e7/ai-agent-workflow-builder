@@ -621,6 +621,7 @@ class NeedsMeAnswer(WireModel):
 
 class AbilitiesAnswer(WireModel):
     kind: Literal["abilities"] = "abilities"
+    how_to_start: bool = False
 
 
 class QuestionAnswer(WireModel):

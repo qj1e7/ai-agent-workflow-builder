@@ -76,7 +76,7 @@ describe('the Planner’s short answers, as the chat-first sketch draws them', (
   const asked = (text: string, mark: PartView['mark'], reason: PartView['reason'] = null): PartView => ({ text, mark, reason, note: null, choices: [] })
 
   it('lists what I can do in the registry’s short words, with what isn’t built yet in one Not yet line', () => {
-    const reply: PlannerReply = { answer: 'abilities', parts: [asked('What can you do', 'will_do')] }
+    const reply: PlannerReply = { answer: 'abilities', how_to_start: false, parts: [asked('What can you do', 'will_do')] }
     expect(text(draw(reply, { registry: REGISTRY }))).toBe(
       'What I can do Watch software for new releases Create Jira tickets, after a yes Explain a stopped run, and retry it Change or pause your workflows Not yet: Teams channels, email, Confluence.',
     )
@@ -85,11 +85,23 @@ describe('the Planner’s short answers, as the chat-first sketch draws them', (
 
   it('never shows a line as working while its connection needs setting up', () => {
     const jiraOff: CapabilitiesView = { ...REGISTRY, capabilities: REGISTRY.capabilities.map((c) => (c.id === 'jira.create' ? { ...c, state: 'needs_setup' as const } : c)) }
-    expect(text(draw({ answer: 'abilities', parts: [] }, { registry: jiraOff }))).toContain('Create Jira tickets, after a yes Needs setup')
+    expect(text(draw({ answer: 'abilities', how_to_start: false, parts: [] }, { registry: jiraOff }))).toContain('Create Jira tickets, after a yes Needs setup')
+  })
+
+  it('answers how to start with the steps, and the registry’s example as a chip, with no cross on her question', () => {
+    const reply: PlannerReply = { answer: 'abilities', how_to_start: true, parts: [asked('list me the steps to use this app', 'will_do')] }
+    const html = draw(reply, { registry: REGISTRY })
+    expect(text(html)).toBe(
+      'How to start Tell me what should run by itself, in your own words, like “Keep track of the LangGraph version”. Check the card I make, and change anything I guessed. Press Set up. I do a test run, which writes nothing. If the test passes, press Turn it on. Nothing is written until an Approver says yes in Teams. Keep track of the LangGraph version',
+    )
+    expect(buttons(html)).toEqual(['Keep track of the LangGraph version'])
+    expect(html).toContain('aria-label="Try one"')
+    expect(draw(reply, { leftovers: true }), 'nothing is crossed above it').toBe('')
+    expect(sayOf(reply)).toBeNull()
   })
 
   it('says it didn’t follow a request it read none of, and what it can do instead', () => {
-    const reply: PlannerReply = { answer: 'abilities', parts: [asked('What’s the weather', 'cant', 'not_followed')] }
+    const reply: PlannerReply = { answer: 'abilities', how_to_start: false, parts: [asked('What’s the weather', 'cant', 'not_followed')] }
     expect(text(draw(reply, { registry: REGISTRY }))).toBe('I didn’t follow that I can watch software releases, fix stopped runs and change your workflows.')
     expect(sayOf(reply)).toBeNull()
   })
@@ -569,10 +581,12 @@ describe('an Approver’s answers in the chat (spec 5.3)', () => {
   })
 
   it('answers what he can ask in the sketch’s three lines', () => {
-    const html = ask({ answer: 'abilities', parts: [{ text: 'What can you do', mark: 'will_do', reason: null, note: null, choices: [] }] })
+    const html = ask({ answer: 'abilities', how_to_start: false, parts: [{ text: 'What can you do', mark: 'will_do', reason: null, note: null, choices: [] }] })
     expect(answerOf(html)).toBe('What I can do Show what waits for your yes Show exactly what a change will write Show your past decisions')
-    const unknown = ask({ answer: 'abilities', parts: [{ text: 'What’s the weather', mark: 'cant', reason: 'not_followed', note: null, choices: [] }] })
+    const unknown = ask({ answer: 'abilities', how_to_start: false, parts: [{ text: 'What’s the weather', mark: 'cant', reason: 'not_followed', note: null, choices: [] }] })
     expect(answerOf(unknown)).toContain('I didn’t follow that I can show what waits for your yes, and your past decisions.')
+    const start = ask({ answer: 'abilities', how_to_start: true, parts: [{ text: 'help', mark: 'will_do', reason: null, note: null, choices: [] }] })
+    expect(answerOf(start), 'he sets nothing up, so he gets what he can ask, not the steps').toBe('What I can do Show what waits for your yes Show exactly what a change will write Show your past decisions')
   })
 
   it('gives a refusal with no set-up offered, and his request to open where he decides', () => {

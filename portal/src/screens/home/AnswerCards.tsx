@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import { Link } from '../../ui/Link'
-import type { CantReply, CantRowView, OfflineReply, PartReply, PartView, PauseReply, PlannerReply, QuestionReply, ResumeReply, SetupCardReply, SwitchChoice, WatchlistReply } from '../../api/types'
+import type { AbilitiesReply, CantReply, CantRowView, CapabilitiesView, OfflineReply, PartReply, PartView, PauseReply, PlannerReply, QuestionReply, ResumeReply, SetupCardReply, SwitchChoice, WatchlistReply } from '../../api/types'
 import { useErrorWords } from '../../api/context'
 import { useCapabilities } from '../../api/plannerQueries'
 import { useMoveWorkflow } from '../../api/workflowQueries'
@@ -13,7 +13,7 @@ import softwareStyles from '../software/Software.module.css'
 import { ChangedInN8nAnswer } from './ChangedCard'
 import { AskTheTeam } from './AskTheTeam'
 import { useAsker } from './asker'
-import { cantLines, capabilityCard, oneLine, questionActions, refusalNext, SAY_ANOTHER_WAY, startingPoints, stateWords, switchedSay, watchlistSwitchNote, type Asker } from './answers'
+import { cantLines, capabilityCard, oneLine, questionActions, refusalNext, SAY_ANOTHER_WAY, startingPoints, startSteps, stateWords, switchedSay, watchlistSwitchNote, type Asker } from './answers'
 import { cardFrom } from './card'
 import { asksOnCard, cantOnCard, crossesInstead, crossesOnCard, followedNothing } from './parts'
 import { SetupCard, type CardStart } from './SetupCard'
@@ -244,8 +244,31 @@ function WhatICanDo({ lines, notYet = [] }: { lines: readonly { key: string; tex
   )
 }
 
-/** What I can do, in the registry’s short words with the platform’s state of each, or that it followed none of the request. */
-function AbilitiesAnswer({ reply }: { reply: PlannerReply }) {
+/** How to start: the steps from her words to the yes, then the registry’s examples as chips that ask the Planner for them. */
+function HowToStart({ view, page }: { view: CapabilitiesView; page: Page }) {
+  const examples = startingPoints(view)
+  return (
+    <Card title="How to start">
+      <ol className={styles['steps']}>
+        {startSteps(view).map((step) => (
+          <li key={step}>{step}</li>
+        ))}
+      </ol>
+      {examples.length > 0 ? (
+        <div className={styles['chips']} role="group" aria-label="Try one">
+          {examples.map((text) => (
+            <button key={text} type="button" className={styles['chip']} onClick={() => page.ask(text)}>
+              {text}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </Card>
+  )
+}
+
+/** What I can do, in the registry’s short words with the platform’s state of each, or how to start when that was asked, or that it followed none of the request. */
+function AbilitiesAnswer({ reply, page }: { reply: AbilitiesReply; page: Page }) {
   const asker = useAsker()
   const nothing = followedNothing(reply)
   const capabilities = useCapabilities({ enabled: asker === 'operator' && !nothing })
@@ -264,6 +287,7 @@ function AbilitiesAnswer({ reply }: { reply: PlannerReply }) {
       </p>
     )
   }
+  if (reply.how_to_start) return <HowToStart view={capabilities.data} page={page} />
   const { can, notYet } = capabilityCard(capabilities.data)
   return <WhatICanDo lines={can.map((entry) => ({ key: entry.id, text: entry.short, state: stateWords(entry) }))} notYet={notYet} />
 }
@@ -418,7 +442,7 @@ export function Answer({ reply, typed, page }: AnswerProps) {
     case 'refused':
       return <RefusedAnswer reply={reply} typed={typed} page={page} />
     case 'abilities':
-      return <AbilitiesAnswer reply={reply} />
+      return <AbilitiesAnswer reply={reply} page={page} />
     case 'pause':
     case 'resume':
       return <SwitchChoices reply={reply} />

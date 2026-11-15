@@ -127,7 +127,8 @@ ABOUT = (
     ),
     (
         re.compile(
-            r"^what can you do|^what do you do|^help\b|\bweather\b|\bjoke\b|^how many software\b",
+            r"^what can you do|^what do you do|^help\b|\bweather\b|\bjoke\b|^how many software\b"
+            r"|\bsteps to use\b|^how (?:can|do) i (?:start|use|begin)\b",
             re.IGNORECASE,
         ),
         "abilities",

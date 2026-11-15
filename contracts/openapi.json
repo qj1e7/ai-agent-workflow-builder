@@ -10,6 +10,12 @@
             "title": "Answer",
             "type": "string"
           },
+          "how_to_start": {
+            "default": false,
+            "description": "True when the request asks how to start using the app, as \"help\" or \"list the steps\". The Portal then leads with the steps, not the list of what it can do.",
+            "title": "How To Start",
+            "type": "boolean"
+          },
           "parts": {
             "description": "Every clause of what the person typed, in order, with what happened to it (spec 6.5). None is dropped. Empty for a chip they tapped, for an answer inside another answer, and when no model read the request.",
             "items": {
@@ -21,7 +27,8 @@
         },
         "required": [
           "parts",
-          "answer"
+          "answer",
+          "how_to_start"
         ],
         "title": "AbilitiesReply",
         "type": "object"

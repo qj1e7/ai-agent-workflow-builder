@@ -119,7 +119,7 @@ def parts_of(
         asked = _about_state(text, clauses, _names_of(answer))
         return _answered(text, clauses, asked or _the_only_question(text, clauses))
     if isinstance(answer, AbilitiesAnswer):
-        about = [c for c in clauses if about_the_app(text[c[0] : c[1]])]
+        about = [c for c in clauses if _about_the_app(text[c[0] : c[1]])]
         return _answered(text, clauses, about)
     if isinstance(answer, EditAnswer | PauseAnswer | ResumeAnswer):
         marked = (
@@ -143,11 +143,19 @@ def parts_of(
     return found
 
 
-def about_the_app(clause: str) -> bool:
+def _about_the_app(clause: str) -> bool:
     """Whether the clause asks what the Planner can do or how to start using the app, and orders
     nothing, so "help me close the done tickets" is no question about the app."""
     asks = ABOUT_THE_PLANNER.search(clause) or HOW_TO_START.search(clause)
     return bool(asks) and not _orders(clause) and not change_verbs_in(clause)
+
+
+def asks_how_to_start(request: str) -> bool:
+    """Whether a clause of the request asks how to start using the app."""
+    text = visible_words(request)
+    return any(
+        _about_the_app(text[a:b]) and HOW_TO_START.search(text[a:b]) for a, b in clauses_of(text)
+    )
 
 
 def _asks(text: str, clause: Span) -> bool:

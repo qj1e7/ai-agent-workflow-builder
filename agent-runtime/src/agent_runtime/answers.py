@@ -78,7 +78,7 @@ from agent_runtime.edits import (
     left_over,
 )
 from agent_runtime.follow_ups import follow_up_of, watch_offer_of
-from agent_runtime.parts import NOT_FOLLOWED, OWN_TIME, locate, parts_of
+from agent_runtime.parts import NOT_FOLLOWED, OWN_TIME, asks_how_to_start, locate, parts_of
 from agent_runtime.planner import (
     CANT_YET,
     NOTE_LIMIT,
@@ -754,7 +754,7 @@ def _about(read: TaskRead, request: str) -> PlannerAnswer:
         case "needs_me":
             return NeedsMeAnswer()
         case _:
-            return AbilitiesAnswer()
+            return AbilitiesAnswer(how_to_start=asks_how_to_start(request))
 
 
 def said_plainly(row: CantRow) -> CantRow:
@@ -865,7 +865,7 @@ def _answer_of(
     if read.asks_about != "none" and not (read.asks_about == "abilities" and task is not None):
         return _about(read, text)
     if task is None:
-        return AbilitiesAnswer()
+        return AbilitiesAnswer(how_to_start=asks_how_to_start(text))
     return _from_task(read, task, text)
 
 
