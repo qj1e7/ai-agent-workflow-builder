@@ -207,6 +207,15 @@ def test_the_words_follow_the_portal() -> None:
     assert words_of(None) == "(no answer was recorded)"
 
 
+def test_how_to_start_shows_the_portals_steps_and_chips() -> None:
+    shown = words_of(Answered(answer=AbilitiesAnswer(how_to_start=True), parts=[]))
+    assert shown.startswith("How to start:")
+    assert "1. Tell me what should run by itself, in your own words, like “Keep track of" in shown
+    assert "Nothing is written until an Approver says yes in Teams." in shown
+    assert "[Keep track of the LangGraph version]" in shown
+    assert "What can you do?" not in shown
+
+
 def test_a_gateway_judge_is_built_with_the_gateways_client() -> None:
     env = {
         "AGENT_MODEL_BASE_URL": "https://gateway.invalid",

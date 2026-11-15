@@ -10,7 +10,7 @@ not is scored by the judge, a different model, never by the guard's own checks."
 import json
 import time
 from dataclasses import dataclass, fields
-from typing import Any, Literal, cast
+from typing import Any, Final, Literal, cast
 
 from langchain_core.language_models import BaseChatModel
 from pydantic import BaseModel
@@ -25,6 +25,7 @@ from agent_runtime.answers import (
     word_rule_refusal,
 )
 from agent_runtime.contract import (
+    AbilitiesAnswer,
     Answered,
     AnswerRequest,
     DidntFollowAnswer,
@@ -191,12 +192,25 @@ def words_of(answer: PlannerAnswer, case: ReplyCase) -> str:
     return f"[{_kind(answer)}] {shown}"
 
 
+HELP_LANE_GROUPS: Final = frozenset({"how_to", "team_lead"})
+"""The groups whose how-to questions the help lane answers with How to start (#290), which the
+free reply leaves to it."""
+
+
 def _kind(answer: PlannerAnswer) -> str:
-    return f"reply:{answer.form}" if isinstance(answer, FreeReplyAnswer) else answer.kind
+    match answer:
+        case FreeReplyAnswer():
+            return f"reply:{answer.form}"
+        case AbilitiesAnswer(how_to_start=True):
+            return "how_to_start"
+        case _:
+            return answer.kind
 
 
 def _acceptable(case: ReplyCase, answer: PlannerAnswer) -> bool:
     kind = _kind(answer)
+    if kind == "how_to_start":
+        return "reply" in case.kinds and case.group in HELP_LANE_GROUPS
     return kind in case.kinds or (kind.startswith("reply:") and "reply" in case.kinds)
 
 

@@ -455,6 +455,22 @@ def _cross(part: RequestPart) -> str:
     return f"{head}: “{part.text}” {why}".rstrip()
 
 
+def _how_to_start() -> list[str]:
+    """The Portal's How to start card (startSteps and startingPoints in answers.ts)."""
+    examples = [e.text for e in CAPABILITY_LIST.examples if e.kind != "learn"]
+    teams = any(c.id == "teams.ask" and c.state == "ready" for c in CAPABILITY_LIST.capabilities)
+    first = f", like “{examples[0]}”" if examples else ""
+    steps = [
+        f"Tell me what should run by itself, in your own words{first}.",
+        "Check the card I make, and change anything I guessed.",
+        "Press Set up. I do a test run, which writes nothing.",
+        "If the test passes, press Turn it on.",
+        f"Nothing is written until an Approver says yes{' in Teams' if teams else ''}.",
+    ]
+    numbered = [f"{n}. {step}" for n, step in enumerate(steps, 1)]
+    return ["How to start:", *numbered, " ".join(f"[{text}]" for text in examples)]
+
+
 def _said(shown: PlannerAnswer, facts: PlannerFacts) -> list[str]:
     match shown:
         case SetupCardAnswer() | PartAnswer():
@@ -490,6 +506,8 @@ def _said(shown: PlannerAnswer, facts: PlannerFacts) -> list[str]:
             ]
         case NeedsMeAnswer():
             return _needs(facts)
+        case AbilitiesAnswer(how_to_start=True):
+            return _how_to_start()
         case AbilitiesAnswer():
             return [f"What I can do: {'; '.join(CAN)}. Not yet: {', '.join(NOT_YET)}."]
         case QuestionAnswer():

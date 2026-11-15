@@ -2,10 +2,10 @@ from typing import Any
 
 from evals.gate import GATE_MAX_CALLS, bars, gate
 from evals.red_team import RED_TEAM
-from evals.reply import REPLY, REPLY_DEV, REPLY_GATE, ReplyCase
+from evals.reply import REPLY, REPLY_DEV, REPLY_GATE, ReplyCase, _acceptable
 from evals.runner import JOBS, jobs_chosen
 
-from agent_runtime.contract import ReplyEnvelope
+from agent_runtime.contract import AbilitiesAnswer, ReplyEnvelope
 from agent_runtime.reply_verifier import Verdict
 from tests.fakes import ScriptedChat
 from tests.test_answers import follow_up
@@ -225,3 +225,12 @@ def test_a_run_of_every_job_runs_each_reply_case_once() -> None:
     names = [job.name for job in jobs_chosen({})]
     assert "reply" in names and "reply_gate" not in names and "reply_dev" not in names
     assert [job.name for job in jobs_chosen({"EVAL_JOBS": "reply_dev"})] == ["reply_dev"]
+
+
+def test_a_how_to_question_accepts_the_help_lanes_how_to_start_but_not_the_bare_list() -> None:
+    how_to = CASES["how_to-01"]
+    chat = next(c for c in CASES.values() if c.group == "chat" and c.kinds == ["reply"])
+    start = AbilitiesAnswer(how_to_start=True)
+    assert _acceptable(how_to, start)
+    assert not _acceptable(how_to, AbilitiesAnswer())
+    assert not _acceptable(chat, start)
