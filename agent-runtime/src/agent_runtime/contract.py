@@ -1124,6 +1124,97 @@ class QuestionAnswer(WireModel):
     )
 
 
+type ReplyForm = Literal["answer", "clarify", "cant"]
+
+REPLY_TEXT_LIMIT: Final = 600
+CHOICE_LIMIT: Final = 40
+
+
+class ReplyEnvelope(BaseModel):
+    """What the model fills for a free reply (ADR 0047). It is loose on purpose: the guard's checks,
+    not the parser, decide whether it can be shown, so a broken rule counts as a reject."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    form: ReplyForm = Field(
+        description="answer: answer it from the guide, the capabilities or the facts. clarify: "
+        "a request too vague to act on, settled by one short question. cant: it asks for "
+        "something the platform can't do."
+    )
+    text: str = Field(
+        description="Plain words, at most 600 characters. No Markdown, list, link or HTML. A "
+        "clarify ends with a question mark."
+    )
+    choices: list[str] = Field(
+        default_factory=list[str],
+        description="For clarify only: 2 to 4 replies the person can tap, each 2 to 5 words and "
+        "never more than 40 characters, in their own voice.",
+    )
+    offer: str | None = Field(
+        default=None,
+        description="For cant only: the id of the one Ready capability that comes closest, or "
+        "null when none does.",
+    )
+    looked_at: list[str] = Field(
+        default_factory=list[str],
+        description="The sections of the facts you used: watchlist, workflows, needs_you.",
+    )
+
+
+class ReplyOffer(WireModel):
+    """The button on a free reply's can't. It sends the registry's example request for the
+    closest Ready capability as the person's next message, so the Planner reads it again and any
+    write it sets up still waits for a yes (ADR 0047)."""
+
+    capability: str = Field(description="The id of a Ready capability in the registry.")
+    request: str = Field(
+        min_length=1, max_length=2000, description="The registry's example request it sends."
+    )
+
+
+class FreeReplyAnswer(WireModel):
+    """The model's own reply to a message no other answer fits, shown only after code checked it
+    (ADR 0047). It writes nothing: a choice or an offer is sent as the person's next message."""
+
+    kind: Literal["reply"] = "reply"
+    form: ReplyForm = Field(
+        description="answer: a direct answer. clarify: one short question, with choices to tap. "
+        "cant: an honest can't, with the closest thing the platform can do as a button."
+    )
+    text: str = Field(min_length=1, max_length=REPLY_TEXT_LIMIT, description="Plain words only.")
+    choices: list[Annotated[str, Field(min_length=1, max_length=CHOICE_LIMIT)]] = Field(
+        default_factory=list[str],
+        max_length=4,
+        description="For clarify only, 2 to 4 replies to tap. Each is sent as the next message.",
+    )
+    offer: ReplyOffer | None = Field(
+        default=None,
+        description="For cant only. None on a can't means the button is Ask the team.",
+    )
+    looked_at: list[FactSection] = Field(
+        default_factory=list[FactSection],
+        max_length=3,
+        description="The sections of the facts the reply used, kept only when they were sent.",
+    )
+
+    @model_validator(mode="after")
+    def _form_fits(self) -> FreeReplyAnswer:
+        if (self.form == "clarify") != (len(self.choices) >= 2) or (
+            self.form != "clarify" and self.choices
+        ):
+            raise ValueError("Only a clarifying question has choices, 2 to 4 of them")
+        if self.offer is not None and self.form != "cant":
+            raise ValueError("Only a can't offers something instead")
+        return self
+
+
+class DidntFollowAnswer(WireModel):
+    """The fixed fallback for a free reply that failed or that the guard rejected: one line on
+    what the Planner can do for this person, and Say it another way. Never a bare cross."""
+
+    kind: Literal["didnt_follow"] = "didnt_follow"
+
+
 class _OnOrOff(WireModel):
     workflow_words: str | None = Field(
         default=None,
@@ -1244,7 +1335,9 @@ type PlannerAnswer = Annotated[
     | QuestionAnswer
     | EditAnswer
     | PauseAnswer
-    | ResumeAnswer,
+    | ResumeAnswer
+    | FreeReplyAnswer
+    | DidntFollowAnswer,
     Field(discriminator="kind"),
 ]
 

@@ -63,6 +63,15 @@ export const isThinking = (thread: Thread): boolean => thread.messages.some((m) 
 /** The turn the next typed request may follow on from: what the person asked, the software the Planner named, and the words it answered with. */
 export type PreviousTurn = NonNullable<PlannerAnswerIn['previous']>
 
+/**
+ * What goes to the Planner for words she typed or tapped: the words, with the turn before when there is one. A tapped choice
+ * carries it too, so the Planner knows it follows a clarifying question and never asks a second one in a row.
+ */
+export function askOf(text: string, thread: Thread): PlannerAnswerIn {
+  const previous = previousOf(thread)
+  return previous === null ? { text } : { text, previous }
+}
+
 export function previousOf(thread: Thread): PreviousTurn | null {
   // A Changed in n8n card answers no question, so a request typed after it follows on from the last answer to a person.
   const last = thread.messages.findLast((m) => m.kind === 'reply' && m.reply.answer !== 'changed_in_n8n')
@@ -71,7 +80,8 @@ export function previousOf(thread: Thread): PreviousTurn | null {
   return {
     request: typed,
     software: reply.answer === 'watchlist' ? reply.software : null,
-    answer: reply.answer === 'question' ? reply.text : null,
-    kind: reply.answer,
+    answer: reply.answer === 'question' || reply.answer === 'reply' ? reply.text : null,
+    // The runtime refuses a second clarifying question in a row, and tells one from an answer by this word.
+    kind: reply.answer === 'reply' && reply.form === 'clarify' ? 'reply_clarify' : reply.answer,
   }
 }

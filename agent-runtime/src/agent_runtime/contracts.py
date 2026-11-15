@@ -41,6 +41,7 @@ from agent_runtime.contract import (
     ChosenAgent,
     Connected,
     ConnectRequest,
+    DidntFollowAnswer,
     DraftApproval,
     DraftBlock,
     Drafted,
@@ -50,6 +51,7 @@ from agent_runtime.contract import (
     FindSoftwareRequest,
     FoundModel,
     FoundSoftware,
+    FreeReplyAnswer,
     GitHubProblem,
     GithubSource,
     GitHubWorking,
@@ -66,6 +68,7 @@ from agent_runtime.contract import (
     ReadReleasesRequest,
     ReleaseRead,
     ReleasesRead,
+    ReplyEnvelope,
     RoomAddressee,
     SoftwareMatch,
     SoftwareToCheck,
@@ -80,6 +83,7 @@ from agent_runtime.contract import (
     WireModel,
     agent_event_adapter,
 )
+from agent_runtime.free_reply import answer_of_envelope
 from agent_runtime.github import TOKEN_REFUSED
 from agent_runtime.model_access import KEY_REFUSED
 from agent_runtime.reading import DaysRead, PlaceRead, SearchRead, TicketRead
@@ -940,6 +944,49 @@ def answered_question() -> Answered:
     return Answered(answer=answer, parts=parts_of(None, question_request().task, answer))
 
 
+HOW_TO_START = "how can i start to use this ?"
+
+
+def _free_reply(task: str, envelope: ReplyEnvelope) -> Answered:
+    """A free reply as the guard lets it through, so the fixture is what the checks pass."""
+    request = AnswerRequest(task=task, model=draft_request().model)
+    shown = answer_of_envelope(envelope, request)
+    answer = shown if isinstance(shown, FreeReplyAnswer) else DidntFollowAnswer()
+    return Answered(answer=answer, parts=parts_of(None, task, answer))
+
+
+def answered_reply() -> Answered:
+    text = (
+        "To start, type what you want done in the box, in your own words, such as Check "
+        "LangGraph for new releases every Monday at 9am. The Planner shows a card with what it "
+        "understood. Change anything on it, then turn it on."
+    )
+    return _free_reply(HOW_TO_START, ReplyEnvelope(form="answer", text=text))
+
+
+def answered_reply_clarify() -> Answered:
+    envelope = ReplyEnvelope(
+        form="clarify",
+        text="Which would you like to keep an eye on?",
+        choices=["New releases of some software", "Jira tickets every week"],
+    )
+    return _free_reply("help me keep an eye on things", envelope)
+
+
+def answered_reply_cant() -> Answered:
+    text = (
+        "I can't send email yet. I can put the list in one new Jira ticket, after an Approver's "
+        "yes."
+    )
+    envelope = ReplyEnvelope(form="cant", text=text, offer="jira.create")
+    return _free_reply("email the bug list to my manager", envelope)
+
+
+def answered_didnt_follow() -> Answered:
+    answer = DidntFollowAnswer()
+    return Answered(answer=answer, parts=parts_of(None, "flibber the wotsit", answer))
+
+
 def fixtures() -> dict[str, WireModel]:
     finished = finished_task()
     return {
@@ -992,6 +1039,10 @@ def fixtures() -> dict[str, WireModel]:
         "planner-answered-pause.json": answered_pause(),
         "planner-question-request.json": question_request(),
         "planner-answered-question.json": answered_question(),
+        "planner-answered-reply.json": answered_reply(),
+        "planner-answered-reply-clarify.json": answered_reply_clarify(),
+        "planner-answered-reply-cant.json": answered_reply_cant(),
+        "planner-answered-didnt-follow.json": answered_didnt_follow(),
         "planner-check-part-request.json": CheckPartRequest(kind="do", text="Email the list"),
         "planner-check-part-cant.json": check_one_part(
             CheckPartRequest(kind="do", text="Email the list")

@@ -375,6 +375,17 @@ EXAMPLES: Final = (
 )
 CAPABILITY_LIST: Final = CapabilityList(capabilities=list(CAPABILITIES), examples=list(EXAMPLES))
 
+WEEKLY_BUGS: Final = "Every Monday at 9am, list last week's new bugs in one new Jira ticket"
+OFFER_REQUESTS: Final = {
+    "github.releases": EXAMPLES[0].text,
+    "jira.read": WEEKLY_BUGS,
+    "jira.find_by_update": WEEKLY_BUGS,
+    "summarise": WEEKLY_BUGS,
+    "jira.create": WEEKLY_BUGS,
+}
+"""For each Ready capability a free reply's can't may offer, the request its button sends
+(ADR 0047). They are not Home's ideas, so they live here and not in `EXAMPLES`."""
+
 WRITES: Final = words(
     "close resolve cancel reopen delete remove purge erase wipe destroy trash discard drop archive "
     "update edit change modify rename replace rewrite set label tag flag mark prioritise "
@@ -1368,6 +1379,12 @@ def one_line_cant(entry: CapabilitySpec) -> str:
 def _cant_sentence(what: str, reader: _Reader) -> str:
     yet = "" if _is_unsupported(what) else " yet"
     return f"I can't {what}{yet}. {reader.can()}"
+
+
+def names_no_ability(note: str) -> bool:
+    """Whether a can't's note is only the request's own words before "I can only ...": the
+    sentence the Planner writes when it found no ability the request is close to."""
+    return note.endswith(f". {_reader(ABILITIES).can()}")
 
 
 def why_not(kind: RowKind, text: str, abilities: tuple[Ability, ...] = ABILITIES) -> str | None:

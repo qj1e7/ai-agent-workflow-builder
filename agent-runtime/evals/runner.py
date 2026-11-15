@@ -10,7 +10,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 from urllib.parse import unquote
 
 from langchain_core.language_models import BaseChatModel
@@ -25,10 +25,26 @@ from evals.draft import DRAFT
 from evals.explain import EXPLAIN
 from evals.jobs import Answer, Case, Job, marked
 from evals.providers import PROVIDERS, Env, NotRun, Target, plan
+from evals.red_team import RED_TEAM
+from evals.reply import REPLY, REPLY_DEV, REPLY_GATE
 from evals.report import report
 from evals.summarise import SUMMARISE
 
-JOBS: tuple[Job[Any], ...] = (SUMMARISE, EXPLAIN, DRAFT, CHOOSE, ANSWER, ANYTHING)
+JOBS: tuple[Job[Any], ...] = (
+    SUMMARISE,
+    EXPLAIN,
+    DRAFT,
+    CHOOSE,
+    ANSWER,
+    ANYTHING,
+    REPLY,
+    REPLY_GATE,
+    REPLY_DEV,
+    RED_TEAM,
+)
+PARTS_OF_REPLY: Final = frozenset({REPLY_GATE.name, REPLY_DEV.name})
+"""Jobs that run part of the reply job's cases. A run of every job leaves them out, so it runs
+each case once."""
 PRICING = Path(__file__).parent / "pricing.json"
 # CI keeps the endpoints as secrets too. A URL can hold a password or a private host name.
 URL_ENVS = ("AZURE_OPENAI_ENDPOINT", "OLLAMA_BASE_URL", "AGENT_MODEL_BASE_URL")
@@ -268,7 +284,7 @@ def model_for(job: Job[Any], target: Target, shared: BaseChatModel) -> BaseChatM
 def jobs_chosen(env: Env) -> tuple[Job[Any], ...]:
     wanted = [name.strip() for name in env.get("EVAL_JOBS", "").split(",") if name.strip()]
     if not wanted:
-        return JOBS
+        return tuple(job for job in JOBS if job.name not in PARTS_OF_REPLY)
     unknown = sorted(set(wanted) - {job.name for job in JOBS})
     if unknown:
         raise ValueError(f"EVAL_JOBS names no job: {', '.join(unknown)}")

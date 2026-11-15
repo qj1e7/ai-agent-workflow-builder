@@ -205,6 +205,8 @@
   font: inherit;
   font-size: 0.88rem;
   font-weight: 600;
+  text-align: left;
+  overflow-wrap: anywhere;
   cursor: pointer;
   transition:
     border-color var(--dur-press) ease,

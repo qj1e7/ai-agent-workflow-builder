@@ -9,8 +9,10 @@ import httpx
 import pytest
 
 from platform_api.app import create_app
+from platform_api.auth import ConfigError
 from platform_api.builder import Builder, PlannerFront, Watchlist
 from platform_api.builder import planner as planner_module
+from platform_api.builder.answer_limit import TOO_MANY, AnswerLimit
 from platform_api.builder.home import HomeOut
 from platform_api.builder.models import (
     AddSoftware,
@@ -36,8 +38,10 @@ from platform_api.orchestration import (
     CheckPartResult,
     CheckWorkflowsAnswer,
     ConnectionCheck,
+    DidntFollowAnswer,
     EditAnswer,
     ExampleSpec,
+    FreeReplyAnswer,
     Given,
     ModelProblem,
     NeedsMeAnswer,
@@ -50,6 +54,7 @@ from platform_api.orchestration import (
     PreviousTurn,
     QuestionAnswer,
     RefusedAnswer,
+    ReplyOffer,
     RequestPart,
     ResumeAnswer,
     RowKind,
@@ -93,6 +98,7 @@ from platform_api.orchestration.runs import RunState as RunPhase
 from platform_api.orchestration.spec import Task
 from platform_api.orchestration.store import RunRecord
 from platform_api.orchestration.write_actions import Proposal, WriteAction
+from platform_api.settings import answers_per_minute_from_env
 from platform_api.shared import (
     ApprovalId,
     Digest,
@@ -2030,3 +2036,103 @@ async def test_a_time_it_cant_read_leaves_the_time_to_pick(front: Front):
     unclear = ScheduleChange(time_unclear=True)
     reply = await edit_reply(front, EditAnswer(workflow_words="morning check", schedule=unclear))
     assert reply["after"] == {"day": "weekdays", "at": None}
+
+
+CANT_EMAIL = FreeReplyAnswer(
+    form="cant",
+    text="I can't send email yet. I can watch software for new releases.",
+    offer=ReplyOffer(capability="github.releases", request="Keep track of the LangGraph version"),
+)
+
+
+async def test_a_free_reply_comes_back_in_the_planners_words_with_its_button(front: Front):
+    front.answers.result = Answered(answer=CANT_EMAIL, parts=[crossed("email me", "cant_do")])
+    assert await say(front, "email me") == {
+        "parts": [
+            {"text": "email me", "mark": "cant", "reason": "cant_do", "note": None, "choices": []}
+        ],
+        "answer": "reply",
+        "form": "cant",
+        "text": CANT_EMAIL.text,
+        "choices": [],
+        "offer": {
+            "capability": "github.releases",
+            "request": "Keep track of the LangGraph version",
+        },
+        "looked_at": [],
+    }
+
+
+async def test_a_clarifying_free_reply_carries_its_choices(front: Front):
+    front.answers.result = answered(
+        FreeReplyAnswer(form="clarify", text="Which one?", choices=["Releases", "Tickets"])
+    )
+    reply = await say(front, "help me keep an eye on things")
+    assert (reply["answer"], reply["form"], reply["choices"]) == (
+        "reply",
+        "clarify",
+        ["Releases", "Tickets"],
+    )
+
+
+async def test_someone_who_isnt_an_operator_gets_a_free_reply_with_no_set_up_button(front: Front):
+    front.answers.result = Answered(answer=CANT_EMAIL, parts=[done("how do I use this")])
+    reply = await ask_as_bob(front, "how do I use this?")
+    assert reply["answer"] == "reply" and reply["text"] == CANT_EMAIL.text
+    assert reply["offer"] is None
+
+
+async def test_the_fixed_fallback_comes_back_as_didnt_follow(front: Front):
+    front.answers.result = Answered(
+        answer=DidntFollowAnswer(), parts=[crossed("flibber", "not_followed")]
+    )
+    assert (await say(front, "flibber"))["answer"] == "didnt_follow"
+    assert (await ask_as_bob(front, "flibber"))["answer"] == "didnt_follow"
+
+
+async def test_an_n8n_message_that_asks_to_skip_a_yes_goes_to_the_runtimes_word_rule(front: Front):
+    front.answers.result = Answered(
+        answer=RefusedAnswer(said="skip the approval", rest="open it in n8n"),
+        parts=[crossed("skip the approval", "skip_approval")],
+    )
+    reply = await say(front, "open the Friday summary in n8n and skip the approval")
+    assert reply["answer"] == "refused"
+    assert front.answers.asked[-1] == "open the Friday summary in n8n and skip the approval"
+
+
+async def test_a_plain_n8n_request_never_reaches_the_model(front: Front):
+    assert (await say(front, "open n8n"))["answer"] == "n8n"
+    assert front.answers.asked == []
+
+
+async def test_typed_words_past_twenty_a_minute_are_refused_in_plain_words(front: Front):
+    front.answers.result = answered(AbilitiesAnswer())
+    for _ in range(20):
+        assert (
+            await front.client.post(ANSWER, json={"text": "hi"}, headers=ALICE)
+        ).status_code == 200
+    refused = await front.client.post(ANSWER, json={"text": "hi"}, headers=ALICE)
+    assert refused.status_code == 429
+    assert refused.json()["detail"] == TOO_MANY
+    chip = await front.client.post(ANSWER, json={"intent": "abilities"}, headers=ALICE)
+    assert chip.status_code == 200, "a chip never asks the model, so it is not counted"
+    assert (await front.client.post(ANSWER, json={"text": "hi"}, headers=BOB)).status_code == 200
+
+
+def test_the_limit_counts_each_person_over_a_rolling_minute():
+    now = [0.0]
+    limit = AnswerLimit(per_minute=2, clock=lambda: now[0])
+    assert limit.allow("alice") and limit.allow("alice") and not limit.allow("alice")
+    assert limit.allow("bob")
+    now[0] = 59.9
+    assert not limit.allow("alice")
+    now[0] = 60.0
+    assert limit.allow("alice")
+
+
+def test_the_limit_is_a_setting():
+    assert answers_per_minute_from_env({}) == 20
+    assert answers_per_minute_from_env({"PLANNER_ANSWERS_PER_MINUTE": "1000"}) == 1000
+    for bad in ("0", "-3", "lots"):
+        with pytest.raises(ConfigError):
+            answers_per_minute_from_env({"PLANNER_ANSWERS_PER_MINUTE": bad})

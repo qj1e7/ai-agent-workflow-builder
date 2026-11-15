@@ -12,6 +12,7 @@ from agent_runtime.contract import (
     AbilitiesAnswer,
     Answered,
     AnswerRequest,
+    DidntFollowAnswer,
     EditAnswer,
     NeedsYouFact,
     PauseAnswer,
@@ -30,6 +31,8 @@ from agent_runtime.questions import (
     COULD_NOT_ANSWER,
     QUESTION_SYSTEM,
     QuestionReply,
+    answer_of_reply,
+    could_not_answer,
     workflows_rule,
 )
 from agent_runtime.reading import TicketRead
@@ -64,9 +67,11 @@ def ask(
     task: str = QUESTION,
     first: TaskRead | None = None,
 ) -> tuple[Any, ScriptedChat]:
+    """The answer with the free reply turned off, so a dead end shows as the fixed fallback and
+    these tests stay about the lane (ADR 0047)."""
     chat = ScriptedChat(structured=[first or reading(), reply])
     request = AnswerRequest(task=task, model=answer_request().model, facts=facts)
-    return answer_task(request, lambda timeout: chat), chat
+    return answer_task(request, lambda timeout: chat, free_reply=False), chat
 
 
 def test_a_question_about_the_persons_data_is_answered_from_the_facts_in_the_models_words():
@@ -109,11 +114,11 @@ def test_sections_are_listed_in_the_order_the_facts_hold_them():
     assert result.answer.looked_at == ["watchlist", "workflows", "needs_you"]
 
 
-def test_no_facts_means_no_lane_so_the_fixed_answer_stands_and_the_model_is_asked_once():
+def test_no_facts_means_no_lane_so_the_catch_all_is_a_dead_end_and_the_lane_is_not_asked():
     reply = QuestionReply(about_their_data=True, text="Three.")
     for facts in (None, PlannerFacts()):
         result, chat = ask(reply, facts=facts)
-        assert isinstance(result, Answered) and result.answer == AbilitiesAnswer()
+        assert isinstance(result, Answered) and result.answer == DidntFollowAnswer()
         assert len(chat.calls) == 1
 
 
@@ -130,8 +135,10 @@ def test_no_facts_means_no_lane_so_the_fixed_answer_stands_and_the_model_is_aske
     ],
 )
 def test_a_reply_that_offers_to_act_or_runs_long_gets_the_fixed_text(text: str):
-    result, _ = ask(QuestionReply(about_their_data=True, text=text))
-    assert result.answer == QuestionAnswer(text=COULD_NOT_ANSWER, looked_at=[])
+    reply = QuestionReply(about_their_data=True, text=text)
+    assert answer_of_reply(reply, FACTS) == could_not_answer()
+    result, _ = ask(reply)
+    assert result.answer == DidntFollowAnswer()
 
 
 def test_a_plain_cant_is_not_an_offer():
@@ -140,10 +147,10 @@ def test_a_plain_cant_is_not_an_offer():
     assert result.answer.text == "I can't see Postgres on the watchlist."
 
 
-def test_a_second_call_that_fails_gives_the_first_answer():
+def test_a_second_call_that_fails_gives_the_first_answer_which_for_the_catch_all_is_a_dead_end():
     slow = type("ReadTimeout", (Exception,), {})("took too long")
     result, _ = ask(slow)
-    assert isinstance(result, Answered) and result.answer == AbilitiesAnswer()
+    assert isinstance(result, Answered) and result.answer == DidntFollowAnswer()
 
 
 def test_the_catch_all_is_sent_to_the_lane_and_a_no_keeps_the_abilities_answer():
@@ -153,9 +160,9 @@ def test_the_catch_all_is_sent_to_the_lane_and_a_no_keeps_the_abilities_answer()
     assert chat.asked == [TaskRead, QuestionReply]
 
 
-def test_without_facts_the_catch_all_stays_abilities_and_the_lane_is_not_asked():
+def test_without_facts_the_catch_all_is_a_dead_end_and_the_lane_is_not_asked():
     result, chat = ask(QuestionReply(about_their_data=True, text="Three."), facts=None)
-    assert isinstance(result, Answered) and result.answer == AbilitiesAnswer()
+    assert isinstance(result, Answered) and result.answer == DidntFollowAnswer()
     assert len(chat.calls) == 1
 
 
@@ -231,8 +238,8 @@ def test_decide_leaves_which_software_cants_and_tasks_alone():
     ],
 )
 def test_more_offer_phrasings_fall_back_to_the_fixed_text(offer: str):
-    result, _ = ask(QuestionReply(about_their_data=True, text=f"Three. {offer}"))
-    assert result.answer == QuestionAnswer(text=COULD_NOT_ANSWER, looked_at=[])
+    reply = QuestionReply(about_their_data=True, text=f"Three. {offer}")
+    assert answer_of_reply(reply, FACTS) == could_not_answer()
 
 
 def test_the_prompt_keeps_the_facts_out_of_the_answer():
@@ -301,10 +308,10 @@ def test_a_second_call_that_fails_on_the_watched_watchlist_route_gives_the_first
     assert chat.asked == [TaskRead, QuestionReply]
 
 
-def test_the_catch_all_keeps_the_fixed_text_when_the_guards_reject():
+def test_the_catch_all_with_the_fixed_text_is_a_dead_end_when_the_guards_reject():
     reply = QuestionReply(about_their_data=True, text="Three. I can set up a check for you.")
     out, _ = ask(reply)
-    assert out.answer == QuestionAnswer(text=COULD_NOT_ANSWER, looked_at=[])
+    assert out.answer == DidntFollowAnswer()
 
 
 PREVIOUS = PreviousTurn(request="What is the newest version of LangGraph?", software=None)
@@ -480,9 +487,9 @@ def test_the_fixed_fallback_is_about_no_software():
     reply = QuestionReply(
         about_their_data=True, text="LangGraph. I can add it.", about_software=["LangGraph"]
     )
-    result, _ = ask(reply)
-    assert result.answer == QuestionAnswer(text=COULD_NOT_ANSWER, looked_at=[])
-    assert result.answer.about_software == []
+    fixed = answer_of_reply(reply, FACTS)
+    assert fixed == QuestionAnswer(text=COULD_NOT_ANSWER, looked_at=[])
+    assert fixed is not None and fixed.about_software == []
 
 
 @pytest.mark.parametrize(

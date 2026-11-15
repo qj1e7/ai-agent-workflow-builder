@@ -7,7 +7,7 @@ import { deskOf, desksReducer, panelOf, type DeskAction, type Desks, type Note }
 import { newCardMemory, type CardMemory } from './cardMemory'
 import { arrivalKey, unseenArrivals } from './changed'
 import type { CardStart } from './SetupCard'
-import { isThinking, previousOf, type Thread } from './threadState'
+import { askOf, isThinking, type Thread } from './threadState'
 
 export const SEND_FAILED = 'That didn’t send. Try again.'
 export const DRAFT_SAVED = 'Your draft is saved. Find it on Workflows.'
@@ -36,6 +36,8 @@ export interface Chat {
   readonly askBehind: (shown: string) => void
   /** Sends what is in the box, following on from the last answer. */
   readonly sendText: () => void
+  /** Sends words she tapped, such as a choice or an offer, following on from the last answer as typed words do. */
+  readonly sendWords: (words: string) => void
   readonly resume: (start: CardStart) => void
   /** Shows each version published in n8n that this chat has not shown yet, oldest first. A new chat does not show one again. */
   readonly arrive: (found: readonly ChangedInN8nReply[]) => void
@@ -125,8 +127,10 @@ export function ChatProvider({ children, initial = {} }: { children: ReactNode; 
       sendText: () => {
         const typed = desk.text.trim()
         if (typed === '' || busy) return
-        const previous = previousOf(thread)
-        send(previous === null ? { text: typed } : { text: typed, previous }, typed, desk.text)
+        send(askOf(typed, thread), typed, desk.text)
+      },
+      sendWords: (words) => {
+        if (!busy) send(askOf(words, thread), words, null)
       },
       resume: (start) => here({ type: 'resumed', start }),
       arrive: (found) => {

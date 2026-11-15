@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import editCant from '../../../../contracts/fixtures/planner/answer.edit.cant.json'
 import editUnclear from '../../../../contracts/fixtures/planner/answer.edit.unclear.json'
 import type { PartView, PlannerReply } from '../../api/types'
-import { crossWords, leftoverParts, partMark } from './parts'
+import { askOfCross, crossWords, leftoverParts, partMark } from './parts'
 
 const crossed = (text: string, reason: PartView['reason']): PartView => ({ text, mark: 'cant', reason, note: null, choices: [] })
 
@@ -35,5 +35,33 @@ describe('the mark of one of the card’s three parts, from the marks of what it
     expect(partMark(['ok', 'later'])).toBe('later')
     expect(partMark(['ok', 'ok'])).toBe('ok')
     expect(partMark([]), 'a part with nothing in it is left off the card, so its mark is never read').toBe('ok')
+  })
+})
+
+describe('the next step of a cross', () => {
+  it('asks a clause it didn’t follow, or one that is a question of its own, as its own message', () => {
+    expect(askOfCross(crossed('flibber the wotsit', 'not_followed'))).toBe('flibber the wotsit')
+    expect(askOfCross(crossed('how many tickets are open?', 'ask_on_its_own'))).toBe('how many tickets are open?')
+  })
+
+  it('treats a cross with no reason as one it didn’t follow, as its words do', () => {
+    expect(askOfCross(crossed('flibber', null))).toBe('flibber')
+  })
+
+  it('leaves a watch request’s own time to the Software watchlist’s offer', () => {
+    expect(askOfCross(crossed('every weekday at 9', 'own_time'))).toBeNull()
+  })
+
+  it('leaves a cross that already sits on a card with its own button alone', () => {
+    expect(askOfCross(crossed('send email', 'cant_do'))).toBeNull()
+    expect(askOfCross(crossed('skip the yes', 'skip_approval'))).toBeNull()
+  })
+})
+
+describe('a free reply and the fallback card draw no crosses', () => {
+  const part = crossed('flibber', 'not_followed')
+  it('answers the whole message, so none is left over', () => {
+    expect(leftoverParts({ answer: 'reply', form: 'answer', text: 'Hi.', choices: [], offer: null, looked_at: [], parts: [part] })).toEqual([])
+    expect(leftoverParts({ answer: 'didnt_follow', parts: [part] })).toEqual([])
   })
 })

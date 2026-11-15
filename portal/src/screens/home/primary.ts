@@ -15,3 +15,6 @@ export function useMainButton(): 'primary' | 'secondary' {
  * is ever open for editing and the page's address names that one draft.
  */
 export const CardLive = createContext(true)
+
+/** Sends words to the Planner as a new question. A cross's next step uses it, wherever the cross is drawn. Outside the thread there is none, so no such button is drawn. */
+export const AskPlanner = createContext<((text: string) => void) | null>(null)

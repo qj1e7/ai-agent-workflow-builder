@@ -1,0 +1,23 @@
+{
+  "status": "answered",
+  "answer": {
+    "kind": "reply",
+    "form": "cant",
+    "text": "I can't send email yet. I can put the list in one new Jira ticket, after an Approver's yes.",
+    "choices": [],
+    "offer": {
+      "capability": "jira.create",
+      "request": "Every Monday at 9am, list last week's new bugs in one new Jira ticket"
+    },
+    "looked_at": []
+  },
+  "parts": [
+    {
+      "text": "email the bug list to my manager",
+      "mark": "cant",
+      "reason": "cant_do",
+      "note": null,
+      "choices": []
+    }
+  ]
+}

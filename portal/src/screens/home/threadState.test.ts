@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { PlannerReply } from '../../api/types'
 import { EMPTY_FORM } from './card'
-import { EMPTY, isThinking, previousOf, threadReducer } from './threadState'
+import { askOf, EMPTY, isThinking, previousOf, threadReducer } from './threadState'
 
 const REPLY: PlannerReply = { answer: 'abilities', how_to_start: false, parts: [] }
 
@@ -42,6 +42,13 @@ describe('the thread', () => {
     expect(previousOf(ask({ answer: 'offline', why: 'trouble', message: 'x', starters: [], parts: [] }, 'x'))).toBeNull()
   })
 
+  it('sends tapped words with the turn before, so a choice after a clarifying question says so', () => {
+    expect(askOf('Redis', EMPTY)).toEqual({ text: 'Redis' })
+    const clarify: PlannerReply = { answer: 'reply', form: 'clarify', text: 'Which software?', choices: ['Redis', 'Kafka'], offer: null, looked_at: [], parts: [] }
+    const asked = threadReducer(threadReducer(EMPTY, { type: 'sent', text: 'watch it' }), { type: 'answered', reply: clarify, typed: 'watch it' })
+    expect(askOf('Redis', asked)).toEqual({ text: 'Redis', previous: { request: 'watch it', software: null, answer: 'Which software?', kind: 'reply_clarify' } })
+  })
+
   it('does not hand over a request that has no answer yet', () => {
     expect(previousOf(threadReducer(EMPTY, { type: 'sent', text: 'a' }))).toBeNull()
   })
@@ -61,5 +68,23 @@ describe('the thread', () => {
     expect(isThinking(asked)).toBe(false)
     expect(asked.messages.at(-1)?.id).toBe(asked.last)
     expect(previousOf(asked)).toEqual(previousOf(talked))
+  })
+})
+
+describe('the turn before, for a free reply', () => {
+  const free = (form: 'answer' | 'clarify' | 'cant', text: string): PlannerReply => ({ answer: 'reply', form, text, choices: form === 'clarify' ? ['a', 'b'] : [], offer: null, looked_at: [], parts: [] })
+  const after = (reply: PlannerReply) => previousOf(threadReducer(threadReducer(EMPTY, { type: 'sent', text: 'hmm' }), { type: 'answered', reply, typed: 'hmm' }))
+
+  it('sends a clarifying question as reply_clarify, with its words, so the runtime refuses a second one in a row', () => {
+    expect(after(free('clarify', 'Which one?'))).toEqual({ request: 'hmm', software: null, answer: 'Which one?', kind: 'reply_clarify' })
+  })
+
+  it('sends an answer and a can’t as plain reply, with their words', () => {
+    expect(after(free('answer', 'Type what you want.'))).toMatchObject({ answer: 'Type what you want.', kind: 'reply' })
+    expect(after(free('cant', 'I can’t send email yet.'))).toMatchObject({ answer: 'I can’t send email yet.', kind: 'reply' })
+  })
+
+  it('carries no words from the fallback card', () => {
+    expect(after({ answer: 'didnt_follow', parts: [] })).toMatchObject({ answer: null, kind: 'didnt_follow' })
   })
 })

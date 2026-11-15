@@ -6,7 +6,7 @@ from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from platform_api.auth import AuthConfig, ConfigError, auth_config
-from platform_api.shared import JIRA_PROJECT_PATTERN, TEAM_TIME_ZONE
+from platform_api.shared import ANSWERS_PER_MINUTE, JIRA_PROJECT_PATTERN, TEAM_TIME_ZONE
 
 type Context = Literal["builder", "orchestration", "monitoring"]
 type ActivityReader = Literal["postgres", "cosmos"]
@@ -131,6 +131,9 @@ class Settings:
     jira: JiraSettings = JiraSettings()
     confluence: ConfluenceSettings = ConfluenceSettings()
     team_time_zone: ZoneInfo = TEAM_TIME_ZONE
+    planner_answers_per_minute: int = ANSWERS_PER_MINUTE
+    """PLANNER_ANSWERS_PER_MINUTE: how many typed requests one person may send the Planner in a
+    minute (ADR 0047). The end-to-end suite raises it, since it sends many as one person."""
     node_key: str | None = field(default=None, repr=False)
     """WAB_NODE_KEY, which our n8n node pack sends. Without it no node call is taken."""
     start_secret: str | None = field(default=None, repr=False)
@@ -460,12 +463,22 @@ def settings_from_env(env: Mapping[str, str]) -> Settings:
         jira=jira,
         confluence=confluence_from_env(env, jira),
         team_time_zone=team_time_zone_from_env(env),
+        planner_answers_per_minute=answers_per_minute_from_env(env),
         node_key=env.get("WAB_NODE_KEY", "").strip() or None,
         start_secret=env.get("WAB_START_SECRET", "").strip() or None,
         n8n_owner=n8n_owner,
         n8n_staff_access=staff_access_from_env(env, n8n_owner),
         n8n_editor_url=n8n_editor_url_from_env(env),
     )
+
+
+def answers_per_minute_from_env(env: Mapping[str, str]) -> int:
+    raw = env.get("PLANNER_ANSWERS_PER_MINUTE", "").strip()
+    if not raw:
+        return ANSWERS_PER_MINUTE
+    if not raw.isdigit() or int(raw) < 1:
+        raise ConfigError("PLANNER_ANSWERS_PER_MINUTE must be a whole number of at least 1.")
+    return int(raw)
 
 
 def n8n_owner_from_env(env: Mapping[str, str]) -> N8nOwner | None:
