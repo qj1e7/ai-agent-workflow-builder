@@ -558,6 +558,11 @@ def reading(task: str) -> dict[str, Any]:
         if TICKET_WORDS.search(rest):
             read.update(structures(rest))
             read["name"] = name_of(rest)
+        # As the real model does: a time the watch's own words give, as "every Thursday at 7am".
+        watch = " and ".join(c for c in CLAUSE.split(task) if RELEASE_WORDS.search(c))
+        when = SCHEDULE.search(watch)
+        if read["schedule"] is None and when is not None:
+            read["schedule"] = when.group(0)
         return read
     if VULNERABILITY_WORDS.search(task) and TICKET_WORDS.search(task) is None:
         read["name"] = name_of(task)

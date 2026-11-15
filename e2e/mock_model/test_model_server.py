@@ -505,6 +505,11 @@ class ReadTest(unittest.TestCase):
         self.assertEqual(read["ticket"], None)
         self.assertEqual(read["search"]["updated"], {"how": "before", "days": 14})
 
+    def test_a_watch_request_keeps_the_time_its_own_words_give(self) -> None:
+        read = server.reading("Watch LangGraph releases every Thursday at 7am")
+        self.assertEqual((read["belongs_on_watchlist"], read["software"]), (True, "LangGraph"))
+        self.assertEqual(read["schedule"], "every Thursday at 7am")
+
     def test_a_mixed_request_is_the_watchlist_with_the_rest_in_the_structures(self) -> None:
         read = server.reading("Watch React releases and list stale bug tickets every Friday")
         self.assertEqual((read["belongs_on_watchlist"], read["software"]), (True, "React"))

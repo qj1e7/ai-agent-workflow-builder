@@ -2,7 +2,8 @@ import type { ReactNode } from 'react'
 import type { PartView, PlannerReply } from '../../api/types'
 import { useWatchlist } from '../../api/queries'
 import { useOperatorsSay } from '../../shell/OperatorsNote'
-import { Button } from '../../ui/Button'
+import { buttonClassName } from '../../ui/Button'
+import { cx } from '../../ui/cx'
 import { IconCheck, IconX } from '../../ui/icons'
 import { useAsker } from './asker'
 import { crossLabel, crossWords, leftoverParts, MARK_WORDS, watchlistRuns, type CrossContext, type Mark } from './parts'
@@ -71,7 +72,11 @@ export function Leftovers({ reply, ask }: { reply: PlannerReply; ask?: (text: st
   const offer = (part: PartView) => {
     if (!ask || !operator || part.reason !== 'own_time') return null
     const words = watchlistRuns(part.text)
-    return <Button onClick={() => ask(words)}>{words}</Button>
+    return (
+      <button type="button" className={cx(buttonClassName(), styles['offer'])} onClick={() => ask(words)}>
+        {words}
+      </button>
+    )
   }
   return (
     <div className={styles['leftovers']}>

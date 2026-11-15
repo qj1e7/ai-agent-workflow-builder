@@ -550,6 +550,22 @@ test.describe('with the AI model on', () => {
     await context.close()
   })
 
+  test('OWN-time: a watch request’s own time is offered to the whole watchlist, and the offer gets the edit card', async ({ browser }) => {
+    const context = await devContext(browser, 'alice')
+    const page = await context.newPage()
+    const watch = watchPage(page)
+    const messages = () => thread(page).locator(':scope > li')
+    await page.goto('/')
+    await ask(page, 'Watch LangGraph releases every Thursday at 7am')
+    const offer = messages().last().getByRole('button', { name: 'Make the Software watchlist run every Thursday at 7am' })
+    await expect(offer).toBeVisible()
+    await offer.click()
+    await expect(editCard(messages().last()), 'the Planner answers the offer with the edit card').toBeVisible({ timeout: 30_000 })
+    await expect(editCard(messages().last()).getByRole('button', { name: 'Save change' }), 'nothing changes until she saves it').toBeVisible()
+    assertClean(watch)
+    await context.close()
+  })
+
   test('a new answer comes into view, from its top when it is taller than the conversation', async ({ browser }, info) => {
     const context = await devContext(browser, 'alice')
     const page = await context.newPage()
