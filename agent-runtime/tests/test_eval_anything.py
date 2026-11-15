@@ -23,6 +23,8 @@ from agent_runtime.contract import (
     CantAnswer,
     CantRow,
     CheckWorkflowsAnswer,
+    DidntFollowAnswer,
+    FreeReplyAnswer,
     ModelProblem,
     NeedsMeAnswer,
     PlannerAnswer,
@@ -142,7 +144,7 @@ def test_a_message_crossed_end_to_end_fails_unless_the_case_allows_it() -> None:
     [
         (question(COULD_NOT_ANSWER).model_copy(update={"looked_at": []}), False),
         (question("LangGraph is behind: 1.2.14, and the newest is 1.2.16."), True),
-        (CantAnswer(cant=[CantRow(kind="do", text="close", note="No.", unsupported=True)]), False),
+        (CantAnswer(cant=[CantRow(kind="do", text="close", note="No.", unsupported=True)]), True),
         (
             CantAnswer(cant=[CantRow(kind="do", text="email", note="No.", instead="A ticket.")]),
             True,
@@ -259,3 +261,28 @@ def test_a_state_answer_shows_the_persons_own_state_as_the_portal_does() -> None
         "You have 1 workflow.",
         "- Morning new-ticket check: on, last run Done",
     ]
+
+
+def test_a_free_reply_fits_where_abilities_a_question_or_a_cant_would() -> None:
+    shown = FreeReplyAnswer(form="answer", text="Hello! Type what you want done in the box.")
+    said = part("hi", "will_do")
+    assert scored(case(kinds=["abilities", "question"]), shown, said) == {}
+    assert "acceptable_kind" in scored(case(kinds=["setup_card"]), shown, said)
+
+
+def test_the_fixed_fallback_is_never_an_acceptable_answer() -> None:
+    crossed = part("hi", "cant", "not_followed")
+    failed = scored(case(kinds=["abilities", "question", "cant"]), DidntFollowAnswer(), crossed)
+    assert failed["acceptable_kind"] == "didnt_follow"
+
+
+def test_a_free_reply_cant_is_no_cross_but_its_words_are_held_to_the_claim_and_style_checks() -> (
+    None
+):
+    cant = FreeReplyAnswer(form="cant", text="I can't book meeting rooms. Tap Ask the team.")
+    crossed = part("book me a room", "cant", "cant_do")
+    assert scored(case(kinds=["cant"]), cant, crossed) == {}
+    done = FreeReplyAnswer(form="answer", text="I've created the ticket for you.")
+    assert "no_done_claim" in scored(case(kinds=["question"]), done, part("x"))
+    long = FreeReplyAnswer(form="answer", text="One. Two. Three. Four. Five.")
+    assert "plain_and_short" in scored(case(kinds=["question"]), long, part("x"))

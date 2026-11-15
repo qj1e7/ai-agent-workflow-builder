@@ -102,6 +102,9 @@ type Kind = Literal[
     "pause",
     "resume",
 ]
+FREE_REPLY_FITS: Final = frozenset({"abilities", "question", "cant"})
+"""A case that accepts the list of abilities, a question answer or a can't also accepts a free
+reply, which ADR 0047 puts where those dead-ended. The fixed fallback is never acceptable."""
 
 HOME_FACTS: Final = PlannerFacts.model_validate(
     {
@@ -295,14 +298,20 @@ def score(case: AnythingCase, answer: Answer) -> list[Check]:
     shown = result.answer
     return [
         check("answered", []),
-        check("acceptable_kind", [] if shown.kind in case.kinds else [shown.kind]),
+        check("acceptable_kind", [] if _acceptable(case, shown) else [shown.kind]),
         _refusal(case, shown),
-        check("not_all_crossed", _whole_crossed(case, result.parts)),
+        check("not_all_crossed", _whole_crossed(case, shown, result.parts)),
         check("gives_a_next_step", [] if next_step(shown) else [f"{shown.kind}, no way on"]),
         check("no_unbuilt_claim", unbuilt_claims(shown)),
         check("no_done_claim", done_claims(" ".join(own_words(shown)))),
         check("plain_and_short", style_problems(shown, case.facts)),
     ]
+
+
+def _acceptable(case: AnythingCase, shown: PlannerAnswer) -> bool:
+    if isinstance(shown, FreeReplyAnswer):
+        return bool(FREE_REPLY_FITS & set(case.kinds))
+    return shown.kind in case.kinds
 
 
 def _refusal(case: AnythingCase, shown: PlannerAnswer) -> Check:
@@ -312,9 +321,12 @@ def _refusal(case: AnythingCase, shown: PlannerAnswer) -> Check:
     return check("no_false_refusal", said)
 
 
-def _whole_crossed(case: AnythingCase, parts: list[RequestPart]) -> list[str]:
+def _whole_crossed(case: AnythingCase, shown: PlannerAnswer, parts: list[RequestPart]) -> list[str]:
     """A message is never told to ask on its own what it already asked on its own, and, unless
-    the case allows it, never comes back crossed from end to end."""
+    the case allows it, never comes back crossed from end to end. A free reply answers the whole
+    message in words, so its can't is no cross: whether it helps is the judge's to score."""
+    if isinstance(shown, FreeReplyAnswer):
+        return []
     crossed = [p for p in parts if p.mark == "cant"]
     if len(parts) == 1 and crossed and crossed[0].reason == "ask_on_its_own":
         return [f"asks to ask “{crossed[0].text}” on its own, as it was"]
@@ -324,19 +336,14 @@ def _whole_crossed(case: AnythingCase, parts: list[RequestPart]) -> list[str]:
 
 
 def next_step(shown: PlannerAnswer) -> bool:
-    """Whether the person has somewhere to go: an answer, a card, a choice, or a can't with what
-    they have instead, a close alternative, or Ask the team."""
+    """Whether the person has somewhere to go: an answer, a card, a choice, or a can't. Every can't
+    now carries a button in the Portal: its alternative, Ask the team (even for what the platform
+    won't do), or Ask about this on a part it didn't follow (ADR 0047)."""
     match shown:
         case QuestionAnswer():
             return not is_fallback(shown)
-        case CantAnswer():
-            return shown.alternative is not None or any(_way_on(row) for row in shown.cant)
         case _:
             return True
-
-
-def _way_on(row: CantRow) -> bool:
-    return row.instead is not None or (row.needs is not None and not row.unsupported)
 
 
 def cards_of(shown: PlannerAnswer | None) -> list[SetupCardAnswer | PartAnswer]:
@@ -355,7 +362,7 @@ def own_words(shown: PlannerAnswer) -> list[str]:
     """The words the model wrote itself that the person reads: a card's name and a question's
     answer. Code writes every other line from closed structures, or quotes the person."""
     found = [card.name for card in cards_of(shown)]
-    return found + ([shown.text] if isinstance(shown, QuestionAnswer) else [])
+    return found + ([shown.text] if isinstance(shown, QuestionAnswer | FreeReplyAnswer) else [])
 
 
 def unbuilt_claims(shown: PlannerAnswer) -> list[str]:
@@ -376,6 +383,8 @@ LIST_ITEM: Final = re.compile(r"^\s*(?:[-*•]|\d+[.)])\s+")
 MARKUP: Final = re.compile(r"\*\*|__|`|^#+\s|\|", re.MULTILINE)
 SELF_TALK: Final = re.compile(r"\b(?:the facts|data I was given|JSON|snapshot)\b", re.IGNORECASE)
 MOST_SENTENCES: Final = 3
+MOST_FREE_SENTENCES: Final = 4
+"""The free reply's prompt allows four short sentences, the question answer's three."""
 MOST_ITEMS: Final = 6
 MOST_WORDS: Final = 80
 NAME_WORDS: Final = range(2, 6)
@@ -390,14 +399,15 @@ def style_problems(shown: PlannerAnswer, facts: PlannerFacts) -> list[str]:
         for c in cards_of(shown)
         if len(c.name.split()) not in NAME_WORDS
     ]
-    if not isinstance(shown, QuestionAnswer):
+    if not isinstance(shown, QuestionAnswer | FreeReplyAnswer):
         return found
     text = shown.text
+    most = MOST_FREE_SENTENCES if isinstance(shown, FreeReplyAnswer) else MOST_SENTENCES
     lines = text.splitlines()
     items = [line for line in lines if LIST_ITEM.match(line)]
     prose = " ".join(line for line in lines if not LIST_ITEM.match(line))
     sentences = len(re.findall(r"[.!?](?:\s|$)", prose))
-    if sentences > MOST_SENTENCES:
+    if sentences > most:
         found.append(f"{sentences} sentences")
     if len(items) > MOST_ITEMS:
         found.append(f"{len(items)} list items")
@@ -457,7 +467,7 @@ def _said(shown: PlannerAnswer, facts: PlannerFacts) -> list[str]:
             lines = [_cant_line(c) for c in shown.cant]
             if shown.alternative is not None:
                 lines += ["What I can do instead:", *_said(shown.alternative, facts)]
-            elif any(_way_on(c) for c in shown.cant):
+            else:
                 lines.append("[Ask the team]")
             return lines
         case WatchlistAnswer():
