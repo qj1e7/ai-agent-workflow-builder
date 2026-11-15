@@ -18,6 +18,7 @@ from platform_api.builder.sweep import ASKED_GAP, Found, Regraded, VersionsSweep
 from platform_api.builder.versions import changes_between, schedule_of
 from platform_api.builder.watchlist import MovedToN8n
 from platform_api.orchestration import (
+    GRADING_RULES,
     ChangedInN8n,
     N8nError,
     N8nWorkflow,
@@ -692,6 +693,11 @@ async def test_safety_the_sweep_grades_every_workflow_again_under_new_rules_and_
     fired = ExecutionFacts(workflow_id, "trigger", None, None, before["n8n_version_id"])
     assert decide_link(fired, None, None, None, ran, NOW) == VERSION_FAILED
     assert await v.builder.sweep.sweep() == [], "graded once under these rules"
+    marked = await v.own.row(
+        "SELECT graded_by FROM builder.use_case_versions WHERE use_case_id = %s AND version = 1",
+        use_case_id,
+    )
+    assert marked == {"graded_by": f"{GRADING_RULES} {ERROR_WORKFLOW}"}
 
 
 async def test_a_look_that_fails_is_graded_at_the_next_sweep(

@@ -80,8 +80,7 @@ ADVICE: Mapping[FailureReason, Advice] = {
         "which the update removed, so the run could not carry on.",
         likely_cause="The run started before the update.",
         suggested_action="start_again",
-        suggestion="Start the workflow again. If the run was making its changes, check Jira "
-        "first, so nothing is made twice.",
+        suggestion="Start the workflow again. It runs on its own n8n workflow now.",
     ),
 }
 
@@ -168,6 +167,14 @@ SITE_CHANGED = Advice(
 )
 
 
+STOPPED_WHILE_WRITING = Advice(
+    explanation=ADVICE["StoppedByUpdate"].explanation,
+    likely_cause="The run started before the update and was making its changes.",
+    suggested_action="ask_maintainer",
+    suggestion=WRITE_STOP_ADVICE,
+)
+
+
 def explain(reason: FailureReason) -> Advice:
     return ADVICE[reason]
 
@@ -182,6 +189,8 @@ def explain_failure(failure: RunFailedData) -> Advice:
         return WRITE_REFUSED
     if failure.reason == "SafetyDenied" and failure.message == JIRA_SITE_CHANGED:
         return SITE_CHANGED
+    if failure.reason == "StoppedByUpdate" and failure.stage == "acting":
+        return STOPPED_WHILE_WRITING
     return ADVICE[failure.reason]
 
 

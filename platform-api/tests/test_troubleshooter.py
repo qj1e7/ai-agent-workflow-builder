@@ -216,6 +216,15 @@ STOPS: list[tuple[FailureStage, FailureReason, bool, str, str]] = [
         "The n8n workflow 'release-check' failed at its step 'Write action': boom",
         "A step in the workflow engine failed.",
     ),
+    (
+        "acting",
+        "StoppedByUpdate",
+        False,
+        "This run started before the update and may have partly finished. Check Jira before you "
+        "start it again.",
+        "The platform was updated while this run was on the old shared workflow, which the "
+        "update removed, so the run could not carry on.",
+    ),
 ]
 
 
