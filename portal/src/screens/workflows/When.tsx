@@ -1,12 +1,12 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { useErrorWords } from '../../api/context'
-import type { Day, ScheduleIn, UseCaseView } from '../../api/types'
+import type { Day, ScheduleSaveIn, UseCaseView } from '../../api/types'
 import { useRereadWorkflow, useSaveWorkflowSchedule } from '../../api/workflowQueries'
 import { Button } from '../../ui/Button'
 import { checkClock, DAYS, everyWords } from '../software/software'
 import { useEditorThatRefocusesItsOpener } from '../software/Schedule'
 import { useChanges } from './Status'
-import { heldNote, nextRunWords, scheduleSaver, whenWords } from './workflow'
+import { CHANGED_SINCE_OPENED, heldNote, nextRunWords, scheduleSaver, whenWords } from './workflow'
 import styles from './Workflows.module.css'
 
 const capital = (words: string): string => `${words.charAt(0).toUpperCase()}${words.slice(1)}`
@@ -15,15 +15,18 @@ const ownerWarning = 'Saving makes you the owner of this schedule. Its runs then
 
 interface EditorProps {
   readonly schedule: Pick<NonNullable<UseCaseView['schedule']>, 'day' | 'at'> | null
+  /** The version the editor opened on. A save carries it, so a teammate's later change is never saved over. */
+  readonly version: number
   readonly isPending: boolean
-  readonly save: (body: ScheduleIn, form: { onSuccess: () => void; onError: (failure: unknown) => void }) => void
+  readonly save: (body: ScheduleSaveIn, form: { onSuccess: () => void; onError: (failure: unknown) => void }) => void
   readonly onDone: () => void
 }
 
 /** The sketch's inline editor: a day, a time, Save and Cancel. The time is any 5-minute step, since the platform takes any, and a time is never guessed. */
-export function WhenEditor({ schedule, isPending, save, onDone }: EditorProps) {
+export function WhenEditor({ schedule, version, isPending, save, onDone }: EditorProps) {
   const [day, setDay] = useState<Day>(schedule?.day ?? 'every_day')
   const [at, setAt] = useState(schedule?.at ?? '')
+  const [opened] = useState(version)
   const [error, setError] = useState<string | undefined>()
   const words = useErrorWords()
   const first = useRef<HTMLSelectElement>(null)
@@ -39,7 +42,7 @@ export function WhenEditor({ schedule, isPending, save, onDone }: EditorProps) {
       return
     }
     setError(undefined)
-    save({ day, at: clock.value }, { onSuccess: onDone, onError: (failure) => setError(words(failure)) })
+    save({ day, at: clock.value, expected_version: opened }, { onSuccess: onDone, onError: (failure) => setError(words(failure)) })
   }
 
   return (
@@ -84,27 +87,42 @@ interface WhenProps {
   readonly onSaved: (words: string) => void
 }
 
-/** When, as the sketch draws it: the schedule in words, Change beside it, and the editor in its place while it is open. */
+/**
+ * When, as the sketch draws it: the schedule in words, Change beside it, and the editor in its place while it is open. A save from a
+ * version no longer in use closes the editor, so the schedule read again shows in its place, with the platform's words under it.
+ */
 export function When({ useCase, now, mayChange, onSaved }: WhenProps) {
   const id = useCase.use_case_id
   const headingId = useId()
   const save = useSaveWorkflowSchedule(id)
   const reread = useRereadWorkflow()
   const { editing, opener, open, close } = useEditorThatRefocusesItsOpener()
+  const [refused, setRefused] = useState<string | null>(null)
   const { words, small } = whenWords(useCase)
   const next = heldNote(useCase) ?? `Next run: ${nextRunWords(useCase, now)}`
   const changes = useChanges(next)
-  const saver = scheduleSaver((body, answers) => save.mutate(body, answers), { useCaseId: id, now, say: onSaved, refocus: () => undefined, reread })
+  const stale = () => {
+    setRefused(CHANGED_SINCE_OPENED)
+    close()
+  }
+  const saver = scheduleSaver((body, answers) => save.mutate(body, answers), { useCaseId: id, now, say: onSaved, refocus: () => undefined, reread, stale })
   return (
     <section className={styles['section']} aria-labelledby={headingId}>
       <h2 id={headingId}>When</h2>
       {editing && mayChange ? (
-        <WhenEditor schedule={useCase.schedule} isPending={save.isPending} save={saver} onDone={close} />
+        <WhenEditor schedule={useCase.schedule} version={useCase.version} isPending={save.isPending} save={saver} onDone={close} />
       ) : (
         <div className={styles['whenRow']}>
           <span>{words}</span>
           {mayChange ? (
-            <Button ref={opener} data-place="schedule" onClick={open}>
+            <Button
+              ref={opener}
+              data-place="schedule"
+              onClick={() => {
+                setRefused(null)
+                open()
+              }}
+            >
               {useCase.schedule ? 'Change' : 'Set'}
               <span className="visually-hidden"> when it runs</span>
             </Button>
@@ -118,6 +136,11 @@ export function When({ useCase, now, mayChange, onSaved }: WhenProps) {
           {next}
         </span>
       </p>
+      {refused ? (
+        <p className={styles['problem']} role="alert">
+          {refused}
+        </p>
+      ) : null}
     </section>
   )
 }

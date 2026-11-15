@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 from platform_api.builder.service import NothingToCheck
 from platform_api.orchestration import RunStarted
 from platform_api.shared import RunId
-from tests.declared import ALICE, BOB, FakeBuilder, app_with, declared_status
+from tests.declared import ALICE, BOB, STALE, FakeBuilder, app_with, declared_status
 
 USE_CASE = {
     "template": "software_watchlist",
@@ -16,7 +16,8 @@ USE_CASE = {
 }
 KEY = {"Idempotency-Key": "k"}
 REPEATED = FakeBuilder(started=RunStarted(RunId("run_1"), created=False))
-SCHEDULE = {"day": "monday", "at": "09:00"}
+SCHEDULE = {"day": "monday", "at": "09:00", "expected_version": 1}
+OFF = "/api/v1/watchlist/schedule?expected_version="
 SOFTWARE = {"name": "LangGraph", "repo": "langchain-ai/langgraph", "our_version": "1.2.14"}
 RESTORE = "/api/v1/watchlist/software/{}/restore"
 ADDRESS = "/api/v1/watchlist/software/{}/address"
@@ -127,9 +128,20 @@ CASES = [
         422,
         id="schedule-422",
     ),
-    pytest.param("DELETE", "/api/v1/watchlist/schedule", {}, None, None, 401, id="off-401"),
-    pytest.param("DELETE", "/api/v1/watchlist/schedule", BOB, None, None, 403, id="off-403"),
-    pytest.param("DELETE", "/api/v1/watchlist/schedule", ALICE, None, None, 404, id="off-404"),
+    pytest.param(
+        "PUT",
+        "/api/v1/watchlist/schedule",
+        ALICE,
+        {**SCHEDULE, "expected_version": STALE},
+        None,
+        409,
+        id="schedule-409",
+    ),
+    pytest.param("DELETE", f"{OFF}1", {}, None, None, 401, id="off-401"),
+    pytest.param("DELETE", f"{OFF}1", BOB, None, None, 403, id="off-403"),
+    pytest.param("DELETE", f"{OFF}1", ALICE, None, None, 404, id="off-404"),
+    pytest.param("DELETE", f"{OFF}{STALE}", ALICE, None, None, 409, id="off-409"),
+    pytest.param("DELETE", "/api/v1/watchlist/schedule", ALICE, None, None, 422, id="off-422"),
 ]
 
 
@@ -200,7 +212,8 @@ def test_the_route_answers_the_status_and_declares_it(
         method, path.format(use_case_id="uc_x"), headers=headers, json=body
     )
     assert response.status_code == status
-    declared_status(app, method, re.sub(r"/sw_[a-z]+", "/{software_id}", path), response)
+    template = re.sub(r"/sw_[a-z]+", "/{software_id}", path.split("?")[0])
+    declared_status(app, method, template, response)
 
 
 def test_a_full_watchlist_is_a_422_of_its_own_type():

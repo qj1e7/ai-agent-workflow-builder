@@ -4948,7 +4948,7 @@
       },
       "EditReply": {
         "additionalProperties": false,
-        "description": "A change to a workflow the person has, proposed. Nothing changes until they save it: an\nOperator saves a workflow's schedule with PUT /api/v1/use-cases/{use_case_id}/schedule, with\nvia set to chat, which publishes a version that POST .../versions/{version}/undo undoes. The\nSoftware watchlist's is saved with PUT /api/v1/watchlist/schedule and keeps no versions.",
+        "description": "A change to a workflow the person has, proposed. Nothing changes until they save it: an\nOperator saves a workflow's schedule with PUT /api/v1/use-cases/{use_case_id}/schedule, with\nvia set to chat and the version read, which publishes a version that POST\n.../versions/{version}/undo undoes. The Software watchlist's is saved with PUT\n/api/v1/watchlist/schedule, with the version read, and keeps no versions.",
         "properties": {
           "after": {
             "anyOf": [
@@ -10142,6 +10142,30 @@
         "title": "ScheduleIn",
         "type": "object"
       },
+      "ScheduleSaveIn": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "$ref": "#/components/schemas/ClockTime",
+            "description": "Time of day in Singapore, HH:MM on a 5-minute step."
+          },
+          "day": {
+            "$ref": "#/components/schemas/Day"
+          },
+          "expected_version": {
+            "description": "The version the person read before making this change. When another version is in use by now, nothing is saved or published and the answer is 409, so a teammate's later change is never overwritten.",
+            "title": "Expected Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "day",
+          "at",
+          "expected_version"
+        ],
+        "title": "ScheduleSaveIn",
+        "type": "object"
+      },
       "ScheduleView": {
         "additionalProperties": false,
         "properties": {
@@ -10161,6 +10185,18 @@
               }
             ],
             "description": "Why the schedule starts no check: owner_removed when the owner has left the People list, owner_not_an_operator when they are no longer an Operator. An Operator takes it over by saving it again. Null while the owner can run it."
+          },
+          "held_words": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why a held schedule starts no run, and how it runs again, in the words to show. Null while the owner can run it.",
+            "title": "Held Words"
           },
           "next_at": {
             "anyOf": [
@@ -12003,6 +12039,18 @@
             ],
             "description": "Why the schedule starts no run: owner_removed when the owner has left the People list, owner_not_an_operator when they are no longer an Operator. An Operator takes it over by saving it again. Null while the owner can run it."
           },
+          "held_words": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why a held schedule starts no run, and how it runs again, in the words to show. Null while the owner can run it.",
+            "title": "Held Words"
+          },
           "owner_name": {
             "description": "The name of the schedule owner. Its scheduled runs start as them.",
             "title": "Owner Name",
@@ -12032,6 +12080,11 @@
           "day": {
             "$ref": "#/components/schemas/Day"
           },
+          "expected_version": {
+            "description": "The version the person read before making this change. When another version is in use by now, nothing is saved or published and the answer is 409, so a teammate's later change is never overwritten.",
+            "title": "Expected Version",
+            "type": "integer"
+          },
           "via": {
             "$ref": "#/components/schemas/Via",
             "default": "page",
@@ -12040,7 +12093,8 @@
         },
         "required": [
           "day",
-          "at"
+          "at",
+          "expected_version"
         ],
         "title": "UseCaseScheduleIn",
         "type": "object"
@@ -19257,7 +19311,7 @@
     },
     "/api/v1/use-cases/{use_case_id}/schedule": {
       "put": {
-        "description": "Saves when the workflow runs on its own, in Singapore time. The caller becomes the schedule owner, whose scheduled runs start as them and who can never approve them. That lifts a hold, so an Operator takes over a workflow whose owner can no longer run it by saving its schedule. A new schedule publishes a new version of the workflow, which the answer names. Saving the same schedule again publishes none. A paused workflow stays paused. Saving is not a write to Jira or Confluence, so it needs no approval.",
+        "description": "Saves when the workflow runs on its own, in Singapore time. The caller becomes the schedule owner, whose scheduled runs start as them and who can never approve them. That lifts a hold, so an Operator takes over a workflow whose owner can no longer run it by saving its schedule. A new schedule publishes a new version of the workflow, which the answer names. Saving the same schedule again publishes none. A paused workflow stays paused. Saving is not a write to Jira or Confluence, so it needs no approval. With expected_version, a save made from a version that is no longer in use saves nothing.",
         "operationId": "save_schedule_api_v1_use_cases__use_case_id__schedule_put",
         "parameters": [
           {
@@ -19329,7 +19383,7 @@
                 }
               }
             },
-            "description": "The Software watchlist's schedule is saved on the Software page. Or: Changed again since, in n8n. Nothing was saved."
+            "description": "Changed since you opened it. Nothing was saved. Or: The Software watchlist's schedule is saved on the Software page. Or: Changed again since, in n8n. Nothing was saved."
           },
           "422": {
             "content": {
@@ -19944,8 +19998,21 @@
     },
     "/api/v1/watchlist/schedule": {
       "delete": {
-        "description": "Turns the schedule off. Checks then start only when an Operator starts one.",
+        "description": "Turns the schedule off. Checks then start only when an Operator starts one. Turning it off from a version of the watchlist that is no longer in use changes nothing.",
         "operationId": "turn_off_schedule_api_v1_watchlist_schedule_delete",
+        "parameters": [
+          {
+            "description": "The version the person read before making this change. When another version is in use by now, nothing is saved or published and the answer is 409, so a teammate's later change is never overwritten.",
+            "in": "query",
+            "name": "expected_version",
+            "required": true,
+            "schema": {
+              "description": "The version the person read before making this change. When another version is in use by now, nothing is saved or published and the answer is 409, so a teammate's later change is never overwritten.",
+              "title": "Expected Version",
+              "type": "integer"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -19995,7 +20062,17 @@
                 }
               }
             },
-            "description": "Changed again since, in n8n. Nothing was saved."
+            "description": "Changed since you opened it. Nothing was saved. Or: Changed again since, in n8n. Nothing was saved."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           },
           "503": {
             "content": {
@@ -20022,13 +20099,13 @@
         ]
       },
       "put": {
-        "description": "Saves when the watchlist is checked on its own. The caller becomes the schedule owner, who can never approve a scheduled check. On its own n8n workflow, the Schedule Trigger changes first, under the version compare, and nothing is saved when n8n does not take it.",
+        "description": "Saves when the watchlist is checked on its own. The caller becomes the schedule owner, who can never approve a scheduled check. On its own n8n workflow, the Schedule Trigger changes first, under the version compare, and nothing is saved when n8n does not take it. A save made from a version of the watchlist that is no longer in use saves nothing.",
         "operationId": "save_schedule_api_v1_watchlist_schedule_put",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ScheduleIn"
+                "$ref": "#/components/schemas/ScheduleSaveIn"
               }
             }
           },
@@ -20083,7 +20160,7 @@
                 }
               }
             },
-            "description": "Changed again since, in n8n. Nothing was saved."
+            "description": "Changed since you opened it. Nothing was saved. Or: Changed again since, in n8n. Nothing was saved."
           },
           "422": {
             "content": {

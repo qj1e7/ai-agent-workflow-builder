@@ -1,5 +1,6 @@
 from collections.abc import AsyncIterator, Mapping
 from datetime import timedelta
+from typing import Any
 
 import httpx
 import pytest
@@ -309,12 +310,24 @@ async def test_the_first_add_saves_the_default_schedule_for_the_person_who_added
     assert second.json()["schedule"] == schedule, "a later add leaves the schedule and its owner"
 
 
+async def version_now(client: httpx.AsyncClient) -> dict[str, int]:
+    """The watchlist's version as a page that has just read it holds it."""
+    found = (await client.get("/api/v1/watchlist", headers=ALICE)).json()["watchlist"]
+    return {"expected_version": found["version"]}
+
+
+async def from_version_now(client: httpx.AsyncClient, body: dict[str, str]) -> dict[str, Any]:
+    return {**body, **await version_now(client)}
+
+
 async def test_saving_a_schedule_makes_the_caller_its_owner_and_answers_the_watchlist(
     client: httpx.AsyncClient,
 ):
     await client.post("/api/v1/watchlist/software", json=LANGGRAPH, headers=CAROL)
     saved = await client.put(
-        "/api/v1/watchlist/schedule", json={"day": "every_day", "at": "06:30"}, headers=ALICE
+        "/api/v1/watchlist/schedule",
+        json=await from_version_now(client, {"day": "every_day", "at": "06:30"}),
+        headers=ALICE,
     )
     assert saved.status_code == 200
     view = saved.json()
@@ -336,7 +349,9 @@ async def test_a_schedule_whose_owner_left_the_list_is_held_until_an_operator_sa
 
     assert (held["owner"], held.get("held"), held["next_at"]) == ("carol", "owner_removed", None)
     taken = await client.put(
-        "/api/v1/watchlist/schedule", json={"day": "monday", "at": "09:00"}, headers=ALICE
+        "/api/v1/watchlist/schedule",
+        json=await from_version_now(client, {"day": "monday", "at": "09:00"}),
+        headers=ALICE,
     )
     assert taken.status_code == 200
     schedule = taken.json()["schedule"]
@@ -360,7 +375,7 @@ async def test_a_schedule_whose_owner_is_now_only_an_approver_is_held_and_they_c
         "owner_not_an_operator",
         None,
     )
-    body = {"day": "friday", "at": "17:00"}
+    body = await from_version_now(client, {"day": "friday", "at": "17:00"})
     assert (
         await client.put("/api/v1/watchlist/schedule", json=body, headers=ALICE)
     ).status_code == 403
@@ -373,31 +388,37 @@ async def test_turning_the_schedule_off_leaves_null_and_saving_again_turns_it_on
     client: httpx.AsyncClient,
 ):
     await client.post("/api/v1/watchlist/software", json=LANGGRAPH, headers=ALICE)
-    off = await client.delete("/api/v1/watchlist/schedule", headers=CAROL)
+    known = await version_now(client)
+    off = await client.delete("/api/v1/watchlist/schedule", params=known, headers=CAROL)
     assert (off.status_code, off.json()["schedule"]) == (200, None)
-    again = await client.delete("/api/v1/watchlist/schedule", headers=CAROL)
+    again = await client.delete("/api/v1/watchlist/schedule", params=known, headers=CAROL)
     assert (again.status_code, again.json()["schedule"]) == (200, None)
     await client.post("/api/v1/watchlist/software", json=REDIS, headers=ALICE)
     assert (await client.get("/api/v1/watchlist", headers=ALICE)).json()["watchlist"][
         "schedule"
     ] is None, "adding more software does not bring a turned off schedule back"
     on = await client.put(
-        "/api/v1/watchlist/schedule", json={"day": "friday", "at": "17:00"}, headers=CAROL
+        "/api/v1/watchlist/schedule",
+        json=await from_version_now(client, {"day": "friday", "at": "17:00"}),
+        headers=CAROL,
     )
     assert on.json()["schedule"]["owner"] == "carol"
 
 
 async def test_a_schedule_needs_a_watchlist_and_an_operator(client: httpx.AsyncClient):
-    body = {"day": "monday", "at": "09:00"}
+    body = {"day": "monday", "at": "09:00", "expected_version": 1}
+    known = {"expected_version": 1}
     assert (
         await client.put("/api/v1/watchlist/schedule", json=body, headers=ALICE)
     ).status_code == 404
-    assert (await client.delete("/api/v1/watchlist/schedule", headers=ALICE)).status_code == 404
+    off = await client.delete("/api/v1/watchlist/schedule", params=known, headers=ALICE)
+    assert off.status_code == 404
     await client.post("/api/v1/watchlist/software", json=LANGGRAPH, headers=ALICE)
     assert (
         await client.put("/api/v1/watchlist/schedule", json=body, headers=BOB)
     ).status_code == 403
-    assert (await client.delete("/api/v1/watchlist/schedule", headers=BOB)).status_code == 403
+    off = await client.delete("/api/v1/watchlist/schedule", params=known, headers=BOB)
+    assert off.status_code == 403
     assert (await client.put("/api/v1/watchlist/schedule", json=body)).status_code == 401
 
 
@@ -419,7 +440,9 @@ async def test_a_bad_day_or_time_is_a_422_naming_the_field(
     client: httpx.AsyncClient, body: dict[str, str], field: str
 ):
     await client.post("/api/v1/watchlist/software", json=LANGGRAPH, headers=ALICE)
-    r = await client.put("/api/v1/watchlist/schedule", json=body, headers=ALICE)
+    r = await client.put(
+        "/api/v1/watchlist/schedule", json=await from_version_now(client, body), headers=ALICE
+    )
     assert r.status_code == 422
     assert [problem["loc"][-1] for problem in r.json()["detail"]] == [field]
 

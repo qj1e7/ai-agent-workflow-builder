@@ -1,21 +1,28 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from platform_api.auth import OPERATORS_ONLY, SIGNED_IN, CurrentPrincipal
 from platform_api.builder.http import Operator
 from platform_api.builder.lifecycle import TooLate
-from platform_api.builder.lifecycle_http import N8N_CHANGED, N8N_NOT_READY, refused_in_n8n
+from platform_api.builder.lifecycle_http import (
+    CHANGED_IN_N8N,
+    CHANGED_SINCE_OPENED,
+    N8N_NOT_READY,
+    refused_in_n8n,
+)
 from platform_api.builder.models import (
+    EXPECTED_VERSION,
     AddressIn,
     AddSoftware,
     FindIn,
     FindOut,
-    ScheduleIn,
+    ScheduleSaveIn,
     WatchlistOut,
     WatchlistView,
 )
 from platform_api.builder.n8n_draft import DraftRefused, N8nNotReady
+from platform_api.builder.versions import ChangedSince
 from platform_api.builder.watchlist import (
     NeverAtThatAddress,
     NoMoveReported,
@@ -210,7 +217,7 @@ async def put_address_back(
 SCHEDULE_REFUSED = {
     **OPERATORS_ONLY,
     404: error_response("The watchlist does not exist yet"),
-    409: N8N_CHANGED,
+    409: error_response(f"{CHANGED_SINCE_OPENED} Or: {CHANGED_IN_N8N}"),
     503: N8N_NOT_READY,
 }
 
@@ -221,32 +228,40 @@ SCHEDULE_REFUSED = {
         "Saves when the watchlist is checked on its own. The caller becomes the schedule "
         "owner, who can never approve a scheduled check. On its own n8n workflow, the Schedule "
         "Trigger changes first, under the version compare, and nothing is saved when n8n does "
-        "not take it."
+        "not take it. A save made from a version of the watchlist that is no longer in use "
+        "saves nothing."
     ),
     responses=SCHEDULE_REFUSED,
 )
 async def save_schedule(
-    body: ScheduleIn, principal: Operator, watchlist: CurrentWatchlist
+    body: ScheduleSaveIn, principal: Operator, watchlist: CurrentWatchlist
 ) -> WatchlistView:
     return _scheduled(await watchlist.save_schedule(principal, body))
 
 
 @router.delete(
     "/watchlist/schedule",
-    description="Turns the schedule off. Checks then start only when an Operator starts one.",
+    description="Turns the schedule off. Checks then start only when an Operator starts one. "
+    "Turning it off from a version of the watchlist that is no longer in use changes nothing.",
     responses=SCHEDULE_REFUSED,
 )
-async def turn_off_schedule(principal: Operator, watchlist: CurrentWatchlist) -> WatchlistView:
-    return _scheduled(await watchlist.turn_off_schedule(principal))
+async def turn_off_schedule(
+    principal: Operator,
+    watchlist: CurrentWatchlist,
+    expected_version: Annotated[int, Query(description=EXPECTED_VERSION)],
+) -> WatchlistView:
+    return _scheduled(await watchlist.turn_off_schedule(principal, expected_version))
 
 
 def _scheduled(
-    saved: WatchlistView | NoWatchlist | N8nNotReady | DraftRefused | ChangedInN8n,
+    saved: WatchlistView | NoWatchlist | N8nNotReady | DraftRefused | ChangedInN8n | ChangedSince,
 ) -> WatchlistView:
     match saved:
         case WatchlistView():
             return saved
         case NoWatchlist():
             raise HTTPException(404, "Add software first, then set the schedule")
+        case ChangedSince():
+            raise HTTPException(409, CHANGED_SINCE_OPENED)
         case N8nNotReady() | DraftRefused() | ChangedInN8n():
             raise refused_in_n8n(saved)

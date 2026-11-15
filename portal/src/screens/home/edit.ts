@@ -1,7 +1,7 @@
 import type { Day, EditChoice, EditReply, PartView, UseCaseView, VersionView } from '../../api/types'
 import { clockWords, everyWords, repeatWords } from '../software/software'
 import { scheduleShort } from '../run/words'
-import { undoneWords } from '../workflows/workflow'
+import { CHANGED_SINCE_OPENED, changedSinceOpened, undoneWords } from '../workflows/workflow'
 import { hourChoices, orList, TIMES } from './card'
 import { howOftenWords } from './parts'
 
@@ -221,6 +221,14 @@ export function publishedVersion(target: EditChoice, saved: Pick<UseCaseView, 'v
   if (target.watchlist || newest === undefined || me === undefined) return null
   if (newest.version !== saved.version || newest.by !== me || newest.via !== 'chat') return null
   return known !== undefined && saved.version > known ? saved.version : null
+}
+
+/**
+ * Why Save changed nothing. A teammate's change since the card read the workflow keeps the platform's words, and the card reads the
+ * workflow again: a new schedule turns it into the stale answer that names it, and the same schedule leaves Save to press again.
+ */
+export function saveProblem(error: unknown, words: (error: unknown) => string): string {
+  return changedSinceOpened(error) ? CHANGED_SINCE_OPENED : `Could not save the change. ${words(error)}`
 }
 
 /** What pressing Save does: send the change with the version it was read at, point at the question still open, wait for the read, or nothing. */

@@ -273,8 +273,11 @@ test('scenario H: alice changes the schedule, pauses and deletes through the pag
   await context.close()
 })
 
+/** A save from the version in use now, as a page that has just read it sends it. */
 async function saveSchedule(request: APIRequestContext, user: string, useCaseId: string, data: Record<string, string>): Promise<void> {
-  const response = await request.put(`/api/v1/use-cases/${useCaseId}/schedule`, { headers: { 'X-Dev-User': user }, data })
+  const headers = { 'X-Dev-User': user }
+  const { version } = (await (await request.get(`/api/v1/use-cases/${useCaseId}`, { headers })).json()) as { version: number }
+  const response = await request.put(`/api/v1/use-cases/${useCaseId}/schedule`, { headers, data: { ...data, expected_version: version } })
   expect(response.status(), `${user} saves the schedule: ${await response.text()}`).toBe(200)
 }
 
@@ -342,6 +345,35 @@ test('alice’s schedule changes publish versions the page lists read only, an U
   }
   await expectAccessible(page, path.join(OUT, 'axe'), 'workflow-page-versions')
   await bobContext.close()
+  await context.close()
+})
+
+test('a schedule saved from an old read is refused, says so, and shows carol’s schedule in its place', async ({ browser, request }, info) => {
+  const workflow = await agentWorkflow(request, 'changed since')
+  const context = await devContext(browser, 'alice')
+  const page = await context.newPage()
+  await page.goto(`/workflows/${workflow.id}`)
+  await expect(heading(page)).toHaveText(workflow.name)
+  await changeWhen(page).click()
+  await page.getByLabel('Day').selectOption('monday')
+  await page.getByLabel('Time, Singapore').fill('09:00')
+
+  await saveSchedule(request, 'carol', workflow.id, { day: 'friday', at: '17:30' })
+  await page.getByRole('button', { name: 'Save', exact: true }).click()
+
+  await expect(page.getByRole('main').getByRole('alert')).toHaveText('Changed since you opened it. Nothing was saved.')
+  await expect(page.getByRole('form', { name: 'Change when it runs' }), 'the editor gives way to the schedule read again').toHaveCount(0)
+  await expect(page.getByRole('main')).toContainText('Every Friday at 17:30')
+  await expect(page.getByRole('main')).toContainText('Set by Carol.')
+  await expect(changeWhen(page), 'focus returns to Change, which opens on carol’s schedule').toBeFocused()
+  await shot(page, info, 'sched-changed-since')
+  const kept = await request.get(`/api/v1/use-cases/${workflow.id}`, { headers: { 'X-Dev-User': 'alice' } })
+  const view = (await kept.json()) as { version: number; schedule: { day: string; owner_name: string } }
+  expect([view.version, view.schedule.day, view.schedule.owner_name], 'alice’s stale save published nothing').toEqual([2, 'friday', 'Carol'])
+
+  await changeWhen(page).click()
+  await expect(page.getByLabel('Day')).toHaveValue('friday')
+  await expect(page.getByRole('main').getByRole('alert'), 'opening the editor again clears the refusal').toHaveCount(0)
   await context.close()
 })
 

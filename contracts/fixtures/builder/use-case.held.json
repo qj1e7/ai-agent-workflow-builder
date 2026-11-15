@@ -16,7 +16,8 @@
     "at": "09:00",
     "time_zone": "Asia/Singapore",
     "owner_name": "Alice",
-    "held": "owner_removed"
+    "held": "owner_removed",
+    "held_words": "Not running: Alice is no longer on the People list. An Operator can take it over by saving the schedule."
   },
   "plan": [
     {

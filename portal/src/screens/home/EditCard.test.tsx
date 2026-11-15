@@ -13,15 +13,16 @@ import editMissing from '../../../../contracts/fixtures/planner/answer.edit.miss
 import editUnclear from '../../../../contracts/fixtures/planner/answer.edit.unclear.json'
 import editWatchlist from '../../../../contracts/fixtures/planner/answer.edit.watchlist.json'
 import statuses from '../../../../contracts/fixtures/watchlist/statuses.json'
-import type { ApiClient } from '../../api/client'
 import { ApiProvider } from '../../api/context'
 import { keys } from '../../api/queries'
 import { createDevSession } from '../../api/session'
 import type { EditReply, Me, UseCaseView, VersionView, WatchlistView } from '../../api/types'
-import { chatScheduleOptions, undoOptions } from '../../api/workflowQueries'
+import { ApiError, type ApiClient } from '../../api/client'
+import { chatScheduleOptions, chatWatchlistOptions, undoOptions } from '../../api/workflowQueries'
+import { CHANGED_SINCE_OPENED } from '../workflows/workflow'
 import type { Page } from './AnswerCards'
 import { CardMemoryContext, newCardMemory, type EditKept } from './cardMemory'
-import { doneLine, doneSay, editView, NO_PICKS, openSay, pressSave, publishedVersion, sinceUnversioned, undoneNote, type Read, type Schedule } from './edit'
+import { doneLine, doneSay, editView, NO_PICKS, openSay, pressSave, publishedVersion, saveProblem, sinceUnversioned, undoneNote, type Read, type Schedule } from './edit'
 import { EditCard } from './EditCard'
 
 const ALICE: Me = { id: 'alice', display: 'Alice', roles: ['operator', 'approver'] }
@@ -257,7 +258,7 @@ describe('the edit card once she has pressed', () => {
 describe('saving and undoing from the card', () => {
   const answered = (data: unknown) => Promise.resolve({ data, response: { ok: true, status: 200 } })
 
-  it('saves through the workflow’s schedule route, marked as a change from the chat, reads who published the newest version, and reads the workflow and the list again', async () => {
+  it('saves through the workflow’s schedule route, marked as a change from the chat with the version the card read, reads who published the newest version, and reads the workflow and the list again', async () => {
     const queryClient = new QueryClient()
     queryClient.setQueryData(keys.useCase('me', 'uc_01JB8'), { ...MORNING, version: 1 })
     queryClient.setQueryData(keys.useCases('me'), [{ ...MORNING, version: 1 }])
@@ -267,7 +268,7 @@ describe('saving and undoing from the card', () => {
       GET: (path: string) => (sent.push([path]), answered({ versions: [version(2, 'chat'), version(1, null)] })),
     } as unknown as ApiClient
     const options = chatScheduleOptions(client, queryClient, 'me')
-    const change = { useCaseId: 'uc_01JB8', schedule: { day: 'monday' as const, at: '08:00' } }
+    const change = { useCaseId: 'uc_01JB8', schedule: { day: 'monday' as const, at: '08:00' }, known: 1 }
 
     const saved = await options.mutationFn(change)
     options.onSuccess(saved)
@@ -275,11 +276,39 @@ describe('saving and undoing from the card', () => {
 
     expect(saved.newest).toEqual(version(2, 'chat'))
     expect(sent).toEqual([
-      ['/api/v1/use-cases/{use_case_id}/schedule', { params: { path: { use_case_id: 'uc_01JB8' } }, body: { day: 'monday', at: '08:00', via: 'chat' } }],
+      ['/api/v1/use-cases/{use_case_id}/schedule', { params: { path: { use_case_id: 'uc_01JB8' } }, body: { day: 'monday', at: '08:00', via: 'chat', expected_version: 1 } }],
       ['/api/v1/use-cases/{use_case_id}/versions'],
     ])
     expect(queryClient.getQueryState(keys.useCase('me', 'uc_01JB8'))?.isInvalidated).toBe(true)
     expect(queryClient.getQueryState(keys.useCases('me'))?.isInvalidated).toBe(true)
+  })
+
+  it('a save a teammate’s change since refused says so, publishes nothing, and reads the workflow again, which turns the card into the answer that names the new schedule', async () => {
+    const queryClient = new QueryClient()
+    queryClient.setQueryData(keys.useCase('me', 'uc_01JB8'), { ...MORNING, version: 1 })
+    const refused = { error: { detail: CHANGED_SINCE_OPENED }, response: { ok: false, status: 409 } }
+    const client = { PUT: () => Promise.resolve(refused), GET: () => Promise.reject(new Error('nothing to read')) } as unknown as ApiClient
+    const options = chatScheduleOptions(client, queryClient, 'me')
+    const change = { useCaseId: 'uc_01JB8', schedule: { day: 'monday' as const, at: '08:00' }, known: 1 }
+
+    const failure = await options.mutationFn(change).catch((error: unknown) => error)
+    options.onSettled(undefined, failure, change)
+
+    expect(saveProblem(failure, () => 'unused')).toBe('Changed since you opened it. Nothing was saved.')
+    expect(saveProblem(new ApiError(503, { detail: 'n8n did not take the change in time, so nothing changed.' }), (error) => (error as Error).message)).toBe('Could not save the change. n8n did not take the change in time, so nothing changed.')
+    expect(queryClient.getQueryState(keys.useCase('me', 'uc_01JB8'))?.isInvalidated, 'the workflow is read again').toBe(true)
+    const now = editView(EDIT, NO_PICKS, read({ day: 'friday', at: '17:30' }, 2))
+    expect(openSay(EDIT, now, null)).toBe('Morning new-ticket check changed since I read it, and runs every Friday at 17:30 now. Ask again to change it.')
+    const same = editView(EDIT, NO_PICKS, read(WEEKDAYS, 2))
+    expect(pressSave(same, read(WEEKDAYS, 2)), 'read again with the same schedule, Save sends the version read now').toMatchObject({ kind: 'send', known: 2 })
+  })
+
+  it('saves the watchlist’s schedule through its own route, with the version the card read', async () => {
+    const queryClient = new QueryClient()
+    const sent: unknown[] = []
+    const client = { PUT: (path: string, init: unknown) => (sent.push([path, init]), answered(WATCHLIST)) } as unknown as ApiClient
+    await chatWatchlistOptions(client, queryClient, 'me').mutationFn({ useCaseId: WATCHLIST.use_case_id, schedule: { day: 'friday', at: '08:00' }, known: WATCHLIST.version })
+    expect(sent).toEqual([['/api/v1/watchlist/schedule', { body: { day: 'friday', at: '08:00', expected_version: WATCHLIST.version } }]])
   })
 
   it('undoes through the undo route, from the chat', async () => {

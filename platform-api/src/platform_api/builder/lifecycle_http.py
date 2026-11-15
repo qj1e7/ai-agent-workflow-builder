@@ -46,6 +46,7 @@ NO_REPUBLISH_BODY = RepublishIn()
 IN_USE_CHANGED = "Another version is in use by now, so nothing changed."
 DELETED_IN_N8N = "This workflow was deleted in n8n, so it can't change there."
 CHANGED_IN_N8N = "Changed again since, in n8n. Nothing was saved."
+CHANGED_SINCE_OPENED = "Changed since you opened it. Nothing was saved."
 N8N_NOT_READY = error_response(
     "n8n did not take the change in time, so nothing changed. Or: sign-in could not be checked "
     "because the identity provider's keys are unavailable"
@@ -192,11 +193,14 @@ async def restore_use_case(
     "them. That lifts a hold, so an Operator takes over a workflow whose owner can no longer "
     "run it by saving its schedule. A new schedule publishes a new version of the workflow, "
     "which the answer names. Saving the same schedule again publishes none. A paused workflow "
-    "stays paused. Saving is not a write to Jira or Confluence, so it needs no approval.",
+    "stays paused. Saving is not a write to Jira or Confluence, so it needs no approval. With "
+    "expected_version, a save made from a version that is no longer in use saves nothing.",
     responses={
         **OPERATORS_ONLY,
         404: NOT_FOUND,
-        409: error_response(f"{SCHEDULE_ON_SOFTWARE_PAGE} Or: {CHANGED_IN_N8N}"),
+        409: error_response(
+            f"{CHANGED_SINCE_OPENED} Or: {SCHEDULE_ON_SOFTWARE_PAGE} Or: {CHANGED_IN_N8N}"
+        ),
         503: N8N_NOT_READY,
     },
 )
@@ -206,6 +210,8 @@ async def save_schedule(
     match await builder.save_schedule(use_case_id, principal, body):
         case ScheduleOnSoftwarePage():
             raise HTTPException(409, SCHEDULE_ON_SOFTWARE_PAGE)
+        case ChangedSince():
+            raise HTTPException(409, CHANGED_SINCE_OPENED)
         case N8nNotReady() | ChangedInN8n() | DraftRefused() as refused:
             raise refused_in_n8n(refused)
         case None:

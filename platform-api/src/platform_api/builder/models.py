@@ -159,6 +159,11 @@ class UseCaseSchedule(WireModel):
         "People list, owner_not_an_operator when they are no longer an Operator. An Operator "
         "takes it over by saving it again. Null while the owner can run it.",
     )
+    held_words: str | None = Field(
+        default=None,
+        description="Why a held schedule starts no run, and how it runs again, in the words to "
+        "show. Null while the owner can run it.",
+    )
 
 
 class LastRunView(WireModel):
@@ -474,6 +479,17 @@ class ScheduleIn(WireIn):
     at: ClockTime = Field(description="Time of day in Singapore, HH:MM on a 5-minute step.")
 
 
+EXPECTED_VERSION = (
+    "The version the person read before making this change. When another version is in use by "
+    "now, nothing is saved or published and the answer is 409, so a teammate's later change is "
+    "never overwritten."
+)
+
+
+class ScheduleSaveIn(ScheduleIn):
+    expected_version: int = Field(description=EXPECTED_VERSION)
+
+
 type Via = Literal["page", "chat"]
 
 VIA_WORDS = (
@@ -482,7 +498,7 @@ VIA_WORDS = (
 )
 
 
-class UseCaseScheduleIn(ScheduleIn):
+class UseCaseScheduleIn(ScheduleSaveIn):
     via: Via = Field(default="page", description=VIA_WORDS)
 
 
@@ -601,6 +617,11 @@ class ScheduleView(WireModel):
         description="Why the schedule starts no check: owner_removed when the owner has left the "
         "People list, owner_not_an_operator when they are no longer an Operator. An Operator "
         "takes it over by saving it again. Null while the owner can run it.",
+    )
+    held_words: str | None = Field(
+        default=None,
+        description="Why a held schedule starts no run, and how it runs again, in the words to "
+        "show. Null while the owner can run it.",
     )
 
 

@@ -13,7 +13,7 @@ import pytest
 
 from platform_api.builder import Builder
 from platform_api.builder.layout import schedule_rule
-from platform_api.builder.models import RepublishIn, ScheduleIn, WatchlistView
+from platform_api.builder.models import RepublishIn, ScheduleSaveIn, WatchlistView
 from platform_api.builder.sweep import ASKED_GAP, Found, Regraded, VersionsSweep
 from platform_api.builder.versions import changes_between, schedule_of
 from platform_api.builder.watchlist import MovedToN8n
@@ -284,7 +284,9 @@ async def test_safety_undo_puts_the_version_before_back_as_n8n_still_holds_it(v:
     again = await v.rollback("carol", use_case_id, 1, in_use=2)
     assert (again.status_code, again.json()["version"]) == (200, 3), "asked again, the same"
     path = f"/api/v1/use-cases/{use_case_id}/schedule"
-    later = await v.call("carol", "PUT", path, {"day": "monday", "at": "09:00"})
+    later = await v.call(
+        "carol", "PUT", path, {"day": "monday", "at": "09:00", "expected_version": 3}
+    )
     assert later.status_code == 200, "the compare checks the draft the platform last saw"
 
 
@@ -334,7 +336,9 @@ async def test_safety_a_change_in_n8n_the_sweep_has_not_seen_is_never_overwritte
     use_case_id, workflow_id = await made(v.own, on=True)
     v.n8n.publish_as(workflow_id, DAVE_IN_N8N, without_yes)
     path = f"/api/v1/use-cases/{use_case_id}/schedule"
-    refused = await v.call("carol", "PUT", path, {"day": "monday", "at": "09:00"})
+    refused = await v.call(
+        "carol", "PUT", path, {"day": "monday", "at": "09:00", "expected_version": 1}
+    )
     assert (refused.status_code, refused.json()["detail"]) == (409, CHANGED_SINCE)
     await v.sweep()
     v.n8n.edit(workflow_id)
@@ -552,7 +556,8 @@ async def test_the_watchlists_schedule_save_compares_with_the_draft_after_a_roll
     draft = world.n8n.workflows[moved.workflow_id]["versionId"]
     assert world.n8n.workflows[moved.workflow_id]["activeVersionId"] != draft
 
-    saved = await world.on_n8n.save_schedule(ALICE, ScheduleIn(day="friday", at="08:00"))
+    friday = ScheduleSaveIn(day="friday", at="08:00", expected_version=(await world.view()).version)
+    saved = await world.on_n8n.save_schedule(ALICE, friday)
 
     assert isinstance(saved, WatchlistView), saved
     [row] = await world.rows("SELECT n8n_draft_id FROM builder.use_cases")

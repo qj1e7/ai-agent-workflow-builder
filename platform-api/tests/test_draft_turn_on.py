@@ -267,7 +267,9 @@ async def test_saving_a_draft_s_schedule_publishes_no_version_and_turn_on_uses_i
     use_case_id = await draft(lab)
     path = f"/api/v1/use-cases/{use_case_id}/schedule"
 
-    saved = await lab.call("alice", "PUT", path, {"day": "friday", "at": "17:30"})
+    saved = await lab.call(
+        "alice", "PUT", path, {"day": "friday", "at": "17:30", "expected_version": 1}
+    )
 
     assert saved.status_code == 200, saved.text
     assert (saved.json()["state"], saved.json()["version"]) == ("draft", 1)

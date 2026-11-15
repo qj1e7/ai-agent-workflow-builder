@@ -344,8 +344,9 @@ class EditChoice(WireModel):
 class EditReply(Reply):
     """A change to a workflow the person has, proposed. Nothing changes until they save it: an
     Operator saves a workflow's schedule with PUT /api/v1/use-cases/{use_case_id}/schedule, with
-    via set to chat, which publishes a version that POST .../versions/{version}/undo undoes. The
-    Software watchlist's is saved with PUT /api/v1/watchlist/schedule and keeps no versions."""
+    via set to chat and the version read, which publishes a version that POST
+    .../versions/{version}/undo undoes. The Software watchlist's is saved with PUT
+    /api/v1/watchlist/schedule, with the version read, and keeps no versions."""
 
     answer: Literal["edit"] = "edit"
     use_case_id: str | None = Field(

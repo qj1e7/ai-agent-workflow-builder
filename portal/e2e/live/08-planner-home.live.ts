@@ -1191,7 +1191,7 @@ test.describe('the edit card (spec 6.7)', () => {
     await editCard(answer).getByRole('button', { name: 'Save change' }).click()
     await expect(editCard(answer)).toContainText('Saved as version 3.')
     await reread
-    const later = await backend.send('PUT', 'carol', `/api/v1/use-cases/${morning.id}/schedule`, { day: 'friday', at: '17:30' })
+    const later = await backend.saveWorkflowSchedule('carol', morning.id, { day: 'friday', at: '17:30' })
     expect(later.status, 'carol changes it on its page').toBe(200)
     await editCard(answer).getByRole('button', { name: /^Undo/ }).click()
     await expect(editCard(answer).getByRole('alert')).toHaveText(`Could not undo version 3. ${morning.name} changed again since, so Undo would throw that change away.`)
@@ -1287,7 +1287,7 @@ test.describe('the edit card (spec 6.7)', () => {
   test('ANS-edit-never and the watchlist: Never mind changes nothing, and saving the watchlist’s schedule says who owns it, with no Undo it can’t keep', async ({ browser, backend }, info) => {
     const before = (await backend.get<{ watchlist: { schedule: { day: string; at: string } | null } | null }>('alice', '/api/v1/watchlist')).watchlist?.schedule ?? null
     if ((await backend.get<{ watchlist: unknown }>('alice', '/api/v1/watchlist')).watchlist === null) await backend.freshWatchlist('alice')
-    const put = await backend.send('PUT', 'alice', '/api/v1/watchlist/schedule', { day: 'monday', at: '09:00' })
+    const put = await backend.saveWatchlistSchedule('alice', { day: 'monday', at: '09:00' })
     expect(put.status).toBe(200)
     const context = await devContext(browser, 'alice')
     const page = await context.newPage()
@@ -1313,8 +1313,8 @@ test.describe('the edit card (spec 6.7)', () => {
         await shot(page, info, `r8-edit-watchlist-saved-${String(width)}`)
       }
     } finally {
-      if (before) await backend.send('PUT', 'alice', '/api/v1/watchlist/schedule', before)
-      else await backend.send('DELETE', 'alice', '/api/v1/watchlist/schedule')
+      if (before) await backend.saveWatchlistSchedule('alice', before)
+      else await backend.turnOffWatchlistSchedule('alice')
       await context.close()
     }
   })

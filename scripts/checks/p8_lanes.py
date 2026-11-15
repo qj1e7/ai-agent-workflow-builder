@@ -138,7 +138,8 @@ def ensure_watchlist(api: Api) -> Any:
         raise SystemExit(f"add LangGraph: HTTP {status} {added!r}")
     found = api.get("alice", "/api/v1/watchlist")["watchlist"]
     if found["schedule"] is None:
-        api.call("alice", "PUT", "/api/v1/watchlist/schedule", {"day": "monday", "at": "09:00"})
+        monday = {"day": "monday", "at": "09:00", "expected_version": found["version"]}
+        api.call("alice", "PUT", "/api/v1/watchlist/schedule", monday)
         found = api.get("alice", "/api/v1/watchlist")["watchlist"]
     return found
 

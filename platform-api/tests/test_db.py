@@ -13,7 +13,7 @@ def test_each_context_has_a_version_table_in_its_own_schema(postgres: PostgresUr
     with psycopg.connect(postgres.owner) as conn:
         for context, head in (
             ("builder", "0018"),
-            ("orchestration", "0024"),
+            ("orchestration", "0025"),
             ("monitoring", "0002"),
         ):
             table = sql.Identifier(context, "alembic_version")
