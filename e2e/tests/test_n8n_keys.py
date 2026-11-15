@@ -340,10 +340,10 @@ def chat_deletes() -> int:
 def test_a_version_published_in_n8n_that_runs_a_block_unchecked_comes_back_off(
     api: Api, mock_model: None
 ):
-    """The E16 safety review's first must-fix. n8n won't let the holder publish a block naming the
-    platform's key (spike P8, Q12), but it will with a key of their own, and back in the
-    platform's project n8n would run that on every tick of its schedule. So the take-back takes it
-    off before it moves, and it stays off, marked Needs a fix."""
+    """The E16 safety review's first must-fix. The free edition lets the holder publish a block
+    naming the platform's key (spike P8, Q12). n8n won't run it in their space, but back in the
+    platform's project it would, on every tick of its schedule. So the take-back takes it off
+    before it moves, and it stays off, marked Needs a fix."""
     platform_keys(api)
     created = set_up(api, "e2e a published delete comes back off", on=True)
     use_case_id, workflow_id = created["use_case_id"], created["n8n_workflow_id"]
@@ -356,11 +356,12 @@ def test_a_version_published_in_n8n_that_runs_a_block_unchecked_comes_back_off(
     jo.member.call("PATCH", f"/workflows/{workflow_id}", body)
     saved = jo.member.call("GET", f"/workflows/{workflow_id}")
     publish = {"versionId": saved["versionId"], "expectedChecksum": saved["checksum"]}
-    refused = jo.member.client.post(f"/rest/workflows/{workflow_id}/activate", json=publish)
-    observed("a member publishes a block naming the platform's key", refused.text[:300])
-    assert refused.status_code == 400 and "do not have access" in refused.text, refused.text
-    published = published_with_her_own_key(jo.member, workflow_id)
-    observed("a member publishes the same block with a key of their own", published)
+    answer = jo.member.client.post(f"/rest/workflows/{workflow_id}/activate", json=publish)
+    live = N8N_OWNER.call("GET", f"/workflows/{workflow_id}")["activeVersionId"]
+    observed("a member publishes a block naming the platform's key", (answer.status_code, live))
+    if live != saved["versionId"]:
+        published = published_with_her_own_key(jo.member, workflow_id)
+        observed("a member publishes the same block with a key of their own", published)
     api.post(jo.person, f"/api/v1/use-cases/{use_case_id}/take-back", expect=(200,))
     back = N8N_OWNER.call("GET", f"/workflows/{workflow_id}")
     observed("the version n8n runs once it is back", back["activeVersionId"])

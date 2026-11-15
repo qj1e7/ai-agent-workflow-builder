@@ -130,9 +130,9 @@ this ADR gives, or makes it stronger.
    hold `chat:write` and the scopes that read channel and people lists. `chat:write` also lets the
    bot edit or delete its own messages; the team lead accepts that, and it is recorded here.
 6. **The owner bypass, and the rule it sets.** n8n lets a workflow in the owner's personal project
-   use every key there is, a member's included. n8n won't let a member publish a version naming a
-   platform key they can't use (spike P8, Q12), but it will one naming a key of their own. So no
-   workflow in the platform's project is ever
+   use every key there is, a member's included. On the free edition n8n also lets a member
+   publish a version naming a platform key they can't use (spike P8, Q12); it won't run it in
+   their space, but it would there. So no workflow in the platform's project is ever
    live with a version that has a finding n8n would run anyway (`runs_anyway`), and no draft with
    one is ever run. Two places hold that rule. Every move into the platform's project, a
    take-back or a set-up, first takes off whatever n8n has published, then moves the workflow, so
