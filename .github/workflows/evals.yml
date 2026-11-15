@@ -14,8 +14,13 @@ on:
         required: false
         default: ''
         type: string
+      anthropic_models:
+        description: The Anthropic models to score with ANTHROPIC_API_KEY, comma separated. When set and models is empty, the gateway is skipped.
+        required: false
+        default: ''
+        type: string
       judge:
-        description: The judge model, as gateway:<model>. Empty uses the EVAL_JUDGE variable, else no judge.
+        description: The judge model, as gateway:<model> or anthropic:<model>. Empty uses the EVAL_JUDGE variable, else no judge.
         required: false
         default: ''
         type: string
@@ -87,11 +92,11 @@ jobs:
           AZURE_OPENAI_API_VERSION: ${{ vars.AZURE_OPENAI_API_VERSION }}
           AZURE_OPENAI_DEPLOYMENTS: ${{ vars.AZURE_OPENAI_DEPLOYMENTS }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          ANTHROPIC_MODELS: ${{ vars.ANTHROPIC_MODELS }}
+          ANTHROPIC_MODELS: ${{ inputs.anthropic_models || vars.ANTHROPIC_MODELS }}
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
           GOOGLE_MODELS: ${{ vars.GOOGLE_MODELS }}
           AGENT_MODEL_API_KEY: ${{ secrets.AISG_API_KEY }}
-          GATEWAY_MODELS: ${{ inputs.models || vars.GATEWAY_MODELS || 'claude-haiku-4-5-20251001' }}
+          GATEWAY_MODELS: ${{ inputs.models || (inputs.anthropic_models == '' && (vars.GATEWAY_MODELS || 'claude-haiku-4-5-20251001')) || '' }}
           EVAL_TEMPERATURE: ${{ vars.EVAL_TEMPERATURE }}
           EVAL_JUDGE: ${{ inputs.judge || vars.EVAL_JUDGE }}
           EVAL_JOBS: ${{ inputs.jobs }}
