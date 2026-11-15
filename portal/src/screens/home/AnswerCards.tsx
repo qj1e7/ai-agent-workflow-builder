@@ -53,13 +53,14 @@ export function SetupCardAnswer({ reply, typed }: { reply: SetupCardReply | Part
   return <SetupCard start={startOf(reply, typed)} />
 }
 
-/** A can’t the registry says in one line: the line as the head, what she has instead under it, and Ask the team unless the platform won’t do it. */
+/**
+ * A can’t the registry says in one line: the line as the head, what she has instead under it, and Ask the team. Even what the
+ * platform won’t do gets Ask the team, so no can’t is ever bare (ADR 0047): the team can still hear that someone needs it.
+ */
 function OneLineCant({ row, typed }: { row: CantRowView; typed: string }) {
+  const why = row.unsupported ? 'It won\'t do this' : 'It can\'t do this yet'
   return (
-    <Card
-      title={row.note.replace(/\.$/, '')}
-      {...(row.unsupported ? {} : { foot: <AskTheTeam capability={row.system ?? row.text} starter={`I asked the Planner for: ${typed}\n\nIt can't do this yet: ${row.text}`} /> })}
-    >
+    <Card title={row.note.replace(/\.$/, '')} foot={<AskTheTeam capability={row.system ?? row.text} starter={`I asked the Planner for: ${typed}\n\n${why}: ${row.text}`} />}>
       <p className="muted">{row.instead}</p>
     </Card>
   )

@@ -109,10 +109,10 @@ describe('the Planner’s short answers, as the chat-first sketch draws them', (
     expect(draw(cantOf(TEAMS), { leftovers: true }), 'the card already says it').toBe('')
   })
 
-  it('offers no Ask the team for what the platform won’t do', () => {
+  it('gives what the platform won’t do Ask the team too, so no can’t is bare (ADR 0047)', () => {
     const html = draw(cantOf(DELETE))
-    expect(text(html)).toBe('I don\'t delete anything in Jira A Jira admin can do that.')
-    expect(buttons(html)).toEqual([])
+    expect(text(html)).toBe('I don\'t delete anything in Jira A Jira admin can do that. Ask the team')
+    expect(buttons(html)).toEqual(['Ask the team'])
   })
 
   it('says a pause or a resume in one plain line, and when nothing changed', () => {
