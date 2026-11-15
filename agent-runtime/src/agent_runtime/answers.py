@@ -297,14 +297,14 @@ def _refused(text: str, said: str) -> RefusedAnswer:
 
 def _with_a_yes(rest: str) -> str:
     """The rest of a refused request, offered to set up with a yes only when the platform can:
-    each clause is a schedule or asks for a Ready ability and nothing it can't do, it names no
-    yes, and it tells the Planner nothing. Otherwise empty, and the parts say why (principle 5)."""
+    each clause is a schedule or asks for a Ready ability and nothing it can't do, and it tells
+    the Planner nothing. Otherwise empty, and the parts say why (principle 5). An offered rest
+    goes back to the Planner as a new request, which is read and checked whole again."""
     text = plain(rest, 2000)
     tasks = [text[a:b] for a, b in clauses_of(text) if not only_schedule_words(text[a:b])]
     able = (
         bool(tasks)
         and names_an_ability(text)
-        and not names_a_yes(text)
         and not instructs_the_planner(text)
         and all(why_not("schedule", c) is None for c in tasks)
     )
