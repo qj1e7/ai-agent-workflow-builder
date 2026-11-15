@@ -33,6 +33,7 @@ from platform_api.orchestration.n8n_run_view import RunsInN8n
 from platform_api.orchestration.n8n_staff import (
     INVITE_LIFE,
     NO_ACCESS,
+    NO_ADDRESS,
     NOT_READY,
     OFF,
     SET_PASSWORD,
@@ -626,6 +627,24 @@ async def test_the_password_link_points_where_people_open_n8n(
     assert await s.settle() == [Made(CAROL)]
     mine = (await s.call("carol", "GET", "/api/v1/me/n8n")).json()
     assert mine["set_password_url"] == shown
+
+
+async def test_with_no_editor_address_no_link_is_shown_and_the_words_say_who_to_ask(s: Staffed):
+    """n8n's own link would open nothing, so none is shown rather than a dead one."""
+    no_address = staff_for(s.lab, s.n8n, editor_url=None)
+    s.lab.app.state.staff = no_address
+    s.lab.builder.holding = Holding(s.lab.h.db, Workflows(s.n8n, s.lab.h.db), no_address)
+    use_case_id, _ = await held(s)
+    assert (await s.give("carol")).status_code == 200
+    assert await s.settle() == [Made(CAROL)]
+    mine = (await s.call("carol", "GET", "/api/v1/me/n8n")).json()
+    assert (mine["account"], mine["set_password_url"], mine["why_not"]) == (
+        "invited",
+        None,
+        NO_ADDRESS,
+    )
+    refused = await s.open("carol", use_case_id)
+    assert (refused.status_code, refused.json()["detail"]) == (409, NO_ADDRESS), "same words"
 
 
 async def test_an_account_follows_the_flag_and_is_never_taken_by_email(s: Staffed):

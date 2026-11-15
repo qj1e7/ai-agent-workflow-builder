@@ -7,7 +7,7 @@ The account follows the flag on its own: each settle reads the list and n8n and 
 differs, so a settle cut off anywhere is finished by the next. An account is ended only once its
 person holds no workflow, and whatever its own space still holds moves to the platform's
 project, so nothing is deleted with it. The password-set link is sealed at rest, shown only to
-its person, and dropped once used. It is never logged."""
+its person at the address people open n8n from, and dropped once used. It is never logged."""
 
 import asyncio
 import contextlib
@@ -16,6 +16,7 @@ from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from typing import Any, Literal
+from urllib.parse import urlsplit, urlunsplit
 
 import httpx
 
@@ -39,6 +40,10 @@ INVITE_LIFE = timedelta(days=7)
 and link, shown only to its person."""
 NOT_MADE = "Your n8n account isn't made yet. Try again in a minute."
 SET_PASSWORD = "Set your n8n password first. The link is on your Settings page."
+NO_ADDRESS = (
+    "Set your n8n password first. Your link can't be shown until the platform knows n8n's "
+    "address. Ask the person who runs the platform to set it."
+)
 
 
 @dataclass(frozen=True)
@@ -131,15 +136,26 @@ class Reissued:
 type Settled = Made | Ended | Accepted | Reissued
 
 
-def _ready_or_not(row: _Row, account: AccountState) -> NotYet | CanOpen:
+def _ready_or_not(row: _Row, account: AccountState, link_shown: bool) -> NotYet | CanOpen:
     match account:
         case "none":
             return NotYet(NOT_MADE)
         case "invited":
-            return NotYet(SET_PASSWORD)
+            return NotYet(SET_PASSWORD if link_shown else NO_ADDRESS)
         case "ready":
             assert row.n8n_user_id is not None
             return CanOpen(row.id, row.n8n_user_id)
+
+
+def _at_editor(link: str, editor_url: str) -> str:
+    """n8n's password link at the address people open n8n from. n8n builds the link from its own
+    address, which a browser outside the platform's network can't reach. n8n's path goes under
+    the editor address's path unless it already starts with it, and the query, which holds the
+    token, stays exactly as n8n gave it."""
+    n8n, editor = urlsplit(link), urlsplit(editor_url)
+    prefix = editor.path.rstrip("/")
+    path = n8n.path if n8n.path.startswith(f"{prefix}/") else f"{prefix}{n8n.path}"
+    return urlunsplit((editor.scheme, editor.netloc, path, n8n.query, n8n.fragment))
 
 
 _ROW = (
@@ -213,7 +229,7 @@ class StaffAccounts:
             return NoN8nAccess()
         if (closed := (await self.gate()).closed) is not None:
             return StaffClosed(closed)
-        return _ready_or_not(row, await self._account(row))
+        return _ready_or_not(row, await self._account(row), self.editor_url is not None)
 
     async def mine(self, person: UserId) -> MyN8n:
         row = await self._person(person)
@@ -221,10 +237,19 @@ class StaffAccounts:
             return MyN8n(False, "none", None, False, NO_ACCESS, None)
         account = await self._account(row)
         closed = (await self.gate()).closed
-        access = StaffClosed(closed) if closed is not None else _ready_or_not(row, account)
-        link = None
+        access = (
+            StaffClosed(closed)
+            if closed is not None
+            else _ready_or_not(row, account, self.editor_url is not None)
+        )
+        opened = None
         if account == "invited" and row.sealed_invite is not None and self._box is not None:
-            link = self._box.open(row.sealed_invite)
+            opened = self._box.open(row.sealed_invite)
+        link = (
+            None
+            if opened is None or self.editor_url is None
+            else _at_editor(opened, self.editor_url)
+        )
         if isinstance(access, CanOpen):
             return MyN8n(True, account, link, True, None, self.editor_url)
         assert not isinstance(access, NoN8nAccess)
