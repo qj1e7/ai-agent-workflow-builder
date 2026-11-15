@@ -1460,6 +1460,20 @@
       ],
       "type": "string"
     },
+    "DidntFollowAnswer": {
+      "additionalProperties": false,
+      "description": "The fixed fallback for a free reply that failed or that the guard rejected: one line on\nwhat the Planner can do for this person, and Say it another way. Never a bare cross.",
+      "properties": {
+        "kind": {
+          "const": "didnt_follow",
+          "default": "didnt_follow",
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "title": "DidntFollowAnswer",
+      "type": "object"
+    },
     "DraftApproval": {
       "additionalProperties": false,
       "properties": {
@@ -1881,6 +1895,67 @@
         "matches"
       ],
       "title": "FoundSoftware",
+      "type": "object"
+    },
+    "FreeReplyAnswer": {
+      "additionalProperties": false,
+      "description": "The model's own reply to a message no other answer fits, shown only after code checked it\n(ADR 0047). It writes nothing: a choice or an offer is sent as the person's next message.",
+      "properties": {
+        "choices": {
+          "description": "For clarify only, 2 to 4 replies to tap. Each is sent as the next message.",
+          "items": {
+            "maxLength": 40,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 4,
+          "title": "Choices",
+          "type": "array"
+        },
+        "form": {
+          "$ref": "#/$defs/ReplyForm",
+          "description": "answer: a direct answer. clarify: one short question, with choices to tap. cant: an honest can't, with the closest thing the platform can do as a button."
+        },
+        "kind": {
+          "const": "reply",
+          "default": "reply",
+          "title": "Kind",
+          "type": "string"
+        },
+        "looked_at": {
+          "description": "The sections of the facts the reply used, kept only when they were sent.",
+          "items": {
+            "$ref": "#/$defs/FactSection"
+          },
+          "maxItems": 3,
+          "title": "Looked At",
+          "type": "array"
+        },
+        "offer": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReplyOffer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "For cant only. None on a can't means the button is Ask the team."
+        },
+        "text": {
+          "description": "Plain words only.",
+          "maxLength": 600,
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "form",
+        "text"
+      ],
+      "title": "FreeReplyAnswer",
       "type": "object"
     },
     "GitHubCheckResult": {
@@ -2432,12 +2507,14 @@
           "abilities": "#/$defs/AbilitiesAnswer",
           "cant": "#/$defs/CantAnswer",
           "check_workflows": "#/$defs/CheckWorkflowsAnswer",
+          "didnt_follow": "#/$defs/DidntFollowAnswer",
           "edit": "#/$defs/EditAnswer",
           "needs_me": "#/$defs/NeedsMeAnswer",
           "part": "#/$defs/PartAnswer",
           "pause": "#/$defs/PauseAnswer",
           "question": "#/$defs/QuestionAnswer",
           "refused": "#/$defs/RefusedAnswer",
+          "reply": "#/$defs/FreeReplyAnswer",
           "resume": "#/$defs/ResumeAnswer",
           "setup_card": "#/$defs/SetupCardAnswer",
           "watchlist": "#/$defs/WatchlistAnswer",
@@ -2488,6 +2565,12 @@
         },
         {
           "$ref": "#/$defs/ResumeAnswer"
+        },
+        {
+          "$ref": "#/$defs/FreeReplyAnswer"
+        },
+        {
+          "$ref": "#/$defs/DidntFollowAnswer"
         }
       ]
     },
@@ -2898,6 +2981,38 @@
         "releases"
       ],
       "title": "ReleasesRead",
+      "type": "object"
+    },
+    "ReplyForm": {
+      "enum": [
+        "answer",
+        "clarify",
+        "cant"
+      ],
+      "type": "string"
+    },
+    "ReplyOffer": {
+      "additionalProperties": false,
+      "description": "The button on a free reply's can't. It sends the registry's example request for the\nclosest Ready capability as the person's next message, so the Planner reads it again and any\nwrite it sets up still waits for a yes (ADR 0047).",
+      "properties": {
+        "capability": {
+          "description": "The id of a Ready capability in the registry.",
+          "title": "Capability",
+          "type": "string"
+        },
+        "request": {
+          "description": "The registry's example request it sends.",
+          "maxLength": 2000,
+          "minLength": 1,
+          "title": "Request",
+          "type": "string"
+        }
+      },
+      "required": [
+        "capability",
+        "request"
+      ],
+      "title": "ReplyOffer",
       "type": "object"
     },
     "RepoName": {

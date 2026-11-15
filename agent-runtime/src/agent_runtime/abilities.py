@@ -371,6 +371,11 @@ EXAMPLES: Final = (
     ExampleSpec(
         text="Keep track of the LangGraph version", kind="monitor", needs=["github.releases"]
     ),
+    ExampleSpec(
+        text="Every Monday at 9am, list last week's new bugs in one new Jira ticket",
+        kind="automate",
+        needs=["jira.read", "jira.find_by_update", "summarise", "jira.create"],
+    ),
     ExampleSpec(text="What can you do?", kind="learn", needs=[]),
 )
 CAPABILITY_LIST: Final = CapabilityList(capabilities=list(CAPABILITIES), examples=list(EXAMPLES))

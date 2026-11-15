@@ -121,9 +121,10 @@ def test_every_example_needs_only_ready_capabilities():
             assert BY_ID[needed].state == "ready", (example.text, needed)
 
 
-def test_the_day_one_examples_are_about_software_versioning():
+def test_the_examples_are_software_versioning_and_one_jira_ticket_a_cant_can_offer():
     assert [(e.text, e.kind) for e in EXAMPLES] == [
         ("Keep track of the LangGraph version", "monitor"),
+        ("Every Monday at 9am, list last week's new bugs in one new Jira ticket", "automate"),
         ("What can you do?", "learn"),
     ]
 
