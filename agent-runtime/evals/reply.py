@@ -41,6 +41,7 @@ from agent_runtime.contract import (
     PlannerFacts,
     PreviousTurn,
     ReplyEnvelope,
+    RequestPart,
     ScheduleChange,
     SetupCardAnswer,
     WatchlistAnswer,
@@ -200,11 +201,12 @@ def follow_up(model: BaseChatModel, case: ReplyCase, first: Answer, marker: str)
     return Answer(read, words_of(shown, case), first.raw, steps)
 
 
-def words_of(answer: PlannerAnswer, case: ReplyCase) -> str:
+def words_of(answer: PlannerAnswer, case: ReplyCase, parts: list[RequestPart] | None = None) -> str:
     """The answer as the judge and the report read it: its kind, then what the Portal shows, in
-    the words the `anything` job draws it with. The gate reads the kind."""
-    parts = parts_of(None, case.task, answer, case.facts)
-    shown = shown_words(Answered(answer=answer, parts=parts), case.facts or HOME_FACTS)
+    the words the `anything` job draws it with. The gate reads the kind. `parts` are the marks the
+    answer carries, when the product sent them: the Portal draws those."""
+    marks = parts_of(None, case.task, answer, case.facts) if parts is None else parts
+    shown = shown_words(Answered(answer=answer, parts=marks), case.facts or HOME_FACTS)
     return f"[{_kind(answer)}] {shown}"
 
 
@@ -379,7 +381,11 @@ def ask_led(model: BaseChatModel, case: ReplyCase) -> Answer:
     watched = model.model_copy(update={"callbacks": [timed]})
     outcome = led(request_of(case), lambda _timeout: watched)
     result = outcome.result
-    text = words_of(result.answer, case) if isinstance(result, Answered) else result.message
+    text = (
+        words_of(result.answer, case, result.parts)
+        if isinstance(result, Answered)
+        else result.message
+    )
     shown = f"{text}\n(tools: {', '.join(outcome.tools) or 'none'}"
     shown += f"; fell back: {outcome.fell_back})" if outcome.fell_back else ")"
     if outcome.errors:
@@ -407,7 +413,7 @@ def score_led(case: ReplyCase, answer: Answer) -> list[Check]:
     found = [
         check("answered", []),
         check("right_kind", [] if _acceptable(case, shown) else [kind]),
-        no_themed_names(words_of(shown, case)),
+        no_themed_names(words_of(shown, case, result.parts)),
     ]
     if case.must_refuse:
         found.append(check("refuses_a_skip", [] if kind == "refused" else [kind]))

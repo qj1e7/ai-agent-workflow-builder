@@ -2,7 +2,7 @@ import json
 
 import pytest
 from evals.budget import dollars_for
-from evals.reply import SPIKE_LED
+from evals.reply import REPLY_LED, SPIKE_LED
 from evals.runner import AI_LED, jobs_chosen, run_case
 
 from tests.fakes import ScriptedChat, asks, call
@@ -10,6 +10,10 @@ from tests.test_planner_led import CLEAN
 from tests.test_questions import reading
 
 PRICE = {"input_usd_per_mtok": 2.0, "output_usd_per_mtok": 10.0}
+
+
+def reply_case(case_id: str):
+    return next(c for c in REPLY_LED.cases() if c.id == case_id)
 
 
 def spike_case(case_id: str):
@@ -80,3 +84,14 @@ def test_cached_input_is_priced_at_the_caches_share() -> None:
     assert fresh == pytest.approx(0.021)
     assert cached == pytest.approx((2_000 + 800) * 2e-6 + 100 * 1e-5)
     assert written == pytest.approx((2_000 + 10_000) * 2e-6 + 100 * 1e-5)
+
+
+def test_the_judge_reads_the_marks_the_answer_carries() -> None:
+    chat = ScriptedChat(
+        script=[asks(call("show", {"what": "how_to_start"}, "c1"))],
+        structured=[reading()],
+    )
+
+    outcome = run_case(chat, REPLY_LED, reply_case("how_to-17"), {})
+
+    assert outcome.answer.startswith("[how_to_start] How to start:")
