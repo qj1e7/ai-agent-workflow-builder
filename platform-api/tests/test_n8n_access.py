@@ -7,14 +7,22 @@ settings; and a publish by a member is matched by the n8n user id the platform s
 import logging
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
+from datetime import timedelta
 from typing import Any, cast
 
 import httpx
+import psycopg
 import pytest
 
 from platform_api.bootstrap import LoadedWorkflow, record_status
 from platform_api.builder import Builder
-from platform_api.builder.n8n_holds import STRANDED, Holding
+from platform_api.builder.n8n_holds import (
+    MOVE_GRACE,
+    NO_SPACE,
+    STRANDED,
+    STRAYS_EVERY,
+    Holding,
+)
 from platform_api.builder.n8n_view import InN8nViews
 from platform_api.builder.planner import HERE_IN_N8N, WHICH_IN_N8N, AnswerIn, PlannerFront
 from platform_api.orchestration import Publisher
@@ -22,12 +30,14 @@ from platform_api.orchestration.model_settings import KeyBox
 from platform_api.orchestration.n8n import N8nExecutions
 from platform_api.orchestration.n8n_run_view import RunsInN8n
 from platform_api.orchestration.n8n_staff import (
+    INVITE_LIFE,
     NO_ACCESS,
     NOT_READY,
     OFF,
     SET_PASSWORD,
     Ended,
     Made,
+    Reissued,
     StaffAccounts,
 )
 from platform_api.orchestration.workflow_check import ERROR_WORKFLOW as ERROR_WORKFLOW_NAME
@@ -334,12 +344,81 @@ async def test_a_failed_move_that_cannot_go_back_is_stranded_until_release_moves
 
     s.n8n.transfer_keeps = lambda settings: settings
     s.n8n.after_put = None
+    await s.settle()
+    assert s.n8n.home_of(workflow_id) != PLATFORM_PROJECT, "left to its own Open for a while"
+    s.lab.h.advance(MOVE_GRACE)
     s.n8n.transfer_answers = [500]
     await s.settle()
     assert s.n8n.home_of(workflow_id) != PLATFORM_PROJECT, "a refused retry keeps it stranded"
     await s.settle()
     assert s.n8n.home_of(workflow_id) == PLATFORM_PROJECT
     assert (await s.lab.move("alice", "resume", use_case_id)).status_code == 200
+
+
+async def test_a_hold_that_fails_to_save_after_the_move_leaves_a_mark_the_settle_loop_follows(
+    s: Staffed,
+):
+    await s.member()
+    use_case_id, workflow_id = await held(s)
+    async with s.lab.h.db.transaction("builder") as uow:
+        await uow.conn.execute(
+            "INSERT INTO builder.n8n_holds (use_case_id, held_by, opened_at) VALUES (%s, 'x', %s)",
+            (use_case_id, NOW),
+        )
+    with pytest.raises(psycopg.errors.UniqueViolation):
+        await s.open("carol", use_case_id)
+    assert await s.held_by(use_case_id) is None
+    assert s.n8n.home_of(workflow_id) != PLATFORM_PROJECT, "n8n moved it before the save failed"
+    assert (await s.lab.move("alice", "pause", use_case_id)).status_code == 200
+    resumed = await s.lab.move("alice", "resume", use_case_id)
+    assert (resumed.status_code, resumed.json()["detail"]) == (409, STRANDED)
+    s.lab.h.advance(MOVE_GRACE)
+    await s.settle()
+    assert s.n8n.home_of(workflow_id) == PLATFORM_PROJECT
+
+
+async def test_a_workflow_found_outside_the_platform_s_project_with_nobody_holding_it_comes_back(
+    s: Staffed,
+):
+    n8n_user = await s.member()
+    use_case_id, workflow_id = await held(s)
+    member_space = s.n8n.personal_project(n8n_user)
+    s.n8n.workflows[workflow_id]["shared"] = [{"projectId": member_space, "role": "workflow:owner"}]
+    s.lab.h.advance(STRAYS_EVERY)
+    await s.settle()
+    assert s.n8n.home_of(workflow_id) == PLATFORM_PROJECT
+    assert await s.held_by(use_case_id) is None
+
+
+async def test_an_account_n8n_lost_is_forgotten_and_made_again(s: Staffed):
+    lost = await s.member()
+    assert (await s.call("carol", "GET", "/api/v1/me/n8n")).json()["account"] == "ready"
+    use_case_id, workflow_id = await held(s)
+    s.n8n.users.pop(lost)
+    s.n8n.projects = [p for p in s.n8n.projects if p.get("creatorId") != lost]
+    refused = await s.open("carol", use_case_id)
+    assert (refused.status_code, refused.json()["detail"]) == (503, NO_SPACE)
+    assert (await s.person("carol"))["n8n_user_id"] is None, "forgotten, never stuck"
+    assert s.n8n.home_of(workflow_id) == PLATFORM_PROJECT
+    assert await s.settle() == [Made(CAROL)]
+    s.n8n.accept((await s.person("carol"))["n8n_user_id"])
+    assert (await s.open("carol", use_case_id)).status_code == 200
+
+
+async def test_an_unused_password_link_is_replaced_after_a_week(s: Staffed):
+    assert (await s.give("carol")).status_code == 200
+    assert await s.settle() == [Made(CAROL)]
+    first = (await s.call("carol", "GET", "/api/v1/me/n8n")).json()["set_password_url"]
+    old_user = (await s.person("carol"))["n8n_user_id"]
+    s.lab.h.advance(INVITE_LIFE - timedelta(minutes=1))
+    assert await s.settle() == [], "a link younger than a week stays"
+    s.lab.h.advance(timedelta(minutes=1))
+    assert await s.settle() == [Reissued(CAROL)]
+    assert s.n8n.deleted_users == [(old_user, PLATFORM_PROJECT)], "the old link opens nothing"
+    second = (await s.call("carol", "GET", "/api/v1/me/n8n")).json()["set_password_url"]
+    assert second and second != first
+    theirs = (await s.call("alice", "GET", "/api/v1/me/n8n")).json()
+    assert theirs["set_password_url"] is None, "shown to Carol alone"
 
 
 async def test_a_move_whose_answer_was_lost_is_read_back_not_taken_as_failed(s: Staffed):
@@ -452,7 +531,7 @@ async def test_a_schedule_edit_is_refused_while_someone_holds_the_workflow(s: St
         "alice",
         "PUT",
         f"/api/v1/use-cases/{use_case_id}/schedule",
-        {"day": "monday", "at": "07:30", "via": "page"},
+        {"day": "monday", "at": "07:30", "via": "page", "expected_version": 1},
     )
     assert saved.status_code == 409
     assert saved.json()["detail"].startswith("Carol has it open in n8n since ")

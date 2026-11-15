@@ -22,6 +22,7 @@ import {
   openSay,
   pressSave,
   publishedVersion,
+  saveProblem,
   scheduleOnCard,
   sinceUnversioned,
   targetOf,
@@ -142,13 +143,13 @@ export function EditCard({ reply, typed, page, say, now, about }: EditCardProps)
     if (press.kind === 'ask') document.getElementById(`${id}-question`)?.querySelector('button')?.focus()
     if (press.kind !== 'send') return
     const { target: chosen, after, known } = press
-    const failed = (error: unknown) => setProblem(`Could not save the change. ${words(error)}`)
+    const failed = (error: unknown) => setProblem(saveProblem(error, words))
     if (chosen.watchlist) {
-      saveWatchlist.mutate({ useCaseId: chosen.use_case_id, schedule: after }, { onSuccess: () => saved(after, null, chosen), onError: failed })
+      saveWatchlist.mutate({ useCaseId: chosen.use_case_id, schedule: after, known }, { onSuccess: () => saved(after, null, chosen), onError: failed })
       return
     }
     saveChange.mutate(
-      { useCaseId: chosen.use_case_id, schedule: after },
+      { useCaseId: chosen.use_case_id, schedule: after, known },
       { onSuccess: ({ view: answer, newest }) => saved(after, publishedVersion(chosen, answer, newest, me.data?.id, known), chosen), onError: failed },
     )
   }

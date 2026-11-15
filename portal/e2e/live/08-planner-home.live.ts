@@ -8,7 +8,7 @@ import { connectMockModel } from './support/settings'
 import { SettingsApi } from './support/settings'
 import { REDIS, type Backend } from './support/stack'
 import { expect, test } from './support/test'
-import { devContext, needsOnWorkflows, OUT, shot } from './support/ui'
+import { devContext, needsOnWorkflows, OUT, showEvery, shot } from './support/ui'
 import { askAndWait, editCard, newestAnswer, rereadOf, scheduledWorkflow, shown, tag, versionsOf } from './support/edit'
 
 /** The sketch's question, Alice's Home heading; her greeting is the line above it. */
@@ -931,7 +931,10 @@ test.describe('the chat after the first message', () => {
     await expect(page.locator('#side-panel').locator('li[data-home-item] b').first(), 'the strip names the first row of the panel: one ranking').toHaveText(urgent)
     const held = await page.locator('#side-panel').locator('li[data-home-item]').count()
     expect(held, 'the panel holds the needs the platform returned').toBeGreaterThan(1)
-    if (held < total) await expect(page.locator('#side-panel').getByRole('link', { name: 'See all on Workflows' })).toBeVisible()
+    if (held < total) {
+      await expect(page.locator('#side-panel').getByRole('status').filter({ hasText: /^Showing / }), 'the panel says how many it shows of the count').toHaveText(`Showing ${String(held)} of ${String(total)}.`)
+      expect(await showEvery(page.locator('#side-panel'), page.locator('#side-panel').locator('li[data-home-item]')), 'Show more reaches every need N more counts').toBe(total)
+    }
     await page.locator('#side-panel').getByRole('link', { name: 'More details' }).click()
     await expect(page).toHaveURL(/\/workflows$/)
     expect(await needsOnWorkflows(page), 'N more plus one is the Needs you rows on Workflows').toBe(total)
@@ -977,7 +980,7 @@ test.describe('the chat after the first message', () => {
     await expect(thread(page)).toContainText(`${String(total)} ${total === 1 ? 'thing needs' : 'things need'} you`)
     const rows = await thread(page).locator('li[data-home-item]').count()
     expect(rows, 'one row each for the needs the platform returned').toBeGreaterThan(0)
-    if (rows < total) await expect(thread(page).getByRole('link', { name: 'See all on Workflows' })).toBeVisible()
+    if (rows < total) expect(await showEvery(thread(page), thread(page).locator('li[data-home-item]')), 'Show more under the answer reaches every need it counts').toBe(total)
     await repair()
     await context.close()
   })
@@ -1188,7 +1191,7 @@ test.describe('the edit card (spec 6.7)', () => {
     await editCard(answer).getByRole('button', { name: 'Save change' }).click()
     await expect(editCard(answer)).toContainText('Saved as version 3.')
     await reread
-    const later = await backend.send('PUT', 'carol', `/api/v1/use-cases/${morning.id}/schedule`, { day: 'friday', at: '17:30' })
+    const later = await backend.saveWorkflowSchedule('carol', morning.id, { day: 'friday', at: '17:30' })
     expect(later.status, 'carol changes it on its page').toBe(200)
     await editCard(answer).getByRole('button', { name: /^Undo/ }).click()
     await expect(editCard(answer).getByRole('alert')).toHaveText(`Could not undo version 3. ${morning.name} changed again since, so Undo would throw that change away.`)
@@ -1284,7 +1287,7 @@ test.describe('the edit card (spec 6.7)', () => {
   test('ANS-edit-never and the watchlist: Never mind changes nothing, and saving the watchlist’s schedule says who owns it, with no Undo it can’t keep', async ({ browser, backend }, info) => {
     const before = (await backend.get<{ watchlist: { schedule: { day: string; at: string } | null } | null }>('alice', '/api/v1/watchlist')).watchlist?.schedule ?? null
     if ((await backend.get<{ watchlist: unknown }>('alice', '/api/v1/watchlist')).watchlist === null) await backend.freshWatchlist('alice')
-    const put = await backend.send('PUT', 'alice', '/api/v1/watchlist/schedule', { day: 'monday', at: '09:00' })
+    const put = await backend.saveWatchlistSchedule('alice', { day: 'monday', at: '09:00' })
     expect(put.status).toBe(200)
     const context = await devContext(browser, 'alice')
     const page = await context.newPage()
@@ -1310,8 +1313,8 @@ test.describe('the edit card (spec 6.7)', () => {
         await shot(page, info, `r8-edit-watchlist-saved-${String(width)}`)
       }
     } finally {
-      if (before) await backend.send('PUT', 'alice', '/api/v1/watchlist/schedule', before)
-      else await backend.send('DELETE', 'alice', '/api/v1/watchlist/schedule')
+      if (before) await backend.saveWatchlistSchedule('alice', before)
+      else await backend.turnOffWatchlistSchedule('alice')
       await context.close()
     }
   })

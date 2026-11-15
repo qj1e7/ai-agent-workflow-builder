@@ -457,8 +457,8 @@ test('@lane5 bob, an Approver only, sees the list and no add, remove, schedule o
       'POST add': (await backend.send('POST', 'bob', '/api/v1/watchlist/software', { name: 'Nope', repo: 'acme/nope' })).status,
       'DELETE remove': (await backend.send('DELETE', 'bob', `/api/v1/watchlist/software/${lg.id}`)).status,
       'POST restore': (await backend.send('POST', 'bob', `/api/v1/watchlist/software/${gone.id}/restore`)).status,
-      'PUT schedule': (await backend.send('PUT', 'bob', '/api/v1/watchlist/schedule', { day: 'monday', at: '09:00' })).status,
-      'DELETE schedule': (await backend.send('DELETE', 'bob', '/api/v1/watchlist/schedule')).status,
+      'PUT schedule': (await backend.send('PUT', 'bob', '/api/v1/watchlist/schedule', { day: 'monday', at: '09:00', expected_version: 1 })).status,
+      'DELETE schedule': (await backend.send('DELETE', 'bob', '/api/v1/watchlist/schedule?expected_version=1')).status,
       'POST run (Check now)': (await backend.send('POST', 'bob', `/api/v1/use-cases/${useCaseId}/runs`, undefined, { 'Idempotency-Key': randomUUID() })).status,
       'POST pause': (await backend.send('POST', 'bob', `/api/v1/use-cases/${useCaseId}/pause`)).status,
       'POST resume': (await backend.send('POST', 'bob', `/api/v1/use-cases/${useCaseId}/resume`)).status,
@@ -511,7 +511,7 @@ test('@lane6 when GitHub fails for each row in its own way, each row says it can
       { ...LANGGRAPH, our_version: '1.2.16' },
       { ...REDIS, our_version: '8.2.1' },
     ])
-    await backend.send('PUT', 'alice', '/api/v1/watchlist/schedule', { day: 'monday', at: '09:00' })
+    await backend.saveWatchlistSchedule('alice', { day: 'monday', at: '09:00' })
     let first = ''
     let second = ''
     let runId = ''
@@ -700,7 +700,7 @@ test('@lane10 search filters 14 rows as you type and a screen reader hears the c
 test('@lane11 alice pauses the watchlist through the API, and the page says Paused with no next check time; resuming brings the time back', async ({ browser }) => {
   await withBackend(async (backend) => {
     const useCaseId = await backend.freshWatchlist('alice', [LANGGRAPH])
-    await backend.send('PUT', 'alice', '/api/v1/watchlist/schedule', { day: 'monday', at: '09:00' })
+    await backend.saveWatchlistSchedule('alice', { day: 'monday', at: '09:00' })
     const context = await devContext(browser, 'alice')
     const page = await context.newPage()
     const watch = watchPage(page)
@@ -723,7 +723,7 @@ test('@lane11 alice pauses the watchlist through the API, and the page says Paus
       const byHand = await backend.send('POST', 'alice', `/api/v1/use-cases/${useCaseId}/runs`, undefined, { 'Idempotency-Key': randomUUID() })
       expect(byHand.status, 'a paused watchlist starts no check by hand').toBe(409)
 
-      await backend.delete('alice', '/api/v1/watchlist/schedule')
+      await backend.turnOffWatchlistSchedule('alice')
       await openSoftware(page)
       await expect(schedule).toContainText('No schedule. Paused. No check runs until an Operator resumes it.')
       await expect(page.getByText(/Press Check now/)).toHaveCount(0)
@@ -733,7 +733,7 @@ test('@lane11 alice pauses the watchlist through the API, and the page says Paus
       await shotTo(page, 11, 'p6-paused-no-schedule.png', true)
       save(11, 'p6-paused-no-schedule.json', { byHand, scheduleText: await text(schedule), addedNotice: await text(notice(page)) })
 
-      await backend.send('PUT', 'alice', '/api/v1/watchlist/schedule', { day: 'monday', at: '09:00' })
+      await backend.saveWatchlistSchedule('alice', { day: 'monday', at: '09:00' })
       await backend.post('alice', `/api/v1/use-cases/${useCaseId}/resume`)
       await openSoftware(page)
       await expect(schedule).toContainText('Next check ')

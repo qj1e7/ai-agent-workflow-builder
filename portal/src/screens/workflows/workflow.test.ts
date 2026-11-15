@@ -14,11 +14,13 @@ import heldSchedule from '../../../../contracts/fixtures/watchlist/schedule.held
 import { ApiError } from '../../api/client'
 import { errorWords } from '../../api/errors'
 import { createLatch } from '../../api/latch'
-import type { RunView, ScheduleHold, ScheduleView, UseCaseView, VersionSchedule, VersionView } from '../../api/types'
+import type { RunView, ScheduleHold, ScheduleView, UseCaseView, VersionSchedule, VersionView, WatchlistView } from '../../api/types'
 import { placeAfterRedraw } from '../../ui/focus'
-import { nextCheckWords, TAKE_OVER_WORDS } from '../software/software'
+import { nextCheckWords } from '../software/software'
 import {
   bannerOf,
+  CHANGED_SINCE_OPENED,
+  changedSinceOpened,
   changeProblem,
   controlsOf,
   deleteWords,
@@ -226,19 +228,26 @@ describe('the next run', () => {
   })
 })
 
-const heldBy = (held: ScheduleHold, owner_name = 'Carol'): UseCaseView => ({ ...AGENTS, next_run_at: null, schedule: { day: 'monday', at: '09:00', time_zone: 'Asia/Singapore', owner_name, held } })
+const CAROL_LEFT = 'Not running: Carol is no longer on the People list. An Operator can take it over by saving the schedule.'
+const heldBy = (held: ScheduleHold, held_words: string | null = CAROL_LEFT): UseCaseView => ({
+  ...AGENTS,
+  next_run_at: null,
+  schedule: { day: 'monday', at: '09:00', time_zone: 'Asia/Singapore', owner_name: 'Carol', held, held_words },
+})
 
 describe('a schedule held because its owner can no longer run it', () => {
-  it('says why on the workflow page, and the next run reads Not running', () => {
-    expect(heldNote(heldBy('owner_removed'))).toBe('Not running: Carol is no longer on the People list. An Operator can take it over by saving the schedule.')
-    expect(heldNote(heldBy('owner_not_an_operator'))).toBe('Not running: Carol can no longer run workflows. An Operator can take it over by saving the schedule.')
-    expect(heldNote(heldBy('owner_removed', ' '))).toBe('Not running: its owner is no longer on the People list. An Operator can take it over by saving the schedule.')
+  it('says why on the workflow page in the platform’s own words, and the next run reads Not running', () => {
+    expect(heldNote(heldBy('owner_removed'))).toBe(CAROL_LEFT)
+    const notOperator = 'Not running: Carol can no longer run workflows. An Operator can take it over by saving the schedule.'
+    expect(heldNote(heldBy('owner_not_an_operator', notOperator))).toBe(notOperator)
+    expect(heldNote(heldBy('owner_removed', null)), 'held with no words still promises no run').toBe('Not running.')
     expect([nextRunWords(heldBy('owner_removed'), NOW), nextRunWords(HELD, NOW)]).toEqual(['Not running', 'Not running'])
   })
 
-  it('says why in the Software page’s words, since an Operator takes either schedule over by saving it', () => {
-    expect(heldNote(HELD)).toBe(nextCheckWords(heldSchedule.schedule as ScheduleView, false))
-    expect(heldNote(heldBy('owner_removed'))).toContain(TAKE_OVER_WORDS)
+  it('says why in the same words as the Software page, which the platform sends on both views', () => {
+    const words = (heldSchedule as WatchlistView).schedule?.held_words
+    expect(words).toBe('Not running: Alice is no longer on the People list. An Operator can take it over by saving the schedule.')
+    expect([heldNote(HELD), nextCheckWords(heldSchedule.schedule as ScheduleView, false)]).toEqual([words, words])
   })
 
   it('gives way to Paused, and says nothing while the schedule runs', () => {
@@ -640,8 +649,9 @@ describe('what happens when a schedule is saved', () => {
       say: (text) => seen.push(`said ${text}`),
       refocus: () => seen.push('focus'),
       reread: (id) => seen.push(`reread ${id}`),
+      stale: () => seen.push('closed, the workflow read again shows in its place'),
     })
-    save({ day: 'monday', at: '09:00' }, form)
+    save({ day: 'monday', at: '09:00', expected_version: 1 }, form)
     return seen
   }
 
@@ -656,6 +666,14 @@ describe('what happens when a schedule is saved', () => {
 
   it('only shows any other refusal', () => {
     expect(setup((answers) => answers.onError(new ApiError(403, { detail: 'x' })))).toEqual(['shown 403'])
+  })
+
+  it('gives way to the workflow read again when a teammate changed it since the form opened, so the new schedule shows', () => {
+    const changed = new ApiError(409, { detail: CHANGED_SINCE_OPENED })
+    expect(setup((answers) => answers.onError(changed))).toEqual(['closed, the workflow read again shows in its place', 'focus', 'reread uc_1'])
+    expect(CHANGED_SINCE_OPENED).toBe('Changed since you opened it. Nothing was saved.')
+    expect(changedSinceOpened(changed)).toBe(true)
+    expect(changedSinceOpened(new ApiError(409, { detail: 'Changed again since, in n8n. Nothing was saved.' })), 'a change made in n8n keeps the form open').toBe(false)
   })
 })
 

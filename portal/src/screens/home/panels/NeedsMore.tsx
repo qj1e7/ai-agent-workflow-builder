@@ -1,22 +1,8 @@
-import { Link } from '../../../ui/Link'
-import { useAsker } from '../asker'
-import { moreWords, SEE_ALL_WORDS, type Needs } from '../home'
-import styles from '../Planner.module.css'
+import type { Pager } from '../../../api/homeQueries'
+import { ShowMore } from '../../../ui/ShowMore'
+import { drawnKeys, type Needs } from '../home'
 
-/**
- * What follows Needs you's rows when some aren’t shown. An Operator gets the link to Workflows. Workflows lists no more for
- * someone who isn’t an Operator, so they are told how many are left instead, as their Home does.
- */
-export function NeedsMore({ needs }: { needs: Needs }) {
-  const asker = useAsker()
-  const said = asker === 'approver' ? moreWords(needs.more) : null
-  if (said !== null) return <p className={styles['more']}>{said}</p>
-  if (needs.total - needs.shown.length > 0 && asker === 'operator') {
-    return (
-      <p className={styles['more']}>
-        <Link to="/workflows">{SEE_ALL_WORDS}</Link>
-      </p>
-    )
-  }
-  return null
+/** Show more under Needs you: the platform's next page of what needs the person joins the same rows, so every one counted can be opened. */
+export function NeedsMore({ needs, pager }: { needs: Needs; pager: Pager }) {
+  return <ShowMore shown={needs.shown.length} total={needs.total} pager={pager} keys={drawnKeys(needs.shown)} rowAttr="data-home-item" />
 }

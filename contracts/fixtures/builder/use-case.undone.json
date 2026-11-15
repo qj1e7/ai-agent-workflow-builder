@@ -14,7 +14,8 @@
     "at": "08:00",
     "time_zone": "Asia/Singapore",
     "owner_name": "Alice",
-    "held": null
+    "held": null,
+    "held_words": null
   },
   "plan": [
     {

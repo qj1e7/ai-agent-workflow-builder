@@ -2340,6 +2340,80 @@ def test_a_name_or_a_question_word_is_never_a_command(asks: str, task: str, word
         assert not isinstance(answer, EditAnswer), (task, facts)
 
 
+PAST_FIFTY = PlannerFacts(
+    workflows=[
+        WorkflowFact(name=f"Report {n}", state="on", last_run="Done", last_run_at=None)
+        for n in range(50)
+    ],
+    other_workflows=[
+        *(f"Report {n}" for n in range(50, 117)),
+        *(w.name for w in WORKFLOWS.workflows or []),
+    ],
+)
+"""120 workflows, with the three WORKFLOWS names among those sent by name alone."""
+
+
+@pytest.mark.parametrize(
+    ("asks", "task"),
+    [
+        ("needs_me", "What needs my attention? Pause the morning check"),
+        ("none", "pause keep our software up to date"),
+        ("none", "Pause the weekly summary and email me"),
+        ("my_workflows", "When does the weekly summary run next?"),
+    ],
+)
+def test_a_workflow_named_past_the_first_fifty_is_known_by_its_name(asks: str, task: str):
+    fields = read(asks_about=asks)
+    answer = answer_of(fields, task, PAST_FIFTY)
+    assert answer == answer_of(fields, task, WORKFLOWS)
+    assert not isinstance(answer, CantAnswer)
+    named = [(p.text, p.mark, p.reason) for p in parts_of(fields, task, answer, PAST_FIFTY)]
+    assert named == marks(fields, task), "no name is crossed"
+
+
+PAST_THE_CAP = PAST_FIFTY.model_copy(
+    update={"other_workflows": [f"Report {n}" for n in range(50, 300)], "left_out_workflows": 903}
+)
+"""1,203 workflows, of which 300 were named, and Keep our software up to date was not."""
+EVERY_NAME_SENT = PAST_THE_CAP.model_copy(update={"left_out_workflows": None})
+
+
+@pytest.mark.parametrize(
+    ("fields", "task", "changes"),
+    [
+        (
+            read(
+                asks_about="change",
+                belongs_on_watchlist=True,
+                watchlist_word="watch",
+                software="React",
+            ),
+            "Watch React every Monday at 9am",
+            True,
+        ),
+        (read(asks_about="change"), "delete every closed ticket", True),
+        (read(asks_about="change"), "pause keep our software up to date", False),
+    ],
+    ids=["a watch request", "a write to tickets", "an Approver's change"],
+)
+def test_past_the_cap_a_request_that_crosses_no_workflow_name_keeps_its_own_answer(
+    fields: TaskRead, task: str, changes: bool
+):
+    answer = answer_of(fields, task, PAST_THE_CAP, changes_workflows=changes)
+    assert answer == answer_of(fields, task, EVERY_NAME_SENT, changes_workflows=changes)
+    assert not isinstance(answer, QuestionAnswer)
+
+
+def test_past_the_cap_a_change_to_a_workflow_it_could_not_find_says_how_many_it_read():
+    answer = answer_of(
+        read(asks_about="change"), "pause keep our software up to date", PAST_THE_CAP
+    )
+    assert answer == QuestionAnswer(
+        text="I could only read 300 of your 1,203 workflows, so I couldn't find the one you named.",
+        looked_at=["workflows"],
+    )
+
+
 def test_a_change_after_the_question_is_an_edit_and_the_question_is_kept():
     task = "Rename the morning check, then tell me how my workflows are doing"
     fields = read(asks_about="my_workflows")

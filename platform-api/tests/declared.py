@@ -8,6 +8,8 @@ from fastapi import FastAPI
 
 from platform_api.app import create_app
 from platform_api.builder.lifecycle import TooLate
+from platform_api.builder.models import ScheduleSaveIn
+from platform_api.builder.versions import ChangedSince
 from platform_api.builder.watchlist import (
     NeverAtThatAddress,
     NoMoveReported,
@@ -27,6 +29,9 @@ from platform_api.orchestration.n8n_calls import (
 )
 from platform_api.shared import N8nExecutionId, SoftwareId
 from tests.support import LOCAL_ENV
+
+STALE = 0
+"""A version the fake watchlist has moved past, so a schedule change from it is refused."""
 
 ALICE = {"X-Dev-User": "alice"}
 BOB = {"X-Dev-User": "bob"}
@@ -135,11 +140,11 @@ class FakeWatchlist:
             return TooLate(datetime(2026, 11, 3, tzinfo=UTC))
         return NoSuchSoftware(SoftwareId(software_id))
 
-    async def save_schedule(self, principal: object, body: object) -> object:
-        return NoWatchlist()
+    async def save_schedule(self, principal: object, body: ScheduleSaveIn) -> object:
+        return ChangedSince() if body.expected_version == STALE else NoWatchlist()
 
-    async def turn_off_schedule(self, principal: object) -> object:
-        return NoWatchlist()
+    async def turn_off_schedule(self, principal: object, expected: int) -> object:
+        return ChangedSince() if expected == STALE else NoWatchlist()
 
 
 class FakeTeamRequests:

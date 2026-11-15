@@ -189,6 +189,7 @@ def _schedule_view(saved: SavedSchedule, document: Mapping[str, Any] | None) -> 
         time_zone=schedule.time_zone,
         owner_name=saved.owner_name,
         held=saved.held,
+        held_words=saved.held_words,
     )
 
 
@@ -246,6 +247,7 @@ def _view(
 ) -> UseCaseView:
     template = TEMPLATES[row["template"]]
     state = _state(lifecycle_of(row))
+    held = schedule is not None and schedule.held is not None
     plan = (
         plan_for_cards([a.card for a in agents])
         if template.key == AGENT_CARDS.key
@@ -261,7 +263,7 @@ def _view(
         owner=UserId(row["owner"]),
         created_at=row["created_at"],
         state=state,
-        next_run_at=_next_run_at(row, now) if state == "on" else None,
+        next_run_at=_next_run_at(row, now) if state == "on" and not held else None,
         schedule=None
         if schedule is None
         else _schedule_view(schedule, row["document"] if _own(row) else None),
@@ -625,11 +627,12 @@ class Builder:
 
     async def save_schedule(
         self, use_case_id: str, principal: Principal, body: UseCaseScheduleIn
-    ) -> UseCaseView | ScheduleOnSoftwarePage | InN8nRefused | None:
+    ) -> UseCaseView | ScheduleOnSoftwarePage | ChangedSince | InN8nRefused | None:
         """The same save as the watchlist's: the caller becomes the owner, which lifts a hold.
         A new schedule publishes a new version. Saving the same one again publishes none.
         Saving is not a write to Jira or Confluence, so it needs no approval. An own workflow's
-        new schedule is saved in n8n first (ENGINE-PLAN 2.5)."""
+        new schedule is saved in n8n first (ENGINE-PLAN 2.5). A save made from a version that
+        is no longer in use changes nothing."""
         # Read the workflow before the lock, so the lock holds one connection and no more.
         view = await self.get_use_case(use_case_id, principal)
         if view is None:
@@ -637,10 +640,18 @@ class Builder:
         if view.template == SOFTWARE_WATCHLIST.key:
             return ScheduleOnSoftwarePage()
         after = Schedule(body.day, body.at)
-        match await self._publish(use_case_id, principal, body.via, lambda _: Publish(after)):
+        match await self._publish(
+            use_case_id, principal, body.via, lambda _: Publish(after), body.expected_version
+        ):
             case None:
                 return None
-            case N8nNotReady() | DraftRefused() | ChangedInN8n() | HeldInN8n() as refused:
+            case (
+                N8nNotReady()
+                | DraftRefused()
+                | ChangedInN8n()
+                | ChangedSince()
+                | HeldInN8n() as refused
+            ):
                 return refused
             case _:
                 return await self.get_use_case(use_case_id, principal)
@@ -684,6 +695,7 @@ class Builder:
         principal: Principal,
         via: Via,
         decide: Callable[[Sequence[Version]], Undo],
+        expected: int | None = None,
     ) -> Undo | InN8nRefused | None:
         """Publishes what `decide` makes of the versions, and saves its schedule. The builder
         cannot write orchestration's schedules, so the schedule is saved in its own transaction,
@@ -712,6 +724,8 @@ class Builder:
             state = lifecycle_of(row)
             if not isinstance(state, Draft | On | Paused):
                 return None
+            if expected is not None and row["current_version"] != expected:
+                return ChangedSince()
             draft = isinstance(state, Draft)
             versions = [] if draft else await versions_of(uow.conn, use_case_id)
             decided = decide(versions)

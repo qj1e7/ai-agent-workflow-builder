@@ -203,17 +203,9 @@ export const checksOnItsOwn = (view: Pick<WatchlistView, 'schedule' | 'state'> |
 
 export const NOT_AUTOMATIC = 'Not checked automatically'
 
-const heldWhy: Record<ScheduleHold, string> = {
-  owner_removed: 'is no longer on the People list',
-  owner_not_an_operator: 'can no longer run workflows',
-}
-
-/** Why a held schedule starts nothing, in the words the Software page and the workflow page both show. */
-export const TAKE_OVER_WORDS = 'An Operator can take it over by saving the schedule.'
-
-export function heldWords(held: ScheduleHold, ownerName: string, howToRunAgain: string): string {
-  const owner = ownerName.trim() || 'its owner'
-  return `Not running: ${owner} ${heldWhy[held]}. ${howToRunAgain}`
+/** Why a held schedule starts nothing and how it runs again, in the platform's words, the one source the Software page and the workflow page show. Null while it is not held. */
+export function heldWords(schedule: { readonly held?: ScheduleHold | null; readonly held_words?: string | null }): string | null {
+  return schedule.held ? (schedule.held_words ?? 'Not running.') : null
 }
 
 /**
@@ -228,7 +220,8 @@ export function nextCheckOf(view: Pick<WatchlistView, 'state' | 'schedule'> | nu
 }
 
 export function nextCheckWords(schedule: ScheduleView, paused: boolean): string {
-  if (schedule.held && !paused) return heldWords(schedule.held, schedule.owner_name, TAKE_OVER_WORDS)
+  const held = heldWords(schedule)
+  if (held && !paused) return held
   if (schedule.next_at === null) return PAUSED_WORDS
   return `Next check ${dateAndClock(schedule.next_at, schedule.time_zone)}, ${timesZone(schedule.time_zone)}.`
 }

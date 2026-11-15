@@ -320,7 +320,7 @@ function Loaded({ view, operator, answeredAt, now, rowId }: LoadedProps) {
         </p>
       ) : null}
       {view ? (
-        <Schedule schedule={view.schedule} operator={operator} useCaseId={view.use_case_id} paused={paused} answeredAt={answeredAt} onResumed={() => dispatch({ type: 'resumed' })} />
+        <Schedule schedule={view.schedule} version={view.version} operator={operator} useCaseId={view.use_case_id} paused={paused} answeredAt={answeredAt} onResumed={() => dispatch({ type: 'resumed' })} />
       ) : null}
     </>
   )

@@ -4948,7 +4948,7 @@
       },
       "EditReply": {
         "additionalProperties": false,
-        "description": "A change to a workflow the person has, proposed. Nothing changes until they save it: an\nOperator saves a workflow's schedule with PUT /api/v1/use-cases/{use_case_id}/schedule, with\nvia set to chat, which publishes a version that POST .../versions/{version}/undo undoes. The\nSoftware watchlist's is saved with PUT /api/v1/watchlist/schedule and keeps no versions.",
+        "description": "A change to a workflow the person has, proposed. Nothing changes until they save it: an\nOperator saves a workflow's schedule with PUT /api/v1/use-cases/{use_case_id}/schedule, with\nvia set to chat and the version read, which publishes a version that POST\n.../versions/{version}/undo undoes. The Software watchlist's is saved with PUT\n/api/v1/watchlist/schedule, with the version read, and keeps no versions.",
         "properties": {
           "after": {
             "anyOf": [
@@ -5673,6 +5673,42 @@
         "title": "FollowingUpItem",
         "type": "object"
       },
+      "FollowingUpPage": {
+        "additionalProperties": false,
+        "properties": {
+          "following_up": {
+            "description": "This person's own requests to the team, the newest first, 50 a page.",
+            "items": {
+              "$ref": "#/components/schemas/FollowingUpItem"
+            },
+            "title": "Following Up",
+            "type": "array"
+          },
+          "following_up_total": {
+            "title": "Following Up Total",
+            "type": "integer"
+          },
+          "next": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Pass it as `after` to read the next page. Null when every row has been sent.",
+            "title": "Next"
+          }
+        },
+        "required": [
+          "following_up",
+          "following_up_total",
+          "next"
+        ],
+        "title": "FollowingUpPage",
+        "type": "object"
+      },
       "FoundModel": {
         "additionalProperties": false,
         "properties": {
@@ -5816,6 +5852,7 @@
       },
       "HomeOut": {
         "additionalProperties": false,
+        "description": "The first page of each list that can run long, with its total, and the cursor that reads\nthe rest, so every row a total counts can be reached.",
         "properties": {
           "addresses": {
             "description": "For an Operator, the watched software whose repository GitHub moved or cannot find, as the latest check left it, in the order of the Software page. The same rows the Software page lists under Needs attention.",
@@ -5826,7 +5863,7 @@
             "type": "array"
           },
           "approvals": {
-            "description": "Runs waiting for a yes this person may give, the newest first. At most 10.",
+            "description": "Runs waiting for a yes this person may give, the newest first. The first 10.",
             "items": {
               "$ref": "#/components/schemas/ApprovalItem"
             },
@@ -5873,7 +5910,7 @@
             "type": "array"
           },
           "declined": {
-            "description": "An Operator's own test runs that an Approver declined, while each is the newest run of its workflow, the newest decline first. They are part of Needs you, and one leaves when the workflow runs again. At most 10.",
+            "description": "An Operator's own test runs that an Approver declined, while each is the newest run of its workflow, the newest decline first. They are part of Needs you, and one leaves when the workflow runs again. The first 10.",
             "items": {
               "$ref": "#/components/schemas/DeclinedItem"
             },
@@ -5893,19 +5930,43 @@
             "type": "array"
           },
           "following_up": {
-            "description": "This person's own requests to the team, Ask the team and Report to support, the newest first, with the status and the latest reply. At most 50. A request marked Done leaves after 30 days.",
+            "description": "This person's own requests to the team, Ask the team and Report to support, the newest first, with the status and the latest reply. The first 50. A request marked Done leaves after 30 days.",
             "items": {
               "$ref": "#/components/schemas/FollowingUpItem"
             },
             "title": "Following Up",
             "type": "array"
           },
+          "following_up_next": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Pass it as `after` to `/api/v1/home/following-up` for the rest. Null when all are here.",
+            "title": "Following Up Next"
+          },
           "following_up_total": {
             "title": "Following Up Total",
             "type": "integer"
           },
+          "needs_next": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Pass it as `after` to `/api/v1/home/needs` for the rest of approvals, stopped, declined and questions_for_me. Null when all are here.",
+            "title": "Needs Next"
+          },
           "questions_for_me": {
-            "description": "Questions Approvers asked this person on requests they started, or whose schedule they own, while each request waits for a yes and the question has no answer. The newest first. They are part of Needs you. At most 10.",
+            "description": "Questions Approvers asked this person on requests they started, or whose schedule they own, while each request waits for a yes and the question has no answer. The newest first. They are part of Needs you. The first 10.",
             "items": {
               "$ref": "#/components/schemas/QuestionItem"
             },
@@ -5925,7 +5986,7 @@
             "type": "array"
           },
           "stopped": {
-            "description": "Stopped runs an Operator started, owns or retried, while each is the newest run of its workflow. The newest first. At most 10.",
+            "description": "Stopped runs an Operator started, owns or retried, while each is the newest run of its workflow. The newest first. The first 10.",
             "items": {
               "$ref": "#/components/schemas/StoppedItem"
             },
@@ -5937,12 +5998,24 @@
             "type": "integer"
           },
           "waiting_on_others": {
-            "description": "Runs waiting for someone else's yes that this person is part of. At most 50.",
+            "description": "Runs waiting for someone else's yes that this person is part of. The first 50.",
             "items": {
               "$ref": "#/components/schemas/WaitingItem"
             },
             "title": "Waiting On Others",
             "type": "array"
+          },
+          "waiting_on_others_next": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Pass it as `after` to `/api/v1/home/waiting-on-others` for the rest. Null when all are here.",
+            "title": "Waiting On Others Next"
           },
           "waiting_on_others_total": {
             "title": "Waiting On Others Total",
@@ -5962,13 +6035,16 @@
           "stopped_total",
           "waiting_on_others",
           "waiting_on_others_total",
+          "waiting_on_others_next",
           "declined",
           "declined_total",
           "questions_for_me",
           "questions_for_me_total",
+          "needs_next",
           "drafts",
           "following_up",
           "following_up_total",
+          "following_up_next",
           "replied",
           "coming_up",
           "workflows",
@@ -7054,6 +7130,85 @@
           "answer"
         ],
         "title": "NeedsMeReply",
+        "type": "object"
+      },
+      "NeedsPage": {
+        "additionalProperties": false,
+        "description": "One page of the parts of Needs you that can run long. Each total counts every row.",
+        "properties": {
+          "approvals": {
+            "description": "Runs waiting for a yes this person may give, the newest first, 10 a page.",
+            "items": {
+              "$ref": "#/components/schemas/ApprovalItem"
+            },
+            "title": "Approvals",
+            "type": "array"
+          },
+          "approvals_total": {
+            "title": "Approvals Total",
+            "type": "integer"
+          },
+          "declined": {
+            "description": "An Operator's own test runs that an Approver declined, while each is the newest run of its workflow, the newest decline first. One leaves when the workflow runs again. 10 a page.",
+            "items": {
+              "$ref": "#/components/schemas/DeclinedItem"
+            },
+            "title": "Declined",
+            "type": "array"
+          },
+          "declined_total": {
+            "title": "Declined Total",
+            "type": "integer"
+          },
+          "next": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Pass it as `after` to read the next page. Null when every row has been sent.",
+            "title": "Next"
+          },
+          "questions_for_me": {
+            "description": "Questions Approvers asked this person on requests they started, or whose schedule they own, while each request waits for a yes and the question has no answer. The newest first, 10 a page.",
+            "items": {
+              "$ref": "#/components/schemas/QuestionItem"
+            },
+            "title": "Questions For Me",
+            "type": "array"
+          },
+          "questions_for_me_total": {
+            "title": "Questions For Me Total",
+            "type": "integer"
+          },
+          "stopped": {
+            "description": "Stopped runs an Operator started, owns or retried, while each is the newest run of its workflow. The newest first, 10 a page.",
+            "items": {
+              "$ref": "#/components/schemas/StoppedItem"
+            },
+            "title": "Stopped",
+            "type": "array"
+          },
+          "stopped_total": {
+            "title": "Stopped Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "approvals",
+          "approvals_total",
+          "stopped",
+          "stopped_total",
+          "declined",
+          "declined_total",
+          "questions_for_me",
+          "questions_for_me_total",
+          "next"
+        ],
+        "title": "NeedsPage",
         "type": "object"
       },
       "NewAgent": {
@@ -10395,6 +10550,30 @@
         "title": "ScheduleIn",
         "type": "object"
       },
+      "ScheduleSaveIn": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "$ref": "#/components/schemas/ClockTime",
+            "description": "Time of day in Singapore, HH:MM on a 5-minute step."
+          },
+          "day": {
+            "$ref": "#/components/schemas/Day"
+          },
+          "expected_version": {
+            "description": "The version the person read before making this change. When another version is in use by now, nothing is saved or published and the answer is 409, so a teammate's later change is never overwritten.",
+            "title": "Expected Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "day",
+          "at",
+          "expected_version"
+        ],
+        "title": "ScheduleSaveIn",
+        "type": "object"
+      },
       "ScheduleView": {
         "additionalProperties": false,
         "properties": {
@@ -10414,6 +10593,18 @@
               }
             ],
             "description": "Why the schedule starts no check: owner_removed when the owner has left the People list, owner_not_an_operator when they are no longer an Operator. An Operator takes it over by saving it again. Null while the owner can run it."
+          },
+          "held_words": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why a held schedule starts no run, and how it runs again, in the words to show. Null while the owner can run it.",
+            "title": "Held Words"
           },
           "next_at": {
             "anyOf": [
@@ -12401,6 +12592,18 @@
             ],
             "description": "Why the schedule starts no run: owner_removed when the owner has left the People list, owner_not_an_operator when they are no longer an Operator. An Operator takes it over by saving it again. Null while the owner can run it."
           },
+          "held_words": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why a held schedule starts no run, and how it runs again, in the words to show. Null while the owner can run it.",
+            "title": "Held Words"
+          },
           "owner_name": {
             "description": "The name of the schedule owner. Its scheduled runs start as them.",
             "title": "Owner Name",
@@ -12430,6 +12633,11 @@
           "day": {
             "$ref": "#/components/schemas/Day"
           },
+          "expected_version": {
+            "description": "The version the person read before making this change. When another version is in use by now, nothing is saved or published and the answer is 409, so a teammate's later change is never overwritten.",
+            "title": "Expected Version",
+            "type": "integer"
+          },
           "via": {
             "$ref": "#/components/schemas/Via",
             "default": "page",
@@ -12438,7 +12646,8 @@
         },
         "required": [
           "day",
-          "at"
+          "at",
+          "expected_version"
         ],
         "title": "UseCaseScheduleIn",
         "type": "object"
@@ -13004,6 +13213,42 @@
           "because"
         ],
         "title": "WaitingItem",
+        "type": "object"
+      },
+      "WaitingPage": {
+        "additionalProperties": false,
+        "properties": {
+          "next": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Pass it as `after` to read the next page. Null when every row has been sent.",
+            "title": "Next"
+          },
+          "waiting_on_others": {
+            "description": "Runs waiting for someone else's yes that this person is part of, the newest first, 50 a page.",
+            "items": {
+              "$ref": "#/components/schemas/WaitingItem"
+            },
+            "title": "Waiting On Others",
+            "type": "array"
+          },
+          "waiting_on_others_total": {
+            "title": "Waiting On Others Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "waiting_on_others",
+          "waiting_on_others_total",
+          "next"
+        ],
+        "title": "WaitingPage",
         "type": "object"
       },
       "WatchedSoftwareView": {
@@ -15666,6 +15911,276 @@
           }
         ],
         "summary": "Home",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/home/following-up": {
+      "get": {
+        "description": "A page of this person's own requests to the team, the newest first.",
+        "operationId": "home_following_up_api_v1_home_following_up_get",
+        "parameters": [
+          {
+            "description": "The `next` of the page before, or Home's cursor for the list. Leave it out for the first page.",
+            "in": "query",
+            "name": "after",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The `next` of the page before, or Home's cursor for the list. Leave it out for the first page.",
+              "title": "After"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FollowingUpPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Signed in, but not on the People list. Ask an Operator to add you"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "This isn\u2019t a page this list gave out. Read the list again from its first page."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Home Following Up",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/home/needs": {
+      "get": {
+        "description": "A page of the parts of Needs you that can run long: runs waiting for this person's yes, stopped runs, declined test runs and questions, each the newest first. Home answers the first page. Each total counts every row, so the pages reach every one.",
+        "operationId": "home_needs_api_v1_home_needs_get",
+        "parameters": [
+          {
+            "description": "The `next` of the page before, or Home's cursor for the list. Leave it out for the first page.",
+            "in": "query",
+            "name": "after",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The `next` of the page before, or Home's cursor for the list. Leave it out for the first page.",
+              "title": "After"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NeedsPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Signed in, but not on the People list. Ask an Operator to add you"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "This isn\u2019t a page this list gave out. Read the list again from its first page."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Home Needs",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/home/waiting-on-others": {
+      "get": {
+        "description": "A page of the runs waiting for someone else's yes that this person is part of, the newest first.",
+        "operationId": "home_waiting_on_others_api_v1_home_waiting_on_others_get",
+        "parameters": [
+          {
+            "description": "The `next` of the page before, or Home's cursor for the list. Leave it out for the first page.",
+            "in": "query",
+            "name": "after",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The `next` of the page before, or Home's cursor for the list. Leave it out for the first page.",
+              "title": "After"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WaitingPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Signed in, but not on the People list. Ask an Operator to add you"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "This isn\u2019t a page this list gave out. Read the list again from its first page."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Home Waiting On Others",
         "tags": [
           "builder"
         ]
@@ -19803,7 +20318,7 @@
     },
     "/api/v1/use-cases/{use_case_id}/schedule": {
       "put": {
-        "description": "Saves when the workflow runs on its own, in Singapore time. The caller becomes the schedule owner, whose scheduled runs start as them and who can never approve them. That lifts a hold, so an Operator takes over a workflow whose owner can no longer run it by saving its schedule. A new schedule publishes a new version of the workflow, which the answer names. Saving the same schedule again publishes none. A paused workflow stays paused. Saving is not a write to Jira or Confluence, so it needs no approval.",
+        "description": "Saves when the workflow runs on its own, in Singapore time. The caller becomes the schedule owner, whose scheduled runs start as them and who can never approve them. That lifts a hold, so an Operator takes over a workflow whose owner can no longer run it by saving its schedule. A new schedule publishes a new version of the workflow, which the answer names. Saving the same schedule again publishes none. A paused workflow stays paused. Saving is not a write to Jira or Confluence, so it needs no approval. With expected_version, a save made from a version that is no longer in use saves nothing.",
         "operationId": "save_schedule_api_v1_use_cases__use_case_id__schedule_put",
         "parameters": [
           {
@@ -19875,7 +20390,7 @@
                 }
               }
             },
-            "description": "The Software watchlist's schedule is saved on the Software page. Or: Changed again since, in n8n. Nothing was saved."
+            "description": "Changed since you opened it. Nothing was saved. Or: The Software watchlist's schedule is saved on the Software page. Or: Changed again since, in n8n. Nothing was saved."
           },
           "422": {
             "content": {
@@ -20591,8 +21106,21 @@
     },
     "/api/v1/watchlist/schedule": {
       "delete": {
-        "description": "Turns the schedule off. Checks then start only when an Operator starts one.",
+        "description": "Turns the schedule off. Checks then start only when an Operator starts one. Turning it off from a version of the watchlist that is no longer in use changes nothing.",
         "operationId": "turn_off_schedule_api_v1_watchlist_schedule_delete",
+        "parameters": [
+          {
+            "description": "The version the person read before making this change. When another version is in use by now, nothing is saved or published and the answer is 409, so a teammate's later change is never overwritten.",
+            "in": "query",
+            "name": "expected_version",
+            "required": true,
+            "schema": {
+              "description": "The version the person read before making this change. When another version is in use by now, nothing is saved or published and the answer is 409, so a teammate's later change is never overwritten.",
+              "title": "Expected Version",
+              "type": "integer"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -20642,7 +21170,17 @@
                 }
               }
             },
-            "description": "Changed again since, in n8n. Nothing was saved."
+            "description": "Changed since you opened it. Nothing was saved. Or: Changed again since, in n8n. Nothing was saved."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           },
           "503": {
             "content": {
@@ -20669,13 +21207,13 @@
         ]
       },
       "put": {
-        "description": "Saves when the watchlist is checked on its own. The caller becomes the schedule owner, who can never approve a scheduled check. On its own n8n workflow, the Schedule Trigger changes first, under the version compare, and nothing is saved when n8n does not take it.",
+        "description": "Saves when the watchlist is checked on its own. The caller becomes the schedule owner, who can never approve a scheduled check. On its own n8n workflow, the Schedule Trigger changes first, under the version compare, and nothing is saved when n8n does not take it. A save made from a version of the watchlist that is no longer in use saves nothing.",
         "operationId": "save_schedule_api_v1_watchlist_schedule_put",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ScheduleIn"
+                "$ref": "#/components/schemas/ScheduleSaveIn"
               }
             }
           },
@@ -20730,7 +21268,7 @@
                 }
               }
             },
-            "description": "Changed again since, in n8n. Nothing was saved."
+            "description": "Changed since you opened it. Nothing was saved. Or: Changed again since, in n8n. Nothing was saved."
           },
           "422": {
             "content": {

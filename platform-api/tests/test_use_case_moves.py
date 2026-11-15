@@ -28,16 +28,16 @@ from platform_api.builder.moves import (
 from platform_api.builder.n8n_draft import DraftRefused, N8nNotReady, NotSafe
 from platform_api.builder.watchlist import AlreadyOnN8n, MovedToN8n, WaitsForRun
 from platform_api.db import json
-from platform_api.orchestration import Publisher, RanVersion, Schedule
+from platform_api.orchestration import Day, Publisher, RanVersion, Schedule
 from platform_api.orchestration.approvals import Refusal, Verdict
 from platform_api.orchestration.runs import Acting, AwaitingApproval, Succeeded
-from platform_api.orchestration.schedule_store import ScheduleBook, schedule_owner
+from platform_api.orchestration.schedule_store import ScheduleBook, saved_schedule
 from platform_api.orchestration.service import Decided, DecisionRefused
 from platform_api.orchestration.watch_store import WatchFacts
-from platform_api.shared import N8nExecutionId, RunId, UseCaseId
+from platform_api.shared import N8nExecutionId, Principal, RunId, UseCaseId
 from tests.conftest import PostgresUrls
 from tests.fake_n8n import FakeN8n
-from tests.support import ALICE, BOB, CAROL, SPEC
+from tests.support import ALICE, BOB, CAROL, SPEC, schedule_owners_listed
 from tests.test_builder_lifecycle import Lab, ModelConnected
 from tests.test_n8n_builder import BODY, ERROR_WORKFLOW, WRITES, lab
 from tests.test_n8n_lifecycle import NEVER_LIVE, Workflows
@@ -126,11 +126,16 @@ class Moving:
         )
         assert created.status_code == 201, created.text
         use_case_id = str(created.json()["use_case_id"])
-        old = self.lab.builder
-        await old.save_schedule(use_case_id, DAVE, UseCaseScheduleIn(day="monday", at="07:00"))
-        await old.save_schedule(use_case_id, ALICE, UseCaseScheduleIn(day="tuesday", at="07:30"))
+        await self.save_schedule(use_case_id, DAVE, "monday", "07:00")
+        await self.save_schedule(use_case_id, ALICE, "tuesday", "07:30")
         assert (await self.use_case(use_case_id))["engine"] == "shared_run"
         return use_case_id
+
+    async def save_schedule(self, use_case_id: str, who: Principal, day: Day, at: str) -> None:
+        """A save from the version in use now, as the workflow's page makes it."""
+        known = (await self.use_case(use_case_id))["current_version"]
+        body = UseCaseScheduleIn(day=day, at=at, expected_version=known)
+        await self.lab.builder.save_schedule(use_case_id, who, body)
 
     async def waiting_run(self, use_case_id: str) -> RunId:
         """A run of it on the shared run workflow, waiting for a yes."""
@@ -218,7 +223,8 @@ async def test_safety_everyone_whose_work_it_was_stays_a_party_after_the_move(m:
     version_id = (await m.version(use_case_id, 4))["n8n_version_id"]
     assert await m.builder.facts.version(moved.workflow_id, version_id) == MOVED
     async with m.lab.h.db.connection("orchestration") as conn:
-        assert await schedule_owner(conn, UseCaseId(use_case_id)) == ALICE.user_id
+        saved = await saved_schedule(conn, UseCaseId(use_case_id))
+    assert saved is not None and saved.owner == ALICE.user_id
 
 
 async def test_safety_nobody_whose_work_a_moved_workflow_is_approves_its_scheduled_run(w: Writes):
@@ -226,6 +232,7 @@ async def test_safety_nobody_whose_work_a_moved_workflow_is_approves_its_schedul
     schedule and published it, Carol set it up and Dave changed it. Bob, who is none of them,
     may say yes."""
     w.workflows.versions = {"v1": MOVED}
+    await schedule_owners_listed(w.h.db, ALICE)
     await ScheduleBook(w.h.db).save(SPEC.use_case_id, Schedule("tuesday", "07:30"), ALICE)
     await w.ask()
     run = await w.run()
@@ -365,9 +372,7 @@ async def test_a_held_schedule_stays_until_an_operator_saves_it(m: Moving):
             "UPDATE orchestration.people SET removed_at = now() WHERE id = 'alice'"
         )
     assert await m.moves.move(use_case_id) == ScheduleHeld("owner_removed")
-    await m.lab.builder.save_schedule(
-        use_case_id, CAROL, UseCaseScheduleIn(day="friday", at="09:00")
-    )
+    await m.save_schedule(use_case_id, CAROL, "friday", "09:00")
     assert isinstance(await m.moves.move(use_case_id), MovedToN8n)
 
 

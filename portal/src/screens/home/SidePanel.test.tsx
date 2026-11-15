@@ -10,7 +10,7 @@ import capabilities from '../../../../contracts/fixtures/planner/capabilities.js
 import statuses from '../../../../contracts/fixtures/watchlist/statuses.json'
 import { ApiProvider } from '../../api/context'
 import { createDevSession } from '../../api/session'
-import type { CapabilitiesView, HomeOut, Me, UseCaseView, WatchlistView } from '../../api/types'
+import type { ApprovalItem, CapabilitiesView, HomeOut, Me, NeedsPage, UseCaseView, WatchlistView } from '../../api/types'
 import { InChat } from '../../ui/fromChat'
 import { escapeIsFree } from '../../ui/escape'
 import { focusAfterClose, wrapTab, type PanelItem } from '../../ui/sidePanel'
@@ -26,6 +26,7 @@ const WATCHLIST = statuses as WatchlistView
 const REDIS = 'sw_01JBW00000000000000000003'
 const REGISTRY = capabilities as CapabilitiesView
 
+const EMPTY_PAGE: NeedsPage = { approvals: [], approvals_total: 0, stopped: [], stopped_total: 0, declined: [], declined_total: 0, questions_for_me: [], questions_for_me_total: 0, next: null }
 const ALICE_HOME = aliceHome as HomeOut
 const BOB_HOME = bobHome as HomeOut
 const OPEN_BESIDE = () => undefined
@@ -42,11 +43,13 @@ interface Options {
   useCases?: UseCaseView[]
   back?: PanelItem | null
   onOpen?: (item: PanelItem) => void
+  /** The pages of Needs you that Show more has read. */
+  pages?: NeedsPage[]
 }
 
 function draw(
   item: PanelItem,
-  { me = ALICE, narrow = false, useCase = STOPPED, home = me.id === 'bob' ? BOB_HOME : ALICE_HOME, useCases = [STOPPED], back = null, onOpen }: Options = {},
+  { me = ALICE, narrow = false, useCase = STOPPED, home = me.id === 'bob' ? BOB_HOME : ALICE_HOME, useCases = [STOPPED], back = null, onOpen, pages }: Options = {},
 ): string {
   const session = createDevSession({ getItem: () => me.id, setItem: () => undefined })
   const scope = session.cacheScope()
@@ -59,6 +62,7 @@ function draw(
   queryClient.setQueryData(['use-cases', scope], useCases)
   queryClient.setQueryData(['use-case', scope, useCase.use_case_id], useCase)
   queryClient.setQueryData(['troubleshoot', scope, STOPPED.last_run?.run_id, 0], advice)
+  if (pages) queryClient.setQueryData(['home', scope, 'needs'], { pages, pageParams: pages.map((_, n) => (n === 0 ? null : (pages[n - 1]?.next ?? null))) })
   return renderToStaticMarkup(
     <QueryClientProvider client={queryClient}>
       <ApiProvider session={session} platformFetch={fetch} origin="http://portal.test">
@@ -143,6 +147,24 @@ describe('the side panel’s views', () => {
     expect(links(html)[0]).toEqual(['More details', '/workflows'])
     expect(text(html)).toMatch(/Do now[\s\S]*Software watchlist stopped[\s\S]*Set up/)
     expect(html.match(/data-home-item=/g)).toHaveLength(needsTotal(ALICE_HOME))
+  })
+
+  it('holds every request the strip’s N more counts: a page at a time with Show more, then all of them', () => {
+    const [first] = BOB_HOME.approvals as [ApprovalItem]
+    const asks = Array.from({ length: 27 }, (_, n) => ({ ...first, run_id: `run_${String(n)}`, approval_id: `apr_${String(n)}`, started_at: new Date(Date.UTC(2026, 10, 3, 1, 59 - n)).toISOString() }))
+    const page = (from: number, to: number, next: string | null): NeedsPage => ({ ...EMPTY_PAGE, approvals: asks.slice(from, to), approvals_total: 27, next })
+    const home: HomeOut = { ...BOB_HOME, ...page(0, 10, 'c1'), confirmations: [], needs_next: 'c1' }
+    const strip = needsTotal(home)
+    expect(strip, 'the strip counts every request').toBe(27)
+
+    const firstPage = draw({ kind: 'needs' }, { me: BOB, home })
+    expect(firstPage.match(/data-home-item=/g)).toHaveLength(10)
+    expect(firstPage).toMatch(/role="status"[^>]*>Showing 10 of 27\.<\/p>/)
+    expect(buttons(firstPage)).toContain('Show more')
+
+    const all = draw({ kind: 'needs' }, { me: BOB, home, pages: [page(0, 10, 'c1'), page(10, 20, 'c2'), page(20, 27, null)] })
+    expect([...all.matchAll(/data-home-item="approval:(apr_\d+)"/g)].map((m) => m[1])).toEqual(asks.map((ask) => ask.approval_id))
+    expect(buttons(all)).not.toContain('Show more')
   })
 
   it('opens a row of Needs you in the panel, with a button that the chat’s Back can undo, and a page link where there is no panel item', () => {

@@ -211,7 +211,7 @@ class _Workflows:
 
 
 class _Facts:
-    async def read(self, viewer: Principal) -> PlannerFacts:
+    async def read(self, viewer: Principal, request: str) -> PlannerFacts:
         return PlannerFacts()
 
 

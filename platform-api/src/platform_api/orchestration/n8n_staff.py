@@ -13,8 +13,8 @@ import asyncio
 import contextlib
 import logging
 from collections.abc import Awaitable, Callable, Mapping
-from dataclasses import dataclass, field
-from datetime import timedelta
+from dataclasses import dataclass, field, replace
+from datetime import datetime, timedelta
 from typing import Any, Literal
 
 import httpx
@@ -30,7 +30,13 @@ SETTLE_EVERY = timedelta(seconds=15)
 
 NO_ACCESS = "Only people with n8n access can open n8n. An admin can add it in Settings."
 OFF = "Opening n8n is coming once the block list is on."
-NOT_READY = "n8n can't be opened until its block list is checked again."
+NOT_READY = (
+    "n8n can't be opened from here until its block list is checked again. Your own n8n space "
+    "stays, without any of the team's workflows."
+)
+INVITE_LIFE = timedelta(days=7)
+"""n8n's password link never runs out, so an unused one this old is replaced by a new account
+and link, shown only to its person."""
 NOT_MADE = "Your n8n account isn't made yet. Try again in a minute."
 SET_PASSWORD = "Set your n8n password first. The link is on your Settings page."
 
@@ -99,6 +105,7 @@ class _Row:
     on_list: bool
     n8n_user_id: str | None
     sealed_invite: str | None
+    invited_at: datetime | None
 
 
 @dataclass(frozen=True)
@@ -116,7 +123,12 @@ class Accepted:
     person: UserId
 
 
-type Settled = Made | Ended | Accepted
+@dataclass(frozen=True)
+class Reissued:
+    person: UserId
+
+
+type Settled = Made | Ended | Accepted | Reissued
 
 
 def _ready_or_not(row: _Row, account: AccountState) -> NotYet | CanOpen:
@@ -132,7 +144,7 @@ def _ready_or_not(row: _Row, account: AccountState) -> NotYet | CanOpen:
 
 _ROW = (
     "SELECT id, email, n8n_access, removed_at IS NULL AS on_list, n8n_user_id,"
-    " n8n_invite FROM orchestration.people"
+    " n8n_invite, n8n_invited_at FROM orchestration.people"
 )
 
 
@@ -144,6 +156,7 @@ def _row(row: Mapping[str, Any]) -> _Row:
         row["on_list"],
         row["n8n_user_id"],
         row["n8n_invite"],
+        row["n8n_invited_at"],
     )
 
 
@@ -272,9 +285,47 @@ class StaffAccounts:
             return await self._make(row)
         if not wants and row.n8n_user_id is not None and not await holds(row.id):
             return await self._end(row)
-        if wants and row.sealed_invite is not None and await self._account(row) == "ready":
-            return Accepted(row.id)
+        if wants and row.sealed_invite is not None:
+            match await self._account(row):
+                case "ready":
+                    return Accepted(row.id)
+                case "invited" if self._stale(row) and gate.closed is None:
+                    return await self._reissue(row)
+                case _:
+                    return None
         return None
+
+    def _stale(self, row: _Row) -> bool:
+        return row.invited_at is not None and self._db.clock() - row.invited_at >= INVITE_LIFE
+
+    async def _reissue(self, row: _Row) -> Reissued | None:
+        """Ends the unused account and makes a new one, so the old link opens nothing."""
+        await self._end(row)
+        made = await self._make(replace(row, n8n_user_id=None, sealed_invite=None))
+        log.info("made a new n8n password link for %s, as the old one went unused", row.id)
+        return None if made is None else Reissued(row.id)
+
+    async def recheck(self, person: UserId) -> None:
+        """Asks n8n whether the person's account is still there, and forgets one n8n no longer
+        has, so the next settle makes it again."""
+        row = await self._person(person)
+        if row is None or row.n8n_user_id is None or self._api is None:
+            return
+        try:
+            user = await self._api.user(row.n8n_user_id)
+        except (N8nError, httpx.HTTPError) as error:
+            log.warning("could not read the n8n account of %s: %s", person, error)
+            return
+        if user is not None:
+            return
+        async with self._db.transaction("orchestration") as uow:
+            await uow.conn.execute(
+                "UPDATE orchestration.people SET n8n_user_id = NULL, n8n_invite = NULL,"
+                " n8n_invited_at = NULL WHERE id = %s AND n8n_user_id = %s",
+                (person, row.n8n_user_id),
+            )
+        log.warning("n8n no longer has the account of %s, so the platform makes it again", person)
+        self.nudge()
 
     async def _make(self, row: _Row) -> Made | None:
         assert self._api is not None and self._box is not None
@@ -289,10 +340,10 @@ class StaffAccounts:
         async with self._db.transaction("orchestration") as uow:
             kept = await (
                 await uow.conn.execute(
-                    "UPDATE orchestration.people SET n8n_user_id = %s, n8n_invite = %s"
-                    " WHERE id = %s AND n8n_user_id IS NULL AND n8n_access"
+                    "UPDATE orchestration.people SET n8n_user_id = %s, n8n_invite = %s,"
+                    " n8n_invited_at = %s WHERE id = %s AND n8n_user_id IS NULL AND n8n_access"
                     " AND removed_at IS NULL RETURNING id",
-                    (invited.user_id, self._box.seal(invited.link), row.id),
+                    (invited.user_id, self._box.seal(invited.link), uow.now, row.id),
                 )
             ).fetchone()
         if kept is None:
@@ -306,8 +357,8 @@ class StaffAccounts:
         await self._delete(row.n8n_user_id)
         async with self._db.transaction("orchestration") as uow:
             await uow.conn.execute(
-                "UPDATE orchestration.people SET n8n_user_id = NULL, n8n_invite = NULL"
-                " WHERE id = %s AND n8n_user_id = %s",
+                "UPDATE orchestration.people SET n8n_user_id = NULL, n8n_invite = NULL,"
+                " n8n_invited_at = NULL WHERE id = %s AND n8n_user_id = %s",
                 (row.id, row.n8n_user_id),
             )
         log.info("ended the n8n account of %s", row.id)
@@ -337,7 +388,7 @@ class StaffAccounts:
             return "invited"
         async with self._db.transaction("orchestration") as uow:
             await uow.conn.execute(
-                "UPDATE orchestration.people SET n8n_invite = NULL,"
+                "UPDATE orchestration.people SET n8n_invite = NULL, n8n_invited_at = NULL,"
                 " n8n_user_id = CASE WHEN %s THEN NULL ELSE n8n_user_id END"
                 " WHERE id = %s AND n8n_user_id = %s",
                 (user is None, row.id, row.n8n_user_id),

@@ -126,7 +126,8 @@ class NotAScheduleChange:
 
 @dataclass(frozen=True)
 class ChangedSince:
-    """A later version exists, and Undo would throw it away."""
+    """A later version exists than the one the change was made from, so making it would throw
+    that version away."""
 
 
 @dataclass(frozen=True)

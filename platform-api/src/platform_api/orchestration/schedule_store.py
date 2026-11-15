@@ -12,6 +12,21 @@ type ScheduleHold = Literal["owner_removed", "owner_not_an_operator"]
 """Why a schedule starts no run: its owner has left the People list, or is no longer an
 Operator."""
 
+_HELD_WHY: dict[ScheduleHold, str] = {
+    "owner_removed": "is no longer on the People list",
+    "owner_not_an_operator": "can no longer run workflows",
+}
+
+
+def held_words(hold: ScheduleHold, owner_name: str) -> str:
+    """Why a held schedule starts no run, and how it runs again: the one source of these words,
+    which every view carries and the log of a slot it ended says."""
+    owner = owner_name.strip() or "its owner"
+    return (
+        f"Not running: {owner} {_HELD_WHY[hold]}. "
+        "An Operator can take it over by saving the schedule."
+    )
+
 
 @dataclass(frozen=True)
 class SavedSchedule:
@@ -39,6 +54,11 @@ class SavedSchedule:
     def held(self) -> ScheduleHold | None:
         starter = self.starter
         return None if isinstance(starter, Principal) else starter
+
+    @property
+    def held_words(self) -> str | None:
+        hold = self.held
+        return None if hold is None else held_words(hold, self.owner_name)
 
 
 _WITH_OWNER = (
@@ -69,10 +89,7 @@ class ScheduleBook:
 
     async def get(self, use_case_id: UseCaseId) -> SavedSchedule | None:
         async with self._db.connection("orchestration") as conn:
-            row = await (
-                await conn.execute(_SCHEDULES + " WHERE s.use_case_id = %s", (use_case_id,))
-            ).fetchone()
-        return None if row is None else _saved(row)
+            return await saved_schedule(conn, use_case_id)
 
     async def save(
         self, use_case_id: UseCaseId, schedule: Schedule, owner: Principal
@@ -133,11 +150,9 @@ class ScheduleBook:
         return [_saved(row) for row in rows]
 
 
-async def schedule_owner(conn: Connection, use_case_id: UseCaseId) -> UserId | None:
-    """Who the Portal names as the owner of the use case's schedule, if it has one."""
+async def saved_schedule(conn: Connection, use_case_id: UseCaseId) -> SavedSchedule | None:
+    """The use case's schedule and the owner the Portal names, if it has one."""
     row = await (
-        await conn.execute(
-            "SELECT owner_id FROM orchestration.schedules WHERE use_case_id = %s", (use_case_id,)
-        )
+        await conn.execute(_SCHEDULES + " WHERE s.use_case_id = %s", (use_case_id,))
     ).fetchone()
-    return None if row is None else UserId(row["owner_id"])
+    return None if row is None else _saved(row)

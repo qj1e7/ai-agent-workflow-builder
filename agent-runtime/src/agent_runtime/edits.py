@@ -247,7 +247,7 @@ def _merged(spans: list[Span]) -> list[Span]:
 
 
 def _workflow_names(facts: PlannerFacts | None) -> list[str]:
-    return [w.name for w in (facts.workflows if facts is not None else None) or []]
+    return [] if facts is None else facts.workflow_names()
 
 
 def _whole(text: str, words_: str) -> Span | None:
@@ -404,6 +404,15 @@ def _writes_beside(words_: str) -> bool:
     tokens = {w for w, _, _ in _tokens(words_)}
     plain = bool(_writes(words_) - EDIT_VERBS) and not tokens & EDIT_VERBS
     return plain or _deletes_tickets_in(words_)
+
+
+def changes_a_workflow(read: TaskRead, text: str) -> bool:
+    """The reading calls it a change to one of the person's workflows, and nothing in it says
+    otherwise: it is no watch request, and it writes to nothing but a workflow, so "delete every
+    closed ticket" is not one."""
+    return (
+        read.asks_about == "change" and not read.belongs_on_watchlist and not _writes_beside(text)
+    )
 
 
 def _switch_of(text: str, names: _Names) -> type[Switch] | None:

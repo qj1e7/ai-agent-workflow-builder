@@ -117,7 +117,7 @@ test('what needs an Approver is one number on Home and on Workflows, and the rai
 
   await menu.getByRole('link', { name: /^Workflows/ }).click()
   await expect(page).toHaveURL(/\/workflows$/)
-  expect(await needsOnWorkflows(page), 'his heading is the Needs you rows on Workflows, with the rest its note counts').toBe(onHome)
+  expect(await needsOnWorkflows(page), 'his heading is the Needs you rows on Workflows, every one reached with Show more').toBe(onHome)
   await context.close()
 })
 

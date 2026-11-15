@@ -30,7 +30,7 @@ from platform_api.orchestration.schedule_store import ScheduleBook
 from platform_api.orchestration.service import DecisionRefused
 from platform_api.orchestration.store import SHOW_OUTCOME, WAKE, Store
 from platform_api.shared import UseCaseId, UserId
-from tests.support import BOB, CAROL, SPEC
+from tests.support import BOB, CAROL, SPEC, schedule_owners_listed
 from tests.test_n8n_calls import ALICE, DAVE, RELEASE, WORKFLOW, Calls, t
 from tests.test_n8n_wait import DAVE as DAVE_APPROVER
 from tests.test_n8n_wait import ERIN
@@ -169,6 +169,7 @@ async def test_safety_no_author_and_not_the_schedule_owner_approves_a_scheduled_
     w.workflows.versions = {
         "v1": RanVersion("safe", Publisher(CAROL.user_id), (Publisher(ERIN.user_id),))
     }
+    await schedule_owners_listed(w.h.db, DAVE_APPROVER)
     await ScheduleBook(w.h.db).save(SPEC.use_case_id, Schedule("tuesday", "07:30"), DAVE_APPROVER)
     assert isinstance(await w.ask(), Waiting)
     run = await w.run()
