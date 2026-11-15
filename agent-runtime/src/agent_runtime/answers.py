@@ -75,10 +75,18 @@ from agent_runtime.edits import (
     changes_a_workflow,
     commanded,
     edit_of,
+    how_often,
     left_over,
 )
 from agent_runtime.follow_ups import follow_up_of, watch_offer_of
-from agent_runtime.parts import NOT_FOLLOWED, OWN_TIME, asks_how_to_start, locate, parts_of
+from agent_runtime.parts import (
+    HOW_OFTEN,
+    NOT_FOLLOWED,
+    OWN_TIME,
+    asks_how_to_start,
+    locate,
+    parts_of,
+)
 from agent_runtime.planner import (
     CANT_YET,
     NOTE_LIMIT,
@@ -673,9 +681,9 @@ def _watch_rows(
     own = stretch is not None and not _its_schedule(request[stretch[0] : stretch[1]], schedule)
     if own and stretch and any(a <= stretch[0] and stretch[1] <= b for a, b in watched):
         text = plain(request[stretch[0] : stretch[1]], TEXT_LIMIT)
-        found.append(
-            (stretch, CantRow(kind="schedule", text=text, note=OWN_TIME, needs="new_tool"))
-        )
+        # A time the watchlist's one schedule could hold is offered to the whole watchlist.
+        note = OWN_TIME if how_often(text) is None else HOW_OFTEN
+        found.append((stretch, CantRow(kind="schedule", text=text, note=note, needs="new_tool")))
     for clause in _change_clauses(changes):
         found.append((_stretch(request, clause), _change_row(clause)))
     # Words beside the watch stand beside no part of a task, so a part is never named for them.

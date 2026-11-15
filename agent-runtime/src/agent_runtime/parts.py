@@ -52,9 +52,11 @@ OWN_TIME: Final = (
     "The Software watchlist checks all your software together, on one schedule. I can't give "
     "one software its own time yet."
 )
+HOW_OFTEN: Final = "I can't run things that often yet."
 REASON_OF_NOTE: Final[dict[str, PartReason]] = {
     NOT_FOLLOWED: "not_followed",
     OWN_TIME: "own_time",
+    HOW_OFTEN: "how_often",
 }
 """The can't rows whose note is a reason the Portal words itself. Any other note is the
 registry's words for a part the platform can't do."""

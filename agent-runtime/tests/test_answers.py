@@ -2249,6 +2249,34 @@ def test_a_watch_time_is_crossed_only_when_it_differs_from_the_watchlists(task: 
     assert isinstance(answer_of(fields, task), CantAnswer)
 
 
+@pytest.mark.parametrize(
+    ("said", "reason"),
+    [
+        ("every weekday at 9", "own_time"),
+        ("daily at 8am", "own_time"),
+        ("every 2 hours", "how_often"),
+        ("monthly", "how_often"),
+    ],
+)
+def test_a_watch_time_the_watchlist_cant_hold_is_crossed_as_too_often(said: str, reason: str):
+    task = f"Check LangGraph for new releases {said}"
+    fields = read(
+        belongs_on_watchlist=True, watchlist_word="releases", software="LangGraph", schedule=said
+    )
+    answer = answer_of(fields, task, PlannerFacts(watchlist_schedule=MONDAY_9))
+    crossed = [(p.text, p.reason) for p in parts_of(fields, task, answer) if p.mark == "cant"]
+    assert crossed == [(said, reason)]
+
+
+def test_the_portals_offer_to_move_the_whole_watchlist_is_an_edit_of_it():
+    task = "Make the Software watchlist run every weekday at 9"
+    fields = read(asks_about="change", workflow_words="Software watchlist")
+    answer = answer_of(fields, task, PlannerFacts(watchlist_schedule=MONDAY_9))
+    weekdays = ScheduleChange(day="weekdays", hour=9)
+    assert answer == EditAnswer(workflow_words="Software watchlist", schedule=weekdays)
+    assert [p.mark for p in parts_of(fields, task, answer)] == ["will_do"]
+
+
 WORKFLOWS = PlannerFacts(
     workflows=[
         WorkflowFact(name=name, state="on", last_run=None, last_run_at=None)

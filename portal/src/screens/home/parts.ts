@@ -47,6 +47,9 @@ export interface CrossContext {
   readonly short?: boolean
 }
 
+/** The request that moves the whole Software watchlist to the time she asked of one software. */
+export const watchlistRuns = (time: string): string => `Make the Software watchlist run ${time.trim()}`
+
 /** “every weekday except Friday” leaves a day out, which no schedule here can hold. Anything else reads as how often. */
 const LEAVES_OUT = /^(?:except|excluding|but not|apart from|other than)\b/i
 

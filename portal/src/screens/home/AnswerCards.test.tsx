@@ -60,7 +60,7 @@ function draw(reply: PlannerReply, { typed = 'Every Friday, sum up the tickets w
   return renderToStaticMarkup(
     <QueryClientProvider client={queryClient}>
       <ApiProvider session={createDevSession(null)} platformFetch={fetch} origin="http://portal.test">
-        <MemoryRouter>{leftovers ? <Leftovers reply={reply} /> : <Answer reply={reply} typed={typed} page={PAGE} />}</MemoryRouter>
+        <MemoryRouter>{leftovers ? <Leftovers reply={reply} ask={PAGE.ask} /> : <Answer reply={reply} typed={typed} page={PAGE} />}</MemoryRouter>
       </ApiProvider>
     </QueryClientProvider>,
   )
@@ -350,10 +350,19 @@ describe('the clauses an answer didn’t read', () => {
     expect(text(draw(checkLeftover as PlannerReply, { leftovers: true }))).toBe('Can’t do: “every Friday sum up the closed tickets” Ask this on its own, and I’ll answer it.')
   })
 
-  it('give a watch request’s own time its reason', () => {
-    expect(text(draw(ownTime as WatchlistReply, { leftovers: true }))).toBe(
-      'Can’t do: “every day at 8am” The Software watchlist checks all your software together, on one schedule. I can’t give one software its own time yet.',
+  it('give a watch request’s own time its reason, and offer that time to the whole watchlist', () => {
+    const html = draw(ownTime as WatchlistReply, { leftovers: true })
+    expect(text(html)).toBe(
+      'Can’t do: “every day at 8am” The Software watchlist checks all your software together, on one schedule. I can’t give one software its own time yet. Make the Software watchlist run every day at 8am',
     )
+    expect(buttons(html)).toEqual(['Make the Software watchlist run every day at 8am'])
+  })
+
+  it('offer nothing for a time the watchlist can’t hold, and say so', () => {
+    const tooOften: WatchlistReply = { ...(ownTime as WatchlistReply), parts: [{ text: 'every 2 hours', mark: 'cant', reason: 'how_often', note: null, choices: [] }] }
+    const html = draw(tooOften, { leftovers: true })
+    expect(text(html)).toBe('Can’t do: “every 2 hours” I can’t run things every 2 hours yet.')
+    expect(buttons(html)).toEqual([])
   })
 
   it('never repeat what a can’t answer’s card already says, and a set-up card marks its own', () => {
