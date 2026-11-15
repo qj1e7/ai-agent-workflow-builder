@@ -1,6 +1,7 @@
 """The platform's own calls to n8n while it runs (ENGINE-PLAN 2.1 and 2.5), against a fake n8n
 that answers as spike P7 recorded n8n 2.42.6 answering."""
 
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -23,6 +24,7 @@ from platform_api.orchestration.n8n import (
     same_as_sent,
 )
 from platform_api.orchestration.n8n_calls import (
+    ExecutionFacts,
     FailedExecution,
     Finished,
     PlatformWorkflow,
@@ -324,6 +326,9 @@ def failures_for(n8n: FakeN8n) -> N8nWorkflows:
     return N8nWorkflows(api_for(n8n), None)  # type: ignore[arg-type]
 
 
+RAN = ExecutionFacts("wf1", "webhook", None, None, "v1")
+
+
 async def test_the_sweep_reads_how_each_execution_ended_from_n8n_s_own_record() -> None:
     n8n = FakeN8n()
     n8n.execution("45", "error", failed=("Read release", "GitHub answered 503."))
@@ -333,7 +338,7 @@ async def test_the_sweep_reads_how_each_execution_ended_from_n8n_s_own_record() 
     failures = failures_for(n8n)
     ended = {e: await failures.ended(N8nExecutionId(e)) for e in ("45", "46", "running")}
     assert ended == {
-        "45": FailedExecution(N8nExecutionId("45"), "wf1", "Read release", "GitHub answered 503."),
+        "45": FailedExecution(N8nExecutionId("45"), RAN, "Read release", "GitHub answered 503."),
         "46": Finished(N8nExecutionId("46")),
         "running": None,
     }
@@ -343,15 +348,18 @@ async def test_the_sweep_reads_how_each_execution_ended_from_n8n_s_own_record() 
 
 
 async def test_a_failure_is_the_block_and_the_words_from_n8n_s_own_record() -> None:
+    """With what the execution ran, read from the same record, since n8n no longer reads a failed
+    execution as running (#265)."""
     n8n = FakeN8n()
     n8n.execution("45", "error", failed=("Read release", "GitHub answered 503."))
-    n8n.execution("46", "error", last_node="Compare")
+    n8n.execution("46", "error", last_node="Compare", nonce="start_1", retry_of="44")
     failures = failures_for(n8n)
     assert await failures.failure(N8nExecutionId("45")) == FailedExecution(
-        N8nExecutionId("45"), "wf1", "Read release", "GitHub answered 503."
+        N8nExecutionId("45"), RAN, "Read release", "GitHub answered 503."
     )
+    retried = ExecutionFacts("wf1", "webhook", N8nExecutionId("44"), "start_1", "v1")
     assert await failures.failure(N8nExecutionId("46")) == FailedExecution(
-        N8nExecutionId("46"), "wf1", "Compare", None
+        N8nExecutionId("46"), retried, "Compare", None
     )
 
 
@@ -362,6 +370,29 @@ async def test_an_execution_that_did_not_end_in_an_error_is_no_failure() -> None
     failures = failures_for(n8n)
     for status in ("success", "running", "waiting", "canceled", "gone"):
         assert await failures.failure(N8nExecutionId(status)) is None, status
+
+
+@dataclass
+class UnreadN8n(FakeN8n):
+    """n8n while it restarts: it refuses the connection, or answers 503, for an execution."""
+
+    refused: bool = True
+
+    def handle(self, request: httpx.Request) -> httpx.Response:
+        if "/executions/" not in request.url.path:
+            return super().handle(request)
+        if self.refused:
+            raise httpx.ConnectError("n8n is restarting")
+        return httpx.Response(503, json={"message": "n8n is starting"})
+
+
+@pytest.mark.parametrize("refused", [True, False], ids=["connection-refused", "answered-503"])
+async def test_a_failure_n8n_cannot_be_read_for_is_asked_again_not_refused(refused: bool) -> None:
+    """A report whose failure n8n cannot be read for is answered with a retry, never with "n8n
+    does not say this execution failed", which the block would not send again."""
+    n8n = UnreadN8n(refused=refused)
+    n8n.execution("45", "error", failed=("Read release", "GitHub answered 503."))
+    assert isinstance(await failures_for(n8n).failure(N8nExecutionId("45")), TryLater)
 
 
 async def test_a_draft_runs_by_hand_from_start_from_the_portal_with_our_item() -> None:
@@ -436,7 +467,7 @@ async def test_the_sweep_reads_an_execution_s_data_only_once_it_failed() -> None
     assert await N8nExecutions(api_for(n8n)).landed(N8nExecutionId("46"))
     assert n8n.data_reads == []
     assert await failures.ended(N8nExecutionId("47")) == FailedExecution(
-        N8nExecutionId("47"), "wf1", "Read release", "GitHub answered 503."
+        N8nExecutionId("47"), RAN, "Read release", "GitHub answered 503."
     )
     assert n8n.data_reads == ["47"]
 
