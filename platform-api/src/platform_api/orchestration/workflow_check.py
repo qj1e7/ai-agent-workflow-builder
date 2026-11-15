@@ -26,7 +26,6 @@ from platform_api.orchestration.agents import CardInput
 from platform_api.orchestration.n8n_calls import WRITE_TARGETS, Grade, WriteEntry
 from platform_api.orchestration.n8n_schedule import interval_problem, schedule_intervals
 from platform_api.orchestration.node_classes import CLASS_FILE, NODE_CLASSES, BlockKind, Off
-from platform_api.orchestration.schedule import TIME_ZONE
 
 type Document = dict[str, Any]
 
@@ -240,9 +239,13 @@ def writes(document: Mapping[str, Any]) -> list[str]:
 
 
 def grade(
-    document: Mapping[str, Any], error_workflow: str | None, known: KnownOptions | None = None
+    document: Mapping[str, Any],
+    error_workflow: str | None,
+    time_zone: str,
+    known: KnownOptions | None = None,
 ) -> Graded:
-    """The worst of the findings: `needs_a_fix` over `writes_refused` over `safe`."""
+    """The worst of the findings: `needs_a_fix` over `writes_refused` over `safe`. `time_zone`
+    is the team time zone, which every workflow runs on."""
     try:
         flow = read_flow(document)
     except Unreadable as unreadable:
@@ -250,7 +253,7 @@ def grade(
     findings: list[Finding] = [
         *_off_blocks(flow),
         *_triggers(flow),
-        *_settings(flow, error_workflow),
+        *_settings(flow, error_workflow, time_zone),
         *_parameters(flow),
         *_schedules(flow),
         *(() if known is None else _options(flow, known)),
@@ -289,7 +292,7 @@ PLATFORM_SHAPES: Mapping[str, PlatformShape] = {
     SELF_TEST: PlatformShape(
         ("schedule", "read"),
         "a Schedule Trigger, then a Read",
-        {"timezone": TIME_ZONE},
+        {"timezone": "Asia/Singapore"},
         reports_failures=True,
     ),
 }
@@ -344,6 +347,11 @@ def _fix(block: str | None, text: str) -> Finding:
     return Finding("needs_a_fix", block, text)
 
 
+def _place_of(time_zone: str) -> str:
+    """The place a zone is named for, as in "London" for Europe/London."""
+    return time_zone.rsplit("/", 1)[-1].replace("_", " ")
+
+
 def _off_blocks(flow: Flow) -> Iterable[Finding]:
     """Every block the class file does not let run: its type, its version, or what it was asked
     to do. Unknown means off (ADR 0045)."""
@@ -370,12 +378,12 @@ def _triggers(flow: Flow) -> Iterable[Finding]:
         yield _fix(None, "Nothing starts it: it has no Schedule and no Start from the Portal.")
 
 
-def _settings(flow: Flow, error_workflow: str | None) -> Iterable[Finding]:
+def _settings(flow: Flow, error_workflow: str | None, time_zone: str) -> Iterable[Finding]:
     settings = flow.settings
     if error_workflow is None or settings.get("errorWorkflow") != error_workflow:
         yield _fix(None, "Its failures do not go to the platform's error workflow.")
-    if settings.get("timezone") != TIME_ZONE:
-        yield _fix(None, "It does not run on Singapore time.")
+    if settings.get("timezone") != time_zone:
+        yield _fix(None, f"It does not run on {_place_of(time_zone)} time.")
     if settings.get("saveManualExecutions") is not True:
         yield _fix(None, "n8n does not keep its test runs.")
     if settings.get("saveExecutionProgress") is not True:

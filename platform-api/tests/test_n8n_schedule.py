@@ -136,35 +136,43 @@ def test_an_expression_that_never_fires_raises_and_cannot_be_shown() -> None:
 
 def test_the_next_run_is_the_earliest_of_its_schedules() -> None:
     document = workflow(trigger("monday", MONDAY_9), trigger("daily", DAILY_8))
-    run = next_run(document, "wfCheck01", FRIDAY_0830)
+    run = next_run(document, "wfCheck01", FRIDAY_0830, SINGAPORE.key)
     assert run is not None
     assert run.replace(second=0) == datetime(2026, 11, 14, 8, 0, tzinfo=SINGAPORE)
 
 
 def test_a_disabled_schedule_does_not_count() -> None:
     document = workflow(trigger("monday", MONDAY_9), trigger("daily", DAILY_8, disabled=True))
-    run = next_run(document, "wfCheck01", FRIDAY_0830)
+    run = next_run(document, "wfCheck01", FRIDAY_0830, SINGAPORE.key)
     assert run is not None
     assert run.replace(second=0) == datetime(2026, 11, 16, 9, 0, tzinfo=SINGAPORE)
 
 
 def test_a_workflow_with_no_schedule_has_no_next_run() -> None:
     start = {"id": "s", "name": "Start", "type": "CUSTOM.wabStartFromPortal", "parameters": {}}
-    assert next_run(workflow(start), "wfCheck01", FRIDAY_0830) is None
-    assert next_run(workflow(trigger("off", DAILY_8, disabled=True)), "wf", FRIDAY_0830) is None
+    assert next_run(workflow(start), "wfCheck01", FRIDAY_0830, SINGAPORE.key) is None
+    off = workflow(trigger("off", DAILY_8, disabled=True))
+    assert next_run(off, "wf", FRIDAY_0830, SINGAPORE.key) is None
 
 
 def test_one_rule_the_portal_cannot_show_hides_the_next_run() -> None:
     document = workflow(trigger("monday", MONDAY_9), trigger("daily", DAILY_8, EVERY_2_DAYS))
-    assert next_run(document, "wfCheck01", FRIDAY_0830) is None
+    assert next_run(document, "wfCheck01", FRIDAY_0830, SINGAPORE.key) is None
 
 
-def test_the_next_run_is_on_the_workflow_s_clock_and_singapore_s_when_it_has_none() -> None:
-    utc = next_run(workflow(trigger("daily", DAILY_8), timezone="UTC"), "wf", FRIDAY_0830)
-    unset = next_run(workflow(trigger("daily", DAILY_8), timezone=None), "wf", FRIDAY_0830)
-    assert utc is not None and unset is not None
+@pytest.mark.parametrize("unset", [None, "DEFAULT"])
+def test_the_next_run_is_on_the_workflow_s_clock_and_the_team_s_when_it_has_none(
+    unset: str | None,
+) -> None:
+    daily = trigger("daily", DAILY_8)
+    utc = next_run(workflow(daily, timezone="UTC"), "wf", FRIDAY_0830, SINGAPORE.key)
+    team = next_run(workflow(daily, timezone=unset), "wf", FRIDAY_0830, SINGAPORE.key)
+    london = next_run(workflow(daily, timezone=unset), "wf", FRIDAY_0830, "Europe/London")
+    assert utc is not None and team is not None and london is not None
     assert utc.replace(second=0) == datetime.fromisoformat("2026-11-13T08:00:00+00:00")
-    assert unset.replace(second=0) == datetime(2026, 11, 14, 8, 0, tzinfo=SINGAPORE)
+    assert team.replace(second=0) == datetime(2026, 11, 14, 8, 0, tzinfo=SINGAPORE)
+    london_8 = datetime(2026, 11, 13, 8, 0, tzinfo=ZoneInfo("Europe/London"))
+    assert london.replace(second=0) == london_8, "8:30 in Singapore is 0:30 in London"
 
 
 def test_a_laid_out_release_check_runs_next_monday_at_9_on_its_hidden_second() -> None:
@@ -178,13 +186,14 @@ def test_a_laid_out_release_check_runs_next_monday_at_9_on_its_hidden_second() -
         "uc_01JB8RELEASE",
         "LangGraph release check",
         "https://portal.example/workflows/uc_01JB8RELEASE",
-        Schedule("monday", "09:00"),
+        Schedule("monday", "09:00", SINGAPORE.key),
         (checker,),
         "wfErrorReporter01",
+        SINGAPORE.key,
     )
     document = lay_out(plan)
     schedule = next(n for n in document["nodes"] if n["type"] == "n8n-nodes-base.scheduleTrigger")
     interval = schedule["parameters"]["rule"]["interval"][0]
     second = int(cron_expression(interval, f"wfRelease01:{schedule['id']}").split()[0])
-    run = next_run(document, "wfRelease01", FRIDAY_0830)
+    run = next_run(document, "wfRelease01", FRIDAY_0830, SINGAPORE.key)
     assert run == datetime(2026, 11, 16, 9, 0, second, tzinfo=SINGAPORE)

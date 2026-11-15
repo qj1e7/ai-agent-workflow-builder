@@ -23,7 +23,7 @@ from platform_api.orchestration.workflow_check import (
     SELF_TEST,
     check_platform,
 )
-from tests.support import FIXTURES
+from tests.support import FIXTURES, TEAM_ZONE
 
 GOLDEN = Path(__file__).parent / "golden" / "n8n"
 PACK = FIXTURES.parent / "n8n" / "node-types.json"
@@ -85,19 +85,19 @@ def gate_removed() -> Doc:
 
 
 def graded(document: Doc) -> str:
-    return grade(document, ERROR_WORKFLOW).grade
+    return grade(document, ERROR_WORKFLOW, TEAM_ZONE).grade
 
 
 def findings(document: Doc) -> list[str]:
-    return [f.text for f in grade(document, ERROR_WORKFLOW).findings]
+    return [f.text for f in grade(document, ERROR_WORKFLOW, TEAM_ZONE).findings]
 
 
 def test_the_release_check_as_the_platform_saves_it_is_safe() -> None:
-    assert grade(release_check(), ERROR_WORKFLOW).findings == ()
+    assert grade(release_check(), ERROR_WORKFLOW, TEAM_ZONE).findings == ()
 
 
 def test_a_write_with_its_gate_removed_never_grades_safe() -> None:
-    result = grade(gate_removed(), ERROR_WORKFLOW)
+    result = grade(gate_removed(), ERROR_WORKFLOW, TEAM_ZONE)
     assert result.grade == "writes_refused"
     assert [f.block for f in result.findings] == ["Create ticket"]
 
@@ -274,8 +274,20 @@ def test_settings_the_run_link_and_the_error_workflow_rely_on(
     assert graded(document) == "needs_a_fix"
 
 
+def test_a_workflow_runs_on_the_team_time_zone_whichever_it_is() -> None:
+    london = release_check()
+    london["settings"]["timezone"] = "Europe/London"
+    assert grade(london, ERROR_WORKFLOW, "Europe/London").grade == "safe"
+    singapore = grade(release_check(), ERROR_WORKFLOW, "Europe/London")
+    assert (singapore.grade, [f.text for f in singapore.findings]) == (
+        "needs_a_fix",
+        ["It does not run on London time."],
+    )
+    assert findings(london) == ["It does not run on Singapore time."]
+
+
 def test_an_unknown_error_workflow_is_never_taken_for_the_platform_s() -> None:
-    assert grade(release_check(), None).grade == "needs_a_fix"
+    assert grade(release_check(), None, TEAM_ZONE).grade == "needs_a_fix"
 
 
 @pytest.mark.parametrize(
@@ -359,21 +371,21 @@ def test_a_block_naming_an_option_the_editor_does_not_list_needs_a_fix() -> None
         {"jira.create_ticket": frozenset({"MOCK"})},
         {"crd_version_checker": {"GitHub repository": None, "Jira project": frozenset({"MOCK"})}},
     )
-    assert grade(release_check(), ERROR_WORKFLOW, known).grade == "safe"
+    assert grade(release_check(), ERROR_WORKFLOW, TEAM_ZONE, known).grade == "safe"
     elsewhere = release_check()
     node(elsewhere, "Read release")["parameters"]["place"] = "someone/else"
-    assert grade(elsewhere, ERROR_WORKFLOW, known).grade == "needs_a_fix"
+    assert grade(elsewhere, ERROR_WORKFLOW, TEAM_ZONE, known).grade == "needs_a_fix"
     stranger = release_check()
     node(stranger, "Compare")["parameters"]["agent"] = "crd_unknown"
-    assert grade(stranger, ERROR_WORKFLOW, known).grade == "needs_a_fix"
+    assert grade(stranger, ERROR_WORKFLOW, TEAM_ZONE, known).grade == "needs_a_fix"
     elsewhere = release_check()
     node(elsewhere, "Compare")["parameters"]["inputs"]["input"][1]["value"] = "PROD"
-    assert grade(elsewhere, ERROR_WORKFLOW, known).grade == "needs_a_fix"
+    assert grade(elsewhere, ERROR_WORKFLOW, TEAM_ZONE, known).grade == "needs_a_fix"
     unknown_input = release_check()
     node(unknown_input, "Compare")["parameters"]["inputs"]["input"].append(
         {"name": "Repo", "value": "evil/repo"}
     )
-    assert grade(unknown_input, ERROR_WORKFLOW, known).grade == "needs_a_fix"
+    assert grade(unknown_input, ERROR_WORKFLOW, TEAM_ZONE, known).grade == "needs_a_fix"
 
 
 def test_something_that_is_not_a_workflow_needs_a_fix() -> None:
@@ -409,7 +421,7 @@ def test_the_checker_never_changes_the_document_it_is_given() -> None:
     document = gate_removed()
     before = deepcopy(document)
     add_yes(document, "uc")
-    grade(document, ERROR_WORKFLOW)
+    grade(document, ERROR_WORKFLOW, TEAM_ZONE)
     assert document == before
 
 

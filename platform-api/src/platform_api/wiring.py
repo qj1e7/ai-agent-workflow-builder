@@ -402,6 +402,7 @@ async def build(settings: Settings) -> Services:
         settings.watchlist_jira_project,
         ProjectFinding(agents),
         None if n8n.drafts is None else OnN8n(n8n.drafts, watch_facts, software_page),
+        time_zone=settings.team_time_zone,
     )
     await watchlist.adopt_ticket_project()
     builder = Builder(
@@ -417,6 +418,7 @@ async def build(settings: Settings) -> Services:
         writes=node_writes(settings),
         requests=orchestrator,
         open_runs=watch_facts,
+        time_zone=settings.team_time_zone,
     )
     # Before any run can start: a run left on the shared run workflow, whose blocks are off, ends
     # first (E11), so the workflows it held back can move.

@@ -259,7 +259,7 @@ export function scheduleSaver(mutate: (body: ScheduleSaveIn, answers: SavedAnswe
     })
 }
 
-/** "every Monday at 8:00", with the zone after it when it is not Singapore. */
+/** "every Monday at 8:00", with the zone after it when it is not the team's. */
 function runsAt(schedule: VersionSchedule): string {
   const zone = scheduleZoneName(schedule.time_zone)
   return `${repeatWords(schedule)}${zone ? ` ${zone}` : ''}`

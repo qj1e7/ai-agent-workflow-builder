@@ -9,6 +9,7 @@ from pydantic import Field
 
 from platform_api.oidc import OidcAuth, OidcAuthenticator, is_trusted_url, origin_of
 from platform_api.shared import (
+    TEAM_TIME_ZONE,
     DevIdentity,
     ExternalIdentity,
     Identity,
@@ -322,6 +323,12 @@ class Me(WireModel):
         json_schema_extra=_without_default,
         description="False when the sign-in is good but no Operator has added this person yet.",
     )
+    time_zone: str = Field(
+        default=TEAM_TIME_ZONE.key,
+        json_schema_extra=_without_default,
+        description="The team time zone, such as Asia/Singapore, from the TEAM_TIME_ZONE "
+        "setting. Every time the Portal shows without naming a zone is in it.",
+    )
 
 
 me_router = APIRouter(tags=["sign-in"])
@@ -335,16 +342,24 @@ me_router = APIRouter(tags=["sign-in"])
         "`on_list: false` and no roles; every other route answers them 403."
     ),
 )
-def who_am_i(signed_in: CurrentSignIn) -> Me:
+def who_am_i(signed_in: CurrentSignIn, request: Request) -> Me:
+    zone: str = request.app.state.settings.team_time_zone.key
     if signed_in.person is None:
         identity = signed_in.identity
         assert isinstance(identity, ExternalIdentity)
-        return Me(id=UserId(identity.subject), display=identity.display, roles=[], on_list=False)
+        return Me(
+            id=UserId(identity.subject),
+            display=identity.display,
+            roles=[],
+            on_list=False,
+            time_zone=zone,
+        )
     principal = signed_in.person
     return Me(
         id=principal.user_id,
         display=principal.display,
         roles=[role for role in Role if role in principal.roles],
+        time_zone=zone,
     )
 
 

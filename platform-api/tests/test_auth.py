@@ -162,9 +162,24 @@ def test_dev_mode_rejects_missing_or_unknown_user(headers: dict[str, str]):
     [
         (
             "alice",
-            {"id": "alice", "display": "Alice", "roles": ["operator", "approver"], "on_list": True},
+            {
+                "id": "alice",
+                "display": "Alice",
+                "roles": ["operator", "approver"],
+                "on_list": True,
+                "time_zone": "Asia/Singapore",
+            },
         ),
-        ("bob", {"id": "bob", "display": "Bob", "roles": ["approver"], "on_list": True}),
+        (
+            "bob",
+            {
+                "id": "bob",
+                "display": "Bob",
+                "roles": ["approver"],
+                "on_list": True,
+                "time_zone": "Asia/Singapore",
+            },
+        ),
     ],
 )
 def test_me_answers_who_the_platform_thinks_you_are(user: str, me: dict[str, object]):

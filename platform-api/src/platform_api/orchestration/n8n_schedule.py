@@ -21,12 +21,11 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel, Field, JsonValue, ValidationError
 
-from platform_api.orchestration.schedule import TIME_ZONE
-
 SCHEDULE_TRIGGER = "n8n-nodes-base.scheduleTrigger"
 CRON = "cronExpression"
 DEFAULT_ZONE = "DEFAULT"
-"""What n8n stores when a workflow uses the instance's time zone, which is Singapore's."""
+"""What n8n stores when a workflow uses the instance's time zone, GENERIC_TIMEZONE, which the
+deploy sets to the team time zone."""
 UNREADABLE = "has a time the Portal cannot read."
 SEARCH = timedelta(days=5 * 366)
 BOUNDS = ((0, 59), (0, 59), (0, 23), (1, 31), (1, 12), (0, 7))
@@ -152,7 +151,9 @@ def next_fire(expression: str, after: datetime, zone: ZoneInfo) -> datetime:
     raise ValueError(f"{expression!r} does not fire within five years")
 
 
-def next_run(document: Mapping[str, Any], workflow_id: str, after: datetime) -> datetime | None:
+def next_run(
+    document: Mapping[str, Any], workflow_id: str, after: datetime, team_zone: str
+) -> datetime | None:
     """The first time after `after` that any enabled Schedule Trigger in the n8n workflow fires.
     None when nothing schedules it, or when any of its rules is one the Portal cannot show, so the
     Portal never shows a time it cannot stand behind. It does not check that the workflow is on."""
@@ -160,7 +161,7 @@ def next_run(document: Mapping[str, Any], workflow_id: str, after: datetime) -> 
         workflow = _Workflow.model_validate(document)
     except ValidationError:
         return None
-    zone = _zone(workflow.settings)
+    zone = _zone(workflow.settings, team_zone)
     if zone is None:
         return None
     fires: list[datetime] = []
@@ -197,10 +198,16 @@ class _Workflow(BaseModel):
     settings: dict[str, JsonValue] = Field(default_factory=dict[str, JsonValue])
 
 
-def _zone(settings: Mapping[str, JsonValue]) -> ZoneInfo | None:
+def zone_name(settings: Mapping[str, JsonValue], team_zone: str) -> str:
+    """The zone an n8n workflow's Schedule Triggers run on: its own setting, else the instance's,
+    which is the team time zone."""
     name = settings.get("timezone")
+    return name if isinstance(name, str) and name != DEFAULT_ZONE else team_zone
+
+
+def _zone(settings: Mapping[str, JsonValue], team_zone: str) -> ZoneInfo | None:
     try:
-        return ZoneInfo(name if isinstance(name, str) and name != DEFAULT_ZONE else TIME_ZONE)
+        return ZoneInfo(zone_name(settings, team_zone))
     except ZoneInfoNotFoundError, ValueError:
         return None
 

@@ -361,6 +361,17 @@ variable "watchlist_jira_project" {
   }
 }
 
+variable "team_time_zone" {
+  description = "The zone the team works in, an IANA name such as Asia/Singapore (TEAM_TIME_ZONE). The Portal's times, a new schedule, the agents' today and the Jira days are in it, and n8n runs on it (GENERIC_TIMEZONE)."
+  type        = string
+  default     = "Asia/Singapore"
+
+  validation {
+    condition     = can(regex("^[A-Za-z][A-Za-z0-9_+-]*(/[A-Za-z0-9_+-]+){0,2}$", var.team_time_zone)) && length(var.team_time_zone) <= 64
+    error_message = "team_time_zone must be a time zone name, such as Asia/Singapore or Europe/London."
+  }
+}
+
 # The first people (ADR 0030). platform-api reads them only while its People list is empty, so a
 # later deploy cannot hand out roles. The rules match platform-api's startup check, so plan refuses
 # what would stop it. Real addresses go in the azure-dev environment's variables, never in git.

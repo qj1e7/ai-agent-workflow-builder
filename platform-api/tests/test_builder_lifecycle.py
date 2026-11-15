@@ -50,7 +50,7 @@ from platform_api.orchestration.runs import AwaitingApproval, StepName
 from platform_api.shared import N8nExecutionId, Role, RunId, UseCaseId, UserId
 from tests.conftest import PostgresUrls
 from tests.declared import declared_status
-from tests.support import ALICE, CAROL, LOCAL_ENV, NOW
+from tests.support import ALICE, CAROL, LOCAL_ENV, NOW, TEAM_ZONE
 from tests.test_builder_http import NothingLearned
 from tests.test_card_runs import output, ticket
 from tests.test_orchestrator import Harness, open_harness
@@ -143,17 +143,17 @@ def test_a_watchlist_still_on_the_shared_run_workflow_shows_no_next_check():
     workflow, whose Schedule Trigger runs it."""
     saved = SavedSchedule(
         UseCaseId("uc_w"),
-        Schedule("monday", "09:00"),
+        Schedule("monday", "09:00", TEAM_ZONE),
         CAROL_ID,
         "Carol",
         NOW,
         frozenset({Role.OPERATOR}),
     )
 
-    on = schedule_view(saved, NOW, on=True)
+    on = schedule_view(saved, NOW, True, TEAM_ZONE)
 
     assert on is not None and on.next_at is None
-    assert schedule_view(saved, NOW, on=False) == on
+    assert schedule_view(saved, NOW, False, TEAM_ZONE) == on
 
 
 class ModelConnected:

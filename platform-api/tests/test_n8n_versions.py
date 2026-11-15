@@ -30,7 +30,7 @@ from platform_api.orchestration.n8n_calls import VERSION_FAILED, ExecutionFacts,
 from platform_api.orchestration.schedule import DAYS
 from platform_api.shared import UseCaseId, UserId
 from tests.fake_n8n import FakeN8n
-from tests.support import ALICE, CAROL, NOW
+from tests.support import ALICE, CAROL, NOW, TEAM_ZONE
 from tests.test_builder_lifecycle import Lab, ModelConnected, start_run
 from tests.test_n8n_builder import ERROR_WORKFLOW, WRITES, Drafts, N8nLab, lab
 from tests.test_n8n_lifecycle import Workflows, made, move, version_row
@@ -147,7 +147,7 @@ def adding(node_type: str) -> Callable[[dict[str, Any]], None]:
 def at_seven_thirty(workflow: dict[str, Any]) -> None:
     for node in workflow["nodes"]:
         if node["type"] == "n8n-nodes-base.scheduleTrigger":
-            node["parameters"] = schedule_rule(Schedule("every_day", "07:30"))
+            node["parameters"] = schedule_rule(Schedule("every_day", "07:30", TEAM_ZONE))
 
 
 async def on_and_changed(
@@ -161,16 +161,27 @@ async def on_and_changed(
 
 @pytest.mark.parametrize("day", DAYS)
 def test_the_schedule_is_read_back_from_the_rule_the_planner_lays_out(day: str):
-    schedule = Schedule(day, "07:30")  # type: ignore[arg-type]
+    schedule = Schedule(day, "07:30", TEAM_ZONE)  # type: ignore[arg-type]
     trigger = {"type": "n8n-nodes-base.scheduleTrigger", "parameters": schedule_rule(schedule)}
-    assert schedule_of({"nodes": [trigger]}) == schedule
+    assert schedule_of({"nodes": [trigger]}, TEAM_ZONE) == schedule
+
+
+def test_the_schedule_read_back_is_in_the_zone_the_workflow_runs_on():
+    trigger = {
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "parameters": schedule_rule(Schedule("monday", "09:00", TEAM_ZONE)),
+    }
+    own = {"nodes": [trigger], "settings": {"timezone": "Europe/London"}}
+    instance = {"nodes": [trigger], "settings": {"timezone": "DEFAULT"}}
+    assert schedule_of(own, TEAM_ZONE) == Schedule("monday", "09:00", "Europe/London")
+    assert schedule_of(instance, "Europe/London") == Schedule("monday", "09:00", "Europe/London")
 
 
 def test_the_changes_are_a_plain_comparison_of_blocks_the_schedule_and_settings():
     trigger = {
         "name": "Daily 8:00",
         "type": "n8n-nodes-base.scheduleTrigger",
-        "parameters": schedule_rule(Schedule("every_day", "08:00")),
+        "parameters": schedule_rule(Schedule("every_day", "08:00", TEAM_ZONE)),
     }
     ask = {"name": "Ask for a yes", "type": "CUSTOM.wabAskForYes", "parameters": {}}
     make = {"name": "Create ticket", "type": "CUSTOM.wabMakeApprovedChanges", "parameters": {}}
@@ -182,7 +193,7 @@ def test_the_changes_are_a_plain_comparison_of_blocks_the_schedule_and_settings(
         },
         "settings": {"timezone": "Asia/Singapore"},
     }
-    moved = {**trigger, "parameters": schedule_rule(Schedule("monday", "07:30"))}
+    moved = {**trigger, "parameters": schedule_rule(Schedule("monday", "07:30", TEAM_ZONE))}
     after = {
         "nodes": [moved, make, {"name": "Tell you", "type": "CUSTOM.wabTell", "parameters": {}}],
         "connections": {"Daily 8:00": {"main": [[{"node": "Create ticket"}]]}},
@@ -506,7 +517,13 @@ class Stuck(Workflows):
 async def test_safety_a_slow_n8n_never_holds_a_workflow_from_undo_for_long(v: Versions):
     use_case_id, _ = await on_and_changed(v)
     stuck = VersionsSweep(
-        v.own.lab.h.db, Stuck(v.n8n, v.own.lab.h.db), v.builder.facts, v.accounts, None, 0.2
+        v.own.lab.h.db,
+        Stuck(v.n8n, v.own.lab.h.db),
+        v.builder.facts,
+        v.accounts,
+        None,
+        TEAM_ZONE,
+        0.2,
     )
     looking = asyncio.create_task(stuck.sweep())
     await asyncio.sleep(0.05)
@@ -702,7 +719,7 @@ async def test_safety_the_sweep_grades_every_workflow_again_under_new_rules_and_
         "SELECT graded_by FROM builder.use_case_versions WHERE use_case_id = %s AND version = 1",
         use_case_id,
     )
-    assert marked == {"graded_by": f"{GRADING_RULES} {ERROR_WORKFLOW}"}
+    assert marked == {"graded_by": f"{GRADING_RULES} {ERROR_WORKFLOW} {TEAM_ZONE}"}
 
 
 async def test_a_look_that_fails_is_graded_at_the_next_sweep(

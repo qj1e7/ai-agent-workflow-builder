@@ -5,6 +5,7 @@ from collections.abc import AsyncIterator, Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, LiteralString
+from zoneinfo import ZoneInfo
 
 import httpx
 import pytest
@@ -30,19 +31,22 @@ from platform_api.orchestration import (
     ReleasesRead,
     WriteEntry,
     grade,
+    next_run,
 )
 from platform_api.orchestration.agents import ReleaseRead
 from platform_api.orchestration.n8n import N8nApi, N8nWorkflows
 from platform_api.settings import N8nOwner
-from platform_api.shared import UserId
+from platform_api.shared import TEAM_TIME_ZONE, UserId
 from tests import test_builder_lifecycle
 from tests.fake_n8n import OWNER_EMAIL, OWNER_PASSWORD, FakeN8n
+from tests.support import TEAM_ZONE
 from tests.test_builder_lifecycle import VALUES, Lab, ModelConnected
 
 pytestmark = pytest.mark.anyio
 
 lab = test_builder_lifecycle.lab
 ERROR_WORKFLOW = "wfErrorReporter01"
+LONDON = ZoneInfo("Europe/London")
 REPO = VALUES["GitHub repository"]
 BODY: dict[str, Any] = {
     "name": "LangGraph release check",
@@ -107,7 +111,7 @@ WRITES = [
 ]
 
 
-def with_n8n(lab: Lab, drafts: N8nWorkflows) -> None:
+def with_n8n(lab: Lab, drafts: N8nWorkflows, time_zone: ZoneInfo = TEAM_TIME_ZONE) -> None:
     lab.builder = Builder(
         lab.h.db,
         lab.h.orchestrator,
@@ -116,6 +120,7 @@ def with_n8n(lab: Lab, drafts: N8nWorkflows) -> None:
         ModelConnected(),
         n8n=drafts,
         writes=WRITES,
+        time_zone=time_zone,
     )
     lab.app.state.builder = lab.builder
 
@@ -134,7 +139,7 @@ async def test_a_new_use_case_is_saved_in_n8n_as_a_draft_the_checker_graded_safe
     assert (body["n8n_workflow_id"], body["grade"]) == ("wf1", "safe")
     held = n8n_lab.n8n.workflows["wf1"]
     assert held["activeVersionId"] is None, "a draft is never published"
-    assert grade(held, ERROR_WORKFLOW).grade == "safe"
+    assert grade(held, ERROR_WORKFLOW, TEAM_ZONE).grade == "safe"
     names = [block["name"] for block in body["blocks"]]
     assert names == [
         "Daily 8:00",
@@ -148,6 +153,24 @@ async def test_a_new_use_case_is_saved_in_n8n_as_a_draft_the_checker_graded_safe
     ]
     ask = next(b for b in body["blocks"] if b["name"] == "Ask for a yes")
     assert {"exit": "Yes", "to": "Create ticket"} in ask["next"]
+
+
+async def test_with_another_team_time_zone_the_workflow_runs_on_it_and_grades_safe(lab: Lab):
+    n8n = FakeN8n()
+    with_n8n(lab, Drafts(n8n, lab.h.db), LONDON)
+
+    created = await N8nLab(lab, n8n).create()
+
+    assert (created.status_code, created.json()["grade"]) == (201, "safe"), created.text
+    held = n8n.workflows["wf1"]
+    assert held["settings"]["timezone"] == "Europe/London"
+    assert grade(held, ERROR_WORKFLOW, "Europe/London").grade == "safe"
+    fires = next_run(held, "wf1", datetime(2026, 11, 13, 12, 0, tzinfo=LONDON), TEAM_ZONE)
+    assert fires is not None
+    assert (fires.astimezone(LONDON).day, fires.astimezone(LONDON).hour) == (14, 8)
+    use_case_id = created.json()["use_case_id"]
+    view = (await lab.call("alice", "GET", f"/api/v1/use-cases/{use_case_id}")).json()
+    assert (view["schedule"]["at"], view["schedule"]["time_zone"]) == ("08:00", "Europe/London")
 
 
 async def test_the_build_log_replays_in_the_sketch_s_words_and_order(n8n_lab: N8nLab):

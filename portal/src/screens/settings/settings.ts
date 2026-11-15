@@ -14,6 +14,7 @@ import type {
   SettingsArea,
   SettingsChangeOut,
 } from '../../api/types'
+import { inTeamZone } from '../workflows/times'
 
 export type SettingsTab = 'connections' | 'people' | 'model' | 'how'
 
@@ -135,24 +136,16 @@ export function keyEndingWords(hint: string): string {
   return `API key ending ${keyHint(hint)}`
 }
 
-const shortDateTime = new Intl.DateTimeFormat('en-GB', {
-  weekday: 'short',
-  day: 'numeric',
-  month: 'short',
-  hour: '2-digit',
-  minute: '2-digit',
-  hourCycle: 'h23',
-  timeZone: 'Asia/Singapore',
-})
+const shortDateTime = inTeamZone({ weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
 
-const shortDate = new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Asia/Singapore' })
+const shortDate = inTeamZone({ weekday: 'short', day: 'numeric', month: 'short' })
 
 export function whenWords(at: string): string {
-  return shortDateTime.format(new Date(at))
+  return shortDateTime().format(new Date(at))
 }
 
 export function activeModelWords(active: ModelOut): string {
-  return `${keyEndingWords(active.key_hint)}. Saved by ${active.by_name} on ${shortDate.format(new Date(active.at))}. It answered the test in ${secondsWords(active.test_seconds)}.`
+  return `${keyEndingWords(active.key_hint)}. Saved by ${active.by_name} on ${shortDate().format(new Date(active.at))}. It answered the test in ${secondsWords(active.test_seconds)}.`
 }
 
 export function secondsWords(seconds: number): string {

@@ -38,6 +38,7 @@ from platform_api.contracts.stories import (
 )
 from platform_api.contracts.watchlist_stories import SCHEDULE, STATUSES
 from platform_api.orchestration import Schedule, held_words
+from platform_api.shared import TEAM_TIME_ZONE
 from platform_api.wire import WireModel
 
 PAUSED = USE_CASE.model_copy(update={"state": "paused", "next_run_at": None})
@@ -207,13 +208,15 @@ LAID_OUT = check_draft(
             AGENT_USE_CASE.use_case_id,
             USE_CASE_NAME,
             f"https://portal.example/workflows/{AGENT_USE_CASE.use_case_id}",
-            Schedule("monday", "08:00"),
+            Schedule("monday", "08:00", TEAM_TIME_ZONE.key),
             (PlannedAgent(VERSION_CHECKER_ID, "Version checker", tuple(VALUES.items()), True),),
             "wfErrorReporter01",
+            TEAM_TIME_ZONE.key,
         )
     ),
     AGENT_USE_CASE.use_case_id,
     "wfErrorReporter01",
+    TEAM_TIME_ZONE.key,
 )
 assert isinstance(LAID_OUT, Checked)
 SET_UP_IN_N8N = UseCaseCreated(

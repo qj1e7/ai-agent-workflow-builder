@@ -186,9 +186,11 @@ class Moves:
         schedules: ScheduleBook,
         lay_out: LayOut,
         known: Known,
+        team_zone: str,
         watchlist: Watchlist | None = None,
     ) -> None:
         self._db = db
+        self._zone = team_zone
         self._n8n = n8n
         self._runs = runs
         self._schedules = schedules
@@ -331,7 +333,7 @@ class Moves:
                 log.error("%s is not restored to n8n: its version in use is not safe", use_case_id)
                 return NotSafe()
             document = with_error_workflow(row["document"], error_workflow)
-            graded = grade(document, error_workflow, await self._known())
+            graded = grade(document, error_workflow, self._zone, await self._known())
             if graded.grade != "safe":
                 log.error("%s is not restored to n8n: %s", use_case_id, graded.findings)
                 return NotSafe()

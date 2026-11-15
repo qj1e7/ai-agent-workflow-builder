@@ -10,6 +10,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import Any, Protocol
+from zoneinfo import ZoneInfo
 
 import httpx
 
@@ -80,7 +81,15 @@ from platform_api.orchestration import (
     Written,
     next_run,
 )
-from platform_api.shared import Principal, RunId, SoftwareId, UseCaseId, UserId, new_id
+from platform_api.shared import (
+    TEAM_TIME_ZONE,
+    Principal,
+    RunId,
+    SoftwareId,
+    UseCaseId,
+    UserId,
+    new_id,
+)
 
 log = logging.getLogger(__name__)
 
@@ -292,7 +301,11 @@ type Move = MovedToN8n | AlreadyOnN8n | WaitsForRun | NoWatchlist | N8nNotReady 
 
 
 def schedule_view(
-    saved: SavedSchedule | None, now: datetime, on: bool, n8n: InN8n | None = None
+    saved: SavedSchedule | None,
+    now: datetime,
+    on: bool,
+    team_zone: str,
+    n8n: InN8n | None = None,
 ) -> ScheduleView | None:
     """The next check is when its own n8n workflow's Schedule Trigger fires, to the second n8n
     adds to it (ENGINE-PLAN 2.4). Still on the shared run workflow, it starts none until it
@@ -301,7 +314,7 @@ def schedule_view(
         return None
     next_at = None
     if n8n is not None and n8n.document is not None:
-        next_at = next_run(n8n.document, n8n.workflow_id, now)
+        next_at = next_run(n8n.document, n8n.workflow_id, now, team_zone)
     return ScheduleView(
         day=saved.schedule.day,
         at=saved.schedule.at,
@@ -613,8 +626,11 @@ class Watchlist:
         ticket_project: str = WATCHLIST_PROJECT,
         finder: ProjectFinder | None = None,
         n8n: OnN8n | None = None,
+        time_zone: ZoneInfo = TEAM_TIME_ZONE,
     ) -> None:
         self._db = db
+        self._zone = time_zone.key
+        """The team time zone: the schedule's, and the one its own n8n workflow runs on."""
         self._facts = facts
         self._schedules = schedules
         self._project = ticket_project
@@ -715,7 +731,7 @@ class Watchlist:
             else:
                 record = await self._next_version(uow, record, (*record.software, listed))
         if created:
-            await self._schedules.save_default(record.use_case_id, principal)
+            await self._schedules.save_default(record.use_case_id, principal, self._zone)
             if self._n8n is not None:
                 await self.move_to_n8n()
                 record = await self._record() or record
@@ -725,7 +741,8 @@ class Watchlist:
         self, principal: Principal, body: ScheduleSaveIn
     ) -> WatchlistView | NoWatchlist | ScheduleRefused:
         """Saving makes the caller the schedule owner, and the owner cannot approve its checks."""
-        return await self._schedule(principal, Schedule(body.day, body.at), body.expected_version)
+        schedule = Schedule(body.day, body.at, self._zone)
+        return await self._schedule(principal, schedule, body.expected_version)
 
     async def turn_off_schedule(
         self, principal: Principal, expected: int
@@ -867,9 +884,9 @@ class Watchlist:
         if error_workflow is None:
             return N8nNotReady("n8n is not ready yet: its error workflow is not loaded.")
         plan = layout.LayoutPlan(
-            use_case_id, WATCHLIST_NAME, on.software_page, schedule, (), error_workflow
+            use_case_id, WATCHLIST_NAME, on.software_page, schedule, (), error_workflow, self._zone
         )
-        checked = check_draft(layout.watchlist(plan), use_case_id, error_workflow)
+        checked = check_draft(layout.watchlist(plan), use_case_id, error_workflow, self._zone)
         if isinstance(checked, DraftRefused):
             log.error("the safety checker refused the watchlist's layout: %s", checked)
         return checked
@@ -1036,7 +1053,7 @@ class Watchlist:
         return view(
             record,
             standing,
-            schedule_view(saved, now, on, record.n8n),
+            schedule_view(saved, now, on, self._zone, record.n8n),
             changes,
             moving=await self._moving(record),
         )
