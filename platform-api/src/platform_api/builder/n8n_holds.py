@@ -41,6 +41,8 @@ STRANDED = (
     "n8n has not finished moving this workflow, so nothing else changes in it until it is back "
     "where the platform keeps it. Try again in a few minutes."
 )
+GONE_BEFORE = "n8n no longer has this workflow."
+NOT_FINISHED = "n8n did not finish moving the workflow, so it is not set up. Try again in a minute."
 MOVE_GRACE = timedelta(minutes=2)
 """How long a move's mark is left to the Open in n8n that set it, before the settle loop moves
 the workflow back."""
@@ -335,6 +337,23 @@ class Holding:
         await let_go(uow, use_case_id, by)
         log.info("%s took %s back", by or "the platform", use_case_id)
         return None
+
+    async def take_in(self, workflow_id: str) -> HoldRefused | None:
+        """Moves a workflow made in n8n, which no use case names yet, to the platform's project,
+        read back as every move is (E15). None once it is there. Moving one already there changes
+        nothing."""
+        home = await self._n8n.platform_project()
+        if home is None:
+            return HoldRefused(503, NO_HOME)
+        match await self._move(workflow_id, home):
+            case _Moved():
+                return None
+            case _Gone():
+                return HoldRefused(404, GONE_BEFORE)
+            case _Stranded():
+                return HoldRefused(503, NOT_FINISHED)
+            case HoldRefused() as refused:
+                return refused
 
     async def release(self) -> list[str]:
         """Takes back every workflow whose holder may hold none now, and moves back every one a

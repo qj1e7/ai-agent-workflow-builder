@@ -141,6 +141,7 @@ from platform_api.orchestration import (
     Schedule,
     ScheduleBook,
     Task,
+    Unreadable,
     WriteEntry,
     Written,
     add_yes,
@@ -148,6 +149,7 @@ from platform_api.orchestration import (
     cards_policy,
     grade,
     next_run,
+    read_flow,
     tools_used,
     write_tools_used,
 )
@@ -158,7 +160,7 @@ log = logging.getLogger(__name__)
 _CURRENT_VERSION = """
     SELECT u.use_case_id, u.owner, u.paused_at, u.paused_by, u.deleted_at, u.deleted_by,
            u.draft, u.left_out, u.engine, u.n8n_workflow_id, u.deleted_in_n8n_at,
-           u.move_refused, v.version,
+           u.move_refused, u.made_in_n8n_by, v.version,
            v.template, v.name, v.instruction, v.params, v.created_at, v.document,
            v.n8n_version_id, v.grade, v.findings
     FROM builder.use_cases u
@@ -285,6 +287,7 @@ def _view(
         deleted_in_n8n_at=row["deleted_in_n8n_at"],
         moving_to_n8n=moving,
         move_refused=None if _own(row) else row["move_refused"],
+        made_in_n8n_by=row["made_in_n8n_by"],
     )
 
 
@@ -365,6 +368,12 @@ class WatchlistStays:
 @dataclass(frozen=True)
 class ScheduleOnSoftwarePage:
     pass
+
+
+@dataclass(frozen=True)
+class ScheduleInN8n:
+    """A workflow made in n8n has no plan the Planner could lay it out from again, so when it
+    runs is changed in n8n."""
 
 
 type Moved = Lifecycle | AlreadyDeleted | TooLate | WatchlistStays
@@ -627,7 +636,7 @@ class Builder:
 
     async def save_schedule(
         self, use_case_id: str, principal: Principal, body: UseCaseScheduleIn
-    ) -> UseCaseView | ScheduleOnSoftwarePage | ChangedSince | InN8nRefused | None:
+    ) -> UseCaseView | ScheduleOnSoftwarePage | ScheduleInN8n | ChangedSince | InN8nRefused | None:
         """The same save as the watchlist's: the caller becomes the owner, which lifts a hold.
         A new schedule publishes a new version. Saving the same one again publishes none.
         Saving is not a write to Jira or Confluence, so it needs no approval. An own workflow's
@@ -639,6 +648,8 @@ class Builder:
             return None
         if view.template == SOFTWARE_WATCHLIST.key:
             return ScheduleOnSoftwarePage()
+        if view.made_in_n8n_by is not None:
+            return ScheduleInN8n()
         after = Schedule(body.day, body.at)
         match await self._publish(
             use_case_id, principal, body.via, lambda _: Publish(after), body.expected_version
@@ -1372,8 +1383,10 @@ class Builder:
                 for a in pinned
             )
             task = CardsTask(cards)
-            asked = max((x.approvers for a in pinned for x in a.card.approvals), default=1)
-            policy = cards_policy([run.card for run in cards], asked)
+            named = await self._named_in_n8n(use_case_id, {a.card.card_id for a in pinned})
+            every = [*(a.card for a in pinned), *named]
+            asked = max((x.approvers for card in every for x in card.approvals), default=1)
+            policy = cards_policy([card_spec(card) for card in every], asked)
         else:
             listed = await self._watchlist.task_for(use_case_id, view.version)
             if listed is None:
@@ -1391,6 +1404,24 @@ class Builder:
             approval_policy=policy,
             n8n=await self._target(use_case_id),
         )
+
+    async def _named_in_n8n(self, use_case_id: str, pinned: set[str]) -> list[CardView]:
+        """The cards the Agent blocks of its own n8n workflow name beyond the pinned ones, as a
+        workflow made or changed in n8n may. Each runs its newest version, so the Approvers it
+        asks for count too."""
+        async with self._db.connection("builder") as conn:
+            row = await (
+                await conn.execute(_CURRENT_VERSION + " WHERE u.use_case_id = %s", (use_case_id,))
+            ).fetchone()
+        if row is None or row["document"] is None:
+            return []
+        try:
+            flow = read_flow(row["document"])
+        except Unreadable:
+            return []
+        named = {str(block.parameters.get("agent")) for block in flow.of_kind("agent")} - pinned
+        found = [await self._cards.get(card_id) for card_id in sorted(named)]
+        return [card for card in found if card is not None]
 
     async def start_run(
         self,

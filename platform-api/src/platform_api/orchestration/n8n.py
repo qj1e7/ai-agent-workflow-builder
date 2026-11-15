@@ -401,6 +401,16 @@ class N8nWorkflow:
 
 
 @dataclass(frozen=True)
+class ListedWorkflow:
+    """A workflow as n8n lists the ones a project holds."""
+
+    workflow: N8nWorkflow
+    live: dict[str, Any] | None
+    """The version n8n runs, as it runs it: its blocks and edges with the workflow's settings.
+    None while nothing is published."""
+
+
+@dataclass(frozen=True)
 class TriggerStatus:
     node_id: str
     status: str
@@ -558,6 +568,22 @@ class _WorkflowOut(_Data):
     nodes: list[dict[str, JsonValue]]
     connections: dict[str, JsonValue]
     settings: dict[str, JsonValue] = Field(default_factory=dict[str, JsonValue])
+
+
+class _LiveVersion(_Data):
+    version_id: str = Field(alias="versionId")
+    nodes: list[dict[str, JsonValue]]
+    connections: dict[str, JsonValue]
+
+
+class _ListedOut(_WorkflowOut):
+    is_archived: bool = Field(default=False, alias="isArchived")
+    active_version: _LiveVersion | None = Field(default=None, alias="activeVersion")
+
+
+class _Listing(_Data):
+    data: list[_ListedOut]
+    next_cursor: str | None = Field(default=None, alias="nextCursor")
 
 
 class _RestWorkflow(_Data):
@@ -893,6 +919,18 @@ class N8nApi:
             return None
         return _workflow(_parse(_WorkflowOut, _expect(response)))
 
+    async def workflows_in(self, project_id: str) -> list[ListedWorkflow]:
+        """Every workflow the project holds that is not archived, page by page."""
+        params = {"projectId": project_id, "excludePinnedData": "true", "limit": "250"}
+        found: list[ListedWorkflow] = []
+        while True:
+            response = _expect(await self._public("GET", "/workflows", params=params))
+            page = _parse(_Listing, response)
+            found.extend(_listed(item) for item in page.data if not item.is_archived)
+            if not page.next_cursor:
+                return found
+            params = {**params, "cursor": page.next_cursor}
+
     async def home_project(self, workflow_id: str) -> str | None:
         """None when n8n no longer has the workflow."""
         response = await self._public("GET", f"/workflows/{workflow_id}")
@@ -1129,6 +1167,21 @@ def _workflow(out: _WorkflowOut) -> N8nWorkflow:
     return N8nWorkflow(out.id, out.version_id, out.active_version_id, document)
 
 
+def _listed(out: _ListedOut) -> ListedWorkflow:
+    live = out.active_version
+    in_use = (
+        None
+        if live is None or live.version_id != out.active_version_id
+        else {
+            "name": out.name,
+            "nodes": live.nodes,
+            "connections": live.connections,
+            "settings": out.settings,
+        }
+    )
+    return ListedWorkflow(_workflow(out), in_use)
+
+
 def _facts(record: ExecutionRecord) -> ExecutionFacts:
     retry_of = None if record.retry_of is None else N8nExecutionId(record.retry_of)
     return ExecutionFacts(
@@ -1226,6 +1279,16 @@ class N8nDrafts(Protocol):
         ...
 
     async def remove_for_good(self, workflow_id: str) -> None: ...
+
+
+async def personal_spaces(api: N8nApi) -> dict[str, str]:
+    """Each personal project by the n8n user whose own space it is. A user n8n names as the
+    creator of two is left out, so no workflow is put down to the wrong person."""
+    spaces: dict[str, list[str]] = {}
+    for project in await api.projects():
+        if project.type == "personal" and project.creator_id is not None:
+            spaces.setdefault(project.creator_id, []).append(project.id)
+    return {user: ids[0] for user, ids in spaces.items() if len(ids) == 1}
 
 
 async def platform_project(db: Database) -> str | None:
@@ -1376,12 +1439,14 @@ class N8nWorkflows:
 
     async def member_project(self, n8n_user_id: str) -> str | None:
         """The member's own space, found by n8n's id for them, never by name or email (P7 Q9)."""
-        found = [
-            p.id
-            for p in await self._api.projects()
-            if p.type == "personal" and p.creator_id == n8n_user_id
-        ]
-        return found[0] if len(found) == 1 else None
+        return (await personal_spaces(self._api)).get(n8n_user_id)
+
+    async def spaces(self) -> dict[str, str]:
+        """Each member's own space by n8n's id for the member, as n8n names its creator."""
+        return await personal_spaces(self._api)
+
+    async def workflows_in(self, project_id: str) -> list[ListedWorkflow]:
+        return await self._api.workflows_in(project_id)
 
     async def platform_project(self) -> str | None:
         return await platform_project(self._db)

@@ -6444,6 +6444,86 @@
         "title": "LostView",
         "type": "object"
       },
+      "MadeInN8nList": {
+        "additionalProperties": false,
+        "properties": {
+          "workflows": {
+            "items": {
+              "$ref": "#/components/schemas/MadeInN8nView"
+            },
+            "title": "Workflows",
+            "type": "array"
+          }
+        },
+        "required": [
+          "workflows"
+        ],
+        "title": "MadeInN8nList",
+        "type": "object"
+      },
+      "MadeInN8nView": {
+        "additionalProperties": false,
+        "properties": {
+          "can_set_up": {
+            "title": "Can Set Up",
+            "type": "boolean"
+          },
+          "findings": {
+            "description": "Why it is not safe, in the safety checker's words, one per problem.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Findings",
+            "type": "array"
+          },
+          "grade": {
+            "$ref": "#/components/schemas/Grade",
+            "description": "The safety checker's grade of the version n8n runs, or of its draft when nothing is published. Only a safe version asks for a yes and writes."
+          },
+          "made_by": {
+            "description": "Who made it in n8n: the person whose own n8n space holds it, or held it when their account ended, matched by the n8n account the platform made for them.",
+            "title": "Made By",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "published": {
+            "description": "Whether it is published in n8n, so it runs there.",
+            "title": "Published",
+            "type": "boolean"
+          },
+          "why_not": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why it can't be set up now, in words to show.",
+            "title": "Why Not"
+          },
+          "workflow_id": {
+            "title": "Workflow Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "workflow_id",
+          "name",
+          "made_by",
+          "published",
+          "grade",
+          "findings",
+          "can_set_up",
+          "why_not"
+        ],
+        "title": "MadeInN8nView",
+        "type": "object"
+      },
       "Me": {
         "additionalProperties": false,
         "properties": {
@@ -10657,6 +10737,22 @@
         "title": "SeenIn",
         "type": "object"
       },
+      "SetUpFromN8n": {
+        "additionalProperties": false,
+        "properties": {
+          "workflow_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Workflow Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "workflow_id"
+        ],
+        "title": "SetUpFromN8n",
+        "type": "object"
+      },
       "SettingsArea": {
         "enum": [
           "people",
@@ -12722,6 +12818,18 @@
             },
             "title": "Left Out",
             "type": "array"
+          },
+          "made_in_n8n_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Who made it in n8n, for a workflow made in n8n and then set up from Workflows (ENGINE-PLAN E15). Change it in n8n: its runs are their work, so they never approve them. Null for a workflow the Planner laid out.",
+            "title": "Made In N8N By"
           },
           "move_refused": {
             "anyOf": [
@@ -16518,6 +16626,76 @@
         ]
       }
     },
+    "/api/v1/n8n/workflows": {
+      "get": {
+        "description": "Every workflow made in n8n that waits to be set up (ENGINE-PLAN E15): those in the own n8n space of someone the platform made an n8n account for, and those n8n moved to the platform's project when their maker's account ended. Each names its maker, matched by the n8n account the platform made for them, and the safety checker's grade. Only for someone who can open n8n now.",
+        "operationId": "made_in_n8n_api_v1_n8n_workflows_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MadeInN8nList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Only people with n8n access can open n8n. An admin can add it in Settings."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Opening n8n is coming once the block list is on. Or: n8n can't be opened now, in words to show"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Made In N8N",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
     "/api/v1/people": {
       "get": {
         "operationId": "list_people_api_v1_people_get",
@@ -19292,6 +19470,106 @@
         ]
       }
     },
+    "/api/v1/use-cases/from-n8n": {
+      "post": {
+        "description": "Sets up a workflow made in n8n as one the platform runs (ENGINE-PLAN E15, ADR 0027). It moves to the platform's project first, and what n8n holds there is graded and registered, as version 1. One published in n8n is on at once, with its maker as its publisher. One that is not is set up as a draft, and only when it passes the check. Only a safe version asks for a yes and writes, and any Approver decides, never its maker or the person who set it up. Only an Operator who can open n8n now.",
+        "operationId": "set_up_from_n8n_api_v1_use_cases_from_n8n_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetUpFromN8n"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UseCaseCreated"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Only an Operator can do this, or the person is not on the People list"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "No workflow made in n8n with this id waits to be set up."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "This workflow is set up already. Or: Fix it in n8n first. It isn't published there, and only a workflow that passes the check can be turned on. Or: n8n is not ready yet: its error workflow is not loaded. Or: Opening n8n is coming once the block list is on. Or: n8n can't be opened now, in words to show"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "n8n did not move or show it, so nothing is set up"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Set Up From N8N",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
     "/api/v1/use-cases/suggest": {
       "post": {
         "operationId": "suggest_template_api_v1_use_cases_suggest_post",
@@ -20374,7 +20652,7 @@
                 }
               }
             },
-            "description": "Changed since you opened it. Nothing was saved. Or: The Software watchlist's schedule is saved on the Software page. Or: Changed again since, in n8n. Nothing was saved."
+            "description": "Changed since you opened it. Nothing was saved. Or: The Software watchlist's schedule is saved on the Software page. Or: This workflow was made in n8n, so change when it runs there, with Open in n8n. Or: Changed again since, in n8n. Nothing was saved."
           },
           "422": {
             "content": {

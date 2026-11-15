@@ -6,6 +6,15 @@ from pydantic import Field
 
 from platform_api.auth import OPERATORS_ONLY, SIGNED_IN, CurrentPrincipal
 from platform_api.builder.http import NO_SUCH, NOT_FOUND, WorkflowOperator
+from platform_api.builder.made_in_n8n import (
+    FIX_IN_N8N,
+    NOT_LOADED,
+    SET_UP_ALREADY,
+    MadeInN8n,
+    MadeInN8nList,
+    SetUpFromN8n,
+)
+from platform_api.builder.models import UseCaseCreated
 from platform_api.builder.n8n_holds import Free, Held, Holding, HoldRefused
 from platform_api.builder.n8n_view import InN8nViews, RunN8nView, UseCaseN8nView
 from platform_api.orchestration import NO_ACCESS, OFF
@@ -45,8 +54,17 @@ def _views(request: Request) -> InN8nViews:
     return views
 
 
+def _made(request: Request) -> MadeInN8n | None:
+    """None on a platform that does not lay workflows out in n8n. The route refuses, so a body
+    that can't be read is still a 422 first."""
+    made: MadeInN8n | None = getattr(request.app.state, "made_in_n8n", None)
+    return made
+
+
 CurrentHolding = Annotated[Holding, Depends(_holding)]
 CurrentViews = Annotated[InN8nViews, Depends(_views)]
+CurrentMade = Annotated[MadeInN8n | None, Depends(_made)]
+NOT_WAITING = "No workflow made in n8n with this id waits to be set up."
 
 
 def _with_access(principal: CurrentPrincipal) -> Principal:
@@ -140,3 +158,59 @@ async def run_in_n8n(run_id: RunId, principal: N8nViewer, views: CurrentViews) -
     if view is None:
         raise HTTPException(404, "No such run")
     return view
+
+
+@router.get(
+    "/n8n/workflows",
+    description="Every workflow made in n8n that waits to be set up (ENGINE-PLAN E15): those in "
+    "the own n8n space of someone the platform made an n8n account for, and those n8n moved to "
+    "the platform's project when their maker's account ended. Each names its maker, matched by "
+    "the n8n account the platform made for them, and the safety checker's grade. Only for "
+    "someone who can open n8n now.",
+    responses={
+        **SIGNED_IN,
+        403: error_response(NO_ACCESS),
+        409: error_response(f"{OFF} Or: n8n can't be opened now, in words to show"),
+    },
+)
+async def made_in_n8n(principal: CurrentPrincipal, made: CurrentMade) -> MadeInN8nList:
+    if made is None:
+        raise HTTPException(409, OFF)
+    match await made.waiting(principal):
+        case HoldRefused() as refused:
+            raise HTTPException(refused.status, refused.words)
+        case views:
+            return MadeInN8nList(workflows=views)
+
+
+@router.post(
+    "/use-cases/from-n8n",
+    status_code=201,
+    description="Sets up a workflow made in n8n as one the platform runs (ENGINE-PLAN E15, ADR "
+    "0027). It moves to the platform's project first, and what n8n holds there is graded and "
+    "registered, as version 1. One published in n8n is on at once, with its maker as its "
+    "publisher. One that is not is set up as a draft, and only when it passes the check. Only a "
+    "safe version asks for a yes and writes, and any Approver decides, never its maker or the "
+    "person who set it up. Only an Operator who can open n8n now.",
+    responses={
+        **OPERATORS_ONLY,
+        404: error_response(NOT_WAITING),
+        409: error_response(
+            f"{SET_UP_ALREADY} Or: {FIX_IN_N8N} Or: {NOT_LOADED} Or: {OFF} Or: n8n can't be "
+            "opened now, in words to show"
+        ),
+        503: error_response("n8n did not move or show it, so nothing is set up"),
+    },
+)
+async def set_up_from_n8n(
+    body: SetUpFromN8n, principal: WorkflowOperator, made: CurrentMade
+) -> UseCaseCreated:
+    if made is None:
+        raise HTTPException(409, OFF)
+    match await made.set_up(body.workflow_id, principal):
+        case None:
+            raise HTTPException(404, NOT_WAITING)
+        case HoldRefused() as refused:
+            raise HTTPException(refused.status, refused.words)
+        case created:
+            return created

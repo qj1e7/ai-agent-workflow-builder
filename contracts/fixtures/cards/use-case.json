@@ -48,5 +48,6 @@
   "findings": [],
   "deleted_in_n8n_at": null,
   "moving_to_n8n": false,
-  "move_refused": null
+  "move_refused": null,
+  "made_in_n8n_by": null
 }

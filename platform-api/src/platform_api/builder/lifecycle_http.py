@@ -19,6 +19,7 @@ from platform_api.builder.n8n_holds import HeldInN8n
 from platform_api.builder.service import (
     InN8nRefused,
     Republished,
+    ScheduleInN8n,
     ScheduleOnSoftwarePage,
     WatchlistStays,
 )
@@ -36,6 +37,7 @@ from platform_api.wire import error_response
 router = APIRouter(prefix="/api/v1", tags=["builder"])
 
 SCHEDULE_ON_SOFTWARE_PAGE = "The Software watchlist's schedule is saved on the Software page."
+SCHEDULE_IN_N8N = "This workflow was made in n8n, so change when it runs there, with Open in n8n."
 WATCHLIST_STAYS = "The Software watchlist can't be deleted. Remove its software instead."
 NO_SUCH_VERSION = "No such version"
 CHANGED_SINCE = (
@@ -206,7 +208,8 @@ async def restore_use_case(
         **OPERATORS_ONLY,
         404: NOT_FOUND,
         409: error_response(
-            f"{CHANGED_SINCE_OPENED} Or: {SCHEDULE_ON_SOFTWARE_PAGE} Or: {CHANGED_IN_N8N}"
+            f"{CHANGED_SINCE_OPENED} Or: {SCHEDULE_ON_SOFTWARE_PAGE} Or: {SCHEDULE_IN_N8N} Or: "
+            f"{CHANGED_IN_N8N}"
         ),
         503: N8N_NOT_READY,
     },
@@ -217,6 +220,8 @@ async def save_schedule(
     match await builder.save_schedule(use_case_id, principal, body):
         case ScheduleOnSoftwarePage():
             raise HTTPException(409, SCHEDULE_ON_SOFTWARE_PAGE)
+        case ScheduleInN8n():
+            raise HTTPException(409, SCHEDULE_IN_N8N)
         case ChangedSince():
             raise HTTPException(409, CHANGED_SINCE_OPENED)
         case N8nNotReady() | ChangedInN8n() | DraftRefused() | HeldInN8n() as refused:

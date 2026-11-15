@@ -12,7 +12,7 @@ its person, and dropped once used. It is never logged."""
 import asyncio
 import contextlib
 import logging
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Awaitable, Callable, Iterable, Mapping
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from typing import Any, Literal
@@ -21,7 +21,7 @@ import httpx
 
 from platform_api.db import Database
 from platform_api.orchestration.model_settings import KeyBox
-from platform_api.orchestration.n8n import N8nApi, N8nError, platform_project
+from platform_api.orchestration.n8n import N8nApi, N8nError, personal_spaces, platform_project
 from platform_api.shared import UserId
 
 log = logging.getLogger(__name__)
@@ -198,6 +198,27 @@ class StaffAccounts:
             ).fetchall()
         return {row["n8n_user_id"]: UserId(row["id"]) for row in rows}
 
+    async def makers(self) -> Mapping[str, UserId]:
+        """Who made each workflow noted as it left its maker's own space (E15)."""
+        async with self._db.connection("orchestration") as conn:
+            rows = await (
+                await conn.execute("SELECT workflow_id, made_by FROM orchestration.n8n_makers")
+            ).fetchall()
+        return {row["workflow_id"]: UserId(row["made_by"]) for row in rows}
+
+    async def note_made(
+        self, person: UserId, n8n_user_id: str, workflow_ids: Iterable[str]
+    ) -> None:
+        """Notes that these workflows were made in this person's own space, before they leave
+        it. The first maker noted stays."""
+        async with self._db.transaction("orchestration") as uow:
+            for workflow_id in workflow_ids:
+                await uow.conn.execute(
+                    "INSERT INTO orchestration.n8n_makers (workflow_id, made_by, n8n_user_id,"
+                    " noted_at) VALUES (%s, %s, %s, %s) ON CONFLICT (workflow_id) DO NOTHING",
+                    (workflow_id, person, n8n_user_id, uow.now),
+                )
+
     async def display_of(self, person: UserId) -> str:
         async with self._db.connection("orchestration") as conn:
             row = await (
@@ -353,7 +374,13 @@ class StaffAccounts:
         return Made(row.id)
 
     async def _end(self, row: _Row) -> Ended:
-        assert row.n8n_user_id is not None
+        """n8n moves what the account's own space still holds to the platform's project, and
+        keeps no maker for it, so each workflow there is noted as this person's first."""
+        assert row.n8n_user_id is not None and self._api is not None
+        space = (await personal_spaces(self._api)).get(row.n8n_user_id)
+        if space is not None:
+            left = await self._api.workflows_in(space)
+            await self.note_made(row.id, row.n8n_user_id, [w.workflow.id for w in left])
         await self._delete(row.n8n_user_id)
         async with self._db.transaction("orchestration") as uow:
             await uow.conn.execute(
