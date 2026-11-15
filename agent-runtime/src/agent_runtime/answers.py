@@ -737,7 +737,7 @@ def _watch_rows(
     stretch = schedule_stretch(read.schedule, request)
     watched = _watch_clauses(read, request)
     own = stretch is not None and not _its_schedule(request[stretch[0] : stretch[1]], schedule)
-    if own and stretch and any(a <= stretch[0] and stretch[1] <= b for a, b in watched):
+    if own and stretch and _the_watchs(request, stretch, watched):
         # A time the watchlist's one schedule could hold is offered to the whole watchlist.
         # A schedule the reading missed is read from the request's own words.
         holds = _watchlist_holds(read.schedule or request[stretch[0] : stretch[1]])
@@ -759,6 +759,15 @@ def _watch_rows(
         if not any(at[0] < b and a < at[1] for (a, b), _ in kept):
             kept.append((at, row))
     return [row for _, row in kept]
+
+
+def _the_watchs(request: str, stretch: tuple[int, int], watched: list[tuple[int, int]]) -> bool:
+    """Whether a schedule is the watch's: inside a clause about the watch, or in a clause of its
+    own with nothing but schedule words, as "Every weekday at 9, check LangGraph"."""
+    if any(a <= stretch[0] and stretch[1] <= b for a, b in watched):
+        return True
+    clause = next(((a, b) for a, b in clauses_of(request) if a <= stretch[0] < b), None)
+    return clause is not None and only_schedule_words(request[clause[0] : clause[1]])
 
 
 # Words that are write verbs for a ticket but read plainly beside software: "which version do we
