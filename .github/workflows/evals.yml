@@ -1,24 +1,70 @@
 name: evals
 
-# The model bake-off. Run by hand from the Actions tab. Never on a pull request.
+# The model bake-off. Run by hand from the Actions tab, or with gh workflow run. Never on a pull request.
 on:
   workflow_dispatch:
+    inputs:
+      jobs:
+        description: The jobs to run, comma separated (summarise, explain, draft, choose, answer, anything). Empty runs every job.
+        required: false
+        default: ''
+        type: string
+      models:
+        description: The gateway models to score, comma separated. Empty uses the GATEWAY_MODELS variable, else Claude Haiku 4.5.
+        required: false
+        default: ''
+        type: string
+      judge:
+        description: The judge model, as gateway:<model>. Empty uses the EVAL_JUDGE variable, else no judge.
+        required: false
+        default: ''
+        type: string
+      marker:
+        description: The run's marker. Empty makes up a new one, so the gateway can't answer from its store.
+        required: false
+        default: ''
+        type: string
 
 permissions:
   contents: read
 
+env:
+  AGENT_MODEL_BASE_URL: https://llm-gateway.aisg.sg
+
 jobs:
   evals:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    # The keys live only in the evals environment, which only main may use. "Run workflow" runs
-    # the file from the chosen branch, so a guard in this file could be deleted on that branch.
-    # The environment's branch rule cannot.
+    timeout-minutes: 90
+    # ADR 0032 keeps the keys in the evals environment, with a rule that only main may use it.
+    # "Run workflow" runs the file from the chosen branch, so a guard in this file could be
+    # deleted on that branch. The environment's branch rule cannot.
     environment: evals
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           persist-credentials: false
+
+      # Names only. The key goes to curl on its standard input, never on its command line.
+      - name: List the models the AI Singapore gateway serves
+        env:
+          AGENT_MODEL_API_KEY: ${{ secrets.AISG_API_KEY }}
+        run: |
+          if [ -z "${AGENT_MODEL_API_KEY}" ]; then
+            echo "AISG_API_KEY is not set, so the gateway is not run."
+            exit 0
+          fi
+          listed="$(mktemp)"
+          for header in "Authorization: Bearer" "x-api-key:"; do
+            code="$(printf '%s %s\n' "$header" "$AGENT_MODEL_API_KEY" |
+              curl --silent --show-error --max-time 30 --header @- --output "$listed" \
+                --write-out '%{http_code}' "$AGENT_MODEL_BASE_URL/v1/models" || true)"
+            echo "${header%%:*}: HTTP $code"
+            if [ "$code" = "200" ]; then
+              jq -r '.data[]?.id' "$listed" | sort | tee -a "$GITHUB_STEP_SUMMARY"
+              break
+            fi
+          done
+          rm -f "$listed"
 
       # A provider whose secret is not configured is reported as "not run", and the job still passes.
       - name: Score the configured providers on the golden set
@@ -33,9 +79,19 @@ jobs:
           ANTHROPIC_MODELS: ${{ vars.ANTHROPIC_MODELS }}
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
           GOOGLE_MODELS: ${{ vars.GOOGLE_MODELS }}
+          AGENT_MODEL_API_KEY: ${{ secrets.AISG_API_KEY }}
+          GATEWAY_MODELS: ${{ inputs.models || vars.GATEWAY_MODELS || 'claude-haiku-4-5-20251001' }}
           EVAL_TEMPERATURE: ${{ vars.EVAL_TEMPERATURE }}
-          EVAL_JUDGE: ${{ vars.EVAL_JUDGE }}
+          EVAL_JUDGE: ${{ inputs.judge || vars.EVAL_JUDGE }}
+          EVAL_JOBS: ${{ inputs.jobs }}
+          EVAL_MARKER: ${{ inputs.marker }}
         run: scripts/evals.sh
+
+      - name: Put the report on the run's page
+        if: ${{ !cancelled() }}
+        run: |
+          report=agent-runtime/evals/out/results.md
+          if [ -f "$report" ]; then cat "$report" >> "$GITHUB_STEP_SUMMARY"; fi
 
       - name: Keep the results
         if: ${{ !cancelled() }}
