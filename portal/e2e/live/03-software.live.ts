@@ -219,7 +219,7 @@ test('the count line and what checks each row hold through a decline, and the de
   await expect(countLine(waiting), 'a row whose ticket waits for a yes still has a newer version').toHaveText(LINE)
   await before.close()
 
-  await backend.send('PUT', 'alice', '/api/v1/watchlist/schedule', { day: 'monday', at: '09:00' })
+  await backend.saveWatchlistSchedule('alice', { day: 'monday', at: '09:00' })
   const { digest } = await backend.get<{ digest: string }>('bob', `/api/v1/approvals/${approvalId}`)
   await backend.post('bob', `/api/v1/approvals/${approvalId}/decisions`, { step: 0, verdict: 'decline', digest, reason: 'Wrong version' }, undefined, [201])
   await backend.waitForState(runId, ['rejected'])

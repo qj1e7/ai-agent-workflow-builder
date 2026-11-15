@@ -273,8 +273,11 @@ test('scenario H: alice changes the schedule, pauses and deletes through the pag
   await context.close()
 })
 
+/** A save from the version in use now, as a page that has just read it sends it. */
 async function saveSchedule(request: APIRequestContext, user: string, useCaseId: string, data: Record<string, string>): Promise<void> {
-  const response = await request.put(`/api/v1/use-cases/${useCaseId}/schedule`, { headers: { 'X-Dev-User': user }, data })
+  const headers = { 'X-Dev-User': user }
+  const { version } = (await (await request.get(`/api/v1/use-cases/${useCaseId}`, { headers })).json()) as { version: number }
+  const response = await request.put(`/api/v1/use-cases/${useCaseId}/schedule`, { headers, data: { ...data, expected_version: version } })
   expect(response.status(), `${user} saves the schedule: ${await response.text()}`).toBe(200)
 }
 

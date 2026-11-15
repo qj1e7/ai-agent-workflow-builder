@@ -4,7 +4,7 @@ import type { BlockKind, Me, RunView, ScheduleSaveIn, UseCaseView, VersionSchedu
 import { agentIdentity } from '../../ui/agents'
 import { andList, declinedOfSteps, declinedRecord, runPill, scheduleShort, stageWords, type NameOf, type NextRun, type StageFacts } from '../run/words'
 import { faceId } from '../agents/agents'
-import { heldWords, repeatWords, TAKE_OVER_WORDS } from '../software/software'
+import { heldWords, repeatWords } from '../software/software'
 import { DELETED_IN_N8N, madeWords, needsFixBanner, refusedBanner, UNKNOWN_PUBLISHER } from './n8nChange'
 import { lineWhen, nextRunAt, runWhen, scheduleZoneName, zoneWords } from './times'
 
@@ -160,7 +160,7 @@ export function nextRunWords(useCase: Pick<UseCaseView, 'state' | 'next_run_at' 
 
 /** Why the schedule starts no run while its owner can no longer run it, as the Software page says it. Paused wins, so null while paused. */
 export function heldNote({ state, schedule }: Pick<UseCaseView, 'state' | 'schedule'>): string | null {
-  return state === 'on' && schedule?.held ? heldWords(schedule.held, schedule.owner_name, TAKE_OVER_WORDS) : null
+  return state === 'on' && schedule ? heldWords(schedule) : null
 }
 
 export interface When {

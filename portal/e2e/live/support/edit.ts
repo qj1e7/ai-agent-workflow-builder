@@ -20,7 +20,7 @@ export const tag = (): string =>
 /** An agent workflow of alice's that runs on the schedule given, saved on its page, so it is at version 2. */
 export async function scheduledWorkflow(backend: Backend, name: string, schedule: { day: string; at: string }): Promise<Made> {
   const made = await backend.post<{ use_case_id: string }>('alice', '/api/v1/agent-use-cases', { name, instruction: 'Check LangGraph for a new release and raise a ticket in MOCK.', agents: AGENTS }, undefined, [201])
-  const saved = await backend.send('PUT', 'alice', `/api/v1/use-cases/${made.use_case_id}/schedule`, schedule)
+  const saved = await backend.saveWorkflowSchedule('alice', made.use_case_id, schedule)
   expect(saved.status, `alice sets ${name}’s schedule: ${JSON.stringify(saved.body)}`).toBe(200)
   return { id: made.use_case_id, name }
 }

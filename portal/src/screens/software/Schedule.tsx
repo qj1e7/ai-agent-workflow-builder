@@ -208,7 +208,7 @@ export function Schedule({ schedule, version, operator, paused, useCaseId, answe
             {schedule ? 'Change schedule' : 'Set a schedule'}
           </Button>
           {schedule ? (
-            <Button data-place="schedule-off" loading={off.isPending} onClick={() => off.mutate(undefined, { onSuccess: () => opener.current?.focus() })}>
+            <Button data-place="schedule-off" loading={off.isPending} onClick={() => off.mutate(version, { onSuccess: () => opener.current?.focus() })}>
               Turn off schedule
             </Button>
           ) : null}

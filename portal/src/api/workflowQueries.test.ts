@@ -5,7 +5,8 @@ import setUpCreated from '../../../contracts/fixtures/builder/agent-use-case.off
 import draftUseCase from '../../../contracts/fixtures/builder/use-case.draft.json'
 import type { UseCaseCreated, UseCaseView } from './types'
 import { MutationObserver, QueryClient } from '@tanstack/react-query'
-import { keys } from './queries'
+import { keys, turnOffScheduleOptions } from './queries'
+import { ApiError } from './client'
 import type { ApiClient } from './client'
 import { applySavedView, holdSetUp, madeBySetUp, startTestOptions, saveScheduleOptions, setUpOffOptions, testAgain, testAsked, testStarted, turnOnOptions, withView, type SetUp } from './workflowQueries'
 
@@ -38,6 +39,25 @@ describe('the cache after a schedule is saved', () => {
   })
 })
 
+describe('turning the watchlist’s schedule off', () => {
+  it('sends the version the page read, and reads the watchlist again when a teammate changed it since, so the schedule that stays shows', async () => {
+    const queryClient = new QueryClient()
+    queryClient.setQueryData(keys.watchlist('me'), { version: 7 })
+    const sent: unknown[] = []
+    const refused = { error: { detail: 'Changed since you opened it. Nothing was saved.' }, response: { ok: false, status: 409 } }
+    const client = { DELETE: (path: string, init: unknown) => (sent.push([path, init]), Promise.resolve(refused)) } as unknown as ApiClient
+    const options = turnOffScheduleOptions(client, queryClient, 'me')
+
+    const failure = await options.mutationFn(7).catch((error: unknown) => error)
+    options.onError()
+
+    expect(sent).toEqual([['/api/v1/watchlist/schedule', { params: { query: { expected_version: 7 } } }]])
+    expect(failure).toBeInstanceOf(ApiError)
+    expect((failure as ApiError).message).toBe('Changed since you opened it. Nothing was saved.')
+    expect(queryClient.getQueryState(keys.watchlist('me'))?.isInvalidated).toBe(true)
+  })
+})
+
 describe('saving a workflow’s schedule', () => {
   it('sends it to the workflow’s schedule route and keeps the answer in the cache', async () => {
     const queryClient = new QueryClient()
@@ -46,10 +66,10 @@ describe('saving a workflow’s schedule', () => {
     const client = { PUT: (path: string, init: unknown) => (sent.push([path, init]), Promise.resolve({ data: saved, response: { ok: true, status: 200 } })) } as unknown as ApiClient
     const options = saveScheduleOptions(client, queryClient, 'me', NEWER.use_case_id)
 
-    const view = await options.mutationFn({ day: 'monday', at: '09:00' })
+    const view = await options.mutationFn({ day: 'monday', at: '09:00', expected_version: NEWER.version })
     options.onSuccess(view)
 
-    expect(sent).toEqual([['/api/v1/use-cases/{use_case_id}/schedule', { params: { path: { use_case_id: NEWER.use_case_id } }, body: { day: 'monday', at: '09:00', via: 'page' } }]])
+    expect(sent).toEqual([['/api/v1/use-cases/{use_case_id}/schedule', { params: { path: { use_case_id: NEWER.use_case_id } }, body: { day: 'monday', at: '09:00', expected_version: NEWER.version, via: 'page' } }]])
     expect(queryClient.getQueryData(keys.useCase('me', NEWER.use_case_id))).toEqual(saved)
   })
 })

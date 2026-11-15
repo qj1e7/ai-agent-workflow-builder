@@ -28,6 +28,9 @@ const BOB: Me = { id: 'bob', display: 'Bob', roles: ['approver'] }
 const TEAM = (peopleList.people as PersonOut[]).filter((person) => ['alice', 'bob', 'carol'].includes(person.id))
 
 const AGENTS = agentUseCase as UseCaseView
+const ALICE_LEFT = 'Not running: Alice is no longer on the People list. An Operator can take it over by saving the schedule.'
+const ALICE_NOT_AN_OPERATOR = 'Not running: Alice can no longer run workflows. An Operator can take it over by saving the schedule.'
+const CAROL_LEFT = 'Not running: Carol is no longer on the People list. An Operator can take it over by saving the schedule.'
 const WATCHLIST = watchlistUseCase as UseCaseView
 const NOW = new Date('2026-11-04T15:00:00+08:00')
 
@@ -200,8 +203,10 @@ describe('a workflow page', () => {
   })
 
   it('while its schedule is held, keeps the schedule in the Schedule row and says for the next run why it is not running', () => {
-    const removed = render({ useCase: { ...AGENTS, next_run_at: null, schedule: { day: 'monday', at: '09:00', time_zone: 'Asia/Singapore', owner_name: 'Alice', held: 'owner_removed' } } })
-    const notOperator = render({ useCase: { ...AGENTS, next_run_at: null, schedule: { day: 'monday', at: '09:00', time_zone: 'Asia/Singapore', owner_name: 'Alice', held: 'owner_not_an_operator' } } })
+    const removed = render({ useCase: { ...AGENTS, next_run_at: null, schedule: { day: 'monday', at: '09:00', time_zone: 'Asia/Singapore', owner_name: 'Alice', held: 'owner_removed', held_words: ALICE_LEFT } } })
+    const notOperator = render({
+      useCase: { ...AGENTS, next_run_at: null, schedule: { day: 'monday', at: '09:00', time_zone: 'Asia/Singapore', owner_name: 'Alice', held: 'owner_not_an_operator', held_words: ALICE_NOT_AN_OPERATOR } },
+    })
     expect(whenOf(removed)).toBe('Every Monday at 9:00 Singapore time (SGT).')
     expect(nextOf(removed)).toBe('Not running: Alice is no longer on the People list. An Operator can take it over by saving the schedule.')
     expect(nextOf(notOperator)).toBe('Not running: Alice can no longer run workflows. An Operator can take it over by saving the schedule.')
@@ -260,17 +265,17 @@ describe('a workflow page', () => {
   })
 
   it('tells everyone a held schedule can be taken over by saving it', () => {
-    const held: UseCaseView = { ...AGENTS, next_run_at: null, schedule: { day: 'monday', at: '09:00', time_zone: 'Asia/Singapore', owner_name: 'Carol', held: 'owner_removed' } }
+    const held: UseCaseView = { ...AGENTS, next_run_at: null, schedule: { day: 'monday', at: '09:00', time_zone: 'Asia/Singapore', owner_name: 'Carol', held: 'owner_removed', held_words: CAROL_LEFT } }
     for (const me of [ALICE, BOB]) {
       expect(nextOf(render({ me, useCase: held }))).toContain('An Operator can take it over by saving the schedule.')
     }
   })
 
   it('lets an Operator take a held schedule over from When: Change opens on it, the save carries the version read, and the saved view names her and its next run', async () => {
-    const held: UseCaseView = { ...AGENTS, version: 3, next_run_at: null, schedule: { day: 'monday', at: '09:00', time_zone: 'Asia/Singapore', owner_name: 'Carol', held: 'owner_removed' } }
+    const held: UseCaseView = { ...AGENTS, version: 3, next_run_at: null, schedule: { day: 'monday', at: '09:00', time_zone: 'Asia/Singapore', owner_name: 'Carol', held: 'owner_removed', held_words: CAROL_LEFT } }
     expect(buttons(render({ me: ALICE, useCase: held }))).toContain('Change when it runs')
     expect(buttons(render({ me: BOB, useCase: held })).filter((label) => /when it runs/i.test(label)), 'only an Operator can take it over').toEqual([])
-    const taken: UseCaseView = { ...held, next_run_at: '2026-11-09T01:00:00Z', schedule: { ...held.schedule!, owner_name: 'Alice', held: null } }
+    const taken: UseCaseView = { ...held, next_run_at: '2026-11-09T01:00:00Z', schedule: { ...held.schedule!, owner_name: 'Alice', held: null, held_words: null } }
     const sent: unknown[] = []
     const client = { PUT: (path: string, init: unknown) => (sent.push([path, init]), Promise.resolve({ data: taken, response: { ok: true, status: 200 } })) } as unknown as ApiClient
 
