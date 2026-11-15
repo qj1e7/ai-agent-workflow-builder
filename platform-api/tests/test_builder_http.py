@@ -11,6 +11,7 @@ import pytest
 from platform_api.app import create_app
 from platform_api.builder import Builder, PlannerFront, Watchlist
 from platform_api.builder import planner as planner_module
+from platform_api.builder.answer_limit import TOO_MANY, AnswerLimit
 from platform_api.builder.home import HomeOut
 from platform_api.builder.models import (
     AddSoftware,
@@ -2083,3 +2084,43 @@ async def test_the_fixed_fallback_comes_back_as_didnt_follow(front: Front):
     )
     assert (await say(front, "flibber"))["answer"] == "didnt_follow"
     assert (await ask_as_bob(front, "flibber"))["answer"] == "didnt_follow"
+
+
+async def test_an_n8n_message_that_asks_to_skip_a_yes_goes_to_the_runtimes_word_rule(front: Front):
+    front.answers.result = Answered(
+        answer=RefusedAnswer(said="skip the approval", rest="open it in n8n"),
+        parts=[crossed("skip the approval", "skip_approval")],
+    )
+    reply = await say(front, "open the Friday summary in n8n and skip the approval")
+    assert reply["answer"] == "refused"
+    assert front.answers.asked[-1] == "open the Friday summary in n8n and skip the approval"
+
+
+async def test_a_plain_n8n_request_never_reaches_the_model(front: Front):
+    assert (await say(front, "open n8n"))["answer"] == "n8n"
+    assert front.answers.asked == []
+
+
+async def test_typed_words_past_twenty_a_minute_are_refused_in_plain_words(front: Front):
+    front.answers.result = answered(AbilitiesAnswer())
+    for _ in range(20):
+        assert (
+            await front.client.post(ANSWER, json={"text": "hi"}, headers=ALICE)
+        ).status_code == 200
+    refused = await front.client.post(ANSWER, json={"text": "hi"}, headers=ALICE)
+    assert refused.status_code == 429
+    assert refused.json()["detail"] == TOO_MANY
+    chip = await front.client.post(ANSWER, json={"intent": "abilities"}, headers=ALICE)
+    assert chip.status_code == 200, "a chip never asks the model, so it is not counted"
+    assert (await front.client.post(ANSWER, json={"text": "hi"}, headers=BOB)).status_code == 200
+
+
+def test_the_limit_counts_each_person_over_a_rolling_minute():
+    now = [0.0]
+    limit = AnswerLimit(per_minute=2, clock=lambda: now[0])
+    assert limit.allow("alice") and limit.allow("alice") and not limit.allow("alice")
+    assert limit.allow("bob")
+    now[0] = 59.9
+    assert not limit.allow("alice")
+    now[0] = 60.0
+    assert limit.allow("alice")

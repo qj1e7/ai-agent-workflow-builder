@@ -564,6 +564,13 @@ class N8nReply(Reply):
 
 
 N8N_WORD = re.compile(r"(?<!\w)n8n(?!\w)", re.IGNORECASE)
+YES_WORDS: Final = re.compile(
+    r"\b(?:approv\w*|yes|sign[- ]?off|review\w*|ask\w*|any(?:one|body)|no(?:one|body)|bypass\w*|"
+    r"skip\w*|loop|permission|consent|ok(?:ay)?|go-?ahead|without|auto\w*|myself|own)\b",
+    re.IGNORECASE,
+)
+"""The words a request to skip a yes is made of. A message about n8n with one of them goes to the
+runtime, whose word rule refuses a skipped yes before anything else (ADR 0047)."""
 HERE_IN_N8N = "Here it is in n8n."
 WHICH_IN_N8N = "Say which workflow to open in n8n."
 
@@ -902,7 +909,7 @@ class PlannerFront:
         self._connections = connections
 
     async def answer(self, body: AnswerIn, viewer: Principal) -> PlannerReply | NoSuchWorkflow:
-        if body.text is not None and N8N_WORD.search(body.text):
+        if body.text is not None and N8N_WORD.search(body.text) and not YES_WORDS.search(body.text):
             return await self._n8n(body.text, viewer)
         operator = Role.OPERATOR in viewer.roles
         decided = None if operator or body.text is None else past_decisions(body.text)
