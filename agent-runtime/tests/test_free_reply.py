@@ -25,7 +25,14 @@ from agent_runtime.contract import (
     WorkflowFact,
 )
 from agent_runtime.contracts import answer_request
-from agent_runtime.free_reply import APPROVER, OPERATOR, dead_end, reply_messages
+from agent_runtime.free_reply import (
+    APPROVER,
+    CATCH_ALL,
+    NOT_IN_THE_FACTS,
+    OPERATOR,
+    dead_end,
+    reply_messages,
+)
 from agent_runtime.questions import COULD_NOT_ANSWER, QuestionReply
 from tests.fakes import ScriptedChat
 from tests.test_answers import follow_up
@@ -269,9 +276,43 @@ def test_an_approver_is_told_they_cant_set_up_workflows():
     assert APPROVER in system and OPERATOR not in system
 
 
-def test_a_message_naming_an_unreached_system_carries_a_note():
+NOTES = "The notes, what the platform's rules found in the message:\n"
+
+
+def test_a_message_naming_an_unbuilt_thing_carries_the_registrys_words_in_the_notes():
     _, user = reply_messages(request("send it to slack"), dead_end_of("send it to slack"))
-    assert "The notes:\n- The message names Slack, which the platform can't reach." in user
+    notes = user.split(NOTES)[1].split("\n\n")[0].splitlines()
+    assert notes == [
+        f"- {CATCH_ALL}",
+        "- The message asks for slack.send, which is not on the team's plan: Slack and text "
+        "messages aren't on the team's plan.",
+        "- The message names Slack, which the platform can't reach.",
+    ]
+
+
+def test_each_dead_end_says_which_rule_ended_there():
+    crossed = [RequestPart(text="flibber the wotsit", mark="cant", reason="not_followed")]
+    found = dead_end(
+        CantAnswer(cant=[CantRow(kind="look_for", text="flibber", note="x")]), crossed, "x"
+    )
+    assert found is not None
+    assert found.notes == (
+        "The rules could not read these parts of the message as a task: “flibber the wotsit”.",
+    )
+    fixed = dead_end(QuestionAnswer(text=COULD_NOT_ANSWER, looked_at=[]), [], "x")
+    assert fixed is not None and fixed.notes == (NOT_IN_THE_FACTS,)
+    catch_all = dead_end(AbilitiesAnswer(), [], "x")
+    assert catch_all is not None and catch_all.notes == (CATCH_ALL,)
+
+
+def test_a_planned_capability_carries_what_the_person_has_instead():
+    found = dead_end(AbilitiesAnswer(), [], "post the bug list in our Teams channel")
+    assert found is not None
+    assert (
+        "The message asks for teams.post, which is planned: The team's Tell flow isn't connected "
+        "yet. Until it is, Teams carries approval requests, run outcomes and requests for the "
+        "team, and nothing is emailed. Instead: Run results show here, in the chat."
+    ) in found.notes
 
 
 def test_the_turn_before_is_context_only():

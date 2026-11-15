@@ -34,7 +34,7 @@ from agent_runtime.contract import (
 from agent_runtime.drafting import ask_model
 from agent_runtime.how_to import HOW_TO
 from agent_runtime.questions import is_fallback, sent_sections
-from agent_runtime.reply_guard import Given, GuardCheck, guarded
+from agent_runtime.reply_guard import NOT_READY, Given, GuardCheck, guarded
 from agent_runtime.summary import ChatFor
 
 log = logging.getLogger(__name__)
@@ -57,6 +57,14 @@ def _crosses_only(parts: list[RequestPart]) -> bool:
     return bool(parts) and all(p.mark == "cant" and p.reason in DEAD_END_CROSSES for p in parts)
 
 
+CATCH_ALL: Final = (
+    "No ready-made answer fits: the rules found no task to set up, and no question about the "
+    "person's own data."
+)
+NOT_IN_THE_FACTS: Final = "The person's data, as read for this message, does not answer it."
+NOT_READ: Final = "The rules could not read these parts of the message as a task: {parts}."
+
+
 def dead_end(answer: PlannerAnswer, parts: list[RequestPart], message: str) -> DeadEnd | None:
     """The dead ends ADR 0047 names, or None when the answer stands: the catch-all list of
     abilities when no part of the message asked what the Planner can do, the question lane's
@@ -64,21 +72,26 @@ def dead_end(answer: PlannerAnswer, parts: list[RequestPart], message: str) -> D
     "Ask this on its own", with no part ticked and nothing named it can't do."""
     match answer:
         case AbilitiesAnswer() if not any(p.mark == "will_do" for p in parts):
-            return DeadEnd(_notes(message))
+            return DeadEnd((CATCH_ALL, *_found_in(message)))
         case QuestionAnswer() if is_fallback(answer):
-            return DeadEnd(_notes(message))
+            return DeadEnd((NOT_IN_THE_FACTS, *_found_in(message)))
         case CantAnswer(alternative=None) | PartAnswer() if _crosses_only(parts) and all(
             row.needs is None for row in answer.cant
         ):
-            return DeadEnd(_notes(message))
+            quoted = "; ".join(dict.fromkeys(f"“{p.text}”" for p in parts))
+            return DeadEnd((NOT_READ.format(parts=quoted), *_found_in(message)))
         case _:
             return None
 
 
-def _notes(message: str) -> tuple[str, ...]:
-    """What the rules found that the reply should weigh: each system the message names that the
-    platform doesn't reach, and a request for known vulnerabilities, which is planned."""
-    found = [
+def _found_in(message: str) -> tuple[str, ...]:
+    """What the rules found in the message that the reply should weigh, in the registry's own
+    words: each capability it asks for that isn't built, each system the platform doesn't reach,
+    and a request for known vulnerabilities, which is planned. The shaping rules no longer answer
+    these themselves at a dead end: they inform the reply (ADR 0047)."""
+    asked = [spec for spec in CAPABILITIES if spec.id in NOT_READY and NOT_READY[spec.id](message)]
+    found = [_registry_note(spec) for spec in asked]
+    found += [
         f"The message names {system}, which the platform can't reach."
         for system in other_systems(message)
         if system != "Teams"
@@ -86,6 +99,12 @@ def _notes(message: str) -> tuple[str, ...]:
     if vulnerability_phrase(message):
         found.append("The message asks about known vulnerabilities, which are planned, not built.")
     return tuple(found)
+
+
+def _registry_note(spec: CapabilitySpec) -> str:
+    state = "planned" if spec.state == "planned" else "not on the team's plan"
+    instead = f" Instead: {spec.instead}" if spec.instead else ""
+    return f"The message asks for {spec.id}, which is {state}: {spec.why}{instead}"
 
 
 SYSTEM: Final = (
@@ -160,7 +179,8 @@ def reply_messages(request: AnswerRequest, gap: DeadEnd) -> tuple[str, str]:
         f"The facts:\n{facts}",
     ]
     if gap.notes:
-        sections.append("The notes:\n" + "\n".join(f"- {n}" for n in gap.notes))
+        found = "\n".join(f"- {n}" for n in gap.notes)
+        sections.append(f"The notes, what the platform's rules found in the message:\n{found}")
     earlier = request.previous
     if earlier is not None:
         before = f"The turn before, as context only:\n{earlier.request}"
