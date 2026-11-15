@@ -6,6 +6,7 @@ import re
 from typing import Any
 
 import pytest
+from evals.gate import bars
 
 from agent_runtime.answers import (
     SkipRead,
@@ -280,3 +281,18 @@ def test_the_eval_shows_the_honest_cant_the_product_keeps_when_the_reply_is_reje
     failed = scored(priority, reading("none"), done)
     assert "right_kind" not in failed
     assert failed["free_reply_shown"].startswith("claims_done | ")
+
+
+def test_the_gate_counts_a_rejected_reply_as_tried_when_the_honest_cant_is_shown():
+    kept = {
+        "case": "k",
+        "failed": {"free_reply_shown": "claims_done"},
+        "answer": "[cant] Can't: set the priority to high on new tickets.",
+    }
+    shown = [{"case": f"s{i}", "failed": {}, "answer": "[reply:answer] Hi."} for i in range(19)]
+    [bar] = [
+        b
+        for b in bars([kept, *shown], judge_agreed=False)
+        if b.name.startswith("Free replies the guard or the verifier rejects")
+    ]
+    assert bar.measured == "1 of 20"

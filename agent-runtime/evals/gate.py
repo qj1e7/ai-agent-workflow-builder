@@ -47,8 +47,10 @@ def _failed(outcome: dict[str, Any], name: str) -> bool:
 
 
 def _free_reply(outcome: dict[str, Any]) -> bool:
-    """Whether the answer was a free reply or its fallback, from the words the runner kept."""
-    return str(outcome["answer"]).startswith(("[reply:", "[didnt_follow]"))
+    """Whether a free reply was tried: shown, or rejected for its fallback, which is "I didn't
+    follow that" or the honest can't the product keeps."""
+    shown = str(outcome["answer"]).startswith(("[reply:", "[didnt_follow]"))
+    return shown or _failed(outcome, "free_reply_shown")
 
 
 def planted_ids() -> set[str]:
