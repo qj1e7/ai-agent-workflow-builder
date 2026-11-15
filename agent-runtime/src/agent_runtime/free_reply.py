@@ -230,7 +230,7 @@ def answer_of_envelope(
 
 
 def reply_to(
-    request: AnswerRequest, gap: DeadEnd, chat_for: ChatFor
+    request: AnswerRequest, gap: DeadEnd, chat_for: ChatFor, verify_with: ChatFor | None = None
 ) -> FreeReplyAnswer | DidntFollowAnswer:
     """One more model call for a dead end, the code checks, then the verifier's call on the words
     as they would be shown. Only the reply's id and the check that failed are logged, never the
@@ -251,7 +251,7 @@ def reply_to(
     elif shown is STILL_UNCLEAR:
         return shown
     else:
-        failed = verify(shown, chat_for)
+        failed = verify(shown, verify_with or chat_for)
         if failed is None:
             return shown
     log.warning("Free reply %s fell back: %s", reply_id, failed)

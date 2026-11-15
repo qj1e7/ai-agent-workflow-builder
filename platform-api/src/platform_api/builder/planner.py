@@ -87,11 +87,11 @@ from platform_api.wire import WireIn, WireModel
 
 log = logging.getLogger(__name__)
 
-ANSWER_LIMIT_SECONDS: Final = 20.0
+ANSWER_LIMIT_SECONDS: Final = 35.0
 """The model gets 8 seconds for each of its calls in the runtime: the reading, the answer to a
-question about the person's data (ADR 0042), and the free reply at a dead end (ADR 0047). This
-is the platform's own limit around the whole call, so a runtime that hangs still gives the
-person an answer."""
+question about the person's data (ADR 0042), and at a dead end the free reply and its verifier
+(ADR 0047). Four calls can take 32 seconds, so this is the platform's own limit around the whole
+call, past which a runtime that hangs still gives the person the offline answer."""
 
 type CapabilityState = Literal["ready", "needs_setup", "down", "planned", "unsupported"]
 type Intent = Literal[

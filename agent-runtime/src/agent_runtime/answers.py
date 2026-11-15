@@ -1082,9 +1082,15 @@ def _state_answer_about_the_watchlist(
     return isinstance(answer, CheckWorkflowsAnswer) and bool(WATCHLIST_WORDS.search(text))
 
 
-def answer_task(request: AnswerRequest, chat_for: ChatFor, free_reply: bool = True) -> AnswerResult:
+def answer_task(
+    request: AnswerRequest,
+    chat_for: ChatFor,
+    free_reply: bool = True,
+    verify_with: ChatFor | None = None,
+) -> AnswerResult:
     """The Planner's one answer. A dead end gets the free reply (ADR 0047), or the fixed
-    fallback when the free reply is turned off."""
+    fallback when the free reply is turned off. The verifier runs on `verify_with`, else on the
+    connected model."""
     refused = word_rule_refusal(request.task)
     if refused is not None:
         return Answered(answer=refused, parts=parts_of(None, request.task, refused))
@@ -1101,7 +1107,8 @@ def answer_task(request: AnswerRequest, chat_for: ChatFor, free_reply: bool = Tr
     parts = parts_of(read, request.task, answer, request.facts)
     gap = dead_end(answer, parts, request.task)
     if gap is not None:
-        answer = reply_to(request, gap, chat_for) if free_reply else DidntFollowAnswer()
+        verifier = verify_with or chat_for
+        answer = reply_to(request, gap, chat_for, verifier) if free_reply else DidntFollowAnswer()
         parts = parts_of(read, request.task, answer, request.facts)
     return Answered(answer=answer, parts=parts)
 
