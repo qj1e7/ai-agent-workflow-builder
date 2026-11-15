@@ -1068,7 +1068,7 @@ class RefusedAnswer(WireModel):
     said: str = Field(
         max_length=200,
         description="The words that asked to skip a yes, as the request wrote them, so the "
-        "refusal names the part. Empty only when the model said so without quoting them.",
+        "refusal names the part.",
     )
     rest: str = Field(
         max_length=2000,

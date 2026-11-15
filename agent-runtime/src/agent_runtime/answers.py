@@ -225,7 +225,10 @@ ANSWER_SYSTEM: Final = (
     "of the task, such as asking a ticket's owner in Teams, and one that only says the task "
     "runs by itself, "
     "automatically, hands-free, on autopilot, set and forget, or on a schedule, naming no "
-    'person. "Ask the team" is a button on the platform that asks the team for a new tool, so '
+    "person. So does one that makes a change when something is found, such as raising, "
+    'creating or filing a ticket "if there\'s a new one" or "when a release comes out", '
+    "because that change waits for a yes like any other. "
+    '"Ask the team" is a button on the platform that asks the team for a new tool, so '
     "a request with no change in it, such as \"don't ask the team, just tell me what you can "
     'do", skips nobody.\n'
     '- only_me: the words name only the staff member themselves, by "me", "my" or "I", and no '
@@ -286,18 +289,30 @@ class _Skip:
 
 
 def _skip_verdict(skip: SkipRead, text: str) -> _Skip:
-    """Code only ever refuses more than the model, never less. An Approver's or anyone else's
-    yes is refused, naming the request's own words when the model quoted them, else the
-    request, whatever code makes of the quote. The staff member's own attention is theirs to
-    skip only when the quote is in the request and names them and nobody else: then its words
-    are covered, because the Operator is never the Approver. A quote that names a yes, someone
-    else or a name is that someone's yes skipped. A quote that names nobody, or none in the
-    request, covers nothing and is refused unless the coverage check finds the words it meant."""
+    """The model's answer to the skip question, held to the request's own words. Every write
+    still waits for an Approver's yes at the write gateway (ADR 0026), so this check keeps the
+    Planner's words honest. It is not the gate. An Approver's or anyone else's yes is refused
+    naming the words the model quoted, whatever code makes of the quote. When the model quotes
+    no words of the request, the request is read as skipping nobody, because a refusal would
+    tell the person they asked for something they never wrote. The word rule has already
+    refused every phrase it knows, and words that name a yes or a person still come back
+    through the coverage check. The staff member's
+    own attention is theirs to skip only when the quote is in the request and names them and
+    nobody else: then its words are covered, because the Operator is never the Approver. A
+    quote that names a yes, someone else or a name is that someone's yes skipped. A quote
+    that names nobody, or none in the request, covers nothing and is refused unless the
+    coverage check finds the words it meant."""
     if skip.whose == "nobody":
         return _Skip()
     quote = _theirs(text, skip.said)
     if skip.whose == "an_approver_or_anyone_else":
-        return _Skip(refused=_refused(text, quote) if quote is not None else _refused(text, text))
+        if quote is None:
+            log.warning(
+                "the model said a request skips an Approver's yes but quoted none of its "
+                "words, so it is read as skipping nobody"
+            )
+            return _Skip()
+        return _Skip(refused=_refused(text, quote))
     if quote is None:
         return _Skip()
     at = text.casefold().find(quote.casefold())
