@@ -25,6 +25,9 @@ from platform_api.orchestration.workflow_check import (
 )
 from tests.support import FIXTURES, TEAM_ZONE
 
+PAT = "jiraSoftwareServerPatApi"
+"""The credential type of a Data Center personal access token."""
+
 GOLDEN = Path(__file__).parent / "golden" / "n8n"
 PACK = FIXTURES.parent / "n8n" / "node-types.json"
 """The node pack's types, as the pack's own test keeps contracts/ in step with it."""
@@ -514,7 +517,7 @@ def test_a_platform_workflow_out_of_shape_is_named(
 
 SLACK_KEY = "wab-slack-send"
 JIRA_KEY = "wab-jira-read"
-KEYS_MADE = {SLACK_KEY: "slackApi", JIRA_KEY: "jiraSoftwareServerPatApi"}
+KEYS_MADE = {SLACK_KEY: "slackApi", JIRA_KEY: PAT}
 """The keys the platform made in n8n, by id, with each one's n8n credential type."""
 
 
@@ -540,9 +543,7 @@ def notice_findings(document: Doc, keys: dict[str, str] | None = None) -> list[t
 
 def jira_read(document: Doc, parameters: dict[str, Any], key: str = JIRA_KEY) -> Doc:
     with_block(document, "n8n-nodes-base.jira", "Read tickets", "Compare", 1, parameters)
-    node(document, "Read tickets")["credentials"] = {
-        "jiraSoftwareServerPatApi": {"id": key, "name": "Jira"}
-    }
+    node(document, "Read tickets")["credentials"] = {PAT: {"id": key, "name": "Jira"}}
     return document
 
 
@@ -638,27 +639,25 @@ def test_a_key_the_platform_did_not_make_needs_a_fix_that_runs_anyway() -> None:
     document = release_notice()
     node(document, "Tell Slack")["credentials"] = {"slackApi": {"id": "aliceSlack", "name": "Mine"}}
     assert notice_findings(document) == [
-        ('"Tell Slack" uses a key the platform did not make.', True)
+        ('"Tell Slack" does not use the platform\'s key.', False),
+        ('"Tell Slack" uses a key the platform did not make.', True),
     ]
     reads = jira_read(release_notice(), {"operation": "get"}, key="aliceJira")
-    assert notice_findings(reads) == [
-        ('"Read tickets" uses a key the platform did not make.', True)
-    ]
+    assert ('"Read tickets" uses a key the platform did not make.', True) in notice_findings(reads)
 
 
 def test_a_key_named_by_name_only_is_not_the_platform_s() -> None:
     document = release_notice()
     node(document, "Tell Slack")["credentials"] = {"slackApi": {"name": "The platform's Slack key"}}
-    assert notice_findings(document) == [
-        ('"Tell Slack" uses a key the platform did not make.', True)
-    ]
+    assert ('"Tell Slack" uses a key the platform did not make.', True) in notice_findings(document)
 
 
 def test_without_the_platform_s_keys_every_key_is_someone_else_s() -> None:
     """Fail closed: a grade that is not told the platform's keys trusts none."""
     graded = grade(release_notice(), ERROR_WORKFLOW, TEAM_ZONE)
     assert [f.text for f in graded.findings] == [
-        '"Tell Slack" uses a key the platform did not make.'
+        '"Tell Slack" has no key: the platform has none for it.',
+        '"Tell Slack" uses a key the platform did not make.',
     ]
     assert graded.grade == "needs_a_fix"
 
@@ -700,3 +699,50 @@ def test_an_older_version_of_a_system_block_is_off_and_runs_anyway(
     assert notice_findings(document) == [
         (f'"Old" uses version {version:g} of {block_type}, which is off.', True)
     ]
+
+
+def test_a_block_for_a_system_with_no_platform_key_needs_a_fix() -> None:
+    """Teams, Outlook and Gmail have no key the platform can hold (ADR 0045, as amended), so their
+    blocks cannot run. A refused or missing Slack key leaves Slack's the same."""
+    document = with_block(
+        release_notice(),
+        "n8n-nodes-base.microsoftTeams",
+        "Tell Teams",
+        "Newer?",
+        2,
+        {
+            "resource": "channelMessage",
+            "teamId": {"__rl": True, "value": "T1", "mode": "id"},
+            "channelId": {"__rl": True, "value": "C1", "mode": "id"},
+        },
+    )
+    assert notice_findings(document) == [
+        ('"Tell Teams" has no key: the platform has none for it.', False)
+    ]
+    assert notice_findings(release_notice(), {JIRA_KEY: PAT}) == [
+        ('"Tell Slack" has no key: the platform has none for it.', False),
+        ('"Tell Slack" uses a key the platform did not make.', True),
+    ]
+
+
+def test_a_block_with_its_key_taken_off_does_not_use_the_platform_s_key() -> None:
+    document = release_notice()
+    del node(document, "Tell Slack")["credentials"]
+    assert notice_findings(document) == [('"Tell Slack" does not use the platform\'s key.', False)]
+
+
+FIRST = '"{}" runs before any of our steps. Add one of our steps first, so each run is recorded.'
+
+
+def test_one_of_n8n_s_blocks_before_any_of_ours_needs_a_fix_that_runs_anyway() -> None:
+    """Our first block links the run, so it is recorded and shown, and checks the version before
+    n8n reads or posts anything (ADR 0045, as amended)."""
+    document = release_notice()
+    link(document, "Start from the Portal", "Tell Slack")
+    assert notice_findings(document) == [(FIRST.format("Tell Slack"), True)]
+    reads_first = jira_read(release_notice(), {"operation": "getAll"})
+    assert notice_findings(reads_first) == [], "after Read release and Compare"
+    link(reads_first, "Daily 8:00", "Read tickets")
+    assert notice_findings(reads_first) == [(FIRST.format("Read tickets"), True)], (
+        "every way from a trigger counts, the schedule's too"
+    )

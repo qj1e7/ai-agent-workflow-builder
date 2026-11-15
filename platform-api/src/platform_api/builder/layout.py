@@ -33,6 +33,7 @@ from platform_api.orchestration import (
     block_id,
     face,
     free_name,
+    skipped_in_tests,
 )
 
 READ_RELEASE = "Read release"
@@ -146,6 +147,9 @@ class _Canvas:
         self.key = key
         self.nodes: list[dict[str, Any]] = []
         self.connections: dict[str, dict[str, list[list[dict[str, Any]]]]] = {}
+        self.pins: dict[str, list[dict[str, Any]]] = {}
+        """Each notice block's output in a test run, which n8n uses in place of running it, so a
+        test run posts nothing. n8n ignores it in every other run."""
 
     def node(
         self,
@@ -187,6 +191,8 @@ class _Canvas:
                 "credentials": {block.slot: {"id": block.key.id, "name": block.key.name}},
             }
         )
+        if seen.notice:
+            self.pins[block.name] = [{"json": {"skipped": skipped_in_tests(block.key.said)}}]
         return block.name
 
     def link(self, source: str, target: str, exit_index: int = 0) -> None:
@@ -205,6 +211,7 @@ class _Canvas:
                 **SETTINGS,
                 "errorWorkflow": plan.error_workflow,
             },
+            **({"pinData": self.pins} if self.pins else {}),
         }
 
 

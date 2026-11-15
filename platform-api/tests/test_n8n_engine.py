@@ -146,6 +146,7 @@ class Switch:
 class Engine(Writes):
     trigger: Trigger
     records: N8nRecords
+    api: N8nApi
     pinned: PinnedWorkflows
     sources: FakeSources
     switch: Switch
@@ -250,6 +251,7 @@ async def e(postgres: PostgresUrls) -> AsyncIterator[Engine]:
         )
         engine = Engine(h, reads, workflows, calls, waits, orchestrator, FakeLanding())
         engine.flaky, engine.trigger, engine.records = flaky, trigger, records
+        engine.api = api
         engine.pinned, engine.sources, engine.switch = workflows, sources, switch
         yield engine
         await starts.close()
@@ -282,6 +284,25 @@ async def test_run_now_goes_from_the_trigger_to_bob_s_yes_and_one_ticket(e: Engi
     assert await e.tickets() == ["MOCK-1"]
     done = await e.state(run_id)
     assert isinstance(done, Succeeded) and done.outcome is Outcome.WRITTEN
+
+
+async def test_safety_a_test_run_never_starts_while_a_notice_block_would_post(e: Engine):
+    """n8n runs a block whose output is pinned only in a run by hand, a test run, and uses the
+    pinned output there instead (ADR 0045, as amended). A notice with none would post."""
+    slack = {
+        "name": "Tell Slack",
+        "type": "n8n-nodes-base.slack",
+        "typeVersion": 2.7,
+        "parameters": {"channelId": {"__rl": True, "value": "C1", "mode": "id"}},
+    }
+    e.records.workflows[WORKFLOW]["nodes"] = [slack]
+    await e.start(replace(OWN, stops_at_gate=True))
+    await e.tick()
+    assert e.records.draft_runs == [], "not started, so nothing posted"
+    e.records.workflows[WORKFLOW]["pinData"] = {
+        "Tell Slack": [{"json": {"skipped": "Slack notice skipped in the test run."}}]
+    }
+    assert await e.api.unpinned(WORKFLOW) == []
 
 
 async def test_safety_a_test_run_runs_the_draft_by_hand_asks_nobody_and_writes_nothing(

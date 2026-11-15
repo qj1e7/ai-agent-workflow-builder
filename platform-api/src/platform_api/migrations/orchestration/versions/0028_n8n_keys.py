@@ -7,12 +7,10 @@ down_revision = "0027"
 def upgrade() -> None:
     # The keys the platform makes in n8n for n8n's own blocks (ADR 0045, ENGINE-PLAN E16, E17).
     # A key is the platform's while n8n holds it as made: made at n8n_created_at and changed last
-    # at n8n_updated_at. refused says why the platform holds none now. fingerprint is a salted
-    # hash of what n8n was given, so a new secret in Key Vault is noticed; the secret is never
-    # kept here.
-    #
-    # A loan puts a key in the space of whoever holds a workflow that names it. A key sits in one
-    # n8n project, so all of a key's loans name one project.
+    # at n8n_updated_at, as n8n answered the platform's own create, never moved on later. A key
+    # never leaves the platform's n8n project. refused says why the platform holds none now.
+    # fingerprint is a salted hash of what n8n was given, so a new secret in Key Vault is
+    # noticed; the secret is never kept here.
     #
     # A quarantined key is a member's own, which n8n moved to the platform's project as their
     # account ended. It is never the platform's, and the sweep leaves it only while it sits there.
@@ -33,14 +31,6 @@ def upgrade() -> None:
                 CHECK (refused IS NULL OR n8n_created_at IS NULL)
         );
 
-        CREATE TABLE orchestration.n8n_key_loans (
-            key_id text NOT NULL,
-            use_case_id text NOT NULL,
-            project_id text NOT NULL,
-            lent_at timestamptz NOT NULL,
-            PRIMARY KEY (key_id, use_case_id)
-        );
-
         CREATE TABLE orchestration.n8n_quarantined_keys (
             key_id text PRIMARY KEY,
             n8n_user_id text NOT NULL,
@@ -54,7 +44,6 @@ def upgrade() -> None:
         );
 
         GRANT SELECT, INSERT, UPDATE, DELETE ON orchestration.n8n_keys TO wab_orchestration;
-        GRANT SELECT, INSERT, UPDATE, DELETE ON orchestration.n8n_key_loans TO wab_orchestration;
         GRANT SELECT, INSERT ON orchestration.n8n_quarantined_keys TO wab_orchestration;
         GRANT SELECT, INSERT, UPDATE ON orchestration.n8n_key_tests TO wab_orchestration;
     """)
@@ -64,6 +53,5 @@ def downgrade() -> None:
     op.execute("""
         DROP TABLE orchestration.n8n_key_tests;
         DROP TABLE orchestration.n8n_quarantined_keys;
-        DROP TABLE orchestration.n8n_key_loans;
         DROP TABLE orchestration.n8n_keys;
     """)

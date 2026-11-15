@@ -6,7 +6,7 @@ or moves it no further. The platform takes back by itself every workflow held by
 hold none now: whose n8n access ended, or while staff access is off or the allow list unproven."""
 
 import logging
-from collections.abc import Iterable, Mapping
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, Protocol
@@ -19,13 +19,11 @@ from platform_api.db import Connection, Database, UnitOfWork, hold_workflow
 from platform_api.orchestration import (
     CanOpen,
     ChangedInN8n,
-    LendRefused,
     N8nError,
     N8nWorkflow,
     NoN8nAccess,
     StaffAccess,
     Written,
-    credentials_named,
 )
 from platform_api.settings import TEAM_TIME_ZONE
 from platform_api.shared import Principal, UserId
@@ -73,33 +71,26 @@ class StaffPort(Protocol):
         ...
 
 
-class KeyLoans(Protocol):
-    """The platform's keys in n8n, which go with a workflow that names them (ADR 0045)."""
+class Keys(Protocol):
+    """The platform's keys in n8n, which never leave its project (ADR 0045, as amended)."""
 
     async def sweep(self) -> object:
-        """The credential sweep, so no key a member added waits in their space."""
+        """The credential sweep, so no key a member added is left anywhere."""
         ...
 
-    async def lend(
-        self, use_case_id: str, project: str, ids: Iterable[str]
-    ) -> LendRefused | None: ...
+    async def clear(self) -> object:
+        """The same sweep, marking no workflow."""
+        ...
 
-    async def give_back(self, use_case_id: str) -> None: ...
-
-    async def place(self, home: str | None = None) -> list[str]: ...
-
-
-def lent_elsewhere(said: str, name: str) -> str:
-    return (
-        f"The platform's {said} key is open in n8n with another workflow, by {name}. Only one "
-        "space can hold it at a time, so take that one back first."
-    )
+    async def made(self) -> dict[str, str]: ...
 
 
 class N8nMoves(Protocol):
     async def look(self, workflow_id: str) -> N8nWorkflow | None: ...
 
-    async def kept(self, workflow_id: str, version_id: str) -> dict[str, Any] | None: ...
+    async def keep_keys(
+        self, workflow_id: str, expected_draft: str, made: Mapping[str, str]
+    ) -> Written | ChangedInN8n: ...
 
     async def home(self, workflow_id: str) -> str | None: ...
 
@@ -228,7 +219,7 @@ class Holding:
         n8n: N8nMoves,
         staff: StaffPort,
         zone: ZoneInfo = TEAM_TIME_ZONE,
-        keys: KeyLoans | None = None,
+        keys: Keys | None = None,
     ) -> None:
         self._db = db
         self._n8n = n8n
@@ -306,7 +297,7 @@ class Holding:
                 await _unmark(uow, use_case_id)
                 await self._staff.recheck(actor.user_id)
                 return HoldRefused(503, NO_SPACE)
-            if (refused := await self._lend(use_case_id, workflow_id, project)) is not None:
+            if (refused := await self._swept()) is not None:
                 await _unmark(uow, use_case_id)
                 return refused
             match await self._move(workflow_id, project):
@@ -314,14 +305,12 @@ class Holding:
                     return HoldRefused(503, STRANDED)
                 case _Gone():
                     await _unmark(uow, use_case_id)
-                    await self._give_back(use_case_id)
                     return HoldRefused(409, GONE)
                 case HoldRefused() as refused:
                     await _unmark(uow, use_case_id)
-                    await self._give_back(use_case_id)
                     return refused
                 case _Moved():
-                    await self._place()
+                    pass
             await uow.conn.execute(
                 "UPDATE builder.use_cases SET held_by = %s, held_since = %s, n8n_stranded_at = NULL"
                 " WHERE use_case_id = %s",
@@ -379,57 +368,46 @@ class Holding:
                     return await _strand(uow, use_case_id)
                 case HoldRefused() as refused:
                     return refused
-                case _Moved() | _Gone():
+                case _Moved():
+                    await self._keys_back(row["n8n_workflow_id"])
+                case _Gone():
                     pass
         await let_go(uow, use_case_id, by)
-        await self._give_back(use_case_id)
         log.info("%s took %s back", by or "the platform", use_case_id)
         return None
 
-    async def _lend(self, use_case_id: str, workflow_id: str, project: str) -> HoldRefused | None:
-        """The credential sweep runs first, so no key a member added waits in their space, then
-        the keys the workflow's draft and live version name are lent to the space it moves to."""
+    async def _swept(self) -> HoldRefused | None:
+        """The credential sweep before a workflow opens, so no key a member added waits in
+        their space."""
         if self._keys is None:
             return None
         try:
             await self._keys.sweep()
-            named = await self._named(workflow_id)
         except (N8nError, httpx.HTTPError) as error:
-            log.warning("could not sweep n8n's keys before %s opens: %s", workflow_id, error)
+            log.warning("could not sweep n8n's keys before a workflow opens: %s", error)
             return HoldRefused(503, NOT_MOVED)
-        refused = await self._keys.lend(use_case_id, project, named)
-        if refused is None:
-            return None
-        holder = await self.holder(refused.use_case_id)
-        name = "someone" if holder is None else await self._staff.display_of(holder.by)
-        return HoldRefused(409, lent_elsewhere(refused.key.said, name))
+        return None
 
-    async def _named(self, workflow_id: str) -> set[str]:
-        workflow = await self._n8n.look(workflow_id)
-        if workflow is None:
-            return set()
-        named = credentials_named(workflow.document)
-        if workflow.active_version_id is not None:
-            named |= credentials_named(
-                await self._n8n.kept(workflow_id, workflow.active_version_id)
-            )
-        return named
-
-    async def _give_back(self, use_case_id: str) -> None:
-        """The workflow is back, or never went, so the keys lent with it come home now. A move n8n
-        does not make now is made by the next sweep."""
-        if self._keys is None:
-            return
-        await self._keys.give_back(use_case_id)
-        await self._place()
-
-    async def _place(self) -> None:
+    async def _keys_back(self, workflow_id: str) -> None:
+        """Before anything runs once it is back: every key a member added goes, and the draft's
+        blocks name the platform's key for their system again, whatever the member's editor kept
+        or dropped. A version they published is graded with the keys it names, and our first
+        block stops its runs while it names a key the platform did not make. What n8n does not
+        take now, the next sweep and the next take-back do."""
         if self._keys is None:
             return
         try:
-            await self._keys.place()
+            await self._keys.clear()
+            workflow = await self._n8n.look(workflow_id)
+            if workflow is None:
+                return
+            made = await self._keys.made()
+            kept = await self._n8n.keep_keys(workflow_id, workflow.version_id, made)
         except (N8nError, httpx.HTTPError) as error:
-            log.warning("could not put the platform's keys where their loans say: %s", error)
+            log.warning("could not put the platform's keys back on %s: %s", workflow_id, error)
+            return
+        if isinstance(kept, ChangedInN8n):
+            log.warning("%s changed in n8n as its keys went back on", workflow_id)
 
     async def take_in(self, workflow_id: str) -> HoldRefused | None:
         """Moves a workflow made in n8n, which no use case names yet, to the platform's project,

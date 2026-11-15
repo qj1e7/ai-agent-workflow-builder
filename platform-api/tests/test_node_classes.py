@@ -83,7 +83,9 @@ def test_n8n_also_loads_the_ai_tools_it_makes_and_each_is_off():
     """n8n makes a tool of each node marked usable by an AI agent after NODES_INCLUDE has picked
     the nodes, so the list cannot leave it out. AI agents are off (ADR 0023)."""
     made = set(NODE_CLASSES.loaded()) - set(NODE_CLASSES.included())
-    assert made == {"n8n-nodes-base.dateTimeTool", *(f"{name}Tool" for name in SYSTEMS)}
+    hitl = {f"{name}HitlTool" for name in SYSTEMS if "jira" not in name and "github" not in name}
+    tools = {f"{name}Tool" for name in SYSTEMS}
+    assert made == {"n8n-nodes-base.dateTimeTool", *tools, *hitl}
     for tool in made:
         assert isinstance(NODE_CLASSES.verdict(tool, 2, {}), Off)
 
@@ -145,6 +147,13 @@ def test_a_system_block_runs_for_what_its_row_classes(
         ("microsoftTeams", 1.1, {"resource": "channelMessage"}, Off("version", "1.1")),
         ("microsoftOutlook", 2, {"operation": "delete"}, Off("operation", "message delete")),
         ("gmail", 2.1, {"operation": "reply"}, Off("operation", "message reply")),
+        ("jira", 1, {"resource": "__CUSTOM_API_CALL__"}, Off("operation", "__CUSTOM_API_CALL__")),
+        (
+            "github",
+            1,
+            {"resource": "release", "operation": "__CUSTOM_API_CALL__"},
+            Off("operation", "release __CUSTOM_API_CALL__"),
+        ),
     ],
 )
 def test_a_system_block_is_off_for_anything_else(

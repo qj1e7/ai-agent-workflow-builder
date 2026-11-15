@@ -269,3 +269,15 @@ class MockGithubTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class WhoATokenIs(unittest.TestCase):
+    def test_the_platform_s_reader_token_has_no_scope_and_a_good_one_can_write(self) -> None:
+        with running() as base:
+            status, headers, body = call_with(base, "/user", token=server.READER_TOKEN)
+            self.assertEqual((status, body["login"]), (200, "mock"))
+            self.assertEqual(headers.get("X-OAuth-Scopes"), "")
+            _, headers, _ = call_with(base, "/user", token=server.GOOD_TOKEN)
+            self.assertEqual(headers.get("X-OAuth-Scopes"), "repo")
+            status, _, _ = call_with(base, "/user", token="someone-else")
+            self.assertEqual(status, 401)

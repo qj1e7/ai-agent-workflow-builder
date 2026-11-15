@@ -27,7 +27,8 @@ from platform_api.orchestration.n8n_calls import (
     Publisher,
     TryLater,
 )
-from platform_api.orchestration.workflow_check import ERROR_WORKFLOW
+from platform_api.orchestration.platform_keys import attach_keys
+from platform_api.orchestration.workflow_check import ERROR_WORKFLOW, unpinned_notices
 from platform_api.settings import N8nOwner
 from platform_api.shared import N8nExecutionId, UserId
 
@@ -369,16 +370,15 @@ PLATFORM_API_SCOPES = (
     "user:delete",
     "credential:create",
     "credential:read",
-    "credential:update",
     "credential:delete",
     "credential:list",
-    "credential:move",
 )
 """Only what the platform's calls need, as n8n 2.42.6's public controllers check them: read covers
 history and versions, activate covers publish, move covers transfer, list covers a project's
 workflows (E15), and the retry of an execution has a scope of its own. The user scopes make and
 end staff accounts (ENGINE-PLAN 2.9). The credential scopes make the platform's own keys, test
-them, lend them with a workflow, and remove every key the platform did not make (ADR 0045)."""
+them, and remove every key the platform did not make (ADR 0045). A key is never changed or moved:
+one that must change is deleted and made anew."""
 KEY_LIFETIME = timedelta(days=3)
 """A key that leaks stops working within days. When n8n refuses it, the platform makes another."""
 STALE_KEY_AGE = timedelta(days=1)
@@ -1045,9 +1045,17 @@ class N8nApi:
             return
         _expect(await self._public("POST", f"/workflows/{workflow_id}/unpublish", {}))
 
+    async def unpinned(self, workflow_id: str) -> list[str]:
+        """The draft's notice blocks whose output is not pinned, so a test run would post."""
+        response = await self._public("GET", f"/workflows/{workflow_id}")
+        if response.status_code == 404:
+            return []
+        return unpinned_notices(_expect(response).json())
+
     async def run_draft(self, workflow_id: str, item: Mapping[str, Any]) -> str:
         """/rest: runs the draft by hand from Start from the Portal with this item as its output,
-        and answers the execution's id at once (P7 Q3, body B). n8n runs the stored draft."""
+        and answers the execution's id at once (P7 Q3, body B). n8n runs the stored draft, with
+        the output pinned for each notice block, so a test run posts nothing."""
         body: dict[str, Any] = {
             "triggerToStartFrom": {
                 "name": START_NAME,
@@ -1127,11 +1135,6 @@ class N8nApi:
         created = _expect(await self._public("POST", "/credentials", body))
         return _credential(_parse(_CredentialOut, created))
 
-    async def change_credential(self, credential_id: str, data: Mapping[str, str]) -> None:
-        """Replaces the key's data, as when Key Vault holds a new secret. It stays where it is."""
-        body = {"data": dict(data), "isPartialData": False}
-        _expect(await self._public("PATCH", f"/credentials/{credential_id}", body))
-
     async def test_credential(self, credential_id: str) -> tuple[bool, str]:
         """n8n's own connection test of a stored key: whether n8n reached the system with it, and
         what n8n said."""
@@ -1141,11 +1144,6 @@ class N8nApi:
 
     async def delete_credential(self, credential_id: str) -> None:
         _expect(await self._public("DELETE", f"/credentials/{credential_id}"), 200, 204, 404)
-
-    async def move_credential(self, credential_id: str, project_id: str) -> None:
-        body = {"destinationProjectId": project_id}
-        response = await self._public("PUT", f"/credentials/{credential_id}/transfer", body)
-        _expect(response, 200, 204)
 
     async def execution(self, execution_id: str, data: bool = True) -> ExecutionRecord | None:
         """With data, the start item and a failure's block and words too. Without, its status
@@ -1583,6 +1581,18 @@ class N8nWorkflows:
 
     async def triggers_live(self, workflow_id: str, version_id: str) -> None:
         await self._live(workflow_id, version_id)
+
+    async def keep_keys(
+        self, workflow_id: str, expected_draft: str, made: Mapping[str, str]
+    ) -> Written | ChangedInN8n:
+        """Puts the platform's key back on each block for a system in the draft, by the block's
+        type, and takes off every other key, publishing nothing (ADR 0045, as amended)."""
+        return await self._api.write(
+            workflow_id,
+            expected_draft,
+            lambda document: attach_keys(document, made),
+            publish=False,
+        )
 
     async def keep_settings(
         self, workflow_id: str, expected_draft: str, settings: Mapping[str, Any]

@@ -235,5 +235,14 @@
     "saveExecutionProgress": true,
     "executionOrder": "v1",
     "errorWorkflow": "wfErrorReporter01"
+  },
+  "pinData": {
+    "Tell Slack": [
+      {
+        "json": {
+          "skipped": "Slack notice skipped in the test run."
+        }
+      }
+    ]
   }
 }

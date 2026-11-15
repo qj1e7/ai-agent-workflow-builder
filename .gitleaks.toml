@@ -7,3 +7,7 @@ regexes = [
   '''4633458b-17de-408a-b874-0445c86b69e6''',
   '''b86a8fe4-44ce-4948-aee5-eccb2c155cd7''',
 ]
+
+[[allowlists]]
+description = "Terraform names a variable for each n8n key setting; the value is the variable, not a key"
+regexes = ['''var\.n8n_key_[a-z_]+''']

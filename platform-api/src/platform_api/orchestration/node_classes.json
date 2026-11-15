@@ -109,10 +109,11 @@
         "by": ["resource", "operation"],
         "default": "issue",
         "resources": {
-          "issue": {"default": "create", "operations": {"changelog": "read", "create": "off", "delete": "off", "get": "read", "getAll": "read", "notify": "off", "transitions": "read", "update": "off"}},
-          "issueAttachment": {"default": "add", "operations": {"add": "off", "get": "read", "getAll": "read", "remove": "off"}},
-          "issueComment": {"default": "add", "operations": {"add": "off", "get": "read", "getAll": "read", "remove": "off", "update": "off"}},
-          "user": {"default": "create", "operations": {"create": "off", "delete": "off", "get": "read"}}
+          "__CUSTOM_API_CALL__": "off",
+          "issue": {"default": "create", "operations": {"changelog": "read", "create": "off", "delete": "off", "get": "read", "getAll": "read", "notify": "off", "transitions": "read", "update": "off", "__CUSTOM_API_CALL__": "off"}},
+          "issueAttachment": {"default": "add", "operations": {"add": "off", "get": "read", "getAll": "read", "remove": "off", "__CUSTOM_API_CALL__": "off"}},
+          "issueComment": {"default": "add", "operations": {"add": "off", "get": "read", "getAll": "read", "remove": "off", "update": "off", "__CUSTOM_API_CALL__": "off"}},
+          "user": {"default": "create", "operations": {"create": "off", "delete": "off", "get": "read", "__CUSTOM_API_CALL__": "off"}}
         },
         "tag": "Reads Jira",
         "says": "Reads Jira issues",
@@ -129,15 +130,16 @@
         "by": ["resource", "operation"],
         "default": "issue",
         "resources": {
-          "file": {"default": "create", "operations": {"create": "off", "delete": "off", "edit": "off", "get": "read", "list": "read"}},
-          "issue": {"default": "create", "operations": {"create": "off", "createComment": "off", "edit": "off", "get": "read", "lock": "off"}},
-          "organization": {"default": "getRepositories", "operations": {"getRepositories": "read", "getMembers": "read"}},
-          "pullRequest": {"default": "create", "operations": {"create": "off", "update": "off", "close": "off", "reopen": "off", "get": "read", "createComment": "off", "editComment": "off", "getDiff": "read", "getPatch": "read", "merge": "off"}},
-          "release": {"default": "create", "operations": {"create": "off", "delete": "off", "get": "read", "getAll": "read", "update": "off"}},
-          "repository": {"default": "getIssues", "operations": {"get": "read", "getIssues": "read", "getLicense": "read", "getProfile": "read", "getPullRequests": "read", "listPopularPaths": "read", "listReferrers": "read"}},
-          "review": {"default": "create", "operations": {"create": "off", "get": "read", "getAll": "read", "update": "off"}},
-          "user": {"default": "getRepositories", "operations": {"getRepositories": "read", "getUserIssues": "read", "invite": "off"}},
-          "workflow": {"default": "dispatch", "operations": {"disable": "off", "dispatch": "off", "dispatchAndWait": "off", "enable": "off", "get": "read", "getUsage": "read", "list": "read"}}
+          "__CUSTOM_API_CALL__": "off",
+          "file": {"default": "create", "operations": {"create": "off", "delete": "off", "edit": "off", "get": "read", "list": "read", "__CUSTOM_API_CALL__": "off"}},
+          "issue": {"default": "create", "operations": {"create": "off", "createComment": "off", "edit": "off", "get": "read", "lock": "off", "__CUSTOM_API_CALL__": "off"}},
+          "organization": {"default": "getRepositories", "operations": {"getRepositories": "read", "getMembers": "read", "__CUSTOM_API_CALL__": "off"}},
+          "pullRequest": {"default": "create", "operations": {"create": "off", "update": "off", "close": "off", "reopen": "off", "get": "read", "createComment": "off", "editComment": "off", "getDiff": "read", "getPatch": "read", "merge": "off", "__CUSTOM_API_CALL__": "off"}},
+          "release": {"default": "create", "operations": {"create": "off", "delete": "off", "get": "read", "getAll": "read", "update": "off", "__CUSTOM_API_CALL__": "off"}},
+          "repository": {"default": "getIssues", "operations": {"get": "read", "getIssues": "read", "getLicense": "read", "getProfile": "read", "getPullRequests": "read", "listPopularPaths": "read", "listReferrers": "read", "__CUSTOM_API_CALL__": "off"}},
+          "review": {"default": "create", "operations": {"create": "off", "get": "read", "getAll": "read", "update": "off", "__CUSTOM_API_CALL__": "off"}},
+          "user": {"default": "getRepositories", "operations": {"getRepositories": "read", "getUserIssues": "read", "invite": "off", "__CUSTOM_API_CALL__": "off"}},
+          "workflow": {"default": "dispatch", "operations": {"disable": "off", "dispatch": "off", "dispatchAndWait": "off", "enable": "off", "get": "read", "getUsage": "read", "list": "read", "__CUSTOM_API_CALL__": "off"}}
         },
         "tag": "Reads GitHub",
         "says": "Reads GitHub",
@@ -154,14 +156,15 @@
         "by": ["resource", "operation"],
         "default": "channel",
         "resources": {
-          "activityNotification": {"default": "send", "operations": {"send": "off"}},
-          "channel": {"default": "create", "operations": {"create": "off", "deleteChannel": "off", "get": "off", "getAll": "off", "update": "off"}},
-          "channelMessage": {"default": "create", "operations": {"create": "notice", "softDeleteMessage": "off", "get": "off", "getAll": "off", "getAllReplies": "off", "reply": "off", "undoSoftDeleteMessage": "off"}},
-          "chat": {"default": "create", "operations": {"create": "off", "get": "off", "getAll": "off"}},
-          "chatMember": {"default": "getAll", "operations": {"add": "off", "getAll": "off", "remove": "off"}},
-          "chatMessage": {"default": "create", "operations": {"create": "off", "softDeleteMessage": "off", "get": "off", "getAll": "off", "sendAndWait": "off", "undoSoftDeleteMessage": "off"}},
-          "onlineMeeting": {"default": "create", "operations": {"create": "off", "createOrGet": "off", "deleteMeeting": "off", "get": "off", "update": "off"}},
-          "task": {"default": "create", "operations": {"create": "off", "deleteTask": "off", "get": "off", "getAll": "off", "update": "off"}}
+          "__CUSTOM_API_CALL__": "off",
+          "activityNotification": {"default": "send", "operations": {"send": "off", "__CUSTOM_API_CALL__": "off"}},
+          "channel": {"default": "create", "operations": {"create": "off", "deleteChannel": "off", "get": "off", "getAll": "off", "update": "off", "__CUSTOM_API_CALL__": "off"}},
+          "channelMessage": {"default": "create", "operations": {"create": "notice", "softDeleteMessage": "off", "get": "off", "getAll": "off", "getAllReplies": "off", "reply": "off", "undoSoftDeleteMessage": "off", "__CUSTOM_API_CALL__": "off"}},
+          "chat": {"default": "create", "operations": {"create": "off", "get": "off", "getAll": "off", "__CUSTOM_API_CALL__": "off"}},
+          "chatMember": {"default": "getAll", "operations": {"add": "off", "getAll": "off", "remove": "off", "__CUSTOM_API_CALL__": "off"}},
+          "chatMessage": {"default": "create", "operations": {"create": "off", "softDeleteMessage": "off", "get": "off", "getAll": "off", "sendAndWait": "off", "undoSoftDeleteMessage": "off", "__CUSTOM_API_CALL__": "off"}},
+          "onlineMeeting": {"default": "create", "operations": {"create": "off", "createOrGet": "off", "deleteMeeting": "off", "get": "off", "update": "off", "__CUSTOM_API_CALL__": "off"}},
+          "task": {"default": "create", "operations": {"create": "off", "deleteTask": "off", "get": "off", "getAll": "off", "update": "off", "__CUSTOM_API_CALL__": "off"}}
         },
         "tag": "Posts in Teams",
         "says": "Posts a message in a Teams channel",
@@ -179,14 +182,15 @@
         "by": ["resource", "operation"],
         "default": "message",
         "resources": {
-          "calendar": {"default": "getAll", "operations": {"create": "off", "delete": "off", "get": "off", "getAll": "off", "update": "off"}},
-          "contact": {"default": "getAll", "operations": {"create": "off", "delete": "off", "get": "off", "getAll": "off", "update": "off"}},
-          "draft": {"default": "create", "operations": {"create": "off", "delete": "off", "get": "off", "send": "off", "update": "off"}},
-          "event": {"default": "getAll", "operations": {"create": "off", "delete": "off", "get": "off", "getAll": "off", "update": "off"}},
-          "folder": {"default": "create", "operations": {"create": "off", "delete": "off", "get": "off", "getAll": "off", "update": "off"}},
-          "folderMessage": {"default": "getAll", "operations": {"getAll": "off"}},
-          "message": {"default": "send", "operations": {"delete": "off", "get": "off", "getAll": "off", "move": "off", "reply": "off", "send": "notice", "sendAndWait": "off", "update": "off"}},
-          "messageAttachment": {"default": "add", "operations": {"add": "off", "download": "off", "get": "off", "getAll": "off"}}
+          "__CUSTOM_API_CALL__": "off",
+          "calendar": {"default": "getAll", "operations": {"create": "off", "delete": "off", "get": "off", "getAll": "off", "update": "off", "__CUSTOM_API_CALL__": "off"}},
+          "contact": {"default": "getAll", "operations": {"create": "off", "delete": "off", "get": "off", "getAll": "off", "update": "off", "__CUSTOM_API_CALL__": "off"}},
+          "draft": {"default": "create", "operations": {"create": "off", "delete": "off", "get": "off", "send": "off", "update": "off", "__CUSTOM_API_CALL__": "off"}},
+          "event": {"default": "getAll", "operations": {"create": "off", "delete": "off", "get": "off", "getAll": "off", "update": "off", "__CUSTOM_API_CALL__": "off"}},
+          "folder": {"default": "create", "operations": {"create": "off", "delete": "off", "get": "off", "getAll": "off", "update": "off", "__CUSTOM_API_CALL__": "off"}},
+          "folderMessage": {"default": "getAll", "operations": {"getAll": "off", "__CUSTOM_API_CALL__": "off"}},
+          "message": {"default": "send", "operations": {"delete": "off", "get": "off", "getAll": "off", "move": "off", "reply": "off", "send": "notice", "sendAndWait": "off", "update": "off", "__CUSTOM_API_CALL__": "off"}},
+          "messageAttachment": {"default": "add", "operations": {"add": "off", "download": "off", "get": "off", "getAll": "off", "__CUSTOM_API_CALL__": "off"}}
         },
         "tag": "Emails from Outlook",
         "says": "Sends an email from Outlook",
@@ -276,6 +280,22 @@
   },
   "n8n-nodes-base.slackTool": {
     "off": "An AI agent's tool, which n8n makes from Slack whatever NODES_INCLUDE says. AI agents are off (ADR 0023).",
+    "loaded_with": "n8n-nodes-base.slack"
+  },
+  "n8n-nodes-base.gmailHitlTool": {
+    "off": "An AI agent's tool that sends and waits for a person's answer, which n8n makes from Gmail whatever NODES_INCLUDE says. AI agents are off (ADR 0023).",
+    "loaded_with": "n8n-nodes-base.gmail"
+  },
+  "n8n-nodes-base.microsoftOutlookHitlTool": {
+    "off": "An AI agent's tool that sends and waits for a person's answer, which n8n makes from Microsoft Outlook whatever NODES_INCLUDE says. AI agents are off (ADR 0023).",
+    "loaded_with": "n8n-nodes-base.microsoftOutlook"
+  },
+  "n8n-nodes-base.microsoftTeamsHitlTool": {
+    "off": "An AI agent's tool that sends and waits for a person's answer, which n8n makes from Microsoft Teams whatever NODES_INCLUDE says. AI agents are off (ADR 0023).",
+    "loaded_with": "n8n-nodes-base.microsoftTeams"
+  },
+  "n8n-nodes-base.slackHitlTool": {
+    "off": "An AI agent's tool that sends and waits for a person's answer, which n8n makes from Slack whatever NODES_INCLUDE says. AI agents are off (ADR 0023).",
     "loaded_with": "n8n-nodes-base.slack"
   }
 }

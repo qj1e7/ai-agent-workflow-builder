@@ -349,6 +349,26 @@ async def make_transition(version: str, key: str, request: Request, practice: Pr
     return Response(status_code=204)
 
 
+PERMISSIONS = (
+    "BROWSE_PROJECTS",
+    "CREATE_ISSUES",
+    "EDIT_ISSUES",
+    "TRANSITION_ISSUES",
+    "ADD_COMMENTS",
+    "ADMINISTER_PROJECTS",
+    "USER_PICKER",
+)
+"""The practice Jira's permissions, enough for both its accounts to answer what they may do."""
+
+
+@router.get(API + "/permissions", include_in_schema=False)
+async def all_permissions(version: str, request: Request, practice: Practice) -> Response:
+    if (refused := _gate(request, practice, version)) is not None:
+        return refused
+    listed = {name: {"key": name, "name": name.replace("_", " ").title()} for name in PERMISSIONS}
+    return JSONResponse({"permissions": listed})
+
+
 @router.get(API + "/mypermissions", include_in_schema=False)
 async def my_permissions(version: str, request: Request, practice: Practice) -> Response:
     """Whether the account may do each thing asked about, in any project, as Jira answers with
@@ -365,7 +385,7 @@ async def my_permissions(version: str, request: Request, practice: Practice) -> 
             "key": name,
             "name": name.replace("_", " ").title(),
             "type": "PROJECT",
-            "havePermission": platform or name == "BROWSE_PROJECTS",
+            "havePermission": platform or name in ("BROWSE_PROJECTS", "USER_PICKER"),
         }
         for number, name in enumerate(asked, start=1)
     }

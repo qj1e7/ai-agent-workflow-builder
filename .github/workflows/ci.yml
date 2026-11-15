@@ -154,7 +154,7 @@ jobs:
         if: matrix.project != 'e2e'
         run: docker build --target runtime --tag ${{ matrix.project }}:runtime ${{ matrix.project }}
 
-      - name: Mock GitHub, mock model and mock Confluence tests in their images
+      - name: Mock GitHub, mock model, mock Confluence and mock Slack tests in their images
         if: matrix.project == 'e2e'
         run: |
           docker build --target test --tag mock-github:test e2e/mock_github
@@ -163,6 +163,8 @@ jobs:
           docker run --rm mock-model:test
           docker build --target test --tag mock-confluence:test e2e/mock_confluence
           docker run --rm mock-confluence:test
+          docker build --target test --tag mock-slack:test e2e/mock_slack
+          docker run --rm mock-slack:test
 
   portal:
     runs-on: ubuntu-latest

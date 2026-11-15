@@ -1,9 +1,9 @@
 """The credential sweep, seen from the workflows (ENGINE-PLAN E17, ADR 0045 section 2).
 
-Every minute, and whenever a workflow opens in n8n, the platform deletes every key in n8n it did
-not make, makes its own again where they are gone or changed, and puts each key it lent where
-the workflow that names it is held. This module says what that means for the workflows: a key
-removed from someone's n8n space while they hold a workflow marks that workflow Needs a fix, and
+Every minute, and whenever a workflow opens in n8n or comes back, the platform deletes every key
+in n8n it did not make, and makes its own again where they are gone or changed. Its own keys
+never leave its project. This module says what that means for the workflows: a key removed from
+someone's n8n space while they hold a workflow marks that workflow Needs a fix, and
 a workflow in the platform's own n8n project that no use case names and that n8n runs with a key
 the platform did not make is taken off in n8n. In the platform's project n8n lets a workflow use
 every key there is, so that is the only place such a workflow could run with a member's key: one
@@ -27,7 +27,6 @@ import httpx
 from platform_api.db import Database
 from platform_api.orchestration import (
     KeyRemoved,
-    LendRefused,
     ListedWorkflow,
     N8nError,
     credentials_named,
@@ -44,19 +43,9 @@ KEY_CHANGED = "One of the platform's keys was changed in n8n while it was open t
 class Keys(Protocol):
     async def sweep(self) -> list[KeyRemoved]: ...
 
-    async def keep_only(self, held: Iterable[str]) -> None: ...
-
     async def made(self) -> dict[str, str]: ...
 
     async def plant(self) -> str | None: ...
-
-    async def lend(
-        self, use_case_id: str, project: str, ids: Iterable[str]
-    ) -> LendRefused | None: ...
-
-    async def give_back(self, use_case_id: str) -> None: ...
-
-    async def place(self, home: str | None = None) -> list[str]: ...
 
 
 class Spaces(Protocol):
@@ -85,9 +74,6 @@ class KeysSwept:
 
 
 class KeySweep:
-    """Also the key loans Open in n8n and Take back make, so every Open sweeps as the minute
-    does."""
-
     def __init__(self, db: Database, keys: Keys, n8n: Spaces, people: People) -> None:
         self._db = db
         self._keys = keys
@@ -97,24 +83,22 @@ class KeySweep:
 
     async def sweep(self) -> KeysSwept:
         async with self._lock:
-            await self._keys.keep_only(await self._holding())
             removed = await self._keys.sweep()
             marked = await self._mark(removed)
             taken_off = await self._take_off()
             try:
                 await self._keys.plant()
             except (N8nError, httpx.HTTPError) as error:
-                log.warning("could not plant the credential sweep's daily key: %s", error)
+                log.warning("the sweep's daily self-test did not start: %s", type(error).__name__)
             return KeysSwept(tuple(removed), tuple(marked), tuple(taken_off))
 
-    async def lend(self, use_case_id: str, project: str, ids: Iterable[str]) -> LendRefused | None:
-        return await self._keys.lend(use_case_id, project, ids)
+    async def made(self) -> dict[str, str]:
+        return await self._keys.made()
 
-    async def give_back(self, use_case_id: str) -> None:
-        await self._keys.give_back(use_case_id)
-
-    async def place(self, home: str | None = None) -> list[str]:
-        return await self._keys.place(home)
+    async def clear(self) -> list[KeyRemoved]:
+        """The sweep of keys alone, marking nothing, for a take-back that holds the workflow's
+        row: a mark there would wait on it. The hold ends with that take-back anyway."""
+        return await self._keys.sweep()
 
     async def sweep_forever(self, stop: asyncio.Event, every: timedelta = SWEEP_EVERY) -> None:
         while not stop.is_set():
@@ -124,17 +108,6 @@ class KeySweep:
                 log.exception("the credential sweep failed")
             with contextlib.suppress(TimeoutError):
                 await asyncio.wait_for(stop.wait(), every.total_seconds())
-
-    async def _holding(self) -> list[str]:
-        """Each use case someone holds, or that is moving in or out of n8n now, whose loans stay."""
-        async with self._db.connection("builder") as conn:
-            rows = await (
-                await conn.execute(
-                    "SELECT use_case_id FROM builder.use_cases"
-                    " WHERE held_by IS NOT NULL OR n8n_stranded_at IS NOT NULL"
-                )
-            ).fetchall()
-        return [row["use_case_id"] for row in rows]
 
     async def _mark(self, removed: Iterable[KeyRemoved]) -> list[str]:
         """Each workflow held by the person in whose n8n space a key was removed."""

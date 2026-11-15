@@ -32,7 +32,14 @@ from platform_api.builder.n8n_draft import (
     DraftRefused,
     check_draft,
 )
-from platform_api.orchestration import ASK_EXITS, KEYS, KnownOptions, Schedule, grade
+from platform_api.orchestration import (
+    ASK_EXITS,
+    KEYS,
+    KnownOptions,
+    Schedule,
+    grade,
+    unpinned_notices,
+)
 from tests.support import TEAM_ZONE
 
 GOLDEN = Path(__file__).parent / "golden" / "n8n"
@@ -231,7 +238,16 @@ def test_the_release_check_may_tell_slack_with_the_platform_s_key_and_needs_no_y
     assert (NEWER, 0, "Tell Slack") in edges(checked.document)
     kinds = {node["type"] for node in checked.document["nodes"]}
     assert "CUSTOM.wabAskForYes" not in kinds
-    assert checked.lines == (("check", FIT),)
+    assert checked.lines == (
+        ("check", FIT),
+        ("note", 'A test run skips "Tell Slack", so it posts nothing.'),
+    )
+    assert checked.document["pinData"] == {
+        "Tell Slack": [{"json": {"skipped": "Slack notice skipped in the test run."}}]
+    }, "n8n uses the pinned output in a run by hand, a test run, and ignores it in every other run"
+    assert unpinned_notices(checked.document) == []
+    del checked.document["pinData"]
+    assert unpinned_notices(checked.document) == ["Tell Slack"]
 
 
 def test_without_the_platform_s_key_the_slack_notice_is_never_saved() -> None:
@@ -239,7 +255,8 @@ def test_without_the_platform_s_key_the_slack_notice_is_never_saved() -> None:
     refused = check_draft(laid, RELEASE_CHECK.use_case_id, ERROR_WORKFLOW, TEAM_ZONE)
     assert isinstance(refused, DraftRefused)
     assert [f.text for f in refused.findings] == [
-        '"Tell Slack" uses a key the platform did not make.'
+        '"Tell Slack" has no key: the platform has none for it.',
+        '"Tell Slack" uses a key the platform did not make.',
     ]
 
 

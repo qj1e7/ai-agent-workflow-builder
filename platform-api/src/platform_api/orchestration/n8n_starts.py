@@ -113,6 +113,12 @@ class N8nStarts:
             start = await CallBook().issue_start(uow, run_id, "test", target.workflow_id)
         item = {"nonce": start.nonce, "kind": "test", "workflow_id": target.workflow_id}
         try:
+            if unpinned := await self._api.unpinned(target.workflow_id):
+                names = ", ".join(f'"{name}"' for name in unpinned)
+                raise DispatchFailure(
+                    f"{names} would post in a test run, so the test run did not start. Pin its "
+                    "output in n8n."
+                )
             return N8nExecutionId(await self._api.run_draft(target.workflow_id, item))
         except (N8nError, httpx.HTTPError) as error:
             raise DispatchFailure(f"n8n did not run the draft: {_words(error)}") from None

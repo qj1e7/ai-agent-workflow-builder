@@ -120,10 +120,7 @@ from platform_api.orchestration.n8n_calls import (
     WriteEntry,
 )
 from platform_api.orchestration.n8n_credentials import (
-    KEYS,
     KeyRemoved,
-    KeySpec,
-    LendRefused,
     PlatformKeys,
     credentials_named,
 )
@@ -155,6 +152,7 @@ from platform_api.orchestration.planning import (
     ProjectFinding,
     RuntimeDown,
 )
+from platform_api.orchestration.platform_keys import KEYS, KeySpec, attach_keys
 from platform_api.orchestration.run_gist import RunGist
 from platform_api.orchestration.runs import state_name
 from platform_api.orchestration.schedule import (
@@ -233,6 +231,8 @@ from platform_api.orchestration.workflow_check import (
     grade,
     known_options,
     read_flow,
+    skipped_in_tests,
+    unpinned_notices,
     writes,
 )
 from platform_api.orchestration.write_actions import Binding
@@ -240,10 +240,12 @@ from platform_api.orchestration.write_actions import Binding
 __all__ = [
     "Face",
     "face",
+    "skipped_in_tests",
+    "unpinned_notices",
     "KEYS",
     "KeyRemoved",
     "KeySpec",
-    "LendRefused",
+    "attach_keys",
     "PlatformKeys",
     "credentials_named",
     "NO_ACCESS",

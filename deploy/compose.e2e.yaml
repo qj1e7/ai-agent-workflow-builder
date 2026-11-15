@@ -55,16 +55,59 @@ services:
       timeout: 3s
       retries: 15
 
+  # Slack's Web API for n8n's own Slack block (ADR 0045). n8n always calls https://slack.com, so
+  # this container answers to that name on the stack's network, over TLS with a certificate
+  # authority it makes at each start and writes to the slack-ca volume, which n8n trusts. The
+  # platform asks it what a key may do over plain HTTP on 8500, where the tests read each post.
+  mock-slack:
+    image: wab/mock-slack:${WAB_IMAGE_TAG:-dev}
+    build:
+      context: ../e2e/mock_slack
+      target: runtime
+    volumes:
+      - slack-ca:/ca
+    networks:
+      default:
+        aliases: [slack.com]
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8500/healthz', timeout=2)
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+  n8n:
+    environment:
+      NODE_EXTRA_CA_CERTS: /wab-test-ca/ca.pem
+    volumes:
+      - slack-ca:/wab-test-ca:ro
+    depends_on:
+      mock-slack:
+        condition: service_healthy
+
   # The mock Confluence's own bot and test token, not a secret. Only the inventory may be read.
+  # The keys the platform makes in n8n for n8n's GitHub and Slack blocks are the mocks' own test
+  # tokens, not secrets; the Jira key is the practice Jira's browse-only account.
   platform-api:
     environment:
       N8N_STAFF_ACCESS: "on"
+      N8N_KEY_GITHUB_TOKEN: mock-github-reader
+      N8N_KEY_GITHUB_URL: http://mock-github:8200
+      N8N_KEY_SLACK_TOKEN: mock-slack-token
+      SLACK_API_URL: http://mock-slack:8500/api
       CONFLUENCE_BASE_URL: http://mock-confluence:8400/wiki
       CONFLUENCE_EMAIL: bot@codesparks.test
       CONFLUENCE_API_TOKEN: mock-confluence-token
       CONFLUENCE_PAGES: 424242=Software inventory
     depends_on:
       mock-confluence:
+        condition: service_healthy
+      mock-github:
+        condition: service_healthy
+      mock-slack:
         condition: service_healthy
 
   agent-runtime:
@@ -87,6 +130,7 @@ services:
       MOCK_GITHUB_URL: http://mock-github:8200
       MOCK_MODEL_URL: http://mock-model:8300
       MOCK_CONFLUENCE_URL: http://mock-confluence:8400
+      MOCK_SLACK_URL: http://mock-slack:8500
       E2E_WAIT_SECONDS: ${E2E_WAIT_SECONDS:-90}
       # old-engine when the stack started from the old-engine seed, so only the move's test runs.
       E2E_SEED: ${E2E_SEED:-}
@@ -106,3 +150,8 @@ services:
         condition: service_healthy
       mock-confluence:
         condition: service_healthy
+      mock-slack:
+        condition: service_healthy
+
+volumes:
+  slack-ca: {}

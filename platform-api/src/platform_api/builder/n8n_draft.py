@@ -69,6 +69,18 @@ class DraftRefused:
     findings: tuple[Finding, ...]
 
 
+def test_run_skips(name: str) -> str:
+    return f'A test run skips "{name}", so it posts nothing.'
+
+
+def notices_in(document: Mapping[str, Any]) -> list[str]:
+    try:
+        flow = read_flow(document)
+    except Unreadable:
+        return []
+    return [b.name for b in flow.blocks.values() if face(b.type, b.version, b.parameters).notice]
+
+
 def added_line(write: str) -> str:
     return f"Added a yes before {WHAT_IS_WRITTEN.get(write, f'"{write}"')}."
 
@@ -97,6 +109,7 @@ def check_draft(
     lines.extend(("note", added_line(write)) for write in with_yes.added_before)
     if changes:
         lines.append(("check", EVERY_WRITE))
+    lines.extend(("note", test_run_skips(name)) for name in notices_in(with_yes.document))
     return Checked(with_yes.document, graded, tuple(lines))
 
 

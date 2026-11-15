@@ -85,7 +85,7 @@ class _Row(BaseModel):
     by: str | tuple[str, str] | None = None
     default: str | None = None
     operations: dict[str, Class] | None = None
-    resources: dict[str, _Resource] | None = None
+    resources: dict[str, _Resource | Literal["off"]] | None = None
     tag: str | None = Field(default=None, min_length=1)
     says: str | None = Field(default=None, min_length=1)
     target: tuple[str, ...] = ()
@@ -101,8 +101,8 @@ class _Row(BaseModel):
             if whole or self.operations is not None or None in picked:
                 raise ValueError("a row by resource and operation has default and resources only")
             assert self.resources is not None
-            if self.default not in self.resources:
-                raise ValueError(f"the default {self.default} has no resource")
+            if not isinstance(self.resources.get(str(self.default)), _Resource):
+                raise ValueError(f"the default {self.default} has no resource that is on")
             return self
         if self.resources is not None:
             raise ValueError(f"only a row by {' and '.join(PAIR)} has resources")
@@ -156,7 +156,9 @@ class Resources:
 
     default: str
     """The resource when `resource` is left out."""
-    operations: Mapping[str, Operations]
+    operations: Mapping[str, Operations | Literal["off"]]
+    """Each resource's operations, or off for a resource that is off whatever it does, such as
+    the Custom API Call n8n adds to a node with a key, which sends any request with it."""
 
 
 type Classed = Class | Operations | Resources
@@ -333,7 +335,7 @@ def _what(classed: Classed, parameters: Mapping[str, object]) -> tuple[str, Clas
             if isinstance(resource, Off):
                 return resource
             operations = classed.operations.get(resource)
-            if operations is None:
+            if operations is None or operations == "off":
                 return Off("operation", resource)
             chosen = _what(operations, parameters)
             return chosen if isinstance(chosen, Off) else (f"{resource} {chosen[0]}", chosen[1])
@@ -346,7 +348,9 @@ def _classed(row: _Row) -> Classed:
         return Resources(
             str(row.default),
             {
-                name: Operations("operation", resource.default, dict(resource.operations))
+                name: "off"
+                if resource == "off"
+                else Operations("operation", resource.default, dict(resource.operations))
                 for name, resource in row.resources.items()
             },
         )
@@ -457,6 +461,8 @@ def _choices(what: str, classed: Classed, properties: Sequence[Mapping[str, Any]
             )
             problems += _offered(what, resource, picks.get("resource"))
             for name, operations in sorted(classed.operations.items()):
+                if operations == "off":
+                    continue
                 shown = [p for p in picks.get("operation", []) if name in _shown_for(p)]
                 problems += _offered(f"{what} {name}", operations, shown or None)
             return problems

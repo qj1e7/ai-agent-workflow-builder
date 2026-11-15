@@ -19,7 +19,7 @@ from platform_api.builder.n8n_holds import MOVE_GRACE, STRANDED, Holding
 from platform_api.orchestration import KEYS, PlatformKeys
 from platform_api.orchestration.n8n_credentials import (
     GONE_WITHIN,
-    JIRA_WRITES,
+    JIRA_READS,
     PLANTED_KIND,
     key_test_line,
 )
@@ -31,6 +31,9 @@ from tests.test_n8n_access import PLATFORM_PROJECT, Staffed, held, lab, s
 from tests.test_n8n_api import api_for
 from tests.test_n8n_builder import WRITES
 from tests.test_n8n_lifecycle import Workflows
+
+PAT = "jiraSoftwareServerPatApi"
+"""The credential type of a Data Center personal access token."""
 
 pytestmark = pytest.mark.anyio
 
@@ -45,7 +48,7 @@ GIVEN: dict[KeySystem, N8nKey] = {
         "http://github",
     ),
     "jira": N8nKey(
-        "jiraSoftwareServerPatApi",
+        PAT,
         {"domain": "http://jira", "personalAccessToken": "jira-token-for-tests"},
         "http://jira",
     ),
@@ -59,7 +62,17 @@ class Systems:
 
     slack_scopes: str | None = "chat:write,channels:read"
     github_scopes: str | None = ""
-    jira_may: set[str] = field(default_factory=set[str])
+    jira_may: set[str] = field(default_factory=lambda: {"BROWSE_PROJECTS", "USER_PICKER"})
+    jira_lists: set[str] = field(
+        default_factory=lambda: {
+            "BROWSE_PROJECTS",
+            "USER_PICKER",
+            "CREATE_ISSUES",
+            "EDIT_ISSUES",
+            "ADMINISTER",
+            "SOME_PERMISSION_JIRA_ADDS_LATER",
+        }
+    )
     asked: list[str] = field(default_factory=list[str])
 
     def client(self) -> httpx.AsyncClient:
@@ -76,6 +89,9 @@ class Systems:
                     {} if self.github_scopes is None else {"x-oauth-scopes": self.github_scopes}
                 )
                 return httpx.Response(200, json={"login": "reader"}, headers=headers)
+            case "jira", "/rest/api/2/permissions":
+                listed = {name: {"key": name} for name in self.jira_lists}
+                return httpx.Response(200, json={"permissions": listed})
             case "jira", "/rest/api/2/mypermissions":
                 asked = request.url.params["permissions"].split(",")
                 held = {name: {"havePermission": name in self.jira_may} for name in asked}
@@ -146,13 +162,14 @@ async def test_the_platform_makes_each_key_in_its_own_project_once_the_system_sh
         **{key: PLATFORM_PROJECT for key in k.n8n.credentials if key.startswith("wab-test-")},
     }
     assert await k.keys.made() == {
-        JIRA: "jiraSoftwareServerPatApi",
+        JIRA: PAT,
         GITHUB: "githubApi",
         SLACK: "slackApi",
     }
     assert sorted(k.systems.asked) == [
         "github /user",
         "jira /rest/api/2/mypermissions",
+        "jira /rest/api/2/permissions",
         "slack /api/auth.test",
     ]
     slack = k.n8n.credentials[SLACK]
@@ -175,11 +192,15 @@ async def test_the_platform_makes_each_key_in_its_own_project_once_the_system_sh
             "channels:manage",
         ),
         ("slack", lambda s: setattr(s, "slack_scopes", None), "Slack did not say"),
-        ("github", lambda s: setattr(s, "github_scopes", "repo"), "can change GitHub (repo)"),
+        ("github", lambda s: setattr(s, "github_scopes", "repo"), "more than read (repo)"),
         ("github", lambda s: setattr(s, "github_scopes", "public_repo, read:org"), "public_repo"),
         ("github", lambda s: setattr(s, "github_scopes", None), "fine-grained"),
         ("jira", lambda s: s.jira_may.add("CREATE_ISSUES"), "CREATE_ISSUES"),
         ("jira", lambda s: s.jira_may.add("ADMINISTER"), "ADMINISTER"),
+        ("jira", lambda s: s.jira_may.add("SOME_PERMISSION_JIRA_ADDS_LATER"), "ADDS_LATER"),
+        ("jira", lambda s: s.jira_lists.clear(), "did not list its permissions"),
+        ("slack", lambda s: setattr(s, "slack_scopes", "chat:write,some:scope"), "some:scope"),
+        ("github", lambda s: setattr(s, "github_scopes", "read:org, some:scope"), "some:scope"),
     ],
     ids=[
         "slack-manages-channels",
@@ -189,6 +210,10 @@ async def test_the_platform_makes_each_key_in_its_own_project_once_the_system_sh
         "github-fine-grained",
         "jira-creates",
         "jira-administers",
+        "jira-an-unknown-permission",
+        "jira-lists-nothing",
+        "slack-an-unknown-scope",
+        "github-an-unknown-scope",
     ],
 )
 async def test_a_key_that_can_write_or_does_not_say_is_refused_at_creation(
@@ -202,11 +227,18 @@ async def test_a_key_that_can_write_or_does_not_say_is_refused_at_creation(
     assert not state.made and state.refused is not None and says in state.refused
 
 
-async def test_every_write_permission_jira_has_is_asked_about():
-    assert {"CREATE_ISSUES", "EDIT_ISSUES", "DELETE_ISSUES", "TRANSITION_ISSUES"} <= set(
-        JIRA_WRITES
-    )
-    assert "BROWSE_PROJECTS" not in JIRA_WRITES
+async def test_a_jira_key_may_hold_only_what_reading_needs(k: Keyed):
+    """Fail closed: Jira lists every permission it has, and the account must hold none of them but
+    a short list of reads."""
+    assert {
+        "BROWSE_PROJECTS",
+        "VIEW_READONLY_WORKFLOW",
+        "VIEW_DEV_TOOLS",
+        "VIEW_VOTERS_AND_WATCHERS",
+        "USER_PICKER",
+    } == JIRA_READS
+    await k.sweep.sweep()
+    assert JIRA in await k.keys.made(), "browsing and picking users are reads"
 
 
 async def test_a_key_n8n_cannot_connect_with_is_removed_and_says_why(k: Keyed):
@@ -265,23 +297,20 @@ async def test_a_key_made_again_with_the_platform_s_id_by_someone_else_is_not_tr
     assert k.n8n.credentials[SLACK]["data"] == {"accessToken": "slack-token-for-tests"}
 
 
-async def test_a_new_secret_in_key_vault_changes_the_key_where_it_is(k: Keyed):
+async def test_a_new_secret_in_key_vault_makes_the_key_anew_never_changes_it(k: Keyed):
+    """The record is only ever what n8n answered the platform's own create."""
     await settled(k)
-    k.given(
-        {
-            **GIVEN,
-            "slack": N8nKey("slackApi", {"accessToken": "rotated-for-tests"}, "http://slack/api"),
-        }
-    )
+    made = k.n8n.credentials[SLACK]["createdAt"]
+    rotated = N8nKey("slackApi", {"accessToken": "rotated-for-tests"}, "http://slack/api")
+    k.given({**GIVEN, "slack": rotated})
     k.n8n.calls.clear()
     swept = await k.sweep.sweep()
     assert swept.removed == ()
-    assert f"PATCH /api/v1/credentials/{SLACK}" in k.n8n.calls
+    assert f"DELETE /api/v1/credentials/{SLACK}" in k.n8n.calls
+    assert not [c for c in k.n8n.calls if c.startswith(("PATCH", "PUT"))], "never changed or moved"
     assert k.n8n.credentials[SLACK]["data"] == {"accessToken": "rotated-for-tests"}
+    assert k.n8n.credentials[SLACK]["createdAt"] != made
     assert SLACK in await k.keys.made()
-    k.n8n.calls.clear()
-    await k.sweep.sweep()
-    assert not [c for c in k.n8n.calls if c.startswith(("PATCH", "DELETE"))], "settled"
 
 
 async def test_a_key_no_longer_given_is_deleted(k: Keyed):
@@ -347,6 +376,16 @@ def test_the_self_test_line_says_when_a_planted_key_stayed():
     assert key_test_line((NOW, NOW), NOW + timedelta(days=2))[0] is False, "none planted lately"
 
 
+async def test_a_platform_key_moved_out_of_its_project_is_deleted_and_made_again(k: Keyed):
+    """A key never leaves the platform's project, so one found elsewhere was moved by someone."""
+    await settled(k)
+    carol = await k.s.member()
+    k.n8n.credentials[GITHUB]["projectId"] = k.n8n.personal_project(carol)
+    swept = await k.sweep.sweep()
+    assert [(r.id, r.changed) for r in swept.removed] == [(GITHUB, True)]
+    assert k.n8n.credentials[GITHUB]["projectId"] == PLATFORM_PROJECT
+
+
 def with_slack(k: Keyed, workflow_id: str) -> None:
     """The workflow's draft and the version n8n runs both post in Slack with the platform's key."""
     workflow = k.n8n.workflows[workflow_id]
@@ -368,103 +407,122 @@ def with_slack(k: Keyed, workflow_id: str) -> None:
         k.n8n.history[workflow_id][live]["nodes"].append(copy.deepcopy(block))
 
 
-async def lent(k: Keyed) -> tuple[str, str, str]:
+def slack_in(k: Keyed, workflow_id: str) -> dict[str, Any]:
+    [block] = [n for n in k.n8n.workflows[workflow_id]["nodes"] if n["name"] == "Tell Slack"]
+    return block
+
+
+async def opened(k: Keyed) -> tuple[str, str, str]:
     """Carol holds a workflow that posts in Slack: the use case, the workflow and her space."""
     await settled(k)
     carol = await k.s.member()
     use_case_id, workflow_id = await held(k.s)
     with_slack(k, workflow_id)
-    opened = await k.s.open("carol", use_case_id)
-    assert opened.status_code == 200, opened.text
-    space = k.n8n.personal_project(carol)
-    assert k.n8n.credentials[SLACK]["projectId"] == space, "the key went with it"
-    assert k.n8n.credentials[JIRA]["projectId"] == PLATFORM_PROJECT, "only the keys it names"
-    return use_case_id, workflow_id, space
+    answer = await k.s.open("carol", use_case_id)
+    assert answer.status_code == 200, answer.text
+    return use_case_id, workflow_id, k.n8n.personal_project(carol)
 
 
-async def test_open_in_n8n_lends_the_keys_the_workflow_names_and_take_back_returns_them(k: Keyed):
-    use_case_id, workflow_id, _ = await lent(k)
+def her_editor_swaps_the_key(k: Keyed, workflow_id: str, space: str) -> str:
+    """In her space she cannot use the platform's key, so she adds her own and points the block at
+    it, and puts a platform key on a block that is not for a system."""
+    hers = k.n8n.add_credential(space, "slackApi")
+    slack_in(k, workflow_id)["credentials"] = {"slackApi": {"id": hers, "name": "mine"}}
+    first = k.n8n.workflows[workflow_id]["nodes"][0]
+    first["credentials"] = {"githubApi": {"id": GITHUB, "name": "x"}}
+    k.n8n.edit(workflow_id)
+    return hers
+
+
+def put_back(k: Keyed, workflow_id: str, hers: str) -> None:
+    """Back home, the draft's blocks name the platform's key for their system again, every other
+    key is off them, and her key is gone."""
+    assert slack_in(k, workflow_id)["credentials"] == {
+        "slackApi": {"id": SLACK, "name": KEYS["slack"].name}
+    }
+    assert "credentials" not in k.n8n.workflows[workflow_id]["nodes"][0], "not a block for a system"
+    assert hers not in k.n8n.credentials
+
+
+async def test_open_in_n8n_never_lends_a_platform_key(k: Keyed):
+    """A key in a member's space could be pointed at their own server to read its secret. So the
+    workflow opens without it, and they cannot run it with the key while they hold it."""
+    _, workflow_id, space = await opened(k)
+    assert k.n8n.home_of(workflow_id) == space
+    assert {key: k.in_n8n()[key] for key in (SLACK, JIRA, GITHUB)} == {
+        SLACK: PLATFORM_PROJECT,
+        JIRA: PLATFORM_PROJECT,
+        GITHUB: PLATFORM_PROJECT,
+    }
+
+
+async def test_open_in_n8n_sweeps_first(k: Keyed):
+    """So no key a member added waits in their space for the workflow that comes to it."""
+    await settled(k)
+    carol = await k.s.member()
+    hers = k.n8n.add_credential(k.n8n.personal_project(carol), "slackApi")
+    use_case_id, _ = await held(k.s)
+    assert (await k.s.open("carol", use_case_id)).status_code == 200
+    assert hers not in k.n8n.credentials
+
+
+async def test_the_holder_s_take_back_puts_the_keys_back(k: Keyed):
+    use_case_id, workflow_id, space = await opened(k)
+    hers = her_editor_swaps_the_key(k, workflow_id, space)
     assert (await k.s.take_back("carol", use_case_id)).status_code == 200
-    assert k.n8n.credentials[SLACK]["projectId"] == PLATFORM_PROJECT
-    assert SLACK in await k.keys.made(), "moving it keeps it the platform's"
-    await k.sweep.sweep()
-    assert SLACK in k.n8n.credentials, "and the next sweep does not take it for someone else's"
+    put_back(k, workflow_id, hers)
 
 
-async def test_another_operator_s_take_back_returns_the_keys(k: Keyed):
-    use_case_id, _, _ = await lent(k)
+async def test_another_operator_s_take_back_puts_the_keys_back(k: Keyed):
+    use_case_id, workflow_id, space = await opened(k)
     dana = await k.s.operator("dana")
     await k.s.member(dana)
+    hers = her_editor_swaps_the_key(k, workflow_id, space)
     assert (await k.s.take_back(dana, use_case_id)).status_code == 200
-    assert k.n8n.credentials[SLACK]["projectId"] == PLATFORM_PROJECT
+    put_back(k, workflow_id, hers)
 
 
-async def test_the_platform_s_own_take_back_returns_the_keys_when_access_ends(k: Keyed):
-    use_case_id, _, _ = await lent(k)
+async def test_the_platform_s_own_take_back_puts_the_keys_back_when_access_ends(k: Keyed):
+    use_case_id, workflow_id, space = await opened(k)
+    hers = her_editor_swaps_the_key(k, workflow_id, space)
     assert (await k.s.give("carol", on=False)).status_code == 200
     await k.s.settle()
     assert await k.s.held_by(use_case_id) is None
-    assert k.n8n.credentials[SLACK]["projectId"] == PLATFORM_PROJECT
+    put_back(k, workflow_id, hers)
 
 
-async def test_a_delete_returns_the_keys_with_the_workflow(k: Keyed):
-    use_case_id, _, _ = await lent(k)
+async def test_a_delete_puts_the_keys_back_before_n8n_removes_it(k: Keyed):
+    use_case_id, workflow_id, space = await opened(k)
+    hers = her_editor_swaps_the_key(k, workflow_id, space)
+    k.n8n.calls.clear()
     assert (await k.s.lab.move("alice", "delete", use_case_id)).status_code == 200
-    assert k.n8n.credentials[SLACK]["projectId"] == PLATFORM_PROJECT
+    assert hers not in k.n8n.credentials
+    keys_back = k.n8n.calls.index(f"PUT /api/v1/workflows/{workflow_id}")
+    archived = k.n8n.calls.index(f"POST /api/v1/workflows/{workflow_id}/archive")
+    assert keys_back < archived
 
 
-async def test_a_stranded_move_lends_nothing_and_its_recovery_returns_the_keys(k: Keyed):
+async def test_a_stranded_move_s_recovery_puts_the_keys_back(k: Keyed):
     await settled(k)
-    await k.s.member()
+    carol = await k.s.member()
     use_case_id, workflow_id = await held(k.s)
     with_slack(k, workflow_id)
     k.n8n.transfer_keeps = lambda settings: {}
     k.n8n.after_put = k.n8n.edit
     k.n8n.transfer_answers = [204, 500]
-    opened = await k.s.open("carol", use_case_id)
-    assert (opened.status_code, opened.json()["detail"]) == (503, STRANDED)
+    answer = await k.s.open("carol", use_case_id)
+    assert (answer.status_code, answer.json()["detail"]) == (503, STRANDED)
+    hers = her_editor_swaps_the_key(k, workflow_id, k.n8n.personal_project(carol))
     k.n8n.transfer_keeps = lambda settings: settings
     k.n8n.after_put = None
     k.s.lab.h.advance(MOVE_GRACE)
     await k.s.settle()
     assert k.n8n.home_of(workflow_id) == PLATFORM_PROJECT
-    await k.sweep.sweep()
-    assert k.n8n.credentials[SLACK]["projectId"] == PLATFORM_PROJECT
-
-
-async def test_the_sweep_puts_a_lent_key_back_when_its_loan_has_no_hold(k: Keyed):
-    """Whatever path left a key in a space with no workflow held there, the next sweep fixes it."""
-    use_case_id, _, space = await lent(k)
-    async with k.s.lab.h.db.transaction("builder") as uow:
-        await uow.conn.execute(
-            "UPDATE builder.use_cases SET held_by = NULL, held_since = NULL WHERE use_case_id = %s",
-            (use_case_id,),
-        )
-    assert k.n8n.credentials[SLACK]["projectId"] == space
-    await k.sweep.sweep()
-    assert k.n8n.credentials[SLACK]["projectId"] == PLATFORM_PROJECT
-
-
-async def test_a_key_lent_to_one_space_refuses_an_open_to_another(k: Keyed):
-    first, _, _ = await lent(k)
-    dana = await k.s.operator("dana")
-    dana_n8n = await k.s.member(dana)
-    second, workflow_id = await held(k.s)
-    with_slack(k, workflow_id)
-    refused = await k.s.open(dana, second)
-    assert refused.status_code == 409
-    assert refused.json()["detail"] == (
-        "The platform's Slack key is open in n8n with another workflow, by Carol. Only one space "
-        "can hold it at a time, so take that one back first."
-    )
-    assert k.n8n.home_of(workflow_id) == PLATFORM_PROJECT, "nothing moved"
-    assert (await k.s.take_back("carol", first)).status_code == 200
-    assert (await k.s.open(dana, second)).status_code == 200
-    assert k.n8n.credentials[SLACK]["projectId"] == k.n8n.personal_project(dana_n8n)
+    put_back(k, workflow_id, hers)
 
 
 async def test_a_key_added_in_the_holder_s_space_is_removed_and_marks_the_workflow(k: Keyed):
-    use_case_id, _, space = await lent(k)
+    use_case_id, _, space = await opened(k)
     hers = k.n8n.add_credential(space, "jiraSoftwareCloudApi")
     swept = await k.sweep.sweep()
     assert hers not in k.n8n.credentials
@@ -476,27 +534,24 @@ async def test_a_key_added_in_the_holder_s_space_is_removed_and_marks_the_workfl
     assert KEY_ADDED not in view["findings"], "the mark ends with the hold"
 
 
-async def test_a_lent_key_changed_by_its_holder_is_removed_made_again_and_marks_the_workflow(
-    k: Keyed,
-):
-    use_case_id, _, _ = await lent(k)
-    k.n8n.edit_credential(SLACK, accessToken="hers")
+async def test_a_platform_key_found_in_the_holder_s_space_is_put_right_and_marks_it(k: Keyed):
+    use_case_id, _, space = await opened(k)
+    k.n8n.credentials[SLACK]["projectId"] = space
     swept = await k.sweep.sweep()
     assert [(r.id, r.changed) for r in swept.removed] == [(SLACK, True)]
     assert swept.marked == (use_case_id,)
     view = (await k.s.call("alice", "GET", f"/api/v1/use-cases/{use_case_id}")).json()
     assert view["findings"][-1] == KEY_CHANGED
-    assert k.n8n.credentials[SLACK]["data"] == {"accessToken": "slack-token-for-tests"}
+    assert k.n8n.credentials[SLACK]["projectId"] == PLATFORM_PROJECT
 
 
 async def test_member_hand_run_with_own_key_is_swept(k: Keyed):
     """n8n's allow list is by type, so a holder can set the Slack block to delete in a draft and
     run it by hand with a key of their own. The checker never sees that run; the sweep removes
     the key within a minute, and with it the run's means (ADR 0045, acceptance note)."""
-    use_case_id, workflow_id, space = await lent(k)
+    _, workflow_id, space = await opened(k)
     hers = k.n8n.add_credential(space, "slackApi")
-    draft = k.n8n.workflows[workflow_id]
-    [slack] = [n for n in draft["nodes"] if n["name"] == "Tell Slack"]
+    slack = slack_in(k, workflow_id)
     slack["parameters"]["operation"] = "delete"
     slack["credentials"] = {"slackApi": {"id": hers, "name": "mine"}}
     await k.sweep.sweep()
@@ -512,17 +567,14 @@ async def test_a_workflow_an_ended_account_left_running_with_its_maker_s_key_is_
     carol = await k.s.member()
     space = k.n8n.personal_project(carol)
     hers = k.n8n.add_credential(space, "slackApi")
-    use_case_id, laid_out = await held(k.s)
+    _, laid_out = await held(k.s)
     document = copy.deepcopy(k.n8n.workflows[laid_out])
     for key in ("id", "versionId", "checksum", "activeVersionId", "active", "projectId", "shared"):
         document.pop(key, None)
     left = k.n8n.make_in(space, document, published_by=carol)
     with_slack(k, left)
-    [slack] = [
-        n
-        for n in k.n8n.history[left][k.n8n.workflows[left]["activeVersionId"]]["nodes"]
-        if n["name"] == "Tell Slack"
-    ]
+    live = k.n8n.workflows[left]["activeVersionId"]
+    [slack] = [n for n in k.n8n.history[left][live]["nodes"] if n["name"] == "Tell Slack"]
     slack["credentials"] = {"slackApi": {"id": hers, "name": "mine"}}
     await k.keys.quarantine(space, carol)
     assert (await k.s.give("carol", on=False)).status_code == 200
@@ -533,4 +585,3 @@ async def test_a_workflow_an_ended_account_left_running_with_its_maker_s_key_is_
     assert not k.n8n.workflows[left]["active"]
     assert hers in k.n8n.credentials, "the key stays, unused"
     assert k.n8n.workflows[laid_out]["active"], "a use case's workflow is never taken off here"
-    assert use_case_id

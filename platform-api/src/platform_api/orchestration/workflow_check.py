@@ -41,6 +41,7 @@ from platform_api.orchestration.node_classes import (
     Off,
     Runs,
 )
+from platform_api.orchestration.platform_keys import KEY_FOR_TYPE
 
 type Document = dict[str, Any]
 
@@ -283,6 +284,7 @@ def grade(
         *_parameters(flow),
         *_places(flow),
         *_keys(flow, {} if known is None else known.keys),
+        *_ours_first(flow),
         *_schedules(flow),
         *(() if known is None else _options(flow, known)),
         *_yes_before_writes(flow),
@@ -437,6 +439,8 @@ class Face:
     """None for a block that is off: its type, its version or what it was asked to do."""
     ours: bool
     tag: str | None
+    notice: bool = False
+    """One of n8n's own blocks that posts a notice, which a test run must skip."""
 
 
 def face(node_type: str, version: JsonValue, parameters: Mapping[str, JsonValue]) -> Face:
@@ -450,12 +454,61 @@ def face(node_type: str, version: JsonValue, parameters: Mapping[str, JsonValue]
     if isinstance(verdict, Off):
         return Face(None, ours, None)
     tag = SHAPES if spec.kind == "shape" else None if verdict.use is None else verdict.use.tag
-    return Face(spec.kind, ours, tag)
+    return Face(spec.kind, ours, tag, verdict.on == "notice")
+
+
+def skipped_in_tests(said: str) -> str:
+    """What a notice block's pinned output says, in place of a post, in a test run."""
+    return f"{said} notice skipped in the test run."
+
+
+def unpinned_notices(document: Mapping[str, Any]) -> list[str]:
+    """Each of n8n's own notice blocks whose output is not pinned, which a test run, a manual run
+    by hand, would post from. n8n ignores pinned output in every run that is not by hand."""
+    pinned = cast(Mapping[str, Any], document.get("pinData") or {})
+    return [
+        str(node.get("name"))
+        for node in cast(list[dict[str, Any]], document.get("nodes") or [])
+        if not node.get("disabled")
+        and face(
+            str(node.get("type")), node.get("typeVersion"), node.get("parameters") or {}
+        ).notice
+        and not pinned.get(str(node.get("name")))
+    ]
 
 
 def _runs_anyway(block: Block) -> bool:
     """n8n loads the type, so it runs the block, and it is not one of ours, so it never asks."""
     return NODE_CLASSES.loads(block.type) and not block.type.startswith(OURS)
+
+
+CALLS: frozenset[BlockKind] = frozenset({"read", "agent", "propose", "ask", "write", "tell"})
+"""Our blocks that call the platform, so a run that meets one is linked and its version checked
+before anything after it runs."""
+OURS_FIRST = "Add one of our steps first, so each run is recorded."
+
+
+def _ours_first(flow: Flow) -> Iterable[Finding]:
+    """On every way from a trigger, one of our blocks that calls the platform comes before the
+    first of n8n's own blocks for a system. That call links the run, so it is recorded and shown,
+    and checks the version first, so a version that does not pass the check stops there before
+    n8n reads or posts anything."""
+    starts = [b.name for b in flow.blocks.values() if b.spec is not None and b.spec.starts]
+    early: dict[str, None] = {}
+    seen: set[tuple[str, bool]] = set()
+    stack = [(name, False) for name in starts]
+    while stack:
+        name, called = stack.pop()
+        if (name, called) in seen:
+            continue
+        seen.add((name, called))
+        kind = _kind(flow, name)
+        if kind == "system" and not called:
+            early[name] = None
+        called = called or kind in CALLS
+        stack.extend((edge.target, called) for edge in flow.after(name))
+    for name in early:
+        yield _fix(name, f'"{name}" runs before any of our steps. {OURS_FIRST}', runs_anyway=True)
 
 
 def _places(flow: Flow) -> Iterable[Finding]:
@@ -501,8 +554,19 @@ def _literal(value: JsonValue) -> bool:
 def _keys(flow: Flow, keys: Mapping[str, str]) -> Iterable[Finding]:
     """Only the platform makes keys in n8n (ADR 0045). A block that names any other key would
     run with it, and in the platform's own n8n project n8n lets a workflow use every key there
-    is, a member's too."""
+    is, a member's too. A block for a system names the platform's key for it, or it cannot run:
+    Teams, Outlook and Gmail have none."""
     for block in flow.blocks.values():
+        spec = KEY_FOR_TYPE.get(block.type)
+        runs = NODE_CLASSES.verdict(block.type, block.version, block.parameters)
+        if block.spec is not None and block.spec.kind == "system" and isinstance(runs, Runs):
+            if spec is None or spec.id not in keys:
+                yield _fix(block.name, f'"{block.name}" has no key: the platform has none for it.')
+            elif not any(
+                isinstance(named, dict) and named.get("id") == spec.id
+                for named in block.credentials.values()
+            ):
+                yield _fix(block.name, f'"{block.name}" does not use the platform\'s key.')
         for kind, named in block.credentials.items():
             key = named.get("id") if isinstance(named, dict) else None
             if not isinstance(key, str) or key not in keys:
