@@ -236,6 +236,7 @@ from platform_api.orchestration.workflow_check import (
     known_options,
     read_flow,
     skipped_in_tests,
+    unchecked,
     unpinned_notices,
     writes,
 )
@@ -245,6 +246,7 @@ __all__ = [
     "Face",
     "face",
     "skipped_in_tests",
+    "unchecked",
     "unpinned_notices",
     "KEYS",
     "KeyRemoved",

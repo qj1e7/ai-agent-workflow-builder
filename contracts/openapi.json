@@ -20751,7 +20751,7 @@
                 }
               }
             },
-            "description": "The watchlist is empty, so there is nothing to check, an agent use case has no AI model connected, the workflow is paused, or it is a draft and this is not a test run"
+            "description": "The watchlist is empty, so there is nothing to check, an agent use case has no AI model connected, the workflow is paused, or it is a draft and this is not a test run. A test run also waits while someone holds the workflow in n8n, or while its n8n draft has a block the platform can't check"
           },
           "422": {
             "content": {

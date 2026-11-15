@@ -240,6 +240,8 @@
         "tag": "Posts in Slack",
         "says": "Posts a message in Slack",
         "target": ["select", "channelId", "user"],
+        "text": ["text", "blocksUi", "attachments"],
+        "quiet": ["otherOptions.link_names"],
         "approvers_min": 1
       },
       {"versions": [1], "class": "off"}

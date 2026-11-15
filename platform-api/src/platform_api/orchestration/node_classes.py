@@ -89,6 +89,8 @@ class _Row(BaseModel):
     tag: str | None = Field(default=None, min_length=1)
     says: str | None = Field(default=None, min_length=1)
     target: tuple[str, ...] = ()
+    text: tuple[str, ...] = ()
+    quiet: tuple[str, ...] = ()
     approvers_min: int | None = Field(default=None, ge=1, le=2)
 
     @model_validator(mode="after")
@@ -121,7 +123,7 @@ class _Row(BaseModel):
         if None in described:
             raise ValueError("a row that says what it does has a tag, says and approvers_min")
         assert self.tag is not None and self.says is not None and self.approvers_min is not None
-        return Use(self.tag, self.says, self.target, self.approvers_min)
+        return Use(self.tag, self.says, self.target, self.approvers_min, self.text, self.quiet)
 
 
 class _On(BaseModel):
@@ -176,6 +178,11 @@ class Use:
     """The parameters that name where it reads or posts, as dotted paths into its parameters.
     A notice's must be literals (the Tell rule)."""
     approvers_min: int
+    text: tuple[str, ...] = ()
+    """The parameters that hold what a notice says, which never call out a whole channel."""
+    quiet: tuple[str, ...] = ()
+    """Switches a notice leaves off, such as Slack's link_names, which turns a written @channel
+    into a call to everyone in it."""
 
 
 @dataclass(frozen=True)

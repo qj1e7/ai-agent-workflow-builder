@@ -102,7 +102,9 @@ this ADR gives, or makes it stronger.
    `mail.google.com` scopes, so a key that can only send does not work with it. It rewrites an
    Outlook app key each time it gets a token, so the sweep could not tell a key changed in n8n
    from one n8n refreshed. Teams notices go through our own Tell, under the Tell rule, so nothing
-   is lost. The registry says so, and claims none of these blocks works (principle 5).
+   is lost. The registry says so, and claims none of these blocks works (principle 5). The three
+   types are still loaded, since n8n's allow list is by type: a member can run one only with a
+   key of their own, in their own space, and the sweep removes that key within a minute.
 2. **Only classic GitHub tokens, with read scopes or none.** GitHub does not say what a
    fine-grained token or an app may do, so the platform refuses one.
 3. **A platform key never leaves the platform's project.** Section 2 said "Open in n8n" lends a
@@ -127,10 +129,16 @@ this ADR gives, or makes it stronger.
    projects and seeing workflows, development links, voters, watchers and users. A Slack bot may
    hold `chat:write` and the scopes that read channel and people lists. `chat:write` also lets the
    bot edit or delete its own messages; the team lead accepts that, and it is recorded here.
-6. **The owner bypass.** n8n lets a workflow in the owner's personal project use every key there
-   is, a member's included. So the sweep takes off any published workflow in the platform's project
-   that no use case names and that names a key the platform did not make, such as one n8n moved
-   there with its maker's keys as the maker's account ended.
+6. **The owner bypass, and the rule it sets.** n8n lets a workflow in the owner's personal project
+   use every key there is, a member's included. So no workflow in the platform's project is ever
+   live with a version that has a finding n8n would run anyway (`runs_anyway`), and no draft with
+   one is ever run. Two places hold that rule. Every move into the platform's project checks the
+   version n8n has published first: a take-back takes such a version off before the move and marks
+   the workflow `Needs a fix`, and a set-up refuses to take it in. The sweep, every minute, checks
+   every published workflow in the platform's project, whether a use case names it or not, takes
+   off each that breaks the rule, and marks the use case that names it. Nothing is deleted. A
+   test run, which runs the draft there by hand, does not start while someone holds the workflow,
+   or while its draft has such a finding.
 7. **A test run posts nothing.** A layout pins the output of each notice block. n8n uses pinned
    output only in a run by hand, which is what a test run is, and ignores it in every other run. A
    test run of a draft whose notice block has no pinned output does not start.
@@ -141,6 +149,28 @@ this ADR gives, or makes it stronger.
    `Needs a fix: Add one of our steps first, so each run is recorded.`
 9. **n8n blocks are set up in n8n, not from the chat.** The Planner does not lay them out yet; the
    layout code can, and the registry says so.
+10. **A take-back never lets go of a draft whose keys are not put right.** When n8n does not take
+    the keys back on, the workflow stays held and marked `Needs a fix`, and the platform tries
+    again each minute until it does.
+11. **Keys are asked about again each day, and made one at a time.** Once a day the platform asks
+    each system again what its key may do. A key that can now do more is taken out of n8n, and the
+    sweep takes off every workflow that names it. A system that does not answer leaves the key in
+    place until it does. One sweep looks at the keys at a time, so none deletes a key another is
+    still making. platform-api runs as one replica, so a lock in the process is enough.
+12. **A notice never calls out a whole channel.** The Tell rule now also covers what a notice says:
+    no `<!channel>`, `<!here>`, `<!everyone>`, `@channel`, `@here` or `@everyone` in its words, and
+    Slack's `link_names` left off, which would turn a written @channel into a call to everyone.
+    The class file names the parameters for each, and such a block runs anyway, so it is never
+    live. Words a run reads, such as a ticket's summary, can't be checked before the run.
+13. **A test run reads with the platform's key.** A test run runs the draft by hand in the
+    platform's project, so its Jira and GitHub blocks read with the platform's keys. What those
+    keys can see is what any Operator can read through a test run. Give the Jira key an account
+    that sees only the projects Operators may see, and the GitHub key no more than the
+    repositories they need. `infra/README.md` says so where the keys are set.
+
+`attach_keys` may change one parameter of a block it puts a key on: the one that picks which
+credential type the block asks for, such as Jira Cloud or Data Center. That changes how the block
+signs in, not what it does, which the class file already checked, so it is not a finding.
 
 Also found while building: n8n adds a "Custom API Call" choice to every node with a key, which
 sends any request with that key, and makes a human-in-the-loop AI tool of the Slack, Teams,

@@ -6,7 +6,7 @@ an unsafe one is set up with its writes refused, and its maker and the person wh
 never approve its runs."""
 
 import copy
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from typing import Any
 
 import httpx
@@ -29,7 +29,7 @@ from platform_api.builder.models import (
     CardInput,
     CardView,
 )
-from platform_api.builder.n8n_holds import NOT_MOVED
+from platform_api.builder.n8n_holds import CHANGED_AS_TAKEN, NOT_MOVED
 from platform_api.builder.n8n_http import SEE_MADE_IN_N8N
 from platform_api.builder.versions import authors_from
 from platform_api.orchestration import (
@@ -577,8 +577,8 @@ async def test_a_published_one_changed_to_name_a_member_s_key_as_it_moves_goes_b
 
     looks.workflows_in = changed_after_listing  # type: ignore[method-assign]
     refused = await set_up(s, "carol", workflow_id)
-    assert (refused.status_code, refused.json()["detail"]) == (409, CHANGED_AS_SET_UP)
-    assert s.n8n.home_of(workflow_id) == space
+    assert (refused.status_code, refused.json()["detail"]) == (409, CHANGED_AS_TAKEN)
+    assert s.n8n.home_of(workflow_id) == space, "never in the platform's project, live"
 
 
 async def test_the_platform_s_own_workflows_never_wait_to_be_set_up(s: Staffed):
@@ -598,3 +598,44 @@ async def test_the_platform_s_own_workflows_never_wait_to_be_set_up(s: Staffed):
     assert copy_id not in {w["workflow_id"] for w in await waiting(s, "carol")}
     refused = await set_up(s, "carol", copy_id)
     assert refused.status_code == 404
+
+
+async def published_with_draft(s: Staffed, change: Callable[[dict[str, Any]], None]) -> str:
+    """Carol's published workflow, as checked, whose draft she then changed and saved."""
+    carol_n8n, space = await space_of(s, "carol")
+    workflow_id = s.n8n.make_in(space, named(await laid_out(s), "Draft differs"), carol_n8n)
+    change(s.n8n.workflows[workflow_id])
+    s.n8n.edit(workflow_id)
+    return workflow_id
+
+
+async def test_a_published_one_whose_draft_n8n_would_run_unchecked_waits_for_a_fix(s: Staffed):
+    """A test run runs the draft, in the platform's project, so the draft is checked too."""
+
+    def deletes(workflow: dict[str, Any]) -> None:
+        changed = posting_with(workflow, "any")
+        changed["nodes"][-1]["parameters"]["operation"] = "delete"
+        workflow.update(nodes=changed["nodes"], connections=changed["connections"])
+
+    workflow_id = await published_with_draft(s, deletes)
+    [listed] = [w for w in await waiting(s, "carol") if w["workflow_id"] == workflow_id]
+    assert (listed["can_set_up"], listed["why_not"]) == (False, FIX_N8N_BLOCKS)
+    assert listed["findings"][-1] == (
+        'In its draft: "Tell Slack" does something that is off: message delete.'
+    )
+    refused = await set_up(s, "carol", workflow_id)
+    assert (refused.status_code, refused.json()["detail"]) == (409, FIX_N8N_BLOCKS)
+
+
+async def test_set_up_puts_the_platform_s_keys_back_on_the_draft_it_takes_in(s: Staffed):
+    """Her key in the draft is taken off as it comes in, so no test run could use it."""
+    hers = "her-own-key"
+
+    def posts(workflow: dict[str, Any]) -> None:
+        changed = posting_with(workflow, hers)
+        workflow.update(nodes=changed["nodes"], connections=changed["connections"])
+
+    workflow_id = await published_with_draft(s, posts)
+    assert (await set_up(s, "carol", workflow_id)).status_code == 201
+    [slack] = [n for n in s.n8n.workflows[workflow_id]["nodes"] if n["name"] == "Tell Slack"]
+    assert "credentials" not in slack, "this platform holds no Slack key, so the block has none"

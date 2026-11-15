@@ -27,6 +27,7 @@ does not work with it. n8n rewrites an Outlook app key each time it gets a token
 so the sweep could not tell such a key changed in n8n from one n8n refreshed.
 """
 
+import asyncio
 import base64
 import hashlib
 import json
@@ -56,6 +57,8 @@ ASK_SECONDS = 15.0
 ASK_AGAIN = timedelta(hours=1)
 """A refused key is asked about again this often, since its account's rights can change while
 Key Vault holds the same secret."""
+ASK_DAILY = timedelta(days=1)
+"""How often the system is asked again what a key the platform made may do."""
 
 
 @dataclass(frozen=True)
@@ -68,7 +71,25 @@ class KeyRefused:
     words: str
 
 
-type Probed = Scoped | KeyRefused
+@dataclass(frozen=True)
+class Unanswered:
+    """The system could not be asked now: it did not answer, or answered that it was busy or
+    broken. A new key is not made. A key already made stays until the system answers."""
+
+    words: str
+
+
+type Probed = Scoped | KeyRefused | Unanswered
+
+
+class _NoAnswer(Exception):
+    pass
+
+
+def _answered(response: httpx.Response) -> httpx.Response:
+    if response.status_code == 429 or response.status_code >= 500:
+        raise _NoAnswer(f"it answered {response.status_code}")
+    return response
 
 
 JIRA_READS = frozenset(
@@ -135,14 +156,16 @@ async def _ask_jira(http: httpx.AsyncClient, key: N8nKey) -> Probed:
     else:
         header = f"Bearer {key.data['personalAccessToken']}"
     headers = {"Authorization": header, "Accept": "application/json"}
-    listed = await http.get(f"{key.asks}/rest/api/2/permissions", headers=headers)
+    listed = _answered(await http.get(f"{key.asks}/rest/api/2/permissions", headers=headers))
     names = _jira_permissions(listed)
     if names is None:
         return KeyRefused(f"Jira did not list its permissions: it answered {listed.status_code}.")
-    held = await http.get(
-        f"{key.asks}/rest/api/2/mypermissions",
-        params={"permissions": ",".join(sorted(names))},
-        headers=headers,
+    held = _answered(
+        await http.get(
+            f"{key.asks}/rest/api/2/mypermissions",
+            params={"permissions": ",".join(sorted(names))},
+            headers=headers,
+        )
     )
     answers = _jira_permissions(held)
     if answers is None:
@@ -168,8 +191,10 @@ def _jira_permissions(response: httpx.Response) -> dict[str, Any] | None:
 
 
 async def _ask_github(http: httpx.AsyncClient, key: N8nKey) -> Probed:
-    response = await http.get(
-        f"{key.asks}/user", headers={"Authorization": f"token {key.data['accessToken']}"}
+    response = _answered(
+        await http.get(
+            f"{key.asks}/user", headers={"Authorization": f"token {key.data['accessToken']}"}
+        )
     )
     if response.status_code != 200:
         return KeyRefused(f"GitHub did not take the key: it answered {response.status_code}.")
@@ -185,8 +210,10 @@ async def _ask_github(http: httpx.AsyncClient, key: N8nKey) -> Probed:
 
 
 async def _ask_slack(http: httpx.AsyncClient, key: N8nKey) -> Probed:
-    response = await http.post(
-        f"{key.asks}/auth.test", headers={"Authorization": f"Bearer {key.data['accessToken']}"}
+    response = _answered(
+        await http.post(
+            f"{key.asks}/auth.test", headers={"Authorization": f"Bearer {key.data['accessToken']}"}
+        )
     )
     answer: Mapping[str, Any] = (
         cast(Mapping[str, Any], response.json()) if response.status_code == 200 else {}
@@ -212,12 +239,16 @@ PROBES: Mapping[KeySystem, Callable[[httpx.AsyncClient, N8nKey], Awaitable[Probe
 
 async def probe(system: KeySystem, key: N8nKey, http: httpx.AsyncClient) -> Probed:
     """What the system says the key may do. Anything but a clear "only read" or "only post" is a
-    refusal, a system that does not answer included."""
+    refusal, and a system that does not answer is not a pass either."""
     try:
         return await PROBES[system](http, key)
-    except (httpx.HTTPError, ValueError, KeyError) as error:
-        return KeyRefused(
+    except (httpx.HTTPError, _NoAnswer) as error:
+        return Unanswered(
             f"The platform could not ask {KEYS[system].said} what the key may do: {error}."
+        )
+    except (ValueError, KeyError) as error:
+        return KeyRefused(
+            f"The platform could not read what {KEYS[system].said} said about the key: {error}."
         )
 
 
@@ -286,6 +317,9 @@ class PlatformKeys:
         self._keys = dict(keys)
         self._http = http or httpx.AsyncClient(timeout=ASK_SECONDS)
         self._home = home or (lambda: platform_project(db))
+        self._lock = asyncio.Lock()
+        """One look at n8n's keys at a time, so a sweep never deletes a key another is making
+        before it is recorded. platform-api runs as one replica."""
 
     async def close(self) -> None:
         await self._http.aclose()
@@ -316,15 +350,18 @@ class PlatformKeys:
         holds as it made it, then makes again each of its own that is gone."""
         if self._api is None:
             return []
-        home = await self._home()
-        if home is None:
-            log.warning("no bootstrap has recorded the platform's n8n project, so no key is swept")
-            return []
-        listed = await self._api.credentials()
-        removed = await self._remove_foreign(listed, home)
-        gone = {r.id for r in removed}
-        await self._ensure(home, [c for c in listed if c.id not in gone])
-        return removed
+        async with self._lock:
+            home = await self._home()
+            if home is None:
+                log.warning(
+                    "no bootstrap has recorded the platform's n8n project, so no key is swept"
+                )
+                return []
+            listed = await self._api.credentials()
+            removed = await self._remove_foreign(listed, home)
+            gone = {r.id for r in removed}
+            await self._ensure(home, [c for c in listed if c.id not in gone])
+            return removed
 
     async def _remove_foreign(self, listed: Sequence[N8nCredential], home: str) -> list[KeyRemoved]:
         assert self._api is not None
@@ -386,18 +423,45 @@ class PlatformKeys:
             present = (
                 spec.id in held and record is not None and record["n8n_created_at"] is not None
             )
-            if record is not None and _same(key.kind, key.data, record["fingerprint"]):
-                if present:
-                    continue
-                asked_lately = self._db.clock() - record["checked_at"] < ASK_AGAIN
-                if record["refused"] is not None and asked_lately:
-                    continue
+            same = record is not None and _same(key.kind, key.data, record["fingerprint"])
             try:
+                if same and present:
+                    assert record is not None
+                    if self._db.clock() - record["checked_at"] >= ASK_DAILY:
+                        await self._ask_again(spec, key, record["fingerprint"])
+                    continue
+                if (
+                    same
+                    and record is not None
+                    and record["refused"] is not None
+                    and self._db.clock() - record["checked_at"] < ASK_AGAIN
+                ):
+                    continue
                 if spec.id in held:
                     await self._api.delete_credential(spec.id)
                 await self._make(spec, key, home)
             except (N8nError, httpx.HTTPError) as error:
                 log.warning("could not make the platform's %s key in n8n: %s", spec.said, error)
+
+    async def _ask_again(self, spec: KeySpec, key: N8nKey, print_: str) -> None:
+        """Once a day the system is asked again what a key the platform made may do. A key that
+        can now do more is taken out of n8n, so every workflow that names it stops: the sweep
+        takes those off. One the system can't be asked about now stays, and is asked again at
+        the next sweep."""
+        assert self._api is not None
+        asked = await probe(spec.system, key, self._http)
+        match asked:
+            case Unanswered(words=words):
+                log.warning("could not ask again about the platform's %s key: %s", spec.said, words)
+            case KeyRefused(words=words):
+                await self._api.delete_credential(spec.id)
+                await self._refuse(spec, key, print_, f"{words} It was taken out of n8n.")
+            case Scoped():
+                async with self._db.transaction("orchestration") as uow:
+                    await uow.conn.execute(
+                        "UPDATE orchestration.n8n_keys SET checked_at = %s WHERE id = %s",
+                        (uow.now, spec.id),
+                    )
 
     async def _make(self, spec: KeySpec, key: N8nKey, home: str) -> None:
         """Asks the system first, then makes the key, then has n8n test it. A key that fails
@@ -405,7 +469,7 @@ class PlatformKeys:
         assert self._api is not None
         print_ = fingerprint(key.kind, key.data, secrets.token_hex(8))
         asked = await probe(spec.system, key, self._http)
-        if isinstance(asked, KeyRefused):
+        if isinstance(asked, KeyRefused | Unanswered):
             await self._refuse(spec, key, print_, asked.words)
             return
         made = await self._api.create_credential(spec.id, spec.name, key.kind, key.data, home)
@@ -453,18 +517,21 @@ class PlatformKeys:
         and the sweep leaves them only while they sit there."""
         if self._api is None:
             return []
-        made = await self.made()
-        found = [
-            c.id for c in await self._api.credentials() if c.project == project and c.id not in made
-        ]
-        async with self._db.transaction("orchestration") as uow:
-            for key in found:
-                await uow.conn.execute(
-                    "INSERT INTO orchestration.n8n_quarantined_keys (key_id, n8n_user_id,"
-                    " quarantined_at) VALUES (%s, %s, %s) ON CONFLICT (key_id) DO NOTHING",
-                    (key, n8n_user_id, uow.now),
-                )
-        return found
+        async with self._lock:
+            made = await self.made()
+            found = [
+                c.id
+                for c in await self._api.credentials()
+                if c.project == project and c.id not in made
+            ]
+            async with self._db.transaction("orchestration") as uow:
+                for key in found:
+                    await uow.conn.execute(
+                        "INSERT INTO orchestration.n8n_quarantined_keys (key_id, n8n_user_id,"
+                        " quarantined_at) VALUES (%s, %s, %s) ON CONFLICT (key_id) DO NOTHING",
+                        (key, n8n_user_id, uow.now),
+                    )
+            return found
 
     async def plant(self) -> str | None:
         """The daily self-test: a key the platform does not record as its own, in its own
@@ -487,12 +554,13 @@ class PlatformKeys:
             return None
         key = f"wab-test-{secrets.token_hex(4)}"
         data = {"accessToken": f"not-a-key-{secrets.token_hex(8)}"}
-        async with self._db.transaction("orchestration") as uow:
-            await uow.conn.execute(
-                "INSERT INTO orchestration.n8n_key_tests (key_id, planted_at) VALUES (%s, %s)",
-                (key, uow.now),
-            )
-        await self._api.create_credential(key, PLANTED_NAME, PLANTED_KIND, data, home)
+        async with self._lock:
+            async with self._db.transaction("orchestration") as uow:
+                await uow.conn.execute(
+                    "INSERT INTO orchestration.n8n_key_tests (key_id, planted_at) VALUES (%s, %s)",
+                    (key, uow.now),
+                )
+            await self._api.create_credential(key, PLANTED_NAME, PLANTED_KIND, data, home)
         log.info("planted key %s for the credential sweep's daily self-test", key)
         return key
 

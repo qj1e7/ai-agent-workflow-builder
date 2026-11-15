@@ -46,6 +46,7 @@ from platform_api.builder.service import (
     CardsRefused,
     N8nNotReady,
     NoModelToRun,
+    NoTestRun,
     NothingToCheck,
     NotMovedYet,
     NotOnYet,
@@ -255,7 +256,8 @@ async def get_use_case(
         409: error_response(
             "The watchlist is empty, so there is nothing to check, an agent use case has no "
             "AI model connected, the workflow is paused, or it is a draft and this is not a "
-            "test run"
+            "test run. A test run also waits while someone holds the workflow in n8n, or while "
+            "its n8n draft has a block the platform can't check"
         ),
     },
     description="Starts a run. On a draft only a test run starts, and it stops at the approval "
@@ -282,7 +284,7 @@ async def start_run(
         raise HTTPException(409, "This workflow is paused. Resume it to start a run.")
     if isinstance(started, NotOnYet):
         raise HTTPException(409, NOT_ON_YET)
-    if isinstance(started, NotMovedYet):
+    if isinstance(started, NotMovedYet | NoTestRun):
         raise HTTPException(409, started.words)
     if not started.created:
         response.status_code = 200

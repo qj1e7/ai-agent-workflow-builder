@@ -152,6 +152,7 @@ from platform_api.orchestration import (
     next_run,
     read_flow,
     tools_used,
+    unchecked,
     write_tools_used,
 )
 from platform_api.shared import TEAM_TIME_ZONE, Principal, UseCaseId, UserId, new_id
@@ -365,6 +366,21 @@ class UseCasePaused:
 @dataclass(frozen=True)
 class NotOnYet:
     """A draft runs by hand only as a test run."""
+
+
+@dataclass(frozen=True)
+class NoTestRun:
+    """A test run runs the draft in the platform's n8n project, where n8n lets it use every key
+    there is. So none starts while the draft is held in someone's space, or has a block n8n
+    would run unchecked. The words say why."""
+
+    words: str
+
+
+UNCHECKED_TEST = (
+    "The draft in n8n has a block the platform can't check: {found} Fix it in n8n, then test it."
+)
+UNREAD_TEST = "n8n did not show the draft, so no test run started. Try again in a minute."
 
 
 @dataclass(frozen=True)
@@ -1462,9 +1478,20 @@ class Builder:
         principal: Principal,
         idempotency_key: str,
         test: bool = False,
-    ) -> RunStarted | None | NothingToCheck | NoModelToRun | UseCasePaused | NotOnYet | NotMovedYet:
+    ) -> (
+        RunStarted
+        | None
+        | NothingToCheck
+        | NoModelToRun
+        | UseCasePaused
+        | NotOnYet
+        | NotMovedYet
+        | NoTestRun
+    ):
         """A test run of a draft stops at the approval gate (ADR 0044). Whether it is a draft
-        is read under the lock, so a draft turned on since runs as any test run does."""
+        is read under the lock, so a draft turned on since runs as any test run does. A test run
+        runs the n8n draft, so it starts only when nobody holds it and n8n would run nothing in
+        it unchecked."""
         view = await self.get_use_case(use_case_id)
         # Its first run after a run that held it back runs on its own n8n workflow. Read it again
         # whatever the move answers, since a move may also have landed meanwhile.
@@ -1489,6 +1516,10 @@ class Builder:
             # The shared run workflow is made of blocks the allow list turns off (E11).
             return NotMovedYet(view.move_refused or NOT_MOVED_YET)
         spec = replace(spec, test=test)
+        if test and spec.n8n is not None:
+            refused = await self._untestable(use_case_id, spec.n8n, principal.user_id)
+            if refused is not None:
+                return refused
         if isinstance(spec.task, CardsTask) and not await self._planner.has_model():
             return NoModelToRun()
         async with self._db.transaction("builder") as uow:
@@ -1507,6 +1538,28 @@ class Builder:
                     return await self._runs.start_run(trial, principal, idempotency_key)
                 case On():
                     return await self._runs.start_run(spec, principal, idempotency_key)
+
+    async def _untestable(
+        self, use_case_id: str, target: N8nTarget, actor: UserId
+    ) -> NoTestRun | None:
+        if self.holding is not None:
+            async with self._db.connection("builder") as conn:
+                held = await self.holding.refused_while_held(conn, use_case_id, actor)
+            if held is not None:
+                return NoTestRun(held.words)
+        if self._n8n is None:
+            return NoTestRun(UNREAD_TEST)
+        try:
+            draft = await self._n8n.look(target.workflow_id)
+        except (N8nError, httpx.HTTPError) as error:
+            log.warning("could not read the draft of %s before a test run: %s", use_case_id, error)
+            return NoTestRun(UNREAD_TEST)
+        if draft is None:
+            return NoTestRun(UNREAD_TEST)
+        found = unchecked(draft.document, (await self.facts.known({})).keys)
+        if found:
+            return NoTestRun(UNCHECKED_TEST.format(found=found[0].text))
+        return None
 
 
 def _bound(card: CardView, values: Mapping[str, str]) -> CardRun:

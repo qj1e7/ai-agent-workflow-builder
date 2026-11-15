@@ -9,6 +9,7 @@ import copy
 import json
 import os
 import uuid
+from collections.abc import Callable
 from typing import Any
 
 import httpx
@@ -280,4 +281,98 @@ def test_member_hand_run_with_own_key_is_swept(api: Api, mock_model: None):
     named: dict[str, Any] = {n["name"]: n.get("credentials") for n in back["nodes"]}
     observed("the keys the draft names once taken back", named)
     assert named["Delete in Slack"] is None, "a Slack delete gets no key, not the platform's"
+    api.delete("alice", f"/api/v1/use-cases/{use_case_id}", expect=(200,))
+
+
+def deletes_in_slack(after: str) -> Callable[[list[Json], Json], None]:
+    """n8n's Slack block set to delete, naming the platform's key, right after a trigger, so it
+    would run before any of our blocks."""
+
+    def change(nodes: list[Json], connections: Json) -> None:
+        nodes.append(
+            {
+                "id": str(uuid.uuid4()),
+                "name": "Delete in Slack",
+                "type": "n8n-nodes-base.slack",
+                "typeVersion": 2.7,
+                "position": [900, 400],
+                "parameters": {
+                    "operation": "delete",
+                    "channelId": {"__rl": True, "value": CHANNEL, "mode": "id"},
+                    "timestamp": "1",
+                },
+                "credentials": {"slackApi": {"id": "wab-slack-send", "name": "Slack"}},
+            }
+        )
+        trigger = next(n["name"] for n in nodes if n["type"].endswith(after))
+        exits = connections.setdefault(trigger, {"main": [[]]})["main"][0]
+        exits.append({"node": "Delete in Slack", "type": "main", "index": 0})
+
+    return change
+
+
+def chat_deletes() -> int:
+    return len([m for m in sent_to_slack() if m["method"] == "chat.delete"])
+
+
+def test_a_version_published_in_n8n_that_runs_a_block_unchecked_comes_back_off(
+    api: Api, mock_model: None
+):
+    """The E16 safety review's first must-fix: back in the platform's project n8n would run the
+    holder's published Slack delete with the platform's key on every tick of its schedule. So the
+    take-back takes it off before it moves, and marks the workflow Needs a fix."""
+    platform_keys(api)
+    created = set_up(api, "e2e a published delete comes back off", on=True)
+    use_case_id, workflow_id = created["use_case_id"], created["n8n_workflow_id"]
+    jo = staff_member(api, "Jo")
+    api.post(jo.person, f"/api/v1/use-cases/{use_case_id}/open-in-n8n", expect=(200,))
+    deletes = chat_deletes()
+    published = jo.member.publish(workflow_id, deletes_in_slack("scheduleTrigger"))
+    observed("a member publishes a Slack delete naming the platform's key", published)
+    api.post(jo.person, f"/api/v1/use-cases/{use_case_id}/take-back", expect=(200,))
+    back = N8N_OWNER.call("GET", f"/workflows/{workflow_id}")
+    observed("the version n8n runs once it is back", back["activeVersionId"])
+    assert back["activeVersionId"] is None, "taken off before it came back"
+    view = api.get("alice", f"/api/v1/use-cases/{use_case_id}")
+    assert view["grade"] == "needs_a_fix", view
+    assert any("took it off in n8n" in finding for finding in view["findings"]), view
+    assert chat_deletes() == deletes, "nothing was deleted in Slack"
+    api.delete("alice", f"/api/v1/use-cases/{use_case_id}", expect=(200,))
+
+
+def test_no_test_run_starts_while_held_or_on_a_draft_n8n_would_run_unchecked(
+    api: Api, mock_model: None
+):
+    """The E16 safety review's second must-fix: a test run runs the draft by hand in the
+    platform's project, where n8n lets it use every key there is."""
+    platform_keys(api)
+    created = set_up(api, "e2e an unsafe draft is never test run", on=True)
+    use_case_id, workflow_id = created["use_case_id"], created["n8n_workflow_id"]
+    runs = f"/api/v1/use-cases/{use_case_id}/runs"
+    kim = staff_member(api, "Kim")
+    api.post(kim.person, f"/api/v1/use-cases/{use_case_id}/open-in-n8n", expect=(200,))
+    held = api.post(
+        "carol",
+        runs,
+        {"test": True},
+        expect=(409,),
+        headers={"Idempotency-Key": f"h-{use_case_id}"},
+    ).json()
+    observed("a test run while a member holds it", held["detail"])
+    draft = kim.member.call("GET", f"/workflows/{workflow_id}")
+    deletes_in_slack("wabStartFromPortal")(draft["nodes"], draft["connections"])
+    body = {key: draft[key] for key in ("nodes", "connections", "settings", "versionId")}
+    kim.member.call("PATCH", f"/workflows/{workflow_id}", body)
+    api.post(kim.person, f"/api/v1/use-cases/{use_case_id}/take-back", expect=(200,))
+    deletes = chat_deletes()
+    refused = api.post(
+        "carol",
+        runs,
+        {"test": True},
+        expect=(409,),
+        headers={"Idempotency-Key": f"u-{use_case_id}"},
+    ).json()
+    observed("a test run of a draft n8n would run unchecked", refused["detail"])
+    assert "can't check" in refused["detail"], refused
+    assert chat_deletes() == deletes
     api.delete("alice", f"/api/v1/use-cases/{use_case_id}", expect=(200,))

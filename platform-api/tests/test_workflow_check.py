@@ -18,10 +18,12 @@ from platform_api.orchestration import (
 )
 from platform_api.orchestration.workflow_check import ERROR_WORKFLOW as ERROR_WORKFLOW_NAME
 from platform_api.orchestration.workflow_check import (
+    OURS_FIRST,
     PLATFORM_SHAPES,
     SELF_TEST,
     check_platform,
     platform_document,
+    unchecked,
 )
 from tests.support import FIXTURES, TEAM_ZONE
 
@@ -746,3 +748,70 @@ def test_one_of_n8n_s_blocks_before_any_of_ours_needs_a_fix_that_runs_anyway() -
     assert notice_findings(reads_first) == [(FIRST.format("Read tickets"), True)], (
         "every way from a trigger counts, the schedule's too"
     )
+
+
+@pytest.mark.parametrize(
+    ("where", "value"),
+    [
+        ("text", "New release <!channel>"),
+        ("text", "={{ $json.key }} <!here|here>"),
+        ("text", "heads up @everyone"),
+        ("blocksUi", '{"blocks": [{"type": "section", "text": {"text": "<!everyone>"}}]}'),
+        ("attachments", [{"text": "@channel look"}]),
+    ],
+    ids=["channel", "here-in-an-expression", "at-everyone", "in-blocks", "in-an-attachment"],
+)
+def test_a_notice_that_calls_out_a_whole_channel_is_off(where: str, value: Any) -> None:
+    """The Tell rule: a notice tells the people it is for, never a whole channel at once."""
+    document = release_notice()
+    node(document, "Tell Slack")["parameters"][where] = value
+    assert notice_findings(document) == [
+        ('"Tell Slack" calls out a whole channel, so it is off.', True)
+    ]
+
+
+@pytest.mark.parametrize("switch", [True, "={{ true }}"], ids=["on", "an-expression"])
+def test_a_notice_that_links_names_is_off(switch: Any) -> None:
+    """Slack's link_names turns a written @channel into a call to everyone in it."""
+    document = release_notice()
+    node(document, "Tell Slack")["parameters"]["otherOptions"] = {"link_names": switch}
+    assert notice_findings(document) == [
+        ('"Tell Slack" calls out a whole channel, so it is off.', True)
+    ]
+
+
+def test_a_notice_that_names_one_person_or_leaves_link_names_off_is_fine() -> None:
+    document = release_notice()
+    parameters = node(document, "Tell Slack")["parameters"]
+    parameters["text"] = "<@U123> the release is out, see #releases"
+    parameters["otherOptions"] = {"link_names": False}
+    assert notice_findings(document) == []
+
+
+def test_unchecked_names_only_what_n8n_would_run_whatever_the_platform_says() -> None:
+    """The invariant (ADR 0045, as amended): no version with one of these is live in the
+    platform's n8n project, and no draft with one is run."""
+    assert unchecked(release_notice(), KEYS_MADE) == ()
+    document = release_notice()
+    node(document, "Tell Slack")["parameters"]["operation"] = "delete"
+    node(document, "Compare")["credentials"] = {"slackApi": {"id": "aliceSlack", "name": "x"}}
+    with_block(document, "n8n-nodes-base.httpRequest", "Post it", "Newer?", 4.2)
+    assert [f.text for f in unchecked(document, KEYS_MADE)] == [
+        '"Tell Slack" does something that is off: message delete.',
+        '"Compare" uses a key the platform did not make.',
+    ], "a block n8n does not load never runs, so it is not one"
+
+
+def test_unchecked_counts_a_block_before_ours_and_a_key_the_platform_no_longer_holds() -> None:
+    document = release_notice()
+    first = next(n["name"] for n in document["nodes"] if n["type"].endswith("scheduleTrigger"))
+    link(document, first, "Tell Slack")
+    assert [f.text for f in unchecked(document, {})] == [
+        '"Tell Slack" uses a key the platform did not make.',
+        f'"Tell Slack" runs before any of our steps. {OURS_FIRST}',
+    ]
+
+
+def test_a_document_the_checker_can_t_read_counts_as_unchecked() -> None:
+    [found] = unchecked({"nodes": "not a list"}, KEYS_MADE)
+    assert found.runs_anyway

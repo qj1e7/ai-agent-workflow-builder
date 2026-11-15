@@ -90,6 +90,9 @@ def attach_keys(document: Mapping[str, Any], made: Mapping[str, str]) -> dict[st
             continue
         node["credentials"] = {kind: {"id": spec.id, "name": spec.name}}
         parameters = node.setdefault("parameters", {})
+        # Safe to change without a finding: it picks only which credential type the block asks
+        # for, such as Jira Cloud or Data Center. What the block does, its resource and
+        # operation, was checked above and stays as it is.
         if parameters.get(spec.picks, spec.picked) != spec.by_kind[kind]:
             parameters[spec.picks] = spec.by_kind[kind]
     return attached

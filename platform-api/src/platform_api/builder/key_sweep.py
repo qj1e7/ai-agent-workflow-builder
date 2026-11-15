@@ -3,12 +3,11 @@
 Every minute, and whenever a workflow opens in n8n or comes back, the platform deletes every key
 in n8n it did not make, and makes its own again where they are gone or changed. Its own keys
 never leave its project. This module says what that means for the workflows: a key removed from
-someone's n8n space while they hold a workflow marks that workflow Needs a fix, and
-a workflow in the platform's own n8n project that no use case names and that n8n runs with a key
-the platform did not make is taken off in n8n. In the platform's project n8n lets a workflow use
-every key there is, so that is the only place such a workflow could run with a member's key: one
-n8n moved there as its maker's account ended, with the maker's keys, which the platform keeps
-but never uses.
+someone's n8n space while they hold a workflow marks that workflow Needs a fix, and every
+workflow in the platform's own n8n project whose published version n8n would run unchecked
+(`unchecked`) is taken off in n8n, and marked Needs a fix when a use case names it. In the
+platform's project n8n lets a workflow use every key there is, so no such version stays live
+there, whoever published it and however it got there. Nothing is deleted.
 
 Once a day it also plants a key of its own making that it does not record as its own, which the
 next sweep must delete within a minute, as the self-test of the whole guard.
@@ -20,7 +19,7 @@ import logging
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import Protocol
+from typing import Any, Protocol
 
 import httpx
 
@@ -29,7 +28,7 @@ from platform_api.orchestration import (
     KeyRemoved,
     ListedWorkflow,
     N8nError,
-    credentials_named,
+    unchecked,
 )
 from platform_api.shared import UserId
 
@@ -38,6 +37,17 @@ log = logging.getLogger(__name__)
 SWEEP_EVERY = timedelta(seconds=60)
 KEY_ADDED = "A key was added in n8n while it was open there. The platform removed it."
 KEY_CHANGED = "One of the platform's keys was changed in n8n while it was open there."
+TAKEN_OFF = (
+    "The version published in n8n has a block the platform can't check, so the platform took it "
+    "off in n8n. Open it in n8n, fix it, and publish it again."
+)
+UNCHECKED_DRAFT = (
+    "Its draft in n8n has a block the platform can't check, so no test run starts until it is "
+    "fixed in n8n."
+)
+KEYS_NOT_BACK = (
+    "n8n did not take the platform's keys back on this workflow, so it stays held until it does."
+)
 
 
 class Keys(Protocol):
@@ -57,6 +67,8 @@ class Spaces(Protocol):
 
     async def workflows_in(self, project_id: str) -> list[ListedWorkflow]: ...
 
+    async def kept(self, workflow_id: str, version_id: str) -> dict[str, Any] | None: ...
+
     async def go_off(self, workflow_id: str) -> None: ...
 
 
@@ -70,7 +82,8 @@ class KeysSwept:
     marked: tuple[str, ...]
     """The use cases a removed key marks Needs a fix."""
     taken_off: tuple[str, ...]
-    """The workflows in the platform's project taken off in n8n."""
+    """The workflows in the platform's project taken off in n8n, each named by a use case marked
+    Needs a fix."""
 
 
 class KeySweep:
@@ -97,7 +110,8 @@ class KeySweep:
 
     async def clear(self) -> list[KeyRemoved]:
         """The sweep of keys alone, marking nothing, for a take-back that holds the workflow's
-        row: a mark there would wait on it. The hold ends with that take-back anyway."""
+        row: a mark there would wait on it, so it does not wait for this sweep's lock either. The
+        keys' own lock keeps the two from crossing. The hold ends with that take-back anyway."""
         return await self._keys.sweep()
 
     async def sweep_forever(self, stop: asyncio.Event, every: timedelta = SWEEP_EVERY) -> None:
@@ -135,34 +149,33 @@ class KeySweep:
         return marked
 
     async def _take_off(self) -> list[str]:
-        """Each workflow in the platform's project that no use case names and whose published
-        version names a key the platform did not make."""
+        """Each workflow in the platform's project whose published version n8n would run
+        unchecked, named by a use case or not, is taken off in n8n. A use case that names it is
+        marked Needs a fix. One whose published version n8n can't show counts too."""
         home = await self._n8n.platform_project()
         if home is None:
             return []
-        async with self._db.connection("builder") as conn:
-            rows = await (
-                await conn.execute(
-                    "SELECT n8n_workflow_id FROM builder.use_cases"
-                    " WHERE n8n_workflow_id IS NOT NULL"
-                )
-            ).fetchall()
-        named = {row["n8n_workflow_id"] for row in rows}
         made = await self._keys.made()
         taken: list[str] = []
         for listed in await self._n8n.workflows_in(home):
             workflow = listed.workflow
-            if workflow.id in named or listed.live is None:
+            if workflow.active_version_id is None:
                 continue
-            if not credentials_named(listed.live) - made.keys():
+            live = listed.live or await self._n8n.kept(workflow.id, workflow.active_version_id)
+            if not unchecked(live or {}, made):
                 continue
             try:
                 await self._n8n.go_off(workflow.id)
             except (N8nError, httpx.HTTPError) as error:
                 log.error("could not take %s off in n8n: %s", workflow.id, error)
                 continue
-            log.warning(
-                "took %s off in n8n: it ran with a key the platform did not make", workflow.id
-            )
+            log.warning("took %s off in n8n: it would run a block unchecked", workflow.id)
             taken.append(workflow.id)
+        if taken:
+            async with self._db.transaction("builder") as uow:
+                await uow.conn.execute(
+                    "UPDATE builder.use_cases SET n8n_key_finding = %s, n8n_key_found_at = %s"
+                    " WHERE n8n_workflow_id = ANY(%s)",
+                    (TAKEN_OFF, uow.now, taken),
+                )
         return taken

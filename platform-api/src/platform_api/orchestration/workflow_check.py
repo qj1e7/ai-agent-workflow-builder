@@ -13,6 +13,9 @@ the grade is the guard, with the platform's keys, which can only read or post, a
 credential sweep (ADR 0045, section 2): a notice posts only to a place written in the block, and
 every key a block names must be one the platform made.
 
+In the platform's own n8n project n8n lets a workflow use every key there is. So no version with
+a finding that `runs_anyway` is ever live there, and no draft with one is ever run (`unchecked`).
+
 Pure. A document is the n8n workflow JSON as the public API takes it.
 """
 
@@ -283,6 +286,7 @@ def grade(
         *_settings(flow, error_workflow, time_zone),
         *_parameters(flow),
         *_places(flow),
+        *_mentions(flow),
         *_keys(flow, {} if known is None else known.keys),
         *_ours_first(flow),
         *_schedules(flow),
@@ -290,6 +294,26 @@ def grade(
         *_yes_before_writes(flow),
     ]
     return _graded(findings)
+
+
+def unchecked(document: Mapping[str, Any], keys: Mapping[str, str]) -> tuple[Finding, ...]:
+    """What n8n would run in the document whatever the platform says: one of its own blocks that
+    is off, posts where an expression picks or calls out a whole channel, names a key the platform
+    did not make, or runs before any of ours. `keys` is each key the platform made, by id, with
+    its n8n credential type. A document the checker can't read counts as one, since n8n may still
+    run it."""
+    try:
+        flow = read_flow(document)
+    except Unreadable as unreadable:
+        return (_fix(None, str(unreadable), runs_anyway=True),)
+    found = (
+        *_off_blocks(flow),
+        *_places(flow),
+        *_mentions(flow),
+        *_keys(flow, keys),
+        *_ours_first(flow),
+    )
+    return tuple(finding for finding in found if finding.runs_anyway)
 
 
 ERROR_WORKFLOW = "run_failure_reporter"
@@ -524,6 +548,47 @@ def _places(flow: Flow) -> Iterable[Finding]:
                 f'"{block.name}" posts to a place an expression picks, so it is off.',
                 runs_anyway=True,
             )
+
+
+MASS_MENTION = re.compile(r"<!(?:channel|here|everyone)\b|@(?:channel|here|everyone)\b", re.I)
+"""Slack's words that call out everyone in a channel or a workspace."""
+
+
+def _mentions(flow: Flow) -> Iterable[Finding]:
+    """The Tell rule for what a notice says: it never calls out a whole channel, in its words or
+    by a switch such as Slack's link_names, which turns a written @channel into one. The platform
+    can't read a run's data first, so words a run reads are not checked here."""
+    for block in flow.blocks.values():
+        verdict = NODE_CLASSES.verdict(block.type, block.version, block.parameters)
+        if not isinstance(verdict, Runs) or verdict.on != "notice" or verdict.use is None:
+            continue
+        use = verdict.use
+        loud = any(
+            MASS_MENTION.search(text)
+            for path in use.text
+            for text in _texts(_at_path(block.parameters, path))
+        )
+        switched = any(_at_path(block.parameters, path) not in (None, False) for path in use.quiet)
+        if loud or switched:
+            yield _fix(
+                block.name,
+                f'"{block.name}" calls out a whole channel, so it is off.',
+                runs_anyway=True,
+            )
+
+
+def _texts(value: JsonValue) -> Iterable[str]:
+    match value:
+        case str():
+            yield value
+        case dict():
+            for inner in value.values():
+                yield from _texts(inner)
+        case list():
+            for inner in value:
+                yield from _texts(inner)
+        case _:
+            return
 
 
 def _at_path(parameters: Mapping[str, JsonValue], path: str) -> JsonValue:

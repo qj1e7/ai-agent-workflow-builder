@@ -35,6 +35,7 @@ from platform_api.builder.versions import Publication, authors_json
 from platform_api.db import Connection, Database, hold_workflow, json
 from platform_api.orchestration import (
     CanOpen,
+    Finding,
     Grade,
     Graded,
     KnownOptions,
@@ -43,7 +44,9 @@ from platform_api.orchestration import (
     N8nWorkflow,
     NoN8nAccess,
     StaffAccess,
+    attach_keys,
     grade,
+    unchecked,
 )
 from platform_api.shared import TEAM_TIME_ZONE, Principal, UserId, new_id
 from platform_api.wire import WireIn, WireModel
@@ -164,6 +167,9 @@ class Candidate:
     document: dict[str, Any]
     """The version n8n runs, or its draft while nothing is published."""
     graded: Graded
+    draft: tuple[Finding, ...] = ()
+    """What n8n would run unchecked in the draft of one that is published, once the platform's
+    keys are back on it. A test run runs the draft."""
 
     @property
     def published(self) -> bool:
@@ -171,7 +177,7 @@ class Candidate:
 
     @property
     def runs_anyway(self) -> bool:
-        return any(finding.runs_anyway for finding in self.graded.findings)
+        return bool(self.draft) or any(finding.runs_anyway for finding in self.graded.findings)
 
     @property
     def why_not(self) -> str | None:
@@ -189,7 +195,10 @@ class Candidate:
             made_by=self.maker.person,
             published=self.published,
             grade=self.graded.grade,
-            findings=[f.text for f in self.graded.findings],
+            findings=[
+                *(f.text for f in self.graded.findings),
+                *(f"In its draft: {f.text}" for f in self.draft),
+            ],
             can_set_up=why_not is None,
             why_not=why_not,
         )
@@ -263,7 +272,7 @@ class MadeInN8n:
                 return HoldRefused(503, NOT_READ)
             workflow, document = held
             graded = grade(document, error_workflow, self._zone, known)
-            moved = Candidate(candidate.listed, maker, document, graded)
+            moved = Candidate(candidate.listed, maker, document, graded, _draft(workflow, known))
             if moved.why_not is not None:
                 await self._give_back(workflow_id, maker)
                 return HoldRefused(409, CHANGED_AS_SET_UP)
@@ -353,7 +362,7 @@ class MadeInN8n:
             if document is None:
                 continue
             graded = grade(document, error_workflow, self._zone, known)
-            found[workflow.id] = Candidate(listed, maker, document, graded)
+            found[workflow.id] = Candidate(listed, maker, document, graded, _draft(workflow, known))
         return found
 
     async def _made(self) -> list[tuple[ListedWorkflow, Maker]]:
@@ -393,6 +402,14 @@ class MadeInN8n:
         except (N8nError, httpx.HTTPError) as error:
             log.warning("could not read the published version of %s: %s", workflow.id, error)
             return None
+
+
+def _draft(workflow: N8nWorkflow, known: KnownOptions) -> tuple[Finding, ...]:
+    """The draft of a published workflow is not what the grade read, and a test run runs it. It
+    is checked as it will be once the platform's keys are back on it."""
+    if workflow.active_version_id is None:
+        return ()
+    return unchecked(attach_keys(workflow.document, known.keys), known.keys)
 
 
 async def _named(conn: Connection, workflow_id: str) -> bool:

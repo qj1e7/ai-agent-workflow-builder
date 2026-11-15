@@ -4,6 +4,7 @@ or post, and n8n's own test passes; every other key goes within a sweep, a membe
 a key lent with a workflow comes back on every take-back path; a key an ending account leaves is
 kept unused; and the daily self-test plants a key the next sweep must remove."""
 
+import asyncio
 import copy
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
@@ -14,9 +15,17 @@ import httpx
 import pytest
 
 from platform_api.builder import Builder
-from platform_api.builder.key_sweep import KEY_ADDED, KEY_CHANGED, KeySweep
+from platform_api.builder.key_sweep import (
+    KEY_ADDED,
+    KEY_CHANGED,
+    KEYS_NOT_BACK,
+    TAKEN_OFF,
+    UNCHECKED_DRAFT,
+    KeySweep,
+)
 from platform_api.builder.n8n_holds import MOVE_GRACE, STRANDED, Holding
-from platform_api.orchestration import KEYS, PlatformKeys
+from platform_api.builder.service import UNCHECKED_TEST
+from platform_api.orchestration import KEYS, N8nError, PlatformKeys
 from platform_api.orchestration.n8n_credentials import (
     GONE_WITHIN,
     JIRA_READS,
@@ -27,6 +36,7 @@ from platform_api.settings import KeySystem, N8nKey
 from tests.fake_n8n import FakeN8n
 from tests.support import NOW
 from tests.test_builder_lifecycle import Lab, ModelConnected
+from tests.test_draft_turn_on import RUNS_PATH
 from tests.test_n8n_access import PLATFORM_PROJECT, Staffed, held, lab, s
 from tests.test_n8n_api import api_for
 from tests.test_n8n_builder import WRITES
@@ -73,6 +83,7 @@ class Systems:
             "SOME_PERMISSION_JIRA_ADDS_LATER",
         }
     )
+    slack_down: bool = False
     asked: list[str] = field(default_factory=list[str])
 
     def client(self) -> httpx.AsyncClient:
@@ -81,6 +92,8 @@ class Systems:
     def handle(self, request: httpx.Request) -> httpx.Response:
         self.asked.append(f"{request.url.host} {request.url.path}")
         match request.url.host, request.url.path:
+            case "slack", "/api/auth.test" if self.slack_down:
+                return httpx.Response(503)
             case "slack", "/api/auth.test":
                 headers = {} if self.slack_scopes is None else {"x-oauth-scopes": self.slack_scopes}
                 return httpx.Response(200, json={"ok": True}, headers=headers)
@@ -599,3 +612,182 @@ async def test_a_workflow_an_ended_account_left_running_with_its_maker_s_key_is_
     assert not k.n8n.workflows[left]["active"]
     assert hers in k.n8n.credentials, "the key stays, unused"
     assert k.n8n.workflows[laid_out]["active"], "a use case's workflow is never taken off here"
+
+
+async def n8n_user(k: Keyed, person: str = "carol") -> str:
+    return str((await k.s.person(person))["n8n_user_id"])
+
+
+def deletes_in_slack(workflow: dict[str, Any]) -> None:
+    """n8n's Slack block set to delete, still naming the platform's key, after the trigger."""
+    [block] = [n for n in workflow["nodes"] if n["name"] == "Tell Slack"]
+    block["parameters"] = {**block["parameters"], "operation": "delete", "timestamp": "1"}
+
+
+async def finding(k: Keyed, use_case_id: str) -> tuple[str, str]:
+    view = (await k.s.call("alice", "GET", f"/api/v1/use-cases/{use_case_id}")).json()
+    return view["grade"], view["findings"][-1]
+
+
+def last(calls: list[str], call: str) -> int:
+    return len(calls) - 1 - calls[::-1].index(call)
+
+
+async def test_a_take_back_takes_off_a_version_published_in_n8n_that_runs_a_block_unchecked(
+    k: Keyed,
+):
+    """In the holder's space n8n won't run it with the platform's key. In the platform's project
+    it would, every time its schedule fires. So it is taken off before it moves back."""
+    use_case_id, workflow_id, _ = await opened(k)
+    k.n8n.publish_as(workflow_id, await n8n_user(k), deletes_in_slack)
+    assert (await k.s.take_back("carol", use_case_id)).status_code == 200
+    assert k.n8n.home_of(workflow_id) == PLATFORM_PROJECT
+    assert k.n8n.workflows[workflow_id]["activeVersionId"] is None
+    off = k.n8n.calls.index(f"POST /api/v1/workflows/{workflow_id}/unpublish")
+    assert off < last(k.n8n.calls, f"PUT /api/v1/workflows/{workflow_id}/transfer")
+    assert await finding(k, use_case_id) == ("needs_a_fix", TAKEN_OFF)
+
+
+async def test_the_platform_s_own_take_back_takes_it_off_too(k: Keyed):
+    use_case_id, workflow_id, _ = await opened(k)
+    k.n8n.publish_as(workflow_id, await n8n_user(k), deletes_in_slack)
+    assert (await k.s.give("carol", on=False)).status_code == 200
+    await k.s.settle()
+    assert await k.s.held_by(use_case_id) is None
+    assert k.n8n.workflows[workflow_id]["activeVersionId"] is None
+    assert await finding(k, use_case_id) == ("needs_a_fix", TAKEN_OFF)
+
+
+async def test_a_take_back_of_a_draft_n8n_would_run_unchecked_marks_it(k: Keyed):
+    use_case_id, workflow_id, _ = await opened(k)
+    deletes_in_slack(k.n8n.workflows[workflow_id])
+    k.n8n.edit(workflow_id)
+    live = k.n8n.workflows[workflow_id]["activeVersionId"]
+    assert (await k.s.take_back("carol", use_case_id)).status_code == 200
+    assert k.n8n.workflows[workflow_id]["activeVersionId"] == live, "the checked version runs on"
+    assert await finding(k, use_case_id) == ("needs_a_fix", UNCHECKED_DRAFT)
+
+
+async def test_a_take_back_whose_keys_n8n_did_not_take_stays_held_and_is_tried_again(
+    k: Keyed, monkeypatch: pytest.MonkeyPatch
+):
+    """Never let go of a draft whose keys are not put right: it stays held, marked, and the
+    platform tries again."""
+    use_case_id, workflow_id, space = await opened(k)
+    hers = her_editor_swaps_the_key(k, workflow_id, space)
+    moves = k.s.holding._n8n  # pyright: ignore[reportPrivateUsage]
+    took = moves.keep_keys
+
+    async def refused(*_: object) -> None:
+        raise N8nError("n8n is busy")
+
+    monkeypatch.setattr(moves, "keep_keys", refused)
+    answer = await k.s.take_back("carol", use_case_id)
+    assert (answer.status_code, answer.json()["detail"]) == (503, STRANDED)
+    assert await k.s.held_by(use_case_id) == "carol"
+    assert await finding(k, use_case_id) == ("needs_a_fix", KEYS_NOT_BACK)
+    monkeypatch.setattr(moves, "keep_keys", took)
+    await k.s.holding.release()
+    assert await k.s.held_by(use_case_id) is None
+    put_back(k, workflow_id, hers)
+
+
+async def test_the_sweep_takes_off_every_live_version_at_home_n8n_would_run_unchecked(
+    k: Keyed,
+):
+    """Named by a use case or not, however it got there. The use case is marked, never
+    deleted."""
+    await settled(k)
+    carol = await k.s.member()
+    use_case_id, workflow_id = await held(k.s)
+    clean, _ = await held(k.s)
+    with_slack(k, workflow_id)
+    k.n8n.publish_as(workflow_id, carol, deletes_in_slack)
+    swept = await k.sweep.sweep()
+    assert swept.taken_off == (workflow_id,)
+    assert k.n8n.workflows[workflow_id]["activeVersionId"] is None
+    assert workflow_id in k.n8n.workflows, "never deleted"
+    assert await finding(k, use_case_id) == ("needs_a_fix", TAKEN_OFF)
+    view = (await k.s.call("alice", "GET", f"/api/v1/use-cases/{clean}")).json()
+    assert (view["grade"], view["findings"]) == ("safe", [])
+
+
+async def runs(k: Keyed, use_case_id: str) -> httpx.Response:
+    path = f"/api/v1/use-cases/{use_case_id}/runs"
+    return await k.s.lab.call("alice", "POST", path, {"test": True}, template=RUNS_PATH)
+
+
+async def test_no_test_run_starts_while_someone_holds_the_workflow(k: Keyed):
+    """A test run runs the draft as n8n holds it, where it holds it."""
+    use_case_id, _, _ = await opened(k)
+    answer = await runs(k, use_case_id)
+    assert answer.status_code == 409
+    assert answer.json()["detail"].startswith("Carol has it open in n8n")
+
+
+async def test_no_test_run_starts_on_a_draft_n8n_would_run_unchecked(k: Keyed):
+    """In the platform's project n8n lets the draft use every key there is."""
+    await settled(k)
+    use_case_id, workflow_id = await held(k.s)
+    with_slack(k, workflow_id)
+    deletes_in_slack(k.n8n.workflows[workflow_id])
+    answer = await runs(k, use_case_id)
+    assert answer.status_code == 409
+    words = '"Tell Slack" does something that is off: message delete.'
+    assert answer.json()["detail"] == UNCHECKED_TEST.format(found=words)
+    del slack_in(k, workflow_id)["parameters"]["operation"]
+    assert (await runs(k, use_case_id)).status_code == 201
+
+
+async def test_the_platform_asks_again_each_day_and_takes_out_a_key_that_can_now_do_more(
+    k: Keyed,
+):
+    """Every workflow that names it stops: the same sweep takes the live ones off."""
+    await settled(k)
+    use_case_id, workflow_id = await held(k.s)
+    with_slack(k, workflow_id)
+    k.s.lab.h.advance(timedelta(days=1))
+    k.systems.slack_scopes = "chat:write,channels:read,channels:history"
+    swept = await k.sweep.sweep()
+    assert SLACK not in k.n8n.credentials and SLACK not in await k.keys.made()
+    assert swept.taken_off == (workflow_id,)
+    assert await finding(k, use_case_id) == ("needs_a_fix", TAKEN_OFF)
+
+
+async def test_a_key_the_system_can_t_be_asked_about_today_stays(k: Keyed):
+    await settled(k)
+    k.s.lab.h.advance(timedelta(days=1))
+    k.systems.slack_scopes = None
+    k.systems.slack_down = True
+    await k.sweep.sweep()
+    assert SLACK in k.n8n.credentials and SLACK in await k.keys.made()
+    k.systems.slack_down = False
+    k.systems.slack_scopes = "chat:write"
+    asked = len(k.systems.asked)
+    await k.sweep.sweep()
+    assert len(k.systems.asked) > asked, "asked again at the next sweep"
+
+
+async def test_one_sweep_at_a_time_so_none_deletes_a_key_another_is_making(
+    k: Keyed, monkeypatch: pytest.MonkeyPatch
+):
+    """n8n holds a new key a moment before the platform records it. A sweep that looked then
+    would take it for one the platform did not make, so the second waits for the first."""
+    api = k.keys._api  # pyright: ignore[reportPrivateUsage]
+    assert api is not None
+    create = api.create_credential
+    others: list[asyncio.Task[object]] = []
+
+    async def slow(*args: Any) -> Any:
+        made = await create(*args)
+        if not others:
+            others.append(asyncio.create_task(k.keys.sweep()))
+            await asyncio.sleep(0.1)
+        return made
+
+    monkeypatch.setattr(api, "create_credential", slow)
+    k.n8n.calls.clear()
+    await k.keys.sweep()
+    await asyncio.gather(*others)
+    assert not [c for c in k.n8n.calls if c.startswith("DELETE /api/v1/credentials/")]
+    assert await k.keys.sweep() == [], "each key is still as the platform made it"
