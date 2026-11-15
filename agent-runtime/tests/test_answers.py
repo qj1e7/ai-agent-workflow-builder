@@ -1,4 +1,5 @@
 import json
+import logging
 from typing import Any
 
 import pytest
@@ -842,10 +843,9 @@ def test_an_only_me_quote_that_names_someone_else_is_that_someones_yes_skipped()
 
 
 def test_the_models_approver_answer_is_never_overruled_even_when_its_quote_names_only_me():
-    """Code only refuses more than the model, never less: an Approver's or anyone else's yes
-    from the model is refused naming its words, whatever code makes of the quote. The cost is
-    a refusal on an own-attention phrasing the model over-flags, which is friction, not a
-    silent skip."""
+    """An Approver's or anyone else's yes from the model, with words of the request quoted, is
+    refused naming them, whatever code makes of the quote. The cost is a refusal on an
+    own-attention phrasing the model over-flags, which is friction, not a silent skip."""
     task = (
         "Every Monday, list open bug tickets in MOCK and create one ticket that lists them, "
         "no need to notify me"
@@ -865,7 +865,9 @@ def test_the_models_approver_answer_is_never_overruled_even_when_its_quote_names
     )
 
 
-def test_the_models_approver_answer_refuses_with_its_quote_or_the_request():
+def test_the_models_approver_answer_refuses_with_its_quote_or_the_words_naming_a_yes():
+    """With no quote, the words that name a yes still come back as the refusal, in the
+    person's own words rather than the whole request."""
     task = (
         "Every Monday, list open bug tickets in MOCK and create one ticket that lists them, "
         "the approver step is optional"
@@ -883,7 +885,74 @@ def test_the_models_approver_answer_refuses_with_its_quote_or_the_request():
     unquoted = answer_of(
         read(skips_the_yes=SkipRead(whose="an_approver_or_anyone_else"), ticket=LISTS), task
     )
-    assert isinstance(unquoted, RefusedAnswer) and unquoted.said == task
+    assert isinstance(unquoted, RefusedAnswer) and unquoted.said == "approver step is optional"
+
+
+RELEASE_CHECK = (
+    "Every weekday at 9, check LangGraph for new releases and raise a Jira ticket if there's a "
+    "new one."
+)
+
+
+def release_check(skip: SkipRead) -> TaskRead:
+    return read(
+        skips_the_yes=skip,
+        belongs_on_watchlist=True,
+        watchlist_word="releases",
+        software="LangGraph",
+        schedule="Every weekday at 9",
+        ticket=TicketRead(
+            creates=True, says="summary", said="raise a Jira ticket if there's a new one"
+        ),
+    )
+
+
+@pytest.mark.parametrize("said", [None, "raise the ticket without a yes"])
+def test_an_approver_skip_with_no_words_of_the_request_quoted_is_not_refused_on_that_alone(
+    said: str | None, caplog: pytest.LogCaptureFixture
+):
+    """A ticket raised when a release is found waits for a yes like any other. A model said
+    it skipped an Approver's yes and quoted no words of the request, and the person was told
+    they asked for something they never wrote. The request goes to the watchlist, and the
+    overruled answer is logged without the request's words."""
+    skip = SkipRead(whose="an_approver_or_anyone_else", said=said)
+    with caplog.at_level(logging.INFO, logger="agent_runtime.answers"):
+        answer = answer_of(release_check(skip), RELEASE_CHECK)
+    assert isinstance(answer, WatchlistAnswer)
+    assert (answer.software, answer.word) == ("LangGraph", "releases")
+    [record] = [r for r in caplog.records if r.name == "agent_runtime.answers"]
+    assert record.levelno == logging.WARNING
+    assert "LangGraph" not in record.getMessage()
+
+
+@pytest.mark.parametrize(
+    ("words", "said"),
+    [
+        ("raise it without asking Bob", "without asking"),
+        ("skip the queue", "skip the queue"),
+    ],
+)
+def test_an_approver_skip_with_words_of_the_request_quoted_is_still_refused(words: str, said: str):
+    """ "skip the queue" is a skip only the model's quote names: neither the word rule nor the
+    words naming a yes or a person refuse it."""
+    task = f"Create one ticket in SUP that lists the stale bugs, {words}"
+    skip = SkipRead(whose="an_approver_or_anyone_else", said=words)
+    answer = answer_of(read(skips_the_yes=skip, ticket=LISTS), task)
+    assert isinstance(answer, RefusedAnswer) and answer.said == said
+
+
+@pytest.mark.parametrize("words", ["no approval needed", "push it straight through"])
+@pytest.mark.parametrize("skip", [NO_SKIP, SkipRead(whose="an_approver_or_anyone_else")])
+def test_a_phrase_the_word_rule_knows_is_refused_whatever_the_model_says(
+    words: str, skip: SkipRead
+):
+    """ "push it straight through" names no yes and no person, so only the word rule refuses
+    it."""
+    task = f"Create one ticket in SUP that lists the stale bugs, {words}"
+    answer = answer_of(read(skips_the_yes=skip, ticket=LISTS), task)
+    assert answer == RefusedAnswer(
+        said=words, rest="Create one ticket in SUP that lists the stale bugs"
+    )
 
 
 @pytest.mark.parametrize(
