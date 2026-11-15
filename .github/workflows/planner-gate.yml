@@ -1,12 +1,12 @@
 name: planner-gate
 
-# ADR 0047: a pull request that changes the Planner is scored on the real model through the AI
-# Singapore gateway, on the reply set's gate cases and the verifier's red-team set.
+# ADR 0047: a pull request that changes the Planner is scored on the real model, on the reply
+# set's gate cases and the verifier's red-team set, through Anthropic with the team lead's key.
 #
-# Budget. The gateway key is the team lead's, with a small budget ($32, used up on 15 Nov 2026).
-# So each run is capped at 200 calls and $3, the gate refuses a run with higher caps, and there
-# is no scheduled run. The nightly runs ADR 0047 asks for, the judge, and its calibration against
-# the team lead's labels (REPLY_JUDGE_AGREED) all wait for the team lead to set a budget.
+# Budget. The key draws on a $200 monthly Anthropic credit, so each run is capped at 250 calls
+# and $5, and the gate refuses a run with higher caps. There is no scheduled run: the nightly
+# runs ADR 0047 asks for wait for the team lead to set a budget for them. The judge's scores are
+# reported, and gate only once it has agreed with the team lead's own labels (REPLY_JUDGE_AGREED).
 on:
   pull_request:
     paths:
@@ -15,8 +15,13 @@ on:
       - agent-runtime/evals/cases/red_team.json
   workflow_dispatch:
     inputs:
-      model:
-        description: The gateway model to gate. Empty uses PLANNER_GATE_MODEL, else Claude Sonnet 5.5 (ADR 0048).
+      models:
+        description: The Anthropic models to score, comma separated. Empty uses PLANNER_GATE_MODEL, else Claude Sonnet 5.5 (ADR 0048).
+        required: false
+        default: ''
+        type: string
+      jobs:
+        description: The jobs to run, comma separated. Empty runs reply_gate,red_team. red_team alone measures the verifier.
         required: false
         default: ''
         type: string
@@ -27,9 +32,6 @@ permissions:
 concurrency:
   group: planner-gate-${{ github.ref }}
   cancel-in-progress: true
-
-env:
-  AGENT_MODEL_BASE_URL: https://llm-gateway.aisg.sg
 
 jobs:
   gate:
@@ -42,35 +44,39 @@ jobs:
 
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
 
-      # A repository secret, so a branch of this repository can read it (ADR 0047). Without it
-      # the gate cannot run, and says so instead of passing quietly.
-      - name: Check the gateway key is set
+      # Without the key the gate cannot run, and says so instead of passing quietly.
+      - name: Check the Anthropic key is set
         env:
-          AGENT_MODEL_API_KEY: ${{ secrets.AISG_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
-          if [ -z "${AGENT_MODEL_API_KEY}" ]; then
-            echo "::error::AISG_API_KEY is not set, so the Planner gate cannot run."
+          if [ -z "${ANTHROPIC_API_KEY}" ]; then
+            echo "::error::ANTHROPIC_API_KEY is not set, so the Planner gate cannot run."
             exit 1
           fi
 
-      # One model, no judge, and the run's own marker, because the gateway answers a repeated
-      # request from its store. The caps match evals.gate's GATE_MAX_CALLS and GATE_MAX_DOLLARS.
+      # Anthropic only: no gateway setting is passed. The caps match evals.gate's GATE_MAX_CALLS
+      # and GATE_MAX_DOLLARS, and every run has its own marker.
       - name: Score the gate cases and the red-team set
         env:
-          AGENT_MODEL_API_KEY: ${{ secrets.AISG_API_KEY }}
-          GATEWAY_MODELS: ${{ inputs.model || vars.PLANNER_GATE_MODEL || 'claude-sonnet-5-5' }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_MODELS: ${{ inputs.models || vars.PLANNER_GATE_MODEL || 'claude-sonnet-5-5' }}
           EVAL_TEMPERATURE: ${{ vars.EVAL_TEMPERATURE }}
-          EVAL_JUDGE: ''
-          EVAL_JOBS: reply_gate,red_team
-          EVAL_MAX_CALLS: '200'
-          EVAL_MAX_DOLLARS: '3'
+          EVAL_JUDGE: anthropic:claude-sonnet-5-5
+          EVAL_JOBS: ${{ inputs.jobs || 'reply_gate,red_team' }}
+          EVAL_MAX_CALLS: '250'
+          EVAL_MAX_DOLLARS: '5'
           EVAL_MARKER: gate-${{ github.run_id }}-${{ github.run_attempt }}
+          OLLAMA_BASE_URL: ''
         run: scripts/evals.sh
 
       - name: Hold the run to the ADR's bars
         working-directory: agent-runtime
+        env:
+          JUDGE_AGREED: ${{ vars.REPLY_JUDGE_AGREED }}
         run: |
-          uv run --locked python -m evals.gate evals/out/results.json | tee -a "$GITHUB_STEP_SUMMARY"
+          agreed=()
+          if [ "${JUDGE_AGREED}" = "true" ]; then agreed=(--judge-agreed); fi
+          uv run --locked python -m evals.gate evals/out/results.json "${agreed[@]}" | tee -a "$GITHUB_STEP_SUMMARY"
           exit "${PIPESTATUS[0]}"
 
       - name: Keep the results

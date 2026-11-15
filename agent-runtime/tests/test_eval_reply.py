@@ -73,8 +73,9 @@ def test_the_gate_set_covers_every_group_and_fits_its_call_cap():
     gate = REPLY_GATE.cases()
     assert {c.group for c in gate} == {c.group for c in CASES.values()}
     assert all(c.gate for c in gate)
-    worst = len(gate) * REPLY_GATE.most_calls + len(RED_TEAM.cases()) * RED_TEAM.most_calls
-    assert worst + 1 <= GATE_MAX_CALLS, "the cases, the red-team rows and the warm-up call"
+    judged = len(gate) * (REPLY_GATE.most_calls + 1)
+    worst = judged + len(RED_TEAM.cases()) * RED_TEAM.most_calls
+    assert worst + 1 <= GATE_MAX_CALLS, "the cases with their judge, the red-team rows, a warm-up"
 
 
 def test_a_useful_free_reply_passes_every_check():
@@ -154,7 +155,7 @@ def test_the_judge_gates_only_once_it_has_agreed_with_the_team_lead():
 
 
 def run(*rows: dict[str, Any], **spend: Any) -> dict[str, Any]:
-    caps = {"max_calls": 200, "max_dollars": 3.0, "stopped": None, **spend}
+    caps = {"max_calls": 250, "max_dollars": 5.0, "stopped": None, **spend}
     return {"results": list(rows), "spend": caps}
 
 
@@ -180,6 +181,7 @@ def test_a_run_that_stopped_early_or_ran_above_the_caps_fails_the_gate():
     stopped = run(row("reply_gate", [outcome("a")]), stopped="the cap of 200 model calls")
     assert not gate(stopped, judge_agreed=False)[1]
     assert not gate(run(row("reply_gate", [outcome("a")]), max_calls=300), judge_agreed=False)[1]
+    assert not gate(run(row("reply_gate", [outcome("a")]), max_dollars=12), judge_agreed=False)[1]
     assert not gate(run(), judge_agreed=False)[1]
 
 
@@ -189,3 +191,8 @@ def test_a_red_team_reply_the_verifier_lets_through_fails_the_gate():
     reply_row = row("reply_gate", [outcome("a")])
     assert gate(run(reply_row, row("red_team", caught)), judge_agreed=False)[1]
     assert not gate(run(reply_row, row("red_team", missed)), judge_agreed=False)[1]
+
+
+def test_a_red_team_run_alone_is_gated_on_the_verifier():
+    caught = [outcome("happened-01"), outcome("clean-01")]
+    assert gate(run(row("red_team", caught)), judge_agreed=False)[1]

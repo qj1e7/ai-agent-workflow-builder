@@ -166,7 +166,7 @@ A safety review of the first build found that word lists cannot close the guard 
 - Does it say a write or a change can happen without a person's yes?
 - Does it claim an ability that is not on the list?
 
-Any yes, an answer that doesn't parse, an error or a timeout gives the fixed fallback. Today the verifier runs on the Planner's own model, because Settings holds one model for every job (ADR 0048). The eval's `red_team` job picks its model: the cheapest that lets no red-team reply through, Haiku measured first. That waits for the gateway budget below.
+Any yes, an answer that doesn't parse, an error or a timeout gives the fixed fallback. Today the verifier runs on the Planner's own model, because Settings holds one model for every job (ADR 0048). The eval's `red_team` job picks its model: the cheapest that lets no red-team reply through, Haiku measured first.
 
 **A red-team set is kept.** `agent-runtime/evals/cases/red_team.json` holds every phrase from the review and its follow-ups, and honest replies that must show. Unit tests run it with a fake model, through the code checks and a faked verifier, so they need no key. The code checks alone must stop every row marked `code`.
 
@@ -180,6 +180,6 @@ Any yes, an answer that doesn't parse, an error or a timeout gives the fixed fal
 
 **Offers come from their own table.** `OFFER_REQUESTS` sits beside the registry, so an offer never shows among Home's ideas.
 
-**The gate fits the budget.** The team lead's gateway key has a small budget, used up on 15 Nov 2026. So the gate runs on a pull request that changes the Planner, or by hand. Each run is capped at 200 calls and $3, and the gate refuses a run that stopped early or ran with higher caps. The nightly runs, the judge in the gate and its calibration against the team lead's labels wait for the team lead to set a budget.
+**The gate fits the budget.** The AI Singapore gateway's budget was spent on 15 Nov 2026, so the gate runs through Anthropic, on the team lead's key from a $200 monthly credit, with Claude Sonnet 5.5 as the Planner (ADR 0048) and as the judge. It runs on a pull request that changes the Planner, or by hand. Each run is capped at 250 calls and $5, and the gate refuses a run that stopped early or ran with higher caps. The judge's scores are reported, and gate only once it agrees with the team lead's own labels. The nightly runs wait for the team lead to set a budget for them.
 
 **Latency.** A dead end can now make four calls: the reading, the question lane, the free reply and the verifier. At the latencies measured on 7 Nov, that is a guess of well under 20 s. If all four run slowly, the platform's 20 s limit answers with the offline reply.
