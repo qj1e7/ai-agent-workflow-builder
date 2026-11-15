@@ -721,7 +721,8 @@ def _watch_rows(
         text = plain(request[at[0] : at[1]], TEXT_LIMIT)
         note = OWN_TIME if holds else HOW_OFTEN
         found.append((at, CantRow(kind="schedule", text=text, note=note, needs="new_tool")))
-    for clause in _change_clauses(changes):
+    own = _stretches(WATCHLISTS_OWN_TICKET, changes) + _stretches(AFFIRMS_A_YES, changes)
+    for clause in _change_clauses(_without_stretches(changes, own)):
         found.append((_stretch(request, clause), _change_row(clause)))
     # Words beside the watch stand beside no part of a task, so a part is never named for them.
     if task is not None:
@@ -744,6 +745,37 @@ PLAIN_BESIDE_SOFTWARE: Final = frozenset({"run", "log", "make"}) | NOTIFIES
 def _asks_for_a_change(clause: str) -> bool:
     verbs = set(change_verbs_in(clause)) - PLAIN_BESIDE_SOFTWARE
     return bool(verbs) or commands_a_change(clause)
+
+
+AFFIRMS_A_YES: Final = re.compile(
+    r"\b(?:only\s+)?(?:after|once|when)\s+(?:an|the)\s+approver\s+(?:says\s+yes|approves(?:\s+it)?|"
+    r"has\s+approved(?:\s+it)?)\b",
+    re.IGNORECASE,
+)
+"""Words that say the write waits for an Approver's yes, as "after the approver says yes". Every
+card already waits for one, so they ask for nothing new. They are covered only when no other
+word is left over, so "with the approval skipped" or "and the rest go straight in" still come
+back as a skip the coverage check refuses."""
+WATCHLISTS_OWN_TICKET: Final = re.compile(
+    r"\b(?:and\s+)?(?:raise|create|open|file|log|make)\s+(?:an?\s+|one\s+)?(?:new\s+)?(?:jira\s+|"
+    r"upgrade\s+)?ticket(?:\s+(?:if|when|whenever)\s+(?:there(?:['’]s|\s+is)\s+a\s+new\s+(?:one|"
+    r"release|version)|(?:it|there)\s+(?:has|is)\s+a\s+new\s+(?:one|release|version)|a\s+new\s+"
+    r"(?:one|release|version)\s+(?:comes\s+out|is\s+out)))?\b",
+    re.IGNORECASE,
+)
+"""Beside a release watch, the upgrade ticket the Software watchlist raises itself, after a yes:
+"raise a Jira ticket if there's a new one". A ticket with more, as one for major releases only
+or in another project, keeps those words, which come back as parts it can't do."""
+
+
+def _stretches(pattern: re.Pattern[str], text: str) -> list[tuple[int, int]]:
+    return [found.span() for found in pattern.finditer(text)]
+
+
+def _without_stretches(text: str, stretches: list[tuple[int, int]]) -> str:
+    for start, end in sorted(stretches, reverse=True):
+        text = f"{text[:start]} {text[end:]}"
+    return text
 
 
 def _change_clauses(text: str) -> list[str]:
@@ -896,6 +928,8 @@ def _answer_of(
         read = read.model_copy(update={"asks_about": unchanged})
     task = None
     covered = [skip.covered] if skip.covered is not None else []
+    if read.belongs_on_watchlist:
+        covered += _stretches(WATCHLISTS_OWN_TICKET, text)
     watched = _watch_clauses(read, text) if read.belongs_on_watchlist else []
     writes = _writes(read, text)
     # A question about the app is no task, but beside a skip the model flagged and couldn't
@@ -907,6 +941,13 @@ def _answer_of(
     )
     if read.asks_about == "none" or as_task:
         task = _read_task(read, text, covered + watched, writes, skip.unquoted)
+        yes = _stretches(AFFIRMS_A_YES, text)
+        if task.spans and yes:
+            # Words that close the request by naming the yes its write waits for ask nothing
+            # new, but only when nothing else is left over: any other leftover word, as "and
+            # the rest go straight in", keeps them, and the coverage check refuses them.
+            closed = _read_task(read, text, covered + watched + yes, writes, skip.unquoted)
+            task = task if closed.spans else closed
         refused = _refused_span(task, text) if writes else None
         if refused is not None:
             return refused

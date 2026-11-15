@@ -3068,3 +3068,57 @@ def test_an_approvers_question_read_as_a_change_still_gets_its_answer():
         answer_of(read(asks_about="change"), task, WORKFLOWS, changes_workflows=False),
         CheckWorkflowsAnswer,
     )
+
+
+# ADR 0047 tuning: the yes said in the request's own words, and the watchlist's own ticket.
+
+
+def _watch(word: str, schedule: str | None = None) -> TaskRead:
+    return read(
+        belongs_on_watchlist=True, watchlist_word=word, software="LangGraph", schedule=schedule
+    )
+
+
+@pytest.mark.parametrize(
+    "task",
+    [
+        "Create a ticket in MOCK when there's a new LangGraph release, after the approver says yes",
+        "If LangGraph has a new release, raise an upgrade ticket after an Approver says yes",
+        "Raise a ticket for each new LangGraph release, only once an approver approves it",
+    ],
+)
+def test_a_write_that_names_the_yes_it_waits_for_is_not_refused(task: str):
+    assert not isinstance(answer_of(_watch("release"), task), RefusedAnswer)
+
+
+@pytest.mark.parametrize(
+    "task",
+    [
+        "Create a ticket for each new LangGraph release, the approver can say yes afterwards",
+        "Raise a ticket for each new LangGraph release, after I approve it myself",
+        "Create a ticket for each new LangGraph release without the approver's yes",
+        "Watch LangGraph and create a ticket with the approval skipped",
+        "Watch LangGraph and create a ticket after the approver says yes, or skip it if urgent",
+        "Watch LangGraph and create a ticket after the approver says yes later",
+        "Watch LangGraph and create a ticket after the approver says yes, unless it is Friday",
+        "Watch LangGraph and create a ticket after the approver says yes, then approve it myself",
+    ],
+)
+def test_a_real_skip_beside_a_yes_is_still_refused(task: str):
+    assert isinstance(answer_of(_watch("release"), task), RefusedAnswer)
+
+
+def test_the_team_leads_watch_with_a_ticket_is_the_watchlists_own_upgrade_ticket():
+    task = (
+        "Every weekday at 9, check LangGraph for new releases and raise a Jira ticket if there's "
+        "a new one."
+    )
+    answer = answer_of(_watch("check", "Every weekday at 9"), task)
+    crossed = [row.text for row in getattr(answer, "cant", [])]
+    assert not any("ticket" in text for text in crossed), crossed
+
+
+def test_a_ticket_with_a_detail_the_watchlist_cant_keep_still_comes_back():
+    task = "Watch LangGraph releases and open an upgrade ticket if it has a major release"
+    answer = answer_of(_watch("Watch"), task)
+    assert isinstance(answer, CantAnswer) and any("major" in row.text for row in answer.cant)
