@@ -39,12 +39,19 @@ class Job[C: Case]:
     judged: bool
     time_limit_s: float | None = None
     follow_up: Callable[[BaseChatModel, C, Answer, str], Answer] | None = None
+    product_call: Callable[[BaseChatModel, C], Answer] | None = None
+    """The product's own code path, run in place of the prompt and the schema. It sends the
+    product's exact messages, so the run's marker is not on them."""
+    judge_question: Callable[[C, str], str] | None = None
+    """What the judge is asked about a case's answer, in place of accuracy and clarity."""
 
     def cases(self) -> list[C]:
         rows = json.loads((CASES / f"{self.name}.json").read_text())
         return [self.case_type.model_validate(row) for row in rows]
 
     def ask(self, model: BaseChatModel, case: C, marker: str = "") -> Answer:
+        if self.product_call is not None:
+            return self.product_call(model, case)
         prompt = marked(self.prompt(case), marker)
         if self.schema is None:
             raw = model.invoke(prompt)
