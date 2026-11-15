@@ -72,6 +72,10 @@ _Avoid_: Drawer, modal
 **Question answer**:
 The Planner's reply to a question about the person's own data, such as how many software are on the watchlist. The model writes it in its own words from a facts snapshot read when the question arrives, and only from those facts. It names the sections it used, and it never offers to act. It is the one answer whose text is not fixed (ADR 0042).
 
+**Free reply**:
+The Planner's reply in its own words to a message that no card or fixed answer fits: a direct answer, one clarifying question with choices to tap, or a can't with the closest thing the platform can do. It never writes, and it never says that anything was done (ADR 0047, proposed).
+_Avoid_: Chat reply, fallback, free text
+
 **Capability**:
 Something the platform can do for a workflow, such as reading Jira tickets. It is in exactly one state: Ready, Needs setup, Not answering, Planned or Unsupported. Every screen and the Planner read the same state.
 _Avoid_: Ability, feature (in the app)
