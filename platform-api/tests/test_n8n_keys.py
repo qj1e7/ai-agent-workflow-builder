@@ -7,7 +7,7 @@ kept unused; and the daily self-test plants a key the next sweep must remove."""
 import asyncio
 import copy
 from collections.abc import AsyncIterator
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import timedelta
 from typing import Any
 
@@ -24,7 +24,7 @@ from platform_api.builder.key_sweep import (
     KeySweep,
 )
 from platform_api.builder.n8n_holds import MOVE_GRACE, STRANDED, Holding
-from platform_api.builder.service import UNCHECKED_TEST
+from platform_api.builder.service import NOT_SHOWN, UNCHECKED_TEST
 from platform_api.orchestration import KEYS, N8nError, PlatformKeys
 from platform_api.orchestration.n8n_credentials import (
     GONE_WITHIN,
@@ -683,7 +683,7 @@ async def test_a_take_back_whose_keys_n8n_did_not_take_stays_held_and_is_tried_a
 
     monkeypatch.setattr(moves, "keep_keys", refused)
     answer = await k.s.take_back("carol", use_case_id)
-    assert (answer.status_code, answer.json()["detail"]) == (503, STRANDED)
+    assert (answer.status_code, answer.json()["detail"]) == (503, NOT_BACK_YET)
     assert await k.s.held_by(use_case_id) == "carol"
     assert await finding(k, use_case_id) == ("needs_a_fix", NOT_BACK_YET)
     monkeypatch.setattr(moves, "keep_keys", took)
@@ -865,3 +865,159 @@ async def test_a_version_naming_a_key_since_taken_out_does_not_go_back_on(k: Key
     resumed = await k.s.lab.move("alice", "resume", use_case_id)
     assert resumed.status_code == 409, resumed.text
     assert k.n8n.workflows[workflow_id]["activeVersionId"] is None
+
+
+async def test_open_in_n8n_never_waits_on_the_sweep_it_runs(k: Keyed):
+    """Open holds the workflow's row, so its sweep is of keys alone. Here the day's re-ask takes
+    the Slack key out, so a sweep that also took off and marked would wait on that row (the E16
+    safety re-check)."""
+    await settled(k)
+    await k.s.member()
+    use_case_id, workflow_id = await held(k.s)
+    with_slack(k, workflow_id)
+    k.s.lab.h.advance(timedelta(days=1))
+    k.systems.slack_scopes = "chat:write,channels:history"
+    try:
+        answer = await asyncio.wait_for(k.s.open("carol", use_case_id), 3)
+    except TimeoutError:
+        pytest.fail("Open in n8n waited on the sweep it ran")
+    assert answer.status_code == 200, answer.text
+    assert SLACK not in k.n8n.credentials, "the key went all the same"
+    assert (await asyncio.wait_for(k.sweep.sweep(), 8)).removed == ()
+
+
+def watched_moves(
+    k: Keyed, monkeypatch: pytest.MonkeyPatch
+) -> tuple[list[tuple[str | None, str | None]], list[str]]:
+    """What is live where the workflow is as each transfer lands and at each look after, and each
+    version the take-back waited on triggers for."""
+    moves = k.s.holding._n8n  # pyright: ignore[reportPrivateUsage]
+    move, triggers_live, look = moves.move, moves.triggers_live, moves.look
+    landed: list[tuple[str | None, str | None]] = []
+    waited: list[str] = []
+
+    def seen(workflow_id: str) -> tuple[str | None, str | None]:
+        return k.n8n.home_of(workflow_id), k.n8n.workflows[workflow_id]["activeVersionId"]
+
+    async def watched(workflow_id: str, project_id: str) -> None:
+        await move(workflow_id, project_id)
+        landed.append(seen(workflow_id))
+
+    async def looked(workflow_id: str) -> Any:
+        if landed:
+            landed.append(seen(workflow_id))
+        return await look(workflow_id)
+
+    async def waited_on(workflow_id: str, version_id: str) -> None:
+        waited.append(version_id)
+        await triggers_live(workflow_id, version_id)
+
+    monkeypatch.setattr(moves, "move", watched)
+    monkeypatch.setattr(moves, "triggers_live", waited_on)
+    monkeypatch.setattr(moves, "look", looked)
+    return landed, waited
+
+
+async def test_a_publish_after_it_was_taken_off_never_reaches_the_platform_s_project_live(
+    k: Keyed, monkeypatch: pytest.MonkeyPatch
+):
+    """The holder publishes between the take-off and the move. It is taken off again just before
+    the transfer, and no trigger is waited on (the E16 safety re-check)."""
+    use_case_id, workflow_id, _ = await opened(k)
+    carol = await n8n_user(k)
+    moves = k.s.holding._n8n  # pyright: ignore[reportPrivateUsage]
+    go_off = moves.go_off
+    raced: list[str] = []
+
+    async def published_once_it_was_off(workflow_id: str) -> None:
+        await go_off(workflow_id)
+        if not raced:
+            raced.append(k.n8n.publish_as(workflow_id, carol, deletes_in_slack))
+
+    monkeypatch.setattr(moves, "go_off", published_once_it_was_off)
+    landed, waited = watched_moves(k, monkeypatch)
+    assert (await k.s.take_back("carol", use_case_id)).status_code == 200
+    assert set(landed) == {(PLATFORM_PROJECT, None)}, "never live in the platform's project"
+    assert raced[0] not in waited
+    assert k.n8n.workflows[workflow_id]["activeVersionId"] != raced[0]
+
+
+async def test_a_publish_as_it_moves_is_taken_off_the_moment_it_lands(
+    k: Keyed, monkeypatch: pytest.MonkeyPatch
+):
+    """Published between the last look and the transfer, n8n carries it live into the platform's
+    project. It is taken off as it lands, with no wait on its triggers, and the take-back goes on
+    in place of moving it back."""
+    use_case_id, workflow_id, _ = await opened(k)
+    carol = await n8n_user(k)
+    k.n8n.publish_as(workflow_id, carol, deletes_in_slack)
+    moves = k.s.holding._n8n  # pyright: ignore[reportPrivateUsage]
+    move = moves.move
+    raced: list[str] = []
+
+    async def published_as_it_moved(workflow_id: str, project_id: str) -> None:
+        if project_id == PLATFORM_PROJECT and not raced:
+            raced.append(k.n8n.publish_as(workflow_id, carol, deletes_in_slack))
+        await move(workflow_id, project_id)
+
+    monkeypatch.setattr(moves, "move", published_as_it_moved)
+    landed, waited = watched_moves(k, monkeypatch)
+    assert (await k.s.take_back("carol", use_case_id)).status_code == 200
+    assert landed[0] == (PLATFORM_PROJECT, raced[0]), "n8n carried it live through the transfer"
+    assert landed[1:].count(landed[0]) == 1, "the look that found it live took it off"
+    assert waited == [], "no wait on its triggers"
+    assert k.n8n.workflows[workflow_id]["activeVersionId"] is None
+    assert await finding(k, use_case_id) == ("needs_a_fix", TAKEN_OFF)
+
+
+async def test_the_sweep_takes_off_a_live_version_n8n_does_not_show_and_goes_on(
+    k: Keyed, monkeypatch: pytest.MonkeyPatch
+):
+    await settled(k)
+    shy, shy_workflow = await held(k.s)
+    _, other = await held(k.s)
+    k.n8n.publish_as(other, await k.s.member(), deletes_in_slack_after_with_slack(k, other))
+    workflows = k.sweep._n8n  # pyright: ignore[reportPrivateUsage]
+    kept = workflows.kept
+
+    async def hides_one(workflow_id: str, version_id: str) -> Any:
+        if workflow_id == shy_workflow:
+            raise N8nError("n8n did not answer")
+        return await kept(workflow_id, version_id)
+
+    monkeypatch.setattr(workflows, "kept", hides_one)
+    monkeypatch.setattr(workflows, "workflows_in", unlisted(workflows.workflows_in))
+    swept = await k.sweep.sweep()
+    assert set(swept.taken_off) == {shy_workflow, other}
+    assert await finding(k, shy) == ("needs_a_fix", TAKEN_OFF)
+
+
+def deletes_in_slack_after_with_slack(k: Keyed, workflow_id: str) -> Any:
+    with_slack(k, workflow_id)
+    return deletes_in_slack
+
+
+def unlisted(workflows_in: Any) -> Any:
+    """n8n's list without each published version, so the sweep asks for it by itself."""
+
+    async def listed(project_id: str) -> Any:
+        return [replace(item, live=None) for item in await workflows_in(project_id)]
+
+    return listed
+
+
+async def test_a_version_n8n_does_not_show_stays_off_and_says_so(
+    k: Keyed, monkeypatch: pytest.MonkeyPatch
+):
+    await settled(k)
+    use_case_id, _ = await held(k.s)
+    assert (await k.s.lab.move("alice", "pause", use_case_id)).status_code == 200
+    drafts = k.s.lab.builder._n8n  # pyright: ignore[reportPrivateUsage]
+    assert drafts is not None
+
+    async def silent(*_: object) -> None:
+        raise N8nError("n8n did not answer")
+
+    monkeypatch.setattr(drafts, "kept", silent)
+    resumed = await k.s.lab.move("alice", "resume", use_case_id)
+    assert (resumed.status_code, resumed.json()["detail"]) == (503, NOT_SHOWN)

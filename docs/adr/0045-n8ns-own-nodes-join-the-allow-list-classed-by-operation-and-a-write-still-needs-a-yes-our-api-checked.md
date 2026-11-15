@@ -135,9 +135,12 @@ this ADR gives, or makes it stronger.
    their space, but it would there. So no workflow in the platform's project is ever
    live with a version that has a finding n8n would run anyway (`runs_anyway`), and no draft with
    one is ever run. Two places hold that rule. Every move into the platform's project, a
-   take-back or a set-up, first takes off whatever n8n has published, then moves the workflow, so
-   its holder or maker can no longer change it, then takes off anything published in between,
-   puts the keys back on the draft, and only then checks. The version that was live, or for a
+   take-back or a set-up, first takes off whatever n8n has published, takes off again whatever
+   was published since just before the transfer, and again the moment the workflow lands, with no
+   wait on its triggers. Then, with its holder or maker no longer able to change it, the platform
+   puts the keys back on the draft, and only then checks. The window left is n8n's own transfer:
+   a version published in the instant between the platform's last look and the transfer, which
+   n8n carries live until the platform takes it off as it lands, before anything else. The version that was live, or for a
    take-back the one on record when nothing was, goes back on only if it passes. Otherwise it
    stays off, and the workflow is marked `Needs a fix`; a set-up sends it back to its maker. A
    version a member published that the platform puts back on stays the member's publish. A
@@ -147,7 +150,9 @@ this ADR gives, or makes it stronger.
    grade. The
    sweep, every minute, checks every published workflow in the platform's project, whether a use
    case names it or not, takes off each that breaks the rule, and marks the use case that names
-   it. Nothing is deleted.
+   it. Nothing is deleted. A version n8n does not show counts as one that breaks it. Open in n8n
+   sweeps keys alone, since it holds the workflow's row and a mark would wait on it, and a mark
+   waits at most five seconds on any row, so a lock cycle fails in place of stopping the sweep.
 7. **A test run posts nothing.** A layout pins the output of each notice block. n8n uses pinned
    output only in a run by hand, which is what a test run is, and ignores it in every other run. A
    test run of a draft whose notice block has no pinned output does not start.
@@ -171,8 +176,8 @@ this ADR gives, or makes it stronger.
     checker reads all of it before anything runs; a notice that says what a run read goes through
     our Tell, which the platform controls. Slack's blocks are decoded from their JSON first, and
     blocks that don't decode are refused. The words are matched in NFKC and case-folded, and none
-    may call out a whole channel: no `<!channel>`, `<!here>`, `<!everyone>`, `@channel`, `@here`
-    or `@everyone`. Slack's `link_names` stays off, since it would turn a written @channel into a
+    may call out a whole channel or a user group: no `<!channel>`, `<!here>`, `<!everyone>`,
+    `<!subteam^…>`, `@channel`, `@here` or `@everyone`. Slack's `link_names` stays off, since it would turn a written @channel into a
     call to everyone. The class file names each notice row's text, and a notice row without it is
     refused. A block that breaks this runs anyway, so it is never live.
 13. **A test run runs only the draft the platform checked.** When a test run is asked for, the

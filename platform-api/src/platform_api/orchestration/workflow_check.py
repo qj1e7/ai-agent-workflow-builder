@@ -552,9 +552,9 @@ def _places(flow: Flow) -> Iterable[Finding]:
             )
 
 
-MASS_MENTION = re.compile(r"<!(?:channel|here|everyone)\b|@(?:channel|here|everyone)\b")
-"""Slack's words that call out everyone in a channel or a workspace, matched on text in NFKC and
-case-folded."""
+MASS_MENTION = re.compile(r"<!(?:channel|here|everyone)\b|<!subteam\^|@(?:channel|here|everyone)\b")
+"""Slack's words that call out everyone in a channel, a workspace or a user group, matched on text
+in NFKC and case-folded."""
 SAYS_WHAT_A_RUN_READ = "writes its message with an expression, so it is off. Use our Tell for that"
 UNREADABLE_WORDS = "has a message the checker can't read, so it is off"
 CALLS_EVERYONE = "calls out a whole channel, so it is off"

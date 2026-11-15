@@ -22,6 +22,7 @@ from datetime import timedelta
 from typing import Any, Protocol
 
 import httpx
+import psycopg
 
 from platform_api.db import Database
 from platform_api.orchestration import (
@@ -35,6 +36,9 @@ from platform_api.shared import UserId
 log = logging.getLogger(__name__)
 
 SWEEP_EVERY = timedelta(seconds=60)
+MARK_WAIT = "SET LOCAL lock_timeout = '5s'"
+"""A mark waits on a workflow's row this long at most, so a lock cycle fails, and the next sweep
+runs, in place of hanging."""
 KEY_ADDED = "A key was added in n8n while it was open there. The platform removed it."
 KEY_CHANGED = "One of the platform's keys was changed in n8n while it was open there."
 TAKEN_OFF = (
@@ -133,6 +137,7 @@ class KeySweep:
         people = await self._people.people_by_n8n_user()
         marked: list[str] = []
         async with self._db.transaction("builder") as uow:
+            await uow.conn.execute(MARK_WAIT)
             for key in found:
                 person = people.get(owners.get(str(key.project), ""))
                 if person is None:
@@ -162,8 +167,12 @@ class KeySweep:
             workflow = listed.workflow
             if workflow.active_version_id is None:
                 continue
-            live = listed.live or await self._n8n.kept(workflow.id, workflow.active_version_id)
-            if not unchecked(live or {}, made):
+            try:
+                live = listed.live or await self._n8n.kept(workflow.id, workflow.active_version_id)
+            except (N8nError, httpx.HTTPError) as error:
+                log.warning("n8n did not show the live version of %s: %s", workflow.id, error)
+                live = None
+            if live is not None and not unchecked(live, made):
                 continue
             try:
                 await self._n8n.go_off(workflow.id)
@@ -173,10 +182,14 @@ class KeySweep:
             log.warning("took %s off in n8n: it would run a block unchecked", workflow.id)
             taken.append(workflow.id)
         if taken:
-            async with self._db.transaction("builder") as uow:
-                await uow.conn.execute(
-                    "UPDATE builder.use_cases SET n8n_key_finding = %s, n8n_key_found_at = %s"
-                    " WHERE n8n_workflow_id = ANY(%s)",
-                    (TAKEN_OFF, uow.now, taken),
-                )
+            try:
+                async with self._db.transaction("builder") as uow:
+                    await uow.conn.execute(MARK_WAIT)
+                    await uow.conn.execute(
+                        "UPDATE builder.use_cases SET n8n_key_finding = %s, n8n_key_found_at = %s"
+                        " WHERE n8n_workflow_id = ANY(%s)",
+                        (TAKEN_OFF, uow.now, taken),
+                    )
+            except psycopg.errors.LockNotAvailable:
+                log.error("took %s off in n8n, but a held row kept them from being marked", taken)
         return taken

@@ -82,12 +82,9 @@ class StaffPort(Protocol):
 class Keys(Protocol):
     """The platform's keys in n8n, which never leave its project (ADR 0045, as amended)."""
 
-    async def sweep(self) -> object:
-        """The credential sweep, so no key a member added is left anywhere."""
-        ...
-
     async def clear(self) -> object:
-        """The same sweep, marking no workflow."""
+        """The credential sweep of keys alone, so no key a member added is left anywhere. It
+        marks and takes off no workflow, so it never waits on a row the caller holds."""
         ...
 
     async def made(self) -> dict[str, str]: ...
@@ -206,10 +203,10 @@ async def _unmark(uow: UnitOfWork, use_case_id: str) -> None:
     )
 
 
-async def _strand(uow: UnitOfWork, use_case_id: str) -> HoldRefused:
+async def _strand(uow: UnitOfWork, use_case_id: str, words: str = STRANDED) -> HoldRefused:
     await _mark(uow, use_case_id)
-    log.error("%s may sit outside the platform's n8n project; release moves it back", use_case_id)
-    return HoldRefused(503, STRANDED)
+    log.error("%s did not finish coming back; release tries again: %s", use_case_id, words)
+    return HoldRefused(503, words)
 
 
 async def _note(uow: UnitOfWork, use_case_id: str, words: str) -> None:
@@ -409,7 +406,7 @@ class Holding:
             except (N8nError, httpx.HTTPError) as error:
                 log.warning("could not take %s off before it comes back: %s", workflow_id, error)
                 return HoldRefused(503, NOT_MOVED)
-            match await self._move(workflow_id, home):
+            match await self._move(workflow_id, home, off=True):
                 case _Stranded():
                     return await _strand(uow, use_case_id)
                 case HoldRefused() as refused:
@@ -419,7 +416,7 @@ class Holding:
                     back = await self._home_again(workflow_id, in_use and (was_live or in_use))
                     if back is None:
                         await _note(uow, use_case_id, NOT_BACK_YET)
-                        return await _strand(uow, use_case_id)
+                        return await _strand(uow, use_case_id, NOT_BACK_YET)
                     taken_off, draft = back
                 case _Gone():
                     pass
@@ -444,17 +441,11 @@ class Holding:
     async def _home_again(
         self, workflow_id: str, publish: str | None
     ) -> tuple[tuple[Finding, ...], tuple[Finding, ...]] | None:
-        """Once the workflow is in the platform's project, where its holder can't change it and
-        n8n lets it use every key there is: whatever got published since it was taken off is
-        taken off again, the keys go back on the draft, and the version `publish` goes live only
-        if n8n would run nothing in it unchecked. What n8n would run unchecked in that version
-        and in the draft, or None when n8n did not do it all, so the caller keeps the hold and
-        the platform tries again."""
-        try:
-            await self._off(workflow_id)
-        except (N8nError, httpx.HTTPError) as error:
-            log.warning("could not take %s off once it was back: %s", workflow_id, error)
-            return None
+        """Once the workflow is in the platform's project, off, where its holder can't change it
+        and n8n lets it use every key there is: the keys go back on the draft, and the version
+        `publish` goes live only if n8n would run nothing in it unchecked. What n8n would run
+        unchecked in that version and in the draft, or None when n8n did not do it all, so the
+        caller keeps the hold and the platform tries again."""
         draft = await self._keys_back(workflow_id)
         if draft is None or publish is None:
             return None if draft is None else ((), draft)
@@ -472,11 +463,12 @@ class Holding:
 
     async def _swept(self) -> HoldRefused | None:
         """The credential sweep before a workflow opens, so no key a member added waits in
-        their space."""
+        their space. Keys alone: Open holds the workflow's row, and the sweep's marks would wait
+        on it. The minute's sweep takes off and marks."""
         if self._keys is None:
             return None
         try:
-            await self._keys.sweep()
+            await self._keys.clear()
         except (N8nError, httpx.HTTPError) as error:
             log.warning("could not sweep n8n's keys before a workflow opens: %s", error)
             return HoldRefused(503, NOT_MOVED)
@@ -518,7 +510,7 @@ class Holding:
         except (N8nError, httpx.HTTPError) as error:
             log.warning("could not take %s off before it comes in: %s", workflow_id, error)
             return HoldRefused(503, NOT_MOVED)
-        if (refused := await self.send_back(workflow_id, home)) is not None:
+        if (refused := await self.send_back(workflow_id, home, off=True)) is not None:
             await self._live_again(workflow_id, was_live, space, home)
             return refused
         back = await self._home_again(workflow_id, was_live)
@@ -550,10 +542,12 @@ class Holding:
         except (N8nError, httpx.HTTPError) as error:
             log.warning("could not put %s back on in its maker's space: %s", workflow_id, error)
 
-    async def send_back(self, workflow_id: str, project_id: str) -> HoldRefused | None:
+    async def send_back(
+        self, workflow_id: str, project_id: str, off: bool = False
+    ) -> HoldRefused | None:
         """Moves a workflow no use case names to a project, such as back to its maker's space
-        when its set-up is refused after the move. None once it is there."""
-        match await self._move(workflow_id, project_id):
+        when its set-up is refused after the move. None once it is there. `off` as for _move."""
+        match await self._move(workflow_id, project_id, off):
             case _Moved():
                 return None
             case _Gone():
@@ -633,11 +627,17 @@ class Holding:
                     (uow.now - MOVE_GRACE, row["use_case_id"]),
                 )
 
-    async def _move(self, workflow_id: str, project: str) -> _MoveResult:
+    async def _move(self, workflow_id: str, project: str, off: bool = False) -> _MoveResult:
         """Moves the workflow and reads it back. n8n takes a published workflow off and puts it
         back on as it moves it, so the move waits for every trigger to be live again. A move that
         changed the version n8n runs or the settings puts the settings back, or else moves it
-        back where it was."""
+        back where it was.
+
+        `off` is for a workflow taken off to come into the platform's project, where n8n lets it
+        use every key there is. Whatever got published since is taken off just before the
+        transfer and again the moment it lands, and no trigger is waited for. What is left is
+        n8n's own transfer: a version published between the last look and the transfer, which n8n
+        carries live until the platform takes it off as it lands."""
         try:
             before = await self._n8n.look(workflow_id)
             if before is None:
@@ -645,6 +645,11 @@ class Holding:
             was = await self._n8n.home(workflow_id)
             if was == project:
                 return _Moved()
+            if off and before.active_version_id is not None:
+                await self._n8n.go_off(workflow_id)
+                before = await self._n8n.look(workflow_id)
+                if before is None:
+                    return _Gone()
         except (N8nError, httpx.HTTPError) as error:
             log.warning("could not read %s in n8n: %s", workflow_id, error)
             return HoldRefused(503, NOT_MOVED)
@@ -658,7 +663,12 @@ class Holding:
             except N8nError, httpx.HTTPError:
                 return _Stranded()
         try:
-            if before.active_version_id is not None:
+            if off:
+                landed = await self._n8n.look(workflow_id)
+                if landed is not None and landed.active_version_id is not None:
+                    await self._n8n.go_off(workflow_id)
+                    log.warning("took %s off the moment it landed", workflow_id)
+            elif before.active_version_id is not None:
                 await self._n8n.triggers_live(workflow_id, before.active_version_id)
             after = await self._n8n.look(workflow_id)
             if after is None or await self._n8n.home(workflow_id) != project:

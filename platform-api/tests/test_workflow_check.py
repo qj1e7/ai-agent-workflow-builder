@@ -785,8 +785,19 @@ def test_one_of_n8n_s_blocks_before_any_of_ours_needs_a_fix_that_runs_anyway() -
         ("text", "heads up \uff20channel"),
         ("blocksUi", '{"blocks": [{"type": "section", "text": {"text": "\\u003c!everyone>"}}]}'),
         ("attachments", [{"text": "@channel look"}]),
+        ("text", "Look <!subteam^S0123|@devs>"),
+        ("blocksUi", '{"blocks": [{"type": "section", "text": {"text": "<!subteam^S1>"}}]}'),
     ],
-    ids=["channel", "here-in-capitals", "at-everyone", "full-width-at", "in-blocks", "attached"],
+    ids=[
+        "channel",
+        "here-in-capitals",
+        "at-everyone",
+        "full-width-at",
+        "in-blocks",
+        "attached",
+        "a-user-group",
+        "a-user-group-in-blocks",
+    ],
 )
 def test_a_notice_that_calls_out_a_whole_channel_is_off(where: str, value: Any) -> None:
     """The Tell rule: a notice tells the people it is for, never a whole channel at once."""
