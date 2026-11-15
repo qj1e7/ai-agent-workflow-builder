@@ -6,12 +6,11 @@ import { Button } from '../../ui/Button'
 import { checkClock, DAYS, everyWords } from '../software/software'
 import { useEditorThatRefocusesItsOpener } from '../software/Schedule'
 import { useChanges } from './Status'
-import { CHANGED_SINCE_OPENED, heldNote, nextRunWords, scheduleSaver, whenWords } from './workflow'
+import { CHANGED_SINCE_OPENED, heldNote, nextRunWords, OWNER_WARNING, scheduleSaver, whenWords } from './workflow'
 import styles from './Workflows.module.css'
+import { teamPlace, teamTime } from './times'
 
 const capital = (words: string): string => `${words.charAt(0).toUpperCase()}${words.slice(1)}`
-
-const ownerWarning = 'Saving makes you the owner of this schedule. Its runs then count as your work, so you won’t be able to approve them.'
 
 interface EditorProps {
   readonly schedule: Pick<NonNullable<UseCaseView['schedule']>, 'day' | 'at'> | null
@@ -59,7 +58,7 @@ export function WhenEditor({ schedule, version, isPending, save, onDone }: Edito
           ))}
         </select>
         <label htmlFor={`${ids}-at`} className="visually-hidden">
-          Time, Singapore
+          Time, {teamPlace()}
         </label>
         <input id={`${ids}-at`} type="time" step={300} value={at} aria-invalid={error ? true : undefined} aria-describedby={error ? `${ids}-error` : undefined} onChange={(event) => setAt(event.target.value)} />
         <Button type="submit" variant="primary" loading={isPending} aria-describedby={`${ids}-owner`}>
@@ -68,7 +67,7 @@ export function WhenEditor({ schedule, version, isPending, save, onDone }: Edito
         <Button onClick={onDone}>Cancel</Button>
       </div>
       <p className={styles['small']} id={`${ids}-owner`}>
-        {ownerWarning} Times are Singapore time.
+        {OWNER_WARNING} Times are {teamTime()}.
       </p>
       {error ? (
         <p className={styles['problem']} id={`${ids}-error`} role="alert">

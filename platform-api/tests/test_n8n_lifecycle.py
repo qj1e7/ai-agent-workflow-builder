@@ -89,7 +89,9 @@ async def test_safety_turn_it_on_says_on_only_once_n8n_has_every_trigger_live(ow
     assert own.n8n.workflows[workflow_id]["activeVersionId"] == first["n8n_version_id"]
     assert (first["published_by"], first["published_in"]) == ("carol", "portal")
     shown = datetime.fromisoformat(view["next_run_at"])
-    assert shown == next_run(first["document"], workflow_id, shown - timedelta(days=1))
+    assert shown == next_run(
+        first["document"], workflow_id, shown - timedelta(days=1), SINGAPORE.key
+    )
     assert (shown.astimezone(SINGAPORE).hour, shown.astimezone(SINGAPORE).minute) == (8, 0)
 
     again = await move(own, "turn-on", use_case_id)

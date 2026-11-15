@@ -38,7 +38,6 @@ WEEKDAY: dict[Day, int] = {
     "sunday": 6,
 }
 SATURDAY = 5
-TIME_ZONE = "Asia/Singapore"
 STEP_MINUTES = 5
 DEFAULT_DAY: Day = "monday"
 DEFAULT_AT = "09:00"
@@ -59,7 +58,8 @@ def parse_at(text: str) -> time | None:
 class Schedule:
     day: Day
     at: str
-    time_zone: str = TIME_ZONE
+    time_zone: str
+    """An IANA name. A new schedule is in the team time zone."""
 
     @property
     def time_of_day(self) -> time:

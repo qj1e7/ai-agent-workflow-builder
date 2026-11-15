@@ -37,7 +37,7 @@ from platform_api.orchestration.watch_store import WatchFacts
 from platform_api.shared import N8nExecutionId, Principal, RunId, UseCaseId
 from tests.conftest import PostgresUrls
 from tests.fake_n8n import FakeN8n
-from tests.support import ALICE, BOB, CAROL, SPEC, schedule_owners_listed
+from tests.support import ALICE, BOB, CAROL, SPEC, TEAM_ZONE, schedule_owners_listed
 from tests.test_builder_lifecycle import Lab, ModelConnected
 from tests.test_n8n_builder import BODY, ERROR_WORKFLOW, WRITES, lab
 from tests.test_n8n_lifecycle import NEVER_LIVE, Workflows
@@ -185,7 +185,7 @@ async def test_the_move_lays_it_out_in_n8n_with_its_schedule_and_puts_it_live(m:
 
     assert isinstance(moved, MovedToN8n) and moved.version == 4
     trigger = next(n for n in m.nodes(moved.workflow_id) if n["type"] == SCHEDULE_TRIGGER)
-    assert trigger["parameters"] == schedule_rule(Schedule("tuesday", "07:30"))
+    assert trigger["parameters"] == schedule_rule(Schedule("tuesday", "07:30", TEAM_ZONE))
     row = await m.use_case(use_case_id)
     assert (row["engine"], row["n8n_workflow_id"], row["current_version"]) == (
         "own",
@@ -233,7 +233,9 @@ async def test_safety_nobody_whose_work_a_moved_workflow_is_approves_its_schedul
     may say yes."""
     w.workflows.versions = {"v1": MOVED}
     await schedule_owners_listed(w.h.db, ALICE)
-    await ScheduleBook(w.h.db).save(SPEC.use_case_id, Schedule("tuesday", "07:30"), ALICE)
+    await ScheduleBook(w.h.db).save(
+        SPEC.use_case_id, Schedule("tuesday", "07:30", TEAM_ZONE), ALICE
+    )
     await w.ask()
     run = await w.run()
     assert {ALICE.user_id, CAROL.user_id, DAVE.user_id} <= run.parties

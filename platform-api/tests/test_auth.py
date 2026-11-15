@@ -168,6 +168,7 @@ def test_dev_mode_rejects_missing_or_unknown_user(headers: dict[str, str]):
                 "roles": ["operator", "approver"],
                 "on_list": True,
                 "n8n_access": False,
+                "time_zone": "Asia/Singapore",
             },
         ),
         (
@@ -178,6 +179,7 @@ def test_dev_mode_rejects_missing_or_unknown_user(headers: dict[str, str]):
                 "roles": ["approver"],
                 "on_list": True,
                 "n8n_access": False,
+                "time_zone": "Asia/Singapore",
             },
         ),
     ],
