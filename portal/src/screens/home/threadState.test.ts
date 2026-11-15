@@ -3,7 +3,7 @@ import type { PlannerReply } from '../../api/types'
 import { EMPTY_FORM } from './card'
 import { EMPTY, isThinking, previousOf, threadReducer } from './threadState'
 
-const REPLY: PlannerReply = { answer: 'abilities', parts: [] }
+const REPLY: PlannerReply = { answer: 'abilities', how_to_start: false, parts: [] }
 
 describe('the thread', () => {
   it('shows the person’s words, then the Planner thinking, then its answer in the same place', () => {

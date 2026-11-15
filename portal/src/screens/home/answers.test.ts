@@ -20,6 +20,7 @@ import {
   refusalNext,
   sayOf,
   startingPoints,
+  startSteps,
   stateWords,
   TAG_CANT,
   TAG_CHOICE,
@@ -159,6 +160,29 @@ describe('the lists Home shows without being asked', () => {
 
   it('offers only examples that set something up, which the platform vouches for', () => {
     expect(startingPoints(CAPS)).toEqual(['Keep track of the LangGraph version'])
+  })
+})
+
+describe('How to start, from the registry', () => {
+  const CAPS = capabilities as CapabilitiesView
+  const withTeams = (state: CapabilitiesView['capabilities'][number]['state']): CapabilitiesView => ({
+    ...CAPS,
+    capabilities: CAPS.capabilities.map((entry) => (entry.id === 'teams.ask' ? { ...entry, state } : entry)),
+  })
+
+  it('walks from her words to the yes, with the registry’s own example', () => {
+    expect(startSteps(CAPS)).toEqual([
+      'Tell me what should run by itself, in your own words, like “Keep track of the LangGraph version”.',
+      'Check the card I make, and change anything I guessed.',
+      'Press Set up. I do a test run, which writes nothing.',
+      'If the test passes, press Turn it on.',
+      'Nothing is written until an Approver says yes in Teams.',
+    ])
+  })
+
+  it('names Teams only while the platform can ask there, and no example it doesn’t have', () => {
+    expect(startSteps(withTeams('needs_setup')).at(-1)).toBe('Nothing is written until an Approver says yes.')
+    expect(startSteps({ ...CAPS, examples: [] })[0]).toBe('Tell me what should run by itself, in your own words.')
   })
 })
 

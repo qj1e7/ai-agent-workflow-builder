@@ -309,6 +309,9 @@ def planner_fixtures(root: Path) -> dict[str, WireModel]:
             rest="Create the ticket",
         ),
         "planner/answer.abilities.json": AbilitiesReply(),
+        "planner/answer.abilities.how_to_start.json": AbilitiesReply(
+            how_to_start=True, parts=[does("list me the steps to use this app")]
+        ),
         "planner/answer.ideas.json": IdeasReply(),
         "planner/answer.check_workflows.json": CheckWorkflowsReply(use_case_id=None),
         "planner/answer.check_workflows.leftover.json": CheckWorkflowsReply(

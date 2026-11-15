@@ -366,6 +366,16 @@
   list-style: disc;
 }
 
+/* How to start: the same short list, numbered. */
+.steps {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: 20px;
+  font-size: 0.92rem;
+  list-style: decimal;
+}
+
 /* "and N more" after the which-workflow chips: a 44 px target that takes the chips' line. */
 .moreChoices {
   display: inline-flex;

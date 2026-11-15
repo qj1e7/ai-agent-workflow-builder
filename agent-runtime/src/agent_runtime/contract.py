@@ -1098,6 +1098,11 @@ class NeedsMeAnswer(WireModel):
 
 class AbilitiesAnswer(WireModel):
     kind: Literal["abilities"] = "abilities"
+    how_to_start: bool = Field(
+        default=False,
+        description='True when the request asks how to start using the app, as "help" or '
+        '"list the steps". The Portal then leads with the steps, not the list of what it can do.',
+    )
 
 
 class QuestionAnswer(WireModel):

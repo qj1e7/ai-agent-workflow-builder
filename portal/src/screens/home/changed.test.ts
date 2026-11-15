@@ -129,12 +129,12 @@ describe('what arrives in the chat', () => {
     const arrived = threadReducer(asking, { type: 'arrived', reply: REFUSED })
     expect(arrived.messages.map((m) => m.kind)).toEqual(['reply', 'me', 'thinking'])
     expect(threadReducer(arrived, { type: 'failed' }).messages).toEqual([{ kind: 'reply', id: 3, reply: REFUSED, typed: '' }])
-    const answered = threadReducer(arrived, { type: 'answered', reply: { answer: 'abilities', parts: [] } as PlannerReply, typed: 'Check my workflows' })
+    const answered = threadReducer(arrived, { type: 'answered', reply: { answer: 'abilities', how_to_start: false, parts: [] } as PlannerReply, typed: 'Check my workflows' })
     expect(answered.messages.map((m) => m.kind)).toEqual(['reply', 'me', 'reply'])
   })
 
   it('does not take the card for the answer a typed request follows on from', () => {
-    const asked = threadReducer(threadReducer(EMPTY, { type: 'sent', text: 'Check my workflows' }), { type: 'answered', reply: { answer: 'abilities', parts: [] } as PlannerReply, typed: 'Check my workflows' })
+    const asked = threadReducer(threadReducer(EMPTY, { type: 'sent', text: 'Check my workflows' }), { type: 'answered', reply: { answer: 'abilities', how_to_start: false, parts: [] } as PlannerReply, typed: 'Check my workflows' })
     expect(previousOf(threadReducer(asked, { type: 'arrived', reply: REFUSED }))?.request).toBe('Check my workflows')
     expect(previousOf(threadReducer(EMPTY, { type: 'arrived', reply: REFUSED }))).toBeNull()
   })

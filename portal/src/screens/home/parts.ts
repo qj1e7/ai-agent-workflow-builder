@@ -47,6 +47,9 @@ export interface CrossContext {
   readonly short?: boolean
 }
 
+/** The request that moves the whole Software watchlist to the time she asked of one software. */
+export const watchlistRuns = (time: string): string => `Make the Software watchlist run ${time.trim()}`
+
 /** “every weekday except Friday” leaves a day out, which no schedule here can hold. Anything else reads as how often. */
 const LEAVES_OUT = /^(?:except|excluding|but not|apart from|other than)\b/i
 
@@ -130,8 +133,11 @@ export function leftoverParts(reply: PlannerReply): PartView[] {
     case 'ideas':
     case 'offline':
       return []
-    case 'cant':
-      return reply.alternative?.answer === 'setup_card' ? [] : above(reply.parts.filter((part) => part.reason !== 'cant_do' && part.reason !== 'needs_the_rest'))
+    case 'cant': {
+      // The card names only the can'ts with something to build. One with nothing to build, as a yes that can't be skipped, is drawn here.
+      const named = (part: PartView) => reply.cant.some((row) => row.needs !== null && row.text.trim().toLowerCase() === part.text.trim().toLowerCase())
+      return reply.alternative?.answer === 'setup_card' ? [] : above(reply.parts.filter((part) => !(part.reason === 'cant_do' && named(part)) && part.reason !== 'needs_the_rest'))
+    }
     case 'operators':
       // The answer’s sentence already says who makes the changes, so only a question beside them is marked.
       return above(reply.parts.filter((part) => part.reason !== 'operators'))

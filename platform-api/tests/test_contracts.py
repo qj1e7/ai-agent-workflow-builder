@@ -186,6 +186,7 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "planner/answer.which_software.json": TypeAdapter(PlannerReply),
     "planner/answer.refused.json": TypeAdapter(PlannerReply),
     "planner/answer.abilities.json": TypeAdapter(PlannerReply),
+    "planner/answer.abilities.how_to_start.json": TypeAdapter(PlannerReply),
     "planner/answer.ideas.json": TypeAdapter(PlannerReply),
     "planner/answer.check_workflows.json": TypeAdapter(PlannerReply),
     "planner/answer.check_workflows.leftover.json": TypeAdapter(PlannerReply),

@@ -277,6 +277,11 @@ class RefusedReply(Reply):
 
 class AbilitiesReply(Reply):
     answer: Literal["abilities"] = "abilities"
+    how_to_start: bool = Field(
+        default=False,
+        description='True when the request asks how to start using the app, as "help" or '
+        '"list the steps". The Portal then leads with the steps, not the list of what it can do.',
+    )
 
 
 class IdeasReply(Reply):
@@ -944,8 +949,8 @@ class PlannerFront:
                 return WhyStoppedReply(use_case_id=await self._which(words))
             case NeedsMeAnswer():
                 return NeedsMeReply()
-            case AbilitiesAnswer():
-                return AbilitiesReply()
+            case AbilitiesAnswer(how_to_start=how_to_start):
+                return AbilitiesReply(how_to_start=how_to_start)
             case QuestionAnswer(text=text, looked_at=looked_at, about_software=software):
                 return QuestionReply(text=text, looked_at=looked_at, about_software=software)
             case EditAnswer() as edit:

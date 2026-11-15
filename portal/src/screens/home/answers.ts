@@ -272,3 +272,16 @@ export function whyNot(entry: Pick<CapabilityView, 'cant' | 'why' | 'fix'>): str
 export function startingPoints(view: CapabilitiesView): readonly string[] {
   return view.examples.filter((example) => example.kind !== 'learn').map((example) => example.text)
 }
+
+/** How to start, step by step: the registry’s first example in her words, and Teams named only while the platform can ask for a yes there. */
+export function startSteps(view: CapabilitiesView): readonly string[] {
+  const example = startingPoints(view)[0]
+  const teams = view.capabilities.some((entry) => entry.id === 'teams.ask' && entry.state === 'ready')
+  return [
+    example === undefined ? 'Tell me what should run by itself, in your own words.' : `Tell me what should run by itself, in your own words, like “${example}”.`,
+    'Check the card I make, and change anything I guessed.',
+    'Press Set up. I do a test run, which writes nothing.',
+    'If the test passes, press Turn it on.',
+    teams ? 'Nothing is written until an Approver says yes in Teams.' : 'Nothing is written until an Approver says yes.',
+  ]
+}

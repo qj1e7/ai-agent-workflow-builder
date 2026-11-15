@@ -166,6 +166,7 @@ button, input { font: inherit; color: inherit; }
 .live .stamp { animation: stamp calc(420ms * var(--k)) var(--ease-out) both; }
 @keyframes stamp { from { opacity: 0; transform: translateY(-50%) rotate(-8deg) scale(1.8); } to { opacity: 1; transform: translateY(-50%) rotate(-8deg) scale(1); } }
 .caps { margin: 0; padding-left: 18px; font-size: 0.92rem; display: grid; gap: 2px; }
+.btn.offer { white-space: normal; text-align: start; padding-block: 6px; }
 .card.big { padding: 18px 20px; }
 
 /* Lines: small inside a chat card, large in the side panel */
@@ -586,6 +587,7 @@ button, input { font: inherit; color: inherit; }
       <li>Bob sees what will be written and what wasn’t checked, can ask Alice a question, and can decline with a reason. A declined record never says “created”.</li>
       <li>Needs you is split into Do now and Set up, and stays pinned while you chat.</li>
       <li>n8n views show only for people with n8n access. Switch “View as” to compare.</li>
+      <li>“help”, “how do I start?” or “list the steps to use this app” gets How to start: the steps from your words to the yes, and an example to try. “What can you do?” still lists what it can do.</li>
       <li>Try typing “what needs my attention today?”, “is LangGraph up to date?”, “watch Kubernetes and email me”, “make it daily” or “pause the React check”.</li>
     </ul>
   </section>
@@ -824,6 +826,10 @@ const histCard = () => `<div class="card"><div class="c-head"><b>Your recent dec
 const capsCard = () => (W.user === 'bob'
   ? '<div class="card"><div class="c-head"><b>What I can do</b></div><ul class="caps"><li>Show what waits for your yes</li><li>Show exactly what a change will write</li><li>Show your past decisions</li></ul></div>'
   : '<div class="card"><div class="c-head"><b>What I can do</b></div><ul class="caps"><li>Watch software for new releases</li><li>Create Jira tickets, after a yes</li><li>Explain a stopped run, and retry it</li><li>Change or pause your workflows</li></ul><p class="small muted">Not yet: Teams channels, email, Confluence.</p></div>');
+const START_EXAMPLE = 'Keep track of the LangGraph version';
+const startCard = () => (W.user === 'bob'
+  ? capsCard()
+  : `<div class="card"><div class="c-head"><b>How to start</b></div><ol class="caps"><li>Tell me what should run by itself, in your own words, like “${START_EXAMPLE}”.</li><li>Check the card I make, and change anything I guessed.</li><li>Press Set up. I do a test run, which writes nothing.</li><li>If the test passes, press Turn it on.</li><li>Nothing is written until an Approver says yes in Teams.</li></ol><div class="pick" role="group" aria-label="Try one"><button type="button" data-say="${START_EXAMPLE}">${START_EXAMPLE}</button></div></div>`);
 const cantCard = (head, alt, ask) => `<div class="card"><div class="c-head"><b>${head}</b></div>${alt ? `<p class="muted">${alt}</p>` : ''}${ask ? '<div class="c-foot"><span class="c-act"><button class="btn ghost sm" type="button" data-toast="Asked the team. Their answer will show here.">Ask the team</button></span></div>' : ''}</div>`;
 const CANT = [
   [/(teams|channel|slack)/, 'I can’t post in Teams channels yet', 'Run results show here, in the chat.', true],
@@ -1701,7 +1707,10 @@ function buildAsk(t) {
     const f = W.wf[d.soft];
     const [st, ss] = wfState(d.soft);
     W.focus = d.soft;
-    return pushCard(`<div class="card"><div class="c-head"><b>${f.name}</b><span class="pill" data-s="${ss}">${st}</span></div><p>It already watches ${W.soft[d.soft].name}, ${lower(long(f.sched))}.</p><div class="c-foot"><span class="c-act"><button class="btn ghost sm" type="button" data-open="wf:${d.soft}">Open it</button></span></div></div>`, 'lead', 'You already have this one.');
+    const said = d.sched.day !== undefined || d.sched.time ? { day: d.sched.day === undefined ? f.sched.day : d.sched.day, time: d.sched.time || f.sched.time } : null;
+    const move = said && long(said) !== long(f.sched) && canEdit() ? `Make the ${f.name} run ${lower(long(said))}` : '';
+    const offer = move ? `<button class="btn ghost sm offer" type="button" data-say="${move}">${move}</button>` : '';
+    return pushCard(`<div class="card"><div class="c-head"><b>${f.name}</b><span class="pill" data-s="${ss}">${st}</span></div><p>It already watches ${W.soft[d.soft].name}, ${lower(long(f.sched))}.</p><div class="c-foot"><span class="c-act">${offer}<button class="btn ghost sm" type="button" data-open="wf:${d.soft}">Open it</button></span></div></div>`, 'lead', 'You already have this one.');
   }
   W.drafts[d.key] = d;
   const m = pushCard(partsCard(d), 'lead', 'Here’s what I understood.');
@@ -1873,7 +1882,8 @@ const EDIT_RE = /\b(make|change|switch|move|set|run|put|reschedule)\b/;
 async function respond(t) {
   const s = t.toLowerCase();
   if (/\bn8n\b/.test(s)) return n8nAsk(s);
-  if (/\b(what can you|help|how do i)\b/.test(s)) return pushCard(capsCard());
+  if (/\b(help|how (do|can) i (start|use|begin)|steps|get started|how does (this|it) work)\b/.test(s)) return pushCard(startCard());
+  if (/\b(what can you|how do i)\b/.test(s)) return pushCard(capsCard());
   if (canEdit() && /\b(pause|turn off|stop running)\b/.test(s) && findWf(s)) return pauseIt(findWf(s), true);
   if (canEdit() && /\b(resume|unpause|turn (it )?back on)\b/.test(s) && findWf(s)) return pauseIt(findWf(s), false);
   if (canEdit() && EDIT_RE.test(s) && SCHED_RE.test(s) && !/\b(watch|track|monitor|new release)\b/.test(s)) return editAsk(s);
