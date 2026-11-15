@@ -85,6 +85,8 @@ HOW_TO_START: Final = re.compile(
 )
 """A question about how to start using the app, as "how do I start", "list the steps to use this
 app" or "help"."""
+SET_UP_BY_THEM: Final = re.compile(r"\b(?:i|we)\s+(?:have\s+|had\s+)?set\s+up\b", re.IGNORECASE)
+"""A workflow already set up, as "what I set up"."""
 
 STATE_ANSWERS: Final = (CheckWorkflowsAnswer, WhyStoppedAnswer, NeedsMeAnswer, QuestionAnswer)
 """The answers that read platform state for a question, and set nothing up."""
@@ -149,7 +151,13 @@ def _about_the_app(clause: str) -> bool:
     """Whether the clause asks what the Planner can do or how to start using the app, and orders
     nothing, so "help me close the done tickets" is no question about the app."""
     asks = ABOUT_THE_PLANNER.search(clause) or HOW_TO_START.search(clause)
-    return bool(asks) and not _orders(clause) and not change_verbs_in(clause)
+    return bool(asks) and not _orders(clause) and not _writes(clause)
+
+
+def _writes(clause: str) -> bool:
+    """Whether the clause holds a write, as "delete the old tickets". "what I set up" names a
+    workflow she has, and writes nothing."""
+    return bool(change_verbs_in(SET_UP_BY_THEM.sub(" ", clause)))
 
 
 def asks_how_to_start(request: str) -> bool:
@@ -196,8 +204,9 @@ def _about_state(text: str, clauses: list[Span], names: list[str]) -> list[Span]
 
 
 def _the_only_question(text: str, clauses: list[Span]) -> list[Span]:
-    """The request's one clause when it orders nothing: the answer was chosen for it."""
-    return [c for c in clauses if len(clauses) == 1 and not _orders(text[c[0] : c[1]])]
+    """The request's one clause when it orders and writes nothing: the answer was chosen for it."""
+    alone = [text[a:b] for a, b in clauses if len(clauses) == 1]
+    return clauses if alone and not _orders(alone[0]) and not _writes(alone[0]) else []
 
 
 def _answered(text: str, clauses: list[Span], asked: list[Span]) -> list[RequestPart]:
