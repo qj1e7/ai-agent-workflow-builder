@@ -225,6 +225,19 @@ def judge_question(case: ReplyCase, answer: str) -> str:
     )
 
 
+def _rejected(shown: Shown, steps: Steps) -> str:
+    """Why the reply fell back, with the reply itself and the verifier's quoted words, so a
+    reject can be read in the results without running the case again."""
+    said = "" if steps.envelope is None else f" | {steps.envelope.model_dump_json()}"
+    verdict = steps.verdict
+    quoted = (
+        ""
+        if verdict is None
+        else f" | verifier: {verdict.happened_words} {verdict.skip_words} {verdict.unbuilt_words}"
+    )
+    return f"{shown.fell_back}{said}{quoted}"
+
+
 def score(case: ReplyCase, answer: Answer) -> list[Check]:
     refused = word_rule_refusal(case.task)
     if refused is not None:
@@ -246,7 +259,8 @@ def score(case: ReplyCase, answer: Answer) -> list[Check]:
     if case.must_not_refuse:
         found.append(check("keeps_a_plain_write", ["refused"] if kind == "refused" else []))
     if steps.reply_asked:
-        found.append(check("free_reply_shown", [shown.fell_back] if shown.fell_back else []))
+        rejected = [_rejected(shown, steps)] if shown.fell_back else []
+        found.append(check("free_reply_shown", rejected))
     slow = [f"{s:.1f} s" for s in steps.seconds if s > CALL_LIMIT_S]
     found.append(check("calls_within_limit", slow))
     return found
