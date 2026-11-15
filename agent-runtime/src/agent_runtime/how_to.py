@@ -12,7 +12,10 @@ HOW_TO: Final = (
     "A workflow is a task that runs again and again on a schedule, such as every Monday at 9am.",
     "The Planner reads your words and shows a set-up card with what it understood, part by part.",
     "Each part of the card has a tick, a cross, or a question for you to answer.",
-    "An Operator can change any part of the card, then turn the workflow on or save it as a draft.",
+    "An Operator can change any part of the card, then press Set up for a test run that writes "
+    "nothing.",
+    "If the test run passes, the Operator presses Turn it on.",
+    "A card you leave stays as a draft by itself, and Resume on Workflows opens it again.",
     "Anything that writes data, such as a new Jira ticket, waits for an Approver's yes in Teams.",
     "The person who asked is never the Approver of their own request.",
     "Operators set up and change workflows, and Approvers say yes or no to requests.",
@@ -20,6 +23,8 @@ HOW_TO: Final = (
     "Needs you lists what waits for you, such as a request to approve or a run that stopped.",
     "The Watchlist holds the software your team runs, and it checks GitHub for new releases on "
     "one schedule.",
+    "To add software to the Watchlist, open the Watchlist and fill in Add software, or type "
+    "Check and its name in the box, such as Check LangGraph for new releases.",
     "To change when a workflow runs, say so in the box, such as Move the morning check to 10am.",
     "To pause a workflow, type Pause and its name, and type Resume and its name to turn it back "
     "on.",
