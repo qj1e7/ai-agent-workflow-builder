@@ -97,6 +97,7 @@ from platform_api.orchestration.connections import (
 from platform_api.orchestration.n8n import (
     ChangedInN8n,
     Expected,
+    ListedWorkflow,
     N8nDrafts,
     N8nError,
     N8nWorkflow,
@@ -246,6 +247,7 @@ __all__ = [
     "Edge",
     "ChangedInN8n",
     "Expected",
+    "ListedWorkflow",
     "N8nDrafts",
     "N8nError",
     "N8nWorkflow",

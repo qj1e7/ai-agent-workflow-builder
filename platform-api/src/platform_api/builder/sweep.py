@@ -121,6 +121,12 @@ class Regraded:
 type Seen = Found | Gone | Regraded
 
 
+def grading_mark(error_workflow: str | None, zone: str) -> str:
+    """What a grade was made under: this release's rules, the error workflow and the team's
+    time zone. A version marked otherwise is graded again."""
+    return f"{GRADING_RULES} {error_workflow} {zone}"
+
+
 def last_activation(version_id: str, timeline: Sequence[PublishEvent]) -> PublishEvent | None:
     activated = [e for e in timeline if e.version_id == version_id and e.event == "activated"]
     if not activated:
@@ -198,7 +204,7 @@ class VersionsSweep:
         error_workflow = (
             await self._n8n.error_workflow_id() or await self._n8n.recorded_error_workflow_id()
         )
-        mark = f"{GRADING_RULES} {error_workflow} {self._zone}"
+        mark = grading_mark(error_workflow, self._zone)
         found: list[Seen] = []
         for row in rows:
             try:

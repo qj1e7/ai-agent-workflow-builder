@@ -146,6 +146,7 @@ async def test_the_platform_s_key_has_only_the_scopes_it_uses_and_runs_out_in_da
         "workflow:create",
         "workflow:deactivate",
         "workflow:delete",
+        "workflow:list",
         "workflow:move",
         "workflow:read",
         "workflow:update",
