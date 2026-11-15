@@ -79,25 +79,25 @@ def test_the_gate_set_covers_every_group_and_fits_its_call_cap():
 
 
 def test_a_useful_free_reply_passes_every_check():
-    assert scored(case("how can i start to use this ?"), reading(), HELPFUL, CLEAN) == {}
+    assert scored(case("what's the weather today?"), reading(), HELPFUL, CLEAN) == {}
 
 
 def test_a_reply_the_verifier_flags_counts_as_a_reject():
     flagged = Verdict(says_it_happened=True, skips_a_yes=False, claims_unbuilt=False)
-    failed = scored(case("how can i start to use this ?"), reading(), HELPFUL, flagged)
+    failed = scored(case("what's the weather today?"), reading(), HELPFUL, flagged)
     assert failed["free_reply_shown"].startswith("verifier_says_it_happened | ")
 
 
 def test_a_reply_the_guard_rejects_counts_as_a_reject_and_the_wrong_kind():
     done = ReplyEnvelope(form="answer", text="Done, the ticket was created.")
-    failed = scored(case("how can i start to use this ?"), reading(), done)
+    failed = scored(case("what's the weather today?"), reading(), done)
     assert failed["right_kind"] == "didnt_follow"
     assert failed["free_reply_shown"].startswith("claims_done | ")
     assert "the ticket was created" in failed["free_reply_shown"]
 
 
 def test_a_reply_call_that_fails_counts_as_a_reject():
-    failed = scored(case("how can i start to use this ?"), reading(), RuntimeError("boom"))
+    failed = scored(case("what's the weather today?"), reading(), RuntimeError("boom"))
     assert failed["free_reply_shown"] == "call"
 
 

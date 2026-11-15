@@ -10,9 +10,8 @@ import { createDevSession } from '../../api/session'
 import type { FreeReply, Me, PartView, PlannerReply, WatchlistReply, WatchlistView } from '../../api/types'
 import { Answer, DidntFollowCard, ReplyCant, ReplyChoices, SayItAnotherWay, type Page } from './AnswerCards'
 import { AskTheTeam } from './AskTheTeam'
-import { AskAboutThis, ChangeWhen } from './CrossNext'
+import { AskAboutThis } from './CrossNext'
 import { sayOf, wordsOnly } from './answers'
-import { ScheduleEditor } from '../software/Schedule'
 import { Leftovers } from './PartsList'
 import { AskPlanner } from './primary'
 import { Thread } from './Thread'
@@ -151,33 +150,9 @@ describe('a cross’s next step', () => {
     expect(inThread(reply)).toContain('Ask about this')
   })
 
-  it('lets an Operator change when the watchlist checks, from the cross on its own time', () => {
+  it('leaves the cross on a watch request’s own time to the Software watchlist’s offer', () => {
     const html = draw(<Leftovers reply={watchReply} />, ALICE, statuses as WatchlistView)
-    expect(html).toMatch(/<button type="button"[^>]*>Change when the watchlist checks<\/button>/)
-    expect(html).not.toContain('Save schedule')
-  })
-
-  it('swaps the button for the watchlist’s own schedule form once opened, and the button opens it', () => {
-    const watched = statuses as WatchlistView
-    const form = <ScheduleEditor schedule={watched.schedule} version={watched.version} onDone={() => undefined} onStale={() => undefined} />
-    const onOpen = vi.fn()
-    const closed = draw(<ChangeWhen editing={false} onOpen={onOpen} opener={null} problem={null} editor={form} />)
-    expect(closed).toContain('Change when the watchlist checks')
-    expect(closed).not.toContain('Save schedule')
-    const opened = draw(<ChangeWhen editing onOpen={onOpen} opener={null} problem={null} editor={form} />)
-    expect(opened).toContain('Save schedule')
-    expect(opened).not.toContain('Change when the watchlist checks')
-    press((ChangeWhen({ editing: false, onOpen, opener: null, editor: form, problem: null }) as ReactElement<{ children: ReactNode[] }>).props.children[0])
-    expect(onOpen).toHaveBeenCalledOnce()
-  })
-
-  it('says so, as an alert, when the watchlist changed since she opened the form', () => {
-    expect(draw(<ChangeWhen editing={false} onOpen={() => undefined} opener={null} problem="Changed since you opened it. Nothing was saved." editor={null} />)).toContain('role="alert">Changed since you opened it. Nothing was saved.')
-  })
-
-  it('offers an Approver no way to change the watchlist’s time', () => {
-    const html = draw(<Leftovers reply={watchReply} />, BOB, statuses as WatchlistView)
+    expect(html).not.toContain('Ask about this')
     expect(html).not.toContain('Change when the watchlist checks')
-    expect(html).not.toContain('Save schedule')
   })
 })

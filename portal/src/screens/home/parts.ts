@@ -90,22 +90,18 @@ export function crossLabel(part: PartView, when?: When, short = false): string {
   return others.length > 0 ? andList(others.map(quote)) : quote(part.text)
 }
 
-/** The one thing a person can tap on a cross: ask that part on its own, or change the time the Software watchlist checks. */
-export type NextStep = { readonly kind: 'ask'; readonly text: string } | { readonly kind: 'schedule' }
-
 /**
- * A cross always has a next step (ADR 0047). A clause the Planner didn’t follow, or a question it answers on its own, is sent
- * back as its own message. A time on a watch request is the watchlist’s own schedule, which only an Operator changes. The rest
- * already sit on a card with its own button, or have nothing to tap.
+ * What a cross sends as its own message when she taps Ask about this (ADR 0047): a clause the Planner didn’t follow, or a
+ * question it answers on its own. A time on a watch request has the Software watchlist’s offer instead, and the rest already sit
+ * on a card with its own button. Null when the cross has no such step.
  */
-export function nextStepOf(part: PartView, asker: 'operator' | 'approver'): NextStep | null {
+export function askOfCross(part: PartView): string | null {
   const reason: PartReason | null = part.reason ?? (part.mark === 'cant' ? 'not_followed' : null)
   switch (reason) {
     case 'not_followed':
     case 'ask_on_its_own':
-      return part.text.trim() === '' ? null : { kind: 'ask', text: part.text }
+      return part.text.trim() === '' ? null : part.text
     case 'own_time':
-      return asker === 'operator' ? { kind: 'schedule' } : null
     case null:
     case 'cant_do':
     case 'one_day':

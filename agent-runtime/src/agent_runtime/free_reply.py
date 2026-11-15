@@ -70,8 +70,12 @@ def dead_end(answer: PlannerAnswer, parts: list[RequestPart], message: str) -> D
     """The dead ends ADR 0047 names, or None when the answer stands: the catch-all list of
     abilities when no part of the message asked what the Planner can do, the question lane's
     fixed text, and a can't or part card whose only crosses are "I didn't follow this part" or
-    "Ask this on its own", with no part ticked and nothing named it can't do."""
+    "Ask this on its own", with no part ticked and nothing named it can't do. A question about
+    how to start is the help lane's: its How to start card is registry-based and reviewed, so
+    the free reply never takes it."""
     match answer:
+        case AbilitiesAnswer(how_to_start=True):
+            return None
         case AbilitiesAnswer() if not any(p.mark == "will_do" for p in parts):
             return DeadEnd((CATCH_ALL, *_found_in(message)))
         case QuestionAnswer() if is_fallback(answer):

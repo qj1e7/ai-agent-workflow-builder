@@ -43,7 +43,7 @@ def envelope_of(row: dict[str, Any]) -> ReplyEnvelope:
 
 def shown_with(row: dict[str, Any], verdict: object) -> object:
     chat = ScriptedChat(structured=[reading(), envelope_of(row), verdict])
-    request = AnswerRequest(task="how do i start", model=answer_request().model)
+    request = AnswerRequest(task="what's the weather today?", model=answer_request().model)
     result = answer_task(request, lambda timeout: chat)
     assert isinstance(result, Answered)
     return result.answer

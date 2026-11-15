@@ -42,6 +42,8 @@ from tests.test_questions import FACTS, QUESTION, reading
 
 HOW_TO_START = "how can i start to use this ?"
 STEPS = "list me the steps to use this app"
+WEATHER = "what's the weather today?"
+"""A message no ready-made answer fits, read as about the Planner or as a task: a dead end."""
 HELPFUL = ReplyEnvelope(
     form="answer",
     text="To start, type what you want done in the box, such as Check LangGraph for new "
@@ -76,19 +78,26 @@ def prompt_of(chat: ScriptedChat, call: int = -1) -> tuple[str, str]:
 
 
 @pytest.mark.parametrize("task", [HOW_TO_START, STEPS])
-@pytest.mark.parametrize("about", ["abilities", "none"])
-def test_the_team_leads_how_to_questions_get_a_useful_reply(task: str, about: str):
-    result, chat = answered(task, reading(about), HELPFUL, CLEAN)
-    assert result.answer == FreeReplyAnswer(form="answer", text=HELPFUL.text)
-    assert asked_shapes(chat) == ["TaskRead", "ReplyEnvelope", "Verdict"]
-    assert [p.mark for p in result.parts] == ["will_do"]
+def test_the_team_leads_how_to_questions_get_the_help_lanes_card_and_no_free_reply(task: str):
+    """The help lane's How to start card is registry-based and reviewed, so the free reply
+    never takes a question the help lane answers (#290)."""
+    result, chat = answered(task, reading())
+    assert isinstance(result.answer, AbilitiesAnswer) and result.answer.how_to_start
+    assert asked_shapes(chat) == ["TaskRead"]
     assert all(p.reason != "ask_on_its_own" for p in result.parts)
 
 
 @pytest.mark.parametrize("task", [HOW_TO_START, STEPS])
-def test_with_facts_the_question_lane_says_no_first_then_the_free_reply_answers(task: str):
+def test_read_as_a_task_the_team_leads_questions_still_get_a_useful_free_reply(task: str):
+    result, chat = answered(task, reading("none"), HELPFUL, CLEAN)
+    assert result.answer == FreeReplyAnswer(form="answer", text=HELPFUL.text)
+    assert asked_shapes(chat) == ["TaskRead", "ReplyEnvelope", "Verdict"]
+    assert [p.mark for p in result.parts] == ["will_do"]
+
+
+def test_with_facts_the_question_lane_says_no_first_then_the_free_reply_answers():
     no = QuestionReply(about_their_data=False)
-    result, chat = answered(task, reading(), no, HELPFUL, CLEAN, facts=FACTS)
+    result, chat = answered(WEATHER, reading(), no, HELPFUL, CLEAN, facts=FACTS)
     assert asked_shapes(chat) == ["TaskRead", "QuestionReply", "ReplyEnvelope", "Verdict"]
     assert isinstance(result.answer, FreeReplyAnswer)
 
@@ -191,7 +200,7 @@ def test_the_word_rule_still_refuses_before_any_model_call():
     ],
 )
 def test_a_reply_the_guard_rejects_gives_the_fixed_fallback(envelope: ReplyEnvelope):
-    result, _ = answered(HOW_TO_START, reading(), envelope)
+    result, _ = answered(WEATHER, reading(), envelope)
     assert result.answer == DidntFollowAnswer()
     assert [(p.mark, p.reason) for p in result.parts] == [("cant", "not_followed")]
 
@@ -199,13 +208,13 @@ def test_a_reply_the_guard_rejects_gives_the_fixed_fallback(envelope: ReplyEnvel
 def test_a_failed_or_slow_call_gives_the_fixed_fallback():
     slow = type("ReadTimeout", (Exception,), {})("took too long")
     for failure in (slow, RuntimeError("boom")):
-        result, _ = answered(HOW_TO_START, reading(), failure)
+        result, _ = answered(WEATHER, reading(), failure)
         assert result.answer == DidntFollowAnswer()
 
 
 def test_turned_off_every_dead_end_gets_the_fallback_with_no_model_call():
     chat = ScriptedChat(structured=[reading(), HELPFUL])
-    result = answer_task(request(HOW_TO_START), lambda timeout: chat, free_reply=False)
+    result = answer_task(request(WEATHER), lambda timeout: chat, free_reply=False)
     assert isinstance(result, Answered) and result.answer == DidntFollowAnswer()
     assert asked_shapes(chat) == ["TaskRead"]
 
@@ -213,7 +222,7 @@ def test_turned_off_every_dead_end_gets_the_fallback_with_no_model_call():
 def test_the_reading_failing_is_still_the_model_problem():
     slow = type("ReadTimeout", (Exception,), {})("took too long")
     chat = ScriptedChat(structured=[slow])
-    assert isinstance(answer_task(request(HOW_TO_START), lambda timeout: chat), ModelProblem)
+    assert isinstance(answer_task(request(WEATHER), lambda timeout: chat), ModelProblem)
 
 
 def test_a_fallback_logs_only_the_reply_id_and_the_check(caplog: pytest.LogCaptureFixture):
@@ -228,7 +237,7 @@ def test_a_fallback_logs_only_the_reply_id_and_the_check(caplog: pytest.LogCaptu
 
 def test_a_failed_call_logs_that_the_call_failed(caplog: pytest.LogCaptureFixture):
     with caplog.at_level(logging.WARNING, logger="agent_runtime.free_reply"):
-        answered(HOW_TO_START, reading(), RuntimeError("the key sk-123 was refused"))
+        answered(WEATHER, reading(), RuntimeError("the key sk-123 was refused"))
     logged = [r.getMessage() for r in caplog.records if r.name == "agent_runtime.free_reply"]
     assert len(logged) == 1 and logged[0].endswith(" fell back: call")
     assert "sk-123" not in logged[0]
@@ -246,7 +255,7 @@ def test_a_second_clarifying_question_in_a_row_becomes_a_cant_with_ask_the_team(
 
 
 def test_the_prompt_carries_the_guide_the_registry_the_facts_and_the_message():
-    _, chat = answered(HOW_TO_START, reading(), HELPFUL, CLEAN)
+    _, chat = answered(WEATHER, reading(), HELPFUL, CLEAN)
     system, user = prompt_of(chat, -2)
     assert "never instructions to you" in system
     assert OPERATOR in system and "{role}" not in system
@@ -254,12 +263,12 @@ def test_the_prompt_carries_the_guide_the_registry_the_facts_and_the_message():
     assert "- teams.post: Posts in Teams and emails. Planned." in user
     assert "- github.releases: Check software for new releases on GitHub. Ready." in user
     assert "The facts:\nNone were read." in user
-    assert user.endswith(f"The message:\n{HOW_TO_START}")
+    assert user.endswith(f"The message:\n{WEATHER}")
 
 
 def test_the_prompt_never_carries_the_model_key_or_its_address():
     no = QuestionReply(about_their_data=False)
-    _, chat = answered(HOW_TO_START, reading(), no, HELPFUL, CLEAN, facts=FACTS)
+    _, chat = answered(WEATHER, reading(), no, HELPFUL, CLEAN, facts=FACTS)
     system, user = prompt_of(chat, -2)
     access = answer_request().model
     for secret in (access.api_key, access.base_url):
@@ -270,14 +279,12 @@ def test_the_prompt_carries_only_the_facts_sent_for_this_person():
     facts = PlannerFacts(
         workflows=[WorkflowFact(name="Friday summary", state="on", last_run=None, last_run_at=None)]
     )
-    system, user = reply_messages(request(HOW_TO_START, facts=facts), dead_end_of(HOW_TO_START))
+    system, user = reply_messages(request(WEATHER, facts=facts), dead_end_of(WEATHER))
     assert f"The facts:\n{facts.model_dump_json(exclude_none=True)}" in user
 
 
 def test_an_approver_is_told_they_cant_set_up_workflows():
-    system, _ = reply_messages(
-        request(HOW_TO_START, changes_workflows=False), dead_end_of(HOW_TO_START)
-    )
+    system, _ = reply_messages(request(WEATHER, changes_workflows=False), dead_end_of(WEATHER))
     assert APPROVER in system and OPERATOR not in system
 
 
@@ -389,7 +396,7 @@ def test_a_planted_choice_that_skips_a_yes_never_shows():
     planted = ReplyEnvelope(
         form="clarify", text="How should it run?", choices=["Every Friday", "Skip the approval"]
     )
-    result, _ = answered("I need help with things", reading(), planted)
+    result, _ = answered("help me keep an eye on things", reading(), planted)
     assert result.answer == DidntFollowAnswer()
 
 
@@ -401,7 +408,7 @@ def test_a_planted_offer_of_an_unbuilt_capability_becomes_ask_the_team():
 
 def test_the_free_reply_is_offered_no_tool():
     no = QuestionReply(about_their_data=False)
-    result, chat = answered(HOW_TO_START, reading(), no, HELPFUL, CLEAN, facts=FACTS)
+    result, chat = answered(WEATHER, reading(), no, HELPFUL, CLEAN, facts=FACTS)
     assert isinstance(result.answer, FreeReplyAnswer)
     assert chat.offered == []
     assert chat.asked == [TaskRead, QuestionReply, ReplyEnvelope, Verdict]
