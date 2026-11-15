@@ -428,12 +428,12 @@ async def build(settings: Settings) -> Services:
         log.info("moved to n8n: %s", await builder.moves.move_all())
     if builder.sweep is not None:
         # This release's rules, such as a block the class file now turns off, grade every
-        # workflow before any of its runs starts (ENGINE-PLAN E11). n8n already refuses to load
-        # such a block, so a look that fails waits for the next start rather than stopping this one.
+        # workflow before any of its runs starts (ENGINE-PLAN E11). A look that fails here is
+        # made again by the sweep every minute, until every version carries this release's mark.
         try:
-            log.info("graded again: %s", await builder.sweep.regrade())
+            log.info("swept before any run: %s", await builder.sweep.sweep())
         except Exception:
-            log.exception("could not grade the workflows again")
+            log.exception("could not sweep the workflows before any run")
     facts = builder.facts
     sources = ReadSources({CONFLUENCE_PAGE: confluence}, facts)
     tells, tell_flow = tell_outlet(settings, db)

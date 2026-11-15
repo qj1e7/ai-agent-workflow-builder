@@ -1096,6 +1096,10 @@ class N8nDrafts(Protocol):
 
     async def error_workflow_id(self) -> str | None: ...
 
+    async def recorded_error_workflow_id(self) -> str | None:
+        """The error workflow the last bootstrap recorded, ready or not."""
+        ...
+
     async def save_draft(self, document: Mapping[str, Any]) -> SavedDraft: ...
 
     async def remove(self, workflow_id: str) -> None: ...
@@ -1149,6 +1153,16 @@ class N8nWorkflows:
         """The error workflow, as the last bootstrap that was ready loaded it."""
         loaded = (await self.platform_workflows()).get(ERROR_WORKFLOW)
         return None if loaded is None else loaded.id
+
+    async def recorded_error_workflow_id(self) -> str | None:
+        """The error workflow the last bootstrap recorded, whether or not it was ready, as a
+        bootstrap that loads nothing keeps what the one before recorded."""
+        async with self._db.connection("orchestration") as conn:
+            row = await (
+                await conn.execute("SELECT workflows FROM orchestration.engine_status WHERE id = 1")
+            ).fetchone()
+        loaded: list[dict[str, Any]] = [] if row is None else row["workflows"]
+        return next((str(w["id"]) for w in loaded if w["name"] == ERROR_WORKFLOW), None)
 
     async def platform_workflows(self) -> dict[str, PlatformWorkflow]:
         """As the last bootstrap that was ready recorded them."""

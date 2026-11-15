@@ -10,6 +10,7 @@ its version or what it was asked to do is off in the class file (ADR 0045).
 Pure. A document is the n8n workflow JSON as the public API takes it.
 """
 
+import hashlib
 import uuid
 from collections.abc import Iterable, Mapping, Sequence
 from copy import deepcopy
@@ -20,10 +21,11 @@ from typing import Any, cast
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, ValidationError
 
+from platform_api.orchestration import n8n_schedule, node_classes
 from platform_api.orchestration.agents import CardInput
 from platform_api.orchestration.n8n_calls import WRITE_TARGETS, Grade, WriteEntry
 from platform_api.orchestration.n8n_schedule import interval_problem, schedule_intervals
-from platform_api.orchestration.node_classes import NODE_CLASSES, BlockKind, Off
+from platform_api.orchestration.node_classes import CLASS_FILE, NODE_CLASSES, BlockKind, Off
 from platform_api.orchestration.schedule import TIME_ZONE
 
 type Document = dict[str, Any]
@@ -49,6 +51,15 @@ NODE_TYPES: Mapping[str, NodeType] = {
 """Every type the class file turns on: our node pack, as n8n names a custom extension's nodes
 (`CUSTOM.<name>`, P7 Q11), n8n's three triggers, IF, Merge, No Op, Sticky Note and its data
 nodes. Whether one block may run also depends on its version and what it does."""
+
+GRADING_RULES = hashlib.sha256(
+    b"".join(
+        Path(f).read_bytes()
+        for f in (__file__, node_classes.__file__, CLASS_FILE, n8n_schedule.__file__)
+    )
+).hexdigest()[:16]
+"""The rules a grade is made under: this checker, the class file and the schedule rules, as this
+release holds them. The versions sweep grades again a version graded under others."""
 
 TYPE_OF: Mapping[BlockKind, str] = {
     spec.kind: name for name, spec in NODE_TYPES.items() if spec.kind != "shape"
