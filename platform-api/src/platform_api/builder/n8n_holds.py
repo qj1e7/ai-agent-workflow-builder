@@ -8,7 +8,7 @@ hold none now: whose n8n access ended, or while staff access is off or the allow
 import logging
 from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Protocol
 from zoneinfo import ZoneInfo
 
@@ -38,9 +38,13 @@ NO_HOME = "No bootstrap has recorded the platform's n8n project yet. Nothing cha
 NOT_MOVED = "n8n did not move the workflow. Nothing changed. Try again."
 SETTINGS_LOST = "n8n lost the workflow's settings in the move, so it stayed where it was."
 STRANDED = (
-    "n8n did not finish moving this workflow, so the platform is moving it back to its own "
-    "n8n project. Nothing else changes in it until then. Try again in a minute."
+    "n8n has not finished moving this workflow, so nothing else changes in it until it is back "
+    "where the platform keeps it. Try again in a few minutes."
 )
+MOVE_GRACE = timedelta(minutes=2)
+"""How long a move's mark is left to the Open in n8n that set it, before the settle loop moves
+the workflow back."""
+STRAYS_EVERY = timedelta(minutes=1)
 TAKE_IT_BACK = "Take it back to change it here."
 NOT_YOURS = (
     "Only the person who has it open, or someone with n8n access, can take it back. "
@@ -52,6 +56,10 @@ class StaffPort(Protocol):
     async def access(self, person: UserId) -> StaffAccess: ...
 
     async def display_of(self, person: UserId) -> str: ...
+
+    async def recheck(self, person: UserId) -> None:
+        """Asks n8n whether the person's account is still there, and forgets it when not."""
+        ...
 
 
 class N8nMoves(Protocol):
@@ -142,12 +150,23 @@ def held_of(use_case_id: str, row: Mapping[str, Any]) -> Held | None:
     return Held(use_case_id, row["n8n_workflow_id"], UserId(row["held_by"]), row["held_since"])
 
 
-async def _strand(uow: UnitOfWork, use_case_id: str) -> HoldRefused:
+async def _mark(uow: UnitOfWork, use_case_id: str) -> None:
     await uow.conn.execute(
         "UPDATE builder.use_cases SET n8n_stranded_at = coalesce(n8n_stranded_at, %s)"
         " WHERE use_case_id = %s",
         (uow.now, use_case_id),
     )
+
+
+async def _unmark(uow: UnitOfWork, use_case_id: str) -> None:
+    await uow.conn.execute(
+        "UPDATE builder.use_cases SET n8n_stranded_at = NULL WHERE use_case_id = %s",
+        (use_case_id,),
+    )
+
+
+async def _strand(uow: UnitOfWork, use_case_id: str) -> HoldRefused:
+    await _mark(uow, use_case_id)
     log.error("%s may sit outside the platform's n8n project; release moves it back", use_case_id)
     return HoldRefused(503, STRANDED)
 
@@ -178,6 +197,7 @@ class Holding:
         self._n8n = n8n
         self._staff = staff
         self._zone = zone
+        self._strays_at: datetime | None = None
 
     async def holder(self, use_case_id: str) -> Held | None:
         async with self._db.connection("builder") as conn:
@@ -208,7 +228,9 @@ class Holding:
 
     async def open(self, use_case_id: str, actor: Principal) -> Held | HoldRefused | None:
         """Transfers the workflow to the actor's own n8n space. Opening one the actor already
-        holds changes nothing."""
+        holds changes nothing. The move is marked in its own committed step before n8n moves
+        anything, so a hold that fails to save after the move still leaves the mark, and the
+        settle loop moves the workflow back."""
         access = await self._staff.access(actor.user_id)
         if not isinstance(access, CanOpen):
             return HoldRefused(403 if isinstance(access, NoN8nAccess) else 409, access.words)
@@ -224,16 +246,30 @@ class Holding:
                 return held
             if held is not None:
                 return HoldRefused(409, await self.words(held))
-            workflow_id = row["n8n_workflow_id"]
-            project = await self._n8n.member_project(access.n8n_user_id)
+            if row["n8n_stranded_at"] is not None:
+                return HoldRefused(409, STRANDED)
+            await _mark(uow, use_case_id)
+        workflow_id = str(row["n8n_workflow_id"])
+        async with self._db.transaction("builder") as uow:
+            await hold_workflow(uow.conn, use_case_id, alone=True)
+            await uow.conn.execute(_ROW + " FOR UPDATE", (use_case_id,))
+            try:
+                project = await self._n8n.member_project(access.n8n_user_id)
+            except (N8nError, httpx.HTTPError) as error:
+                log.warning("could not read n8n's projects: %s", error)
+                project = None
             if project is None:
+                await _unmark(uow, use_case_id)
+                await self._staff.recheck(actor.user_id)
                 return HoldRefused(503, NO_SPACE)
             match await self._move(workflow_id, project):
                 case _Stranded():
-                    return await _strand(uow, use_case_id)
+                    return HoldRefused(503, STRANDED)
                 case _Gone():
+                    await _unmark(uow, use_case_id)
                     return HoldRefused(409, GONE)
                 case HoldRefused() as refused:
+                    await _unmark(uow, use_case_id)
                     return refused
                 case _Moved():
                     pass
@@ -301,27 +337,73 @@ class Holding:
         return None
 
     async def release(self) -> list[str]:
-        """Takes back every workflow whose holder may hold none now."""
+        """Takes back every workflow whose holder may hold none now, and moves back every one a
+        move left marked. Once a minute it also asks n8n where each workflow nobody holds sits,
+        and marks one found outside the platform's project, so it comes back too."""
+        now = self._db.clock()
+        if self._strays_at is None or now - self._strays_at >= STRAYS_EVERY:
+            self._strays_at = now
+            await self._mark_strays()
         async with self._db.connection("builder") as conn:
             rows = await (
                 await conn.execute(
-                    "SELECT use_case_id, held_by FROM builder.use_cases"
+                    "SELECT use_case_id FROM builder.use_cases"
                     " WHERE held_by IS NOT NULL OR n8n_stranded_at IS NOT NULL"
                 )
             ).fetchall()
         taken: list[str] = []
         for row in rows:
-            holder = row["held_by"]
-            if holder is not None and isinstance(await self._staff.access(UserId(holder)), CanOpen):
-                continue
             try:
-                back = await self.take_back(row["use_case_id"], None)
+                if await self._release_one(row["use_case_id"]):
+                    taken.append(row["use_case_id"])
             except (N8nError, httpx.HTTPError) as error:
                 log.warning("could not take %s back from n8n: %s", row["use_case_id"], error)
-                continue
-            if isinstance(back, Free):
-                taken.append(row["use_case_id"])
         return taken
+
+    async def _release_one(self, use_case_id: str) -> bool:
+        """Decided again under the workflow's lock, so an Open in n8n in flight is never undone:
+        its own mark is left alone for MOVE_GRACE."""
+        async with self._db.transaction("builder") as uow:
+            await hold_workflow(uow.conn, use_case_id, alone=True)
+            row = await (await uow.conn.execute(_ROW + " FOR UPDATE", (use_case_id,))).fetchone()
+            if row is None:
+                return False
+            held = held_of(use_case_id, row)
+            if held is not None and isinstance(await self._staff.access(held.by), CanOpen):
+                return False
+            marked = row["n8n_stranded_at"]
+            if held is None and (marked is None or uow.now - marked < MOVE_GRACE):
+                return False
+            return await self.back_in(uow, use_case_id, None) is None
+
+    async def _mark_strays(self) -> None:
+        home = await self._n8n.platform_project()
+        if home is None:
+            return
+        async with self._db.connection("builder") as conn:
+            rows = await (
+                await conn.execute(
+                    "SELECT use_case_id, n8n_workflow_id FROM builder.use_cases"
+                    " WHERE engine = 'own' AND n8n_workflow_id IS NOT NULL AND held_by IS NULL"
+                    " AND n8n_stranded_at IS NULL AND deleted_at IS NULL"
+                    " AND deleted_in_n8n_at IS NULL"
+                )
+            ).fetchall()
+        for row in rows:
+            try:
+                where = await self._n8n.home(row["n8n_workflow_id"])
+            except (N8nError, httpx.HTTPError) as error:
+                log.warning("could not read where %s sits: %s", row["n8n_workflow_id"], error)
+                continue
+            if where is None or where == home:
+                continue
+            log.error("%s sits outside the platform's n8n project with nobody holding it", row)
+            async with self._db.transaction("builder") as uow:
+                await uow.conn.execute(
+                    "UPDATE builder.use_cases SET n8n_stranded_at = %s"
+                    " WHERE use_case_id = %s AND held_by IS NULL AND n8n_stranded_at IS NULL",
+                    (uow.now - MOVE_GRACE, row["use_case_id"]),
+                )
 
     async def _move(self, workflow_id: str, project: str) -> _MoveResult:
         """Moves the workflow and reads it back. n8n takes a published workflow off and puts it
