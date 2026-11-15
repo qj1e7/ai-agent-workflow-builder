@@ -150,6 +150,8 @@ services:
       N8N_OWNER_PASSWORD: ${N8N_OWNER_PASSWORD:?run deploy/make-env.sh}
       STEP_KEY: ${STEP_KEY:?run deploy/make-env.sh}
       PLATFORM_INTERNAL_URL: http://platform-api:8000
+      # The self-test runs on the team time zone, as every workflow does.
+      TEAM_TIME_ZONE: ${TEAM_TIME_ZONE:-Asia/Singapore}
 
   platform-api:
     <<: *platform-image

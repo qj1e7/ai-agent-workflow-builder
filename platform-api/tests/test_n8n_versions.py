@@ -8,6 +8,7 @@ import asyncio
 from collections.abc import AsyncIterator, Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -65,6 +66,10 @@ class Requests:
         return 1
 
 
+AGAIN = " Save its schedule again, or change its time zone in n8n."
+"""What every time zone finding says to do."""
+
+
 @dataclass
 class Versions:
     own: N8nLab
@@ -104,10 +109,9 @@ class Versions:
         return set(ran.parties)
 
 
-@pytest.fixture
-async def v(lab: Lab) -> AsyncIterator[Versions]:
-    n8n = FakeN8n()
-    accounts, requests = Accounts(), Requests(n8n)
+def on_n8n(
+    lab: Lab, n8n: FakeN8n, accounts: Accounts, requests: Requests, zone: str = TEAM_ZONE
+) -> None:
     lab.builder = Builder(
         lab.h.db,
         lab.h.orchestrator,
@@ -118,8 +122,16 @@ async def v(lab: Lab) -> AsyncIterator[Versions]:
         writes=WRITES,
         requests=requests,
         accounts=accounts,
+        time_zone=ZoneInfo(zone),
     )
     lab.app.state.builder = lab.builder
+
+
+@pytest.fixture
+async def v(lab: Lab) -> AsyncIterator[Versions]:
+    n8n = FakeN8n()
+    accounts, requests = Accounts(), Requests(n8n)
+    on_n8n(lab, n8n, accounts, requests)
     yield Versions(N8nLab(lab, n8n), accounts, requests)
 
 
@@ -585,6 +597,29 @@ def off_singapore_time(workflow: dict[str, Any]) -> None:
     workflow["settings"] = {**workflow["settings"], "timezone": "America/New_York"}
 
 
+async def test_a_changed_team_time_zone_needs_a_fix_until_the_schedule_is_saved_again(
+    v: Versions,
+):
+    use_case_id, workflow_id = await made(v.own, on=True)
+    on_n8n(v.own.lab, v.n8n, v.accounts, v.requests, "Europe/London")
+
+    assert await v.sweep() == 1, "a new zone grades every version again"
+    view = await v.view(use_case_id)
+    assert (view["grade"], view["findings"]) == (
+        "needs_a_fix",
+        [f"It does not run on London time.{AGAIN}"],
+    )
+    again = {"day": "every_day", "at": "08:00", "expected_version": view["version"]}
+    saved = await v.call("alice", "PUT", f"/api/v1/use-cases/{use_case_id}/schedule", again)
+
+    assert saved.status_code == 200, saved.text
+    assert (saved.json()["grade"], saved.json()["schedule"]["time_zone"]) == (
+        "safe",
+        "Europe/London",
+    )
+    assert v.n8n.workflows[workflow_id]["settings"]["timezone"] == "Europe/London"
+
+
 async def test_safety_undo_puts_the_settings_back_that_a_change_in_n8n_took_away(v: Versions):
     """n8n keeps settings once for the workflow and runs every version with them, so a version it
     still holds would run with the changed ones. Undo writes the kept workflow instead."""
@@ -592,7 +627,7 @@ async def test_safety_undo_puts_the_settings_back_that_a_change_in_n8n_took_away
     view = await v.view(use_case_id)
     assert (view["grade"], view["findings"]) == (
         "needs_a_fix",
-        ["It does not run on Singapore time."],
+        [f"It does not run on Singapore time.{AGAIN}"],
     )
     first = await version_row(v.own, use_case_id, 1)
     undone = await v.rollback("carol", use_case_id, 1, in_use=2)

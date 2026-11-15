@@ -1,12 +1,12 @@
 import { ApiError } from '../../api/client'
 import { pressOnce, type Latch, type Outcome } from '../../api/latch'
-import type { BlockKind, Me, RunView, ScheduleSaveIn, UseCaseView, VersionSchedule, VersionView } from '../../api/types'
+import type { BlockKind, Day, Me, RunView, ScheduleSaveIn, UseCaseView, VersionSchedule, VersionView } from '../../api/types'
 import { agentIdentity } from '../../ui/agents'
 import { andList, declinedOfSteps, declinedRecord, runPill, scheduleShort, stageWords, type NameOf, type NextRun, type StageFacts } from '../run/words'
 import { faceId } from '../agents/agents'
 import { heldWords, repeatWords } from '../software/software'
 import { DELETED_IN_N8N, madeWords, needsFixBanner, refusedBanner, UNKNOWN_PUBLISHER } from './n8nChange'
-import { lineWhen, nextRunAt, runWhen, scheduleZoneName, zoneWords } from './times'
+import { lineWhen, nextRunAt, runWhen, scheduleZoneName, teamZone, zoneWords } from './times'
 
 export type Tone = 'ok' | 'wait' | 'bad' | 'new'
 
@@ -487,6 +487,8 @@ export type BannerAction =
   | { readonly kind: 'yes' }
   /** Undo a version published in n8n: rolls back to `to`, naming the version the person saw in use. */
   | { readonly kind: 'undo'; readonly to: number; readonly inUse: number }
+  /** Save the same schedule again: the platform lays the workflow out on the team time zone, which every earlier version misses. */
+  | { readonly kind: 'resave'; readonly day: Day; readonly at: string }
 
 export interface Banner {
   readonly tone: BannerTone
@@ -505,6 +507,20 @@ const atWords = (when: string) => when.replace(/^Today, /, 'today at ').replace(
 
 const sentence = (words: string): string => (/[.!?]$/.test(words) ? words : `${words}.`)
 
+export const OWNER_WARNING = 'Saving makes you the owner of this schedule. Its runs then count as your work, so you won’t be able to approve them.'
+
+/**
+ * A version that needs a fix. A schedule on another zone than the team's is saved again, and saving it makes the presser its owner, so
+ * the banner says so, as the schedule editor does. Any other fix is Undo, which has a version to go back to from version 2.
+ */
+function needsFixOf(useCase: BannerFacts['useCase'], viewer: Viewer, version: number): Banner {
+  const text = needsFixBanner(useCase.findings ?? [])
+  const schedule = useCase.schedule
+  if (!viewer.operator) return { tone: 'bad', text, action: null }
+  if (schedule && schedule.time_zone !== teamZone()) return { tone: 'bad', text: `${text} ${OWNER_WARNING}`, action: { kind: 'resave', day: schedule.day, at: schedule.at } }
+  return { tone: 'bad', text, action: version > 1 ? { kind: 'undo', to: version - 1, inUse: version } : null }
+}
+
 /**
  * One sentence on the state, and the one action that moves it on. Pause wins over the last run, because a paused workflow starts nothing.
  * Otherwise the newest run's pill decides, and its stage words say the rest, so the banner, the pill, the row and Recent runs never disagree:
@@ -519,7 +535,7 @@ export function bannerOf({ useCase, viewer, now, nameOf }: BannerFacts): Banner 
   const version = useCase.version ?? 1
   // A version the safety checker graded unsafe leads, as in the sketch: it matters more than a pause or the last run.
   if (useCase.grade === 'writes_refused') return { tone: 'bad', text: refusedBanner(useCase.blocks), action: viewer.operator ? { kind: 'yes' } : null }
-  if (useCase.grade === 'needs_a_fix') return { tone: 'bad', text: needsFixBanner(useCase.findings ?? []), action: viewer.operator && version > 1 ? { kind: 'undo', to: version - 1, inUse: version } : null }
+  if (useCase.grade === 'needs_a_fix') return needsFixOf(useCase, viewer, version)
   if (useCase.state === 'paused') {
     return viewer.operator
       ? { tone: 'off', text: 'Paused. It won’t run until you resume it.', action: { kind: 'resume' } }

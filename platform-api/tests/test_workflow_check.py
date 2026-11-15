@@ -19,9 +19,9 @@ from platform_api.orchestration import (
 from platform_api.orchestration.workflow_check import ERROR_WORKFLOW as ERROR_WORKFLOW_NAME
 from platform_api.orchestration.workflow_check import (
     PLATFORM_SHAPES,
-    PLATFORM_WORKFLOWS_DIR,
     SELF_TEST,
     check_platform,
+    platform_document,
 )
 from tests.support import FIXTURES, TEAM_ZONE
 
@@ -29,6 +29,8 @@ GOLDEN = Path(__file__).parent / "golden" / "n8n"
 PACK = FIXTURES.parent / "n8n" / "node-types.json"
 """The node pack's types, as the pack's own test keeps contracts/ in step with it."""
 ERROR_WORKFLOW = "wfErrorReporter01"
+AGAIN = " Save its schedule again, or change its time zone in n8n."
+"""What every time zone finding says to do."""
 
 type Doc = dict[str, Any]
 
@@ -281,9 +283,24 @@ def test_a_workflow_runs_on_the_team_time_zone_whichever_it_is() -> None:
     singapore = grade(release_check(), ERROR_WORKFLOW, "Europe/London")
     assert (singapore.grade, [f.text for f in singapore.findings]) == (
         "needs_a_fix",
-        ["It does not run on London time."],
+        [f"It does not run on London time.{AGAIN}"],
     )
-    assert findings(london) == ["It does not run on Singapore time."]
+    assert findings(london) == [f"It does not run on Singapore time.{AGAIN}"]
+
+
+@pytest.mark.parametrize(
+    ("zone", "named"),
+    [
+        ("UTC", "UTC"),
+        ("Etc/GMT-8", "GMT+8"),
+        ("Etc/GMT+5", "GMT-5"),
+        ("America/Argentina/Buenos_Aires", "Buenos Aires time"),
+        ("EST5EDT", "EST5EDT time"),
+    ],
+)
+def test_the_finding_names_the_team_time_zone_as_the_portal_does(zone: str, named: str) -> None:
+    [finding] = grade(release_check(), ERROR_WORKFLOW, zone).findings
+    assert finding.text == f"It does not run on {named}.{AGAIN}"
 
 
 def test_an_unknown_error_workflow_is_never_taken_for_the_platform_s() -> None:
@@ -425,28 +442,27 @@ def test_the_checker_never_changes_the_document_it_is_given() -> None:
     assert document == before
 
 
-def platform(name: str) -> Doc:
-    """One of the platform's own workflows as bootstrap loads it, failures sent to the error
-    workflow."""
-    document: Doc = json.loads((PLATFORM_WORKFLOWS_DIR / f"{name}.n8n.json").read_text())
-    if name == SELF_TEST:
-        document["settings"]["errorWorkflow"] = ERROR_WORKFLOW
-    return document
+def platform(name: str, zone: str = TEAM_ZONE) -> Doc:
+    """One of the platform's own workflows as bootstrap loads it."""
+    return platform_document(name, ERROR_WORKFLOW, zone)
 
 
-def test_the_platform_s_own_workflows_as_committed_are_in_shape() -> None:
+@pytest.mark.parametrize("zone", [TEAM_ZONE, "Europe/London"])
+def test_the_platform_s_own_workflows_as_committed_are_in_shape(zone: str) -> None:
     assert set(PLATFORM_SHAPES) == {"run_failure_reporter", "self_test_failure"}
     for name in PLATFORM_SHAPES:
-        assert check_platform(platform(name), ERROR_WORKFLOW) == (), name
+        assert check_platform(platform(name, zone), ERROR_WORKFLOW, zone) == (), name
 
 
-def test_the_self_test_runs_once_a_day_at_six_singapore_time() -> None:
-    self_test = platform(SELF_TEST)
+def test_the_self_test_runs_once_a_day_at_six_in_the_team_time_zone() -> None:
+    self_test = platform(SELF_TEST, "Europe/London")
     [trigger] = [n for n in self_test["nodes"] if n["type"] == "n8n-nodes-base.scheduleTrigger"]
     assert trigger["parameters"]["rule"]["interval"] == [
         {"field": "days", "triggerAtHour": 6, "triggerAtMinute": 0}
     ]
-    assert self_test["settings"]["timezone"] == "Asia/Singapore"
+    assert self_test["settings"]["timezone"] == "Europe/London"
+    singapore = check_platform(platform(SELF_TEST), ERROR_WORKFLOW, "Europe/London")
+    assert [f.text for f in singapore] == ["Its setting timezone must be 'Europe/London'."]
 
 
 def http_reporter(document: Doc) -> None:
@@ -491,6 +507,6 @@ def test_a_platform_workflow_out_of_shape_is_named(
 ) -> None:
     document = platform(name)
     change(document)
-    findings = check_platform(document, ERROR_WORKFLOW)
+    findings = check_platform(document, ERROR_WORKFLOW, TEAM_ZONE)
     assert findings and all(f.grade == "needs_a_fix" for f in findings)
     assert any(says in f.text for f in findings), [f.text for f in findings]

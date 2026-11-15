@@ -495,6 +495,7 @@ locals {
         N8N_BASE_URL          = local.url["n8n"]
         N8N_OWNER_EMAIL       = var.n8n_owner_email
         PLATFORM_INTERNAL_URL = local.url["platform-api"]
+        TEAM_TIME_ZONE        = var.team_time_zone
       }
       secrets = {
         DATABASE_URL_OWNER = local.secret["database-url-owner"]

@@ -448,6 +448,8 @@ class BootstrapSettings:
     n8n_owner_password: str = field(repr=False)
     step_key: str = field(repr=False)
     platform_internal_url: str
+    team_time_zone: ZoneInfo = TEAM_TIME_ZONE
+    """The self-test runs on it, as every workflow does."""
 
 
 def owner_database_url_from_env(env: Mapping[str, str]) -> str:
@@ -462,4 +464,5 @@ def bootstrap_settings_from_env(env: Mapping[str, str]) -> BootstrapSettings:
         n8n_owner_password=_required(env, "N8N_OWNER_PASSWORD"),
         step_key=_required(env, "STEP_KEY"),
         platform_internal_url=_required(env, "PLATFORM_INTERNAL_URL").rstrip("/"),
+        team_time_zone=team_time_zone_from_env(env),
     )

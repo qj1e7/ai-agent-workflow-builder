@@ -7,7 +7,7 @@ import { useLatch } from '../../api/latch'
 import { useDisplayName } from '../../api/people'
 import { useMe, useRuns, useStartRun, useUseCase } from '../../api/queries'
 import type { Me, UseCaseView } from '../../api/types'
-import { useAddTheYesBack, useDeleteWorkflow, useMoveWorkflow, useRereadWorkflow, useRollback, useSweepOnFocus } from '../../api/workflowQueries'
+import { useAddTheYesBack, useDeleteWorkflow, useMoveWorkflow, useRereadWorkflow, useRollback, useSaveWorkflowSchedule, useSweepOnFocus } from '../../api/workflowQueries'
 import { OperatorsNote } from '../../shell/OperatorsNote'
 import { PageHead } from '../../shell/PageHead'
 import { ActionMenu, type MenuItem } from '../../ui/ActionMenu'
@@ -46,6 +46,7 @@ import {
   rereadWhenOutOfDate,
   pillOf,
   runsOf,
+  scheduleSavedWords,
   sentenceOf,
   SOFTWARE_PAGE,
   viewerOf,
@@ -164,6 +165,7 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
   const move = useMoveWorkflow()
   const rollback = useRollback()
   const addYes = useAddTheYesBack()
+  const saveAgain = useSaveWorkflowSchedule(id)
   const removal = useDeleteWorkflow()
   const reread = useRereadWorkflow()
   const changes = useLatch()
@@ -208,11 +210,11 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
     })
   }
 
-  function republish(action: Extract<NonNullable<typeof banner.action>, { kind: 'yes' | 'undo' }>) {
-    const answers = (toast: (saved: number) => string) => ({
+  function republish(action: Extract<NonNullable<typeof banner.action>, { kind: 'yes' | 'undo' | 'resave' }>) {
+    const answers = (toast: (view: UseCaseView) => string) => ({
       onSuccess: (view: UseCaseView) => {
         setProblem(null)
-        setSaid((before) => ({ id: (before?.id ?? 0) + 1, text: toast(view.version) }))
+        setSaid((before) => ({ id: (before?.id ?? 0) + 1, text: toast(view) }))
       },
       onError: (error: unknown) => {
         rereadIfOutOfDate('switch')(error)
@@ -220,8 +222,9 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
       },
     })
     const send = { useCaseId: id, inUse: useCase.version, via: 'page' } as const
-    if (action.kind === 'yes') addYes.mutate(send, answers(yesBackToast))
-    else rollback.mutate({ ...send, version: action.to }, answers((saved) => backToVersionToast(action.to, saved)))
+    if (action.kind === 'yes') addYes.mutate(send, answers((view) => yesBackToast(view.version)))
+    else if (action.kind === 'resave') saveAgain.mutate({ day: action.day, at: action.at, expected_version: useCase.version }, answers((view) => scheduleSavedWords(view, now)))
+    else rollback.mutate({ ...send, version: action.to }, answers((view) => backToVersionToast(action.to, view.version)))
   }
 
   function confirmDelete() {
@@ -274,7 +277,7 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
           <OperatorsNote what="this workflow" />
         </p>
       )}
-      <StatusBanner banner={banner} resuming={move.isPending} onResume={() => pauseOrResume('resume')} onRepublish={republish} republishing={rollback.isPending || addYes.isPending} />
+      <StatusBanner banner={banner} resuming={move.isPending} onResume={() => pauseOrResume('resume')} onRepublish={republish} republishing={rollback.isPending || addYes.isPending || saveAgain.isPending} />
       {useCase.moving_to_n8n ? (
         <p className="muted" role="status">
           Moving to n8n after this run.

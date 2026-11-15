@@ -11,6 +11,8 @@ Pure. A document is the n8n workflow JSON as the public API takes it.
 """
 
 import hashlib
+import json
+import re
 import uuid
 from collections.abc import Iterable, Mapping, Sequence
 from copy import deepcopy
@@ -279,6 +281,8 @@ class PlatformShape:
     """Settings it must keep as they are."""
     reports_failures: bool
     """Its failures go to the error workflow."""
+    scheduled: bool = False
+    """Its Schedule Trigger runs on the team time zone, as every workflow's does."""
 
 
 PLATFORM_SHAPES: Mapping[str, PlatformShape] = {
@@ -292,15 +296,31 @@ PLATFORM_SHAPES: Mapping[str, PlatformShape] = {
     SELF_TEST: PlatformShape(
         ("schedule", "read"),
         "a Schedule Trigger, then a Read",
-        {"timezone": "Asia/Singapore"},
+        {},
         reports_failures=True,
+        scheduled=True,
     ),
 }
 """The platform's own n8n workflows, which bootstrap loads and checks (ENGINE-PLAN 2.8): the
 error workflow, and the daily self-test that fails on purpose to prove it reports."""
 
 
-def check_platform(document: Mapping[str, Any], error_workflow: str | None) -> tuple[Finding, ...]:
+def platform_document(name: str, error_workflow: str | None, time_zone: str) -> Document:
+    """One of the platform's own n8n workflows as bootstrap loads it: its failures go to the error
+    workflow, and a scheduled one runs on the team time zone."""
+    document: Document = json.loads((PLATFORM_WORKFLOWS_DIR / f"{name}.n8n.json").read_text())
+    shape = PLATFORM_SHAPES[name]
+    settings = document.setdefault("settings", {})
+    if shape.reports_failures and error_workflow is not None:
+        settings["errorWorkflow"] = error_workflow
+    if shape.scheduled:
+        settings["timezone"] = time_zone
+    return document
+
+
+def check_platform(
+    document: Mapping[str, Any], error_workflow: str | None, time_zone: str
+) -> tuple[Finding, ...]:
     """Every way the document differs from its platform shape, none for a document in shape."""
     name = str(document.get("name"))
     shape = PLATFORM_SHAPES.get(name)
@@ -310,7 +330,8 @@ def check_platform(document: Mapping[str, Any], error_workflow: str | None) -> t
         flow = read_flow(document)
     except Unreadable as unreadable:
         return (_fix(None, str(unreadable)),)
-    findings = [*_chain(flow, shape), *_kept(flow, shape.kept), *_off_blocks(flow)]
+    kept = {**shape.kept, **({"timezone": time_zone} if shape.scheduled else {})}
+    findings = [*_chain(flow, shape), *_kept(flow, kept), *_off_blocks(flow)]
     findings += _schedules(flow)
     reported = error_workflow is not None and flow.settings.get("errorWorkflow") == error_workflow
     if shape.reports_failures and not reported:
@@ -347,9 +368,25 @@ def _fix(block: str | None, text: str) -> Finding:
     return Finding("needs_a_fix", block, text)
 
 
-def _place_of(time_zone: str) -> str:
-    """The place a zone is named for, as in "London" for Europe/London."""
-    return time_zone.rsplit("/", 1)[-1].replace("_", " ")
+_UTC_NAMES = frozenset(
+    {"UTC", "Etc/UTC", "GMT", "Etc/GMT", "GMT0", "Etc/GMT0", "GMT+0", "GMT-0", "Etc/UCT", "UCT"}
+    | {"Universal", "Etc/Universal", "Zulu", "Etc/Zulu", "Greenwich", "Etc/Greenwich"}
+)
+_FIXED = re.compile(r"Etc/GMT([+-])(\d+)")
+_CITY = re.compile(r"(?!Etc/)[A-Z][A-Za-z]+/(?:[A-Za-z_-]+/)?([A-Z][A-Za-z_-]+)")
+
+
+def _zone_words(time_zone: str) -> str:
+    """A zone named as the Portal names it: "London time", "UTC", or "GMT+8" for Etc/GMT-8, whose
+    sign is the other way round. A zone with no city shows its id: "EST5EDT time"."""
+    if time_zone in _UTC_NAMES:
+        return "UTC"
+    if fixed := _FIXED.fullmatch(time_zone):
+        hours = int(fixed[2])
+        return "UTC" if hours == 0 else f"GMT{'-' if fixed[1] == '+' else '+'}{hours}"
+    city = _CITY.fullmatch(time_zone)
+    place = time_zone if city is None else re.sub(r"[_-]", " ", city[1])
+    return f"{place} time"
 
 
 def _off_blocks(flow: Flow) -> Iterable[Finding]:
@@ -383,7 +420,11 @@ def _settings(flow: Flow, error_workflow: str | None, time_zone: str) -> Iterabl
     if error_workflow is None or settings.get("errorWorkflow") != error_workflow:
         yield _fix(None, "Its failures do not go to the platform's error workflow.")
     if settings.get("timezone") != time_zone:
-        yield _fix(None, f"It does not run on {_place_of(time_zone)} time.")
+        yield _fix(
+            None,
+            f"It does not run on {_zone_words(time_zone)}. "
+            "Save its schedule again, or change its time zone in n8n.",
+        )
     if settings.get("saveManualExecutions") is not True:
         yield _fix(None, "n8n does not keep its test runs.")
     if settings.get("saveExecutionProgress") is not True:
