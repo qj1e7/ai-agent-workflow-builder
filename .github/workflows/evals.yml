@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
     inputs:
       jobs:
-        description: The jobs to run, comma separated (summarise, explain, draft, choose, answer, anything). Empty runs every job.
+        description: The jobs to run, comma separated (summarise, explain, draft, choose, answer, anything, reply, reply_gate, reply_dev, red_team, spike, spike_dev). Empty runs every job.
         required: false
         default: ''
         type: string
@@ -36,6 +36,11 @@ on:
         type: string
       max_dollars:
         description: The most the run may spend in US dollars, at the prices in pricing.json. Empty means 5.
+        required: false
+        default: ''
+        type: string
+      planner_mode:
+        description: The Planner the answer, anything, reply and spike jobs run, rules or ai_led. Empty means rules.
         required: false
         default: ''
         type: string
@@ -104,6 +109,7 @@ jobs:
           EVAL_MARKER: ${{ inputs.marker }}
           EVAL_MAX_CALLS: ${{ inputs.max_calls }}
           EVAL_MAX_DOLLARS: ${{ inputs.max_dollars }}
+          EVAL_PLANNER_MODE: ${{ inputs.planner_mode }}
         run: scripts/evals.sh
 
       - name: Put the report on the run's page

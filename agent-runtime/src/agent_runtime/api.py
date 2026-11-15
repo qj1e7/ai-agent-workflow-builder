@@ -61,6 +61,7 @@ from agent_runtime.jira import JiraReaderFor, PlatformJiraFor, no_jira
 from agent_runtime.model_access import ModelProbe, chat_for, summarizer_for
 from agent_runtime.origins import Origin, origin_of, parse_origin_list
 from agent_runtime.planner import FixedPlanner, Planner, run_cards, run_task
+from agent_runtime.planner_led import PLANNER_MODES, PlannerMode, answer_led
 from agent_runtime.release_source import ReleaseSource, releases_of
 from agent_runtime.summary import (
     ChatFor,
@@ -142,6 +143,14 @@ def _platform_jira_url(env: Mapping[str, str], origins: frozenset[Origin]) -> st
     return url
 
 
+def _planner_mode(env: Mapping[str, str]) -> PlannerMode:
+    named = env.get("PLANNER_MODE", "").strip() or "rules"
+    for mode in PLANNER_MODES:
+        if named == mode:
+            return mode
+    raise SettingsError(f"PLANNER_MODE must be one of {', '.join(PLANNER_MODES)}")
+
+
 def _github_token(env: Mapping[str, str]) -> str | None:
     token = env.get("GITHUB_TOKEN", "").strip()
     if not all(33 <= ord(character) < 127 for character in token):
@@ -169,6 +178,8 @@ class Settings:
     verifier_model: str | None = None
     """PLANNER_VERIFIER_MODEL: the model the free reply's verifier runs on, through the same
     connection. None runs it on the connected model, the Planner's own (ADR 0048)."""
+    planner_mode: PlannerMode = "rules"
+    """PLANNER_MODE: rules, today's Planner, or ai_led, the spike in `planner_led`."""
 
     @classmethod
     def from_env(cls, env: Mapping[str, str]) -> Self:
@@ -194,6 +205,7 @@ class Settings:
             platform_jira_url=_platform_jira_url(env, origins),
             free_reply=env.get("PLANNER_FREE_REPLY", "").strip().casefold() != "off",
             verifier_model=env.get("PLANNER_VERIFIER_MODEL", "").strip() or None,
+            planner_mode=_planner_mode(env),
         )
 
     @property
@@ -453,6 +465,8 @@ def create_app(
         verifier = (
             active.chat_source(body.model.model_copy(update={"model": named})) if named else None
         )
+        if config.planner_mode == "ai_led":
+            return answer_led(body, chat, verify_with=verifier or chat)
         return answer_task(body, chat, config.free_reply, verify_with=verifier or chat)
 
     @app.post("/v1/planner/check-part", dependencies=[Depends(require_key)])

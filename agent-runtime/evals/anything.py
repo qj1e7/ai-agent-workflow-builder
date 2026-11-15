@@ -7,12 +7,14 @@ gets. A judge, when one is set, reads the answer in about the words the person s
 
 import json
 import re
+from collections.abc import Callable
+from dataclasses import replace
 from typing import Any, Final, Literal
 
 from langchain_core.callbacks import BaseCallbackHandler
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage
-from langchain_core.messages.ai import UsageMetadata
+from langchain_core.messages.ai import InputTokenDetails, UsageMetadata
 from langchain_core.outputs import ChatGeneration, LLMResult
 from pydantic import Field
 
@@ -49,7 +51,10 @@ from agent_runtime.contract import (
     WorkflowFact,
     answer_result_adapter,
 )
+from agent_runtime.planner_led import Led, led
 from agent_runtime.questions import OFFERS, is_fallback
+from agent_runtime.summary import ChatFor
+from evals.budget import cached_tokens
 from evals.checks import Check, check, done_claims, jargon, themed_names
 from evals.jobs import Answer, Case, Job
 
@@ -238,7 +243,7 @@ NOT_YET: Final = [
 ]
 
 
-class _Replies(BaseCallbackHandler):
+class Replies(BaseCallbackHandler):
     """Each reply the model gave, so the record keeps its own reading beside the answer."""
 
     def __init__(self) -> None:
@@ -259,13 +264,33 @@ def request_of(case: AnythingCase) -> AnswerRequest:
     )
 
 
-def ask(model: BaseChatModel, case: AnythingCase) -> Answer:
-    replies = _Replies()
-    watched = model.model_copy(update={"callbacks": [replies]})
-    result = answer_task(request_of(case), lambda _timeout: watched)
-    model_said = [_said_by_model(m) for m in replies.messages]
-    record = {"result": result.model_dump(mode="json"), "model_said": model_said}
-    return Answer(result, json.dumps(record), _usage(replies.messages))
+type Planner = Callable[[AnswerRequest, ChatFor], AnswerResult | Led]
+"""The Planner under test: `answer_task` in rules mode, `led` in ai_led mode."""
+
+
+def ask_with(planner: Planner) -> Callable[[BaseChatModel, AnythingCase], Answer]:
+    """The product's own path for a case. An ai_led answer also records the tools the model
+    called and why it fell back, if it did."""
+
+    def ask(model: BaseChatModel, case: AnythingCase) -> Answer:
+        replies = Replies()
+        watched = model.model_copy(update={"callbacks": [replies]})
+        outcome = planner(request_of(case), lambda _timeout: watched)
+        result = outcome.result if isinstance(outcome, Led) else outcome
+        model_said = [_said_by_model(m) for m in replies.messages]
+        record: dict[str, object] = {
+            "result": result.model_dump(mode="json"),
+            "model_said": model_said,
+        }
+        if isinstance(outcome, Led):
+            record |= {"tools": outcome.tools, "fell_back": outcome.fell_back}
+            record |= {"errors": outcome.errors}
+        return Answer(result, json.dumps(record), usage_of(replies.messages))
+
+    return ask
+
+
+ask = ask_with(answer_task)
 
 
 def _said_by_model(message: BaseMessage) -> object:
@@ -273,12 +298,17 @@ def _said_by_model(message: BaseMessage) -> object:
     return calls[0]["args"] if calls else message.text
 
 
-def _usage(messages: list[BaseMessage]) -> AIMessage:
+def usage_of(messages: list[BaseMessage]) -> AIMessage:
+    """Every call's tokens added up, the prompt cache's reads and writes too."""
     total = UsageMetadata(input_tokens=0, output_tokens=0, total_tokens=0)
+    read, written = 0, 0
     for message in messages:
         usage = getattr(message, "usage_metadata", None) or {}
         for key in ("input_tokens", "output_tokens", "total_tokens"):
             total[key] += int(usage.get(key, 0))
+        cached = cached_tokens(usage)
+        read, written = read + cached[0], written + cached[1]
+    total["input_token_details"] = InputTokenDetails(cache_read=read, cache_creation=written)
     return AIMessage("", usage_metadata=total)
 
 
@@ -634,3 +664,7 @@ ANYTHING = Job(
     judge_question=judge_question,
     most_calls=2,
 )
+
+ANYTHING_LED = replace(ANYTHING, product_call=ask_with(led), most_calls=6)
+"""The same set on the AI-led Planner: its turn, the rules' reading beside it, a second turn
+when the first call can't be used, a second reading for a joined request, and the verifier."""

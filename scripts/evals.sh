@@ -6,6 +6,7 @@
 # their values never appear on the command line or in the output. See docs/evidence/model-bakeoff/.
 # EVAL_JOBS=answer runs one job. EVAL_MARKER sets the run's marker, else one is made up.
 # EVAL_MAX_CALLS (300) and EVAL_MAX_DOLLARS (5) cap the run, judge calls included.
+# EVAL_PLANNER_MODE=ai_led runs the Planner's jobs on the AI-led Planner (planner_led.py).
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -24,6 +25,7 @@ settings=(
   GOOGLE_API_KEY GOOGLE_MODELS
   AGENT_MODEL_BASE_URL AGENT_MODEL_API_KEY GATEWAY_MODELS
   EVAL_TEMPERATURE EVAL_JUDGE EVAL_JOBS EVAL_MARKER EVAL_MAX_CALLS EVAL_MAX_DOLLARS
+  EVAL_PLANNER_MODE
 )
 env_args=()
 for name in "${settings[@]}"; do

@@ -1,4 +1,5 @@
 import re
+from dataclasses import replace
 from typing import cast
 
 from langchain_core.language_models import BaseChatModel
@@ -14,6 +15,7 @@ from agent_runtime.answers import (
 )
 from agent_runtime.contract import (
     AbilitiesAnswer,
+    Answered,
     AnswerRequest,
     CantAnswer,
     CantRow,
@@ -34,8 +36,10 @@ from agent_runtime.contract import (
 )
 from agent_runtime.parts import parts_of
 from agent_runtime.planner import said_in, visible_words
+from agent_runtime.planner_led import Led, led
 from agent_runtime.questions import QuestionReply, answer_of_reply, question_messages
 from agent_runtime.reading import polite
+from evals.anything import Replies, usage_of
 from evals.checks import (
     Check,
     check,
@@ -377,9 +381,14 @@ def score(case: AnswerCase, answer: Answer) -> list[Check]:
             shown = decided
     if shown is None:
         return [check("answered", []), check("right_kind", ["the reading does not hold together"])]
-    text = " ".join(_texts(shown))
     reading = value if isinstance(value, TaskRead) else None
-    parts = _part_checks(case, shown, parts_of(reading, case.task, shown, case.facts))
+    return checks_of(case, shown, parts_of(reading, case.task, shown, case.facts))
+
+
+def checks_of(case: AnswerCase, shown: PlannerAnswer, said: list[RequestPart]) -> list[Check]:
+    """The checks on the answer the person sees and its marked parts, in either mode."""
+    text = " ".join(_texts(shown))
+    parts = _part_checks(case, shown, said)
     if isinstance(shown, QuestionAnswer):
         # Its words quote the person's own software names, such as n8n, so the jargon check
         # does not apply. The model's text is still held to the themed-name rule.
@@ -413,3 +422,22 @@ ANSWER = Job(
     follow_up=follow_up,
     most_calls=2,
 )
+
+
+def ask_led(model: BaseChatModel, case: AnswerCase) -> Answer:
+    replies = Replies()
+    watched = model.model_copy(update={"callbacks": [replies]})
+    outcome = led(_request(case), lambda _timeout: watched)
+    record = outcome.result.model_dump_json()
+    return Answer(outcome, record, usage_of(replies.messages))
+
+
+def score_led(case: AnswerCase, answer: Answer) -> list[Check]:
+    outcome = answer.value
+    result = outcome.result if isinstance(outcome, Led) else None
+    if not isinstance(result, Answered):
+        return [check("answered", ["the Portal shows its offline answer"])]
+    return checks_of(case, result.answer, result.parts)
+
+
+ANSWER_LED = replace(ANSWER, product_call=ask_led, score=score_led, most_calls=6)
