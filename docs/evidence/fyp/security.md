@@ -58,15 +58,15 @@ Since 13 Nov each workflow is its own n8n workflow, built from our node pack ([A
 | Control | What it stops | Proof | Status |
 |---|---|---|---|
 | Our blocks have no address field and no credential. They call only `WAB_API_URL`, with `WAB_NODE_KEY` from the container | Someone editing a block points it at another system or reads the key | [Node pack README][pack], [PR #241][pr241] | Built |
-| `N8N_BLOCK_ENV_ACCESS_IN_NODE=true`. Execute Command and Local File Trigger excluded. Community packages off | An expression reads keys from the environment, or a node runs shell commands | [`deploy/compose.yaml`][compose] lines 85 to 87, [`infra/envs/dev/main.tf`][tf] lines 349 to 351 | On in both |
-| Node allow list (`NODES_INCLUDE`) | Any node not on the list, such as HTTP Request or Code. n8n refuses to save or turn on a workflow with one | [`scripts/pack-smoke.sh`][smoke] in CI's `n8n-node-pack` job. Spike P7 ([PR #240][pr240], [findings][p7]) | Built and tested, not yet switched on (E11) |
+| `N8N_BLOCK_ENV_ACCESS_IN_NODE=true`. Execute Command and Local File Trigger excluded. Community packages off | An expression reads keys from the environment, or a node runs shell commands | [`deploy/compose.yaml`][compose] lines 85 to 87, [`infra/envs/dev/main.tf`][tf] lines 387 to 389 | On in both |
+| Node allow list (`NODES_INCLUDE`), written from `node_classes.json` by [`scripts/nodes-include.sh`][nodes-include]. CI fails when compose or Terraform differs from the file | Any node not on the list, such as HTTP Request or Code. n8n refuses to turn on or run by hand a workflow with one | [`scripts/pack-smoke.sh`][smoke] in CI's `n8n-node-pack` job, e2e [`test_allow_list`][e2e-allow]. Bootstrap is not ready unless n8n loads exactly the file's types. Spike P7 ([PR #240][pr240], [findings][p7]) | On in both (E11) |
 | Signed start. An HMAC-SHA256 with `WAB_START_SECRET` over the workflow id, webhook id, nonce, kind and expiry. Our API issues each nonce for one run and uses it once | A forged or replayed Run now, or a start for one workflow used on another | [`startFromPortal.test.ts`][t-start], [`test_safety_a_start_is_signed_for_its_own_workflow_and_no_other_takes_it`][t-engine] | Built |
 | Signed wake. A `mac`, an HMAC-SHA256 with `WAB_NODE_KEY` over the execution id, request id and decision. A wrong mac gets 401 and picks no exit. An error lands on "No answer", never on Yes | A forged wake, or n8n's resume URL used alone | [`askForYes.test.ts`][t-ask], e2e [`test_resume_url_alone_writes_nothing`][e2e] | Built |
 | The resume URL is sealed at rest and never returned by any route | Someone reads it from our database or API | [PR #246][pr246] | Built |
 | Grading. `grade()` walks every path and puts "Ask for a yes" before every write. It refuses HTTP, Code, Webhook and unknown nodes. Only a version graded Safe goes live | A workflow published without the gate | [`workflow_check.py`][wc], [`test_safety_only_a_version_graded_safe_ever_goes_live`][t-life] | Built ([PR #253][pr253], [PR #261][pr261]) |
 | The Tell rule. A notice goes only to recipients fixed in settings. Our API writes it from what the run read, escaped, and its only link goes back to the run. A test run sends nothing | A notice used to send data to an address someone chose | [`test_n8n_tell.py`][t-tell], [PR #249][pr249], [PR #252][pr252] | Built |
 | Failure reports from n8n. Our API answers 403 unless the report comes from our error workflow, and 409 unless n8n's own record says the run failed | A forged report fails a run | [PR #249][pr249], [node pack README][pack] | Built |
-| n8n's own nodes are classed `read`, `notice`, `write` or `off` in `node_classes.json`. Unknown means off. The `write` class is empty | n8n's built-in nodes writing with their own credentials | [ADR 0045][a45], accepted 14 Nov | Decided, not built |
+| n8n's own nodes are classed `read`, `notice`, `write` or `off` in [`node_classes.json`][classes], by version and by what each is set to do. Unknown means off, and so does an expression in what a node does. n8n's own nodes only read for now; the file refuses a row that breaks that | n8n's built-in nodes writing with their own credentials, or a node set at run time to do what is off | [ADR 0045][a45], [`test_node_classes.py`][t-classes]. The pin check in the pack smoke fails on any version or choice the pinned image has that the file does not class | Built (E11). The `write` class is empty |
 
 ## Keys and secrets
 
@@ -158,6 +158,10 @@ Each review was by a separate AI model, named in the PR, and the table quotes wh
 [t-start]: ../../../n8n-node-pack/test/startFromPortal.test.ts
 [t-ask]: ../../../n8n-node-pack/test/askForYes.test.ts
 [smoke]: ../../../scripts/pack-smoke.sh
+[nodes-include]: ../../../scripts/nodes-include.sh
+[classes]: ../../../platform-api/src/platform_api/orchestration/node_classes.json
+[t-classes]: ../../../platform-api/tests/test_node_classes.py
+[e2e-allow]: ../../../e2e/tests/test_allow_list.py
 [compose]: ../../../deploy/compose.yaml
 [mkenv]: ../../../deploy/make-env.sh
 [tf]: ../../../infra/envs/dev/main.tf
