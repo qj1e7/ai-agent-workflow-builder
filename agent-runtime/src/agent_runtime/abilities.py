@@ -1410,6 +1410,16 @@ def _cant_sentence(what: str, reader: _Reader) -> str:
     return f"I can't {said}{yet}. {reader.can()}"
 
 
+def names_an_ability(text: str) -> bool:
+    """Whether the words ask for something one of the abilities does, by its own verb."""
+    reader = _reader(ABILITIES)
+    able = {verb for ability in ABILITIES for verb in ability.verbs}
+    return any(
+        (found := reader.verb(word)) is not None and found[1] != "ed" and found[0] in able
+        for word in _tokens(text)
+    )
+
+
 def names_no_ability(note: str) -> bool:
     """Whether a can't's note is only the request's own words before "I can only ...": the
     sentence the Planner writes when it found no ability the request is close to."""

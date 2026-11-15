@@ -20,6 +20,7 @@ from agent_runtime.abilities import (
     change_verbs_in,
     commands_a_change,
     names_a_ticket_field,
+    names_an_ability,
     need_of,
     one_line_cant,
     other_release_source,
@@ -114,10 +115,12 @@ from agent_runtime.reading import (
     a_statement,
     clashes_in,
     clauses_of,
+    instructs_the_planner,
     leftovers,
     names_a_person,
     names_a_yes,
     negated,
+    only_schedule_words,
     render_place,
     render_schedule,
     render_search,
@@ -283,12 +286,28 @@ def _refusal(text: str) -> RefusedAnswer | None:
     found = skip_of_a_yes(text)
     if found is None:
         return None
-    return RefusedAnswer(said=plain(found, SAID_LIMIT), rest=plain(without_the_skip(text), 2000))
+    return RefusedAnswer(said=plain(found, SAID_LIMIT), rest=_with_a_yes(without_the_skip(text)))
 
 
 def _refused(text: str, said: str) -> RefusedAnswer:
     rest = without_the_phrase(text, said)
-    return RefusedAnswer(said=plain(said, SAID_LIMIT), rest=plain(rest or text, 2000))
+    return RefusedAnswer(said=plain(said, SAID_LIMIT), rest=_with_a_yes(rest or text))
+
+
+def _with_a_yes(rest: str) -> str:
+    """The rest of a refused request, offered to set up with a yes only when the platform can:
+    each clause is a schedule or asks for a Ready ability and nothing it can't do, it names no
+    yes, and it tells the Planner nothing. Otherwise empty, and the parts say why (principle 5)."""
+    text = plain(rest, 2000)
+    tasks = [text[a:b] for a, b in clauses_of(text) if not only_schedule_words(text[a:b])]
+    able = (
+        bool(tasks)
+        and names_an_ability(text)
+        and not names_a_yes(text)
+        and not instructs_the_planner(text)
+        and all(why_not("schedule", c) is None for c in tasks)
+    )
+    return text if able else ""
 
 
 @dataclass(frozen=True)

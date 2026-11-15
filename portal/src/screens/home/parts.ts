@@ -148,7 +148,8 @@ function holdsCard(reply: PlannerReply): boolean {
  * The clauses an answer didn’t read, which it draws above its card (spec 6.5). A free reply answers the whole message, and the
  * fallback card replaces the crosses, so neither draws any. The set-up card and the edit card mark their own parts. The can’t
  * answer’s card already names what it can’t do, so only the clauses it didn’t read are added. A card inside the answer asks its
- * own clash and days, so they aren’t drawn twice. The refusal, which software, places to start and the offline answer draw none.
+ * own clash and days, so they aren’t drawn twice. A refusal that offers a set-up with a yes draws none, and one that offers none
+ * draws why it can’t do the rest, past the skip its card names. Which software, places to start and the offline answer draw none.
  */
 export function leftoverParts(reply: PlannerReply): PartView[] {
   const above = (parts: readonly PartView[]) => parts.filter((part) => part.mark !== 'will_do' && !(holdsCard(reply) && asksOnCard(part)))
@@ -157,7 +158,6 @@ export function leftoverParts(reply: PlannerReply): PartView[] {
     case 'part':
     case 'edit':
     case 'changed_in_n8n':
-    case 'refused':
     case 'which_software':
     case 'ideas':
     case 'offline':
@@ -169,6 +169,8 @@ export function leftoverParts(reply: PlannerReply): PartView[] {
       const named = (part: PartView) => reply.cant.some((row) => row.needs !== null && row.text.trim().toLowerCase() === part.text.trim().toLowerCase())
       return reply.alternative?.answer === 'setup_card' ? [] : above(reply.parts.filter((part) => !(part.reason === 'cant_do' && named(part)) && part.reason !== 'needs_the_rest'))
     }
+    case 'refused':
+      return reply.rest.trim() === '' ? above(reply.parts.filter((part) => part.reason !== 'skip_approval')) : []
     case 'operators':
       // The answer’s sentence already says who makes the changes, so only a question beside them is marked.
       return above(reply.parts.filter((part) => part.reason !== 'operators'))

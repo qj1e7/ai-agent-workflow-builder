@@ -65,3 +65,18 @@ describe('a free reply and the fallback card draw no crosses', () => {
     expect(leftoverParts({ answer: 'didnt_follow', parts: [part] })).toEqual([])
   })
 })
+
+describe('a refusal’s rest', () => {
+  const skip: PartView = { text: 'Skip the approval', mark: 'cant', reason: 'skip_approval', note: null, choices: [] }
+  const close: PartView = { text: 'close the old tickets', mark: 'cant', reason: 'cant_do', note: 'I can’t close the old tickets.', choices: [] }
+  const refused = (rest: string, parts: PartView[]): PlannerReply => ({ answer: 'refused', reason: 'skip_approval', said: 'Skip the approval', rest, parts })
+
+  it('says why it can’t do the rest when it offers no set-up, and leaves the skip to the card', () => {
+    expect(leftoverParts(refused('', [skip, close]))).toEqual([close])
+  })
+
+  it('draws nothing beside a rest it offers to set up with a yes', () => {
+    const withAYes: PartView = { text: 'create a ticket', mark: 'cant', reason: 'with_a_yes', note: null, choices: [] }
+    expect(leftoverParts(refused('create a ticket', [skip, withAYes]))).toEqual([])
+  })
+})
