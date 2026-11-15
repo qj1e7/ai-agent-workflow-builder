@@ -1,5 +1,6 @@
 import json
 from collections.abc import Iterator
+from dataclasses import replace
 from typing import Any
 
 import httpx
@@ -32,6 +33,7 @@ from tests.support import LOCAL_ENV, NOW, SPEC
 N8N = "http://n8n.test"
 TRUNK_HEADS = {"monitoring": "0001", "orchestration": "0004", "builder": "0003"}
 READY = (True, "all workflows loaded, active and linted")
+OWNER_EXISTS = "Instance owner already setup"
 
 
 def env_for(owner_url: str) -> dict[str, str]:
@@ -176,7 +178,12 @@ def in_project(project: str) -> list[dict[str, str]]:
 class FakeN8n:
     """`existing` sit in the platform's project, the owner's own, and `theirs` in a member's."""
 
-    def __init__(self, existing: list[str], theirs: list[str] | None = None) -> None:
+    def __init__(
+        self, existing: list[str], theirs: list[str] | None = None, owner_exists: bool = False
+    ) -> None:
+        self.owner_exists = owner_exists
+        self.unreadable = False
+        """Every read of one workflow fails, as when n8n is still starting."""
         placed = [(name, PLATFORM_PROJECT) for name in existing]
         placed += [(name, MEMBER_PROJECT) for name in theirs or []]
         self.workflows: dict[str, dict[str, Any]] = {
@@ -191,6 +198,7 @@ class FakeN8n:
             for n, (name, project) in enumerate(placed, start=1)
         }
         self.deleted: list[str] = []
+        self.credentials: list[str] = []
         self.unpublishing: set[str] = set()
         self.calls: list[str] = []
         self.scopes: list[str] = []
@@ -205,6 +213,8 @@ class FakeN8n:
         body: Any = json.loads(request.content) if request.content else None
         if path == "/healthz/readiness":
             return httpx.Response(200, json={"status": "ok"})
+        if path == "/rest/owner/setup" and self.owner_exists:
+            return httpx.Response(400, json={"message": OWNER_EXISTS})
         if path in ("/rest/owner/setup", "/rest/login"):
             return httpx.Response(200, json={"data": {"id": "1"}})
         if path == "/rest/projects/personal":
@@ -219,9 +229,14 @@ class FakeN8n:
             self.scopes = list(body["scopes"])
             return httpx.Response(200, json={"data": {"rawApiKey": "key"}})
         if path == "/api/v1/credentials" and method == "POST":
+            self.credentials.append("cred1")
             return httpx.Response(200, json={"id": "cred1"})
         if path == "/api/v1/credentials" and method == "GET":
-            return httpx.Response(200, json={"data": [{"id": "cred1", "name": "X-Step-Key"}]})
+            listed = [{"id": c, "name": "X-Step-Key"} for c in self.credentials]
+            return httpx.Response(200, json={"data": listed})
+        if path.startswith("/api/v1/credentials/") and method == "DELETE":
+            self.credentials.remove(path.removeprefix("/api/v1/credentials/"))
+            return httpx.Response(200, json={})
         if path == "/api/v1/workflows" and method == "GET":
             wanted = request.url.params.get("name")
             listed = [w for w in self.workflows.values() if wanted in (None, w["name"])]
@@ -234,6 +249,10 @@ class FakeN8n:
             return httpx.Response(200, json=self.workflows[workflow_id])
         if path.startswith("/api/v1/workflows/"):
             workflow_id = path.split("/")[4]
+            if method == "GET" and self.unreadable:
+                return httpx.Response(503, json={"message": "starting"})
+            if method == "GET" and workflow_id not in self.workflows:
+                return httpx.Response(404, json={"message": "Not Found"})
             self.calls.append(f"{method} {path.removeprefix('/api/v1/workflows/')}")
             if workflow_id not in self.workflows:
                 return httpx.Response(404, json={"message": "Not Found"})
@@ -358,6 +377,93 @@ def test_old_release_data_stops_migrate_before_any_migration(
     assert RESET_HINT in capsys.readouterr().out
 
 
+def settings_for(owner_url: str) -> BootstrapSettings:
+    return BootstrapSettings(
+        owner_database_url=owner_url,
+        n8n_base_url=N8N,
+        n8n_owner_email="owner@example.com",
+        n8n_owner_password="Aa1secret",
+        step_key="step-key",
+        platform_internal_url="http://platform-api:8000",
+    )
+
+
+def names_in(n8n: FakeN8n) -> list[str]:
+    return sorted(w["name"] for w in n8n.workflows.values())
+
+
+def recorded(owner_url: str, ids: dict[str, str]) -> None:
+    """What the last bootstrap loaded, as it records it."""
+    loaded = [{"name": name, "id": id, "active": True, "sha256": "x"} for name, id in ids.items()]
+    with psycopg.connect(owner_url, autocommit=True) as conn:
+        conn.execute(
+            "INSERT INTO orchestration.engine_status (id, loaded_at, ready, detail, workflows)"
+            " VALUES (1, now(), true, 'loaded', %s)",
+            (json.dumps(loaded),),
+        )
+
+
+def test_while_a_workflow_runs_on_the_shared_run_workflow_bootstrap_keeps_it(
+    postgres: PostgresUrls, monkeypatch: pytest.MonkeyPatch
+):
+    truncate_all(postgres.owner)
+    n8n = serve(monkeypatch, FakeN8n(["run", "schedule_tick"]))
+    recorded(postgres.owner, {"run": "W1", "schedule_tick": "W2"})
+    insert_use_case(postgres.owner, "uc_cards", "agent_cards")
+
+    loaded, findings = load_into_n8n(settings_for(postgres.owner), load_all(), lambda _: None)
+
+    assert findings == []
+    assert sorted(w.name for w in loaded) == ["run", "run_failure_reporter", "self_test_failure"]
+    assert names_in(n8n) == ["run", "run_failure_reporter", "self_test_failure"], (
+        "the schedule tick goes at once"
+    )
+    assert n8n.credentials == ["cred1"], "the run workflow's steps still need the step key"
+
+
+def test_a_run_that_has_not_ended_keeps_the_shared_run_workflow(
+    postgres: PostgresUrls, monkeypatch: pytest.MonkeyPatch
+):
+    """Its workflow was deleted, but its yes may still come, and its write runs there."""
+    truncate_all(postgres.owner)
+    n8n = serve(monkeypatch, FakeN8n(["run"]))
+    recorded(postgres.owner, {"run": "W1"})
+    spec = TypeAdapter(RunSpec).dump_python(replace(SPEC, n8n=None), mode="json")
+    insert_run(postgres.owner, "run_waiting", spec)
+    with psycopg.connect(postgres.owner, autocommit=True) as conn:
+        conn.execute("UPDATE orchestration.runs SET state = 'AwaitingApproval'")
+
+    load_into_n8n(settings_for(postgres.owner), load_all(), lambda _: None)
+
+    assert names_in(n8n) == ["run", "run_failure_reporter", "self_test_failure"]
+
+
+def test_once_nothing_runs_on_it_bootstrap_removes_the_shared_run_and_tick_workflows(
+    postgres: PostgresUrls, monkeypatch: pytest.MonkeyPatch
+):
+    truncate_all(postgres.owner)
+    n8n = serve(monkeypatch, FakeN8n(["run", "schedule_tick", "Staff access review", "run"]))
+    recorded(postgres.owner, {"run": "W1", "schedule_tick": "W2"})
+    insert_use_case(postgres.owner, "uc_moved", "agent_cards")
+    insert_run(postgres.owner, "run_done", TypeAdapter(RunSpec).dump_python(SPEC, mode="json"))
+    with psycopg.connect(postgres.owner, autocommit=True) as conn:
+        conn.execute("UPDATE builder.use_cases SET engine = 'own', n8n_workflow_id = 'wf_moved'")
+    said: list[str] = []
+
+    loaded, _ = load_into_n8n(settings_for(postgres.owner), load_all(), said.append)
+
+    assert [w.name for w in loaded] == ["run_failure_reporter", "self_test_failure"]
+    assert names_in(n8n) == [
+        "Staff access review",
+        "run",
+        "run_failure_reporter",
+        "self_test_failure",
+    ]
+    assert "W4" in n8n.workflows, "a staff workflow named run is not the platform's"
+    assert any(line.startswith("workflow run (W1): removed") for line in said)
+    assert n8n.credentials == [], "nothing loaded names the step key, so it goes"
+
+
 def test_bootstrap_removes_the_old_run_workflow_by_its_exact_name_and_nothing_else(
     postgres: PostgresUrls, monkeypatch: pytest.MonkeyPatch
 ):
@@ -365,25 +471,12 @@ def test_bootstrap_removes_the_old_run_workflow_by_its_exact_name_and_nothing_el
     n8n = serve(
         monkeypatch, FakeN8n([OLD_RUN_WORKFLOW, "Staff access review", f"{OLD_RUN_WORKFLOW} copy"])
     )
-    settings = BootstrapSettings(
-        owner_database_url=postgres.owner,
-        n8n_base_url=N8N,
-        n8n_owner_email="owner@example.com",
-        n8n_owner_password="Aa1secret",
-        step_key="step-key",
-        platform_internal_url="http://platform-api:8000",
-    )
     said: list[str] = []
 
-    loaded, findings = load_into_n8n(settings, load_all(), said.append)
+    loaded, findings = load_into_n8n(settings_for(postgres.owner), load_all(), said.append)
 
     assert findings == []
-    assert sorted(w.name for w in loaded) == [
-        "run",
-        "run_failure_reporter",
-        "schedule_tick",
-        "self_test_failure",
-    ]
+    assert sorted(w.name for w in loaded) == ["run_failure_reporter", "self_test_failure"]
     assert all(w.active for w in loaded)
     assert n8n.deleted == ["W1"]
     assert [c for c in n8n.calls if c.split()[1].split("/")[0] == "W1"] == [
@@ -394,14 +487,73 @@ def test_bootstrap_removes_the_old_run_workflow_by_its_exact_name_and_nothing_el
     assert sorted(w["name"] for w in n8n.workflows.values()) == [
         "Staff access review",
         f"{OLD_RUN_WORKFLOW} copy",
-        "run",
         "run_failure_reporter",
-        "schedule_tick",
         "self_test_failure",
     ]
     assert "workflow:delete" in n8n.scopes
     assert any(line.startswith(f"workflow {OLD_RUN_WORKFLOW} (W1): removed") for line in said)
     assert n8n.api_keys == [{"id": "k2", "label": "Alice's own key"}], "platform-api makes its own"
+
+
+def restore_pending(owner_url: str) -> list[str] | None:
+    """The workflows the restore was asked for, or None when none was asked."""
+    with psycopg.connect(owner_url) as conn:
+        row = conn.execute("SELECT missing FROM builder.n8n_restore").fetchone()
+    return None if row is None else list(row[0])
+
+
+def own_use_case(owner_url: str, use_case_id: str, workflow_id: str) -> None:
+    insert_use_case(owner_url, use_case_id, "agent_cards")
+    with psycopg.connect(owner_url, autocommit=True) as conn:
+        conn.execute(
+            "UPDATE builder.use_cases SET engine = 'own', n8n_workflow_id = %s"
+            " WHERE use_case_id = %s",
+            (workflow_id, use_case_id),
+        )
+
+
+def test_an_n8n_that_kept_its_owner_but_lost_every_workflow_asks_for_a_restore(
+    postgres: PostgresUrls, monkeypatch: pytest.MonkeyPatch
+):
+    """On Azure n8n makes its owner from its settings on every start, so an emptied n8n still
+    has one. What tells is that n8n holds none of the workflows our records name."""
+    truncate_all(postgres.owner)
+    serve(monkeypatch, FakeN8n([], owner_exists=True))
+    recorded(postgres.owner, {"run_failure_reporter": "W7"})
+    own_use_case(postgres.owner, "uc_own", "wf_gone")
+    assert main(env_for(postgres.owner)) == 0
+    assert restore_pending(postgres.owner) == ["wf_gone"]
+
+
+def test_an_n8n_that_holds_a_workflow_our_records_name_asks_for_no_restore(
+    postgres: PostgresUrls, monkeypatch: pytest.MonkeyPatch
+):
+    truncate_all(postgres.owner)
+    serve(monkeypatch, FakeN8n(["run_failure_reporter"], owner_exists=True))
+    recorded(postgres.owner, {"run_failure_reporter": "W1"})
+    own_use_case(postgres.owner, "uc_own", "wf_staff_deleted")
+    assert main(env_for(postgres.owner)) == 0
+    assert restore_pending(postgres.owner) is None
+
+
+def test_an_n8n_that_cannot_be_read_is_never_taken_for_empty(
+    postgres: PostgresUrls, monkeypatch: pytest.MonkeyPatch
+):
+    truncate_all(postgres.owner)
+    n8n = serve(monkeypatch, FakeN8n([], owner_exists=True))
+    n8n.unreadable = True
+    own_use_case(postgres.owner, "uc_own", "wf_somewhere")
+    main(env_for(postgres.owner))
+    assert restore_pending(postgres.owner) is None
+
+
+def test_a_new_n8n_with_nothing_on_record_asks_for_no_restore(
+    postgres: PostgresUrls, monkeypatch: pytest.MonkeyPatch
+):
+    truncate_all(postgres.owner)
+    serve(monkeypatch, FakeN8n([]))
+    assert main(env_for(postgres.owner)) == 0
+    assert restore_pending(postgres.owner) is None
 
 
 def loaded_names(owner_url: str) -> dict[str, str]:
@@ -417,6 +569,7 @@ def test_the_error_workflow_and_the_self_test_are_loaded_active_and_every_failur
 ):
     truncate_all(postgres.owner)
     n8n = serve(monkeypatch, FakeN8n([]))
+    insert_use_case(postgres.owner, "uc_cards", "agent_cards")
 
     assert main(env_for(postgres.owner)) == 0
 
@@ -428,7 +581,7 @@ def test_the_error_workflow_and_the_self_test_are_loaded_active_and_every_failur
         "CUSTOM.wabReportFailure",
     ], "Report a failure, not an HTTP node"
     assert reporter["settings"]["callerPolicy"] == "any"
-    for name in ("self_test_failure", "run", "schedule_tick"):
+    for name in ("self_test_failure", "run"):
         assert held[name]["settings"]["errorWorkflow"] == reporter["id"], name
     assert engine_status(postgres.owner) == READY
     recorded = loaded_names(postgres.owner)
@@ -472,6 +625,7 @@ def test_a_same_name_workflow_in_a_member_s_project_is_left_alone(
     truncate_all(postgres.owner)
     theirs = ["run_failure_reporter", "self_test_failure", "run"]
     n8n = serve(monkeypatch, FakeN8n([], theirs=theirs))
+    insert_use_case(postgres.owner, "uc_cards", "agent_cards")
     untouched = json.loads(json.dumps(n8n.workflows))
 
     assert main(env_for(postgres.owner)) == 0

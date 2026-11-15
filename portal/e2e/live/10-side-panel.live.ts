@@ -248,6 +248,39 @@ test('the run card moves in place from the stream: stopped, retrying, waiting fo
   await context.close()
 })
 
+test('a Retry in the chat’s run card that another Operator beat says who, in the chat’s message, and keeps focus on the card (issue 158)', async ({ browser, backend }, info) => {
+  const name = `Beaten to it ${randomUUID().slice(0, 6)}`
+  const [runId] = await stoppedRuns(backend, [name])
+  if (!runId) throw new Error('a stopped run')
+  const context = await devContext(browser, 'alice', { reducedMotion: true })
+  const page = await context.newPage()
+  const watch = watchPage(page)
+  await page.setViewportSize({ width: 1280, height: 900 })
+  await page.goto('/')
+  await ask(page, `Why did ${name} stop?`)
+  await expect(panel(page), 'on a wide screen the run opens beside the chat by itself').toBeVisible({ timeout: 20_000 })
+  await panel(page).getByRole('button', { name: 'Close' }).click()
+  const card = newest(page).locator('section').filter({ has: page.getByRole('heading', { name, exact: true }) })
+  await expect(card.locator('[data-run-pill]')).toHaveText('Stopped', { timeout: 15_000 })
+  await page.route(`**/api/v1/runs/${runId}/retry`, async (route) => {
+    await backend.post('carol', `/api/v1/runs/${runId}/retry`, undefined, undefined, [202])
+    await backend.waitToLeave(runId, 'failed', 60_000)
+    await route.continue()
+  })
+  const answered = page.waitForResponse((response) => response.url().endsWith(`/api/v1/runs/${runId}/retry`), { timeout: 90_000 })
+  await card.getByRole('button', { name: 'Retry', exact: true }).click()
+  expect((await answered).status(), 'Carol retried it first, so the platform refuses Alice’s press').toBe(409)
+
+  const said = 'Carol already retried this run.'
+  await expect(page.getByRole('status').filter({ hasText: said }), 'a screen reader hears who retried it').toHaveText(said)
+  await expect(page.locator('[aria-hidden="true"]', { hasText: said }), 'and the chat shows it').toBeVisible()
+  await expect(card.getByRole('heading', { name, exact: true }), 'focus goes to the card’s title, which stays as the run moves on').toBeFocused()
+  await shot(page, info, 'i158-card-retried-first')
+  await expect(card.getByRole('button', { name: 'Retry', exact: true })).toHaveCount(0)
+  assertClean(watch)
+  await context.close()
+})
+
 async function openRequest(page: Page, runId: string): Promise<Locator> {
   await ask(page, 'What needs me?')
   const opener = newest(page).locator(`[data-opens="approval:${runId}"]`)

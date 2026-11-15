@@ -13,7 +13,6 @@ from platform_api.builder.models import (
 from platform_api.db import Database
 from platform_api.orchestration import (
     Given,
-    NotOn,
     RunSpec,
     RunStarted,
     ScheduleBook,
@@ -173,7 +172,7 @@ async def test_only_do_a_test_run_marks_the_run_a_test(
     use_case_id = UseCaseId(added.use_case_id)
     await builder.start_run(use_case_id, ALICE, "check-now")
     await builder.start_run(use_case_id, ALICE, "try-it", test=True)
-    spec = await builder.check_spec(use_case_id)
-    assert not isinstance(spec, NotOn) and spec is not None
+    spec = await builder.run_spec_for(use_case_id)
+    assert isinstance(spec, RunSpec)
     assert [s.test for s, _, _ in runs.started] == [False, True]
     assert spec.test is False

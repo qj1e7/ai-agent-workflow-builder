@@ -1,4 +1,4 @@
-import { useContext, useEffect, useState, type ReactNode } from 'react'
+import { useContext, useEffect, useId, useState, type ReactNode } from 'react'
 import { useHome } from '../../api/homeQueries'
 import { useRun, useMe, useUseCases } from '../../api/queries'
 import { isOperator } from '../../api/me'
@@ -9,6 +9,7 @@ import { Card } from '../../ui/Card'
 import { OpenButton } from '../../ui/OpenItem'
 import { useShownInPanel } from '../../ui/sidePanel'
 import { AnswerList, StopAnswers, StopNext } from '../run/Outcome'
+import { RunPlaceContext, type RunPlace } from '../run/place'
 import { RunLine, SettledLine } from '../run/RunLine'
 import { RunPill } from '../run/RunPill'
 import { POLL_FAILED_MS, useReconnectWhenBehind } from '../run/follow'
@@ -18,6 +19,7 @@ import { type RunStory, useRunStory } from '../run/useRunStory'
 import { sentence, stageWords, type NameOf, type RunState } from '../run/words'
 import { useShowBesideOnWide } from './autoOpen'
 import { CardMemoryContext } from './cardMemory'
+import { useNote } from './ChatProvider'
 import styles from './Planner.module.css'
 
 type Say = (text: string) => void
@@ -50,9 +52,13 @@ export function RunCardView({ runId, name, story, beside }: { runId: string; nam
   const ended = settled !== null
   const failure = model.phase.state === 'failed' ? model.phase : null
   const safeId = `${runId}-safe`
+  const headingId = useId()
+  const note = useNote()
+  const place: RunPlace = { focus: () => document.getElementById(headingId)?.focus(), say: note }
   return (
     <Card
       title={name}
+      headingId={headingId}
       pill={<RunPill facts={story.facts} />}
       status={
         beside ? undefined : (
@@ -61,7 +67,13 @@ export function RunCardView({ runId, name, story, beside }: { runId: string; nam
           </OpenButton>
         )
       }
-      actions={failure ? <StopNext runId={runId} failure={failure} {...story.stopped} safeId={safeId} /> : undefined}
+      actions={
+        failure ? (
+          <RunPlaceContext.Provider value={place}>
+            <StopNext runId={runId} failure={failure} {...story.stopped} safeId={safeId} />
+          </RunPlaceContext.Provider>
+        ) : undefined
+      }
     >
       {beside ? null : ended ? <SettledLine settled={settled} /> : <RunLine stations={story.stations} arrivedLive={story.arrivedLive} settled={null} small />}
       {failure ? <StopAnswers failure={failure} {...story.stopped} safeId={safeId} /> : story.answers.length > 0 ? <AnswerList answers={story.answers} /> : null}

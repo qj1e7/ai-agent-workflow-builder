@@ -1,12 +1,9 @@
-"""When a watchlist is checked: the schedule, its slots and when a check is due.
-
-Everything here is pure. The store and the tick that act on it are in schedule_store.py.
-"""
+"""When a workflow runs, as the Portal saves it: a day and a time in a time zone. Its own n8n
+workflow's Schedule Trigger runs it (n8n_schedule.py). Pure; the store is schedule_store.py."""
 
 from dataclasses import dataclass
-from datetime import datetime, time, timedelta
+from datetime import time
 from typing import Literal
-from zoneinfo import ZoneInfo
 
 type Day = Literal[
     "every_day",
@@ -70,49 +67,3 @@ class Schedule:
         if parsed is None:
             raise ValueError(f"not a schedule time: {self.at!r}")
         return parsed
-
-
-@dataclass(frozen=True)
-class Slots:
-    latest: datetime
-    """The newest slot at or before now."""
-    next: datetime
-    """The first slot after now."""
-
-
-def _runs_on(day: Day, weekday: int) -> bool:
-    if day == "every_day":
-        return True
-    if day == "weekdays":
-        return weekday < SATURDAY
-    return weekday == WEEKDAY[day]
-
-
-def slots(schedule: Schedule, now: datetime) -> Slots:
-    """The slots on either side of now, in the schedule's own time zone, so 9:00 stays 9:00."""
-    zone = ZoneInfo(schedule.time_zone)
-    local_now = now.astimezone(zone)
-    at = schedule.time_of_day
-
-    def slot_on(offset: int) -> datetime | None:
-        date = (local_now + timedelta(days=offset)).date()
-        if not _runs_on(schedule.day, date.weekday()):
-            return None
-        return datetime.combine(date, at, tzinfo=zone)
-
-    latest = next(s for o in range(0, -8, -1) if (s := slot_on(o)) is not None and s <= now)
-    upcoming = next(s for o in range(0, 8) if (s := slot_on(o)) is not None and s > now)
-    return Slots(latest, upcoming)
-
-
-def due_slot(
-    schedule: Schedule, saved_at: datetime, last_started: datetime | None, now: datetime
-) -> datetime | None:
-    """The slot to start a check for, or None. A slot is due when it is the latest one by now
-    and later than both the last slot started and the time the schedule was saved, so a
-    schedule saved after today's slot waits for the next one, and several missed slots start
-    one check for the newest."""
-    latest = slots(schedule, now).latest
-    if latest <= saved_at or (last_started is not None and latest <= last_started):
-        return None
-    return latest

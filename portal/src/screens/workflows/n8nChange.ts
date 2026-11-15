@@ -37,8 +37,9 @@ export function refusedLine(changes: readonly string[]): string {
   return `Without a yes, our platform refuses the write. The next run stops before ${ticket ? 'the ticket' : 'the write'}.`
 }
 
-/** The state pill's words on the workflow page, whenever the version in use is not safe. */
-export const needsFix = (useCase: Pick<UseCaseView, 'grade'>): boolean => useCase.grade !== undefined && useCase.grade !== null && useCase.grade !== 'safe'
+/** The state pill's words on the workflow page and its row, whenever the version in use is not safe or it could not move to n8n. */
+export const needsFix = (useCase: Pick<UseCaseView, 'grade'> & Partial<Pick<UseCaseView, 'move_refused'>>): boolean =>
+  Boolean(useCase.move_refused) || (useCase.grade !== undefined && useCase.grade !== null && useCase.grade !== 'safe')
 
 export const backToVersionToast = (version: number, saved: number): string => `Back to version ${version}, saved as version ${saved}.`
 export const yesBackToast = (saved: number): string => `Version ${saved} has the yes back.`
@@ -54,6 +55,8 @@ export function madeWords(version: Pick<VersionView, 'made' | 'changes' | 'rolle
       return version.rolled_back_to === null || version.rolled_back_to === undefined ? 'Rolled back' : `Rolled back to version ${version.rolled_back_to}`
     case 'yes_put_back':
       return 'Put “Ask for a yes” back'
+    case 'moved_to_n8n':
+      return 'Moved to its own n8n workflow'
     default:
       return null
   }

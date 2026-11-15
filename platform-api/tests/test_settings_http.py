@@ -392,20 +392,6 @@ def test_where_every_tell_goes_is_shown_and_the_flows_address_is_not():
         assert "sig=" not in response.text and "logic.azure.com" not in response.text
 
 
-def test_a_tick_also_checks_the_connections_that_are_due_and_still_answers_if_that_fails():
-    app, fake_connections = with_connections()
-    headers = {"X-Step-Key": LOCAL_ENV["STEP_KEY"]}
-    assert TestClient(app).post("/internal/v1/schedules/tick", headers=headers).status_code == 200
-    assert fake_connections.due == 1
-
-    async def broken() -> None:
-        raise RuntimeError("the database went away")
-
-    fake_connections.check_due = broken  # type: ignore[method-assign]
-    ticked = TestClient(app).post("/internal/v1/schedules/tick", headers=headers)
-    assert (ticked.status_code, ticked.json()) == (200, {"started": []})
-
-
 @pytest.fixture
 async def practice(db: Database):
     kit = PracticeKit(db)

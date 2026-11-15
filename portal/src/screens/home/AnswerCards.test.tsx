@@ -656,6 +656,7 @@ describe('the run card: the AI troubleshooter’s answer that moves with the run
     expect(html).toContain('aria-label="Steps of this run"')
     expect(labels(html)).toEqual(['What happened', 'Affected', 'Safe to retry'])
     expect(buttons(html)).toEqual(['Open', 'Retry'])
+    expect(html, 'its title can take focus when a press takes Retry away').toMatch(/<h3 id="[^"]+" tabindex="-1">LangGraph release check<\/h3>/)
     expect(whoOf({ answer: 'why_stopped', use_case_id: null, parts: [] })).toBe('troubleshooter')
   })
 

@@ -1,7 +1,24 @@
+import os
 from collections.abc import Iterator
 
 import pytest
 from harness import PLATFORM_API_URL, Api, MockGithub
+
+SEEDED = os.environ.get("E2E_SEED") == "old-engine"
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    config.addinivalue_line(
+        "markers", "old_engine: needs the stack started from the old-engine seed"
+    )
+
+
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    """A stack started from the old-engine seed runs only the move's test, and no other stack
+    runs it."""
+    for item in items:
+        if (item.get_closest_marker("old_engine") is not None) != SEEDED:
+            item.add_marker(pytest.mark.skip(reason="runs only on the other kind of stack"))
 
 
 @pytest.fixture(scope="session")

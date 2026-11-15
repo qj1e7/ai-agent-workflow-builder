@@ -95,6 +95,7 @@ describe('the Versions words', () => {
   it('says a roll back and a yes put back in the sketch’s words', () => {
     expect(madeWords({ made: 'rolled_back', rolled_back_to: 2 })).toBe('Rolled back to version 2')
     expect(madeWords({ made: 'yes_put_back' })).toBe('Put “Ask for a yes” back')
+    expect(madeWords({ made: 'moved_to_n8n' })).toBe('Moved to its own n8n workflow')
     expect(versionLine(version({ made: 'rolled_back', rolled_back_to: 2 }), NOW, nameOf)).toBe('Today, 9:00. Rolled back to version 2. Alice Tan.')
     expect(madeWords({ made: null })).toBeNull()
   })

@@ -1,3 +1,4 @@
+import asyncio
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
@@ -197,6 +198,23 @@ async def test_a_check_that_raises_is_a_connection_that_is_not_answering_without
     assert checked.state == "not_answering"
     assert checked.problem == "The check of Jira did not finish."
     assert "secret-token-value" not in repr(await rig.connections.view())
+
+
+async def test_the_checks_run_on_their_own_and_one_that_fails_stops_none_after_it(rig: Rig):
+    """The platform checks what is due every few minutes, as the schedule tick asked it to before
+    E10, and a check that breaks waits for the next pass."""
+    stop = asyncio.Event()
+    passes: list[int] = []
+
+    async def broken() -> None:
+        passes.append(len(passes))
+        if len(passes) == 2:
+            stop.set()
+        raise RuntimeError("the database went away")
+
+    rig.connections.check_due = broken  # type: ignore[method-assign]
+    await asyncio.wait_for(rig.connections.check_forever(stop, every=timedelta(0)), 5)
+    assert passes == [0, 1]
 
 
 async def test_a_tick_checks_only_what_is_due_and_needs_two_readings_to_raise_a_problem(
