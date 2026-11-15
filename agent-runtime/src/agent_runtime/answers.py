@@ -14,6 +14,7 @@ from typing import Final
 
 from agent_runtime.abilities import (
     NOTIFIES,
+    TICKETS,
     VULNERABILITIES_PLANNED,
     Need,
     cant_entry,
@@ -109,6 +110,7 @@ from agent_runtime.questions import answer_question, is_fallback, question_messa
 from agent_runtime.reading import (
     FILLER,
     ME_WORDS,
+    POLITE,
     SAID_LIMIT,
     AsksAbout,
     SkipRead,
@@ -456,7 +458,7 @@ def _left_out(span: Span, searching: bool, unquoted_skip: bool) -> CantRow:
             elif turns_round(text):
                 note = LEFT_OUT_PART
             else:
-                note = LEFT_OUT_SEARCH if span.kind else LEFT_OUT_PART
+                note = LEFT_OUT_SEARCH if span.kind and _names_a_filter(text) else LEFT_OUT_PART
         case "do":
             # "the change board can catch up on it" opens with a verb but is a statement
             # about someone, not an order: naming it as "I can't change board can..." reads
@@ -492,6 +494,13 @@ def _left_out(span: Span, searching: bool, unquoted_skip: bool) -> CantRow:
         needs=need.needs,
         system=need.system,
     )
+
+
+def _names_a_filter(text: str) -> bool:
+    """Whether the words name more than tickets, as "tickets" or "help me with tickets please"
+    do not: a search it can't run needs a filter to be one."""
+    plain_words = TICKETS | FILLER | ME_WORDS | POLITE
+    return any(w not in plain_words for w in re.findall(r"[\w'’-]+", text.casefold()))
 
 
 def _only_fields(cant: list[CantRow]) -> bool:
@@ -638,8 +647,9 @@ ASKS_TO_WATCH: Final = (
 def _which_software(read: TaskRead, request: str) -> WhichSoftwareAnswer | None:
     """The one question for the detail a watch needs: the reading put the request on the
     watchlist and the request names no software. Only when the request asks nothing else, so no
-    part of it is dropped for the question. The word is the request's own for the watch."""
-    if _software_of(read, request) is not None:
+    part of it is dropped for the question, and never for a question such as "how do I add
+    software to the watchlist", which the guide answers. The word is the request's own."""
+    if _software_of(read, request) is not None or QUESTION_SHAPE.search(request):
         return None
     asked = re.findall(r"[\w'’]+", request.casefold())
     if not asked or any(w not in ASKS_TO_WATCH for w in asked):

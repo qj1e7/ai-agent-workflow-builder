@@ -429,3 +429,18 @@ def test_a_system_the_platform_doesnt_reach_is_named_never_not_followed():
     task = "Can you check GitLab access for the quarterly review?"
     [row] = rows(answer_of(read(name="GitLab access check", software="GitLab"), task))
     assert row.note.startswith("I can't read GitLab yet.")
+
+
+# Round 2 of the eval (run 43746690796) found these.
+
+
+def test_a_how_to_question_about_adding_software_is_not_asked_which_software():
+    task = "how do I add software to the watchlist"
+    answer = answer_of(read(belongs_on_watchlist=True, watchlist_word="add"), task)
+    assert not isinstance(answer, WhichSoftwareAnswer)
+
+
+@pytest.mark.parametrize("task", ["tickets", "help me with tickets please"])
+def test_words_that_name_only_tickets_are_not_followed_never_a_search_it_cant_run(task: str):
+    notes = [r.note for r in rows(answer_of(read(), task))]
+    assert notes and all(not n.startswith("I can't search by this yet") for n in notes)
