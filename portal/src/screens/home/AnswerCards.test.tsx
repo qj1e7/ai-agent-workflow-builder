@@ -368,6 +368,13 @@ describe('the clauses an answer didn’t read', () => {
     expect(buttons(html)).toEqual([])
   })
 
+  it('show a can’t the card doesn’t name, as the yes that can’t be skipped', () => {
+    const note = 'I can’t skip the yes. Nothing is written without a yes.'
+    const words = 'how do I create a workflow without Bob'
+    const skip: CantReply = { answer: 'cant', cant: [{ kind: 'do', text: words, note, needs: null, system: null, instead: null, unsupported: false }], alternative: null, parts: [{ text: words, mark: 'cant', reason: 'cant_do', note, choices: [] }] }
+    expect(text(draw(skip, { leftovers: true }))).toBe(`Can’t do: “${words}” ${note}`)
+  })
+
   it('never repeat what a can’t answer’s card already says, and a set-up card marks its own', () => {
     expect(draw(cant as CantReply, { leftovers: true })).toBe('')
     expect(draw(setupCross as SetupCardReply, { leftovers: true })).toBe('')

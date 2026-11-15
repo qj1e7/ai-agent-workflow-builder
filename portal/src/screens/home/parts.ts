@@ -133,8 +133,11 @@ export function leftoverParts(reply: PlannerReply): PartView[] {
     case 'ideas':
     case 'offline':
       return []
-    case 'cant':
-      return reply.alternative?.answer === 'setup_card' ? [] : above(reply.parts.filter((part) => part.reason !== 'cant_do' && part.reason !== 'needs_the_rest'))
+    case 'cant': {
+      // The card names only the can'ts with something to build. One with nothing to build, as a yes that can't be skipped, is drawn here.
+      const named = (part: PartView) => reply.cant.some((row) => row.needs !== null && row.text.trim().toLowerCase() === part.text.trim().toLowerCase())
+      return reply.alternative?.answer === 'setup_card' ? [] : above(reply.parts.filter((part) => !(part.reason === 'cant_do' && named(part)) && part.reason !== 'needs_the_rest'))
+    }
     case 'operators':
       // The answer’s sentence already says who makes the changes, so only a question beside them is marked.
       return above(reply.parts.filter((part) => part.reason !== 'operators'))
