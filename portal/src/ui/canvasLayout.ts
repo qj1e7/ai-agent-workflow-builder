@@ -1,11 +1,20 @@
 import type { N8nBlockKind, N8nBlockView } from '../api/types'
 
-/** A block not built yet, built, the step a test run is at, one it reached, or the yes the safety checker added. */
-export type NodeState = 'off' | 'idle' | 'now' | 'ok' | 'added'
+/**
+ * A block not built yet, built, the step a run is at, one it reached, or the yes the safety checker added. A run also waits at a
+ * block, such as Ask for a yes, or stops at one with an error.
+ */
+export type NodeState = 'off' | 'idle' | 'now' | 'ok' | 'added' | 'wait' | 'err'
 /** A way out not built yet, built, the test run flowing along it, or one it took. */
 export type EdgeState = 'off' | 'idle' | 'flow' | 'ok'
 
 export const edgeKey = (from: string, to: string): string => `${from}->${to}`
+
+export interface CanvasState {
+  readonly nodes: Readonly<Record<string, NodeState>>
+  /** Keyed `{from}->{to}`, by the blocks' names. */
+  readonly edges: Readonly<Record<string, EdgeState>>
+}
 
 export const NODE = 84
 const COL = 175

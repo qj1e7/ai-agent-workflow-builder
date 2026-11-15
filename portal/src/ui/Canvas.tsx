@@ -38,8 +38,11 @@ const SUB: Readonly<Record<N8nBlockKind, string>> = {
   branch: 'IF',
   merge: 'Merge',
   end: 'Ends the run',
-  other: 'Not allowed',
+  other: 'n8n block',
 }
+
+/** What a screen reader hears after a block's name, for the states a run gives it. */
+const SAID: Partial<Record<NodeState, string>> = { now: 'working', ok: 'done', wait: 'waiting', err: 'stopped here' }
 
 interface CanvasProps {
   readonly blocks: readonly N8nBlockView[]
@@ -49,9 +52,15 @@ interface CanvasProps {
   readonly edges?: Readonly<Record<string, EdgeState>>
 }
 
+function blockSaid(name: string, state: NodeState | undefined): string {
+  const said = state ? SAID[state] : undefined
+  return said ? `${name} (${said})` : name
+}
+
 /**
  * The workflow drawn as n8n draws it, from its blocks and their ways out: our blocks marked, an IF's true and false named. A block
- * not built yet is hidden, one a run reached gets a tick, and dashes flow into the block at work. The states come from the caller.
+ * not built yet is hidden, one a run reached gets a tick, one it waits at turns amber, one it stopped at turns red with a mark, and
+ * dashes flow into the block at work. The states come from the caller.
  */
 export function Canvas({ blocks, name, nodes = {}, edges = {} }: CanvasProps) {
   const id = useId()
@@ -62,7 +71,7 @@ export function Canvas({ blocks, name, nodes = {}, edges = {} }: CanvasProps) {
     // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
     <div className={styles['canvas']} tabIndex={0} role="group" aria-labelledby={id}>
       <svg viewBox={`0 0 ${String(laid.width)} ${String(laid.height)}`} className={styles['svg']} style={{ '--w': `${String(laid.width)}px` } as CSSProperties} role="img" aria-labelledby={id}>
-        <title id={id}>{`${name} in n8n${shown.length > 0 ? `: ${shown.map((node) => node.name).join(', ')}` : ''}`}</title>
+        <title id={id}>{`${name} in n8n${shown.length > 0 ? `: ${shown.map((node) => blockSaid(node.name, nodes[node.name])).join(', ')}` : ''}`}</title>
         {laid.edges.map((edge) => {
           const state = edges[edgeKey(edge.from, edge.to)] ?? 'idle'
           return (
@@ -97,6 +106,10 @@ export function Canvas({ blocks, name, nodes = {}, edges = {} }: CanvasProps) {
               <g className={styles['tick']}>
                 <circle cx={80} cy={4} r={9} />
                 <path d="M75.8 4.2l2.8 2.8 5.2-5.4" />
+              </g>
+              <g className={styles['alert']}>
+                <circle cx={80} cy={4} r={9} />
+                <path d="M80 -0.6v5.2M80 8.4v.2" />
               </g>
               <text className={styles['label']} x={42} y={104} textAnchor="middle">
                 {node.name}

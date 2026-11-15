@@ -77,6 +77,22 @@
   stroke-linejoin: round;
 }
 
+.alert {
+  opacity: 0;
+  transition: opacity var(--dur-small) ease;
+}
+
+.alert circle {
+  fill: var(--red);
+}
+
+.alert path {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+}
+
 .node[data-state='off'] {
   opacity: 0;
   transition-delay: 0ms;
@@ -93,6 +109,20 @@
 .node[data-state='now'] .box {
   stroke: var(--accent);
   stroke-width: 3.5;
+}
+
+.node[data-state='wait'] .box {
+  stroke: var(--amber);
+  fill: var(--amber-soft);
+}
+
+.node[data-state='err'] .box {
+  stroke: var(--red);
+  fill: var(--red-soft);
+}
+
+.node[data-state='err'] .alert {
+  opacity: 1;
 }
 
 .node[data-state='added'] .box {
