@@ -16,12 +16,14 @@ from platform_api.builder.cards import (
     tool_list,
 )
 from platform_api.builder.models import (
+    AgentChoice,
     CannotDo,
     CardApprovalView,
     CardBlock,
     CardDefinition,
     CardInput,
     CardList,
+    CreateAgentUseCase,
     MissingTool,
     NewAgent,
     PlannedAgent,
@@ -42,6 +44,7 @@ from platform_api.contracts.stories import (
     WORKFLOW,
     Story,
     Timeline,
+    announced,
     open_step,
 )
 from platform_api.monitoring.agent_events import (
@@ -59,7 +62,6 @@ from platform_api.monitoring.events import (
     AgentStepFinished,
     AgentStepStarted,
     ApprovalAnnounced,
-    ApprovalAnnouncedData,
     ApprovalDecided,
     ApprovalDecidedData,
     ApprovalRequested,
@@ -199,7 +201,10 @@ USE_CASE = UseCaseView(
             values=VALUES,
         )
     ],
+    last_run=None,
+    left_out=[],
 )
+LEFT_OUT = ["colour them by team"]
 
 
 def card_run_events() -> Timeline:
@@ -360,9 +365,7 @@ def card_run_events() -> Timeline:
         14.6,
         PLATFORM,
         f"The approval request was posted to the Teams channel {CHANNEL}.",
-        ApprovalAnnouncedData(
-            approval_id=CARD_RUN.approval_id, channel=CHANNEL, link=CARD_RUN.approval_link
-        ),
+        announced(tl, 14.6),
     )
     decided = tl.add(
         ApprovalDecided,
@@ -432,5 +435,12 @@ def card_fixtures() -> dict[str, WireModel | list[WireModel]]:
         "cards/plan.new-agent.json": plan_new_agent(),
         "cards/plan.cannot-do.json": plan_cannot_do(),
         "cards/use-case.json": USE_CASE,
+        "cards/use-case.left-out.json": USE_CASE.model_copy(update={"left_out": LEFT_OUT}),
+        "cards/agent-use-case.in.json": CreateAgentUseCase(
+            name=USE_CASE_NAME,
+            instruction=INSTRUCTION,
+            agents=[AgentChoice(card_id=VERSION_CHECKER.card_id, values=VALUES)],
+            left_out=LEFT_OUT,
+        ),
         "runs/card.json": list(card_run_events().events),
     }

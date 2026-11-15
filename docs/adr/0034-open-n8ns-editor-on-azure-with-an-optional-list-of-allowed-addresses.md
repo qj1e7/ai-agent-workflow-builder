@@ -51,3 +51,7 @@ So the allow list also lets in those four ranges, through the setting `N8N_INTER
   - n8n's Webhook node leaves the node allow list;
   - something signs people in before they reach n8n, such as Easy Auth with Entra ID, with only the signed paths left open. n8n's own single sign-on is a paid feature.
 - **If this ADR is accepted,** ADR 0027's "Open in n8n" can link to `n8n_editor_url`, a new Terraform output.
+
+## Changed on 13 Nov 2026
+
+ADR 0027 changes what dropping the address allow list would take: the run webhooks are replaced by our signed Start from the Portal trigger, and the Webhook node is off the node allow list. Sign-in in front of n8n remains.

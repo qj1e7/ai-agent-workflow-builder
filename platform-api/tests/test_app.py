@@ -20,6 +20,9 @@ ROUTES = {
     ("GET", "/api/v1/dev/users"),
     ("GET", "/api/v1/me"),
     ("GET", "/api/v1/home"),
+    ("GET", "/api/v1/home/needs"),
+    ("GET", "/api/v1/home/waiting-on-others"),
+    ("GET", "/api/v1/home/following-up"),
     ("GET", "/api/v1/templates"),
     ("POST", "/api/v1/use-cases"),
     ("GET", "/api/v1/use-cases"),
@@ -28,7 +31,19 @@ ROUTES = {
     ("POST", "/api/v1/use-cases/{use_case_id}/runs"),
     ("POST", "/api/v1/use-cases/{use_case_id}/pause"),
     ("POST", "/api/v1/use-cases/{use_case_id}/resume"),
+    ("POST", "/api/v1/use-cases/{use_case_id}/turn-on"),
     ("PUT", "/api/v1/use-cases/{use_case_id}/schedule"),
+    ("GET", "/api/v1/use-cases/{use_case_id}/versions"),
+    ("POST", "/api/v1/use-cases/{use_case_id}/versions/{version}/undo"),
+    ("POST", "/api/v1/use-cases/{use_case_id}/versions/{version}/rollback"),
+    ("POST", "/api/v1/use-cases/{use_case_id}/add-the-yes-back"),
+    ("POST", "/api/v1/n8n/sweep"),
+    ("POST", "/api/v1/use-cases/{use_case_id}/open-in-n8n"),
+    ("POST", "/api/v1/use-cases/{use_case_id}/take-back"),
+    ("GET", "/api/v1/use-cases/{use_case_id}/n8n"),
+    ("GET", "/api/v1/runs/{run_id}/n8n"),
+    ("GET", "/api/v1/me/n8n"),
+    ("PUT", "/api/v1/people/{person_id}/n8n-access"),
     ("DELETE", "/api/v1/use-cases/{use_case_id}"),
     ("POST", "/api/v1/use-cases/{use_case_id}/restore"),
     ("PUT", "/api/v1/drafts/{draft_id}"),
@@ -66,6 +81,9 @@ ROUTES = {
     ("GET", "/api/v1/runs/{run_id}/troubleshoot"),
     ("GET", "/api/v1/approvals/{approval_id}"),
     ("POST", "/api/v1/approvals/{approval_id}/decisions"),
+    ("POST", "/api/v1/approvals/{approval_id}/questions"),
+    ("POST", "/api/v1/approvals/{approval_id}/questions/{question_id}/answer"),
+    ("GET", "/api/v1/decisions"),
     ("GET", "/api/v1/teams-stub/messages"),
     ("GET", "/api/v1/mock-jira/tickets"),
     ("POST", "/api/v1/mock-jira/tickets/{key}/done"),
@@ -73,8 +91,16 @@ ROUTES = {
     ("POST", "/internal/v1/runs/{run_id}/agent-events"),
     ("GET", "/internal/v1/runs/{run_id}/jira/tickets"),
     ("GET", "/internal/v1/runs/{run_id}/jira/tickets/{key}"),
-    ("POST", "/internal/v1/schedules/tick"),
+    ("GET", "/internal/v1/runs/{run_id}/confluence/pages/{page}"),
     ("POST", "/internal/v1/workflow-failures"),
+    ("GET", "/internal/v1/n8n/options"),
+    ("POST", "/internal/v1/n8n/calls/read"),
+    ("POST", "/internal/v1/n8n/calls/agent"),
+    ("POST", "/internal/v1/n8n/calls/propose"),
+    ("POST", "/internal/v1/n8n/calls/ask"),
+    ("POST", "/internal/v1/n8n/calls/write"),
+    ("POST", "/internal/v1/n8n/calls/tell"),
+    ("POST", "/internal/v1/n8n/failures"),
     ("GET", "/api/v1/settings/model"),
     ("PUT", "/api/v1/settings/model"),
     ("DELETE", "/api/v1/settings/model"),
@@ -204,6 +230,7 @@ async def test_readiness_is_not_ready_before_bootstrap(db: Database):
     assert [(c.name, c.ok) for c in readiness.checks] == [
         ("activity_log", True),
         ("workflows", False),
+        ("self_test", False),
     ]
 
 
@@ -281,65 +308,23 @@ def test_a_bad_step_key_is_refused_before_the_run_id_is_looked_at(refusing_clien
 
 
 # The image's command, `uvicorn platform_api.app:create_app --factory`: uvicorn sets up its own
-# loggers, then builds the app. The script then ticks a held schedule and a paused one.
+# loggers, then builds the app. The script then logs as the moves to n8n do.
 UNDER_UVICORN = """
-import asyncio
 import logging
-from contextlib import asynccontextmanager
-from datetime import UTC, datetime, timedelta
-from types import SimpleNamespace
 
 import uvicorn
 
 from platform_api.app import create_app
-from platform_api.orchestration import NotOn, SavedSchedule, Schedule, ScheduleTicker
-from platform_api.shared import Role, UseCaseId, UserId
 
 uvicorn.Config("platform_api.app:create_app", factory=True).load()
 create_app()
 
-NOW = datetime(2026, 11, 9, 1, 1, tzinfo=UTC)
-
-
-def saved(use_case, owner, roles):
-    return SavedSchedule(
-        UseCaseId(use_case), Schedule("monday", "09:00"), UserId(owner), owner.title(),
-        NOW - timedelta(days=1), None, roles,
-    )
-
-
-class Book:
-    async def all(self):
-        return [saved("uc_held", "carol", None), saved("uc_paused", "alice", {Role.OPERATOR})]
-
-    async def use_up_slot(self, use_case_id, slot):
-        pass
-
-
-class Specs:
-    async def check_spec(self, use_case_id):
-        return NotOn("paused")
-
-
-class Conn:
-    async def execute(self, *args):
-        pass
-
-
-class Clock:
-    def clock(self):
-        return NOW
-
-    @asynccontextmanager
-    async def transaction(self, context):
-        # The tick holds the workflow's lock around a start (#56).
-        yield SimpleNamespace(conn=Conn())
-
-
-asyncio.run(ScheduleTicker(Clock(), Book(), Specs(), None).tick())
+moves = logging.getLogger("platform_api.builder.moves")
+moves.info("%s moves to n8n once run %s ends", "uc_waiting", "run_1")
+moves.info("%s runs as n8n workflow %s from version %d", "uc_moved", "wf1", 2)
 logging.getLogger("uvicorn.error").info("uvicorn's own line")
 logging.getLogger("uvicorn.access").info(
-    '%s - "%s %s HTTP/%s" %d', "127.0.0.1:5000", "POST", "/internal/v1/schedules/tick", "1.1", 200
+    '%s - "%s %s HTTP/%s" %d', "127.0.0.1:5000", "POST", "/internal/v1/n8n/failures", "1.1", 202
 )
 """
 STAMP = r"\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3} "
@@ -347,7 +332,7 @@ STAMP = r"\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3} "
 WITHOUT_COSMOS = {name: v for name, v in os.environ.items() if not name.startswith("COSMOS_")}
 
 
-def test_the_app_under_uvicorn_logs_each_skipped_scheduled_check_once():
+def test_the_app_under_uvicorn_logs_each_line_once():
     done = subprocess.run(
         [sys.executable, "-c", UNDER_UVICORN],
         env={**WITHOUT_COSMOS, **LOCAL},
@@ -359,14 +344,17 @@ def test_the_app_under_uvicorn_logs_each_skipped_scheduled_check_once():
     assert done.returncode == 0, done.stderr
 
     errors = done.stderr.splitlines()
-    skips = [re.sub(f"^{STAMP}", "", line) for line in errors if "skipped" in line]
-    logger = "platform_api.orchestration.schedule_store"
-    assert skips == [
-        f"INFO {logger}: skipped the scheduled check of uc_held, because its owner carol has "
-        "left the People list",
-        f"INFO {logger}: skipped the scheduled check of uc_paused, which is paused",
+    moves = [
+        re.sub(f"^{STAMP}", "", line)
+        for line in errors
+        if "n8n workflow" in line or "moves" in line
+    ]
+    logger = "platform_api.builder.moves"
+    assert moves == [
+        f"INFO {logger}: uc_waiting moves to n8n once run run_1 ends",
+        f"INFO {logger}: uc_moved runs as n8n workflow wf1 from version 2",
     ]
     assert errors.count("INFO:     uvicorn's own line") == 1
-    access = 'INFO:     127.0.0.1:5000 - "POST /internal/v1/schedules/tick HTTP/1.1" 200 OK'
+    access = 'INFO:     127.0.0.1:5000 - "POST /internal/v1/n8n/failures HTTP/1.1" 202 Accepted'
     assert done.stdout.splitlines().count(access) == 1
     assert access not in done.stderr

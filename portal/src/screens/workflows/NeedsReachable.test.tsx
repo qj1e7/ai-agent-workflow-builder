@@ -110,11 +110,32 @@ function platformHome(situation: Situation, runs: readonly Run[]): HomeOut {
   }
 }
 
+/** What GET /api/v1/use-cases says a workflow's last run was, to the person asking. */
+function lastRunOf(run: Run | undefined): UseCaseView['last_run'] {
+  if (!run) return null
+  const { view } = run
+  return {
+    run_id: view.run_id,
+    state: view.state,
+    at: view.started_at,
+    test: false,
+    declined_by: null,
+    decline_reason: null,
+    approved_by: [],
+    proposed: 1,
+    written: 0,
+    tickets: true,
+    you_can_decide: youDecide(run),
+    retryable: view.state === 'failed' && view.retryable,
+    reason: view.state === 'failed' ? view.reason : null,
+  }
+}
+
 function render(situation: Situation, runs: readonly Run[], home: HomeOut): string {
   const session = createDevSession(null)
   const scope = session.cacheScope()
   const queryClient = new QueryClient({ defaultOptions: { queries: { retryOnMount: false } } })
-  const useCases: UseCaseView[] = Array.from({ length: situation.workflows }, (_, n) => ({ ...(agentUseCase as UseCaseView), use_case_id: workflowId(n), name: `Workflow ${n}` }))
+  const useCases: UseCaseView[] = Array.from({ length: situation.workflows }, (_, n) => ({ ...(agentUseCase as UseCaseView), use_case_id: workflowId(n), name: `Workflow ${n}`, last_run: lastRunOf(latestOf(runs).get(workflowId(n))) }))
   queryClient.setQueryData(['me', scope], situation.me)
   queryClient.setQueryData(['dev-users'], Object.values(PEOPLE))
   queryClient.setQueryData(['runs', scope], runs.map((run) => run.view))
@@ -206,28 +227,29 @@ function unreachable(seen: Seen): string[] {
     ...home.stopped.filter((item) => !reaches(seen, item.run_id)).map((item) => `stopped run ${item.run_id} (${item.use_case_id}): no button acts on it`),
     ...home.confirmations.filter((item) => !controls.some((control) => control.item === `confirmation:${item.confirmation_id}`)).map((item) => `confirmation ${item.confirmation_id}: no button`),
     ...home.connections.filter((item) => !controls.some((control) => control.item === `connection:${item.id}` && control.href === '/settings?tab=connections')).map((item) => `connection ${item.id}: no link to the Connections tab`),
-    ...home.addresses.filter((item) => !controls.some((control) => control.item === `address:${item.software_id}` && control.href === `/software?row=${item.software_id}`)).map((item) => `address ${item.software_id}: no button lands on its row`),
+    ...home.addresses.filter((item) => !controls.some((control) => control.item === `address:${item.software_id}` && control.href === `/software/${item.software_id}`)).map((item) => `address ${item.software_id}: no link opens its page`),
     ...home.replied.filter((item) => !controls.some((control) => control.item === `reply:${item.request_id}` && control.href === `/workflows?request=${item.request_id}`)).map((item) => `reply to request ${item.request_id}: no button opens it`),
   ]
 }
 
-/** A workflow's own action is on its latest run: Review and decide when you may decide it, or See why it stopped for an Operator. */
+/**
+ * A workflow whose latest run needs the person has a row on the page, one link to the workflow's page. Its banner offers the run from there
+ * (WorkflowPage.test.tsx). Needs you offers the run itself when the platform lists it.
+ */
 function deadEnds(seen: Seen): string[] {
   return [...latestOf(seen.runs).values()]
     .filter((run) => youDecide(run) || (run.view.state === 'failed' && operator(seen.situation.me)))
-    .filter((run) => !reaches(seen, run.view.run_id))
-    .map((run) => `${run.view.use_case_id}: its latest run ${run.view.run_id} (${run.view.state}) has no button anywhere`)
+    .filter((run) => !reaches(seen, run.view.run_id) && !seen.controls.some((control) => control.href === `/workflows/${run.view.use_case_id}`))
+    .map((run) => `${run.view.use_case_id}: its latest run ${run.view.run_id} (${run.view.state}) has no row that opens it`)
 }
 
 function twice({ actions }: Seen): string[] {
   return [...new Set(actions.filter((action, index) => actions.indexOf(action) !== index))].map((action) => `"${action}" is offered more than once`)
 }
 
-function primaryProblem({ controls, actions, home }: Seen): string[] {
+function primaryProblem({ controls }: Seen): string[] {
   const primaries = controls.filter((control) => control.primary).map((control) => control.text)
-  const somethingToDo = actions.length > 0 || home.confirmations.length > 0 || home.replied.length > 0 || home.connections.length > 0 || home.addresses.length > 0
-  const expected = somethingToDo ? 1 : 0
-  return primaries.length === expected ? [] : [`${primaries.length} primary buttons (${primaries.join(', ')}), expected ${expected}`]
+  return primaries.length === 0 ? [] : [`${primaries.length} primary buttons (${primaries.join(', ')}), expected none: every row is a plain link`]
 }
 
 /** A small seeded generator, so a failing situation is the same on every run. */
@@ -338,7 +360,7 @@ describe(`Needs you on Workflows, in ${SITUATIONS.length} situations the platfor
     expect(failing(unreachable)).toEqual(NONE)
   })
 
-  it('keeps each workflow’s own action somewhere on the page', () => {
+  it('keeps a row for each workflow whose latest run needs the person, opening its page', () => {
     expect(failing(deadEnds)).toEqual(NONE)
   })
 
@@ -346,7 +368,7 @@ describe(`Needs you on Workflows, in ${SITUATIONS.length} situations the platfor
     expect(failing(twice)).toEqual(NONE)
   })
 
-  it('has one primary button when there is something to do, and none when there is nothing', () => {
+  it('has no primary button, because every row and every Needs you item is a plain link', () => {
     expect(failing(primaryProblem)).toEqual(NONE)
   })
 })

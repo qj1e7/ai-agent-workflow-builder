@@ -4,7 +4,7 @@ import { expectAccessible } from '../support/axe'
 import { assertClean, watchPage } from '../support/test'
 import { expect, test } from './support/test'
 import { connectMockModel } from './support/settings'
-import { devContext, OUT, shot } from './support/ui'
+import { devContext, needsOnWorkflows, OUT, shot } from './support/ui'
 
 test.beforeAll(async ({ baseURL }) => {
   await connectMockModel(String(baseURL))
@@ -24,7 +24,7 @@ async function notReloaded(page: Page): Promise<boolean> {
   return page.evaluate(() => (window as unknown as { __homeNotReloaded?: boolean }).__homeNotReloaded === true)
 }
 
-test('bob sees the run alice started at the top of Home, and its one button opens the run at the decision', async ({ browser, backend }, info) => {
+test('bob sees the run alice started at the top of Home, and its row opens the run at the decision', async ({ browser, backend }, info) => {
   const { runId, approvalId } = await backend.waitingRun('alice')
   const context = await devContext(browser, 'bob')
   const page = await context.newPage()
@@ -32,21 +32,21 @@ test('bob sees the run alice started at the top of Home, and its one button open
   await page.goto('/')
   const first = needsYou(page).locator('li[data-home-item]').first()
   await expect(first).toHaveAttribute('data-home-item', `approval:${approvalId}`)
-  await expect(first).toContainText(/1 ticket is waiting for your yes/)
+  await expect(first).toContainText(/needs your yes/)
   await expect(first.getByRole('link')).toHaveCount(1)
-  await expect(first.getByRole('link', { name: 'Review and decide' })).toHaveAttribute('href', `/runs/${runId}`)
+  await expect(first.getByRole('link')).toHaveAttribute('href', `/runs/${runId}`)
   await expect(page.getByRole('main').getByRole('button', { name: /^Approve/ }), 'nothing is decided on Home').toHaveCount(0)
   await shot(page, info, 'p11-06-bob-home')
 
-  await first.getByRole('link', { name: 'Review and decide' }).click()
+  await first.getByRole('link').click()
   await expect(page).toHaveURL(new RegExp(`/runs/${runId}$`))
   await expect(page.locator('#decision'), 'the run page lands on the decision').toBeFocused()
-  await expect(page.getByRole('button', { name: 'Approve 1 ticket' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Approve', exact: true })).toBeVisible()
   assertClean(watch)
   await context.close()
 })
 
-test('alice sees nothing under Waiting on others on Home, because it moved to Workflows', async ({ browser, backend }, info) => {
+test('alice sees no Waiting on others on Home or Workflows, and the run she started reads Waiting for a yes on its workflow’s row', async ({ browser, backend }, info) => {
   const { runId, approvalId } = await backend.waitingRun('alice')
   const context = await devContext(browser, 'alice')
   const page = await context.newPage()
@@ -57,7 +57,9 @@ test('alice sees nothing under Waiting on others on Home, because it moved to Wo
   await expect(page.getByRole('button', { name: /^Approve/ })).toHaveCount(0)
   await shot(page, info, 'p11-06-alice-home')
   await page.goto('/workflows')
-  await expect(waitingOnOthers(page).locator(`a[href="/runs/${runId}"]`)).toContainText('You started it')
+  await expect(page.locator('li[data-workflow-id]').filter({ hasText: 'Software watchlist' })).toContainText('Waiting for a yes')
+  await expect(waitingOnOthers(page)).toHaveCount(0)
+  await expect(page.locator(`a[href="/runs/${runId}"]`), 'Needs you offers alice no run she can’t decide').toHaveCount(0)
   await context.close()
 })
 
@@ -68,11 +70,11 @@ test('bob approves on the run page, and the item has left Home when he comes bac
   await page.goto('/')
   await expect(itemOf(page, approvalId)).toBeVisible()
   await markThisPage(page)
-  await itemOf(page, approvalId).getByRole('link', { name: 'Review and decide' }).click()
-  await page.getByRole('button', { name: 'Approve 1 ticket' }).click()
-  await expect(page.getByText('Approved. The platform is writing now.').or(page.getByRole('heading', { level: 1, name: /created in Jira/ }))).toBeVisible()
-  await page.getByRole('navigation', { name: 'Main' }).filter({ visible: true }).getByRole('link', { name: 'Home' }).click()
-  await expect(page.getByRole('heading', { level: 2, name: /Needs you/ })).toBeVisible()
+  await itemOf(page, approvalId).getByRole('link').click()
+  await page.getByRole('button', { name: 'Approve', exact: true }).click()
+  await expect(page.getByText('Approved. The platform is writing now.').or(page.locator('[data-run-pill]', { hasText: /^Done$/ }))).toBeVisible()
+  await page.getByRole('navigation', { name: 'Browse' }).filter({ visible: true }).getByRole('link', { name: 'Chat' }).click()
+  await expect(page.locator('#planner-box')).toBeVisible()
   await expect(itemOf(page, approvalId)).toHaveCount(0)
   expect(await notReloaded(page), 'Home updated without a reload').toBe(true)
   await context.close()
@@ -90,8 +92,8 @@ test('a yes from the Teams card’s link takes the item off Home at once, withou
   await message.scrollIntoViewIfNeeded()
   // Like real Teams, the card has no Approve button: its link opens the approval page, and Bob decides there.
   await message.getByRole('link', { name: 'Open in AI Workflow Builder' }).click()
-  await page.getByRole('button', { name: 'Approve 1 ticket' }).click()
-  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Home' }).click()
+  await page.getByRole('button', { name: 'Approve', exact: true }).click()
+  await page.getByRole('navigation', { name: 'Browse' }).getByRole('link', { name: 'Chat' }).click()
   await expect(itemOf(page, approvalId)).toHaveCount(0, { timeout: 15_000 })
   await page.getByRole('button', { name: /^Teams, practice copy/ }).click()
   await expect(message).toContainText('Approved by Bob', { timeout: 30_000 })
@@ -101,26 +103,21 @@ test('a yes from the Teams card’s link takes the item off Home at once, withou
   await context.close()
 })
 
-test('the count on the tab, on Home and on Workflows is the same number, and it is on Home for an Approver', async ({ browser, backend }) => {
+test('what needs an Approver is one number on Home and on Workflows, and the rail shows totals instead (principle 7)', async ({ browser, backend }) => {
   const { approvalId } = await backend.waitingRun('alice')
   const context = await devContext(browser, 'bob')
   const page = await context.newPage()
-  const menu = page.getByRole('navigation', { name: 'Main' }).filter({ visible: true })
-  const heading = page.getByRole('main').getByRole('heading', { level: 2, name: /^Needs you/ })
+  const menu = page.getByRole('navigation', { name: 'Browse' }).filter({ visible: true })
   await page.goto('/')
   await expect(itemOf(page, approvalId)).toBeVisible()
-  const onHome = Number((await heading.innerText()).replace(/\D/g, ''))
-  expect(onHome).toBeGreaterThan(0)
-  await expect(menu.getByRole('link', { name: new RegExp(`^Home, ${onHome} need you$`) })).toBeVisible()
-  await expect(menu.getByRole('link', { name: 'Workflows', exact: true }), 'an Approver has the count on Home only').toBeVisible()
-  await expect(menu.getByRole('link', { name: 'Agent library' }), 'an Approver has no Agent library').toHaveCount(0)
+  const onHome = Number((await page.getByRole('heading', { level: 1 }).innerText()).replace(/\D/g, ''))
+  expect(onHome, 'his Home’s heading counts what needs him').toBeGreaterThan(0)
+  await expect(menu.getByRole('link', { name: 'Chat', exact: true }), 'Chat carries no count').toBeVisible()
+  await expect(menu.getByRole('link', { name: /^Workflows, \d+ in all$/ }), 'Workflows counts the team’s workflows').toBeVisible()
 
-  await menu.getByRole('link', { name: 'Workflows' }).click()
+  await menu.getByRole('link', { name: /^Workflows/ }).click()
   await expect(page).toHaveURL(/\/workflows$/)
-  await expect(heading).toContainText(String(onHome))
-  await expect(menu.getByRole('link', { name: new RegExp(`^Home, ${onHome} need you$`) })).toBeVisible()
-  await menu.getByRole('link', { name: 'Home' }).click()
-  await expect(heading).toContainText(String(onHome))
+  expect(await needsOnWorkflows(page), 'his heading is the Needs you rows on Workflows, every one reached with Show more').toBe(onHome)
   await context.close()
 })
 

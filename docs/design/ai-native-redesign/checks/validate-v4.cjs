@@ -18,6 +18,13 @@ const WEEKLY_SUMMARY = 'every Friday, sum up the tickets we closed this week';
 const EMAIL = 'email me a list of open bugs every Monday';
 const LONG_DASH = /[\u2013\u2014]/;
 
+/* The set-up card asks one question at a time, with choice buttons (ADR 0043). fillCard answers the weekly summary's two: the time, then the project. */
+const answer = async (k, arg) => { await k.click(`.thread [data-act="answer"][data-arg="${arg}"]`); };
+const fillCard = async (k) => { await answer(k, 'time:17:00'); await answer(k, 'project:MOCK'); };
+
+/* The Agent library is Settings, How it works (ADR 0043). */
+const goLib = async (k) => { await k.go('agents'); await k.click('[data-act="setTab"][data-arg="how"]'); };
+
 const results = [];
 const consoleErrors = [];
 const fail = (msg) => { throw new Error(msg); };
@@ -53,7 +60,7 @@ const num = (s) => { const m = String(s || '').match(/\d+/); return m ? +m[0] : 
    the strip leaves out the model row, which the hero already is, so it has one row fewer to show. */
 async function needCounts(k, page, { operator, planner = operator }) {
   const out = {};
-  const badge = async () => num(await page.locator('.hdr .badge[data-val="needs-n"]').first().innerText().catch(() => ''));
+  const badge = async () => num(await page.locator('.rail .badge[data-val="needs-n"]').first().innerText().catch(() => ''));
   if (operator) {
     await k.go('workflows');
     out.workflowsHeader = num(await page.locator('main #needs-h .count').innerText().catch(() => '0'));
@@ -102,11 +109,8 @@ const SWEEP = {
   teamsPost: /\bpost(s|ed|ing)?\b[^.]{0,30}\bTeams\b|\bTeams (message|post)|\bmessages? (in|to) Teams|\bnudge/i,
   confluence: /Confluence/i,
   ghIssues: /GitHub issues?|bug reports?/i,
-  /* \bEntra\b, so "Maven Central" is not read as Entra ID. */
-  access: /\bEntra\b|GitLab|admin tools|who has access|access review/i,
-  /* Maven Central, npm, and known vulnerabilities from OSV and NVD are Ready (CAPS.packages, built 8 Nov 2026). What is
-     still Planned of ADR 0025: the other registries, vendor advisories, CISA's list and support dates. */
-  registries: /PyPI|NuGet|Docker Hub|other package registr|security advisor|CISA|actively exploited|attackers are using|endoflife|support end/i,
+  access: /Entra|GitLab|admin tools|who has access|access review/i,
+  registries: /Maven|PyPI|\bnpm\b|NuGet|Docker Hub|package registr|security advisor|vulnerab|\bCVE|NVD|CISA|actively exploited|endoflife|support end/i,
   jiraComp: /\bcomponents?\b/i,
   email: /\bsends? (an? )?e-?mails?\b|\be-?mail (me|them|it|a|the)\b|\bSlack\b|Outlook/i,
   tickets: /\b(close|edit|move|delete)s? (the |a |these |those )?(Jira )?tickets?\b/i,
@@ -128,7 +132,8 @@ async function sweep(page, { preview = false } = {}) {
           if (u.tagName === 'SECTION') break;
         }
       }
-      if (el.closest('.cmsg.me, .testctl, .abil-not, .cap-not, [data-pres^="cant:"], [data-pres^="part:"], [data-pres^="refuse:"], [data-pres^="down:"]')) return 'not-yet or can’t';
+      /* changed (ADR 0043): a part marked with a cross on a set-up card is a can't, by its mark and its "Can’t do" label. */
+      if (el.closest('.cmsg.me, .testctl, .abil-not, .cap-not, [data-pres^="cant:"], [data-pres^="part:"], [data-pres^="refuse:"], [data-pres^="down:"], .part[data-mark="no"]')) return 'not-yet or can’t';
       const msg = el.closest('li.cmsg');
       if (msg && msg.querySelector('[data-pres^="cant:"], [data-pres^="part:"], [data-pres^="refuse:"], [data-pres^="down:"]')) return 'can’t answer';
       for (let b = el; b && !roots.includes(b); b = b.parentElement) {
@@ -218,16 +223,16 @@ async function main() {
     await session(b, async (k, page) => { await k.ctl('modelOn', 'off'); seen.push(agree('no AI model', await needCounts(k, page, { operator: true, planner: false }), { strip: true, offline: true })); });
     await session(b, async (k, page) => {
       await k.setDay('one');
-      const badge = await page.locator('.hdr .badge[data-val="needs-n"]').count();
+      const badge = await page.locator('.rail .badge[data-val="needs-n"]').count();
       const head = await page.locator('main #needs-h').count();
       ok(!badge && !head, `day one: tab badge ${badge ? 'shown' : 'none'}, Home Needs you ${head ? 'shown' : 'none'}; both should be empty`);
       await k.ctl('Jira stops answering');
       seen.push(agree('day one with Jira down', await needCounts(k, page, { operator: true })));
     });
     await session(b, async (k, page) => {
-      const tab = num(await page.locator('.tabbar .badge').first().innerText().catch(() => ''));
+      const tab = num(await page.locator('.rail .badge').first().innerText().catch(() => ''));
       const head = num(await page.locator('main #needs-h .count').innerText().catch(() => ''));
-      ok(tab === head, `phone tab bar badge ${tab}, Home says ${head}`);
+      ok(tab === head, `phone rail badge ${tab}, Home says ${head}`);
       seen.push(`phone ${tab}`);
     }, { width: 390 });
     console.log(`              ${seen.join('; ')}`);
@@ -243,8 +248,13 @@ async function main() {
       ok(n !== null, `${label}: footer has no count: ${foot}`);
       ok(disabled === n > 0, `${label}: footer says ${n} left but Turn it on is ${disabled ? 'disabled' : 'enabled'}`);
       if (m) ok(m[2].split(/, | and /).length === n, `${label}: footer count ${n} names ${m[2]}`);
-      const missing = await page.locator('.pcard .schip.missing').count();
-      ok(missing === n, `${label}: footer says ${n} left, the card marks ${missing} parts as please choose`);
+      /* changed (ADR 0043, one question at a time): the card shows one question while any choice is left, and none
+         after. Was: the card marks as many parts please choose as the footer counts. */
+      const asked = await page.locator('.pcard .part[data-mark="ask"]').count();
+      ok(asked === (n > 0 ? 1 : 0), `${label}: footer says ${n} left, the card shows ${asked} questions`);
+      /* Fix pass N1: the questions still to come show muted, so the card lists as many as the footer counts. */
+      const later = await page.locator('.pcard .part[data-mark="later"]').count();
+      ok(asked + later === n, `${label}: footer says ${n} left, the card lists ${asked} now and ${later} for later`);
       const all = await k.main();
       const other = [...all.matchAll(/(\d+) (more )?(choices?|answers?|questions?) (left|to go)|I need (\d+)/g)].map((x) => +(x[1] || x[5]));
       ok(other.every((v) => v === n), `${label}: the page names ${other.join(', ')} while the footer says ${n}`);
@@ -261,8 +271,8 @@ async function main() {
     const log = [await read('start')];
     await pickTickets('created'); log.push(await read('tickets'));
     await page.selectOption('#fix-action', 'list'); await k.settle(); log.push(await read('action'));
-    await page.selectOption('#fix-project', 'MOCK'); await k.settle(); log.push(await read('project'));
-    await page.fill('#sched-time', '17:00'); await k.settle(); log.push(await read('time'));
+    await answer(k, 'time:17:00'); log.push(await read('time'));
+    await answer(k, 'project:MOCK'); log.push(await read('project'));
     ok(/Nothing is unclear\. Turn it on when you’re ready\./.test(await page.locator('.pcard .pcard-f').innerText()), 'with nothing left, the footer does not read “Nothing is unclear. Turn it on when you’re ready.”');
     if (!(await page.$('#sched-freq'))) await k.click('[data-act="whenOpen"]');
     await page.selectOption('#sched-freq', 'day'); await k.settle(); log.push(await read('how often'));
@@ -283,32 +293,36 @@ async function main() {
     });
     await session(b, async (k, page) => {
       await k.ask('every day, sum up the tickets created this week');
-      const amber = await page.locator('.pcard .schip.missing:has(#fix-tickets)').count();
+      /* changed (ADR 0043): the conflict is a question, asked after the time. Was: an amber ticket chip. */
+      await answer(k, 'time:17:00');
+      const amber = await page.locator('.pcard .part[data-mark="ask"][data-part="tickets"]').count();
       const off = await page.locator('.pcard [data-act="turnOn"]').isDisabled();
-      if (!amber || !off) bad.push(`“every day … this week” is not amber with Turn it on held (amber ${amber}, disabled ${off})`);
+      if (!amber || !off) bad.push(`“every day … this week” does not ask which tickets with Turn it on held (asked ${amber}, disabled ${off})`);
     });
     await session(b, async (k, page) => {
       await k.ask(WEEKLY_SUMMARY);
       const v = await page.$$eval('#fix-tickets option', (os) => (os.find((o) => o.value.startsWith('created@')) || {}).value);
       await page.selectOption('#fix-tickets', v); await k.settle();
-      await page.selectOption('#fix-project', 'MOCK'); await k.settle();
-      await page.fill('#sched-time', '17:00'); await k.settle();
+      await fillCard(k);
       if (!(await page.$('#sched-freq'))) await k.click('[data-act="whenOpen"]');
       await page.selectOption('#sched-freq', 'day'); await k.settle();
       const s = await sentence(page);
-      const amber = await page.locator('.pcard .schip.missing:has(#fix-tickets)').count();
+      const amber = await page.locator('.pcard .part[data-mark="ask"][data-part="tickets"]').count();
       const opts = await page.$$eval('#fix-tickets option', (os) => os.map((o) => o.value).filter(Boolean));
       if (!/in the last day/.test(s) && !amber) bad.push(`after choosing “Tickets created this week” on a Friday card, then Every day: the card reads “${s.slice(0, 80)}”, not amber, Turn it on ${(await page.locator('.pcard [data-act="turnOn"]').isDisabled()) ? 'held' : 'ready'}, and the choices offer ${opts.join(', ')}`);
     });
     ok(!bad.length, bad.join(' || '));
   });
 
+  /* ADR 0043 step 4 gave Bob the Planner's box for questions only, so the box and its suggestions are no longer
+     creation controls by themselves. What he types is: a request to set up, change or watch gets "Operators set up
+     workflows." and no card that creates anything, and every suggestion is a question. */
   await check(B, 'roles-bob-creates-nothing', async (b) => {
     for (const preview of [false, true]) {
       await session(b, async (k, page) => {
         await k.setUser('bob');
         if (preview) await k.ctl('preview', 'on');
-        const creation = 'main :is([data-ask], form[data-submit="ask"], [data-act="example"], [data-act="say"], [data-act="askPlanner"], [data-act="newChat"], [data-act="n8nNew"], #sw-name, form[data-submit="swFind"], form[data-submit="swAdd"])';
+        const creation = 'main :is([data-act="say"], [data-act="askPlanner"], [data-act="newChat"], [data-act="n8nNew"], #sw-name, form[data-submit="swFind"], form[data-submit="swAdd"])';
         const named = /^(Set up|Ask the Planner|Start in n8n|Add software|Find it|New chat|Turn it on)/;
         const at = async (where) => {
           ok((await page.locator(creation).count()) === 0, `${where}${preview ? ' (Planned shown)' : ''}: Bob sees a creation control`);
@@ -317,21 +331,29 @@ async function main() {
           ok(!hit, `${where}${preview ? ' (Planned shown)' : ''}: Bob sees “${hit}”`);
         };
         await at('Home');
+        const chips = await page.$$eval('main [data-act="example"]', (cs) => cs.map((c) => c.textContent.trim()));
+        ok(chips.every((c) => /\?$/.test(c)), `${preview ? '(Planned shown) ' : ''}Bob’s suggestions are not all questions: ${chips.join(' | ')}`);
+        for (const ask of [WEEKLY_SUMMARY, 'Watch Redis releases', 'Make the morning new-ticket check run on Mondays only']) {
+          await k.ask(ask);
+          const say = await page.locator('.thread [data-say]').last().innerText();
+          ok(/^Operators set up workflows\./.test(say), `${preview ? '(Planned shown) ' : ''}Bob asked “${ask}” and was not told Operators set up workflows: “${say}”`);
+          const made = await page.locator('main .thread :is([data-act="turnOn"], [data-act="watchAdd"], [data-act="instead"], [data-act="editSave"], .pcard)').count();
+          ok(made === 0, `${preview ? '(Planned shown) ' : ''}Bob asked “${ask}” and got ${made} creation controls or cards`);
+        }
         await k.go('workflows'); await at('Workflows');
         await k.go('software'); await at('Software watchlist');
-        ok((await page.locator('.hdr [data-act="go"][data-arg="agents"]').count()) === 0, 'Bob has an Agent library link');
+        ok((await page.locator('.rail [data-act="go"][data-arg="agents"]').count()) === 0, 'Bob has an Agent library link');
       });
     }
     await session(b, async (k, page) => {
       await k.setUser('bob');
-      ok((await page.locator('.tabbar [data-act="go"][data-arg="agents"]').count()) === 0, 'Bob has an Agents tab on a phone');
+      ok((await page.locator('.rail [data-act="go"][data-arg="agents"]').count()) === 0, 'Bob has an Agents item in the rail on a phone');
     }, { width: 390 });
   });
 
   await check(B, 'roles-alice-not-own-test-run', async (b) => session(b, async (k, page) => {
     await k.ask(WEEKLY_SUMMARY);
-    await page.selectOption('#fix-project', 'MOCK'); await k.settle();
-    await page.fill('#sched-time', '17:00'); await k.settle();
+    await fillCard(k);
     await k.click('[data-act="turnOn"]');
     await k.click('[data-act="testRun"]');
     await k.waitText(/another Approver must decide/);
@@ -420,7 +442,7 @@ async function main() {
     await session(b, async (k, page) => { await k.setUser('bob'); seen.push(await looks(k, page, 'Bob')); });
     await session(b, async (k, page) => { await k.ctl('preview', 'on'); seen.push(await looks(k, page, 'Planned shown')); });
     await session(b, async (k, page) => {
-      await k.ask(WEEKLY_SUMMARY); await page.selectOption('#fix-project', 'MOCK'); await k.settle(); await page.fill('#sched-time', '17:00'); await k.settle();
+      await k.ask(WEEKLY_SUMMARY); await fillCard(k);
       await k.click('[data-act="turnOn"]'); await k.click('[data-act="testRun"]'); await k.waitText(/another Approver must decide/);
       await k.setUser('bob'); seen.push(await looks(k, page, 'Bob with a test run waiting'));
     });
@@ -439,10 +461,10 @@ async function main() {
       ...['issues', 'nudge'].map((id) => [`run ${id}`, async (k) => { await k.go('workflows'); await k.click(`main [data-act="workflow"][data-arg="${id}"]`); await k.click('main [data-act="watch"]'); await k.click('main [data-act="runDetail"]'); }]),
       ['run sw', async (k) => { await k.go('workflows'); await k.click('main [data-act="run"][data-arg="sw"]'); await k.click('main [data-act="runDetail"]'); }],
       ['software', async (k, page) => { await k.go('software'); for (const key of ['lj', 'fa', 'ls']) { await page.click(`main [data-act="swHist"][data-arg="${key}"]`); await k.settle(150); } }],
-      ['library what it can do', async (k) => k.go('agents')],
-      ['library agents', async (k) => { await k.go('agents'); await k.click('[data-act="libTab"][data-arg="agents"]'); }],
-      ['library tools', async (k) => { await k.go('agents'); await k.click('[data-act="libTab"][data-arg="tools"]'); }],
-      ...['lead', 'trouble', 'checker', 'writer', 'jira', 'summary'].map((id) => [`agent ${id}`, async (k, page) => { await k.go('agents'); await k.click('[data-act="libTab"][data-arg="agents"]'); await k.click(`main [data-act="agent"][data-arg="${id}"]`); await page.$$eval('.dialog details', (ds) => ds.forEach((d) => { d.open = true; })); }]),
+      ['library what it can do', async (k) => goLib(k)],
+      ['library agents', async (k) => { await goLib(k); await k.click('[data-act="libTab"][data-arg="agents"]'); }],
+      ['library tools', async (k) => { await goLib(k); await k.click('[data-act="libTab"][data-arg="tools"]'); }],
+      ...['lead', 'trouble', 'checker', 'writer', 'jira', 'summary'].map((id) => [`agent ${id}`, async (k, page) => { await goLib(k); await k.click('[data-act="libTab"][data-arg="agents"]'); await k.click(`main [data-act="agent"][data-arg="${id}"]`); await page.$$eval('.dialog details', (ds) => ds.forEach((d) => { d.open = true; })); }]),
       ...['connections', 'people', 'model'].map((tab) => [`settings ${tab}`, async (k) => { await k.click('.hdr [data-act="go"][data-arg="settings"]'); await k.click(`[data-act="setTab"][data-arg="${tab}"]`); }]),
       ['support case', async (k) => { await k.go('workflows'); await k.click('main [data-act="report"]'); await k.click('[data-act="sendReport"]'); await k.click('.dialog [data-act="closeModal"]'); await k.click('main [data-act="workflow"][data-arg="nudge"]'); }],
       ['teams', async (k) => k.click('.hdr [data-act="teams"]')],
@@ -481,13 +503,13 @@ async function main() {
       ...['issues', 'access'].map((id) => [`workflow ${id}`, async (k, page) => { await k.go('workflows'); await k.click(`main [data-act="workflow"][data-arg="${id}"]`); await page.$$eval('main details', (ds) => ds.forEach((d) => { d.open = true; })); }]),
       ['run sw', async (k) => { await k.go('workflows'); await k.click('main [data-act="run"][data-arg="sw"]'); await k.click('main [data-act="runDetail"]'); }],
       ['software', async (k) => k.go('software')],
-      ['library agents', async (k) => { await k.go('agents'); await k.click('[data-act="libTab"][data-arg="agents"]'); }],
-      ['library tools', async (k) => { await k.go('agents'); await k.click('[data-act="libTab"][data-arg="tools"]'); }],
+      ['library agents', async (k) => { await goLib(k); await k.click('[data-act="libTab"][data-arg="agents"]'); }],
+      ['library tools', async (k) => { await goLib(k); await k.click('[data-act="libTab"][data-arg="tools"]'); }],
       ['teams', async (k) => k.click('.hdr [data-act="teams"]')],
       ['bob home', async (k) => k.setUser('bob')],
       ['workflow issues menu', async (k) => { await k.go('workflows'); await k.click('main [data-act="workflow"][data-arg="issues"]'); await k.click('main [data-act="menu"]'); }],
       ...['connections', 'usage'].map((tab) => [`settings ${tab}`, async (k) => { await k.click('.hdr [data-act="go"][data-arg="settings"]'); await k.click(`[data-act="setTab"][data-arg="${tab}"]`); }]),
-      ['agent writer', async (k, page) => { await k.go('agents'); await k.click('[data-act="libTab"][data-arg="agents"]'); await k.click('main [data-act="agent"][data-arg="writer"]'); await page.$$eval('.dialog details', (ds) => ds.forEach((d) => { d.open = true; })); }],
+      ['agent writer', async (k, page) => { await goLib(k); await k.click('[data-act="libTab"][data-arg="agents"]'); await k.click('main [data-act="agent"][data-arg="writer"]'); await page.$$eval('.dialog details', (ds) => ds.forEach((d) => { d.open = true; })); }],
       ['support case', async (k) => { await k.go('workflows'); await k.click('main [data-act="report"]'); await k.click('[data-act="sendReport"]'); await k.click('.dialog [data-act="closeModal"]'); await k.click('main [data-act="workflow"][data-arg="nudge"]'); }],
       ['planner card', async (k, page) => { await k.ask(WEEKLY_SUMMARY); await page.$$eval('main details', (ds) => ds.forEach((d) => { d.open = true; })); }],
     ];
@@ -604,9 +626,11 @@ async function main() {
   await check(B, 'offline-honest', async (b) => session(b, async (k, page) => {
     await k.ctl('modelOn', 'off');
     const home = await k.main();
-    ok(/agent workflows can’t run/.test(home), 'the offline Home does not say agent workflows can’t run');
+    /* Since #195 the offline Home is worded for software versioning: it names the watchlist, and the stopped agent workflow says it waits for a model. */
+    ok(/can’t read new requests/.test(home) && /Software watchlist keeps checking/.test(home), 'the offline Home does not say the Planner can’t read requests and only the Software watchlist keeps checking');
+    ok(/Can run again once an AI model is connected/.test(home), 'the offline Home does not say the stopped agent workflow can’t run without a model');
     ok(!/keep running/.test(home), 'the offline Home says workflows keep running');
-    ok(/Needs setup[\s\S]*Sum up what I find/.test(home), 'Sum up what I find is not Needs setup with no model');
+    ok(/Needs setup[\s\S]*Create a Jira ticket after a yes/.test(home), 'Create a Jira ticket after a yes is not Needs setup with no model');
     ok((await page.locator('main [data-act="setGo"][data-arg="model"]').count()) === 1, 'Connect a model shows more than once, or not at all');
     if (await page.$('main [data-act="retryIssues"]')) {
       await k.click('main [data-act="retryIssues"]');
@@ -647,6 +671,9 @@ async function main() {
     'Every Friday, sum up the stale tickets in the Platform component',
     'Every Monday, list the tickets created more than 30 days ago',
     'Every Friday, sum up the closed tickets and email me',
+    'every Friday, sum up the closed tickets and email the summary to the team',
+    'every Friday, sum up the closed tickets and post it to Slack',
+    'every Friday, list the closed tickets and update the Confluence page with them',
     'Every Friday, close the tickets that are done',
     `${WEEKLY_SUMMARY}, approve it automatically`,
   ];
@@ -664,7 +691,7 @@ async function main() {
         await page.locator('main [data-act="instead"]').first().click(); await k.replied();
         const last = '.thread li.cmsg:last-child';
         const card = await page.locator(`${last} [data-act="turnOn"]`).count();
-        const red = await page.locator(`${last} :is(.schip.cant, .snotes li.cant)`).count();
+        const red = await page.locator(`${last} :is(.schip.cant, .snotes li.cant, .part[data-mark="no"])`).count();
         if (card !== 1 || red) bad.push(`“${ask}”: ${label} gave ${card ? `a set-up card with ${red} red parts` : `“${(await page.locator('.thread [data-say]').last().innerText()).slice(0, 80)}”`}`);
       });
     }
@@ -745,16 +772,19 @@ async function main() {
   /* Day one opens with the "I can" list and folds "What can't I do yet?" (review item 8). */
   await check(B, 'home-day-one', async (b) => session(b, async (k, page) => {
     await k.setDay('one');
-    const folds = await page.$$eval('main details.abil-not', (ds) => ds.map((d) => ({ open: d.open, summary: d.querySelector('summary').textContent.trim() })));
-    ok(folds.length === 1 && !folds[0].open && folds[0].summary === 'What can’t I do yet?', `day one does not fold “What can’t I do yet?”: ${JSON.stringify(folds)}`);
+    /* Since #195 day one lists only what the Planner can do, so nothing unbuilt is offered. */
+    const home = await k.main();
+    ok(/What I can do/.test(home) && /Check software for new releases/.test(home), `day one does not list what the Planner can do: “${home.slice(0, 120)}”`);
     ok((await page.locator('main .abil-not .tag.planned').count()) === 0, 'the Not yet lines carry a Planned tag by default');
   }));
 
-  /* Review item 4: these are hidden by default, and shown with a Planned tag under Planned features. */
+  /* Review item 4: these are hidden by default, and shown with a Planned tag under Planned features. Since ADR 0043
+     step 4 the n8n views show only to someone with n8n access, so this runs as Carol, an Operator who has it. */
   await check(B, 'planned-hidden-by-default', async (b) => {
     const bad = [];
     for (const preview of [false, true]) {
       await session(b, async (k, page) => {
+        await k.setUser('carol');
         if (preview) await k.ctl('preview', 'on');
         const say = (feature, shown, tagged) => {
           if (!preview && shown) bad.push(`${feature} shows by default`);
@@ -778,7 +808,7 @@ async function main() {
         await k.click('main [data-act="menu"]');
         say('Open in n8n', await page.locator('.menu [data-arg^="n8nAsk"]').count(), await page.locator('.menu [data-arg^="n8nAsk"] .tag.planned').count());
         await page.keyboard.press('Escape'); await k.settle();
-        await k.go('agents'); await k.click('[data-act="libTab"][data-arg="agents"]');
+        await goLib(k); await k.click('[data-act="libTab"][data-arg="agents"]');
         if (!preview && /change (it|them|an agent|agents) in plain English/i.test(await k.main())) bad.push(`by default, the Agents tab says agents can be changed: “${(await k.main()).match(/[^.\n]*change (it|them|an agent|agents) in plain English[^.\n]*/i)[0].trim()}”`);
         await k.click('main [data-act="agent"][data-arg="writer"]');
         say('Changing an agent', await page.locator('.dialog [data-act="agentSuggest"]').count(), await page.locator('.dialog .tag.planned').count());
@@ -803,9 +833,9 @@ async function main() {
   await check(B, 'i6-new-agent-drafted', async (b) => session(b, async (k, page) => {
     await k.ask('Every Monday at 9:00, compare last week’s new tickets with the week before in project MOCK');
     await page.$$eval('main details', (ds) => ds.forEach((d) => { d.open = true; }));
-    ok(/New agent, saved to the Agent library when you turn this on/.test(await k.main()), 'the comparison card does not draft a new agent');
+    ok(/New agent, saved under How it works, in Settings, when you turn this on/.test(await k.main()), 'the comparison card does not draft a new agent');
     await k.click('[data-act="turnOn"]');
-    await k.go('agents'); await k.click('[data-act="libTab"][data-arg="agents"]');
+    await goLib(k); await k.click('[data-act="libTab"][data-arg="agents"]');
     const before = 4;
     const n = num(await page.locator('main h2:has-text("Specialist agents") .count').innerText().catch(() => ''));
     ok(n === before + 1, `the Agent library lists ${n} specialist agents after turning it on, not ${before + 1}`);
@@ -860,7 +890,7 @@ async function main() {
       const r = await tabReach(page, sel, opts);
       rows.push(`${label} ${r.presses === null ? 'NOT REACHED' : `${r.presses}${r.ring ? '' : ' NO RING'}`}`);
     });
-    const card = async (k, page) => { await k.ask(WEEKLY_SUMMARY); await page.selectOption('#fix-project', 'MOCK'); await k.settle(); await page.fill('#sched-time', '17:00'); await k.settle(); };
+    const card = async (k) => { await k.ask(WEEKLY_SUMMARY); await fillCard(k); };
     await reach('A Turn it on', async (k, page) => { await k.setDay('one'); await card(k, page); }, '[data-act="turnOn"]');
     await reach('B Retry the run', async (k) => k.go('workflows'), 'main [data-act="retryIssues"]');
     await reach('B-home Retry the run', async () => {}, 'main [data-act="retryIssues"]');
@@ -895,10 +925,23 @@ async function main() {
     ok(await page.evaluate(() => document.activeElement.matches('[data-act="menu"]')), 'focus does not return to More actions');
   }));
 
-  await check(B, 'control-bob-has-a-text-box', async (b) => session(b, async (k, page) => {
+  /* ADR 0043 step 4 gave Bob the box on purpose, so the old control (Bob has the box) now passes. This one asserts what
+     must stay false: Bob's box never gives him a set-up card. */
+  await check(B, 'control-bob-gets-a-set-up-card', async (b) => session(b, async (k, page) => {
     await k.setUser('bob');
-    ok((await page.locator('main [data-ask]').count()) === 1, 'seeded control: Bob has the Planner box');
+    await k.ask(WEEKLY_SUMMARY);
+    ok((await page.locator('main .thread [data-act="turnOn"]').count()) === 1, 'seeded control: Bob gets a set-up card with Turn it on');
   }), { expectedFail: true });
+
+  /* Fix pass M3: the words the leftover check skips are function words only. A verb there would make a whole clause,
+     such as "and let me know", vanish without a cross. The list below is the judge's: a word added to the
+     prototype's STOP list that isn't here fails this check. */
+  const FUNCTION_WORDS = new Set(['a', 'an', 'the', 'and', 'or', 'then', 'also', 'so', 'but', 'plus', 'i', 'me', 'my', 'mine', 'we', 'us', 'our', 'you', 'your', 'it', 'its', 'they', 'them', 'their', 'this', 'that', 'these', 'those', 'what', 'which', 'who', 'to', 'for', 'of', 'in', 'on', 'at', 'by', 'with', 'from', 'into', 'about', 'up', 'out', 'is', 'are', 'be', 'been', 'am', 'was', 'were', 'do', 'does', 'did', 'have', 'has', 'can', 'could', 'would', 'will', 'should', 'all', 'any', 'each', 'every', 'just', 'only', 'one', 'please', 'thanks', 'thank', 'kindly', 'i’d', "i'd", 'it’s', "it's", 'i’m', "i'm"]);
+  await check(B, 'stop-words-are-function-words', async (b) => session(b, async (k, page) => {
+    const stop = await page.evaluate(() => window.mock.STOP);
+    const extra = stop.filter((w) => !FUNCTION_WORDS.has(w));
+    ok(stop.length > 0 && !extra.length, `the leftover check skips words that aren’t function words: ${extra.join(', ')}`);
+  }));
 
   await check(B, 'no-console-errors', async () => {
     const errs = [...new Set(consoleErrors)];

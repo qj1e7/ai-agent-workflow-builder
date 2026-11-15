@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from platform_api.builder.cards import VERSION_CHECKER, sorted_for_library
-from platform_api.builder.models import CardList, UnderstoodRowView, UseCaseList
+from platform_api.builder.models import CardList, UnderstoodRowView, UseCaseList, Via
 from platform_api.builder.planner import (
     AbilitiesReply,
     AnswerIn,
@@ -19,17 +19,29 @@ from platform_api.builder.planner import (
     CantRowView,
     CheckPartIn,
     CheckWorkflowsReply,
+    DecidedReply,
+    DecideReply,
+    EditAfter,
+    EditBefore,
+    EditChoice,
+    EditReply,
     IdeasReply,
     ListedSoftware,
     NeedsMeReply,
+    OperatorsReply,
     PartCheckCantDo,
     PartCheckFits,
     PartReply,
+    PartView,
+    PauseReply,
     PlannerFront,
     QuestionReply,
     RefusedReply,
+    ReplyReason,
+    ResumeReply,
     SetupCardReply,
     SimilarWorkflow,
+    SwitchChoice,
     WatchlistReply,
     WhichSoftwareReply,
     WhyStoppedReply,
@@ -64,15 +76,68 @@ ROWS = [
     ),
     UnderstoodRowView(kind="where", text="In the MOCK project", state="understood", note=None),
 ]
-SETUP_CARD = SetupCardReply(name="Weekly summary of closed tickets", rows=ROWS, similar=None)
+
+
+def does(text: str) -> PartView:
+    return PartView(text=text, mark="will_do", reason=None, note=None, choices=[])
+
+
+def crossed(text: str, reason: ReplyReason, *choices: str, note: str | None = None) -> PartView:
+    return PartView(text=text, mark="cant", reason=reason, note=note, choices=list(choices))
+
+
+EDIT = EditReply(
+    use_case_id="uc_01JB8",
+    name="Morning new-ticket check",
+    watchlist=False,
+    missing=None,
+    software=None,
+    choices=[],
+    before=EditBefore(day="weekdays", at="08:00"),
+    after=EditAfter(day="monday", at="08:00"),
+    hour=None,
+    cant=None,
+    holds_save=False,
+    parts=[does("Make the morning new-ticket check run on Mondays only")],
+)
+
+SETUP_CARD = SetupCardReply(
+    name="Weekly summary of closed tickets",
+    rows=ROWS,
+    similar=None,
+    parts=[does("Every Friday"), does("sum up the tickets we closed this week")],
+)
+CROSS_ROWS = [
+    UnderstoodRowView(kind="schedule", text="Every Friday at 17:00", state="understood", note=None),
+    UnderstoodRowView(
+        kind="look_for", text="Tickets closed this week in MOCK", state="understood", note=None
+    ),
+    UnderstoodRowView(
+        kind="do", text="Sum them up in one new ticket", state="understood", note=None
+    ),
+]
+CLASH_ROWS = [
+    UnderstoodRowView(
+        kind="schedule",
+        text="",
+        state="missing",
+        note='Your words said "Monday" and "Friday". I can only set one day, so please choose one.',
+    ),
+    UnderstoodRowView(
+        kind="look_for", text="Closed tickets in MOCK", state="understood", note=None
+    ),
+    UnderstoodRowView(
+        kind="do", text="Sum them up in one new ticket", state="understood", note=None
+    ),
+]
 EMAIL = CantRowView(
     kind="do",
     text="email it to the team",
-    note="I can't email it to the team. I can only read Jira tickets, sum up what I find, "
-    "check software for new releases, create a Jira ticket after a yes, and ask Approvers for a "
-    "yes in Teams.",
+    note="I can't send email yet.",
     needs="new_system",
     system="email",
+    instead="Run results show here, in the chat.",
+    unsupported=False,
 )
 
 
@@ -104,6 +169,7 @@ class _Answers:
         task: str,
         facts: PlannerFacts | None = None,
         previous: PreviousTurn | None = None,
+        changes_workflows: bool = True,
     ) -> NoModel:
         return NoModel()
 
@@ -137,9 +203,15 @@ class _Workflows:
     async def list_cards(self) -> CardList:
         return CardList(cards=sorted_for_library([VERSION_CHECKER], []))
 
+    async def pause_use_case(self, use_case_id: str, principal: Principal, via: Via) -> None:
+        return None
+
+    async def resume_use_case(self, use_case_id: str, principal: Principal, via: Via) -> None:
+        return None
+
 
 class _Facts:
-    async def read(self, viewer: Principal) -> PlannerFacts:
+    async def read(self, viewer: Principal, request: str) -> PlannerFacts:
         return PlannerFacts()
 
 
@@ -172,10 +244,45 @@ def planner_fixtures(root: Path) -> dict[str, WireModel]:
         "planner/answer.setup_card.json": SETUP_CARD.model_copy(
             update={"similar": SimilarWorkflow(use_case_id="uc_01JB8", name=SETUP_CARD.name)}
         ),
-        "planner/answer.part.json": PartReply(
-            name="Weekly summary, to email", rows=ROWS, cant=[EMAIL], similar=None
+        "planner/answer.setup_card.cross.json": SetupCardReply(
+            name="Friday closed ticket summary",
+            rows=CROSS_ROWS,
+            similar=None,
+            parts=[
+                does("Every Friday at 5pm"),
+                does("sum up the tickets we closed this week in MOCK"),
+                crossed("colour them by team", "not_followed"),
+            ],
         ),
-        "planner/answer.cant.json": CantReply(cant=[EMAIL], alternative=SETUP_CARD),
+        "planner/answer.setup_card.clash.json": SetupCardReply(
+            name="Closed ticket summary",
+            rows=CLASH_ROWS,
+            similar=None,
+            parts=[
+                crossed("Monday and Friday", "one_day", "Monday", "Friday"),
+                does("sum up the closed tickets in MOCK"),
+            ],
+        ),
+        "planner/answer.part.json": PartReply(
+            name="Weekly summary, to email",
+            rows=ROWS,
+            cant=[EMAIL],
+            similar=None,
+            parts=[
+                does("Every Friday"),
+                does("sum up the tickets we closed this week"),
+                crossed(EMAIL.text, "cant_do", note=EMAIL.note),
+            ],
+        ),
+        "planner/answer.cant.json": CantReply(
+            cant=[EMAIL],
+            alternative=SETUP_CARD.model_copy(update={"parts": []}),
+            parts=[
+                does("Every Friday"),
+                does("sum up the tickets we closed this week"),
+                crossed(EMAIL.text, "cant_do", note=EMAIL.note),
+            ],
+        ),
         "planner/answer.watchlist.json": WatchlistReply(
             word="releases",
             software="LangGraph",
@@ -183,7 +290,17 @@ def planner_fixtures(root: Path) -> dict[str, WireModel]:
             also=None,
         ),
         "planner/answer.watchlist.also.json": WatchlistReply(
-            word="releases", software="Kubernetes", already_listed=None, also=SETUP_CARD
+            word="releases",
+            software="Kubernetes",
+            already_listed=None,
+            also=SETUP_CARD.model_copy(update={"parts": []}),
+        ),
+        "planner/answer.watchlist.own_time.json": WatchlistReply(
+            word="watch",
+            software="Grafana",
+            already_listed=None,
+            also=None,
+            parts=[does("watch Grafana"), crossed("every day at 8am", "own_time")],
         ),
         "planner/answer.which_software.json": WhichSoftwareReply(word="version"),
         "planner/answer.refused.json": RefusedReply(
@@ -192,14 +309,184 @@ def planner_fixtures(root: Path) -> dict[str, WireModel]:
             rest="Create the ticket",
         ),
         "planner/answer.abilities.json": AbilitiesReply(),
+        "planner/answer.abilities.how_to_start.json": AbilitiesReply(
+            how_to_start=True, parts=[does("list me the steps to use this app")]
+        ),
         "planner/answer.ideas.json": IdeasReply(),
         "planner/answer.check_workflows.json": CheckWorkflowsReply(use_case_id=None),
+        "planner/answer.check_workflows.leftover.json": CheckWorkflowsReply(
+            use_case_id=None,
+            parts=[
+                does("How are my workflows doing"),
+                crossed("every Friday sum up the closed tickets", "ask_on_its_own"),
+            ],
+        ),
         "planner/answer.why_stopped.json": WhyStoppedReply(use_case_id="uc_01JB8"),
         "planner/answer.needs_me.json": NeedsMeReply(),
+        "planner/answer.needs_me.operators.json": NeedsMeReply(
+            parts=[
+                does("What is waiting for my yes"),
+                crossed("pause the morning new-ticket check", "operators"),
+            ]
+        ),
+        "planner/answer.operators.json": OperatorsReply(
+            parts=[crossed("Pause the weekly closed-ticket summary", "operators")]
+        ),
+        "planner/answer.decided.json": DecidedReply(
+            only=None, parts=[does("What did I decide before")]
+        ),
+        "planner/answer.decided.declines.json": DecidedReply(
+            only="decline", parts=[does("did I decline anything")]
+        ),
+        "planner/answer.decide.json": DecideReply(parts=[does("Approve the upgrade tickets")]),
+        "planner/answer.decide.question.json": DecideReply(
+            parts=[
+                does("Approve the upgrade"),
+                crossed("is LangGraph up to date", "ask_on_its_own"),
+            ]
+        ),
         "planner/answer.question.json": QuestionReply(
             text="LangGraph is behind. You run 1.2.14 and the newest is 1.2.16.",
             looked_at=["watchlist"],
             about_software=["LangGraph"],
+        ),
+        "planner/answer.edit.json": EDIT,
+        "planner/answer.edit.unclear.json": EditReply(
+            use_case_id="uc_01JB8",
+            name="Morning new-ticket check",
+            watchlist=False,
+            missing=None,
+            software=None,
+            choices=[],
+            before=EditBefore(day="weekdays", at="08:00"),
+            after=EditAfter(day="weekdays", at=None),
+            hour=None,
+            cant=None,
+            holds_save=False,
+            parts=[crossed("in the afternoon", "not_followed")],
+        ),
+        "planner/answer.edit.missing.json": EditReply(
+            use_case_id=None,
+            name=None,
+            watchlist=False,
+            missing="React check",
+            software="React",
+            choices=[],
+            before=None,
+            after=None,
+            hour=None,
+            cant=None,
+            holds_save=False,
+        ),
+        "planner/answer.edit.cant.json": EditReply(
+            use_case_id="uc_01JB8",
+            name="Morning new-ticket check",
+            watchlist=False,
+            missing=None,
+            software=None,
+            choices=[],
+            before=EditBefore(day="weekdays", at="08:00"),
+            after=None,
+            hour=None,
+            cant="only_schedule",
+            holds_save=False,
+            parts=[
+                crossed("What needs my attention", "ask_on_its_own"),
+                crossed("Rename the morning check", "only_schedule"),
+            ],
+        ),
+        "planner/answer.pause.json": PauseReply(
+            use_case_id="uc_01JB8",
+            name="React release check",
+            already=False,
+            missing=None,
+            choices=[],
+            parts=[does("pause the React check")],
+        ),
+        "planner/answer.pause.choices.json": PauseReply(
+            use_case_id=None,
+            name=None,
+            already=False,
+            missing=None,
+            choices=[
+                SwitchChoice(
+                    use_case_id="uc_01JB8", name="React release check", state="on", watchlist=False
+                ),
+                SwitchChoice(
+                    use_case_id="uc_01JC2", name="Software watchlist", state="on", watchlist=True
+                ),
+            ],
+            parts=[does("pause the React check")],
+        ),
+        "planner/answer.resume.json": ResumeReply(
+            use_case_id="uc_01JB8",
+            name="React release check",
+            already=False,
+            missing=None,
+            choices=[],
+            parts=[does("resume the React check")],
+        ),
+        "planner/answer.edit.hour.json": EDIT.model_copy(
+            update={
+                "after": EditAfter(day="weekdays", at=None),
+                "hour": 9,
+                "parts": [does("make the morning check run at 9")],
+            }
+        ),
+        "planner/answer.edit.clash.json": EDIT.model_copy(
+            update={
+                "after": None,
+                "holds_save": True,
+                "parts": [
+                    does("make the morning new-ticket check run on"),
+                    crossed("Mondays and Thursdays", "one_day", "Mondays", "Thursdays"),
+                ],
+            }
+        ),
+        "planner/answer.edit.choices.json": EDIT.model_copy(
+            update={
+                "use_case_id": None,
+                "name": None,
+                "before": None,
+                "after": None,
+                "choices": [
+                    EditChoice(
+                        use_case_id="uc_01JB8",
+                        name="Morning new-ticket check",
+                        watchlist=False,
+                        before=EditBefore(day="weekdays", at="08:00"),
+                        after=EditAfter(day="every_day", at="08:00"),
+                    ),
+                    EditChoice(
+                        use_case_id="uc_01JC2",
+                        name="Weekly closed-ticket summary",
+                        watchlist=False,
+                        before=EditBefore(day="friday", at="16:00"),
+                        after=EditAfter(day="every_day", at="16:00"),
+                    ),
+                ],
+                "parts": [does("make it daily")],
+            }
+        ),
+        "planner/answer.edit.watchlist.json": EDIT.model_copy(
+            update={
+                "use_case_id": "uc_01WL",
+                "name": "Keep our software up to date",
+                "watchlist": True,
+                "before": EditBefore(day="monday", at="09:00"),
+                "after": EditAfter(day="every_day", at="09:00"),
+                "parts": [does("Run the software check every day instead of every Monday")],
+            }
+        ),
+        "planner/answer.edit.how_often.json": EDIT.model_copy(
+            update={
+                "after": None,
+                "cant": "how_often",
+                "parts": [
+                    does("make the morning check run every weekday"),
+                    crossed("except Friday", "how_often"),
+                ],
+            }
         ),
         "planner/answer.offline.json": offline("no_model"),
         "planner/answer.offline.too_slow.json": offline("too_slow"),
@@ -213,7 +500,12 @@ def planner_fixtures(root: Path) -> dict[str, WireModel]:
         ),
         "planner/check-part.fits.json": PartCheckFits(),
         "planner/capabilities.json": _capabilities(
-            root, check("jira"), check("github"), check("teams"), check("model")
+            root,
+            check("jira"),
+            check("github"),
+            check("teams"),
+            check("confluence"),
+            check("model"),
         ),
         "planner/capabilities.trouble.json": _capabilities(
             root,
@@ -225,6 +517,14 @@ def planner_fixtures(root: Path) -> dict[str, WireModel]:
             ),
             check("github"),
             check("teams", state="not_checked", checked_at=None, last_ok_at=None),
+            check(
+                "confluence",
+                state="not_set_up",
+                problem="Confluence is not connected.",
+                fix="Ask whoever set up the platform to connect Confluence.",
+                checked_at=None,
+                last_ok_at=None,
+            ),
             check(
                 "model",
                 state="not_set_up",

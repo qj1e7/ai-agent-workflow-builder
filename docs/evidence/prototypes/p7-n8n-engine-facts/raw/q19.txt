@@ -1,0 +1,5 @@
+001 created q19 turn it on: {"id": "JKNGqU5fkaqzwhcK", "versionId": "2708dbef-fec7-4ed7-93b4-46ad0df39a40", "activeVersionId": null}
+002 public POST /workflows/{id}/activate: [200, "2708dbef-fec7-4ed7-93b4-46ad0df39a40"]
+003 publication-status once every trigger is activated, after 0.3s: {"status": "published", "liveVersionId": "2708dbef-fec7-4ed7-93b4-46ad0df39a40", "pendingVersionId": null, "triggers": [{"nodeId": "cb22d8e7-741e-51fe-979b-4d995c9b4697", "status": "activated", "errorMessage": null}, {"nodeId": "c78f95ae-9626-5fdc-8133-08dc19cfc2cb", "status": "activated", "errorMessage": null}, {"nodeId": "a91ba3d3-2300-5215-a52c-8f77cf326ee4", "status": "activated", "errorMessage": null}]}
+004 statuses seen while waiting: ["in_progress", "published"]
+005 the blocks it lists as triggers: ["Daily", "Start from the Portal", "Ask for a yes"]

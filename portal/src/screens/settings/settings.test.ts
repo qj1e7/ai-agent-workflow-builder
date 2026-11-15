@@ -36,6 +36,7 @@ import {
   savedKeyFits,
   SETTINGS_OFF_WORDS,
   settingsErrorWords,
+  settingsTabsFor,
   startingProvider,
   tabFrom,
   type NotFound,
@@ -341,9 +342,16 @@ describe('the AI model', () => {
 
 describe('the tabs', () => {
   it('open on Connections unless the address names another tab', () => {
-    expect(tabFrom(null)).toBe('connections')
-    expect(tabFrom('people')).toBe('people')
-    expect(tabFrom('model')).toBe('model')
-    expect(tabFrom('nonsense')).toBe('connections')
+    expect(tabFrom(null, true)).toBe('connections')
+    expect(tabFrom('people', true)).toBe('people')
+    expect(tabFrom('model', true)).toBe('model')
+    expect(tabFrom('nonsense', true)).toBe('connections')
+  })
+
+  it('offer How it works to an Operator and to nobody else', () => {
+    expect(tabFrom('how', true)).toBe('how')
+    expect(tabFrom('how', false)).toBe('connections')
+    expect(settingsTabsFor(true).map((tab) => tab.label)).toEqual(['Connections', 'People and permissions', 'AI model', 'How it works'])
+    expect(settingsTabsFor(false).map((tab) => tab.label)).toEqual(['Connections', 'People and permissions', 'AI model'])
   })
 })

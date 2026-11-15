@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from agent_runtime.abilities import CAPABILITY_LIST
-from agent_runtime.answers import SkipRead, TaskRead, answer_of, check_one_part
+from agent_runtime.answers import SkipRead, TaskRead, answer_of, check_one_part, parts_of
 from agent_runtime.api import AGENT_CARDS
 from agent_runtime.contract import (
     RELEASE_TAG_PATTERN,
@@ -63,6 +63,9 @@ from agent_runtime.contract import (
     PreviousTurn,
     ProposedIntent,
     QuestionAnswer,
+    ReadReleasesRequest,
+    ReleaseRead,
+    ReleasesRead,
     RoomAddressee,
     SoftwareMatch,
     SoftwareToCheck,
@@ -73,6 +76,7 @@ from agent_runtime.contract import (
     TaskRequest,
     WatchedFact,
     WatchlistInputs,
+    WatchlistScheduleFact,
     WireModel,
     agent_event_adapter,
 )
@@ -811,6 +815,19 @@ def found_software() -> FoundSoftware:
     )
 
 
+def read_releases_request() -> ReadReleasesRequest:
+    return ReadReleasesRequest(repo="langchain-ai/langgraph", tag_pattern=RELEASE_TAG_PATTERN)
+
+
+def releases_read() -> ReleasesRead:
+    return ReleasesRead(
+        releases=[
+            ReleaseRead(tag="1.2.16", name="1.2.16", published_at="2026-11-12T08:00:00Z"),
+            ReleaseRead(tag="1.2.15", name="1.2.15", published_at="2026-11-05T08:00:00Z"),
+        ]
+    )
+
+
 EMAIL_TASK = "Every Friday, email me the list of stale tickets in MOCK"
 SKIP_TASK = "Create the ticket without waiting for approval"
 NO_SKIP = SkipRead(whose="nobody")
@@ -822,8 +839,7 @@ def answer_request(task: str = FOLLOW_UP_TASK) -> AnswerRequest:
 
 def _answered(read: TaskRead, task: str) -> Answered:
     answer = answer_of(read, task)
-    assert answer is not None
-    return Answered(answer=answer)
+    return Answered(answer=answer, parts=parts_of(read, task, answer))
 
 
 def answered_card() -> Answered:
@@ -873,6 +889,23 @@ def answered_refused() -> Answered:
     return _answered(TaskRead(skips_the_yes=NO_SKIP), SKIP_TASK)
 
 
+EDIT_TASK = "Make the morning new-ticket check run on Mondays only"
+
+
+def answered_edit() -> Answered:
+    read = TaskRead(
+        asks_about="change", workflow_words="morning new-ticket check", skips_the_yes=NO_SKIP
+    )
+    return _answered(read, EDIT_TASK)
+
+
+def answered_pause() -> Answered:
+    read = TaskRead(
+        asks_about="change", workflow_words="React check", software="React", skips_the_yes=NO_SKIP
+    )
+    return _answered(read, "Pause the React check")
+
+
 def question_request() -> AnswerRequest:
     watched = [
         WatchedFact(name=n, repo=r, our_version=o, newest_version=v, state=t)
@@ -894,7 +927,9 @@ def question_request() -> AnswerRequest:
     return AnswerRequest(
         task="how many software are on our watchlist",
         model=draft_request().model,
-        facts=PlannerFacts(watchlist=watched),
+        facts=PlannerFacts(
+            watchlist=watched, watchlist_schedule=WatchlistScheduleFact(day="monday", at="09:00")
+        ),
         previous=PreviousTurn(request="What is the newest version of LangGraph?"),
     )
 
@@ -902,7 +937,7 @@ def question_request() -> AnswerRequest:
 def answered_question() -> Answered:
     text = "LangGraph is behind. You run 1.2.14 and the newest is 1.2.16."
     answer = QuestionAnswer(text=text, looked_at=["watchlist"], about_software=["LangGraph"])
-    return Answered(answer=answer)
+    return Answered(answer=answer, parts=parts_of(None, question_request().task, answer))
 
 
 def fixtures() -> dict[str, WireModel]:
@@ -946,11 +981,15 @@ def fixtures() -> dict[str, WireModel]:
         "planner-chosen.json": chosen(),
         "software-find-request.json": find_software_request(),
         "software-found.json": found_software(),
+        "releases-read-request.json": read_releases_request(),
+        "releases-read.json": releases_read(),
         "planner-answer-request.json": answer_request(),
         "planner-answered-card.json": answered_card(),
         "planner-answered-cant.json": answered_cant(),
         "planner-answered-watchlist.json": answered_watchlist(),
         "planner-answered-refused.json": answered_refused(),
+        "planner-answered-edit.json": answered_edit(),
+        "planner-answered-pause.json": answered_pause(),
         "planner-question-request.json": question_request(),
         "planner-answered-question.json": answered_question(),
         "planner-check-part-request.json": CheckPartRequest(kind="do", text="Email the list"),

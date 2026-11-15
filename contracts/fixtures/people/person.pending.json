@@ -10,6 +10,8 @@
     "asked_at": "2026-11-09T03:41:00Z"
   },
   "signed_in": false,
+  "n8n_access": false,
+  "n8n_account": "none",
   "added_by": "alice",
   "added_at": "2026-11-09T03:40:00Z"
 }

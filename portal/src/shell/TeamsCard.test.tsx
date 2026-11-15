@@ -1,5 +1,6 @@
 import teams from '@contracts/fixtures/stubs/teams-messages.json'
 import decided from '@contracts/fixtures/stubs/teams-messages.decided.json'
+import declined from '@contracts/fixtures/stubs/teams-messages.declined.json'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter } from 'react-router'
 import { describe, expect, it } from 'vitest'
@@ -8,6 +9,7 @@ import { AdaptiveCardView, inAppPath } from './TeamsCard'
 
 const WAITING = (teams.messages[0] as TeamsStubMessage).card as AdaptiveCard
 const DECIDED = (decided.messages[0] as TeamsStubMessage).card as AdaptiveCard
+const DECLINED = (declined.messages[0] as TeamsStubMessage).card as AdaptiveCard
 const OPEN_URL = 'http://localhost:8080/approvals/apr_01JB8'
 
 function draw(card: AdaptiveCard): string {
@@ -48,6 +50,13 @@ describe('the approval card', () => {
     const html = draw(DECIDED)
     expect(text(html).startsWith('Approved by Bob Software watchlist wants to make 1 change.')).toBe(true)
     expect(html).toMatch(/<strong[^>]*data-color="good"[^>]*>Approved by Bob<\/strong>/)
+  })
+
+  it('gives the declined record on top, with the reason, and offers nothing that decides', () => {
+    const html = draw(DECLINED)
+    expect(text(html).startsWith('Declined by Bob Nothing was written. Reason: Wrong version. Software watchlist wants to make 1 change.')).toBe(true)
+    expect(html).toMatch(/<strong[^>]*data-color="attention"[^>]*>Declined by Bob<\/strong>/)
+    expect(html).not.toContain('<button')
   })
 
   it('shows text the platform did not write exactly as written, never as markup', () => {

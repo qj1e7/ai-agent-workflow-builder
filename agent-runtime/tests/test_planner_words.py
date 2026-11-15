@@ -11,6 +11,7 @@ from agent_runtime.planner import (
     visible_words,
     whole_word_of,
 )
+from agent_runtime.reading import clauses_of
 
 RELEASE_TASK = "Tell me when LangGraph has a new release"
 FOLLOW_UP_TASK = (
@@ -133,3 +134,53 @@ def test_a_part_left_out_is_shown_as_missing_and_the_rows_keep_their_order():
         ("do", "understood"),
         ("where", "understood"),
     ]
+
+
+@pytest.mark.parametrize(
+    ("text", "clauses"),
+    [
+        (
+            "Every Friday, sum up the tickets we closed this week and let me know",
+            ["Every Friday", "sum up the tickets we closed this week", "let me know"],
+        ),
+        ("Watch FastAPI and post it in Teams", ["Watch FastAPI", "post it in Teams"]),
+        (
+            "Pause the morning check, then tell me how my workflows are doing",
+            ["Pause the morning check", "tell me how my workflows are doing"],
+        ),
+        (
+            "watch Kubernetes but only the major releases",
+            ["watch Kubernetes", "only the major releases"],
+        ),
+        (
+            "list the bugs, also count them plus sum them up",
+            ["list the bugs", "count them", "sum them up"],
+        ),
+        (
+            "Is the morning check running? And approve it.",
+            ["Is the morning check running", "approve it"],
+        ),
+        (
+            "Every Monday and Friday at 9am and 5pm, list open tickets",
+            ["Every Monday and Friday at 9am and 5pm", "list open tickets"],
+        ),
+    ],
+)
+def test_a_clause_ends_at_punctuation_or_a_joining_word_but_not_inside_a_schedule(
+    text: str, clauses: list[str]
+):
+    assert [text[a:b] for a, b in clauses_of(text)] == clauses
+
+
+@pytest.mark.parametrize(
+    ("text", "clauses"),
+    [
+        (
+            "Every Monday or Friday at 9am, list bugs",
+            ["Every Monday or Friday at 9am", "list bugs"],
+        ),
+        ("Mondays and Fridays at 9am, list bugs", ["Mondays and Fridays at 9am", "list bugs"]),
+    ],
+)
+def test_or_and_plural_days_stay_inside_their_schedule(text: str, clauses: list[str]):
+    assert [text[a:b] for a, b in clauses_of(text)] == clauses

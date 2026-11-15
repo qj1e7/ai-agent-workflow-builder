@@ -1,0 +1,78 @@
+# P7 spike stack: n8n 2.42.6 on Postgres, our throwaway node pack, and a stand-in for our API.
+# Values come from p7.env, which run.sh generates and git ignores.
+name: wab-e2e-p7
+services:
+  postgres:
+    image: postgres:17@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3
+    environment:
+      POSTGRES_USER: n8n
+      POSTGRES_DB: n8n
+      POSTGRES_PASSWORD: ${P7_DB_PASSWORD:?run run.sh}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U n8n -d n8n"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  n8n:
+    image: n8nio/n8n:2.42.6@sha256:526daa38b68e923cc00c5280d18b4da5d489f115a73bdbf3b8e452b184197a9a
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: postgres
+      DB_POSTGRESDB_PORT: "5432"
+      DB_POSTGRESDB_DATABASE: n8n
+      DB_POSTGRESDB_USER: n8n
+      DB_POSTGRESDB_PASSWORD: ${P7_DB_PASSWORD:?run run.sh}
+      WEBHOOK_URL: http://n8n:5678/
+      N8N_ENCRYPTION_KEY: ${P7_ENCRYPTION_KEY:?run run.sh}
+      N8N_DIAGNOSTICS_ENABLED: "false"
+      N8N_VERSION_NOTIFICATIONS_ENABLED: "false"
+      N8N_PERSONALIZATION_ENABLED: "false"
+      N8N_HIRING_BANNER_ENABLED: "false"
+      N8N_SECURE_COOKIE: "false"
+      N8N_DISABLED_MODULES: mcp-registry
+      GENERIC_TIMEZONE: Asia/Singapore
+      # The spike ran on a shared host with a load average near 200. These three only stop
+      # timeouts from that load; they change none of the answers.
+      N8N_EXPRESSION_ENGINE_TIMEOUT: "30000"
+      DB_POSTGRESDB_CONNECTION_TIMEOUT: "60000"
+      N8N_RUNNERS_GRANT_TOKEN_TTL: "120"
+      N8N_CUSTOM_EXTENSIONS: /custom
+      WAB_API_URL: http://stub:8041
+      WAB_NODE_KEY: ${P7_NODE_KEY:?run run.sh}
+      WAB_START_SECRET: ${P7_START_SECRET:?run run.sh}
+      P7_GUARD_OFF: ${P7_GUARD_OFF:-}
+      P7_ASK_REFUSE: ${P7_ASK_REFUSE:-respond}
+      NODES_INCLUDE: ${P7_NODES_INCLUDE:-}
+      EXECUTIONS_DATA_PRUNE: ${P7_PRUNE:-false}
+      EXECUTIONS_DATA_PRUNE_MAX_COUNT: ${P7_PRUNE_MAX_COUNT:-0}
+      EXECUTIONS_DATA_PRUNE_SOFT_DELETE_INTERVAL: ${P7_PRUNE_INTERVAL:-60}
+      EXECUTIONS_DATA_HARD_DELETE_BUFFER: ${P7_PRUNE_HARD_BUFFER:-1}
+    ports:
+      - "15721:5678"
+    volumes:
+      - n8ndata:/home/node/.n8n
+      - ./node-pack:/custom/wab:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -Y off -qO- http://localhost:5678/healthz/readiness || exit 1"]
+      interval: 3s
+      timeout: 3s
+      retries: 60
+
+  stub:
+    image: python:3.12-slim@sha256:a6e34c598f2467ed0e9a8d349809fcd8b5c603269512df273a0bb1784edc11b1
+    command: ["python", "-u", "/app/stub.py"]
+    environment:
+      WAB_NODE_KEY: ${P7_NODE_KEY:?run run.sh}
+      N8N_URL: http://n8n:5678
+    volumes: ["./stub.py:/app/stub.py:ro"]
+    ports: ["18041:8041"]
+
+volumes:
+  pgdata: {}
+  n8ndata: {}

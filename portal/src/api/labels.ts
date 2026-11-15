@@ -21,6 +21,9 @@ export const runStateLabel: Record<RunState, string> = {
   succeeded: 'Done',
   rejected: 'Declined',
   failed: 'Stopped',
+  skipped: 'Skipped',
+  expired: 'No answer',
+  lost: 'Lost',
 }
 
 /** Who started a run, as people say it: "Alice", or "Alice's schedule" for a scheduled check. */
@@ -44,6 +47,7 @@ export const failureReasonLabel: Record<FailureReason, string> = {
   SafetyDenied: 'The safety checker blocked the write',
   UnboundIntent: 'The request did not match an allowed action',
   OutOfOrderStep: 'A step ran out of order',
+  StoppedByUpdate: 'The platform was updated while it ran',
 }
 
 export const refusalLabel: Record<Refusal, string> = {
@@ -62,6 +66,9 @@ export const approvalStepStatusLabel: Record<ApprovalStepStatus, string> = {
   open: 'Waiting for an Approver',
   approved: 'Approved',
   declined: 'Declined',
+  expired: 'No answer',
+  cancelled: 'Deleted before an answer',
+  closed: 'Closed by an update',
 }
 
 export const verdictLabel: Record<Verdict, string> = {
@@ -78,6 +85,7 @@ export const blockKindLabel: Record<BlockKind, string> = {
 export const runOutcomeLabel: Record<RunOutcome, string> = {
   written: 'Written',
   nothing_to_write: 'Nothing to write',
+  test_passed: 'Test run passed',
 }
 
 export const roleLabel: Record<Role, string> = {

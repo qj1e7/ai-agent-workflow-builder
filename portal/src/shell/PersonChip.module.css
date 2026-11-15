@@ -5,7 +5,7 @@
 .chip {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   margin-left: 4px;
   padding: 3px 10px 3px 3px;
   border-radius: 999px;
@@ -33,35 +33,27 @@
   display: inline-grid;
   flex: none;
   place-items: center;
-  width: 34px;
-  height: 34px;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
-  font-size: 0.9rem;
-  font-weight: 700;
+  font-size: 0.85rem;
+  font-weight: 800;
 }
 
-.name {
-  display: block;
+.who {
   font-size: 0.9rem;
-  font-weight: 700;
+  font-weight: 600;
   line-height: 1.2;
-}
-
-.role {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
   white-space: nowrap;
 }
 
-@media (max-width: 1150px) {
+/* At 900 px and narrower only the initial shows, as in the sketch; the name and role stay for a screen reader. */
+@media (max-width: 900px) {
   .chip {
     padding-right: 3px;
   }
 
-  .name {
+  .who {
     position: absolute;
     width: 1px;
     height: 1px;

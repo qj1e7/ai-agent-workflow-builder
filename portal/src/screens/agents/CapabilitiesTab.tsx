@@ -4,7 +4,7 @@ import type { CapabilityView, CardView, ConnectionOut } from '../../api/types'
 import { Button } from '../../ui/Button'
 import { AlertMark, CheckMark } from '../settings/marks'
 import { CAPABILITIES_FOOT, CAPABILITIES_UNAVAILABLE_WORDS, capabilityNote, GROUPS, groupOf, settingsPathFor, type Group } from './capabilities'
-import styles from './AgentsPage.module.css'
+import styles from './HowItWorks.module.css'
 
 function Line({ capability, cards, connections, now }: { capability: CapabilityView; cards: readonly CardView[] | undefined; connections: readonly ConnectionOut[] | undefined; now: Date }) {
   const note = capabilityNote(capability, cards, now)

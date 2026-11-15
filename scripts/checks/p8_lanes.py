@@ -5,7 +5,6 @@ usage: python3 -I scripts/checks/p8_lanes.py <command> <api-base-url> <out-dir> 
 
   lane1 <trunk-api> <out> <head-api>  alice starts a watchlist check at trunk and at head
   lane2 <api> <out>                   alice pauses the Software watchlist; no next run
-  lane3 <api> <out> <step-key>        (own stack) a tick past the slot of a paused watchlist
   lane4 <api> <out>                   alice resumes the watchlist; its next run has a date again
   lane5 <api> <out>                   an agent workflow with a past run is deleted, then restored
   lane6 <api> <out>                   deleted while its run waits for a yes; bob still decides
@@ -14,11 +13,8 @@ usage: python3 -I scripts/checks/p8_lanes.py <command> <api-base-url> <out-dir> 
   lane9 <api> <out>                   two pauses at the same moment; one paused state
   seed <api> <out> <count>            alice makes <count> agent workflows for the perf probe
 
-Lane 3 cannot move the stack's clock, so it moves the schedule instead: it saves the watchlist's
-schedule for the next 5-minute slot at least 90 seconds away, pauses the watchlist, waits until
-the slot has passed and asks POST /internal/v1/schedules/tick with the step key. n8n's own
-schedule_tick asks the same route every 5 minutes, so either may use the slot up. As a control it
-then resumes the watchlist, saves the slot after that, waits again, and expects one scheduled run.
+Lane 3, a tick past the slot of a paused watchlist, went with the schedule tick in ENGINE-PLAN
+E10: each workflow's own n8n workflow runs on its Schedule Trigger.
 """
 
 import json
@@ -142,7 +138,8 @@ def ensure_watchlist(api: Api) -> Any:
         raise SystemExit(f"add LangGraph: HTTP {status} {added!r}")
     found = api.get("alice", "/api/v1/watchlist")["watchlist"]
     if found["schedule"] is None:
-        api.call("alice", "PUT", "/api/v1/watchlist/schedule", {"day": "monday", "at": "09:00"})
+        monday = {"day": "monday", "at": "09:00", "expected_version": found["version"]}
+        api.call("alice", "PUT", "/api/v1/watchlist/schedule", monday)
         found = api.get("alice", "/api/v1/watchlist")["watchlist"]
     return found
 
@@ -289,95 +286,6 @@ def lane2(api: Api, out: Path) -> bool:
                 after is not None and after["state"] == "paused" and after["next_run_at"] is None,
                 f"GET /api/v1/use-cases reads {after and after['state']}, "
                 f"next run {after and after['next_run_at']}",
-            ),
-        ]
-    )
-
-
-def next_slot(now: datetime, ahead: timedelta = timedelta(seconds=90)) -> datetime:
-    local = (now + ahead).astimezone(SINGAPORE)
-    slot = local.replace(second=0, microsecond=0)
-    slot += timedelta(minutes=(5 - slot.minute % 5) % 5)
-    return slot if slot >= local else slot + timedelta(minutes=5)
-
-
-def wait_past(slot: datetime) -> None:
-    pause = (slot - datetime.now(UTC)).total_seconds() + 20
-    print(f"waiting {pause:.0f} s for the slot {slot.isoformat()} to pass")
-    time.sleep(max(0.0, pause))
-
-
-def schedule_for(api: Api, slot: datetime) -> tuple[int, Any]:
-    body = {"day": "every_day", "at": slot.strftime("%H:%M")}
-    return api.call("carol", "PUT", "/api/v1/watchlist/schedule", body)
-
-
-def tick(api: Api, step_key: str) -> tuple[int, Any]:
-    return api.call(None, "POST", "/internal/v1/schedules/tick", headers={"X-Step-Key": step_key})
-
-
-def lane3(api: Api, out: Path, step_key: str) -> bool:
-    found = ensure_watchlist(api)
-    use_case_id = found["use_case_id"]
-    slot = next_slot(datetime.now(UTC))
-    saved_status, saved = schedule_for(api, slot)
-    on = api.row(use_case_id)
-    pause_status, paused = api.move("alice", "pause", use_case_id)
-    runs_before = api.runs_of(use_case_id)
-    wait_past(slot)
-    tick_status, ticked = tick(api, step_key)
-    runs_after = api.runs_of(use_case_id)
-
-    api.move("alice", "resume", use_case_id)
-    control_slot = next_slot(datetime.now(UTC))
-    schedule_for(api, control_slot)
-    wait_past(control_slot)
-    control_status, control_tick = tick(api, step_key)
-    deadline = time.monotonic() + 30
-    control_runs = api.runs_of(use_case_id)
-    while len(control_runs) == len(runs_after) and time.monotonic() < deadline:
-        time.sleep(2)
-        control_runs = api.runs_of(use_case_id)
-    new_control = [r for r in control_runs if r["run_id"] not in {x["run_id"] for x in runs_after}]
-    save(
-        out,
-        "p8-no-tick.json",
-        {
-            "slot": slot.isoformat(),
-            "schedule_status": saved_status,
-            "schedule": saved,
-            "listed_while_on": on,
-            "pause_status": pause_status,
-            "paused": paused,
-            "runs_before": runs_before,
-            "tick_status": tick_status,
-            "tick": ticked,
-            "runs_after": runs_after,
-            "control_slot": control_slot.isoformat(),
-            "control_tick_status": control_status,
-            "control_tick": control_tick,
-            "control_new_runs": new_control,
-            "calls": api.log,
-        },
-    )
-    expected = slot.astimezone(UTC)
-    listed_next = (on or {}).get("next_run_at")
-    return verdict(
-        [
-            (saved_status == 200, f"carol saved the schedule for {slot.strftime('%H:%M')} SGT"),
-            (
-                listed_next is not None and datetime.fromisoformat(listed_next) == expected,
-                f"while on, the next run reads {listed_next}",
-            ),
-            (pause_status == 200 and paused["next_run_at"] is None, "alice paused it"),
-            (tick_status == 200, f"the tick after the slot answered HTTP {tick_status}: {ticked}"),
-            (
-                len(runs_after) == len(runs_before),
-                f"no run started: runs {len(runs_before)} -> {len(runs_after)}",
-            ),
-            (
-                len(new_control) == 1 and new_control[0]["trigger"] == "schedule",
-                f"control: resumed, the next slot started {len(new_control)} scheduled run(s)",
             ),
         ]
     )
@@ -623,7 +531,6 @@ def main(argv: list[str]) -> int:
     lanes: dict[str, Any] = {
         "lane1": lambda: lane1(api, out, Api(rest[0])),
         "lane2": lambda: lane2(api, out),
-        "lane3": lambda: lane3(api, out, rest[0]),
         "lane4": lambda: lane4(api, out),
         "lane5": lambda: lane5(api, out),
         "lane6": lambda: lane6(api, out),

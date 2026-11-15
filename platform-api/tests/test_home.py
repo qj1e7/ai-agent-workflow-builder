@@ -17,30 +17,44 @@ from platform_api.orchestration import (
     AnyApprover,
     ApprovalPolicy,
     ApprovalStep,
-    Schedule,
     ScheduleBook,
     TeamsPost,
 )
+from platform_api.orchestration.connections import Reading
 from platform_api.orchestration.people import Person
 from platform_api.orchestration.people_store import People, PersonRow
-from platform_api.orchestration.runs import AwaitingApproval, Failed, Leg, Pending, StepName
+from platform_api.orchestration.person_runs import runs_of
+from platform_api.orchestration.runs import (
+    AwaitingApproval,
+    Failed,
+    Leg,
+    Pending,
+    Rejected,
+    StepName,
+)
+from platform_api.orchestration.service import RunDetail
+from platform_api.orchestration.store import RunRecord
 from platform_api.shared import (
+    ApprovalId,
     ExternalIdentity,
     N8nExecutionId,
     Principal,
+    ProposalId,
     Role,
     RunId,
     SeedPerson,
-    UseCaseId,
     UserId,
 )
 from tests.conftest import PostgresUrls
 from tests.declared import declared_status
-from tests.support import ALICE, LOCAL_ENV, SPEC
+from tests.fake_n8n import FakeN8n
+from tests.support import ALICE, LOCAL_ENV, NOW, SPEC
 from tests.test_builder_http import NothingLearned
 from tests.test_builder_lifecycle import ModelConnected
 from tests.test_card_runs import output, ticket
 from tests.test_connections import DOWN, Rig
+from tests.test_n8n_builder import WRITES
+from tests.test_n8n_lifecycle import Workflows
 from tests.test_orchestrator import Harness, open_harness
 
 pytestmark = pytest.mark.anyio
@@ -60,16 +74,24 @@ EMPTY = {
     "confirmations": [],
     "stopped": [],
     "stopped_total": 0,
+    "declined": [],
+    "declined_total": 0,
+    "questions_for_me": [],
+    "questions_for_me_total": 0,
+    "needs_next": None,
     "waiting_on_others": [],
     "waiting_on_others_total": 0,
+    "waiting_on_others_next": None,
     "drafts": [],
     "following_up": [],
     "following_up_total": 0,
+    "following_up_next": None,
     "replied": [],
     "coming_up": None,
     "workflows": 0,
     "addresses": [],
     "connections": [],
+    "changed_in_n8n": [],
 }
 
 
@@ -128,6 +150,23 @@ class Lab:
     async def run_ids(self, user: str, part: str) -> list[str]:
         return [item["run_id"] for item in (await self.home(user))[part]]
 
+    async def page(self, user: str, path: str, after: str | None) -> dict[str, Any]:
+        response = await self.client.get(
+            path, params={} if after is None else {"after": after}, headers={"X-Dev-User": user}
+        )
+        assert response.status_code == 200, response.text
+        declared_status(self.app, "GET", path, response)
+        return response.json()
+
+    async def every_page(self, user: str, path: str, first: str | None) -> list[dict[str, Any]]:
+        """Home's cursor for a list, followed to its end: the pages after Home's first."""
+        pages: list[dict[str, Any]] = []
+        after = first
+        while after is not None:
+            pages.append(await self.page(user, path, after))
+            after = pages[-1]["next"]
+        return pages
+
 
 @pytest.fixture
 async def lab(postgres: PostgresUrls) -> AsyncIterator[Lab]:
@@ -164,8 +203,9 @@ async def workflow(lab: Lab, owner: str = "alice", name: str = "Watch LangGraph"
     return response.json()["use_case_id"]
 
 
-async def start(lab: Lab, use_case_id: str, by: str = "alice") -> RunId:
-    response = await lab.call(by, "POST", f"/api/v1/use-cases/{use_case_id}/runs")
+async def start(lab: Lab, use_case_id: str, by: str = "alice", test: bool = False) -> RunId:
+    path = f"/api/v1/use-cases/{use_case_id}/runs"
+    response = await lab.call(by, "POST", path, {"test": True} if test else None)
     assert response.status_code == 201, response.text
     return RunId(response.json()["run_id"])
 
@@ -329,6 +369,137 @@ async def test_the_newest_waiting_runs_come_first_and_home_counts_them_all(lab: 
     assert [a["run_id"] for a in home["approvals"]] == started[::-1][:10]
 
 
+async def waiting_runs(
+    lab: Lab, count: int, apart: timedelta = timedelta(seconds=1)
+) -> list[RunId]:
+    """`count` runs alice started, each waiting for a yes, `apart` apart, the oldest first."""
+    started: list[RunId] = []
+    for n in range(count):
+        run = await lab.h.orchestrator.start_run(SPEC, ALICE, f"many-{n}-{uuid.uuid4()}")
+        started.append(run.run_id)
+        lab.h.advance(apart)
+    for run_id in started:
+        await work(lab, run_id, cards=False)
+    return started
+
+
+async def test_every_request_waiting_for_a_yes_is_reached_through_the_pages(lab: Lab):
+    started = await waiting_runs(lab, 27)
+
+    home = await lab.home("bob")
+    pages = await lab.every_page("bob", "/api/v1/home/needs", home["needs_next"])
+
+    reached = [a["run_id"] for a in home["approvals"]]
+    reached += [a["run_id"] for page in pages for a in page["approvals"]]
+    assert reached == started[::-1], "every request once, the newest first"
+    assert [len(page["approvals"]) for page in pages] == [10, 7]
+    assert {home["approvals_total"], *(page["approvals_total"] for page in pages)} == {27}
+    assert pages[-1]["next"] is None
+
+
+async def test_a_page_goes_on_where_the_last_one_ended_when_a_new_request_arrives(lab: Lab):
+    started = await waiting_runs(lab, 12)
+    first = await lab.home("bob")
+
+    (newest,) = await waiting_runs(lab, 1)
+    after = await lab.page("bob", "/api/v1/home/needs", first["needs_next"])
+
+    assert [a["run_id"] for a in after["approvals"]] == started[::-1][10:]
+    assert after["approvals_total"] == 13, "the count is the list as it is now"
+    assert [a["run_id"] for a in (await lab.home("bob"))["approvals"]][0] == newest
+
+
+async def test_a_request_decided_between_pages_skips_nothing_and_repeats_nothing(lab: Lab):
+    started = await waiting_runs(lab, 13)
+    first = await lab.home("bob")
+    on_first_page, not_read_yet = started[-1], started[0]
+
+    await decide_first_step(lab, "bob", on_first_page)
+    await decide_first_step(lab, "bob", not_read_yet)
+    after = await lab.page("bob", "/api/v1/home/needs", first["needs_next"])
+
+    read = [a["run_id"] for a in first["approvals"]] + [a["run_id"] for a in after["approvals"]]
+    assert len(read) == len(set(read)), "no request twice"
+    assert set(started[1:-1]) <= set(read), "every request still waiting was reached"
+    assert not_read_yet not in read
+    assert after["approvals_total"] == 11, "the count is what still waits"
+    again = await lab.home("bob")
+    pages = await lab.every_page("bob", "/api/v1/home/needs", again["needs_next"])
+    fresh = [a["run_id"] for a in again["approvals"]]
+    fresh += [a["run_id"] for page in pages for a in page["approvals"]]
+    assert fresh == started[1:-1][::-1] and again["approvals_total"] == len(fresh)
+
+
+async def test_requests_started_at_the_same_moment_are_each_reached_once_by_their_id(lab: Lab):
+    started = await waiting_runs(lab, 23, apart=timedelta(0))
+
+    home = await lab.home("bob")
+    pages = await lab.every_page("bob", "/api/v1/home/needs", home["needs_next"])
+
+    reached = [a["run_id"] for a in home["approvals"]]
+    reached += [a["run_id"] for page in pages for a in page["approvals"]]
+    assert len({a["started_at"] for a in home["approvals"]}) == 1, "one moment for all"
+    assert reached == sorted(started, reverse=True), "each once, the larger id first"
+    assert [len(home["approvals"]), *(len(p["approvals"]) for p in pages)] == [10, 10, 3]
+
+
+async def test_every_stopped_run_is_reached_through_the_pages(lab: Lab):
+    stopped = [await stopped_run(lab, await workflow(lab, name=f"Check {n}")) for n in range(12)]
+
+    home = await lab.home("alice")
+    pages = await lab.every_page("alice", "/api/v1/home/needs", home["needs_next"])
+
+    reached = [s["run_id"] for s in home["stopped"]]
+    reached += [s["run_id"] for page in pages for s in page["stopped"]]
+    assert sorted(reached) == sorted(stopped) and len(reached) == 12
+    assert [home["stopped_total"], *(page["stopped_total"] for page in pages)] == [12, 12]
+    assert [page["approvals"] for page in pages] == [[]], "a part with no more sends no rows"
+
+
+async def test_every_run_waiting_on_others_is_reached_through_the_pages(lab: Lab):
+    started = await waiting_runs(lab, 52)
+
+    home = await lab.home("alice")
+    pages = await lab.every_page(
+        "alice", "/api/v1/home/waiting-on-others", home["waiting_on_others_next"]
+    )
+
+    reached = [w["run_id"] for w in home["waiting_on_others"]]
+    reached += [w["run_id"] for page in pages for w in page["waiting_on_others"]]
+    assert reached == started[::-1]
+    assert [len(home["waiting_on_others"]), *(len(p["waiting_on_others"]) for p in pages)] == [
+        50,
+        2,
+    ]
+    assert {page["waiting_on_others_total"] for page in pages} == {52}
+    bob = await lab.home("bob")
+    assert (bob["approvals_total"], len(bob["approvals"])) == (52, 10)
+
+
+async def test_a_page_read_with_no_cursor_is_homes_first_page(lab: Lab):
+    await waiting_runs(lab, 3)
+    home = await lab.home("bob")
+
+    first = await lab.page("bob", "/api/v1/home/needs", None)
+
+    assert first["approvals"] == home["approvals"]
+    assert first["next"] == home["needs_next"] is None
+
+
+@pytest.mark.parametrize(
+    "path", ["/api/v1/home/needs", "/api/v1/home/waiting-on-others", "/api/v1/home/following-up"]
+)
+async def test_a_cursor_this_list_did_not_give_out_is_refused(lab: Lab, path: str):
+    await waiting_runs(lab, 12)
+    other = (await lab.home("bob"))["needs_next"]
+    for after in ("not-a-cursor", "e30", other if path != "/api/v1/home/needs" else "W10"):
+        response = await lab.client.get(
+            path, params={"after": after}, headers={"X-Dev-User": "bob"}
+        )
+        assert response.status_code == 422, (after, response.text)
+        declared_status(lab.app, "GET", path, response)
+
+
 async def test_a_stopped_run_shows_to_the_operators_who_started_or_own_it_with_the_reason(
     lab: Lab,
 ):
@@ -369,6 +540,75 @@ async def test_a_deleted_workflow_s_stopped_run_is_not_shown(lab: Lab):
     ).status_code == 200
 
     assert (await lab.home("alice"))["stopped"] == []
+
+
+async def declined_run(
+    lab: Lab, use_case_id: str, by: str, test: bool, reason: str | None = None
+) -> RunId:
+    run_id = await start(lab, use_case_id, by, test=test)
+    await work(lab, run_id)
+    run = (await lab.call("bob", "GET", f"/api/v1/runs/{run_id}")).json()
+    seen = (
+        await lab.call("bob", "GET", f"/api/v1/approvals/{run['approval']['approval_id']}")
+    ).json()
+    body = {"step": 0, "verdict": "decline", "digest": seen["digest"]}
+    if reason is not None:
+        body["reason"] = reason
+    path = f"/api/v1/approvals/{seen['approval_id']}/decisions"
+    assert (await lab.call("bob", "POST", path, body)).status_code == 201
+    return run_id
+
+
+async def test_a_declined_test_run_is_in_its_starters_needs_you_with_who_declined_and_why(
+    lab: Lab,
+):
+    use_case_id = await workflow(lab, owner="carol")
+    run_id = await declined_run(lab, use_case_id, "alice", test=True, reason="Wrong version")
+
+    home = await lab.home("alice")
+    assert home["declined_total"] == 1
+    (item,) = home["declined"]
+    assert {k: item[k] for k in ("run_id", "use_case_id", "use_case_name")} == {
+        "run_id": run_id,
+        "use_case_id": use_case_id,
+        "use_case_name": "Watch LangGraph",
+    }
+    assert (item["declined_by"], item["declined_by_name"], item["decline_reason"]) == (
+        "bob",
+        "Bob",
+        "Wrong version",
+    )
+    for not_the_starter in ("carol", "bob", "dave"):
+        assert (await lab.home(not_the_starter))["declined"] == [], not_the_starter
+
+
+async def test_only_a_test_run_declined_counts_and_it_leaves_when_the_workflow_runs_again(
+    lab: Lab,
+):
+    run_now = await workflow(lab, name="Run now")
+    await declined_run(lab, run_now, "alice", test=False)
+    assert await lab.run_ids("alice", "declined") == []
+
+    tried = await workflow(lab, name="Tried")
+    first = await declined_run(lab, tried, "alice", test=True)
+    assert await lab.run_ids("alice", "declined") == [first]
+    assert (await lab.home("alice"))["declined"][0]["decline_reason"] is None
+
+    await start(lab, tried, test=True)
+    assert await lab.run_ids("alice", "declined") == []
+
+
+async def test_a_declined_test_run_leaves_needs_you_when_its_starter_is_no_longer_an_operator(
+    lab: Lab,
+):
+    use_case_id = await workflow(lab, owner="dave")
+    run_id = await declined_run(lab, use_case_id, "dave", test=True, reason="Wrong version")
+    assert await lab.run_ids("dave", "declined") == [run_id]
+
+    assert isinstance(await lab.people.set_operator(ALICE_NOW, "dave", False), Person)
+
+    home = await lab.home("dave")
+    assert (home["declined"], home["declined_total"]) == ([], 0)
 
 
 async def test_a_confirmation_shows_to_approvers_who_may_decide_it_and_not_to_the_asker(lab: Lab):
@@ -441,42 +681,59 @@ async def test_a_long_draft_name_is_cut_to_what_a_row_can_show(lab: Lab):
     assert draft["name"].endswith("…")
 
 
+def on_n8n(lab: Lab) -> None:
+    """Each new workflow is laid out as its own n8n workflow, whose Schedule Trigger runs it."""
+    builder = Builder(
+        lab.h.db,
+        lab.h.orchestrator,
+        lab.app.state.watchlist,
+        "http://localhost:8000",
+        ModelConnected(),
+        n8n=Workflows(FakeN8n(), lab.h.db),
+        writes=WRITES,
+    )
+    lab.app.state.builder = builder
+    lab.app.state.home = Home(
+        builder,
+        lab.h.orchestrator,
+        lab.people,
+        lab.app.state.team_requests,
+        lab.rig.connections,
+        lab.app.state.watchlist,
+    )
+
+
+async def scheduled(lab: Lab, name: str, day: str, at: str) -> str:
+    body = {
+        "name": name,
+        "instruction": "Check LangGraph for new releases.",
+        "agents": [{"card_id": VERSION_CHECKER_ID, "values": VALUES}],
+        "schedule": {"day": day, "at": at},
+        "on": True,
+    }
+    response = await lab.call("alice", "POST", "/api/v1/agent-use-cases", body)
+    assert response.status_code == 201, response.text
+    return response.json()["use_case_id"]
+
+
 async def test_coming_up_names_the_next_scheduled_workflow_and_how_many_more(lab: Lab):
-    added = await lab.call(
-        "alice",
-        "POST",
-        "/api/v1/watchlist/software",
-        {"name": "LangGraph", "repo": "langchain-ai/langgraph", "our_version": "1.2.14"},
-    )
-    assert added.status_code == 201, added.text
-    scheduled = await lab.call(
-        "alice", "PUT", "/api/v1/watchlist/schedule", {"day": "monday", "at": "09:00"}
-    )
-    assert scheduled.status_code == 200, scheduled.text
+    on_n8n(lab)
+    await scheduled(lab, "Weekly", "monday", "09:00")
+    daily = await scheduled(lab, "Daily", "every_day", "08:00")
     await workflow(lab)
 
     home = await lab.home("bob")
 
-    assert home["workflows"] == 2
+    view = (await lab.call("bob", "GET", f"/api/v1/use-cases/{daily}")).json()
+    assert home["workflows"] == 3
     assert home["coming_up"] == {
-        "use_case_id": added.json()["use_case_id"],
-        "name": "Software watchlist",
-        "template": "software_watchlist",
-        "next_run_at": scheduled.json()["schedule"]["next_at"],
+        "use_case_id": daily,
+        "name": "Daily",
+        "template": "agent_cards",
+        "next_run_at": view["next_run_at"],
         "time_zone": "Asia/Singapore",
-        "more": 0,
+        "more": 1,
     }
-
-
-async def test_coming_up_carries_its_schedules_own_time_zone(lab: Lab):
-    use_case_id = await workflow(lab)
-    london = Schedule("every_day", "09:00", "Europe/London")
-    await ScheduleBook(lab.h.db).save(UseCaseId(use_case_id), london, ALICE_NOW)
-
-    coming_up = (await lab.home("bob"))["coming_up"]
-
-    assert coming_up["use_case_id"] == use_case_id
-    assert coming_up["time_zone"] == "Europe/London"
 
 
 async def test_someone_signed_in_but_not_on_the_list_is_refused(lab: Lab):
@@ -538,19 +795,25 @@ async def test_following_up_shows_a_persons_own_requests_with_the_latest_reply(l
     assert (await lab.home("erin"))["following_up"] == []
 
 
-async def test_following_up_shows_every_request_up_to_fifty_and_counts_them_all(lab: Lab):
-    for n in range(52):
+async def test_every_request_to_the_team_is_reached_through_the_pages(lab: Lab):
+    for n in range(103):
         await ask(
             lab,
             "alice",
             {"kind": "ask_the_team", "about": {"capability": "x"}, "note": f"n{n}"},
             f"k{n}",
         )
+        lab.h.advance(timedelta(seconds=1))
 
     home = await lab.home("alice")
+    pages = await lab.every_page("alice", "/api/v1/home/following-up", home["following_up_next"])
 
-    assert (len(home["following_up"]), home["following_up_total"]) == (50, 52)
-    assert home["following_up"][0]["note"] == "n51"
+    notes = [i["note"] for i in home["following_up"]]
+    notes += [i["note"] for page in pages for i in page["following_up"]]
+    assert notes == [f"n{n}" for n in range(102, -1, -1)]
+    assert [len(home["following_up"]), *(len(p["following_up"]) for p in pages)] == [50, 50, 3]
+    assert {home["following_up_total"], *(p["following_up_total"] for p in pages)} == {103}
+    assert (await lab.home("bob"))["following_up_next"] is None
 
 
 async def test_a_done_request_leaves_following_up_after_30_days(lab: Lab):
@@ -576,7 +839,7 @@ async def test_home_shows_an_operator_the_connections_that_do_not_work_and_start
     lab: Lab,
 ):
     assert (await lab.home("alice"))["connections"] == []
-    assert [p.calls for p in lab.rig.probes.values()] == [0, 0, 0, 0]
+    assert [lab.rig.probes[id].calls for id in ("jira", "github", "teams")] == [0, 0, 0]
 
     lab.rig.probes["jira"].reading = DOWN
     checked = await lab.rig.connections.check_now("jira")
@@ -594,7 +857,18 @@ async def test_home_shows_an_operator_the_connections_that_do_not_work_and_start
         "last_ok_at": None,
         "expires_at": None,
     }
-    assert [p.calls for p in lab.rig.probes.values()] == [1, 1, 0, 0]
+    assert [lab.rig.probes[id].calls for id in ("jira", "github", "teams")] == [1, 1, 0]
+
+
+async def test_home_lists_no_ai_model_for_an_operator_while_none_is_set_up(lab: Lab):
+    lab.rig.probes["model"].reading = Reading("not_set_up", "No AI model is turned on.")
+    (item,) = (await lab.home("alice"))["connections"]
+    assert (item["id"], item["state"], item["fix"]) == (
+        "model",
+        "not_set_up",
+        "Add an AI model under Settings, AI model.",
+    )
+    assert (await lab.home("bob"))["connections"] == []
 
 
 async def test_home_leaves_connections_to_the_operators(lab: Lab):
@@ -652,3 +926,11 @@ async def test_home_lists_the_moved_and_missing_software_for_an_operator_only(la
         ("FastAPI", "tiangolo/fastapi", "fastapi/fastapi", False),
         ("LangServe", "langchain-ai/langserve", None, True),
     ]
+
+
+def test_a_declined_test_run_with_no_recorded_decline_is_left_out_rather_than_failing_home():
+    rejected = Rejected(RunId("run_1"), ProposalId("prp_1"), ApprovalId("apr_1"), UserId("bob"), 0)
+    record = RunRecord(
+        RunId("run_1"), replace(SPEC, test=True), UserId("alice"), NOW, NOW, 1, rejected, (), None
+    )
+    assert runs_of([RunDetail(record, 0, None, None, ())], ALICE_NOW, {}).declined == ()

@@ -3,14 +3,18 @@ import { useLocation } from 'react-router'
 import { isOperator, notOnTheList } from './api/me'
 import { useMe } from './api/queries'
 import { useNow } from './api/ticking'
+import { ChatProvider } from './screens/home/ChatProvider'
+import { setTeamZone } from './screens/workflows/times'
 import { AskToBeAdded } from './shell/AskToBeAdded'
+import { BackToChat } from './shell/BackToChat'
 import { Header } from './shell/Header'
-import { TabBar } from './shell/Menu'
 import { PlatformDown, platformIsDown } from './shell/PlatformDown'
 import { PRODUCT } from './shell/product'
+import { Rail } from './shell/Rail'
 import { AppRoutes } from './shell/routes'
 import { TestControls } from './shell/TestControls'
 import { ErrorBoundary } from './ui/ErrorBoundary'
+import { useFromChat } from './ui/fromChat'
 import styles from './shell/Shell.module.css'
 
 /** Focus stays where it is on first load, so the skip link stays the first Tab stop. */
@@ -52,29 +56,35 @@ const WALL_CLOCK = () => new Date()
 
 export function App({ now = WALL_CLOCK }: { now?: () => Date }) {
   const me = useMe()
+  // Here, not in an effect, so the pages below render their times in the zone from the start.
+  setTeamZone(me.data?.time_zone)
   const at = useNow(now)
   const { pathname } = useLocation()
+  const fromChat = useFromChat()
   useHeadingFocus()
 
   let content
   if (me.isPending) content = <p className="muted" role="status">Loading</p>
   else if (me.isError && platformIsDown(me.error)) content = <PlatformDown onRetry={() => void me.refetch()} />
   else if (me.data?.on_list === false) content = <AskToBeAdded display={me.data.display} />
-  else content = <AppRoutes context={{ name: me.data?.display ?? null, now: at }} />
+  else content = <AppRoutes context={{ name: me.data?.display ?? null, now: at, operator: isOperator(me.data) }} />
 
   return (
-    <>
+    <ChatProvider>
       <button type="button" className={styles['skip']} onClick={skipToMain}>
         Skip to main content
       </button>
       <Header person={me.data ?? null} />
-      <main id="main" tabIndex={-1} className={styles['sheet']}>
-        <div className={styles['wrap']}>
-          <ErrorBoundary resetKey={pathname}>{content}</ErrorBoundary>
-        </div>
-      </main>
-      <TabBar operator={isOperator(me.data)} onList={me.data !== undefined && !notOnTheList(me.data)} />
+      <div className={styles['shell']}>
+        <Rail onList={me.data !== undefined && !notOnTheList(me.data)} />
+        <main id="main" tabIndex={-1} className={styles['sheet']}>
+          <div className={styles['wrap']}>
+            {fromChat ? <BackToChat /> : null}
+            <ErrorBoundary resetKey={pathname}>{content}</ErrorBoundary>
+          </div>
+        </main>
+      </div>
       <TestControls />
-    </>
+    </ChatProvider>
   )
 }

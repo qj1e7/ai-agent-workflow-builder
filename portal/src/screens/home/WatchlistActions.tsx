@@ -1,13 +1,14 @@
 import { useEffect, useReducer, useRef, useState } from 'react'
-import { useNavigate } from 'react-router'
 import { useErrorWords } from '../../api/context'
 import { useLatch } from '../../api/latch'
 import { useMe, useRemoveSoftware, useRestoreSoftware, useStartRun, useWatchlist } from '../../api/queries'
 import type { WatchedSoftwareView } from '../../api/types'
-import { Button, ButtonLink } from '../../ui/Button'
+import { Button } from '../../ui/Button'
+import { useChatNavigate } from '../../ui/fromChat'
+import { OpenButton } from '../../ui/OpenItem'
 import { pressCheckNow } from '../software/checkNow'
 import { changeFeedback, noticeWords, NO_FEEDBACK, pressRemove, pressUndo } from '../software/removal'
-import { scheduleRuns } from '../software/software'
+import { scheduleRuns, softwarePath } from '../software/software'
 import styles from './Planner.module.css'
 
 interface StopProps {
@@ -48,12 +49,12 @@ function StopWatching({ row, confirming, busy, ask, keep, stop }: StopProps) {
 function CheckAllNow({ useCaseId }: { useCaseId: string }) {
   const start = useStartRun()
   const latch = useLatch()
-  const navigate = useNavigate()
+  const navigate = useChatNavigate()
   const words = useErrorWords()
   return (
     <>
       <div className={styles['buttons']}>
-        <Button loading={start.isPending} onClick={() => pressCheckNow(latch, start.mutate, useCaseId, (runId) => void navigate(`/runs/${runId}`))}>
+        <Button loading={start.isPending} onClick={() => pressCheckNow(latch, start.mutate, useCaseId, (runId) => navigate(`/runs/${runId}`))}>
           Check all software now
         </Button>
       </div>
@@ -71,7 +72,8 @@ function CheckAllNow({ useCaseId }: { useCaseId: string }) {
  * check the watchlist now, and stop watching it. An Approver sees nothing here, as on the Software page. A name the
  * watchlist no longer holds gets no action.
  */
-export function SoftwareActions({ names }: { names: readonly string[] }) {
+/** `named`: each row says its software's name. Leave it off when the card's title already names the one software. */
+export function SoftwareActions({ names, named = true }: { names: readonly string[]; named?: boolean }) {
   const me = useMe()
   const watchlist = useWatchlist()
   const removal = useRemoveSoftware()
@@ -96,10 +98,10 @@ export function SoftwareActions({ names }: { names: readonly string[] }) {
         <ul>
           {held.map((row) => (
             <li key={row.id}>
-              <b>{row.name}</b>
-              <ButtonLink to={`/software?row=${encodeURIComponent(row.id)}`}>
+              {named ? <b>{row.name}</b> : null}
+              <OpenButton item={{ kind: 'software', id: row.id }} to={softwarePath(row.id)}>
                 Open<span className="visually-hidden"> {row.name}</span> on the Software page
-              </ButtonLink>
+              </OpenButton>
               <StopWatching
                 row={row}
                 confirming={confirming === row.id}

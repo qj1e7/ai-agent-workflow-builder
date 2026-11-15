@@ -82,7 +82,7 @@ function describeFocus(): Omit<Stop, 'id' | 'pixelsChange'> & { id: number | nul
   return {
     id: el.dataset['e2eStop'] === undefined ? -1 : Number(el.dataset['e2eStop']),
     atBody: false,
-    label: el.dataset['e2eName'] ?? el.tagName,
+    label: el.dataset['e2eName'] ?? (el.getAttribute('aria-label') ?? (el.textContent.trim().replace(/\s+/g, ' ').slice(0, 50) || el.tagName)),
     top,
     bottom: top + rect.height,
     left: rect.left + window.scrollX,
@@ -127,6 +127,7 @@ export async function walkTabs(page: Page): Promise<Walk> {
   for (let press = 0; press < MAX_TABS; press += 1) {
     await page.keyboard.press('Tab')
     const at = await page.evaluate(describeFocus)
+    if (at.id === -1) throw new Error(`Tab reached "${at.label}", which was not on the page when the walk started. Wait for the page to finish drawing before walking it.`)
     if (at.atBody || at.id === null || seen.has(at.id)) break
     seen.add(at.id)
     const noRingInStyles = at.focused.width === 0 || at.focused.style === at.rest.style

@@ -1,11 +1,11 @@
 import hmac
 import logging
 from datetime import datetime
-from typing import Annotated, Any, Literal, TypedDict
+from typing import Annotated, Any, Literal, Self, TypedDict
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
-from pydantic import Field, TypeAdapter
+from pydantic import Field, TypeAdapter, model_validator
 
 from platform_api.auth import OPERATORS_ONLY, SIGNED_IN, CurrentPrincipal
 from platform_api.orchestration.approvals import (
@@ -18,25 +18,34 @@ from platform_api.orchestration.approvals import (
     why_not,
 )
 from platform_api.orchestration.connections import Connections
+from platform_api.orchestration.questions import AnswerRefusal, Question, QuestionId
 from platform_api.orchestration.runs import (
     Acting,
     AwaitingApproval,
+    Expired,
     Failed,
+    Lost,
     Pending,
     Proposed,
     Rejected,
+    Skipped,
     Succeeded,
     Working,
 )
 from platform_api.orchestration.runs import StepName as DomainStep
-from platform_api.orchestration.schedule_store import ScheduleTicker
 from platform_api.orchestration.service import (
+    AnswerRefused,
     Decided,
     DecisionRace,
     DecisionRefused,
+    KeyAskedAnother,
     NotFound,
     NotRetryable,
     Orchestrator,
+    Post,
+    QuestionAnswered,
+    QuestionAsked,
+    QuestionRefused,
     Retried,
     RunDetail,
     approval_link,
@@ -58,9 +67,11 @@ from platform_api.shared import (
 )
 from platform_api.wire import (
     ApprovalStepView,
+    DeclineReason,
     ErrorBody,
     FailureReason,
     FailureStage,
+    QuestionText,
     RunOutcome,
     StepName,
     StepOutcome,
@@ -113,6 +124,7 @@ class _RunBase(WireModel):
     use_case_version: int
     started_by: UserId
     trigger: Trigger
+    test: bool = Field(description="True when a person started it with Do a test run.")
     started_at: datetime
     updated_at: datetime
     last_seq: int
@@ -169,6 +181,25 @@ class FailedView(_RunBase):
     message: str
 
 
+class SkippedView(_RunBase):
+    state: Literal["skipped"] = "skipped"
+    waiting_run_id: RunId = Field(
+        description="The earlier run of the same workflow that was still waiting for a yes."
+    )
+
+
+class ExpiredView(_RunBase):
+    state: Literal["expired"] = "expired"
+    proposal: ProposalView
+    approval: ApprovalRef
+
+
+class LostView(_RunBase):
+    state: Literal["lost"] = "lost"
+    proposal: ProposalView
+    approval: ApprovalRef
+
+
 type RunView = Annotated[
     PendingView
     | WorkingView
@@ -177,7 +208,10 @@ type RunView = Annotated[
     | ActingView
     | SucceededView
     | RejectedView
-    | FailedView,
+    | FailedView
+    | SkippedView
+    | ExpiredView
+    | LostView,
     Field(discriminator="state"),
 ]
 
@@ -190,6 +224,31 @@ class RunList(WireModel):
 
 class RetryAccepted(WireModel):
     state: Literal["pending", "acting"]
+
+
+class AnswerView(WireModel):
+    text: str
+    by: UserId
+    at: datetime
+
+
+class QuestionView(WireModel):
+    question_id: QuestionId
+    asked_by: UserId
+    asked_at: datetime
+    text: str
+    answer: AnswerView | None = Field(
+        description="The requester's answer. Null until they answer, and for good when the "
+        "request was decided first."
+    )
+
+
+class QuestionIn(WireIn):
+    text: QuestionText = Field(description="The question for the requester, 1 to 1000 characters.")
+
+
+class QuestionAnswerIn(WireIn):
+    text: QuestionText = Field(description="The requester's answer, 1 to 1000 characters.")
 
 
 class ApprovalView(WireModel):
@@ -215,12 +274,37 @@ class ApprovalView(WireModel):
         "decided, and it can be empty before. The digest covers only the actions, so a decision "
         "never covers this text."
     )
+    not_checked: list[str] = Field(
+        description="What this run couldn't check: the software a check couldn't read, by name, "
+        "in the watchlist's order. Empty when it read everything and for a workflow of agents. "
+        "It stays once the request is decided, so the record shows what the Approver was told. "
+        "It is for the reader and decides nothing."
+    )
+    requester: UserId = Field(
+        description="Who answers questions on this request: whoever started the run, or the "
+        "workflow's owner when its schedule started it."
+    )
+    questions: list[QuestionView] = Field(
+        description="What Approvers asked the requester, the first asked first. A question "
+        "decides nothing. Once the request is decided they stay here, read only."
+    )
 
 
 class DecisionIn(WireIn):
     step: int
     verdict: Verdict
     digest: Digest
+    reason: DeclineReason | None = Field(
+        default=None,
+        description="Why the Approver declines, up to 200 characters. Optional, and only with "
+        '"verdict": "decline". It is a note on the decline and decides nothing.',
+    )
+
+    @model_validator(mode="after")
+    def _a_reason_only_with_a_decline(self) -> Self:
+        if self.reason is not None and self.verdict is not Verdict.DECLINE:
+            raise ValueError("A reason goes only with a decline.")
+        return self
 
 
 class DecisionView(WireModel):
@@ -228,6 +312,7 @@ class DecisionView(WireModel):
     by: UserId
     verdict: Verdict
     at: datetime
+    reason: str | None = Field(description="Why the Approver declined, when they gave a reason.")
 
 
 class DecisionOut(WireModel):
@@ -249,10 +334,6 @@ class StepResponseOut(WireModel):
 class RetryLater(WireModel):
     retryable: Literal[True] = True
     detail: str
-
-
-class TickOut(WireModel):
-    started: list[RunId]
 
 
 class WorkflowFailureIn(WireIn):
@@ -291,11 +372,6 @@ StepKey = Annotated[str, Header(alias="X-Step-Key")]
 def current_orchestrator(request: Request) -> Orchestrator:
     orchestrator: Orchestrator = request.app.state.orchestrator
     return orchestrator
-
-
-def current_ticker(request: Request) -> ScheduleTicker:
-    ticker: ScheduleTicker = request.app.state.schedule_ticker
-    return ticker
 
 
 def current_connections(request: Request) -> Connections:
@@ -342,11 +418,13 @@ def proposal_view(proposal: Proposal) -> ProposalView:
     )
 
 
-def approval_ref(request: ApprovalRequest, decisions: tuple[Decision, ...]) -> ApprovalRef:
+def approval_ref(
+    request: ApprovalRequest, decisions: tuple[Decision, ...], post: Post | None
+) -> ApprovalRef:
     return ApprovalRef(
         approval_id=request.id,
         link=approval_link(request.id),
-        steps=steps_view(request, decisions),
+        steps=steps_view(request, decisions, post),
     )
 
 
@@ -357,6 +435,7 @@ class RunBaseFields(TypedDict):
     use_case_version: int
     started_by: UserId
     trigger: Trigger
+    test: bool
     started_at: datetime
     updated_at: datetime
     last_seq: int
@@ -372,6 +451,7 @@ def run_view(detail: RunDetail, viewer: Principal) -> RunView:
         use_case_version=record.spec.use_case_version,
         started_by=record.started_by,
         trigger=record.spec.trigger,
+        test=record.spec.test,
         started_at=record.started_at,
         updated_at=record.updated_at,
         last_seq=detail.last_seq,
@@ -391,7 +471,7 @@ def run_view(detail: RunDetail, viewer: Principal) -> RunView:
             return AwaitingApprovalView(
                 **base,
                 proposal=proposal_view(detail.proposal),
-                approval=approval_ref(detail.approval, detail.decisions),
+                approval=approval_ref(detail.approval, detail.decisions, detail.post),
                 # The same rule, and the same person, as the approval's own view.
                 you_can_decide=why_not(detail.approval, detail.decisions, viewer) is None,
             )
@@ -400,7 +480,7 @@ def run_view(detail: RunDetail, viewer: Principal) -> RunView:
             return ActingView(
                 **base,
                 proposal=proposal_view(detail.proposal),
-                approval=approval_ref(detail.approval, detail.decisions),
+                approval=approval_ref(detail.approval, detail.decisions, detail.post),
             )
         case Succeeded():
             return SucceededView(
@@ -422,7 +502,7 @@ def run_view(detail: RunDetail, viewer: Principal) -> RunView:
             return RejectedView(
                 **base,
                 proposal=proposal_view(detail.proposal),
-                approval=approval_ref(detail.approval, detail.decisions),
+                approval=approval_ref(detail.approval, detail.decisions, detail.post),
                 rejected_by=state.by,
                 step=state.step,
             )
@@ -433,6 +513,16 @@ def run_view(detail: RunDetail, viewer: Principal) -> RunView:
                 reason=state.failure.reason.value,
                 retryable=state.failure.retryable,
                 message=state.failure.message,
+            )
+        case Skipped():
+            return SkippedView(**base, waiting_run_id=state.waiting)
+        case Expired() | Lost():
+            assert detail.proposal is not None and detail.approval is not None
+            view = ExpiredView if isinstance(state, Expired) else LostView
+            return view(
+                **base,
+                proposal=proposal_view(detail.proposal),
+                approval=approval_ref(detail.approval, detail.decisions, detail.post),
             )
 
 
@@ -450,6 +540,27 @@ REFUSAL_MESSAGES: dict[Refusal, str] = {
 }
 
 
+ANSWER_REFUSALS: dict[AnswerRefusal, tuple[int, str]] = {
+    AnswerRefusal.NOT_THE_REQUESTER: (
+        403,
+        "Only the person who started this run, or owns its schedule, can answer.",
+    ),
+    AnswerRefusal.DECIDED: (409, "The request was decided before this answer."),
+    AnswerRefusal.ANSWERED: (409, "This question already has an answer."),
+}
+
+
+def question_view(question: Question) -> QuestionView:
+    answer = question.answer
+    return QuestionView(
+        question_id=question.id,
+        asked_by=question.asked_by,
+        asked_at=question.asked_at,
+        text=question.text,
+        answer=None if answer is None else AnswerView(text=answer.text, by=answer.by, at=answer.at),
+    )
+
+
 def _json(status_code: int, body: WireModel) -> JSONResponse:
     return JSONResponse(status_code=status_code, content=body.model_dump(mode="json"))
 
@@ -464,7 +575,10 @@ def _decision_out(decided: Decided) -> DecisionOut:
             status = "open"
     d = decided.decision
     return DecisionOut(
-        status=status, decision=DecisionView(step=d.step_index, by=d.by, verdict=d.verdict, at=d.at)
+        status=status,
+        decision=DecisionView(
+            step=d.step_index, by=d.by, verdict=d.verdict, at=d.at, reason=d.reason
+        ),
     )
 
 
@@ -501,8 +615,8 @@ async def retry_run(
     run_id: RunId, principal: Operator, orchestrator: CurrentOrchestrator
 ) -> RetryAccepted:
     match await orchestrator.retry(run_id, principal):
-        case Retried(state):
-            return RetryAccepted(state="acting" if isinstance(state, Acting) else "pending")
+        case Retried(resumes):
+            return RetryAccepted(state=resumes)
         case NotRetryable(detail):
             raise HTTPException(status_code=409, detail=detail)
         case NotFound():
@@ -531,7 +645,7 @@ async def get_approval(
                 proposal_view(detail.proposal).actions, detail.site_names, strict=True
             )
         ],
-        steps=steps_view(detail.request, detail.decisions),
+        steps=steps_view(detail.request, detail.decisions, detail.post),
         you_can_decide=detail.why_not is None,
         why_not=detail.why_not,
         use_case_id=run.spec.use_case_id,
@@ -541,6 +655,9 @@ async def get_approval(
         trigger=run.spec.trigger,
         retried_by=[u for u in dict.fromkeys(run.retried_by) if u in detail.request.parties],
         found=detail.found,
+        not_checked=list(detail.not_checked),
+        requester=detail.requester,
+        questions=[question_view(q) for q in detail.questions],
     )
 
 
@@ -567,7 +684,9 @@ async def decide(
     orchestrator: CurrentOrchestrator,
     response: Response,
 ) -> DecisionOut | JSONResponse:
-    result = await orchestrator.decide(approval_id, principal, body.step, body.verdict, body.digest)
+    result = await orchestrator.decide(
+        approval_id, principal, body.step, body.verdict, body.digest, body.reason
+    )
     match result:
         case Decided() as decided:
             if decided.repeated:
@@ -579,6 +698,95 @@ async def decide(
             raise HTTPException(status_code=409, detail="Another Approver decided this step first")
         case NotFound():
             raise HTTPException(status_code=404, detail="No such approval")
+
+
+@router.post(
+    "/api/v1/approvals/{approval_id}/questions",
+    status_code=201,
+    response_model=QuestionView,
+    tags=["orchestration"],
+    description=(
+        "Asks the requester a question on a request that waits for a yes. Only someone who may "
+        "decide the open step may ask. A question decides nothing: the request keeps waiting, "
+        "and its steps and decisions stay as they were. The same Idempotency-Key from the same "
+        "person, with the same words, answers the question it asked before."
+    ),
+    responses={
+        **SIGNED_IN,
+        200: {"model": QuestionView, "description": "This Idempotency-Key asked it before"},
+        403: {
+            "model": RefusalOut | ErrorBody,
+            "description": "This person cannot decide the open step, so cannot ask, or is not "
+            "on the People list",
+        },
+        404: error_response("No such approval"),
+        409: error_response("This Idempotency-Key already asked a question with other words"),
+    },
+)
+async def ask_question(
+    approval_id: ApprovalId,
+    body: QuestionIn,
+    principal: CurrentPrincipal,
+    idempotency_key: Annotated[str, Header(alias="Idempotency-Key", min_length=1, max_length=200)],
+    orchestrator: CurrentOrchestrator,
+    response: Response,
+) -> QuestionView | JSONResponse:
+    match await orchestrator.ask(approval_id, principal, body.text, idempotency_key):
+        case QuestionAsked(question, repeated):
+            if repeated:
+                response.status_code = 200
+            return question_view(question)
+        case QuestionRefused(reason):
+            return _json(403, RefusalOut(refusal=reason, message=REFUSAL_MESSAGES[reason]))
+        case KeyAskedAnother():
+            raise HTTPException(
+                status_code=409, detail="This key already asked a question with other words."
+            )
+        case NotFound():
+            raise HTTPException(status_code=404, detail="No such approval")
+
+
+@router.post(
+    "/api/v1/approvals/{approval_id}/questions/{question_id}/answer",
+    status_code=201,
+    response_model=QuestionView,
+    tags=["orchestration"],
+    description=(
+        "Answers a question on a request. Only the requester may answer: whoever started the "
+        "run, or the workflow's owner when its schedule started it. Each question takes one "
+        "answer, while the request waits. An answer decides nothing: the request keeps waiting "
+        "for someone else's yes. The same answer sent again answers the question as it is."
+    ),
+    responses={
+        **SIGNED_IN,
+        200: {"model": QuestionView, "description": "The same answer was already kept"},
+        403: error_response(
+            "Only the requester can answer, or the person is not on the People list"
+        ),
+        404: error_response("No such question on this approval"),
+        409: error_response(
+            "The request was decided before the answer, or the question has another answer"
+        ),
+    },
+)
+async def answer_question(
+    approval_id: ApprovalId,
+    question_id: QuestionId,
+    body: QuestionAnswerIn,
+    principal: CurrentPrincipal,
+    orchestrator: CurrentOrchestrator,
+    response: Response,
+) -> QuestionView:
+    match await orchestrator.answer(approval_id, question_id, principal, body.text):
+        case QuestionAnswered(question, repeated):
+            if repeated:
+                response.status_code = 200
+            return question_view(question)
+        case AnswerRefused(reason):
+            status, words = ANSWER_REFUSALS[reason]
+            raise HTTPException(status_code=status, detail=words)
+        case NotFound():
+            raise HTTPException(status_code=404, detail="No such question on this approval")
 
 
 @router.post(
@@ -608,31 +816,6 @@ async def run_step(
     except RetryLaterError as error:
         return _json(503, RetryLater(detail=str(error)))
     return StepResponseOut(proceed=reply.proceed, outcome=reply.outcome, detail=reply.detail)
-
-
-@router.post(
-    "/internal/v1/schedules/tick",
-    tags=["internal"],
-    description=(
-        "Asked every 5 minutes by the schedule_tick workflow. Starts one check for each "
-        "schedule that is due and answers the runs it started."
-    ),
-    responses={401: error_response("Bad step key")},
-)
-async def tick_schedules(
-    step_key: StepKey,
-    request: Request,
-    ticker: Annotated[ScheduleTicker, Depends(current_ticker)],
-    connections: Annotated[Connections, Depends(current_connections)],
-) -> TickOut:
-    check_step_key(request, step_key)
-    started = await ticker.tick()
-    try:
-        await connections.check_due()
-    except Exception as error:
-        # The runs are already started, so a check that fails must not fail the tick.
-        log.warning("the connection checks did not finish: %s", type(error).__name__)
-    return TickOut(started=started)
 
 
 @router.post(

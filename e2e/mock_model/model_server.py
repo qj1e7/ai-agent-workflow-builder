@@ -19,6 +19,7 @@ can be tested without a real model:
   that part alone, the others missing.
 - A request with tools and no forced tool is a card run. The mock calls github_read_releases,
   then jira_search, then jira_create_ticket, then writes a report, by what the conversation holds.
+  A card that reads a Confluence page calls confluence_read_page on its page instead.
   The ticket's title follows the card: a release, a follow-up or a summary. The follow-up card
   searches for bug tickets with no update for the days its plan names, working the day out from
   the date in the prompt, and its ticket body lists the tickets the search returned.
@@ -74,12 +75,17 @@ SOFTWARE = (
     "Kubernetes",
     "React",
 )
+DAY_NAME = r"(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)s?"
+CLOCK = r"\d{1,2}(?::\d{2})?\s*(?:am|pm)?"
 SCHEDULE = re.compile(
-    r"\b(?:every|each)\s+(?:week ?day|day|morning|monday|tuesday|wednesday|thursday|friday|"
-    r"saturday|sunday|week|month)s?(?:\s+at\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?)?"
+    rf"\b(?:every|each)\s+(?:week ?day|day|morning|{DAY_NAME}|week|month)s?"
+    rf"(?:\s+(?:and|or)\s+{DAY_NAME})?"
+    rf"(?:\s+at\s+{CLOCK}(?:\s+(?:and|or)\s+(?:at\s+)?{CLOCK})?)?"
     r"|\b(?:daily|weekly|monthly)\b",
     re.IGNORECASE,
 )
+"""A schedule as a real model reads it, two days or two times included, so the runtime sees the
+whole schedule and asks which one."""
 FIND = re.compile(r"(?:find|look for|list|search for)\s+(.+?)(?:\s+and\s+(.+))?$", re.IGNORECASE)
 FOUND = re.compile(r"\b(?:of|every|all)\s+(.+?tickets?)\b", re.IGNORECASE)
 IN_PROJECT = re.compile(r"\bin ([A-Z][A-Z0-9]{1,9})\b")
@@ -121,12 +127,19 @@ ABOUT = (
     ),
     (
         re.compile(
-            r"^what can you do|^what do you do|^help\b|\bweather\b|\bjoke\b|^how many software\b",
+            r"^what can you do|^what do you do|^help\b|\bweather\b|\bjoke\b|^how many software\b"
+            r"|\bsteps to use\b|^how (?:can|do) i (?:start|use|begin)\b",
             re.IGNORECASE,
         ),
         "abilities",
     ),
 )
+CHANGE = re.compile(
+    r"^(?:please\s+)?(?:make|change|move|switch|set|run|pause|resume|rename|turn|delete)\s+"
+    r"(?:the\s+)?(.+?)(?:\s+(?:run|to|on|at|every|daily|weekly|monthly|off|instead)\b|\s*$)",
+    re.IGNORECASE,
+)
+"""A change to a workflow the person has, and the words that name it."""
 WORKFLOW_NAMED = re.compile(
     r"(?:why did|is|are)\s+(?:the\s+)?(.+?)\s+"
     r"(?:stop|stopped|fail|failed|running|working|on|paused)\b",
@@ -504,16 +517,22 @@ def structures(task: str) -> dict[str, Any]:
 
 def reading(task: str) -> dict[str, Any]:
     about = next((kind for pattern, kind in ABOUT if pattern.search(task.strip())), "none")
+    change = CHANGE.match(task.strip()) if not task.lower().startswith("set up") else None
+    if change is not None:
+        about = "change"
     if about != "none":
-        named = WORKFLOW_NAMED.search(task) if about in ("why_stopped", "my_workflows") else None
+        named = WORKFLOW_NAMED.search(task) if about in ("why_stopped", "my_workflows") else change
         words = (
             named.group(1)
-            if named and named.group(1).lower() not in ("my", "my workflow")
+            if named and named.group(1).lower() not in ("my", "my workflow", "it")
             else None
         )
+        # As the real model does: the software the words name, as React in "the React check".
+        software = next((s for s in SOFTWARE if words and s.lower() in words.lower()), None)
         return {
             "asks_about": about,
             "workflow_words": words,
+            "software": software,
             "belongs_on_watchlist": False,
             "skips_the_yes": skip_read(task),
             "schedule": None,
@@ -539,6 +558,11 @@ def reading(task: str) -> dict[str, Any]:
         if TICKET_WORDS.search(rest):
             read.update(structures(rest))
             read["name"] = name_of(rest)
+        # As the real model does: a time the watch's own words give, as "every Thursday at 7am".
+        watch = " and ".join(c for c in CLAUSE.split(task) if RELEASE_WORDS.search(c))
+        when = SCHEDULE.search(watch)
+        if read["schedule"] is None and when is not None:
+            read["schedule"] = when.group(0)
         return read
     if VULNERABILITY_WORDS.search(task) and TICKET_WORDS.search(task) is None:
         read["name"] = name_of(task)
@@ -638,6 +662,11 @@ def run_step(body: dict[str, Any]) -> dict[str, Any]:
     number = sum(calls.values())
     if "github_read_releases" in offered and "github_read_releases" not in calls:
         return call("github_read_releases", {"repo": repo}, number)
+    if "confluence_read_page" in offered:
+        page = next((v for v in values if not REPO.fullmatch(v)), "Software inventory")
+        if "confluence_read_page" not in calls:
+            return call("confluence_read_page", {"page": page}, number)
+        return say(f"I read {page} in Confluence.")
     card = CARD_NAME.search(system)
     follow_up = card is not None and FOLLOW_UP.search(card.group(1)) is not None
     if "jira_search" in offered and "jira_search" not in calls:

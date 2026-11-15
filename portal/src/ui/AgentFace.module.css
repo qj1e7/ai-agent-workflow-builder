@@ -48,29 +48,40 @@
   opacity: 0;
 }
 
+/* Done looks done when it is drawn: happy eyes and the tick. A face that becomes done while watched reacts into that look.
+   Every reaction ends on the look the state already has, so none keeps a fill. */
+.face[data-state='success'] .ok,
+.face[data-state='success'] .happy {
+  opacity: 1;
+}
+
+.face[data-state='success'] .eyes {
+  opacity: 0;
+}
+
 .face[data-react][data-state='waiting'] .badge,
 .face[data-react][data-state='error'] .badge {
-  animation: badge-in var(--dur-attn) var(--ease-out) both;
+  animation: badge-in var(--dur-attn) var(--ease-out);
 }
 
 .face[data-react][data-state='error'] .body {
-  animation: concern var(--dur-attn) var(--ease-out) both;
+  animation: concern var(--dur-attn) var(--ease-out);
 }
 
 .face[data-react][data-state='success'] .ok {
-  animation: ok-badge var(--dur-success) var(--ease-out) both;
+  animation: badge-in var(--dur-success) var(--ease-out);
 }
 
 .face[data-react][data-state='success'] .happy {
-  animation: shown var(--dur-success) ease-out both;
+  animation: shown var(--dur-success) ease-out;
 }
 
 .face[data-react][data-state='success'] .eyes {
-  animation: hidden var(--dur-success) ease-out both;
+  animation: hidden var(--dur-success) ease-out;
 }
 
 .face[data-react][data-state='success'] .body {
-  animation: cheer var(--dur-success) var(--ease-out) both;
+  animation: cheer var(--dur-success) var(--ease-out);
 }
 
 .face[data-state='stopped'] {
@@ -79,7 +90,7 @@
 }
 
 .face[data-react][data-state='stopped'] {
-  animation: doze var(--dur-attn) ease-out both;
+  animation: doze var(--dur-attn) ease-out;
 }
 
 :global([data-paused]) .face *,
@@ -152,45 +163,15 @@
   }
 }
 
-@keyframes ok-badge {
-  0% {
-    opacity: 0;
-    transform: scale(0.4);
-  }
-
-  30%,
-  75% {
-    opacity: 1;
-    transform: none;
-  }
-
-  100% {
-    opacity: 0;
-    transform: none;
-  }
-}
-
 @keyframes shown {
-  0%,
-  100% {
+  from {
     opacity: 0;
-  }
-
-  15%,
-  80% {
-    opacity: 1;
   }
 }
 
 @keyframes hidden {
-  0%,
-  100% {
+  from {
     opacity: 1;
-  }
-
-  15%,
-  80% {
-    opacity: 0;
   }
 }
 
@@ -232,49 +213,41 @@
 }
 
 .planner[data-react][data-state='stopped'] {
-  animation: doze var(--dur-attn) ease-out both;
+  animation: doze var(--dur-attn) ease-out;
 }
 
 .planner[data-react][data-state='waiting'] .badge,
 .planner[data-react][data-state='error'] .badge {
-  animation: badge-in var(--dur-attn) var(--ease-out) both;
+  animation: badge-in var(--dur-attn) var(--ease-out);
+}
+
+.planner[data-state='success'] .ok {
+  opacity: 1;
 }
 
 .planner[data-react][data-state='success'] .ok {
-  animation: ok-badge var(--dur-success) var(--ease-out) both;
+  animation: badge-in var(--dur-success) var(--ease-out);
 }
 
-/* The Planner's happy eyes and plain eyes swap while it cheers, as the Orb's do. */
+/* The Planner's happy eyes and plain eyes swap as the Orb's do: done shows the happy ones. */
 .planner [data-part='happy'] {
   opacity: 0;
   transform-box: fill-box;
   transform-origin: center;
 }
 
+.planner[data-state='success'] [data-part='happy'] {
+  opacity: 1;
+}
+
+.planner[data-state='success'] [data-part='eyes'] {
+  opacity: 0;
+}
+
 .planner[data-react][data-state='success'] [data-part='happy'] {
-  animation: shown var(--dur-success) ease-out both;
+  animation: shown var(--dur-success) ease-out;
 }
 
 .planner[data-react][data-state='success'] [data-part='eyes'] {
-  animation: hidden var(--dur-success) ease-out both;
-}
-
-@keyframes ok-fade {
-  0%,
-  100% {
-    opacity: 0;
-  }
-
-  20%,
-  75% {
-    opacity: 1;
-  }
-}
-
-/* With motion off the green check still shows, because it is the only sign of success on the face, but it fades out as in the prototype. */
-@media (prefers-reduced-motion: reduce) {
-  .face[data-react][data-state='success'] .ok,
-  .planner[data-react][data-state='success'] .ok {
-    animation: ok-fade var(--dur-success) ease-out both !important;
-  }
+  animation: hidden var(--dur-success) ease-out;
 }

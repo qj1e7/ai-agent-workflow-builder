@@ -3,6 +3,25 @@
   margin: 0 auto;
 }
 
+/* The hero stretches to the page's height, so it can centre itself without a scroll. */
+.home:has([data-hero]) {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  width: 100%;
+  max-width: none;
+}
+
+/* The chat spans the page beside the rail, as the sketch's chat column does, and shares it with the side panel. */
+.home:has([data-chat]) {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  width: 100%;
+  max-width: none;
+}
+
 .section {
   display: grid;
   gap: 12px;
@@ -40,24 +59,6 @@
   }
 }
 
-.coming {
-  display: grid;
-  grid-template-columns: 16px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 4px 10px;
-  margin-top: 16px;
-  padding: 10px 16px;
-  border-radius: var(--r-well);
-  background: var(--sunk);
-  color: var(--muted);
-  font-size: 0.9rem;
-}
-
-.coming b {
-  color: var(--ink);
-  font-weight: 600;
-}
-
 .needs {
   display: grid;
 }
@@ -79,7 +80,8 @@
 }
 
 .tool,
-.info {
+.info,
+.off {
   color: var(--muted);
 }
 
@@ -166,6 +168,11 @@
   margin-top: 6px;
 }
 
+/* Buttons that gave way to the side panel leave no gap behind them. */
+.buttons:empty {
+  display: none;
+}
+
 .row {
   display: grid;
   grid-template-columns: 20px minmax(0, 1fr) auto;
@@ -223,6 +230,13 @@
   font-size: 0.875rem;
 }
 
+/* “N more” is a line of small text under WCAG 2.5.8's 24 px, so it gets a full target. */
+.more a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+
 .problem {
   flex-basis: 100%;
   color: var(--red-ink);
@@ -231,21 +245,6 @@
 
 .row > .problem {
   grid-column: 2 / -1;
-}
-
-.quiet {
-  padding: 28px;
-  border: 1px dashed var(--rail);
-  border-radius: var(--r-card);
-  color: var(--muted);
-  text-align: center;
-}
-
-.quiet b {
-  display: block;
-  margin-bottom: 4px;
-  color: var(--ink);
-  font-size: 1.125rem;
 }
 
 .rows {
@@ -381,20 +380,6 @@
 }
 
 @media (max-width: 600px) {
-  .coming {
-    grid-template-columns: 16px minmax(0, 1fr);
-    align-items: start;
-  }
-
-  .coming > svg {
-    margin-top: 3px;
-  }
-
-  .coming > a {
-    grid-column: 2;
-    justify-self: start;
-  }
-
   .row {
     grid-template-columns: 20px minmax(0, 1fr);
   }
@@ -408,4 +393,104 @@
   .card {
     padding: 16px;
   }
+}
+
+.groups {
+  display: grid;
+  gap: 20px;
+  list-style: none;
+}
+
+.group {
+  display: grid;
+  gap: 8px;
+}
+
+.group > h3 {
+  color: var(--muted);
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+/* The sketch's Needs you on Home: plain rows under small group headings, each row one control. */
+.plain {
+  display: grid;
+  gap: 14px;
+  width: 100%;
+  margin-top: 8px;
+  text-align: left;
+}
+
+.plain .groups {
+  gap: 14px;
+}
+
+.plain .group {
+  gap: 6px;
+}
+
+.group > h2 {
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.needRows {
+  display: grid;
+  gap: 6px;
+  list-style: none;
+}
+
+.need {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 46px;
+  padding: 10px 12px 10px 14px;
+  border: 1px solid var(--hair);
+  border-radius: var(--r-card);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    border-color var(--dur-press) ease,
+    transform var(--dur-press) var(--ease-out);
+}
+
+.need:active {
+  transform: scale(0.99);
+}
+
+.need svg {
+  flex: none;
+  color: var(--muted);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .need:hover {
+    border-color: var(--ink);
+  }
+}
+
+.needText {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--amber);
+}
+
+[data-tone='err'] .dot {
+  background: var(--red);
 }

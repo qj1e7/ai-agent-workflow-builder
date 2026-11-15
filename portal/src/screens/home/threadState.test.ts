@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { PlannerReply } from '../../api/types'
+import { EMPTY_FORM } from './card'
 import { EMPTY, isThinking, previousOf, threadReducer } from './threadState'
 
-const REPLY: PlannerReply = { answer: 'abilities' }
+const REPLY: PlannerReply = { answer: 'abilities', how_to_start: false, parts: [] }
 
 describe('the thread', () => {
   it('shows the person’s words, then the Planner thinking, then its answer in the same place', () => {
@@ -34,14 +35,31 @@ describe('the thread', () => {
   it('hands the next typed request the turn before it: the words, the software it named, the text it answered with, and the kind of answer it was', () => {
     const ask = (reply: PlannerReply, typed: string) => threadReducer(threadReducer(EMPTY, { type: 'sent', text: typed }), { type: 'answered', reply, typed })
     expect(previousOf(EMPTY)).toBeNull()
-    const watch = ask({ answer: 'watchlist', word: 'version', software: 'FastAPI', already_listed: null, also: null }, 'Is there a newer FastAPI?')
+    const watch = ask({ answer: 'watchlist', word: 'version', software: 'FastAPI', already_listed: null, also: null, parts: [] }, 'Is there a newer FastAPI?')
     expect(previousOf(watch)).toEqual({ request: 'Is there a newer FastAPI?', software: 'FastAPI', answer: null, kind: 'watchlist' })
-    const said = ask({ answer: 'question', text: 'LangGraph is at 1.2.14.', looked_at: ['watchlist'] }, 'What is the newest version of LangGraph?')
+    const said = ask({ answer: 'question', text: 'LangGraph is at 1.2.14.', looked_at: ['watchlist'], about_software: [], parts: [] }, 'What is the newest version of LangGraph?')
     expect(previousOf(said)).toEqual({ request: 'What is the newest version of LangGraph?', software: null, answer: 'LangGraph is at 1.2.14.', kind: 'question' })
-    expect(previousOf(ask({ answer: 'offline', why: 'trouble', message: 'x', starters: [] }, 'x'))).toBeNull()
+    expect(previousOf(ask({ answer: 'offline', why: 'trouble', message: 'x', starters: [], parts: [] }, 'x'))).toBeNull()
   })
 
   it('does not hand over a request that has no answer yet', () => {
     expect(previousOf(threadReducer(EMPTY, { type: 'sent', text: 'a' }))).toBeNull()
+  })
+
+  it('opens a resumed draft as a card after the conversation, keeping every turn before it', () => {
+    const talked = threadReducer(threadReducer(EMPTY, { type: 'sent', text: 'a' }), { type: 'answered', reply: REPLY, typed: 'a' })
+    const resumed = threadReducer(talked, { type: 'resumed', start: { form: EMPTY_FORM, plan: null, draftId: 'drf-1', similar: null } })
+    expect(resumed.messages.map((m) => m.kind)).toEqual(['me', 'reply', 'card'])
+    expect(resumed.messages.at(-1)?.id).toBe(resumed.last)
+    expect(resumed.last).toBeGreaterThan(talked.last)
+  })
+
+  it('answers Which software is behind? at once from the watchlist, never thinking, and never as the turn the next request follows on from', () => {
+    const talked = threadReducer(threadReducer(EMPTY, { type: 'sent', text: 'a' }), { type: 'answered', reply: REPLY, typed: 'a' })
+    const asked = threadReducer(talked, { type: 'asked_behind', text: 'Which software is behind?' })
+    expect(asked.messages.map((m) => m.kind)).toEqual(['me', 'reply', 'me', 'behind'])
+    expect(isThinking(asked)).toBe(false)
+    expect(asked.messages.at(-1)?.id).toBe(asked.last)
+    expect(previousOf(asked)).toEqual(previousOf(talked))
   })
 })

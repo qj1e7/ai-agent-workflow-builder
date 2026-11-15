@@ -1,0 +1,181 @@
+{
+ "cron": "4.4.0",
+ "tz": "Asia/Singapore",
+ "from": "2026-11-13T00:30:00.000Z",
+ "node_key": "wfP7example:4f2b7f0e-0000-4000-8000-000000000001",
+ "rows": [
+  {
+   "label": "daily 8:00",
+   "interval": {
+    "field": "days",
+    "triggerAtHour": 8,
+    "triggerAtMinute": 0
+   },
+   "expression": "43 0 8 * * *",
+   "next_utc": [
+    "2026-11-14T00:00:43.000Z",
+    "2026-11-15T00:00:43.000Z",
+    "2026-11-16T00:00:43.000Z"
+   ],
+   "recurrence_filter": false
+  },
+  {
+   "label": "daily 9:00, minute left out",
+   "interval": {
+    "field": "days",
+    "triggerAtHour": 9
+   },
+   "expression": "43 51 9 * * *",
+   "next_utc": [
+    "2026-11-13T01:51:43.000Z",
+    "2026-11-14T01:51:43.000Z",
+    "2026-11-15T01:51:43.000Z"
+   ],
+   "recurrence_filter": false
+  },
+  {
+   "label": "daily, hour and minute left out",
+   "interval": {
+    "field": "days"
+   },
+   "expression": "43 51 21 * * *",
+   "next_utc": [
+    "2026-11-13T13:51:43.000Z",
+    "2026-11-14T13:51:43.000Z",
+    "2026-11-15T13:51:43.000Z"
+   ],
+   "recurrence_filter": false
+  },
+  {
+   "label": "weekly Monday 9:00",
+   "interval": {
+    "field": "weeks",
+    "triggerAtDay": [
+     1
+    ],
+    "triggerAtHour": 9,
+    "triggerAtMinute": 0
+   },
+   "expression": "43 0 9 * * 1",
+   "next_utc": [
+    "2026-11-16T01:00:43.000Z",
+    "2026-11-23T01:00:43.000Z",
+    "2026-11-30T01:00:43.000Z"
+   ],
+   "recurrence_filter": false
+  },
+  {
+   "label": "weekdays 7:30",
+   "interval": {
+    "field": "weeks",
+    "triggerAtDay": [
+     1,
+     2,
+     3,
+     4,
+     5
+    ],
+    "triggerAtHour": 7,
+    "triggerAtMinute": 30
+   },
+   "expression": "43 30 7 * * 1,2,3,4,5",
+   "next_utc": [
+    "2026-11-15T23:30:43.000Z",
+    "2026-11-16T23:30:43.000Z",
+    "2026-11-17T23:30:43.000Z"
+   ],
+   "recurrence_filter": false
+  },
+  {
+   "label": "every hour at :15",
+   "interval": {
+    "field": "hours",
+    "hoursInterval": 1,
+    "triggerAtMinute": 15
+   },
+   "expression": "43 15 */1 * * *",
+   "next_utc": [
+    "2026-11-13T01:15:43.000Z",
+    "2026-11-13T02:15:43.000Z",
+    "2026-11-13T03:15:43.000Z"
+   ],
+   "recurrence_filter": false
+  },
+  {
+   "label": "every 5 hours at :00 (does not divide 24)",
+   "interval": {
+    "field": "hours",
+    "hoursInterval": 5,
+    "triggerAtMinute": 0
+   },
+   "expression": "43 0 * * * *",
+   "next_utc": [
+    "2026-11-13T01:00:43.000Z",
+    "2026-11-13T02:00:43.000Z",
+    "2026-11-13T03:00:43.000Z"
+   ],
+   "recurrence_filter": true
+  },
+  {
+   "label": "every 2 days at 8:00",
+   "interval": {
+    "field": "days",
+    "daysInterval": 2,
+    "triggerAtHour": 8,
+    "triggerAtMinute": 0
+   },
+   "expression": "43 0 8 * * *",
+   "next_utc": [
+    "2026-11-14T00:00:43.000Z",
+    "2026-11-15T00:00:43.000Z",
+    "2026-11-16T00:00:43.000Z"
+   ],
+   "recurrence_filter": true
+  },
+  {
+   "label": "every 15 minutes",
+   "interval": {
+    "field": "minutes",
+    "minutesInterval": 15
+   },
+   "expression": "43 */15 * * * *",
+   "next_utc": [
+    "2026-11-13T00:30:43.000Z",
+    "2026-11-13T00:45:43.000Z",
+    "2026-11-13T01:00:43.000Z"
+   ],
+   "recurrence_filter": false
+  },
+  {
+   "label": "monthly on the 1st at 9:00",
+   "interval": {
+    "field": "months",
+    "monthsInterval": 1,
+    "triggerAtDayOfMonth": 1,
+    "triggerAtHour": 9,
+    "triggerAtMinute": 0
+   },
+   "expression": "43 0 9 1 */1 *",
+   "next_utc": [
+    "2026-12-01T01:00:43.000Z",
+    "2027-01-01T01:00:43.000Z",
+    "2027-02-01T01:00:43.000Z"
+   ],
+   "recurrence_filter": false
+  },
+  {
+   "label": "cron 0 30 7 * * 1-5",
+   "interval": {
+    "field": "cronExpression",
+    "expression": "0 30 7 * * 1-5"
+   },
+   "expression": "0 30 7 * * 1-5",
+   "next_utc": [
+    "2026-11-15T23:30:00.000Z",
+    "2026-11-16T23:30:00.000Z",
+    "2026-11-17T23:30:00.000Z"
+   ],
+   "recurrence_filter": false
+  }
+ ]
+}

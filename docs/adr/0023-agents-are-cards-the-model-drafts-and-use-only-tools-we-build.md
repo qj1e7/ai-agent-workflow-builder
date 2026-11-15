@@ -50,3 +50,7 @@ Two throwaway prototypes back this, on the branch [`prototype/agent-cards`](http
 - **The prototypes' cases become golden sets in `agent-runtime/evals`.** They cover drafted cards passing the checks, Room lead choices and card runs. The AI Singapore gateway returns a stored answer when it gets the exact same request again, so repeats must be sent at the same time or carry a per-run marker. Otherwise they measure the cache, not the model.
 - **The Room lead needs a clearer line between "can't do" and "new agent".** "Can't do" means outside the tool list or too risky to automate. "New agent" means in scope, with no saved card that fits. The prototype mixed them up.
 - **A team's saved cards are its agent library.** It is not NCS's agent hub. Because cards are data, a card and the tools it names could later be offered to the hub. That is out of scope here.
+
+## Changed on 13 Nov 2026
+
+ADR 0027 amends "one generic n8n workflow carries every card's runs": each use case is now its own n8n workflow, built from our node pack. The rest stands, including that the model never writes arbitrary n8n workflows: the Planner places only our nodes, and the node allow list enforces it.

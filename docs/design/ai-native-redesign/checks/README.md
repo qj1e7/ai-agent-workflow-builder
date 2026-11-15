@@ -44,6 +44,15 @@ A scenario with `notPossible: 'reason'` is skipped and reported as not possible.
 
 **quality.cjs** writes, for each screen at both widths: axe-core violations by impact, whether the page scrolls sideways at 390 px (with the widest elements), the running animations under reduced motion, and console errors. It also counts the Tab presses from page load to the Home text box (Operator) and to Bob's first "Review and decide" button, and lists stops with no visible focus style.
 
+**fit.cjs** checks that the layout holds at 1440, 1280, 1024, 861, 768 and 390 px, on every screen. It reports four kinds of problem:
+
+- Text that sticks out of the card, box, button or pill that holds it.
+- Text cut off by a box that hides overflow, or shortened with an ellipsis.
+- Two pieces of text drawn on top of each other.
+- Buttons side by side that differ in height or sit off each other's centre.
+
+It also reports sideways scroll and console errors. Text past a scrolling area counts as reachable, and a layer fixed to the screen is measured on its own. A seeded control must be caught first, so the check is known to fail when it should. Text inside SVG (the n8n canvas) is not measured, so look at the screenshots for it. Run it with `node docs/design/ai-native-redesign/checks/fit.cjs <prototype.html> <paths.cjs> <out.json>`. Add `--widths=1280,390` or `--only=name,name` for a shorter run. It exits non-zero on any problem.
+
 ## Add a version's paths
 
 1. Copy `paths-v3.cjs` to `paths-v4.cjs`.

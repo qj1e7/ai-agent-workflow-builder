@@ -23,7 +23,16 @@
       "label": "Team approver",
       "status": "open",
       "decided_by": null,
-      "decided_at": null
+      "decided_at": null,
+      "reason": null,
+      "post": "sent",
+      "sent_to": [
+        {
+          "id": "bob",
+          "display": "Bob"
+        }
+      ],
+      "sent_at": "2026-11-03T02:14:10.612000Z"
     }
   ],
   "you_can_decide": false,
@@ -34,5 +43,8 @@
   "started_by": "alice",
   "trigger": "person",
   "retried_by": [],
-  "found": "LangGraph has a new release: 1.2.16."
+  "found": "LangGraph has a new release: 1.2.16.",
+  "not_checked": [],
+  "requester": "alice",
+  "questions": []
 }

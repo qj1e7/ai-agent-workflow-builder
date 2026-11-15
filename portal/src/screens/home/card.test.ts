@@ -5,13 +5,22 @@ import cannotDo from '../../../../contracts/fixtures/cards/plan.cannot-do.json'
 import useOne from '../../../../contracts/fixtures/cards/plan.use-one.json'
 import setupCardAnswer from '../../../../contracts/fixtures/planner/answer.setup_card.json'
 import partAnswer from '../../../../contracts/fixtures/planner/answer.part.json'
+import clashAnswer from '../../../../contracts/fixtures/planner/answer.setup_card.clash.json'
+import crossAnswer from '../../../../contracts/fixtures/planner/answer.setup_card.cross.json'
 import checkCant from '../../../../contracts/fixtures/planner/check-part.cant.json'
 import { ApiError } from '../../api/client'
 import type { CardToolId, CardView, DraftView, PartReply, PlanOut, RowKind, RowState, SetupCardReply } from '../../api/types'
 import {
   afterPartCheck,
   andList,
+  answerWhen,
   cardFrom,
+  nextQuestion,
+  setUpWords,
+  secondName,
+  timeWords,
+  cardPhase,
+  isQuestion,
   leftWords,
   savedLeft,
   setupLeft,
@@ -21,6 +30,7 @@ import {
   createBody,
   defaultName,
   draftContent,
+  draftWrites,
   dropRow,
   EMPTY_FORM,
   ROW_LABEL,
@@ -34,16 +44,17 @@ import {
   rowBlockers,
   savedCopyOf,
   scheduleOf,
-  turnOn,
+  setUp,
   valueOf,
   valueProblem,
   whenProblems,
   whenWords,
   type Form,
+  type PlanView,
   type PartResult,
   type PlanAgent,
   type Row,
-  type TurnOnCalls,
+  type SetUpCalls,
 } from './card'
 
 const FOLLOW_UP = 'Every weekday at 3pm, find bug tickets in MOCK with no update for 10 days and create one follow-up ticket that lists them'
@@ -331,23 +342,25 @@ describe('step 4, turn it on', () => {
     expect(checkedRows(ready())[0]).toEqual({ ok: true, words: 'When: Every weekday at 15:00, as you asked.' })
   })
 
-  it('sends the name, the rows as the instruction, each agent’s values and the schedule', () => {
+  it('sends the name, the rows as the instruction, each agent’s values and the schedule, as a draft that is not on yet', () => {
     const form = { ...ready(), name: '  Follow up stale bugs ' }
     expect(createBody(form, planView(CLEAN_DRAFT, form.rows), { 0: 'crd_new' })).toEqual({
       name: 'Follow up stale bugs',
       instruction: 'Find bug tickets in MOCK with no update for 14 days. Create one follow-up ticket that lists them. Where it goes: Jira project MOCK.',
       agents: [{ card_id: 'crd_new', values: { 'Jira project': 'MOCK' } }],
       schedule: { day: 'weekdays', at: '15:00' },
+      left_out: [],
+      on: false,
     })
     const named = createBody({ ...form, name: '' }, planView(CLEAN_DRAFT, form.rows), { 0: 'crd_new' })
     expect(named.name).toBe('Stale bug follow-up')
   })
 })
 
-describe('pressing Turn it on', () => {
+describe('pressing Set up', () => {
   const form = (): Form => ({ ...enterWhen(read(ROWS)), step: 4, name: 'Follow up stale bugs' })
 
-  function fakeCalls(failing: number, saved: string | null = null): { readonly calls: TurnOnCalls; readonly seen: string[] } {
+  function fakeCalls(failing: number, saved: string | null = null): { readonly calls: SetUpCalls; readonly seen: string[] } {
     const seen: string[] = []
     const answer = <T>(said: string, value: T): Promise<T> => {
       seen.push(said)
@@ -368,15 +381,15 @@ describe('pressing Turn it on', () => {
     const { calls, seen } = fakeCalls(3)
     const cards = new Map<string, string>()
     const plan = planView(CLEAN_DRAFT, form().rows)
-    await expect(turnOn(form(), plan, 'd1', cards, calls)).rejects.toBeInstanceOf(ApiError)
+    await expect(setUp(form(), plan, 'd1', cards, calls)).rejects.toBeInstanceOf(ApiError)
     expect(seen).toEqual(['look for Stale bug follow-up', 'save Stale bug follow-up', 'create with crd_new'])
-    await expect(turnOn(form(), plan, 'd1', cards, calls)).resolves.toEqual({ useCaseId: 'uc_new', draftKept: false })
+    await expect(setUp(form(), plan, 'd1', cards, calls)).resolves.toEqual({ useCaseId: 'uc_new', draftKept: false })
     expect(seen).toEqual(['look for Stale bug follow-up', 'save Stale bug follow-up', 'create with crd_new', 'create with crd_new', 'delete draft d1'])
   })
 
   it('uses the agent the Operator already saved for the same plan, and saves no copy', async () => {
     const { calls, seen } = fakeCalls(0, 'crd_saved')
-    await expect(turnOn(form(), planView(CLEAN_DRAFT, form().rows), null, new Map(), calls)).resolves.toEqual({ useCaseId: 'uc_new', draftKept: false })
+    await expect(setUp(form(), planView(CLEAN_DRAFT, form().rows), null, new Map(), calls)).resolves.toEqual({ useCaseId: 'uc_new', draftKept: false })
     expect(seen).toEqual(['look for Stale bug follow-up', 'create with crd_saved'])
   })
 
@@ -428,13 +441,13 @@ describe('pressing Turn it on', () => {
 
   it('saves nothing new for a saved agent, and has no draft to delete for a workflow never saved as one', async () => {
     const { calls, seen } = fakeCalls(0)
-    await expect(turnOn(form(), planView(USE_ONE, form().rows), null, new Map(), calls)).resolves.toEqual({ useCaseId: 'uc_new', draftKept: false })
+    await expect(setUp(form(), planView(USE_ONE, form().rows), null, new Map(), calls)).resolves.toEqual({ useCaseId: 'uc_new', draftKept: false })
     expect(seen).toEqual(['create with crd_version_checker'])
   })
 
   it('still turns it on when the draft cannot be deleted, and says the draft is kept', async () => {
     const { calls, seen } = fakeCalls(4)
-    await expect(turnOn(form(), planView(CLEAN_DRAFT, form().rows), 'd1', new Map(), calls)).resolves.toEqual({ useCaseId: 'uc_new', draftKept: true })
+    await expect(setUp(form(), planView(CLEAN_DRAFT, form().rows), 'd1', new Map(), calls)).resolves.toEqual({ useCaseId: 'uc_new', draftKept: true })
     expect(seen).toEqual(['look for Stale bug follow-up', 'save Stale bug follow-up', 'create with crd_new', 'delete draft d1'])
   })
 })
@@ -533,37 +546,39 @@ describe('the Planner’s set-up card', () => {
   describe('setupLeft', () => {
     it('lets the When section answer for the schedule: a schedule row with nothing in it is not asked for twice', () => {
       const form = cardFrom('x', [{ kind: 'schedule', text: '', state: 'missing', note: null }, { kind: 'do', text: 'List them', state: 'understood', note: null }], '')
-      expect(setupLeft(form, null)).toEqual(['when it runs', 'the Planner to choose the agents'])
+      expect(setupLeft(form, null).choices).toEqual(['when it runs', 'the Planner to choose the agents'])
       const timed = { ...form, when: { often: 'every_day' as const, day: '' as const, at: '09:00', filledFrom: '' } }
-      expect(setupLeft(timed, null)).toEqual(['the Planner to choose the agents'])
+      expect(setupLeft(timed, null).choices).toEqual(['the Planner to choose the agents'])
     })
 
     it('lists no time as what is left, and nothing else, once the parts are clear and the plan is in', () => {
       const plan = AGENTS([])
-      expect(setupLeft(fresh(), plan)).toEqual(['when it runs'])
+      expect(setupLeft(fresh(), plan).choices).toEqual(['when it runs'])
       const timed = { ...fresh(), when: { often: 'week' as const, day: 'friday' as const, at: '16:00', filledFrom: 'Every Friday' } }
-      expect(setupLeft(timed, plan)).toEqual([])
+      expect(setupLeft(timed, plan).choices).toEqual([])
     })
 
     it('adds the plan’s empty inputs, such as the Jira project, to the same list', () => {
       const plan = AGENTS([{ name: 'Jira project', kind: 'jira_project' }])
-      expect(setupLeft(fresh(), plan)).toEqual(['when it runs', 'the Jira project'])
+      expect(setupLeft(fresh(), plan).choices).toEqual(['when it runs', 'the Jira project'])
       const form = { ...fresh(), typed: { '0:Jira project': 'mock' } }
-      expect(setupLeft(form, plan)).toEqual(['when it runs'])
+      expect(setupLeft(form, plan).choices).toEqual(['when it runs'])
     })
 
     it('says the Planner is still choosing the agents until the plan arrives, and counts a part it can’t do or is still checking', () => {
       const timed = { ...fresh(), when: { often: 'week' as const, day: 'friday' as const, at: '16:00', filledFrom: 'x' } }
-      expect(setupLeft(timed, null)).toEqual(['the Planner to choose the agents'])
+      expect(setupLeft(timed, null).choices).toEqual(['the Planner to choose the agents'])
       const edited = changeRow(timed, 2, 'Email the list to the team')
-      expect(setupLeft(edited, null)).toEqual(['my check of your new words'])
-      expect(setupLeft(afterPartCheck(edited, edited.rows[2] as Row, checkCant as never), null)).toEqual(['a part I can’t do yet'])
+      expect(setupLeft(edited, null).choices).toEqual(['my check of your new words'])
+      expect(setupLeft(afterPartCheck(edited, edited.rows[2] as Row, checkCant as never), null).choices).toEqual(['a part I can’t do yet'])
     })
 
     it('is the one source of the footer line, with a count that follows the list', () => {
-      expect(leftWords([])).toBe('Nothing is unclear. Turn it on when you’re ready.')
-      expect(leftWords(['when it runs'])).toBe('1 choice left: when it runs.')
-      expect(leftWords(['when it runs', 'the Jira project'])).toBe('2 choices left: when it runs and the Jira project.')
+      expect(leftWords({ choices: [], leftOut: [] }), 'nothing left to answer says nothing: the button says what it sets up').toBe('')
+      expect(leftWords({ choices: ['when it runs'], leftOut: [] })).toBe('1 question to answer')
+      expect(leftWords({ choices: ['when it runs', 'the Jira project'], leftOut: [] })).toBe('2 questions to answer')
+      expect(leftWords({ choices: ['the Planner to choose the agents'], leftOut: [] }), 'waiting on the Planner is no question for her').toBe('Waiting for the Planner…')
+      expect(leftWords({ choices: ['my check of your new words'], leftOut: [] })).toBe('Checking your new words…')
       expect(andList(['a', 'b', 'c'])).toBe('a, b and c')
     })
   })
@@ -576,10 +591,217 @@ describe('the Planner’s set-up card', () => {
     expect(afterPartCheck(edited, part, null).rows[2]).toMatchObject({ state: 'cant_do', note: NOT_CHECKED })
   })
 
+  describe('nextQuestion', () => {
+    const CLASH = clashAnswer as SetupCardReply
+    const words = (form: Form, plan: PlanView | null = null) => nextQuestion(form, plan)?.words ?? null
+    const pick = (form: Form, label: string): Form => {
+      const asked = nextQuestion(form, null)
+      const choice = asked?.kind === 'when' ? asked.choices.find((one) => one.label === label) : undefined
+      if (!choice) throw new Error(`No choice ${label} in ${JSON.stringify(asked)}`)
+      return answerWhen(form, choice.set)
+    }
+    const said = (schedule: string, typed = schedule) => cardFrom('x', [{ kind: 'schedule', text: schedule, state: schedule ? 'understood' : 'missing', note: null }, ...REPLY.rows.slice(1)], typed)
+
+    it('asks how often, then the day of a weekly run, then the time, one at a time, and nothing once the schedule is whole', () => {
+      const start = said('')
+      expect(words(start)).toBe('How often?')
+      expect(nextQuestion(start, null)).toMatchObject({ kind: 'when', choices: [{ label: 'Every day' }, { label: 'Every weekday' }, { label: 'Every week' }] })
+      const weekly = pick(start, 'Every week')
+      expect(words(weekly)).toBe('Which day?')
+      const friday = pick(weekly, 'Friday')
+      expect(words(friday)).toBe('Fridays, at what time?')
+      expect(nextQuestion(friday, null)).toMatchObject({ choices: [{ label: '8:00' }, { label: '9:00' }, { label: '13:00' }, { label: '17:00' }] })
+      const timed = pick(friday, '9:00')
+      expect(whenSaid(timed.when)).toBe('Every Friday at 9:00')
+      expect(nextQuestion(timed, null)).toBeNull()
+    })
+
+    it('never guesses a time: a named day with no time asks the time, and a bare hour asks morning or evening', () => {
+      expect(words(said('Every Friday'))).toBe('Fridays, at what time?')
+      const bare = said('Every Friday at 9')
+      expect(words(bare)).toBe('At 9:00 or 21:00?')
+      expect(whenSaid(pick(bare, '21:00').when)).toBe('Every Friday at 21:00')
+      expect(words(said('Every Friday at 12'))).toBe('At 0:00 or 12:00?')
+      expect(whenSaid(said('Every Friday at 17').when)).toBe('Every Friday at 17:00')
+    })
+
+    it('asks which of two days the request named, never picking the first, and keeps the time it said', () => {
+      const form = cardFrom(CLASH.name, CLASH.rows, 'Every Monday and Friday at 9am, sum up the closed tickets in MOCK', CLASH.parts)
+      expect(form.when).toMatchObject({ often: 'week', day: '', at: '09:00' })
+      expect(words(form)).toBe('Monday or Friday?')
+      expect(nextQuestion(form, null)).toMatchObject({ choices: [{ label: 'Monday' }, { label: 'Friday' }] })
+      expect(whenSaid(pick(form, 'Monday').when)).toBe('Every Monday at 9:00')
+    })
+
+    it('asks which of two times, and which of two frequencies, in the words of the choices', () => {
+      const parts = (reason: 'one_time' | 'one_frequency', text: string, ...choices: string[]) => [{ text, mark: 'cant' as const, reason, note: null, choices }]
+      const times = cardFrom('x', [{ kind: 'schedule', text: '', state: 'missing', note: null }], 'every Friday at 9am and 5pm list open tickets', parts('one_time', '9am and 5pm', '9am', '5pm'))
+      expect(words(times)).toBe('9:00 or 17:00?')
+      expect(whenSaid(pick(times, '17:00').when)).toBe('Every Friday at 17:00')
+      const often = cardFrom('x', [{ kind: 'schedule', text: '', state: 'missing', note: null }], 'every day and every week at 9am, list tickets', parts('one_frequency', 'every day and every week', 'every day', 'every week'))
+      expect(words(often)).toBe('Every day or Every week?')
+    })
+
+    it('then asks which tickets, the Jira project, and what it does, in that order', () => {
+      const timed = (form: Form): Form => answerWhen(form, { often: 'every_day', at: '09:00' })
+      const missing = (kind: RowKind) => ({ kind, text: '', state: 'missing' as const, note: null })
+      const form = timed(cardFrom('x', [missing('look_for'), missing('do')], ''))
+      expect(nextQuestion(form, null)).toEqual({ kind: 'row', index: 0, words: 'Which tickets should it find?' })
+      const found = changeRow(form, 0, 'Closed tickets')
+      const settled = { ...found, rows: found.rows.map((row) => ({ ...row, state: row.kind === 'look_for' ? ('edited' as const) : row.state })) }
+      expect(nextQuestion(settled, AGENTS([{ name: 'Jira project', kind: 'jira_project' }]))).toEqual({ kind: 'input', agent: 0, input: 'Jira project', words: 'Which Jira project should it use?' })
+      expect(nextQuestion({ ...settled, typed: { '0:Jira project': 'MOCK' } }, AGENTS([{ name: 'Jira project', kind: 'jira_project' }]))).toEqual({ kind: 'row', index: 1, words: 'What should it do with them?' })
+    })
+  })
+
+  describe('setupLeft with crosses', () => {
+    const CROSS = crossAnswer as SetupCardReply
+    const CLASH = clashAnswer as SetupCardReply
+    const plan = AGENTS([])
+
+    it('keeps her words for each cross, which never stop Turn it on but change its name and the footer', () => {
+      const form = cardFrom(CROSS.name, CROSS.rows, 'Every Friday at 5pm, sum up the tickets we closed this week in MOCK and colour them by team', CROSS.parts)
+      const left = setupLeft(form, plan)
+      expect(left).toEqual({ choices: [], leftOut: ['colour them by team'] })
+      expect(leftWords(left), 'the cross is on the card, so the foot needn’t say it again').toBe('')
+      expect(setUpWords(left)).toBe('Set up the part I can')
+      expect(setUpWords(setupLeft(fresh(), plan))).toBe('Set up')
+    })
+
+    it('never says nothing is unclear while a part has a cross, and a choice still left comes first', () => {
+      const form = cardFrom(CROSS.name, CROSS.rows.slice(1), 'sum up the tickets and colour them by team', CROSS.parts)
+      expect(leftWords(setupLeft(form, plan))).toBe('1 question to answer')
+    })
+
+    it('names only the day left out once she picks one of two, and sends that as left_out', () => {
+      const form = cardFrom(CLASH.name, CLASH.rows, 'Every Monday and Friday at 9am, sum up the closed tickets in MOCK', CLASH.parts)
+      expect(setupLeft(form, plan)).toEqual({ choices: ['when it runs'], leftOut: ['Monday and Friday'] })
+      const monday = answerWhen(form, { often: 'week', day: 'monday' })
+      expect(setupLeft(monday, plan)).toEqual({ choices: [], leftOut: ['Friday'] })
+      expect(createBody(monday, plan, {}).left_out).toEqual(['Friday'])
+      const tuesday = answerWhen(form, { often: 'week', day: 'tuesday' })
+      expect(setupLeft(tuesday, plan).leftOut).toEqual(['Monday and Friday'])
+    })
+
+    it('asks how many days when the words name none, until she changes which tickets it finds', () => {
+      const asked = { ...fresh(), when: { often: 'week' as const, day: 'friday' as const, at: '16:00', filledFrom: 'x' }, marked: [{ text: 'stale', mark: 'question' as const, reason: 'how_many_days' as const, note: null, choices: [] }] }
+      expect(setupLeft(asked, plan).choices).toEqual(['how many days'])
+      expect(nextQuestion(asked, plan)?.kind).toBe('days')
+      const changed = changeRow(asked, 1, 'Bug tickets not updated for 10 days')
+      expect(changed.marked).toEqual([])
+    })
+
+    it('keeps the crosses in a saved draft, so Workflows says the same', () => {
+      const form = cardFrom(CROSS.name, CROSS.rows, 'x', CROSS.parts)
+      const draft = saved(2, JSON.parse(JSON.stringify(draftContent(form, null))) as Record<string, unknown>)
+      expect(restoreDraft(draft).form.marked).toEqual(form.marked)
+      expect(savedLeft(draft)?.leftOut).toEqual(['colour them by team'])
+      const old = saved(2, JSON.parse(JSON.stringify({ ...draftContent(form, null), form: { ...form, marked: undefined } })) as Record<string, unknown>)
+      expect(restoreDraft(old).form.marked).toEqual([])
+    })
+  })
+
   it('gives a saved card’s draft the same list setupLeft gives the open card, and none for a draft with only words', () => {
     const card = { ...fresh(), name: 'Mine' }
     const draft = saved(2, JSON.parse(JSON.stringify(draftContent(card, null))) as Record<string, unknown>)
     expect(savedLeft(draft)).toEqual(setupLeft(card, null))
     expect(savedLeft(saved(2, { intent: 'Every Wednesday, find tickets' }))).toBeNull()
+  })
+})
+
+describe('pressing on the set-up card', () => {
+  const built = { type: 'built', useCaseId: 'uc_1', draftKept: false, newAgents: [] } as const
+
+  it('Set up makes it Building, the platform’s answer builds it, and a refusal opens the card again', () => {
+    expect(cardPhase({ kind: 'open' }, { type: 'set_up', key: 'press_1' }), 'a press keeps its key, so a card drawn again finds its answer').toEqual({ kind: 'creating', key: 'press_1' })
+    expect(cardPhase({ kind: 'creating', key: 'press_1' }, built)).toEqual({ kind: 'built', useCaseId: 'uc_1', draftKept: false, newAgents: [] })
+    expect(cardPhase({ kind: 'creating', key: 'press_1' }, { type: 'refused' })).toEqual({ kind: 'open' })
+    expect(cardPhase({ kind: 'creating', key: 'press_1' }, { type: 'refused', said: ['Name it.'] }), 'the card keeps the platform’s words').toEqual({ kind: 'open', refused: ['Name it.'] })
+    expect(cardPhase({ kind: 'built', useCaseId: 'uc_1', draftKept: false, newAgents: [] }, { type: 'set_up', key: 'press_2' }), 'a second press sets up nothing more').toEqual({ kind: 'built', useCaseId: 'uc_1', draftKept: false, newAgents: [] })
+  })
+
+  it('Never mind drops an open card, never one being set up, and Undo opens a dropped one again', () => {
+    expect(cardPhase({ kind: 'open' }, { type: 'never_mind' })).toEqual({ kind: 'dropped' })
+    expect(cardPhase({ kind: 'creating', key: 'press_1' }, { type: 'never_mind' })).toEqual({ kind: 'creating', key: 'press_1' })
+    expect(cardPhase({ kind: 'dropped' }, { type: 'undo' })).toEqual({ kind: 'open' })
+    expect(cardPhase({ kind: 'dropped' }, { type: 'set_up', key: 'press_3' })).toEqual({ kind: 'dropped' })
+  })
+})
+
+describe('what the footer counts', () => {
+  it('counts only the questions the card asks, and says what else waits in its own words', () => {
+    expect(leftWords({ choices: ['when it runs', 'a part I can’t do yet'], leftOut: [] }), 'a part she must change is no question').toBe('1 question to answer')
+    expect(leftWords({ choices: ['a part I can’t do yet'], leftOut: [] })).toBe('Change the part I can’t do yet, or leave it out.')
+    expect(leftWords({ choices: ['a request I can do'], leftOut: [] })).toBe('Change your words to something I can do.')
+    expect(isQuestion('the Jira project')).toBe(true)
+    expect(isQuestion('nothing left out for want of a tool')).toBe(false)
+  })
+})
+
+describe('a second workflow of the same name', () => {
+  it('gets the next number, so Set up another never makes two of one name', () => {
+    expect(secondName('LangGraph release check')).toBe('LangGraph release check 2')
+    expect(secondName('LangGraph release check 2')).toBe('LangGraph release check 3')
+  })
+
+  it('asks the time in the words of how often it runs', () => {
+    expect(timeWords({ often: 'every_day', day: '', at: '', filledFrom: null })).toBe('Every day, at what time?')
+    expect(timeWords({ often: 'weekdays', day: '', at: '', filledFrom: null })).toBe('Every weekday, at what time?')
+    expect(timeWords({ often: 'week', day: 'monday', at: '', filledFrom: null })).toBe('Mondays, at what time?')
+  })
+})
+
+describe('the card’s draft saves and deletes', () => {
+  /** A request the server has not answered yet, and the order the server handled each one. */
+  const server = () => {
+    const handled: string[] = []
+    const pending = (name: string) => {
+      let answer: (ok: boolean) => void = () => undefined
+      const request = new Promise<void>((resolve, reject) => {
+        answer = (ok) => {
+          handled.push(name)
+          if (ok) resolve()
+          else reject(new Error(`${name} failed`))
+        }
+      })
+      return { request, answer }
+    }
+    return { handled, pending }
+  }
+  const tick = () => new Promise((resolve) => setTimeout(resolve, 0))
+
+  it('deletes only after a save still on its way has landed, so the save can’t bring the draft back (#190)', async () => {
+    const { handled, pending } = server()
+    const writes = draftWrites()
+    const save = pending('save')
+    void writes.saved(save.request)
+    const deleted = writes.afterSaves(() => {
+      handled.push('delete')
+      return Promise.resolve()
+    })
+    await tick()
+    expect(handled, 'the delete waits while the save is on its way').toEqual([])
+    save.answer(true)
+    await deleted
+    expect(handled).toEqual(['save', 'delete'])
+  })
+
+  it('still deletes after a save that failed, and at once when nothing is being saved', async () => {
+    const { handled, pending } = server()
+    const writes = draftWrites()
+    const save = pending('save')
+    writes.saved(save.request).catch(() => undefined)
+    const deleted = writes.afterSaves(() => {
+      handled.push('delete')
+      return Promise.resolve()
+    })
+    save.answer(false)
+    await deleted
+    expect(handled).toEqual(['save', 'delete'])
+    await writes.afterSaves(() => {
+      handled.push('delete again')
+      return Promise.resolve()
+    })
+    expect(handled.at(-1)).toBe('delete again')
   })
 })

@@ -1,0 +1,5 @@
+# The package variant: our pack installed where n8n looks for community packages, instead of N8N_CUSTOM_EXTENSIONS.
+services:
+  n8n:
+    volumes:
+      - ./node-pack:/home/node/.n8n/nodes/node_modules/n8n-nodes-wab:ro

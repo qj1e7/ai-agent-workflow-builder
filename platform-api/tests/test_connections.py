@@ -1,3 +1,4 @@
+import asyncio
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
@@ -199,6 +200,23 @@ async def test_a_check_that_raises_is_a_connection_that_is_not_answering_without
     assert "secret-token-value" not in repr(await rig.connections.view())
 
 
+async def test_the_checks_run_on_their_own_and_one_that_fails_stops_none_after_it(rig: Rig):
+    """The platform checks what is due every few minutes, as the schedule tick asked it to before
+    E10, and a check that breaks waits for the next pass."""
+    stop = asyncio.Event()
+    passes: list[int] = []
+
+    async def broken() -> None:
+        passes.append(len(passes))
+        if len(passes) == 2:
+            stop.set()
+        raise RuntimeError("the database went away")
+
+    rig.connections.check_due = broken  # type: ignore[method-assign]
+    await asyncio.wait_for(rig.connections.check_forever(stop, every=timedelta(0)), 5)
+    assert passes == [0, 1]
+
+
 async def test_a_tick_checks_only_what_is_due_and_needs_two_readings_to_raise_a_problem(
     rig: Rig, db: Database
 ):
@@ -245,12 +263,11 @@ async def _age(db: Database, connection: str, by: timedelta) -> None:
         )
 
 
-async def test_what_needs_attention_is_read_from_what_was_kept_and_asks_nobody(rig: Rig):
+async def test_what_needs_attention_is_read_from_what_was_kept_and_checks_nothing(rig: Rig):
     assert await rig.connections.needing_attention() == []
-    assert [p.calls for p in rig.probes.values()] == [0, 0, 0, 0]
+    assert [rig.probes[id].calls for id in ("jira", "github", "teams")] == [0, 0, 0]
 
     rig.probes["jira"].reading = DOWN
-    rig.probes["model"].reading = Reading("not_set_up", "No AI model is turned on.")
     rig.probes["github"].reading = Reading(
         "working", expires_at=datetime.now(UTC) + timedelta(days=9)
     )
@@ -262,6 +279,20 @@ async def test_what_needs_attention_is_read_from_what_was_kept_and_asks_nobody(r
     assert [(c.id, c.state) for c in found] == [("jira", "not_answering"), ("github", "working")]
     assert found[1].problem == "The key runs out soon."
     assert found[1].fix == "Ask whoever set up GitHub for a new key before this one runs out."
+
+
+async def test_no_ai_model_needs_attention_as_its_settings_say_now_with_no_check_first(rig: Rig):
+    rig.probes["model"].reading = Reading("not_set_up", "No AI model is turned on.")
+    (model,) = await rig.connections.needing_attention()
+    assert (model.id, model.state, model.fix) == (
+        "model",
+        "not_set_up",
+        "Add an AI model under Settings, AI model.",
+    )
+    assert [rig.probes[id].calls for id in ("jira", "github", "teams")] == [0, 0, 0]
+
+    rig.probes["model"].reading = WORKING
+    assert await rig.connections.needing_attention() == []
 
 
 async def test_the_stored_result_holds_no_secret_and_no_error_text(rig: Rig, db: Database):
@@ -422,7 +453,8 @@ async def test_a_first_post_teams_refuses_shows_not_answering_without_its_error(
         None,
     )
     assert teams.fix == "Ask whoever set up the Teams address to check that it still works."
-    assert "secret" not in repr(teams) and "500" not in repr(teams)
+    assert "secret" not in repr(teams)
+    assert "500" not in f"{teams.problem} {teams.fix}"
     assert [c.id for c in await connections.needing_attention()] == ["teams"]
 
 

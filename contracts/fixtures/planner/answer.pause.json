@@ -1,0 +1,17 @@
+{
+  "parts": [
+    {
+      "text": "pause the React check",
+      "mark": "will_do",
+      "reason": null,
+      "note": null,
+      "choices": []
+    }
+  ],
+  "use_case_id": "uc_01JB8",
+  "name": "React release check",
+  "already": false,
+  "missing": null,
+  "choices": [],
+  "answer": "pause"
+}

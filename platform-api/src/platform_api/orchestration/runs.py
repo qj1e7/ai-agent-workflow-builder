@@ -9,12 +9,17 @@ from platform_api.monitoring import (
     ActionLine,
     Actor,
     ApprovalRequestedData,
+    ExecutionLinkedData,
+    ExecutionResumedData,
     LegDispatchedData,
     PendingEvent,
     RunCreatedData,
+    RunExpiredData,
     RunFailedData,
+    RunLostData,
     RunRejectedData,
     RunRetriedData,
+    RunSkippedData,
     RunSucceededData,
     StepFinishedData,
     StepRetriedData,
@@ -64,6 +69,7 @@ class FailureReason(Enum):
     SAFETY_DENIED = "SafetyDenied"
     UNBOUND_INTENT = "UnboundIntent"
     OUT_OF_ORDER_STEP = "OutOfOrderStep"
+    STOPPED_BY_UPDATE = "StoppedByUpdate"
 
 
 class Stage(Enum):
@@ -76,6 +82,22 @@ class Stage(Enum):
 class Outcome(Enum):
     WRITTEN = "written"
     NOTHING_TO_WRITE = "nothing_to_write"
+    TEST_PASSED = "test_passed"
+
+
+TEST_PASSED = "Test run passed up to the yes. Nothing was written."
+SKIPPED = "An earlier run is still waiting for a yes."
+NO_ANSWER = "No answer. Nothing was written."
+DELETED_BEFORE_AN_ANSWER = "Deleted before an answer. Nothing was written."
+STOPPED_BEFORE_WRITING = (
+    "This run started before the update and couldn't finish. Nothing was written. Start it again."
+)
+STOPPED_WHILE_WRITING = (
+    "This run started before the update and may have partly finished. Check Jira before you "
+    "start it again."
+)
+"""What a run on the shared run workflow says when an update ends it (ENGINE-PLAN E11): the
+workflow it would carry on in is made of blocks the allow list turns off."""
 
 
 @dataclass(frozen=True)
@@ -121,6 +143,44 @@ class ResumeAct:
     proposal_id: ProposalId
     approval_id: ApprovalId
     attempt: int
+    unread: tuple[str, ...] = ()
+
+
+def _resumed(execution: N8nExecutionId, how: str) -> PendingEvent:
+    return PendingEvent(
+        WORKFLOW,
+        "execution_resumed",
+        f"n8n execution {execution} {how}.",
+        ExecutionResumedData(execution_id=execution),
+    )
+
+
+def write_done(written: WriteDone) -> PendingEvent:
+    """One change made, with who approved it (AGENTS.md: log every agent action)."""
+    return PendingEvent(
+        PLATFORM,
+        "write_action_done",
+        f"{written.connector} {written.operation} done: {written.external_reference}, approved "
+        f"by {', '.join(written.approved_by)}.",
+        WriteActionDoneData(
+            connector=written.connector,
+            operation=written.operation,
+            external_reference=written.external_reference,
+            approved_by=list(written.approved_by),
+            url=written.url,
+        ),
+    )
+
+
+def _run_written(count: int) -> PendingEvent:
+    return PendingEvent(
+        PLATFORM,
+        "run_succeeded",
+        f"The run succeeded. {count} write action was done."
+        if count == 1
+        else f"The run succeeded. {count} write actions were done.",
+        RunSucceededData(outcome=Outcome.WRITTEN.value),
+    )
 
 
 def _step_started(step: StepName, execution: N8nExecutionId, try_number: int) -> PendingEvent:
@@ -211,11 +271,44 @@ class Failed:
             case ResumeWork(attempt):
                 pending = Pending(self.run_id, attempt, None, deadline(Pending, now))
                 return Moved(pending, _retried(by, Leg.WORK, attempt))
-            case ResumeAct(proposal_id, approval_id, attempt):
+            case ResumeAct(proposal_id, approval_id, attempt, unread):
                 acting = Acting(
-                    self.run_id, proposal_id, approval_id, attempt, None, deadline(Acting, now)
+                    self.run_id,
+                    proposal_id,
+                    approval_id,
+                    attempt,
+                    None,
+                    deadline(Acting, now),
+                    unread,
                 )
                 return Moved(acting, _retried(by, Leg.ACT, attempt))
+
+    def retry_in_n8n(self, by: Actor) -> PendingEvent:
+        """A retry n8n carries itself, from the block that stopped, on the version that ran. The
+        run stays failed until the retry's first call joins it (ENGINE-PLAN 2.3.10)."""
+        leg = Leg.ACT if isinstance(self.resume, ResumeAct) else Leg.WORK
+        return PendingEvent(
+            by,
+            "run_retried",
+            f"{by.display} retried the run. n8n picks it up at the block that stopped.",
+            RunRetriedData(leg=leg.value, attempt=self.resume.attempt),
+        )
+
+    def start_again(self, by: Actor, now: datetime) -> Moved[Pending] | None:
+        """A run that stopped before n8n ran any of it starts again with a new start. None when
+        it stopped while making changes, which only n8n's retry of its execution may carry on."""
+        match self.resume:
+            case ResumeWork(attempt):
+                pending = Pending(self.run_id, attempt, None, deadline(Pending, now))
+                retried = PendingEvent(
+                    by,
+                    "run_retried",
+                    f"{by.display} retried the run. It starts again in n8n.",
+                    RunRetriedData(leg=Leg.WORK.value, attempt=attempt),
+                )
+                return Moved(pending, (retried,))
+            case ResumeAct():
+                return None
 
 
 def _retried(by: Actor, leg: Leg, attempt: int) -> tuple[PendingEvent, ...]:
@@ -229,10 +322,56 @@ def _retried(by: Actor, leg: Leg, attempt: int) -> tuple[PendingEvent, ...]:
 
 
 @dataclass(frozen=True)
+class Skipped:
+    """A run n8n started while an earlier run of the same workflow waited for a yes. It ends at
+    its first call, so the Approvers never see two requests for one change."""
+
+    run_id: RunId
+    waiting: RunId
+
+
+@dataclass(frozen=True)
+class Expired:
+    """Nobody answered the request before it expired (ADR 0024). Nothing was written."""
+
+    run_id: RunId
+    proposal_id: ProposalId
+    approval_id: ApprovalId
+    unread: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class Lost:
+    """Approved, but the waiting n8n execution could not take the yes (ENGINE-PLAN 2.3.13).
+    Nothing was written, and the approved proposal stays on the record."""
+
+    run_id: RunId
+    proposal_id: ProposalId
+    approval_id: ApprovalId
+    unread: tuple[str, ...] = ()
+
+    def taken(self, execution: N8nExecutionId, now: datetime) -> Moved[Acting]:
+        """n8n took the yes after all: the execution that waited for it asks to make the
+        changes. Our record of the wake was lost, or the wake met the 409 of a resume already
+        done."""
+        acting = Acting(
+            self.run_id,
+            self.proposal_id,
+            self.approval_id,
+            1,
+            execution,
+            deadline(Acting, now),
+            self.unread,
+        )
+        return Moved(acting, (_resumed(execution, "took the yes after all and carries on"),))
+
+
+@dataclass(frozen=True)
 class Succeeded:
     run_id: RunId
     outcome: Outcome
     written: tuple[WriteDone, ...]
+    unread: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -242,6 +381,7 @@ class Rejected:
     approval_id: ApprovalId
     by: UserId
     step: int
+    unread: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -252,6 +392,7 @@ class Acting:
     attempt: int
     claimant: N8nExecutionId | None
     deadline_at: datetime
+    unread: tuple[str, ...] = ()
 
     def claim(self, execution: N8nExecutionId) -> Acting:
         return replace(self, claimant=execution)
@@ -262,41 +403,38 @@ class Acting:
     def succeed(
         self, execution: N8nExecutionId, written: tuple[WriteDone, ...], detail: str
     ) -> Moved[Succeeded]:
-        done = tuple(
-            PendingEvent(
-                PLATFORM,
-                "write_action_done",
-                f"{w.connector} {w.operation} done: {w.external_reference}, approved by "
-                f"{', '.join(w.approved_by)}.",
-                WriteActionDoneData(
-                    connector=w.connector,
-                    operation=w.operation,
-                    external_reference=w.external_reference,
-                    approved_by=list(w.approved_by),
-                    url=w.url,
-                ),
-            )
-            for w in written
-        )
-        succeeded = PendingEvent(
-            PLATFORM,
-            "run_succeeded",
-            f"The run succeeded. {len(written)} write action was done."
-            if len(written) == 1
-            else f"The run succeeded. {len(written)} write actions were done.",
-            RunSucceededData(outcome=Outcome.WRITTEN.value),
-        )
         return Moved(
-            Succeeded(self.run_id, Outcome.WRITTEN, written),
+            Succeeded(self.run_id, Outcome.WRITTEN, written, self.unread),
             (
-                *done,
+                *(write_done(w) for w in written),
                 step_finished(StepName.WRITE_ACTION, execution, 1, "written", detail),
-                succeeded,
+                _run_written(len(written)),
             ),
         )
 
+    def made(
+        self, written: tuple[WriteDone, ...], fresh: tuple[WriteDone, ...]
+    ) -> Moved[Succeeded]:
+        """Make the approved changes made the last of the run's changes in n8n. It logs only
+        what this try made: an earlier try logged its own, and a change another run made first
+        is in that run's log."""
+        if not written:
+            already = PendingEvent(
+                PLATFORM,
+                "run_succeeded",
+                "The run succeeded. Another run had already made its changes.",
+                RunSucceededData(outcome=Outcome.NOTHING_TO_WRITE.value),
+            )
+            return Moved(
+                Succeeded(self.run_id, Outcome.NOTHING_TO_WRITE, (), self.unread), (already,)
+            )
+        return Moved(
+            Succeeded(self.run_id, Outcome.WRITTEN, written, self.unread),
+            (*(write_done(w) for w in fresh), _run_written(len(written))),
+        )
+
     def fail(self, failure: Failure) -> Moved[Failed]:
-        resume = ResumeAct(self.proposal_id, self.approval_id, self.attempt + 1)
+        resume = ResumeAct(self.proposal_id, self.approval_id, self.attempt + 1, self.unread)
         return Moved(
             Failed(self.run_id, Stage.ACTING, failure, resume),
             (run_failed(Stage.ACTING, failure),),
@@ -309,22 +447,84 @@ class AwaitingApproval:
     proposal_id: ProposalId
     approval_id: ApprovalId
     summary: str = ""
+    unread: tuple[str, ...] = ()
 
     def approve(self, now: datetime) -> Moved[Acting]:
         state = Acting(
-            self.run_id, self.proposal_id, self.approval_id, 1, None, deadline(Acting, now)
+            self.run_id,
+            self.proposal_id,
+            self.approval_id,
+            1,
+            None,
+            deadline(Acting, now),
+            self.unread,
         )
         return Moved(state, (_leg_dispatched(Leg.ACT, 1),))
 
-    def reject(self, by: UserId, by_display: str, step: int) -> Moved[Rejected]:
+    def woken(self, execution: N8nExecutionId, now: datetime) -> Moved[Acting]:
+        """n8n took the yes. The write's deadline starts now, not at the decision, so an n8n
+        outage while it waits does not use it up."""
+        acting = Acting(
+            self.run_id,
+            self.proposal_id,
+            self.approval_id,
+            1,
+            execution,
+            deadline(Acting, now),
+            self.unread,
+        )
+        return Moved(acting, (_resumed(execution, "took the yes and carries on"),))
+
+    def lose(self, why: str) -> Moved[Lost]:
+        lost = PendingEvent(
+            PLATFORM,
+            "run_lost",
+            f"Approved, but n8n lost the run, because {sentence(why)} Nothing was written.",
+            RunLostData(approval_id=self.approval_id, why=why),
+        )
+        return Moved(Lost(self.run_id, self.proposal_id, self.approval_id, self.unread), (lost,))
+
+    def expire(self) -> Moved[Expired]:
+        expired = PendingEvent(
+            PLATFORM, "run_expired", NO_ANSWER, RunExpiredData(approval_id=self.approval_id)
+        )
+        return Moved(
+            Expired(self.run_id, self.proposal_id, self.approval_id, self.unread), (expired,)
+        )
+
+    def stop_for_update(self) -> Moved[Failed]:
+        """An update ended the shared run workflow it waited in (ENGINE-PLAN E11). Nothing was
+        written, and its request ends closed, so a late yes is refused."""
+        failure = Failure(FailureReason.STOPPED_BY_UPDATE, STOPPED_BEFORE_WRITING, retryable=False)
+        failed = Failed(self.run_id, Stage.PROPOSED, failure, ResumeWork(1))
+        return Moved(failed, (run_failed(Stage.PROPOSED, failure),))
+
+    def cancel(self) -> Moved[Expired]:
+        """Its workflow was deleted before anyone answered (ENGINE-PLAN D7). Nothing was
+        written, and the request ends cancelled."""
+        cancelled = PendingEvent(
+            PLATFORM,
+            "run_expired",
+            DELETED_BEFORE_AN_ANSWER,
+            RunExpiredData(approval_id=self.approval_id),
+        )
+        return Moved(
+            Expired(self.run_id, self.proposal_id, self.approval_id, self.unread), (cancelled,)
+        )
+
+    def reject(
+        self, by: UserId, by_display: str, step: int, reason: str | None = None
+    ) -> Moved[Rejected]:
+        because = f" Reason: {sentence(reason)}" if reason else ""
         rejected = PendingEvent(
             PLATFORM,
             "run_rejected",
-            f"{by_display} declined the request. Nothing was written.",
-            RunRejectedData(by=by, step=step),
+            f"{by_display} declined the request. Nothing was written.{because}",
+            RunRejectedData(by=by, step=step, reason=reason),
         )
         return Moved(
-            Rejected(self.run_id, self.proposal_id, self.approval_id, by, step), (rejected,)
+            Rejected(self.run_id, self.proposal_id, self.approval_id, by, step, self.unread),
+            (rejected,),
         )
 
 
@@ -337,18 +537,16 @@ class Proposed:
     deadline_at: datetime
     # The agents' summary, for the approval message. Runs saved before it existed load with "".
     summary: str = ""
+    # The software a check couldn't read, by name, for the approval's Not checked. Runs saved
+    # before it existed load with none.
+    unread: tuple[str, ...] = ()
 
     def open_approval(
         self, approval_id: ApprovalId, steps: list[ApprovalStepView], link: str
     ) -> Moved[AwaitingApproval]:
-        requested = PendingEvent(
-            PLATFORM,
-            "approval_requested",
-            f"Approval requested. Waiting for the {steps[0].label}.",
-            ApprovalRequestedData(approval_id=approval_id, steps=steps, link=link),
-        )
+        requested = _approval_requested(approval_id, steps, link)
         return Moved(
-            AwaitingApproval(self.run_id, self.proposal_id, approval_id, self.summary),
+            AwaitingApproval(self.run_id, self.proposal_id, approval_id, self.summary, self.unread),
             (
                 _step_started(StepName.ASK_APPROVAL, self.execution, 1),
                 requested,
@@ -359,6 +557,24 @@ class Proposed:
                     "approval_opened",
                     f"Approval {approval_id} opened",
                 ),
+            ),
+        )
+
+    def stop_for_test(self) -> Moved[Succeeded]:
+        """A test run of a draft ends at the approval gate. Nobody is asked for a yes, so the
+        write can never be made (ADR 0044)."""
+        return Moved(
+            Succeeded(self.run_id, Outcome.TEST_PASSED, (), self.unread),
+            (
+                _step_started(StepName.ASK_APPROVAL, self.execution, 1),
+                step_finished(
+                    StepName.ASK_APPROVAL,
+                    self.execution,
+                    1,
+                    "test_passed",
+                    "A test run of a draft asks nobody for a yes",
+                ),
+                _test_passed(),
             ),
         )
 
@@ -381,6 +597,10 @@ class Working:
     @property
     def task_id(self) -> TaskId:
         return TaskId(f"{self.run_id}/work/{self.attempt}")
+
+    def touch(self, now: datetime) -> Working:
+        """A run n8n carries stays alive while its nodes keep calling."""
+        return replace(self, deadline_at=deadline(Working, now))
 
     def retry_step(self) -> Moved[Working]:
         next_try = self.try_number + 1
@@ -405,6 +625,7 @@ class Working:
         proposer: Actor,
         summary: str,
         now: datetime,
+        unread: tuple[str, ...] = (),
     ) -> Moved[Proposed]:
         count = len(lines)
         proposed = PendingEvent(
@@ -423,6 +644,7 @@ class Working:
                 self.attempt,
                 deadline(Proposed, now),
                 summary,
+                unread,
             ),
             (
                 proposed,
@@ -431,6 +653,51 @@ class Working:
                 ),
             ),
         )
+
+    def ask(
+        self,
+        proposal: tuple[ProposalId, Digest, tuple[ActionLine, ...]],
+        approval_id: ApprovalId,
+        steps: list[ApprovalStepView],
+        link: str,
+        summary: str,
+        left_out: tuple[str, ...] = (),
+        unread: tuple[str, ...] = (),
+    ) -> Moved[AwaitingApproval]:
+        """Ask for a yes in n8n: the run's proposal is what its blocks proposed, less what was
+        already made. The Approver also sees what the run could not read."""
+        return Moved(
+            AwaitingApproval(self.run_id, proposal[0], approval_id, summary, unread),
+            (
+                _workflow_proposed(*proposal, left_out),
+                _approval_requested(approval_id, steps, link),
+            ),
+        )
+
+    def stop_at_gate(
+        self,
+        proposal: tuple[ProposalId, Digest, tuple[ActionLine, ...]],
+        left_out: tuple[str, ...] = (),
+        unread: tuple[str, ...] = (),
+    ) -> Moved[Succeeded]:
+        """A test run shows what it would ask, asks nobody and writes nothing."""
+        return Moved(
+            Succeeded(self.run_id, Outcome.TEST_PASSED, (), unread),
+            (_workflow_proposed(*proposal, left_out), _test_passed()),
+        )
+
+    def skip(self, waiting: RunId) -> Moved[Skipped]:
+        """Another run of the workflow already waits for a yes (ADR 0026)."""
+        return Moved(Skipped(self.run_id, waiting), (run_skipped(waiting),))
+
+    def nothing_to_change(self, left_out: tuple[str, ...] = ()) -> Moved[Succeeded]:
+        succeeded = PendingEvent(
+            PLATFORM,
+            "run_succeeded",
+            " ".join(("The run succeeded. There was nothing to change.", *left_out)),
+            RunSucceededData(outcome=Outcome.NOTHING_TO_WRITE.value),
+        )
+        return Moved(Succeeded(self.run_id, Outcome.NOTHING_TO_WRITE, ()), (succeeded,))
 
     def finish_with_nothing_to_write(self, summary: str) -> Moved[Succeeded]:
         succeeded = PendingEvent(
@@ -470,6 +737,20 @@ class Pending:
     def claim(self, execution: N8nExecutionId) -> Pending:
         return replace(self, claimant=execution)
 
+    def link(self, execution: N8nExecutionId, mode: str, now: datetime) -> Moved[Working]:
+        working = working_on(self.run_id, execution, self.attempt, now)
+        return Moved(working, (execution_linked(execution, mode),))
+
+    def skip(self, execution: N8nExecutionId, mode: str, waiting: RunId) -> Moved[Skipped]:
+        return Moved(
+            Skipped(self.run_id, waiting), (execution_linked(execution, mode), run_skipped(waiting))
+        )
+
+    def passed_test(self) -> Moved[Succeeded]:
+        """A test run n8n ran to its end before any block called: it reached no yes and wrote
+        nothing."""
+        return Moved(Succeeded(self.run_id, Outcome.TEST_PASSED, ()), (_test_passed(),))
+
     def begin_work(self, execution: N8nExecutionId, now: datetime) -> Moved[Working]:
         working = Working(
             self.run_id,
@@ -489,9 +770,39 @@ class Pending:
 
 
 type RunState = (
-    Pending | Working | Proposed | AwaitingApproval | Acting | Succeeded | Rejected | Failed
+    Pending
+    | Working
+    | Proposed
+    | AwaitingApproval
+    | Acting
+    | Succeeded
+    | Rejected
+    | Failed
+    | Skipped
+    | Expired
+    | Lost
 )
 type ActiveState = Pending | Working | Proposed | Acting
+
+
+def unread_in(state: RunState) -> tuple[str, ...]:
+    """The software the run's check couldn't read. It is kept from the proposal to the run's end,
+    so a decided request still says what its Approver was told."""
+    match state:
+        case (
+            Proposed(unread=unread)
+            | AwaitingApproval(unread=unread)
+            | Acting(unread=unread)
+            | Rejected(unread=unread)
+            | Expired(unread=unread)
+            | Lost(unread=unread)
+            | Succeeded(unread=unread)
+            | Failed(resume=ResumeAct(unread=unread))
+        ):
+            return unread
+        case _:
+            return ()
+
 
 STATE_NAMES: Mapping[type[RunState], RunStateName] = {
     Pending: "pending",
@@ -502,6 +813,9 @@ STATE_NAMES: Mapping[type[RunState], RunStateName] = {
     Succeeded: "succeeded",
     Rejected: "rejected",
     Failed: "failed",
+    Skipped: "skipped",
+    Expired: "expired",
+    Lost: "lost",
 }
 
 
@@ -527,20 +841,26 @@ def fail(state: ActiveState, failure: Failure) -> Moved[Failed]:
     return state.fail(failure)
 
 
-def created_events(
+def stop_for_update(state: ActiveState) -> Moved[Failed]:
+    """An update ended the shared run workflow it ran in (ENGINE-PLAN E11). Only a run already
+    making its changes may have written some of them."""
+    words = STOPPED_WHILE_WRITING if isinstance(state, Acting) else STOPPED_BEFORE_WRITING
+    return state.fail(Failure(FailureReason.STOPPED_BY_UPDATE, words, retryable=False))
+
+
+def run_created(
     use_case_id: str,
     use_case_version: int,
     use_case_name: str,
     by: Actor,
-    attempt: int,
     trigger: Trigger = "person",
-) -> tuple[PendingEvent, ...]:
+) -> PendingEvent:
     summary = (
         f"{by.display} started a run of the {use_case_name}."
         if trigger == "person"
         else f"{by.display}'s schedule started a check of the {use_case_name}."
     )
-    created = PendingEvent(
+    return PendingEvent(
         by,
         "run_created",
         summary,
@@ -551,7 +871,85 @@ def created_events(
             trigger=trigger,
         ),
     )
+
+
+def created_events(
+    use_case_id: str,
+    use_case_version: int,
+    use_case_name: str,
+    by: Actor,
+    attempt: int,
+    trigger: Trigger = "person",
+) -> tuple[PendingEvent, ...]:
+    created = run_created(use_case_id, use_case_version, use_case_name, by, trigger)
     return (created, _leg_dispatched(Leg.WORK, attempt))
+
+
+def execution_linked(execution: N8nExecutionId, mode: str) -> PendingEvent:
+    return PendingEvent(
+        WORKFLOW,
+        "execution_linked",
+        f"n8n execution {execution} is carrying the run ({mode}).",
+        ExecutionLinkedData(execution_id=execution, mode=mode),
+    )
+
+
+def _approval_requested(
+    approval_id: ApprovalId, steps: list[ApprovalStepView], link: str
+) -> PendingEvent:
+    return PendingEvent(
+        PLATFORM,
+        "approval_requested",
+        f"Approval requested. Waiting for the {steps[0].label}.",
+        ApprovalRequestedData(approval_id=approval_id, steps=steps, link=link),
+    )
+
+
+def _workflow_proposed(
+    proposal_id: ProposalId,
+    digest: Digest,
+    lines: tuple[ActionLine, ...],
+    left_out: tuple[str, ...] = (),
+) -> PendingEvent:
+    count = len(lines)
+    proposed = (
+        f"The workflow proposed {count} change{'' if count == 1 else 's'}: "
+        + "; ".join(line.line for line in lines)
+        + "."
+    )
+    return PendingEvent(
+        WORKFLOW,
+        "write_action_proposed",
+        " ".join((proposed, *left_out)),
+        WriteActionProposedData(proposal_id=proposal_id, digest=digest, actions=list(lines)),
+    )
+
+
+def _test_passed() -> PendingEvent:
+    return PendingEvent(
+        PLATFORM, "run_succeeded", TEST_PASSED, RunSucceededData(outcome=Outcome.TEST_PASSED.value)
+    )
+
+
+def run_skipped(waiting: RunId) -> PendingEvent:
+    return PendingEvent(PLATFORM, "run_skipped", SKIPPED, RunSkippedData(waiting_run_id=waiting))
+
+
+def working_on(run_id: RunId, execution: N8nExecutionId, attempt: int, now: datetime) -> Working:
+    return Working(run_id, execution, attempt, 1, deadline(Working, now), now + CALLBACK_LIFETIME)
+
+
+def linked_events(
+    created: PendingEvent, execution: N8nExecutionId, mode: str
+) -> tuple[PendingEvent, ...]:
+    """A run n8n started itself: on a schedule, or by hand in the editor."""
+    return (created, execution_linked(execution, mode))
+
+
+def skipped_events(
+    created: PendingEvent, execution: N8nExecutionId, mode: str, waiting: RunId
+) -> tuple[PendingEvent, ...]:
+    return (*linked_events(created, execution, mode), run_skipped(waiting))
 
 
 PLANNER = agent_actor("planner", "Planner")
@@ -571,7 +969,15 @@ def caller_of(state: RunState, execution: N8nExecutionId) -> Caller:
             return Caller.CLAIMANT if holder == execution else Caller.OTHER
         case Working(execution=holder) | Proposed(execution=holder):
             return Caller.CLAIMANT if holder == execution else Caller.OTHER
-        case AwaitingApproval() | Succeeded() | Rejected() | Failed():
+        case (
+            AwaitingApproval()
+            | Succeeded()
+            | Rejected()
+            | Failed()
+            | Skipped()
+            | Expired()
+            | Lost()
+        ):
             return Caller.OTHER
 
 
@@ -581,7 +987,15 @@ def holder_of(state: RunState) -> N8nExecutionId | None:
             return holder
         case Working(execution=holder) | Proposed(execution=holder):
             return holder
-        case AwaitingApproval() | Succeeded() | Rejected() | Failed():
+        case (
+            AwaitingApproval()
+            | Succeeded()
+            | Rejected()
+            | Failed()
+            | Skipped()
+            | Expired()
+            | Lost()
+        ):
             return None
 
 
@@ -652,7 +1066,12 @@ ASK_APPROVAL = frozenset({StepName.ASK_APPROVAL})
 WRITE_ACTION = frozenset({StepName.WRITE_ACTION})
 
 REFEREE_TABLE: tuple[RefereeRow, ...] = (
-    RefereeRow(frozenset(StepName), (Failed, Rejected), ANY_CALLER, RowVerdict.REPLAY_FALSE),
+    RefereeRow(
+        frozenset(StepName),
+        (Failed, Rejected, Skipped, Expired, Lost),
+        ANY_CALLER,
+        RowVerdict.REPLAY_FALSE,
+    ),
     RefereeRow(RUN_AGENTS, (Pending,), CLAIM_OR_UNCLAIMED, RowVerdict.BEGIN),
     RefereeRow(RUN_AGENTS, (Pending,), OTHER, RowVerdict.SUPERSEDE),
     RefereeRow(RUN_AGENTS, (Working,), CLAIMANT, RowVerdict.BEGIN),

@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react'
-import { Link } from 'react-router'
+import { Link } from '../../ui/Link'
 import { useErrorWords } from '../../api/context'
 import { useLatch } from '../../api/latch'
 import { useAddSoftware, useFindSoftware } from '../../api/queries'
@@ -24,6 +24,7 @@ export function AddToWatchlist({ name }: { name: string }) {
   const words = useErrorWords()
   const main = useMainButton()
   const asked = useRef<string | null>(null)
+  const [kept, setKept] = useState(false)
   const { mutate } = find
   useEffect(() => {
     if (asked.current === name) return
@@ -31,6 +32,7 @@ export function AddToWatchlist({ name }: { name: string }) {
     mutate(name)
   }, [name, mutate])
 
+  if (kept) return <p className="muted">Not added. Nothing changed.</p>
   if (add.isSuccess) {
     const added = add.variables
     const where = SOURCE_NAMES[added.package?.kind ?? 'github']
@@ -101,6 +103,7 @@ export function AddToWatchlist({ name }: { name: string }) {
         <Button variant={main} loading={add.isPending} onClick={press}>
           Add {name}
         </Button>
+        <Button onClick={() => setKept(true)}>Never mind</Button>
       </div>
       {add.isError ? (
         <p className={styles['problem']} role="alert">

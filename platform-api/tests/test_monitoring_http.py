@@ -344,7 +344,7 @@ def failed_at(stage: FailureStage, reason: FailureReason, retryable: bool) -> Pe
     )
 
 
-async def test_troubleshoot_answers_the_four_questions_for_a_failed_work_leg(
+async def test_troubleshoot_answers_the_three_questions_for_a_failed_work_leg(
     client: httpx.AsyncClient, app: FastAPI
 ):
     await append(app, RUN, failed_at("working", "AgentError", True))
@@ -352,9 +352,11 @@ async def test_troubleshoot_answers_the_four_questions_for_a_failed_work_leg(
     assert r.status_code == 200
     answers = r.json()["answers"]
     assert answers["what_happened"] == r.json()["advice"]["explanation"]
-    assert answers["what_affected"] == "Nothing was written."
+    assert answers["what_affected"] == "Nothing. No ticket was written."
     assert answers["retry"] == {"possible": True, "asks_again": True}
     assert answers["next"] == "retry"
+    assert answers["safe_to_retry"] == "Yes. Nothing was written, so a retry is safe."
+    assert "can_fix" not in answers
 
 
 async def test_troubleshoot_sends_a_refused_write_to_support(
@@ -367,6 +369,7 @@ async def test_troubleshoot_sends_a_refused_write_to_support(
     assert answers["what_affected"] == "The approved write may or may not have reached Jira."
     assert answers["retry"] == {"possible": False, "asks_again": False}
     assert answers["next"] == "report"
+    assert answers["safe_to_retry"].startswith("No. ")
 
 
 async def troubleshoot_run(h: Harness, postgres: PostgresUrls, run_id: RunId) -> dict[str, Any]:
@@ -439,7 +442,7 @@ async def test_troubleshoot_never_says_nothing_was_written_when_jira_made_the_ti
     assert answers["what_affected"] == "The approved write may or may not have reached Jira."
     assert answers["retry"] == {"possible": True, "asks_again": False}
     assert answers["next"] == "retry"
-    assert "finds a ticket an earlier try made" in answers["can_fix"]
+    assert "finds a ticket an earlier try made" in answers["safe_to_retry"]
 
 
 async def engine_timed_out(h: Harness) -> None:
@@ -525,6 +528,7 @@ async def test_troubleshoot_says_only_what_the_agents_stop_carries(
     assert (got["failure"]["stage"], got["failure"]["retryable"]) == ("working", False)
     answers = got["answers"]
     assert answers["what_happened"] == said
-    assert answers["what_affected"] == "Nothing was written."
+    assert answers["what_affected"] == "Nothing. No ticket was written."
     assert answers["retry"] == {"possible": False, "asks_again": False}
     assert answers["next"] == "report"
+    assert answers["safe_to_retry"].startswith("No. ")

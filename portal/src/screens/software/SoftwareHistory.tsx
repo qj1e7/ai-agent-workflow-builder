@@ -3,11 +3,11 @@ import { TicketKeys } from '../jira/TicketKeys'
 import { historyOf, ticketsOf } from './software'
 import styles from './Software.module.css'
 
-export function SoftwareHistory({ row, nameOf, id }: { row: WatchedSoftwareView; nameOf: (id: string) => string; id: string }) {
+export function SoftwareHistory({ row, nameOf, declined, id }: { row: WatchedSoftwareView; nameOf: (id: string) => string; declined: string | null; id: string }) {
   return (
     <div className={styles['history']} id={id}>
       <ol className={styles['timeline']} aria-label={`History of ${row.name}`}>
-        {historyOf(row, nameOf).map((line, index) => (
+        {historyOf(row, nameOf, declined).map((line, index) => (
           <li key={index}>
             <b>{line.when}</b>
             <span>

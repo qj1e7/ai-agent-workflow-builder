@@ -5,6 +5,17 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      live_grep:
+        description: Run only the live browser specs whose title matches this pattern, without the API suite unless api_k is set, DAST or the load test. Empty runs everything.
+        required: false
+        default: ''
+        type: string
+      api_k:
+        description: Run only the API e2e tests that match this pytest -k expression, without the browser suite unless live_grep is set, DAST or the load test. Empty runs everything.
+        required: false
+        default: ''
+        type: string
 
 permissions:
   contents: read
@@ -74,6 +85,22 @@ jobs:
         working-directory: ${{ matrix.project }}
         run: uv run pyright
 
+      # The platform-api tests search what its image holds; this searches the rest of the
+      # checkout. Only the design records under docs/ may still name the tick (ENGINE-PLAN D20).
+      - name: Nothing asks for the retired schedule tick
+        if: matrix.project == 'e2e'
+        working-directory: .
+        run: |
+          if git grep -n "/internal/v1/schedules/""tick" -- . ':!docs'; then
+            echo "The schedule tick went in ENGINE-PLAN E10. Nothing may ask for it." >&2
+            exit 1
+          fi
+
+      - name: n8n's allow list in compose and Terraform is the one node_classes.json makes
+        if: matrix.project == 'e2e'
+        working-directory: .
+        run: scripts/nodes-include.sh --check
+
       - name: Check import rules
         if: matrix.project == 'platform-api'
         working-directory: ${{ matrix.project }}
@@ -127,13 +154,15 @@ jobs:
         if: matrix.project != 'e2e'
         run: docker build --target runtime --tag ${{ matrix.project }}:runtime ${{ matrix.project }}
 
-      - name: Mock GitHub and mock model tests in their images
+      - name: Mock GitHub, mock model and mock Confluence tests in their images
         if: matrix.project == 'e2e'
         run: |
           docker build --target test --tag mock-github:test e2e/mock_github
           docker run --rm mock-github:test
           docker build --target test --tag mock-model:test e2e/mock_model
           docker run --rm mock-model:test
+          docker build --target test --tag mock-confluence:test e2e/mock_confluence
+          docker run --rm mock-confluence:test
 
   portal:
     runs-on: ubuntu-latest
@@ -172,6 +201,54 @@ jobs:
           docker pull --quiet nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10
           sh nginx/render.test.sh
 
+  n8n-node-pack:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: n8n-node-pack
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version-file: n8n-node-pack/.nvmrc
+          cache: npm
+          cache-dependency-path: n8n-node-pack/package-lock.json
+
+      # n8n-workflow pulls in isolated-vm, whose native build the pack never needs.
+      - name: Install
+        run: npm ci --ignore-scripts
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm test
+
+      - name: The image builds on the n8n pin in infra/public-images.json
+        working-directory: .
+        run: |
+          pin=$(jq -r '.n8n | "\(.repository):\(.tag)@\(.digest)"' infra/public-images.json)
+          if ! grep -qxF "FROM $pin" deploy/n8n/Dockerfile; then
+            echo "deploy/n8n/Dockerfile does not build on $pin from infra/public-images.json." >&2
+            exit 1
+          fi
+
+      # The pin check in the pack smoke runs platform-api's code against what the image serves.
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          enable-cache: false
+
+      - name: Pack smoke, n8n loads exactly the classed types and the pin check holds
+        working-directory: .
+        run: scripts/pack-smoke.sh
+
   scans:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -206,13 +283,19 @@ jobs:
   e2e:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    # The browser suite alone took 27 minutes on 13 Nov 2026, then ZAP and k6 need about 8 more,
+    # and the move from an old-engine database about 8.
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           persist-credentials: false
 
       - name: Run the API tests, then the browser suite, against the whole stack
+        env:
+          LIVE_GREP: ${{ inputs.live_grep }}
+          API_K: ${{ inputs.api_k }}
+          E2E_SUITES: ${{ inputs.api_k != '' && inputs.live_grep != '' && 'api ui' || inputs.api_k != '' && 'api' || inputs.live_grep != '' && 'ui' || '' }}
         run: scripts/e2e.sh
 
       - name: Keep the stack and test logs
@@ -231,9 +314,24 @@ jobs:
           path: portal/e2e/out/live/
           if-no-files-found: ignore
 
+      # A run that picks tests runs the move only when api_k names it, as in -f api_k=old_engine.
+      - name: Move an old-engine database to the new engine, with its history
+        if: ${{ !cancelled() && inputs.live_grep == '' && (inputs.api_k == '' || contains(inputs.api_k, 'old_engine')) }}
+        env:
+          E2E_SEED: old-engine
+        run: scripts/e2e.sh
+
+      - name: Keep the logs of the move
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: e2e-old-engine-logs
+          path: e2e/out/
+          if-no-files-found: ignore
+
       # DAST and the load test share this job and its Docker layer cache. A failed e2e run does not hide them.
       - name: DAST with OWASP ZAP against the whole stack
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && inputs.live_grep == '' && inputs.api_k == '' }}
         run: scripts/dast.sh
 
       - name: Keep the ZAP reports
@@ -245,7 +343,7 @@ jobs:
           if-no-files-found: ignore
 
       - name: Load test with k6 against the whole stack
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && inputs.live_grep == '' && inputs.api_k == '' }}
         run: scripts/load.sh
 
       - name: Keep the k6 summary

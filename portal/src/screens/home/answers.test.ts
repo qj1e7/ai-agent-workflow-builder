@@ -14,11 +14,13 @@ import {
   workflowsSay,
   cantLine,
   cardLines,
+  ideasSay,
   lineText,
   needsSay,
   refusalNext,
   sayOf,
   startingPoints,
+  startSteps,
   stateWords,
   TAG_CANT,
   TAG_CHOICE,
@@ -60,7 +62,7 @@ describe('a can’t row', () => {
   it('keeps its text and its note apart', () => {
     const line = cantLine(CANT.cant[0]!)
     expect(line.text).toBe('email it to the team')
-    expect(line.note).toContain('I can\'t email it to the team.')
+    expect(line.note).toBe('I can\'t send email yet.')
   })
 
   it('shows the note in place of empty text, and a plain line when it has neither', () => {
@@ -77,10 +79,13 @@ describe('the sentence for each answer', () => {
   const answers: Record<string, PlannerReply> = { card: CARD, part: PART, cant: CANT, refused: refused as PlannerReply }
 
   it('never promises more than the answer’s own kind', () => {
-    expect(sayOf(answers['card']!)).toBe('Here’s what I understood. I filled in what I could.')
-    expect(sayOf(answers['part']!)).toContain('I can do part of that.')
+    expect(sayOf({ ...(answers['card'] as SetupCardReply), similar: null })).toBe('Here’s what I understood.')
+    expect(sayOf(answers['card']!), 'a workflow of the same name leads with the one she has').toBe('You already have this one.')
+    expect(sayOf(answers['part']!), 'the sketch leads every set-up card the same way, a cross or not').toBe('Here’s what I understood.')
     expect(sayOf(answers['cant']!)).toBe('I can’t do all of that, but I can set up something close.')
-    expect(sayOf({ ...CANT, alternative: null })).toBe('I can’t do that yet.')
+    expect(sayOf({ ...CANT, alternative: null }), 'its one-line card says it').toBeNull()
+    const own = { ...CANT, alternative: null, cant: CANT.cant.map((row) => ({ ...row, instead: null })) }
+    expect(sayOf(own)).toBe('I can’t do that yet.')
     expect(sayOf(answers['refused']!)).toBe('I can’t set that up. Anything that changes data waits for a yes, every time.')
   })
 
@@ -90,7 +95,7 @@ describe('the sentence for each answer', () => {
 
   it('leaves the three state answers to the pages’ own functions', () => {
     for (const answer of ['check_workflows', 'why_stopped', 'needs_me'] as const) {
-      expect(sayOf({ answer, use_case_id: null })).toBeNull()
+      expect(sayOf({ answer, use_case_id: null, parts: [] })).toBeNull()
     }
   })
 
@@ -158,14 +163,57 @@ describe('the lists Home shows without being asked', () => {
   })
 })
 
+describe('How to start, from the registry', () => {
+  const CAPS = capabilities as CapabilitiesView
+  const withTeams = (state: CapabilitiesView['capabilities'][number]['state']): CapabilitiesView => ({
+    ...CAPS,
+    capabilities: CAPS.capabilities.map((entry) => (entry.id === 'teams.ask' ? { ...entry, state } : entry)),
+  })
+
+  it('walks from her words to the yes, with the registry’s own example', () => {
+    expect(startSteps(CAPS)).toEqual([
+      'Tell me what should run by itself, in your own words, like “Keep track of the LangGraph version”.',
+      'Check the card I make, and change anything I guessed.',
+      'Press Set up. I do a test run, which writes nothing.',
+      'If the test passes, press Turn it on.',
+      'Nothing is written until an Approver says yes in Teams.',
+    ])
+  })
+
+  it('names Teams only while the platform can ask there, and no example it doesn’t have', () => {
+    expect(startSteps(withTeams('needs_setup')).at(-1)).toBe('Nothing is written until an Approver says yes.')
+    expect(startSteps({ ...CAPS, examples: [] })[0]).toBe('Tell me what should run by itself, in your own words.')
+  })
+})
+
 describe('Check my workflows counts what its rows show', () => {
-  const caseOf = (id: string, state: 'on' | 'paused' = 'on') => ({ use_case_id: id, state }) as unknown as Row['useCase']
-  const row = (id: string, latest: string | null, state: 'on' | 'paused' = 'on'): Row =>
-    ({ useCase: caseOf(id, state), latest: latest === null ? null : ({ state: latest, reason: 'agent_error' } as unknown as Row['latest']), action: null })
+  const caseOf = (id: string, state: 'on' | 'paused', last: string | null) =>
+    ({ use_case_id: id, state, last_run: last === null ? null : { state: last } }) as unknown as Row['useCase']
+  const row = (id: string, last: string | null, state: 'on' | 'paused' = 'on'): Row => ({ useCase: caseOf(id, state, last), action: null })
 
   it('says running only for a run in progress, never for a workflow that is simply idle', () => {
     const rows = [row('a', 'failed'), row('b', 'awaiting_approval'), row('c', null), row('d', 'succeeded'), row('e', 'working')]
     expect(workflowsSay(rows)).toBe('You have 5 workflows. 1 stopped, 1 is waiting for a yes, 1 is running.')
     expect(workflowsSay([row('c', null), row('d', 'succeeded')])).toBe('You have 2 workflows. None needs you.')
+  })
+})
+
+describe('Set up another workflow counts its places to start (FIX-starts-count)', () => {
+  const CAPS = capabilities as CapabilitiesView
+
+  it('says as many places as the chips under it show', () => {
+    const places = startingPoints(CAPS).length
+    expect(places).toBeGreaterThan(0)
+    expect(ideasSay(places)).toBe(places === 1 ? 'Here is a place to start. Pick it, or tell me something else.' : `Here are ${String(places)} places to start. Pick one, or tell me something else.`)
+  })
+
+  it('reads right for one place, two places and none', () => {
+    expect(ideasSay(1)).toBe('Here is a place to start. Pick it, or tell me something else.')
+    expect(ideasSay(2)).toBe('Here are 2 places to start. Pick one, or tell me something else.')
+    expect(ideasSay(0)).toContain('no places to start')
+  })
+
+  it('is said by the list under it, so the reply itself carries no fixed count', () => {
+    expect(sayOf({ answer: 'ideas', parts: [] })).toBeNull()
   })
 })

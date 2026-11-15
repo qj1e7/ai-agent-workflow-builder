@@ -1,0 +1,8 @@
+001 variant: base: "NODES_INCLUDE unset"
+002 node types n8n loaded: count, ours: [847, ["CUSTOM.askForYes", "CUSTOM.callOurApi", "CUSTOM.reportFailure", "CUSTOM.startFromPortal"]]
+003 first 12 types: ["@n8n/n8n-nodes-langchain.agent", "@n8n/n8n-nodes-langchain.agentTool", "@n8n/n8n-nodes-langchain.alibabaCloud", "@n8n/n8n-nodes-langchain.alibabaCloudTool", "@n8n/n8n-nodes-langchain.anthropic", "@n8n/n8n-nodes-langchain.anthropicTool", "@n8n/n8n-nodes-langchain.chainLlm", "@n8n/n8n-nodes-langchain.chainRetrievalQa", "@n8n/n8n-nodes-langchain.chainSummarization", "@n8n/n8n-nodes-langchain.chat", "@n8n/n8n-nodes-langchain.chatHitlTool", "@n8n/n8n-nodes-langchain.chatHubVectorStorePGVector"]
+004 create a workflow with an HTTP Request node: [200, "aYPdsLS6MI3X3CmC"]
+005 publish it: [200, "published"]
+006 run it by hand: [200, {"data": {"executionId": "42"}}]
+007 the hand run: ["success", null]
+008 requests that reached the stand-in API from the HTTP Request node: ["/leak-http"]

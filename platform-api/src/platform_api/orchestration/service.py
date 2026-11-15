@@ -4,8 +4,8 @@ import logging
 import traceback
 from collections.abc import Awaitable, Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
-from datetime import date, datetime
-from typing import Any, Protocol
+from datetime import date, datetime, timedelta
+from typing import Any, Literal, Protocol
 from zoneinfo import ZoneInfo
 
 from platform_api.db import Database, UnitOfWork
@@ -13,6 +13,7 @@ from platform_api.monitoring import (
     PLATFORM,
     SAFETY_CHECKER,
     ActivityEvent,
+    Actor,
     AgentEvent,
     ApprovalAnnouncedData,
     ApprovalAnnounceFailedData,
@@ -34,21 +35,22 @@ from platform_api.orchestration.agents import (
     CardToRun,
     CarryForward,
     ModelAccess,
-    SoftwareToCheck,
     TaskFailed,
     TaskFinished,
     TaskOutput,
     TaskRequest,
     WatchlistInputs,
-    source_in,
 )
 from platform_api.orchestration.approvals import (
     AlreadyRecorded,
     ApprovalRequest,
     ApprovalStatus,
     Approved,
+    Closed,
     Decision,
     Declined,
+    Ended,
+    Invalid,
     Open,
     Recorded,
     Refusal,
@@ -59,34 +61,64 @@ from platform_api.orchestration.approvals import (
 from platform_api.orchestration.cards import ReviewedCards, bind_cards, review_cards
 from platform_api.orchestration.dispatch import (
     RETRY_POLICY,
+    WAKE_POLICY,
     ApprovalChannel,
     ApprovalNotice,
     ApprovalOutcome,
     AskedStep,
+    Delivered,
     DispatchFailure,
+    Gone,
+    HeldWait,
     MessageRef,
     OutcomeVerdict,
     RetryPolicy,
+    WakeDecision,
+    WakeLanding,
+    WakePolicy,
+    Waker,
     WorkflowEngine,
     without_addresses,
 )
+from platform_api.orchestration.n8n_calls import StartKind
+from platform_api.orchestration.n8n_starts import RunStarts
 from platform_api.orchestration.person_runs import PersonRuns, runs_of
+from platform_api.orchestration.questions import (
+    Answer,
+    AnswerRefusal,
+    Question,
+    QuestionId,
+    answer_refusal,
+    asked_with,
+    insert_question,
+    load_question,
+    load_questions_for,
+    repeats,
+    requester_of,
+    save_answer,
+)
+from platform_api.orchestration.run_gist import RunGist, gist_of
 from platform_api.orchestration.runs import (
     PLANNER,
+    TEST_PASSED,
     Acting,
     AwaitingApproval,
     Begin,
+    Expired,
     Failed,
     Failure,
     FailureReason,
     Leg,
+    Lost,
     Moved,
     Pending,
     Proposed,
     Refuse,
     Rejected,
     Replay,
+    ResumeAct,
     RunState,
+    Skipped,
     StepName,
     Succeeded,
     Supersede,
@@ -97,8 +129,11 @@ from platform_api.orchestration.runs import (
     fail,
     holder_of,
     referee,
+    run_created,
     state_name,
     step_finished,
+    stop_for_update,
+    unread_in,
 )
 from platform_api.orchestration.spec import (
     CardsTask,
@@ -108,24 +143,36 @@ from platform_api.orchestration.spec import (
 )
 from platform_api.orchestration.store import (
     ANNOUNCE,
+    RETRY,
     SHOW_OUTCOME,
+    START,
     START_LEG,
+    WAKE,
     DecisionConflict,
     OutboxRow,
     RunRecord,
     Store,
 )
-from platform_api.orchestration.watch import Reviewed, Unusable, all_could_not_read, review
+from platform_api.orchestration.watch import (
+    Reviewed,
+    Unusable,
+    all_could_not_read,
+    review,
+    unread_of,
+    watchlist_inputs,
+)
 from platform_api.orchestration.watch_store import WatchStore
+from platform_api.orchestration.working_hours import after_working_time
 from platform_api.orchestration.write_actions import (
     AuthorizedWrite,
     Deny,
     DenyReason,
     Proposal,
     ProposedIntent,
+    Sites,
     UnboundIntent,
-    WriteFailed,
     WriteGateway,
+    WritingRun,
     at_sites,
     bind,
     check,
@@ -146,10 +193,17 @@ from platform_api.shared import (
     Role,
     RunId,
     TaskId,
+    UseCaseId,
     UserId,
     new_id,
 )
-from platform_api.wire import ApprovalStepView, StepOutcome
+from platform_api.wire import (
+    ApprovalStepStatus,
+    ApprovalStepView,
+    ApproverRef,
+    StepOutcome,
+    TeamsPost,
+)
 
 log = logging.getLogger(__name__)
 
@@ -181,12 +235,54 @@ class RetryLater(Exception): ...
 
 
 @dataclass(frozen=True)
+class Sent:
+    """A request posted to Teams: when, and everyone on the People list with the Approver role
+    now, by name."""
+
+    at: datetime
+    approvers: Mapping[UserId, str]
+
+
+@dataclass(frozen=True)
+class NotSent:
+    """A request whose post to Teams failed after every try. An Approver can still decide it in
+    the app."""
+
+
+type Post = Sent | NotSent
+"""How a request's post to Teams went. A request not tried yet has none."""
+
+
+@dataclass(frozen=True)
 class RunDetail:
     record: RunRecord
     last_seq: int
     proposal: Proposal | None
     approval: ApprovalRequest | None
     decisions: tuple[Decision, ...]
+    post: Post | None = None
+
+
+@dataclass(frozen=True)
+class PastDecision:
+    decision: Decision
+    run: RunDetail
+    gist: RunGist
+
+    @property
+    def connector(self) -> str | None:
+        """Where the run wrote, or would write: its first write, else its first proposed one."""
+        state = self.run.record.state
+        if isinstance(state, Succeeded) and state.written:
+            return state.written[0].connector
+        actions = self.run.proposal.actions if self.run.proposal is not None else ()
+        return actions[0].connector if actions else None
+
+
+@dataclass(frozen=True)
+class PastDecisions:
+    decisions: tuple[PastDecision, ...]
+    total: int
 
 
 def _links(state: RunState) -> tuple[ProposalId | None, ApprovalId | None]:
@@ -197,6 +293,8 @@ def _links(state: RunState) -> tuple[ProposalId | None, ApprovalId | None]:
             AwaitingApproval(proposal_id=pid, approval_id=aid)
             | Acting(proposal_id=pid, approval_id=aid)
             | Rejected(proposal_id=pid, approval_id=aid)
+            | Expired(proposal_id=pid, approval_id=aid)
+            | Lost(proposal_id=pid, approval_id=aid)
         ):
             return pid, aid
         case _:
@@ -211,8 +309,13 @@ class ApprovalDetail:
     why_not: Refusal | None
     run: RunRecord
     found: str
+    not_checked: tuple[str, ...]
+    """What the run couldn't check, by name, kept once the request is decided."""
     site_names: tuple[str, ...]
     """Where each action writes, as people read it, in the order of the proposal's actions."""
+    questions: tuple[Question, ...]
+    requester: UserId
+    post: Post | None = None
 
 
 @dataclass(frozen=True)
@@ -241,8 +344,46 @@ type DecisionResult = Decided | DecisionRefused | DecisionRace | NotFound
 
 
 @dataclass(frozen=True)
+class QuestionAsked:
+    question: Question
+    repeated: bool
+
+
+@dataclass(frozen=True)
+class QuestionRefused:
+    reason: Refusal
+
+
+@dataclass(frozen=True)
+class KeyAskedAnother:
+    """The Idempotency-Key already asked a question with other words, which is kept as it was."""
+
+
+type AskResult = QuestionAsked | QuestionRefused | KeyAskedAnother | NotFound
+
+
+@dataclass(frozen=True)
+class QuestionAnswered:
+    question: Question
+    repeated: bool
+
+
+@dataclass(frozen=True)
+class AnswerRefused:
+    reason: AnswerRefusal
+
+
+type AnswerResult = QuestionAnswered | AnswerRefused | NotFound
+
+
+RETRY_PATIENCE = timedelta(minutes=10)
+"""How long a retry n8n took may take to call our API before a new press asks n8n again."""
+
+
+@dataclass(frozen=True)
 class Retried:
-    state: Pending | Acting
+    resumes: Literal["pending", "acting"]
+    """Where the run picks up: before n8n has run it, or while it makes the approved changes."""
 
 
 @dataclass(frozen=True)
@@ -290,11 +431,119 @@ def _notice_people(request: ApprovalRequest) -> set[UserId]:
     return people
 
 
-def steps_view(request: ApprovalRequest, decisions: Iterable[Decision]) -> list[ApprovalStepView]:
+def wake_decision(request: ApprovalRequest, decisions: Iterable[Decision]) -> WakeDecision | None:
+    """What the execution that waits for a request is told, read from the records alone. A
+    request that is still open, or was cancelled, tells it nothing."""
+    match approval_status(request, decisions):
+        case Approved():
+            return "yes"
+        case Declined():
+            return "no"
+        case Closed(ended=Ended.EXPIRED):
+            return "no_answer"
+        case Open() | Invalid() | Closed():
+            return None
+
+
+def request_for(
+    record: RunRecord, proposal: Proposal, now: datetime, time_zone: ZoneInfo
+) -> ApprovalRequest:
+    """The request for a run's proposal. Everyone whose work the run is stays out of it, and it
+    keeps the expiry it was made with (ADR 0024)."""
+    return ApprovalRequest(
+        id=ApprovalId(new_id("apr")),
+        run_id=record.run_id,
+        proposal_id=proposal.id,
+        digest=proposal.digest,
+        policy=record.spec.approval_policy,
+        parties=record.parties,
+        expires_at=after_working_time(now, record.spec.expires_after, time_zone),
+    )
+
+
+async def enqueue_announcement(
+    uow: UnitOfWork,
+    store: Store,
+    record: RunRecord,
+    request: ApprovalRequest,
+    proposal: Proposal,
+    summary: str,
+    sites: Sites,
+) -> None:
+    """The Teams card that asks for a yes, sent by the tick."""
+    names = await store.names(uow, _notice_people(request))
+    link = approval_link(request.id)
+    await store.enqueue(
+        uow,
+        record.run_id,
+        ANNOUNCE,
+        {
+            "run_id": record.run_id,
+            "approval_id": request.id,
+            "use_case_name": record.spec.use_case_name,
+            "actions": list(intents(proposal.actions)),
+            "link": link,
+            "summary": summary,
+            "lines": [describe_at(a, sites).line for a in proposal.actions],
+            "digest": request.digest,
+            "steps": _asked_steps(request, names),
+            "not_deciding": sorted({names[p] for p in request.parties}),
+            "owner_name": names[record.spec.owner],
+        },
+        uow.now,
+    )
+
+
+ENDED_STEPS: Mapping[Ended, ApprovalStepStatus] = {
+    Ended.EXPIRED: "expired",
+    Ended.CANCELLED: "cancelled",
+    Ended.CLOSED: "closed",
+}
+"""What a step nobody decided reads once its request ended."""
+
+
+def _sent_to(
+    request: ApprovalRequest,
+    index: int,
+    decided_before: Collection[UserId],
+    approvers: Mapping[UserId, str],
+) -> list[ApproverRef]:
+    """Who may decide a step, by the rules approvals.decide applies: the Approvers the step
+    allows, minus the run's parties and whoever decided an earlier step. By name, then by id."""
+    match request.policy.steps[index].eligible:
+        case approvals.AnyApprover():
+            allowed = set(approvers)
+        case approvals.OneOf(users):
+            allowed = users & approvers.keys()
+    may = allowed - request.parties - set(decided_before)
+    return [
+        ApproverRef(id=user, display=approvers[user])
+        for user in sorted(may, key=lambda user: (approvers[user], user))
+    ]
+
+
+def _post_on_the_wire(post: Post | None) -> TeamsPost:
+    match post:
+        case Sent():
+            return "sent"
+        case NotSent():
+            return "failed"
+        case None:
+            return "waiting"
+
+
+def steps_view(
+    request: ApprovalRequest, decisions: Iterable[Decision], post: Post | None = None
+) -> list[ApprovalStepView]:
     by_step = {d.step_index: d for d in decisions if d.approval_id == request.id}
     views: list[ApprovalStepView] = []
     open_seen = False
     for index, step in enumerate(request.policy.steps):
+        before = [d.by for i, d in by_step.items() if i < index]
+        sent = post if isinstance(post, Sent) else None
+        names = [] if sent is None else _sent_to(request, index, before, sent.approvers)
+        sent_at = None if sent is None else sent.at
+        how = _post_on_the_wire(post)
         decision = by_step.get(index)
         if decision is not None:
             status = "approved" if decision.verdict is Verdict.APPROVE else "declined"
@@ -305,14 +554,29 @@ def steps_view(request: ApprovalRequest, decisions: Iterable[Decision]) -> list[
                     status=status,
                     decided_by=decision.by,
                     decided_at=decision.at,
+                    reason=decision.reason,
+                    post=how,
+                    sent_to=names,
+                    sent_at=sent_at,
                 )
             )
             if status == "declined":
                 open_seen = True
             continue
         status = "waiting" if open_seen else "open"
+        if request.ended is not None:
+            status = ENDED_STEPS[request.ended]
         open_seen = True
-        views.append(ApprovalStepView(index=index, label=step.label, status=status))
+        views.append(
+            ApprovalStepView(
+                index=index,
+                label=step.label,
+                status=status,
+                post=how,
+                sent_to=names,
+                sent_at=sent_at,
+            )
+        )
     return views
 
 
@@ -323,10 +587,12 @@ DENIED_ON_THE_WIRE: Mapping[DenyReason, DeniedReason] = {
     DenyReason.DIGEST_MISMATCH: "digest_mismatch",
     DenyReason.UNREGISTERED_ACTION: "unregistered_action",
     DenyReason.TARGET_CHANGED: "target_changed",
+    DenyReason.EXPIRED: "expired",
+    DenyReason.TEST_RUN: "test_run",
 }
 
 
-def _denied(reason: DeniedReason, detail: str) -> PendingEvent:
+def write_denied(reason: DeniedReason, detail: str) -> PendingEvent:
     return PendingEvent(
         SAFETY_CHECKER,
         "write_action_denied",
@@ -379,6 +645,10 @@ class Orchestrator:
         *,
         public_base_url: str,
         time_zone: ZoneInfo = TEAM_TIME_ZONE,
+        waker: Waker | None = None,
+        wake_policy: WakePolicy = WAKE_POLICY,
+        landing: WakeLanding | None = None,
+        starts: RunStarts | None = None,
     ) -> None:
         self._db = db
         self._public_base_url = public_base_url.rstrip("/")
@@ -394,6 +664,10 @@ class Orchestrator:
         self._gateway = gateway
         self._mint_callback = mint_callback
         self._retry = retry_policy
+        self._waker = waker
+        self._wake_policy = wake_policy
+        self._landing = landing
+        self._starts = starts
         self._wake = asyncio.Event()
 
     async def start_run(
@@ -416,20 +690,31 @@ class Orchestrator:
             record, created = await self._store.insert_run(uow, record, idempotency_key)
             if not created:
                 return RunStarted(record.run_id, False)
-            await self._store.record_leg_attempt(uow, run_id, Leg.WORK, 1, None)
-            await self._enqueue_leg(uow, record, Leg.WORK, uow.now)
-            await self._activity.append(
-                uow,
-                run_id,
-                created_events(
+            by = user_actor(principal.user_id, principal.display)
+            if spec.n8n is None:
+                await self._store.record_leg_attempt(uow, run_id, Leg.WORK, 1, None)
+                await self._enqueue_leg(uow, record, Leg.WORK, uow.now)
+                events = created_events(
                     spec.use_case_id,
                     spec.use_case_version,
                     spec.use_case_name,
-                    user_actor(principal.user_id, principal.display),
+                    by,
                     1,
                     spec.trigger,
-                ),
-            )
+                )
+            else:
+                kind: StartKind = "test" if spec.test or spec.stops_at_gate else "run_now"
+                await self._enqueue_start(uow, run_id, kind, 1, uow.now)
+                events = (
+                    run_created(
+                        spec.use_case_id,
+                        spec.use_case_version,
+                        spec.use_case_name,
+                        by,
+                        spec.trigger,
+                    ),
+                )
+            await self._activity.append(uow, run_id, events)
         self.nudge()
         return RunStarted(run_id, True)
 
@@ -469,7 +754,7 @@ class Orchestrator:
         detail = f"{step.value} is not allowed while the run is {state_name(record.state)}"
         events: list[PendingEvent] = []
         if step is StepName.WRITE_ACTION:
-            events.append(_denied("out_of_order", detail))
+            events.append(write_denied("out_of_order", detail))
         events.append(step_finished(step, execution, 1, "refused", detail))
         if fails_run:
             # The referee refuses only before the work is approved, so nothing can be written yet.
@@ -567,6 +852,7 @@ class Orchestrator:
         output: TaskOutput,
     ) -> StepReply:
         reviewed: Reviewed | None = None
+        unread: tuple[str, ...] = ()
         task = record.spec.task
         if isinstance(task, CardsTask):
             match review_cards(task, output.proposed):
@@ -583,7 +869,7 @@ class Orchestrator:
                         uow, record, working, FailureReason.AGENT_ERROR, detail
                     )
                 case Reviewed() as reviewed:
-                    pass
+                    unread = unread_of(task, reviewed)
             intents = [ProposedIntent(p.kind, dict(p.fields), p.reason) for p in output.proposed]
             bound = bind(intents, record.spec.bindings)
         proposal: Proposal | None = None
@@ -604,7 +890,7 @@ class Orchestrator:
                 await self._store.insert_proposal(uow, proposal)
                 lines = tuple(describe(action) for action in actions)
                 moved = working.propose(
-                    proposal.id, proposal.digest, lines, PLANNER, summary, uow.now
+                    proposal.id, proposal.digest, lines, PLANNER, summary, uow.now, unread
                 )
                 reply = StepReply(True, "proposed", summary)
         if reviewed is not None:
@@ -640,22 +926,8 @@ class Orchestrator:
         spec = record.spec
         inputs: WatchlistInputs | CardsInputs
         match spec.task:
-            case WatchlistTask(tag_pattern, software):
-                inputs = WatchlistInputs(
-                    tag_pattern=tag_pattern,
-                    software=[
-                        SoftwareToCheck(
-                            id=s.id,
-                            name=s.name,
-                            source=source_in(s.source.kind, s.source.ref),
-                            our_version=s.our_version,
-                            open_ticket=s.open_ticket,
-                            awaiting_approval=s.awaiting_approval,
-                            from_first_check=s.from_first_check,
-                        )
-                        for s in software
-                    ],
-                )
+            case WatchlistTask() as task:
+                inputs = watchlist_inputs(task)
             case CardsTask(agents):
                 inputs = CardsInputs(
                     agents=[CardToRun(card=a.card, values=dict(a.values)) for a in agents]
@@ -679,39 +951,18 @@ class Orchestrator:
             record = admitted
             assert isinstance(record.state, Proposed)
             proposed = record.state
+            if record.spec.stops_at_gate:
+                await self._commit(uow, record, proposed.stop_for_test())
+                return StepReply(False, "test_passed", TEST_PASSED)
             proposal = await self._store.load_proposal(uow, proposed.proposal_id)
             assert proposal is not None
-            request = ApprovalRequest(
-                id=ApprovalId(new_id("apr")),
-                run_id=run_id,
-                proposal_id=proposal.id,
-                digest=proposal.digest,
-                policy=record.spec.approval_policy,
-                parties=frozenset({record.started_by, record.spec.owner, *record.retried_by}),
-            )
+            request = request_for(record, proposal, uow.now, self._time_zone)
             await self._store.insert_approval(uow, request)
             link = approval_link(request.id)
             moved = proposed.open_approval(request.id, steps_view(request, ()), link)
-            await self._commit(uow, record, moved)
-            names = await self._store.names(uow, _notice_people(request))
-            await self._store.enqueue(
-                uow,
-                run_id,
-                ANNOUNCE,
-                {
-                    "run_id": run_id,
-                    "approval_id": request.id,
-                    "use_case_name": record.spec.use_case_name,
-                    "actions": list(intents(proposal.actions)),
-                    "link": link,
-                    "summary": proposed.summary,
-                    "lines": [describe_at(a, self._gateway.sites).line for a in proposal.actions],
-                    "digest": request.digest,
-                    "steps": _asked_steps(request, names),
-                    "not_deciding": sorted({names[p] for p in request.parties}),
-                    "owner_name": names[record.spec.owner],
-                },
-                uow.now,
+            record = await self._commit(uow, record, moved)
+            await enqueue_announcement(
+                uow, self._store, record, request, proposal, proposed.summary, self._gateway.sites
             )
         self.nudge()
         return StepReply(False, "approval_opened", f"Approval {request.id} opened")
@@ -733,6 +984,7 @@ class Orchestrator:
             decisions = await self._store.load_decisions(uow, request.id)
             verdict = check(
                 acting,
+                WritingRun(record.spec.use_case_id, record.spec.stops_at_gate),
                 proposal,
                 request,
                 decisions,
@@ -746,7 +998,7 @@ class Orchestrator:
                     moved2 = acting.fail(
                         Failure(FailureReason.SAFETY_DENIED, why, retryable=False)
                     ).preceded_by(
-                        _denied(DENIED_ON_THE_WIRE[reason], detail),
+                        write_denied(DENIED_ON_THE_WIRE[reason], detail),
                         step_finished(StepName.WRITE_ACTION, execution, 1, "refused", detail),
                     )
                     await self._commit(uow, record, moved2)
@@ -754,21 +1006,21 @@ class Orchestrator:
                     return StepReply(False, "refused", detail)
                 case AuthorizedWrite() as authorized:
                     pass
-        try:
-            written = await self._gateway.execute(authorized)
-        except WriteFailed as error:
+        carried = await self._gateway.execute(authorized)
+        if carried.failure is not None:
             async with self._db.transaction("orchestration") as uow:
                 current = await self._store.load_run(uow, run_id, lock=True)
                 if current is None or current.version != record.version:
                     return StepReply(False, "superseded", "The run moved on during the write")
-                detail = str(error)
-                moved2 = acting.fail(
-                    Failure(FailureReason.WRITE_FAILED, detail, retryable=error.retryable)
-                ).preceded_by(step_finished(StepName.WRITE_ACTION, execution, 1, "failed", detail))
+                detail = carried.failure.message
+                moved2 = acting.fail(carried.failure).preceded_by(
+                    step_finished(StepName.WRITE_ACTION, execution, 1, "failed", detail)
+                )
                 await self._commit(uow, current, moved2)
                 await self._store.cancel_outbox(uow, run_id)
             return StepReply(False, "failed", detail)
 
+        written = carried.written
         async with self._db.transaction("orchestration") as uow:
             current = await self._store.load_run(uow, run_id, lock=True)
             if current is None or current.version != record.version:
@@ -803,7 +1055,15 @@ class Orchestrator:
                     )
                     await self._commit(uow, record, fail(state, failure))
                     await self._store.cancel_outbox(uow, run_id)
-                case AwaitingApproval() | Succeeded() | Rejected() | Failed():
+                case (
+                    AwaitingApproval()
+                    | Succeeded()
+                    | Rejected()
+                    | Failed()
+                    | Skipped()
+                    | Expired()
+                    | Lost()
+                ):
                     return
 
     async def get_approval(
@@ -817,6 +1077,8 @@ class Orchestrator:
             record = await self._store.load_run(uow, request.run_id)
             assert proposal is not None and record is not None
             decisions = await self._store.load_decisions(uow, approval_id)
+            asked = await load_questions_for(uow, [approval_id])
+            post = await self._posts(uow, [approval_id])
         match record.state:
             case AwaitingApproval(approval_id=waiting, summary=summary) if waiting == approval_id:
                 found = summary
@@ -829,7 +1091,11 @@ class Orchestrator:
             approvals.why_not(request, decisions, principal),
             record,
             found,
+            unread_in(record.state),
             tuple(site_name(action, self._gateway.sites) for action in proposal.actions),
+            asked.get(approval_id, ()),
+            requester_of(record.spec, record.started_by),
+            post.get(approval_id),
         )
 
     async def decide(
@@ -839,13 +1105,18 @@ class Orchestrator:
         step_index: int,
         verdict: Verdict,
         seen_digest: Digest,
+        decline_reason: str | None = None,
     ) -> DecisionResult:
+        """The gate's rules decide alone. A reason only rides along on a decline it recorded."""
         async with self._db.transaction("orchestration") as uow:
             request = await self._store.load_approval(uow, approval_id)
             if request is None:
                 return NotFound()
             record = await self._store.load_run(uow, request.run_id, lock=True)
             assert record is not None
+            # Read again under the run's lock, which the tick takes to end a request unanswered.
+            request = await self._store.load_approval(uow, approval_id)
+            assert request is not None
             decisions = await self._store.load_decisions(uow, approval_id)
             if self._people is not None:
                 roles = await self._people.roles_now(uow, principal.user_id)
@@ -859,6 +1130,8 @@ class Orchestrator:
                 case AlreadyRecorded(decision):
                     return Decided(approval_status(request, decisions), decision, True)
                 case Recorded(decision):
+                    if decline_reason is not None and verdict is Verdict.DECLINE:
+                        decision = replace(decision, reason=decline_reason)
                     try:
                         await self._store.insert_decision(uow, decision)
                     except DecisionConflict:
@@ -870,8 +1143,17 @@ class Orchestrator:
                         await self._activity.append(uow, record.run_id, [decided])
                         return Decided(status, decision, False)
                     if isinstance(status, Approved | Declined):
-                        await self._enqueue_outcome(uow, record, request, status, principal)
+                        await self._enqueue_outcome(
+                            uow, record, request, all_decisions, status, principal
+                        )
+                    held = await self._store.held_wait(uow, request.id)
+                    wake = wake_decision(request, all_decisions)
+                    if held is not None and wake is not None:
+                        await self._enqueue_wake(uow, record.run_id, request.id, wake)
                     match status:
+                        case Approved() if held is not None:
+                            # n8n holds the wait, so the run acts only once n8n takes the yes.
+                            await self._activity.append(uow, record.run_id, [decided])
                         case Approved():
                             moved = record.state.approve(uow.now).preceded_by(decided)
                             record = await self._commit(uow, record, moved)
@@ -880,12 +1162,72 @@ class Orchestrator:
                             )
                             await self._enqueue_leg(uow, record, Leg.ACT, uow.now)
                         case Declined(by, step):
-                            moved_r = record.state.reject(by, principal.display, step)
+                            moved_r = record.state.reject(
+                                by, principal.display, step, decision.reason
+                            )
                             await self._commit(uow, record, moved_r.preceded_by(decided))
-                        case Open() | approvals.Invalid():
+                        case Open() | Invalid() | Closed():
                             await self._activity.append(uow, record.run_id, [decided])
         self.nudge()
         return Decided(status, decision, False)
+
+    async def ask(
+        self, approval_id: ApprovalId, principal: Principal, text: str, idempotency_key: str
+    ) -> AskResult:
+        """Only someone the gate would let decide the open step may ask. The question goes on the
+        request and nothing else: the run, the approval and its decisions stay as they were."""
+        async with self._db.transaction("orchestration") as uow:
+            request = await self._store.load_approval(uow, approval_id)
+            if request is None:
+                return NotFound()
+            await self._store.load_run(uow, request.run_id, lock=True)
+            kept = await asked_with(uow, approval_id, principal.user_id, idempotency_key)
+            # A replay hands back what this person already asked and writes nothing, so it needs
+            # no fresh check, even after the request is decided or their role is taken away.
+            if kept is not None:
+                return QuestionAsked(kept, True) if kept.text == text else KeyAskedAnother()
+            if self._people is not None:
+                roles = await self._people.roles_now(uow, principal.user_id)
+                principal = replace(principal, roles=roles or frozenset())
+            decisions = await self._store.load_decisions(uow, approval_id)
+            reason = approvals.why_not(request, decisions, principal)
+            if reason is not None:
+                return QuestionRefused(reason)
+            question = await insert_question(
+                uow, approval_id, principal.user_id, text, idempotency_key
+            )
+        return QuestionAsked(question, repeated=False)
+
+    async def answer(
+        self, approval_id: ApprovalId, question_id: QuestionId, principal: Principal, text: str
+    ) -> AnswerResult:
+        """Only the requester answers, once, while the request waits. The answer is kept on the
+        question and nothing else changes. The run's lock keeps it from landing after a
+        decision."""
+        async with self._db.transaction("orchestration") as uow:
+            request = await self._store.load_approval(uow, approval_id)
+            if request is None:
+                return NotFound()
+            record = await self._store.load_run(uow, request.run_id, lock=True)
+            assert record is not None
+            question = await load_question(uow, approval_id, question_id)
+            if question is None:
+                return NotFound()
+            if repeats(question, principal.user_id, text):
+                return QuestionAnswered(question, repeated=True)
+            decisions = await self._store.load_decisions(uow, approval_id)
+            refusal = answer_refusal(
+                question,
+                requester_of(record.spec, record.started_by),
+                approval_status(request, decisions),
+                principal.user_id,
+            )
+            if refusal is not None:
+                return AnswerRefused(refusal)
+            answered = await save_answer(uow, question, Answer(text, principal.user_id, uow.now))
+        if answered is None:
+            return AnswerRefused(AnswerRefusal.ANSWERED)
+        return QuestionAnswered(answered, repeated=False)
 
     async def retry(self, run_id: RunId, principal: Principal) -> RetryResult:
         async with self._db.transaction("orchestration") as uow:
@@ -897,13 +1239,48 @@ class Orchestrator:
                 return NotRetryable(f"The run is {state_name(state)}, not failed")
             if not state.failure.retryable:
                 return NotRetryable(cannot_retry(state.stage, state.failure))
-            moved = state.retry(user_actor(principal.user_id, principal.display), uow.now)
-            record = await self._commit(uow, record, moved, retried_by=principal.user_id)
-            leg = Leg.ACT if isinstance(moved.state, Acting) else Leg.WORK
-            await self._store.record_leg_attempt(uow, run_id, leg, moved.state.attempt, None)
-            await self._enqueue_leg(uow, record, leg, uow.now + self._retry.operator_retry_delay)
+            by = user_actor(principal.user_id, principal.display)
+            at = uow.now + self._retry.operator_retry_delay
+            if record.spec.n8n is not None:
+                retried = await self._retry_in_n8n(uow, record, state, by, at)
+            else:
+                moved = state.retry(by, uow.now)
+                record = await self._commit(uow, record, moved, retried_by=principal.user_id)
+                leg = Leg.ACT if isinstance(moved.state, Acting) else Leg.WORK
+                await self._store.record_leg_attempt(uow, run_id, leg, moved.state.attempt, None)
+                await self._enqueue_leg(uow, record, leg, at)
+                retried = Retried("acting" if leg == Leg.ACT else "pending")
         self.nudge()
-        return Retried(moved.state)
+        return retried
+
+    async def _retry_in_n8n(
+        self, uow: UnitOfWork, record: RunRecord, state: Failed, by: Actor, at: datetime
+    ) -> RetryResult:
+        """n8n's own retry of the run's newest execution, from the block that stopped (2.3.10),
+        never Failed.retry(): the retry execution joins the run on its first call. A run n8n
+        never ran starts again. A second press while a retry of the same execution is on its way,
+        or was taken by n8n and has not called yet, asks n8n nothing, so the run never carries two
+        retries."""
+        execution = await self._store.newest_execution(uow, record.run_id)
+        resumes: Literal["pending", "acting"] = (
+            "acting" if isinstance(state.resume, ResumeAct) else "pending"
+        )
+        if execution is None:
+            moved = state.start_again(by, uow.now)
+            if moved is None:
+                return NotRetryable("n8n holds no execution of this run to retry.")
+            await self._commit(uow, record, moved, retried_by=UserId(by.id))
+            await self._enqueue_start(uow, record.run_id, "retry", moved.state.attempt, at)
+            return Retried(resumes)
+        since = uow.now - RETRY_PATIENCE
+        if await self._store.retry_asked(uow, record.run_id, execution, since):
+            return Retried(resumes)
+        await self._store.save_run(uow, record, state, retried_by=UserId(by.id))
+        await self._activity.append(uow, record.run_id, [state.retry_in_n8n(by)])
+        assert record.spec.n8n is not None
+        payload = {"execution_id": execution, "workflow_id": record.spec.n8n.workflow_id}
+        await self._store.enqueue(uow, record.run_id, RETRY, payload, at)
+        return Retried(resumes)
 
     async def get_run(self, run_id: RunId) -> RunDetail | None:
         async with self._db.transaction("orchestration") as uow:
@@ -916,10 +1293,44 @@ class Orchestrator:
         async with self._db.transaction("orchestration") as uow:
             return await self._details(uow, await self._store.list_runs(uow))
 
+    async def newest_runs(
+        self, use_case_ids: Sequence[UseCaseId], viewer: Principal | None = None
+    ) -> dict[UseCaseId, RunGist]:
+        """The newest run of each named workflow, with only those runs read in full."""
+        if not use_case_ids:
+            return {}
+        async with self._db.transaction("orchestration") as uow:
+            records = await self._store.newest_runs(uow, use_case_ids)
+            details = await self._details(uow, records)
+        return {d.record.spec.use_case_id: gist_of(d, viewer) for d in details}
+
+    async def decisions_of(
+        self, viewer: Principal, verdict: Verdict | None, limit: int
+    ) -> PastDecisions:
+        """The viewer's own decisions, newest first, each with the run it decided as it stands
+        now, so a line can say what the decision led to."""
+        async with self._db.transaction("orchestration") as uow:
+            page = await self._store.decided_by(uow, viewer.user_id, verdict, limit)
+            records = await self._store.load_runs(uow, {run_id for run_id, _ in page.decided})
+            details = {d.record.run_id: d for d in await self._details(uow, records)}
+        return PastDecisions(
+            tuple(
+                PastDecision(decision, details[run_id], gist_of(details[run_id], viewer))
+                for run_id, decision in page.decided
+            ),
+            page.total,
+        )
+
     async def runs_for(self, viewer: Principal) -> PersonRuns:
         async with self._db.transaction("orchestration") as uow:
-            details = await self._details(uow, await self._store.open_runs(uow))
-        return runs_of(details, viewer)
+            details = await self._details(uow, await self._store.open_runs(uow, viewer.user_id))
+            waiting = [
+                d.approval.id
+                for d in details
+                if d.approval is not None and isinstance(d.record.state, AwaitingApproval)
+            ]
+            asked = await load_questions_for(uow, waiting)
+        return runs_of(details, viewer, asked)
 
     async def _detail(self, uow: UnitOfWork, record: RunRecord) -> RunDetail:
         (detail,) = await self._details(uow, [record])
@@ -934,6 +1345,7 @@ class Orchestrator:
         proposals = await self._store.load_proposals(uow, proposal_ids)
         approvals = await self._store.load_approvals(uow, approval_ids)
         decisions = await self._store.load_decisions_for(uow, approval_ids)
+        posts = await self._posts(uow, approval_ids)
         return [
             RunDetail(
                 record,
@@ -941,9 +1353,24 @@ class Orchestrator:
                 proposals.get(pid) if pid is not None else None,
                 approvals.get(aid) if aid is not None else None,
                 decisions.get(aid, ()) if aid is not None else (),
+                posts.get(aid) if aid is not None else None,
             )
             for record, (pid, aid) in zip(records, links, strict=True)
         ]
+
+    async def _posts(
+        self, uow: UnitOfWork, approval_ids: Collection[ApprovalId]
+    ) -> dict[ApprovalId, Post]:
+        """How each request's post to Teams went. One posted after a failed try was sent. The
+        Approvers are read only when one was."""
+        posted = await self._store.posted_at(uow, approval_ids)
+        posts: dict[ApprovalId, Post] = {
+            aid: NotSent() for aid in await self._store.announce_given_up(uow, approval_ids)
+        }
+        if posted:
+            approvers = await self._store.approvers(uow)
+            posts |= {aid: Sent(at, approvers) for aid, at in posted.items()}
+        return posts
 
     def nudge(self) -> None:
         self._wake.set()
@@ -996,6 +1423,10 @@ class Orchestrator:
             overdue = await self._store.runs_past_deadline(uow, now)
         for run_id in overdue:
             await self._expire(run_id, now)
+        async with self._db.transaction("orchestration") as uow:
+            unanswered = await self._store.requests_past_expiry(uow, now)
+        for run_id in unanswered:
+            await self._expire_request(run_id, now)
 
     async def _dispatch(self, row: OutboxRow, now: datetime) -> None:
         try:
@@ -1005,6 +1436,12 @@ class Orchestrator:
                 await self._dispatch_announcement(row)
             elif row.kind == SHOW_OUTCOME:
                 await self._dispatch_outcome(row)
+            elif row.kind == WAKE:
+                await self._dispatch_wake(row)
+            elif row.kind == START:
+                await self._dispatch_start(row)
+            elif row.kind == RETRY:
+                await self._dispatch_retry(row)
             else:
                 raise DispatchFailure(f"unknown outbox kind {row.kind}")
         except DispatchFailure as error:
@@ -1029,6 +1466,44 @@ class Orchestrator:
                     await self._store.save_run(uow, record, acting.claim(execution))
                 case _:
                     pass
+
+    async def _dispatch_start(self, row: OutboxRow) -> None:
+        """Starts a pending run in its own n8n workflow. A run that moved on since is left."""
+        async with self._db.transaction("orchestration") as uow:
+            record = await self._store.load_run(uow, row.run_id)
+        attempt = int(row.payload["attempt"])
+        target = None if record is None else record.spec.n8n
+        if record is None or target is None or not _pending_at(record.state, attempt):
+            async with self._db.transaction("orchestration") as uow:
+                await self._store.outbox_sent(uow, row.id)
+            return
+        if self._starts is None:
+            raise DispatchFailure("this platform cannot start n8n workflows of their own")
+        execution = await self._starts.start(row.run_id, target, row.payload["kind"])
+        async with self._db.transaction("orchestration") as uow:
+            await self._store.outbox_sent(uow, row.id)
+            record = await self._store.load_run(uow, row.run_id, lock=True)
+            if execution is None or record is None:
+                return
+            match record.state:
+                case Pending(claimant=None) as pending if pending.attempt == attempt:
+                    await self._store.save_run(uow, record, pending.claim(execution))
+                case _:
+                    pass
+
+    async def _dispatch_retry(self, row: OutboxRow) -> None:
+        """n8n answers its retry only once the retry stops, so the outbox waits on it a while and
+        no request ever does. What the retry does, the run hears from its blocks' calls."""
+        if self._starts is None:
+            raise DispatchFailure("this platform cannot retry n8n workflows of their own")
+        execution = N8nExecutionId(row.payload["execution_id"])
+        refused = await self._starts.retry(execution, row.payload["workflow_id"])
+        async with self._db.transaction("orchestration") as uow:
+            if refused is None:
+                await self._store.outbox_sent(uow, row.id)
+                return
+            await self._store.outbox_give_up(uow, row.id, refused.detail)
+        log.warning("n8n would not retry execution %s: %s", execution, refused.detail)
 
     def approval_url(self, approval_id: ApprovalId) -> str:
         """The approval page as an absolute address, for a card read outside the Portal."""
@@ -1056,6 +1531,10 @@ class Orchestrator:
         async with self._db.transaction("orchestration") as uow:
             await self._store.save_message_ref(uow, approval_id, ref)
             await self._store.outbox_sent(uow, row.id)
+            request = await self._store.load_approval(uow, approval_id)
+            decisions = await self._store.load_decisions(uow, approval_id)
+            sent = Sent(uow.now, await self._store.approvers(uow))
+            steps = [] if request is None else steps_view(request, decisions, sent)
             await self._activity.append(
                 uow,
                 row.run_id,
@@ -1069,6 +1548,8 @@ class Orchestrator:
                             approval_id=notice.approval_id,
                             channel=self._channel.name,
                             link=notice.link,
+                            sent_to=[step.sent_to for step in steps],
+                            sent_at=sent.at,
                         ),
                         dedupe_key=f"announced:{notice.approval_id}",
                     )
@@ -1080,17 +1561,26 @@ class Orchestrator:
         uow: UnitOfWork,
         record: RunRecord,
         request: ApprovalRequest,
+        decisions: tuple[Decision, ...],
         status: Approved | Declined,
         decider: Principal,
     ) -> None:
+        approved_first: tuple[UserId, ...] = ()
+        reason: str | None = None
         match status:
             case Approved(approvers):
                 verdict: OutcomeVerdict = "approved"
                 deciders = approvers
-            case Declined(by):
+            case Declined(by, step):
                 verdict = "declined"
                 deciders = (by,)
-        names = {**await self._store.names(uow, deciders), decider.user_id: decider.display}
+                steps = sorted(decisions, key=lambda d: d.step_index)
+                approved_first = tuple(d.by for d in steps if d.step_index < step)
+                reason = next(d.reason for d in steps if d.step_index == step)
+        names = {
+            **await self._store.names(uow, (*approved_first, *deciders)),
+            decider.user_id: decider.display,
+        }
         await self._store.enqueue(
             uow,
             record.run_id,
@@ -1099,6 +1589,8 @@ class Orchestrator:
                 "approval_id": request.id,
                 "verdict": verdict,
                 "by": [names[d] for d in deciders],
+                "approved_first": [names[d] for d in approved_first],
+                "reason": reason,
                 "use_case_name": record.spec.use_case_name,
             },
             uow.now,
@@ -1141,12 +1633,104 @@ class Orchestrator:
             by=tuple(row.payload["by"]),
             use_case_name=row.payload["use_case_name"],
             open_url=self.approval_url(approval_id),
+            approved_first=tuple(row.payload.get("approved_first", ())),
+            reason=row.payload.get("reason"),
         )
         await _through_channel(self._channel.update(ref, outcome))
         async with self._db.transaction("orchestration") as uow:
             await self._store.outbox_sent(uow, row.id)
 
+    async def _dispatch_wake(self, row: OutboxRow) -> None:
+        approval_id = ApprovalId(row.payload["approval_id"])
+        decision: WakeDecision = row.payload["decision"]
+        async with self._db.transaction("orchestration") as uow:
+            record = await self._store.load_run(uow, row.run_id)
+            request = await self._store.load_approval(uow, approval_id)
+            assert record is not None and request is not None
+            held = await self._store.held_wait(uow, approval_id)
+            decisions = await self._store.load_decisions(uow, approval_id)
+            if (
+                held is None
+                or isinstance(record.state, Lost)
+                or wake_decision(request, decisions) != decision
+            ):
+                await self._store.outbox_give_up(uow, row.id, "the records hold no such decision")
+                log.warning(
+                    "did not wake n8n for %s: the records hold no %s", approval_id, decision
+                )
+                return
+        if self._waker is None:
+            raise DispatchFailure("this platform has no WAB_NODE_KEY to sign a wake")
+        answer = await self._waker.wake(held, request.id, decision)
+        if isinstance(answer, Gone) and await self._earlier_wake_landed(row, held):
+            answer = Delivered()
+        async with self._db.transaction("orchestration") as uow:
+            record = await self._store.load_run(uow, row.run_id, lock=True)
+            assert record is not None
+            match answer:
+                case Delivered():
+                    await self._store.outbox_sent(uow, row.id)
+                    match record.state:
+                        case AwaitingApproval() as waiting if (
+                            decision == "yes" and waiting.approval_id == approval_id
+                        ):
+                            await self._commit(
+                                uow, record, waiting.woken(held.execution_id, uow.now)
+                            )
+                        case _:
+                            pass
+                case Gone():
+                    await self._store.outbox_give_up(uow, row.id, "n8n answered 409")
+                    why = "the waiting execution was resumed by something else, or has finished"
+                    await self._lose(uow, record, approval_id, decision, why)
+
+    async def _earlier_wake_landed(self, row: OutboxRow, held: HeldWait) -> bool:
+        """A 409 after an earlier try may only mean that try's answer was lost: n8n took the
+        wake and resumed the execution, and then the line dropped. n8n's own record decides, and
+        only one of a running or finished execution counts as delivered."""
+        if row.attempt == 0 or self._landing is None:
+            return False
+        return await self._landing.landed(held.execution_id)
+
+    async def _lose(
+        self,
+        uow: UnitOfWork,
+        record: RunRecord,
+        approval_id: ApprovalId,
+        decision: WakeDecision,
+        why: str,
+    ) -> None:
+        """A yes n8n can no longer take loses the run. A no or no answer ended the run already,
+        so its execution is only left waiting."""
+        match record.state:
+            case AwaitingApproval() as waiting if (
+                decision == "yes" and waiting.approval_id == approval_id
+            ):
+                await self._commit(uow, record, waiting.lose(why))
+            case _:
+                log.warning("n8n did not take the %s for %s: %s", decision, approval_id, why)
+
+    async def _wake_failed(self, row: OutboxRow, now: datetime, error: str) -> None:
+        assert row.created_at is not None
+        again_at = self._wake_policy.next_try(row.attempt + 1, row.created_at, now)
+        async with self._db.transaction("orchestration") as uow:
+            if again_at is not None:
+                await self._store.outbox_retry(uow, row.id, again_at, error)
+                return
+            await self._store.outbox_give_up(uow, row.id, error)
+            record = await self._store.load_run(uow, row.run_id, lock=True)
+            assert record is not None
+            approval_id = ApprovalId(row.payload["approval_id"])
+            why = "n8n could not be reached for a day"
+            await self._lose(uow, record, approval_id, row.payload["decision"], why)
+
     async def _dispatch_failed(self, row: OutboxRow, now: datetime, error: str) -> None:
+        tried = row.attempt + 1
+        said = without_addresses(error)
+        log.warning("outbox %s for %s failed on try %d: %s", row.kind, row.run_id, tried, said)
+        if row.kind == WAKE:
+            await self._wake_failed(row, now, error)
+            return
         failures = row.attempt + 1
         if failures <= len(self._retry.delays):
             async with self._db.transaction("orchestration") as uow:
@@ -1192,11 +1776,14 @@ class Orchestrator:
                 case Pending() | Acting() as state if attempt is not None and state.attempt == int(
                     attempt
                 ):
+                    what = (
+                        "n8n did not take the start"
+                        if row.kind == START
+                        else f"The workflow engine did not take the "
+                        f"{row.payload.get('leg', 'next')} leg"
+                    )
                     failure = Failure(
-                        FailureReason.DISPATCH_FAILED,
-                        f"The workflow engine did not take the "
-                        f"{row.payload.get('leg', 'next')} leg: {error}",
-                        retryable=True,
+                        FailureReason.DISPATCH_FAILED, f"{what}: {error}", retryable=True
                     )
                     await self._commit(uow, record, fail(state, failure))
                     await self._store.cancel_outbox(uow, row.run_id)
@@ -1223,6 +1810,117 @@ class Orchestrator:
                 case _:
                     return
 
+    async def _expire_request(self, run_id: RunId, now: datetime) -> None:
+        """Ends a request nobody answered (ADR 0024). Nothing is written, and the execution that
+        waits for it, if n8n holds the wait, takes its No answer exit."""
+        async with self._db.transaction("orchestration") as uow:
+            record = await self._store.load_run(uow, run_id, lock=True)
+            if record is None or not isinstance(record.state, AwaitingApproval):
+                return
+            request = await self._store.load_approval(uow, record.state.approval_id)
+            assert request is not None
+            decisions = await self._store.load_decisions(uow, request.id)
+            due = request.expires_at is not None and request.expires_at <= now
+            if not due or not isinstance(approval_status(request, decisions), Open):
+                return
+            await self._store.end_request(uow, request.id, Ended.EXPIRED)
+            await self._commit(uow, record, record.state.expire())
+            wake = wake_decision(replace(request, ended=Ended.EXPIRED), decisions)
+            if wake is not None and await self._store.held_wait(uow, request.id) is not None:
+                await self._enqueue_wake(uow, run_id, request.id, wake)
+
+    async def cancel_for_deleted(self, use_case_id: UseCaseId) -> int:
+        """A workflow deleted while a request waits (ENGINE-PLAN D7). Each open request ends
+        cancelled, "Deleted before an answer. Nothing was written.", and its Approvers see that
+        on its card. The execution that waits for it is never woken, because n8n would still
+        run an archived workflow's write (P7 Q17). A yes n8n has not taken yet is lost the same
+        way, its wake held back. Asked again, it changes nothing. How many requests it ended."""
+        async with self._db.transaction("orchestration") as uow:
+            waiting = await self._store.waiting_runs(uow, use_case_id)
+        ended = 0
+        for run_id in waiting:
+            async with self._db.transaction("orchestration") as uow:
+                record = await self._store.load_run(uow, run_id, lock=True)
+                if record is None or not isinstance(record.state, AwaitingApproval):
+                    continue
+                request = await self._store.load_approval(uow, record.state.approval_id)
+                assert request is not None
+                decisions = await self._store.load_decisions(uow, request.id)
+                await self._store.cancel_outbox(uow, run_id)
+                match approval_status(request, decisions):
+                    case Open():
+                        await self._store.end_request(uow, request.id, Ended.CANCELLED)
+                        await self._commit(uow, record, record.state.cancel())
+                        await self._store.enqueue(
+                            uow,
+                            run_id,
+                            SHOW_OUTCOME,
+                            {
+                                "approval_id": request.id,
+                                "verdict": "cancelled",
+                                "by": [],
+                                "use_case_name": record.spec.use_case_name,
+                            },
+                            uow.now,
+                        )
+                        ended += 1
+                    case Approved():
+                        why = "its workflow was deleted before n8n took the yes."
+                        await self._commit(uow, record, record.state.lose(why))
+                    case _:
+                        pass
+        return ended
+
+    async def stop_old_engine_runs(self) -> list[RunId]:
+        """Ends every run still on the shared run workflow, made of blocks the allow list turns
+        off (ENGINE-PLAN E11), so none waits for a workflow that is gone. Nothing is written by
+        it: a waiting request ends closed and its Approvers see that on its card, and a run that
+        was making its changes says to check Jira first. Asked again, it changes nothing. The
+        runs it ended."""
+        async with self._db.transaction("orchestration") as uow:
+            open_runs = await self._store.old_engine_runs(uow)
+        stopped: list[RunId] = []
+        for run_id in open_runs:
+            async with self._db.transaction("orchestration") as uow:
+                record = await self._store.load_run(uow, run_id, lock=True)
+                if record is None or record.spec.n8n is not None:
+                    continue
+                match record.state:
+                    case Pending() | Working() | Proposed() | Acting() as state:
+                        await self._commit(uow, record, stop_for_update(state))
+                    case AwaitingApproval() as state:
+                        await self._store.end_request(uow, state.approval_id, Ended.CLOSED)
+                        await self._commit(uow, record, state.stop_for_update())
+                        await self._store.enqueue(
+                            uow,
+                            run_id,
+                            SHOW_OUTCOME,
+                            {
+                                "approval_id": state.approval_id,
+                                "verdict": "closed",
+                                "by": [],
+                                "use_case_name": record.spec.use_case_name,
+                            },
+                            uow.now,
+                        )
+                    case _:
+                        continue
+                await self._store.cancel_outbox(uow, run_id)
+                stopped.append(run_id)
+        if stopped:
+            self.nudge()
+        return stopped
+
+    async def _enqueue_wake(
+        self, uow: UnitOfWork, run_id: RunId, approval_id: ApprovalId, decision: WakeDecision
+    ) -> None:
+        """One wake per request, whatever asks for a second. It names no address: the tick reads
+        the sealed one from the request."""
+        payload = {"approval_id": approval_id, "decision": decision}
+        await self._store.enqueue(
+            uow, run_id, WAKE, payload, uow.now, once_as=f"wake:{approval_id}"
+        )
+
     async def _commit(
         self,
         uow: UnitOfWork,
@@ -1236,6 +1934,11 @@ class Orchestrator:
         await self._watch.run_moved(uow, record, moved.state)
         return saved
 
+    async def _enqueue_start(
+        self, uow: UnitOfWork, run_id: RunId, kind: StartKind, attempt: int, at: datetime
+    ) -> None:
+        await self._store.enqueue(uow, run_id, START, {"kind": kind, "attempt": attempt}, at)
+
     async def _enqueue_leg(
         self, uow: UnitOfWork, record: RunRecord, leg: Leg, next_at: datetime
     ) -> None:
@@ -1247,6 +1950,10 @@ class Orchestrator:
             {"workflow": record.spec.workflow, "leg": leg.value, "attempt": attempt},
             next_at,
         )
+
+
+def _pending_at(state: RunState, attempt: int) -> bool:
+    return isinstance(state, Pending) and state.attempt == attempt
 
 
 def _active(state: RunState) -> Pending | Working | Proposed | Acting:

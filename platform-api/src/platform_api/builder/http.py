@@ -1,12 +1,19 @@
 from collections.abc import Callable
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query, Request, Response
 from fastapi.responses import JSONResponse
 
 from platform_api.auth import OPERATORS_ONLY, SIGNED_IN, CurrentPrincipal
 from platform_api.builder.card_store import NoSuchCard, StarterCard
-from platform_api.builder.home import Home, HomeOut
+from platform_api.builder.home import (
+    NEEDS_LISTS,
+    WAITING_LIST,
+    Home,
+    HomeOut,
+    NeedsPage,
+    WaitingPage,
+)
 from platform_api.builder.models import (
     BlockView,
     CardChecked,
@@ -20,6 +27,7 @@ from platform_api.builder.models import (
     PlanIn,
     PlanOut,
     RunStarted,
+    StartRunIn,
     SuggestIn,
     SuggestOut,
     TemplateList,
@@ -29,15 +37,21 @@ from platform_api.builder.models import (
     UseCaseList,
     UseCaseView,
 )
+from platform_api.builder.n8n_draft import DraftRefused
+from platform_api.builder.paging import Place, parse_cursor
 from platform_api.builder.planning import NoModelConnected, RuntimeNotAnswering
 from platform_api.builder.service import (
     AgentUseCaseRefused,
     Builder,
     CardsRefused,
+    N8nNotReady,
     NoModelToRun,
     NothingToCheck,
+    NotMovedYet,
+    NotOnYet,
     UseCasePaused,
 )
+from platform_api.builder.team_requests import FOLLOWING_UP, FollowingUpPage
 from platform_api.builder.templates import (
     AGENT_CARDS,
     SOFTWARE_WATCHLIST,
@@ -109,6 +123,7 @@ NO_SUCH = "No such workflow"
 NOT_FOUND = error_response("No such workflow, or it is deleted")
 NO_MODEL = "Connect an AI model in Settings first."
 NO_MODEL_TO_RUN = "Connect an AI model in Settings to run agents."
+NOT_ON_YET = "This workflow isn't on yet. Do a test run, or turn it on to run it."
 NOT_OFFERED = {
     SOFTWARE_WATCHLIST.key: "Add software on the Software page",
     AGENT_CARDS.key: "Describe the task on the Builder page",
@@ -124,6 +139,65 @@ CARD_NOT_FOUND = error_response("No such agent")
 )
 async def home(principal: CurrentPrincipal, home: CurrentHome) -> HomeOut:
     return await home.for_person(principal)
+
+
+BAD_CURSOR = "This isn’t a page this list gave out. Read the list again from its first page."
+PAGED = {**SIGNED_IN, 422: error_response(BAD_CURSOR)}
+AFTER = Query(
+    description="The `next` of the page before, or Home's cursor for the list. Leave it out for "
+    "the first page."
+)
+
+
+def _after(after: str | None, lists: tuple[str, ...]) -> dict[str, Place] | None:
+    if after is None:
+        return None
+    cursor = parse_cursor(after, lists)
+    if cursor is None:
+        raise HTTPException(422, BAD_CURSOR)
+    return cursor
+
+
+@router.get(
+    "/home/needs",
+    responses=PAGED,
+    description="A page of the parts of Needs you that can run long: runs waiting for this "
+    "person's yes, stopped runs, declined test runs and questions, each the newest first. Home "
+    "answers the first page. Each total counts every row, so the pages reach every one.",
+)
+async def home_needs(
+    principal: CurrentPrincipal,
+    home: CurrentHome,
+    after: Annotated[str | None, AFTER] = None,
+) -> NeedsPage:
+    return await home.needs(principal, _after(after, NEEDS_LISTS))
+
+
+@router.get(
+    "/home/waiting-on-others",
+    responses=PAGED,
+    description="A page of the runs waiting for someone else's yes that this person is part "
+    "of, the newest first.",
+)
+async def home_waiting_on_others(
+    principal: CurrentPrincipal,
+    home: CurrentHome,
+    after: Annotated[str | None, AFTER] = None,
+) -> WaitingPage:
+    return await home.waiting_on_others(principal, _after(after, (WAITING_LIST,)))
+
+
+@router.get(
+    "/home/following-up",
+    responses=PAGED,
+    description="A page of this person's own requests to the team, the newest first.",
+)
+async def home_following_up(
+    principal: CurrentPrincipal,
+    home: CurrentHome,
+    after: Annotated[str | None, AFTER] = None,
+) -> FollowingUpPage:
+    return await home.following_up(principal, _after(after, (FOLLOWING_UP,)))
 
 
 @router.get("/templates", responses=SIGNED_IN)
@@ -145,9 +219,13 @@ async def create_use_case(
     )
 
 
+NO_BODY = StartRunIn()
+"""What a start with no body means: Run now or a check, not a test."""
+
+
 @router.get("/use-cases", responses=SIGNED_IN)
 async def list_use_cases(principal: CurrentPrincipal, builder: CurrentBuilder) -> UseCaseList:
-    return await builder.list_use_cases()
+    return await builder.list_use_cases(principal)
 
 
 @router.post("/use-cases/suggest", responses=SIGNED_IN)
@@ -161,7 +239,7 @@ def suggest_template(
 async def get_use_case(
     use_case_id: str, principal: CurrentPrincipal, builder: CurrentBuilder
 ) -> UseCaseView:
-    view = await builder.get_use_case(use_case_id)
+    view = await builder.get_use_case(use_case_id, principal)
     if view is None:
         raise HTTPException(404, NO_SUCH)
     return view
@@ -176,9 +254,12 @@ async def get_use_case(
         404: NOT_FOUND,
         409: error_response(
             "The watchlist is empty, so there is nothing to check, an agent use case has no "
-            "AI model connected, or the workflow is paused"
+            "AI model connected, the workflow is paused, or it is a draft and this is not a "
+            "test run"
         ),
     },
+    description="Starts a run. On a draft only a test run starts, and it stops at the approval "
+    "gate: it asks nobody for a yes and writes nothing (ADR 0044).",
 )
 async def start_run(
     use_case_id: str,
@@ -186,8 +267,11 @@ async def start_run(
     idempotency_key: Annotated[str, Header(alias="Idempotency-Key")],
     builder: CurrentBuilder,
     response: Response,
+    body: Annotated[StartRunIn, Body()] = NO_BODY,
 ) -> RunStarted:
-    started = await builder.start_run(UseCaseId(use_case_id), principal, idempotency_key)
+    started = await builder.start_run(
+        UseCaseId(use_case_id), principal, idempotency_key, test=body.test
+    )
     if started is None:
         raise HTTPException(404, NO_SUCH)
     if isinstance(started, NothingToCheck):
@@ -196,6 +280,10 @@ async def start_run(
         raise HTTPException(409, NO_MODEL_TO_RUN)
     if isinstance(started, UseCasePaused):
         raise HTTPException(409, "This workflow is paused. Resume it to start a run.")
+    if isinstance(started, NotOnYet):
+        raise HTTPException(409, NOT_ON_YET)
+    if isinstance(started, NotMovedYet):
+        raise HTTPException(409, started.words)
     if not started.created:
         response.status_code = 200
     return RunStarted(run_id=started.run_id, events_url=f"/api/v1/runs/{started.run_id}/events")
@@ -302,6 +390,8 @@ async def plan_task(body: PlanIn, principal: Operator, builder: CurrentBuilder) 
     "/agent-use-cases",
     status_code=201,
     responses=OPERATORS_ONLY,
+    description="Sets up an agent use case, on unless the body says on: false. A draft never "
+    "runs on its schedule until an Operator turns it on (ADR 0044).",
 )
 async def create_agent_use_case(
     body: CreateAgentUseCase, principal: Operator, builder: CurrentBuilder
@@ -313,3 +403,9 @@ async def create_agent_use_case(
             raise HTTPException(
                 422, [{"loc": list(where), "msg": message} for where, message in errors]
             )
+        case DraftRefused(findings):
+            raise HTTPException(
+                422, [{"loc": ["body"], "msg": finding.text} for finding in findings]
+            )
+        case N8nNotReady(detail):
+            raise HTTPException(503, detail)

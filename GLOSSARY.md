@@ -26,7 +26,7 @@ One thing an agent can do in another system, such as reading GitHub releases or 
 _Avoid_: Plugin, skill, integration
 
 **Agent library**:
-The agent cards a team has saved. The Planner chooses from it.
+The agent cards a team has saved. The Planner chooses from it. It lives under How it works, in Settings (ADR 0043).
 _Avoid_: Agent hub (NCS's agent hub is a separate thing)
 
 **Use case**:
@@ -42,11 +42,39 @@ The Planner's reply on Home when it can do a request: the whole workflow filled 
 _Avoid_: Wizard, form, New workflow (the old 4-step page)
 
 **Planner answer**:
-What the Planner replies to one request typed on Home: a set-up card, a watchlist row, a question about which software, the part it can do, a can't with the nearest alternative, a refusal to skip a yes, an answer about the person's workflows (check my workflows, why it stopped, what needs me), a question answer, the list of what it can do, or offline. Code decides which one from the model's reading, and the reply sentences are fixed text (ADR 0037), except for the question answer (ADR 0042).
+What the Planner replies to one request typed on Home: a set-up card, an edit card, a watchlist row, a question about which software, the part it can do, a can't with the nearest alternative, a refusal to skip a yes, an answer about the person's workflows (check my workflows, why it stopped, what needs me), a question answer, the list of what it can do, or offline. Code decides which one from the model's reading, and the reply sentences are fixed text (ADR 0037), except for the question answer (ADR 0042).
 _Avoid_: Reply, response, intent (in the app)
+
+**Edit card**:
+The Planner's reply when someone asks to change a workflow they already have: only what changes, before and after. Saving it publishes a new version, with Undo (ADR 0043).
+_Avoid_: New draft (for a change to an existing workflow)
+
+**Part marks**:
+The mark beside each part of a request on the Planner's card: a tick for a part it will do, a cross with its reason for a part it can't do or didn't follow, or a question for something it needs to know. Every clause of the request gets one, so no part is dropped silently. A part with a cross is left out, and the workflow keeps a Left out line that says so.
+_Avoid_: Chips (a chip is a value she can change), flags
+
+**Needs you**:
+The list of what waits on the signed-in person, grouped into Do now (stops, approvals) and Set up (keys, missing sources). One source feeds every place it shows, and it stays pinned at the top of a conversation.
+_Avoid_: Needs attention, inbox
+
+**Pinned line**:
+The one line at the top of a conversation that names the most urgent item in Needs you, with Open and "N more". It stays while the conversation grows, so urgent items never scroll away.
+_Avoid_: Banner, alert
+
+**Rail**:
+The slim column on the left of the app with Chat, Workflows and Watchlist, each with a count. Workflows and Watchlist open as full pages, and the chat shows only on Chat. In a narrow window it is a bar across the top (ADR 0043).
+_Avoid_: Tabs, menu, sidebar
+
+**Side panel**:
+Where something opened from a card in the chat shows, beside the chat, so the conversation stays in view. It shows one thing at a time, as a summary, with More details for the full page. A link inside it, or anything opened from the rail or a page, opens as a full page instead. In a narrow window it covers the window, with Close.
+_Avoid_: Drawer, modal
 
 **Question answer**:
 The Planner's reply to a question about the person's own data, such as how many software are on the watchlist. The model writes it in its own words from a facts snapshot read when the question arrives, and only from those facts. It names the sections it used, and it never offers to act. It is the one answer whose text is not fixed (ADR 0042).
+
+**Free reply**:
+The Planner's reply in its own words to a message that no card or fixed answer fits: a direct answer, one clarifying question with choices to tap, or a can't with the closest thing the platform can do. It never writes, and it never says that anything was done (ADR 0047, proposed).
+_Avoid_: Chat reply, fallback, free text
 
 **Capability**:
 Something the platform can do for a workflow, such as reading Jira tickets. It is in exactly one state: Ready, Needs setup, Not answering, Planned or Unsupported. Every screen and the Planner read the same state.
@@ -57,7 +85,7 @@ A request someone saves for the team when the platform can't help: Ask the team,
 _Avoid_: Ticket (that is Jira), support email
 
 **Draft**:
-A set-up card that an Operator started and has not turned on, kept so they can come back to it. Only they see it, listed on Workflows. Always write "n8n draft" for an n8n workflow that is not published yet.
+A workflow that is set up but not turned on yet. It never runs on its schedule, its test run stops before the yes, and Turn it on publishes its version 1 (ADR 0044). Everyone sees it on Workflows. A set-up card that an Operator started and kept to come back to is a draft too, and only they see it. Always write "n8n draft" for an n8n workflow that is not published yet.
 _Avoid_: Proposal (that is a run's write actions)
 
 **Paused**:
@@ -80,17 +108,42 @@ The web app where Operators build use cases and start runs, watch the live activ
 _Avoid_: Frontend, dashboard
 
 **Node pack**:
-Our own n8n nodes. With them, an n8n workflow can run an agent card, read from another system, add write actions to a proposal, ask for approval and carry out an approved proposal. They are the only way an n8n workflow reaches another system.
+Our own n8n nodes, built into our n8n image: Start from the Portal, Read, Agent, Propose a change, Ask for a yes, Make the approved changes, Tell and Report a failure. With them, an n8n workflow can run an agent card, read from another system, add write actions to a proposal, ask for approval, carry out an approved proposal and tell the team. They are the only way an n8n workflow reaches another system. Each one calls only our API, at the address and with the key in n8n's environment, and has no field for either.
 _Avoid_: Plugin, integration, custom nodes
+
+**Start from the Portal**:
+The node pack's trigger. It starts a workflow when someone presses Run now, Test run or Retry in the Portal, and only for a start our API signed for that workflow, within five minutes and once.
+_Avoid_: Webhook
+
+**Made in n8n**:
+A workflow someone built in n8n from our nodes and then registered in the Portal, rather than one the Planner laid out. Until an Operator names its Approvers, any Approver on the team decides its requests (ADR 0027). Planned.
+
+**Holder**:
+The person who has a workflow open in n8n, in their own n8n project. A run they start by hand in n8n is their work, so they cannot approve it. Take back ends the hold (ADR 0027).
+
+**Version compare**:
+The check around every change our platform makes to a workflow in n8n. The workflow must still be the version the Portal last stored, and the change must read back as sent. When someone changed it in n8n since, the platform shows "Changed again since, in n8n." (ADR 0027). Planned.
 
 **Published version**:
 The version of a use case's n8n workflow that runs. Staff change the n8n draft, and publishing the n8n draft makes it the published version.
 _Avoid_: Live version, active version
 
+**Version compare**:
+The check the platform makes around every change it makes to a workflow's n8n workflow. It reads the n8n version first and stops if someone changed it since the Portal last saw it, then reads the workflow back after the change. If an edit in n8n got there first, the Portal says `Changed again since, in n8n.` n8n's free edition offers no lock the platform could hold instead (spike P7).
+_Avoid_: Lock
+
+**Made in n8n**:
+A workflow someone built in n8n rather than in the Portal. It runs on the platform only after an Operator with n8n access registers it on Workflows and names an Approver for its yes.
+_Avoid_: External workflow, imported workflow
+
+**Holder**:
+The Operator with n8n access who has a workflow open in n8n. Open in n8n moves the workflow into their own space in n8n, because n8n's free edition lets only one person's space hold it. While someone holds a workflow, the platform changes it only to undo or to add the yes back, and Take it back returns it.
+_Avoid_: Owner (the platform's n8n account), editor
+
 ### Keeping software up to date
 
 **Watchlist**:
-The list of software a team runs and keeps up to date. It is checked on a schedule, and one approval request covers each check. In the app it is the **Software watchlist**.
+The list of software a team runs and keeps up to date. It is checked on a schedule, and one approval request covers each check. The page is called the **Software watchlist**, and the rail shows it as Watchlist.
 _Avoid_: Inventory, software list
 
 **Use the new address**:
@@ -128,7 +181,7 @@ _Avoid_: EOL, deprecated
 The person who last saved a watchlist's schedule. Every scheduled check counts as their work.
 
 **Held schedule**:
-A schedule whose owner has left the People list or is no longer an Operator. It starts no run, and each slot it misses is used up, until the owner is an Operator again or another Operator saves the schedule and so becomes its owner.
+A schedule whose owner has left the People list or is no longer an Operator. It starts no run: each time its Schedule Trigger fires, our API ends the slot quietly, until the owner is an Operator again or another Operator saves the schedule and so becomes its owner. A takeover that saves the same schedule publishes no version, so the next scheduled run's "started by" still names the publisher of the version in use (D5), while the Portal names the new owner under When. Both are parties, so neither can approve that run.
 _Avoid_: Paused (a workflow is paused), turned off (an Operator turns a schedule off)
 
 ### Running
@@ -138,15 +191,22 @@ One execution of a use case, from trigger to result.
 _Avoid_: Job, execution (n8n uses "execution" for its own internal runs)
 
 **Test run**:
-A run an Operator starts by hand to try a workflow. It asks for a yes and writes like any other run.
-_Avoid_: Dry run (nothing is skipped)
+A run an Operator starts by hand to try a workflow. On a workflow that is on, it asks for a yes and writes like any other run. On a draft, it stops at the approval gate: it asks nobody for a yes and writes nothing (ADR 0044).
+_Avoid_: Dry run
+
+**Skipped**:
+A run that n8n started while an earlier run of the same workflow was still waiting for a yes. It stops at its first step and does nothing, so Approvers never see two requests for one change. The Portal says "An earlier run is still waiting for a yes."
+
+**Node call**:
+One call from a block of the node pack to our platform, such as a Read or an Agent. The first call of a run links its n8n execution to the run. Our platform keeps each block's first answer and gives it again when n8n repeats or retries the call, so no agent runs twice and no change is proposed twice.
+_Avoid_: Step call, webhook
 
 **Planner**:
 The agent that reads a task, says what it understood, and decides which saved agents to bring in, or that a new agent card is needed.
 _Avoid_: Room lead (the old name), orchestrator
 
 **Planner's box**:
-The text box on Home where an Operator says what to automate, check or fix. The Planner answers under it with a Planner answer, and its face, the Visor bot, shows whether it is listening, thinking or sorry. The old four-step New workflow screen is gone. Its old address leads to Home.
+The text box on Home where an Operator says what to automate, check or fix. It starts in the middle of Home and moves to the bottom of the chat after the first message. The Planner answers in the chat with a Planner answer, and its face, the Visor bot, shows whether it is listening, thinking or sorry. The old four-step New workflow screen is gone. Its old address leads to Home.
 
 **Specialist agent**:
 An agent, defined by an agent card, that the Planner brings in to do one part of a run.
@@ -156,10 +216,18 @@ The specialist agent that reads each watched software's releases at its source, 
 _Avoid_: Release checker (the old name), scanner
 
 **Leg**:
-The part of a run that n8n carries in one execution. A run has a work leg up to the approval request and an act leg from the approval to the end. Our platform owns the pause between them.
+Retired on 13 Nov 2026 (ADR 0026). It was the part of a run that n8n carried in one execution, a work leg and an act leg with our platform owning the pause between them. Each workflow is now its own n8n workflow, and n8n holds the wait for a yes.
 
 **Write action**:
 Any action that changes data in an external system, such as Jira, Confluence or GitLab.
+
+**Start from the Portal**:
+The block of ours that starts a run when the Portal asks, for Run now. It accepts only a start our API signed for that one run, and it has no setting anyone can change. A test run of a draft hands n8n the same signed start directly.
+_Avoid_: Webhook (n8n's Webhook block is off)
+
+**Tell**:
+A block that posts a run's result in the team's Teams channel and emails the team's fixed list. Our API writes the message from what the run read and found, never from text in the workflow. It changes no system of record, so it needs no yes, and in a test run it sends nothing.
+_Avoid_: Notify, message
 
 **Jira site**:
 The Jira that tickets live in: the practice Jira, or one Jira address. Each Jira write action names the site it was approved for, and the safety checker refuses it in any other (ADR 0041). A ticket key means a ticket only together with its site. Changing the token keeps the site.
@@ -172,9 +240,36 @@ _Avoid_: Plan, draft (a Draft is a set-up card not yet turned on)
 **Approval gate**:
 The step that pauses a run before a write action until an Approver approves it in Teams.
 
+**Tell**:
+A Teams card or an email that only reports what a run read or found. It may go out without a yes, because it changes no data, under the Tell rule: its recipients are the ones fixed in the Portal, our API writes its words from the run's own reads and agent results, and a test run sends nothing (ADR 0026). The node pack's Tell node sends one.
+_Avoid_: Notification, alert
+
+**Tell flow**:
+The team's one Power Automate flow that posts a Tell's card in the team's channel and emails the team's list. Its address is a secret, kept in Key Vault and never shown. Until it is set, a Tell goes to the practice copy. Setting it alone does not make "Posts in Teams and emails" ready. That waits for E14, when the Planner can lay out a Tell block.
+
 **Approval card**:
 The Adaptive Card the platform posts in Teams for each approval request: what would be written, what the agents found, and who can decide. Its one button, Open in AI Workflow Builder, opens the approval page, where the Approver decides. Once decided, it shows who approved or declined. The practice copy shows the same card.
 _Avoid_: Teams message, notification
+
+**Not checked**:
+The line on an approval that names what the run could not check, such as software it couldn't read or security advisories the platform can't read yet. It tells the Approver what their yes does not cover.
+_Avoid_: Warnings, caveats
+
+**Question on a request**:
+A question an Approver who may decide asks the requester, on the approval request, before deciding. Only the requester answers, once, while the request waits for a yes. The questions stay on the record, read only, once it is decided. A question or an answer decides nothing.
+_Avoid_: Comment, chat
+
+**Requester**:
+The person a request is for: whoever started the run, or the workflow's owner when its schedule started it. They answer questions on the request and see the decline reason. They never decide their own request.
+_Avoid_: Asker, submitter
+
+**Decline reason**:
+The reason an Approver may give when declining, such as "Wrong version". It is optional, and it shows with the declined record.
+_Avoid_: Rejection note
+
+**Declined**:
+An approval request an Approver said no to. Nothing is written. Every place that shows the run says who declined, that nothing was written, and the decline reason if there is one, in the same words.
+_Avoid_: Rejected (in the app), cancelled
 
 **Outcome card**:
 The short card the platform posts in Teams once an approval request is decided, saying who approved or declined. A Workflows webhook cannot edit the approval card, so it posts this second card instead. It goes only to the channel that had the approval card. If the channel set up now does not match it, nothing is posted, and the run's activity says so.
@@ -199,12 +294,16 @@ The check that every agent action passes before it runs. It denies write actions
 **Live activity view**:
 The animated view of a run that shows agents talking, hand-offs, and where something failed.
 
+**Run line**:
+The row of a run's steps, in plain words, whose links show where the run is: which step is at work, which waits for a yes, where it stopped, and which steps are done.
+_Avoid_: Progress bar, station strip
+
 **Activity event**:
 One recorded thing that happened in a run, such as an agent step, an approval decision or a failure. The live activity view and the AI troubleshooter both read activity events.
 _Avoid_: Log line, n8n event
 
 **AI troubleshooter**:
-The agent that explains why a run failed and helps the Operator fix it.
+The agent that explains why a run failed and helps the Operator fix it. It answers three questions: what happened, what was affected, and whether a retry is safe.
 
 **Copier**:
 The part of run monitoring that copies each new activity event from PostgreSQL to Cosmos DB. It copies a run's events in order, and only one copier works on a run at a time. PostgreSQL keeps every event, so a copy that stops halfway goes on from the copied mark.
@@ -217,6 +316,14 @@ _Avoid_: Checkpoint, watermark
 **Activity reader**:
 Where the live activity view, its replay and the AI troubleshooter read activity events: Cosmos DB or PostgreSQL. The setting `ACTIVITY_READER` picks `cosmos` or `postgres`. When Cosmos DB is set up, the copier runs whichever is picked. A place without Cosmos DB, such as a DevNet that does not allow it, reads PostgreSQL.
 
+**Error workflow**:
+The platform's own n8n workflow, `run_failure_reporter`, that n8n starts when any of our n8n workflows fails. Its Report a failure block tells our API which execution failed, and our API reads the block and the words from n8n's own record. n8n skips an error workflow that is not active, so bootstrap keeps it active.
+_Avoid_: Error handler, alert workflow
+
+**Daily self-test**:
+The platform's own n8n workflow, `self_test_failure`, that n8n runs once a day at 06:00 in the team time zone and that fails on purpose. Its failure travels the error workflow to our API like a run's would, and our API keeps when it arrived. It is never a run. `/healthz/ready` warns when none arrived in 26 hours, because then the error workflow is not reporting.
+_Avoid_: Heartbeat, canary
+
 **Replica**:
 One running instance of a platform service, such as platform-api in Container Apps. Several replicas share one database, and PostgreSQL wakes each one when events are added or copied, so any replica can stream any run. Call the activity log in Cosmos DB the copy, never a replica.
 _Avoid_: Pod, node
@@ -224,7 +331,7 @@ _Avoid_: Pod, node
 ### Setting up
 
 **Connection**:
-The platform's account in another system, such as GitHub, Jira or Teams, with its key. Agents read through it. Only the write gateway holds a key that writes.
+The platform's account in another system, such as GitHub, Jira, Teams or Confluence, with its key. Agents read through it. Only the write gateway holds a key that writes. Confluence's connection also lists the only pages the platform may read, its allowed pages.
 _Avoid_: Integration, credential
 
 **Practice copy**:
@@ -232,7 +339,7 @@ A stand-in for Jira or Teams that the platform runs itself, so demos and tests w
 _Avoid_: Mock (in the app), sandbox
 
 **Team time zone**:
-The zone the team works in, Singapore unless the setting `TEAM_TIME_ZONE` names another. The agents' today, the day a run started, and every day an agent searches Jira by are days in it, so a search "since 18 Oct" starts at midnight there.
+The zone the team works in, Singapore unless the setting `TEAM_TIME_ZONE` names another. Every time the Portal shows without naming a zone is in it, and so is a new schedule. Every workflow's own n8n workflow runs on it. The agents' today, the day a run started, and every day an agent searches Jira by are days in it, so a search "since 18 Oct" starts at midnight there.
 _Avoid_: Server time, UTC day
 
 **Confirmation**:
@@ -250,3 +357,7 @@ A person who approves write actions, and who confirms a new Approver and a new A
 **People list**:
 The platform's own record of who may use it and which roles they hold. Sign-in only says who someone is; the People list gives them their roles. Someone who signs in but is not on it is told to ask an Operator.
 _Avoid_: Users, accounts, app roles
+
+**n8n access**:
+A mark on an Operator in the People list that lets them see a workflow's n8n blocks and open it in n8n, where they can change it. Only Operators can have it, because a change made in n8n changes a workflow, and Approvers never can: gaining the Approver role ends it. The platform makes the person's n8n account with the same email, and matches them later by n8n's id for that account, never by email. Everyone else sees the workflow's plain steps. It is not a third role (ADR 0043, ENGINE-PLAN 2.9).
+_Avoid_: n8n role, admin

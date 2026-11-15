@@ -55,7 +55,8 @@ def seed() -> dict[str, str]:
         if error.code != 409:
             raise
     use_case_id = watchlist["use_case_id"]
-    call("DELETE", "/api/v1/watchlist/schedule")
+    known = call("GET", "/api/v1/watchlist")["watchlist"]["version"]
+    call("DELETE", f"/api/v1/watchlist/schedule?expected_version={known}")
     started = call(
         "POST",
         f"/api/v1/use-cases/{use_case_id}/runs",
@@ -67,6 +68,9 @@ def seed() -> dict[str, str]:
         run = call("GET", f"/api/v1/runs/{run_id}")
         if run["state"] == "awaiting_approval":
             return ids_of(use_case_id, run)
+        if run["state"] == "skipped":
+            # Another check of the watchlist waits for a yes, and only one may (ADR 0026).
+            return ids_of(use_case_id, call("GET", f"/api/v1/runs/{run['waiting_run_id']}"))
         if run["state"] in ("failed", "rejected", "succeeded"):
             raise SystemExit(f"seed run ended as {run['state']}")
         time.sleep(1)

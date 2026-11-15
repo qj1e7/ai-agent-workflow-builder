@@ -1,0 +1,50 @@
+{
+  "parts": [
+    {
+      "text": "make it daily",
+      "mark": "will_do",
+      "reason": null,
+      "note": null,
+      "choices": []
+    }
+  ],
+  "answer": "edit",
+  "use_case_id": null,
+  "name": null,
+  "watchlist": false,
+  "missing": null,
+  "software": null,
+  "choices": [
+    {
+      "use_case_id": "uc_01JB8",
+      "name": "Morning new-ticket check",
+      "watchlist": false,
+      "before": {
+        "day": "weekdays",
+        "at": "08:00"
+      },
+      "after": {
+        "day": "every_day",
+        "at": "08:00"
+      }
+    },
+    {
+      "use_case_id": "uc_01JC2",
+      "name": "Weekly closed-ticket summary",
+      "watchlist": false,
+      "before": {
+        "day": "friday",
+        "at": "16:00"
+      },
+      "after": {
+        "day": "every_day",
+        "at": "16:00"
+      }
+    }
+  ],
+  "before": null,
+  "after": null,
+  "hour": null,
+  "cant": null,
+  "holds_save": false
+}

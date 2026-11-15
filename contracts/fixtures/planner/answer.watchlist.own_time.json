@@ -1,0 +1,23 @@
+{
+  "parts": [
+    {
+      "text": "watch Grafana",
+      "mark": "will_do",
+      "reason": null,
+      "note": null,
+      "choices": []
+    },
+    {
+      "text": "every day at 8am",
+      "mark": "cant",
+      "reason": "own_time",
+      "note": null,
+      "choices": []
+    }
+  ],
+  "answer": "watchlist",
+  "word": "watch",
+  "software": "Grafana",
+  "already_listed": null,
+  "also": null
+}

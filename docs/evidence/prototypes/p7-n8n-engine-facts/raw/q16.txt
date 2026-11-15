@@ -1,0 +1,6 @@
+001 created q16 prune: {"id": "I98tdzESWko1LxX0", "versionId": "6dd9e377-d18b-4d25-98ee-d4284a506566", "activeVersionId": null}
+002 the oldest execution waits for a yes: {"id": "58", "status": "waiting", "mode": "webhook", "finished": false, "retryOf": null, "retrySuccessId": null, "waitTill": "3000-01-01T00:00:00.000Z", "workflowId": "I98tdzESWko1LxX0", "startedAt": "2026-11-13T09:00:35.124Z", "stoppedAt": "2026-11-13T09:00:35.223Z"}
+003 then four that finished: [["62", "success"], ["61", "success"], ["60", "success"], ["59", "success"], ["58", "waiting"]]
+004 soft-deleted rows appeared after 51s: true
+005 rows now (id, status, soft-deleted?): ["58|waiting|f", "59|success|t", "60|success|t", "61|success|f", "62|success|f"]
+006 the real yes on the waiting execution after pruning: [200, {"id": "58", "status": "success", "mode": "webhook", "finished": true, "retryOf": null, "retrySuccessId": null, "waitTill": null, "workflowId": "I98tdzESWko1LxX0", "startedAt": "2026-11-13T09:00:35.124Z", "stoppedAt": "2026-11-13T09:01:31.094Z", "workflowVersionId": "6dd9e377-d18b-4d25-98ee-d4284a506566", "lastNodeExecuted": "Create ticket", "nodes_run": {"Start from the Portal": 1, "Read release": 1, "Ask for a yes": 1, "Create ticket": 1}}]

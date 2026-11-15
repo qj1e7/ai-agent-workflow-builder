@@ -1,18 +1,26 @@
-import { useId, type AnimationEvent, type CSSProperties } from 'react'
-import { Link, useNavigate } from 'react-router'
+import { useId, useState, type AnimationEvent, type CSSProperties } from 'react'
+import { Link } from '../../ui/Link'
+import { useChatNavigate } from '../../ui/fromChat'
 import { useErrorWords } from '../../api/context'
 import { useLatch } from '../../api/latch'
-import { useModelOff, useRetry } from '../../api/queries'
+import { newIdempotencyKey } from '../../api/idempotency'
+import { RetriedFirst, useMe, useModelOff, useRetry, useStartRun, type RetryAfter } from '../../api/queries'
+import { useDisplayName } from '../../api/people'
 import type { DraftItem, WaitingItem } from '../../api/types'
 import { AgentFace } from '../../ui/AgentFace'
 import { Button, ButtonLink } from '../../ui/Button'
 import { cx } from '../../ui/cx'
-import { IconAlert, IconChevronRight, IconInfo, IconShield, type Icon } from '../../ui/icons'
+import { IconAlert, IconChevronRight, IconInfo, IconShield, IconX, type Icon } from '../../ui/icons'
+import { OpenButton, OpenLink } from '../../ui/OpenItem'
+import { useAfterPanelAction, useShownInPanel } from '../../ui/sidePanel'
+import { useRunPlace } from '../run/place'
+import { pressTestAgain } from '../run/testAgain'
 import { draftPath } from './card'
-import { actionsOf, draftWords, retryProblem, waitingWords, wordsOf, type Action, type Need, type Tone } from './home'
+import { useNote } from './ChatProvider'
+import { actionsOf, CONNECT_ABOVE, draftWords, isModelNeed, lineOf, NO_MODEL_TITLE, openPathOf, panelItemOf, retriedFirstWords, retryProblem, waitingWords, wordsOf, type Action, type Need, type Tone } from './home'
 import styles from './Home.module.css'
 
-const TONE_ICON: Record<Tone, Icon> = { wait: IconShield, tool: IconShield, bad: IconAlert, info: IconInfo }
+const TONE_ICON: Record<Tone, Icon> = { wait: IconShield, tool: IconShield, bad: IconAlert, info: IconInfo, off: IconX }
 
 export interface Motion {
   readonly glide: string
@@ -33,18 +41,45 @@ function motionProps({ glide, arrive, stagger, leaving, onAnimationEnd }: Motion
   }
 }
 
+/**
+ * Where a Retry press leaves the person. A press takes Retry away as the run moves on, so in a place that follows the run, or in the
+ * side panel, that place's heading takes focus. Anywhere else a retry the platform took opens the run, so the person sees it go. A
+ * press another Operator beat is said where the person is, naming who retried it.
+ */
+export function useRetryAfter(runId: string): RetryAfter {
+  const navigate = useChatNavigate()
+  const backToTop = useAfterPanelAction()
+  const place = useRunPlace()
+  const note = useNote()
+  const me = useMe().data?.id
+  const nameOf = useDisplayName()
+  const say = place?.say ?? note
+  const focus = backToTop ?? place?.focus ?? null
+  return {
+    retried: () => (focus ? focus() : navigate(`/runs/${runId}`)),
+    retriedFirst: (by) => {
+      say(retriedFirstWords(by, me, nameOf))
+      ;(focus ?? focusPageHeading)()
+    },
+  }
+}
+
+const focusPageHeading = () => document.querySelector<HTMLElement>('main h1')?.focus()
+
+/** Retries a stopped run. While the side panel shows the run, the chat hides its own Retry, because the panel has it. */
 export function RetryButton({ runId, label, primary, describedBy }: { runId: string; label: string; primary: boolean; describedBy: string }) {
-  const navigate = useNavigate()
-  const retry = useRetry(runId, () => void navigate(`/runs/${runId}`))
+  const retry = useRetry(runId, useRetryAfter(runId))
   const latch = useLatch()
   const words = useErrorWords()
+  const inPanel = useShownInPanel({ kind: 'run', id: runId })
   const press = () => latch.run((settled) => retry.mutate(undefined, { onSettled: settled }))
+  if (inPanel) return null
   return (
     <>
       <Button variant={primary ? 'primary' : 'secondary'} loading={retry.isPending} onClick={press} aria-describedby={describedBy}>
         {label}
       </Button>
-      {retry.isError ? (
+      {retry.isError && !(retry.error instanceof RetriedFirst) ? (
         <p className={styles['problem']} role="alert">
           {retryProblem(retry.error, words)}
         </p>
@@ -53,8 +88,38 @@ export function RetryButton({ runId, label, primary, describedBy }: { runId: str
   )
 }
 
+/** Starts a new test run of the workflow, as Do a test run does, and opens it so the person sees it go. */
+export function TestAgainButton({ useCaseId, label, primary, describedBy }: { useCaseId: string; label: string; primary: boolean; describedBy: string }) {
+  const navigate = useChatNavigate()
+  const start = useStartRun()
+  const latch = useLatch()
+  const words = useErrorWords()
+  const [key] = useState(newIdempotencyKey)
+  const press = () => pressTestAgain(latch, start.mutate, { useCaseId, idempotencyKey: key }, (runId) => navigate(`/runs/${runId}`))
+  return (
+    <>
+      <Button variant={primary ? 'primary' : 'secondary'} loading={start.isPending} onClick={press} aria-describedby={describedBy}>
+        {label}
+      </Button>
+      {start.isError ? (
+        <p className={styles['problem']} role="alert">
+          {`Could not start the test run. ${words(start.error)}`}
+        </p>
+      ) : null}
+    </>
+  )
+}
+
 function ActionButton({ action, primary, describedBy }: { action: Action; primary: boolean; describedBy: string }) {
   if (action.kind === 'retry') return <RetryButton runId={action.runId} label={action.label} primary={primary} describedBy={describedBy} />
+  if (action.kind === 'test') return <TestAgainButton useCaseId={action.useCaseId} label={action.label} primary={primary} describedBy={describedBy} />
+  if (action.item) {
+    return (
+      <OpenButton item={action.item} to={action.to} variant={primary ? 'primary' : 'secondary'} aria-describedby={describedBy}>
+        {action.label}
+      </OpenButton>
+    )
+  }
   return (
     <ButtonLink to={action.to} variant={primary ? 'primary' : 'secondary'} aria-describedby={describedBy}>
       {action.label}
@@ -67,15 +132,18 @@ interface NeedProps {
   readonly card: boolean
   /** Its action is not the page's main button. */
   readonly quiet?: boolean
+  /** Connect a model is already on the page, above the list. */
+  readonly connectAbove?: boolean
   readonly now: Date
   readonly motion: Motion
 }
 
-export function NeedItem({ need, card, quiet = false, now, motion }: NeedProps) {
+export function NeedItem({ need, card, quiet = false, connectAbove = false, now, motion }: NeedProps) {
   const titleId = useId()
   const modelOff = useModelOff()
-  const words = wordsOf(need, now, modelOff)
-  const actions = actionsOf(need, modelOff)
+  const pointsUp = connectAbove && modelOff && isModelNeed(need)
+  const words = pointsUp ? { ...wordsOf(need, now, modelOff), title: NO_MODEL_TITLE, meta: CONNECT_ABOVE, note: null } : wordsOf(need, now, modelOff)
+  const actions = pointsUp ? [] : actionsOf(need, modelOff)
   const Icon = TONE_ICON[words.tone]
   const { className, ...moving } = motionProps(motion)
   const icon = (
@@ -91,7 +159,7 @@ export function NeedItem({ need, card, quiet = false, now, motion }: NeedProps) 
         <div className={styles['rowText']}>
           <b id={titleId}>{words.title}</b>
           <span className={styles['rowMeta']}>{words.meta}</span>
-          {need.kind === 'stopped' && words.note ? <span className={styles['rowMeta']}>{words.note}</span> : null}
+          {(need.kind === 'stopped' || need.kind === 'declined' || need.kind === 'question') && words.note ? <span className={styles['rowMeta']}>{words.note}</span> : null}
           {words.why ? (
             <span className={styles['rowWhy']}>
               <b>AI troubleshooter:</b> {words.why}
@@ -106,9 +174,9 @@ export function NeedItem({ need, card, quiet = false, now, motion }: NeedProps) 
     <li className={cx(styles['card'], className)} data-home-item={need.key} data-kind={need.kind} {...moving}>
       {icon}
       <div className={styles['cardBody']}>
-        <h3 id={titleId} className={styles['cardTitle']}>
+        <h4 id={titleId} className={styles['cardTitle']}>
           {words.title}
-        </h3>
+        </h4>
         <p className={styles['cardMeta']}>{words.meta}</p>
         {words.lines.length > 0 ? (
           <ul className={styles['lines']} aria-label="What it would change">
@@ -133,6 +201,38 @@ export function NeedItem({ need, card, quiet = false, now, motion }: NeedProps) 
           ))}
         </div>
       </div>
+    </li>
+  )
+}
+
+/**
+ * One row of Needs you as the sketch draws it: a dot in the row’s tone, what it is about in bold, what happened, and a chevron. The
+ * whole row opens the item, beside the chat when the chat drew it and as its page anywhere else.
+ */
+export function NeedRow({ need, now }: { need: Need; now: Date }) {
+  const { tone, subject, rest } = lineOf(need, now)
+  const item = panelItemOf(need)
+  const to = openPathOf(need)
+  const words = (
+    <>
+      <span className={styles['dot']} aria-hidden="true" />
+      <span className={styles['needText']}>
+        <b>{subject}</b> {rest}
+      </span>
+      <IconChevronRight size={16} aria-hidden="true" />
+    </>
+  )
+  return (
+    <li data-home-item={need.key} data-kind={need.kind} data-tone={tone}>
+      {item ? (
+        <OpenLink item={item} to={to} className={styles['need']}>
+          {words}
+        </OpenLink>
+      ) : (
+        <Link to={to} className={styles['need']}>
+          {words}
+        </Link>
+      )}
     </li>
   )
 }

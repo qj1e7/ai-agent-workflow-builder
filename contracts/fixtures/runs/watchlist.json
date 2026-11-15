@@ -459,7 +459,11 @@
           "label": "Team approver",
           "status": "open",
           "decided_by": null,
-          "decided_at": null
+          "decided_at": null,
+          "reason": null,
+          "post": "waiting",
+          "sent_to": [],
+          "sent_at": null
         }
       ],
       "link": "/approvals/apr_01JBC"
@@ -498,7 +502,16 @@
     "data": {
       "approval_id": "apr_01JBC",
       "channel": "CODESparks Ops",
-      "link": "/approvals/apr_01JBC"
+      "link": "/approvals/apr_01JBC",
+      "sent_to": [
+        [
+          {
+            "id": "bob",
+            "display": "Bob"
+          }
+        ]
+      ],
+      "sent_at": "2026-11-20T02:14:11.400000Z"
     }
   },
   {

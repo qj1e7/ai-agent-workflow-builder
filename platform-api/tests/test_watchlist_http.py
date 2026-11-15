@@ -1,5 +1,6 @@
 from collections.abc import AsyncIterator, Mapping
 from datetime import timedelta
+from typing import Any
 
 import httpx
 import pytest
@@ -83,17 +84,11 @@ class Renamed:
         )
 
 
-class FakeTicker:
-    async def tick(self) -> list[RunId]:
-        return [RunId("run_01A"), RunId("run_01B")]
-
-
 @pytest.fixture
 async def client(db: Database) -> AsyncIterator[httpx.AsyncClient]:
     app = create_app(LOCAL_ENV)
     app.state.people = await people_in(db)
     app.state.watchlist = Watchlist(db, NothingLearned(), ScheduleBook(db))
-    app.state.schedule_ticker = FakeTicker()
     app.state.connections = FakeConnections()
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
@@ -309,11 +304,20 @@ async def test_the_first_add_saves_the_default_schedule_for_the_person_who_added
         "09:00",
         "Asia/Singapore",
     )
-    assert schedule["next_at"].endswith("+08:00")
-    assert schedule["next_at"] > schedule["saved_at"]
+    assert schedule["next_at"] is None, "on the shared run workflow it starts no check"
 
     second = await client.post("/api/v1/watchlist/software", json=REDIS, headers=ALICE)
     assert second.json()["schedule"] == schedule, "a later add leaves the schedule and its owner"
+
+
+async def version_now(client: httpx.AsyncClient) -> dict[str, int]:
+    """The watchlist's version as a page that has just read it holds it."""
+    found = (await client.get("/api/v1/watchlist", headers=ALICE)).json()["watchlist"]
+    return {"expected_version": found["version"]}
+
+
+async def from_version_now(client: httpx.AsyncClient, body: dict[str, str]) -> dict[str, Any]:
+    return {**body, **await version_now(client)}
 
 
 async def test_saving_a_schedule_makes_the_caller_its_owner_and_answers_the_watchlist(
@@ -321,14 +325,16 @@ async def test_saving_a_schedule_makes_the_caller_its_owner_and_answers_the_watc
 ):
     await client.post("/api/v1/watchlist/software", json=LANGGRAPH, headers=CAROL)
     saved = await client.put(
-        "/api/v1/watchlist/schedule", json={"day": "every_day", "at": "06:30"}, headers=ALICE
+        "/api/v1/watchlist/schedule",
+        json=await from_version_now(client, {"day": "every_day", "at": "06:30"}),
+        headers=ALICE,
     )
     assert saved.status_code == 200
     view = saved.json()
     assert [row["name"] for row in view["software"]] == ["LangGraph"]
     schedule = view["schedule"]
     assert (schedule["day"], schedule["at"], schedule["owner"]) == ("every_day", "06:30", "alice")
-    assert schedule["next_at"].endswith("06:30:00+08:00")
+    assert schedule["next_at"] is None, "on the shared run workflow it starts no check"
     got = await client.get("/api/v1/watchlist", headers=BOB)
     assert got.json() == {"watchlist": view}
 
@@ -343,12 +349,14 @@ async def test_a_schedule_whose_owner_left_the_list_is_held_until_an_operator_sa
 
     assert (held["owner"], held.get("held"), held["next_at"]) == ("carol", "owner_removed", None)
     taken = await client.put(
-        "/api/v1/watchlist/schedule", json={"day": "monday", "at": "09:00"}, headers=ALICE
+        "/api/v1/watchlist/schedule",
+        json=await from_version_now(client, {"day": "monday", "at": "09:00"}),
+        headers=ALICE,
     )
     assert taken.status_code == 200
     schedule = taken.json()["schedule"]
     assert (schedule["owner"], schedule["owner_name"], schedule["held"]) == ("alice", "Alice", None)
-    assert schedule["next_at"].endswith("09:00:00+08:00")
+    assert schedule["next_at"] is None, "on the shared run workflow it starts no check"
 
 
 async def test_a_schedule_whose_owner_is_now_only_an_approver_is_held_and_they_cannot_take_it_back(
@@ -367,44 +375,50 @@ async def test_a_schedule_whose_owner_is_now_only_an_approver_is_held_and_they_c
         "owner_not_an_operator",
         None,
     )
-    body = {"day": "friday", "at": "17:00"}
+    body = await from_version_now(client, {"day": "friday", "at": "17:00"})
     assert (
         await client.put("/api/v1/watchlist/schedule", json=body, headers=ALICE)
     ).status_code == 403
     taken = (await client.put("/api/v1/watchlist/schedule", json=body, headers=CAROL)).json()
     assert (taken["schedule"]["owner"], taken["schedule"]["held"]) == ("carol", None)
-    assert taken["schedule"]["next_at"].endswith("17:00:00+08:00")
+    assert taken["schedule"]["next_at"] is None, "on the shared run workflow it starts no check"
 
 
 async def test_turning_the_schedule_off_leaves_null_and_saving_again_turns_it_on(
     client: httpx.AsyncClient,
 ):
     await client.post("/api/v1/watchlist/software", json=LANGGRAPH, headers=ALICE)
-    off = await client.delete("/api/v1/watchlist/schedule", headers=CAROL)
+    known = await version_now(client)
+    off = await client.delete("/api/v1/watchlist/schedule", params=known, headers=CAROL)
     assert (off.status_code, off.json()["schedule"]) == (200, None)
-    again = await client.delete("/api/v1/watchlist/schedule", headers=CAROL)
+    again = await client.delete("/api/v1/watchlist/schedule", params=known, headers=CAROL)
     assert (again.status_code, again.json()["schedule"]) == (200, None)
     await client.post("/api/v1/watchlist/software", json=REDIS, headers=ALICE)
     assert (await client.get("/api/v1/watchlist", headers=ALICE)).json()["watchlist"][
         "schedule"
     ] is None, "adding more software does not bring a turned off schedule back"
     on = await client.put(
-        "/api/v1/watchlist/schedule", json={"day": "friday", "at": "17:00"}, headers=CAROL
+        "/api/v1/watchlist/schedule",
+        json=await from_version_now(client, {"day": "friday", "at": "17:00"}),
+        headers=CAROL,
     )
     assert on.json()["schedule"]["owner"] == "carol"
 
 
 async def test_a_schedule_needs_a_watchlist_and_an_operator(client: httpx.AsyncClient):
-    body = {"day": "monday", "at": "09:00"}
+    body = {"day": "monday", "at": "09:00", "expected_version": 1}
+    known = {"expected_version": 1}
     assert (
         await client.put("/api/v1/watchlist/schedule", json=body, headers=ALICE)
     ).status_code == 404
-    assert (await client.delete("/api/v1/watchlist/schedule", headers=ALICE)).status_code == 404
+    off = await client.delete("/api/v1/watchlist/schedule", params=known, headers=ALICE)
+    assert off.status_code == 404
     await client.post("/api/v1/watchlist/software", json=LANGGRAPH, headers=ALICE)
     assert (
         await client.put("/api/v1/watchlist/schedule", json=body, headers=BOB)
     ).status_code == 403
-    assert (await client.delete("/api/v1/watchlist/schedule", headers=BOB)).status_code == 403
+    off = await client.delete("/api/v1/watchlist/schedule", params=known, headers=BOB)
+    assert off.status_code == 403
     assert (await client.put("/api/v1/watchlist/schedule", json=body)).status_code == 401
 
 
@@ -426,20 +440,11 @@ async def test_a_bad_day_or_time_is_a_422_naming_the_field(
     client: httpx.AsyncClient, body: dict[str, str], field: str
 ):
     await client.post("/api/v1/watchlist/software", json=LANGGRAPH, headers=ALICE)
-    r = await client.put("/api/v1/watchlist/schedule", json=body, headers=ALICE)
+    r = await client.put(
+        "/api/v1/watchlist/schedule", json=await from_version_now(client, body), headers=ALICE
+    )
     assert r.status_code == 422
     assert [problem["loc"][-1] for problem in r.json()["detail"]] == [field]
-
-
-async def test_the_tick_checks_the_step_key_and_answers_the_runs_it_started(
-    client: httpx.AsyncClient,
-):
-    assert (await client.post("/internal/v1/schedules/tick")).status_code == 422
-    wrong = await client.post("/internal/v1/schedules/tick", headers={"X-Step-Key": "wrong"})
-    assert wrong.status_code == 401
-    assert (await client.post("/internal/v1/schedules/tick", headers=ALICE)).status_code == 422
-    ticked = await client.post("/internal/v1/schedules/tick", headers=STEP_KEY)
-    assert (ticked.status_code, ticked.json()) == (200, {"started": ["run_01A", "run_01B"]})
 
 
 async def test_the_row_carries_the_name_github_gave_and_the_new_address_replaces_the_saved_one(

@@ -72,6 +72,19 @@ class MockModelTest(unittest.TestCase):
         done = run(READ, SEARCH, ("jira_create_ticket", arguments, "Proposed."))
         self.assertIn("proposed one ticket", post(done)["content"][0]["text"])
 
+    def test_a_confluence_card_reads_its_page_then_reports(self) -> None:
+        system = (
+            "Agent card: Page reader\nInputs for this run:\n- Confluence page: Software inventory\n"
+        )
+        tools = [{"name": "confluence_read_page"}]
+        asked = ("confluence_read_page", {"page": "Software inventory"})
+        self.assertEqual(tool_use(post({**run(), "system": system, "tools": tools})), asked)
+        parsed = (*asked, '{"data": {}}')
+        done = {**run(parsed), "system": system, "tools": tools}
+        self.assertEqual(
+            post(done)["content"][0]["text"], "I read Software inventory in Confluence."
+        )
+
     def test_a_card_without_the_github_tool_never_reads_releases(self) -> None:
         body = {**run(), "tools": TOOLS[1:]}
         self.assertEqual(tool_use(post(body)), SEARCH[:2])
@@ -380,6 +393,21 @@ class ReadTest(unittest.TestCase):
         )
         self.assertEqual(read["place"], {"project": "MOCK", "said": "in MOCK"})
 
+    def test_a_schedule_with_two_days_or_two_times_is_read_whole(self) -> None:
+        for task, said in [
+            (
+                "Every Monday and Friday at 9am, find bug tickets in MOCK",
+                "Every Monday and Friday at 9am",
+            ),
+            (
+                "Every Friday at 9am and 5pm, find bug tickets in MOCK",
+                "Every Friday at 9am and 5pm",
+            ),
+        ]:
+            read = server.reading(task)
+            self.assertEqual(read["schedule"], said)
+            self.assertEqual(read["search"]["said"], "bug tickets in MOCK")
+
     def test_a_detail_the_search_cannot_filter_by_is_left_out_of_the_structures(self) -> None:
         read = server.reading(
             "Every Monday, find P1 bugs in MOCK reported by Bob and create one ticket that "
@@ -441,11 +469,28 @@ class ReadTest(unittest.TestCase):
             ("Anything to approve?", "needs_me", None),
             ("What can you do?", "abilities", None),
             ("What's the weather?", "abilities", None),
+            ("list me the steps to use this app", "abilities", None),
+            ("how can i start to use this ?", "abilities", None),
         ):
             with self.subTest(task=task):
                 read = server.reading(task)
                 self.assertEqual((read["asks_about"], read["workflow_words"]), (about, words))
                 self.assertEqual((read["search"], read["ticket"]), (None, None))
+
+    def test_a_change_to_a_workflow_is_read_as_a_change_naming_it(self) -> None:
+        for task, words in (
+            ("Make the morning new-ticket check run on Mondays only", "morning new-ticket check"),
+            ("Change the React check to Tuesdays", "React check"),
+            ("Pause the weekly summary", "weekly summary"),
+            ("make it daily", None),
+        ):
+            with self.subTest(task=task):
+                read = server.reading(task)
+                self.assertEqual((read["asks_about"], read["workflow_words"]), ("change", words))
+                self.assertEqual((read["search"], read["ticket"]), (None, None))
+        self.assertEqual(server.reading("Change the React check to Tuesdays")["software"], "React")
+        self.assertIsNone(server.reading("Pause the weekly summary")["software"])
+        self.assertEqual(server.reading("Set up a weekly summary")["asks_about"], "none")
 
     def test_a_vulnerability_check_fills_no_search(self) -> None:
         read = server.reading("Warn me about any known vulnerabilities in Log4j")
@@ -459,6 +504,11 @@ class ReadTest(unittest.TestCase):
         read = server.reading("Every Friday, email me the list of stale tickets in MOCK")
         self.assertEqual(read["ticket"], None)
         self.assertEqual(read["search"]["updated"], {"how": "before", "days": 14})
+
+    def test_a_watch_request_keeps_the_time_its_own_words_give(self) -> None:
+        read = server.reading("Watch LangGraph releases every Thursday at 7am")
+        self.assertEqual((read["belongs_on_watchlist"], read["software"]), (True, "LangGraph"))
+        self.assertEqual(read["schedule"], "every Thursday at 7am")
 
     def test_a_mixed_request_is_the_watchlist_with_the_rest_in_the_structures(self) -> None:
         read = server.reading("Watch React releases and list stale bug tickets every Friday")

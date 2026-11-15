@@ -94,18 +94,24 @@ def test_without_a_watchlist_in_the_facts_there_is_no_follow_up():
 
 def test_unwatched_software_the_reading_names_gives_the_watch_offer():
     out, chat = run("and FastAPI?", reading("abilities", software="fastapi "))
-    assert out == Answered(answer=WatchlistAnswer(word="version", software="FastAPI"))
+    assert isinstance(out, Answered) and out.answer == WatchlistAnswer(
+        word="version", software="FastAPI"
+    )
     assert chat.asked[0].__name__ == "TaskRead" and len(chat.calls) == 1
 
 
 def test_the_watch_offer_also_follows_a_watch_offer():
     out, _ = run("what about Grafana?", reading("abilities", software="Grafana"), AFTER_A_WATCH)
-    assert out == Answered(answer=WatchlistAnswer(word="version", software="Grafana"))
+    assert isinstance(out, Answered) and out.answer == WatchlistAnswer(
+        word="version", software="Grafana"
+    )
 
 
 def test_a_watchlist_answer_for_the_unwatched_name_gives_the_watch_offer():
     out, _ = run("and FastAPI?", watch_reading("FastAPI"))
-    assert out == Answered(answer=WatchlistAnswer(word="version", software="FastAPI"))
+    assert isinstance(out, Answered) and out.answer == WatchlistAnswer(
+        word="version", software="FastAPI"
+    )
 
 
 @pytest.mark.parametrize("previous", [AFTER_A_QUESTION, AFTER_A_WATCH])
@@ -122,7 +128,7 @@ def test_a_watchlist_answer_for_the_unwatched_name_gives_the_watch_offer():
 )
 def test_a_follow_up_never_preempts_the_first_reading(task: str, previous: PreviousTurn):
     out, chat = run(task, reading("abilities"), previous)
-    assert out == Answered(answer=AbilitiesAnswer())
+    assert isinstance(out, Answered) and out.answer == AbilitiesAnswer()
     assert [c.__name__ for c in chat.asked] == ["TaskRead"]
     cant, _ = run(task, reading("none"), previous)
     assert cant.answer.kind != "watchlist"
@@ -145,9 +151,8 @@ def test_a_change_request_never_reaches_the_lane(task: str):
 
 def test_watched_software_goes_to_the_question_lane_with_the_typed_words():
     out, chat = run("what about Redis?", reading("abilities"))
-    assert out == Answered(
-        answer=QuestionAnswer(text="Redis is up to date.", looked_at=["watchlist"])
-    )
+    assert isinstance(out, Answered)
+    assert out.answer == QuestionAnswer(text="Redis is up to date.", looked_at=["watchlist"])
     assert chat.asked[0].__name__ == "TaskRead"
     lane = cast(tuple[str, str], chat.calls[1][1])[1]
     assert lane.endswith("The question:\nwhat about Redis?")
@@ -162,10 +167,10 @@ def test_the_first_reading_sees_only_the_typed_words():
 
 def test_a_lane_that_says_no_or_fails_keeps_the_first_answer():
     out, _ = run("and Redis?", reading("abilities"), lane=QuestionReply(about_their_data=False))
-    assert out == Answered(answer=AbilitiesAnswer())
+    assert isinstance(out, Answered) and out.answer == AbilitiesAnswer()
     slow = type("ReadTimeout", (Exception,), {})("took too long")
     out, _ = run("and Redis?", reading("abilities"), lane=slow)
-    assert out == Answered(answer=AbilitiesAnswer())
+    assert isinstance(out, Answered) and out.answer == AbilitiesAnswer()
 
 
 def test_a_reply_the_guards_reject_gives_the_first_answer_when_it_is_not_the_catch_all():

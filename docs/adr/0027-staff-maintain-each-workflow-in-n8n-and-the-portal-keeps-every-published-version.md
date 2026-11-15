@@ -1,8 +1,12 @@
 ---
-status: proposed
+status: accepted
 ---
 
 # Staff maintain each workflow in n8n, and the Portal keeps every published version
+
+> Amended by ADR 0045 (14 Nov 2026): the allow list is no longer the fixed list below. It is our node pack, n8n's triggers and flow nodes, and every n8n node and operation classed in `node_classes.json`, with unknown meaning off. HTTP Request, Code and Webhook stay off.
+
+> Amended by ADR 0046 (15 Nov 2026): "Singapore time" below means the team time zone, the `TEAM_TIME_ZONE` setting, which is Singapore unless a deploy names another. The Planner lays each workflow out on it, the check flags a workflow whose own zone differs from it, and our deploy sets n8n's `GENERIC_TIMEZONE` to it.
 
 The sponsor's biggest concern is maintenance after handover, and he wants his staff to use n8n for it. He wants them to change how a workflow runs, build new workflows, and see the agents, all in n8n. ADR 0012 made n8n's editor read-only in practice: one generic n8n workflow per template, kept as a file in git and reloaded on each deploy. It left open whether the sponsor would accept that. He does not.
 
@@ -101,3 +105,27 @@ Prototype P7 will test the new trigger and the data nodes before they are built.
 - **n8n users must match our users by email,** so that a published version maps to a person.
 - **NCS maintains a small TypeScript node pack beside the Python.** P6's nodes were plain JavaScript loaded from a folder. The real pack is baked into our own n8n image at the pinned version, which also works offline in DevNet (ADR 0006). CI tests the pack and the allow list against a new n8n version before the pin moves.
 - **n8n's licence** (the Sustainable Use License) still needs the sponsor's confirmation, as ADR 0002 says.
+
+## Accepted on 13 Nov 2026, with these additions
+
+**Every workflow is its own n8n workflow, built by the Planner from our node pack,** including the Software watchlist. The platform's one generic `run` workflow and `schedule_tick` retire once every use case has moved. The node pack is: Start from the Portal, Read, Agent, Propose a change, Ask for a yes, Make the approved changes, Tell, Report a failure. The allow list is exactly: those eight, n8n's Schedule, Manual and Error triggers, IF, Merge, No Op and Sticky Note. n8n's data nodes join only after P7 shows that none can send data out or run code.
+
+**The version compare.** An open n8n editor tab can autosave an old draft over a change made through the API (the team saw it twice in November). So the platform compares the workflow's `versionId` before and after every write it makes to n8n, reads the stored copy back, and reports "Changed again since, in n8n" when it lost. Undo and roll back prefer n8n's publish of an earlier version id, which no autosave touches. The platform makes no other write to a workflow while a person holds it in n8n.
+
+**Our API's address and key come from n8n's container environment,** never from a node field or a credential. Start from the Portal checks a signed body with a secret from the same environment, with an expiry and a nonce.
+
+**On the free edition:** the platform transfers a workflow to the person who opens it in n8n, shows who holds it, and takes it back on request; whoever holds it can publish; the platform creates each person's n8n account with the same email when an Operator gives them n8n access, and stores the n8n user id for every later match; Approvers never get n8n access, and gaining the Approver role drops it. No staff account exists before the node allow list is on.
+
+**The safety checker's grade** covers the allow list, a yes before every write, the trigger, the error workflow, Singapore time, the fixed Tell choices, and a schedule interval longer than the expiry wait, so a request always expires before the next scheduled run. The grade is not the barrier; the gateway and the allow list are.
+
+**The Portal reads n8n's public API for versions and executions, and three internal endpoints** (publication status, the publish timeline, and a manual run of a draft), each kept in one function and re-proven before the pinned n8n version moves.
+
+**Report a failure** replaces the HTTP node in the error workflow, and a daily self-test workflow fails on purpose to prove the chain.
+
+**The Software watchlist and the existing use cases move** by a bootstrap step that lays out each one from its template with its schedule copied into the Schedule Trigger; run history keeps its use case id, and a use case with a request still waiting moves on the next deploy.
+
+**The cert list expiry reminder** is the first non-Jira workflow, rebuilt from our nodes: Read Confluence, an agent with the parser as a tool, and Tell to Teams and email; its original stays in `docs/evidence/n8n/cert-reminder/` as the record. (14 Nov 2026: the team lead dropped the cert reminder. Only the Confluence read was built, ENGINE-PLAN E12.)
+
+This ADR supersedes ADR 0012 and ADR 0020. It amends ADR 0023's "one generic n8n workflow carries every card's runs" (each use case now has its own) and ADR 0034's list of what dropping the address allow list would take (the webhooks are replaced and the Webhook node is off the list; sign-in in front of n8n remains). ADR 0024 stands unchanged: our API keeps the clock.
+
+The team lead accepted this ADR on 13 Nov 2026, when they decided that n8n is the engine behind every workflow. The design and build plan are in `docs/design/chat-first/ENGINE-PLAN.md`.

@@ -1,4 +1,4 @@
-from collections.abc import Collection, Mapping
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from typing import Any
@@ -7,17 +7,26 @@ import psycopg
 from pydantic import TypeAdapter
 
 from platform_api.db import UnitOfWork, json
-from platform_api.orchestration.approvals import ApprovalPolicy, ApprovalRequest, Decision, Verdict
-from platform_api.orchestration.dispatch import RETRY_POLICY, Identity, MessageRef
+from platform_api.orchestration.approvals import (
+    ApprovalPolicy,
+    ApprovalRequest,
+    Decision,
+    Ended,
+    Verdict,
+)
+from platform_api.orchestration.dispatch import RETRY_POLICY, HeldWait, Identity, MessageRef
 from platform_api.orchestration.runs import (
     Acting,
     AwaitingApproval,
+    Expired,
     Failed,
     Leg,
+    Lost,
     Pending,
     Proposed,
     Rejected,
     RunState,
+    Skipped,
     Succeeded,
     Working,
 )
@@ -35,7 +44,19 @@ from platform_api.shared import (
 
 STATE_TYPES: Mapping[str, type[RunState]] = {
     cls.__name__: cls
-    for cls in (Pending, Working, Proposed, AwaitingApproval, Acting, Succeeded, Rejected, Failed)
+    for cls in (
+        Pending,
+        Working,
+        Proposed,
+        AwaitingApproval,
+        Acting,
+        Succeeded,
+        Rejected,
+        Failed,
+        Skipped,
+        Expired,
+        Lost,
+    )
 }
 _state_adapters: dict[str, TypeAdapter[Any]] = {
     name: TypeAdapter(cls) for name, cls in STATE_TYPES.items()
@@ -65,6 +86,20 @@ class RunRecord:
     state: RunState
     retried_by: tuple[UserId, ...]
     carry_forward: str | None
+    joined_by: tuple[UserId, ...] = ()
+    """People whose work the run also is: the holder of a run started or retried by hand in n8n,
+    and the owner of the schedule that started it."""
+
+    @property
+    def parties(self) -> frozenset[UserId]:
+        """Whose work the run is, so who can never approve it."""
+        return frozenset({self.started_by, self.spec.owner, *self.retried_by, *self.joined_by})
+
+
+@dataclass(frozen=True)
+class DecidedPage:
+    decided: tuple[tuple[RunId, Decision], ...]
+    total: int
 
 
 class Stale(Exception): ...
@@ -76,8 +111,23 @@ class DecisionConflict(Exception): ...
 START_LEG = "start_leg"
 ANNOUNCE = "announce"
 SHOW_OUTCOME = "show_outcome"
+OLD_ENGINE_RUNS = """
+    SELECT run_id, use_case_id, state, started_at FROM orchestration.runs
+    WHERE jsonb_typeof(spec -> 'n8n') IS DISTINCT FROM 'object'
+      AND state IN ('Pending', 'Working', 'Proposed', 'AwaitingApproval', 'Acting')
+    ORDER BY started_at, run_id
+"""
+"""Runs on the shared run workflow that have not ended. From E11 nothing can carry them on."""
 """Shows a decided request's outcome on its Teams card. The outcome holds however the run ends,
 so cancelling a run's outbox leaves these rows."""
+WAKE = "wake"
+"""Tells the n8n execution that waits for a request what the records decided. One per request."""
+START = "start"
+"""Starts a pending run in the use case's own n8n workflow: Run now through the signed start, a
+test run through a run of the draft (ENGINE-PLAN 2.3.2 and 2.3.3)."""
+RETRY = "retry"
+"""Asks n8n to retry a failed execution. n8n answers only when the retry stops, so it never runs
+inside a request (ENGINE-PLAN 2.3.10)."""
 
 
 SOMEONE = "someone on this run"
@@ -92,13 +142,22 @@ class OutboxRow:
     attempt: int
     leased_until: datetime | None = None
     """The lease this tick holds on the row, which only it can renew."""
+    created_at: datetime | None = None
 
 
 def _deadline_of(state: RunState) -> datetime | None:
     match state:
         case Pending() | Working() | Proposed() | Acting():
             return state.deadline_at
-        case AwaitingApproval() | Succeeded() | Rejected() | Failed():
+        case (
+            AwaitingApproval()
+            | Succeeded()
+            | Rejected()
+            | Failed()
+            | Skipped()
+            | Expired()
+            | Lost()
+        ):
             return None
 
 
@@ -113,12 +172,13 @@ def _record(row: Mapping[str, Any]) -> RunRecord:
         state=load_state(row["state"], row["state_data"]),
         retried_by=tuple(UserId(u) for u in row["retried_by"]),
         carry_forward=row["carry_forward"],
+        joined_by=tuple(UserId(u) for u in row["joined_by"]),
     )
 
 
 RUN_COLUMNS = (
     "run_id, spec, started_by, started_at, updated_at, version, state, state_data, "
-    "retried_by, carry_forward"
+    "retried_by, carry_forward, joined_by"
 )
 
 
@@ -131,8 +191,8 @@ class Store:
             await uow.conn.execute(
                 "INSERT INTO orchestration.runs (run_id, use_case_id, idempotency_key, spec, "
                 "started_by, started_at, updated_at, version, state, state_data, deadline_at, "
-                "retried_by, carry_forward) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
+                "retried_by, carry_forward, joined_by) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
                 "ON CONFLICT (use_case_id, idempotency_key) DO NOTHING RETURNING run_id",
                 (
                     record.run_id,
@@ -148,6 +208,7 @@ class Store:
                     _deadline_of(record.state),
                     json(list(record.retried_by)),
                     record.carry_forward,
+                    json(list(record.joined_by)),
                 ),
             )
         ).fetchone()
@@ -182,14 +243,17 @@ class Store:
         state: RunState,
         *,
         retried_by: UserId | None = None,
+        joined: Sequence[UserId] = (),
     ) -> RunRecord:
         name, data = dump_state(state)
         new_retried = record.retried_by + ((retried_by,) if retried_by else ())
+        fresh = (person for person in joined if person not in record.joined_by)
+        new_joined = record.joined_by + tuple(dict.fromkeys(fresh))
         updated = await (
             await uow.conn.execute(
                 "UPDATE orchestration.runs SET state = %s, state_data = %s, deadline_at = %s, "
-                "updated_at = %s, version = version + 1, retried_by = %s, carry_forward = %s "
-                "WHERE run_id = %s AND version = %s RETURNING version",
+                "updated_at = %s, version = version + 1, retried_by = %s, carry_forward = %s, "
+                "joined_by = %s WHERE run_id = %s AND version = %s RETURNING version",
                 (
                     name,
                     json(data),
@@ -197,6 +261,7 @@ class Store:
                     uow.now,
                     json(list(new_retried)),
                     record.carry_forward,
+                    json(list(new_joined)),
                     record.run_id,
                     record.version,
                 ),
@@ -210,6 +275,7 @@ class Store:
             version=int(updated["version"]),
             updated_at=uow.now,
             retried_by=new_retried,
+            joined_by=new_joined,
         )
 
     async def list_runs(self, uow: UnitOfWork) -> list[RunRecord]:
@@ -217,6 +283,21 @@ class Store:
             await uow.conn.execute(
                 f"SELECT {RUN_COLUMNS} FROM orchestration.runs "
                 "ORDER BY started_at DESC, run_id DESC"
+            )
+        ).fetchall()
+        return [_record(row) for row in rows]
+
+    async def newest_runs(
+        self, uow: UnitOfWork, use_case_ids: Sequence[UseCaseId]
+    ) -> list[RunRecord]:
+        """The newest run of each named use case, one row each, by the index on
+        (use_case_id, started_at DESC)."""
+        rows = await (
+            await uow.conn.execute(
+                f"SELECT DISTINCT ON (use_case_id) {RUN_COLUMNS} FROM orchestration.runs "
+                "WHERE use_case_id = ANY(%s) "
+                "ORDER BY use_case_id, started_at DESC, run_id DESC",
+                (list(use_case_ids),),
             )
         ).fetchall()
         return [_record(row) for row in rows]
@@ -236,14 +317,19 @@ class Store:
         ).fetchone()
         return None if row is None else row["started_at"]
 
-    async def open_runs(self, uow: UnitOfWork) -> list[RunRecord]:
+    async def open_runs(self, uow: UnitOfWork, viewer: UserId) -> list[RunRecord]:
+        """Runs waiting for a yes, and each workflow's newest run when it stopped, or when it is
+        the viewer's own test run and was declined."""
         rows = await (
             await uow.conn.execute(
                 f"SELECT {RUN_COLUMNS} FROM orchestration.runs r "
-                "WHERE r.state = 'AwaitingApproval' OR (r.state = 'Failed' AND NOT EXISTS ("
+                "WHERE r.state = 'AwaitingApproval' OR ((r.state = 'Failed' OR (r.state = "
+                "'Rejected' AND r.started_by = %s AND COALESCE((r.spec ->> 'test')::boolean, "
+                "false))) AND NOT EXISTS ("
                 "SELECT 1 FROM orchestration.runs newer WHERE newer.use_case_id = r.use_case_id "
                 "AND (newer.started_at, newer.run_id) > (r.started_at, r.run_id))) "
-                "ORDER BY r.started_at DESC, r.run_id DESC"
+                "ORDER BY r.started_at DESC, r.run_id DESC",
+                (viewer,),
             )
         ).fetchall()
         return [_record(row) for row in rows]
@@ -322,10 +408,13 @@ class Store:
             for row in rows
         }
 
-    async def insert_approval(self, uow: UnitOfWork, request: ApprovalRequest) -> None:
+    async def insert_approval(
+        self, uow: UnitOfWork, request: ApprovalRequest, held: HeldWait | None = None
+    ) -> None:
         await uow.conn.execute(
             "INSERT INTO orchestration.approval_requests (approval_id, run_id, proposal_id, "
-            "digest, policy, parties, created_at) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+            "digest, policy, parties, created_at, expires_at, execution_id, resume_url) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
             (
                 request.id,
                 request.run_id,
@@ -334,8 +423,44 @@ class Store:
                 json(_policy_adapter.dump_python(request.policy, mode="json")),
                 json(sorted(request.parties)),
                 uow.now,
+                request.expires_at,
+                None if held is None else held.execution_id,
+                None if held is None else held.sealed_url,
             ),
         )
+
+    async def held_wait(self, uow: UnitOfWork, approval_id: ApprovalId) -> HeldWait | None:
+        """The n8n execution that waits for this request, when n8n holds the wait."""
+        row = await (
+            await uow.conn.execute(
+                "SELECT execution_id, resume_url FROM orchestration.approval_requests "
+                "WHERE approval_id = %s AND execution_id IS NOT NULL",
+                (approval_id,),
+            )
+        ).fetchone()
+        if row is None:
+            return None
+        return HeldWait(N8nExecutionId(row["execution_id"]), row["resume_url"])
+
+    async def end_request(self, uow: UnitOfWork, approval_id: ApprovalId, ended: Ended) -> None:
+        await uow.conn.execute(
+            "UPDATE orchestration.approval_requests SET ended = %s, ended_at = %s "
+            "WHERE approval_id = %s AND ended IS NULL",
+            (ended.value, uow.now, approval_id),
+        )
+
+    async def requests_past_expiry(self, uow: UnitOfWork, now: datetime) -> list[RunId]:
+        """The runs whose request waits past its expiry. The tick ends each one undecided."""
+        rows = await (
+            await uow.conn.execute(
+                "SELECT a.run_id FROM orchestration.approval_requests a "
+                "JOIN orchestration.runs r ON r.run_id = a.run_id "
+                "WHERE a.ended IS NULL AND a.expires_at <= %s AND r.state = 'AwaitingApproval' "
+                "ORDER BY a.expires_at",
+                (now,),
+            )
+        ).fetchall()
+        return [RunId(row["run_id"]) for row in rows]
 
     async def load_approval(
         self, uow: UnitOfWork, approval_id: ApprovalId
@@ -349,8 +474,8 @@ class Store:
             return {}
         rows = await (
             await uow.conn.execute(
-                "SELECT approval_id, run_id, proposal_id, digest, policy, parties "
-                "FROM orchestration.approval_requests WHERE approval_id = ANY(%s)",
+                "SELECT approval_id, run_id, proposal_id, digest, policy, parties, expires_at, "
+                "ended FROM orchestration.approval_requests WHERE approval_id = ANY(%s)",
                 (list(approval_ids),),
             )
         ).fetchall()
@@ -362,6 +487,8 @@ class Store:
                 Digest(row["digest"]),
                 _policy_adapter.validate_python(row["policy"]),
                 frozenset(UserId(u) for u in row["parties"]),
+                row["expires_at"],
+                None if row["ended"] is None else Ended(row["ended"]),
             )
             for row in rows
         }
@@ -370,7 +497,8 @@ class Store:
         try:
             await uow.conn.execute(
                 "INSERT INTO orchestration.approval_decisions (approval_id, step_index, "
-                "decided_by, verdict, seen_digest, decided_at) VALUES (%s, %s, %s, %s, %s, %s)",
+                "decided_by, verdict, seen_digest, decided_at, reason) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s)",
                 (
                     decision.approval_id,
                     decision.step_index,
@@ -378,6 +506,7 @@ class Store:
                     decision.verdict.value,
                     decision.seen_digest,
                     decision.at,
+                    decision.reason,
                 ),
             )
         except psycopg.errors.UniqueViolation as error:
@@ -396,8 +525,8 @@ class Store:
             return {}
         rows = await (
             await uow.conn.execute(
-                "SELECT approval_id, step_index, decided_by, verdict, seen_digest, decided_at "
-                "FROM orchestration.approval_decisions WHERE approval_id = ANY(%s) "
+                "SELECT approval_id, step_index, decided_by, verdict, seen_digest, decided_at, "
+                "reason FROM orchestration.approval_decisions WHERE approval_id = ANY(%s) "
                 "ORDER BY approval_id, step_index",
                 (list(approval_ids),),
             )
@@ -411,17 +540,70 @@ class Store:
                 Verdict(row["verdict"]),
                 Digest(row["seen_digest"]),
                 row["decided_at"],
+                row["reason"],
             )
             decisions[decision.approval_id] = (*decisions.get(decision.approval_id, ()), decision)
         return decisions
 
+    async def decided_by(
+        self, uow: UnitOfWork, person: UserId, verdict: Verdict | None, limit: int
+    ) -> DecidedPage:
+        """The person's decisions, newest first, each with the run it decided, and how many
+        there are in all."""
+        rows = await (
+            await uow.conn.execute(
+                "SELECT d.approval_id, d.step_index, d.decided_by, d.verdict, d.seen_digest, "
+                "d.decided_at, d.reason, a.run_id, count(*) OVER () AS total "
+                "FROM orchestration.approval_decisions d "
+                "JOIN orchestration.approval_requests a ON a.approval_id = d.approval_id "
+                "WHERE d.decided_by = %s AND (%s::text IS NULL OR d.verdict = %s) "
+                "ORDER BY d.decided_at DESC, d.approval_id DESC, d.step_index DESC LIMIT %s",
+                (person, *(2 * [None if verdict is None else verdict.value]), limit),
+            )
+        ).fetchall()
+        decided = tuple(
+            (
+                RunId(row["run_id"]),
+                Decision(
+                    ApprovalId(row["approval_id"]),
+                    int(row["step_index"]),
+                    UserId(row["decided_by"]),
+                    Verdict(row["verdict"]),
+                    Digest(row["seen_digest"]),
+                    row["decided_at"],
+                    row["reason"],
+                ),
+            )
+            for row in rows
+        )
+        return DecidedPage(decided, int(rows[0]["total"]) if rows else 0)
+
+    async def load_runs(self, uow: UnitOfWork, run_ids: Collection[RunId]) -> list[RunRecord]:
+        if not run_ids:
+            return []
+        rows = await (
+            await uow.conn.execute(
+                f"SELECT {RUN_COLUMNS} FROM orchestration.runs WHERE run_id = ANY(%s)",
+                (list(run_ids),),
+            )
+        ).fetchall()
+        return [_record(row) for row in rows]
+
     async def enqueue(
-        self, uow: UnitOfWork, run_id: RunId, kind: str, payload: dict[str, Any], next_at: datetime
+        self,
+        uow: UnitOfWork,
+        run_id: RunId,
+        kind: str,
+        payload: dict[str, Any],
+        next_at: datetime,
+        once_as: str | None = None,
     ) -> None:
+        """With once_as, a second row under the same key is never made."""
         await uow.conn.execute(
             "INSERT INTO orchestration.outbox (run_id, kind, payload, attempt, next_at, status, "
-            "created_at) VALUES (%s, %s, %s, 0, %s, 'pending', %s)",
-            (run_id, kind, json(payload), next_at, uow.now),
+            "created_at, idempotency_key) VALUES (%s, %s, %s, 0, %s, 'pending', %s, %s) "
+            "ON CONFLICT (idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING",
+            (run_id, kind, json(payload), next_at, uow.now, once_as),
         )
 
     async def take_due_outbox(
@@ -441,7 +623,7 @@ class Store:
                 "AND next_at <= %s AND (leased_until IS NULL OR leased_until <= %s) "
                 "ORDER BY next_at, id LIMIT %s FOR UPDATE SKIP LOCKED) due WHERE o.id = due.id "
                 "RETURNING o.id, o.run_id, o.kind, o.payload, o.attempt, o.next_at, "
-                "o.leased_until",
+                "o.leased_until, o.created_at",
                 (now + lease, now, now, limit),
             )
         ).fetchall()
@@ -454,6 +636,7 @@ class Store:
                 r["payload"],
                 int(r["attempt"]),
                 r["leased_until"],
+                r["created_at"],
             )
             for r in rows
         ]
@@ -494,12 +677,53 @@ class Store:
             (error[:500], row_id),
         )
 
+    async def waiting_runs(self, uow: UnitOfWork, use_case_id: str) -> list[RunId]:
+        rows = await (
+            await uow.conn.execute(
+                "SELECT run_id FROM orchestration.runs WHERE use_case_id = %s"
+                " AND state = 'AwaitingApproval' ORDER BY started_at",
+                (use_case_id,),
+            )
+        ).fetchall()
+        return [RunId(row["run_id"]) for row in rows]
+
+    async def old_engine_runs(self, uow: UnitOfWork) -> list[RunId]:
+        """Runs on the shared run workflow that have not ended, oldest first."""
+        rows = await (await uow.conn.execute(OLD_ENGINE_RUNS)).fetchall()
+        return [RunId(row["run_id"]) for row in rows]
+
     async def cancel_outbox(self, uow: UnitOfWork, run_id: RunId) -> None:
         await uow.conn.execute(
             "UPDATE orchestration.outbox SET status = 'cancelled' "
             "WHERE run_id = %s AND status = 'pending' AND kind <> %s",
             (run_id, SHOW_OUTCOME),
         )
+
+    async def retry_asked(
+        self, uow: UnitOfWork, run_id: RunId, execution: N8nExecutionId, since: datetime
+    ) -> bool:
+        """Whether a retry of this execution is on its way, or n8n took one since `since`. A retry
+        that joined the run and failed again leaves a newer execution to retry."""
+        row = await (
+            await uow.conn.execute(
+                "SELECT 1 FROM orchestration.outbox WHERE run_id = %s AND kind = %s "
+                "AND payload ->> 'execution_id' = %s "
+                "AND (status = 'pending' OR (status = 'sent' AND next_at > %s)) LIMIT 1",
+                (run_id, RETRY, execution, since),
+            )
+        ).fetchone()
+        return row is not None
+
+    async def newest_execution(self, uow: UnitOfWork, run_id: RunId) -> N8nExecutionId | None:
+        """The n8n execution that joined the run last, which is the one a retry picks up."""
+        row = await (
+            await uow.conn.execute(
+                "SELECT execution_id FROM orchestration.executions WHERE run_id = %s "
+                "ORDER BY linked_at DESC, execution_id DESC LIMIT 1",
+                (run_id,),
+            )
+        ).fetchone()
+        return None if row is None else N8nExecutionId(row["execution_id"])
 
     async def announcement_pending(self, uow: UnitOfWork, approval_id: ApprovalId) -> bool:
         row = await (
@@ -545,6 +769,46 @@ class Store:
         ).fetchall()
         found = {UserId(row["id"]): str(row["display"]) for row in rows}
         return {user: found.get(user, SOMEONE) for user in ids}
+
+    async def approvers(self, uow: UnitOfWork) -> dict[UserId, str]:
+        """Everyone on the People list who holds the Approver role now, by name."""
+        rows = await (
+            await uow.conn.execute(
+                "SELECT id, display FROM orchestration.people "
+                "WHERE is_approver AND removed_at IS NULL"
+            )
+        ).fetchall()
+        return {UserId(row["id"]): str(row["display"]) for row in rows}
+
+    async def announce_given_up(
+        self, uow: UnitOfWork, approval_ids: Collection[ApprovalId]
+    ) -> set[ApprovalId]:
+        """The requests whose post to Teams the outbox gave up on."""
+        if not approval_ids:
+            return set()
+        rows = await (
+            await uow.conn.execute(
+                "SELECT DISTINCT payload->>'approval_id' AS approval_id FROM orchestration.outbox "
+                "WHERE kind = %s AND status = 'given_up' AND payload->>'approval_id' = ANY(%s)",
+                (ANNOUNCE, list(approval_ids)),
+            )
+        ).fetchall()
+        return {ApprovalId(row["approval_id"]) for row in rows}
+
+    async def posted_at(
+        self, uow: UnitOfWork, approval_ids: Collection[ApprovalId]
+    ) -> dict[ApprovalId, datetime]:
+        """When each request was posted to Teams. One not posted, or whose post failed, has none."""
+        if not approval_ids:
+            return {}
+        rows = await (
+            await uow.conn.execute(
+                "SELECT approval_id, posted_at FROM orchestration.approval_messages "
+                "WHERE approval_id = ANY(%s)",
+                (list(approval_ids),),
+            )
+        ).fetchall()
+        return {ApprovalId(row["approval_id"]): row["posted_at"] for row in rows}
 
     async def pending_outbox(self, uow: UnitOfWork, run_id: RunId) -> int:
         row = await (

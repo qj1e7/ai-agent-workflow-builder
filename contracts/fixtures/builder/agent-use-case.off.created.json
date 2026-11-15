@@ -1,0 +1,118 @@
+{
+  "use_case_id": "uc_01JD0",
+  "version": 1,
+  "n8n_workflow_id": "wfRelease01",
+  "grade": "safe",
+  "build_log": [
+    {
+      "at": "2026-11-02T01:00:00Z",
+      "kind": "status",
+      "text": "Adding blocks in n8n\u2026"
+    },
+    {
+      "at": "2026-11-02T01:00:00.040000Z",
+      "kind": "check",
+      "text": "The blocks fit together."
+    },
+    {
+      "at": "2026-11-02T01:00:00.040000Z",
+      "kind": "status",
+      "text": "Safety checker is checking the write\u2026"
+    },
+    {
+      "at": "2026-11-02T01:00:00.040000Z",
+      "kind": "note",
+      "text": "Added a yes before the ticket."
+    },
+    {
+      "at": "2026-11-02T01:00:00.040000Z",
+      "kind": "check",
+      "text": "Every write waits for a yes."
+    },
+    {
+      "at": "2026-11-02T01:00:00.820000Z",
+      "kind": "status",
+      "text": "Saved as a draft in n8n."
+    }
+  ],
+  "blocks": [
+    {
+      "name": "Mon 8:00",
+      "kind": "schedule",
+      "next": [
+        {
+          "exit": null,
+          "to": "Read release"
+        }
+      ]
+    },
+    {
+      "name": "Start from the Portal",
+      "kind": "start",
+      "next": [
+        {
+          "exit": null,
+          "to": "Read release"
+        }
+      ]
+    },
+    {
+      "name": "Read release",
+      "kind": "read",
+      "next": [
+        {
+          "exit": null,
+          "to": "Compare"
+        }
+      ]
+    },
+    {
+      "name": "Compare",
+      "kind": "agent",
+      "next": [
+        {
+          "exit": null,
+          "to": "Newer?"
+        }
+      ]
+    },
+    {
+      "name": "Newer?",
+      "kind": "branch",
+      "next": [
+        {
+          "exit": "true",
+          "to": "Ask for a yes"
+        },
+        {
+          "exit": "false",
+          "to": "Nothing to change"
+        }
+      ]
+    },
+    {
+      "name": "Ask for a yes",
+      "kind": "ask",
+      "next": [
+        {
+          "exit": "Yes",
+          "to": "Create ticket"
+        },
+        {
+          "exit": "Nothing to change",
+          "to": "Nothing to change"
+        }
+      ]
+    },
+    {
+      "name": "Create ticket",
+      "kind": "write",
+      "next": []
+    },
+    {
+      "name": "Nothing to change",
+      "kind": "end",
+      "next": []
+    }
+  ]
+}

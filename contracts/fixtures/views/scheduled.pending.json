@@ -5,6 +5,7 @@
   "use_case_version": 7,
   "started_by": "alice",
   "trigger": "schedule",
+  "test": false,
   "started_at": "2026-11-16T01:00:12Z",
   "updated_at": "2026-11-16T01:00:12Z",
   "last_seq": 2,

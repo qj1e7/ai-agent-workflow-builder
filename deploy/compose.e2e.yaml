@@ -17,6 +17,22 @@ services:
       timeout: 3s
       retries: 15
 
+  # Confluence's REST API with the Software inventory page and one page the platform may not read.
+  mock-confluence:
+    image: wab/mock-confluence:${WAB_IMAGE_TAG:-dev}
+    build:
+      context: ../e2e/mock_confluence
+      target: runtime
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8400/healthz', timeout=2)
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
   # An Anthropic-style model that answers by what the request asks for, so the card tests run
   # the real runtime without a real model. The runtime may reach it because it is listed below.
   mock-model:
@@ -39,6 +55,18 @@ services:
       timeout: 3s
       retries: 15
 
+  # The mock Confluence's own bot and test token, not a secret. Only the inventory may be read.
+  platform-api:
+    environment:
+      N8N_STAFF_ACCESS: "on"
+      CONFLUENCE_BASE_URL: http://mock-confluence:8400/wiki
+      CONFLUENCE_EMAIL: bot@codesparks.test
+      CONFLUENCE_API_TOKEN: mock-confluence-token
+      CONFLUENCE_PAGES: 424242=Software inventory
+    depends_on:
+      mock-confluence:
+        condition: service_healthy
+
   agent-runtime:
     environment:
       GITHUB_API_BASE: http://mock-github:8200
@@ -54,14 +82,18 @@ services:
     profiles: [e2e]
     build:
       context: ../e2e
-      additional_contexts:
-        contracts: ../contracts
     environment:
       PLATFORM_API_URL: http://platform-api:8000
       MOCK_GITHUB_URL: http://mock-github:8200
       MOCK_MODEL_URL: http://mock-model:8300
+      MOCK_CONFLUENCE_URL: http://mock-confluence:8400
       E2E_WAIT_SECONDS: ${E2E_WAIT_SECONDS:-90}
-      STEP_KEY: ${STEP_KEY:?run deploy/make-env.sh}
+      # old-engine when the stack started from the old-engine seed, so only the move's test runs.
+      E2E_SEED: ${E2E_SEED:-}
+      # Only to read the drafts the platform saves in n8n, as the platform itself does.
+      N8N_BASE_URL: http://n8n:5678
+      N8N_OWNER_EMAIL: ${N8N_OWNER_EMAIL:?run deploy/make-env.sh}
+      N8N_OWNER_PASSWORD: ${N8N_OWNER_PASSWORD:?run deploy/make-env.sh}
       # Only to seed practice Jira tickets that were last updated long ago, which no API call can
       # do. It is the same role the practice Jira itself uses.
       E2E_DATABASE_URL: postgresql://wab_orchestration:${WAB_ORCHESTRATION_PASSWORD:?run deploy/make-env.sh}@postgres:5432/platform
@@ -71,4 +103,6 @@ services:
       mock-github:
         condition: service_healthy
       mock-model:
+        condition: service_healthy
+      mock-confluence:
         condition: service_healthy

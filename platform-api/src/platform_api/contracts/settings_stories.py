@@ -11,6 +11,7 @@ from platform_api.orchestration.settings_http import (
     ConnectionOut,
     ConnectionsView,
     SavedOut,
+    TellSetupOut,
     view_of,
 )
 from platform_api.shared import Principal, Role, UserId
@@ -104,6 +105,18 @@ def connections_view() -> ConnectionsView:
                 fix="Ask whoever set up the Teams address to check that it still works.",
             ),
             ConnectionOut(
+                id="confluence",
+                name="Confluence",
+                practice=False,
+                state="not_set_up",
+                checked_at=None,
+                last_ok_at=None,
+                problem="Confluence is not connected.",
+                key_ends_in=None,
+                expires_at=None,
+                fix="Ask whoever set up the platform to connect Confluence.",
+            ),
+            ConnectionOut(
                 id="model",
                 name="AI model",
                 practice=False,
@@ -117,6 +130,11 @@ def connections_view() -> ConnectionsView:
             ),
         ],
         you_can_check=True,
+        tell=TellSetupOut(
+            flow_set=True,
+            channel="CODESparks Ops",
+            email_to=["ops-lead@codesparks.example", "support@codesparks.example"],
+        ),
     )
 
 

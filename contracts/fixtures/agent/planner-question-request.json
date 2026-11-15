@@ -55,6 +55,13 @@
       }
     ],
     "workflows": null,
-    "needs_you": null
-  }
+    "other_workflows": null,
+    "left_out_workflows": null,
+    "needs_you": null,
+    "watchlist_schedule": {
+      "day": "monday",
+      "at": "09:00"
+    }
+  },
+  "changes_workflows": true
 }

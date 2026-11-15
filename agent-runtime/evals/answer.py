@@ -13,22 +13,29 @@ from agent_runtime.answers import (
     word_rule_refusal,
 )
 from agent_runtime.contract import (
+    AbilitiesAnswer,
     AnswerRequest,
     CantAnswer,
     CantRow,
+    EditAnswer,
+    EditCant,
     ModelAccess,
     PartAnswer,
     PlannerAnswer,
     PlannerFacts,
     PreviousTurn,
     QuestionAnswer,
+    RequestPart,
     RowState,
+    ScheduleChange,
     SetupCardAnswer,
     UnderstoodRow,
     WatchlistAnswer,
 )
-from agent_runtime.planner import said_in
+from agent_runtime.parts import parts_of
+from agent_runtime.planner import said_in, visible_words
 from agent_runtime.questions import QuestionReply, answer_of_reply, question_messages
+from agent_runtime.reading import polite
 from evals.checks import (
     Check,
     check,
@@ -48,6 +55,17 @@ _CLOCK_WORDS = re.compile(
     r"five|six|seven|eight|nine|ten|eleven|twelve)\b",
     re.IGNORECASE,
 )
+_NO_UPDATE = re.compile(
+    r"(?:\b(?:no|not|never|nobody|without)\b|n't\b)[^,;:.!?]*?\b(?:updates?|updated|touched)\b|"
+    r"\buntouched\b",
+    re.IGNORECASE,
+)
+"""A request that says a ticket has had no update: a negation before an update word in the
+same stretch between punctuation, however far."""
+_SPLIT = re.compile(r"[,;:.!?()]+|\b(?:and|then|but|also|plus|or)\b", re.IGNORECASE)
+"""Where the scoring splits a request, on its own and more finely than the runtime does, so a
+part the runtime never marks can't hide in a clause it chose."""
+_UPDATED_WITHIN = re.compile(r"\bupdated\s+(?:in\s+the\s+last|today|since)\b", re.IGNORECASE)
 _DAY_WORDS = re.compile(
     r"\b(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|weekday|weekdays|daily|"
     r"weekly|monthly|hourly)\b",
@@ -69,6 +87,14 @@ class AnswerCase(Case):
     also: str | None = None
     understood: list[str] = []
     schedule: list[RowState] = []
+    crossed: list[str] = []
+    reasons: list[str] = []
+    not_reasons: list[str] = []
+    how_to_start: bool | None = None
+    change: ScheduleChange | None = None
+    edit_cant: EditCant | None = None
+    one_liner: str | None = None
+    changes_workflows: bool = True
     facts: PlannerFacts | None = None
     previous: PreviousTurn | None = None
 
@@ -76,7 +102,13 @@ class AnswerCase(Case):
 def _request(case: AnswerCase) -> AnswerRequest:
     """The request the decision reads. The eval never calls the model again."""
     access = ModelAccess(style="openai", base_url="http://eval.invalid", model="eval", api_key="-")
-    return AnswerRequest(task=case.task, model=access, facts=case.facts, previous=case.previous)
+    return AnswerRequest(
+        task=case.task,
+        model=access,
+        facts=case.facts,
+        previous=case.previous,
+        changes_workflows=case.changes_workflows,
+    )
 
 
 def prompt(case: AnswerCase) -> str:
@@ -125,6 +157,10 @@ MACHINE_FIELDS = frozenset({"kind", "state", "status", "needs", "reason"})
 
 
 def _texts(shown: PlannerAnswer) -> list[str]:
+    if isinstance(shown, EditAnswer):
+        # Its other fields are the schedule's own terms, which the Portal words.
+        return [t for t in (shown.workflow_words, shown.software) if t]
+
     def strings(value: object) -> list[str]:
         if isinstance(value, str):
             return [value]
@@ -172,6 +208,15 @@ def _field_checks(case: AnswerCase, shown: PlannerAnswer) -> list[Check]:
         also = getattr(shown, "also", None)
         kind = "none" if also is None else also.kind
         found.append(check("carries_the_rest", [] if kind == case.also else [kind]))
+    edit = shown if isinstance(shown, EditAnswer) else None
+    if case.change is not None:
+        read = None if edit is None else edit.schedule
+        found.append(check("reads_the_new_schedule", [] if read == case.change else [str(read)]))
+    if case.edit_cant is not None:
+        cant = None if edit is None else edit.cant
+        found.append(
+            check("names_the_change_it_cant_make", [] if cant == case.edit_cant else [str(cant)])
+        )
     return found
 
 
@@ -190,7 +235,8 @@ def _cant_checks(case: AnswerCase, shown: PlannerAnswer) -> list[Check]:
     if case.needs is not None:
         found.append(
             check(
-                "needs", [] if any(c.needs == case.needs for c in cant) else [c.needs for c in cant]
+                "needs",
+                [] if any(c.needs == case.needs for c in cant) else [str(c.needs) for c in cant],
             )
         )
     if case.system is not None:
@@ -198,6 +244,9 @@ def _cant_checks(case: AnswerCase, shown: PlannerAnswer) -> list[Check]:
         found.append(
             check("names_the_system", [] if case.system in systems else [str(s) for s in systems])
         )
+    if case.one_liner is not None:
+        notes = [c.note for c in cant if c.instead is not None]
+        found.append(check("says_the_one_liner", [] if case.one_liner in notes else notes))
     return found
 
 
@@ -229,6 +278,65 @@ def _card_checks(case: AnswerCase, shown: PlannerAnswer) -> list[Check]:
     if case.schedule:
         ok = schedule.state in case.schedule
         found.append(check("schedule_state", [] if ok else [f"schedule is {schedule.state}"]))
+    return found
+
+
+def dropped(task: str, parts: list[RequestPart]) -> list[str]:
+    """Each piece of the request, split here, not by the runtime, that no part's words reach.
+    Thanks and please ask for nothing, so they need no part."""
+    text = visible_words(task)
+    marked = [m for p in parts if (m := _found(text, p.text)) is not None]
+    found: list[str] = []
+    at = 0
+    for cut in [*_SPLIT.finditer(text), None]:
+        end = len(text) if cut is None else cut.start()
+        piece = text[at:end].strip()
+        start = at + text[at:end].find(piece)
+        if (
+            piece
+            and not polite(piece)
+            and not any(a < start + len(piece) and b > start for a, b in marked)
+        ):
+            found.append(f"dropped: {piece}")
+        at = len(text) if cut is None else cut.end()
+    return found
+
+
+def _found(text: str, words: str) -> tuple[int, int] | None:
+    pattern = r"\W+".join(re.escape(w) for w in re.findall(r"\w+", words.removesuffix("…")))
+    hit = re.search(rf"(?<!\w){pattern}", text, re.IGNORECASE) if pattern else None
+    return None if hit is None else (hit.start(), hit.end())
+
+
+def flipped(task: str, rows: list[UnderstoodRow]) -> list[str]:
+    """Each accepted row that shows an update within some days for a request that says no
+    update: the meaning turned round with a tick."""
+    if not _NO_UPDATE.search(task):
+        return []
+    return [
+        f"flipped: {r.text}" for r in rows if r.state in ACCEPTED and _UPDATED_WITHIN.search(r.text)
+    ]
+
+
+def _part_checks(case: AnswerCase, shown: PlannerAnswer, parts: list[RequestPart]) -> list[Check]:
+    """Every clause comes back as a part with a mark, and a request that says no update never
+    gets a tick on an update within some days (plan 7.5)."""
+    problems = dropped(case.task, parts) + flipped(case.task, card_of(shown) or [])
+    found = [check("keeps_or_flags_each_part", problems)]
+    if case.crossed:
+        crosses = [p.text for p in parts if p.mark == "cant"]
+        missing = [w for w in case.crossed if not any(mentions(t, w) for t in crosses)]
+        found.append(check("crosses_the_part", missing))
+    if case.reasons:
+        given = {p.reason for p in parts}
+        found.append(check("gives_the_reason", [r for r in case.reasons if r not in given]))
+    if case.not_reasons:
+        wrong = [f"{p.reason}: {p.text}" for p in parts if p.reason in case.not_reasons]
+        found.append(check("never_gives_the_reason", wrong))
+    if case.how_to_start is not None:
+        shows = isinstance(shown, AbilitiesAnswer) and shown.how_to_start
+        wrong = [] if shows == case.how_to_start else [f"how_to_start is {shows}"]
+        found.append(check("shows_how_to_start", wrong))
     return found
 
 
@@ -270,16 +378,24 @@ def score(case: AnswerCase, answer: Answer) -> list[Check]:
     if shown is None:
         return [check("answered", []), check("right_kind", ["the reading does not hold together"])]
     text = " ".join(_texts(shown))
+    reading = value if isinstance(value, TaskRead) else None
+    parts = _part_checks(case, shown, parts_of(reading, case.task, shown, case.facts))
     if isinstance(shown, QuestionAnswer):
         # Its words quote the person's own software names, such as n8n, so the jargon check
         # does not apply. The model's text is still held to the themed-name rule.
-        return [check("answered", []), *_kind_checks(case, shown.kind), no_themed_names(text)]
+        return [
+            check("answered", []),
+            *_kind_checks(case, shown.kind),
+            *parts,
+            no_themed_names(text),
+        ]
     return [
         check("answered", []),
         *_kind_checks(case, shown.kind),
         *_field_checks(case, shown),
         *_cant_checks(case, shown),
         *_card_checks(case, shown),
+        *parts,
         no_jargon(text),
         no_themed_names(text),
     ]
@@ -295,4 +411,5 @@ ANSWER = Job(
     judged=False,
     time_limit_s=ANSWER_TIMEOUT_SECONDS,
     follow_up=follow_up,
+    most_calls=2,
 )

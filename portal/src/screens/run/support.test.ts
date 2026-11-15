@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { deliveryWords, failureText, NOTE_LIMIT, NOTE_ROOM, reportNote, suggestionFor } from './support'
+import { deliveryWords, failureText, NOTE_LIMIT, NOTE_ROOM, reportNote } from './support'
 
 describe('the failure text', () => {
   it('drops the error type and keeps every sentence the platform wrote', () => {
@@ -11,12 +11,6 @@ describe('the failure text', () => {
 
   it('is empty when nothing is left', () => {
     expect(failureText('')).toBe('')
-  })
-})
-
-describe('the troubleshooter’s advice', () => {
-  it('is shown whole, including the advice to start a new run before the write step', () => {
-    expect(suggestionFor('Ask a maintainer. Then start a new run.')).toBe('Ask a maintainer. Then start a new run.')
   })
 })
 

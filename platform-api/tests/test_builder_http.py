@@ -1,7 +1,7 @@
 import asyncio
-from collections.abc import AsyncIterator, Mapping
-from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from collections.abc import AsyncIterator, Mapping, Sequence
+from dataclasses import dataclass, field, replace
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from typing import cast
 
@@ -12,7 +12,16 @@ from platform_api.app import create_app
 from platform_api.builder import Builder, PlannerFront, Watchlist
 from platform_api.builder import planner as planner_module
 from platform_api.builder.home import HomeOut
-from platform_api.builder.models import AddSoftware, CreateAgentUseCase
+from platform_api.builder.models import (
+    AddSoftware,
+    CardApprovalView,
+    CardBlock,
+    CardDefinition,
+    CardInput,
+    CardView,
+    CreateAgentUseCase,
+    UseCaseCreated,
+)
 from platform_api.builder.planner_facts import STATUS_WORDS, PlannerFactsReader
 from platform_api.db import Database
 from platform_api.orchestration import (
@@ -23,9 +32,11 @@ from platform_api.orchestration import (
     CantRow,
     CapabilityList,
     CapabilitySpec,
+    CardsTask,
     CheckPartResult,
     CheckWorkflowsAnswer,
     ConnectionCheck,
+    EditAnswer,
     ExampleSpec,
     Given,
     ModelProblem,
@@ -34,16 +45,21 @@ from platform_api.orchestration import (
     PartAnswer,
     PartCantDo,
     PartFits,
+    PauseAnswer,
     PlannerFacts,
     PreviousTurn,
     QuestionAnswer,
     RefusedAnswer,
+    RequestPart,
+    ResumeAnswer,
     RowKind,
     RunDetail,
+    RunGist,
     RunSpec,
     RunStarted,
     RuntimeDown,
     ScheduleBook,
+    ScheduleChange,
     SetupCardAnswer,
     SoftwareFacts,
     Standing,
@@ -54,8 +70,43 @@ from platform_api.orchestration import (
     WhichSoftwareAnswer,
     WhyStoppedAnswer,
 )
-from platform_api.shared import Principal, Role, RunId, SoftwareId, UseCaseId, UserId
-from tests.support import LOCAL_ENV
+from platform_api.orchestration.agents import HttpAgentRuntime
+from platform_api.orchestration.approvals import Decision, Verdict
+from platform_api.orchestration.planning import CapabilityRegistry
+from platform_api.orchestration.run_gist import gist_of
+from platform_api.orchestration.runs import (
+    AwaitingApproval,
+    Failed,
+    Failure,
+    Outcome,
+    Pending,
+    Rejected,
+    ResumeWork,
+    Stage,
+    Succeeded,
+    WriteDone,
+)
+from platform_api.orchestration.runs import (
+    FailureReason as RunFailure,
+)
+from platform_api.orchestration.runs import RunState as RunPhase
+from platform_api.orchestration.spec import Task
+from platform_api.orchestration.store import RunRecord
+from platform_api.orchestration.write_actions import Proposal, WriteAction
+from platform_api.shared import (
+    ApprovalId,
+    Digest,
+    Principal,
+    ProposalId,
+    Role,
+    RunId,
+    SoftwareId,
+    UseCaseId,
+    UserId,
+)
+from platform_api.wire import Trigger
+from tests.declared import FakeConnections
+from tests.support import FIXTURES, LOCAL_ENV, SPEC
 
 pytestmark = pytest.mark.anyio
 
@@ -72,9 +123,11 @@ GOOD = {
 class SecondCallRepeats:
     def __init__(self) -> None:
         self.calls = 0
+        self.specs: list[RunSpec] = []
 
     async def start_run(self, spec: RunSpec, principal: Principal, idempotency_key: str):
         self.calls += 1
+        self.specs.append(spec)
         return RunStarted(RunId("run_1"), created=self.calls == 1)
 
 
@@ -100,6 +153,57 @@ async def client(db: Database) -> AsyncIterator[httpx.AsyncClient]:
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
         yield c
+
+
+AGENT_USE_CASE = {
+    "name": "Friday summary",
+    "instruction": "Sum up the tickets closed this week.",
+    "agents": [
+        {
+            "card_id": "crd_version_checker",
+            "values": {"GitHub repository": "a/b", "Jira project": "MOCK"},
+        }
+    ],
+}
+
+
+async def test_a_workflow_keeps_what_it_was_set_up_without_as_text_for_people(
+    client: httpx.AsyncClient,
+):
+    body = {**AGENT_USE_CASE, "left_out": ["colour them by team", "  Friday  "]}
+    made = await client.post("/api/v1/agent-use-cases", json=body, headers=ALICE)
+    assert made.status_code == 201, made.text
+    use_case_id = made.json()["use_case_id"]
+
+    read = await client.get(f"/api/v1/use-cases/{use_case_id}", headers=ALICE)
+    listed = (await client.get("/api/v1/use-cases", headers=ALICE)).json()["use_cases"]
+
+    assert read.json()["left_out"] == ["colour them by team", "Friday"]
+    assert [u["left_out"] for u in listed if u["use_case_id"] == use_case_id] == [
+        ["colour them by team", "Friday"]
+    ]
+    assert read.json()["instruction"] == AGENT_USE_CASE["instruction"]
+
+
+async def test_a_workflow_set_up_with_every_part_has_nothing_left_out(client: httpx.AsyncClient):
+    made = await client.post("/api/v1/agent-use-cases", json=AGENT_USE_CASE, headers=ALICE)
+    assert made.status_code == 201, made.text
+    read = await client.get(f"/api/v1/use-cases/{made.json()['use_case_id']}", headers=ALICE)
+    assert read.json()["left_out"] == []
+
+
+@pytest.mark.parametrize(
+    "left_out",
+    [[""], ["x" * 201], ["part"] * 11, "colour them by team"],
+    ids=["blank", "too long", "too many", "not a list"],
+)
+async def test_left_out_that_cannot_be_kept_is_refused_with_a_422(
+    client: httpx.AsyncClient, left_out: object
+):
+    body = {**AGENT_USE_CASE, "left_out": left_out}
+    r = await client.post("/api/v1/agent-use-cases", json=body, headers=ALICE)
+    assert r.status_code == 422, r.text
+    assert any("left_out" in e["loc"] for e in r.json()["detail"])
 
 
 async def save(client: httpx.AsyncClient) -> str:
@@ -201,9 +305,10 @@ FOUR_ROWS = [
 EMAIL = CantRow(
     kind="do",
     text="email it",
-    note="I can't email it. I can only read Jira tickets.",
+    note="I can't send email yet.",
     needs="new_system",
     system="email",
+    instead="Run results show here, in the chat.",
 )
 
 
@@ -216,13 +321,19 @@ class FakeAnswers:
     facts: list[PlannerFacts | None] = field(default_factory=list[PlannerFacts | None])
     previous: list[PreviousTurn | None] = field(default_factory=list[PreviousTurn | None])
     checked: list[tuple[str, str]] = field(default_factory=list[tuple[str, str]])
+    changes: list[bool] = field(default_factory=list[bool])
 
     async def answer(
-        self, task: str, facts: PlannerFacts | None = None, previous: PreviousTurn | None = None
+        self,
+        task: str,
+        facts: PlannerFacts | None = None,
+        previous: PreviousTurn | None = None,
+        changes_workflows: bool = True,
     ) -> AnswerResult | NoModel | RuntimeDown:
         self.asked.append(task)
         self.facts.append(facts)
         self.previous.append(previous)
+        self.changes.append(changes_workflows)
         await asyncio.sleep(self.wait)
         return self.result
 
@@ -231,9 +342,61 @@ class FakeAnswers:
         return self.part
 
 
-class NoRuns:
-    async def list_runs(self) -> list[RunDetail]:
-        return []
+TICKET = WriteAction("jira", "create_ticket", {"project": "MOCK"}, {"title": "Upgrade LangGraph"})
+
+
+class RunBook:
+    """The runs the platform has, which Builder reads for each workflow's last run."""
+
+    def __init__(self) -> None:
+        self.runs: list[RunDetail] = []
+        self.asked: list[list[UseCaseId]] = []
+        self.viewers: list[Principal | None] = []
+
+    async def newest_runs(
+        self, use_case_ids: Sequence[UseCaseId], viewer: Principal | None = None
+    ) -> dict[UseCaseId, RunGist]:
+        self.asked.append(list(use_case_ids))
+        self.viewers.append(viewer)
+        newest: dict[UseCaseId, RunDetail] = {}
+        for run in self.runs:
+            key = run.record.spec.use_case_id
+            if key in use_case_ids and (
+                key not in newest
+                or (run.record.started_at, run.record.run_id)
+                > (newest[key].record.started_at, newest[key].record.run_id)
+            ):
+                newest[key] = run
+        return {key: gist_of(run, viewer) for key, run in newest.items()}
+
+    def add(
+        self,
+        use_case_id: str,
+        state: RunPhase,
+        at: datetime,
+        trigger: Trigger = "schedule",
+        proposed: int = 0,
+        task: Task = SPEC.task,
+        test: bool = False,
+        decisions: tuple[Decision, ...] = (),
+    ) -> RunId:
+        run_id = RunId(f"run_{len(self.runs) + 1}")
+        record = RunRecord(
+            run_id,
+            replace(
+                SPEC, use_case_id=UseCaseId(use_case_id), trigger=trigger, task=task, test=test
+            ),
+            UserId("alice"),
+            at,
+            at,
+            1,
+            state,
+            (),
+            None,
+        )
+        proposal = Proposal(ProposalId("prp_1"), run_id, (TICKET,) * proposed, Digest("d"))
+        self.runs.append(RunDetail(record, 0, proposal if proposed else None, None, decisions))
+        return run_id
 
 
 class FakeHome:
@@ -249,6 +412,8 @@ class FakeHome:
             connections=[],
             addresses=[],
             replied=[1],
+            declined_total=1,
+            questions_for_me_total=1,
         )
         return cast(HomeOut, counts)
 
@@ -346,24 +511,28 @@ class Front:
     builder: Builder
     watchlist: Watchlist
     home: FakeHome
+    book: RunBook
+    starter: SecondCallRepeats
 
 
 @pytest.fixture
 async def front(db: Database) -> AsyncIterator[Front]:
     app = create_app(LOCAL_ENV)
     watchlist = Watchlist(db, NothingLearned(), ScheduleBook(db))
-    builder = Builder(db, SecondCallRepeats(), watchlist, "http://localhost:8000")
+    book = RunBook()
+    starter = SecondCallRepeats()
+    builder = Builder(db, starter, watchlist, "http://localhost:8000", history=book)
     answers = FakeAnswers()
     states = FakeStates(a_check("jira"), a_check("github"), a_check("teams"), a_check("model"))
     registry = FakeRegistry(REGISTRY)
     app.state.builder = builder
     app.state.watchlist = watchlist
     home = FakeHome()
-    facts = PlannerFactsReader(watchlist, builder, NoRuns(), home)
+    facts = PlannerFactsReader(watchlist, builder, home)
     app.state.planner_front = PlannerFront(answers, builder, watchlist, registry, states, facts)
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
-        yield Front(c, answers, states, registry, builder, watchlist, home)
+        yield Front(c, answers, states, registry, builder, watchlist, home, book, starter)
 
 
 async def say(front: Front, text: str = FRIDAY) -> dict[str, object]:
@@ -376,12 +545,13 @@ def answered(answer: object) -> Answered:
     return Answered(answer=answer)  # type: ignore[arg-type]
 
 
-async def make_workflow(front: Front, name: str) -> str:
+async def make_workflow(front: Front, name: str, schedule: dict[str, str] | None = None) -> str:
     made = await front.builder.create_agent_use_case(
         Principal(UserId("alice"), frozenset({Role.OPERATOR}), "Alice"),
         CreateAgentUseCase.model_validate(
             {
                 "name": name,
+                "schedule": schedule,
                 "instruction": "x",
                 "agents": [
                     {
@@ -412,6 +582,94 @@ async def test_a_set_up_card_comes_back_with_its_rows_and_a_similar_workflow(fro
     assert again["similar"] == {"use_case_id": existing, "name": "friday SUMMARY"}
 
 
+async def test_a_workflow_of_the_same_name_that_watches_no_software_is_not_the_one_she_asks_for(
+    front: Front,
+):
+    front.answers.result = answered(SetupCardAnswer(name="Friday summary", rows=FOUR_ROWS))
+    alice = Principal(UserId("alice"), frozenset({Role.OPERATOR}), "Alice")
+    reader = await front.builder.create_card(
+        alice,
+        CardDefinition(
+            name="Ticket reader",
+            purpose="Raises a ticket.",
+            inputs=[CardInput(name="Where", kind="jira_project", example="MOCK")],
+            blocks=[CardBlock(say="Raise a ticket.", tool="jira.create_ticket")],
+            approvals=[CardApprovalView(tool="jira.create_ticket", approvers=1)],
+        ),
+    )
+    assert isinstance(reader, CardView)
+    made = await front.builder.create_agent_use_case(
+        alice,
+        CreateAgentUseCase.model_validate(
+            {
+                "name": "friday SUMMARY",
+                "instruction": "x",
+                "agents": [{"card_id": reader.card_id, "values": {"Where": "MOCK"}}],
+            }
+        ),
+    )
+    assert isinstance(made, UseCaseCreated)
+    reply = await say(front)
+    assert reply["answer"] == "setup_card" and reply["similar"] is None
+
+
+async def test_every_part_of_the_request_comes_back_with_its_mark_in_order(front: Front):
+    typed = "Every Monday and Friday at 9am, sum up the closed tickets and colour them by team"
+    parts = [
+        RequestPart(
+            text="Monday and Friday", mark="cant", reason="one_day", choices=["Monday", "Friday"]
+        ),
+        RequestPart(text="sum up the closed tickets", mark="will_do"),
+        RequestPart(text="colour them by team", mark="cant", reason="not_followed"),
+    ]
+    card = SetupCardAnswer(name="Friday summary", rows=FOUR_ROWS)
+    front.answers.result = Answered(answer=card, parts=parts)
+
+    reply = await say(front, typed)
+
+    assert reply["parts"] == [
+        {
+            "text": "Monday and Friday",
+            "mark": "cant",
+            "reason": "one_day",
+            "note": None,
+            "choices": ["Monday", "Friday"],
+        },
+        {
+            "text": "sum up the closed tickets",
+            "mark": "will_do",
+            "reason": None,
+            "note": None,
+            "choices": [],
+        },
+        {
+            "text": "colour them by team",
+            "mark": "cant",
+            "reason": "not_followed",
+            "note": None,
+            "choices": [],
+        },
+    ]
+
+
+async def test_parts_belong_to_the_whole_answer_never_to_the_rest_inside_it(front: Front):
+    rest = SetupCardAnswer(name="Friday summary", rows=FOUR_ROWS)
+    front.answers.result = Answered(
+        answer=WatchlistAnswer(word="release", software=None, also=rest),
+        parts=[RequestPart(text="Watch releases", mark="will_do")],
+    )
+    reply = await say(front, "Watch releases and every Friday sum up")
+    assert [p["text"] for p in cast(list[dict[str, object]], reply["parts"])] == ["Watch releases"]
+    assert cast(dict[str, object], reply["also"])["parts"] == []
+
+
+async def test_a_tapped_chip_and_the_offline_answer_mark_no_parts(front: Front):
+    r = await front.client.post(ANSWER, json={"intent": "needs_me"}, headers=ALICE)
+    assert r.json() == {"parts": [], "answer": "needs_me"}
+    front.answers.result = NoModel()
+    assert (await say(front))["parts"] == []
+
+
 async def test_a_part_keeps_the_part_the_platform_cannot_do(front: Front):
     front.answers.result = answered(PartAnswer(name="Friday", rows=FOUR_ROWS, cant=[EMAIL]))
     reply = await say(front)
@@ -422,6 +680,8 @@ async def test_a_part_keeps_the_part_the_platform_cannot_do(front: Front):
         "note": EMAIL.note,
         "needs": "new_system",
         "system": "email",
+        "instead": "Run results show here, in the chat.",
+        "unsupported": False,
     }
 
 
@@ -453,6 +713,7 @@ async def test_a_question_answer_comes_back_with_the_sections_it_looked_at(front
         QuestionAnswer(text="Nothing is on the watchlist yet.", looked_at=["watchlist"])
     )
     assert await say(front, "how many software are on our watchlist") == {
+        "parts": [],
         "answer": "question",
         "text": "Nothing is on the watchlist yet.",
         "looked_at": ["watchlist"],
@@ -495,11 +756,28 @@ async def test_the_runtime_gets_the_facts_the_screens_show_for_the_signed_in_per
     source = row["our_version_source"]
     assert fact.our_version_source == (None if source is None else source["kind"])
     assert fact.our_version_ticket == (None if source is None else source["ticket"])
-    assert facts.needs_you is not None and facts.needs_you.total == 4
+    needs = facts.needs_you
+    assert needs is not None
+    assert (needs.declined, needs.questions, needs.total) == (1, 1, 6), "Home's whole count"
+    parts = needs.model_dump(exclude={"total"})
+    assert sum(parts.values()) == needs.total, f"every part of the total is named: {parts}"
     assert [u.name for u in (await front.builder.list_use_cases()).use_cases] == [
         w.name for w in facts.workflows or []
     ]
     assert [v.user_id for v in front.home.viewers] == ["alice"]
+
+
+async def test_the_facts_carry_the_watchlists_schedule_as_its_page_shows_it(front: Front):
+    alice = Principal(UserId("alice"), frozenset({Role.OPERATOR}), "Alice")
+    await front.watchlist.add(alice, AddSoftware.model_validate(LANGGRAPH))
+    front.answers.result = answered(AbilitiesAnswer())
+    await say(front, "watch React every Monday at 9am")
+    (facts,) = front.answers.facts
+    page = (await front.client.get("/api/v1/watchlist", headers=ALICE)).json()["watchlist"]
+    assert page["schedule"] is not None
+    assert facts is not None and facts.watchlist_schedule is not None
+    shown = facts.watchlist_schedule
+    assert (shown.day, shown.at) == (page["schedule"]["day"], page["schedule"]["at"])
 
 
 async def test_a_follow_up_passes_the_previous_turn_on_and_changes_nothing_else(front: Front):
@@ -514,7 +792,7 @@ async def test_a_follow_up_passes_the_previous_turn_on_and_changes_nothing_else(
         ANSWER, json={"text": "and Redis?", "previous": previous}, headers=ALICE
     )
     assert r.status_code == 200, r.text
-    assert r.json() == {"answer": "which_software", "word": "version"}
+    assert r.json() == {"parts": [], "answer": "which_software", "word": "version"}
     (sent,) = front.answers.previous
     assert sent is not None and sent.model_dump() == previous
 
@@ -545,29 +823,32 @@ async def test_a_watchlist_row_carries_the_rest_of_a_mixed_request(front: Front)
 
 async def test_the_other_kinds_come_back_as_they_were_read(front: Front):
     front.answers.result = answered(WhichSoftwareAnswer(word="version"))
-    assert await say(front) == {"answer": "which_software", "word": "version"}
+    assert await say(front) == {"parts": [], "answer": "which_software", "word": "version"}
     front.answers.result = answered(RefusedAnswer(said="skip the yes", rest="close every ticket"))
     assert await say(front) == {
+        "parts": [],
         "answer": "refused",
         "reason": "skip_approval",
         "said": "skip the yes",
         "rest": "close every ticket",
     }
     front.answers.result = answered(AbilitiesAnswer())
-    assert await say(front) == {"answer": "abilities"}
+    assert await say(front) == {"parts": [], "answer": "abilities", "how_to_start": False}
+    front.answers.result = answered(AbilitiesAnswer(how_to_start=True))
+    assert await say(front, "help") == {"parts": [], "answer": "abilities", "how_to_start": True}
     front.answers.result = answered(NeedsMeAnswer())
-    assert await say(front) == {"answer": "needs_me"}
+    assert await say(front) == {"parts": [], "answer": "needs_me"}
 
 
-async def test_a_workflow_named_in_a_question_is_matched_to_the_one_that_has_the_name(front: Front):
+async def test_a_workflow_named_in_a_question_is_matched_by_whole_words(front: Front):
     first = await make_workflow(front, "Morning new-ticket check")
     await make_workflow(front, "Friday summary")
     front.answers.result = answered(CheckWorkflowsAnswer(workflow_words=None))
-    assert await say(front) == {"answer": "check_workflows", "use_case_id": None}
+    assert await say(front) == {"parts": [], "answer": "check_workflows", "use_case_id": None}
     front.answers.result = answered(CheckWorkflowsAnswer(workflow_words="morning new-ticket check"))
     assert (await say(front))["use_case_id"] == first
     front.answers.result = answered(WhyStoppedAnswer(workflow_words="the morning check"))
-    assert (await say(front))["use_case_id"] is None
+    assert (await say(front))["use_case_id"] == first
     front.answers.result = answered(WhyStoppedAnswer(workflow_words="Morning"))
     assert (await say(front))["use_case_id"] == first
 
@@ -602,7 +883,7 @@ async def test_why_stopped_for_a_workflow_that_does_not_exist_is_a_404(front: Fr
     r = await front.client.post(
         ANSWER, json={"intent": "why_stopped", "use_case_id": made}, headers=ALICE
     )
-    assert r.json() == {"answer": "why_stopped", "use_case_id": made}
+    assert r.json() == {"parts": [], "answer": "why_stopped", "use_case_id": made}
 
 
 async def test_with_no_model_the_answer_is_the_plain_offline_one_and_the_starters(front: Front):
@@ -642,18 +923,314 @@ async def test_a_broken_answer_is_the_offline_answer_never_a_guess(
     front.answers.result = result
     reply = await say(front)
     assert (reply["answer"], reply["why"]) == ("offline", why)
-    assert set(reply) == {"answer", "why", "message", "starters"}
+    assert set(reply) == {"parts", "answer", "why", "message", "starters"}
 
 
-async def test_only_an_operator_is_answered_and_a_blank_or_double_request_is_refused(
+async def test_anyone_signed_in_is_answered_and_a_blank_or_double_request_is_refused(
     front: Front,
 ):
-    assert (await front.client.post(ANSWER, json={"text": "x"}, headers=BOB)).status_code == 403
     assert (await front.client.post(ANSWER, json={"text": "x"})).status_code == 401
     assert (await front.client.post(ANSWER, json={"text": " "}, headers=ALICE)).status_code == 422
     both = {"text": "x", "intent": "abilities"}
     assert (await front.client.post(ANSWER, json=both, headers=ALICE)).status_code == 422
     assert front.answers.asked == []
+
+
+async def ask_as_bob(front: Front, text: str) -> dict[str, object]:
+    r = await front.client.post(ANSWER, json={"text": text}, headers=BOB)
+    assert r.status_code == 200, r.text
+    return cast(dict[str, object], r.json())
+
+
+def done(text: str) -> RequestPart:
+    return RequestPart(text=text, mark="will_do")
+
+
+def crossed(text: str, reason: str = "ask_on_its_own") -> RequestPart:
+    return RequestPart(text=text, mark="cant", reason=reason)  # type: ignore[arg-type]
+
+
+def marks(reply: dict[str, object]) -> list[tuple[object, object, object]]:
+    parts = cast(list[dict[str, object]], reply["parts"])
+    return [(p["text"], p["mark"], p["reason"]) for p in parts]
+
+
+async def test_an_approvers_questions_get_the_runtimes_answer_as_an_operators_would(front: Front):
+    front.answers.result = Answered(
+        answer=NeedsMeAnswer(), parts=[done("What is waiting for my yes")]
+    )
+    reply = await ask_as_bob(front, "What is waiting for my yes?")
+    assert reply["answer"] == "needs_me"
+    assert marks(reply) == [("What is waiting for my yes", "will_do", None)]
+    front.answers.result = Answered(
+        answer=QuestionAnswer(
+            text="LangGraph is behind.", looked_at=["watchlist"], about_software=["LangGraph"]
+        ),
+        parts=[done("Is LangGraph up to date")],
+    )
+    assert (await ask_as_bob(front, "Is LangGraph up to date?"))["text"] == "LangGraph is behind."
+    front.answers.result = Answered(answer=AbilitiesAnswer(), parts=[done("What can you do")])
+    assert (await ask_as_bob(front, "What can you do?"))["answer"] == "abilities"
+    front.answers.result = answered(CheckWorkflowsAnswer(workflow_words=None))
+    assert (await ask_as_bob(front, "How are the workflows doing?"))["answer"] == "check_workflows"
+
+
+SET_UP = answered(SetupCardAnswer(name="Friday summary", rows=FOUR_ROWS))
+
+
+@pytest.mark.parametrize(
+    ("text", "answer"),
+    [
+        ("Every Friday, sum up the tickets we closed this week", SET_UP),
+        ("Pause the weekly closed-ticket summary", answered(AbilitiesAnswer())),
+        ("Make the morning new-ticket check run on Mondays only", answered(NeedsMeAnswer())),
+        ("Watch Redis releases", answered(WatchlistAnswer(word="releases", software="Redis"))),
+        ("Keep track of the React version", answered(WhichSoftwareAnswer(word="version"))),
+        ("Could you make the morning check daily?", answered(CantAnswer(cant=[EMAIL]))),
+        ("Email me the open bugs", answered(PartAnswer(name="x", rows=FOUR_ROWS, cant=[EMAIL]))),
+    ],
+)
+async def test_an_approver_asking_for_any_change_gets_operators_and_never_a_card(
+    front: Front, text: str, answer: Answered
+):
+    front.answers.result = answer
+    reply = await ask_as_bob(front, text)
+    assert reply["answer"] == "operators"
+    assert set(reply) == {"answer", "parts"}
+
+
+async def test_set_up_ideas_are_an_operators_but_an_approvers_chips_are_answered(front: Front):
+    async def tap(intent: str) -> object:
+        r = await front.client.post(ANSWER, json={"intent": intent}, headers=BOB)
+        return r.json()["answer"]
+
+    assert await tap("setup_ideas") == "operators"
+    assert [await tap(i) for i in ("needs_me", "check_workflows", "abilities", "decided")] == [
+        "needs_me",
+        "check_workflows",
+        "abilities",
+        "decided",
+    ]
+    assert front.answers.asked == []
+
+
+@pytest.mark.parametrize(
+    ("text", "answer", "parts"),
+    [
+        (
+            "What is waiting for my yes, and pause the morning new-ticket check",
+            NeedsMeAnswer(),
+            [
+                done("What is waiting for my yes"),
+                crossed("pause the morning new-ticket check"),
+            ],
+        ),
+        (
+            "Delete the weekly summary, then how are the workflows doing?",
+            CheckWorkflowsAnswer(workflow_words=None),
+            [
+                crossed("Delete the weekly summary", "not_followed"),
+                done("how are the workflows doing"),
+            ],
+        ),
+        (
+            "How are the workflows doing? Then delete the weekly summary",
+            CheckWorkflowsAnswer(workflow_words=None),
+            [done("How are the workflows doing"), done("delete the weekly summary")],
+        ),
+    ],
+)
+async def test_a_question_beside_a_change_is_answered_and_the_change_crossed_in_either_order(
+    front: Front, text: str, answer: object, parts: list[RequestPart]
+):
+    front.answers.result = Answered(answer=answer, parts=parts)  # type: ignore[arg-type]
+    reply = await ask_as_bob(front, text)
+    assert reply["answer"] == answer.kind  # type: ignore[attr-defined]
+    change = next(p.text for p in parts if p.text.split()[0].lower() in {"pause", "delete"})
+    question = next(p.text for p in parts if p.text != change)
+    assert marks(reply) == [
+        (p.text, *(("will_do", None) if p.text == question else ("cant", "operators")))
+        for p in parts
+    ]
+
+
+async def test_an_operators_question_beside_a_change_keeps_the_runtimes_marks(front: Front):
+    parts = [done("What is waiting for my yes"), crossed("pause the morning new-ticket check")]
+    front.answers.result = Answered(answer=NeedsMeAnswer(), parts=parts)
+    reply = await say(front, "What is waiting for my yes, and pause the morning new-ticket check")
+    assert marks(reply)[1] == ("pause the morning new-ticket check", "cant", "ask_on_its_own")
+
+
+@pytest.mark.parametrize(
+    ("text", "only"),
+    [
+        ("What did I decide before?", None),
+        ("show my past decisions", None),
+        ("did I decline anything?", "decline"),
+        ("What did I approve?", "approve"),
+    ],
+)
+async def test_an_approvers_own_decisions_are_read_from_the_whole_question(
+    front: Front, text: str, only: str | None
+):
+    front.answers.result = Answered(answer=AbilitiesAnswer(), parts=[crossed(text, "not_followed")])
+    reply = await ask_as_bob(front, text)
+    assert reply == {
+        "answer": "decided",
+        "only": only,
+        "parts": [
+            {
+                "text": text.rstrip("?"),
+                "mark": "will_do",
+                "reason": None,
+                "note": None,
+                "choices": [],
+            }
+        ],
+    }
+
+
+async def test_a_change_beside_a_question_about_decisions_is_crossed_for_the_operators(
+    front: Front,
+):
+    front.answers.result = answered(AbilitiesAnswer())
+    reply = await ask_as_bob(front, "What did I decide before, and pause the morning check?")
+    assert reply["answer"] == "decided"
+    assert marks(reply) == [
+        ("What did I decide before", "will_do", None),
+        ("pause the morning check", "cant", "operators"),
+    ]
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["approve the upgrade", "decline that request", "approve it", "did I approve the upgrade"],
+)
+async def test_an_approve_or_decline_goes_to_the_request_whatever_it_names(front: Front, text: str):
+    front.answers.result = answered(CantAnswer(cant=[EMAIL]))
+    reply = await ask_as_bob(front, text)
+    assert reply["answer"] == ("decided" if text.startswith("did") else "decide")
+    assert marks(reply) == [(text, "will_do", None)]
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "approve the upgrade & delete the workflow",
+        "approve the upgrade while you delete the workflow",
+        "approve the upgrade so you can delete the workflow",
+    ],
+)
+async def test_a_change_inside_an_approve_is_never_ticked_and_the_whole_is_refused(
+    front: Front, text: str
+):
+    front.answers.result = answered(NeedsMeAnswer())
+    reply = await ask_as_bob(front, text)
+    assert reply["answer"] == "operators"
+    crossed = {(mark, reason) for _, mark, reason in marks(reply)}
+    assert crossed == {("cant", "operators")}, "the change is never ticked with the approve"
+
+
+@pytest.mark.parametrize(
+    "text", ["what did I decide & delete the workflow", "what did I decide while you delete it"]
+)
+async def test_a_change_beside_past_decisions_is_crossed_whatever_joins_them(
+    front: Front, text: str
+):
+    reply = await ask_as_bob(front, text)
+    assert reply["answer"] == "decided"
+    assert [mark for _, *mark in marks(reply)] == [["will_do", None], ["cant", "operators"]]
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Have I got anything to approve?",
+        "Do I have anything to approve?",
+        "have I anything waiting to approve",
+        "Is there anything I have to approve today?",
+    ],
+)
+async def test_asking_what_there_is_to_approve_is_a_question_not_a_decision(
+    front: Front, text: str
+):
+    front.answers.result = Answered(answer=NeedsMeAnswer(), parts=[done(text.rstrip("?"))])
+    reply = await ask_as_bob(front, text)
+    assert (reply["answer"], marks(reply)) == ("needs_me", [(text.rstrip("?"), "will_do", None)])
+
+
+@pytest.mark.parametrize(
+    ("text", "only"),
+    [("did I say no to anything", "decline"), ("did I say yes to the upgrade", "approve")],
+)
+async def test_saying_yes_or_no_before_is_a_past_decision(front: Front, text: str, only: str):
+    reply = await ask_as_bob(front, text)
+    assert (reply["answer"], reply["only"]) == ("decided", only)
+
+
+async def test_an_approvers_past_decisions_need_no_model_and_ask_the_runtime_nothing(
+    front: Front,
+):
+    front.answers.result = NoModel()
+    assert (await ask_as_bob(front, "What did I decide before?"))["answer"] == "decided"
+    assert front.answers.asked == []
+    assert (await ask_as_bob(front, "approve it"))["answer"] == "offline"
+    assert front.answers.asked == ["approve it"]
+
+
+@pytest.mark.parametrize(
+    "text", ["auto-approve everything", "approve it for me", "approve on my behalf, I trust it"]
+)
+async def test_the_runtimes_refusal_stands_for_an_approver_whatever_the_words(
+    front: Front, text: str
+):
+    front.answers.result = answered(RefusedAnswer(said=text, rest=""))
+    assert (await ask_as_bob(front, text))["answer"] == "refused"
+
+
+async def test_a_ticked_clause_that_isnt_a_question_is_crossed_for_an_approver(front: Front):
+    front.answers.result = Answered(
+        answer=NeedsMeAnswer(),
+        parts=[done("what needs me"), done("notify Carol"), done("blue sky thinking")],
+    )
+    reply = await ask_as_bob(front, "what needs me and notify Carol and blue sky thinking")
+    assert marks(reply) == [
+        ("what needs me", "will_do", None),
+        ("notify Carol", "cant", "operators"),
+        ("blue sky thinking", "cant", "not_followed"),
+    ]
+    front.answers.result = Answered(
+        answer=QuestionAnswer(text="t", looked_at=[]), parts=[done("Kill the LangGraph check")]
+    )
+    assert (await ask_as_bob(front, "Kill the LangGraph check"))["answer"] == "operators"
+
+
+async def test_a_question_beside_an_approve_is_kept_and_asked_on_its_own(front: Front):
+    front.answers.result = answered(CantAnswer(cant=[EMAIL]))
+    reply = await ask_as_bob(front, "Approve the upgrade and is LangGraph up to date?")
+    assert reply["answer"] == "decide"
+    assert marks(reply) == [
+        ("Approve the upgrade", "will_do", None),
+        ("is LangGraph up to date", "cant", "ask_on_its_own"),
+    ]
+
+
+async def test_an_approve_beside_a_change_is_refused_whole(front: Front):
+    front.answers.result = answered(NeedsMeAnswer())
+    reply = await ask_as_bob(front, "approve the upgrade and pause the morning new-ticket check")
+    assert reply["answer"] == "operators"
+    assert marks(reply) == [
+        ("approve the upgrade", "cant", "operators"),
+        ("pause the morning new-ticket check", "cant", "operators"),
+    ]
+
+
+async def test_skipping_a_yes_and_no_model_answer_an_approver_as_anyone(front: Front):
+    front.answers.result = answered(RefusedAnswer(said="automatically", rest=""))
+    assert (await ask_as_bob(front, "Approve it automatically"))["answer"] == "refused"
+    assert (await ask_as_bob(front, "Set up the summary with no approval"))["answer"] == "refused"
+    front.answers.result = NoModel()
+    assert (await ask_as_bob(front, "What is waiting for my yes?"))["answer"] == "offline"
 
 
 CHECK = "/api/v1/planner/check-part"
@@ -702,6 +1279,44 @@ async def states_of(front: Front) -> dict[str, dict[str, object]]:
     r = await front.client.get(CAPABILITIES, headers=BOB)
     assert r.status_code == 200
     return {c["id"]: c for c in r.json()["capabilities"]}
+
+
+async def test_posts_in_teams_and_emails_stays_planned_everywhere_while_the_tell_flow_is_set(
+    db: Database,
+):
+    """The flow is only a connection fact. The capability waits for E14, when the Planner can lay
+    out a Tell block, so no screen says the platform posts before anyone can use it."""
+    runtime_registry = (FIXTURES / "agent" / "capabilities.json").read_text()
+
+    def runtime(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200, text=runtime_registry, headers={"content-type": "application/json"}
+        )
+
+    agents = HttpAgentRuntime(
+        "http://agent-runtime:8100",
+        "agent-key-not-real",
+        client=httpx.AsyncClient(transport=httpx.MockTransport(runtime)),
+    )
+    flow = "https://prod.example.logic.azure.com/workflows/tell/run?sig=flow-secret"
+    app = create_app({**LOCAL_ENV, "TEAMS_TELL_WEBHOOK_URL": flow, "TELL_EMAIL_TO": "a@x.example"})
+    watchlist = Watchlist(db, NothingLearned(), ScheduleBook(db))
+    builder = Builder(
+        db, SecondCallRepeats(), watchlist, "http://localhost:8000", history=RunBook()
+    )
+    facts = PlannerFactsReader(watchlist, builder, FakeHome())
+    registry = CapabilityRegistry(agents)
+    app.state.planner_front = PlannerFront(
+        FakeAnswers(), builder, watchlist, registry, FakeStates(), facts
+    )
+    app.state.connections = FakeConnections()
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        listed = (await client.get(CAPABILITIES, headers=BOB)).json()["capabilities"]
+        tell = (await client.get("/api/v1/settings/connections", headers=BOB)).json()["tell"]
+    [entry] = [c for c in listed if c["plain"] == "Posts in Teams and emails"]
+    assert (entry["state"], entry["short"]) == ("planned", "Teams channels, email")
+    assert tell["flow_set"] is True
 
 
 async def test_the_capabilities_are_the_registry_with_its_examples(front: Front):
@@ -780,3 +1395,638 @@ def test_a_real_long_tag_is_kept_whole():
     tag = "@langchain/langgraph-checkpoint-postgres@1.0.0"
     fact = WatchedFact(name="x", repo="a/b", our_version=None, newest_version=tag, state="s")
     assert fact.newest_version == tag
+
+
+LONG_AGO = datetime(2026, 10, 26, 1, 41, tzinfo=UTC)
+USE_CASES = "/api/v1/use-cases"
+
+
+async def last_run_of(front: Front, name: str) -> dict[str, object] | None:
+    r = await front.client.get(USE_CASES, headers=ALICE)
+    assert r.status_code == 200, r.text
+    (row,) = [u for u in r.json()["use_cases"] if u["name"] == name]
+    return cast(dict[str, object] | None, row["last_run"])
+
+
+async def test_a_workflow_that_never_ran_has_no_last_run(front: Front):
+    await make_workflow(front, "Never ran")
+    assert await last_run_of(front, "Never ran") is None
+
+
+def decided(step: int, by: str, verdict: Verdict, reason: str | None = None) -> Decision:
+    return Decision(ApprovalId("apr_1"), step, UserId(by), verdict, Digest("d"), LONG_AGO, reason)
+
+
+async def test_a_declined_run_names_who_declined_and_why_and_writes_nothing(front: Front):
+    use_case_id = await make_workflow(front, "Declined")
+    run_id = front.book.add(
+        use_case_id,
+        Rejected(RunId("run_1"), ProposalId("prp_1"), ApprovalId("apr_1"), UserId("bob"), 0),
+        LONG_AGO,
+        proposed=3,
+        decisions=(decided(0, "bob", Verdict.DECLINE, "Wrong version"),),
+    )
+    assert await last_run_of(front, "Declined") == {
+        "run_id": run_id,
+        "state": "rejected",
+        "at": "2026-10-26T01:41:00Z",
+        "test": False,
+        "declined_by": "bob",
+        "decline_reason": "Wrong version",
+        "approved_by": [],
+        "proposed": 3,
+        "written": 0,
+        "tickets": True,
+        "you_can_decide": False,
+        "retryable": False,
+        "reason": None,
+        "outcome": None,
+    }
+
+
+async def test_a_run_declined_at_the_second_step_names_who_said_yes_first(front: Front):
+    use_case_id = await make_workflow(front, "Second")
+    front.book.add(
+        use_case_id,
+        Rejected(RunId("run_1"), ProposalId("prp_1"), ApprovalId("apr_1"), UserId("alice"), 1),
+        LONG_AGO,
+        proposed=1,
+        decisions=(decided(0, "bob", Verdict.APPROVE), decided(1, "alice", Verdict.DECLINE)),
+    )
+    last = await last_run_of(front, "Second")
+    assert last is not None
+    assert (last["declined_by"], last["approved_by"], last["decline_reason"]) == (
+        "alice",
+        ["bob"],
+        None,
+    )
+
+
+async def test_a_stopped_run_is_the_last_run_with_no_one_declining(front: Front):
+    use_case_id = await make_workflow(front, "Stopped")
+    failure = Failure(RunFailure.AGENT_ERROR, "Jira did not answer", retryable=True)
+    front.book.add(
+        use_case_id,
+        Failed(RunId("run_1"), Stage.WORKING, failure, ResumeWork(2)),
+        LONG_AGO,
+    )
+    last = await last_run_of(front, "Stopped")
+    assert last is not None
+    assert (last["state"], last["declined_by"], last["proposed"], last["tickets"]) == (
+        "failed",
+        None,
+        0,
+        False,
+    )
+    assert (last["retryable"], last["reason"]) == (True, "AgentError")
+
+
+async def test_a_test_run_is_the_run_the_platform_recorded_as_one(front: Front):
+    use_case_id = await make_workflow(front, "Tried")
+    front.book.add(
+        use_case_id,
+        Pending(RunId("run_1"), 1, None, LONG_AGO),
+        LONG_AGO,
+        trigger="person",
+        test=True,
+    )
+    last = await last_run_of(front, "Tried")
+    assert last is not None and last["test"] is True and last["state"] == "pending"
+
+
+async def test_a_test_run_that_passed_at_the_yes_says_so(front: Front):
+    use_case_id = await make_workflow(front, "Passed")
+    front.book.add(
+        use_case_id,
+        Succeeded(RunId("run_1"), Outcome.TEST_PASSED, ()),
+        LONG_AGO,
+        trigger="person",
+        test=True,
+        proposed=1,
+    )
+    last = await last_run_of(front, "Passed")
+    assert last is not None
+    assert (last["state"], last["test"], last["outcome"], last["written"]) == (
+        "succeeded",
+        True,
+        "test_passed",
+        0,
+    )
+
+
+async def test_a_run_that_has_not_finished_has_no_outcome(front: Front):
+    use_case_id = await make_workflow(front, "Going")
+    front.book.add(use_case_id, Pending(RunId("run_1"), 1, None, LONG_AGO), LONG_AGO)
+    last = await last_run_of(front, "Going")
+    assert last is not None and last["outcome"] is None
+
+
+async def test_a_run_by_hand_that_was_not_a_test_is_not_one(front: Front):
+    use_case_id = await make_workflow(front, "Run now")
+    front.book.add(
+        use_case_id,
+        Pending(RunId("run_1"), 1, None, LONG_AGO),
+        LONG_AGO,
+        trigger="person",
+        task=CardsTask(agents=()),
+    )
+    last = await last_run_of(front, "Run now")
+    assert last is not None and last["test"] is False
+
+
+async def test_a_run_a_schedule_started_is_not_a_test_run(front: Front):
+    use_case_id = await make_workflow(front, "Scheduled")
+    front.book.add(
+        use_case_id,
+        Pending(RunId("run_1"), 1, None, LONG_AGO),
+        LONG_AGO,
+        trigger="schedule",
+        task=CardsTask(agents=()),
+    )
+    last = await last_run_of(front, "Scheduled")
+    assert last is not None and last["test"] is False
+
+
+async def test_the_newest_run_is_the_last_run_whatever_its_state(front: Front):
+    use_case_id = await make_workflow(front, "Newest")
+    done = Succeeded(
+        RunId("run_1"),
+        Outcome.WRITTEN,
+        (WriteDone("jira", "create_ticket", "MOCK-1", (UserId("bob"),)),),
+    )
+    front.book.add(use_case_id, done, LONG_AGO + timedelta(days=7))
+    front.book.add(
+        use_case_id,
+        AwaitingApproval(RunId("run_2"), ProposalId("prp_1"), ApprovalId("apr_2")),
+        LONG_AGO,
+        proposed=2,
+    )
+    last = await last_run_of(front, "Newest")
+    assert last is not None
+    assert (last["state"], last["written"], last["tickets"]) == ("succeeded", 1, True)
+
+
+async def test_one_workflows_runs_are_not_another_workflows_last_run(front: Front):
+    await make_workflow(front, "Quiet")
+    other = await make_workflow(front, "Busy")
+    front.book.add(other, Pending(RunId("run_1"), 1, None, LONG_AGO), LONG_AGO)
+    assert await last_run_of(front, "Quiet") is None
+    assert await last_run_of(front, "Busy") is not None
+
+
+async def test_the_planner_reads_the_same_last_run_the_rows_show(front: Front):
+    use_case_id = await make_workflow(front, "Same")
+    front.book.add(
+        use_case_id,
+        Rejected(RunId("run_1"), ProposalId("prp_1"), ApprovalId("apr_1"), UserId("bob"), 0),
+        LONG_AGO,
+        proposed=1,
+    )
+    front.answers.result = answered(AbilitiesAnswer())
+    await say(front)
+    (facts,) = front.answers.facts
+    assert facts is not None and facts.workflows is not None
+    (fact,) = [w for w in facts.workflows if w.name == "Same"]
+    last = await last_run_of(front, "Same")
+    assert last is not None
+    assert (fact.last_run, fact.last_run_at) == ("Declined", LONG_AGO)
+    assert last["at"] == "2026-10-26T01:41:00Z"
+
+
+async def test_builder_asks_only_for_the_workflows_it_shows(front: Front):
+    first = await make_workflow(front, "One")
+    await make_workflow(front, "Two")
+    front.book.asked.clear()
+    r = await front.client.get(f"{USE_CASES}/{first}", headers=ALICE)
+    assert r.status_code == 200
+    assert front.book.asked == [[first]]
+
+
+async def start_over_http(
+    front: Front, use_case_id: str, key: str, body: dict[str, bool] | None = None
+) -> None:
+    headers = {**ALICE, "Idempotency-Key": key}
+    url = f"{USE_CASES}/{use_case_id}/runs"
+    r = await (
+        front.client.post(url, headers=headers)
+        if body is None
+        else front.client.post(url, headers=headers, json=body)
+    )
+    assert r.status_code in (200, 201), r.text
+
+
+async def test_only_a_request_for_a_test_run_marks_the_run_a_test(front: Front):
+    alice = Principal(UserId("alice"), frozenset({Role.OPERATOR}), "Alice")
+    added = await front.watchlist.add(alice, AddSoftware.model_validate(LANGGRAPH))
+    assert hasattr(added, "use_case_id")
+    use_case_id = str(added.use_case_id)  # type: ignore[union-attr]
+    await start_over_http(front, use_case_id, "k1")
+    await start_over_http(front, use_case_id, "k2", {"test": False})
+    await start_over_http(front, use_case_id, "k3", {"test": True})
+    assert [spec.test for spec in front.starter.specs] == [False, False, True]
+
+
+async def test_every_change_answers_for_the_person_who_made_it(front: Front):
+    use_case_id = await make_workflow(front, "Changed")
+    base = f"{USE_CASES}/{use_case_id}"
+    changes = {
+        "pause": lambda: front.client.post(f"{base}/pause", headers=ALICE),
+        "resume": lambda: front.client.post(f"{base}/resume", headers=ALICE),
+        "save the schedule": lambda: front.client.put(
+            f"{base}/schedule",
+            headers=ALICE,
+            json={"day": "friday", "at": "17:30", "expected_version": 1},
+        ),
+        "delete": lambda: front.client.delete(base, headers=ALICE),
+        "restore": lambda: front.client.post(f"{base}/restore", headers=ALICE),
+    }
+    for name, change in changes.items():
+        front.book.viewers.clear()
+        answer = await change()
+        assert answer.status_code == 200, f"{name}: {answer.text}"
+        if name != "delete":
+            assert {v.user_id for v in front.book.viewers if v} == {"alice"}, name
+            assert None not in front.book.viewers, name
+
+
+WEEKDAYS_8 = {"day": "weekdays", "at": "08:00"}
+FRIDAY_16 = {"day": "friday", "at": "16:00"}
+
+
+async def edit_reply(front: Front, answer: EditAnswer) -> dict[str, object]:
+    front.answers.result = answered(answer)
+    return await say(front, "make the morning check run on Mondays only")
+
+
+async def test_an_edit_names_the_workflow_by_whole_words_with_before_and_after(front: Front):
+    morning = await make_workflow(front, "Morning new-ticket check", WEEKDAYS_8)
+    await make_workflow(front, "Weekly closed-ticket summary", FRIDAY_16)
+    monday = ScheduleChange(day="monday")
+    reply = await edit_reply(front, EditAnswer(workflow_words="morning check", schedule=monday))
+    assert reply == {
+        "answer": "edit",
+        "use_case_id": morning,
+        "name": "Morning new-ticket check",
+        "watchlist": False,
+        "missing": None,
+        "software": None,
+        "choices": [],
+        "before": WEEKDAYS_8,
+        "after": {"day": "monday", "at": "08:00"},
+        "hour": None,
+        "cant": None,
+        "holds_save": False,
+        "parts": [],
+    }
+
+
+@pytest.mark.parametrize(
+    ("words", "change", "after"),
+    [
+        ("weekly summary", ScheduleChange(at="10:00"), {"day": "friday", "at": "10:00"}),
+        ("weekly one", ScheduleChange(day="every_day"), {"day": "every_day", "at": "16:00"}),
+        ("Weekly closed-ticket summary", ScheduleChange(weekly=True), FRIDAY_16),
+        ("weekly summary", ScheduleChange(hour=9), {"day": "friday", "at": None}),
+    ],
+)
+async def test_the_after_keeps_what_the_change_leaves_out(
+    front: Front, words: str, change: ScheduleChange, after: dict[str, str | None]
+):
+    await make_workflow(front, "Weekly closed-ticket summary", FRIDAY_16)
+    reply = await edit_reply(front, EditAnswer(workflow_words=words, schedule=change))
+    assert (reply["before"], reply["after"]) == (FRIDAY_16, after)
+    assert reply["hour"] == change.hour
+
+
+async def test_weekly_with_no_day_leaves_the_day_to_pick_when_it_runs_every_weekday(front: Front):
+    await make_workflow(front, "Morning new-ticket check", WEEKDAYS_8)
+    weekly = EditAnswer(workflow_words="morning check", schedule=ScheduleChange(weekly=True))
+    assert (await edit_reply(front, weekly))["after"] == {"day": None, "at": "08:00"}
+
+
+async def test_words_that_name_no_workflow_are_missing_and_nothing_is_proposed(front: Front):
+    await make_workflow(front, "Weekly closed-ticket summary", FRIDAY_16)
+    monday = ScheduleChange(day="monday")
+    reply = await edit_reply(front, EditAnswer(workflow_words="morning check", schedule=monday))
+    assert (reply["use_case_id"], reply["missing"], reply["before"], reply["after"]) == (
+        None,
+        "morning check",
+        None,
+        None,
+    )
+
+
+async def test_a_word_inside_another_word_is_no_match(front: Front):
+    await make_workflow(front, "Checkout errors", FRIDAY_16)
+    reply = await edit_reply(front, EditAnswer(workflow_words="out", schedule=ScheduleChange()))
+    assert (reply["use_case_id"], reply["missing"]) == (None, "out")
+
+
+async def test_words_that_match_several_workflows_offer_them_as_choices(front: Front):
+    first = await make_workflow(front, "Friday summary", FRIDAY_16)
+    second = await make_workflow(front, "Friday follow-up", WEEKDAYS_8)
+    at_ten = ScheduleChange(at="10:00")
+    reply = await edit_reply(front, EditAnswer(workflow_words="Friday", schedule=at_ten))
+    assert (reply["use_case_id"], reply["missing"], reply["before"], reply["after"]) == (
+        None,
+        None,
+        None,
+        None,
+    )
+    assert sorted(
+        cast(list[dict[str, object]], reply["choices"]), key=lambda c: str(c["name"])
+    ) == [
+        {
+            "use_case_id": second,
+            "name": "Friday follow-up",
+            "watchlist": False,
+            "before": WEEKDAYS_8,
+            "after": {"day": "weekdays", "at": "10:00"},
+        },
+        {
+            "use_case_id": first,
+            "name": "Friday summary",
+            "watchlist": False,
+            "before": FRIDAY_16,
+            "after": {"day": "friday", "at": "10:00"},
+        },
+    ]
+
+
+async def test_a_watched_softwares_check_is_the_watchlists_schedule(front: Front):
+    alice = Principal(UserId("alice"), frozenset({Role.OPERATOR}), "Alice")
+    await front.watchlist.add(alice, AddSoftware.model_validate(LANGGRAPH))
+    tuesday = ScheduleChange(day="tuesday")
+    edit = EditAnswer(workflow_words="LangGraph check", software="LangGraph", schedule=tuesday)
+    reply = await edit_reply(front, edit)
+    listed = (await front.builder.list_use_cases()).use_cases
+    [watchlist] = [u for u in listed if u.template == "software_watchlist"]
+    assert (reply["use_case_id"], reply["watchlist"], reply["missing"]) == (
+        watchlist.use_case_id,
+        True,
+        None,
+    )
+    assert watchlist.schedule is not None
+    assert reply["after"] == {"day": "tuesday", "at": watchlist.schedule.at}
+    software = EditAnswer(workflow_words="software watchlist check", schedule=tuesday)
+    assert (await edit_reply(front, software))["use_case_id"] == watchlist.use_case_id
+
+
+async def test_a_software_check_for_software_not_watched_is_missing_and_names_it(front: Front):
+    edit = EditAnswer(workflow_words="React check", software="React", schedule=ScheduleChange())
+    reply = await edit_reply(front, edit)
+    assert (reply["use_case_id"], reply["missing"], reply["software"]) == (
+        None,
+        "React check",
+        "React",
+    )
+
+
+async def test_a_change_the_chat_cant_make_names_the_workflow_and_proposes_nothing(front: Front):
+    morning = await make_workflow(front, "Morning new-ticket check", WEEKDAYS_8)
+    for cant in ("only_schedule", "how_often"):
+        edit = EditAnswer(workflow_words="morning check", cant=cant)  # type: ignore[arg-type]
+        reply = await edit_reply(front, edit)
+        assert (reply["use_case_id"], reply["cant"], reply["after"]) == (morning, cant, None)
+        assert reply["before"] == WEEKDAYS_8
+
+
+async def test_a_clash_holds_save_with_no_after(front: Front):
+    await make_workflow(front, "Morning new-ticket check", WEEKDAYS_8)
+    reply = await edit_reply(front, EditAnswer(workflow_words="morning check", holds_save=True))
+    assert (reply["holds_save"], reply["after"]) == (True, None)
+
+
+async def test_an_edit_saves_nothing(front: Front):
+    morning = await make_workflow(front, "Morning new-ticket check", WEEKDAYS_8)
+    monday = ScheduleChange(day="monday")
+    await edit_reply(front, EditAnswer(workflow_words="morning check", schedule=monday))
+    versions = await front.client.get(f"/api/v1/use-cases/{morning}/versions", headers=ALICE)
+    assert [v["version"] for v in versions.json()["versions"]] == [1]
+    shown = await front.client.get(f"/api/v1/use-cases/{morning}", headers=ALICE)
+    assert shown.json()["schedule"]["day"] == "weekdays"
+
+
+async def test_words_in_the_plural_still_name_the_workflow(front: Front):
+    morning = await make_workflow(front, "Morning new-ticket check", WEEKDAYS_8)
+    edit = EditAnswer(workflow_words="new tickets check", schedule=ScheduleChange(day="monday"))
+    assert (await edit_reply(front, edit))["use_case_id"] == morning
+
+
+async def test_a_watched_softwares_check_is_the_watchlist_before_a_workflow_named_for_it(
+    front: Front,
+):
+    alice = Principal(UserId("alice"), frozenset({Role.OPERATOR}), "Alice")
+    await front.watchlist.add(alice, AddSoftware.model_validate(LANGGRAPH))
+    await make_workflow(front, "LangGraph upgrade tickets", FRIDAY_16)
+    edit = EditAnswer(workflow_words="LangGraph check", software="LangGraph")
+    reply = await edit_reply(front, edit.model_copy(update={"schedule": ScheduleChange()}))
+    assert reply["watchlist"] is True
+
+
+@pytest.mark.parametrize("words", ["it", None, "this one"])
+async def test_it_alone_names_no_workflow_and_offers_every_one(front: Front, words: str | None):
+    morning = await make_workflow(front, "Morning new-ticket check", WEEKDAYS_8)
+    weekly = await make_workflow(front, "Weekly closed-ticket summary", FRIDAY_16)
+    daily = ScheduleChange(day="every_day")
+    reply = await edit_reply(front, EditAnswer(workflow_words=words, schedule=daily))
+    assert (reply["use_case_id"], reply["missing"]) == (None, None)
+    choices = cast(list[dict[str, object]], reply["choices"])
+    assert {str(c["use_case_id"]): c["after"] for c in choices} == {
+        morning: {"day": "every_day", "at": "08:00"},
+        weekly: {"day": "every_day", "at": "16:00"},
+    }
+
+
+async def test_the_check_that_fits_no_workflow_offers_every_one_rather_than_none(front: Front):
+    summary = await make_workflow(front, "Weekly closed-ticket summary", FRIDAY_16)
+    edit = EditAnswer(workflow_words="the check", schedule=ScheduleChange(day="monday"))
+    reply = await edit_reply(front, edit)
+    assert (reply["use_case_id"], reply["missing"]) == (None, None)
+    assert [c["use_case_id"] for c in cast(list[dict[str, str]], reply["choices"])] == [summary]
+
+
+async def test_the_runtime_is_told_an_operator_can_change_workflows(front: Front):
+    front.answers.result = answered(AbilitiesAnswer())
+    await say(front, "what can you do?")
+    assert front.answers.changes == [True]
+
+
+async def test_the_runtime_is_told_an_approver_cannot_and_an_edit_answers_operators(front: Front):
+    front.answers.result = answered(
+        EditAnswer(workflow_words="morning check", schedule=ScheduleChange(day="monday"))
+    )
+    reply = await ask_as_bob(front, "Make the morning check run on Mondays only")
+    assert front.answers.changes == [False]
+    assert reply["answer"] == "operators"
+
+
+async def switch_reply(
+    front: Front, answer: PauseAnswer | ResumeAnswer, text: str = "pause the morning check"
+) -> dict[str, object]:
+    front.answers.result = answered(answer)
+    return await say(front, text)
+
+
+async def state_of(front: Front, use_case_id: str) -> str:
+    shown = await front.client.get(f"/api/v1/use-cases/{use_case_id}", headers=ALICE)
+    return str(shown.json()["state"])
+
+
+async def test_a_pause_pauses_the_one_workflow_its_words_name(front: Front):
+    morning = await make_workflow(front, "Morning new-ticket check", WEEKDAYS_8)
+    weekly = await make_workflow(front, "Weekly closed-ticket summary", FRIDAY_16)
+    reply = await switch_reply(front, PauseAnswer(workflow_words="morning check"))
+    assert reply == {
+        "answer": "pause",
+        "use_case_id": morning,
+        "name": "Morning new-ticket check",
+        "already": False,
+        "missing": None,
+        "choices": [],
+        "parts": [],
+    }
+    assert (await state_of(front, morning), await state_of(front, weekly)) == ("paused", "on")
+
+
+async def test_a_second_pause_says_it_was_already_paused_and_a_resume_turns_it_on(front: Front):
+    morning = await make_workflow(front, "Morning new-ticket check", WEEKDAYS_8)
+    await switch_reply(front, PauseAnswer(workflow_words="morning check"))
+    again = await switch_reply(front, PauseAnswer(workflow_words="morning check"))
+    assert (again["use_case_id"], again["already"]) == (morning, True)
+    on = await switch_reply(front, ResumeAnswer(workflow_words="morning check"), "resume it")
+    assert (on["answer"], on["use_case_id"], on["already"]) == ("resume", morning, False)
+    assert await state_of(front, morning) == "on"
+    on_again = await switch_reply(front, ResumeAnswer(workflow_words="morning check"), "resume")
+    assert on_again["already"] is True
+
+
+@pytest.mark.parametrize("words", [None, "check"])
+async def test_it_or_words_that_fit_several_pause_nothing_and_offer_each_one(
+    front: Front, words: str | None
+):
+    morning = await make_workflow(front, "Morning new-ticket check", WEEKDAYS_8)
+    weekly = await make_workflow(front, "Weekly ticket check", FRIDAY_16)
+    reply = await switch_reply(front, PauseAnswer(workflow_words=words), "pause it")
+    assert (reply["use_case_id"], reply["missing"]) == (None, None)
+    choices = cast(list[dict[str, str]], reply["choices"])
+    assert sorted(choices, key=lambda c: c["name"]) == [
+        {
+            "use_case_id": morning,
+            "name": "Morning new-ticket check",
+            "state": "on",
+            "watchlist": False,
+        },
+        {"use_case_id": weekly, "name": "Weekly ticket check", "state": "on", "watchlist": False},
+    ]
+    assert (await state_of(front, morning), await state_of(front, weekly)) == ("on", "on")
+
+
+async def test_words_that_name_no_workflow_are_missing_and_pause_nothing(front: Front):
+    weekly = await make_workflow(front, "Weekly closed-ticket summary", FRIDAY_16)
+    reply = await switch_reply(front, PauseAnswer(workflow_words="morning check"))
+    assert (reply["use_case_id"], reply["missing"], reply["choices"]) == (
+        None,
+        "morning check",
+        [],
+    )
+    assert await state_of(front, weekly) == "on"
+
+
+async def test_a_watched_softwares_check_is_offered_as_the_watchlist_and_nothing_is_paused(
+    front: Front,
+):
+    """The Software watchlist checks every software on it, so pausing it for "the LangGraph
+    check" would stop more than she asked. She picks it herself."""
+    alice = Principal(UserId("alice"), frozenset({Role.OPERATOR}), "Alice")
+    await front.watchlist.add(alice, AddSoftware.model_validate(LANGGRAPH))
+    pause = PauseAnswer(workflow_words="LangGraph check", software="LangGraph")
+    reply = await switch_reply(front, pause, "pause the LangGraph check")
+    [choice] = cast(list[dict[str, str]], reply["choices"])
+    assert reply["use_case_id"] is None
+    assert await state_of(front, choice["use_case_id"]) == "on"
+
+
+async def test_a_workflow_named_for_a_watched_software_and_the_watchlist_are_both_offered(
+    front: Front,
+):
+    alice = Principal(UserId("alice"), frozenset({Role.OPERATOR}), "Alice")
+    await front.watchlist.add(alice, AddSoftware.model_validate(LANGGRAPH))
+    check = await make_workflow(front, "LangGraph release check", FRIDAY_16)
+    pause = PauseAnswer(workflow_words="LangGraph check", software="LangGraph")
+    reply = await switch_reply(front, pause, "pause the LangGraph check")
+    choices = cast(list[dict[str, object]], reply["choices"])
+    assert reply["use_case_id"] is None
+    assert [(c["name"], c["watchlist"]) for c in choices] == [
+        ("LangGraph release check", False),
+        ("Software watchlist", True),
+    ]
+    assert await state_of(front, check) == "on"
+
+
+async def test_a_workflow_named_for_software_nobody_watches_is_paused(front: Front):
+    check = await make_workflow(front, "React release check", FRIDAY_16)
+    pause = PauseAnswer(workflow_words="React check", software="React")
+    reply = await switch_reply(front, pause, "pause the React check")
+    assert (reply["use_case_id"], reply["name"]) == (check, "React release check")
+    assert await state_of(front, check) == "paused"
+
+
+async def test_who_paused_and_resumed_from_the_chat_is_kept_after_the_resume(
+    front: Front, db: Database, caplog: pytest.LogCaptureFixture
+):
+    morning = await make_workflow(front, "Morning new-ticket check", WEEKDAYS_8)
+    caplog.set_level("INFO", logger="platform_api.builder.service")
+    await switch_reply(front, PauseAnswer(workflow_words="morning check"))
+    await switch_reply(front, PauseAnswer(workflow_words="morning check"))
+    await front.client.post(f"/api/v1/use-cases/{morning}/resume", headers=ALICE)
+    async with db.connection("builder") as conn:
+        rows = await (
+            await conn.execute(
+                "SELECT move, moved_by, via FROM builder.use_case_moves"
+                " WHERE use_case_id = %s ORDER BY moved_at",
+                (morning,),
+            )
+        ).fetchall()
+    assert [(r["move"], r["moved_by"], r["via"]) for r in rows] == [
+        ("pause", "alice", "chat"),
+        ("resume", "alice", "page"),
+    ]
+    said = [r.getMessage() for r in caplog.records if morning in r.getMessage()]
+    assert said == [f"alice paused {morning} via chat", f"alice resumed {morning} via page"]
+
+
+async def test_an_approver_pauses_nothing(front: Front):
+    morning = await make_workflow(front, "Morning new-ticket check", WEEKDAYS_8)
+    front.answers.result = answered(PauseAnswer(workflow_words="morning check"))
+    reply = await ask_as_bob(front, "pause the morning check")
+    assert reply["answer"] == "operators"
+    assert await state_of(front, morning) == "on"
+
+
+async def test_a_match_holding_every_word_check_included_wins(front: Front):
+    morning = await make_workflow(front, "Morning new-ticket check", WEEKDAYS_8)
+    await make_workflow(front, "Morning status", FRIDAY_16)
+    edit = EditAnswer(workflow_words="morning check", schedule=ScheduleChange(day="monday"))
+    assert (await edit_reply(front, edit))["use_case_id"] == morning
+
+
+@pytest.mark.parametrize(
+    ("words", "found"),
+    [("this one", None), ("news check", None), ("statuses", "Morning status")],
+)
+async def test_little_words_go_before_plurals_are_made_one(
+    front: Front, words: str, found: str | None
+):
+    await make_workflow(front, "Morning new-ticket check", WEEKDAYS_8)
+    await make_workflow(front, "Morning status", FRIDAY_16)
+    reply = await edit_reply(front, EditAnswer(workflow_words=words, schedule=ScheduleChange()))
+    assert reply["name"] == found
+    assert reply["missing"] == (None if words == "this one" or found else words)
+
+
+async def test_a_time_it_cant_read_leaves_the_time_to_pick(front: Front):
+    await make_workflow(front, "Morning new-ticket check", WEEKDAYS_8)
+    unclear = ScheduleChange(time_unclear=True)
+    reply = await edit_reply(front, EditAnswer(workflow_words="morning check", schedule=unclear))
+    assert reply["after"] == {"day": "weekdays", "at": None}

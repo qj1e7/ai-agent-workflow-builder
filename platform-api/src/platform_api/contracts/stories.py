@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import TypedDict
@@ -58,6 +59,7 @@ from platform_api.monitoring.troubleshooter import answers, explain
 from platform_api.orchestration.approvals import Refusal, Verdict
 from platform_api.orchestration.dispatch import ApprovalNotice, ApprovalOutcome, AskedStep
 from platform_api.orchestration.http import (
+    AnswerView,
     ApprovalActionView,
     ApprovalRef,
     ApprovalView,
@@ -66,6 +68,7 @@ from platform_api.orchestration.http import (
     DecisionView,
     FailedView,
     ProposalView,
+    QuestionView,
     RefusalOut,
     RejectedView,
     RunView,
@@ -79,11 +82,12 @@ from platform_api.orchestration.http import (
     WriteDoneView,
 )
 from platform_api.orchestration.jira import PRACTICE_SITE
+from platform_api.orchestration.questions import QuestionId
 from platform_api.orchestration.teams import approval_card, practice_text, with_outcome
 from platform_api.orchestration.write_actions import WriteAction, describe_at, digest
 from platform_api.practice_jira.http import MockJiraTicket, MockJiraTickets
-from platform_api.shared import ApprovalId, ProposalId, RunId, UserId
-from platform_api.wire import ApprovalStepView, Trigger, WireModel
+from platform_api.shared import TEAM_TIME_ZONE, ApprovalId, ProposalId, RunId, UserId
+from platform_api.wire import ApprovalStepView, ApproverRef, Trigger, WireModel
 
 ALICE = UserId("alice")
 BOB = UserId("bob")
@@ -165,6 +169,7 @@ class Story:
 
 SUCCESS = Story("success", RunId("run_01JB8"), datetime(2026, 11, 3, 2, 14, tzinfo=UTC), "41", "42")
 FAILURE = Story("failure", RunId("run_01JB9"), datetime(2026, 11, 4, 2, 14, tzinfo=UTC), "43")
+DECLINE_REASON = "Wrong version"
 REJECTED = Story("rejected", RunId("run_01JBA"), datetime(2026, 11, 5, 2, 14, tzinfo=UTC), "44")
 
 
@@ -197,14 +202,53 @@ class Timeline:
         return self.events[-1]
 
 
-def open_step() -> ApprovalStepView:
-    return ApprovalStepView(index=0, label="Team approver", status="open")
+SENT_TO = [ApproverRef(id=BOB, display="Bob")]
+"""Who may decide: the Approvers on the People list, Alice and Bob, minus Alice, whose run it is."""
+ANNOUNCED_AT = 10.612
+"""Seconds into the run when its request is posted to Teams."""
 
 
-def decided_step(verdict: Verdict, at: datetime) -> ApprovalStepView:
+def open_step(sent_at: datetime | None = None) -> ApprovalStepView:
+    """The one step, open. Once the request is in Teams it names who it went to."""
+    return ApprovalStepView(
+        index=0,
+        label="Team approver",
+        status="open",
+        post="sent" if sent_at else "waiting",
+        sent_to=SENT_TO if sent_at else [],
+        sent_at=sent_at,
+    )
+
+
+def decided_step(
+    verdict: Verdict, at: datetime, reason: str | None = None, sent_at: datetime | None = None
+) -> ApprovalStepView:
     status = "approved" if verdict is Verdict.APPROVE else "declined"
     return ApprovalStepView(
-        index=0, label="Team approver", status=status, decided_by=BOB, decided_at=at
+        index=0,
+        label="Team approver",
+        status=status,
+        decided_by=BOB,
+        decided_at=at,
+        reason=reason,
+        post="sent" if sent_at else "waiting",
+        sent_to=SENT_TO if sent_at else [],
+        sent_at=sent_at,
+    )
+
+
+def announced_at(tl: Timeline) -> datetime:
+    return next(e.ts for e in tl.events if e.kind == "approval_announced")
+
+
+def announced(tl: Timeline, seconds: float) -> ApprovalAnnouncedData:
+    """The request posted to Teams at seconds into the run, naming who may decide."""
+    return ApprovalAnnouncedData(
+        approval_id=tl.story.approval_id,
+        channel=CHANNEL,
+        link=tl.story.approval_link,
+        sent_to=[SENT_TO],
+        sent_at=tl.at(seconds),
     )
 
 
@@ -348,12 +392,10 @@ def work_leg_to_announcement(tl: Timeline) -> None:
     )
     tl.add(
         ApprovalAnnounced,
-        10.612,
+        ANNOUNCED_AT,
         PLATFORM,
         f"The approval request was posted to the Teams channel {CHANNEL}.",
-        ApprovalAnnouncedData(
-            approval_id=tl.story.approval_id, channel=CHANNEL, link=tl.story.approval_link
-        ),
+        announced(tl, ANNOUNCED_AT),
     )
 
 
@@ -515,8 +557,8 @@ def rejected_events() -> Timeline:
         RunRejected,
         251.92,
         PLATFORM,
-        "Bob declined the request. Nothing was written.",
-        RunRejectedData(by=BOB, step=0),
+        f"Bob declined the request. Nothing was written. Reason: {DECLINE_REASON}.",
+        RunRejectedData(by=BOB, step=0, reason=DECLINE_REASON),
     )
     return tl
 
@@ -536,6 +578,7 @@ class RunBaseFields(TypedDict):
     use_case_version: int
     started_by: UserId
     trigger: Trigger
+    test: bool
     started_at: datetime
     updated_at: datetime
     last_seq: int
@@ -550,6 +593,7 @@ def _base(story: Story, tl: Timeline, seq: int) -> RunBaseFields:
         use_case_version=1,
         started_by=ALICE,
         trigger="person",
+        test=False,
         started_at=story.t0,
         updated_at=tl.events[seq - 1].ts,
         last_seq=seq,
@@ -562,7 +606,7 @@ def awaiting_approval_view(story: Story, tl: Timeline) -> RunView:
     return AwaitingApprovalView(
         **_base(story, tl, seq),
         proposal=proposal_view(story),
-        approval=approval_ref(story, [open_step()]),
+        approval=approval_ref(story, [open_step(announced_at(tl))]),
         you_can_decide=True,  # As Bob, who decides it, sees the run.
     )
 
@@ -607,20 +651,44 @@ def rejected_final_view(tl: Timeline) -> RunView:
     return RejectedView(
         **_base(REJECTED, tl, len(tl.events)),
         proposal=proposal_view(REJECTED),
-        approval=approval_ref(REJECTED, [decided_step(Verdict.DECLINE, decided.ts)]),
+        approval=approval_ref(
+            REJECTED,
+            [decided_step(Verdict.DECLINE, decided.ts, DECLINE_REASON, announced_at(tl))],
+        ),
         rejected_by=BOB,
         step=0,
     )
 
 
-def approval_view_for(story: Story, viewer: UserId) -> ApprovalView:
+# Bob asks Alice, who started the run, before he decides, and she answers. Neither decides.
+QUESTION = QuestionView(
+    question_id=QuestionId("q_01JB8QA5K0000000000000000"),
+    asked_by=BOB,
+    asked_at=datetime(2026, 11, 3, 2, 16, 5, tzinfo=UTC),
+    text="Has 1.2.16 been tested with our login service?",
+    answer=None,
+)
+ANSWERED = QUESTION.model_copy(
+    update={
+        "answer": AnswerView(
+            text="Yes. We tested it with the team on Friday.",
+            by=ALICE,
+            at=datetime(2026, 11, 3, 2, 18, 40, tzinfo=UTC),
+        )
+    }
+)
+
+
+def approval_view_for(
+    story: Story, viewer: UserId, questions: Sequence[QuestionView] = ()
+) -> ApprovalView:
     own_work = viewer == ALICE
     return ApprovalView(
         approval_id=story.approval_id,
         run_id=story.run_id,
         digest=DIGEST,
         actions=[ApprovalActionView(**ACTION_VIEW.model_dump(), site_name=PRACTICE_SITE.name)],
-        steps=[open_step()],
+        steps=[open_step(story.t0 + timedelta(seconds=ANNOUNCED_AT))],
         you_can_decide=not own_work,
         why_not=Refusal.OWN_WORK if own_work else None,
         use_case_id=USE_CASE_ID,
@@ -630,6 +698,9 @@ def approval_view_for(story: Story, viewer: UserId) -> ApprovalView:
         trigger="person",
         retried_by=[],
         found=SUMMARY,
+        not_checked=[],
+        requester=ALICE,
+        questions=list(questions),
     )
 
 
@@ -637,7 +708,7 @@ def decision_out(tl: Timeline) -> DecisionOut:
     decided = next(e for e in tl.events if e.kind == "approval_decided")
     return DecisionOut(
         status="approved",
-        decision=DecisionView(step=0, by=BOB, verdict=Verdict.APPROVE, at=decided.ts),
+        decision=DecisionView(step=0, by=BOB, verdict=Verdict.APPROVE, at=decided.ts, reason=None),
     )
 
 
@@ -664,6 +735,8 @@ USE_CASE = UseCaseView(
     schedule=USE_CASE_SCHEDULE,
     plan=template_view(SOFTWARE_WATCHLIST).blocks,
     agents=[],
+    last_run=None,
+    left_out=[],
 )
 
 SUGGESTION = Builder.suggest(INSTRUCTION)
@@ -708,12 +781,11 @@ APPROVAL_NOTICE = ApprovalNotice(
 )
 
 
-def teams_messages(tl: Timeline, decided: bool = False) -> TeamsStubMessages:
-    """The practice Teams copy as the run asks for a yes, and, when decided, after Bob's yes."""
+def teams_messages(tl: Timeline, outcome: ApprovalOutcome | None = None) -> TeamsStubMessages:
+    """The practice Teams copy as the run asks for a yes, and with the outcome once decided."""
     announced = next(e for e in tl.events if e.kind == "approval_announced")
     card = approval_card(APPROVAL_NOTICE)
-    if decided:
-        outcome = ApprovalOutcome("approved", ("Bob",), USE_CASE_NAME, APPROVAL_NOTICE.open_url)
+    if outcome is not None:
         card = with_outcome(card, outcome)
     return TeamsStubMessages(
         messages=[
@@ -757,7 +829,7 @@ def troubleshooting(tl: Timeline) -> TroubleshootingOut:
         run_id=FAILURE.run_id,
         failure=failed.data,
         advice=explain(failed.data.reason),
-        answers=answers(failed.data),
+        answers=answers(failed.data, failed.ts.astimezone(TEAM_TIME_ZONE)),
     )
 
 
@@ -777,6 +849,10 @@ def fixtures() -> dict[str, WireModel | list[WireModel]]:
         "views/rejected.final.json": rejected_final_view(rejected),
         "approvals/apr_01JB8.alice.json": approval_view_for(SUCCESS, ALICE),
         "approvals/apr_01JB8.bob.json": approval_view_for(SUCCESS, BOB),
+        "approvals/apr_01JB8.alice.asked.json": approval_view_for(SUCCESS, ALICE, [QUESTION]),
+        "approvals/apr_01JB8.bob.answered.json": approval_view_for(SUCCESS, BOB, [ANSWERED]),
+        "approvals/question.asked.json": QUESTION,
+        "approvals/question.answered.json": ANSWERED,
         "approvals/decision.approved.json": decision_out(success),
         "approvals/refusal.own_work.json": OWN_WORK_REFUSAL,
         "builder/templates.json": TEMPLATES,
@@ -786,7 +862,19 @@ def fixtures() -> dict[str, WireModel | list[WireModel]]:
         "internal/workflow-failure.json": WORKFLOW_FAILURE,
         "stubs/dev-users.json": DEV_USERS,
         "stubs/teams-messages.json": teams_messages(success),
-        "stubs/teams-messages.decided.json": teams_messages(success, decided=True),
+        "stubs/teams-messages.decided.json": teams_messages(
+            success, ApprovalOutcome("approved", ("Bob",), USE_CASE_NAME, APPROVAL_NOTICE.open_url)
+        ),
+        "stubs/teams-messages.declined.json": teams_messages(
+            success,
+            ApprovalOutcome(
+                "declined",
+                ("Bob",),
+                USE_CASE_NAME,
+                APPROVAL_NOTICE.open_url,
+                reason=DECLINE_REASON,
+            ),
+        ),
         "stubs/mock-jira-tickets.json": mock_jira_tickets(success),
         "troubleshooting/failure.json": troubleshooting(failure),
     }

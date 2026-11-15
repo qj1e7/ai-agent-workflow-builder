@@ -17,6 +17,7 @@ from platform_api.orchestration import (
     AT_PATTERN,
     CardToolId,
     Day,
+    Grade,
     InputKind,
     RowKind,
     RowState,
@@ -35,6 +36,8 @@ from platform_api.wire import (
     WireIn,
     WireModel,
 )
+from platform_api.wire import FailureReason as FailureReasonName
+from platform_api.wire import RunOutcome as RunOutcomeName
 from platform_api.wire import RunState as RunStateName
 
 type BlockKind = Literal["agent", "approval", "write_action"]
@@ -72,9 +75,82 @@ class CreateUseCase(WireIn):
     params: dict[str, str]
 
 
+type N8nBlockKind = Literal[
+    "schedule",
+    "start",
+    "manual",
+    "error",
+    "read",
+    "agent",
+    "propose",
+    "ask",
+    "write",
+    "tell",
+    "report",
+    "branch",
+    "merge",
+    "end",
+    "other",
+    "off",
+]
+
+
+class N8nExitView(WireModel):
+    exit: str | None = Field(
+        description="Which way out: true or false for an IF, the name of an Ask for a yes exit "
+        "(No answer, Yes, No, Nothing to change), or null for a block with one way out."
+    )
+    to: str = Field(description="The block it leads to, by name.")
+
+
+class N8nBlockView(WireModel):
+    name: str = Field(description="The block's name, as n8n, the canvas and the run line show it.")
+    kind: N8nBlockKind = Field(
+        description="What the block does: schedule, start (Start from the Portal), manual and "
+        "error start a run; read, agent, propose, ask (Ask for a yes), write (Make the approved "
+        "changes), tell and report are our blocks; branch (IF), merge and end (No Op) are n8n's; "
+        "other is one of n8n's data blocks; off is a block the class file turns off or does not "
+        "know, which never runs."
+    )
+    next: list[N8nExitView] = Field(description="Where each of its exits leads.")
+
+
+type BuildLineKind = Literal["status", "check", "note"]
+
+
+class BuildLineView(WireModel):
+    at: AwareDatetime = Field(
+        description="When it happened, for replaying the lines with their real gaps."
+    )
+    kind: BuildLineKind = Field(
+        description="status: what the builder was doing. check: a check that passed. note: what "
+        "the safety checker changed."
+    )
+    text: str
+
+
 class UseCaseCreated(WireModel):
     use_case_id: str
     version: int
+    n8n_workflow_id: str | None = Field(
+        default=None,
+        description="The workflow of its own that holds it in n8n, saved as a draft. Null when "
+        "this platform does not lay workflows out in n8n.",
+    )
+    grade: Literal["safe", "writes_refused", "needs_a_fix"] | None = Field(
+        default=None,
+        description="The safety checker's grade of the draft. Only a safe draft is saved, so it "
+        "is safe whenever there is a draft.",
+    )
+    build_log: list[BuildLineView] = Field(
+        default_factory=list[BuildLineView],
+        description="What happened while it was laid out in n8n, in order, in the set-up card's "
+        "words. Empty with no draft in n8n.",
+    )
+    blocks: list[N8nBlockView] = Field(
+        default_factory=list[N8nBlockView],
+        description="The draft's blocks in the order a run meets them. Empty with no draft in n8n.",
+    )
 
 
 class UseCaseAgentView(WireModel):
@@ -84,7 +160,7 @@ class UseCaseAgentView(WireModel):
     values: dict[str, str]
 
 
-type UseCaseState = Literal["on", "paused"]
+type UseCaseState = Literal["draft", "on", "paused"]
 
 type ClockTime = Annotated[str, Field(pattern=AT_PATTERN, examples=["09:00"])]
 
@@ -102,6 +178,53 @@ class UseCaseSchedule(WireModel):
         "People list, owner_not_an_operator when they are no longer an Operator. An Operator "
         "takes it over by saving it again. Null while the owner can run it.",
     )
+    held_words: str | None = Field(
+        default=None,
+        description="Why a held schedule starts no run, and how it runs again, in the words to "
+        "show. Null while the owner can run it.",
+    )
+
+
+class LastRunView(WireModel):
+    run_id: RunId
+    state: RunStateName
+    at: AwareDatetime = Field(description="When the run started.")
+    test: bool = Field(
+        description="True when a person started it with Do a test run. False for Run now, a "
+        "check of the watchlist and a run its schedule started."
+    )
+    declined_by: UserId | None = Field(
+        description="Who declined it. Null unless the run was declined."
+    )
+    decline_reason: str | None = Field(
+        description="Why it was declined, when the Approver gave a reason. Null otherwise."
+    )
+    approved_by: list[UserId] = Field(
+        description="Who said yes to its request, in step order. On a declined run, those who "
+        "said yes before it was declined. Empty when nobody did."
+    )
+    proposed: int = Field(
+        description="How many writes the run asked a yes for. Counted only while the run waits "
+        "for a yes or after it was declined. 0 for a run that finished or stopped."
+    )
+    written: int = Field(description="How many writes the run made. 0 if none.")
+    tickets: bool = Field(
+        description="True when each of those writes is a ticket, so the Portal can say tickets "
+        "rather than changes."
+    )
+    you_can_decide: bool = Field(
+        description="True when the person asking may decide the yes this run waits for. False "
+        "for any other run, and in an answer that is not for a person."
+    )
+    retryable: bool = Field(description="True when the run stopped and a retry may start it again.")
+    reason: FailureReasonName | None = Field(
+        description="Why a stopped run stopped. Null for any other run."
+    )
+    outcome: RunOutcomeName | None = Field(
+        default=None,
+        description="How a finished run ended: written, nothing_to_write, or test_passed for a "
+        "test run that stopped before the yes and wrote nothing. Null until it succeeded.",
+    )
 
 
 class UseCaseView(WireModel):
@@ -114,17 +237,19 @@ class UseCaseView(WireModel):
     owner: UserId
     created_at: datetime
     state: UseCaseState = Field(
-        description="on, or paused until an Operator resumes it. A paused workflow starts no "
-        "run, on its schedule or by hand. A deleted workflow is not shown."
+        description="on, paused until an Operator resumes it, or draft until an Operator turns "
+        "it on (ADR 0044). A paused workflow starts no run, on its schedule or by hand. A draft "
+        "never runs on its schedule, and by hand only a test run, which stops before the yes and "
+        "writes nothing. A deleted workflow is not shown."
     )
     next_run_at: datetime | None = Field(
-        description="When the workflow next runs on its own. Null while it is paused, while its "
-        "schedule is held because the owner can no longer run it, and for a workflow with no "
-        "schedule."
+        description="When the workflow next runs on its own. Null while it is a draft, while it "
+        "is paused, while its schedule is held because the owner can no longer run it, and for a "
+        "workflow with no schedule."
     )
     schedule: UseCaseSchedule | None = Field(
-        description="When it runs on its own, and who owns the schedule. Kept while it is "
-        "paused or held. Null for a workflow with no schedule."
+        description="When it runs on its own, and who owns the schedule. Kept while it is a "
+        "draft, paused or held. Null for a workflow with no schedule."
     )
     plan: list[BlockView] = Field(
         description="The blocks a run of this use case draws, in order. A template use case "
@@ -134,6 +259,50 @@ class UseCaseView(WireModel):
     agents: list[UseCaseAgentView] = Field(
         description="The agents of an agent use case, with the values they run with. "
         "Empty for a template use case."
+    )
+    last_run: LastRunView | None = Field(
+        description="The newest run of this workflow, whatever its state. Null when it has "
+        "never run."
+    )
+    left_out: list[str] = Field(
+        description="The parts of the request it was set up without, in the person's own words "
+        "(plan 4.6). Text for people to read: nothing runs from it."
+    )
+    blocks: list[N8nBlockView] = Field(
+        default_factory=list[N8nBlockView],
+        description="The blocks of this version's own workflow in n8n, in the order a run meets "
+        "them, read from the workflow the platform keeps for the version. Empty for a workflow "
+        "that runs on the shared n8n workflow.",
+    )
+    grade: Grade | None = Field(
+        default=None,
+        description="The safety checker's grade of the version in use, for a workflow n8n "
+        "carries. writes_refused: a write can run without a yes, so the platform refuses this "
+        "version's writes and asks nobody, until the yes is put back or the change undone. "
+        "needs_a_fix: it uses a block that is off, or cannot run as the platform expects, so "
+        "each run stops at its first block. Null for a workflow on the shared n8n workflow.",
+    )
+    findings: list[str] = Field(
+        default_factory=list[str],
+        description="Why the version in use is not safe, in the safety checker's words, one per "
+        "problem. Empty when it is safe.",
+    )
+    deleted_in_n8n_at: AwareDatetime | None = Field(
+        default=None,
+        description="When the platform found its workflow deleted in n8n. It runs no more, and "
+        "its runs and versions are kept (ENGINE-PLAN D7). Null while n8n has it.",
+    )
+    moving_to_n8n: bool = Field(
+        default=False,
+        description="True while it still runs on the shared n8n workflow only because a run of "
+        "it has not ended. It moves to an n8n workflow of its own once that run ends "
+        "(ENGINE-PLAN 2.6).",
+    )
+    move_refused: str | None = Field(
+        default=None,
+        description="Why it is still on the shared n8n workflow and so starts no scheduled run, "
+        "in plain words with what to do: a step the safety checker refused, or n8n not taking "
+        "it yet. Null once it moved, and while it only waits for a run to end.",
     )
 
 
@@ -147,6 +316,14 @@ class UseCaseDeleted(WireModel):
     restore_until: datetime = Field(
         description="Until then, POST /api/v1/use-cases/{use_case_id}/restore puts the workflow "
         "back as it was. Its past runs stay readable either way."
+    )
+
+
+class StartRunIn(WireIn):
+    test: bool = Field(
+        default=False,
+        description="True for Do a test run, which tries a workflow once. Run now and a check "
+        "of the watchlist send nothing.",
     )
 
 
@@ -375,7 +552,131 @@ class LastCheckView(WireModel):
 
 class ScheduleIn(WireIn):
     day: Day
-    at: ClockTime = Field(description="Time of day in Singapore, HH:MM on a 5-minute step.")
+    at: ClockTime = Field(
+        description="Time of day in the team time zone, HH:MM on a 5-minute step."
+    )
+
+
+EXPECTED_VERSION = (
+    "The version the person read before making this change. When another version is in use by "
+    "now, nothing is saved or published and the answer is 409, so a teammate's later change is "
+    "never overwritten."
+)
+
+
+class ScheduleSaveIn(ScheduleIn):
+    expected_version: int = Field(description=EXPECTED_VERSION)
+
+
+type Via = Literal["page", "chat"]
+
+VIA_WORDS = (
+    "Where the change was made: page, the workflow's page, or chat, the Planner's chat. The "
+    "version keeps it."
+)
+
+
+class UseCaseScheduleIn(ScheduleSaveIn):
+    via: Via = Field(default="page", description=VIA_WORDS)
+
+
+class UndoIn(WireIn):
+    via: Via = Field(default="page", description=VIA_WORDS)
+
+
+class RepublishIn(WireIn):
+    via: Via = Field(default="page", description=VIA_WORDS)
+    in_use: int | None = Field(
+        default=None,
+        description="The version the person saw in use, as the Changed in n8n card names it. "
+        "When another version is in use by now, nothing changes and the answer is 409, so a "
+        "change made since is never thrown away.",
+    )
+
+
+class VersionSchedule(WireModel):
+    day: Day
+    at: ClockTime
+    time_zone: str
+
+
+class ScheduleChangeView(WireModel):
+    before: VersionSchedule | None = Field(description="Null when it had no schedule.")
+    after: VersionSchedule | None = Field(
+        description="Null when an Undo took the schedule away again."
+    )
+
+
+class VersionChange(WireModel):
+    schedule: ScheduleChangeView
+
+
+type VersionMade = Literal[
+    "published_in_n8n", "settings_changed_in_n8n", "rolled_back", "yes_put_back", "moved_to_n8n"
+]
+
+
+class VersionView(WireModel):
+    version: int
+    at: AwareDatetime = Field(
+        description="When it was published. For version 1, when the workflow was set up."
+    )
+    by: UserId | None = Field(
+        description="Who changed it: the person who saved the schedule, rolled back or put the "
+        "yes back in the Portal, or who published it in n8n. Null for version 1, for a version "
+        "the Software watchlist published, and for a version published in n8n by someone the "
+        "People list can't match."
+    )
+    via: Via | None = Field(
+        description="Where in the Portal it was changed. Null for a version made in n8n, and "
+        "when by is null."
+    )
+    change: VersionChange | None = Field(
+        description="The change of when it runs. Null for version 1, for a version the Software "
+        "watchlist published when its software changed, and for a version made otherwise."
+    )
+    undid: int | None = Field(
+        description="The version this one undid, publishing the schedule from before it again."
+    )
+    running: bool = Field(description="True for the version running now, which is the newest.")
+    made: VersionMade | None = Field(
+        default=None,
+        description="How a version that is not a change of when it runs came about: "
+        "published_in_n8n by a person in n8n's editor; settings_changed_in_n8n, the same version "
+        "in n8n with its settings saved there and nothing published, which n8n runs with the new "
+        "settings at once; rolled_back to an earlier version; yes_put_back, which put Ask for "
+        "a yes back before each write; or moved_to_n8n, the version that moved it from the shared "
+        "n8n workflow to its own. Null otherwise.",
+    )
+    grade: Grade | None = Field(
+        default=None,
+        description="The safety checker's grade of this version, for a workflow n8n carries. "
+        "Null for a workflow on the shared n8n workflow.",
+    )
+    changes: list[str] = Field(
+        default_factory=list[str],
+        description="For a version published in n8n, or whose settings changed there, what "
+        "changed from the version before, in plain words, as the Changed in n8n card lists "
+        "them. Empty otherwise.",
+    )
+    rolled_back_to: int | None = Field(
+        default=None, description="The version a roll back put back in use. Null otherwise."
+    )
+    publisher_unknown: bool = Field(
+        default=False,
+        description="True for a version published in n8n by someone the People list can't "
+        "match. Its runs stop at their first block until an Operator matches the person.",
+    )
+
+
+class SweepOut(WireModel):
+    found: int = Field(description="How many versions published in n8n this look found and kept.")
+
+
+class VersionList(WireModel):
+    versions: list[VersionView] = Field(
+        description="Newest first. Empty for a draft, which has published no version yet."
+    )
 
 
 class ScheduleView(WireModel):
@@ -395,13 +696,18 @@ class ScheduleView(WireModel):
         "People list, owner_not_an_operator when they are no longer an Operator. An Operator "
         "takes it over by saving it again. Null while the owner can run it.",
     )
+    held_words: str | None = Field(
+        default=None,
+        description="Why a held schedule starts no run, and how it runs again, in the words to "
+        "show. Null while the owner can run it.",
+    )
 
 
 class WatchlistView(WireModel):
     use_case_id: str
     version: int
     ticket_project: str
-    state: UseCaseState = Field(
+    state: Literal["on", "paused"] = Field(
         description="on, or paused until an Operator resumes it, as on its use case view. A "
         "paused watchlist starts no check, on its schedule or by hand."
     )
@@ -411,6 +717,12 @@ class WatchlistView(WireModel):
     )
     last_check: LastCheckView | None
     schedule: ScheduleView | None = Field(description="Null when the schedule is turned off.")
+    moving_to_n8n: bool = Field(
+        default=False,
+        description="The watchlist still runs on the shared run workflow because a check has "
+        "not ended. It moves to its own n8n workflow the next time it is asked once that check "
+        "ends: at the next Check now, or when the platform next starts.",
+    )
 
 
 class WatchlistOut(WireModel):
@@ -579,9 +891,26 @@ class CreateAgentUseCase(WireIn):
     agents: Annotated[list[AgentChoice], Field(min_length=1, max_length=3)]
     schedule: ScheduleIn | None = Field(
         default=None,
-        description="When it runs on its own, in Singapore time. The person who sets it up "
+        description="When it runs on its own, in the team time zone. The person who sets it up "
         "owns the schedule, so its scheduled runs are their work. Leave it out to run it only "
         "by hand.",
+    )
+    left_out: Annotated[
+        list[
+            Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
+        ],
+        Field(max_length=10),
+    ] = Field(
+        default_factory=list,
+        description="The parts of the request the Planner marked with a cross, in the person's "
+        "own words, so the workflow keeps what it was set up without (plan 4.6). Nothing runs "
+        "from them.",
+    )
+    on: bool = Field(
+        default=True,
+        description="False sets it up as a draft (ADR 0044): it never runs on its schedule, a "
+        "test run of it stops before the yes and writes nothing, and turning it on publishes "
+        "version 1.",
     )
 
 

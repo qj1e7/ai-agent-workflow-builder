@@ -33,6 +33,7 @@ from platform_api.contracts.stories import (
     WORKFLOW,
     Story,
     Timeline,
+    announced,
     approval_ref,
     open_step,
 )
@@ -48,7 +49,6 @@ from platform_api.monitoring.events import (
     AgentStepFinished,
     AgentStepStarted,
     ApprovalAnnounced,
-    ApprovalAnnouncedData,
     ApprovalDecided,
     ApprovalDecidedData,
     ApprovalRequested,
@@ -478,9 +478,7 @@ def check_events() -> Timeline:
         at + 5.6,
         PLATFORM,
         f"The approval request was posted to the Teams channel {CHANNEL}.",
-        ApprovalAnnouncedData(
-            approval_id=CHECK.approval_id, channel=CHANNEL, link=CHECK.approval_link
-        ),
+        announced(tl, at + 5.6),
     )
     _act_leg(tl, at + 1260.0)
     return tl
@@ -548,7 +546,7 @@ def _act_leg(tl: Timeline, decided_at: float) -> None:
 
 
 def awaiting_approval_view(tl: Timeline) -> RunView:
-    announced = next(e for e in tl.events if e.kind == "approval_announced")
+    posted = next(e for e in tl.events if e.kind == "approval_announced")
     return AwaitingApprovalView(
         run_id=CHECK.run_id,
         use_case_id=USE_CASE_ID,
@@ -556,9 +554,10 @@ def awaiting_approval_view(tl: Timeline) -> RunView:
         use_case_version=USE_CASE_VERSION,
         started_by=ALICE,
         trigger="person",
+        test=False,
         started_at=CHECK.t0,
-        updated_at=announced.ts,
-        last_seq=announced.seq,
+        updated_at=posted.ts,
+        last_seq=posted.seq,
         events_url=CHECK.events_url,
         proposal=ProposalView(
             proposal_id=CHECK.proposal_id,
@@ -573,7 +572,7 @@ def awaiting_approval_view(tl: Timeline) -> RunView:
                 for action in ACTIONS
             ],
         ),
-        approval=approval_ref(CHECK, [open_step()]),
+        approval=approval_ref(CHECK, [open_step(posted.ts)]),
         you_can_decide=True,  # As Bob, who decides it, sees the run.
     )
 

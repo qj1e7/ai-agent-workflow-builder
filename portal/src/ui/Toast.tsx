@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react'
+import { escapeIsFree } from './escape'
 import { IconX } from './icons'
 import { motionAllowed } from './motion'
 import { readMs, startToastClock, type Hold, type ToastClock } from './toastClock'
@@ -16,8 +17,10 @@ export const UNDO_ID = 'toast-undo'
 interface ToastProps {
   readonly message: ToastMessage | null
   readonly onDismiss: () => void
-  /** Where focus goes when the message leaves while focus is on it. */
-  readonly focusAfter: () => HTMLElement | null
+  /** Where focus goes when the message leaves while focus is on it. Only a message with Undo can hold focus. */
+  readonly focusAfter?: () => HTMLElement | null
+  /** Drawn in the flow of the dock it is placed in, above the box, rather than floating at the foot of the page, so it never covers anything. */
+  readonly inline?: boolean
 }
 
 /**
@@ -25,9 +28,9 @@ interface ToastProps {
  * Dismiss or leaving the page. One without Undo leaves after its reading time, which waits while the pointer or focus
  * is on it and while the tab is hidden.
  */
-export function Toast({ message, onDismiss, focusAfter }: ToastProps) {
+export function Toast({ message, onDismiss, focusAfter, inline = false }: ToastProps) {
   return (
-    <div className={styles['dock']}>
+    <div className={styles[inline ? 'inline' : 'dock']}>
       <p role="status" className="visually-hidden">
         {message?.text ?? ''}
       </p>
@@ -44,7 +47,7 @@ function useLatest<T>(value: T): { readonly current: T } {
   return latest
 }
 
-function Card({ message, onDismiss, focusAfter }: { message: ToastMessage; onDismiss: () => void; focusAfter: () => HTMLElement | null }) {
+function Card({ message, onDismiss, focusAfter }: { message: ToastMessage; onDismiss: () => void; focusAfter: (() => HTMLElement | null) | undefined }) {
   const card = useRef<HTMLDivElement>(null)
   const clock = useRef<ToastClock | null>(null)
   const textId = useId()
@@ -52,18 +55,21 @@ function Card({ message, onDismiss, focusAfter }: { message: ToastMessage; onDis
   const timed = message.undo === undefined
 
   const leave = () => {
-    if (card.current?.contains(document.activeElement)) focusAfter()?.focus()
+    if (card.current?.contains(document.activeElement)) focusAfter?.()?.focus()
     if (motionAllowed()) setLeaving(true)
     else onDismiss()
   }
   const latestLeave = useLatest(leave)
 
   useEffect(() => {
+    // On the window, so a menu, an editor or the side panel takes Escape first and this one waits for the next press.
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !document.querySelector('dialog[open]')) latestLeave.current()
+      if (!escapeIsFree(event, document.querySelector('dialog[open]') !== null)) return
+      event.preventDefault()
+      latestLeave.current()
     }
-    document.addEventListener('keydown', onKey)
-    if (!timed) return () => document.removeEventListener('keydown', onKey)
+    window.addEventListener('keydown', onKey)
+    if (!timed) return () => window.removeEventListener('keydown', onKey)
     const started = startToastClock(readMs(message.text), () => latestLeave.current())
     clock.current = started
     const onVisibility = () => (document.hidden ? started.hold('hidden') : started.release('hidden'))
@@ -71,7 +77,7 @@ function Card({ message, onDismiss, focusAfter }: { message: ToastMessage; onDis
     document.addEventListener('visibilitychange', onVisibility)
     return () => {
       started.stop()
-      document.removeEventListener('keydown', onKey)
+      window.removeEventListener('keydown', onKey)
       document.removeEventListener('visibilitychange', onVisibility)
     }
   }, [timed, message.text, latestLeave])

@@ -67,9 +67,20 @@ jobs:
       TF_VAR_jira_issue_type: ${{ vars.JIRA_ISSUE_TYPE || 'Task' }}
       TF_VAR_jira_browse_url: ${{ vars.JIRA_BROWSE_URL }}
       TF_VAR_watchlist_jira_project: ${{ vars.WATCHLIST_JIRA_PROJECT || 'MOCK' }}
+      # Optional. The zone the team works in. Unset keeps Asia/Singapore.
+      TF_VAR_team_time_zone: ${{ vars.TEAM_TIME_ZONE || 'Asia/Singapore' }}
+      # Optional, Confluence (ENGINE-PLAN E12). Unset CONFLUENCE_BASE_URL keeps it not connected.
+      TF_VAR_confluence_base_url: ${{ vars.CONFLUENCE_BASE_URL }}
+      TF_VAR_confluence_pages: ${{ vars.CONFLUENCE_PAGES }}
+      TF_VAR_confluence_api_token: ${{ secrets.CONFLUENCE_API_TOKEN }}
+      TF_VAR_confluence_email: ${{ vars.CONFLUENCE_EMAIL }}
       # Optional (ADR 0036). Unset keeps the practice Teams copy and its channel name.
       TF_VAR_teams_webhook_url: ${{ secrets.TEAMS_WEBHOOK_URL }}
       TF_VAR_teams_channel: ${{ vars.TEAMS_CHANNEL }}
+      # Optional (ENGINE-PLAN D1). The Tell flow, a secret kept in Key Vault, and the team's email
+      # list, a plain variable that the Portal shows. Unset keeps the practice copy.
+      TF_VAR_teams_tell_webhook_url: ${{ secrets.TEAMS_TELL_WEBHOOK_URL }}
+      TF_VAR_tell_email_to: ${{ vars.TELL_EMAIL_TO }}
       # Optional, for a subscription that refuses Cosmos DB's free tier or its region (ADR 0031).
       TF_VAR_cosmos_location: ${{ vars.COSMOS_LOCATION }}
       TF_VAR_cosmos_serverless: ${{ vars.COSMOS_SERVERLESS || 'false' }}
@@ -119,7 +130,8 @@ jobs:
         run: |
           registry=$(terraform -chdir=infra/envs/dev output -raw registry_name)
           server=$(terraform -chdir=infra/envs/dev output -raw registry_login_server)
-          jq -r 'to_entries[] | .value | "\(.repository) \(.tag) \(.digest)"' infra/public-images.json |
+          # n8n is not copied: our n8n image below builds on its pin.
+          jq -r 'to_entries[] | select(.key != "n8n") | .value | "\(.repository) \(.tag) \(.digest)"' infra/public-images.json |
             while read -r repository tag digest; do
               az acr import --name "$registry" --source "docker.io/$repository@$digest" \
                 --image "$repository:$tag" --force --output none
@@ -128,6 +140,7 @@ jobs:
           docker build --target runtime --tag "wab/platform-api:$GITHUB_SHA" platform-api
           docker build --target runtime --tag "wab/agent-runtime:$GITHUB_SHA" agent-runtime
           docker build --file portal/Dockerfile --tag "wab/portal:$GITHUB_SHA" .
+          docker build --file deploy/n8n/Dockerfile --tag "wab/n8n:$GITHUB_SHA" .
           # The deploy identity's AcrPush can still be on its way after Terraform's wait.
           retry() {
             label=$1
@@ -144,7 +157,7 @@ jobs:
             done
           }
           retry "Signing in to the registry" az acr login --name "$registry"
-          for image in platform-api agent-runtime portal; do
+          for image in platform-api agent-runtime portal n8n; do
             docker tag "wab/$image:$GITHUB_SHA" "$server/$image:$GITHUB_SHA"
             retry "Pushing $image" docker push --quiet "$server/$image:$GITHUB_SHA" >/dev/null
             echo "Pushed $image"

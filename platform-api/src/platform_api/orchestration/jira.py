@@ -144,7 +144,9 @@ def jira_summary(title: str) -> str:
     return " ".join(title.split())[:SUMMARY_LIMIT]
 
 
-_WRITE_LABEL = re.compile(r"^wab-run_[A-Za-z0-9]+-prp_[A-Za-z0-9]+-[0-9]+$")
+_WRITE_LABEL = re.compile(
+    r"^wab-(?:run_[A-Za-z0-9]+-prp_[A-Za-z0-9]+-[0-9]+|subject-[0-9a-f]{40})$"
+)
 
 
 def write_label(key: WriteKey) -> str:

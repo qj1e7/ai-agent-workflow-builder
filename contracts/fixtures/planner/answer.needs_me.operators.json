@@ -1,0 +1,19 @@
+{
+  "parts": [
+    {
+      "text": "What is waiting for my yes",
+      "mark": "will_do",
+      "reason": null,
+      "note": null,
+      "choices": []
+    },
+    {
+      "text": "pause the morning new-ticket check",
+      "mark": "cant",
+      "reason": "operators",
+      "note": null,
+      "choices": []
+    }
+  ],
+  "answer": "needs_me"
+}

@@ -4,8 +4,11 @@ from pathlib import Path
 
 from platform_api.app import create_app
 from platform_api.contracts.cards_stories import card_fixtures
+from platform_api.contracts.decisions_stories import decisions_fixtures
 from platform_api.contracts.home_stories import home_fixtures
 from platform_api.contracts.lifecycle_stories import lifecycle_fixtures
+from platform_api.contracts.n8n_access_stories import n8n_access_fixtures
+from platform_api.contracts.n8n_wait_stories import n8n_wait_fixtures
 from platform_api.contracts.people_stories import people_fixtures
 from platform_api.contracts.planner_stories import planner_fixtures
 from platform_api.contracts.settings_stories import settings_fixtures
@@ -68,13 +71,16 @@ def write_all(root: Path) -> list[Path]:
         shutil.rmtree(fixture_root / name, ignore_errors=True)
     for relative, value in {
         **fixtures(),
+        **n8n_wait_fixtures(),
         **settings_fixtures(),
         **watchlist_fixtures(),
         **watchlist_run_fixtures(),
         **card_fixtures(),
         **lifecycle_fixtures(),
         **people_fixtures(),
+        **n8n_access_fixtures(),
         **home_fixtures(),
+        **decisions_fixtures(),
         **planner_fixtures(root),
     }.items():
         path = fixture_root / relative

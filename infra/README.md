@@ -47,7 +47,7 @@ infra/
     container_app/     one Container App
     container_app_job/ one Container Apps Job
   sql/db-init.sql      the role setup that the db-init job runs
-  public-images.json   n8n and PostgreSQL, pinned by digest, copied into our registry
+  public-images.json   the pins of n8n and PostgreSQL. PostgreSQL is copied into our registry; our n8n image builds on the n8n pin
   bootstrap/           one-time setup by a person: state storage and the deploy identity
   scripts/             the offline checks, and the job runner the deploy workflow uses
 ```
@@ -85,6 +85,8 @@ infra/
 | `PLATFORM_JIRA_URL` (agent-runtime) | `http://platform-api:8000` | platform-api's HTTPS URL. It must be one of `CALLBACK_ALLOWED_ORIGINS` (ADR 0035) |
 | `JIRA_BASE_URL`, `JIRA_API_FLAVOR`, `JIRA_EMAIL`, `JIRA_ISSUE_TYPE`, `JIRA_BROWSE_URL`, `WATCHLIST_JIRA_PROJECT` | `.env`, unset by default: the practice Jira, `datacenter`, `Task`, `MOCK` | the `JIRA_*` and `WATCHLIST_JIRA_PROJECT` variables, unset by default ([A real Jira](#a-real-jira)) |
 | `JIRA_API_TOKEN` | `.env`, empty | a Key Vault secret, `jira-api-token`, from `JIRA_API_TOKEN`, only when that secret is set |
+| `CONFLUENCE_BASE_URL`, `CONFLUENCE_EMAIL`, `CONFLUENCE_PAGES` | `.env`, unset by default, so Confluence is not connected | the `CONFLUENCE_BASE_URL`, `CONFLUENCE_EMAIL` and `CONFLUENCE_PAGES` variables, unset by default. The email names the account and is not secret. `CONFLUENCE_PAGES` lists the only pages platform-api reads, as `id=title` separated by `;` |
+| `CONFLUENCE_API_TOKEN` | `.env`, empty | a Key Vault secret, `confluence-api-token`, from `CONFLUENCE_API_TOKEN`, only when that secret is set. With none, platform-api signs in with Jira's token when Jira is on the same site |
 | `COSMOS_ENDPOINT` | `http://cosmos:8081`, the emulator | the account's endpoint |
 | `COSMOS_KEY` | the emulator's published key | a Key Vault secret, copied from the account |
 | `ACTIVITY_READER` | `cosmos` by default | always `cosmos` |
@@ -93,7 +95,9 @@ infra/
 | `TEAMS_REQUESTS_WEBHOOK_URL` | `.env`, empty by default, so new team requests go to the approvals channel's webhook, or nowhere | not wired in Terraform yet, so it is unset and new team requests use `TEAMS_WEBHOOK_URL` (ADR 0038) |
 | `NVD_API_KEY` (agent-runtime) | `.env`, empty by default, so NVD is asked at most about once every 6 seconds and scores 10 CVEs a check | not wired in Terraform yet, so it is unset. With a free key from NVD, a Key Vault secret, it asks every 0.6 seconds and scores 50 (ADR 0025) |
 | `MAVEN_REPO_BASE`, `NPM_REGISTRY_BASE`, `OSV_API_BASE`, `NVD_API_BASE` (agent-runtime) | not set, so Maven Central, the npm registry, OSV.dev and NVD on the open internet | not set, so the same. Inside DevNet each needs an allowed route or an internal mirror (ADR 0005) |
-| `TEAM_TIME_ZONE` | not set, so `Asia/Singapore`. platform-api reads the agents' Jira days in it, gives the last run's day in it, and sends it to the agent runtime as the zone of the agents' today | not set, so the same `Asia/Singapore` |
+| `TEAMS_TELL_WEBHOOK_URL` | `.env`, empty by default, so a Tell's notice goes to the practice copy | a Key Vault secret, `teams-tell-webhook-url`, from the `teams_tell_webhook_url` variable, which the deploy takes from the GitHub secret `TEAMS_TELL_WEBHOOK_URL` (ENGINE-PLAN D1). "Posts in Teams and emails" stays planned until E14 |
+| `TELL_EMAIL_TO` | `.env`, empty by default | the `tell_email_to` variable, from the GitHub variable `TELL_EMAIL_TO`. The team's email list, separated by commas. A plain setting, not a secret: Settings, Connections shows it to anyone signed in. Required with the Tell flow |
+| `TEAM_TIME_ZONE` | `.env`, unset by default, so `Asia/Singapore`. platform-api gives it to the Portal in `/api/v1/me`, so every time the Portal shows is in it. A new schedule, the agents' today, the last run's day and the Jira days are in it, and every workflow's own n8n workflow and the daily self-test run on it. n8n's `GENERIC_TIMEZONE` takes the same value | the `team_time_zone` variable, from the GitHub variable `TEAM_TIME_ZONE`, else `Asia/Singapore`. It goes to platform-api, the bootstrap job and n8n's `GENERIC_TIMEZONE` |
 | `MAX_BODY_BYTES` | not set, so 2 MiB (2097152). platform-api refuses a larger request body with 413 | not set, so the same 2 MiB |
 | `SETTINGS_ENCRYPTION_KEY` | `.env` | a generated Key Vault secret. If it is lost, an Operator pastes the model key again |
 | `FIRST_OPERATOR`, `FIRST_APPROVERS` | `.env`, empty by default | from `first_operator` and `first_approvers`, only when they are set |
@@ -237,6 +241,7 @@ If the repository is made public later, add required reviewers and "Prevent self
    | Variable | Value |
    |---|---|
    | `TEAMS_CHANNEL` | optional. The Teams channel's name, as the approval card and the activity log name it. Unset means `CODESparks Ops` |
+   | `TEAM_TIME_ZONE` | optional. The zone the team works in, such as `Europe/London`. Unset means `Asia/Singapore`. Set it before the first workflow is made. Changing it later grades each workflow laid out on the old zone Needs a fix (ADR 0046). n8n still fires its Schedule Trigger on the old zone, and our API refuses each run at its first block, before it reads anything, until its schedule is saved again or its zone is changed in n8n. Terraform checks only that the value looks like a zone name, so a name that is not a real zone passes the plan, and platform-api then refuses to start |
    | `AZURE_LOCATION` | optional. The region for every resource. Unset means `southeastasia`. Set it before the first deploy only: changing it later replaces everything, PostgreSQL included |
    | `COSMOS_LOCATION` | optional. A region for Cosmos DB alone, when it is refused in `AZURE_LOCATION` |
    | `COSMOS_SERVERLESS` | optional. `true` makes a serverless Cosmos DB account, for when the free tier is refused. Unset means `false` |
@@ -246,7 +251,7 @@ If the repository is made public later, add required reviewers and "Prevent self
    With the GitHub CLI, each is one command, for example `gh secret set AZURE_TENANT_ID --env azure-dev` (it asks for the value) or `gh variable set AZURE_LOCATION --env azure-dev --body eastasia`.
 8. **Run the deploy.** In the Actions tab, run the `deploy` workflow on `main`. Leave `allow_destroy` off. The workflow then:
    1. creates the registry if it is missing,
-   2. copies n8n and PostgreSQL into the registry by digest, then builds and pushes our three images, tagged with the commit SHA,
+   2. copies PostgreSQL into the registry by digest, then builds and pushes our four images, tagged with the commit SHA. Our n8n image is the pinned n8n with our node pack inside (`deploy/n8n/Dockerfile`),
    3. creates the `db-init` job if it is missing and runs it, so the database roles exist before any app starts. This step also creates the Cosmos DB account, because the job reads its secrets from Key Vault and Key Vault holds the account's key. A new account takes about 5 to 10 minutes,
    4. creates or updates the `migrate` job with the new platform-api image and runs it, so the database is at the new schema before the new platform-api starts ([Migrations on a deploy](#migrations-on-a-deploy)). Step 3 already brought everything the job depends on up to date, so this apply changes only the job and its identity,
    5. plans everything, puts the count of changes in the run summary, and applies that exact plan,
@@ -268,7 +273,7 @@ These were not testable offline, so they are guesses until a real deploy confirm
   - **Why an action.** It is an `azapi_resource_action`, not an `azapi_update_resource`. That resource sends a PUT that keeps only the fields in azapi's own copy of the API, and that copy has no `environmentMode`, so it would drop the setting without an error. An action has nothing to read back, though. If the mode ever changes in Azure, Terraform does not see it. To send the PATCH again, replace the action by hand (`terraform apply -replace='module.container_env.azapi_resource_action.workload_profiles_mode'`). Removing the action from the code changes nothing in Azure.
 - Azure RBAC can take a few minutes to reach Key Vault and the registry. Microsoft says up to 10 minutes. Each app's identity waits 90 seconds after its role assignments before its app is created. The deploy identity waits 90 seconds after giving itself AcrPush and Key Vault Secrets Officer, before it pushes images or writes secrets. The workflow also tries `az acr login` and each `docker push` up to five times, 30 seconds apart. If an app still fails to read a secret, or Terraform cannot write one, rerun the workflow.
 - The workflow waits for each job twice as long as the job's own timeout: 600 seconds for `db-init` and `migrate`, and 1200 for `bootstrap`. Pulling the image on a cold start counts against the wait, not the timeout. If a wait still runs out, check the job's execution in the Azure portal before you rerun.
-- `az acr import` should keep each image's digest, since the Terraform code pulls n8n and PostgreSQL by digest. If a pull fails with "manifest unknown", compare the digest in the registry with `public-images.json`.
+- `az acr import` should keep each image's digest, since the Terraform code pulls PostgreSQL by digest. If a pull fails with "manifest unknown", compare the digest in the registry with `public-images.json`.
 - The Azure admin role is not a superuser. `db-init` grants itself membership in `n8n` and `wab_owner` before it hands them their databases. A local PostgreSQL 17 run showed that the handover fails without that grant and works with it. On Azure it is still untested.
 - Container Apps ingress ends any request after 240 seconds. The live view's event stream reconnects on its own. Check that the live view keeps up after 4 minutes.
 - A subscription may have only one free-tier Cosmos DB account. If one exists, from a test by hand for example, the create fails. Delete the other account first, or set `COSMOS_SERVERLESS=true`. Azure may also refuse the region, as some Azure for Students subscriptions only allow a few. Then set `COSMOS_LOCATION` to an allowed region.

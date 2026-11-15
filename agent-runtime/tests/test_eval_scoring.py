@@ -4,7 +4,7 @@ from typing import Any
 
 import httpx
 import pytest
-from evals.answer import ANSWER, AnswerCase, _cant_checks, _card_checks
+from evals.answer import ANSWER, AnswerCase, _cant_checks, _card_checks, dropped, flipped
 from evals.checks import Check, jargon, mentions, write_claims
 from evals.choose import CHOOSE, ChooseCase
 from evals.draft import DRAFT, DraftCase
@@ -26,7 +26,7 @@ from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 from langchain_core.messages import AIMessage
 
 from agent_runtime.answers import TaskRead, answer_of
-from agent_runtime.contract import CantRow, PartAnswer, SetupCardAnswer, UnderstoodRow
+from agent_runtime.contract import CantRow, PartAnswer, RequestPart, SetupCardAnswer, UnderstoodRow
 from agent_runtime.summary import SUMMARY_TIMEOUT_SECONDS, ModelSummarizer, template_check_summary
 
 
@@ -284,6 +284,7 @@ def test_every_job_is_registered_once() -> None:
         "draft",
         "choose",
         "answer",
+        "anything",
     ]
 
 
@@ -607,6 +608,22 @@ def test_a_refusal_and_a_question_are_scored_on_their_kind_and_words():
     assert failed(ANSWER.score(answer_case("why-did-it-stop"), wrong)) == {"names_the_workflow"}
 
 
+def test_a_release_check_that_raises_a_ticket_passes_unless_it_is_refused():
+    read = {
+        "belongs_on_watchlist": True,
+        "watchlist_word": "releases",
+        "software": "LangGraph",
+        "schedule": "Every weekday at 9",
+        "ticket": {"creates": True, "says": "summary", "said": "raise a Jira ticket"},
+    }
+    case = answer_case("release-check-raises-a-ticket")
+    assert failed(ANSWER.score(case, read_answer(**read))) == set()
+    unquoted = read_answer(**read, skips_the_yes={"whose": "an_approver_or_anyone_else"})
+    assert failed(ANSWER.score(case, unquoted)) == set()
+    quoted = {"whose": "an_approver_or_anyone_else", "said": "raise a Jira ticket"}
+    assert "right_kind" in failed(ANSWER.score(case, read_answer(**read, skips_the_yes=quoted)))
+
+
 def test_a_mixed_request_is_scored_on_the_watchlist_and_the_rest():
     read = {
         "belongs_on_watchlist": True,
@@ -626,6 +643,7 @@ def test_a_mixed_request_is_scored_on_the_watchlist_and_the_rest():
     assert failed(ANSWER.score(answer_case("mixed-watch-and-list"), alone)) == {
         "carries_the_rest",
         "reads_the_parts",
+        "right_kind",
     }
 
 
@@ -646,3 +664,142 @@ def test_a_word_rule_refusal_scores_as_the_product_answers_even_when_the_reading
     case = answer_case("find-bugs-in-mock")
     checks = ANSWER.score(case, Answer(None, "<not json", None))
     assert failed(checks) == {"answered"}
+
+
+SUMMARY_READ = {
+    "schedule": "Every Friday",
+    "search": {"status": "done", "done": {"how": "within", "days": 7}, "said": "closed"},
+    "ticket": {"creates": False, "says": "summary", "said": "sum up"},
+}
+
+
+def test_a_clause_left_out_of_the_reading_must_come_back_as_a_cross():
+    case = answer_case("r4-not-followed-colour")
+    assert failed(ANSWER.score(case, read_answer(**SUMMARY_READ))) == set()
+
+
+@pytest.mark.parametrize("how", ["before", "within"])
+def test_a_negated_update_passes_as_no_update_or_as_a_cross_never_as_a_tick(how: str):
+    search = {"issue_types": ["bug"], "updated": {"how": how, "days": 10}, "said": "bug tickets"}
+    reading = read_answer(schedule="Every Friday", search=search, ticket=SUMMARY_READ["ticket"])
+    assert failed(ANSWER.score(answer_case("r4-stale-havent"), reading)) == set()
+
+
+def test_a_clash_is_scored_on_the_schedule_and_its_reason():
+    case = answer_case("r4-clash-days")
+    assert (
+        failed(ANSWER.score(case, read_answer(**{**SUMMARY_READ, "schedule": "Every Monday at 9"})))
+        == set()
+    )
+
+
+def test_a_refusal_keeps_the_question_asked_with_it_without_any_reading():
+    case = answer_case("r4-question-with-skip")
+    assert failed(ANSWER.score(case, Answer(None, "", None))) == set()
+
+
+def test_a_clause_with_no_part_fails_keeps_or_flags_each_part():
+    task = "Every Friday, sum up the closed tickets and colour them by team"
+    kept = [
+        RequestPart(text="Every Friday", mark="will_do"),
+        RequestPart(text="sum up the closed tickets", mark="will_do"),
+    ]
+    assert dropped(task, kept) == ["dropped: colour them by team"]
+    crossed = RequestPart(text="colour them", mark="cant", reason="not_followed")
+    assert dropped(task, [*kept, crossed]) == []
+    assert dropped("Every Friday, list the open bugs, thanks", kept[:1]) == [
+        "dropped: list the open bugs"
+    ]
+
+
+def test_a_request_that_says_no_update_fails_on_an_update_within_some_days():
+    row = UnderstoodRow(
+        kind="look_for", text="Bug tickets, updated in the last 10 days", state="understood"
+    )
+    far = "Every Friday, list bugs in MOCK that nobody on the duty team has updated for 10 days"
+    assert flipped(far, [row]) == ["flipped: Bug tickets, updated in the last 10 days"]
+    assert flipped("Every Friday, list bugs updated in the last 10 days", [row]) == []
+
+
+@pytest.mark.parametrize(
+    ("case_id", "read"),
+    [
+        ("r7-edit-mondays", {"asks_about": "change", "workflow_words": "morning new-ticket check"}),
+        ("r7-edit-instead", {"asks_about": "change", "workflow_words": "the weekly summary"}),
+        ("r7-edit-react", {"asks_about": "change", "workflow_words": "React check"}),
+        ("r7-edit-rename", {"asks_about": "change", "workflow_words": "morning check"}),
+        ("r7-edit-monthly", {"asks_about": "change", "workflow_words": "morning check"}),
+        ("r7-edit-two-days", {"asks_about": "change"}),
+        ("r7-command-pause", {"asks_about": "needs_me"}),
+        ("r7-command-daily", {"asks_about": "my_workflows", "workflow_words": "weekly summary"}),
+        ("r7-name-next-run", {"asks_about": "my_workflows", "workflow_words": "weekly summary"}),
+        ("r7-name-holds-weekly", {"asks_about": "my_workflows"}),
+        (
+            "c6-pause-react",
+            {"asks_about": "change", "workflow_words": "React check", "software": "React"},
+        ),
+        (
+            "c6-resume-react",
+            {"asks_about": "change", "workflow_words": "React check", "software": "React"},
+        ),
+        (
+            "c6-watch-and-email",
+            {"belongs_on_watchlist": True, "watchlist_word": "watch", "software": "Kubernetes"},
+        ),
+        ("c6-teams-channel", {}),
+        ("c6-delete-mock", {}),
+    ],
+)
+def test_each_edit_case_passes_on_a_good_reading(case_id: str, read: dict[str, Any]) -> None:
+    assert failed(ANSWER.score(answer_case(case_id), read_answer(**read))) == set()
+
+
+def test_a_cant_in_its_own_words_fails_the_one_liner_check() -> None:
+    case = answer_case("c6-teams-channel").model_copy(update={"one_liner": "I can't do that."})
+    assert "says_the_one_liner" in failed(ANSWER.score(case, read_answer()))
+
+
+def test_an_edit_with_the_wrong_schedule_or_cant_fails_the_check_that_names_it() -> None:
+    wrong = read_answer(asks_about="change", workflow_words="morning new-ticket check")
+    case = answer_case("r7-edit-mondays").model_copy(
+        update={"task": "Make the morning new-ticket check run on Tuesdays"}
+    )
+    assert failed(ANSWER.score(case, wrong)) == {"reads_the_new_schedule"}
+    case = answer_case("r7-edit-rename").model_copy(
+        update={"task": "Make the morning check run daily"}
+    )
+    assert failed(ANSWER.score(case, wrong)) >= {"names_the_change_it_cant_make"}
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    [
+        "help-steps-to-use",
+        "help-how-to-start",
+        "help-alone",
+        "help-how-it-works",
+        "help-whats-this",
+        "help-how-app-works",
+        "help-need-help",
+        "help-where-to-start",
+        "help-set-up-workflow",
+        "help-create-workflow",
+    ],
+)
+def test_a_question_about_starting_passes_on_an_abilities_reading(case_id: str) -> None:
+    assert failed(ANSWER.score(answer_case(case_id), read_answer(asks_about="abilities"))) == set()
+
+
+def test_a_question_about_starting_fails_when_it_is_crossed_or_shows_the_wrong_card() -> None:
+    case = answer_case("help-steps-to-use")
+    crossed = failed(ANSWER.score(case, read_answer(name="Steps list")))
+    assert {"right_kind", "never_gives_the_reason"} <= crossed
+    capabilities = answer_case("what-can-you-do").model_copy(update={"how_to_start": True})
+    assert failed(ANSWER.score(capabilities, read_answer(asks_about="abilities"))) == {
+        "shows_how_to_start"
+    }
+
+
+def test_a_question_beside_an_order_is_still_asked_on_its_own() -> None:
+    case = answer_case("help-what-and-pause")
+    assert failed(ANSWER.score(case, read_answer(asks_about="abilities"))) == set()

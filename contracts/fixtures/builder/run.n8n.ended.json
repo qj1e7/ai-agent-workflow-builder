@@ -1,0 +1,230 @@
+{
+  "run_id": "run_01JN8N",
+  "use_case_id": "uc_01JD0",
+  "workflow_id": "wfRelease01",
+  "execution_id": "482",
+  "n8n_version_id": "2f6d4c1e-1d52-4a8e-9b1c-6f1f0f6b2c11",
+  "nodes": [
+    {
+      "name": "About this workflow",
+      "type": "n8n-nodes-base.stickyNote",
+      "kind": "other",
+      "position": [
+        0.0,
+        -400.0
+      ],
+      "disabled": false
+    },
+    {
+      "name": "Mon 8:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "kind": "schedule",
+      "position": [
+        0.0,
+        0.0
+      ],
+      "disabled": false
+    },
+    {
+      "name": "Start from the Portal",
+      "type": "CUSTOM.wabStartFromPortal",
+      "kind": "start",
+      "position": [
+        0.0,
+        200.0
+      ],
+      "disabled": false
+    },
+    {
+      "name": "Read release",
+      "type": "CUSTOM.wabRead",
+      "kind": "read",
+      "position": [
+        220.0,
+        0.0
+      ],
+      "disabled": false
+    },
+    {
+      "name": "Compare",
+      "type": "CUSTOM.wabAgent",
+      "kind": "agent",
+      "position": [
+        440.0,
+        0.0
+      ],
+      "disabled": false
+    },
+    {
+      "name": "Newer?",
+      "type": "n8n-nodes-base.if",
+      "kind": "branch",
+      "position": [
+        660.0,
+        0.0
+      ],
+      "disabled": false
+    },
+    {
+      "name": "Ask for a yes",
+      "type": "CUSTOM.wabAskForYes",
+      "kind": "ask",
+      "position": [
+        880.0,
+        0.0
+      ],
+      "disabled": false
+    },
+    {
+      "name": "Create ticket",
+      "type": "CUSTOM.wabMakeApprovedChanges",
+      "kind": "write",
+      "position": [
+        1100.0,
+        0.0
+      ],
+      "disabled": false
+    },
+    {
+      "name": "Nothing to change",
+      "type": "n8n-nodes-base.noOp",
+      "kind": "end",
+      "position": [
+        880.0,
+        200.0
+      ],
+      "disabled": false
+    }
+  ],
+  "edges": [
+    {
+      "source": "Mon 8:00",
+      "exit": 0,
+      "target": "Read release"
+    },
+    {
+      "source": "Start from the Portal",
+      "exit": 0,
+      "target": "Read release"
+    },
+    {
+      "source": "Read release",
+      "exit": 0,
+      "target": "Compare"
+    },
+    {
+      "source": "Compare",
+      "exit": 0,
+      "target": "Newer?"
+    },
+    {
+      "source": "Newer?",
+      "exit": 0,
+      "target": "Ask for a yes"
+    },
+    {
+      "source": "Newer?",
+      "exit": 1,
+      "target": "Nothing to change"
+    },
+    {
+      "source": "Ask for a yes",
+      "exit": 1,
+      "target": "Create ticket"
+    },
+    {
+      "source": "Ask for a yes",
+      "exit": 3,
+      "target": "Nothing to change"
+    }
+  ],
+  "blocks": [
+    {
+      "name": "Mon 8:00",
+      "kind": "schedule",
+      "next": [
+        {
+          "exit": null,
+          "to": "Read release"
+        }
+      ]
+    },
+    {
+      "name": "Start from the Portal",
+      "kind": "start",
+      "next": [
+        {
+          "exit": null,
+          "to": "Read release"
+        }
+      ]
+    },
+    {
+      "name": "Read release",
+      "kind": "read",
+      "next": [
+        {
+          "exit": null,
+          "to": "Compare"
+        }
+      ]
+    },
+    {
+      "name": "Compare",
+      "kind": "agent",
+      "next": [
+        {
+          "exit": null,
+          "to": "Newer?"
+        }
+      ]
+    },
+    {
+      "name": "Newer?",
+      "kind": "branch",
+      "next": [
+        {
+          "exit": "true",
+          "to": "Ask for a yes"
+        },
+        {
+          "exit": "false",
+          "to": "Nothing to change"
+        }
+      ]
+    },
+    {
+      "name": "Ask for a yes",
+      "kind": "ask",
+      "next": [
+        {
+          "exit": "Yes",
+          "to": "Create ticket"
+        },
+        {
+          "exit": "Nothing to change",
+          "to": "Nothing to change"
+        }
+      ]
+    },
+    {
+      "name": "Create ticket",
+      "kind": "write",
+      "next": []
+    },
+    {
+      "name": "Nothing to change",
+      "kind": "end",
+      "next": []
+    }
+  ],
+  "states": {
+    "Start from the Portal": "done",
+    "Read release": "done",
+    "Compare": "done",
+    "Newer?": "done",
+    "Ask for a yes": "done",
+    "Create ticket": "failed"
+  },
+  "from_n8n": true
+}

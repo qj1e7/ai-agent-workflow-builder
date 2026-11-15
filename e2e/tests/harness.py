@@ -4,8 +4,7 @@ import time
 import uuid
 from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Any, NoReturn
+from typing import Any, NoReturn, cast
 
 import httpx
 import psycopg
@@ -16,10 +15,10 @@ type Json = dict[str, Any]
 PLATFORM_API_URL = os.environ.get("PLATFORM_API_URL", "http://platform-api:8000")
 MOCK_GITHUB_URL = os.environ.get("MOCK_GITHUB_URL", "http://mock-github:8200")
 MOCK_MODEL_URL = os.environ.get("MOCK_MODEL_URL", "http://mock-model:8300")
-STEP_KEY = os.environ.get("STEP_KEY", "")
+MOCK_CONFLUENCE_URL = os.environ.get("MOCK_CONFLUENCE_URL", "http://mock-confluence:8400")
+N8N_URL = os.environ.get("N8N_BASE_URL", "http://n8n:5678")
 DATABASE_URL = os.environ.get("E2E_DATABASE_URL", "")
 WAIT_SECONDS = float(os.environ.get("E2E_WAIT_SECONDS", "90"))
-CONTRACTS_DIR = Path(os.environ.get("CONTRACTS_DIR", Path(__file__).parents[2] / "contracts"))
 
 TERMINAL_STATES = frozenset({"succeeded", "rejected", "failed"})
 TERMINAL_EVENTS = frozenset({"run_succeeded", "run_rejected", "run_failed"})
@@ -32,11 +31,18 @@ def fail(message: str) -> NoReturn:
     pytest.fail(message, pytrace=False)
 
 
-def fixture_kinds(name: str) -> list[str]:
-    events: list[Json] = json.loads(
-        (CONTRACTS_DIR / "fixtures" / "runs" / f"{name}.json").read_text()
-    )
-    return [event["kind"] for event in events]
+OLD_ENGINE_KINDS = frozenset({"leg_dispatched", "step_started"})
+"""Only the shared run workflow dispatches legs and starts steps. Both engines finish the agents'
+step, which keeps what they found in the run's log."""
+
+
+def assert_story(events: list[Json], story: list[str]) -> None:
+    """The run told these events in this order, with others between them, and ran on its own n8n
+    workflow, where no leg of the shared run workflow is dispatched."""
+    kinds = [event["kind"] for event in events]
+    rest = iter(kinds)
+    assert all(kind in rest for kind in story), f"{story} is not in order in {kinds}"
+    assert not OLD_ENGINE_KINDS & set(kinds), f"the shared run workflow ran it: {kinds}"
 
 
 @dataclass
@@ -148,16 +154,6 @@ class Api:
 
     def mark_done(self, user: str, key: str, *, expect: Iterable[int] = (200,)) -> httpx.Response:
         return self.post(user, f"/api/v1/mock-jira/tickets/{key}/done", expect=expect)
-
-    def tick(self, step_key: str, *, expect: Iterable[int] = (200,)) -> httpx.Response:
-        """What the schedule_tick workflow asks every 5 minutes. It signs in with the step key."""
-        return self.request(
-            None,
-            "POST",
-            "/internal/v1/schedules/tick",
-            expect=expect,
-            headers={"X-Step-Key": step_key},
-        )
 
     def watchlist(self, user: str = "alice") -> Json | None:
         return self.get(user, "/api/v1/watchlist")["watchlist"]
@@ -308,6 +304,28 @@ class MockGithub:
             fail(f"mock-github refused mode {mode!r}: {response.status_code} {response.text[:200]}")
 
 
+class MockConfluence:
+    """The mock Confluence's switches, and the pages the platform asked it for."""
+
+    def _post(self, path: str, body: Json) -> Json:
+        try:
+            response = httpx.post(f"{MOCK_CONFLUENCE_URL}{path}", json=body, timeout=5)
+        except httpx.HTTPError as error:
+            fail(f"mock-confluence at {MOCK_CONFLUENCE_URL} is unreachable ({error!r})")
+        if response.status_code != 200:
+            fail(f"mock-confluence refused {path}: {response.status_code} {response.text[:200]}")
+        return response.json()
+
+    def set_mode(self, mode: str) -> None:
+        self._post("/_admin/mode", {"mode": mode})
+
+    def forget_reads(self) -> None:
+        self._post("/_admin/reads", {})
+
+    def reads(self) -> list[str]:
+        return httpx.get(f"{MOCK_CONFLUENCE_URL}/_admin/reads", timeout=5).json()["reads"]
+
+
 def assert_gapless(events: list[Json], run_id: str, start: int = 1) -> None:
     seqs = [event["seq"] for event in events]
     assert seqs == list(range(start, start + len(events))), f"seq not gapless from {start}: {seqs}"
@@ -318,8 +336,58 @@ def approval_requested(events: list[Json]) -> Json:
     return next(e["data"] for e in reversed(events) if e["kind"] == "approval_requested")
 
 
+class N8nOwner:
+    """n8n's /rest as its owner, the way the platform reads it, signed in once for the whole run:
+    n8n allows only a few sign-ins a minute. It signs in again only when n8n ends the session."""
+
+    def __init__(self) -> None:
+        self._client: httpx.Client | None = None
+
+    def _sign_in(self, client: httpx.Client) -> None:
+        login = {
+            "emailOrLdapLoginId": os.environ["N8N_OWNER_EMAIL"],
+            "password": os.environ["N8N_OWNER_PASSWORD"],
+        }
+        client.post("/rest/login", json=login).raise_for_status()
+
+    def call(self, method: str, path: str, body: object = None) -> Any:
+        """n8n's answer, as n8n_answer reads it. A call that changes something is checked by
+        reading back what it changed, never by its answer alone."""
+        return n8n_answer(self.send(method, f"/rest{path}", body))
+
+    def send(self, method: str, path: str, body: object = None) -> httpx.Response:
+        """n8n's answer as it came, for a path from n8n's root, such as a refusal."""
+        if self._client is None:
+            self._client = httpx.Client(base_url=N8N_URL, timeout=30)
+            self._sign_in(self._client)
+        answer = self._client.request(method, path, json=body)
+        if answer.status_code == 401:
+            self._sign_in(self._client)
+            answer = self._client.request(method, path, json=body)
+        return answer
+
+
+def n8n_answer(answer: httpx.Response) -> Any:
+    """What n8n's /rest gave for a 2xx: the `data` it wraps most answers in, the whole body when it
+    wraps nothing, or None for an empty body. Raises for any other status."""
+    answer.raise_for_status()
+    if not answer.content:
+        return None
+    found: object = answer.json()
+    wrapped = cast(dict[str, Any], found) if isinstance(found, dict) else {"data": found}
+    return wrapped.get("data", wrapped)
+
+
+N8N_OWNER = N8nOwner()
+
+
 def tickets_for(api: Api, run_id: str) -> list[Json]:
-    return [t for t in api.tickets() if t["run_id"] == run_id]
+    """The tickets a run wrote, by the run's own record of what it made, or by the run named in
+    a ticket's label. A change made under its subject's key, as a workflow's own n8n run makes
+    it (ENGINE-PLAN 2.3.8), is labelled with the subject, not the run."""
+    written: list[Json] = api.run_view("alice", run_id).get("written") or []
+    made = {w["external_reference"] for w in written}
+    return [t for t in api.tickets() if t["run_id"] == run_id or t["key"] in made]
 
 
 def bob_decides(api: Api, approval_id: str, verdict: str, digest: str) -> httpx.Response:

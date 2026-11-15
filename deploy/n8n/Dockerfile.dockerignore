@@ -1,0 +1,7 @@
+*
+!n8n-node-pack/package.json
+!n8n-node-pack/package-lock.json
+!n8n-node-pack/.npmrc
+!n8n-node-pack/tsconfig.json
+!n8n-node-pack/tsconfig.build.json
+!n8n-node-pack/src

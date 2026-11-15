@@ -58,7 +58,7 @@ const h1 = (page: Page) => page.getByRole('heading', { level: 1 })
 const needsYou = (page: Page) => page.getByRole('list', { name: 'Needs you' })
 const approvalItem = (page: Page, approvalId: string) => page.locator(`li[data-home-item="approval:${approvalId}"]`)
 const waitingOnOthers = (page: Page) => page.getByRole('region', { name: 'Waiting on others' })
-const mainMenu = (page: Page) => page.getByRole('navigation', { name: 'Main' }).filter({ visible: true })
+const mainMenu = (page: Page) => page.getByRole('navigation', { name: 'Browse' }).filter({ visible: true })
 
 async function withBackend<T>(act: (backend: Backend, api: APIRequestContext) => Promise<T>): Promise<T> {
   const backend = await Backend.connect(BASE_URL)
@@ -170,7 +170,7 @@ test('@lane3 bob approves from Home and the item leaves his Home without a reloa
     await approvalItem(page, viaRunPage.approvalId).getByRole('link', { name: 'Review and decide' }).click()
     await page.getByRole('button', { name: 'Approve 1 ticket' }).click()
     await backend.waitToLeave(viaRunPage.runId, 'awaiting_approval')
-    await mainMenu(page).getByRole('link', { name: 'Home' }).click()
+    await mainMenu(page).getByRole('link', { name: 'Chat' }).click()
     await expect(page.getByRole('heading', { level: 2, name: /^Needs you/ })).toBeVisible()
     await expect(approvalItem(page, viaRunPage.approvalId)).toHaveCount(0)
     const sameAfterRunPage = await stillTheSamePage(page)
@@ -187,7 +187,7 @@ test('@lane3 bob approves from Home and the item leaves his Home without a reloa
     await page.getByRole('button', { name: 'Approve 1 ticket' }).click()
     const decidedAt = Date.now()
     await backend.waitToLeave(viaTeams.runId, 'awaiting_approval')
-    await mainMenu(page).getByRole('link', { name: 'Home' }).click()
+    await mainMenu(page).getByRole('link', { name: 'Chat' }).click()
     await expect(approvalItem(page, viaTeams.approvalId)).toHaveCount(0, { timeout: 5_000 })
     const leftAfterMs = Date.now() - decidedAt
     await page.getByRole('button', { name: /^Teams, practice copy/ }).click()
@@ -369,13 +369,13 @@ test('@lane10-setup one waiting run for the seed to copy', async () => {
   })
 })
 
-test('@lane10 with 50 runs waiting, bob’s Home shows the newest first and says how many more wait', async ({ browser }) => {
+test('@lane10 with 50 runs waiting, bob’s Home shows the newest first, says how many of how many, and offers Show more', async ({ browser }) => {
   const seed = savedBySetup<WaitingRun>(10, 'p11.sh lane10, which runs @lane10-setup and copies the run')
   await withBackend(async (_backend, api) => {
     const answer = await homeOf(api, 'bob')
     const page = await openHome(browser, 'bob')
     const keys = await needsYou(page).locator('li[data-home-item]').evaluateAll((all) => all.map((li) => li.getAttribute('data-home-item')))
-    const more = await page.getByText(/more runs? (is|are) waiting for your yes/).innerText()
+    const more = await needsYou(page).getByRole('status').filter({ hasText: /^Showing / }).innerText()
     await shotTo(page, 10, 'p11-many.png', true)
     save(10, 'p11-many.json', { seed, total: answer.approvals_total, keys, more, approvals: answer.approvals })
     expect(answer.approvals_total).toBeGreaterThanOrEqual(50)
@@ -383,7 +383,8 @@ test('@lane10 with 50 runs waiting, bob’s Home shows the newest first and says
     const times = answer.approvals.map((a) => a.started_at)
     expect(times, 'newest first').toEqual([...times].sort().reverse())
     expect(keys).toEqual(answer.approvals.slice(0, 10).map((a) => `approval:${a.approval_id}`))
-    expect(more).toContain(`${answer.approvals_total - 10} more runs are waiting for your yes`)
+    expect(more).toBe(`Showing ${String(keys.length)} of ${String(answer.approvals_total)}.`)
+    await expect(needsYou(page).getByRole('button', { name: 'Show more', exact: true })).toBeVisible()
     await page.context().close()
   })
 })
@@ -471,7 +472,7 @@ test('@review-video bob decides from Home, then alice sees her stopped run with 
   await page.waitForTimeout(1_000)
   await page.getByRole('button', { name: 'Approve 1 ticket' }).click()
   await page.waitForTimeout(4_000)
-  await mainMenu(page).getByRole('link', { name: 'Home' }).click()
+  await mainMenu(page).getByRole('link', { name: 'Chat' }).click()
   await expect(approvalItem(page, waiting.approvalId)).toHaveCount(0)
   await page.waitForTimeout(4_000)
   await page.getByRole('button', { name: 'Test controls' }).click()
@@ -544,7 +545,7 @@ async function menuMoveTo(browser: Browser, from: string, label: string, slowHom
 
 test('@focus-home a menu move to Home puts focus on its heading, like every other page, once Home has loaded', async ({ browser }) => {
   const rows: { from: string; to: string; slowHomeMs: number; active: string }[] = []
-  for (const slow of [0, 0, 0, 0, 0, 300, 300, 300]) rows.push({ from: '/settings', to: 'Home', slowHomeMs: slow, active: await menuMoveTo(browser, '/settings', 'Home', slow) })
+  for (const slow of [0, 0, 0, 0, 0, 300, 300, 300]) rows.push({ from: '/settings', to: 'Chat', slowHomeMs: slow, active: await menuMoveTo(browser, '/settings', 'Chat', slow) })
   for (const slow of [0, 300]) rows.push({ from: '/settings', to: 'Workflows', slowHomeMs: slow, active: await menuMoveTo(browser, '/settings', 'Workflows', slow) })
   save('probes', 'focus-home.json', rows)
   expect(rows.filter((row) => !row.active.startsWith('h1')), 'every move ends with focus on the page heading').toEqual([])

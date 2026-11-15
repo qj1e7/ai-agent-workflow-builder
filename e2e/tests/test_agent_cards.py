@@ -28,9 +28,6 @@ FOLLOW_UP_TASK = (
 )
 PLANTED = {"GitHub repository": "acme/planted", "Jira project": "MOCK"}
 LANGGRAPH = {"GitHub repository": "langchain-ai/langgraph", "Jira project": "MOCK"}
-COULD_NOT_CHECK = (
-    "Could not check langchain-ai/langgraph: GitHub returned 503 Service Unavailable three times"
-)
 
 
 def run_agents(api: Api, card_id: str, values: dict[str, str], name: str) -> str:
@@ -83,7 +80,10 @@ def test_without_a_model_the_planner_answers_offline_and_the_chips_still_work(ap
     for intent in ("abilities", "needs_me", "setup_ideas"):
         chip = api.post("alice", "/api/v1/planner/answer", {"intent": intent}, expect=(200,))
         assert chip.json()["answer"] in ("abilities", "needs_me", "ideas")
-    api.post("bob", "/api/v1/planner/answer", {"intent": "abilities"}, expect=(403,))
+    asked = api.post("bob", "/api/v1/planner/answer", {"intent": "decided"}, expect=(200,))
+    assert asked.json()["answer"] == "decided", "an Approver's question chips work with no model"
+    ideas = api.post("bob", "/api/v1/planner/answer", {"intent": "setup_ideas"}, expect=(200,))
+    assert ideas.json()["answer"] == "operators", "setting up is an Operator's, so Bob is refused"
 
 
 def test_one_changed_part_is_checked_by_code_and_the_capabilities_list_what_works(
@@ -106,9 +106,13 @@ def test_one_changed_part_is_checked_by_code_and_the_capabilities_list_what_work
     assert fits == {"state": "fits"}
     listed = {c["id"]: c for c in api.get("bob", "/api/v1/capabilities")["capabilities"]}
     assert listed["jira.create"]["state"] in ("ready", "needs_setup")
-    assert listed["teams.post"]["state"] == "planned"
+    assert (listed["teams.post"]["state"], listed["teams.post"]["plain"]) == (
+        "planned",
+        "Posts in Teams and emails",
+    )
     assert "approval requests only" not in listed["teams.post"]["why"]
-    assert listed["email.send"]["state"] == "unsupported"
+    assert listed["teams.post"]["short"] == "Teams channels, email"
+    assert "email.send" not in listed
     assert "crd_version_checker" in listed["github.releases"]["agents"]
 
 
@@ -185,8 +189,10 @@ def test_a_github_outage_stops_the_version_checker_before_its_model_can_ask_for_
     run_id = run_agents(api, "crd_version_checker", LANGGRAPH, "e2e outage")
     stopped = api.wait_for_state("alice", run_id, {"failed", "awaiting_approval"})
     assert stopped["state"] == "failed", "a check that read nothing must not ask for a yes"
-    assert (stopped["reason"], stopped["retryable"]) == ("AgentError", True)
-    assert stopped["message"] == f"UpstreamUnavailable: {COULD_NOT_CHECK}"
+    assert (stopped["reason"], stopped["retryable"]) == ("WorkflowNodeError", True)
+    assert stopped["message"].startswith(
+        'Stopped before it read anything. "Read release" failed in n8n'
+    ), "the release check reads GitHub in its own block, before the Version checker runs"
     events = api.events_after("alice", run_id)
     kinds = [e["kind"] for e in events]
     assert "write_action_proposed" not in kinds and "approval_requested" not in kinds

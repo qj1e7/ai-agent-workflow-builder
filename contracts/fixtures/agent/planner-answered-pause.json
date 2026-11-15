@@ -1,0 +1,17 @@
+{
+  "status": "answered",
+  "answer": {
+    "workflow_words": "React check",
+    "software": "React",
+    "kind": "pause"
+  },
+  "parts": [
+    {
+      "text": "Pause the React check",
+      "mark": "will_do",
+      "reason": null,
+      "note": null,
+      "choices": []
+    }
+  ]
+}

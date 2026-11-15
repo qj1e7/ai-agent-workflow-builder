@@ -4,17 +4,20 @@ import { MemoryRouter } from 'react-router'
 import { describe, expect, it } from 'vitest'
 import aliceHome from '../../../contracts/fixtures/builder/home.alice.json'
 import bobHome from '../../../contracts/fixtures/builder/home.bob.json'
+import movedWatchlist from '../../../contracts/fixtures/watchlist/moved.json'
+import statusesWatchlist from '../../../contracts/fixtures/watchlist/statuses.json'
 import { App } from '../App'
 import { ApiError } from '../api/client'
 import { ApiProvider } from '../api/context'
 import { TicketLinksProvider } from '../api/ticketLinks'
 import { createDevSession, SIGNED_IN, type Session } from '../api/session'
-import type { HomeOut, Me } from '../api/types'
+import type { HomeOut, Me, WatchlistView } from '../api/types'
+import { howItWorksPath } from '../screens/agents/agents'
 import { needsTotal } from '../screens/home/home'
 import { focusMovedOutside } from './PersonChip'
 import { TEAMS_TITLE } from './TeamsPanel'
 import { TEST_NOTE } from './TestControls'
-import { MENU_PAGE_IDS, PAGES } from './routes'
+import { oldAgentsDestination, PAGES, railCountFor, railCurrent, RAIL_PAGE_IDS } from './routes'
 
 const ORIGIN = 'http://portal.test'
 const MORNING = new Date('2026-10-29T03:00:00Z')
@@ -40,9 +43,11 @@ interface Setup {
   readonly oidc?: boolean
   readonly browseUrl?: string | null
   readonly home?: HomeOut
+  readonly watchlist?: WatchlistView
+  readonly now?: Date
 }
 
-function render({ path = '/', me = ALICE, meError, oidc = false, browseUrl = null, home }: Setup = {}): string {
+function render({ path = '/', me = ALICE, meError, oidc = false, browseUrl = null, home, watchlist, now = MORNING }: Setup = {}): string {
   const session = oidc ? oidcSession : createDevSession(null)
   const queryClient = new QueryClient({ defaultOptions: { queries: { retryOnMount: false } } })
   const key = ['me', session.cacheScope()]
@@ -50,12 +55,13 @@ function render({ path = '/', me = ALICE, meError, oidc = false, browseUrl = nul
   else queryClient.getQueryCache().build(queryClient, { queryKey: key }).setState({ status: 'error', error: meError, fetchStatus: 'idle' })
   queryClient.setQueryData(['dev-users'], [ALICE, BOB])
   if (home) queryClient.setQueryData(['home', session.cacheScope()], home)
+  if (watchlist) queryClient.setQueryData(['watchlist', session.cacheScope()], watchlist)
   return renderToStaticMarkup(
     <QueryClientProvider client={queryClient}>
       <ApiProvider session={session} platformFetch={fetch} origin={ORIGIN}>
         <TicketLinksProvider config={{ jiraBrowseUrl: browseUrl }}>
           <MemoryRouter initialEntries={[path]}>
-            <App now={() => MORNING} />
+            <App now={() => now} />
           </MemoryRouter>
         </TicketLinksProvider>
       </ApiProvider>
@@ -75,23 +81,31 @@ function currentLinks(html: string): string[] {
     .map((tag) => /href="([^"]*)"/.exec(tag)?.[1] ?? '')
 }
 
-function menuLabels(html: string): string[] {
-  const nav = /<nav\b[^>]*aria-label="Main"[^>]*>([\s\S]*?)<\/nav>/.exec(html)?.[1] ?? ''
+function railLabels(html: string): string[] {
+  const nav = /<nav\b[^>]*aria-label="Browse"[^>]*>([\s\S]*?)<\/nav>/.exec(html)?.[1] ?? ''
   return [...nav.matchAll(/<a\b[^>]*>([\s\S]*?)<\/a>/g)].map((match) => text(match[1] ?? ''))
 }
 
-const DRAWN_AT_ONCE = MENU_PAGE_IDS
+const DRAWN_AT_ONCE = RAIL_PAGE_IDS
 
-describe('the menu', () => {
-  it('reads Home, Workflows, Software watchlist, Agent library for an Operator, with no New workflow', () => {
-    expect(menuLabels(render())).toEqual(['Home', 'Workflows', 'Software watchlist', 'Agent library'])
+describe('the rail', () => {
+  it('reads Chat, Workflows and Watchlist for an Operator, with no menu in the header and no Agent library', () => {
+    const html = render()
+    expect(railLabels(html)).toEqual(['Chat', 'Workflows', 'Watchlist'])
+    expect(html).not.toContain('href="/agents"')
+    expect(headerOf(html)).not.toMatch(/aria-label="Browse"/)
   })
 
-  it('has no New workflow for an Approver who is not an Operator, on the header or the tab bar', () => {
+  it('has the same three items for an Approver who is not an Operator', () => {
     const html = render({ me: BOB })
-    expect(menuLabels(html)).toEqual(['Home', 'Workflows', 'Software watchlist'])
+    expect(railLabels(html)).toEqual(['Chat', 'Workflows', 'Watchlist'])
     expect(html).not.toContain('href="/new"')
     expect(html).not.toContain('href="/agents"')
+  })
+
+  it('is one nav, with no second tab bar', () => {
+    const navs = [...render().matchAll(/<nav\b[^>]*aria-label="Browse"/g)]
+    expect(navs).toHaveLength(1)
   })
 
   it('sends an old /new address, a saved draft’s old link and the old done page to Home, never to a blank page', () => {
@@ -102,31 +116,42 @@ describe('the menu', () => {
     }
   })
 
-  it('has the menu’s items on the phone tab bar too', () => {
-    const html = render()
-    const bars = [...html.matchAll(/<nav\b[^>]*aria-label="Main"[^>]*>([\s\S]*?)<\/nav>/g)].map((match) =>
-      [...(match[1] ?? '').matchAll(/<a\b[^>]*href="([^"]*)"/g)].map((link) => link[1]),
-    )
-    expect(bars).toHaveLength(2)
-    expect(bars[1]).toEqual(MENU_PAGE_IDS.map((id) => PAGES[id].path))
+  it('sends the old Agent library address to How it works for an Operator, keeping the agent and the tab, and Home for anyone else', () => {
+    expect(oldAgentsDestination(true, null, null)).toBe('/settings?tab=how')
+    expect(oldAgentsDestination(true, 'crd_version_checker', null)).toBe(howItWorksPath({ show: 'agents', agent: 'crd_version_checker' }))
+    expect(oldAgentsDestination(true, 'planner', 'agents')).toBe('/settings?tab=how&show=agents&agent=planner')
+    expect(oldAgentsDestination(true, null, 'tools')).toBe('/settings?tab=how&show=tools')
+    expect(oldAgentsDestination(false, 'planner', 'agents')).toBe('/')
+    expect(render({ path: '/agents/planner' })).toContain('<main')
   })
 
   it.each(DRAWN_AT_ONCE)('%s links to its path, and at that path shows its own heading with the item marked current', (id) => {
-    const { path, menuLabel } = PAGES[id]
+    const { path, railLabel } = PAGES[id]
     const html = render({ path, home: ALICE_HOME })
     expect(html).toContain(`href="${path}"`)
     const heading = headings(html)
     expect(heading).toHaveLength(1)
-    expect(heading[0]).toBe(id === 'home' ? 'Good morning! Alice' : menuLabel)
+    expect(heading[0]).toBe(id === 'home' ? 'What should run by itself?' : railLabel)
     expect(new Set(currentLinks(html))).toEqual(new Set([path]))
   })
 
-  it('keeps an item current on the addresses under it, such as an open agent card, and Home only at Home', () => {
-    expect(currentLinks(render({ path: '/agents/crd_version_checker' }))).toEqual(['/agents', '/agents'])
-    expect(currentLinks(render({ path: '/' }))).toEqual(['/', '/'])
+  it('keeps Home current only at Home, and an item current on the addresses under it', () => {
+    expect(currentLinks(render({ path: '/' }))).toEqual(['/'])
+    expect(currentLinks(render({ path: '/workflows/uc_01JB7' }))).toEqual(['/workflows'])
+    expect(currentLinks(render({ path: '/software/anything' }))).toEqual(['/software'])
   })
 
-  it('marks nothing current for a path the menu does not name', () => {
+  it('marks Workflows current on a run page and an approval page, and Watchlist when the run is the watchlist’s', () => {
+    expect(currentLinks(render({ path: '/runs/run_01JB8' }))).toEqual(['/workflows'])
+    expect(currentLinks(render({ path: '/approvals/apr_01JB8' }))).toEqual(['/workflows'])
+    expect(railCurrent('/runs/run_01JB8', 'software')).toBe('software')
+    expect(railCurrent('/approvals/apr_01JB8', 'software')).toBe('software')
+    expect(railCurrent('/runs/run_01JB8', 'workflows')).toBe('workflows')
+    expect(railCurrent('/workflows', 'software')).toBe('workflows')
+    expect(railCurrent('/settings', 'workflows')).toBeNull()
+  })
+
+  it('marks nothing current for a path the rail does not name', () => {
     expect(currentLinks(render({ path: '/nowhere' }))).toEqual([])
   })
 })
@@ -135,44 +160,53 @@ const ALICE_HOME = aliceHome as HomeOut
 const BOB_HOME = bobHome as HomeOut
 const plain = (html: string) => html.replace(/<[^>]*>/g, '')
 const linkNames = (html: string) =>
-  [...html.matchAll(/<nav\b[^>]*aria-label="Main"[^>]*>([\s\S]*?)<\/nav>/g)].flatMap((nav) =>
+  [...html.matchAll(/<nav\b[^>]*aria-label="Browse"[^>]*>([\s\S]*?)<\/nav>/g)].flatMap((nav) =>
     [...(nav[1] ?? '').matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/g)].map((match) => /aria-label="([^"]*)"/.exec(match[1] ?? '')?.[1] ?? plain(match[2] ?? '')),
   )
 
-describe('the count of what needs you', () => {
-  it('shows needsTotal on Workflows for an Operator, in the link’s name, on the header and the tab bar', () => {
-    const total = needsTotal(ALICE_HOME)
-    expect(total).toBeGreaterThan(0)
+const SOFTWARE_WITH_DECISION = statusesWatchlist as WatchlistView
+const SOFTWARE_WITH_ADDRESSES = movedWatchlist as WatchlistView
+
+describe('the rail’s counts', () => {
+  it('are totals, as in the sketch: how many workflows the team has, and how much software is watched, in each link’s name', () => {
+    const html = render({ home: ALICE_HOME, watchlist: SOFTWARE_WITH_DECISION })
+    expect(linkNames(html)).toEqual(['Chat', `Workflows, ${String(ALICE_HOME.workflows)} in all`, `Watchlist, ${String(SOFTWARE_WITH_DECISION.software.length)} in all`])
+  })
+
+  it('are the same for an Approver who is not an Operator, because they count what is there, not what needs him', () => {
+    const html = render({ me: BOB, home: BOB_HOME, watchlist: SOFTWARE_WITH_ADDRESSES })
+    expect(linkNames(html)).toEqual(['Chat', `Workflows, ${String(BOB_HOME.workflows)} in all`, `Watchlist, ${String(SOFTWARE_WITH_ADDRESSES.software.length)} in all`])
+  })
+
+  it('never count what needs the person, which the needs strip and Workflows show instead', () => {
+    expect(needsTotal(ALICE_HOME)).toBeGreaterThan(ALICE_HOME.workflows)
+    expect(linkNames(render({ home: ALICE_HOME })).some((name) => name.includes('need'))).toBe(false)
+  })
+
+  it('start the link’s name with its visible label, and show the number once', () => {
     const html = render({ home: ALICE_HOME })
-    expect(linkNames(html).filter((name) => name.startsWith('Workflows'))).toEqual([`Workflows, ${total} need you`, `Workflows, ${total} need you`])
-    expect(linkNames(html).filter((name) => name.startsWith('Home'))).toEqual(['Home', 'Home'])
+    expect(html.match(/<a\b[^>]*aria-label="Workflows, 1 in all"/g)).toHaveLength(1)
+    expect(plain(html.match(/<nav\b[^>]*aria-label="Browse"[\s\S]*?<\/nav>/)?.[0] ?? '')).toContain('Workflows1')
   })
 
-  it('shows it on Home instead for an Approver who is not an Operator', () => {
-    const total = needsTotal(BOB_HOME)
-    const html = render({ me: BOB, home: BOB_HOME })
-    expect(linkNames(html).filter((name) => name.includes('need you'))).toEqual([`Home, ${total} need you`, `Home, ${total} need you`])
-    expect(linkNames(html)).toContain('Workflows')
+  it('show nothing for none, or before the numbers have loaded', () => {
+    expect(linkNames(render({ home: { ...ALICE_HOME, workflows: 0 }, watchlist: { ...SOFTWARE_WITH_DECISION, software: [] } }))).toEqual(['Chat', 'Workflows', 'Watchlist'])
+    expect(linkNames(render())).toEqual(['Chat', 'Workflows', 'Watchlist'])
   })
 
-  it('starts the link’s name with its visible label, and shows the number once', () => {
-    const html = render({ home: ALICE_HOME })
-    const total = needsTotal(ALICE_HOME)
-    expect(html.match(new RegExp(`<a\\b[^>]*aria-label="Workflows, ${total} need you"`, 'g'))).toHaveLength(2)
-    expect(plain(html.match(/<nav\b[^>]*aria-label="Main"[\s\S]*?<\/nav>/)?.[0] ?? '')).toContain(`Workflows${total}`)
-  })
-
-  it('shows no count when nothing needs the person, or before Home has loaded', () => {
-    const quiet: HomeOut = { ...ALICE_HOME, approvals: [], approvals_total: 0, confirmations: [], stopped: [], stopped_total: 0, replied: [], connections: [], addresses: [] }
-    expect(linkNames(render({ home: quiet })).some((name) => name.includes('need you'))).toBe(false)
-    expect(linkNames(render()).some((name) => name.includes('need you'))).toBe(false)
+  it('follow one rule for every item', () => {
+    expect(railCountFor('home', 5, 2)).toBeNull()
+    expect(railCountFor('workflows', 5, 2)).toBe(5)
+    expect(railCountFor('software', 5, 2)).toBe(2)
+    expect(railCountFor('workflows', 0, 2)).toBeNull()
+    expect(railCountFor('software', 5, undefined)).toBeNull()
   })
 })
 
-describe('the Settings gear', () => {
-  it('links to /settings and, there, shows the Settings heading with the gear marked current', () => {
+describe('Settings in the top bar', () => {
+  it('is a text link to /settings and, there, shows the Settings heading with the link marked current', () => {
     const html = render()
-    expect(html).toMatch(/<a\b[^>]*aria-label="Settings"[^>]*href="\/settings"|<a\b[^>]*href="\/settings"[^>]*aria-label="Settings"/)
+    expect(headerOf(html)).toMatch(/<a\b[^>]*href="\/settings"[^>]*>Settings<\/a>/)
     const settings = render({ path: '/settings' })
     expect(headings(settings)).toEqual(['Settings'])
     expect(currentLinks(settings)).toEqual(['/settings'])
@@ -196,7 +230,7 @@ describe('a run or an approval link', () => {
     const html = render({ path })
     expect(headings(html)).toEqual([])
     expect(text(mainOf(html))).toBe('Loading')
-    expect(currentLinks(html)).toEqual([])
+    expect(currentLinks(html)).toEqual(['/workflows'])
   })
 })
 
@@ -209,28 +243,42 @@ describe('the pages', () => {
     }
   })
 
-  it('open Home with the greeting and today in Singapore time', () => {
+  it('open Home with the greeting in Singapore time, as a line above the heading', () => {
     const main = text(mainOf(render({ home: ALICE_HOME })))
-    expect(main).toContain('Good morning! Alice')
+    expect(main).toContain('Good morning, Alice What should run by itself?')
+  })
+
+  it('greet Alice and give Home’s times in the team time zone /api/v1/me names', () => {
+    const evening = new Date('2026-10-28T20:00:00Z')
+    const london = text(mainOf(render({ home: ALICE_HOME, me: { ...ALICE, time_zone: 'Europe/London' }, now: evening })))
+    expect(london).toContain('Good evening, Alice')
+    expect(london).toContain('Software watchlist stopped Wed 4 Nov at 2:14')
+    const singapore = text(mainOf(render({ home: ALICE_HOME, now: evening })))
+    expect(singapore, 'an answer that names no zone is Singapore’s').toContain('Good morning, Alice')
+    expect(singapore).toContain('Software watchlist stopped Wed 4 Nov at 10:14')
   })
 
   it('never use the retired names', () => {
-    for (const path of ['/', '/workflows', '/software', '/agents', '/settings', '/nowhere']) {
+    for (const path of ['/', '/workflows', '/software', '/settings', '/settings?tab=how', '/nowhere']) {
       expect(text(render({ path })), path).not.toMatch(/room lead|release checker|use case/i)
     }
   })
 })
 
 describe('the person', () => {
-  it('shows the signed-in name, initial and roles in the header', () => {
+  it('shows the signed-in person as “Name, Role” beside their initial, as the sketch does', () => {
     const header = headerOf(render())
-    expect(text(header)).toContain('Alice')
-    expect(text(header)).toContain('Operator and Approver')
+    expect(text(header)).toContain('A Alice, Operator and Approver')
     expect(header).toMatch(/aria-hidden="true"[^>]*>A<\/span>/)
   })
 
+  it('adds n8n access for someone who has it, as the sketch’s “Alice, Operator, n8n access”', () => {
+    expect(text(headerOf(render({ me: { id: 'alice', display: 'Alice', roles: ['operator'], n8n_access: true } })))).toContain('Alice, Operator, n8n access')
+    expect(text(headerOf(render()))).not.toContain('n8n access')
+  })
+
   it('shows Bob as an Approver', () => {
-    expect(text(headerOf(render({ me: BOB })))).toContain('Approver')
+    expect(text(headerOf(render({ me: BOB })))).toContain('Bob, Approver')
     expect(text(headerOf(render({ me: BOB })))).not.toContain('Operator')
   })
 
@@ -289,8 +337,8 @@ describe('the frame', () => {
     expect(html.indexOf('Skip to main content')).toBeLessThan(html.indexOf('<header'))
   })
 
-  it('names the product in the header', () => {
-    expect(text(headerOf(render()))).toContain('AI Workflow Builder')
+  it('names the product in the header, after its AI mark', () => {
+    expect(text(headerOf(render()))).toContain('AI AI Workflow Builder')
   })
 })
 
@@ -305,12 +353,14 @@ describe('when the platform is down', () => {
     expect(text(mainOf(html))).toContain('Check your connection, or try again in a moment.')
     expect(mainOf(html)).toMatch(/<button\b[^>]*>Try again<\/button>/)
     expect(text(headerOf(html))).toContain('Workflow Builder')
-    expect(menuLabels(html)).toEqual(['Home', 'Workflows', 'Software watchlist'])
+    expect(railLabels(html)).toEqual(['Chat', 'Workflows', 'Watchlist'])
     expect(headerOf(html)).not.toContain('Operator')
   })
 
   it('does not say so for a refusal below 500', () => {
-    expect(headings(render({ meError: new ApiError(403, null), home: BOB_HOME }))).toEqual(['Good morning'])
+    const html = render({ meError: new ApiError(403, null), home: BOB_HOME })
+    expect(headings(html)).toEqual(['3 things need you'])
+    expect(text(mainOf(html))).toContain('Good morning 3 things need you')
   })
 
   it('keeps the test controls, so a stale person can be swapped', () => {
@@ -321,11 +371,11 @@ describe('when the platform is down', () => {
 describe('the way in to the practice Jira', () => {
   const jiraLink = /<a\b[^>]*aria-label="Jira, practice copy"[^>]*href="\/jira"[^>]*>[\s\S]*?<\/a>/
 
-  it('is a header link next to Teams and Settings, with a visible Jira label, and not in the menu', () => {
+  it('is a header link next to Teams and Settings, with a visible Jira label, and not in the rail', () => {
     const html = render()
     const link = jiraLink.exec(headerOf(html))?.[0] ?? ''
     expect(text(link)).toBe('Jira')
-    expect(menuLabels(html)).not.toContain('Practice Jira')
+    expect(railLabels(html)).not.toContain('Practice Jira')
   })
 
   it('is left out for someone who is not on the People list, as Teams is', () => {

@@ -48,8 +48,24 @@ locals {
     } : name => value if value != ""
   }
 
+  # Confluence (ENGINE-PLAN E12, D2), set the same way. Unset keeps it not connected, and only the
+  # pages in CONFLUENCE_PAGES are ever read. With no token of its own, platform-api signs in with
+  # Jira's when both are on one Atlassian site.
+  confluence_token_set = nonsensitive(var.confluence_api_token != "")
+  confluence_settings = {
+    for name, value in {
+      CONFLUENCE_BASE_URL = var.confluence_base_url
+      CONFLUENCE_EMAIL    = trimspace(var.confluence_email)
+      CONFLUENCE_PAGES    = var.confluence_pages
+    } : name => value if value != ""
+  }
+
   # The same for the Teams Workflows webhook (ADR 0036). Unset keeps the practice Teams copy.
   teams_webhook_set = nonsensitive(var.teams_webhook_url != "")
+  # And for the Tell flow, which posts a run's notice and emails it (ENGINE-PLAN D1). Unset keeps
+  # the practice copy. The team's email list must be set with it.
+  teams_tell_webhook_set = nonsensitive(var.teams_tell_webhook_url != "")
+  tell_email_to          = trimspace(var.tell_email_to)
 
   # The first people's addresses are not secret, and the app table's for_each needs plain values.
   first_people = trimspace(nonsensitive(var.first_operator)) == "" ? {} : {
@@ -57,10 +73,11 @@ locals {
     FIRST_APPROVERS = trimspace(nonsensitive(var.first_approvers))
   }
 
+  # n8n runs our own image, built on the n8n pin in public-images.json with our node pack inside.
   public_images = jsondecode(file("${path.module}/../../public-images.json"))
   images = merge(
-    { for name, image in local.public_images : name => "${module.registry.login_server}/${image.repository}@${image.digest}" },
-    { for name in ["platform-api", "agent-runtime", "portal"] : name => "${module.registry.login_server}/${name}:${var.image_tag}" },
+    { for name, image in local.public_images : name => "${module.registry.login_server}/${image.repository}@${image.digest}" if name != "n8n" },
+    { for name in ["platform-api", "agent-runtime", "portal", "n8n"] : name => "${module.registry.login_server}/${name}:${var.image_tag}" },
   )
 
   # n8n's editor (ADR 0034). The addresses only point at people, and the app table's for_each
@@ -153,6 +170,8 @@ resource "random_password" "generated" {
     "n8n-encryption-key",
     "n8n-owner-password",
     "step-key",
+    "wab-node-key",
+    "wab-start-secret",
     "agent-api-key",
     "callback-signing-key",
     "settings-encryption-key",
@@ -206,8 +225,48 @@ module "key_vault" {
     { "cosmos-key" = module.cosmos.primary_key },
     local.github_token_set ? { "github-token" = var.github_token } : {},
     local.jira_token_set ? { "jira-api-token" = var.jira_api_token } : {},
+    local.confluence_token_set ? { "confluence-api-token" = var.confluence_api_token } : {},
     local.teams_webhook_set ? { "teams-webhook-url" = var.teams_webhook_url } : {},
+    local.teams_tell_webhook_set ? { "teams-tell-webhook-url" = var.teams_tell_webhook_url } : {},
   )
+}
+
+locals {
+  # n8n's allow list. scripts/nodes-include.sh writes it from platform-api's node_classes.json
+  # (ADR 0045), and CI fails when the two differ.
+  n8n_nodes_include = [
+    "CUSTOM.wabStartFromPortal",
+    "CUSTOM.wabRead",
+    "CUSTOM.wabAgent",
+    "CUSTOM.wabProposeChange",
+    "CUSTOM.wabAskForYes",
+    "CUSTOM.wabMakeApprovedChanges",
+    "CUSTOM.wabTell",
+    "CUSTOM.wabReportFailure",
+    "n8n-nodes-base.scheduleTrigger",
+    "n8n-nodes-base.manualTrigger",
+    "n8n-nodes-base.errorTrigger",
+    "n8n-nodes-base.if",
+    "n8n-nodes-base.merge",
+    "n8n-nodes-base.noOp",
+    "n8n-nodes-base.stickyNote",
+    "n8n-nodes-base.filter",
+    "n8n-nodes-base.switch",
+    "n8n-nodes-base.set",
+    "n8n-nodes-base.limit",
+    "n8n-nodes-base.aggregate",
+    "n8n-nodes-base.splitOut",
+    "n8n-nodes-base.removeDuplicates",
+    "n8n-nodes-base.summarize",
+    "n8n-nodes-base.renameKeys",
+    "n8n-nodes-base.dateTime",
+    "n8n-nodes-base.compareDatasets",
+    "n8n-nodes-base.splitInBatches",
+    "n8n-nodes-base.xml",
+    "n8n-nodes-base.markdown",
+    "n8n-nodes-base.executionData",
+    "n8n-nodes-base.stopAndError",
+  ]
 }
 
 locals {
@@ -232,17 +291,27 @@ locals {
           OIDC_AUDIENCE          = var.oidc_audience
           AGENT_RUNTIME_URL      = local.url["agent-runtime"]
           N8N_BASE_URL           = local.url["n8n"]
+          N8N_OWNER_EMAIL        = var.n8n_owner_email
           PLATFORM_INTERNAL_URL  = local.url["platform-api"]
           COSMOS_ENDPOINT        = module.cosmos.endpoint
           ACTIVITY_READER        = "cosmos"
           JIRA_API_FLAVOR        = var.jira_api_flavor
           JIRA_ISSUE_TYPE        = var.jira_issue_type
           WATCHLIST_JIRA_PROJECT = var.watchlist_jira_project
+          TEAM_TIME_ZONE         = var.team_time_zone
         },
         var.oidc_jwks_url == "" ? {} : { OIDC_JWKS_URL = var.oidc_jwks_url },
         var.teams_channel == "" ? {} : { TEAMS_CHANNEL = var.teams_channel },
+        # Staff reach n8n's editor only while it is open, so only then do they get n8n accounts
+        # (ENGINE-PLAN 2.9). platform-api still waits for a bootstrap that proved the allow list.
+        var.n8n_editor_external ? {
+          N8N_STAFF_ACCESS = "on"
+          N8N_EDITOR_URL   = local.url["n8n"]
+        } : {},
+        local.tell_email_to == "" ? {} : { TELL_EMAIL_TO = local.tell_email_to },
         local.first_people,
         local.jira_settings,
+        local.confluence_settings,
       )
       secrets = merge(
         {
@@ -251,12 +320,21 @@ locals {
           DATABASE_URL_MONITORING    = local.secret["database-url-monitoring"]
           AGENT_API_KEY              = local.secret["agent-api-key"]
           STEP_KEY                   = local.secret["step-key"]
+          WAB_NODE_KEY               = local.secret["wab-node-key"]
+          WAB_START_SECRET           = local.secret["wab-start-secret"]
+          N8N_OWNER_PASSWORD         = local.secret["n8n-owner-password"]
           CALLBACK_SIGNING_KEY       = local.secret["callback-signing-key"]
           SETTINGS_ENCRYPTION_KEY    = local.secret["settings-encryption-key"]
           COSMOS_KEY                 = local.secret["cosmos-key"]
         },
         local.jira_token_set ? { JIRA_API_TOKEN = local.secret["jira-api-token"] } : {},
+        local.confluence_token_set ? {
+          CONFLUENCE_API_TOKEN = local.secret["confluence-api-token"]
+        } : {},
         local.teams_webhook_set ? { TEAMS_WEBHOOK_URL = local.secret["teams-webhook-url"] } : {},
+        local.teams_tell_webhook_set ? {
+          TEAMS_TELL_WEBHOOK_URL = local.secret["teams-tell-webhook-url"]
+        } : {},
       )
     }
 
@@ -298,6 +376,9 @@ locals {
       # overwriteExisting). The bootstrap's own setup call then gets "Instance owner already setup"
       # and signs in, as on any later run. The names match the ones the bootstrap uses. The hash is
       # in local.inline_secrets.
+      #
+      # GENERIC_TIMEZONE is the team time zone, so a workflow set to n8n's default zone runs on the
+      # team's, as platform-api reads it.
       env = merge(
         {
           DB_TYPE                           = "postgresdb"
@@ -307,10 +388,22 @@ locals {
           DB_POSTGRESDB_USER                = "n8n"
           DB_POSTGRESDB_SSL_ENABLED         = "true"
           WEBHOOK_URL                       = "${local.url["n8n"]}/"
+          GENERIC_TIMEZONE                  = var.team_time_zone
           N8N_DIAGNOSTICS_ENABLED           = "false"
           N8N_VERSION_NOTIFICATIONS_ENABLED = "false"
           N8N_PERSONALIZATION_ENABLED       = "false"
           N8N_HIRING_BANNER_ENABLED         = "false"
+          # The node key is in this environment, so nothing a person adds to a workflow may read it.
+          # n8n excludes these two nodes by default; pinned so an upgrade cannot drop them.
+          N8N_BLOCK_ENV_ACCESS_IN_NODE   = "true"
+          NODES_EXCLUDE                  = jsonencode(["n8n-nodes-base.executeCommand", "n8n-nodes-base.localFileTrigger"])
+          N8N_COMMUNITY_PACKAGES_ENABLED = "false"
+          NODES_INCLUDE                  = jsonencode(local.n8n_nodes_include)
+          # 30 days of executions (ENGINE-PLAN D10). A waiting execution is never pruned (P7 Q16).
+          EXECUTIONS_DATA_PRUNE           = "true"
+          EXECUTIONS_DATA_MAX_AGE         = "720"
+          EXECUTIONS_DATA_SAVE_ON_SUCCESS = "all"
+          WAB_API_URL                     = local.url["platform-api"]
         },
         var.n8n_editor_external ? {
           N8N_PROTOCOL                      = "https"
@@ -326,6 +419,8 @@ locals {
       secrets = {
         DB_POSTGRESDB_PASSWORD = local.secret["n8n-db-password"]
         N8N_ENCRYPTION_KEY     = local.secret["n8n-encryption-key"]
+        WAB_NODE_KEY           = local.secret["wab-node-key"]
+        WAB_START_SECRET       = local.secret["wab-start-secret"]
       }
     }
 
@@ -406,6 +501,7 @@ locals {
         N8N_BASE_URL          = local.url["n8n"]
         N8N_OWNER_EMAIL       = var.n8n_owner_email
         PLATFORM_INTERNAL_URL = local.url["platform-api"]
+        TEAM_TIME_ZONE        = var.team_time_zone
       }
       secrets = {
         DATABASE_URL_OWNER = local.secret["database-url-owner"]

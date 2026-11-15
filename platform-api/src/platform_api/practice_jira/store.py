@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
-from platform_api.db import Database
+from platform_api.db import Connection, Database
 from platform_api.shared import TicketStatus
 
 PRACTICE_EMAIL = "practice@platform.invalid"
@@ -25,6 +25,7 @@ _COLUMNS = (
     "labels, issue_type, creator, updated_at, assignee"
 )
 _OUR_LABEL = re.compile(r"^wab-(run_[A-Za-z0-9]+)-(prp_[A-Za-z0-9]+)-([0-9]+)$")
+_SUBJECT_LABEL = re.compile(r"^wab-subject-([0-9a-f]{40})$")
 
 
 def _to_ms(at: datetime) -> datetime:
@@ -120,9 +121,14 @@ class PracticeJira:
         assignee: str | None = None,
     ) -> PracticeTicket:
         """A new ticket, numbered after every other. A label in our write-key shape also fills
-        the run columns, so the practice Jira's page can link to the run."""
+        the run columns, so the practice Jira's page can link to the run. A write made under its
+        subject's key is labelled with the subject, so its run comes from our record of the
+        write, made before the ticket."""
         ours = next((m for label in labels if (m := _OUR_LABEL.match(label))), None)
         async with self._db.transaction("orchestration") as uow:
+            run = None if ours is None else (ours.group(1), ours.group(2))
+            if run is None:
+                run = await _made_under_subject(uow.conn, labels)
             await uow.conn.execute("LOCK TABLE orchestration.mock_jira_tickets IN EXCLUSIVE MODE")
             row = await (
                 await uow.conn.execute(
@@ -147,8 +153,8 @@ class PracticeJira:
                         title,
                         body,
                         stamp,
-                        None if ours is None else ours.group(1),
-                        None if ours is None else ours.group(2),
+                        None if run is None else run[0],
+                        None if run is None else run[1],
                         list(dict.fromkeys(labels)),
                         issue_type,
                         creator,
@@ -213,3 +219,18 @@ class PracticeJira:
                 )
             ).fetchone()
         return None if row is None else _ticket(row)
+
+
+async def _made_under_subject(conn: Connection, labels: Sequence[str]) -> tuple[str, str] | None:
+    """The run and proposal of the write a subject label names, from our record of the write."""
+    subject = next((m for label in labels if (m := _SUBJECT_LABEL.match(label))), None)
+    if subject is None:
+        return None
+    row = await (
+        await conn.execute(
+            "SELECT run_id, proposal_id FROM orchestration.write_executions"
+            " WHERE idempotency_key = %s",
+            (f"subject/{subject.group(1)}",),
+        )
+    ).fetchone()
+    return None if row is None else (str(row["run_id"]), str(row["proposal_id"]))

@@ -54,7 +54,10 @@ services:
       start_period: 10s
 
   n8n:
-    image: n8nio/n8n:2.42.6@sha256:526daa38b68e923cc00c5280d18b4da5d489f115a73bdbf3b8e452b184197a9a
+    build:
+      context: ..
+      dockerfile: deploy/n8n/Dockerfile
+    image: wab/n8n:${WAB_IMAGE_TAG:-dev}
     depends_on:
       postgres:
         condition: service_healthy
@@ -66,6 +69,8 @@ services:
       DB_POSTGRESDB_USER: n8n
       DB_POSTGRESDB_PASSWORD: ${N8N_DB_PASSWORD:?run deploy/make-env.sh}
       WEBHOOK_URL: http://n8n:5678/
+      # A workflow set to n8n's default zone runs on the team's, as platform-api reads it.
+      GENERIC_TIMEZONE: ${TEAM_TIME_ZONE:-Asia/Singapore}
       N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:?run deploy/make-env.sh}
       N8N_DIAGNOSTICS_ENABLED: "false"
       N8N_VERSION_NOTIFICATIONS_ENABLED: "false"
@@ -76,6 +81,24 @@ services:
       # n8n, and a locked-down network refuses the call (issue #86). n8n 2.42.6 reads this setting in
       # @n8n/backend-common's ModulesConfig, and docs/evidence/devnet/n8n-proxy.test.sh checks it.
       N8N_DISABLED_MODULES: mcp-registry
+      # The keys below are in this container's environment, so nothing a person adds to a workflow may
+      # read it: no $env in expressions, no Execute Command, no community packages. Execute Command and
+      # Local File Trigger are n8n's own default exclusions, pinned here so an upgrade cannot drop them.
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "true"
+      NODES_EXCLUDE: '["n8n-nodes-base.executeCommand","n8n-nodes-base.localFileTrigger"]'
+      N8N_COMMUNITY_PACKAGES_ENABLED: "false"
+      # The allow list: n8n loads only these node types. scripts/nodes-include.sh writes it from
+      # platform-api's node_classes.json (ADR 0045), and CI fails when the two differ.
+      NODES_INCLUDE: '["CUSTOM.wabStartFromPortal","CUSTOM.wabRead","CUSTOM.wabAgent","CUSTOM.wabProposeChange","CUSTOM.wabAskForYes","CUSTOM.wabMakeApprovedChanges","CUSTOM.wabTell","CUSTOM.wabReportFailure","n8n-nodes-base.scheduleTrigger","n8n-nodes-base.manualTrigger","n8n-nodes-base.errorTrigger","n8n-nodes-base.if","n8n-nodes-base.merge","n8n-nodes-base.noOp","n8n-nodes-base.stickyNote","n8n-nodes-base.filter","n8n-nodes-base.switch","n8n-nodes-base.set","n8n-nodes-base.limit","n8n-nodes-base.aggregate","n8n-nodes-base.splitOut","n8n-nodes-base.removeDuplicates","n8n-nodes-base.summarize","n8n-nodes-base.renameKeys","n8n-nodes-base.dateTime","n8n-nodes-base.compareDatasets","n8n-nodes-base.splitInBatches","n8n-nodes-base.xml","n8n-nodes-base.markdown","n8n-nodes-base.executionData","n8n-nodes-base.stopAndError"]'
+      # n8n keeps 30 days of executions (ENGINE-PLAN D10). Our API keeps every node's answer, so the
+      # Portal loses nothing, and n8n never prunes a waiting execution (P7 Q16).
+      EXECUTIONS_DATA_PRUNE: "true"
+      EXECUTIONS_DATA_MAX_AGE: "720"
+      EXECUTIONS_DATA_SAVE_ON_SUCCESS: all
+      # Our blocks call only this API, with this key, and check each start with the secret.
+      WAB_API_URL: http://platform-api:8000
+      WAB_NODE_KEY: ${WAB_NODE_KEY:?run deploy/make-env.sh}
+      WAB_START_SECRET: ${WAB_START_SECRET:?run deploy/make-env.sh}
     ports:
       - "${N8N_HOST_PORT:-5678}:5678"
     volumes:
@@ -129,6 +152,8 @@ services:
       N8N_OWNER_PASSWORD: ${N8N_OWNER_PASSWORD:?run deploy/make-env.sh}
       STEP_KEY: ${STEP_KEY:?run deploy/make-env.sh}
       PLATFORM_INTERNAL_URL: http://platform-api:8000
+      # The self-test runs on the team time zone, as every workflow does.
+      TEAM_TIME_ZONE: ${TEAM_TIME_ZONE:-Asia/Singapore}
 
   platform-api:
     <<: *platform-image
@@ -148,9 +173,21 @@ services:
       AGENT_RUNTIME_URL: http://agent-runtime:8100
       AGENT_API_KEY: ${AGENT_API_KEY:?run deploy/make-env.sh}
       N8N_BASE_URL: http://n8n:5678
+      # n8n's owner, as bootstrap uses it: the platform lays each new workflow out in n8n as a draft.
+      N8N_OWNER_EMAIL: ${N8N_OWNER_EMAIL:?run deploy/make-env.sh}
+      N8N_OWNER_PASSWORD: ${N8N_OWNER_PASSWORD:?run deploy/make-env.sh}
+      # on lets an Operator give a person n8n access: the platform makes their n8n account and
+      # opens workflows in it, once bootstrap has proved the allow list (ENGINE-PLAN 2.9). It needs
+      # SETTINGS_ENCRYPTION_KEY, which seals each password link. N8N_EDITOR_URL is where people open
+      # n8n's editor from their browser.
+      N8N_STAFF_ACCESS: ${N8N_STAFF_ACCESS:-off}
+      N8N_EDITOR_URL: ${N8N_EDITOR_URL:-http://localhost:${N8N_HOST_PORT:-5678}}
       STEP_KEY: ${STEP_KEY:?run deploy/make-env.sh}
       PLATFORM_INTERNAL_URL: http://platform-api:8000
       CALLBACK_SIGNING_KEY: ${CALLBACK_SIGNING_KEY:?run deploy/make-env.sh}
+      # The same two values n8n has: our API checks the node pack's key and signs each start.
+      WAB_NODE_KEY: ${WAB_NODE_KEY:?run deploy/make-env.sh}
+      WAB_START_SECRET: ${WAB_START_SECRET:?run deploy/make-env.sh}
       # Optional: without it the Portal's AI model settings are off (ADR 0022).
       SETTINGS_ENCRYPTION_KEY: ${SETTINGS_ENCRYPTION_KEY:-}
       # The Teams channel the approval card names. With TEAMS_WEBHOOK_URL set, the card goes to
@@ -160,6 +197,10 @@ services:
       # Optional: sends new team request cards to a different channel. Unset, they go to the
       # approvals channel above, and with neither set nothing is posted (ADR 0038).
       TEAMS_REQUESTS_WEBHOOK_URL: ${TEAMS_REQUESTS_WEBHOOK_URL:-}
+      # Optional: the Tell flow, which posts a run's notice and emails it. Unset keeps the practice
+      # copy. Set, it needs TELL_EMAIL_TO, the team's email list, separated by commas.
+      TEAMS_TELL_WEBHOOK_URL: ${TEAMS_TELL_WEBHOOK_URL:-}
+      TELL_EMAIL_TO: ${TELL_EMAIL_TO:-}
       # The first deploy's people (ADR 0030). Read only while the People list is empty, and only
       # with real sign-in; dev mode seeds alice, bob and carol instead.
       FIRST_OPERATOR: ${FIRST_OPERATOR:-}
@@ -176,6 +217,15 @@ services:
       JIRA_BROWSE_URL: ${JIRA_BROWSE_URL:-}
       # The Jira project the watchlist raises tickets in. MOCK is the practice Jira's.
       WATCHLIST_JIRA_PROJECT: ${WATCHLIST_JIRA_PROJECT:-MOCK}
+      # The zone the team works in. The Portal's times, a new schedule, the agents' today and the
+      # Jira days are in it, and n8n runs on it.
+      TEAM_TIME_ZONE: ${TEAM_TIME_ZONE:-Asia/Singapore}
+      # Confluence (ENGINE-PLAN E12). Unset keeps it not connected. The wiki's address, such as
+      # https://your-site.atlassian.net/wiki, and the only pages read, as id=title separated by ;.
+      CONFLUENCE_BASE_URL: ${CONFLUENCE_BASE_URL:-}
+      CONFLUENCE_EMAIL: ${CONFLUENCE_EMAIL:-}
+      CONFLUENCE_API_TOKEN: ${CONFLUENCE_API_TOKEN:-}
+      CONFLUENCE_PAGES: ${CONFLUENCE_PAGES:-}
     ports:
       - "${PLATFORM_API_HOST_PORT:-8000}:8000"
     healthcheck:

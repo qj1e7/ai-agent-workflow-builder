@@ -14,6 +14,7 @@ from platform_api.monitoring.agent_events import (
 from platform_api.shared import ApprovalId, ProposalId, RunId, UserId
 from platform_api.wire import (
     ApprovalStepView,
+    ApproverRef,
     FailureReason,
     FailureStage,
     Leg,
@@ -33,8 +34,11 @@ type DeniedReason = Literal[
     "unregistered_action",
     "target_changed",
     "out_of_order",
+    "expired",
+    "test_run",
 ]
 type WireVerdict = Literal["approve", "decline"]
+type ToldStatus = Literal["sent", "not_confirmed", "would_have_sent", "nothing_to_report"]
 
 
 class Actor(WireModel):
@@ -97,6 +101,14 @@ class ApprovalAnnouncedData(WireModel):
     approval_id: ApprovalId
     channel: str
     link: str
+    sent_to: list[list[ApproverRef]] = Field(
+        default_factory=list[list[ApproverRef]],
+        description="Who may decide each step, in step order, as the request's steps named them "
+        "when it was posted. Events from before names have none.",
+    )
+    sent_at: datetime | None = Field(
+        default=None, description="When it was posted. Events from before have none."
+    )
 
 
 class ApprovalAnnounceFailedData(WireModel):
@@ -140,6 +152,9 @@ class RunSucceededData(WireModel):
 class RunRejectedData(WireModel):
     by: UserId
     step: int
+    reason: str | None = Field(
+        default=None, description="Why the Approver declined, when they gave a reason."
+    )
 
 
 class RunFailedData(WireModel):
@@ -154,9 +169,39 @@ class RunRetriedData(WireModel):
     attempt: int
 
 
+class ExecutionLinkedData(WireModel):
+    execution_id: str
+    mode: str = Field(description="How n8n says the execution started, such as trigger or retry.")
+
+
+class RunSkippedData(WireModel):
+    waiting_run_id: RunId = Field(
+        description="The earlier run of the same workflow that is still waiting for a yes."
+    )
+
+
+class RunExpiredData(WireModel):
+    approval_id: ApprovalId = Field(description="The request that nobody answered in time.")
+
+
+class ExecutionResumedData(WireModel):
+    execution_id: str = Field(description="The waiting n8n execution that took the yes.")
+
+
+class RunLostData(WireModel):
+    approval_id: ApprovalId
+    why: str = Field(description="Why n8n could not take the yes, in plain words.")
+
+
 class SupportReportedData(WireModel):
     request_id: str
     reported_by: UserId
+
+
+class ToldData(WireModel):
+    block: str = Field(description="The Tell block, by its name in the workflow.")
+    status: ToldStatus
+    line: str = Field(description="What the block did, in plain words.")
 
 
 class _Envelope(WireModel):
@@ -277,9 +322,39 @@ class RunRetried(_Envelope):
     data: RunRetriedData
 
 
+class ExecutionLinked(_Envelope):
+    kind: Literal["execution_linked"] = "execution_linked"
+    data: ExecutionLinkedData
+
+
+class RunSkipped(_Envelope):
+    kind: Literal["run_skipped"] = "run_skipped"
+    data: RunSkippedData
+
+
+class RunExpired(_Envelope):
+    kind: Literal["run_expired"] = "run_expired"
+    data: RunExpiredData
+
+
+class ExecutionResumed(_Envelope):
+    kind: Literal["execution_resumed"] = "execution_resumed"
+    data: ExecutionResumedData
+
+
+class RunLost(_Envelope):
+    kind: Literal["run_lost"] = "run_lost"
+    data: RunLostData
+
+
 class SupportReported(_Envelope):
     kind: Literal["support_reported"] = "support_reported"
     data: SupportReportedData
+
+
+class Told(_Envelope):
+    kind: Literal["told"] = "told"
+    data: ToldData
 
 
 type ActivityEvent = Annotated[
@@ -305,7 +380,13 @@ type ActivityEvent = Annotated[
     | RunRejected
     | RunFailed
     | RunRetried
-    | SupportReported,
+    | ExecutionLinked
+    | RunSkipped
+    | RunExpired
+    | ExecutionResumed
+    | RunLost
+    | SupportReported
+    | Told,
     Field(discriminator="kind"),
 ]
 

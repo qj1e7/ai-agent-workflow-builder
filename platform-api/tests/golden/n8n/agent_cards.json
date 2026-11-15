@@ -1,0 +1,217 @@
+{
+  "name": "Weekly release and sprint check",
+  "nodes": [
+    {
+      "id": "1914a0b9-f116-51b4-b248-9af3f0e10126",
+      "name": "About this workflow",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -400
+      ],
+      "parameters": {
+        "content": "## Weekly release and sprint check\nRuns Sprint digest, Version checker.\n\nSet up in the Portal: https://portal.example/workflows/uc_01JB8RELEASE\n\nSafe to change here: when it runs, and the words in a block. Every change to Jira waits for a yes in Teams before it is made.",
+        "height": 260,
+        "width": 460
+      }
+    },
+    {
+      "id": "cd232888-0a13-52a1-8abd-9a22cc2da53d",
+      "name": "Mon 9:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "triggerAtDay": [
+                1
+              ],
+              "triggerAtHour": 9,
+              "triggerAtMinute": 0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "295c1b37-2792-5fa4-b723-f1702b9bf00b",
+      "name": "Start from the Portal",
+      "type": "CUSTOM.wabStartFromPortal",
+      "typeVersion": 1,
+      "position": [
+        0,
+        200
+      ],
+      "parameters": {},
+      "webhookId": "d980c774-8f7a-5f37-b490-49ebdfcee489"
+    },
+    {
+      "id": "d4e39a18-b3d6-5f1c-918d-36a380b53553",
+      "name": "Sprint digest",
+      "type": "CUSTOM.wabAgent",
+      "typeVersion": 1,
+      "position": [
+        220,
+        0
+      ],
+      "parameters": {
+        "agent": "crd_sprint_digest",
+        "inputs": {
+          "input": [
+            {
+              "name": "Jira project",
+              "value": "MOCK"
+            }
+          ]
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "id": "47b95b9c-9e40-50c9-b6eb-2d239db8c453",
+      "name": "Version checker",
+      "type": "CUSTOM.wabAgent",
+      "typeVersion": 1,
+      "position": [
+        440,
+        0
+      ],
+      "parameters": {
+        "agent": "crd_version_checker",
+        "inputs": {
+          "input": [
+            {
+              "name": "GitHub repository",
+              "value": "langchain-ai/langgraph"
+            },
+            {
+              "name": "Jira project",
+              "value": "MOCK"
+            }
+          ]
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "id": "3f638ea4-ee00-5b7c-873c-34e533c3cd17",
+      "name": "Ask for a yes",
+      "type": "CUSTOM.wabAskForYes",
+      "typeVersion": 1,
+      "position": [
+        660,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "7439fc58-086e-5c53-8972-2ab58f4d6f9d",
+      "name": "Create ticket",
+      "type": "CUSTOM.wabMakeApprovedChanges",
+      "typeVersion": 1,
+      "position": [
+        880,
+        0
+      ],
+      "parameters": {},
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "id": "ac412ec2-db93-5de4-b637-25a99d2a3296",
+      "name": "Nothing to change",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        660,
+        200
+      ],
+      "parameters": {}
+    }
+  ],
+  "connections": {
+    "Mon 9:00": {
+      "main": [
+        [
+          {
+            "node": "Sprint digest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Start from the Portal": {
+      "main": [
+        [
+          {
+            "node": "Sprint digest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sprint digest": {
+      "main": [
+        [
+          {
+            "node": "Version checker",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Version checker": {
+      "main": [
+        [
+          {
+            "node": "Ask for a yes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ask for a yes": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Create ticket",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [],
+        [
+          {
+            "node": "Nothing to change",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "timezone": "Asia/Singapore",
+    "saveManualExecutions": true,
+    "saveExecutionProgress": true,
+    "executionOrder": "v1",
+    "errorWorkflow": "wfErrorReporter01"
+  }
+}

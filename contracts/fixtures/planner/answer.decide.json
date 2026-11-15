@@ -1,0 +1,12 @@
+{
+  "parts": [
+    {
+      "text": "Approve the upgrade tickets",
+      "mark": "will_do",
+      "reason": null,
+      "note": null,
+      "choices": []
+    }
+  ],
+  "answer": "decide"
+}

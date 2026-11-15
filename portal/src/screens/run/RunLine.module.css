@@ -1,89 +1,379 @@
-.stage {
-  margin: 20px 0 24px;
-  padding: 24px 20px 20px;
-  border: 1px solid var(--hair);
-  border-radius: var(--r-card);
-  background: var(--surface);
-}
-
+/* The run line: the workflow's steps from end to end, small in cards and the side panel, large with the agents on the run page.
+   Each step is --w wide with a dot of --m, --top below the step's top. Narrower than that, the steps share the width with a gap
+   between them, down to --least, and the steps scroll sideways below that, as the sketch's do, so no name breaks inside a word.
+   The scroller's inline padding holds a ticket chip wider than its step. */
 .line {
-  --ty: 91px;
-  position: relative;
+  --pad: 8px;
+  container-type: inline-size;
   display: grid;
-  grid-template-columns: repeat(var(--n), minmax(0, 1fr));
-  margin: 0;
-  padding: 8px 0 0;
+  gap: 8px;
 }
 
-.track,
-.fill {
-  position: absolute;
-  top: var(--ty);
-  left: calc(100% / var(--n) / 2);
-  height: 3px;
-  border-radius: 3px;
+.scroll {
+  overflow-x: auto;
+  padding: 0 var(--pad) 4px;
+  border-radius: var(--r-ctl);
+}
+
+.scroll:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.large {
+  margin: 20px 0 24px;
 }
 
 .track {
-  right: calc(100% / var(--n) / 2);
-  background: var(--hair);
-}
-
-.fill {
-  width: calc(100% - 100% / var(--n));
-  background: var(--ink);
-  transform: scaleX(var(--f));
-  transform-origin: left center;
-  transition: transform var(--move) var(--ease-move);
-}
-
-.station {
-  position: relative;
+  --tw: max(100cqw - 2 * var(--pad), var(--n) * var(--least) + (var(--n) - 1) * 8px);
+  --sw: min(var(--w), (var(--tw) - (var(--n) - 1) * 8px) / var(--n));
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
+  width: var(--tw);
+  align-items: flex-start;
+  justify-content: space-between;
+  margin: 0;
+  padding: 8px 0 2px;
+  list-style: none;
+}
+
+.small .track {
+  --w: 64px;
+  --least: 56px;
+  --m: 24px;
+  --top: 0px;
+  padding-top: 16px;
+}
+
+.large .track {
+  --w: 100px;
+  --least: 72px;
+  --m: 34px;
+  --top: 46px;
+  padding-top: 12px;
+}
+
+.step {
+  position: relative;
+  flex: none;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
+  align-content: start;
+  justify-items: center;
+  width: var(--sw);
   min-width: 0;
   text-align: center;
+  transition: opacity var(--dur-panel) ease;
+}
+
+/* One link from each step's dot to the next one's, in the state of the step it leads into. The dots cover its ends. */
+.link {
+  position: absolute;
+  z-index: 0;
+  top: calc(var(--top) + var(--m) / 2 - 1.5px);
+  left: 50%;
+  width: calc((var(--tw) - var(--sw)) / (var(--n) - 1));
+  height: 3px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--rail);
+  transform-origin: left center;
+}
+
+.link[data-link='solid'] {
+  background: var(--ink);
+}
+
+.link[data-link='flow'],
+.link[data-link='wait'],
+.link[data-link='stop'],
+.link[data-link='dead'],
+.link[data-replay] {
+  background: none;
+}
+
+/* The dashes are drawn one period wider than the link, so the march is a transform of 14px that repeats seamlessly. */
+.link::before {
+  position: absolute;
+  inset: 0;
+  content: '';
+}
+
+.link[data-link='flow']::before,
+.link[data-link='wait']::before,
+.link[data-replay]::before {
+  left: -14px;
+  background: repeating-linear-gradient(90deg, var(--accent) 0 8px, transparent 8px 14px);
+}
+
+.link[data-link='wait']::before {
+  background-image: repeating-linear-gradient(90deg, var(--amber) 0 8px, transparent 8px 14px);
+}
+
+.link[data-link='stop']:not([data-replay])::before {
+  background: repeating-linear-gradient(90deg, var(--red) 0 5px, transparent 5px 9px);
+}
+
+.link[data-link='dead']::before {
+  background: repeating-linear-gradient(90deg, var(--rail) 0 4px, transparent 4px 8px);
+}
+
+.link[data-march]::before,
+.link[data-replay]::before {
+  animation: march 0.6s linear infinite;
+}
+
+.link[data-march][data-link='wait']::before {
+  animation-duration: 1.4s;
+}
+
+.grow {
+  animation: grow var(--move) var(--ease-move);
 }
 
 .who {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: flex-end;
-  justify-content: center;
-  height: 56px;
+  height: 38px;
+  margin-bottom: 4px;
 }
 
-.dotWrap {
-  display: grid;
-  place-items: center;
-  height: 38px;
+.nobody {
+  width: 30px;
+  height: 30px;
+  border: 2px dashed var(--rail);
+  border-radius: 50%;
 }
 
 .dot {
+  position: relative;
+  z-index: 1;
   display: grid;
   place-items: center;
-  width: 30px;
-  height: 30px;
-  border: 2px dashed var(--edge);
+  width: var(--m);
+  height: var(--m);
+  border: 2px solid var(--ink);
   border-radius: 50%;
   background: var(--surface);
+  color: var(--ink);
+  transition:
+    background-color var(--dur-small) ease,
+    border-color var(--dur-small) ease,
+    color var(--dur-small) ease,
+    box-shadow var(--dur-attn) ease;
+}
+
+.dot > svg {
+  width: 11px;
+  height: 11px;
+}
+
+.large .dot > svg {
+  width: 16px;
+  height: 16px;
+}
+
+.gate .dot {
+  border-radius: 7px;
+}
+
+.large .gate .dot {
+  border-radius: 10px;
+}
+
+.done .dot {
+  background: var(--ink);
+  color: var(--on-ink);
+}
+
+.now .dot,
+.step[data-replay] .dot {
+  border-color: var(--accent);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 0 0 4px var(--accent-soft);
+}
+
+.wait .dot {
+  border-color: var(--amber);
+  background: var(--amber-soft);
+  color: var(--amber-ink);
+}
+
+.wait .dot::after {
+  position: absolute;
+  inset: -4px;
+  border-radius: inherit;
+  content: '';
+  animation: halo 1.8s ease-out infinite;
+}
+
+.err .dot {
+  border-color: var(--red);
+  background: var(--red-soft);
+  color: var(--red-ink);
+}
+
+.err:not([data-replay]) .dot {
+  animation: shake 320ms ease-in-out;
+}
+
+.no .dot {
+  border-style: dashed;
+  border-color: var(--muted);
+  background: var(--sunk);
   color: var(--muted);
+}
+
+/* A skipped step fades, but what it says under it keeps full contrast. */
+.skip .who,
+.skip .dot,
+.skip .label {
+  opacity: 0.4;
+}
+
+/* The gate opens once the yes is given. */
+.dot [data-shackle] {
+  transform-box: fill-box;
+  transform-origin: 15% 100%;
+  transition: transform var(--dur-attn) var(--ease-out);
+}
+
+.gate.done [data-shackle] {
+  transform: translateY(-3.9px) rotate(-16deg);
+}
+
+.tick,
+.stopMark {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  color: var(--on-status);
+  box-shadow: 0 0 0 2px var(--surface);
+  opacity: 0;
+  transform: scale(0.6);
+  transition:
+    opacity var(--dur-small) ease,
+    transform var(--dur-small) var(--ease-out);
+}
+
+.tick[data-shown],
+.stopMark[data-shown] {
+  opacity: 1;
+  transform: none;
+}
+
+.tick {
+  background: var(--green);
+}
+
+.stopMark {
+  background: var(--red);
+}
+
+.tick > svg,
+.stopMark > svg {
+  width: 8px;
+  height: 8px;
+}
+
+.step[data-replay] .stopMark {
+  opacity: 0;
 }
 
 .label {
-  padding: 0 4px;
-  font-size: 0.95rem;
+  position: relative;
+  z-index: 1;
+  max-width: 100%;
+  font-size: 0.7rem;
   font-weight: 600;
-  line-height: 1.25;
+  line-height: 1.2;
+  overflow-wrap: break-word;
 }
 
-.label small {
-  display: block;
-  margin-top: 3px;
+.large .label {
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.under {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px;
+  max-width: 100%;
   color: var(--muted);
-  font-size: 0.85rem;
-  font-weight: 400;
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1.3;
+  overflow-wrap: break-word;
+}
+
+.large .under {
+  font-size: 0.78rem;
+}
+
+.timer {
+  white-space: nowrap;
+}
+
+/* A key wider than its step and the space either side of it is cut short on screen. Its link and title keep the whole key. */
+.chip {
+  flex: none;
+  max-width: calc(var(--sw) + 2 * var(--pad));
+  overflow: hidden;
+  padding: 1px 6px;
+  border: 1px solid var(--green-line);
+  border-radius: 999px;
+  background: var(--green-soft);
+  color: var(--green-ink);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  animation: lift 520ms var(--ease-out);
+}
+
+.large .chip {
+  padding-inline: 9px;
+}
+
+.chip a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.chip:hover {
+  border-color: var(--green-ink);
+}
+
+.chip svg {
+  vertical-align: -1px;
+  margin-left: 3px;
+}
+
+/* The request reached Teams: it pings in once, in the waiting colour. The icon starts the first line when the names wrap. The
+   ping ends on the line's own look, so it keeps no fill: a finished animation that fills stays alive, and the page never settles. */
+.sent {
+  color: var(--amber-ink);
+  animation: ping 600ms var(--ease-out);
+}
+
+.sent svg {
+  display: inline;
+  margin-right: 3px;
+  vertical-align: -2px;
+}
+
+.unsent {
+  color: var(--red-ink);
 }
 
 .arrive .dot,
@@ -91,99 +381,88 @@
   animation: land var(--dur-small) var(--ease-out) var(--move) backwards;
 }
 
-.todo .who {
-  opacity: 0.45;
+.settled {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 600;
+  animation: fade-up var(--dur-small) var(--ease-out);
 }
 
-.todo .label,
-.skip .label {
-  color: var(--muted);
+.settled[data-tone='ok'] {
+  color: var(--green-ink);
 }
 
-.skip .who {
-  opacity: 0.25;
+.settled > svg {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  margin-top: 0.2em;
 }
 
-.done .dot {
-  border: 2px solid var(--ink);
-  background: var(--ink);
-  color: var(--on-ink);
+:global([data-paused]) .link::before,
+:global([data-paused]) .dot::after {
+  animation-play-state: paused;
 }
 
-.now .dot {
-  border: 2px solid var(--accent);
-  background: var(--surface);
-  outline: 2px solid var(--accent);
-  outline-offset: 3px;
+@keyframes march {
+  to {
+    transform: translateX(14px);
+  }
 }
 
-.now .label {
-  color: var(--ink);
-  font-weight: 700;
+@keyframes grow {
+  from {
+    transform: scaleX(0);
+  }
 }
 
-.gate .dot {
-  width: 38px;
-  height: 38px;
-  border: 2px solid var(--ink);
-  background: var(--surface);
-  color: var(--ink);
+@keyframes halo {
+  from {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--amber) 55%, transparent);
+  }
+
+  to {
+    box-shadow: 0 0 0 12px color-mix(in srgb, var(--amber) 0%, transparent);
+  }
 }
 
-.gate.wait .dot {
-  border-color: var(--amber);
-  background: var(--amber-soft);
-  color: var(--amber-ink);
-  outline: 2px solid var(--amber);
-  outline-offset: 3px;
+@keyframes shake {
+  25% {
+    transform: translateX(-3px);
+  }
+
+  75% {
+    transform: translateX(3px);
+  }
 }
 
-.gate.done .dot {
-  border-color: var(--green);
-  background: var(--green);
-  color: var(--on-status);
+@keyframes ping {
+  0% {
+    opacity: 0;
+    transform: translateY(4px) scale(0.9);
+  }
+
+  60% {
+    opacity: 1;
+    transform: translateY(-2px) scale(1.04);
+  }
 }
 
-.gate.declined .dot {
-  border-color: var(--red-line);
-  background: var(--red-soft);
-  color: var(--red-ink);
+@keyframes lift {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.9);
+  }
 }
 
-.gate.skip .dot,
-.gate.todo .dot {
-  border-style: dashed;
-  border-color: var(--edge);
-  color: var(--muted);
-}
-
-.fail .dot {
-  border: 2px solid var(--red);
-  background: var(--red);
-  color: var(--on-status);
-  outline: 2px solid var(--red);
-  outline-offset: 3px;
-}
-
-.fail .label {
-  color: var(--red-ink);
-}
-
-.app {
-  display: grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  border: 1px solid var(--hair);
-  border-radius: 25%;
-  background: var(--surface);
-}
-
-.nobody {
-  width: 40px;
-  height: 40px;
-  border: 2px dashed var(--rail);
-  border-radius: 50%;
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
 }
 
 @keyframes land {
@@ -193,62 +472,24 @@
   }
 }
 
-@media (max-width: 760px) {
-  .line {
-    grid-template-columns: minmax(0, 1fr);
-    padding-top: 0;
-  }
+/* A step not built yet keeps its place, and fades in when the set-up card's build log adds it. */
+.step {
+  transition:
+    opacity var(--dur-small) ease,
+    transform var(--dur-small) var(--ease-out);
+}
 
-  .track,
-  .fill {
-    top: 32px;
-    right: auto;
-    left: 17px;
-    width: 3px;
-    height: auto;
-  }
+.step[data-off] {
+  opacity: 0;
+  transform: scale(0.8);
+}
 
-  .track {
-    bottom: 32px;
-  }
+.link[data-off] {
+  opacity: 0;
+}
 
-  .fill {
-    height: calc(100% - 64px);
-    transform: scaleY(var(--f));
-    transform-origin: center top;
-  }
-
-  .station {
-    flex-direction: row;
-    gap: 12px;
-    height: 64px;
-    text-align: left;
-  }
-
-  .dotWrap {
-    flex: none;
-    order: 1;
-    width: 38px;
-  }
-
-  .who {
-    flex: none;
-    order: 2;
-    width: 40px;
-    height: auto;
-  }
-
-  .who svg {
-    width: 36px;
-    height: 36px;
-  }
-
-  .who > span {
-    width: 32px !important;
-    height: 32px !important;
-  }
-
-  .label {
-    order: 3;
-  }
+/* The yes the safety checker added, ringed in its colour until the workflow is on. */
+.step[data-added] .dot {
+  border-color: var(--safety);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--safety) 25%, transparent);
 }

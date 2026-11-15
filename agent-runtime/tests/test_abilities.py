@@ -38,10 +38,10 @@ WONT = ("close", "delete", "edit", "move", "update", "change", "reassign", "assi
 
 def cant(what: str) -> str:
     """The refusal: "yet" for what is planned, none for what the registry marks Unsupported
-    (changing tickets, email and Slack)."""
+    (changing tickets, Slack and text messages)."""
     words_of = what.lower().split()
     wont = words_of[0] in WONT or bool(
-        {"email", "slack", "mail", "sms"} & set(re.findall(r"\w+", what.lower()))
+        {"slack", "slacks", "sms", "text", "texts"} & set(re.findall(r"\w+", what.lower()))
     )
     yet = "" if wont else " yet"
     return f"I can't {what}{yet}. {CAN}"
@@ -324,6 +324,80 @@ def test_a_place_source_or_audience_in_another_system_is_cant_do_whatever_the_pr
     assert why_no_tool(kind, text) == cant(text[0].lower() + text[1:])
 
 
+RESULT_GOES_ELSEWHERE = [
+    "Write a summary for the Slack channel review",
+    "Write a summary for the Slack version",
+    "Write a summary for the Teams release",
+    "Write a summary for the Slack ticket",
+    "Write a summary for the ServiceNow incident",
+    "Write a summary for the Slack-channel",
+    "Write a summary for the Slack/Teams channel",
+    "Write a summary for the Slack.com channel",
+    "Write a summary for the Slacks channel",
+    "Write a summary for the slack-channel",
+    "Write a summary for the ServiceNow ticket review",
+    "Write a summary for the Mattermost channel",
+    "Write a summary for the Webex space",
+    "Write a summary for the PagerDuty incident",
+    "Write a summary for the Grafana dashboard",
+    "Write a summary for the Power BI report",
+    "Write a summary for the Okta group",
+    "Write a summary for the AD group",
+    "Write a summary for the wiki page",
+    "Write a summary for the shared mailbox",
+    "Write a summary for the shared drive",
+    "Write a summary for the status page",
+    "Write a summary for the mailing list",
+    "Write a summary for the pull request",
+    "Write a summary as the Mattermost channel",
+    "Write a summary per the Grafana dashboard",
+]
+
+
+@pytest.mark.parametrize("kind", ["do", "where"])
+@pytest.mark.parametrize("text", RESULT_GOES_ELSEWHERE)
+def test_a_result_for_a_place_it_cannot_go_is_cant_do_however_the_place_is_written(
+    kind: RowKind, text: str
+):
+    """#120: a system's own ticket, version or place, a system name joined by punctuation or
+    made plural, and a place in no system the platform reaches."""
+    assert why_no_tool(kind, text) == cant(text[0].lower() + text[1:])
+
+
+@pytest.mark.parametrize("kind", ["do", "where"])
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Create a ticket for the Kubernetes upgrade",
+        "Raise a Kubernetes upgrade ticket",
+        "Create a ticket for the GitLab patch",
+        "Create a ticket for the GitLab review",
+        "Write a summary for the dashboard team",
+        "Check Azure/azure-cli for new releases",
+    ],
+)
+def test_an_upgrade_or_patch_that_names_a_thing_is_no_write_and_a_ticket_for_it_stays(
+    kind: RowKind, text: str
+):
+    """#120: the Phase 2 upgrade tickets, a topic that is also a verb, an audience whose name
+    holds a place word, and a repository whose owner is a system's name."""
+    assert why_no_tool(kind, text) is None
+
+
+@pytest.mark.parametrize(
+    ("text", "what"),
+    [
+        ("Create a ticket for the Kubernetes upgrade and apply it", "apply it"),
+        ("Create a ticket for the Kubernetes upgrade and roll it out", "roll it out"),
+        ("Create a ticket for the GitLab patch, then apply the patch", "apply the patch"),
+    ],
+)
+def test_applying_or_rolling_out_after_an_upgrade_ticket_is_a_write_it_cant_do(
+    text: str, what: str
+):
+    assert why_no_tool("do", text) == cant(what)
+
+
 def test_a_place_after_a_comma_is_still_checked():
     text = "Write a summary for the team, in Slack"
     assert why_no_tool("do", text) == cant("write a summary for the team, in Slack")
@@ -572,8 +646,8 @@ def test_a_new_tool_is_one_more_line_in_the_table():
     assert why_not("where", "Teams", more) is None
     assert why_not("do", "Delete them", more) == (
         "I can't delete them. I can only read Jira tickets, sum up what I find, check "
-        "software for new releases, create a Jira ticket after a yes, and post a message in "
-        "Teams."
+        "software for new releases, read a Confluence page the team allows, create a Jira "
+        "ticket after a yes, and post a message in Teams."
     )
 
 
@@ -927,3 +1001,21 @@ def test_a_jira_change_that_uses_a_release_word_still_asks_for_a_change():
 def test_the_reactive_can_lists_only_the_focus_abilities():
     assert "read Jira tickets" not in CAN
     assert why_not("do", "Delete them") == f"I can't delete them. {CAN}"
+
+
+def test_one_named_confluence_page_is_read_on_a_request_in_words():
+    assert why_no_tool("look_for", "Software in the Software inventory page in Confluence") is None
+
+
+@pytest.mark.parametrize(
+    ("kind", "text"),
+    [
+        ("look_for", "Pages in Confluence changed this week"),
+        ("do", "Update the Software inventory page in Confluence"),
+        ("do", "Draft a report for the Confluence page"),
+        ("where", "The Weekly summary page in Confluence"),
+    ],
+)
+def test_any_other_confluence_part_is_still_a_cant_that_names_confluence(kind: RowKind, text: str):
+    assert why_no_tool(kind, text) is not None
+    assert need_of(kind, text) == Need("new_system", "Confluence")

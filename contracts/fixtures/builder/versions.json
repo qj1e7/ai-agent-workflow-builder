@@ -1,0 +1,45 @@
+{
+  "versions": [
+    {
+      "version": 2,
+      "at": "2026-11-04T01:10:00Z",
+      "by": "alice",
+      "via": "chat",
+      "change": {
+        "schedule": {
+          "before": {
+            "day": "weekdays",
+            "at": "08:00",
+            "time_zone": "Asia/Singapore"
+          },
+          "after": {
+            "day": "monday",
+            "at": "08:00",
+            "time_zone": "Asia/Singapore"
+          }
+        }
+      },
+      "undid": null,
+      "running": true,
+      "made": null,
+      "grade": null,
+      "changes": [],
+      "rolled_back_to": null,
+      "publisher_unknown": false
+    },
+    {
+      "version": 1,
+      "at": "2026-11-04T09:30:00Z",
+      "by": null,
+      "via": null,
+      "change": null,
+      "undid": null,
+      "running": false,
+      "made": null,
+      "grade": null,
+      "changes": [],
+      "rolled_back_to": null,
+      "publisher_unknown": false
+    }
+  ]
+}

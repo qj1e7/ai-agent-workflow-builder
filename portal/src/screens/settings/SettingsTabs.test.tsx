@@ -5,6 +5,10 @@ import { describe, expect, it } from 'vitest'
 import confirmationsAlice from '../../../../contracts/fixtures/people/confirmations.alice.json'
 import confirmationsBob from '../../../../contracts/fixtures/people/confirmations.bob.json'
 import list from '../../../../contracts/fixtures/people/list.json'
+import meN8nInvited from '../../../../contracts/fixtures/people/me-n8n.invited.json'
+import meN8nReady from '../../../../contracts/fixtures/people/me-n8n.ready.json'
+import personN8n from '../../../../contracts/fixtures/people/person.n8n-access.json'
+import refusalN8n from '../../../../contracts/fixtures/people/refusal.n8n_operators_only.json'
 import personApprover from '../../../../contracts/fixtures/people/person.approver.json'
 import capabilities from '../../../../contracts/fixtures/planner/capabilities.json'
 import history from '../../../../contracts/fixtures/settings/history.json'
@@ -15,12 +19,14 @@ import pendingAlice from '../../../../contracts/fixtures/settings/model.pending.
 import pendingBob from '../../../../contracts/fixtures/settings/model.pending.bob.json'
 import { App } from '../../App'
 import { ApiProvider } from '../../api/context'
+import { ApiError, type ApiClient } from '../../api/client'
+import { sendN8nAccess } from '../../api/settingsQueries'
 import { createDevSession } from '../../api/session'
-import type { ConfirmationOut, ConnectionOut, ConnectionsView, Me, ModelOut, PersonOut } from '../../api/types'
+import type { ConfirmationOut, ConnectionOut, ConnectionsView, Me, ModelOut, MyN8nOut, PersonOut } from '../../api/types'
 import { MODEL_READ_ONLY_WORDS, NO_MODEL_WORDS, notNowWords } from './ModelTab'
 import { PEOPLE_LEAD } from './PeopleTab'
 import { checkResultWords, GITHUB_KEY_NOTE } from './connections'
-import { ONLY_OPERATORS_WORDS, SETTINGS_OFF_WORDS } from './settings'
+import { n8nAccessWords, ONLY_OPERATORS_WORDS, SETTINGS_OFF_WORDS, settingsErrorWords } from './settings'
 import { SettingsTabs } from './SettingsTabs'
 
 const ALICE: Me = { id: 'alice', display: 'Alice', roles: ['operator', 'approver'], on_list: true }
@@ -37,21 +43,22 @@ const CALM: ConnectionsView = {
 const PEOPLE = list.people as PersonOut[]
 const DAVE_ID = 'per_01JD4VE'
 const withDave = (dave: PersonOut) => PEOPLE.map((person) => (person.id === DAVE_ID ? dave : person))
-const CONFIRMED = withDave(personApprover)
+const CONFIRMED = withDave(personApprover as PersonOut)
 const NOT_NOW = withDave({ ...(personApprover as PersonOut), approver: false })
 const approverOnly = (confirmations: { confirmations: unknown[] }) =>
   (confirmations.confirmations as ConfirmationOut[]).filter((entry) => entry.kind === 'approver')
 
 interface Setup {
   readonly me?: Me
-  readonly tab?: 'connections' | 'model' | 'people'
+  readonly tab?: 'connections' | 'model' | 'people' | 'how'
   readonly connections?: ConnectionsView | Error
   readonly model?: unknown
   readonly people?: PersonOut[]
   readonly confirmations?: ConfirmationOut[]
+  readonly myN8n?: MyN8nOut
 }
 
-function render({ me = ALICE, tab = 'model', model = modelActive, people = PEOPLE, confirmations = [], connections: shown = CALM }: Setup = {}): string {
+function render({ me = ALICE, tab = 'model', model = modelActive, people = PEOPLE, confirmations = [], connections: shown = CALM, myN8n }: Setup = {}): string {
   const session = createDevSession({ getItem: () => me.id, setItem: () => undefined })
   const user = session.cacheScope()
   const queryClient = new QueryClient({ defaultOptions: { queries: { retryOnMount: false } } })
@@ -62,6 +69,7 @@ function render({ me = ALICE, tab = 'model', model = modelActive, people = PEOPL
   queryClient.setQueryData(['settings-history', user], history.changes)
   queryClient.setQueryData(['connections', user], shown)
   queryClient.setQueryData(['capabilities', user], capabilities)
+  if (myN8n) queryClient.setQueryData(['my-n8n', user], myN8n)
   return renderToStaticMarkup(
     <QueryClientProvider client={queryClient}>
       <ApiProvider session={session} platformFetch={fetch} origin="http://portal.test">
@@ -87,12 +95,28 @@ const checkboxes = (html: string) => [...html.matchAll(/<input[^>]*type="checkbo
 const buttonsIn = (html: string) => [...html.matchAll(/<button\b[^>]*>([\s\S]*?)<\/button>/g)].map((match) => text(match[1] ?? ''))
 
 describe('the Settings tabs', () => {
-  it('offer Connections, People and roles and the AI model in that order, with the one shown marked pressed', () => {
+  it('offer Connections, People and permissions, the AI model and How it works to an Operator, in that order, with the one shown marked pressed', () => {
     const html = render({ tab: 'connections' })
     expect(html).toMatch(/role="group" aria-label="Settings sections"/)
-    expect(html).toMatch(/<button type="button" aria-pressed="true">Connections.*<button type="button" aria-pressed="false">People and roles.*<button type="button" aria-pressed="false">AI model/s)
-    expect(render({ tab: 'people' })).toMatch(/<button type="button" aria-pressed="true">People and roles/)
+    expect(html).toMatch(
+      /<button type="button" aria-pressed="true">Connections.*<button type="button" aria-pressed="false">People and permissions.*<button type="button" aria-pressed="false">AI model.*<button type="button" aria-pressed="false">How it works/s,
+    )
+    expect(render({ tab: 'people' })).toMatch(/<button type="button" aria-pressed="true">People and permissions/)
     expect(render({ tab: 'model' })).toMatch(/<button type="button" aria-pressed="true">AI model/)
+    expect(render({ tab: 'how' })).toMatch(/<button type="button" aria-pressed="true">How it works/)
+  })
+
+  it('leave How it works out for an Approver who is not an Operator, and open Connections if the address asks for it', () => {
+    const html = render({ me: BOB, tab: 'how' })
+    expect(buttonsIn(html).slice(0, 3)).toEqual(['Connections', 'People and permissions', 'AI model'])
+    expect(html).not.toContain('How it works')
+    expect(html).toMatch(/<button type="button" aria-pressed="true">Connections/)
+  })
+
+  it('put the Agent library’s tabs inside How it works', () => {
+    const html = render({ tab: 'how' })
+    expect(html).toContain('aria-label="Show"')
+    expect(text(html)).toContain('What it can do')
   })
 
   it('mark the tabs that need the viewer', () => {
@@ -174,12 +198,36 @@ describe('the Connections tab', () => {
   it('is read-only for an Approver who is not an Operator, and says only Operators change settings', () => {
     const forBob = render({ me: BOB, tab: 'connections', connections: { ...ALL, you_can_check: false } })
     expect(buttonsIn(forBob).filter((b) => b.startsWith('Check now'))).toEqual([])
+    expect(forBob).not.toMatch(/disabled=""|aria-disabled="true"/)
     expect(text(forBob)).toContain(ONLY_OPERATORS_WORDS)
+  })
+
+  it('shows the Tell flow as a connection fact, read only, and never its address or a claim that it posts yet', () => {
+    const set = text(cardOf(html, 'tell'))
+    expect(set).toContain('Tell flow Set Workflows can post and email with it once Tell blocks arrive.')
+    expect(set).toContain('Posts in CODESparks Ops')
+    expect(set).toContain('Emails ops-lead@codesparks.example, support@codesparks.example')
+    expect(set).toContain('Who changes these Whoever set up the platform, in its settings. The chat can’t change them.')
+    const unset = text(cardOf(render({ tab: 'connections', connections: { ...ALL, tell: { flow_set: false, channel: 'CODESparks Ops', email_to: [] } } }), 'tell'))
+    expect(unset).toContain('Tell flow Not set Not set up yet. Workflows can post and email with it once it is set and Tell blocks arrive.')
+    expect(unset).toContain('Emails Nobody yet')
+    expect(buttonsIn(cardOf(html, 'tell'))).toEqual([])
+    expect(html).not.toMatch(/sig=|logic\.azure/)
   })
 
   it('marks the tab when a connection needs someone, and not when all is well', () => {
     expect(render({ tab: 'people', connections: ALL })).toMatch(/Connections[^<]*<span class="[^"]*dot[^"]*"/)
     expect(render({ tab: 'people' })).not.toMatch(/Connections[^<]*<span class="[^"]*dot[^"]*"/)
+  })
+
+  it('shows Confluence not set up on its card, and marks no tab for it', () => {
+    const unset = { ...CALM, connections: CALM.connections.map((c) => (c.id === 'confluence' ? (ALL.connections.find((a) => a.id === 'confluence') as ConnectionOut) : c)) }
+    expect(render({ tab: 'people', connections: unset })).not.toMatch(/Connections[^<]*<span class="[^"]*dot[^"]*"/)
+    const card = text(render({ tab: 'connections', connections: unset }))
+    expect(card).toContain('Confluence')
+    expect(card).toContain('Not set up')
+    expect(card).toContain('Confluence is not connected. Ask whoever set up the platform to connect Confluence.')
+    expect(buttonsIn(render({ tab: 'connections', connections: unset }))).not.toContain('Check now for Confluence')
   })
 })
 
@@ -268,6 +316,7 @@ describe('the AI model tab', () => {
     expect(html).not.toContain('<form')
     expect(html).not.toContain('<select')
     expect(html).not.toContain('<input')
+    expect(html).not.toMatch(/disabled=""|aria-disabled="true"/)
   })
 
   it('says when the platform has the settings switched off', () => {
@@ -285,7 +334,7 @@ describe('the AI model tab', () => {
   })
 })
 
-describe('the People and roles tab', () => {
+describe('the People and permissions tab', () => {
   it('lists everyone with their roles, and says who has not signed in yet', () => {
     const html = render({ tab: 'people', confirmations: approverOnly(confirmationsAlice) })
     const main = text(html)
@@ -343,18 +392,21 @@ describe('the People and roles tab', () => {
     expect(main).toContain('Add a person')
     expect(html).toMatch(/<label for="add-email">Work email<\/label>/)
     expect(html).toMatch(/<label for="add-name">Name<\/label>/)
-    expect(checkboxes(html).filter((box) => box.includes('disabled'))).toEqual([checkboxes(html).find((box) => box.includes('per_01JD4VE-approver'))])
+    expect(checkboxes(html).filter((box) => box.includes('disabled') && !box.includes('-n8n'))).toEqual([checkboxes(html).find((box) => box.includes('per_01JD4VE-approver'))])
     expect(buttonsIn(html)).toContain('Add')
   })
 
-  it('is read-only for an Approver who is not an Operator, and says only Operators change settings', () => {
+  it('is read-only for an Approver who is not an Operator: each person’s roles in words, and no control he can’t use', () => {
     const html = render({ me: BOB, tab: 'people', people: CONFIRMED })
     expect(text(html)).toContain(ONLY_OPERATORS_WORDS)
-    const boxes = checkboxes(html)
-    expect(boxes.length).toBe(PEOPLE.length * 2)
-    expect(boxes.every((box) => box.includes('disabled=""'))).toBe(true)
+    expect(checkboxes(html)).toEqual([])
+    expect(html).not.toMatch(/disabled=""|aria-disabled="true"/)
+    expect(text(rowOf(html, 'Alice'))).toContain('Operator and Approver')
+    expect(text(rowOf(html, 'Bob'))).toMatch(/You .*Approver$/)
+    expect(text(rowOf(html, 'Carol'))).toMatch(/Operator$/)
+    expect(text(rowOf(html, 'Dave'))).toMatch(/Operator and Approver$/)
     expect(html).not.toContain('<form')
-    expect(buttonsIn(html).filter((name) => !['Connections', 'AI model', 'People and roles'].includes(name))).toEqual([])
+    expect(buttonsIn(html).filter((name) => !['Connections', 'AI model', 'People and permissions'].includes(name))).toEqual([])
   })
 
   it('explains the rules, two Approvers and one Operator among them', () => {
@@ -384,5 +436,82 @@ describe('the Teams card', () => {
     expect(teams).toContain('What it does Sends approval requests to Approvers')
     expect(teams).not.toMatch(/post|message/i)
     expect(text(cardOf(render({ tab: 'connections' }), 'jira'))).not.toContain('What it does')
+  })
+})
+
+describe('n8n access on People and permissions', () => {
+  const REASON = 'Only Operators can have n8n access, and Approvers never can.'
+  const boxFor = (html: string, id: string) => boxOf(html, `person-${id}-n8n`)
+  const CAROL_ID = 'carol'
+  const withCarol = (carol: Partial<PersonOut>) => PEOPLE.map((person) => (person.id === CAROL_ID ? { ...(personN8n as PersonOut), ...carol } : person))
+
+  it('lets an Operator tick it for an Operator who is not an Approver', () => {
+    const html = render({ tab: 'people' })
+    expect(boxFor(html, CAROL_ID)).not.toContain('disabled')
+    expect(text(rowOf(html, 'Carol'))).toContain('n8n access for Carol')
+    expect(text(rowOf(html, 'Carol'))).not.toContain(REASON)
+  })
+
+  it('offers no box that can never be ticked: not for an Approver, nor while an Approver role waits', () => {
+    const html = render({ tab: 'people' })
+    for (const id of ['alice', 'bob', DAVE_ID]) expect(html, id).not.toContain(`id="person-${id}-n8n"`)
+    expect(checkboxes(html).filter((box) => box.includes('-n8n') && box.includes('disabled'))).toEqual([])
+  })
+
+  it('always lets an Operator end it, whatever else the person is waiting for', () => {
+    const people = PEOPLE.map((person) => (person.id === DAVE_ID ? { ...person, n8n_access: true, n8n_account: 'ready' as const } : person))
+    expect(boxFor(render({ tab: 'people', people }), DAVE_ID)).not.toContain('disabled')
+  })
+
+  it('shows it ticked, and what their n8n account is waiting for, but nothing once the account is ready', () => {
+    expect(boxFor(render({ tab: 'people', people: withCarol({}) }), CAROL_ID)).toContain('checked')
+    expect(text(rowOf(render({ tab: 'people', people: withCarol({ n8n_account: 'invited' }) }), 'Carol'))).toContain('n8n: waiting for them to set a password')
+    expect(text(rowOf(render({ tab: 'people', people: withCarol({ n8n_account: 'none' }) }), 'Carol'))).toContain('n8n: no account yet')
+    expect(text(rowOf(render({ tab: 'people', people: withCarol({}) }), 'Carol'))).not.toContain('n8n:')
+  })
+
+  it('says n8n access in words for someone who can only read the page', () => {
+    const html = render({ me: BOB, tab: 'people', people: withCarol({}) })
+    expect(text(rowOf(html, 'Carol'))).toMatch(/Operator, n8n access$/)
+    expect(checkboxes(html)).toEqual([])
+  })
+
+  it('lists the rule', () => {
+    expect(text(render({ tab: 'people' }))).toContain('Only Operators can have n8n access. Gaining the Approver role ends it.')
+  })
+
+  it('sends the tick to the n8n access route', async () => {
+    const sent: unknown[] = []
+    const client = { PUT: (path: string, init: unknown) => (sent.push([path, init]), Promise.resolve({ data: personN8n, response: { ok: true, status: 200 } })) } as unknown as ApiClient
+    await sendN8nAccess(client, CAROL_ID, true)
+    expect(sent).toEqual([['/api/v1/people/{person_id}/n8n-access', { params: { path: { person_id: CAROL_ID } }, body: { n8n_access: true } }]])
+  })
+
+  it('says it was given or ended in plain words', () => {
+    expect(n8nAccessWords('Carol', true)).toBe('Carol has n8n access.')
+    expect(n8nAccessWords('Carol', false)).toBe('Carol’s n8n access ended.')
+  })
+
+  it('shows the platform’s refusal words as they are', () => {
+    expect(settingsErrorWords(new ApiError(409, refusalN8n), 'dev', 'person', 'Bob')).toBe(refusalN8n.message)
+  })
+
+  it('shows your own row a link to set your n8n password while the account is waiting for one', () => {
+    const html = render({ me: CAROL, tab: 'people', people: withCarol({ n8n_account: 'invited' }), myN8n: meN8nInvited as MyN8nOut })
+    const link = new RegExp('<a [^>]*href="([^"]*)"[^>]*>Set your n8n password</a>').exec(html)
+    expect(link?.[1]).toBe(meN8nInvited.set_password_url)
+    expect(link?.[0]).toContain('target="_blank"')
+    expect(link?.[0]).toContain('rel="noopener noreferrer"')
+  })
+
+  it('shows no link once the account is ready', () => {
+    const html = render({ me: CAROL, tab: 'people', people: withCarol({}), myN8n: meN8nReady as MyN8nOut })
+    expect(html).not.toContain('Set your n8n password')
+  })
+
+  it('never shows the link on another person’s row', () => {
+    const html = render({ me: ALICE, tab: 'people', people: withCarol({ n8n_account: 'invited' }), myN8n: meN8nInvited as MyN8nOut })
+    expect(html).not.toContain('Set your n8n password')
+    expect(html).not.toContain('example-not-a-real-token')
   })
 })

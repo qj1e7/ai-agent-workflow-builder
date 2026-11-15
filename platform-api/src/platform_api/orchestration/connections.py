@@ -1,8 +1,9 @@
-"""Connection health: whether Jira, GitHub, Teams and the AI model work, and the last result.
+"""Connection health: whether Jira, GitHub, Teams, Confluence and the AI model work, and the last
+result.
 
-A check only reads. It never writes to Jira, GitHub or Teams, and it changes nothing the safety
-checker allows. A result holds plain words chosen here, never a system's own error text, and
-never a token, so it is safe to store and to show.
+A check only reads. It never writes to Jira, GitHub, Teams or Confluence, and it changes nothing
+the safety checker allows. A result holds plain words chosen here, never a system's own error
+text, and never a token, so it is safe to store and to show.
 
 Each result belongs to one identity: the practice copy, or the adapter with a one-way fingerprint
 of the address and the key it used. Only results of the identity in use now are read, so a new
@@ -10,6 +11,7 @@ address or a new key starts with no history, and no screen shows what another co
 """
 
 import asyncio
+import contextlib
 import logging
 from collections.abc import Awaitable, Mapping, Sequence
 from dataclasses import dataclass, replace
@@ -24,6 +26,7 @@ from platform_api.orchestration.agents import (
     GitHubProblem,
     GitHubWorking,
 )
+from platform_api.orchestration.confluence_rest import ConfluenceReach
 from platform_api.orchestration.dispatch import (
     PRACTICE,
     ApprovalChannel,
@@ -37,14 +40,17 @@ from platform_api.orchestration.model_settings import SettingsOff, SettingsState
 
 log = logging.getLogger(__name__)
 
-type ConnectionId = Literal["jira", "github", "teams", "model"]
+CHECK_EVERY = timedelta(minutes=5)
+"""As often as the schedule tick asked before E10."""
+
+type ConnectionId = Literal["jira", "github", "teams", "confluence", "model"]
 type Found = Literal["working", "needs_attention", "not_answering", "not_set_up"]
 """What a reading can find, and so the only states a kept result has."""
 type ConnectionState = Literal[
     "working", "needs_attention", "not_answering", "not_set_up", "not_checked"
 ]
 
-CONNECTION_IDS: Final[tuple[ConnectionId, ...]] = ("jira", "github", "teams", "model")
+CONNECTION_IDS: Final[tuple[ConnectionId, ...]] = ("jira", "github", "teams", "confluence", "model")
 RECHECK_AFTER: Final = timedelta(hours=1)
 """A scheduled tick checks a working connection at most this often. One that does not work is
 checked on every tick, so its warning ends soon after it is fixed. Neither spends a limit:
@@ -99,7 +105,15 @@ class Observed:
     waiting: str
 
 
-type Known = Checked | ReadFresh | Observed
+@dataclass(frozen=True)
+class Unset:
+    """Not set up on this platform, which runs without it. Nothing is tried or kept, and Home
+    does not raise it, but whatever needs it reads as needing setup."""
+
+    problem: str
+
+
+type Known = Checked | ReadFresh | Observed | Unset
 
 
 @dataclass(frozen=True)
@@ -277,7 +291,8 @@ class Connections:
 
     async def view(self) -> list[ConnectionCheck]:
         """Every connection with its last result. One the platform checks, and never checked with
-        what it uses now, is checked now, once."""
+        what it uses now, is checked now, once. That check only reads Jira or GitHub, but it keeps
+        its result in connection_checks, so this read writes our own row for whoever asks."""
         kept = await self._kept()
         shown: dict[ConnectionId, Shown | None] = {}
         for id, entry in self._entries.items():
@@ -304,10 +319,22 @@ class Connections:
                 shown = await self._read_fresh(entry, probe)
             case Observed():
                 shown = (await self._kept()).get(entry.id)
+            case Unset():
+                shown = None
         return self._present(entry, shown, self._db.clock())
 
+    async def check_forever(self, stop: asyncio.Event, every: timedelta = CHECK_EVERY) -> None:
+        """Checks what is due every few minutes, as the schedule tick did before E10."""
+        while not stop.is_set():
+            try:
+                await self.check_due()
+            except Exception as error:
+                log.warning("the connection checks did not finish: %s", type(error).__name__)
+            with contextlib.suppress(TimeoutError):
+                await asyncio.wait_for(stop.wait(), every.total_seconds())
+
     async def check_due(self) -> None:
-        """The scheduled tick's part: checks what is due, and lets nothing go wrong on the way."""
+        """Checks what is due, and lets nothing go wrong on the way."""
         kept = await self._kept()
         now = self._db.clock()
         waiting = [
@@ -318,16 +345,24 @@ class Connections:
         await asyncio.gather(*(self._check(e, probe, at_once=False) for e, probe in waiting))
 
     async def needing_attention(self) -> list[ConnectionCheck]:
-        """Connections that do not work, and keys that run out soon. Reads what was stored and
-        asks nobody, so a fresh stack shows none until a check found something."""
+        """Connections that do not work, and keys that run out soon. A checked connection is read
+        from what was stored and asks nobody, so a fresh stack shows none until a check found
+        something. The AI model is read from its own settings, as every view reads it, and is
+        listed while it is not set up, because nothing that needs it can run."""
         kept = await self._kept()
         now = self._db.clock()
-        found = [
-            self._present(self._entries[id], shown, now)
-            for id, shown in kept.items()
-            if not isinstance(self._entries[id].known, ReadFresh)
+        found: list[ConnectionCheck] = []
+        for id, entry in self._entries.items():
+            shown = (
+                await self._read_fresh(entry, entry.known.probe)
+                if isinstance(entry.known, ReadFresh)
+                else kept.get(id)
+            )
+            if shown is not None:
+                found.append(self._present(entry, shown, now))
+        trouble = [
+            c for c in found if c.state in ("needs_attention", "not_answering", "not_set_up")
         ]
-        trouble = [c for c in found if c.state in ("needs_attention", "not_answering")]
         ending = sorted(
             (c for c in found if c.runs_out_soon(now)),
             key=lambda c: c.expires_at or now,
@@ -382,6 +417,19 @@ class Connections:
             return Reading("not_answering", CHECK_FAILED.format(name=entry.name))
 
     def _present(self, entry: Entry, shown: Shown | None, now: datetime) -> ConnectionCheck:
+        if isinstance(entry.known, Unset):
+            return ConnectionCheck(
+                id=entry.id,
+                name=entry.name,
+                practice=entry.practice,
+                state="not_set_up",
+                checked_at=None,
+                last_ok_at=None,
+                problem=entry.known.problem,
+                key_ends_in=None,
+                expires_at=None,
+                fix=fix_for(entry, "not_set_up", expiring=False),
+            )
         if shown is None:
             return ConnectionCheck(
                 id=entry.id,
@@ -420,6 +468,10 @@ class JiraChecker(Protocol):
     async def check(self) -> JiraReach: ...
 
 
+class ConfluenceChecker(Protocol):
+    async def check(self) -> ConfluenceReach: ...
+
+
 class GitHubChecker(Protocol):
     async def check_github(self) -> GitHubCheckResult | AgentUnavailable | AgentRejected: ...
 
@@ -441,6 +493,11 @@ def jira_probe(jira: JiraChecker, name: str, key_ends_in: str | None) -> Probe:
                 return Reading("not_answering", NOT_ANSWERING.format(name=name))
 
     return probe
+
+
+def confluence_probe(confluence: ConfluenceChecker, key_ends_in: str | None) -> Probe:
+    """Asks Confluence who the key is, as Jira is asked. It reads no page."""
+    return jira_probe(confluence, "Confluence", key_ends_in)
 
 
 GITHUB_PROBLEMS: Final[dict[str, tuple[Found, str]]] = {

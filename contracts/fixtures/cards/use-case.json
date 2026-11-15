@@ -40,5 +40,13 @@
         "Jira project": "MOCK"
       }
     }
-  ]
+  ],
+  "last_run": null,
+  "left_out": [],
+  "blocks": [],
+  "grade": null,
+  "findings": [],
+  "deleted_in_n8n_at": null,
+  "moving_to_n8n": false,
+  "move_refused": null
 }

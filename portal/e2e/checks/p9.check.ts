@@ -71,7 +71,7 @@ const nextRunOf = (page: Page) => page.locator('dt', { hasText: 'Next run' }).lo
 const whenOf = (page: Page) => page.locator('dt', { hasText: /^When$/ }).locator('xpath=following-sibling::dd[1]')
 const recentRuns = (page: Page) => page.getByRole('region', { name: 'Recent runs' })
 const toastCard = (page: Page) => page.locator('[class*="dock"] > div')
-const mainMenu = (page: Page) => page.getByRole('navigation', { name: 'Main' }).filter({ visible: true })
+const mainMenu = (page: Page) => page.getByRole('navigation', { name: 'Browse' }).filter({ visible: true })
 
 async function mainButtons(page: Page): Promise<string[]> {
   return (await page.getByRole('main').getByRole('button').allInnerTexts()).map((label) => label.trim())
@@ -421,7 +421,7 @@ test('@lane7 an agent’s name on the workflow page opens its card, and Close co
     const dialog = page.locator('main dialog[open]')
     await expect(dialog).toBeVisible()
     await expect(dialog.getByRole('heading', { name: 'Version checker', level: 2 })).toBeVisible()
-    await expect(page).toHaveURL(/\/agents\/crd_version_checker$/)
+    await expect(page).toHaveURL(/\/settings\?tab=how&show=agents&agent=crd_version_checker$/)
     await shotTo(page, 7, 'p9-agent-link.png')
     await dialog.getByRole('button', { name: 'Close' }).first().click()
     await expect(page).toHaveURL(new RegExp(`/workflows/${workflow.id}$`))
@@ -654,9 +654,8 @@ async function focusOrigins(): Promise<{ label: string; path: string }[]> {
     const workflow = await agentWorkflow(api, 'focus origin')
     const runId = await backend.checkNow('alice', workflow.id)
     return [
-      { label: 'Home', path: '/' },
-      { label: 'Software watchlist', path: '/software' },
-      { label: 'Agent library', path: '/agents' },
+      { label: 'Chat', path: '/' },
+      { label: 'Watchlist', path: '/software' },
       { label: 'Settings', path: '/settings' },
       { label: 'a workflow page', path: `/workflows/${workflow.id}` },
       { label: 'a run page', path: `/runs/${runId}` },
@@ -682,7 +681,7 @@ test('@focus opening Workflows from every page, at 1440 and 390 px, puts focus o
         await expect(page.locator('li[data-workflow-id]').first()).toBeVisible()
         await page.waitForTimeout(1_200)
         rows.push({ width, from: origin.label, to: '/workflows', attempt, ...(await focusNow(page)) })
-        if (origin.label === 'Home') {
+        if (origin.label === 'Chat') {
           await page.locator('li[data-workflow-id] h2 a[href^="/workflows/"]').first().click()
           await expect(page.getByRole('main').getByRole('link', { name: 'Workflows', exact: true })).toBeVisible()
           await page.waitForTimeout(1_200)
@@ -832,7 +831,7 @@ test('@watchlist-resume a watchlist paused through the API can be resumed on the
   test.setTimeout(300_000)
   await withBackend(async (backend, api) => {
     const watchlist = await backend.freshWatchlist('alice')
-    expect((await call(api, 'alice', 'PUT', '/api/v1/watchlist/schedule', { day: 'monday', at: '09:00' })).status).toBe(200)
+    expect((await backend.saveWatchlistSchedule('alice', { day: 'monday', at: '09:00' })).status).toBe(200)
     const facts: Record<string, unknown> = { watchlist }
     for (const phone of [false, true]) {
       const width = phone ? 390 : 1440

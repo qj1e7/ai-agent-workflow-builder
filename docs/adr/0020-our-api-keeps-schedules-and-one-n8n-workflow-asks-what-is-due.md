@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: superseded by ADR 0027
 ---
 
 # Our API keeps each watchlist's schedule, and one n8n workflow asks it what is due
@@ -20,3 +20,7 @@ A scheduled check has no person pressing Start, but the approval gate needs to k
 - The tick workflow should not save its successful executions, or n8n's execution list gains 288 entries a day. Its failures still reach the error workflow.
 - A schedule keeps its time zone (Singapore for CODESparks), so a 9:00 check stays at 9:00.
 - When the schedule owner leaves the team, another Operator saves the schedule again to take it over. The Portal shows the owner's name next to the schedule.
+
+## Superseded on 13 Nov 2026
+
+ADR 0027 replaces this decision. See `docs/design/chat-first/ENGINE-PLAN.md`.

@@ -192,6 +192,8 @@ async def test_an_operator_adds_people_and_the_list_grows(client: httpx.AsyncCli
         "display": "Dave",
         "roles": ["operator"],
         "on_list": True,
+        "n8n_access": False,
+        "time_zone": "Asia/Singapore",
     }
     users = (await client.get("/api/v1/dev/users")).json()["users"]
     assert [u["display"] for u in users] == ["Alice", "Bob", "Carol", "Dave"]

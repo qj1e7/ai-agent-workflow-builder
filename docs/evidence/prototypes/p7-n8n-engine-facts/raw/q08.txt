@@ -1,0 +1,33 @@
+001 created q08 archive with a waiting execution: {"id": "fH4vOM1T3qSH58Qq", "versionId": "6f7d2cfd-ccc0-4f38-b136-62413e1a8685", "activeVersionId": null}
+002 A. public POST /workflows/{id}/archive: [200, "archived"]
+003 A. after archive: workflow: [200, {"active": false, "isArchived": true, "activeVersionId": null}]
+004 A. after archive: execution: {"id": "35", "status": "waiting", "mode": "webhook", "finished": false, "retryOf": null, "retrySuccessId": null, "waitTill": "3000-01-01T00:00:00.000Z", "workflowId": "fH4vOM1T3qSH58Qq", "startedAt": "2026-11-13T08:57:48.293Z", "stoppedAt": "2026-11-13T08:57:48.349Z", "workflowVersionId": "6f7d2cfd-ccc0-4f38-b136-62413e1a8685"}
+005 A. after archive: execution rows in n8n's database: "35|waiting|f"
+006 A. the real yes after archive: [200, "firstEntryJson"]
+007 A. after the yes: workflow: [200, {"active": false, "isArchived": true, "activeVersionId": null}]
+008 A. after the yes: execution: {"id": "35", "status": "success", "mode": "webhook", "finished": true, "retryOf": null, "retrySuccessId": null, "waitTill": null, "workflowId": "fH4vOM1T3qSH58Qq", "startedAt": "2026-11-13T08:57:48.293Z", "stoppedAt": "2026-11-13T08:57:49.050Z", "workflowVersionId": "6f7d2cfd-ccc0-4f38-b136-62413e1a8685"}
+009 A. after the yes: execution rows in n8n's database: "35|success|f"
+010 A. Create ticket called our API: ["Create ticket"]
+011 A. unarchive: [200, "unarchived"]
+012 A. after unarchive: workflow: [200, {"active": false, "isArchived": false, "activeVersionId": null}]
+013 A. after unarchive: execution: {"id": "35", "status": "success", "mode": "webhook", "finished": true, "retryOf": null, "retrySuccessId": null, "waitTill": null, "workflowId": "fH4vOM1T3qSH58Qq", "startedAt": "2026-11-13T08:57:48.293Z", "stoppedAt": "2026-11-13T08:57:49.050Z", "workflowVersionId": "6f7d2cfd-ccc0-4f38-b136-62413e1a8685"}
+014 A. after unarchive: execution rows in n8n's database: "35|success|f"
+015 created q08 delete with a waiting execution: {"id": "PtNq0xN6hpUJ6ruz", "versionId": "173b316a-5a96-4979-8fe9-f5e41c5327fd", "activeVersionId": null}
+016 B. public DELETE /workflows/{id} without archiving first: [409, {"message": "Cannot delete a published workflow. Unpublish it before deleting."}]
+017 B. after delete: workflow: [200, {"active": true, "isArchived": false, "activeVersionId": "173b316a-5a96-4979-8fe9-f5e41c5327fd"}]
+018 B. after delete: execution: {"id": "36", "status": "waiting", "mode": "webhook", "finished": false, "retryOf": null, "retrySuccessId": null, "waitTill": "3000-01-01T00:00:00.000Z", "workflowId": "PtNq0xN6hpUJ6ruz", "startedAt": "2026-11-13T08:57:54.385Z", "stoppedAt": "2026-11-13T08:57:54.443Z", "workflowVersionId": "173b316a-5a96-4979-8fe9-f5e41c5327fd"}
+019 B. after delete: execution rows in n8n's database: "36|waiting|f"
+020 B. the real yes after delete: [200, "firstEntryJson"]
+021 created q08 archive then delete: {"id": "KbGwRUJwq2EetBwb", "versionId": "b475f9e8-2311-49bd-8e2f-f98bd03b44e4", "activeVersionId": null}
+022 C. public DELETE after archive: [200, {"id": "KbGwRUJwq2EetBwb", "isArchived": true}]
+023 C. after archive and delete: workflow: [404, {"message": "Not Found"}]
+024 C. after archive and delete: execution: "404"
+025 C. after archive and delete: execution rows in n8n's database: "none"
+026 C. the real yes after delete: [404, {"code": 404, "message": "The execution \"37\" does not exist."}]
+027 created q08 rest delete: {"id": "g8ayT2WuE6ugDLSU", "versionId": "ebab5bc7-e8e6-48d6-8355-f574c1231cf0", "activeVersionId": null}
+028 D. DELETE /rest/workflows/{id} (the editor's delete) without archiving: [409, {"code": 409, "message": "Cannot delete a published workflow. Unpublish it before deleting."}]
+029 D. POST /rest/workflows/{id}/archive: [200, "archived"]
+030 D. DELETE /rest/workflows/{id} after archive: [409, {"code": 409, "message": "Workflow is still being unpublished. Please try again in a few moments."}]
+031 D. after: workflow: [200, {"active": false, "isArchived": true, "activeVersionId": null}]
+032 D. after: execution: {"id": "38", "status": "waiting", "mode": "webhook", "finished": false, "retryOf": null, "retrySuccessId": null, "waitTill": "3000-01-01T00:00:00.000Z", "workflowId": "g8ayT2WuE6ugDLSU", "startedAt": "2026-11-13T08:57:59.950Z", "stoppedAt": "2026-11-13T08:58:00.003Z", "workflowVersionId": "ebab5bc7-e8e6-48d6-8355-f574c1231cf0"}
+033 D. after: execution rows in n8n's database: "38|waiting|f"

@@ -1,4 +1,5 @@
-from datetime import UTC, datetime
+from dataclasses import replace
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -23,7 +24,11 @@ from platform_api.orchestration.approvals import (
     decide,
     why_not,
 )
+from platform_api.orchestration.runs import Pending
+from platform_api.orchestration.service import NotSent, Sent, steps_view
+from platform_api.orchestration.store import RunRecord
 from platform_api.shared import ApprovalId, Digest, Principal, ProposalId, Role, RunId, UserId
+from tests.support import SPEC
 
 ALICE = UserId("alice")
 BOB = UserId("bob")
@@ -386,6 +391,27 @@ def test_why_not_is_none_exactly_when_a_yes_on_the_open_step_would_be_recorded()
             )
 
 
+@pytest.mark.parametrize(
+    ("decided", "step", "by"),
+    [
+        pytest.param((), 0, BOB, id="the first approver"),
+        pytest.param((decision(0, BOB),), 1, CAROL, id="the second approver"),
+    ],
+)
+def test_safety_a_decision_at_or_after_the_expiry_is_refused(
+    decided: tuple[Decision, ...], step: int, by: UserId
+):
+    """Before the tick ends the request, a late yes is still refused, so the records never hold
+    a yes the expiry outran, and a first yes never pulls the second Approver into a dead walk."""
+    expiring = replace(request(TWO_STEPS), expires_at=LATER)
+    for at in (LATER, LATER + timedelta(seconds=1)):
+        for verdict in Verdict:
+            refused = decide(expiring, decided, approver(by), step, verdict, DIGEST, at)
+            assert refused == Refused(Refusal.NOT_OPEN)
+    in_time = decide(expiring, decided, approver(by), step, Verdict.APPROVE, DIGEST, NOW)
+    assert isinstance(in_time, Recorded)
+
+
 def test_decide_stamps_the_time_it_was_given():
     result = decide(request(), (), approver(BOB), 0, Verdict.APPROVE, DIGEST, LATER)
     assert isinstance(result, Recorded)
@@ -394,3 +420,95 @@ def test_decide_stamps_the_time_it_was_given():
 
 def test_own_work_serializes_as_the_http_refusal():
     assert Refusal.OWN_WORK.value == "own_work"
+
+
+def test_whoever_joined_a_run_in_n8n_is_a_party_and_cannot_approve_it():
+    """The holder of a run started by hand in n8n, or the publisher whose version a trigger
+    ran, joins the run. The request's parties come from the run, so their yes is own work."""
+    dave = UserId("dave")
+    pending = Pending(RunId("run_1"), 1, None, NOW)
+    record = RunRecord(RunId("run_1"), SPEC, BOB, NOW, NOW, 1, pending, (), None, (dave,))
+    assert record.parties == {BOB, SPEC.owner, dave}
+    joined = ApprovalRequest(
+        APPROVAL, RunId("run_1"), ProposalId("prp_1"), DIGEST, ONE_STEP, record.parties
+    )
+    assert approval_status(joined, [decision(0, dave)]) == Invalid(DecisionFault.OWN_WORK)
+    assert approval_status(joined, [decision(0, CAROL)]) == Approved((CAROL,))
+
+
+ON_THE_LIST = {ALICE: "Alice", BOB: "Bob", CAROL: "Carol", DAVE: "Dave"}
+"""Everyone with the Approver role. Alice started the run, so she is its one party."""
+TWO_ANY = ApprovalPolicy(
+    (ApprovalStep("Team approver", AnyApprover()), ApprovalStep("Second approver", AnyApprover()))
+)
+
+
+def sent_to(
+    policy: ApprovalPolicy, decisions: tuple[Decision, ...] = (), on_list=ON_THE_LIST
+) -> list[list[UserId]]:
+    """Who each step was sent to, by id."""
+    steps = steps_view(request(policy), decisions, Sent(LATER, on_list))
+    return [[person.id for person in step.sent_to] for step in steps]
+
+
+def test_a_request_names_no_one_until_it_is_sent():
+    [step] = steps_view(request(), ())
+    assert (step.post, step.sent_to, step.sent_at) == ("waiting", [], None)
+
+
+def test_a_failed_post_names_no_one_and_says_it_failed():
+    [step] = steps_view(request(), (), NotSent())
+    assert (step.post, step.sent_to, step.sent_at) == ("failed", [], None)
+
+
+def test_one_step_is_sent_to_every_approver_but_the_runs_parties():
+    [step] = steps_view(request(), (), Sent(LATER, ON_THE_LIST))
+    assert (step.post, step.sent_at) == ("sent", LATER)
+    assert [(p.id, p.display) for p in step.sent_to] == [
+        (BOB, "Bob"),
+        (CAROL, "Carol"),
+        (DAVE, "Dave"),
+    ]
+
+
+def test_two_approvers_who_share_a_name_are_both_listed_by_id():
+    bob_too = UserId("bob_2")
+    [step] = steps_view(request(), (), Sent(LATER, {**ON_THE_LIST, bob_too: "Bob"}))
+    assert [(p.id, p.display) for p in step.sent_to][:2] == [(BOB, "Bob"), (bob_too, "Bob")]
+    after_bob = sent_to(TWO_ANY, (decision(0, BOB),), {**ON_THE_LIST, bob_too: "Bob"})
+    assert after_bob[1] == [bob_too, CAROL, DAVE], "the other Bob may still say the second yes"
+
+
+def test_two_steps_each_name_their_own_approvers_in_turn():
+    assert sent_to(TWO_ANY) == [[BOB, CAROL, DAVE], [BOB, CAROL, DAVE]]
+    after_bob = sent_to(TWO_ANY, (decision(0, BOB),))
+    assert after_bob == [[BOB, CAROL, DAVE], [CAROL, DAVE]], "Bob can't say yes twice"
+    assert sent_to(TWO_STEPS) == [[BOB, CAROL, DAVE], [CAROL]], "a step that names one"
+    without_carol = {user: name for user, name in ON_THE_LIST.items() if user != CAROL}
+    assert sent_to(TWO_STEPS, on_list=without_carol)[1] == [], "Carol lost the Approver role"
+
+
+@pytest.mark.parametrize("policy", [ONE_STEP, TWO_ANY, TWO_STEPS])
+def test_the_names_are_exactly_who_a_yes_on_the_open_step_would_be_recorded_for(
+    policy: ApprovalPolicy,
+):
+    for decisions in [(), (decision(0, BOB),)][: len(policy.steps)]:
+        status = approval_status(request(policy), decisions)
+        assert isinstance(status, Open)
+        recorded = {
+            user
+            for user in ON_THE_LIST
+            if isinstance(
+                decide(
+                    request(policy),
+                    decisions,
+                    approver(user),
+                    status.next_step,
+                    Verdict.APPROVE,
+                    DIGEST,
+                    NOW,
+                ),
+                Recorded,
+            )
+        }
+        assert set(sent_to(policy, decisions)[status.next_step]) == recorded

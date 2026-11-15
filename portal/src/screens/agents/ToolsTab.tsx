@@ -1,7 +1,7 @@
 import type { CapabilityView, CardView, ToolView } from '../../api/types'
 import { approvalWords, kindLabel } from './agents'
 import { toolHealth } from './capabilities'
-import styles from './AgentsPage.module.css'
+import styles from './HowItWorks.module.css'
 
 function usedBy(tool: ToolView, cards: readonly CardView[]): string {
   // ADR 0025: the Version checker runs these itself on the Software watchlist, and no agent card can.

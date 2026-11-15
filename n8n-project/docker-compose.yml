@@ -1,0 +1,33 @@
+# n8n for the "Cert List expiry reminder" project
+#
+#   data    -> docker volume  n8n_data   (workflows, credentials AND the auto-generated
+#             encryption key - never delete this volume, never set N8N_ENCRYPTION_KEY
+#             to a different value, or stored credentials stop decrypting)
+#   certs   -> ./certs/gateway-ca.pem   (only needed when your network does TLS inspection /
+#             runs a corporate proxy; without the right root CA, HTTPS calls to inspected
+#             sites fail with "SSL Issue". The shared bundle ships NO CA - unpack.ps1
+#             strips this mount + NODE_EXTRA_CA_CERTS when certs\gateway-ca.pem is absent)
+#
+# start:  docker compose -f C:\n8n\docker-compose.yml up -d
+# stop:   docker compose -f C:\n8n\docker-compose.yml down
+# logs:   docker compose -f C:\n8n\docker-compose.yml logs --tail 50
+name: n8n
+
+services:
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:latest
+    container_name: n8n
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      NODE_EXTRA_CA_CERTS: /certs/gateway-ca.pem
+      GENERIC_TIMEZONE: Asia/Singapore
+      TZ: Asia/Singapore
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./certs:/certs:ro
+
+volumes:
+  n8n_data:
+    external: true

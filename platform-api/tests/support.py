@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from platform_api.db import Database
 from platform_api.orchestration import (
     AnyApprover,
     ApprovalPolicy,
@@ -15,7 +16,8 @@ from platform_api.orchestration import (
     WatchedSoftware,
     WatchlistTask,
 )
-from platform_api.shared import Principal, Role, SoftwareId, UseCaseId, UserId
+from platform_api.orchestration.people_store import People
+from platform_api.shared import Principal, Role, SeedPerson, SoftwareId, UseCaseId, UserId
 
 LOCAL_ENV = {
     "AUTH_MODE": "dev",
@@ -43,6 +45,8 @@ ALICE = Principal(UserId("alice"), frozenset({Role.OPERATOR, Role.APPROVER}), "A
 BOB = Principal(UserId("bob"), frozenset({Role.APPROVER}), "Bob")
 CAROL = Principal(UserId("carol"), frozenset({Role.OPERATOR}), "Carol")
 NOW = datetime(2026, 11, 3, 2, 14, tzinfo=UTC)
+TEAM_ZONE = "Asia/Singapore"
+"""The team time zone the tests run in, unless one names another."""
 
 
 @dataclass
@@ -118,3 +122,13 @@ WATCHLIST_SPEC = RunSpec(
 
 def fixture(relative: str) -> Any:
     return json.loads((FIXTURES / relative).read_text())
+
+
+async def schedule_owners_listed(db: Database, *owners: Principal) -> None:
+    """Puts each person on the People list as an Operator, as saving a schedule needs. A schedule
+    whose owner is not an Operator on the list is held, and its slots start no run."""
+    seed = [
+        SeedPerson(p.user_id, f"{p.user_id}@example.test", p.display, p.roles | {Role.OPERATOR})
+        for p in owners
+    ]
+    assert await People(db).seed_dev(seed)

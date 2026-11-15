@@ -1,4 +1,20 @@
 {
+  "parts": [
+    {
+      "text": "Every Friday",
+      "mark": "will_do",
+      "reason": null,
+      "note": null,
+      "choices": []
+    },
+    {
+      "text": "sum up the tickets we closed this week",
+      "mark": "will_do",
+      "reason": null,
+      "note": null,
+      "choices": []
+    }
+  ],
   "answer": "setup_card",
   "name": "Weekly summary of closed tickets",
   "rows": [

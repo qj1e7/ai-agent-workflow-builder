@@ -3,6 +3,12 @@
     "AbilitiesAnswer": {
       "additionalProperties": false,
       "properties": {
+        "how_to_start": {
+          "default": false,
+          "description": "True when the request asks how to start using the app, as \"help\" or \"list the steps\". The Portal then leads with the steps, not the list of what it can do.",
+          "title": "How To Start",
+          "type": "boolean"
+        },
         "kind": {
           "const": "abilities",
           "default": "abilities",
@@ -500,6 +506,12 @@
     "AnswerRequest": {
       "additionalProperties": false,
       "properties": {
+        "changes_workflows": {
+          "default": true,
+          "description": "False when the person asking can't change workflows, as an Approver who isn't an Operator: a change beside a question is crossed, and the question still gets its answer (plan 3.2).",
+          "title": "Changes Workflows",
+          "type": "boolean"
+        },
         "facts": {
           "anyOf": [
             {
@@ -563,6 +575,14 @@
       "properties": {
         "answer": {
           "$ref": "#/$defs/PlannerAnswer"
+        },
+        "parts": {
+          "description": "Every clause of the request, in order, with what happened to it. None is dropped. Thanks and please get no part.",
+          "items": {
+            "$ref": "#/$defs/RequestPart"
+          },
+          "title": "Parts",
+          "type": "array"
         },
         "status": {
           "const": "answered",
@@ -645,12 +665,34 @@
     "CantRow": {
       "additionalProperties": false,
       "properties": {
+        "instead": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "What the person has instead, in one sentence, from the registry entry the part asks for. With it, the note is that entry's one-line can't. None when no entry with those words fits the part.",
+          "title": "Instead"
+        },
         "kind": {
           "$ref": "#/$defs/RowKind"
         },
         "needs": {
-          "$ref": "#/$defs/CantNeed",
-          "description": "new_tool when the part is in a system the platform already reaches, such as Jira or GitHub, so a tool would have to be built and the team decides. new_system when it names a system or source the platform doesn't reach, or names none."
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CantNeed"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "new_tool when the part is in a system the platform already reaches, such as Jira or GitHub, so a tool would have to be built and the team decides. new_system when it names a system or source the platform doesn't reach. None for a part the Planner didn't follow, which names nothing to build."
         },
         "note": {
           "description": "Why it can't do it yet.",
@@ -677,13 +719,18 @@
           "maxLength": 200,
           "title": "Text",
           "type": "string"
+        },
+        "unsupported": {
+          "default": false,
+          "description": "True when the platform won't do the part at all, so there is nothing to ask the team for.",
+          "title": "Unsupported",
+          "type": "boolean"
         }
       },
       "required": [
         "kind",
         "text",
-        "note",
-        "needs"
+        "note"
       ],
       "title": "CantRow",
       "type": "object"
@@ -757,6 +804,19 @@
           "title": "Id",
           "type": "string"
         },
+        "instead": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "For one that isn't ready, what the person has instead, in one sentence, as a can't card says it under its head. None when it is ready, or when nothing comes close.",
+          "title": "Instead"
+        },
         "kind": {
           "$ref": "#/$defs/CapabilityKind"
         },
@@ -774,6 +834,19 @@
           "description": "True for what the platform does by itself, which Home leaves out of its lists.",
           "title": "Platform",
           "type": "boolean"
+        },
+        "short": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The capability in a few words, as the chat's capabilities card names it: one of its lines when it is ready, a name in its Not yet note when it isn't. None for one the card leaves out.",
+          "title": "Short"
         },
         "state": {
           "$ref": "#/$defs/CapabilityState",
@@ -1059,6 +1132,7 @@
         "github.read_releases",
         "jira.search",
         "jira.read_ticket",
+        "confluence.read_page",
         "jira.create_ticket"
       ],
       "type": "string"
@@ -1397,7 +1471,8 @@
       "enum": [
         "jira",
         "github",
-        "teams"
+        "teams",
+        "confluence"
       ],
       "type": "string"
     },
@@ -1535,6 +1610,84 @@
       ],
       "title": "Drafted",
       "type": "object"
+    },
+    "EditAnswer": {
+      "additionalProperties": false,
+      "properties": {
+        "cant": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EditCant"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "only_schedule: it asks for a change other than when the workflow runs, such as renaming it, or pausing it beside another change, which the chat can't make yet. A pause or a resume alone is its own answer. how_often: it asks for a frequency the schedule can't hold, such as monthly. None when the change can be made."
+        },
+        "holds_save": {
+          "default": false,
+          "description": "True when the new schedule names two days, two times or two frequencies. Nothing can be saved until the person asks again without the part with a cross.",
+          "title": "Holds Save",
+          "type": "boolean"
+        },
+        "kind": {
+          "const": "edit",
+          "default": "edit",
+          "title": "Kind",
+          "type": "string"
+        },
+        "schedule": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ScheduleChange"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "When it should run. None when the request asks for no change to when it runs, or for one the schedule can't hold."
+        },
+        "software": {
+          "anyOf": [
+            {
+              "maxLength": 80,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The software those words name, as \"the React check\" names React, so the platform can tell the Software watchlist's check of it. None when they name none.",
+          "title": "Software"
+        },
+        "workflow_words": {
+          "anyOf": [
+            {
+              "maxLength": 80,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The words of the request that name the workflow to change, as it wrote them. The platform matches them to one of the person's workflows by whole words. None when the request names none, as \"make it daily\".",
+          "title": "Workflow Words"
+        }
+      },
+      "title": "EditAnswer",
+      "type": "object"
+    },
+    "EditCant": {
+      "enum": [
+        "only_schedule",
+        "how_often"
+      ],
+      "type": "string"
     },
     "ExampleKind": {
       "enum": [
@@ -2118,6 +2271,18 @@
           "title": "Connections",
           "type": "integer"
         },
+        "declined": {
+          "description": "The person's own test runs an Approver declined.",
+          "minimum": 0,
+          "title": "Declined",
+          "type": "integer"
+        },
+        "questions": {
+          "description": "Questions Approvers asked the person on requests waiting for a yes.",
+          "minimum": 0,
+          "title": "Questions",
+          "type": "integer"
+        },
         "replies": {
           "minimum": 0,
           "title": "Replies",
@@ -2129,7 +2294,7 @@
           "type": "integer"
         },
         "total": {
-          "description": "The count Home shows under Needs you.",
+          "description": "The count Home shows under Needs you, the sum of the counts above.",
           "minimum": 0,
           "title": "Total",
           "type": "integer"
@@ -2142,6 +2307,8 @@
         "connections",
         "addresses",
         "replies",
+        "declined",
+        "questions",
         "total"
       ],
       "title": "NeedsYouFact",
@@ -2264,16 +2431,87 @@
       "title": "PartFits",
       "type": "object"
     },
+    "PartMark": {
+      "enum": [
+        "will_do",
+        "cant",
+        "question"
+      ],
+      "type": "string"
+    },
+    "PartReason": {
+      "enum": [
+        "not_followed",
+        "cant_do",
+        "ask_on_its_own",
+        "one_day",
+        "one_time",
+        "one_frequency",
+        "own_time",
+        "skip_approval",
+        "with_a_yes",
+        "needs_the_rest",
+        "how_many_days",
+        "only_schedule",
+        "how_often"
+      ],
+      "type": "string"
+    },
+    "PauseAnswer": {
+      "additionalProperties": false,
+      "description": "A request to pause one of the person's workflows, and nothing else.",
+      "properties": {
+        "kind": {
+          "const": "pause",
+          "default": "pause",
+          "title": "Kind",
+          "type": "string"
+        },
+        "software": {
+          "anyOf": [
+            {
+              "maxLength": 80,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The software those words name, as \"the React check\" names React. None when they name none.",
+          "title": "Software"
+        },
+        "workflow_words": {
+          "anyOf": [
+            {
+              "maxLength": 80,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The words of the request that name the workflow, as it wrote them. The platform matches them to one of the person's workflows by whole words. None for \"it\", so the person picks one.",
+          "title": "Workflow Words"
+        }
+      },
+      "title": "PauseAnswer",
+      "type": "object"
+    },
     "PlannerAnswer": {
       "discriminator": {
         "mapping": {
           "abilities": "#/$defs/AbilitiesAnswer",
           "cant": "#/$defs/CantAnswer",
           "check_workflows": "#/$defs/CheckWorkflowsAnswer",
+          "edit": "#/$defs/EditAnswer",
           "needs_me": "#/$defs/NeedsMeAnswer",
           "part": "#/$defs/PartAnswer",
+          "pause": "#/$defs/PauseAnswer",
           "question": "#/$defs/QuestionAnswer",
           "refused": "#/$defs/RefusedAnswer",
+          "resume": "#/$defs/ResumeAnswer",
           "setup_card": "#/$defs/SetupCardAnswer",
           "watchlist": "#/$defs/WatchlistAnswer",
           "which_software": "#/$defs/WhichSoftwareAnswer",
@@ -2314,6 +2552,15 @@
         },
         {
           "$ref": "#/$defs/QuestionAnswer"
+        },
+        {
+          "$ref": "#/$defs/EditAnswer"
+        },
+        {
+          "$ref": "#/$defs/PauseAnswer"
+        },
+        {
+          "$ref": "#/$defs/ResumeAnswer"
         }
       ]
     },
@@ -2321,6 +2568,20 @@
       "additionalProperties": false,
       "description": "What the platform holds for the signed-in person at the moment of the question. A section\nthat is None was not sent, and the answer may not claim to have looked at it.",
       "properties": {
+        "left_out_workflows": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "How many more workflows the person has whose names were not sent at all, to keep the facts short. None when every name was sent.",
+          "title": "Left Out Workflows"
+        },
         "needs_you": {
           "anyOf": [
             {
@@ -2331,6 +2592,23 @@
             }
           ],
           "default": null
+        },
+        "other_workflows": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/WorkflowName"
+              },
+              "maxItems": 250,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The names of the person's other workflows, sent when they have more than the workflows above. Their state and last run were not read.",
+          "title": "Other Workflows"
         },
         "watchlist": {
           "anyOf": [
@@ -2347,6 +2625,18 @@
           ],
           "default": null,
           "title": "Watchlist"
+        },
+        "watchlist_schedule": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WatchlistScheduleFact"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "When the Software watchlist checks all its software. None when it is off or was not read, so a time asked for one software is a cross."
         },
         "workflows": {
           "anyOf": [
@@ -2522,6 +2812,41 @@
       "title": "QuestionAnswer",
       "type": "object"
     },
+    "ReadReleasesRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "repo": {
+          "$ref": "#/$defs/RepoName",
+          "description": "The public GitHub repository, as owner/name."
+        },
+        "tag_pattern": {
+          "$ref": "#/$defs/TagPattern"
+        }
+      },
+      "required": [
+        "repo",
+        "tag_pattern"
+      ],
+      "title": "ReadReleasesRequest",
+      "type": "object"
+    },
+    "ReadReleasesResult": {
+      "discriminator": {
+        "mapping": {
+          "not_read": "#/$defs/ReleasesNotRead",
+          "read": "#/$defs/ReleasesRead"
+        },
+        "propertyName": "status"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/ReleasesRead"
+        },
+        {
+          "$ref": "#/$defs/ReleasesNotRead"
+        }
+      ]
+    },
     "RefusedAnswer": {
       "additionalProperties": false,
       "properties": {
@@ -2544,7 +2869,7 @@
           "type": "string"
         },
         "said": {
-          "description": "The words that asked to skip a yes, as the request wrote them, so the refusal names the part. Empty only when the model said so without quoting them.",
+          "description": "The words that asked to skip a yes, as the request wrote them, so the refusal names the part.",
           "maxLength": 200,
           "title": "Said",
           "type": "string"
@@ -2557,9 +2882,199 @@
       "title": "RefusedAnswer",
       "type": "object"
     },
+    "ReleaseRead": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Name"
+        },
+        "published_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Published At"
+        },
+        "tag": {
+          "title": "Tag",
+          "type": "string"
+        }
+      },
+      "required": [
+        "tag",
+        "name",
+        "published_at"
+      ],
+      "title": "ReleaseRead",
+      "type": "object"
+    },
+    "ReleasesNotRead": {
+      "additionalProperties": false,
+      "properties": {
+        "message": {
+          "description": "What went wrong with GitHub, in plain words.",
+          "maxLength": 300,
+          "title": "Message",
+          "type": "string"
+        },
+        "retryable": {
+          "description": "True when trying again later may work.",
+          "title": "Retryable",
+          "type": "boolean"
+        },
+        "status": {
+          "const": "not_read",
+          "default": "not_read",
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "message",
+        "retryable"
+      ],
+      "title": "ReleasesNotRead",
+      "type": "object"
+    },
+    "ReleasesRead": {
+      "additionalProperties": false,
+      "properties": {
+        "releases": {
+          "description": "The repository's stable releases that the tag rule counts, newest first, as GitHub lists them. Empty when it has none.",
+          "items": {
+            "$ref": "#/$defs/ReleaseRead"
+          },
+          "maxItems": 30,
+          "title": "Releases",
+          "type": "array"
+        },
+        "status": {
+          "const": "read",
+          "default": "read",
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "releases"
+      ],
+      "title": "ReleasesRead",
+      "type": "object"
+    },
     "RepoName": {
       "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9._-]{1,100}$",
       "type": "string"
+    },
+    "RequestPart": {
+      "additionalProperties": false,
+      "description": "One clause of the request and what the answer does with it (plan 4.1).",
+      "properties": {
+        "choices": {
+          "description": "For one_day and one_time, each day or time the request named, in its own words, for the person to choose one.",
+          "items": {
+            "maxLength": 40,
+            "type": "string"
+          },
+          "title": "Choices",
+          "type": "array"
+        },
+        "mark": {
+          "$ref": "#/$defs/PartMark",
+          "description": "will_do for a part the answer does, cant for one it doesn't, and question for the one thing the answer asks."
+        },
+        "note": {
+          "anyOf": [
+            {
+              "maxLength": 300,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "For cant_do, why, in the registry's words.",
+          "title": "Note"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PartReason"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Why, for a cant: not_followed (no rule read it), cant_do (see note), ask_on_its_own (a question asked beside a request, or a request beside a question), one_day, one_time or one_frequency (a schedule with two, see choices), own_time (a time on a watch request), skip_approval (it asks to skip a yes), with_a_yes (it waits until the request is set up with a yes), needs_the_rest (it can't run without a part that can't be done), how_many_days (a question: the words name a span of days but no number), only_schedule (a change to a workflow other than when it runs, which the chat can't make yet), how_often (a frequency the schedule can't hold, such as monthly). None for will_do."
+        },
+        "text": {
+          "description": "The request's own words: the whole clause, or, in a clause the Planner partly read, only the words it didn't read.",
+          "maxLength": 200,
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text",
+        "mark"
+      ],
+      "title": "RequestPart",
+      "type": "object"
+    },
+    "ResumeAnswer": {
+      "additionalProperties": false,
+      "description": "A request to turn a paused workflow back on, and nothing else.",
+      "properties": {
+        "kind": {
+          "const": "resume",
+          "default": "resume",
+          "title": "Kind",
+          "type": "string"
+        },
+        "software": {
+          "anyOf": [
+            {
+              "maxLength": 80,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The software those words name, as \"the React check\" names React. None when they name none.",
+          "title": "Software"
+        },
+        "workflow_words": {
+          "anyOf": [
+            {
+              "maxLength": 80,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The words of the request that name the workflow, as it wrote them. The platform matches them to one of the person's workflows by whole words. None for \"it\", so the person picks one.",
+          "title": "Workflow Words"
+        }
+      },
+      "title": "ResumeAnswer",
+      "type": "object"
     },
     "RoomAddressee": {
       "additionalProperties": false,
@@ -2591,6 +3106,67 @@
         "cant_do"
       ],
       "type": "string"
+    },
+    "ScheduleChange": {
+      "additionalProperties": false,
+      "description": "When a request asks a workflow it names to run, in the schedule's own terms. A part it\ndoesn't name is None, so the saved one stays.",
+      "properties": {
+        "at": {
+          "anyOf": [
+            {
+              "pattern": "^(?:[01]\\d|2[0-3]):[0-5]\\d$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The time it asks for, 24-hour, as 09:00.",
+          "title": "At"
+        },
+        "day": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WatchDay"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The day it asks for, if it names one."
+        },
+        "hour": {
+          "anyOf": [
+            {
+              "maximum": 12,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "An hour it names with no am or pm, as \"at 9\", which could be morning or evening, so the person picks one. Never guessed.",
+          "title": "Hour"
+        },
+        "time_unclear": {
+          "default": false,
+          "description": "A time it names that the schedule can't read, as \"in the afternoon\" or \"an hour later\": the person picks one. Never guessed.",
+          "title": "Time Unclear",
+          "type": "boolean"
+        },
+        "weekly": {
+          "default": false,
+          "description": "True for once a week with no day named. The saved day stays when it is one day of the week, and the person picks one when it isn't.",
+          "title": "Weekly",
+          "type": "boolean"
+        }
+      },
+      "title": "ScheduleChange",
+      "type": "object"
     },
     "SetupCardAnswer": {
       "additionalProperties": false,
@@ -3067,6 +3643,7 @@
         "github.read_releases",
         "jira.search",
         "jira.read_ticket",
+        "confluence.read_page",
         "jira.create_ticket",
         "packages.read_versions",
         "packages.find_vulnerabilities"
@@ -3255,6 +3832,20 @@
       "enum": [
         "OSV",
         "NVD"
+      ],
+      "type": "string"
+    },
+    "WatchDay": {
+      "enum": [
+        "every_day",
+        "weekdays",
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday"
       ],
       "type": "string"
     },
@@ -3491,6 +4082,26 @@
       "title": "WatchlistInputs",
       "type": "object"
     },
+    "WatchlistScheduleFact": {
+      "additionalProperties": false,
+      "properties": {
+        "at": {
+          "description": "24-hour time, as 09:00.",
+          "pattern": "^(?:[01]\\d|2[0-3]):[0-5]\\d$",
+          "title": "At",
+          "type": "string"
+        },
+        "day": {
+          "$ref": "#/$defs/WatchDay"
+        }
+      },
+      "required": [
+        "day",
+        "at"
+      ],
+      "title": "WatchlistScheduleFact",
+      "type": "object"
+    },
     "WhichSoftwareAnswer": {
       "additionalProperties": false,
       "properties": {
@@ -3568,12 +4179,11 @@
           "title": "Last Run At"
         },
         "name": {
-          "maxLength": 80,
-          "title": "Name",
-          "type": "string"
+          "$ref": "#/$defs/WorkflowName"
         },
         "state": {
           "enum": [
+            "draft",
             "on",
             "paused"
           ],
@@ -3589,6 +4199,10 @@
       ],
       "title": "WorkflowFact",
       "type": "object"
+    },
+    "WorkflowName": {
+      "maxLength": 80,
+      "type": "string"
     }
   },
   "additionalProperties": false,
@@ -3641,6 +4255,12 @@
     "planner_choose_result": {
       "$ref": "#/$defs/ChooseResult"
     },
+    "releases_read_request": {
+      "$ref": "#/$defs/ReadReleasesRequest"
+    },
+    "releases_read_result": {
+      "$ref": "#/$defs/ReadReleasesResult"
+    },
     "software_find_request": {
       "$ref": "#/$defs/FindSoftwareRequest"
     },
@@ -3675,6 +4295,8 @@
     "planner_choose_result",
     "software_find_request",
     "software_find_result",
+    "releases_read_request",
+    "releases_read_result",
     "planner_answer_request",
     "planner_answer_result",
     "planner_check_part_request",

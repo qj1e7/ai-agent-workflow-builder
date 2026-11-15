@@ -237,13 +237,18 @@ class WatchlistInputs(WireModel):
 
 
 type CardToolId = Literal[
-    "github.read_releases", "jira.search", "jira.read_ticket", "jira.create_ticket"
+    "github.read_releases",
+    "jira.search",
+    "jira.read_ticket",
+    "confluence.read_page",
+    "jira.create_ticket",
 ]
 """The tools an agent card can use. The runtime gives each one to the model."""
 type ToolId = Literal[
     "github.read_releases",
     "jira.search",
     "jira.read_ticket",
+    "confluence.read_page",
     "jira.create_ticket",
     "packages.read_versions",
     "packages.find_vulnerabilities",
@@ -609,7 +614,7 @@ class ToolList(WireModel):
 
 type CapabilityKind = Literal["read", "write", "notify", "none"]
 type CapabilityState = Literal["ready", "planned", "unsupported"]
-type ConnectionId = Literal["jira", "github", "teams"]
+type ConnectionId = Literal["jira", "github", "teams", "confluence"]
 type ExampleKind = Literal["automate", "monitor", "learn"]
 
 
@@ -640,6 +645,17 @@ class CapabilitySpec(WireModel):
         "creating the upgrade ticket. Home's lists show only these."
     )
     tools: list[ToolId] = Field(description="The tools that do it. Empty unless it is ready.")
+    short: str | None = Field(
+        default=None,
+        description="The capability in a few words, as the chat's capabilities card names it: one "
+        "of its lines when it is ready, a name in its Not yet note when it isn't. None for one the "
+        "card leaves out.",
+    )
+    instead: str | None = Field(
+        default=None,
+        description="For one that isn't ready, what the person has instead, in one sentence, as a "
+        "can't card says it under its head. None when it is ready, or when nothing comes close.",
+    )
 
 
 class ExampleSpec(WireModel):
@@ -856,6 +872,35 @@ type FindSoftwareResult = Annotated[
 ]
 
 
+class ReadReleasesRequest(WireModel):
+    repo: RepoName = Field(description="The public GitHub repository, as owner/name.")
+    tag_pattern: TagPattern
+
+
+class ReleaseRead(WireModel):
+    tag: str
+    name: str | None
+    published_at: str | None
+
+
+class ReleasesRead(WireModel):
+    status: Literal["read"] = "read"
+    releases: list[ReleaseRead] = Field(
+        max_length=30,
+        description="The repository's stable releases that the tag rule counts, newest first, "
+        "as GitHub lists them. Empty when it has none.",
+    )
+
+
+class ReleasesNotRead(WireModel):
+    status: Literal["not_read"] = "not_read"
+    message: str = Field(max_length=300, description="What went wrong with GitHub, in plain words.")
+    retryable: bool = Field(description="True when trying again later may work.")
+
+
+type ReadReleasesResult = Annotated[ReleasesRead | ReleasesNotRead, Field(discriminator="status")]
+
+
 type FactSection = Literal["watchlist", "workflows", "needs_you"]
 
 
@@ -893,9 +938,18 @@ class WatchedFact(WireModel):
     )
 
 
+WORKFLOW_FACTS: Final = 50
+OTHER_WORKFLOWS: Final = 250
+"""At the 80-character limit, 250 names are about 21 KB of the question's facts, less than a full
+watchlist section. Past it the facts count the names left out, and the Planner says it read only
+some."""
+
+type WorkflowName = Annotated[str, StringConstraints(max_length=80)]
+
+
 class WorkflowFact(WireModel):
-    name: str = Field(max_length=80)
-    state: Literal["on", "paused"]
+    name: WorkflowName
+    state: Literal["draft", "on", "paused"]
     last_run: str | None = Field(
         max_length=40, description="The state of the newest run, in the words the Portal uses."
     )
@@ -909,7 +963,34 @@ class NeedsYouFact(WireModel):
     connections: int = Field(ge=0)
     addresses: int = Field(ge=0)
     replies: int = Field(ge=0)
-    total: int = Field(ge=0, description="The count Home shows under Needs you.")
+    declined: int = Field(ge=0, description="The person's own test runs an Approver declined.")
+    questions: int = Field(
+        ge=0, description="Questions Approvers asked the person on requests waiting for a yes."
+    )
+    total: int = Field(
+        ge=0, description="The count Home shows under Needs you, the sum of the counts above."
+    )
+
+
+type WatchDay = Literal[
+    "every_day",
+    "weekdays",
+    "monday",
+    "tuesday",
+    "wednesday",
+    "thursday",
+    "friday",
+    "saturday",
+    "sunday",
+]
+
+
+CLOCK_PATTERN: Final = r"^(?:[01]\d|2[0-3]):[0-5]\d$"
+
+
+class WatchlistScheduleFact(WireModel):
+    day: WatchDay
+    at: str = Field(pattern=CLOCK_PATTERN, description="24-hour time, as 09:00.")
 
 
 class PlannerFacts(WireModel):
@@ -917,8 +998,33 @@ class PlannerFacts(WireModel):
     that is None was not sent, and the answer may not claim to have looked at it."""
 
     watchlist: list[WatchedFact] | None = Field(default=None, max_length=100)
-    workflows: list[WorkflowFact] | None = Field(default=None, max_length=50)
+    workflows: list[WorkflowFact] | None = Field(default=None, max_length=WORKFLOW_FACTS)
+    other_workflows: list[WorkflowName] | None = Field(
+        default=None,
+        max_length=OTHER_WORKFLOWS,
+        description="The names of the person's other workflows, sent when they have more than "
+        "the workflows above. Their state and last run were not read.",
+    )
+    left_out_workflows: int | None = Field(
+        default=None,
+        gt=0,
+        description="How many more workflows the person has whose names were not sent at all, "
+        "to keep the facts short. None when every name was sent.",
+    )
     needs_you: NeedsYouFact | None = None
+    watchlist_schedule: WatchlistScheduleFact | None = Field(
+        default=None,
+        description="When the Software watchlist checks all its software. None when it is off "
+        "or was not read, so a time asked for one software is a cross.",
+    )
+
+    def workflow_names(self) -> list[str]:
+        """Every workflow's name the platform sent, those with a last run and the others."""
+        return [w.name for w in self.workflows or []] + list(self.other_workflows or [])
+
+    def workflows_in_all(self) -> int:
+        """How many workflows the person has, named in the facts or not."""
+        return len(self.workflow_names()) + (self.left_out_workflows or 0)
 
 
 class PreviousTurn(WireModel):
@@ -954,6 +1060,12 @@ class AnswerRequest(WireModel):
         description="Read by the platform when the request arrives. Only a question about the "
         "person's own data uses it. Without it, such a question gets the fixed fallback.",
     )
+    changes_workflows: bool = Field(
+        default=True,
+        description="False when the person asking can't change workflows, as an Approver who "
+        "isn't an Operator: a change beside a question is crossed, and the question still gets "
+        "its answer (plan 3.2).",
+    )
 
 
 type CantNeed = Literal["new_tool", "new_system"]
@@ -963,16 +1075,30 @@ class CantRow(WireModel):
     kind: RowKind
     text: str = Field(max_length=200, description="The part the platform can't do, in plain words.")
     note: str = Field(max_length=300, description="Why it can't do it yet.")
-    needs: CantNeed = Field(
+    needs: CantNeed | None = Field(
+        default=None,
         description="new_tool when the part is in a system the platform already reaches, such "
         "as Jira or GitHub, so a tool would have to be built and the team decides. new_system "
-        "when it names a system or source the platform doesn't reach, or names none."
+        "when it names a system or source the platform doesn't reach. None for a part the "
+        "Planner didn't follow, which names nothing to build.",
     )
     system: str | None = Field(
         default=None,
         max_length=40,
         description="The system the part names, in plain words, such as Jira or email. None "
         "when it names none.",
+    )
+    instead: str | None = Field(
+        default=None,
+        max_length=200,
+        description="What the person has instead, in one sentence, from the registry entry the "
+        "part asks for. With it, the note is that entry's one-line can't. None when no entry with "
+        "those words fits the part.",
+    )
+    unsupported: bool = Field(
+        default=False,
+        description="True when the platform won't do the part at all, so there is nothing to ask "
+        "the team for.",
     )
 
 
@@ -1053,7 +1179,7 @@ class RefusedAnswer(WireModel):
     said: str = Field(
         max_length=200,
         description="The words that asked to skip a yes, as the request wrote them, so the "
-        "refusal names the part. Empty only when the model said so without quoting them.",
+        "refusal names the part.",
     )
     rest: str = Field(
         max_length=2000,
@@ -1083,6 +1209,11 @@ class NeedsMeAnswer(WireModel):
 
 class AbilitiesAnswer(WireModel):
     kind: Literal["abilities"] = "abilities"
+    how_to_start: bool = Field(
+        default=False,
+        description='True when the request asks how to start using the app, as "help" or '
+        '"list the steps". The Portal then leads with the steps, not the list of what it can do.',
+    )
 
 
 class QuestionAnswer(WireModel):
@@ -1104,6 +1235,112 @@ class QuestionAnswer(WireModel):
     )
 
 
+class _OnOrOff(WireModel):
+    workflow_words: str | None = Field(
+        default=None,
+        max_length=80,
+        description="The words of the request that name the workflow, as it wrote them. The "
+        'platform matches them to one of the person\'s workflows by whole words. None for "it", '
+        "so the person picks one.",
+    )
+    software: str | None = Field(
+        default=None,
+        max_length=80,
+        description='The software those words name, as "the React check" names React. None when '
+        "they name none.",
+    )
+
+
+class PauseAnswer(_OnOrOff):
+    """A request to pause one of the person's workflows, and nothing else."""
+
+    kind: Literal["pause"] = "pause"
+
+
+class ResumeAnswer(_OnOrOff):
+    """A request to turn a paused workflow back on, and nothing else."""
+
+    kind: Literal["resume"] = "resume"
+
+
+type EditCant = Literal["only_schedule", "how_often"]
+
+
+class ScheduleChange(WireModel):
+    """When a request asks a workflow it names to run, in the schedule's own terms. A part it
+    doesn't name is None, so the saved one stays."""
+
+    day: WatchDay | None = Field(default=None, description="The day it asks for, if it names one.")
+    weekly: bool = Field(
+        default=False,
+        description="True for once a week with no day named. The saved day stays when it is one "
+        "day of the week, and the person picks one when it isn't.",
+    )
+    at: str | None = Field(
+        default=None, pattern=CLOCK_PATTERN, description="The time it asks for, 24-hour, as 09:00."
+    )
+    hour: int | None = Field(
+        default=None,
+        ge=1,
+        le=12,
+        description='An hour it names with no am or pm, as "at 9", which could be morning or '
+        "evening, so the person picks one. Never guessed.",
+    )
+    time_unclear: bool = Field(
+        default=False,
+        description='A time it names that the schedule can\'t read, as "in the afternoon" or "an '
+        'hour later": the person picks one. Never guessed.',
+    )
+
+    @model_validator(mode="after")
+    def _one_of_each(self) -> ScheduleChange:
+        if self.day is not None and self.weekly:
+            raise ValueError("A day named is not weekly with no day")
+        if sum((self.at is not None, self.hour is not None, self.time_unclear)) > 1:
+            raise ValueError("A time is named once")
+        return self
+
+
+class EditAnswer(WireModel):
+    kind: Literal["edit"] = "edit"
+    workflow_words: str | None = Field(
+        default=None,
+        max_length=80,
+        description="The words of the request that name the workflow to change, as it wrote "
+        "them. The platform matches them to one of the person's workflows by whole words. None "
+        'when the request names none, as "make it daily".',
+    )
+    software: str | None = Field(
+        default=None,
+        max_length=80,
+        description='The software those words name, as "the React check" names React, so the '
+        "platform can tell the Software watchlist's check of it. None when they name none.",
+    )
+    schedule: ScheduleChange | None = Field(
+        default=None,
+        description="When it should run. None when the request asks for no change to when it "
+        "runs, or for one the schedule can't hold.",
+    )
+    cant: EditCant | None = Field(
+        default=None,
+        description="only_schedule: it asks for a change other than when the workflow runs, "
+        "such as renaming it, or pausing it beside another change, which the chat can't make "
+        "yet. A pause or a resume alone is its own answer. how_often: it asks for "
+        "a frequency the schedule can't hold, such as monthly. None when the change can be made.",
+    )
+    holds_save: bool = Field(
+        default=False,
+        description="True when the new schedule names two days, two times or two frequencies. "
+        "Nothing can be saved until the person asks again without the part with a cross.",
+    )
+
+    @model_validator(mode="after")
+    def _a_cant_proposes_nothing(self) -> EditAnswer:
+        if self.cant is not None and (self.schedule is not None or self.holds_save):
+            raise ValueError("An edit the chat can't make proposes no schedule")
+        return self
+
+
 type PlannerAnswer = Annotated[
     SetupCardAnswer
     | PartAnswer
@@ -1115,14 +1352,75 @@ type PlannerAnswer = Annotated[
     | WhyStoppedAnswer
     | NeedsMeAnswer
     | AbilitiesAnswer
-    | QuestionAnswer,
+    | QuestionAnswer
+    | EditAnswer
+    | PauseAnswer
+    | ResumeAnswer,
     Field(discriminator="kind"),
 ]
+
+
+type PartMark = Literal["will_do", "cant", "question"]
+type PartReason = Literal[
+    "not_followed",
+    "cant_do",
+    "ask_on_its_own",
+    "one_day",
+    "one_time",
+    "one_frequency",
+    "own_time",
+    "skip_approval",
+    "with_a_yes",
+    "needs_the_rest",
+    "how_many_days",
+    "only_schedule",
+    "how_often",
+]
+
+
+class RequestPart(WireModel):
+    """One clause of the request and what the answer does with it (plan 4.1)."""
+
+    text: str = Field(
+        max_length=200,
+        description="The request's own words: the whole clause, or, in a clause the Planner "
+        "partly read, only the words it didn't read.",
+    )
+    mark: PartMark = Field(
+        description="will_do for a part the answer does, cant for one it doesn't, and question "
+        "for the one thing the answer asks."
+    )
+    reason: PartReason | None = Field(
+        default=None,
+        description="Why, for a cant: not_followed (no rule read it), cant_do (see note), "
+        "ask_on_its_own (a question asked beside a request, or a request beside a question), "
+        "one_day, one_time or one_frequency (a schedule with two, see choices), own_time (a "
+        "time on a watch "
+        "request), skip_approval (it asks to skip a yes), with_a_yes (it waits until the "
+        "request is set up with a yes), needs_the_rest (it can't run without a part that "
+        "can't be done), how_many_days (a question: the words name a span of days but no "
+        "number), only_schedule (a change to a workflow other than when it runs, which the "
+        "chat can't make yet), how_often (a frequency the schedule can't hold, such as "
+        "monthly). None for will_do.",
+    )
+    note: str | None = Field(
+        default=None, max_length=300, description="For cant_do, why, in the registry's words."
+    )
+    choices: list[Annotated[str, Field(max_length=40)]] = Field(
+        default_factory=list[str],
+        description="For one_day and one_time, each day or time the request named, in its own "
+        "words, for the person to choose one.",
+    )
 
 
 class Answered(WireModel):
     status: Literal["answered"] = "answered"
     answer: PlannerAnswer
+    parts: list[RequestPart] = Field(
+        default_factory=list[RequestPart],
+        description="Every clause of the request, in order, with what happened to it. None is "
+        "dropped. Thanks and please get no part.",
+    )
 
 
 type AnswerResult = Annotated[Answered | ModelProblem, Field(discriminator="status")]
@@ -1184,6 +1482,8 @@ class AgentApiSchema(WireModel):
     planner_choose_result: ChooseResult
     software_find_request: FindSoftwareRequest
     software_find_result: FindSoftwareResult
+    releases_read_request: ReadReleasesRequest
+    releases_read_result: ReadReleasesResult
     planner_answer_request: AnswerRequest
     planner_answer_result: AnswerResult
     planner_check_part_request: CheckPartRequest

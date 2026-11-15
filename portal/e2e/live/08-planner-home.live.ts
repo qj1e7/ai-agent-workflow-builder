@@ -8,12 +8,16 @@ import { connectMockModel } from './support/settings'
 import { SettingsApi } from './support/settings'
 import { REDIS, type Backend } from './support/stack'
 import { expect, test } from './support/test'
-import { devContext, OUT, shot } from './support/ui'
+import { devContext, needsOnWorkflows, OUT, showEvery, shot } from './support/ui'
+import { askAndWait, editCard, newestAnswer, rereadOf, scheduledWorkflow, shown, tag, versionsOf } from './support/edit'
 
-const GREETING = /^Good (morning|afternoon|evening)! Alice$/
+/** The sketch's question, Alice's Home heading; her greeting is the line above it. */
+const ALICE_HEADING = 'What should run by itself?'
 const OFFLINE = 'I can’t read new requests until an AI model is connected'
+/** A request the Planner answers with a set-up card. */
+const SUMMARY = 'Find bug tickets in MOCK with no update for 10 days and create one follow-up ticket that lists them'
 
-const box = (page: Page) => page.getByLabel('Ask the Planner about software versions')
+const box = (page: Page) => page.getByLabel('Ask, or describe a task')
 const thread = (page: Page) => page.getByRole('list', { name: 'Conversation with the Planner' })
 const polite = (page: Page) => page.locator('[aria-live="polite"]')
 const main = (page: Page) => page.getByRole('main')
@@ -44,18 +48,81 @@ async function jiraDown(backend: Backend): Promise<() => Promise<void>> {
   }
 }
 
+/** The number every place shows for Needs you, read from the platform: each kind it counts, added up. */
+async function platformNeeds(backend: Backend, user: string): Promise<number> {
+  const home = await backend.get<{ approvals_total: number; stopped_total: number; declined_total: number; questions_for_me_total: number; confirmations: unknown[]; connections: unknown[]; addresses: unknown[]; replied: unknown[] }>(user, '/api/v1/home')
+  return home.approvals_total + home.stopped_total + home.declined_total + home.questions_for_me_total + home.confirmations.length + home.connections.length + home.addresses.length + home.replied.length
+}
+
+/** Alice asks the team for something and bob replies, so the reply sits in her Needs you until she opens it. */
+async function teamReplied(backend: Backend): Promise<void> {
+  const made = await backend.post<{ request_id: string }>('alice', '/api/v1/team-requests', { kind: 'ask_the_team', about: { capability: 'email.send' }, note: `Please add email ${randomUUID().slice(0, 6)}` }, { 'Idempotency-Key': randomUUID() }, [201])
+  await backend.post('bob', `/api/v1/team-requests/${made.request_id}/replies`, { text: 'Not on the plan yet, we will tell you.' }, undefined, [201])
+}
+
+/** A draft alice saved from a set-up card, which Resume reopens as that card. */
+async function cardDraft(backend: Backend, label: string): Promise<string> {
+  const id = randomUUID()
+  const content = {
+    name: `${label} ${id.slice(0, 6)}`,
+    form: {
+      step: 2,
+      text: `Every Monday, list the tickets closed last week ${id.slice(0, 6)}`,
+      name: '',
+      rows: [
+        { kind: 'schedule', text: 'Every Monday', state: 'understood', note: null },
+        { kind: 'look_for', text: 'tickets closed last week in MOCK', state: 'understood', note: null },
+        { kind: 'do', text: 'Create one ticket that lists them', state: 'understood', note: null },
+        { kind: 'where', text: 'Jira project MOCK', state: 'understood', note: null },
+      ],
+      typed: {},
+      when: { often: '', at: '' },
+    },
+    plan: null,
+  }
+  const saved = await backend.send('PUT', 'alice', `/api/v1/drafts/${id}`, { step: 2, content })
+  expect(saved.status, `alice saves a draft: ${JSON.stringify(saved.body)}`).toBe(200)
+  return id
+}
+
+const draftIds = async (backend: Backend): Promise<string[]> => (await backend.get<{ drafts: { draft_id: string }[] }>('alice', '/api/v1/drafts')).drafts.map((draft) => draft.draft_id)
+
+/** Deletes the drafts a test's cards saved as newer answers replaced them, so alice's draft limit never stops a later test. */
+async function forgetNewDrafts(backend: Backend, before: readonly string[]): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 1_500))
+  for (const id of await draftIds(backend)) if (!before.includes(id)) await backend.send('DELETE', 'alice', `/api/v1/drafts/${id}`)
+}
+
+/** Every draft saved from this page, with the person it was saved as. */
+function draftSaves(page: Page): string[] {
+  const saves: string[] = []
+  page.on('request', (request) => {
+    if (request.method() === 'PUT' && /\/api\/v1\/drafts\//.test(request.url())) saves.push(request.headers()['x-dev-user'] ?? 'unknown')
+  })
+  return saves
+}
+
 async function noSideways(page: Page): Promise<void> {
   const widths = await page.evaluate(() => [document.documentElement.scrollWidth, document.documentElement.clientWidth])
   expect(widths[0], 'no sideways scroll').toBeLessThanOrEqual(widths[1] ?? 0)
 }
 
-async function tooSmall(controls: Locator): Promise<string[]> {
+/** The controls under 44 px tall. The sketch's chips (36 px), Send (40 px) and the needs strip's Open and “N more” (32 px) are drawn smaller on purpose, so they are left out by name. */
+async function tooSmall(controls: Locator, sketchSized: readonly string[] = []): Promise<string[]> {
   const small: string[] = []
   for (const control of await controls.all()) {
     const size = await control.boundingBox()
-    if (size && size.height < 43.5) small.push(`${(await control.innerText()).trim() || (await control.getAttribute('aria-label')) || '?'} (${Math.round(size.height)} px)`)
+    const name = (await control.innerText()).trim() || (await control.getAttribute('aria-label')) || '?'
+    if (size && size.height < 43.5 && !sketchSized.includes(name)) small.push(`${name} (${Math.round(size.height)} px)`)
   }
   return small
+}
+
+/** The names of the controls the sketch draws under 44 px: the chips, Send, and the strip's Open and “N more”. */
+async function sketchSized(page: Page): Promise<string[]> {
+  const chips = await page.getByRole('group', { name: /^(Suggestions|Starting points)$/ }).getByRole('button').allInnerTexts()
+  const strip = await page.getByRole('region', { name: 'Needs you', exact: true }).locator('a, button').allInnerTexts()
+  return [...chips, ...strip, 'Send'].map((name) => name.trim())
 }
 
 test.describe('with no AI model', () => {
@@ -63,7 +130,7 @@ test.describe('with no AI model', () => {
     await modelOff(String(baseURL))
   })
 
-  test('alice’s Home says it can’t read new requests, offers Connect a model, and keeps the lists and Needs you', async ({ browser, backend }, info) => {
+  test('alice’s Home says it can’t read new requests, offers Connect a model, and keeps the lists and Needs you, the model row first and counted (FIX-offline-count)', async ({ browser, backend }, info) => {
     await backend.waitingRun('alice')
     const repair = await jiraDown(backend)
     const context = await devContext(browser, 'alice')
@@ -75,8 +142,14 @@ test.describe('with no AI model', () => {
     await expect(main(page).getByRole('link', { name: 'Connect a model' })).toHaveAttribute('href', '/settings?tab=model')
     await expect(main(page).getByRole('heading', { name: 'I can', exact: true })).toBeVisible()
     await expect(main(page).getByRole('button', { name: 'Ask the team for something new' }), 'Home offers no request for the team').toHaveCount(0)
-    await expect(page.getByRole('list', { name: 'Needs you' })).toBeVisible()
-    await expect(page.locator('li[data-home-item="connection:model"]'), 'the hero already offers Connect a model').toHaveCount(0)
+    const needs = page.getByRole('list', { name: 'Needs you' })
+    await expect(needs.locator('li[data-home-item]').first(), 'FIX-offline-count: the first row is the model').toHaveAttribute('data-home-item', 'connection:model')
+    await expect(needs.locator('li[data-home-item="connection:model"]'), 'it points to the button above it').toHaveText(/No AI model connected\s*Connect one with the button above\./)
+    await expect(needs.locator('li[data-home-item="connection:model"]').getByRole('link'), 'it offers no second Connect a model').toHaveCount(0)
+    await expect(main(page).getByRole('link', { name: 'Connect a model' }), 'the hero has the only Connect a model').toHaveCount(1)
+    const counted = await platformNeeds(backend, 'alice')
+    expect(counted, 'the platform counts the model row with the rest').toBeGreaterThan(1)
+    await expect(page.getByRole('heading', { name: /^Needs you/, level: 2 }), 'FIX-offline-count: the number is the platform’s count, the model row included').toHaveText(new RegExp(`^Needs you\\s*${String(counted)}$`))
     await settled(page)
     await expectAccessible(page, path.join(OUT, 'axe'), 'planner-home-offline')
     await shot(page, info, 'n10-08-offline')
@@ -95,6 +168,19 @@ test.describe('with no AI model', () => {
     expect(dead, 'principle 9: no button is shown dead').toBe(0)
     await context.close()
   })
+  test('ROLE-offline: bob’s Home says the Planner can’t answer and who can connect one, with no box, and keeps his request first', async ({ browser, backend }, info) => {
+    await backend.waitingRun('alice')
+    const context = await devContext(browser, 'bob')
+    const page = await context.newPage()
+    await page.goto('/')
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('I can’t answer questions until an AI model is connected')
+    await expect(main(page)).toContainText(/An Operator can connect one in Settings\. (\d+ changes? waits? for your yes|\d+ things? needs? you)\./)
+    await expect(page.getByRole('textbox'), 'no box while there is no model').toHaveCount(0)
+    await expect(main(page).getByRole('link', { name: 'Connect a model' }), 'no Connect a model, which only an Operator can use').toHaveCount(0)
+    await expect(page.getByRole('list', { name: 'Needs you' }).getByRole('link', { name: 'Review and decide' }).first()).toBeVisible()
+    await shot(page, info, 'r16-bob-offline')
+    await context.close()
+  })
 })
 
 test.describe('with the AI model on', () => {
@@ -102,42 +188,40 @@ test.describe('with the AI model on', () => {
     await connectMockModel(String(baseURL))
   })
 
-  const SUMMARY = 'Find bug tickets in MOCK with no update for 10 days and create one follow-up ticket that lists them'
-  const card = (page: Page) => thread(page).locator('section[data-card]')
+  const card = (page: Page) => thread(page).locator('[data-card]')
   const left = (page: Page) => card(page).locator('[id$="-left"]')
-  const turnOn = (page: Page) => card(page).getByRole('button', { name: 'Turn it on', exact: true })
+  const setUp = (page: Page) => card(page).getByRole('button', { name: 'Set up', exact: true })
+  const pillOf = (page: Page) => card(page).last().locator('[data-draft-pill]')
 
-  /** The card asks for what it lacks, and the plan may ask for the Jira project. Everything is filled from the keyboard. */
+  /** The card asks for what it lacks, and the plan may ask for the Jira project. Everything is filled from the keyboard, and a project the Planner already filled in is left as it is. */
   async function fillTheRest(page: Page, project: string): Promise<void> {
-    const field = card(page).getByLabel(/^Jira project/)
-    if (await field.count()) {
+    const field = card(page).last().getByLabel(/^Jira project/)
+    if ((await field.count()) && (await field.inputValue()) === '') {
       await field.focus()
       await page.keyboard.type(project)
     }
   }
 
   // 37 days appears in no other test, so the drafted agent's steps differ from every agent another test saved. The Planner then drafts a new one, whatever the library holds.
-  test('inconsistency I6: a new agent is saved to the library only when the workflow is turned on', async ({ browser, backend }, info) => {
+  test('inconsistency I6: a new agent is saved to the library only when Set up makes the workflow', async ({ browser, backend }, info) => {
     const owner = 'alice'
     const cards = async () => (await backend.get<{ cards: { name: string; owner: string }[] }>(owner, '/api/v1/agent-cards')).cards
     const context = await devContext(browser, owner)
     const page = await context.newPage()
     const watch = watchPage(page)
     await page.goto('/')
-    await ask(page, 'Every Friday at 4pm, follow up on bug tickets in MOCK with no update for 37 days')
+    await ask(page, 'Every Friday at 4pm, find bug tickets in MOCK with no update for 37 days')
     await expect(card(page)).toBeVisible()
     await card(page).getByRole('button', { name: /what it does|^Create/i }).first().click()
     await card(page).getByRole('group', { name: /^Change/ }).getByRole('textbox').fill('Raise one follow-up ticket that lists them')
     await page.keyboard.press('Enter')
-    await card(page).locator('summary').click()
-    await expect(card(page).locator('details')).toContainText('New agent, saved to the Agent library when you turn this on', { timeout: 30_000 })
     const before = await cards()
     await fillTheRest(page, 'MOCK')
-    await expect(left(page)).toHaveText('Nothing is unclear. Turn it on when you’re ready.', { timeout: 30_000 })
-    expect((await cards()).length, 'nothing is saved to the library before Turn it on').toBe(before.length)
-    await turnOn(page).click()
-    await expect(thread(page).getByRole('status')).toContainText('is saved in the Agent library', { timeout: 30_000 })
-    expect((await cards()).length, 'the new agent is in the library after Turn it on').toBe(before.length + 1)
+    await expect(left(page)).toHaveText('', { timeout: 30_000 })
+    expect((await cards()).length, 'nothing is saved to the library before Set up').toBe(before.length)
+    await setUp(page).click()
+    await expect(card(page)).toContainText('is saved under How it works, in Settings', { timeout: 30_000 })
+    expect((await cards()).length, 'the new agent is in the library once Set up made the workflow').toBe(before.length + 1)
     await shot(page, info, 'n11-i6')
     assertClean(watch)
     await context.close()
@@ -154,17 +238,21 @@ test.describe('with the AI model on', () => {
       await route.continue()
     })
     await ask(page, 'Every Friday, email me the list of tickets we closed this week')
-    await expect(box(page), 'the box waits while the Planner answers').toBeDisabled()
-    await expect(box(page)).toHaveAttribute('placeholder', 'The Planner is answering')
+    await expect(box(page), 'the box stays focused and read-only while the Planner answers, so one message goes at a time').toHaveAttribute('readonly', '')
+    await expect(box(page)).toBeFocused()
     await expect(thread(page).getByText('I can’t do all of that, but I can set up something close.')).toBeVisible()
-    await expect(thread(page).getByRole('heading', { name: 'What I can’t do yet' })).toBeVisible()
+    await expect(thread(page).getByRole('heading', { name: 'I can\'t send email yet' })).toBeVisible()
+    await expect(thread(page)).toContainText('Run results show here, in the chat.')
     await expect(thread(page).getByRole('heading', { name: 'What I can do instead' })).toBeVisible()
     await expect(thread(page)).toContainText('email')
     await expect(polite(page), 'the sentence is read once, in the polite region').toContainText('I can’t do all of that, but I can set up something close.')
     await expect(box(page)).toBeEnabled()
-    await expect(box(page)).toHaveAttribute('placeholder', 'Ask for something else')
+    await expect(box(page)).toHaveAttribute('placeholder', 'Ask, or describe a task')
 
     await thread(page).getByRole('button', { name: 'Ask the team' }).click()
+    const cantCard = thread(page).locator('section').filter({ has: page.getByLabel('What should the team know?') })
+    const [cardBox, fieldBox] = await Promise.all([cantCard.boundingBox(), page.getByLabel('What should the team know?').boundingBox()])
+    expect(fieldBox?.width ?? 0, 'Ask the team opens across the card, not squeezed into the buttons’ corner').toBeGreaterThan((cardBox?.width ?? 0) - 60)
     await page.getByLabel('What should the team know?').fill('Please add email so the Planner can send the Friday list')
     await page.getByRole('button', { name: 'Save the request' }).click()
     await expect(thread(page)).toContainText('Saved as a request for the team.')
@@ -178,7 +266,7 @@ test.describe('with the AI model on', () => {
   })
 
   for (const phone of [false, true]) {
-    test(`scenario A: a first-time Operator asks for the weekly follow-up, picks the time the card asks for, turns it on and finds it on Workflows (${phone ? '390' : '1440'} px)`, async ({ browser, backend }, info) => {
+    test(`scenario A, Ask in my words: a first-time Operator asks for the weekly follow-up, picks the time the card asks for, sets it up, sees it built and tested, and turns it on (${phone ? '390' : '1440'} px)`, async ({ browser, backend }, info) => {
       const before = (await backend.get<{ use_cases: { name: string }[] }>('alice', '/api/v1/use-cases')).use_cases.length
       const draftsBefore = (await backend.get<{ drafts: { draft_id: string }[] }>('alice', '/api/v1/drafts')).drafts.map((draft) => draft.draft_id)
       const context = await devContext(browser, 'alice', { phone })
@@ -187,47 +275,87 @@ test.describe('with the AI model on', () => {
       await page.goto('/')
       await ask(page, SUMMARY)
       await expect(card(page), 'the Planner answers with a set-up card').toBeVisible()
-      await expect(card(page)).toContainText('What will happen')
-      await expect(card(page)).toContainText('and put the result in one new Jira ticket')
-      await expect(card(page).getByRole('button', { name: /^one new Jira ticket/ }), 'the destination is a visible chip').toBeVisible()
-      await expect(card(page).getByRole('button', { name: /^Choose when it runs/ }).first(), 'a time is never guessed').toBeVisible()
-      await expect(turnOn(page), 'Turn it on is never shown dead').not.toHaveAttribute('aria-disabled', 'true')
-      await expect(left(page)).toContainText(/choices? left: .*when it runs/)
+      const parts = card(page).getByRole('list', { name: 'Each part of your request' })
+      await expect(parts.locator('[data-part]').evaluateAll((rows) => rows.map((row) => row.getAttribute('data-part')))).resolves.toEqual(['Watch', 'When', 'Then'])
+      await expect(parts.locator('[data-part="Then"]'), 'what it writes waits for a yes, and says so').toContainText('After a yes')
+      await expect(pillOf(page)).toHaveText('Draft')
+      await expect(parts.locator('[data-mark="ask"]'), 'one question at a time').toHaveCount(1)
+      await expect(parts.locator('[data-part="When"]'), 'a time is never guessed: it asks how often first').toContainText('How often?')
+      await expect(setUp(page), 'Set up is never shown dead').not.toHaveAttribute('aria-disabled', 'true')
+      await expect(left(page)).toContainText(/questions? to answer/)
       await shot(page, info, `n11-card-${phone ? '390' : '1440'}`)
 
-      await turnOn(page).focus()
+      await setUp(page).focus()
       await page.keyboard.press('Enter')
-      const often = card(page).getByLabel('How often')
-      await expect(often, 'pressing Turn it on while the time is missing opens the time picker').toBeFocused()
-      await expect(card(page).getByText('Choose how often it runs.')).toBeVisible()
-      await often.selectOption('week')
-      await card(page).getByLabel('Day').selectOption('friday')
-      await card(page).getByLabel('Time, Singapore').fill('16:00')
-      await expect(card(page)).toContainText('Every week')
+      const weekly = card(page).getByRole('button', { name: 'Every week', exact: true })
+      await expect(card(page).getByRole('button', { name: 'Every day', exact: true }), 'pressing Set up while the time is missing goes to the question').toBeFocused()
+      await weekly.click()
+      await expect(parts.locator('[data-part="When"]')).toContainText('Which day?')
+      await card(page).getByRole('button', { name: 'Friday', exact: true }).click()
+      await expect(parts.locator('[data-part="When"]')).toContainText('Fridays, at what time?')
+      await card(page).getByRole('button', { name: '17:00', exact: true }).click()
+      await expect(parts.locator('[data-part="When"]')).toContainText('Every Friday at 17:00, Singapore time')
+      await expect(parts.locator('[data-part="When"]')).toHaveAttribute('data-mark', 'ok')
       await fillTheRest(page, 'MOCK')
-      await expect(left(page), 'the footer recounts from the same list').toHaveText('Nothing is unclear. Turn it on when you’re ready.', { timeout: 30_000 })
+      await expect(left(page), 'the footer recounts from the same list, and says nothing once nothing is left').toHaveText('', { timeout: 30_000 })
       await settled(page)
       await expectAccessible(page, path.join(OUT, 'axe'), `setup-card-${phone ? '390' : '1440'}`)
 
-      await turnOn(page).focus()
+      await setUp(page).focus()
       await page.keyboard.press('Enter')
-      await expect(card(page).or(thread(page).getByRole('status')).first()).toBeVisible()
-      await expect(thread(page).getByRole('status').getByText(/is on\./)).toBeVisible({ timeout: 30_000 })
-      await expect(thread(page).getByRole('button', { name: 'Do a test run' })).toBeVisible()
-      await expect(thread(page).getByRole('status')).toContainText('First run')
-      await expect(thread(page).getByRole('status')).toContainText('except you is asked for a yes in Teams')
-      await shot(page, info, `n11-on-${phone ? '390' : '1440'}`)
-      const draftsAfter = (await backend.get<{ drafts: { draft_id: string }[] }>('alice', '/api/v1/drafts')).drafts.map((draft) => draft.draft_id)
-      expect(draftsAfter, 'turning it on leaves no new draft behind').toEqual(draftsBefore)
+      await expect(pillOf(page), 'Set up makes a draft, and the card builds it').toHaveText(/Building|Ready/, { timeout: 30_000 })
+      const made = async () => (await backend.get<{ use_cases: { use_case_id: string; name: string; state: string; last_run: { test: boolean } | null }[] }>('alice', '/api/v1/use-cases')).use_cases
+      await expect.poll(async () => (await made()).length, { message: 'one workflow was set up' }).toBe(before + 1)
+      const draft = (await made())[0]
+      expect(draft?.state, 'Set up makes a draft that is not on').toBe('draft')
+      await expect(card(page), 'the line and the Tester’s test run follow the run’s own events').toContainText(/Test run passed/, { timeout: 90_000 })
+      await expect(pillOf(page)).toHaveText('Ready')
+      await expect(card(page)).toContainText(/Nothing was written|nothing new to write/)
+      const panel = page.locator('#side-panel')
+      if (!phone) {
+        await expect(panel, 'on a wide screen Set up shows the build beside the chat').toContainText(/Building( in n8n)?/)
+        await expect(panel.getByRole('list', { name: 'Checks' })).toContainText(/Test run passed/)
+        await expect(panel).toContainText('The builder saves a draft. It can’t publish by itself.')
+        await expect(panel, 'nothing unbuilt is claimed').not.toContainText('Only our blocks')
+      }
+      await shot(page, info, `n11-ready-${phone ? '390' : '1440'}`)
+      const draftsAfter = (await backend.get<{ drafts: { draft_id: string }[] }>('alice', '/api/v1/drafts')).drafts.map((one) => one.draft_id)
+      expect(draftsAfter, 'Set up leaves no draft of the card behind: the workflow holds it').toEqual(draftsBefore)
+      expect((await made())[0]?.last_run?.test, 'the card’s test run is a test run').toBe(true)
+      expect((await made())[0]?.state, 'a test run turns nothing on').toBe('draft')
 
-      await thread(page).getByRole('link', { name: 'See it on Workflows' }).click()
-      await expect(page).toHaveURL(/\/workflows\/[^/]+$/)
-      const after = (await backend.get<{ use_cases: { name: string }[] }>('alice', '/api/v1/use-cases')).use_cases
-      expect(after.length, 'one workflow was set up').toBe(before + 1)
+      await card(page).getByRole('button', { name: 'Turn it on', exact: true }).click()
+      await expect(card(page)).toContainText(/On\. First run /, { timeout: 30_000 })
+      await expect(pillOf(page)).toHaveText('On')
+      expect((await made())[0]?.state, 'On only once the platform says it is on').toBe('on')
+      if (!phone) await expect(panel).toContainText(/On\. Version 1/)
+      await shot(page, info, `n11-on-${phone ? '390' : '1440'}`)
       assertClean(watch)
       await context.close()
     })
   }
+
+  test('a draft’s own page: no Run now and no Pause, a test run that writes nothing, then Turn it on and On only once the platform says so', async ({ browser, backend }) => {
+    const name = `Draft page ${randomUUID().slice(0, 6)}`
+    const made = await backend.post<{ use_case_id: string }>('alice', '/api/v1/agent-use-cases', { name, instruction: 'Check LangGraph for a new release and raise a ticket in MOCK.', agents: [{ card_id: 'crd_version_checker', values: { 'GitHub repository': 'langchain-ai/langgraph', 'Jira project': 'MOCK' } }], schedule: { day: 'monday', at: '09:00' }, on: false }, undefined, [201])
+    const context = await devContext(browser, 'alice')
+    const page = await context.newPage()
+    const watch = watchPage(page)
+    await page.goto(`/workflows/${made.use_case_id}`)
+    await expect(main(page)).toContainText('A draft. It runs only as a test, which writes nothing, until you turn it on after a test run passes.')
+    await expect(main(page).getByRole('button', { name: 'Pause' }), 'pausing a draft would change nothing').toHaveCount(0)
+    await expect(main(page).getByRole('button', { name: 'Turn it on' }), 'no Turn it on before a test run passed').toHaveCount(0)
+    await main(page).getByRole('button', { name: 'Test run', exact: true }).click()
+    await expect(page).toHaveURL(/\/runs\/run_/, { timeout: 30_000 })
+    await expect.poll(async () => (await backend.get<{ last_run: { test: boolean; state: string; outcome: string | null } | null }>('alice', `/api/v1/use-cases/${made.use_case_id}`)).last_run?.outcome ?? null, { timeout: 90_000 }).toMatch(/test_passed|nothing_to_write/)
+    await page.goto(`/workflows/${made.use_case_id}`)
+    await expect(main(page)).toContainText(/Test run passed/)
+    await main(page).getByRole('button', { name: 'Turn it on', exact: true }).click()
+    await expect(main(page).getByRole('button', { name: 'Turn it on' }), 'once on, it is no draft').toHaveCount(0, { timeout: 30_000 })
+    expect((await backend.get<{ state: string }>('alice', `/api/v1/use-cases/${made.use_case_id}`)).state).toBe('on')
+    assertClean(watch)
+    await context.close()
+  })
 
   test('scenario E: the person changes the guessed project and the schedule without starting again, a change is checked, and the footer recounts', async ({ browser, backend }, info) => {
     const context = await devContext(browser, 'alice')
@@ -237,21 +365,21 @@ test.describe('with the AI model on', () => {
     await ask(page, SUMMARY)
     await expect(card(page)).toBeVisible()
     const asked = page.waitForRequest((request) => request.url().endsWith('/api/v1/planner/check-part') && request.method() === 'POST')
-    const chip = card(page).getByRole('button', { name: /^bug tickets in MOCK, with no update for 10 days/ })
+    const chip = card(page).getByRole('button', { name: /^Bug tickets in MOCK, with no update for 10 days/ })
     await chip.focus()
     await page.keyboard.press('Enter')
-    const editor = card(page).getByRole('group', { name: 'Change Looks for' })
+    const editor = card(page).getByRole('group', { name: 'Change Watch' })
     await expect(editor).toBeVisible()
     await editor.getByRole('textbox').fill('bug tickets in OPS, with no update for 10 days')
     await page.keyboard.press('Enter')
     expect((await asked).postDataJSON(), 'a changed part is checked by the Planner').toMatchObject({ kind: 'look_for', text: 'bug tickets in OPS, with no update for 10 days' })
-    await expect(card(page).getByRole('button', { name: /^bug tickets in OPS, with no update for 10 days/ }), 'focus and the sentence follow the change').toBeFocused()
-    await expect(card(page)).toContainText('find bug tickets in OPS, with no update for 10 days')
+    await expect(card(page).getByRole('button', { name: /^Bug tickets in OPS, with no update for 10 days/ }), 'focus and the sentence follow the change').toBeFocused()
+    await expect(card(page)).toContainText('Bug tickets in OPS, with no update for 10 days')
 
-    await card(page).getByRole('button', { name: 'Change when it runs' }).click()
-    await card(page).getByLabel('How often').selectOption('weekdays')
+    await card(page).getByRole('button', { name: 'Every weekday', exact: true }).click()
+    await card(page).getByRole('button', { name: 'Another time', exact: true }).click()
     await card(page).getByLabel('Time, Singapore').fill('15:00')
-    await expect(card(page), 'the sentence follows the schedule').toContainText('Every weekday')
+    await expect(card(page), 'the When part follows the schedule').toContainText('Every weekday at 15:00, Singapore time')
     await expect(left(page)).not.toContainText('when it runs')
     await page.keyboard.press('Escape')
 
@@ -262,16 +390,12 @@ test.describe('with the AI model on', () => {
 
     await page.goto('/workflows')
     const row = page.locator(`li[data-draft="${id}"]`)
-    await expect(row, 'the draft shows on Workflows with the card’s own reason').toContainText(/Needs |Nothing is unclear/)
-    await row.getByRole('link', { name: /^Resume/ }).click()
+    await expect(row, 'the draft shows on Workflows with the card’s own reason').toContainText(/Needs |questions? to answer|Nothing is unclear/)
+    await row.getByRole('link').click()
     await expect(page, 'Resume reopens the card on Home').toHaveURL(new RegExp(`/\\?draft=${id}`))
-    await expect(card(page)).toContainText('find bug tickets in OPS, with no update for 10 days')
+    await expect(card(page)).toContainText('Bug tickets in OPS, with no update for 10 days')
     await expect(card(page)).toContainText('Every weekday')
     await shot(page, info, 'n11-resumed')
-    await card(page).getByRole('button', { name: 'Rename' }).click()
-    await page.getByLabel('Workflow name').fill('Stale bug chaser')
-    await page.getByRole('button', { name: 'Done' }).click()
-    await expect(card(page).getByRole('heading', { name: 'Stale bug chaser' }).locator('..').getByText('Filled in by me'), 'the tag goes once the person renames').toHaveCount(0)
     await card(page).getByRole('button', { name: 'Never mind' }).click()
     const sure = page.getByRole('alertdialog')
     await expect(sure, 'Never mind on a resumed draft asks first').toBeVisible()
@@ -280,7 +404,8 @@ test.describe('with the AI model on', () => {
     expect((await drafts()).some((draft) => draft.draft_id === id), 'keeping the draft leaves it saved').toBe(true)
     await card(page).getByRole('button', { name: 'Never mind' }).click()
     await page.getByRole('alertdialog').getByRole('button', { name: 'Discard draft' }).click()
-    await expect(thread(page)).toContainText('All right, never mind.')
+    await expect(pillOf(page), 'Never mind drops it').toHaveText('Dropped')
+    await expect(card(page)).toContainText('Nothing was set up.')
     await expect.poll(async () => (await drafts()).some((draft) => draft.draft_id === id), { timeout: 15_000 }).toBe(false)
     await thread(page).getByRole('button', { name: 'Undo' }).click()
     await expect(card(page), 'Undo puts the draft and its card back').toBeVisible()
@@ -288,6 +413,197 @@ test.describe('with the AI model on', () => {
     await card(page).getByRole('button', { name: 'Never mind' }).click()
     await page.getByRole('alertdialog').getByRole('button', { name: 'Discard draft' }).click()
     await expect.poll(async () => (await drafts()).some((draft) => draft.draft_id === id), { timeout: 15_000 }).toBe(false)
+    assertClean(watch)
+    await context.close()
+  })
+
+  /** A follow-up the mock model reads whole, so the parts around it are what each test is about. */
+  const STALE = 'find bug tickets in MOCK with no update for 10 days and create one ticket that lists them'
+  const newestCard = (page: Page) => card(page).last()
+  const partsOf = (page: Page) => newestCard(page).getByRole('list', { name: 'Each part of your request' })
+  const whenPart = (page: Page) => partsOf(page).locator('[data-part="When"]')
+  const crosses = (page: Page) => partsOf(page).locator('[data-mark="no"]')
+  const partCan = (page: Page) => newestCard(page).getByRole('button', { name: 'Set up the part I can', exact: true })
+
+  /** The workflow Set up just made: alice's newest. */
+  async function leftOutOf(backend: Backend): Promise<{ use_case_id: string; left_out: string[]; schedule: { day: string; at: string } | null }> {
+    const newest = (await backend.get<{ use_cases: { use_case_id: string }[] }>('alice', '/api/v1/use-cases')).use_cases[0]
+    return backend.get('alice', `/api/v1/use-cases/${newest?.use_case_id ?? ''}`)
+  }
+
+  test('ANS-cross and ANS-left-out: a clause the Planner didn’t follow is crossed, the button sets up the part it can, and the workflow keeps it as Left out', async ({ browser, backend }, info) => {
+    const context = await devContext(browser, 'alice')
+    const page = await context.newPage()
+    const watch = watchPage(page)
+    await page.goto('/')
+    await ask(page, `Every Friday at 5pm, ${STALE}. Colour them by team.`)
+    await expect(thread(page).getByText('Here’s what I understood.')).toBeVisible()
+    await expect(thread(page).getByRole('heading', { name: 'What I can’t do yet' }), 'a clause it didn’t follow is no can’t').toHaveCount(0)
+    await expect(crosses(page)).toHaveText(/Can’t do: “Colour them by team”\s*I didn’t follow this part\./)
+    await expect(whenPart(page)).toContainText('Every Friday at 17:00, Singapore time')
+    await expect(partCan(page)).toBeVisible()
+    await fillTheRest(page, 'MOCK')
+    await expect(left(page).last(), 'nothing is left to answer, and the cross stays on the card').toHaveText('', { timeout: 30_000 })
+    await expect(crosses(page)).toHaveCount(1)
+    await shot(page, info, 'r5-cross')
+    await partCan(page).click()
+    await expect(crosses(page), 'the cross stays on the card as it builds').toHaveCount(1)
+    await expect.poll(async () => (await leftOutOf(backend)).left_out, { message: 'the workflow keeps her words for the part with a cross', timeout: 30_000 }).toEqual(['Colour them by team'])
+    await page.goto(`/workflows/${(await leftOutOf(backend)).use_case_id}`)
+    await expect(main(page)).toContainText('Left out: “Colour them by team”. It was set up without that part.')
+    await shot(page, info, 'r5-left-out-page')
+    assertClean(watch)
+    await context.close()
+  })
+
+  test('ANS-clash-day and FIX-day-choice: two days ask which one, never the first, and the workflow keeps her day and names only the other as left out', async ({ browser, backend }, info) => {
+    const context = await devContext(browser, 'alice')
+    const page = await context.newPage()
+    const watch = watchPage(page)
+    await page.goto('/')
+    await ask(page, `Every Monday and Friday at 9am, ${STALE}`)
+    await expect(whenPart(page)).toHaveAttribute('data-mark', 'ask')
+    await expect(whenPart(page)).toContainText('Monday or Friday?')
+    await expect(crosses(page)).toHaveText(/Monday and Friday\.\s*I can only set one day\./)
+    await shot(page, info, 'r5-clash')
+    await newestCard(page).getByRole('button', { name: 'Monday', exact: true }).click()
+    await expect(whenPart(page)).toContainText('Every Monday at 9:00, Singapore time')
+    await expect(crosses(page)).toHaveText(/Friday\.\s*I can only set one day, so it runs on Monday only\./)
+    await fillTheRest(page, 'MOCK')
+    await expect(left(page).last()).toHaveText('', { timeout: 30_000 })
+    await partCan(page).click()
+    await expect.poll(async () => (await leftOutOf(backend)).left_out, { timeout: 30_000 }).toEqual(['Friday'])
+    const made = await leftOutOf(backend)
+    expect(made.schedule).toMatchObject({ day: 'monday', at: '09:00' })
+    assertClean(watch)
+    await context.close()
+  })
+
+  test('ANS-clash-time, ANS-one-question and ANS-no-time: one question at a time, in order, and a time is never picked for her', async ({ browser, backend }, info) => {
+    const before = await draftIds(backend)
+    const context = await devContext(browser, 'alice')
+    const page = await context.newPage()
+    const watch = watchPage(page)
+    const asks = () => partsOf(page).locator('[data-mark="ask"]')
+    await page.goto('/')
+    await ask(page, `Every Friday at 9am and 5pm, ${STALE}`)
+    await expect(whenPart(page)).toContainText('9:00 or 17:00?')
+    await expect(partsOf(page), 'no time is ticked').not.toContainText('Singapore time')
+    await newestCard(page).getByRole('button', { name: '17:00', exact: true }).click()
+    await expect(whenPart(page)).toContainText('Every Friday at 17:00, Singapore time')
+
+    await ask(page, SUMMARY)
+    await expect(asks()).toHaveCount(1)
+    await expect(whenPart(page)).toContainText('How often?')
+    await newestCard(page).getByRole('button', { name: 'Every week', exact: true }).click()
+    await expect(asks()).toHaveCount(1)
+    await expect(whenPart(page)).toContainText('Which day?')
+    await expect(newestCard(page).getByRole('button', { name: 'Monday', exact: true }), 'focus moves to the next question').toBeFocused()
+    await newestCard(page).getByRole('button', { name: 'Friday', exact: true }).click()
+    await expect(whenPart(page)).toContainText('Fridays, at what time?')
+    await shot(page, info, 'r5-question')
+    await newestCard(page).getByRole('button', { name: '9:00', exact: true }).click()
+    await expect(whenPart(page)).toContainText('Every Friday at 9:00, Singapore time')
+
+    await ask(page, `Every Friday at 9, ${STALE}`)
+    await expect(whenPart(page), 'a bare hour asks morning or evening').toContainText('At 9:00 or 21:00?')
+    await expect(left(page).last()).toContainText(/questions? to answer/)
+    assertClean(watch)
+    await context.close()
+    await forgetNewDrafts(backend, before)
+  })
+
+  test('ANS-whole-clause and the leftovers of other answers: what an answer didn’t read is marked above its card', async ({ browser }, info) => {
+    const context = await devContext(browser, 'alice')
+    const page = await context.newPage()
+    const watch = watchPage(page)
+    const newest = () => thread(page).locator(':scope > li').last()
+    await page.goto('/')
+    await ask(page, 'watch Kubernetes but only the major releases')
+    await expect(newest().getByRole('list', { name: 'Each part of your request' })).toHaveText(/Can’t do: “only the major releases”\s*I didn’t follow this part\./)
+    await ask(page, 'How are my workflows doing, and every Friday sum up the closed tickets')
+    await expect(newest().getByRole('list', { name: 'Each part of your request' })).toHaveText(/“every Friday sum up the closed tickets”\s*Ask this on its own, and I’ll answer it\./)
+    await expect(newest().getByRole('list', { name: 'Your workflows' }).first(), 'the question is still answered').toBeVisible()
+    await shot(page, info, 'r5-leftovers')
+    assertClean(watch)
+    await context.close()
+  })
+
+  test('HELP: a question about how to start gets the steps with nothing crossed, and its chip asks the Planner', async ({ browser }, info) => {
+    const context = await devContext(browser, 'alice')
+    const page = await context.newPage()
+    const watch = watchPage(page)
+    const messages = () => thread(page).locator(':scope > li')
+    await page.goto('/')
+    for (const words of ['how can i start to use this ?', 'list me the steps to use this app']) {
+      await ask(page, words)
+      await expect(messages().last().getByRole('heading', { name: 'How to start', exact: true })).toBeVisible()
+      await expect(messages().last().getByRole('list', { name: 'Each part of your request' }), 'the question is answered, never crossed').toHaveCount(0)
+      await expect(messages().last().locator('ol > li')).toHaveCount(5)
+    }
+    await shot(page, info, 'help-how-to-start')
+    const before = await messages().count()
+    await messages().last().getByRole('group', { name: 'Try one' }).getByRole('button', { name: 'Keep track of the LangGraph version' }).click()
+    await expect(messages().nth(before), 'the chip asks in her words').toHaveText(/Keep track of the LangGraph version/)
+    await expect(messages().nth(before + 1)).toHaveAttribute('data-answer', 'true', { timeout: 30_000 })
+    assertClean(watch)
+    await context.close()
+  })
+
+  test('OWN-time: a watch request’s own time is offered to the whole watchlist, and the offer gets the edit card', async ({ browser }) => {
+    const context = await devContext(browser, 'alice')
+    const page = await context.newPage()
+    const watch = watchPage(page)
+    const messages = () => thread(page).locator(':scope > li')
+    await page.goto('/')
+    await ask(page, 'Watch LangGraph releases every Thursday at 7am')
+    const offer = messages().last().getByRole('button', { name: 'Make the Software watchlist run every Thursday at 7am' })
+    await expect(offer).toBeVisible()
+    await offer.click()
+    await expect(editCard(messages().last()), 'the Planner answers the offer with the edit card').toBeVisible({ timeout: 30_000 })
+    await expect(editCard(messages().last()).getByRole('button', { name: 'Save change' }), 'nothing changes until she saves it').toBeVisible()
+    assertClean(watch)
+    await context.close()
+  })
+
+  test('a new answer comes into view, from its top when it is taller than the conversation', async ({ browser }, info) => {
+    const context = await devContext(browser, 'alice')
+    const page = await context.newPage()
+    const watch = watchPage(page)
+    const inView = (answer: Locator) =>
+      answer.evaluate((item) => {
+        const region = item.closest('[role="region"]')!.getBoundingClientRect()
+        const box = item.getBoundingClientRect()
+        const top = box.top >= region.top - 1
+        return box.height > region.height ? top && box.top <= region.top + 1 : top && box.bottom <= region.bottom + 1
+      })
+    await page.goto('/')
+    // Enough answers first that a new one would land below the fold if the conversation didn't follow it.
+    for (const text of ['What can you do?', 'What needs me?', 'What can you do?']) {
+      const answer = await askAndWait(page, text)
+      await expect.poll(() => inView(answer), { message: `the answer to “${text}” is in view` }).toBe(true)
+    }
+    const tall = await askAndWait(page, 'watch Kubernetes but only the major releases')
+    await expect.poll(() => inView(tall), { message: 'the watch card is in view' }).toBe(true)
+    await shot(page, info, 'answer-in-view')
+    assertClean(watch)
+    await context.close()
+  })
+
+  test('FIX-never-mind: the add-software card has Never mind, which changes nothing', async ({ browser, backend }) => {
+    await backend.freshWatchlist('alice', [])
+    const context = await devContext(browser, 'alice')
+    const page = await context.newPage()
+    const watch = watchPage(page)
+    await page.goto('/')
+    await ask(page, 'Monitor Redis releases')
+    await expect(thread(page), 'the software card says why it can’t name her version').toContainText('It isn’t on the watchlist, so I don’t know which version you run.')
+    await thread(page).getByRole('button', { name: 'Watch it', exact: true }).click()
+    await expect(thread(page).getByRole('button', { name: 'Add Redis' })).toBeVisible()
+    await thread(page).getByRole('button', { name: 'Never mind' }).click()
+    await expect(thread(page)).toContainText('Not added. Nothing changed.')
+    const { watchlist } = await backend.get<{ watchlist: { software: { name: string }[] } | null }>('alice', '/api/v1/watchlist')
+    expect(watchlist?.software.map((entry) => entry.name) ?? []).not.toContain('Redis')
     assertClean(watch)
     await context.close()
   })
@@ -300,6 +616,7 @@ test.describe('with the AI model on', () => {
     await page.goto('/')
     await ask(page, 'Monitor Redis releases')
     await expect(thread(page).getByText('Redis is software, so it belongs on the Software watchlist', { exact: false })).toBeVisible()
+    await thread(page).getByRole('button', { name: 'Watch it', exact: true }).click()
     await expect(thread(page).getByText('redis/redis', { exact: false })).toBeVisible()
     await shot(page, info, 'n10-08-watchlist')
     await thread(page).getByRole('button', { name: 'Add Redis' }).click()
@@ -309,6 +626,9 @@ test.describe('with the AI model on', () => {
     expect(watchlist?.software.map((entry) => entry.name)).toContain('Redis')
     await thread(page).getByRole('link', { name: 'Open the Software watchlist' }).click()
     await expect(page).toHaveURL(/\/software$/)
+    const row = page.locator('li[data-status]').filter({ hasText: 'Redis' })
+    await expect(row, 'the row says it is only watched so far, and what checks it').toContainText(/Redis\s*Added today · (?:checked by Software watchlist|not checked automatically)[\s\S]*Watching/)
+    await expect(page.locator('main h1 + p'), 'the count line counts it').toHaveText('1 watching')
     assertClean(watch)
     await context.close()
   })
@@ -338,7 +658,7 @@ test.describe('with the AI model on', () => {
     await context.close()
   })
 
-  test('the three suggestions are about the watchlist, and Check my workflows, typed, draws the Workflows list’s own rows', async ({ browser, backend }, info) => {
+  test('the sketch’s three chips stay under the box in the chat, and Check my workflows, typed, draws the Workflows list’s own rows', async ({ browser, backend }, info) => {
     await backend.freshWatchlist('alice', [REDIS])
     await backend.waitingRun('alice')
     const repair = await jiraDown(backend)
@@ -346,24 +666,26 @@ test.describe('with the AI model on', () => {
     const page = await context.newPage()
     const watch = watchPage(page)
     await page.goto('/')
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText(GREETING)
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(ALICE_HEADING)
     const chips = page.getByRole('group', { name: 'Suggestions' }).getByRole('button')
     await expect(chips).toHaveCount(3)
-    await expect(chips).toHaveText(['Which software has a newer version?', 'Watch another software for new versions', 'What can you do?'])
-    const total = Number((await main(page).getByRole('heading', { level: 2, name: /^Needs you/ }).innerText()).replace(/\D/g, ''))
-    await expect(page.getByRole('navigation', { name: 'Main' }).filter({ visible: true }).getByRole('link', { name: new RegExp(`^Workflows, ${total} need you$`) })).toBeVisible()
+    await expect(chips).toHaveText(['What needs me?', 'Which software is behind?', 'What can you do?'])
+    const needsYou = main(page).getByRole('list', { name: 'Needs you' })
+    await expect(needsYou.locator('li[data-home-item]').first(), 'Needs you is plain rows under the chips').toBeVisible()
+    const total = await platformNeeds(backend, 'alice')
 
     await ask(page, 'Check my workflows')
     await expect(thread(page).getByRole('list', { name: 'Your workflows' })).toBeVisible()
     await expect(thread(page)).toContainText(/You have \d+ workflows?\./)
-    await expect(main(page).getByRole('heading', { level: 2, name: /^Needs you/ }), 'Needs you is hidden while the thread shows').toHaveCount(0)
+    await expect(needsYou, 'the rows give way to the strip while the thread shows').toHaveCount(0)
+    await expect(chips, 'the chips stay under the box').toHaveText(['What needs me?', 'Which software is behind?', 'What can you do?'])
     await shot(page, info, 'n10-08-check')
 
-    await ask(page, 'What needs me?')
-    await expect(thread(page)).toContainText(`${total} ${total === 1 ? 'thing needs' : 'things need'} you.`)
+    await chips.filter({ hasText: 'What needs me?' }).click()
+    await expect(thread(page)).toContainText(`${total} ${total === 1 ? 'thing needs' : 'things need'} you`)
     await page.getByRole('button', { name: 'New chat' }).click()
     await expect(thread(page)).toHaveCount(0)
-    await expect(main(page).getByRole('heading', { level: 2, name: new RegExp(`^Needs you ${total}`) })).toBeVisible()
+    await expect(needsYou.locator('li[data-home-item]').first()).toBeVisible()
     assertClean(watch)
     await repair()
     await context.close()
@@ -376,23 +698,21 @@ test.describe('with the AI model on', () => {
     await box(page).focus()
     await page.keyboard.type('What can you do?')
     await page.keyboard.press('Enter')
-    await expect(thread(page).getByText('Here is what I can do, and what I can’t do yet.')).toBeVisible()
-    await expect(thread(page).getByRole('heading', { name: 'I can', exact: true })).toBeVisible()
+    await expect(thread(page).getByRole('heading', { name: 'What I can do', exact: true })).toBeVisible()
+    await expect(thread(page)).toContainText('Not yet: Teams channels, email, Confluence.')
     await page.getByRole('button', { name: 'New chat' }).focus()
     await page.keyboard.press('Enter')
     await expect(thread(page)).toHaveCount(0)
     await context.close()
   })
 
-  test('the chip Which software has a newer version? is answered from the watchlist, with its Looked at line', async ({ browser, backend }) => {
+  test('the chip Which software is behind? is answered from the watchlist at once, plainly when nothing is behind', async ({ browser, backend }) => {
     await backend.freshWatchlist('alice', [REDIS])
     const context = await devContext(browser, 'alice')
     const page = await context.newPage()
     await page.goto('/')
-    await page.getByRole('group', { name: 'Suggestions' }).getByRole('button', { name: 'Which software has a newer version?' }).click()
-    await expect(thread(page)).toContainText('Nothing on your watchlist has a newer version.')
-    await expect(thread(page).getByText('Looked at')).toBeVisible()
-    await expect(thread(page).getByRole('link', { name: 'Software', exact: true })).toBeVisible()
+    await page.getByRole('group', { name: 'Suggestions' }).getByRole('button', { name: 'Which software is behind?' }).click()
+    await expect(thread(page), 'Redis has no version of ours, so nothing is known to be behind, and the count says it is watched').toContainText('Nothing has a newer version. 1 watching.')
     await context.close()
   })
 
@@ -408,13 +728,13 @@ test.describe('with the AI model on', () => {
       await ask(page, 'what about Redis?')
       await expect(thread(page)).toContainText('Redis runs 8.2.0.')
       await expect(thread(page).getByText('Looked at').last()).toBeVisible()
-      const open = thread(page).getByRole('link', { name: 'Open Redis on the Software page' })
-      await expect(open).toHaveAttribute('href', /^\/software\?row=/)
+      const open = thread(page).getByRole('button', { name: 'Open Redis on the Software page' })
+      await expect(open, 'from the chat it opens in the side panel').toHaveAttribute('data-opens', /^software:/)
       const stop = thread(page).getByRole('button', { name: 'Stop watching Redis' })
       await expect(stop, 'Stop watching comes after Open').toBeVisible()
       const check = thread(page).getByRole('button', { name: 'Check all software now' })
       await expect(check).toBeVisible()
-      expect(await tooSmall(page.locator('main').getByRole('link', { name: 'Open Redis on the Software page' })), 'principle 11: targets of at least 44 px').toEqual([])
+      expect(await tooSmall(open), 'principle 11: targets of at least 44 px').toEqual([])
       expect(await tooSmall(stop.or(check)), 'principle 11: targets of at least 44 px').toEqual([])
       await noSideways(page)
       await settled(page)
@@ -437,7 +757,9 @@ test.describe('with the AI model on', () => {
       expect(await names(), 'the page’s Undo puts it back').toContain('Redis')
 
       await open.click()
-      await expect(page).toHaveURL(/\/software\?row=/)
+      await expect(page.locator('#side-panel-h'), 'Redis opens in the side panel').toHaveText('Redis')
+      await page.locator('#side-panel').getByRole('link', { name: 'More details' }).click()
+      await expect(page).toHaveURL(/\/software\/[^/?]+$/)
       await context.close()
     })
   }
@@ -462,15 +784,17 @@ test.describe('with the AI model on', () => {
     const page = await context.newPage()
     await page.goto('/')
     await expect(box(page)).toBeVisible()
+    // The suggestions draw once the watchlist and the registry have loaded, so the walk waits for the ones it checks.
+    await expect(page.getByRole('group', { name: 'Suggestions' }).getByRole('button')).toHaveCount(3)
     const walk = await walkTabs(page)
     const labels = walk.stops.map((stop) => stop.label)
-    for (const name of ['Ask the Planner about software versions', 'Send to the Planner', 'Which software has a newer version?']) {
+    for (const name of ['Ask, or describe a task', 'Send', 'Which software is behind?']) {
       expect(labels.some((label) => label.includes(name)), `Tab reaches ${name}; stops: ${labels.join(', ')}`).toBe(true)
     }
     expect(walk.unreached, 'controls Tab never reached').toEqual([])
     expect(withoutVisibleFocus(walk.stops), 'stops whose focus ring is missing').toEqual([])
 
-    await tabTo(page, page.getByRole('button', { name: 'Watch another software for new versions' }))
+    await tabTo(page, page.getByRole('button', { name: 'Which software is behind?' }))
     await page.keyboard.press('Enter')
     await expect(thread(page)).toContainText(/software/i)
     await ask(page, 'Every Friday, email me the list of tickets we closed this week')
@@ -484,10 +808,47 @@ test.describe('with the AI model on', () => {
     await context.close()
   })
 
+  // The sketch's measures up to a 1440 px window. Wider, Home grows as one block: 1.25 times at 1920 px and 1.4 times at 2560 px.
+  for (const { width, height, phone, face: faceSize, box: boxHeight, chip: chipHeight } of [
+    { width: 390, height: 844, phone: true, face: 96, box: 60, chip: 36 },
+    { width: 1440, height: 900, phone: false, face: 96, box: 60, chip: 36 },
+    { width: 1920, height: 1080, phone: false, face: 120, box: 75, chip: 45 },
+    { width: 2560, height: 1440, phone: false, face: 134, box: 84, chip: 50 },
+  ]) {
+    test(`Home at ${String(width)} px: a ${String(faceSize)} px face, a ${String(boxHeight)} px box, ${String(chipHeight)} px chips, the question on one line, and a page that ends in the window`, async ({ browser }) => {
+      const context = await devContext(browser, 'alice', { phone })
+      const page = await context.newPage()
+      await page.setViewportSize({ width, height })
+      // Home with nothing to do, so the rows can't make the page longer than the window.
+      await page.route('**/api/v1/home', async (route) => {
+        const response = await route.fetch()
+        const home = (await response.json()) as Record<string, unknown>
+        const calm = { approvals: [], approvals_total: 0, stopped: [], stopped_total: 0, declined: [], declined_total: 0, questions_for_me: [], questions_for_me_total: 0, confirmations: [], connections: [], addresses: [], replied: [] }
+        await route.fulfill({ response, json: { ...home, ...calm } })
+      })
+      await page.goto('/')
+      await expect(box(page)).toBeVisible()
+      await page.evaluate(() => document.fonts.ready)
+      const face = await main(page).locator('svg').first().boundingBox()
+      const composer = await box(page).locator('xpath=..').boundingBox()
+      const chip = await page.getByRole('group', { name: /^(Suggestions|Starting points)$/ }).getByRole('button').first().boundingBox()
+      expect(Math.round(face?.width ?? 0), 'the Planner’s face').toBe(faceSize)
+      expect(Math.round(composer?.height ?? 0), 'the box before the first message').toBe(boxHeight)
+      expect(Math.round(chip?.height ?? 0), 'a chip').toBe(chipHeight)
+      const lines = await main(page).getByRole('heading', { level: 1 }).evaluate((h1: HTMLElement) => Math.round(h1.offsetHeight / parseFloat(getComputedStyle(h1).lineHeight)))
+      expect(lines, 'the question stays on one line').toBe(1)
+      // At 900 px and narrower the practice stack's test controls sit under the page, so the check is that the page itself ends in the window.
+      const mainBottom = await main(page).evaluate((element) => element.getBoundingClientRect().bottom)
+      expect(mainBottom, 'the empty Home never makes the page scroll').toBeLessThanOrEqual((await page.evaluate(() => window.innerHeight)) + 1)
+      await context.close()
+    })
+  }
+
   for (const phone of [false, true]) {
     const size = phone ? '390' : '1440'
     test(`Home and its answers pass WCAG 2.2 AA, do not scroll sideways and keep 44 px targets at ${size} px`, async ({ browser, backend }, info) => {
       await backend.waitingRun('alice')
+      const before = await draftIds(backend)
       const context = await devContext(browser, 'alice', { phone })
       const page = await context.newPage()
       await page.goto('/')
@@ -495,13 +856,15 @@ test.describe('with the AI model on', () => {
       await settled(page)
       await expectAccessible(page, path.join(OUT, 'axe'), `planner-home-${size}`)
       await noSideways(page)
-      expect(await tooSmall(main(page).locator('button, a[href]')), 'principle 11: targets of at least 44 px').toEqual([])
+      expect(await tooSmall(main(page).locator('button, a[href]'), await sketchSized(page)), 'principle 11: targets of at least 44 px, but for the sketch’s chips and strip').toEqual([])
       await shot(page, info, `n10-08-home-${size}`)
 
       for (const [text, shown] of [
         ['Check my workflows', thread(page).getByRole('list', { name: 'Your workflows' })],
-        ['What can you do?', thread(page).getByRole('heading', { name: 'I can', exact: true })],
-        ['Every Friday, email me the list of tickets we closed this week', thread(page).getByRole('heading', { name: 'What I can’t do yet' })],
+        ['What can you do?', thread(page).getByRole('heading', { name: 'What I can do', exact: true })],
+        ['Every Friday, email me the list of tickets we closed this week', thread(page).getByRole('heading', { name: 'I can\'t send email yet' })],
+        [`Every Monday and Friday at 9am, ${STALE}. Colour them by team.`, thread(page).getByRole('list', { name: 'Each part of your request' }).locator('[data-mark="no"]')],
+        ['Which software has a newer version?', thread(page).getByText('Looked at').last()],
       ] as const) {
         await ask(page, text)
         await expect(shown.first()).toBeVisible()
@@ -509,8 +872,16 @@ test.describe('with the AI model on', () => {
       await settled(page)
       await expectAccessible(page, path.join(OUT, 'axe'), `planner-thread-${size}`)
       await noSideways(page)
+      // The chat's own controls: the strip, the dock and the Looked at links. The cards in the answers get their own sizes as each is rebuilt.
+      const chrome = page
+        .getByRole('region', { name: 'Needs you', exact: true })
+        .locator('a, button')
+        .or(box(page).locator('xpath=ancestor::form/..').locator('button, a[href]'))
+        .or(thread(page).getByText('Looked at').locator('xpath=..').locator('a'))
+      expect(await tooSmall(chrome, await sketchSized(page)), 'principle 11: 44 px targets in the chat too, but for the sketch’s chips, Send and strip').toEqual([])
       await shot(page, info, `n10-08-thread-${size}`)
       await context.close()
+      await forgetNewDrafts(backend, before)
     })
   }
 
@@ -534,39 +905,19 @@ test.describe('with the AI model on', () => {
     for (const old of ['/new', '/new/done/uc_1']) {
       await page.goto(old)
       await expect(page).toHaveURL(/\/$/)
-      await expect(page.getByLabel('Ask the Planner about software versions')).toBeVisible()
+      await expect(page.getByLabel('Ask, or describe a task')).toBeVisible()
     }
     await context.close()
   })
 
   test('the old address of a saved draft reopens that draft as a card on Home', async ({ browser, backend }) => {
-    const id = randomUUID()
-    const text = `Every Monday, list the tickets closed last week ${id.slice(0, 6)}`
-    const content = {
-      name: `Old address draft ${id.slice(0, 6)}`,
-      form: {
-        step: 2,
-        text,
-        name: '',
-        rows: [
-          { kind: 'schedule', text: 'Every Monday', state: 'understood', note: null },
-          { kind: 'look_for', text: 'tickets closed last week in MOCK', state: 'understood', note: null },
-          { kind: 'do', text: 'Create one ticket that lists them', state: 'understood', note: null },
-          { kind: 'where', text: 'Jira project MOCK', state: 'understood', note: null },
-        ],
-        typed: {},
-        when: { often: '', at: '' },
-      },
-      plan: null,
-    }
-    const saved = await backend.send('PUT', 'alice', `/api/v1/drafts/${id}`, { step: 2, content })
-    expect(saved.status, `alice saves a draft: ${JSON.stringify(saved.body)}`).toBe(200)
+    const id = await cardDraft(backend, 'Old address draft')
     const context = await devContext(browser, 'alice')
     try {
       const page = await context.newPage()
       await page.goto(`/new?draft=${id}`)
-      await expect(thread(page).locator('section[data-card]')).toContainText('tickets closed last week')
-      await expect(page).toHaveURL(new RegExp(`/\\?draft=${id}$`))
+      await expect(thread(page).locator('[data-card]')).toContainText('Tickets closed last week')
+      await expect(page, 'once the card is open, the address no longer asks for the draft').toHaveURL(/\/$/)
     } finally {
       await context.close()
       await backend.send('DELETE', 'alice', `/api/v1/drafts/${id}`)
@@ -583,14 +934,659 @@ test.describe('with the AI model on', () => {
   })
 })
 
-test('bob’s Home has no box, no suggestions and no creation action', async ({ browser, backend }) => {
-  await backend.waitingRun('alice')
-  const context = await devContext(browser, 'bob')
-  const page = await context.newPage()
-  await page.goto('/')
-  await expect(page.getByRole('list', { name: 'Needs you' })).toBeVisible()
-  await expect(main(page)).toContainText('You’re an Approver, so you decide on requests. Operators set up workflows.')
-  await expect(page.getByLabel('Ask the Planner about software versions')).toHaveCount(0)
-  await expect(page.getByRole('group', { name: 'Suggestions' })).toHaveCount(0)
-  await context.close()
+test.describe('the chat after the first message', () => {
+  test.beforeAll(async ({ baseURL }) => {
+    await connectMockModel(String(baseURL))
+  })
+
+  const pinned = (page: Page) => page.getByRole('region', { name: 'Needs you', exact: true })
+  const pinnedOpen = (page: Page) => pinned(page).getByRole('link', { name: /^Open/ }).or(pinned(page).getByRole('button', { name: /^Open/ }))
+
+  test('SHELL-pinned: the needs strip appears with the first message, the box docks with its chips, and N more plus one is the count everywhere', async ({ browser, backend }, info) => {
+    await backend.freshWatchlist('alice', [REDIS])
+    await teamReplied(backend)
+    const repair = await jiraDown(backend)
+    const context = await devContext(browser, 'alice')
+    const page = await context.newPage()
+    await page.goto('/')
+    await expect(box(page)).toBeVisible()
+    await expect(pinned(page), 'no pinned line before the first message').toHaveCount(0)
+    await ask(page, 'What can you do?')
+    await expect(pinned(page)).toBeVisible()
+    await expect(box(page)).toHaveAttribute('placeholder', 'Ask, or describe a task')
+    await expect(box(page), 'an answer with no card hands focus back to the box').toBeFocused()
+    await expect(main(page).getByRole('list', { name: 'Needs you' }), 'Home’s rows give way to the strip').toHaveCount(0)
+    await expect(page.getByRole('group', { name: 'Suggestions' }).getByRole('button'), 'the chips stay under the docked box').toHaveCount(3)
+    const total = await platformNeeds(backend, 'alice')
+    expect(total, 'a reply from the team and Jira not answering are two needs').toBeGreaterThan(1)
+    await expect(pinnedOpen(page), 'Open shows the most urgent need beside the chat when it has a view there, and on its page otherwise').toBeVisible()
+    if ((await pinned(page).getByRole('link', { name: /^Open/ }).count()) > 0) await expect(pinned(page).getByRole('link', { name: /^Open/ })).toHaveAttribute('href', /^\/(settings|software|workflows)/)
+    else await expect(pinned(page).getByRole('button', { name: /^Open/ })).toHaveAttribute('data-opens', /^(run|approval|connection|software):/)
+    const urgent = await pinned(page).locator('b').first().innerText()
+    await expect(pinned(page).getByRole('button', { name: `${String(total - 1)} more that need you` }), 'N more opens Needs you beside the chat').toHaveAttribute('data-opens', 'needs:')
+    await pinned(page).getByRole('button', { name: /more that need you/ }).click()
+    await expect(page.locator('#side-panel').locator('li[data-home-item] b').first(), 'the strip names the first row of the panel: one ranking').toHaveText(urgent)
+    const held = await page.locator('#side-panel').locator('li[data-home-item]').count()
+    expect(held, 'the panel holds the needs the platform returned').toBeGreaterThan(1)
+    if (held < total) {
+      await expect(page.locator('#side-panel').getByRole('status').filter({ hasText: /^Showing / }), 'the panel says how many it shows of the count').toHaveText(`Showing ${String(held)} of ${String(total)}.`)
+      expect(await showEvery(page.locator('#side-panel'), page.locator('#side-panel').locator('li[data-home-item]')), 'Show more reaches every need N more counts').toBe(total)
+    }
+    await page.locator('#side-panel').getByRole('link', { name: 'More details' }).click()
+    await expect(page).toHaveURL(/\/workflows$/)
+    expect(await needsOnWorkflows(page), 'N more plus one is the Needs you rows on Workflows').toBe(total)
+    await expect(main(page).getByRole('heading', { name: 'Do now' })).toBeVisible()
+    await page.getByRole('link', { name: 'Back to the chat', exact: true }).click()
+    await expect(thread(page)).toContainText('What can you do?')
+    await expect(pinned(page)).toBeVisible()
+    await shot(page, info, 'r2-chat-pinned')
+    await repair()
+    await context.close()
+  })
+
+  test('SHELL-rail: the rail brings the chat back as it was, scroll position included', async ({ browser }) => {
+    const context = await devContext(browser, 'alice')
+    const page = await context.newPage()
+    await page.setViewportSize({ width: 1280, height: 520 })
+    await page.goto('/')
+    for (const words of ['What can you do?', 'Check my workflows', 'What needs me?']) await ask(page, words)
+    await expect(thread(page)).toContainText(/things? needs? you/)
+    const conversation = page.getByRole('region', { name: 'Conversation' })
+    await expect(conversation, 'a conversation that overflows is a Tab stop, so the keyboard can scroll it').toHaveAttribute('tabindex', '0')
+    await conversation.evaluate((element) => {
+      element.scrollTop = 120
+    })
+    const before = await conversation.evaluate((element) => element.scrollTop)
+    expect(before).toBeGreaterThan(0)
+    const rail = page.getByRole('navigation', { name: 'Browse' }).filter({ visible: true })
+    await rail.getByRole('link', { name: /^Workflows/ }).click()
+    await expect(thread(page)).toHaveCount(0)
+    await rail.getByRole('link', { name: /^Chat/ }).click()
+    await expect(thread(page)).toContainText('Check my workflows')
+    await expect.poll(() => conversation.evaluate((element) => element.scrollTop)).toBe(before)
+    await context.close()
+  })
+
+  test('ASK-needs: the answer counts what needs her, with one row each, and agrees with the platform', async ({ browser, backend }) => {
+    const repair = await jiraDown(backend)
+    const context = await devContext(browser, 'alice')
+    const page = await context.newPage()
+    await page.goto('/')
+    await ask(page, 'What needs me?')
+    const total = await platformNeeds(backend, 'alice')
+    await expect(thread(page)).toContainText(`${String(total)} ${total === 1 ? 'thing needs' : 'things need'} you`)
+    const rows = await thread(page).locator('li[data-home-item]').count()
+    expect(rows, 'one row each for the needs the platform returned').toBeGreaterThan(0)
+    if (rows < total) expect(await showEvery(thread(page), thread(page).locator('li[data-home-item]')), 'Show more under the answer reaches every need it counts').toBe(total)
+    await repair()
+    await context.close()
+  })
+
+  test('a short conversation is no Tab stop, because there is nothing to scroll', async ({ browser }) => {
+    const context = await devContext(browser, 'alice')
+    const page = await context.newPage()
+    await page.route('**/api/v1/planner/answer', (route) => route.fulfill({ json: { answer: 'which_software', word: 'version' } }))
+    await page.goto('/')
+    await ask(page, 'Is there a newer version?')
+    await expect(thread(page)).toContainText('Which software should I watch?')
+    await expect(page.getByRole('region', { name: 'Conversation' })).not.toHaveAttribute('tabindex')
+    await context.close()
+  })
+
+  test('Resume on Workflows with a conversation open adds the draft’s card after it, with focus on the card', async ({ browser, backend }) => {
+    const id = await cardDraft(backend, 'Resume in chat')
+    const context = await devContext(browser, 'alice')
+    try {
+      const page = await context.newPage()
+      await page.goto('/')
+      await ask(page, 'What can you do?')
+      await expect(thread(page).locator('li[data-answer]')).toHaveCount(1)
+      const rail = page.getByRole('navigation', { name: 'Browse' }).filter({ visible: true })
+      await rail.getByRole('link', { name: /^Workflows/ }).click()
+      await page.locator(`li[data-draft="${id}"]`).getByRole('link').click()
+      const resumed = thread(page).locator('[data-card]')
+      await expect(resumed).toContainText('Tickets closed last week')
+      await expect(thread(page), 'the conversation before it stays').toContainText('What can you do?')
+      await expect(resumed.getByRole('heading', { level: 3 }).first(), 'focus goes to the card').toBeFocused()
+      await expect(page, 'the address no longer asks for the draft').toHaveURL(/\/$/)
+    } finally {
+      await context.close()
+      await backend.send('DELETE', 'alice', `/api/v1/drafts/${id}`)
+    }
+  })
+
+  test('a card keeps what she did on it across pages, and New chat saves it once as her draft and says so', async ({ browser, backend }) => {
+    const context = await devContext(browser, 'alice')
+    const page = await context.newPage()
+    const saves = draftSaves(page)
+    await page.goto('/')
+    await ask(page, SUMMARY)
+    const card = thread(page).locator('[data-card]')
+    await expect(card.getByRole('heading', { level: 3 }).first(), 'a set-up card takes focus at its heading').toBeFocused()
+    await card.getByRole('button', { name: 'Every week', exact: true }).click()
+    await expect(page, 'the card saves her change as a draft').toHaveURL(/\?draft=/)
+    const draftId = new URL(page.url()).searchParams.get('draft') ?? ''
+    const rail = page.getByRole('navigation', { name: 'Browse' }).filter({ visible: true })
+    await rail.getByRole('link', { name: /^Workflows/ }).click()
+    await rail.getByRole('link', { name: /^Chat/ }).click()
+    await expect(card.locator('[data-part="When"]'), 'the card comes back as she left it').toContainText('Which day?')
+    const before = saves.length
+    await page.getByRole('button', { name: 'New chat' }).click()
+    await expect(page.getByRole('status').filter({ hasText: 'Your draft is saved. Find it on Workflows.' })).toBeVisible()
+    await expect.poll(() => saves.length, { message: 'New chat saves the card' }).toBeGreaterThan(before)
+    await page.waitForTimeout(1_000)
+    expect(saves.slice(before), 'New chat saves the card once, as alice').toEqual(['alice'])
+    const drafts = await backend.get<{ drafts: { draft_id: string; content: unknown }[] }>('alice', '/api/v1/drafts')
+    expect(drafts.drafts.filter((draft) => draft.draft_id === draftId), 'one draft, the card’s own').toHaveLength(1)
+    await context.close()
+    await backend.send('DELETE', 'alice', `/api/v1/drafts/${draftId}`)
+  })
+
+  test('a card she hadn’t finished is never saved as the next person who signs in', async ({ browser }) => {
+    const context = await devContext(browser, 'alice')
+    const page = await context.newPage()
+    const saves = draftSaves(page)
+    await page.goto('/')
+    await ask(page, 'Every Friday at 4pm, follow up on bug tickets in MOCK with no update for 41 days')
+    await expect(thread(page).locator('[data-card]')).toBeVisible()
+    await page.getByRole('button', { name: /Test controls/ }).click()
+    await page.getByRole('button', { name: 'Bob', exact: true }).click()
+    await expect(main(page).getByText(/^Good (morning|afternoon|evening), Bob$/)).toBeVisible()
+    await page.waitForTimeout(1_000)
+    expect(saves, 'no draft is saved as bob').not.toContain('bob')
+    await page.getByRole('button', { name: 'Alice', exact: true }).click()
+    await expect(thread(page).locator('[data-card]'), 'her card is there when she comes back').toBeVisible()
+    await context.close()
+  })
+
+  test('a workflow a chat card opens in the side panel has More details, a page with Back to the chat, which puts focus back on the chat', async ({ browser, backend }) => {
+    const name = `Back to the chat ${randomUUID().slice(0, 6)}`
+    await backend.post('alice', '/api/v1/agent-use-cases', { name, instruction: 'Check LangGraph for a new release and raise a ticket in MOCK.', agents: [{ card_id: 'crd_version_checker', values: { 'GitHub repository': 'langchain-ai/langgraph', 'Jira project': 'MOCK' } }] }, undefined, [201])
+    const context = await devContext(browser, 'alice')
+    const page = await context.newPage()
+    await page.goto('/')
+    await ask(page, `Is ${name} running?`)
+    await thread(page).getByRole('list', { name: 'Your workflows' }).getByRole('button', { name, exact: true }).click()
+    await page.locator('#side-panel').getByRole('link', { name: 'More details' }).click()
+    await expect(page.getByRole('link', { name: 'Back to the chat', exact: true })).toBeVisible()
+    await expect(main(page).getByRole('link', { name: 'Workflows', exact: true }), 'the page’s own Back gives way to Back to the chat').toHaveCount(0)
+    await page.getByRole('link', { name: 'Back to the chat', exact: true }).click()
+    await expect(thread(page)).toContainText(`Is ${name} running?`)
+    await expect(page.getByRole('heading', { level: 1, name: 'Planner' })).toBeFocused()
+    await expect(page.locator('#side-panel'), 'the panel is still there on return').toBeVisible()
+    await context.close()
+  })
+
+  test('ROLE-own-chat: signing in as someone else never shows the last person’s chat, and hers is there when she comes back', async ({ browser }) => {
+    const context = await devContext(browser, 'alice')
+    const page = await context.newPage()
+    await page.goto('/')
+    await ask(page, 'Check my workflows')
+    await expect(thread(page)).toContainText('Check my workflows')
+    await page.getByRole('button', { name: /Test controls/ }).click()
+    await page.getByRole('button', { name: 'Bob', exact: true }).click()
+    await expect(main(page).getByText(/^Good (morning|afternoon|evening), Bob$/)).toBeVisible()
+    await expect(thread(page)).toHaveCount(0)
+    await expect(main(page)).not.toContainText('Check my workflows')
+    await page.getByRole('button', { name: 'Alice', exact: true }).click()
+    await expect(thread(page)).toContainText('Check my workflows')
+    await context.close()
+  })
+
+  test('FIX-starts-count: the sentence over the places to start counts the places it shows', async ({ browser }) => {
+    const context = await devContext(browser, 'alice')
+    const page = await context.newPage()
+    await page.route('**/api/v1/planner/answer', (route) => route.fulfill({ json: { answer: 'ideas' } }))
+    await page.goto('/')
+    await ask(page, 'set up another workflow')
+    const uses = thread(page).getByRole('button', { name: 'Use this' })
+    await expect(uses.first(), 'the places to start are drawn before they are counted').toBeVisible()
+    const places = await uses.count()
+    await expect(thread(page)).toContainText(places === 1 ? 'Here is a place to start. Pick it, or tell me something else.' : `Here are ${String(places)} places to start. Pick one, or tell me something else.`)
+    await context.close()
+  })
+
+  test('New chat clears the thread and brings back Home’s rows in place of the strip, and the keyboard reaches the box, New chat and the strip', async ({ browser, backend }) => {
+    const repair = await jiraDown(backend)
+    const context = await devContext(browser, 'alice')
+    const page = await context.newPage()
+    await page.goto('/')
+    await ask(page, 'What can you do?')
+    await tabTo(page, pinnedOpen(page))
+    await tabTo(page, page.getByRole('button', { name: 'New chat' }))
+    await page.keyboard.press('Enter')
+    await expect(thread(page)).toHaveCount(0)
+    await expect(pinned(page)).toHaveCount(0)
+    await expect(main(page).getByRole('list', { name: 'Needs you' })).toBeVisible()
+    await expect(box(page)).toBeFocused()
+    await repair()
+    await context.close()
+  })
+})
+
+test.describe('the edit card (spec 6.7)', () => {
+  test.beforeAll(async ({ baseURL }) => {
+    await connectMockModel(String(baseURL))
+  })
+
+  const WEEKDAYS_8 = { day: 'weekdays', at: '08:00' }
+  const sentenceOf = (answer: Locator) => answer.locator('p[id$="-sentence"]')
+  const heading = (answer: Locator) => editCard(answer).getByRole('heading', { level: 3 })
+
+  test('Change by talking, ANS-edit-save: Save change publishes a version from the chat, Open shows it beside, the page lists it, and Undo publishes the one before again', async ({ browser, backend }) => {
+    const morning = await scheduledWorkflow(backend, `Morning check ${tag()}`, WEEKDAYS_8)
+    const context = await devContext(browser, 'alice')
+    const page = await context.newPage()
+    const watch = watchPage(page)
+    await page.goto('/')
+    const answer = await askAndWait(page, `Make the ${morning.name} run on Mondays only`)
+    await expect(sentenceOf(answer), 'the card needs no lead: its head says what changes').toHaveCount(0)
+    await expect(heading(answer), 'the card takes focus on its heading').toBeFocused()
+    await expect(heading(answer)).toHaveText(`Change ${morning.name}`)
+    await expect(editCard(answer)).toContainText(/When\s*Weekdays 8:00\s*becomes\s*Mon 8:00/)
+    await expect(editCard(answer).locator('[data-edit-pill]')).toHaveText('Not saved')
+    await expect(answer.getByRole('button', { name: /^Set up/ }), 'no new set-up card').toHaveCount(0)
+    expect((await versionsOf(backend, morning.id)).map((v) => v.version), 'nothing is saved before Save change').toEqual([2, 1])
+
+    await editCard(answer).getByRole('button', { name: 'Save change' }).click()
+    await expect(editCard(answer).locator('[data-edit-status]')).toHaveText('Saved as version 3.')
+    await expect(editCard(answer).locator('[data-edit-pill]')).toHaveText('Saved')
+    await expect(editCard(answer).getByRole('button', { name: /^Undo/ })).toBeFocused()
+    expect(await shown(backend, morning.id)).toMatchObject({ version: 3, schedule: { day: 'monday', at: '08:00' } })
+    expect((await versionsOf(backend, morning.id))[0]).toMatchObject({ version: 3, by: 'alice', via: 'chat' })
+    await editCard(answer).getByRole('button', { name: `Open ${morning.name}` }).click()
+    await expect(page.locator('#side-panel').getByRole('heading', { level: 2 }), 'Open shows the workflow beside the chat').toHaveText(morning.name)
+    await page.locator('#side-panel').getByRole('button', { name: 'Close' }).click()
+
+    const rail = page.getByRole('navigation', { name: 'Browse' }).filter({ visible: true })
+    await rail.getByRole('link', { name: /^Workflows/ }).click()
+    await main(page).getByRole('link', { name: morning.name, exact: true }).click()
+    await expect(page).toHaveURL(new RegExp(`/workflows/${morning.id}$`))
+    await page.locator('summary', { hasText: 'Versions' }).click()
+    await expect(page.getByRole('list', { name: 'Versions, newest first' }).getByRole('listitem').first()).toContainText(/Version 3, in use\s*Today, \d{1,2}:\d\d\. Alice changed when it runs from every weekday at 8:00 to every Monday at 8:00\./)
+    await rail.getByRole('link', { name: /^Chat/ }).click()
+    const kept = newestAnswer(page)
+    await expect(editCard(kept), 'the card keeps its Undo across pages').toContainText('Saved as version 3.')
+    await editCard(kept).getByRole('button', { name: /^Undo/ }).click()
+    await expect(editCard(kept).locator('[data-edit-status]')).toHaveText('Back to Weekdays 8:00.')
+    await expect(editCard(kept).locator('[data-edit-pill]')).toHaveText('Undone')
+    await expect(page.getByRole('status').filter({ hasText: 'Back to version 2, saved as version 4.' }), 'Undo says which version it went back to, and the version it saved').toHaveCount(1)
+    expect(await shown(backend, morning.id)).toMatchObject({ version: 4, schedule: WEEKDAYS_8 })
+    expect((await versionsOf(backend, morning.id))[0]).toMatchObject({ version: 4, via: 'chat', undid: 3 })
+    await expectAccessible(page, path.join(OUT, 'axe'), 'r8-edit-card')
+    assertClean(watch)
+    await context.close()
+  })
+
+  test('ANS-edit-after: a later change on its page is named and takes Undo away, a stale Undo is refused with a 409, and a paused workflow says so', async ({ browser, backend }) => {
+    const morning = await scheduledWorkflow(backend, `Morning check ${tag()}`, WEEKDAYS_8)
+    const context = await devContext(browser, 'alice')
+    const page = await context.newPage()
+    await page.goto('/')
+    const answer = await askAndWait(page, `Make the ${morning.name} run on Mondays only`)
+    const reread = rereadOf(page, morning.id)
+    await editCard(answer).getByRole('button', { name: 'Save change' }).click()
+    await expect(editCard(answer)).toContainText('Saved as version 3.')
+    await reread
+    const later = await backend.saveWorkflowSchedule('carol', morning.id, { day: 'friday', at: '17:30' })
+    expect(later.status, 'carol changes it on its page').toBe(200)
+    await editCard(answer).getByRole('button', { name: /^Undo/ }).click()
+    await expect(editCard(answer).getByRole('alert')).toHaveText(`Could not undo version 3. ${morning.name} changed again since, so Undo would throw that change away.`)
+    await expect(editCard(answer)).toContainText('Saved as version 3. Changed again since, on its page.')
+    await expect(editCard(answer).getByRole('button', { name: /^Undo/ }), 'no Undo that would throw away a later change').toHaveCount(0)
+    expect(await shown(backend, morning.id), 'the stale Undo published nothing').toMatchObject({ version: 4, schedule: { day: 'friday', at: '17:30' } })
+
+    await backend.post('alice', `/api/v1/use-cases/${morning.id}/pause`)
+    const paused = await askAndWait(page, `Make the ${morning.name} run at 9am`)
+    await editCard(paused).getByRole('button', { name: 'Save change' }).click()
+    await expect(editCard(paused)).toContainText('Saved as version 5. It’s paused, so it won’t run until you resume it.')
+    await context.close()
+  })
+
+  test('ANS-asks, ANS-edit-days and ANS-edit-honest: a bare hour is asked, two days hold Save, “it” is the workflow just discussed, and a change it can’t make names the workflow', async ({ browser, backend }) => {
+    const morning = await scheduledWorkflow(backend, `Morning check ${tag()}`, WEEKDAYS_8)
+    const context = await devContext(browser, 'alice')
+    const page = await context.newPage()
+    await page.goto('/')
+
+    const hour = await askAndWait(page, `make the ${morning.name} run at 9`)
+    await expect(editCard(hour)).toContainText('At 9:00 or 21:00?')
+    await expect(editCard(hour), 'no time is guessed: the change is the question').toHaveText(/Weekdays 8:00\s*becomes\s*At 9:00 or 21:00\?/)
+    await editCard(hour).getByRole('button', { name: '9:00', exact: true }).click()
+    await expect(editCard(hour)).toHaveText(/Weekdays 8:00\s*becomes\s*Weekdays 9:00/)
+    await expect(editCard(hour).getByRole('button', { name: 'Save change' }), 'focus moves to Save change once the time is picked').toBeFocused()
+
+    const it = await askAndWait(page, 'make it daily')
+    await expect(heading(it), '“it” is the workflow the answer before was about').toHaveText(`Change ${morning.name}`)
+    await expect(editCard(it)).toContainText(/Weekdays 8:00\s*becomes\s*Daily 8:00/)
+
+    const days = await askAndWait(page, `make the ${morning.name} run on Mondays and Thursdays`)
+    await expect(editCard(days)).toHaveText(/“Mondays and Thursdays”\s*I can only set one day\./)
+    await expect(editCard(days)).toContainText('Ask again without the part with a cross.')
+    await expect(editCard(days).getByRole('button', { name: 'Save change' }), 'no Save change that can’t work').toHaveCount(0)
+
+    const rename = await askAndWait(page, `rename the ${morning.name} to Daily tickets`)
+    await expect(sentenceOf(rename)).toHaveText(`From the chat I can only change when ${morning.name} runs.`)
+    await expect(editCard(rename)).toHaveCount(0)
+    await expect(rename.getByRole('button', { name: `Open ${morning.name}` }).or(rename.getByRole('link', { name: `Open ${morning.name}` }))).toBeVisible()
+
+    const react = await askAndWait(page, 'Make the React check run on Mondays only')
+    await expect(sentenceOf(react)).toHaveText(/^You don’t have a React check\. React isn’t on the Software watchlist/)
+    await expect(react.getByRole('button', { name: 'Watch React' })).toBeVisible()
+    const missing = await askAndWait(page, `make the purple ${tag()} report run on Mondays only`)
+    await expect(sentenceOf(missing)).toHaveText(/^You don’t have a workflow called “purple \w+ report”\.$/)
+    expect(await shown(backend, morning.id), 'no answer saved anything').toMatchObject({ version: 2, schedule: WEEKDAYS_8 })
+    await context.close()
+  })
+
+  test('ANS-status-commands, ANS-questions, ANS-name-words and FIX-name-*: a change beside a question is a command, a question is never one, and a schedule word in a name is neither', async ({ browser, backend }) => {
+    const morning = await scheduledWorkflow(backend, `Morning check ${tag()}`, WEEKDAYS_8)
+    const weekly = await scheduledWorkflow(backend, `Weekly report ${tag()}`, { day: 'friday', at: '16:00' })
+    const context = await devContext(browser, 'alice')
+    const page = await context.newPage()
+    await page.goto('/')
+
+    const pause = await askAndWait(page, `what needs my attention? pause the ${morning.name}`)
+    await expect(pause).toContainText(`Paused ${morning.name}. It won’t start a new run until you resume it.`)
+    await expect(pause).toHaveText(/“what needs my attention”\s*Ask this on its own, and I’ll answer it\./)
+    expect((await shown(backend, morning.id)).state, 'C13: the pause reached the platform').toBe('paused')
+    const resume = await askAndWait(page, `resume the ${morning.name}`)
+    await expect(resume).toContainText(`${morning.name} is on again.`)
+    expect((await shown(backend, morning.id)).state).toBe('on')
+    const word = tag()
+    const first = await scheduledWorkflow(backend, `Morning check ${word}`, WEEKDAYS_8)
+    const second = await scheduledWorkflow(backend, `Evening check ${word}`, WEEKDAYS_8)
+    const which = await askAndWait(page, `pause the ${word} check`)
+    await expect(which, 'C12: two fit, so she picks, and nothing is paused yet').toContainText('Which workflow?')
+    expect(await tooSmall(which.locator('button, a[href]'), [first.name, second.name]), 'principle 11: 44 px targets, but for the sketch’s 36 px workflow chips').toEqual([])
+    expect((await shown(backend, first.id)).state).toBe('on')
+    await which.getByRole('button', { name: second.name }).click()
+    await expect(which.getByRole('status')).toHaveText(`Paused ${second.name}. It won’t start a new run until you resume it.`)
+    expect((await shown(backend, second.id)).state, 'only the one she picked').toBe('paused')
+    expect((await shown(backend, first.id)).state).toBe('on')
+    const both = await askAndWait(page, `how are my workflows doing? make the ${morning.name} run at 10am`)
+    await expect(editCard(both)).toContainText(/Weekdays 8:00\s*becomes\s*Weekdays 10:00/)
+
+    const next = await askAndWait(page, `when does the ${morning.name} run next?`)
+    await expect(editCard(next), 'a question is never a change').toHaveCount(0)
+    await expect(next).not.toContainText('I can only change')
+    const asked = await askAndWait(page, `when does the ${morning.name} run? make it run daily`)
+    await expect(editCard(asked)).toContainText(/Weekdays 8:00\s*becomes\s*Daily 8:00/)
+
+    const ten = await askAndWait(page, `make the ${weekly.name} run at 10am`)
+    await expect(editCard(ten), 'only the time changes, and the day stays').toContainText(/Fri 16:00\s*becomes\s*Fri 10:00/)
+    const how = await askAndWait(page, `how is the ${weekly.name} doing?`)
+    await expect(editCard(how), 'FIX-name-not-command: a name with “weekly” in it asks nothing').toHaveCount(0)
+    await expect(how.getByRole('button', { name: /^Set up/ })).toHaveCount(0)
+    await context.close()
+  })
+
+  test('ANS-edit-never and the watchlist: Never mind changes nothing, and saving the watchlist’s schedule says who owns it, with no Undo it can’t keep', async ({ browser, backend }, info) => {
+    const before = (await backend.get<{ watchlist: { schedule: { day: string; at: string } | null } | null }>('alice', '/api/v1/watchlist')).watchlist?.schedule ?? null
+    if ((await backend.get<{ watchlist: unknown }>('alice', '/api/v1/watchlist')).watchlist === null) await backend.freshWatchlist('alice')
+    const put = await backend.saveWatchlistSchedule('alice', { day: 'monday', at: '09:00' })
+    expect(put.status).toBe(200)
+    const context = await devContext(browser, 'alice')
+    const page = await context.newPage()
+    try {
+      await page.goto('/')
+      const never = await askAndWait(page, 'Run the software check every day instead of every Monday')
+      await expect(editCard(never)).toContainText(/Mon 9:00\s*becomes\s*Daily 9:00[\s\S]*software on the watchlist are checked\. Saving makes you the owner of this schedule\./)
+      await editCard(never).getByRole('button', { name: 'Never mind' }).click()
+      await expect(editCard(never).locator('[data-edit-pill]'), 'Never mind keeps the card, changing nothing').toHaveText('Not changed')
+      await expect(box(page), 'Never mind hands focus back to the box').toBeFocused()
+      await expect(editCard(never).getByRole('button'), 'nothing left to press on a card she backed out of').toHaveCount(0)
+      expect((await backend.get<{ watchlist: { schedule: { day: string } } }>('alice', '/api/v1/watchlist')).watchlist.schedule.day, 'Never mind changed nothing').toBe('monday')
+
+      const seven = await askAndWait(page, 'Run the software check every day at 7am')
+      await editCard(seven).getByRole('button', { name: 'Save change' }).click()
+      await expect(editCard(seven).locator('[data-edit-status]')).toHaveText('Saved.')
+      await expect(editCard(seven)).toContainText('and made you the owner of this schedule.')
+      await expect(editCard(seven).getByRole('button', { name: /^Undo/ })).toHaveCount(0)
+      await expect(editCard(seven).getByRole('link', { name: 'Change it on the Software page' })).toBeVisible()
+      for (const width of [1920, 1280, 900, 390]) {
+        await page.setViewportSize({ width, height: 900 })
+        await noSideways(page)
+        await shot(page, info, `r8-edit-watchlist-saved-${String(width)}`)
+      }
+    } finally {
+      if (before) await backend.saveWatchlistSchedule('alice', before)
+      else await backend.turnOffWatchlistSchedule('alice')
+      await context.close()
+    }
+  })
+
+  test('choices: words that fit two workflows ask which, and picking one shows its change', async ({ browser, backend }) => {
+    const both = tag()
+    await scheduledWorkflow(backend, `Friday digest ${both}`, { day: 'friday', at: '16:00' })
+    await scheduledWorkflow(backend, `Friday follow-up ${both}`, WEEKDAYS_8)
+    const context = await devContext(browser, 'alice')
+    const page = await context.newPage()
+    await page.goto('/')
+    const which = await askAndWait(page, `make the Friday ${both} one run at 10am`)
+    await expect(sentenceOf(which)).toHaveText('Which workflow should I change?')
+    await expect(heading(which)).toBeFocused()
+    await editCard(which).getByRole('button', { name: `Friday follow-up ${both}` }).click()
+    await expect(heading(which)).toHaveText(`Change Friday follow-up ${both}`)
+    await expect(editCard(which)).toContainText(/Weekdays 8:00\s*becomes\s*Weekdays 10:00/)
+    await context.close()
+  })
+
+  test('pressing on the card: Save waits for the workflow’s read, Enter in Another time only picks, and saving one card turns an older card on the same workflow stale', async ({ browser, backend }) => {
+    const morning = await scheduledWorkflow(backend, `Morning check ${tag()}`, WEEKDAYS_8)
+    const context = await devContext(browser, 'alice')
+    const page = await context.newPage()
+    const puts: string[] = []
+    page.on('request', (request) => {
+      if (request.method() === 'PUT' && request.url().includes(morning.id)) puts.push(request.url())
+    })
+    let release: () => void = () => undefined
+    const held = new Promise<void>((resolve) => (release = resolve))
+    await page.route(`**/api/v1/use-cases/${morning.id}`, async (route) => {
+      if (route.request().method() === 'GET') await held
+      await route.continue()
+    })
+    await page.goto('/')
+
+    const early = await askAndWait(page, `make the ${morning.name} run at 10am`)
+    const save = editCard(early).getByRole('button', { name: 'Save change' })
+    await expect(save, 'Save waits while the workflow is read').toHaveAttribute('aria-busy', 'true')
+    await save.click({ force: true })
+    release()
+    await expect(save).not.toHaveAttribute('aria-busy', 'true')
+    expect(puts, 'a press before the read saved nothing').toEqual([])
+
+    const unread = await askAndWait(page, `make the ${morning.name} run on Mondays in the afternoon`)
+    await expect(editCard(unread)).toContainText('What time should it run?')
+    await editCard(unread).getByRole('button', { name: 'Another time' }).click()
+    await editCard(unread).getByLabel('Time, Singapore').fill('10:05')
+    await editCard(unread).getByLabel('Time, Singapore').press('Enter')
+    await expect(editCard(unread)).toHaveText(/Weekdays 8:00\s*becomes\s*Mon 10:05/)
+    expect(puts, 'Enter in Another time picks the time and saves nothing').toEqual([])
+
+    await editCard(unread).getByRole('button', { name: 'Save change' }).click()
+    await expect(editCard(unread)).toContainText('Saved as version 3.')
+    await expect(early.locator('p[id$="-sentence"]'), 'the older card on the same workflow is out of date now').toHaveText(`${morning.name} changed since I read it, and runs every Monday at 10:05 now. Ask again to change it.`)
+    await expect(editCard(early), 'and offers no Save').toHaveCount(0)
+    expect(await shown(backend, morning.id)).toMatchObject({ version: 3, schedule: { day: 'monday', at: '10:05' } })
+    await context.close()
+  })
+
+  test('bob, an Approver, never gets an edit answer', async ({ backend }) => {
+    const morning = await scheduledWorkflow(backend, `Morning check ${tag()}`, WEEKDAYS_8)
+    const answer = await backend.send<{ answer?: string }>('POST', 'bob', '/api/v1/planner/answer', { text: `Make the ${morning.name} run on Mondays only` })
+    expect([answer.status, answer.body.answer], 'bob is told who makes changes, never given an edit').toEqual([200, 'operators'])
+    expect(await shown(backend, morning.id)).toMatchObject({ version: 2, schedule: WEEKDAYS_8 })
+  })
+})
+
+/**
+ * Bob, an Approver who isn't an Operator, asks questions only (ADR 0043, spec 5.3). Matches ROLE-home, ROLE-asks, ROLE-refuse,
+ * ROLE-panel, KEYS-ROLE, FIX-decided-whole, FIX-approve-any-object, FIX-decisions-detail and FOLLOW-bob-mixed in checks/paths-v4.cjs.
+ */
+test.describe('bob asks the Planner questions only', () => {
+  test.beforeAll(async ({ baseURL }) => {
+    await connectMockModel(String(baseURL))
+  })
+
+  const bobBox = (page: Page) => page.getByLabel('Ask, or describe a task')
+  const newest = (page: Page) => thread(page).locator(':scope > li').last()
+  const said = (page: Page) => newest(page).locator('p').first()
+  const panel = (page: Page) => page.locator('#side-panel')
+  const OPS = /^Operators set up workflows\. Ask .+\.$/
+  const CHANGES = [/^Turn it on$/, /^Set up/, /^Watch it$/, /^Save/, /^Pause/, /^Resume/, /^Retry/, /^Run now$/, /^Check now$/, /^Add .*watchlist/i, /^Set it up with a yes$/, /^Approve/, /^Decline/]
+
+  async function bobAsks(page: Page, text: string): Promise<void> {
+    const before = await thread(page).locator(':scope > li[data-answer]').count()
+    await bobBox(page).fill(text)
+    await bobBox(page).press('Enter')
+    await expect(thread(page).locator(':scope > li[data-answer]')).toHaveCount(before + 1)
+    await expect(newest(page)).toHaveAttribute('data-answer', 'true')
+  }
+
+  async function noChangeControl(page: Page): Promise<void> {
+    for (const name of CHANGES) await expect(thread(page).getByRole('button', { name }), `no ${String(name)} in any answer`).toHaveCount(0)
+    await expect(thread(page).locator('[data-card]'), 'no set-up or edit card').toHaveCount(0)
+  }
+
+  /** A run Alice started that Bob declined, so he has a decision of his own to ask about. */
+  async function bobDeclined(backend: Backend, reason: string): Promise<void> {
+    const { runId, approvalId } = await backend.waitingRun('alice')
+    const { digest } = await backend.get<{ digest: string }>('bob', `/api/v1/approvals/${approvalId}`)
+    await backend.post('bob', `/api/v1/approvals/${approvalId}/decisions`, { step: 0, verdict: 'decline', digest, reason }, undefined, [201])
+    await backend.waitForState(runId, ['rejected'])
+  }
+
+  test('ROLE-home and ROLE-asks: bob’s Home has the box and his three questions above Needs you, and each answer comes from platform state', async ({ browser, backend }, info) => {
+    await bobDeclined(backend, 'Wrong version')
+    await backend.waitingRun('alice')
+    const context = await devContext(browser, 'bob')
+    const page = await context.newPage()
+    const watch = watchPage(page)
+    await page.goto('/')
+    await expect(main(page).getByText(/^Good (morning|afternoon|evening), Bob$/)).toBeVisible()
+    await expect(page.getByRole('heading', { level: 1 }), 'his heading says what waits for his yes, in the sketch’s words').toHaveText(/^(\d+ changes? waits? for your yes|\d+ things? needs? you)$/)
+    const line = (await page.getByRole('heading', { level: 1 }).innerText()).trim()
+    await expect(bobBox(page)).toHaveAttribute('placeholder', 'Ask, or describe a task')
+    const chips = page.getByRole('group', { name: 'Suggestions' }).getByRole('button')
+    await expect(chips).toHaveText(['What waits for me?', 'What did I decide?', 'What can you do?'])
+    const tops = await Promise.all([bobBox(page), chips.first(), main(page).getByRole('list', { name: 'Needs you' })].map(async (at) => (await at.boundingBox())?.y ?? -1))
+    expect(tops.every((top, index) => top >= 0 && (index === 0 || top > (tops[index - 1] ?? 0))), 'box, then the questions, then Needs you').toBe(true)
+    await expect(main(page), 'the sketch’s Home for Bob has no note').not.toContainText('You’re an Approver')
+    await settled(page)
+    await expectAccessible(page, path.join(OUT, 'axe'), 'planner-home-bob')
+    await shot(page, info, 'r16-bob-home')
+
+    await chips.first().click()
+    if (/waits? for your yes$/.test(line)) {
+      await expect(said(page), 'only requests wait, so the answer is the requests themselves, as the sketch’s cards').toHaveText(/^(This needs|These need) your yes\.$/)
+      await expect(newest(page).locator('[data-approval-pill]').first()).toHaveText('Needs your yes')
+      await expect(newest(page).getByRole('heading', { level: 3 }).first()).toHaveText(/^Create \d+ Jira tickets?$/)
+    } else {
+      await expect(newest(page).getByRole('heading', { level: 3 }), 'what needs him is his Home heading, as the card’s head').toHaveText(line)
+    }
+    await expect(newest(page).locator('[data-opens^="approval:"]').or(page.locator('#side-panel [data-approval-pill]')).first(), 'each request opens beside the chat, or already shows there').toBeVisible()
+    await bobAsks(page, 'What did I decide before?')
+    await expect(newest(page).getByRole('heading', { level: 3, name: 'Your recent decisions' })).toBeVisible()
+    await expect(newest(page).getByRole('list', { name: 'Your decisions' }).locator('[data-decision="decline"]').first()).toContainText(/Today \d+:\d\d · Wrong version\s*Declined/)
+    await bobAsks(page, 'did I decline anything?')
+    await expect(newest(page).getByRole('heading', { level: 3, name: 'Your recent declines' })).toBeVisible()
+    const verdicts = await newest(page).locator('[data-decision]').evaluateAll((rows) => rows.map((row) => row.getAttribute('data-decision')))
+    expect(verdicts.length > 0 && verdicts.every((verdict) => verdict === 'decline'), 'FIX-decisions-detail: only declines').toBe(true)
+    await bobAsks(page, 'How are the workflows doing?')
+    await expect(said(page)).toHaveText(/^The team has \d+ workflows?\./)
+    await bobAsks(page, 'What can you do?')
+    await expect(newest(page)).toContainText(/What I can do\s*Show what waits for your yes\s*Show exactly what a change will write\s*Show your past decisions/)
+    await noChangeControl(page)
+    await shot(page, info, 'r16-bob-asks')
+    assertClean(watch)
+    await context.close()
+  })
+
+  test('ROLE-refuse and FIX-approve-any-object: every change gets who makes changes, an approve goes to the request, and nothing changes', async ({ browser, backend }, info) => {
+    await backend.waitingRun('alice')
+    const workflows = async () => (await backend.get<{ use_cases: { use_case_id: string; state: string }[] }>('alice', '/api/v1/use-cases')).use_cases
+    const before = await workflows()
+    const context = await devContext(browser, 'bob')
+    const page = await context.newPage()
+    const watch = watchPage(page)
+    await page.goto('/')
+    for (const change of ['Pause the weekly closed-ticket summary', 'Every Friday, sum up the tickets we closed this week', 'Watch Redis releases', 'Could you make the morning check daily?']) {
+      await bobAsks(page, change)
+      await expect(said(page), `“${change}” gets who makes changes`).toHaveText(OPS)
+      await noChangeControl(page)
+    }
+    await shot(page, info, 'r16-bob-refused')
+    // The reading may take an approve for a way around the gate and refuse it, and the refusal stands. Either way he gets the request to open.
+    for (const decide of ['approve the upgrade tickets', 'decline that request', 'auto-approve everything', 'approve it for me']) {
+      await bobAsks(page, decide)
+      await expect(said(page)).toHaveText(/^(I can’t approve or decline for you\. Open the request to see exactly what it will write, and decide there\.|I can’t set that up\. Anything that changes data waits for a yes, every time\.)$/)
+      await expect(newest(page).locator('[data-approval-pill]').first(), 'the request, as its card, to open and decide on').toBeVisible()
+    }
+    await bobAsks(page, 'approve the upgrade and pause the morning new-ticket check')
+    await expect(said(page), 'an approve beside a change is refused whole, by builder or by the reading').toHaveText(/^(Operators set up workflows\. Ask .+\.|I can’t set that up\. Anything that changes data waits for a yes, every time\.)$/)
+    await noChangeControl(page)
+    expect(await workflows(), 'nothing changed').toEqual(before)
+    assertClean(watch)
+    await context.close()
+  })
+
+  test('FOLLOW-bob-mixed: a question asked with a change is answered as it is alone, and the change has a cross saying who makes changes', async ({ browser, backend }, info) => {
+    await backend.waitingRun('alice')
+    const context = await devContext(browser, 'bob')
+    const page = await context.newPage()
+    await page.goto('/')
+    await bobAsks(page, 'What is waiting for my yes?')
+    const alone = (await said(page).innerText()).trim()
+    await bobAsks(page, 'What is waiting for my yes, and pause the morning new-ticket check')
+    await expect(said(page)).toHaveText(alone)
+    await expect(newest(page).getByRole('list', { name: 'Each part of your request' })).toContainText(/“pause the morning new-ticket check”\s*Operators set up workflows\. Ask /)
+    await noChangeControl(page)
+    await shot(page, info, 'r16-bob-mixed')
+    await context.close()
+  })
+
+  test('FIX-decided-whole: asking to see past decisions reads the whole question, with no part crossed', async ({ browser, backend }) => {
+    await bobDeclined(backend, 'Not this week')
+    const context = await devContext(browser, 'bob')
+    const page = await context.newPage()
+    await page.goto('/')
+    await bobAsks(page, 'show my past decisions')
+    await expect(newest(page).getByRole('heading', { level: 3, name: 'Your recent decisions' })).toBeVisible()
+    await expect(newest(page).locator('[data-mark="no"]')).toHaveCount(0)
+    await context.close()
+  })
+
+  test('ROLE-panel and KEYS-ROLE: by keyboard bob asks, opens the request from the answer in the side panel, approves there, and his card follows', async ({ browser, backend }, info) => {
+    const { runId } = await backend.waitingRun('alice')
+    const context = await devContext(browser, 'bob', { reducedMotion: true })
+    const page = await context.newPage()
+    await page.setViewportSize({ width: 1280, height: 900 })
+    await page.goto('/')
+    await page.locator('h1').focus()
+    await tabTo(page, bobBox(page))
+    await page.keyboard.type('What is waiting for my yes?')
+    await page.keyboard.press('Enter')
+    await expect(newest(page)).toHaveAttribute('data-answer', 'true')
+    const opener = newest(page).locator(`[data-opens="approval:${runId}"]`)
+    // With one request the sketch shows it beside the chat at once, and the card hides its button. Closed, the card offers it again.
+    await expect(opener.or(panel(page)).first()).toBeVisible({ timeout: 20_000 })
+    if (await panel(page).isVisible()) await panel(page).getByRole('button', { name: 'Close' }).click()
+    await tabTo(page, opener)
+    const ring = await opener.evaluate((el) => { const style = getComputedStyle(el); return (style.outlineStyle !== 'none' && style.outlineWidth !== '0px') || style.boxShadow !== 'none' })
+    expect(ring, 'Review and decide shows its focus').toBe(true)
+    await page.keyboard.press('Enter')
+    await expect(page.locator('#side-panel-h'), 'focus goes to the panel’s heading').toBeFocused()
+    await shot(page, info, 'r16-bob-panel')
+    await panel(page).getByRole('button', { name: 'Approve', exact: true }).click()
+    await expect(panel(page).getByRole('button', { name: 'Approve', exact: true }), 'the decision is made in the panel').toHaveCount(0, { timeout: 30_000 })
+    await expect(panel(page), 'the panel keeps the request, with its record').toContainText(/Approved by Bob (at|on \w{3} \d{1,2} \w{3} at) \d{1,2}:\d{2}\. MOCK-\d+ created\./, { timeout: 30_000 })
+    await panel(page).getByRole('button', { name: 'Close' }).click()
+    const card = newest(page).locator('section', { has: page.locator(`[data-opens="approval:${runId}"]`) })
+    await expect(card, 'his card stays and says what happened').toContainText(/Approved\. MOCK-\d+ created\./, { timeout: 20_000 })
+    // Other requests left waiting by earlier tests keep their own Review and decide, so only his card is checked.
+    await expect(card.getByRole('button', { name: 'Review and decide' }), 'and no longer asks him to decide').toHaveCount(0)
+    await expect(card.getByRole('button', { name: 'Open', exact: true }), 'it opens the request’s record instead').toBeVisible()
+    await context.close()
+  })
 })

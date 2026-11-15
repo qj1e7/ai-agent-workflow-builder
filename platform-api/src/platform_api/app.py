@@ -8,12 +8,14 @@ from typing import Literal
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from pydantic import Field
 
 from platform_api import auth, wiring
 from platform_api.body_guard import RefuseDeepJson, refuse_invalid_request
 from platform_api.builder import (
     drafts_http,
     lifecycle_http,
+    n8n_http,
     planner_http,
     team_requests_http,
     watchlist_http,
@@ -23,8 +25,16 @@ from platform_api.db import Database
 from platform_api.monitoring import Copier
 from platform_api.monitoring import http as monitoring_http
 from platform_api.nul_guard import RefuseNul
+from platform_api.orchestration import (
+    confluence_reads_http,
+    decisions_http,
+    jira_reads_http,
+    n8n_calls_http,
+    people_http,
+    self_test,
+    settings_http,
+)
 from platform_api.orchestration import http as orchestration_http
-from platform_api.orchestration import jira_reads_http, people_http, settings_http
 from platform_api.practice_jira import dev_router as practice_jira_dev_router
 from platform_api.practice_jira import router as practice_jira_router
 from platform_api.security_headers import SecurityHeaders
@@ -40,6 +50,11 @@ class ReadinessCheck(WireModel):
     name: str
     ok: bool
     detail: str
+    counts_for_ready: bool = Field(
+        default=True,
+        description="False for a check that only warns. Ready does not wait for it, so a probe "
+        "never takes the platform out of traffic over it.",
+    )
 
 
 class Readiness(WireModel):
@@ -68,6 +83,10 @@ def _log_platform_api() -> None:
     loggers, so without this an INFO line, such as a skipped scheduled check, is dropped.
     Uvicorn's loggers and the root logger are left alone, so no line prints twice. Building the
     app again adds no second handler."""
+    # httpx and httpcore log each request's full address at INFO, and a webhook's address or n8n's
+    # resume address carries its own signature. Their warnings and errors still show.
+    for name in ("httpx", "httpcore"):
+        logging.getLogger(name).setLevel(logging.WARNING)
     logger = logging.getLogger("platform_api")
     if any(handler.name == _LOG_HANDLER for handler in logger.handlers):
         return
@@ -100,15 +119,19 @@ def create_app(env: Mapping[str, str] | None = None) -> FastAPI:
     app.add_middleware(SecurityHeaders)
     app.include_router(builder_http.router)
     app.include_router(lifecycle_http.router)
+    app.include_router(n8n_http.router)
     app.include_router(drafts_http.router)
     app.include_router(planner_http.router)
     app.include_router(watchlist_http.router)
     app.include_router(team_requests_http.router)
     app.include_router(orchestration_http.router)
+    app.include_router(decisions_http.router)
+    app.include_router(n8n_calls_http.router)
     # The practice Jira, its REST API and its own pages, only while it is the Jira in use.
     if settings.practice_systems and settings.jira.practice:
         app.include_router(practice_jira_router)
     app.include_router(jira_reads_http.router)
+    app.include_router(confluence_reads_http.router)
     app.include_router(settings_http.router)
     app.include_router(people_http.router)
     app.include_router(monitoring_http.router)
@@ -170,6 +193,8 @@ async def readiness_of(
                 "FROM orchestration.engine_status WHERE id = 1"
             )
         ).fetchone()
+        seen = await self_test.SelfTests().seen(uow)
+        now = uow.now
     if row is None:
         checks.append(
             ReadinessCheck(name="workflows", ok=False, detail="bootstrap has not run yet")
@@ -182,7 +207,9 @@ async def readiness_of(
         if loaded:
             detail += f"; loaded: {loaded}"
         checks.append(ReadinessCheck(name="workflows", ok=bool(row["ready"]), detail=detail))
-    return Readiness(ready=all(c.ok for c in checks), checks=checks)
+    ok, detail = self_test.ready_line(seen, now)
+    checks.append(ReadinessCheck(name="self_test", ok=ok, detail=detail, counts_for_ready=False))
+    return Readiness(ready=all(c.ok for c in checks if c.counts_for_ready), checks=checks)
 
 
 def _copy_detail(copying: bool, behind: bool) -> str:

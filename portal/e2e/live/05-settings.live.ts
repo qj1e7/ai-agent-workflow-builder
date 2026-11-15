@@ -16,13 +16,13 @@ test.afterAll(async () => {
   await api.dispose()
 })
 
-test('Settings opens on Connections, and People and roles lists everyone with their roles', async ({ page }, info) => {
+test('Settings opens on Connections, and People and permissions lists everyone with their roles', async ({ page }, info) => {
   await page.goto('/settings')
   await expect(settingsTab(page, 'Connections')).toHaveAttribute('aria-pressed', 'true')
   await expect(page.getByRole('heading', { level: 2, name: 'Connections' })).toBeVisible()
-  await settingsTab(page, 'People and roles').click()
+  await settingsTab(page, 'People and permissions').click()
   await expect(page).toHaveURL(/\/settings\?tab=people$/)
-  await expect(settingsTab(page, 'People and roles')).toBeFocused()
+  await expect(settingsTab(page, 'People and permissions')).toBeFocused()
   for (const [email, name] of [
     ['alice@example.test', 'Alice'],
     ['bob@example.test', 'Bob'],
@@ -58,7 +58,7 @@ test('an Operator adds a person, asks for them as an Approver, and another Appro
     await openSettings(bobPage, 'people')
     await personRow(bobPage, email).getByRole('button', { name: `Confirm ${name} as an Approver` }).click()
     await expect(bobPage.locator('#people-notice')).toContainText(`${name} is now an Approver.`)
-    await expect(roleBox(bobPage, 'Approver', name)).toBeChecked()
+    await expect(personRow(bobPage, email).getByText('Operator and Approver', { exact: true })).toBeVisible()
     await shot(bobPage, info, 'p10-03-confirmed')
     await bob.close()
     expect((await api.person(email))?.approver).toBe(true)
@@ -106,7 +106,11 @@ test('an Approver who is not an Operator sees every tab read-only', async ({ bro
     await expect(page.getByRole('main').locator('form')).toHaveCount(0)
     const editable = await page.getByRole('main').locator('input:not([disabled]), select:not([disabled]), textarea:not([disabled])').count()
     expect(editable, `${tab}: fields bob could change`).toBe(0)
+    await expect(page.getByRole('main').locator(':is(button, input, select, textarea):disabled, [aria-disabled="true"]'), `${tab}: no dead control`).toHaveCount(0)
   }
+  await expect(page.getByRole('main').getByRole('checkbox')).toHaveCount(0)
+  await expect(personRow(page, 'alice@example.test').getByText('Operator and Approver', { exact: true })).toBeVisible()
+  await expect(personRow(page, 'bob@example.test').getByText('Approver', { exact: true })).toBeVisible()
   await shot(page, info, 'p10-04-read-only')
   await bob.close()
 })

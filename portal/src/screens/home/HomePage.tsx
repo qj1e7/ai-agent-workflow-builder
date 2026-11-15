@@ -1,32 +1,42 @@
-import { useEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore } from 'react'
-import { Link, useSearchParams } from 'react-router'
-import { useHome } from '../../api/homeQueries'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
+import { useSearchParams } from 'react-router'
+import { Link } from '../../ui/Link'
+import { useCacheScope } from '../../api/context'
+import { useHome, type Pager } from '../../api/homeQueries'
 import { isOperator } from '../../api/me'
-import { useCapabilities, useDrafts, usePlannerAnswer } from '../../api/plannerQueries'
+import { useCapabilities, useDrafts } from '../../api/plannerQueries'
+import { useSweepOnFocus } from '../../api/workflowQueries'
 import { useMe, useModelSettings, useWatchlist } from '../../api/queries'
-import type { HomeOut, PlannerAnswerIn } from '../../api/types'
+import type { HomeOut, PlannerReply } from '../../api/types'
 import { PageHead } from '../../shell/PageHead'
 import { Button, ButtonLink } from '../../ui/Button'
-import { IconClock } from '../../ui/icons'
+import { useMediaQuery } from '../../ui/media'
+import { motionAllowed } from '../../ui/motion'
+import { Toast } from '../../ui/Toast'
 import { PlannerBot, type BotState } from '../../ui/PlannerBot'
 import { restoreDraft } from './card'
 import { NEEDS_YOU_ANCHOR, type Page } from './AnswerCards'
 import { CapabilityLists } from './CapabilityLists'
-import { approverLine, comingUpOf, HOME_NEEDS_SHOWN, moreWords, needsOf, needsTotal, SEE_ALL_WORDS, stateLine, suggestionsOf, type Needs, type Next } from './home'
-import { NeedsSection, useArrival } from './NeedsSection'
+import { APPROVER_SUGGESTIONS, approverHeading, approverLine, HOME_NEEDS_SHOWN, needsOf, needsTotal, suggestionsOf, type Needs } from './home'
+import { NeedsMore } from './panels/NeedsMore'
+import { usePagedNeeds } from './usePagedNeeds'
+import { NeedRows, NeedsSection, useArrival } from './NeedsSection'
+import { ChatView, NEWEST } from './ChatView'
+import { foldSender, type Transition } from './fold'
+import { useChat } from './ChatProvider'
 import { PlannerBox } from './PlannerBox'
-import { EMPTY, isThinking, previousOf, threadReducer } from './threadState'
-import { Thread } from './Thread'
 import homeStyles from './Home.module.css'
 import styles from './Planner.module.css'
 
 interface HomePageProps {
-  readonly heading: string
+  /** "Good afternoon, Alice": the small line above Home's question, and the heading while Home can't load. */
+  readonly greeting: string
   readonly today: string
   readonly now: Date
 }
 
-export function HomePage({ heading, today, now }: HomePageProps) {
+export function HomePage({ greeting, today, now }: HomePageProps) {
   const home = useHome()
   const loaded = home.data
   return (
@@ -37,10 +47,10 @@ export function HomePage({ heading, today, now }: HomePageProps) {
         </p>
       ) : null}
       {loaded ? (
-        <HomeBody heading={heading} home={loaded} now={now} />
+        <HomeBody greeting={greeting} home={loaded} now={now} />
       ) : home.isError ? (
         <>
-          <PageHead heading={heading} lead={today} />
+          <PageHead heading={greeting} lead={today} />
           <p role="alert">Home could not be loaded.</p>
           <Button onClick={() => void home.refetch()}>Try again</Button>
         </>
@@ -53,180 +63,174 @@ export function HomePage({ heading, today, now }: HomePageProps) {
   )
 }
 
-/** One heading for the whole visit, so the shell's focus stays on it. Home draws no heading while it loads, and the shell moves focus to the first one drawn. */
-export function HomeBody({ heading, home, now }: { heading: string; home: HomeOut; now: Date }) {
+/**
+ * One heading for the whole visit, so the shell's focus stays on it. Home draws no heading while it loads, and the shell moves focus to the first one drawn.
+ * Each person gets their own Home, so nothing one person had on a card is ever drawn, or saved, for the next.
+ */
+export function HomeBody({ greeting, home, now }: { greeting: string; home: HomeOut; now: Date }) {
   const operator = isOperator(useMe().data)
-  return operator ? <OperatorHome heading={heading} home={home} now={now} /> : <ApproverHome heading={heading} home={home} now={now} />
-}
-
-function ComingNext({ next }: { next: Next }) {
-  return (
-    <div className={homeStyles['coming']}>
-      <IconClock size={16} />
-      <span>
-        <b>Coming up next:</b> <Link to={next.to}>{next.name}</Link>, {next.when}
-        {next.more > 0 ? `, and ${next.more} more` : ''}.
-      </span>
-      <Link to="/workflows">See all workflows</Link>
-    </div>
-  )
-}
-
-function AllQuiet({ next }: { next: Next | null }) {
-  return (
-    <div className={homeStyles['quiet']}>
-      <b>All quiet</b>
-      {next ? (
-        <>
-          Next up: <Link to={next.to}>{next.name}</Link>, {next.when}.
-        </>
-      ) : (
-        'Nothing is scheduled yet.'
-      )}
-    </div>
-  )
-}
-
-/** An Approver who is not an Operator: what waits for a yes, in full. No box, no suggestions, nothing to create. */
-function ApproverHome({ heading, home, now }: { heading: string; home: HomeOut; now: Date }) {
-  const needs = useMemo(() => needsOf(home), [home])
-  const next = comingUpOf(home, now)
-  const arrival = useArrival(needs.shown.map((need) => need.key))
-  const total = needsTotal(home)
-  return (
-    <>
-      <PageHead heading={heading} lead={approverLine(home)}>
-        {total > 0 && next ? <ComingNext next={next} /> : null}
-      </PageHead>
-      <NeedsSection
-        needs={needs}
-        now={now}
-        arrival={arrival}
-        more={moreWords(needs.more) ? <p className={homeStyles['more']}>{moreWords(needs.more)}</p> : null}
-        whenNone={<AllQuiet next={next} />}
-      />
-      <p className="muted">You’re an Approver, so you decide on requests. Operators set up workflows.</p>
-    </>
-  )
+  const person = useCacheScope()
+  return <PlannerHome key={person} greeting={greeting} home={home} now={now} operator={operator} />
 }
 
 const PHONE = '(max-width: 600px)'
 
-function usePhone(): boolean {
-  return useSyncExternalStore(
-    (notify) => {
-      if (typeof window.matchMedia !== 'function') return () => undefined
-      const query = window.matchMedia(PHONE)
-      query.addEventListener('change', notify)
-      return () => query.removeEventListener('change', notify)
-    },
-    () => typeof window.matchMedia === 'function' && window.matchMedia(PHONE).matches,
-    () => false,
-  )
-}
-
-const SEND_FAILED = 'That didn’t send. Try again.'
 const DRAFT_GONE = 'That draft is gone. Ask for it again below.'
-const DAY_ONE_HEADING = 'Which software should we keep up to date?'
-const DAY_ONE_LEAD = 'Ask about your watchlist, or tell me what software to watch.'
+/** Answers that are a card to work on. Focus goes to the card's heading; any other answer hands it back to the box. */
+const CARD_ANSWERS: ReadonlySet<PlannerReply['answer']> = new Set(['setup_card', 'part', 'watchlist', 'edit'])
+/** An Operator's question on Home, day one included (the sketch's heading). */
+export const OPERATOR_HEADING = 'What should run by itself?'
 const OFFLINE_HEADING = 'I can’t read new requests until an AI model is connected'
 const OFFLINE_LEAD =
   'Without an AI model, the Planner can’t answer questions. The Software watchlist keeps checking for new releases.'
+const APPROVER_OFFLINE_HEADING = 'I can’t answer questions until an AI model is connected'
+const APPROVER_OFFLINE_LEAD = 'An Operator can connect one in Settings.'
+const APPROVER_NOTE = 'You’re an Approver, so you decide on requests. Operators set up workflows.'
 
-/** Needs you on Home, without the “no AI model” row while the page already offers Connect a model. The count stays the platform’s. */
-function needsHere(home: HomeOut, withoutModel: boolean): Needs {
-  const shown = needsOf(withoutModel ? { ...home, connections: home.connections.filter((item) => item.id !== 'model') } : home, HOME_NEEDS_SHOWN)
-  return { ...shown, total: needsTotal(home) }
+/** Needs you on Home: the most urgent few of the grouped list. The count is the platform’s, and the model’s row stays, so every row counted is listed. */
+function needsHere(home: HomeOut): Needs {
+  return { ...needsOf(home, HOME_NEEDS_SHOWN), total: needsTotal(home) }
 }
 
-function OperatorHome({ heading, home, now }: { heading: string; home: HomeOut; now: Date }) {
+/** The fold's view transition: the box and its chips glide to the bottom. None when motion is reduced or the browser has none. */
+function viewTransition(): Transition | null {
+  if (typeof document.startViewTransition !== 'function' || !motionAllowed()) return null
+  return (update) => void document.startViewTransition(() => flushSync(update))
+}
+
+/**
+ * Home, the chat with the Planner (spec 5). An Operator asks for anything. Someone who isn’t an Operator gets the same calm Home with
+ * the box for questions only, their three questions as suggestions and Needs you in full (spec 5.3). The server refuses them every
+ * change, so the Portal only draws no control that changes anything.
+ */
+function PlannerHome({ greeting, home, now, operator }: { greeting: string; home: HomeOut; now: Date; operator: boolean }) {
   const model = useModelSettings()
-  const capabilities = useCapabilities()
-  const answer = usePlannerAnswer()
-  const [thread, dispatch] = useReducer(threadReducer, EMPTY)
-  const [text, setText] = useState('')
-  const [problem, setProblem] = useState<string | null>(null)
+  const capabilities = useCapabilities({ enabled: operator })
+  const chat = useChat()
+  const { thread, text, problem } = chat
+  const [folding, setFolding] = useState(false)
+  const [sendOne] = useState(() => foldSender(setFolding))
+  const busy = chat.busy || folding
   const [keys, setKeys] = useState(0)
-  const [lists, setLists] = useState(false)
   const boxRef = useRef<HTMLTextAreaElement>(null)
-  const focusAnswer = useRef(false)
-  const phone = usePhone()
+  const focusOn = useRef<number | null>(null)
+  const phone = useMediaQuery(PHONE)
   const [params, setParams] = useSearchParams()
-  const wanted = params.get('draft')
+  const wanted = operator ? params.get('draft') : null
   const drafts = useDrafts(wanted !== null)
   const reopened = useRef<string | null>(null)
+  /** The draft id the newest card wrote in the address, as opposed to one Resume brought here. */
+  const written = useRef<string | null>(null)
   const offline = model.data !== undefined && model.data.active === null
-  const dayOne = home.workflows === 0
   const empty = thread.messages.length === 0
-  const busy = isThinking(thread)
-  const needs = useMemo(() => needsHere(home, offline), [home, offline])
+  const { needs: paged, pager } = usePagedNeeds(home)
+  const needs = useMemo(() => (operator ? needsHere(home) : (paged ?? needsOf(home))), [home, operator, paged])
   const arrival = useArrival(needs.shown.map((need) => need.key))
-  const watching = useWatchlist().data?.software.length
-  const watched = watching !== undefined && watching > 0
-  const suggestions = useMemo(() => suggestionsOf(watching, capabilities.data), [watching, capabilities.data])
+  const watching = useWatchlist({ enabled: operator }).data?.software.length
+  const watched = !operator || (watching !== undefined && watching > 0)
+  const suggestions = useMemo(() => (operator ? suggestionsOf(watching, capabilities.data) : APPROVER_SUGGESTIONS), [operator, watching, capabilities.data])
+  const { resume, type, setProblem, arrive } = chat
 
-  // Resume on Workflows lands here with the draft's id in the address, and the draft opens as the card it was.
+  // A version someone published in n8n comes into the chat as a card, oldest first, and never twice.
+  useSweepOnFocus(operator)
   useEffect(() => {
-    if (wanted === null || reopened.current === wanted || thread.messages.length > 0) return
+    if (operator) arrive(home.changed_in_n8n)
+  }, [operator, arrive, home.changed_in_n8n])
+
+  // Resume on Workflows lands here with the draft's id in the address, and the draft opens as the card it was, after any
+  // conversation. The newest card writes its own draft's id there too, and that card is already shown.
+  const newest = thread.messages.at(-1)
+  const newestDraft = newest ? chat.cardMemory(newest.id).kept()?.draft : undefined
+  useEffect(() => {
+    if (wanted === null) {
+      reopened.current = null
+      written.current = null
+      return
+    }
+    if (newestDraft === wanted) {
+      written.current = wanted
+      return
+    }
+    if (reopened.current === wanted) return
+    // The card that wrote it is still shown above, now that a newer answer came, so the address goes back to the chat.
+    if (written.current === wanted) {
+      written.current = null
+      setParams({}, { replace: true })
+      return
+    }
     if (!drafts.data || (drafts.isStale && !drafts.isFetchedAfterMount)) return
     reopened.current = wanted
+    setParams({}, { replace: true })
     const found = drafts.data.find((saved) => saved.draft_id === wanted)
     const { form, plan } = found ? restoreDraft(found) : { form: null, plan: null }
     if (form !== null && form.rows.length > 0) {
-      dispatch({ type: 'resumed', start: { form, plan, draftId: wanted, similar: null, ...(found ? { resumed: found } : {}) } })
+      focusOn.current = thread.last + 1
+      resume({ form, plan, draftId: wanted, similar: null, ...(found ? { resumed: found } : {}) })
       return
     }
-    setParams({}, { replace: true })
     setTimeout(() => {
       if (form === null) setProblem(DRAFT_GONE)
-      else setText(form.text)
+      else type(form.text)
       boxRef.current?.focus()
     }, 0)
-  }, [wanted, drafts.data, drafts.isStale, drafts.isFetchedAfterMount, thread.messages.length, setParams])
+  }, [wanted, newestDraft, drafts.data, drafts.isStale, drafts.isFetchedAfterMount, thread.last, setParams, resume, type, setProblem])
 
-  // A chip leaves the page when pressed, so focus would fall to the page. It goes to the answer once that arrives.
+  // The fold draws the box anew at the bottom of the chat, so focus goes with it.
+  const wasEmpty = useRef(empty)
+  useLayoutEffect(() => {
+    if (wasEmpty.current && !empty) boxRef.current?.focus({ preventScroll: true })
+    wasEmpty.current = empty
+  }, [empty])
+
+  // The box stays focused, read-only, while the Planner answers. A card then takes focus at its heading, and any other answer, or a
+  // send that failed, leaves it in the box.
   useEffect(() => {
-    if (!focusAnswer.current || thread.messages.at(-1)?.kind !== 'reply') return
-    focusAnswer.current = false
-    document.querySelector<HTMLElement>('#thread-h + ol > li:last-child')?.focus({ preventScroll: true })
-  }, [thread.messages])
+    if (newest === undefined) return
+    if (newest.kind === 'thinking') {
+      focusOn.current = newest.id
+      return
+    }
+    if (focusOn.current === null) return
+    const arrived = newest.id === focusOn.current
+    focusOn.current = null
+    const card = arrived && (newest.kind === 'card' || (newest.kind === 'reply' && CARD_ANSWERS.has(newest.reply.answer)))
+    const heading = card ? document.querySelector<HTMLElement>(`${NEWEST} section h3`) : null
+    if (heading) {
+      heading.tabIndex = -1
+      heading.focus({ preventScroll: true })
+    } else boxRef.current?.focus()
+  }, [newest])
 
-  useEffect(() => {
-    if (thread.messages.length > 0) document.querySelector('#thread-h + ol > li:last-child')?.scrollIntoView({ block: 'nearest' })
-  }, [thread.messages.length])
-
-  function send(ask: PlannerAnswerIn, shown: string, restore: string | null) {
-    setProblem(null)
-    dispatch({ type: 'sent', text: shown })
-    setText('')
-    answer.mutate(ask, {
-      onSuccess: (reply) => dispatch({ type: 'answered', reply, typed: shown }),
-      onError: () => {
-        dispatch({ type: 'failed' })
-        if (restore !== null) setText(restore)
-        setProblem(SEND_FAILED)
-      },
-    })
-  }
-
-  const sendText = () => {
-    const typed = text.trim()
-    if (typed === '' || busy) return
-    const previous = previousOf(thread)
-    send(previous === null ? { text: typed } : { text: typed, previous }, typed, text)
-  }
   const page: Page = {
     ask: (words) => {
-      if (!busy) send({ text: words }, words, null)
+      if (!busy) chat.send({ text: words }, words, null)
     },
     edit: (words) => {
-      setText(words)
+      chat.type(words)
       setTimeout(() => boxRef.current?.focus(), 0)
     },
+    box: () => setTimeout(() => boxRef.current?.focus(), 0),
   }
 
   const hero: BotState = offline ? 'sorry' : busy ? 'thinking' : text.trim() !== '' ? 'listening' : 'idle'
   const look = ((text.length % 24) - 12) / 12
+  const toast = <Toast inline message={chat.note} onDismiss={chat.readNote} focusAfter={() => boxRef.current ?? document.querySelector<HTMLElement>('main h1')} />
+
+  if (offline && !operator) {
+    return (
+      <div className={styles['planner']}>
+        <div className={`${styles['welcome']} ${styles['offline']}`}>
+          <PlannerBot state="sorry" size={phone ? 96 : 128} />
+          <h1 tabIndex={-1}>{APPROVER_OFFLINE_HEADING}</h1>
+          <p className={styles['lead']}>
+            {APPROVER_OFFLINE_LEAD} {approverLine(home)}
+          </p>
+        </div>
+        {needs.shown.length > 0 ? <NeedsHere needs={needs} now={now} arrival={arrival} pager={pager} full /> : null}
+        <p className={`muted ${styles['centred']}`}>{APPROVER_NOTE}</p>
+      </div>
+    )
+  }
 
   if (offline) {
     return (
@@ -241,112 +245,109 @@ function OperatorHome({ heading, home, now }: { heading: string; home: HomeOut; 
             </ButtonLink>
           </div>
         </div>
-        {needs.shown.length > 0 ? <NeedsHere needs={needs} now={now} arrival={arrival} quiet /> : null}
+        {needs.shown.length > 0 ? <NeedsHere needs={needs} now={now} arrival={arrival} pager={pager} quiet connectAbove /> : null}
         {capabilities.data ? <CapabilityLists view={capabilities.data} /> : null}
       </div>
     )
   }
 
+  const send = (go: () => void) => sendOne(go, empty ? viewTransition() : null)
+  const box = (
+    <PlannerBox
+      text={text}
+      busy={busy}
+      empty={empty}
+      problem={problem}
+      boxRef={boxRef}
+      onChange={(value) => {
+        chat.type(value)
+        setKeys((count) => count + 1)
+      }}
+      onSend={() => send(chat.sendText)}
+    />
+  )
+  const chips = (
+    <div className={styles['chips']} role="group" aria-label={watched ? 'Suggestions' : 'Starting points'}>
+      {suggestions.map((suggestion) => (
+        <button
+          key={suggestion.label}
+          type="button"
+          className={styles['chip']}
+          aria-disabled={busy || undefined}
+          onClick={() => {
+            if (busy) return
+            send(() => (suggestion.local === 'behind' ? chat.askBehind(suggestion.label) : chat.send(suggestion.ask, suggestion.label, null)))
+            boxRef.current?.focus()
+          }}
+        >
+          {suggestion.label}
+        </button>
+      ))}
+    </div>
+  )
+
+  if (!empty) {
+    return (
+      <>
+        <ChatView
+          home={home}
+          now={now}
+          page={page}
+          box={box}
+          chips={chips}
+          toast={toast}
+          onNewChat={() => {
+            chat.newChat()
+            if (wanted !== null) setParams({}, { replace: true })
+            setTimeout(() => boxRef.current?.focus(), 0)
+          }}
+        />
+      </>
+    )
+  }
+
   return (
-    <div className={styles['planner']}>
-      <div className={`${styles['welcome']} ${empty ? '' : styles['compact']}`}>
-        <PlannerBot state={hero} size={empty ? (phone ? 96 : 128) : 52} keys={keys} look={look} />
-        <div>
-          {empty ? (
-            dayOne ? (
-              <>
-                <h1 tabIndex={-1}>{DAY_ONE_HEADING}</h1>
-                <p className={styles['lead']}>{DAY_ONE_LEAD}</p>
-              </>
-            ) : (
-              <>
-                <h1 tabIndex={-1}>{heading}</h1>
-                <p className={styles['lead']}>{stateLine(home, now)}</p>
-              </>
-            )
-          ) : (
-            <h1 tabIndex={-1}>Planner</h1>
-          )}
-        </div>
+    <div className={styles['hero']} data-hero>
+      <PlannerBot state={hero} size={96} keys={keys} look={look} />
+      <p className={styles['hi']}>{greeting}</p>
+      <h1 tabIndex={-1}>{operator ? OPERATOR_HEADING : approverHeading(home)}</h1>
+      <div className={styles['dock']}>
+        {toast}
+        {box}
+        {chips}
       </div>
-      {empty ? null : <Thread thread={thread} now={now} page={page} />}
-      <PlannerBox
-        text={text}
-        busy={busy}
-        empty={empty}
-        phone={phone}
-        problem={problem}
-        boxRef={boxRef}
-        onChange={(value) => {
-          setText(value)
-          setKeys((count) => count + 1)
-        }}
-        onSend={sendText}
-      />
-      {empty ? (
-        <div className={styles['chips']} role="group" aria-label={watched ? 'Suggestions' : 'Starting points'}>
-          {suggestions.map((suggestion) => (
-            <button
-              key={suggestion.label}
-              type="button"
-              className={styles['chip']}
-              aria-disabled={busy || undefined}
-              onClick={() => {
-                if (busy) return
-                focusAnswer.current = true
-                send(suggestion.ask, suggestion.label, null)
-              }}
-            >
-              {suggestion.label}
-            </button>
-          ))}
-        </div>
-      ) : (
-        <div className={styles['centred']}>
-          <button
-            type="button"
-            className={styles['linkButton']}
-            onClick={() => {
-              dispatch({ type: 'new_chat' })
-              setText('')
-              setProblem(null)
-              if (wanted !== null) setParams({}, { replace: true })
-            }}
-          >
-            New chat
-          </button>
-        </div>
-      )}
-      {empty && needs.shown.length > 0 ? <NeedsHere needs={needs} now={now} arrival={arrival} /> : null}
-      {empty && !dayOne && !suggestions.some((suggestion) => suggestion.ask.intent === 'abilities') ? (
-        <div className={styles['centred']}>
-          <button type="button" className={styles['linkButton']} aria-expanded={lists} onClick={() => setLists((open) => !open)}>
-            {lists ? 'Hide what I can do' : 'What can I ask for?'}
-          </button>
-        </div>
-      ) : null}
-      {empty && (dayOne || lists) && capabilities.data ? <CapabilityLists view={capabilities.data} /> : null}
+      <NeedRows needs={needs.shown} now={now} more={<More needs={needs} pager={pager} full={!operator} />} />
     </div>
   )
 }
 
-/** `quiet`: the page has its own main button, so Needs you has none. */
-function NeedsHere({ needs, now, arrival, quiet = false }: { needs: Needs; now: Date; arrival: ReturnType<typeof useArrival>; quiet?: boolean }) {
+/** What Needs you has past its rows on Home: a link to the rest on Workflows, or, where Home lists every row, Show more for the next page. */
+function More({ needs, pager, full }: { needs: Needs; pager: Pager; full: boolean }) {
+  if (full) return <NeedsMore needs={needs} pager={pager} />
   const left = needs.total - needs.shown.length
+  return left > 0 ? (
+    <p className={homeStyles['more']}>
+      <Link to="/workflows">
+        {left} more<span className="visually-hidden"> that need you</span>
+      </Link>
+    </p>
+  ) : null
+}
+
+/**
+ * `quiet`: the page has its own main button, so Needs you has none. `full`: Home lists every row, as it does for someone who isn’t an
+ * Operator, so the rest come with Show more here rather than a link to Workflows.
+ */
+function NeedsHere({ needs, now, arrival, pager, quiet = false, connectAbove = false, full = false }: { needs: Needs; now: Date; arrival: ReturnType<typeof useArrival>; pager: Pager; quiet?: boolean; connectAbove?: boolean; full?: boolean }) {
   return (
     <NeedsSection
       needs={needs}
       now={now}
       arrival={arrival}
       quiet={quiet}
+      connectAbove={connectAbove}
       anchor={NEEDS_YOU_ANCHOR}
-      more={
-        left > 0 ? (
-          <p className={homeStyles['more']}>
-            <Link to="/workflows">{SEE_ALL_WORDS}</Link>
-          </p>
-        ) : null
-      }
+      more={<More needs={needs} pager={pager} full={full} />}
       whenNone={null}
     />
   )

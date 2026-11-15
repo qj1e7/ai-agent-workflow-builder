@@ -1,6 +1,7 @@
-import type { ApprovalStepStatus, BlockKind, FailureReason, FailureStage, RunOutcome, Trigger, Verdict } from '../../api/types'
-import { runId as asRunId } from '../../stream/brand'
+import type { ApprovalStepStatus, ApproverRef, BlockKind, FailureReason, FailureStage, RunOutcome, Trigger, Verdict } from '../../api/types'
+import { runId as asRunId, type RunTime } from '../../stream/brand'
 import { parseEvent, type EventOf, type RunEvent } from '../../stream/parse'
+import { GATE_STEP, stepWords, writeLabel } from './words'
 
 export const PLANNER_ID = 'planner'
 
@@ -15,6 +16,9 @@ export type Phase =
   | { readonly state: 'proposed' }
   | { readonly state: 'awaiting_approval' }
   | { readonly state: 'acting' }
+  | { readonly state: 'skipped' }
+  | { readonly state: 'expired' }
+  | { readonly state: 'lost' }
   | { readonly state: 'succeeded'; readonly outcome: RunOutcome }
   | { readonly state: 'rejected'; readonly by: string; readonly step: number }
   | {
@@ -34,6 +38,13 @@ export type Spot =
   | { readonly at: 'write' }
   | { readonly at: 'done' }
 
+/** A declined request: who said yes to the steps before, who declined, and why when they said (spec 10.5). */
+export interface Declined {
+  readonly by: string
+  readonly approvedBy: readonly string[]
+  readonly reason: string | null
+}
+
 export interface ApprovalStep {
   readonly index: number
   readonly label: string
@@ -49,26 +60,37 @@ export interface Written {
   readonly url?: string | null
 }
 
-export type ChatItem =
-  | { readonly kind: 'started'; readonly seq: number; readonly by: string; readonly trigger: Trigger }
-  | { readonly kind: 'joined'; readonly seq: number; readonly agents: readonly AgentRef[] }
-  | { readonly kind: 'said'; readonly seq: number; readonly speaker: AgentRef; readonly text: string; readonly bad: boolean }
-  | { readonly kind: 'asked'; readonly seq: number; readonly channel: string | null; readonly posted: boolean | null }
-  | { readonly kind: 'decided'; readonly seq: number; readonly by: string; readonly verdict: Verdict; readonly step: string | null }
+/** One entry in the run's log, placed and timed by the event that made it. */
+export type ChatItem = { readonly seq: number; readonly at: RunTime } & (
+  | { readonly kind: 'started'; readonly by: string; readonly trigger: Trigger }
+  | { readonly kind: 'joined'; readonly agents: readonly AgentRef[] }
+  | { readonly kind: 'said'; readonly speaker: AgentRef; readonly text: string; readonly bad: boolean }
+  /** A request for a yes. Once the platform says it was posted to Teams, who may decide each step, in step order. */
+  | { readonly kind: 'asked'; readonly channel: string | null; readonly posted: boolean | null; readonly sentTo: readonly (readonly ApproverRef[])[] }
+  | { readonly kind: 'decided'; readonly by: string; readonly verdict: Verdict; readonly step: string | null }
   | {
       readonly kind: 'written'
-      readonly seq: number
       readonly connector: string
       readonly operation: string
       readonly refs: readonly string[]
       readonly urls?: Readonly<Record<string, string>>
     }
-  | { readonly kind: 'denied'; readonly seq: number }
-  | { readonly kind: 'retried'; readonly seq: number; readonly by: string | null }
-  | { readonly kind: 'finished'; readonly seq: number; readonly outcome: RunOutcome; readonly count: number; readonly operation: string | null }
-  | { readonly kind: 'declined'; readonly seq: number }
-  | { readonly kind: 'stopped'; readonly seq: number; readonly stage: FailureStage }
-  | { readonly kind: 'reported'; readonly seq: number; readonly by: string; readonly requestId: string }
+  | { readonly kind: 'denied' }
+  | { readonly kind: 'retried'; readonly by: string | null }
+  | { readonly kind: 'finished'; readonly outcome: RunOutcome; readonly count: number; readonly operation: string | null }
+  | { readonly kind: 'declined'; readonly record: Declined }
+  | { readonly kind: 'stopped'; readonly stage: FailureStage }
+  | { readonly kind: 'reported'; readonly by: string; readonly requestId: string }
+  | { readonly kind: 'found'; readonly text: string }
+  /** What a Tell block did, in the platform's own words: sent, not confirmed, what a test run would have sent, or nothing to report. */
+  | { readonly kind: 'told'; readonly line: string; readonly bad: boolean }
+)
+
+/** A spot the run reached, and when. */
+export interface Reached {
+  readonly spot: Spot
+  readonly at: RunTime
+}
 
 export interface RunModel {
   /** The last event folded in. Events are taken only in order, so this is also how many there are. */
@@ -79,14 +101,20 @@ export interface RunModel {
   readonly phase: Phase
   readonly spot: Spot
   readonly spotSeq: number
+  /** The spots this attempt reached, in order, from its start. The timer under the step at work counts from the first one the step covers. */
+  readonly reached: readonly Reached[]
   readonly agents: readonly AgentRef[]
   readonly failedAt: Spot | null
   readonly approvalId: string | null
   readonly steps: readonly ApprovalStep[]
   readonly proposed: number
+  /** What each proposed action does, such as create_ticket, so the run can say what it writes before the first write lands. */
+  readonly operations: readonly string[]
   readonly connector: string | null
   readonly written: readonly Written[]
   readonly approvedBy: readonly string[]
+  /** Why the Approver declined, from the decline event, when they gave a reason. */
+  readonly declineReason: string | null
   readonly retriedBy: readonly string[]
   /** What the agents said they found, from the step that closed their work. Kept after the approval stops carrying it. */
   readonly found: string
@@ -104,14 +132,17 @@ export const emptyModel: RunModel = {
   phase: { state: 'pending' },
   spot: { at: 'started' },
   spotSeq: 0,
+  reached: [],
   agents: [],
   failedAt: null,
   approvalId: null,
   steps: [],
   proposed: 0,
+  operations: [],
   connector: null,
   written: [],
   approvedBy: [],
+  declineReason: null,
   retriedBy: [],
   found: '',
   reports: [],
@@ -130,8 +161,11 @@ export function sameSpot(a: Spot | null, b: Spot | null): boolean {
   return a.at === b.at && (a.at !== 'agent' || (b.at === 'agent' && a.index === b.index))
 }
 
-function advanceTo(model: RunModel, spot: Spot, seq: number): RunModel {
-  return rank(spot) > rank(model.spot) ? { ...model, spot, spotSeq: seq } : model
+type When = Pick<RunEvent, 'seq' | 'at'>
+
+function advanceTo(model: RunModel, spot: Spot, event: When): RunModel {
+  if (rank(spot) <= rank(model.spot)) return model
+  return { ...model, spot, spotSeq: event.seq, reached: [...model.reached, { spot, at: event.at }] }
 }
 
 function placeAgent(model: RunModel, agent: AgentRef): { model: RunModel; spot: Spot } {
@@ -141,9 +175,9 @@ function placeAgent(model: RunModel, agent: AgentRef): { model: RunModel; spot: 
   return { model: { ...model, agents: [...model.agents, agent] }, spot: { at: 'agent', index: model.agents.length } }
 }
 
-function touch(model: RunModel, agent: AgentRef, seq: number): RunModel {
+function touch(model: RunModel, agent: AgentRef, event: When): RunModel {
   const placed = placeAgent(model, agent)
-  return working(advanceTo(placed.model, placed.spot, seq))
+  return working(advanceTo(placed.model, placed.spot, event))
 }
 
 function working(model: RunModel): RunModel {
@@ -196,13 +230,13 @@ function failedSpot(model: RunModel, stage: FailureStage): Spot {
 
 function joined(model: RunModel, event: EventOf<'agent_joined'>): RunModel {
   const agent = event.data.agent
-  const placed = placeAgent(touch(model, actorRef(event), event.seq), agent).model
+  const placed = placeAgent(touch(model, actorRef(event), event), agent).model
   const last = placed.chat.at(-1)
   if (last?.kind === 'joined') {
     if (last.agents.some((known) => known.id === agent.id)) return placed
     return { ...placed, chat: [...placed.chat.slice(0, -1), { ...last, agents: [...last.agents, agent] }] }
   }
-  return say(placed, { kind: 'joined', seq: event.seq, agents: [agent] })
+  return say(placed, { kind: 'joined', seq: event.seq, at: event.at, agents: [agent] })
 }
 
 function decided(model: RunModel, event: EventOf<'approval_decided'>): RunModel {
@@ -211,11 +245,11 @@ function decided(model: RunModel, event: EventOf<'approval_decided'>): RunModel 
     s.index === step ? { ...s, status: verdict === 'approve' ? ('approved' as const) : ('declined' as const), by } : s,
   )
   const label = steps.length > 1 ? (steps.find((s) => s.index === step)?.label ?? null) : null
-  let next = say({ ...model, steps }, { kind: 'decided', seq: event.seq, by, verdict, step: label })
+  let next = say({ ...model, steps }, { kind: 'decided', seq: event.seq, at: event.at, by, verdict, step: label })
   if (verdict === 'approve') {
     next = { ...next, approvedBy: next.approvedBy.includes(by) ? next.approvedBy : [...next.approvedBy, by] }
     const allApproved = steps.length === 0 || steps.every((s) => s.status === 'approved')
-    if (allApproved) next = advanceTo({ ...next, phase: { state: 'acting' } }, { at: 'write' }, event.seq)
+    if (allApproved) next = advanceTo({ ...next, phase: { state: 'acting' } }, { at: 'write' }, event)
   }
   return next
 }
@@ -224,29 +258,32 @@ function wrote(model: RunModel, event: EventOf<'write_action_done'>): RunModel {
   const { connector, operation, external_reference: ref } = event.data
   const url = event.data.url ?? null
   let next: RunModel = { ...model, connector, written: [...model.written, { connector, operation, ref, url }], phase: { state: 'acting' } }
-  next = advanceTo(next, { at: 'write' }, event.seq)
+  next = advanceTo(next, { at: 'write' }, event)
   const linked = url === null ? {} : { [ref]: url }
   const last = next.chat.at(-1)
   if (last?.kind === 'written' && last.connector === connector && last.operation === operation) {
     return { ...next, chat: [...next.chat.slice(0, -1), { ...last, refs: [...last.refs, ref], urls: { ...last.urls, ...linked } }] }
   }
-  return say(next, { kind: 'written', seq: event.seq, connector, operation, refs: [ref], urls: linked })
+  return say(next, { kind: 'written', seq: event.seq, at: event.at, connector, operation, refs: [ref], urls: linked })
 }
 
 function retried(model: RunModel, event: EventOf<'run_retried'>): RunModel {
   const by = event.actor.kind === 'user' ? event.actor.id : null
+  const spot: Spot = event.data.leg === 'work' ? { at: 'started' } : { at: 'write' }
   const base: RunModel = {
     ...model,
     failedAt: null,
     retriedBy: by === null || model.retriedBy.includes(by) ? model.retriedBy : [...model.retriedBy, by],
+    spot,
     spotSeq: event.seq,
+    reached: [{ spot, at: event.at }],
     reports: [],
   }
   const next: RunModel =
     event.data.leg === 'work'
-      ? { ...base, phase: { state: 'pending' }, spot: { at: 'started' }, agents: [], approvalId: null, steps: [], proposed: 0, written: [], found: '' }
-      : { ...base, phase: { state: 'acting' }, spot: { at: 'write' } }
-  return say(next, { kind: 'retried', seq: event.seq, by })
+      ? { ...base, phase: { state: 'pending' }, agents: [], approvalId: null, steps: [], proposed: 0, operations: [], written: [], found: '' }
+      : { ...base, phase: { state: 'acting' } }
+  return say(next, { kind: 'retried', seq: event.seq, at: event.at, by })
 }
 
 /** The outcomes of the agents' step that carry their summary. A failed step carries an error. */
@@ -255,7 +292,7 @@ const FOUND_OUTCOMES: ReadonlySet<string> = new Set(['proposed', 'nothing_to_wri
 function reported(model: RunModel, event: EventOf<'support_reported'>): RunModel {
   const { request_id: requestId, reported_by: by } = event.data
   if (model.reports.some((report) => report.requestId === requestId)) return model
-  return say({ ...model, reports: [...model.reports, { requestId, by }] }, { kind: 'reported', seq: event.seq, by, requestId })
+  return say({ ...model, reports: [...model.reports, { requestId, by }] }, { kind: 'reported', seq: event.seq, at: event.at, by, requestId })
 }
 
 function apply(model: RunModel, event: RunEvent): RunModel {
@@ -263,75 +300,91 @@ function apply(model: RunModel, event: RunEvent): RunModel {
     case 'run_created': {
       const { started_by: by, trigger, use_case_id: useCaseId } = event.data
       return say(
-        { ...model, startedBy: by, trigger: trigger ?? 'person', useCaseId, phase: { state: 'pending' } },
-        { kind: 'started', seq: event.seq, by, trigger: trigger ?? 'person' },
+        { ...model, startedBy: by, trigger: trigger ?? 'person', useCaseId, phase: { state: 'pending' }, reached: [{ spot: { at: 'started' }, at: event.at }] },
+        { kind: 'started', seq: event.seq, at: event.at, by, trigger: trigger ?? 'person' },
       )
     }
     case 'agent_joined':
       return joined(model, event)
     case 'agent_message':
-      return say(touch(model, event.data.speaker, event.seq), {
+      return say(touch(model, event.data.speaker, event), {
         kind: 'said',
-        seq: event.seq,
+        seq: event.seq, at: event.at,
         speaker: event.data.speaker,
         text: event.data.text,
         bad: false,
       })
     case 'agent_step_started':
     case 'agent_step_finished':
-      return touch(model, actorRef(event), event.seq)
+      return touch(model, actorRef(event), event)
     case 'agent_failed': {
-      const touched = touch(model, actorRef(event), event.seq)
+      const touched = touch(model, actorRef(event), event)
       const failedAt = placeAgent(touched, actorRef(event)).spot
-      return say({ ...touched, failedAt }, { kind: 'said', seq: event.seq, speaker: actorRef(event), text: event.data.message, bad: true })
+      return say({ ...touched, failedAt }, { kind: 'said', seq: event.seq, at: event.at, speaker: actorRef(event), text: event.data.message, bad: true })
     }
     case 'write_action_proposed': {
       const phase = model.phase.state === 'pending' || model.phase.state === 'working' ? { state: 'proposed' as const } : model.phase
-      return { ...model, phase, proposed: event.data.actions.length, connector: event.data.actions[0]?.connector ?? model.connector }
+      const { actions } = event.data
+      return { ...model, phase, proposed: actions.length, operations: actions.map((action) => action.operation), connector: actions[0]?.connector ?? model.connector }
     }
     case 'approval_requested': {
       const steps = event.data.steps.map((s) => ({ index: s.index, label: s.label, status: s.status, by: s.decided_by ?? null }))
-      const next = advanceTo({ ...model, approvalId: event.data.approval_id, steps, phase: { state: 'awaiting_approval' } }, { at: 'gate' }, event.seq)
-      return say(next, { kind: 'asked', seq: event.seq, channel: null, posted: null })
+      const next = advanceTo({ ...model, approvalId: event.data.approval_id, steps, phase: { state: 'awaiting_approval' } }, { at: 'gate' }, event)
+      return say(next, { kind: 'asked', seq: event.seq, at: event.at, channel: null, posted: null, sentTo: [] })
     }
     case 'approval_announced':
-      return amendLast(model, 'asked', (item) => ({ kind: 'asked', seq: item?.seq ?? event.seq, channel: event.data.channel, posted: true }))
+      return amendLast(model, 'asked', (item) => ({ kind: 'asked', seq: item?.seq ?? event.seq, at: item?.at ?? event.at, channel: event.data.channel, posted: true, sentTo: event.data.sent_to ?? [] }))
     case 'approval_announce_failed':
-      return amendLast(model, 'asked', (item) => ({ kind: 'asked', seq: item?.seq ?? event.seq, channel: event.data.channel, posted: false }))
+      return amendLast(model, 'asked', (item) => ({ kind: 'asked', seq: item?.seq ?? event.seq, at: item?.at ?? event.at, channel: event.data.channel, posted: false, sentTo: [] }))
     case 'approval_decided':
       return decided(model, event)
     case 'write_action_denied':
-      return say(model, { kind: 'denied', seq: event.seq })
+      return say(model, { kind: 'denied', seq: event.seq, at: event.at })
     case 'write_action_done':
       return wrote(model, event)
     case 'run_succeeded': {
-      const next = advanceTo({ ...model, phase: { state: 'succeeded', outcome: event.data.outcome } }, { at: 'done' }, event.seq)
+      const next = advanceTo({ ...model, phase: { state: 'succeeded', outcome: event.data.outcome } }, { at: 'done' }, event)
       return say(next, {
         kind: 'finished',
-        seq: event.seq,
+        seq: event.seq, at: event.at,
         outcome: event.data.outcome,
         count: model.written.length,
         operation: model.written[0]?.operation ?? null,
       })
     }
     case 'run_rejected': {
-      const next = advanceTo({ ...model, phase: { state: 'rejected', by: event.data.by, step: event.data.step } }, { at: 'done' }, event.seq)
-      return say(next, { kind: 'declined', seq: event.seq })
+      const { by, step } = event.data
+      const record: Declined = { by, approvedBy: model.approvedBy, reason: event.data.reason ?? null }
+      const next = advanceTo({ ...model, phase: { state: 'rejected', by, step }, declineReason: record.reason }, { at: 'done' }, event)
+      return say(next, { kind: 'declined', seq: event.seq, at: event.at, record })
     }
     case 'run_failed': {
       const { stage, reason, retryable, message } = event.data
       return say(
         { ...model, failedAt: failedSpot(model, stage), phase: { state: 'failed', stage, reason, retryable, message } },
-        { kind: 'stopped', seq: event.seq, stage },
+        { kind: 'stopped', seq: event.seq, at: event.at, stage },
       )
     }
     case 'run_retried':
       return retried(model, event)
-    case 'step_finished':
-      return event.data.step === 'run_agents' && FOUND_OUTCOMES.has(event.data.outcome) && event.data.detail ? { ...model, found: event.data.detail } : model
+    case 'step_finished': {
+      const { step, outcome, detail } = event.data
+      if (step !== 'run_agents' || !FOUND_OUTCOMES.has(outcome) || !detail) return model
+      return say({ ...model, found: detail }, { kind: 'found', seq: event.seq, at: event.at, text: detail })
+    }
     case 'support_reported':
       return reported(model, event)
+    case 'told':
+      return say(model, { kind: 'told', seq: event.seq, at: event.at, line: event.data.line, bad: event.data.status === 'not_confirmed' })
+    case 'run_skipped':
+      return advanceTo({ ...model, phase: { state: 'skipped' } }, { at: 'done' }, event)
+    case 'run_expired':
+      return advanceTo({ ...model, phase: { state: 'expired' } }, { at: 'done' }, event)
+    case 'run_lost':
+      return advanceTo({ ...model, phase: { state: 'lost' } }, { at: 'done' }, event)
     case 'leg_dispatched':
+    case 'execution_linked':
+    case 'execution_resumed':
     case 'step_started':
     case 'step_retried':
     case 'approval_outcome_not_posted':
@@ -363,64 +416,56 @@ export function foldWire(model: RunModel, raw: readonly unknown[], runId: string
 }
 
 export interface PlanBlock {
+  readonly key: string
   readonly name: string
   readonly kind: BlockKind
 }
 
-export type StationState = 'done' | 'now' | 'todo' | 'wait' | 'skip' | 'fail' | 'declined'
+export type StationState = 'todo' | 'now' | 'wait' | 'done' | 'err' | 'no' | 'skip'
 export type FaceState = 'idle' | 'thinking' | 'working' | 'waiting' | 'success' | 'error' | 'stopped'
+/** The picture in a step's dot: the clock or the person that started the run, an agent reading, the gate, the write. */
+export type StepIcon = 'schedule' | 'person' | 'read' | 'gate' | 'write'
 
-export type StationWho =
-  | { readonly kind: 'person'; readonly id: string }
-  | { readonly kind: 'agent'; readonly agent: AgentRef | null }
-  | { readonly kind: 'platform' }
-  | { readonly kind: 'none' }
+/** What a step says under its name. */
+export type Under =
+  | { readonly kind: 'timer'; readonly since: RunTime }
+  | { readonly kind: 'tickets'; readonly written: readonly Written[] }
+  | { readonly kind: 'note'; readonly text: string }
+  /** The waiting gate, once its request is in Teams: who may decide the open step, by name. */
+  | { readonly kind: 'sent'; readonly to: readonly string[] }
+  /** The waiting gate, when its request could not be posted to Teams. */
+  | { readonly kind: 'unsent' }
 
 export interface Station {
   readonly key: string
   readonly spot: Spot
   readonly label: string
-  /** The agent's name under a step the plan named, or nothing. */
-  readonly sub: string | null
-  readonly who: StationWho
+  readonly icon: StepIcon
+  /** The agent above an agent's step, once it joined. */
+  readonly agent: AgentRef | null
   readonly state: StationState
   readonly face: FaceState
+  readonly under: Under | null
 }
 
-interface Skeleton {
-  readonly key: string
-  readonly spot: Spot
-  readonly label: string
-  readonly sub: string | null
-  readonly who: StationWho
-}
+type Skeleton = Pick<Station, 'key' | 'spot' | 'label' | 'icon' | 'agent'>
 
-function skeleton(model: RunModel, plan: readonly PlanBlock[] | null, writeLabel: (connector: string | null) => string): Skeleton[] {
+function skeleton(model: RunModel, plan: readonly PlanBlock[] | null, trigger: string): Skeleton[] {
   const agentBlocks = plan?.filter((block) => block.kind === 'agent') ?? []
   const writeBlock = plan?.find((block) => block.kind === 'write_action')
   const hasGate = plan === null || plan.some((block) => block.kind === 'approval')
   const hasWrite = plan === null || writeBlock !== undefined
-  const count = Math.max(agentBlocks.length, model.agents.length)
-  const agents: Skeleton[] = Array.from({ length: count }, (_, index) => {
+  const count = Math.max(agentBlocks.length, model.agents.length, 1)
+  const agents = Array.from({ length: count }, (_, index): Skeleton => {
     const agent = model.agents[index] ?? null
-    const named = agentBlocks[index]?.name
-    return {
-      key: `agent:${index}`,
-      spot: { at: 'agent', index },
-      label: named ?? agent?.display ?? 'Agent',
-      sub: named && agent ? agent.display : null,
-      who: { kind: 'agent', agent },
-    }
+    const block = agentBlocks[index]
+    return { key: `agent:${index}`, spot: { at: 'agent', index }, label: block ? stepWords(block) : (agent?.display ?? 'Agent'), icon: 'read', agent }
   })
   return [
-    { key: 'started', spot: { at: 'started' }, label: 'Started', sub: null, who: model.startedBy ? { kind: 'person', id: model.startedBy } : { kind: 'none' } },
-    { key: 'planner', spot: { at: 'planner' }, label: 'Pick agents', sub: null, who: { kind: 'agent', agent: { id: PLANNER_ID, display: 'Planner' } } },
+    { key: 'trigger', spot: { at: 'started' }, label: trigger, icon: model.trigger === 'schedule' ? 'schedule' : 'person', agent: null },
     ...agents,
-    ...(hasGate ? [{ key: 'gate', spot: { at: 'gate' } as Spot, label: 'Approval gate', sub: null, who: { kind: 'none' } as StationWho }] : []),
-    ...(hasWrite
-      ? [{ key: 'write', spot: { at: 'write' } as Spot, label: writeBlock?.name ?? writeLabel(model.connector), sub: null, who: { kind: 'platform' } as StationWho }]
-      : []),
-    { key: 'done', spot: { at: 'done' }, label: 'Done', sub: null, who: { kind: 'none' } },
+    ...(hasGate ? [{ key: 'gate', spot: { at: 'gate' }, label: GATE_STEP, icon: 'gate', agent: null } as const] : []),
+    ...(hasWrite ? [{ key: 'write', spot: { at: 'write' }, label: writeBlock ? stepWords(writeBlock) : writeLabel(model.connector), icon: 'write', agent: null } as const] : []),
   ]
 }
 
@@ -431,19 +476,32 @@ function stationAtOrAfter(stations: readonly Skeleton[], spot: Spot | null): num
   return stations.findIndex((station) => rank(station.spot) > rank(spot))
 }
 
+/** The step a spot is drawn at. The start is the first step, done once the run exists, so the Planner's pick runs under the step after it. */
+function stationOf(stations: readonly Skeleton[], spot: Spot | null): number {
+  return stationAtOrAfter(stations, spot?.at === 'started' ? { at: 'planner' } : spot)
+}
+
 function stateOf(model: RunModel, station: Skeleton, index: number, current: number, failed: number): StationState {
   const { phase } = model
   const at = station.spot.at
-  const unfilled = station.who.kind === 'agent' && station.who.agent === null
+  const unfilled = at === 'agent' && station.agent === null
+  if (at === 'started') return 'done'
   switch (phase.state) {
     case 'failed':
-      if (index === failed) return 'fail'
+      if (index === failed) return 'err'
       return index < failed ? (unfilled ? 'skip' : 'done') : 'todo'
     case 'succeeded':
-      if (phase.outcome === 'nothing_to_write' && (at === 'gate' || at === 'write')) return 'skip'
+      if (phase.outcome !== 'written' && (at === 'gate' || at === 'write')) return 'skip'
       return unfilled ? 'skip' : 'done'
     case 'rejected':
-      if (at === 'gate') return 'declined'
+      if (at === 'gate') return 'no'
+      if (at === 'write') return 'skip'
+      return unfilled ? 'skip' : 'done'
+    case 'skipped':
+      return 'skip'
+    case 'expired':
+    case 'lost':
+      if (at === 'gate') return phase.state === 'lost' ? 'done' : 'skip'
       if (at === 'write') return 'skip'
       return unfilled ? 'skip' : 'done'
     case 'awaiting_approval':
@@ -456,57 +514,70 @@ function stateOf(model: RunModel, station: Skeleton, index: number, current: num
   return index === current ? 'now' : 'todo'
 }
 
-function lastAgentBefore(stations: readonly Skeleton[], states: readonly StationState[], limit: number): number {
-  for (let index = Math.min(limit, stations.length) - 1; index >= 0; index -= 1) {
-    const who = stations[index]?.who
-    if (who?.kind === 'agent' && who.agent !== null && states[index] !== 'skip') return index
-  }
-  return -1
+const FACE: Readonly<Record<StationState, FaceState>> = { todo: 'idle', now: 'working', wait: 'waiting', done: 'success', err: 'error', no: 'idle', skip: 'stopped' }
+const PLANNER: AgentRef = { id: PLANNER_ID, display: 'Planner' }
+
+/** Before any agent joins, the Planner is picking them under the first step, so its face is the one at work there, or stopped. */
+function faceAgent(model: RunModel, station: Skeleton, state: StationState): AgentRef | null {
+  if (station.agent || station.key !== 'agent:0' || model.agents.length > 0) return station.agent
+  return state === 'now' || state === 'err' ? PLANNER : null
 }
 
-function faceOf(model: RunModel, station: Skeleton, state: StationState, index: number, waitingAgent: number, finalAgent: number): FaceState {
-  if (station.who.kind !== 'agent') return 'idle'
-  if (state === 'now') return station.spot.at === 'planner' ? 'thinking' : 'working'
-  if (state === 'fail') return 'error'
-  if (state === 'skip') return 'stopped'
-  if (model.phase.state === 'awaiting_approval' && index === waitingAgent) return 'waiting'
-  if (model.phase.state === 'succeeded' && index === finalAgent) return 'success'
-  return 'idle'
+/** When the step at work began: the first spot this attempt reached that the step covers. */
+function sinceOf(model: RunModel, stations: readonly Skeleton[], index: number): RunTime | null {
+  return model.reached.find((reached) => stationOf(stations, reached.spot) === index)?.at ?? null
 }
 
 /**
- * The run line: Started, the Planner picking agents, one step per agent, the approval gate, the write and Done.
- * The plan, when known, names the agent and write steps and fixes how many there are, so the line does not grow
- * as agents join.
+ * What the waiting gate says of its request: sent, and to whom, or not sent. Nothing until the platform says either. Who it went
+ * to was read when the request was posted, so whoever said yes to an earlier step since is left out by id, as the platform's view
+ * of the step leaves them out.
  */
-export function stationsOf(
-  model: RunModel,
-  plan: readonly PlanBlock[] | null,
-  writeLabel: (connector: string | null) => string,
-): Station[] {
-  const stations = skeleton(model, plan, writeLabel)
-  const current = stationAtOrAfter(stations, model.spot)
-  const failed = model.phase.state === 'failed' ? stationAtOrAfter(stations, model.failedAt) : -1
-  const states = stations.map((station, index) => stateOf(model, station, index, current, failed))
-  const gate = stations.findIndex((station) => station.spot.at === 'gate')
-  const waitingAgent = lastAgentBefore(stations, states, gate < 0 ? stations.length : gate)
-  const finalAgent = lastAgentBefore(stations, states, stations.length)
+function sentUnder(model: RunModel): Under | null {
+  const asked = model.chat.findLast((item) => item.kind === 'asked')
+  if (asked?.kind !== 'asked' || asked.posted === null) return null
+  if (!asked.posted) return { kind: 'unsent' }
+  const open = model.steps.find((step) => step.status === 'open' || step.status === 'waiting')?.index ?? 0
+  const before = new Set(model.steps.flatMap((step) => (step.index < open && step.by ? [step.by] : [])))
+  return { kind: 'sent', to: (asked.sentTo[open] ?? []).filter((person) => !before.has(person.id)).map((person) => person.display) }
+}
+
+function underOf(model: RunModel, stations: readonly Skeleton[], index: number, state: StationState): Under | null {
+  const at = stations[index]?.spot.at
+  if (at === 'gate' && state === 'wait') return sentUnder(model)
+  if (state === 'now') {
+    const since = sinceOf(model, stations, index)
+    return since === null ? null : { kind: 'timer', since }
+  }
+  const written = model.written.filter((write) => write.ref !== '')
+  if (at === 'write' && state === 'done' && written.length > 0) return { kind: 'tickets', written }
+  const tested = model.phase.state === 'succeeded' && model.phase.outcome === 'test_passed'
+  if (at === 'write' && state === 'skip' && (model.phase.state === 'rejected' || tested)) return { kind: 'note', text: 'Nothing written' }
+  return null
+}
+
+/**
+ * The run line: the workflow's blocks and nothing else. What started the run, one step per agent, the gate and the write.
+ * The plan, when known, names the steps and fixes how many there are, so the line does not grow as agents join.
+ */
+export function stationsOf(model: RunModel, plan: readonly PlanBlock[] | null, trigger: string): Station[] {
+  const stations = skeleton(model, plan, trigger)
+  const current = stationOf(stations, model.spot)
+  const failed = model.phase.state === 'failed' ? stationOf(stations, model.failedAt) : -1
   return stations.map((station, index) => {
-    const state = states[index] ?? 'todo'
-    return { ...station, state, face: faceOf(model, station, state, index, waitingAgent, finalAgent) }
+    const state = stateOf(model, station, index, current, failed)
+    const agent = faceAgent(model, station, state)
+    const face = agent === null ? 'idle' : agent.id === PLANNER_ID && state === 'now' ? 'thinking' : FACE[state]
+    return { ...station, agent, state, face, under: underOf(model, stations, index, state) }
   })
 }
 
-/** How far the line's fill reaches, from 0 at Started to 1 at Done. */
-export function reachOf(stations: readonly Station[]): number {
-  if (stations.length < 2) return 0
-  let reached = 0
-  stations.forEach((station, index) => {
-    if (station.state !== 'todo') reached = index
-  })
-  return reached / (stations.length - 1)
+/** A declined run's record: who said yes first, who declined, and why. Null for a run that wasn't declined. */
+export function declinedOf(model: RunModel): Declined | null {
+  const { phase } = model
+  return phase.state === 'rejected' ? { by: phase.by, approvedBy: model.approvedBy, reason: model.declineReason } : null
 }
 
 export function isFinished(phase: Phase): boolean {
-  return phase.state === 'succeeded' || phase.state === 'rejected' || phase.state === 'failed'
+  return ['succeeded', 'rejected', 'failed', 'skipped', 'expired', 'lost'].includes(phase.state)
 }

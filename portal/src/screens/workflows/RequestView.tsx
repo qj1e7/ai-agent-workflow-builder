@@ -6,6 +6,7 @@ import { useMe } from '../../api/queries'
 import { useMarkRequestSeen, useReplyToRequest, useTeamRequest } from '../../api/requestQueries'
 import type { TeamRequestView } from '../../api/types'
 import { Button } from '../../ui/Button'
+import { useFromChat } from '../../ui/fromChat'
 import { IconChevronLeft } from '../../ui/icons'
 import { lineWhen } from './times'
 import { MAX_REPLY, newestReplyToAsker, replyWords, requestKindWords, requestProblem, requestStatusWords } from './requests'
@@ -18,6 +19,7 @@ const NOT_POSTED: Record<NonNullable<TeamRequestView['not_posted_because']>, str
 }
 
 function Back() {
+  if (useFromChat()) return null
   return (
     <Link to="/workflows" className={styles['back']}>
       <IconChevronLeft size={16} />

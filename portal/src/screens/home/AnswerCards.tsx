@@ -1,14 +1,25 @@
-import { useId, useState, type ReactNode } from 'react'
-import { Link } from 'react-router'
-import type { CantReply, OfflineReply, PartReply, PlannerReply, QuestionReply, SetupCardReply, WatchlistReply } from '../../api/types'
+import { useContext, useEffect, useState, type ReactNode } from 'react'
+import { Link } from '../../ui/Link'
+import type { AbilitiesReply, N8nReply, CantReply, CantRowView, CapabilitiesView, OfflineReply, PartReply, PartView, PauseReply, PlannerReply, QuestionReply, ResumeReply, SetupCardReply, SwitchChoice, WatchlistReply } from '../../api/types'
+import { useErrorWords } from '../../api/context'
 import { useCapabilities } from '../../api/plannerQueries'
+import { useMoveWorkflow } from '../../api/workflowQueries'
 import { Button, ButtonLink } from '../../ui/Button'
+import { Card } from '../../ui/Card'
+import { OpenButton } from '../../ui/OpenItem'
+import { useWatchlist } from '../../api/queries'
+import { sentenceFor, softwarePath, stateOf } from '../software/software'
+import softwareStyles from '../software/Software.module.css'
+import { ChangedInN8nAnswer } from './ChangedCard'
 import { AskTheTeam } from './AskTheTeam'
-import { cantLines, refusalNext, SAY_ANOTHER_WAY, startingPoints, TAG_CANT, TAG_CHOICE } from './answers'
+import { useAsker } from './asker'
+import { cantLines, capabilityCard, oneLine, questionActions, refusalNext, SAY_ANOTHER_WAY, startingPoints, startSteps, stateWords, switchedSay, watchlistSwitchNote, type Asker } from './answers'
 import { cardFrom } from './card'
+import { asksOnCard, cantOnCard, crossesInstead, crossesOnCard, followedNothing } from './parts'
 import { SetupCard, type CardStart } from './SetupCard'
-import { CapabilityLists } from './CapabilityLists'
-import { NewestAnswer, useMainButton } from './primary'
+import { CardLive, NewestAnswer, useMainButton } from './primary'
+import { CardMemoryContext } from './cardMemory'
+import { useChatNavigate } from '../../ui/fromChat'
 import { AddToWatchlist, WhichSoftware } from './WatchlistCard'
 import { SoftwareActions } from './WatchlistActions'
 import styles from './Planner.module.css'
@@ -19,89 +30,140 @@ export interface Page {
   readonly ask: (text: string) => void
   /** Puts words back in the box for the person to change. */
   readonly edit: (text: string) => void
+  /** Puts focus back in the box, as when she backs out of a card. */
+  readonly box: () => void
 }
 
 
-/** A set-up card from the Planner’s rows. The person’s own words go with it, so a saved draft keeps them. */
+/** The parts of a reply, with each can’t row of a part answer kept as a cross even if no part names it, so none is dropped. */
+function partsOf(reply: SetupCardReply | PartReply): readonly PartView[] {
+  if (reply.answer !== 'part' || reply.parts.some((part) => part.reason === 'cant_do')) return reply.parts
+  const crosses = cantLines(reply.cant).map((line): PartView => ({ text: line.text, mark: 'cant', reason: 'cant_do', note: line.note || null, choices: [] }))
+  return [...reply.parts, ...crosses]
+}
+
+/** An answer inside another keeps the whole request’s crosses that `keep` picks, so its card still marks them and keeps them as left out. */
+const withCrosses = <T extends PlannerReply>(inner: T, outer: PlannerReply, keep: (part: PartView) => boolean): T => ({ ...inner, parts: outer.parts.filter(keep) })
+
+/** A set-up card from the Planner’s rows and parts. The person’s own words go with it, so a saved draft keeps them. */
 function startOf(reply: SetupCardReply | PartReply, typed: string): CardStart {
-  return { form: cardFrom(reply.name, reply.rows, typed), plan: null, draftId: null, similar: reply.similar }
+  return { form: cardFrom(reply.name, reply.rows, typed, partsOf(reply)), plan: null, draftId: null, similar: reply.similar }
 }
 
-function tagClass(tag: string): string {
-  return [styles['tag'], tag === TAG_CHOICE ? styles['tagChoice'] : undefined, tag === TAG_CANT ? styles['tagCant'] : undefined].filter(Boolean).join(' ')
+/** A set-up card, and a part answer as one: what it can’t do is a cross on the card itself, with Ask the team. */
+export function SetupCardAnswer({ reply, typed }: { reply: SetupCardReply | PartReply; typed: string }) {
+  return <SetupCard start={startOf(reply, typed)} />
 }
 
-function Card({ title, tag, children }: { title: string; tag?: string; children: ReactNode }) {
-  const id = useId()
+/** A can’t the registry says in one line: the line as the head, what she has instead under it, and Ask the team unless the platform won’t do it. */
+function OneLineCant({ row, typed }: { row: CantRowView; typed: string }) {
   return (
-    <section className={styles['pcard']} aria-labelledby={id}>
-      <div className={styles['pcardHead']}>
-        <h3 id={id}>{title}</h3>
-        {tag ? <span className={tagClass(tag)}>{tag}</span> : null}
-      </div>
-      {children}
-    </section>
+    <Card
+      title={row.note.replace(/\.$/, '')}
+      {...(row.unsupported ? {} : { foot: <AskTheTeam capability={row.system ?? row.text} starter={`I asked the Planner for: ${typed}\n\nIt can't do this yet: ${row.text}`} /> })}
+    >
+      <p className="muted">{row.instead}</p>
+    </Card>
   )
 }
 
-export function SetupCardAnswer({ reply, typed }: { reply: SetupCardReply | PartReply; typed: string }) {
-  const left = reply.answer === 'part' ? cantLines(reply.cant) : []
+/**
+ * A can’t answer names only a place the platform can’t send to. Anything else it can’t do, or a clause it didn’t follow, is a
+ * cross on the card that sets up the part it can (spec 6.3 and 6.5). A can’t the registry says in one line gets a card of its own.
+ */
+export function CantAnswer({ reply, typed }: { reply: CantReply; typed: string }) {
+  const alternative = reply.alternative
+  if (cantOnCard(reply) && alternative?.answer === 'setup_card') return <SetupCard start={startOf(withCrosses(alternative, reply, crossesOnCard), typed)} />
+  const named = reply.cant.filter((row) => row.needs !== null)
+  const rows = cantLines(named.filter((row) => !oneLine(row)))
+  const card = alternative?.answer === 'setup_card' ? <SetupCard start={startOf(withCrosses(alternative, reply, crossesInstead), typed)} /> : null
+  const watch = alternative?.answer === 'watchlist' ? <WatchlistAnswer reply={withCrosses(alternative, reply, asksOnCard)} typed={typed} /> : null
+  // With no can’t of its own, the card would be empty: the clauses it didn’t follow are drawn above it.
+  if (named.length === 0) return card ?? watch
   return (
     <>
-      <SetupCard start={startOf(reply, typed)} />
-      {left.length > 0 ? (
-        <Card title="What I can’t do yet">
-          <div className={styles['pcardPart']}>
-            <ul className={styles['lines']}>
-              {left.map((line) => (
-                <li key={line.text}>
-                  {line.text}
-                  {line.note ? <span className={styles['note']}>{line.note}</span> : null}
-                </li>
-              ))}
-            </ul>
-            {reply.answer === 'part' ? (
-              <div className={styles['buttons']}>
-                <AskTheTeam capability={reply.cant[0]?.system ?? left[0]?.text ?? 'part of a request'} starter={`I asked the Planner for: ${typed}\n\nWhat it can't do yet: ${left.map((line) => line.text).join('; ')}`} />
-              </div>
-            ) : null}
-          </div>
+      {named.filter(oneLine).map((row) => (
+        <OneLineCant key={row.text} row={row} typed={typed} />
+      ))}
+      {rows.length > 0 ? (
+        <Card
+          title="What I can’t do yet"
+          foot={
+            <AskTheTeam
+              capability={reply.cant.find((row) => row.system && !oneLine(row))?.system ?? rows[0]?.text ?? 'something new'}
+              starter={`I asked the Planner for: ${typed}\n\nIt can't do this yet: ${rows.map((line) => line.text).join('; ')}`}
+              secondary={alternative !== null}
+            />
+          }
+        >
+          <ul className={styles['lines']}>
+            {rows.map((line) => (
+              <li key={line.text}>
+                <b>{line.text}</b>
+                {line.note ? <span className={styles['note']}>{line.note}</span> : null}
+              </li>
+            ))}
+          </ul>
         </Card>
       ) : null}
+      {card ? (
+        <>
+          <h3 className={styles['altHeading']}>What I can do instead</h3>
+          {card}
+        </>
+      ) : null}
+      {watch}
     </>
   )
 }
 
-export function CantAnswer({ reply, typed }: { reply: CantReply; typed: string }) {
-  const rows = cantLines(reply.cant)
-  const alternative = reply.alternative
-  return (
-    <>
-      <Card title="What I can’t do yet">
-        <ul className={styles['lines']}>
-          {rows.map((line) => (
-            <li key={line.text}>
-              <b>{line.text}</b>
-              {line.note ? <span className={styles['note']}>{line.note}</span> : null}
-            </li>
-          ))}
-        </ul>
-        <div className={styles['footer']}>
-          <AskTheTeam
-            capability={reply.cant.find((row) => row.system)?.system ?? rows[0]?.text ?? 'something new'}
-            starter={`I asked the Planner for: ${typed}\n\nIt can't do this yet: ${rows.map((line) => line.text).join('; ')}`}
-            secondary={alternative !== null}
-          />
-        </div>
+/**
+ * The sketch's software card: a watched software's name, its pill and where it stands, in the watchlist's own words, or that the
+ * version she runs isn't known because it isn't on the watchlist yet, with Watch it. Watch it adds it to the Software watchlist,
+ * which is where watched software lives here, after finding its GitHub project.
+ */
+function SoftwareCard({ name, listed }: { name: string; listed: WatchlistReply['already_listed'] }) {
+  const main = useMainButton()
+  const operator = useAsker() === 'operator'
+  const watchlist = useWatchlist({ enabled: listed !== null })
+  const [watching, setWatching] = useState(false)
+  const row = listed ? watchlist.data?.software.find((software) => software.id === listed.software_id) : undefined
+  const state = row ? stateOf(row) : null
+  if (listed) {
+    return (
+      <Card
+        title={row?.name ?? listed.name}
+        pill={
+          state ? (
+            <span className={softwareStyles['pill']} data-tone={state.tone}>
+              {state.words}
+            </span>
+          ) : undefined
+        }
+        actions={
+          <OpenButton variant={main} item={{ kind: 'software', id: listed.software_id }} to={softwarePath(listed.software_id)}>
+            Open it
+          </OpenButton>
+        }
+      >
+        <p>{row ? sentenceFor(row) : `${listed.name} is on the Software watchlist.`}</p>
       </Card>
-      {alternative?.answer === 'setup_card' ? (
-        <>
-          <h3 className={styles['altHeading']}>What I can do instead</h3>
-          <SetupCard start={startOf(alternative, typed)} />
-        </>
-      ) : null}
-      {alternative?.answer === 'watchlist' ? <WatchlistAnswer reply={alternative} typed={typed} /> : null}
-    </>
+    )
+  }
+  return (
+    <Card
+      title={name}
+      actions={
+        operator && !watching ? (
+          <Button variant={main} onClick={() => setWatching(true)}>
+            Watch it
+          </Button>
+        ) : undefined
+      }
+    >
+      <p className="muted">It isn’t on the watchlist, so I don’t know which version you run.</p>
+      {watching ? <AddToWatchlist name={name} /> : null}
+    </Card>
   )
 }
 
@@ -110,33 +172,16 @@ export function WatchlistAnswer({ reply, typed }: { reply: WatchlistReply; typed
   const main = useMainButton()
   return (
     <>
-      <Card title={listed ? 'Already on the watchlist' : 'The Software watchlist'}>
-        <div className={styles['pcardPart']}>
-          {listed ? (
-            <>
-              <p>{listed.name} is on the Software watchlist.</p>
-              <div className={styles['buttons']}>
-                <ButtonLink variant={main} to={`/software?row=${encodeURIComponent(listed.software_id)}`}>
-                  Open it
-                </ButtonLink>
-              </div>
-            </>
-          ) : reply.software ? (
-            <AddToWatchlist name={reply.software} />
-          ) : (
-            <div className={styles['buttons']}>
-              <ButtonLink variant={main} to="/software">
-                Open the Software watchlist
-              </ButtonLink>
-            </div>
-          )}
-        </div>
-      </Card>
+      {listed || reply.software ? (
+        <SoftwareCard name={listed?.name ?? reply.software ?? ''} listed={listed} />
+      ) : (
+        <Card title="The Software watchlist" actions={<ButtonLink variant={main} to="/software">Open the Software watchlist</ButtonLink>} />
+      )}
       {reply.also ? (
         <>
           <p>The rest of your request:</p>
           <NewestAnswer.Provider value={false}>
-            <Answer reply={reply.also} typed={typed} page={NO_PAGE} />
+            <Answer reply={withCrosses(reply.also, reply, asksOnCard)} typed={typed} page={NO_PAGE} />
           </NewestAnswer.Provider>
         </>
       ) : null}
@@ -144,19 +189,20 @@ export function WatchlistAnswer({ reply, typed }: { reply: WatchlistReply; typed
   )
 }
 
-const NO_PAGE: Page = { ask: () => undefined, edit: () => undefined }
+const NO_PAGE: Page = { ask: () => undefined, edit: () => undefined, box: () => undefined }
 
 function RefusedAnswer({ reply, typed, page }: { reply: Extract<PlannerReply, { answer: 'refused' }>; typed: string; page: Page }) {
-  const { rest } = refusalNext(reply)
-  const main = useMainButton()
+  // Someone who isn't an Operator sets nothing up, so the refusal offers them no set-up with a yes. Their main button is the request
+  // to open, drawn under the card.
+  const operator = useAsker() === 'operator'
+  const { rest } = operator ? refusalNext(reply) : { rest: null }
+  const newest = useMainButton()
+  const main = operator ? newest : 'secondary'
   return (
-    <Card title="How approvals work">
-      <div className={styles['pcardPart']}>
-        <p>
-          You asked me to skip a yes: <q>{reply.said}</q>. Any Approver on your team except you decides on your requests, in Teams. Nobody approves their own work, and nothing approves itself.
-        </p>
-        <p className="muted">{SAY_ANOTHER_WAY}</p>
-        <div className={styles['buttons']}>
+    <Card
+      title="How approvals work"
+      actions={
+        <>
           {rest ? (
             <Button variant={main} onClick={() => page.ask(rest)}>
               Set it up with a yes
@@ -165,24 +211,137 @@ function RefusedAnswer({ reply, typed, page }: { reply: Extract<PlannerReply, { 
           <Button variant={rest ? 'secondary' : main} onClick={() => page.edit(typed)}>
             Say it another way
           </Button>
-        </div>
-      </div>
+        </>
+      }
+    >
+      <p>
+        You asked me to skip a yes: <q>{reply.said}</q>. Any Approver on your team except you decides on your requests, in Teams. Nobody approves their own work, and nothing approves itself.
+      </p>
+      <p className="muted">{SAY_ANOTHER_WAY}</p>
     </Card>
   )
 }
 
-function AbilitiesAnswer() {
-  const capabilities = useCapabilities()
+/** What someone who isn't an Operator can ask, each a question the Planner answers (ADR 0043). */
+export const APPROVER_CAN = ['Show what waits for your yes', 'Show exactly what a change will write', 'Show your past decisions'] as const
+
+const FOLLOWED_NOTHING: Readonly<Record<Asker, string>> = {
+  operator: 'I can watch software releases, fix stopped runs and change your workflows.',
+  approver: 'I can show what waits for your yes, and your past decisions.',
+}
+
+function WhatICanDo({ lines, notYet = [] }: { lines: readonly { key: string; text: string; state: string | null }[]; notYet?: readonly string[] }) {
   return (
-    <>
-      {capabilities.data ? (
-        <CapabilityLists view={capabilities.data} />
-      ) : (
-        <p className="muted" role="status">
-          {capabilities.isError ? 'I couldn’t load what I can do just now.' : 'Loading what I can do'}
+    <Card title="What I can do">
+      <ul className={styles['caps']}>
+        {lines.map((line) => (
+          <li key={line.key}>
+            {line.text}
+            {line.state ? <span className={styles['note']}>{line.state}</span> : null}
+          </li>
+        ))}
+      </ul>
+      {notYet.length > 0 ? <p className={styles['note']}>Not yet: {notYet.join(', ')}.</p> : null}
+    </Card>
+  )
+}
+
+/** How to start: the steps from her words to the yes, then the registry’s examples as chips that ask the Planner for them. */
+function HowToStart({ view, page }: { view: CapabilitiesView; page: Page }) {
+  const examples = startingPoints(view)
+  return (
+    <Card title="How to start">
+      <ol className={styles['steps']}>
+        {startSteps(view).map((step) => (
+          <li key={step}>{step}</li>
+        ))}
+      </ol>
+      {examples.length > 0 ? (
+        <div className={styles['chips']} role="group" aria-label="Try one">
+          {examples.map((text) => (
+            <button key={text} type="button" className={styles['chip']} onClick={() => page.ask(text)}>
+              {text}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </Card>
+  )
+}
+
+/** What I can do, in the registry’s short words with the platform’s state of each, or how to start when that was asked, or that it followed none of the request. */
+function AbilitiesAnswer({ reply, page }: { reply: AbilitiesReply; page: Page }) {
+  const asker = useAsker()
+  const nothing = followedNothing(reply)
+  const capabilities = useCapabilities({ enabled: asker === 'operator' && !nothing })
+  if (nothing) {
+    return (
+      <Card title="I didn’t follow that">
+        <p className="muted">{FOLLOWED_NOTHING[asker]}</p>
+      </Card>
+    )
+  }
+  if (asker === 'approver') return <WhatICanDo lines={APPROVER_CAN.map((text) => ({ key: text, text, state: null }))} />
+  if (!capabilities.data) {
+    return (
+      <p className="muted" role="status">
+        {capabilities.isError ? 'I couldn’t load what I can do just now.' : 'Loading what I can do'}
+      </p>
+    )
+  }
+  if (reply.how_to_start) return <HowToStart view={capabilities.data} page={page} />
+  const { can, notYet } = capabilityCard(capabilities.data)
+  return <WhatICanDo lines={can.map((entry) => ({ key: entry.id, text: entry.short, state: stateWords(entry) }))} notYet={notYet} />
+}
+
+const MOST_CHOICES = 5
+
+/**
+ * Which workflow a pause or a resume means, when the words fit several, none, or a watched software’s check, which is the whole
+ * Software watchlist. Nothing changed yet: the one she picks is paused or resumed through its own route, and the line says so.
+ */
+function SwitchChoices({ reply }: { reply: PauseReply | ResumeReply }) {
+  const move = useMoveWorkflow()
+  const errorWords = useErrorWords()
+  const [picked, setPicked] = useState<SwitchChoice | null>(null)
+  if (reply.choices.length === 0) return null
+  const title = reply.answer === 'pause' ? 'Pause a workflow' : 'Turn a workflow back on'
+  if (picked && move.isSuccess) {
+    const wanted = reply.answer === 'pause' ? 'paused' : 'on'
+    return (
+      <Card title={title}>
+        <p role="status">{switchedSay(reply.answer, picked.name, picked.state === wanted)}</p>
+      </Card>
+    )
+  }
+  const pick = (choice: SwitchChoice) => {
+    setPicked(choice)
+    move.mutate({ move: reply.answer, useCaseId: choice.use_case_id })
+  }
+  const shown = reply.choices.slice(0, MOST_CHOICES)
+  const more = reply.choices.length - shown.length
+  // The sketch's 36 px chips, one per workflow, as on Home.
+  return (
+    <Card title={title}>
+      <div className={styles['chips']}>
+        {shown.map((choice) => (
+          <button key={choice.use_case_id} type="button" className={styles['chip']} aria-disabled={move.isPending || undefined} onClick={() => !move.isPending && pick(choice)}>
+            {choice.name}
+          </button>
+        ))}
+        {more > 0 ? (
+          <Link to="/workflows" className={styles['moreChoices']}>
+            and {more} more
+          </Link>
+        ) : null}
+      </div>
+      {reply.choices.some((choice) => choice.watchlist) ? <p className={styles['note']}>{watchlistSwitchNote(reply.answer)}</p> : null}
+      {move.isError ? (
+        <p className={styles['problem']} role="alert">
+          {errorWords(move.error)}
         </p>
-      )}
-    </>
+      ) : null}
+    </Card>
   )
 }
 
@@ -263,14 +422,34 @@ function Dismissable({ children }: { children: (never: () => void) => ReactNode 
   return gone ? <p className="muted">All right, never mind.</p> : children(() => setGone(true))
 }
 
+/** Where the Planner's n8n answer opens: the workflow's page on its In n8n tab, or nowhere when it named none it may open. */
+export function n8nTabOf(reply: N8nReply): string | null {
+  return reply.can_open && reply.use_case_id !== null ? `/workflows/${reply.use_case_id}?view=n8n` : null
+}
+
+/** The sketch's "Here it is in n8n.": the newest such answer opens its workflow's In n8n tab, once. Coming back to the chat never opens it again. */
+function N8nAnswer({ reply }: { reply: N8nReply }) {
+  const memory = useContext(CardMemoryContext)
+  const newest = useContext(CardLive)
+  const go = useChatNavigate()
+  const to = n8nTabOf(reply)
+  useEffect(() => {
+    if (to === null || !newest || memory.beside.kept()) return
+    memory.beside.keep(true)
+    go(to)
+  }, [to, newest, memory, go])
+  return null
+}
+
 interface AnswerProps {
   readonly reply: PlannerReply
   readonly typed: string
   readonly page: Page
 }
 
-/** The body of one Planner answer, past its sentence. The three state answers are in StateAnswers. */
+/** The body of one Planner answer, past its sentence. The state answers are in StateAnswers, and the edit card draws its own sentence. */
 export function Answer({ reply, typed, page }: AnswerProps) {
+  const asker = useAsker()
   switch (reply.answer) {
     case 'setup_card':
     case 'part':
@@ -284,21 +463,35 @@ export function Answer({ reply, typed, page }: AnswerProps) {
     case 'refused':
       return <RefusedAnswer reply={reply} typed={typed} page={page} />
     case 'abilities':
-      return <AbilitiesAnswer />
+      return <AbilitiesAnswer reply={reply} page={page} />
+    case 'pause':
+    case 'resume':
+      return <SwitchChoices reply={reply} />
     case 'ideas':
       return <IdeasAnswer page={page} />
     case 'offline':
-      return <OfflineAnswer reply={reply} />
-    case 'question':
+      return asker === 'operator' ? <OfflineAnswer reply={reply} /> : null
+    case 'question': {
+      const names = questionActions(reply, asker)
+      if (names.length === 0) return <LookedAt sections={reply.looked_at} />
       return (
-        <>
+        <Card title={names.length === 1 ? names[0] : 'On your watchlist'}>
           <LookedAt sections={reply.looked_at} />
-          {(reply.about_software ?? []).length > 0 ? <SoftwareActions names={reply.about_software ?? []} /> : null}
-        </>
+          <SoftwareActions names={names} named={names.length > 1} />
+        </Card>
       )
+    }
+    case 'changed_in_n8n':
+      return <ChangedInN8nAnswer reply={reply} />
+    case 'n8n':
+      return <N8nAnswer reply={reply} />
+    case 'edit':
     case 'check_workflows':
     case 'why_stopped':
     case 'needs_me':
+    case 'operators':
+    case 'decided':
+    case 'decide':
       return null
   }
 }

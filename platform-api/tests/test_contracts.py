@@ -14,17 +14,24 @@ from platform_api.builder.models import (
     CannotDo,
     CardChecked,
     CardList,
+    CreateAgentUseCase,
     DraftIn,
     DraftList,
     NewAgent,
     PlanOut,
-    ScheduleIn,
+    ScheduleSaveIn,
     ToolList,
+    UndoIn,
+    UseCaseCreated,
     UseCaseDeleted,
+    UseCaseScheduleIn,
     UseSaved,
+    VersionList,
     WatchlistOut,
     WatchlistView,
 )
+from platform_api.builder.n8n_http import HoldOut
+from platform_api.builder.n8n_view import RunN8nView, UseCaseN8nView
 from platform_api.builder.planner import (
     AnswerIn,
     CapabilitiesView,
@@ -44,6 +51,7 @@ from platform_api.orchestration.agents import (
     DraftRequest,
     FindSoftwareRequest,
     ModelAccess,
+    ReadReleasesRequest,
     TaskFinished,
     TaskRequest,
     WatchlistInputs,
@@ -55,19 +63,21 @@ from platform_api.orchestration.agents import (
     find_software_result_adapter,
     github_check_result_adapter,
     model_test_result_adapter,
+    read_releases_result_adapter,
     task_result_adapter,
 )
 from platform_api.orchestration.agents import CapabilityList as AgentCapabilityList
 from platform_api.orchestration.agents import ToolList as AgentToolList
 from platform_api.orchestration.approvals import Refusal, Verdict
 from platform_api.orchestration.confirmations import DecideRefusal
+from platform_api.orchestration.decisions_http import DecisionsView
 from platform_api.orchestration.http import (
     ApprovalView,
     DecisionOut,
+    QuestionView,
     RefusalOut,
     StepResponseOut,
     TeamsStubMessages,
-    TickOut,
     WorkflowFailureIn,
     run_view_adapter,
 )
@@ -77,6 +87,7 @@ from platform_api.orchestration.people_http import (
     ConfirmationDecisionIn,
     ConfirmationsOut,
     DecideRefusalOut,
+    MyN8nOut,
     PeopleOut,
     PeopleRefusalOut,
     PersonOut,
@@ -105,6 +116,8 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "runs/success.json": activity_events_adapter,
     "runs/failure.json": activity_events_adapter,
     "runs/rejected.json": activity_events_adapter,
+    "runs/expired.json": activity_events_adapter,
+    "runs/lost.json": activity_events_adapter,
     "runs/watchlist.json": activity_events_adapter,
     "runs/card.json": activity_events_adapter,
     "cards/tools.json": TypeAdapter(ToolList),
@@ -114,6 +127,8 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "cards/plan.new-agent.json": TypeAdapter(PlanOut),
     "cards/plan.cannot-do.json": TypeAdapter(PlanOut),
     "cards/use-case.json": TypeAdapter(UseCaseView),
+    "cards/use-case.left-out.json": TypeAdapter(UseCaseView),
+    "cards/agent-use-case.in.json": TypeAdapter(CreateAgentUseCase),
     "agent/tools.json": TypeAdapter(AgentToolList),
     "agent/capabilities.json": TypeAdapter(AgentCapabilityList),
     "agent/card-task-request.json": TypeAdapter(TaskRequest),
@@ -124,11 +139,15 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "agent/planner-chosen.json": choose_result_adapter,
     "agent/software-find-request.json": TypeAdapter(FindSoftwareRequest),
     "agent/software-found.json": find_software_result_adapter,
+    "agent/releases-read-request.json": TypeAdapter(ReadReleasesRequest),
+    "agent/releases-read.json": read_releases_result_adapter,
     "agent/planner-answer-request.json": TypeAdapter(AnswerRequest),
     "agent/planner-answered-card.json": answer_result_adapter,
     "agent/planner-answered-cant.json": answer_result_adapter,
     "agent/planner-answered-watchlist.json": answer_result_adapter,
     "agent/planner-answered-refused.json": answer_result_adapter,
+    "agent/planner-answered-edit.json": answer_result_adapter,
+    "agent/planner-answered-pause.json": answer_result_adapter,
     "agent/planner-question-request.json": TypeAdapter(AnswerRequest),
     "agent/planner-answered-question.json": answer_result_adapter,
     "agent/planner-check-part-request.json": TypeAdapter(CheckPartRequest),
@@ -143,26 +162,55 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "views/watchlist.awaiting_approval.json": run_view_adapter,
     "approvals/apr_01JB8.alice.json": TypeAdapter(ApprovalView),
     "approvals/apr_01JB8.bob.json": TypeAdapter(ApprovalView),
+    "approvals/apr_01JB8.alice.asked.json": TypeAdapter(ApprovalView),
+    "approvals/apr_01JB8.bob.answered.json": TypeAdapter(ApprovalView),
+    "approvals/question.asked.json": TypeAdapter(QuestionView),
+    "approvals/question.answered.json": TypeAdapter(QuestionView),
     "approvals/decision.approved.json": TypeAdapter(DecisionOut),
     "approvals/refusal.own_work.json": TypeAdapter(RefusalOut),
+    "approvals/decisions.bob.json": TypeAdapter(DecisionsView),
+    "approvals/decisions.none.json": TypeAdapter(DecisionsView),
     "builder/templates.json": TypeAdapter(TemplateList),
     "builder/use-case.json": TypeAdapter(UseCaseView),
     "builder/suggest.json": TypeAdapter(SuggestOut),
     "planner/answer.text.json": TypeAdapter(AnswerIn),
     "planner/answer.intent.json": TypeAdapter(AnswerIn),
     "planner/answer.setup_card.json": TypeAdapter(PlannerReply),
+    "planner/answer.setup_card.cross.json": TypeAdapter(PlannerReply),
+    "planner/answer.setup_card.clash.json": TypeAdapter(PlannerReply),
     "planner/answer.part.json": TypeAdapter(PlannerReply),
     "planner/answer.cant.json": TypeAdapter(PlannerReply),
     "planner/answer.watchlist.json": TypeAdapter(PlannerReply),
     "planner/answer.watchlist.also.json": TypeAdapter(PlannerReply),
+    "planner/answer.watchlist.own_time.json": TypeAdapter(PlannerReply),
     "planner/answer.which_software.json": TypeAdapter(PlannerReply),
     "planner/answer.refused.json": TypeAdapter(PlannerReply),
     "planner/answer.abilities.json": TypeAdapter(PlannerReply),
+    "planner/answer.abilities.how_to_start.json": TypeAdapter(PlannerReply),
     "planner/answer.ideas.json": TypeAdapter(PlannerReply),
     "planner/answer.check_workflows.json": TypeAdapter(PlannerReply),
+    "planner/answer.check_workflows.leftover.json": TypeAdapter(PlannerReply),
     "planner/answer.why_stopped.json": TypeAdapter(PlannerReply),
     "planner/answer.needs_me.json": TypeAdapter(PlannerReply),
+    "planner/answer.needs_me.operators.json": TypeAdapter(PlannerReply),
+    "planner/answer.operators.json": TypeAdapter(PlannerReply),
+    "planner/answer.decided.json": TypeAdapter(PlannerReply),
+    "planner/answer.decided.declines.json": TypeAdapter(PlannerReply),
+    "planner/answer.decide.json": TypeAdapter(PlannerReply),
+    "planner/answer.decide.question.json": TypeAdapter(PlannerReply),
     "planner/answer.question.json": TypeAdapter(PlannerReply),
+    "planner/answer.edit.json": TypeAdapter(PlannerReply),
+    "planner/answer.edit.missing.json": TypeAdapter(PlannerReply),
+    "planner/answer.edit.cant.json": TypeAdapter(PlannerReply),
+    "planner/answer.pause.json": TypeAdapter(PlannerReply),
+    "planner/answer.pause.choices.json": TypeAdapter(PlannerReply),
+    "planner/answer.resume.json": TypeAdapter(PlannerReply),
+    "planner/answer.edit.unclear.json": TypeAdapter(PlannerReply),
+    "planner/answer.edit.hour.json": TypeAdapter(PlannerReply),
+    "planner/answer.edit.clash.json": TypeAdapter(PlannerReply),
+    "planner/answer.edit.choices.json": TypeAdapter(PlannerReply),
+    "planner/answer.edit.watchlist.json": TypeAdapter(PlannerReply),
+    "planner/answer.edit.how_often.json": TypeAdapter(PlannerReply),
     "planner/answer.offline.json": TypeAdapter(PlannerReply),
     "planner/answer.offline.too_slow.json": TypeAdapter(PlannerReply),
     "planner/check-part.in.json": TypeAdapter(CheckPartIn),
@@ -172,17 +220,33 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "planner/capabilities.trouble.json": TypeAdapter(CapabilitiesView),
     "builder/use-case.paused.json": TypeAdapter(UseCaseView),
     "builder/use-case.held.json": TypeAdapter(UseCaseView),
+    "builder/use-case.declined.json": TypeAdapter(UseCaseView),
+    "builder/use-case.waiting.json": TypeAdapter(UseCaseView),
+    "builder/use-case.stopped.json": TypeAdapter(UseCaseView),
     "builder/use-case.deleted.json": TypeAdapter(UseCaseDeleted),
     "builder/draft.in.json": TypeAdapter(DraftIn),
     "builder/drafts.json": TypeAdapter(DraftList),
+    "builder/schedule.in.json": TypeAdapter(UseCaseScheduleIn),
+    "builder/undo.in.json": TypeAdapter(UndoIn),
+    "builder/use-case.versioned.json": TypeAdapter(UseCaseView),
+    "builder/use-case.undone.json": TypeAdapter(UseCaseView),
+    "builder/versions.json": TypeAdapter(VersionList),
+    "builder/versions.undone.json": TypeAdapter(VersionList),
+    "builder/agent-use-case.off.in.json": TypeAdapter(CreateAgentUseCase),
+    "builder/agent-use-case.off.created.json": TypeAdapter(UseCaseCreated),
+    "builder/use-case.draft.json": TypeAdapter(UseCaseView),
+    "builder/use-case.turned-on.json": TypeAdapter(UseCaseView),
     "builder/home.bob.json": TypeAdapter(HomeOut),
     "builder/home.alice.json": TypeAdapter(HomeOut),
+    "builder/home.alice.declined-test.json": TypeAdapter(HomeOut),
+    "builder/home.alice.question.json": TypeAdapter(HomeOut),
     "builder/home.day-one.json": TypeAdapter(HomeOut),
     "internal/step-responses.json": TypeAdapter(list[StepResponseOut]),
     "internal/workflow-failure.json": TypeAdapter(WorkflowFailureIn),
     "stubs/dev-users.json": TypeAdapter(DevUsers),
     "stubs/teams-messages.json": TypeAdapter(TeamsStubMessages),
     "stubs/teams-messages.decided.json": TypeAdapter(TeamsStubMessages),
+    "stubs/teams-messages.declined.json": TypeAdapter(TeamsStubMessages),
     "stubs/mock-jira-tickets.json": TypeAdapter(MockJiraTickets),
     "stubs/mock-jira-ticket.done.json": TypeAdapter(MockJiraTicket),
     "troubleshooting/failure.json": TypeAdapter(TroubleshootingOut),
@@ -218,13 +282,11 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "watchlist/statuses.json": TypeAdapter(WatchlistView),
     "watchlist/moved.json": TypeAdapter(WatchlistView),
     "watchlist/add-software.json": TypeAdapter(AddSoftware),
-    "watchlist/schedule.in.json": TypeAdapter(ScheduleIn),
+    "watchlist/schedule.in.json": TypeAdapter(ScheduleSaveIn),
     "watchlist/schedule.saved.json": TypeAdapter(WatchlistView),
     "watchlist/schedule.off.json": TypeAdapter(WatchlistView),
     "watchlist/schedule.held.json": TypeAdapter(WatchlistView),
     "watchlist/paused.json": TypeAdapter(WatchlistView),
-    "internal/tick.started.json": TypeAdapter(TickOut),
-    "internal/tick.nothing-due.json": TypeAdapter(TickOut),
     "views/scheduled.pending.json": run_view_adapter,
     "watchlist/before-check.json": TypeAdapter(WatchlistView),
     "people/list.json": TypeAdapter(PeopleOut),
@@ -239,6 +301,15 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "people/decision.confirmed.json": TypeAdapter(ConfirmationDecidedOut),
     "people/decide-refusal.you_asked.json": TypeAdapter(DecideRefusalOut),
     "settings/history.json": TypeAdapter(SettingsHistoryOut),
+    "people/person.n8n-access.json": TypeAdapter(PersonOut),
+    "people/refusal.n8n_operators_only.json": TypeAdapter(PeopleRefusalOut),
+    "people/me-n8n.invited.json": TypeAdapter(MyN8nOut),
+    "people/me-n8n.ready.json": TypeAdapter(MyN8nOut),
+    "builder/use-case.n8n.json": TypeAdapter(UseCaseN8nView),
+    "builder/use-case.n8n.held.json": TypeAdapter(UseCaseN8nView),
+    "builder/opened-in-n8n.json": TypeAdapter(HoldOut),
+    "builder/run.n8n.waiting.json": TypeAdapter(RunN8nView),
+    "builder/run.n8n.ended.json": TypeAdapter(RunN8nView),
 }
 
 
@@ -371,6 +442,26 @@ def test_approval_views_follow_the_own_work_rule():
     assert (alice.you_can_decide, alice.why_not) == (False, Refusal.OWN_WORK)
     assert (bob.you_can_decide, bob.why_not) == (True, None)
     assert alice.digest == bob.digest
+
+
+def test_a_decider_asks_the_requester_answers_and_nothing_is_decided():
+    bob = ApprovalView.model_validate(load("approvals/apr_01JB8.bob.json"))
+    asked = ApprovalView.model_validate(load("approvals/apr_01JB8.alice.asked.json"))
+    answered = ApprovalView.model_validate(load("approvals/apr_01JB8.bob.answered.json"))
+    (question,) = asked.questions
+    (done,) = answered.questions
+    assert bob.you_can_decide and question.asked_by == "bob"
+    assert asked.requester == asked.started_by == "alice"
+    assert question.answer is None
+    assert done.answer is not None and done.answer.by == answered.requester
+    assert [step.status for step in answered.steps] == ["open"], "an answer decides nothing"
+    home = HomeOut.model_validate(load("builder/home.alice.question.json"))
+    (item,) = home.questions_for_me
+    assert (item.question_id, item.approval_id, item.text) == (
+        question.question_id,
+        asked.approval_id,
+        question.text,
+    )
 
 
 def test_home_fixtures_follow_the_own_work_rule():

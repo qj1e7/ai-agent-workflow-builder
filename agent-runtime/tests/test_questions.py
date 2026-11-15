@@ -12,7 +12,9 @@ from agent_runtime.contract import (
     AbilitiesAnswer,
     Answered,
     AnswerRequest,
+    EditAnswer,
     NeedsYouFact,
+    PauseAnswer,
     PlannerFacts,
     PreviousTurn,
     QuestionAnswer,
@@ -23,7 +25,14 @@ from agent_runtime.contract import (
     WorkflowFact,
 )
 from agent_runtime.contracts import answer_request
-from agent_runtime.questions import COULD_NOT_ANSWER, QUESTION_SYSTEM, QuestionReply
+from agent_runtime.parts import parts_of
+from agent_runtime.questions import (
+    COULD_NOT_ANSWER,
+    QUESTION_SYSTEM,
+    QuestionReply,
+    workflows_rule,
+)
+from agent_runtime.reading import TicketRead
 from tests.fakes import ScriptedChat
 from tests.test_answers import follow_up
 
@@ -63,8 +72,9 @@ def ask(
 def test_a_question_about_the_persons_data_is_answered_from_the_facts_in_the_models_words():
     reply = QuestionReply(about_their_data=True, text="Three: LangGraph, Redis and n8n.")
     result, chat = ask(reply)
-    assert result == Answered(
-        answer=QuestionAnswer(text="Three: LangGraph, Redis and n8n.", looked_at=["watchlist"])
+    assert isinstance(result, Answered)
+    assert result.answer == QuestionAnswer(
+        text="Three: LangGraph, Redis and n8n.", looked_at=["watchlist"]
     )
     assert chat.asked == [TaskRead, QuestionReply]
     assert chat.calls[1][0] == ("system", QUESTION_SYSTEM)
@@ -83,7 +93,15 @@ def test_sections_are_listed_in_the_order_the_facts_hold_them():
         watchlist=WATCHED,
         workflows=[WorkflowFact(name="Weekly", state="on", last_run=None, last_run_at=None)],
         needs_you=NeedsYouFact(
-            approvals=1, confirmations=0, stopped=0, connections=0, addresses=0, replies=0, total=1
+            approvals=1,
+            confirmations=0,
+            stopped=0,
+            connections=0,
+            addresses=0,
+            replies=0,
+            declined=0,
+            questions=0,
+            total=1,
         ),
     )
     reply = QuestionReply(about_their_data=True, text="One thing needs you.")
@@ -95,7 +113,7 @@ def test_no_facts_means_no_lane_so_the_fixed_answer_stands_and_the_model_is_aske
     reply = QuestionReply(about_their_data=True, text="Three.")
     for facts in (None, PlannerFacts()):
         result, chat = ask(reply, facts=facts)
-        assert result == Answered(answer=AbilitiesAnswer())
+        assert isinstance(result, Answered) and result.answer == AbilitiesAnswer()
         assert len(chat.calls) == 1
 
 
@@ -131,13 +149,13 @@ def test_a_second_call_that_fails_gives_the_first_answer():
 def test_the_catch_all_is_sent_to_the_lane_and_a_no_keeps_the_abilities_answer():
     reply = QuestionReply(about_their_data=False)
     result, chat = ask(reply, task="What can you do?")
-    assert result == Answered(answer=AbilitiesAnswer())
+    assert isinstance(result, Answered) and result.answer == AbilitiesAnswer()
     assert chat.asked == [TaskRead, QuestionReply]
 
 
 def test_without_facts_the_catch_all_stays_abilities_and_the_lane_is_not_asked():
     result, chat = ask(QuestionReply(about_their_data=True, text="Three."), facts=None)
-    assert result == Answered(answer=AbilitiesAnswer())
+    assert isinstance(result, Answered) and result.answer == AbilitiesAnswer()
     assert len(chat.calls) == 1
 
 
@@ -380,6 +398,53 @@ def test_why_stopped_keeps_the_fixed_answer_when_a_run_has_stopped():
     assert isinstance(out, WhyStoppedAnswer)
 
 
+def test_why_stopped_keeps_the_fixed_answer_when_some_last_runs_were_left_out():
+    out = _why(PlannerFacts(workflows=[_workflow("Done")], other_workflows=["Night check"]))
+    assert isinstance(out, WhyStoppedAnswer)
+
+
+def test_the_lane_is_told_which_workflows_came_by_name_only_and_to_say_it_could_not_look():
+    facts = PlannerFacts(workflows=[_workflow("Done")], other_workflows=["Night check"])
+    reply = QuestionReply(about_their_data=True, text="I couldn't look at Night check just now.")
+    result, chat = ask(reply, facts, "how is the night check doing?")
+    system = cast(tuple[str, str], chat.calls[1][0])[1]
+    assert workflows_rule(facts) in system and system.startswith(QUESTION_SYSTEM[:40])
+    assert "Only 1 of their 2 workflows came with a state and last run" in system
+    assert '"other_workflows":["Night check"]' in cast(tuple[str, str], chat.calls[1][1])[1]
+    assert result.answer.text == "I couldn't look at Night check just now."
+    _, plain = ask(reply, PlannerFacts(workflows=[_workflow("Done")]), "how are my workflows?")
+    assert plain.calls[1][0] == ("system", QUESTION_SYSTEM), "the rule only when it applies"
+
+
+def test_a_question_about_all_their_workflows_is_told_to_say_it_read_only_some():
+    facts = PlannerFacts(
+        workflows=[_workflow("Done")], other_workflows=["Night check"], left_out_workflows=3
+    )
+    rule = workflows_rule(facts)
+    assert "Only 1 of their 5 workflows came with a state and last run" in rule
+    assert "say the answer is from 1 of their 5 workflows" in rule
+
+
+def test_a_change_to_a_workflow_whose_name_was_not_sent_says_how_many_were_read():
+    facts = PlannerFacts(
+        workflows=[_workflow("Done")], other_workflows=["Night check"], left_out_workflows=1200
+    )
+    unused = QuestionReply(about_their_data=False)
+    result, _ = ask(unused, facts, "pause keep our software up to date", reading("change"))
+    assert isinstance(result, Answered)
+    assert result.answer == QuestionAnswer(
+        text="I could only read 2 of your 1,202 workflows, so I couldn't find the one you named.",
+        looked_at=["workflows"],
+    )
+
+
+def test_with_every_name_sent_a_change_to_an_unknown_name_is_crossed_as_before():
+    facts = PlannerFacts(workflows=[_workflow("Done")], other_workflows=["Night check"])
+    unused = QuestionReply(about_their_data=False)
+    result, _ = ask(unused, facts, "pause keep our software up to date", reading("change"))
+    assert isinstance(result, Answered) and not isinstance(result.answer, QuestionAnswer)
+
+
 @pytest.mark.parametrize("facts", [None, FACTS])
 def test_why_stopped_keeps_the_fixed_answer_when_the_workflows_are_missing(facts):
     assert isinstance(_why(facts), WhyStoppedAnswer)
@@ -430,8 +495,10 @@ def test_the_fixed_fallback_is_about_no_software():
         "Can you stop watching Redis?",
         "Can you unwatch Redis?",
         "Can you stop tracking Redis?",
-        "Is the watchlist running?",
         "Did it open a ticket for Redis?",
+        "Is the watchlist running? Make it run daily",
+        "Which software is behind? And close the upgrade tickets",
+        "Can you run the watchlist now?",
     ],
 )
 @pytest.mark.parametrize("first", [watch_reading("Redis"), reading("abilities")])
@@ -440,7 +507,68 @@ def test_any_change_word_keeps_the_first_answer(task: str, first: TaskRead):
     assert not isinstance(out, AskTheQuestionLane)
 
 
-@pytest.mark.parametrize("task", ["what about Redis?", "How many software are we watching?"])
+@pytest.mark.parametrize(
+    "task",
+    [
+        "what about Redis?",
+        "How many software are we watching?",
+        "Is the watchlist running?",
+        "When does the watchlist run next?",
+        "Why did the watchlist check stop?",
+    ],
+)
 def test_plain_questions_still_reach_the_lane(task: str):
     out = decided(task, reading("abilities"))
     assert isinstance(out, AskTheQuestionLane)
+
+
+def test_a_question_beside_a_new_workflow_asked_for_reaches_the_lane():
+    """A new workflow changes nothing that exists, so the state answer comes back, with the task
+    crossed to ask on its own (plan 7.5, r4-state-with-task)."""
+    task = "Which software is behind, and set up a weekly summary"
+    first = reading(
+        "none",
+        belongs_on_watchlist=True,
+        watchlist_word="Which software is behind",
+        name="Weekly summary",
+        schedule="Weekly",
+    )
+    out = decided(task, first)
+    assert isinstance(out, AskTheQuestionLane) and out.first_on_reject
+    asked = QuestionAnswer(text="Redis is behind.", looked_at=["watchlist"])
+    assert [(p.text, p.mark, p.reason) for p in parts_of(first, task, asked)] == [
+        ("Which software is behind", "will_do", None),
+        ("set up a weekly summary", "cant", "ask_on_its_own"),
+    ]
+
+
+def test_an_edit_never_goes_to_the_lane():
+    out = decided(
+        "Is the watchlist running? Rename it", reading("change", workflow_words="watchlist")
+    )
+    assert isinstance(out, EditAnswer) and out.cant == "only_schedule"
+    out = decided(
+        "Is the watchlist running? Pause it", reading("change", workflow_words="watchlist")
+    )
+    assert isinstance(out, PauseAnswer) and out.workflow_words == "watchlist"
+
+
+def test_a_question_crossed_as_not_followed_stays_a_cant_without_watched_software():
+    first = reading("none", belongs_on_watchlist=True, watchlist_word="Which software is behind")
+    task = "Which software is behind, and set up a weekly summary"
+    assert not isinstance(decided(task, first, PlannerFacts(watchlist=[])), AskTheQuestionLane)
+
+
+def test_a_question_beside_a_new_workflow_read_as_a_ticket_still_reaches_the_lane():
+    """The golden run's own reading of r4-state-with-task, which read the summary as a ticket."""
+    task = "Which software is behind, and set up a weekly summary"
+    first = reading(
+        "none",
+        belongs_on_watchlist=True,
+        watchlist_word="Which software is behind",
+        name="Weekly summary",
+        schedule="Weekly",
+        ticket=TicketRead(creates=False, says="summary", said="set up a weekly summary"),
+    )
+    out = decided(task, first)
+    assert isinstance(out, AskTheQuestionLane) and out.first_on_reject

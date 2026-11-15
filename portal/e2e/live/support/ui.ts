@@ -1,4 +1,4 @@
-import type { Browser, BrowserContext, Page, TestInfo } from '@playwright/test'
+import { expect, type Browser, type BrowserContext, type Locator, type Page, type TestInfo } from '@playwright/test'
 import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
 
@@ -39,4 +39,55 @@ export async function shot(page: Page, info: TestInfo, name: string): Promise<vo
   await page.waitForTimeout(900)
   await page.screenshot({ path: path.join(dir, `${name}.png`), caret: 'hide' })
   info.annotations.push({ type: 'shot', description: name })
+}
+
+/** Presses Show more under a list until it goes, so every row the list counts is drawn, and says how many rows there are then. */
+export async function showEvery(list: Locator, rows: Locator): Promise<number> {
+  const more = list.getByRole('button', { name: 'Show more', exact: true })
+  while ((await more.count()) > 0) {
+    const before = await rows.count()
+    await more.click()
+    await expect.poll(async () => (await more.count()) === 0 || (await rows.count()) > before, { message: 'Show more drew the next rows' }).toBe(true)
+  }
+  return rows.count()
+}
+
+/**
+ * The rows of Needs you on Workflows, every one, after Show more has read each page. The heading carries no number, as in the
+ * sketch, so this is the number the strip, the Planner's answer and an Approver's Home heading must match.
+ */
+export async function needsOnWorkflows(page: Page): Promise<number> {
+  const section = page.getByRole('main').getByRole('region', { name: 'Needs you' })
+  await expect(section.locator('li[data-home-item]').first()).toBeVisible()
+  return showEvery(section, section.locator('li[data-home-item]'))
+}
+
+/** A page someone who isn't an Operator reads: one note naming the Operators, and no control there that is dead. */
+export async function expectReadOnly(page: Page, what: string): Promise<void> {
+  const main = page.getByRole('main')
+  const note = main.getByText(/^Only Operators change /)
+  await expect(note).toHaveCount(1)
+  await expect(note).toHaveText(new RegExp(`^Only Operators change ${what}\\. Ask .*Alice.*Carol.*\\.$`))
+  await expect(note).not.toContainText('Bob')
+  await expect(main.locator(':is(button, input, select, textarea):disabled, [aria-disabled="true"]')).toHaveCount(0)
+}
+
+/** The reasons Decline opens, before anything is declined (spec 10.4). */
+export const declineReasons = (scope: Page | Locator): Locator => scope.getByRole('group', { name: /^Why\? Optional\./ })
+
+/** Decline asks why first. This picks the reason when there is one, then declines. */
+export async function decline(scope: Page | Locator, reason?: string): Promise<void> {
+  await scope.getByRole('button', { name: 'Decline' }).click()
+  const why = declineReasons(scope)
+  if (reason !== undefined) await why.getByRole('button', { name: reason }).click()
+  await why.getByRole('button', { name: 'Decline' }).click()
+}
+
+/**
+ * An answer about one run shows it beside the chat by itself on a wide screen, and offers Open on a narrow one (the sketch's
+ * auto-open). Waits for the first, presses the second.
+ */
+export async function showRun(page: Page, opener: Locator): Promise<void> {
+  if ((page.viewportSize()?.width ?? 0) > 900) await expect(page.locator('#side-panel'), 'on a wide screen the run opens beside the chat by itself').toBeVisible({ timeout: 20_000 })
+  else await opener.click()
 }

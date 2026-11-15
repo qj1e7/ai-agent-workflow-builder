@@ -1,0 +1,20 @@
+{
+  "parts": [
+    {
+      "text": "How are my workflows doing",
+      "mark": "will_do",
+      "reason": null,
+      "note": null,
+      "choices": []
+    },
+    {
+      "text": "every Friday sum up the closed tickets",
+      "mark": "cant",
+      "reason": "ask_on_its_own",
+      "note": null,
+      "choices": []
+    }
+  ],
+  "answer": "check_workflows",
+  "use_case_id": null
+}

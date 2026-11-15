@@ -9,7 +9,7 @@ import { createDevSession } from '../../api/session'
 import type { Me, QuestionReply, WatchlistView } from '../../api/types'
 import { Answer, type Page } from './AnswerCards'
 
-const PAGE: Page = { ask: () => undefined, edit: () => undefined }
+const PAGE: Page = { ask: () => undefined, edit: () => undefined, box: () => undefined }
 const ALICE: Me = { id: 'alice', display: 'Alice', roles: ['operator', 'approver'] }
 const BOB: Me = { id: 'bob', display: 'Bob', roles: ['approver'] }
 const LIST = statuses as WatchlistView
@@ -38,7 +38,17 @@ describe('the Software-page actions under an answer about watched software', () 
   it('gives an Operator Open, Stop watching last for the software, and the check of the whole watchlist', () => {
     const html = draw(ALICE, ['fastapi'])
     expect(buttons(html)).toEqual(['Software', 'Open FastAPI on the Software page', 'Stop watching FastAPI', 'Check all software now'])
-    expect(html).toContain(`href="/software?row=${LIST.software[0]?.id}"`)
+    expect(html).toContain(`href="/software/${LIST.software[0]?.id}"`)
+  })
+
+  it('names one software once, as the card’s title, and several by row under “On your watchlist”', () => {
+    const one = draw(ALICE, ['FastAPI'])
+    expect(one).toMatch(/<h3 id="[^"]*">FastAPI<\/h3>/)
+    expect(one).not.toContain('<b>FastAPI</b>')
+    const two = draw(ALICE, ['FastAPI', 'Redis'])
+    expect(two).toMatch(/<h3 id="[^"]*">On your watchlist<\/h3>/)
+    expect(two).toContain('<b>FastAPI</b>')
+    expect(two).toContain('<b>Redis</b>')
   })
 
   it('asks before it stops watching, so the first press removes nothing', () => {

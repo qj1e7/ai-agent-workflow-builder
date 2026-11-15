@@ -38,31 +38,24 @@ export const SettingsIcon = drawn(
   </>,
 )
 
-export const HomeIcon = drawn('HomeIcon', <path d="M4 11l8-7 8 7v9h-5v-6H9v6H4z" />)
-
-export const GridIcon = drawn(
-  'GridIcon',
+/** Workflows on the rail: three linked nodes, as in the sketch. */
+export const NodesIcon = drawn(
+  'NodesIcon',
   <>
-    <rect x="4" y="4" width="7" height="7" rx="1.5" />
-    <rect x="13" y="4" width="7" height="7" rx="1.5" />
-    <rect x="4" y="13" width="7" height="7" rx="1.5" />
-    <rect x="13" y="13" width="7" height="7" rx="1.5" />
+    <circle cx="5.4" cy="12" r="2.6" />
+    <circle cx="18.6" cy="6" r="2.6" />
+    <circle cx="18.6" cy="18" r="2.6" />
+    <path d="M7.9 10.9l8.2-3.8M7.9 13.1l8.2 3.8" />
   </>,
 )
 
-export const BoxIcon = drawn(
-  'BoxIcon',
+/** The Watchlist on the rail: a stack of rows, as in the sketch. */
+export const StackIcon = drawn(
+  'StackIcon',
   <>
-    <path d="M4 7.5L12 3.5l8 4v9l-8 4-8-4z" />
-    <path d="M4 7.5l8 4 8-4M12 11.5v9" />
-  </>,
-)
-
-export const BotIcon = drawn(
-  'BotIcon',
-  <>
-    <rect x="4.5" y="8" width="15" height="11.5" rx="3.5" />
-    <path d="M12 4.5V8M9.2 13.4v.2M14.8 13.4v.2" />
+    <rect x="3.6" y="4.2" width="16.8" height="4.8" rx="1.4" />
+    <rect x="3.6" y="9.6" width="16.8" height="4.8" rx="1.4" />
+    <rect x="3.6" y="15" width="16.8" height="4.8" rx="1.4" />
   </>,
 )
 

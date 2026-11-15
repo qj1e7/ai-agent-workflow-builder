@@ -1,0 +1,29 @@
+{
+  "parts": [
+    {
+      "text": "Run the software check every day instead of every Monday",
+      "mark": "will_do",
+      "reason": null,
+      "note": null,
+      "choices": []
+    }
+  ],
+  "answer": "edit",
+  "use_case_id": "uc_01WL",
+  "name": "Keep our software up to date",
+  "watchlist": true,
+  "missing": null,
+  "software": null,
+  "choices": [],
+  "before": {
+    "day": "monday",
+    "at": "09:00"
+  },
+  "after": {
+    "day": "every_day",
+    "at": "09:00"
+  },
+  "hour": null,
+  "cant": null,
+  "holds_save": false
+}

@@ -331,6 +331,11 @@
   gap: 4px 18px;
 }
 
+.rolesText {
+  font-weight: 600;
+  text-align: right;
+}
+
 .check {
   display: flex;
   align-items: center;
@@ -429,8 +434,10 @@
     grid-template-columns: 34px minmax(0, 1fr);
   }
 
-  .person .roles {
+  .person .roles,
+  .person .rolesText {
     grid-column: 2;
+    text-align: left;
   }
 
   .waiting {

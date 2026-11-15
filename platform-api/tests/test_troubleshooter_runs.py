@@ -13,7 +13,7 @@ from platform_api.orchestration.jira import (
     JiraUnavailable,
     JiraWriteConnector,
 )
-from platform_api.orchestration.runs import Acting, Failed, StepName
+from platform_api.orchestration.runs import Failed, StepName
 from platform_api.orchestration.service import Orchestrator, Retried
 from platform_api.orchestration.write_actions import WriteGateway
 from platform_api.shared import WRITE_STOP_ADVICE, N8nExecutionId, RunId
@@ -76,8 +76,7 @@ async def lost_write(h: Harness) -> RunId:
 
 
 async def retry_to_the_write(h: Harness, run_id: RunId) -> None:
-    retried = await h.orchestrator.retry(run_id, ALICE)
-    assert isinstance(retried, Retried) and isinstance(retried.state, Acting)
+    assert await h.orchestrator.retry(run_id, ALICE) == Retried("acting")
     h.advance(timedelta(seconds=40))
     await h.orchestrator.tick()
 

@@ -79,11 +79,11 @@ function onlyDev(): void {
 }
 
 /** Opens the page and returns what the platform answered for the cards and the tools. */
-async function openLibrary(page: Page, url = '/agents?tab=agents'): Promise<{ cards: Card[]; tools: Tool[] | null }> {
+async function openLibrary(page: Page, url = '/settings?tab=how&show=agents'): Promise<{ cards: Card[]; tools: Tool[] | null }> {
   const cardsReply = page.waitForResponse((r) => new URL(r.url()).pathname === '/api/v1/agent-cards')
   const toolsReply = page.waitForResponse((r) => new URL(r.url()).pathname === '/api/v1/tools').catch(() => null)
   await page.goto(url)
-  await expect(h1(page)).toHaveText('Agent library')
+  await expect(h1(page)).toHaveText('Settings')
   const cards = ((await (await cardsReply).json()) as { cards: Card[] }).cards
   const reply = await toolsReply
   const tools = reply?.ok() ? ((await reply.json()) as { tools: Tool[] }).tools : null
@@ -97,7 +97,7 @@ test('@lane1 the library lists every card once, beside the two platform agents',
   const context = await devContext(browser, 'alice')
   const page = await context.newPage()
   if (TARGET === 'trunk') {
-    await page.goto('/agents?tab=agents')
+    await page.goto('/settings?tab=how&show=agents')
     await expect(h1(page)).toBeVisible()
     save(1, 'p7-library-trunk.json', { target: 'trunk', heading: await h1(page).innerText(), main: await page.locator('main').innerText() })
     await shotTo(page, path.join(laneDir(1), 'p7-library-trunk.png'))
@@ -205,7 +205,7 @@ test('@lane6 a card opens from its URL and closing returns focus to its tile', a
   const page = await context.newPage()
   const { cards } = await openLibrary(page)
   const card = cards.find((c) => c.name === 'Version checker')
-  const url = `/agents/${card?.card_id ?? 'crd_version_checker'}`
+  const url = `/settings?tab=how&show=agents&agent=${card?.card_id ?? 'crd_version_checker'}`
   await page.goto(url)
   const dialog = dialogOf(page)
   await expect(dialog).toBeVisible()
@@ -213,7 +213,7 @@ test('@lane6 a card opens from its URL and closing returns focus to its tile', a
   await shotTo(page, path.join(laneDir(6), 'p7-deep-link.png'))
   await dialog.getByRole('button', { name: 'Close' }).first().click()
   await expect(dialog).toHaveCount(0)
-  await expect(page).toHaveURL(/\/agents$/)
+  await expect(page).toHaveURL(/\/settings\?tab=how&show=agents$/)
   const tile = page.getByRole('link', { name: 'Version checker', exact: true })
   await expect(tile, 'focus is back on the card’s tile').toBeFocused()
   await shotTo(page, path.join(laneDir(6), 'p7-deep-link-closed.png'))
@@ -380,8 +380,8 @@ test('@lane10 the Tools tab says the tool list is not available and keeps the ca
     .then(async (r) => ({ status: r.status(), tools: r.ok() ? ((await r.json()) as { tools: Tool[] }).tools.length : 0 }))
     .catch(() => ({ status: -1, tools: 0 }))
   const cardsReal = page.waitForResponse((r) => new URL(r.url()).pathname === '/api/v1/agent-cards')
-  await page.goto('/agents?tab=agents')
-  await expect(h1(page)).toHaveText('Agent library')
+  await page.goto('/settings?tab=how&show=agents')
+  await expect(h1(page)).toHaveText('Settings')
   const cardCount = ((await (await cardsReal).json()) as { cards: Card[] }).cards.length
   await expect(tiles(page), 'every tile has drawn').toHaveCount(PLATFORM_AGENTS.length + cardCount)
   const shown = await tiles(page).count()
@@ -405,8 +405,8 @@ test('@lane10 the Tools tab says the tool list is not available and keeps the ca
   const forced = await context.newPage()
   await forced.route('**/api/v1/tools', (route) => route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ detail: 'The agent runtime did not answer' }) }))
   const cardsForced = forced.waitForResponse((r) => new URL(r.url()).pathname === '/api/v1/agent-cards')
-  await forced.goto('/agents?tab=agents')
-  await expect(h1(forced)).toHaveText('Agent library')
+  await forced.goto('/settings?tab=how&show=agents')
+  await expect(h1(forced)).toHaveText('Settings')
   const forcedCount = ((await (await cardsForced).json()) as { cards: Card[] }).cards.length
   await expect(tiles(forced), 'every tile has drawn').toHaveCount(PLATFORM_AGENTS.length + forcedCount)
   const before = await tiles(forced).allInnerTexts()
@@ -485,7 +485,7 @@ test('@lane11 a press on the dimmed page beside a card closes it, and a press th
   await shotTo(page, path.join(laneDir(11), 'p7-press-kept-open.png'))
   const closedByPage = await press('on the dimmed page beside the card', beside, beside)
   await expect(dialog).toHaveCount(0)
-  await expect(page).toHaveURL(/\/agents$/)
+  await expect(page).toHaveURL(/\/settings\?tab=how&show=agents$/)
   await expect(tile, 'focus is back on the card’s tile').toBeFocused()
   await shotTo(page, path.join(laneDir(11), 'p7-press-closed.png'))
   save(11, 'p7-press-beside.json', { viewport: DESKTOP, card: box, beside, edge, onTitle, presses, afterClose: new URL(page.url()).pathname })
@@ -500,7 +500,7 @@ test('@perf largest contentful paint of the Agent library', async ({ browser }) 
   test.skip(TARGET === 'trunk', 'trunk has no Agent library')
   const context = await devContext(browser, 'alice')
   const page = await context.newPage()
-  await page.goto('/agents?tab=agents', { waitUntil: 'load' })
+  await page.goto('/settings?tab=how&show=agents', { waitUntil: 'load' })
   await expect(tiles(page).first()).toBeVisible({ timeout: 30_000 })
   await page.waitForTimeout(2_000)
   const measured = await page.evaluate(

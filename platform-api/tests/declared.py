@@ -8,6 +8,8 @@ from fastapi import FastAPI
 
 from platform_api.app import create_app
 from platform_api.builder.lifecycle import TooLate
+from platform_api.builder.models import ScheduleSaveIn
+from platform_api.builder.versions import ChangedSince
 from platform_api.builder.watchlist import (
     NeverAtThatAddress,
     NoMoveReported,
@@ -17,12 +19,25 @@ from platform_api.builder.watchlist import (
     RepoAlreadyWatched,
     WatchlistFull,
 )
-from platform_api.shared import SoftwareId
+from platform_api.orchestration.n8n_call_service import FailureResult, LeftAsIs
+from platform_api.orchestration.n8n_calls import (
+    Answer,
+    CallResult,
+    NodeCall,
+    NodeOption,
+    OptionKind,
+)
+from platform_api.shared import N8nExecutionId, SoftwareId
 from tests.support import LOCAL_ENV
+
+STALE = 0
+"""A version the fake watchlist has moved past, so a schedule change from it is refused."""
 
 ALICE = {"X-Dev-User": "alice"}
 BOB = {"X-Dev-User": "bob"}
 STEP_KEY = {"X-Step-Key": LOCAL_ENV["STEP_KEY"]}
+NODE_KEY_ENV = {"WAB_NODE_KEY": "test-node-key"}
+NODE_KEY = {"X-Wab-Node-Key": NODE_KEY_ENV["WAB_NODE_KEY"]}
 
 
 class FakeOrchestrator:
@@ -46,14 +61,39 @@ class FakeOrchestrator:
         return self._decide
 
 
+class FakeNodeCalls:
+    """Answers every node call with one result, and records the calls."""
+
+    def __init__(
+        self, result: CallResult | None = None, failure: FailureResult | None = None
+    ) -> None:
+        self._result = result or Answer(({"id": "1.2.16"},))
+        self._failure = failure or LeftAsIs("No run carries this execution.")
+        self.calls: list[NodeCall] = []
+        self.reports: list[tuple[N8nExecutionId, N8nExecutionId]] = []
+        self.asked: list[tuple[OptionKind, dict[str, str]]] = []
+
+    async def call(self, call: NodeCall) -> CallResult:
+        self.calls.append(call)
+        return self._result
+
+    async def options(self, kind: OptionKind, of: Mapping[str, str]) -> list[NodeOption]:
+        self.asked.append((kind, dict(of)))
+        return [NodeOption("MOCK", "MOCK")] if kind == "places" else []
+
+    async def report(self, reporter: N8nExecutionId, failed: N8nExecutionId) -> FailureResult:
+        self.reports.append((reporter, failed))
+        return self._failure
+
+
 class FakeBuilder:
     def __init__(self, started: object = None) -> None:
         self._started = started
 
-    async def get_use_case(self, use_case_id: str) -> None:
+    async def get_use_case(self, use_case_id: str, viewer: object = None) -> None:
         return None
 
-    async def start_run(self, *args: object) -> object:
+    async def start_run(self, *args: object, **kwargs: object) -> object:
         return self._started
 
     async def pause_use_case(self, *args: object) -> None:
@@ -100,11 +140,11 @@ class FakeWatchlist:
             return TooLate(datetime(2026, 11, 3, tzinfo=UTC))
         return NoSuchSoftware(SoftwareId(software_id))
 
-    async def save_schedule(self, principal: object, body: object) -> object:
-        return NoWatchlist()
+    async def save_schedule(self, principal: object, body: ScheduleSaveIn) -> object:
+        return ChangedSince() if body.expected_version == STALE else NoWatchlist()
 
-    async def turn_off_schedule(self) -> object:
-        return NoWatchlist()
+    async def turn_off_schedule(self, principal: object, expected: int) -> object:
+        return ChangedSince() if expected == STALE else NoWatchlist()
 
 
 class FakeTeamRequests:
@@ -113,11 +153,6 @@ class FakeTeamRequests:
 
     async def reply(self, *args: object) -> None:
         return None
-
-
-class FakeTicker:
-    async def tick(self) -> list[Any]:
-        return []
 
 
 class FakeConnections:
@@ -181,6 +216,7 @@ def app_with(
     planner_front: object = None,
     log: object = None,
     env: Mapping[str, str] | None = None,
+    node_calls: object = None,
 ) -> FastAPI:
     app = create_app({**LOCAL_ENV, **(env or {})})
     app.state.orchestrator = orchestrator or FakeOrchestrator()
@@ -190,8 +226,8 @@ def app_with(
     app.state.practice_jira = FakeMockJira()
     app.state.watchlist = FakeWatchlist()
     app.state.team_requests = FakeTeamRequests()
-    app.state.schedule_ticker = FakeTicker()
     app.state.connections = FakeConnections()
+    app.state.node_calls = node_calls or FakeNodeCalls()
     return app
 
 

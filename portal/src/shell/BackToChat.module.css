@@ -1,0 +1,18 @@
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  margin-bottom: 6px;
+  padding: 4px 0;
+  color: var(--muted);
+  font-weight: 600;
+  text-decoration: none;
+  transition: color var(--dur-press) ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .back:hover {
+    color: var(--ink);
+  }
+}

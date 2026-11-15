@@ -1,13 +1,51 @@
 import { useState } from 'react'
 import { useCacheScope, useErrorWords } from '../../api/context'
 import { useLatch } from '../../api/latch'
+import { useCapabilities } from '../../api/plannerQueries'
 import { isConflict, refusalOf, useDecide } from '../../api/queries'
-import type { ApprovalStepView, ApprovalView, DecisionIn, Verdict } from '../../api/types'
-import { starterName } from '../../api/labels'
-import { andList, CONFLICT_WORDS, lockWords, type NameOf, type Party } from './words'
+import type { ApprovalStepView, ApprovalView, CapabilityView, DecisionIn, DecisionView, UseCaseView, Verdict } from '../../api/types'
+import { cardsOf } from '../workflows/workflow'
+import type { Declined } from './runModel'
+import { andList, CONFLICT_WORDS, declinedOfSteps, lockWords, type Party } from './words'
 
 export function openStep(approval: ApprovalView): ApprovalStepView | null {
   return approval.steps.find((step) => step.status === 'open') ?? null
+}
+
+/**
+ * Where a request stands, from its steps: waiting at one step, or over. Only an open request takes a decision, so an expired,
+ * cancelled or decided one says why instead of offering buttons.
+ */
+export type Standing =
+  | { readonly is: 'open'; readonly step: number; readonly steps: number; readonly approvedBy: readonly string[] }
+  | { readonly is: 'approved'; readonly by: readonly string[]; readonly at: string | null }
+  | { readonly is: 'declined'; readonly record: Declined; readonly at: string | null }
+  | { readonly is: 'expired' | 'cancelled' | 'closed' }
+
+export function standingOf(steps: readonly ApprovalStepView[]): Standing {
+  const declined = steps.find((step) => step.status === 'declined')
+  if (declined) return { is: 'declined', record: declinedOfSteps(steps) ?? { by: declined.decided_by ?? '', approvedBy: [], reason: declined.reason ?? null }, at: declined.decided_at ?? null }
+  if (steps.some((step) => step.status === 'expired')) return { is: 'expired' }
+  if (steps.some((step) => step.status === 'cancelled')) return { is: 'cancelled' }
+  if (steps.some((step) => step.status === 'closed')) return { is: 'closed' }
+  const approved = steps.filter((step) => step.status === 'approved')
+  const by = approved.flatMap((step) => (step.decided_by ? [step.decided_by] : []))
+  const open = steps.find((step) => step.status === 'open' || step.status === 'waiting')
+  if (open) return { is: 'open', step: open.index, steps: steps.length, approvedBy: by }
+  return { is: 'approved', by, at: approved.at(-1)?.decided_at ?? null }
+}
+
+/**
+ * The steps with this person's recorded decision in, until the platform's next read shows it. A later step no longer names them,
+ * since no one says yes twice.
+ */
+export function stepsAfter(steps: readonly ApprovalStepView[], decision: DecisionView): readonly ApprovalStepView[] {
+  if (steps.find((step) => step.index === decision.step)?.status !== 'open') return steps
+  const status = decision.verdict === 'approve' ? ('approved' as const) : ('declined' as const)
+  return steps.map((step) => {
+    if (step.index === decision.step) return { ...step, status, decided_by: decision.by, decided_at: decision.at, reason: decision.reason ?? null }
+    return step.index > decision.step ? { ...step, sent_to: (step.sent_to ?? []).filter((person) => person.id !== decision.by) } : step
+  })
 }
 
 /**
@@ -29,53 +67,79 @@ export function foundOf(fromActivity: string, fromApproval: string | undefined):
   return fromActivity !== '' ? fromActivity : (fromApproval ?? '')
 }
 
-/** Who asked: the workflow, who set it up, and whether a schedule or a person started this run. */
-export function askedWords(approval: ApprovalView, nameOf: NameOf): string {
-  const starter = `${starterName(nameOf(approval.started_by), approval.trigger)} started this run.`
-  const retried = approval.retried_by.length > 0 ? ` ${andList(approval.retried_by.map(nameOf))} retried it.` : ''
-  return `${approval.use_case_name}, set up by ${nameOf(approval.owner)}. ${starter}${retried}`
+/**
+ * What a run checks, and the registry entries that would check more of it. The first a workflow's agents use is what the run
+ * checks: a release check also reads Jira, but only to find the tickets it raised.
+ */
+const CHECKS: readonly { readonly reads: string; readonly more: readonly string[] }[] = [
+  { reads: 'github.releases', more: ['registries.check'] },
+  { reads: 'jira.read', more: ['jira.find_by_update', 'jira.find_by_detail', 'jira.find_older'] },
+]
+
+/**
+ * Not checked (spec 10.4), only from the run and the capability registry: the software the run couldn't read, then what the
+ * platform can't yet check of what the run checks. An entry the registry says is Ready is never listed.
+ */
+export function notCheckedWords(unread: readonly string[], cards: readonly string[], capabilities: readonly CapabilityView[] | undefined): readonly string[] {
+  const registry = capabilities ?? []
+  const check = CHECKS.find(({ reads }) => registry.some((c) => c.id === reads && c.agents.some((card) => cards.includes(card))))
+  const cant = registry.flatMap((c) => (check?.more.includes(c.id) && c.state !== 'ready' && c.cant ? [`The platform can’t yet ${c.cant.replaceAll("'", '’')}.`] : []))
+  const read = unread.length > 0 ? [`${andList(unread)} couldn’t be read, so no ticket is proposed for ${unread.length === 1 ? 'it' : 'them'}.`] : []
+  return [...read, ...cant]
 }
 
-/** What happens next. Under today's rule a waiting request never expires, so it names no stop time and no backup. */
-export function happensWords(approval: ApprovalView, canDecide: boolean): string {
-  const who = canDecide ? 'you say yes' : 'an Approver says yes'
-  const order = approval.steps.length > 1 ? ' It needs two Approvers, one after the other.' : ''
-  return `Nothing is written until ${who}.${order} The request waits until someone decides. ${canDecide ? 'If you decline' : 'If an Approver declines'}, the run stops there.`
+/**
+ * Not checked for a request, waiting or decided. Null until the registry has answered, so the section never grows under the
+ * Approver's pointer. If the registry can't be read, only the run's own lines are given.
+ */
+export function useNotChecked(approval: ApprovalView | undefined, useCase: Pick<UseCaseView, 'template' | 'agents'> | undefined): readonly string[] | null {
+  const capabilities = useCapabilities({ enabled: approval !== undefined })
+  if (!approval) return []
+  if (capabilities.isPending) return null
+  return notCheckedWords(approval.not_checked, useCase ? cardsOf(useCase).map((card) => card.card_id) : [], capabilities.data?.capabilities)
 }
 
-/** The reader's part: why they can decide, which of two yeses is theirs, or why they can't. */
-export function yourPart(approval: ApprovalView, party: Party | null, nameOf: NameOf): string | null {
-  const step = openStep(approval)
-  if (!step) return null
-  if (!approval.you_can_decide) return lockWords(approval.why_not, party)
-  const before = approval.steps.filter((other) => other.index < step.index && other.status === 'approved')
-  if (before.length > 0 && approval.steps.length === 2) {
-    const said = andList(before.map((other) => (other.decided_by ? nameOf(other.decided_by) : 'Another Approver')))
-    return `${said} said yes. Your yes is the second of two.`
-  }
-  return 'You can decide because you didn’t set this up or start this run.'
+/** What the person decides. Only a decline takes a reason, and it is optional (spec 10.4). */
+export type Choice = { readonly verdict: 'approve' } | { readonly verdict: 'decline'; readonly reason: string | null }
+
+export const APPROVE: Choice = { verdict: 'approve' }
+
+/** A few quick reasons to decline, as the prototype offers them. The software check has its own. */
+export function declineReasons(template: string | undefined): readonly string[] {
+  return template === 'software_watchlist' ? ['Not this week', 'Wrong version', 'Needs testing first'] : ['Not needed this time', 'Something in it is wrong']
 }
 
 /** What to post, or null when the platform said this person may not decide or nothing is open. Never from the stream. */
-export function decisionFor(approval: ApprovalView | undefined, verdict: Verdict): DecisionIn | null {
+export function decisionFor(approval: ApprovalView | undefined, choice: Choice): DecisionIn | null {
   if (!approval?.you_can_decide) return null
   const step = openStep(approval)
-  return step ? { step: step.index, verdict, digest: approval.digest } : null
+  if (!step) return null
+  const body = { step: step.index, verdict: choice.verdict, digest: approval.digest }
+  return choice.verdict === 'decline' && choice.reason ? { ...body, reason: choice.reason } : body
+}
+
+/** Whether this person may say yes now: the platform says so, the request is open, and they haven't just decided it here. */
+export function canDecideNow(approval: ApprovalView, decision: Pick<Decision, 'recorded' | 'steps'>): boolean {
+  return approval.you_can_decide && standingOf(decision.steps ?? approval.steps).is === 'open' && decision.recorded === null
 }
 
 export interface Decision {
   readonly pending: Verdict | null
   /** The verdict the platform recorded for this person on this page. */
   readonly recorded: Verdict | null
+  /** The record of the decline the platform recorded for this person on this page. */
+  readonly declined: Declined | null
+  /** The request's steps with that decision in, ahead of the next read. Null until this person decides here. */
+  readonly steps: readonly ApprovalStepView[] | null
   readonly error: string | null
-  decide(this: void, verdict: Verdict): void
+  decide(this: void, choice: Choice): void
 }
 
 /**
  * It posts only when the platform said this person may decide. A second press before the first answer is dropped.
  * A dev user switch starts clean, because it remembers who sent it.
  */
-export function useDecision(approval: ApprovalView | undefined, party: Party | null, onRecorded?: (verdict: Verdict) => void): Decision {
+export function useDecision(approval: ApprovalView | undefined, party: Party | null, onRecorded?: (decision: DecisionView) => void): Decision {
   const mutation = useDecide(approval?.approval_id ?? '')
   const latch = useLatch()
   const user = useCacheScope()
@@ -83,13 +147,13 @@ export function useDecision(approval: ApprovalView | undefined, party: Party | n
   const [sent, setSent] = useState<{ by: string; verdict: Verdict } | null>(null)
   const mine = sent !== null && sent.by === user
 
-  function decide(verdict: Verdict): void {
-    const body = decisionFor(approval, verdict)
-    if (!body) return
+  function decide(choice: Choice): void {
+    const body = decisionFor(approval, choice)
+    if (!body || !approval) return
     latch.run((settled) => {
-      setSent({ by: user, verdict })
+      setSent({ by: user, verdict: choice.verdict })
       mutation.mutate(body, {
-        onSuccess: () => onRecorded?.(verdict),
+        onSuccess: (answer) => onRecorded?.(answer.decision),
         onSettled: settled,
       })
     })
@@ -102,9 +166,13 @@ export function useDecision(approval: ApprovalView | undefined, party: Party | n
     else if (isConflict(mutation.error)) error = CONFLICT_WORDS
     else error = errorWords(mutation.error)
   }
+  const recorded = mine && mutation.isSuccess ? mutation.data.decision : null
+  const steps = recorded && approval ? stepsAfter(approval.steps, recorded) : null
   return {
     pending: mine && mutation.isPending ? sent.verdict : null,
-    recorded: mine && mutation.isSuccess ? sent.verdict : null,
+    recorded: recorded ? recorded.verdict : null,
+    declined: recorded?.verdict === 'decline' && steps ? declinedOfSteps(steps) : null,
+    steps,
     error,
     decide,
   }

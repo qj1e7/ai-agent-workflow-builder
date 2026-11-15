@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, type ReactNode } from 'react'
+import { useEffect, useEffectEvent, useId, useRef, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router'
 import type { CardView, ToolId, ToolView } from '../../api/types'
 import { agentIdentity } from '../../ui/agents'
@@ -21,10 +21,11 @@ import {
   WATCHLIST_NOTE,
   cardAccess,
   faceId,
+  howItWorksPath,
   type Access,
   type PlatformAgent,
 } from './agents'
-import styles from './AgentsPage.module.css'
+import styles from './HowItWorks.module.css'
 
 export const tileId = (id: string) => `agent-tile-${id}`
 
@@ -33,7 +34,7 @@ export function useCloseWithoutHistoryEntry(): () => void {
   const location = useLocation()
   return () => {
     if (openedFromList(location.state)) void navigate(-1)
-    else void navigate(`/agents${location.search}`, { replace: true })
+    else void navigate(howItWorksPath({ show: new URLSearchParams(location.search).get('show') }), { replace: true })
   }
 }
 
@@ -78,7 +79,7 @@ function Tile({ id, name, what, note, access, toolCount, platform, to }: TilePro
   )
 }
 
-export function PlatformTile({ agent, search }: { agent: PlatformAgent; search: string }) {
+export function PlatformTile({ agent }: { agent: PlatformAgent }) {
   return (
     <Tile
       id={agent.id}
@@ -87,12 +88,12 @@ export function PlatformTile({ agent, search }: { agent: PlatformAgent; search: 
       access="none"
       toolCount={0}
       platform
-      to={`/agents/${agent.id}${search}`}
+      to={howItWorksPath({ show: 'agents', agent: agent.id })}
     />
   )
 }
 
-export function CardTile({ card, tools, search }: { card: CardView; tools: ToolIndex; search: string }) {
+export function CardTile({ card, tools }: { card: CardView; tools: ToolIndex }) {
   const kinds = new Map([...tools].map(([id, tool]) => [id, tool.kind]))
   const extra = watchlistTools(card, tools.values())
   return (
@@ -104,7 +105,7 @@ export function CardTile({ card, tools, search }: { card: CardView; tools: ToolI
       access={cardAccess(card, kinds)}
       toolCount={card.tools.length + extra.length}
       platform={false}
-      to={`/agents/${card.card_id}${search}`}
+      to={howItWorksPath({ show: 'agents', agent: card.card_id })}
     />
   )
 }
@@ -154,16 +155,35 @@ export function pressClosesCard(start: Spot | null, end: Spot, card: Edges): boo
   return start !== null && offCard(start, card) && offCard(end, card)
 }
 
+/**
+ * The address says which agent is open, so closing asks for the address to change and the dialog goes when the address no
+ * longer names the agent. Closing the dialog first would hide it while a step back was still on its way, and that step
+ * could land after the person had already gone somewhere else.
+ */
 function Modal({ face, title, under, onClose, children }: ModalProps) {
   const dialog = useRef<HTMLDialogElement>(null)
   const topClose = useRef<HTMLButtonElement>(null)
   const titleId = useId()
+  const asked = useRef(false)
+  const close = () => {
+    if (asked.current) return
+    asked.current = true
+    onClose()
+  }
+  const closeFromEffect = useEffectEvent(close)
   useEffect(() => {
     const element = dialog.current
     if (!element) return
     if (!element.open) element.showModal()
     topClose.current?.focus()
-    const onKey = (event: KeyboardEvent) => keepTabInside(element, event)
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !event.isComposing) {
+        event.preventDefault()
+        closeFromEffect()
+        return
+      }
+      keepTabInside(element, event)
+    }
     let pressStart: Spot | null = null
     const onPointerDown = (event: PointerEvent) => {
       pressStart = event
@@ -171,7 +191,7 @@ function Modal({ face, title, under, onClose, children }: ModalProps) {
     const onClick = (event: MouseEvent) => {
       const closes = event.target === element && pressClosesCard(pressStart, event, element.getBoundingClientRect())
       pressStart = null
-      if (closes) element.close()
+      if (closes) closeFromEffect()
     }
     document.addEventListener('keydown', onKey)
     element.addEventListener('pointerdown', onPointerDown)
@@ -182,9 +202,8 @@ function Modal({ face, title, under, onClose, children }: ModalProps) {
       element.removeEventListener('click', onClick)
     }
   }, [])
-  const close = () => dialog.current?.close()
   return (
-    <dialog ref={dialog} className={styles['dialog']} aria-labelledby={titleId} onClose={onClose}>
+    <dialog ref={dialog} className={styles['dialog']} aria-labelledby={titleId} onClose={close}>
       <div className={cx(styles['tileTop'], styles['dialogTop'])}>
         <AgentFace id={face} size={56} />
         <div>

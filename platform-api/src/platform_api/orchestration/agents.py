@@ -1,11 +1,12 @@
 from dataclasses import dataclass
 from datetime import date, datetime
-from typing import Annotated, Any, Final, Literal, Protocol
+from typing import Annotated, Any, Final, Literal, Protocol, Self
 
 import httpx
 from pydantic import Field, StringConstraints, TypeAdapter, field_validator, model_validator
 
 from platform_api.monitoring import AgentEvent
+from platform_api.orchestration.schedule import AT_PATTERN, Day
 from platform_api.wire import MavenCoordinate, NpmPackage, RepoName, SourceKind, WireModel
 
 
@@ -57,13 +58,18 @@ class WatchlistInputs(WireModel):
 
 
 type CardToolId = Literal[
-    "github.read_releases", "jira.search", "jira.read_ticket", "jira.create_ticket"
+    "github.read_releases",
+    "jira.search",
+    "jira.read_ticket",
+    "confluence.read_page",
+    "jira.create_ticket",
 ]
 """The tools an agent card can use. The runtime gives each one to the model."""
 type ToolId = Literal[
     "github.read_releases",
     "jira.search",
     "jira.read_ticket",
+    "confluence.read_page",
     "jira.create_ticket",
     "packages.read_versions",
     "packages.find_vulnerabilities",
@@ -308,11 +314,13 @@ class CapabilitySpec(WireModel):
     state: Literal["ready", "planned", "unsupported"]
     cant: str | None
     why: str | None
-    connection: Literal["jira", "github", "teams"] | None
+    connection: Literal["jira", "github", "teams", "confluence"] | None
     needs_model: bool
     platform: bool
     focus: bool
     tools: list[ToolId]
+    short: str | None = None
+    instead: str | None = None
 
 
 class ExampleSpec(WireModel):
@@ -477,6 +485,33 @@ type FindSoftwareResult = Annotated[
 find_software_result_adapter: TypeAdapter[FindSoftwareResult] = TypeAdapter(FindSoftwareResult)
 
 
+class ReadReleasesRequest(WireModel):
+    repo: RepoName
+    tag_pattern: str
+
+
+class ReleaseRead(WireModel):
+    tag: str
+    name: str | None
+    published_at: str | None
+
+
+class ReleasesRead(WireModel):
+    status: Literal["read"] = "read"
+    releases: list[ReleaseRead] = Field(max_length=30)
+
+
+class ReleasesNotRead(WireModel):
+    status: Literal["not_read"] = "not_read"
+    message: str = Field(max_length=300)
+    retryable: bool
+
+
+type ReadReleasesResult = Annotated[ReleasesRead | ReleasesNotRead, Field(discriminator="status")]
+
+read_releases_result_adapter: TypeAdapter[ReadReleasesResult] = TypeAdapter(ReadReleasesResult)
+
+
 type FactSection = Literal["watchlist", "workflows", "needs_you"]
 
 
@@ -510,9 +545,19 @@ class WatchedFact(WireModel):
         return value[:NEWEST_VERSION_LIMIT] if isinstance(value, str) else value
 
 
+WORKFLOW_FACTS: Final = 50
+"""The workflows sent with their state and last run. The names of the rest are sent alone."""
+OTHER_WORKFLOWS: Final = 250
+"""At the 80-character limit, 250 names are about 21 KB of the question's facts, less than a full
+watchlist section. Past it the facts count the names left out, and the Planner says it read only
+some."""
+
+type WorkflowName = Annotated[str, StringConstraints(max_length=80)]
+
+
 class WorkflowFact(WireModel):
-    name: str = Field(max_length=80)
-    state: Literal["on", "paused"]
+    name: WorkflowName
+    state: Literal["draft", "on", "paused"]
     last_run: str | None = Field(max_length=40)
     last_run_at: datetime | None
 
@@ -524,13 +569,29 @@ class NeedsYouFact(WireModel):
     connections: int = Field(ge=0)
     addresses: int = Field(ge=0)
     replies: int = Field(ge=0)
+    declined: int = Field(ge=0)
+    questions: int = Field(ge=0)
     total: int = Field(ge=0)
+
+
+class WatchlistScheduleFact(WireModel):
+    day: Day
+    at: str = Field(pattern=AT_PATTERN)
 
 
 class PlannerFacts(WireModel):
     watchlist: list[WatchedFact] | None = Field(default=None, max_length=100)
-    workflows: list[WorkflowFact] | None = Field(default=None, max_length=50)
+    workflows: list[WorkflowFact] | None = Field(default=None, max_length=WORKFLOW_FACTS)
+    # Left out of the payload when None, so a runtime from before them takes the facts while the
+    # two services roll out.
+    other_workflows: list[WorkflowName] | None = Field(
+        default=None, max_length=OTHER_WORKFLOWS, exclude_if=lambda names: names is None
+    )
+    left_out_workflows: int | None = Field(
+        default=None, gt=0, exclude_if=lambda count: count is None
+    )
     needs_you: NeedsYouFact | None = None
+    watchlist_schedule: WatchlistScheduleFact | None = None
 
 
 class PreviousTurn(WireModel):
@@ -545,6 +606,7 @@ class AnswerRequest(WireModel):
     model: ModelAccess
     facts: PlannerFacts | None = None
     previous: PreviousTurn | None = None
+    changes_workflows: bool = True
 
 
 type CantNeed = Literal["new_tool", "new_system"]
@@ -554,8 +616,10 @@ class CantRow(WireModel):
     kind: RowKind
     text: str = Field(max_length=200)
     note: str = Field(max_length=300)
-    needs: CantNeed
+    needs: CantNeed | None = None
     system: str | None = Field(default=None, max_length=40)
+    instead: str | None = Field(default=None, max_length=200)
+    unsupported: bool = False
 
 
 class SetupCardAnswer(WireModel):
@@ -620,6 +684,7 @@ class NeedsMeAnswer(WireModel):
 
 class AbilitiesAnswer(WireModel):
     kind: Literal["abilities"] = "abilities"
+    how_to_start: bool = False
 
 
 class QuestionAnswer(WireModel):
@@ -629,6 +694,55 @@ class QuestionAnswer(WireModel):
     about_software: list[Annotated[str, Field(max_length=80)]] = Field(
         default_factory=list, max_length=3
     )
+
+
+class _OnOrOff(WireModel):
+    workflow_words: str | None = Field(default=None, max_length=80)
+    software: str | None = Field(default=None, max_length=80)
+
+
+class PauseAnswer(_OnOrOff):
+    kind: Literal["pause"] = "pause"
+
+
+class ResumeAnswer(_OnOrOff):
+    kind: Literal["resume"] = "resume"
+
+
+type EditCant = Literal["only_schedule", "how_often"]
+
+
+class ScheduleChange(WireModel):
+    """When a request asks a workflow to run. A part it doesn't name is None, so the saved one
+    stays. `weekly` is once a week with no day named, and `hour` an hour with no am or pm."""
+
+    day: Day | None = None
+    weekly: bool = False
+    at: str | None = Field(default=None, pattern=AT_PATTERN)
+    hour: int | None = Field(default=None, ge=1, le=12)
+    time_unclear: bool = False
+
+    @model_validator(mode="after")
+    def _one_of_each(self) -> Self:
+        times = (self.at is not None, self.hour is not None, self.time_unclear)
+        if (self.day is not None and self.weekly) or sum(times) > 1:
+            raise ValueError("A day or a time is named once")
+        return self
+
+
+class EditAnswer(WireModel):
+    kind: Literal["edit"] = "edit"
+    workflow_words: str | None = Field(default=None, max_length=80)
+    software: str | None = Field(default=None, max_length=80)
+    schedule: ScheduleChange | None = None
+    cant: EditCant | None = None
+    holds_save: bool = False
+
+    @model_validator(mode="after")
+    def _a_cant_proposes_nothing(self) -> Self:
+        if self.cant is not None and (self.schedule is not None or self.holds_save):
+            raise ValueError("An edit the chat can't make proposes no schedule")
+        return self
 
 
 type PlannerAnswer = Annotated[
@@ -642,14 +756,44 @@ type PlannerAnswer = Annotated[
     | WhyStoppedAnswer
     | NeedsMeAnswer
     | AbilitiesAnswer
-    | QuestionAnswer,
+    | QuestionAnswer
+    | EditAnswer
+    | PauseAnswer
+    | ResumeAnswer,
     Field(discriminator="kind"),
 ]
+
+
+type PartMark = Literal["will_do", "cant", "question"]
+type PartReason = Literal[
+    "not_followed",
+    "cant_do",
+    "ask_on_its_own",
+    "one_day",
+    "one_time",
+    "one_frequency",
+    "own_time",
+    "skip_approval",
+    "with_a_yes",
+    "needs_the_rest",
+    "how_many_days",
+    "only_schedule",
+    "how_often",
+]
+
+
+class RequestPart(WireModel):
+    text: str = Field(max_length=200)
+    mark: PartMark
+    reason: PartReason | None = None
+    note: str | None = Field(default=None, max_length=300)
+    choices: list[Annotated[str, Field(max_length=40)]] = Field(default_factory=list[str])
 
 
 class Answered(WireModel):
     status: Literal["answered"] = "answered"
     answer: PlannerAnswer
+    parts: list[RequestPart] = Field(default_factory=list[RequestPart])
 
 
 type AnswerResult = Annotated[Answered | ModelProblem, Field(discriminator="status")]
@@ -760,6 +904,11 @@ class HttpAgentRuntime:
         self, request: FindSoftwareRequest
     ) -> FindSoftwareResult | AgentUnavailable | AgentRejected:
         return await self._model_call("/v1/software/find", request, find_software_result_adapter)
+
+    async def read_releases(
+        self, request: ReadReleasesRequest
+    ) -> ReadReleasesResult | AgentUnavailable | AgentRejected:
+        return await self._model_call("/v1/releases/read", request, read_releases_result_adapter)
 
     async def answer(
         self, request: AnswerRequest

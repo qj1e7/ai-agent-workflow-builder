@@ -1,0 +1,206 @@
+{
+ "tables": [
+  {
+   "table": "builder.use_case_cards",
+   "columns": [
+    "use_case_id",
+    "version",
+    "position",
+    "card_id",
+    "card_version",
+    "values"
+   ],
+   "data": "uc_01M7DH66JZSZF71KV2HV9NP5KE\t1\t0\tcrd_version_checker\t1\t{\"Jira project\": \"MOCK\", \"GitHub repository\": \"langchain-ai/langgraph\"}\nuc_01M7DH66MXP9WFYT0KT1683DC8\t1\t0\tcrd_version_checker\t1\t{\"Jira project\": \"MOCK\", \"GitHub repository\": \"langchain-ai/langgraph\"}\n"
+  },
+  {
+   "table": "builder.use_case_versions",
+   "columns": [
+    "use_case_id",
+    "version",
+    "template",
+    "name",
+    "instruction",
+    "params",
+    "created_at",
+    "n8n_version_id",
+    "published_by",
+    "published_in",
+    "grade",
+    "document",
+    "made",
+    "made_by",
+    "made_via",
+    "back_to",
+    "also",
+    "findings"
+   ],
+   "data": "uc_01M7DH66JZSZF71KV2HV9NP5KE\t1\tagent_cards\tOld release check\tCheck LangGraph for new releases.\t{}\t2026-11-03 02:14:00+00\t\\N\t\\N\t\\N\t\\N\t\\N\t\\N\t\\N\t\\N\t\\N\t[]\t\\N\nuc_01M7DH66MXP9WFYT0KT1683DC8\t1\tagent_cards\tOld waiting check\tCheck LangGraph for new releases.\t{}\t2026-11-03 02:14:00+00\t\\N\t\\N\t\\N\t\\N\t\\N\t\\N\t\\N\t\\N\t\\N\t[]\t\\N\n"
+  },
+  {
+   "table": "builder.use_cases",
+   "columns": [
+    "use_case_id",
+    "owner",
+    "created_at",
+    "current_version",
+    "paused_at",
+    "paused_by",
+    "deleted_at",
+    "deleted_by",
+    "left_out",
+    "draft",
+    "engine",
+    "n8n_workflow_id",
+    "held_by",
+    "held_since",
+    "deleted_in_n8n_at",
+    "n8n_draft_id"
+   ],
+   "data": "uc_01M7DH66JZSZF71KV2HV9NP5KE\tcarol\t2026-11-03 02:14:00+00\t1\t\\N\t\\N\t\\N\t\\N\t{}\tf\tshared_run\t\\N\t\\N\t\\N\t\\N\t\\N\nuc_01M7DH66MXP9WFYT0KT1683DC8\tcarol\t2026-11-03 02:14:00+00\t1\t\\N\t\\N\t\\N\t\\N\t{}\tf\tshared_run\t\\N\t\\N\t\\N\t\\N\t\\N\n"
+  },
+  {
+   "table": "monitoring.run_events",
+   "columns": [
+    "run_id",
+    "seq",
+    "ts",
+    "actor",
+    "kind",
+    "summary",
+    "data",
+    "dedupe_key"
+   ],
+   "data": "run_01M7DH66KEH0MFX9YVFEP8CZR1\t1\t2026-11-03 02:14:00+00\t{\"id\": \"alice\", \"kind\": \"user\", \"display\": \"Alice\"}\trun_created\tAlice started a run of the Old release check.\t{\"trigger\": \"person\", \"started_by\": \"alice\", \"use_case_id\": \"uc_01M7DH66JZSZF71KV2HV9NP5KE\", \"use_case_version\": 1}\tonce:3cb76730628124cc89b7df0bcca505e4\nrun_01M7DH66KEH0MFX9YVFEP8CZR1\t2\t2026-11-03 02:14:00+00\t{\"id\": \"platform\", \"kind\": \"platform\", \"display\": \"Platform\"}\tleg_dispatched\tThe work leg was queued for the workflow engine (attempt 1).\t{\"leg\": \"work\", \"attempt\": 1}\tonce:62b093621227186cb0a21ba61d8840f7\nrun_01M7DH66KEH0MFX9YVFEP8CZR1\t3\t2026-11-03 02:14:00+00\t{\"id\": \"n8n\", \"kind\": \"workflow\", \"display\": \"Workflow engine\"}\tstep_started\tWorkflow step run_agents started (n8n execution 41).\t{\"step\": \"run_agents\", \"try_number\": 1, \"n8n_execution_id\": \"41\"}\tonce:63ede115f899f7ed6f312d7651ba8185\nrun_01M7DH66KEH0MFX9YVFEP8CZR1\t4\t2026-11-03 02:14:02.39+00\t{\"id\": \"planner\", \"kind\": \"agent\", \"display\": \"Planner\"}\tagent_joined\tPlanner brought in Version checker to read the source of LangGraph.\t{\"agent\": {\"id\": \"version_checker\", \"display\": \"Version checker\"}, \"reason\": \"The task asks about new releases of LangGraph.\"}\tagent:run_01M7DH66KEH0MFX9YVFEP8CZR1/work/1:1\nrun_01M7DH66KEH0MFX9YVFEP8CZR1\t5\t2026-11-03 02:14:02.51+00\t{\"id\": \"planner\", \"kind\": \"agent\", \"display\": \"Planner\"}\tagent_message\tPlanner asked Version checker to check LangGraph for new releases.\t{\"text\": \"Please check LangGraph for new releases.\", \"speaker\": {\"id\": \"planner\", \"display\": \"Planner\"}, \"addressee\": {\"id\": \"version_checker\", \"kind\": \"agent\", \"display\": \"Version checker\"}}\tagent:run_01M7DH66KEH0MFX9YVFEP8CZR1/work/1:2\nrun_01M7DH66KEH0MFX9YVFEP8CZR1\t6\t2026-11-03 02:14:02.64+00\t{\"id\": \"version_checker\", \"kind\": \"agent\", \"display\": \"Version checker\"}\tagent_step_started\tVersion checker is reading the releases of LangGraph.\t{\"step\": \"read_source\"}\tagent:run_01M7DH66KEH0MFX9YVFEP8CZR1/work/1:3\nrun_01M7DH66KEH0MFX9YVFEP8CZR1\t7\t2026-11-03 02:14:04.873+00\t{\"id\": \"version_checker\", \"kind\": \"agent\", \"display\": \"Version checker\"}\tagent_step_finished\tVersion checker read LangGraph. 2 releases newer than 1.2.14.\t{\"step\": \"read_source\", \"result\": {\"state\": \"behind\", \"newest\": \"1.2.16\", \"software_id\": \"sw_01JC2A3B4C5D6E7F8G9H0J1K2M\"}}\tagent:run_01M7DH66KEH0MFX9YVFEP8CZR1/work/1:4\nrun_01M7DH66KEH0MFX9YVFEP8CZR1\t8\t2026-11-03 02:14:05.12+00\t{\"id\": \"version_checker\", \"kind\": \"agent\", \"display\": \"Version checker\"}\tagent_message\tVersion checker reported that LangGraph is behind and suggested one ticket.\t{\"text\": \"LangGraph has a new release: 1.2.16. I suggest one ticket.\", \"speaker\": {\"id\": \"version_checker\", \"display\": \"Version checker\"}, \"addressee\": {\"kind\": \"room\"}}\tagent:run_01M7DH66KEH0MFX9YVFEP8CZR1/work/1:5\nrun_01M7DH66KEH0MFX9YVFEP8CZR1\t9\t2026-11-03 02:14:05.301+00\t{\"id\": \"planner\", \"kind\": \"agent\", \"display\": \"Planner\"}\tagent_message\tPlanner agreed and will propose the ticket for approval.\t{\"text\": \"Agreed. I'll draft one ticket for an Approver to check.\", \"speaker\": {\"id\": \"planner\", \"display\": \"Planner\"}, \"addressee\": {\"id\": \"version_checker\", \"kind\": \"agent\", \"display\": \"Version checker\"}}\tagent:run_01M7DH66KEH0MFX9YVFEP8CZR1/work/1:6\nrun_01M7DH66KEH0MFX9YVFEP8CZR1\t10\t2026-11-03 02:14:00+00\t{\"id\": \"planner\", \"kind\": \"agent\", \"display\": \"Planner\"}\twrite_action_proposed\tThe agents proposed 1 write action: Create Jira ticket in MOCK: Upgrade LangGraph from 1.2.14 to 1.2.16.\t{\"digest\": \"sha256:21010f8f64f2314c9ca277fbfa9eaeed45969e49168289bf0b7974879d280f85\", \"actions\": [{\"line\": \"Create Jira ticket in MOCK: Upgrade LangGraph from 1.2.14 to 1.2.16\", \"connector\": \"jira\", \"operation\": \"create_ticket\"}], \"proposal_id\": \"prp_01M7DH66M5R7Y396DB0FVZ7V3B\"}\tonce:79134cfd5143e5cf24c64c38a6e150d9\nrun_01M7DH66KEH0MFX9YVFEP8CZR1\t11\t2026-11-03 02:14:00+00\t{\"id\": \"n8n\", \"kind\": \"workflow\", \"display\": \"Workflow engine\"}\tstep_finished\tWorkflow step run_agents finished: Two releases.\t{\"step\": \"run_agents\", \"detail\": \"Two releases.\", \"outcome\": \"proposed\", \"try_number\": 1, \"n8n_execution_id\": \"41\"}\tonce:6998025fb33dd786a06ef31062c83fff\nrun_01M7DH66KEH0MFX9YVFEP8CZR1\t12\t2026-11-03 02:14:00+00\t{\"id\": \"n8n\", \"kind\": \"workflow\", \"display\": \"Workflow engine\"}\tstep_started\tWorkflow step ask_approval started (n8n execution 41).\t{\"step\": \"ask_approval\", \"try_number\": 1, \"n8n_execution_id\": \"41\"}\tonce:68c5501475e59c590d225aebc21f1ebc\nrun_01M7DH66KEH0MFX9YVFEP8CZR1\t13\t2026-11-03 02:14:00+00\t{\"id\": \"platform\", \"kind\": \"platform\", \"display\": \"Platform\"}\tapproval_requested\tApproval requested. Waiting for the Team approver.\t{\"link\": \"/approvals/apr_01M7DH66M9HDXPBTQQQQ7NESCC\", \"steps\": [{\"post\": \"waiting\", \"index\": 0, \"label\": \"Team approver\", \"reason\": null, \"status\": \"open\", \"sent_at\": null, \"sent_to\": [], \"decided_at\": null, \"decided_by\": null}], \"approval_id\": \"apr_01M7DH66M9HDXPBTQQQQ7NESCC\"}\tonce:17e7fad98b59af81260bfdb1d9c441ad\nrun_01M7DH66KEH0MFX9YVFEP8CZR1\t14\t2026-11-03 02:14:00+00\t{\"id\": \"n8n\", \"kind\": \"workflow\", \"display\": \"Workflow engine\"}\tstep_finished\tWorkflow step ask_approval finished: Approval apr_01M7DH66M9HDXPBTQQQQ7NESCC opened.\t{\"step\": \"ask_approval\", \"detail\": \"Approval apr_01M7DH66M9HDXPBTQQQQ7NESCC opened\", \"outcome\": \"approval_opened\", \"try_number\": 1, \"n8n_execution_id\": \"41\"}\tonce:279f7f8101328cd7cc810995fe275abe\nrun_01M7DH66KEH0MFX9YVFEP8CZR1\t15\t2026-11-03 02:14:00+00\t{\"id\": \"platform\", \"kind\": \"platform\", \"display\": \"Platform\"}\tapproval_announced\tThe approval request was posted to the Teams channel CODESparks Ops.\t{\"link\": \"/approvals/apr_01M7DH66M9HDXPBTQQQQ7NESCC\", \"channel\": \"CODESparks Ops\", \"sent_at\": \"2026-11-03T02:14:00Z\", \"sent_to\": [[{\"id\": \"bob\", \"display\": \"Bob\"}]], \"approval_id\": \"apr_01M7DH66M9HDXPBTQQQQ7NESCC\"}\tannounced:apr_01M7DH66M9HDXPBTQQQQ7NESCC\nrun_01M7DH66N87C09G3R8SXYS7WFP\t1\t2026-11-03 02:14:00+00\t{\"id\": \"alice\", \"kind\": \"user\", \"display\": \"Alice\"}\trun_created\tAlice started a run of the Old waiting check.\t{\"trigger\": \"person\", \"started_by\": \"alice\", \"use_case_id\": \"uc_01M7DH66MXP9WFYT0KT1683DC8\", \"use_case_version\": 1}\tonce:414ccd4a3dea7b47926b9a65b656501e\nrun_01M7DH66N87C09G3R8SXYS7WFP\t2\t2026-11-03 02:14:00+00\t{\"id\": \"platform\", \"kind\": \"platform\", \"display\": \"Platform\"}\tleg_dispatched\tThe work leg was queued for the workflow engine (attempt 1).\t{\"leg\": \"work\", \"attempt\": 1}\tonce:e18b6f45b76a412f8868b7a3bd460b3f\nrun_01M7DH66N87C09G3R8SXYS7WFP\t3\t2026-11-03 02:14:00+00\t{\"id\": \"n8n\", \"kind\": \"workflow\", \"display\": \"Workflow engine\"}\tstep_started\tWorkflow step run_agents started (n8n execution 42).\t{\"step\": \"run_agents\", \"try_number\": 1, \"n8n_execution_id\": \"42\"}\tonce:6fa7edb5175e1e7f51ec97dd5bec8283\nrun_01M7DH66N87C09G3R8SXYS7WFP\t4\t2026-11-03 02:14:02.39+00\t{\"id\": \"planner\", \"kind\": \"agent\", \"display\": \"Planner\"}\tagent_joined\tPlanner brought in Version checker to read the source of LangGraph.\t{\"agent\": {\"id\": \"version_checker\", \"display\": \"Version checker\"}, \"reason\": \"The task asks about new releases of LangGraph.\"}\tagent:run_01M7DH66N87C09G3R8SXYS7WFP/work/1:1\nrun_01M7DH66N87C09G3R8SXYS7WFP\t5\t2026-11-03 02:14:02.51+00\t{\"id\": \"planner\", \"kind\": \"agent\", \"display\": \"Planner\"}\tagent_message\tPlanner asked Version checker to check LangGraph for new releases.\t{\"text\": \"Please check LangGraph for new releases.\", \"speaker\": {\"id\": \"planner\", \"display\": \"Planner\"}, \"addressee\": {\"id\": \"version_checker\", \"kind\": \"agent\", \"display\": \"Version checker\"}}\tagent:run_01M7DH66N87C09G3R8SXYS7WFP/work/1:2\nrun_01M7DH66N87C09G3R8SXYS7WFP\t6\t2026-11-03 02:14:02.64+00\t{\"id\": \"version_checker\", \"kind\": \"agent\", \"display\": \"Version checker\"}\tagent_step_started\tVersion checker is reading the releases of LangGraph.\t{\"step\": \"read_source\"}\tagent:run_01M7DH66N87C09G3R8SXYS7WFP/work/1:3\nrun_01M7DH66N87C09G3R8SXYS7WFP\t7\t2026-11-03 02:14:04.873+00\t{\"id\": \"version_checker\", \"kind\": \"agent\", \"display\": \"Version checker\"}\tagent_step_finished\tVersion checker read LangGraph. 2 releases newer than 1.2.14.\t{\"step\": \"read_source\", \"result\": {\"state\": \"behind\", \"newest\": \"1.2.16\", \"software_id\": \"sw_01JC2A3B4C5D6E7F8G9H0J1K2M\"}}\tagent:run_01M7DH66N87C09G3R8SXYS7WFP/work/1:4\nrun_01M7DH66N87C09G3R8SXYS7WFP\t8\t2026-11-03 02:14:05.12+00\t{\"id\": \"version_checker\", \"kind\": \"agent\", \"display\": \"Version checker\"}\tagent_message\tVersion checker reported that LangGraph is behind and suggested one ticket.\t{\"text\": \"LangGraph has a new release: 1.2.16. I suggest one ticket.\", \"speaker\": {\"id\": \"version_checker\", \"display\": \"Version checker\"}, \"addressee\": {\"kind\": \"room\"}}\tagent:run_01M7DH66N87C09G3R8SXYS7WFP/work/1:5\nrun_01M7DH66N87C09G3R8SXYS7WFP\t9\t2026-11-03 02:14:05.301+00\t{\"id\": \"planner\", \"kind\": \"agent\", \"display\": \"Planner\"}\tagent_message\tPlanner agreed and will propose the ticket for approval.\t{\"text\": \"Agreed. I'll draft one ticket for an Approver to check.\", \"speaker\": {\"id\": \"planner\", \"display\": \"Planner\"}, \"addressee\": {\"id\": \"version_checker\", \"kind\": \"agent\", \"display\": \"Version checker\"}}\tagent:run_01M7DH66N87C09G3R8SXYS7WFP/work/1:6\nrun_01M7DH66N87C09G3R8SXYS7WFP\t10\t2026-11-03 02:14:00+00\t{\"id\": \"planner\", \"kind\": \"agent\", \"display\": \"Planner\"}\twrite_action_proposed\tThe agents proposed 1 write action: Create Jira ticket in MOCK: Upgrade LangGraph from 1.2.14 to 1.2.16.\t{\"digest\": \"sha256:21010f8f64f2314c9ca277fbfa9eaeed45969e49168289bf0b7974879d280f85\", \"actions\": [{\"line\": \"Create Jira ticket in MOCK: Upgrade LangGraph from 1.2.14 to 1.2.16\", \"connector\": \"jira\", \"operation\": \"create_ticket\"}], \"proposal_id\": \"prp_01M7DH66NWJJYT9QF82WCS5QX4\"}\tonce:02a91ed2a1745ecb469b35389cc917f3\nrun_01M7DH66N87C09G3R8SXYS7WFP\t11\t2026-11-03 02:14:00+00\t{\"id\": \"n8n\", \"kind\": \"workflow\", \"display\": \"Workflow engine\"}\tstep_finished\tWorkflow step run_agents finished: Two releases.\t{\"step\": \"run_agents\", \"detail\": \"Two releases.\", \"outcome\": \"proposed\", \"try_number\": 1, \"n8n_execution_id\": \"42\"}\tonce:bd3b3d81c5b6cfe18e994d8c9adecccd\nrun_01M7DH66N87C09G3R8SXYS7WFP\t12\t2026-11-03 02:14:00+00\t{\"id\": \"n8n\", \"kind\": \"workflow\", \"display\": \"Workflow engine\"}\tstep_started\tWorkflow step ask_approval started (n8n execution 42).\t{\"step\": \"ask_approval\", \"try_number\": 1, \"n8n_execution_id\": \"42\"}\tonce:9d374514770d5c0f788545a5a8dd0329\nrun_01M7DH66N87C09G3R8SXYS7WFP\t13\t2026-11-03 02:14:00+00\t{\"id\": \"platform\", \"kind\": \"platform\", \"display\": \"Platform\"}\tapproval_requested\tApproval requested. Waiting for the Team approver.\t{\"link\": \"/approvals/apr_01M7DH66P0R2HWZYV3WBNTKCYW\", \"steps\": [{\"post\": \"waiting\", \"index\": 0, \"label\": \"Team approver\", \"reason\": null, \"status\": \"open\", \"sent_at\": null, \"sent_to\": [], \"decided_at\": null, \"decided_by\": null}], \"approval_id\": \"apr_01M7DH66P0R2HWZYV3WBNTKCYW\"}\tonce:bfcb9284e26373633e9454c599fde12b\nrun_01M7DH66N87C09G3R8SXYS7WFP\t14\t2026-11-03 02:14:00+00\t{\"id\": \"n8n\", \"kind\": \"workflow\", \"display\": \"Workflow engine\"}\tstep_finished\tWorkflow step ask_approval finished: Approval apr_01M7DH66P0R2HWZYV3WBNTKCYW opened.\t{\"step\": \"ask_approval\", \"detail\": \"Approval apr_01M7DH66P0R2HWZYV3WBNTKCYW opened\", \"outcome\": \"approval_opened\", \"try_number\": 1, \"n8n_execution_id\": \"42\"}\tonce:f4f1a8c5c2e736d4bdc9b18feb39949b\nrun_01M7DH66N87C09G3R8SXYS7WFP\t15\t2026-11-03 02:14:00+00\t{\"id\": \"platform\", \"kind\": \"platform\", \"display\": \"Platform\"}\tapproval_announced\tThe approval request was posted to the Teams channel CODESparks Ops.\t{\"link\": \"/approvals/apr_01M7DH66P0R2HWZYV3WBNTKCYW\", \"channel\": \"CODESparks Ops\", \"sent_at\": \"2026-11-03T02:14:00Z\", \"sent_to\": [[{\"id\": \"bob\", \"display\": \"Bob\"}]], \"approval_id\": \"apr_01M7DH66P0R2HWZYV3WBNTKCYW\"}\tannounced:apr_01M7DH66P0R2HWZYV3WBNTKCYW\nrun_01M7DH66KEH0MFX9YVFEP8CZR1\t16\t2026-11-03 02:14:00+00\t{\"id\": \"bob\", \"kind\": \"user\", \"display\": \"Bob\"}\tapproval_decided\tBob declined the request (Team approver).\t{\"by\": \"bob\", \"step\": 0, \"digest\": \"sha256:21010f8f64f2314c9ca277fbfa9eaeed45969e49168289bf0b7974879d280f85\", \"verdict\": \"decline\", \"approval_id\": \"apr_01M7DH66M9HDXPBTQQQQ7NESCC\"}\tonce:ba6cdbbd70b3ddab20d07d64c5c1e885\nrun_01M7DH66KEH0MFX9YVFEP8CZR1\t17\t2026-11-03 02:14:00+00\t{\"id\": \"platform\", \"kind\": \"platform\", \"display\": \"Platform\"}\trun_rejected\tBob declined the request. Nothing was written.\t{\"by\": \"bob\", \"step\": 0, \"reason\": null}\tonce:7c4ecb19ab91f7d067c2b9a4a0838f84\n"
+  },
+  {
+   "table": "orchestration.approval_decisions",
+   "columns": [
+    "approval_id",
+    "step_index",
+    "decided_by",
+    "verdict",
+    "seen_digest",
+    "decided_at",
+    "reason"
+   ],
+   "data": "apr_01M7DH66M9HDXPBTQQQQ7NESCC\t0\tbob\tdecline\tsha256:21010f8f64f2314c9ca277fbfa9eaeed45969e49168289bf0b7974879d280f85\t2026-11-03 02:14:00+00\t\\N\n"
+  },
+  {
+   "table": "orchestration.approval_messages",
+   "columns": [
+    "approval_id",
+    "channel",
+    "message_id",
+    "posted_at",
+    "identity"
+   ],
+   "data": "apr_01M7DH66M9HDXPBTQQQQ7NESCC\tCODESparks Ops\ttm_01M7DH66MGCJ6Q7AG44YWWS7CS\t2026-11-03 02:14:00+00\tpractice\napr_01M7DH66P0R2HWZYV3WBNTKCYW\tCODESparks Ops\ttm_01M7DH66P6XMZCFDVBNQ4MD427\t2026-11-03 02:14:00+00\tpractice\n"
+  },
+  {
+   "table": "orchestration.approval_requests",
+   "columns": [
+    "approval_id",
+    "run_id",
+    "proposal_id",
+    "digest",
+    "policy",
+    "parties",
+    "created_at",
+    "expires_at",
+    "ended",
+    "ended_at",
+    "execution_id",
+    "resume_url"
+   ],
+   "data": "apr_01M7DH66M9HDXPBTQQQQ7NESCC\trun_01M7DH66KEH0MFX9YVFEP8CZR1\tprp_01M7DH66M5R7Y396DB0FVZ7V3B\tsha256:21010f8f64f2314c9ca277fbfa9eaeed45969e49168289bf0b7974879d280f85\t{\"steps\": [{\"label\": \"Team approver\", \"eligible\": {}}]}\t[\"alice\", \"carol\"]\t2026-11-03 02:14:00+00\t\\N\t\\N\t\\N\t\\N\t\\N\napr_01M7DH66P0R2HWZYV3WBNTKCYW\trun_01M7DH66N87C09G3R8SXYS7WFP\tprp_01M7DH66NWJJYT9QF82WCS5QX4\tsha256:21010f8f64f2314c9ca277fbfa9eaeed45969e49168289bf0b7974879d280f85\t{\"steps\": [{\"label\": \"Team approver\", \"eligible\": {}}]}\t[\"alice\", \"carol\"]\t2026-11-03 02:14:00+00\t\\N\t\\N\t\\N\t\\N\t\\N\n"
+  },
+  {
+   "table": "orchestration.leg_attempts",
+   "columns": [
+    "run_id",
+    "leg",
+    "attempt",
+    "n8n_execution_id",
+    "recorded_at"
+   ],
+   "data": "run_01M7DH66KEH0MFX9YVFEP8CZR1\twork\t1\t41\t2026-11-03 02:14:00+00\nrun_01M7DH66N87C09G3R8SXYS7WFP\twork\t1\t42\t2026-11-03 02:14:00+00\n"
+  },
+  {
+   "table": "orchestration.outbox",
+   "columns": [
+    "id",
+    "run_id",
+    "kind",
+    "payload",
+    "attempt",
+    "next_at",
+    "status",
+    "last_error",
+    "created_at",
+    "leased_until",
+    "idempotency_key"
+   ],
+   "data": "1\trun_01M7DH66KEH0MFX9YVFEP8CZR1\tstart_leg\t{\"leg\": \"work\", \"attempt\": 1, \"workflow\": \"run\"}\t0\t2026-11-03 02:14:00+00\tsent\t\\N\t2026-11-03 02:14:00+00\t2026-11-03 02:15:00+00\t\\N\n5\trun_01M7DH66KEH0MFX9YVFEP8CZR1\tshow_outcome\t{\"by\": [\"Bob\"], \"reason\": null, \"verdict\": \"declined\", \"approval_id\": \"apr_01M7DH66M9HDXPBTQQQQ7NESCC\", \"use_case_name\": \"Old release check\", \"approved_first\": []}\t0\t2026-11-03 02:14:00+00\tsent\t\\N\t2026-11-03 02:14:00+00\t2026-11-03 02:15:00+00\t\\N\n2\trun_01M7DH66KEH0MFX9YVFEP8CZR1\tannounce\t{\"link\": \"/approvals/apr_01M7DH66M9HDXPBTQQQQ7NESCC\", \"lines\": [\"Create Jira ticket in MOCK on the practice Jira: Upgrade LangGraph from 1.2.14 to 1.2.16\"], \"steps\": [{\"who\": [], \"label\": \"Team approver\"}], \"digest\": \"sha256:21010f8f64f2314c9ca277fbfa9eaeed45969e49168289bf0b7974879d280f85\", \"run_id\": \"run_01M7DH66KEH0MFX9YVFEP8CZR1\", \"actions\": [\"create a Jira ticket in MOCK titled \\\\\"Upgrade LangGraph from 1.2.14 to 1.2.16\\\\\"\"], \"summary\": \"Two releases.\", \"owner_name\": \"Carol\", \"approval_id\": \"apr_01M7DH66M9HDXPBTQQQQ7NESCC\", \"not_deciding\": [\"Alice\", \"Carol\"], \"use_case_name\": \"Old release check\"}\t0\t2026-11-03 02:14:00+00\tsent\t\\N\t2026-11-03 02:14:00+00\t2026-11-03 02:15:00+00\t\\N\n3\trun_01M7DH66N87C09G3R8SXYS7WFP\tstart_leg\t{\"leg\": \"work\", \"attempt\": 1, \"workflow\": \"run\"}\t0\t2026-11-03 02:14:00+00\tsent\t\\N\t2026-11-03 02:14:00+00\t2026-11-03 02:15:00+00\t\\N\n4\trun_01M7DH66N87C09G3R8SXYS7WFP\tannounce\t{\"link\": \"/approvals/apr_01M7DH66P0R2HWZYV3WBNTKCYW\", \"lines\": [\"Create Jira ticket in MOCK on the practice Jira: Upgrade LangGraph from 1.2.14 to 1.2.16\"], \"steps\": [{\"who\": [], \"label\": \"Team approver\"}], \"digest\": \"sha256:21010f8f64f2314c9ca277fbfa9eaeed45969e49168289bf0b7974879d280f85\", \"run_id\": \"run_01M7DH66N87C09G3R8SXYS7WFP\", \"actions\": [\"create a Jira ticket in MOCK titled \\\\\"Upgrade LangGraph from 1.2.14 to 1.2.16\\\\\"\"], \"summary\": \"Two releases.\", \"owner_name\": \"Carol\", \"approval_id\": \"apr_01M7DH66P0R2HWZYV3WBNTKCYW\", \"not_deciding\": [\"Alice\", \"Carol\"], \"use_case_name\": \"Old waiting check\"}\t0\t2026-11-03 02:14:00+00\tsent\t\\N\t2026-11-03 02:14:00+00\t2026-11-03 02:15:00+00\t\\N\n"
+  },
+  {
+   "table": "orchestration.proposals",
+   "columns": [
+    "proposal_id",
+    "run_id",
+    "actions",
+    "digest",
+    "created_at"
+   ],
+   "data": "prp_01M7DH66M5R7Y396DB0FVZ7V3B\trun_01M7DH66KEH0MFX9YVFEP8CZR1\t[{\"fields\": {\"body\": \"Details.\", \"title\": \"Upgrade LangGraph from 1.2.14 to 1.2.16\"}, \"target\": {\"site\": \"practice\", \"project\": \"MOCK\"}, \"subject\": null, \"connector\": \"jira\", \"operation\": \"create_ticket\"}]\tsha256:21010f8f64f2314c9ca277fbfa9eaeed45969e49168289bf0b7974879d280f85\t2026-11-03 02:14:00+00\nprp_01M7DH66NWJJYT9QF82WCS5QX4\trun_01M7DH66N87C09G3R8SXYS7WFP\t[{\"fields\": {\"body\": \"Details.\", \"title\": \"Upgrade LangGraph from 1.2.14 to 1.2.16\"}, \"target\": {\"site\": \"practice\", \"project\": \"MOCK\"}, \"subject\": null, \"connector\": \"jira\", \"operation\": \"create_ticket\"}]\tsha256:21010f8f64f2314c9ca277fbfa9eaeed45969e49168289bf0b7974879d280f85\t2026-11-03 02:14:00+00\n"
+  },
+  {
+   "table": "orchestration.runs",
+   "columns": [
+    "run_id",
+    "use_case_id",
+    "idempotency_key",
+    "spec",
+    "started_by",
+    "started_at",
+    "updated_at",
+    "version",
+    "state",
+    "state_data",
+    "deadline_at",
+    "retried_by",
+    "carry_forward",
+    "joined_by"
+   ],
+   "data": "run_01M7DH66N87C09G3R8SXYS7WFP\tuc_01M7DH66MXP9WFYT0KT1683DC8\t489f3482-2b6e-4f17-a061-19714c60a323\t{\"n8n\": null, \"task\": {\"kind\": \"cards\", \"agents\": [{\"card\": {\"id\": \"crd_version_checker\", \"name\": \"Version checker\", \"blocks\": [{\"say\": \"Read the newest releases of the repository.\", \"tool\": \"github.read_releases\"}, {\"say\": \"Look in Jira for a ticket about the newest release, so it is not raised twice.\", \"tool\": \"jira.search\"}, {\"say\": \"If there is none, propose a ticket naming the release, its date and its link.\", \"tool\": \"jira.create_ticket\"}], \"inputs\": [{\"kind\": \"github_repo\", \"name\": \"GitHub repository\", \"what\": \"The public repository to watch, as owner/name.\", \"example\": \"langchain-ai/langgraph\"}, {\"kind\": \"jira_project\", \"name\": \"Jira project\", \"what\": \"The Jira project that gets the ticket.\", \"example\": \"MOCK\"}], \"purpose\": \"Checks a public GitHub repository for a new release and proposes a Jira ticket for it.\", \"version\": 1}, \"values\": {\"Jira project\": \"MOCK\", \"GitHub repository\": \"langchain-ai/langgraph\"}, \"bindings\": {\"jira.create_ticket\": {\"target\": {\"project\": \"MOCK\"}, \"connector\": \"jira\", \"operation\": \"create_ticket\"}}}]}, \"test\": false, \"owner\": \"carol\", \"trigger\": \"person\", \"bindings\": {}, \"workflow\": \"run\", \"instruction\": \"Check LangGraph for new releases.\", \"use_case_id\": \"uc_01M7DH66MXP9WFYT0KT1683DC8\", \"expires_after\": \"PT18H\", \"stops_at_gate\": false, \"use_case_name\": \"Old waiting check\", \"approval_policy\": {\"steps\": [{\"label\": \"Team approver\", \"eligible\": {}}]}, \"use_case_version\": 1}\talice\t2026-11-03 02:14:00+00\t2026-11-03 02:14:00+00\t5\tAwaitingApproval\t{\"run_id\": \"run_01M7DH66N87C09G3R8SXYS7WFP\", \"unread\": [], \"summary\": \"Two releases.\", \"approval_id\": \"apr_01M7DH66P0R2HWZYV3WBNTKCYW\", \"proposal_id\": \"prp_01M7DH66NWJJYT9QF82WCS5QX4\"}\t\\N\t[]\t\\N\t[]\nrun_01M7DH66KEH0MFX9YVFEP8CZR1\tuc_01M7DH66JZSZF71KV2HV9NP5KE\tb3fc2066-ca11-47b3-8eb6-9923326c0785\t{\"n8n\": null, \"task\": {\"kind\": \"cards\", \"agents\": [{\"card\": {\"id\": \"crd_version_checker\", \"name\": \"Version checker\", \"blocks\": [{\"say\": \"Read the newest releases of the repository.\", \"tool\": \"github.read_releases\"}, {\"say\": \"Look in Jira for a ticket about the newest release, so it is not raised twice.\", \"tool\": \"jira.search\"}, {\"say\": \"If there is none, propose a ticket naming the release, its date and its link.\", \"tool\": \"jira.create_ticket\"}], \"inputs\": [{\"kind\": \"github_repo\", \"name\": \"GitHub repository\", \"what\": \"The public repository to watch, as owner/name.\", \"example\": \"langchain-ai/langgraph\"}, {\"kind\": \"jira_project\", \"name\": \"Jira project\", \"what\": \"The Jira project that gets the ticket.\", \"example\": \"MOCK\"}], \"purpose\": \"Checks a public GitHub repository for a new release and proposes a Jira ticket for it.\", \"version\": 1}, \"values\": {\"Jira project\": \"MOCK\", \"GitHub repository\": \"langchain-ai/langgraph\"}, \"bindings\": {\"jira.create_ticket\": {\"target\": {\"project\": \"MOCK\"}, \"connector\": \"jira\", \"operation\": \"create_ticket\"}}}]}, \"test\": false, \"owner\": \"carol\", \"trigger\": \"person\", \"bindings\": {}, \"workflow\": \"run\", \"instruction\": \"Check LangGraph for new releases.\", \"use_case_id\": \"uc_01M7DH66JZSZF71KV2HV9NP5KE\", \"expires_after\": \"PT18H\", \"stops_at_gate\": false, \"use_case_name\": \"Old release check\", \"approval_policy\": {\"steps\": [{\"label\": \"Team approver\", \"eligible\": {}}]}, \"use_case_version\": 1}\talice\t2026-11-03 02:14:00+00\t2026-11-03 02:14:00+00\t6\tRejected\t{\"by\": \"bob\", \"step\": 0, \"run_id\": \"run_01M7DH66KEH0MFX9YVFEP8CZR1\", \"unread\": [], \"approval_id\": \"apr_01M7DH66M9HDXPBTQQQQ7NESCC\", \"proposal_id\": \"prp_01M7DH66M5R7Y396DB0FVZ7V3B\"}\t\\N\t[]\t\\N\t[]\n"
+  },
+  {
+   "table": "orchestration.schedules",
+   "columns": [
+    "use_case_id",
+    "day",
+    "at",
+    "time_zone",
+    "owner_id",
+    "owner_name",
+    "saved_at",
+    "last_slot_started"
+   ],
+   "data": "uc_01M7DH66JZSZF71KV2HV9NP5KE\tevery_day\t09:00\tAsia/Singapore\tcarol\tCarol\t2026-11-03 02:14:00+00\t\\N\nuc_01M7DH66MXP9WFYT0KT1683DC8\tevery_day\t09:00\tAsia/Singapore\tcarol\tCarol\t2026-11-03 02:14:00+00\t\\N\n"
+  },
+  {
+   "table": "orchestration.teams_stub_messages",
+   "columns": [
+    "id",
+    "ts",
+    "channel",
+    "text",
+    "link",
+    "run_id",
+    "approval_id",
+    "card",
+    "outcome"
+   ],
+   "data": "tm_01M7DH66P6XMZCFDVBNQ4MD427\t2026-11-03 02:14:00+00\tCODESparks Ops\tA run of the Old waiting check needs an Approver. It would create a Jira ticket in MOCK titled \"Upgrade LangGraph from 1.2.14 to 1.2.16\". Open the approval page to decide. The agents said: Two releases.\t/approvals/apr_01M7DH66P0R2HWZYV3WBNTKCYW\trun_01M7DH66N87C09G3R8SXYS7WFP\tapr_01M7DH66P0R2HWZYV3WBNTKCYW\t{\"body\": [{\"type\": \"RichTextBlock\", \"inlines\": [{\"text\": \"Old waiting check\", \"type\": \"TextRun\", \"weight\": \"bolder\"}, {\"text\": \" wants to make 1 change. Nothing is written until an Approver says yes.\", \"type\": \"TextRun\"}]}, {\"type\": \"RichTextBlock\", \"inlines\": [{\"text\": \"Set up by \", \"type\": \"TextRun\"}, {\"text\": \"Carol\", \"type\": \"TextRun\"}]}, {\"type\": \"RichTextBlock\", \"inlines\": [{\"text\": \"\u2022 Create Jira ticket in MOCK on the practice Jira: Upgrade LangGraph from 1.2.14 to 1.2.16\", \"type\": \"TextRun\"}]}, {\"text\": \"What the agents found\", \"type\": \"TextBlock\", \"wrap\": true, \"weight\": \"bolder\"}, {\"type\": \"RichTextBlock\", \"inlines\": [{\"text\": \"Two releases.\", \"type\": \"TextRun\"}]}, {\"text\": \"Who can decide\", \"type\": \"TextBlock\", \"wrap\": true, \"weight\": \"bolder\"}, {\"type\": \"RichTextBlock\", \"inlines\": [{\"text\": \"Any Approver\", \"type\": \"TextRun\"}]}, {\"type\": \"RichTextBlock\", \"inlines\": [{\"text\": \"Alice and Carol can\u2019t decide, because this run is their own work.\", \"type\": \"TextRun\"}]}], \"type\": \"AdaptiveCard\", \"actions\": [{\"url\": \"http://localhost:8000/approvals/apr_01M7DH66P0R2HWZYV3WBNTKCYW\", \"type\": \"Action.OpenUrl\", \"title\": \"Open in AI Workflow Builder\"}], \"version\": \"1.4\", \"fallbackText\": \"An approval request is waiting in AI Workflow Builder.\"}\t\\N\ntm_01M7DH66MGCJ6Q7AG44YWWS7CS\t2026-11-03 02:14:00+00\tCODESparks Ops\tA run of the Old release check needs an Approver. It would create a Jira ticket in MOCK titled \"Upgrade LangGraph from 1.2.14 to 1.2.16\". Open the approval page to decide. The agents said: Two releases.\t/approvals/apr_01M7DH66M9HDXPBTQQQQ7NESCC\trun_01M7DH66KEH0MFX9YVFEP8CZR1\tapr_01M7DH66M9HDXPBTQQQQ7NESCC\t{\"body\": [{\"id\": \"outcome\", \"type\": \"RichTextBlock\", \"inlines\": [{\"text\": \"Declined by Bob\", \"type\": \"TextRun\", \"color\": \"attention\", \"weight\": \"bolder\"}]}, {\"id\": \"outcome_note\", \"type\": \"RichTextBlock\", \"inlines\": [{\"text\": \"Nothing was written.\", \"type\": \"TextRun\"}]}, {\"type\": \"RichTextBlock\", \"inlines\": [{\"text\": \"Old release check\", \"type\": \"TextRun\", \"weight\": \"bolder\"}, {\"text\": \" wants to make 1 change. Nothing is written until an Approver says yes.\", \"type\": \"TextRun\"}]}, {\"type\": \"RichTextBlock\", \"inlines\": [{\"text\": \"Set up by \", \"type\": \"TextRun\"}, {\"text\": \"Carol\", \"type\": \"TextRun\"}]}, {\"type\": \"RichTextBlock\", \"inlines\": [{\"text\": \"\u2022 Create Jira ticket in MOCK on the practice Jira: Upgrade LangGraph from 1.2.14 to 1.2.16\", \"type\": \"TextRun\"}]}, {\"text\": \"What the agents found\", \"type\": \"TextBlock\", \"wrap\": true, \"weight\": \"bolder\"}, {\"type\": \"RichTextBlock\", \"inlines\": [{\"text\": \"Two releases.\", \"type\": \"TextRun\"}]}, {\"text\": \"Who can decide\", \"type\": \"TextBlock\", \"wrap\": true, \"weight\": \"bolder\"}, {\"type\": \"RichTextBlock\", \"inlines\": [{\"text\": \"Any Approver\", \"type\": \"TextRun\"}]}, {\"type\": \"RichTextBlock\", \"inlines\": [{\"text\": \"Alice and Carol can\u2019t decide, because this run is their own work.\", \"type\": \"TextRun\"}]}], \"type\": \"AdaptiveCard\", \"actions\": [{\"url\": \"http://localhost:8000/approvals/apr_01M7DH66M9HDXPBTQQQQ7NESCC\", \"type\": \"Action.OpenUrl\", \"title\": \"Open in AI Workflow Builder\"}], \"version\": \"1.4\", \"fallbackText\": \"An approval request is waiting in AI Workflow Builder.\"}\t{\"by\": [\"Bob\"], \"verdict\": \"declined\"}\n"
+  }
+ ]
+}

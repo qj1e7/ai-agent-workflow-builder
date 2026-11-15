@@ -1,0 +1,13 @@
+001 the invite link's shape (query keys only)
+002 public POST /api/v1/users [alice, global:member]: [201, [{"user": {"id": "c3040094-09d8-44f7-9c09-471bf8113c35", "email": "alice@example.com", "inviteAcceptUrl": "***", "emailSent": false, "role": "global:member"}, "error": ""}]]
+003 invite link query keys: ["token"]
+004 alice accepts: POST /rest/invitations/accept {token}: [200, "global:member"]
+005 public POST /api/v1/users [carol, global:admin]: [403, {"message": "Cannot invite admin user without advanced permissions. Please upgrade to a license that includes this feature."}]
+006 POST /rest/invitations [bob]: [200, {"data": [{"user": {"id": "92137a89-82fa-4556-90a8-336f6b57d2dc", "email": "bob@example.com", "emailSent": false, "role": "global:member", "inviteAcceptUrl": "***"}, "error": ""}]}]
+007 bob accepts: POST /rest/invitations/accept {token}: [200, "global:member"]
+008 public GET /api/v1/users: [200, [["bob@example.com", "global:member", false], ["alice@example.com", "global:member", false], ["platform@example.com", "global:owner", false]]]
+009 public GET /api/v1/projects: [403, {"message": "Your license does not allow for feat:projectRole:admin. To enable feat:projectRole:admin, please upgrade to a license that supports this feature."}]
+010 alice: GET /rest/projects/personal: [200, "personal"]
+011 bob: GET /rest/projects/personal: [200, "personal"]
+012 owner: GET /rest/projects (how the platform finds a member's project without their login): [200, [["personal", "Alice Tester <alice@example.com>"], ["personal", "Bob Tester <bob@example.com>"], ["personal", "Platform Account <platform@example.com>"]]]
+013 project ids saved for owner, alice, bob

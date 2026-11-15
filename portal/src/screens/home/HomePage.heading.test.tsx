@@ -19,7 +19,7 @@ const STATES: Record<string, object> = {
 
 function pageIn(state: object): ReactElement<{ children: ReactNode[] }> {
   query.result = state
-  return HomePage({ heading: 'Good afternoon! Bob', today: 'Tuesday 3 November.', now: new Date('2026-11-03T15:00:00+08:00') }) as ReactElement<{ children: ReactNode[] }>
+  return HomePage({ greeting: 'Good afternoon, Bob', today: 'Tuesday 3 November.', now: new Date('2026-11-03T15:00:00+08:00') }) as ReactElement<{ children: ReactNode[] }>
 }
 
 const [, slot] = [0, 1]
@@ -30,7 +30,7 @@ describe('Home’s heading', () => {
     for (const page of [loaded, refreshFailed]) {
       const body = page.props.children[slot]
       expect(isValidElement(body) && body.type).toBe(HomeBody)
-      expect(isValidElement<{ heading: string }>(body) && body.props.heading).toBe('Good afternoon! Bob')
+      expect(isValidElement<{ greeting: string }>(body) && body.props.greeting).toBe('Good afternoon, Bob')
     }
   })
 

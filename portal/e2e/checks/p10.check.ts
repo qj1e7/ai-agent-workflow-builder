@@ -289,7 +289,7 @@ test('@lane5 alice ticks Approver for dave, and bob confirms it in Settings', as
     const bob = await as(browser, 'bob')
     await openSettings(bob.page, 'people')
     const row = personRow(bob.page, 'dave@example.test')
-    await expect(settingsTab(bob.page, 'People and roles')).toContainText('needs you')
+    await expect(settingsTab(bob.page, 'People and permissions')).toContainText('needs you')
     await expect(row.getByRole('button', { name: 'Confirm Dave as an Approver' })).toBeVisible()
     await shotTo(bob.page, 5, 'p10-confirm-approver.png')
     await row.getByRole('button', { name: 'Confirm Dave as an Approver' }).click()
@@ -382,7 +382,7 @@ async function expectReadOnly(page: Page, tab: 'model' | 'people') {
   const state = await readOnlyState(page)
   expect(state.forms, `${tab}: no form for bob`).toBe(0)
   expect(state.fields.filter((f) => !f.disabled), `${tab}: fields bob could change`).toEqual([])
-  const decisions = state.buttons.filter((name) => !/^(AI model|People and roles)/.test(name))
+  const decisions = state.buttons.filter((name) => !/^(AI model|People and permissions)/.test(name))
   expect(decisions.every((name) => /^(Confirm|Not now)/.test(name)), `${tab}: buttons other than the tabs and a decision: ${decisions.join(', ')}`).toBe(true)
   return { ...state, decisions }
 }
@@ -408,7 +408,7 @@ test('@lane8 bob sees every control read-only, and the page says only Operators 
   await context.close()
 })
 
-// Lane 11 (D2 in the P10 recheck). Someone else takes people off the list while alice has People and roles open. The
+// Lane 11 (D2 in the P10 recheck). Someone else takes people off the list while alice has People and permissions open. The
 // page names who left on its own line, keeps a notice or a refusal about someone still listed, and gives the line focus
 // when the focused row left. Run on its own stack: it adds and removes people, and its last step needs alice and bob as
 // the only Approvers.
@@ -580,7 +580,7 @@ test('@signin-not-on-list carol signs in with real sign-in, is not on the list, 
     url: page.url(),
     main: await page.getByRole('main').innerText(),
     tabs: await page.getByRole('group', { name: 'Settings sections' }).count(),
-    settingsHeadings: await page.getByRole('heading', { level: 2, name: /AI model|People and roles/ }).count(),
+    settingsHeadings: await page.getByRole('heading', { level: 2, name: /AI model|People and permissions/ }).count(),
     checkboxes: await page.getByRole('checkbox').count(),
   }
   await shotTo(page, 'signin', 'p10-not-on-list.png')
@@ -708,8 +708,8 @@ test('@lane10 after a key is saved, the full key is in no page source, no API re
     await expect(page.locator('#model-now')).toContainText(`API key ending ${key.slice(-2)}`)
     await page.getByText(/^Change history/).click()
     const afterReload = await everythingOnThePage(page)
-    await settingsTab(page, 'People and roles').click()
-    await expect(page.getByRole('heading', { level: 2, name: 'People and roles' })).toBeVisible()
+    await settingsTab(page, 'People and permissions').click()
+    await expect(page.getByRole('heading', { level: 2, name: 'People and permissions' })).toBeVisible()
     const peopleTab = await everythingOnThePage(page)
     const direct: Record<string, boolean> = {}
     for (const user of ['alice', 'bob', 'carol']) {
@@ -721,7 +721,7 @@ test('@lane10 after a key is saved, the full key is in no page source, no API re
       ...responses.filter((r) => r.holdsKey).map((r) => `response to ${r.method} ${r.url}`),
       ...(afterSave.includes(secretPart) ? ['page after saving'] : []),
       ...(afterReload.includes(secretPart) ? ['page after reload, history open'] : []),
-      ...(peopleTab.includes(secretPart) ? ['People and roles tab'] : []),
+      ...(peopleTab.includes(secretPart) ? ['People and permissions tab'] : []),
       ...(storesHoldKey ? ['browser storage'] : []),
       ...(keyField ? ['the key field after saving'] : []),
       ...Object.entries(direct)
@@ -735,7 +735,7 @@ test('@lane10 after a key is saved, the full key is in no page source, no API re
       ...responses.map((r) => `  ${r.method} ${r.url} ${r.status}: ${r.holdsKey ? 'HOLDS THE KEY' : 'clean'}`),
       `page after saving: ${afterSave.includes(secretPart) ? 'HOLDS THE KEY' : 'clean'} (${afterSave.length} characters, field values included)`,
       `page after reload with the history open: ${afterReload.includes(secretPart) ? 'HOLDS THE KEY' : 'clean'}`,
-      `People and roles tab: ${peopleTab.includes(secretPart) ? 'HOLDS THE KEY' : 'clean'}`,
+      `People and permissions tab: ${peopleTab.includes(secretPart) ? 'HOLDS THE KEY' : 'clean'}`,
       `browser storage (local, session, cookies; IndexedDB ${stores.indexedDb.length === 0 ? 'has no databases' : `names ${stores.indexedDb.join(', ')}`}): ${storesHoldKey ? 'HOLDS THE KEY' : 'clean'}`,
       `key field after saving: ${keyField ? 'NOT EMPTY' : 'empty'}`,
       'direct GETs:',
@@ -762,7 +762,7 @@ test('@seed adds the perf probe’s people once', async () => {
   })
 })
 
-test('@perf largest contentful paint of People and roles, and when every row is drawn', async ({ browser }) => {
+test('@perf largest contentful paint of People and permissions, and when every row is drawn', async ({ browser }) => {
   const { context, page } = await as(browser, 'alice')
   await page.goto('/settings?tab=people', { waitUntil: 'commit' })
   const drawn = await page.waitForFunction(
@@ -819,7 +819,7 @@ test('@review-video alice connects a model and asks for a new Approver, and bob 
     await page.getByRole('button', { name: 'Test and save' }).click()
     await expect(page.getByRole('button', { name: 'Connect', exact: true })).toBeVisible({ timeout: 30_000 })
     await page.waitForTimeout(4_500)
-    await settingsTab(page, 'People and roles').click()
+    await settingsTab(page, 'People and permissions').click()
     await page.waitForTimeout(1_500)
     await roleBox(page, 'Approver', 'Mei Ling').click()
     await expect(page.locator('#people-notice')).toContainText('Another Approver must confirm Mei Ling as an Approver.')

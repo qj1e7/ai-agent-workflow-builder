@@ -1,75 +1,112 @@
 import capabilitiesFixture from '@contracts/fixtures/planner/capabilities.json'
 import failedRun from '@contracts/fixtures/views/failure.final.json'
+import rejectedRun from '@contracts/fixtures/views/rejected.final.json'
 import empty from '@contracts/fixtures/watchlist/empty.json'
 import paused from '@contracts/fixtures/watchlist/paused.json'
 import moved from '@contracts/fixtures/watchlist/moved.json'
 import held from '@contracts/fixtures/watchlist/schedule.held.json'
 import statuses from '@contracts/fixtures/watchlist/statuses.json'
+import peopleList from '@contracts/fixtures/people/list.json'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { MemoryRouter } from 'react-router'
+import { MemoryRouter, Route, Routes } from 'react-router'
 import { describe, expect, it } from 'vitest'
 import { ApiProvider } from '../../api/context'
 import { TicketLinksProvider } from '../../api/ticketLinks'
 import { createDevSession } from '../../api/session'
-import type { FindOut, Me, ProjectGuess, ScheduleHold, WatchedSoftwareView, WatchlistView } from '../../api/types'
+import type { FindOut, Me, PersonOut, ProjectGuess, ScheduleHold, WatchedSoftwareView, WatchlistView } from '../../api/types'
+import { AppRoutes } from '../../shell/routes'
 import { AddSoftwareForm } from './AddSoftware'
 import { addReducer, readyToAdd, START, type AddAction, type AddState } from './addByName'
 import { FindSoftware } from './FindSoftware'
 import { MovedNote } from './NewAddress'
 import { SoftwareRoute } from './SoftwarePage'
+import { SoftwarePanel } from './SoftwarePanel'
 import { SoftwareHistory } from './SoftwareHistory'
 import { ScheduleEditor, ScheduleNote } from './Schedule'
 
 const ALICE: Me = { id: 'alice', display: 'Alice', roles: ['operator', 'approver'] }
 const BOB: Me = { id: 'bob', display: 'Bob', roles: ['approver'] }
+const TEAM = (peopleList.people as PersonOut[]).filter((person) => ['alice', 'bob', 'carol'].includes(person.id))
 
-function render(view: unknown, me: Me, runs: readonly { run_id: string }[] = [], page: ReactNode = <SoftwareRoute />, capabilities: unknown = capabilitiesFixture): string {
+const NOW = new Date('2026-11-16T12:00:00+08:00')
+
+function render(view: unknown, me: Me, runs: readonly { run_id: string }[] = [], page: ReactNode = <SoftwareRoute now={NOW} />, capabilities: unknown = capabilitiesFixture, path = '/software'): string {
   const session = createDevSession(null)
   const queryClient = new QueryClient({ defaultOptions: { queries: { retryOnMount: false } } })
   queryClient.setQueryData(['me', session.cacheScope()], me)
   queryClient.setQueryData(['watchlist', session.cacheScope()], view)
   for (const run of runs) queryClient.setQueryData(['run', session.cacheScope(), run.run_id], run)
   queryClient.setQueryData(['dev-users'], [ALICE, BOB])
+  queryClient.setQueryData(['people', session.cacheScope()], TEAM)
   if (capabilities !== null) queryClient.setQueryData(['capabilities', session.cacheScope()], capabilities)
   return renderToStaticMarkup(
     <QueryClientProvider client={queryClient}>
       <ApiProvider session={session} platformFetch={fetch} origin="http://portal.test">
-        <MemoryRouter>{page}</MemoryRouter>
+        <MemoryRouter initialEntries={[path]}>{page}</MemoryRouter>
       </ApiProvider>
     </QueryClientProvider>,
   )
 }
 
+/** A software's own page, at /software/{id}. */
+function renderItem(view: unknown, me: Me, id: string, runs: readonly { run_id: string }[] = [], capabilities: unknown = capabilitiesFixture, wrap: (page: ReactNode) => ReactNode = (page) => page): string {
+  const page = wrap(
+    <Routes>
+      <Route path="/software/:softwareId" element={<SoftwareRoute now={NOW} />} />
+    </Routes>,
+  )
+  return render(view, me, runs, page, capabilities, `/software/${id}`)
+}
+
+/** A software in the chat's side panel. */
+const panel = (view: unknown, id: string) => render(view, ALICE, [], <SoftwarePanel id={id} />)
+
+const ROW = (statuses as WatchlistView).software
+const idOf = (status: string, from: readonly WatchedSoftwareView[] = ROW) => from.find((row) => row.status === status)!.id
+
 const text = (html: string) => html.replace(/<[^>]*>/g, ' ').replaceAll('&#x27;', "'").replace(/\s+/g, ' ').trim()
 const buttons = (html: string) => [...html.matchAll(/<button\b[^>]*>([\s\S]*?)<\/button>/g)].map((match) => text(match[1] ?? ''))
 
 describe('the Software watchlist page', () => {
-  it('lists each software with our version, the newest and its status', () => {
+  it('says the watchlist moves to n8n after the check that holds it back, and only then', () => {
+    expect(text(render({ ...statuses, moving_to_n8n: true }, ALICE))).toContain('Moving to n8n after this run.')
+    expect(text(render(statuses, ALICE))).not.toContain('Moving to n8n')
+  })
+
+  it('lists each software as one link with its name, what it runs and what is newest, and its pill', () => {
     const html = render(statuses, ALICE)
     const words = text(html)
     for (const row of (statuses as WatchlistView).software) expect(words).toContain(row.name)
-    expect(words).toContain('Needs attention 1')
-    expect(words).toContain('Software we watch 6')
-    expect(words).toContain('1.2.14')
-    expect(words).toContain('1.2.16')
-    expect(words).toContain('Ticket waiting for a yes')
+    expect(html.match(/data-software-id="/g)).toHaveLength(6)
+    expect(words).toContain('1.2.14 → 1.2.16 · checked by Software watchlist')
+    expect(words).toContain('Newer out')
+    expect(html).toContain(`href="/software/${idOf('behind')}"`)
   })
 
-  it('says on the row why a check could not read the source, and that it will try at the next check', () => {
-    expect(text(render(statuses, ALICE))).toContain('Can’t check GitHub answered 404 Not Found. It will try again at the next check.')
+  it('sorts what needs a person first: Can’t find, Can’t check, Newer out, Watching, then Up to date', () => {
+    const states = [...render(statuses, ALICE).matchAll(/<span class="[^"]*pill[^"]*"[^>]*>([^<]+)<\/span>/g)].map((match) => match[1])
+    expect(states).toEqual(['Can’t check', 'Newer out', 'Newer out', 'Newer out', 'Watching', 'Up to date'])
   })
 
-  it('keeps the newest version an earlier check read on a row that can’t be checked, and says when it was read', () => {
-    expect(text(render(statuses, ALICE))).toContain('Newest 0.115.2 Last read Mon 9 Nov, 9:00')
+  it('says not checked automatically while no schedule checks the list', () => {
+    expect(text(render({ ...statuses, schedule: null }, ALICE))).toContain('1.2.14 → 1.2.16 · not checked automatically')
+  })
+
+  it('says on the software’s page why a check could not read the source, and that it will try at the next check', () => {
+    expect(text(renderItem(statuses, ALICE, idOf('cant_check')))).toContain('GitHub answered 404 Not Found. It will try again at the next check.')
+  })
+
+  it('keeps the newest version an earlier check read on a software that can’t be checked, and says when it was read', () => {
+    expect(text(renderItem(statuses, ALICE, idOf('cant_check')))).toContain('Newest 0.115.2 Last read Mon 9 Nov, 9:00')
   })
 
   it('promises no next check when no schedule is set', () => {
     const words = text(render({ ...statuses, schedule: null }, ALICE))
     expect(words).not.toContain('next check')
-    expect(words).toContain('GitHub answered 404 Not Found. It is checked again when an Operator presses Check now.')
     expect(words).toContain('No schedule. Press Check now to check by hand.')
+    expect(text(renderItem({ ...statuses, schedule: null }, ALICE, idOf('cant_check')))).toContain('GitHub answered 404 Not Found. It is checked again when an Operator presses Check now.')
     expect(text(render({ ...empty, schedule: null }, ALICE))).toContain('Add the tools your team runs, then press Check now to check them.')
   })
 
@@ -88,7 +125,7 @@ describe('the Software watchlist page', () => {
     expect(words).toContain('Checked every Monday at 9:00, set by Alice.')
     expect(words).not.toContain('Next check')
     expect(words).not.toContain('It will try again at the next check')
-    expect(words).toContain('GitHub answered 404 Not Found. It is checked again once the watchlist is resumed.')
+    expect(text(renderItem(paused, ALICE, idOf('cant_check', (paused as WatchlistView).software)))).toContain('GitHub answered 404 Not Found. It is checked again once the watchlist is resumed.')
     expect(words).toContain('Change schedule')
     expect(buttons(render(paused, ALICE))).not.toContain('Check now')
     expect(buttons(render(statuses, ALICE))).toContain('Check now')
@@ -144,21 +181,35 @@ describe('the Software watchlist page', () => {
     expect(words).toContain('Next check Mon 23 Nov, 9:00, London time.')
   })
 
-  it('gives an Operator Check now, Remove, Change schedule and the add form', () => {
+  it('gives an Operator Check now, Change schedule and the add form on the list, and Remove from watchlist last on a software’s page', () => {
     const html = render(statuses, ALICE)
     expect(buttons(html)).toContain('Check now')
     expect(buttons(html)).toContain('Change schedule')
-    expect(buttons(html).some((label) => label.startsWith('Remove'))).toBe(true)
+    expect(buttons(html).some((label) => label.startsWith('Remove'))).toBe(false)
     expect(html).toContain('Add software')
+    const item = buttons(renderItem(statuses, ALICE, idOf('behind')))
+    expect(item.at(-1)).toMatch(/^Remove from watchlist/)
+    expect(item).toContain('History of LangGraph')
   })
 
   it('gives an Approver the list and no way to add, remove, schedule or check', () => {
     const html = render(statuses, BOB)
-    const labels = buttons(html)
+    const labels = [...buttons(html), ...buttons(renderItem(statuses, BOB, idOf('behind')))]
     expect(text(html)).toContain('FastAPI')
     expect(labels.some((label) => /^(Check now|Remove|Change schedule|Set a schedule|Turn off schedule|Add)/.test(label))).toBe(false)
     expect(html).not.toContain('Add software')
     expect(labels.some((label) => label.startsWith('History'))).toBe(true)
+  })
+
+  it('is read only for an Approver: one note under the heading names the Operators, and nothing is dead', () => {
+    const page = (me: Me) => render(statuses, me, [], <AppRoutes context={{ name: me.display, now: new Date(), operator: me.roles.includes('operator') }} />)
+    const head = text(page(BOB))
+    expect(head.match(/Only Operators change/g)).toHaveLength(1)
+    expect(head).toContain('Watchlist')
+    expect(head).toContain('Only Operators change the watchlist. Ask Alice or Carol.')
+    expect(text(page(ALICE))).not.toContain('Only Operators change')
+    for (const view of [statuses, paused, moved, held, null]) expect(render(view, BOB)).not.toMatch(/disabled=""|aria-disabled="true"/)
+    expect(renderItem(statuses, BOB, idOf('behind'))).not.toMatch(/disabled=""|aria-disabled="true"/)
   })
 
   it('keeps an empty status line on the page, so a screen reader hears each change to the list', () => {
@@ -225,33 +276,28 @@ const form = (state: AddState, busy = false) => renderToStaticMarkup(<AddSoftwar
 describe('the order of the page', () => {
   const headings = (html: string) => [...html.matchAll(/<h2[^>]*>([\s\S]*?)<\/h2>/g)].map((m) => text(m[1] ?? '').replace(/ \d+$/, ''))
 
-  it('leads with what needs attention, then the software we watch, then how it is checked', () => {
-    expect(headings(render(statuses, ALICE))).toEqual(['Needs attention', 'Software we watch', 'How it’s checked'])
+  it('has the sketch’s parts only: the software we watch, then its schedule, with no Needs attention and no How it’s checked', () => {
+    for (const view of [statuses, { ...(statuses as WatchlistView), software: (statuses as WatchlistView).software.filter((row) => row.status === 'up_to_date') }]) {
+      const html = render(view, ALICE)
+      expect(headings(html)).toEqual(['Schedule'])
+      expect(html.indexOf('aria-label="Software we watch"')).toBeLessThan(html.indexOf('schedule-heading'))
+      expect(text(html)).not.toMatch(/Needs attention|How it’s checked|Review and decide|only place we/)
+    }
   })
 
-  it('has no Needs attention section when nothing needs it', () => {
-    const calm = { ...(statuses as WatchlistView), software: (statuses as WatchlistView).software.filter((row) => row.status === 'up_to_date' || row.status === 'not_checked') }
-    expect(headings(render(calm, ALICE))).toEqual(['Software we watch', 'How it’s checked'])
+  it('keeps the schedule and its owner rule on the page, since the platform takes the watchlist’s schedule only here', () => {
+    const words = text(render(statuses, ALICE))
+    expect(words).toContain('Checked every Monday at 9:00')
+    expect(words).toContain('Scheduled checks count as Alice’s work, so Alice can’t approve them.')
+    expect(buttons(render(statuses, ALICE))).toContain('Change schedule')
   })
 
-  it('puts one decision for the whole check in Needs attention, and no row', () => {
-    const html = render(statuses, ALICE)
-    const attention = html.slice(html.indexOf('needs-attention-heading'), html.indexOf('software-we-watch-heading'))
-    expect(text(attention)).toContain('The latest check wants to raise 1 upgrade ticket.')
-    expect(text(attention)).toContain('Nothing is written until an Approver says yes.')
-    expect(text(attention)).toContain('Review and decide')
-    expect(attention).not.toContain('<li')
-    expect(text(attention)).not.toContain('Can’t check')
-    expect(attention.match(/Review and decide/g)).toHaveLength(1)
-  })
-
-  it('keeps every row in Software we watch, with the real count, the waiting row and the one that can’t be checked included', () => {
+  it('keeps every row in Software we watch, the waiting row and the one that can’t be checked included', () => {
     const view = statuses as WatchlistView
     const html = render(statuses, ALICE)
-    const watching = html.slice(html.indexOf('software-we-watch-heading'), html.indexOf('how-checked-heading'))
-    expect(text(watching.slice(0, 120))).toContain(`Software we watch ${view.software.length}`)
-    expect(watching.match(/<li id="software-/g)).toHaveLength(view.software.length)
-    expect(text(watching)).toContain('Ticket waiting for a yes')
+    const watching = html.slice(html.indexOf('aria-label="Software we watch"'), html.indexOf('schedule-heading'))
+    expect(watching.match(/data-software-id="/g)).toHaveLength(view.software.length)
+    expect(text(watching)).toContain('Newer out')
     expect(text(watching)).toContain('Can’t check')
   })
 
@@ -263,45 +309,52 @@ describe('the order of the page', () => {
     expect(/<button[^>]*primary[^>]*>\s*Check now/.test(html)).toBe(false)
   })
 
-  it('says how it is checked with the schedule and every source that works, from the registry', () => {
-    const words = text(render(statuses, ALICE))
-    expect(words).toContain('How it’s checked')
-    expect(words).toContain(
-      'We can check GitHub, Maven Central and npm today. Known vulnerabilities are looked up for Maven Central and npm packages. We can’t check PyPI, NuGet or Docker Hub, support end dates, or which vulnerabilities attackers are using yet.',
-    )
-  })
-
-  it('says GitHub is not working when the registry says so, and says nothing about sources without the registry', () => {
-    const down = capabilitiesFixture.capabilities.map((c) => (c.id === 'github.releases' ? { ...c, state: 'down' as const } : c))
-    expect(text(render(statuses, ALICE, [], <SoftwareRoute />, { capabilities: down, examples: [] }))).toContain('We can check Maven Central and npm today. GitHub is not working right now.')
-    const githubOnly = capabilitiesFixture.capabilities.filter((c) => c.id !== 'packages.versions').map((c) => (c.id === 'github.releases' ? { ...c, state: 'down' as const } : c))
-    expect(text(render(statuses, ALICE, [], <SoftwareRoute />, { capabilities: githubOnly, examples: [] }))).toContain('GitHub is the only place we check, and it is not working right now.')
-    expect(text(render(statuses, ALICE, [], <SoftwareRoute />, null))).not.toContain('can check')
-  })
-
   it('puts Add software inside Software we watch for an Operator, and not at all for an Approver', () => {
     const operator = render(statuses, ALICE)
-    expect(operator.indexOf('Add software')).toBeGreaterThan(operator.indexOf('software-we-watch-heading'))
-    expect(operator.indexOf('Add software')).toBeLessThan(operator.indexOf('how-checked-heading'))
+    expect(operator.indexOf('Add software')).toBeGreaterThan(operator.indexOf('aria-label="Software we watch"'))
+    expect(operator.indexOf('Add software')).toBeLessThan(operator.indexOf('schedule-heading'))
     expect(text(render(statuses, BOB))).not.toContain('Add software')
   })
 })
 
 describe('what the team runs', () => {
   const row = (changes: Partial<WatchedSoftwareView>): WatchedSoftwareView => ({ ...(statuses as WatchlistView).software[0]!, ...changes })
+  const alone = (changed: WatchedSoftwareView) => renderItem({ ...(statuses as WatchlistView), software: [changed] }, ALICE, changed.id)
 
   it('says Not known when nobody knows, and never shows the newest release in its place', () => {
     const unknown = row({ our_version: null, our_version_source: { kind: 'first_check', at: '2026-11-09T01:00:00Z', ticket: null }, compared_from: '8.2.0', newest_version: '8.2.1', status: 'behind' })
-    const words = text(render({ ...(statuses as WatchlistView), software: [unknown] }, ALICE))
-    expect(words).toContain('Ours Not known')
+    const words = text(alone(unknown))
+    expect(words).toContain('You run Not known')
     expect(words).toContain('Telling you about releases newer than 8.2.0, the newest the first check read')
-    expect(words).not.toContain('Ours 8.2')
+    expect(words).not.toContain('You run 8.2')
   })
 
   it('says the first check starts the comparison before any check has read the newest', () => {
     const fresh = row({ our_version: null, our_version_source: null, compared_from: null, status: 'not_checked', newest_version: null, newest_read_at: null, checked_at: null })
-    const words = text(render({ ...(statuses as WatchlistView), software: [fresh] }, ALICE))
-    expect(words).toContain('Ours Not known The first check reads the newest release. Later checks tell you about newer ones')
+    const words = text(alone(fresh))
+    expect(words).toContain('You run Not known The first check reads the newest release. Later checks tell you about newer ones')
+    expect(words).toContain('Watching')
+    expect(words).toContain('Not checked yet. The first check reads the newest release.')
+  })
+
+  it('gives the software page its kind line, name, pill, sentence and facts, as the sketch does', () => {
+    const words = text(renderItem(statuses, ALICE, idOf('behind')))
+    expect(words).toContain('Watchlist LangGraph Newer out')
+    expect(words).toContain('You run 1.2.14. Newest is 1.2.16.')
+    for (const label of ['You run', 'Newest', 'Upgrade ticket', 'Checked by', 'Source']) expect(words).toContain(label)
+    expect(words).toContain('Upgrade ticket None yet')
+    expect(words).toContain('Checked by Software watchlist last checked Mon 16 Nov, 9:00')
+    expect(words).toContain('Source github.com/langchain-ai/langgraph')
+  })
+
+  it('goes back to the Watchlist, and says a software that is not on it any more is gone', () => {
+    expect(renderItem(statuses, ALICE, idOf('behind'))).toMatch(/<a[^>]*href="\/software"[^>]*>[\s\S]*Watchlist<\/a>/)
+    expect(text(renderItem(statuses, ALICE, 'sw_gone'))).toContain('That software isn’t on the Watchlist any more.')
+  })
+
+  it('opens an old Software link to a row by its page', () => {
+    const html = render(statuses, ALICE, [], <SoftwareRoute now={NOW} />, capabilitiesFixture, `/software?row=${idOf('behind')}`)
+    expect(html).not.toContain('Software we watch')
   })
 })
 
@@ -474,10 +527,11 @@ describe('what the add form sends', () => {
 describe('a schedule held because its owner can no longer run it', () => {
   const PAUSED_WORDS = 'Paused. No check runs until an Operator resumes it.'
   const OWNER_WORDS = 'Scheduled checks count as'
-  const heldFor = (hold: ScheduleHold, ownerName = 'Alice') => {
+  const NOT_AN_OPERATOR = 'Not running: Alice can no longer run workflows. An Operator can take it over by saving the schedule.'
+  const heldFor = (hold: ScheduleHold, words: string) => {
     const view = held as WatchlistView
     if (view.schedule === null) throw new Error('the held fixture has a schedule')
-    return { ...view, schedule: { ...view.schedule, held: hold, owner_name: ownerName } }
+    return { ...view, schedule: { ...view.schedule, held: hold, held_words: words } }
   }
 
   it('says the owner is no longer on the People list, and promises no next check anywhere on the page', () => {
@@ -487,20 +541,15 @@ describe('a schedule held because its owner can no longer run it', () => {
     expect(words).not.toContain('Next check')
     expect(words).not.toContain('It will try again at the next check')
     expect(words).not.toContain(OWNER_WORDS)
-    expect(words).toContain('GitHub answered 404 Not Found. It is checked again when an Operator presses Check now.')
+    expect(text(renderItem(held, ALICE, idOf('cant_check', (held as WatchlistView).software)))).toContain('GitHub answered 404 Not Found. It is checked again when an Operator presses Check now.')
     expect(buttons(render(held, ALICE))).toEqual(expect.arrayContaining(['Check now', 'Change schedule']))
   })
 
   it('says the owner can no longer run workflows when they are no longer an Operator', () => {
-    const words = text(render(heldFor('owner_not_an_operator'), BOB))
-    expect(words).toContain('Not running: Alice can no longer run workflows. An Operator can take it over by saving the schedule.')
+    const words = text(render(heldFor('owner_not_an_operator', NOT_AN_OPERATOR), BOB))
+    expect(words).toContain(NOT_AN_OPERATOR)
     expect(words).not.toContain(PAUSED_WORDS)
     expect(words).not.toContain(OWNER_WORDS)
-  })
-
-  it('says its owner when the view gives no name', () => {
-    expect(text(render(heldFor('owner_removed', ''), BOB))).toContain('Not running: its owner is no longer on the People list. An Operator can take it over by saving the schedule.')
-    expect(text(render(heldFor('owner_not_an_operator', ' '), BOB))).toContain('Not running: its owner can no longer run workflows.')
   })
 
   it('still says whose work the checks are while the schedule is not held, paused or not', () => {
@@ -510,7 +559,7 @@ describe('a schedule held because its owner can no longer run it', () => {
 
   it('keeps the paused words while the watchlist is paused as well', () => {
     for (const hold of ['owner_removed', 'owner_not_an_operator'] as const) {
-      const words = text(render({ ...heldFor(hold), state: 'paused' }, ALICE))
+      const words = text(render({ ...heldFor(hold, NOT_AN_OPERATOR), state: 'paused' }, ALICE))
       expect(words).toContain(PAUSED_WORDS)
       expect(words).not.toContain('Not running')
       expect(words).not.toContain(OWNER_WORDS)
@@ -520,7 +569,7 @@ describe('a schedule held because its owner can no longer run it', () => {
 
 describe('the schedule editor', () => {
   it('warns before saving that the person saving becomes the owner and cannot approve its checks', () => {
-    const html = render(statuses, ALICE, [], <ScheduleEditor schedule={(statuses as WatchlistView).schedule} onDone={() => undefined} />)
+    const html = render(statuses, ALICE, [], <ScheduleEditor schedule={(statuses as WatchlistView).schedule} version={(statuses as WatchlistView).version} onDone={() => undefined} onStale={() => undefined} />)
     expect(text(html)).toContain('Saving makes you the owner of this schedule. Its checks then count as your work, so you won’t be able to approve them.')
     expect(html).toMatch(/<button[^>]*type="submit"[^>]*aria-describedby="sched-owner-note"/)
   })
@@ -528,8 +577,68 @@ describe('the schedule editor', () => {
 
 describe('the schedule note', () => {
   it('says no schedule is set and how a check starts then', () => {
-    expect(text(renderToStaticMarkup(<ScheduleNote schedule={null} operator paused={false} />))).toBe('No schedule. Press Check now to check by hand.')
-    expect(text(renderToStaticMarkup(<ScheduleNote schedule={null} operator={false} paused={false} />))).toBe('No schedule. An Operator can press Check now to check by hand.')
+    expect(text(renderToStaticMarkup(<ScheduleNote schedule={null} operator paused={false} />))).toBe('No schedule. Press Check now to check by hand. One approval covers all the upgrade tickets.')
+    expect(text(renderToStaticMarkup(<ScheduleNote schedule={null} operator={false} paused={false} />))).toBe('No schedule. An Operator can press Check now to check by hand. One approval covers all the upgrade tickets.')
+  })
+})
+
+describe('the count line under the title', () => {
+  const page = (view: unknown, me: Me) => text(render(view, me, [], <AppRoutes context={{ name: me.display, now: new Date(), operator: me.roles.includes('operator') }} />))
+
+  it('says what has a newer version, what can’t be checked, what is up to date and what is only watched, right under the title, to Operators and Approvers', () => {
+    for (const me of [ALICE, BOB]) expect(page(statuses, me)).toContain('Watchlist 3 have a newer version · 1 can’t be checked · 1 is up to date · 1 watching')
+  })
+
+  it('keeps the plain lead while the list is empty', () => {
+    expect(page(empty, ALICE)).toContain('Watchlist Everything your team runs, in one list.')
+  })
+})
+
+describe('what checks each row', () => {
+  it('says each software is checked by the Software watchlist while its schedule runs', () => {
+    const words = text(render(statuses, ALICE))
+    for (const row of (statuses as WatchlistView).software) expect(words).toContain(row.name)
+    expect(words.match(/checked by Software watchlist/g)).toHaveLength(6)
+  })
+
+  it('names the Software watchlist on a software’s page as a link, as its row does, and says so in the side panel too', () => {
+    const html = renderItem(statuses, ALICE, idOf('behind'))
+    expect(html).toMatch(/<dt>Checked by<\/dt><dd><a[^>]*href="\/software"[^>]*>Software watchlist<\/a>/)
+    expect(text(render(statuses, ALICE))).toContain('checked by Software watchlist')
+    expect(text(panel(statuses, idOf('behind')))).toContain('Checked by Software watchlist')
+  })
+
+  it('says not checked automatically on the row, the page and the panel while it is paused or has no schedule', () => {
+    for (const view of [{ ...statuses, schedule: null }, { ...statuses, state: 'paused' }]) {
+      expect(text(render(view, ALICE))).toContain('· not checked automatically')
+      expect(text(renderItem(view, ALICE, idOf('behind')))).toContain('Checked by Not checked automatically')
+      expect(text(panel(view, idOf('behind')))).toContain('Checked by Not checked automatically')
+    }
+  })
+})
+
+describe('after an Approver declines the latest check', () => {
+  const view = { ...statuses, last_check: { run_id: rejectedRun.run_id, state: 'rejected', started_at: '2026-11-16T01:00:12Z' } }
+  const record = /Declined by Bob\. Nothing was written\. Reason: Wrong version\. The tickets will be proposed again at the next check, [^.]+\./
+
+  it('gives the record, with the next check, as the Upgrade ticket of a software with a new version and of no other', () => {
+    for (const me of [ALICE, BOB]) {
+      const noted = (statuses as WatchlistView).software.filter((row) => record.test(text(renderItem(view, me, row.id, [rejectedRun]))))
+      expect(noted.map((row) => row.name)).toEqual(['LangGraph'])
+      expect(text(renderItem(view, me, idOf('behind'), [rejectedRun]))).toMatch(/Upgrade ticket Declined by Bob/)
+    }
+  })
+
+  it('gives the same record in the history, on the line of the check that found the new version', () => {
+    const langgraph = (statuses as WatchlistView).software.find((row) => row.status === 'behind')!
+    const declined = 'Declined by Bob. Nothing was written. Reason: Wrong version. The tickets will be proposed again at the next check, Mon 16 Nov, 9:00.'
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <SoftwareHistory row={langgraph} nameOf={(id) => id} declined={declined} id="h" />
+      </MemoryRouter>,
+    )
+    expect(text(html)).toContain(`Mon 16 Nov, 9:00 Found 1.2.16. ${declined}`)
+    expect(html).not.toContain('href="/jira/')
   })
 })
 
@@ -548,7 +657,7 @@ describe('ticket keys on the Software watchlist', () => {
   const link = (key: string) => new RegExp(`<a\\b[^>]*href="/jira/${key}"[^>]*>${key}`)
 
   it('links the open ticket and the ticket our version came from, whatever the project', () => {
-    const html = render(view, ALICE)
+    const html = renderItem(view, ALICE, open.id)
     expect(html).toMatch(link('OPS-143'))
     expect(html).toMatch(link('OPS-140'))
   })
@@ -557,7 +666,7 @@ describe('ticket keys on the Software watchlist', () => {
     const row = view.software.find((item) => item.id === open.id)!
     const html = renderToStaticMarkup(
       <MemoryRouter>
-        <SoftwareHistory row={row as WatchedSoftwareView} nameOf={(id) => id} id="h" />
+        <SoftwareHistory row={row as WatchedSoftwareView} nameOf={(id) => id} declined={null} id="h" />
       </MemoryRouter>,
     )
     expect(html).toMatch(link('OPS-143'))
@@ -566,17 +675,13 @@ describe('ticket keys on the Software watchlist', () => {
   })
 
   it('does not link key-like words that are not tickets the row holds', () => {
-    const html = render({ ...view, software: view.software.map((row) => ({ ...row, problem: 'UTF-8 and CVE-2024-1234' })) }, ALICE)
+    const html = renderItem({ ...view, software: view.software.map((row) => ({ ...row, problem: 'UTF-8 and CVE-2024-1234' })) }, ALICE, open.id)
     expect(html).not.toContain('href="/jira/UTF-8"')
     expect(html).not.toContain('href="/jira/CVE-2024-1234"')
   })
 
   it('links to the real Jira in a new tab, safely, when an address is configured', () => {
-    const html = render(view, ALICE, [], (
-      <TicketLinksProvider config={{ jiraBrowseUrl: 'https://jira.example.test/browse/{key}' }}>
-        <SoftwareRoute />
-      </TicketLinksProvider>
-    ))
+    const html = renderItem(view, ALICE, open.id, [], capabilitiesFixture, (page) => <TicketLinksProvider config={{ jiraBrowseUrl: 'https://jira.example.test/browse/{key}' }}>{page}</TicketLinksProvider>)
     expect(html).toMatch(/<a\b[^>]*href="https:\/\/jira.example.test\/browse\/OPS-143"[^>]*target="_blank"[^>]*rel="noopener noreferrer"[^>]*>OPS-143/)
     expect(html).not.toContain('href="/jira/OPS-143"')
   })
@@ -588,44 +693,50 @@ describe('a repository GitHub moved', () => {
   const fastapi = rows.find((row) => row.name === 'FastAPI')!
   const note = (changes: { confirming?: boolean; busy?: boolean; operator?: boolean } = {}) =>
     renderToStaticMarkup(<MovedNote row={fastapi} operator={changes.operator ?? true} confirming={changes.confirming ?? false} busy={changes.busy ?? false} onAsk={() => undefined} onConfirm={() => undefined} onCancel={() => undefined} />)
-  const attention = (html: string) => html.slice(html.indexOf('needs-attention-heading'), html.indexOf('software-we-watch-heading'))
-  const rowOf = (html: string, name: string) => html.split('<li id="software-').find((part) => part.includes(`<b>${name}</b>`)) ?? ''
+  const pageOf = (me: Me, name: string) => renderItem(moved, me, rows.find((row) => row.name === name)!.id)
+  const links = (html: string) => [...html.matchAll(/<a\b[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g)].map((match) => [match[1], text(match[2] ?? '')])
 
-  it('says on the row that GitHub renamed the project, still reaches it, and offers the new address to an Operator', () => {
-    const html = render(moved, ALICE)
-    const row = text(rowOf(html, 'FastAPI'))
-    expect(row).toContain('GitHub · tiangolo/fastapi')
+  it('says on the software’s page that GitHub renamed the project, still reaches it, and offers the new address to an Operator', () => {
+    const html = pageOf(ALICE, 'FastAPI')
+    const row = text(html)
+    expect(row).toContain('Checked by Software watchlist')
     expect(row).toContain('GitHub now calls this project fastapi/fastapi. We saved tiangolo/fastapi, and checks still reach it through GitHub’s redirect.')
-    expect(buttons(rowOf(html, 'FastAPI'))).toContain('Use the new address for FastAPI')
-    expect(row).toContain('New version')
+    expect(buttons(html)).toContain('Use the new address for FastAPI')
+    expect(row).toContain('Newer out')
   })
 
-  it('lists the moved and the missing repository in Needs attention, each with a way to find its row', () => {
-    const words = text(attention(render(moved, ALICE)))
-    expect(words).toContain('Needs attention 2')
-    expect(words).toContain('GitHub moved FastAPI from tiangolo/fastapi to fastapi/fastapi.')
-    expect(words).toContain('GitHub can’t find langchain-ai/langserve, the address saved for LangServe.')
-    expect(buttons(attention(render(moved, ALICE))).filter((label) => label.startsWith('Show it'))).toHaveLength(2)
-    expect(words).not.toContain('Use the new address')
-  })
-
-  it('offers the new address once, on the row that was renamed and nowhere else', () => {
+  it('lists the moved and the missing repository as rows that open their own pages, with no Needs attention on the Watchlist', () => {
     const html = render(moved, ALICE)
-    expect(buttons(html).filter((label) => label.startsWith('Use the new address'))).toEqual(['Use the new address for FastAPI'])
+    expect(text(html)).not.toContain('Needs attention')
+    const hrefs = links(html).map(([href]) => href)
+    for (const row of rows.filter((item) => item.moved_to || item.not_found)) expect(hrefs).toContain(`/software/${row.id}`)
+  })
+
+  it('offers Ask the team on the page of a software GitHub can’t find, as the sketch does, and nowhere else', () => {
+    expect(buttons(pageOf(ALICE, 'LangServe'))).toEqual(expect.arrayContaining(['Ask the team', 'Remove from watchlist LangServe']))
+    expect(buttons(pageOf(BOB, 'LangServe'))).toContain('Ask the team')
+    expect(buttons(pageOf(ALICE, 'FastAPI'))).not.toContain('Ask the team')
+    expect(buttons(render(moved, ALICE))).not.toContain('Ask the team')
+  })
+
+  it('offers the new address once, on the page of the software that was renamed and nowhere else', () => {
+    expect(buttons(render(moved, ALICE)).filter((label) => label.startsWith('Use the new address'))).toEqual([])
+    expect(buttons(pageOf(ALICE, 'FastAPI')).filter((label) => label.startsWith('Use the new address'))).toEqual(['Use the new address for FastAPI'])
+    expect(buttons(pageOf(ALICE, 'LangServe')).filter((label) => label.startsWith('Use the new address'))).toEqual([])
   })
 
   it('gives a repository GitHub cannot find its own words, no new address, and no promise it moved somewhere known', () => {
-    const html = render(moved, ALICE)
-    const row = text(rowOf(html, 'LangServe'))
-    expect(row).toContain('Can’t check')
-    expect(row).toContain('GitHub can’t find langchain-ai/langserve. It may have moved to another repository. LangServe stays Can’t check until GitHub finds that address. Remove it and add it again at its new address.')
+    const html = pageOf(ALICE, 'LangServe')
+    const row = text(html)
+    expect(row).toContain('Can’t find')
+    expect(row).toContain('GitHub can’t find langchain-ai/langserve, and doesn’t say where it moved. Remove it and add it again at its new address.')
     expect(row).not.toContain('Use the new address')
     expect(row).not.toContain('GitHub answered 404')
-    expect(row).toContain('Remove LangServe')
+    expect(buttons(html).at(-1)).toMatch(/^Remove from watchlist/)
   })
 
   it('tells an Approver, who cannot change the list, what an Operator can do', () => {
-    const html = render(moved, BOB)
+    const html = pageOf(BOB, 'FastAPI') + pageOf(BOB, 'LangServe')
     const words = text(html)
     expect(words).toContain('An Operator can switch it to the new address.')
     expect(words).toContain('An Operator can fix this.')
@@ -658,7 +769,7 @@ describe('a repository GitHub moved', () => {
     const older: Record<string, unknown> = { ...fastapi }
     delete older['moved_to']
     delete older['not_found']
-    const html = render({ ...(statuses as WatchlistView), software: [older] }, ALICE)
+    const html = renderItem({ ...(statuses as WatchlistView), software: [older] }, ALICE, String(older['id']))
     expect(text(html)).not.toContain('GitHub now calls')
     expect(text(html)).not.toContain('GitHub can’t find')
   })

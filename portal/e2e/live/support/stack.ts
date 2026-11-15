@@ -9,9 +9,11 @@ type Json = Record<string, unknown>
 
 export interface RunSnapshot {
   run_id: string
+  use_case_id: string
   state: string
   use_case_name: string
   started_by: string
+  test: boolean
   reason?: string | null
   retryable?: boolean | null
   stage?: string | null
@@ -105,14 +107,47 @@ export class Backend {
     return answer.body
   }
 
+  /** A schedule change from the version a page has just read, as the Portal sends it. A change with no version is refused. */
+  async saveWorkflowSchedule(user: string, useCaseId: string, schedule: { day: string; at: string; via?: string }): Promise<Answer<Json>> {
+    const { version } = await this.get<{ version: number }>(user, `/api/v1/use-cases/${useCaseId}`)
+    return this.send('PUT', user, `/api/v1/use-cases/${useCaseId}/schedule`, { ...schedule, expected_version: version })
+  }
+
+  async saveWatchlistSchedule(user: string, schedule: { day: string; at: string }): Promise<Answer<Json>> {
+    const { watchlist } = await this.get<{ watchlist: { version: number } | null }>(user, '/api/v1/watchlist')
+    return this.send('PUT', user, '/api/v1/watchlist/schedule', { ...schedule, expected_version: watchlist?.version ?? 1 })
+  }
+
+  /** Turns the watchlist's schedule off from the version read just now. With no watchlist there is nothing to turn off. */
+  async turnOffWatchlistSchedule(user: string): Promise<void> {
+    const { watchlist } = await this.get<{ watchlist: { version: number } | null }>(user, '/api/v1/watchlist')
+    if (watchlist) await this.delete(user, `/api/v1/watchlist/schedule?expected_version=${String(watchlist.version)}`)
+  }
+
   /** Empties the watchlist, adds the software afresh with no ticket history and turns the schedule off. Answers the check's id. */
   async freshWatchlist(user = 'alice', software: readonly Software[] = [LANGGRAPH]): Promise<string> {
-    const { watchlist } = await this.get<{ watchlist: { software: { id: string }[] } | null }>(user, '/api/v1/watchlist')
+    const { watchlist } = await this.get<{ watchlist: { use_case_id: string; software: { id: string }[] } | null }>(user, '/api/v1/watchlist')
+    if (watchlist) await this.declineWaitingChecks(watchlist.use_case_id)
     for (const item of watchlist?.software ?? []) await this.delete(user, `/api/v1/watchlist/software/${item.id}`)
     let useCaseId = ''
     for (const item of software) useCaseId = (await this.post<{ use_case_id: string }>(user, '/api/v1/watchlist/software', item, {}, [201])).use_case_id
-    await this.delete(user, '/api/v1/watchlist/schedule', [200, 404])
+    await this.turnOffWatchlistSchedule(user)
     return useCaseId
+  }
+
+  /**
+   * On its own n8n workflow the watchlist has at most one check waiting for a yes, and a check started while one waits is
+   * skipped (ADR 0026). Specs leave checks waiting on purpose, so Bob declines any that still wait, which writes nothing.
+   */
+  async declineWaitingChecks(useCaseId: string): Promise<void> {
+    for (const run of await this.runs()) {
+      if (run.use_case_id !== useCaseId || run.state !== 'awaiting_approval') continue
+      const approvalId = await this.approvalIdOf(run.run_id)
+      // A request already decided can still show its run waiting until n8n takes the answer.
+      const { digest, steps } = await this.get<{ digest: string; steps: { status: string }[] }>('bob', `/api/v1/approvals/${approvalId}`)
+      if (!steps.some((step) => step.status === 'open')) continue
+      await this.post('bob', `/api/v1/approvals/${approvalId}/decisions`, { step: 0, verdict: 'decline', digest }, undefined, [201, 409])
+    }
   }
 
   async startCheck(user = 'alice', software: readonly Software[] = [LANGGRAPH]): Promise<string> {
@@ -122,7 +157,7 @@ export class Backend {
   /** Adds one more software to the watchlist as it is, so a second check proposes it while the first still waits. */
   async addAndCheck(user: string, software: Software): Promise<string> {
     const { use_case_id: useCaseId } = await this.post<{ use_case_id: string }>(user, '/api/v1/watchlist/software', software, {}, [201])
-    await this.delete(user, '/api/v1/watchlist/schedule', [200, 404])
+    await this.turnOffWatchlistSchedule(user)
     return this.checkNow(user, useCaseId)
   }
 
@@ -135,6 +170,19 @@ export class Backend {
     const runId = await this.startCheck(user, software)
     await this.waitForState(runId, ['awaiting_approval'])
     return { runId, approvalId: await this.approvalIdOf(runId) }
+  }
+
+  /** A check of LangGraph and Redis while GitHub has no Redis, so the request waits with one ticket and Redis not checked. */
+  async waitingRunWithUnread(user = 'alice'): Promise<WaitingRun> {
+    const useCaseId = await this.freshWatchlist(user, [LANGGRAPH, REDIS])
+    await setMockGithubMode('not_found', REDIS.repo)
+    try {
+      const runId = await this.checkNow(user, useCaseId)
+      await this.waitForState(runId, ['awaiting_approval'])
+      return { runId, approvalId: await this.approvalIdOf(runId) }
+    } finally {
+      await setMockGithubMode('ok', REDIS.repo)
+    }
   }
 
   async runs(user = 'alice'): Promise<RunSnapshot[]> {
@@ -190,11 +238,12 @@ export class Backend {
   }
 }
 
-export async function setMockGithubMode(mode: 'ok' | 'unavailable' | 'not_found'): Promise<void> {
+/** Sets how the mock GitHub answers, for every repository or for one. */
+export async function setMockGithubMode(mode: 'ok' | 'unavailable' | 'not_found', repo?: string): Promise<void> {
   const http = await request.newContext()
   try {
-    const response = await http.post(`${MOCK_GITHUB_URL}/_admin/mode`, { data: { mode } })
-    expect(response.status(), `mock-github accepts mode ${mode}`).toBe(200)
+    const response = await http.post(`${MOCK_GITHUB_URL}/_admin/mode`, { data: repo === undefined ? { mode } : { mode, repo } })
+    expect(response.status(), `mock-github accepts mode ${mode}${repo === undefined ? '' : ` for ${repo}`}`).toBe(200)
   } finally {
     await http.dispose()
   }

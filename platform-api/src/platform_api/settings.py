@@ -1,5 +1,6 @@
+import re
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal
 from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -16,9 +17,9 @@ CONTEXTS: tuple[Context, ...] = ("builder", "orchestration", "monitoring")
 
 @dataclass(frozen=True)
 class DatabaseUrls:
-    builder: str
-    orchestration: str
-    monitoring: str
+    builder: str = field(repr=False)
+    orchestration: str = field(repr=False)
+    monitoring: str = field(repr=False)
 
     def for_context(self, context: Context) -> str:
         match context:
@@ -33,7 +34,7 @@ class DatabaseUrls:
 @dataclass(frozen=True)
 class CosmosSettings:
     endpoint: str
-    key: str
+    key: str = field(repr=False)
 
 
 @dataclass(frozen=True)
@@ -57,7 +58,7 @@ class JiraSettings:
 
     base_url: str | None = None
     flavor: JiraFlavor = "datacenter"
-    token: str | None = None
+    token: str | None = field(default=None, repr=False)
     email: str | None = None
     issue_type: str = "Task"
     browse_url: str = "/jira/{key}"
@@ -67,8 +68,38 @@ class JiraSettings:
         return self.base_url is None
 
 
+@dataclass(frozen=True)
+class ConfluencePage:
+    """A page the platform may read: its id, and its title as people name it."""
+
+    id: str
+    title: str
+
+
+@dataclass(frozen=True)
+class ConfluenceSettings:
+    """Which Confluence the platform reads, and the only pages it may read (ENGINE-PLAN D2). No
+    address means Confluence is not connected. base_url is the wiki's own address, such as
+    https://your-site.atlassian.net/wiki. With an email the platform signs in as Atlassian Cloud
+    does, with the email and an API token. Without one it sends the token as Data Center's
+    personal access token."""
+
+    base_url: str | None = None
+    email: str | None = None
+    token: str | None = None
+    pages: tuple[ConfluencePage, ...] = ()
+
+
 PRACTICE_JIRA_PROJECT = "MOCK"
 """The practice Jira's project, where the watchlist raises tickets unless told otherwise."""
+
+
+@dataclass(frozen=True)
+class N8nOwner:
+    """n8n's owner account, which the platform signs in as to lay out and publish workflows."""
+
+    email: str
+    password: str = field(repr=False)
 
 
 @dataclass(frozen=True)
@@ -77,15 +108,20 @@ class Settings:
     public_base_url: str
     database: DatabaseUrls
     agent_runtime_url: str
-    agent_api_key: str
+    agent_api_key: str = field(repr=False)
     n8n_base_url: str
-    step_key: str
+    step_key: str = field(repr=False)
     platform_internal_url: str
-    callback_signing_key: str
+    callback_signing_key: str = field(repr=False)
     teams_channel: str
-    teams_webhook_url: str | None = None
-    teams_requests_webhook_url: str | None = None
-    settings_encryption_key: str | None = None
+    teams_webhook_url: str | None = field(default=None, repr=False)
+    teams_requests_webhook_url: str | None = field(default=None, repr=False)
+    teams_tell_webhook_url: str | None = field(default=None, repr=False)
+    """The Tell flow, which posts a notice to the team's channel and emails the team's list (D1).
+    Unset keeps the practice copy."""
+    tell_email_to: tuple[str, ...] = ()
+    """TELL_EMAIL_TO, the team's fixed email list that every Tell emails."""
+    settings_encryption_key: str | None = field(default=None, repr=False)
     first_people: FirstPeople | None = None
     activity_reader: ActivityReader = "postgres"
     cosmos: CosmosSettings | None = None
@@ -93,7 +129,20 @@ class Settings:
     practice_systems: bool = True
     watchlist_jira_project: str = PRACTICE_JIRA_PROJECT
     jira: JiraSettings = JiraSettings()
+    confluence: ConfluenceSettings = ConfluenceSettings()
     team_time_zone: ZoneInfo = TEAM_TIME_ZONE
+    node_key: str | None = field(default=None, repr=False)
+    """WAB_NODE_KEY, which our n8n node pack sends. Without it no node call is taken."""
+    start_secret: str | None = field(default=None, repr=False)
+    """WAB_START_SECRET, which signs each start the Portal sends to Start from the Portal."""
+    n8n_owner: N8nOwner | None = None
+    """N8N_OWNER_EMAIL and N8N_OWNER_PASSWORD. Without them the platform lays no workflow out
+    in n8n, and new use cases run on the shared n8n workflow."""
+    n8n_staff_access: bool = False
+    """N8N_STAFF_ACCESS. Off, the platform makes no staff n8n account and opens no workflow in
+    n8n (ENGINE-PLAN 2.9, M5). On, it still waits for a bootstrap that proved the allow list."""
+    n8n_editor_url: str | None = None
+    """N8N_EDITOR_URL, where people open n8n's editor, as ADR 0034's n8n_editor_url output."""
 
 
 def _required(env: Mapping[str, str], name: str) -> str:
@@ -162,6 +211,19 @@ def teams_webhook_from_env(env: Mapping[str, str], name: str = "TEAMS_WEBHOOK_UR
     return url
 
 
+def tell_email_from_env(env: Mapping[str, str], flow_set: bool) -> tuple[str, ...]:
+    """The team's email list, separated by commas. With the Tell flow set it may not be empty,
+    because the flow sends every Tell's email to this list."""
+    emails = tuple(e.strip() for e in env.get("TELL_EMAIL_TO", "").split(",") if e.strip())
+    for email in emails:
+        local, at, domain = email.partition("@")
+        if not (at and local and "." in domain) or any(c.isspace() or c == ";" for c in email):
+            raise ConfigError(f"{email!r} in TELL_EMAIL_TO is not an email.")
+    if flow_set and not emails:
+        raise ConfigError("TEAMS_TELL_WEBHOOK_URL needs TELL_EMAIL_TO, the team's email list.")
+    return emails
+
+
 def max_body_bytes_from_env(env: Mapping[str, str]) -> int:
     raw = env.get("MAX_BODY_BYTES", "").strip()
     if not raw:
@@ -184,6 +246,25 @@ def practice_systems_from_env(env: Mapping[str, str]) -> bool:
             return False
         case other:
             raise ConfigError(f"PRACTICE_SYSTEMS takes on or off, not {other!r}.")
+
+
+def n8n_staff_access_from_env(env: Mapping[str, str]) -> bool:
+    match env.get("N8N_STAFF_ACCESS", "").strip().lower() or "off":
+        case "on":
+            return True
+        case "off":
+            return False
+        case other:
+            raise ConfigError(f"N8N_STAFF_ACCESS takes on or off, not {other!r}.")
+
+
+def n8n_editor_url_from_env(env: Mapping[str, str]) -> str | None:
+    raw = env.get("N8N_EDITOR_URL", "").strip().rstrip("/")
+    if not raw:
+        return None
+    if urlsplit(raw).scheme not in ("http", "https") or not urlsplit(raw).hostname:
+        raise ConfigError(f"N8N_EDITOR_URL must be an http or https address, not {raw!r}.")
+    return raw
 
 
 def watchlist_jira_project_from_env(env: Mapping[str, str]) -> str:
@@ -265,11 +346,90 @@ def jira_from_env(
     return JiraSettings(base_url, flavor, token, email, issue_type, browse_url)
 
 
+CONFLUENCE_PAGE_ID = re.compile(r"[0-9]{1,20}")
+CONFLUENCE_TITLE_LIMIT = 255
+
+
+def _confluence_address(value: str) -> str:
+    """The token goes to this address with every call, so it is https, or plain http only to a
+    host with no dot in its name, which is a service on the stack's own network."""
+    parts = urlsplit(value)
+    if parts.scheme == "http" and parts.hostname and "." not in parts.hostname:
+        return _web_address("CONFLUENCE_BASE_URL", value, https_only=False)
+    return _web_address("CONFLUENCE_BASE_URL", value, https_only=True)
+
+
+def confluence_pages_from_env(raw: str) -> tuple[ConfluencePage, ...]:
+    pages: list[ConfluencePage] = []
+    for entry in (part.strip() for part in raw.split(";")):
+        if not entry:
+            continue
+        page_id, equals, title = (part.strip() for part in entry.partition("="))
+        if not equals or CONFLUENCE_PAGE_ID.fullmatch(page_id) is None:
+            raise ConfigError(
+                "CONFLUENCE_PAGES lists pages as id=title, separated by a semicolon, such as "
+                f"123456=Software inventory. {entry!r} is not one."
+            )
+        if not 1 <= len(title) <= CONFLUENCE_TITLE_LIMIT or not title.isprintable():
+            raise ConfigError(f"The title of page {page_id} in CONFLUENCE_PAGES is not one line.")
+        pages.append(ConfluencePage(page_id, title))
+    for name, values in (
+        ("id", [p.id for p in pages]),
+        ("title", [" ".join(p.title.split()).casefold() for p in pages]),
+    ):
+        if len(set(values)) < len(values):
+            raise ConfigError(f"Two pages in CONFLUENCE_PAGES have the same {name}.")
+    return tuple(pages)
+
+
+def confluence_from_env(env: Mapping[str, str], jira: JiraSettings) -> ConfluenceSettings:
+    """Unset keeps Confluence not connected. Without a token of its own it signs in with Jira's,
+    when Jira is on the same site, as Atlassian Cloud allows."""
+    raw_base = env.get("CONFLUENCE_BASE_URL", "").strip()
+    if not raw_base:
+        return ConfluenceSettings()
+    base_url = _confluence_address(raw_base)
+    email = env.get("CONFLUENCE_EMAIL", "").strip() or None
+    token = env.get("CONFLUENCE_API_TOKEN", "").strip() or None
+    same_site = jira.base_url is not None and (
+        urlsplit(jira.base_url).hostname == urlsplit(base_url).hostname
+    )
+    if token is None and same_site:
+        email, token = email or jira.email, jira.token
+    if token is None:
+        raise ConfigError("CONFLUENCE_BASE_URL is set but CONFLUENCE_API_TOKEN is not.")
+    if not all(33 <= ord(character) < 127 for character in token):
+        raise ConfigError(
+            "CONFLUENCE_API_TOKEN holds a space, a line break or a character that is not a plain "
+            "letter, digit or symbol. Paste the token again."
+        )
+    pages = confluence_pages_from_env(env.get("CONFLUENCE_PAGES", ""))
+    if not pages:
+        raise ConfigError(
+            "CONFLUENCE_BASE_URL is set, so CONFLUENCE_PAGES must list the pages the platform "
+            "may read, such as 123456=Software inventory."
+        )
+    return ConfluenceSettings(base_url, email, token, pages)
+
+
+def staff_access_from_env(env: Mapping[str, str], owner: N8nOwner | None) -> bool:
+    on = n8n_staff_access_from_env(env)
+    if on and (owner is None or not env.get("SETTINGS_ENCRYPTION_KEY")):
+        raise ConfigError(
+            "N8N_STAFF_ACCESS=on needs N8N_OWNER_EMAIL and N8N_OWNER_PASSWORD, which make each "
+            "person's n8n account, and SETTINGS_ENCRYPTION_KEY, which seals their password link."
+        )
+    return on
+
+
 def settings_from_env(env: Mapping[str, str]) -> Settings:
     auth = auth_config(env)
+    n8n_owner = n8n_owner_from_env(env)
     cosmos = cosmos_from_env(env)
     public_base_url = auth.public_base_url.rstrip("/")
     practice_systems = practice_systems_from_env(env)
+    jira = jira_from_env(env, public_base_url, practice_systems)
+    tell_flow = teams_webhook_from_env(env, "TEAMS_TELL_WEBHOOK_URL")
     return Settings(
         auth=auth,
         first_people=first_people_from_env(env),
@@ -288,25 +448,45 @@ def settings_from_env(env: Mapping[str, str]) -> Settings:
         teams_channel=env.get("TEAMS_CHANNEL") or "CODESparks Ops",
         teams_webhook_url=teams_webhook_from_env(env),
         teams_requests_webhook_url=teams_webhook_from_env(env, "TEAMS_REQUESTS_WEBHOOK_URL"),
+        teams_tell_webhook_url=tell_flow,
+        tell_email_to=tell_email_from_env(env, tell_flow is not None),
         settings_encryption_key=env.get("SETTINGS_ENCRYPTION_KEY") or None,
         activity_reader=activity_reader_from_env(env, cosmos),
         cosmos=cosmos,
         max_body_bytes=max_body_bytes_from_env(env),
         practice_systems=practice_systems,
         watchlist_jira_project=watchlist_jira_project_from_env(env),
-        jira=jira_from_env(env, public_base_url, practice_systems),
+        jira=jira,
+        confluence=confluence_from_env(env, jira),
         team_time_zone=team_time_zone_from_env(env),
+        node_key=env.get("WAB_NODE_KEY", "").strip() or None,
+        start_secret=env.get("WAB_START_SECRET", "").strip() or None,
+        n8n_owner=n8n_owner,
+        n8n_staff_access=staff_access_from_env(env, n8n_owner),
+        n8n_editor_url=n8n_editor_url_from_env(env),
     )
+
+
+def n8n_owner_from_env(env: Mapping[str, str]) -> N8nOwner | None:
+    email = env.get("N8N_OWNER_EMAIL", "").strip()
+    password = env.get("N8N_OWNER_PASSWORD", "")
+    if not email and not password:
+        return None
+    if not email or not password:
+        raise ConfigError("N8N_OWNER_EMAIL and N8N_OWNER_PASSWORD go together.")
+    return N8nOwner(email, password)
 
 
 @dataclass(frozen=True)
 class BootstrapSettings:
-    owner_database_url: str
+    owner_database_url: str = field(repr=False)
     n8n_base_url: str
     n8n_owner_email: str
-    n8n_owner_password: str
-    step_key: str
+    n8n_owner_password: str = field(repr=False)
+    step_key: str = field(repr=False)
     platform_internal_url: str
+    team_time_zone: ZoneInfo = TEAM_TIME_ZONE
+    """The self-test runs on it, as every workflow does."""
 
 
 def owner_database_url_from_env(env: Mapping[str, str]) -> str:
@@ -321,4 +501,5 @@ def bootstrap_settings_from_env(env: Mapping[str, str]) -> BootstrapSettings:
         n8n_owner_password=_required(env, "N8N_OWNER_PASSWORD"),
         step_key=_required(env, "STEP_KEY"),
         platform_internal_url=_required(env, "PLATFORM_INTERNAL_URL").rstrip("/"),
+        team_time_zone=team_time_zone_from_env(env),
     )

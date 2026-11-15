@@ -1,0 +1,41 @@
+001 filter v2.3: {"credentials": [], "webhooks": 0, "requestDefaults": false, "code fields": [], "url fields": [], "calls another workflow": []}
+002 switch v3.4: {"credentials": [], "webhooks": 0, "requestDefaults": false, "code fields": [], "url fields": [], "calls another workflow": []}
+003 set v3.5: {"credentials": [], "webhooks": 0, "requestDefaults": false, "code fields": [], "url fields": [], "calls another workflow": []}
+004 limit v1: {"credentials": [], "webhooks": 0, "requestDefaults": false, "code fields": [], "url fields": [], "calls another workflow": []}
+005 sort v1: {"credentials": [], "webhooks": 0, "requestDefaults": false, "code fields": ["code (jsEditor)"], "url fields": [], "calls another workflow": []}
+006 aggregate v1: {"credentials": [], "webhooks": 0, "requestDefaults": false, "code fields": [], "url fields": [], "calls another workflow": []}
+007 splitOut v1: {"credentials": [], "webhooks": 0, "requestDefaults": false, "code fields": [], "url fields": [], "calls another workflow": []}
+008 removeDuplicates v2: {"credentials": [], "webhooks": 0, "requestDefaults": false, "code fields": [], "url fields": [], "calls another workflow": []}
+009 summarize v1.1: {"credentials": [], "webhooks": 0, "requestDefaults": false, "code fields": [], "url fields": [], "calls another workflow": []}
+010 renameKeys v1: {"credentials": [], "webhooks": 0, "requestDefaults": false, "code fields": [], "url fields": [], "calls another workflow": []}
+011 dateTime v2: {"credentials": [], "webhooks": 0, "requestDefaults": false, "code fields": [], "url fields": [], "calls another workflow": []}
+012 compareDatasets v2.3: {"credentials": [], "webhooks": 0, "requestDefaults": false, "code fields": [], "url fields": [], "calls another workflow": []}
+013 itemLists v3.1: {"credentials": [], "webhooks": 0, "requestDefaults": false, "code fields": ["code (jsEditor)"], "url fields": [], "calls another workflow": []}
+014 splitInBatches v3: {"credentials": [], "webhooks": 0, "requestDefaults": false, "code fields": [], "url fields": [], "calls another workflow": []}
+015 crypto v2: {"credentials": ["crypto"], "webhooks": 0, "requestDefaults": false, "code fields": [], "url fields": [], "calls another workflow": []}
+016 markdown v1: {"credentials": [], "webhooks": 0, "requestDefaults": false, "code fields": [], "url fields": ["options.excludeTrailingPunctuationFromURLs"], "calls another workflow": []}
+017 html v1.2: {"credentials": [], "webhooks": 0, "requestDefaults": false, "code fields": ["html (htmlEditor)"], "url fields": [], "calls another workflow": []}
+018 xml v1: {"credentials": [], "webhooks": 0, "requestDefaults": false, "code fields": [], "url fields": [], "calls another workflow": []}
+019 wait v1.1: {"credentials": ["httpBasicAuth", "httpHeaderAuth", "jwtAuth"], "webhooks": 3, "requestDefaults": false, "code fields": ["formFields.values.html (htmlEditor)"], "url fields": ["options.respondWithOptions.values.redirectUrl", "options.respondWithOptions.values.respondWith.Redirect URL"], "calls another workflow": []}
+020 executeWorkflow v1.4: {"credentials": [], "webhooks": 0, "requestDefaults": false, "code fields": [], "url fields": ["source.URL", "workflowUrl"], "calls another workflow": ["workflowId"]}
+021 respondToWebhook v1.5: {"credentials": ["jwtAuth"], "webhooks": 0, "requestDefaults": false, "code fields": [], "url fields": ["redirectURL"], "calls another workflow": []}
+022 executionData v1.1: {"credentials": [], "webhooks": 0, "requestDefaults": false, "code fields": [], "url fields": [], "calls another workflow": []}
+023 stopAndError v1: {"credentials": [], "webhooks": 0, "requestDefaults": false, "code fields": [], "url fields": [], "calls another workflow": []}
+024 if v2.3: {"credentials": [], "webhooks": 0, "requestDefaults": false, "code fields": [], "url fields": [], "calls another workflow": []}
+025 merge v3.2: {"credentials": [], "webhooks": 0, "requestDefaults": false, "code fields": ["query (sqlEditor)"], "url fields": [], "calls another workflow": []}
+026 noOp v1: {"credentials": [], "webhooks": 0, "requestDefaults": false, "code fields": [], "url fields": [], "calls another workflow": []}
+027 created q10 expression and code probes: {"id": "dsXydyYanr2fhEQC", "versionId": "aaa02411-19fc-4b4b-a879-5661723bbf23", "activeVersionId": null}
+028 Env probe: output: {"error": "access to env vars denied"}
+029 Escape probe: output: {"error": "Expression contains invalid constructor function call"}
+030 Other probes: output: {"process": {"env": "0"}, "require": "object", "fetch": "object", "globalThis": "", "require call": "refused: (intermediate value)(intermediate value)(intermediate value).require is not a function", "fetch call": "refused: (intermediate value)(intermediate value)(intermediate value).fetch is not a function"}
+031 Two items: output: {"list": [2, 1]}
+032 Split Out: output: {"list": 2}
+033 Sort by code: output: {"list": 1}
+034 q10 expression and code probes: execution status: ["success", null]
+035 created q10 Merge SQL reaching out (SELECT * FROM JSON("http://stub:8041/leak-json")): {"id": "TG8XyOM5ecRJwcPu", "versionId": "ab12b878-9f11-4cbf-9b99-46f5bbab5896", "activeVersionId": null}
+036 Merge by SQL 0: error: "Issue while executing query"
+037 q10 Merge SQL reaching out (SELECT * FROM JSON("http://stub:8041/leak-json")): execution status: ["error", "Issue while executing query"]
+038 created q10 Merge SQL reaching out (SELECT * FROM CSV("http://stub:8041/leak-csv")): {"id": "0CrY0MP8V8J4YO4v", "versionId": "29576ad8-b57b-4e17-85ec-d19c6a8d7944", "activeVersionId": null}
+039 Merge by SQL 1: error: "Issue while executing query"
+040 q10 Merge SQL reaching out (SELECT * FROM CSV("http://stub:8041/leak-csv")): execution status: ["error", "Issue while executing query"]
+041 requests the stand-in API received from anything but our nodes: []

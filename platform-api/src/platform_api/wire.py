@@ -3,7 +3,14 @@ from datetime import datetime
 from typing import Annotated, Any, Literal, NoReturn, cast
 
 from fastapi import HTTPException
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    field_validator,
+)
 from pydantic_core import PydanticCustomError
 
 from platform_api.shared import UserId
@@ -93,6 +100,7 @@ type StepOutcome = Literal[
     "superseded",
     "refused",
     "replayed",
+    "test_passed",
 ]
 type RunState = Literal[
     "pending",
@@ -103,8 +111,11 @@ type RunState = Literal[
     "succeeded",
     "rejected",
     "failed",
+    "skipped",
+    "expired",
+    "lost",
 ]
-type RunOutcome = Literal["written", "nothing_to_write"]
+type RunOutcome = Literal["written", "nothing_to_write", "test_passed"]
 type FailureStage = Literal["pending", "working", "proposed", "acting"]
 type FailureReason = Literal[
     "AgentError",
@@ -115,9 +126,38 @@ type FailureReason = Literal[
     "SafetyDenied",
     "UnboundIntent",
     "OutOfOrderStep",
+    "StoppedByUpdate",
 ]
 type Trigger = Literal["person", "schedule"]
-type ApprovalStepStatus = Literal["waiting", "open", "approved", "declined"]
+type ApprovalStepStatus = Literal[
+    "waiting", "open", "approved", "declined", "expired", "cancelled", "closed"
+]
+
+
+DECLINE_REASON_MAX = 200
+
+type DeclineReason = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=DECLINE_REASON_MAX)
+]
+"""Why an Approver declined, such as "Wrong version". Optional, and only with a decline."""
+
+QUESTION_MAX = 1000
+
+type QuestionText = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=QUESTION_MAX)
+]
+"""A question on a request, or its answer. It is a message, and decides nothing."""
+
+
+type TeamsPost = Literal["waiting", "sent", "failed"]
+
+
+class ApproverRef(WireModel):
+    """Someone a request was sent to: who, and their name on the People list. Two people may share
+    a name, so only the id tells them apart."""
+
+    id: UserId
+    display: str
 
 
 class ApprovalStepView(WireModel):
@@ -126,6 +166,25 @@ class ApprovalStepView(WireModel):
     status: ApprovalStepStatus
     decided_by: UserId | None = None
     decided_at: datetime | None = None
+    reason: str | None = Field(
+        default=None,
+        description="Why the Approver declined this step, when they gave a reason. Null for "
+        "any other step.",
+    )
+    post: TeamsPost = Field(
+        default="waiting",
+        description="Where the request's post to Teams stands: waiting to be posted, sent, or "
+        "failed after every try. Only a sent request names who it went to.",
+    )
+    sent_to: list[ApproverRef] = Field(
+        default_factory=list[ApproverRef],
+        description="Who may decide this step once the request is in Teams: the Approvers on "
+        "the People list, minus the run's parties and whoever decided an earlier step. Empty "
+        "unless the post is sent.",
+    )
+    sent_at: datetime | None = Field(
+        default=None, description="When the request was posted to Teams. Null unless it was."
+    )
 
 
 REPO_PATTERN = r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9._-]{1,100}$"

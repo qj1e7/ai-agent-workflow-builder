@@ -1,10 +1,11 @@
+from datetime import datetime
 from typing import get_args
 
 import pytest
 
 from platform_api.monitoring.events import RunFailedData
 from platform_api.monitoring.troubleshooter import ADVICE, answers, explain, explain_failure
-from platform_api.shared import WRITE_STOP_ADVICE
+from platform_api.shared import TEAM_TIME_ZONE, WRITE_STOP_ADVICE
 from platform_api.wire import FailureReason, FailureStage
 
 
@@ -64,7 +65,7 @@ STOPS: list[tuple[FailureStage, FailureReason, bool, str, str]] = [
         True,
         "UpstreamUnavailable: Could not check LangGraph: GitHub returned 503 Service "
         "Unavailable three times",
-        "An agent could not finish its work.",
+        "GitHub didn't answer.",
     ),
     (
         "working",
@@ -215,6 +216,15 @@ STOPS: list[tuple[FailureStage, FailureReason, bool, str, str]] = [
         "The n8n workflow 'release-check' failed at its step 'Write action': boom",
         "A step in the workflow engine failed.",
     ),
+    (
+        "acting",
+        "StoppedByUpdate",
+        False,
+        "This run started before the update and may have partly finished. Check Jira before you "
+        "start it again.",
+        "The platform was updated while this run was on the old shared workflow, which the "
+        "update removed, so the run could not carry on.",
+    ),
 ]
 
 
@@ -234,9 +244,28 @@ def test_what_happened_says_only_what_the_stop_carries(
     assert answers(stopped(row)).what_happened == row[4]
 
 
-def test_what_happened_is_the_advice_explanation():
+def test_what_happened_is_the_advice_explanation_unless_github_didnt_answer():
     for row in STOPS:
-        assert answers(stopped(row)).what_happened == explain_failure(stopped(row)).explanation
+        if "GitHub returned 5" not in row[3]:
+            assert answers(stopped(row)).what_happened == explain_failure(stopped(row)).explanation
+
+
+@pytest.mark.parametrize(
+    "said",
+    [
+        "Could not check LangGraph: GitHub returned 503 Service Unavailable three times",
+        "None of the 3 watched software could be checked. GitHub could not be reached three times",
+    ],
+)
+def test_github_not_answering_is_one_sentence_with_the_time_it_stopped(said: str):
+    stop = failure("AgentError", True, message=f"UpstreamUnavailable: {said}")
+    at = datetime(2026, 11, 13, 8, 0, 31, tzinfo=TEAM_TIME_ZONE)
+    assert answers(stop, at).what_happened == "GitHub didn't answer at 8:00."
+
+
+def test_a_github_refusal_is_not_github_not_answering():
+    stop = failure("AgentError", False, message="UpstreamRejected: GitHub answered 404 Not Found")
+    assert "GitHub" not in answers(stop).what_happened
 
 
 def test_an_agent_stop_with_no_known_reason_gets_one_advice_naming_no_cause():
@@ -256,7 +285,7 @@ def test_no_model_connected_is_told_to_connect_one():
 def test_nothing_was_written_before_the_write_step():
     for row in STOPS:
         if row[0] != "acting":
-            assert answers(stopped(row)).what_affected == "Nothing was written."
+            assert answers(stopped(row)).what_affected == "Nothing. No ticket was written."
 
 
 def test_at_the_write_step_a_write_may_have_reached_jira_and_no_answer_says_start_a_new_run():
@@ -265,9 +294,14 @@ def test_at_the_write_step_a_write_may_have_reached_jira_and_no_answer_says_star
             continue
         got = answers(stopped(row))
         assert got.what_affected == "The approved write may or may not have reached Jira."
-        said = " ".join([got.what_happened, got.what_affected, got.can_fix]).lower()
+        said = " ".join([got.what_happened, got.what_affected]).lower()
         assert "nothing was written" not in said
         assert "new run" not in said
+        if got.retry.possible:
+            assert "nothing was written" not in got.safe_to_retry.lower()
+            assert "new run" not in got.safe_to_retry.lower()
+        else:
+            assert WRITE_STOP_ADVICE in got.safe_to_retry
 
 
 def test_the_two_refused_cases_cannot_be_retried_and_go_to_support():
@@ -275,7 +309,33 @@ def test_the_two_refused_cases_cannot_be_retried_and_go_to_support():
         got = answers(stop)
         assert got.retry.possible is False and got.retry.asks_again is False
         assert got.next == "report"
-        assert got.can_fix == "This kind of stop can't be retried."
+        assert got.safe_to_retry.startswith("No. This kind of stop can't be retried. ")
+        assert explain_failure(stop).suggestion in got.safe_to_retry
+
+
+def test_safe_to_retry_answers_the_question_with_yes_or_no_first():
+    for row in STOPS:
+        got = answers(stopped(row))
+        assert got.safe_to_retry.startswith("Yes. " if row[2] else "No. ")
+
+
+def test_a_stop_that_cannot_be_retried_says_what_to_do_instead():
+    for row in STOPS:
+        if not row[2]:
+            assert explain_failure(stopped(row)).suggestion in answers(stopped(row)).safe_to_retry
+
+
+def test_a_retry_says_to_wait_or_check_first_when_retrying_at_once_would_fail_again():
+    limited = failure(
+        "AgentError",
+        True,
+        message="UpstreamUnavailable: GitHub is limiting how often we can ask.",
+    )
+    assert "Wait a few minutes first." in answers(limited).safe_to_retry
+    down = answers(failure("DispatchFailed", True))
+    assert "Check that the workflow engine is running first" in down.safe_to_retry
+    plain = answers(failure("AgentError", True)).safe_to_retry
+    assert "first" not in plain
 
 
 def test_a_retry_is_possible_exactly_when_the_failure_is_retryable():
@@ -291,7 +351,7 @@ def test_a_retry_before_the_write_runs_the_work_again_and_waits_for_a_yes():
             continue
         got = answers(stopped(row))
         assert got.retry.asks_again is True
-        assert "still waits for a yes" in got.can_fix
+        assert got.safe_to_retry.endswith("Nothing was written, so a retry is safe.")
 
 
 @pytest.mark.parametrize(
@@ -301,7 +361,7 @@ def test_a_retry_at_the_write_step_carries_on_without_a_new_yes(reason: FailureR
     got = answers(failure(reason, True, "acting"))
     assert (got.retry.possible, got.retry.asks_again) == (True, False)
     assert got.next == "retry"
-    assert "nobody has to approve again" in got.can_fix
+    assert "nobody has to approve again" in got.safe_to_retry
 
 
 def test_jira_not_connected_is_told_to_connect_it_in_settings():

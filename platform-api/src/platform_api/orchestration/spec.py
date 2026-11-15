@@ -1,11 +1,13 @@
 from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import timedelta
 from typing import Annotated, Literal, Protocol
 
 from pydantic import Field
 
 from platform_api.orchestration.agents import CardSpec
 from platform_api.orchestration.approvals import ApprovalPolicy
+from platform_api.orchestration.working_hours import EXPIRES_AFTER
 from platform_api.orchestration.write_actions import Binding
 from platform_api.shared import Principal, RunId, SoftwareId, UseCaseId, UserId
 from platform_api.wire import SourceKind, Trigger
@@ -62,6 +64,16 @@ type Task = Annotated[WatchlistTask | CardsTask, Field(discriminator="kind")]
 
 
 @dataclass(frozen=True)
+class N8nTarget:
+    """The use case's own n8n workflow, which carries its runs (ENGINE-PLAN 2.3)."""
+
+    workflow_id: str
+    webhook_id: str | None
+    """Start from the Portal's webhookId in the version that runs, where Run now is sent. None
+    in a workflow without that block, which only its schedule or a test run starts."""
+
+
+@dataclass(frozen=True)
 class RunSpec:
     use_case_id: UseCaseId
     use_case_version: int
@@ -73,6 +85,17 @@ class RunSpec:
     bindings: Mapping[str, Binding]
     approval_policy: ApprovalPolicy
     trigger: Trigger = "person"
+    test: bool = False
+    """A person started it with Do a test run. A row stored without it reads False."""
+    stops_at_gate: bool = False
+    """A test run of a draft: it stops at the approval gate, asks nobody for a yes and writes
+    nothing (ADR 0044). A row stored without it reads False."""
+    expires_after: timedelta = EXPIRES_AFTER
+    """How long its request waits for a yes, in working hours, before it expires (ADR 0024)."""
+    n8n: N8nTarget | None = None
+    """Set when the use case runs as its own n8n workflow. None runs it through the shared run
+    workflow, as every use case did before (ENGINE-PLAN 2.6). A row stored without it reads
+    None."""
 
 
 @dataclass(frozen=True)

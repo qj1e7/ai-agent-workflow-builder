@@ -9,7 +9,14 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Literal
 
-from platform_api.orchestration.agents import Finding, ProposedIntentIn, TaskError
+from platform_api.orchestration.agents import (
+    Finding,
+    ProposedIntentIn,
+    SoftwareToCheck,
+    TaskError,
+    WatchlistInputs,
+    source_in,
+)
 from platform_api.orchestration.spec import WatchlistTask
 from platform_api.shared import ApprovalId, ProposalId, RunId, SoftwareId
 
@@ -291,6 +298,57 @@ def review(
             )
         tickets.append(TicketToPropose(index, software_id, finding.newest))
     return Reviewed(tuple(learned), tuple(tickets))
+
+
+def watchlist_inputs(task: WatchlistTask) -> WatchlistInputs:
+    """What the agents check: each listed software as the platform knows it."""
+    return WatchlistInputs(
+        tag_pattern=task.tag_pattern,
+        software=[
+            SoftwareToCheck(
+                id=s.id,
+                name=s.name,
+                source=source_in(s.source.kind, s.source.ref),
+                our_version=s.our_version,
+                open_ticket=s.open_ticket,
+                awaiting_approval=s.awaiting_approval,
+                from_first_check=s.from_first_check,
+            )
+            for s in task.software
+        ],
+    )
+
+
+def listed(task: WatchlistTask) -> tuple[dict[str, str], ...]:
+    """The Read the watchlist block's items: the software this check reads, in list order."""
+    return tuple(
+        {"kind": "software", "id": s.id, "name": s.name, "repo": s.source.ref}
+        for s in task.software
+    )
+
+
+def ticket_subject(ticket: TicketToPropose) -> str:
+    """What an upgrade ticket is about: one software at one version, which a use case raises
+    once across all its runs (ADR 0026)."""
+    return f"{ticket.software_id}@{ticket.version}"
+
+
+def tickets_in(task: WatchlistTask, subjects: Sequence[str | None]) -> tuple[TicketToPropose, ...]:
+    """The upgrade tickets in a proposal, by their place in it: each change about software on
+    the check's list. A software id never holds an @, so the version is all after the first."""
+    on_list = {software.id for software in task.software}
+    found: list[TicketToPropose] = []
+    for index, subject in enumerate(subjects):
+        software_id, at, version = (subject or "").partition("@")
+        if at and version and software_id in on_list:
+            found.append(TicketToPropose(index, SoftwareId(software_id), version))
+    return tuple(found)
+
+
+def unread_of(task: WatchlistTask, reviewed: Reviewed) -> tuple[str, ...]:
+    """The software the check couldn't read, by name, in the watchlist's order."""
+    missed = {entry.software_id for entry in reviewed.learned if isinstance(entry, CouldNotRead)}
+    return tuple(software.name for software in task.software if software.id in missed)
 
 
 NOTHING_READABLE_TYPES = frozenset({"UpstreamUnavailable", "UpstreamRejected"})

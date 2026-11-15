@@ -3,6 +3,7 @@
 import pytest
 
 from platform_api.builder.cards import (
+    STARTER_CARDS,
     VERSION_CHECKER,
     card_spec,
     check_card,
@@ -16,6 +17,7 @@ from platform_api.builder.models import (
     CardBlock,
     CardDefinition,
     CardInput,
+    CardView,
 )
 from platform_api.orchestration import TOOL_RULES
 
@@ -49,11 +51,10 @@ def test_a_good_card_has_no_problems_and_gets_the_rules_approval():
     assert checked.card.approvals == checked.approvals
 
 
-def test_the_starter_card_passes_its_own_check_unchanged():
+@pytest.mark.parametrize("starter", STARTER_CARDS, ids=lambda card: card.card_id)
+def test_each_starter_card_passes_its_own_check_unchanged(starter: CardView):
     definition_of_starter = CardDefinition.model_validate(
-        VERSION_CHECKER.model_dump(
-            include={"name", "purpose", "good_for", "inputs", "blocks", "approvals"}
-        )
+        starter.model_dump(include={"name", "purpose", "good_for", "inputs", "blocks", "approvals"})
     )
     checked = check_card(definition_of_starter)
     assert checked.problems == []

@@ -4,30 +4,43 @@ The runtime reads a typed request and the builder adds what only it knows: a wor
 already has under that name, software already on the list, and which workflow a name means. An
 intent chip never asks the model. When no model is connected, or it is slow or gives an answer
 that cannot be used, the person gets the plain offline answer with the starter workflows, never
-a guess. Nothing here writes.
+a guess. Nothing here writes, and the only change it makes is the one asked for alone: an
+Operator's pause or resume of the one workflow its words name.
 """
 
 import asyncio
 import logging
+import re
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Annotated, Final, Literal, Protocol, Self
 
-from pydantic import Field, StringConstraints, model_validator
+from pydantic import AwareDatetime, ConfigDict, Field, StringConstraints, model_validator
 
+from platform_api.builder import asks
 from platform_api.builder.models import (
     CardList,
+    ClockTime,
     StarterView,
     UnderstoodRowView,
     UseCaseList,
+    UseCaseState,
     UseCaseView,
+    Via,
     WatchlistView,
 )
+from platform_api.builder.n8n_draft import N8nNotReady, NotSafe
+from platform_api.builder.n8n_holds import HeldInN8n
 from platform_api.builder.planning import FALLBACK_WORDS, STARTERS, FallbackWhy
+from platform_api.builder.templates import SOFTWARE_WATCHLIST
 from platform_api.orchestration import (
+    NO_ACCESS,
+    OFF,
     AbilitiesAnswer,
     Answered,
     AnswerResult,
+    CanOpen,
     CantAnswer,
     CantRow,
     CapabilityList,
@@ -36,27 +49,37 @@ from platform_api.orchestration import (
     CheckWorkflowsAnswer,
     ConnectionCheck,
     ConnectionId,
+    Day,
+    EditAnswer,
+    EditCant,
     ExampleSpec,
     FactSection,
+    Grade,
     ModelProblem,
     NeedsMeAnswer,
     NoModel,
     PartAnswer,
     PartCantDo,
+    PartMark,
+    PartReason,
+    PauseAnswer,
     PlannerAnswer,
     PlannerFacts,
     PreviousTurn,
     QuestionAnswer,
     RefusedAnswer,
+    RequestPart,
+    ResumeAnswer,
     RowKind,
     RuntimeDown,
     SetupCardAnswer,
+    StaffAccess,
     UnderstoodRow,
     WatchlistAnswer,
     WhichSoftwareAnswer,
     WhyStoppedAnswer,
 )
-from platform_api.shared import Principal
+from platform_api.shared import Principal, Role, UserId
 from platform_api.wire import WireIn, WireModel
 
 log = logging.getLogger(__name__)
@@ -67,7 +90,10 @@ answer to a question about the person's data (ADR 0042). This is the platform's 
 the whole call, so a runtime that hangs still gives the person an answer."""
 
 type CapabilityState = Literal["ready", "needs_setup", "down", "planned", "unsupported"]
-type Intent = Literal["check_workflows", "needs_me", "abilities", "setup_ideas", "why_stopped"]
+type Intent = Literal[
+    "check_workflows", "needs_me", "abilities", "setup_ideas", "why_stopped", "decided"
+]
+type ReplyReason = PartReason | Literal["operators"]
 
 
 class PreviousIn(WireIn):
@@ -126,11 +152,68 @@ class CantRowView(WireModel):
     kind: RowKind
     text: str
     note: str = Field(description="Why the platform can't do it, in plain words.")
-    needs: Literal["new_tool", "new_system"] = Field(
+    needs: Literal["new_tool", "new_system"] | None = Field(
         description="new_tool: the platform already reaches the system, so the team decides on a "
-        "tool. new_system: it names a system or source the platform doesn't reach, or none."
+        "tool. new_system: it names a system or source the platform doesn't reach. Null for a "
+        "part the Planner didn't follow, which names nothing to build."
     )
     system: str | None
+    instead: str | None = Field(
+        description="What the person has instead, in one sentence, when the note is a registry "
+        "entry's one-line can't. Null otherwise."
+    )
+    unsupported: bool = Field(
+        description="True when the platform won't do it at all, so there is nothing to ask the "
+        "team for."
+    )
+
+
+class PartView(WireModel):
+    text: str = Field(
+        description="The request's own words: a whole clause, or, in a clause the Planner partly "
+        "read, only the words it didn't read."
+    )
+    mark: PartMark = Field(
+        description="will_do for a part the answer does, cant for one it doesn't, and question "
+        "for one it asks about."
+    )
+    reason: ReplyReason | None = Field(
+        description="Why, for a cant or a question: not_followed (no rule read it), cant_do (see "
+        "note), ask_on_its_own, one_day, one_time or one_frequency (a schedule with two, see "
+        "choices), own_time (a time on a watch request), skip_approval, with_a_yes, "
+        "needs_the_rest, how_many_days, only_schedule (a change to a workflow other than when it "
+        "runs), how_often (a schedule it can't hold, such as monthly), and operators (a change "
+        "asked by someone who isn't an Operator). Null for will_do."
+    )
+    note: str | None = Field(description="For cant_do, why, in the registry's words.")
+    choices: list[str] = Field(
+        description="For one_day, one_time and one_frequency, each the request named, in its own "
+        "words, for the person to choose one."
+    )
+
+
+def _part_view(part: RequestPart) -> PartView:
+    return PartView(
+        text=part.text,
+        mark=part.mark,
+        reason=part.reason,
+        note=part.note,
+        choices=list(part.choices),
+    )
+
+
+class Reply(WireModel):
+    """An answer on Home. The contract lists each field as always sent, defaults included, so
+    the Portal never reads one as optional."""
+
+    model_config = ConfigDict(extra="forbid", json_schema_serialization_defaults_required=True)
+
+    parts: list[PartView] = Field(
+        default_factory=list[PartView],
+        description="Every clause of what the person typed, in order, with what happened to it "
+        "(spec 6.5). None is dropped. Empty for a chip they tapped, for an answer inside another "
+        "answer, and when no model read the request.",
+    )
 
 
 class SimilarWorkflow(WireModel):
@@ -143,16 +226,17 @@ class ListedSoftware(WireModel):
     name: str
 
 
-class SetupCardReply(WireModel):
+class SetupCardReply(Reply):
     answer: Literal["setup_card"] = "setup_card"
     name: str
     rows: list[UnderstoodRowView]
     similar: SimilarWorkflow | None = Field(
-        description="A workflow of the team's with the same name, when there is one."
+        description="A workflow of the team's with the same name that watches a GitHub "
+        "repository, so it is the one asked for. Null when there is none."
     )
 
 
-class PartReply(WireModel):
+class PartReply(Reply):
     answer: Literal["part"] = "part"
     name: str
     rows: list[UnderstoodRowView]
@@ -160,7 +244,7 @@ class PartReply(WireModel):
     similar: SimilarWorkflow | None
 
 
-class WatchlistReply(WireModel):
+class WatchlistReply(Reply):
     answer: Literal["watchlist"] = "watchlist"
     word: str
     software: str | None
@@ -173,49 +257,54 @@ class WatchlistReply(WireModel):
     )
 
 
-class CantReply(WireModel):
+class CantReply(Reply):
     answer: Literal["cant"] = "cant"
     cant: list[CantRowView]
     alternative: Annotated[SetupCardReply | WatchlistReply, Field(discriminator="answer")] | None
 
 
-class WhichSoftwareReply(WireModel):
+class WhichSoftwareReply(Reply):
     answer: Literal["which_software"] = "which_software"
     word: str
 
 
-class RefusedReply(WireModel):
+class RefusedReply(Reply):
     answer: Literal["refused"] = "refused"
     reason: Literal["skip_approval"]
     said: str
     rest: str
 
 
-class AbilitiesReply(WireModel):
+class AbilitiesReply(Reply):
     answer: Literal["abilities"] = "abilities"
+    how_to_start: bool = Field(
+        default=False,
+        description='True when the request asks how to start using the app, as "help" or '
+        '"list the steps". The Portal then leads with the steps, not the list of what it can do.',
+    )
 
 
-class IdeasReply(WireModel):
+class IdeasReply(Reply):
     answer: Literal["ideas"] = "ideas"
 
 
-class CheckWorkflowsReply(WireModel):
+class CheckWorkflowsReply(Reply):
     answer: Literal["check_workflows"] = "check_workflows"
     use_case_id: str | None = Field(
         description="The workflow the request names, when one name matches. Null for all."
     )
 
 
-class WhyStoppedReply(WireModel):
+class WhyStoppedReply(Reply):
     answer: Literal["why_stopped"] = "why_stopped"
     use_case_id: str | None
 
 
-class NeedsMeReply(WireModel):
+class NeedsMeReply(Reply):
     answer: Literal["needs_me"] = "needs_me"
 
 
-class QuestionReply(WireModel):
+class QuestionReply(Reply):
     answer: Literal["question"] = "question"
     text: str = Field(
         description="The Planner's answer to a question about the person's own data, in its own "
@@ -232,7 +321,153 @@ class QuestionReply(WireModel):
     )
 
 
-class OfflineReply(WireModel):
+class EditBefore(WireModel):
+    day: Day
+    at: ClockTime
+
+
+class EditAfter(WireModel):
+    day: Day | None = Field(
+        description="Null when the person picks the day: weekly was asked for, and the saved "
+        "schedule isn't one day of the week."
+    )
+    at: ClockTime | None = Field(
+        description="Null when the person picks the time: the request named an hour with no am "
+        "or pm (hour), or a time the schedule can't read."
+    )
+
+
+class EditChoice(WireModel):
+    """One workflow the request could mean, with what the change would make of its schedule, so
+    picking it needs no second reading."""
+
+    use_case_id: str
+    name: str
+    watchlist: bool = Field(description="True when it is the Software watchlist.")
+    before: EditBefore | None = Field(description="When it runs now. Null when it has no schedule.")
+    after: EditAfter | None = Field(
+        description="When it would run once saved. Null when nothing can be saved: a change the "
+        "chat can't make, or a clash."
+    )
+
+
+class EditReply(Reply):
+    """A change to a workflow the person has, proposed. Nothing changes until they save it: an
+    Operator saves a workflow's schedule with PUT /api/v1/use-cases/{use_case_id}/schedule, with
+    via set to chat and the version read, which publishes a version that POST
+    .../versions/{version}/undo undoes. The Software watchlist's is saved with PUT
+    /api/v1/watchlist/schedule, with the version read, and keeps no versions."""
+
+    answer: Literal["edit"] = "edit"
+    use_case_id: str | None = Field(
+        description="The workflow to change. Null when the request names none of the person's "
+        "workflows, or names several."
+    )
+    name: str | None = Field(description="Its name. Null with use_case_id.")
+    watchlist: bool = Field(description="True when it is the Software watchlist.")
+    missing: str | None = Field(
+        description="The request's words for a workflow the person doesn't have, as \"morning "
+        'check". Null otherwise.'
+    )
+    software: str | None = Field(
+        description='The software those words name, as React in "the React check". With missing '
+        "set, it isn't on the Software watchlist."
+    )
+    choices: list[EditChoice] = Field(
+        description="The workflows the request could mean, for the person to pick one: every one "
+        'its words match when they match several, or every workflow for "it" and no name. '
+        "Empty when one matched, and when the words name none."
+    )
+    before: EditBefore | None = Field(
+        description="When it runs now. Null when no workflow matched, or it has no schedule."
+    )
+    after: EditAfter | None = Field(
+        description="When it would run once saved: the saved schedule with the change. Null "
+        "when nothing can be saved: no workflow matched, a change the chat can't make, or a "
+        "clash."
+    )
+    hour: int | None = Field(
+        description="An hour the request named with no am or pm, as 9: the person picks 9:00 or "
+        "21:00."
+    )
+    cant: EditCant | None = Field(
+        description="only_schedule: a change other than when it runs, which the chat can't make "
+        "yet. how_often: a frequency the schedule can't hold, such as monthly."
+    )
+    holds_save: bool = Field(
+        description="True when the request named two days, two times or two frequencies. "
+        "Nothing can be saved until the person asks again."
+    )
+
+
+class SwitchChoice(WireModel):
+    use_case_id: str
+    name: str
+    state: UseCaseState
+    watchlist: bool = Field(
+        description="True for the Software watchlist, whose pause stops the checks of every "
+        "software on it."
+    )
+
+
+class _SwitchReply(Reply):
+    use_case_id: str | None = Field(
+        description="The workflow paused or turned back on. Null when the words named none of the "
+        "person's workflows, or several, or a watched software's check, so nothing changed."
+    )
+    name: str | None = Field(description="Its name. Null with use_case_id.")
+    already: bool = Field(description="True when it was already that way, so nothing changed.")
+    missing: str | None = Field(
+        description="The request's words for a workflow the person doesn't have. Null otherwise."
+    )
+    choices: list[SwitchChoice] = Field(
+        description="The workflows the request could mean, for the person to pick one, which the "
+        "Portal then pauses or resumes through the workflow's own route: every one its words "
+        'match when they match several, the Software watchlist for "the React check", or every '
+        'workflow for "it". Empty when one matched or the words name none.'
+    )
+
+
+class PauseReply(_SwitchReply):
+    """A pause asked for alone. For an Operator the platform pauses the one workflow the words
+    name, as POST /api/v1/use-cases/{use_case_id}/pause does: it starts no runs until it is
+    resumed, and a run that has started carries on."""
+
+    answer: Literal["pause"] = "pause"
+
+
+class ResumeReply(_SwitchReply):
+    """A resume asked for alone. For an Operator the platform turns the one workflow the words
+    name back on, as POST /api/v1/use-cases/{use_case_id}/resume does."""
+
+    answer: Literal["resume"] = "resume"
+
+
+class OperatorsReply(Reply):
+    """A change asked by someone who isn't an Operator. Only Operators set up and change
+    workflows, so nothing is offered that changes anything (ADR 0043)."""
+
+    answer: Literal["operators"] = "operators"
+
+
+class DecidedReply(Reply):
+    """The person's own decisions, which the Portal reads from GET /api/v1/decisions."""
+
+    answer: Literal["decided"] = "decided"
+    only: Literal["approve", "decline"] | None = Field(
+        description='approve or decline when the question asks for only those, as "Did I '
+        'decline anything?". Null for all of them.'
+    )
+
+
+class DecideReply(Reply):
+    """An approve or decline asked in the chat. Nobody decides there: the Portal offers the
+    requests waiting for the person's yes, to open and decide on."""
+
+    answer: Literal["decide"] = "decide"
+
+
+class OfflineReply(Reply):
     answer: Literal["offline"] = "offline"
     why: FallbackWhy = Field(
         description="no_model: none is connected. too_slow: it took too long. trouble: it "
@@ -240,6 +475,60 @@ class OfflineReply(WireModel):
     )
     message: str
     starters: list[StarterView]
+
+
+class ChangedInN8nReply(Reply):
+    """A version published in n8n, as the versions sweep found and graded it (ENGINE-PLAN 2.5).
+    Home lists the newest for Operators, and the chat shows each as the Changed in n8n card, whose
+    Undo rolls back to the version before with POST
+    /api/v1/use-cases/{use_case_id}/versions/{version}/rollback and whose Add the yes back is POST
+    /api/v1/use-cases/{use_case_id}/add-the-yes-back, each with in_use set to version."""
+
+    answer: Literal["changed_in_n8n"] = "changed_in_n8n"
+    use_case_id: str
+    name: str
+    version: int = Field(description="The version published in n8n, or whose settings changed.")
+    made: Literal["published_in_n8n", "settings_changed_in_n8n"] = Field(
+        description="published_in_n8n: someone published it in n8n's editor. "
+        "settings_changed_in_n8n: someone saved its settings there and published nothing, and n8n "
+        "runs the live version with them at once. n8n does not say who saved them, so by is null."
+    )
+    by: UserId | None = Field(
+        description="Who published it in n8n. Null when the People list can't match them, so "
+        "its runs stop at their first block until an Operator matches the person, and for "
+        "settings saved in n8n, which n8n does not name anyone for."
+    )
+    by_name: str | None = Field(description="Their name. Null with by.")
+    at: AwareDatetime = Field(description="When the platform found it.")
+    grade: Grade
+    changes: list[str] = Field(
+        description="What changed from the version before, in plain words, one per line."
+    )
+    findings: list[str] = Field(
+        description="Why it is not safe, in the safety checker's words. Empty when it is safe."
+    )
+    in_use: int = Field(
+        description="The version in use now. Another number than version means someone has "
+        "changed it since, so the card offers nothing more."
+    )
+
+
+class N8nReply(Reply):
+    """Asked to open n8n (ENGINE-PLAN 2.9). Only an Operator with n8n access, while staff access
+    to n8n is on and the allow list proven, can: said tells everyone else why not."""
+
+    answer: Literal["n8n"] = "n8n"
+    said: str
+    can_open: bool
+    use_case_id: str | None = Field(
+        description="The workflow the request names, when exactly one name matches and you can "
+        "open it. Open it in n8n with POST /api/v1/use-cases/{use_case_id}/open-in-n8n."
+    )
+
+
+N8N_WORD = re.compile(r"(?<!\w)n8n(?!\w)", re.IGNORECASE)
+HERE_IN_N8N = "Here it is in n8n."
+WHICH_IN_N8N = "Say which workflow to open in n8n."
 
 
 WatchlistReply.model_rebuild()
@@ -257,7 +546,15 @@ type PlannerReply = Annotated[
     | WhyStoppedReply
     | NeedsMeReply
     | QuestionReply
-    | OfflineReply,
+    | EditReply
+    | PauseReply
+    | ResumeReply
+    | OperatorsReply
+    | DecidedReply
+    | DecideReply
+    | OfflineReply
+    | ChangedInN8nReply
+    | N8nReply,
     Field(discriminator="answer"),
 ]
 
@@ -287,6 +584,13 @@ class CapabilityView(WireModel):
         "unsupported: the team has decided against it."
     )
     cant: str | None = Field(description="What the platform can't do, when it is not ready.")
+    short: str | None = Field(
+        description="Its words on the chat's capabilities card: a line when it is ready, a name "
+        "in the card's Not yet note when it isn't. Null for one the card leaves out."
+    )
+    instead: str | None = Field(
+        description="For one that isn't ready, what the person has instead, in one sentence."
+    )
     why: str | None = Field(
         description="Why it is not ready: the registry's words for a planned or unsupported "
         "entry, the connection's problem for needs_setup and down. Null when ready."
@@ -316,14 +620,18 @@ class CapabilitiesView(WireModel):
 
 class Answering(Protocol):
     async def answer(
-        self, task: str, facts: PlannerFacts | None = None, previous: PreviousTurn | None = None
+        self,
+        task: str,
+        facts: PlannerFacts | None = None,
+        previous: PreviousTurn | None = None,
+        changes_workflows: bool = True,
     ) -> AnswerResult | NoModel | RuntimeDown: ...
 
     async def check_part(self, kind: RowKind, text: str) -> CheckPartResult | RuntimeDown: ...
 
 
 class FactsReading(Protocol):
-    async def read(self, viewer: Principal) -> PlannerFacts: ...
+    async def read(self, viewer: Principal, request: str) -> PlannerFacts: ...
 
 
 class Registry(Protocol):
@@ -341,9 +649,21 @@ class Workflows(Protocol):
 
     async def list_cards(self) -> CardList: ...
 
+    async def pause_use_case(
+        self, use_case_id: str, principal: Principal, via: Via
+    ) -> UseCaseView | N8nNotReady | NotSafe | HeldInN8n | None: ...
+
+    async def resume_use_case(
+        self, use_case_id: str, principal: Principal, via: Via
+    ) -> UseCaseView | N8nNotReady | NotSafe | HeldInN8n | None: ...
+
 
 class Listed(Protocol):
     async def view(self) -> WatchlistView | None: ...
+
+
+class N8nAccessPort(Protocol):
+    async def access(self, person: UserId) -> StaffAccess: ...
 
 
 class NoSuchWorkflow:
@@ -360,16 +680,158 @@ def offline(why: FallbackWhy) -> OfflineReply:
 
 def _cant_row(row: CantRow) -> CantRowView:
     return CantRowView(
-        kind=row.kind, text=row.text, note=row.note, needs=row.needs, system=row.system
+        kind=row.kind,
+        text=row.text,
+        note=row.note,
+        needs=row.needs,
+        system=row.system,
+        instead=row.instead,
+        unsupported=row.unsupported,
     )
+
+
+def _held_in(cases: Sequence[UseCaseView], wanted: str) -> list[UseCaseView]:
+    """Each workflow whose whole name the normalized words hold."""
+    return [u for u in cases if re.search(rf"(?<!\w){re.escape(_norm(u.name))}(?!\w)", wanted)]
 
 
 def _norm(name: str) -> str:
     return " ".join(name.casefold().split())
 
 
+LITTLE_WORDS: Final = frozenset(
+    {"the", "a", "an", "my", "our", "this", "that", "it", "its", "one", "workflow", "check"}
+    | {"checks", "workflows"}
+)
+"""Words that name no workflow on their own, as in "the weekly one" or "the React check"."""
+WATCHLIST_WORDS: Final = frozenset({"software", "watchlist", "version", "versions"})
+ONE_DAY: Final[frozenset[Day]] = frozenset(
+    {"monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"}
+)
+
+
+def _own_words(text: str, keep_check: bool = False) -> frozenset[str]:
+    """The words that name a workflow, little words aside, each as one of a kind, so "tickets"
+    is "ticket". With `keep_check`, "check" stays, so a name that holds it wins first."""
+    little = LITTLE_WORDS - {"check"} if keep_check else LITTLE_WORDS
+    return frozenset(_one(w) for w in re.findall(r"[^\W_]+", text.casefold()) if w not in little)
+
+
+def _one(word: str) -> str:
+    """The word as one of a kind: "summaries" is "summary", "statuses" is "status" and
+    "tickets" is "ticket", while "status", "news" and "this" stay as they are."""
+    if len(word) > 4 and word.endswith("ies"):
+        return word[:-3] + "y"
+    if len(word) > 5 and word.endswith(("sses", "shes", "ches", "xes", "uses")):
+        return word[:-2]
+    if len(word) > 4 and word.endswith("s") and not word.endswith(("ss", "us", "is")):
+        return word[:-1]
+    return word
+
+
+def _after(before: EditBefore | None, edit: EditAnswer) -> EditAfter | None:
+    """The saved schedule with the change made. A part the change leaves out stays as saved. A
+    weekly change keeps the saved day when it is one day of the week, and an hour with no am or
+    pm, or a time it can't read, leaves the time to pick. None when there is nothing to save."""
+    change = edit.schedule
+    if change is None:
+        return None
+    day = change.day or (before.day if before is not None else None)
+    if change.weekly:
+        day = before.day if before is not None and before.day in ONE_DAY else None
+    asked = change.hour is not None or change.time_unclear
+    at = change.at or (before.at if before is not None and not asked else None)
+    return EditAfter(day=day, at=at)
+
+
+def _choice(use_case: UseCaseView, edit: EditAnswer) -> EditChoice:
+    saved = use_case.schedule
+    before = None if saved is None else EditBefore(day=saved.day, at=saved.at)
+    return EditChoice(
+        use_case_id=use_case.use_case_id,
+        name=use_case.name,
+        watchlist=use_case.template == SOFTWARE_WATCHLIST.key,
+        before=before,
+        after=_after(before, edit),
+    )
+
+
 def _rows(rows: Sequence[UnderstoodRow]) -> list[UnderstoodRowView]:
     return [UnderstoodRowView(kind=r.kind, text=r.text, state=r.state, note=r.note) for r in rows]
+
+
+QUESTIONS: Final = frozenset(
+    {"needs_me", "check_workflows", "why_stopped", "question", "abilities", "decided"}
+)
+"""The answers that change nothing, for someone who isn't an Operator (plan 3.2)."""
+
+
+def _cross(text: str, reason: ReplyReason) -> PartView:
+    return PartView(text=text, mark="cant", reason=reason, note=None, choices=[])
+
+
+def _done(text: str) -> PartView:
+    return PartView(text=text, mark="will_do", reason=None, note=None, choices=[])
+
+
+CROSS_FOR: Final[dict[asks.Ask, ReplyReason]] = {
+    "change": "operators",
+    "decide": "operators",
+    "question": "ask_on_its_own",
+    "decided": "ask_on_its_own",
+    "other": "not_followed",
+}
+"""Why a clause an answer doesn't answer has a cross: a change and an approve or decline are an
+Operator's or the request's, a question is asked on its own, and anything else wasn't followed."""
+
+
+def _parts(clauses: list[asks.Clause], answered: asks.Ask | None) -> list[PartView]:
+    return [
+        _done(c.text) if c.ask == answered else _cross(c.text, CROSS_FOR[c.ask]) for c in clauses
+    ]
+
+
+def _remark(part: PartView) -> PartView:
+    """A clause that asks for a change is never ticked, whatever the reading made of it, and
+    only a question is: anything else ticked gets its cross."""
+    ask = asks.ask_of(part.text)
+    if ask == "change" or (part.mark == "will_do" and ask not in ("question", "decided")):
+        return _cross(part.text, CROSS_FOR[ask])
+    return part
+
+
+def past_decisions(text: str) -> DecidedReply | None:
+    """A question about the person's own decisions, answered from platform state with no model:
+    there is nothing in it for the runtime to refuse. None when the request holds an approve or
+    decline, which the runtime reads first, or no question about decisions at all."""
+    clauses = asks.clauses_of(text)
+    kinds = {c.ask for c in clauses}
+    if "decided" not in kinds or "decide" in kinds:
+        return None
+    return DecidedReply(only=asks.only_of(clauses), parts=_parts(clauses, "decided"))
+
+
+def questions_only(reply: PlannerReply, text: str | None) -> PlannerReply:
+    """The answer for someone who can't change workflows (ADR 0043, spec 5.3). Their own
+    decisions and an approve or decline are read from their words here, clause by clause; any
+    other question keeps the runtime's answer. A change gets "operators", alone or beside an
+    approve or decline. Beside a question, it is a cross that says the same. The runtime's
+    refusal stands, whatever the words, and so does the offline answer. Questions about past
+    decisions are answered before the runtime is asked (`past_decisions`)."""
+    if reply.answer in ("offline", "refused"):
+        return reply
+    decided = past_decisions(text or "")
+    if decided is not None:
+        return decided
+    clauses = asks.clauses_of(text or "")
+    kinds = {c.ask for c in clauses}
+    if "decide" in kinds:
+        if "change" in kinds:
+            return OperatorsReply(parts=_parts(clauses, None))
+        return DecideReply(parts=_parts(clauses, "decide"))
+    if reply.answer not in QUESTIONS or ("change" in kinds and "question" not in kinds):
+        return OperatorsReply(parts=_parts(clauses, None))
+    return reply.model_copy(update={"parts": [_remark(p) for p in reply.parts]})
 
 
 class PlannerFront:
@@ -381,8 +843,10 @@ class PlannerFront:
         registry: Registry,
         connections: ConnectionStates,
         facts: FactsReading,
+        staff: N8nAccessPort | None = None,
     ) -> None:
         self._facts = facts
+        self._staff = staff
         self._answers = answers
         self._workflows = workflows
         self._watchlist = watchlist
@@ -390,10 +854,20 @@ class PlannerFront:
         self._connections = connections
 
     async def answer(self, body: AnswerIn, viewer: Principal) -> PlannerReply | NoSuchWorkflow:
+        if body.text is not None and N8N_WORD.search(body.text):
+            return await self._n8n(body.text, viewer)
+        operator = Role.OPERATOR in viewer.roles
+        decided = None if operator or body.text is None else past_decisions(body.text)
+        if decided is not None:
+            return decided
         if body.text is not None:
-            return await self._typed(body.text, viewer, body.previous)
-        assert body.intent is not None
-        return await self._intent(body.intent, body.use_case_id)
+            reply = await self._typed(body.text, viewer, body.previous)
+        else:
+            assert body.intent is not None
+            reply = await self._intent(body.intent, body.use_case_id)
+        if operator or isinstance(reply, NoSuchWorkflow):
+            return reply
+        return questions_only(reply, body.text)
 
     async def _intent(
         self, intent: Intent, use_case_id: str | None
@@ -405,6 +879,8 @@ class PlannerFront:
                 return IdeasReply()
             case "needs_me":
                 return NeedsMeReply()
+            case "decided":
+                return DecidedReply(only=None)
             case "check_workflows":
                 return CheckWorkflowsReply(use_case_id=None)
             case "why_stopped":
@@ -421,7 +897,12 @@ class PlannerFront:
         earlier = None if previous is None else PreviousTurn(**previous.model_dump())
         try:
             async with asyncio.timeout(ANSWER_LIMIT_SECONDS):
-                result = await self._answers.answer(text, await self._facts.read(viewer), earlier)
+                result = await self._answers.answer(
+                    text,
+                    await self._facts.read(viewer, text),
+                    earlier,
+                    changes_workflows=Role.OPERATOR in viewer.roles,
+                )
         except TimeoutError:
             log.warning("The Planner's answer took longer than %g seconds", ANSWER_LIMIT_SECONDS)
             return offline("too_slow")
@@ -434,10 +915,11 @@ class PlannerFront:
             case ModelProblem(reason=reason):
                 log.warning("The Planner's answer fell back to the starters: %s", reason)
                 return offline("too_slow" if reason == "too_slow" else "trouble")
-            case Answered(answer=answer):
-                return await self._finish(answer)
+            case Answered(answer=answer, parts=parts):
+                reply = await self._finish(answer, viewer)
+                return reply.model_copy(update={"parts": [_part_view(p) for p in parts]})
 
-    async def _finish(self, answer: PlannerAnswer) -> PlannerReply:
+    async def _finish(self, answer: PlannerAnswer, viewer: Principal) -> PlannerReply:
         match answer:
             case SetupCardAnswer(name=name, rows=rows):
                 return SetupCardReply(
@@ -453,10 +935,10 @@ class PlannerFront:
             case CantAnswer(cant=cant, alternative=alternative):
                 return CantReply(
                     cant=[_cant_row(c) for c in cant],
-                    alternative=await self._alternative(alternative),
+                    alternative=await self._alternative(alternative, viewer),
                 )
             case WatchlistAnswer() as watch:
-                return await self._watch(watch)
+                return await self._watch(watch, viewer)
             case WhichSoftwareAnswer(word=word):
                 return WhichSoftwareReply(word=word)
             case RefusedAnswer(reason=reason, said=said, rest=rest):
@@ -467,13 +949,30 @@ class PlannerFront:
                 return WhyStoppedReply(use_case_id=await self._which(words))
             case NeedsMeAnswer():
                 return NeedsMeReply()
-            case AbilitiesAnswer():
-                return AbilitiesReply()
+            case AbilitiesAnswer(how_to_start=how_to_start):
+                return AbilitiesReply(how_to_start=how_to_start)
             case QuestionAnswer(text=text, looked_at=looked_at, about_software=software):
                 return QuestionReply(text=text, looked_at=looked_at, about_software=software)
+            case EditAnswer() as edit:
+                return await self._edit(edit)
+            case PauseAnswer() | ResumeAnswer():
+                return await self._switch(answer, viewer)
+
+    async def _n8n(self, text: str, viewer: Principal) -> N8nReply:
+        """Answered by the platform, never the model: who may open n8n is a rule, not a guess."""
+        if self._staff is None:
+            said = OFF if viewer.n8n_access else NO_ACCESS
+            return N8nReply(said=said, can_open=False, use_case_id=None)
+        access = await self._staff.access(viewer.user_id)
+        if not isinstance(access, CanOpen):
+            return N8nReply(said=access.words, can_open=False, use_case_id=None)
+        named = _held_in(await self._use_cases(), _norm(text))
+        one = named[0].use_case_id if len(named) == 1 else None
+        said = WHICH_IN_N8N if one is None else HERE_IN_N8N
+        return N8nReply(said=said, can_open=True, use_case_id=one)
 
     async def _alternative(
-        self, alternative: SetupCardAnswer | WatchlistAnswer | None
+        self, alternative: SetupCardAnswer | WatchlistAnswer | None, viewer: Principal
     ) -> SetupCardReply | WatchlistReply | None:
         match alternative:
             case None:
@@ -483,12 +982,12 @@ class PlannerFront:
                     name=name, rows=_rows(rows), similar=await self._similar(name)
                 )
             case WatchlistAnswer() as watch:
-                return await self._watch(watch)
+                return await self._watch(watch, viewer)
 
-    async def _watch(self, watch: WatchlistAnswer) -> WatchlistReply:
+    async def _watch(self, watch: WatchlistAnswer, viewer: Principal) -> WatchlistReply:
         also = None
         if watch.also is not None:
-            rest = await self._finish(watch.also)
+            rest = await self._finish(watch.also, viewer)
             if isinstance(rest, SetupCardReply | PartReply | CantReply):
                 also = rest
         return WatchlistReply(
@@ -518,28 +1017,136 @@ class PlannerFront:
         return (await self._workflows.list_use_cases()).use_cases
 
     async def _similar(self, name: str) -> SimilarWorkflow | None:
+        """The workflow she already has that is the one she asks for: the same name, and it
+        watches a GitHub repository, as a release check does. A same-named workflow that watches
+        none may do something else, so her request is set up as she asked."""
         wanted = _norm(name)
+        named = [
+            u
+            for u in await self._use_cases()
+            if u.template != SOFTWARE_WATCHLIST.key and _norm(u.name) == wanted
+        ]
+        if not named:
+            return None
+        repos = {
+            card.card_id: [i.name for i in card.inputs if i.kind == "github_repo"]
+            for card in (await self._workflows.list_cards()).cards
+        }
         return next(
             (
                 SimilarWorkflow(use_case_id=u.use_case_id, name=u.name)
-                for u in await self._use_cases()
-                if u.template != "software_watchlist" and _norm(u.name) == wanted
+                for u in named
+                if any(a.values.get(i) for a in u.agents for i in repos.get(a.card_id, []))
             ),
             None,
         )
 
     async def _which(self, words: str | None) -> str | None:
-        """The workflow a name means: the one whose name is the words, else the only one whose
-        name holds them or is held by them. Null when none or several match."""
-        if words is None or not words.strip():
+        """The workflow a name means, when exactly one matches. Null when none or several do."""
+        if words is None:
             return None
-        wanted = _norm(words)
+        matched = await self._matching(words, None)
+        return matched[0].use_case_id if len(matched) == 1 else None
+
+    async def _matching(self, words: str, software: str | None) -> list[UseCaseView]:
+        """The workflows the words name, by whole words: the one called that, else the Software
+        watchlist for the check of a software on it, as "the React check", else each whose whole
+        name the words hold, else each that has every one of the words, little words and "check"
+        aside. The watchlist's own words name it too."""
         cases = await self._use_cases()
+        wanted = _norm(words)
         exact = [u for u in cases if _norm(u.name) == wanted]
-        if len(exact) == 1:
-            return exact[0].use_case_id
-        near = [u for u in cases if wanted in _norm(u.name) or _norm(u.name) in wanted]
-        return near[0].use_case_id if len(near) == 1 else None
+        held = _held_in(cases, wanted)
+        own = _own_words(words)
+        watchlist = [u for u in cases if u.template == SOFTWARE_WATCHLIST.key]
+        watched = await self._listed(software) if software is not None else None
+        if not exact and watched is not None and own <= _own_words(software or ""):
+            return watchlist
+        every = _own_words(words, keep_check=True)
+        found = (
+            exact
+            or held
+            or [u for u in cases if every and every <= _own_words(u.name, keep_check=True)]
+            or [u for u in cases if own and own <= _own_words(u.name)]
+        )
+        if found:
+            return found
+        if (own and own <= WATCHLIST_WORDS) or watched is not None:
+            return watchlist
+        return []
+
+    async def _named(self, words: str | None, software: str | None) -> _Named:
+        """The workflows the request's words name, by whole words."""
+        named = words if words is not None and _own_words(words, keep_check=True) else None
+        matched = [] if named is None else await self._matching(named, software)
+        missing = named if named is not None and not matched and _own_words(named) else None
+        # "it", or "the check" that fits none, names no workflow: she picks from every one.
+        several = matched if matched else [] if missing is not None else await self._use_cases()
+        one = matched[0] if len(matched) == 1 else None
+        return _Named(one=one, missing=missing, several=[] if one is not None else several)
+
+    async def _edit(self, edit: EditAnswer) -> EditReply:
+        """The change proposed, for the workflow its words name. The after is the saved schedule
+        with the change made. Nothing is saved here."""
+        named = await self._named(edit.workflow_words, edit.software)
+        one = None if named.one is None else _choice(named.one, edit)
+        return EditReply(
+            use_case_id=None if one is None else one.use_case_id,
+            name=None if one is None else one.name,
+            watchlist=one is not None and one.watchlist,
+            missing=named.missing,
+            software=edit.software,
+            choices=[_choice(u, edit) for u in named.several],
+            before=None if one is None else one.before,
+            after=None if one is None else one.after,
+            hour=None if edit.schedule is None else edit.schedule.hour,
+            cant=edit.cant,
+            holds_save=edit.holds_save,
+        )
+
+    async def _switch(
+        self, answer: PauseAnswer | ResumeAnswer, viewer: Principal
+    ) -> PauseReply | ResumeReply:
+        """Pauses or resumes the one workflow the words name, for an Operator. The words are
+        matched to workflow names first. A watched software's check is also the Software
+        watchlist's, which checks every software on it, so when it fits it is offered beside the
+        workflow, never paused for her. Several matches, or "it", change nothing either: she
+        picks one."""
+        pausing = isinstance(answer, PauseAnswer)
+        reply = PauseReply if pausing else ResumeReply
+        named = await self._named(answer.workflow_words, None)
+        listed = await self._watchlist_of(answer.software)
+        one = named.one
+        if one is not None and listed is None and _operates(viewer):
+            move = self._workflows.pause_use_case if pausing else self._workflows.resume_use_case
+            moved = await move(one.use_case_id, viewer, "chat")
+            # When n8n could not take the change, nothing changed, and she is offered the
+            # workflow again to try once more.
+            if isinstance(moved, UseCaseView):
+                return reply(
+                    use_case_id=moved.use_case_id,
+                    name=moved.name,
+                    already=one.state == ("paused" if pausing else "on"),
+                    missing=None,
+                    choices=[],
+                )
+        several = [one] if one is not None else named.several
+        offered = [u for u in several if listed is None or u.use_case_id != listed.use_case_id]
+        offered += [] if listed is None else [listed]
+        return reply(
+            use_case_id=None,
+            name=None,
+            already=False,
+            missing=named.missing if listed is None else None,
+            choices=[_switch_choice(u) for u in offered],
+        )
+
+    async def _watchlist_of(self, software: str | None) -> UseCaseView | None:
+        """The Software watchlist, when the software is on it."""
+        if software is None or await self._listed(software) is None:
+            return None
+        cases = await self._use_cases()
+        return next((u for u in cases if u.template == SOFTWARE_WATCHLIST.key), None)
 
     async def check_part(self, body: CheckPartIn) -> PartChecked | RegistryUnavailable:
         checked = await self._answers.check_part(body.kind, body.text)
@@ -573,6 +1180,29 @@ class PlannerFront:
         return uses
 
 
+@dataclass(frozen=True)
+class _Named:
+    """What a request's words name: the one workflow they match, the words when they name a
+    workflow the person doesn't have, or the workflows to pick from when not exactly one matched."""
+
+    one: UseCaseView | None
+    missing: str | None
+    several: list[UseCaseView]
+
+
+def _operates(viewer: Principal) -> bool:
+    return Role.OPERATOR in viewer.roles
+
+
+def _switch_choice(use_case: UseCaseView) -> SwitchChoice:
+    return SwitchChoice(
+        use_case_id=use_case.use_case_id,
+        name=use_case.name,
+        state=use_case.state,
+        watchlist=use_case.template == SOFTWARE_WATCHLIST.key,
+    )
+
+
 def _example(example: ExampleSpec) -> ExampleView:
     return ExampleView(text=example.text, kind=example.kind, needs=list(example.needs))
 
@@ -600,6 +1230,8 @@ def _capability(
         system=spec.system,
         state=state,
         cant=spec.cant,
+        short=spec.short,
+        instead=spec.instead,
         why=why,
         fix=fix,
         connection=spec.connection,

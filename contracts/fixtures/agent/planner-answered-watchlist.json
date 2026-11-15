@@ -5,5 +5,14 @@
     "word": "release",
     "software": "LangGraph",
     "also": null
-  }
+  },
+  "parts": [
+    {
+      "text": "Tell me when LangGraph has a new release",
+      "mark": "will_do",
+      "reason": null,
+      "note": null,
+      "choices": []
+    }
+  ]
 }

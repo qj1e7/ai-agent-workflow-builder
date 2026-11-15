@@ -17,11 +17,6 @@ export function failureText(message: string): string {
   return withCurrentNames(/[.!?…]$/.test(text) ? text : `${text}.`)
 }
 
-/** The troubleshooter's advice, in the words the page uses elsewhere. */
-export function suggestionFor(suggestion: string): string {
-  return withCurrentNames(suggestion)
-}
-
 /** The most of a name the note's label carries. The label is not the person's own words, so a very long name must not push them out. */
 const NAME_ROOM = 80
 

@@ -1,0 +1,7 @@
+001 variant: custom: "[\"CUSTOM.startFromPortal\", \"CUSTOM.callOurApi\", \"CUSTOM.askForYes\", \"CUSTOM.reportFailure\", \"n8n-nodes-base.scheduleTrigger\", \"n8n-nodes-base.manualTrigger\", \"n8n-nodes-base.errorTrigger\", \"n8n-nodes-base.if\", \"n8n-nodes-base.merge\", \"n8n-nodes-base.noOp\", \"n8n-nodes-base.stickyNote\"]"
+002 node types n8n loaded: count, ours: [11, ["CUSTOM.askForYes", "CUSTOM.callOurApi", "CUSTOM.reportFailure", "CUSTOM.startFromPortal"]]
+003 every type n8n loaded: ["CUSTOM.askForYes", "CUSTOM.callOurApi", "CUSTOM.reportFailure", "CUSTOM.startFromPortal", "n8n-nodes-base.errorTrigger", "n8n-nodes-base.if", "n8n-nodes-base.manualTrigger", "n8n-nodes-base.merge", "n8n-nodes-base.noOp", "n8n-nodes-base.scheduleTrigger", "n8n-nodes-base.stickyNote"]
+004 create a workflow with an HTTP Request node: [200, "4iQ5plB20W8quMbR"]
+005 publish it: [400, {"message": "Unrecognized node type: n8n-nodes-base.httpRequest"}]
+006 run it by hand: [400, {"code": 0, "message": "Unrecognized node type: n8n-nodes-base.httpRequest"}]
+007 requests that reached the stand-in API from the HTTP Request node: []

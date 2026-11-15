@@ -16,7 +16,7 @@ variable "location" {
 }
 
 variable "image_tag" {
-  description = "Tag of our three images in the registry. The deploy workflow uses the commit SHA."
+  description = "Tag of our four images in the registry. The deploy workflow uses the commit SHA."
   type        = string
 }
 
@@ -196,6 +196,80 @@ variable "teams_webhook_url" {
   }
 }
 
+variable "teams_tell_webhook_url" {
+  description = "Optional Power Automate flow that posts each Tell's notice to the team's channel and emails the team's list (TEAMS_TELL_WEBHOOK_URL, ENGINE-PLAN D1). Its address carries its own signature, so it is a secret. Empty keeps the practice copy."
+  type        = string
+  default     = ""
+  sensitive   = true
+
+  validation {
+    condition     = var.teams_tell_webhook_url == "" || can(regex("^https://[^\\s]+$", var.teams_tell_webhook_url))
+    error_message = "teams_tell_webhook_url must be empty, or the https address the Tell flow gave, with no spaces."
+  }
+}
+
+variable "tell_email_to" {
+  description = "The team's fixed email list that every Tell emails, separated by commas (TELL_EMAIL_TO, ENGINE-PLAN D19). A plain setting, shown to anyone signed in. Required with teams_tell_webhook_url. Empty keeps nobody on it."
+  type        = string
+  default     = ""
+
+  validation {
+    condition = alltrue([
+      for email in split(",", var.tell_email_to) :
+      can(regex("^[^@,;[:space:]]+@[^,;[:space:]]*[.][^,;[:space:]]*$", trimspace(email))) if trimspace(email) != ""
+    ])
+    error_message = "Each address in tell_email_to must be an email, separated by commas."
+  }
+
+  validation {
+    condition     = var.teams_tell_webhook_url == "" || trimspace(var.tell_email_to) != ""
+    error_message = "teams_tell_webhook_url needs tell_email_to, the team's email list."
+  }
+}
+
+# Confluence (ENGINE-PLAN E12, D2). Leave confluence_base_url empty to keep Confluence not
+# connected. The rules match platform-api's startup check, so plan refuses what would stop it.
+
+variable "confluence_base_url" {
+  description = "The wiki's address (CONFLUENCE_BASE_URL), such as https://your-site.atlassian.net/wiki. Empty keeps Confluence not connected. The token goes there with every call, so it must be https."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.confluence_base_url == "" || can(regex("^https://[A-Za-z0-9.-]+(:[0-9]+)?(/[A-Za-z0-9._~:/%-]*)?$", var.confluence_base_url))
+    error_message = "confluence_base_url must be empty, or an https URL: a host of letters, digits, . and -, an optional port, and a path of letters, digits and . _ ~ : / % -, with no query or fragment."
+  }
+}
+
+variable "confluence_api_token" {
+  description = "The Confluence token (CONFLUENCE_API_TOKEN), kept in Key Vault as confluence-api-token: an API token for Cloud with confluence_email, or a personal access token for Data Center. Empty signs in with jira_api_token when Jira is on the same site."
+  type        = string
+  default     = ""
+  sensitive   = true
+
+  validation {
+    condition     = var.confluence_base_url == "" || var.confluence_api_token != "" || var.jira_api_token != ""
+    error_message = "confluence_api_token must be set when confluence_base_url is, unless Jira on the same site lends its token."
+  }
+}
+
+variable "confluence_email" {
+  description = "The Confluence account's email (CONFLUENCE_EMAIL). It names the account and is not secret. Cloud signs in with it and the token. Empty sends the token alone, as Data Center takes it."
+  type        = string
+  default     = ""
+}
+
+variable "confluence_pages" {
+  description = "The only Confluence pages the platform reads (CONFLUENCE_PAGES), as id=title, separated by a semicolon, such as 123456=Software inventory."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.confluence_base_url == "" || can(regex("^ *[0-9]{1,20} *=[^;=]+(; *[0-9]{1,20} *=[^;=]+)* *;? *$", var.confluence_pages))
+    error_message = "confluence_pages must list the pages as id=title, separated by a semicolon, such as 123456=Software inventory, when confluence_base_url is set."
+  }
+}
+
 variable "github_api_base" {
   description = "GitHub API that the release checker reads."
   type        = string
@@ -284,6 +358,17 @@ variable "watchlist_jira_project" {
   validation {
     condition     = can(regex("^[A-Z][A-Z0-9_]{1,254}$", var.watchlist_jira_project))
     error_message = "watchlist_jira_project must be a Jira project key: a capital letter, then 1 or more capital letters, digits or underscores."
+  }
+}
+
+variable "team_time_zone" {
+  description = "The zone the team works in, an IANA name such as Asia/Singapore (TEAM_TIME_ZONE). The Portal's times, a new schedule, the agents' today and the Jira days are in it, and n8n runs on it (GENERIC_TIMEZONE)."
+  type        = string
+  default     = "Asia/Singapore"
+
+  validation {
+    condition     = can(regex("^[A-Za-z][A-Za-z0-9_+-]*(/[A-Za-z0-9_+-]+){0,2}$", var.team_time_zone)) && length(var.team_time_zone) <= 64
+    error_message = "team_time_zone must be a time zone name, such as Asia/Singapore or Europe/London."
   }
 }
 

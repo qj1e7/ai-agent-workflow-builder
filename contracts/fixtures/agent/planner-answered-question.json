@@ -9,5 +9,14 @@
     "about_software": [
       "LangGraph"
     ]
-  }
+  },
+  "parts": [
+    {
+      "text": "how many software are on our watchlist",
+      "mark": "will_do",
+      "reason": null,
+      "note": null,
+      "choices": []
+    }
+  ]
 }

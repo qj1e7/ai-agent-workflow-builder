@@ -1,4 +1,4 @@
-import type { CapabilityView, ConnectionId, ConnectionOut } from '../../api/types'
+import type { CapabilityView, ConnectionId, ConnectionItem, ConnectionOut, TellSetupOut } from '../../api/types'
 import { runWhen } from '../workflows/times'
 
 export type Health = 'ok' | 'warn' | 'off'
@@ -26,7 +26,7 @@ const when = (iso: string, now: Date) => runWhen(iso, now).replace(/^Today/, 'to
 const dot = (words: string) => (/[.!?]$/.test(words) ? words : `${words}.`)
 
 /** Words for a connection from the state the platform found. The text is the platform's own plain words, not a guess. */
-export function connectionWords(connection: ConnectionOut, now: Date): ConnectionWords {
+export function connectionWords(connection: ConnectionItem, now: Date): ConnectionWords {
   const checked = connection.checked_at ? `Checked ${when(connection.checked_at, now)}` : null
   const fix = connection.fix ? ` ${dot(connection.fix)}` : ''
   const problem = dot(connection.problem ?? `${connection.name} needs attention.`)
@@ -65,7 +65,25 @@ export function usedBy(id: ConnectionId, capabilities: readonly CapabilityView[]
 
 export const CHECK_DOWN_WORDS = 'Could not check.'
 
-/** A connection that wants someone, shown as a dot on the tab. A key that runs out soon counts. */
+/**
+ * Where every Tell goes, as a connection fact. The platform's settings fix it, so it is only read here, and the flow's address
+ * is never shown. The registry's Tell entry stays planned until the Planner can lay out a Tell block (E14), so these words claim nothing yet.
+ */
+export function tellWords(tell: TellSetupOut): { readonly label: string; readonly text: string; readonly emails: string } {
+  return {
+    label: tell.flow_set ? 'Set' : 'Not set',
+    text: tell.flow_set
+      ? 'Workflows can post and email with it once Tell blocks arrive.'
+      : 'Not set up yet. Workflows can post and email with it once it is set and Tell blocks arrive.',
+    emails: tell.email_to.length > 0 ? tell.email_to.join(', ') : 'Nobody yet',
+  }
+}
+
+export const TELL_CHANGED_BY_WORDS = 'Whoever set up the platform, in its settings. The chat can’t change them.'
+
+const QUIET: readonly ConnectionOut['state'][] = ['working', 'not_checked', 'not_set_up']
+
+/** A connection that wants someone, shown as a dot on the tab. A key that runs out soon counts. One never set up, such as Confluence on a team that does not use it, wants nobody: its card says so. */
 export function connectionNeedsYou(connections: readonly ConnectionOut[] | undefined): boolean {
-  return cardsOf(connections ?? []).some((c) => (c.state !== 'working' && c.state !== 'not_checked') || c.expires_at !== null)
+  return cardsOf(connections ?? []).some((c) => !QUIET.includes(c.state) || c.expires_at !== null)
 }

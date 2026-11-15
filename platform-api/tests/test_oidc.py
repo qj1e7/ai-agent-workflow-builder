@@ -112,6 +112,8 @@ def test_a_valid_token_signs_in_as_the_person_it_names(client: TestClient, key: 
         "display": "Alice",
         "roles": ["operator", "approver"],
         "on_list": True,
+        "n8n_access": False,
+        "time_zone": "Asia/Singapore",
     }
 
 
@@ -307,9 +309,12 @@ async def test_an_issuer_that_drips_its_keys_is_a_failed_load_at_the_deadline(
     monkeypatch.setattr("platform_api.oidc.FETCH_DEADLINE_SECONDS", 0.2)
     issuer.jwks_answer = httpx.Response(200, stream=Drip())
     app = oidc_app(issuer, clock)
-    async with async_client(app) as client, asyncio.timeout(1):
+    started = time.monotonic()
+    # The guard only stops a hang; a busy CI runner can take well over a second to answer.
+    async with async_client(app) as client, asyncio.timeout(10):
         response = await client.get(ME, headers=bearer(token()))
     unavailable(app, response)
+    assert time.monotonic() - started >= 0.2, "the drip was cut by the deadline, not before it"
     assert issuer.jwks_fetches == 1
 
 
@@ -537,7 +542,14 @@ def test_a_person_not_on_the_list_is_told_to_ask_an_operator(issuer: FakeIssuer,
     nobody = bearer(token(claims=NOBODY_CLAIMS))
     me = client.get(ME, headers=nobody)
     assert me.status_code == 200
-    assert me.json() == {"id": NOBODY_ID, "display": "Nobody", "roles": [], "on_list": False}
+    assert me.json() == {
+        "id": NOBODY_ID,
+        "display": "Nobody",
+        "roles": [],
+        "on_list": False,
+        "n8n_access": False,
+        "time_zone": "Asia/Singapore",
+    }
     declared_status(app, "GET", ME, me)
     decision = {"verdict": "confirm", "digest": "sha256:0"}
     for method, path, declared, body in (

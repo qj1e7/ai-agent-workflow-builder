@@ -10,7 +10,12 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import Any, Protocol
+from zoneinfo import ZoneInfo
 
+import httpx
+
+from platform_api.builder import layout
+from platform_api.builder.in_n8n import discard, write_in_n8n
 from platform_api.builder.lifecycle import (
     RESTORE_WINDOW,
     Lifecycle,
@@ -28,13 +33,16 @@ from platform_api.builder.models import (
     NoProjectChecked,
     NoProjectKnown,
     ProjectGuess,
-    ScheduleIn,
+    ScheduleSaveIn,
     ScheduleView,
     SourceView,
     VersionSourceView,
     WatchedSoftwareView,
     WatchlistView,
 )
+from platform_api.builder.n8n_draft import Checked as Laid
+from platform_api.builder.n8n_draft import DraftRefused, N8nNotReady, check_draft
+from platform_api.builder.n8n_holds import HeldInN8n, Holding
 from platform_api.builder.templates import (
     SOFTWARE_WATCHLIST,
     WATCHLIST_INSTRUCTION,
@@ -42,9 +50,11 @@ from platform_api.builder.templates import (
     WATCHLIST_NAME,
     WATCHLIST_PROJECT,
 )
-from platform_api.db import Connection, Database, UnitOfWork, json
+from platform_api.builder.versions import ChangedSince
+from platform_api.db import Connection, Database, UnitOfWork, hold_workflow, json
 from platform_api.orchestration import (
     ATTENTION_ORDER,
+    ChangedInN8n,
     Checked,
     CouldNotCheck,
     FindSoftwareResult,
@@ -54,6 +64,9 @@ from platform_api.orchestration import (
     Given,
     LastCheck,
     LatestCheck,
+    N8nDrafts,
+    N8nError,
+    OpenRuns,
     RuntimeDown,
     SavedSchedule,
     Schedule,
@@ -66,8 +79,18 @@ from platform_api.orchestration import (
     WatchlistFacts,
     WatchlistStanding,
     WatchlistTask,
+    Written,
+    next_run,
 )
-from platform_api.shared import Principal, SoftwareId, UseCaseId, UserId, new_id
+from platform_api.shared import (
+    TEAM_TIME_ZONE,
+    Principal,
+    RunId,
+    SoftwareId,
+    UseCaseId,
+    UserId,
+    new_id,
+)
 
 log = logging.getLogger(__name__)
 
@@ -106,6 +129,17 @@ class ListedSoftware:
 
 
 @dataclass(frozen=True)
+class InN8n:
+    """The watchlist's own n8n workflow, and the version of it the records hold."""
+
+    workflow_id: str
+    version_id: str | None
+    document: Mapping[str, Any] | None
+    draft: str | None = None
+    """n8n's draft as the platform last saw it, which the version compare checks."""
+
+
+@dataclass(frozen=True)
 class WatchlistRecord:
     use_case_id: UseCaseId
     version: int
@@ -113,6 +147,41 @@ class WatchlistRecord:
     ticket_project: str
     software: tuple[ListedSoftware, ...]
     lifecycle: Lifecycle
+    n8n: InN8n | None = None
+    """None while the watchlist still runs on the shared run workflow (ENGINE-PLAN 2.6)."""
+    left_in_n8n: str | None = None
+    """A workflow a move made and named before it was cut off, while the watchlist still runs on
+    the shared run workflow. The next move removes it."""
+
+
+@dataclass(frozen=True)
+class OnN8n:
+    """What the watchlist needs to run as its own n8n workflow."""
+
+    drafts: N8nDrafts
+    runs: OpenRuns
+    software_page: str
+    """The Software page's address, which the workflow's note links to."""
+    holding: Holding | None = None
+
+
+@dataclass(frozen=True)
+class MovedToN8n:
+    workflow_id: str
+    version: int
+
+
+@dataclass(frozen=True)
+class AlreadyOnN8n:
+    pass
+
+
+@dataclass(frozen=True)
+class WaitsForRun:
+    """A run of the watchlist has not ended, so the watchlist stays where it is until it ends,
+    and nothing that run waits for is lost."""
+
+    run_id: RunId
 
 
 @dataclass(frozen=True)
@@ -246,9 +315,25 @@ class NoWatchlist:
     pass
 
 
-def schedule_view(saved: SavedSchedule | None, now: datetime, on: bool) -> ScheduleView | None:
+type ScheduleRefused = N8nNotReady | DraftRefused | ChangedInN8n | ChangedSince | HeldInN8n
+type Move = MovedToN8n | AlreadyOnN8n | WaitsForRun | NoWatchlist | N8nNotReady | DraftRefused
+
+
+def schedule_view(
+    saved: SavedSchedule | None,
+    now: datetime,
+    on: bool,
+    team_zone: str,
+    n8n: InN8n | None = None,
+) -> ScheduleView | None:
+    """The next check is when its own n8n workflow's Schedule Trigger fires, to the second n8n
+    adds to it (ENGINE-PLAN 2.4). Still on the shared run workflow, it starts none until it
+    moves, and a held schedule starts none until an Operator takes it over."""
     if saved is None:
         return None
+    next_at = None
+    if n8n is not None and n8n.document is not None:
+        next_at = next_run(n8n.document, n8n.workflow_id, now, team_zone)
     return ScheduleView(
         day=saved.schedule.day,
         at=saved.schedule.at,
@@ -256,8 +341,9 @@ def schedule_view(saved: SavedSchedule | None, now: datetime, on: bool) -> Sched
         owner=saved.owner,
         owner_name=saved.owner_name,
         saved_at=saved.saved_at,
-        next_at=saved.next_run(now) if on else None,
+        next_at=next_at if on and saved.held is None else None,
         held=saved.held,
+        held_words=saved.held_words,
     )
 
 
@@ -266,6 +352,7 @@ def view(
     standing: WatchlistStanding,
     schedule: ScheduleView | None = None,
     changes: Mapping[SoftwareId, Sequence[AddressChangeView]] | None = None,
+    moving: bool = False,
 ) -> WatchlistView:
     return WatchlistView(
         use_case_id=record.use_case_id,
@@ -282,6 +369,7 @@ def view(
         ),
         last_check=last_check_view(standing.last_check),
         schedule=schedule,
+        moving_to_n8n=moving,
     )
 
 
@@ -311,7 +399,8 @@ def given_versions(record: WatchlistRecord) -> Mapping[SoftwareId, Given | None]
 
 _CURRENT = """
     SELECT u.use_case_id, u.owner, u.paused_at, u.paused_by, u.deleted_at, u.deleted_by,
-           v.version, v.params
+           u.draft, u.engine, u.n8n_workflow_id, u.n8n_draft_id, v.version, v.params,
+           v.n8n_version_id, v.document
     FROM builder.use_cases u
     JOIN builder.use_case_versions v
       ON v.use_case_id = u.use_case_id AND v.version = u.current_version
@@ -470,6 +559,8 @@ async def _current(conn: Connection, lock: bool) -> WatchlistRecord | None:
     if row is None:
         return None
     use_case_id = UseCaseId(row["use_case_id"])
+    own = row["engine"] == "own"
+    workflow_id: str | None = row["n8n_workflow_id"]
     return WatchlistRecord(
         use_case_id,
         int(row["version"]),
@@ -477,6 +568,49 @@ async def _current(conn: Connection, lock: bool) -> WatchlistRecord | None:
         str(row["params"]["ticket_project"]),
         await _software_of(conn, use_case_id, int(row["version"])),
         lifecycle_of(row),
+        InN8n(workflow_id, row["n8n_version_id"], row["document"], row["n8n_draft_id"])
+        if own and workflow_id
+        else None,
+        None if own else workflow_id,
+    )
+
+
+async def _name_in_n8n(uow: UnitOfWork, use_case_id: UseCaseId, workflow_id: str | None) -> None:
+    await uow.conn.execute(
+        "UPDATE builder.use_cases SET n8n_workflow_id = %s WHERE use_case_id = %s",
+        (workflow_id, use_case_id),
+    )
+
+
+async def _keep_in_n8n(
+    uow: UnitOfWork,
+    use_case_id: UseCaseId,
+    version: int,
+    held: Written,
+    grade: str,
+    published_by: UserId | None,
+) -> None:
+    """The version keeps what n8n holds of it, and who put it live from the Portal, whose
+    scheduled checks are their work (D5). A version not put live has no publisher yet. The layout
+    is the template's, which nobody edits in n8n, so it has no earlier authors. n8n's draft is
+    this layout now."""
+    await uow.conn.execute(
+        "UPDATE builder.use_cases SET n8n_draft_id = %s WHERE use_case_id = %s",
+        (held.version_id, use_case_id),
+    )
+    await uow.conn.execute(
+        "UPDATE builder.use_case_versions SET n8n_version_id = %s, document = %s, grade = %s,"
+        " published_by = %s, published_in = %s, also = '[]'::jsonb, findings = NULL"
+        " WHERE use_case_id = %s AND version = %s",
+        (
+            held.version_id,
+            json(held.document),
+            grade,
+            published_by,
+            None if published_by is None else "portal",
+            use_case_id,
+            version,
+        ),
     )
 
 
@@ -511,12 +645,17 @@ class Watchlist:
         schedules: ScheduleBook,
         ticket_project: str = WATCHLIST_PROJECT,
         finder: ProjectFinder | None = None,
+        n8n: OnN8n | None = None,
+        time_zone: ZoneInfo = TEAM_TIME_ZONE,
     ) -> None:
         self._db = db
+        self._zone = time_zone.key
+        """The team time zone: the schedule's, and the one its own n8n workflow runs on."""
         self._facts = facts
         self._schedules = schedules
         self._project = ticket_project
         self._finder = finder or NoFinder()
+        self._n8n = n8n
 
     async def find(self, name: str) -> FindOut:
         """The GitHub projects a name could mean, each checked just now, and which the watchlist
@@ -614,27 +753,175 @@ class Watchlist:
             else:
                 record = await self._next_version(uow, record, (*record.software, listed))
         if created:
-            await self._schedules.save_default(record.use_case_id, principal)
+            await self._schedules.save_default(record.use_case_id, principal, self._zone)
+            if self._n8n is not None:
+                await self.move_to_n8n()
+                record = await self._record() or record
         return await self._view_of(record)
 
     async def save_schedule(
-        self, principal: Principal, body: ScheduleIn
-    ) -> WatchlistView | NoWatchlist:
+        self, principal: Principal, body: ScheduleSaveIn
+    ) -> WatchlistView | NoWatchlist | ScheduleRefused:
         """Saving makes the caller the schedule owner, and the owner cannot approve its checks."""
-        async with self._db.connection("builder") as conn:
-            record = await _current(conn, lock=False)
-        if record is None:
-            return NoWatchlist()
-        await self._schedules.save(record.use_case_id, Schedule(body.day, body.at), principal)
-        return await self._view_of(record)
+        schedule = Schedule(body.day, body.at, self._zone)
+        return await self._schedule(principal, schedule, body.expected_version)
 
-    async def turn_off_schedule(self) -> WatchlistView | NoWatchlist:
+    async def turn_off_schedule(
+        self, principal: Principal, expected: int
+    ) -> WatchlistView | NoWatchlist | ScheduleRefused:
+        return await self._schedule(principal, None, expected)
+
+    async def _schedule(
+        self, principal: Principal, schedule: Schedule | None, expected: int
+    ) -> WatchlistView | NoWatchlist | ScheduleRefused:
+        """On its own n8n workflow, the Schedule Trigger changes first, under the version compare
+        (ENGINE-PLAN 2.5). Nothing is saved here when n8n does not take it, or when the change
+        was made from a version that is no longer in use."""
+        async with self._db.transaction("builder") as uow:
+            record = await self._hold(uow)
+            if record is None:
+                return NoWatchlist()
+            if record.version != expected:
+                return ChangedSince()
+            if record.n8n is not None:
+                refused = await self._schedule_in_n8n(uow, record, record.n8n, principal, schedule)
+                if refused is not None:
+                    return refused
+        if schedule is None:
+            await self._schedules.delete(record.use_case_id)
+        else:
+            await self._schedules.save(record.use_case_id, schedule, principal)
+        return await self._view_of(await self._record() or record)
+
+    async def _schedule_in_n8n(
+        self,
+        uow: UnitOfWork,
+        record: WatchlistRecord,
+        n8n: InN8n,
+        principal: Principal,
+        schedule: Schedule | None,
+    ) -> ScheduleRefused | None:
+        if self._n8n is None:
+            return N8nNotReady("This platform is not connected to n8n.")
+        if self._n8n.holding is not None:
+            held = await self._n8n.holding.refused_while_held(
+                uow.conn, record.use_case_id, principal.user_id
+            )
+            if held is not None:
+                return held
+        laid = await self._laid_out(self._n8n, record.use_case_id, schedule)
+        if not isinstance(laid, Laid):
+            return laid
+        if laid.document == n8n.document:
+            return None
+        in_use = n8n.version_id
+        if in_use is None:
+            return N8nNotReady("This version is not saved in n8n, so it cannot be changed there.")
+        live = is_on(record.lifecycle)
+        written = await write_in_n8n(
+            self._n8n.drafts, n8n.workflow_id, n8n.draft or in_use, in_use, laid.document, live
+        )
+        if not isinstance(written, Written):
+            return written
+        moved = await self._next_version(uow, record, record.software)
+        publisher = principal.user_id if live else None
+        await _keep_in_n8n(
+            uow, record.use_case_id, moved.version, written, laid.graded.grade, publisher
+        )
+        return None
+
+    async def move_to_n8n(self) -> Move:
+        """Puts the watchlist on its own n8n workflow, with its schedule in the Schedule Trigger,
+        in a new version (ENGINE-PLAN 2.6). Asking again changes nothing. A watchlist with a run
+        that has not ended stays as it is, so nothing that run waits for is lost; it moves the next
+        time it is asked.
+
+        The records name the new workflow before it can run, so a move cut off at any point leaves
+        nothing in n8n that the next move does not find and remove."""
+        if self._n8n is None:
+            return N8nNotReady("This platform is not connected to n8n.")
+        on = self._n8n
+        async with self._db.transaction("builder") as uow:
+            record = await self._hold(uow)
+            if record is None:
+                return NoWatchlist()
+            if record.n8n is not None:
+                return AlreadyOnN8n()
+            if (open_run := await on.runs.open_run(record.use_case_id)) is not None:
+                log.info("the watchlist moves to n8n once run %s ends", open_run)
+                return WaitsForRun(open_run)
+            if record.left_in_n8n is not None:
+                await discard(on.drafts, record.left_in_n8n)
+            saved = await self._schedules.get(record.use_case_id)
+            schedule = None if saved is None else saved.schedule
+            laid = await self._laid_out(on, record.use_case_id, schedule)
+            if not isinstance(laid, Laid):
+                return laid
+            try:
+                draft = await on.drafts.save_draft(laid.document)
+            except (N8nError, httpx.HTTPError) as error:
+                log.warning("n8n did not take the watchlist's workflow: %s", error)
+                return N8nNotReady("n8n did not take the watchlist's workflow. It runs as before.")
+            await _name_in_n8n(uow, record.use_case_id, draft.workflow_id)
+        async with self._db.transaction("builder") as uow:
+            record = await self._hold(uow)
+            if record is None or record.left_in_n8n != draft.workflow_id:
+                return AlreadyOnN8n()
+            live = is_on(record.lifecycle)
+            try:
+                if live:
+                    await on.drafts.go_live(draft.workflow_id, draft.version_id)
+            except (N8nError, httpx.HTTPError) as error:
+                log.warning("n8n did not put the watchlist's workflow live: %s", error)
+                await discard(on.drafts, draft.workflow_id)
+                await _name_in_n8n(uow, record.use_case_id, None)
+                return N8nNotReady(
+                    "n8n did not turn the watchlist's workflow on. It runs as before."
+                )
+            moved = await self._next_version(uow, record, record.software)
+            publisher = (record.owner if saved is None else saved.owner) if live else None
+            held = Written(draft.version_id, draft.document)
+            await _keep_in_n8n(
+                uow, record.use_case_id, moved.version, held, laid.graded.grade, publisher
+            )
+            await uow.conn.execute(
+                "UPDATE builder.use_cases SET engine = 'own' WHERE use_case_id = %s",
+                (record.use_case_id,),
+            )
+        log.info(
+            "the watchlist runs as n8n workflow %s from version %d",
+            draft.workflow_id,
+            moved.version,
+        )
+        return MovedToN8n(draft.workflow_id, moved.version)
+
+    async def _hold(self, uow: UnitOfWork) -> WatchlistRecord | None:
+        """The watchlist, locked in the order a list change and a pause take their locks, so a
+        move or a schedule change never crosses either."""
+        await uow.conn.execute("SELECT pg_advisory_xact_lock(hashtext('builder.watchlist'))")
+        found = await _current(uow.conn, lock=False)
+        if found is None:
+            return None
+        await hold_workflow(uow.conn, found.use_case_id, alone=True)
+        return await _current(uow.conn, lock=True)
+
+    async def _laid_out(
+        self, on: OnN8n, use_case_id: UseCaseId, schedule: Schedule | None
+    ) -> Laid | DraftRefused | N8nNotReady:
+        error_workflow = await on.drafts.error_workflow_id()
+        if error_workflow is None:
+            return N8nNotReady("n8n is not ready yet: its error workflow is not loaded.")
+        plan = layout.LayoutPlan(
+            use_case_id, WATCHLIST_NAME, on.software_page, schedule, (), error_workflow, self._zone
+        )
+        checked = check_draft(layout.watchlist(plan), use_case_id, error_workflow, self._zone)
+        if isinstance(checked, DraftRefused):
+            log.error("the safety checker refused the watchlist's layout: %s", checked)
+        return checked
+
+    async def _record(self) -> WatchlistRecord | None:
         async with self._db.connection("builder") as conn:
-            record = await _current(conn, lock=False)
-        if record is None:
-            return NoWatchlist()
-        await self._schedules.delete(record.use_case_id)
-        return await self._view_of(record)
+            return await _current(conn, lock=False)
 
     async def remove(self, software_id: SoftwareId) -> WatchlistView | NoSuchSoftware:
         async with self._db.transaction("builder") as uow:
@@ -762,7 +1049,7 @@ class Watchlist:
             row = await (
                 await conn.execute(
                     "SELECT u.owner, u.paused_at, u.paused_by, u.deleted_at, u.deleted_by, "
-                    "v.params FROM builder.use_cases u "
+                    "u.draft, v.params FROM builder.use_cases u "
                     "JOIN builder.use_case_versions v ON v.use_case_id = u.use_case_id "
                     "WHERE u.use_case_id = %s AND v.version = %s",
                     (use_case_id, version),
@@ -789,7 +1076,20 @@ class Watchlist:
         on = is_on(record.lifecycle)
         async with self._db.connection("builder") as conn:
             changes = await _address_changes(conn, record.use_case_id)
-        return view(record, standing, schedule_view(saved, self._db.clock(), on), changes)
+        now = self._db.clock()
+        return view(
+            record,
+            standing,
+            schedule_view(saved, now, on, self._zone, record.n8n),
+            changes,
+            moving=await self._moving(record),
+        )
+
+    async def _moving(self, record: WatchlistRecord) -> bool:
+        """Still on the shared run workflow only because a run has not ended."""
+        if self._n8n is None or record.n8n is not None:
+            return False
+        return await self._n8n.runs.open_run(record.use_case_id) is not None
 
     async def _create(
         self, uow: UnitOfWork, principal: Principal, first: ListedSoftware
@@ -828,9 +1128,11 @@ class Watchlist:
         project = record.ticket_project if ticket_project is None else ticket_project
         await uow.conn.execute(
             "INSERT INTO builder.use_case_versions (use_case_id, version, template, name, "
-            "instruction, params, created_at) "
+            "instruction, params, created_at, n8n_version_id, document, grade, published_by, "
+            "published_in, also, findings) "
             "SELECT use_case_id, %s, template, name, instruction, "
-            "jsonb_set(params, '{ticket_project}', to_jsonb(%s::text)), %s "
+            "jsonb_set(params, '{ticket_project}', to_jsonb(%s::text)), %s, n8n_version_id, "
+            "document, grade, published_by, published_in, also, findings "
             "FROM builder.use_case_versions WHERE use_case_id = %s AND version = %s",
             (version, project, uow.now, record.use_case_id, record.version),
         )
@@ -839,6 +1141,4 @@ class Watchlist:
             (version, record.use_case_id),
         )
         await _write_list(uow, record.use_case_id, version, software)
-        return WatchlistRecord(
-            record.use_case_id, version, record.owner, project, software, record.lifecycle
-        )
+        return replace(record, version=version, ticket_project=project, software=software)

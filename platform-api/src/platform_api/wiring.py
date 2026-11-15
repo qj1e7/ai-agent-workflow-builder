@@ -8,13 +8,24 @@ from fastapi import FastAPI
 
 from platform_api.auth import DEV_PEOPLE, DevAuth, OidcAuth
 from platform_api.builder import Builder, Home, PlannerFront, TeamRequests, Watchlist
+from platform_api.builder.n8n_holds import Holding
+from platform_api.builder.n8n_view import InN8nViews
 from platform_api.builder.planner_facts import PlannerFactsReader
+from platform_api.builder.watchlist import OnN8n
 from platform_api.db import Database
 from platform_api.monitoring import ActivityLog, Copier, CosmosEvents, callback_for
+from platform_api.orchestration import self_test
 from platform_api.orchestration.agents import HttpAgentRuntime
+from platform_api.orchestration.confluence_rest import (
+    CONFLUENCE_PAGE,
+    ConfluencePages,
+    confluence_identity,
+    confluence_pages,
+)
 from platform_api.orchestration.connections import (
     TEAMS_NOT_CHECKED,
     Checked,
+    ConfluenceChecker,
     Connections,
     Entry,
     GitHubChecker,
@@ -22,7 +33,9 @@ from platform_api.orchestration.connections import (
     ModelView,
     Observed,
     ReadFresh,
+    Unset,
     WatchedChannel,
+    confluence_probe,
     github_probe,
     jira_probe,
     model_probe,
@@ -32,12 +45,31 @@ from platform_api.orchestration.dispatch import (
     PRACTICE,
     ApprovalChannel,
     Identity,
+    N8nWaker,
     N8nWebhooks,
     identity_of,
 )
 from platform_api.orchestration.jira import JiraWriteConnector, jira_site
 from platform_api.orchestration.jira_rest import JiraAuth, JiraRestAdapter
 from platform_api.orchestration.model_settings import KeyBox, ModelSettings
+from platform_api.orchestration.n8n import N8nApi, N8nExecutions, N8nWorkflows
+from platform_api.orchestration.n8n_call_service import NodeCalls
+from platform_api.orchestration.n8n_calls import (
+    Ended,
+    ExecutionFacts,
+    FailedExecution,
+    N8nFailures,
+    N8nReads,
+    NodeCatalog,
+    NodeOption,
+    PlatformWorkflow,
+    ReadSources,
+    TryLater,
+    WriteEntry,
+)
+from platform_api.orchestration.n8n_run_view import RunsInN8n
+from platform_api.orchestration.n8n_staff import StaffAccounts
+from platform_api.orchestration.n8n_starts import N8nStarts
 from platform_api.orchestration.people_store import People
 from platform_api.orchestration.planning import (
     CapabilityRegistry,
@@ -46,16 +78,19 @@ from platform_api.orchestration.planning import (
     ProjectFinding,
 )
 from platform_api.orchestration.runs import Leg
-from platform_api.orchestration.schedule_store import ScheduleBook, ScheduleTicker
+from platform_api.orchestration.schedule_store import ScheduleBook
 from platform_api.orchestration.service import Orchestrator
 from platform_api.orchestration.team_request_card import TeamsRequestChannel
 from platform_api.orchestration.teams import TeamsStub, TeamsWorkflowsWebhook
+from platform_api.orchestration.tell import TellFlow, TellOutlet, TellPractice, TellSetup
 from platform_api.orchestration.watch_store import WatchFacts
 from platform_api.orchestration.workflows import load_all
 from platform_api.orchestration.write_actions import WriteGateway
 from platform_api.practice_jira import PRACTICE_EMAIL, PracticeJira, practice_token
 from platform_api.settings import Settings
-from platform_api.shared import RunId, TaskId
+from platform_api.shared import N8nExecutionId, RunId, TaskId
+
+log = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -64,23 +99,30 @@ class Services:
     db: Database
     activity_log: ActivityLog
     orchestrator: Orchestrator
+    node_calls: NodeCalls
     builder: Builder
     planner_front: PlannerFront
     home: Home
     watchlist: Watchlist
     team_requests: TeamRequests
     request_channel: TeamsRequestChannel
-    schedule_ticker: ScheduleTicker
     teams_stub: TeamsStub
     jira: JiraRestAdapter
     jira_client: httpx.AsyncClient
     model_settings: ModelSettings
     connections: Connections
     people: People
+    confluence: ConfluencePages
+    staff: StaffAccounts
     copier: Copier | None = None
     cosmos: CosmosEvents | None = None
     teams_webhook: TeamsWorkflowsWebhook | None = None
+    waker: N8nWaker | None = None
     practice_jira: PracticeJira | None = None
+    n8n: N8nApi | None = None
+    starts: N8nStarts | None = None
+    tell_flow: TellFlow | None = None
+    in_n8n: InN8nViews | None = None
 
 
 JIRA_TIMEOUT_SECONDS = 10.0
@@ -121,12 +163,12 @@ def install(app: FastAPI, services: Services) -> None:
     app.state.activity_log = services.activity_log
     app.state.copier = services.copier
     app.state.orchestrator = services.orchestrator
+    app.state.node_calls = services.node_calls
     app.state.builder = services.builder
     app.state.planner_front = services.planner_front
     app.state.home = services.home
     app.state.watchlist = services.watchlist
     app.state.team_requests = services.team_requests
-    app.state.schedule_ticker = services.schedule_ticker
     app.state.teams_stub = services.teams_stub
     app.state.teams_webhook = services.teams_webhook
     app.state.jira = services.jira
@@ -134,23 +176,73 @@ def install(app: FastAPI, services: Services) -> None:
     app.state.model_settings = services.model_settings
     app.state.connections = services.connections
     app.state.people = services.people
+    app.state.confluence = services.confluence
+    app.state.staff = services.staff
+    app.state.in_n8n = services.in_n8n
 
 
-def quiet_http_logs() -> None:
-    """httpx and httpcore log every request's full address at INFO, and a webhook's address
-    carries its own signature. So with a webhook set, they log only warnings, for every client
-    in this process, n8n's and the agent runtime's too. Their warnings and errors still show."""
-    for name in ("httpx", "httpcore"):
-        logging.getLogger(name).setLevel(logging.WARNING)
+class NoN8nReads:
+    """Without n8n's owner sign-in the platform cannot read n8n, so it vouches for no execution,
+    no node call is taken, and every failure report is refused."""
+
+    async def execution(self, execution_id: N8nExecutionId) -> ExecutionFacts | None:
+        return None
+
+    async def platform_workflows(self) -> dict[str, PlatformWorkflow]:
+        return {}
+
+    async def in_place(self, workflow: PlatformWorkflow) -> bool | TryLater:
+        return False
+
+    async def ended(self, execution_id: N8nExecutionId) -> Ended | None:
+        return None
+
+    async def failure(self, execution_id: N8nExecutionId) -> FailedExecution | None:
+        return None
+
+
+@dataclass(frozen=True)
+class N8nParts:
+    api: N8nApi | None
+    reads: N8nReads
+    drafts: N8nWorkflows | None
+    landing: N8nExecutions | None
+    failures: N8nFailures
+
+
+def n8n_api_of(settings: Settings) -> N8nApi | None:
+    """One per process: the owner's sign-in and API key are shared by every part that calls n8n."""
+    return None if settings.n8n_owner is None else N8nApi(settings.n8n_base_url, settings.n8n_owner)
+
+
+def n8n_parts(settings: Settings, db: Database, api: N8nApi | None) -> N8nParts:
+    if api is None:
+        return N8nParts(None, NoN8nReads(), None, None, NoN8nReads())
+    executions = N8nExecutions(api)
+    workflows = N8nWorkflows(api, db)
+    return N8nParts(api, executions, workflows, executions, workflows)
+
+
+def node_writes(settings: Settings) -> list[WriteEntry]:
+    """The writes a Propose a change block may name: the registry's one ready write, in the
+    Jira project the platform writes to."""
+    project = NodeOption(settings.watchlist_jira_project, settings.watchlist_jira_project)
+    return [
+        WriteEntry(
+            "jira.create_ticket",
+            "Create a Jira ticket",
+            "jira",
+            "create_ticket",
+            "project",
+            (project,),
+        )
+    ]
 
 
 def request_channel_for(settings: Settings) -> TeamsRequestChannel:
     """Where new team requests are announced (ADR 0038): TEAMS_REQUESTS_WEBHOOK_URL, else the
     approvals channel's webhook, else nowhere. The request is kept either way."""
-    url = settings.teams_requests_webhook_url or settings.teams_webhook_url
-    if url is not None:
-        quiet_http_logs()
-    return TeamsRequestChannel(url)
+    return TeamsRequestChannel(settings.teams_requests_webhook_url or settings.teams_webhook_url)
 
 
 def approval_channel(
@@ -160,9 +252,35 @@ def approval_channel(
     TEAMS_WEBHOOK_URL is set. Returns the channel, and the webhook adapter to close on shutdown."""
     if settings.teams_webhook_url is None:
         return practice, None
-    quiet_http_logs()
     webhook = TeamsWorkflowsWebhook(settings.teams_webhook_url, settings.teams_channel, client)
     return webhook, webhook
+
+
+def tell_outlet(settings: Settings, db: Database) -> tuple[TellOutlet, TellFlow | None]:
+    """Where a Tell goes: the practice copy, or the team's Tell flow when TEAMS_TELL_WEBHOOK_URL
+    is set. Returns the outlet, and the flow to close on shutdown."""
+    setup = TellSetup(settings.teams_channel, settings.tell_email_to, settings.public_base_url)
+    if settings.teams_tell_webhook_url is None:
+        return TellPractice(db, setup), None
+    flow = TellFlow(settings.teams_tell_webhook_url, setup)
+    return flow, flow
+
+
+CONFLUENCE_UNSET = "Confluence is not connected."
+
+
+def confluence_entry(settings: Settings, confluence: ConfluenceChecker | None) -> Entry:
+    """Confluence is optional: the platform runs without it, and only the reads that need it say
+    so."""
+    if settings.confluence.base_url is None or confluence is None:
+        return Entry("confluence", "Confluence", Identity("confluence"), Unset(CONFLUENCE_UNSET))
+    key = key_hint(settings.confluence.token)
+    return Entry(
+        "confluence",
+        "Confluence",
+        confluence_identity(settings.confluence),
+        Checked(confluence_probe(confluence, key)),
+    )
 
 
 def connections_for(
@@ -172,6 +290,7 @@ def connections_for(
     channel: ApprovalChannel,
     agents: GitHubChecker,
     models: ModelView,
+    confluence: ConfluenceChecker | None = None,
 ) -> tuple[Connections, ApprovalChannel]:
     jira_settings = settings.jira
     jira_identity = (
@@ -203,6 +322,7 @@ def connections_for(
             # see, so a change there is found by the next check, not here.
             Entry("github", "GitHub", Identity("github"), Checked(github_probe(agents))),
             teams,
+            confluence_entry(settings, confluence),
             Entry("model", "AI model", Identity("model"), ReadFresh(model_probe(models))),
         ],
     )
@@ -252,28 +372,55 @@ async def build(settings: Settings) -> Services:
 
     agents = HttpAgentRuntime(settings.agent_runtime_url, settings.agent_api_key)
     secret = settings.settings_encryption_key
-    model_settings = ModelSettings(db, agents, KeyBox(secret) if secret else None, people=people)
-    connections, channel = connections_for(settings, db, jira, channel, agents, model_settings)
+    box = KeyBox(secret) if secret else None
+    model_settings = ModelSettings(db, agents, box, people=people)
+    n8n_api = n8n_api_of(settings)
+    staff = StaffAccounts(db, n8n_api, box, settings.n8n_staff_access, settings.n8n_editor_url)
+    people.changed = staff.nudge
+    waker = None
+    if settings.node_key is not None and box is not None:
+        waker = N8nWaker(settings.n8n_base_url, settings.node_key, box)
+    confluence = confluence_pages(settings.confluence)
+    connections, channel = connections_for(
+        settings, db, jira, channel, agents, model_settings, confluence
+    )
+    gateway = WriteGateway(db, [JiraWriteConnector(jira, db, site)])
+    n8n = n8n_parts(settings, db, n8n_api)
+    holding = (
+        None if n8n.drafts is None else Holding(db, n8n.drafts, staff, settings.team_time_zone)
+    )
+    starts = (
+        None
+        if n8n.api is None
+        else N8nStarts(db, n8n.api, settings.n8n_base_url, settings.start_secret)
+    )
     orchestrator = Orchestrator(
         db,
         activity,
         N8nWebhooks(settings.n8n_base_url, path_for),
         channel,
         agents,
-        WriteGateway(db, [JiraWriteConnector(jira, db, site)]),
+        gateway,
         mint,
         models=model_settings,
         people=people,
         public_base_url=settings.public_base_url,
         time_zone=settings.team_time_zone,
+        waker=waker,
+        landing=n8n.landing,
+        starts=starts,
     )
     schedules = ScheduleBook(db)
+    watch_facts = WatchFacts(db, jira, site.identity)
+    software_page = f"{settings.public_base_url}/software"
     watchlist = Watchlist(
         db,
-        WatchFacts(db, jira, site.identity),
+        watch_facts,
         schedules,
         settings.watchlist_jira_project,
         ProjectFinding(agents),
+        None if n8n.drafts is None else OnN8n(n8n.drafts, watch_facts, software_page, holding),
+        time_zone=settings.team_time_zone,
     )
     await watchlist.adopt_ticket_project()
     builder = Builder(
@@ -283,6 +430,53 @@ async def build(settings: Settings) -> Services:
         settings.public_base_url,
         CardPlanning(db, model_settings, agents),
         schedules,
+        orchestrator,
+        n8n=n8n.drafts,
+        releases=agents,
+        writes=node_writes(settings),
+        requests=orchestrator,
+        open_runs=watch_facts,
+        accounts=staff,
+        holding=holding,
+        time_zone=settings.team_time_zone,
+    )
+    # Before any run can start: a run left on the shared run workflow, whose blocks are off, ends
+    # first (E11), so the workflows it held back can move.
+    log.info("ended on the shared run workflow: %s", await orchestrator.stop_old_engine_runs())
+    if builder.moves is not None:
+        # Before any run can start: a workflow n8n lost comes back first, then whatever is left on
+        # the shared run workflow moves to its own (ENGINE-PLAN 2.6, E10).
+        log.info("restored to n8n: %s", await builder.moves.restore_if_asked())
+        log.info("moved to n8n: %s", await builder.moves.move_all())
+    if builder.sweep is not None:
+        # This release's rules, such as a block the class file now turns off, grade every
+        # workflow before any of its runs starts (ENGINE-PLAN E11). A look that fails here is
+        # made again by the sweep every minute, until every version carries this release's mark.
+        try:
+            log.info("swept before any run: %s", await builder.sweep.sweep())
+        except Exception:
+            log.exception("could not sweep the workflows before any run")
+    facts = builder.facts
+    sources = ReadSources({CONFLUENCE_PAGE: confluence}, facts)
+    tells, tell_flow = tell_outlet(settings, db)
+    node_calls = NodeCalls(
+        db,
+        activity,
+        agents,
+        mint,
+        NodeCatalog(facts, sources, node_writes(settings)),
+        facts,
+        n8n.reads,
+        sources,
+        gateway.sites,
+        model_settings,
+        box=box,
+        time_zone=settings.team_time_zone,
+        gateway=gateway,
+        tells=tells,
+        failures=n8n.failures,
+        switch=n8n.drafts,
+        nudge=orchestrator.nudge,
     )
     request_channel = request_channel_for(settings)
     team_requests = TeamRequests(
@@ -294,6 +488,7 @@ async def build(settings: Settings) -> Services:
         db=db,
         activity_log=activity,
         orchestrator=orchestrator,
+        node_calls=node_calls,
         builder=builder,
         planner_front=PlannerFront(
             PlannerAnswers(db, model_settings, agents),
@@ -301,13 +496,13 @@ async def build(settings: Settings) -> Services:
             watchlist,
             CapabilityRegistry(agents),
             connections,
-            PlannerFactsReader(watchlist, builder, orchestrator, home),
+            PlannerFactsReader(watchlist, builder, home),
+            staff,
         ),
         home=home,
         watchlist=watchlist,
         team_requests=team_requests,
         request_channel=request_channel,
-        schedule_ticker=ScheduleTicker(db, schedules, builder, orchestrator),
         teams_stub=teams,
         jira=jira,
         jira_client=jira_client,
@@ -315,9 +510,26 @@ async def build(settings: Settings) -> Services:
         model_settings=model_settings,
         connections=connections,
         people=people,
+        confluence=confluence,
+        staff=staff,
         copier=copier,
         cosmos=cosmos,
         teams_webhook=webhook,
+        waker=waker,
+        n8n=n8n.api,
+        starts=starts,
+        tell_flow=tell_flow,
+        in_n8n=(
+            None
+            if holding is None
+            else InN8nViews(
+                db,
+                holding,
+                staff,
+                RunsInN8n(db, n8n.landing),
+                settings.n8n_editor_url,
+            )
+        ),
     )
 
 
@@ -325,23 +537,47 @@ class Runner:
     def __init__(self, services: Services) -> None:
         self._services = services
         self._stop = asyncio.Event()
-        self._task: asyncio.Task[None] | None = None
+        self._tasks: list[asyncio.Task[None]] = []
 
     def start(self) -> None:
-        self._task = asyncio.create_task(self._services.orchestrator.run_forever(self._stop))
+        self._tasks = [
+            asyncio.create_task(self._services.orchestrator.run_forever(self._stop)),
+            asyncio.create_task(self._services.node_calls.sweep_forever(self._stop)),
+            asyncio.create_task(self_test.watch_forever(self._services.db, self._stop)),
+        ]
+        if (sweep := self._services.builder.sweep) is not None:
+            self._tasks.append(asyncio.create_task(sweep.sweep_forever(self._stop)))
+        if (moves := self._services.builder.moves) is not None:
+            self._tasks.append(asyncio.create_task(moves.move_forever(self._stop)))
+        if (holding := self._services.builder.holding) is not None:
+            settle = self._services.staff.settle_forever(self._stop, holding.release, holding.holds)
+            self._tasks.append(asyncio.create_task(settle))
+        self._tasks.append(
+            asyncio.create_task(self._services.connections.check_forever(self._stop))
+        )
 
     async def stop(self) -> None:
         self._stop.set()
         self._services.orchestrator.nudge()
-        if self._task is not None:
-            await self._task
+        self._services.staff.nudge()
+        for task in self._tasks:
+            await task
+        if self._services.tell_flow is not None:
+            await self._services.tell_flow.close()
         if self._services.teams_webhook is not None:
             await self._services.teams_webhook.close()
+        if self._services.waker is not None:
+            await self._services.waker.close()
+        if self._services.starts is not None:
+            await self._services.starts.close()
+        if self._services.n8n is not None:
+            await self._services.n8n.close()
         await self._services.request_channel.close()
         if self._services.copier is not None:
             await self._services.copier.stop()
         await self._services.activity_log.stop()
         await self._services.jira_client.aclose()
+        await self._services.confluence.close()
         if self._services.cosmos is not None:
             await self._services.cosmos.close()
         await self._services.db.close()

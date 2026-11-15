@@ -10,16 +10,21 @@ from platform_api.builder.home import (
     ComingUp,
     ConfirmationItem,
     ConnectionItem,
+    DeclinedItem,
     DraftItem,
     HomeOut,
+    QuestionItem,
     StoppedItem,
     WaitingItem,
 )
+from platform_api.builder.planner import ChangedInN8nReply
 from platform_api.builder.team_requests import FollowingUpItem, ReplyView
 from platform_api.builder.templates import SOFTWARE_WATCHLIST
 from platform_api.contracts.stories import (
     ALICE,
+    BOB,
     FAILURE,
+    QUESTION,
     SUCCESS,
     TICKET_TITLE,
     USE_CASE_ID,
@@ -29,6 +34,7 @@ from platform_api.contracts.stories import (
 )
 from platform_api.monitoring.troubleshooter import explain
 from platform_api.orchestration import ConfirmationKind
+from platform_api.shared import RunId, UserId
 from platform_api.wire import WireModel
 
 CONFIRMATIONS_ASKED = datetime(2026, 11, 9, 3, 41, tzinfo=UTC)
@@ -84,16 +90,24 @@ def home_for_bob() -> HomeOut:
         ],
         stopped=[],
         stopped_total=0,
+        declined=[],
+        declined_total=0,
+        questions_for_me=[],
+        questions_for_me_total=0,
+        needs_next=None,
         waiting_on_others=[],
         waiting_on_others_total=0,
+        waiting_on_others_next=None,
         drafts=[],
         following_up=[],
         following_up_total=0,
+        following_up_next=None,
         replied=[],
         coming_up=COMING_UP,
         workflows=1,
         addresses=[],
         connections=[],
+        changed_in_n8n=[],
     )
 
 
@@ -134,6 +148,11 @@ def home_for_alice(failure: Timeline) -> HomeOut:
             )
         ],
         stopped_total=1,
+        declined=[],
+        declined_total=0,
+        questions_for_me=[],
+        questions_for_me_total=0,
+        needs_next=None,
         waiting_on_others=[
             WaitingItem(
                 run_id=SUCCESS.run_id,
@@ -147,6 +166,7 @@ def home_for_alice(failure: Timeline) -> HomeOut:
             )
         ],
         waiting_on_others_total=1,
+        waiting_on_others_next=None,
         drafts=[
             DraftItem(
                 draft_id="drf-7f3a2c",
@@ -157,6 +177,7 @@ def home_for_alice(failure: Timeline) -> HomeOut:
         ],
         following_up=[SUPPORT_REPORT],
         following_up_total=1,
+        following_up_next=None,
         replied=[SUPPORT_REPORT],
         coming_up=COMING_UP,
         workflows=1,
@@ -200,6 +221,21 @@ def home_for_alice(failure: Timeline) -> HomeOut:
                 expires_at=datetime(2026, 11, 18, 9, 0, tzinfo=UTC),
             ),
         ],
+        changed_in_n8n=[
+            ChangedInN8nReply(
+                use_case_id="uc_fastapi",
+                name="FastAPI release check",
+                version=4,
+                made="published_in_n8n",
+                by=UserId("alice"),
+                by_name="Alice Tan",
+                at=datetime(2026, 11, 9, 2, 5, tzinfo=UTC),
+                grade="writes_refused",
+                changes=["Now runs every day at 7:30.", "Deleted “Ask for a yes”."],
+                findings=['"Create ticket" can run without a yes.'],
+                in_use=4,
+            )
+        ],
     )
 
 
@@ -209,16 +245,67 @@ DAY_ONE = HomeOut(
     confirmations=[],
     stopped=[],
     stopped_total=0,
+    declined=[],
+    declined_total=0,
+    questions_for_me=[],
+    questions_for_me_total=0,
+    needs_next=None,
     waiting_on_others=[],
     waiting_on_others_total=0,
+    waiting_on_others_next=None,
     drafts=[],
     following_up=[],
     following_up_total=0,
+    following_up_next=None,
     replied=[],
     coming_up=None,
     workflows=0,
     addresses=[],
     connections=[],
+    changed_in_n8n=[],
+)
+
+
+# Bob declined Alice's test run, and said why.
+DECLINED_TEST = DAY_ONE.model_copy(
+    update={
+        "declined": [
+            DeclinedItem(
+                run_id=RunId("run_01JD7TS"),
+                use_case_id="uc_01JD7TS",
+                use_case_name="Weekly closed-ticket summary",
+                started_at=datetime(2026, 11, 10, 1, 2, tzinfo=UTC),
+                declined_at=datetime(2026, 11, 10, 1, 10, tzinfo=UTC),
+                declined_by=BOB,
+                declined_by_name="Bob",
+                decline_reason="Something in it is wrong",
+            )
+        ],
+        "declined_total": 1,
+        "workflows": 1,
+    }
+)
+
+
+# Bob asked Alice a question on the run she started, which still waits for his yes.
+QUESTION_FOR_ALICE = DAY_ONE.model_copy(
+    update={
+        "questions_for_me": [
+            QuestionItem(
+                question_id=QUESTION.question_id,
+                approval_id=SUCCESS.approval_id,
+                run_id=SUCCESS.run_id,
+                use_case_id=USE_CASE_ID,
+                use_case_name=USE_CASE_NAME,
+                asked_by=BOB,
+                asked_by_name="Bob",
+                asked_at=QUESTION.asked_at,
+                text=QUESTION.text,
+            )
+        ],
+        "questions_for_me_total": 1,
+        "workflows": 1,
+    }
 )
 
 
@@ -226,5 +313,7 @@ def home_fixtures() -> dict[str, WireModel]:
     return {
         "builder/home.bob.json": home_for_bob(),
         "builder/home.alice.json": home_for_alice(failure_events()),
+        "builder/home.alice.declined-test.json": DECLINED_TEST,
+        "builder/home.alice.question.json": QUESTION_FOR_ALICE,
         "builder/home.day-one.json": DAY_ONE,
     }

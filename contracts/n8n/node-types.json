@@ -1,0 +1,64 @@
+{
+  "nodes": [
+    {
+      "type": "CUSTOM.wabStartFromPortal",
+      "displayName": "Start from the Portal",
+      "settings": {}
+    },
+    {
+      "type": "CUSTOM.wabRead",
+      "displayName": "Read",
+      "settings": {
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 2000
+      }
+    },
+    {
+      "type": "CUSTOM.wabAgent",
+      "displayName": "Agent",
+      "settings": {
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 2000
+      }
+    },
+    {
+      "type": "CUSTOM.wabProposeChange",
+      "displayName": "Propose a change",
+      "settings": {
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 2000
+      }
+    },
+    {
+      "type": "CUSTOM.wabAskForYes",
+      "displayName": "Ask for a yes",
+      "settings": {}
+    },
+    {
+      "type": "CUSTOM.wabMakeApprovedChanges",
+      "displayName": "Make the approved changes",
+      "settings": {
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 2000
+      }
+    },
+    {
+      "type": "CUSTOM.wabTell",
+      "displayName": "Tell",
+      "settings": {
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 2000
+      }
+    },
+    {
+      "type": "CUSTOM.wabReportFailure",
+      "displayName": "Report a failure",
+      "settings": {}
+    }
+  ]
+}

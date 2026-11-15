@@ -1,0 +1,19 @@
+{
+  "parts": [
+    {
+      "text": "Approve the upgrade",
+      "mark": "will_do",
+      "reason": null,
+      "note": null,
+      "choices": []
+    },
+    {
+      "text": "is LangGraph up to date",
+      "mark": "cant",
+      "reason": "ask_on_its_own",
+      "note": null,
+      "choices": []
+    }
+  ],
+  "answer": "decide"
+}

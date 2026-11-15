@@ -1,4 +1,5 @@
-from datetime import UTC, datetime
+from dataclasses import replace
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -8,6 +9,7 @@ from platform_api.orchestration.approvals import (
     ApprovalRequest,
     ApprovalStep,
     Decision,
+    Ended,
     Verdict,
 )
 from platform_api.orchestration.dispatch import identity_of
@@ -23,6 +25,7 @@ from platform_api.orchestration.write_actions import (
     Site,
     UnboundIntent,
     WriteAction,
+    WritingRun,
     at_sites,
     bind,
     check,
@@ -33,8 +36,11 @@ from platform_api.orchestration.write_actions import (
     intents,
     listed,
     site_name,
+    still_to_make,
+    subject_key,
+    write_key,
 )
-from platform_api.shared import ApprovalId, Digest, ProposalId, RunId, UserId
+from platform_api.shared import ApprovalId, Digest, ProposalId, RunId, UseCaseId, UserId
 
 ALICE = UserId("alice")
 BOB = UserId("bob")
@@ -89,6 +95,8 @@ def decline(step: int, by: UserId) -> Decision:
 
 
 ACTING = Acting(RUN, PROPOSAL, APPROVAL, 1, None, NOW)
+USE_CASE = UseCaseId("uc_1")
+THE_RUN = WritingRun(USE_CASE, test=False)
 
 
 def test_a_ticket_is_put_in_words_from_its_project_and_title():
@@ -182,6 +190,10 @@ def test_digest_changes_when_a_field_changes():
         "jira", "create_ticket", {"project": "MOCK"}, {"title": "x", "body": "..."}
     )
     assert digest((changed,)) != TICKET_DIGEST
+
+
+def test_digest_leaves_out_the_subject_because_the_approver_says_yes_to_the_change():
+    assert digest((replace(TICKET, subject="langgraph 1.2.16"),)) == TICKET_DIGEST
 
 
 @pytest.mark.parametrize(
@@ -376,7 +388,7 @@ def test_bind(intents, expected):
     ],
 )
 def test_check(acting, proposal_, request_, decisions, registry, expected):
-    result = check(acting, proposal_, request_, decisions, registry, SITES)
+    result = check(acting, THE_RUN, proposal_, request_, decisions, registry, SITES)
     if expected is AuthorizedWrite:
         assert isinstance(result, AuthorizedWrite)
     else:
@@ -386,6 +398,7 @@ def test_check(acting, proposal_, request_, decisions, registry, expected):
 def test_authorized_write_carries_the_proposal_and_who_approved():
     result = check(
         ACTING,
+        THE_RUN,
         proposal(),
         request(TWO_STEPS),
         (approve(0, BOB), approve(1, CAROL)),
@@ -396,6 +409,7 @@ def test_authorized_write_carries_the_proposal_and_who_approved():
     assert result.proposal == proposal()
     assert result.approval_id == APPROVAL
     assert result.approvers == (BOB, CAROL)
+    assert result.use_case_id == USE_CASE
 
 
 def sited(site: str | None) -> WriteAction:
@@ -408,6 +422,7 @@ def approved_with(action: WriteAction, sites: dict[str, Site]) -> AuthorizedWrit
     signed = digest((action,))
     return check(
         ACTING,
+        THE_RUN,
         proposal((action,), signed),
         request(digest=signed),
         (approve(0, BOB, signed),),
@@ -471,3 +486,77 @@ def test_a_ticket_line_names_its_jira_for_the_approver():
 def test_authorized_write_cannot_be_built_directly():
     with pytest.raises(TypeError):
         AuthorizedWrite()
+
+
+EXPIRES_AT = NOW + timedelta(hours=1)
+
+
+def expiring(ended: Ended | None = None) -> ApprovalRequest:
+    return replace(request(), expires_at=EXPIRES_AT, ended=ended)
+
+
+def approved_at(at: datetime) -> Decision:
+    return replace(approve(0, BOB), at=at)
+
+
+def checked(request_: ApprovalRequest, *decisions: Decision, test: bool = False):
+    run = WritingRun(USE_CASE, test)
+    return check(ACTING, run, proposal(), request_, decisions, REGISTRY, SITES)
+
+
+def test_safety_an_expired_request_never_writes():
+    assert checked(expiring(Ended.EXPIRED)) == Deny(DenyReason.EXPIRED)
+
+
+def test_safety_a_yes_recorded_after_the_expiry_never_writes():
+    """The tick ends a request a few seconds after its expiry, so a yes can land in between."""
+    late = approved_at(EXPIRES_AT + timedelta(seconds=1))
+    assert checked(expiring(), late) == Deny(DenyReason.EXPIRED)
+
+
+def test_a_yes_given_before_the_expiry_still_writes_after_it():
+    """n8n may take the yes hours later, or a lost run may carry on, and the yes still stands."""
+    in_time = approved_at(EXPIRES_AT - timedelta(seconds=1))
+    assert isinstance(checked(expiring(), in_time), AuthorizedWrite)
+    assert checked(expiring(), approved_at(EXPIRES_AT)) == Deny(DenyReason.EXPIRED)
+
+
+def test_safety_a_cancelled_or_declined_request_never_writes():
+    assert checked(expiring(Ended.CANCELLED), approve(0, BOB)) == Deny(DenyReason.NOT_APPROVED)
+    assert checked(expiring(), decline(0, CAROL)) == Deny(DenyReason.NOT_APPROVED)
+
+
+def test_safety_a_test_run_never_writes_even_with_a_yes_on_record():
+    assert checked(request(), approve(0, BOB), test=True) == Deny(DenyReason.TEST_RUN)
+    assert isinstance(checked(request(), approve(0, BOB)), AuthorizedWrite)
+
+
+def test_a_subject_key_is_one_per_use_case_and_subject():
+    key = subject_key(USE_CASE, "langgraph 1.2.16")
+    assert key == subject_key(USE_CASE, "langgraph 1.2.16")
+    assert key != subject_key(UseCaseId("uc_2"), "langgraph 1.2.16")
+    assert key != subject_key(USE_CASE, "langgraph 1.2.17")
+    assert key.startswith("subject/") and len(key) == len("subject/") + 40
+
+
+def test_each_action_without_a_subject_has_its_own_key_naming_its_index():
+    """A retry finds each change by its key, so two changes of one proposal never share one."""
+    actions = (ticket("A"), ticket("B"), replace(ticket("C"), subject="lg"))
+    proposal = Proposal(PROPOSAL, RUN, actions, digest(actions))
+    keys = [write_key(USE_CASE, proposal, index).text for index in range(3)]
+    assert keys == [f"{RUN}/{PROPOSAL}/0", f"{RUN}/{PROPOSAL}/1", subject_key(USE_CASE, "lg")]
+
+
+def test_the_ask_leaves_out_a_subject_already_made_or_proposed_twice():
+    made, again, fresh, plain = (
+        replace(ticket(title), subject=subject)
+        for title, subject in (("A", "a"), ("A again", "a2"), ("B", "b"), ("C", None))
+    )
+    twice = replace(fresh, fields={"title": "B again", "body": ""})
+    earlier = {subject_key(USE_CASE, "a"): RunId("run_0")}
+    kept, left_out = still_to_make(USE_CASE, (made, fresh, plain, twice, again), earlier)
+    assert kept == (fresh, plain, again)
+    assert left_out == (
+        "Left out, already made in run run_0: Create Jira ticket in MOCK: A.",
+        "Left out, proposed twice: Create Jira ticket in MOCK: B again.",
+    )

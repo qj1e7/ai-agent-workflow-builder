@@ -37,6 +37,18 @@
       "fix": "Ask whoever set up the Teams address to check that it still works."
     },
     {
+      "id": "confluence",
+      "name": "Confluence",
+      "practice": false,
+      "state": "not_set_up",
+      "checked_at": null,
+      "last_ok_at": null,
+      "problem": "Confluence is not connected.",
+      "key_ends_in": null,
+      "expires_at": null,
+      "fix": "Ask whoever set up the platform to connect Confluence."
+    },
+    {
       "id": "model",
       "name": "AI model",
       "practice": false,
@@ -49,5 +61,13 @@
       "fix": "Add an AI model under Settings, AI model."
     }
   ],
-  "you_can_check": true
+  "you_can_check": true,
+  "tell": {
+    "flow_set": true,
+    "channel": "CODESparks Ops",
+    "email_to": [
+      "ops-lead@codesparks.example",
+      "support@codesparks.example"
+    ]
+  }
 }

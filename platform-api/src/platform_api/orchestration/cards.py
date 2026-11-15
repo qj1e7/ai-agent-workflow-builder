@@ -118,6 +118,13 @@ TOOL_RULES: tuple[ToolRule, ...] = (
         system="Jira",
     ),
     ToolRule(
+        "confluence.read_page",
+        "read",
+        "Read a Confluence page",
+        "Reads one Confluence page that the team allows, as plain lines.",
+        system="Confluence",
+    ),
+    ToolRule(
         "jira.create_ticket",
         "write",
         "Create a Jira ticket",

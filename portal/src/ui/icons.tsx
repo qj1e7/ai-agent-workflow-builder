@@ -60,6 +60,25 @@ export const IconLock = drawn(
   2.2,
 )
 
+/** The run line's gate. Its shackle is marked so the line can open it once the yes is given. */
+export const IconGate = drawn(
+  'IconGate',
+  <>
+    <path data-shackle="" d="M7.95 10.8V8.1a4.05 4.05 0 0 1 8.1 0v2.7" />
+    <rect x="5.1" y="10.8" width="13.8" height="9.9" rx="2.4" fill="currentColor" />
+  </>,
+  2.7,
+)
+
+export const IconTicket = drawn(
+  'IconTicket',
+  <>
+    <rect x="3.9" y="4.5" width="16.2" height="15" rx="2.4" />
+    <path d="M7.8 9.9h8.4M7.8 14.1h5.4" />
+  </>,
+  2.7,
+)
+
 export const IconPause = drawn('IconPause', <path d="M9 6v12M15 6v12" />, 3)
 
 export const IconPlay = drawn('IconPlay', <path d="M8 5.5v13l10.5-6.5z" />, 2.2)
@@ -119,4 +138,33 @@ export const IconInfo = drawn(
   2.4,
 )
 
+/** A message, as a request sent to Teams. */
+export const IconMessage = drawn('IconMessage', <path d="M4.5 5.25h15a1.5 1.5 0 0 1 1.5 1.5V15a1.5 1.5 0 0 1-1.5 1.5h-8.25l-4.5 3.75V16.5H4.5A1.5 1.5 0 0 1 3 15V6.75a1.5 1.5 0 0 1 1.5-1.5z" />, 2.2)
+
 export const IconSend = drawn('IconSend', <path d="M4 12l16-8-6 16-2.5-6.5z" />, 2)
+
+/** An IF block: one way in, two ways out. */
+export const IconFork = drawn('IconFork', <path d="M3.5 12h5.5M9 12l4.5-6H20M9 12l4.5 6H20" />, 2.4)
+
+/** A block that ends the run quietly. */
+export const IconStop = drawn(
+  'IconStop',
+  <>
+    <circle cx="12" cy="12" r="8.2" />
+    <path d="M8.2 12h7.6" />
+  </>,
+  2.4,
+)
+
+/** A block that tells the person, in the app. */
+export const IconBell = drawn(
+  'IconBell',
+  <>
+    <path d="M6 17.1v-6a6 6 0 0 1 12 0v6l1.8 1.8H4.2z" />
+    <path d="M9.9 21a2.25 2.25 0 0 0 4.2 0" />
+  </>,
+  2.2,
+)
+
+/** An agent's block that weighs what was read. */
+export const IconCompare = drawn('IconCompare', <path d="M4 8.5h14l-3.5-3.5M20 15.5H6l3.5 3.5" />, 2.4)

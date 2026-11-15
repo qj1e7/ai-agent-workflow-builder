@@ -1,0 +1,44 @@
+{
+  "parts": [
+    {
+      "text": "Monday and Friday",
+      "mark": "cant",
+      "reason": "one_day",
+      "note": null,
+      "choices": [
+        "Monday",
+        "Friday"
+      ]
+    },
+    {
+      "text": "sum up the closed tickets in MOCK",
+      "mark": "will_do",
+      "reason": null,
+      "note": null,
+      "choices": []
+    }
+  ],
+  "answer": "setup_card",
+  "name": "Closed ticket summary",
+  "rows": [
+    {
+      "kind": "schedule",
+      "text": "",
+      "state": "missing",
+      "note": "Your words said \"Monday\" and \"Friday\". I can only set one day, so please choose one."
+    },
+    {
+      "kind": "look_for",
+      "text": "Closed tickets in MOCK",
+      "state": "understood",
+      "note": null
+    },
+    {
+      "kind": "do",
+      "text": "Sum them up in one new ticket",
+      "state": "understood",
+      "note": null
+    }
+  ],
+  "similar": null
+}

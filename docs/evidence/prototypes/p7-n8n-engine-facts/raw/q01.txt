@@ -1,0 +1,27 @@
+001 created q01 start and link: {"id": "pgC1s6pquuaMSfbA", "versionId": "623cceff-9cd4-4528-a436-93f9f3d62b1e", "activeVersionId": null}
+002 settings as n8n stored them: {"saveExecutionProgress": true, "saveManualExecutions": true, "timezone": "Asia/Singapore", "executionOrder": "v1"}
+003 Start from the Portal webhookId as stored: "61418b80-96fa-4f3d-a63e-5a482227155d"
+004 POST /api/v1/workflows/pgC1s6pquuaMSfbA/publish: [200, {"active": true, "versionId": "623cceff-9cd4-4528-a436-93f9f3d62b1e", "activeVersionId": "623cceff-9cd4-4528-a436-93f9f3d62b1e"}]
+005 GET /rest/workflows/pgC1s6pquuaMSfbA/publication-status: {"status": "published", "liveVersionId": "623cceff-9cd4-4528-a436-93f9f3d62b1e", "pendingVersionId": null, "triggers": [{"nodeId": "e3fae88b-58d9-54d5-95cc-c8a781d8999e", "status": "activated", "errorMessage": null}]}
+006 webhook_entity rows: "61418b80-96fa-4f3d-a63e-5a482227155d/start|POST|Start from the Portal|"
+007 POST /webhook/{webhookId}/start, signed: [200, "firstEntryJson"]
+008 POST /webhook/start (no webhookId): [404, {"code": 404, "message": "The requested webhook \"POST start\" is not registered.", "hint": "The workflow must be active for a production URL to run successfully. You can activate the workflow using the toggle in the top-right of the editor. Note that unlike test URL calls, production URL calls aren't shown on the canvas (only in the executions list)"}]
+009 the execution: {"id": "1", "status": "success", "mode": "webhook", "finished": true, "retryOf": null, "retrySuccessId": null, "waitTill": null, "workflowId": "pgC1s6pquuaMSfbA", "startedAt": "2026-11-13T08:56:33.653Z", "stoppedAt": "2026-11-13T08:56:33.748Z", "workflowVersionId": "623cceff-9cd4-4528-a436-93f9f3d62b1e", "lastNodeExecuted": "Compare", "nodes_run": {"Start from the Portal": 1, "Read release": 1, "Compare": 1}}
+010 node calls (node, mode) as our nodes reported: [["Read release", "webhook"], ["Compare", "webhook"]]
+011 our API's first read of GET /executions/{id} mid-run (saveExecutionProgress on): {"http": 200, "status": "running", "mode": "webhook", "retryOf": null, "nodes_in_runData": ["Start from the Portal"], "start_item": {"nonce": "97317020b31f453abb6293052bd2a5a9", "kind": "run_now", "expires": 1794560493, "signed_over": "rawBody"}}
+012 start item each node read itself with $('Start from the Portal'): [{"nonce": "97317020b31f453abb6293052bd2a5a9", "kind": "run_now", "expires": 1794560493, "signed_over": "rawBody"}, {"nonce": "97317020b31f453abb6293052bd2a5a9", "kind": "run_now", "expires": 1794560493, "signed_over": "rawBody"}]
+013 start with a bad signature: [401, {"detail": "Bad signature."}]
+014 start with an expired body: [401, {"detail": "This start has expired."}]
+015 executions before and after the two refused starts: [1, 1]
+016 10 more starts: [execution, first-read http, status seen, start item seen]: [["11", 200, "running", true], ["10", 200, "running", true], ["9", 200, "running", true], ["8", 200, "running", true], ["7", 200, "running", true], ["6", 200, "running", true], ["5", 200, "running", true], ["4", 200, "running", true], ["3", 200, "running", true], ["2", 200, "running", true]]
+017 PUT saveExecutionProgress false: [200, {"saveExecutionProgress": false, "saveManualExecutions": true, "timezone": "Asia/Singapore", "executionOrder": "v1"}]
+018 5 starts with saveExecutionProgress off: [execution, http, status, start item seen, body]: [["16", 200, "running", false, null], ["15", 200, "running", false, null], ["14", 200, "running", false, null], ["13", 200, "running", false, null], ["12", 200, "running", false, null]]
+019 start items the nodes read themselves (fallback) in those runs: [true, true, true, true, true, true, true, true, true, true]
+020 created q01 schedule: {"id": "hTZ8VQy2KljPaB99", "versionId": "c5ba72c1-6edd-48d8-80bf-67d99cc2d6dd", "activeVersionId": null}
+021 POST /api/v1/workflows/hTZ8VQy2KljPaB99/publish: [200, {"active": true, "versionId": "c5ba72c1-6edd-48d8-80bf-67d99cc2d6dd", "activeVersionId": "c5ba72c1-6edd-48d8-80bf-67d99cc2d6dd"}]
+022 GET /rest/workflows/hTZ8VQy2KljPaB99/publication-status: {"status": "published", "liveVersionId": "c5ba72c1-6edd-48d8-80bf-67d99cc2d6dd", "pendingVersionId": null, "triggers": [{"nodeId": "c0f7f925-d736-5eef-9292-9051900277c3", "status": "activated", "errorMessage": null}]}
+023 scheduled execution: {"id": "17", "status": "success", "mode": "trigger", "finished": true, "retryOf": null, "retrySuccessId": null, "waitTill": null, "workflowId": "hTZ8VQy2KljPaB99", "startedAt": "2026-11-13T08:57:00.011Z", "stoppedAt": "2026-11-13T08:57:00.060Z", "workflowVersionId": "c5ba72c1-6edd-48d8-80bf-67d99cc2d6dd", "lastNodeExecuted": "Read release", "nodes_run": {"Every 20 seconds": 1, "Read release": 1}}
+024 node calls (node, mode) in the scheduled run: [["Read release", "trigger"]]
+025 start item a node reads in a scheduled run: [{"unreadable": "Referenced node doesn't exist"}]
+026 our API's first read in a scheduled run: {"http": 200, "status": "running", "mode": "trigger", "retryOf": null, "nodes_in_runData": ["Every 20 seconds"], "start_item": null}
+027 every scheduled execution while published (id, startedAt): ["17|2026-11-13 08:57:00.011+00"]

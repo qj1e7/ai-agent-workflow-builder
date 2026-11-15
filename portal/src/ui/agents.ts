@@ -41,6 +41,9 @@ const known: Readonly<Record<string, Omit<AgentIdentity, 'id'>>> = {
 
 export const KNOWN_AGENT_IDS: readonly string[] = Object.keys(known)
 
+/** Agents that run under another id: an agent card's run carries the card's id. */
+const SAME_AS: Readonly<Record<string, string>> = { crd_version_checker: 'version_checker' }
+
 const OTHER_AGENT_COLOURS: readonly [Colours, ...Colours[]] = [
   { hue: 'var(--agent-1)', tint: 'var(--agent-1-tint)' },
   { hue: 'var(--agent-2)', tint: 'var(--agent-2-tint)' },
@@ -58,7 +61,7 @@ function sentenceCase(id: string): string {
  * and colours. Any other id gets a plain Orb in one of the fixed agent colours, chosen from the id, so it looks the same on every screen and in every run.
  */
 export function agentIdentity(id: string, display?: string): AgentIdentity {
-  const registered = known[id]
+  const registered = known[SAME_AS[id] ?? id]
   if (registered) return { id, ...registered }
   return {
     id,

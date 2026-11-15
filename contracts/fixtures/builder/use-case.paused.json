@@ -16,7 +16,8 @@
     "at": "09:00",
     "time_zone": "Asia/Singapore",
     "owner_name": "Alice",
-    "held": null
+    "held": null,
+    "held_words": null
   },
   "plan": [
     {
@@ -38,5 +39,13 @@
       "kind": "write_action"
     }
   ],
-  "agents": []
+  "agents": [],
+  "last_run": null,
+  "left_out": [],
+  "blocks": [],
+  "grade": null,
+  "findings": [],
+  "deleted_in_n8n_at": null,
+  "moving_to_n8n": false,
+  "move_refused": null
 }

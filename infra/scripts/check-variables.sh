@@ -1,7 +1,7 @@
 #!/bin/sh
 # Checks the variable rules in a variables.tf for sign-in, the first people, n8n's allow list,
-# Teams and a real Jira: good values pass, and plan refuses what platform-api, agent-runtime or
-# the Portal would refuse, or what would open n8n wider than meant. It plans a module that holds only that
+# Teams, a real Jira and Confluence: good values pass, and plan refuses what platform-api,
+# agent-runtime or the Portal would refuse, or what would open n8n wider than meant. It plans a module that holds only that
 # file, so it needs no provider and no credentials. check.sh runs it in the Terraform image.
 # Usage: check-variables.sh <variables.tf>
 set -eu
@@ -65,6 +65,10 @@ expect accepted - "other inside ranges for n8n" -var n8n_internal_allowed_cidrs=
 expect accepted - "a Teams webhook and channel" \
   -var 'teams_webhook_url=https://prod.example.logic.azure.com/workflows/a/triggers/manual/run?sig=x' \
   -var 'teams_channel=CODESparks Support'
+expect accepted - "a Tell flow and its email list" \
+  -var 'teams_tell_webhook_url=https://prod.example.logic.azure.com/workflows/b/triggers/manual/run?sig=x' \
+  -var 'tell_email_to=ops@codesparks.example, lead@codesparks.example'
+expect accepted - "the team's email list alone, a plain setting" -var 'tell_email_to=ops@codesparks.example'
 
 expect accepted - "a Data Center Jira" -var jira_base_url=https://jira.example.test -var jira_api_token=pat
 expect accepted - "a Cloud Jira with its email" -var jira_base_url=https://example.atlassian.net \
@@ -72,6 +76,8 @@ expect accepted - "a Cloud Jira with its email" -var jira_base_url=https://examp
 expect accepted - "a Jira address with a port and a path" -var jira_base_url=https://jira.example.test:8443/jira -var jira_api_token=pat
 expect accepted - "a Jira browse address and another project" \
   -var 'jira_browse_url=https://jira.example.test/browse/{key}' -var watchlist_jira_project=AB_1
+expect accepted - "another team time zone" -var team_time_zone=America/Argentina/Buenos_Aires
+expect accepted - "UTC as the team time zone" -var team_time_zone=UTC
 
 expect refused oidc_issuer "issuer over http" -var oidc_issuer=http://mock-oidc:8080/default
 expect refused oidc_issuer "issuer with no host" -var oidc_issuer=https:///tenant/v2.0
@@ -87,7 +93,13 @@ expect refused oidc_jwks_url "keys URL with a query" -var 'oidc_jwks_url=https:/
 expect refused oidc_audience "audience not set" -var oidc_audience=
 
 expect refused teams_webhook_url "Teams webhook over http" -var teams_webhook_url=http://hook.example.test/run
+expect refused teams_tell_webhook_url "Tell flow over http" -var teams_tell_webhook_url=http://hook.example.test/run
+expect refused tell_email_to "Tell flow with no email list" \
+  -var 'teams_tell_webhook_url=https://prod.example.logic.azure.com/workflows/b/triggers/manual/run?sig=x'
+expect refused tell_email_to "email list with a name in it" -var 'tell_email_to=ops@codesparks.example, Ops Team'
 expect refused teams_channel "Teams channel on two lines" -var "teams_channel=Ops${nl}Other"
+expect refused team_time_zone "a zone written as words" -var 'team_time_zone=Singapore Time'
+expect refused team_time_zone "a zone written as an offset" -var 'team_time_zone=+08:00'
 expect refused oidc_audience "audience as the api:// URI" -var "oidc_audience=api://$AUDIENCE"
 
 expect refused oidc_client_id "client ID not set" -var oidc_client_id=
@@ -129,6 +141,19 @@ expect refused n8n_internal_allowed_cidrs "an inside range that is a word" -var 
 expect refused n8n_internal_allowed_cidrs "an inside range wider than /16" -var n8n_internal_allowed_cidrs=100.64.0.0/10
 expect refused n8n_internal_allowed_cidrs "an inside range that starts mid-range" -var n8n_internal_allowed_cidrs=100.100.0.51/17
 expect refused jira_base_url "a Jira over http" -var jira_base_url=http://jira.example.test -var jira_api_token=pat
+expect accepted - "a Confluence with its token and pages" -var confluence_base_url=https://example.atlassian.net/wiki \
+  -var confluence_api_token=t -var confluence_email=bot@example.test -var 'confluence_pages=123456=Software inventory; 7=Patches'
+expect accepted - "a Confluence that borrows Jira's token" -var jira_base_url=https://example.atlassian.net \
+  -var jira_api_flavor=cloud -var jira_api_token=t -var jira_email=bot@example.test \
+  -var confluence_base_url=https://example.atlassian.net/wiki -var 'confluence_pages=123456=Software inventory'
+expect refused confluence_base_url "a Confluence over http" -var confluence_base_url=http://wiki.example.test \
+  -var confluence_api_token=t -var 'confluence_pages=1=A'
+expect refused confluence_api_token "a Confluence with no token" -var confluence_base_url=https://wiki.example.test \
+  -var 'confluence_pages=1=A'
+expect refused confluence_pages "a Confluence with no pages" -var confluence_base_url=https://wiki.example.test \
+  -var confluence_api_token=t
+expect refused confluence_pages "a Confluence page with no id" -var confluence_base_url=https://wiki.example.test \
+  -var confluence_api_token=t -var 'confluence_pages=Software inventory'
 expect refused jira_api_token "a Jira with no token" -var jira_base_url=https://jira.example.test
 expect refused jira_api_flavor "a Jira flavor that is not one" -var jira_api_flavor=server
 expect refused jira_email "a Cloud Jira with no email" -var jira_base_url=https://example.atlassian.net \

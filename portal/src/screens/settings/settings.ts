@@ -14,17 +14,31 @@ import type {
   SettingsArea,
   SettingsChangeOut,
 } from '../../api/types'
+import { inTeamZone } from '../workflows/times'
 
-export type SettingsTab = 'connections' | 'people' | 'model'
+export type SettingsTab = 'connections' | 'people' | 'model' | 'how'
 
-export const SETTINGS_TABS: readonly { readonly id: SettingsTab; readonly label: string }[] = [
+interface SettingsTabEntry {
+  readonly id: SettingsTab
+  readonly label: string
+  readonly operatorOnly?: true
+}
+
+const SETTINGS_TAB_LIST: readonly SettingsTabEntry[] = [
   { id: 'connections', label: 'Connections' },
-  { id: 'people', label: 'People and roles' },
+  { id: 'people', label: 'People and permissions' },
   { id: 'model', label: 'AI model' },
+  { id: 'how', label: 'How it works', operatorOnly: true },
 ]
 
-export function tabFrom(param: string | null): SettingsTab {
-  return param === 'people' || param === 'model' ? param : 'connections'
+/** How it works is for Operators. Nobody else is offered it. */
+export function settingsTabsFor(operator: boolean): readonly SettingsTabEntry[] {
+  return SETTINGS_TAB_LIST.filter((tab) => operator || tab.operatorOnly !== true)
+}
+
+export function tabFrom(param: string | null, operator: boolean): SettingsTab {
+  if (param === 'people' || param === 'model') return param
+  return param === 'how' && operator ? 'how' : 'connections'
 }
 
 export const ONLY_OPERATORS_WORDS = 'Only Operators change settings.'
@@ -34,10 +48,13 @@ export const SETTINGS_OFF_WORDS =
   'AI model settings are switched off on this platform. The team that runs the platform can switch them on.'
 export const CHECK_WHAT_YOU_TYPED_WORDS = 'Check what you typed, then try again.'
 
+export const N8N_OPERATORS_ONLY_WORDS = 'Only Operators can have n8n access, and Approvers never can.'
+
 export const ROLE_RULES: readonly string[] = [
   'Making someone an Approver needs another Approver to confirm it.',
   'At least 2 people are Approvers, so nobody has to approve their own work.',
   'At least 1 person is an Operator, so someone can always change settings.',
+  'Only Operators can have n8n access. Gaining the Approver role ends it.',
 ]
 
 export const peopleRefusalWords: Record<PeopleRefusal, string> = {
@@ -52,6 +69,7 @@ export const peopleRefusalWords: Record<PeopleRefusal, string> = {
   already_asked: 'An Approver has already been asked to confirm this person.',
   confirmation_waiting: 'An Approver is still deciding on this person’s Approver role. Ask them to say not now first.',
   yourself: 'You can’t take yourself off the list.',
+  n8n_operators_only: N8N_OPERATORS_ONLY_WORDS,
 }
 
 export const decideRefusalWords: Record<DecideRefusal, string> = {
@@ -105,6 +123,18 @@ export function settingsErrorWords(error: unknown, signIn: SessionKind, missing:
   return error.status >= 500 ? errorWords(error, signIn) : NOT_ACCEPTED_WORDS
 }
 
+/** Each person's roles in words, for someone who reads People and permissions but can't change it. */
+export function rolesWords(person: Pick<PersonOut, 'operator' | 'approver' | 'n8n_access'>): string {
+  const roles = [person.operator ? 'Operator' : null, person.approver ? 'Approver' : null].filter((role) => role !== null).join(' and ')
+  return person.n8n_access ? `${roles}, n8n access` : roles
+}
+
+/** Ending it is always allowed. Only an Operator who is no Approver, and not waiting to become one, can be given it. */
+export function canChangeN8nAccess(person: Pick<PersonOut, 'operator' | 'approver' | 'pending_approver' | 'n8n_access'>): boolean {
+  if (person.n8n_access) return true
+  return person.operator && !person.approver && person.pending_approver === null
+}
+
 export function canChangeSettings(me: Me | undefined): boolean {
   return me?.roles.includes('operator') ?? false
 }
@@ -117,24 +147,16 @@ export function keyEndingWords(hint: string): string {
   return `API key ending ${keyHint(hint)}`
 }
 
-const shortDateTime = new Intl.DateTimeFormat('en-GB', {
-  weekday: 'short',
-  day: 'numeric',
-  month: 'short',
-  hour: '2-digit',
-  minute: '2-digit',
-  hourCycle: 'h23',
-  timeZone: 'Asia/Singapore',
-})
+const shortDateTime = inTeamZone({ weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
 
-const shortDate = new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Asia/Singapore' })
+const shortDate = inTeamZone({ weekday: 'short', day: 'numeric', month: 'short' })
 
 export function whenWords(at: string): string {
-  return shortDateTime.format(new Date(at))
+  return shortDateTime().format(new Date(at))
 }
 
 export function activeModelWords(active: ModelOut): string {
-  return `${keyEndingWords(active.key_hint)}. Saved by ${active.by_name} on ${shortDate.format(new Date(active.at))}. It answered the test in ${secondsWords(active.test_seconds)}.`
+  return `${keyEndingWords(active.key_hint)}. Saved by ${active.by_name} on ${shortDate().format(new Date(active.at))}. It answered the test in ${secondsWords(active.test_seconds)}.`
 }
 
 export function secondsWords(seconds: number): string {
@@ -239,8 +261,15 @@ export function saidAfterRefusal(said: PeopleSaid, problem: PeopleProblem): Peop
   return { notice: null, problem: named ? null : problem, left: said.left }
 }
 
+const N8N_ACCOUNT_WORDS: Record<'invited' | 'none', string> = {
+  invited: 'n8n: waiting for them to set a password',
+  none: 'n8n: no account yet',
+}
+
 export function personStatusWords(person: PersonOut): string | null {
-  return person.signed_in ? null : NOT_SIGNED_IN_WORDS
+  const n8n = person.n8n_access && person.n8n_account !== 'ready' ? N8N_ACCOUNT_WORDS[person.n8n_account] : null
+  const said = [person.signed_in ? null : NOT_SIGNED_IN_WORDS, n8n].filter((part) => part !== null)
+  return said.length > 0 ? said.join('. ') : null
 }
 
 export const OTHER_ADDRESS = 'other'
@@ -276,6 +305,10 @@ export function fieldOfProblem(reason: ProblemReason, step: 'key' | 'pick', othe
 
 export function operatorChangeWords(name: string, operator: boolean): string {
   return operator ? `${name} is now an Operator.` : `${name} is no longer an Operator.`
+}
+
+export function n8nAccessWords(name: string, on: boolean): string {
+  return on ? `${name} has n8n access.` : `${name}’s n8n access ended.`
 }
 
 export function undoneWords(name: string, operator: boolean): string {

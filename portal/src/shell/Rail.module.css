@@ -1,0 +1,85 @@
+.rail {
+  position: sticky;
+  top: calc(53px + env(safe-area-inset-top, 0px));
+  display: grid;
+  gap: 4px;
+  padding: 12px 8px;
+}
+
+.link {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 4px;
+  min-height: 58px;
+  padding: 10px 4px 8px;
+  border-radius: 10px;
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 700;
+  text-decoration: none;
+  transition:
+    background-color var(--dur-press) ease,
+    color var(--dur-press) ease,
+    transform var(--dur-press) var(--ease-out);
+}
+
+.link:active {
+  transform: scale(0.97);
+}
+
+.link[aria-current='page'] {
+  background: var(--active);
+  color: var(--ink);
+}
+
+/* A total, not an alert, so it is quiet: the sketch's white badge. */
+.count {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  min-width: 18px;
+  padding: 0 5px;
+  border: 1px solid var(--hair);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .link:hover {
+    background: var(--active);
+    color: var(--ink);
+  }
+}
+
+/* At 900 px and narrower the rail is a row of small buttons under the top bar, left-aligned, as in the sketch. */
+@media (max-width: 900px) {
+  .rail {
+    z-index: var(--z-nav);
+    top: env(safe-area-inset-top, 0px);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--hair);
+    background: var(--surface);
+  }
+
+  .link {
+    grid-auto-flow: column;
+    align-items: center;
+    gap: 6px;
+    min-height: 32px;
+    padding: 6px 10px;
+  }
+
+  .count {
+    position: static;
+  }
+}

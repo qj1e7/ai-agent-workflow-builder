@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { useCacheScope } from '../../api/context'
 import { useLatch } from '../../api/latch'
-import { useAddPerson, useAskApprover, useConfirmations, useDecideConfirmation, usePeopleList, useRemoveApprover, useSetOperator } from '../../api/settingsQueries'
+import { useAddPerson, useAskApprover, useConfirmations, useDecideConfirmation, useMyN8n, usePeopleList, useRemoveApprover, useSetN8nAccess, useSetOperator } from '../../api/settingsQueries'
 import type { ConfirmationOut, Me, PersonOut } from '../../api/types'
 import { Button } from '../../ui/Button'
 import { focusIfFocusFell } from '../../ui/focus'
@@ -13,13 +13,16 @@ import {
   approverRemovedWords,
   askedApproverWords,
   canChangeSettings,
+  canChangeN8nAccess,
   decidedApproverWords,
+  n8nAccessWords,
   ONLY_OPERATORS_WORDS,
   operatorChangeWords,
   peopleRefusalOf,
   pendingApproverFor,
   personStatusWords,
   ROLE_RULES,
+  rolesWords,
   saidAfterListChange,
   saidAfterRefusal,
   undoneWords,
@@ -36,6 +39,7 @@ export const PEOPLE_LEAD = 'Operators set up workflows and change settings. Appr
 
 const operatorBoxId = (personId: string) => `person-${personId}-operator`
 const approverBoxId = (personId: string) => `person-${personId}-approver`
+const n8nBoxId = (personId: string) => `person-${personId}-n8n`
 const rowErrorId = (personId: string) => `person-${personId}-error`
 
 const NOTHING_SAID: PeopleSaid = { notice: null, problem: null, left: null }
@@ -48,7 +52,7 @@ interface Settled {
 
 interface Busy {
   readonly personId: string
-  readonly act: 'operator' | 'approver' | 'confirm' | 'not_now' | 'undo'
+  readonly act: 'operator' | 'approver' | 'n8n' | 'confirm' | 'not_now' | 'undo'
   readonly to?: boolean
 }
 
@@ -59,7 +63,7 @@ export function PeopleTab({ me }: { me: Me | undefined }) {
   const viewer = useCacheScope()
   if (people.isPending) {
     return (
-      <section className={styles['panel']} aria-label="People and roles">
+      <section className={styles['panel']} aria-label="People and permissions">
         <p className="muted" role="status">
           Loading
         </p>
@@ -68,7 +72,7 @@ export function PeopleTab({ me }: { me: Me | undefined }) {
   }
   if (people.isError) {
     return (
-      <section className={styles['panel']} aria-label="People and roles">
+      <section className={styles['panel']} aria-label="People and permissions">
         <p role="status">{words(people.error)}</p>
         <div className={styles['buttons']}>
           <Button onClick={() => void people.refetch()}>Try again</Button>
@@ -91,6 +95,7 @@ function PeoplePanel({ people, confirmations, me }: PanelProps) {
   const setOperator = useSetOperator()
   const askApprover = useAskApprover()
   const removeApprover = useRemoveApprover()
+  const setN8nAccess = useSetN8nAccess()
   const decide = useDecideConfirmation()
   const latch = useLatch()
   const focus = useFocusOnNextRender()
@@ -141,6 +146,12 @@ function PeoplePanel({ people, confirmations, me }: PanelProps) {
     )
   }
 
+  function onN8nAccess(person: PersonOut, to: boolean) {
+    change(person, 'n8n', to, (done) => setN8nAccess.mutate({ personId: person.id, n8nAccess: to }, done), () =>
+      tell({ personId: person.id, words: n8nAccessWords(person.display, to), undo: null }),
+    )
+  }
+
   function onUndo(person: PersonOut, undo: NonNullable<PeopleNotice['undo']>) {
     change(person, 'undo', undefined, (done) => setOperator.mutate({ personId: person.id, operator: undo.operator }, done), () => {
       tell({ personId: person.id, words: undoneWords(undo.name, undo.operator), undo: null })
@@ -185,7 +196,7 @@ function PeoplePanel({ people, confirmations, me }: PanelProps) {
 
   return (
     <section className={styles['panel']} aria-labelledby="people-heading">
-      <h2 id="people-heading">People and roles</h2>
+      <h2 id="people-heading">People and permissions</h2>
       <p className={styles['note']}>{PEOPLE_LEAD}</p>
       {operator ? null : <p className={styles['note']}>{ONLY_OPERATORS_WORDS}</p>}
       <p className="visually-hidden" role="status">
@@ -219,6 +230,7 @@ function PeoplePanel({ people, confirmations, me }: PanelProps) {
             notice={notice?.personId === person.id ? noticeFor(person) : null}
             onOperator={(to) => onOperator(person, to)}
             onApprover={(to) => onApprover(person, to)}
+            onN8nAccess={(to) => onN8nAccess(person, to)}
             onDecide={(confirmation, verdict) => onDecide(person, confirmation, verdict)}
           />
         ))}
@@ -248,15 +260,18 @@ interface RowProps {
   notice: ReactNode
   onOperator: (to: boolean) => void
   onApprover: (to: boolean) => void
+  onN8nAccess: (to: boolean) => void
   onDecide: (confirmation: ConfirmationOut, verdict: 'confirm' | 'not_now') => void
 }
 
-function PersonRow({ person, me, operator, confirmation, askedByName, busy, problem, notice, onOperator, onApprover, onDecide }: RowProps) {
+function PersonRow({ person, me, operator, confirmation, askedByName, busy, problem, notice, onOperator, onApprover, onN8nAccess, onDecide }: RowProps) {
   const tone = personTone(person.display)
   const status = personStatusWords(person)
   const pending = person.pending_approver !== null
   const operatorTicked = busy?.act === 'operator' && busy.to !== undefined ? busy.to : person.operator
   const approverTicked = busy?.act === 'approver' && busy.to !== undefined ? busy.to : person.approver || pending
+  const n8nTicked = busy?.act === 'n8n' && busy.to !== undefined ? busy.to : person.n8n_access
+  const n8nAllowed = canChangeN8nAccess(person)
   const describedBy = problem ? rowErrorId(person.id) : undefined
   const can = pending ? pendingApproverFor(confirmation, person, me, confirmation?.asked_by_name ?? askedByName) : null
 
@@ -273,30 +288,46 @@ function PersonRow({ person, me, operator, confirmation, askedByName, busy, prob
         <span className={styles['small']}>{person.email}</span>
         {status ? <span className={styles['small']}>{status}</span> : null}
       </div>
-      <div className={styles['roles']}>
-        <label className={styles['check']}>
-          <input
-            type="checkbox"
-            id={operatorBoxId(person.id)}
-            checked={operatorTicked}
-            disabled={!operator}
-            aria-describedby={describedBy}
-            onChange={(event) => onOperator(event.target.checked)}
-          />
-          Operator<span className="visually-hidden"> for {person.display}</span>
-        </label>
-        <label className={styles['check']}>
-          <input
-            type="checkbox"
-            id={approverBoxId(person.id)}
-            checked={approverTicked}
-            disabled={!operator || pending}
-            aria-describedby={describedBy}
-            onChange={(event) => onApprover(event.target.checked)}
-          />
-          Approver<span className="visually-hidden"> for {person.display}</span>
-        </label>
-      </div>
+      {operator ? (
+        <div className={styles['roles']}>
+          <label className={styles['check']}>
+            <input
+              type="checkbox"
+              id={operatorBoxId(person.id)}
+              checked={operatorTicked}
+              aria-describedby={describedBy}
+              onChange={(event) => onOperator(event.target.checked)}
+            />
+            Operator<span className="visually-hidden"> for {person.display}</span>
+          </label>
+          <label className={styles['check']}>
+            <input
+              type="checkbox"
+              id={approverBoxId(person.id)}
+              checked={approverTicked}
+              disabled={pending}
+              aria-describedby={describedBy}
+              onChange={(event) => onApprover(event.target.checked)}
+            />
+            Approver<span className="visually-hidden"> for {person.display}</span>
+          </label>
+          {n8nAllowed ? (
+            <label className={styles['check']}>
+              <input
+                type="checkbox"
+                id={n8nBoxId(person.id)}
+                checked={n8nTicked}
+                aria-describedby={describedBy}
+                onChange={(event) => onN8nAccess(event.target.checked)}
+              />
+              n8n access<span className="visually-hidden"> for {person.display}</span>
+            </label>
+          ) : null}
+        </div>
+      ) : (
+        <p className={styles['rolesText']}>{rolesWords(person)}</p>
+      )}
+      {me?.id === person.id && person.n8n_access ? <MyN8nLine /> : null}
       {pending ? (
         <div className={styles['rowNote']}>
           <span className={styles['pill']} data-tone="wait">
@@ -326,6 +357,26 @@ function PersonRow({ person, me, operator, confirmation, askedByName, busy, prob
       {notice ? <div className={styles['rowNote']}>{notice}</div> : null}
     </li>
   )
+}
+
+function MyN8nLine() {
+  const mine = useMyN8n(true)
+  const link = mine.data?.set_password_url ?? null
+  const whyNot = mine.data?.why_not ?? null
+  if (link) {
+    return (
+      <div className={styles['rowNote']}>
+        <a href={link} target="_blank" rel="noopener noreferrer">
+          Set your n8n password
+        </a>
+      </div>
+    )
+  }
+  return whyNot ? (
+    <div className={styles['rowNote']}>
+      <span className={styles['small']}>{whyNot}</span>
+    </div>
+  ) : null
 }
 
 type AddField = 'email' | 'display' | 'roles' | 'form'
