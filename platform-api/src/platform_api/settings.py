@@ -142,7 +142,8 @@ class Settings:
     """N8N_STAFF_ACCESS. Off, the platform makes no staff n8n account and opens no workflow in
     n8n (ENGINE-PLAN 2.9, M5). On, it still waits for a bootstrap that proved the allow list."""
     n8n_editor_url: str | None = None
-    """N8N_EDITOR_URL, where people open n8n's editor, as ADR 0034's n8n_editor_url output."""
+    """N8N_EDITOR_URL, where people open n8n's editor, as ADR 0034's n8n_editor_url output. Each
+    password link n8n makes is shown at this address."""
 
 
 def _required(env: Mapping[str, str], name: str) -> str:

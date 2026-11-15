@@ -304,6 +304,12 @@ class UseCaseView(WireModel):
         "in plain words with what to do: a step the safety checker refused, or n8n not taking "
         "it yet. Null once it moved, and while it only waits for a run to end.",
     )
+    made_in_n8n_by: UserId | None = Field(
+        default=None,
+        description="Who made it in n8n, for a workflow made in n8n and then set up from "
+        "Workflows (ENGINE-PLAN E15). Change it in n8n: its runs are their work, so they never "
+        "approve them. Null for a workflow the Planner laid out.",
+    )
 
 
 class UseCaseList(WireModel):
