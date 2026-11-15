@@ -124,7 +124,7 @@ def _failure(job: str, outcome: dict[str, Any], case: Case | None) -> list[str]:
         lines.append(f"  - Kind `{kind}`.{judge}" + (f" Failed: {failed}." if failed else ""))
         lines += _quoted(words_of(result, getattr(case, "facts", HOME_FACTS)))
     else:
-        lines.append(f"  - Failed: {failed}.")
+        lines += [f"  - Failed: {failed}."] if failed else []
         lines += _quoted(outcome["answer"][:400])
     return lines
 
