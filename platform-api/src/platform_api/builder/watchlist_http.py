@@ -5,17 +5,24 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from platform_api.auth import OPERATORS_ONLY, SIGNED_IN, CurrentPrincipal
 from platform_api.builder.http import Operator
 from platform_api.builder.lifecycle import TooLate
-from platform_api.builder.lifecycle_http import N8N_CHANGED, N8N_NOT_READY, refused_in_n8n
+from platform_api.builder.lifecycle_http import (
+    CHANGED_IN_N8N,
+    CHANGED_SINCE_OPENED,
+    N8N_CHANGED,
+    N8N_NOT_READY,
+    refused_in_n8n,
+)
 from platform_api.builder.models import (
     AddressIn,
     AddSoftware,
     FindIn,
     FindOut,
-    ScheduleIn,
+    ScheduleSaveIn,
     WatchlistOut,
     WatchlistView,
 )
 from platform_api.builder.n8n_draft import DraftRefused, N8nNotReady
+from platform_api.builder.versions import ChangedSince
 from platform_api.builder.watchlist import (
     NeverAtThatAddress,
     NoMoveReported,
@@ -221,12 +228,16 @@ SCHEDULE_REFUSED = {
         "Saves when the watchlist is checked on its own. The caller becomes the schedule "
         "owner, who can never approve a scheduled check. On its own n8n workflow, the Schedule "
         "Trigger changes first, under the version compare, and nothing is saved when n8n does "
-        "not take it."
+        "not take it. With expected_version, a save made from a version of the watchlist that "
+        "is no longer in use saves nothing."
     ),
-    responses=SCHEDULE_REFUSED,
+    responses={
+        **SCHEDULE_REFUSED,
+        409: error_response(f"{CHANGED_SINCE_OPENED} Or: {CHANGED_IN_N8N}"),
+    },
 )
 async def save_schedule(
-    body: ScheduleIn, principal: Operator, watchlist: CurrentWatchlist
+    body: ScheduleSaveIn, principal: Operator, watchlist: CurrentWatchlist
 ) -> WatchlistView:
     return _scheduled(await watchlist.save_schedule(principal, body))
 
@@ -241,12 +252,14 @@ async def turn_off_schedule(principal: Operator, watchlist: CurrentWatchlist) ->
 
 
 def _scheduled(
-    saved: WatchlistView | NoWatchlist | N8nNotReady | DraftRefused | ChangedInN8n,
+    saved: WatchlistView | NoWatchlist | N8nNotReady | DraftRefused | ChangedInN8n | ChangedSince,
 ) -> WatchlistView:
     match saved:
         case WatchlistView():
             return saved
         case NoWatchlist():
             raise HTTPException(404, "Add software first, then set the schedule")
+        case ChangedSince():
+            raise HTTPException(409, CHANGED_SINCE_OPENED)
         case N8nNotReady() | DraftRefused() | ChangedInN8n():
             raise refused_in_n8n(saved)

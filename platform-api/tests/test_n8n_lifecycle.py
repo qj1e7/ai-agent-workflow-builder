@@ -3,6 +3,7 @@ its own (ENGINE-PLAN 2.4 and 2.5): the Portal says On only once n8n has every tr
 person who turned it on is its publisher, and n8n runs exactly the version the records hold."""
 
 from collections.abc import AsyncIterator
+from copy import deepcopy
 from datetime import datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -205,6 +206,61 @@ async def test_a_change_made_in_n8n_since_is_never_saved_over(own: N8nLab):
     assert saved.json()["detail"] == "Changed again since, in n8n. Nothing was saved."
     view = (await own.lab.call("alice", "GET", f"/api/v1/use-cases/{use_case_id}")).json()
     assert view["version"] == 1
+
+
+CHANGED_SINCE_OPENED = {"detail": "Changed since you opened it. Nothing was saved."}
+
+
+async def test_a_schedule_saved_from_an_old_read_is_refused_and_publishes_nothing(own: N8nLab):
+    """Carol saved Mondays after Alice's page read version 1. Alice's save from that read
+    changes nothing anywhere, so Carol's change stands. Saved from the version in use, it goes."""
+    use_case_id, workflow_id = await made(own, on=True)
+    path = f"/api/v1/use-cases/{use_case_id}/schedule"
+    carols = {"day": "monday", "at": "09:00", "expected_version": 1}
+    assert (await own.lab.call("carol", "PUT", path, carols)).status_code == 200
+    in_n8n = deepcopy(own.n8n.workflows[workflow_id])
+
+    alices = {"day": "friday", "at": "17:30", "expected_version": 1}
+    stale = await own.lab.call("alice", "PUT", path, alices)
+
+    assert (stale.status_code, stale.json()) == (409, CHANGED_SINCE_OPENED)
+    assert own.n8n.workflows[workflow_id] == in_n8n, "nothing was written to n8n"
+    view = (await own.lab.call("alice", "GET", f"/api/v1/use-cases/{use_case_id}")).json()
+    assert (view["version"], view["schedule"]["day"], view["schedule"]["owner_name"]) == (
+        2,
+        "monday",
+        "Carol",
+    )
+    versions = await own.lab.call("alice", "GET", f"/api/v1/use-cases/{use_case_id}/versions")
+    assert [v["version"] for v in versions.json()["versions"]] == [2, 1]
+
+    fresh = await own.lab.call("alice", "PUT", path, {**alices, "expected_version": 2})
+    assert fresh.status_code == 200, fresh.text
+    assert (fresh.json()["version"], fresh.json()["schedule"]["owner_name"]) == (3, "Alice")
+
+
+async def test_a_held_schedule_names_no_next_run_until_another_operator_takes_it_over(
+    own: N8nLab,
+):
+    use_case_id, _ = await made(own, on=True)
+    path = f"/api/v1/use-cases/{use_case_id}/schedule"
+    monday = {"day": "monday", "at": "09:00", "expected_version": 1}
+    assert (await own.lab.call("carol", "PUT", path, monday)).status_code == 200
+    assert (await own.lab.call("alice", "DELETE", "/api/v1/people/carol")).status_code == 204
+
+    held = (await own.lab.call("bob", "GET", f"/api/v1/use-cases/{use_case_id}")).json()
+
+    assert (held["state"], held["next_run_at"], held["schedule"]["held"]) == (
+        "on",
+        None,
+        "owner_removed",
+    )
+    taken = await own.lab.call("alice", "PUT", path, {**monday, "expected_version": 2})
+    assert taken.status_code == 200, taken.text
+    view = taken.json()
+    assert (view["schedule"]["held"], view["schedule"]["owner_name"]) == (None, "Alice")
+    shown = datetime.fromisoformat(view["next_run_at"]).astimezone(SINGAPORE)
+    assert (shown.weekday(), shown.hour, shown.minute) == (0, 9, 0)
 
 
 async def test_a_run_carries_its_workflow_and_where_its_trigger_listens(own: N8nLab):

@@ -250,7 +250,9 @@ def lifecycle_fixtures() -> dict[str, WireModel | list[WireModel]]:
         "builder/use-case.deleted.json": DELETED,
         "builder/draft.in.json": DRAFT_IN,
         "builder/drafts.json": DRAFTS,
-        "builder/schedule.in.json": UseCaseScheduleIn(day="monday", at="08:00", via="chat"),
+        "builder/schedule.in.json": UseCaseScheduleIn(
+            day="monday", at="08:00", via="chat", expected_version=1
+        ),
         "builder/undo.in.json": UndoIn(via="page"),
         "builder/use-case.versioned.json": VERSIONED,
         "builder/use-case.undone.json": UNDONE_USE_CASE,

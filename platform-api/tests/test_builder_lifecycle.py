@@ -329,6 +329,28 @@ async def test_a_schedule_whose_owner_left_the_list_names_no_next_run_until_it_i
     assert (taken["schedule"]["held"], taken["schedule"]["owner_name"]) == (None, "Alice")
 
 
+async def test_a_watchlist_schedule_saved_from_an_old_read_saves_nothing(lab: Lab):
+    """Alice's page read the watchlist before Carol added Redis. Her save from that read is
+    refused, and the schedule stays as it was. Saved from the version in use, it goes."""
+    await watchlist_workflow(lab)
+    read = (await lab.call("alice", "GET", "/api/v1/watchlist")).json()["watchlist"]
+    assert (await lab.call("carol", "POST", "/api/v1/watchlist/software", REDIS)).status_code == 201
+
+    friday = {"day": "friday", "at": "08:00", "expected_version": read["version"]}
+    stale = await lab.call("alice", "PUT", "/api/v1/watchlist/schedule", friday)
+
+    assert (stale.status_code, stale.json()) == (
+        409,
+        {"detail": "Changed since you opened it. Nothing was saved."},
+    )
+    now = (await lab.call("alice", "GET", "/api/v1/watchlist")).json()["watchlist"]
+    assert now["schedule"] == read["schedule"]
+    fresh = {**friday, "expected_version": now["version"]}
+    saved = await lab.call("alice", "PUT", "/api/v1/watchlist/schedule", fresh)
+    assert saved.status_code == 200, saved.text
+    assert saved.json()["schedule"]["day"] == "friday"
+
+
 @pytest.mark.parametrize(
     ("owner", "change", "held"),
     [

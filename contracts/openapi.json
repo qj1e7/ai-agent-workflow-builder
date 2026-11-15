@@ -9985,6 +9985,36 @@
         "title": "ScheduleIn",
         "type": "object"
       },
+      "ScheduleSaveIn": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "$ref": "#/components/schemas/ClockTime",
+            "description": "Time of day in Singapore, HH:MM on a 5-minute step."
+          },
+          "day": {
+            "$ref": "#/components/schemas/Day"
+          },
+          "expected_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The version the person read before making this change. When another version is in use by now, nothing is saved or published and the answer is 409, so a teammate's later change is never overwritten.",
+            "title": "Expected Version"
+          }
+        },
+        "required": [
+          "day",
+          "at"
+        ],
+        "title": "ScheduleSaveIn",
+        "type": "object"
+      },
       "ScheduleView": {
         "additionalProperties": false,
         "properties": {
@@ -11873,6 +11903,18 @@
           },
           "day": {
             "$ref": "#/components/schemas/Day"
+          },
+          "expected_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The version the person read before making this change. When another version is in use by now, nothing is saved or published and the answer is 409, so a teammate's later change is never overwritten.",
+            "title": "Expected Version"
           },
           "via": {
             "$ref": "#/components/schemas/Via",
@@ -18793,7 +18835,7 @@
     },
     "/api/v1/use-cases/{use_case_id}/schedule": {
       "put": {
-        "description": "Saves when the workflow runs on its own, in Singapore time. The caller becomes the schedule owner, whose scheduled runs start as them and who can never approve them. That lifts a hold, so an Operator takes over a workflow whose owner can no longer run it by saving its schedule. A new schedule publishes a new version of the workflow, which the answer names. Saving the same schedule again publishes none. A paused workflow stays paused. Saving is not a write to Jira or Confluence, so it needs no approval.",
+        "description": "Saves when the workflow runs on its own, in Singapore time. The caller becomes the schedule owner, whose scheduled runs start as them and who can never approve them. That lifts a hold, so an Operator takes over a workflow whose owner can no longer run it by saving its schedule. A new schedule publishes a new version of the workflow, which the answer names. Saving the same schedule again publishes none. A paused workflow stays paused. Saving is not a write to Jira or Confluence, so it needs no approval. With expected_version, a save made from a version that is no longer in use saves nothing.",
         "operationId": "save_schedule_api_v1_use_cases__use_case_id__schedule_put",
         "parameters": [
           {
@@ -18865,7 +18907,7 @@
                 }
               }
             },
-            "description": "The Software watchlist's schedule is saved on the Software page. Or: Changed again since, in n8n. Nothing was saved."
+            "description": "Changed since you opened it. Nothing was saved. Or: The Software watchlist's schedule is saved on the Software page. Or: Changed again since, in n8n. Nothing was saved."
           },
           "422": {
             "content": {
@@ -19558,13 +19600,13 @@
         ]
       },
       "put": {
-        "description": "Saves when the watchlist is checked on its own. The caller becomes the schedule owner, who can never approve a scheduled check. On its own n8n workflow, the Schedule Trigger changes first, under the version compare, and nothing is saved when n8n does not take it.",
+        "description": "Saves when the watchlist is checked on its own. The caller becomes the schedule owner, who can never approve a scheduled check. On its own n8n workflow, the Schedule Trigger changes first, under the version compare, and nothing is saved when n8n does not take it. With expected_version, a save made from a version of the watchlist that is no longer in use saves nothing.",
         "operationId": "save_schedule_api_v1_watchlist_schedule_put",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ScheduleIn"
+                "$ref": "#/components/schemas/ScheduleSaveIn"
               }
             }
           },
@@ -19619,7 +19661,7 @@
                 }
               }
             },
-            "description": "Changed again since, in n8n. Nothing was saved."
+            "description": "Changed since you opened it. Nothing was saved. Or: Changed again since, in n8n. Nothing was saved."
           },
           "422": {
             "content": {

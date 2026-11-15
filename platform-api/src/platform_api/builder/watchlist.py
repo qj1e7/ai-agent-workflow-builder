@@ -32,7 +32,7 @@ from platform_api.builder.models import (
     NoProjectChecked,
     NoProjectKnown,
     ProjectGuess,
-    ScheduleIn,
+    ScheduleSaveIn,
     ScheduleView,
     SourceView,
     VersionSourceView,
@@ -48,6 +48,7 @@ from platform_api.builder.templates import (
     WATCHLIST_NAME,
     WATCHLIST_PROJECT,
 )
+from platform_api.builder.versions import ChangedSince
 from platform_api.db import Connection, Database, UnitOfWork, hold_workflow, json
 from platform_api.orchestration import (
     ATTENTION_ORDER,
@@ -286,7 +287,7 @@ class NoWatchlist:
     pass
 
 
-type ScheduleRefused = N8nNotReady | DraftRefused | ChangedInN8n
+type ScheduleRefused = N8nNotReady | DraftRefused | ChangedInN8n | ChangedSince
 type Move = MovedToN8n | AlreadyOnN8n | WaitsForRun | NoWatchlist | N8nNotReady | DraftRefused
 
 
@@ -295,7 +296,7 @@ def schedule_view(
 ) -> ScheduleView | None:
     """The next check is when its own n8n workflow's Schedule Trigger fires, to the second n8n
     adds to it (ENGINE-PLAN 2.4). Still on the shared run workflow, it starts none until it
-    moves."""
+    moves, and a held schedule starts none until an Operator takes it over."""
     if saved is None:
         return None
     next_at = None
@@ -308,7 +309,7 @@ def schedule_view(
         owner=saved.owner,
         owner_name=saved.owner_name,
         saved_at=saved.saved_at,
-        next_at=next_at if on else None,
+        next_at=next_at if on and saved.held is None else None,
         held=saved.held,
     )
 
@@ -720,28 +721,32 @@ class Watchlist:
         return await self._view_of(record)
 
     async def save_schedule(
-        self, principal: Principal, body: ScheduleIn
+        self, principal: Principal, body: ScheduleSaveIn
     ) -> WatchlistView | NoWatchlist | ScheduleRefused:
         """Saving makes the caller the schedule owner, and the owner cannot approve its checks."""
-        return await self._schedule(principal, Schedule(body.day, body.at))
+        return await self._schedule(principal, Schedule(body.day, body.at), body.expected_version)
 
     async def turn_off_schedule(
         self, principal: Principal
     ) -> WatchlistView | NoWatchlist | ScheduleRefused:
-        return await self._schedule(principal, None)
+        return await self._schedule(principal, None, None)
 
     async def _schedule(
-        self, principal: Principal, schedule: Schedule | None
+        self, principal: Principal, schedule: Schedule | None, expected: int | None
     ) -> WatchlistView | NoWatchlist | ScheduleRefused:
         """On its own n8n workflow, the Schedule Trigger changes first, under the version compare
-        (ENGINE-PLAN 2.5). Nothing is saved here when n8n does not take it."""
-        record = await self._record()
-        if record is None:
-            return NoWatchlist()
-        if record.n8n is not None:
-            refused = await self._schedule_in_n8n(principal, schedule)
-            if refused is not None:
-                return refused
+        (ENGINE-PLAN 2.5). Nothing is saved here when n8n does not take it, or when the change
+        was made from a version that is no longer in use."""
+        async with self._db.transaction("builder") as uow:
+            record = await self._hold(uow)
+            if record is None:
+                return NoWatchlist()
+            if expected is not None and record.version != expected:
+                return ChangedSince()
+            if record.n8n is not None:
+                refused = await self._schedule_in_n8n(uow, record, record.n8n, principal, schedule)
+                if refused is not None:
+                    return refused
         if schedule is None:
             await self._schedules.delete(record.use_case_id)
         else:
@@ -749,40 +754,34 @@ class Watchlist:
         return await self._view_of(await self._record() or record)
 
     async def _schedule_in_n8n(
-        self, principal: Principal, schedule: Schedule | None
+        self,
+        uow: UnitOfWork,
+        record: WatchlistRecord,
+        n8n: InN8n,
+        principal: Principal,
+        schedule: Schedule | None,
     ) -> ScheduleRefused | None:
         if self._n8n is None:
             return N8nNotReady("This platform is not connected to n8n.")
-        async with self._db.transaction("builder") as uow:
-            record = await self._hold(uow)
-            if record is None or record.n8n is None:
-                return None
-            laid = await self._laid_out(self._n8n, record.use_case_id, schedule)
-            if not isinstance(laid, Laid):
-                return laid
-            if laid.document == record.n8n.document:
-                return None
-            in_use = record.n8n.version_id
-            if in_use is None:
-                return N8nNotReady(
-                    "This version is not saved in n8n, so it cannot be changed there."
-                )
-            live = is_on(record.lifecycle)
-            written = await write_in_n8n(
-                self._n8n.drafts,
-                record.n8n.workflow_id,
-                record.n8n.draft or in_use,
-                in_use,
-                laid.document,
-                live,
-            )
-            if not isinstance(written, Written):
-                return written
-            moved = await self._next_version(uow, record, record.software)
-            publisher = principal.user_id if live else None
-            await _keep_in_n8n(
-                uow, record.use_case_id, moved.version, written, laid.graded.grade, publisher
-            )
+        laid = await self._laid_out(self._n8n, record.use_case_id, schedule)
+        if not isinstance(laid, Laid):
+            return laid
+        if laid.document == n8n.document:
+            return None
+        in_use = n8n.version_id
+        if in_use is None:
+            return N8nNotReady("This version is not saved in n8n, so it cannot be changed there.")
+        live = is_on(record.lifecycle)
+        written = await write_in_n8n(
+            self._n8n.drafts, n8n.workflow_id, n8n.draft or in_use, in_use, laid.document, live
+        )
+        if not isinstance(written, Written):
+            return written
+        moved = await self._next_version(uow, record, record.software)
+        publisher = principal.user_id if live else None
+        await _keep_in_n8n(
+            uow, record.use_case_id, moved.version, written, laid.graded.grade, publisher
+        )
         return None
 
     async def move_to_n8n(self) -> Move:

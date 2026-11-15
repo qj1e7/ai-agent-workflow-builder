@@ -13,7 +13,7 @@ import pytest
 
 from platform_api.builder import Builder
 from platform_api.builder.layout import schedule_rule
-from platform_api.builder.models import RepublishIn, ScheduleIn, WatchlistView
+from platform_api.builder.models import RepublishIn, ScheduleSaveIn, WatchlistView
 from platform_api.builder.sweep import ASKED_GAP, Found, VersionsSweep
 from platform_api.builder.versions import changes_between, schedule_of
 from platform_api.builder.watchlist import MovedToN8n
@@ -550,7 +550,7 @@ async def test_the_watchlists_schedule_save_compares_with_the_draft_after_a_roll
     draft = world.n8n.workflows[moved.workflow_id]["versionId"]
     assert world.n8n.workflows[moved.workflow_id]["activeVersionId"] != draft
 
-    saved = await world.on_n8n.save_schedule(ALICE, ScheduleIn(day="friday", at="08:00"))
+    saved = await world.on_n8n.save_schedule(ALICE, ScheduleSaveIn(day="friday", at="08:00"))
 
     assert isinstance(saved, WatchlistView), saved
     [row] = await world.rows("SELECT n8n_draft_id FROM builder.use_cases")

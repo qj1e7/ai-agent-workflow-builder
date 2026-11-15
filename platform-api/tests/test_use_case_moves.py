@@ -30,13 +30,13 @@ from platform_api.db import json
 from platform_api.orchestration import Publisher, RanVersion, Schedule
 from platform_api.orchestration.approvals import Refusal, Verdict
 from platform_api.orchestration.runs import Acting, AwaitingApproval, Succeeded
-from platform_api.orchestration.schedule_store import ScheduleBook, schedule_owner
+from platform_api.orchestration.schedule_store import ScheduleBook, saved_schedule
 from platform_api.orchestration.service import Decided, DecisionRefused
 from platform_api.orchestration.watch_store import WatchFacts
 from platform_api.shared import N8nExecutionId, RunId, UseCaseId
 from tests.conftest import PostgresUrls
 from tests.fake_n8n import FakeN8n
-from tests.support import ALICE, BOB, CAROL, SPEC
+from tests.support import ALICE, BOB, CAROL, SPEC, schedule_owners_listed
 from tests.test_builder_lifecycle import Lab, ModelConnected
 from tests.test_n8n_builder import BODY, ERROR_WORKFLOW, WRITES, lab
 from tests.test_n8n_lifecycle import NEVER_LIVE, Workflows
@@ -217,7 +217,8 @@ async def test_safety_everyone_whose_work_it_was_stays_a_party_after_the_move(m:
     version_id = (await m.version(use_case_id, 4))["n8n_version_id"]
     assert await m.builder.facts.version(moved.workflow_id, version_id) == MOVED
     async with m.lab.h.db.connection("orchestration") as conn:
-        assert await schedule_owner(conn, UseCaseId(use_case_id)) == ALICE.user_id
+        saved = await saved_schedule(conn, UseCaseId(use_case_id))
+    assert saved is not None and saved.owner == ALICE.user_id
 
 
 async def test_safety_nobody_whose_work_a_moved_workflow_is_approves_its_scheduled_run(w: Writes):
@@ -225,6 +226,7 @@ async def test_safety_nobody_whose_work_a_moved_workflow_is_approves_its_schedul
     schedule and published it, Carol set it up and Dave changed it. Bob, who is none of them,
     may say yes."""
     w.workflows.versions = {"v1": MOVED}
+    await schedule_owners_listed(w.h.db, ALICE)
     await ScheduleBook(w.h.db).save(SPEC.use_case_id, Schedule("tuesday", "07:30"), ALICE)
     await w.ask()
     run = await w.run()

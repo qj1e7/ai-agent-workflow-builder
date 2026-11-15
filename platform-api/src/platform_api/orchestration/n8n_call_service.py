@@ -140,7 +140,7 @@ from platform_api.orchestration.runs import (
     working_on,
     write_done,
 )
-from platform_api.orchestration.schedule_store import schedule_owner
+from platform_api.orchestration.schedule_store import saved_schedule
 from platform_api.orchestration.self_test import SelfTests
 from platform_api.orchestration.service import (
     DENIED_ON_THE_WIRE,
@@ -670,6 +670,15 @@ class NodeCalls:
             case Refused():
                 return link
             case NewRun(started_by, trigger, joined):
+                if trigger == "schedule":
+                    # The schedule's owner, as the Portal names them, is a party to every run it
+                    # starts, even when someone else published the version that runs (D5). While
+                    # the owner can no longer run it, its slot ends quietly until another
+                    # Operator takes it over.
+                    saved = await saved_schedule(uow.conn, own.spec.use_case_id)
+                    if saved is not None and saved.held_words is not None:
+                        return NothingToRun(saved.held_words)
+                    joined = (*joined, *_one(None if saved is None else saved.owner))
                 return await linked(
                     await self._new_run(
                         uow, own, started_by, trigger, execution, facts.mode, joined
@@ -776,10 +785,7 @@ class NodeCalls:
         else:
             state = Skipped(run_id, waiting)
             events = skipped_events(created, execution, mode, waiting)
-        # The schedule's owner, as the Portal names them, is a party to every run it starts, even
-        # when someone else published the version that runs (D5), beside the version's authors.
-        owner = None if trigger != "schedule" else await schedule_owner(uow.conn, spec.use_case_id)
-        parties = tuple(dict.fromkeys((*joined, *_one(owner))))
+        parties = tuple(dict.fromkeys(joined))
         record = RunRecord(
             run_id, spec, started_by, uow.now, uow.now, 1, state, (), None, joined_by=parties
         )

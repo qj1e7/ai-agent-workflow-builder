@@ -474,6 +474,15 @@ class ScheduleIn(WireIn):
     at: ClockTime = Field(description="Time of day in Singapore, HH:MM on a 5-minute step.")
 
 
+class ScheduleSaveIn(ScheduleIn):
+    expected_version: int | None = Field(
+        default=None,
+        description="The version the person read before making this change. When another "
+        "version is in use by now, nothing is saved or published and the answer is 409, so a "
+        "teammate's later change is never overwritten.",
+    )
+
+
 type Via = Literal["page", "chat"]
 
 VIA_WORDS = (
@@ -482,7 +491,7 @@ VIA_WORDS = (
 )
 
 
-class UseCaseScheduleIn(ScheduleIn):
+class UseCaseScheduleIn(ScheduleSaveIn):
     via: Via = Field(default="page", description=VIA_WORDS)
 
 

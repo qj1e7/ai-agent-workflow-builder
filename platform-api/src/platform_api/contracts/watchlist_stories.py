@@ -8,7 +8,7 @@ from platform_api.builder.models import (
     AddressChangeView,
     AddSoftware,
     LastCheckView,
-    ScheduleIn,
+    ScheduleSaveIn,
     ScheduleView,
     SourceView,
     VersionSourceView,
@@ -164,7 +164,7 @@ SCHEDULE = ScheduleView(
     saved_at=ADDED_AT,
     next_at=datetime(2026, 11, 23, 9, 0, tzinfo=SINGAPORE),
 )
-SCHEDULE_IN = ScheduleIn(day="every_day", at="06:30")
+SCHEDULE_IN = ScheduleSaveIn(day="every_day", at="06:30", expected_version=7)
 SCHEDULE_SAVED = ScheduleView(
     day="every_day",
     at="06:30",

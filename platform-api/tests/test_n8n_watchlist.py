@@ -2,6 +2,7 @@
 Ask for a yes, Create tickets, through our API's node calls, and what the Software page reads
 after each."""
 
+import logging
 from collections.abc import AsyncIterator
 from dataclasses import replace
 
@@ -24,6 +25,7 @@ from platform_api.orchestration.n8n_calls import (
     Waiting,
     WriteAnswer,
 )
+from platform_api.orchestration.people_store import People
 from platform_api.orchestration.runs import Failed, FailureReason, Succeeded
 from platform_api.orchestration.schedule import Schedule
 from platform_api.orchestration.schedule_store import ScheduleBook
@@ -33,7 +35,17 @@ from platform_api.orchestration.watch import Given
 from platform_api.orchestration.watch_store import WatchFacts, WatchlistStanding
 from platform_api.shared import Principal
 from tests.conftest import PostgresUrls
-from tests.support import BOB, LANGGRAPH, NOW, REDIS, SPEC, fixture, watched
+from tests.support import (
+    BOB,
+    CAROL,
+    LANGGRAPH,
+    NOW,
+    REDIS,
+    SPEC,
+    fixture,
+    schedule_owners_listed,
+    watched,
+)
 from tests.test_n8n_calls import CARD_RUN
 from tests.test_n8n_wait import DAVE, ERIN, resume_url
 from tests.test_n8n_write import Writes, open_writes
@@ -206,6 +218,7 @@ async def test_the_schedule_owner_the_portal_names_never_approves_a_scheduled_ru
     schedule again writes no version, and a version saved while paused is published by whoever
     resumes it. Both are the run's own work."""
     wl.workflows.versions = {"v1": RanVersion("safe", Publisher(publisher.user_id))}
+    await schedule_owners_listed(wl.h.db, owner)
     await ScheduleBook(wl.h.db).save(SPEC.use_case_id, Schedule("tuesday", "07:30"), owner)
 
     waiting = await check(wl, "101")
@@ -225,6 +238,41 @@ async def test_an_empty_watchlist_s_slot_ends_quietly_and_makes_no_run(wl: Write
     assert await wl.call("101", AskCall(resume_url("101")), "Ask for a yes") == NothingToChange()
     assert await wl.runs() == []
     assert wl.h.agent.requests == []
+
+
+async def test_a_schedule_whose_owner_left_the_list_starts_no_run_until_it_is_taken_over(
+    wl: Writes, caplog: pytest.LogCaptureFixture
+):
+    """n8n's Schedule Trigger still fires for a held schedule, so our API ends its slot quietly,
+    as the old tick skipped it: nothing fails in n8n, no run waits on anyone, and the log says
+    why. Once Dave saves it, he owns it, and its next run is his work, which he can't approve."""
+    await schedule_owners_listed(wl.h.db, CAROL, DAVE)
+    schedules = ScheduleBook(wl.h.db)
+    await schedules.save(SPEC.use_case_id, Schedule("tuesday", "07:30"), CAROL)
+    await People(wl.h.db).remove(DAVE, CAROL.user_id)
+    left = await schedules.get(SPEC.use_case_id)
+    assert left is not None and left.held == "owner_removed"
+    wl.started("101")
+
+    with caplog.at_level(logging.INFO):
+        assert await wl.call("101", READ, "Read the watchlist") == Answer(())
+        assert await wl.call("101", CHECK, "Check the watchlist") == Answer(())
+        asked = await wl.call("101", AskCall(resume_url("101")), "Ask for a yes")
+
+    assert asked == NothingToChange()
+    assert await wl.runs() == []
+    assert wl.h.agent.requests == []
+    assert (
+        "Not running: Carol is no longer on the People list. "
+        "An Operator can take it over by saving the schedule."
+    ) in caplog.text
+
+    await schedules.save(SPEC.use_case_id, Schedule("tuesday", "07:30"), DAVE)
+    assert isinstance(await check(wl, "102"), Waiting)
+    run = await wl.run()
+    assert DAVE.user_id in run.parties
+    assert await wl.decide(DAVE) == DecisionRefused(Refusal.OWN_WORK)
+    assert not isinstance(await wl.decide(BOB), DecisionRefused), "another Approver can say yes"
 
 
 async def test_the_request_goes_to_teams_without_waiting_for_the_next_tick(wl: Writes):
