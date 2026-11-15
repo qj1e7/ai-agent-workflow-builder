@@ -13,6 +13,7 @@ from agent_runtime.answers import (
     word_rule_refusal,
 )
 from agent_runtime.contract import (
+    AbilitiesAnswer,
     AnswerRequest,
     CantAnswer,
     CantRow,
@@ -88,6 +89,8 @@ class AnswerCase(Case):
     schedule: list[RowState] = []
     crossed: list[str] = []
     reasons: list[str] = []
+    not_reasons: list[str] = []
+    how_to_start: bool | None = None
     change: ScheduleChange | None = None
     edit_cant: EditCant | None = None
     one_liner: str | None = None
@@ -327,6 +330,13 @@ def _part_checks(case: AnswerCase, shown: PlannerAnswer, parts: list[RequestPart
     if case.reasons:
         given = {p.reason for p in parts}
         found.append(check("gives_the_reason", [r for r in case.reasons if r not in given]))
+    if case.not_reasons:
+        wrong = [f"{p.reason}: {p.text}" for p in parts if p.reason in case.not_reasons]
+        found.append(check("never_gives_the_reason", wrong))
+    if case.how_to_start is not None:
+        shows = isinstance(shown, AbilitiesAnswer) and shown.how_to_start
+        wrong = [] if shows == case.how_to_start else [f"how_to_start is {shows}"]
+        found.append(check("shows_how_to_start", wrong))
     return found
 
 

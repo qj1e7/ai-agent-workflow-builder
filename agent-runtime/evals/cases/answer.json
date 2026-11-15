@@ -623,6 +623,11 @@
     "task": "What can you do?",
     "kind": [
       "abilities"
+    ],
+    "how_to_start": false,
+    "not_reasons": [
+      "ask_on_its_own",
+      "not_followed"
     ]
   },
   {
@@ -6150,5 +6155,70 @@
       "delete*"
     ],
     "one_liner": "I don't delete anything in Jira."
+  },
+  {
+    "id": "help-steps-to-use",
+    "note": "The team lead's words on Home. The question is the whole request, so it is answered with the steps, never crossed to ask on its own.",
+    "task": "list me the steps to use this app",
+    "kind": [
+      "abilities"
+    ],
+    "how_to_start": true,
+    "not_reasons": [
+      "ask_on_its_own",
+      "not_followed"
+    ]
+  },
+  {
+    "id": "help-how-to-start",
+    "note": "The team lead's second try, with the space before the question mark.",
+    "task": "how can i start to use this ?",
+    "kind": [
+      "abilities"
+    ],
+    "how_to_start": true,
+    "not_reasons": [
+      "ask_on_its_own",
+      "not_followed"
+    ]
+  },
+  {
+    "id": "help-alone",
+    "note": "One word. It gets the steps, never \"I didn't follow that\".",
+    "task": "help",
+    "kind": [
+      "abilities"
+    ],
+    "how_to_start": true,
+    "not_reasons": [
+      "ask_on_its_own",
+      "not_followed"
+    ]
+  },
+  {
+    "id": "help-how-it-works",
+    "note": "A question about the app, so the steps answer it.",
+    "task": "how does this work?",
+    "kind": [
+      "abilities"
+    ],
+    "how_to_start": true,
+    "not_reasons": [
+      "ask_on_its_own",
+      "not_followed"
+    ]
+  },
+  {
+    "id": "help-what-and-pause",
+    "note": "A real mix: the question is answered or asked on its own beside the pause, whichever the answer does.",
+    "task": "what can you do and pause the morning check",
+    "kind": [
+      "abilities",
+      "pause",
+      "edit"
+    ],
+    "reasons": [
+      "ask_on_its_own"
+    ]
   }
 ]
