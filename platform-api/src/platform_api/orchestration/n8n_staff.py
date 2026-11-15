@@ -12,7 +12,7 @@ its person, and dropped once used. It is never logged."""
 import asyncio
 import contextlib
 import logging
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Awaitable, Callable, Iterable, Mapping
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from typing import Any, Literal
@@ -21,7 +21,7 @@ import httpx
 
 from platform_api.db import Database
 from platform_api.orchestration.model_settings import KeyBox
-from platform_api.orchestration.n8n import N8nApi, N8nError, platform_project
+from platform_api.orchestration.n8n import N8nApi, N8nError, personal_spaces, platform_project
 from platform_api.shared import UserId
 
 log = logging.getLogger(__name__)
@@ -103,9 +103,18 @@ class _Row:
     email: str
     access: bool
     on_list: bool
+    operator: bool
+    approver: bool
     n8n_user_id: str | None
     sealed_invite: str | None
     invited_at: datetime | None
+
+    @property
+    def may_hold(self) -> bool:
+        """n8n access, on the People list, as an Operator who is no Approver. The table refuses
+        any other row with the flag; this is asked again so no Approver opens n8n whatever a row
+        says."""
+        return self.access and self.on_list and self.operator and not self.approver
 
 
 @dataclass(frozen=True)
@@ -143,8 +152,8 @@ def _ready_or_not(row: _Row, account: AccountState) -> NotYet | CanOpen:
 
 
 _ROW = (
-    "SELECT id, email, n8n_access, removed_at IS NULL AS on_list, n8n_user_id,"
-    " n8n_invite, n8n_invited_at FROM orchestration.people"
+    "SELECT id, email, n8n_access, removed_at IS NULL AS on_list, is_operator, is_approver,"
+    " n8n_user_id, n8n_invite, n8n_invited_at FROM orchestration.people"
 )
 
 
@@ -154,6 +163,8 @@ def _row(row: Mapping[str, Any]) -> _Row:
         row["email"],
         row["n8n_access"],
         row["on_list"],
+        row["is_operator"],
+        row["is_approver"],
         row["n8n_user_id"],
         row["n8n_invite"],
         row["n8n_invited_at"],
@@ -198,6 +209,36 @@ class StaffAccounts:
             ).fetchall()
         return {row["n8n_user_id"]: UserId(row["id"]) for row in rows}
 
+    async def makers(self) -> Mapping[str, UserId]:
+        """Who made each workflow noted as it left its maker's own space (E15)."""
+        async with self._db.connection("orchestration") as conn:
+            rows = await (
+                await conn.execute("SELECT workflow_id, made_by FROM orchestration.n8n_makers")
+            ).fetchall()
+        return {row["workflow_id"]: UserId(row["made_by"]) for row in rows}
+
+    async def note_made(
+        self, person: UserId, n8n_user_id: str, workflow_ids: Iterable[str]
+    ) -> None:
+        """Notes that these workflows were made in this person's own space, before they leave
+        it. The first maker noted stays."""
+        async with self._db.transaction("orchestration") as uow:
+            for workflow_id in workflow_ids:
+                await uow.conn.execute(
+                    "INSERT INTO orchestration.n8n_makers (workflow_id, made_by, n8n_user_id,"
+                    " noted_at) VALUES (%s, %s, %s, %s) ON CONFLICT (workflow_id) DO NOTHING",
+                    (workflow_id, person, n8n_user_id, uow.now),
+                )
+
+    async def forget_made(self, workflow_ids: Iterable[str]) -> None:
+        """Drops the notes of workflows still in their maker's own space, where their creator
+        names the maker."""
+        async with self._db.transaction("orchestration") as uow:
+            await uow.conn.execute(
+                "DELETE FROM orchestration.n8n_makers WHERE workflow_id = ANY(%s)",
+                (list(workflow_ids),),
+            )
+
     async def display_of(self, person: UserId) -> str:
         async with self._db.connection("orchestration") as conn:
             row = await (
@@ -209,7 +250,7 @@ class StaffAccounts:
 
     async def access(self, person: UserId) -> StaffAccess:
         row = await self._person(person)
-        if row is None or not row.access or not row.on_list:
+        if row is None or not row.may_hold:
             return NoN8nAccess()
         if (closed := (await self.gate()).closed) is not None:
             return StaffClosed(closed)
@@ -217,7 +258,7 @@ class StaffAccounts:
 
     async def mine(self, person: UserId) -> MyN8n:
         row = await self._person(person)
-        if row is None or not row.access or not row.on_list:
+        if row is None or not row.may_hold:
             return MyN8n(False, "none", None, False, NO_ACCESS, None)
         account = await self._account(row)
         closed = (await self.gate()).closed
@@ -280,7 +321,7 @@ class StaffAccounts:
     async def _settle_one(
         self, row: _Row, gate: StaffGate, holds: Callable[[UserId], Awaitable[bool]]
     ) -> Settled | None:
-        wants = row.access and row.on_list
+        wants = row.may_hold
         if wants and row.n8n_user_id is None and gate.closed is None:
             return await self._make(row)
         if not wants and row.n8n_user_id is not None and not await holds(row.id):
@@ -353,7 +394,10 @@ class StaffAccounts:
         return Made(row.id)
 
     async def _end(self, row: _Row) -> Ended:
+        """Ends the account whatever the note does. A delete n8n refuses raises, and the person
+        stays marked for ending, so the next settle tries again."""
         assert row.n8n_user_id is not None
+        await self._note_space(row)
         await self._delete(row.n8n_user_id)
         async with self._db.transaction("orchestration") as uow:
             await uow.conn.execute(
@@ -363,6 +407,22 @@ class StaffAccounts:
             )
         log.info("ended the n8n account of %s", row.id)
         return Ended(row.id)
+
+    async def _note_space(self, row: _Row) -> None:
+        """n8n moves what the account's own space still holds to the platform's project, and
+        keeps no maker for it, so each workflow there is noted as this person's first. Best
+        effort: when n8n can't list it, the account ends anyway, and those workflows never wait
+        to be set up."""
+        assert row.n8n_user_id is not None and self._api is not None
+        try:
+            space = (await personal_spaces(self._api)).get(row.n8n_user_id)
+            if space is None:
+                return
+            left = await self._api.workflows_in(space)
+        except (N8nError, httpx.HTTPError) as error:
+            log.warning("could not note what an ending n8n account made: %s", type(error).__name__)
+            return
+        await self.note_made(row.id, row.n8n_user_id, [w.workflow.id for w in left])
 
     async def _delete(self, n8n_user_id: str) -> None:
         assert self._api is not None

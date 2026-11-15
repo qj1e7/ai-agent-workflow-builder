@@ -20,6 +20,7 @@ import draftsFixture from '../../../../contracts/fixtures/builder/drafts.json'
 import peopleList from '../../../../contracts/fixtures/people/list.json'
 import type { DraftView, HomeOut, Me, PersonOut, ReplyView, TeamRequestView, UnderstoodRowView, UseCaseView } from '../../api/types'
 import type { LastRun } from './workflow'
+import type { MadeInN8nView } from '../../api/madeInN8nQueries'
 import { needsTotal, pinnedOf } from '../home/home'
 
 const ALICE: Me = { id: 'alice', display: 'Alice', roles: ['operator', 'approver'] }
@@ -46,13 +47,15 @@ interface Setup {
   readonly request?: { readonly id: string; readonly data?: TeamRequestView | Error }
   /** The page to open. Home reads the same Needs you, so a test can compare the two. */
   readonly path?: string
+  /** What the platform answers for workflows made in n8n that wait to be set up. */
+  readonly made?: MadeInN8nView[]
 }
 
 /** The platform answers for the person asking. In these tests only Bob may decide the waiting run. */
 const asSeenBy = (me: Me, useCase: UseCaseView): UseCaseView =>
   useCase.last_run?.state === 'awaiting_approval' ? { ...useCase, last_run: { ...useCase.last_run, you_can_decide: me.id === 'bob' } } : useCase
 
-function render({ me = ALICE, useCases = [STOPPED_BUGS, WAITING_WATCHLIST, LANGGRAPH], state, home, drafts, request, path = '/workflows' }: Setup = {}): string {
+function render({ me = ALICE, useCases = [STOPPED_BUGS, WAITING_WATCHLIST, LANGGRAPH], state, home, drafts, request, path = '/workflows', made }: Setup = {}): string {
   const session = createDevSession(null)
   const scope = session.cacheScope()
   const queryClient = new QueryClient({ defaultOptions: { queries: { retryOnMount: false } } })
@@ -63,6 +66,7 @@ function render({ me = ALICE, useCases = [STOPPED_BUGS, WAITING_WATCHLIST, LANGG
   queryClient.setQueryData(['watchlist', scope], { software: [] })
   if (home) queryClient.setQueryData(['home', scope], home)
   if (drafts) queryClient.setQueryData(['drafts', scope], drafts)
+  if (made) queryClient.setQueryData(['made-in-n8n', scope], made)
   if (request?.data instanceof Error) queryClient.getQueryCache().build(queryClient, { queryKey: ['team-request', scope, request.id] }).setState({ status: 'error', error: request.data, fetchStatus: 'idle' })
   else if (request?.data) queryClient.setQueryData(['team-request', scope, request.id], request.data)
   if (useCases instanceof Error) queryClient.getQueryCache().build(queryClient, { queryKey: ['use-cases', scope] }).setState({ status: 'error', error: useCases, fetchStatus: 'idle' })
@@ -492,5 +496,46 @@ describe('a request opened by its link', () => {
   it('has nothing on it that approves', () => {
     const html = open({ request: { id: 'trq_01JD5RP', data: REQUEST } })
     expect(html).not.toMatch(/Approve|Decline|Review and decide/)
+  })
+})
+
+describe('workflows made in n8n, for someone with n8n access', () => {
+  const MAINTAINER: Me = { ...CAROL, n8n_access: true }
+  const SAFE: MadeInN8nView = { workflow_id: 'wf7', name: 'Morning check', made_by: 'carol', published: true, grade: 'safe', findings: [], can_set_up: true, why_not: null }
+  const NO_YES: MadeInN8nView = { ...SAFE, workflow_id: 'wf8', name: 'Quick fix', published: false, grade: 'writes_refused', findings: ['"Create ticket" can run without a yes.'], can_set_up: false, why_not: 'Fix it in n8n first. It isn’t published there, and only a workflow that passes the check can be turned on.' }
+  const madeRow = (html: string, id: string) => new RegExp(`<li[^>]*data-made-in-n8n="${id}"[\\s\\S]*?</li>`).exec(html)?.[0] ?? ''
+
+  it('lists each one as the plan says it, with who made it, its grade in words and Set up', () => {
+    const html = render({ me: MAINTAINER, made: [SAFE] })
+    const row = madeRow(html, 'wf7')
+    expect(text(row)).toContain('Morning check is in n8n but not registered')
+    expect(text(row)).toContain('Made in n8n by Carol. Safe: every change waits for a yes. Published in n8n, so it runs once set up.')
+    expect(row).toMatch(/data-tone="ok"[^>]*>Safe<\/span>/)
+    expect(labelsOf(row, 'Set up')).toHaveLength(1)
+    expect(mainOf(html)).toMatch(/<h2[^>]*>Made in n8n<\/h2>/)
+  })
+
+  it('names what to fix, and offers no Set up for a draft that fails the check', () => {
+    const row = madeRow(render({ me: MAINTAINER, made: [NO_YES] }), 'wf8')
+    expect(text(row).replaceAll('&quot;', '"')).toContain('Writes refused: "Create ticket" can run without a yes. Fix it in n8n first.')
+    expect(row).toMatch(/data-tone="bad"[^>]*>Writes refused<\/span>/)
+    expect(labelsOf(row, 'Set up')).toHaveLength(0)
+  })
+
+  it('says a safe one that is not published is set up as a draft', () => {
+    const row = madeRow(render({ me: MAINTAINER, made: [{ ...SAFE, published: false }] }), 'wf7')
+    expect(text(row)).toContain('It is set up as a draft, since it isn’t published in n8n.')
+  })
+
+  it('shows nothing of it to anyone without n8n access', () => {
+    for (const me of [CAROL, BOB]) {
+      const html = render({ me, made: [SAFE] })
+      expect(html).not.toContain('data-made-in-n8n')
+      expect(html).not.toContain('>Made in n8n<')
+    }
+  })
+
+  it('shows nothing while none waits', () => {
+    expect(render({ me: MAINTAINER, made: [] })).not.toContain('>Made in n8n<')
   })
 })

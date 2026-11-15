@@ -83,6 +83,12 @@ class FakeN8n:
     """How n8n answers the next transfers, in turn. A transfer it refuses moves nothing."""
     transfers_lost: int = 0
     """How many of the next transfers move the workflow but lose their answer."""
+    list_page: int | None = None
+    """How many workflows one page of a project's list holds. All of them unless a test says."""
+    list_answers: list[int] = field(default_factory=list[int])
+    """How n8n answers the next lists of a project's workflows, in turn, before it lists."""
+    user_delete_answers: list[int] = field(default_factory=list[int])
+    """How n8n answers the next deletes of an account, in turn. One it refuses deletes nothing."""
 
     def client(self) -> httpx.AsyncClient:
         return httpx.AsyncClient(transport=httpx.MockTransport(self.handle), base_url="http://n8n")
@@ -116,6 +122,28 @@ class FakeN8n:
         workflow["versionId"] = _new_version()
         workflow["checksum"] = _new_version()
         self._remember(workflow_id)
+
+    def make_in(
+        self, project_id: str, document: dict[str, Any], published_by: str | None = None
+    ) -> str:
+        """A member saves a new workflow in their own space in n8n's editor, and publishes it
+        when `published_by` names them."""
+        self.made += 1
+        workflow_id = f"wf{self.made}"
+        self.workflows[workflow_id] = {
+            **json.loads(json.dumps(document)),
+            "id": workflow_id,
+            "versionId": _new_version(),
+            "checksum": _new_version(),
+            "activeVersionId": None,
+            "active": False,
+            "projectId": project_id,
+            "shared": [{"projectId": project_id, "role": "workflow:owner"}],
+        }
+        self._remember(workflow_id)
+        if published_by is not None:
+            self._activate(workflow_id, self.workflows[workflow_id]["versionId"], published_by)
+        return workflow_id
 
     def accept(self, user_id: str) -> None:
         """The member sets their password through the invite link."""
@@ -252,6 +280,13 @@ class FakeN8n:
                 }
                 self._remember(workflow_id)
                 return httpx.Response(200, json=self.workflows[workflow_id])
+            case "GET", ["workflows"]:
+                if self.list_answers and (answer := self.list_answers.pop(0)) != 200:
+                    return httpx.Response(answer, json={"message": "n8n could not list them"})
+                key = request.headers.get("X-N8N-API-KEY", "")
+                if "workflow:list" not in self.scopes.get(key, {"workflow:list"}):
+                    return httpx.Response(403, json={"message": "Forbidden"})
+                return self._listing(request.url.params)
             case "GET", ["workflows", workflow_id] if workflow_id in self.workflows:
                 return httpx.Response(200, json=self.workflows[workflow_id])
             case "DELETE", ["workflows", workflow_id] if workflow_id in self.workflows:
@@ -347,6 +382,8 @@ class FakeN8n:
                     return httpx.Response(404, json={"message": "Could not find user"})
                 return httpx.Response(200, json={"id": user_id, **user})
             case "DELETE", ["users", user_id]:
+                if self.user_delete_answers and (answer := self.user_delete_answers.pop(0)) != 204:
+                    return httpx.Response(answer, json={"message": "n8n did not delete it"})
                 if self.users.pop(user_id, None) is None:
                     return httpx.Response(404, json={"message": "not found"})
                 transfer = request.url.params.get("transferId")
@@ -377,6 +414,31 @@ class FakeN8n:
                 return httpx.Response(200, json={"data": found})
             case _:
                 return httpx.Response(404, json={"message": f"no {path} in the fake"})
+
+    def _listing(self, params: httpx.QueryParams) -> httpx.Response:
+        """A project's workflows, archived ones marked, each with the version n8n runs, a page at
+        a time as `list_page` says."""
+        held = [
+            {
+                **workflow,
+                "isArchived": workflow_id in self.archived,
+                "activeVersion": None
+                if workflow["activeVersionId"] is None
+                else {
+                    "versionId": workflow["activeVersionId"],
+                    **self.history[workflow_id][workflow["activeVersionId"]],
+                },
+            }
+            for workflow_id, workflow in self.workflows.items()
+            if self.home_of(workflow_id) == params.get("projectId")
+        ]
+        start = int(params.get("cursor", "0"))
+        size = self.list_page or len(held) or 1
+        page = held[start : start + size]
+        after = start + size
+        return httpx.Response(
+            200, json={"data": page, "nextCursor": str(after) if after < len(held) else None}
+        )
 
     def _invitable(self, email: str) -> bool:
         """n8n answers nothing for an email that already has an account in use."""
