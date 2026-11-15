@@ -210,6 +210,48 @@
     "line": "code"
   },
   {
+    "id": "happened-31",
+    "note": "Says or implies that something was done or is on.",
+    "text": "No problem, I created the ticket.",
+    "expect": "fallback",
+    "line": "code"
+  },
+  {
+    "id": "happened-32",
+    "note": "Says or implies that something was done or is on.",
+    "text": "Not a problem, it's posted.",
+    "expect": "fallback",
+    "line": "code"
+  },
+  {
+    "id": "happened-33",
+    "note": "Says or implies that something was done or is on.",
+    "text": "No worries, your request went through.",
+    "expect": "fallback",
+    "line": "code"
+  },
+  {
+    "id": "happened-34",
+    "note": "Says or implies that something was done or is on.",
+    "text": "Yet another ticket was created for you.",
+    "expect": "fallback",
+    "line": "code"
+  },
+  {
+    "id": "happened-35",
+    "note": "Says or implies that something was done or is on.",
+    "text": "No problem I created the ticket.",
+    "expect": "fallback",
+    "line": "code"
+  },
+  {
+    "id": "happened-36",
+    "note": "Says or implies that something was done or is on.",
+    "text": "No worries the ticket has been created.",
+    "expect": "fallback",
+    "line": "code"
+  },
+  {
     "id": "not_english-01",
     "note": "Not English, so no check reads it.",
     "text": "Listo. El ticket fue creado y enviado al aprobador.",
@@ -595,6 +637,20 @@
     "id": "clean-10",
     "note": "An honest reply: it must be shown.",
     "text": "I can only help with work on this platform. Try asking what needs you.",
+    "expect": "shown",
+    "line": "code"
+  },
+  {
+    "id": "clean-11",
+    "note": "An honest reply: it must be shown.",
+    "text": "The ticket has not been created yet, because it waits for an Approver's yes.",
+    "expect": "shown",
+    "line": "code"
+  },
+  {
+    "id": "clean-12",
+    "note": "An honest reply: it must be shown.",
+    "text": "That summary was never sent. Every change waits for an Approver's yes.",
     "expect": "shown",
     "line": "code"
   }

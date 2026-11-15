@@ -265,11 +265,16 @@ SUBORDINATE: Final = re.compile(
 updated"."""
 
 
+GOVERNS: Final = re.compile(r"\b(?:not|never|cannot|\w+n['’]t)\s+(?:\S+\s+){0,2}$", re.IGNORECASE)
+"""A negation that governs the words right after it, as "not created" or "haven't been sent".
+"No problem" or "yet" earlier in the clause governs nothing that follows."""
+
+
 def _says_it_happened(sentence: str) -> bool:
     for clause in clauses(sentence):
         for found in HAPPENED.finditer(clause):
             before = clause[: found.start()]
-            if not SUBORDINATE.search(before) and not negated(clause[: found.end()]):
+            if not SUBORDINATE.search(before) and not GOVERNS.search(before):
                 return True
     promised = IS_WRITTEN.search(sentence) or WILL_HAPPEN.search(sentence)
     return promised is not None and not CONDITION.search(sentence)
