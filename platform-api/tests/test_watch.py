@@ -375,3 +375,36 @@ def test_each_software_the_runtime_gave_a_reason_for_keeps_its_own_and_the_rest_
 def test_a_check_that_failed_for_another_reason_says_nothing_about_the_software():
     error = TaskError(type="AgentError", message="The agent stopped", retryable=False)
     assert all_could_not_read(TASK, error, []) is None
+
+
+def test_the_check_reads_each_software_from_its_own_source():
+    """ADR 0025: a Maven Central or npm package reaches the agents as that source, never as a
+    GitHub repository."""
+    from platform_api.orchestration.agents import GithubSource, MavenSource, NpmSource
+    from platform_api.orchestration.spec import SoftwareSource, WatchedSoftware
+    from platform_api.orchestration.watch import watchlist_inputs
+
+    def watched(id: str, ref: str, kind: str) -> WatchedSoftware:
+        return WatchedSoftware(
+            id=SoftwareId(id),
+            name=id,
+            source=SoftwareSource(ref, kind),  # type: ignore[arg-type]
+            our_version="1.0.0",
+            open_ticket=None,
+            awaiting_approval=False,
+        )
+
+    task = WatchlistTask(
+        tag_pattern=r"^v?(\d+\.\d+\.\d+)$",
+        software=(
+            watched("sw_a", "grafana/grafana", "github"),
+            watched("sw_b", "org.apache.logging.log4j:log4j-core", "maven"),
+            watched("sw_c", "express", "npm"),
+        ),
+    )
+    sources = [s.source for s in watchlist_inputs(task).software]
+    assert sources == [
+        GithubSource(ref="grafana/grafana"),
+        MavenSource(ref="org.apache.logging.log4j:log4j-core"),
+        NpmSource(ref="express"),
+    ]

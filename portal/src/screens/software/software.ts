@@ -311,6 +311,13 @@ export function sourceUrl(kind: SourceKind, ref: string): string {
   return `https://github.com/${ref}`
 }
 
+/** Where a watched software is read, as the software page's Source fact says it, as the sketch draws it (ADR 0025). */
+export function sourceAt(kind: SourceKind, ref: string): string {
+  if (kind === 'maven') return `central.sonatype.com/artifact/${ref.replace(':', '/')}`
+  if (kind === 'npm') return `npmjs.com/package/${ref}`
+  return `github.com/${ref}`
+}
+
 /** One watched source: what the list already holds, to refuse the same one twice. A change of case is the same source. */
 export interface Watched {
   readonly kind: SourceKind

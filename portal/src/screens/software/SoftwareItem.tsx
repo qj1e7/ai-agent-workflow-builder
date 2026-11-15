@@ -7,7 +7,7 @@ import { TicketKeys } from '../jira/TicketKeys'
 import { MovedNote, NotFoundNote } from './NewAddress'
 import { removeButtonId } from './removal'
 import { SoftwareHistory } from './SoftwareHistory'
-import { askWhereWords, cantCheckWords, newestOf, oursOf, rowDomId, sentenceFor, stateOf, ticketFact, ticketsOf, NOT_AUTOMATIC, WATCHLIST_PATH } from './software'
+import { askWhereWords, cantCheckWords, newestOf, oursOf, rowDomId, sentenceFor, sourceAt, stateOf, ticketFact, ticketsOf, NOT_AUTOMATIC, SOURCE_NAMES, WATCHLIST_PATH } from './software'
 import { dateAndClock } from '../workflows/times'
 import workflowStyles from '../workflows/Workflows.module.css'
 import styles from './Software.module.css'
@@ -45,7 +45,7 @@ interface ItemProps {
 
 /**
  * One watched software, as the sketch's software page draws it: the kind line, its name and pill, a banner when GitHub can't find it, then
- * You run, Newest, Upgrade ticket, Checked by and Source. Software GitHub can't find offers Ask the team, as in the sketch. History and
+ * You run, Newest, Upgrade ticket, Checked by and Source, which names GitHub, Maven Central or npm (ADR 0025). Software GitHub can't find offers Ask the team, as in the sketch. History and
  * Remove stay, because the platform can do both. Remove comes last.
  */
 export function SoftwareItem(props: ItemProps) {
@@ -116,10 +116,11 @@ export function SoftwareItem(props: ItemProps) {
           <dt>Source</dt>
           <dd>
             <a href={row.source.url} target="_blank" rel="noopener noreferrer" className={styles['source']}>
-              {`github.com/${row.source.ref}`}
+              {sourceAt(row.source.kind, row.source.ref)}
               <IconExternal size={12} />
-              <span className="visually-hidden"> (opens GitHub in a new tab)</span>
+              <span className="visually-hidden"> (opens {SOURCE_NAMES[row.source.kind]} in a new tab)</span>
             </a>
+            <span className={styles['src']}>{SOURCE_NAMES[row.source.kind]}</span>
           </dd>
         </div>
       </dl>

@@ -48,7 +48,7 @@ _PLACES = """
     SELECT s.source_ref AS repo, s.name FROM builder.use_cases u
     JOIN builder.watched_software s
       ON s.use_case_id = u.use_case_id AND s.version = u.current_version
-    WHERE u.deleted_at IS NULL
+    WHERE u.deleted_at IS NULL AND s.source_kind = 'github'
     UNION
     SELECT c."values" ->> %(input)s, c."values" ->> %(input)s FROM builder.use_cases u
     JOIN builder.use_case_cards c

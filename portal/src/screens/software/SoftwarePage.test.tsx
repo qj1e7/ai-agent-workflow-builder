@@ -831,3 +831,17 @@ describe('add a Maven Central or npm package (ADR 0025)', () => {
     expect(text(form(state))).toContain('Maven coordinates')
   })
 })
+
+describe('a package’s own page (ADR 0025)', () => {
+  it('names the registry it is read from in its Source fact, as the sketch does', () => {
+    const view = statuses as unknown as WatchlistView
+    const first = view.software[0]
+    if (!first) throw new Error('no software in the fixture')
+    const npm: WatchedSoftwareView = { ...first, name: 'Express', source: { kind: 'npm', ref: 'express', url: 'https://www.npmjs.com/package/express?activeTab=versions' } }
+    const words = text(renderItem({ ...view, software: [npm] }, ALICE, npm.id))
+    expect(words).toContain('Source npmjs.com/package/express (opens npm in a new tab) npm')
+    expect(words).not.toContain('github.com/express')
+    const github = text(renderItem(statuses, ALICE, first.id))
+    expect(github).toContain(`Source github.com/${first.source.ref} (opens GitHub in a new tab) GitHub`)
+  })
+})
