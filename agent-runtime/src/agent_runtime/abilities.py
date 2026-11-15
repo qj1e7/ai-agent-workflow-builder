@@ -383,7 +383,8 @@ WRITES: Final = words(
     "email mail notify remind ping nudge chase tell ask alert warn inform contact invite dm "
     "broadcast announce upload export save copy download print grant revoke disable enable "
     "suspend deactivate activate block unblock ban reset restart reboot deploy run install "
-    "uninstall upgrade patch execute trigger kill rollback push commit sync schedule book call"
+    "uninstall upgrade patch apply roll execute trigger kill rollback push commit sync schedule "
+    "book call"
 )
 SYSTEMS: Final = {
     "jira": "Jira",
@@ -560,10 +561,10 @@ class _Word:
     @property
     def system(self) -> str | None:
         """The system the word names, also with an 's or as a capitalised plural, as in
-        "Slack's" or "Slacks", and in a capitalised part of a word joined by a hyphen or a dot,
-        as in "Slack-channel" or "Slack.com". A slash joins systems only, as in "Slack/Teams", so
-        a repository such as "Azure/azure-cli" names none. A trailing s' never reaches here:
-        TOKEN drops an apostrophe with no letter after it."""
+        "Slack's" or "Slacks", and in a part of a word joined by a hyphen or a dot that is
+        capitalised or beside a place, as in "Slack.com" or "slack-channel". A slash joins
+        systems only, as in "Slack/Teams", so a repository such as "Azure/azure-cli" names none.
+        A trailing s' never reaches here: TOKEN drops an apostrophe with no letter after it."""
         if "/" not in self.raw:
             return _system_in(self.raw)
         named = [_system_in(part) for part in self.raw.split("/")]
@@ -596,7 +597,9 @@ def _system_in(raw: str) -> str | None:
     if whole is not None:
         return whole
     parts = re.split(r"[-.]", raw)
-    joined = (_system_named(part) for part in parts if len(parts) > 1 and part[:1].isupper())
+    placed = any(part.casefold() in PLACES for part in parts)
+    named = (part for part in parts if len(parts) > 1 and (part[:1].isupper() or placed))
+    joined = (_system_named(part) for part in named)
     return next((name for name in joined if name is not None), None)
 
 
@@ -833,19 +836,21 @@ def _ends_in_a_place(phrase: Clause, reaches: frozenset[str]) -> bool:
 def _only_the_topic(phrase: Clause, destined: bool) -> bool:
     """Whether a phrase names another system only as what a result is about: it ends in a topic
     such as "outage" or "release", or in Jira tickets, as in "the Teams outage tickets", but not
-    in that system's own, as in "the GitHub issue" or "the ServiceNow incident", and names none
-    of that system's places, as in "the Slack channel review". When the phrase says where a
+    in that system's own, as in "the GitHub issue" or "the ServiceNow ticket review", and names
+    none of that system's places, as in "the Slack channel review". When the phrase says where a
     result goes or who it is for, a ticket, version or release right after the system is that
     system's own too, as in "a summary for the Slack ticket" or "for the Teams release"."""
-    if any(word.low in PLACES and before.system for before, word in pairwise(phrase)):
+    if any(
+        (word.low in PLACES and before.system)
+        or (word.low in TICKETS and before.system in TICKET_SYSTEMS)
+        for before, word in pairwise(phrase)
+    ):
         return False
     for at in range(len(phrase) - 1, -1, -1):
         word = phrase[at]
         if word.raw.isdigit() or word.key:
             continue
         before = phrase[at - 1].system if at else None
-        if word.low in TICKETS and before in TICKET_SYSTEMS:
-            return False
         if destined and before is not None and word.low in OWN_COPIES:
             return False
         return word.low in TOPICS | TICKETS

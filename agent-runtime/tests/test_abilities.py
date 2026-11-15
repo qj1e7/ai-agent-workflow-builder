@@ -333,6 +333,8 @@ RESULT_GOES_ELSEWHERE = [
     "Write a summary for the Slack/Teams channel",
     "Write a summary for the Slack.com channel",
     "Write a summary for the Slacks channel",
+    "Write a summary for the slack-channel",
+    "Write a summary for the ServiceNow ticket review",
     "Write a summary for the Mattermost channel",
     "Write a summary for the Webex space",
     "Write a summary for the PagerDuty incident",
@@ -379,6 +381,20 @@ def test_an_upgrade_or_patch_that_names_a_thing_is_no_write_and_a_ticket_for_it_
     """#120: the Phase 2 upgrade tickets, a topic that is also a verb, an audience whose name
     holds a place word, and a repository whose owner is a system's name."""
     assert why_no_tool(kind, text) is None
+
+
+@pytest.mark.parametrize(
+    ("text", "what"),
+    [
+        ("Create a ticket for the Kubernetes upgrade and apply it", "apply it"),
+        ("Create a ticket for the Kubernetes upgrade and roll it out", "roll it out"),
+        ("Create a ticket for the GitLab patch, then apply the patch", "apply the patch"),
+    ],
+)
+def test_applying_or_rolling_out_after_an_upgrade_ticket_is_a_write_it_cant_do(
+    text: str, what: str
+):
+    assert why_no_tool("do", text) == cant(what)
 
 
 def test_a_place_after_a_comma_is_still_checked():
