@@ -114,6 +114,7 @@ from agent_runtime.reading import (
     POLITE,
     RUNS_BY_ITSELF,
     SAID_LIMIT,
+    SCHEDULE_WORDS,
     AsksAbout,
     SkipRead,
     Span,
@@ -1144,8 +1145,8 @@ def _named_when_asked(
 ) -> WatchlistAnswer | None:
     """The offer to watch the software named in answer to "Which software should I watch?". It
     comes after every refusal, so the model's answer to the skip question can only add one
-    (ADR 0047), and only when the reading names the typed words as the software, with no time
-    and no task beside them (ADR 0042: the first reading names it as software)."""
+    (ADR 0047), and only when the reading names the typed words as the software, with no time,
+    no yes and no task in or beside them (ADR 0042: the first reading names it as software)."""
     named = named_when_asked(request)
     if named is None or isinstance(answer, RefusedAnswer):
         return None
@@ -1154,6 +1155,9 @@ def _named_when_asked(
     if any((read.search, read.ticket, read.place)) or _TICKET_KEY.search(named):
         return None
     if (read.software or "").strip().casefold() != named.casefold():
+        return None
+    said = re.findall(r"\w+", named.casefold())
+    if names_a_yes(named) or any(w in SCHEDULE_WORDS for w in said):
         return None
     return WatchlistAnswer(word=VERSION, software=named)
 
