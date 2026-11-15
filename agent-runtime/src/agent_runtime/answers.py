@@ -716,7 +716,8 @@ def _watch_rows(
     own = stretch is not None and not _its_schedule(request[stretch[0] : stretch[1]], schedule)
     if own and stretch and any(a <= stretch[0] and stretch[1] <= b for a, b in watched):
         # A time the watchlist's one schedule could hold is offered to the whole watchlist.
-        holds = _watchlist_holds(read.schedule)
+        # A schedule the reading missed is read from the request's own words.
+        holds = _watchlist_holds(read.schedule or request[stretch[0] : stretch[1]])
         at = stretch if holds else locate(request, read.schedule or "") or stretch
         text = plain(request[at[0] : at[1]], TEXT_LIMIT)
         note = OWN_TIME if holds else HOW_OFTEN

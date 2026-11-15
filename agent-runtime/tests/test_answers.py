@@ -3122,3 +3122,21 @@ def test_a_ticket_with_a_detail_the_watchlist_cant_keep_still_comes_back():
     task = "Watch LangGraph releases and open an upgrade ticket if it has a major release"
     answer = answer_of(_watch("Watch"), task)
     assert isinstance(answer, CantAnswer) and any("major" in row.text for row in answer.cant)
+
+
+from agent_runtime.parts import HOW_OFTEN, OWN_TIME  # noqa: E402
+
+
+def test_a_watch_time_the_reading_missed_is_read_from_the_request_itself():
+    """The team lead's sentence: with no schedule in the reading, "every weekday at 9" is still
+    one day and one time the watchlist's one schedule could hold, never "that often"."""
+    task = "Check LangGraph for new releases every weekday at 9"
+    answer = answer_of(_watch("releases"), task)
+    notes = [row.note for row in getattr(answer, "cant", [])]
+    assert notes == [OWN_TIME], notes
+
+
+def test_a_watch_time_too_often_for_the_watchlist_still_says_so():
+    task = "Check LangGraph for new releases every hour"
+    answer = answer_of(_watch("releases"), task)
+    assert [row.note for row in getattr(answer, "cant", [])] == [HOW_OFTEN]
