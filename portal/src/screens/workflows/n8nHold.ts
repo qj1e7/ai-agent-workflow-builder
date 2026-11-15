@@ -70,7 +70,7 @@ export function heldLine(hold: Held, now: Date): string {
 export const theirsNote = (hold: Extract<Hold, { kind: 'theirs' }>): string => hold.cant ?? `Anyone with n8n access can take it back from ${hold.name}.`
 
 export const takenBackWords = (hold: Held): string =>
-  `Taken back from ${hold.kind === 'mine' ? 'your n8n space' : hold.name}. It can be changed here again.`
+  `Taken back from ${hold.kind === 'mine' ? 'your n8n space' : hold.name}. You can change it here again.`
 
 /** Why opening n8n or taking a workflow back was refused, in the platform's own words when it gave them. */
 export function n8nRefusalWords(error: unknown, otherwise: (error: unknown) => string): string {
@@ -94,8 +94,9 @@ export function openEditorTab(host: Pick<Window, 'open'>): EditorTab | null {
   const tab = host.open('', '_blank')
   if (!tab) return null
   tab.opener = null
-  tab.document.title = 'Opening n8n'
-  tab.document.body.textContent = 'Opening n8n…'
+  // A browser may hand back the blank page before it has a body. The words are only a courtesy, so the move never waits on them.
+  const body = tab.document.body as HTMLElement | null
+  if (body) body.textContent = 'Opening n8n…'
   return {
     go: (url) => tab.location.replace(url),
     close: () => tab.close(),

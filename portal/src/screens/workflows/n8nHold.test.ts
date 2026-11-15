@@ -75,7 +75,7 @@ describe('the In n8n tab’s words', () => {
     const theirs = holdOf(HELD, ON, ALICE)
     if (theirs.kind !== 'theirs') throw new Error('held by Carol')
     expect(theirsNote(theirs)).toBe('Anyone with n8n access can take it back from Carol.')
-    expect(takenBackWords(theirs)).toBe('Taken back from Carol. It can be changed here again.')
+    expect(takenBackWords(theirs)).toBe('Taken back from Carol. You can change it here again.')
   })
 
   it('shows a refusal in the platform’s own words', () => {
