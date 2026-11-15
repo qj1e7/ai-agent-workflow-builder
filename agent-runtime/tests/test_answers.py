@@ -534,10 +534,23 @@ def test_a_request_with_no_structure_and_no_change_is_the_abilities_answer():
         "how does this work?",
         "what is this app?",
         "What can you do, and how do I start?",
+        "what's this?",
+        "how does this app work",
+        "I need help",
+        "where to start",
+        "how do I set up a workflow",
+        "how do I create a workflow",
     ],
 )
 def test_a_question_about_starting_shows_how_to_start(task: str):
     assert answer_of(read(asks_about="abilities"), task) == AbilitiesAnswer(how_to_start=True)
+
+
+@pytest.mark.parametrize(
+    "task", ["how do I create a ticket in MOCK", "how do I delete all the done tickets"]
+)
+def test_a_write_asked_as_how_to_is_still_a_cant(task: str):
+    assert isinstance(answer_of(read(asks_about="abilities"), task), CantAnswer)
 
 
 def test_what_i_can_do_alone_shows_what_it_can_do():
@@ -1887,6 +1900,12 @@ ABOUT_THE_APP = [
     "what is this app?",
     "Where do I begin?",
     "What can you do?",
+    "what's this?",
+    "how does this app work",
+    "I need help",
+    "where to start",
+    "how do I set up a workflow",
+    "how do I create a workflow",
 ]
 
 

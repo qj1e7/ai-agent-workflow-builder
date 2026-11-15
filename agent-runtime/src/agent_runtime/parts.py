@@ -73,13 +73,18 @@ ABOUT_THE_PLANNER: Final = re.compile(
     r"\byou\b.*\b(?:do|help|able|offer)\b|\b(?:abilities|capabilities)\b", re.IGNORECASE
 )
 """A question about what the Planner can do, as "what can you do"."""
+A_WORKFLOW: Final = (
+    r"(?:set\s+up|create|make|build|add)\s+(?:(?:a|an|my|our|the|new|another|one)\s+)*workflows?"
+)
+"""Making a workflow here, as "create a workflow". Asked how to, it writes nothing in Jira."""
 HOW_TO_START: Final = re.compile(
     r"^(?:please\s+)?help(?:\s+(?:me|us))?(?:\s+please)?$|"
-    r"\bhow\s+(?:do|can|should|could)\s+(?:i|we)\s+(?:start|begin|use|get\s+started)\b|"
-    r"\bhow\s+to\s+(?:start|begin|use|get\s+started)\b|"
-    r"\bhow\s+does\s+(?:this|it|the\s+app)\s+work\b|"
-    r"\bwhere\s+(?:do|should|can)\s+(?:i|we)\s+(?:start|begin)\b|"
-    r"\bwhat\s+(?:is|'s|’s)\s+this\b|"
+    r"\bneed\s+(?:some\s+|a\s+little\s+)?help\b|"
+    rf"\bhow\s+(?:do|can|should|could)\s+(?:i|we)\s+(?:start|begin|use|get\s+started|{A_WORKFLOW})\b|"
+    rf"\bhow\s+to\s+(?:start|begin|use|get\s+started|{A_WORKFLOW})\b|"
+    r"\bhow\s+does\s+(?:this|it|the)(?:\s+(?:app|platform|tool|thing))?\s+work\b|"
+    r"\bwhere\s+(?:(?:do|should|can)\s+(?:i|we)\s+|to\s+)(?:start|begin)\b|"
+    r"\bwhat(?:\s+is|'s|’s)\s+this\b|"
     r"\b(?:get(?:ting)?\s+started|steps|guide|tutorial|walkthrough|first\s+time|new\s+here)\b",
     re.IGNORECASE,
 )
@@ -151,13 +156,21 @@ def _about_the_app(clause: str) -> bool:
     """Whether the clause asks what the Planner can do or how to start using the app, and orders
     nothing, so "help me close the done tickets" is no question about the app."""
     asks = ABOUT_THE_PLANNER.search(clause) or HOW_TO_START.search(clause)
-    return bool(asks) and not _orders(clause) and not _writes(clause)
+    how = re.sub(A_WORKFLOW, " ", clause, flags=re.IGNORECASE)
+    return bool(asks) and not _orders(clause) and not _writes(how)
 
 
 def _writes(clause: str) -> bool:
     """Whether the clause holds a write, as "delete the old tickets". "what I set up" names a
     workflow she has, and writes nothing."""
     return bool(change_verbs_in(SET_UP_BY_THEM.sub(" ", clause)))
+
+
+def only_about_the_app(request: str) -> bool:
+    """Whether every clause of the request asks what the Planner can do or how to start."""
+    text = visible_words(request)
+    clauses = [c for c in clauses_of(text) if not polite(text[c[0] : c[1]])]
+    return bool(clauses) and all(_about_the_app(text[a:b]) for a, b in clauses)
 
 
 def asks_how_to_start(request: str) -> bool:

@@ -85,6 +85,7 @@ from agent_runtime.parts import (
     OWN_TIME,
     asks_how_to_start,
     locate,
+    only_about_the_app,
     parts_of,
 )
 from agent_runtime.planner import (
@@ -765,6 +766,12 @@ def _about(read: TaskRead, request: str) -> PlannerAnswer:
             return AbilitiesAnswer(how_to_start=asks_how_to_start(request))
 
 
+def _asks_about_the_app(read: TaskRead, text: str) -> bool:
+    """The model read a question about the Planner, and every clause asks what it can do or how
+    to start, so a task's word in it, as "create" in "how do I create a workflow", is no task."""
+    return read.asks_about == "abilities" and only_about_the_app(text)
+
+
 def said_plainly(row: CantRow) -> CantRow:
     """The row in its registry entry's words, when an entry with words of its own fits it: its
     one-line can't as the note, and what the person has instead."""
@@ -852,7 +859,9 @@ def _answer_of(
     covered = [skip.covered] if skip.covered is not None else []
     watched = _watch_clauses(read, text) if read.belongs_on_watchlist else []
     writes = _writes(read, text)
-    if read.asks_about == "none" or task_shaped(read, left_over(read, text, facts)):
+    if read.asks_about == "none" or (
+        task_shaped(read, left_over(read, text, facts)) and not _asks_about_the_app(read, text)
+    ):
         task = _read_task(read, text, covered + watched, writes)
         refused = _refused_span(task, text) if writes else None
         if refused is not None:

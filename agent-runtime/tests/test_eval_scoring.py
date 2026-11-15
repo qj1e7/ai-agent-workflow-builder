@@ -756,7 +756,18 @@ def test_an_edit_with_the_wrong_schedule_or_cant_fails_the_check_that_names_it()
 
 @pytest.mark.parametrize(
     "case_id",
-    ["help-steps-to-use", "help-how-to-start", "help-alone", "help-how-it-works"],
+    [
+        "help-steps-to-use",
+        "help-how-to-start",
+        "help-alone",
+        "help-how-it-works",
+        "help-whats-this",
+        "help-how-app-works",
+        "help-need-help",
+        "help-where-to-start",
+        "help-set-up-workflow",
+        "help-create-workflow",
+    ],
 )
 def test_a_question_about_starting_passes_on_an_abilities_reading(case_id: str) -> None:
     assert failed(ANSWER.score(answer_case(case_id), read_answer(asks_about="abilities"))) == set()

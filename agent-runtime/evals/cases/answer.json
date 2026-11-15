@@ -6220,5 +6220,83 @@
     "reasons": [
       "ask_on_its_own"
     ]
+  },
+  {
+    "id": "help-whats-this",
+    "note": "A first look at the app.",
+    "task": "what's this?",
+    "kind": [
+      "abilities"
+    ],
+    "how_to_start": true,
+    "not_reasons": [
+      "ask_on_its_own",
+      "not_followed"
+    ]
+  },
+  {
+    "id": "help-how-app-works",
+    "note": "Asked about the app itself.",
+    "task": "how does this app work",
+    "kind": [
+      "abilities"
+    ],
+    "how_to_start": true,
+    "not_reasons": [
+      "ask_on_its_own",
+      "not_followed"
+    ]
+  },
+  {
+    "id": "help-need-help",
+    "note": "Help, said as a sentence.",
+    "task": "I need help",
+    "kind": [
+      "abilities"
+    ],
+    "how_to_start": true,
+    "not_reasons": [
+      "ask_on_its_own",
+      "not_followed"
+    ]
+  },
+  {
+    "id": "help-where-to-start",
+    "note": "No question word, still a question about starting.",
+    "task": "where to start",
+    "kind": [
+      "abilities"
+    ],
+    "how_to_start": true,
+    "not_reasons": [
+      "ask_on_its_own",
+      "not_followed"
+    ]
+  },
+  {
+    "id": "help-set-up-workflow",
+    "note": "A question about how to, not an order: \"set up\" writes nothing in Jira.",
+    "task": "how do I set up a workflow",
+    "kind": [
+      "abilities"
+    ],
+    "how_to_start": true,
+    "not_reasons": [
+      "ask_on_its_own",
+      "not_followed"
+    ]
+  },
+  {
+    "id": "help-create-workflow",
+    "note": "\"create\" is a ticket word too, but this asks how to make a workflow here, so it is no can't.",
+    "task": "how do I create a workflow",
+    "kind": [
+      "abilities"
+    ],
+    "how_to_start": true,
+    "not_reasons": [
+      "ask_on_its_own",
+      "not_followed"
+    ]
   }
 ]
