@@ -182,6 +182,7 @@ export function leftoverParts(reply: PlannerReply): PartView[] {
     case 'question':
     case 'decided':
     case 'decide':
+    case 'n8n':
       return above(reply.parts)
   }
 }

@@ -5885,6 +5885,64 @@
         "title": "Health",
         "type": "object"
       },
+      "HoldOut": {
+        "additionalProperties": false,
+        "properties": {
+          "editor_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The workflow in n8n's editor, for the person who just opened it.",
+            "title": "Editor Url"
+          },
+          "held_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Who has it open in n8n now. Null for nobody.",
+            "title": "Held By"
+          },
+          "held_since": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Held Since"
+          },
+          "use_case_id": {
+            "title": "Use Case Id",
+            "type": "string"
+          },
+          "workflow_id": {
+            "title": "Workflow Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "use_case_id",
+          "workflow_id",
+          "held_by",
+          "held_since",
+          "editor_url"
+        ],
+        "title": "HoldOut",
+        "type": "object"
+      },
       "HomeOut": {
         "additionalProperties": false,
         "description": "The first page of each list that can run long, with its total, and the cursor that reads\nthe rest, so every row a total counts can be reached.",
@@ -6490,6 +6548,11 @@
             "title": "Id",
             "type": "string"
           },
+          "n8n_access": {
+            "description": "Whether an Operator gave this person n8n access. GET /api/v1/me/n8n says whether n8n can be opened now.",
+            "title": "N8N Access",
+            "type": "boolean"
+          },
           "on_list": {
             "description": "False when the sign-in is good but no Operator has added this person yet.",
             "title": "On List",
@@ -6837,6 +6900,92 @@
         "title": "ModelTrouble",
         "type": "object"
       },
+      "MyN8nOut": {
+        "additionalProperties": false,
+        "properties": {
+          "access": {
+            "description": "Whether an Operator gave you n8n access.",
+            "title": "Access",
+            "type": "boolean"
+          },
+          "account": {
+            "$ref": "#/components/schemas/N8nAccountState"
+          },
+          "can_open": {
+            "description": "Whether you can open workflows in n8n now.",
+            "title": "Can Open",
+            "type": "boolean"
+          },
+          "editor_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "n8n's editor, while you can open it.",
+            "title": "Editor Url"
+          },
+          "set_password_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Your one link to set your n8n password, until you have used it. Shown only to you, and never sent anywhere else.",
+            "title": "Set Password Url"
+          },
+          "why_not": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why not, in words to show. Null when you can.",
+            "title": "Why Not"
+          }
+        },
+        "required": [
+          "access",
+          "account",
+          "set_password_url",
+          "can_open",
+          "why_not",
+          "editor_url"
+        ],
+        "title": "MyN8nOut",
+        "type": "object"
+      },
+      "N8nAccessIn": {
+        "additionalProperties": false,
+        "properties": {
+          "n8n_access": {
+            "title": "N8N Access",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "n8n_access"
+        ],
+        "title": "N8nAccessIn",
+        "type": "object"
+      },
+      "N8nAccountState": {
+        "enum": [
+          "none",
+          "invited",
+          "ready"
+        ],
+        "type": "string"
+      },
       "N8nBlockKind": {
         "enum": [
           "schedule",
@@ -6886,6 +7035,31 @@
         "title": "N8nBlockView",
         "type": "object"
       },
+      "N8nEdgeView": {
+        "additionalProperties": false,
+        "properties": {
+          "exit": {
+            "description": "Which of the source block's exits, from 0.",
+            "title": "Exit",
+            "type": "integer"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "target": {
+            "title": "Target",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "exit",
+          "target"
+        ],
+        "title": "N8nEdgeView",
+        "type": "object"
+      },
       "N8nExitView": {
         "additionalProperties": false,
         "properties": {
@@ -6912,6 +7086,118 @@
           "to"
         ],
         "title": "N8nExitView",
+        "type": "object"
+      },
+      "N8nHolderView": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "since": {
+            "format": "date-time",
+            "title": "Since",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "since"
+        ],
+        "title": "N8nHolderView",
+        "type": "object"
+      },
+      "N8nNodeView": {
+        "additionalProperties": false,
+        "properties": {
+          "disabled": {
+            "title": "Disabled",
+            "type": "boolean"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/N8nBlockKind",
+            "description": "What the block does, as on the set-up card. other is a sticky note, one of n8n's data blocks, or a type the safety checker does not know; type says which."
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "position": {
+            "description": "Where n8n's editor draws it, as x and y.",
+            "items": {
+              "type": "number"
+            },
+            "title": "Position",
+            "type": "array"
+          },
+          "type": {
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "type",
+          "kind",
+          "position",
+          "disabled"
+        ],
+        "title": "N8nNodeView",
+        "type": "object"
+      },
+      "N8nReply": {
+        "additionalProperties": false,
+        "description": "Asked to open n8n (ENGINE-PLAN 2.9). Only an Operator with n8n access, while staff access\nto n8n is on and the allow list proven, can: said tells everyone else why not.",
+        "properties": {
+          "answer": {
+            "const": "n8n",
+            "default": "n8n",
+            "title": "Answer",
+            "type": "string"
+          },
+          "can_open": {
+            "title": "Can Open",
+            "type": "boolean"
+          },
+          "parts": {
+            "description": "Every clause of what the person typed, in order, with what happened to it (spec 6.5). None is dropped. Empty for a chip they tapped, for an answer inside another answer, and when no model read the request.",
+            "items": {
+              "$ref": "#/components/schemas/PartView"
+            },
+            "title": "Parts",
+            "type": "array"
+          },
+          "said": {
+            "title": "Said",
+            "type": "string"
+          },
+          "use_case_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The workflow the request names, when exactly one name matches and you can open it. Open it in n8n with POST /api/v1/use-cases/{use_case_id}/open-in-n8n.",
+            "title": "Use Case Id"
+          }
+        },
+        "required": [
+          "parts",
+          "answer",
+          "said",
+          "can_open",
+          "use_case_id"
+        ],
+        "title": "N8nReply",
         "type": "object"
       },
       "NeedsMeReply": {
@@ -7114,6 +7400,15 @@
         ],
         "title": "NoProjectKnown",
         "type": "object"
+      },
+      "NodeState": {
+        "enum": [
+          "running",
+          "waiting",
+          "done",
+          "failed"
+        ],
+        "type": "string"
       },
       "Note": {
         "maxLength": 1000,
@@ -7887,7 +8182,8 @@
           "already_an_approver",
           "already_asked",
           "confirmation_waiting",
-          "yourself"
+          "yourself",
+          "n8n_operators_only"
         ],
         "title": "PeopleRefusal",
         "type": "string"
@@ -7938,6 +8234,15 @@
             "title": "Id",
             "type": "string"
           },
+          "n8n_access": {
+            "description": "Whether this person may open workflows in n8n's editor. Only an Operator who is no Approver holds it, and gaining the Approver role ends it.",
+            "title": "N8N Access",
+            "type": "boolean"
+          },
+          "n8n_account": {
+            "$ref": "#/components/schemas/N8nAccountState",
+            "description": "The n8n account the platform made for this person. invited: they have not set their n8n password yet. none: there is none, as while n8n access is off, or before the platform has made it."
+          },
           "operator": {
             "title": "Operator",
             "type": "boolean"
@@ -7967,6 +8272,8 @@
           "approver",
           "pending_approver",
           "signed_in",
+          "n8n_access",
+          "n8n_account",
           "added_by",
           "added_at"
         ],
@@ -8063,6 +8370,7 @@
             "didnt_follow": "#/components/schemas/DidntFollowReply",
             "edit": "#/components/schemas/EditReply",
             "ideas": "#/components/schemas/IdeasReply",
+            "n8n": "#/components/schemas/N8nReply",
             "needs_me": "#/components/schemas/NeedsMeReply",
             "offline": "#/components/schemas/OfflineReply",
             "operators": "#/components/schemas/OperatorsReply",
@@ -8145,6 +8453,9 @@
           },
           {
             "$ref": "#/components/schemas/ChangedInN8nReply"
+          },
+          {
+            "$ref": "#/components/schemas/N8nReply"
           }
         ]
       },
@@ -9763,6 +10074,94 @@
           "why"
         ],
         "title": "RunLostData",
+        "type": "object"
+      },
+      "RunN8nView": {
+        "additionalProperties": false,
+        "properties": {
+          "edges": {
+            "items": {
+              "$ref": "#/components/schemas/N8nEdgeView"
+            },
+            "title": "Edges",
+            "type": "array"
+          },
+          "execution_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The run's last n8n execution.",
+            "title": "Execution Id"
+          },
+          "from_n8n": {
+            "description": "n8n's own record of the ended run was read, so n8n's blocks are here too.",
+            "title": "From N8N",
+            "type": "boolean"
+          },
+          "n8n_version_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The n8n version that execution ran.",
+            "title": "N8N Version Id"
+          },
+          "nodes": {
+            "items": {
+              "$ref": "#/components/schemas/N8nNodeView"
+            },
+            "title": "Nodes",
+            "type": "array"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "states": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/NodeState"
+            },
+            "description": "Each block's state by its name. A block that is not here has not run.",
+            "title": "States",
+            "type": "object"
+          },
+          "use_case_id": {
+            "title": "Use Case Id",
+            "type": "string"
+          },
+          "workflow_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workflow Id"
+          }
+        },
+        "required": [
+          "run_id",
+          "use_case_id",
+          "workflow_id",
+          "execution_id",
+          "n8n_version_id",
+          "nodes",
+          "edges",
+          "states",
+          "from_n8n"
+        ],
+        "title": "RunN8nView",
         "type": "object"
       },
       "RunOutcome": {
@@ -12147,6 +12546,144 @@
           "use_cases"
         ],
         "title": "UseCaseList",
+        "type": "object"
+      },
+      "UseCaseN8nView": {
+        "additionalProperties": false,
+        "properties": {
+          "can_open": {
+            "description": "Whether you can open n8n's editor now.",
+            "title": "Can Open",
+            "type": "boolean"
+          },
+          "edges": {
+            "items": {
+              "$ref": "#/components/schemas/N8nEdgeView"
+            },
+            "title": "Edges",
+            "type": "array"
+          },
+          "editor_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "This workflow in n8n's editor, while you can open it and it sits in your own n8n space.",
+            "title": "Editor Url"
+          },
+          "holder": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/N8nHolderView"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Who has it open in n8n now, if anyone."
+          },
+          "n8n_version_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N8N Version Id"
+          },
+          "nodes": {
+            "items": {
+              "$ref": "#/components/schemas/N8nNodeView"
+            },
+            "title": "Nodes",
+            "type": "array"
+          },
+          "published_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Who published the version in use. Null for one nobody could be matched to.",
+            "title": "Published By"
+          },
+          "published_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published By Name"
+          },
+          "published_in": {
+            "anyOf": [
+              {
+                "enum": [
+                  "portal",
+                  "n8n"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published In"
+          },
+          "use_case_id": {
+            "title": "Use Case Id",
+            "type": "string"
+          },
+          "version": {
+            "description": "The version in use.",
+            "title": "Version",
+            "type": "integer"
+          },
+          "why_not": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why not, in words to show. Null when you can.",
+            "title": "Why Not"
+          },
+          "workflow_id": {
+            "title": "Workflow Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "use_case_id",
+          "workflow_id",
+          "version",
+          "n8n_version_id",
+          "published_by",
+          "published_by_name",
+          "published_in",
+          "nodes",
+          "edges",
+          "holder",
+          "can_open",
+          "why_not",
+          "editor_url"
+        ],
+        "title": "UseCaseN8nView",
         "type": "object"
       },
       "UseCaseSchedule": {
@@ -15813,6 +16350,66 @@
         ]
       }
     },
+    "/api/v1/me/n8n": {
+      "get": {
+        "description": "Your own n8n account, and the link to set your n8n password while you have not used it (ENGINE-PLAN 2.9).",
+        "operationId": "my_n8n_api_v1_me_n8n_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyN8nOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Signed in, but not on the People list. Ask an Operator to add you"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "My N8N",
+        "tags": [
+          "people"
+        ]
+      }
+    },
     "/api/v1/mock-jira/tickets": {
       "get": {
         "operationId": "list_mock_jira_tickets_api_v1_mock_jira_tickets_get",
@@ -16489,6 +17086,117 @@
         ]
       }
     },
+    "/api/v1/people/{person_id}/n8n-access": {
+      "put": {
+        "description": "Gives or ends n8n access. The platform makes or ends the person's n8n account within a minute, and only while staff access to n8n is on.",
+        "operationId": "set_n8n_access_api_v1_people__person_id__n8n_access_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "person_id",
+            "required": true,
+            "schema": {
+              "title": "Person Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/N8nAccessIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Only an Operator can do this, or the person is not on the People list"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "No such person on the list"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PeopleRefusalOut"
+                }
+              }
+            },
+            "description": "A rule about people and roles refused it"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Set N8N Access",
+        "tags": [
+          "people"
+        ]
+      }
+    },
     "/api/v1/people/{person_id}/operator": {
       "put": {
         "operationId": "set_operator_api_v1_people__person_id__operator_put",
@@ -17039,6 +17747,97 @@
         "summary": "Run Events",
         "tags": [
           "monitoring"
+        ]
+      }
+    },
+    "/api/v1/runs/{run_id}/n8n": {
+      "get": {
+        "description": "A run as n8n carried it: the blocks and edges of the version it ran, and each block's state, from our blocks' calls and, once the run ended, n8n's own record. For people with n8n access.",
+        "operationId": "run_in_n8n_api_v1_runs__run_id__n8n_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunN8nView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Only people with n8n access can open n8n. An admin can add it in Settings."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "No such run"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Run In N8N",
+        "tags": [
+          "builder"
         ]
       }
     },
@@ -18704,7 +19503,7 @@
     },
     "/api/v1/use-cases/{use_case_id}": {
       "delete": {
-        "description": "Takes the workflow out of the list and stops it running. Nothing is erased: its past runs stay readable, a run waiting for a yes can still be decided, and it can be restored for a day. Deleting it again answers the same.",
+        "description": "Takes the workflow out of the list and stops it running. Nothing is erased: its past runs stay readable, a run waiting for a yes can still be decided, and it can be restored for a day. Deleting it again answers the same. One someone holds in n8n is taken back first, and stays theirs when n8n does not move it.",
         "operationId": "delete_use_case_api_v1_use_cases__use_case_id__delete",
         "parameters": [
           {
@@ -18786,7 +19585,7 @@
                 }
               }
             },
-            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+            "description": "n8n did not take the change in time, so nothing changed. Or: sign-in could not be checked because the identity provider's keys are unavailable"
           }
         },
         "security": [
@@ -18999,6 +19798,198 @@
           }
         ],
         "summary": "Add The Yes Back",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/use-cases/{use_case_id}/n8n": {
+      "get": {
+        "description": "The workflow as n8n holds the version in use: its blocks and edges, who published it, who has it open in n8n, and whether you can open n8n's editor now. For people with n8n access.",
+        "operationId": "use_case_in_n8n_api_v1_use_cases__use_case_id__n8n_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "use_case_id",
+            "required": true,
+            "schema": {
+              "title": "Use Case Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UseCaseN8nView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Only people with n8n access can open n8n. An admin can add it in Settings."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "No such workflow, or it is deleted"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Use Case In N8N",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/use-cases/{use_case_id}/open-in-n8n": {
+      "post": {
+        "description": "Moves the workflow to your own n8n space and answers its address in n8n's editor (ENGINE-PLAN 2.5). Only an Operator with n8n access can, and never an Approver. While you hold it, anything you publish there is a new version, which the safety check grades, with you as its publisher, who can never approve its runs. Opening it again changes nothing. 409 while staff access to n8n is off, the allow list is unproven, or someone else holds it.",
+        "operationId": "open_in_n8n_api_v1_use_cases__use_case_id__open_in_n8n_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "use_case_id",
+            "required": true,
+            "schema": {
+              "title": "Use Case Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HoldOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Only an Operator can do this, or the person is not on the People list"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "No such workflow, or it is deleted"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Opening n8n is coming once the block list is on. Or: someone else has it open in n8n, in words to show"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "n8n did not do it, so nothing changed"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Open In N8N",
         "tags": [
           "builder"
         ]
@@ -19545,6 +20536,107 @@
           }
         ],
         "summary": "Save Schedule",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/use-cases/{use_case_id}/take-back": {
+      "post": {
+        "description": "Moves the workflow back to the platform's n8n project. The person who holds it can, and so can any Operator with n8n access, who the record then names. Taking back one nobody holds changes nothing.",
+        "operationId": "take_back_api_v1_use_cases__use_case_id__take_back_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "use_case_id",
+            "required": true,
+            "schema": {
+              "title": "Use Case Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HoldOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Only an Operator can do this, or the person is not on the People list"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "No such workflow, or it is deleted"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Opening n8n is coming once the block list is on. Or: someone else has it open in n8n, in words to show"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "n8n did not do it, so nothing changed"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Take Back",
         "tags": [
           "builder"
         ]

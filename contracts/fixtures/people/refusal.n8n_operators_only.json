@@ -1,0 +1,4 @@
+{
+  "refusal": "n8n_operators_only",
+  "message": "Only Operators can have n8n access, and Approvers never can."
+}

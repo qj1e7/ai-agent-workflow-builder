@@ -138,6 +138,11 @@ class Settings:
     n8n_owner: N8nOwner | None = None
     """N8N_OWNER_EMAIL and N8N_OWNER_PASSWORD. Without them the platform lays no workflow out
     in n8n, and new use cases run on the shared n8n workflow."""
+    n8n_staff_access: bool = False
+    """N8N_STAFF_ACCESS. Off, the platform makes no staff n8n account and opens no workflow in
+    n8n (ENGINE-PLAN 2.9, M5). On, it still waits for a bootstrap that proved the allow list."""
+    n8n_editor_url: str | None = None
+    """N8N_EDITOR_URL, where people open n8n's editor, as ADR 0034's n8n_editor_url output."""
 
 
 def _required(env: Mapping[str, str], name: str) -> str:
@@ -241,6 +246,25 @@ def practice_systems_from_env(env: Mapping[str, str]) -> bool:
             return False
         case other:
             raise ConfigError(f"PRACTICE_SYSTEMS takes on or off, not {other!r}.")
+
+
+def n8n_staff_access_from_env(env: Mapping[str, str]) -> bool:
+    match env.get("N8N_STAFF_ACCESS", "").strip().lower() or "off":
+        case "on":
+            return True
+        case "off":
+            return False
+        case other:
+            raise ConfigError(f"N8N_STAFF_ACCESS takes on or off, not {other!r}.")
+
+
+def n8n_editor_url_from_env(env: Mapping[str, str]) -> str | None:
+    raw = env.get("N8N_EDITOR_URL", "").strip().rstrip("/")
+    if not raw:
+        return None
+    if urlsplit(raw).scheme not in ("http", "https") or not urlsplit(raw).hostname:
+        raise ConfigError(f"N8N_EDITOR_URL must be an http or https address, not {raw!r}.")
+    return raw
 
 
 def watchlist_jira_project_from_env(env: Mapping[str, str]) -> str:
@@ -388,8 +412,19 @@ def confluence_from_env(env: Mapping[str, str], jira: JiraSettings) -> Confluenc
     return ConfluenceSettings(base_url, email, token, pages)
 
 
+def staff_access_from_env(env: Mapping[str, str], owner: N8nOwner | None) -> bool:
+    on = n8n_staff_access_from_env(env)
+    if on and (owner is None or not env.get("SETTINGS_ENCRYPTION_KEY")):
+        raise ConfigError(
+            "N8N_STAFF_ACCESS=on needs N8N_OWNER_EMAIL and N8N_OWNER_PASSWORD, which make each "
+            "person's n8n account, and SETTINGS_ENCRYPTION_KEY, which seals their password link."
+        )
+    return on
+
+
 def settings_from_env(env: Mapping[str, str]) -> Settings:
     auth = auth_config(env)
+    n8n_owner = n8n_owner_from_env(env)
     cosmos = cosmos_from_env(env)
     public_base_url = auth.public_base_url.rstrip("/")
     practice_systems = practice_systems_from_env(env)
@@ -426,7 +461,9 @@ def settings_from_env(env: Mapping[str, str]) -> Settings:
         team_time_zone=team_time_zone_from_env(env),
         node_key=env.get("WAB_NODE_KEY", "").strip() or None,
         start_secret=env.get("WAB_START_SECRET", "").strip() or None,
-        n8n_owner=n8n_owner_from_env(env),
+        n8n_owner=n8n_owner,
+        n8n_staff_access=staff_access_from_env(env, n8n_owner),
+        n8n_editor_url=n8n_editor_url_from_env(env),
     )
 
 

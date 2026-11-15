@@ -1,9 +1,9 @@
 import { useState, type ReactNode } from 'react'
 import { Link } from '../../ui/Link'
-import type { CantReply, CantRowView, FreeReply, OfflineReply, PartReply, PartView, PauseReply, PlannerReply, QuestionReply, ResumeReply, SetupCardReply, SwitchChoice, WatchlistReply } from '../../api/types'
+import type { N8nReply, CantReply, CantRowView, FreeReply, OfflineReply, PartReply, PartView, PauseReply, PlannerReply, QuestionReply, ResumeReply, SetupCardReply, SwitchChoice, WatchlistReply } from '../../api/types'
 import { useErrorWords } from '../../api/context'
 import { useCapabilities } from '../../api/plannerQueries'
-import { useMoveWorkflow } from '../../api/workflowQueries'
+import { useMoveWorkflow, useOpenInN8n } from '../../api/workflowQueries'
 import { Button, ButtonLink } from '../../ui/Button'
 import { Card } from '../../ui/Card'
 import { OpenButton } from '../../ui/OpenItem'
@@ -13,7 +13,7 @@ import softwareStyles from '../software/Software.module.css'
 import { ChangedInN8nAnswer } from './ChangedCard'
 import { AskTheTeam } from './AskTheTeam'
 import { useAsker } from './asker'
-import { cantLines, capabilityCard, offerLabel, oneLine, questionActions, refusalNext, SAY_ANOTHER_WAY, startingPoints, stateWords, switchedSay, watchlistSwitchNote, type Asker } from './answers'
+import { openInN8nWords, cantLines, capabilityCard, offerLabel, oneLine, questionActions, refusalNext, SAY_ANOTHER_WAY, startingPoints, stateWords, switchedSay, watchlistSwitchNote, type Asker } from './answers'
 import { cardFrom } from './card'
 import { asksOnCard, cantOnCard, crossesInstead, crossesOnCard, followedNothing } from './parts'
 import { SetupCard, type CardStart } from './SetupCard'
@@ -460,6 +460,25 @@ function Dismissable({ children }: { children: (never: () => void) => ReactNode 
   return gone ? <p className="muted">All right, never mind.</p> : children(() => setGone(true))
 }
 
+export function openEditor(url: string): void {
+  window.open(url, '_blank', 'noopener,noreferrer')
+}
+
+function N8nAnswer({ reply }: { reply: N8nReply }) {
+  const open = useOpenInN8n()
+  const words = useErrorWords()
+  if (!reply.can_open || reply.use_case_id === null) return null
+  const useCaseId = reply.use_case_id
+  return (
+    <>
+      <Button loading={open.isPending} onClick={() => open.mutate(useCaseId, { onSuccess: (held) => held.editor_url && openEditor(held.editor_url) })}>
+        Open in n8n editor
+      </Button>
+      {open.isError ? <p role="alert">{openInN8nWords(open.error, words)}</p> : null}
+    </>
+  )
+}
+
 interface AnswerProps {
   readonly reply: PlannerReply
   readonly typed: string
@@ -506,6 +525,8 @@ export function Answer({ reply, typed, page }: AnswerProps) {
       return <DidntFollowCard typed={typed} page={page} />
     case 'changed_in_n8n':
       return <ChangedInN8nAnswer reply={reply} />
+    case 'n8n':
+      return <N8nAnswer reply={reply} />
     case 'edit':
     case 'check_workflows':
     case 'why_stopped':
