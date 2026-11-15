@@ -174,14 +174,10 @@ class Candidate:
         return any(finding.runs_anyway for finding in self.graded.findings)
 
     @property
-    def can_set_up(self) -> bool:
-        return not self.runs_anyway and (self.published or self.graded.grade == "safe")
-
-    @property
     def why_not(self) -> str | None:
         if self.runs_anyway:
             return FIX_N8N_BLOCKS
-        return None if self.can_set_up else FIX_IN_N8N
+        return None if self.published or self.graded.grade == "safe" else FIX_IN_N8N
 
     def view(self, closed: str | None = None) -> MadeInN8nView:
         """`closed` says why nothing can be set up now, whatever its grade."""
@@ -268,7 +264,7 @@ class MadeInN8n:
             workflow, document = held
             graded = grade(document, error_workflow, self._zone, known)
             moved = Candidate(candidate.listed, maker, document, graded)
-            if not moved.can_set_up:
+            if moved.why_not is not None:
                 await self._give_back(workflow_id, maker)
                 return HoldRefused(409, CHANGED_AS_SET_UP)
             use_case_id = new_id("uc")

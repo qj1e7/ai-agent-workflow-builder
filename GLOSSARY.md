@@ -241,6 +241,17 @@ The step that pauses a run before a write action until an Approver approves it i
 A Teams card or an email that only reports what a run read or found. It may go out without a yes, because it changes no data, under the Tell rule: its recipients are the ones fixed in the Portal, our API writes its words from the run's own reads and agent results, and a test run sends nothing (ADR 0026). The node pack's Tell node sends one.
 _Avoid_: Notification, alert
 
+**n8n block**:
+One of n8n's own blocks in a workflow, beside our node pack's. A block for an outside system, such as Jira or Slack, may only read or post a notice, as `node_classes.json` classes each operation, and runs with a platform key. The run line and the canvas badge it `n8n block` and tag it with what it does, such as Reads Jira or Posts in Slack (ADR 0045).
+_Avoid_: built-in node, native node
+
+**Platform key**:
+A key in n8n's credential store that the platform made, in its own n8n project, from Key Vault, only once the system showed it can do no more than read or post. It never leaves that project. The checker lets an n8n block name only a platform key. Jira, GitHub and Slack have one; Teams, Outlook and Gmail have none (ADR 0045, as amended).
+_Avoid_: credential, token
+
+**Credential sweep**:
+The platform's look at every key in n8n, every minute, whenever a workflow opens in n8n and whenever one comes back. It deletes each key the platform did not make, makes a platform key anew when it was changed or moved, marks a workflow its holder added a key for, and takes off a workflow in the platform's project that would run with someone else's key. A key it plants each day proves it (ENGINE-PLAN E17).
+
 **Tell flow**:
 The team's one Power Automate flow that posts a Tell's card in the team's channel and emails the team's list. Its address is a secret, kept in Key Vault and never shown. Until it is set, a Tell goes to the practice copy. Setting it alone does not make "Posts in Teams and emails" ready. That waits for E14, when the Planner can lay out a Tell block.
 

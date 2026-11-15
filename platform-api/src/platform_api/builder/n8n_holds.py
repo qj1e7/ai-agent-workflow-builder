@@ -24,6 +24,7 @@ from platform_api.orchestration import (
     NoN8nAccess,
     StaffAccess,
     Written,
+    attach_keys,
 )
 from platform_api.settings import TEAM_TIME_ZONE
 from platform_api.shared import Principal, UserId
@@ -402,6 +403,8 @@ class Holding:
             if workflow is None:
                 return
             made = await self._keys.made()
+            if attach_keys(workflow.document, made) == workflow.document:
+                return
             kept = await self._n8n.keep_keys(workflow_id, workflow.version_id, made)
         except (N8nError, httpx.HTTPError) as error:
             log.warning("could not put the platform's keys back on %s: %s", workflow_id, error)

@@ -89,3 +89,57 @@ The four options in section 2. Two more were put aside:
 - **The pack smoke** asserts n8n loads exactly the types `node_classes.json` names plus ours, and that every operation of each is classed.
 - **ENGINE-PLAN** section 6 replaces E11 and E16 with the PRs that build this, drops the cert reminder's parser (E12 keeps only the general Confluence reader) and E14.
 - **What does not change.** Runs, the wait in n8n, the sweep, Undo, the versions, the Tell flow, the n8n access flag and the chat-first sketch's screens and words. The only visible additions are the `n8n block` badge, its tags, and the one extra line on the approval card.
+
+## Amended on 15 Nov 2026, as E16 and E17 were built
+
+The team lead took these decisions on what building E16 and E17 found. Each one keeps a guarantee
+this ADR gives, or makes it stronger.
+
+1. **No platform key for Teams, Outlook or Gmail.** Their blocks stay classed, so a workflow that
+   uses one grades `Needs a fix: it has no key`. n8n 2.42.6's own code shows why. Its Teams block
+   posts to a channel only with a person's own sign-in ("app-only Graph supports only migration
+   import"), which the platform cannot hold. Its Gmail block asks Google for `gmail.modify` and
+   `mail.google.com` scopes, so a key that can only send does not work with it. It rewrites an
+   Outlook app key each time it gets a token, so the sweep could not tell a key changed in n8n
+   from one n8n refreshed. Teams notices go through our own Tell, under the Tell rule, so nothing
+   is lost. The registry says so, and claims none of these blocks works (principle 5).
+2. **Only classic GitHub tokens, with read scopes or none.** GitHub does not say what a
+   fine-grained token or an app may do, so the platform refuses one.
+3. **A platform key never leaves the platform's project.** Section 2 said "Open in n8n" lends a
+   workflow's keys to its holder. Building it showed a holder could then edit a lent key in their
+   own space, point it at their own server, and read its secret. So a workflow that names a key
+   opens in n8n without it. The holder can edit the blocks, and cannot run them with the key while
+   they hold the workflow, because n8n lets a member's workflow use only the keys in the member's
+   own space. On every take-back path (`take_back`, `release`, `back_in` and the recovery of a
+   stranded move) the platform first runs the credential sweep, then puts its key back on each
+   block for a system by the block's type, and takes every other key off. n8n's Community edition
+   keeps a reference to a key the saver cannot use (spike P8), so the put-back is usually a check
+   that changes nothing, and it covers the case where a reference was changed or dropped.
+4. **A key's record is never moved on from n8n.** The record holds what n8n answered the
+   platform's own create: the id, the type, and the times n8n made and last changed it. A key
+   that differs from that record in any way, or sits outside the platform's project, is deleted
+   and made anew from Key Vault. A new secret also makes the key anew. A key is never changed or
+   moved in place.
+5. **Every key is checked against what reading or posting needs, so anything unknown is a
+   refusal.** Jira lists every permission it has; the account must hold none but browsing
+   projects and seeing workflows, development links, voters, watchers and users. A Slack bot may
+   hold `chat:write` and the scopes that read channel and people lists. `chat:write` also lets the
+   bot edit or delete its own messages; the team lead accepts that, and it is recorded here.
+6. **The owner bypass.** n8n lets a workflow in the owner's personal project use every key there
+   is, a member's included. So the sweep takes off any published workflow in the platform's project
+   that no use case names and that names a key the platform did not make, such as one n8n moved
+   there with its maker's keys as the maker's account ended.
+7. **A test run posts nothing.** A layout pins the output of each notice block. n8n uses pinned
+   output only in a run by hand, which is what a test run is, and ignores it in every other run. A
+   test run of a draft whose notice block has no pinned output does not start.
+8. **Every run is recorded.** A workflow with any of n8n's own blocks for a system needs one of
+   our blocks that calls the platform before the first such block, on every way from a trigger.
+   That call links the run, so it is recorded and shown, and checks the version first, so a
+   version that fails the check stops before n8n reads or posts. Without it the workflow grades
+   `Needs a fix: Add one of our steps first, so each run is recorded.`
+9. **n8n blocks are set up in n8n, not from the chat.** The Planner does not lay them out yet; the
+   layout code can, and the registry says so.
+
+Also found while building: n8n adds a "Custom API Call" choice to every node with a key, which
+sends any request with that key, and makes a human-in-the-loop AI tool of the Slack, Teams,
+Outlook and Gmail nodes. The class file turns all of them off, and the pin check names each.

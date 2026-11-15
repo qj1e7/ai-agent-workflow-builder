@@ -554,7 +554,7 @@ async def test_a_workflow_naming_a_member_s_own_key_needs_a_fix_before_set_up(
         False,
         FIX_N8N_BLOCKS,
     )
-    assert listed["findings"] == ['"Tell Slack" uses a key the platform did not make.']
+    assert '"Tell Slack" uses a key the platform did not make.' in listed["findings"]
     refused = await set_up(s, "carol", workflow_id)
     assert (refused.status_code, refused.json()["detail"]) == (409, FIX_N8N_BLOCKS)
     assert s.n8n.home_of(workflow_id) == space, "never moved where n8n would run it with any key"
