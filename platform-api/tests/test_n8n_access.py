@@ -501,15 +501,22 @@ async def test_platform_writes_wait_while_someone_holds_the_workflow(s: Staffed)
     assert len(await s.lab.builder.sweep.sweep()) == 1
     held_words = f"Carol has it open in n8n since {NOW.astimezone(s.holding._zone):%H:%M}."
     take_it_back = f"{held_words} Take it back to change it here."
+    ask_for_it = f"{held_words} Ask Carol, or anyone with n8n access, to take it back."
     for path in (
         f"/api/v1/use-cases/{use_case_id}/versions/1/rollback",
         f"/api/v1/use-cases/{use_case_id}/add-the-yes-back",
     ):
         refused = await s.call("alice", "POST", path, {"via": "page", "in_use": 2})
-        assert (refused.status_code, refused.json()["detail"]) == (409, take_it_back), path
+        assert (refused.status_code, refused.json()["detail"]) == (409, ask_for_it), (
+            f"{path}: Alice has no n8n access, so she can't take it back herself"
+        )
+        mine = await s.call("carol", "POST", path, {"via": "page", "in_use": 2})
+        assert (mine.status_code, mine.json()["detail"]) == (409, take_it_back), (
+            f"{path}: Carol holds it, so she can"
+        )
     assert (await s.lab.move("alice", "pause", use_case_id)).status_code == 200, "pause still"
     resumed = await s.lab.move("alice", "resume", use_case_id)
-    assert (resumed.status_code, resumed.json()["detail"]) == (409, take_it_back)
+    assert (resumed.status_code, resumed.json()["detail"]) == (409, ask_for_it)
     assert len(await version_rows(s, use_case_id)) == 2, "nothing was published over her work"
 
     assert (await s.take_back("carol", use_case_id)).status_code == 200
@@ -535,7 +542,15 @@ async def test_a_schedule_edit_is_refused_while_someone_holds_the_workflow(s: St
     )
     assert saved.status_code == 409
     assert saved.json()["detail"].startswith("Carol has it open in n8n since ")
-    assert saved.json()["detail"].endswith("Take it back to change it here.")
+    assert saved.json()["detail"].endswith("Ask Carol, or anyone with n8n access, to take it back.")
+    hers = await s.call(
+        "carol",
+        "PUT",
+        f"/api/v1/use-cases/{use_case_id}/schedule",
+        {"day": "monday", "at": "07:30", "via": "page", "expected_version": 1},
+    )
+    assert hers.status_code == 409
+    assert hers.json()["detail"].endswith("Take it back to change it here."), "she holds it"
 
 
 async def test_my_n8n_shows_the_password_link_only_to_its_person_and_only_until_used(
@@ -678,9 +693,8 @@ async def test_a_run_in_n8n_has_each_block_s_state_from_its_calls_then_n8n_s_rec
     assert ended["states"] == {
         "Start from the Portal": "done",
         "Version checker": "done",
-        "Newer?": "done",
         "Ask for a yes": "failed",
-    }
+    }, "n8n's own record says what ran, so nothing is guessed on top of it"
     assert (await s.call("bob", "GET", "/api/v1/runs/run_n8n/n8n")).status_code == 403
 
 

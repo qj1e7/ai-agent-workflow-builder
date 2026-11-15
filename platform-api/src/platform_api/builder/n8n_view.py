@@ -27,8 +27,9 @@ class N8nNodeView(WireModel):
     name: str
     type: str
     kind: N8nBlockKind = Field(
-        description="What the block does, as on the set-up card. other is a sticky note, one of "
-        "n8n's data blocks, or a type the safety checker does not know; type says which."
+        description="What the block does, as on the set-up card. other is a sticky note or one "
+        "of n8n's data blocks, and off a type the class file turns off or does not know; type "
+        "says which."
     )
     position: list[float] = Field(description="Where n8n's editor draws it, as x and y.")
     disabled: bool
@@ -83,9 +84,10 @@ class RunN8nView(WireModel):
         "workflow's blocks list them, which the canvas draws."
     )
     states: dict[str, NodeState] = Field(
-        description="Each block's state by its name. A block that is not here has not run. One "
-        "of n8n's blocks that never calls the platform, such as an IF, is done once a block "
-        "after it ran (ENGINE-PLAN section 1, row 9)."
+        description="Each block's state by its name. A block that is not here has not run, or "
+        "is not known to have run. Until n8n's own record is read, a block that never calls the "
+        "platform, such as an IF, is done when it is the one way into a block that ran "
+        "(ENGINE-PLAN section 1, row 9)."
     )
     from_n8n: bool = Field(
         description="n8n's own record of the ended run was read, so n8n's blocks are here too."
@@ -108,7 +110,7 @@ def graph(document: Mapping[str, Any] | None) -> tuple[list[N8nNodeView], list[N
     for node in document["nodes"]:
         spec = NODE_TYPES.get(str(node.get("type", "")))
         kind: N8nBlockKind = (
-            "other" if spec is None or spec.kind in ("note", "shape") else spec.kind
+            "off" if spec is None else "other" if spec.kind in ("note", "shape") else spec.kind
         )
         position = node.get("position") or [0, 0]
         nodes.append(
@@ -124,24 +126,32 @@ def graph(document: Mapping[str, Any] | None) -> tuple[list[N8nNodeView], list[N
     return nodes, edges
 
 
-QUIET: frozenset[N8nBlockKind] = frozenset({"branch", "merge", "other"})
-"""n8n's own blocks between a run's start and its end, which never call the platform."""
+QUIET: frozenset[N8nBlockKind] = frozenset(
+    {"schedule", "start", "manual", "error", "branch", "merge", "other"}
+)
+"""Blocks that never call the platform: the starts, and n8n's own blocks before a run's end."""
 
 
 def with_quiet_blocks(
     states: Mapping[str, NodeState], nodes: list[N8nNodeView], edges: list[N8nEdgeView]
 ) -> dict[str, NodeState]:
-    """Each quiet block that a block after it shows ran is done too, so an IF is not drawn as
-    not run while the run waits past it. n8n's own record, once read, already names them."""
+    """Before n8n's own record is read, a quiet block is done when it is the one way into a
+    block that ran, so an IF is not drawn as not run while the run waits past it. Where two
+    blocks lead in, either may have run, so neither is guessed."""
     kinds = {node.name: node.kind for node in nodes}
+    into: dict[str, set[str]] = {}
+    for edge in edges:
+        into.setdefault(edge.target, set()).add(edge.source)
     found = dict(states)
     grown = True
     while grown:
         grown = False
-        for edge in edges:
-            quiet = kinds.get(edge.source) in QUIET
-            if quiet and edge.target in found and edge.source not in found:
-                found[edge.source] = "done"
+        for target, sources in into.items():
+            if target not in found or len(sources) != 1:
+                continue
+            [source] = sources
+            if source not in found and kinds.get(source) in QUIET:
+                found[source] = "done"
                 grown = True
     return found
 
@@ -229,7 +239,7 @@ class InN8nViews:
             nodes=nodes,
             edges=edges,
             blocks=[] if document is None else blocks_of(document),
-            states=with_quiet_blocks(ran.nodes, nodes, edges),
+            states=dict(ran.nodes) if ran.read_n8n else with_quiet_blocks(ran.nodes, nodes, edges),
             from_n8n=ran.read_n8n,
         )
 
