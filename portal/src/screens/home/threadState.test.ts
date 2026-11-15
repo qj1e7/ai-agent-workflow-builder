@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { PlannerReply } from '../../api/types'
 import { EMPTY_FORM } from './card'
-import { EMPTY, isThinking, previousOf, threadReducer } from './threadState'
+import { askOf, EMPTY, isThinking, previousOf, threadReducer } from './threadState'
 
 const REPLY: PlannerReply = { answer: 'abilities', parts: [] }
 
@@ -40,6 +40,13 @@ describe('the thread', () => {
     const said = ask({ answer: 'question', text: 'LangGraph is at 1.2.14.', looked_at: ['watchlist'], about_software: [], parts: [] }, 'What is the newest version of LangGraph?')
     expect(previousOf(said)).toEqual({ request: 'What is the newest version of LangGraph?', software: null, answer: 'LangGraph is at 1.2.14.', kind: 'question' })
     expect(previousOf(ask({ answer: 'offline', why: 'trouble', message: 'x', starters: [], parts: [] }, 'x'))).toBeNull()
+  })
+
+  it('sends tapped words with the turn before, so a choice after a clarifying question says so', () => {
+    expect(askOf('Redis', EMPTY)).toEqual({ text: 'Redis' })
+    const clarify: PlannerReply = { answer: 'reply', form: 'clarify', text: 'Which software?', choices: ['Redis', 'Kafka'], offer: null, looked_at: [], parts: [] }
+    const asked = threadReducer(threadReducer(EMPTY, { type: 'sent', text: 'watch it' }), { type: 'answered', reply: clarify, typed: 'watch it' })
+    expect(askOf('Redis', asked)).toEqual({ text: 'Redis', previous: { request: 'watch it', software: null, answer: 'Which software?', kind: 'reply_clarify' } })
   })
 
   it('does not hand over a request that has no answer yet', () => {
