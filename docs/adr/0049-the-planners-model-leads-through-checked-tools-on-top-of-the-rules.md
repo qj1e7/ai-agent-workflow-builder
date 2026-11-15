@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 ---
 
 # The Planner's model leads through checked tools, on top of the rules
@@ -21,7 +21,7 @@ A spike on 16 Nov 2026 put the model in front of the rules, behind a switch. Bot
 | Cost per message at list price | about $0.022, estimated | $0.011 with Anthropic's prompt cache |
 | Time per message at the 95th percentile | 11.7 s | 12.5 s |
 
-The rules' cost is an estimate. In rules mode, the eval's `reply` and spike jobs count only the reading call, so the figure is the run's spend less the judge's share, which the AI-led run measured at about $0.0057 an answer. The report's own table, $0.0165, counts too few calls.
+The rules' cost is an estimate. In rules mode, the eval's `reply` and spike jobs count only the reading call, so the figure is the run's spend less the judge's share, estimated from the AI-led run at about $0.0057 an answer. The report's own table, $0.0165, counts too few calls.
 
 Message by message, 55 answers became useful and 34 stopped being useful. That is a lead from one run each (sign test p = 0.03), not proof. The spike also found three faults, which decisions 2 to 4 fix. The model ticked an ask it never did. It copied the briefing's one example reply into off-topic answers. And the content checker refused true facts, such as a software already on the Watchlist.
 
@@ -48,7 +48,7 @@ Each tool ends in a kind of Planner answer the Portal already draws. Decision 4 
 
 Only `set_up_workflow` reads the turn before, through decision 5. Every other tool's arguments are located in the message alone. When the model picks `watch_software` or `change_workflow` and the rules read the same kind, the person sees the rules' answer.
 
-**2. Code checks every tick.** A clause is a part the rules' reading makes (`parts_of`), as today. An argument reaches a clause only when code locates its exact text inside that clause. A paraphrased argument locates nothing, and the call is invalid, never a tick. The one-action tools reach these clauses and no others:
+**2. Code checks every tick.** A clause is a part the rules' reading makes (`parts_of`), as today. An argument reaches a clause only when code locates its exact text inside that clause. A paraphrased argument locates nothing, and the call is invalid, never a tick. A name may differ in case, spacing, dots and hyphens, as `their_words` allows today, and is shown in the person's spelling. The one-action tools reach these clauses and no others:
 
 - `watch_software` reaches the clause where code locates the software name.
 - `change_workflow` reaches the clause where code locates the workflow words, and the clause where code reads the change: a pause or resume word, or the day or time `said_schedule` reads.
@@ -88,7 +88,7 @@ The Portal sends the turn before, so a client can forge it (ADR 0047). Only the 
 
 The person who runs the eval reads every reply the judge scores 1, by hand, and records each in the run's report with whether it is a safety miss. The team lead reads that list before deciding. The 13 s bar covers the slow paths. A joined request makes a second reading call. A call that fails its check makes a second model turn and up to two verifier calls, and the spike's slowest message took 22.1 s that way.
 
-The six runs cost about $65, plus what the judge spends thinking. That figure is the spike's Planner spend per run plus an Opus judge at twice Sonnet's price per token. Opus 5.5's thinking can't be turned off, so the first run measures the rest. The money comes from the team lead's monthly credit (ADR 0047). The team lead reads the runs and decides the switch. Until then, `ai_led` runs only where the team lead turns it on. Going back is one setting, `PLANNER_MODE=rules`.
+The six runs cost about $65, plus what the judge spends thinking. That figure is the spike's Planner spend per run plus an Opus judge at twice Sonnet's price per token. As the author understands it, Opus 5.5's thinking can't be turned off, so the first run measures the rest. Before the runs, `agent-runtime/evals/pricing.json` gains an entry for `anthropic:claude-opus-5-5` with its price source, as the other entries have. The money comes from the team lead's monthly credit (ADR 0047). The team lead reads the runs and decides the switch. Until then, `ai_led` runs only where the team lead turns it on. Going back is one setting, `PLANNER_MODE=rules`.
 
 ## Considered options
 
