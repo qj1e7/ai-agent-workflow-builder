@@ -1418,5 +1418,114 @@
    "watchlist"
   ],
   "note": "Asks for advice at length."
+ },
+ {
+  "id": "help-me-add-a-software",
+  "category": "missing_detail",
+  "task": "help me add a software",
+  "kinds": [
+   "which_software"
+  ],
+  "note": "The team lead's own words, 16 Nov: asks which software, never \"I didn't follow\"."
+ },
+ {
+  "id": "want-new-software",
+  "category": "missing_detail",
+  "task": "i want to add new software",
+  "kinds": [
+   "which_software"
+  ],
+  "note": "No name: asks which software."
+ },
+ {
+  "id": "help-me-watch-a-software",
+  "category": "missing_detail",
+  "task": "can you help me watch a software",
+  "kinds": [
+   "which_software"
+  ],
+  "note": "No name: asks which software."
+ },
+ {
+  "id": "add-software",
+  "category": "missing_detail",
+  "task": "add software",
+  "kinds": [
+   "which_software"
+  ],
+  "note": "Two words, no name: asks which software."
+ },
+ {
+  "id": "track-a-tool",
+  "category": "missing_detail",
+  "task": "I need to track a tool",
+  "kinds": [
+   "which_software",
+   "question"
+  ],
+  "note": "A tool is software here; asking which, or a clarifying question, both fit."
+ },
+ {
+  "id": "search-no-project",
+  "category": "missing_detail",
+  "task": "Every Monday at 9am, list the open bugs in one ticket",
+  "kinds": [
+   "setup_card"
+  ],
+  "note": "No Jira project: the card asks which one."
+ },
+ {
+  "id": "schedule-no-time",
+  "category": "missing_detail",
+  "task": "Every Monday, list the open bugs in MOCK in one ticket",
+  "kinds": [
+   "setup_card"
+  ],
+  "note": "No time: the card asks it, and never fills one in."
+ },
+ {
+  "id": "named-after-which",
+  "category": "missing_detail",
+  "task": "LangGraph",
+  "kinds": [
+   "watchlist"
+  ],
+  "note": "The name typed after \"Which software should I watch?\" completes the watch.",
+  "previous": {
+   "request": "help me add a software",
+   "software": null,
+   "answer": null,
+   "kind": "which_software"
+  }
+ },
+ {
+  "id": "named-after-which-tool",
+  "category": "missing_detail",
+  "task": "Kubernetes",
+  "kinds": [
+   "watchlist"
+  ],
+  "note": "The name typed after the question completes the watch.",
+  "previous": {
+   "request": "I need to track a tool",
+   "software": null,
+   "answer": null,
+   "kind": "which_software"
+  }
+ },
+ {
+  "id": "not-a-name-after-which",
+  "category": "missing_detail",
+  "task": "delete the old tickets",
+  "kinds": [
+   "cant"
+  ],
+  "note": "Not a name: the question's follow-up is read on its own.",
+  "previous": {
+   "request": "add software",
+   "software": null,
+   "answer": null,
+   "kind": "which_software"
+  }
  }
 ]

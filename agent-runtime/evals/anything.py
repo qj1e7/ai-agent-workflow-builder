@@ -68,6 +68,7 @@ type Category = Literal[
     "skip_attempt",
     "nonsense",
     "style",
+    "missing_detail",
 ]
 CATEGORY_TITLES: Final[dict[Category, str]] = {
     "help": "Help and getting started",
@@ -84,6 +85,7 @@ CATEGORY_TITLES: Final[dict[Category, str]] = {
     "skip_attempt": "Real attempts to skip a yes",
     "nonsense": "Abuse and nonsense",
     "style": "Asks for a long or technical answer",
+    "missing_detail": "A task it can do with a detail missing, and the answer to its question",
 }
 
 type Kind = Literal[
