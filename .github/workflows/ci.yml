@@ -32,7 +32,8 @@ env:
 jobs:
   checks:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # The platform-api suite passed 3,000 tests and took 12 to 15 minutes on 15 Nov 2026.
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:

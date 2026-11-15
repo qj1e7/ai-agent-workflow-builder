@@ -90,6 +90,34 @@ export function crossLabel(part: PartView, when?: When, short = false): string {
   return others.length > 0 ? andList(others.map(quote)) : quote(part.text)
 }
 
+/**
+ * What a cross sends as its own message when she taps Ask about this (ADR 0047): a clause the Planner didn’t follow, or a
+ * question it answers on its own. A time on a watch request has the Software watchlist’s offer instead, and the rest already sit
+ * on a card with its own button. Null when the cross has no such step.
+ */
+export function askOfCross(part: PartView): string | null {
+  const reason: PartReason | null = part.reason ?? (part.mark === 'cant' ? 'not_followed' : null)
+  switch (reason) {
+    case 'not_followed':
+    case 'ask_on_its_own':
+      return part.text.trim() === '' ? null : part.text
+    case 'own_time':
+    case null:
+    case 'cant_do':
+    case 'one_day':
+    case 'one_time':
+    case 'one_frequency':
+    case 'skip_approval':
+    case 'with_a_yes':
+    case 'needs_the_rest':
+    case 'how_many_days':
+    case 'operators':
+    case 'only_schedule':
+    case 'how_often':
+      return null
+  }
+}
+
 /** Every cross and question of a request, for the card that sets up the part the Planner can do. A watch request’s own time isn’t the card’s. */
 export const crossesOnCard = (part: PartView): boolean => part.mark !== 'will_do' && part.reason !== 'needs_the_rest' && part.reason !== 'own_time'
 
@@ -117,7 +145,8 @@ function holdsCard(reply: PlannerReply): boolean {
 }
 
 /**
- * The clauses an answer didn’t read, which it draws above its card (spec 6.5). The set-up card and the edit card mark their own parts. The can’t
+ * The clauses an answer didn’t read, which it draws above its card (spec 6.5). A free reply answers the whole message, and the
+ * fallback card replaces the crosses, so neither draws any. The set-up card and the edit card mark their own parts. The can’t
  * answer’s card already names what it can’t do, so only the clauses it didn’t read are added. A card inside the answer asks its
  * own clash and days, so they aren’t drawn twice. The refusal, which software, places to start and the offline answer draw none.
  */
@@ -132,6 +161,8 @@ export function leftoverParts(reply: PlannerReply): PartView[] {
     case 'which_software':
     case 'ideas':
     case 'offline':
+    case 'reply':
+    case 'didnt_follow':
       return []
     case 'cant': {
       // The card names only the can'ts with something to build. One with nothing to build, as a yes that can't be skipped, is drawn here.

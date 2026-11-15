@@ -1,10 +1,11 @@
 import { useState } from 'react'
+import type { PlannerReply } from '../../api/types'
 import { PlannerBot, type BotState } from '../../ui/PlannerBot'
 import { Answer, type Page } from './AnswerCards'
 import { EditCard } from './EditCard'
 import { CardMemoryContext, NO_MEMORY, type CardMemory } from './cardMemory'
 import { Leftovers } from './PartsList'
-import { CardLive, NewestAnswer } from './primary'
+import { AskPlanner, CardLive, NewestAnswer } from './primary'
 import { SetupCard } from './SetupCard'
 import { sayOf, whoOf, wordsOnly } from './answers'
 import { useAsker } from './asker'
@@ -14,7 +15,9 @@ import { isAnswer, type Message, type Thread as ThreadState } from './threadStat
 import { Waiting } from './Waiting'
 import styles from './Planner.module.css'
 
-const SORRY = new Set(['cant', 'refused', 'offline', 'operators'])
+const SORRY = new Set(['cant', 'refused', 'offline', 'operators', 'didnt_follow'])
+
+const isSorry = (reply: PlannerReply): boolean => SORRY.has(reply.answer) || (reply.answer === 'reply' && reply.form === 'cant')
 const RESUMED = 'Here’s your draft. Pick up where you left off.'
 const FACE = 30
 
@@ -77,7 +80,7 @@ export function Thread({ thread, now, page, memory }: ThreadProps) {
   const newest = thread.messages.at(-1)?.id ?? 0
   const sayFor = (id: number): Say => (text) => setSaid((now) => (now?.id === id ? now : { id, text }))
   return (
-    <>
+    <AskPlanner.Provider value={page.ask}>
       <h2 className="visually-hidden" id="thread-h">
         Conversation with the Planner
       </h2>
@@ -104,7 +107,7 @@ export function Thread({ thread, now, page, memory }: ThreadProps) {
               </li>
             )
           }
-          const state: BotState = message.kind === 'thinking' ? 'thinking' : message.kind === 'reply' && SORRY.has(message.reply.answer) ? 'sorry' : 'idle'
+          const state: BotState = message.kind === 'thinking' ? 'thinking' : message.kind === 'reply' && isSorry(message.reply) ? 'sorry' : 'idle'
           return (
             <li key={message.id} className={styles['said']} tabIndex={-1} data-answer={isAnswer(message) || undefined}>
               <PlannerBot state={state} size={FACE} />
@@ -150,6 +153,6 @@ export function Thread({ thread, now, page, memory }: ThreadProps) {
       <div className="visually-hidden" role="status" aria-live="polite">
         {thread.messages.at(-1)?.kind === 'thinking' ? '' : said?.text ?? ''}
       </div>
-    </>
+    </AskPlanner.Provider>
   )
 }

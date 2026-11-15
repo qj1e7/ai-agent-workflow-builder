@@ -47,6 +47,7 @@ from agent_runtime.contract import (
     CheckPartRequest,
     CheckPartResult,
     CheckWorkflowsAnswer,
+    DidntFollowAnswer,
     EditAnswer,
     ModelProblem,
     NeedsMeAnswer,
@@ -79,6 +80,7 @@ from agent_runtime.edits import (
     left_over,
 )
 from agent_runtime.follow_ups import follow_up_of, watch_offer_of
+from agent_runtime.free_reply import dead_end, reply_to
 from agent_runtime.parts import (
     HOW_OFTEN,
     NOT_FOLLOWED,
@@ -714,12 +716,14 @@ def _watch_rows(
     own = stretch is not None and not _its_schedule(request[stretch[0] : stretch[1]], schedule)
     if own and stretch and any(a <= stretch[0] and stretch[1] <= b for a, b in watched):
         # A time the watchlist's one schedule could hold is offered to the whole watchlist.
-        holds = _watchlist_holds(read.schedule)
+        # A schedule the reading missed is read from the request's own words.
+        holds = _watchlist_holds(read.schedule or request[stretch[0] : stretch[1]])
         at = stretch if holds else locate(request, read.schedule or "") or stretch
         text = plain(request[at[0] : at[1]], TEXT_LIMIT)
         note = OWN_TIME if holds else HOW_OFTEN
         found.append((at, CantRow(kind="schedule", text=text, note=note, needs="new_tool")))
-    for clause in _change_clauses(changes):
+    own = _stretches(WATCHLISTS_OWN_TICKET, changes) + _stretches(AFFIRMS_A_YES, changes)
+    for clause in _change_clauses(_without_stretches(changes, own)):
         found.append((_stretch(request, clause), _change_row(clause)))
     # Words beside the watch stand beside no part of a task, so a part is never named for them.
     if task is not None:
@@ -742,6 +746,37 @@ PLAIN_BESIDE_SOFTWARE: Final = frozenset({"run", "log", "make"}) | NOTIFIES
 def _asks_for_a_change(clause: str) -> bool:
     verbs = set(change_verbs_in(clause)) - PLAIN_BESIDE_SOFTWARE
     return bool(verbs) or commands_a_change(clause)
+
+
+AFFIRMS_A_YES: Final = re.compile(
+    r"\b(?:only\s+)?(?:after|once|when)\s+(?:an|the)\s+approver\s+(?:says\s+yes|approves(?:\s+it)?|"
+    r"has\s+approved(?:\s+it)?)\b",
+    re.IGNORECASE,
+)
+"""Words that say the write waits for an Approver's yes, as "after the approver says yes". Every
+card already waits for one, so they ask for nothing new. They are covered only when no other
+word is left over, so "with the approval skipped" or "and the rest go straight in" still come
+back as a skip the coverage check refuses."""
+WATCHLISTS_OWN_TICKET: Final = re.compile(
+    r"\b(?:and\s+)?(?:raise|create|open|file|log|make)\s+(?:an?\s+|one\s+)?(?:new\s+)?(?:jira\s+|"
+    r"upgrade\s+)?ticket(?:\s+(?:if|when|whenever)\s+(?:there(?:['’]s|\s+is)\s+a\s+new\s+(?:one|"
+    r"release|version)|(?:it|there)\s+(?:has|is)\s+a\s+new\s+(?:one|release|version)|a\s+new\s+"
+    r"(?:one|release|version)\s+(?:comes\s+out|is\s+out)))?\b",
+    re.IGNORECASE,
+)
+"""Beside a release watch, the upgrade ticket the Software watchlist raises itself, after a yes:
+"raise a Jira ticket if there's a new one". A ticket with more, as one for major releases only
+or in another project, keeps those words, which come back as parts it can't do."""
+
+
+def _stretches(pattern: re.Pattern[str], text: str) -> list[tuple[int, int]]:
+    return [found.span() for found in pattern.finditer(text)]
+
+
+def _without_stretches(text: str, stretches: list[tuple[int, int]]) -> str:
+    for start, end in sorted(stretches, reverse=True):
+        text = f"{text[:start]} {text[end:]}"
+    return text
 
 
 def _change_clauses(text: str) -> list[str]:
@@ -894,6 +929,8 @@ def _answer_of(
         read = read.model_copy(update={"asks_about": unchanged})
     task = None
     covered = [skip.covered] if skip.covered is not None else []
+    if read.belongs_on_watchlist:
+        covered += _stretches(WATCHLISTS_OWN_TICKET, text)
     watched = _watch_clauses(read, text) if read.belongs_on_watchlist else []
     writes = _writes(read, text)
     # A question about the app is no task, but beside a skip the model flagged and couldn't
@@ -905,6 +942,13 @@ def _answer_of(
     )
     if read.asks_about == "none" or as_task:
         task = _read_task(read, text, covered + watched, writes, skip.unquoted)
+        yes = _stretches(AFFIRMS_A_YES, text)
+        if task.spans and yes:
+            # Words that close the request by naming the yes its write waits for ask nothing
+            # new, but only when nothing else is left over: any other leftover word, as "and
+            # the rest go straight in", keeps them, and the coverage check refuses them.
+            closed = _read_task(read, text, covered + watched + yes, writes, skip.unquoted)
+            task = task if closed.spans else closed
         refused = _refused_span(task, text) if writes else None
         if refused is not None:
             return refused
@@ -1080,7 +1124,15 @@ def _state_answer_about_the_watchlist(
     return isinstance(answer, CheckWorkflowsAnswer) and bool(WATCHLIST_WORDS.search(text))
 
 
-def answer_task(request: AnswerRequest, chat_for: ChatFor) -> AnswerResult:
+def answer_task(
+    request: AnswerRequest,
+    chat_for: ChatFor,
+    free_reply: bool = True,
+    verify_with: ChatFor | None = None,
+) -> AnswerResult:
+    """The Planner's one answer. A dead end gets the free reply (ADR 0047), or the fixed
+    fallback when the free reply is turned off. The verifier runs on `verify_with`, else on the
+    connected model."""
     refused = word_rule_refusal(request.task)
     if refused is not None:
         return Answered(answer=refused, parts=parts_of(None, request.task, refused))
@@ -1094,15 +1146,29 @@ def answer_task(request: AnswerRequest, chat_for: ChatFor) -> AnswerResult:
     if isinstance(read, ModelProblem):
         return read
     answer = _answer(read, request, chat_for)
-    return Answered(answer=answer, parts=parts_of(read, request.task, answer, request.facts))
+    parts = parts_of(read, request.task, answer, request.facts)
+    gap = dead_end(answer, parts, request.task)
+    if gap is not None:
+        verifier = verify_with or chat_for
+        answer = reply_to(request, gap, chat_for, verifier) if free_reply else DidntFollowAnswer()
+        if isinstance(answer, DidntFollowAnswer) and gap.keep is not None:
+            answer = gap.keep
+        parts = parts_of(read, request.task, answer, request.facts)
+    return Answered(answer=answer, parts=parts)
 
 
 def _answer(read: TaskRead, request: AnswerRequest, chat_for: ChatFor) -> PlannerAnswer:
     decided = decide(read, request)
     if not isinstance(decided, AskTheQuestionLane):
         return decided
-    asked = answer_question(request, chat_for)
-    # The lane may improve an answer, never make it worse: when its call fails, the first stands.
+    return settled(decided, answer_question(request, chat_for))
+
+
+def settled(
+    decided: AskTheQuestionLane, asked: QuestionAnswer | ModelProblem | None
+) -> PlannerAnswer:
+    """The answer once the question lane replied. The lane may improve an answer, never make it
+    worse: when its call fails, the first stands."""
     if asked is None or isinstance(asked, ModelProblem):
         return decided.otherwise
     if decided.first_on_reject and is_fallback(asked):

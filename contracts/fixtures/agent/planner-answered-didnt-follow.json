@@ -1,0 +1,15 @@
+{
+  "status": "answered",
+  "answer": {
+    "kind": "didnt_follow"
+  },
+  "parts": [
+    {
+      "text": "flibber the wotsit",
+      "mark": "cant",
+      "reason": "not_followed",
+      "note": null,
+      "choices": []
+    }
+  ]
+}

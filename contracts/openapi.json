@@ -4673,6 +4673,32 @@
         "title": "DevUsers",
         "type": "object"
       },
+      "DidntFollowReply": {
+        "additionalProperties": false,
+        "description": "The fixed fallback when the free reply failed or its checks refused it: the sketch's I\ndidn't follow that card, with Say it another way. The Portal words it for the person's role.",
+        "properties": {
+          "answer": {
+            "const": "didnt_follow",
+            "default": "didnt_follow",
+            "title": "Answer",
+            "type": "string"
+          },
+          "parts": {
+            "description": "Every clause of what the person typed, in order, with what happened to it (spec 6.5). None is dropped. Empty for a chip they tapped, for an answer inside another answer, and when no model read the request.",
+            "items": {
+              "$ref": "#/components/schemas/PartView"
+            },
+            "title": "Parts",
+            "type": "array"
+          }
+        },
+        "required": [
+          "parts",
+          "answer"
+        ],
+        "title": "DidntFollowReply",
+        "type": "object"
+      },
       "DraftIn": {
         "additionalProperties": false,
         "properties": {
@@ -5763,6 +5789,73 @@
           "matches"
         ],
         "title": "FoundProjects",
+        "type": "object"
+      },
+      "FreeReply": {
+        "additionalProperties": false,
+        "description": "The Planner's own words for a message no other answer fits, checked before they are sent\n(ADR 0047). It changes nothing: a choice and an offer are sent as the next message.",
+        "properties": {
+          "answer": {
+            "const": "reply",
+            "default": "reply",
+            "title": "Answer",
+            "type": "string"
+          },
+          "choices": {
+            "description": "For clarify only, 2 to 4 replies to tap, each sent as the next message.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Choices",
+            "type": "array"
+          },
+          "form": {
+            "$ref": "#/components/schemas/ReplyForm",
+            "description": "answer: a direct answer. clarify: one short question, with choices to tap. cant: an honest can't, with offer as its button, or Ask the team when offer is null."
+          },
+          "looked_at": {
+            "description": "The sections of the facts the reply used, as a question answer's are.",
+            "items": {
+              "$ref": "#/components/schemas/FactSection"
+            },
+            "title": "Looked At",
+            "type": "array"
+          },
+          "offer": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReplyOfferView"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "For cant only: the closest Ready capability. Null on a can't means the button is Ask the team. Always null for someone who isn't an Operator."
+          },
+          "parts": {
+            "description": "Every clause of what the person typed, in order, with what happened to it (spec 6.5). None is dropped. Empty for a chip they tapped, for an answer inside another answer, and when no model read the request.",
+            "items": {
+              "$ref": "#/components/schemas/PartView"
+            },
+            "title": "Parts",
+            "type": "array"
+          },
+          "text": {
+            "description": "Plain words only, to draw as text.",
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "parts",
+          "answer",
+          "form",
+          "text",
+          "choices",
+          "offer",
+          "looked_at"
+        ],
+        "title": "FreeReply",
         "type": "object"
       },
       "Grade": {
@@ -8408,6 +8501,7 @@
             "check_workflows": "#/components/schemas/CheckWorkflowsReply",
             "decide": "#/components/schemas/DecideReply",
             "decided": "#/components/schemas/DecidedReply",
+            "didnt_follow": "#/components/schemas/DidntFollowReply",
             "edit": "#/components/schemas/EditReply",
             "ideas": "#/components/schemas/IdeasReply",
             "n8n": "#/components/schemas/N8nReply",
@@ -8418,6 +8512,7 @@
             "pause": "#/components/schemas/PauseReply",
             "question": "#/components/schemas/QuestionReply",
             "refused": "#/components/schemas/RefusedReply",
+            "reply": "#/components/schemas/FreeReply",
             "resume": "#/components/schemas/ResumeReply",
             "setup_card": "#/components/schemas/SetupCardReply",
             "watchlist": "#/components/schemas/WatchlistReply",
@@ -8462,6 +8557,12 @@
           },
           {
             "$ref": "#/components/schemas/QuestionReply"
+          },
+          {
+            "$ref": "#/components/schemas/FreeReply"
+          },
+          {
+            "$ref": "#/components/schemas/DidntFollowReply"
           },
           {
             "$ref": "#/components/schemas/EditReply"
@@ -9445,6 +9546,14 @@
         "title": "RejectedView",
         "type": "object"
       },
+      "ReplyForm": {
+        "enum": [
+          "answer",
+          "clarify",
+          "cant"
+        ],
+        "type": "string"
+      },
       "ReplyIn": {
         "additionalProperties": false,
         "properties": {
@@ -9466,6 +9575,27 @@
           "text"
         ],
         "title": "ReplyIn",
+        "type": "object"
+      },
+      "ReplyOfferView": {
+        "additionalProperties": false,
+        "properties": {
+          "capability": {
+            "description": "The Ready capability it stands for.",
+            "title": "Capability",
+            "type": "string"
+          },
+          "request": {
+            "description": "The registry's example request. The Portal's button sends it as the person's next message, so the Planner reads it again and any write still waits for a yes.",
+            "title": "Request",
+            "type": "string"
+          }
+        },
+        "required": [
+          "capability",
+          "request"
+        ],
+        "title": "ReplyOfferView",
         "type": "object"
       },
       "ReplyReason": {
@@ -17427,7 +17557,7 @@
     },
     "/api/v1/planner/answer": {
       "post": {
-        "description": "The Planner's one answer to what a person types or taps on Home. A typed request is read by the AI model and answered as a set-up card, a part, a can't, a watchlist row, a question about software, a refusal, or one of the question kinds the Portal fills from its own routes. An intent chip never asks the model. Without a model, or after 10 seconds, or when the answer cannot be used, it answers `offline` with the starter workflows. Someone who isn't an Operator asks questions only (ADR 0043): they get the question kinds, `decided` for their own decisions and `decide` for an approve or decline, which goes to the request. Anything else answers `operators`, and a change beside a question is a part marked `operators`. Nothing is saved or written.",
+        "description": "The Planner's one answer to what a person types or taps on Home. A typed request is read by the AI model and answered as a set-up card, a part, a can't, a watchlist row, a question about software, a refusal, or one of the question kinds the Portal fills from its own routes. An intent chip never asks the model. Without a model, or after 35 seconds, or when the answer cannot be used, it answers `offline` with the starter workflows. Someone who isn't an Operator asks questions only (ADR 0043): they get the question kinds, `decided` for their own decisions and `decide` for an approve or decline, which goes to the request. Anything else answers `operators`, and a change beside a question is a part marked `operators`. Nothing is saved or written. One person may send typed words 20 times a minute; past that it answers 429 in plain words.",
         "operationId": "answer_api_v1_planner_answer_post",
         "requestBody": {
           "content": {
@@ -17489,6 +17619,16 @@
               }
             },
             "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "You've asked the Planner a lot in the last minute. Wait a moment, then ask again."
           },
           "503": {
             "content": {

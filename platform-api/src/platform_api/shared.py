@@ -131,3 +131,8 @@ def has_id_shape(value: str, prefix: str) -> bool:
         and len(body) == 26
         and all(c in _CROCKFORD for c in body)
     )
+
+
+ANSWERS_PER_MINUTE = 20
+"""How many typed requests one person may send the Planner in a minute, unless
+PLANNER_ANSWERS_PER_MINUTE says otherwise (ADR 0047)."""

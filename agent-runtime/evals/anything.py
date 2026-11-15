@@ -26,7 +26,9 @@ from agent_runtime.contract import (
     CantAnswer,
     CantRow,
     CheckWorkflowsAnswer,
+    DidntFollowAnswer,
     EditAnswer,
+    FreeReplyAnswer,
     ModelAccess,
     ModelProblem,
     NeedsMeAnswer,
@@ -100,6 +102,9 @@ type Kind = Literal[
     "pause",
     "resume",
 ]
+FREE_REPLY_FITS: Final = frozenset({"abilities", "question", "cant"})
+"""A case that accepts the list of abilities, a question answer or a can't also accepts a free
+reply, which ADR 0047 puts where those dead-ended. The fixed fallback is never acceptable."""
 
 HOME_FACTS: Final = PlannerFacts.model_validate(
     {
@@ -293,14 +298,20 @@ def score(case: AnythingCase, answer: Answer) -> list[Check]:
     shown = result.answer
     return [
         check("answered", []),
-        check("acceptable_kind", [] if shown.kind in case.kinds else [shown.kind]),
+        check("acceptable_kind", [] if _acceptable(case, shown) else [shown.kind]),
         _refusal(case, shown),
-        check("not_all_crossed", _whole_crossed(case, result.parts)),
+        check("not_all_crossed", _whole_crossed(case, shown, result.parts)),
         check("gives_a_next_step", [] if next_step(shown) else [f"{shown.kind}, no way on"]),
         check("no_unbuilt_claim", unbuilt_claims(shown)),
         check("no_done_claim", done_claims(" ".join(own_words(shown)))),
         check("plain_and_short", style_problems(shown, case.facts)),
     ]
+
+
+def _acceptable(case: AnythingCase, shown: PlannerAnswer) -> bool:
+    if isinstance(shown, FreeReplyAnswer):
+        return bool(FREE_REPLY_FITS & set(case.kinds))
+    return shown.kind in case.kinds
 
 
 def _refusal(case: AnythingCase, shown: PlannerAnswer) -> Check:
@@ -310,9 +321,12 @@ def _refusal(case: AnythingCase, shown: PlannerAnswer) -> Check:
     return check("no_false_refusal", said)
 
 
-def _whole_crossed(case: AnythingCase, parts: list[RequestPart]) -> list[str]:
+def _whole_crossed(case: AnythingCase, shown: PlannerAnswer, parts: list[RequestPart]) -> list[str]:
     """A message is never told to ask on its own what it already asked on its own, and, unless
-    the case allows it, never comes back crossed from end to end."""
+    the case allows it, never comes back crossed from end to end. A free reply answers the whole
+    message in words, so its can't is no cross: whether it helps is the judge's to score."""
+    if isinstance(shown, FreeReplyAnswer):
+        return []
     crossed = [p for p in parts if p.mark == "cant"]
     if len(parts) == 1 and crossed and crossed[0].reason == "ask_on_its_own":
         return [f"asks to ask “{crossed[0].text}” on its own, as it was"]
@@ -322,19 +336,14 @@ def _whole_crossed(case: AnythingCase, parts: list[RequestPart]) -> list[str]:
 
 
 def next_step(shown: PlannerAnswer) -> bool:
-    """Whether the person has somewhere to go: an answer, a card, a choice, or a can't with what
-    they have instead, a close alternative, or Ask the team."""
+    """Whether the person has somewhere to go: an answer, a card, a choice, or a can't. Every can't
+    now carries a button in the Portal: its alternative, Ask the team (even for what the platform
+    won't do), or Ask about this on a part it didn't follow (ADR 0047)."""
     match shown:
         case QuestionAnswer():
             return not is_fallback(shown)
-        case CantAnswer():
-            return shown.alternative is not None or any(_way_on(row) for row in shown.cant)
         case _:
             return True
-
-
-def _way_on(row: CantRow) -> bool:
-    return row.instead is not None or (row.needs is not None and not row.unsupported)
 
 
 def cards_of(shown: PlannerAnswer | None) -> list[SetupCardAnswer | PartAnswer]:
@@ -353,7 +362,7 @@ def own_words(shown: PlannerAnswer) -> list[str]:
     """The words the model wrote itself that the person reads: a card's name and a question's
     answer. Code writes every other line from closed structures, or quotes the person."""
     found = [card.name for card in cards_of(shown)]
-    return found + ([shown.text] if isinstance(shown, QuestionAnswer) else [])
+    return found + ([shown.text] if isinstance(shown, QuestionAnswer | FreeReplyAnswer) else [])
 
 
 def unbuilt_claims(shown: PlannerAnswer) -> list[str]:
@@ -374,6 +383,8 @@ LIST_ITEM: Final = re.compile(r"^\s*(?:[-*•]|\d+[.)])\s+")
 MARKUP: Final = re.compile(r"\*\*|__|`|^#+\s|\|", re.MULTILINE)
 SELF_TALK: Final = re.compile(r"\b(?:the facts|data I was given|JSON|snapshot)\b", re.IGNORECASE)
 MOST_SENTENCES: Final = 3
+MOST_FREE_SENTENCES: Final = 4
+"""The free reply's prompt allows four short sentences, the question answer's three."""
 MOST_ITEMS: Final = 6
 MOST_WORDS: Final = 80
 NAME_WORDS: Final = range(2, 6)
@@ -388,14 +399,15 @@ def style_problems(shown: PlannerAnswer, facts: PlannerFacts) -> list[str]:
         for c in cards_of(shown)
         if len(c.name.split()) not in NAME_WORDS
     ]
-    if not isinstance(shown, QuestionAnswer):
+    if not isinstance(shown, QuestionAnswer | FreeReplyAnswer):
         return found
     text = shown.text
+    most = MOST_FREE_SENTENCES if isinstance(shown, FreeReplyAnswer) else MOST_SENTENCES
     lines = text.splitlines()
     items = [line for line in lines if LIST_ITEM.match(line)]
     prose = " ".join(line for line in lines if not LIST_ITEM.match(line))
     sentences = len(re.findall(r"[.!?](?:\s|$)", prose))
-    if sentences > MOST_SENTENCES:
+    if sentences > most:
         found.append(f"{sentences} sentences")
     if len(items) > MOST_ITEMS:
         found.append(f"{len(items)} list items")
@@ -434,13 +446,42 @@ def words_of(result: AnswerResult | None, facts: PlannerFacts = HOME_FACTS) -> s
     if not isinstance(shown, RefusedAnswer | WhichSoftwareAnswer):
         named = ("cant_do", "needs_the_rest") if isinstance(shown, CantAnswer) else ()
         lines += [_cross(p) for p in parts if p.mark != "will_do" and p.reason not in named]
-    return "\n".join(lines)
+    return "\n".join(lines + _buttons(shown))
+
+
+def _buttons(shown: PlannerAnswer) -> list[str]:
+    """The card's own buttons, as the Portal draws them (SetupCard.tsx, WatchlistCard.tsx)."""
+    match shown:
+        case SetupCardAnswer():
+            return ["[Never mind] [Set up]"]
+        case PartAnswer():
+            return ["[Never mind] [Set up the part I can]"]
+        case WatchlistAnswer(software=str(name)):
+            return [f"[Add {name}] [Never mind]"]
+        case _:
+            return []
 
 
 def _cross(part: RequestPart) -> str:
     head = "Question" if part.mark == "question" else "Can't do"
     why = part.note or REASON_WORDS.get(part.reason or "", "")
     return f"{head}: “{part.text}” {why}".rstrip()
+
+
+def _how_to_start() -> list[str]:
+    """The Portal's How to start card (startSteps and startingPoints in answers.ts)."""
+    examples = [e.text for e in CAPABILITY_LIST.examples if e.kind != "learn"]
+    teams = any(c.id == "teams.ask" and c.state == "ready" for c in CAPABILITY_LIST.capabilities)
+    first = f", like “{examples[0]}”" if examples else ""
+    steps = [
+        f"Tell me what should run by itself, in your own words{first}.",
+        "Check the card I make, and change anything I guessed.",
+        "Press Set up. I do a test run, which writes nothing.",
+        "If the test passes, press Turn it on.",
+        f"Nothing is written until an Approver says yes{' in Teams' if teams else ''}.",
+    ]
+    numbered = [f"{n}. {step}" for n, step in enumerate(steps, 1)]
+    return ["How to start:", *numbered, " ".join(f"[{text}]" for text in examples)]
 
 
 def _said(shown: PlannerAnswer, facts: PlannerFacts) -> list[str]:
@@ -455,7 +496,7 @@ def _said(shown: PlannerAnswer, facts: PlannerFacts) -> list[str]:
             lines = [_cant_line(c) for c in shown.cant]
             if shown.alternative is not None:
                 lines += ["What I can do instead:", *_said(shown.alternative, facts)]
-            elif any(_way_on(c) for c in shown.cant):
+            else:
                 lines.append("[Ask the team]")
             return lines
         case WatchlistAnswer():
@@ -478,6 +519,8 @@ def _said(shown: PlannerAnswer, facts: PlannerFacts) -> list[str]:
             ]
         case NeedsMeAnswer():
             return _needs(facts)
+        case AbilitiesAnswer(how_to_start=True):
+            return _how_to_start()
         case AbilitiesAnswer():
             return [f"What I can do: {'; '.join(CAN)}. Not yet: {', '.join(NOT_YET)}."]
         case QuestionAnswer():
@@ -491,6 +534,13 @@ def _said(shown: PlannerAnswer, facts: PlannerFacts) -> list[str]:
             return [f"Change {_which(shown.workflow_words)}: {change}."]
         case PauseAnswer() | ResumeAnswer():
             return [f"{shown.kind.capitalize()} {_which(shown.workflow_words)}, one of yours."]
+        case FreeReplyAnswer():
+            taps = [f"[{choice}]" for choice in shown.choices]
+            if shown.form == "cant":
+                taps.append(f"[Try “{shown.offer.request}”]" if shown.offer else "[Ask the team]")
+            return [shown.text, *taps]
+        case DidntFollowAnswer():
+            return ["I didn't follow that. [Say it another way]"]
 
 
 def _named(facts: PlannerFacts, workflow_words: str | None) -> list[WorkflowFact]:

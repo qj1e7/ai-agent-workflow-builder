@@ -202,9 +202,7 @@ function PlannerHome({ greeting, home, now, operator }: { greeting: string; home
   }, [newest])
 
   const page: Page = {
-    ask: (words) => {
-      if (!busy) chat.send({ text: words }, words, null)
-    },
+    ask: (words) => chat.sendWords(words),
     edit: (words) => {
       chat.type(words)
       setTimeout(() => boxRef.current?.focus(), 0)

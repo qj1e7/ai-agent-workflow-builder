@@ -3,6 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from platform_api.auth import OPERATORS_ONLY, SIGNED_IN, CurrentPrincipal
+from platform_api.builder.answer_limit import TOO_MANY, AnswerLimit
 from platform_api.builder.http import SET_UP_OR_RUN, operators_only
 from platform_api.builder.planner import (
     AnswerIn,
@@ -31,20 +32,37 @@ def current_front(request: Request) -> PlannerFront:
 CurrentFront = Annotated[PlannerFront, Depends(current_front)]
 
 
+def current_limit(request: Request) -> AnswerLimit:
+    limit: AnswerLimit = request.app.state.answer_limit
+    return limit
+
+
+CurrentLimit = Annotated[AnswerLimit, Depends(current_limit)]
+
+
 @router.post(
     "/planner/answer",
     description="The Planner's one answer to what a person types or taps on Home. A typed "
     "request is read by the AI model and answered as a set-up card, a part, a can't, a "
     "watchlist row, a question about software, a refusal, or one of the question kinds the "
     "Portal fills from its own routes. An intent chip never asks the model. Without a model, "
-    "or after 10 seconds, or when the answer cannot be used, it answers `offline` with the "
+    "or after 35 seconds, or when the answer cannot be used, it answers `offline` with the "
     "starter workflows. Someone who isn't an Operator asks questions only (ADR 0043): they "
     "get the question kinds, `decided` for their own decisions and `decide` for an approve or "
     "decline, which goes to the request. Anything else answers `operators`, and a change "
-    "beside a question is a part marked `operators`. Nothing is saved or written.",
-    responses={**SIGNED_IN, 404: error_response("No such workflow")},
+    "beside a question is a part marked `operators`. Nothing is saved or written. One person "
+    "may send typed words 20 times a minute; past that it answers 429 in plain words.",
+    responses={
+        **SIGNED_IN,
+        404: error_response("No such workflow"),
+        429: error_response(TOO_MANY),
+    },
 )
-async def answer(body: AnswerIn, principal: CurrentPrincipal, front: CurrentFront) -> PlannerReply:
+async def answer(
+    body: AnswerIn, principal: CurrentPrincipal, front: CurrentFront, limit: CurrentLimit
+) -> PlannerReply:
+    if body.text is not None and not limit.allow(principal.user_id):
+        raise HTTPException(429, TOO_MANY)
     match await front.answer(body, principal):
         case NoSuchWorkflow():
             raise HTTPException(404, "No such workflow")

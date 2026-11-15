@@ -9,6 +9,7 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import timedelta
 from typing import Any, cast
+from urllib.parse import parse_qs, urlsplit
 
 import httpx
 import psycopg
@@ -32,6 +33,7 @@ from platform_api.orchestration.n8n_run_view import RunsInN8n
 from platform_api.orchestration.n8n_staff import (
     INVITE_LIFE,
     NO_ACCESS,
+    NO_ADDRESS,
     NOT_READY,
     OFF,
     SET_PASSWORD,
@@ -131,9 +133,11 @@ class Staffed:
         return row["held_by"]
 
 
-def staff_for(lab: Lab, n8n: FakeN8n, switched_on: bool = True) -> StaffAccounts:
+def staff_for(
+    lab: Lab, n8n: FakeN8n, switched_on: bool = True, editor_url: str | None = EDITOR
+) -> StaffAccounts:
     return StaffAccounts(
-        lab.h.db, api_for(n8n), KeyBox("test-secret-not-real"), switched_on, EDITOR
+        lab.h.db, api_for(n8n), KeyBox("test-secret-not-real"), switched_on, editor_url
     )
 
 
@@ -563,7 +567,8 @@ async def test_my_n8n_shows_the_password_link_only_to_its_person_and_only_until_
     mine = await s.call("carol", "GET", "/api/v1/me/n8n")
     assert mine.headers["cache-control"] == "no-store"
     link = mine.json()["set_password_url"]
-    assert link.startswith("http://n8n/signup?token=secret-")
+    assert link.startswith(f"{EDITOR}/signup?token=secret-"), "where people open n8n"
+    [token] = parse_qs(urlsplit(link).query)["token"]
     assert mine.json() | {"set_password_url": None} == {
         "access": True,
         "account": "invited",
@@ -587,7 +592,59 @@ async def test_my_n8n_shows_the_password_link_only_to_its_person_and_only_until_
     )
     assert after["editor_url"] == EDITOR
     assert (await s.person("carol"))["n8n_invite"] is None, "forgotten once used"
-    assert link not in caplog.text, "never logged"
+    assert token not in caplog.text, "never logged"
+
+
+@pytest.mark.parametrize(
+    ("from_n8n", "editor_url", "shown"),
+    [
+        (
+            "http://n8n:5678/signup?token=abc",
+            "http://localhost:5678",
+            "http://localhost:5678/signup?token=abc",
+        ),
+        (
+            "http://n8n:5678/signup?token=a.B-c_~%2Bd%3D",
+            "https://example.test/n8n",
+            "https://example.test/n8n/signup?token=a.B-c_~%2Bd%3D",
+        ),
+        (
+            "http://n8n:5678/n8n/signup?token=abc",
+            "https://example.test/n8n",
+            "https://example.test/n8n/signup?token=abc",
+        ),
+    ],
+    ids=["local", "path prefix", "n8n under the same prefix"],
+)
+async def test_the_password_link_points_where_people_open_n8n(
+    s: Staffed, from_n8n: str, editor_url: str, shown: str
+):
+    """n8n builds the link from its own address, which inside the platform's network is one a
+    browser can't reach."""
+    s.n8n.invite_link = from_n8n
+    s.lab.app.state.staff = staff_for(s.lab, s.n8n, editor_url=editor_url)
+    assert (await s.give("carol")).status_code == 200
+    assert await s.settle() == [Made(CAROL)]
+    mine = (await s.call("carol", "GET", "/api/v1/me/n8n")).json()
+    assert mine["set_password_url"] == shown
+
+
+async def test_with_no_editor_address_no_link_is_shown_and_the_words_say_who_to_ask(s: Staffed):
+    """n8n's own link would open nothing, so none is shown rather than a dead one."""
+    no_address = staff_for(s.lab, s.n8n, editor_url=None)
+    s.lab.app.state.staff = no_address
+    s.lab.builder.holding = Holding(s.lab.h.db, Workflows(s.n8n, s.lab.h.db), no_address)
+    use_case_id, _ = await held(s)
+    assert (await s.give("carol")).status_code == 200
+    assert await s.settle() == [Made(CAROL)]
+    mine = (await s.call("carol", "GET", "/api/v1/me/n8n")).json()
+    assert (mine["account"], mine["set_password_url"], mine["why_not"]) == (
+        "invited",
+        None,
+        NO_ADDRESS,
+    )
+    refused = await s.open("carol", use_case_id)
+    assert (refused.status_code, refused.json()["detail"]) == (409, NO_ADDRESS), "same words"
 
 
 async def test_an_account_follows_the_flag_and_is_never_taken_by_email(s: Staffed):
