@@ -108,6 +108,7 @@ from agent_runtime.reading import (
     Span,
     TaskRead,
     a_statement,
+    clashes_in,
     clauses_of,
     leftovers,
     names_a_person,
@@ -662,6 +663,12 @@ def _watchlist(
     return CantAnswer(cant=rows, alternative=watching) if rows else watching
 
 
+def _watchlist_holds(schedule: str | None) -> bool:
+    """Whether the watchlist's one schedule could run on the whole schedule the model read, by
+    the edit card's own checks: no frequency it can't run at, and one day and one time."""
+    return schedule is not None and how_often(schedule) is None and not clashes_in(schedule)
+
+
 def _watch_rows(
     read: TaskRead,
     task: _Task | None,
@@ -681,10 +688,12 @@ def _watch_rows(
     watched = _watch_clauses(read, request)
     own = stretch is not None and not _its_schedule(request[stretch[0] : stretch[1]], schedule)
     if own and stretch and any(a <= stretch[0] and stretch[1] <= b for a, b in watched):
-        text = plain(request[stretch[0] : stretch[1]], TEXT_LIMIT)
         # A time the watchlist's one schedule could hold is offered to the whole watchlist.
-        note = OWN_TIME if how_often(text) is None else HOW_OFTEN
-        found.append((stretch, CantRow(kind="schedule", text=text, note=note, needs="new_tool")))
+        holds = _watchlist_holds(read.schedule)
+        at = stretch if holds else locate(request, read.schedule or "") or stretch
+        text = plain(request[at[0] : at[1]], TEXT_LIMIT)
+        note = OWN_TIME if holds else HOW_OFTEN
+        found.append((at, CantRow(kind="schedule", text=text, note=note, needs="new_tool")))
     for clause in _change_clauses(changes):
         found.append((_stretch(request, clause), _change_row(clause)))
     # Words beside the watch stand beside no part of a task, so a part is never named for them.

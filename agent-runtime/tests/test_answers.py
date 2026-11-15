@@ -2289,6 +2289,9 @@ def test_a_watch_time_is_crossed_only_when_it_differs_from_the_watchlists(task: 
         ("daily at 8am", "own_time"),
         ("every 2 hours", "how_often"),
         ("monthly", "how_often"),
+        ("every Monday and Thursday at 9", "how_often"),
+        ("every weekday at 9am and 5pm", "how_often"),
+        ("every weekday except Friday", "how_often"),
     ],
 )
 def test_a_watch_time_the_watchlist_cant_hold_is_crossed_as_too_often(said: str, reason: str):
