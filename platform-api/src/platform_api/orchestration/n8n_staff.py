@@ -394,13 +394,10 @@ class StaffAccounts:
         return Made(row.id)
 
     async def _end(self, row: _Row) -> Ended:
-        """n8n moves what the account's own space still holds to the platform's project, and
-        keeps no maker for it, so each workflow there is noted as this person's first."""
-        assert row.n8n_user_id is not None and self._api is not None
-        space = (await personal_spaces(self._api)).get(row.n8n_user_id)
-        if space is not None:
-            left = await self._api.workflows_in(space)
-            await self.note_made(row.id, row.n8n_user_id, [w.workflow.id for w in left])
+        """Ends the account whatever the note does. A delete n8n refuses raises, and the person
+        stays marked for ending, so the next settle tries again."""
+        assert row.n8n_user_id is not None
+        await self._note_space(row)
         await self._delete(row.n8n_user_id)
         async with self._db.transaction("orchestration") as uow:
             await uow.conn.execute(
@@ -410,6 +407,22 @@ class StaffAccounts:
             )
         log.info("ended the n8n account of %s", row.id)
         return Ended(row.id)
+
+    async def _note_space(self, row: _Row) -> None:
+        """n8n moves what the account's own space still holds to the platform's project, and
+        keeps no maker for it, so each workflow there is noted as this person's first. Best
+        effort: when n8n can't list it, the account ends anyway, and those workflows never wait
+        to be set up."""
+        assert row.n8n_user_id is not None and self._api is not None
+        try:
+            space = (await personal_spaces(self._api)).get(row.n8n_user_id)
+            if space is None:
+                return
+            left = await self._api.workflows_in(space)
+        except (N8nError, httpx.HTTPError) as error:
+            log.warning("could not note what an ending n8n account made: %s", type(error).__name__)
+            return
+        await self.note_made(row.id, row.n8n_user_id, [w.workflow.id for w in left])
 
     async def _delete(self, n8n_user_id: str) -> None:
         assert self._api is not None

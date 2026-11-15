@@ -491,3 +491,23 @@ async def test_its_runs_read_and_write_where_its_agent_blocks_say(s: Staffed):
     assert read_projects(spec.task) == {"MOCK"}, "so the agent may read the Jira project it names"
     targets = [dict(b.target) for run in spec.task.agents for b in run.bindings.values()]
     assert targets == [{"project": "MOCK"}], "and its change lands there"
+
+
+async def test_an_n8n_error_while_noting_never_keeps_an_ended_account(s: Staffed):
+    carol_n8n, carol_space = await space_of(s, "carol")
+    s.n8n.make_in(carol_space, named(await laid_out(s), "Left behind"), carol_n8n)
+    assert (await s.give("carol", on=False)).status_code == 200
+    s.n8n.list_answers = [500]
+    assert Ended(CAROL) in await s.settle(), "removing access never waits on the note"
+    assert carol_n8n in [user for user, _ in s.n8n.deleted_users]
+    assert (await s.person("carol"))["n8n_user_id"] is None
+
+
+async def test_an_account_delete_n8n_refuses_is_tried_again(s: Staffed):
+    carol_n8n, _ = await space_of(s, "carol")
+    assert (await s.give("carol", on=False)).status_code == 200
+    s.n8n.user_delete_answers = [500]
+    assert Ended(CAROL) not in await s.settle()
+    assert (await s.person("carol"))["n8n_user_id"] == carol_n8n, "still marked for ending"
+    assert Ended(CAROL) in await s.settle(), "the next settle ends it"
+    assert carol_n8n in [user for user, _ in s.n8n.deleted_users]

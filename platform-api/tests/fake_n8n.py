@@ -85,6 +85,10 @@ class FakeN8n:
     """How many of the next transfers move the workflow but lose their answer."""
     list_page: int | None = None
     """How many workflows one page of a project's list holds. All of them unless a test says."""
+    list_answers: list[int] = field(default_factory=list[int])
+    """How n8n answers the next lists of a project's workflows, in turn, before it lists."""
+    user_delete_answers: list[int] = field(default_factory=list[int])
+    """How n8n answers the next deletes of an account, in turn. One it refuses deletes nothing."""
 
     def client(self) -> httpx.AsyncClient:
         return httpx.AsyncClient(transport=httpx.MockTransport(self.handle), base_url="http://n8n")
@@ -277,6 +281,8 @@ class FakeN8n:
                 self._remember(workflow_id)
                 return httpx.Response(200, json=self.workflows[workflow_id])
             case "GET", ["workflows"]:
+                if self.list_answers and (answer := self.list_answers.pop(0)) != 200:
+                    return httpx.Response(answer, json={"message": "n8n could not list them"})
                 key = request.headers.get("X-N8N-API-KEY", "")
                 if "workflow:list" not in self.scopes.get(key, {"workflow:list"}):
                     return httpx.Response(403, json={"message": "Forbidden"})
@@ -376,6 +382,8 @@ class FakeN8n:
                     return httpx.Response(404, json={"message": "Could not find user"})
                 return httpx.Response(200, json={"id": user_id, **user})
             case "DELETE", ["users", user_id]:
+                if self.user_delete_answers and (answer := self.user_delete_answers.pop(0)) != 204:
+                    return httpx.Response(answer, json={"message": "n8n did not delete it"})
                 if self.users.pop(user_id, None) is None:
                     return httpx.Response(404, json={"message": "not found"})
                 transfer = request.url.params.get("transferId")
