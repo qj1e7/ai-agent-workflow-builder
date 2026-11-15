@@ -40,7 +40,7 @@ def cant(what: str) -> str:
     (changing tickets, Slack and text messages)."""
     words_of = what.lower().split()
     wont = words_of[0] in WONT or bool(
-        {"slack", "sms", "text", "texts"} & set(re.findall(r"\w+", what.lower()))
+        {"slack", "slacks", "sms", "text", "texts"} & set(re.findall(r"\w+", what.lower()))
     )
     yet = "" if wont else " yet"
     return f"I can't {what}{yet}. {CAN}"
@@ -321,6 +321,80 @@ def test_a_place_source_or_audience_in_another_system_is_cant_do_whatever_the_pr
     kind: RowKind, text: str
 ):
     assert why_no_tool(kind, text) == cant(text[0].lower() + text[1:])
+
+
+RESULT_GOES_ELSEWHERE = [
+    "Write a summary for the Slack channel review",
+    "Write a summary for the Slack version",
+    "Write a summary for the Teams release",
+    "Write a summary for the Slack ticket",
+    "Write a summary for the ServiceNow incident",
+    "Write a summary for the Slack-channel",
+    "Write a summary for the Slack/Teams channel",
+    "Write a summary for the Slack.com channel",
+    "Write a summary for the Slacks channel",
+    "Write a summary for the slack-channel",
+    "Write a summary for the ServiceNow ticket review",
+    "Write a summary for the Mattermost channel",
+    "Write a summary for the Webex space",
+    "Write a summary for the PagerDuty incident",
+    "Write a summary for the Grafana dashboard",
+    "Write a summary for the Power BI report",
+    "Write a summary for the Okta group",
+    "Write a summary for the AD group",
+    "Write a summary for the wiki page",
+    "Write a summary for the shared mailbox",
+    "Write a summary for the shared drive",
+    "Write a summary for the status page",
+    "Write a summary for the mailing list",
+    "Write a summary for the pull request",
+    "Write a summary as the Mattermost channel",
+    "Write a summary per the Grafana dashboard",
+]
+
+
+@pytest.mark.parametrize("kind", ["do", "where"])
+@pytest.mark.parametrize("text", RESULT_GOES_ELSEWHERE)
+def test_a_result_for_a_place_it_cannot_go_is_cant_do_however_the_place_is_written(
+    kind: RowKind, text: str
+):
+    """#120: a system's own ticket, version or place, a system name joined by punctuation or
+    made plural, and a place in no system the platform reaches."""
+    assert why_no_tool(kind, text) == cant(text[0].lower() + text[1:])
+
+
+@pytest.mark.parametrize("kind", ["do", "where"])
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Create a ticket for the Kubernetes upgrade",
+        "Raise a Kubernetes upgrade ticket",
+        "Create a ticket for the GitLab patch",
+        "Create a ticket for the GitLab review",
+        "Write a summary for the dashboard team",
+        "Check Azure/azure-cli for new releases",
+    ],
+)
+def test_an_upgrade_or_patch_that_names_a_thing_is_no_write_and_a_ticket_for_it_stays(
+    kind: RowKind, text: str
+):
+    """#120: the Phase 2 upgrade tickets, a topic that is also a verb, an audience whose name
+    holds a place word, and a repository whose owner is a system's name."""
+    assert why_no_tool(kind, text) is None
+
+
+@pytest.mark.parametrize(
+    ("text", "what"),
+    [
+        ("Create a ticket for the Kubernetes upgrade and apply it", "apply it"),
+        ("Create a ticket for the Kubernetes upgrade and roll it out", "roll it out"),
+        ("Create a ticket for the GitLab patch, then apply the patch", "apply the patch"),
+    ],
+)
+def test_applying_or_rolling_out_after_an_upgrade_ticket_is_a_write_it_cant_do(
+    text: str, what: str
+):
+    assert why_no_tool("do", text) == cant(what)
 
 
 def test_a_place_after_a_comma_is_still_checked():

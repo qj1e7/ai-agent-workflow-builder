@@ -1129,6 +1129,13 @@ def _workflow(out: _WorkflowOut) -> N8nWorkflow:
     return N8nWorkflow(out.id, out.version_id, out.active_version_id, document)
 
 
+def _facts(record: ExecutionRecord) -> ExecutionFacts:
+    retry_of = None if record.retry_of is None else N8nExecutionId(record.retry_of)
+    return ExecutionFacts(
+        record.workflow_id, record.mode, retry_of, record.start_nonce, record.version_id
+    )
+
+
 class N8nExecutions:
     """n8n's records of executions, through its public API (ENGINE-PLAN 2.3)."""
 
@@ -1148,10 +1155,7 @@ class N8nExecutions:
         record = await self._record(execution_id)
         if record is None or record.status not in VOUCHED:
             return None
-        retry_of = None if record.retry_of is None else N8nExecutionId(record.retry_of)
-        return ExecutionFacts(
-            record.workflow_id, record.mode, retry_of, record.start_nonce, record.version_id
-        )
+        return _facts(record)
 
     async def landed(self, execution_id: N8nExecutionId) -> bool:
         """Whether n8n shows the execution running or finished, after a wake met a 409."""
@@ -1423,16 +1427,16 @@ class N8nWorkflows:
             return None
         if record.status == "success":
             return Finished(execution_id)
-        return FailedExecution(execution_id, record.workflow_id, record.failed_node, record.error)
+        return FailedExecution(execution_id, _facts(record), record.failed_node, record.error)
 
-    async def failure(self, execution_id: N8nExecutionId) -> FailedExecution | None:
+    async def failure(self, execution_id: N8nExecutionId) -> FailedExecution | TryLater | None:
         """The block that failed and n8n's words for it, from n8n's own record. None unless n8n
         has the execution and it ended in an error."""
         try:
             record = await self._api.execution(execution_id)
         except (N8nError, httpx.HTTPError) as error:
             log.warning("could not read n8n execution %s: %s", execution_id, error)
-            return None
+            return N8N_UNREADABLE
         if record is None or record.status != "error":
             return None
-        return FailedExecution(execution_id, record.workflow_id, record.failed_node, record.error)
+        return FailedExecution(execution_id, _facts(record), record.failed_node, record.error)

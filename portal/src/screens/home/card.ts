@@ -589,6 +589,23 @@ export async function setUp(form: Form, plan: PlanView, draftId: string | null, 
   return { useCaseId: made.use_case_id, draftKept }
 }
 
+/**
+ * One card's draft writes, in the order they were asked for. A delete waits for a save still on its way, or the save could
+ * land after it and bring the draft back (#190).
+ */
+export function draftWrites() {
+  let landed: Promise<unknown> = Promise.resolve()
+  return {
+    saved<T>(save: Promise<T>): Promise<T> {
+      landed = save.catch(() => undefined)
+      return save
+    },
+    afterSaves<T>(write: () => Promise<T>): Promise<T> {
+      return landed.then(write)
+    },
+  }
+}
+
 export interface Planned {
   readonly task: string
   readonly answer: PlanOut
