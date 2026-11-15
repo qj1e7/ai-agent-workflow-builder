@@ -8,6 +8,7 @@ from fastapi import FastAPI
 
 from platform_api.auth import DEV_PEOPLE, DevAuth, OidcAuth
 from platform_api.builder import Builder, Home, PlannerFront, TeamRequests, Watchlist
+from platform_api.builder.made_in_n8n import MadeInN8n
 from platform_api.builder.n8n_holds import Holding
 from platform_api.builder.n8n_view import InN8nViews
 from platform_api.builder.planner_facts import PlannerFactsReader
@@ -123,6 +124,7 @@ class Services:
     starts: N8nStarts | None = None
     tell_flow: TellFlow | None = None
     in_n8n: InN8nViews | None = None
+    made_in_n8n: MadeInN8n | None = None
 
 
 JIRA_TIMEOUT_SECONDS = 10.0
@@ -179,6 +181,7 @@ def install(app: FastAPI, services: Services) -> None:
     app.state.confluence = services.confluence
     app.state.staff = services.staff
     app.state.in_n8n = services.in_n8n
+    app.state.made_in_n8n = services.made_in_n8n
 
 
 class NoN8nReads:
@@ -529,6 +532,11 @@ async def build(settings: Settings) -> Services:
                 RunsInN8n(db, n8n.landing),
                 settings.n8n_editor_url,
             )
+        ),
+        made_in_n8n=(
+            None
+            if holding is None or n8n.drafts is None
+            else MadeInN8n(db, n8n.drafts, staff, holding, facts, settings.team_time_zone)
         ),
     )
 

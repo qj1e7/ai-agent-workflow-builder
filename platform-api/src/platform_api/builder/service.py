@@ -142,6 +142,7 @@ from platform_api.orchestration import (
     Schedule,
     ScheduleBook,
     Task,
+    Unreadable,
     WriteEntry,
     Written,
     add_yes,
@@ -149,6 +150,7 @@ from platform_api.orchestration import (
     cards_policy,
     grade,
     next_run,
+    read_flow,
     tools_used,
     write_tools_used,
 )
@@ -159,7 +161,7 @@ log = logging.getLogger(__name__)
 _CURRENT_VERSION = """
     SELECT u.use_case_id, u.owner, u.paused_at, u.paused_by, u.deleted_at, u.deleted_by,
            u.draft, u.left_out, u.engine, u.n8n_workflow_id, u.deleted_in_n8n_at,
-           u.move_refused, v.version,
+           u.move_refused, u.made_in_n8n_by, v.version,
            v.template, v.name, v.instruction, v.params, v.created_at, v.document,
            v.n8n_version_id, v.grade, v.findings
     FROM builder.use_cases u
@@ -289,6 +291,7 @@ def _view(
         deleted_in_n8n_at=row["deleted_in_n8n_at"],
         moving_to_n8n=moving,
         move_refused=None if _own(row) else row["move_refused"],
+        made_in_n8n_by=row["made_in_n8n_by"],
     )
 
 
@@ -369,6 +372,12 @@ class WatchlistStays:
 @dataclass(frozen=True)
 class ScheduleOnSoftwarePage:
     pass
+
+
+@dataclass(frozen=True)
+class ScheduleInN8n:
+    """A workflow made in n8n has no plan the Planner could lay it out from again, so when it
+    runs is changed in n8n."""
 
 
 type Moved = Lifecycle | AlreadyDeleted | TooLate | WatchlistStays
@@ -638,7 +647,7 @@ class Builder:
 
     async def save_schedule(
         self, use_case_id: str, principal: Principal, body: UseCaseScheduleIn
-    ) -> UseCaseView | ScheduleOnSoftwarePage | ChangedSince | InN8nRefused | None:
+    ) -> UseCaseView | ScheduleOnSoftwarePage | ScheduleInN8n | ChangedSince | InN8nRefused | None:
         """The same save as the watchlist's: the caller becomes the owner, which lifts a hold.
         A new schedule publishes a new version. Saving the same one again publishes none.
         Saving is not a write to Jira or Confluence, so it needs no approval. An own workflow's
@@ -650,6 +659,8 @@ class Builder:
             return None
         if view.template == SOFTWARE_WATCHLIST.key:
             return ScheduleOnSoftwarePage()
+        if view.made_in_n8n_by is not None:
+            return ScheduleInN8n()
         after = Schedule(body.day, body.at, self._zone)
         match await self._publish(
             use_case_id, principal, body.via, lambda _: Publish(after), body.expected_version
@@ -1385,15 +1396,11 @@ class Builder:
             pinned = (await self._cards.agents_of([(use_case_id, view.version)])).get(
                 (use_case_id, view.version), []
             )
-            cards = tuple(
-                CardRun(
-                    card_spec(a.card), dict(a.values), card_bindings(card_spec(a.card), a.values)
-                )
-                for a in pinned
-            )
-            task = CardsTask(cards)
-            asked = max((x.approvers for a in pinned for x in a.card.approvals), default=1)
-            policy = cards_policy([run.card for run in cards], asked)
+            named = await self._named_in_n8n(use_case_id, {a.card.card_id for a in pinned})
+            chosen = [*((a.card, dict(a.values)) for a in pinned), *named]
+            task = CardsTask(tuple(_bound(card, values) for card, values in chosen))
+            asked = max((x.approvers for card, _ in chosen for x in card.approvals), default=1)
+            policy = cards_policy([card_spec(card) for card, _ in chosen], asked)
         else:
             listed = await self._watchlist.task_for(use_case_id, view.version)
             if listed is None:
@@ -1411,6 +1418,31 @@ class Builder:
             approval_policy=policy,
             n8n=await self._target(use_case_id),
         )
+
+    async def _named_in_n8n(
+        self, use_case_id: str, pinned: set[str]
+    ) -> list[tuple[CardView, dict[str, str]]]:
+        """The cards the Agent blocks of its own n8n workflow name beyond the pinned ones, with
+        each block's values, as a workflow made or changed in n8n may hold. Each runs its newest
+        version with those values, so what it may read and the Approvers it asks for count too.
+        The checker graded the values against the places the platform allows."""
+        async with self._db.connection("builder") as conn:
+            row = await (
+                await conn.execute(_CURRENT_VERSION + " WHERE u.use_case_id = %s", (use_case_id,))
+            ).fetchone()
+        if row is None or row["document"] is None:
+            return []
+        try:
+            flow = read_flow(row["document"])
+        except Unreadable:
+            return []
+        found: list[tuple[CardView, dict[str, str]]] = []
+        for block in flow.of_kind("agent"):
+            card_id = str(block.parameters.get("agent"))
+            card = None if card_id in pinned else await self._cards.get(card_id)
+            if card is not None:
+                found.append((card, _agent_values(block.parameters)))
+        return found
 
     async def start_run(
         self,
@@ -1463,6 +1495,28 @@ class Builder:
                     return await self._runs.start_run(trial, principal, idempotency_key)
                 case On():
                     return await self._runs.start_run(spec, principal, idempotency_key)
+
+
+def _bound(card: CardView, values: Mapping[str, str]) -> CardRun:
+    """A block that names no place for a write the card makes binds none, so its run is refused
+    at the write, never sent to a default place."""
+    spec = card_spec(card)
+    try:
+        return CardRun(spec, dict(values), card_bindings(spec, values))
+    except ValueError:
+        return CardRun(spec, dict(values), {})
+
+
+def _agent_values(parameters: Mapping[str, Any]) -> dict[str, str]:
+    """An Agent block's values, as its fixed collection of inputs holds them."""
+    inputs = parameters.get("inputs")
+    rows = cast(dict[str, Any], inputs).get("input") if isinstance(inputs, dict) else None
+    listed = cast(list[object], rows) if isinstance(rows, list) else []
+    return {
+        str(row["name"]): str(row["value"])
+        for row in (cast(dict[str, Any], r) for r in listed if isinstance(r, dict))
+        if "name" in row and isinstance(row.get("value"), str)
+    }
 
 
 async def _store_in_n8n(uow: UnitOfWork, use_case_id: str, version: int, relaid: Relaid) -> None:

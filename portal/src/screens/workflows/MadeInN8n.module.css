@@ -1,0 +1,27 @@
+/* A workflow made in n8n that waits to be set up: what it is on the left, its grade and Set up on the right. */
+.row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  min-height: 56px;
+  padding: 10px 16px;
+}
+
+.end {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+@media (max-width: 560px) {
+  .row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .end {
+    justify-content: flex-start;
+  }
+}

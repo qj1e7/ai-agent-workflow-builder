@@ -42,6 +42,8 @@ ROUTES = {
     ("POST", "/api/v1/use-cases/{use_case_id}/take-back"),
     ("GET", "/api/v1/use-cases/{use_case_id}/n8n"),
     ("GET", "/api/v1/runs/{run_id}/n8n"),
+    ("GET", "/api/v1/n8n/workflows"),
+    ("POST", "/api/v1/use-cases/from-n8n"),
     ("GET", "/api/v1/me/n8n"),
     ("PUT", "/api/v1/people/{person_id}/n8n-access"),
     ("DELETE", "/api/v1/use-cases/{use_case_id}"),
