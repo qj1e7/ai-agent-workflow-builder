@@ -211,7 +211,7 @@ def test_a_write_the_checker_cannot_put_behind_one_yes_is_never_saved() -> None:
     assert {f.grade for f in refused.findings} == {"needs_a_fix"}
 
 
-SLACK = slack_notice("Tell Slack", "C0123ABCD", "={{ $json.summary }}")
+SLACK = slack_notice("Tell Slack", "C0123ABCD", "A newer LangGraph release is out.")
 PLATFORM_KEYS = KnownOptions(
     frozenset({VERSION_CHECKER_ID}),
     {"github_releases": frozenset({"langchain-ai/langgraph"})},

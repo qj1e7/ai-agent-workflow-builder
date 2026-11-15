@@ -19,6 +19,7 @@ from platform_api.orchestration.n8n import N8nApi, N8nError, RetryRefused, Still
 from platform_api.orchestration.n8n_call_book import CallBook
 from platform_api.orchestration.n8n_calls import StartKind, start_signature
 from platform_api.orchestration.spec import N8nTarget
+from platform_api.orchestration.workflow_check import unpinned_notices
 from platform_api.shared import N8nExecutionId, RunId
 
 
@@ -68,6 +69,13 @@ class RunStarts(Protocol):
         ...
 
 
+DRAFT_CHANGED = (
+    "The draft changed in n8n after the platform checked it, so the test run did not start. "
+    "Start it again."
+)
+"""A test run runs only the draft the platform checked (ADR 0045, as amended)."""
+
+
 class N8nStarts:
     def __init__(
         self,
@@ -113,7 +121,14 @@ class N8nStarts:
             start = await CallBook().issue_start(uow, run_id, "test", target.workflow_id)
         item = {"nonce": start.nonce, "kind": "test", "workflow_id": target.workflow_id}
         try:
-            if unpinned := await self._api.unpinned(target.workflow_id):
+            draft = await self._api.draft(target.workflow_id)
+            if draft is None:
+                raise DispatchFailure(
+                    "n8n no longer has the workflow, so the test run did not start."
+                )
+            if target.draft_version is not None and draft.get("versionId") != target.draft_version:
+                raise DispatchFailure(DRAFT_CHANGED)
+            if unpinned := unpinned_notices(draft):
                 names = ", ".join(f'"{name}"' for name in unpinned)
                 raise DispatchFailure(
                     f"{names} would post in a test run, so the test run did not start. Pin its "

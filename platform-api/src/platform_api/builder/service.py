@@ -1517,15 +1517,22 @@ class Builder:
             return NotMovedYet(view.move_refused or NOT_MOVED_YET)
         spec = replace(spec, test=test)
         if test and spec.n8n is not None:
-            refused = await self._untestable(use_case_id, spec.n8n, principal.user_id)
-            if refused is not None:
-                return refused
+            checked = await self._checked_draft(use_case_id, spec.n8n)
+            if isinstance(checked, NoTestRun):
+                return checked
+            spec = replace(spec, n8n=replace(spec.n8n, draft_version=checked))
         if isinstance(spec.task, CardsTask) and not await self._planner.has_model():
             return NoModelToRun()
         async with self._db.transaction("builder") as uow:
             # Read the state again under the lock, on this one connection, and hold the lock
             # until the run is inserted, so a pause or delete can't land in between (#56).
             await hold_workflow(uow.conn, use_case_id, alone=False)
+            if test and self.holding is not None:
+                held = await self.holding.refused_while_held(
+                    uow.conn, use_case_id, principal.user_id
+                )
+                if held is not None:
+                    return NoTestRun(held.words)
             match await _lifecycle_now(uow.conn, use_case_id):
                 case None | Deleted():
                     return None
@@ -1539,14 +1546,9 @@ class Builder:
                 case On():
                     return await self._runs.start_run(spec, principal, idempotency_key)
 
-    async def _untestable(
-        self, use_case_id: str, target: N8nTarget, actor: UserId
-    ) -> NoTestRun | None:
-        if self.holding is not None:
-            async with self._db.connection("builder") as conn:
-                held = await self.holding.refused_while_held(conn, use_case_id, actor)
-            if held is not None:
-                return NoTestRun(held.words)
+    async def _checked_draft(self, use_case_id: str, target: N8nTarget) -> NoTestRun | str:
+        """The version id of the draft a test run would run, once n8n would run nothing in it
+        unchecked. The run is then held to that draft."""
         if self._n8n is None:
             return NoTestRun(UNREAD_TEST)
         try:
@@ -1559,7 +1561,7 @@ class Builder:
         found = unchecked(draft.document, (await self.facts.known({})).keys)
         if found:
             return NoTestRun(UNCHECKED_TEST.format(found=found[0].text))
-        return None
+        return draft.version_id
 
 
 def _bound(card: CardView, values: Mapping[str, str]) -> CardRun:

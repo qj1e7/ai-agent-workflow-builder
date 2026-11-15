@@ -169,6 +169,7 @@
         "tag": "Posts in Teams",
         "says": "Posts a message in a Teams channel",
         "target": ["teamId", "channelId"],
+        "text": ["message"],
         "approvers_min": 1
       },
       {"versions": [1, 1.1], "class": "off"}
@@ -195,6 +196,7 @@
         "tag": "Emails from Outlook",
         "says": "Sends an email from Outlook",
         "target": ["mailbox", "toRecipients", "additionalFields.ccRecipients", "additionalFields.bccRecipients", "additionalFields.replyTo", "additionalFields.from"],
+        "text": ["subject", "bodyContent"],
         "approvers_min": 1
       },
       {"versions": [1], "class": "off"}
@@ -216,6 +218,7 @@
         "tag": "Emails from Gmail",
         "says": "Sends an email from Gmail",
         "target": ["sendTo", "options.ccList", "options.bccList", "options.replyTo"],
+        "text": ["subject", "message"],
         "approvers_min": 1
       },
       {"versions": [1], "class": "off"}
@@ -241,6 +244,7 @@
         "says": "Posts a message in Slack",
         "target": ["select", "channelId", "user"],
         "text": ["text", "blocksUi", "attachments"],
+        "encoded": ["blocksUi"],
         "quiet": ["otherOptions.link_names"],
         "approvers_min": 1
       },

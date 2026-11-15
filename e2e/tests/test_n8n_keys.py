@@ -99,7 +99,7 @@ def reads_then_tells(source_id: str, name: str) -> Json:
             "parameters": {
                 "select": "channel",
                 "channelId": {"__rl": True, "value": CHANNEL, "mode": "id"},
-                "text": "={{ $json.key }} was read",
+                "text": "A ticket was read",
                 "otherOptions": {"includeLinkToWorkflow": False},
             },
             "credentials": {"slackApi": {"id": "wab-slack-send", "name": "Slack"}},
@@ -174,7 +174,7 @@ def test_builtin_read_and_notice(api: Api, mock_model: None):
     posted = api.poll("n8n's Slack block to post once", lambda: posts_to(CHANNEL)[before:] or None)
     observed("posts to Slack after a real run", posted)
     assert len(posted) == 1 and posted[0]["token"] == "mock-slack-token"
-    assert posted[0]["text"].startswith("MOCK-") or "was read" in posted[0]["text"]
+    assert posted[0]["text"] == "A ticket was read"
     assert home, "the platform's own project"
     for made in (use_case_id, source["use_case_id"]):
         api.delete("alice", f"/api/v1/use-cases/{made}", expect=(200,))

@@ -22,6 +22,7 @@ Pure. A document is the n8n workflow JSON as the public API takes it.
 import hashlib
 import json
 import re
+import unicodedata
 import uuid
 from collections.abc import Iterable, Mapping, Sequence
 from copy import deepcopy
@@ -43,6 +44,7 @@ from platform_api.orchestration.node_classes import (
     BlockKind,
     Off,
     Runs,
+    Use,
 )
 from platform_api.orchestration.platform_keys import KEY_FOR_TYPE
 
@@ -286,7 +288,7 @@ def grade(
         *_settings(flow, error_workflow, time_zone),
         *_parameters(flow),
         *_places(flow),
-        *_mentions(flow),
+        *_words(flow),
         *_keys(flow, {} if known is None else known.keys),
         *_ours_first(flow),
         *_schedules(flow),
@@ -309,7 +311,7 @@ def unchecked(document: Mapping[str, Any], keys: Mapping[str, str]) -> tuple[Fin
     found = (
         *_off_blocks(flow),
         *_places(flow),
-        *_mentions(flow),
+        *_words(flow),
         *_keys(flow, keys),
         *_ours_first(flow),
     )
@@ -550,31 +552,46 @@ def _places(flow: Flow) -> Iterable[Finding]:
             )
 
 
-MASS_MENTION = re.compile(r"<!(?:channel|here|everyone)\b|@(?:channel|here|everyone)\b", re.I)
-"""Slack's words that call out everyone in a channel or a workspace."""
+MASS_MENTION = re.compile(r"<!(?:channel|here|everyone)\b|@(?:channel|here|everyone)\b")
+"""Slack's words that call out everyone in a channel or a workspace, matched on text in NFKC and
+case-folded."""
+SAYS_WHAT_A_RUN_READ = "writes its message with an expression, so it is off. Use our Tell for that"
+UNREADABLE_WORDS = "has a message the checker can't read, so it is off"
+CALLS_EVERYONE = "calls out a whole channel, so it is off"
 
 
-def _mentions(flow: Flow) -> Iterable[Finding]:
-    """The Tell rule for what a notice says: it never calls out a whole channel, in its words or
-    by a switch such as Slack's link_names, which turns a written @channel into one. The platform
-    can't read a run's data first, so words a run reads are not checked here."""
+def _words(flow: Flow) -> Iterable[Finding]:
+    """The Tell rule for what a notice says (ADR 0045, as amended): in this release n8n's own
+    notice text is written out in the block, never an expression, so the checker reads all of it
+    before anything runs, and a notice that says what a run read goes through our Tell. It never
+    calls out a whole channel, in its words or by a switch such as Slack's link_names."""
     for block in flow.blocks.values():
         verdict = NODE_CLASSES.verdict(block.type, block.version, block.parameters)
         if not isinstance(verdict, Runs) or verdict.on != "notice" or verdict.use is None:
             continue
-        use = verdict.use
-        loud = any(
-            MASS_MENTION.search(text)
-            for path in use.text
-            for text in _texts(_at_path(block.parameters, path))
-        )
-        switched = any(_at_path(block.parameters, path) not in (None, False) for path in use.quiet)
-        if loud or switched:
-            yield _fix(
-                block.name,
-                f'"{block.name}" calls out a whole channel, so it is off.',
-                runs_anyway=True,
-            )
+        problem = _said(block.parameters, verdict.use)
+        if problem is not None:
+            yield _fix(block.name, f'"{block.name}" {problem}.', runs_anyway=True)
+
+
+def _said(parameters: Mapping[str, JsonValue], use: Use) -> str | None:
+    said: list[str] = []
+    for path in use.text:
+        value = _at_path(parameters, path)
+        texts = list(_texts(value))
+        if any(text.startswith("=") for text in texts):
+            return SAYS_WHAT_A_RUN_READ
+        if path in use.encoded and isinstance(value, str):
+            try:
+                texts = list(_texts(json.loads(value)))
+            except ValueError:
+                return UNREADABLE_WORDS
+        said += texts
+    if any(MASS_MENTION.search(unicodedata.normalize("NFKC", text).casefold()) for text in said):
+        return CALLS_EVERYONE
+    if any(_at_path(parameters, path) not in (None, False) for path in use.quiet):
+        return CALLS_EVERYONE
+    return None
 
 
 def _texts(value: JsonValue) -> Iterable[str]:

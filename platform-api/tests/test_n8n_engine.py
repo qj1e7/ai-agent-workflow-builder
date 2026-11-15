@@ -517,3 +517,17 @@ def test_safety_a_schedule_never_starts_a_workflow_that_is_not_on():
     version = RanVersion("safe", Publisher(UserId("alice")))
     assert decide_link(facts, None, None, None, version, NOW, on=False) == NOT_ON
     assert decide_link(facts, None, None, None, version, NOW) == NewRun(UserId("alice"), "schedule")
+
+
+async def test_safety_a_test_run_runs_only_the_draft_the_platform_checked(e: Engine):
+    """The draft could change between the check and the run, so the run is held to the draft's
+    version id at the check, and one changed since does not start (ADR 0045, as amended)."""
+    target = OWN.n8n
+    assert target is not None
+    checked = replace(OWN, stops_at_gate=True, n8n=replace(target, draft_version="v0"))
+    await e.start(checked)
+    await e.tick()
+    assert e.records.draft_runs == [], "the draft is v1 now, not the v0 that was checked"
+    await e.start(replace(checked, n8n=replace(target, draft_version="v1")))
+    await e.tick()
+    assert len(e.records.draft_runs) == 1

@@ -1045,12 +1045,18 @@ class N8nApi:
             return
         _expect(await self._public("POST", f"/workflows/{workflow_id}/unpublish", {}))
 
-    async def unpinned(self, workflow_id: str) -> list[str]:
-        """The draft's notice blocks whose output is not pinned, so a test run would post."""
+    async def draft(self, workflow_id: str) -> dict[str, Any] | None:
+        """The workflow as the public API holds it, with its draft's version id. None when n8n no
+        longer has it."""
         response = await self._public("GET", f"/workflows/{workflow_id}")
         if response.status_code == 404:
-            return []
-        return unpinned_notices(_expect(response).json())
+            return None
+        found: dict[str, Any] = _expect(response).json()
+        return found
+
+    async def unpinned(self, workflow_id: str) -> list[str]:
+        """The draft's notice blocks whose output is not pinned, so a test run would post."""
+        return unpinned_notices(await self.draft(workflow_id) or {})
 
     async def run_draft(self, workflow_id: str, item: Mapping[str, Any]) -> str:
         """/rest: runs the draft by hand from Start from the Portal with this item as its output,

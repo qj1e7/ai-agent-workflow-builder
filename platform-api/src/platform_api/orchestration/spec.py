@@ -68,6 +68,9 @@ class N8nTarget:
     webhook_id: str | None
     """Start from the Portal's webhookId in the version that runs, where Run now is sent. None
     in a workflow without that block, which only its schedule or a test run starts."""
+    draft_version: str | None = None
+    """For a test run, the version id of the draft the platform checked when it was asked for.
+    A test run runs only that draft: one changed since does not start (ADR 0045, as amended)."""
 
 
 @dataclass(frozen=True)

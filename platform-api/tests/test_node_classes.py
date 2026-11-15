@@ -363,6 +363,11 @@ def a_notice_without_its_place(raw: Raw) -> None:
     raw["n8n-nodes-base.slack"]["rows"][0]["target"] = []
 
 
+def a_notice_without_its_text(raw: Raw) -> None:
+    """The checker reads every word a notice says, so a notice row names where its words are."""
+    raw["n8n-nodes-base.microsoftTeams"]["rows"][0]["text"] = []
+
+
 def reads_and_notices_in_one_row(raw: Raw) -> None:
     raw["n8n-nodes-base.slack"]["rows"][0]["resources"]["message"]["operations"]["search"] = "read"
 
@@ -410,6 +415,7 @@ def picked_by_three(raw: Raw) -> None:
         made_from_an_off_type,
         slack_writes,
         a_notice_without_its_place,
+        a_notice_without_its_text,
         reads_and_notices_in_one_row,
         a_system_block_that_says_nothing,
         a_tag_without_the_rest,

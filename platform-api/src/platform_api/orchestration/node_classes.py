@@ -90,6 +90,7 @@ class _Row(BaseModel):
     says: str | None = Field(default=None, min_length=1)
     target: tuple[str, ...] = ()
     text: tuple[str, ...] = ()
+    encoded: tuple[str, ...] = ()
     quiet: tuple[str, ...] = ()
     approvers_min: int | None = Field(default=None, ge=1, le=2)
 
@@ -123,7 +124,15 @@ class _Row(BaseModel):
         if None in described:
             raise ValueError("a row that says what it does has a tag, says and approvers_min")
         assert self.tag is not None and self.says is not None and self.approvers_min is not None
-        return Use(self.tag, self.says, self.target, self.approvers_min, self.text, self.quiet)
+        return Use(
+            self.tag,
+            self.says,
+            self.target,
+            self.approvers_min,
+            self.text,
+            self.encoded,
+            self.quiet,
+        )
 
 
 class _On(BaseModel):
@@ -179,7 +188,11 @@ class Use:
     A notice's must be literals (the Tell rule)."""
     approvers_min: int
     text: tuple[str, ...] = ()
-    """The parameters that hold what a notice says, which never call out a whole channel."""
+    """The parameters that hold what a notice says. In this release each is written out in the
+    block, never an expression, and none calls out a whole channel."""
+    encoded: tuple[str, ...] = ()
+    """Those of the text parameters that hold JSON in a string, such as Slack's blocks, which
+    the checker reads decoded."""
     quiet: tuple[str, ...] = ()
     """Switches a notice leaves off, such as Slack's link_names, which turns a written @channel
     into a call to everyone in it."""
@@ -429,10 +442,11 @@ def _check_n8ns_own(name: str, entry: OnType) -> None:
             raise ValueError(f"{name} version {key}: say what it does, and give it one class")
         if on <= {"read"}:
             continue
-        if on != {"notice"} or use is None or not use.target:
+        if on != {"notice"} or use is None or not use.target or not use.text:
             raise ValueError(
-                f"{name} version {key}: n8n's own nodes only read, or post where their row says, "
-                "until the write proxy (ADR 0045, E18) exists"
+                f"{name} version {key}: n8n's own nodes only read, or post where their row says "
+                "and what their row names as its text, until the write proxy (ADR 0045, E18) "
+                "exists"
             )
 
 

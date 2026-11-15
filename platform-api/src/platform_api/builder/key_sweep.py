@@ -45,8 +45,9 @@ UNCHECKED_DRAFT = (
     "Its draft in n8n has a block the platform can't check, so no test run starts until it is "
     "fixed in n8n."
 )
-KEYS_NOT_BACK = (
-    "n8n did not take the platform's keys back on this workflow, so it stays held until it does."
+NOT_BACK_YET = (
+    "n8n did not finish taking this workflow back, so it stays held and off until it does. The "
+    "platform tries again each minute."
 )
 
 

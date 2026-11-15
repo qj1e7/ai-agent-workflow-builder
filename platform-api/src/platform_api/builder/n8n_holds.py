@@ -14,7 +14,7 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
-from platform_api.builder.key_sweep import KEYS_NOT_BACK, TAKEN_OFF, UNCHECKED_DRAFT
+from platform_api.builder.key_sweep import NOT_BACK_YET, TAKEN_OFF, UNCHECKED_DRAFT
 from platform_api.builder.versions import settings_changed
 from platform_api.db import Connection, Database, UnitOfWork, hold_workflow
 from platform_api.orchestration import (
@@ -49,7 +49,7 @@ GONE_BEFORE = "n8n no longer has this workflow."
 NOT_FINISHED = "n8n did not finish moving the workflow, so it is not set up. Try again in a minute."
 CHANGED_AS_TAKEN = (
     "It changed in n8n while it was being set up, and n8n would now run a block the platform "
-    "can't check, so it stayed in its maker's n8n space. Fix it there first."
+    "can't check, so it went back to its maker's n8n space, taken off. Fix it there first."
 )
 MOVE_GRACE = timedelta(minutes=2)
 """How long a move's mark is left to the Open in n8n that set it, before the settle loop moves
@@ -99,6 +99,8 @@ class N8nMoves(Protocol):
     async def kept(self, workflow_id: str, version_id: str) -> dict[str, Any] | None: ...
 
     async def go_off(self, workflow_id: str) -> None: ...
+
+    async def go_live(self, workflow_id: str, version_id: str) -> None: ...
 
     async def keep_keys(
         self, workflow_id: str, expected_draft: str, made: Mapping[str, str]
@@ -217,6 +219,21 @@ async def _note(uow: UnitOfWork, use_case_id: str, words: str) -> None:
         " WHERE use_case_id = %s",
         (words, uow.now, use_case_id),
     )
+
+
+async def _in_use(uow: UnitOfWork, use_case_id: str) -> str | None:
+    """The version in use, as the platform checked and recorded it, while the workflow is on. None
+    while it is paused, deleted or a draft."""
+    row = await (
+        await uow.conn.execute(
+            "SELECT v.n8n_version_id FROM builder.use_cases u JOIN builder.use_case_versions v"
+            " ON v.use_case_id = u.use_case_id AND v.version = u.current_version"
+            " WHERE u.use_case_id = %s AND NOT u.draft AND u.paused_at IS NULL"
+            " AND u.deleted_at IS NULL",
+            (use_case_id,),
+        )
+    ).fetchone()
+    return None if row is None else row["n8n_version_id"]
 
 
 async def let_go(uow: UnitOfWork, use_case_id: str, by: UserId | None) -> None:
@@ -388,12 +405,9 @@ class Holding:
             if home is None:
                 return HoldRefused(503, NO_HOME)
             try:
-                taken_off = await self._live_unchecked(workflow_id)
-                if taken_off:
-                    await self._n8n.go_off(workflow_id)
-                    log.warning("took %s off in n8n before it came back", workflow_id)
+                was_live = await self._off(workflow_id)
             except (N8nError, httpx.HTTPError) as error:
-                log.warning("could not check %s before it comes back: %s", workflow_id, error)
+                log.warning("could not take %s off before it comes back: %s", workflow_id, error)
                 return HoldRefused(503, NOT_MOVED)
             match await self._move(workflow_id, home):
                 case _Stranded():
@@ -401,11 +415,12 @@ class Holding:
                 case HoldRefused() as refused:
                     return refused
                 case _Moved():
-                    keyed = await self._keys_back(workflow_id)
-                    if keyed is None:
-                        await _note(uow, use_case_id, KEYS_NOT_BACK)
+                    in_use = await _in_use(uow, use_case_id)
+                    back = await self._home_again(workflow_id, in_use and (was_live or in_use))
+                    if back is None:
+                        await _note(uow, use_case_id, NOT_BACK_YET)
                         return await _strand(uow, use_case_id)
-                    draft = keyed
+                    taken_off, draft = back
                 case _Gone():
                     pass
         await let_go(uow, use_case_id, by)
@@ -417,15 +432,43 @@ class Holding:
     async def _made(self) -> dict[str, str]:
         return {} if self._keys is None else await self._keys.made()
 
-    async def _live_unchecked(self, workflow_id: str) -> tuple[Finding, ...]:
-        """What n8n would run unchecked in the version it has published, none when that passes or
-        nothing is published. No such version comes into the platform's project live, where n8n
-        lets it use every key there is. Raises when n8n can't be asked."""
+    async def _off(self, workflow_id: str) -> str | None:
+        """Takes off whatever n8n has published, whatever it is, and says which version that was.
+        Raises when n8n can't be asked."""
         workflow = await self._n8n.look(workflow_id)
         if workflow is None or workflow.active_version_id is None:
-            return ()
-        live = await self._n8n.kept(workflow_id, workflow.active_version_id)
-        return unchecked(live or {}, await self._made())
+            return None
+        await self._n8n.go_off(workflow_id)
+        return workflow.active_version_id
+
+    async def _home_again(
+        self, workflow_id: str, publish: str | None
+    ) -> tuple[tuple[Finding, ...], tuple[Finding, ...]] | None:
+        """Once the workflow is in the platform's project, where its holder can't change it and
+        n8n lets it use every key there is: whatever got published since it was taken off is
+        taken off again, the keys go back on the draft, and the version `publish` goes live only
+        if n8n would run nothing in it unchecked. What n8n would run unchecked in that version
+        and in the draft, or None when n8n did not do it all, so the caller keeps the hold and
+        the platform tries again."""
+        try:
+            await self._off(workflow_id)
+        except (N8nError, httpx.HTTPError) as error:
+            log.warning("could not take %s off once it was back: %s", workflow_id, error)
+            return None
+        draft = await self._keys_back(workflow_id)
+        if draft is None or publish is None:
+            return None if draft is None else ((), draft)
+        try:
+            version = await self._n8n.kept(workflow_id, publish)
+            found = unchecked(version or {}, await self._made())
+            if not found:
+                await self._n8n.go_live(workflow_id, publish)
+        except (N8nError, httpx.HTTPError) as error:
+            log.warning("could not put %s back on in n8n: %s", workflow_id, error)
+            return None
+        if found:
+            log.warning("left %s off in n8n: %s", workflow_id, found[0].text)
+        return found, draft
 
     async def _swept(self) -> HoldRefused | None:
         """The credential sweep before a workflow opens, so no key a member added waits in
@@ -470,16 +513,31 @@ class Holding:
         if home is None:
             return HoldRefused(503, NO_HOME)
         try:
-            if await self._live_unchecked(workflow_id):
-                return HoldRefused(409, CHANGED_AS_TAKEN)
+            space = await self._n8n.home(workflow_id)
+            was_live = await self._off(workflow_id)
         except (N8nError, httpx.HTTPError) as error:
-            log.warning("could not check %s before it comes in: %s", workflow_id, error)
+            log.warning("could not take %s off before it comes in: %s", workflow_id, error)
             return HoldRefused(503, NOT_MOVED)
         if (refused := await self.send_back(workflow_id, home)) is not None:
+            await self._live_again(workflow_id, was_live)
             return refused
-        if await self._keys_back(workflow_id) is None:
+        back = await self._home_again(workflow_id, was_live)
+        if back is None:
             return HoldRefused(503, NOT_FINISHED)
-        return None
+        taken_off, _ = back
+        gone_back = taken_off and space is not None and space != home
+        if gone_back and await self.send_back(workflow_id, str(space)) is not None:
+            log.error("could not move %s back to its maker's space", workflow_id)
+        return HoldRefused(409, CHANGED_AS_TAKEN) if taken_off else None
+
+    async def _live_again(self, workflow_id: str, version: str | None) -> None:
+        """A set-up that moved nothing puts back on what it took off in its maker's space."""
+        if version is None:
+            return
+        try:
+            await self._n8n.go_live(workflow_id, version)
+        except (N8nError, httpx.HTTPError) as error:
+            log.warning("could not put %s back on in its maker's space: %s", workflow_id, error)
 
     async def send_back(self, workflow_id: str, project_id: str) -> HoldRefused | None:
         """Moves a workflow no use case names to a project, such as back to its maker's space

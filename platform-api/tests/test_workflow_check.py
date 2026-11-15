@@ -576,10 +576,36 @@ def test_a_notice_to_a_place_an_expression_picks_is_off(channel: Any, where: str
     ]
 
 
-def test_a_notice_s_content_may_come_from_the_run() -> None:
+@pytest.mark.parametrize(
+    ("where", "value"),
+    [
+        ("text", "={{ $json.summary }} {{ $json.newer }}"),
+        ("text", "={{ '<!' + 'channel>' }}"),
+        ("blocksUi", "={{ JSON.stringify($json.blocks) }}"),
+        ("attachments", [{"text": "={{ $json.summary }}"}]),
+    ],
+    ids=["from-the-run", "built-to-hide-a-mention", "blocks", "an-attachment"],
+)
+def test_a_notice_written_with_an_expression_is_off(where: str, value: Any) -> None:
+    """n8n notice text is written out in this release, so the checker reads every word before
+    anything runs. A notice that says what a run read goes through our Tell."""
     document = release_notice()
-    node(document, "Tell Slack")["parameters"]["text"] = "={{ $json.summary }} {{ $json.newer }}"
-    assert notice_findings(document) == []
+    node(document, "Tell Slack")["parameters"][where] = value
+    assert notice_findings(document) == [
+        (
+            '"Tell Slack" writes its message with an expression, so it is off. Use our Tell for '
+            "that.",
+            True,
+        )
+    ]
+
+
+def test_a_notice_whose_blocks_the_checker_can_t_read_is_off() -> None:
+    document = release_notice()
+    node(document, "Tell Slack")["parameters"]["blocksUi"] = '{"blocks": [<!channel>'
+    assert notice_findings(document) == [
+        ('"Tell Slack" has a message the checker can\'t read, so it is off.', True)
+    ]
 
 
 def test_an_email_s_copy_to_an_address_an_expression_picks_is_off() -> None:
@@ -754,12 +780,13 @@ def test_one_of_n8n_s_blocks_before_any_of_ours_needs_a_fix_that_runs_anyway() -
     ("where", "value"),
     [
         ("text", "New release <!channel>"),
-        ("text", "={{ $json.key }} <!here|here>"),
+        ("text", "Look <!HERE|here>"),
         ("text", "heads up @everyone"),
-        ("blocksUi", '{"blocks": [{"type": "section", "text": {"text": "<!everyone>"}}]}'),
+        ("text", "heads up \uff20channel"),
+        ("blocksUi", '{"blocks": [{"type": "section", "text": {"text": "\\u003c!everyone>"}}]}'),
         ("attachments", [{"text": "@channel look"}]),
     ],
-    ids=["channel", "here-in-an-expression", "at-everyone", "in-blocks", "in-an-attachment"],
+    ids=["channel", "here-in-capitals", "at-everyone", "full-width-at", "in-blocks", "attached"],
 )
 def test_a_notice_that_calls_out_a_whole_channel_is_off(where: str, value: Any) -> None:
     """The Tell rule: a notice tells the people it is for, never a whole channel at once."""

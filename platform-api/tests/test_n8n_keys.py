@@ -18,7 +18,7 @@ from platform_api.builder import Builder
 from platform_api.builder.key_sweep import (
     KEY_ADDED,
     KEY_CHANGED,
-    KEYS_NOT_BACK,
+    NOT_BACK_YET,
     TAKEN_OFF,
     UNCHECKED_DRAFT,
     KeySweep,
@@ -685,7 +685,7 @@ async def test_a_take_back_whose_keys_n8n_did_not_take_stays_held_and_is_tried_a
     answer = await k.s.take_back("carol", use_case_id)
     assert (answer.status_code, answer.json()["detail"]) == (503, STRANDED)
     assert await k.s.held_by(use_case_id) == "carol"
-    assert await finding(k, use_case_id) == ("needs_a_fix", KEYS_NOT_BACK)
+    assert await finding(k, use_case_id) == ("needs_a_fix", NOT_BACK_YET)
     monkeypatch.setattr(moves, "keep_keys", took)
     await k.s.holding.release()
     assert await k.s.held_by(use_case_id) is None
@@ -791,3 +791,61 @@ async def test_one_sweep_at_a_time_so_none_deletes_a_key_another_is_making(
     await asyncio.gather(*others)
     assert not [c for c in k.n8n.calls if c.startswith("DELETE /api/v1/credentials/")]
     assert await k.keys.sweep() == [], "each key is still as the platform made it"
+
+
+def changed_note(workflow: dict[str, Any]) -> None:
+    workflow["nodes"][0]["notes"] = "changed by Carol in n8n"
+
+
+async def test_a_take_back_takes_it_off_first_and_puts_back_only_a_version_that_passes(
+    k: Keyed,
+):
+    """The holder can't publish once it is in the platform's project, so what goes back on was
+    checked after they lost it."""
+    use_case_id, workflow_id, _ = await opened(k)
+    published = k.n8n.publish_as(workflow_id, await n8n_user(k), changed_note)
+    assert (await k.s.take_back("carol", use_case_id)).status_code == 200
+    calls = k.n8n.calls
+    off = calls.index(f"POST /api/v1/workflows/{workflow_id}/unpublish")
+    moved = last(calls, f"PUT /api/v1/workflows/{workflow_id}/transfer")
+    on = last(calls, f"POST /api/v1/workflows/{workflow_id}/publish")
+    assert off < moved < on
+    assert k.n8n.workflows[workflow_id]["activeVersionId"] == published
+    view = (await k.s.call("alice", "GET", f"/api/v1/use-cases/{use_case_id}")).json()
+    assert TAKEN_OFF not in view["findings"]
+
+
+async def test_a_take_back_leaves_nothing_live_the_holder_published_before_it_moved(
+    k: Keyed, monkeypatch: pytest.MonkeyPatch
+):
+    use_case_id, workflow_id, _ = await opened(k)
+    carol = await n8n_user(k)
+    k.n8n.publish_as(workflow_id, carol, deletes_in_slack)
+    moves = k.s.holding._n8n  # pyright: ignore[reportPrivateUsage]
+    go_off = moves.go_off
+    raced: list[str] = []
+
+    async def published_once_it_was_off(workflow_id: str) -> None:
+        await go_off(workflow_id)
+        if not raced:
+            raced.append(k.n8n.publish_as(workflow_id, carol, changed_note))
+
+    monkeypatch.setattr(moves, "go_off", published_once_it_was_off)
+    assert (await k.s.take_back("carol", use_case_id)).status_code == 200
+    assert k.n8n.workflows[workflow_id]["activeVersionId"] is None, "nothing unchecked stays on"
+    assert await finding(k, use_case_id) == ("needs_a_fix", TAKEN_OFF)
+
+
+async def test_a_test_run_is_held_to_the_draft_the_platform_checked(k: Keyed):
+    await settled(k)
+    use_case_id, workflow_id = await held(k.s)
+    answer = await runs(k, use_case_id)
+    assert answer.status_code == 201, answer.text
+    async with k.s.lab.h.db.connection("orchestration") as conn:
+        row = await (
+            await conn.execute(
+                "SELECT spec FROM orchestration.runs WHERE run_id = %s", (answer.json()["run_id"],)
+            )
+        ).fetchone()
+    assert row is not None
+    assert row["spec"]["n8n"]["draft_version"] == k.n8n.workflows[workflow_id]["versionId"]
