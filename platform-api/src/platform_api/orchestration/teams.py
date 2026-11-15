@@ -252,6 +252,8 @@ def _decided(outcome: ApprovalOutcome) -> str:
         return f"Approved by {listed(outcome.by)}"
     if outcome.verdict == "cancelled":
         return "Deleted before an answer"
+    if outcome.verdict == "closed":
+        return "Closed by an update before an answer"
     by = listed(outcome.by)
     if outcome.approved_first:
         return f"Approved by {', then '.join(outcome.approved_first)}, then declined by {by}"

@@ -47,6 +47,7 @@ export const failureReasonLabel: Record<FailureReason, string> = {
   SafetyDenied: 'The safety checker blocked the write',
   UnboundIntent: 'The request did not match an allowed action',
   OutOfOrderStep: 'A step ran out of order',
+  StoppedByUpdate: 'The platform was updated while it ran',
 }
 
 export const refusalLabel: Record<Refusal, string> = {
@@ -67,6 +68,7 @@ export const approvalStepStatusLabel: Record<ApprovalStepStatus, string> = {
   declined: 'Declined',
   expired: 'No answer',
   cancelled: 'Deleted before an answer',
+  closed: 'Closed by an update',
 }
 
 export const verdictLabel: Record<Verdict, string> = {

@@ -2030,7 +2030,8 @@
           "approved",
           "declined",
           "expired",
-          "cancelled"
+          "cancelled",
+          "closed"
         ],
         "type": "string"
       },
@@ -5564,7 +5565,8 @@
           "WriteFailed",
           "SafetyDenied",
           "UnboundIntent",
-          "OutOfOrderStep"
+          "OutOfOrderStep",
+          "StoppedByUpdate"
         ],
         "type": "string"
       },
@@ -6691,7 +6693,7 @@
         "properties": {
           "kind": {
             "$ref": "#/components/schemas/N8nBlockKind",
-            "description": "What the block does: schedule, start (Start from the Portal), manual and error start a run; read, agent, propose, ask (Ask for a yes), write (Make the approved changes), tell and report are our blocks; branch (IF), merge and end (No Op) are n8n's; other is a block that is not on the allow list."
+            "description": "What the block does: schedule, start (Start from the Portal), manual and error start a run; read, agent, propose, ask (Ask for a yes), write (Make the approved changes), tell and report are our blocks; branch (IF), merge and end (No Op) are n8n's; other is one of n8n's data blocks, or a block that is off."
           },
           "name": {
             "description": "The block's name, as n8n, the canvas and the run line show it.",
@@ -10854,7 +10856,8 @@
           "retry",
           "check_workflow_engine",
           "reload_workflow",
-          "ask_maintainer"
+          "ask_maintainer",
+          "start_again"
         ],
         "type": "string"
       },
@@ -11949,7 +11952,7 @@
                 "type": "null"
               }
             ],
-            "description": "The safety checker's grade of the version in use, for a workflow n8n carries. writes_refused: a write can run without a yes, so the platform refuses this version's writes and asks nobody, until the yes is put back or the change undone. needs_a_fix: it uses a block that is not on, or cannot run as the platform expects, so each run stops at its first block. Null for a workflow on the shared n8n workflow."
+            "description": "The safety checker's grade of the version in use, for a workflow n8n carries. writes_refused: a write can run without a yes, so the platform refuses this version's writes and asks nobody, until the yes is put back or the change undone. needs_a_fix: it uses a block that is off, or cannot run as the platform expects, so each run stops at its first block. Null for a workflow on the shared n8n workflow."
           },
           "instruction": {
             "title": "Instruction",

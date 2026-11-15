@@ -60,9 +60,22 @@ def link(document: Doc, source: str, target: str, exit_index: int = 0) -> Doc:
     return document
 
 
-def with_block(document: Doc, block_type: str, name: str = "Extra", after: str = "Compare") -> Doc:
+def with_block(
+    document: Doc,
+    block_type: str,
+    name: str = "Extra",
+    after: str = "Compare",
+    version: object = 1,
+    parameters: dict[str, Any] | None = None,
+) -> Doc:
     document["nodes"].append(
-        {"id": "x", "name": name, "type": block_type, "typeVersion": 1, "parameters": {}}
+        {
+            "id": "x",
+            "name": name,
+            "type": block_type,
+            "typeVersion": version,
+            "parameters": parameters or {},
+        }
     )
     return link(document, after, name)
 
@@ -73,6 +86,10 @@ def gate_removed() -> Doc:
 
 def graded(document: Doc) -> str:
     return grade(document, ERROR_WORKFLOW).grade
+
+
+def findings(document: Doc) -> list[str]:
+    return [f.text for f in grade(document, ERROR_WORKFLOW).findings]
 
 
 def test_the_release_check_as_the_platform_saves_it_is_safe() -> None:
@@ -100,7 +117,13 @@ def test_a_write_reached_by_a_second_path_around_the_yes_has_no_yes() -> None:
 def test_a_second_yes_on_one_path_needs_a_fix() -> None:
     document = release_check()
     document["nodes"].append(
-        {"id": "y", "name": "Ask again", "type": "CUSTOM.wabAskForYes", "parameters": {}}
+        {
+            "id": "y",
+            "name": "Ask again",
+            "type": "CUSTOM.wabAskForYes",
+            "typeVersion": 1,
+            "parameters": {},
+        }
     )
     link(without(document, "Create ticket"), "Ask for a yes", "Ask again", 1)
     assert graded(document) == "needs_a_fix"
@@ -121,6 +144,99 @@ def test_a_block_that_is_not_on_the_allow_list_needs_a_fix(block_type: str) -> N
     assert graded(with_block(release_check(), block_type)) == "needs_a_fix"
 
 
+DATA_NODES = {
+    "Filter": ("n8n-nodes-base.filter", 2.3),
+    "Switch": ("n8n-nodes-base.switch", 3.4),
+    "Edit Fields": ("n8n-nodes-base.set", 3.5),
+    "Limit": ("n8n-nodes-base.limit", 1),
+    "Aggregate": ("n8n-nodes-base.aggregate", 1),
+    "Split Out": ("n8n-nodes-base.splitOut", 1),
+    "Remove Duplicates": ("n8n-nodes-base.removeDuplicates", 2),
+    "Summarize": ("n8n-nodes-base.summarize", 1.1),
+    "Rename Keys": ("n8n-nodes-base.renameKeys", 1),
+    "Date & Time": ("n8n-nodes-base.dateTime", 2),
+    "Compare Datasets": ("n8n-nodes-base.compareDatasets", 2.3),
+    "Loop Over Items": ("n8n-nodes-base.splitInBatches", 3),
+    "XML": ("n8n-nodes-base.xml", 1),
+    "Markdown": ("n8n-nodes-base.markdown", 1),
+    "Execution Data": ("n8n-nodes-base.executionData", 1.1),
+    "Stop and Error": ("n8n-nodes-base.stopAndError", 1),
+}
+"""P7 Q10's data nodes, which only reshape items, at their newest version in the pinned n8n."""
+
+
+@pytest.mark.parametrize(("block_type", "version"), DATA_NODES.values(), ids=list(DATA_NODES))
+def test_each_of_n8n_s_data_nodes_is_on(block_type: str, version: float) -> None:
+    shaped = with_block(release_check(), block_type, "Shape it", version=version)
+    assert findings(shaped) == []
+
+
+@pytest.mark.parametrize(
+    "block_type",
+    [
+        "n8n-nodes-base.sort",
+        "n8n-nodes-base.itemLists",
+        "n8n-nodes-base.httpRequest",
+        "n8n-nodes-base.code",
+        "n8n-nodes-base.webhook",
+        "n8n-nodes-base.wait",
+        "n8n-nodes-base.executeWorkflow",
+        "n8n-nodes-base.respondToWebhook",
+    ],
+)
+def test_sort_and_every_block_that_can_reach_out_or_run_code_is_off(block_type: str) -> None:
+    assert findings(with_block(release_check(), block_type, "Off")) == [
+        f'"Off" uses a block that is off: {block_type}.'
+    ]
+
+
+@pytest.mark.parametrize(
+    ("version", "parameters", "says"),
+    [
+        (9, {}, '"Date" uses version 9 of n8n-nodes-base.dateTime, which is off.'),
+        (None, {}, '"Date" uses version None of n8n-nodes-base.dateTime, which is off.'),
+        ("2", {}, '"Date" uses version 2 of n8n-nodes-base.dateTime, which is off.'),
+        (1, {}, '"Date" uses version 1 of n8n-nodes-base.dateTime, which is off.'),
+        (2, {"operation": "teleport"}, '"Date" does something that is off: teleport.'),
+        (2, {"operation": 3}, '"Date" does something that is off: 3.'),
+    ],
+    ids=["unknown-version", "no-version", "version-as-text", "version-off", "unknown", "no-text"],
+)
+def test_an_unknown_version_or_operation_is_off(
+    version: object, parameters: dict[str, Any], says: str
+) -> None:
+    dated = with_block(
+        release_check(), "n8n-nodes-base.dateTime", "Date", version=version, parameters=parameters
+    )
+    assert findings(dated) == [says]
+
+
+def test_an_operation_classed_off_is_off_and_the_default_is_the_one_n8n_runs() -> None:
+    kept = with_block(release_check(), "n8n-nodes-base.removeDuplicates", "Dedupe", version=2)
+    assert findings(kept) == [], "it removes duplicate items, n8n's default"
+    node(kept, "Dedupe")["parameters"] = {"operation": "clearDeduplicationHistory"}
+    assert findings(kept) == ['"Dedupe" does something that is off: clearDeduplicationHistory.']
+
+
+@pytest.mark.parametrize(
+    ("block_type", "version", "parameters"),
+    [
+        ("n8n-nodes-base.dateTime", 2, {"operation": "={{ 'formatDate' }}"}),
+        ("n8n-nodes-base.dateTime", 2, {"operation": "=getCurrentDate"}),
+        ("n8n-nodes-base.merge", 3.2, {"mode": "={{ $json.mode }}"}),
+    ],
+    ids=["date-and-time", "a-plain-expression", "merge"],
+)
+def test_an_expression_in_what_a_block_does_is_off(
+    block_type: str, version: float, parameters: dict[str, Any]
+) -> None:
+    """It could pick anything when it runs, a mode the file turns off among them."""
+    picked = with_block(
+        release_check(), block_type, "Picked", version=version, parameters=parameters
+    )
+    assert findings(picked) == ['"Picked" picks what it does with an expression, so it is off.']
+
+
 def test_a_workflow_that_nothing_starts_needs_a_fix() -> None:
     document = without(release_check(), "Daily 8:00", "Start from the Portal")
     assert graded(document) == "needs_a_fix"
@@ -135,7 +251,7 @@ def test_a_manual_trigger_alone_does_not_start_a_platform_run() -> None:
 def test_a_write_reached_from_a_manual_trigger_needs_its_yes_too() -> None:
     document = release_check()
     document["nodes"].append(
-        {"id": "m", "name": "Run by hand", "type": "n8n-nodes-base.manualTrigger"}
+        {"id": "m", "name": "Run by hand", "type": "n8n-nodes-base.manualTrigger", "typeVersion": 1}
     )
     assert graded(link(document, "Run by hand", "Create ticket")) == "writes_refused"
 
@@ -223,10 +339,14 @@ def test_a_schedule_the_portal_can_show_to_the_minute_is_fine(interval: dict[str
     assert graded(document) == "safe"
 
 
-def test_a_merge_by_sql_and_a_tell_elsewhere_need_a_fix() -> None:
-    merge = with_block(release_check(), "n8n-nodes-base.merge", "Merge")
+def test_a_merge_by_sql_needs_a_fix() -> None:
+    merge = with_block(release_check(), "n8n-nodes-base.merge", "Merge", version=3.2)
+    assert graded(merge) == "safe", "it appends, n8n's default, when the mode is left out"
     node(merge, "Merge")["parameters"] = {"mode": "combineBySql"}
-    assert graded(merge) == "needs_a_fix"
+    assert findings(merge) == ['"Merge" does something that is off: combineBySql.']
+
+
+def test_a_tell_elsewhere_needs_a_fix() -> None:
     tell = with_block(release_check(), "CUSTOM.wabTell", "Tell you")
     node(tell, "Tell you")["parameters"] = {"where": "https://example.com/hook"}
     assert graded(tell) == "needs_a_fix"
@@ -335,7 +455,7 @@ def unlinked(document: Doc) -> None:
     ("name", "change", "says"),
     [
         (ERROR_WORKFLOW_NAME, lambda d: d["settings"].pop("callerPolicy"), "callerPolicy"),
-        (ERROR_WORKFLOW_NAME, http_reporter, "not on"),
+        (ERROR_WORKFLOW_NAME, http_reporter, "is off"),
         (ERROR_WORKFLOW_NAME, second_report, "nothing else"),
         (ERROR_WORKFLOW_NAME, unlinked, "nothing else"),
         (SELF_TEST, lambda d: d["settings"].pop("errorWorkflow"), "error workflow"),

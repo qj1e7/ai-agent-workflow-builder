@@ -232,6 +232,44 @@ module "key_vault" {
 }
 
 locals {
+  # n8n's allow list. scripts/nodes-include.sh writes it from platform-api's node_classes.json
+  # (ADR 0045), and CI fails when the two differ.
+  n8n_nodes_include = [
+    "CUSTOM.wabStartFromPortal",
+    "CUSTOM.wabRead",
+    "CUSTOM.wabAgent",
+    "CUSTOM.wabProposeChange",
+    "CUSTOM.wabAskForYes",
+    "CUSTOM.wabMakeApprovedChanges",
+    "CUSTOM.wabTell",
+    "CUSTOM.wabReportFailure",
+    "n8n-nodes-base.scheduleTrigger",
+    "n8n-nodes-base.manualTrigger",
+    "n8n-nodes-base.errorTrigger",
+    "n8n-nodes-base.if",
+    "n8n-nodes-base.merge",
+    "n8n-nodes-base.noOp",
+    "n8n-nodes-base.stickyNote",
+    "n8n-nodes-base.filter",
+    "n8n-nodes-base.switch",
+    "n8n-nodes-base.set",
+    "n8n-nodes-base.limit",
+    "n8n-nodes-base.aggregate",
+    "n8n-nodes-base.splitOut",
+    "n8n-nodes-base.removeDuplicates",
+    "n8n-nodes-base.summarize",
+    "n8n-nodes-base.renameKeys",
+    "n8n-nodes-base.dateTime",
+    "n8n-nodes-base.compareDatasets",
+    "n8n-nodes-base.splitInBatches",
+    "n8n-nodes-base.xml",
+    "n8n-nodes-base.markdown",
+    "n8n-nodes-base.executionData",
+    "n8n-nodes-base.stopAndError",
+  ]
+}
+
+locals {
   secret = module.key_vault.secrets
 
   apps = {
@@ -349,7 +387,12 @@ locals {
           N8N_BLOCK_ENV_ACCESS_IN_NODE   = "true"
           NODES_EXCLUDE                  = jsonencode(["n8n-nodes-base.executeCommand", "n8n-nodes-base.localFileTrigger"])
           N8N_COMMUNITY_PACKAGES_ENABLED = "false"
-          WAB_API_URL                    = local.url["platform-api"]
+          NODES_INCLUDE                  = jsonencode(local.n8n_nodes_include)
+          # 30 days of executions (ENGINE-PLAN D10). A waiting execution is never pruned (P7 Q16).
+          EXECUTIONS_DATA_PRUNE           = "true"
+          EXECUTIONS_DATA_MAX_AGE         = "720"
+          EXECUTIONS_DATA_SAVE_ON_SUCCESS = "all"
+          WAB_API_URL                     = local.url["platform-api"]
         },
         var.n8n_editor_external ? {
           N8N_PROTOCOL                      = "https"

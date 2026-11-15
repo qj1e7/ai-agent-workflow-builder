@@ -1,6 +1,7 @@
 """Writes e2e/old_engine/seed.json, the database of a platform from before ENGINE-PLAN E10, from
 the platform's own code: two agent workflows on the shared run workflow, one whose run Bob
-declined and one whose run waits for his yes. The e2e test of the move starts a stack from it.
+declined and one whose run waits for his yes. The e2e test of the move starts a stack from it, and
+from E11 checks that the waiting run is ended with words that say so, as nothing can carry it on.
 
 It runs only when asked, as it rewrites the seed:
     WRITE_OLD_ENGINE_SEED=../e2e/old_engine/seed.json uv run pytest tests/test_old_engine_seed.py

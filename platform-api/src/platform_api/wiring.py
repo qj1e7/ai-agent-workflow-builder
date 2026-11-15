@@ -418,11 +418,22 @@ async def build(settings: Settings) -> Services:
         requests=orchestrator,
         open_runs=watch_facts,
     )
+    # Before any run can start: a run left on the shared run workflow, whose blocks are off, ends
+    # first (E11), so the workflows it held back can move.
+    log.info("ended on the shared run workflow: %s", await orchestrator.stop_old_engine_runs())
     if builder.moves is not None:
         # Before any run can start: a workflow n8n lost comes back first, then whatever is left on
         # the shared run workflow moves to its own (ENGINE-PLAN 2.6, E10).
         log.info("restored to n8n: %s", await builder.moves.restore_if_asked())
         log.info("moved to n8n: %s", await builder.moves.move_all())
+    if builder.sweep is not None:
+        # This release's rules, such as a block the class file now turns off, grade every
+        # workflow before any of its runs starts (ENGINE-PLAN E11). A look that fails here is
+        # made again by the sweep every minute, until every version carries this release's mark.
+        try:
+            log.info("swept before any run: %s", await builder.sweep.sweep())
+        except Exception:
+            log.exception("could not sweep the workflows before any run")
     facts = builder.facts
     sources = ReadSources({CONFLUENCE_PAGE: confluence}, facts)
     tells, tell_flow = tell_outlet(settings, db)

@@ -35,11 +35,13 @@ class ApprovalPolicy:
 
 
 class Ended(Enum):
-    """How a request ended that nobody decided. Nobody answered by its expiry (ADR 0024), or its
-    workflow was deleted while it waited (ENGINE-PLAN D7). Nothing is written either way."""
+    """How a request ended that nobody decided. Nobody answered by its expiry (ADR 0024), its
+    workflow was deleted while it waited (ENGINE-PLAN D7), or an update ended the shared run
+    workflow it waited in (E11). Nothing is written either way."""
 
     EXPIRED = "expired"
     CANCELLED = "cancelled"
+    CLOSED = "closed"
 
 
 @dataclass(frozen=True)

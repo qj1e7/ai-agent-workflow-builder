@@ -183,8 +183,9 @@ class MessageRef:
     identity: Identity
 
 
-type OutcomeVerdict = Literal["approved", "declined", "cancelled"]
-"""cancelled: the workflow was deleted before an answer (ENGINE-PLAN D7)."""
+type OutcomeVerdict = Literal["approved", "declined", "cancelled", "closed"]
+"""cancelled: the workflow was deleted before an answer (ENGINE-PLAN D7). closed: an update
+ended the shared run workflow the run waited in (E11)."""
 
 
 @dataclass(frozen=True)
