@@ -24,25 +24,38 @@ from test_n8n_engine import set_up, ticket_count
 
 
 class Member:
-    """A staff member's n8n account, as the platform will make one once E7 lands: invited by the
-    owner and signed in to n8n's editor with their own session. Each step reads back what it
-    changed, because n8n's answer to a change is not proof of it."""
+    """A staff member's n8n account, signed in to n8n's editor with their own session: invited by
+    the owner by hand, or through the password link the platform made for them (E7). Each step
+    reads back what it changed, because n8n's answer to a change is not proof of it."""
 
-    def __init__(self, name: str) -> None:
-        self.email = f"{name}-{secrets.token_hex(4)}@example.com"
-        invite = [{"email": self.email, "role": "global:member"}]
-        [invited] = N8N_OWNER.call("POST", "/invitations", invite)
-        link = str(invited["user"]["inviteAcceptUrl"])
+    def __init__(self, name: str, invited: tuple[str, str] | None = None) -> None:
+        if invited is None:
+            email = f"{name}-{secrets.token_hex(4)}@example.com"
+            invite = [{"email": email, "role": "global:member"}]
+            [made] = N8N_OWNER.call("POST", "/invitations", invite)
+            invited = (email, str(made["user"]["inviteAcceptUrl"]))
+        self.email, link = invited
         token = urllib.parse.parse_qs(urllib.parse.urlparse(link).query)["token"][0]
-        password = f"E6-{secrets.token_urlsafe(12)}a1A"
+        self.password = f"E6-{secrets.token_urlsafe(12)}a1A"
         self.client = httpx.Client(base_url=N8N_URL, timeout=30)
-        accept = {"token": token, "firstName": name, "lastName": "Tester", "password": password}
+        accept = {
+            "token": token,
+            "firstName": name,
+            "lastName": "Tester",
+            "password": self.password,
+        }
         n8n_answer(self.client.post("/rest/invitations/accept", json=accept))
-        login = {"emailOrLdapLoginId": self.email, "password": password}
+        login = {"emailOrLdapLoginId": self.email, "password": self.password}
         n8n_answer(self.client.post("/rest/login", json=login))
         personal = self.call("GET", "/projects/personal")
         assert personal["type"] == "personal", "signed in as the member, in their own space"
         self.project = str(personal["id"])
+
+    def change_email(self, email: str) -> None:
+        """In their n8n profile, which n8n applies at once without a mail server."""
+        changed = self.call("POST", "/change-email", {"email": email, "currentPassword": self.password})
+        assert changed["status"] == "changed", changed
+        self.email = email
 
     def call(self, method: str, path: str, body: object = None) -> Any:
         return n8n_answer(self.client.request(method, f"/rest{path}", json=body))

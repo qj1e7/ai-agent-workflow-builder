@@ -170,6 +170,12 @@ services:
       # n8n's owner, as bootstrap uses it: the platform lays each new workflow out in n8n as a draft.
       N8N_OWNER_EMAIL: ${N8N_OWNER_EMAIL:?run deploy/make-env.sh}
       N8N_OWNER_PASSWORD: ${N8N_OWNER_PASSWORD:?run deploy/make-env.sh}
+      # on lets an Operator give a person n8n access: the platform makes their n8n account and
+      # opens workflows in it, once bootstrap has proved the allow list (ENGINE-PLAN 2.9). It needs
+      # SETTINGS_ENCRYPTION_KEY, which seals each password link. N8N_EDITOR_URL is where people open
+      # n8n's editor from their browser.
+      N8N_STAFF_ACCESS: ${N8N_STAFF_ACCESS:-off}
+      N8N_EDITOR_URL: ${N8N_EDITOR_URL:-http://localhost:${N8N_HOST_PORT:-5678}}
       STEP_KEY: ${STEP_KEY:?run deploy/make-env.sh}
       PLATFORM_INTERNAL_URL: http://platform-api:8000
       CALLBACK_SIGNING_KEY: ${CALLBACK_SIGNING_KEY:?run deploy/make-env.sh}
