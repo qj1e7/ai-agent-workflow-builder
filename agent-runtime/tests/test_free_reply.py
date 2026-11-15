@@ -87,6 +87,12 @@ def test_the_team_leads_how_to_questions_get_the_help_lanes_card_and_no_free_rep
     assert all(p.reason != "ask_on_its_own" for p in result.parts)
 
 
+def test_the_help_lanes_card_is_never_a_dead_end_even_with_nothing_ticked():
+    crossed = [RequestPart(text="list me the steps", mark="cant", reason="not_followed")]
+    assert dead_end(AbilitiesAnswer(how_to_start=True), crossed, STEPS) is None
+    assert dead_end(AbilitiesAnswer(how_to_start=False), crossed, STEPS) is not None
+
+
 @pytest.mark.parametrize("task", [HOW_TO_START, STEPS])
 def test_read_as_a_task_the_team_leads_questions_still_get_a_useful_free_reply(task: str):
     result, chat = answered(task, reading("none"), HELPFUL, CLEAN)
