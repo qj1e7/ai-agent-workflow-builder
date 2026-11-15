@@ -1917,6 +1917,20 @@ def test_a_state_answer_ticks_the_one_clause_it_was_chosen_for(task: str):
     assert [(mark, reason) for _, mark, reason in parts(fields, task)] == [("will_do", None)]
 
 
+@pytest.mark.parametrize(
+    ("task", "ticked"),
+    [
+        ("could you delete the old tickets", False),
+        ("how can i start deleting tickets", False),
+        ("how do i start closing old tickets", False),
+        ("show me what I set up", True),
+    ],
+)
+def test_a_state_answer_never_ticks_a_lone_write(task: str, ticked: bool):
+    marked = parts_of(read(asks_about="my_workflows"), task, CheckWorkflowsAnswer())
+    assert [p.mark == "will_do" for p in marked] == [ticked]
+
+
 @pytest.mark.parametrize("task", ["Can you post in Teams?", "Can you send me an email?"])
 def test_a_lone_question_the_cant_answers_keeps_its_cant(task: str):
     fields = read()
