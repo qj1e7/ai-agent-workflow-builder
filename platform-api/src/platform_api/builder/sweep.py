@@ -242,13 +242,15 @@ class VersionsSweep:
                 return None
             kept: dict[str, Any] = row["document"]
             settings: dict[str, Any] = workflow.document.get("settings") or {}
+            changed = settings_changed(kept.get("settings"), settings)
+            drifted = live is not None and changed is not None
+            if not drifted and not regrade:
+                return None
             document = kept if live is None else {**kept, "settings": settings}
             graded = grade(document, error_workflow, known)
-            if live is not None and settings_changed(kept.get("settings"), settings) is not None:
+            if drifted:
                 return await self._settings(uow, row, workflow, document, graded)
-            if regrade:
-                return await _regraded(uow, row, graded)
-            return None
+            return await _regraded(uow, row, graded)
 
     async def _settings(
         self,
