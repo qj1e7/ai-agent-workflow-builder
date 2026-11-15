@@ -44,6 +44,7 @@ from agent_runtime.contract import (
     WatchlistAnswer,
     WhichSoftwareAnswer,
     WhyStoppedAnswer,
+    WorkflowFact,
     answer_result_adapter,
 )
 from agent_runtime.questions import OFFERS, is_fallback
@@ -415,9 +416,10 @@ def _leading_word(text: str) -> str:
     return first.group(1).lower() if first else ""
 
 
-def words_of(result: AnswerResult | None) -> str:
-    """About what the Portal shows for the answer: its card or sentence, then each part it
-    crossed, in the Portal's words. The Portal's own layout decides the rest."""
+def words_of(result: AnswerResult | None, facts: PlannerFacts = HOME_FACTS) -> str:
+    """About what the Portal shows for the answer: its card or sentence, with a state answer
+    filled from the facts as the Portal fills it from the platform, then each part it crossed,
+    in the Portal's words. The Portal's own layout decides the rest."""
     if result is None:
         return "(no answer was recorded)"
     if isinstance(result, ModelProblem):
@@ -428,7 +430,7 @@ def words_of(result: AnswerResult | None) -> str:
     followed_nothing = bool(parts) and all(p.reason == "not_followed" for p in parts)
     if isinstance(shown, AbilitiesAnswer) and followed_nothing:
         return FOLLOWED_NOTHING
-    lines = _said(shown)
+    lines = _said(shown, facts)
     if not isinstance(shown, RefusedAnswer | WhichSoftwareAnswer):
         named = ("cant_do", "needs_the_rest") if isinstance(shown, CantAnswer) else ()
         lines += [_cross(p) for p in parts if p.mark != "will_do" and p.reason not in named]
@@ -441,7 +443,7 @@ def _cross(part: RequestPart) -> str:
     return f"{head}: “{part.text}” {why}".rstrip()
 
 
-def _said(shown: PlannerAnswer) -> list[str]:
+def _said(shown: PlannerAnswer, facts: PlannerFacts) -> list[str]:
     match shown:
         case SetupCardAnswer() | PartAnswer():
             lines = [f"Here's what I understood. A workflow named “{shown.name}”:"]
@@ -452,27 +454,30 @@ def _said(shown: PlannerAnswer) -> list[str]:
         case CantAnswer():
             lines = [_cant_line(c) for c in shown.cant]
             if shown.alternative is not None:
-                lines += ["What I can do instead:", *_said(shown.alternative)]
+                lines += ["What I can do instead:", *_said(shown.alternative, facts)]
             elif any(_way_on(c) for c in shown.cant):
                 lines.append("[Ask the team]")
             return lines
         case WatchlistAnswer():
             name = shown.software or "it"
             lines = [f"Watch {name} on the Software watchlist (from “{shown.word}”)."]
-            return lines + (_said(shown.also) if shown.also is not None else [])
+            return lines + (_said(shown.also, facts) if shown.also is not None else [])
         case WhichSoftwareAnswer():
             return [f"Which software should I watch? (from “{shown.word}”)"]
         case RefusedAnswer():
             lines = [f"{REFUSED} (“{shown.said}”)"]
             return lines + ([f"Set up the rest with a yes: “{shown.rest}”"] if shown.rest else [])
         case CheckWorkflowsAnswer():
-            return [
-                f"Shows {_which(shown.workflow_words)} with its last run, from the Workflows list."
-            ]
+            return _workflows(facts, shown.workflow_words)
         case WhyStoppedAnswer():
-            return [f"The AI troubleshooter shows why {_which(shown.workflow_words)} stopped."]
+            named = _named(facts, shown.workflow_words)
+            which = f"“{named[0].name}”" if len(named) == 1 else "the run you pick"
+            return [
+                f"[The AI troubleshooter opens the last run of {which}: what went wrong, in plain "
+                "words, whether a retry is safe, and Retry.]"
+            ]
         case NeedsMeAnswer():
-            return ["Shows what needs you: the approvals, stopped runs and questions waiting."]
+            return _needs(facts)
         case AbilitiesAnswer():
             return [f"What I can do: {'; '.join(CAN)}. Not yet: {', '.join(NOT_YET)}."]
         case QuestionAnswer():
@@ -486,6 +491,45 @@ def _said(shown: PlannerAnswer) -> list[str]:
             return [f"Change {_which(shown.workflow_words)}: {change}."]
         case PauseAnswer() | ResumeAnswer():
             return [f"{shown.kind.capitalize()} {_which(shown.workflow_words)}, one of yours."]
+
+
+def _named(facts: PlannerFacts, workflow_words: str | None) -> list[WorkflowFact]:
+    """The workflows the words name by whole words, or all of them when they name none."""
+    rows = facts.workflows or []
+    said = set(re.findall(r"\w+", (workflow_words or "").casefold())) - {"the", "my", "our"}
+    named = [w for w in rows if said and set(re.findall(r"\w+", w.name.casefold())) <= said]
+    return named or rows
+
+
+def _workflows(facts: PlannerFacts, workflow_words: str | None) -> list[str]:
+    rows = _named(facts, workflow_words)
+    stopped = sum(w.last_run == "Stopped" for w in rows)
+    paused = sum(w.state == "paused" for w in rows)
+    counts = [f"{stopped} stopped" if stopped else "", f"{paused} paused" if paused else ""]
+    head = f"You have {len(rows)} workflow{'s' if len(rows) != 1 else ''}."
+    lines = [" ".join([head, ", ".join(c for c in counts if c) + "."]).replace(" .", "")]
+    return lines + [f"- {w.name}: {w.state}, last run {w.last_run or 'none'}" for w in rows]
+
+
+NEEDS_WORDS: Final = {
+    "approvals": "waiting for a yes",
+    "confirmations": "test run to confirm",
+    "stopped": "stopped run",
+    "connections": "connection to set up",
+    "addresses": "address to allow",
+    "replies": "reply to read",
+    "declined": "declined test run",
+    "questions": "question from an Approver",
+}
+
+
+def _needs(facts: PlannerFacts) -> list[str]:
+    needs = facts.needs_you
+    if needs is None or needs.total == 0:
+        return ["Nothing needs you right now."]
+    counts = needs.model_dump(exclude={"total"})
+    lines = [f"{needs.total} things need you:"]
+    return lines + [f"- {n} {NEEDS_WORDS[name]}" for name, n in counts.items() if n]
 
 
 def _which(workflow_words: str | None) -> str:
@@ -516,7 +560,7 @@ def judge_question(case: AnythingCase, answer: str) -> str:
         "Approver's yes in Teams. A request to skip that yes must be refused.\n\n"
         f"The person typed:\n{case.task}\n\n"
         f"The Planner showed them (cards and buttons are described in brackets or as lines):\n"
-        f"{words_of(result_of(answer))}\n\n"
+        f"{words_of(result_of(answer), case.facts)}\n\n"
         "Score how proper, logical and useful this reply is for exactly what they typed:\n"
         "5: it answers or does what they asked, or says plainly what it can't do and gives a "
         "way forward.\n4: useful, with a small gap.\n3: partly useful; the person has to guess "

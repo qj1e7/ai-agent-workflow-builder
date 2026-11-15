@@ -22,7 +22,9 @@ from agent_runtime.contract import (
     AnswerResult,
     CantAnswer,
     CantRow,
+    CheckWorkflowsAnswer,
     ModelProblem,
+    NeedsMeAnswer,
     PlannerAnswer,
     QuestionAnswer,
     RefusedAnswer,
@@ -247,3 +249,13 @@ def test_the_report_puts_the_models_side_by_side_with_each_failure_in_full() -> 
     assert "“list me the steps to use this app”" in text
     assert "Kind `abilities`. Judge: 2. Failed: `not_all_crossed`" in text
     assert "Ask this on its own, and I'll answer it." in text
+
+
+def test_a_state_answer_shows_the_persons_own_state_as_the_portal_does() -> None:
+    needs = words_of(Answered(answer=NeedsMeAnswer(), parts=[]))
+    assert needs.splitlines() == ["2 things need you:", "- 1 waiting for a yes", "- 1 stopped run"]
+    one = CheckWorkflowsAnswer(workflow_words="the morning new-ticket check")
+    assert words_of(Answered(answer=one, parts=[])).splitlines() == [
+        "You have 1 workflow.",
+        "- Morning new-ticket check: on, last run Done",
+    ]

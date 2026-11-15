@@ -10,7 +10,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from evals.anything import ANYTHING, CATEGORY_TITLES, result_of, words_of
+from evals.anything import ANYTHING, CATEGORY_TITLES, HOME_FACTS, result_of, words_of
 from evals.jobs import Case
 
 type Cases = Mapping[str, Mapping[str, Case]]
@@ -122,7 +122,7 @@ def _failure(job: str, outcome: dict[str, Any], case: Case | None) -> list[str]:
         kind = getattr(getattr(result, "answer", None), "kind", "offline")
         judge = f" Judge: {outcome['judge']}." if "judge" in outcome else ""
         lines.append(f"  - Kind `{kind}`.{judge}" + (f" Failed: {failed}." if failed else ""))
-        lines += _quoted(words_of(result))
+        lines += _quoted(words_of(result, getattr(case, "facts", HOME_FACTS)))
     else:
         lines.append(f"  - Failed: {failed}.")
         lines += _quoted(outcome["answer"][:400])
