@@ -102,8 +102,20 @@ NEGATION: Final = re.compile(
 )
 
 
-def negated(sentence: str) -> bool:
-    return NEGATION.search(sentence) is not None
+CLAUSE_BREAK: Final = re.compile(
+    r"[,;:]|\s+(?:but|so|while|whereas|although|though|because|however|then|yet)\s+",
+    re.IGNORECASE,
+)
+
+
+def clauses(sentence: str) -> list[str]:
+    """The sentence cut where a new clause starts, so a negation covers only its own words: in
+    "It cannot phone you, but SMS alerts go out", the SMS clause is checked on its own."""
+    return [c.strip() for c in CLAUSE_BREAK.split(sentence) if c.strip()]
+
+
+def negated(clause: str) -> bool:
+    return NEGATION.search(clause) is not None
 
 
 # 1. Shape.
@@ -140,11 +152,39 @@ MARKUP: Final = re.compile(
 """Markdown and HTML, in words whose line breaks are already spaces: a heading, a list, a
 quote, emphasis, code, a link or a tag."""
 SHOWN_PUNCTUATION: Final = frozenset({"Pd", "Pi", "Pf", "Ps", "Pe", "Po", "Sc", "Zs"})
+TLDS: Final = (
+    "com|org|net|io|sg|gov|edu|mil|int|co|ai|dev|app|info|biz|me|uk|us|my|au|cn|jp|de|fr|es|it|"
+    "nl|in|tv|cc|ly|gg|xyz|site|online|tech|cloud|store|link|page|so|to|sh|local|internal|test"
+)
 LINK: Final = re.compile(
-    r"\b(?:https?://|ftp://|www\.|mailto:)"
-    r"|\b[\w-]+(?:\.[\w-]+)*\.(?:com|org|net|io|sg|gov|edu|co|ai|dev|app|info|me|uk|us)\b",
+    r"\b(?:https?|ftp|file)://|\bwww\.|\bmailto:|\blocalhost\b"
+    rf"|\b[\w-]+(?:\.[\w-]+)*\.(?:{TLDS})\b|\b[\w-]+\s+dot\s+(?:{TLDS})\b"
+    r"|\b[\w-]+\.[a-z]{2,}/|\b\d{1,3}(?:\.\d{1,3}){3}\b",
     re.IGNORECASE,
 )
+"""A link in any form: a scheme, www, a host with a known top-level domain, spelled out with
+"dot", a host with a path, or an IP address."""
+ARROWS: Final = re.compile(r"-{2,}>|<-{1,}|=>")
+ENGLISH: Final = words(
+    "the a an to of in on at for with and or but is are was be it its this that these those you "
+    "your i me my we our they them their what which who when where how why can not no yes do does "
+    "did if so as by from about into than then there here will would should could just only also "
+    "each every all any some more one first next please thanks thank welcome hello hi sure okay "
+    "ok you're it's i'm don't can't isn't won't let's here's that's what's i've we've you've i'll "
+    "we'll you'll i'd has have had been being am were get got go make use see new now after "
+    "before until up out over very too own same other"
+)
+"""Common English words. A reply reads as English when enough of its words are these."""
+
+
+def _reads_as_english(text: str) -> bool:
+    """Whether the words read as English: one common word in a very short reply, and at least
+    one in five words in a longer one. The staff read English, and the checks only know it."""
+    found = re.findall(r"[a-z]+(?:['’][a-z]+)?", text.casefold())
+    common = sum(w.replace("’", "'") in ENGLISH for w in found)
+    if len(found) < 4:
+        return common >= 1
+    return common / len(found) >= 0.2
 
 
 def _plain_characters(text: str) -> bool:
@@ -155,12 +195,16 @@ def _plain_characters(text: str) -> bool:
 
 
 def is_plain(reply: Shown, given: Given) -> bool:
-    """Plain characters, and no Markdown, HTML or link anywhere: the Portal draws the reply as
-    text."""
-    return all(
-        _plain_characters(t) and not MARKUP.search(t) and not LINK.search(t)
+    """Plain English text: plain characters, no Markdown, HTML, arrow or link anywhere, and a
+    text that reads as English. The Portal draws the reply as text."""
+    plain = all(
+        _plain_characters(t)
+        and not MARKUP.search(t)
+        and not LINK.search(t)
+        and not ARROWS.search(t)
         for t in (reply.text, *reply.choices)
     )
+    return plain and _reads_as_english(reply.text)
 
 
 # 3. No claim that something happened.
@@ -169,11 +213,13 @@ DONE: Final = (
     r"(?:created|sent|posted|approved|changed|saved|scheduled|set\s+up|turned\s+(?:on|off)|"
     r"switched\s+(?:on|off)|paused|resumed|deleted|removed|added|updated|edited|filed|raised|"
     r"closed|moved|emailed|mailed|messaged|notified|published|submitted|written|wrote|logged|"
-    r"assigned|cancell?ed|fixed|retried|restarted|completed|done)"
+    r"assigned|cancell?ed|fixed|retried|restarted|completed|done|made|opened|booked|arranged|"
+    r"handled|sorted|received|put|enabled|launched|started|queued|activated)"
 )
 WRITTEN: Final = (
     r"(?:created|sent|posted|approved|deleted|emailed|published|submitted|filed|raised|saved|"
-    r"set\s+up|turned\s+on|done)"
+    r"set\s+up|turned\s+on|done|made|opened|booked|arranged|handled|sorted|received|queued|"
+    r"enabled|activated|launched)"
 )
 SOON: Final = r"(?:(?:just|already|now|successfully|also|been|all)\s+)*"
 HAPPENED: Final = re.compile(
@@ -184,12 +230,26 @@ HAPPENED: Final = re.compile(
     rf"set|ready|in\s+place)\b"
     r"|\b\w+\s+(?:has\s+|had\s+|already\s+|just\s+)*(?:approved|declined)\s+"
     r"(?:it|your|the|this|that|them)\b"
-    r"|\ball\s+set\b|^\s*done\b",
+    r"|\ball\s+set\b|^\s*(?:done|sorted)\b|\b(?:gone|went)\s+ahead\b"
+    r"|\b(?:took|taken|taking)\s+care\b|\bconsider\s+it\s+(?:done|handled|sorted|taken)\b"
+    r"|\bgot\s+it\s+done\b|\breceived\b|\bis\s+in\s*(?:[.!?]|$)|\b(?:went|gone|is)\s+through\b"
+    r"|\bsaid\s+(?:yes|ok(?:ay)?)\b|\bsigned\s+off\b|\bgave\s+(?:it\s+|you\s+)?(?:a\s+|the\s+|their\s+)?"
+    r"(?:yes|go-?ahead|ok(?:ay)?)\b|\bexists?\b|\bfrom\s+now\s+on\b"
+    r"|\b(?:is|are|['’]s|['’]re)\s+(?:now\s+|already\s+)?(?:live|active|running|underway|"
+    r"in\s+progress|happening|in\s+place)\b",
     re.IGNORECASE,
 )
 """Words that say something happened: a change in the past or the present perfect, active or
 passive, by the Planner, the platform or anyone, a decision someone made, or that something is
-done or is now on."""
+done, exists, or is now on or running. A first net only: the verifier asks the same question in
+other words (`reply_verifier`)."""
+WILL_HAPPEN: Final = re.compile(
+    r"\b(?:will|['’]ll)\s+(?:now\s+|then\s+|also\s+)?(?:run|check|start|post|send|create|"
+    r"raise|file|go\s+out|write|email|notify)\b",
+    re.IGNORECASE,
+)
+"""A promise that something set up will happen, which says it was set up, unless the sentence
+says when, as "once you turn it on, it will run every Monday"."""
 IS_WRITTEN: Final = re.compile(rf"\b(?:is|are)\s+{WRITTEN}\b", re.IGNORECASE)
 """A present passive, as "your ticket is created", which says it happened unless the sentence
 says when, as "a ticket is created only after a yes"."""
@@ -206,10 +266,13 @@ updated"."""
 
 
 def _says_it_happened(sentence: str) -> bool:
-    for found in HAPPENED.finditer(sentence):
-        if not SUBORDINATE.search(sentence[: found.start()]):
-            return True
-    return IS_WRITTEN.search(sentence) is not None and not CONDITION.search(sentence)
+    for clause in clauses(sentence):
+        for found in HAPPENED.finditer(clause):
+            before = clause[: found.start()]
+            if not SUBORDINATE.search(before) and not negated(clause[: found.end()]):
+                return True
+    promised = IS_WRITTEN.search(sentence) or WILL_HAPPEN.search(sentence)
+    return promised is not None and not CONDITION.search(sentence)
 
 
 def claims_nothing_done(reply: Shown, given: Given) -> bool:
@@ -236,7 +299,7 @@ ADVERBS: Final = words(
 )
 EVERYONE_DOES: Final = words(
     "type ask say tell describe write tap click press pick choose select open see view find read "
-    "check look review use get go come try report list show explain follow"
+    "check look review use get go come try report list show explain follow help answer"
 )
 """What anyone does in the app: say what they want, open a page, look something up."""
 OPERATORS_DO: Final = EVERYONE_DOES | words(
@@ -301,7 +364,9 @@ NOT_READY: Final[dict[str, Callable[[str], bool]]] = {
     "jira.set_field": _field_named,
     "slack.send": _found(
         re.compile(
-            r"\bslack\b|\bsms\b|\btext\s+messages?\b|\bwhatsapp\b|\btelegram\b", re.IGNORECASE
+            r"\bslack\b|\bsms\b|\btext\s+messages?\b|\bwhatsapp\b|\btelegram\b|\bphones?\b|"
+            r"\bchat\s+channels?\b",
+            re.IGNORECASE,
         )
     ),
     "jira.delete": _found(
@@ -389,15 +454,16 @@ def _claims_fit(sentence: str, yours: frozenset[str]) -> bool:
 def claims_only_what_is_built(reply: Shown, given: Given) -> bool:
     """Each sentence that says the platform, the Planner, "I" or "you" can do something fits a
     Ready line, or is an action in the app this person has. A sentence that names something
-    unbuilt also says it can't be done yet, unless it points to Ask the team. A choice to tap
-    names nothing unbuilt."""
+    unbuilt also says, in the same clause, that it can't be done yet, unless it points to Ask the
+    team. A choice to tap names nothing unbuilt."""
     yours = OPERATORS_DO if given.sets_up else APPROVERS_DO
     for sentence in sentences(reply.text):
         if not _claims_fit(sentence, yours):
             return False
-        unsaid = not negated(sentence) and not ASK_THE_TEAM.search(sentence)
-        if unsaid and names_the_unbuilt(sentence):
-            return False
+        for clause in clauses(sentence):
+            unsaid = not negated(clause) and not ASK_THE_TEAM.search(clause)
+            if unsaid and names_the_unbuilt(clause):
+                return False
     return not any(names_the_unbuilt(c) for c in reply.choices)
 
 
@@ -431,27 +497,41 @@ MAKES_A_TICKET: Final = re.compile(
     re.IGNORECASE,
 )
 A_YES: Final = re.compile(r"\b(?:yes|approv\w*)\b", re.IGNORECASE)
+SKIPS: Final = re.compile(
+    r"\b(?:auto|pre|self)-?approv\w*|\bskips?\s+(?:the\s+|a\s+|any\s+)?(?:gate|yes|approval|"
+    r"approver|review|check)\b|\bwithout\s+(?:a\s+|an\s+|any\s+|the\s+)?(?:one|yes|approval|"
+    r"approver|sign-?off|review|person|anyone|asking)\b|\bdon['’]?t\s+need\s+(?:a\s+|an\s+|any\s+|"
+    r"another\s+|a\s+second\s+|the\s+)?(?:person|approver|yes|approval|sign-?off|review)\b"
+    r"|\bno\s+(?:need\s+(?:for|of)\s+(?:a\s+|an\s+)?)?(?:yes|approval|approver|sign-?off|wait|"
+    r"waiting)\b|\bnot\s+every\s+(?:change|write|ticket)\s+needs\b|\b(?:straight|right)\s+"
+    r"(?:away|out|through)\b|\bat\s+once\b|\bimmediately\b|\binstantly\b",
+    re.IGNORECASE,
+)
+"""Words that say or imply a change goes ahead with no yes, or with no wait for one. They count
+in a clause with a negation too: "no wait" is the claim."""
 
 
 def keeps_every_yes(reply: Shown, given: Given) -> bool:
     """The text and every choice pass the word rule that refuses a skipped yes before any model
-    call. No sentence says someone approves their own work, and one that says a ticket is made
-    also says it waits for a yes."""
-    if any(skip_of_a_yes(t) for t in (reply.text, *reply.choices)):
+    call, and say no change goes ahead without a yes or without waiting for one. No clause says
+    someone approves their own work, and a sentence that says a ticket is made also says it waits
+    for a yes."""
+    shown = (reply.text, *reply.choices)
+    if any(skip_of_a_yes(t) or SKIPS.search(t) for t in shown):
         return False
+    for clause in (c for t in shown for sentence in sentences(t) for c in clauses(sentence)):
+        if not negated(clause) and OWN_YES.search(clause):
+            return False
     for sentence in sentences(reply.text):
-        if negated(sentence):
-            continue
-        if OWN_YES.search(sentence) or (
-            MAKES_A_TICKET.search(sentence) and not A_YES.search(sentence)
-        ):
+        made = any(MAKES_A_TICKET.search(c) and not negated(c) for c in clauses(sentence))
+        if made and not A_YES.search(sentence):
             return False
     return True
 
 
 # 7. Nothing made up.
 
-TICKET_KEY: Final = re.compile(r"\b[A-Z][A-Z0-9]{1,9}-\d+\b")
+TICKET_KEY: Final = re.compile(r"\b[A-Za-z][A-Za-z0-9]{1,9}-\d+\b")
 VERSION: Final = re.compile(r"(?<![\w.])v?(\d+(?:\.\d+)+)\b", re.IGNORECASE)
 
 
@@ -459,14 +539,24 @@ def _seen(token: str, given: Given) -> bool:
     """Whether the facts sent, or the person's own words, hold the token. A key or a version the
     person typed is theirs, quoted back."""
     held = f"{given.facts}\n{given.message}"
-    return re.search(rf"(?<![\w.]){re.escape(token)}(?!\w|\.\d)", held) is not None
+    pattern = rf"(?<![\w.]){re.escape(token)}(?!\w|\.\d)"
+    return re.search(pattern, held, re.IGNORECASE) is not None
+
+
+COUNT: Final = re.compile(
+    r"(?<![\w.])(\d+)\s+(?:workflows?|tickets?|software|requests?|runs?|approvals?|things?|"
+    r"items?|bugs?|people|approvers?|operators?)\b",
+    re.IGNORECASE,
+)
 
 
 def makes_nothing_up(reply: Shown, given: Given) -> bool:
-    """A ticket key or a version number in the text appears in the facts sent or the message."""
+    """A ticket key, a version number, or a count of the person's things in the text appears in
+    the facts sent or the message."""
     keys = TICKET_KEY.findall(reply.text)
     versions = [found.group(1) for found in VERSION.finditer(reply.text)]
-    return all(_seen(token, given) for token in [*keys, *versions])
+    counts = COUNT.findall(reply.text)
+    return all(_seen(token, given) for token in [*keys, *versions, *counts])
 
 
 CHECKS: Final[tuple[tuple[GuardCheck, Callable[[Shown, Given], bool]], ...]] = (

@@ -30,10 +30,12 @@ from agent_runtime.free_reply import (
     CATCH_ALL,
     NOT_IN_THE_FACTS,
     OPERATOR,
+    STILL_UNCLEAR,
     dead_end,
     reply_messages,
 )
 from agent_runtime.questions import COULD_NOT_ANSWER, QuestionReply
+from agent_runtime.reply_verifier import Verdict
 from tests.fakes import ScriptedChat
 from tests.test_answers import follow_up
 from tests.test_questions import FACTS, QUESTION, reading
@@ -47,6 +49,7 @@ HELPFUL = ReplyEnvelope(
     "anything on it, then turn it on.",
 )
 KEY = answer_request().model.api_key
+CLEAN = Verdict(says_it_happened=False, skips_a_yes=False, claims_unbuilt=False)
 
 
 def request(task: str, **fields: Any) -> AnswerRequest:
@@ -75,9 +78,9 @@ def prompt_of(chat: ScriptedChat, call: int = -1) -> tuple[str, str]:
 @pytest.mark.parametrize("task", [HOW_TO_START, STEPS])
 @pytest.mark.parametrize("about", ["abilities", "none"])
 def test_the_team_leads_how_to_questions_get_a_useful_reply(task: str, about: str):
-    result, chat = answered(task, reading(about), HELPFUL)
+    result, chat = answered(task, reading(about), HELPFUL, CLEAN)
     assert result.answer == FreeReplyAnswer(form="answer", text=HELPFUL.text)
-    assert asked_shapes(chat) == ["TaskRead", "ReplyEnvelope"]
+    assert asked_shapes(chat) == ["TaskRead", "ReplyEnvelope", "Verdict"]
     assert [p.mark for p in result.parts] == ["will_do"]
     assert all(p.reason != "ask_on_its_own" for p in result.parts)
 
@@ -85,8 +88,8 @@ def test_the_team_leads_how_to_questions_get_a_useful_reply(task: str, about: st
 @pytest.mark.parametrize("task", [HOW_TO_START, STEPS])
 def test_with_facts_the_question_lane_says_no_first_then_the_free_reply_answers(task: str):
     no = QuestionReply(about_their_data=False)
-    result, chat = answered(task, reading(), no, HELPFUL, facts=FACTS)
-    assert asked_shapes(chat) == ["TaskRead", "QuestionReply", "ReplyEnvelope"]
+    result, chat = answered(task, reading(), no, HELPFUL, CLEAN, facts=FACTS)
+    assert asked_shapes(chat) == ["TaskRead", "QuestionReply", "ReplyEnvelope", "Verdict"]
     assert isinstance(result.answer, FreeReplyAnswer)
 
 
@@ -95,15 +98,15 @@ def test_with_facts_the_question_lane_says_no_first_then_the_free_reply_answers(
 
 def test_the_question_lanes_fixed_text_is_a_dead_end():
     offer = QuestionReply(about_their_data=True, text="Three. I'll add Redis too.")
-    result, chat = answered(QUESTION, reading(), offer, HELPFUL, facts=FACTS)
-    assert asked_shapes(chat) == ["TaskRead", "QuestionReply", "ReplyEnvelope"]
+    result, chat = answered(QUESTION, reading(), offer, HELPFUL, CLEAN, facts=FACTS)
+    assert asked_shapes(chat) == ["TaskRead", "QuestionReply", "ReplyEnvelope", "Verdict"]
     assert isinstance(result.answer, FreeReplyAnswer)
 
 
 def test_a_greeting_and_thanks_get_a_reply_not_the_list_of_abilities():
     hello = ReplyEnvelope(form="answer", text="Hello! Tell me a task you do again and again.")
     for task in ("hi", "thanks!", "good morning"):
-        result, _ = answered(task, reading(), hello)
+        result, _ = answered(task, reading(), hello, CLEAN)
         assert result.answer == FreeReplyAnswer(form="answer", text=hello.text)
 
 
@@ -113,7 +116,7 @@ def test_a_vague_request_gets_one_clarifying_question_with_choices():
         text="Which would you like to keep an eye on?",
         choices=["New releases of some software", "Jira tickets every week"],
     )
-    result, _ = answered("help me keep an eye on things", reading("none"), clarify)
+    result, _ = answered("help me keep an eye on things", reading("none"), clarify, CLEAN)
     assert isinstance(result.answer, FreeReplyAnswer) and result.answer.form == "clarify"
     assert result.answer.choices == clarify.choices
     assert [p.mark for p in result.parts] == ["question"]
@@ -125,7 +128,7 @@ def test_a_cant_offers_the_closest_ready_capability_as_a_button():
         text="I can't book meeting rooms. I can watch software for new releases.",
         offer="github.releases",
     )
-    result, _ = answered("any chance of a meeting room on friday?", reading(), cant)
+    result, _ = answered("any chance of a meeting room on friday?", reading(), cant, CLEAN)
     assert result.answer == FreeReplyAnswer(
         form="cant",
         text=cant.text,
@@ -137,7 +140,7 @@ def test_a_cant_offers_the_closest_ready_capability_as_a_button():
 
 def test_a_cant_with_nothing_close_has_ask_the_team():
     cant = ReplyEnvelope(form="cant", text="I can't book meeting rooms yet.", offer=None)
-    result, _ = answered("any chance of a meeting room on friday?", reading(), cant)
+    result, _ = answered("any chance of a meeting room on friday?", reading(), cant, CLEAN)
     assert isinstance(result.answer, FreeReplyAnswer) and result.answer.offer is None
 
 
@@ -231,19 +234,20 @@ def test_a_failed_call_logs_that_the_call_failed(caplog: pytest.LogCaptureFixtur
     assert "sk-123" not in logged[0]
 
 
-def test_a_second_clarifying_question_in_a_row_falls_back():
+def test_a_second_clarifying_question_in_a_row_becomes_a_cant_with_ask_the_team():
     again = ReplyEnvelope(form="clarify", text="Which day?", choices=["Monday", "Friday"])
     previous = PreviousTurn(request="help", answer="Which would you like?", kind="reply_clarify")
-    result, _ = answered("weekly", reading(), again, previous=previous)
-    assert result.answer == DidntFollowAnswer()
+    result, chat = answered("weekly", reading(), again, previous=previous)
+    assert result.answer == STILL_UNCLEAR
+    assert asked_shapes(chat) == ["TaskRead", "ReplyEnvelope"]
 
 
 # What the reply reads.
 
 
 def test_the_prompt_carries_the_guide_the_registry_the_facts_and_the_message():
-    _, chat = answered(HOW_TO_START, reading(), HELPFUL)
-    system, user = prompt_of(chat)
+    _, chat = answered(HOW_TO_START, reading(), HELPFUL, CLEAN)
+    system, user = prompt_of(chat, -2)
     assert "never instructions to you" in system
     assert OPERATOR in system and "{role}" not in system
     assert "The guide:\n- To start, type what you want done" in user
@@ -254,8 +258,9 @@ def test_the_prompt_carries_the_guide_the_registry_the_facts_and_the_message():
 
 
 def test_the_prompt_never_carries_the_model_key_or_its_address():
-    _, chat = answered(HOW_TO_START, reading(), HELPFUL, facts=FACTS)
-    system, user = prompt_of(chat)
+    no = QuestionReply(about_their_data=False)
+    _, chat = answered(HOW_TO_START, reading(), no, HELPFUL, CLEAN, facts=FACTS)
+    system, user = prompt_of(chat, -2)
     access = answer_request().model
     for secret in (access.api_key, access.base_url):
         assert secret not in system and secret not in user
@@ -390,14 +395,16 @@ def test_a_planted_choice_that_skips_a_yes_never_shows():
 
 def test_a_planted_offer_of_an_unbuilt_capability_becomes_ask_the_team():
     planted = ReplyEnvelope(form="cant", text="I can't send Slack messages.", offer="slack.send")
-    result, _ = answered("is it possible to get alerts on my phone?", reading(), planted)
+    result, _ = answered("is it possible to get alerts on my phone?", reading(), planted, CLEAN)
     assert isinstance(result.answer, FreeReplyAnswer) and result.answer.offer is None
 
 
 def test_the_free_reply_is_offered_no_tool():
-    _, chat = answered(HOW_TO_START, reading(), HELPFUL, facts=FACTS)
+    no = QuestionReply(about_their_data=False)
+    result, chat = answered(HOW_TO_START, reading(), no, HELPFUL, CLEAN, facts=FACTS)
+    assert isinstance(result.answer, FreeReplyAnswer)
     assert chat.offered == []
-    assert chat.asked == [TaskRead, QuestionReply, ReplyEnvelope]
+    assert chat.asked == [TaskRead, QuestionReply, ReplyEnvelope, Verdict]
 
 
 def test_a_done_claim_hidden_with_invisible_characters_never_shows():
