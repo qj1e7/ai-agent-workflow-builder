@@ -1142,8 +1142,8 @@ class ReplyEnvelope(BaseModel):
     )
     choices: list[str] = Field(
         default_factory=list[str],
-        description="For clarify only: 2 to 4 replies the person can tap, each at most 40 "
-        "characters, in their own voice.",
+        description="For clarify only: 2 to 4 replies the person can tap, each 2 to 5 words and "
+        "never more than 40 characters, in their own voice.",
     )
     offer: str | None = Field(
         default=None,

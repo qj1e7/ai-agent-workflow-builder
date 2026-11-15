@@ -120,9 +120,9 @@ SYSTEM: Final = (
     "settles it. cant, when it asks for something the platform can't do.\n"
     "- text: plain words, at most four short sentences. No Markdown, list, link or HTML. For "
     "steps, write First, Then and Next in one paragraph. A clarify ends with a question mark.\n"
-    "- choices: for clarify only, 2 to 4 short replies the person can tap, each at most 40 "
-    'characters, in the person\'s own voice, such as "Check LangGraph releases". Each is sent '
-    "as their next message.\n"
+    "- choices: for clarify only, 2 to 4 replies the person can tap, each 2 to 5 words and never "
+    'more than 40 characters, in the person\'s own voice, such as "Check LangGraph releases" or '
+    '"Weekly Jira tickets". Each is sent as their next message. A longer choice is refused.\n'
     "- offer: for cant only, the id of the one Ready capability below that comes closest to "
     "what they asked, or null when none comes close. The platform makes it a button.\n"
     "- looked_at: the sections of the facts you used: watchlist, workflows or needs_you.\n\n"
