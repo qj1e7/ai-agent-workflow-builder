@@ -10,10 +10,12 @@ import { AgentFace } from '../../ui/AgentFace'
 import { Button } from '../../ui/Button'
 import { Toast, type ToastMessage } from '../../ui/Toast'
 import { useFromChat } from '../../ui/fromChat'
+import { useView, ViewTabs } from '../../ui/ViewTabs'
 import { motionAllowed } from '../../ui/motion'
 import { nextRunOf } from '../workflows/workflow'
 import { ApprovalGate, NotChecked } from './ApprovalGate'
 import { DECISION_ID, DecisionArea, LONG_LOG, StepLog } from './Chat'
+import { RunInN8n } from './InN8n'
 import { canDecideNow, foundOf, partyOf, useDecision, useNotChecked, type Decision } from './decision'
 import { POLL_FAILED_MS, useReconnectWhenBehind } from './follow'
 import { useLiveRun, type LiveRun } from './liveRun'
@@ -183,6 +185,9 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
   const [lands] = useState(() => fromApproval || LANDS_ON_DECISION.has(shown.phase.state))
   const logList = useRef<HTMLOListElement>(null)
   const heading = useRef<HTMLHeadingElement>(null)
+  const n8nAccess = me?.n8n_access === true
+  const [view, showView] = useView()
+  const shownView = n8nAccess ? view : 'main'
 
   const waiting = shown.phase.state === 'awaiting_approval'
   const saidByMe = me ? shown.chat.findLast((item) => item.kind === 'decided' && item.by === me.id) : undefined
@@ -305,11 +310,18 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
         </div>
         <RunPill facts={facts} yours={waiting && approval !== undefined && canDecideNow(approval, decision)} />
       </div>
+      {n8nAccess ? <ViewTabs main="Steps" shown={shownView} onShow={showView} className={styles['views']} /> : null}
       <p className={styles['status']}>
         <span role="status">{statusWords(decision, live)}</span>
         {declinedSoFar ? ` ${declinedSoFar}` : null}
       </p>
-      <RunLine stations={stations} arrivedLive={arrivedLive} settled={settled} />
+      {shownView === 'n8n' ? (
+        <div className={styles['inN8n']}>
+          <RunInN8n runId={run.run_id} name={run.use_case_name} seq={shown.seq} ended={modelFinished} />
+        </div>
+      ) : (
+        <RunLine stations={stations} arrivedLive={arrivedLive} settled={settled} />
+      )}
       {trouble}
       {gate}
       {ending}

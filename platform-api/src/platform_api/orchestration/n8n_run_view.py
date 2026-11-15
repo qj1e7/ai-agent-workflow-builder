@@ -7,11 +7,22 @@ from dataclasses import dataclass
 from typing import Literal, Protocol
 
 from platform_api.db import Database
+from platform_api.orchestration.runs import (
+    AwaitingApproval,
+    Expired,
+    Failed,
+    Lost,
+    Rejected,
+    Skipped,
+    Succeeded,
+)
 from platform_api.shared import N8nExecutionId, RunId
 
 type NodeState = Literal["running", "waiting", "done", "failed"]
 
-ENDED = frozenset({"succeeded", "rejected", "failed", "skipped", "expired", "lost"})
+WAITING = AwaitingApproval.__name__
+ENDED = frozenset(s.__name__ for s in (Succeeded, Rejected, Failed, Skipped, Expired, Lost))
+"""orchestration.runs keeps a run's state by its class name, as the store writes it."""
 
 _FROM_N8N: Mapping[str, NodeState] = {
     "success": "done",
@@ -48,7 +59,7 @@ def call_state(outcome: str, kind: str, run_state: str) -> NodeState:
         return "running"
     if outcome == "refused":
         return "failed"
-    if kind == "ask" and run_state == "awaiting_approval":
+    if kind == "ask" and run_state == WAITING:
         return "waiting"
     return "done"
 

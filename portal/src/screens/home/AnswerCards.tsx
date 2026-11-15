@@ -1,9 +1,9 @@
-import { useState, type ReactNode } from 'react'
+import { useContext, useEffect, useState, type ReactNode } from 'react'
 import { Link } from '../../ui/Link'
 import type { N8nReply, CantReply, CantRowView, OfflineReply, PartReply, PartView, PauseReply, PlannerReply, QuestionReply, ResumeReply, SetupCardReply, SwitchChoice, WatchlistReply } from '../../api/types'
 import { useErrorWords } from '../../api/context'
 import { useCapabilities } from '../../api/plannerQueries'
-import { useMoveWorkflow, useOpenInN8n } from '../../api/workflowQueries'
+import { useMoveWorkflow } from '../../api/workflowQueries'
 import { Button, ButtonLink } from '../../ui/Button'
 import { Card } from '../../ui/Card'
 import { OpenButton } from '../../ui/OpenItem'
@@ -13,11 +13,13 @@ import softwareStyles from '../software/Software.module.css'
 import { ChangedInN8nAnswer } from './ChangedCard'
 import { AskTheTeam } from './AskTheTeam'
 import { useAsker } from './asker'
-import { openInN8nWords, cantLines, capabilityCard, oneLine, questionActions, refusalNext, SAY_ANOTHER_WAY, startingPoints, stateWords, switchedSay, watchlistSwitchNote, type Asker } from './answers'
+import { cantLines, capabilityCard, oneLine, questionActions, refusalNext, SAY_ANOTHER_WAY, startingPoints, stateWords, switchedSay, watchlistSwitchNote, type Asker } from './answers'
 import { cardFrom } from './card'
 import { asksOnCard, cantOnCard, crossesInstead, crossesOnCard, followedNothing } from './parts'
 import { SetupCard, type CardStart } from './SetupCard'
-import { NewestAnswer, useMainButton } from './primary'
+import { CardLive, NewestAnswer, useMainButton } from './primary'
+import { CardMemoryContext } from './cardMemory'
+import { useChatNavigate } from '../../ui/fromChat'
 import { AddToWatchlist, WhichSoftware } from './WatchlistCard'
 import { SoftwareActions } from './WatchlistActions'
 import styles from './Planner.module.css'
@@ -396,23 +398,23 @@ function Dismissable({ children }: { children: (never: () => void) => ReactNode 
   return gone ? <p className="muted">All right, never mind.</p> : children(() => setGone(true))
 }
 
-export function openEditor(url: string): void {
-  window.open(url, '_blank', 'noopener,noreferrer')
+/** Where the Planner's n8n answer opens: the workflow's page on its In n8n tab, or nowhere when it named none it may open. */
+export function n8nTabOf(reply: N8nReply): string | null {
+  return reply.can_open && reply.use_case_id !== null ? `/workflows/${reply.use_case_id}?view=n8n` : null
 }
 
+/** The sketch's "Here it is in n8n.": the newest such answer opens its workflow's In n8n tab, once. Coming back to the chat never opens it again. */
 function N8nAnswer({ reply }: { reply: N8nReply }) {
-  const open = useOpenInN8n()
-  const words = useErrorWords()
-  if (!reply.can_open || reply.use_case_id === null) return null
-  const useCaseId = reply.use_case_id
-  return (
-    <>
-      <Button loading={open.isPending} onClick={() => open.mutate(useCaseId, { onSuccess: (held) => held.editor_url && openEditor(held.editor_url) })}>
-        Open in n8n editor
-      </Button>
-      {open.isError ? <p role="alert">{openInN8nWords(open.error, words)}</p> : null}
-    </>
-  )
+  const memory = useContext(CardMemoryContext)
+  const newest = useContext(CardLive)
+  const go = useChatNavigate()
+  const to = n8nTabOf(reply)
+  useEffect(() => {
+    if (to === null || !newest || memory.beside.kept()) return
+    memory.beside.keep(true)
+    go(to)
+  }, [to, newest, memory, go])
+  return null
 }
 
 interface AnswerProps {

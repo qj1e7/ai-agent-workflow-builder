@@ -784,7 +784,9 @@ class Watchlist:
         if self._n8n is None:
             return N8nNotReady("This platform is not connected to n8n.")
         if self._n8n.holding is not None:
-            held = await self._n8n.holding.refused_while_held(uow.conn, record.use_case_id)
+            held = await self._n8n.holding.refused_while_held(
+                uow.conn, record.use_case_id, principal.user_id
+            )
             if held is not None:
                 return held
         laid = await self._laid_out(self._n8n, record.use_case_id, schedule)

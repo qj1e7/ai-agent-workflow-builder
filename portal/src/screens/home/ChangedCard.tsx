@@ -1,12 +1,15 @@
 import { useContext, useState } from 'react'
 import { useErrorWords } from '../../api/context'
+import { useMe } from '../../api/queries'
 import type { ChangedInN8nReply } from '../../api/types'
-import { useAddTheYesBack, useRollback } from '../../api/workflowQueries'
+import { useAddTheYesBack, useRollback, useUseCaseInN8n } from '../../api/workflowQueries'
 import { Button } from '../../ui/Button'
 import { Card } from '../../ui/Card'
 import { cx } from '../../ui/cx'
 import { IconCheck } from '../../ui/icons'
+import { useTakeBackPress } from '../workflows/InN8n'
 import { ADD_THE_YES_BACK, backToVersionToast, gradePill, UNDO, yesBackToast } from '../workflows/n8nChange'
+import { heldLine, heldOf, mayTakeBack, TAKE_IT_BACK, theirsNote } from '../workflows/n8nHold'
 import runStyles from '../run/RunPage.module.css'
 import { useAsker } from './asker'
 import { CardMemoryContext } from './cardMemory'
@@ -21,6 +24,7 @@ const TONE = { ok: 'ok', err: 'bad' } as const
 /**
  * The sketch's Changed in n8n card: a version someone published in n8n's editor, graded by the safety checker. Add the yes back
  * and Undo each publish a new version, naming the version the person saw in use, so a change made since is never thrown away.
+ * While someone has the workflow open in n8n both would be refused, so the card names who, with Take it back for those who may.
  */
 export function ChangedInN8nAnswer({ reply }: { reply: ChangedInN8nReply }) {
   const operator = useAsker() === 'operator'
@@ -31,15 +35,22 @@ export function ChangedInN8nAnswer({ reply }: { reply: ChangedInN8nReply }) {
   const rollback = useRollback()
   const addYes = useAddTheYesBack()
   const [phase, setPhase] = useState<Phase>(() => memory.changed.kept() ?? OPEN)
+  const me = useMe().data
+  const n8nAccess = operator && me?.n8n_access === true
+  const inN8n = useUseCaseInN8n(reply.use_case_id, { enabled: n8nAccess })
+  const held = n8nAccess && me && inN8n.data ? heldOf(inN8n.data, me) : null
+  const takeBack = useTakeBackPress(reply.use_case_id, held, note)
   const settle = (next: Phase) => {
     memory.changed.keep(next)
     setPhase(next)
   }
   const busy = rollback.isPending || addYes.isPending
   const words = wordsOf(reply)
-  const buttons = buttonsOf(reply, phase, operator)
+  const offered = buttonsOf(reply, phase, operator)
+  const buttons = held ? { yes: false, undo: false } : offered
+  const takesBack = held !== null && mayTakeBack(held) && (offered.yes || offered.undo)
   const status = statusOf(reply, phase)
-  const problem = problemOf(phase)
+  const problem = takeBack.problem ?? problemOf(phase)
   const pill = gradePill(reply.grade)
   const answers = (toast: (saved: number) => string) => ({
     onSuccess: (view: { readonly version: number }) => {
@@ -67,7 +78,11 @@ export function ChangedInN8nAnswer({ reply }: { reply: ChangedInN8nReply }) {
         ) : undefined
       }
       actions={
-        buttons.yes || buttons.undo ? (
+        takesBack ? (
+          <Button loading={takeBack.pending} onClick={takeBack.press}>
+            {TAKE_IT_BACK}
+          </Button>
+        ) : buttons.yes || buttons.undo ? (
           <>
             {buttons.yes ? (
               <Button variant={main} loading={addYes.isPending} onClick={() => !busy && addYes.mutate(send, answers(yesBackToast))}>
@@ -94,6 +109,7 @@ export function ChangedInN8nAnswer({ reply }: { reply: ChangedInN8nReply }) {
         </ul>
       ) : null}
       {words.refused ? <p className={styles['note']}>{words.refused}</p> : null}
+      {held ? <p className={styles['note']}>{held.kind === 'theirs' ? `${heldLine(held, new Date())} ${theirsNote(held)}` : heldLine(held, new Date())}</p> : null}
       {words.findings.length > 0 ? (
         <ul className={styles['lines']}>
           {words.findings.map((line) => (
