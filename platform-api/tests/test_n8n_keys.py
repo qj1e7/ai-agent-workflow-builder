@@ -849,3 +849,19 @@ async def test_a_test_run_is_held_to_the_draft_the_platform_checked(k: Keyed):
         ).fetchone()
     assert row is not None
     assert row["spec"]["n8n"]["draft_version"] == k.n8n.workflows[workflow_id]["versionId"]
+
+
+async def test_a_version_naming_a_key_since_taken_out_does_not_go_back_on(k: Keyed):
+    """Its grade was made with the keys the platform held then. It is checked again as it goes
+    live."""
+    await settled(k)
+    use_case_id, workflow_id = await held(k.s)
+    with_slack(k, workflow_id)
+    assert (await k.s.lab.move("alice", "pause", use_case_id)).status_code == 200
+    k.s.lab.h.advance(timedelta(days=1))
+    k.systems.slack_scopes = "chat:write,channels:history"
+    await k.sweep.sweep()
+    assert SLACK not in await k.keys.made()
+    resumed = await k.s.lab.move("alice", "resume", use_case_id)
+    assert resumed.status_code == 409, resumed.text
+    assert k.n8n.workflows[workflow_id]["activeVersionId"] is None

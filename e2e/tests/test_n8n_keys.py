@@ -15,7 +15,7 @@ from typing import Any
 import httpx
 from harness import N8N_OWNER, Api, Json, SeededTicket, fail, seed_tickets
 from test_n8n_engine import set_up
-from test_n8n_versions import staff_member
+from test_n8n_versions import Member, staff_member
 
 MOCK_SLACK = os.environ.get("MOCK_SLACK_URL", "http://mock-slack:8500")
 PLATFORM_KEYS = {"wab-jira-read", "wab-github-read", "wab-slack-send"}
@@ -284,9 +284,9 @@ def test_member_hand_run_with_own_key_is_swept(api: Api, mock_model: None):
     api.delete("alice", f"/api/v1/use-cases/{use_case_id}", expect=(200,))
 
 
-def deletes_in_slack(after: str) -> Callable[[list[Json], Json], None]:
-    """n8n's Slack block set to delete, naming the platform's key, right after a trigger, so it
-    would run before any of our blocks."""
+def deletes_in_slack(after: str, key: str = "wab-slack-send") -> Callable[[list[Json], Json], None]:
+    """n8n's Slack block set to delete, naming a key, right after a trigger, so it would run
+    before any of our blocks."""
 
     def change(nodes: list[Json], connections: Json) -> None:
         nodes.append(
@@ -298,10 +298,11 @@ def deletes_in_slack(after: str) -> Callable[[list[Json], Json], None]:
                 "position": [900, 400],
                 "parameters": {
                     "operation": "delete",
+                    "select": "channel",
                     "channelId": {"__rl": True, "value": CHANNEL, "mode": "id"},
-                    "timestamp": "1",
+                    "timestamp": 1,
                 },
-                "credentials": {"slackApi": {"id": "wab-slack-send", "name": "Slack"}},
+                "credentials": {"slackApi": {"id": key, "name": "Slack"}},
             }
         )
         trigger = next(n["name"] for n in nodes if n["type"].endswith(after))
@@ -311,6 +312,27 @@ def deletes_in_slack(after: str) -> Callable[[list[Json], Json], None]:
     return change
 
 
+def published_with_her_own_key(member: Member, workflow_id: str) -> str:
+    """The sweep removes a member's key within a minute, so one it took before the publish is
+    made again."""
+    for _ in range(3):
+        mine = member.call(
+            "POST",
+            "/credentials",
+            {"name": "Mine", "type": "slackApi", "data": {"accessToken": "mine"}},
+        )
+
+        def uses_mine(nodes: list[Json], _: Json, key: str = str(mine["id"])) -> None:
+            [block] = [n for n in nodes if n["name"] == "Delete in Slack"]
+            block["credentials"] = {"slackApi": {"id": key, "name": "Mine"}}
+
+        try:
+            return member.publish(workflow_id, uses_mine)
+        except httpx.HTTPStatusError as refused:
+            observed("n8n refused a publish with the member's key", refused.response.text[:200])
+    fail("n8n did not publish the member's own key three times running")
+
+
 def chat_deletes() -> int:
     return len([m for m in sent_to_slack() if m["method"] == "chat.delete"])
 
@@ -318,17 +340,27 @@ def chat_deletes() -> int:
 def test_a_version_published_in_n8n_that_runs_a_block_unchecked_comes_back_off(
     api: Api, mock_model: None
 ):
-    """The E16 safety review's first must-fix: back in the platform's project n8n would run the
-    holder's published Slack delete with the platform's key on every tick of its schedule. So the
-    take-back takes it off before it moves, and marks the workflow Needs a fix."""
+    """The E16 safety review's first must-fix. n8n won't let the holder publish a block naming the
+    platform's key (spike P8, Q12), but it will with a key of their own, and back in the
+    platform's project n8n would run that on every tick of its schedule. So the take-back takes it
+    off before it moves, and it stays off, marked Needs a fix."""
     platform_keys(api)
     created = set_up(api, "e2e a published delete comes back off", on=True)
     use_case_id, workflow_id = created["use_case_id"], created["n8n_workflow_id"]
     jo = staff_member(api, "Jo")
     api.post(jo.person, f"/api/v1/use-cases/{use_case_id}/open-in-n8n", expect=(200,))
     deletes = chat_deletes()
-    published = jo.member.publish(workflow_id, deletes_in_slack("scheduleTrigger"))
-    observed("a member publishes a Slack delete naming the platform's key", published)
+    draft = jo.member.call("GET", f"/workflows/{workflow_id}")
+    deletes_in_slack("scheduleTrigger")(draft["nodes"], draft["connections"])
+    body = {key: draft[key] for key in ("nodes", "connections", "settings", "versionId")}
+    jo.member.call("PATCH", f"/workflows/{workflow_id}", body)
+    saved = jo.member.call("GET", f"/workflows/{workflow_id}")
+    publish = {"versionId": saved["versionId"], "expectedChecksum": saved["checksum"]}
+    refused = jo.member.client.post(f"/rest/workflows/{workflow_id}/activate", json=publish)
+    observed("a member publishes a block naming the platform's key", refused.text[:300])
+    assert refused.status_code == 400 and "do not have access" in refused.text, refused.text
+    published = published_with_her_own_key(jo.member, workflow_id)
+    observed("a member publishes the same block with a key of their own", published)
     api.post(jo.person, f"/api/v1/use-cases/{use_case_id}/take-back", expect=(200,))
     back = N8N_OWNER.call("GET", f"/workflows/{workflow_id}")
     observed("the version n8n runs once it is back", back["activeVersionId"])

@@ -371,10 +371,12 @@ async def test_an_ended_account_s_workflows_wait_with_the_maker_noted_as_it_ende
 async def test_a_move_n8n_refuses_sets_up_nothing(s: Staffed):
     carol_n8n, carol_space = await space_of(s, "carol")
     workflow_id = s.n8n.make_in(carol_space, named(await laid_out(s), "Stays"), carol_n8n)
+    live = s.n8n.workflows[workflow_id]["activeVersionId"]
     s.n8n.transfer_answers = [500]
     refused = await set_up(s, "carol", workflow_id)
     assert (refused.status_code, refused.json()["detail"]) == (503, NOT_MOVED)
     assert s.n8n.home_of(workflow_id) == carol_space
+    assert s.n8n.workflows[workflow_id]["activeVersionId"] == live, "back on, in her space"
     assert [w["workflow_id"] for w in await waiting(s, "carol")] == [workflow_id]
     assert workflow_id not in await s.staff.makers(), "no note left for a workflow still hers"
 
@@ -639,3 +641,17 @@ async def test_set_up_puts_the_platform_s_keys_back_on_the_draft_it_takes_in(s: 
     assert (await set_up(s, "carol", workflow_id)).status_code == 201
     [slack] = [n for n in s.n8n.workflows[workflow_id]["nodes"] if n["name"] == "Tell Slack"]
     assert "credentials" not in slack, "this platform holds no Slack key, so the block has none"
+
+
+async def test_a_move_that_stops_in_the_platform_s_project_leaves_it_off(s: Staffed):
+    """It took her version off to move it. Stuck in the platform's project, where n8n lets it use
+    every key there is, it stays off: nothing goes back on there unchecked."""
+    carol_n8n, carol_space = await space_of(s, "carol")
+    workflow_id = s.n8n.make_in(carol_space, named(await laid_out(s), "Stuck"), carol_n8n)
+    s.n8n.transfer_keeps = lambda settings: {}
+    s.n8n.after_put = s.n8n.edit
+    s.n8n.transfer_answers = [204, 500]
+    refused = await set_up(s, "carol", workflow_id)
+    assert refused.status_code == 503
+    assert s.n8n.home_of(workflow_id) == PLATFORM_PROJECT
+    assert s.n8n.workflows[workflow_id]["activeVersionId"] is None

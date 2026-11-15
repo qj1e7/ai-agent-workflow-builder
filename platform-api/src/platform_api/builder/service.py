@@ -1150,6 +1150,17 @@ class Builder:
         chosen = [(agent.card, agent.values) for agent in pinned]
         return await self._laid_out(use_case_id, row["name"], schedule, chosen)
 
+    async def _unchecked_in_n8n(self, workflow_id: str, version_id: str) -> bool:
+        """The version as n8n holds it, checked again now, just before it goes live: the keys the
+        platform holds may have changed since it was graded. One n8n can't show counts too."""
+        assert self._n8n is not None
+        try:
+            version = await self._n8n.kept(workflow_id, version_id)
+        except (N8nError, httpx.HTTPError) as error:
+            log.warning("could not read %s before it goes live: %s", workflow_id, error)
+            return True
+        return bool(unchecked(version or {}, (await self.facts.known({})).keys))
+
     async def _follow_in_n8n(
         self, row: Mapping[str, Any], after: Lifecycle
     ) -> N8nNotReady | NotSafe | None:
@@ -1166,6 +1177,8 @@ class Builder:
         if is_on(after) and version_id is None:
             return N8nNotReady("This version is not saved in n8n. Change when it runs to save it.")
         if is_on(after) and row["grade"] != "safe":
+            return NotSafe()
+        if is_on(after) and await self._unchecked_in_n8n(workflow_id, version_id):
             return NotSafe()
         try:
             if is_on(after):

@@ -519,7 +519,7 @@ class Holding:
             log.warning("could not take %s off before it comes in: %s", workflow_id, error)
             return HoldRefused(503, NOT_MOVED)
         if (refused := await self.send_back(workflow_id, home)) is not None:
-            await self._live_again(workflow_id, was_live)
+            await self._live_again(workflow_id, was_live, space, home)
             return refused
         back = await self._home_again(workflow_id, was_live)
         if back is None:
@@ -530,11 +530,22 @@ class Holding:
             log.error("could not move %s back to its maker's space", workflow_id)
         return HoldRefused(409, CHANGED_AS_TAKEN) if taken_off else None
 
-    async def _live_again(self, workflow_id: str, version: str | None) -> None:
-        """A set-up that moved nothing puts back on what it took off in its maker's space."""
+    async def _live_again(
+        self, workflow_id: str, version: str | None, space: str | None, home: str
+    ) -> None:
+        """A set-up that moved nothing puts back on what it took off, only once n8n shows it in
+        its maker's own space, where the platform's keys can't be used. A move that stopped part
+        way may have left it in the platform's project, so anywhere else, or nowhere n8n can
+        say, it stays off."""
         if version is None:
             return
         try:
+            where = await self._n8n.home(workflow_id)
+            if space is None or space == home or where != space:
+                log.error(
+                    "left %s off: n8n shows it at %s, not its maker's space", workflow_id, where
+                )
+                return
             await self._n8n.go_live(workflow_id, version)
         except (N8nError, httpx.HTTPError) as error:
             log.warning("could not put %s back on in its maker's space: %s", workflow_id, error)
