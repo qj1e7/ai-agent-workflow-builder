@@ -12,6 +12,7 @@ from agent_runtime.answers import (
     LEFT_OUT_PART,
     LEFT_OUT_SEARCH,
     LEFT_OUT_YES,
+    SKIP_PART_NOTE,
     SkipRead,
     TaskRead,
     answer_of,
@@ -920,9 +921,58 @@ def test_an_approver_skip_with_no_words_of_the_request_quoted_is_not_refused_on_
         answer = answer_of(release_check(skip), RELEASE_CHECK)
     assert isinstance(answer, WatchlistAnswer)
     assert (answer.software, answer.word) == ("LangGraph", "releases")
+    assert SKIP_PART_NOTE not in answer.model_dump_json()
+    parts = parts_of(release_check(skip), RELEASE_CHECK, answer)
+    assert all(p.note != SKIP_PART_NOTE and p.reason != "skip_approval" for p in parts)
     [record] = [r for r in caplog.records if r.name == "agent_runtime.answers"]
     assert record.levelno == logging.WARNING
     assert "LangGraph" not in record.getMessage()
+
+
+SKIP_UNQUOTED = SkipRead(whose="an_approver_or_anyone_else")
+
+
+def bug_list_with(words: str, skip: SkipRead) -> tuple[TaskRead, str]:
+    task = f"Every Monday, list the open bugs in SUP and create one ticket that lists them, {words}"
+    reading = read(
+        skips_the_yes=skip,
+        schedule="Every Monday",
+        search=search(project="SUP", issue_types=["bug"], status="open", said="open bugs"),
+        ticket=TicketRead(creates=True, says="list", said="create one ticket that lists them"),
+    )
+    return reading, task
+
+
+@pytest.mark.parametrize(
+    "words",
+    [
+        "skip the review step",
+        "skip the queue",
+        "leave Bob out of it",
+        "keep Bob out of the loop",
+        "straight through, no checks",
+        "whitout asking",
+        "ohne Freigabe",
+        "不需要审批",
+    ],
+)
+def test_words_not_followed_beside_a_skip_the_model_could_not_quote_say_the_yes_stays(words: str):
+    """The model said an Approver's yes is skipped and quoted none of the request, and nothing
+    read these words. They are most likely the skip, so each says the yes can't be skipped
+    rather than that the Planner didn't follow it."""
+    reading, task = bug_list_with(words, SKIP_UNQUOTED)
+    answer = answer_of(reading, task)
+    assert isinstance(answer, CantAnswer) and answer.cant
+    assert {row.note for row in answer.cant} == {SKIP_PART_NOTE}
+    crossed = [p for p in parts_of(reading, task, answer) if p.mark == "cant"]
+    assert crossed and {p.note for p in crossed} == {SKIP_PART_NOTE}
+
+
+def test_words_not_followed_with_no_skip_flagged_are_still_not_followed():
+    reading, task = bug_list_with("skip the queue", NO_SKIP)
+    answer = answer_of(reading, task)
+    assert isinstance(answer, CantAnswer) and cant_of(answer) == ["skip the queue"]
+    assert answer.cant[0].note == LEFT_OUT_PART
 
 
 @pytest.mark.parametrize(
