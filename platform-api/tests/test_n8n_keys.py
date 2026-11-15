@@ -7,6 +7,7 @@ kept unused; and the daily self-test plants a key the next sweep must remove."""
 import asyncio
 import contextlib
 import copy
+import re
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field, replace
 from datetime import timedelta
@@ -31,6 +32,7 @@ from platform_api.orchestration import KEYS, N8nError, PlatformKeys
 from platform_api.orchestration.n8n_credentials import (
     GONE_WITHIN,
     JIRA_READS,
+    PLANT_FAILED,
     PLANTED_KIND,
     key_test_line,
 )
@@ -1115,3 +1117,42 @@ async def test_a_key_open_in_n8n_removes_marks_her_other_workflows_at_the_next_s
     assert hers not in k.n8n.credentials
     assert use_case_id in (await k.sweep.sweep()).marked
     assert await finding(k, use_case_id) == ("needs_a_fix", KEY_ADDED)
+
+
+async def test_the_daily_self_test_plants_a_key_n8n_takes(k: Keyed):
+    """n8n takes a key id of at most 16 letters, digits, underscores or hyphens. The planted key's
+    was 17, so n8n refused every plant, and the health line blamed the sweep."""
+    planted = await k.keys.plant()
+    assert planted is not None and planted in k.n8n.credentials
+    for key in (planted, *(spec.id for spec in KEYS.values())):
+        assert re.fullmatch(r"[a-zA-Z0-9_-]{1,16}", key), key
+
+
+async def test_a_plant_n8n_refuses_is_tried_again_and_the_health_line_says_so(
+    k: Keyed, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+):
+    """A failed create plants nothing on record, so the next minute's sweep plants again, and the
+    health line says the plant failed, never that the sweep missed a key."""
+    api = k.keys._api  # pyright: ignore[reportPrivateUsage]
+    assert api is not None
+    create = api.create_credential
+
+    async def refused(credential_id: str, *args: Any) -> Any:
+        if credential_id.startswith("wab-test-"):
+            raise N8nError("n8n refused it", status=400)
+        return await create(credential_id, *args)
+
+    monkeypatch.setattr(api, "create_credential", refused)
+    await k.sweep.sweep()
+    assert "the sweep's daily self-test did not start: N8nError, n8n answered 400" in caplog.text
+    ready, line = await k.keys.tested()
+    assert (ready, line) == (False, PLANT_FAILED.format(why="n8n answered 400"))
+    async with k.s.lab.h.db.connection("orchestration") as conn:
+        rows = await (await conn.execute("SELECT 1 FROM orchestration.n8n_key_tests")).fetchall()
+    assert rows == [], "nothing planted is on record"
+    monkeypatch.setattr(api, "create_credential", create)
+    k.s.lab.h.advance(timedelta(minutes=1))
+    await k.sweep.sweep()
+    assert [key for key in k.n8n.credentials if key.startswith("wab-test-")], "planted again"
+    await k.sweep.sweep()
+    assert (await k.keys.tested())[0], "and the sweep removed it"

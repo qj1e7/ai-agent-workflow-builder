@@ -29,6 +29,7 @@ from platform_api.orchestration import (
     KeyRemoved,
     ListedWorkflow,
     N8nError,
+    answered,
     unchecked,
 )
 from platform_api.shared import UserId
@@ -117,7 +118,11 @@ class KeySweep:
             try:
                 await self._keys.plant()
             except (N8nError, httpx.HTTPError) as error:
-                log.warning("the sweep's daily self-test did not start: %s", type(error).__name__)
+                log.warning(
+                    "the sweep's daily self-test did not start: %s, %s",
+                    type(error).__name__,
+                    answered(error),
+                )
             return KeysSwept(tuple(removed), tuple(marked), tuple(taken_off))
 
     async def made(self) -> dict[str, str]:

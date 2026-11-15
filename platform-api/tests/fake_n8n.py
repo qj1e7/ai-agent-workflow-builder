@@ -2,6 +2,7 @@
 (docs/evidence/prototypes/p7-n8n-engine-facts), kept in memory."""
 
 import json
+import re
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -469,6 +470,11 @@ class FakeN8n:
                 )
             case "POST", ["credentials"]:
                 key = body.get("id") or f"cred{len(self.credentials) + 1}"
+                if not re.fullmatch(r"[a-zA-Z0-9_-]{1,16}", key):
+                    # n8n 2.42.6's public API: "An unused credential ID of 1-16 letters, digits,
+                    # underscores, or hyphens" (its openapi.yml, seen live in E17's follow-up).
+                    message = "request/body/id String must contain at most 16 character(s)"
+                    return httpx.Response(400, json={"message": message})
                 if key in self.credentials:
                     return httpx.Response(409, json={"message": "That id is in use"})
                 at = self._now()

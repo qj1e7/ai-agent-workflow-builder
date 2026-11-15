@@ -126,6 +126,7 @@ from platform_api.orchestration.n8n_calls import (
 from platform_api.orchestration.n8n_credentials import (
     KeyRemoved,
     PlatformKeys,
+    answered,
     credentials_named,
 )
 from platform_api.orchestration.n8n_run_view import NodeState, RunInN8n
@@ -253,6 +254,7 @@ __all__ = [
     "KeySpec",
     "attach_keys",
     "PlatformKeys",
+    "answered",
     "credentials_named",
     "NO_ACCESS",
     "OFF",
