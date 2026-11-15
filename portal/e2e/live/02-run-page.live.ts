@@ -499,7 +499,7 @@ for (const phone of [false, true]) {
       const saved = await backend.saveWatchlistSchedule('alice', { day: 'monday', at: '09:00' })
       expect(saved.status, 'a weekly check is set').toBe(200)
       try {
-        const next = /The tickets will be proposed again at the next check, Mon \d+ \w+, 9:00\./
+        const next = /The tickets will be proposed again at the next check, (Today|Mon \d+ \w+), 9:00\./
         await alice.goto('/software')
         await softwareRow(alice, 'LangGraph').getByRole('link').click()
         await expect(alice.getByRole('main'), 'the software page says when the tickets are proposed again').toContainText(next)

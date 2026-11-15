@@ -88,8 +88,10 @@
   font-weight: 600;
 }
 
+/* Many people wrap onto more lines inside the panel, never past its edge. */
 .segmented {
   display: inline-flex;
+  flex-wrap: wrap;
   padding: 2px;
   border: 1px solid var(--mock-dim);
   border-radius: 10px;
