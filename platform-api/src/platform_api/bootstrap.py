@@ -31,16 +31,8 @@ OLD_TASK_KIND = "release"
 RETIRED_WORKFLOWS = ("schedule_tick", "run")
 """Removed by these exact names, as they are the platform's own. Nothing ticks schedules since
 E10: each workflow's own n8n workflow has its Schedule Trigger. The shared run workflow is made of
-Webhook, HTTP Request and Respond to Webhook blocks, which the allow list turns off (E11)."""
-OLD_RUNS_OPEN = """
-    SELECT count(*) FROM orchestration.runs
-    WHERE jsonb_typeof(spec -> 'n8n') IS DISTINCT FROM 'object'
-      AND state IN ('Pending', 'Working', 'Proposed', 'AwaitingApproval', 'Acting')
-"""
-OLD_RUNS_LEFT = (
-    "{count} run(s) on the shared run workflow have not ended, and n8n's allow list leaves it no "
-    "block to finish them with. Let them end under the release before this one first"
-)
+Webhook, HTTP Request and Respond to Webhook blocks, which the allow list turns off (E11), and
+platform-api ends any run still on it as it starts."""
 SHOWN = 5
 """How many of the types n8n loads beyond the allow list bootstrap names, when it loads more."""
 RESET_HINT = (
@@ -77,9 +69,6 @@ def main(env: Mapping[str, str] | None = None) -> int:
         return 1
     if not migrate_to_head(settings.owner_database_url, say):
         return _finish(settings, say, [], [], "the database holds old release-check data")
-    left = old_runs_open(settings.owner_database_url)
-    if left:
-        return _finish(settings, say, [], [], OLD_RUNS_LEFT.format(count=left))
     try:
         loaded, findings = load_into_n8n(settings, say)
     except NotThePlatforms as error:
@@ -274,16 +263,6 @@ def _upsert(place: Place, body: dict[str, Any], digest: str) -> str:
         change = "updated in place, content changed"
     place.say(f"workflow {name} ({result.id}): {change}")
     return result.id
-
-
-def old_runs_open(owner_url: str) -> int:
-    """Runs on the shared run workflow that have not ended. Its blocks are off from E11, so only
-    the release before can finish them. A workflow still on it with no open run moves to its own
-    n8n workflow as platform-api starts (ENGINE-PLAN E10), and needs it no more."""
-    with psycopg.connect(owner_url) as conn:
-        row = conn.execute(OLD_RUNS_OPEN).fetchone()
-    assert row is not None
-    return int(row[0])
 
 
 def retire_old_engine(place: Place) -> None:

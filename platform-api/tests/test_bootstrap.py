@@ -10,11 +10,10 @@ from fastapi.testclient import TestClient
 from psycopg import sql
 from pydantic import TypeAdapter
 
-from platform_api import bootstrap, migrate
+from platform_api import bootstrap, migrate, old_runs
 from platform_api.app import create_app
 from platform_api.bootstrap import (
     OLD_RUN_WORKFLOW,
-    OLD_RUNS_LEFT,
     OLD_TASK_KIND,
     OLD_TEMPLATE,
     RESET_HINT,
@@ -426,11 +425,12 @@ def test_a_workflow_still_on_the_shared_run_workflow_with_no_open_run_lets_it_go
     assert engine_status(postgres.owner) == READY
 
 
-def test_a_run_on_the_shared_run_workflow_that_has_not_ended_stops_bootstrap_first(
-    postgres: PostgresUrls, monkeypatch: pytest.MonkeyPatch
+def test_a_run_on_the_shared_run_workflow_that_has_not_ended_leaves_bootstrap_ready(
+    postgres: PostgresUrls, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ):
-    """Its yes may still come, but no block it needs can run under the allow list, so the deploy
-    stops and the release before finishes it. Nothing in n8n changes."""
+    """No block it needs can run under the allow list, so the shared run workflow goes, and
+    platform-api ends the run as it starts, saying so (ENGINE-PLAN E11). On Azure the apps
+    change before bootstrap runs, so a stop here could only hold every workflow back."""
     truncate_all(postgres.owner)
     n8n = serve(monkeypatch, FakeN8n(["run"]))
     recorded(postgres.owner, {"run": "W1"})
@@ -439,11 +439,14 @@ def test_a_run_on_the_shared_run_workflow_that_has_not_ended_stops_bootstrap_fir
     with psycopg.connect(postgres.owner, autocommit=True) as conn:
         conn.execute("UPDATE orchestration.runs SET state = 'AwaitingApproval'")
 
-    assert main(env_for(postgres.owner)) == 1
+    assert main(env_for(postgres.owner)) == 0
 
-    assert engine_status(postgres.owner) == (False, OLD_RUNS_LEFT.format(count=1))
-    assert names_in(n8n) == ["run"]
-    assert n8n.calls == [], "bootstrap did not touch n8n"
+    assert engine_status(postgres.owner) == READY
+    assert names_in(n8n) == ["run_failure_reporter", "self_test_failure"]
+    assert old_runs.main({"DATABASE_URL_OWNER": postgres.owner}) == 0
+    listed = capsys.readouterr().out
+    assert f"run_waiting\t{SPEC.use_case_id}\tAwaitingApproval\tstarted " in listed, listed
+    assert listed.endswith("1 run(s) on the shared run workflow have not ended.\n")
 
 
 @pytest.mark.parametrize(

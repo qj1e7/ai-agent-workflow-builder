@@ -2030,7 +2030,8 @@
           "approved",
           "declined",
           "expired",
-          "cancelled"
+          "cancelled",
+          "closed"
         ],
         "type": "string"
       },
@@ -5564,7 +5565,8 @@
           "WriteFailed",
           "SafetyDenied",
           "UnboundIntent",
-          "OutOfOrderStep"
+          "OutOfOrderStep",
+          "StoppedByUpdate"
         ],
         "type": "string"
       },
@@ -10854,7 +10856,8 @@
           "retry",
           "check_workflow_engine",
           "reload_workflow",
-          "ask_maintainer"
+          "ask_maintainer",
+          "start_again"
         ],
         "type": "string"
       },

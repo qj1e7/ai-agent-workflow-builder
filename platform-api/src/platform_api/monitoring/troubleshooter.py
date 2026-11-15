@@ -8,7 +8,7 @@ from platform_api.shared import JIRA_SITE_CHANGED, WRITE_STOP_ADVICE
 from platform_api.wire import FailureReason, WireModel
 
 type SuggestedAction = Literal[
-    "retry", "check_workflow_engine", "reload_workflow", "ask_maintainer"
+    "retry", "check_workflow_engine", "reload_workflow", "ask_maintainer", "start_again"
 ]
 
 
@@ -74,6 +74,14 @@ ADVICE: Mapping[FailureReason, Advice] = {
         suggested_action="reload_workflow",
         suggestion="Ask a maintainer to reload the workflow from git, then start a new "
         "run. Retrying would run the same edited workflow.",
+    ),
+    "StoppedByUpdate": Advice(
+        explanation="The platform was updated while this run was on the old shared workflow, "
+        "which the update removed, so the run could not carry on.",
+        likely_cause="The run started before the update.",
+        suggested_action="start_again",
+        suggestion="Start the workflow again. If the run was making its changes, check Jira "
+        "first, so nothing is made twice.",
     ),
 }
 

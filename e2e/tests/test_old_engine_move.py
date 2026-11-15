@@ -3,17 +3,21 @@ workflow, moves to the new engine as the platform starts, with its history intac
 
 The stack starts from e2e/old_engine/seed.json, loaded before bootstrap (scripts/e2e.sh with
 E2E_SEED=old-engine). It holds two agent workflows on the shared run workflow: "Old release
-check", whose one run Bob declined, and "Old idle check", which never ran. None of its runs is
-open, as n8n's allow list turns the shared run workflow's blocks off from ENGINE-PLAN E11, so a
-run still waiting there stops bootstrap and is finished by the release before."""
+check", whose one run Bob declined, and "Old waiting check", whose run waits for Bob's yes. From
+E11 the shared run workflow's blocks are off, so the platform ends the waiting run as it starts,
+says so, and refuses a late yes, and both workflows move."""
 
 import pytest
 from harness import Api, Json, approval_requested, assert_story, bob_decides, tickets_for
 
+ENDED = (
+    "This run started before the update and couldn't finish. Nothing was written. Start it again."
+)
+
 pytestmark = pytest.mark.old_engine
 
 MOVED = "Old release check"
-IDLE = "Old idle check"
+WAITING = "Old waiting check"
 
 
 def workflow(api: Api, name: str) -> Json:
@@ -41,12 +45,31 @@ def test_the_old_engine_database_moves_to_the_new_engine_with_its_history(
     assert made == [(2, "moved_to_n8n"), (1, None)]
     assert [r["state"] for r in runs_of(api, moved["use_case_id"])] == ["rejected"]
 
-    idle = workflow(api, IDLE)
-    assert (idle["state"], idle["grade"], idle["moving_to_n8n"]) == ("on", "safe", False)
-    assert idle["blocks"] and idle["next_run_at"] is not None
-    made = [(v["version"], v["made"]) for v in versions(api, idle["use_case_id"])]
+    waiting = workflow(api, WAITING)
+    assert (waiting["state"], waiting["grade"], waiting["moving_to_n8n"]) == ("on", "safe", False)
+    assert waiting["blocks"], "its run ended as the platform started, so it moved"
+    made = [(v["version"], v["made"]) for v in versions(api, waiting["use_case_id"])]
     assert made == [(2, "moved_to_n8n"), (1, None)]
-    assert runs_of(api, idle["use_case_id"]) == []
+    [ended] = runs_of(api, waiting["use_case_id"])
+    assert (ended["state"], ended["reason"], ended["retryable"]) == (
+        "failed",
+        "StoppedByUpdate",
+        False,
+    )
+    assert ended["message"] == ENDED
+    events = api.events_after("alice", ended["run_id"])
+    assert events[-1]["kind"] == "run_failed"
+    approval_id = approval_requested(events)["approval_id"]
+    approval = api.get("bob", f"/api/v1/approvals/{approval_id}")
+    assert [step["status"] for step in approval["steps"]] == ["closed"]
+    late = api.post(
+        "bob",
+        f"/api/v1/approvals/{approval_id}/decisions",
+        {"step": 0, "verdict": "approve", "digest": approval["digest"]},
+        expect=(403,),
+    )
+    assert late.json()["refusal"] == "not_open", late.text
+    assert tickets_for(api, ended["run_id"]) == [], "a late yes writes nothing"
 
     run_id, started = api.start_run("carol", moved["use_case_id"])
     assert started.status_code == 201

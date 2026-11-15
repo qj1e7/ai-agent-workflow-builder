@@ -72,6 +72,8 @@ export function approvalPill(standing: Standing, canDecide: boolean): Pill {
       return { label: 'No answer', tone: 'quiet' }
     case 'cancelled':
       return { label: 'Cancelled', tone: 'quiet' }
+    case 'closed':
+      return { label: 'Closed', tone: 'quiet' }
   }
 }
 
@@ -169,6 +171,8 @@ export function recordWords(standing: Standing, facts: StageFacts | null, nameOf
       return 'No one said yes in time. Nothing was written, and it can’t be decided now.'
     case 'cancelled':
       return 'The workflow was deleted before anyone decided. Nothing was written, and it can’t be decided now.'
+    case 'closed':
+      return 'The platform was updated before anyone decided. Nothing was written, and it can’t be decided now.'
   }
 }
 
@@ -185,5 +189,7 @@ export function cardStatusWords(standing: Standing, facts: StageFacts | null): s
       return 'No answer. Nothing was written.'
     case 'cancelled':
       return 'Cancelled. Nothing was written.'
+    case 'closed':
+      return 'Closed. Nothing was written.'
   }
 }

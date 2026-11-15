@@ -248,6 +248,7 @@ describe('the record, once it is decided or over', () => {
   it.each([
     ['expired', 'No answer', 'No one said yes in time. Nothing was written, and it can’t be decided now.'],
     ['cancelled', 'Cancelled', 'The workflow was deleted before anyone decided. Nothing was written, and it can’t be decided now.'],
+    ['closed', 'Closed', 'The platform was updated before anyone decided. Nothing was written, and it can’t be decided now.'],
   ] as const)('%s: says why nobody can decide, even if an old read still says Bob may', (status, label, words) => {
     const html = draw({ ...BOB, steps: BOB.steps.map((step) => ({ ...step, status })) })
     expect(pill(html)).toBe(label)

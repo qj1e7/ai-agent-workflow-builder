@@ -844,7 +844,8 @@
         "approved",
         "declined",
         "expired",
-        "cancelled"
+        "cancelled",
+        "closed"
       ],
       "type": "string"
     },
@@ -1104,7 +1105,8 @@
         "WriteFailed",
         "SafetyDenied",
         "UnboundIntent",
-        "OutOfOrderStep"
+        "OutOfOrderStep",
+        "StoppedByUpdate"
       ],
       "type": "string"
     },

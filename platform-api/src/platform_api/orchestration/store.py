@@ -111,6 +111,13 @@ class DecisionConflict(Exception): ...
 START_LEG = "start_leg"
 ANNOUNCE = "announce"
 SHOW_OUTCOME = "show_outcome"
+OLD_ENGINE_RUNS = """
+    SELECT run_id, use_case_id, state, started_at FROM orchestration.runs
+    WHERE jsonb_typeof(spec -> 'n8n') IS DISTINCT FROM 'object'
+      AND state IN ('Pending', 'Working', 'Proposed', 'AwaitingApproval', 'Acting')
+    ORDER BY started_at, run_id
+"""
+"""Runs on the shared run workflow that have not ended. From E11 nothing can carry them on."""
 """Shows a decided request's outcome on its Teams card. The outcome holds however the run ends,
 so cancelling a run's outbox leaves these rows."""
 WAKE = "wake"
@@ -678,6 +685,11 @@ class Store:
                 (use_case_id,),
             )
         ).fetchall()
+        return [RunId(row["run_id"]) for row in rows]
+
+    async def old_engine_runs(self, uow: UnitOfWork) -> list[RunId]:
+        """Runs on the shared run workflow that have not ended, oldest first."""
+        rows = await (await uow.conn.execute(OLD_ENGINE_RUNS)).fetchall()
         return [RunId(row["run_id"]) for row in rows]
 
     async def cancel_outbox(self, uow: UnitOfWork, run_id: RunId) -> None:

@@ -418,6 +418,9 @@ async def build(settings: Settings) -> Services:
         requests=orchestrator,
         open_runs=watch_facts,
     )
+    # Before any run can start: a run left on the shared run workflow, whose blocks are off, ends
+    # first (E11), so the workflows it held back can move.
+    log.info("ended on the shared run workflow: %s", await orchestrator.stop_old_engine_runs())
     if builder.moves is not None:
         # Before any run can start: a workflow n8n lost comes back first, then whatever is left on
         # the shared run workflow moves to its own (ENGINE-PLAN 2.6, E10).
