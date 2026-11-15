@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 ---
 
 # Every message gets a useful answer, and code guards the Planner's free reply
