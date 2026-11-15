@@ -83,6 +83,8 @@ from agent_runtime.parts import (
     HOW_OFTEN,
     NOT_FOLLOWED,
     OWN_TIME,
+    SKIP_PART_NOTE,
+    a_lone_write,
     asks_how_to_start,
     locate,
     only_about_the_app,
@@ -262,7 +264,6 @@ ANSWER_SYSTEM: Final = (
 )
 
 
-SKIP_PART_NOTE = "I can't skip the yes. Nothing is written without a yes."
 TOLD: Final = re.compile(
     r"\blet\s+(?:me|us)\s+know\b|\bkeep\s+(?:me|us)\s+(?:posted|updated|informed)\b",
     re.IGNORECASE,
@@ -407,8 +408,8 @@ def _left_out(span: Span, searching: bool, unquoted_skip: bool) -> CantRow:
     search can't filter by; `TICKET_FIELDS` names it when it knows the field. Words that fit
     no part are listed under what to look for, the contract's catch-all, with a plain note
     that claims no kind for them. Beside a skip the model flagged but couldn't quote, that
-    note says the yes can't be skipped instead, because those words are most likely the
-    skip."""
+    note, and the plain note for an action no line names, say the yes can't be skipped
+    instead, because those words are most likely the skip."""
     text = plain(span.text, TEXT_LIMIT)
     kind: RowKind = span.kind or "look_for"
     if vulnerability_phrase(text) is not None:
@@ -441,10 +442,12 @@ def _left_out(span: Span, searching: bool, unquoted_skip: bool) -> CantRow:
             note = LEFT_OUT_SCHEDULE
     need = need_of(kind, text)
     unreached = need.needs == "new_system" and need.system is not None
+    if unquoted_skip and note in (LEFT_OUT_PART, LEFT_OUT_DO) and not unreached:
+        return CantRow(kind=kind, text=text, note=SKIP_PART_NOTE)
     if note == LEFT_OUT_PART and not unreached:
         # Words the Planner didn't follow name nothing to build, unless they name a system it
         # doesn't reach, as Entra.
-        return CantRow(kind=kind, text=text, note=SKIP_PART_NOTE if unquoted_skip else note)
+        return CantRow(kind=kind, text=text, note=note)
     if need == Need("new_system", None) and span.kind == "look_for" and searching:
         need = Need("new_tool", "Jira")
     return CantRow(
@@ -893,9 +896,14 @@ def _answer_of(
     covered = [skip.covered] if skip.covered is not None else []
     watched = _watch_clauses(read, text) if read.belongs_on_watchlist else []
     writes = _writes(read, text)
-    if read.asks_about == "none" or (
-        task_shaped(read, left_over(read, text, facts)) and not _asks_about_the_app(read, text)
-    ):
+    # A question about the app is no task, but beside a skip the model flagged and couldn't
+    # quote it is read as one, so its words come back crossed, never ticked.
+    as_task = (
+        skip.unquoted
+        if _asks_about_the_app(read, text)
+        else task_shaped(read, left_over(read, text, facts))
+    )
+    if read.asks_about == "none" or as_task:
         task = _read_task(read, text, covered + watched, writes, skip.unquoted)
         refused = _refused_span(task, text) if writes else None
         if refused is not None:
@@ -917,7 +925,9 @@ def _answer_of(
         refused = _refused_span(task, text) if writes else None
         if refused is not None:
             return refused
-    if read.asks_about != "none" and not (read.asks_about == "abilities" and task is not None):
+    if read.asks_about != "none" and not (
+        task is not None and (read.asks_about == "abilities" or a_lone_write(text))
+    ):
         return _about(read, text)
     if task is None:
         return AbilitiesAnswer(how_to_start=asks_how_to_start(text))

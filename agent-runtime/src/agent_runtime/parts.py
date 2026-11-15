@@ -33,7 +33,14 @@ from agent_runtime.contract import (
     WhichSoftwareAnswer,
     WhyStoppedAnswer,
 )
-from agent_runtime.edits import QUESTION_START, STATE_WORDS, edit_marks, switch_marks
+from agent_runtime.edits import (
+    QUESTION_START,
+    STATE_WORDS,
+    asks,
+    commanded,
+    edit_marks,
+    switch_marks,
+)
 from agent_runtime.planner import NOTE_LIMIT, TEXT_LIMIT, plain, visible_words
 from agent_runtime.reading import (
     FILLER,
@@ -42,12 +49,15 @@ from agent_runtime.reading import (
     TaskRead,
     clauses_of,
     days_asked,
+    names_a_yes,
+    negated,
     polite,
     schedule_clashes,
     trim,
 )
 
 NOT_FOLLOWED: Final = "I didn't follow this part."
+SKIP_PART_NOTE: Final = "I can't skip the yes. Nothing is written without a yes."
 OWN_TIME: Final = (
     "The Software watchlist checks all your software together, on one schedule. I can't give "
     "one software its own time yet."
@@ -124,12 +134,13 @@ def parts_of(
     workflows, as the answer read them."""
     text = visible_words(request)
     clauses = [c for c in clauses_of(text) if not polite(text[c[0] : c[1]])]
+    skips = [c for c in clauses if _skips_a_yes(read, text[c[0] : c[1]], facts)]
     if isinstance(answer, STATE_ANSWERS):
         asked = _about_state(text, clauses, _names_of(answer))
-        return _answered(text, clauses, asked or _the_only_question(text, clauses))
+        return _answered(text, clauses, asked or _the_only_question(text, clauses), skips)
     if isinstance(answer, AbilitiesAnswer):
         about = [c for c in clauses if _about_the_app(text[c[0] : c[1]])]
-        return _answered(text, clauses, about)
+        return _answered(text, clauses, about, skips)
     if isinstance(answer, EditAnswer | PauseAnswer | ResumeAnswer):
         marked = (
             edit_marks(read, text, answer, clauses, facts)
@@ -171,6 +182,19 @@ def only_about_the_app(request: str) -> bool:
     text = visible_words(request)
     clauses = [c for c in clauses_of(text) if not polite(text[c[0] : c[1]])]
     return bool(clauses) and all(_about_the_app(text[a:b]) for a, b in clauses)
+
+
+def a_lone_write(request: str) -> bool:
+    """Whether the request is one clause that orders or writes something, as "could you delete
+    the old tickets", which no answer to a question carries out. A question, a "don't" and a
+    write that names a yes are not: the last is a skip of the yes, which its part answers."""
+    text = visible_words(request)
+    alone = [(a, b) for a, b in clauses_of(text) if not polite(text[a:b])]
+    if len(alone) != 1:
+        return False
+    clause = text[alone[0][0] : alone[0][1]]
+    plain_order = not asks(text, alone[0]) and not negated(clause) and not names_a_yes(clause)
+    return plain_order and (_orders(clause) or _writes(clause))
 
 
 def asks_how_to_start(request: str) -> bool:
@@ -222,12 +246,23 @@ def _the_only_question(text: str, clauses: list[Span]) -> list[Span]:
     return clauses if alone and not _orders(alone[0]) and not _writes(alone[0]) else []
 
 
-def _answered(text: str, clauses: list[Span], asked: list[Span]) -> list[RequestPart]:
+def _skips_a_yes(read: TaskRead | None, clause: str, facts: PlannerFacts | None) -> bool:
+    """Whether the clause names a yes and asks for a change, as "stop asking Bob for a yes":
+    a skip of the yes, whichever answer the request got."""
+    return names_a_yes(clause) and commanded(read, clause, facts)
+
+
+def _answered(
+    text: str, clauses: list[Span], asked: list[Span], skips: list[Span]
+) -> list[RequestPart]:
     """An answer to a question sets nothing up: it ticks the clauses it answers. Every other
-    clause keeps a cross: a task or an order beside a clause it answers, asked on its own, gets
-    its own answer, and anything else was not followed."""
+    clause keeps a cross: a skip of the yes says the yes can't be skipped, a task or an order
+    beside a clause it answers, asked on its own, gets its own answer, and anything else was not
+    followed."""
     return [
-        _part(text, c, "will_do")
+        _part(text, c, "cant", "cant_do", SKIP_PART_NOTE)
+        if c in skips
+        else _part(text, c, "will_do")
         if c in asked
         else _part(
             text,
