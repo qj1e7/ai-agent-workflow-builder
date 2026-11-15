@@ -277,6 +277,9 @@ class FakeN8n:
                 self._remember(workflow_id)
                 return httpx.Response(200, json=self.workflows[workflow_id])
             case "GET", ["workflows"]:
+                key = request.headers.get("X-N8N-API-KEY", "")
+                if "workflow:list" not in self.scopes.get(key, {"workflow:list"}):
+                    return httpx.Response(403, json={"message": "Forbidden"})
                 return self._listing(request.url.params)
             case "GET", ["workflows", workflow_id] if workflow_id in self.workflows:
                 return httpx.Response(200, json=self.workflows[workflow_id])

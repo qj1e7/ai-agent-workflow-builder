@@ -360,6 +360,7 @@ PLATFORM_API_SCOPES = (
     "workflow:move",
     "workflow:activate",
     "workflow:deactivate",
+    "workflow:list",
     "execution:read",
     "execution:list",
     "execution:retry",
@@ -368,8 +369,9 @@ PLATFORM_API_SCOPES = (
     "user:delete",
 )
 """Only what the platform's calls need, as n8n 2.42.6's public controllers check them: read covers
-history and versions, activate covers publish, move covers transfer, and the retry of an execution
-has a scope of its own. The user scopes make and end staff accounts (ENGINE-PLAN 2.9)."""
+history and versions, activate covers publish, move covers transfer, list covers a project's
+workflows (E15), and the retry of an execution has a scope of its own. The user scopes make and
+end staff accounts (ENGINE-PLAN 2.9)."""
 KEY_LIFETIME = timedelta(days=3)
 """A key that leaks stops working within days. When n8n refuses it, the platform makes another."""
 STALE_KEY_AGE = timedelta(days=1)
