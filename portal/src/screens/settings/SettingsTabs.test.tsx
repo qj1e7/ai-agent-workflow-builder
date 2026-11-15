@@ -452,24 +452,21 @@ describe('n8n access on People and permissions', () => {
     expect(text(rowOf(html, 'Carol'))).not.toContain(REASON)
   })
 
-  it('disables it with the reason for an Operator who is also an Approver, and for an Approver', () => {
+  it('offers no box that can never be ticked: not for an Approver, nor while an Approver role waits', () => {
     const html = render({ tab: 'people' })
-    for (const name of ['Alice', 'Bob']) {
-      const id = name.toLowerCase()
-      expect(boxFor(html, id), name).toContain('disabled')
-      expect(boxFor(html, id), name).toContain(`aria-describedby="person-${id}-n8n-reason"`)
-      expect(text(rowOf(html, name)), name).toContain(REASON)
-    }
+    for (const id of ['alice', 'bob', DAVE_ID]) expect(html, id).not.toContain(`id="person-${id}-n8n"`)
+    expect(checkboxes(html).filter((box) => box.includes('-n8n') && box.includes('disabled'))).toEqual([])
   })
 
-  it('disables it for a person whose Approver role is waiting for a confirmation', () => {
-    expect(boxFor(render({ tab: 'people' }), DAVE_ID)).toContain('disabled')
+  it('always lets an Operator end it, whatever else the person is waiting for', () => {
+    const people = PEOPLE.map((person) => (person.id === DAVE_ID ? { ...person, n8n_access: true, n8n_account: 'ready' as const } : person))
+    expect(boxFor(render({ tab: 'people', people }), DAVE_ID)).not.toContain('disabled')
   })
 
   it('shows it ticked, and what their n8n account is waiting for, but nothing once the account is ready', () => {
     expect(boxFor(render({ tab: 'people', people: withCarol({}) }), CAROL_ID)).toContain('checked')
     expect(text(rowOf(render({ tab: 'people', people: withCarol({ n8n_account: 'invited' }) }), 'Carol'))).toContain('n8n: waiting for them to set a password')
-    expect(text(rowOf(render({ tab: 'people', people: withCarol({ n8n_account: 'none' }) }), 'Carol'))).toContain('n8n: making the account')
+    expect(text(rowOf(render({ tab: 'people', people: withCarol({ n8n_account: 'none' }) }), 'Carol'))).toContain('n8n: no account yet')
     expect(text(rowOf(render({ tab: 'people', people: withCarol({}) }), 'Carol'))).not.toContain('n8n:')
   })
 
@@ -491,7 +488,7 @@ describe('n8n access on People and permissions', () => {
   })
 
   it('says it was given or ended in plain words', () => {
-    expect(n8nAccessWords('Carol', true)).toBe('Carol has n8n access. Their n8n account is made within a minute.')
+    expect(n8nAccessWords('Carol', true)).toBe('Carol has n8n access.')
     expect(n8nAccessWords('Carol', false)).toBe('Carol’s n8n access ended.')
   })
 

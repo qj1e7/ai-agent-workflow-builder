@@ -52,7 +52,7 @@ export type VersionSchedule = Schemas['VersionSchedule']
 export type CreateUseCase = Schemas['CreateUseCase']
 export type TemplateView = Schemas['TemplateView']
 export type BlockView = Schemas['BlockView']
-export type BlockKind = Schemas['platform_api__builder__models__BlockKind']
+export type BlockKind = Schemas['BlockKind']
 export type ParamSpec = Schemas['ParamSpec']
 
 export type ToolView = Schemas['ToolView']

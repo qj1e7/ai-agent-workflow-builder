@@ -128,7 +128,9 @@ export function rolesWords(person: Pick<PersonOut, 'operator' | 'approver' | 'n8
   return person.n8n_access ? `${roles}, n8n access` : roles
 }
 
-export function canHaveN8nAccess(person: Pick<PersonOut, 'operator' | 'approver' | 'pending_approver'>): boolean {
+/** Ending it is always allowed. Only an Operator who is no Approver, and not waiting to become one, can be given it. */
+export function canChangeN8nAccess(person: Pick<PersonOut, 'operator' | 'approver' | 'pending_approver' | 'n8n_access'>): boolean {
+  if (person.n8n_access) return true
   return person.operator && !person.approver && person.pending_approver === null
 }
 
@@ -268,7 +270,7 @@ export function saidAfterRefusal(said: PeopleSaid, problem: PeopleProblem): Peop
 
 const N8N_ACCOUNT_WORDS: Record<'invited' | 'none', string> = {
   invited: 'n8n: waiting for them to set a password',
-  none: 'n8n: making the account',
+  none: 'n8n: no account yet',
 }
 
 export function personStatusWords(person: PersonOut): string | null {
@@ -313,7 +315,7 @@ export function operatorChangeWords(name: string, operator: boolean): string {
 }
 
 export function n8nAccessWords(name: string, on: boolean): string {
-  return on ? `${name} has n8n access. Their n8n account is made within a minute.` : `${name}’s n8n access ended.`
+  return on ? `${name} has n8n access.` : `${name}’s n8n access ended.`
 }
 
 export function undoneWords(name: string, operator: boolean): string {

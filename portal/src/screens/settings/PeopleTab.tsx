@@ -13,9 +13,8 @@ import {
   approverRemovedWords,
   askedApproverWords,
   canChangeSettings,
-  canHaveN8nAccess,
+  canChangeN8nAccess,
   decidedApproverWords,
-  N8N_OPERATORS_ONLY_WORDS,
   n8nAccessWords,
   ONLY_OPERATORS_WORDS,
   operatorChangeWords,
@@ -41,7 +40,6 @@ export const PEOPLE_LEAD = 'Operators set up workflows and change settings. Appr
 const operatorBoxId = (personId: string) => `person-${personId}-operator`
 const approverBoxId = (personId: string) => `person-${personId}-approver`
 const n8nBoxId = (personId: string) => `person-${personId}-n8n`
-const n8nReasonId = (personId: string) => `person-${personId}-n8n-reason`
 const rowErrorId = (personId: string) => `person-${personId}-error`
 
 const NOTHING_SAID: PeopleSaid = { notice: null, problem: null, left: null }
@@ -273,7 +271,7 @@ function PersonRow({ person, me, operator, confirmation, askedByName, busy, prob
   const operatorTicked = busy?.act === 'operator' && busy.to !== undefined ? busy.to : person.operator
   const approverTicked = busy?.act === 'approver' && busy.to !== undefined ? busy.to : person.approver || pending
   const n8nTicked = busy?.act === 'n8n' && busy.to !== undefined ? busy.to : person.n8n_access
-  const n8nAllowed = canHaveN8nAccess(person)
+  const n8nAllowed = canChangeN8nAccess(person)
   const describedBy = problem ? rowErrorId(person.id) : undefined
   const can = pending ? pendingApproverFor(confirmation, person, me, confirmation?.asked_by_name ?? askedByName) : null
 
@@ -313,28 +311,22 @@ function PersonRow({ person, me, operator, confirmation, askedByName, busy, prob
             />
             Approver<span className="visually-hidden"> for {person.display}</span>
           </label>
-          <label className={styles['check']}>
-            <input
-              type="checkbox"
-              id={n8nBoxId(person.id)}
-              checked={n8nTicked}
-              disabled={!n8nAllowed}
-              aria-describedby={n8nAllowed ? describedBy : n8nReasonId(person.id)}
-              onChange={(event) => onN8nAccess(event.target.checked)}
-            />
-            n8n access<span className="visually-hidden"> for {person.display}</span>
-          </label>
+          {n8nAllowed ? (
+            <label className={styles['check']}>
+              <input
+                type="checkbox"
+                id={n8nBoxId(person.id)}
+                checked={n8nTicked}
+                aria-describedby={describedBy}
+                onChange={(event) => onN8nAccess(event.target.checked)}
+              />
+              n8n access<span className="visually-hidden"> for {person.display}</span>
+            </label>
+          ) : null}
         </div>
       ) : (
         <p className={styles['rolesText']}>{rolesWords(person)}</p>
       )}
-      {operator && !n8nAllowed ? (
-        <div className={styles['rowNote']}>
-          <span className={styles['small']} id={n8nReasonId(person.id)}>
-            {N8N_OPERATORS_ONLY_WORDS}
-          </span>
-        </div>
-      ) : null}
       {me?.id === person.id && person.n8n_access ? <MyN8nLine /> : null}
       {pending ? (
         <div className={styles['rowNote']}>
