@@ -1,3 +1,4 @@
+import logging
 from dataclasses import replace
 from typing import Any, cast
 
@@ -336,3 +337,44 @@ def test_the_answer_route_runs_the_ai_led_planner_when_the_setting_asks() -> Non
 
     assert answered["answer"]["kind"] == "which_software"
     assert chat.offered and chat.offered[0][-1] == "reply"
+
+
+class ProviderRefused(Exception):
+    """A provider's 400, with a key quoted in its free text, as a provider may."""
+
+    status_code = 400
+    body = {
+        "type": "error",
+        "error": {
+            "type": "invalid_request_error",
+            "message": "bad header x-api-key: sk-ant-api03-FAKEKEYFAKEKEY",
+        },
+    }
+
+    def __str__(self) -> str:
+        return self.body["error"]["message"]
+
+
+def test_a_failed_turn_logs_the_status_and_the_error_type_never_the_providers_words(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    with caplog.at_level(logging.WARNING):
+        result, _ = run("hi", ProviderRefused())
+
+    assert shown(result) == DidntFollowAnswer()
+    assert "status 400, invalid_request_error" in caplog.text
+    assert "FAKEKEY" not in caplog.text and "x-api-key" not in caplog.text
+
+
+def test_a_turn_with_no_tool_call_goes_back_to_the_model_once() -> None:
+    result, chat = run(
+        "hi",
+        AIMessage(content="Hello there."),
+        tool("reply", form="answer", text="Hello. Type what you want done in the box on Home."),
+        then=[CLEAN],
+    )
+
+    assert isinstance(shown(result), FreeReplyAnswer)
+    assert "exactly one tool" in result.errors[0]
+    retry = next(c for c in chat.calls if any(m.text == "Hello there." for m in c))
+    assert retry[-1].type == "human" and "exactly one tool" in retry[-1].text

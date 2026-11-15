@@ -670,7 +670,9 @@ def _lead(messages: list[BaseMessage], chat_for: ChatFor) -> AIMessage | ModelPr
     try:
         model = chat_for(LEAD_TIMEOUT_SECONDS)
         tools = [offered(t) for t in TOOLS]
-        bound = model.bind_tools(tools, tool_choice="any", parallel_tool_calls=False)
+        # Sonnet 5.5 refuses a forced tool choice, so the briefing asks for one call and a turn
+        # with none goes back to the model like any call that can't be used.
+        bound = model.bind_tools(tools, parallel_tool_calls=False)
         system = _system(BRIEFING, model)
         reply = bound.invoke([system, *messages])
     except Exception as error:
@@ -679,23 +681,40 @@ def _lead(messages: list[BaseMessage], chat_for: ChatFor) -> AIMessage | ModelPr
     return reply
 
 
+ERROR_TYPES: Final = frozenset(
+    {
+        "invalid_request_error",
+        "authentication_error",
+        "permission_error",
+        "not_found_error",
+        "rate_limit_error",
+        "api_error",
+        "overloaded_error",
+    }
+)
+"""The provider's structured error types the log may name. Its free-text message never goes in
+the log: it can quote the request, and with it a key."""
+
+
 def _shape(error: Exception) -> str:
-    """What a provider said was wrong with the request's shape. Only an invalid-request error's
-    own message is kept: it names fields of the request, never the key or the address."""
+    """The HTTP status and the provider's structured error type, when the type is a known one."""
+    status: object = getattr(error, "status_code", None)
     body: object = getattr(error, "body", None)
     found = cast(dict[str, object], body).get("error") if isinstance(body, dict) else None
-    if not isinstance(found, dict):
-        return ""
-    said = cast(dict[str, object], found)
-    if said.get("type") != "invalid_request_error":
-        return ""
-    return f": {str(said.get('message', ''))[:300]}"
+    kind = cast(dict[str, object], found).get("type") if isinstance(found, dict) else None
+    shown = [f"status {status}"] if isinstance(status, int) else []
+    shown += [str(kind)] if kind in ERROR_TYPES else []
+    return f" ({', '.join(shown)})" if shown else ""
 
 
-def _told(message: AIMessage, why: str) -> list[ToolMessage]:
+def _told(message: AIMessage, why: str) -> list[BaseMessage]:
+    """Why the turn can't be used: an error for each call it made, or, for a turn with no call,
+    a message from the platform, so the model always answers the last word."""
     ids = [c["id"] or "" for c in message.tool_calls] + [
         c["id"] or "" for c in message.invalid_tool_calls
     ]
+    if not ids:
+        return [HumanMessage(f"The platform did not use that: {why}")]
     return [ToolMessage(f"Not used: {why}", tool_call_id=i, status="error") for i in ids]
 
 
