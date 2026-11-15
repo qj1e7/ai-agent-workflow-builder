@@ -107,6 +107,23 @@ export class Backend {
     return answer.body
   }
 
+  /** A schedule change from the version a page has just read, as the Portal sends it. A change with no version is refused. */
+  async saveWorkflowSchedule(user: string, useCaseId: string, schedule: { day: string; at: string; via?: string }): Promise<Answer<Json>> {
+    const { version } = await this.get<{ version: number }>(user, `/api/v1/use-cases/${useCaseId}`)
+    return this.send('PUT', user, `/api/v1/use-cases/${useCaseId}/schedule`, { ...schedule, expected_version: version })
+  }
+
+  async saveWatchlistSchedule(user: string, schedule: { day: string; at: string }): Promise<Answer<Json>> {
+    const { watchlist } = await this.get<{ watchlist: { version: number } | null }>(user, '/api/v1/watchlist')
+    return this.send('PUT', user, '/api/v1/watchlist/schedule', { ...schedule, expected_version: watchlist?.version ?? 1 })
+  }
+
+  /** Turns the watchlist's schedule off from the version read just now. With no watchlist there is nothing to turn off. */
+  async turnOffWatchlistSchedule(user: string): Promise<void> {
+    const { watchlist } = await this.get<{ watchlist: { version: number } | null }>(user, '/api/v1/watchlist')
+    if (watchlist) await this.delete(user, `/api/v1/watchlist/schedule?expected_version=${String(watchlist.version)}`)
+  }
+
   /** Empties the watchlist, adds the software afresh with no ticket history and turns the schedule off. Answers the check's id. */
   async freshWatchlist(user = 'alice', software: readonly Software[] = [LANGGRAPH]): Promise<string> {
     const { watchlist } = await this.get<{ watchlist: { use_case_id: string; software: { id: string }[] } | null }>(user, '/api/v1/watchlist')
@@ -114,7 +131,7 @@ export class Backend {
     for (const item of watchlist?.software ?? []) await this.delete(user, `/api/v1/watchlist/software/${item.id}`)
     let useCaseId = ''
     for (const item of software) useCaseId = (await this.post<{ use_case_id: string }>(user, '/api/v1/watchlist/software', item, {}, [201])).use_case_id
-    await this.delete(user, '/api/v1/watchlist/schedule', [200, 404])
+    await this.turnOffWatchlistSchedule(user)
     return useCaseId
   }
 
@@ -140,7 +157,7 @@ export class Backend {
   /** Adds one more software to the watchlist as it is, so a second check proposes it while the first still waits. */
   async addAndCheck(user: string, software: Software): Promise<string> {
     const { use_case_id: useCaseId } = await this.post<{ use_case_id: string }>(user, '/api/v1/watchlist/software', software, {}, [201])
-    await this.delete(user, '/api/v1/watchlist/schedule', [200, 404])
+    await this.turnOffWatchlistSchedule(user)
     return this.checkNow(user, useCaseId)
   }
 

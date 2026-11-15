@@ -831,7 +831,7 @@ test('@watchlist-resume a watchlist paused through the API can be resumed on the
   test.setTimeout(300_000)
   await withBackend(async (backend, api) => {
     const watchlist = await backend.freshWatchlist('alice')
-    expect((await call(api, 'alice', 'PUT', '/api/v1/watchlist/schedule', { day: 'monday', at: '09:00' })).status).toBe(200)
+    expect((await backend.saveWatchlistSchedule('alice', { day: 'monday', at: '09:00' })).status).toBe(200)
     const facts: Record<string, unknown> = { watchlist }
     for (const phone of [false, true]) {
       const width = phone ? 390 : 1440

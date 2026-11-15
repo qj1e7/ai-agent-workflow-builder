@@ -55,7 +55,8 @@ def seed() -> dict[str, str]:
         if error.code != 409:
             raise
     use_case_id = watchlist["use_case_id"]
-    call("DELETE", "/api/v1/watchlist/schedule")
+    known = call("GET", "/api/v1/watchlist")["watchlist"]["version"]
+    call("DELETE", f"/api/v1/watchlist/schedule?expected_version={known}")
     started = call(
         "POST",
         f"/api/v1/use-cases/{use_case_id}/runs",

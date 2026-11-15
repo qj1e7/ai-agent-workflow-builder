@@ -177,7 +177,7 @@ _Avoid_: EOL, deprecated
 The person who last saved a watchlist's schedule. Every scheduled check counts as their work.
 
 **Held schedule**:
-A schedule whose owner has left the People list or is no longer an Operator. It starts no run, and each slot it misses is used up, until the owner is an Operator again or another Operator saves the schedule and so becomes its owner.
+A schedule whose owner has left the People list or is no longer an Operator. It starts no run: each time its Schedule Trigger fires, our API ends the slot quietly, until the owner is an Operator again or another Operator saves the schedule and so becomes its owner. A takeover that saves the same schedule publishes no version, so the next scheduled run's "started by" still names the publisher of the version in use (D5), while the Portal names the new owner under When. Both are parties, so neither can approve that run.
 _Avoid_: Paused (a workflow is paused), turned off (an Operator turns a schedule off)
 
 ### Running

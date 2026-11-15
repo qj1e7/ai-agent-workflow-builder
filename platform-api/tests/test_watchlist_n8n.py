@@ -2,13 +2,15 @@
 the Schedule Trigger, and changes its schedule there under the version compare (2.5). The real
 drafts store runs on a fake n8n."""
 
+from copy import deepcopy
 from dataclasses import dataclass, field
 from typing import Any, LiteralString
 
 import pytest
 
 from platform_api.builder import Builder, Watchlist
-from platform_api.builder.models import AddSoftware, ScheduleIn, WatchlistView
+from platform_api.builder.models import AddSoftware, ScheduleSaveIn, WatchlistView
+from platform_api.builder.versions import ChangedSince
 from platform_api.builder.watchlist import (
     AlreadyOnN8n,
     Move,
@@ -26,7 +28,7 @@ from platform_api.orchestration import (
 )
 from platform_api.shared import Principal, RunId, UseCaseId
 from tests.fake_n8n import FakeN8n
-from tests.support import ALICE, CAROL
+from tests.support import ALICE, CAROL, schedule_owners_listed
 from tests.test_n8n_builder import Drafts
 from tests.test_watchlist_builder import FakeFacts
 
@@ -82,7 +84,8 @@ class World:
 
 
 @pytest.fixture
-def world(db: Database) -> World:
+async def world(db: Database) -> World:
+    await schedule_owners_listed(db, ALICE, CAROL)
     return world_on(db)
 
 
@@ -104,8 +107,10 @@ def langgraph() -> AddSoftware:
 
 async def watchlist_before_the_move(world: World) -> None:
     """Made before the move, with Carol's Tuesday 07:30 schedule."""
-    await world.shared.add(ALICE, langgraph())
-    await world.shared.save_schedule(CAROL, ScheduleIn(day="tuesday", at="07:30"))
+    added = await world.shared.add(ALICE, langgraph())
+    assert isinstance(added, WatchlistView)
+    tuesday = ScheduleSaveIn(day="tuesday", at="07:30", expected_version=added.version)
+    await world.shared.save_schedule(CAROL, tuesday)
 
 
 async def test_the_move_copies_the_schedule_into_the_trigger_and_puts_it_live(world: World):
@@ -214,7 +219,8 @@ async def test_a_new_schedule_changes_the_trigger_in_n8n_first(world: World):
     moved = await world.on_n8n.move_to_n8n()
     assert isinstance(moved, MovedToN8n)
 
-    saved = await world.on_n8n.save_schedule(ALICE, ScheduleIn(day="friday", at="08:00"))
+    friday = ScheduleSaveIn(day="friday", at="08:00", expected_version=moved.version)
+    saved = await world.on_n8n.save_schedule(ALICE, friday)
 
     assert isinstance(saved, WatchlistView) and saved.version == 3
     assert world.rule(moved.workflow_id) == {
@@ -229,9 +235,30 @@ async def test_a_new_schedule_changes_the_trigger_in_n8n_first(world: World):
     assert stored["published_by"] == ALICE.user_id
     assert saved.schedule is not None and saved.schedule.owner == "alice"
 
-    off = await world.on_n8n.turn_off_schedule(ALICE)
+    off = await world.on_n8n.turn_off_schedule(ALICE, saved.version)
     assert isinstance(off, WatchlistView) and off.schedule is None
     assert world.rule(moved.workflow_id) is None, "nothing in n8n starts it on a schedule"
+
+
+async def test_a_schedule_change_from_an_old_read_saves_nothing_in_n8n_or_here(world: World):
+    await watchlist_before_the_move(world)
+    moved = await world.on_n8n.move_to_n8n()
+    assert isinstance(moved, MovedToN8n)
+    friday = ScheduleSaveIn(day="friday", at="08:00", expected_version=2)
+    assert isinstance(await world.on_n8n.save_schedule(ALICE, friday), WatchlistView)
+    in_n8n = deepcopy(world.n8n.workflows[moved.workflow_id])
+
+    monday = ScheduleSaveIn(day="monday", at="09:00", expected_version=2)
+    refused = await world.on_n8n.save_schedule(CAROL, monday)
+
+    assert refused == ChangedSince()
+    assert world.n8n.workflows[moved.workflow_id] == in_n8n
+    view = await world.view()
+    assert view.version == 3
+    assert view.schedule is not None and (view.schedule.day, view.schedule.owner) == (
+        "friday",
+        "alice",
+    )
 
 
 async def test_a_schedule_change_over_an_edit_in_n8n_saves_nothing(world: World):
@@ -239,8 +266,9 @@ async def test_a_schedule_change_over_an_edit_in_n8n_saves_nothing(world: World)
     moved = await world.on_n8n.move_to_n8n()
     assert isinstance(moved, MovedToN8n)
     world.n8n.edit(moved.workflow_id)
+    friday = ScheduleSaveIn(day="friday", at="08:00", expected_version=moved.version)
 
-    refused = await world.on_n8n.save_schedule(ALICE, ScheduleIn(day="friday", at="08:00"))
+    refused = await world.on_n8n.save_schedule(ALICE, friday)
 
     assert isinstance(refused, ChangedInN8n)
     view = await world.view()
