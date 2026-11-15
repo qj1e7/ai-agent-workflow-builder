@@ -18,7 +18,6 @@ from platform_api.orchestration import (
     GITHUB_RELEASES,
     NODE_TYPES,
     NOTHING_TO_CHANGE_BLOCK,
-    TIME_ZONE,
     TYPE_OF,
     WATCHLIST_CHECKER,
     WATCHLIST_PLACE,
@@ -47,7 +46,6 @@ ROW = 200
 TYPE_VERSIONS: Mapping[BlockKind, float] = {"schedule": 1.2, "branch": 2}
 RETRY = {"retryOnFail": True, "maxTries": 3, "waitBetweenTries": 2000}
 SETTINGS = {
-    "timezone": TIME_ZONE,
     "saveManualExecutions": True,
     "saveExecutionProgress": True,
     "executionOrder": "v1",
@@ -98,6 +96,8 @@ class LayoutPlan:
     schedule: Schedule | None
     agents: Sequence[PlannedAgent]
     error_workflow: str
+    time_zone: str
+    """The team time zone, which the workflow and its Schedule Trigger run on."""
 
 
 def lay_out(plan: LayoutPlan) -> Document:
@@ -151,7 +151,11 @@ class _Canvas:
             "name": plan.name,
             "nodes": self.nodes,
             "connections": self.connections,
-            "settings": {**SETTINGS, "errorWorkflow": plan.error_workflow},
+            "settings": {
+                "timezone": plan.time_zone,
+                **SETTINGS,
+                "errorWorkflow": plan.error_workflow,
+            },
         }
 
 

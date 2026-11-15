@@ -1,6 +1,6 @@
 import { OPEN_RUN_AGAIN_WORDS } from '../../api/errors'
 import { connectorLabel, failureReasonLabel, refusalLabel, starterName } from '../../api/labels'
-import { nextRunAt } from '../workflows/times'
+import { inTeamZone, nextRunAt, teamZone } from '../workflows/times'
 import type { SessionKind } from '../../api/session'
 import type { ApprovalStepView, Day, FailureReason, Refusal, RunOutcome, RunView, UseCaseView, WriteActionView } from '../../api/types'
 import { PRODUCT } from '../../shell/product'
@@ -82,28 +82,27 @@ export function writeLabel(connector: string | null): string {
   return connector ? `Write in ${connectorLabel(connector)}` : 'Write the changes'
 }
 
-const TIME_ZONE = 'Asia/Singapore'
-const dayAndTime = new Intl.DateTimeFormat('en-GB', { weekday: 'short', hour: 'numeric', minute: '2-digit', hourCycle: 'h23', timeZone: TIME_ZONE })
+const dayAndTime = inTeamZone({ weekday: 'short', hour: 'numeric', minute: '2-digit', hourCycle: 'h23' })
 
-/** "Fri 9:14", in Singapore time. */
+/** "Fri 9:14", in the team time zone. */
 export function shortTime(iso: string): string {
   const at = new Date(iso)
   if (Number.isNaN(at.getTime())) return ''
-  const part = (type: Intl.DateTimeFormatPartTypes) => dayAndTime.formatToParts(at).find((p) => p.type === type)?.value ?? ''
+  const part = (type: Intl.DateTimeFormatPartTypes) => dayAndTime().formatToParts(at).find((p) => p.type === type)?.value ?? ''
   return `${part('weekday')} ${Number(part('hour'))}:${part('minute')}`
 }
 
-const logParts = new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hourCycle: 'h23', timeZone: TIME_ZONE })
+const logParts = inTeamZone({ weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hourCycle: 'h23' })
 
 /** "Tue 27 Oct" and "8:00", built from their parts, because browsers differ on the commas and the leading zero. */
 function dayAndClock(at: number): { day: string; clock: string } {
-  const parts = logParts.formatToParts(at)
+  const parts = logParts().formatToParts(at)
   const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)?.value ?? ''
   return { day: `${part('weekday')} ${part('day')} ${part('month')}`, clock: `${Number(part('hour'))}:${part('minute')}` }
 }
 
 /**
- * When each entry in a run's log happened, in Singapore time (spec 10.2). The first says its day, "Tue 27 Oct, 8:00", and
+ * When each entry in a run's log happened, in the team time zone (spec 10.2). The first says its day, "Tue 27 Oct, 8:00", and
  * the rest only the time, unless the day changed. "X joined" marks where agents come in, so it has no time of its own.
  */
 export function logTimes(items: readonly ChatItem[]): ReadonlyMap<number, string> {
@@ -370,7 +369,7 @@ const LATE_MINUTES = 10
 function scheduleStarted(schedule: Schedule, startedAt: string): boolean {
   const at = new Date(startedAt)
   if (Number.isNaN(at.getTime())) return false
-  const parts = new Intl.DateTimeFormat('en-GB', { timeZone: schedule.time_zone || TIME_ZONE, weekday: 'long', hour: 'numeric', minute: '2-digit', hourCycle: 'h23' }).formatToParts(at)
+  const parts = new Intl.DateTimeFormat('en-GB', { timeZone: schedule.time_zone || teamZone(), weekday: 'long', hour: 'numeric', minute: '2-digit', hourCycle: 'h23' }).formatToParts(at)
   const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)?.value ?? ''
   const day = part('weekday').toLowerCase()
   const [hour = NaN, minute = NaN] = schedule.at.split(':').map(Number)
@@ -411,7 +410,7 @@ export interface Settled {
   readonly text: string
 }
 
-/** "at 9:04" today, else "on Tue 3 Nov at 9:04", in Singapore time. */
+/** "at 9:04" today, else "on Tue 3 Nov at 9:04", in the team time zone. */
 export function settledWhen(at: number, now: Date): string {
   const { day, clock } = dayAndClock(at)
   return day === dayAndClock(now.getTime()).day ? `at ${clock}` : `on ${day} at ${clock}`
@@ -482,11 +481,11 @@ export interface LogRow {
   readonly urls: Readonly<Record<string, string>> | undefined
 }
 
-const clockParts = new Intl.DateTimeFormat('en-GB', { hour: 'numeric', minute: '2-digit', second: '2-digit', hourCycle: 'h23', timeZone: TIME_ZONE })
+const clockParts = inTeamZone({ hour: 'numeric', minute: '2-digit', second: '2-digit', hourCycle: 'h23' })
 
-/** "8:00:31", in Singapore time. */
+/** "8:00:31", in the team time zone. */
 export function logClock(at: number): string {
-  const parts = clockParts.formatToParts(at)
+  const parts = clockParts().formatToParts(at)
   const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)?.value ?? ''
   return `${Number(part('hour'))}:${part('minute')}:${part('second')}`
 }

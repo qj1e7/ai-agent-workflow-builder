@@ -235,7 +235,10 @@ ANSWER_SYSTEM: Final = (
     "of the task, such as asking a ticket's owner in Teams, and one that only says the task "
     "runs by itself, "
     "automatically, hands-free, on autopilot, set and forget, or on a schedule, naming no "
-    'person. "Ask the team" is a button on the platform that asks the team for a new tool, so '
+    "person. So does one that makes a change when something is found, such as raising, "
+    'creating or filing a ticket "if there\'s a new one" or "when a release comes out", '
+    "because that change waits for a yes like any other. "
+    '"Ask the team" is a button on the platform that asks the team for a new tool, so '
     "a request with no change in it, such as \"don't ask the team, just tell me what you can "
     'do", skips nobody.\n'
     '- only_me: the words name only the staff member themselves, by "me", "my" or "I", and no '
@@ -288,26 +291,40 @@ def _refused(text: str, said: str) -> RefusedAnswer:
 @dataclass(frozen=True)
 class _Skip:
     """What code makes of the model's answer to the skip question: the quote of the staff
-    member's own attention, accepted (covered) or unverified, or a refusal."""
+    member's own attention, accepted (covered) or unverified, a refusal, or a skip of an
+    Approver's yes the model flagged but quoted no words of the request for (unquoted)."""
 
     refused: RefusedAnswer | None = None
     covered: tuple[int, int] | None = None
     unverified: str | None = None
+    unquoted: bool = False
 
 
 def _skip_verdict(skip: SkipRead, text: str) -> _Skip:
-    """Code only ever refuses more than the model, never less. An Approver's or anyone else's
-    yes is refused, naming the request's own words when the model quoted them, else the
-    request, whatever code makes of the quote. The staff member's own attention is theirs to
-    skip only when the quote is in the request and names them and nobody else: then its words
-    are covered, because the Operator is never the Approver. A quote that names a yes, someone
-    else or a name is that someone's yes skipped. A quote that names nobody, or none in the
-    request, covers nothing and is refused unless the coverage check finds the words it meant."""
+    """The model's answer to the skip question, held to the request's own words. Every write
+    still waits for an Approver's yes at the write gateway (ADR 0026), so this check keeps the
+    Planner's words honest. It is not the gate. An Approver's or anyone else's yes is refused
+    naming the words the model quoted, whatever code makes of the quote. When the model quotes
+    no words of the request, nothing is refused, because a refusal would tell the person they
+    asked for something they never wrote. The word rule has already refused every phrase it
+    knows, words that name a yes or a person still come back through the coverage check, and
+    the words the Planner didn't follow say the yes can't be skipped. The staff member's own
+    attention is theirs to skip only when the quote is in the request and names them and
+    nobody else: then its words are covered, because the Operator is never the Approver. A
+    quote that names a yes, someone else or a name is that someone's yes skipped. A quote in
+    the request that names nobody covers nothing and is refused, unless the coverage check
+    first refuses the words it meant. With no quote in the request, nothing is covered."""
     if skip.whose == "nobody":
         return _Skip()
     quote = _theirs(text, skip.said)
     if skip.whose == "an_approver_or_anyone_else":
-        return _Skip(refused=_refused(text, quote) if quote is not None else _refused(text, text))
+        if quote is None:
+            log.warning(
+                "the model said a request skips an Approver's yes but quoted none of its "
+                "words, so it is not refused"
+            )
+            return _Skip(unquoted=True)
+        return _Skip(refused=_refused(text, quote))
     if quote is None:
         return _Skip()
     at = text.casefold().find(quote.casefold())
@@ -384,12 +401,14 @@ def _writes(read: TaskRead, text: str) -> bool:
     return commands or read_a_ticket
 
 
-def _left_out(span: Span, searching: bool) -> CantRow:
+def _left_out(span: Span, searching: bool, unquoted_skip: bool) -> CantRow:
     """The can't row for words nothing explains: the person's own words, with why, and what a
     fix needs. A span in a ticket search that names no other system is a Jira detail the
     search can't filter by; `TICKET_FIELDS` names it when it knows the field. Words that fit
     no part are listed under what to look for, the contract's catch-all, with a plain note
-    that claims no kind for them."""
+    that claims no kind for them. Beside a skip the model flagged but couldn't quote, that
+    note says the yes can't be skipped instead, because those words are most likely the
+    skip."""
     text = plain(span.text, TEXT_LIMIT)
     kind: RowKind = span.kind or "look_for"
     if vulnerability_phrase(text) is not None:
@@ -425,7 +444,7 @@ def _left_out(span: Span, searching: bool) -> CantRow:
     if note == LEFT_OUT_PART and not unreached:
         # Words the Planner didn't follow name nothing to build, unless they name a system it
         # doesn't reach, as Entra.
-        return CantRow(kind=kind, text=text, note=note)
+        return CantRow(kind=kind, text=text, note=SKIP_PART_NOTE if unquoted_skip else note)
     if need == Need("new_system", None) and span.kind == "look_for" and searching:
         need = Need("new_tool", "Jira")
     return CantRow(
@@ -475,15 +494,18 @@ def _watch_instead(cant: list[CantRow], read: TaskRead, request: str) -> Watchli
 
 @dataclass(frozen=True)
 class _Task:
-    """A task read once: the rows code rendered, the words no structure explains, and whether
-    a ticket search is part of it."""
+    """A task read once: the rows code rendered, the words no structure explains, whether a
+    ticket search is part of it, and whether the model flagged a skip it couldn't quote."""
 
     rows: list[UnderstoodRow]
     spans: list[Span]
     searching: bool
+    unquoted_skip: bool
 
 
-def _read_task(read: TaskRead, text: str, covered: list[tuple[int, int]], writes: bool) -> _Task:
+def _read_task(
+    read: TaskRead, text: str, covered: list[tuple[int, int]], writes: bool, unquoted_skip: bool
+) -> _Task:
     rendered = [render_schedule(read.schedule, text)]
     if read.search is not None:
         rendered.append(render_search(read.search, text))
@@ -493,7 +515,7 @@ def _read_task(read: TaskRead, text: str, covered: list[tuple[int, int]], writes
         rendered.append(render_place(read.place, text))
     said: dict[RowKind, tuple[int, int] | None] = {r.row.kind: r.said for r in rendered}
     spans = leftovers(text, rendered, covered, said, writes)
-    return _Task(arrange([r.row for r in rendered]), spans, read.search is not None)
+    return _Task(arrange([r.row for r in rendered]), spans, read.search is not None, unquoted_skip)
 
 
 def _refused_span(task: _Task, text: str) -> RefusedAnswer | None:
@@ -516,7 +538,7 @@ def _from_task(read: TaskRead, task: _Task, text: str) -> PlannerAnswer:
     card = SetupCardAnswer(name=name, rows=task.rows) if offered else None
     if not task.spans:
         return card if card is not None else AbilitiesAnswer()
-    cant = [_left_out(span, task.searching) for span in task.spans]
+    cant = [_left_out(span, task.searching, task.unquoted_skip) for span in task.spans]
     if card is not None and _only_fields(cant):
         return PartAnswer(name=name, rows=task.rows, cant=cant)
     watch = None if _only_fields(cant) else _watch_instead(cant, read, text)
@@ -697,8 +719,11 @@ def _watch_rows(
     for clause in _change_clauses(changes):
         found.append((_stretch(request, clause), _change_row(clause)))
     # Words beside the watch stand beside no part of a task, so a part is never named for them.
-    for span in task.spans if task is not None else []:
-        found.append(((span.start, span.end), _left_out(replace(span, kind=None), False)))
+    if task is not None:
+        found += [
+            ((s.start, s.end), _left_out(replace(s, kind=None), False, task.unquoted_skip))
+            for s in task.spans
+        ]
     kept: list[tuple[tuple[int, int], CantRow]] = []
     for at, row in found:
         if not any(at[0] < b and a < at[1] for (a, b), _ in kept):
@@ -871,7 +896,7 @@ def _answer_of(
     if read.asks_about == "none" or (
         task_shaped(read, left_over(read, text, facts)) and not _asks_about_the_app(read, text)
     ):
-        task = _read_task(read, text, covered + watched, writes)
+        task = _read_task(read, text, covered + watched, writes, skip.unquoted)
         refused = _refused_span(task, text) if writes else None
         if refused is not None:
             return refused
@@ -881,7 +906,11 @@ def _answer_of(
         answer = _watchlist(read, task, text, watch_schedule)
         if answer is not None:
             return answer
-    unwatched = _read_task(read, text, covered, writes) if task is not None and watched else None
+    unwatched = (
+        _read_task(read, text, covered, writes, skip.unquoted)
+        if task is not None and watched
+        else None
+    )
     if unwatched is not None and _offers(unwatched):
         # The card it offers watches nothing, so the watch's own words come back beside it.
         task = unwatched

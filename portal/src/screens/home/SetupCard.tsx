@@ -60,6 +60,7 @@ import { ASKED_NEXT, partMark, type Mark } from './parts'
 import { crossParts, PartsList, type Part } from './PartsList'
 import { CardLive, useMainButton } from './primary'
 import styles from './SetupCard.module.css'
+import { teamPlace, teamTime } from '../workflows/times'
 
 /** Where a set-up card starts: the Planner's rows, or a saved draft. */
 export interface CardStart {
@@ -205,7 +206,7 @@ function WhenPicker({ when, problems, focus, onWhen, onDone }: { when: When; pro
           </div>
         ) : null}
         <div className={styles['field']}>
-          <label htmlFor={`${id}-at`}>Time, Singapore</label>
+          <label htmlFor={`${id}-at`}>Time, {teamPlace()}</label>
           <input id={`${id}-at`} type="time" step={300} value={when.at} aria-invalid={problems.at ? true : undefined} onKeyDown={leave} onChange={(event) => onWhen({ ...when, at: event.target.value })} />
         </div>
       </div>
@@ -618,7 +619,9 @@ function SettingUp({ start }: { start: CardStart }) {
           mark: 'ok' as const,
           body: (
             <>
-              <span>{timeText ?? ''}, Singapore time</span>
+              <span>
+                {timeText ?? ''}, {teamTime()}
+              </span>
               <button type="button" className={styles['link']} aria-expanded={editing === 'when'} onClick={() => open('when')}>
                 Change<span className="visually-hidden"> when it runs</span>
               </button>

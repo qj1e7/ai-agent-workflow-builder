@@ -30,6 +30,8 @@ from platform_api.builder.models import (
     WatchlistOut,
     WatchlistView,
 )
+from platform_api.builder.n8n_http import HoldOut
+from platform_api.builder.n8n_view import RunN8nView, UseCaseN8nView
 from platform_api.builder.planner import (
     AnswerIn,
     CapabilitiesView,
@@ -85,6 +87,7 @@ from platform_api.orchestration.people_http import (
     ConfirmationDecisionIn,
     ConfirmationsOut,
     DecideRefusalOut,
+    MyN8nOut,
     PeopleOut,
     PeopleRefusalOut,
     PersonOut,
@@ -298,6 +301,15 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "people/decision.confirmed.json": TypeAdapter(ConfirmationDecidedOut),
     "people/decide-refusal.you_asked.json": TypeAdapter(DecideRefusalOut),
     "settings/history.json": TypeAdapter(SettingsHistoryOut),
+    "people/person.n8n-access.json": TypeAdapter(PersonOut),
+    "people/refusal.n8n_operators_only.json": TypeAdapter(PeopleRefusalOut),
+    "people/me-n8n.invited.json": TypeAdapter(MyN8nOut),
+    "people/me-n8n.ready.json": TypeAdapter(MyN8nOut),
+    "builder/use-case.n8n.json": TypeAdapter(UseCaseN8nView),
+    "builder/use-case.n8n.held.json": TypeAdapter(UseCaseN8nView),
+    "builder/opened-in-n8n.json": TypeAdapter(HoldOut),
+    "builder/run.n8n.waiting.json": TypeAdapter(RunN8nView),
+    "builder/run.n8n.ended.json": TypeAdapter(RunN8nView),
 }
 
 

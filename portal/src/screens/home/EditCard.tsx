@@ -41,6 +41,7 @@ import runStyles from '../run/RunPage.module.css'
 import styles from './EditCard.module.css'
 import partsStyles from './PartsList.module.css'
 import setup from './SetupCard.module.css'
+import { teamPlace } from '../workflows/times'
 
 type Focus = 'heading' | 'save' | 'undo'
 
@@ -297,7 +298,7 @@ export function EditCard({ reply, typed, page, say, now, about }: EditCardProps)
           if (onStep) pick({ at: another }, 'save')
         }}
       >
-        <label htmlFor={`${id}-another`}>Time, Singapore</label>
+        <label htmlFor={`${id}-another`}>Time, {teamPlace()}</label>
         <input id={`${id}-another`} type="time" step={300} value={another} aria-describedby={`${id}-another-help`} onChange={(event) => setAnother(event.target.value)} />
         <Button type="submit">Use this time</Button>
         <span id={`${id}-another-help`} className={styles['note']}>

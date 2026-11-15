@@ -72,7 +72,11 @@ def added_line(write: str) -> str:
 
 
 def check_draft(
-    laid: Mapping[str, Any], key: str, error_workflow: str, known: KnownOptions | None = None
+    laid: Mapping[str, Any],
+    key: str,
+    error_workflow: str,
+    time_zone: str,
+    known: KnownOptions | None = None,
 ) -> Checked | DraftRefused:
     """The checker puts a yes before each write, then grades the result. Only a draft that grades
     Safe is saved: a layout that needs a fix, or a write the checker could not put behind one
@@ -82,7 +86,7 @@ def check_draft(
         with_yes = add_yes(laid, key)
     except Unreadable as unreadable:
         return DraftRefused((Finding("needs_a_fix", None, str(unreadable)),))
-    graded = grade(with_yes.document, error_workflow, known)
+    graded = grade(with_yes.document, error_workflow, time_zone, known)
     if graded.grade != "safe":
         return DraftRefused(graded.findings)
     lines: list[tuple[LineKind, str]] = [("check", FIT)]

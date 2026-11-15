@@ -72,6 +72,10 @@ _Avoid_: Drawer, modal
 **Question answer**:
 The Planner's reply to a question about the person's own data, such as how many software are on the watchlist. The model writes it in its own words from a facts snapshot read when the question arrives, and only from those facts. It names the sections it used, and it never offers to act. It is the one answer whose text is not fixed (ADR 0042).
 
+**Free reply**:
+The Planner's reply in its own words to a message that no card or fixed answer fits: a direct answer, one clarifying question with choices to tap, or a can't with the closest thing the platform can do. It never writes, and it never says that anything was done (ADR 0047, proposed).
+_Avoid_: Chat reply, fallback, free text
+
 **Capability**:
 Something the platform can do for a workflow, such as reading Jira tickets. It is in exactly one state: Ready, Needs setup, Not answering, Planned or Unsupported. Every screen and the Planner read the same state.
 _Avoid_: Ability, feature (in the app)
@@ -115,7 +119,7 @@ _Avoid_: Webhook
 A workflow someone built in n8n from our nodes and then registered in the Portal, rather than one the Planner laid out. Until an Operator names its Approvers, any Approver on the team decides its requests (ADR 0027). Planned.
 
 **Holder**:
-The person who has a workflow open in n8n, in their own n8n project. A run they start by hand in n8n is their work, so they cannot approve it. Take back ends the hold. Planned (ADR 0027).
+The person who has a workflow open in n8n, in their own n8n project. A run they start by hand in n8n is their work, so they cannot approve it. Take back ends the hold (ADR 0027).
 
 **Version compare**:
 The check around every change our platform makes to a workflow in n8n. The workflow must still be the version the Portal last stored, and the change must read back as sent. When someone changed it in n8n since, the platform shows "Changed again since, in n8n." (ADR 0027). Planned.
@@ -317,7 +321,7 @@ The platform's own n8n workflow, `run_failure_reporter`, that n8n starts when an
 _Avoid_: Error handler, alert workflow
 
 **Daily self-test**:
-The platform's own n8n workflow, `self_test_failure`, that n8n runs once a day at 06:00 Singapore time and that fails on purpose. Its failure travels the error workflow to our API like a run's would, and our API keeps when it arrived. It is never a run. `/healthz/ready` warns when none arrived in 26 hours, because then the error workflow is not reporting.
+The platform's own n8n workflow, `self_test_failure`, that n8n runs once a day at 06:00 in the team time zone and that fails on purpose. Its failure travels the error workflow to our API like a run's would, and our API keeps when it arrived. It is never a run. `/healthz/ready` warns when none arrived in 26 hours, because then the error workflow is not reporting.
 _Avoid_: Heartbeat, canary
 
 **Replica**:
@@ -335,7 +339,7 @@ A stand-in for Jira or Teams that the platform runs itself, so demos and tests w
 _Avoid_: Mock (in the app), sandbox
 
 **Team time zone**:
-The zone the team works in, Singapore unless the setting `TEAM_TIME_ZONE` names another. The agents' today, the day a run started, and every day an agent searches Jira by are days in it, so a search "since 18 Oct" starts at midnight there.
+The zone the team works in, Singapore unless the setting `TEAM_TIME_ZONE` names another. Every time the Portal shows without naming a zone is in it, and so is a new schedule. Every workflow's own n8n workflow runs on it. The agents' today, the day a run started, and every day an agent searches Jira by are days in it, so a search "since 18 Oct" starts at midnight there.
 _Avoid_: Server time, UTC day
 
 **Confirmation**:
@@ -355,5 +359,5 @@ The platform's own record of who may use it and which roles they hold. Sign-in o
 _Avoid_: Users, accounts, app roles
 
 **n8n access**:
-A mark on an Operator in the People list that lets them see a workflow's n8n blocks and open it in n8n, where they can change it. Only Operators can have it, because a change made in n8n changes a workflow. Everyone else sees the workflow's plain steps. It is not a third role. Planned (ADR 0043).
+A mark on an Operator in the People list that lets them see a workflow's n8n blocks and open it in n8n, where they can change it. Only Operators can have it, because a change made in n8n changes a workflow, and Approvers never can: gaining the Approver role ends it. The platform makes the person's n8n account with the same email, and matches them later by n8n's id for that account, never by email. Everyone else sees the workflow's plain steps. It is not a third role (ADR 0043, ENGINE-PLAN 2.9).
 _Avoid_: n8n role, admin

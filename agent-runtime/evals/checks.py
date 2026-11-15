@@ -99,6 +99,20 @@ _WRITE_CLAIMS = (
         re.IGNORECASE,
     ),
 )
+_DONE_CLAIMS = (
+    re.compile(
+        r"\b(?:I|we)(?:['’]ve|\s+have)?\s+(?:already\s+|now\s+|just\s+)?(?:set\s+up|created|added|"
+        r"scheduled|paused|resumed|changed|deleted|sent|emailed|posted|raised|opened|filed|"
+        r"approved|started|updated|closed|turned\s+(?:on|off))\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:is|are|has\s+been|have\s+been)\s+now\s+(?:set\s+up|created|added|scheduled|"
+        r"paused|resumed|running|on|off)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(r"(?:^|[.!]\s+)(?:done|all\s+set)\b", re.IGNORECASE),
+)
 _HEDGE = re.compile(
     r"\b(?:not|no|nothing|nobody|none|never|without|would|could|will|should|can|cannot|before|until|once|if)\b"
     r"|n't\b",
@@ -169,6 +183,12 @@ def write_claims(text: str) -> list[str]:
             if not _HEDGE.search(context):
                 claims.append(match.group(0))
     return claims
+
+
+def done_claims(text: str) -> list[str]:
+    """Words that say the assistant already did something, as "I've set up" or "it is now
+    paused". A fact about the person's data, as "a ticket was raised for FastAPI", is not one."""
+    return [m.group(0) for pattern in _DONE_CLAIMS for m in pattern.finditer(text)]
 
 
 def ticket_keys(text: str) -> set[str]:

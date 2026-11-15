@@ -39,10 +39,13 @@ import runUseCase from '../../../../contracts/fixtures/builder/use-case.json'
 import { OpensInPanel } from '../../ui/sidePanel'
 import { emptyModel, foldWire, type RunModel } from '../run/runModel'
 import { storyOf } from '../run/useRunStory'
-import type { ApprovalView, TroubleshootingOut, CantReply, CantRowView, CapabilitiesView, DecisionsView, HomeOut, Me, OfflineReply, PartReply, PartView, PauseReply, PlannerReply, QuestionReply, ResumeReply, SetupCardReply, UseCaseView, WatchlistReply, WatchlistView } from '../../api/types'
+import type { N8nReply, ApprovalView, TroubleshootingOut, CantReply, CantRowView, CapabilitiesView, DecisionsView, HomeOut, Me, OfflineReply, PartReply, PartView, PauseReply, PlannerReply, QuestionReply, ResumeReply, SetupCardReply, UseCaseView, WatchlistReply, WatchlistView } from '../../api/types'
+import { sendOpenInN8n } from '../../api/workflowQueries'
+import openedInN8n from '../../../../contracts/fixtures/builder/opened-in-n8n.json'
+import type { ApiClient } from '../../api/client'
 import { Answer, type Page } from './AnswerCards'
 import { newCardMemory, type CardMemory } from './cardMemory'
-import { sayOf, switchedSay, whoOf } from './answers'
+import { sayOf, switchedSay, whoOf, wordsOnly } from './answers'
 import { Leftovers } from './PartsList'
 import { RunCardView } from './RunCard'
 import { Thread } from './Thread'
@@ -801,5 +804,30 @@ describe('the run card: the AI troubleshooter’s answer that moves with the run
     expect(stages).toEqual(['stopped', 'retrying', 'waiting', 'writing', 'done'])
     const heads = new Set(frames.map((html) => /^<section[^>]*><div[^>]*><h3[^>]*>([^<]*)<\/h3>/.exec(html)?.[1]))
     expect(heads, 'every frame is the same card, headed by the run’s workflow').toEqual(new Set(['LangGraph release check']))
+  })
+})
+
+describe('the Planner’s n8n answer', () => {
+  const noAccess: N8nReply = { answer: 'n8n', said: 'You do not have n8n access yet. An Operator can give it to you on the People page.', can_open: false, use_case_id: null, parts: [] }
+  const canOpen: N8nReply = { answer: 'n8n', said: 'You can open it in n8n.', can_open: true, use_case_id: 'uc_01JD0', parts: [] }
+
+  it('says why not, and draws no button, to someone who can’t open n8n', () => {
+    expect(sayOf(noAccess)).toBe(noAccess.said)
+    expect(wordsOnly(noAccess, 'operator')).toBe(true)
+    expect(buttons(draw(noAccess))).toEqual([])
+  })
+
+  it('draws one Open in n8n editor button when the workflow can be opened', () => {
+    expect(sayOf(canOpen)).toBe(canOpen.said)
+    expect(wordsOnly(canOpen, 'operator')).toBe(false)
+    expect(buttons(draw(canOpen))).toEqual(['Open in n8n editor'])
+  })
+
+  it('asks the platform to open the workflow and gets the editor address back', async () => {
+    const sent: unknown[] = []
+    const client = { POST: (path: string, init: unknown) => (sent.push([path, init]), Promise.resolve({ data: openedInN8n, response: { ok: true, status: 200 } })) } as unknown as ApiClient
+    const held = await sendOpenInN8n(client, 'uc_01JD0')
+    expect(sent).toEqual([['/api/v1/use-cases/{use_case_id}/open-in-n8n', { params: { path: { use_case_id: 'uc_01JD0' } } }]])
+    expect(held.editor_url).toBe(openedInN8n.editor_url)
   })
 })

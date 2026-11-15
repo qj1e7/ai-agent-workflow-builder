@@ -8,6 +8,8 @@ from fastapi import FastAPI
 
 from platform_api.auth import DEV_PEOPLE, DevAuth, OidcAuth
 from platform_api.builder import Builder, Home, PlannerFront, TeamRequests, Watchlist
+from platform_api.builder.n8n_holds import Holding
+from platform_api.builder.n8n_view import InN8nViews
 from platform_api.builder.planner_facts import PlannerFactsReader
 from platform_api.builder.watchlist import OnN8n
 from platform_api.db import Database
@@ -65,6 +67,8 @@ from platform_api.orchestration.n8n_calls import (
     TryLater,
     WriteEntry,
 )
+from platform_api.orchestration.n8n_run_view import RunsInN8n
+from platform_api.orchestration.n8n_staff import StaffAccounts
 from platform_api.orchestration.n8n_starts import N8nStarts
 from platform_api.orchestration.people_store import People
 from platform_api.orchestration.planning import (
@@ -109,6 +113,7 @@ class Services:
     connections: Connections
     people: People
     confluence: ConfluencePages
+    staff: StaffAccounts
     copier: Copier | None = None
     cosmos: CosmosEvents | None = None
     teams_webhook: TeamsWorkflowsWebhook | None = None
@@ -117,6 +122,7 @@ class Services:
     n8n: N8nApi | None = None
     starts: N8nStarts | None = None
     tell_flow: TellFlow | None = None
+    in_n8n: InN8nViews | None = None
 
 
 JIRA_TIMEOUT_SECONDS = 10.0
@@ -171,6 +177,8 @@ def install(app: FastAPI, services: Services) -> None:
     app.state.connections = services.connections
     app.state.people = services.people
     app.state.confluence = services.confluence
+    app.state.staff = services.staff
+    app.state.in_n8n = services.in_n8n
 
 
 class NoN8nReads:
@@ -202,10 +210,14 @@ class N8nParts:
     failures: N8nFailures
 
 
-def n8n_parts(settings: Settings, db: Database) -> N8nParts:
-    if settings.n8n_owner is None:
+def n8n_api_of(settings: Settings) -> N8nApi | None:
+    """One per process: the owner's sign-in and API key are shared by every part that calls n8n."""
+    return None if settings.n8n_owner is None else N8nApi(settings.n8n_base_url, settings.n8n_owner)
+
+
+def n8n_parts(settings: Settings, db: Database, api: N8nApi | None) -> N8nParts:
+    if api is None:
         return N8nParts(None, NoN8nReads(), None, None, NoN8nReads())
-    api = N8nApi(settings.n8n_base_url, settings.n8n_owner)
     executions = N8nExecutions(api)
     workflows = N8nWorkflows(api, db)
     return N8nParts(api, executions, workflows, executions, workflows)
@@ -362,6 +374,9 @@ async def build(settings: Settings) -> Services:
     secret = settings.settings_encryption_key
     box = KeyBox(secret) if secret else None
     model_settings = ModelSettings(db, agents, box, people=people)
+    n8n_api = n8n_api_of(settings)
+    staff = StaffAccounts(db, n8n_api, box, settings.n8n_staff_access, settings.n8n_editor_url)
+    people.changed = staff.nudge
     waker = None
     if settings.node_key is not None and box is not None:
         waker = N8nWaker(settings.n8n_base_url, settings.node_key, box)
@@ -370,7 +385,10 @@ async def build(settings: Settings) -> Services:
         settings, db, jira, channel, agents, model_settings, confluence
     )
     gateway = WriteGateway(db, [JiraWriteConnector(jira, db, site)])
-    n8n = n8n_parts(settings, db)
+    n8n = n8n_parts(settings, db, n8n_api)
+    holding = (
+        None if n8n.drafts is None else Holding(db, n8n.drafts, staff, settings.team_time_zone)
+    )
     starts = (
         None
         if n8n.api is None
@@ -401,7 +419,8 @@ async def build(settings: Settings) -> Services:
         schedules,
         settings.watchlist_jira_project,
         ProjectFinding(agents),
-        None if n8n.drafts is None else OnN8n(n8n.drafts, watch_facts, software_page),
+        None if n8n.drafts is None else OnN8n(n8n.drafts, watch_facts, software_page, holding),
+        time_zone=settings.team_time_zone,
     )
     await watchlist.adopt_ticket_project()
     builder = Builder(
@@ -417,6 +436,9 @@ async def build(settings: Settings) -> Services:
         writes=node_writes(settings),
         requests=orchestrator,
         open_runs=watch_facts,
+        accounts=staff,
+        holding=holding,
+        time_zone=settings.team_time_zone,
     )
     # Before any run can start: a run left on the shared run workflow, whose blocks are off, ends
     # first (E11), so the workflows it held back can move.
@@ -475,6 +497,7 @@ async def build(settings: Settings) -> Services:
             CapabilityRegistry(agents),
             connections,
             PlannerFactsReader(watchlist, builder, home),
+            staff,
         ),
         home=home,
         watchlist=watchlist,
@@ -488,6 +511,7 @@ async def build(settings: Settings) -> Services:
         connections=connections,
         people=people,
         confluence=confluence,
+        staff=staff,
         copier=copier,
         cosmos=cosmos,
         teams_webhook=webhook,
@@ -495,6 +519,17 @@ async def build(settings: Settings) -> Services:
         n8n=n8n.api,
         starts=starts,
         tell_flow=tell_flow,
+        in_n8n=(
+            None
+            if holding is None
+            else InN8nViews(
+                db,
+                holding,
+                staff,
+                RunsInN8n(db, n8n.landing),
+                settings.n8n_editor_url,
+            )
+        ),
     )
 
 
@@ -514,6 +549,9 @@ class Runner:
             self._tasks.append(asyncio.create_task(sweep.sweep_forever(self._stop)))
         if (moves := self._services.builder.moves) is not None:
             self._tasks.append(asyncio.create_task(moves.move_forever(self._stop)))
+        if (holding := self._services.builder.holding) is not None:
+            settle = self._services.staff.settle_forever(self._stop, holding.release, holding.holds)
+            self._tasks.append(asyncio.create_task(settle))
         self._tasks.append(
             asyncio.create_task(self._services.connections.check_forever(self._stop))
         )
@@ -521,6 +559,7 @@ class Runner:
     async def stop(self) -> None:
         self._stop.set()
         self._services.orchestrator.nudge()
+        self._services.staff.nudge()
         for task in self._tasks:
             await task
         if self._services.tell_flow is not None:

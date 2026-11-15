@@ -7,6 +7,7 @@ cancelled, with nothing written and the workflow gone from n8n."""
 import secrets
 import urllib.parse
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any
 
 import httpx
@@ -24,25 +25,40 @@ from test_n8n_engine import set_up, ticket_count
 
 
 class Member:
-    """A staff member's n8n account, as the platform will make one once E7 lands: invited by the
-    owner and signed in to n8n's editor with their own session. Each step reads back what it
-    changed, because n8n's answer to a change is not proof of it."""
+    """A staff member's n8n account, signed in to n8n's editor with their own session: invited by
+    the owner by hand, or through the password link the platform made for them (E7). Each step
+    reads back what it changed, because n8n's answer to a change is not proof of it."""
 
-    def __init__(self, name: str) -> None:
-        self.email = f"{name}-{secrets.token_hex(4)}@example.com"
-        invite = [{"email": self.email, "role": "global:member"}]
-        [invited] = N8N_OWNER.call("POST", "/invitations", invite)
-        link = str(invited["user"]["inviteAcceptUrl"])
+    def __init__(self, name: str, invited: tuple[str, str] | None = None) -> None:
+        if invited is None:
+            email = f"{name}-{secrets.token_hex(4)}@example.com"
+            invite = [{"email": email, "role": "global:member"}]
+            [made] = N8N_OWNER.call("POST", "/invitations", invite)
+            invited = (email, str(made["user"]["inviteAcceptUrl"]))
+        self.email, link = invited
         token = urllib.parse.parse_qs(urllib.parse.urlparse(link).query)["token"][0]
-        password = f"E6-{secrets.token_urlsafe(12)}a1A"
+        self.password = f"E6-{secrets.token_urlsafe(12)}a1A"
         self.client = httpx.Client(base_url=N8N_URL, timeout=30)
-        accept = {"token": token, "firstName": name, "lastName": "Tester", "password": password}
+        accept = {
+            "token": token,
+            "firstName": name,
+            "lastName": "Tester",
+            "password": self.password,
+        }
         n8n_answer(self.client.post("/rest/invitations/accept", json=accept))
-        login = {"emailOrLdapLoginId": self.email, "password": password}
+        login = {"emailOrLdapLoginId": self.email, "password": self.password}
         n8n_answer(self.client.post("/rest/login", json=login))
         personal = self.call("GET", "/projects/personal")
         assert personal["type"] == "personal", "signed in as the member, in their own space"
         self.project = str(personal["id"])
+
+    def change_email(self, email: str) -> None:
+        """In their n8n profile, which n8n applies at once without a mail server."""
+        changed = self.call(
+            "POST", "/change-email", {"email": email, "currentPassword": self.password}
+        )
+        assert changed["status"] == "changed", changed
+        self.email = email
 
     def call(self, method: str, path: str, body: object = None) -> Any:
         return n8n_answer(self.client.request(method, f"/rest{path}", json=body))
@@ -112,18 +128,39 @@ def settings_in_n8n(workflow_id: str, where: str) -> Json:
     return settings
 
 
-def held_by(api: Api, member: Member, workflow_id: str) -> None:
-    """Open in n8n, done by hand until E7: the workflow moves to the member's own project. The
-    move is checked by reading the workflow back, not by the transfer's answer."""
-    body = {"destinationProjectId": member.project}
-    N8N_OWNER.call("PUT", f"/workflows/{workflow_id}/transfer", body)
-    api.poll("the member to hold the workflow", lambda: member.can_open(workflow_id))
-    held: Json = N8N_OWNER.call("GET", f"/workflows/{workflow_id}")
-    shares: list[Json] = held.get("shared") or []
-    home: Json = held.get("homeProject") or {}
-    projects = {share.get("projectId") for share in shares} | {home.get("id")}
-    named = {"shared", "homeProject"} & set(held)
-    assert not named or member.project in projects, f"n8n puts it in {projects}"
+@dataclass(frozen=True)
+class Staff:
+    """A person an Operator gave n8n access, signed in to n8n through the platform's link."""
+
+    person: str
+    email: str
+    member: Member
+
+
+def staff_member(api: Api, name: str) -> Staff:
+    email = f"{name.lower()}-{secrets.token_hex(4)}@example.test"
+    body = {"email": email, "display": name, "operator": True}
+    person = str(api.post("alice", "/api/v1/people", body, expect=(201,)).json()["id"])
+    access = {"n8n_access": True}
+    path = f"/api/v1/people/{person}/n8n-access"
+    api.request("alice", "PUT", path, expect=(200,), json_body=access)
+    mine: Json = api.poll(
+        f"the platform to make {name}'s n8n account",
+        lambda: (m := api.get(person, "/api/v1/me/n8n"))["set_password_url"] and m,
+    )
+    member = Member(name, (email, mine["set_password_url"]))
+    api.poll(
+        f"n8n to know {name} set a password", lambda: api.get(person, "/api/v1/me/n8n")["can_open"]
+    )
+    return Staff(person, email, member)
+
+
+def held_by(api: Api, staff: Staff, use_case_id: str, workflow_id: str) -> None:
+    """Open in n8n, through the platform: the workflow moves to the member's own project, which
+    the member's own read proves."""
+    opened = api.post(staff.person, f"/api/v1/use-cases/{use_case_id}/open-in-n8n", expect=(200,))
+    assert opened.json()["held_by"] == staff.person
+    assert staff.member.can_open(workflow_id), "it sits in the member's own n8n space"
 
 
 def swept(api: Api, use_case_id: str, version: int) -> Json:
@@ -144,10 +181,10 @@ def test_a_version_published_in_n8n_is_kept_graded_and_carded_and_undo_restores(
     first = api.get("alice", f"/api/v1/use-cases/{use_case_id}/versions")["versions"][0]
     assert (first["version"], first["grade"]) == (1, "safe")
     laid_out = settings_in_n8n(workflow_id, "as the platform laid it out")
-    member = Member("dana")
-    held_by(api, member, workflow_id)
+    dana = staff_member(api, "Dana")
+    held_by(api, dana, use_case_id, workflow_id)
     assert settings_in_n8n(workflow_id, "once the member holds it") == laid_out
-    published = member.publish_without_the_yes(workflow_id)
+    published = dana.member.publish_without_the_yes(workflow_id)
     assert settings_in_n8n(workflow_id, "once the member published") == laid_out
 
     view = swept(api, use_case_id, 2)
@@ -156,9 +193,9 @@ def test_a_version_published_in_n8n_is_kept_graded_and_carded_and_undo_restores(
     newest = api.get("alice", f"/api/v1/use-cases/{use_case_id}/versions")["versions"][0]
     assert (newest["made"], newest["by"], newest["publisher_unknown"]) == (
         "published_in_n8n",
-        None,
-        True,
-    ), "nobody guesses who published it"
+        dana.person,
+        False,
+    ), "matched by the n8n user id the platform stored"
     assert "Deleted “Ask for a yes”." in newest["changes"]
     cards = [
         c
@@ -166,7 +203,7 @@ def test_a_version_published_in_n8n_is_kept_graded_and_carded_and_undo_restores(
         if c["use_case_id"] == use_case_id
     ]
     assert [(c["version"], c["grade"], c["by"], c["in_use"]) for c in cards] == [
-        (2, "writes_refused", None, 2)
+        (2, "writes_refused", dana.person, 2)
     ]
     assert api.get("bob", "/api/v1/home")["changed_in_n8n"] == [], "the card is an Operator's"
     assert N8N_OWNER.call("GET", f"/workflows/{workflow_id}")["activeVersionId"] == published
@@ -177,6 +214,10 @@ def test_a_version_published_in_n8n_is_kept_graded_and_carded_and_undo_restores(
     assert (stopped["state"], stopped["reason"]) == ("failed", "SafetyDenied")
     assert ticket_count(api) == tickets, "a version without its yes writes nothing"
 
+    rollback = f"/api/v1/use-cases/{use_case_id}/versions/1/rollback"
+    held = api.post("alice", rollback, {"via": "chat", "in_use": 2}, expect=(409,))
+    assert held.json()["detail"].startswith("Dana has it open in n8n since ")
+    api.post(dana.person, f"/api/v1/use-cases/{use_case_id}/take-back", expect=(200,))
     undone = api.post(
         "alice",
         f"/api/v1/use-cases/{use_case_id}/versions/1/rollback",

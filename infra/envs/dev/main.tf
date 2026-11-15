@@ -298,9 +298,16 @@ locals {
           JIRA_API_FLAVOR        = var.jira_api_flavor
           JIRA_ISSUE_TYPE        = var.jira_issue_type
           WATCHLIST_JIRA_PROJECT = var.watchlist_jira_project
+          TEAM_TIME_ZONE         = var.team_time_zone
         },
         var.oidc_jwks_url == "" ? {} : { OIDC_JWKS_URL = var.oidc_jwks_url },
         var.teams_channel == "" ? {} : { TEAMS_CHANNEL = var.teams_channel },
+        # Staff reach n8n's editor only while it is open, so only then do they get n8n accounts
+        # (ENGINE-PLAN 2.9). platform-api still waits for a bootstrap that proved the allow list.
+        var.n8n_editor_external ? {
+          N8N_STAFF_ACCESS = "on"
+          N8N_EDITOR_URL   = local.url["n8n"]
+        } : {},
         local.tell_email_to == "" ? {} : { TELL_EMAIL_TO = local.tell_email_to },
         local.first_people,
         local.jira_settings,
@@ -369,6 +376,9 @@ locals {
       # overwriteExisting). The bootstrap's own setup call then gets "Instance owner already setup"
       # and signs in, as on any later run. The names match the ones the bootstrap uses. The hash is
       # in local.inline_secrets.
+      #
+      # GENERIC_TIMEZONE is the team time zone, so a workflow set to n8n's default zone runs on the
+      # team's, as platform-api reads it.
       env = merge(
         {
           DB_TYPE                           = "postgresdb"
@@ -378,6 +388,7 @@ locals {
           DB_POSTGRESDB_USER                = "n8n"
           DB_POSTGRESDB_SSL_ENABLED         = "true"
           WEBHOOK_URL                       = "${local.url["n8n"]}/"
+          GENERIC_TIMEZONE                  = var.team_time_zone
           N8N_DIAGNOSTICS_ENABLED           = "false"
           N8N_VERSION_NOTIFICATIONS_ENABLED = "false"
           N8N_PERSONALIZATION_ENABLED       = "false"
@@ -490,6 +501,7 @@ locals {
         N8N_BASE_URL          = local.url["n8n"]
         N8N_OWNER_EMAIL       = var.n8n_owner_email
         PLATFORM_INTERNAL_URL = local.url["platform-api"]
+        TEAM_TIME_ZONE        = var.team_time_zone
       }
       secrets = {
         DATABASE_URL_OWNER = local.secret["database-url-owner"]

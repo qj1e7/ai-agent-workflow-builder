@@ -23,7 +23,7 @@ from platform_api.orchestration.confirmations import (
     why_not,
 )
 from platform_api.orchestration.model_settings import close_address_asked_by
-from platform_api.orchestration.people import Changed, Person, Refused
+from platform_api.orchestration.people import Changed, N8nAccount, Person, Refused
 from platform_api.settings import FirstPeople
 from platform_api.shared import (
     DevIdentity,
@@ -40,7 +40,7 @@ log = logging.getLogger(__name__)
 
 _COLUMNS = (
     "id, entra_oid, email, display, is_operator, is_approver, added_by, added_at, "
-    "bound_at, removed_at"
+    "bound_at, removed_at, n8n_access, n8n_user_id, n8n_invite IS NOT NULL AS n8n_pending"
 )
 
 
@@ -56,6 +56,12 @@ def _person(row: Mapping[str, Any]) -> Person:
         entra_oid=row["entra_oid"],
         bound_at=row["bound_at"],
         removed_at=row["removed_at"],
+        n8n_access=row["n8n_access"],
+        n8n_account=(
+            None
+            if row["n8n_user_id"] is None
+            else N8nAccount(row["n8n_user_id"], row["n8n_pending"])
+        ),
     )
 
 
@@ -102,8 +108,8 @@ class PeopleStore:
     async def insert(self, uow: UnitOfWork, person: Person) -> None:
         await uow.conn.execute(
             "INSERT INTO orchestration.people (id, entra_oid, email, display, is_operator, "
-            "is_approver, added_by, added_at, bound_at, removed_at) "
-            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            "is_approver, added_by, added_at, bound_at, removed_at, n8n_access) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
             (
                 person.id,
                 person.entra_oid,
@@ -115,6 +121,7 @@ class PeopleStore:
                 person.added_at,
                 person.bound_at,
                 person.removed_at,
+                person.n8n_access,
             ),
         )
 
@@ -122,7 +129,7 @@ class PeopleStore:
         await uow.conn.execute(
             "UPDATE orchestration.people SET email = %s, display = %s, is_operator = %s, "
             "is_approver = %s, added_by = %s, added_at = %s, entra_oid = %s, bound_at = %s, "
-            "removed_at = %s WHERE id = %s",
+            "removed_at = %s, n8n_access = %s WHERE id = %s",
             (
                 person.email,
                 person.display,
@@ -133,6 +140,7 @@ class PeopleStore:
                 person.entra_oid,
                 person.bound_at,
                 person.removed_at,
+                person.n8n_access,
                 person.id,
             ),
         )
@@ -223,10 +231,12 @@ type DecideResult = Decided | DecideRefused | ModelAddress | NotFound
 class People:
     """The People list: who may sign in, and who holds which role (ADR 0029)."""
 
-    def __init__(self, db: Database) -> None:
+    def __init__(self, db: Database, changed: Callable[[], None] | None = None) -> None:
         self._db = db
         self._store = PeopleStore()
         self._confirmations = ConfirmationStore()
+        self.changed = changed or (lambda: None)
+        """Told after a change commits, so n8n accounts follow it soon."""
 
     async def resolve(self, identity: Identity) -> Principal | None:
         async with self._db.transaction("orchestration") as uow:
@@ -364,7 +374,20 @@ class People:
             ),
         )
 
+    async def set_n8n_access(self, actor: Principal, person_id: str, on: bool) -> ChangeResult:
+        """The account itself is made or ended by StaffAccounts, which follows this flag."""
+        return await self._change(
+            actor,
+            person_id,
+            lambda me, _, person, __, ___: rules.set_n8n_access(me, person, on),
+        )
+
     async def remove(self, actor: Principal, person_id: str) -> ChangeResult:
+        removed = await self._remove(actor, person_id)
+        self.changed()
+        return removed
+
+    async def _remove(self, actor: Principal, person_id: str) -> ChangeResult:
         async with self._db.transaction("orchestration") as uow:
             await self._store.lock(uow)
             people = await self._store.all(uow)
@@ -382,6 +405,11 @@ class People:
             return outcome.person
 
     async def _change(self, actor: Principal, person_id: str, rule: Rule) -> ChangeResult:
+        changed = await self._apply(actor, person_id, rule)
+        self.changed()
+        return changed
+
+    async def _apply(self, actor: Principal, person_id: str, rule: Rule) -> ChangeResult:
         async with self._db.transaction("orchestration") as uow:
             await self._store.lock(uow)
             people = await self._store.all(uow)
@@ -494,6 +522,17 @@ class People:
         decision: ConfirmationDecision,
         seen_digest: str,
     ) -> DecideResult:
+        decided = await self._decide(decider, confirmation_id, decision, seen_digest)
+        self.changed()
+        return decided
+
+    async def _decide(
+        self,
+        decider: Principal,
+        confirmation_id: str,
+        decision: ConfirmationDecision,
+        seen_digest: str,
+    ) -> DecideResult:
         async with self._db.transaction("orchestration") as uow:
             await self._store.lock(uow)
             confirmation = await self._confirmations.load(uow, confirmation_id, lock=True)
@@ -526,11 +565,11 @@ class People:
                 return DecideRefused(DecideRefusal.ALREADY_DECIDED)
             asked_by = _name(dict((p.id, p) for p in people), confirmation.asked_by)
             if decision is ConfirmationDecision.CONFIRMED:
-                about = rules.grant_approver(about)
+                about, ended = rules.grant_approver(about)
                 await self._store.save(uow, about)
                 summary = (
                     f"{fresh.display} confirmed {about.display} as an Approver, "
-                    f"as {asked_by} asked."
+                    f"as {asked_by} asked.{ended}"
                 )
             else:
                 summary = (

@@ -15,6 +15,7 @@ from platform_api.builder.models import (
     VersionList,
 )
 from platform_api.builder.n8n_draft import DraftRefused, N8nNotReady, NotSafe
+from platform_api.builder.n8n_holds import HeldInN8n
 from platform_api.builder.service import (
     InN8nRefused,
     Republished,
@@ -79,15 +80,17 @@ def refused_in_n8n(
             return HTTPException(409, CHANGED_IN_N8N)
         case NotSafe():
             return HTTPException(409, NOT_SAFE)
+        case HeldInN8n(words):
+            return HTTPException(409, words)
         case DraftRefused(findings):
             return HTTPException(422, [{"loc": ["body"], "msg": f.text} for f in findings])
 
 
-def _moved(found: UseCaseView | N8nNotReady | NotSafe | None) -> UseCaseView:
+def _moved(found: UseCaseView | N8nNotReady | NotSafe | HeldInN8n | None) -> UseCaseView:
     match found:
         case None:
             raise HTTPException(404, NO_SUCH)
-        case N8nNotReady() | NotSafe():
+        case N8nNotReady() | NotSafe() | HeldInN8n():
             raise refused_in_n8n(found)
         case view:
             return view
@@ -139,11 +142,13 @@ async def turn_on_use_case(
     "/use-cases/{use_case_id}",
     description="Takes the workflow out of the list and stops it running. Nothing is erased: "
     "its past runs stay readable, a run waiting for a yes can still be decided, and it can be "
-    "restored for a day. Deleting it again answers the same.",
+    "restored for a day. Deleting it again answers the same. One someone holds in n8n is taken "
+    "back first, and stays theirs when n8n does not move it.",
     responses={
         **OPERATORS_ONLY,
         404: error_response(NO_SUCH),
         409: error_response(WATCHLIST_STAYS),
+        503: N8N_NOT_READY,
     },
 )
 async def delete_use_case(
@@ -154,6 +159,8 @@ async def delete_use_case(
             return deleted
         case WatchlistStays():
             raise HTTPException(409, WATCHLIST_STAYS)
+        case N8nNotReady() as refused:
+            raise refused_in_n8n(refused)
         case None:
             raise HTTPException(404, NO_SUCH)
 
@@ -188,7 +195,7 @@ async def restore_use_case(
 
 @router.put(
     "/use-cases/{use_case_id}/schedule",
-    description="Saves when the workflow runs on its own, in Singapore time. The caller "
+    description="Saves when the workflow runs on its own, in the team time zone. The caller "
     "becomes the schedule owner, whose scheduled runs start as them and who can never approve "
     "them. That lifts a hold, so an Operator takes over a workflow whose owner can no longer "
     "run it by saving its schedule. A new schedule publishes a new version of the workflow, "
@@ -212,7 +219,7 @@ async def save_schedule(
             raise HTTPException(409, SCHEDULE_ON_SOFTWARE_PAGE)
         case ChangedSince():
             raise HTTPException(409, CHANGED_SINCE_OPENED)
-        case N8nNotReady() | ChangedInN8n() | DraftRefused() as refused:
+        case N8nNotReady() | ChangedInN8n() | DraftRefused() | HeldInN8n() as refused:
             raise refused_in_n8n(refused)
         case None:
             raise HTTPException(404, NO_SUCH)
@@ -264,7 +271,7 @@ async def undo_version(
             raise HTTPException(409, CHANGED_SINCE)
         case NotAScheduleChange():
             raise HTTPException(409, NOT_A_SCHEDULE_CHANGE)
-        case N8nNotReady() | ChangedInN8n() | DraftRefused() as refused:
+        case N8nNotReady() | ChangedInN8n() | DraftRefused() | HeldInN8n() as refused:
             raise refused_in_n8n(refused)
         case view:
             return view

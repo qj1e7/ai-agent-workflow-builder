@@ -411,4 +411,5 @@ ANSWER = Job(
     judged=False,
     time_limit_s=ANSWER_TIMEOUT_SECONDS,
     follow_up=follow_up,
+    most_calls=2,
 )

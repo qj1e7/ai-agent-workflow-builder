@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import agentUseCase from '../../../../contracts/fixtures/cards/use-case.json'
 import { ApiProvider } from '../../api/context'
 import { createDevSession } from '../../api/session'
@@ -9,6 +9,7 @@ import { StatusBanner } from './Banner'
 import { backToVersionToast, madeWords, needsFix, refusedBanner, writeWords, yesBackToast } from './n8nChange'
 import { StatusPills } from './Status'
 import { Versions } from './Versions'
+import { setTeamZone } from './times'
 import { bannerOf, versionLine, type Viewer } from './workflow'
 
 const ALICE: Viewer = { id: 'alice', operator: true, approver: true }
@@ -40,6 +41,26 @@ describe('the workflow page’s banner for a graded version', () => {
     expect(bannerOf(facts(fix))).toEqual({ tone: 'bad', text: 'Needs a fix: “Send email” is not a block we run.', action: { kind: 'undo', to: 3, inUse: 4 } })
     expect(bannerOf(facts({ ...fix, version: 1 })).action, 'there is no version before the first').toBeNull()
     expect(bannerOf(facts(fix, BOB)).action).toBeNull()
+  })
+
+  describe('after the team time zone changed', () => {
+    afterEach(() => setTeamZone(undefined))
+    const findings = ['It does not run on London time. Save its schedule again, or change its time zone in n8n.']
+    const singapore = { day: 'monday', at: '09:00', time_zone: 'Asia/Singapore', owner_name: 'Alice', held: null } as const
+    const offZone = { ...on, grade: 'needs_a_fix', findings, schedule: singapore } as UseCaseView
+
+    it('offers to save the schedule again, which lays it out on the team’s zone, never Undo to a version on the old one', () => {
+      setTeamZone('Europe/London')
+      const owner = 'Saving makes you the owner of this schedule. Its runs then count as your work, so you won’t be able to approve them.'
+      expect(bannerOf(facts(offZone))).toEqual({ tone: 'bad', text: `Needs a fix: ${findings[0]} ${owner}`, action: { kind: 'resave', day: 'monday', at: '09:00' } })
+      expect(bannerOf(facts(offZone, BOB)).action).toBeNull()
+      expect(bannerOf(facts({ ...offZone, schedule: { ...singapore, time_zone: 'Europe/London' } })).action, 'on the team’s zone, the fix is elsewhere').toEqual({ kind: 'undo', to: 3, inUse: 4 })
+    })
+
+    it('draws Save the schedule again as the main button', () => {
+      const html = renderToStaticMarkup(<StatusBanner banner={{ tone: 'bad', text: 'x', action: { kind: 'resave', day: 'monday', at: '09:00' } }} resuming={false} onResume={() => undefined} />)
+      expect(html).toMatch(/_primary_[^>]*>Save the schedule again/)
+    })
   })
 
   it('says a workflow deleted in n8n will not run again, with no action, and says it before anything else', () => {
