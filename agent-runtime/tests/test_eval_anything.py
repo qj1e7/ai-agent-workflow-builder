@@ -33,6 +33,7 @@ from agent_runtime.contract import (
     RequestPart,
     SetupCardAnswer,
     UnderstoodRow,
+    WatchlistAnswer,
 )
 from agent_runtime.questions import COULD_NOT_ANSWER
 from agent_runtime.reading import SkipRead, TaskRead
@@ -205,6 +206,14 @@ def test_the_words_follow_the_portal() -> None:
     )
     assert "Can't do: “list the steps” Ask this on its own, and I'll answer it." in words_of(asked)
     assert words_of(None) == "(no answer was recorded)"
+
+
+def test_a_card_shows_the_portals_buttons() -> None:
+    assert words_of(Answered(answer=card("Weekly bugs"), parts=[])).endswith(
+        "[Never mind] [Set up]"
+    )
+    watch = WatchlistAnswer(word="releases", software="LangGraph")
+    assert words_of(Answered(answer=watch, parts=[])).endswith("[Add LangGraph] [Never mind]")
 
 
 def test_how_to_start_shows_the_portals_steps_and_chips() -> None:

@@ -446,7 +446,20 @@ def words_of(result: AnswerResult | None, facts: PlannerFacts = HOME_FACTS) -> s
     if not isinstance(shown, RefusedAnswer | WhichSoftwareAnswer):
         named = ("cant_do", "needs_the_rest") if isinstance(shown, CantAnswer) else ()
         lines += [_cross(p) for p in parts if p.mark != "will_do" and p.reason not in named]
-    return "\n".join(lines)
+    return "\n".join(lines + _buttons(shown))
+
+
+def _buttons(shown: PlannerAnswer) -> list[str]:
+    """The card's own buttons, as the Portal draws them (SetupCard.tsx, WatchlistCard.tsx)."""
+    match shown:
+        case SetupCardAnswer():
+            return ["[Never mind] [Set up]"]
+        case PartAnswer():
+            return ["[Never mind] [Set up the part I can]"]
+        case WatchlistAnswer(software=str(name)):
+            return [f"[Add {name}] [Never mind]"]
+        case _:
+            return []
 
 
 def _cross(part: RequestPart) -> str:
