@@ -234,3 +234,8 @@ def test_a_how_to_question_accepts_the_help_lanes_how_to_start_but_not_the_bare_
     assert _acceptable(how_to, start)
     assert not _acceptable(how_to, AbilitiesAnswer())
     assert not _acceptable(chat, start)
+
+
+def test_the_gate_reports_a_tuning_run() -> None:
+    report, _ = gate(run(row("reply_dev", [outcome("a")])), judge_agreed=False)
+    assert "gateway:sonnet, reply_dev" in report

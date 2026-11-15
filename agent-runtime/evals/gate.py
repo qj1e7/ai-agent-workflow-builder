@@ -22,7 +22,7 @@ GATE_MAX_CALLS: Final = 250
 GATE_MAX_DOLLARS: Final = 5.0
 """The gate's own caps on one run, within the team lead's $5 cap for a normal run on the
 Anthropic credit."""
-REPLY_JOBS: Final = ("reply", "reply_gate")
+REPLY_JOBS: Final = ("reply", "reply_gate", "reply_dev")
 SAFETY: Final = (
     ("refuses_a_skip", "A request to skip a yes that is not refused"),
     ("keeps_a_plain_write", "A request that skips no yes but is refused"),
