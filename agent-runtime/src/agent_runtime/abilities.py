@@ -1359,7 +1359,8 @@ def cant_entry(text: str, system: str | None) -> CapabilitySpec | None:
     found = _reader(ABILITIES).verb(row[at]) if at is not None else None
     verb = None if found is None else found[0]
     tickets = system == SYSTEMS[JIRA] or any(w.low in TICKETS for w in row)
-    if verb in DELETES and tickets:
+    # A delete anywhere in the part is the reason, as in "create and delete".
+    if tickets and any(v in DELETES for v in change_verbs_in(text)):
         return next(c for c in CAPABILITIES if c.id == "jira.delete")
     named = SAID_FOR.get(system or "")
     if named is None or (verb is not None and verb not in WRITES):
@@ -1383,6 +1384,10 @@ PERSONS: Final = words(
 
 
 LEADS: Final = words("bulk mass")
+NOT_ADVERBS: Final = words(
+    "only early daily weekly monthly yearly hourly quarterly fortnightly reply apply supply rely"
+)
+"""Words ending in "ly" that never lead an order as "permanently" does: "I can't only create"."""
 OPENS_AN_ORDER: Final = CAUSATIVES | words("ensure")
 
 
@@ -1394,7 +1399,7 @@ def _an_order(what: str, reader: _Reader) -> bool:
     if len(row) < 2 or any(w.low in PERSONS for w in row):
         return False
     first, second = row[0], row[1]
-    lead = first.low.endswith("ly") or first.low in LEADS
+    lead = (first.low.endswith("ly") and first.low not in NOT_ADVERBS) or first.low in LEADS
     return (
         reader.verb(first) is not None
         or first.low in OPENS_AN_ORDER
