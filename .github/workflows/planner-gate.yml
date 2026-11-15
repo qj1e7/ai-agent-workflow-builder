@@ -1,0 +1,101 @@
+name: planner-gate
+
+# ADR 0047: the Planner's answers are gated on the reply golden set, on the real model through the
+# AI Singapore gateway. A pull request that changes the Planner runs it once. Main runs it three
+# times each night, because the model behind the gateway can change without a commit.
+on:
+  pull_request:
+    paths:
+      - agent-runtime/src/agent_runtime/abilities.py
+      - agent-runtime/src/agent_runtime/answers.py
+      - agent-runtime/src/agent_runtime/contract.py
+      - agent-runtime/src/agent_runtime/edits.py
+      - agent-runtime/src/agent_runtime/follow_ups.py
+      - agent-runtime/src/agent_runtime/free_reply.py
+      - agent-runtime/src/agent_runtime/how_to.py
+      - agent-runtime/src/agent_runtime/parts.py
+      - agent-runtime/src/agent_runtime/planner.py
+      - agent-runtime/src/agent_runtime/questions.py
+      - agent-runtime/src/agent_runtime/reading.py
+      - agent-runtime/src/agent_runtime/reply_guard.py
+      - agent-runtime/evals/reply.py
+      - agent-runtime/evals/gate.py
+      - agent-runtime/evals/cases/answer.json
+      - agent-runtime/evals/cases/reply.json
+      - .github/workflows/planner-gate.yml
+  schedule:
+    - cron: "0 18 * * *"
+  workflow_dispatch:
+    inputs:
+      models:
+        description: The gateway models to gate, comma separated. Empty uses Claude Haiku 4.5.
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: planner-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  AGENT_MODEL_BASE_URL: https://llm-gateway.aisg.sg
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        run: ${{ github.event_name == 'schedule' && fromJSON('[1, 2, 3]') || fromJSON('[1]') }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+
+      # A repository secret, so a branch of this repository can read it (ADR 0047). Without it
+      # the gate cannot run, and says so instead of passing quietly.
+      - name: Check the gateway key is set
+        env:
+          AGENT_MODEL_API_KEY: ${{ secrets.AISG_API_KEY }}
+        run: |
+          if [ -z "${AGENT_MODEL_API_KEY}" ]; then
+            echo "::error::AISG_API_KEY is not set, so the Planner gate cannot run."
+            exit 1
+          fi
+
+      # Each run gets its own marker, because the gateway answers a repeated request from its store.
+      - name: Score the reply golden set
+        env:
+          AGENT_MODEL_API_KEY: ${{ secrets.AISG_API_KEY }}
+          GATEWAY_MODELS: ${{ inputs.models || vars.GATEWAY_MODELS || 'claude-haiku-4-5-20251001' }}
+          EVAL_TEMPERATURE: ${{ vars.EVAL_TEMPERATURE }}
+          EVAL_JUDGE: ${{ vars.EVAL_JUDGE }}
+          EVAL_JOBS: reply
+          EVAL_MARKER: gate-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.run }}
+        run: scripts/evals.sh
+
+      # The judge's score gates only once the team lead has set REPLY_JUDGE_AGREED, after it agreed
+      # with their own labels on at least 27 of 30 replies.
+      - name: Hold the run to the ADR's bars
+        working-directory: agent-runtime
+        env:
+          JUDGE_AGREED: ${{ vars.REPLY_JUDGE_AGREED }}
+        run: |
+          agreed=()
+          if [ "${JUDGE_AGREED}" = "true" ]; then agreed=(--judge-agreed); fi
+          uv run --locked python -m evals.gate evals/out/results.json "${agreed[@]}" | tee -a "$GITHUB_STEP_SUMMARY"
+          exit "${PIPESTATUS[0]}"
+
+      - name: Keep the results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: planner-gate-${{ matrix.run }}
+          path: agent-runtime/evals/out/
+          if-no-files-found: ignore

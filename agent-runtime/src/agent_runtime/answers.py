@@ -1045,8 +1045,14 @@ def _answer(read: TaskRead, request: AnswerRequest, chat_for: ChatFor) -> Planne
     decided = decide(read, request)
     if not isinstance(decided, AskTheQuestionLane):
         return decided
-    asked = answer_question(request, chat_for)
-    # The lane may improve an answer, never make it worse: when its call fails, the first stands.
+    return settled(decided, answer_question(request, chat_for))
+
+
+def settled(
+    decided: AskTheQuestionLane, asked: QuestionAnswer | ModelProblem | None
+) -> PlannerAnswer:
+    """The answer once the question lane replied. The lane may improve an answer, never make it
+    worse: when its call fails, the first stands."""
     if asked is None or isinstance(asked, ModelProblem):
         return decided.otherwise
     if decided.first_on_reject and is_fallback(asked):
