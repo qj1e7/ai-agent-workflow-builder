@@ -406,6 +406,15 @@ def _writes_beside(words_: str) -> bool:
     return plain or _deletes_tickets_in(words_)
 
 
+def changes_a_workflow(read: TaskRead, text: str) -> bool:
+    """The reading calls it a change to one of the person's workflows, and nothing in it says
+    otherwise: it is no watch request, and it writes to nothing but a workflow, so "delete every
+    closed ticket" is not one."""
+    return (
+        read.asks_about == "change" and not read.belongs_on_watchlist and not _writes_beside(text)
+    )
+
+
 def _switch_of(text: str, names: _Names) -> type[Switch] | None:
     """Pause or resume, when the order holds nothing else: no schedule and no word beyond the
     order itself, so "pause it for a week" stays a change the chat can't make. A write in a clause

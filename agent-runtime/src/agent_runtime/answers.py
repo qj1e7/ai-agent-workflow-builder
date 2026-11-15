@@ -72,6 +72,7 @@ from agent_runtime.edits import (
     NEW_WORKFLOW,
     asks,
     asks_for_a_change,
+    changes_a_workflow,
     commanded,
     edit_of,
     left_over,
@@ -829,7 +830,12 @@ def _answer_of(
     edit = edit_of(read, text, facts) if changes_workflows else None
     if edit is not None:
         return edit
-    if read.asks_about == "change" and facts is not None and facts.left_out_workflows:
+    if (
+        changes_workflows
+        and facts is not None
+        and facts.left_out_workflows
+        and changes_a_workflow(read, text)
+    ):
         return could_only_read(facts)
     if read.asks_about == "change":
         unchanged = _unchanged(read, text, facts, changes_workflows)
