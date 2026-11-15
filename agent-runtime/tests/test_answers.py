@@ -2228,7 +2228,11 @@ def test_the_route_returns_the_parts_with_the_answer():
         make_app(chat).post("/v1/planner/answer", json=body).json()
     )
     assert isinstance(result, Answered)
-    assert [(p.mark, p.reason) for p in result.parts] == [("will_do", None), ("cant", "cant_do")]
+    assert [(p.mark, p.reason) for p in result.parts] == [
+        ("will_do", None),
+        ("cant", "cant_do"),
+        ("question", "how_many_days"),
+    ]
 
 
 # The review's cases (R4 second round).

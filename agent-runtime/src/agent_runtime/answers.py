@@ -531,8 +531,12 @@ def _refused_span(task: _Task, text: str) -> RefusedAnswer | None:
 
 
 def _offers(task: _Task) -> bool:
-    """Whether the task reads something to look for or to do, so a card is worth offering."""
-    return any(r.kind in ("look_for", "do") and r.state in ACCEPTED for r in task.rows)
+    """Whether the task reads something to look for or to do, so a card is worth offering. A
+    search that only asks how many days ("the stale tickets") is one: the card asks it."""
+    return any(
+        r.kind in ("look_for", "do") and (r.state in ACCEPTED or (r.state == "missing" and r.text))
+        for r in task.rows
+    )
 
 
 def _from_task(read: TaskRead, task: _Task, text: str) -> PlannerAnswer:
@@ -769,6 +773,18 @@ WATCHLISTS_OWN_TICKET: Final = re.compile(
 or in another project, keeps those words, which come back as parts it can't do."""
 
 
+RUNS_BY_ITSELF: Final = re.compile(
+    r"\b(?:(?:run|runs|do)\s+(?:it|this|that|them)\s+)?(?:automatically|by\s+itself|on\s+its\s+own|"
+    r"on\s+autopilot|hands[-\s]free|in\s+the\s+background)\b|"
+    r"\bset\s+(?:it\s+)?and\s+forget(?:\s+(?:about\s+)?it)?\b|"
+    r"\b(?:run|runs)\s+(?:it|this|that|them)\b(?=\s+(?:every|each|daily|weekly|monthly|on\s+[A-Za-z]+days?)\b)",
+    re.IGNORECASE,
+)
+"""Words that say the task runs by itself, as every workflow does on its schedule: "run it
+automatically", "set and forget". They name no person and no yes, so a write beside them still
+waits for one, and any word that does name one still comes back."""
+
+
 def _stretches(pattern: re.Pattern[str], text: str) -> list[tuple[int, int]]:
     return [found.span() for found in pattern.finditer(text)]
 
@@ -929,6 +945,7 @@ def _answer_of(
         read = read.model_copy(update={"asks_about": unchanged})
     task = None
     covered = [skip.covered] if skip.covered is not None else []
+    covered += _stretches(RUNS_BY_ITSELF, text)
     if read.belongs_on_watchlist:
         covered += _stretches(WATCHLISTS_OWN_TICKET, text)
     watched = _watch_clauses(read, text) if read.belongs_on_watchlist else []

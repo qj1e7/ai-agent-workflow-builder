@@ -324,6 +324,9 @@ only when it holds that direction ("with no update for 10 days" as updated befor
 the model read the other way round comes back to the person."""
 NOT_UPDATED: Final = words("untouched stale idle dormant quiet")
 """Update words that say no update on their own: a filter on them runs before, never within."""
+STALE: Final = NOT_UPDATED - words("quiet")
+"""The ones that say it of tickets whatever they stand beside, so a search the model read without
+a day filter still asks how many days ("the stale bugs")."""
 EXCLUSIONS: Final = words("except excepting excluding exclude excludes unless besides")
 """Words that leave out what follows them. A search can't leave anything out, so like a
 negation one is explained only where a structure holds that direction. "other than" and "apart
@@ -864,9 +867,12 @@ def _day_filters(read: SearchRead, text: str) -> list[tuple[str, DaysRead]]:
     been updated for 10 days" read as updated within 10 days, or turned round twice, as "not
     gone without an update", is dropped too: its words come back, never shown as understood."""
     found: list[tuple[str, DaysRead]] = []
+    updated = read.updated
+    if updated is None and _forms_in(text, STALE):
+        updated = DaysRead(how="before")
     for when, filter_ in (
         ("created", read.created),
-        ("updated", read.updated),
+        ("updated", updated),
         ("done", read.done),
     ):
         forms = WHEN_VOCAB[when]
@@ -1209,7 +1215,8 @@ def _clause_ends(text: str) -> list[tuple[int, int]]:
 def clauses_of(text: str) -> list[tuple[int, int]]:
     """Each clause of the request, trimmed. A clause ends at a comma, a full stop or other
     punctuation, or at "and", "then", "but", "also" or "plus", except inside a schedule, so
-    "every Monday and Friday at 9am" stays one clause."""
+    "every Monday and Friday at 9am" stays one clause, and between two lone words, so "set and
+    forget" stays one too."""
     found: list[tuple[int, int]] = []
     at = 0
     for start, end in [*_clause_ends(text), (len(text), len(text))]:
@@ -1218,9 +1225,17 @@ def clauses_of(text: str) -> list[tuple[int, int]]:
         if lead is not None:
             clause = trim(text, lead.end(), clause[1])
         if clause[0] < clause[1]:
+            if found and _joined_words(text, found[-1], clause):
+                clause = (found.pop()[0], clause[1])
             found.append(clause)
         at = max(at, end)
     return found
+
+
+def _joined_words(text: str, before: tuple[int, int], after: tuple[int, int]) -> bool:
+    """Whether two clauses are one word each with only a joining word between them."""
+    lone = all(len(_request_tokens(text[a:b])) == 1 for a, b in (before, after))
+    return lone and CLAUSE_END.search(text[before[1] : after[0]]) is None
 
 
 def _clause_of(text: str, tokens: list[tuple[str, int, int]]) -> list[int]:
