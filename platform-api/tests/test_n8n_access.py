@@ -537,6 +537,8 @@ async def test_the_in_n8n_views_are_for_people_with_n8n_access(s: Staffed):
         True,
     )
     assert (view["published_by"], view["published_by_name"]) == ("alice", "Alice")
+    versions = (await s.call("carol", "GET", f"/api/v1/use-cases/{use_case_id}/versions")).json()
+    assert view["published_at"] == versions["versions"][0]["at"], "the versions list's time"
     assert view["editor_url"] is None, "the editor opens it only for the person who holds it"
     assert (await s.open("carol", use_case_id)).status_code == 200
     view = (await s.call("carol", "GET", f"/api/v1/use-cases/{use_case_id}/n8n")).json()
@@ -568,9 +570,19 @@ async def test_a_run_in_n8n_has_each_block_s_state_from_its_calls_then_n8n_s_rec
                 (node, kind, "answered", f"call-{node}", NOW, NOW),
             )
     waiting = (await s.call("carol", "GET", "/api/v1/runs/run_n8n/n8n")).json()
-    assert waiting["states"] == {"Version checker": "done", "Ask for a yes": "waiting"}
+    assert waiting["states"] == {
+        "Version checker": "done",
+        "Newer?": "done",
+        "Ask for a yes": "waiting",
+    }, "the IF never calls the platform, so the yes waiting after it says it ran"
     assert (waiting["from_n8n"], waiting["n8n_version_id"]) == (False, version_id)
     assert "Nothing to change" in [n["name"] for n in waiting["nodes"]]
+    blocks = {block["name"]: block for block in waiting["blocks"]}
+    assert set(blocks) == {n["name"] for n in waiting["nodes"]} - {"About this workflow"}
+    assert {(exit["exit"], exit["to"]) for exit in blocks["Newer?"]["next"]} == {
+        ("true", "Ask for a yes"),
+        ("false", "Nothing to change"),
+    }
 
     async with s.lab.h.db.transaction("orchestration") as uow:
         await uow.conn.execute(
@@ -587,6 +599,7 @@ async def test_a_run_in_n8n_has_each_block_s_state_from_its_calls_then_n8n_s_rec
     assert ended["states"] == {
         "Start from the Portal": "done",
         "Version checker": "done",
+        "Newer?": "done",
         "Ask for a yes": "failed",
     }
     assert (await s.call("bob", "GET", "/api/v1/runs/run_n8n/n8n")).status_code == 403

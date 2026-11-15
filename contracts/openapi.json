@@ -9794,6 +9794,14 @@
       "RunN8nView": {
         "additionalProperties": false,
         "properties": {
+          "blocks": {
+            "description": "The same blocks in the order a run meets them, as the set-up card and a workflow's blocks list them, which the canvas draws.",
+            "items": {
+              "$ref": "#/components/schemas/N8nBlockView"
+            },
+            "title": "Blocks",
+            "type": "array"
+          },
           "edges": {
             "items": {
               "$ref": "#/components/schemas/N8nEdgeView"
@@ -9845,7 +9853,7 @@
             "additionalProperties": {
               "$ref": "#/components/schemas/NodeState"
             },
-            "description": "Each block's state by its name. A block that is not here has not run.",
+            "description": "Each block's state by its name. A block that is not here has not run. One of n8n's blocks that never calls the platform, such as an IF, is done once a block after it ran (ENGINE-PLAN section 1, row 9).",
             "title": "States",
             "type": "object"
           },
@@ -9873,6 +9881,7 @@
           "n8n_version_id",
           "nodes",
           "edges",
+          "blocks",
           "states",
           "from_n8n"
         ],
@@ -12283,6 +12292,12 @@
             "title": "Nodes",
             "type": "array"
           },
+          "published_at": {
+            "description": "When the version in use was made, as the versions list says it.",
+            "format": "date-time",
+            "title": "Published At",
+            "type": "string"
+          },
           "published_by": {
             "anyOf": [
               {
@@ -12355,6 +12370,7 @@
           "published_by",
           "published_by_name",
           "published_in",
+          "published_at",
           "nodes",
           "edges",
           "holder",

@@ -5,9 +5,10 @@ from collections.abc import Mapping
 from datetime import datetime
 from typing import Any, Literal, Protocol
 
-from pydantic import Field
+from pydantic import AwareDatetime, Field
 
-from platform_api.builder.models import N8nBlockKind
+from platform_api.builder.models import N8nBlockKind, N8nBlockView
+from platform_api.builder.n8n_draft import blocks_of
 from platform_api.builder.n8n_holds import Held, Holding, StaffPort
 from platform_api.db import Database
 from platform_api.orchestration import (
@@ -55,6 +56,9 @@ class UseCaseN8nView(WireModel):
     )
     published_by_name: str | None
     published_in: Literal["portal", "n8n"] | None
+    published_at: AwareDatetime = Field(
+        description="When the version in use was made, as the versions list says it."
+    )
     nodes: list[N8nNodeView]
     edges: list[N8nEdgeView]
     holder: N8nHolderView | None = Field(description="Who has it open in n8n now, if anyone.")
@@ -74,8 +78,14 @@ class RunN8nView(WireModel):
     n8n_version_id: str | None = Field(description="The n8n version that execution ran.")
     nodes: list[N8nNodeView]
     edges: list[N8nEdgeView]
+    blocks: list[N8nBlockView] = Field(
+        description="The same blocks in the order a run meets them, as the set-up card and a "
+        "workflow's blocks list them, which the canvas draws."
+    )
     states: dict[str, NodeState] = Field(
-        description="Each block's state by its name. A block that is not here has not run."
+        description="Each block's state by its name. A block that is not here has not run. One "
+        "of n8n's blocks that never calls the platform, such as an IF, is done once a block "
+        "after it ran (ENGINE-PLAN section 1, row 9)."
     )
     from_n8n: bool = Field(
         description="n8n's own record of the ended run was read, so n8n's blocks are here too."
@@ -114,9 +124,31 @@ def graph(document: Mapping[str, Any] | None) -> tuple[list[N8nNodeView], list[N
     return nodes, edges
 
 
+QUIET: frozenset[N8nBlockKind] = frozenset({"branch", "merge", "other"})
+"""n8n's own blocks between a run's start and its end, which never call the platform."""
+
+
+def with_quiet_blocks(
+    states: Mapping[str, NodeState], nodes: list[N8nNodeView], edges: list[N8nEdgeView]
+) -> dict[str, NodeState]:
+    """Each quiet block that a block after it shows ran is done too, so an IF is not drawn as
+    not run while the run waits past it. n8n's own record, once read, already names them."""
+    kinds = {node.name: node.kind for node in nodes}
+    found = dict(states)
+    grown = True
+    while grown:
+        grown = False
+        for edge in edges:
+            quiet = kinds.get(edge.source) in QUIET
+            if quiet and edge.target in found and edge.source not in found:
+                found[edge.source] = "done"
+                grown = True
+    return found
+
+
 _IN_USE = """
     SELECT u.n8n_workflow_id, u.current_version, v.document, v.n8n_version_id, v.published_by,
-           v.published_in
+           v.published_in, v.created_at
     FROM builder.use_cases u
     JOIN builder.use_case_versions v
       ON v.use_case_id = u.use_case_id AND v.version = u.current_version
@@ -166,6 +198,7 @@ class InN8nViews:
             if publisher is None
             else await self._staff.display_of(publisher),
             published_in=row["published_in"],
+            published_at=row["created_at"],
             nodes=nodes,
             edges=edges,
             holder=None if held is None else await self._holder(held),
@@ -185,7 +218,8 @@ class InN8nViews:
                 row = await found.fetchone()
             if row is None:
                 row = await (await conn.execute(_IN_USE, (ran.use_case_id,))).fetchone()
-        nodes, edges = graph(None if row is None else row["document"])
+        document = None if row is None else row["document"]
+        nodes, edges = graph(document)
         return RunN8nView(
             run_id=run_id,
             use_case_id=ran.use_case_id,
@@ -194,7 +228,8 @@ class InN8nViews:
             n8n_version_id=ran.version_id,
             nodes=nodes,
             edges=edges,
-            states=dict(ran.nodes),
+            blocks=[] if document is None else blocks_of(document),
+            states=with_quiet_blocks(ran.nodes, nodes, edges),
             from_n8n=ran.read_n8n,
         )
 
