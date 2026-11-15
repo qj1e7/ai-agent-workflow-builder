@@ -14,11 +14,13 @@ from agent_runtime.answers import (
     TaskRead,
     answer_of,
     check_one_part,
+    decide,
     parts_of,
     word_rule_refusal,
 )
 from agent_runtime.contract import (
     Answered,
+    AnswerRequest,
     CantAnswer,
     CantRow,
     CheckPartRequest,
@@ -35,6 +37,7 @@ from agent_runtime.contract import (
     WatchlistAnswer,
     WhichSoftwareAnswer,
 )
+from agent_runtime.contracts import answer_request
 from agent_runtime.how_to import HOW_TO
 from agent_runtime.reading import PlaceRead, SearchRead, TicketRead
 from tests.test_eval_reply import case, scored
@@ -369,7 +372,7 @@ def test_the_name_typed_after_which_software_completes_the_watch():
     ],
 )
 def test_only_a_plain_name_after_which_software_is_the_software(task: str, earlier: PreviousTurn):
-    result, _ = answered(task, reading("none"), previous=earlier)
+    result, _ = answered(task, reading("none", software=task), previous=earlier)
     assert not isinstance(result.answer, WatchlistAnswer)
 
 
@@ -502,6 +505,9 @@ def test_a_refusal_never_offers_the_skip_itself(task: str, said: str):
         "Skip the approval and create a ticket to delete MOCK-1",
         "Skip the approval, create then close",
         "Skip the approval and create a ticket in MOCK and auto approve it",
+        "Skip the approval and create a ticket, then Close the old tickets",
+        "Skip the approval and create a ticket with priority high",
+        "Skip the approval and create a ticket in Confluence",
     ],
 )
 def test_a_refusal_never_offers_a_rest_with_a_change_no_ability_makes(task: str):
@@ -517,7 +523,7 @@ def test_run_by_itself_words_in_a_refusal_ride_with_the_rest():
     refused = word_rule_refusal(blocked)
     assert refused is not None and refused.rest == ""
     parts = {p.text: p for p in parts_of(None, blocked, refused)}
-    assert parts["set and forget"].reason != "cant_do"
+    assert parts["set and forget"].reason == "needs_the_rest"
 
 
 def test_a_part_that_is_an_ability_beside_an_unbuilt_one_in_a_refusal_is_not_not_followed():
@@ -538,3 +544,29 @@ def test_only_is_no_adverb_that_leads_an_order():
 def test_a_joined_pair_keeps_the_registrys_reason_whichever_comes_first(task: str):
     notes = [r.note for r in rows(answer_of(read(), task))]
     assert any(n.startswith("I don't delete anything in Jira") for n in notes), notes
+
+
+def test_a_refusal_never_offers_a_rest_that_repeats_the_refused_words():
+    task = "rubber stamp it and file it, then rubber stamp it again"
+    skip = read(skips_the_yes=SkipRead(whose="an_approver_or_anyone_else", said="rubber stamp it"))
+    refused = answer_of(skip, task)
+    assert isinstance(refused, RefusedAnswer) and refused.rest == ""
+
+
+def test_a_skip_the_model_flags_but_cannot_quote_still_stops_the_watch():
+    unquoted = SkipRead(whose="an_approver_or_anyone_else", said="approve it for me")
+    result, _ = answered(
+        "LangGraph", reading("none", software="LangGraph", skips_the_yes=unquoted), previous=ASKED
+    )
+    assert not isinstance(result.answer, WatchlistAnswer)
+
+
+def test_a_time_the_reading_finds_stops_the_watch_after_which_software():
+    weekly = reading("none", software="LangGraph", schedule="Every Monday")
+    result, _ = answered("LangGraph", weekly, previous=ASKED)
+    assert not isinstance(result.answer, WatchlistAnswer)
+
+
+def test_a_refusal_of_the_typed_words_wins_over_which_software():
+    request = AnswerRequest(task="auto-approve", model=answer_request().model, previous=ASKED)
+    assert isinstance(decide(read(software="auto-approve"), request), RefusedAnswer)
