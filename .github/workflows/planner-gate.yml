@@ -1,34 +1,22 @@
 name: planner-gate
 
-# ADR 0047: the Planner's answers are gated on the reply golden set, on the real model through the
-# AI Singapore gateway. A pull request that changes the Planner runs it once. Main runs it three
-# times each night, because the model behind the gateway can change without a commit.
+# ADR 0047: a pull request that changes the Planner is scored on the real model through the AI
+# Singapore gateway, on the reply set's gate cases and the verifier's red-team set.
+#
+# Budget. The gateway key is the team lead's, with a small budget ($32, used up on 15 Nov 2026).
+# So each run is capped at 200 calls and $3, the gate refuses a run with higher caps, and there
+# is no scheduled run. The nightly runs ADR 0047 asks for, the judge, and its calibration against
+# the team lead's labels (REPLY_JUDGE_AGREED) all wait for the team lead to set a budget.
 on:
   pull_request:
     paths:
-      - agent-runtime/src/agent_runtime/abilities.py
-      - agent-runtime/src/agent_runtime/answers.py
-      - agent-runtime/src/agent_runtime/contract.py
-      - agent-runtime/src/agent_runtime/edits.py
-      - agent-runtime/src/agent_runtime/follow_ups.py
-      - agent-runtime/src/agent_runtime/free_reply.py
-      - agent-runtime/src/agent_runtime/how_to.py
-      - agent-runtime/src/agent_runtime/parts.py
-      - agent-runtime/src/agent_runtime/planner.py
-      - agent-runtime/src/agent_runtime/questions.py
-      - agent-runtime/src/agent_runtime/reading.py
-      - agent-runtime/src/agent_runtime/reply_guard.py
-      - agent-runtime/evals/reply.py
-      - agent-runtime/evals/gate.py
-      - agent-runtime/evals/cases/answer.json
+      - agent-runtime/src/agent_runtime/**
       - agent-runtime/evals/cases/reply.json
-      - .github/workflows/planner-gate.yml
-  schedule:
-    - cron: "0 18 * * *"
+      - agent-runtime/evals/cases/red_team.json
   workflow_dispatch:
     inputs:
-      models:
-        description: The gateway models to gate, comma separated. Empty uses Claude Haiku 4.5.
+      model:
+        description: The gateway model to gate. Empty uses PLANNER_GATE_MODEL, else Claude Sonnet 5.5 (ADR 0048).
         required: false
         default: ''
         type: string
@@ -47,10 +35,6 @@ jobs:
   gate:
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    strategy:
-      fail-fast: false
-      matrix:
-        run: ${{ github.event_name == 'schedule' && fromJSON('[1, 2, 3]') || fromJSON('[1]') }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
@@ -69,33 +53,30 @@ jobs:
             exit 1
           fi
 
-      # Each run gets its own marker, because the gateway answers a repeated request from its store.
-      - name: Score the reply golden set
+      # One model, no judge, and the run's own marker, because the gateway answers a repeated
+      # request from its store. The caps match evals.gate's GATE_MAX_CALLS and GATE_MAX_DOLLARS.
+      - name: Score the gate cases and the red-team set
         env:
           AGENT_MODEL_API_KEY: ${{ secrets.AISG_API_KEY }}
-          GATEWAY_MODELS: ${{ inputs.models || vars.GATEWAY_MODELS || 'claude-haiku-4-5-20251001' }}
+          GATEWAY_MODELS: ${{ inputs.model || vars.PLANNER_GATE_MODEL || 'claude-sonnet-5-5' }}
           EVAL_TEMPERATURE: ${{ vars.EVAL_TEMPERATURE }}
-          EVAL_JUDGE: ${{ vars.EVAL_JUDGE }}
-          EVAL_JOBS: reply
-          EVAL_MARKER: gate-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.run }}
+          EVAL_JUDGE: ''
+          EVAL_JOBS: reply_gate,red_team
+          EVAL_MAX_CALLS: '200'
+          EVAL_MAX_DOLLARS: '3'
+          EVAL_MARKER: gate-${{ github.run_id }}-${{ github.run_attempt }}
         run: scripts/evals.sh
 
-      # The judge's score gates only once the team lead has set REPLY_JUDGE_AGREED, after it agreed
-      # with their own labels on at least 27 of 30 replies.
       - name: Hold the run to the ADR's bars
         working-directory: agent-runtime
-        env:
-          JUDGE_AGREED: ${{ vars.REPLY_JUDGE_AGREED }}
         run: |
-          agreed=()
-          if [ "${JUDGE_AGREED}" = "true" ]; then agreed=(--judge-agreed); fi
-          uv run --locked python -m evals.gate evals/out/results.json "${agreed[@]}" | tee -a "$GITHUB_STEP_SUMMARY"
+          uv run --locked python -m evals.gate evals/out/results.json | tee -a "$GITHUB_STEP_SUMMARY"
           exit "${PIPESTATUS[0]}"
 
       - name: Keep the results
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: planner-gate-${{ matrix.run }}
+          name: planner-gate
           path: agent-runtime/evals/out/
           if-no-files-found: ignore

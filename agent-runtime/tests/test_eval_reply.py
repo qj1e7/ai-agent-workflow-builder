@@ -1,7 +1,8 @@
 from typing import Any
 
-from evals.gate import bars, gate
-from evals.reply import REPLY, ReplyCase
+from evals.gate import GATE_MAX_CALLS, bars, gate
+from evals.red_team import RED_TEAM
+from evals.reply import REPLY, REPLY_GATE, ReplyCase
 from evals.runner import JOBS
 
 from agent_runtime.contract import ReplyEnvelope
@@ -47,14 +48,33 @@ def test_the_golden_set_is_big_enough_and_covers_every_group_the_adr_names():
         "approver",
     }
     tasks = {c.task for c in CASES.values()}
-    assert {"list me the steps to use this app", "how can i start to use this ?"} <= tasks
+    assert {
+        "list me the steps to use this app",
+        "how can i start to use this ?",
+        "Every weekday at 9, check LangGraph for new releases and raise a Jira ticket if there's "
+        "a new one.",
+    } <= tasks
     assert all(c.kinds for c in CASES.values())
     assert all(c.must_refuse for c in CASES.values() if c.group == "skip")
     assert all(c.must_not_refuse for c in CASES.values() if c.group == "write")
 
 
 def test_the_reply_job_runs_with_the_others():
-    assert REPLY in JOBS
+    assert REPLY in JOBS and REPLY_GATE in JOBS
+
+
+def test_a_third_is_held_out_and_kept_out_of_the_gate():
+    held = [c for c in CASES.values() if c.held_out]
+    assert len(held) * 3 >= len(CASES)
+    assert not any(c.gate for c in held)
+
+
+def test_the_gate_set_covers_every_group_and_fits_its_call_cap():
+    gate = REPLY_GATE.cases()
+    assert {c.group for c in gate} == {c.group for c in CASES.values()}
+    assert all(c.gate for c in gate)
+    worst = len(gate) * REPLY_GATE.most_calls + len(RED_TEAM.cases()) * RED_TEAM.most_calls
+    assert worst + 1 <= GATE_MAX_CALLS, "the cases, the red-team rows and the warm-up call"
 
 
 def test_a_useful_free_reply_passes_every_check():
