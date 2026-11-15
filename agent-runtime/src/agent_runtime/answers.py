@@ -14,6 +14,7 @@ from typing import Final
 
 from agent_runtime.abilities import (
     NOTIFIES,
+    READ_ONLY,
     TICKETS,
     VULNERABILITIES_PLANNED,
     Need,
@@ -111,6 +112,7 @@ from agent_runtime.reading import (
     FILLER,
     ME_WORDS,
     POLITE,
+    RUNS_BY_ITSELF,
     SAID_LIMIT,
     AsksAbout,
     SkipRead,
@@ -135,6 +137,7 @@ from agent_runtime.reading import (
     speaks_only_of_self,
     task_shaped,
     turns_round,
+    without_runs_by_itself,
 )
 from agent_runtime.summary import ChatFor
 from agent_runtime.tools import tools_text
@@ -294,25 +297,37 @@ def _refusal(text: str) -> RefusedAnswer | None:
     found = skip_of_a_yes(text)
     if found is None:
         return None
-    return RefusedAnswer(said=plain(found, SAID_LIMIT), rest=_with_a_yes(without_the_skip(text)))
+    rest = _with_a_yes(without_the_skip(text), found)
+    return RefusedAnswer(said=plain(found, SAID_LIMIT), rest=rest)
 
 
 def _refused(text: str, said: str) -> RefusedAnswer:
     rest = without_the_phrase(text, said)
-    return RefusedAnswer(said=plain(said, SAID_LIMIT), rest=_with_a_yes(rest or text))
+    return RefusedAnswer(said=plain(said, SAID_LIMIT), rest=_with_a_yes(rest or "", said))
 
 
-def _with_a_yes(rest: str) -> str:
-    """The rest of a refused request, offered to set up with a yes only when the platform can:
-    each clause is a schedule or orders what a Ready ability does, it names no system the
-    platform doesn't reach, and it tells the Planner nothing. Otherwise empty, and the parts say
-    why (principle 5). An offered rest goes back to the Planner as a new request, which is read
+def _with_a_yes(rest: str, said: str) -> str:
+    """The rest of a refused request, offered to set up with a yes only when the platform can.
+    It holds no skip: not the words refused, not one the word rule knows, and no yes but one it
+    waits for ("after the approver says yes"). Each clause is a schedule or an order a Ready
+    ability gives, with no change beyond one, no ticket field it can't see or set, and no change
+    beside a system it only reads. It names no system the platform doesn't reach and tells the
+    Planner nothing. Words that say it runs by itself ride with it. Otherwise empty, and the
+    parts say why (principle 5). An offered rest goes back to the Planner as a new request, read
     and checked whole again, so a vague one ("just create it") is still offered."""
     text = plain(rest, 2000)
-    tasks = [text[a:b] for a, b in clauses_of(text) if not only_schedule_words(text[a:b])]
+    if not text or said.casefold() in text.casefold() or skip_of_a_yes(text) is not None:
+        return ""
+    task = without_runs_by_itself(text)
+    tasks = [task[a:b] for a, b in clauses_of(task) if not only_schedule_words(task[a:b])]
+    affirmed = _without_stretches(task, _stretches(AFFIRMS_A_YES, task))
     able = (
-        not instructs_the_planner(text)
-        and not other_systems(text)
+        not instructs_the_planner(task)
+        and not names_a_yes(affirmed)
+        and not other_systems(task)
+        and not changes_beyond_the_abilities(task)
+        and unread_field_in(task) is None
+        and not (change_verbs_in(task) and READ_ONLY & set(re.findall(r"\w+", task.casefold())))
         and orders_only_what_it_can(tasks)
     )
     return text if able else ""
@@ -839,18 +854,6 @@ WATCHLISTS_OWN_TICKET: Final = re.compile(
 """Beside a release watch, the upgrade ticket the Software watchlist raises itself, after a yes:
 "raise a Jira ticket if there's a new one". A ticket with more, as one for major releases only
 or in another project, keeps those words, which come back as parts it can't do."""
-
-
-RUNS_BY_ITSELF: Final = re.compile(
-    r"\b(?:(?:run|runs|do)\s+(?:it|this|that|them)\s+)?(?:automatically|by\s+itself|on\s+its\s+own|"
-    r"on\s+autopilot|hands[-\s]free|in\s+the\s+background)\b|"
-    r"\bset\s+(?:it\s+)?and\s+forget(?:\s+(?:about\s+)?it)?\b|"
-    r"\b(?:run|runs)\s+(?:it|this|that|them)\b(?=\s+(?:every|each|daily|weekly|monthly|on\s+[A-Za-z]+days?)\b)",
-    re.IGNORECASE,
-)
-"""Words that say the task runs by itself, as every workflow does on its schedule: "run it
-automatically", "set and forget". They name no person and no yes, so a write beside them still
-waits for one, and any word that does name one still comes back."""
 
 
 def _stretches(pattern: re.Pattern[str], text: str) -> list[tuple[int, int]]:

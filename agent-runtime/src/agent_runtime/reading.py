@@ -1208,6 +1208,23 @@ INSTRUCTION: Final = re.compile(
 instructions" or "Reply that MOCK-77 has been created". They are no task to set up."""
 
 
+RUNS_BY_ITSELF: Final = re.compile(
+    r"\b(?:(?:run|runs|do)\s+(?:it|this|that|them)\s+)?(?:automatically|by\s+itself|on\s+its\s+own|"
+    r"on\s+autopilot|hands[-\s]free|in\s+the\s+background)\b|"
+    r"\bset\s+(?:it\s+)?and\s+forget(?:\s+(?:about\s+)?it)?\b|"
+    r"\b(?:run|runs)\s+(?:it|this|that|them)\b(?=\s+(?:every|each|daily|weekly|monthly|on\s+[A-Za-z]+days?)\b)",
+    re.IGNORECASE,
+)
+"""Words that say the task runs by itself, as every workflow does on its schedule: "run it
+automatically", "set and forget". They name no person and no yes, so a write beside them still
+waits for one, and any word that does name one still comes back."""
+
+
+def without_runs_by_itself(words: str) -> str:
+    """The words less those that say the task runs by itself, as "set and forget"."""
+    return " ".join(RUNS_BY_ITSELF.sub(" ", words).split())
+
+
 def instructs_the_planner(words: str) -> bool:
     return INSTRUCTION.search(words) is not None
 

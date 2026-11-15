@@ -1425,9 +1425,12 @@ def orders_only_what_it_can(clauses: list[str]) -> bool:
 
 
 def changes_beyond_the_abilities(text: str) -> bool:
-    """Whether the words ask for a change no ability makes, as "delete" or "set"."""
+    """Whether the words ask for a change no ability makes, as "delete" or "set". A release
+    word that names a thing, as "upgrade" in "the LangGraph upgrade ticket", asks for none."""
     able = {verb for ability in ABILITIES for verb in ability.verbs}
-    return any(verb not in able for verb in change_verbs_in(text))
+    row = _tokens(text)
+    nouns = {row[at].bare for at in range(len(row)) if _release_noun(row, at)}
+    return any(verb not in able and verb not in nouns for verb in change_verbs_in(text))
 
 
 def names_no_ability(note: str) -> bool:

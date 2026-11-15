@@ -10,7 +10,14 @@ import re
 from dataclasses import dataclass
 from typing import Final
 
-from agent_runtime.abilities import change_verbs_in, commands_a_change, why_not
+from agent_runtime.abilities import (
+    change_verbs_in,
+    changes_beyond_the_abilities,
+    commands_a_change,
+    orders_only_what_it_can,
+    other_systems,
+    why_not,
+)
 from agent_runtime.contract import (
     AbilitiesAnswer,
     CantAnswer,
@@ -57,6 +64,7 @@ from agent_runtime.reading import (
     polite,
     schedule_clashes,
     trim,
+    without_runs_by_itself,
 )
 
 NOT_FOLLOWED: Final = "I didn't follow this part."
@@ -414,10 +422,19 @@ def _unmarked(answer: PlannerAnswer, text: str, clause: Span) -> RequestPart:
 
 
 def _not_offered(text: str, clause: Span) -> RequestPart:
-    """A clause beside a refusal that offers no set-up: what it can't do, in the registry's
-    words, or not followed when it tells the Planner what to say or names nothing it can't do."""
+    """A clause beside a refusal that offers no set-up: the registry's can't for a change no
+    ability makes or a system the platform doesn't reach; "It can't run without the part I
+    can't do" for an order an ability gives, or words that say it runs by itself; and not
+    followed for words that tell the Planner what to say or that name nothing."""
     words = text[clause[0] : clause[1]]
-    note = None if instructs_the_planner(words) else why_not("schedule", words)
-    if note is None:
+    if instructs_the_planner(words):
         return _part(text, clause, "cant", "not_followed")
-    return _part(text, clause, "cant", "cant_do", note)
+    task = without_runs_by_itself(words)
+    if not task:
+        return _part(text, clause, "cant", "needs_the_rest")
+    note = why_not("schedule", task) or why_not("do", task)
+    if note is not None and (changes_beyond_the_abilities(task) or other_systems(task)):
+        return _part(text, clause, "cant", "cant_do", note)
+    if orders_only_what_it_can([task]):
+        return _part(text, clause, "cant", "needs_the_rest")
+    return _part(text, clause, "cant", "not_followed")
