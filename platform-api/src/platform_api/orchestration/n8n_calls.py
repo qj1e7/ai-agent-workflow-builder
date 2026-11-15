@@ -627,7 +627,8 @@ class FailedExecution:
     from n8n (ENGINE-PLAN 2.8)."""
 
     execution_id: N8nExecutionId
-    workflow_id: str
+    facts: ExecutionFacts
+    """What it ran, from the same record: n8n no longer reads a failed execution as running."""
     node: str | None
     message: str | None
 

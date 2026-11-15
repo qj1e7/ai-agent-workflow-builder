@@ -66,11 +66,10 @@ REPORTER = N8nExecutionId("900")
 
 @dataclass
 class FakeFailures:
-    """n8n's failed executions, as the public API lists them, what each one's data says, and
-    which workflow is the platform's error workflow."""
+    """n8n's record of each failed execution, and which workflows are the platform's error
+    workflow and daily self-test."""
 
-    errored: dict[str, list[str]] = field(default_factory=dict[str, list[str]])
-    words: dict[str, tuple[str, str]] = field(default_factory=dict[str, tuple[str, str]])
+    failed: dict[str, FailedExecution] = field(default_factory=dict[str, FailedExecution])
     error_workflow: str | None = ERROR_WORKFLOW
     self_test: str | None = SELF_TEST
     read: list[str] = field(default_factory=list[str])
@@ -101,11 +100,7 @@ class FakeFailures:
 
     async def failure(self, execution_id: N8nExecutionId) -> FailedExecution | None:
         self.read.append(execution_id)
-        workflow = next((w for w, listed in self.errored.items() if execution_id in listed), None)
-        if workflow is None:
-            return None
-        node, message = self.words.get(execution_id, ("Read release", "GitHub did not answer"))
-        return FailedExecution(execution_id, workflow, node, message)
+        return self.failed.get(execution_id)
 
 
 @dataclass
@@ -129,9 +124,14 @@ class Reports:
         message: str = "The agent is down",
         workflow: str = WORKFLOW,
     ) -> None:
-        """n8n's record: the execution ended in an error at this block, with these words."""
-        self.failures.errored.setdefault(workflow, []).append(execution)
-        self.failures.words[execution] = (node, message)
+        """n8n's record: the execution ended in an error at this block, with these words. As in
+        n8n, an execution that failed no longer reads as running, so only this record of its
+        failure carries what it ran."""
+        ran = self.n8n.executions.pop(execution, None)
+        facts = ran or ExecutionFacts(workflow, "trigger", None, None, "v1")
+        self.failures.failed[execution] = FailedExecution(
+            N8nExecutionId(execution), facts, node, message
+        )
 
     async def report(self, execution: str = "101", **said: str) -> FailureResult:
         """Report a failure, run by our error workflow's execution 900."""
@@ -197,9 +197,11 @@ async def test_a_report_fails_the_linked_run_with_the_blocks_words(r: Reports):
 
 
 async def test_a_report_without_a_link_shows_the_run_that_stopped_before_reading(r: Reports):
-    """The schedule fired, and Read could not reach our API, so no block ever called."""
+    """The schedule fired, and Read could not reach our API, so no block ever called. n8n no
+    longer reads it as running, so it is linked from n8n's record of its failure (#265)."""
     r.started("101")
     assert isinstance(await r.report(node="Read release", message="ECONNREFUSED"), FailedRun)
+    assert await r.n8n.execution(N8nExecutionId("101")) is None, "n8n shows it failed"
     [run] = await r.runs()
     assert run.spec.trigger == "schedule"
     assert isinstance(run.state, Failed)
@@ -292,15 +294,9 @@ async def test_a_repeated_report_leaves_the_first_failure(r: Reports):
 
 
 async def test_a_report_for_a_workflow_that_is_not_ours_makes_no_run(r: Reports):
+    """Refused plainly, by n8n's record of the failure, and never asked for again (#265)."""
     r.n8n.executions["101"] = ExecutionFacts("wf_theirs", "trigger", None, None, "v1")
-    assert isinstance(await r.report(), LeftAsIs)
-    assert await r.runs() == []
-
-
-async def test_a_report_for_an_execution_n8n_does_not_know_yet_is_asked_again(r: Reports):
-    r.n8n.executions[REPORTER] = ExecutionFacts(ERROR_WORKFLOW, "error", None, None, None)
-    r.errored("101")
-    assert isinstance(await r.calls.report(REPORTER, N8nExecutionId("101")), TryLater)
+    assert await r.report() == LeftAsIs(NOT_OURS.detail)
     assert await r.runs() == []
 
 
@@ -396,8 +392,8 @@ async def test_the_sweep_fails_an_open_run_from_its_error_execution(r: Reports):
     reach no error workflow."""
     r.started("101")
     await r.call("101", READ, "Read release")
-    r.failures.errored[WORKFLOW] = ["99", "101"]
-    r.failures.words["101"] = ("Read release", "GitHub did not answer")
+    r.errored("99")
+    r.errored("101", "Read release", "GitHub did not answer")
     [run] = await r.runs()
     assert await r.calls.sweep() == [run.run_id]
     state = await r.state()
@@ -432,8 +428,7 @@ async def test_the_sweep_fails_a_test_run_whose_execution_failed_before_any_bloc
     record = RunRecord(run_id, own, SPEC.owner, NOW, NOW, 1, claimed, (), None)
     async with r.h.db.transaction("orchestration") as uow:
         await Store().insert_run(uow, record, "portal:test")
-    r.failures.errored[WORKFLOW] = ["101"]
-    r.failures.words["101"] = ("Read release", "The node is not set up")
+    r.errored("101", "Read release", "The node is not set up")
     assert await r.calls.sweep() == [run_id]
     state = await r.state()
     assert isinstance(state, Failed) and state.stage is Stage.PENDING
@@ -458,7 +453,7 @@ async def test_the_sweep_passes_a_test_run_n8n_finished_before_any_block_called(
 
 async def test_the_sweep_never_fails_a_run_that_finished(r: Reports):
     run_id = await r.test_run_at_the_gate()
-    r.failures.errored[WORKFLOW] = ["101"]
+    r.errored("101")
     assert await r.calls.sweep() == []
     assert await r.state() == Succeeded(run_id, Outcome.TEST_PASSED, ())
     assert r.failures.read == []
