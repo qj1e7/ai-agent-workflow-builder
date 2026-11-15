@@ -39,6 +39,8 @@ SECRET_ENVS = (
     *URL_ENVS,
 )
 _KEY_SHAPES = re.compile(r"\b(?:sk-[\w*-]{8,}|AIza[\w-]{8,})")
+# A gateway names the key's owner in its own errors, such as a spent budget.
+_EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+(?::[\w-]+)?")
 WARM_UP = "Reply with the word ready."
 # A host name, host label or user name shorter than this is not redacted on its own. Short ones
 # such as "db", "a" or "host" are ordinary words in error text, so removing them would wreck the
@@ -94,7 +96,7 @@ def redact(text: str, env: Env) -> str:
     text = _KEY_SHAPES.sub("[redacted]", text)
     for secret in _secret_values(env):
         text = text.replace(secret, "[redacted]")
-    return text
+    return _EMAIL.sub("[redacted]", text)
 
 
 def _failure(error: Exception, env: Env) -> str:
