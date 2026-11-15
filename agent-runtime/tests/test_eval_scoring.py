@@ -284,6 +284,7 @@ def test_every_job_is_registered_once() -> None:
         "draft",
         "choose",
         "answer",
+        "anything",
         "reply",
     ]
 

@@ -42,6 +42,7 @@ from tests.support import (
     NOW,
     REDIS,
     SPEC,
+    TEAM_ZONE,
     fixture,
     schedule_owners_listed,
     watched,
@@ -219,7 +220,9 @@ async def test_the_schedule_owner_the_portal_names_never_approves_a_scheduled_ru
     resumes it. Both are the run's own work."""
     wl.workflows.versions = {"v1": RanVersion("safe", Publisher(publisher.user_id))}
     await schedule_owners_listed(wl.h.db, owner)
-    await ScheduleBook(wl.h.db).save(SPEC.use_case_id, Schedule("tuesday", "07:30"), owner)
+    await ScheduleBook(wl.h.db).save(
+        SPEC.use_case_id, Schedule("tuesday", "07:30", TEAM_ZONE), owner
+    )
 
     waiting = await check(wl, "101")
 
@@ -250,7 +253,7 @@ async def test_a_schedule_whose_owner_left_the_list_starts_no_run_until_it_is_ta
     which he can't approve."""
     await schedule_owners_listed(wl.h.db, CAROL, DAVE)
     schedules = ScheduleBook(wl.h.db)
-    await schedules.save(SPEC.use_case_id, Schedule("tuesday", "07:30"), CAROL)
+    await schedules.save(SPEC.use_case_id, Schedule("tuesday", "07:30", TEAM_ZONE), CAROL)
     await People(wl.h.db).remove(DAVE, CAROL.user_id)
     left = await schedules.get(SPEC.use_case_id)
     assert left is not None and left.held == "owner_removed"
@@ -258,7 +261,7 @@ async def test_a_schedule_whose_owner_left_the_list_starts_no_run_until_it_is_ta
 
     with caplog.at_level(logging.INFO):
         assert await wl.call("101", READ, "Read the watchlist") == Answer(())
-    await schedules.save(SPEC.use_case_id, Schedule("tuesday", "07:30"), DAVE)
+    await schedules.save(SPEC.use_case_id, Schedule("tuesday", "07:30", TEAM_ZONE), DAVE)
     checked = await wl.call("101", CHECK, "Check the watchlist")
     asked = await wl.call("101", AskCall(resume_url("101")), "Ask for a yes")
 

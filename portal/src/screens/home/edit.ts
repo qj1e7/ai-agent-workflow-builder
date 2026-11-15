@@ -5,7 +5,7 @@ import { CHANGED_SINCE_OPENED, changedSinceOpened, undoneWords } from '../workfl
 import { hourChoices, orList, TIMES } from './card'
 import { howOftenWords } from './parts'
 
-/** A schedule the edit card shows or saves: a day and a time, in Singapore. */
+/** A schedule the edit card shows or saves: a day and a time, in the team time zone. */
 export interface Schedule {
   readonly day: Day
   readonly at: string

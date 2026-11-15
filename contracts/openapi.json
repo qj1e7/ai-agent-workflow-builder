@@ -4234,7 +4234,7 @@
                 "type": "null"
               }
             ],
-            "description": "When it runs on its own, in Singapore time. The person who sets it up owns the schedule, so its scheduled runs are their work. Leave it out to run it only by hand."
+            "description": "When it runs on its own, in the team time zone. The person who sets it up owns the schedule, so its scheduled runs are their work. Leave it out to run it only by hand."
           }
         },
         "required": [
@@ -6564,6 +6564,11 @@
             },
             "title": "Roles",
             "type": "array"
+          },
+          "time_zone": {
+            "description": "The team time zone, such as Asia/Singapore, from the TEAM_TIME_ZONE setting. Every time the Portal shows without naming a zone is in it.",
+            "title": "Time Zone",
+            "type": "string"
           }
         },
         "required": [
@@ -10658,7 +10663,7 @@
         "properties": {
           "at": {
             "$ref": "#/components/schemas/ClockTime",
-            "description": "Time of day in Singapore, HH:MM on a 5-minute step."
+            "description": "Time of day in the team time zone, HH:MM on a 5-minute step."
           },
           "day": {
             "$ref": "#/components/schemas/Day"
@@ -10676,7 +10681,7 @@
         "properties": {
           "at": {
             "$ref": "#/components/schemas/ClockTime",
-            "description": "Time of day in Singapore, HH:MM on a 5-minute step."
+            "description": "Time of day in the team time zone, HH:MM on a 5-minute step."
           },
           "day": {
             "$ref": "#/components/schemas/Day"
@@ -12742,7 +12747,7 @@
         "properties": {
           "at": {
             "$ref": "#/components/schemas/ClockTime",
-            "description": "Time of day in Singapore, HH:MM on a 5-minute step."
+            "description": "Time of day in the team time zone, HH:MM on a 5-minute step."
           },
           "day": {
             "$ref": "#/components/schemas/Day"
@@ -20432,7 +20437,7 @@
     },
     "/api/v1/use-cases/{use_case_id}/schedule": {
       "put": {
-        "description": "Saves when the workflow runs on its own, in Singapore time. The caller becomes the schedule owner, whose scheduled runs start as them and who can never approve them. That lifts a hold, so an Operator takes over a workflow whose owner can no longer run it by saving its schedule. A new schedule publishes a new version of the workflow, which the answer names. Saving the same schedule again publishes none. A paused workflow stays paused. Saving is not a write to Jira or Confluence, so it needs no approval. With expected_version, a save made from a version that is no longer in use saves nothing.",
+        "description": "Saves when the workflow runs on its own, in the team time zone. The caller becomes the schedule owner, whose scheduled runs start as them and who can never approve them. That lifts a hold, so an Operator takes over a workflow whose owner can no longer run it by saving its schedule. A new schedule publishes a new version of the workflow, which the answer names. Saving the same schedule again publishes none. A paused workflow stays paused. Saving is not a write to Jira or Confluence, so it needs no approval. With expected_version, a save made from a version that is no longer in use saves nothing.",
         "operationId": "save_schedule_api_v1_use_cases__use_case_id__schedule_put",
         "parameters": [
           {

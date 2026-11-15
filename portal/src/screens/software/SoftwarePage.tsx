@@ -38,7 +38,6 @@ import {
   REFRESH_MS,
   rowsMatching,
   scheduleRuns,
-  singaporeTime,
   softwareLine,
   softwarePath,
   stateOf,
@@ -46,6 +45,7 @@ import {
   watchRank,
 } from './software'
 import styles from './Software.module.css'
+import { dateAndClock, teamTime } from '../workflows/times'
 
 function useFocusOnceRendered(feedback: ChangeFeedback) {
   const focusedFor = useRef<ChangeFeedback | null>(null)
@@ -129,7 +129,7 @@ function LastCheckStopped({ last }: { last: LastCheckView }) {
   return (
     <div className={styles['stopped']}>
       <p>
-        <b>{stoppedWords(reason)}</b> Started {singaporeTime(last.started_at)}, Singapore time.
+        <b>{stoppedWords(reason)}</b> Started {dateAndClock(last.started_at)}, {teamTime()}.
       </p>
       <Link to={`/runs/${last.run_id}`}>Open the run</Link>
     </div>

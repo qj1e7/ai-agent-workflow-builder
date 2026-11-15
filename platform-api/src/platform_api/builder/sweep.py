@@ -148,9 +148,11 @@ class VersionsSweep:
         graders: Graders,
         accounts: N8nAccounts,
         requests: OpenRequests | None,
+        team_zone: str,
         look_seconds: float = LOOK_SECONDS,
     ) -> None:
         self._db = db
+        self._zone = team_zone
         self._n8n = n8n
         self._graders = graders
         self._accounts = accounts
@@ -196,7 +198,7 @@ class VersionsSweep:
         error_workflow = (
             await self._n8n.error_workflow_id() or await self._n8n.recorded_error_workflow_id()
         )
-        mark = f"{GRADING_RULES} {error_workflow}"
+        mark = f"{GRADING_RULES} {error_workflow} {self._zone}"
         found: list[Seen] = []
         for row in rows:
             try:
@@ -244,7 +246,7 @@ class VersionsSweep:
             if not drifted and row["graded_by"] == mark:
                 return None
             document = kept if live is None else {**kept, "settings": settings}
-            graded = grade(document, error_workflow, known)
+            graded = grade(document, error_workflow, self._zone, known)
             if drifted:
                 return await self._settings(uow, row, workflow, document, graded)
             return await _regraded(uow, row, graded, mark)
@@ -309,7 +311,7 @@ class VersionsSweep:
         people = await self._accounts.people_by_n8n_user()
         publisher = publisher_of(live, "n8n", None, timeline, people)
         assert publisher is not None
-        graded = grade(document, error_workflow, known)
+        graded = grade(document, error_workflow, self._zone, known)
         newest = row["current_version"]
         version = await add_version(
             uow,

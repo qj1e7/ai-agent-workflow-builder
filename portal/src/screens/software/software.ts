@@ -398,12 +398,7 @@ interface Newest {
 export function newestOf(row: WatchedSoftwareView): Newest {
   if (row.newest_version === null) return { version: row.status === 'not_checked' ? 'Not checked yet' : 'Not known', note: null }
   const keptFrom = row.status === 'cant_check' ? row.newest_read_at : null
-  return { version: row.newest_version, note: keptFrom ? `Last read ${singaporeTime(keptFrom)}` : null }
-}
-
-/** "Mon 16 Nov, 9:00", in Singapore time. The midnight hour reads "0:30". */
-export function singaporeTime(iso: string): string {
-  return dateAndClock(iso)
+  return { version: row.newest_version, note: keptFrom ? `Last read ${dateAndClock(keptFrom)}` : null }
 }
 
 export function clockWords(at: string): string {
@@ -417,7 +412,7 @@ export function repeatWords({ day, at }: { readonly day: Day; readonly at: strin
   return `${dayLabel[day]} at ${clockWords(at)}`
 }
 
-/** "Checked every Monday at 9:00, set by Carol.", with the schedule's zone after the time when it is not Singapore: "at 9:00 London time". */
+/** "Checked every Monday at 9:00, set by Carol.", with the schedule's zone after the time when it is not the team's: "at 9:00 London time". */
 export function scheduleWords(schedule: ScheduleView): string {
   const zone = scheduleZoneName(schedule.time_zone)
   return `Checked ${repeatWords(schedule)}${zone ? ` ${zone}` : ''}, set by ${schedule.owner_name}.`
@@ -471,5 +466,5 @@ export function historyOf(row: WatchedSoftwareView, nameOf: (id: string) => stri
   }
   dated.push({ at: row.added_at, words: `Added by ${nameOf(row.added_by)}.` })
   const newestFirst = [...dated].sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
-  return [...now, ...newestFirst.map(({ at, words }) => ({ when: singaporeTime(at), words }))]
+  return [...now, ...newestFirst.map(({ at, words }) => ({ when: dateAndClock(at), words }))]
 }

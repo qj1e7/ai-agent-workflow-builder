@@ -13,6 +13,7 @@ export const gradePill = (grade: Grade): { readonly label: string; readonly tone
 
 export const ADD_THE_YES_BACK = 'Add the yes back'
 export const UNDO = 'Undo'
+export const SAVE_AGAIN = 'Save the schedule again'
 export const UNKNOWN_PUBLISHER = 'someone we don’t know'
 export const UNKNOWN_PUBLISHER_STOPS = 'We don’t know who published it in n8n, so its runs stop.'
 export const SETTINGS_SAVED = 'Its settings were changed in n8n.'

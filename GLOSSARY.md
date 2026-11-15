@@ -321,7 +321,7 @@ The platform's own n8n workflow, `run_failure_reporter`, that n8n starts when an
 _Avoid_: Error handler, alert workflow
 
 **Daily self-test**:
-The platform's own n8n workflow, `self_test_failure`, that n8n runs once a day at 06:00 Singapore time and that fails on purpose. Its failure travels the error workflow to our API like a run's would, and our API keeps when it arrived. It is never a run. `/healthz/ready` warns when none arrived in 26 hours, because then the error workflow is not reporting.
+The platform's own n8n workflow, `self_test_failure`, that n8n runs once a day at 06:00 in the team time zone and that fails on purpose. Its failure travels the error workflow to our API like a run's would, and our API keeps when it arrived. It is never a run. `/healthz/ready` warns when none arrived in 26 hours, because then the error workflow is not reporting.
 _Avoid_: Heartbeat, canary
 
 **Replica**:
@@ -339,7 +339,7 @@ A stand-in for Jira or Teams that the platform runs itself, so demos and tests w
 _Avoid_: Mock (in the app), sandbox
 
 **Team time zone**:
-The zone the team works in, Singapore unless the setting `TEAM_TIME_ZONE` names another. The agents' today, the day a run started, and every day an agent searches Jira by are days in it, so a search "since 18 Oct" starts at midnight there.
+The zone the team works in, Singapore unless the setting `TEAM_TIME_ZONE` names another. Every time the Portal shows without naming a zone is in it, and so is a new schedule. Every workflow's own n8n workflow runs on it. The agents' today, the day a run started, and every day an agent searches Jira by are days in it, so a search "since 18 Oct" starts at midnight there.
 _Avoid_: Server time, UTC day
 
 **Confirmation**:

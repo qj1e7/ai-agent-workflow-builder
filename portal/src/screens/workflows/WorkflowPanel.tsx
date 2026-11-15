@@ -55,8 +55,9 @@ function Summary({ useCase, me, now }: { useCase: UseCaseView; me: Me; now: Date
   const stopped = stopOf(useCase, whole)
   const troubleshoot = useTroubleshoot(stopped?.run_id ?? '', stopped !== null, 0)
   // Resume is beside Pause, so the banner leaves it out. One primary action for the state.
-  // Add the yes back and Undo are on the workflow's page, so the panel shows none that it can't run.
-  const banner = whole.action?.kind === 'resume' || whole.action?.kind === 'yes' || whole.action?.kind === 'undo' ? { ...whole, action: null } : whole
+  // Add the yes back, Undo and Save the schedule again are on the workflow's page, so the panel shows none that it can't run.
+  const kind = whole.action?.kind
+  const banner = kind === 'resume' || kind === 'yes' || kind === 'undo' || kind === 'resave' ? { ...whole, action: null } : whole
   return (
     <>
       <div>

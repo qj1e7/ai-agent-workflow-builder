@@ -45,6 +45,8 @@ ALICE = Principal(UserId("alice"), frozenset({Role.OPERATOR, Role.APPROVER}), "A
 BOB = Principal(UserId("bob"), frozenset({Role.APPROVER}), "Bob")
 CAROL = Principal(UserId("carol"), frozenset({Role.OPERATOR}), "Carol")
 NOW = datetime(2026, 11, 3, 2, 14, tzinfo=UTC)
+TEAM_ZONE = "Asia/Singapore"
+"""The team time zone the tests run in, unless one names another."""
 
 
 @dataclass

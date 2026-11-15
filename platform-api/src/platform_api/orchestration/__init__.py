@@ -123,7 +123,7 @@ from platform_api.orchestration.n8n_calls import (
     WriteEntry,
 )
 from platform_api.orchestration.n8n_run_view import NodeState, RunInN8n
-from platform_api.orchestration.n8n_schedule import next_run
+from platform_api.orchestration.n8n_schedule import next_run, zone_name
 from platform_api.orchestration.n8n_staff import (
     NO_ACCESS,
     OFF,
@@ -154,7 +154,6 @@ from platform_api.orchestration.run_gist import RunGist
 from platform_api.orchestration.runs import state_name
 from platform_api.orchestration.schedule import (
     AT_PATTERN,
-    TIME_ZONE,
     Day,
     Schedule,
     parse_at,
@@ -257,6 +256,7 @@ __all__ = [
     "publisher_of",
     "N8nTarget",
     "next_run",
+    "zone_name",
     "read_flow",
     "GITHUB_RELEASES",
     "WATCHLIST_CHECKER",
@@ -280,7 +280,6 @@ __all__ = [
     "ASK_EXITS",
     "writes",
     "N8nDocument",
-    "TIME_ZONE",
     "NODE_TYPES",
     "GRADING_RULES",
     "NOTHING_TO_CHANGE_BLOCK",

@@ -17,6 +17,8 @@ from langchain_core.language_models import BaseChatModel
 from pydantic import BaseModel, Field
 
 from evals.answer import ANSWER
+from evals.anything import ANYTHING
+from evals.budget import BUDGET_USED_UP, Spend, budget_spent, metered, spend_for, spent_words
 from evals.checks import Check
 from evals.choose import CHOOSE
 from evals.draft import DRAFT
@@ -24,9 +26,10 @@ from evals.explain import EXPLAIN
 from evals.jobs import Answer, Case, Job, marked
 from evals.providers import PROVIDERS, Env, NotRun, Target, plan
 from evals.reply import REPLY
+from evals.report import report
 from evals.summarise import SUMMARISE
 
-JOBS: tuple[Job[Any], ...] = (SUMMARISE, EXPLAIN, DRAFT, CHOOSE, ANSWER, REPLY)
+JOBS: tuple[Job[Any], ...] = (SUMMARISE, EXPLAIN, DRAFT, CHOOSE, ANSWER, ANYTHING, REPLY)
 PRICING = Path(__file__).parent / "pricing.json"
 # CI keeps the endpoints as secrets too. A URL can hold a password or a private host name.
 URL_ENVS = ("AZURE_OPENAI_ENDPOINT", "OLLAMA_BASE_URL", "AGENT_MODEL_BASE_URL")
@@ -38,6 +41,8 @@ SECRET_ENVS = (
     *URL_ENVS,
 )
 _KEY_SHAPES = re.compile(r"\b(?:sk-[\w*-]{8,}|AIza[\w-]{8,})")
+# A gateway names the key's owner in its own errors, such as a spent budget.
+_EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+(?::[\w-]+)?")
 WARM_UP = "Reply with the word ready."
 # A host name, host label or user name shorter than this is not redacted on its own. Short ones
 # such as "db", "a" or "host" are ordinary words in error text, so removing them would wreck the
@@ -93,10 +98,12 @@ def redact(text: str, env: Env) -> str:
     text = _KEY_SHAPES.sub("[redacted]", text)
     for secret in _secret_values(env):
         text = text.replace(secret, "[redacted]")
-    return text
+    return _EMAIL.sub("[redacted]", text)
 
 
 def _failure(error: Exception, env: Env) -> str:
+    if budget_spent(error):
+        return BUDGET_USED_UP
     # Redact before cutting, so a secret is never cut in half and left partly visible.
     return redact(f"{type(error).__name__}: {error}", env)[:500]
 
@@ -135,19 +142,18 @@ def run_case(
 
 
 class Verdict(BaseModel):
-    score: int = Field(
-        ge=1,
-        le=5,
-        description="1 to 5. 5 means accurate to the input and clear to a non-technical reader.",
-    )
+    score: int = Field(ge=1, le=5, description="1 to 5, where 5 is best, as the question says.")
 
 
-def judge(model: BaseChatModel, prompt: str, answer: str) -> int | None:
-    question = (
+def accuracy_question(prompt: str, answer: str) -> str:
+    return (
         "Rate this answer from 1 to 5. Judge only whether it is accurate to the task input and "
         f"clear to a non-technical support person.\n\nTask given to the assistant:\n{prompt}\n\n"
         f"Answer:\n{answer}"
     )
+
+
+def judge(model: BaseChatModel, question: str) -> int | None:
     try:
         verdict = model.with_structured_output(Verdict).invoke(question)
     except Exception:
@@ -162,7 +168,7 @@ def judge_target(env: Env) -> Target | None:
     provider_name, model = spec.split(":", 1)
     for provider in PROVIDERS:
         if provider.name == provider_name and all(env.get(n) for n in provider.needs):
-            return Target(provider.name, model, provider.settings(env, model))
+            return Target(provider.name, model, provider.settings(env, model), provider.client)
     return None
 
 
@@ -222,6 +228,7 @@ def summarise_job(
             n: sum(any(c.name == n and c.passed for c in o.checks) for o in outcomes) for n in names
         },
         "latency_ms": {
+            "mean": round(statistics.fmean(latencies)) if latencies else None,
             "median": round(statistics.median(latencies)) if latencies else None,
             "p95": round(percentile(latencies, 0.95) or 0) if latencies else None,
         },
@@ -276,7 +283,13 @@ def run_target(
     pricing: Mapping[str, Any],
     marker: str = "",
     jobs: tuple[Job[Any], ...] = JOBS,
+    spend: Spend | None = None,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """The target's rows, case by case, until `spend` says to stop. A stop keeps what ran."""
+    spend = spend or Spend(max_calls=10**9, max_dollars=float("inf"), prices={})
+    stopped = spend.stop_reason(1)
+    if stopped is not None:
+        return {"stopped": stopped}, []
     try:
         # Building can fail on a malformed setting, and the error can quote it.
         model = target.build()
@@ -285,20 +298,38 @@ def run_target(
         warm_up_ms = round((time.perf_counter() - started) * 1000)
         models = {job.name: model_for(job, target, model) for job in jobs}
     except Exception as error:
-        return {"error": _failure(error, env)}, []
+        status = {"error": _failure(error, env)}
+        return ({**status, "stopped": BUDGET_USED_UP} if budget_spent(error) else status), []
     rows: list[dict[str, Any]] = []
     for job in jobs:
         outcomes: list[Outcome] = []
-        for case in job.cases():
+        cases = job.cases()
+        ahead = job.most_calls + (1 if judge_model is not None and job.judged else 0)
+        stopped: str | None = None
+        for case in cases:
+            stopped = spend.stop_reason(ahead)
+            if stopped is not None:
+                break
             outcome = run_case(models[job.name], job, case, env, marker)
             if judge_model is not None and job.judged and outcome.answer:
-                outcome = replace(
-                    outcome, judge=judge(judge_model, job.prompt(case), outcome.answer)
+                question = (
+                    job.judge_question(case, outcome.answer)
+                    if job.judge_question
+                    else accuracy_question(job.prompt(case), outcome.answer)
                 )
+                outcome = replace(outcome, judge=judge(judge_model, marked(question, marker)))
+            if spend.gateway_out:
+                # The case met the spent budget, so its score says nothing about the model.
+                stopped = BUDGET_USED_UP
+                break
             outcomes.append(outcome)
             mark = "pass" if outcome.passed else "FAIL"
             print(f"  {target.label} {job.name}/{case.id}: {mark}", flush=True)
-        rows.append(summarise_job(target, job, outcomes, pricing))
+        if outcomes:
+            rows.append({**summarise_job(target, job, outcomes, pricing), "of": len(cases)})
+        if stopped is not None:
+            print(f"  {target.label}: stopped at {stopped}", flush=True)
+            return {"warm_up_ms": warm_up_ms, "stopped": stopped}, rows
     return {"warm_up_ms": warm_up_ms}, rows
 
 
@@ -359,26 +390,40 @@ def main(out: Path, env: Env | None = None) -> int:
     models: list[dict[str, Any]] = []
     marker = env.get("EVAL_MARKER") or uuid.uuid4().hex[:12]
     jobs = jobs_chosen(env)
-    for target in targets:
-        print(f"Running {target.label}", flush=True)
-        status, rows = run_target(target, env, judge_model, pricing, marker, jobs)
-        if "error" in status:
-            not_run.append(_redacted(NotRun(target.provider, target.model, status["error"]), env))
-            continue
-        models.append({"provider": target.provider, "model": target.model, **status})
-        results.extend(rows)
-    report = {
+    spend = spend_for(env, pricing)
+    stopped: str | None = None
+    with metered(spend):
+        for target in targets:
+            if stopped is not None:
+                not_run.append(NotRun(target.provider, target.model, f"stopped at {stopped}"))
+                continue
+            print(f"Running {target.label}", flush=True)
+            status, rows = run_target(target, env, judge_model, pricing, marker, jobs, spend)
+            stopped = status.pop("stopped", None)
+            if "error" in status:
+                failed = NotRun(target.provider, target.model, status["error"])
+                not_run.append(_redacted(failed, env))
+            elif rows or stopped is None:
+                models.append({"provider": target.provider, "model": target.model, **status})
+            else:
+                not_run.append(NotRun(target.provider, target.model, f"stopped at {stopped}"))
+            results.extend(rows)
+    results_file = {
         "generated_at": datetime.now(UTC).isoformat(timespec="seconds"),
         "marker": marker,
         "cases": {job.name: len(job.cases()) for job in jobs},
         "judge": judge_spec.label if judge_spec else None,
         "models": models,
         "not_run": [n.__dict__ for n in not_run],
+        "spend": {**spend.summary(), "stopped": stopped},
         "results": results,
     }
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(report, indent=2) + "\n")
+    out.write_text(json.dumps(results_file, indent=2) + "\n")
+    cases = {job.name: {c.id: c for c in job.cases()} for job in jobs}
+    out.with_suffix(".md").write_text(report([results_file], cases))
     print()
     print(table(results, not_run))
-    print(f"\nWrote {out}")
+    print(f"\n{spent_words(results_file['spend'])}")
+    print(f"Wrote {out} and its report, {out.with_suffix('.md').name}")
     return 0
