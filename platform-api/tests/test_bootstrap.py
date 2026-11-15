@@ -208,7 +208,7 @@ class FakeN8n:
             {"id": "k1", "label": "platform-api"},
             {"id": "k2", "label": "Alice's own key"},
         ]
-        self.node_types = list(NODE_CLASSES.included())
+        self.node_types = list(NODE_CLASSES.loaded())
         """What n8n loaded, as NODES_INCLUDE from the class file makes it."""
 
     def handle(self, request: httpx.Request) -> httpx.Response:
@@ -450,17 +450,21 @@ def test_a_run_on_the_shared_run_workflow_that_has_not_ended_stops_bootstrap_fir
     ("loads", "says"),
     [
         (
-            [*NODE_CLASSES.included(), "n8n-nodes-base.httpRequest", "n8n-nodes-base.code"],
+            [*NODE_CLASSES.loaded(), "n8n-nodes-base.httpRequest", "n8n-nodes-base.code"],
             "n8n loads 2 node type(s) that node_classes.json does not turn on, "
             "n8n-nodes-base.code, n8n-nodes-base.httpRequest: NODES_INCLUDE is not the class "
             "file's allow list",
         ),
         (
-            [t for t in NODE_CLASSES.included() if t != "CUSTOM.wabAskForYes"],
-            "n8n does not load CUSTOM.wabAskForYes, which node_classes.json turns on",
+            [t for t in NODE_CLASSES.loaded() if t != "CUSTOM.wabAskForYes"],
+            "n8n does not load CUSTOM.wabAskForYes, which node_classes.json says it loads",
+        ),
+        (
+            list(NODE_CLASSES.included()),
+            "n8n does not load n8n-nodes-base.dateTimeTool, which node_classes.json says it loads",
         ),
     ],
-    ids=["more", "fewer"],
+    ids=["more", "fewer", "without-the-tool-n8n-makes"],
 )
 def test_bootstrap_is_not_ready_unless_n8n_loads_exactly_the_class_file_s_types(
     postgres: PostgresUrls,

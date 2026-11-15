@@ -9,7 +9,9 @@ keeps it complete against the node types the pinned n8n image serves.
 
 The file maps each type to `{"off": why}`, or to its block kind and its rows. A row classes some
 versions of the type, either whole (`class`) or by the parameter that picks what the node does
-(`by`), with n8n's default for it and a class for each choice.
+(`by`), with n8n's default for it and a class for each choice. An off type that n8n makes itself
+from one that is on, whatever NODES_INCLUDE says, names that type in `loaded_with`: n8n makes an
+AI agent's tool of every node marked usable as one.
 """
 
 from collections.abc import Iterable, Mapping, Sequence
@@ -77,6 +79,7 @@ class _On(BaseModel):
 class _Off(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     off: str = Field(min_length=1)
+    loaded_with: str | None = None
 
 
 _FILE = TypeAdapter(dict[str, _On | _Off])
@@ -105,6 +108,8 @@ class OnType:
 @dataclass(frozen=True)
 class OffType:
     why: str
+    loaded_with: str | None = None
+    """The type that is on whose loading makes n8n load this one too."""
 
 
 @dataclass(frozen=True)
@@ -143,6 +148,16 @@ class NodeClasses:
         """n8n's allow list: every type the file does not turn off, in the file's order."""
         return tuple(name for name, entry in self._types.items() if isinstance(entry, OnType))
 
+    def loaded(self) -> tuple[str, ...]:
+        """Every type n8n loads with the allow list: the types that are on, and the off types n8n
+        makes from them."""
+        made = (
+            name
+            for name, entry in self._types.items()
+            if isinstance(entry, OffType) and entry.loaded_with is not None
+        )
+        return (*self.included(), *made)
+
     def blocks(self) -> Mapping[str, BlockKind]:
         return {
             name: entry.block for name, entry in self._types.items() if isinstance(entry, OnType)
@@ -177,9 +192,13 @@ class NodeClasses:
         load. None when they agree."""
         problems: list[str] = []
         seen: dict[str, set[str]] = {}
+        made = set(self.loaded()) - set(self.included())
         for description in served:
             name = str(description.get("name"))
             entry = self._types.get(name)
+            if name in made:
+                made.discard(name)
+                continue
             if not isinstance(entry, OnType):
                 problems.append(f"n8n loads {name}, which the class file does not turn on.")
                 continue
@@ -191,6 +210,10 @@ class NodeClasses:
                     problems.append(f"{name} version {version} is not classed.")
                 elif classed != "off":
                     problems += _choices(f"{name} version {version}", classed, properties)
+        problems += [
+            f"The class file says n8n makes {name}, which n8n does not load."
+            for name in sorted(made)
+        ]
         for name, entry in self._types.items():
             if isinstance(entry, OnType):
                 for version in sorted(entry.versions.keys() - seen.get(name, set())):
@@ -202,7 +225,7 @@ class NodeClasses:
 
 def _domain(entry: _On | _Off) -> OnType | OffType:
     if isinstance(entry, _Off):
-        return OffType(entry.off)
+        return OffType(entry.off, entry.loaded_with)
     versions: dict[str, Classed] = {}
     for row in entry.rows:
         classed: Classed = (
@@ -226,7 +249,11 @@ def _check(types: Mapping[str, OnType | OffType]) -> None:
     """What the file may say, so a row that breaks a safety rule fails every test and start."""
     holders: dict[BlockKind, list[str]] = {}
     for name, entry in types.items():
-        if not isinstance(entry, OnType):
+        if isinstance(entry, OffType):
+            if entry.loaded_with is not None and not isinstance(
+                types.get(entry.loaded_with), OnType
+            ):
+                raise ValueError(f"{name} is loaded with {entry.loaded_with}, which is not on")
             continue
         holders.setdefault(entry.block, []).append(name)
         classes = set[Class]().union(*(_classes(c) for c in entry.versions.values()))

@@ -4,6 +4,8 @@
 #   scripts/nodes-include.sh          writes both
 #   scripts/nodes-include.sh --check  changes nothing, and fails when either differs from the file
 #   scripts/nodes-include.sh --print  prints the list, as scripts/pack-smoke.sh gives it to n8n
+#   scripts/nodes-include.sh --loaded prints every type n8n then loads: the list, and the off types
+#                                     the file says n8n makes from them (loaded_with)
 # Needs jq.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -18,7 +20,8 @@ case "${1:-}" in
   "") ;;
   --check) check=true ;;
   --print) echo "$listed"; exit 0 ;;
-  *) echo "usage: scripts/nodes-include.sh [--check | --print]" >&2; exit 2 ;;
+  --loaded) jq -c '[to_entries[] | select(.value.off == null or .value.loaded_with != null) | .key]' "$classes"; exit 0 ;;
+  *) echo "usage: scripts/nodes-include.sh [--check | --print | --loaded]" >&2; exit 2 ;;
 esac
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT

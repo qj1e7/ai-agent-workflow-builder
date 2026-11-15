@@ -25,7 +25,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"pin check: {problem}", file=sys.stderr)
     if problems:
         return 1
-    print(f"pin check: n8n serves exactly the {len(NODE_CLASSES.included())} classed types.")
+    loaded = len(NODE_CLASSES.loaded())
+    print(f"pin check: every type, version and choice of the {loaded} n8n serves is classed.")
     return 0
 
 

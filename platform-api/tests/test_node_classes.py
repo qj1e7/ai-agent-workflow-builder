@@ -9,7 +9,7 @@ from typing import Any
 import pytest
 
 from platform_api.orchestration.n8n_schedule import SCHEDULE_TRIGGER
-from platform_api.orchestration.node_classes import CLASS_FILE, NODE_CLASSES, NodeClasses
+from platform_api.orchestration.node_classes import CLASS_FILE, NODE_CLASSES, NodeClasses, Off
 from platform_api.orchestration.workflow_check import TYPE_OF
 from platform_api.pin_check import main as pin_check
 from tests.support import FIXTURES
@@ -65,6 +65,14 @@ def test_n8n_loads_our_pack_n8n_s_triggers_and_flow_nodes_and_its_data_nodes_and
     assert len(included) == 31
 
 
+def test_n8n_also_loads_the_ai_tool_it_makes_from_date_and_time_which_is_off():
+    """n8n makes a tool of each node marked usable by an AI agent after NODES_INCLUDE has picked
+    the nodes, so the list cannot leave it out. It has no main input, and AI agents are off."""
+    tool = "n8n-nodes-base.dateTimeTool"
+    assert set(NODE_CLASSES.loaded()) - set(NODE_CLASSES.included()) == {tool}
+    assert isinstance(NODE_CLASSES.verdict(tool, 2, {}), Off)
+
+
 def test_the_schedule_block_is_the_type_the_schedule_reader_knows():
     assert TYPE_OF["schedule"] == SCHEDULE_TRIGGER
 
@@ -101,6 +109,10 @@ def change_default(raw: Raw) -> None:
     raw["n8n-nodes-base.merge"]["rows"][0]["default"] = "combine"
 
 
+def drop_the_made_tool(raw: Raw) -> None:
+    del raw["n8n-nodes-base.dateTimeTool"]
+
+
 def whole_where_n8n_picks(raw: Raw) -> None:
     raw["n8n-nodes-base.dateTime"]["rows"][0] = {"versions": [2], "class": "read"}
 
@@ -119,6 +131,7 @@ def whole_where_n8n_picks(raw: Raw) -> None:
             whole_where_n8n_picks,
             "n8n-nodes-base.dateTime version 2 picks what it does by operation",
         ),
+        (drop_the_made_tool, "n8n loads n8n-nodes-base.dateTimeTool, which the class file"),
     ],
     ids=[
         "an-operation",
@@ -129,6 +142,7 @@ def whole_where_n8n_picks(raw: Raw) -> None:
         "an-operation-n8n-lacks",
         "a-default",
         "a-whole-class",
+        "a-type-n8n-makes",
     ],
 )
 def test_the_pin_check_fails_when_the_file_and_the_image_disagree(
@@ -138,6 +152,21 @@ def test_the_pin_check_fails_when_the_file_and_the_image_disagree(
     change(raw)
     problems = classes_from(raw, tmp_path).unclassed(served())
     assert any(says in problem for problem in problems), problems
+
+
+def test_the_pin_check_names_a_type_n8n_loads_that_the_file_turns_off():
+    """As when n8n runs without the allow list."""
+    leaky = [*served(), {"name": "n8n-nodes-base.httpRequest", "version": 4.2, "properties": []}]
+    assert NODE_CLASSES.unclassed(leaky) == [
+        "n8n loads n8n-nodes-base.httpRequest, which the class file does not turn on."
+    ]
+
+
+def test_the_pin_check_names_a_made_type_n8n_no_longer_makes():
+    gone = [d for d in served() if d["name"] != "n8n-nodes-base.dateTimeTool"]
+    assert NODE_CLASSES.unclassed(gone) == [
+        "The class file says n8n makes n8n-nodes-base.dateTimeTool, which n8n does not load."
+    ]
 
 
 def test_the_pin_check_names_an_operation_a_new_image_adds(tmp_path: Path):
@@ -195,6 +224,10 @@ def twice(raw: Raw) -> None:
     raw["n8n-nodes-base.if"]["rows"].append({"versions": [1], "class": "read"})
 
 
+def made_from_an_off_type(raw: Raw) -> None:
+    raw["n8n-nodes-base.dateTimeTool"]["loaded_with"] = "n8n-nodes-base.sort"
+
+
 def default_unclassed(raw: Raw) -> None:
     raw["n8n-nodes-base.executionData"]["rows"][0]["default"] = "load"
 
@@ -211,6 +244,7 @@ def default_unclassed(raw: Raw) -> None:
         both_ways,
         twice,
         default_unclassed,
+        made_from_an_off_type,
     ],
 )
 def test_the_file_may_not_break_a_safety_rule(change: Callable[[Raw], None], tmp_path: Path):

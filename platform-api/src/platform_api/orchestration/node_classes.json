@@ -108,5 +108,9 @@
   "n8n-nodes-base.executeWorkflow": {"off": "It runs another workflow, also one fetched from an address (P7 Q10)."},
   "n8n-nodes-base.respondToWebhook": {"off": "It answers a webhook call and takes a credential (P7 Q10)."},
   "n8n-nodes-base.sort": {"off": "Its code mode runs JavaScript (P7 Q10)."},
-  "n8n-nodes-base.itemLists": {"off": "Its sort has the same code mode as Sort (P7 Q10)."}
+  "n8n-nodes-base.itemLists": {"off": "Its sort has the same code mode as Sort (P7 Q10)."},
+  "n8n-nodes-base.dateTimeTool": {
+    "off": "An AI agent's tool, which n8n makes from Date & Time whatever NODES_INCLUDE says. It has no main input, and AI agents are off (ADR 0023).",
+    "loaded_with": "n8n-nodes-base.dateTime"
+  }
 }

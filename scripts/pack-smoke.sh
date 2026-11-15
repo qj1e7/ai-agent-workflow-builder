@@ -3,8 +3,9 @@
 # - with no allow list: all eight of our blocks load, and Execute Command and Local File Trigger
 #   do not;
 # - with the allow list scripts/nodes-include.sh makes from node_classes.json, as deployed:
-#   exactly those types load, a workflow with an HTTP Request node cannot be turned on, and the
-#   pin check finds every version and choice of every type n8n serves classed (ADR 0045).
+#   exactly the types the file says n8n loads, a workflow with an HTTP Request node cannot be
+#   turned on, and the pin check finds every version and choice of every type n8n serves classed
+#   (ADR 0045).
 # Needs Docker, jq and uv. Publishes no port. PACK_SMOKE_IMAGE names an image already built.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -17,6 +18,7 @@ fi
 
 ours=$(jq -c '[.nodes[].type]' n8n-node-pack/node-types.json)
 allow_list=$(scripts/nodes-include.sh --print)
+loads=$(scripts/nodes-include.sh --loaded)
 never='["n8n-nodes-base.executeCommand","n8n-nodes-base.localFileTrigger"]'
 served=$(mktemp -d)
 
@@ -123,10 +125,10 @@ fi
 
 on=$(check_n8n on --env "NODES_INCLUDE=$allow_list")
 on_types=$(jq -c .types <<<"$on")
-extra=$(jq -cn --argjson want "$allow_list" --argjson got "$on_types" '$got - $want')
-missing=$(jq -cn --argjson want "$allow_list" --argjson got "$on_types" '$want - $got')
+extra=$(jq -cn --argjson want "$loads" --argjson got "$on_types" '$got - $want')
+missing=$(jq -cn --argjson want "$loads" --argjson got "$on_types" '$want - $got')
 if [ "$extra" = "[]" ] && [ "$missing" = "[]" ]; then
-  pass "with the allow list, n8n loads exactly its $(jq length <<<"$allow_list") types."
+  pass "with the allow list of $(jq length <<<"$allow_list"), n8n loads exactly the $(jq length <<<"$loads") types node_classes.json says."
 else
   fail "with the allow list, n8n also loads $extra and is missing $missing."
 fi

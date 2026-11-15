@@ -178,9 +178,10 @@ def load_into_n8n(settings: BootstrapSettings, say: Say) -> tuple[list[LoadedWor
 
 
 def allow_list_findings(loaded: Collection[str]) -> list[str]:
-    """n8n must load exactly the types node_classes.json turns on (ADR 0045). One more could reach
-    anything, as when NODES_INCLUDE is unset, and one fewer is a block a workflow cannot run."""
-    wanted = set(NODE_CLASSES.included())
+    """n8n must load exactly the types node_classes.json says it loads (ADR 0045). One more could
+    reach anything, as when NODES_INCLUDE is unset, and one fewer is a block a workflow cannot
+    run."""
+    wanted = set(NODE_CLASSES.loaded())
     extra, missing = sorted(set(loaded) - wanted), sorted(wanted - set(loaded))
     findings: list[str] = []
     if extra:
@@ -190,7 +191,9 @@ def allow_list_findings(loaded: Collection[str]) -> list[str]:
             f"{named}: NODES_INCLUDE is not the class file's allow list"
         )
     if missing:
-        findings.append(f"n8n does not load {', '.join(missing)}, which node_classes.json turns on")
+        findings.append(
+            f"n8n does not load {', '.join(missing)}, which node_classes.json says it loads"
+        )
     return findings
 
 
