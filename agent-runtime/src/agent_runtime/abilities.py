@@ -10,6 +10,7 @@ import re
 import unicodedata
 from dataclasses import dataclass
 from functools import cache
+from itertools import pairwise
 from typing import Final, Literal, NamedTuple
 
 from agent_runtime.contract import (
@@ -414,6 +415,10 @@ SYSTEMS: Final = {
     "dropbox": "Dropbox",
     "salesforce": "Salesforce",
     "jenkins": "Jenkins",
+    "okta": "Okta",
+    "webex": "Webex",
+    "pagerduty": "PagerDuty",
+    "powerbi": "Power BI",
     "email": "email",
     "e-mail": "email",
     "mail": "email",
@@ -421,14 +426,18 @@ SYSTEMS: Final = {
     "teams": "Teams",
 }
 CASE_SENSITIVE: Final = words("teams")
+ACRONYMS: Final = {"AD": "entra", "BI": "powerbi"}
+"""Systems named by capitals only, as in "the AD group" or "the Power BI report"."""
+GENERIC: Final = words("email e-mail mail sms")
+"""Systems named by a common word, whose plural, as in "Emails", is not a product's name."""
 TICKET_SYSTEMS: Final = words(
-    "jira github gitlab bitbucket servicenow devops trello asana zendesk freshdesk"
+    "jira github gitlab bitbucket servicenow devops trello asana zendesk freshdesk pagerduty"
 )
 PLACES: Final = words(
     "sheet sheets spreadsheet spreadsheets workbook page pages wiki doc docs document documents "
     "file files folder folders drive chat chats channel channels inbox mailbox message messages "
     "dm thread repo repos repository repositories branch branches pr prs server servers database "
-    "calendar site website"
+    "calendar site website dashboard dashboards mailing"
 )
 JIRA_ANCHORS: Final = words("jira project projects board boards backlog queue")
 PROJECT_WORDS: Final = words("project board")
@@ -451,6 +460,11 @@ TOPICS: Final = (
     | frozenset(RELEASE_ROOTS)
     | VULNERABILITIES
 )
+DESTINED: Final = words("for as per")
+"""The prepositions that can say where a result goes or who it is for."""
+OWN_COPIES: Final = (TICKETS - TOPICS) | words("version versions release releases")
+"""What a result for a system's place can mean right after the system's name, as in "a summary
+for the Slack version"."""
 SUBJECTS: Final = words("i we you")
 WANTING: Final = words("want wants need needs would like prefer")
 
@@ -545,16 +559,45 @@ class _Word:
 
     @property
     def system(self) -> str | None:
-        """The system the word names, also with an 's, as in "Slack's". A trailing s' never
-        reaches here: TOKEN drops an apostrophe with no letter after it."""
-        name = self.low.removesuffix("'s")
-        if name in CASE_SENSITIVE and not self.capital:
-            return None
-        return name if name in SYSTEMS else None
+        """The system the word names, also with an 's or as a capitalised plural, as in
+        "Slack's" or "Slacks", and in a capitalised part of a word joined by a hyphen or a dot,
+        as in "Slack-channel" or "Slack.com". A slash joins systems only, as in "Slack/Teams", so
+        a repository such as "Azure/azure-cli" names none. A trailing s' never reaches here:
+        TOKEN drops an apostrophe with no letter after it."""
+        if "/" not in self.raw:
+            return _system_in(self.raw)
+        named = [_system_in(part) for part in self.raw.split("/")]
+        return named[0] if all(named) else None
 
     @property
     def product(self) -> bool:
         return self.system is None and CAMEL.fullmatch(self.raw) is not None
+
+
+def _system_named(raw: str) -> str | None:
+    low = raw.casefold().replace("’", "'").removesuffix("'s")
+    capital = raw[:1].isupper()
+    if low in CASE_SENSITIVE and not capital:
+        return None
+    if low in SYSTEMS:
+        return low
+    if raw in ACRONYMS:
+        return ACRONYMS[raw]
+    plural = low.removesuffix("s")
+    return (
+        plural
+        if capital and plural != low and plural in SYSTEMS and plural not in GENERIC
+        else None
+    )
+
+
+def _system_in(raw: str) -> str | None:
+    whole = _system_named(raw)
+    if whole is not None:
+        return whole
+    parts = re.split(r"[-.]", raw)
+    joined = (_system_named(part) for part in parts if len(parts) > 1 and part[:1].isupper())
+    return next((name for name in joined if name is not None), None)
 
 
 type Clause = tuple[_Word, ...]
@@ -690,6 +733,17 @@ def _cant_phrase(clause: Clause, reader: _Reader) -> str:
     return shown[: SAID_LIMIT - 1].rsplit(" ", 1)[0] + "…"
 
 
+def _release_noun(clause: Clause, at: int) -> bool:
+    """Whether a release word names a thing, as in "a Kubernetes upgrade ticket" or "the GitLab
+    patch", rather than asking for it to be done."""
+    if clause[at].low not in RELEASE_ROOTS or at == 0:
+        return False
+    before = clause[at - 1]
+    after = clause[at + 1] if at + 1 < len(clause) else None
+    named = before.proper or before.system is not None or before.product
+    return named or (after is not None and after.low in TICKETS)
+
+
 def _objects(clause: Clause, start: int, reader: _Reader) -> _Objects:
     at = start
     while at < len(clause) and clause[at].low in PARTICLES:
@@ -697,7 +751,12 @@ def _objects(clause: Clause, start: int, reader: _Reader) -> _Objects:
     things: list[list[_Word]] = [[]]
     while at < len(clause):
         word = clause[at]
-        acts = bool(things[-1]) and reader.acts(word) and not _noun_place(things[-1][-1])
+        acts = (
+            bool(things[-1])
+            and reader.acts(word)
+            and not _noun_place(things[-1][-1])
+            and not _release_noun(clause, at)
+        )
         if word.low in ("and", "or", ","):
             things.append([])
         elif word.mark or word.low in PREPS | ENDS | PARTICLES or acts:
@@ -711,7 +770,7 @@ def _objects(clause: Clause, start: int, reader: _Reader) -> _Objects:
 def _phrases(clause: Clause, start: int, reader: _Reader) -> Phrases:
     """The phrases after what the action is done to, each with its preposition. The words after
     a mark, as in "(Slack)" or ": Teams", are a phrase too, with the mark in place of the
-    preposition."""
+    preposition. A topic that is also a verb, as in "the GitLab review", stays in its phrase."""
     phrases: list[tuple[str, list[_Word]]] = []
     for word in clause[start:]:
         if word.low in PARTICLES and not phrases:
@@ -720,7 +779,9 @@ def _phrases(clause: Clause, start: int, reader: _Reader) -> Phrases:
             phrases.append((word.low, []))
             continue
         last = phrases[-1][1][-1] if phrases and phrases[-1][1] else None
-        if not phrases or word.low in ENDS or (reader.acts(word) and not _noun_place(last)):
+        topic = last is not None and word.low in TOPICS
+        acts = reader.acts(word) and not _noun_place(last) and not topic
+        if not phrases or word.low in ENDS or acts:
             break
         phrases[-1][1].append(word)
     return [(prep, tuple(phrase)) for prep, phrase in phrases]
@@ -759,27 +820,48 @@ def _elsewhere(phrase: Clause, reaches: frozenset[str], products: bool = True) -
     return False
 
 
-def _only_the_topic(phrase: Clause) -> bool:
+def _ends_in_a_place(phrase: Clause, reaches: frozenset[str]) -> bool:
+    """Whether a phrase ends in a place, as in "the wiki page", "the mailing list" or "the pull
+    request", not in who a result is for, as in "the dashboard team"."""
+    own = _own_requests(phrase)
+    if own is not None and own not in reaches:
+        return True
+    head = _head(phrase)
+    return head is not None and head.low in PLACES
+
+
+def _only_the_topic(phrase: Clause, destined: bool) -> bool:
     """Whether a phrase names another system only as what a result is about: it ends in a topic
     such as "outage" or "release", or in Jira tickets, as in "the Teams outage tickets", but not
-    in that system's own, as in "the GitHub issue"."""
+    in that system's own, as in "the GitHub issue" or "the ServiceNow incident", and names none
+    of that system's places, as in "the Slack channel review". When the phrase says where a
+    result goes or who it is for, a ticket, version or release right after the system is that
+    system's own too, as in "a summary for the Slack ticket" or "for the Teams release"."""
+    if any(word.low in PLACES and before.system for before, word in pairwise(phrase)):
+        return False
     for at in range(len(phrase) - 1, -1, -1):
         word = phrase[at]
         if word.raw.isdigit() or word.key:
             continue
         before = phrase[at - 1].system if at else None
-        return word.low in TOPICS or (word.low in TICKETS and before not in TICKET_SYSTEMS)
+        if word.low in TICKETS and before in TICKET_SYSTEMS:
+            return False
+        if destined and before is not None and word.low in OWN_COPIES:
+            return False
+        return word.low in TOPICS | TICKETS
     return False
 
 
-def _another_systems_place(prep: str, phrase: Clause, known: frozenset[str]) -> bool:
+def _another_systems_place(prep: str, phrase: Clause, known: frozenset[str], output: bool) -> bool:
     """Whether a phrase names a system the platform neither reaches nor reads, as in "for the
     Slack workspace" or "for the Teams admins", other than as the topic, as in "a ticket for the
     Teams outage". After "from" or a mark, as in "from the Slack outage" or "(Slack)", even a
-    topic counts."""
+    topic counts. `output` says the clause makes a result for people, whose "for", "as" or
+    "per" says where it goes or who it is for."""
     if all(word.system is None or word.system in known for word in phrase):
         return False
-    return prep == "from" or not prep[:1].isalnum() or not _only_the_topic(phrase)
+    destined = output and prep in DESTINED
+    return prep == "from" or not prep[:1].isalnum() or not _only_the_topic(phrase, destined)
 
 
 def _names_jira(phrase: Clause) -> bool:
@@ -848,7 +930,10 @@ def _fits(
 ) -> bool:
     """Whether one thing the action is done to, and every phrase after it, fits the ability.
     `phrases` are the ones right after the thing, `around` every phrase to the end of the
-    clause, and `read` every system the platform reads for this clause."""
+    clause, and `read` every system the platform reads for this clause. A result for people
+    goes nowhere but the run, so a place after its "for", "as" or "per", as in "for the wiki
+    page", is somewhere it cannot go."""
+    output = ability.makes is OUTPUTS
     if ability.makes is None:
         reads = any(w.low in TICKETS for w in thing) or not _elsewhere(
             thing, ability.reaches, False
@@ -866,8 +951,10 @@ def _fits(
         named = prep == "for" and all(w.system or w.low in DETERMINERS for w in phrase)
         if (prep in IN_PLACE | TO_PLACE or named) and _elsewhere(phrase, ability.reaches):
             return False
+        if output and prep in DESTINED and _ends_in_a_place(phrase, ability.reaches):
+            return False
     known = ability.reaches | (read - READ_ONLY)
-    return not any(_another_systems_place(prep, phrase, known) for prep, phrase in around)
+    return not any(_another_systems_place(prep, phrase, known, output) for prep, phrase in around)
 
 
 def _asks_for_change(clause: Clause, at: int) -> bool:
@@ -888,6 +975,8 @@ def _writes_in(clause: Clause, at: int, reader: _Reader) -> bool:
         word = clause[i]
         found = reader.verb(word)
         if found is None or found[0] not in reader.writes or word.proper:
+            continue
+        if _release_noun(clause, i):
             continue
         if found[1] == "ed":
             if _asks_for_change(clause, i):
@@ -1213,7 +1302,7 @@ def _is_unsupported(what: str) -> bool:
         if next(c for c in CAPABILITIES if c.id == id).state != "unsupported":
             continue
         if any(
-            w.low.removesuffix("'s").removesuffix("’s") in named
+            w.low.removesuffix("'s").removesuffix("’s") in named or w.system in named
             for w in (row[:1] if first_only else row)
         ):
             return True
