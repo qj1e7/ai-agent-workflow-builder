@@ -124,3 +124,22 @@
     grid-column: 3;
   }
 }
+
+/* A cross's next step sits under its words, wrapped so a long label never widens the row. */
+.next {
+  display: grid;
+  justify-items: start;
+  flex: 1 1 100%;
+  gap: 8px;
+  min-width: 0;
+}
+
+.next:empty {
+  display: none;
+}
+
+.problem {
+  margin: 0;
+  color: var(--red-ink);
+  font-size: 0.9375rem;
+}

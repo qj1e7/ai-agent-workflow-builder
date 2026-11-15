@@ -3,6 +3,7 @@ import type { PartView, PlannerReply } from '../../api/types'
 import { useWatchlist } from '../../api/queries'
 import { useOperatorsSay } from '../../shell/OperatorsNote'
 import { IconCheck, IconX } from '../../ui/icons'
+import { CrossNext } from './CrossNext'
 import { crossLabel, crossWords, leftoverParts, MARK_WORDS, type CrossContext, type Mark } from './parts'
 import styles from './PartsList.module.css'
 
@@ -41,7 +42,7 @@ export function PartsList({ parts, short = false }: { parts: readonly Part[]; sh
   )
 }
 
-/** The runtime’s crosses and questions as rows. `more` adds a next step to a row, such as Ask the team. */
+/** The runtime’s crosses and questions as rows. Each gets its own next step where it has one, and `more` adds another, such as Ask the team. */
 export function crossParts(parts: readonly PartView[], context: CrossContext = {}, more?: (part: PartView) => ReactNode): Part[] {
   return parts.map((part, index) => ({
     key: `cross-${String(index)}`,
@@ -51,6 +52,7 @@ export function crossParts(parts: readonly PartView[], context: CrossContext = {
       <>
         <span>{crossWords(part, context)}</span>
         {more?.(part)}
+        <CrossNext part={part} />
       </>
     ),
   }))

@@ -71,7 +71,8 @@ export function previousOf(thread: Thread): PreviousTurn | null {
   return {
     request: typed,
     software: reply.answer === 'watchlist' ? reply.software : null,
-    answer: reply.answer === 'question' ? reply.text : null,
-    kind: reply.answer,
+    answer: reply.answer === 'question' || reply.answer === 'reply' ? reply.text : null,
+    // The runtime refuses a second clarifying question in a row, and tells one from an answer by this word.
+    kind: reply.answer === 'reply' && reply.form === 'clarify' ? 'reply_clarify' : reply.answer,
   }
 }

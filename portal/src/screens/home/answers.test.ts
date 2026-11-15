@@ -158,7 +158,7 @@ describe('the lists Home shows without being asked', () => {
   })
 
   it('offers only examples that set something up, which the platform vouches for', () => {
-    expect(startingPoints(CAPS)).toEqual(['Keep track of the LangGraph version'])
+    expect(startingPoints(CAPS)).toEqual(['Keep track of the LangGraph version', "Every Monday at 9am, list last week's new bugs in one new Jira ticket"])
   })
 })
 

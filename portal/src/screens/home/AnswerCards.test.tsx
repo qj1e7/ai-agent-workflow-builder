@@ -90,7 +90,7 @@ describe('the Planner’s short answers, as the chat-first sketch draws them', (
 
   it('says it didn’t follow a request it read none of, and what it can do instead', () => {
     const reply: PlannerReply = { answer: 'abilities', parts: [asked('What’s the weather', 'cant', 'not_followed')] }
-    expect(text(draw(reply, { registry: REGISTRY }))).toBe('I didn’t follow that I can watch software releases, fix stopped runs and change your workflows.')
+    expect(text(draw(reply, { registry: REGISTRY }))).toBe('I didn’t follow that I can watch software releases, fix stopped runs and change your workflows. Say it another way')
     expect(sayOf(reply)).toBeNull()
   })
 

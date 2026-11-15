@@ -2,7 +2,7 @@ import type { CantRowView, CapabilitiesView, CapabilityView, OfflineReply, Pause
 import { count } from '../run/words'
 import { isRunning, type Row } from '../workflows/workflow'
 import { sayChanged } from './changed'
-import { cantOnCard } from './parts'
+import { cantOnCard, quote } from './parts'
 
 /** The words for each part of a request. They match the names the removed New workflow screen used. */
 export const ROW_LABEL: Readonly<Record<RowKind, string>> = {
@@ -91,7 +91,8 @@ export const questionActions = (reply: QuestionReply, asker: Asker): readonly st
 export function wordsOnly(reply: PlannerReply, asker: Asker): boolean {
   if (reply.answer === 'question') return questionActions(reply, asker).length === 0
   if (reply.answer === 'pause' || reply.answer === 'resume') return reply.choices.length === 0
-  return reply.answer === 'operators' || (reply.answer === 'offline' && asker === 'approver')
+  // A free reply is the Planner's own words, with its chips or button under them inside the same message.
+  return reply.answer === 'reply' || reply.answer === 'operators' || (reply.answer === 'offline' && asker === 'approver')
 }
 
 /** Who fronts an answer: the AI troubleshooter owns the run card, and the Planner every other answer. */
@@ -165,10 +166,12 @@ export function sayOf(reply: PlannerReply, asker: Asker = 'operator'): string | 
       return switchSay(reply)
     case 'abilities':
     case 'ideas':
+    case 'didnt_follow':
       return null
     case 'offline':
       return asker === 'operator' ? reply.message : APPROVER_OFFLINE[reply.why]
     case 'question':
+    case 'reply':
       return reply.text
     case 'changed_in_n8n':
       return sayChanged(reply)
@@ -182,6 +185,9 @@ export function sayOf(reply: PlannerReply, asker: Asker = 'operator'): string | 
       return null
   }
 }
+
+/** The button that sends a free reply’s offer. It says the request itself, so what she taps is exactly what is sent. */
+export const offerLabel = (request: string): string => `Try ${quote(request.trim())}`
 
 /** What a refusal can do next. The words after the unsafe part go back to the Planner, never straight to a set-up (they can ask for more). */
 export interface RefusalNext {

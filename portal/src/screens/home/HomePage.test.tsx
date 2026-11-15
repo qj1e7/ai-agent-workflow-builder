@@ -133,7 +133,7 @@ describe('Home for an Operator in a normal week (A1 to A7)', () => {
   it('shows the day-one pair while nothing is watched', () => {
     const empty = mainOf(render(ALICE, ALICE_HOME))
     expect(empty).toContain('aria-label="Starting points"')
-    expect(chipsOf(empty, 'Starting points')).toEqual(['Keep track of the LangGraph version', 'What can you do?'])
+    expect(chipsOf(empty, 'Starting points')).toEqual(['Keep track of the LangGraph version', "Every Monday at 9am, list last week's new bugs in one new Jira ticket", 'What can you do?'])
   })
 
   it('sets up no general workflow from a chip', () => {
