@@ -1381,6 +1381,12 @@ def _cant_sentence(what: str, reader: _Reader) -> str:
     return f"I can't {what}{yet}. {reader.can()}"
 
 
+def names_no_ability(note: str) -> bool:
+    """Whether a can't's note is only the request's own words before "I can only ...": the
+    sentence the Planner writes when it found no ability the request is close to."""
+    return note.endswith(f". {_reader(ABILITIES).can()}")
+
+
 def why_not(kind: RowKind, text: str, abilities: tuple[Ability, ...] = ABILITIES) -> str | None:
     """Why the platform can't do this part, in plain words, or None when every action in it fits
     one of the abilities and no field it reads is one the agents can't see."""

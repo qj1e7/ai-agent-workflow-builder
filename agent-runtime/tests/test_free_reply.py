@@ -484,3 +484,43 @@ def test_the_answer_route_asks_the_verifier_on_the_model_the_setting_names():
     assert answered_["answer"]["kind"] == "reply"
     assert asked_for == [answer_request().model.model, "the-verifier"]
     assert asked_shapes(verifier) == ["Verdict"]
+
+
+# A can't that names no ability: the lane's own "I can only ..." sentence, a dead end too.
+
+JOKE = "tell me a joke"
+ROOM = "book me a meeting room for friday"
+
+
+@pytest.mark.parametrize("task", [JOKE, ROOM, "send me a summary"])
+def test_a_cant_that_names_no_ability_gets_the_free_reply(task: str):
+    result, chat = answered(task, reading("none"), HELPFUL, CLEAN)
+    assert isinstance(result.answer, FreeReplyAnswer)
+    assert asked_shapes(chat) == ["TaskRead", "ReplyEnvelope", "Verdict"]
+
+
+def test_a_rejected_reply_to_a_cant_that_names_no_ability_keeps_the_honest_cant():
+    done = ReplyEnvelope(form="cant", text="I've booked the room for you.")
+    result, _ = answered(ROOM, reading("none"), done)
+    assert isinstance(result.answer, CantAnswer)
+    assert "meeting room" in result.answer.cant[0].text
+
+
+def test_with_the_free_reply_off_a_cant_that_names_no_ability_is_kept():
+    chat = ScriptedChat(structured=[reading("none")])
+    result = answer_task(request(ROOM), lambda timeout: chat, free_reply=False)
+    assert isinstance(result, Answered) and isinstance(result.answer, CantAnswer)
+
+
+@pytest.mark.parametrize(
+    "task",
+    [
+        "post the open bugs in our Teams channel every Monday",
+        "update the release notes page in Confluence",
+        "tell me about new CVEs for Redis",
+    ],
+)
+def test_a_cant_that_names_what_it_cant_do_stands(task: str):
+    result, chat = answered(task, reading("none"))
+    assert not isinstance(result.answer, FreeReplyAnswer | DidntFollowAnswer)
+    assert asked_shapes(chat) == ["TaskRead"]

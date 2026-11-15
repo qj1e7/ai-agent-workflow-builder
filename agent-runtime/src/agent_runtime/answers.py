@@ -1150,6 +1150,8 @@ def answer_task(
     if gap is not None:
         verifier = verify_with or chat_for
         answer = reply_to(request, gap, chat_for, verifier) if free_reply else DidntFollowAnswer()
+        if isinstance(answer, DidntFollowAnswer) and gap.keep is not None:
+            answer = gap.keep
         parts = parts_of(read, request.task, answer, request.facts)
     return Answered(answer=answer, parts=parts)
 

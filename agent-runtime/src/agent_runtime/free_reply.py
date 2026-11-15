@@ -14,6 +14,7 @@ from typing import Final
 from agent_runtime.abilities import (
     CAPABILITIES,
     OFFER_REQUESTS,
+    names_no_ability,
     other_systems,
     vulnerability_phrase,
 )
@@ -52,6 +53,15 @@ class DeadEnd:
     rules found in the message, for the model to weigh."""
 
     notes: tuple[str, ...] = ()
+    keep: PlannerAnswer | None = None
+    """The structured answer to show when the free reply falls back, when it is honest and has
+    a way on. None shows "I didn't follow that"."""
+
+
+NAMED_NO_ABILITY: Final = (
+    "The rules found no ability close to {parts}, so they could only say it can't be done yet. "
+    "Say plainly what you can't do, and offer the nearest thing the platform does, if one is close."
+)
 
 
 def _crosses_only(parts: list[RequestPart]) -> bool:
@@ -85,6 +95,13 @@ def dead_end(answer: PlannerAnswer, parts: list[RequestPart], message: str) -> D
         ):
             quoted = "; ".join(dict.fromkeys(f"“{p.text}”" for p in parts))
             return DeadEnd((NOT_READ.format(parts=quoted), *_found_in(message)))
+        case CantAnswer(alternative=None) if (
+            answer.cant
+            and all(names_no_ability(row.note) for row in answer.cant)
+            and not any(p.mark == "will_do" for p in parts)
+        ):
+            quoted = "; ".join(dict.fromkeys(f"“{row.text}”" for row in answer.cant))
+            return DeadEnd((NAMED_NO_ABILITY.format(parts=quoted), *_found_in(message)), answer)
         case _:
             return None
 
@@ -139,9 +156,21 @@ SYSTEM: Final = (
     "say that something is done, is on or is running. Say what the person can do next.\n"
     "- Never offer or promise to do something. Do not write I'll, I will, let me, want me to, "
     "shall I or keep you posted. Tell the person what to type or tap instead.\n"
+    "- Never say what happened to a run, a ticket or a request in the facts, such as stopped, "
+    'failed, waiting or created. Name the page that shows it instead, such as "Open Needs you '
+    'to see them."\n'
+    "- For a greeting, thanks or small talk, write one or two short sentences: reply in kind, "
+    "then say where to start, such as typing what they want done in the box on Home.\n"
+    "- To say what the platform is for, say it sets up workflows, tasks that run again and "
+    "again on a schedule, and that every change waits for an Approver's yes. Say nothing else "
+    "about what it does.\n"
+    "- For a cant, say plainly what you can't do, then the nearest Ready capability as what they "
+    "can type instead, if one is close, then that they can tap Ask the team.\n"
     "- When you say what you or the platform can do, name only Ready capabilities. When you "
     "name one that is Planned or Not on the plan, or a system the platform doesn't reach, say "
-    'in the same part of the sentence "I can\'t ... yet".\n'
+    "in the same part of the sentence \"I can't ... yet\". Name at most two things you can't do "
+    'in one sentence, joined by or, such as "I can\'t move or delete tickets yet". Never list '
+    "them with commas.\n"
     "- Every change to data waits for an Approver's yes in Teams, and the person who asked is "
     "never the Approver of their own request. Say it in those words. Whenever you mention a new "
     "Jira ticket, say in the same sentence that it waits for an Approver's yes. Never say a "
