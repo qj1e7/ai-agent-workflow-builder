@@ -2069,6 +2069,43 @@ def test_a_state_answer_never_ticks_a_lone_write(task: str, ticked: bool):
     assert [p.mark == "will_do" for p in marked] == [ticked]
 
 
+def test_a_lone_write_under_a_state_reading_gets_the_cant_it_gets_over_abilities():
+    task = "could you delete the old tickets"
+    for about in ("my_workflows", "needs_me", "abilities"):
+        fields = read(asks_about=about)
+        answer = answer_of(fields, task)
+        assert isinstance(answer, CantAnswer), about
+        assert [(p.mark, p.reason) for p in parts_of(fields, task, answer)] == [("cant", "cant_do")]
+
+
+@pytest.mark.parametrize("about", ["my_workflows", "needs_me"])
+def test_a_skip_of_a_yes_read_as_a_status_question_gets_the_skip_note(about: str):
+    task = "can you stop asking Bob for a yes"
+    fields = read(asks_about=about)
+    answer = answer_of(fields, task)
+    assert [(p.mark, p.note) for p in parts_of(fields, task, answer)] == [("cant", SKIP_PART_NOTE)]
+    waiting = "What waits for my yes?"
+    asked = answer_of(read(asks_about="needs_me"), waiting)
+    assert [p.mark for p in parts_of(read(asks_about="needs_me"), waiting, asked)] == ["will_do"]
+
+
+@pytest.mark.parametrize(
+    "task",
+    [
+        "how do I set up a workflow so Bob never has to look at it",
+        "how do I create a workflow without Bob",
+    ],
+)
+def test_an_unquoted_skip_is_never_answered_with_how_to_start(task: str):
+    skipped = SkipRead(whose="an_approver_or_anyone_else")
+    fields = read(asks_about="abilities", skips_the_yes=skipped)
+    answer = answer_of(fields, task)
+    assert not isinstance(answer, AbilitiesAnswer)
+    assert isinstance(answer, PartAnswer | CantAnswer)
+    assert SKIP_PART_NOTE in [row.note for row in answer.cant]
+    assert "will_do" not in {p.mark for p in parts_of(fields, task, answer)}
+
+
 @pytest.mark.parametrize("task", ["Can you post in Teams?", "Can you send me an email?"])
 def test_a_lone_question_the_cant_answers_keeps_its_cant(task: str):
     fields = read()
