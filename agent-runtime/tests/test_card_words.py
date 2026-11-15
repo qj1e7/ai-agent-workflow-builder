@@ -28,10 +28,12 @@ from agent_runtime.contract import (
     PartAnswer,
     PartCantDo,
     PlannerAnswer,
+    PreviousTurn,
     RefusedAnswer,
     ReplyEnvelope,
     SetupCardAnswer,
     WatchlistAnswer,
+    WhichSoftwareAnswer,
 )
 from agent_runtime.how_to import HOW_TO
 from agent_runtime.reading import PlaceRead, SearchRead, TicketRead
@@ -323,3 +325,76 @@ def test_the_gate_counts_a_rejected_reply_as_tried_when_the_honest_cant_is_shown
         if b.name.startswith("Free replies the guard or the verifier rejects")
     ]
     assert bar.measured == "1 of 20"
+
+
+# 7. A missing detail is asked, never "I didn't follow".
+
+
+@pytest.mark.parametrize(
+    ("task", "verb"),
+    [
+        ("help me add a software", "add"),
+        ("i want to add new software", "add"),
+        ("can you help me watch a software", "watch"),
+        ("add software", "add"),
+        ("I need to track a tool", "track"),
+    ],
+)
+def test_a_watch_the_reading_names_no_software_for_asks_which_software(task: str, verb: str):
+    result, _ = answered(task, reading("none", belongs_on_watchlist=True, watchlist_word=verb))
+    assert result.answer == WhichSoftwareAnswer(word=verb)
+    assert [p.mark for p in result.parts] == ["question"]
+
+
+def test_which_software_is_never_asked_over_another_part_of_the_request():
+    task = "help me add a software and email the team the list"
+    answer = answer_of(read(belongs_on_watchlist=True, watchlist_word="add"), task)
+    assert not isinstance(answer, WhichSoftwareAnswer)
+
+
+def test_the_name_typed_after_which_software_completes_the_watch():
+    asked = PreviousTurn(request="help me add a software", kind="which_software")
+    result, _ = answered("LangGraph", reading("none"), previous=asked)
+    assert result.answer == WatchlistAnswer(word="version", software="LangGraph")
+
+
+@pytest.mark.parametrize(
+    ("task", "earlier"),
+    [
+        ("LangGraph", PreviousTurn(request="what can you do?", kind="abilities")),
+        ("MOCK-12", PreviousTurn(request="help me add a software", kind="which_software")),
+        ("delete the old tickets", PreviousTurn(request="add a software", kind="which_software")),
+    ],
+)
+def test_only_a_plain_name_after_which_software_is_the_software(task: str, earlier: PreviousTurn):
+    result, _ = answered(task, reading("none"), previous=earlier)
+    assert not isinstance(result.answer, WatchlistAnswer)
+
+
+def test_a_ticket_search_with_no_project_is_a_card_that_asks_where():
+    task = "Every Monday at 9am, list the open bugs in one ticket"
+    answer = answer_of(
+        read(
+            schedule="Every Monday at 9am",
+            search=SearchRead(issue_types=["bug"], status="open", said="the open bugs"),
+            ticket=TicketRead(creates=True, says="list", said="list the open bugs in one ticket"),
+        ),
+        task,
+    )
+    assert isinstance(answer, SetupCardAnswer)
+    assert [r.kind for r in answer.rows if r.state == "missing"] == ["where"]
+
+
+def test_a_time_the_request_never_said_is_asked_never_filled_in():
+    task = "Every Monday, list the open bugs in MOCK in one ticket"
+    answer = answer_of(
+        read(
+            schedule="Every Monday at 9am",
+            search=SearchRead(project="MOCK", issue_types=["bug"], status="open", said="bugs"),
+            ticket=TicketRead(creates=True, says="list", said="list the open bugs"),
+        ),
+        task,
+    )
+    assert isinstance(answer, SetupCardAnswer)
+    [when] = [r for r in answer.rows if r.kind == "schedule"]
+    assert when.state == "missing" and "9am" not in when.text

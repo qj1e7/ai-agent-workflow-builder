@@ -81,7 +81,7 @@ from agent_runtime.edits import (
     how_often,
     left_over,
 )
-from agent_runtime.follow_ups import follow_up_of, watch_offer_of
+from agent_runtime.follow_ups import VERSION, follow_up_of, named_when_asked, watch_offer_of
 from agent_runtime.free_reply import dead_end, reply_to
 from agent_runtime.parts import (
     HOW_OFTEN,
@@ -108,6 +108,7 @@ from agent_runtime.planner import (
 from agent_runtime.questions import answer_question, is_fallback, question_messages
 from agent_runtime.reading import (
     FILLER,
+    ME_WORDS,
     SAID_LIMIT,
     AsksAbout,
     SkipRead,
@@ -199,6 +200,10 @@ ANSWER_SYSTEM: Final = (
     "request names one. When the request also asks for something else, such as a weekly ticket "
     "list, read that other part into its parts as fully as you would a task of its own, and "
     "leave only the software part out. Otherwise fill in no parts.\n"
+    "A request to add, watch, track or follow a piece of software, a tool or an app belongs on "
+    'the Software watchlist too, even when it names none, such as "help me add a software": set '
+    "belongs_on_watchlist to true, copy the verb into watchlist_word and leave software null. The "
+    "platform asks which one.\n"
     "A request for known vulnerabilities, CVEs, security advisories or security patches does "
     "not belong on the Software watchlist, even if it names software or releases, because no "
     "tool checks for them yet. Set belongs_on_watchlist to false and fill in no search for it.\n"
@@ -605,11 +610,6 @@ WATCH_VERBS: Final = (
 """Verbs that start a watch request. The model's reading of one is taken only when the request
 says it and names the software."""
 _VERB_PATTERN: Final = "|".join(r"\s+".join(v.split()) for v in WATCH_VERBS)
-_WHICH_SOFTWARE: Final = re.compile(
-    rf"\s*(?:(?:can|could|would|will)\s+you\s+|please\s+)*({_VERB_PATTERN})\s+"
-    r"(?:a\s+new|another|some|new|a)\s+software(?:\s+(?:for\s+me|please))*\s*[.!?]*\s*",
-    re.IGNORECASE,
-)
 _TICKET_KEY: Final = re.compile(r"\b[A-Z][A-Z0-9]+-\d+\b")
 _NOT_A_WATCH: Final = re.compile(
     r"\b(?:tickets?|issues?|projects?|boards?|approvers?|approvals?|workflows?|comments?|"
@@ -620,10 +620,29 @@ _NOT_A_WATCH: Final = re.compile(
 read as the software."""
 
 
-def _which_software(text: str) -> WhichSoftwareAnswer | None:
-    """A watch verb and "a software" with nothing else: which software is the only question."""
-    found = _WHICH_SOFTWARE.fullmatch(text)
-    return None if found is None else WhichSoftwareAnswer(word=" ".join(found.group(1).split()))
+ASKS_TO_WATCH: Final = (
+    words(
+        "add watch track monitor follow check tabs eye software tool tools app apps application "
+        "applications package packages library libraries product products new another more "
+        "watchlist"
+    )
+    | FILLER
+    | ME_WORDS
+)
+"""The words of a request that only asks to watch some software, as "help me add a software"."""
+
+
+def _which_software(read: TaskRead, request: str) -> WhichSoftwareAnswer | None:
+    """The one question for the detail a watch needs: the reading put the request on the
+    watchlist and the request names no software. Only when the request asks nothing else, so no
+    part of it is dropped for the question. The word is the request's own for the watch."""
+    if _software_of(read, request) is not None:
+        return None
+    asked = re.findall(r"[\w'’]+", request.casefold())
+    if not asked or any(w not in ASKS_TO_WATCH for w in asked):
+        return None
+    word = whole_word_of(request, read.watchlist_word) or _verb_in(request)
+    return None if word is None else WhichSoftwareAnswer(word=word)
 
 
 def _watch_verb(read: TaskRead, request: str) -> str | None:
@@ -685,7 +704,7 @@ def _watchlist(
     if word is None:
         word = verb = _watch_verb(read, request)
     if word is None:
-        return None
+        return _which_software(read, request)
     software = _software_of(read, request)
     security = vulnerability_phrase(request)
     if security is not None:
@@ -957,9 +976,6 @@ def _answer_of(
     refused = _refusal(text)
     if refused is not None:
         return refused
-    asked_which = _which_software(text)
-    if asked_which is not None:
-        return asked_which
     skip = _skip_verdict(read.skips_the_yes, text)
     if skip.refused is not None:
         return skip.refused
@@ -1063,9 +1079,13 @@ def decide(read: TaskRead, request: AnswerRequest) -> PlannerAnswer | AskTheQues
     """The fixed answer for a reading, or the question lane when that answer is the catch-all, a
     watchlist offer for software the watchlist already holds, which software for a question
     while the watchlist holds some, or check workflows for a request that names the watchlist.
-    Every other answer stands. Only code routes: the reading itself is never changed. The lane
+    Every other answer stands. A plain name typed after "Which software should I watch?" is the
+    offer to watch it. Only code routes: the reading itself is never changed. The lane
     fails closed: a change word left once the question's own words and the names are out keeps
     the first answer, whatever the shape of the sentence (spec 6.4)."""
+    named = _named_when_asked(read, request)
+    if named is not None:
+        return named
     answer = answer_of(read, request.task, request.facts, request.changes_workflows)
     if question_messages(request) is None or isinstance(
         answer, EditAnswer | PauseAnswer | ResumeAnswer
@@ -1101,6 +1121,17 @@ def decide(read: TaskRead, request: AnswerRequest) -> PlannerAnswer | AskTheQues
     if _a_question_beside_a_new_workflow(answer, text, request):
         return AskTheQuestionLane(otherwise=answer, first_on_reject=True)
     return answer
+
+
+def _named_when_asked(read: TaskRead, request: AnswerRequest) -> WatchlistAnswer | None:
+    """The offer to watch the software named in answer to "Which software should I watch?",
+    when the reading finds no task in the typed words and the name is no ticket key."""
+    named = named_when_asked(request)
+    if named is None or read.asks_about not in ("none", "abilities"):
+        return None
+    if any((read.search, read.ticket, read.place)) or _TICKET_KEY.search(named):
+        return None
+    return WatchlistAnswer(word=VERSION, software=named)
 
 
 WHY: Final = re.compile(r"\bwhy\b|\bwent\s+wrong\b|\bwhat\s+happened\b", re.IGNORECASE)

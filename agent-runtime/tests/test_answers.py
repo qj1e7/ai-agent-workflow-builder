@@ -1696,21 +1696,22 @@ def test_a_watch_verb_request_with_a_change_still_fails_closed():
 
 
 @pytest.mark.parametrize(
-    "task",
+    ("task", "verb"),
     [
-        "add a software for me",
-        "Add another software",
-        "please watch some software for me please",
-        "track a new software",
+        ("add a software for me", "add"),
+        ("Add another software", "Add"),
+        ("please watch some software for me please", "watch"),
+        ("track a new software", "track"),
     ],
 )
-def test_a_watch_verb_with_no_software_name_asks_which_software(task: str):
-    answer = answer_of(read(asks_about="abilities"), task)
-    assert isinstance(answer, WhichSoftwareAnswer)
+def test_a_watch_with_no_software_name_asks_which_software(task: str, verb: str):
+    reading = read(belongs_on_watchlist=True, watchlist_word=verb)
+    assert answer_of(reading, task) == WhichSoftwareAnswer(word=verb)
 
 
 def test_more_words_after_a_software_noun_are_not_the_which_software_ask():
-    answer = answer_of(read(asks_about="abilities"), "add a software and email the team")
+    reading = read(belongs_on_watchlist=True, watchlist_word="add")
+    answer = answer_of(reading, "add a software and email the team")
     assert not isinstance(answer, WhichSoftwareAnswer)
 
 
@@ -2145,7 +2146,8 @@ def test_a_refusal_keeps_the_question_asked_with_it():
 
 
 def test_which_software_marks_its_clause_as_the_question():
-    assert parts(read(), "watch a new software") == [("watch a new software", "question", None)]
+    reading = read(belongs_on_watchlist=True, watchlist_word="watch")
+    assert parts(reading, "watch a new software") == [("watch a new software", "question", None)]
 
 
 CLASH_TASK = "{when}, list open tickets in MOCK"
