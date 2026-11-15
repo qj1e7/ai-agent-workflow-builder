@@ -18,6 +18,7 @@ from agent_runtime.abilities import (
     Need,
     cant_entry,
     change_verbs_in,
+    changes_beyond_the_abilities,
     commands_a_change,
     names_a_ticket_field,
     names_an_ability,
@@ -454,9 +455,14 @@ def _left_out(span: Span, searching: bool, unquoted_skip: bool) -> CantRow:
         case "do":
             # "the change board can catch up on it" opens with a verb but is a statement
             # about someone, not an order: naming it as "I can't change board can..." reads
-            # wrong, so a statement gets the plain note.
+            # wrong, so a statement gets the plain note. Words whose only change is one the
+            # abilities make, as "create the ticket", were not followed: "I can't do this"
+            # would claim less than the platform does.
             imperative = starts_with_a_verb(text) and not a_statement(text)
-            note = (why_not("do", text) if imperative else None) or LEFT_OUT_DO
+            beyond = changes_beyond_the_abilities(text)
+            note = (why_not("do", text) if imperative else None) or (
+                LEFT_OUT_DO if beyond or a_statement(text) else LEFT_OUT_PART
+            )
         case "where":
             note = why_not("where", text) or LEFT_OUT_WHERE
         case "schedule":

@@ -1420,6 +1420,12 @@ def names_an_ability(text: str) -> bool:
     )
 
 
+def changes_beyond_the_abilities(text: str) -> bool:
+    """Whether the words ask for a change no ability makes, as "delete" or "set"."""
+    able = {verb for ability in ABILITIES for verb in ability.verbs}
+    return any(verb not in able for verb in change_verbs_in(text))
+
+
 def names_no_ability(note: str) -> bool:
     """Whether a can't's note is only the request's own words before "I can only ...": the
     sentence the Planner writes when it found no ability the request is close to."""
