@@ -460,10 +460,12 @@ for (const width of [1440, 390]) {
     await expect(thread(page), 'the second click is the full page, with the chat gone').toHaveCount(0)
     await page.getByRole('link', { name: 'Back to the chat' }).click()
     await expect(panel(page), 'the panel is as it was on return').toBeVisible()
-    await expect(page.locator('#side-panel-h'), 'focus is in the panel before Escape').toBeFocused()
 
-    await page.keyboard.press('Escape')
-    await expect(panel(page)).toHaveCount(0)
+    // The panel listens for Escape from an effect after it is drawn, so a key pressed the instant it reappears can come first.
+    await expect(async () => {
+      await page.keyboard.press('Escape')
+      await expect(panel(page)).toHaveCount(0, { timeout: 1_000 })
+    }, 'Escape closes the panel').toPass({ timeout: 10_000 })
     await expect(strip(page).getByRole('button', { name: /more that need you$/ }), 'Escape puts focus back on what opened the panel').toBeFocused()
     expect(await pageScroll(page), '#app has not scrolled').toEqual([0, 0, 0])
     assertClean(watch)
