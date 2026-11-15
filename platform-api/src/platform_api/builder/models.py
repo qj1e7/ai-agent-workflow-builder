@@ -482,7 +482,9 @@ class LastCheckView(WireModel):
 
 class ScheduleIn(WireIn):
     day: Day
-    at: ClockTime = Field(description="Time of day in Singapore, HH:MM on a 5-minute step.")
+    at: ClockTime = Field(
+        description="Time of day in the team time zone, HH:MM on a 5-minute step."
+    )
 
 
 EXPECTED_VERSION = (
@@ -814,7 +816,7 @@ class CreateAgentUseCase(WireIn):
     agents: Annotated[list[AgentChoice], Field(min_length=1, max_length=3)]
     schedule: ScheduleIn | None = Field(
         default=None,
-        description="When it runs on its own, in Singapore time. The person who sets it up "
+        description="When it runs on its own, in the team time zone. The person who sets it up "
         "owns the schedule, so its scheduled runs are their work. Leave it out to run it only "
         "by hand.",
     )

@@ -3,6 +3,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from typing import Any, Literal, cast
+from zoneinfo import ZoneInfo
 
 import httpx
 
@@ -153,7 +154,7 @@ from platform_api.orchestration import (
     tools_used,
     write_tools_used,
 )
-from platform_api.shared import Principal, UseCaseId, UserId, new_id
+from platform_api.shared import TEAM_TIME_ZONE, Principal, UseCaseId, UserId, new_id
 
 log = logging.getLogger(__name__)
 
@@ -181,10 +182,12 @@ _IN_N8N = (
 when a save waited on the lock had moved the current version on."""
 
 
-def _schedule_view(saved: SavedSchedule, document: Mapping[str, Any] | None) -> UseCaseSchedule:
+def _schedule_view(
+    saved: SavedSchedule, document: Mapping[str, Any] | None, team_zone: str
+) -> UseCaseSchedule:
     """An own workflow runs when its Schedule Trigger says, which a version published in n8n
-    may have changed, so its day and time are read from the version in use."""
-    schedule = schedule_of(document) or saved.schedule
+    may have changed, so its day, time and zone are read from the version in use."""
+    schedule = schedule_of(document, team_zone) or saved.schedule
     return UseCaseSchedule(
         day=schedule.day,
         at=schedule.at,
@@ -216,7 +219,7 @@ def _target(row: Mapping[str, Any]) -> N8nTarget | None:
     return N8nTarget(row["n8n_workflow_id"], _start_webhook(row["document"]))
 
 
-def _next_run_at(row: Mapping[str, Any], now: datetime) -> datetime | None:
+def _next_run_at(row: Mapping[str, Any], now: datetime, team_zone: str) -> datetime | None:
     """An own workflow runs when n8n's Schedule Trigger fires, to the second n8n adds to it
     (ENGINE-PLAN 2.4). One still on the shared run workflow starts no scheduled run until it
     moves (E10)."""
@@ -225,7 +228,7 @@ def _next_run_at(row: Mapping[str, Any], now: datetime) -> datetime | None:
     document = row["document"]
     if document is None or row["deleted_in_n8n_at"] is not None:
         return None
-    return next_run(document, row["n8n_workflow_id"], now)
+    return next_run(document, row["n8n_workflow_id"], now, team_zone)
 
 
 def _state(state: Lifecycle) -> UseCaseState:
@@ -245,6 +248,7 @@ def _view(
     schedule: SavedSchedule | None,
     last_run: LastRunView | None,
     now: datetime,
+    team_zone: str,
     moving: bool = False,
 ) -> UseCaseView:
     template = TEMPLATES[row["template"]]
@@ -265,10 +269,10 @@ def _view(
         owner=UserId(row["owner"]),
         created_at=row["created_at"],
         state=state,
-        next_run_at=_next_run_at(row, now) if state == "on" and not held else None,
+        next_run_at=_next_run_at(row, now, team_zone) if state == "on" and not held else None,
         schedule=None
         if schedule is None
-        else _schedule_view(schedule, row["document"] if _own(row) else None),
+        else _schedule_view(schedule, row["document"] if _own(row) else None, team_zone),
         plan=plan,
         agents=[
             UseCaseAgentView(
@@ -443,8 +447,11 @@ class Builder:
         accounts: N8nAccounts | None = None,
         open_runs: OpenRuns | None = None,
         holding: Holding | None = None,
+        time_zone: ZoneInfo = TEAM_TIME_ZONE,
     ) -> None:
         self._db = db
+        self._zone = time_zone.key
+        """The team time zone: a new schedule's, and the one every workflow runs on."""
         self._runs = runs
         self._watchlist = watchlist
         self._cards = CardLibrary(db)
@@ -462,7 +469,9 @@ class Builder:
         self.sweep = (
             None
             if n8n is None
-            else VersionsSweep(db, n8n, self.facts, accounts or NoN8nAccounts(), requests)
+            else VersionsSweep(
+                db, n8n, self.facts, accounts or NoN8nAccounts(), requests, self._zone
+            )
         )
         """The versions sweep, for a platform that lays workflows out in n8n."""
         self._open_runs = open_runs
@@ -476,6 +485,7 @@ class Builder:
                 self._schedules,
                 self._laid_out_again,
                 lambda: self.facts.known({}),
+                self._zone,
                 watchlist,
             )
         )
@@ -537,6 +547,7 @@ class Builder:
                 schedules.get(row["use_case_id"]),
                 last_run_view(gist) if (gist := newest.get(row["use_case_id"])) else None,
                 now,
+                self._zone,
                 row["use_case_id"] in moving,
             )
             for row in rows
@@ -650,7 +661,7 @@ class Builder:
             return ScheduleOnSoftwarePage()
         if view.made_in_n8n_by is not None:
             return ScheduleInN8n()
-        after = Schedule(body.day, body.at)
+        after = Schedule(body.day, body.at, self._zone)
         match await self._publish(
             use_case_id, principal, body.via, lambda _: Publish(after), body.expected_version
         ):
@@ -897,7 +908,7 @@ class Builder:
         when it is resumed. n8n's live version and draft must be the ones the platform saw."""
         assert self._n8n is not None and current.held is not None
         error_workflow = await self._n8n.error_workflow_id()
-        graded = grade(held.document, error_workflow, await self.facts.known({}))
+        graded = grade(held.document, error_workflow, self._zone, await self.facts.known({}))
         if graded.grade != "safe":
             return NotSafeToPublish(tuple(f.text for f in graded.findings))
         workflow_id = row["n8n_workflow_id"]
@@ -1230,7 +1241,7 @@ class Builder:
             try:
                 await self._schedules.save(
                     UseCaseId(use_case_id),
-                    Schedule(body.schedule.day, body.schedule.at),
+                    Schedule(body.schedule.day, body.schedule.at, self._zone),
                     principal,
                 )
             except Exception:
@@ -1260,7 +1271,11 @@ class Builder:
     ) -> InN8n | DraftRefused | N8nNotReady:
         clock = self._db.clock
         started = BuildLineView(at=clock(), kind="status", text=ADDING)
-        schedule = None if body.schedule is None else Schedule(body.schedule.day, body.schedule.at)
+        schedule = (
+            None
+            if body.schedule is None
+            else Schedule(body.schedule.day, body.schedule.at, self._zone)
+        )
         checked = await self._laid_out(use_case_id, body.name, schedule, chosen)
         if not isinstance(checked, Checked):
             return checked
@@ -1293,10 +1308,11 @@ class Builder:
             schedule,
             tuple(_planned(card, values) for card, values in chosen),
             error_workflow,
+            self._zone,
         )
         repos = [values[REPO_INPUT] for _, values in chosen if REPO_INPUT in values]
         known = await self.facts.known({GITHUB_RELEASES: repos})
-        checked = check_draft(lay_out(plan), use_case_id, error_workflow, known)
+        checked = check_draft(lay_out(plan), use_case_id, error_workflow, self._zone, known)
         if isinstance(checked, DraftRefused):
             log.error("the safety checker refused the layout of %s: %s", use_case_id, checked)
         return checked

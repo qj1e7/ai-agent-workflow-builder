@@ -11,6 +11,7 @@ import { CHANGED_SINCE_OPENED, changedSinceOpened, rereadWhenOutOfDate } from '.
 import { pressResume, SCHEDULE_PLACES_IN_PAGE_ORDER, schedulePlaces, type SchedulePlace } from './resume'
 import { checkClock, DAYS, dayOption, nextCheckWords, noScheduleWords, ONE_APPROVAL, scheduleOwnerWords, scheduleWords } from './software'
 import styles from './Software.module.css'
+import { teamPlace } from '../workflows/times'
 
 export function ScheduleNote({ schedule, operator, paused }: { schedule: ScheduleView | null; operator: boolean; paused: boolean }) {
   if (schedule === null) return <p>{`${noScheduleWords({ operator, paused })} ${ONE_APPROVAL}`}</p>
@@ -84,7 +85,7 @@ export function ScheduleForm({ schedule, version, work, save, onDone, onStale }:
         </select>
       </div>
       <div className={styles['field']}>
-        <label htmlFor="sched-at">Time, Singapore</label>
+        <label htmlFor="sched-at">Time, {teamPlace()}</label>
         <input id="sched-at" type="time" step={300} value={at} aria-invalid={error ? true : undefined} aria-describedby={error ? 'sched-error' : undefined} onChange={(event) => setAt(event.target.value)} />
       </div>
       <p className={styles['ownerNote']} id="sched-owner-note">

@@ -67,6 +67,8 @@ jobs:
       TF_VAR_jira_issue_type: ${{ vars.JIRA_ISSUE_TYPE || 'Task' }}
       TF_VAR_jira_browse_url: ${{ vars.JIRA_BROWSE_URL }}
       TF_VAR_watchlist_jira_project: ${{ vars.WATCHLIST_JIRA_PROJECT || 'MOCK' }}
+      # Optional. The zone the team works in. Unset keeps Asia/Singapore.
+      TF_VAR_team_time_zone: ${{ vars.TEAM_TIME_ZONE || 'Asia/Singapore' }}
       # Optional, Confluence (ENGINE-PLAN E12). Unset CONFLUENCE_BASE_URL keeps it not connected.
       TF_VAR_confluence_base_url: ${{ vars.CONFLUENCE_BASE_URL }}
       TF_VAR_confluence_pages: ${{ vars.CONFLUENCE_PAGES }}

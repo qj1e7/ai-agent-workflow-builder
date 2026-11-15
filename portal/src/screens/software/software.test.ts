@@ -25,7 +25,6 @@ import {
   scheduleOwnerWords,
   scheduleRuns,
   scheduleWords,
-  singaporeTime,
   sentenceFor,
   softwareLine,
   stateOf,
@@ -33,6 +32,7 @@ import {
   watchRank,
   versionSourceWords,
 } from './software'
+import { dateAndClock, setTeamZone } from '../workflows/times'
 import { formatterFactory, nextRunWords } from '../workflows/workflow'
 
 const ROWS = statuses.software as WatchedSoftwareView[]
@@ -254,10 +254,10 @@ describe('words that depend on the schedule and on pausing', () => {
 
 describe('the schedule', () => {
   it('shows the next check in Singapore time and names the owner', () => {
-    expect(singaporeTime('2026-11-23T09:00:00+08:00')).toBe('Mon 23 Nov, 9:00')
-    expect(singaporeTime('2026-11-23T01:00:00Z')).toBe('Mon 23 Nov, 9:00')
-    expect(singaporeTime('2026-11-01T16:30:00Z'), 'the midnight hour keeps its 0').toBe('Mon 2 Nov, 0:30')
-    expect(singaporeTime('not a time')).toBe('')
+    expect(dateAndClock('2026-11-23T09:00:00+08:00')).toBe('Mon 23 Nov, 9:00')
+    expect(dateAndClock('2026-11-23T01:00:00Z')).toBe('Mon 23 Nov, 9:00')
+    expect(dateAndClock('2026-11-01T16:30:00Z'), 'the midnight hour keeps its 0').toBe('Mon 2 Nov, 0:30')
+    expect(dateAndClock('not a time')).toBe('')
     expect(scheduleWords(SCHEDULE)).toBe('Checked every Monday at 9:00, set by Alice.')
     expect(scheduleOwnerWords(SCHEDULE)).toBe('Scheduled checks count as Alice’s work, so Alice can’t approve them.')
   })
@@ -268,6 +268,20 @@ describe('the schedule', () => {
     expect(nextCheckWords(london, false)).toBe('Next check Mon 23 Nov, 9:00, London time.')
     const row = { state: 'on' as const, next_run_at: london.next_at, schedule: { day: london.day, at: london.at, time_zone: london.time_zone, owner_name: london.owner_name } }
     expect(nextRunWords(row, new Date('2026-11-04T15:00:00+08:00'))).toBe('Mon 23 Nov, 9:00 London time')
+  })
+
+  it('for a London team, gives every time in London and names Singapore after a Singapore schedule’s time', () => {
+    setTeamZone('Europe/London')
+    try {
+      expect(dateAndClock('2026-11-23T09:00:00Z')).toBe('Mon 23 Nov, 9:00')
+      expect(scheduleWords(SCHEDULE)).toBe('Checked every Monday at 9:00 Singapore time, set by Alice.')
+      expect(nextCheckWords(SCHEDULE, false)).toBe('Next check Mon 23 Nov, 9:00, Singapore time.')
+      const london: ScheduleView = { ...SCHEDULE, time_zone: 'Europe/London', next_at: '2026-11-23T09:00:00Z' }
+      expect(scheduleWords(london)).toBe('Checked every Monday at 9:00, set by Alice.')
+      expect(nextCheckWords(london, false)).toBe('Next check Mon 23 Nov, 9:00, London time.')
+    } finally {
+      setTeamZone(undefined)
+    }
   })
 
   it('for a zone the browser cannot read, names it from its id and gives the next check in Singapore time, saying so', () => {

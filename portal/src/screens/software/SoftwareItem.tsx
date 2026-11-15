@@ -7,7 +7,8 @@ import { TicketKeys } from '../jira/TicketKeys'
 import { MovedNote, NotFoundNote } from './NewAddress'
 import { removeButtonId } from './removal'
 import { SoftwareHistory } from './SoftwareHistory'
-import { askWhereWords, cantCheckWords, newestOf, oursOf, rowDomId, sentenceFor, singaporeTime, stateOf, ticketFact, ticketsOf, NOT_AUTOMATIC, WATCHLIST_PATH } from './software'
+import { askWhereWords, cantCheckWords, newestOf, oursOf, rowDomId, sentenceFor, stateOf, ticketFact, ticketsOf, NOT_AUTOMATIC, WATCHLIST_PATH } from './software'
+import { dateAndClock } from '../workflows/times'
 import workflowStyles from '../workflows/Workflows.module.css'
 import styles from './Software.module.css'
 
@@ -53,7 +54,7 @@ export function SoftwareItem(props: ItemProps) {
   const ours = oursOf(row)
   const newest = newestOf(row)
   const historyId = `history-${row.id}`
-  const checked = row.checked_at ? `last checked ${singaporeTime(row.checked_at)}${lastCheckStopped ? ', didn’t finish' : ''}` : 'Not checked yet'
+  const checked = row.checked_at ? `last checked ${dateAndClock(row.checked_at)}${lastCheckStopped ? ', didn’t finish' : ''}` : 'Not checked yet'
   return (
     <div id={rowDomId(row.id)} tabIndex={-1} className={styles['item']} data-status={row.status}>
       <BackToWatchlist />

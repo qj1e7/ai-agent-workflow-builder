@@ -16,9 +16,9 @@ from platform_api.orchestration.n8n import PLATFORM_API_KEY_LABEL, N8nClient, N8
 from platform_api.orchestration.node_classes import NODE_CLASSES
 from platform_api.orchestration.workflow_check import (
     ERROR_WORKFLOW,
-    PLATFORM_WORKFLOWS_DIR,
     SELF_TEST,
     check_platform,
+    platform_document,
 )
 from platform_api.settings import BootstrapSettings, bootstrap_settings_from_env
 
@@ -141,7 +141,7 @@ def load_into_n8n(settings: BootstrapSettings, say: Say) -> tuple[list[LoadedWor
             {w["name"]: w["sha256"] for w in previous},
             say,
         )
-        platform = load_platform_workflows(place)
+        platform = load_platform_workflows(place, settings.team_time_zone.key)
         for old in client.workflows_named(OLD_RUN_WORKFLOW):
             if old.project == place.project:
                 client.delete_workflow(old.id)
@@ -230,13 +230,13 @@ class PlatformLoaded:
     findings: list[str]
 
 
-def load_platform_workflows(place: Place) -> PlatformLoaded:
+def load_platform_workflows(place: Place, time_zone: str) -> PlatformLoaded:
     """The platform's own n8n workflows, each made active (ENGINE-PLAN 2.8): the error workflow
-    first, then the daily self-test, whose failures go to it. Each is checked as n8n holds it."""
-    error = platform_document(ERROR_WORKFLOW)
+    first, then the daily self-test, whose failures go to it and which runs on the team time zone.
+    Each is checked as n8n holds it."""
+    error = platform_document(ERROR_WORKFLOW, None, time_zone)
     error_id = _upsert(place, error, _content_hash(error))
-    self_test = platform_document(SELF_TEST)
-    self_test["settings"] = {**self_test["settings"], "errorWorkflow": error_id}
+    self_test = platform_document(SELF_TEST, error_id, time_zone)
     self_test_id = _upsert(place, self_test, _content_hash(self_test))
     loaded: list[LoadedWorkflow] = []
     findings: list[str] = []
@@ -244,12 +244,9 @@ def load_platform_workflows(place: Place) -> PlatformLoaded:
         record = place.client.read_back(workflow_id)
         digest = _content_hash(body)
         loaded.append(LoadedWorkflow(record.name, record.id, record.active, digest, record.project))
-        findings += [f"{record.name}: {f.text}" for f in check_platform(record.document, error_id)]
+        checked = check_platform(record.document, error_id, time_zone)
+        findings += [f"{record.name}: {f.text}" for f in checked]
     return PlatformLoaded(error_id, loaded, findings)
-
-
-def platform_document(name: str) -> dict[str, Any]:
-    return json.loads((PLATFORM_WORKFLOWS_DIR / f"{name}.n8n.json").read_text())
 
 
 def _upsert(place: Place, body: dict[str, Any], digest: str) -> str:

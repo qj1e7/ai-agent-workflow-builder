@@ -146,3 +146,13 @@ WORKFLOW = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "eval
 @pytest.mark.skipif(not WORKFLOW.exists(), reason="The workflows are not in the test image.")
 def test_the_evals_workflow_takes_its_keys_from_the_evals_environment() -> None:
     assert "\n    environment: evals\n" in WORKFLOW.read_text()
+
+
+def test_an_owner_named_in_a_gateway_error_is_redacted() -> None:
+    error = (
+        "Budget has been exceeded! TeamMember=someone.else@example.com.sg:679dd472-884d-4fd0-8616-"
+        "298de248ad85 Current cost: 33.28, Max budget: 32.0"
+    )
+    redacted = redact(error, {})
+    assert "example.com" not in redacted and "679dd472" not in redacted
+    assert "Budget has been exceeded" in redacted and "Max budget: 32.0" in redacted

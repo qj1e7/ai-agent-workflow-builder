@@ -1,6 +1,6 @@
 import { Button, ButtonLink } from '../../ui/Button'
 import { IconAlert, IconCheck, IconLock, IconPause, IconPlay, type Icon } from '../../ui/icons'
-import { ADD_THE_YES_BACK, UNDO } from './n8nChange'
+import { ADD_THE_YES_BACK, SAVE_AGAIN, UNDO } from './n8nChange'
 import type { Banner } from './workflow'
 import styles from './Workflows.module.css'
 
@@ -10,8 +10,8 @@ interface BannerViewProps {
   readonly banner: Banner
   readonly resuming: boolean
   readonly onResume: () => void
-  /** Presses Add the yes back or Undo. The page asks the platform. */
-  readonly onRepublish?: (action: Extract<NonNullable<Banner['action']>, { kind: 'yes' | 'undo' }>) => void
+  /** Presses Add the yes back, Undo or Save the schedule again. The page asks the platform. */
+  readonly onRepublish?: (action: Extract<NonNullable<Banner['action']>, { kind: 'yes' | 'undo' | 'resave' }>) => void
   readonly republishing?: boolean
 }
 
@@ -48,6 +48,12 @@ function BannerButton({ action, resuming, onResume, onRepublish, republishing }:
       return (
         <Button loading={republishing} onClick={() => onRepublish(action)}>
           {UNDO}
+        </Button>
+      )
+    case 'resave':
+      return (
+        <Button variant="primary" loading={republishing} onClick={() => onRepublish(action)}>
+          {SAVE_AGAIN}
         </Button>
       )
     case 'open':

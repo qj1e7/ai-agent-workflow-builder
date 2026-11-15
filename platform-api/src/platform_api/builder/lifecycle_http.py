@@ -197,7 +197,7 @@ async def restore_use_case(
 
 @router.put(
     "/use-cases/{use_case_id}/schedule",
-    description="Saves when the workflow runs on its own, in Singapore time. The caller "
+    description="Saves when the workflow runs on its own, in the team time zone. The caller "
     "becomes the schedule owner, whose scheduled runs start as them and who can never approve "
     "them. That lifts a hold, so an Operator takes over a workflow whose owner can no longer "
     "run it by saving its schedule. A new schedule publishes a new version of the workflow, "
