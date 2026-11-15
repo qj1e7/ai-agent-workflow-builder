@@ -1,0 +1,151 @@
+{
+  "use_case_id": "uc_01JD0",
+  "workflow_id": "wfRelease01",
+  "version": 1,
+  "n8n_version_id": "2f6d4c1e-1d52-4a8e-9b1c-6f1f0f6b2c11",
+  "published_by": "carol",
+  "published_by_name": "Carol",
+  "published_in": "portal",
+  "nodes": [
+    {
+      "name": "About this workflow",
+      "type": "n8n-nodes-base.stickyNote",
+      "kind": "other",
+      "position": [
+        0.0,
+        -400.0
+      ],
+      "disabled": false
+    },
+    {
+      "name": "Mon 8:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "kind": "schedule",
+      "position": [
+        0.0,
+        0.0
+      ],
+      "disabled": false
+    },
+    {
+      "name": "Start from the Portal",
+      "type": "CUSTOM.wabStartFromPortal",
+      "kind": "start",
+      "position": [
+        0.0,
+        200.0
+      ],
+      "disabled": false
+    },
+    {
+      "name": "Read release",
+      "type": "CUSTOM.wabRead",
+      "kind": "read",
+      "position": [
+        220.0,
+        0.0
+      ],
+      "disabled": false
+    },
+    {
+      "name": "Compare",
+      "type": "CUSTOM.wabAgent",
+      "kind": "agent",
+      "position": [
+        440.0,
+        0.0
+      ],
+      "disabled": false
+    },
+    {
+      "name": "Newer?",
+      "type": "n8n-nodes-base.if",
+      "kind": "branch",
+      "position": [
+        660.0,
+        0.0
+      ],
+      "disabled": false
+    },
+    {
+      "name": "Ask for a yes",
+      "type": "CUSTOM.wabAskForYes",
+      "kind": "ask",
+      "position": [
+        880.0,
+        0.0
+      ],
+      "disabled": false
+    },
+    {
+      "name": "Create ticket",
+      "type": "CUSTOM.wabMakeApprovedChanges",
+      "kind": "write",
+      "position": [
+        1100.0,
+        0.0
+      ],
+      "disabled": false
+    },
+    {
+      "name": "Nothing to change",
+      "type": "n8n-nodes-base.noOp",
+      "kind": "end",
+      "position": [
+        880.0,
+        200.0
+      ],
+      "disabled": false
+    }
+  ],
+  "edges": [
+    {
+      "source": "Mon 8:00",
+      "exit": 0,
+      "target": "Read release"
+    },
+    {
+      "source": "Start from the Portal",
+      "exit": 0,
+      "target": "Read release"
+    },
+    {
+      "source": "Read release",
+      "exit": 0,
+      "target": "Compare"
+    },
+    {
+      "source": "Compare",
+      "exit": 0,
+      "target": "Newer?"
+    },
+    {
+      "source": "Newer?",
+      "exit": 0,
+      "target": "Ask for a yes"
+    },
+    {
+      "source": "Newer?",
+      "exit": 1,
+      "target": "Nothing to change"
+    },
+    {
+      "source": "Ask for a yes",
+      "exit": 1,
+      "target": "Create ticket"
+    },
+    {
+      "source": "Ask for a yes",
+      "exit": 3,
+      "target": "Nothing to change"
+    }
+  ],
+  "holder": {
+    "id": "carol",
+    "name": "Carol",
+    "since": "2026-11-10T05:40:00Z"
+  },
+  "can_open": true,
+  "why_not": null,
+  "editor_url": "https://n8n.example/workflow/wfRelease01"
+}

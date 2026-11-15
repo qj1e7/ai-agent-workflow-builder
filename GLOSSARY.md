@@ -115,7 +115,7 @@ _Avoid_: Webhook
 A workflow someone built in n8n from our nodes and then registered in the Portal, rather than one the Planner laid out. Until an Operator names its Approvers, any Approver on the team decides its requests (ADR 0027). Planned.
 
 **Holder**:
-The person who has a workflow open in n8n, in their own n8n project. A run they start by hand in n8n is their work, so they cannot approve it. Take back ends the hold. Planned (ADR 0027).
+The person who has a workflow open in n8n, in their own n8n project. A run they start by hand in n8n is their work, so they cannot approve it. Take back ends the hold (ADR 0027).
 
 **Version compare**:
 The check around every change our platform makes to a workflow in n8n. The workflow must still be the version the Portal last stored, and the change must read back as sent. When someone changed it in n8n since, the platform shows "Changed again since, in n8n." (ADR 0027). Planned.
@@ -355,5 +355,5 @@ The platform's own record of who may use it and which roles they hold. Sign-in o
 _Avoid_: Users, accounts, app roles
 
 **n8n access**:
-A mark on an Operator in the People list that lets them see a workflow's n8n blocks and open it in n8n, where they can change it. Only Operators can have it, because a change made in n8n changes a workflow. Everyone else sees the workflow's plain steps. It is not a third role. Planned (ADR 0043).
+A mark on an Operator in the People list that lets them see a workflow's n8n blocks and open it in n8n, where they can change it. Only Operators can have it, because a change made in n8n changes a workflow, and Approvers never can: gaining the Approver role ends it. The platform makes the person's n8n account with the same email, and matches them later by n8n's id for that account, never by email. Everyone else sees the workflow's plain steps. It is not a third role (ADR 0043, ENGINE-PLAN 2.9).
 _Avoid_: n8n role, admin

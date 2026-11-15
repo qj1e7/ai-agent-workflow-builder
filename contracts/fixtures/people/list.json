@@ -8,6 +8,8 @@
       "approver": true,
       "pending_approver": null,
       "signed_in": true,
+      "n8n_access": false,
+      "n8n_account": "none",
       "added_by": "deploy",
       "added_at": "2026-11-02T06:00:00Z"
     },
@@ -19,6 +21,8 @@
       "approver": true,
       "pending_approver": null,
       "signed_in": true,
+      "n8n_access": false,
+      "n8n_account": "none",
       "added_by": "deploy",
       "added_at": "2026-11-02T06:00:00Z"
     },
@@ -30,6 +34,8 @@
       "approver": false,
       "pending_approver": null,
       "signed_in": true,
+      "n8n_access": false,
+      "n8n_account": "none",
       "added_by": "deploy",
       "added_at": "2026-11-02T06:00:00Z"
     },
@@ -45,6 +51,8 @@
         "asked_at": "2026-11-09T03:41:00Z"
       },
       "signed_in": false,
+      "n8n_access": false,
+      "n8n_account": "none",
       "added_by": "alice",
       "added_at": "2026-11-09T03:40:00Z"
     }

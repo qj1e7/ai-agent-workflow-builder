@@ -6,7 +6,7 @@ at the first block and writes nothing."""
 
 from harness import N8N_OWNER, Api, Json
 from test_n8n_engine import set_up, ticket_count
-from test_n8n_versions import Member, held_by, swept
+from test_n8n_versions import held_by, staff_member, swept
 
 OFF = ("n8n-nodes-base.httpRequest", "n8n-nodes-base.code", "n8n-nodes-base.webhook")
 
@@ -74,9 +74,9 @@ def test_allow_list(api: Api, mock_model: None):
 
     created = set_up(api, "e2e allow list", on=True)
     use_case_id, workflow_id = created["use_case_id"], created["n8n_workflow_id"]
-    member = Member("erin")
-    held_by(api, member, workflow_id)
-    member.publish(workflow_id, by_sql)
+    erin = staff_member(api, "Erin")
+    held_by(api, erin, use_case_id, workflow_id)
+    erin.member.publish(workflow_id, by_sql)
     view = swept(api, use_case_id, 2)
     assert view["grade"] == "needs_a_fix"
     assert view["findings"] == ['"Join by SQL" does something that is off: combineBySql.']

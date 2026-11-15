@@ -21,6 +21,16 @@ def roles_from(is_operator: bool, is_approver: bool) -> frozenset[Role]:
 
 
 @dataclass(frozen=True)
+class N8nAccount:
+    """The n8n account the platform made for a person, by n8n's id for it, which every later
+    match uses: a member can change the email in their n8n profile (ENGINE-PLAN 2.9)."""
+
+    user_id: str
+    pending: bool
+    """The person has not set their n8n password yet."""
+
+
+@dataclass(frozen=True)
 class Person:
     id: UserId
     email: str
@@ -32,6 +42,9 @@ class Person:
     entra_oid: str | None = None
     bound_at: datetime | None = None
     removed_at: datetime | None = None
+    n8n_access: bool = False
+    """Only an Operator who is no Approver holds it (ENGINE-PLAN 2.9)."""
+    n8n_account: N8nAccount | None = None
 
     @property
     def on_list(self) -> bool:
@@ -43,7 +56,7 @@ class Person:
 
     @property
     def principal(self) -> Principal:
-        return Principal(self.id, self.roles, self.display)
+        return Principal(self.id, self.roles, self.display, self.n8n_access)
 
 
 class PeopleRefusal(Enum):
@@ -58,6 +71,7 @@ class PeopleRefusal(Enum):
     ALREADY_ASKED = "already_asked"
     CONFIRMATION_WAITING = "confirmation_waiting"
     YOURSELF = "yourself"
+    N8N_OPERATORS_ONLY = "n8n_operators_only"
 
 
 REFUSAL_MESSAGES: dict[PeopleRefusal, str] = {
@@ -76,6 +90,9 @@ REFUSAL_MESSAGES: dict[PeopleRefusal, str] = {
         "An Approver is still deciding this person's Approver role. Ask them to say not now first."
     ),
     PeopleRefusal.YOURSELF: "You cannot remove yourself from the list.",
+    PeopleRefusal.N8N_OPERATORS_ONLY: (
+        "Only Operators can have n8n access, and Approvers never can."
+    ),
 }
 
 
@@ -208,6 +225,7 @@ def _restored(
         entra_oid=None,
         bound_at=None,
         removed_at=None,
+        n8n_access=False,
     )
 
 
@@ -231,8 +249,9 @@ def set_operator(
     if not person.is_approver:
         return Refused(PeopleRefusal.NO_ROLE)
     return Changed(
-        replace(person, is_operator=False),
-        f"{actor.display} removed {person.display}'s Operator role.",
+        replace(person, is_operator=False, n8n_access=False),
+        f"{actor.display} removed {person.display}'s Operator role."
+        + _access_ended(person, "only Operators can have it"),
     )
 
 
@@ -271,6 +290,29 @@ def remove_approver(
     )
 
 
+def set_n8n_access(actor: Person, person: Person, on: bool) -> Changed | Refused:
+    if (refused := _an_operator(actor)) is not None:
+        return refused
+    if on == person.n8n_access:
+        return Changed(person, None)
+    if not on:
+        return Changed(
+            replace(person, n8n_access=False),
+            f"{actor.display} removed {person.display}'s n8n access.",
+        )
+    if not person.is_operator or person.is_approver:
+        return Refused(PeopleRefusal.N8N_OPERATORS_ONLY)
+    return Changed(
+        replace(person, n8n_access=True), f"{actor.display} gave {person.display} n8n access."
+    )
+
+
+def _access_ended(person: Person, because: str) -> str:
+    if not person.n8n_access:
+        return ""
+    return f" {person.display}'s n8n access ended, because {because}."
+
+
 def remove_person(
     actor: Person, people: Sequence[Person], person: Person, now: datetime
 ) -> Changed | Refused:
@@ -301,14 +343,20 @@ def _removed(person: Person, now: datetime) -> Person:
         person,
         is_operator=False,
         is_approver=False,
+        n8n_access=False,
         entra_oid=None,
         bound_at=None,
         removed_at=now,
     )
 
 
-def grant_approver(person: Person) -> Person:
-    return replace(person, is_approver=True)
+def grant_approver(person: Person) -> tuple[Person, str]:
+    """An Approver never holds n8n access, so gaining the role ends it, and the sentence says
+    so."""
+    return (
+        replace(person, is_approver=True, n8n_access=False),
+        _access_ended(person, "Approvers can't have it"),
+    )
 
 
 def seed_people(seed: Iterable[SeedPerson], now: datetime) -> list[Person]:

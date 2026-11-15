@@ -1,4 +1,5 @@
 import type { CantRowView, CapabilitiesView, CapabilityView, OfflineReply, PauseReply, PlannerReply, QuestionReply, ResumeReply, RowKind, UnderstoodRowView } from '../../api/types'
+import { ApiError } from '../../api/client'
 import { count } from '../run/words'
 import { isRunning, type Row } from '../workflows/workflow'
 import { sayChanged } from './changed'
@@ -91,6 +92,7 @@ export const questionActions = (reply: QuestionReply, asker: Asker): readonly st
 export function wordsOnly(reply: PlannerReply, asker: Asker): boolean {
   if (reply.answer === 'question') return questionActions(reply, asker).length === 0
   if (reply.answer === 'pause' || reply.answer === 'resume') return reply.choices.length === 0
+  if (reply.answer === 'n8n') return !(reply.can_open && reply.use_case_id !== null)
   return reply.answer === 'operators' || (reply.answer === 'offline' && asker === 'approver')
 }
 
@@ -172,6 +174,8 @@ export function sayOf(reply: PlannerReply, asker: Asker = 'operator'): string | 
       return reply.text
     case 'changed_in_n8n':
       return sayChanged(reply)
+    case 'n8n':
+      return reply.said
     case 'edit':
     case 'check_workflows':
     case 'why_stopped':
@@ -268,4 +272,13 @@ export function whyNot(entry: Pick<CapabilityView, 'cant' | 'why' | 'fix'>): str
 /** The starting points “Set up another workflow” offers: the platform’s examples that set something up, which it already vouches for. */
 export function startingPoints(view: CapabilitiesView): readonly string[] {
   return view.examples.filter((example) => example.kind !== 'learn').map((example) => example.text)
+}
+
+/** Why opening n8n was refused, in the platform's own words when it gave them. */
+export function openInN8nWords(error: unknown, otherwise: (error: unknown) => string): string {
+  if (error instanceof ApiError && [403, 409, 503].includes(error.status)) {
+    const detail = (error.body as { detail?: unknown } | null)?.detail
+    if (typeof detail === 'string') return detail
+  }
+  return otherwise(error)
 }

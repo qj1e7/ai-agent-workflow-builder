@@ -1,11 +1,12 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
-import { unwrap } from './client'
+import { unwrap, type ApiClient } from './client'
 import { useApiClient, useCacheScope } from './context'
 import type { AddPersonIn, ConfirmationDecisionIn } from './types'
 
 const settingsKeys = {
   people: (user: string) => ['people', user] as const,
   confirmations: (user: string) => ['confirmations', user] as const,
+  myN8n: (user: string) => ['my-n8n', user] as const,
   history: (user: string) => ['settings-history', user] as const,
 }
 
@@ -70,6 +71,36 @@ export function useSetOperator() {
         }),
       ),
     onSettled: () => refreshPeople(queryClient),
+  })
+}
+
+export async function sendN8nAccess(client: ApiClient, personId: string, n8nAccess: boolean) {
+  return unwrap(
+    await client.PUT('/api/v1/people/{person_id}/n8n-access', {
+      params: { path: { person_id: personId } },
+      body: { n8n_access: n8nAccess },
+    }),
+  )
+}
+
+export function useSetN8nAccess() {
+  const client = useApiClient()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ personId, n8nAccess }: { personId: string; n8nAccess: boolean }) => sendN8nAccess(client, personId, n8nAccess),
+    onSettled: () => refreshPeople(queryClient),
+  })
+}
+
+export function useMyN8n(enabled: boolean) {
+  const client = useApiClient()
+  const user = useCacheScope()
+  return useQuery({
+    queryKey: settingsKeys.myN8n(user),
+    queryFn: async () => unwrap(await client.GET('/api/v1/me/n8n')),
+    enabled,
+    staleTime: 0,
+    gcTime: 0,
   })
 }
 

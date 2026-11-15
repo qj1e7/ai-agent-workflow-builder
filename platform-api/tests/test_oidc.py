@@ -112,6 +112,7 @@ def test_a_valid_token_signs_in_as_the_person_it_names(client: TestClient, key: 
         "display": "Alice",
         "roles": ["operator", "approver"],
         "on_list": True,
+        "n8n_access": False,
     }
 
 
@@ -540,7 +541,13 @@ def test_a_person_not_on_the_list_is_told_to_ask_an_operator(issuer: FakeIssuer,
     nobody = bearer(token(claims=NOBODY_CLAIMS))
     me = client.get(ME, headers=nobody)
     assert me.status_code == 200
-    assert me.json() == {"id": NOBODY_ID, "display": "Nobody", "roles": [], "on_list": False}
+    assert me.json() == {
+        "id": NOBODY_ID,
+        "display": "Nobody",
+        "roles": [],
+        "on_list": False,
+        "n8n_access": False,
+    }
     declared_status(app, "GET", ME, me)
     decision = {"verdict": "confirm", "digest": "sha256:0"}
     for method, path, declared, body in (

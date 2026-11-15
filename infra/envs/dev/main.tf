@@ -301,6 +301,12 @@ locals {
         },
         var.oidc_jwks_url == "" ? {} : { OIDC_JWKS_URL = var.oidc_jwks_url },
         var.teams_channel == "" ? {} : { TEAMS_CHANNEL = var.teams_channel },
+        # Staff reach n8n's editor only while it is open, so only then do they get n8n accounts
+        # (ENGINE-PLAN 2.9). platform-api still waits for a bootstrap that proved the allow list.
+        var.n8n_editor_external ? {
+          N8N_STAFF_ACCESS = "on"
+          N8N_EDITOR_URL   = local.url["n8n"]
+        } : {},
         local.tell_email_to == "" ? {} : { TELL_EMAIL_TO = local.tell_email_to },
         local.first_people,
         local.jira_settings,
