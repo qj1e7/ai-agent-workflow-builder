@@ -43,7 +43,7 @@ Other commit scopes: `infra`, `ci`, `docs`.
 Do not assume an answer. Ask, or propose an ADR.
 
 - Which NoSQL store (Cosmos DB was suggested).
-- Which AI model provider (decide after testing in early sprints).
+- Which AI model provider after handover (ADR 0032). Until then, the Planner runs on Claude Sonnet 5.5 through the AI Singapore gateway (ADR 0048).
 - Who owns the code and the reuse rights (waiting on the sponsor).
 
 ## Product safety rules
