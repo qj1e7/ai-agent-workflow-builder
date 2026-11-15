@@ -202,3 +202,9 @@ A second safety review found no must-fix left. It raised four points, and a run 
 - Words that say a write waits for an Approver's yes, such as "after the approver says yes", are no longer refused as a skip. This holds only when nothing else in the request is left over. "And the rest go straight in" or "with the approval skipped" are still refused. Over 576 phrasings, 12 honest requests are no longer refused, and nothing else changed.
 
 **The gate reports before it blocks.** Until a run meets the bars, `planner-gate.yml` comments its numbers on the pull request and doesn't fail it. The pull request that reaches the bars sets `GATE_BLOCKS` to `true`. Tuning runs use `reply_dev`, the reply set less its held-out third. The held-out third runs only at the end.
+
+## Amended, 16 Nov 2026
+
+**One more dead end.** A question about how to do something, which opens "how do I", "how can we" or "how will I", is a dead end when the answer is the person's workflow list or Needs you. An example is "how do I stop a workflow for a while", which got the list of workflows and nothing about how. The free reply answers it from the guide. If the reply falls back, the list stays, so the person never sees "I didn't follow that" for it.
+
+**A missing name is asked, from the reading.** A request the reading puts on the Software watchlist that names no software, and asks nothing else, gets "Which software should I watch?". A plain name typed next, after that question, is the offer to watch it. This runs after every refusal, so the model's answer to the skip question can only add one, never be removed. It also needs the reading to name the typed words as the software, with no time beside them, as ADR 0042 requires.

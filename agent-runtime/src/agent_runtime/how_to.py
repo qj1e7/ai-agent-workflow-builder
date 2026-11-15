@@ -15,7 +15,8 @@ HOW_TO: Final = (
     "An Operator can change any part of the card, then press Set up for a test run that writes "
     "nothing.",
     "If the test run passes, the Operator presses Turn it on.",
-    "A card you leave stays as a draft by itself, and Resume on Workflows opens it again.",
+    "A card you leave stays as a draft by itself. It shows on Workflows marked Draft, and "
+    "opening it brings the card back to the chat.",
     "Anything that writes data, such as a new Jira ticket, waits for an Approver's yes in Teams.",
     "The person who asked is never the Approver of their own request.",
     "Operators set up and change workflows, and Approvers say yes or no to requests.",
