@@ -633,7 +633,7 @@ async def test_a_run_in_n8n_has_each_block_s_state_from_its_calls_then_n8n_s_rec
         await uow.conn.execute(
             "INSERT INTO orchestration.runs (run_id, use_case_id, idempotency_key, spec,"
             " started_by, started_at, updated_at, state, state_data)"
-            " VALUES ('run_n8n', %s, 'k', '{}', 'carol', %s, %s, 'awaiting_approval', '{}')",
+            " VALUES ('run_n8n', %s, 'k', '{}', 'carol', %s, %s, 'AwaitingApproval', '{}')",
             (use_case_id, NOW, NOW),
         )
         await uow.conn.execute(
@@ -665,7 +665,7 @@ async def test_a_run_in_n8n_has_each_block_s_state_from_its_calls_then_n8n_s_rec
 
     async with s.lab.h.db.transaction("orchestration") as uow:
         await uow.conn.execute(
-            "UPDATE orchestration.runs SET state = 'rejected' WHERE run_id = 'run_n8n'"
+            "UPDATE orchestration.runs SET state = 'Rejected' WHERE run_id = 'run_n8n'"
         )
     s.n8n.execution("901", "success", workflow_id=workflow_id)
     s.n8n.executions["901"]["data"]["resultData"]["runData"] = {
