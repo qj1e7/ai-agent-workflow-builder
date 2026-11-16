@@ -421,6 +421,9 @@ HELD = Given(
         "Needs you holds Kubernetes.",
         "Your Watchlist holds both Redis and Kafka.",
         "Your Watchlist holds React.",
+        "Your workflows include Redis.",
+        "Your Watchlist holds Morning bug list.",
+        "Needs you shows Morning bug list.",
     ],
 )
 def test_a_name_a_list_is_said_to_hold_but_the_facts_dont_is_made_up(text: str):
