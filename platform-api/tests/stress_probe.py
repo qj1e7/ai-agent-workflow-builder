@@ -127,12 +127,22 @@ def _install() -> None:
             took = perf() - gc_start[0]
             if took > SLOW:
                 mark(f"gc gen {info.get('generation')} took {took:.2f}s")
+            if took > 0.3 or info.get("generation") == 2:
+                out(
+                    f"GC gen {info.get('generation')} took {took:.2f}s "
+                    f"collected {info.get('collected')} rss {_rss_mb()} MB "
+                    f"during {os.environ.get('PYTEST_CURRENT_TEST', '?')}"
+                )
 
     gc.callbacks.append(on_gc)
 
 
-if ENABLED:
-    _install()
+def _rss_mb() -> int:
+    try:
+        with open("/proc/self/statm") as f:
+            return int(f.read().split()[1]) * os.sysconf("SC_PAGE_SIZE") // 2**20
+    except OSError:
+        return -1
 
 
 def _pressure() -> str:
@@ -225,3 +235,7 @@ def report(header: str) -> None:
 def cpu() -> float:
     times = os.times()
     return times.user + times.system
+
+
+if ENABLED:
+    _install()
