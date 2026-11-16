@@ -120,6 +120,17 @@ class N8nOwner:
 
 
 @dataclass(frozen=True)
+class LangfuseSettings:
+    """The Langfuse project that platform-api writes code flags to (ADR 0050)."""
+
+    base_url: str
+    public_key: str
+    secret_key: str = field(repr=False)
+    environment: str | None = None
+    """LANGFUSE_TRACING_ENVIRONMENT, sent with each score. Unset, Langfuse uses its default."""
+
+
+@dataclass(frozen=True)
 class Settings:
     auth: AuthConfig
     public_base_url: str
@@ -167,6 +178,12 @@ class Settings:
     n8n_keys: Mapping[KeySystem, N8nKey] = field(default_factory=dict[KeySystem, N8nKey])
     """The keys the platform makes in n8n for n8n's own blocks, from the N8N_KEY_ settings. A
     system with none set has no key, so its blocks never pass the check."""
+    langfuse: LangfuseSettings | None = None
+    """LANGFUSE_BASE_URL, LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY. Without them no score is
+    written."""
+    trace_pseudonym_key: str | None = field(default=None, repr=False)
+    """TRACE_PSEUDONYM_KEY, which keys the pseudonym a trace names the person by. Without it a
+    trace names nobody."""
 
 
 def _required(env: Mapping[str, str], name: str) -> str:
@@ -487,6 +504,31 @@ def n8n_keys_from_env(env: Mapping[str, str], jira: JiraSettings) -> dict[KeySys
     return keys
 
 
+LANGFUSE_ENVIRONMENT = re.compile(r"[a-z0-9_-]{1,40}")
+
+
+def langfuse_from_env(env: Mapping[str, str]) -> LangfuseSettings | None:
+    raw_base = env.get("LANGFUSE_BASE_URL", "").strip()
+    public_key = _secret(env, "LANGFUSE_PUBLIC_KEY")
+    secret_key = _secret(env, "LANGFUSE_SECRET_KEY")
+    if not raw_base and public_key is None and secret_key is None:
+        return None
+    if not raw_base or public_key is None or secret_key is None:
+        raise ConfigError(
+            "LANGFUSE_BASE_URL, LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY go together."
+        )
+    environment = env.get("LANGFUSE_TRACING_ENVIRONMENT", "").strip() or None
+    if environment is not None and (
+        LANGFUSE_ENVIRONMENT.fullmatch(environment) is None or environment.startswith("langfuse")
+    ):
+        raise ConfigError(
+            "LANGFUSE_TRACING_ENVIRONMENT takes lower case letters, digits, hyphens and "
+            f"underscores, up to 40, and may not start with langfuse. {environment!r} is not one."
+        )
+    base_url = _stack_or_https("LANGFUSE_BASE_URL", raw_base)
+    return LangfuseSettings(base_url, public_key, secret_key, environment)
+
+
 def staff_access_from_env(env: Mapping[str, str], owner: N8nOwner | None) -> bool:
     on = n8n_staff_access_from_env(env)
     if on and (owner is None or not env.get("SETTINGS_ENCRYPTION_KEY")):
@@ -541,6 +583,8 @@ def settings_from_env(env: Mapping[str, str]) -> Settings:
         n8n_staff_access=staff_access_from_env(env, n8n_owner),
         n8n_editor_url=n8n_editor_url_from_env(env),
         n8n_keys=n8n_keys_from_env(env, jira),
+        langfuse=langfuse_from_env(env),
+        trace_pseudonym_key=_secret(env, "TRACE_PSEUDONYM_KEY"),
     )
 
 
