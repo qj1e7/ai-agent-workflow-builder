@@ -1,0 +1,50 @@
+{
+  "wording": "Every day at 8:00, it reads GitHub \u201clangchain-ai/langgraph\u201d and Jira \u201cMOCK\u201d. It can create Jira tickets in \u201cMOCK\u201d, each after a yes. It changes nothing else.",
+  "facts": [
+    {
+      "kind": "runs",
+      "together": [
+        "day",
+        "8:00"
+      ],
+      "negated": false
+    },
+    {
+      "kind": "reads",
+      "together": [
+        "reads",
+        "GitHub",
+        "langchain-ai/langgraph"
+      ],
+      "negated": false
+    },
+    {
+      "kind": "reads",
+      "together": [
+        "reads",
+        "Jira",
+        "MOCK"
+      ],
+      "negated": false
+    },
+    {
+      "kind": "writes",
+      "together": [
+        "create",
+        "Jira",
+        "MOCK",
+        "yes"
+      ],
+      "negated": false
+    },
+    {
+      "kind": "changes",
+      "together": [
+        "changes",
+        "nothing",
+        "else"
+      ],
+      "negated": true
+    }
+  ]
+}

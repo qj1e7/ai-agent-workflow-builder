@@ -1,0 +1,447 @@
+{
+  "use_case_id": "uc_01JFASTAPI",
+  "name": "FastAPI release check",
+  "version": 1,
+  "grade": "needs_a_fix",
+  "then": {
+    "number": 1,
+    "grade": "safe"
+  },
+  "in_short": [
+    {
+      "text": "Every day at 8:00",
+      "quoted": false
+    },
+    {
+      "text": ", it ",
+      "quoted": false
+    },
+    {
+      "text": "reads ",
+      "quoted": false
+    },
+    {
+      "text": "GitHub ",
+      "quoted": false
+    },
+    {
+      "text": "fastapi/fastapi",
+      "quoted": true
+    },
+    {
+      "text": " and ",
+      "quoted": false
+    },
+    {
+      "text": "Jira ",
+      "quoted": false
+    },
+    {
+      "text": "MOCK",
+      "quoted": true
+    },
+    {
+      "text": ".",
+      "quoted": false
+    },
+    {
+      "text": " It ",
+      "quoted": false
+    },
+    {
+      "text": "can create Jira tickets",
+      "quoted": false
+    },
+    {
+      "text": " in ",
+      "quoted": false
+    },
+    {
+      "text": "MOCK",
+      "quoted": true
+    },
+    {
+      "text": ", each after a yes",
+      "quoted": false
+    },
+    {
+      "text": ".",
+      "quoted": false
+    },
+    {
+      "text": " It changes nothing else.",
+      "quoted": false
+    }
+  ],
+  "reworded": null,
+  "steps": [
+    {
+      "name": "Daily 8:00",
+      "ours": false,
+      "block_type": "n8n-nodes-base.scheduleTrigger",
+      "tag": "Starts it"
+    },
+    {
+      "name": "Start from the Portal",
+      "ours": true,
+      "block_type": "CUSTOM.wabStartFromPortal",
+      "tag": "Starts it"
+    },
+    {
+      "name": "Read release",
+      "ours": true,
+      "block_type": "CUSTOM.wabRead",
+      "tag": "Reads GitHub"
+    },
+    {
+      "name": "Compare",
+      "ours": true,
+      "block_type": "CUSTOM.wabAgent",
+      "tag": "Runs an agent"
+    },
+    {
+      "name": "Newer?",
+      "ours": false,
+      "block_type": "n8n-nodes-base.if",
+      "tag": "Shapes the data"
+    },
+    {
+      "name": "Ask for a yes",
+      "ours": true,
+      "block_type": "CUSTOM.wabAskForYes",
+      "tag": "Waits for a yes"
+    },
+    {
+      "name": "Create ticket",
+      "ours": true,
+      "block_type": "CUSTOM.wabMakeApprovedChanges",
+      "tag": "Writes after a yes"
+    },
+    {
+      "name": "Nothing to change",
+      "ours": false,
+      "block_type": "n8n-nodes-base.noOp",
+      "tag": "Ends the run"
+    }
+  ],
+  "touches": [
+    {
+      "action": "reads",
+      "system": "GitHub",
+      "place": "fastapi/fastapi",
+      "block": "Read release",
+      "phrase": [
+        {
+          "text": "reads GitHub ",
+          "quoted": false
+        },
+        {
+          "text": "fastapi/fastapi",
+          "quoted": true
+        }
+      ],
+      "key": null
+    },
+    {
+      "action": "reads",
+      "system": "GitHub",
+      "place": "fastapi/fastapi",
+      "block": "Compare",
+      "phrase": [
+        {
+          "text": "reads GitHub ",
+          "quoted": false
+        },
+        {
+          "text": "fastapi/fastapi",
+          "quoted": true
+        }
+      ],
+      "key": null
+    },
+    {
+      "action": "reads",
+      "system": "Jira",
+      "place": "MOCK",
+      "block": "Compare",
+      "phrase": [
+        {
+          "text": "reads Jira ",
+          "quoted": false
+        },
+        {
+          "text": "MOCK",
+          "quoted": true
+        }
+      ],
+      "key": null
+    },
+    {
+      "action": "writes",
+      "system": "Jira",
+      "place": "MOCK",
+      "block": "Create ticket",
+      "phrase": [
+        {
+          "text": "can create Jira tickets",
+          "quoted": false
+        },
+        {
+          "text": " in ",
+          "quoted": false
+        },
+        {
+          "text": "MOCK",
+          "quoted": true
+        },
+        {
+          "text": ", each after a yes",
+          "quoted": false
+        }
+      ],
+      "key": null
+    }
+  ],
+  "flags": [
+    {
+      "rule": "no_error_workflow",
+      "block": null,
+      "what": "A stopped run isn't reported",
+      "why": "Its failures don't go to the platform's error workflow, so a stopped run wouldn't show.",
+      "clears": "fixed_for_you",
+      "takes": "Fix it in n8n. Code makes sure of it in every workflow it lays out."
+    }
+  ],
+  "fixed": [
+    {
+      "rule": "other_time_zone",
+      "words": "Set the team's time zone."
+    },
+    {
+      "rule": "test_runs_not_kept",
+      "words": "Turned on keeping test runs."
+    },
+    {
+      "rule": "progress_not_saved",
+      "words": "Turned on saved progress."
+    },
+    {
+      "rule": "no_yes_before_write",
+      "words": "Added a yes before each write."
+    }
+  ],
+  "passed": [
+    {
+      "rule": "unreadable",
+      "words": "The checker read the whole workflow."
+    },
+    {
+      "rule": "block_off",
+      "words": "Every block loads in our n8n."
+    },
+    {
+      "rule": "version_off",
+      "words": "Every block is a version the platform has classed."
+    },
+    {
+      "rule": "picked_by_expression",
+      "words": "Every block does one thing, written in the block."
+    },
+    {
+      "rule": "operation_off",
+      "words": "Each of n8n's blocks only reads, posts or shapes the data."
+    },
+    {
+      "rule": "nothing_starts",
+      "words": "A schedule or Start from the Portal starts it."
+    },
+    {
+      "rule": "tell_place",
+      "words": "Every Tell goes to one of the fixed places."
+    },
+    {
+      "rule": "notice_place_expression",
+      "words": "Every post goes to a place written in the block."
+    },
+    {
+      "rule": "notice_words_expression",
+      "words": "Every post's words are written in the block."
+    },
+    {
+      "rule": "notice_words_unreadable",
+      "words": "The checker read every post's words."
+    },
+    {
+      "rule": "calls_everyone",
+      "words": "No post calls out a whole channel."
+    },
+    {
+      "rule": "no_platform_key",
+      "words": "The platform has a key for every system a block uses."
+    },
+    {
+      "rule": "not_platform_key",
+      "words": "Every block uses the platform's key for its system."
+    },
+    {
+      "rule": "key_not_made",
+      "words": "No block uses a key the platform didn't make."
+    },
+    {
+      "rule": "key_for_other_block",
+      "words": "Each key is on the kind of block it was made for."
+    },
+    {
+      "rule": "runs_before_ours",
+      "words": "One of our steps comes first, so every run is recorded."
+    },
+    {
+      "rule": "no_run_time",
+      "words": "Its schedule names a time."
+    },
+    {
+      "rule": "run_time_unshowable",
+      "words": "The Portal can show each next run."
+    },
+    {
+      "rule": "unknown_agent",
+      "words": "Every agent is a saved card."
+    },
+    {
+      "rule": "unknown_agent_input",
+      "words": "Every agent gets only its own inputs."
+    },
+    {
+      "rule": "write_place_not_allowed",
+      "words": "Writes only to places the team allows."
+    },
+    {
+      "rule": "read_place_not_allowed",
+      "words": "Reads only places the team allows."
+    },
+    {
+      "rule": "change_not_allowed",
+      "words": "Proposes only changes the team allows."
+    },
+    {
+      "rule": "second_yes",
+      "words": "No path asks for a yes twice."
+    }
+  ],
+  "approves": [
+    {
+      "block": "Create ticket",
+      "decides": "each_run",
+      "approvers": 1,
+      "words": "Waits for a yes in Teams on each run. Nobody who started the run or made the workflow can give it."
+    }
+  ],
+  "settings": [
+    {
+      "label": [
+        {
+          "text": "Run time",
+          "quoted": false
+        }
+      ],
+      "value": [
+        {
+          "text": "every day at 8:00",
+          "quoted": false
+        }
+      ],
+      "mark": "set",
+      "said": "Set in the Portal"
+    },
+    {
+      "label": [
+        {
+          "text": "Where ",
+          "quoted": false
+        },
+        {
+          "text": "Read release",
+          "quoted": true
+        },
+        {
+          "text": " reads",
+          "quoted": false
+        }
+      ],
+      "value": [
+        {
+          "text": "fastapi/fastapi",
+          "quoted": true
+        }
+      ],
+      "mark": "set",
+      "said": "Set in the Portal"
+    },
+    {
+      "label": [
+        {
+          "text": "GitHub repository",
+          "quoted": true
+        },
+        {
+          "text": " for ",
+          "quoted": false
+        },
+        {
+          "text": "Compare",
+          "quoted": true
+        }
+      ],
+      "value": [
+        {
+          "text": "fastapi/fastapi",
+          "quoted": true
+        }
+      ],
+      "mark": "set",
+      "said": "Set in the Portal"
+    },
+    {
+      "label": [
+        {
+          "text": "Jira project",
+          "quoted": true
+        },
+        {
+          "text": " for ",
+          "quoted": false
+        },
+        {
+          "text": "Compare",
+          "quoted": true
+        }
+      ],
+      "value": [
+        {
+          "text": "MOCK",
+          "quoted": true
+        }
+      ],
+      "mark": "set",
+      "said": "Set in the Portal"
+    },
+    {
+      "label": [
+        {
+          "text": "Who says yes on each run",
+          "quoted": false
+        }
+      ],
+      "value": [
+        {
+          "text": "Any Approver",
+          "quoted": false
+        }
+      ],
+      "mark": "set",
+      "said": "Set in the Portal"
+    }
+  ],
+  "approval": "None needed. The Planner laid it out, and each write through our blocks waits for a yes.",
+  "needs_an_answer": 0
+}

@@ -23,6 +23,7 @@ RESTORE = "/api/v1/watchlist/software/{}/restore"
 ADDRESS = "/api/v1/watchlist/software/{}/address"
 UNDO = "/api/v1/watchlist/software/{}/address/undo"
 NEW = {"repo": "fastapi/fastapi"}
+EXPLAIN = "/api/v1/use-cases/{use_case_id}/explain"
 
 CASES = [
     pytest.param("GET", "/api/v1/templates", {}, None, None, 401, id="templates-401"),
@@ -34,6 +35,8 @@ CASES = [
     ),
     pytest.param("GET", "/api/v1/use-cases/{use_case_id}", {}, None, None, 401, id="get-401"),
     pytest.param("GET", "/api/v1/use-cases/{use_case_id}", ALICE, None, None, 404, id="get-404"),
+    pytest.param("GET", EXPLAIN, {}, None, None, 401, id="explain-401"),
+    pytest.param("GET", EXPLAIN, BOB, None, None, 404, id="explain-404"),
     pytest.param(
         "POST", "/api/v1/use-cases/{use_case_id}/runs", KEY, None, None, 401, id="start-401"
     ),
@@ -176,6 +179,7 @@ def test_an_approver_is_told_in_the_app_words_that_only_an_operator_sets_up_or_r
 
 NOT_THERE = [
     pytest.param("GET", "/api/v1/use-cases/uc_gone", {}, id="read"),
+    pytest.param("GET", "/api/v1/use-cases/uc_gone/explain", {}, id="explain"),
     pytest.param("POST", "/api/v1/use-cases/uc_gone/runs", KEY, id="start-run"),
     pytest.param("POST", "/api/v1/use-cases/uc_gone/pause", {}, id="pause"),
     pytest.param("POST", "/api/v1/use-cases/uc_gone/resume", {}, id="resume"),

@@ -62,6 +62,7 @@ from platform_api.orchestration import (
     EditAnswer,
     EditCant,
     ExampleSpec,
+    ExplainAnswer,
     FactSection,
     FreeReplyAnswer,
     Grade,
@@ -556,6 +557,33 @@ class RemoveSoftwareReply(Reply):
     )
 
 
+class ExplainChoice(WireModel):
+    use_case_id: str
+    name: str
+
+
+class ExplainReply(Reply):
+    """A workflow to explain, matched by its words. The Portal shows it with GET
+    /api/v1/use-cases/{use_case_id}/explain?reworded=true. Explaining changes nothing, so
+    anyone signed in may ask."""
+
+    answer: Literal["explain"] = "explain"
+    use_case_id: str | None = Field(
+        description="The workflow to explain. Null when the words name none of the person's "
+        'workflows, name several, or are "it".'
+    )
+    name: str | None = Field(description="Its name. Null with use_case_id.")
+    missing: str | None = Field(
+        description="The words looked for, when they name no workflow the person has. Null "
+        "otherwise."
+    )
+    choices: list[ExplainChoice] = Field(
+        description="The workflows the request could mean, for the person to pick one: every "
+        'one its words match when they match several, or every workflow for "it", so the '
+        "Portal can explain the one in focus. Empty when one matched or the words name none."
+    )
+
+
 class OperatorsReply(Reply):
     """A change asked by someone who isn't an Operator. Only Operators set up and change
     workflows, so nothing is offered that changes anything (ADR 0043)."""
@@ -672,6 +700,7 @@ type PlannerReply = Annotated[
     | PauseReply
     | ResumeReply
     | RemoveSoftwareReply
+    | ExplainReply
     | OperatorsReply
     | DecidedReply
     | DecideReply
@@ -897,6 +926,7 @@ QUESTIONS: Final = frozenset(
     }
 )
 """The answers that change nothing, for someone who isn't an Operator (plan 3.2)."""
+STAND_WHATEVER_THE_WORDS: Final = frozenset({"offline", "refused", "explain"})
 
 
 def _cross(text: str, reason: ReplyReason) -> PartView:
@@ -951,7 +981,7 @@ def questions_only(reply: PlannerReply, text: str | None) -> PlannerReply:
     approve or decline. Beside a question, it is a cross that says the same. The runtime's
     refusal stands, whatever the words, and so does the offline answer. Questions about past
     decisions are answered before the runtime is asked (`past_decisions`)."""
-    if reply.answer in ("offline", "refused"):
+    if reply.answer in STAND_WHATEVER_THE_WORDS:
         return reply
     decided = past_decisions(text or "")
     if decided is not None:
@@ -1128,6 +1158,8 @@ class PlannerFront:
                 return await self._switch(answer, viewer)
             case RemoveSoftwareAnswer() as removal:
                 return await self._removal(removal)
+            case ExplainAnswer(workflow_words=words):
+                return await self._explain(words)
 
     async def _n8n(self, text: str, viewer: Principal) -> N8nReply:
         """Answered by the platform, never the model: who may open n8n is a rule, not a guess."""
@@ -1197,6 +1229,16 @@ class PlannerFront:
                 if s.name in removal.watched_as
             ],
             watched=[s.name for s in held],
+        )
+
+    async def _explain(self, words: str | None) -> ExplainReply:
+        named = await self._named(words, None)
+        one = named.one
+        return ExplainReply(
+            use_case_id=None if one is None else one.use_case_id,
+            name=None if one is None else one.name,
+            missing=named.missing,
+            choices=[ExplainChoice(use_case_id=u.use_case_id, name=u.name) for u in named.several],
         )
 
     async def _use_cases(self) -> list[UseCaseView]:

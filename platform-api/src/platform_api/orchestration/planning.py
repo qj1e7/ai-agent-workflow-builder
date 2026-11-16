@@ -18,8 +18,11 @@ from platform_api.orchestration.agents import (
     CheckPartResult,
     ChooseRequest,
     ChooseResult,
+    CodeWording,
     DraftRequest,
     DraftResult,
+    ExplainWordingRequest,
+    ExplainWordingResult,
     FindSoftwareRequest,
     FindSoftwareResult,
     HttpAgentRuntime,
@@ -115,6 +118,25 @@ class PlannerAnswers:
 
     async def check_part(self, kind: RowKind, text: str) -> CheckPartResult | RuntimeDown:
         reply = await self._agents.check_part(CheckPartRequest(kind=kind, text=text))
+        if isinstance(reply, AgentUnavailable | AgentRejected):
+            return RuntimeDown(reply.detail)
+        return reply
+
+
+class ExplainWordings:
+    def __init__(self, db: Database, models: ActiveModel, agents: HttpAgentRuntime) -> None:
+        self._db = db
+        self._models = models
+        self._agents = agents
+
+    async def reword(self, asked: CodeWording) -> ExplainWordingResult | NoModel | RuntimeDown:
+        async with self._db.transaction("orchestration") as uow:
+            model = await self._models.access(uow)
+        if model is None:
+            return NoModel()
+        reply = await self._agents.explain_wording(
+            ExplainWordingRequest(wording=asked.wording, facts=asked.facts, model=model)
+        )
         if isinstance(reply, AgentUnavailable | AgentRejected):
             return RuntimeDown(reply.detail)
         return reply
