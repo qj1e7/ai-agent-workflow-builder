@@ -19,11 +19,14 @@ from agent_runtime.contract import (
     KEY_PASTED,
     DrafterFacts,
     KeyPasted,
+    LibraryCard,
     ModelAccess,
     ModelProblem,
+    PlanBlock,
     WorkflowDrafted,
     WorkflowDraftRequest,
     WorkflowNotDrafted,
+    WorkflowPlan,
     workflow_draft_result_adapter,
 )
 from agent_runtime.planner import FixedPlanner
@@ -203,14 +206,72 @@ def test_it_stops_when_it_runs_out_of_time(catalogue: Catalogue):
     ],
 )
 def test_words_with_the_shape_of_a_key_never_reach_a_model(catalogue: Catalogue, words: str):
-    def no_model(_timeout: float) -> ScriptedChat:
-        raise AssertionError("a model was built")
-
     result, draft = drafting(request(words), no_model, catalogue)
 
     assert isinstance(result, KeyPasted)
     assert result.message == KEY_PASTED
     assert draft.turns == 0
+
+
+def no_model(_timeout: float) -> ScriptedChat:
+    raise AssertionError("a model was built")
+
+
+def with_key_in_the_current_plan() -> WorkflowDraftRequest:
+    keyed = {"name": "Note", "type": "n8n-nodes-base.set", "version": 3.4}
+    current = WorkflowPlan(
+        name="A plan",
+        blocks=[PlanBlock(**keyed, parameters={"note": "token sk-ant-example-not-a-key"})],
+        wires=[],
+        settings=[],
+    )
+    return WorkflowDraftRequest(words="change the note", facts=FACTS, model=ACCESS, current=current)
+
+
+def with_key_in_the_facts() -> WorkflowDraftRequest:
+    card = LibraryCard(
+        card_id="crd_keyed", name="Keyed", purpose="Calls with ghp_ABCDEFGHIJKLMNOPQRSTUV"
+    )
+    facts = FACTS.model_copy(update={"agent_cards": [card]})
+    return WorkflowDraftRequest(words="use the keyed agent", facts=facts, model=ACCESS)
+
+
+@pytest.mark.parametrize("keyed", [with_key_in_the_current_plan, with_key_in_the_facts])
+def test_a_key_anywhere_the_drafter_would_read_never_reaches_a_model(
+    catalogue: Catalogue, keyed: Any
+):
+    result, draft = drafting(keyed(), no_model, catalogue)
+
+    assert isinstance(result, KeyPasted)
+    assert draft.turns == 0
+
+
+class BrokenCatalogue(Catalogue):
+    def find_blocks(self, words: str, limit: int = 8) -> list[dict[str, Any]]:
+        raise RuntimeError("internal detail that must not leak")
+
+
+def test_an_error_inside_a_tool_is_an_honest_i_couldn_t_draft_that(catalogue: Catalogue):
+    broken = BrokenCatalogue(json.loads(CATALOGUE.read_bytes()))
+    chat = scripted(asks(call("find_blocks", {"words": "slack"}, "c1")), submit(GOOD, 2))
+
+    result = draft_workflow(request(), lambda _: chat, broken)
+
+    assert isinstance(result, WorkflowNotDrafted)
+    assert (result.why, result.message) == ("failed", COULDNT_DRAFT)
+    assert "internal detail" not in result.model_dump_json()
+
+
+def test_the_route_answers_an_error_inside_a_tool_without_a_500(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(Catalogue, "find_blocks", BrokenCatalogue.find_blocks)
+    chat = scripted(asks(call("find_blocks", {"words": "slack"}, "c1")))
+    client = app(chat, {"N8N_CATALOGUE": str(CATALOGUE)}, [])
+
+    answer = client.post("/v1/workflows/draft", json=body())
+
+    assert answer.status_code == 200
+    assert answer.json()["status"] == "not_drafted"
+    assert "internal detail" not in answer.text
 
 
 def test_a_failed_model_call_is_a_model_problem(catalogue: Catalogue):

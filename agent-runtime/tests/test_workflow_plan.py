@@ -591,3 +591,237 @@ def test_a_switch_s_exits_follow_its_rules_and_a_written_count_is_held(catalogue
     huge = block("Route", "n8n-nodes-base.switch", 3.4, mode="expression", numberOutputs=10**9)
     out_of_range = plan([huge, targets[0]], [wire("Route", "Tell 1", "output 81")])
     assert any("has the exits" in p.text for p in problems(catalogue, out_of_range))
+
+
+# Found by the safety review of 7901cd7f. Each of these passed the check there.
+
+EMAIL: Json = {"fromEmail": "bot@example.com", "subject": "S", "emailFormat": "text", "text": "T"}
+GMAIL: Json = {"resource": "message", "operation": "send", "subject": "S", "message": "M"}
+OUTLOOK: Json = {"resource": "message", "operation": "send", "subject": "S"}
+ADDRESS = [setting("address", "address")]
+
+
+def send_email(**parameters: object) -> Json:
+    return block("Mail", "n8n-nodes-base.emailSend", 2.1, **EMAIL, **parameters)
+
+
+@pytest.mark.parametrize(
+    ("bad", "settings", "path"),
+    [
+        (send_email(toEmail="=attacker@evil.example"), [], "toEmail"),
+        (send_email(toEmail="={{ 'attacker@evil.example' }}"), [], "toEmail"),
+        (
+            block(
+                "Mail",
+                "n8n-nodes-base.slack",
+                2.7,
+                resource="message",
+                operation="post",
+                select="channel",
+                channelId={"__rl": True, "mode": "id", "value": "=C0123456"},
+                text="Hi",
+            ),
+            [],
+            "channelId",
+        ),
+        (
+            block(
+                "Mail",
+                "n8n-nodes-base.scheduleTrigger",
+                1.4,
+                rule="={{ {interval:[{field:'hours',hoursInterval:1}]} }}",
+            ),
+            [],
+            "rule",
+        ),
+        (
+            send_email(toEmail="<<address>>", options={"bccEmail": "attacker@evil.example"}),
+            ADDRESS,
+            "options.bccEmail",
+        ),
+        (
+            send_email(toEmail="<<address>>", options={"ccEmail": "attacker@evil.example"}),
+            ADDRESS,
+            "options.ccEmail",
+        ),
+        (
+            send_email(toEmail="<<address>>", options={"replyTo": "={{ $json.from }}"}),
+            ADDRESS,
+            "options.replyTo",
+        ),
+        (
+            block(
+                "Mail",
+                "n8n-nodes-base.gmail",
+                2.1,
+                **GMAIL,
+                sendTo="<<address>>",
+                options={"bccList": "attacker@evil.example"},
+            ),
+            ADDRESS,
+            "options.bccList",
+        ),
+        (
+            block(
+                "Mail",
+                "n8n-nodes-base.gmail",
+                2.1,
+                **GMAIL,
+                sendTo="<<address>>",
+                options={"ccList": "attacker@evil.example"},
+            ),
+            ADDRESS,
+            "options.ccList",
+        ),
+        (
+            block(
+                "Mail",
+                "n8n-nodes-base.microsoftOutlook",
+                2,
+                **OUTLOOK,
+                toRecipients="<<address>>",
+                additionalFields={"ccRecipients": "attacker@evil.example"},
+            ),
+            ADDRESS,
+            "additionalFields.ccRecipients",
+        ),
+        (
+            block(
+                "Mail",
+                "n8n-nodes-base.microsoftOutlook",
+                2,
+                **OUTLOOK,
+                toRecipients="<<address>>",
+                additionalFields={"bccRecipients": "attacker@evil.example"},
+            ),
+            ADDRESS,
+            "additionalFields.bccRecipients",
+        ),
+    ],
+)
+def test_a_never_guessed_place_takes_only_a_placeholder_never_a_value_or_an_expression(
+    catalogue: Catalogue, bad: Json, settings: list[Json], path: str
+):
+    found = problems(catalogue, plan([bad], [], settings))
+
+    assert [p.code for p in found] == ["guessed"], [p.text for p in found]
+    assert f'"Mail": {path} is ' in found[0].text
+
+
+def test_a_nested_address_placeholder_is_placed_with_its_kind(catalogue: Catalogue):
+    mail = send_email(toEmail="<<address>>", options={"bccEmail": "<<copy>>"})
+    settings = [*ADDRESS, setting("copy", "text")]
+
+    found = problems(catalogue, plan([mail], [], settings))
+
+    assert [p.code for p in found] == ["setting"]
+    assert "options.bccEmail holds <<copy>>, which is an address a notice posts to" in found[0].text
+
+
+def http(node_type: str, version: float, **parameters: object) -> Json:
+    return block("Call", node_type, version, **parameters)
+
+
+@pytest.mark.parametrize(
+    ("bad", "code"),
+    [
+        (
+            http("n8n-nodes-base.httpRequest", 4.5, method="POST", url="={{ $json.url }}"),
+            "address_unread",
+        ),
+        (
+            http(
+                "n8n-nodes-base.httpRequest",
+                4.5,
+                method="POST",
+                url="={{ 'https://acme.atlas' + 'sian.net/rest/ap' + 'i/3/issue' }}",
+            ),
+            "address_unread",
+        ),
+        (
+            http("n8n-nodes-base.httpRequest", 4.5, method="PUT", url="<<where>>"),
+            "address_unread",
+        ),
+        (
+            http(
+                "n8n-nodes-base.httpRequest",
+                4.5,
+                method="POST",
+                url="https://api.atlassian.com/ex/confluence/abc/wiki/api/v2/pages",
+            ),
+            "native_write",
+        ),
+        (
+            http(
+                "n8n-nodes-base.httpRequest",
+                4.5,
+                method="POST",
+                url="https://jira.ncs.example/rest/agile/1.0/sprint",
+            ),
+            "native_write",
+        ),
+        (
+            http(
+                "n8n-nodes-base.graphql",
+                1.1,
+                endpoint="https://api.atlassian.com/graphql",
+                query="mutation { createIssue }",
+            ),
+            "native_write",
+        ),
+        (
+            http(
+                "n8n-nodes-base.graphql",
+                1.1,
+                endpoint="={{ $json.endpoint }}",
+                query="mutation { createIssue }",
+            ),
+            "address_unread",
+        ),
+        (
+            http(
+                "@n8n/n8n-nodes-langchain.toolHttpRequest",
+                1.1,
+                toolDescription="x",
+                method="POST",
+                url="https://acme.atlassian.net/rest/api/3/issue",
+            ),
+            "hidden",
+        ),
+        (http("n8n-nodes-base.htmlExtract", 1), "hidden"),
+    ],
+)
+def test_an_http_write_must_name_its_address_and_never_reach_jira_or_confluence(
+    catalogue: Catalogue, bad: Json, code: str
+):
+    found = problems(catalogue, plan([bad], [], [setting("where", "text", "x")]))
+
+    assert code in [p.code for p in found], [p.text for p in found]
+    if code == "address_unread":
+        assert "Write the address out, so the check can read it" in found[0].text
+    if code == "native_write":
+        assert USE_OURS in found[0].text
+
+
+def test_a_graphql_query_that_only_reads_may_reach_atlassian(catalogue: Catalogue):
+    read = http(
+        "n8n-nodes-base.graphql",
+        1.1,
+        endpoint="https://api.atlassian.com/graphql",
+        query="query { me { name } }",
+    )
+
+    assert passed(catalogue, plan([read])).blocks[0].type == "n8n-nodes-base.graphql"
+
+
+def test_a_block_s_parameters_have_a_size_limit(catalogue: Catalogue):
+    huge = {
+        "name": "Tell",
+        "type": "CUSTOM.wabTell",
+        "version": 1,
+        "parameters": json.dumps({"where": "channel", "padding": "a" * 30_000}),
+    }
+
+    found = problems(catalogue, plan([huge]))
+
+    assert [p.code for p in found] == ["too_big"]
