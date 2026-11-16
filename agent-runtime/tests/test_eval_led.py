@@ -156,3 +156,17 @@ def test_a_tick_on_a_clause_no_argument_reaches_is_counted_by_code() -> None:
     assert false_ticks(led_with(None)) == []
     assert false_ticks(Led(Answered(answer=answer, parts=ticks))) == []
     assert request.task == text
+
+
+def test_a_model_named_by_two_providers_has_one_price_with_its_cache_prices() -> None:
+    """The run's spend line finds a price by the model's name alone, so two entries for one name
+    must agree, or the later one silently prices the run (a gateway entry with no cache prices
+    once priced every cached token as fresh input)."""
+    prices = json.loads(Path(PRICING).read_text())
+    by_name: dict[str, list[dict[str, Any]]] = {}
+    for key, price in prices.items():
+        by_name.setdefault(key.partition(":")[2], []).append(
+            {k: v for k, v in price.items() if k != "source"}
+        )
+
+    assert all(all(p == shared[0] for p in shared) for shared in by_name.values()), by_name
