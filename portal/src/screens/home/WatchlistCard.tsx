@@ -114,18 +114,24 @@ export function AddToWatchlist({ name }: { name: string }) {
 
 /**
  * Which software: the Planner heard a watch word with no name. It asks for the name as Add software does on the Software page, in a
- * card like the chat's other answers. Find it is never dead: with no name, the field says why and keeps focus.
+ * card like the chat's other answers, with no title: the Planner's question above it already says what it is for. Find it is never
+ * dead: with no name, the field says why and keeps focus.
  */
 export function WhichSoftware({ onNever }: { onNever: () => void }) {
   const fieldId = useId()
+  const titleId = useId()
   const main = useMainButton()
   const field = useRef<HTMLInputElement>(null)
   const [typed, setTyped] = useState('')
   const [error, setError] = useState<string | undefined>(undefined)
   const [name, setName] = useState<string | null>(null)
+  // The form goes once she names it, so focus moves to the card for that name rather than dropping to the page.
+  useEffect(() => {
+    if (name !== null) document.getElementById(titleId)?.focus()
+  }, [name, titleId])
   if (name !== null) {
     return (
-      <Card title={name}>
+      <Card title={name} headingId={titleId}>
         <AddToWatchlist name={name} />
       </Card>
     )
@@ -143,7 +149,7 @@ export function WhichSoftware({ onNever }: { onNever: () => void }) {
   return (
     <form onSubmit={find} noValidate>
       <Card
-        title="Software to watch"
+        label="Software to watch"
         actions={
           <>
             <Button variant={main} type="submit">
@@ -161,7 +167,6 @@ export function WhichSoftware({ onNever }: { onNever: () => void }) {
             value={typed}
             maxLength={80}
             autoComplete="off"
-            placeholder="Kubernetes"
             aria-invalid={error ? true : undefined}
             aria-describedby={describedBy(fieldId, error)}
             onChange={(event) => {
