@@ -718,6 +718,17 @@ class EditAnswer(WireModel):
         return self
 
 
+class RemoveSoftwareAnswer(WireModel):
+    """Software to take off the Software watchlist, named as the request wrote it, with the
+    watchlist's own names for it."""
+
+    kind: Literal["remove_software"] = "remove_software"
+    software: str = Field(min_length=1, max_length=80)
+    watched_as: list[Annotated[str, Field(max_length=80)]] = Field(
+        default_factory=list[str], max_length=100
+    )
+
+
 type PlannerAnswer = Annotated[
     SetupCardAnswer
     | PartAnswer
@@ -733,6 +744,7 @@ type PlannerAnswer = Annotated[
     | EditAnswer
     | PauseAnswer
     | ResumeAnswer
+    | RemoveSoftwareAnswer
     | FreeReplyAnswer
     | DidntFollowAnswer,
     Field(discriminator="kind"),

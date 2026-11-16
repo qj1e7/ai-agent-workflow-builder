@@ -70,6 +70,7 @@ from platform_api.orchestration import (
     PreviousTurn,
     QuestionAnswer,
     RefusedAnswer,
+    RemoveSoftwareAnswer,
     ReplyForm,
     RequestPart,
     ResumeAnswer,
@@ -485,6 +486,26 @@ class ResumeReply(_SwitchReply):
     answer: Literal["resume"] = "resume"
 
 
+class RemoveSoftwareReply(Reply):
+    """Software to take off the Software watchlist, matched by name. An Operator removes each match
+    with DELETE /api/v1/watchlist/software/{software_id} and undoes it with POST
+    /api/v1/watchlist/software/{software_id}/restore, as the Software page does. It is a setting
+    of the platform: nothing outside it is written, so no Approver is asked. Someone who isn't an
+    Operator gets operators instead."""
+
+    answer: Literal["remove_software"] = "remove_software"
+    software: str = Field(description="The name as the request wrote it.")
+    matches: list[ListedSoftware] = Field(
+        description="The watched software with that name, case, spaces, dots and hyphens aside, "
+        "in the watchlist's order. Empty when the watchlist holds none, and more than one for the "
+        "person to choose."
+    )
+    watched: list[str] = Field(
+        description="The names the watchlist holds, in its order, so a name it doesn't hold is "
+        "answered with what it does hold. Empty when it holds nothing."
+    )
+
+
 class OperatorsReply(Reply):
     """A change asked by someone who isn't an Operator. Only Operators set up and change
     workflows, so nothing is offered that changes anything (ADR 0043)."""
@@ -600,6 +621,7 @@ type PlannerReply = Annotated[
     | EditReply
     | PauseReply
     | ResumeReply
+    | RemoveSoftwareReply
     | OperatorsReply
     | DecidedReply
     | DecideReply
@@ -1030,6 +1052,8 @@ class PlannerFront:
                 return await self._edit(edit)
             case PauseAnswer() | ResumeAnswer():
                 return await self._switch(answer, viewer)
+            case RemoveSoftwareAnswer() as removal:
+                return await self._removal(removal)
 
     async def _n8n(self, text: str, viewer: Principal) -> N8nReply:
         """Answered by the platform, never the model: who may open n8n is a rule, not a guess."""
@@ -1084,6 +1108,21 @@ class PlannerFront:
                 if _norm(s.name) == wanted
             ),
             None,
+        )
+
+    async def _removal(self, removal: RemoveSoftwareAnswer) -> RemoveSoftwareReply:
+        """The runtime names the matches as the watchlist spells them, so each is found by its exact
+        name."""
+        view = await self._watchlist.view()
+        held = view.software if view is not None else []
+        return RemoveSoftwareReply(
+            software=removal.software,
+            matches=[
+                ListedSoftware(software_id=s.id, name=s.name)
+                for s in held
+                if s.name in removal.watched_as
+            ],
+            watched=[s.name for s in held],
         )
 
     async def _use_cases(self) -> list[UseCaseView]:

@@ -37,6 +37,7 @@ from platform_api.builder.planner import (
     PlannerFront,
     QuestionReply,
     RefusedReply,
+    RemoveSoftwareReply,
     ReplyReason,
     ResumeReply,
     SetupCardReply,
@@ -394,6 +395,18 @@ def planner_fixtures(root: Path) -> dict[str, WireModel]:
                 crossed("What needs my attention", "ask_on_its_own"),
                 crossed("Rename the morning check", "only_schedule"),
             ],
+        ),
+        "planner/answer.remove_software.json": RemoveSoftwareReply(
+            software="Node.js",
+            matches=[ListedSoftware(software_id="sw_01JD4", name="node js")],
+            watched=["FastAPI", "LangGraph", "node js", "React"],
+            parts=[does("remove Node.js from the watchlist")],
+        ),
+        "planner/answer.remove_software.none.json": RemoveSoftwareReply(
+            software="Kubernetes",
+            matches=[],
+            watched=["FastAPI", "LangGraph", "node js", "React"],
+            parts=[does("stop watching Kubernetes")],
         ),
         "planner/answer.pause.json": PauseReply(
             use_case_id="uc_01JB8",
