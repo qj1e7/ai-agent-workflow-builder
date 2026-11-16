@@ -8,6 +8,7 @@
       "choices": []
     }
   ],
+  "trace_id": null,
   "answer": "explain",
   "use_case_id": "uc_01JFASTAPI",
   "name": "FastAPI release check",

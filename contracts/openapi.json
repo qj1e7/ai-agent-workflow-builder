@@ -5658,6 +5658,18 @@
             "title": "Parts",
             "type": "array"
           },
+          "trace_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The trace of this turn, when the runtime's answer is shown. The Portal sends it back as previous.trace_id with the next message (ADR 0050). Null for a chip, an answer the platform gives alone, the offline answer, and an answer inside another.",
+            "title": "Trace Id"
+          },
           "use_case_id": {
             "anyOf": [
               {
@@ -5673,6 +5685,7 @@
         },
         "required": [
           "parts",
+          "trace_id",
           "answer",
           "use_case_id",
           "name",

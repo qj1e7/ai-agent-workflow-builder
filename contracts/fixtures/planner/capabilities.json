@@ -229,6 +229,25 @@
       "agents": []
     },
     {
+      "id": "workflows.explain",
+      "plain": "Explain any workflow",
+      "kind": "none",
+      "system": null,
+      "state": "ready",
+      "cant": null,
+      "short": "Explain any workflow",
+      "instead": null,
+      "why": null,
+      "fix": null,
+      "connection": null,
+      "last_ok_at": null,
+      "needs_model": false,
+      "platform": true,
+      "focus": false,
+      "tools": [],
+      "agents": []
+    },
+    {
       "id": "watchlist.remove",
       "plain": "Take software off the Watchlist, with Undo",
       "kind": "none",
