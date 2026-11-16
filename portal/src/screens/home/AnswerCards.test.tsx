@@ -267,6 +267,15 @@ describe('which software', () => {
     expect(html).not.toContain('disabled')
     expect(/<form[^>]*novalidate/i.test(html)).toBe(true)
   })
+
+  it('says it once: no title over the field and no placeholder, while the card keeps its name for a screen reader', () => {
+    const card = /<section[\s\S]*<\/section>/.exec(draw(which))?.[0] ?? ''
+    expect(card).toMatch(/^<section[^>]*aria-label="Software to watch"/)
+    expect(card).not.toContain('<h3')
+    expect(text(card)).toMatch(/^Software name /)
+    expect(card).not.toContain('placeholder')
+    expect(text(card).match(/Kubernetes/g)).toHaveLength(1)
+  })
 })
 
 describe('PartsList on a set-up card', () => {

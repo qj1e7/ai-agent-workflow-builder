@@ -1125,6 +1125,11 @@ test.describe('the chat after the first message', () => {
       await expect(card.getByRole('button', { name: 'Never mind' })).toBeFocused()
       await page.keyboard.press('Enter')
       await expect(thread(page)).toContainText('All right, never mind.')
+      await ask(page, 'help me add a software')
+      const again = thread(page).getByRole('region', { name: 'Software to watch' }).last()
+      await again.getByLabel('Software name').fill('Redis')
+      await again.getByLabel('Software name').press('Enter')
+      await expect(thread(page).getByRole('heading', { name: 'Redis', level: 3 }), 'focus goes to the card for the name, never to the page').toBeFocused()
       await context.close()
     }
   })
