@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
     inputs:
       jobs:
-        description: The jobs to run, comma separated (summarise, explain, draft, choose, answer, anything, reply, reply_gate, reply_dev, red_team, spike, spike_dev). Empty runs every job.
+        description: The jobs to run, comma separated (summarise, explain, explain_wording, draft, choose, answer, anything, reply, reply_gate, reply_dev, red_team, spike, spike_dev). Empty runs every job.
         required: false
         default: ''
         type: string
