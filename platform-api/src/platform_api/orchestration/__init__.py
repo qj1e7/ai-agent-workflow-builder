@@ -133,7 +133,7 @@ from platform_api.orchestration.n8n_credentials import (
     credentials_named,
 )
 from platform_api.orchestration.n8n_run_view import NodeState, RunInN8n
-from platform_api.orchestration.n8n_schedule import next_run, zone_name
+from platform_api.orchestration.n8n_schedule import next_run, schedule_intervals, zone_name
 from platform_api.orchestration.n8n_staff import (
     NO_ACCESS,
     OFF,
@@ -255,6 +255,7 @@ from platform_api.orchestration.workflow_check import (
     unchecked,
     unpinned_notices,
     writes,
+    zone_words,
 )
 from platform_api.orchestration.write_actions import Binding
 
@@ -275,6 +276,7 @@ __all__ = [
     "Runs",
     "Use",
     "Face",
+    "zone_words",
     "face",
     "skipped_in_tests",
     "unchecked",
@@ -312,6 +314,7 @@ __all__ = [
     "publisher_of",
     "N8nTarget",
     "next_run",
+    "schedule_intervals",
     "zone_name",
     "read_flow",
     "GITHUB_RELEASES",

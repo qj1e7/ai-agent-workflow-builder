@@ -13,8 +13,9 @@ Pure. Ids come from the use case's id, so the same use case always gets the same
 """
 
 from collections.abc import Mapping, Sequence
+from copy import deepcopy
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 from platform_api.builder.cards import VERSION_CHECKER_ID
 from platform_api.orchestration import (
@@ -30,10 +31,13 @@ from platform_api.orchestration import (
     Document,
     KeySpec,
     Schedule,
+    Unreadable,
     block_id,
     face,
     free_name,
+    read_flow,
     skipped_in_tests,
+    zone_words,
 )
 
 READ_RELEASE = "Read release"
@@ -379,3 +383,87 @@ def when_label(schedule: Schedule) -> str:
     """The sketch's short words for when it runs, such as "Daily 8:00" or "Mon 9:00"."""
     hour, minute = schedule.at.split(":")
     return f"{DAY_LABELS[schedule.day]} {int(hour)}:{minute}"
+
+
+FIXED_SETTINGS: Mapping[str, str] = {
+    "errorWorkflow": "sends its failures to the platform's error workflow",
+    "timezone": "runs it on {zone}",
+    "saveManualExecutions": "keeps its test runs",
+    "saveExecutionProgress": "saves its progress",
+}
+ADDS_START = "adds Start from the Portal for Run now"
+
+
+@dataclass(frozen=True)
+class FixedForYou:
+    """A workflow made in n8n as Set up leaves it, with the platform's own plumbing put right,
+    which is never its maker's job (ADR 0051, Fixed for you)."""
+
+    document: Document
+    fixed: tuple[str, ...]
+    """What Set up changed, each in words that follow "Set up also"."""
+    no_start: bool = False
+    """It has a schedule, but no Start from the Portal, since no schedule that is on starts a
+    block."""
+
+
+def fixed_for_you(
+    document: Mapping[str, Any], workflow_id: str, error_workflow: str | None, time_zone: str
+) -> FixedForYou:
+    """The settings every layout has, and Start from the Portal beside the schedule, joined to
+    what the schedule starts, so Run now and a test run can start it."""
+    try:
+        read_flow(document)
+    except Unreadable:
+        return FixedForYou(dict(document), ())
+    result: Document = deepcopy(dict(document))
+    settings = dict(cast(dict[str, Any], result.get("settings") or {}))
+    wanted = {
+        "errorWorkflow": error_workflow,
+        "timezone": time_zone,
+        "saveManualExecutions": True,
+        "saveExecutionProgress": True,
+    }
+    fixed: list[str] = []
+    for setting, value in wanted.items():
+        held = settings.get(setting)
+        if value is not None and (type(held) is not type(value) or held != value):
+            settings[setting] = value
+            fixed.append(FIXED_SETTINGS[setting].format(zone=zone_words(time_zone)))
+    result["settings"] = settings
+    if _start_added(result, workflow_id):
+        fixed.append(ADDS_START)
+    nodes = cast(list[dict[str, Any]], result["nodes"])
+    starts = any(n.get("type") == TYPE_OF["start"] and not n.get("disabled") for n in nodes)
+    scheduled = any(n.get("type") == TYPE_OF["schedule"] for n in nodes)
+    return FixedForYou(result, tuple(fixed), scheduled and not starts)
+
+
+def _start_added(document: Document, workflow_id: str) -> bool:
+    nodes = cast(list[dict[str, Any]], document["nodes"])
+    on = [node for node in nodes if not node.get("disabled")]
+    if any(node.get("type") == TYPE_OF["start"] for node in on):
+        return False
+    connections = cast(dict[str, dict[str, list[list[dict[str, Any]]]]], document["connections"])
+    schedules = [node for node in on if node.get("type") == TYPE_OF["schedule"]]
+    targets: dict[tuple[str, int], dict[str, Any]] = {}
+    for schedule in schedules:
+        for target in (connections.get(str(schedule["name"]), {}).get("main") or [[]])[0] or []:
+            targets.setdefault((str(target["node"]), int(target.get("index", 0))), target)
+    if not targets:
+        return False
+    name = free_name(START, {str(node["name"]) for node in nodes})
+    x, y = cast(list[float], schedules[0].get("position") or [0, 0])
+    nodes.append(
+        {
+            "id": block_id(workflow_id, START),
+            "name": name,
+            "type": TYPE_OF["start"],
+            "typeVersion": 1,
+            "position": [x, y + ROW],
+            "parameters": {},
+            "webhookId": block_id(workflow_id, "webhook/start"),
+        }
+    )
+    connections[name] = {"main": [[dict(target) for target in targets.values()]]}
+    return True

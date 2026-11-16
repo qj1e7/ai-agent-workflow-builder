@@ -41,11 +41,13 @@ from platform_api.builder.n8n_draft import DraftRefused
 from platform_api.builder.paging import Place, parse_cursor
 from platform_api.builder.planning import NoModelConnected, RuntimeNotAnswering
 from platform_api.builder.service import (
+    NO_START,
     AgentUseCaseRefused,
     Builder,
     CardsRefused,
     N8nNotReady,
     NoModelToRun,
+    NoStart,
     NoTestRun,
     NothingToCheck,
     NotMovedYet,
@@ -257,7 +259,8 @@ async def get_use_case(
             "The watchlist is empty, so there is nothing to check, an agent use case has no "
             "AI model connected, the workflow is paused, or it is a draft and this is not a "
             "test run. A test run also waits while someone holds the workflow in n8n, or while "
-            "its n8n draft has a block the platform can't check"
+            "its n8n draft has a block the platform can't check. Neither starts a workflow with "
+            "no Start from the Portal block"
         ),
     },
     description="Starts a run. On a draft only a test run starts, and it stops at the approval "
@@ -286,6 +289,8 @@ async def start_run(
         raise HTTPException(409, NOT_ON_YET)
     if isinstance(started, NotMovedYet | NoTestRun):
         raise HTTPException(409, started.words)
+    if isinstance(started, NoStart):
+        raise HTTPException(409, NO_START)
     if not started.created:
         response.status_code = 200
     return RunStarted(run_id=started.run_id, events_url=f"/api/v1/runs/{started.run_id}/events")

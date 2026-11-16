@@ -6728,6 +6728,14 @@
             "title": "Findings",
             "type": "array"
           },
+          "fixed_for_you": {
+            "description": "What Set up puts right that is the platform's to set, never its maker's: its error workflow, its time zone, its kept test runs and progress, and Start from the Portal. Each is words that follow \"Set up also\". The grade and findings are of the workflow once these are put right.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Fixed For You",
+            "type": "array"
+          },
           "grade": {
             "$ref": "#/components/schemas/Grade",
             "description": "The safety checker's grade of the version n8n runs, or of its draft when nothing is published. Only a safe version asks for a yes and writes."
@@ -6745,6 +6753,14 @@
             "description": "Whether it is published in n8n, so it runs there.",
             "title": "Published",
             "type": "boolean"
+          },
+          "set_up_notes": {
+            "description": "What else to know before pressing Set up, in words to show: that it drops changes saved in n8n since the version n8n runs, or that it can't add Start from the Portal.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Set Up Notes",
+            "type": "array"
           },
           "why_not": {
             "anyOf": [
@@ -6770,6 +6786,8 @@
           "published",
           "grade",
           "findings",
+          "fixed_for_you",
+          "set_up_notes",
           "can_set_up",
           "why_not"
         ],
@@ -13297,9 +13315,16 @@
             "title": "Held Words"
           },
           "owner_name": {
-            "description": "The name of the schedule owner. Its scheduled runs start as them.",
-            "title": "Owner Name",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The name of the schedule owner. Its scheduled runs start as them. Null for a schedule nobody saved in the Portal, such as one set in n8n's editor.",
+            "title": "Owner Name"
           },
           "time_zone": {
             "title": "Time Zone",
@@ -13507,6 +13532,18 @@
               }
             ],
             "description": "When it runs on its own, and who owns the schedule. Kept while it is a draft, paused or held. Null for a workflow with no schedule."
+          },
+          "start_refused": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why neither Run now nor a test run can start it, in words to show: the version in use has no Start from the Portal block. Null when they can.",
+            "title": "Start Refused"
           },
           "state": {
             "$ref": "#/components/schemas/UseCaseState",
@@ -21202,7 +21239,7 @@
                 }
               }
             },
-            "description": "The watchlist is empty, so there is nothing to check, an agent use case has no AI model connected, the workflow is paused, or it is a draft and this is not a test run. A test run also waits while someone holds the workflow in n8n, or while its n8n draft has a block the platform can't check"
+            "description": "The watchlist is empty, so there is nothing to check, an agent use case has no AI model connected, the workflow is paused, or it is a draft and this is not a test run. A test run also waits while someone holds the workflow in n8n, or while its n8n draft has a block the platform can't check. Neither starts a workflow with no Start from the Portal block"
           },
           "422": {
             "content": {

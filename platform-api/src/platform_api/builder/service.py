@@ -76,6 +76,7 @@ from platform_api.builder.n8n_draft import (
     NotSafe,
     blocks_of,
     check_draft,
+    read_only_steps,
 )
 from platform_api.builder.n8n_facts import BuilderWorkflowFacts, MadeKeys, ReleaseReader
 from platform_api.builder.n8n_holds import HeldInN8n, Holding
@@ -184,18 +185,25 @@ when a save waited on the lock had moved the current version on."""
 
 
 def _schedule_view(
-    saved: SavedSchedule, document: Mapping[str, Any] | None, team_zone: str
-) -> UseCaseSchedule:
-    """An own workflow runs when its Schedule Trigger says, which a version published in n8n
-    may have changed, so its day, time and zone are read from the version in use."""
-    schedule = schedule_of(document, team_zone) or saved.schedule
+    row: Mapping[str, Any], saved: SavedSchedule | None, team_zone: str
+) -> UseCaseSchedule | None:
+    """An own workflow runs when the Schedule Trigger of the version in use says, whatever was
+    saved in the Portal: a version published in n8n may have added, changed or taken out its
+    schedule. So its day, time and zone are read from that version alone, as its next run is. A
+    schedule saved in the Portal names its owner."""
+    if _own(row) and row["document"] is not None:
+        schedule = schedule_of(row["document"], team_zone)
+    else:
+        schedule = None if saved is None else saved.schedule
+    if schedule is None:
+        return None
     return UseCaseSchedule(
         day=schedule.day,
         at=schedule.at,
         time_zone=schedule.time_zone,
-        owner_name=saved.owner_name,
-        held=saved.held,
-        held_words=saved.held_words,
+        owner_name=None if saved is None else saved.owner_name,
+        held=None if saved is None else saved.held,
+        held_words=None if saved is None else saved.held_words,
     )
 
 
@@ -212,6 +220,12 @@ def _start_webhook(document: Mapping[str, Any] | None) -> str | None:
             hook = node.get("webhookId")
             return hook if isinstance(hook, str) else None
     return None
+
+
+def _no_start(row: Mapping[str, Any]) -> bool:
+    """An own workflow whose version in use has no Start from the Portal, which Run now and a
+    test run start. One made in n8n before Set up added it, or one it was taken out of there."""
+    return _own(row) and row["document"] is not None and _start_webhook(row["document"]) is None
 
 
 def _target(row: Mapping[str, Any]) -> N8nTarget | None:
@@ -264,7 +278,7 @@ def _view(
     state = _state(lifecycle_of(row))
     held = schedule is not None and schedule.held is not None
     plan = (
-        plan_for_cards([a.card for a in agents])
+        plan_for_cards([a.card for a in agents]) or read_only_steps(row["document"])
         if template.key == AGENT_CARDS.key
         else template_view(template).blocks
     )
@@ -279,9 +293,7 @@ def _view(
         created_at=row["created_at"],
         state=state,
         next_run_at=_next_run_at(row, now, team_zone) if state == "on" and not held else None,
-        schedule=None
-        if schedule is None
-        else _schedule_view(schedule, row["document"] if _own(row) else None, team_zone),
+        schedule=_schedule_view(row, schedule, team_zone),
         plan=plan,
         agents=[
             UseCaseAgentView(
@@ -303,6 +315,7 @@ def _view(
         deleted_in_n8n_at=row["deleted_in_n8n_at"],
         moving_to_n8n=moving,
         move_refused=None if _own(row) else row["move_refused"],
+        start_refused=NO_START if _no_start(row) else None,
         made_in_n8n_by=row["made_in_n8n_by"],
     )
 
@@ -377,11 +390,19 @@ class NoTestRun:
     words: str
 
 
+NO_START = (
+    "It has no Start from the Portal block, so the Portal can't start it. Add the block in n8n."
+)
 UNCHECKED_TEST = (
     "The draft in n8n has a block the platform can't check: {found} Fix it in n8n, then test it."
 )
 UNREAD_TEST = "n8n did not show the draft, so no test run started. Try again in a minute."
 NOT_SHOWN = "n8n did not show this version, so it stayed off. Try again in a minute."
+
+
+@dataclass(frozen=True)
+class NoStart:
+    """Neither Run now nor a test run can start it: it has no Start from the Portal block."""
 
 
 @dataclass(frozen=True)
@@ -1505,6 +1526,7 @@ class Builder:
         | NotOnYet
         | NotMovedYet
         | NoTestRun
+        | NoStart
     ):
         """A test run of a draft stops at the approval gate (ADR 0044). Whether it is a draft
         is read under the lock, so a draft turned on since runs as any test run does. A test run
@@ -1533,6 +1555,8 @@ class Builder:
         if spec.n8n is None and self.moves is not None:
             # The shared run workflow is made of blocks the allow list turns off (E11).
             return NotMovedYet(view.move_refused or NOT_MOVED_YET)
+        if view.start_refused is not None:
+            return NoStart()
         spec = replace(spec, test=test)
         if test and spec.n8n is not None:
             checked = await self._checked_draft(use_case_id, spec.n8n)

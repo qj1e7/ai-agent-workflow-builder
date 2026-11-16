@@ -166,8 +166,9 @@ class UseCaseSchedule(WireModel):
     day: Day
     at: ClockTime
     time_zone: str
-    owner_name: str = Field(
-        description="The name of the schedule owner. Its scheduled runs start as them."
+    owner_name: str | None = Field(
+        description="The name of the schedule owner. Its scheduled runs start as them. Null for a "
+        "schedule nobody saved in the Portal, such as one set in n8n's editor."
     )
     held: ScheduleHold | None = Field(
         default=None,
@@ -300,6 +301,11 @@ class UseCaseView(WireModel):
         description="Why it is still on the shared n8n workflow and so starts no scheduled run, "
         "in plain words with what to do: a step the safety checker refused, or n8n not taking "
         "it yet. Null once it moved, and while it only waits for a run to end.",
+    )
+    start_refused: str | None = Field(
+        default=None,
+        description="Why neither Run now nor a test run can start it, in words to show: the "
+        "version in use has no Start from the Portal block. Null when they can.",
     )
     made_in_n8n_by: UserId | None = Field(
         default=None,
