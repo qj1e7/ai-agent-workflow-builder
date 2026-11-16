@@ -214,6 +214,6 @@ data "azurerm_role_definition" "run_command" {
 resource "azurerm_role_assignment" "deployer_run_command" {
   scope              = azurerm_linux_virtual_machine.this.id
   role_definition_id = data.azurerm_role_definition.run_command.role_definition_resource_id
-  principal_id       = data.azurerm_client_config.current.object_id
+  principal_id       = var.deployer_principal_id
   principal_type     = "ServicePrincipal"
 }

@@ -540,6 +540,17 @@ variable "langfuse_owner_email" {
   }
 }
 
+variable "deploy_principal_object_id" {
+  description = "Object ID of the deploy workflow's identity, id-wab-deploy, which gets run-command on the Langfuse VM. Terraform does not take it from whoever runs apply, so a person applying from a laptop never gets the role. infra/bootstrap/setup-azure.sh prints it. Needed with langfuse_enabled."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = !var.langfuse_enabled || can(regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$", var.deploy_principal_object_id))
+    error_message = "deploy_principal_object_id must be the deploy identity's object ID, a GUID, when langfuse_enabled is true."
+  }
+}
+
 variable "langfuse_entra_client_id" {
   description = "Application (client) ID of Langfuse's own Entra app registration (AUTH_AZURE_AD_CLIENT_ID), which only the team's group may use. A person puts its secret in Key Vault as langfuse-entra-client-secret. Needed with langfuse_enabled."
   type        = string

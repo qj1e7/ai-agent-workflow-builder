@@ -358,6 +358,7 @@ module "langfuse_vm" {
   entra_client_id            = var.langfuse_entra_client_id
   log_analytics_workspace_id = module.observability.log_analytics_workspace_id
   alert_email                = trimspace(var.langfuse_alert_email)
+  deployer_principal_id      = var.deploy_principal_object_id
   tags                       = local.tags
 }
 

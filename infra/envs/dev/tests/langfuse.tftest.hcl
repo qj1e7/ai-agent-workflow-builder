@@ -152,9 +152,10 @@ run "langfuse_on_traces_both_apps" {
   command = apply
 
   variables {
-    langfuse_enabled         = true
-    langfuse_owner_email     = "lead@example.test"
-    langfuse_entra_client_id = "12345678-1234-1234-1234-123456789012"
+    langfuse_enabled           = true
+    langfuse_owner_email       = "lead@example.test"
+    langfuse_entra_client_id   = "12345678-1234-1234-1234-123456789012"
+    deploy_principal_object_id = "87654321-4321-4321-4321-210987654321"
   }
 
   assert {

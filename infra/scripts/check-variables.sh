@@ -169,16 +169,21 @@ expect refused watchlist_jira_project "a project key in small letters" -var watc
 expect refused watchlist_jira_project "a one-letter project key" -var watchlist_jira_project=A
 
 LANGFUSE_APP=12345678-1234-1234-1234-123456789012
-expect accepted - "Langfuse on with its owner and Entra app" -var langfuse_enabled=true \
+DEPLOYER=87654321-4321-4321-4321-210987654321
+expect accepted - "Langfuse on with its owner, Entra app and deployer" -var langfuse_enabled=true \
+  -var langfuse_owner_email=lead@example.test -var "langfuse_entra_client_id=$LANGFUSE_APP" \
+  -var "deploy_principal_object_id=$DEPLOYER"
+expect refused deploy_principal_object_id "Langfuse on with no deployer" -var langfuse_enabled=true \
   -var langfuse_owner_email=lead@example.test -var "langfuse_entra_client_id=$LANGFUSE_APP"
 expect accepted - "the team's addresses for Langfuse, with spaces" -var 'langfuse_allowed_ips= 203.0.113.7 , 198.51.100.0/24'
 expect accepted - "an email for Langfuse's alerts" -var langfuse_alert_email=ops@example.test
 expect refused langfuse_owner_email "Langfuse on with no owner" -var langfuse_enabled=true \
-  -var "langfuse_entra_client_id=$LANGFUSE_APP"
+  -var "langfuse_entra_client_id=$LANGFUSE_APP" -var "deploy_principal_object_id=$DEPLOYER"
 expect refused langfuse_entra_client_id "Langfuse on with no Entra app" -var langfuse_enabled=true \
-  -var langfuse_owner_email=lead@example.test
+  -var langfuse_owner_email=lead@example.test -var "deploy_principal_object_id=$DEPLOYER"
 expect refused langfuse_enabled "Langfuse on with an issuer outside Entra" -var langfuse_enabled=true \
   -var langfuse_owner_email=lead@example.test -var "langfuse_entra_client_id=$LANGFUSE_APP" \
+  -var "deploy_principal_object_id=$DEPLOYER" \
   -var oidc_issuer=https://idp.example.test/realms/team
 expect refused langfuse_allowed_ips "a home network address for Langfuse" -var langfuse_allowed_ips=192.168.1.23
 expect refused langfuse_allowed_ips "the whole internet for Langfuse" -var langfuse_allowed_ips=0.0.0.0/0

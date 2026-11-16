@@ -72,3 +72,13 @@ variable "tags" {
   description = "Tags for every resource."
   type        = map(string)
 }
+
+variable "deployer_principal_id" {
+  description = "Object ID of the deploy workflow's identity, which gets run-command on this VM only."
+  type        = string
+
+  validation {
+    condition     = can(regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$", var.deployer_principal_id))
+    error_message = "deployer_principal_id must be an object ID, a GUID."
+  }
+}
