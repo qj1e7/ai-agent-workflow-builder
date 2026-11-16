@@ -15,7 +15,7 @@ import { EMPTY, threadReducer } from './threadState'
 const ALICE: Me = { id: 'alice', display: 'Alice', roles: ['operator', 'approver'] }
 
 function draw(reply: PlannerReply, pending = false, me?: Me): string {
-  let thread = threadReducer(EMPTY, { type: 'sent', text: 'what about Redis?' })
+  let thread = threadReducer(EMPTY, { type: 'sent', text: 'what about Redis?', chat: 'c1' })
   if (!pending) thread = threadReducer(thread, { type: 'answered', reply, typed: 'what about Redis?' })
   const session = createDevSession(null)
   const client = new QueryClient()
@@ -77,9 +77,9 @@ describe('the thread', () => {
 describe('“it” in a request', () => {
   it('means the workflow she picked on the edit card before, when that card offered several', () => {
     const choices = editChoices as PlannerReply
-    let thread = threadReducer(EMPTY, { type: 'sent', text: 'make the friday one daily' })
+    let thread = threadReducer(EMPTY, { type: 'sent', text: 'make the friday one daily', chat: 'c1' })
     thread = threadReducer(thread, { type: 'answered', reply: choices, typed: 'make the friday one daily' })
-    thread = threadReducer(thread, { type: 'sent', text: 'make it daily' })
+    thread = threadReducer(thread, { type: 'sent', text: 'make it daily', chat: 'c1' })
     thread = threadReducer(thread, { type: 'answered', reply: choices, typed: 'make it daily' })
     const memories = new Map<number, CardMemory>()
     const memory = (id: number) => memories.get(id) ?? memories.set(id, newCardMemory()).get(id) ?? newCardMemory()

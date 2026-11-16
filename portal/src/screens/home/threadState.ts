@@ -1,3 +1,4 @@
+import { newIdempotencyKey } from '../../api/idempotency'
 import type { PlannerAnswerIn, PlannerReply } from '../../api/types'
 import type { CardStart } from './SetupCard'
 
@@ -12,12 +13,14 @@ export type Message =
 export interface Thread {
   readonly messages: readonly Message[]
   readonly last: number
+  /** The chat's id, made with its first message, which groups its turns in the Planner's traces (ADR 0050). */
+  readonly chat: string | null
 }
 
-export const EMPTY: Thread = { messages: [], last: 0 }
+export const EMPTY: Thread = { messages: [], last: 0, chat: null }
 
 export type ThreadAction =
-  | { readonly type: 'sent'; readonly text: string }
+  | { readonly type: 'sent'; readonly text: string; readonly chat: string }
   | { readonly type: 'answered'; readonly reply: PlannerReply; readonly typed: string }
   | { readonly type: 'failed' }
   /** A version someone published in n8n, found while the chat is open. It comes with no message from the person before it. */
@@ -31,25 +34,25 @@ export function threadReducer(state: Thread, action: ThreadAction): Thread {
   switch (action.type) {
     case 'sent': {
       const me = state.last + 1
-      return { messages: [...state.messages, { kind: 'me', id: me, text: action.text }, { kind: 'thinking', id: me + 1 }], last: me + 1 }
+      return { messages: [...state.messages, { kind: 'me', id: me, text: action.text }, { kind: 'thinking', id: me + 1 }], last: me + 1, chat: state.chat ?? action.chat }
     }
     case 'answered':
       return { ...state, messages: state.messages.map((m) => (m.kind === 'thinking' ? { kind: 'reply', id: m.id, reply: action.reply, typed: action.typed } : m)) }
     case 'asked_behind': {
       const me = state.last + 1
-      return { messages: [...state.messages, { kind: 'me', id: me, text: action.text }, { kind: 'behind', id: me + 1 }], last: me + 1 }
+      return { ...state, messages: [...state.messages, { kind: 'me', id: me, text: action.text }, { kind: 'behind', id: me + 1 }], last: me + 1 }
     }
     case 'arrived': {
       // A request still waiting for its answer stays last, so a failed send takes back only the request.
       const card: Message = { kind: 'reply', id: state.last + 1, reply: action.reply, typed: '' }
       const waiting = isThinking(state) ? state.messages.slice(-2) : []
       const before = state.messages.slice(0, state.messages.length - waiting.length)
-      return { messages: [...before, card, ...waiting], last: state.last + 1 }
+      return { ...state, messages: [...before, card, ...waiting], last: state.last + 1 }
     }
     case 'failed':
       return { ...state, messages: state.messages.slice(0, -2) }
     case 'resumed':
-      return { messages: [...state.messages, { kind: 'card', id: state.last + 1, start: action.start }], last: state.last + 1 }
+      return { ...state, messages: [...state.messages, { kind: 'card', id: state.last + 1, start: action.start }], last: state.last + 1 }
     case 'new_chat':
       return EMPTY
   }
@@ -72,6 +75,9 @@ export function askOf(text: string, thread: Thread): PlannerAnswerIn {
   return previous === null ? { text } : { text, previous }
 }
 
+/** The chat a message to the Planner goes in: the thread's own, or a new one for its first message. */
+export const chatOf = (thread: Thread, fresh: () => string = newIdempotencyKey): string => thread.chat ?? fresh()
+
 export function previousOf(thread: Thread): PreviousTurn | null {
   // A Changed in n8n card answers no question, so a request typed after it follows on from the last answer to a person.
   const last = thread.messages.findLast((m) => m.kind === 'reply' && m.reply.answer !== 'changed_in_n8n')
@@ -83,5 +89,6 @@ export function previousOf(thread: Thread): PreviousTurn | null {
     answer: reply.answer === 'question' || reply.answer === 'reply' ? reply.text : null,
     // The runtime refuses a second clarifying question in a row, and tells one from an answer by this word.
     kind: reply.answer === 'reply' && reply.form === 'clarify' ? 'reply_clarify' : reply.answer,
+    trace_id: reply.trace_id,
   }
 }

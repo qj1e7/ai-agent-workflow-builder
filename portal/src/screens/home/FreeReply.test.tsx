@@ -20,7 +20,7 @@ import { EMPTY, threadReducer } from './threadState'
 const ALICE: Me = { id: 'alice', display: 'Alice', roles: ['operator', 'approver'] }
 const BOB: Me = { id: 'bob', display: 'Bob', roles: ['approver'] }
 
-const free = (form: FreeReply['form'], over: Partial<FreeReply> = {}): FreeReply => ({ answer: 'reply', form, text: 'Some words.', choices: [], offer: null, looked_at: [], parts: [], ...over })
+const free = (form: FreeReply['form'], over: Partial<FreeReply> = {}): FreeReply => ({ trace_id: null, answer: 'reply', form, text: 'Some words.', choices: [], offer: null, looked_at: [], parts: [], ...over })
 const crossed = (text: string, reason: PartView['reason']): PartView => ({ text, mark: 'cant', reason, note: null, choices: [] })
 const NO_PAGE: Page = { ask: () => undefined, edit: () => undefined, box: () => undefined }
 
@@ -39,7 +39,7 @@ function draw(node: ReactNode, me: Me = ALICE, watched?: WatchlistView): string 
 }
 
 const inThread = (reply: PlannerReply, me: Me = ALICE) =>
-  draw(<Thread thread={threadReducer(threadReducer(EMPTY, { type: 'sent', text: 'hmm' }), { type: 'answered', reply, typed: 'hmm' })} now={new Date('2026-11-15T10:00:00+08:00')} page={NO_PAGE} />, me)
+  draw(<Thread thread={threadReducer(threadReducer(EMPTY, { type: 'sent', text: 'hmm', chat: 'c1' }), { type: 'answered', reply, typed: 'hmm' })} now={new Date('2026-11-15T10:00:00+08:00')} page={NO_PAGE} />, me)
 
 const text = (html: string) => html.replace(/<[^>]*>/g, ' ').replaceAll('&#x27;', "'").replaceAll('&quot;', '"').replace(/\s+/g, ' ').trim()
 const said = (html: string) => /<li[^>]*data-answer[^>]*>([\s\S]*)<\/li>/.exec(html)?.[1] ?? ''
@@ -104,8 +104,8 @@ describe('a free reply, drawn as the Planner’s own message', () => {
     expect(idle).not.toBe('')
     expect(face(free('clarify', { choices: ['a', 'b'] }))).toBe(idle)
     expect(face(free('cant'))).not.toBe(idle)
-    expect(face({ answer: 'didnt_follow', parts: [] })).not.toBe(idle)
-    expect(face(free('cant'))).toBe(face({ answer: 'didnt_follow', parts: [] }))
+    expect(face({ trace_id: null, answer: 'didnt_follow', parts: [] })).not.toBe(idle)
+    expect(face(free('cant'))).toBe(face({ trace_id: null, answer: 'didnt_follow', parts: [] }))
   })
 })
 
@@ -121,7 +121,7 @@ describe('the fallback card', () => {
     const edit = vi.fn()
     press(SayItAnotherWay({ typed: 'blorp', page: { ...NO_PAGE, edit }, variant: 'primary' }))
     expect(edit).toHaveBeenCalledExactlyOnceWith('blorp')
-    const html = draw(<Answer reply={{ answer: 'didnt_follow', parts: [crossed('blorp', 'not_followed')] }} typed="blorp" page={{ ...NO_PAGE, edit }} />)
+    const html = draw(<Answer reply={{ trace_id: null, answer: 'didnt_follow', parts: [crossed('blorp', 'not_followed')] }} typed="blorp" page={{ ...NO_PAGE, edit }} />)
     expect(html).toContain('Say it another way')
     expect(html).not.toContain('Ask about this')
   })
@@ -132,7 +132,7 @@ describe('a cross’s next step', () => {
   const watchReply: WatchlistReply = { ...(ownTime as WatchlistReply) }
 
   it('asks a clause it didn’t follow, and one to ask on its own, as that part’s own words', () => {
-    const reply: PlannerReply = { answer: 'check_workflows', use_case_id: null, parts: [notFollowed, crossed('what is Jira?', 'ask_on_its_own')] }
+    const reply: PlannerReply = { trace_id: null, answer: 'check_workflows', use_case_id: null, parts: [notFollowed, crossed('what is Jira?', 'ask_on_its_own')] }
     const html = draw(<AskPlanner.Provider value={() => undefined}><Leftovers reply={reply} /></AskPlanner.Provider>)
     expect(html.match(/<button type="button"[^>]*>Ask about this<\/button>/g)).toHaveLength(2)
     const ask = vi.fn()
