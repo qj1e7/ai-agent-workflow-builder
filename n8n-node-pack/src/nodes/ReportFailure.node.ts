@@ -21,6 +21,7 @@ export class ReportFailure implements INodeType {
   description: INodeTypeDescription = {
     displayName: 'Report a failure',
     name: 'wabReportFailure',
+    icon: 'file:report.svg',
     group: ['output'],
     version: 1,
     subtitle: 'Portal',

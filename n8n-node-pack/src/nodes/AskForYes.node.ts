@@ -38,6 +38,7 @@ export class AskForYes implements INodeType {
   description: INodeTypeDescription = {
     displayName: 'Ask for a yes',
     name: 'wabAskForYes',
+    icon: 'file:ask.svg',
     group: ['transform'],
     version: 1,
     subtitle: 'Teams',

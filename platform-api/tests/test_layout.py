@@ -13,12 +13,15 @@ import pytest
 
 from platform_api.builder.cards import VERSION_CHECKER_ID
 from platform_api.builder.layout import (
+    ADDS_START,
     CREATE_TICKET,
     NEWER,
+    START,
     LayoutPlan,
     N8nBlock,
     PlannedAgent,
     agent_cards,
+    fixed_for_you,
     lay_out,
     release_notice,
     slack_notice,
@@ -31,10 +34,12 @@ from platform_api.builder.n8n_draft import (
     Checked,
     DraftRefused,
     check_draft,
+    read_only_steps,
 )
 from platform_api.orchestration import (
     ASK_EXITS,
     KEYS,
+    TYPE_OF,
     KnownOptions,
     Schedule,
     grade,
@@ -282,3 +287,170 @@ def test_a_layout_never_places_an_n8n_block_that_is_off_or_breaks_the_tell_rule(
     laid = release_notice(RELEASE_CHECK, "langchain-ai/langgraph", "MOCK", off)
     refused = check_draft(laid, RELEASE_CHECK.use_case_id, ERROR_WORKFLOW, TEAM_ZONE, PLATFORM_KEYS)
     assert isinstance(refused, DraftRefused)
+
+
+SCHEDULE_TRIGGER = "Schedule Trigger"
+
+
+def made_in_the_editor(*extra: dict[str, Any], **settings: Any) -> dict[str, Any]:
+    """A Schedule Trigger at 3am, then our Read, as n8n's editor saves them."""
+    nodes: list[dict[str, Any]] = [
+        {
+            "id": "s1",
+            "name": SCHEDULE_TRIGGER,
+            "type": TYPE_OF["schedule"],
+            "typeVersion": 1.3,
+            "position": [40, 60],
+            "parameters": {"rule": {"interval": [{"triggerAtHour": 3}]}},
+        },
+        {
+            "id": "r1",
+            "name": "Read",
+            "type": TYPE_OF["read"],
+            "typeVersion": 1,
+            "position": [260, 60],
+            "parameters": {"place": "langchain-ai/langgraph"},
+        },
+        *extra,
+    ]
+    return {
+        "name": "React read",
+        "nodes": nodes,
+        "connections": {
+            SCHEDULE_TRIGGER: {"main": [[{"node": "Read", "type": "main", "index": 0}]]}
+        },
+        "settings": {"executionOrder": "v1", **settings},
+    }
+
+
+def test_set_up_puts_right_each_setting_and_adds_the_start_beside_the_schedule() -> None:
+    made = made_in_the_editor()
+    fixed = fixed_for_you(made, "wf9", ERROR_WORKFLOW, TEAM_ZONE)
+    assert fixed.fixed == (
+        "sends its failures to the platform's error workflow",
+        "runs it on Singapore time",
+        "keeps its test runs",
+        "saves its progress",
+        ADDS_START,
+    )
+    assert fixed.document["settings"] == {
+        "executionOrder": "v1",
+        "errorWorkflow": ERROR_WORKFLOW,
+        "timezone": TEAM_ZONE,
+        "saveManualExecutions": True,
+        "saveExecutionProgress": True,
+    }
+    start = fixed.document["nodes"][-1]
+    assert (start["name"], start["type"], start["position"]) == (START, TYPE_OF["start"], [40, 260])
+    assert (
+        start["webhookId"]
+        != fixed_for_you(made, "wf10", ERROR_WORKFLOW, TEAM_ZONE).document["nodes"][-1]["webhookId"]
+    ), "each workflow has its own start address"
+    assert fixed == fixed_for_you(made, "wf9", ERROR_WORKFLOW, TEAM_ZONE), "the same every time"
+    assert edges(fixed.document) == {(SCHEDULE_TRIGGER, 0, "Read"), (START, 0, "Read")}
+    assert grade(fixed.document, ERROR_WORKFLOW, TEAM_ZONE).findings == ()
+    assert made == made_in_the_editor(), "the document it was given is left as it was"
+
+
+def test_a_layout_needs_nothing_put_right() -> None:
+    laid = lay_out(RELEASE_CHECK)
+    assert fixed_for_you(laid, "wf9", ERROR_WORKFLOW, TEAM_ZONE).fixed == ()
+    assert fixed_for_you(laid, "wf9", ERROR_WORKFLOW, TEAM_ZONE).document == laid
+
+
+@pytest.mark.parametrize(
+    ("setting", "held"),
+    [("saveManualExecutions", 1), ("saveExecutionProgress", "true"), ("timezone", "UTC")],
+)
+def test_a_setting_that_is_not_exactly_the_platform_s_is_put_right(setting: str, held: Any) -> None:
+    made = made_in_the_editor(
+        errorWorkflow=ERROR_WORKFLOW,
+        timezone=TEAM_ZONE,
+        saveManualExecutions=True,
+        saveExecutionProgress=True,
+    )
+    made["settings"][setting] = held
+    fixed = fixed_for_you(made, "wf9", ERROR_WORKFLOW, TEAM_ZONE)
+    assert len(fixed.fixed) == 2 and fixed.fixed[-1] == ADDS_START
+    wanted = {"saveManualExecutions": True, "saveExecutionProgress": True, "timezone": TEAM_ZONE}
+    got = fixed.document["settings"][setting]
+    assert (type(got), got) == (type(wanted[setting]), wanted[setting])
+
+
+def test_with_no_error_workflow_loaded_its_failures_are_left_to_the_check() -> None:
+    fixed = fixed_for_you(made_in_the_editor(), "wf9", None, TEAM_ZONE)
+    assert "errorWorkflow" not in fixed.document["settings"]
+    assert "sends its failures to the platform's error workflow" not in fixed.fixed
+    own = fixed_for_you(made_in_the_editor(errorWorkflow="wfTheirs"), "wf9", None, TEAM_ZONE)
+    assert own.document["settings"]["errorWorkflow"] == "wfTheirs", "never named as nothing"
+
+
+def test_start_from_the_portal_starts_every_block_each_schedule_starts_once() -> None:
+    second = {
+        "id": "s2",
+        "name": "Weekly",
+        "type": TYPE_OF["schedule"],
+        "parameters": {"rule": {"interval": [{"field": "weeks"}]}},
+    }
+    tell = {"id": "t1", "name": "Tell", "type": TYPE_OF["tell"], "parameters": {}}
+    made = made_in_the_editor(second, tell)
+    made["connections"]["Weekly"] = {
+        "main": [
+            [
+                {"node": "Read", "type": "main", "index": 0},
+                {"node": "Tell", "type": "main", "index": 0},
+            ]
+        ]
+    }
+    fixed = fixed_for_you(made, "wf9", ERROR_WORKFLOW, TEAM_ZONE)
+    assert fixed.document["connections"][START]["main"] == [
+        [{"node": "Read", "type": "main", "index": 0}, {"node": "Tell", "type": "main", "index": 0}]
+    ]
+
+
+@pytest.mark.parametrize(
+    "change",
+    ["it has a start", "its schedule starts nothing", "its schedule is off"],
+)
+def test_no_start_is_added_where_one_is_there_or_nothing_would_start(change: str) -> None:
+    made = made_in_the_editor()
+    match change:
+        case "it has a start":
+            made["nodes"].append(
+                {"id": "p1", "name": "Run it", "type": TYPE_OF["start"], "parameters": {}}
+            )
+        case "its schedule starts nothing":
+            made["connections"] = {}
+        case _:
+            made["nodes"][0]["disabled"] = True
+    fixed = fixed_for_you(made, "wf9", ERROR_WORKFLOW, TEAM_ZONE)
+    assert ADDS_START not in fixed.fixed
+    assert [n["name"] for n in fixed.document["nodes"]] == [n["name"] for n in made["nodes"]]
+
+
+def test_a_disabled_start_is_no_start_and_a_taken_name_gets_a_number() -> None:
+    off = {"id": "p1", "name": START, "type": TYPE_OF["start"], "disabled": True, "parameters": {}}
+    fixed = fixed_for_you(made_in_the_editor(off), "wf9", ERROR_WORKFLOW, TEAM_ZONE)
+    assert fixed.document["nodes"][-1]["name"] == f"{START} 2"
+    assert (f"{START} 2", 0, "Read") in edges(fixed.document)
+
+
+def test_a_document_the_checker_cannot_read_is_left_as_it_is() -> None:
+    broken = {"name": "Broken", "nodes": "not a list", "connections": {}}
+    assert fixed_for_you(broken, "wf9", ERROR_WORKFLOW, TEAM_ZONE).fixed == ()
+
+
+def test_a_workflow_that_only_reads_has_a_read_step_for_each_read_block() -> None:
+    second = {"id": "r2", "name": "Read again", "type": TYPE_OF["read"], "parameters": {}}
+    made = made_in_the_editor(second)
+    made["connections"]["Read"] = {"main": [[{"node": "Read again", "type": "main", "index": 0}]]}
+    steps = read_only_steps(made)
+    assert [(step.key, step.name, step.kind) for step in steps] == [
+        ("read_1", "Read", "agent"),
+        ("read_2", "Read", "agent"),
+    ]
+    assert read_only_steps(None) == []
+
+
+def test_a_workflow_with_an_agent_names_its_steps_after_its_agents() -> None:
+    assert read_only_steps(lay_out(RELEASE_CHECK)) == [], "the Version checker names the step"

@@ -2,10 +2,13 @@
 Operator with n8n access, builds a workflow from our blocks in her own n8n space and publishes it;
 it waits on Workflows with her as its maker, graded safe, for her and nobody without n8n access;
 she sets it up, so it moves to the platform's project and is on; Run now reads and asks, Erin,
-an Approver by then, can never approve it, and Bob's yes makes one ticket."""
+an Approver by then, can never approve it, and Bob's yes makes one ticket. One saved as n8n's
+editor saves it, with none of the platform's settings, sets up and passes its test run too."""
 
 import copy
 import uuid
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from harness import N8N_OWNER, Api, Json, approval_requested, bob_decides, tickets_for
 from test_n8n_access import becomes_approver, sits_in
@@ -84,5 +87,106 @@ def test_a_workflow_made_in_n8n_is_set_up_runs_and_bob_approves(api: Api, mock_m
     done = api.wait_for_state("carol", run_id, {"succeeded"})
     assert done["outcome"] == "written"
     assert len(tickets_for(api, run_id)) == 1, "exactly one ticket"
+    for made in (use_case_id, source["use_case_id"]):
+        api.delete("alice", f"/api/v1/use-cases/{made}", expect=(200,))
+
+
+SINGAPORE = ZoneInfo("Asia/Singapore")
+FIXED_FOR_YOU = [
+    "sends its failures to the platform's error workflow",
+    "runs it on Singapore time",
+    "keeps its test runs",
+    "saves its progress",
+    "adds Start from the Portal for Run now",
+]
+
+
+def as_the_editor_saves(name: str) -> Json:
+    """A Schedule Trigger at 3am, then our Read on LangGraph, as n8n's editor saves a new
+    workflow: each block with the id the editor gives it, no parameter left at the default the
+    editor shows (the field, the minute and the Read's source), no Start from the Portal, and only
+    the editor's own setting, since a member's editor offers no error workflow of the
+    platform's."""
+    return {
+        "name": name,
+        "nodes": [
+            {
+                "id": str(uuid.uuid4()),
+                "name": "Schedule Trigger",
+                "type": "n8n-nodes-base.scheduleTrigger",
+                "typeVersion": 1.3,
+                "position": [0, 0],
+                "parameters": {"rule": {"interval": [{"triggerAtHour": 3}]}},
+            },
+            {
+                "id": str(uuid.uuid4()),
+                "name": "Read",
+                "type": "CUSTOM.wabRead",
+                "typeVersion": 1,
+                "position": [220, 0],
+                "parameters": {"place": "langchain-ai/langgraph"},
+            },
+        ],
+        "connections": {
+            "Schedule Trigger": {"main": [[{"node": "Read", "type": "main", "index": 0}]]}
+        },
+        "settings": {"executionOrder": "v1"},
+    }
+
+
+def test_one_made_in_the_n8n_editor_is_set_up_and_its_test_run_passes(api: Api, mock_model: None):
+    """Ivy saves a workflow in her own n8n space as the editor saves it. It waits graded safe,
+    with what Set up puts right listed. Set up writes those settings and Start from the Portal
+    in n8n, and keeps her name for it. Its test run passes, and once on it runs at 3:00."""
+    source = set_up(api, "e2e made in the editor, the repository it reads", on=False)
+    ivy = staff_member(api, "Ivy")
+    name = f"e2e made in the editor {uuid.uuid4().hex[:6]}"
+    workflow_id = str(ivy.member.call("POST", "/workflows", as_the_editor_saves(name))["id"])
+
+    waiting = {
+        w["workflow_id"]: w for w in api.get(ivy.person, "/api/v1/n8n/workflows")["workflows"]
+    }
+    found = waiting[workflow_id]
+    assert (found["name"], found["published"], found["grade"]) == (name, False, "safe")
+    assert (found["findings"], found["can_set_up"]) == ([], True)
+    assert found["fixed_for_you"] == FIXED_FOR_YOU
+
+    created = api.post(
+        ivy.person, "/api/v1/use-cases/from-n8n", {"workflow_id": workflow_id}, expect=(201,)
+    ).json()
+    use_case_id = created["use_case_id"]
+    held = N8N_OWNER.call("GET", f"/workflows/{workflow_id}")
+    settings = held["settings"]
+    assert settings["errorWorkflow"] and settings["timezone"] == SINGAPORE.key
+    assert settings["saveManualExecutions"] is True and settings["saveExecutionProgress"] is True
+    assert "Start from the Portal" in {node["name"] for node in held["nodes"]}
+
+    view = api.get("alice", f"/api/v1/use-cases/{use_case_id}")
+    assert (view["name"], view["state"], view["grade"], view["findings"]) == (
+        name,
+        "draft",
+        "safe",
+        [],
+    )
+    assert (view["schedule"]["day"], view["schedule"]["at"]) == ("every_day", "03:00")
+    assert view["start_refused"] is None
+    assert [step["name"] for step in view["plan"]] == ["Read"]
+
+    test_run = api.post(
+        "carol",
+        f"/api/v1/use-cases/{use_case_id}/runs",
+        {"test": True},
+        expect=(201,),
+        headers={"Idempotency-Key": f"t-{use_case_id}"},
+    ).json()
+    finished = api.wait_for_state("carol", test_run["run_id"], {"succeeded"})
+    assert (finished["use_case_name"], finished["outcome"]) == (name, "nothing_to_write")
+
+    turned_on = api.post("alice", f"/api/v1/use-cases/{use_case_id}/turn-on", expect=(200,))
+    at = datetime.fromisoformat(turned_on.json()["next_run_at"]).astimezone(SINGAPORE)
+    assert (at.hour, at.minute) == (3, 0), "the minute n8n's editor showed, which n8n runs"
+    listed = api.get("alice", "/api/v1/use-cases")["use_cases"]
+    [row] = [u for u in listed if u["use_case_id"] == use_case_id]
+    assert (row["name"], row["schedule"]["at"]) == (name, "03:00")
     for made in (use_case_id, source["use_case_id"]):
         api.delete("alice", f"/api/v1/use-cases/{made}", expect=(200,))

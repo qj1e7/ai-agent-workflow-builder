@@ -28,8 +28,8 @@ import { backToVersionToast, needsFix, yesBackToast } from './n8nChange'
 import { StatusPills } from './Status'
 import { Versions } from './Versions'
 import { DraftActions } from './DraftActions'
-import { OpenInN8nEditor, WorkflowInN8n } from './InN8n'
-import { heldLine, holdOf, mayOpen } from './n8nHold'
+import { HeldInN8n, OpenInN8nEditor, WorkflowInN8n } from './InN8n'
+import { cantChangeWords, heldOf, holdOf, mayOpen } from './n8nHold'
 import { When } from './When'
 import {
   bannerOf,
@@ -185,6 +185,7 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
   const [view, showView] = useView()
   const shownView = n8nAccess ? view : 'main'
   const inN8n = useUseCaseInN8n(id, { enabled: n8nAccess, poll: REFRESH_MS })
+  const held = heldOf(useCase, me, n8nAccess ? (inN8n.data ?? null) : null)
   const hold = n8nAccess && inN8n.data ? holdOf(inN8n.data, useCase, me) : null
   const openable = hold !== null && mayOpen(hold) ? hold : null
   useArrivalScroll()
@@ -293,6 +294,7 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
               <OperatorsNote what="this workflow" />
             </p>
           )}
+          {held ? <HeldInN8n useCaseId={id} hold={held} now={now} say={say} /> : null}
           <StatusBanner banner={banner} resuming={move.isPending} onResume={() => pauseOrResume('resume')} onRepublish={republish} republishing={rollback.isPending || addYes.isPending || saveAgain.isPending} />
           {useCase.moving_to_n8n ? (
             <p className="muted" role="status">
@@ -311,7 +313,7 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
           ) : null}
           <RunLine stations={templateLine(useCase)} arrivedLive={null} settled={null} />
           <div className={styles['pair']}>
-            <When useCase={useCase} now={now} mayChange={mayChangeSchedule(useCase, viewer)} onSaved={say} />
+            <When useCase={useCase} now={now} mayChange={mayChangeSchedule(useCase, viewer)} held={held ? cantChangeWords(held) : null} onSaved={say} />
             {gate ? (
               <section className={styles['section']} aria-labelledby="who-says-yes">
                 <h2 id="who-says-yes">Who says yes</h2>
@@ -350,7 +352,6 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
             ) : null}
             {openable ? <OpenInN8nEditor useCaseId={id} hold={openable} variant="secondary" /> : null}
             {items.length > 0 ? <ActionMenu items={items} buttonRef={moreButton} busy={runNow.pending} place={placeOf('run')} /> : null}
-            {hold?.kind === 'theirs' ? <p className={styles['heldLine']}>{heldLine(hold, now)}</p> : null}
           </div>
         </>
       )}
@@ -377,6 +378,7 @@ function notFound(error: unknown): boolean {
 }
 
 function WorkflowLoader({ useCaseId, now }: { useCaseId: string; now: Date }) {
+  const { search } = useLocation()
   const useCase = useUseCase(useCaseId, true, { poll: REFRESH_MS })
   const me = useMe()
   const shown = useCase.data && me.data && !useCase.isError ? controlsOf(useCase.data, viewerOf(me.data)).map(placeOf) : []
@@ -406,7 +408,8 @@ function WorkflowLoader({ useCaseId, now }: { useCaseId: string; now: Date }) {
       </p>
     )
   }
-  if (workflowPath(useCase.data) === SOFTWARE_PAGE) return <Navigate to={SOFTWARE_PAGE} replace />
+  // The watchlist's page is its Summary, and keeps the tab the address asks for, so the Planner's In n8n link lands on it.
+  if (workflowPath(useCase.data) === SOFTWARE_PAGE) return <Navigate to={{ pathname: SOFTWARE_PAGE, search }} replace />
   return <WorkflowView useCase={useCase.data} me={me.data} now={now} onReread={refocus} />
 }
 

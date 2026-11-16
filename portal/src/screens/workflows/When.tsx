@@ -83,6 +83,8 @@ interface WhenProps {
   readonly now: Date
   /** Only an Operator changes a schedule, and not the Software watchlist's, which is changed on its page. */
   readonly mayChange: boolean
+  /** Why a change can't be made now: someone has the workflow open in n8n, so the platform would refuse it. */
+  readonly held: string | null
   readonly onSaved: (words: string) => void
 }
 
@@ -90,7 +92,7 @@ interface WhenProps {
  * When, as the sketch draws it: the schedule in words, Change beside it, and the editor in its place while it is open. A save from a
  * version no longer in use closes the editor, so the schedule read again shows in its place, with the platform's words under it.
  */
-export function When({ useCase, now, mayChange, onSaved }: WhenProps) {
+export function When({ useCase, now, mayChange, held, onSaved }: WhenProps) {
   const id = useCase.use_case_id
   const headingId = useId()
   const save = useSaveWorkflowSchedule(id)
@@ -108,12 +110,14 @@ export function When({ useCase, now, mayChange, onSaved }: WhenProps) {
   return (
     <section className={styles['section']} aria-labelledby={headingId}>
       <h2 id={headingId}>When</h2>
-      {editing && mayChange ? (
+      {editing && mayChange && !held ? (
         <WhenEditor schedule={useCase.schedule} version={useCase.version} isPending={save.isPending} save={saver} onDone={close} />
       ) : (
         <div className={styles['whenRow']}>
           <span>{words}</span>
-          {mayChange ? (
+          {mayChange && held ? (
+            <span className={styles['small']}>{held}</span>
+          ) : mayChange ? (
             <Button
               ref={opener}
               data-place="schedule"
@@ -130,7 +134,7 @@ export function When({ useCase, now, mayChange, onSaved }: WhenProps) {
       )}
       <p className={styles['small']}>
         {small}
-        {useCase.schedule ? ` Set by ${useCase.schedule.owner_name}.` : ''}{' '}
+        {useCase.schedule ? (useCase.schedule.owner_name ? ` Set by ${useCase.schedule.owner_name}.` : ' Set in n8n.') : ''}{' '}
         <span key={changes} className={changes > 0 ? styles['changed'] : undefined}>
           {next}
         </span>

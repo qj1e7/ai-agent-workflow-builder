@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Final, Literal
 
 from platform_api.monitoring.events import RunFailedData
-from platform_api.shared import JIRA_SITE_CHANGED, WRITE_STOP_ADVICE
+from platform_api.shared import JIRA_SITE_CHANGED, NO_START_BLOCK, WRITE_STOP_ADVICE
 from platform_api.wire import FailureReason, WireModel
 
 type SuggestedAction = Literal[
@@ -175,6 +175,15 @@ STOPPED_WHILE_WRITING = Advice(
 )
 
 
+MISSING_START = Advice(
+    explanation="The workflow has no Start from the Portal block, so the Portal couldn't start it.",
+    likely_cause="It was made or changed in n8n without that block.",
+    suggested_action="ask_maintainer",
+    suggestion="Ask someone with n8n access to add Start from the Portal to it in n8n, then "
+    "start a new run.",
+)
+
+
 def explain(reason: FailureReason) -> Advice:
     return ADVICE[reason]
 
@@ -191,6 +200,12 @@ def explain_failure(failure: RunFailedData) -> Advice:
         return SITE_CHANGED
     if failure.reason == "StoppedByUpdate" and failure.stage == "acting":
         return STOPPED_WHILE_WRITING
+    if (
+        failure.reason == "DispatchFailed"
+        and not failure.retryable
+        and NO_START_BLOCK in failure.message
+    ):
+        return MISSING_START
     return ADVICE[failure.reason]
 
 

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { UseQueryResult } from '@tanstack/react-query'
 import { useErrorWords } from '../../api/context'
-import { useMe } from '../../api/queries'
+import { useMe, useUseCase } from '../../api/queries'
 import type { Me, UseCaseN8nView, UseCaseView } from '../../api/types'
 import { useOpenInN8n, useSweepOnOpen, useTakeBack, useUseCaseInN8n } from '../../api/workflowQueries'
 import { Button, ButtonAnchor, type ButtonVariant } from '../../ui/Button'
@@ -99,7 +99,8 @@ export function TakeItBackHere({ useCaseId, refused, say }: TakeItBackHereProps)
   const me = useMe().data
   const n8nAccess = refused && me?.n8n_access === true
   const inN8n = useUseCaseInN8n(useCaseId, { enabled: n8nAccess })
-  const held = n8nAccess && me && inN8n.data ? heldOf(inN8n.data, me) : null
+  const useCase = useUseCase(useCaseId, n8nAccess).data
+  const held = n8nAccess && me && useCase ? heldOf(useCase, me, inN8n.data ?? null) : null
   const takeBack = useTakeBackPress(useCaseId, held, say)
   if (!held || !mayTakeBack(held)) return null
   return (
@@ -123,8 +124,11 @@ interface HeldProps {
   readonly say: (text: string) => void
 }
 
-/** Who has the workflow open in n8n, and Take it back, which its holder and anyone else with n8n access may press. */
-function HeldInN8n({ useCaseId, hold, now, say }: HeldProps) {
+/**
+ * Who has the workflow open in n8n, and Take it back, which its holder and anyone else with n8n access may press. The Summary and the
+ * In n8n tab draw the same banner, from the same hold.
+ */
+export function HeldInN8n({ useCaseId, hold, now, say }: HeldProps) {
   const takeBack = useTakeBackPress(useCaseId, hold, say)
   return (
     <div className={styles['banner']} data-held>
@@ -153,7 +157,7 @@ function HeldInN8n({ useCaseId, hold, now, say }: HeldProps) {
 interface PaneProps {
   readonly useCase: UseCaseView
   readonly inN8n: UseQueryResult<UseCaseN8nView>
-  readonly me: Pick<Me, 'id'>
+  readonly me: Pick<Me, 'id' | 'n8n_access'>
   readonly now: Date
   readonly say: (text: string) => void
 }

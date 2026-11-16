@@ -38,7 +38,8 @@ function render({ me = ALICE, view = FREE, useCase = ON, path = `/workflows/${ON
   queryClient.setQueryData(['dev-users'], [ALICE, BOB, CAROL])
   queryClient.setQueryData(['people', scope], TEAM)
   queryClient.setQueryData(['runs', scope], [])
-  queryClient.setQueryData(['use-case', scope, useCase.use_case_id], useCase)
+  // The platform says who holds it on the workflow and on its In n8n view alike.
+  queryClient.setQueryData(['use-case', scope, useCase.use_case_id], { ...useCase, held_in_n8n: view?.holder ?? useCase.held_in_n8n ?? null })
   if (view) queryClient.setQueryData(['use-case', scope, useCase.use_case_id, 'n8n'], view)
   return renderToStaticMarkup(
     <QueryClientProvider client={queryClient}>
@@ -132,6 +133,7 @@ describe('Take it back on a refused change', () => {
     const scope = session.cacheScope()
     const queryClient = new QueryClient({ defaultOptions: { queries: { retryOnMount: false } } })
     queryClient.setQueryData(['me', scope], me)
+    queryClient.setQueryData(['use-case', scope, ON.use_case_id], { ...ON, held_in_n8n: view.holder })
     queryClient.setQueryData(['use-case', scope, ON.use_case_id, 'n8n'], view)
     return renderToStaticMarkup(
       <QueryClientProvider client={queryClient}>

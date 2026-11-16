@@ -6,15 +6,18 @@ and deletes in n8n; a workflow deleted in n8n keeps its runs and versions."""
 
 import asyncio
 from collections.abc import AsyncIterator, Callable, Mapping
+from copy import deepcopy
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
 import pytest
 
 from platform_api.builder import Builder
-from platform_api.builder.layout import schedule_rule
+from platform_api.builder.layout import LayoutPlan, release_check, schedule_rule
 from platform_api.builder.models import RepublishIn, ScheduleSaveIn, WatchlistView
+from platform_api.builder.service import NO_START
 from platform_api.builder.sweep import ASKED_GAP, Found, Regraded, VersionsSweep
 from platform_api.builder.versions import changes_between, schedule_of
 from platform_api.builder.watchlist import MovedToN8n
@@ -28,6 +31,7 @@ from platform_api.orchestration import (
     Schedule,
 )
 from platform_api.orchestration.n8n_calls import VERSION_FAILED, ExecutionFacts, decide_link
+from platform_api.orchestration.n8n_schedule import SCHEDULE_TRIGGER
 from platform_api.orchestration.schedule import DAYS
 from platform_api.shared import UseCaseId, UserId
 from tests.fake_n8n import FakeN8n
@@ -176,6 +180,21 @@ def test_the_schedule_is_read_back_from_the_rule_the_planner_lays_out(day: str):
     schedule = Schedule(day, "07:30", TEAM_ZONE)  # type: ignore[arg-type]
     trigger = {"type": "n8n-nodes-base.scheduleTrigger", "parameters": schedule_rule(schedule)}
     assert schedule_of({"nodes": [trigger]}, TEAM_ZONE) == schedule
+
+
+@pytest.mark.parametrize(
+    ("interval", "day"),
+    [
+        ({"field": "weeks", "triggerAtDay": None}, "sunday"),
+        ({"field": "days", "daysInterval": None}, "every_day"),
+    ],
+)
+def test_a_part_n8n_sets_to_its_default_when_null_is_shown_as_n8n_runs_it(
+    interval: dict[str, Any], day: str
+):
+    rule = {"interval": [{**interval, "triggerAtHour": 9, "triggerAtMinute": 0}]}
+    trigger = {"type": "n8n-nodes-base.scheduleTrigger", "parameters": {"rule": rule}}
+    assert schedule_of({"nodes": [trigger]}, TEAM_ZONE) == Schedule(day, "09:00", TEAM_ZONE)  # type: ignore[arg-type]
 
 
 def test_the_schedule_read_back_is_in_the_zone_the_workflow_runs_on():
@@ -689,6 +708,103 @@ async def test_settings_put_back_in_n8n_grade_safe_again(v: Versions):
     assert (view["version"], view["grade"], view["findings"]) == (3, "safe", [])
 
 
+RULE_DEFAULTS: tuple[tuple[str, object], ...] = (
+    ("field", "days"),
+    ("triggerAtDay", [0]),
+    ("triggerAtHour", 0),
+    ("triggerAtMinute", 0),
+)
+
+
+def saved_in_n8ns_editor(workflow: dict[str, Any]) -> None:
+    """What n8n 2.42.6's editor writes as it saves a workflow the platform laid out, with no block
+    touched, as docs/evidence/n8n-editor-save/editor_save.txt shows for every layout: a
+    parameter at its default is left out, IF's condition options gain its leftValue, and the
+    settings gain its binary mode."""
+    editors_own = {"executionOrder": "v1", "binaryMode": "separate"}
+    workflow["settings"] = {**editors_own, **workflow["settings"]}
+    for node in workflow["nodes"]:
+        parameters = node["parameters"]
+        if node["type"] == "CUSTOM.wabRead" and parameters.get("source") == "github_releases":
+            del parameters["source"]
+        if node["type"] == "n8n-nodes-base.if":
+            parameters["conditions"]["options"]["leftValue"] = ""
+        if node["type"] == "n8n-nodes-base.scheduleTrigger":
+            for interval in parameters["rule"]["interval"]:
+                for key, default in RULE_DEFAULTS:
+                    if interval.get(key) == default:
+                        del interval[key]
+
+
+def adding_a_schedule_at_three(workflow: dict[str, Any]) -> None:
+    """Adds n8n's Schedule Trigger at 3am in the editor and joins it to the first block. The
+    editor saves it with only the hour, the one value not at n8n's default."""
+    saved_in_n8ns_editor(workflow)
+    workflow["nodes"].append(
+        {
+            "name": "Schedule Trigger",
+            "type": "n8n-nodes-base.scheduleTrigger",
+            "typeVersion": 1.2,
+            "position": [0, -200],
+            "parameters": {"rule": {"interval": [{"triggerAtHour": 3}]}},
+        }
+    )
+    first = {"node": "Read release", "type": "main", "index": 0}
+    workflow["connections"]["Schedule Trigger"] = {"main": [[first]]}
+
+
+async def test_an_autosave_in_n8n_that_writes_only_its_own_defaults_is_no_new_version(
+    v: Versions,
+):
+    """n8n's editor saves on its own while someone looks, writing its defaults in. n8n runs the
+    workflow the same, so there is nothing to roll back to and nothing to tell. A real change
+    to the settings is still a version, since n8n runs the live version with them."""
+    use_case_id, workflow_id = await made(v.own, on=True)
+    v.n8n.save_draft(workflow_id, saved_in_n8ns_editor)
+
+    assert await v.sweep() == 0
+    assert (await v.view(use_case_id))["version"] == 1
+    assert await v.builder.changed_in_n8n(10) == []
+
+    v.n8n.save_settings(workflow_id, no_error_workflow)
+    assert await v.sweep() == 1
+    [card] = await v.builder.changed_in_n8n(10)
+    assert (card.made, card.changes) == (
+        "settings_changed_in_n8n",
+        ["Changed its settings: the error workflow."],
+    )
+
+
+async def test_a_publish_in_n8n_names_only_what_someone_changed(v: Versions):
+    """The editor rewrites blocks nobody touched as it saves, in ways n8n runs the same."""
+    use_case_id, workflow_id = await made(v.own, on=True, schedule=None)
+    v.n8n.publish_as(workflow_id, DAVE_IN_N8N, adding_a_schedule_at_three)
+    assert await v.sweep() == 1
+
+    versions = (await v.call("alice", "GET", f"/api/v1/use-cases/{use_case_id}/versions")).json()
+    changed = ["Now runs every day at 3:00.", "Added “Schedule Trigger”."]
+    assert versions["versions"][0]["changes"] == changed
+    [card] = await v.builder.changed_in_n8n(10)
+    assert card.changes == changed
+
+
+@pytest.mark.parametrize(
+    "schedule",
+    [
+        Schedule("every_day", "08:00", TEAM_ZONE),
+        Schedule("every_day", "00:00", TEAM_ZONE),
+        Schedule("sunday", "07:00", TEAM_ZONE),
+        Schedule("weekdays", "09:15", TEAM_ZONE),
+    ],
+)
+def test_a_layout_n8ns_editor_saved_untouched_has_no_change(schedule: Schedule):
+    plan = LayoutPlan("uc", "Release check", "https://portal", schedule, (), "errors", TEAM_ZONE)
+    laid_out = release_check(plan, "langchain-ai/langgraph", "MOCK")
+    saved = deepcopy(laid_out)
+    saved_in_n8ns_editor(saved)
+    assert changes_between(laid_out, saved) == ["Published again, with no change to its blocks."]
+
+
 async def test_settings_saved_in_another_order_are_no_change(v: Versions):
     use_case_id, workflow_id = await made(v.own, on=True)
 
@@ -829,3 +945,71 @@ async def test_a_workflow_that_is_off_is_graded_again_as_it_was_kept(v: Versions
     await kept_before_the_allow_list(v, use_case_id)
     assert v.builder.sweep is not None
     assert await v.builder.sweep.sweep() == [Regraded(use_case_id, 1, "needs_a_fix")]
+
+
+def daily_at_three_as_n8n_s_editor_saves_it(workflow: dict[str, Any]) -> None:
+    """A Schedule Trigger added in n8n's editor at 3am, its minute left at the 0 the editor
+    shows, joined to the block Start from the Portal starts."""
+    connections: dict[str, Any] = workflow["connections"]
+    first = connections["Start from the Portal"]["main"][0][0]["node"]
+    workflow["nodes"].append(
+        {
+            "id": "9a3c0e52-5d1f-4f7e-8a0b-2f6d1c3e4b5a",
+            "name": "Schedule Trigger",
+            "type": "n8n-nodes-base.scheduleTrigger",
+            "typeVersion": 1.3,
+            "position": [0, 400],
+            "parameters": {"rule": {"interval": [{"triggerAtHour": 3}]}},
+        }
+    )
+    connections["Schedule Trigger"] = {"main": [[{"node": first, "type": "main", "index": 0}]]}
+
+
+def without_the_schedule(workflow: dict[str, Any]) -> None:
+    names = {n["name"] for n in workflow["nodes"] if n["type"] == SCHEDULE_TRIGGER}
+    workflow["nodes"] = [n for n in workflow["nodes"] if n["name"] not in names]
+    for name in names:
+        workflow["connections"].pop(name, None)
+
+
+def without_start_from_the_portal(workflow: dict[str, Any]) -> None:
+    workflow["nodes"] = [n for n in workflow["nodes"] if n["name"] != "Start from the Portal"]
+    workflow["connections"].pop("Start from the Portal")
+
+
+async def test_a_schedule_set_in_n8n_is_the_one_every_screen_shows(v: Versions):
+    use_case_id, workflow_id = await made(v.own, on=True, schedule=None)
+    assert (await v.view(use_case_id))["schedule"] is None
+    v.n8n.publish_as(workflow_id, DAVE_IN_N8N, daily_at_three_as_n8n_s_editor_saves_it)
+    assert await v.sweep() == 1
+    view = await v.view(use_case_id)
+    assert (view["grade"], view["findings"]) == ("safe", [])
+    assert view["schedule"] == {
+        "day": "every_day",
+        "at": "03:00",
+        "time_zone": TEAM_ZONE,
+        "owner_name": None,
+        "held": None,
+        "held_words": None,
+    }
+    at = datetime.fromisoformat(view["next_run_at"]).astimezone(ZoneInfo(TEAM_ZONE))
+    assert (at.hour, at.minute) == (3, 0), "the minute n8n's editor showed, which n8n runs"
+    listed = await v.call("alice", "GET", "/api/v1/use-cases")
+    [row] = [u for u in listed.json()["use_cases"] if u["use_case_id"] == use_case_id]
+    assert (row["schedule"], row["next_run_at"]) == (view["schedule"], view["next_run_at"])
+
+
+async def test_a_schedule_taken_out_in_n8n_is_gone_from_every_screen(v: Versions):
+    use_case_id, _ = await on_and_changed(v, without_the_schedule)
+    view = await v.view(use_case_id)
+    assert (view["schedule"], view["next_run_at"]) == (None, None)
+
+
+async def test_with_no_start_from_the_portal_run_now_is_not_offered_and_says_why(v: Versions):
+    use_case_id, _ = await on_and_changed(v, without_start_from_the_portal)
+    view = await v.view(use_case_id)
+    assert view["start_refused"] == NO_START
+    refused = await v.call("alice", "POST", f"/api/v1/use-cases/{use_case_id}/runs")
+    assert (refused.status_code, refused.json()["detail"]) == (409, NO_START)
+    laid_out, _ = await made(v.own, on=True)
+    assert (await v.view(laid_out))["start_refused"] is None

@@ -1,6 +1,7 @@
 import { useContext, useState } from 'react'
 import { useErrorWords } from '../../api/context'
-import { useMe } from '../../api/queries'
+import { useDisplayName } from '../../api/people'
+import { useMe, useUseCase } from '../../api/queries'
 import type { ChangedInN8nReply } from '../../api/types'
 import { useAddTheYesBack, useRollback, useUseCaseInN8n } from '../../api/workflowQueries'
 import { Button } from '../../ui/Button'
@@ -24,7 +25,8 @@ const TONE = { ok: 'ok', err: 'bad' } as const
 /**
  * The sketch's Changed in n8n card: a version someone published in n8n's editor, graded by the safety checker. Add the yes back
  * and Undo each publish a new version, naming the version the person saw in use, so a change made since is never thrown away.
- * While someone has the workflow open in n8n both would be refused, so the card names who, with Take it back for those who may.
+ * While someone has the workflow open in n8n both would be refused, so the card names who, read from the workflow itself so every
+ * Operator sees it, with Take it back for those who may.
  */
 export function ChangedInN8nAnswer({ reply }: { reply: ChangedInN8nReply }) {
   const operator = useAsker() === 'operator'
@@ -36,16 +38,18 @@ export function ChangedInN8nAnswer({ reply }: { reply: ChangedInN8nReply }) {
   const addYes = useAddTheYesBack()
   const [phase, setPhase] = useState<Phase>(() => memory.changed.kept() ?? OPEN)
   const me = useMe().data
+  const nameOf = useDisplayName()
   const n8nAccess = operator && me?.n8n_access === true
+  const useCase = useUseCase(reply.use_case_id, operator).data
   const inN8n = useUseCaseInN8n(reply.use_case_id, { enabled: n8nAccess })
-  const held = n8nAccess && me && inN8n.data ? heldOf(inN8n.data, me) : null
+  const held = operator && me && useCase ? heldOf(useCase, me, inN8n.data ?? null) : null
   const takeBack = useTakeBackPress(reply.use_case_id, held, note)
   const settle = (next: Phase) => {
     memory.changed.keep(next)
     setPhase(next)
   }
   const busy = rollback.isPending || addYes.isPending
-  const words = wordsOf(reply)
+  const words = wordsOf(reply, nameOf)
   const offered = buttonsOf(reply, phase, operator)
   const buttons = held ? { yes: false, undo: false } : offered
   const takesBack = held !== null && mayTakeBack(held) && (offered.yes || offered.undo)

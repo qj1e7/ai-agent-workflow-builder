@@ -251,6 +251,7 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "builder/schedule.in.json": TypeAdapter(UseCaseScheduleIn),
     "builder/undo.in.json": TypeAdapter(UndoIn),
     "builder/use-case.versioned.json": TypeAdapter(UseCaseView),
+    "builder/use-case.open-in-n8n.json": TypeAdapter(UseCaseView),
     "builder/use-case.undone.json": TypeAdapter(UseCaseView),
     "builder/versions.json": TypeAdapter(VersionList),
     "builder/versions.undone.json": TypeAdapter(VersionList),

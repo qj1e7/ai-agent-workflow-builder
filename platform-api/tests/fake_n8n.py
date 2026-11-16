@@ -167,8 +167,13 @@ class FakeN8n:
     def save_settings(self, workflow_id: str, change: Callable[[dict[str, Any]], None]) -> None:
         """A member changes the workflow's settings in n8n's editor and saves, publishing nothing.
         n8n runs the live version with the new settings at once."""
+        self.save_draft(workflow_id, lambda workflow: change(workflow["settings"]))
+
+    def save_draft(self, workflow_id: str, change: Callable[[dict[str, Any]], None]) -> None:
+        """n8n's editor saves the draft, publishing nothing, as it does on its own while someone
+        has the workflow open."""
         workflow = self.workflows[workflow_id]
-        change(workflow["settings"])
+        change(workflow)
         workflow["versionId"] = _new_version()
         workflow["checksum"] = _new_version()
         self._remember(workflow_id)
@@ -299,6 +304,11 @@ class FakeN8n:
                 return httpx.Response(404, json={"message": f"no /rest{path} in the fake"})
 
     def _activate(self, workflow_id: str, version_id: str, user_id: str = OWNER_ID) -> None:
+        kept = self.history.get(workflow_id, {}).get(version_id)
+        if kept is not None:
+            # n8n's editor names a version as it publishes it. The fake names every published
+            # version, so no read of one may take that label for the workflow's name.
+            kept["name"] = f"Version {version_id[:8]}"
         self.workflows[workflow_id]["activeVersionId"] = version_id
         self.workflows[workflow_id]["active"] = True
         self.timeline.setdefault(workflow_id, []).append(

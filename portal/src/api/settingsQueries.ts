@@ -10,12 +10,13 @@ const settingsKeys = {
   history: (user: string) => ['settings-history', user] as const,
 }
 
-export function usePeopleList() {
+export function usePeopleList(options?: { readonly staleTime?: number }) {
   const client = useApiClient()
   const user = useCacheScope()
   return useQuery({
     queryKey: settingsKeys.people(user),
     queryFn: async () => unwrap(await client.GET('/api/v1/people')).people,
+    staleTime: options?.staleTime ?? 0,
   })
 }
 

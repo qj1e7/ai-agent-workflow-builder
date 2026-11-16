@@ -36,6 +36,11 @@ describe('displayName', () => {
     expect(displayName(users, 'dana_lee')).toBe('Dana lee')
   })
 
+  it('never shows a person id from the People list as a name, while the list loads or once they left it', () => {
+    expect(displayName(users, 'per_01M7HH1YX20KNDD6FB2ERHWAZG')).toBe('a colleague')
+    expect(displayName([{ id: 'per_01M7HH1YX20KNDD6FB2ERHWAZG', display: 'Dana' }], 'per_01M7HH1YX20KNDD6FB2ERHWAZG')).toBe('Dana')
+  })
+
   it('never shows an identity provider object id as a name', () => {
     expect(displayName(users, '3f2504e0-4f89-41d3-9a0c-0305e82c3301')).toBe('a colleague')
     expect(displayName([{ id: '3f2504e0-4f89-41d3-9a0c-0305e82c3301', display: 'Dana' }], '3f2504e0-4f89-41d3-9a0c-0305e82c3301')).toBe('Dana')

@@ -43,7 +43,6 @@ from platform_api.monitoring import (
     typed_again,
 )
 from platform_api.orchestration import (
-    NO_ACCESS,
     OFF,
     AbilitiesAnswer,
     Answered,
@@ -92,6 +91,7 @@ from platform_api.orchestration import (
     WatchlistAnswer,
     WhichSoftwareAnswer,
     WhyStoppedAnswer,
+    no_access_words,
 )
 from platform_api.shared import Principal, Role, UserId
 from platform_api.wire import WireIn, WireModel
@@ -1168,7 +1168,7 @@ class PlannerFront:
     async def _n8n(self, text: str, viewer: Principal) -> N8nReply:
         """Answered by the platform, never the model: who may open n8n is a rule, not a guess."""
         if self._staff is None:
-            said = OFF if viewer.n8n_access else NO_ACCESS
+            said = OFF if viewer.n8n_access else no_access_words(Role.APPROVER in viewer.roles)
             return N8nReply(said=said, can_open=False, use_case_id=None)
         access = await self._staff.access(viewer.user_id)
         if not isinstance(access, CanOpen):

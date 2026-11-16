@@ -14,13 +14,13 @@ from typing import Protocol
 import httpx
 
 from platform_api.db import Database
-from platform_api.orchestration.dispatch import DispatchFailure
+from platform_api.orchestration.dispatch import DispatchFailure, DispatchRefused
 from platform_api.orchestration.n8n import N8nApi, N8nError, RetryRefused, StillRetrying
 from platform_api.orchestration.n8n_call_book import CallBook
 from platform_api.orchestration.n8n_calls import StartKind, start_signature
 from platform_api.orchestration.spec import N8nTarget
 from platform_api.orchestration.workflow_check import unpinned_notices
-from platform_api.shared import N8nExecutionId, RunId
+from platform_api.shared import NO_START_BLOCK, N8nExecutionId, RunId
 
 
 @dataclass(frozen=True)
@@ -99,7 +99,7 @@ class N8nStarts:
         if self._secret is None:
             raise DispatchFailure("WAB_START_SECRET is not set, so no start can be signed")
         if target.webhook_id is None:
-            raise DispatchFailure("the workflow has no Start from the Portal block to start it")
+            raise DispatchRefused(NO_START_BLOCK)
         signed = await issue_start(
             self._db, self._secret, run_id, kind, target.workflow_id, target.webhook_id
         )

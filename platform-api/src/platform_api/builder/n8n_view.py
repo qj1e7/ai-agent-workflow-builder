@@ -2,12 +2,11 @@
 in use holds them, who published it and who holds it now, and for a run, each block's state."""
 
 from collections.abc import Mapping
-from datetime import datetime
 from typing import Any, Literal, Protocol
 
 from pydantic import AwareDatetime, Field
 
-from platform_api.builder.models import N8nBadge, N8nBlockKind, N8nBlockView
+from platform_api.builder.models import N8nBadge, N8nBlockKind, N8nBlockView, N8nHolderView
 from platform_api.builder.n8n_draft import blocks_of, view_kind
 from platform_api.builder.n8n_holds import Held, Holding, StaffPort
 from platform_api.db import Database
@@ -49,12 +48,6 @@ class N8nEdgeView(WireModel):
     source: str
     exit: int = Field(description="Which of the source block's exits, from 0.")
     target: str
-
-
-class N8nHolderView(WireModel):
-    id: UserId
-    name: str
-    since: datetime
 
 
 class UseCaseN8nView(WireModel):
