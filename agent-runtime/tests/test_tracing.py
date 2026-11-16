@@ -262,3 +262,22 @@ def test_a_langfuse_setting_left_out_is_refused_by_name(left_out: str):
     env = {**BASE_ENV, **LANGFUSE_ENV, left_out: ""}
     with pytest.raises(SettingsError, match=left_out):
         Settings.from_env(env)
+
+
+@pytest.mark.parametrize(
+    ("address", "allowed"),
+    [
+        ("http://langfuse-web:3000", True),
+        ("https://langfuse.example.org", True),
+        ("http://langfuse.example.org", False),
+        ("ftp://langfuse-web", False),
+        ("langfuse-web:3000", False),
+    ],
+)
+def test_the_secret_key_goes_only_over_https_or_inside_the_stack(address: str, allowed: bool):
+    env = {**BASE_ENV, **LANGFUSE_ENV, "LANGFUSE_BASE_URL": address}
+    if allowed:
+        assert Settings.from_env(env).langfuse is not None
+    else:
+        with pytest.raises(SettingsError, match="LANGFUSE_BASE_URL"):
+            Settings.from_env(env)

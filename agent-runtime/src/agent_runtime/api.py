@@ -8,6 +8,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Final, Protocol, Self
+from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -158,6 +159,14 @@ def _langfuse(env: Mapping[str, str]) -> LangfuseSettings | None:
     if missing:
         raise SettingsError(
             f"{' and '.join(missing)} must be set too. Set all three Langfuse settings, or none."
+        )
+    # The secret key goes to this address: https, or plain http only to a service on the stack's
+    # own network, whose name has no dot.
+    address = urlsplit(base_url)
+    local = address.scheme == "http" and bool(address.hostname) and "." not in str(address.hostname)
+    if not (local or (address.scheme == "https" and address.hostname)):
+        raise SettingsError(
+            "LANGFUSE_BASE_URL must be an https address, or http to a service on the stack"
         )
     return LangfuseSettings(
         public_key=public_key,
