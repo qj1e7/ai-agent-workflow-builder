@@ -422,6 +422,24 @@ def test_a_draft_with_an_unlisted_tool_or_no_target_input_fails_those_checks() -
     )
 
 
+def test_a_draft_that_makes_a_stated_number_an_input_fails() -> None:
+    """Carol's 14 days, made a text input, would be asked again: the Portal never fills one."""
+    case = draft_case("stated-days-stay-in-the-step")
+    project = case.reference.inputs[0]
+    days = project.model_copy(update={"name": "Days without update", "kind": "text"})
+    blocks = [b.model_copy(update={"say": "Find stale tickets."}) for b in case.reference.blocks]
+    asked = draft_answer(case, inputs=[project, days], blocks=blocks)
+    assert failed(DRAFT.score(case, asked)) == {"stated_values_in_steps"}
+
+
+@pytest.mark.parametrize("tool", ["jira.search", "jira.read_ticket"])
+def test_a_draft_that_reads_jira_with_no_project_input_fails(tool: str) -> None:
+    case = draft_case("stated-days-stay-in-the-step")
+    blocks = [case.reference.blocks[0].model_copy(update={"tool": tool})]
+    unscoped = draft_answer(case, inputs=[], blocks=blocks, approvals=[])
+    assert "jira_tool_has_project_input" in failed(DRAFT.score(case, unscoped))
+
+
 def test_a_draft_with_an_invented_project_or_old_name_fails() -> None:
     case = draft_case("project-not-named")
     blocks = [case.reference.blocks[0].model_copy(update={"say": "Open it in project ABC."})]
