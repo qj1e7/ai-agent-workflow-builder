@@ -313,6 +313,40 @@ def test_a_watch_offer_reaches_the_clause_that_watches_it_too() -> None:
     ]
 
 
+@pytest.mark.parametrize(
+    "call",
+    [
+        tool("ask_which_software", word="keep track of"),
+        tool("watch_software", software="Node Js"),
+    ],
+)
+def test_a_watch_of_it_watches_the_software_the_turn_before_named(call: AIMessage) -> None:
+    result, _ = run(
+        "keep track of it",
+        call,
+        read=reading("none", belongs_on_watchlist=True, watchlist_word="keep track of"),
+        previous=NAMED_NODE_JS,
+        facts=FACTS,
+    )
+
+    assert shown(result) == WatchlistAnswer(word="keep track of", software="Node Js")
+    assert marks(result) == [("keep track of it", "will_do", None)]
+
+
+def test_a_watch_of_it_with_no_software_before_still_asks_which() -> None:
+    before = PreviousTurn(request="help me add a software", kind="which_software")
+
+    result, _ = run(
+        "keep track of it",
+        tool("ask_which_software", word="keep track of"),
+        read=reading("none", belongs_on_watchlist=True, watchlist_word="keep track of"),
+        previous=before,
+        facts=FACTS,
+    )
+
+    assert shown(result) == WhichSoftwareAnswer(word="keep track of")
+
+
 def test_a_paraphrased_argument_locates_nothing_and_is_never_a_tick() -> None:
     result, _ = run(
         "add a tool please",
