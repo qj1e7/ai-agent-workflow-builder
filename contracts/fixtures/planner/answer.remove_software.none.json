@@ -1,0 +1,20 @@
+{
+  "parts": [
+    {
+      "text": "stop watching Kubernetes",
+      "mark": "will_do",
+      "reason": null,
+      "note": null,
+      "choices": []
+    }
+  ],
+  "answer": "remove_software",
+  "software": "Kubernetes",
+  "matches": [],
+  "watched": [
+    "FastAPI",
+    "LangGraph",
+    "node js",
+    "React"
+  ]
+}

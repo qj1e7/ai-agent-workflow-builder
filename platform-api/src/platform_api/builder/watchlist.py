@@ -903,17 +903,27 @@ class Watchlist:
         async with self._db.connection("builder") as conn:
             return await _current(conn, lock=False)
 
-    async def remove(self, software_id: SoftwareId) -> WatchlistView | NoSuchSoftware:
+    async def remove(
+        self, principal: Principal, software_id: SoftwareId
+    ) -> WatchlistView | NoSuchSoftware:
         async with self._db.transaction("builder") as uow:
             record = await _current(uow.conn, lock=True)
-            if record is None or all(s.id != software_id for s in record.software):
+            listed = None if record is None else _listed_in(record, software_id)
+            if record is None or listed is None:
                 return NoSuchSoftware(software_id)
             kept = tuple(s for s in record.software if s.id != software_id)
             record = await self._next_version(uow, record, kept)
+        log.info(
+            "%s removed %s (%s) from the watchlist, version %d",
+            principal.user_id,
+            software_id,
+            listed.source.ref,
+            record.version,
+        )
         return await self._view_of(record)
 
     async def restore(
-        self, software_id: SoftwareId
+        self, principal: Principal, software_id: SoftwareId
     ) -> WatchlistView | NoSuchSoftware | TooLate | RepoAddedAgainSinceRemoval | WatchlistFull:
         async with self._db.transaction("builder") as uow:
             record = await _current(uow.conn, lock=True)
@@ -933,6 +943,13 @@ class Watchlist:
                 if len(record.software) >= WATCHLIST_LIMIT:
                     return WatchlistFull(WATCHLIST_LIMIT)
                 record = await self._next_version(uow, record, (*record.software, removed))
+                log.info(
+                    "%s put %s (%s) back on the watchlist, version %d",
+                    principal.user_id,
+                    software_id,
+                    removed.source.ref,
+                    record.version,
+                )
         return await self._view_of(record)
 
     async def use_new_address(

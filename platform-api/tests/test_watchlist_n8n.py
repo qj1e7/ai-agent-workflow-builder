@@ -291,7 +291,7 @@ class Starts:
 async def test_an_empty_watchlist_has_nothing_on_the_list_to_check(world: World):
     added = await world.on_n8n.add(ALICE, langgraph())
     assert isinstance(added, WatchlistView)
-    await world.on_n8n.remove(added.software[0].id)
+    await world.on_n8n.remove(ALICE, added.software[0].id)
     facts = Builder(world.db, Starts(), world.on_n8n, "").facts
 
     workflow_id = (await world.use_case())["n8n_workflow_id"]
