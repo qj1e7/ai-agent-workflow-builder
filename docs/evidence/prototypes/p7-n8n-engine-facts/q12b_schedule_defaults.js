@@ -24,6 +24,10 @@ const cases = {
   months_default: { rule: { interval: [{ field: 'months' }] } },
   minutes_default: { rule: { interval: [{ field: 'minutes' }] } },
   cron_left_out: { rule: { interval: [{ field: 'cronExpression' }] } },
+  weeks_day_null: { rule: { interval: [{ field: 'weeks', triggerAtDay: null, triggerAtHour: 9, triggerAtMinute: 0 }] } },
+  days_interval_null: { rule: { interval: [{ field: 'days', daysInterval: null, triggerAtHour: 9, triggerAtMinute: 0 }] } },
+  item_null: { rule: { interval: [null] } },
+  item_number: { rule: { interval: [5] } },
 }
 for (const [name, parameters] of Object.entries(cases)) {
   const node = { id: 'n1', name: 'Schedule Trigger', type: 'n8n-nodes-base.scheduleTrigger', typeVersion: 1.3, position: [0, 0], parameters }
