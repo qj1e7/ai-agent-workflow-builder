@@ -40,7 +40,7 @@ export type Held = Extract<Hold, { kind: 'mine' | 'theirs' }>
 
 type Workflow = Pick<UseCaseView, 'state' | 'deleted_in_n8n_at' | 'held_in_n8n'>
 type Person = Pick<Me, 'id' | 'n8n_access'>
-/** What the In n8n view adds: whether this person can open n8n now, and the editor's address for its holder. `loading` until it arrives. */
+/** What the In n8n view adds: whether this person can open n8n now, and the editor's address for its holder. */
 type Opening = Pick<UseCaseN8nView, 'can_open' | 'why_not' | 'editor_url'>
 
 /** For someone who may not take it back, in the platform's own words (builder/n8n_holds.py). */
@@ -49,7 +49,7 @@ const askForIt = (name: string): string => `Ask ${name}, or anyone with n8n acce
 /**
  * Who holds the workflow, said from this person's side, or null while it sits in the platform's own n8n project. The hold is read
  * from the workflow itself, so everyone sees it the same on every page. The In n8n view, read only with n8n access, says whether
- * this person can take it back now.
+ * this person can take it back now, and is `loading` while it is on its way.
  */
 export function heldOf(useCase: Pick<UseCaseView, 'held_in_n8n'>, me: Person, opening: Opening | 'loading' | null = null): Held | null {
   const holder = useCase.held_in_n8n
