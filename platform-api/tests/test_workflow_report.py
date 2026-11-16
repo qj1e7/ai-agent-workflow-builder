@@ -291,7 +291,10 @@ def test_a_made_in_n8n_workflow_flags_each_of_n8n_s_blocks_and_who_clears_it() -
         row = FLAG_RULES[flag.rule]
         assert (flag.what, flag.why) == (row.what, row.why)
     takes = {f.rule: f.takes for f in report.flags}
-    assert takes["operation_off"] == takes["block_off"]
+    assert takes["operation_off"] == "This can't run on this platform yet."
+    assert takes["block_off"] == (
+        "Nobody can clear it in the app. The platform itself would have to change."
+    )
     assert "Approver" not in " ".join(takes.values())
     assert report.fixed == (), "code laid out none of it"
 
@@ -720,7 +723,24 @@ def test_a_value_shaped_like_a_key_in_a_post_or_a_place_shows_as_hidden(secret: 
     report = report_of(document, "n8n")
     assert secret not in repr(report)
     [post] = [t for t in report.touches if t.action == "posts"]
-    assert "(a key, hidden)" in text(post.phrase)
+    assert "(hidden, looks like a key)" in text(post.phrase)
+
+
+@pytest.mark.parametrize(
+    "words",
+    [
+        "Basic settings",
+        "Basic approval",
+        "monkey=12345678",
+        "passkey=whatever1",
+        "issuekey=PROJ-1234",
+    ],
+)
+def test_ordinary_words_near_a_key_s_shape_stay_shown(words: str) -> None:
+    document = made_in_n8n()
+    node(document, "Post summary")["parameters"]["text"] = words
+    [post] = [t for t in report_of(document, "n8n").touches if t.action == "posts"]
+    assert f"“{words}”" in text(post.phrase)
 
 
 def test_a_block_off_by_its_version_could_change_or_send_data_and_an_off_write_changes_it() -> None:

@@ -243,15 +243,15 @@ class WorkflowReport:
 KEY_SHAPE = re.compile(
     r"sk-ant-[\w-]+|sk-[A-Za-z0-9]{16,}|gh[pousr]_\w{16,}|github_pat_\w{16,}|glpat-[\w-]{16,}"
     r"|xox[abposr]-[\w-]+|ATATT[\w=-]{16,}|AKIA[0-9A-Z]{16}|eyJ[\w-]+\.eyJ[\w-]+\.[\w-]+"
-    r"|(?i:bearer)\s+[\w.~+/=-]{8,}|(?i:basic)\s+[A-Za-z0-9+/=]{8,}"
-    r"|(?i:token|key|secret|sig|password|api[_-]?key)=[^&\s\"']{8,}"
+    r"|(?i:bearer)\s+[\w.~+/=-]{8,}|(?i:basic)\s+(?=[A-Za-z0-9+/=]*[0-9+/=])[A-Za-z0-9+/=]{8,}"
+    r"|\b(?i:token|key|secret|sig|password|api[_-]?key)=[^&\s\"']{8,}"
     r"|hooks\.slack\.com/services/\S+|webhook\.office\.com/\S+|\b[0-9a-f]{40}\b"
     r"|-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*"
 )
 """The shapes of keys and tokens: Anthropic, OpenAI, GitHub, GitLab, Slack, Atlassian and AWS
 keys, a signed token, a bearer or basic header, a key in a query, a Slack or Teams incoming
 webhook, a classic 40-hex token and a private key."""
-HIDDEN = "(a key, hidden)"
+HIDDEN = "(hidden, looks like a key)"
 CHOOSERS = frozenset({"select"})
 """Target parameters that only pick which other one applies, as Slack's select picks a channel
 or a user."""
@@ -295,6 +295,7 @@ UNCLASSED = "Does something the platform hasn't classed"
 UNREAD = "The checker can't read this workflow, so nothing more can be said of it."
 ON_SET_UP = "Writes on the set-up approval"
 NOT_YET = "Can't run on this platform yet"
+NOT_YET_TAKES = "This can't run on this platform yet."
 WAITS = {
     1: "Waits for a yes in Teams on each run. Nobody who started the run or made the workflow "
     "can give it.",
@@ -427,13 +428,14 @@ def _quote(text: str) -> Quoted:
 
 
 def _flags(findings: Sequence[Finding], override_built: bool) -> tuple[Flag, ...]:
-    """Each finding in FLAG_RULES order. Until an Approver can accept a flag at set-up, nobody
-    can clear one in the app."""
+    """Each finding in FLAG_RULES order. Until an Approver can accept a flag at set-up, it can't
+    run on this platform."""
     flags: list[Flag] = []
     for rule, row in FLAG_RULES.items():
         clears = row.clears
+        takes = _takes(clears)
         if isinstance(clears, ApproverMayAccept) and not override_built:
-            clears = CantRun()
+            clears, takes = CantRun(), NOT_YET_TAKES
         flags += [
             Flag(
                 rule,
@@ -441,7 +443,7 @@ def _flags(findings: Sequence[Finding], override_built: bool) -> tuple[Flag, ...
                 row.what,
                 row.why,
                 clears,
-                _takes(clears),
+                takes,
             )
             for f in findings
             if f.rule == rule
