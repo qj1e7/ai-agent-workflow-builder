@@ -62,8 +62,8 @@ class LangfuseSettings:
 
 
 class _MaskedError(Exception):
-    """An error's words with every secret masked. Langfuse writes an error's words into the
-    span's status, which `mask_otel_spans` cannot change."""
+    """Langfuse writes an error's words into the span's status, which `mask_otel_spans` cannot
+    change."""
 
 
 class _Callbacks(CallbackHandler):

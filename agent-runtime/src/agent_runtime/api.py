@@ -150,8 +150,6 @@ LANGFUSE_NAMES: Final = ("LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY", "LANGFUSE
 
 
 def _langfuse(env: Mapping[str, str]) -> LangfuseSettings | None:
-    """Tracing is on only when all three are set (ADR 0050). One set alone is a mistake, so it
-    stops the start rather than tracing nothing."""
     public_key, secret_key, base_url = (env.get(name, "").strip() for name in LANGFUSE_NAMES)
     if not (public_key or secret_key or base_url):
         return None
@@ -160,11 +158,9 @@ def _langfuse(env: Mapping[str, str]) -> LangfuseSettings | None:
         raise SettingsError(
             f"{' and '.join(missing)} must be set too. Set all three Langfuse settings, or none."
         )
-    # The secret key goes to this address: https, or plain http only to a service on the stack's
-    # own network, whose name has no dot.
     address = urlsplit(base_url)
-    local = address.scheme == "http" and bool(address.hostname) and "." not in str(address.hostname)
-    if not (local or (address.scheme == "https" and address.hostname)):
+    on_the_stack = address.scheme == "http" and "." not in (address.hostname or ".")
+    if not (on_the_stack or (address.scheme == "https" and address.hostname)):
         raise SettingsError(
             "LANGFUSE_BASE_URL must be an https address, or http to a service on the stack"
         )
