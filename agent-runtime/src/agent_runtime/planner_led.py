@@ -446,7 +446,8 @@ def _schedule_of(args: ChangeWorkflow, text: str) -> ScheduleChange | Invalid:
     if args.day is None and args.at is None and args.hour is None and not args.weekly:
         return Invalid(
             "The call names no day and no time to change. Use reply, form clarify, to ask for the "
-            "time, and leave the workflow's state to its line."
+            "time, with the question as the last words of the text, and leave the workflow's "
+            "state to its line."
         )
     try:
         return ScheduleChange(day=args.day, weekly=args.weekly, at=args.at, hour=args.hour)
