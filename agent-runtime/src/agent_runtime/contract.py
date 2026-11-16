@@ -936,9 +936,34 @@ class PreviousTurn(WireModel):
     )
 
 
+class TurnTrace(WireModel):
+    """Where the turn is traced (ADR 0050). The platform makes it. The runtime traces only when
+    its own tracing is on."""
+
+    id: str = Field(
+        pattern=r"^[0-9a-f]{32}$",
+        description="The turn's trace id, 32 lowercase hex digits. The platform makes a new one "
+        "for each typed message.",
+    )
+    chat: str | None = Field(
+        default=None,
+        pattern=r"^[0-9a-f-]{1,36}$",
+        description="The Portal's chat, which groups its turns into one session.",
+    )
+    person: str | None = Field(
+        default=None,
+        pattern=r"^[0-9a-f]{64}$",
+        description="A pseudonym for the person: an HMAC-SHA256 of their platform id. Never "
+        "their email or name.",
+    )
+
+
 class AnswerRequest(WireModel):
     task: str = Field(min_length=1, max_length=2000)
     model: ModelAccess
+    trace: TurnTrace | None = Field(
+        default=None, description="Where the turn is traced. None leaves it untraced."
+    )
     previous: PreviousTurn | None = Field(
         default=None,
         description="The turn before this one. Context for the question lane only: the Planner "

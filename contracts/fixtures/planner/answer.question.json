@@ -1,5 +1,6 @@
 {
   "parts": [],
+  "trace_id": "019a8c3e5b2f7c41a3d29e6f0b7d1c55",
   "answer": "question",
   "text": "LangGraph is behind. You run 1.2.14 and the newest is 1.2.16.",
   "looked_at": [

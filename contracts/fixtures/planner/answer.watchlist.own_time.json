@@ -15,6 +15,7 @@
       "choices": []
     }
   ],
+  "trace_id": null,
   "answer": "watchlist",
   "word": "watch",
   "software": "Grafana",

@@ -4,7 +4,12 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from platform_api.auth import ConfigError
-from platform_api.settings import CosmosSettings, bootstrap_settings_from_env, settings_from_env
+from platform_api.settings import (
+    CosmosSettings,
+    LangfuseSettings,
+    bootstrap_settings_from_env,
+    settings_from_env,
+)
 from tests.support import LOCAL_ENV
 
 COSMOS = {"COSMOS_ENDPOINT": "http://cosmos:8081", "COSMOS_KEY": "a2V5"}
@@ -207,6 +212,58 @@ def test_the_node_key_and_start_secret_are_read_and_no_node_call_is_taken_withou
     assert (both.node_key, both.start_secret) == ("nk", "ss")
 
 
+LANGFUSE = {
+    "LANGFUSE_BASE_URL": "http://langfuse-web:3000/",
+    "LANGFUSE_PUBLIC_KEY": "pk-lf-1",
+    "LANGFUSE_SECRET_KEY": "sk-lf-1",
+}
+
+
+def test_tracing_is_off_and_names_nobody_unless_set():
+    settings = settings_from_env(LOCAL_ENV)
+    assert (settings.langfuse, settings.trace_pseudonym_key) == (None, None)
+
+
+def test_the_three_langfuse_settings_turn_the_scores_on():
+    settings = settings_from_env(
+        {**LOCAL_ENV, **LANGFUSE, "LANGFUSE_TRACING_ENVIRONMENT": "azure-dev"}
+    )
+    assert settings.langfuse == LangfuseSettings(
+        base_url="http://langfuse-web:3000",
+        public_key="pk-lf-1",
+        secret_key="sk-lf-1",
+        environment="azure-dev",
+    )
+
+
+def test_the_pseudonym_key_is_read_on_its_own():
+    settings = settings_from_env({**LOCAL_ENV, "TRACE_PSEUDONYM_KEY": "k3y"})
+    assert (settings.langfuse, settings.trace_pseudonym_key) == (None, "k3y")
+
+
+@pytest.mark.parametrize(
+    ("env", "reason"),
+    [
+        pytest.param({"LANGFUSE_BASE_URL": ""}, "go together", id="no address"),
+        pytest.param({"LANGFUSE_PUBLIC_KEY": ""}, "go together", id="no public key"),
+        pytest.param({"LANGFUSE_SECRET_KEY": ""}, "go together", id="no secret key"),
+        pytest.param(
+            {"LANGFUSE_BASE_URL": "http://langfuse.example"}, "https", id="plain http outside"
+        ),
+        pytest.param({"LANGFUSE_SECRET_KEY": "sk lf"}, "Paste it again", id="space in a key"),
+        pytest.param(
+            {"LANGFUSE_TRACING_ENVIRONMENT": "Prod"}, "lower case", id="capital in environment"
+        ),
+        pytest.param(
+            {"LANGFUSE_TRACING_ENVIRONMENT": "langfuse-dev"}, "langfuse", id="reserved environment"
+        ),
+    ],
+)
+def test_langfuse_settings_that_cannot_work_refuse_to_start(env: dict[str, str], reason: str):
+    with pytest.raises(ConfigError, match=reason):
+        settings_from_env({**LOCAL_ENV, **LANGFUSE, **env})
+
+
 SECRETS = {
     "DATABASE_URL_BUILDER": "postgresql://wab_builder:db-secret-1@db/platform",
     "DATABASE_URL_ORCHESTRATION": "postgresql://wab_orchestration:db-secret-2@db/platform",
@@ -227,6 +284,10 @@ SECRETS = {
     "WAB_START_SECRET": "start-secret",
     "N8N_OWNER_EMAIL": "owner@example.com",
     "N8N_OWNER_PASSWORD": "n8n-owner-secret",
+    "LANGFUSE_BASE_URL": "https://langfuse.example",
+    "LANGFUSE_PUBLIC_KEY": "pk-lf-1",
+    "LANGFUSE_SECRET_KEY": "langfuse-secret",
+    "TRACE_PSEUDONYM_KEY": "pseudonym-secret",
 }
 
 

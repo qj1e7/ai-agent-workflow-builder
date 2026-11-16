@@ -19,6 +19,12 @@ variable "secrets" {
   sensitive   = true
 }
 
+variable "secrets_set_by_a_person" {
+  description = "Names of secrets whose value a person sets by hand. Terraform makes each with a placeholder and never changes its value."
+  type        = set(string)
+  default     = []
+}
+
 variable "tags" {
   description = "Tags for every resource."
   type        = map(string)

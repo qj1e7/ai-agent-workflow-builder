@@ -15,7 +15,15 @@ from platform_api.builder.n8n_view import InN8nViews
 from platform_api.builder.planner_facts import PlannerFactsReader
 from platform_api.builder.watchlist import OnN8n
 from platform_api.db import Database
-from platform_api.monitoring import ActivityLog, Copier, CosmosEvents, callback_for
+from platform_api.monitoring import (
+    ActivityLog,
+    Copier,
+    CosmosEvents,
+    LangfuseScores,
+    NoTraceScores,
+    TraceScores,
+    callback_for,
+)
 from platform_api.orchestration import self_test
 from platform_api.orchestration.agents import HttpAgentRuntime
 from platform_api.orchestration.confluence_rest import (
@@ -122,6 +130,7 @@ class Services:
     people: People
     confluence: ConfluencePages
     staff: StaffAccounts
+    trace_scores: TraceScores
     copier: Copier | None = None
     cosmos: CosmosEvents | None = None
     teams_webhook: TeamsWorkflowsWebhook | None = None
@@ -277,6 +286,17 @@ def tell_outlet(settings: Settings, db: Database) -> tuple[TellOutlet, TellFlow 
         return TellPractice(db, setup), None
     flow = TellFlow(settings.teams_tell_webhook_url, setup)
     return flow, flow
+
+
+def trace_scores_for(settings: Settings) -> TraceScores:
+    """Where the platform writes code flags on the Planner's traces (ADR 0050). Off unless the
+    three Langfuse settings are set."""
+    langfuse = settings.langfuse
+    if langfuse is None:
+        return NoTraceScores()
+    return LangfuseScores(
+        langfuse.base_url, langfuse.public_key, langfuse.secret_key, langfuse.environment
+    )
 
 
 CONFLUENCE_UNSET = "Confluence is not connected."
@@ -505,6 +525,7 @@ async def build(settings: Settings) -> Services:
         db, request_channel, orchestrator, activity, settings.public_base_url
     )
     home = Home(builder, orchestrator, people, team_requests, connections, watchlist)
+    trace_scores = trace_scores_for(settings)
     return Services(
         settings=settings,
         db=db,
@@ -520,6 +541,8 @@ async def build(settings: Settings) -> Services:
             connections,
             PlannerFactsReader(watchlist, builder, home),
             staff,
+            scores=trace_scores,
+            pseudonym_key=settings.trace_pseudonym_key,
         ),
         home=home,
         watchlist=watchlist,
@@ -534,6 +557,7 @@ async def build(settings: Settings) -> Services:
         people=people,
         confluence=confluence,
         staff=staff,
+        trace_scores=trace_scores,
         copier=copier,
         cosmos=cosmos,
         teams_webhook=webhook,
@@ -618,6 +642,7 @@ class Runner:
         if self._services.n8n is not None:
             await self._services.n8n.close()
         await self._services.request_channel.close()
+        await self._services.trace_scores.close()
         if self._services.copier is not None:
             await self._services.copier.stop()
         await self._services.activity_log.stop()

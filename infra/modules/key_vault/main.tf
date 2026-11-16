@@ -47,3 +47,22 @@ resource "azurerm_key_vault_secret" "this" {
   key_vault_id = time_sleep.deployer_rbac_propagation.triggers["key_vault_id"]
   tags         = var.tags
 }
+
+# A person sets these with `az keyvault secret set` once, such as a secret another system issues.
+# Terraform makes each with a placeholder, so a reader's role has a scope, and never puts the
+# placeholder back over a value a person set.
+# nosemgrep: terraform.azure.security.keyvault.keyvault-ensure-secret-expires.keyvault-ensure-secret-expires
+resource "azurerm_key_vault_secret" "set_by_a_person" {
+  #checkov:skip=CKV_AZURE_41:A person sets the value, and the system that issued it decides when it expires.
+  for_each = var.secrets_set_by_a_person
+
+  name         = each.key
+  value        = "set-by-a-person"
+  content_type = "text/plain"
+  key_vault_id = time_sleep.deployer_rbac_propagation.triggers["key_vault_id"]
+  tags         = var.tags
+
+  lifecycle {
+    ignore_changes = [value]
+  }
+}

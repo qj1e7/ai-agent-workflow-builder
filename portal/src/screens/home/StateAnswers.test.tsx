@@ -64,7 +64,7 @@ function draw(
   )
 }
 
-const answered = (reply: PlannerReply) => threadReducer(threadReducer(EMPTY, { type: 'sent', text: 'asked' }), { type: 'answered', reply, typed: 'asked' })
+const answered = (reply: PlannerReply) => threadReducer(threadReducer(EMPTY, { type: 'sent', text: 'asked', chat: 'c1' }), { type: 'answered', reply, typed: 'asked' })
 const behind = threadReducer(EMPTY, { type: 'asked_behind', text: 'Which software is behind?' })
 
 describe('the Needs card (What needs me?)', () => {

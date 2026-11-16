@@ -1,5 +1,6 @@
 {
   "parts": [],
+  "trace_id": null,
   "answer": "refused",
   "reason": "skip_approval",
   "said": "without waiting for approval",

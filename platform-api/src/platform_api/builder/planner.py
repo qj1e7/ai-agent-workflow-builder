@@ -11,9 +11,10 @@ Operator's pause or resume of the one workflow its words name.
 import asyncio
 import logging
 import re
+import secrets
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Annotated, Final, Literal, Protocol, Self
 
 from pydantic import AwareDatetime, ConfigDict, Field, StringConstraints, model_validator
@@ -34,6 +35,13 @@ from platform_api.builder.n8n_draft import N8nNotReady, NotSafe
 from platform_api.builder.n8n_holds import HeldInN8n
 from platform_api.builder.planning import FALLBACK_WORDS, STARTERS, FallbackWhy
 from platform_api.builder.templates import SOFTWARE_WATCHLIST
+from platform_api.monitoring import (
+    NoTraceScores,
+    TraceIds,
+    TraceScores,
+    pseudonym,
+    typed_again,
+)
 from platform_api.orchestration import (
     NO_ACCESS,
     OFF,
@@ -78,6 +86,7 @@ from platform_api.orchestration import (
     RuntimeDown,
     SetupCardAnswer,
     StaffAccess,
+    TurnTrace,
     UnderstoodRow,
     WatchlistAnswer,
     WhichSoftwareAnswer,
@@ -99,6 +108,7 @@ type Intent = Literal[
     "check_workflows", "needs_me", "abilities", "setup_ideas", "why_stopped", "decided"
 ]
 type ReplyReason = PartReason | Literal["operators"]
+type TraceId = Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{32}$")]
 
 
 class PreviousIn(WireIn):
@@ -113,6 +123,11 @@ class PreviousIn(WireIn):
         default=None,
         description="The kind of answer it was, such as question or watchlist. It only decides "
         "whether a short follow-up applies.",
+    )
+    trace_id: TraceId | None = Field(
+        default=None,
+        description="The trace_id of its answer. When this message came within 60 seconds of it, "
+        "the platform flags that trace as typed again (ADR 0050).",
     )
 
 
@@ -137,6 +152,19 @@ class AnswerIn(WireIn):
         default=None,
         description="With text: the turn before it. Context for the question lane only: the "
         "Planner never builds request text from it.",
+    )
+    chat: (
+        Annotated[
+            str,
+            StringConstraints(
+                pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            ),
+        ]
+        | None
+    ) = Field(
+        default=None,
+        description="The Portal's chat, a UUID it makes for each new chat. It groups the chat's "
+        "turns into one session in the traces (ADR 0050).",
     )
 
     @model_validator(mode="after")
@@ -218,6 +246,12 @@ class Reply(WireModel):
         description="Every clause of what the person typed, in order, with what happened to it "
         "(spec 6.5). None is dropped. Empty for a chip they tapped, for an answer inside another "
         "answer, and when no model read the request.",
+    )
+    trace_id: str | None = Field(
+        default=None,
+        description="The trace of this turn, when the runtime's answer is shown. The Portal sends "
+        "it back as previous.trace_id with the next message (ADR 0050). Null for a chip, an "
+        "answer the platform gives alone, the offline answer, and an answer inside another.",
     )
 
 
@@ -714,6 +748,7 @@ class Answering(Protocol):
         facts: PlannerFacts | None = None,
         previous: PreviousTurn | None = None,
         changes_workflows: bool = True,
+        trace: TurnTrace | None = None,
     ) -> AnswerResult | NoModel | RuntimeDown: ...
 
     async def check_part(self, kind: RowKind, text: str) -> CheckPartResult | RuntimeDown: ...
@@ -942,7 +977,16 @@ class PlannerFront:
         connections: ConnectionStates,
         facts: FactsReading,
         staff: N8nAccessPort | None = None,
+        scores: TraceScores | None = None,
+        pseudonym_key: str | None = None,
     ) -> None:
+        self._scores = scores or NoTraceScores()
+        self._pseudonym_key = pseudonym_key
+        # Without the key, ids are signed with one this process makes, so a typed-again flag needs
+        # the same process to have made the earlier id. A missed flag is the worst that happens.
+        self._trace_ids = TraceIds(
+            pseudonym_key.encode() if pseudonym_key else secrets.token_bytes(32)
+        )
         self._facts = facts
         self._staff = staff
         self._answers = answers
@@ -952,6 +996,12 @@ class PlannerFront:
         self._connections = connections
 
     async def answer(self, body: AnswerIn, viewer: Principal) -> PlannerReply | NoSuchWorkflow:
+        if body.previous is not None and body.previous.trace_id is not None:
+            flag = typed_again(
+                body.previous.trace_id, datetime.now(UTC), self._trace_ids, viewer.user_id
+            )
+            if flag is not None:
+                self._scores.send(flag)
         if body.text is not None and N8N_WORD.search(body.text) and not YES_WORDS.search(body.text):
             return await self._n8n(body.text, viewer)
         operator = Role.OPERATOR in viewer.roles
@@ -959,13 +1009,13 @@ class PlannerFront:
         if decided is not None:
             return decided
         if body.text is not None:
-            reply = await self._typed(body.text, viewer, body.previous)
+            reply = await self._typed(body.text, viewer, body.previous, body.chat)
         else:
             assert body.intent is not None
             reply = await self._intent(body.intent, body.use_case_id)
         if operator or isinstance(reply, NoSuchWorkflow):
             return reply
-        return questions_only(reply, body.text)
+        return questions_only(reply, body.text).model_copy(update={"trace_id": reply.trace_id})
 
     async def _intent(
         self, intent: Intent, use_case_id: str | None
@@ -990,9 +1040,14 @@ class PlannerFront:
                 return WhyStoppedReply(use_case_id=use_case_id)
 
     async def _typed(
-        self, text: str, viewer: Principal, previous: PreviousIn | None = None
+        self, text: str, viewer: Principal, previous: PreviousIn | None, chat: str | None
     ) -> PlannerReply:
-        earlier = None if previous is None else PreviousTurn(**previous.model_dump())
+        earlier = (
+            None if previous is None else PreviousTurn(**previous.model_dump(exclude={"trace_id"}))
+        )
+        key = self._pseudonym_key
+        person = None if key is None else pseudonym(key, viewer.user_id)
+        trace = TurnTrace(id=self._trace_ids.new(viewer.user_id), chat=chat, person=person)
         try:
             async with asyncio.timeout(ANSWER_LIMIT_SECONDS):
                 result = await self._answers.answer(
@@ -1000,6 +1055,7 @@ class PlannerFront:
                     await self._facts.read(viewer, text),
                     earlier,
                     changes_workflows=Role.OPERATOR in viewer.roles,
+                    trace=trace,
                 )
         except TimeoutError:
             log.warning("The Planner's answer took longer than %g seconds", ANSWER_LIMIT_SECONDS)
@@ -1015,7 +1071,8 @@ class PlannerFront:
                 return offline("too_slow" if reason == "too_slow" else "trouble")
             case Answered(answer=answer, parts=parts):
                 reply = await self._finish(answer, viewer)
-                return reply.model_copy(update={"parts": [_part_view(p) for p in parts]})
+                parts_seen = [_part_view(p) for p in parts]
+                return reply.model_copy(update={"parts": parts_seen, "trace_id": trace.id})
 
     async def _finish(self, answer: PlannerAnswer, viewer: Principal) -> PlannerReply:
         match answer:

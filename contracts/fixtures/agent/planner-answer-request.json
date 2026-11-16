@@ -6,6 +6,11 @@
     "model": "claude-sonnet-5-5",
     "api_key": "example-key-not-a-secret"
   },
+  "trace": {
+    "id": "019a8c3e5b2f7c41a3d29e6f0b7d1c55",
+    "chat": "5f0c2a7e-3b1d-4e8f-9a6c-2d4b7e1f0a93",
+    "person": "9c4f1e2a7b3d5c6e8f0a1b2c3d4e5f60718293a4b5c6d7e8f9a0b1c2d3e4f5a6"
+  },
   "previous": null,
   "facts": null,
   "changes_workflows": true
