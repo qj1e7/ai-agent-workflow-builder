@@ -1,7 +1,9 @@
+import importlib.util
 import json
 import logging
 from dataclasses import replace
-from typing import Any
+from pathlib import Path
+from typing import Any, cast
 
 import pytest
 from fastapi.testclient import TestClient
@@ -16,7 +18,12 @@ from agent_runtime.contract import (
     explain_wording_result_adapter,
 )
 from agent_runtime.contracts import answer_request
-from agent_runtime.explain_wording import ExplainWording, explain_guard, reword
+from agent_runtime.explain_wording import (
+    ExplainWording,
+    explain_guard,
+    reword,
+    wording_messages,
+)
 from agent_runtime.reply_verifier import Verdict
 from tests.fakes import ScriptedChat
 from tests.test_api import KEY, SETTINGS
@@ -300,3 +307,39 @@ def test_the_route_asks_the_verifier_on_the_model_the_setting_names():
     answered = client.post("/v1/workflows/explain", json=json.loads(FASTAPI.model_dump_json()))
     assert answered.json() == {"kind": "reworded", "text": SMOOTHED}
     assert asked_for == [FASTAPI.model.model, "the-verifier"]
+
+
+# The mock model the end to end tests run on.
+
+MOCK_MODEL = Path(__file__).resolve().parents[2] / "e2e" / "mock_model" / "model_server.py"
+REACT = request(
+    "Every Monday at 9:00, it reads GitHub “facebook/react” and Jira “WEB”. "
+    "It posts “A new React release is out.” in Slack “C0RELEASES”. It changes nothing.",
+    fact("runs", "Monday", "9:00"),
+    fact("reads", "GitHub", "facebook/react"),
+    fact("reads", "Jira", "WEB"),
+    fact("posts", "post", "Slack", "A new React release is out.", "C0RELEASES"),
+    fact("changes", "changes", "nothing", negated=True),
+)
+
+
+def mock_reworded(asked: ExplainWordingRequest) -> str:
+    spec = importlib.util.spec_from_file_location("mock_model_server", MOCK_MODEL)
+    assert spec is not None and spec.loader is not None
+    mock = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mock)
+    system, user = wording_messages(asked)
+    body = {
+        "system": system,
+        "messages": [{"role": "user", "content": user}],
+        "tools": [{"name": "ExplainWording"}],
+        "tool_choice": {"type": "tool", "name": "ExplainWording"},
+    }
+    _, reply = mock.answer("POST", "/v1/messages", body)
+    return cast(str, reply["content"][0]["input"]["text"])
+
+
+@pytest.mark.skipif(not MOCK_MODEL.exists(), reason="e2e/ is not in the test image")
+def test_the_mock_models_smoothing_passes_and_its_bad_one_is_refused():
+    assert explain_guard(mock_reworded(FASTAPI), FASTAPI) is None
+    assert explain_guard(mock_reworded(REACT), REACT) is not None
