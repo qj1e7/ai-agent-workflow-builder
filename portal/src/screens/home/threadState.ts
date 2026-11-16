@@ -107,9 +107,11 @@ export function previousOf(thread: Thread): PreviousTurn | null {
   const last = thread.messages.findLast((m) => m.kind === 'reply' && m.reply.answer !== 'changed_in_n8n')
   if (last === undefined || last.kind !== 'reply' || last.reply.answer === 'offline' || last.reply.answer === 'changed_in_n8n') return null
   const { reply, typed } = last
+  // A card since that answer puts something else between them, so “it” no longer points at the software it named.
+  const cardSince = thread.messages.slice(thread.messages.indexOf(last) + 1).some((m) => m.kind === 'reply' && m.reply.answer === 'changed_in_n8n')
   return {
     request: typed,
-    software: softwareNamed(reply),
+    software: cardSince ? null : softwareNamed(reply),
     answer: reply.answer === 'question' || reply.answer === 'reply' ? reply.text : null,
     // The runtime refuses a second clarifying question in a row, and tells one from an answer by this word.
     kind: reply.answer === 'reply' && reply.form === 'clarify' ? 'reply_clarify' : reply.answer,
