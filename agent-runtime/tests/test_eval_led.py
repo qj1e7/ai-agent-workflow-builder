@@ -6,8 +6,9 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from evals.budget import cached_tokens, dollars_for
+from evals.budget import PRICE_KEY, cached_tokens, dollars_for, metered, spend_for
 from evals.checks import false_ticks
+from evals.providers import Target
 from evals.reply import REPLY, REPLY_LED, SPIKE_LED
 from evals.runner import AI_LED, PRICING, jobs_chosen, planner_mode, run_case
 from langchain_core.messages import AIMessage
@@ -16,6 +17,7 @@ from agent_runtime.contract import Answered, AnswerRequest, RequestPart, Watchli
 from agent_runtime.contracts import answer_request
 from agent_runtime.planner_led import Led, Shown, clauses_in
 from tests.fakes import ScriptedChat, asks, call
+from tests.test_eval_budget import Gateway
 from tests.test_planner_led import CLEAN
 from tests.test_questions import reading
 
@@ -170,3 +172,26 @@ def test_a_model_named_by_two_providers_has_one_price_with_its_cache_prices() ->
         )
 
     assert all(all(p == shared[0] for p in shared) for shared in by_name.values()), by_name
+
+
+def test_the_spend_line_prices_a_call_by_the_provider_and_model_that_built_it() -> None:
+    usage = {"input_tokens": 1_000_000, "output_tokens": 0, "total_tokens": 1_000_000}
+    pricing = {
+        "anthropic:m": {"input_usd_per_mtok": 1.0, "output_usd_per_mtok": 0.0},
+        "gateway:m": {"input_usd_per_mtok": 3.0, "output_usd_per_mtok": 0.0},
+    }
+    model = Gateway(
+        replies=[AIMessage("x", usage_metadata=usage)],
+        metadata={PRICE_KEY: "anthropic:m"},
+    )
+
+    with metered(spend_for({}, pricing)) as spend:
+        model.invoke("one")
+
+    assert spend.dollars == pytest.approx(1.0)
+
+
+def test_a_target_builds_a_model_that_names_its_price() -> None:
+    built = Target("anthropic", "claude-sonnet-5-5", {"api_key": "not-a-key"}).build()
+
+    assert (built.metadata or {})[PRICE_KEY] == "anthropic:claude-sonnet-5-5"

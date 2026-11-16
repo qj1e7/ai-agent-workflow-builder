@@ -1134,5 +1134,95 @@
         "total": 1
       }
     }
+  },
+  {
+    "id": "held-06",
+    "note": "Says a list holds a software named with a plain English word, which the facts don't hold (ADR 0049).",
+    "text": "Your Watchlist already holds Go. Open the Watchlist to see its line.",
+    "expect": "fallback",
+    "line": "code",
+    "verifier": false,
+    "facts": {
+      "watchlist": [
+        {
+          "name": "LangGraph",
+          "repo": "langchain-ai/langgraph",
+          "our_version": "1.2.14",
+          "newest_version": "1.2.16",
+          "state": "Behind"
+        },
+        {
+          "name": "Redis",
+          "repo": "redis/redis",
+          "our_version": "8.0.2",
+          "newest_version": "8.0.2",
+          "state": "Up to date"
+        }
+      ],
+      "workflows": [
+        {
+          "name": "Morning bug list",
+          "state": "on",
+          "last_run": "Succeeded",
+          "last_run_at": null
+        }
+      ],
+      "needs_you": {
+        "approvals": 1,
+        "confirmations": 0,
+        "stopped": 0,
+        "connections": 0,
+        "addresses": 0,
+        "replies": 0,
+        "declined": 0,
+        "questions": 0,
+        "total": 1
+      }
+    }
+  },
+  {
+    "id": "held-07",
+    "note": "Says a list holds a software named with a plain English word, which the facts don't hold (ADR 0049).",
+    "text": "Go is on your Watchlist.",
+    "expect": "fallback",
+    "line": "code",
+    "verifier": false,
+    "facts": {
+      "watchlist": [
+        {
+          "name": "LangGraph",
+          "repo": "langchain-ai/langgraph",
+          "our_version": "1.2.14",
+          "newest_version": "1.2.16",
+          "state": "Behind"
+        },
+        {
+          "name": "Redis",
+          "repo": "redis/redis",
+          "our_version": "8.0.2",
+          "newest_version": "8.0.2",
+          "state": "Up to date"
+        }
+      ],
+      "workflows": [
+        {
+          "name": "Morning bug list",
+          "state": "on",
+          "last_run": "Succeeded",
+          "last_run_at": null
+        }
+      ],
+      "needs_you": {
+        "approvals": 1,
+        "confirmations": 0,
+        "stopped": 0,
+        "connections": 0,
+        "addresses": 0,
+        "replies": 0,
+        "declined": 0,
+        "questions": 0,
+        "total": 1
+      }
+    }
   }
 ]

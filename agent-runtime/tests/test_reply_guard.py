@@ -424,6 +424,11 @@ HELD = Given(
         "Your workflows include Redis.",
         "Your Watchlist holds Morning bug list.",
         "Needs you shows Morning bug list.",
+        "Your Watchlist already holds Go. Open the Watchlist to see its line.",
+        "Go is on your Watchlist.",
+        "Next is on your Watchlist, and so is Redis.",
+        "Your Watchlist holds Redis and Next.",
+        "If so, Go is on your Watchlist.",
     ],
 )
 def test_a_name_a_list_is_said_to_hold_but_the_facts_dont_is_made_up(text: str):
@@ -445,6 +450,10 @@ def test_a_name_a_list_is_said_to_hold_but_the_facts_dont_is_made_up(text: str):
         "Needs you lists what waits for you.",
         "If a run stops, Needs you lists it, and the AI troubleshooter explains why.",
         "Your workflows list shows them, and an Approver says yes in Teams.",
+        "It is on your Watchlist, so open the Watchlist to see its line.",
+        "Everything you watch is on your Watchlist.",
+        "Your Watchlist holds Redis, and I can't add Go to it from here.",
+        "Your workflows list shows them, and Monday is when the next run starts.",
     ],
 )
 def test_a_list_said_to_hold_only_what_the_facts_hold_passes(text: str):

@@ -358,8 +358,13 @@ def joined_request(request: AnswerRequest) -> str | Invalid:
     return joined
 
 
+APPROVER_CANT: Final = "This person is an Approver, who can't change workflows. Use reply."
+
+
 def _set_up(raw: Mapping[str, Any], turn: Turn) -> Acted:
     args = SetUpWorkflow.model_validate(raw)
+    if not turn.request.changes_workflows:
+        return Invalid(APPROVER_CANT)
     if not args.join_before:
         front, text = turn.front, turn.request.task
     else:
@@ -485,7 +490,7 @@ ANSWER_OF_ACTION: Final[dict[str, type[EditAnswer | PauseAnswer | ResumeAnswer]]
 def _change(raw: Mapping[str, Any], turn: Turn) -> Acted:
     args = ChangeWorkflow.model_validate(raw)
     if not turn.request.changes_workflows:
-        return Invalid("This person is an Approver, who can't change workflows. Use reply.")
+        return Invalid(APPROVER_CANT)
     text = turn.text
     reached = {c for c in turn.clauses if _reads_the_change(args, text[c[0] : c[1]])}
     words = None

@@ -623,13 +623,29 @@ NOT_A_NAME: Final = ENGLISH | words(
     "states nothing none everything anything something everyone approval approvals request "
     "requests items things whatever less several many few most date behind ahead waiting stopped "
     "paused draft drafts people person once twice since till yet either neither such another two "
-    "three four five six seven eight nine ten zero approve open add type tap pick ai "
-    "troubleshooter planner operator operators approver approvers rail card cards button chat guide"
+    "three four five six seven eight nine ten zero approve open add type tap pick"
 )
-"""Words that open a description or a new clause, never a name: "the software your team runs",
-"no software yet", "so open the Watchlist", and the app's own words, as "the AI troubleshooter
-explains why". A made-up name that is one of these words slips through, which the verifier and
-the judge are left to catch."""
+"""Plain lowercase words that open a description or a new clause, never a name: "the software
+your team runs", "no software yet", "so open the Watchlist". Written with a capital mid-sentence,
+as "holds Go", the same word is a name."""
+APP_WORDS: Final = words(
+    "ai troubleshooter planner operator operators approver approvers rail card cards button chat "
+    "guide needs watchlist workflow workflows home teams jira github confluence"
+)
+"""The app's own words, as "the AI troubleshooter explains why" or "an Approver says yes". They
+are never a name a list holds, capitalised or not."""
+ALWAYS_CAPITAL: Final = words(
+    "i i'm i've i'll i'd monday tuesday wednesday thursday friday saturday sunday january "
+    "february march april june july august september october november december"
+)
+"""Words written with a capital wherever they stand, so the capital says nothing about them."""
+SUBJECT_WORDS: Final = words(
+    "it its this that these those they them all each every everything anything something nothing "
+    "none both either neither which what who whatever one some any many most few several another "
+    "other such you we i your our their my"
+)
+"""What opens a sentence that says something is on a list without naming it, as "It is on your
+Watchlist". At the start of a sentence a capital says nothing, so any other word is a name."""
 
 
 class _Named(BaseModel):
@@ -666,16 +682,26 @@ def _list_of(said: str) -> ListName:
     return "watchlist" if "watch" in low else "needs_you" if "needs" in low else "workflows"
 
 
-def _name_like(token: str) -> bool:
+def _name_like(token: str, opens: bool = False) -> bool:
+    """Whether a word reads as a name. A number, or a word of the app or the calendar, never does.
+    At the start of a sentence any word but a pronoun or a determiner does, so "Go is on your
+    Watchlist" names Go. Elsewhere a capital makes a name of a plain word, as "holds Go", and a
+    plain lowercase word opens a description or a new clause."""
     word = token.casefold().rstrip(".").replace("’", "'")
-    return word not in NOT_A_NAME and NUMBER.fullmatch(word) is None
+    if NUMBER.fullmatch(word) or word in APP_WORDS or word in ALWAYS_CAPITAL:
+        return False
+    if opens:
+        return word not in SUBJECT_WORDS
+    return word not in NOT_A_NAME or any(c.isupper() for c in token)
 
 
-def _item_made_up(item: str, names: tuple[str, ...]) -> bool:
+def _item_made_up(item: str, names: tuple[str, ...], opens: bool) -> bool:
     """Whether a thing a list is said to hold names something the list doesn't: a name that is
     none of the facts' names, exactly, case aside. A longer name that starts with a held one, as
-    "LangGraph Studio", is another name."""
-    rest = LEADING.sub("", item.strip(" \"'“”‘’([)]"))
+    "LangGraph Studio", is another name. `opens` is true for the words that open the sentence."""
+    said = item.strip(" \"'“”‘’([)]")
+    rest = LEADING.sub("", said)
+    opens = opens and rest == said
     first = TOKEN.match(rest)
     if first is None:
         return False
@@ -684,19 +710,20 @@ def _item_made_up(item: str, names: tuple[str, ...]) -> bool:
         if held is not None:
             longer = re.match(rf"\s+({TOKEN.pattern})", rest[held.end() :])
             return longer is not None and _name_like(longer.group(1))
-    return _name_like(first.group(0))
+    return _name_like(first.group(0), opens)
 
 
-def _claims_held(sentence: str) -> list[tuple[ListName, str]]:
-    """Each list the sentence says holds something, with the words for what it holds."""
-    found: list[tuple[ListName, str]] = []
+def _claims_held(sentence: str) -> list[tuple[ListName, str, bool]]:
+    """Each list the sentence says holds something, the words for what it holds, and whether
+    those words open the sentence."""
+    found: list[tuple[ListName, str, bool]] = []
     for m in SAYS_IT_HOLDS.finditer(sentence):
-        found.append((_list_of(m.group("list")), sentence[m.end() :]))
+        found.append((_list_of(m.group("list")), sentence[m.end() :], False))
     for m in YOU_WATCH.finditer(sentence):
-        found.append(("watchlist", sentence[m.end() :]))
+        found.append(("watchlist", sentence[m.end() :], False))
     for m in IS_ON.finditer(sentence):
-        starts = [b.end() for b in SUBJECT_START.finditer(sentence, 0, m.start())]
-        found.append((_list_of(m.group("list")), sentence[max(starts, default=0) : m.start()]))
+        start = max((b.end() for b in SUBJECT_START.finditer(sentence, 0, m.start())), default=0)
+        found.append((_list_of(m.group("list")), sentence[start : m.start()], start == 0))
     return found
 
 
@@ -706,10 +733,10 @@ def holds_only_what_the_facts_hold(text: str, facts: str) -> bool:
     doesn't."""
     held = _held(facts)
     return not any(
-        _item_made_up(item, held[name])
+        _item_made_up(item, held[name], opens and n == 0)
         for sentence in sentences(text)
-        for name, words_held in _claims_held(sentence)
-        for item in ITEM_BREAK.split(words_held)
+        for name, words_held, opens in _claims_held(sentence)
+        for n, item in enumerate(ITEM_BREAK.split(words_held))
     )
 
 

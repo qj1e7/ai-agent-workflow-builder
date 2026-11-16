@@ -411,6 +411,20 @@ def test_an_approver_cannot_change_a_workflow() -> None:
     assert "Approver" in result.errors[0]
 
 
+def test_an_approver_cannot_set_up_a_workflow() -> None:
+    result, _ = run(
+        STALE_BUGS,
+        tool("set_up_workflow"),
+        tool("reply", call_id="c2", form="answer", text="Needs you lists what waits for you."),
+        read=follow_up(),
+        changes_workflows=False,
+        then=[CLEAN],
+    )
+
+    assert isinstance(shown(result), FreeReplyAnswer)
+    assert "Approver" in result.errors[0]
+
+
 # Code builds a two-turn join and checks it as if typed whole (decision 5).
 
 
