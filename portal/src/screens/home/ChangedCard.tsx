@@ -10,7 +10,7 @@ import { cx } from '../../ui/cx'
 import { IconCheck } from '../../ui/icons'
 import { useTakeBackPress } from '../workflows/InN8n'
 import { ADD_THE_YES_BACK, backToVersionToast, gradePill, UNDO, yesBackToast } from '../workflows/n8nChange'
-import { heldOf, heldWords, mayTakeBack, TAKE_IT_BACK } from '../workflows/n8nHold'
+import { heldOf, heldWords, mayTakeBack, openingOf, TAKE_IT_BACK } from '../workflows/n8nHold'
 import runStyles from '../run/RunPage.module.css'
 import { useAsker } from './asker'
 import { CardMemoryContext } from './cardMemory'
@@ -42,7 +42,7 @@ export function ChangedInN8nAnswer({ reply }: { reply: ChangedInN8nReply }) {
   const n8nAccess = operator && me?.n8n_access === true
   const useCase = useUseCase(reply.use_case_id, operator).data
   const inN8n = useUseCaseInN8n(reply.use_case_id, { enabled: n8nAccess })
-  const held = operator && me && useCase ? heldOf(useCase, me, inN8n.data ?? 'loading') : null
+  const held = operator && me && useCase ? heldOf(useCase, me, openingOf(inN8n)) : null
   const takeBack = useTakeBackPress(reply.use_case_id, held, note)
   const settle = (next: Phase) => {
     memory.changed.keep(next)

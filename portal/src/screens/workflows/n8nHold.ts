@@ -15,6 +15,7 @@ export const DRAFT = 'Turn it on first. A draft can’t be opened in n8n.'
 export const GONE = 'This workflow was deleted in n8n, so it can’t be opened there.'
 export const NOT_OWN = 'This workflow has no n8n workflow of its own yet.'
 const CANT_OPEN = 'n8n can’t be opened now.'
+export const NOT_LOADED = 'The workflow in n8n could not be loaded.'
 /** The workflow moved to the person's n8n space, but the platform has no address set for n8n's editor (`N8N_EDITOR_URL`). */
 export const NO_EDITOR = 'It is open in your n8n space, but the platform has no address for n8n’s editor, so it can’t open it here. An admin can set it.'
 
@@ -60,6 +61,16 @@ export function heldOf(useCase: Pick<UseCaseView, 'held_in_n8n'>, me: Person, op
   if (me.n8n_access !== true) return { ...theirs, cant: askForIt(holder.name) }
   if (opening === 'loading') return { ...theirs, cant: null, checking: true }
   return { ...theirs, cant: view && !view.can_open ? (view.why_not ?? CANT_OPEN) : null }
+}
+
+/**
+ * What `heldOf` reads from the In n8n view's query: the view, `loading` while it is on its way, or, when it could not be read, why
+ * nothing can be taken back here, in the platform's own words when it gave them.
+ */
+export function openingOf(query: { readonly data?: Opening | undefined; readonly isError: boolean; readonly error: unknown }): Opening | 'loading' {
+  if (query.data) return query.data
+  if (!query.isError) return 'loading'
+  return { can_open: false, why_not: n8nRefusalWords(query.error, () => NOT_LOADED), editor_url: null }
 }
 
 export function holdOf(opening: Opening, useCase: Workflow, me: Person): Hold {
