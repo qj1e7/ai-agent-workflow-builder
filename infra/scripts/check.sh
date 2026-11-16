@@ -69,7 +69,8 @@ run run-job tool --volume "$infra:/infra:ro" --entrypoint /bin/sh "$TERRAFORM_IM
 
 # The Langfuse VM runs the images that deploy/compose.yaml's langfuse profile runs (ADR 0050).
 run langfuse-images tool --volume "$repo:/repo:ro" --entrypoint /bin/sh "$TERRAFORM_IMAGE" \
-  /repo/infra/scripts/check-langfuse-images.sh /repo/infra/modules/langfuse_vm/compose.yaml.tftpl /repo/deploy/compose.yaml
+  /repo/infra/scripts/check-langfuse-images.sh /repo/infra/modules/langfuse_vm/compose.yaml.tftpl /repo/deploy/compose.yaml \
+  /repo/infra/modules/langfuse_vm/clickhouse.xml /repo/deploy/langfuse/clickhouse.xml
 
 run tflint tool \
   --volume "$infra:/infra" --volume "$cache/tflint:/plugins" --env TFLINT_PLUGIN_DIR=/plugins \

@@ -1,8 +1,0 @@
-<!-- The image logs at trace level, in up to ten files of 1000 MB each, on the VM's 32 GiB disk. -->
-<clickhouse>
-    <logger>
-        <level>warning</level>
-        <size>100M</size>
-        <count>3</count>
-    </logger>
-</clickhouse>

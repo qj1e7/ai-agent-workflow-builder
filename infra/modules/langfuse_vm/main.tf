@@ -22,7 +22,7 @@ locals {
   cloud_init = templatefile("${path.module}/cloud-init.yaml.tftpl", {
     compose    = local.compose
     caddyfile  = "${local.fqdn} {\n    reverse_proxy langfuse-web:3000\n}\n"
-    clickhouse = file("${path.module}/clickhouse-logs.xml")
+    clickhouse = file("${path.module}/clickhouse.xml")
     secrets_script = templatefile("${path.module}/langfuse-secrets.sh.tftpl", {
       client_id = azurerm_user_assigned_identity.this.client_id
       secrets   = { for name, secret in var.secrets : name => secret.url }

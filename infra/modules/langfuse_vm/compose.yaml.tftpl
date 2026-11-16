@@ -70,8 +70,9 @@ services:
     image: clickhouse/clickhouse-server:26.3.62.3@sha256:de3e47c64078aa196dae2349e048fc98ba81947f651f5c20e06e46baea8ae40a
     restart: unless-stopped
     user: "101:101"
-    # The VM has 8 GiB. ADR 0050 moves it to Standard_B4as_v2 if the stack's peak passes 6 GiB.
-    mem_limit: 4g
+    # The cap the laptop profile was measured with: the whole stack peaked at 3.3 GiB, under ADR
+    # 0050's 6 GiB line for this 8 GiB VM.
+    mem_limit: 1536m
     environment:
       CLICKHOUSE_DB: default
       CLICKHOUSE_USER: clickhouse
@@ -79,7 +80,7 @@ services:
     volumes:
       - clickhouse_data:/var/lib/clickhouse
       - clickhouse_logs:/var/log/clickhouse-server
-      - /etc/langfuse/clickhouse-logs.xml:/etc/clickhouse-server/config.d/logs.xml:ro
+      - /etc/langfuse/clickhouse.xml:/etc/clickhouse-server/config.d/langfuse.xml:ro
     healthcheck:
       test: wget --no-verbose --tries=1 --spider http://localhost:8123/ping || exit 1
       interval: 5s

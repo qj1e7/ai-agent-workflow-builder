@@ -1,0 +1,13 @@
+<!-- ClickHouse for Langfuse, on a laptop and on the Azure VM alike (ADR 0050). Small caches for
+     one small machine and a few hundred traces a day, which ClickHouse's tips page says runs in
+     2 GB. The image logs at trace level, in up to ten files of 1000 MB each, so this logs less. -->
+<clickhouse>
+    <mark_cache_size>268435456</mark_cache_size>
+    <index_mark_cache_size>67108864</index_mark_cache_size>
+    <uncompressed_cache_size>16777216</uncompressed_cache_size>
+    <logger>
+        <level>warning</level>
+        <size>100M</size>
+        <count>3</count>
+    </logger>
+</clickhouse>

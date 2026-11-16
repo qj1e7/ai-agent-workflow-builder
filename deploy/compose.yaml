@@ -6,6 +6,45 @@ x-platform-image: &platform-image
     target: runtime
   image: wab/platform-api:${WAB_IMAGE_TAG:-dev}
 
+# Langfuse's web app and worker read the same settings (ADR 0050). Every part listens only inside
+# the network, except the web app on the host's localhost.
+x-langfuse-env: &langfuse-env
+  DATABASE_URL: postgresql://langfuse:${LANGFUSE_DB_PASSWORD:-}@postgres:5432/langfuse
+  NEXTAUTH_URL: http://localhost:${LANGFUSE_HOST_PORT:-3000}
+  SALT: ${LANGFUSE_SALT:-}
+  ENCRYPTION_KEY: ${LANGFUSE_ENCRYPTION_KEY:-}
+  TELEMETRY_ENABLED: "false"
+  CLICKHOUSE_MIGRATION_URL: clickhouse://clickhouse:9000
+  CLICKHOUSE_URL: http://clickhouse:8123
+  CLICKHOUSE_USER: langfuse
+  CLICKHOUSE_PASSWORD: ${LANGFUSE_CLICKHOUSE_PASSWORD:-}
+  CLICKHOUSE_CLUSTER_ENABLED: "false"
+  REDIS_HOST: valkey
+  REDIS_PORT: "6379"
+  REDIS_AUTH: ${LANGFUSE_VALKEY_PASSWORD:-}
+  LANGFUSE_USE_AZURE_BLOB: "true"
+  LANGFUSE_S3_EVENT_UPLOAD_BUCKET: langfuse
+  LANGFUSE_S3_EVENT_UPLOAD_PREFIX: events/
+  LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://azurite:10000/devstoreaccount1
+  LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: devstoreaccount1
+  # Azurite's published development key.
+  LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: &azurite-key ${AZURITE_KEY:-Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==}
+  LANGFUSE_S3_MEDIA_UPLOAD_BUCKET: langfuse
+  LANGFUSE_S3_MEDIA_UPLOAD_PREFIX: media/
+  LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT: http://azurite:10000/devstoreaccount1
+  LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID: devstoreaccount1
+  LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: *azurite-key
+
+x-langfuse-depends: &langfuse-depends
+  langfuse-db:
+    condition: service_completed_successfully
+  clickhouse:
+    condition: service_healthy
+  valkey:
+    condition: service_healthy
+  azurite:
+    condition: service_started
+
 # The Cosmos DB emulator's published key.
 x-cosmos: &cosmos-account
   COSMOS_ENDPOINT: http://cosmos:8081
@@ -128,6 +167,13 @@ services:
       AGENT_MODEL_BASE_URL: ${AGENT_MODEL_BASE_URL:-}
       AGENT_MODEL_API_KEY: ${AGENT_MODEL_API_KEY:-}
       AGENT_MODEL_PRIVATE_HOSTS: ${AGENT_MODEL_PRIVATE_HOSTS:-}
+      # Tracing stays off until LANGFUSE_BASE_URL is set, for example to http://langfuse-web:3000 with
+      # the langfuse profile on. The keys follow it, so all three are set or none is (ADR 0050).
+      LANGFUSE_BASE_URL: ${LANGFUSE_BASE_URL:-}
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_BASE_URL:+${LANGFUSE_INIT_PROJECT_PUBLIC_KEY:-}}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_BASE_URL:+${LANGFUSE_INIT_PROJECT_SECRET_KEY:-}}
+      LANGFUSE_TRACING_ENVIRONMENT: local
+      LANGFUSE_RELEASE: ${WAB_IMAGE_TAG:-dev}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8100/healthz', timeout=2)"]
       interval: 3s
@@ -170,6 +216,12 @@ services:
       DATABASE_URL_MONITORING: postgresql://wab_monitoring:${WAB_MONITORING_PASSWORD:?run deploy/make-env.sh}@postgres:5432/platform
       AGENT_RUNTIME_URL: http://agent-runtime:8100
       AGENT_API_KEY: ${AGENT_API_KEY:?run deploy/make-env.sh}
+      # The same switch as the agent runtime's: scores go to Langfuse only once LANGFUSE_BASE_URL is set.
+      LANGFUSE_BASE_URL: ${LANGFUSE_BASE_URL:-}
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_BASE_URL:+${LANGFUSE_INIT_PROJECT_PUBLIC_KEY:-}}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_BASE_URL:+${LANGFUSE_INIT_PROJECT_SECRET_KEY:-}}
+      LANGFUSE_TRACING_ENVIRONMENT: local
+      TRACE_PSEUDONYM_KEY: ${TRACE_PSEUDONYM_KEY:-}
       N8N_BASE_URL: http://n8n:5678
       # n8n's owner, as bootstrap uses it: the platform lays each new workflow out in n8n as a draft.
       N8N_OWNER_EMAIL: ${N8N_OWNER_EMAIL:?run deploy/make-env.sh}
@@ -242,6 +294,119 @@ services:
       timeout: 3s
       retries: 20
 
+  # Makes Langfuse's role and database in our postgres, on a new volume or an old one.
+  langfuse-db:
+    image: postgres:17@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3
+    profiles: [langfuse]
+    # A one-shot job: unless-stopped would start it again after every success.
+    restart: on-failure
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGHOST: postgres
+      PGUSER: postgres
+      PGPASSWORD: ${POSTGRES_PASSWORD:?run deploy/make-env.sh}
+      LANGFUSE_DB_PASSWORD: ${LANGFUSE_DB_PASSWORD:-}
+      LANGFUSE_SALT: ${LANGFUSE_SALT:-}
+      LANGFUSE_ENCRYPTION_KEY: ${LANGFUSE_ENCRYPTION_KEY:-}
+      LANGFUSE_NEXTAUTH_SECRET: ${LANGFUSE_NEXTAUTH_SECRET:-}
+      LANGFUSE_CLICKHOUSE_PASSWORD: ${LANGFUSE_CLICKHOUSE_PASSWORD:-}
+      LANGFUSE_VALKEY_PASSWORD: ${LANGFUSE_VALKEY_PASSWORD:-}
+    volumes:
+      - ./postgres/langfuse-db.sh:/langfuse-db.sh:ro
+    command: ["sh", "/langfuse-db.sh"]
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:26.3.62.3@sha256:de3e47c64078aa196dae2349e048fc98ba81947f651f5c20e06e46baea8ae40a
+    profiles: [langfuse]
+    restart: unless-stopped
+    user: "101:101"
+    # Langfuse asks for more. The whole profile peaked at 3.3 GiB with this cap (ADR 0050).
+    mem_limit: 1536m
+    environment:
+      CLICKHOUSE_DB: default
+      CLICKHOUSE_USER: langfuse
+      CLICKHOUSE_PASSWORD: ${LANGFUSE_CLICKHOUSE_PASSWORD:-}
+    volumes:
+      - clickhousedata:/var/lib/clickhouse
+      - clickhouselogs:/var/log/clickhouse-server
+      - ./langfuse/clickhouse.xml:/etc/clickhouse-server/config.d/langfuse.xml:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8123/ping || exit 1"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+
+  valkey:
+    image: valkey/valkey:8.1.11@sha256:8f836008e0986c36adf50da714c7060cf689dbb335f61fe077939d90fa650809
+    profiles: [langfuse]
+    restart: unless-stopped
+    command:
+      - sh
+      - -c
+      - exec valkey-server --requirepass "$$VALKEY_PASSWORD" --maxmemory-policy noeviction
+    environment:
+      VALKEY_PASSWORD: ${LANGFUSE_VALKEY_PASSWORD:-}
+    volumes:
+      - valkeydata:/data
+    healthcheck:
+      test: ["CMD-SHELL", "valkey-cli -a \"$$VALKEY_PASSWORD\" --no-auth-warning ping | grep -q PONG"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite:3.37.0@sha256:830430c1da1a2d537e08f3e6764dd1f5ae00cf0346bcaf625b968ec3f0971fd5
+    profiles: [langfuse]
+    restart: unless-stopped
+    environment:
+      AZURITE_KEY: *azurite-key
+    # Langfuse does not make its blob container, so a small script makes it once Azurite answers.
+    command:
+      - sh
+      - -c
+      - node /opt/langfuse/blob-container.js & exec azurite-blob --blobHost 0.0.0.0 --location /data --skipApiVersionCheck
+    volumes:
+      - azuritedata:/data
+      - ./langfuse/blob-container.js:/opt/langfuse/blob-container.js:ro
+
+  langfuse-worker:
+    image: langfuse/langfuse-worker:4.80.0@sha256:da9f618dd784219aa6508ab6941c4a89c4ef6fb429fb1734c4163df3baa8f1ca
+    profiles: [langfuse]
+    restart: unless-stopped
+    depends_on: *langfuse-depends
+    environment:
+      <<: *langfuse-env
+
+  langfuse-web:
+    image: langfuse/langfuse:4.80.0@sha256:0814758db3db8e923f733be3884e7d7a9e3afd60568d874a610d78aae47476c5
+    profiles: [langfuse]
+    restart: unless-stopped
+    depends_on: *langfuse-depends
+    environment:
+      <<: *langfuse-env
+      NEXTAUTH_SECRET: ${LANGFUSE_NEXTAUTH_SECRET:-}
+      LANGFUSE_DISABLE_SIGNUP_ONBOARDING: "true"
+      LANGFUSE_INIT_ORG_ID: codesparks
+      LANGFUSE_INIT_ORG_NAME: CODESparks
+      LANGFUSE_INIT_PROJECT_ID: ai-workflow-builder
+      LANGFUSE_INIT_PROJECT_NAME: AI Workflow Builder
+      LANGFUSE_INIT_PROJECT_PUBLIC_KEY: ${LANGFUSE_INIT_PROJECT_PUBLIC_KEY:-}
+      LANGFUSE_INIT_PROJECT_SECRET_KEY: ${LANGFUSE_INIT_PROJECT_SECRET_KEY:-}
+      LANGFUSE_INIT_USER_EMAIL: ${LANGFUSE_INIT_USER_EMAIL:-}
+      LANGFUSE_INIT_USER_NAME: Team lead
+      LANGFUSE_INIT_USER_PASSWORD: ${LANGFUSE_INIT_USER_PASSWORD:-}
+    ports:
+      - "127.0.0.1:${LANGFUSE_HOST_PORT:-3000}:3000"
+    healthcheck:
+      # The web app listens on the container's own name, not on localhost.
+      test: ["CMD-SHELL", "wget -qO- http://$$HOSTNAME:3000/api/public/health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 60
+      start_period: 20s
+
   portal:
     build:
       context: ..
@@ -259,3 +424,7 @@ services:
 volumes:
   pgdata:
   n8ndata:
+  clickhousedata:
+  clickhouselogs:
+  valkeydata:
+  azuritedata:

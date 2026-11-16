@@ -1,12 +1,16 @@
 #!/bin/sh
-# Checks that the Langfuse VM runs the images a laptop runs (ADR 0050): every image in the VM's
-# compose template, pinned by digest, must appear with the same tag and digest in
-# deploy/compose.yaml. Caddy is the one exception, because only the VM serves HTTPS.
-# Usage: check-langfuse-images.sh <compose.yaml.tftpl> <deploy/compose.yaml>
+# Checks that the Langfuse VM runs what a laptop runs (ADR 0050): every image in the VM's compose
+# template, pinned by digest, must appear with the same tag and digest in deploy/compose.yaml, and
+# ClickHouse gets the same config file, the one its memory was measured with. Caddy is the one
+# exception, because only the VM serves HTTPS.
+# Usage: check-langfuse-images.sh <compose.yaml.tftpl> <deploy/compose.yaml> <vm clickhouse.xml>
+#        <deploy clickhouse.xml>
 set -eu
 
 template=$1
 compose=$2
+vm_clickhouse=$3
+local_clickhouse=$4
 azure_only=caddy
 
 # Prints each image reference, without quotes and without the docker.io/ and library/ prefixes.
@@ -40,6 +44,13 @@ for image in $(images "$template"); do
     echo "ok    $image"
   fi
 done
+
+if cmp -s "$vm_clickhouse" "$local_clickhouse"; then
+  echo "ok    $vm_clickhouse is the same as $local_clickhouse"
+else
+  echo "FAIL  $vm_clickhouse differs from $local_clickhouse"
+  failures=$((failures + 1))
+fi
 
 if [ "$checked" = 0 ]; then
   echo "FAIL  no images found in $template"

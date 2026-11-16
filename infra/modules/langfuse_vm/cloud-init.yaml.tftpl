@@ -32,7 +32,7 @@ write_files:
     permissions: "0644"
     content: |
       ${indent(6, chomp(caddyfile))}
-  - path: /etc/langfuse/clickhouse-logs.xml
+  - path: /etc/langfuse/clickhouse.xml
     permissions: "0644"
     content: |
       ${indent(6, chomp(clickhouse))}
