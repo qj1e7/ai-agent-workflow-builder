@@ -22,6 +22,7 @@ import { CardMemoryContext } from './cardMemory'
 import { useChatNavigate } from '../../ui/fromChat'
 import { AddToWatchlist, WhichSoftware } from './WatchlistCard'
 import { SoftwareActions } from './WatchlistActions'
+import { RemoveSoftwareAnswer } from './RemoveSoftware'
 import styles from './Planner.module.css'
 
 /** What a card can ask the page to do. Both go through the Planner or the box, so nothing here reaches a set-up on its own. */
@@ -532,6 +533,8 @@ export function Answer({ reply, typed, page }: AnswerProps) {
     case 'pause':
     case 'resume':
       return <SwitchChoices reply={reply} />
+    case 'remove_software':
+      return <RemoveSoftwareAnswer reply={reply} />
     case 'ideas':
       return <IdeasAnswer page={page} />
     case 'offline':

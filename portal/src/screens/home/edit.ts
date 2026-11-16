@@ -3,7 +3,7 @@ import { clockWords, everyWords, repeatWords } from '../software/software'
 import { scheduleShort } from '../run/words'
 import { CHANGED_SINCE_OPENED, changedSinceOpened, undoneWords } from '../workflows/workflow'
 import { hourChoices, orList, TIMES } from './card'
-import { howOftenWords } from './parts'
+import { howOftenWords, WATCHLIST_CANT } from './parts'
 
 /** A schedule the edit card shows or saves: a day and a time, in the team time zone. */
 export interface Schedule {
@@ -137,6 +137,7 @@ export function openSay(reply: EditReply, view: EditView, every: Day | null): st
       return view.choices.length > 0 ? 'Which workflow should I change?' : 'You have no workflows to change yet.'
     case 'cant':
       if (view.cant === 'how_often') return howOftenWords(reply.parts.find((part) => part.reason === 'how_often')?.text ?? '')
+      if (view.target?.watchlist === true) return WATCHLIST_CANT
       return `From the chat I can only change when ${view.target?.name ?? 'a workflow'} runs.`
     case 'same': {
       const now = repeatWords(view.before)

@@ -783,6 +783,48 @@ test.describe('with the AI model on', () => {
     })
   }
 
+  test('REMOVE: the team lead’s “help me remove node js from watchlist” gets the Software page’s Remove, and Undo puts it back', async ({ browser, backend }, info) => {
+    const nodeJs = { name: 'node js', repo: 'nodejs/node', our_version: '22.11.0' }
+    await backend.freshWatchlist('alice', [REDIS, nodeJs])
+    const names = async () => (await backend.get<{ watchlist: { software: { name: string }[] } | null }>('alice', '/api/v1/watchlist')).watchlist?.software.map((entry) => entry.name)
+    const context = await devContext(browser, 'alice')
+    const page = await context.newPage()
+    const watch = watchPage(page)
+    await page.goto('/')
+    const answer = await askAndWait(page, 'help me remove node js from watchlist')
+    await expect(answer).toContainText('Remove node js from the Watchlist? It won’t be checked any more.')
+    await expect(answer, 'the edit lane’s can’t no longer answers a removal').not.toContainText('I can only change when')
+    const remove = answer.getByRole('button', { name: 'Remove from watchlist node js' })
+    await expect(remove).toBeVisible()
+    await shot(page, info, 'remove-software-card')
+    expect(await names(), 'nothing is removed until she presses Remove').toContain('node js')
+
+    await remove.click()
+    await expect(answer).toContainText('Removed from the watchlist.')
+    const undo = answer.getByRole('button', { name: 'Undo removing node js' })
+    await expect(undo, 'focus moves to Undo').toBeFocused()
+    expect(await names()).toEqual(['Redis'])
+
+    await undo.click()
+    await expect(answer).toContainText('Put node js back on the list.')
+    await expect(remove, 'focus goes back to Remove').toBeFocused()
+    await page.goto('/software')
+    await expect(page.locator('li[data-status]').filter({ hasText: 'node js' }), 'it is back on the Software page').toBeVisible()
+    assertClean(watch)
+    await context.close()
+  })
+
+  test('REMOVE-none: a name the watchlist doesn’t hold is said so, with what it holds, and nothing to press', async ({ browser, backend }) => {
+    await backend.freshWatchlist('alice', [REDIS])
+    const context = await devContext(browser, 'alice')
+    const page = await context.newPage()
+    await page.goto('/')
+    const answer = await askAndWait(page, 'stop watching Kubernetes')
+    await expect(answer).toContainText('Kubernetes isn’t on your Watchlist. It holds Redis.')
+    await expect(answer.getByRole('button', { name: /Remove from watchlist/ })).toHaveCount(0)
+    await context.close()
+  })
+
   test('an unwatched name after a question is offered for the watchlist, never added on its own', async ({ browser, backend }) => {
     await backend.freshWatchlist('alice', [REDIS])
     const context = await devContext(browser, 'alice')

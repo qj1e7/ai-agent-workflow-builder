@@ -174,6 +174,14 @@ describe('the edit card while it proposes a change', () => {
     expect(html).toContain('href="/workflows/uc_01JB8"')
   })
 
+  it('answers a change to the Software watchlist it can’t make with what the chat can do to it, and opens the Watchlist', () => {
+    const watchlist = { ...(editCant as EditReply), use_case_id: 'uc_01JC2', name: 'Software watchlist', watchlist: true, software: 'React', parts: [] }
+    const html = draw(watchlist)
+    expect(sentence(html)).toBe('From the chat I can add software to the Software watchlist, remove it, or change when the watchlist runs.')
+    expect(buttons(html)).toEqual(['Open the Watchlist'])
+    expect(html).toContain('href="/software"')
+  })
+
   it('says a day left out of a schedule plainly', () => {
     expect(sentence(draw(editHowOften as EditReply))).toBe('I can’t leave days out of a schedule yet.')
   })
