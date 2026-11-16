@@ -599,8 +599,8 @@ def _removal(shown: RemoveSoftwareAnswer, facts: PlannerFacts) -> list[str]:
 
 
 def _explained(shown: ExplainAnswer, facts: PlannerFacts) -> list[str]:
-    """The Portal's explain card, for each workflow whose name holds every word the answer gives,
-    as the platform matches them."""
+    """The Portal's explain card, for each workflow whose name holds every word the answer
+    gives."""
     words = shown.workflow_words
     if words is None:
         return ["[The report of the workflow in focus opens, In short first.]"]

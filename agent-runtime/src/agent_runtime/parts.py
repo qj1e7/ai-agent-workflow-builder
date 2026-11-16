@@ -171,7 +171,6 @@ def parts_of(
     if isinstance(answer, RemoveSoftwareAnswer):
         return _removal_parts(text, clauses, facts)
     if isinstance(answer, ExplainAnswer):
-        # The explanation is read only from a request that asks for nothing else.
         return [_part(text, c, "will_do") for c in clauses]
     crosses = _crosses(read, text, answer)
     alone = len(clauses) == 1

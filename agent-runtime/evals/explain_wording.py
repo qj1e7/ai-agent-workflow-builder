@@ -1,10 +1,10 @@
 """Explain's rewording of a workflow's In short (ADR 0051): how often the model's smoothing passes
 every check, and whether what the person would see keeps to the facts.
 
-Each case is code's In short for one of platform-api's golden n8n documents, with the facts the
-platform sends beside it. The product's own path runs on the model under test: one call, the
-guard, then the verifier. The score reads what the person would see against the case's facts in
-its own way, apart from the guard."""
+Each case is code's In short for a workflow from platform-api's golden n8n documents or its report
+tests, with the facts the platform sends beside it. The product's own path runs on the model under
+test: one call, the guard, then the verifier. The score reads what the person would see against the
+case's facts in its own way, apart from the guard."""
 
 import re
 from typing import Final

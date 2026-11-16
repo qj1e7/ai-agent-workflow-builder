@@ -988,11 +988,10 @@ def _answer_of(
     request that writes; then a workflow to explain, software to take off the watchlist, a
     change to a workflow the person has, then the watchlist, a question about the person's
     workflows, then the structures. A request the model called a task is always read against its
-    structures, so
-    words they do not hold come back; "abilities" is the catch-all, so a request that asks for a
-    change wins over it: a planted "close all tickets" comes back as a can't. `facts` name the
-    person's workflows, so a word in a name is never a command, and say when the Software
-    watchlist checks, so a time a watch request names that matches it is no cross."""
+    structures, so words they do not hold come back; "abilities" is the catch-all, so a request
+    that asks for a change wins over it: a planted "close all tickets" comes back as a can't.
+    `facts` name the person's workflows, so a word in a name is never a command, and say when the
+    Software watchlist checks, so a time a watch request names that matches it is no cross."""
     watch_schedule = facts.watchlist_schedule if facts is not None else None
     text = visible_words(request)
     refused = _refusal(text)

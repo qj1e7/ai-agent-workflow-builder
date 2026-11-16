@@ -2,10 +2,10 @@
 own wording so it reads naturally, and on any doubt the person sees code's wording.
 
 The model gets code's wording and the facts behind it, nothing else, and fills one closed shape,
-`ExplainWording`. Its text is made into what the person would see once, and `explain_guard` reads
-only that: its shape, ADR 0047's code checks, then `FACT_CHECKS`, which hold it to the facts. The
-verifier reads it last, as it reads a free reply. Any failed check, failed call, slow call or
-verifier flag keeps code's wording, so Explain never fails for want of the model."""
+`ExplainWording`. Its text is made into what the person would see once, and `explain_guard`
+reads only that: its shape, ADR 0047's code checks, then `FACT_CHECKS`, which hold it to the
+facts. The verifier reads it last, as it reads a free reply. Any failed check, failed call, slow
+call or verifier flag keeps code's wording, so Explain never fails for want of the model."""
 
 import json
 import logging
@@ -37,9 +37,6 @@ log = logging.getLogger(__name__)
 
 EXPLAIN_TIMEOUT_SECONDS: Final = 8.0
 SENTENCE_LIMIT: Final = 6
-EXPLAIN_MESSAGE: Final = "Explain this workflow."
-"""The message ADR 0047's checks are given. The rewording answers nothing the person typed, so no
-word of theirs can vouch for the text."""
 WORDING_MARK: Final = "The wording:\n"
 FACTS_MARK: Final = "The facts:\n"
 
@@ -190,7 +187,7 @@ def explain_guard(text: str, request: ExplainWordingRequest) -> ExplainCheck | N
     if not 1 <= len(shown) <= longest or len(_said(shown).sentences) > SENTENCE_LIMIT:
         return "shape"
     reply = Shown(form="answer", text=shown, choices=(), offer=None, looked_at=())
-    failed = failed_check(reply, Given(message=EXPLAIN_MESSAGE, facts=wording))
+    failed = failed_check(reply, Given(message="", facts=wording))
     return failed if failed is not None else fact_check(shown, request)
 
 
@@ -243,8 +240,8 @@ def reword(
     )
     if isinstance(asked, ModelProblem):
         return _kept(reply_id, "call")
-    failed: ExplainCheck | VerifierFlag | None = explain_guard(asked.text, request)
     shown = shown_words(asked.text)
+    failed: ExplainCheck | VerifierFlag | None = explain_guard(shown, request)
     if failed is None:
         failed = verify(FreeReplyAnswer(form="answer", text=shown), verify_with or chat_for)
     if failed is not None:

@@ -47,7 +47,7 @@ FASTAPI = request(
     fact("writes", "create", "Jira", "MOCK", "yes"),
     fact("changes", "changes", "nothing", "else", negated=True),
 )
-"""Code's In short for the FastAPI release check (platform-api's golden fastapi document)."""
+"""Code's In short for the FastAPI release check (platform-api's report tests)."""
 SMOOTHED = (
     "Each day at 8:00 it reads GitHub “fastapi/fastapi” and Jira “MOCK”. "
     "It can create Jira tickets in “MOCK”, each after a yes. Nothing else changes."
@@ -199,8 +199,6 @@ def test_adr_0047s_checks_run_first_and_name_their_own_check():
     assert explain_guard(claimed, FASTAPI) == "claims_done"
 
 
-# The model call.
-
 CLEAN = Verdict(says_it_happened=False, skips_a_yes=False, claims_unbuilt=False)
 
 
@@ -258,9 +256,6 @@ def test_the_log_holds_the_reply_id_and_the_check_never_the_words(
     assert "SECRET-PLACE" not in logged and "fastapi" not in logged
 
 
-# The route.
-
-
 def client_with(chat: ScriptedChat | None) -> TestClient:
     runtime = replace(
         api_runtime(),
@@ -308,8 +303,6 @@ def test_the_route_asks_the_verifier_on_the_model_the_setting_names():
     assert answered.json() == {"kind": "reworded", "text": SMOOTHED}
     assert asked_for == [FASTAPI.model.model, "the-verifier"]
 
-
-# The mock model the end to end tests run on.
 
 MOCK_MODEL = Path(__file__).resolve().parents[2] / "e2e" / "mock_model" / "model_server.py"
 REACT = request(
