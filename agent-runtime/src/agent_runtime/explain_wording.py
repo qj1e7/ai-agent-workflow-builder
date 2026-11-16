@@ -61,14 +61,15 @@ FUNCTION_WORDS: Final = words(
 sometimes, always, all, any and some are left out, and so is every name: a system or a place comes
 only from the wording."""
 KIND_WORDS: Final[Mapping[ExplainKind, frozenset[str]]] = {
-    "runs": words("every each at on runs run starts start someone schedule time"),
+    "runs": words("every each at on runs run"),
     "reads": frozenset(),
-    "writes": words("can after once only yes approver approver's says waits wait"),
+    "writes": words("can after yes approver approver's says waits wait"),
     "posts": frozenset(),
     "changes": words("changes change nothing else other more"),
 }
 """The words a sentence may use for each kind of fact its sentence in the wording holds, beside
-that sentence's own words. No day, verb or count is here: those come only from the wording."""
+that sentence's own words. No day, trigger, verb or count is here, as "someone starts it" or
+"only once": those come only from the wording."""
 NEGATIONS: Final = words("not no never nothing none nor cannot without")
 QUOTED: Final = re.compile(r"“[^”]*”|\"[^\"]*\"")
 WORD: Final = re.compile(r"[A-Za-z0-9]+(?:['’:.][A-Za-z0-9]+)*")
@@ -120,19 +121,23 @@ def _negated(word: str) -> bool:
     return word in NEGATIONS or word.endswith("n't")
 
 
-def _negations(sentence: _Sentence) -> list[tuple[str, str]]:
-    """Each negation with the word it governs: the first word after it that is not a function
-    word, or, at the end of the sentence, the last one before it. So "changes nothing else" is
-    ("nothing", "else"), "with no yes" is ("no", "yes"), and "It changes nothing." is ("nothing",
-    "changes")."""
+def _negations(sentence: _Sentence) -> list[tuple[str, str, str]]:
+    """Each negation with the word it governs and the side that word is on: the first word after
+    it that is not a function word, or, at the end of the sentence, the last one before it. So
+    "changes nothing else" is ("nothing", "else", "after"), and "It changes nothing." is
+    ("nothing", "changes", "before"), which "Nothing changes." is not, as "It starts nothing." is
+    not "Nothing starts it."."""
     found = sentence.words
-    pairs: list[tuple[str, str]] = []
+    pairs: list[tuple[str, str, str]] = []
     for at, word in enumerate(found):
         if not _negated(word):
             continue
         after = [w for w in found[at + 1 :] if w not in FUNCTION_WORDS]
         before = [w for w in found[:at] if w not in FUNCTION_WORDS]
-        pairs.append((word, after[0] if after else before[-1] if before else ""))
+        if after:
+            pairs.append((word, after[0], "after"))
+        else:
+            pairs.append((word, before[-1] if before else "", "before"))
     return sorted(pairs)
 
 
@@ -269,7 +274,7 @@ SYSTEM: Final = (
     '- Keep each "after a yes" in the sentence of the write it belongs to.\n'
     "- Use only the words of the same sentence of the wording and small joining words such as "
     "and, then and it. Name no system, place, day, time, number or action that sentence doesn't "
-    "name. Never write before, until, always, all, any or some.\n"
+    "name. Never write before, until, always, all, any, some, only or once.\n"
     "- Say what the workflow does, in the present tense. Never say it was done or will be "
     "done.\n"
     "- Plain text in at most six sentences, never longer than twice the wording. No Markdown, "

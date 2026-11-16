@@ -87,7 +87,7 @@ def test_codes_own_wording_passes(asked: ExplainWordingRequest):
         (
             FASTAPI,
             "It reads GitHub “fastapi/fastapi” and Jira “MOCK” every day at 8:00. It can create "
-            "Jira tickets in “MOCK”, but only after a yes. Nothing else changes.",
+            "Jira tickets in “MOCK”, but after a yes. Nothing else changes.",
         ),
         (READS_JIRA, "Each day at 8:00 it reads Jira “MOCK”. It changes nothing in Jira."),
         (
@@ -244,6 +244,24 @@ NO_YES_EACH_RUN = request(
             "It can create a Jira ticket in “MOCK” after a yes. It changes nothing else.",
             "words",
         ),
+        (
+            FASTAPI,
+            "Every day at 8:00 someone starts it, and it reads GitHub “fastapi/fastapi” and Jira "
+            "“MOCK”. It can create Jira tickets in “MOCK”, each after a yes. "
+            "It changes nothing else.",
+            "words",
+        ),
+        (
+            FASTAPI,
+            "Every day at 8:00, it reads GitHub “fastapi/fastapi” and Jira “MOCK”. It can create "
+            "Jira tickets in “MOCK” only once, each after a yes. It changes nothing else.",
+            "words",
+        ),
+        (
+            NOTHING_STARTS_IT,
+            "It starts nothing. When it runs, it reads Jira “MOCK”. It changes nothing.",
+            "negation",
+        ),
     ],
     ids=[
         "weekly-to-daily-merged",
@@ -252,6 +270,9 @@ NO_YES_EACH_RUN = request(
         "yes-moved-within-a-sentence",
         "yes-left-on-a-look",
         "tickets-to-one-ticket",
+        "schedule-to-a-person",
+        "only-once",
+        "negation-on-the-other-side",
     ],
 )
 def test_a_fact_moved_or_changed_inside_the_paragraph_is_refused(
@@ -331,7 +352,7 @@ def test_a_yes_or_a_negation_stays_on_the_fact_it_belongs_to(
         (
             FASTAPI,
             "Each day at 8:00 it reads Jira “MOCK” and GitHub “fastapi/fastapi”. "
-            "It can create Jira tickets in “MOCK”, but only after a yes. Nothing else changes.",
+            "It can create Jira tickets in “MOCK” after a yes. Nothing else changes.",
         ),
         (
             WEEKLY,
@@ -343,12 +364,8 @@ def test_a_yes_or_a_negation_stays_on_the_fact_it_belongs_to(
             "Each day at 8:00 it reads GitHub “fastapi/fastapi” and Jira “MOCK”. "
             "It can create Jira tickets for “MOCK”, each after a yes. Nothing else changes.",
         ),
-        (
-            NOTHING_STARTS_IT,
-            "Nothing starts it. When it runs, it reads Jira “MOCK”. Nothing changes.",
-        ),
     ],
-    ids=["yes-first", "reads-reordered", "each-monday", "for-a-place", "nothing-changes"],
+    ids=["yes-first", "reads-reordered", "each-monday", "for-a-place"],
 )
 def test_a_true_reword_of_each_sentence_still_passes(asked: ExplainWordingRequest, text: str):
     assert explain_guard(text, asked) is None

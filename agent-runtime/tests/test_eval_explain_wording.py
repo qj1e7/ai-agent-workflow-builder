@@ -123,7 +123,7 @@ def test_a_shown_smoothing_that_moves_a_fact_inside_the_paragraph_is_untrue(
         (
             "release-check",
             "Each day at 8:00 it reads Jira “MOCK” and GitHub “langchain-ai/langgraph”. "
-            "It can create Jira tickets in “MOCK”, but only after a yes. Nothing else changes.",
+            "It can create Jira tickets in “MOCK” after a yes. Nothing else changes.",
         ),
         (
             "agent-cards",
