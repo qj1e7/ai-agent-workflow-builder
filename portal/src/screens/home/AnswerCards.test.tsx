@@ -237,6 +237,19 @@ describe('the software card', () => {
     expect(text(html)).toContain('Kubernetes It isn’t on the watchlist, so I don’t know which version you run.')
     expect(buttons(html)).toEqual(['Watch it'])
   })
+
+  it.each(['add', 'Add', 'watch', 'keep track of', 'monitor', 'Keep an eye on', 'track', 'follow'])('says only that it isn’t on the watchlist yet when she asked to %s it', (word) => {
+    const html = draw({ ...ask('Node Js', null), word })
+    expect(text(html)).toContain('Node Js It isn’t on the watchlist yet.')
+    expect(text(html)).not.toContain('which version you run')
+    expect(buttons(html)).toEqual(['Watch it'])
+  })
+
+  it('keeps the version sentence inside a can’t whose alternative is the watch offer, when the word asks about the version', () => {
+    const offer = ask('Node Js', null)
+    const html = draw({ trace_id: null, answer: 'cant', cant: [], alternative: offer, parts: [] })
+    expect(text(html)).toContain('It isn’t on the watchlist, so I don’t know which version you run.')
+  })
 })
 
 describe('PartsList on a set-up card', () => {
