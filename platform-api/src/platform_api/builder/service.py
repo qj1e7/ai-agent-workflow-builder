@@ -191,14 +191,10 @@ def _schedule_view(
     saved in the Portal: a version published in n8n may have added, changed or taken out its
     schedule. So its day, time and zone are read from that version alone, as its next run is. A
     schedule saved in the Portal names its owner."""
-    own = _own(row) and row["document"] is not None
-    schedule = (
-        schedule_of(row["document"], team_zone)
-        if own
-        else None
-        if saved is None
-        else saved.schedule
-    )
+    if _own(row) and row["document"] is not None:
+        schedule = schedule_of(row["document"], team_zone)
+    else:
+        schedule = None if saved is None else saved.schedule
     if schedule is None:
         return None
     return UseCaseSchedule(

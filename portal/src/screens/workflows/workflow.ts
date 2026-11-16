@@ -168,7 +168,7 @@ export interface When {
   readonly small: string
 }
 
-/** When it runs, and under it the zone, or how else it starts. While nothing in n8n can start it from here, that says why instead of Run now. */
+/** When it runs, and under it the zone or how else it starts. With no Start from the Portal, it says why there is no Run now. */
 export function whenWords({ schedule, start_refused: refused }: Pick<UseCaseView, 'schedule'> & Partial<Pick<UseCaseView, 'start_refused'>>): When {
   if (!schedule) return { words: 'No schedule', small: refused ?? 'An Operator starts it with Run now.' }
   const words = repeatWords(schedule)
@@ -343,8 +343,8 @@ export function menuActionsOf(useCase: Pick<UseCaseView, 'template' | 'state'> &
 
 /**
  * What an Operator can do to a workflow. A draft never runs on its schedule or by Run now, so it has a test run instead, and Turn it on
- * once a test run passed (ADR 0044). Pausing a draft would change nothing, so it has no Pause. While nothing in n8n can start it from here,
- * neither Run now nor a test run is offered, and When says why.
+ * once a test run passed (ADR 0044). Pausing a draft would change nothing, so it has no Pause. With no Start from the Portal, neither Run now
+ * nor a test run is offered, and When says why.
  */
 export function controlsOf(useCase: Pick<UseCaseView, 'template' | 'state'> & Partial<Pick<UseCaseView, 'last_run' | 'start_refused'>>, viewer: Viewer): readonly Control[] {
   if (!viewer.operator || looksAfterOnSoftwarePage(useCase)) return []

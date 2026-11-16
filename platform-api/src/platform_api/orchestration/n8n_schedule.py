@@ -38,7 +38,8 @@ PART = re.compile(r"([0-9]+)(?:-([0-9]+))?(?:/([0-9]+))?")
 @dataclass(frozen=True)
 class Rule:
     """One kind of rule: n8n's interval when it is left out, the intervals whose runs the cron
-    alone spaces, and the parts of the time n8n picks itself when they are left out."""
+    alone spaces, and the parts of the time n8n picks itself when one is saved as null, or the
+    rule has no interval at all."""
 
     every_default: int
     shown_every: frozenset[int]
