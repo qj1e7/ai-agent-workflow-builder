@@ -29,7 +29,7 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from itertools import pairwise
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, ValidationError
 
@@ -43,6 +43,7 @@ from platform_api.orchestration.node_classes import (
     OURS,
     BlockKind,
     Off,
+    OffBecause,
     Runs,
     Use,
 )
@@ -99,8 +100,45 @@ ASK_TYPE_VERSION = 1
 ADDED_SPACING = 220
 
 
+type RuleId = Literal[
+    "unreadable",
+    "block_off",
+    "version_off",
+    "picked_by_expression",
+    "operation_off",
+    "nothing_starts",
+    "no_error_workflow",
+    "other_time_zone",
+    "test_runs_not_kept",
+    "progress_not_saved",
+    "tell_place",
+    "notice_place_expression",
+    "notice_words_expression",
+    "notice_words_unreadable",
+    "calls_everyone",
+    "no_platform_key",
+    "not_platform_key",
+    "key_not_made",
+    "key_for_other_block",
+    "runs_before_ours",
+    "no_run_time",
+    "run_time_unshowable",
+    "unknown_agent",
+    "unknown_agent_input",
+    "write_place_not_allowed",
+    "read_place_not_allowed",
+    "change_not_allowed",
+    "no_yes_before_write",
+    "second_yes",
+]
+"""Each rule the checker grades a workflow by (ADR 0051). FLAG_RULES has a row for each."""
+type PlatformRule = Literal["platform_shape", "platform_setting", "not_platform_workflow"]
+"""The rules only the platform's own n8n workflows are held to, which no report shows."""
+
+
 @dataclass(frozen=True)
 class Finding:
+    rule: RuleId | PlatformRule
     grade: Grade
     block: str | None
     text: str
@@ -281,7 +319,7 @@ def grade(
     try:
         flow = read_flow(document)
     except Unreadable as unreadable:
-        return _graded([Finding("needs_a_fix", None, str(unreadable))])
+        return _graded([_fix("unreadable", None, str(unreadable))])
     findings: list[Finding] = [
         *_off_blocks(flow),
         *_triggers(flow),
@@ -307,7 +345,7 @@ def unchecked(document: Mapping[str, Any], keys: Mapping[str, str]) -> tuple[Fin
     try:
         flow = read_flow(document)
     except Unreadable as unreadable:
-        return (_fix(None, str(unreadable), runs_anyway=True),)
+        return (_fix("unreadable", None, str(unreadable), runs_anyway=True),)
     found = (
         *_off_blocks(flow),
         *_places(flow),
@@ -379,17 +417,23 @@ def check_platform(
     name = str(document.get("name"))
     shape = PLATFORM_SHAPES.get(name)
     if shape is None:
-        return (_fix(None, f'"{name}" is not one of the platform\'s own workflows.'),)
+        return (
+            _fix(
+                "not_platform_workflow",
+                None,
+                f'"{name}" is not one of the platform\'s own workflows.',
+            ),
+        )
     try:
         flow = read_flow(document)
     except Unreadable as unreadable:
-        return (_fix(None, str(unreadable)),)
+        return (_fix("unreadable", None, str(unreadable)),)
     kept = {**shape.kept, **({"timezone": time_zone} if shape.scheduled else {})}
     findings = [*_chain(flow, shape), *_kept(flow, kept), *_off_blocks(flow)]
     findings += _schedules(flow)
     reported = error_workflow is not None and flow.settings.get("errorWorkflow") == error_workflow
     if shape.reports_failures and not reported:
-        findings.append(_fix(None, "Its failures do not go to the platform's error workflow."))
+        findings.append(_fix("no_error_workflow", None, NOT_REPORTED))
     return tuple(findings)
 
 
@@ -397,13 +441,13 @@ def _chain(flow: Flow, shape: PlatformShape) -> Iterable[Finding]:
     names = [block.name for kind in shape.chain for block in flow.of_kind(kind)]
     edges = {Edge(source, 0, target) for source, target in pairwise(names)}
     if len(names) != len(shape.chain) or len(flow.blocks) != len(names) or set(flow.edges) != edges:
-        yield _fix(None, f"It must be {shape.said}, and nothing else.")
+        yield _fix("platform_shape", None, f"It must be {shape.said}, and nothing else.")
 
 
 def _kept(flow: Flow, kept: Mapping[str, JsonValue]) -> Iterable[Finding]:
     for key, value in kept.items():
         if flow.settings.get(key) != value:
-            yield _fix(None, f"Its setting {key} must be {value!r}.")
+            yield _fix("platform_setting", None, f"Its setting {key} must be {value!r}.")
 
 
 def _graded(findings: Sequence[Finding]) -> Graded:
@@ -418,8 +462,10 @@ def _graded(findings: Sequence[Finding]) -> Graded:
     return Graded(worst, tuple(findings))
 
 
-def _fix(block: str | None, text: str, runs_anyway: bool = False) -> Finding:
-    return Finding("needs_a_fix", block, text, runs_anyway)
+def _fix(
+    rule: RuleId | PlatformRule, block: str | None, text: str, runs_anyway: bool = False
+) -> Finding:
+    return Finding(rule, "needs_a_fix", block, text, runs_anyway)
 
 
 _UTC_NAMES = frozenset(
@@ -443,13 +489,26 @@ def _zone_words(time_zone: str) -> str:
     return f"{place} time"
 
 
+OFF_RULES: Mapping[OffBecause, RuleId] = {
+    "type": "block_off",
+    "version": "version_off",
+    "expression": "picked_by_expression",
+    "operation": "operation_off",
+}
+
+
 def _off_blocks(flow: Flow) -> Iterable[Finding]:
     """Every block the class file does not let run: its type, its version, or what it was asked
     to do. Unknown means off (ADR 0045)."""
     for block in flow.blocks.values():
         verdict = NODE_CLASSES.verdict(block.type, block.version, block.parameters)
         if isinstance(verdict, Off):
-            yield _fix(block.name, _off_words(block, verdict), _runs_anyway(block))
+            yield _fix(
+                OFF_RULES[verdict.because],
+                block.name,
+                _off_words(block, verdict),
+                _runs_anyway(block),
+            )
 
 
 SHAPES = "Shapes the data"
@@ -534,7 +593,12 @@ def _ours_first(flow: Flow) -> Iterable[Finding]:
         called = called or kind in CALLS
         stack.extend((edge.target, called) for edge in flow.after(name))
     for name in early:
-        yield _fix(name, f'"{name}" runs before any of our steps. {OURS_FIRST}', runs_anyway=True)
+        yield _fix(
+            "runs_before_ours",
+            name,
+            f'"{name}" runs before any of our steps. {OURS_FIRST}',
+            runs_anyway=True,
+        )
 
 
 def _places(flow: Flow) -> Iterable[Finding]:
@@ -546,6 +610,7 @@ def _places(flow: Flow) -> Iterable[Finding]:
             continue
         if not all(_literal(_at_path(block.parameters, path)) for path in verdict.use.target):
             yield _fix(
+                "notice_place_expression",
                 block.name,
                 f'"{block.name}" posts to a place an expression picks, so it is off.',
                 runs_anyway=True,
@@ -558,6 +623,14 @@ in NFKC and case-folded."""
 SAYS_WHAT_A_RUN_READ = "writes its message with an expression, so it is off. Use our Tell for that"
 UNREADABLE_WORDS = "has a message the checker can't read, so it is off"
 CALLS_EVERYONE = "calls out a whole channel, so it is off"
+type NoticeWordsRule = Literal[
+    "notice_words_expression", "notice_words_unreadable", "calls_everyone"
+]
+SAID: Mapping[NoticeWordsRule, str] = {
+    "notice_words_expression": SAYS_WHAT_A_RUN_READ,
+    "notice_words_unreadable": UNREADABLE_WORDS,
+    "calls_everyone": CALLS_EVERYONE,
+}
 
 
 def _words(flow: Flow) -> Iterable[Finding]:
@@ -569,28 +642,28 @@ def _words(flow: Flow) -> Iterable[Finding]:
         verdict = NODE_CLASSES.verdict(block.type, block.version, block.parameters)
         if not isinstance(verdict, Runs) or verdict.on != "notice" or verdict.use is None:
             continue
-        problem = _said(block.parameters, verdict.use)
-        if problem is not None:
-            yield _fix(block.name, f'"{block.name}" {problem}.', runs_anyway=True)
+        rule = _said(block.parameters, verdict.use)
+        if rule is not None:
+            yield _fix(rule, block.name, f'"{block.name}" {SAID[rule]}.', runs_anyway=True)
 
 
-def _said(parameters: Mapping[str, JsonValue], use: Use) -> str | None:
+def _said(parameters: Mapping[str, JsonValue], use: Use) -> NoticeWordsRule | None:
     said: list[str] = []
     for path in use.text:
         value = _at_path(parameters, path)
         texts = list(_texts(value))
         if any(text.startswith("=") for text in texts):
-            return SAYS_WHAT_A_RUN_READ
+            return "notice_words_expression"
         if path in use.encoded and isinstance(value, str):
             try:
                 texts = list(_texts(json.loads(value)))
             except ValueError:
-                return UNREADABLE_WORDS
+                return "notice_words_unreadable"
         said += texts
     if any(MASS_MENTION.search(unicodedata.normalize("NFKC", text).casefold()) for text in said):
-        return CALLS_EVERYONE
+        return "calls_everyone"
     if any(_at_path(parameters, path) not in (None, False) for path in use.quiet):
-        return CALLS_EVERYONE
+        return "calls_everyone"
     return None
 
 
@@ -643,23 +716,34 @@ def _keys(flow: Flow, keys: Mapping[str, str]) -> Iterable[Finding]:
         runs = NODE_CLASSES.verdict(block.type, block.version, block.parameters)
         if block.spec is not None and block.spec.kind == "system" and isinstance(runs, Runs):
             if spec is None or spec.id not in keys:
-                yield _fix(block.name, f'"{block.name}" has no key: the platform has none for it.')
+                yield _fix(
+                    "no_platform_key",
+                    block.name,
+                    f'"{block.name}" has no key: the platform has none for it.',
+                )
             elif not any(
                 isinstance(named, dict) and named.get("id") == spec.id
                 for named in block.credentials.values()
             ):
-                yield _fix(block.name, f'"{block.name}" does not use the platform\'s key.')
+                yield _fix(
+                    "not_platform_key",
+                    block.name,
+                    f'"{block.name}" does not use the platform\'s key.',
+                )
         for kind, named in block.credentials.items():
             key = named.get("id") if isinstance(named, dict) else None
             if not isinstance(key, str) or key not in keys:
                 yield _fix(
+                    "key_not_made",
                     block.name,
                     f'"{block.name}" uses a key the platform did not make.',
                     runs_anyway=True,
                 )
             elif keys[key] != kind:
                 yield _fix(
-                    block.name, f'"{block.name}" uses a platform key made for another block.'
+                    "key_for_other_block",
+                    block.name,
+                    f'"{block.name}" uses a platform key made for another block.',
                 )
 
 
@@ -677,29 +761,43 @@ def _off_words(block: Block, off: Off) -> str:
 
 def _triggers(flow: Flow) -> Iterable[Finding]:
     if not flow.of_kind("schedule", "start"):
-        yield _fix(None, "Nothing starts it: it has no Schedule and no Start from the Portal.")
+        yield _fix(
+            "nothing_starts",
+            None,
+            "Nothing starts it: it has no Schedule and no Start from the Portal.",
+        )
+
+
+NOT_REPORTED = "Its failures do not go to the platform's error workflow."
 
 
 def _settings(flow: Flow, error_workflow: str | None, time_zone: str) -> Iterable[Finding]:
     settings = flow.settings
     if error_workflow is None or settings.get("errorWorkflow") != error_workflow:
-        yield _fix(None, "Its failures do not go to the platform's error workflow.")
+        yield _fix("no_error_workflow", None, NOT_REPORTED)
     if settings.get("timezone") != time_zone:
         yield _fix(
+            "other_time_zone",
             None,
             f"It does not run on {_zone_words(time_zone)}. "
             "Save its schedule again, or change its time zone in n8n.",
         )
     if settings.get("saveManualExecutions") is not True:
-        yield _fix(None, "n8n does not keep its test runs.")
+        yield _fix("test_runs_not_kept", None, "n8n does not keep its test runs.")
     if settings.get("saveExecutionProgress") is not True:
-        yield _fix(None, "n8n does not save its progress, so a run cannot be linked.")
+        yield _fix(
+            "progress_not_saved", None, "n8n does not save its progress, so a run cannot be linked."
+        )
 
 
 def _parameters(flow: Flow) -> Iterable[Finding]:
     for block in flow.of_kind("tell"):
         if block.parameters.get("where", "channel") not in TELL_WHERE:
-            yield _fix(block.name, f'"{block.name}" tells somewhere other than the fixed places.')
+            yield _fix(
+                "tell_place",
+                block.name,
+                f'"{block.name}" tells somewhere other than the fixed places.',
+            )
 
 
 def _schedules(flow: Flow) -> Iterable[Finding]:
@@ -708,35 +806,53 @@ def _schedules(flow: Flow) -> Iterable[Finding]:
     for block in flow.of_kind("schedule"):
         intervals = schedule_intervals(block.parameters)
         if not intervals:
-            yield _fix(block.name, f'"{block.name}" has no time to run.')
+            yield _fix("no_run_time", block.name, f'"{block.name}" has no time to run.')
         for interval in intervals:
             problem = interval_problem(interval)
             if problem is not None:
-                yield _fix(block.name, f'"{block.name}" {problem}')
+                yield _fix("run_time_unshowable", block.name, f'"{block.name}" {problem}')
 
 
 def _options(flow: Flow, known: KnownOptions) -> Iterable[Finding]:
     for block in flow.of_kind("agent"):
         agent = block.parameters.get("agent")
         if not isinstance(agent, str) or agent not in known.agents:
-            yield _fix(block.name, f'"{block.name}" names an agent the platform does not know.')
+            yield _fix(
+                "unknown_agent",
+                block.name,
+                f'"{block.name}" names an agent the platform does not know.',
+            )
             continue
         allowed = known.inputs.get(agent, {})
         for name, value in _input_rows(block):
             if name not in allowed:
-                yield _fix(block.name, f'"{block.name}" gives its agent an input it does not have.')
+                yield _fix(
+                    "unknown_agent_input",
+                    block.name,
+                    f'"{block.name}" gives its agent an input it does not have.',
+                )
             elif (places := allowed[name]) is not None and value not in places:
                 yield _fix(
-                    block.name, f'"{block.name}" writes to a place the platform does not allow.'
+                    "write_place_not_allowed",
+                    block.name,
+                    f'"{block.name}" writes to a place the platform does not allow.',
                 )
     for block in flow.of_kind("read"):
         source = str(block.parameters.get("source", "github_releases"))
         if block.parameters.get("place") not in known.places.get(source, frozenset()):
-            yield _fix(block.name, f'"{block.name}" reads a place the platform does not allow.')
+            yield _fix(
+                "read_place_not_allowed",
+                block.name,
+                f'"{block.name}" reads a place the platform does not allow.',
+            )
     for block in flow.of_kind("propose"):
         places = known.writes.get(str(block.parameters.get("action")))
         if places is None or block.parameters.get("place") not in places:
-            yield _fix(block.name, f'"{block.name}" proposes a change the platform does not allow.')
+            yield _fix(
+                "change_not_allowed",
+                block.name,
+                f'"{block.name}" proposes a change the platform does not allow.',
+            )
 
 
 def _input_rows(block: Block) -> list[tuple[str, JsonValue]]:
@@ -773,9 +889,11 @@ def _yes_before_writes(flow: Flow) -> Iterable[Finding]:
             else:
                 stack.append((edge.target, approved, asked))
     for name in unapproved:
-        yield Finding("writes_refused", name, f'"{name}" can run without a yes.')
+        yield Finding(
+            "no_yes_before_write", "writes_refused", name, f'"{name}" can run without a yes.'
+        )
     for name in doubled:
-        yield _fix(name, f'"{name}" asks for a second yes on the same path.')
+        yield _fix("second_yes", name, f'"{name}" asks for a second yes on the same path.')
 
 
 def _kind(flow: Flow, name: str) -> BlockKind | None:
@@ -855,3 +973,233 @@ def free_name(wanted: str, taken: set[str]) -> str:
     while f"{wanted} {number}" in taken:
         number += 1
     return f"{wanted} {number}"
+
+
+@dataclass(frozen=True)
+class FixedForYou:
+    """Code puts it right whenever it lays a workflow out."""
+
+    added: str
+    """What code made sure of, as the report's "Fixed for you" lists it."""
+
+
+@dataclass(frozen=True)
+class NeedsAnAnswer:
+    """The person setting the workflow up answers it, in the chat or in n8n."""
+
+
+@dataclass(frozen=True)
+class NeedsASetting:
+    """An Operator changes it in Settings or the agent library. Our API refuses it at run time
+    whatever an approval says."""
+
+
+@dataclass(frozen=True)
+class CantRun:
+    """Nobody can clear it in the app. It needs a new ADR, or spike P9."""
+
+
+@dataclass(frozen=True)
+class ApproverMayAccept:
+    """An Approver may accept it at set-up (ADR 0051, section 3)."""
+
+    agrees: str
+    """What the Approver agrees to by accepting it."""
+    approvers: int = 1
+    """How many Approvers accept it, one after the other. Two when code can't tell what a block
+    does, so can't tell that it leaves everyone's access as it was (ADR 0051, section 3)."""
+
+
+type Clears = FixedForYou | NeedsAnAnswer | NeedsASetting | CantRun | ApproverMayAccept
+
+
+@dataclass(frozen=True)
+class FlagRow:
+    what: str
+    why: str
+    """Why it matters."""
+    passed: str
+    """What the report says when no block breaks the rule."""
+    clears: Clears
+
+
+FLAG_RULES: Mapping[RuleId, FlagRow] = {
+    "unreadable": FlagRow(
+        "The checker can't read it",
+        "Nothing in it can be checked, so nobody can say what it does.",
+        "The checker read the whole workflow.",
+        NeedsAnAnswer(),
+    ),
+    "block_off": FlagRow(
+        "Uses a block our n8n doesn't load",
+        "n8n can't run a block it doesn't load, so the workflow can't run as it is.",
+        "Every block loads in our n8n.",
+        CantRun(),
+    ),
+    "version_off": FlagRow(
+        "Uses a version of a block the platform hasn't classed",
+        "Nobody has checked what this version of the block does, and n8n runs it as it is.",
+        "Every block is a version the platform has classed.",
+        ApproverMayAccept(
+            "The block runs as n8n made it, in a version nobody here has checked.", approvers=2
+        ),
+    ),
+    "picked_by_expression": FlagRow(
+        "Picks what it does from the run's data",
+        "What the block does is known only when it runs, so nobody can check it first.",
+        "Every block does one thing, written in the block.",
+        ApproverMayAccept("The block does whatever the run's data picks.", approvers=2),
+    ),
+    "operation_off": FlagRow(
+        "Does something the platform hasn't classed",
+        "It could change data, and n8n's own blocks don't ask for a yes on each run.",
+        "Each of n8n's blocks only reads, posts or shapes the data.",
+        ApproverMayAccept("It does this on every run, with no yes on each run.", approvers=2),
+    ),
+    "nothing_starts": FlagRow(
+        "Nothing starts it",
+        "It has no schedule and no Start from the Portal, so it never runs.",
+        "A schedule or Start from the Portal starts it.",
+        NeedsAnAnswer(),
+    ),
+    "no_error_workflow": FlagRow(
+        "A stopped run isn't reported",
+        "Its failures don't go to the platform's error workflow, so a stopped run wouldn't show.",
+        "A stopped run is reported in the Portal.",
+        FixedForYou("Added our error workflow, so a stopped run shows in the Portal."),
+    ),
+    "other_time_zone": FlagRow(
+        "Runs on another time zone",
+        "Its run times wouldn't match the times the Portal shows.",
+        "Runs on the team's time zone.",
+        FixedForYou("Set the team's time zone."),
+    ),
+    "test_runs_not_kept": FlagRow(
+        "Test runs aren't kept",
+        "n8n wouldn't keep its test runs, so nobody could look at one afterwards.",
+        "n8n keeps its test runs.",
+        FixedForYou("Turned on keeping test runs."),
+    ),
+    "progress_not_saved": FlagRow(
+        "Progress isn't saved",
+        "n8n wouldn't save each step, so a run couldn't be linked to its record.",
+        "n8n saves each step of a run.",
+        FixedForYou("Turned on saved progress."),
+    ),
+    "tell_place": FlagRow(
+        "Tells a place that isn't one of the fixed ones",
+        "Our Tell posts only to the team's Teams channel, its email list, or both.",
+        "Every Tell goes to one of the fixed places.",
+        NeedsAnAnswer(),
+    ),
+    "notice_place_expression": FlagRow(
+        "Posts to a place the run's data picks",
+        "Where it posts is known only when it runs, so a run could post anywhere the key reaches.",
+        "Every post goes to a place written in the block.",
+        ApproverMayAccept("It posts wherever the run's data says."),
+    ),
+    "notice_words_expression": FlagRow(
+        "Posts words from what the run read",
+        "The words are known only when it runs, and what a run reads could say anything.",
+        "Every post's words are written in the block.",
+        ApproverMayAccept("What the run read is posted as it is."),
+    ),
+    "notice_words_unreadable": FlagRow(
+        "Has words the checker can't read",
+        "Nobody can check what it would post.",
+        "The checker read every post's words.",
+        NeedsAnAnswer(),
+    ),
+    "calls_everyone": FlagRow(
+        "Calls out a whole channel",
+        "Everyone in the channel is told, not only the people it is for.",
+        "No post calls out a whole channel.",
+        ApproverMayAccept("Everyone in the channel is told each time it posts."),
+    ),
+    "no_platform_key": FlagRow(
+        "Uses a system the platform has no key for",
+        "The block runs only with a key the platform made, and there is none for this system.",
+        "The platform has a key for every system a block uses.",
+        CantRun(),
+    ),
+    "not_platform_key": FlagRow(
+        "Doesn't use the platform's key",
+        "Each of n8n's blocks for a system runs with the key the platform made for that system.",
+        "Every block uses the platform's key for its system.",
+        FixedForYou("Put the platform's key on each of n8n's blocks."),
+    ),
+    "key_not_made": FlagRow(
+        "Uses a key the platform didn't make",
+        "In the platform's n8n project a workflow could use any key kept there, a member's too.",
+        "No block uses a key the platform didn't make.",
+        FixedForYou("Put no other key on any block."),
+    ),
+    "key_for_other_block": FlagRow(
+        "Uses a platform key made for another block",
+        "A key goes only on the kind of block it was made for.",
+        "Each key is on the kind of block it was made for.",
+        FixedForYou("Put each key only on the kind of block it was made for."),
+    ),
+    "runs_before_ours": FlagRow(
+        "Runs before any of our steps",
+        "Our first step records the run and checks its version. Before it, nothing is checked.",
+        "One of our steps comes first, so every run is recorded.",
+        FixedForYou("Put one of our steps first, so every run is recorded."),
+    ),
+    "no_run_time": FlagRow(
+        "Has no time to run",
+        "Its schedule names no time, so it never runs on its own.",
+        "Its schedule names a time.",
+        NeedsAnAnswer(),
+    ),
+    "run_time_unshowable": FlagRow(
+        "Runs at times the Portal can't show",
+        "n8n would pick part of the time itself, so nobody can see the next run to the minute.",
+        "The Portal can show each next run.",
+        ApproverMayAccept("It runs at times n8n picks, which the Portal can't show."),
+    ),
+    "unknown_agent": FlagRow(
+        "Names an agent card nobody saved",
+        "Our platform refuses to run an agent it doesn't know, whatever an approval says.",
+        "Every agent is a saved card.",
+        NeedsASetting(),
+    ),
+    "unknown_agent_input": FlagRow(
+        "Gives its agent an input the card doesn't have",
+        "Our platform refuses an input the card doesn't have, whatever an approval says.",
+        "Every agent gets only its own inputs.",
+        NeedsASetting(),
+    ),
+    "write_place_not_allowed": FlagRow(
+        "Writes to a place the team hasn't allowed",
+        "Our platform refuses a write to a place that isn't on the team's list.",
+        "Writes only to places the team allows.",
+        NeedsASetting(),
+    ),
+    "read_place_not_allowed": FlagRow(
+        "Reads a place the team hasn't allowed",
+        "Our platform refuses to read a place that isn't on the team's list.",
+        "Reads only places the team allows.",
+        NeedsASetting(),
+    ),
+    "change_not_allowed": FlagRow(
+        "Proposes a change the team hasn't allowed",
+        "Our platform refuses a change, or a place for it, that isn't on the team's list.",
+        "Proposes only changes the team allows.",
+        NeedsASetting(),
+    ),
+    "no_yes_before_write": FlagRow(
+        "Writes with no yes before it",
+        "Our platform refuses the write, so the run stops before it.",
+        "Every write waits for a yes.",
+        FixedForYou("Added a yes before each write."),
+    ),
+    "second_yes": FlagRow(
+        "Asks for a yes twice on one path",
+        "A path needs one yes before its write, and this one asks twice.",
+        "No path asks for a yes twice.",
+        ApproverMayAccept("It asks for a yes twice on one path."),
+    ),
+}
+"""What each rule is, why it matters and who can clear it, in plain words (ADR 0051, section 2).
+The workflow report reads it."""

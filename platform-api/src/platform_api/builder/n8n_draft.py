@@ -99,7 +99,7 @@ def check_draft(
         changes = bool(writes(laid))
         with_yes = add_yes(laid, key)
     except Unreadable as unreadable:
-        return DraftRefused((Finding("needs_a_fix", None, str(unreadable)),))
+        return DraftRefused((Finding("unreadable", "needs_a_fix", None, str(unreadable)),))
     graded = grade(with_yes.document, error_workflow, time_zone, known)
     if graded.grade != "safe":
         return DraftRefused(graded.findings)
