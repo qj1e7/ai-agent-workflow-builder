@@ -166,8 +166,9 @@ class UseCaseSchedule(WireModel):
     day: Day
     at: ClockTime
     time_zone: str
-    owner_name: str = Field(
-        description="The name of the schedule owner. Its scheduled runs start as them."
+    owner_name: str | None = Field(
+        description="The name of the schedule owner. Its scheduled runs start as them. Null for a "
+        "schedule nobody saved in the Portal, such as one set in n8n's editor."
     )
     held: ScheduleHold | None = Field(
         default=None,

@@ -12996,9 +12996,16 @@
             "title": "Held Words"
           },
           "owner_name": {
-            "description": "The name of the schedule owner. Its scheduled runs start as them.",
-            "title": "Owner Name",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The name of the schedule owner. Its scheduled runs start as them. Null for a schedule nobody saved in the Portal, such as one set in n8n's editor.",
+            "title": "Owner Name"
           },
           "time_zone": {
             "title": "Time Zone",
