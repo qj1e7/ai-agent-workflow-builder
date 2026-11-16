@@ -18,6 +18,7 @@
     {
       "kind": "reads",
       "together": [
+        "reads",
         "GitHub",
         "fastapi/fastapi"
       ],
@@ -26,6 +27,7 @@
     {
       "kind": "reads",
       "together": [
+        "reads",
         "Jira",
         "MOCK"
       ],

@@ -960,8 +960,8 @@ def answered_explain() -> Answered:
 def explain_wording_request() -> ExplainWordingRequest:
     facts = [
         ExplainFact(kind="runs", together=["day", "8:00"], negated=False),
-        ExplainFact(kind="reads", together=["GitHub", "fastapi/fastapi"], negated=False),
-        ExplainFact(kind="reads", together=["Jira", "MOCK"], negated=False),
+        ExplainFact(kind="reads", together=["reads", "GitHub", "fastapi/fastapi"], negated=False),
+        ExplainFact(kind="reads", together=["reads", "Jira", "MOCK"], negated=False),
         ExplainFact(kind="writes", together=["create", "Jira", "MOCK", "yes"], negated=False),
         ExplainFact(kind="changes", together=["changes", "nothing", "else"], negated=True),
     ]

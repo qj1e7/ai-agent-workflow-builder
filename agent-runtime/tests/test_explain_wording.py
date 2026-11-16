@@ -42,8 +42,8 @@ FASTAPI = request(
     "Every day at 8:00, it reads GitHub “fastapi/fastapi” and Jira “MOCK”. "
     "It can create Jira tickets in “MOCK”, each after a yes. It changes nothing else.",
     fact("runs", "day", "8:00"),
-    fact("reads", "GitHub", "fastapi/fastapi"),
-    fact("reads", "Jira", "MOCK"),
+    fact("reads", "reads", "GitHub", "fastapi/fastapi"),
+    fact("reads", "reads", "Jira", "MOCK"),
     fact("writes", "create", "Jira", "MOCK", "yes"),
     fact("changes", "changes", "nothing", "else", negated=True),
 )
@@ -55,20 +55,20 @@ SMOOTHED = (
 READS_JIRA = request(
     "Every day at 8:00, it reads Jira “MOCK”. It changes nothing in Jira.",
     fact("runs", "day", "8:00"),
-    fact("reads", "Jira", "MOCK"),
+    fact("reads", "reads", "Jira", "MOCK"),
     fact("changes", "changes", "nothing", negated=True),
 )
 NOTHING_STARTS_IT = request(
     "Nothing starts it. When it runs, it reads Jira “MOCK”. It changes nothing.",
     fact("runs", "starts", negated=True),
-    fact("reads", "Jira", "MOCK"),
+    fact("reads", "reads", "Jira", "MOCK"),
     fact("changes", "changes", "nothing", negated=True),
 )
 BOARD = request(
     "Every Monday at 9:00, it reads Jira “MOCK”. "
     "It can change “Team page” in Jira, each after a yes. It changes nothing else.",
     fact("runs", "Monday", "9:00"),
-    fact("reads", "Jira", "MOCK"),
+    fact("reads", "reads", "Jira", "MOCK"),
     fact("writes", "change", "Jira", "Team page", "yes"),
     fact("changes", "changes", "nothing", "else", negated=True),
 )
@@ -140,13 +140,34 @@ def test_every_negation_is_kept_and_none_is_added(
         (SMOOTHED.replace("“fastapi/fastapi”", "“fastapi”"), "quotes"),
         (SMOOTHED.replace("and Jira “MOCK”", "and Jira “MOCK” and “WEB”"), "quotes"),
         (SMOOTHED.replace("GitHub “fastapi/fastapi” and ", ""), "quotes"),
-        (SMOOTHED.replace("“MOCK”.", "MOCK."), "words"),
+        (SMOOTHED.replace("“MOCK”.", "MOCK."), "together"),
         (SMOOTHED.replace("Each day at 8:00 it", "It"), "together"),
     ],
     ids=["changed", "added", "dropped-place", "unquoted", "dropped-time"],
 )
 def test_nothing_quoted_or_said_is_added_dropped_or_changed(text: str, check: str):
     assert explain_guard(text, FASTAPI) == check
+
+
+def test_a_read_dropped_into_a_writes_sentence_is_refused():
+    dropped = SMOOTHED.replace(" and Jira “MOCK”. It can", ". It can")
+    assert explain_guard(dropped, FASTAPI) == "together"
+
+
+def test_an_added_sentence_that_only_quotes_is_refused():
+    assert explain_guard(SMOOTHED + " “MOCK”.", FASTAPI) == "together"
+
+
+def test_a_word_of_a_kind_of_fact_the_workflow_lacks_is_refused():
+    shares = SMOOTHED.replace("it reads GitHub", "it reads and shares GitHub")
+    assert explain_guard(shares, FASTAPI) == "words"
+
+
+def test_the_text_is_judged_and_shown_as_the_person_sees_it():
+    hidden = SMOOTHED.replace("Nothing", "Noth\u200bing")
+    assert explain_guard(hidden, FASTAPI) is None
+    shown, _ = asked_with(ExplainWording(text=hidden), CLEAN)
+    assert shown == ExplainReworded(text=SMOOTHED)
 
 
 def test_a_new_system_is_never_named():
@@ -309,8 +330,8 @@ REACT = request(
     "Every Monday at 9:00, it reads GitHub “facebook/react” and Jira “WEB”. "
     "It posts “A new React release is out.” in Slack “C0RELEASES”. It changes nothing.",
     fact("runs", "Monday", "9:00"),
-    fact("reads", "GitHub", "facebook/react"),
-    fact("reads", "Jira", "WEB"),
+    fact("reads", "reads", "GitHub", "facebook/react"),
+    fact("reads", "reads", "Jira", "WEB"),
     fact("posts", "post", "Slack", "A new React release is out.", "C0RELEASES"),
     fact("changes", "changes", "nothing", negated=True),
 )
