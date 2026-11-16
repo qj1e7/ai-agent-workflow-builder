@@ -76,6 +76,7 @@ from platform_api.builder.n8n_draft import (
     NotSafe,
     blocks_of,
     check_draft,
+    read_steps,
 )
 from platform_api.builder.n8n_facts import BuilderWorkflowFacts, MadeKeys, ReleaseReader
 from platform_api.builder.n8n_holds import HeldInN8n, Holding
@@ -281,7 +282,7 @@ def _view(
     state = _state(lifecycle_of(row))
     held = schedule is not None and schedule.held is not None
     plan = (
-        plan_for_cards([a.card for a in agents])
+        plan_for_cards([a.card for a in agents]) or read_steps(row["document"])
         if template.key == AGENT_CARDS.key
         else template_view(template).blocks
     )

@@ -9,7 +9,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from platform_api.builder.models import N8nBlockKind, N8nBlockView, N8nExitView
+from platform_api.builder.models import BlockView, N8nBlockKind, N8nBlockView, N8nExitView
 from platform_api.orchestration import (
     ASK_EXITS,
     BlockKind,
@@ -158,6 +158,28 @@ def blocks_of(document: Mapping[str, Any]) -> list[N8nBlockView]:
             )
         )
     return views
+
+
+READ_STEP = "Read"
+
+
+def read_steps(document: Mapping[str, Any] | None) -> list[BlockView]:
+    """The run line's steps for a workflow that only reads, with no agent to name a step after,
+    as one made in n8n may be: one step for each of our Read blocks, in the order a run meets
+    them, named by what the block is."""
+    blocks = [] if document is None else blocks_of(document)
+    if any(block.kind == "agent" for block in blocks):
+        return []
+    reads = [block for block in blocks if block.kind == "read"]
+    return [
+        BlockView(
+            key=f"read_{number}",
+            name=READ_STEP,
+            description="Reads from GitHub, Jira or Confluence. It can't change anything.",
+            kind="agent",
+        )
+        for number, _ in enumerate(reads, start=1)
+    ]
 
 
 def view_kind(seen: Face) -> N8nBlockKind:
