@@ -40,6 +40,7 @@ check_n8n() {
   shift
   docker run --detach --name "$name" --env N8N_DIAGNOSTICS_ENABLED=false \
     --env N8N_VERSION_NOTIFICATIONS_ENABLED=false --env N8N_BLOCK_ENV_ACCESS_IN_NODE=true \
+    --env N8N_DISABLED_MODULES=mcp-registry \
     --env "NODES_EXCLUDE=$never" --env N8N_COMMUNITY_PACKAGES_ENABLED=false "$@" "$image" >/dev/null
   for _ in $(seq 1 90); do
     if docker exec "$name" wget -Y off -qO- http://localhost:5678/healthz/readiness >/dev/null 2>&1; then break; fi

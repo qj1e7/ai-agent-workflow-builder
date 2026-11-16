@@ -13,22 +13,21 @@ through `agent_runtime.catalogue`.
 
 prints the catalogue. `<served nodes.json>` is what the image serves at /types/nodes.json without
 the allow list, `<image>` is the pin it came from, and `<sources>` holds each package in
-`SHIPPED` as the image has it, at least `<package>/dist/known/nodes.json` and
-`<package>/dist/nodes`. scripts/n8n-catalogue.sh runs it.
+`SHIPPED` as the image has it: `<package>/dist/known/nodes.json`, `<package>/dist/nodes` and
+`<package>/dist/utils`. scripts/n8n-catalogue.sh runs it.
 
-The pin check reads each block's own folder in those packages for what could reach n8n's
-environment, its disk or another workflow, and fails on a block that does when section 2 doesn't
-already name it for that.
+It also runs the pin check of the blocks' code (`n8n_code_check`), and fails when that finds
+anything new.
 """
 
 import json
-import re
 import sys
 from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Literal, cast
+from typing import Any, cast
 
+from platform_api.n8n_code_check import SHIPPED, Scan, problems, scan
 from platform_api.orchestration.node_classes import (
     NODE_CLASSES,
     OURS,
@@ -44,8 +43,6 @@ from platform_api.orchestration.platform_keys import KEY_FOR_TYPE
 
 type Json = dict[str, Any]
 
-SHIPPED = ("n8n-nodes-base", "@n8n/n8n-nodes-langchain")
-"""The packages of blocks in the image. The pin check reads the source of each."""
 FETCHED = ("@n8n/mcp-registry",)
 """Packages whose blocks n8n makes while it runs, from a list it fetches from n8n's own API
 (api.n8n.io), not from the image. They change without a new pin, and DevNet can't fetch them, so
@@ -105,69 +102,6 @@ HELD: Mapping[str, tuple[Hold, ...]] = {
     "@n8n/n8n-nodes-langchain.retrieverWorkflow": (CALLS,),
 }
 """The blocks section 2 holds off. A tool n8n makes from one of them is held the same way."""
-
-type Reach = Literal[
-    "child_process", "process.env", "fs", "file helpers", "code sandbox", "another workflow"
-]
-
-_MODULE = r"""(?:\brequire\(\s*|\bimport\(\s*|\bfrom\s*)["']"""
-REACHES: Mapping[Reach, re.Pattern[str]] = {
-    "child_process": re.compile(r"\bchild_process\b"),
-    "process.env": re.compile(r"""\bprocess\.env\b|\bprocess\[\s*["']env["']\s*\]"""),
-    "fs": re.compile(_MODULE + r"""(?:node:)?fs(?:/promises)?["']"""),
-    "file helpers": re.compile(r"\b(?:createReadStream|writeContentToFile|resolvePath)\b"),
-    "code sandbox": re.compile(
-        r"\b[A-Z]\w*Sandbox\b|\bstartJob\b|"
-        + _MODULE
-        + r"""[^"']*(?:[Ss]andbox|vm2|isolated-vm|alasql)[^"']*["']"""
-    ),
-    "another workflow": re.compile(r"\bhelpers\.executeWorkflow\b|\.executeWorkflow\("),
-}
-"""What the author of ADR 0051 searched each block's code for: shell commands, n8n's
-environment, Node's file system, n8n's file helpers, n8n's code sandboxes, and running another
-workflow."""
-
-KNOWN: Mapping[str, frozenset[Reach]] = {
-    # Execute Command, which n8n never loads.
-    "n8n-nodes-base.executeCommand": frozenset({"child_process"}),
-    # The blocks that run code, held for spike P9. Merge runs AlaSQL in its SQL mode, in a
-    # sandbox whose helper uses fs.
-    "n8n-nodes-base.code": frozenset({"code sandbox", "process.env"}),
-    "@n8n/n8n-nodes-langchain.code": frozenset({"code sandbox", "process.env"}),
-    "@n8n/n8n-nodes-langchain.toolCode": frozenset({"code sandbox"}),
-    "n8n-nodes-base.function": frozenset({"code sandbox"}),
-    "n8n-nodes-base.functionItem": frozenset({"code sandbox"}),
-    "n8n-nodes-base.aiTransform": frozenset({"code sandbox"}),
-    "n8n-nodes-base.sort": frozenset({"code sandbox"}),
-    "n8n-nodes-base.itemLists": frozenset({"code sandbox"}),
-    "n8n-nodes-base.merge": frozenset({"code sandbox", "fs"}),
-    # The blocks that read or write a path on n8n's disk, held for spike P9.
-    "n8n-nodes-base.readWriteFile": frozenset({"fs", "file helpers"}),
-    "n8n-nodes-base.readBinaryFile": frozenset({"file helpers"}),
-    "n8n-nodes-base.readBinaryFiles": frozenset({"file helpers"}),
-    "n8n-nodes-base.writeBinaryFile": frozenset({"fs", "file helpers"}),
-    "n8n-nodes-base.git": frozenset({"fs", "file helpers"}),
-    # The sub-workflow blocks, held for an amendment. Execute Sub-workflow also loads a workflow
-    # from a file.
-    "n8n-nodes-base.executeWorkflow": frozenset({"another workflow", "fs", "file helpers"}),
-    "@n8n/n8n-nodes-langchain.toolWorkflow": frozenset({"another workflow"}),
-    "@n8n/n8n-nodes-langchain.retrieverWorkflow": frozenset({"another workflow"}),
-    # Each reads only settings of its own from n8n's environment. Airtop also reads n8n's own
-    # package.json, for n8n's version.
-    "n8n-nodes-base.airtop": frozenset({"process.env", "fs"}),
-    "@n8n/n8n-nodes-langchain.microsoftAgent365Trigger": frozenset({"process.env"}),
-    # Each uses fs only for files of its own in n8n's temporary folder. AI Agent Tool shares AI
-    # Agent's folder.
-    "n8n-nodes-base.editImage": frozenset({"fs"}),
-    "n8n-nodes-base.form": frozenset({"fs"}),
-    "n8n-nodes-base.formTrigger": frozenset({"fs"}),
-    "n8n-nodes-base.ftp": frozenset({"fs"}),
-    "n8n-nodes-base.ssh": frozenset({"fs"}),
-    "n8n-nodes-base.webhook": frozenset({"fs"}),
-    "@n8n/n8n-nodes-langchain.agent": frozenset({"fs"}),
-    "@n8n/n8n-nodes-langchain.agentTool": frozenset({"fs"}),
-}
-"""What section 2 found each block's code reaches in n8n 2.42.6, and why each is safe or held."""
 
 _PARAMETER_KEYS = (
     "name",
@@ -237,40 +171,19 @@ def dump(made: Json) -> str:
     return '{"blocks": {\n' + ",\n".join(lines) + "\n}, " + rest[1:] + "\n"
 
 
-def reaches(sources: Path) -> dict[str, frozenset[Reach]]:
-    """For each block of each package in `SHIPPED`, what the code in its own folder reaches."""
-    by_folder: dict[Path, frozenset[Reach]] = {}
-    found: dict[str, frozenset[Reach]] = {}
-    for package in SHIPPED:
-        root = sources / package
-        known = cast(
-            Mapping[str, Mapping[str, str]],
-            json.loads((root / "dist" / "known" / "nodes.json").read_text()),
-        )
-        for short, entry in known.items():
-            folder = (root / entry["sourcePath"]).parent
-            if folder not in by_folder:
-                by_folder[folder] = _reached(folder)
-            found[f"{package}.{short}"] = by_folder[folder]
-    return found
-
-
-def pin_problems(found: Mapping[str, frozenset[Reach]], served: Iterable[str]) -> list[str]:
-    """Each block whose code reaches something section 2 doesn't name for it, and each type n8n
-    serves whose code the check didn't read."""
-    problems = [
-        f"{name} reaches {', '.join(sorted(new))}, which ADR 0051 doesn't name for it. Read "
-        "its code, then hold it off or add it to KNOWN in platform_api/n8n_catalogue.py."
-        for name, reached in sorted(found.items())
-        if (new := reached - KNOWN.get(name, frozenset()))
-    ]
+def pin_problems(
+    found: Scan, served: Iterable[str], listed: Collection[str] | None = None
+) -> list[str]:
+    """What the pin check of the blocks' code found (`n8n_code_check`), and each type n8n serves
+    whose code it didn't read."""
+    said = problems(found, listed)
     names = set(served)
     for name in sorted(names):
-        if _kept(name) and not name.startswith(OURS) and name not in found:
+        if _kept(name) and not name.startswith(OURS) and name not in found.blocks:
             base = _made_from(name, names)
-            if base is None or base not in found:
-                problems.append(f"n8n serves {name}, whose code the pin check didn't read.")
-    return problems
+            if base is None or base not in found.blocks:
+                said.append(f"n8n serves {name}, whose code the pin check didn't read.")
+    return said
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -282,9 +195,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         return 2
     served = cast(list[Mapping[str, Any]], json.loads(Path(args[0]).read_text()))
-    found = reaches(Path(args[2]))
+    found = scan(Path(args[2]))
     try:
-        made = catalogue(served, args[1], found)
+        made = catalogue(served, args[1], found.blocks)
     except ValueError as error:
         print(f"catalogue: {error}", file=sys.stderr)
         return 1
@@ -358,15 +271,6 @@ def _made_from(name: str, names: set[str]) -> str | None:
     return None
 
 
-def _reached(folder: Path) -> frozenset[Reach]:
-    reached: set[Reach] = set()
-    for path in sorted(folder.rglob("*")):
-        if path.suffix in {".js", ".cjs", ".mjs"} and path.is_file():
-            text = path.read_text(errors="replace")
-            reached.update(reach for reach, pattern in REACHES.items() if pattern.search(text))
-    return frozenset(reached)
-
-
 def _versions(description: Mapping[str, Any]) -> list[int | float]:
     version = description.get("version")
     listed = cast(list[object], version) if isinstance(version, list) else [version]
@@ -407,9 +311,9 @@ def _version(name: str, description: Mapping[str, Any], classes: NodeClasses) ->
     versions = _versions(description)
     properties = cast(Sequence[Mapping[str, Any]], description.get("properties") or [])
     version: Json = {"versions": versions}
-    if resources := _resources(properties):
+    if resources := _resources(properties, versions):
         version["resources"] = resources
-    operations = _operations(properties)
+    operations = _operations(properties, versions)
     _class(name, versions, version, operations, classes)
     if operations:
         version["operations"] = operations
@@ -419,25 +323,37 @@ def _version(name: str, description: Mapping[str, Any], classes: NodeClasses) ->
     return version
 
 
-def _resources(properties: Sequence[Mapping[str, Any]]) -> list[Json]:
+def _resources(
+    properties: Sequence[Mapping[str, Any]], versions: Sequence[int | float]
+) -> list[Json]:
+    """Each resource n8n offers. One that only some of the versions offer names them."""
     seen: dict[str, Json] = {}
+    shown: dict[str, set[int | float]] = {}
     for prop in properties:
         if prop.get("name") == "resource" and prop.get("type") == "options":
+            these = _shown_in(prop, versions)
             for option in _choices(prop):
-                seen.setdefault(str(option.get("value")), _picked(option, ("name", "value")))
-    return list(seen.values())
+                value = str(option.get("value"))
+                seen.setdefault(value, _picked(option, ("name", "value")))
+                shown.setdefault(value, set()).update(these)
+    return [_only_in(seen[value], shown[value], versions) for value in seen if shown[value]]
 
 
-def _operations(properties: Sequence[Mapping[str, Any]]) -> list[Json]:
-    """Each operation n8n offers, with the resource it is offered for."""
+def _operations(
+    properties: Sequence[Mapping[str, Any]], versions: Sequence[int | float]
+) -> list[Json]:
+    """Each operation n8n offers, with the resource it is offered for. One that only some of the
+    versions offer names them, as n8n's `@version` conditions decide."""
     seen: dict[tuple[str | None, str], Json] = {}
+    shown: dict[tuple[str | None, str], set[int | float]] = {}
     for prop in properties:
         if prop.get("name") != "operation" or prop.get("type") != "options":
             continue
+        these = _shown_in(prop, versions)
         options = cast(Mapping[str, Any], prop.get("displayOptions") or {})
         show = cast(Mapping[str, Any], options.get("show") or {})
-        shown = [r for r in cast(list[object], show.get("resource") or []) if isinstance(r, str)]
-        for resource in shown or [None]:
+        offered = [r for r in cast(list[object], show.get("resource") or []) if isinstance(r, str)]
+        for resource in offered or [None]:
             for option in _choices(prop):
                 value = str(option.get("value"))
                 operation: Json = {"value": value, "name": option.get("name") or value}
@@ -446,7 +362,66 @@ def _operations(properties: Sequence[Mapping[str, Any]]) -> list[Json]:
                 if said := option.get("action") or option.get("description"):
                     operation["action"] = said
                 seen.setdefault((resource, value), operation)
-    return list(seen.values())
+                shown.setdefault((resource, value), set()).update(these)
+    return [_only_in(seen[key], shown[key], versions) for key in seen if shown[key]]
+
+
+def _only_in(item: Json, shown: set[int | float], versions: Sequence[int | float]) -> Json:
+    if len(shown) < len(versions):
+        item["versions"] = [v for v in versions if v in shown]
+    return item
+
+
+def _shown_in(prop: Mapping[str, Any], versions: Sequence[int | float]) -> set[int | float]:
+    """The versions n8n shows this property in, by its `@version` conditions. A condition this
+    code can't judge counts as shown."""
+    options = cast(Mapping[str, Any], prop.get("displayOptions") or {})
+    show = cast(Mapping[str, Any], options.get("show") or {}).get("@version")
+    hide = cast(Mapping[str, Any], options.get("hide") or {}).get("@version")
+    return {
+        v
+        for v in versions
+        if (show is None or _version_in(cast(list[object], show), v) is not False)
+        and (hide is None or _version_in(cast(list[object], hide), v) is not True)
+    }
+
+
+def _version_in(conditions: Sequence[object], version: int | float) -> bool | None:
+    """Whether any condition holds for the version, as n8n's `checkConditions` decides, or None
+    when this code can't tell."""
+    results = [_version_is(condition, version) for condition in conditions]
+    if True in results:
+        return True
+    return None if None in results else False
+
+
+def _version_is(condition: object, version: int | float) -> bool | None:
+    if isinstance(condition, int | float) and not isinstance(condition, bool):
+        return condition == version
+    test = cast(Mapping[str, Any], condition).get("_cnd") if isinstance(condition, dict) else None
+    if not isinstance(test, dict) or len(cast(Json, test)) != 1:
+        return None
+    ((how, target),) = cast(Json, test).items()
+    try:
+        match how:
+            case "eq":
+                return version == target
+            case "not":
+                return version != target
+            case "gte":
+                return version >= target
+            case "lte":
+                return version <= target
+            case "gt":
+                return version > target
+            case "lt":
+                return version < target
+            case "between":
+                return target["from"] <= version <= target["to"]
+            case _:
+                return None
+    except TypeError, KeyError:
+        return None
 
 
 def _class(

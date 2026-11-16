@@ -107,6 +107,25 @@ def test_what_n8n_shows_only_in_an_ai_agent_s_tool_is_left_out_of_the_block(
     assert "optimizeResponse" not in names(http["parameters"])
 
 
+def test_an_operation_is_described_only_in_the_versions_that_offer_it(catalogue: Catalogue):
+    notion = "n8n-nodes-base.notion"
+
+    with pytest.raises(
+        NotInCatalogue,
+        match=r"Notion version 1 has no operation 'get' for databasePage\. "
+        r"It has create, getAll, update\.",
+    ):
+        catalogue.describe_block(notion, 1, "databasePage", "get")
+    assert catalogue.describe_block(notion, 2, "databasePage", "get")["parameters"]
+
+    rabbit = "n8n-nodes-base.rabbitmq"
+    with pytest.raises(NotInCatalogue, match="RabbitMQ version 1 has no operation"):
+        catalogue.describe_block(rabbit, 1, None, "deleteMessage")
+    offered = catalogue.describe_block(rabbit, 1.1)["operations"]
+    assert [o["value"] for o in offered] == ["sendMessage", "deleteMessage"]
+    assert all("versions" not in o for o in offered)
+
+
 def test_a_condition_on_another_parameter_stays_on_it(catalogue: Catalogue):
     get = catalogue.describe_block(JIRA, 1, "issue", "get")
     site = next(p for p in get["parameters"] if p["name"] == "site")

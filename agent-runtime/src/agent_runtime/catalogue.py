@@ -140,8 +140,8 @@ class Catalogue:
         return block
 
     def _version(self, node_type: str, version: float) -> Json:
-        """The block's version that holds this one, with what a tool n8n made has from its
-        block."""
+        """The block's version that holds this one, with only the resources and operations this
+        version offers, and with what a tool n8n made has from its block."""
         block = self._block(node_type)
         groups = cast(list[Json], block["versions"])
         group = next((g for g in groups if version in g["versions"]), None)
@@ -149,14 +149,17 @@ class Catalogue:
             listed = ", ".join(f"{v:g}" for g in groups for v in g["versions"])
             raise NotInCatalogue(f"{block['name']} has no version {version:g}. It has {listed}.")
         if "tool_parameters" not in group:
-            return group
+            return group | {
+                "resources": _offered_in(group.get("resources"), version),
+                "operations": _offered_in(group.get("operations"), version),
+            }
         base = self._version(str(block["tool_of"]), version)
         return {
             **{key: value for key, value in group.items() if key != "tool_parameters"},
-            "resources": base.get("resources") or [],
+            "resources": base["resources"],
             "operations": [
                 {key: value for key, value in o.items() if key not in _CLASS_KEYS}
-                for o in cast(list[Json], base.get("operations") or [])
+                for o in cast(list[Json], base["operations"])
             ],
             "parameters": [*group["tool_parameters"], *base["parameters"]],
         }
@@ -214,6 +217,16 @@ class Catalogue:
                 for *_, o in sorted(ranked, key=lambda r: r[:3])[:6]
             ]
         return summary
+
+
+def _offered_in(items: object, version: float) -> list[Json]:
+    """The resources or operations a version offers. The catalogue names the versions of one that
+    only some of a block's versions offer."""
+    return [
+        {key: value for key, value in item.items() if key != "versions"}
+        for item in cast(list[Json], items or [])
+        if version in item.get("versions", [version])
+    ]
 
 
 def _specific(items: Sequence[Json]) -> list[Json]:

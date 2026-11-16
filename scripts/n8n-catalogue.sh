@@ -2,8 +2,9 @@
 # Writes contracts/n8n/catalogue.json, the catalogue of n8n's blocks that the workflow drafter
 # reads (ADR 0051, section 8), from what the image serves without the allow list, stamped with the
 # n8n pin in infra/public-images.json. It also runs section 2's pin check: it reads each block's
-# code in the image, and fails on a block that reaches n8n's environment, its disk or another
-# workflow when ADR 0051 doesn't name it for that (platform_api.n8n_catalogue).
+# code and the blocks' shared helpers in the image, and fails on code that reaches n8n's
+# environment, its disk, code it runs or another workflow when ADR 0051 doesn't name it for that,
+# and on a package the blocks read in that nobody has looked at (platform_api.n8n_code_check).
 #   scripts/n8n-catalogue.sh          runs pack smoke, which starts the image once and calls this
 #                                     script back with what n8n served, and writes the file
 #   scripts/n8n-catalogue.sh --check  the same, but fails when the committed file differs
@@ -43,7 +44,7 @@ docker create --name "$box" "$image" >/dev/null
 modules=/usr/local/lib/node_modules/n8n/node_modules
 for package in n8n-nodes-base @n8n/n8n-nodes-langchain; do
   mkdir -p "$work/sources/$package/dist"
-  for part in known nodes; do
+  for part in known nodes utils; do
     docker cp --quiet "$box:$modules/$package/dist/$part" "$work/sources/$package/dist/$part"
   done
 done

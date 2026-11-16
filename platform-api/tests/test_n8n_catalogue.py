@@ -1,6 +1,5 @@
-"""The catalogue of n8n's blocks (ADR 0051, section 8) and the pin check of their code (section 2),
-on small cut-down copies of what n8n 2.42.6 serves and ships. scripts/pack-smoke.sh runs both on
-the image itself."""
+"""The catalogue of n8n's blocks (ADR 0051, section 8), on small cut-down copies of what n8n
+2.42.6 serves. scripts/pack-smoke.sh runs it on the image itself."""
 
 import json
 from pathlib import Path
@@ -8,7 +7,9 @@ from typing import Any
 
 import pytest
 
-from platform_api.n8n_catalogue import KNOWN, catalogue, dump, main, pin_problems, reaches
+from platform_api.n8n_catalogue import catalogue, dump, main, pin_problems
+from platform_api.n8n_code_check import scan
+from tests.test_n8n_code_check import a_package
 
 PIN = "n8nio/n8n:2.42.6@sha256:526daa38b68e923cc00c5280d18b4da5d489f115a73bdbf3b8e452b184197a9a"
 
@@ -300,101 +301,78 @@ def test_the_file_is_the_same_whatever_order_n8n_serves_in_with_one_block_a_line
     assert json.loads(forwards) == catalogue(served(), PIN, OWN)
 
 
-def a_package(root: Path, package: str, blocks: dict[str, tuple[str, str]]) -> None:
-    """Writes a package as the image holds it: its list of blocks, and each block's code."""
-    known = {}
-    for short, (folder, code) in blocks.items():
-        source = f"dist/nodes/{folder}/{short}.node.js"
-        known[short] = {"className": short, "sourcePath": source}
-        (root / package / source).parent.mkdir(parents=True, exist_ok=True)
-        (root / package / source).write_text(code)
-    (root / package / "dist" / "known").mkdir(parents=True, exist_ok=True)
-    (root / package / "dist" / "known" / "nodes.json").write_text(json.dumps(known))
-
-
-@pytest.fixture
-def sources(tmp_path: Path) -> Path:
-    a_package(
-        tmp_path,
-        "n8n-nodes-base",
-        {
-            "webhook": ("Webhook", 'const fs_1 = require("fs");'),
-            "mautic": ("Mautic", "displayName: 'Sandbox', isSandbox, enableSandbox"),
-            "sort": ("Sort", 'require("../Code/JsTaskRunnerSandbox")'),
-            "jira": ("Jira", "this.helpers.request()"),
-        },
-    )
-    a_package(
-        tmp_path,
-        "@n8n/n8n-nodes-langchain",
-        {"toolWorkflow": ("tools/ToolWorkflow", "await this.executeWorkflow(info, items)")},
-    )
-    return tmp_path
-
-
-def test_the_pin_check_reads_what_each_block_s_code_reaches(sources: Path):
-    assert reaches(sources) == {
-        "n8n-nodes-base.webhook": {"fs"},
-        "n8n-nodes-base.mautic": set(),
-        "n8n-nodes-base.sort": {"code sandbox"},
-        "n8n-nodes-base.jira": set(),
-        "@n8n/n8n-nodes-langchain.toolWorkflow": {"another workflow"},
+def test_an_operation_only_some_versions_offer_names_them():
+    notion = {
+        "name": "n8n-nodes-base.notion",
+        "displayName": "Notion",
+        "version": [1, 2],
+        "properties": [
+            {
+                "name": "resource",
+                "type": "options",
+                "options": [choice("Page", "page"), choice("Old", "old")],
+            },
+            {
+                "name": "resource",
+                "type": "options",
+                "displayOptions": {"show": {"@version": [{"_cnd": {"gte": 2}}]}},
+                "options": [choice("Data source", "dataSource")],
+            },
+            {
+                "name": "operation",
+                "type": "options",
+                "displayOptions": {"show": {"resource": ["page"]}, "hide": {"@version": [1]}},
+                "options": [choice("Create", "create"), choice("Get", "get")],
+            },
+            {
+                "name": "operation",
+                "type": "options",
+                "displayOptions": {"show": {"resource": ["page"], "@version": [1]}},
+                "options": [choice("Create", "create")],
+            },
+        ],
     }
 
+    made = catalogue([notion], PIN, {"n8n-nodes-base.notion"})
+    (version,) = made["blocks"]["n8n-nodes-base.notion"]["versions"]
 
-def test_the_pin_check_passes_what_section_2_names(sources: Path):
-    served = ["n8n-nodes-base.webhook", "n8n-nodes-base.jira", "n8n-nodes-base.jiraTool"]
-
-    assert pin_problems(reaches(sources), [*served, "CUSTOM.wabRead"]) == []
-
-
-@pytest.mark.parametrize(
-    ("short", "code", "reached"),
-    [
-        ("webhook", 'require("node:child_process").exec(command)', "child_process"),
-        ("jira", "const url = process.env.JIRA_URL", "process.env"),
-        ("jira", "await this.helpers.writeContentToFile(path, data)", "file helpers"),
-        ("jira", 'const vm = require("vm2")', "code sandbox"),
-        ("jira", "new JavaScriptSandbox(context, code)", "code sandbox"),
-        ("jira", "await this.helpers.executeWorkflow(info)", "another workflow"),
-        ("jira", 'import { readFile } from "node:fs/promises"', "fs"),
-    ],
-)
-def test_the_pin_check_fails_on_a_block_reaching_what_section_2_does_not_name_for_it(
-    sources: Path, short: str, code: str, reached: str
-):
-    folder = "Jira" if short == "jira" else "Webhook"
-    (sources / "n8n-nodes-base" / "dist" / "nodes" / folder / "Helpers.js").write_text(code)
-
-    (problem,) = pin_problems(reaches(sources), [])
-
-    assert problem.startswith(f"n8n-nodes-base.{short} reaches {reached}, which ADR 0051")
-
-
-def test_a_block_whose_code_the_check_did_not_read_fails(sources: Path):
-    assert pin_problems(reaches(sources), ["n8n-nodes-base.newThing"]) == [
-        "n8n serves n8n-nodes-base.newThing, whose code the pin check didn't read."
+    assert version["resources"] == [
+        {"name": "Page", "value": "page"},
+        {"name": "Old", "value": "old"},
+        {"name": "Data source", "value": "dataSource", "versions": [2]},
+    ]
+    assert version["operations"] == [
+        {"value": "create", "name": "Create", "resource": "page"},
+        {"value": "get", "name": "Get", "resource": "page", "versions": [2]},
     ]
 
 
-def test_every_block_section_2_names_reaches_something():
-    assert all(KNOWN.values())
-
-
 def test_main_prints_the_catalogue_and_fails_on_a_pin_problem(
-    sources: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ):
+    a_package(tmp_path, "n8n-nodes-base", {"jira": ("Jira", "this.helpers.request()")})
+    a_package(tmp_path, "@n8n/n8n-nodes-langchain", {})
     path = tmp_path / "served.json"
     path.write_text(json.dumps(served()[:1]))
 
-    assert main([str(path), PIN, str(sources)]) == 0
+    assert main([str(path), PIN, str(tmp_path)]) == 0
     printed = capsys.readouterr()
     assert json.loads(printed.out)["blocks"]["n8n-nodes-base.jira"]["name"] == "Jira Software"
 
-    (sources / "n8n-nodes-base" / "dist" / "nodes" / "Jira" / "Shell.js").write_text(
+    (tmp_path / "n8n-nodes-base" / "dist" / "nodes" / "Jira" / "Shell.js").write_text(
         'require("child_process")'
     )
-    assert main([str(path), PIN, str(sources)]) == 1
+    assert main([str(path), PIN, str(tmp_path)]) == 1
     printed = capsys.readouterr()
     assert printed.out
     assert "pin check: n8n-nodes-base.jira reaches child_process" in printed.err
+
+
+def test_a_block_whose_code_the_check_did_not_read_fails(tmp_path: Path):
+    a_package(tmp_path, "n8n-nodes-base", {"jira": ("Jira", "")})
+    a_package(tmp_path, "@n8n/n8n-nodes-langchain", {})
+    served = ["n8n-nodes-base.jira", "n8n-nodes-base.jiraTool", "n8n-nodes-base.newThing"]
+
+    assert pin_problems(scan(tmp_path), [*served, "CUSTOM.wabRead"], []) == [
+        "n8n serves n8n-nodes-base.newThing, whose code the pin check didn't read."
+    ]
