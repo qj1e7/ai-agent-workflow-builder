@@ -7,6 +7,7 @@ kept unused; and the daily self-test plants a key the next sweep must remove."""
 import asyncio
 import contextlib
 import copy
+import re
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field, replace
 from datetime import timedelta
@@ -20,6 +21,8 @@ from platform_api.builder.key_sweep import (
     KEY_ADDED,
     KEY_CHANGED,
     NOT_BACK_YET,
+    OFF_IN_N8N,
+    STILL_ON,
     TAKEN_OFF,
     UNCHECKED_DRAFT,
     KeySweep,
@@ -30,6 +33,7 @@ from platform_api.orchestration import KEYS, N8nError, PlatformKeys
 from platform_api.orchestration.n8n_credentials import (
     GONE_WITHIN,
     JIRA_READS,
+    PLANT_FAILED,
     PLANTED_KIND,
     key_test_line,
 )
@@ -41,7 +45,7 @@ from tests.test_draft_turn_on import RUNS_PATH
 from tests.test_n8n_access import PLATFORM_PROJECT, Staffed, held, lab, s
 from tests.test_n8n_api import api_for
 from tests.test_n8n_builder import WRITES
-from tests.test_n8n_lifecycle import Workflows
+from tests.test_n8n_lifecycle import Workflows, made
 
 PAT = "jiraSoftwareServerPatApi"
 """The credential type of a Data Center personal access token."""
@@ -1052,9 +1056,12 @@ async def test_a_mark_that_waits_on_a_held_row_never_stops_a_take_off_and_is_mad
     assert await finding(k, use_case_id) == ("needs_a_fix", KEY_ADDED)
 
 
-async def test_a_take_off_whose_mark_waits_on_a_held_row_is_marked_next_sweep(
+async def test_a_take_off_whose_mark_is_lost_to_a_restart_is_marked_from_state(
     k: Keyed, monkeypatch: pytest.MonkeyPatch
 ):
+    """The sweep takes it off at 10:00:00, its mark waits too long on a held row, and the platform
+    restarts at 10:00:30. On in the records and off in n8n, it is marked at the next sweep all the
+    same, so it never shows as on and safe while it does not run (principle 7)."""
     monkeypatch.setattr(key_sweep, "MARK_WAIT", "SET LOCAL lock_timeout = '100ms'")
     await settled(k)
     carol = await k.s.member()
@@ -1064,9 +1071,42 @@ async def test_a_take_off_whose_mark_waits_on_a_held_row_is_marked_next_sweep(
     async with held_row(k, use_case_id):
         assert (await k.sweep.sweep()).taken_off == (workflow_id,)
     view = (await k.s.call("alice", "GET", f"/api/v1/use-cases/{use_case_id}")).json()
-    assert TAKEN_OFF not in view["findings"], "not marked while its row was held"
-    assert (await k.sweep.sweep()).taken_off == ()
-    assert await finding(k, use_case_id) == ("needs_a_fix", TAKEN_OFF)
+    assert view["grade"] == "safe", "not marked while its row was held"
+    restarted = KeySweep(k.s.lab.h.db, k.keys, k.sweep._n8n, k.s.staff)  # pyright: ignore[reportPrivateUsage]
+    assert (await restarted.sweep()).taken_off == ()
+    assert await finding(k, use_case_id) == ("needs_a_fix", OFF_IN_N8N)
+
+
+async def test_a_workflow_turned_off_on_purpose_is_not_marked(k: Keyed):
+    """Paused, or never turned on, it is off in n8n because the records say so."""
+    await settled(k)
+    paused, paused_workflow = await held(k.s)
+    assert (await k.s.lab.move("alice", "pause", paused)).status_code == 200
+    draft, draft_workflow = await made(k.s.own, on=False)
+    k.n8n.workflows[draft_workflow]["shared"] = [
+        {"projectId": PLATFORM_PROJECT, "role": "workflow:owner"}
+    ]
+    for workflow_id in (paused_workflow, draft_workflow):
+        assert k.n8n.workflows[workflow_id]["activeVersionId"] is None
+    await k.sweep.sweep()
+    for use_case_id in (paused, draft):
+        view = (await k.s.call("alice", "GET", f"/api/v1/use-cases/{use_case_id}")).json()
+        assert (view["grade"], view["findings"]) == ("safe", []), view
+
+
+async def test_a_workflow_n8n_has_off_is_marked_until_it_is_live_again(k: Keyed):
+    """Whoever took it off, the records say on, so it shows Needs a fix. Put back on, the mark
+    goes."""
+    await settled(k)
+    use_case_id, workflow_id = await held(k.s)
+    live = k.n8n.workflows[workflow_id]["activeVersionId"]
+    k.n8n.workflows[workflow_id].update(activeVersionId=None, active=False)
+    await k.sweep.sweep()
+    assert await finding(k, use_case_id) == ("needs_a_fix", OFF_IN_N8N)
+    k.n8n.workflows[workflow_id].update(activeVersionId=live, active=True)
+    await k.sweep.sweep()
+    view = (await k.s.call("alice", "GET", f"/api/v1/use-cases/{use_case_id}")).json()
+    assert (view["grade"], view["findings"]) == ("safe", [])
 
 
 async def test_a_key_open_in_n8n_removes_marks_her_other_workflows_at_the_next_sweep(k: Keyed):
@@ -1078,3 +1118,93 @@ async def test_a_key_open_in_n8n_removes_marks_her_other_workflows_at_the_next_s
     assert hers not in k.n8n.credentials
     assert use_case_id in (await k.sweep.sweep()).marked
     assert await finding(k, use_case_id) == ("needs_a_fix", KEY_ADDED)
+
+
+async def test_the_daily_self_test_plants_a_key_n8n_takes(k: Keyed):
+    """n8n takes a key id of at most 16 letters, digits, underscores or hyphens. The planted key's
+    was 17, so n8n refused every plant, and the health line blamed the sweep."""
+    planted = await k.keys.plant()
+    assert planted is not None and planted in k.n8n.credentials
+    for key in (planted, *(spec.id for spec in KEYS.values())):
+        assert re.fullmatch(r"[a-zA-Z0-9_-]{1,16}", key), key
+
+
+async def test_a_plant_n8n_refuses_is_tried_again_and_the_health_line_says_so(
+    k: Keyed, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+):
+    """A failed create plants nothing on record, so the next minute's sweep plants again, and the
+    health line says the plant failed, never that the sweep missed a key."""
+    api = k.keys._api  # pyright: ignore[reportPrivateUsage]
+    assert api is not None
+    create = api.create_credential
+
+    async def refused(credential_id: str, *args: Any) -> Any:
+        if credential_id.startswith("wab-test-"):
+            raise N8nError("n8n refused it", status=400)
+        return await create(credential_id, *args)
+
+    monkeypatch.setattr(api, "create_credential", refused)
+    await k.sweep.sweep()
+    assert "the sweep's daily self-test did not start: N8nError, n8n answered 400" in caplog.text
+    ready, line = await k.keys.tested()
+    assert (ready, line) == (False, PLANT_FAILED.format(why="n8n answered 400"))
+    async with k.s.lab.h.db.connection("orchestration") as conn:
+        rows = await (await conn.execute("SELECT 1 FROM orchestration.n8n_key_tests")).fetchall()
+    assert rows == [], "nothing planted is on record"
+    monkeypatch.setattr(api, "create_credential", create)
+    k.s.lab.h.advance(timedelta(minutes=1))
+    await k.sweep.sweep()
+    assert [key for key in k.n8n.credentials if key.startswith("wab-test-")], "planted again"
+    await k.sweep.sweep()
+    assert (await k.keys.tested())[0], "and the sweep removed it"
+
+
+async def test_a_workflow_n8n_did_not_take_off_is_marked_and_tried_again(k: Keyed):
+    """n8n answers 502 to the unpublish, so the workflow still runs unchecked. It is marked, never
+    shown as on and safe, and the next sweep takes it off."""
+    await settled(k)
+    carol = await k.s.member()
+    use_case_id, workflow_id = await held(k.s)
+    with_slack(k, workflow_id)
+    k.n8n.publish_as(workflow_id, carol, deletes_in_slack)
+    k.n8n.unpublish_answers = [502]
+    assert (await k.sweep.sweep()).taken_off == ()
+    assert k.n8n.workflows[workflow_id]["activeVersionId"] is not None
+    assert await finding(k, use_case_id) == ("needs_a_fix", STILL_ON)
+    assert (await k.sweep.sweep()).taken_off == (workflow_id,)
+    assert await finding(k, use_case_id) == ("needs_a_fix", TAKEN_OFF)
+
+
+async def test_a_workflow_marked_off_in_n8n_and_then_paused_loses_that_mark(k: Keyed):
+    """Its words are for a workflow that is on here. Paused, it is off on purpose."""
+    await settled(k)
+    use_case_id, workflow_id = await held(k.s)
+    k.n8n.workflows[workflow_id].update(activeVersionId=None, active=False)
+    await k.sweep.sweep()
+    assert await finding(k, use_case_id) == ("needs_a_fix", OFF_IN_N8N)
+    assert (await k.s.lab.move("alice", "pause", use_case_id)).status_code == 200
+    await k.sweep.sweep()
+    view = (await k.s.call("alice", "GET", f"/api/v1/use-cases/{use_case_id}")).json()
+    assert (view["grade"], view["findings"]) == ("safe", [])
+
+
+@pytest.mark.parametrize("state", ["paused", "draft"])
+async def test_a_workflow_off_here_that_n8n_runs_unchecked_is_taken_off_with_no_mark(
+    k: Keyed, state: str
+):
+    """The records say it is off, so once n8n has it off too, nothing is wrong to show."""
+    await settled(k)
+    carol = await k.s.member()
+    if state == "paused":
+        use_case_id, workflow_id = await held(k.s)
+        assert (await k.s.lab.move("alice", "pause", use_case_id)).status_code == 200
+    else:
+        use_case_id, workflow_id = await made(k.s.own, on=False)
+        k.n8n.workflows[workflow_id]["shared"] = [
+            {"projectId": PLATFORM_PROJECT, "role": "workflow:owner"}
+        ]
+    with_slack(k, workflow_id)
+    k.n8n.publish_as(workflow_id, carol, deletes_in_slack)
+    assert (await k.sweep.sweep()).taken_off == (workflow_id,)
+    view = (await k.s.call("alice", "GET", f"/api/v1/use-cases/{use_case_id}")).json()
+    assert TAKEN_OFF not in view["findings"], view

@@ -58,7 +58,11 @@ _RETRY_AFTER_DEFAULT = 10.0
 
 
 class N8nError(Exception):
-    pass
+    def __init__(self, message: str = "", status: int | None = None) -> None:
+        super().__init__(message)
+        self.status = status
+        """n8n's HTTP answer, when it gave one. A log names this, never n8n's words, which may
+        echo what was sent."""
 
 
 class OwnerOutcome(Enum):
@@ -752,7 +756,8 @@ def _credential(out: _CredentialOut) -> N8nCredential:
 def _expect(response: httpx.Response, *ok: int) -> httpx.Response:
     if response.status_code not in (ok or (200,)):
         raise N8nError(
-            f"{response.request.method} {response.request.url.path} failed: {_short(response)}"
+            f"{response.request.method} {response.request.url.path} failed: {_short(response)}",
+            response.status_code,
         )
     return response
 
