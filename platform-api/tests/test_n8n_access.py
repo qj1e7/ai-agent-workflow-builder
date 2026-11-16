@@ -60,6 +60,7 @@ __all__ = ["lab"]
 PLATFORM_PROJECT = "proj-platform"
 EDITOR = "https://n8n.example"
 CAROL = UserId("carol")
+APPROVERS = "Approvers can't have n8n access. An Operator with n8n access can open it."
 
 
 @dataclass
@@ -242,7 +243,9 @@ async def test_approvers_get_403_on_open_in_n8n(s: Staffed):
     use_case_id, workflow_id = await held(s)
     assert (await s.open("bob", use_case_id)).status_code == 403
     refused = await s.open("alice", use_case_id)
-    assert (refused.status_code, refused.json()["detail"]) == (403, NO_ACCESS)
+    assert (refused.status_code, refused.json()["detail"]) == (403, APPROVERS)
+    mine = (await s.call("bob", "GET", "/api/v1/me/n8n")).json()
+    assert (mine["can_open"], mine["why_not"]) == (False, APPROVERS)
     assert s.n8n.home_of(workflow_id) == PLATFORM_PROJECT
 
 
@@ -766,7 +769,9 @@ async def test_the_planner_answers_who_may_open_n8n(s: Staffed):
 
     bob = Principal(UserId("bob"), frozenset({Role.APPROVER}), "Bob")
     no_access = await asked(bob, f"open {name} in n8n")
-    assert (no_access.answer, no_access.said, no_access.can_open) == ("n8n", NO_ACCESS, False)
+    assert (no_access.answer, no_access.said, no_access.can_open) == ("n8n", APPROVERS, False)
+    dana = Principal(UserId(await s.operator("dana")), frozenset({Role.OPERATOR}), "Dana")
+    assert (await asked(dana, f"open {name} in n8n")).said == NO_ACCESS
     carol = Principal(CAROL, frozenset({Role.OPERATOR}), "Carol", n8n_access=True)
     assert (await s.give("carol")).status_code == 200
     s.bootstrapped(ready=False)
