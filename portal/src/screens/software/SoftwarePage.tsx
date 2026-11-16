@@ -11,6 +11,7 @@ import { IconChevronRight } from '../../ui/icons'
 import { Toast } from '../../ui/Toast'
 import { useView, ViewTabs } from '../../ui/ViewTabs'
 import { WorkflowInN8n } from '../workflows/InN8n'
+import { cantChangeWords, heldOf, theirsNote } from '../workflows/n8nHold'
 import { AddSoftware } from './AddSoftware'
 import { pressCheckNow } from './checkNow'
 import { FindSoftware } from './FindSoftware'
@@ -184,13 +185,15 @@ function Notice({ box, feedback, scheduled, paused, onUndo, onDismiss }: NoticeP
 interface LoadedProps {
   readonly view: WatchlistView | null
   readonly operator: boolean
+  /** Who has the watchlist open in n8n, if anyone, said in place of the schedule changes the platform would refuse. */
+  readonly held: string | null
   readonly answeredAt: number
   readonly now: Date
   /** Set on a software's own page. The Watchlist itself has none. */
   readonly rowId: string | null
 }
 
-function Loaded({ view, operator, answeredAt, now, rowId }: LoadedProps) {
+function Loaded({ view, operator, held, answeredAt, now, rowId }: LoadedProps) {
   const [query, setQuery] = useState('')
   const [historyOpen, setHistoryOpen] = useState(false)
   const [feedback, dispatch] = useReducer(changeFeedback, NO_FEEDBACK)
@@ -324,11 +327,13 @@ function Loaded({ view, operator, answeredAt, now, rowId }: LoadedProps) {
         </p>
       ) : null}
       {view ? (
-        <Schedule schedule={view.schedule} version={view.version} operator={operator} useCaseId={view.use_case_id} paused={paused} answeredAt={answeredAt} onResumed={() => dispatch({ type: 'resumed' })} />
+        <Schedule schedule={view.schedule} version={view.version} operator={operator} useCaseId={view.use_case_id} paused={paused} answeredAt={answeredAt} onResumed={() => dispatch({ type: 'resumed' })} held={held} />
       ) : null}
     </>
   )
 }
+
+const TAKE_BACK_ON_TAB = 'Take it back on the In n8n tab to change it here.'
 
 interface Said {
   readonly id: number
@@ -367,6 +372,9 @@ export function SoftwareRoute({ now }: { now: Date }) {
   const watchlist = useWatchlist({ poll: REFRESH_MS })
   const { softwareId = null } = useParams()
   const [view, showView] = useView()
+  const operator = me.data?.roles.includes('operator') === true
+  const workflowId = watchlist.data?.use_case_id ?? ''
+  const useCase = useUseCase(workflowId, operator, { poll: REFRESH_MS })
   if ((watchlist.isError && !watchlist.data) || me.isError) {
     return (
       <>
@@ -382,7 +390,9 @@ export function SoftwareRoute({ now }: { now: Date }) {
       </p>
     )
   }
-  const loaded = <Loaded view={watchlist.data} operator={me.data.roles.includes('operator')} answeredAt={Math.max(watchlist.dataUpdatedAt, watchlist.errorUpdatedAt)} now={now} rowId={softwareId} />
+  const held = useCase.data ? heldOf(useCase.data, me.data) : null
+  const heldWords = held ? `${cantChangeWords(held)} ${held.kind === 'theirs' ? theirsNote(held) : TAKE_BACK_ON_TAB}` : null
+  const loaded = <Loaded view={watchlist.data} operator={operator} held={heldWords} answeredAt={Math.max(watchlist.dataUpdatedAt, watchlist.errorUpdatedAt)} now={now} rowId={softwareId} />
   const workflow = me.data.n8n_access === true && softwareId === null ? watchlist.data?.use_case_id : undefined
   if (workflow === undefined) return loaded
   return (
