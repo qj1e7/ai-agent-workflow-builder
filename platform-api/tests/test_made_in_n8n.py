@@ -6,7 +6,7 @@ an unsafe one is set up with its writes refused, and its maker and the person wh
 never approve its runs."""
 
 import copy
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Callable, Mapping
 from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -20,6 +20,7 @@ from platform_api.builder.made_in_n8n import (
     CHANGED_AS_SET_UP,
     FIX_IN_N8N,
     FIX_N8N_BLOCKS,
+    NOT_FIXED,
     NOT_READ,
     SET_UP_ALREADY,
     MadeInN8n,
@@ -37,12 +38,14 @@ from platform_api.builder.versions import authors_from
 from platform_api.orchestration import (
     TYPE_OF,
     CardsTask,
+    ChangedInN8n,
     ListedWorkflow,
     N8nWorkflow,
     OwnWorkflow,
     Publisher,
     RanVersion,
     RunSpec,
+    Written,
 )
 from platform_api.orchestration.cards import read_projects
 from platform_api.orchestration.n8n_calls import (
@@ -78,6 +81,16 @@ class Looks(Workflows):
 
     blind: int = 0
     edited: tuple[FakeN8n, str] | None = None
+    forgets: int = 0
+    """How many of the platform's next changes n8n saves without their settings."""
+
+    async def change(
+        self, workflow_id: str, expected_version_id: str, document: Mapping[str, Any], live: bool
+    ) -> Written | ChangedInN8n:
+        if self.forgets:
+            self.forgets -= 1
+            document = {**document, "settings": {}}
+        return await super().change(workflow_id, expected_version_id, document, live)
 
     async def look(self, workflow_id: str) -> N8nWorkflow | None:
         if self.blind:
@@ -772,6 +785,24 @@ async def test_a_published_one_keeps_its_own_name_and_shows_when_it_runs(s: Staf
         "SELECT name FROM builder.use_case_versions WHERE use_case_id = %s", row_id(created)
     )
     assert stored == {"name": "React read"}
+    assert s.lab.builder.sweep is not None
+    assert await s.lab.builder.sweep.sweep() == [], "the version the platform published is on record"
+
+
+async def test_one_n8n_did_not_keep_put_right_waits_and_asking_again_finishes(
+    s: Staffed, looks: Looks
+):
+    _, carol_space = await space_of(s, "carol")
+    await a_watched_repository(s)
+    workflow_id = s.n8n.make_in(carol_space, as_the_editor_saves("React read"))
+    looks.forgets = 1
+    refused = await set_up(s, "carol", workflow_id)
+    assert (refused.status_code, refused.json()["detail"]) == (503, NOT_FIXED)
+    assert s.n8n.home_of(workflow_id) == PLATFORM_PROJECT, "moved, with its maker noted"
+    assert [w["workflow_id"] for w in await waiting(s, "carol")] == [workflow_id]
+    again = await set_up(s, "carol", workflow_id)
+    assert again.status_code == 201, again.text
+    assert s.n8n.workflows[workflow_id]["settings"]["errorWorkflow"] == ERROR_WORKFLOW
 
 
 def row_id(created: httpx.Response) -> str:
