@@ -19,6 +19,8 @@ from agent_runtime.contract import (
     ConnectResult,
     DraftRequest,
     DraftResult,
+    ExplainReworded,
+    ExplainWordingRequest,
     FindSoftwareRequest,
     FindSoftwareResult,
     GitHubCheckResult,
@@ -30,10 +32,14 @@ from agent_runtime.contract import (
     ToolList,
     answer_result_adapter,
     check_part_result_adapter,
+    explain_wording_result_adapter,
     task_result_adapter,
 )
+from agent_runtime.explain_wording import explain_guard, fact_check
 
 FIXTURES = Path(__file__).resolve().parents[2] / "contracts" / "fixtures" / "agent"
+WORDINGS = sorted((FIXTURES.parent / "builder").glob("explain-wording.*.json"))
+"""The wording requests platform-api builds from its golden n8n documents."""
 
 pytestmark = pytest.mark.skipif(
     not FIXTURES.exists(), reason="contracts/ is not in the test image. CI runs this on the host."
@@ -83,6 +89,9 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "planner-answered-reply-cant.json": answer_result_adapter,
     "planner-answered-reply-about.json": answer_result_adapter,
     "planner-answered-didnt-follow.json": answer_result_adapter,
+    "explain-wording-request.json": TypeAdapter(ExplainWordingRequest),
+    "explain-wording-reworded.json": explain_wording_result_adapter,
+    "explain-wording-kept.json": explain_wording_result_adapter,
     "planner-check-part-request.json": TypeAdapter(CheckPartRequest),
     "planner-check-part-cant.json": check_part_result_adapter,
     "planner-check-part-fits.json": check_part_result_adapter,
@@ -154,3 +163,21 @@ def test_the_card_task_request_runs_a_card_with_its_values():
 def test_no_fixture_holds_a_model_key_that_looks_real():
     for path in FIXTURES.glob("*.json"):
         assert "sk-" not in path.read_text()
+
+
+def test_the_reworded_fixture_passes_every_check_against_the_request_fixture():
+    request = ExplainWordingRequest.model_validate(load("explain-wording-request.json"))
+    reworded = ExplainReworded.model_validate(load("explain-wording-reworded.json"))
+    assert fact_check(request.wording, request) is None
+    assert explain_guard(reworded.text, request) is None
+
+
+@pytest.mark.parametrize(
+    "path",
+    WORDINGS
+    or [pytest.param(None, marks=pytest.mark.skip(reason="platform-api wrote no wording yet"))],
+    ids=lambda path: path.stem if isinstance(path, Path) else "none",
+)
+def test_codes_own_wording_in_each_platform_request_keeps_to_its_facts(path: Path):
+    request = ExplainWordingRequest.model_validate_json(path.read_text())
+    assert fact_check(request.wording, request) is None

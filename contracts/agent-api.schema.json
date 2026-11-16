@@ -1763,6 +1763,135 @@
       "title": "ExplainAnswer",
       "type": "object"
     },
+    "ExplainFact": {
+      "additionalProperties": false,
+      "description": "One fact of a workflow's In short (ADR 0051): when it runs, a place it reads, a write or a\npost code's wording says after \"It\", or the closing \"It changes nothing\".",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/ExplainKind"
+        },
+        "negated": {
+          "description": "True when code's words for this fact hold a negation.",
+          "title": "Negated",
+          "type": "boolean"
+        },
+        "together": {
+          "description": "The words and quoted values code's wording keeps in one sentence for this fact, as [\"day\", \"8:00\"] or [\"GitHub\", \"fastapi/fastapi\"]. A quoted value is given without its quotes.",
+          "items": {
+            "maxLength": 1200,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 12,
+          "minItems": 1,
+          "title": "Together",
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind",
+        "together",
+        "negated"
+      ],
+      "title": "ExplainFact",
+      "type": "object"
+    },
+    "ExplainKept": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "kept",
+          "default": "kept",
+          "title": "Kind",
+          "type": "string"
+        },
+        "why": {
+          "description": "Why code's wording stays: the id of the check that failed, the verifier's flag, or call when the model's call failed.",
+          "title": "Why",
+          "type": "string"
+        }
+      },
+      "required": [
+        "why"
+      ],
+      "title": "ExplainKept",
+      "type": "object"
+    },
+    "ExplainKind": {
+      "enum": [
+        "runs",
+        "reads",
+        "writes",
+        "posts",
+        "changes"
+      ],
+      "type": "string"
+    },
+    "ExplainReworded": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "reworded",
+          "default": "reworded",
+          "title": "Kind",
+          "type": "string"
+        },
+        "text": {
+          "description": "The In short as the model reworded it, as the person sees it. It passed every check and the verifier.",
+          "maxLength": 700,
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "ExplainReworded",
+      "type": "object"
+    },
+    "ExplainWordingRequest": {
+      "additionalProperties": false,
+      "description": "Code's In short for one workflow, to be reworded so it reads naturally. The model may only\nsmooth the wording: anything in doubt keeps code's.",
+      "properties": {
+        "facts": {
+          "items": {
+            "$ref": "#/$defs/ExplainFact"
+          },
+          "maxItems": 40,
+          "title": "Facts",
+          "type": "array"
+        },
+        "model": {
+          "$ref": "#/$defs/ModelAccess"
+        },
+        "wording": {
+          "description": "Code's In short as one string, each quoted value in curly quotes.",
+          "maxLength": 1200,
+          "title": "Wording",
+          "type": "string"
+        }
+      },
+      "required": [
+        "model",
+        "wording",
+        "facts"
+      ],
+      "title": "ExplainWordingRequest",
+      "type": "object"
+    },
+    "ExplainWordingResult": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ExplainReworded"
+        },
+        {
+          "$ref": "#/$defs/ExplainKept"
+        },
+        {
+          "$ref": "#/$defs/ModelProblem"
+        }
+      ]
+    },
     "FactSection": {
       "enum": [
         "watchlist",
@@ -4293,6 +4422,12 @@
     },
     "tool_list": {
       "$ref": "#/$defs/ToolList"
+    },
+    "workflow_explain_request": {
+      "$ref": "#/$defs/ExplainWordingRequest"
+    },
+    "workflow_explain_result": {
+      "$ref": "#/$defs/ExplainWordingResult"
     }
   },
   "required": [
@@ -4318,7 +4453,9 @@
     "planner_answer_request",
     "planner_answer_result",
     "planner_check_part_request",
-    "planner_check_part_result"
+    "planner_check_part_result",
+    "workflow_explain_request",
+    "workflow_explain_result"
   ],
   "title": "AgentApiSchema",
   "type": "object"
