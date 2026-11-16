@@ -623,11 +623,13 @@ NOT_A_NAME: Final = ENGLISH | words(
     "states nothing none everything anything something everyone approval approvals request "
     "requests items things whatever less several many few most date behind ahead waiting stopped "
     "paused draft drafts people person once twice since till yet either neither such another two "
-    "three four five six seven eight nine ten zero approve open add type tap pick"
+    "three four five six seven eight nine ten zero approve open add type tap pick ai "
+    "troubleshooter planner operator operators approver approvers rail card cards button chat guide"
 )
 """Words that open a description or a new clause, never a name: "the software your team runs",
-"no software yet", "so open the Watchlist". A made-up name that is one of these words slips
-through, which the verifier and the judge are left to catch."""
+"no software yet", "so open the Watchlist", and the app's own words, as "the AI troubleshooter
+explains why". A made-up name that is one of these words slips through, which the verifier and
+the judge are left to catch."""
 
 
 class _Named(BaseModel):

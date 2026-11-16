@@ -443,6 +443,8 @@ def test_a_name_a_list_is_said_to_hold_but_the_facts_dont_is_made_up(text: str):
         "Kubernetes isn't on your Watchlist. To add it, type Check Kubernetes for new releases.",
         "Your Watchlist holds Redis, so open the Watchlist to see its line.",
         "Needs you lists what waits for you.",
+        "If a run stops, Needs you lists it, and the AI troubleshooter explains why.",
+        "Your workflows list shows them, and an Approver says yes in Teams.",
     ],
 )
 def test_a_list_said_to_hold_only_what_the_facts_hold_passes(text: str):
