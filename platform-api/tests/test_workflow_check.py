@@ -351,6 +351,7 @@ def test_a_schedule_whose_next_run_n8n_decides_needs_a_fix(interval: dict[str, A
     ("rule", "said"),
     [
         ({}, '"Daily 8:00" leaves its hour or minute for n8n to pick.'),
+        ({"interval": [None]}, '"Daily 8:00" leaves its hour or minute for n8n to pick.'),
         ({"interval": []}, '"Daily 8:00" has no time to run.'),
     ],
 )

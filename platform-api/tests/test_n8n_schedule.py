@@ -208,8 +208,18 @@ def test_a_time_n8n_s_editor_shows_and_does_not_save_runs_at_n8n_s_default(
 
 @pytest.mark.parametrize(
     "parameters",
-    [{"rule": {"interval": [{"triggerAtHour": 3, "triggerAtMinute": None}]}}, {"rule": {}}],
-    ids=["a minute saved as null", "a rule saved with no interval"],
+    [
+        {"rule": {"interval": [{"triggerAtHour": 3, "triggerAtMinute": None}]}},
+        {"rule": {}},
+        {"rule": {"interval": [None]}},
+        {"rule": {"interval": [5]}},
+    ],
+    ids=[
+        "a minute saved as null",
+        "a rule saved with no interval",
+        "an entry saved as null",
+        "an entry that is not an object",
+    ],
 )
 def test_a_part_n8n_does_not_fill_in_is_one_n8n_picks_so_no_run_is_shown(
     parameters: dict[str, Any],
@@ -241,3 +251,25 @@ def test_a_laid_out_release_check_runs_next_monday_at_9_on_its_hidden_second() -
     second = int(cron_expression(interval, f"wfRelease01:{schedule['id']}").split()[0])
     run = next_run(document, "wfRelease01", FRIDAY_0830, SINGAPORE.key)
     assert run == datetime(2026, 11, 16, 9, 0, second, tzinfo=SINGAPORE)
+
+
+@pytest.mark.parametrize(
+    ("interval", "fires"),
+    [
+        (
+            {"field": "weeks", "triggerAtDay": None, "triggerAtHour": 9, "triggerAtMinute": 0},
+            datetime(2026, 11, 15, 9, 0, N8N_SECOND),
+        ),
+        (
+            {"field": "days", "daysInterval": None, "triggerAtHour": 9, "triggerAtMinute": 0},
+            datetime(2026, 11, 13, 9, 0, N8N_SECOND),
+        ),
+    ],
+    ids=["a day of the week saved as null", "days apart saved as null"],
+)
+def test_a_part_n8n_sets_to_its_default_when_saved_as_null_runs_at_that_default(
+    interval: dict[str, Any], fires: datetime
+) -> None:
+    node = {"id": "n1", "name": "Schedule Trigger", "type": "n8n-nodes-base.scheduleTrigger"}
+    document = workflow({**node, "parameters": {"rule": {"interval": [interval]}}})
+    assert next_run(document, "w1", FRIDAY_0830, SINGAPORE.key) == fires.replace(tzinfo=SINGAPORE)

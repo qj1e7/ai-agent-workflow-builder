@@ -501,7 +501,7 @@ describe('a request opened by its link', () => {
 
 describe('workflows made in n8n, for someone with n8n access', () => {
   const MAINTAINER: Me = { ...CAROL, n8n_access: true }
-  const SAFE: MadeInN8nView = { workflow_id: 'wf7', name: 'Morning check', made_by: 'carol', published: true, grade: 'safe', findings: [], fixed_for_you: [], can_set_up: true, why_not: null }
+  const SAFE: MadeInN8nView = { workflow_id: 'wf7', name: 'Morning check', made_by: 'carol', published: true, grade: 'safe', findings: [], fixed_for_you: [], set_up_notes: [], can_set_up: true, why_not: null }
   const NO_YES: MadeInN8nView = { ...SAFE, workflow_id: 'wf8', name: 'Quick fix', published: false, grade: 'writes_refused', findings: ['"Create ticket" can run without a yes.'], can_set_up: false, why_not: 'Fix it in n8n first. It isn’t published there, and only a workflow that passes the check can be turned on.' }
   const madeRow = (html: string, id: string) => new RegExp(`<li[^>]*data-made-in-n8n="${id}"[\\s\\S]*?</li>`).exec(html)?.[0] ?? ''
 
@@ -528,6 +528,12 @@ describe('workflows made in n8n, for someone with n8n access', () => {
     expect(text(row)).toContain(
       'Safe: every change waits for a yes. Set up also sends its failures to the platform’s error workflow, runs it on Singapore time and adds Start from the Portal for Run now. Published in n8n, so it runs once set up.',
     )
+  })
+
+  it('says what set up drops, or can’t add, before anyone presses it', () => {
+    const notes = ['Set up starts from the published version, so changes saved in n8n since then are dropped.']
+    const row = madeRow(render({ me: MAINTAINER, made: [{ ...SAFE, fixed_for_you: ['keeps its test runs'], set_up_notes: notes }] }), 'wf7')
+    expect(text(row)).toContain(`Set up also keeps its test runs. ${notes[0]} Published in n8n, so it runs once set up.`)
   })
 
   it('names every finding that is left, not only the first', () => {

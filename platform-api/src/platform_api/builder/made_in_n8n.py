@@ -60,6 +60,13 @@ log = logging.getLogger(__name__)
 SET_UP_ALREADY = "This workflow is set up already."
 NOT_LOADED = "n8n is not ready yet: its error workflow is not loaded."
 NOT_READ = "n8n did not show the workflow. Nothing is set up. Try again."
+REPLACES_DRAFT = (
+    "Set up starts from the published version, so changes saved in n8n since then are dropped."
+)
+NO_START_ADDED = (
+    "Set up can't add Start from the Portal, as no schedule that is on starts a block, so Run "
+    "now can't start it."
+)
 NOT_FIXED = "n8n did not keep the platform's settings on it, so it is not set up. Try again."
 CHANGED_AS_SET_UP = (
     "It changed in n8n while it was being set up, and it no longer passes the check, so it went "

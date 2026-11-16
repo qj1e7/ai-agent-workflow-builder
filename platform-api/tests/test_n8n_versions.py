@@ -181,6 +181,21 @@ def test_the_schedule_is_read_back_from_the_rule_the_planner_lays_out(day: str):
     assert schedule_of({"nodes": [trigger]}, TEAM_ZONE) == schedule
 
 
+@pytest.mark.parametrize(
+    ("interval", "day"),
+    [
+        ({"field": "weeks", "triggerAtDay": None}, "sunday"),
+        ({"field": "days", "daysInterval": None}, "every_day"),
+    ],
+)
+def test_a_part_n8n_sets_to_its_default_when_null_is_shown_as_n8n_runs_it(
+    interval: dict[str, Any], day: str
+):
+    rule = {"interval": [{**interval, "triggerAtHour": 9, "triggerAtMinute": 0}]}
+    trigger = {"type": "n8n-nodes-base.scheduleTrigger", "parameters": {"rule": rule}}
+    assert schedule_of({"nodes": [trigger]}, TEAM_ZONE) == Schedule(day, "09:00", TEAM_ZONE)  # type: ignore[arg-type]
+
+
 def test_the_schedule_read_back_is_in_the_zone_the_workflow_runs_on():
     trigger = {
         "type": "n8n-nodes-base.scheduleTrigger",

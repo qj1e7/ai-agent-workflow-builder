@@ -20,8 +20,10 @@ from platform_api.builder.made_in_n8n import (
     CHANGED_AS_SET_UP,
     FIX_IN_N8N,
     FIX_N8N_BLOCKS,
+    NO_START_ADDED,
     NOT_FIXED,
     NOT_READ,
+    REPLACES_DRAFT,
     SET_UP_ALREADY,
     MadeInN8n,
 )
@@ -220,6 +222,7 @@ async def test_each_workflow_in_a_member_s_space_waits_with_its_maker_and_its_gr
         "grade": "safe",
         "findings": [],
         "fixed_for_you": [],
+        "set_up_notes": [],
         "can_set_up": True,
         "why_not": None,
     }
@@ -231,6 +234,7 @@ async def test_each_workflow_in_a_member_s_space_waits_with_its_maker_and_its_gr
         "grade": "writes_refused",
         "findings": ['"Create ticket" can run without a yes.'],
         "fixed_for_you": [],
+        "set_up_notes": [],
         "can_set_up": False,
         "why_not": FIX_IN_N8N,
     }
@@ -805,6 +809,21 @@ async def test_one_n8n_did_not_keep_put_right_waits_and_asking_again_finishes(
     again = await set_up(s, "carol", workflow_id)
     assert again.status_code == 201, again.text
     assert s.n8n.workflows[workflow_id]["settings"]["errorWorkflow"] == ERROR_WORKFLOW
+
+
+async def test_the_row_says_what_set_up_drops_and_when_it_can_add_no_start(s: Staffed):
+    carol_n8n, carol_space = await space_of(s, "carol")
+    await a_watched_repository(s)
+    edited = s.n8n.make_in(carol_space, as_the_editor_saves("Edited since"), carol_n8n)
+    s.n8n.edit(edited)
+    unjoined = {**as_the_editor_saves("Schedule joined to nothing"), "connections": {}}
+    alone = s.n8n.make_in(carol_space, unjoined)
+    as_saved = s.n8n.make_in(carol_space, as_the_editor_saves("As published"), carol_n8n)
+    rows = {w["workflow_id"]: w for w in await waiting(s, "carol")}
+    assert rows[edited]["set_up_notes"] == [REPLACES_DRAFT]
+    assert rows[alone]["set_up_notes"] == [NO_START_ADDED]
+    assert FIXED_FOR_YOU[-1] not in rows[alone]["fixed_for_you"]
+    assert rows[as_saved]["set_up_notes"] == []
 
 
 def row_id(created: httpx.Response) -> str:
