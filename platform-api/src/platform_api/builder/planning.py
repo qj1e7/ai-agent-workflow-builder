@@ -9,7 +9,7 @@ import logging
 from collections.abc import Mapping, Sequence
 from typing import Final, Literal, Protocol
 
-from platform_api.builder.cards import check_card, library_card
+from platform_api.builder.cards import check_card, library_card, with_needed_inputs
 from platform_api.builder.models import (
     CannotDo,
     CardApprovalView,
@@ -207,7 +207,7 @@ async def _draft(
             ),
             missing_tools=_missing(draft),
         )
-    checked = check_card(_definition(draft))
+    checked = check_card(with_needed_inputs(_definition(draft)))
     return NewAgent(
         draft=checked.card,
         approvals=checked.approvals,

@@ -3020,6 +3020,8 @@ def test_another_workflow_beside_the_edit_is_crossed_once():
         ("make the morning check run at 9.30", "at 9.30"),
         ("make the morning check run at nine", "at nine"),
         ("make the morning check run at 24", "at 24"),
+        ("make the morning check run at 24:00", "at 24:00"),
+        ("make the morning check run at 7:5", "at 7:5"),
     ],
 )
 def test_a_time_it_cant_read_is_left_to_pick_and_crossed_never_guessed(task: str, unread: str):

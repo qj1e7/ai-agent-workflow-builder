@@ -124,6 +124,7 @@ from platform_api.builder.views import template_view
 from platform_api.builder.watchlist import Watchlist
 from platform_api.db import Connection, Database, UnitOfWork, hold_workflow, json
 from platform_api.orchestration import (
+    A_COLLEAGUE,
     GITHUB_RELEASES,
     TYPE_OF,
     CardRun,
@@ -611,7 +612,7 @@ class Builder:
 
     async def _holder(self, row: Mapping[str, Any]) -> N8nHolderView:
         by = UserId(row["held_by"])
-        name = by if self.holding is None else await self.holding.name_of(by)
+        name = A_COLLEAGUE if self.holding is None else await self.holding.name_of(by)
         return N8nHolderView(id=by, name=name, since=row["held_since"])
 
     async def _moving(self, rows: Sequence[Mapping[str, Any]]) -> set[str]:

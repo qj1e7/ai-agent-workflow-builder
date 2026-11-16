@@ -24,7 +24,7 @@ const FIX: ChangedInN8nReply = { ...REFUSED, grade: 'needs_a_fix', findings: ['â
 interface Drawn {
   me?: Me
   phase?: Phase
-  inN8n?: UseCaseN8nView
+  inN8n?: UseCaseN8nView | Error
   heldBy?: UseCaseView['held_in_n8n']
   people?: Pick<PersonOut, 'id' | 'display'>[]
 }
@@ -35,7 +35,9 @@ function draw(reply: ChangedInN8nReply, { me = ALICE, phase, inN8n, heldBy = nul
   queryClient.setQueryData(['me', session.cacheScope()], me)
   queryClient.setQueryData(['use-case', session.cacheScope(), reply.use_case_id], { ...(versioned as UseCaseView), use_case_id: reply.use_case_id, held_in_n8n: heldBy })
   if (people) queryClient.setQueryData(['people', session.cacheScope()], people)
-  if (inN8n) queryClient.setQueryData(['use-case', session.cacheScope(), reply.use_case_id, 'n8n'], inN8n)
+  const inN8nKey = ['use-case', session.cacheScope(), reply.use_case_id, 'n8n']
+  if (inN8n instanceof Error) queryClient.getQueryCache().build(queryClient, { queryKey: inN8nKey }).setState({ status: 'error', error: inN8n, fetchStatus: 'idle' })
+  else if (inN8n) queryClient.setQueryData(inN8nKey, inN8n)
   const memory = newCardMemory()
   if (phase) memory.changed.keep(phase)
   return renderToStaticMarkup(
@@ -136,6 +138,21 @@ describe('the Changed in n8n card', () => {
     const theirs = draw(REFUSED, { me: { ...ALICE, n8n_access: true }, inN8n: { ...held, can_open: false, why_not: 'Set your n8n password first.' }, heldBy })
     expect(buttons(theirs), 'nobody is offered a press the platform would refuse').toEqual([])
     expect(buttons(draw({ ...REFUSED, in_use: 6 }, { me: { ...ALICE, n8n_access: true }, inN8n: held, heldBy })), 'a card about a version no longer in use offers nothing').toEqual([])
+  })
+
+  it('names who has it open but offers no Take it back while the In n8n view that says whether she may is loading', () => {
+    const heldBy = (heldInN8n as UseCaseN8nView).holder
+    const html = draw(REFUSED, { me: { ...ALICE, n8n_access: true }, heldBy })
+    expect(text(html)).toMatch(/Carol has it open in n8n since (Tue 10 Nov, )?13:40\./)
+    expect(text(html)).not.toContain('can take it back')
+    expect(buttons(html), 'the platform may still refuse her, until her n8n password is set').toEqual([])
+  })
+
+  it('says why there is no Take it back when the In n8n view could not be read', () => {
+    const heldBy = (heldInN8n as UseCaseN8nView).holder
+    const html = draw(REFUSED, { me: { ...ALICE, n8n_access: true }, inN8n: new Error('offline'), heldBy })
+    expect(text(html)).toMatch(/Carol has it open in n8n since (Tue 10 Nov, )?13:40\. The workflow in n8n could not be loaded\./)
+    expect(buttons(html)).toEqual([])
   })
 
   it('tells an Operator without n8n access who holds it and who can take it back, before she presses anything', () => {

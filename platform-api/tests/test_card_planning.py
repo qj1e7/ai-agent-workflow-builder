@@ -189,14 +189,67 @@ async def test_a_draft_with_problems_comes_back_with_them_listed():
     assert {p.field for p in result.problems} == {"name", "blocks.0.tool"}
 
 
-async def test_a_draft_that_writes_without_a_target_input_is_flagged_not_fixed():
+CAROL = (
+    "Every Friday at 16:00, find Jira tickets in project MOCK that nobody updated for 14 days, "
+    "and raise one Jira ticket in MOCK that lists them"
+)
+
+
+async def test_carols_draft_gets_the_jira_project_input_it_left_out_so_she_has_a_way_on():
+    """The model's draft for Carol used two Jira tools and no Jira project input. Changing her
+    words could not fix that, so the platform adds the input, empty, and she fills it in."""
     planner = FakePlanner(
         chose=chosen("new_agent"),
-        drafted=draft(blocks=[DraftBlock(say="Raise it.", tool="jira.create_ticket")], inputs=[]),
+        drafted=draft(
+            name="Stale ticket lister",
+            inputs=[DraftInput(name="Days without update", kind="text", example="14")],
+            blocks=[
+                DraftBlock(
+                    say="Find tickets nobody updated for that many days.", tool="jira.search"
+                ),
+                DraftBlock(say="Raise one ticket that lists them.", tool="jira.create_ticket"),
+            ],
+            approvals=[DraftApproval(tool="jira.create_ticket", approvers=1, why="")],
+        ),
+    )
+    result = await plan(planner, LIBRARY, CAROL)
+    assert isinstance(result, NewAgent)
+    assert result.problems == []
+    assert [i.name for i in result.draft.inputs if i.kind == "jira_project"] == [PROJECT]
+    assert [(a.tool, a.approvers) for a in result.approvals] == [("jira.create_ticket", 1)]
+
+
+@pytest.mark.parametrize("tool", ["jira.search", "jira.read_ticket", "jira.create_ticket"])
+async def test_a_draft_missing_the_input_its_tool_needs_is_given_it_once(tool: str):
+    blocks = [DraftBlock(say="Do it.", tool=tool), DraftBlock(say="Again.", tool=tool)]
+    planner = FakePlanner(chose=chosen("new_agent"), drafted=draft(blocks=blocks, inputs=[]))
+    result = await plan(planner, LIBRARY, "x")
+    assert isinstance(result, NewAgent)
+    assert result.problems == []
+    assert [(i.name, i.kind, i.example) for i in result.draft.inputs] == [
+        (PROJECT, "jira_project", "MOCK")
+    ]
+
+
+async def test_a_draft_with_two_jira_project_inputs_is_still_flagged_never_trimmed():
+    """Which of two projects is the target is the person's choice, so it is never picked."""
+    two = [DraftInput(name="From", kind="jira_project"), DraftInput(name="To", kind="jira_project")]
+    planner = FakePlanner(
+        chose=chosen("new_agent"),
+        drafted=draft(blocks=[DraftBlock(say="Raise it.", tool="jira.create_ticket")], inputs=two),
     )
     result = await plan(planner, LIBRARY, "x")
     assert isinstance(result, NewAgent)
     assert [p.field for p in result.problems] == ["inputs"]
+    assert len(result.draft.inputs) == 2
+
+
+async def test_a_draft_that_reads_github_only_gets_no_input_it_does_not_need():
+    blocks = [DraftBlock(say="Read the releases.", tool="github.read_releases")]
+    planner = FakePlanner(chose=chosen("new_agent"), drafted=draft(blocks=blocks, inputs=[]))
+    result = await plan(planner, LIBRARY, "x")
+    assert isinstance(result, NewAgent)
+    assert result.draft.inputs == []
 
 
 async def test_a_draft_that_cannot_be_done_is_a_refusal_with_the_missing_tools():

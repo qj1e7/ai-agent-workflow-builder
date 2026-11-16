@@ -422,6 +422,60 @@ def test_a_draft_with_an_unlisted_tool_or_no_target_input_fails_those_checks() -
     )
 
 
+def test_a_draft_that_makes_a_stated_number_an_input_fails() -> None:
+    """Carol's 14 days, made a text input, would be asked again: the Portal never fills one."""
+    case = draft_case("stated-days-stay-in-the-step")
+    project = case.reference.inputs[0]
+    days = project.model_copy(update={"name": "Days without update", "kind": "text"})
+    blocks = [b.model_copy(update={"say": "Find stale tickets."}) for b in case.reference.blocks]
+    asked = draft_answer(case, inputs=[project, days], blocks=blocks)
+    assert failed(DRAFT.score(case, asked)) == {"stated_values_in_steps"}
+
+
+@pytest.mark.parametrize(
+    ("name", "what", "example"),
+    [
+        ("Run on", "The day it runs, such as Friday", ""),
+        ("Report title", "A title for today's list", ""),
+        ("Ticket key", "A ticket to mention", "MOCK-14"),
+    ],
+)
+def test_an_input_that_only_shares_a_letter_run_with_a_stated_value_passes(
+    name: str, what: str, example: str
+) -> None:
+    """ "Friday", "today" and "MOCK-14" hold "day" or "14", but none asks for "14 days"."""
+    case = draft_case("stated-days-stay-in-the-step")
+    project = case.reference.inputs[0]
+    other = project.model_copy(
+        update={"name": name, "kind": "text", "what": what, "example": example}
+    )
+    assert failed(DRAFT.score(case, draft_answer(case, inputs=[project, other]))) == set()
+
+
+@pytest.mark.parametrize("words", ["Look back 14 days", "A 14-day window", "14 Days"])
+def test_an_input_that_asks_for_the_stated_value_with_its_unit_fails(words: str) -> None:
+    case = draft_case("stated-days-stay-in-the-step")
+    project = case.reference.inputs[0]
+    asks = project.model_copy(update={"name": "Window", "kind": "text", "what": words})
+    scored = DRAFT.score(case, draft_answer(case, inputs=[project, asks]))
+    assert failed(scored) == {"stated_values_in_steps"}
+
+
+def test_a_step_may_write_the_stated_value_with_a_hyphen() -> None:
+    case = draft_case("stated-days-stay-in-the-step")
+    blocks = [*case.reference.blocks]
+    blocks[0] = blocks[0].model_copy(update={"say": "Find the tickets idle for a 14-day stretch."})
+    assert failed(DRAFT.score(case, draft_answer(case, blocks=blocks))) == set()
+
+
+@pytest.mark.parametrize("tool", ["jira.search", "jira.read_ticket"])
+def test_a_draft_that_reads_jira_with_no_project_input_fails(tool: str) -> None:
+    case = draft_case("stated-days-stay-in-the-step")
+    blocks = [case.reference.blocks[0].model_copy(update={"tool": tool})]
+    unscoped = draft_answer(case, inputs=[], blocks=blocks, approvals=[])
+    assert "jira_tool_has_project_input" in failed(DRAFT.score(case, unscoped))
+
+
 def test_a_draft_with_an_invented_project_or_old_name_fails() -> None:
     case = draft_case("project-not-named")
     blocks = [case.reference.blocks[0].model_copy(update={"say": "Open it in project ABC."})]

@@ -161,6 +161,15 @@ class SseConnection:
         frame, _, self._buffer = self._buffer.partition(b"\n\n")
         return frame.decode()
 
+    async def event(self, timeout: float = 5) -> tuple[int, dict[str, Any]]:
+        """The next event, past any keep-alive sent while it was on its way. With the Cosmos DB
+        reader an event comes only once the copier has copied it, which can take longer than
+        one keep-alive."""
+        async with asyncio.timeout(timeout):
+            while (frame := await self.frame()) == ": keep-alive":
+                continue
+        return event_in(frame)
+
     async def disconnect(self) -> None:
         if self._task.done():
             return
@@ -200,11 +209,11 @@ async def test_the_stream_resumes_after_last_event_id_then_follows_and_keeps_ali
         assert stream.headers["cache-control"] == "no-cache"
         assert stream.headers["x-accel-buffering"] == "no"
 
-        seq, event = event_in(await stream.frame())
+        seq, event = await stream.event()
         assert (seq, event["seq"], event["summary"]) == (3, 3, "event 3")
 
         await append(app, RUN, pending(4), pending(5))
-        assert [event_in(await stream.frame())[0] for _ in range(2)] == [4, 5]
+        assert [(await stream.event())[0] for _ in range(2)] == [4, 5]
 
         assert await stream.frame(timeout=KEEPALIVE * 5) == ": keep-alive"
         assert await stream.frame(timeout=KEEPALIVE * 5) == ": keep-alive"
@@ -214,10 +223,10 @@ async def test_the_stream_falls_back_to_after_when_last_event_id_is_not_a_number
     await append(app, RUN, pending(1), pending(2), pending(3))
     headers = {**ALICE, "Accept": "text/event-stream", "Last-Event-ID": "abc"}
     async with SseConnection(app, f"/api/v1/runs/{RUN}/events?after=2", headers) as stream:
-        assert event_in(await stream.frame())[0] == 3
+        assert (await stream.event())[0] == 3
     plain = {**ALICE, "Accept": "text/event-stream"}
     async with SseConnection(app, f"/api/v1/runs/{RUN}/events", plain) as stream:
-        assert [event_in(await stream.frame())[0] for _ in range(3)] == [1, 2, 3]
+        assert [(await stream.event())[0] for _ in range(3)] == [1, 2, 3]
 
 
 async def test_the_stream_closes_once_the_person_leaves_the_list(app: FastAPI):
@@ -226,9 +235,9 @@ async def test_the_stream_closes_once_the_person_leaves_the_list(app: FastAPI):
     await append(app, RUN, pending(1))
     headers = {**ALICE, "Accept": "text/event-stream"}
     async with SseConnection(app, f"/api/v1/runs/{RUN}/events", headers) as stream:
-        assert event_in(await stream.frame())[0] == 1
+        assert (await stream.event())[0] == 1
         await append(app, RUN, pending(2))
-        assert event_in(await stream.frame())[0] == 2
+        assert (await stream.event())[0] == 2
         people.remove(UserId("alice"))
         with pytest.raises(EOFError), anyio.fail_after(KEEPALIVE * 10):
             while True:
