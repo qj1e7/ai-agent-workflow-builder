@@ -75,6 +75,7 @@ import { runPill, stageWords } from '../run/words'
 const WATCHLIST = watchlistUseCase as UseCaseView
 const PAUSED = pausedWatchlist as UseCaseView
 const AGENTS = agentUseCase as UseCaseView
+const NO_START = "It has no Start from the Portal block, so the Portal can't start it. Add the block in n8n."
 const HELD = heldWatchlist as UseCaseView
 const run = (view: unknown, change: Partial<RunView> = {}) => ({ ...(view as RunView), ...change }) as RunView
 const NAMES: Record<string, string> = { alice: 'Alice', bob: 'Bob', carol: 'Carol' }
@@ -422,6 +423,16 @@ describe('a draft’s test run, in the same words everywhere', () => {
     expect(controlsOf({ ...draft, last_run: passed }, ALICE)).toEqual(['test', 'turn_on', 'delete'])
     expect(controlsOf({ ...draft, last_run: passed }, BOB)).toEqual([])
   })
+
+  it('offers no Run now and no test run while nothing in n8n can start it, and says why under When', () => {
+    const noStart = { ...AGENTS, start_refused: NO_START }
+    expect(controlsOf(noStart, ALICE)).toEqual(['pause', 'delete'])
+    expect(controlsOf({ ...noStart, state: 'draft' as const, last_run: null }, ALICE)).toEqual(['delete'])
+    expect(menuActionsOf(noStart, ALICE)).not.toContain('run')
+    expect(whenWords(noStart)).toEqual({ words: 'No schedule', small: NO_START })
+    const daily = { day: 'every_day', at: '03:00', time_zone: 'Asia/Singapore', owner_name: null } as const
+    expect(whenWords({ ...noStart, schedule: daily }).small).toBe(`Singapore time (SGT). ${NO_START}`)
+  })
 })
 
 describe('the manage controls of a workflow page', () => {
@@ -618,6 +629,10 @@ describe('changing a workflow’s schedule', () => {
     expect([ALICE, CAROL].map((viewer) => mayChangeSchedule(WATCHLIST, viewer))).toEqual([false, false])
   })
 
+  it('is not offered for a workflow made in n8n, whose schedule is changed in n8n', () => {
+    expect([ALICE, CAROL].map((viewer) => mayChangeSchedule({ ...AGENTS, made_in_n8n_by: 'carol' }, viewer))).toEqual([false, false])
+  })
+
   it('says when it runs next, in the schedule’s own time', () => {
     const saved = { ...AGENTS, state: 'on' as const, next_run_at: '2026-11-09T01:00:00Z', schedule: { day: 'monday' as const, at: '09:00', time_zone: 'Asia/Singapore', owner_name: 'Alice', held: null } }
     expect(scheduleSavedWords(saved, NOW)).toBe('Saved. Next run Mon 9 Nov, 9:00.')
@@ -787,6 +802,7 @@ describe('who says yes', () => {
   it('keeps the whole rule one tap away: the owner, a run’s starter and whoever retries it can’t say yes to it', () => {
     expect(ownWorkRule(null)).toBe('Nobody says yes to their own work. The workflow’s owner, whoever starts a run and whoever retries it can’t say yes to that run.')
     expect(ownWorkRule({ owner_name: 'Carol' })).toMatch(/ A scheduled run starts as Carol\.$/)
+    expect(ownWorkRule({ owner_name: null }), 'a schedule set in n8n has no owner').toBe(ownWorkRule(null))
   })
 })
 

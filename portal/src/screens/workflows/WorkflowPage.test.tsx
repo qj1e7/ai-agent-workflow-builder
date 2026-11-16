@@ -246,6 +246,13 @@ describe('a workflow page', () => {
     expect(sectionText(render({ useCase: SCHEDULED }), 'When')).toContain('Set by Carol.')
   })
 
+  it('says a schedule nobody saved here was set in n8n, and offers no change to one made in n8n', () => {
+    const inN8n = { ...SCHEDULED, schedule: { ...SCHEDULED.schedule!, owner_name: null } }
+    expect(sectionText(render({ useCase: inN8n }), 'When')).toContain('Set in n8n.')
+    expect(sectionText(render({ useCase: inN8n }), 'When')).not.toContain('null')
+    expect(buttons(render({ useCase: { ...inN8n, made_in_n8n_by: 'carol' } }))).not.toContain('Change when it runs')
+  })
+
   it('shows an Approver who is not an Operator neither control', () => {
     for (const useCase of [SCHEDULED, AGENTS]) expect(buttons(render({ me: BOB, useCase })).filter((label) => /when it runs/i.test(label))).toEqual([])
   })

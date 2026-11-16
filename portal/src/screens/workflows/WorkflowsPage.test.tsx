@@ -501,7 +501,7 @@ describe('a request opened by its link', () => {
 
 describe('workflows made in n8n, for someone with n8n access', () => {
   const MAINTAINER: Me = { ...CAROL, n8n_access: true }
-  const SAFE: MadeInN8nView = { workflow_id: 'wf7', name: 'Morning check', made_by: 'carol', published: true, grade: 'safe', findings: [], can_set_up: true, why_not: null }
+  const SAFE: MadeInN8nView = { workflow_id: 'wf7', name: 'Morning check', made_by: 'carol', published: true, grade: 'safe', findings: [], fixed_for_you: [], can_set_up: true, why_not: null }
   const NO_YES: MadeInN8nView = { ...SAFE, workflow_id: 'wf8', name: 'Quick fix', published: false, grade: 'writes_refused', findings: ['"Create ticket" can run without a yes.'], can_set_up: false, why_not: 'Fix it in n8n first. It isn’t published there, and only a workflow that passes the check can be turned on.' }
   const madeRow = (html: string, id: string) => new RegExp(`<li[^>]*data-made-in-n8n="${id}"[\\s\\S]*?</li>`).exec(html)?.[0] ?? ''
 
@@ -520,6 +520,20 @@ describe('workflows made in n8n, for someone with n8n access', () => {
     expect(text(row).replaceAll('&quot;', '"')).toContain('Writes refused: "Create ticket" can run without a yes. Fix it in n8n first.')
     expect(row).toMatch(/data-tone="bad"[^>]*>Writes refused<\/span>/)
     expect(labelsOf(row, 'Set up')).toHaveLength(0)
+  })
+
+  it('says what set up puts right, which is never its maker’s job', () => {
+    const fixed = ['sends its failures to the platform’s error workflow', 'runs it on Singapore time', 'adds Start from the Portal for Run now']
+    const row = madeRow(render({ me: MAINTAINER, made: [{ ...SAFE, fixed_for_you: fixed }] }), 'wf7')
+    expect(text(row)).toContain(
+      'Safe: every change waits for a yes. Set up also sends its failures to the platform’s error workflow, runs it on Singapore time and adds Start from the Portal for Run now. Published in n8n, so it runs once set up.',
+    )
+  })
+
+  it('names every finding that is left, not only the first', () => {
+    const findings = ['"Read" reads a place the platform does not allow.', '"Schedule Trigger" leaves its hour or minute for n8n to pick.']
+    const row = madeRow(render({ me: MAINTAINER, made: [{ ...SAFE, grade: 'needs_a_fix', findings }] }), 'wf7')
+    expect(text(row).replaceAll('&quot;', '"')).toContain(`Needs a fix: ${findings.join(' ')}`)
   })
 
   it('says a safe one that is not published is set up as a draft', () => {
