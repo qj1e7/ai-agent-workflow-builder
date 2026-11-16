@@ -167,8 +167,13 @@ class FakeN8n:
     def save_settings(self, workflow_id: str, change: Callable[[dict[str, Any]], None]) -> None:
         """A member changes the workflow's settings in n8n's editor and saves, publishing nothing.
         n8n runs the live version with the new settings at once."""
+        self.save_draft(workflow_id, lambda workflow: change(workflow["settings"]))
+
+    def save_draft(self, workflow_id: str, change: Callable[[dict[str, Any]], None]) -> None:
+        """n8n's editor saves the draft, publishing nothing, as it does on its own while someone
+        has the workflow open."""
         workflow = self.workflows[workflow_id]
-        change(workflow["settings"])
+        change(workflow)
         workflow["versionId"] = _new_version()
         workflow["checksum"] = _new_version()
         self._remember(workflow_id)

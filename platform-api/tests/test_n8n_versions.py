@@ -6,6 +6,7 @@ and deletes in n8n; a workflow deleted in n8n keeps its runs and versions."""
 
 import asyncio
 from collections.abc import AsyncIterator, Callable, Mapping
+from copy import deepcopy
 from dataclasses import dataclass, field
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -13,7 +14,7 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from platform_api.builder import Builder
-from platform_api.builder.layout import schedule_rule
+from platform_api.builder.layout import LayoutPlan, release_check, schedule_rule
 from platform_api.builder.models import RepublishIn, ScheduleSaveIn, WatchlistView
 from platform_api.builder.sweep import ASKED_GAP, Found, Regraded, VersionsSweep
 from platform_api.builder.versions import changes_between, schedule_of
@@ -687,6 +688,103 @@ async def test_settings_put_back_in_n8n_grade_safe_again(v: Versions):
     assert await v.sweep() == 1
     view = await v.view(use_case_id)
     assert (view["version"], view["grade"], view["findings"]) == (3, "safe", [])
+
+
+N8N_DEFAULTS: tuple[tuple[str, object], ...] = (
+    ("field", "days"),
+    ("triggerAtDay", [0]),
+    ("triggerAtHour", 0),
+    ("triggerAtMinute", 0),
+)
+
+
+def saved_in_n8ns_editor(workflow: dict[str, Any]) -> None:
+    """What n8n 2.42.6's editor writes as it saves a workflow the platform laid out, with no block
+    touched, as its own load and save (getNodeParameters) gave it for every layout: a parameter
+    at its default is left out, IF's condition options gain its leftValue, and the settings
+    gain its binary mode."""
+    editors_own = {"executionOrder": "v1", "binaryMode": "separate"}
+    workflow["settings"] = {**editors_own, **workflow["settings"]}
+    for node in workflow["nodes"]:
+        parameters = node["parameters"]
+        if node["type"] == "CUSTOM.wabRead" and parameters.get("source") == "github_releases":
+            del parameters["source"]
+        if node["type"] == "n8n-nodes-base.if":
+            parameters["conditions"]["options"]["leftValue"] = ""
+        if node["type"] == "n8n-nodes-base.scheduleTrigger":
+            for interval in parameters["rule"]["interval"]:
+                for key, default in N8N_DEFAULTS:
+                    if interval.get(key) == default:
+                        del interval[key]
+
+
+def adding_a_schedule_at_three(workflow: dict[str, Any]) -> None:
+    """Adds n8n's Schedule Trigger at 3am in the editor and joins it to the first block. The
+    editor saves it with only the hour, the one value not at n8n's default."""
+    saved_in_n8ns_editor(workflow)
+    workflow["nodes"].append(
+        {
+            "name": "Schedule Trigger",
+            "type": "n8n-nodes-base.scheduleTrigger",
+            "typeVersion": 1.2,
+            "position": [0, -200],
+            "parameters": {"rule": {"interval": [{"triggerAtHour": 3}]}},
+        }
+    )
+    first = {"node": "Read release", "type": "main", "index": 0}
+    workflow["connections"]["Schedule Trigger"] = {"main": [[first]]}
+
+
+async def test_an_autosave_in_n8n_that_writes_only_its_own_defaults_is_no_new_version(
+    v: Versions,
+):
+    """n8n's editor saves on its own while someone looks, writing its defaults in. n8n runs the
+    workflow the same, so there is nothing to roll back to and nothing to tell. A real change
+    to the settings is still a version, since n8n runs the live version with them."""
+    use_case_id, workflow_id = await made(v.own, on=True)
+    v.n8n.save_draft(workflow_id, saved_in_n8ns_editor)
+
+    assert await v.sweep() == 0
+    assert (await v.view(use_case_id))["version"] == 1
+    assert await v.builder.changed_in_n8n(10) == []
+
+    v.n8n.save_settings(workflow_id, no_error_workflow)
+    assert await v.sweep() == 1
+    [card] = await v.builder.changed_in_n8n(10)
+    assert (card.made, card.changes) == (
+        "settings_changed_in_n8n",
+        ["Changed its settings: the error workflow."],
+    )
+
+
+async def test_a_publish_in_n8n_names_only_what_someone_changed(v: Versions):
+    """The editor rewrites blocks nobody touched as it saves, in ways n8n runs the same."""
+    use_case_id, workflow_id = await made(v.own, on=True, schedule=None)
+    v.n8n.publish_as(workflow_id, DAVE_IN_N8N, adding_a_schedule_at_three)
+    assert await v.sweep() == 1
+
+    versions = (await v.call("alice", "GET", f"/api/v1/use-cases/{use_case_id}/versions")).json()
+    changed = ["Now runs every day at 3:00.", "Added “Schedule Trigger”."]
+    assert versions["versions"][0]["changes"] == changed
+    [card] = await v.builder.changed_in_n8n(10)
+    assert card.changes == changed
+
+
+@pytest.mark.parametrize(
+    "schedule",
+    [
+        Schedule("every_day", "08:00", TEAM_ZONE),
+        Schedule("every_day", "00:00", TEAM_ZONE),
+        Schedule("sunday", "07:00", TEAM_ZONE),
+        Schedule("weekdays", "09:15", TEAM_ZONE),
+    ],
+)
+def test_a_layout_n8ns_editor_saved_untouched_has_no_change(schedule: Schedule):
+    plan = LayoutPlan("uc", "Release check", "https://portal", schedule, (), "errors", TEAM_ZONE)
+    laid_out = release_check(plan, "langchain-ai/langgraph", "MOCK")
+    saved = deepcopy(laid_out)
+    saved_in_n8ns_editor(saved)
+    assert changes_between(laid_out, saved) == ["Published again, with no change to its blocks."]
 
 
 async def test_settings_saved_in_another_order_are_no_change(v: Versions):
