@@ -13,7 +13,7 @@ import { useAfterPanelAction } from '../../ui/sidePanel'
 import { ExplainButton } from '../explain/ExplainButton'
 import { Troubleshooting } from '../run/Outcome'
 import { StatusBanner } from './Banner'
-import { heldLine, heldOf, theirsNote } from './n8nHold'
+import { heldOf, heldWords } from './n8nHold'
 import { needsFix } from './n8nChange'
 import { StatusPills } from './Status'
 import { bannerOf, changeProblem, changeWords, controlsOf, lastRunWords, leftOutWords, NO_RUNS, nextRunWords, pillOf, pressChange, REFRESH_MS, rereadWhenOutOfDate, sentenceOf, viewerOf, type Banner, type LastRun } from './workflow'
@@ -68,7 +68,7 @@ function Summary({ useCase, me, now }: { useCase: UseCaseView; me: Me; now: Date
       </div>
       <p>{sentenceOf(useCase)}</p>
       {leftOutWords(useCase.left_out) ? <p className="muted">{leftOutWords(useCase.left_out)}</p> : null}
-      {held ? <p className="muted">{held.kind === 'theirs' ? `${heldLine(held, now)} ${theirsNote(held)}` : heldLine(held, now)}</p> : null}
+      {held ? <p className="muted">{heldWords(held, now)}</p> : null}
       <StatusBanner banner={banner} resuming={false} onResume={() => undefined} />
       {stopped ? (
         <Troubleshooting

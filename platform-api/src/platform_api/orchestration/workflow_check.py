@@ -220,6 +220,7 @@ class _Node(BaseModel):
     parameters: dict[str, JsonValue] = Field(default_factory=dict[str, JsonValue])
     position: list[float] = Field(default_factory=lambda: [0.0, 0.0])
     credentials: dict[str, JsonValue] = Field(default_factory=dict[str, JsonValue])
+    disabled: bool = False
 
 
 class N8nDocument(BaseModel):
@@ -239,6 +240,8 @@ class Block:
     version: JsonValue = None
     credentials: Mapping[str, JsonValue] = field(default_factory=dict[str, JsonValue])
     """The keys it names, by the n8n credential type each is for."""
+    disabled: bool = False
+    """Turned off in n8n's editor. n8n passes items straight through it (ADR 0051)."""
 
     @property
     def spec(self) -> NodeType | None:
@@ -291,7 +294,9 @@ def read_flow(document: Mapping[str, Any]) -> Flow:
     """Raises Unreadable when the document is not an n8n workflow's shape."""
     parsed = parse(document)
     blocks = {
-        node.name: Block(node.name, node.type, node.parameters, node.typeVersion, node.credentials)
+        node.name: Block(
+            node.name, node.type, node.parameters, node.typeVersion, node.credentials, node.disabled
+        )
         for node in parsed.nodes
     }
     edges = tuple(
@@ -577,7 +582,8 @@ def _ours_first(flow: Flow) -> Iterable[Finding]:
     """On every way from a trigger, one of our blocks that calls the platform comes before the
     first of n8n's own blocks for a system. That call links the run, so it is recorded and shown,
     and checks the version first, so a version that does not pass the check stops there before
-    n8n reads or posts anything."""
+    n8n reads or posts anything. One of ours turned off calls nothing, so it counts as absent,
+    but one of n8n's turned off still counts (ADR 0051)."""
     starts = [b.name for b in flow.blocks.values() if b.spec is not None and b.spec.starts]
     early: dict[str, None] = {}
     seen: set[tuple[str, bool]] = set()
@@ -590,7 +596,7 @@ def _ours_first(flow: Flow) -> Iterable[Finding]:
         kind = _kind(flow, name)
         if kind == "system" and not called:
             early[name] = None
-        called = called or kind in CALLS
+        called = called or (kind in CALLS and not flow.blocks[name].disabled)
         stack.extend((edge.target, called) for edge in flow.after(name))
     for name in early:
         yield _fix(
@@ -866,7 +872,8 @@ def _input_rows(block: Block) -> list[tuple[str, JsonValue]]:
 
 def _yes_before_writes(flow: Flow) -> Iterable[Finding]:
     """Walks every path from every block that starts an execution. A path has a yes only once it
-    leaves an Ask for a yes by its Yes exit."""
+    leaves an Ask for a yes by its Yes exit. An Ask for a yes turned off asks nobody, so it counts
+    as absent, but a write turned off still counts as a write (ADR 0051)."""
     unapproved: dict[str, None] = {}
     doubled: dict[str, None] = {}
     starts = [b.name for b in flow.blocks.values() if b.spec is not None and b.spec.starts]
@@ -879,12 +886,13 @@ def _yes_before_writes(flow: Flow) -> Iterable[Finding]:
         seen.add(state)
         name, approved, asked = state
         kind = _kind(flow, name)
+        asks = kind == "ask" and not flow.blocks[name].disabled
         if kind == "write" and not approved:
             unapproved[name] = None
-        if kind == "ask" and asked:
+        if asks and asked:
             doubled[name] = None
         for edge in flow.after(name):
-            if kind == "ask":
+            if asks:
                 stack.append((edge.target, edge.exit == YES, True))
             else:
                 stack.append((edge.target, approved, asked))

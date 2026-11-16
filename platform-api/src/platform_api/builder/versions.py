@@ -20,6 +20,7 @@ from platform_api.builder.models import (
 )
 from platform_api.db import Connection, UnitOfWork, json
 from platform_api.orchestration import (
+    Block,
     Day,
     Grade,
     Schedule,
@@ -363,8 +364,9 @@ def settings_changed(
 
 def changes_between(before: Mapping[str, Any] | None, after: Mapping[str, Any]) -> list[str]:
     """What a version published in n8n changed, in the Changed in n8n card's words: when it
-    runs, each block deleted, added or changed by name, then how the blocks connect and its
-    settings. A plain comparison of the two workflows as n8n runs them, never a guess at why."""
+    runs, each block deleted, added, turned off or on, or changed by name, with a new version of
+    its block or a new key, then how the blocks connect and its settings. A plain comparison of
+    the two workflows as n8n runs them, never a guess at why."""
     after = _as_n8n_runs(after)
     before = None if before is None else _as_n8n_runs(before)
     try:
@@ -389,15 +391,32 @@ def changes_between(before: Mapping[str, Any] | None, after: Mapping[str, Any]) 
         if was is None:
             lines.append(f"Added “{name}”.")
             continue
+        if was.disabled != block.disabled:
+            lines.append(f"Turned {'off' if block.disabled else 'on'} “{name}”.")
         changed = (was.type, dict(was.parameters)) != (block.type, dict(block.parameters))
         said = schedule_said and block.type == SCHEDULE_TYPE == was.type
         if changed and not said:
             lines.append(f"Changed “{name}”.")
+        if was.type != block.type:
+            continue
+        if was.version != block.version:
+            lines.append(f"Changed “{name}” to another version of its block.")
+        if _key_ids(was) != _key_ids(block):
+            lines.append(f"Changed the key on “{name}”.")
     if set(old.blocks) == set(new.blocks) and set(old.edges) != set(new.edges):
         lines.append("Changed how the blocks connect.")
     if (settings := settings_changed(old.settings, new.settings)) is not None:
         lines.append(f"Changed its settings: {settings}.")
     return lines or ["Published again, with no change to its blocks."]
+
+
+def _key_ids(block: Block) -> dict[str, object]:
+    """The keys a block names, by credential type, each by its id. n8n keeps a key's name beside
+    it, which can change while the key stays the same."""
+    return {
+        kind: named.get("id") if isinstance(named, dict) else named
+        for kind, named in block.credentials.items()
+    }
 
 
 def _schedule_json(schedule: Schedule | None) -> object:
