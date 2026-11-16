@@ -137,7 +137,6 @@ button, input { font: inherit; color: inherit; }
 .btn:active { transform: scale(0.97); }
 .btn.ghost { background: var(--surface); color: var(--ink); border: 1px solid var(--rail); }
 .btn.sm { min-height: 32px; padding: 0 11px; font-size: 0.84rem; }
-.btn[disabled] { background: var(--rail); color: var(--surface); cursor: default; }
 .pill { display: inline-flex; align-items: center; padding: 1px 9px; border-radius: 999px; font-size: 0.78rem; font-weight: 700; background: var(--sunk); color: var(--muted); border: 1px solid var(--hair); white-space: nowrap; }
 .pill.lg { font-size: 0.86rem; padding: 3px 12px; }
 .pill[data-s="ready"], .pill[data-s="run"] { background: var(--accent-soft); color: var(--accent-ink); border-color: transparent; }
@@ -238,7 +237,7 @@ button, input { font: inherit; color: inherit; }
 .read h2 { font-size: 1.1rem; font-weight: 800; }
 .read ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
 @media (hover: hover) and (pointer: fine) {
-  .btn:not([disabled]):not(.ghost):hover, .send:hover { background: var(--hover); }
+  .btn:not(.ghost):hover, .send:hover { background: var(--hover); }
   .btn.ghost:hover, .chips button:hover, .need:hover { border-color: var(--ink); }
   .wl-row:hover { background: var(--sunk); }
   .linkbtn:hover { color: var(--ink); }
@@ -556,8 +555,6 @@ button, input { font: inherit; color: inherit; }
 .rp-g { font-size: 0.84rem; color: var(--muted); font-weight: 600; }
 .rp-b { padding: 0 14px 14px; display: grid; gap: 8px; }
 .live .rp-d[open] .rp-b { animation: fadeup var(--t-small) var(--ease-out); }
-.rp-sec { display: grid; gap: 8px; padding-top: 12px; border-top: 1px solid var(--rule); }
-.rp-sec h4 { font-size: 0.95rem; font-weight: 800; }
 .rp-steps { margin: 0; padding-left: 22px; display: grid; gap: 6px; }
 .rp-steps .s, .rp-rwp .s { display: block; font-size: 0.84rem; color: var(--muted); font-weight: 400; }
 .rp-rwp dd { font-weight: 600; }
@@ -633,7 +630,6 @@ button, input { font: inherit; color: inherit; }
   <div class="demo">
     <div class="ctl"><span class="lbl" id="who-l">View as</span><div class="seg" id="whoSeg" role="group" aria-labelledby="who-l"><button type="button" data-u="alice">Alice</button><button type="button" data-u="maint">Alice, with n8n access</button><button type="button" data-u="bob">Bob, Approver</button></div></div>
     <div class="ctl"><span class="lbl" id="speed-l">Speed</span><div class="seg" id="speed" role="group" aria-labelledby="speed-l"><button type="button" data-k="1">1x</button><button type="button" data-k="0.5">2x</button><button type="button" data-k="0">Instant</button></div></div>
-    <div class="ctl"><span class="lbl" id="rlay-l">Report</span><div class="seg" id="rlay" role="group" aria-labelledby="rlay-l"><button type="button" data-r="one">One page</button><button type="button" data-r="sum">Summary that opens</button></div></div>
     <div class="ctl"><span class="lbl" id="trace-l">Tracing</span><div class="seg" id="trace" role="group" aria-labelledby="trace-l"><button type="button" data-tr="on">On</button><button type="button" data-tr="off">Off</button></div></div>
   </div>
   <div class="demo">
@@ -700,7 +696,8 @@ button, input { font: inherit; color: inherit; }
       <li>“Draft a workflow that …” brings in the Workflow drafter. Each step shows as it goes, and the blocks appear on the line as it lays them out. Play “Draft a workflow”.</li>
       <li>The draft card asks one question at a time, with choices from the team’s own data. A run time is never guessed. A guess shows as a guess you can change. Keys are never typed in the chat, and an Operator adds them in Settings.</li>
       <li>Send for approval appears only when nothing is still needed. Until then the card says how many questions are left.</li>
-      <li>The report is code’s own words. Switch “Report” to compare one page with a summary that opens.</li>
+      <li>The report is code’s own words. In short comes first, then one row per section with a short gist. A row opens on a click, and Settings opens by itself while anything is still needed.</li>
+      <li>Where something can’t go on yet, the reason sits where its button would be, such as “Answer 1 question first”. No button is ever shown dead. The Planner’s set-up card and the change card follow the same rule.</li>
       <li>Bob ticks each flag and says why. Approve appears only when every flag has a tick and a reason. A write by n8n’s own blocks won’t ask on each run, and the page says so. Play “Bob approves a draft”, then “Second Approver” for a workflow that changes who can use GitLab.</li>
       <li>Explain sits on each row of Workflows, on the workflow page and on each version. “Explain the FastAPI release check” answers in the chat, with a Reworded label and code’s own wording one tap away. Play “Explain”.</li>
       <li>A thumbs up or down sits under each Planner answer, only while tracing is on. Switch “Tracing” to compare.</li>
@@ -1813,8 +1810,9 @@ function patchParts(c) {
   const q = question(d);
   const left = $('[data-p-left]', c);
   left.className = 'c-left';
-  left.textContent = q ? '1 question to answer' : '';
-  $('[data-p-act]', c).innerHTML = `<button class="btn ghost" type="button" data-drop>Never mind</button><button class="btn" type="button" data-setup${q ? ' disabled' : ''}>${d.cant.length ? 'Set up the part I can' : 'Set up'}</button>`;
+  left.textContent = '';
+  const n = [!d.soft, d.sched.day === undefined, !d.sched.time].filter(Boolean).length;
+  $('[data-p-act]', c).innerHTML = `<button class="btn ghost" type="button" data-drop>Never mind</button>${q ? `<span class="waiting dwait">Answer ${n} ${n === 1 ? 'question' : 'questions'} first</span>` : `<button class="btn" type="button" data-setup>${d.cant.length ? 'Set up the part I can' : 'Set up'}</button>`}`;
 }
 function pickPart(btn) {
   const c = btn.closest('[data-parts]');
@@ -1970,7 +1968,7 @@ function patchEdit(c) {
   left.className = e.status === 'saved' ? 'c-left okline' : 'c-left';
   left.innerHTML = e.status === 'saved' ? `${ICON.check}Saved as version ${e.ver}.` : e.status === 'undone' ? `Back to ${short(e.from)}.` : '';
   act.innerHTML = e.status === 'asking'
-    ? `<button class="btn ghost" type="button" data-keep>Never mind</button><button class="btn" type="button" data-save${ask ? ' disabled' : ''}>Save change</button>`
+    ? `<button class="btn ghost" type="button" data-keep>Never mind</button>${ask ? '<span class="waiting dwait">Answer 1 question first</span>' : '<button class="btn" type="button" data-save>Save change</button>'}`
     : e.status === 'saved' ? `<button class="btn ghost sm" type="button" data-open="wf:${e.wf}">Open</button><button class="btn ghost sm" type="button" data-undo>Undo</button>` : '';
 }
 function saveEdit(c) {
@@ -2285,7 +2283,6 @@ function wfFacts(id, ver) {
 }
 const factsOf = (id, v) => (W.dw[id] ? dFacts(W.dw[id]) : W.wf[id] ? wfFacts(id, v) : null);
 
-let RLAY = 'sum';
 const OPEN = new Map();
 const SECS = [['steps', 'Step by step'], ['rwp', 'What it reads, writes and posts'], ['flags', 'Flags'], ['who', 'Who approves each write'], ['set', 'Settings'], ['appr', 'Approval']];
 const MK = { filled: ICON.check, needed: '?', guessed: ICON.pen, set: '' };
@@ -2327,13 +2324,12 @@ const RSEC = {
   },
   appr: (F) => [F.apprG, `<p>${F.appr}</p>`],
 };
-/* Two layouts to compare, switched by "Report" in the demo bar: one page with every section, or a summary whose sections open. */
+/* In short first, then one row per section with its gist. A row opens on a click, and Settings opens by itself while anything is needed. */
 function reportHTML(F, o = {}) {
   const rw = o.where === 'card' && F.reworded;
   const head = `<p class="rep-short">${rw && !o.code ? F.reworded : F.short}</p>${rw ? `<p class="rw"><span class="pill">${o.code ? 'Code’s wording' : 'Reworded'}</span><button class="linkbtn" type="button" data-rw>${o.code ? 'Show the reworded one' : 'Show code’s wording'}</button></p>` : ''}${F.ver ? `<p class="small muted">${F.ver}</p>` : ''}`;
   const secs = SECS.filter(([k]) => !(o.skip || []).includes(k)).map(([k, t]) => [k, t, ...RSEC[k](F)]);
-  if (RLAY === 'one') return `<div class="rep" data-lay="one">${head}${secs.map(([, t, , b]) => `<section class="rp-sec"><h4>${t}</h4>${b}</section>`).join('')}</div>`;
-  return `<div class="rep" data-lay="sum">${head}<div class="rp-acc">${secs.map(([k, t, g, b]) => {
+  return `<div class="rep">${head}<div class="rp-acc">${secs.map(([k, t, g, b]) => {
     const sk = `${F.id}:${o.where}:${k}`;
     const open = OPEN.has(sk) ? OPEN.get(sk) : k === 'set' && F.answer > 0;
     return `<details class="rp-d" data-sk="${sk}"${open ? ' open' : ''}><summary><span class="rp-t">${t}</span><span class="rp-g">${g}</span></summary><div class="rp-b">${b}</div></details>`;
@@ -2345,7 +2341,6 @@ function patchRep(el) {
   if (F) el.innerHTML = reportHTML(F, { where: el.dataset.where, code: el.closest('[data-x]')?.dataset.code === '1', skip: el.dataset.skip ? [el.dataset.skip] : [] });
 }
 function toggleRw(btn) { const c = btn.closest('[data-x]'); c.dataset.code = c.dataset.code === '1' ? '' : '1'; refresh(); }
-function setRlay(v) { RLAY = v; press($('#rlay'), 'data-r', v); renderPanel(); if (paging) renderPage(); }
 
 /* ---------- The draft card: the steps as they go, then the line, In short, one question at a time ---------- */
 const dCardShell = (d) => `<div class="card" data-live="dcard" data-k="${d.key}" data-rev="${d.rev}" data-spec="report:${d.key}"><div class="c-head"><b>${dT(d).name}</b><span class="c-hr"><span class="small muted">Revision ${d.rev}</span><span class="pill" data-s="run">Drafting</span></span></div><ul class="dprog" data-dprog></ul><div class="dl-scroll" data-dline hidden></div><p class="c-note" data-dnote hidden></p></div>`;
@@ -2870,7 +2865,6 @@ app.addEventListener('submit', (e) => {
 });
 app.addEventListener('input', (e) => { if (!playing && e.target.matches('[data-fwhy]')) fWhy(e.target); });
 app.addEventListener('toggle', (e) => { if (e.target.matches?.('.rp-d')) OPEN.set(e.target.dataset.sk, e.target.open); }, true);
-$('#rlay').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) setRlay(b.dataset.r); });
 $('#trace').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) setTrace(b.dataset.tr === 'on'); });
 app.addEventListener('click', (e) => {
   if (playing || !e.isTrusted) return;
@@ -2953,7 +2947,6 @@ app.addEventListener('keydown', (e) => {
 });
 
 setSpeed(K);
-press($('#rlay'), 'data-r', RLAY);
 setTrace(true);
 scene({}, true);
 </script>
