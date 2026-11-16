@@ -377,6 +377,9 @@ class NoTestRun:
     words: str
 
 
+NO_START = (
+    "It has no Start from the Portal block, so the Portal can't start it. Add the block in n8n."
+)
 UNCHECKED_TEST = (
     "The draft in n8n has a block the platform can't check: {found} Fix it in n8n, then test it."
 )

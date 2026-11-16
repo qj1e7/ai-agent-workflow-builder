@@ -7,7 +7,9 @@ never approve its runs."""
 
 import copy
 from collections.abc import AsyncIterator, Callable
+from datetime import datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import httpx
 import pytest
@@ -58,7 +60,7 @@ from tests.fake_n8n import FakeN8n
 from tests.support import ALICE, NOW
 from tests.test_builder_lifecycle import VALUES
 from tests.test_n8n_access import PLATFORM_PROJECT, Staffed, lab, s, staff_for
-from tests.test_n8n_builder import ERROR_WORKFLOW
+from tests.test_n8n_builder import ERROR_WORKFLOW, REPO
 from tests.test_n8n_lifecycle import Workflows, made
 
 pytestmark = pytest.mark.anyio
@@ -655,3 +657,121 @@ async def test_a_move_that_stops_in_the_platform_s_project_leaves_it_off(s: Staf
     assert refused.status_code == 503
     assert s.n8n.home_of(workflow_id) == PLATFORM_PROJECT
     assert s.n8n.workflows[workflow_id]["activeVersionId"] is None
+
+
+SCHEDULE_TRIGGER = "Schedule Trigger"
+START = "Start from the Portal"
+FIXED_FOR_YOU = [
+    "sends its failures to the platform's error workflow",
+    "runs it on Singapore time",
+    "keeps its test runs",
+    "saves its progress",
+    "adds Start from the Portal for Run now",
+]
+
+
+async def a_watched_repository(s: Staffed) -> None:
+    """A release check that reads REPO, which makes it a place a Read may name."""
+    await made(s.own)
+
+
+def as_the_editor_saves(name: str) -> dict[str, Any]:
+    """A Schedule Trigger at 3am, then our Read, as n8n's editor saves a new workflow: each block
+    with the id the editor gives it, no parameter it shows at its default (the field, the minute
+    and the Read's source), and only the editor's own setting, since a member's editor offers no
+    error workflow of the platform's."""
+    return {
+        "name": name,
+        "nodes": [
+            {
+                "id": "6f0d4c2e-8b1a-4e3f-9c7d-1a2b3c4d5e6f",
+                "name": SCHEDULE_TRIGGER,
+                "type": "n8n-nodes-base.scheduleTrigger",
+                "typeVersion": 1.3,
+                "position": [0, 0],
+                "parameters": {"rule": {"interval": [{"triggerAtHour": 3}]}},
+            },
+            {
+                "id": "0b9e8d7c-6a5f-4e3d-2c1b-a0f9e8d7c6b5",
+                "name": "Read",
+                "type": TYPE_OF["read"],
+                "typeVersion": 1,
+                "position": [220, 0],
+                "parameters": {"place": REPO},
+            },
+        ],
+        "connections": {
+            SCHEDULE_TRIGGER: {"main": [[{"node": "Read", "type": "main", "index": 0}]]}
+        },
+        "settings": {"executionOrder": "v1"},
+    }
+
+
+async def test_one_saved_as_n8n_s_editor_saves_it_waits_safe_with_what_set_up_fixes(s: Staffed):
+    _, carol_space = await space_of(s, "carol")
+    await a_watched_repository(s)
+    workflow_id = s.n8n.make_in(carol_space, as_the_editor_saves("React read"))
+    [found] = await waiting(s, "carol")
+    assert (found["workflow_id"], found["grade"], found["findings"]) == (workflow_id, "safe", [])
+    assert (found["can_set_up"], found["fixed_for_you"]) == (True, FIXED_FOR_YOU)
+
+
+async def test_set_up_fixes_its_settings_and_adds_start_from_the_portal_in_n8n(s: Staffed):
+    _, carol_space = await space_of(s, "carol")
+    await a_watched_repository(s)
+    workflow_id = s.n8n.make_in(carol_space, as_the_editor_saves("React read"))
+    created = await set_up(s, "carol", workflow_id)
+    assert created.status_code == 201, created.text
+    assert created.json()["grade"] == "safe"
+    held = s.n8n.workflows[workflow_id]
+    assert held["settings"] == {
+        "executionOrder": "v1",
+        "errorWorkflow": ERROR_WORKFLOW,
+        "timezone": "Asia/Singapore",
+        "saveManualExecutions": True,
+        "saveExecutionProgress": True,
+    }
+    [start] = [n for n in held["nodes"] if n["type"] == TYPE_OF["start"]]
+    assert start["name"] == START and start["webhookId"]
+    assert held["connections"][START] == held["connections"][SCHEDULE_TRIGGER]
+    row = await use_case(s, created.json()["use_case_id"])
+    assert (row["draft"], row["n8n_version_id"]) == (True, held["versionId"])
+
+    view = (await s.lab.call("alice", "GET", f"/api/v1/use-cases/{row_id(created)}")).json()
+    assert (view["name"], view["state"], view["grade"], view["findings"]) == (
+        "React read",
+        "draft",
+        "safe",
+        [],
+    )
+    assert (view["schedule"]["day"], view["schedule"]["at"]) == ("every_day", "03:00")
+    assert view["start_refused"] is None
+    assert [(step["name"], step["kind"]) for step in view["plan"]] == [("Read", "agent")]
+    test_run = await s.lab.call(
+        "alice", "POST", f"/api/v1/use-cases/{row_id(created)}/runs", {"test": True}
+    )
+    assert test_run.status_code == 201, test_run.text
+
+
+async def test_a_published_one_keeps_its_own_name_and_shows_when_it_runs(s: Staffed):
+    carol_n8n, carol_space = await space_of(s, "carol")
+    await a_watched_repository(s)
+    workflow_id = s.n8n.make_in(carol_space, as_the_editor_saves("React read"), carol_n8n)
+    created = await set_up(s, "carol", workflow_id)
+    assert created.status_code == 201, created.text
+    held = s.n8n.workflows[workflow_id]
+    live = s.n8n.history[workflow_id][held["activeVersionId"]]
+    assert START in {n["name"] for n in live["nodes"]}, "the version n8n runs has the start"
+    view = (await s.lab.call("alice", "GET", f"/api/v1/use-cases/{row_id(created)}")).json()
+    assert (view["name"], view["state"], view["grade"]) == ("React read", "on", "safe")
+    at = datetime.fromisoformat(view["next_run_at"]).astimezone(ZoneInfo("Asia/Singapore"))
+    assert (at.hour, at.minute) == (3, 0)
+    stored = await s.own.row(
+        "SELECT name FROM builder.use_case_versions WHERE use_case_id = %s", row_id(created)
+    )
+    assert stored == {"name": "React read"}
+
+
+def row_id(created: httpx.Response) -> str:
+    use_case_id: str = created.json()["use_case_id"]
+    return use_case_id

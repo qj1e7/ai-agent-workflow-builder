@@ -175,6 +175,45 @@ def test_the_next_run_is_on_the_workflow_s_clock_and_the_team_s_when_it_has_none
     assert london.replace(second=0) == london_8, "8:30 in Singapore is 0:30 in London"
 
 
+@pytest.mark.parametrize(
+    ("parameters", "fires"),
+    [
+        ({"rule": {"interval": [{"triggerAtHour": 3}]}}, datetime(2026, 11, 14, 3, 0, 41)),
+        ({"rule": {"interval": [{}]}}, datetime(2026, 11, 14, 0, 0, 41)),
+        ({}, datetime(2026, 11, 14, 0, 0, 41)),
+        (
+            {"rule": {"interval": [{"field": "weeks", "triggerAtHour": 9}]}},
+            datetime(2026, 11, 15, 9, 0, 41),
+        ),
+        ({"rule": {"interval": [{"field": "months"}]}}, datetime(2026, 12, 1, 0, 0, 41)),
+    ],
+    ids=["3:00, minute left", "nothing changed", "no rule saved", "weeks, day left", "months"],
+)
+def test_a_time_n8n_s_editor_shows_and_does_not_save_runs_at_n8n_s_default(
+    parameters: dict[str, Any], fires: datetime
+) -> None:
+    """n8n's editor shows each part of a rule at its default and saves only what a person
+    changed. n8n 2.42.6 fills the rest in as it loads the workflow, before it makes the cron:
+    "41 0 3 * * *" for the first case and this node key, as n8n's own code answered."""
+    node = {"id": "n1", "name": "Schedule Trigger", "type": "n8n-nodes-base.scheduleTrigger"}
+    document = workflow({**node, "typeVersion": 1.3, "parameters": parameters})
+    run = next_run(document, "w1", FRIDAY_0830, SINGAPORE.key)
+    assert run == fires.replace(tzinfo=SINGAPORE)
+
+
+@pytest.mark.parametrize(
+    "parameters",
+    [{"rule": {"interval": [{"triggerAtHour": 3, "triggerAtMinute": None}]}}, {"rule": {}}],
+    ids=["a minute saved as null", "a rule saved with no interval"],
+)
+def test_a_part_n8n_does_not_fill_in_is_one_n8n_picks_so_no_run_is_shown(
+    parameters: dict[str, Any],
+) -> None:
+    node = {"id": "n1", "name": "Schedule Trigger", "type": "n8n-nodes-base.scheduleTrigger"}
+    document = workflow({**node, "parameters": parameters})
+    assert next_run(document, "w1", FRIDAY_0830, SINGAPORE.key) is None
+
+
 def test_a_laid_out_release_check_runs_next_monday_at_9_on_its_hidden_second() -> None:
     checker = PlannedAgent(
         VERSION_CHECKER_ID,
