@@ -9873,6 +9873,18 @@
             "title": "Software",
             "type": "string"
           },
+          "trace_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The trace of this turn, when the runtime's answer is shown. The Portal sends it back as previous.trace_id with the next message (ADR 0050). Null for a chip, an answer the platform gives alone, the offline answer, and an answer inside another.",
+            "title": "Trace Id"
+          },
           "watched": {
             "description": "The names the watchlist holds, in its order, so a name it doesn't hold is answered with what it does hold. Empty when it holds nothing.",
             "items": {
@@ -9884,6 +9896,7 @@
         },
         "required": [
           "parts",
+          "trace_id",
           "answer",
           "software",
           "matches",
