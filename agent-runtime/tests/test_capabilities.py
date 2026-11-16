@@ -73,6 +73,7 @@ def test_only_the_platform_duty_is_ready_without_an_ability_line():
         "teams.ask",
         "runs.explain",
         "workflows.change",
+        "watchlist.remove",
     ]
 
 

@@ -16,6 +16,12 @@ describe('the edit answer’s parts', () => {
     expect(crossWords(crossed('Pause the morning check', 'only_schedule'), { workflow: 'Morning new-ticket check' })).toBe('From the chat I can only change when Morning new-ticket check runs.')
   })
 
+  it('answers a change to the Software watchlist’s software with what the chat can do to it', () => {
+    expect(crossWords(crossed('change the React version', 'only_schedule'), { workflow: 'Software watchlist', editsWatchlist: true })).toBe(
+      'From the chat I can add software to the Software watchlist, remove it, or change when the watchlist runs.',
+    )
+  })
+
   it('says a day left out of a schedule plainly, never “run things except Friday”', () => {
     expect(crossWords(crossed('except Friday', 'how_often'))).toBe('I can’t leave days out of a schedule yet.')
     expect(crossWords(crossed('excluding Fridays', 'how_often'))).toBe('I can’t leave days out of a schedule yet.')

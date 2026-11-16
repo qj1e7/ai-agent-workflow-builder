@@ -318,6 +318,12 @@ OPERATORS_DO: Final = EVERYONE_DOES | words(
 )
 """What an Operator does besides: set up workflows, change when they run, pause and resume
 them, and add software to the Watchlist."""
+OFF_THE_WATCHLIST: Final = re.compile(
+    r"^\W*(?:remove|take)\b[^.?!]{0,60}?\b(?:off|from)\s+(?:the\s+|your\s+|my\s+|our\s+)?"
+    r"(?:software\s+)?watch\s*-?list\b",
+    re.IGNORECASE,
+)
+"""Taking software off the Watchlist (watchlist.remove), which only an Operator does."""
 APPROVERS_DO: Final = EVERYONE_DOES | words("approve decline")
 
 TICKETS: Final = r"(?:tickets?|issues?|bugs?|stor(?:y|ies)|tasks?|epics?|incidents?)"
@@ -444,6 +450,8 @@ def _can_do(fragment: str, does: frozenset[str]) -> bool:
         return True
     if names_the_unbuilt(fragment):
         return False
+    if OFF_THE_WATCHLIST.match(fragment):
+        return does >= OPERATORS_DO
     if _first_word(fragment) not in does:
         return _fits_a_ready_line(fragment)
     for asked in re.finditer(r"\bto\s+([a-z]+)\b", fragment, re.IGNORECASE):

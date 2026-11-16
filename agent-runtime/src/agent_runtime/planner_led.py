@@ -50,6 +50,7 @@ from agent_runtime.contract import (
     PauseAnswer,
     PlannerAnswer,
     RefusedAnswer,
+    RemoveSoftwareAnswer,
     ReplyEnvelope,
     RequestPart,
     ResumeAnswer,
@@ -922,6 +923,11 @@ def led(request: AnswerRequest, chat_for: ChatFor, verify_with: ChatFor | None =
     if isinstance(front.answer, RefusedAnswer):
         parts = parts_of(front.read, request.task, front.answer, request.facts)
         return Led(Answered(answer=front.answer, parts=parts), ("front_refusal",))
+    if isinstance(front.answer, RemoveSoftwareAnswer):
+        # No tool draws the remove card, so the rules' own card stands, as ADR 0049 has them
+        # build every card.
+        parts = parts_of(front.read, request.task, front.answer, request.facts)
+        return Led(Answered(answer=front.answer, parts=parts), ("front_removal",))
     turn = Turn(request, front, chat_for, verify_with or chat_for)
     return _two_tries(asked, first, turn)
 

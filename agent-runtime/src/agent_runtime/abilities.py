@@ -268,6 +268,15 @@ CAPABILITIES: Final = (
         platform=True,
         short="Change or pause your workflows",
     ),
+    _ready(
+        "watchlist.remove",
+        "Take software off the Watchlist, with Undo",
+        "none",
+        None,
+        None,
+        [],
+        platform=True,
+    ),
     _not_yet(
         "teams.post",
         "Posts in Teams and emails",
