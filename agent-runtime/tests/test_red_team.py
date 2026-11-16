@@ -15,9 +15,11 @@ from agent_runtime.contract import (
     AnswerRequest,
     DidntFollowAnswer,
     FreeReplyAnswer,
+    PlannerFacts,
     ReplyEnvelope,
 )
 from agent_runtime.contracts import answer_request
+from agent_runtime.free_reply import DeadEnd, given_of, reply_to
 from agent_runtime.reply_guard import Given, guarded
 from agent_runtime.reply_verifier import Verdict, flag_of, verify_messages
 from tests.fakes import ScriptedChat
@@ -41,9 +43,29 @@ def envelope_of(row: dict[str, Any]) -> ReplyEnvelope:
     return ReplyEnvelope(form="clarify" if choices else "answer", text=row["text"], choices=choices)
 
 
+def request_of(row: dict[str, Any], sets_up: bool = True) -> AnswerRequest:
+    facts = PlannerFacts.model_validate(row["facts"]) if "facts" in row else None
+    model = answer_request().model
+    task = "what's the weather today?"
+    return AnswerRequest(task=task, model=model, facts=facts, changes_workflows=sets_up)
+
+
+def given(row: dict[str, Any], sets_up: bool) -> Given:
+    return (
+        given_of(request_of(row, sets_up))
+        if "facts" in row
+        else (OPERATOR if sets_up else APPROVER)
+    )
+
+
 def shown_with(row: dict[str, Any], verdict: object) -> object:
+    if "facts" in row:
+        # With facts sent, the question lane reads the message first. The free reply's own step
+        # is what the row tests: its code checks, then the verifier.
+        chat = ScriptedChat(structured=[envelope_of(row), verdict])
+        return reply_to(request_of(row), DeadEnd(), lambda timeout: chat)
     chat = ScriptedChat(structured=[reading(), envelope_of(row), verdict])
-    request = AnswerRequest(task="what's the weather today?", model=answer_request().model)
+    request = request_of(row)
     result = answer_task(request, lambda timeout: chat)
     assert isinstance(result, Answered)
     return result.answer
@@ -52,13 +74,14 @@ def shown_with(row: dict[str, Any], verdict: object) -> object:
 def test_the_set_holds_every_kind_of_attack_and_honest_replies():
     groups = {r["id"].rsplit("-", 1)[0] for r in ROWS}
     assert {"happened", "not_english", "unbuilt", "skips", "link", "made_up", "choice"} <= groups
+    assert "held" in groups
     assert len(FALLBACK) >= 60 and len(CLEAN_ROWS) >= 10
 
 
 @pytest.mark.parametrize("row", CODE, ids=lambda r: r["id"])
 def test_the_code_checks_alone_stop_it_for_an_operator_and_an_approver(row: dict[str, Any]):
-    assert isinstance(guarded(envelope_of(row), OPERATOR), str), row["text"]
-    assert isinstance(guarded(envelope_of(row), APPROVER), str), row["text"]
+    assert isinstance(guarded(envelope_of(row), given(row, True)), str), row["text"]
+    assert isinstance(guarded(envelope_of(row), given(row, False)), str), row["text"]
 
 
 @pytest.mark.parametrize("row", CODE, ids=lambda r: r["id"])
@@ -75,7 +98,7 @@ def test_it_falls_back_when_the_verifier_flags_it(row: dict[str, Any]):
 def test_a_phrase_only_the_verifier_can_tell_relies_on_it(row: dict[str, Any]):
     """Recorded so the reliance is visible: these pass the code checks, and only the verifier's
     yes stops them. The eval's `verify` job measures whether a model says yes."""
-    assert not isinstance(guarded(envelope_of(row), OPERATOR), str)
+    assert not isinstance(guarded(envelope_of(row), given(row, True)), str)
     assert isinstance(shown_with(row, NO), FreeReplyAnswer)
 
 
@@ -119,3 +142,13 @@ def test_the_eval_asks_the_verifier_only_about_what_its_questions_cover():
     assert asked == {r["id"] for r in ROWS if r["verifier"]}
     assert "link-01" not in asked and "made_up-01" not in asked and "happened-01" in asked
     assert {r["id"] for r in CLEAN_ROWS} <= asked
+
+
+def test_the_verifier_lets_a_list_say_what_it_holds_but_never_needs_you():
+    """ADR 0049: a sentence that only says the Watchlist or the workflow list holds something is
+    no to the first question, because code checks each name against the facts. Needs you is left
+    out: something new there means a write happened."""
+    system, _ = verify_messages(FreeReplyAnswer(form="answer", text="Hi."))
+    first = system.split("\n2. ")[0]
+    assert '"Your Watchlist already holds Redis", is no' in first
+    assert "never Needs you" in first

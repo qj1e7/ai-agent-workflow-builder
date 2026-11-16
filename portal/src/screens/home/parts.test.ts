@@ -61,7 +61,7 @@ describe('the next step of a cross', () => {
 describe('a free reply and the fallback card draw no crosses', () => {
   const part = crossed('flibber', 'not_followed')
   it('answers the whole message, so none is left over', () => {
-    expect(leftoverParts({ trace_id: null, answer: 'reply', form: 'answer', text: 'Hi.', choices: [], offer: null, looked_at: [], parts: [part] })).toEqual([])
+    expect(leftoverParts({ trace_id: null, answer: 'reply', form: 'answer', text: 'Hi.', choices: [], offer: null, looked_at: [], about: [], parts: [part] })).toEqual([])
     expect(leftoverParts({ trace_id: null, answer: 'didnt_follow', parts: [part] })).toEqual([])
   })
 })

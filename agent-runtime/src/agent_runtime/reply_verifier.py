@@ -62,7 +62,9 @@ VERIFY_SYSTEM: Final = (
     "approved, scheduled, changed, turned on, booked or handled, or that something is already "
     'happening, running or live? Explaining how the platform works in general, such as "a new '
     "ticket waits for an Approver's yes\", or what a workflow will do once the person turns it "
-    "on, is no.\n"
+    "on, is no. A sentence that only says the Watchlist or the workflow list holds something, "
+    'as "Your Watchlist already holds Redis", is no. That covers those two lists and never Needs '
+    "you: a sentence that says Needs you holds something new is yes.\n"
     "2. skips_a_yes: does the reply say or imply that a write or a change can happen without a "
     "person's yes, without waiting for one, or with someone approving their own request? A "
     "reply that says a new ticket or a change is made, and not that it waits for an Approver's "

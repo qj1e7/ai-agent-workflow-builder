@@ -42,8 +42,12 @@ The Planner's reply on Home when it can do a request: the whole workflow filled 
 _Avoid_: Wizard, form, New workflow (the old 4-step page)
 
 **Planner answer**:
-What the Planner replies to one request typed on Home: a set-up card, an edit card, a watchlist row, a question about which software, the part it can do, a can't with the nearest alternative, a refusal to skip a yes, an answer about the person's workflows (check my workflows, why it stopped, what needs me), a question answer, the list of what it can do, a free reply, the I didn't follow that card, or offline. Code decides which one from the model's reading, and the reply sentences are fixed text (ADR 0037), except for the question answer (ADR 0042) and the free reply (ADR 0047).
+What the Planner replies to one request typed on Home: a set-up card, an edit card, a watchlist row, a question about which software, the part it can do, a can't with the nearest alternative, a refusal to skip a yes, an answer about the person's workflows (check my workflows, why it stopped, what needs me), a question answer, the list of what it can do, a free reply, the I didn't follow that card, or offline. With the rules Planner, code decides which one from the model's reading. With the AI-led Planner, the model picks the tool, and code checks the call and builds every card (ADR 0049). The reply sentences are fixed text (ADR 0037), except for the question answer (ADR 0042) and the free reply (ADR 0047).
 _Avoid_: Reply, response, intent (in the app)
+
+**AI-led Planner**:
+The Planner when `PLANNER_MODE` is `ai_led`: the model leads each conversation through seven tools that code checks, on top of the rules. The word rule still refuses first, the rules' refusal wins, the rules build every card, and a part of the request no tool reaches is crossed with Ask this on its own. The rules Planner stays the default until the team lead reads the eval runs (ADR 0049).
+_Avoid_: Agent mode, autopilot
 
 **Edit card**:
 The Planner's reply when someone asks to change a workflow they already have: only what changes, before and after. Saving it publishes a new version, with Undo (ADR 0043).
@@ -73,7 +77,7 @@ _Avoid_: Drawer, modal
 The Planner's reply to a question about the person's own data, such as how many software are on the watchlist. The model writes it in its own words from a facts snapshot read when the question arrives, and only from those facts. It names the sections it used, and it never offers to act. With the free reply, it is one of two answers whose text is not fixed (ADR 0042).
 
 **Free reply**:
-The Planner's reply in its own words to a message that no card or fixed answer fits: a direct answer, one clarifying question with choices to tap, or a can't with the closest thing the platform can do. It never writes, and it never says that anything was done. Code checks it before the person sees it, and a failed check shows the I didn't follow that card, with Say it another way (ADR 0047).
+The Planner's reply in its own words to a message that no card or fixed answer fits: a direct answer, one clarifying question with choices to tap, or a can't with the closest thing the platform can do. It never writes, and it never says that anything was done. Code checks it before the person sees it, and a failed check shows the I didn't follow that card, with Say it another way (ADR 0047). When it names watched software or a workflow from the facts, the Portal draws that one's line under it, so the reply never states a version or a run (ADR 0049).
 _Avoid_: Chat reply, fallback, free text
 
 **Capability**:

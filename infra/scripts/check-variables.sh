@@ -78,6 +78,7 @@ expect accepted - "a Jira browse address and another project" \
   -var 'jira_browse_url=https://jira.example.test/browse/{key}' -var watchlist_jira_project=AB_1
 expect accepted - "another team time zone" -var team_time_zone=America/Argentina/Buenos_Aires
 expect accepted - "UTC as the team time zone" -var team_time_zone=UTC
+expect accepted - "the AI-led Planner" -var planner_mode=ai_led
 
 expect refused oidc_issuer "issuer over http" -var oidc_issuer=http://mock-oidc:8080/default
 expect refused oidc_issuer "issuer with no host" -var oidc_issuer=https:///tenant/v2.0
@@ -100,6 +101,7 @@ expect refused tell_email_to "email list with a name in it" -var 'tell_email_to=
 expect refused teams_channel "Teams channel on two lines" -var "teams_channel=Ops${nl}Other"
 expect refused team_time_zone "a zone written as words" -var 'team_time_zone=Singapore Time'
 expect refused team_time_zone "a zone written as an offset" -var 'team_time_zone=+08:00'
+expect refused planner_mode "a Planner that doesn't exist" -var planner_mode=free
 expect refused oidc_audience "audience as the api:// URI" -var "oidc_audience=api://$AUDIENCE"
 
 expect refused oidc_client_id "client ID not set" -var oidc_client_id=

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { PlannerReply } from '../../api/types'
 import { PlannerBot, type BotState } from '../../ui/PlannerBot'
+import { AboutRows } from './AboutRows'
 import { Answer, type Page } from './AnswerCards'
 import { EditCard } from './EditCard'
 import { CardMemoryContext, NO_MEMORY, type CardMemory } from './cardMemory'
@@ -65,6 +66,7 @@ function ReplyBody({ message, now, page, say, about }: { message: Extract<Messag
       {reply.answer === 'operators' ? <OperatorsAnswer say={say} /> : null}
       {reply.answer === 'decided' ? <DecidedAnswer only={reply.only} now={now} say={say} /> : null}
       {reply.answer === 'decide' ? <DecideAnswer say={say} /> : null}
+      {reply.answer === 'reply' ? <AboutRows about={reply.about} now={now} /> : null}
       <Answer reply={reply} typed={message.typed} page={page} />
       {reply.answer === 'refused' && asker === 'approver' ? <RequestsToOpen /> : null}
     </div>

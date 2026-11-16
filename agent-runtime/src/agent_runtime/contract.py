@@ -1198,6 +1198,19 @@ class ReplyOffer(WireModel):
     )
 
 
+type AboutSection = Literal["watchlist", "workflows"]
+ABOUT_LIMIT: Final = 5
+
+
+class ReplyAbout(WireModel):
+    """One watched software or workflow a free reply speaks of. Code keeps it only when the facts
+    hold the name, spelled as they spell it, and the Portal draws its state line from its own data,
+    so the reply never has to state a version, a state or a run (ADR 0049)."""
+
+    section: AboutSection
+    name: str = Field(min_length=1, max_length=80)
+
+
 class FreeReplyAnswer(WireModel):
     """The model's own reply to a message no other answer fits, shown only after code checked it
     (ADR 0047). It writes nothing: a choice or an offer is sent as the person's next message."""
@@ -1221,6 +1234,14 @@ class FreeReplyAnswer(WireModel):
         default_factory=list[FactSection],
         max_length=3,
         description="The sections of the facts the reply used, kept only when they were sent.",
+    )
+    about: list[ReplyAbout] = Field(
+        default_factory=list[ReplyAbout],
+        max_length=ABOUT_LIMIT,
+        description="The watched software and workflows the reply names, each kept only when the "
+        "facts hold it. The Portal draws each one's state line. Left out when empty, so a reply "
+        "that names none reads as it did before ADR 0049.",
+        exclude_if=lambda about: not about,
     )
 
     @model_validator(mode="after")

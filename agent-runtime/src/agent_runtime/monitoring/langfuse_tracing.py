@@ -100,12 +100,14 @@ class _Trace:
 
 
 class _Turn(_Trace):
-    def __init__(self, callbacks: _Callbacks, finish: Callable[[AnswerResult], None]) -> None:
+    def __init__(
+        self, callbacks: _Callbacks, finish: Callable[[AnswerResult, str | None], None]
+    ) -> None:
         super().__init__(callbacks)
         self._finish = finish
 
-    def answered(self, result: AnswerResult) -> None:
-        self._finish(result)
+    def answered(self, result: AnswerResult, fell_back: str | None = None) -> None:
+        self._finish(result, fell_back)
 
 
 @dataclass
@@ -258,8 +260,9 @@ class LangfuseTracing:
         ):
             self._started(trace_id, span.id)
 
-            def finish(result: AnswerResult) -> None:
-                outcome = TurnOutcome(result, time.monotonic() - started, next(iter(notes), None))
+            def finish(result: AnswerResult, fell_back: str | None) -> None:
+                why = fell_back or next(iter(notes), None)
+                outcome = TurnOutcome(result, time.monotonic() - started, why)
                 flags = code_flags(outcome)
                 kind = answer_kind(result)
                 metadata = {"answer_kind": kind}

@@ -167,6 +167,8 @@ services:
       AGENT_MODEL_BASE_URL: ${AGENT_MODEL_BASE_URL:-}
       AGENT_MODEL_API_KEY: ${AGENT_MODEL_API_KEY:-}
       AGENT_MODEL_PRIVATE_HOSTS: ${AGENT_MODEL_PRIVATE_HOSTS:-}
+      # rules is today's Planner. ai_led lets the model lead through checked tools (ADR 0049).
+      PLANNER_MODE: ${PLANNER_MODE:-rules}
       # Tracing stays off until LANGFUSE_BASE_URL is set, for example to http://langfuse-web:3000 with
       # the langfuse profile on. The keys follow it, so all three are set or none is (ADR 0050).
       LANGFUSE_BASE_URL: ${LANGFUSE_BASE_URL:-}

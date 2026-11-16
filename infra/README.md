@@ -87,6 +87,7 @@ infra/
 | n8n's `N8N_INSTANCE_OWNER_*` | not set | not set while n8n is internal. With its editor open, `MANAGED_BY_ENV=true`, the `N8N_OWNER_EMAIL` address, the names `Platform Bootstrap`, and `PASSWORD_HASH` as the app's own secret |
 | `CALLBACK_ALLOWED_ORIGINS` | `http://platform-api:8000` | platform-api's HTTPS origin |
 | `PLATFORM_JIRA_URL` (agent-runtime) | `http://platform-api:8000` | platform-api's HTTPS URL. It must be one of `CALLBACK_ALLOWED_ORIGINS` (ADR 0035) |
+| `PLANNER_MODE` (agent-runtime) | `.env`, unset by default, so `rules`, today's Planner | the `planner_mode` variable, from the GitHub variable `PLANNER_MODE`, else `rules`. `ai_led` lets the model lead through checked tools on top of the rules (ADR 0049). The team lead turns it on after the eval runs ADR 0049 asks for. Any other value stops agent-runtime from starting, and Terraform's plan refuses it |
 | `JIRA_BASE_URL`, `JIRA_API_FLAVOR`, `JIRA_EMAIL`, `JIRA_ISSUE_TYPE`, `JIRA_BROWSE_URL`, `WATCHLIST_JIRA_PROJECT` | `.env`, unset by default: the practice Jira, `datacenter`, `Task`, `MOCK` | the `JIRA_*` and `WATCHLIST_JIRA_PROJECT` variables, unset by default ([A real Jira](#a-real-jira)) |
 | `JIRA_API_TOKEN` | `.env`, empty | a Key Vault secret, `jira-api-token`, from `JIRA_API_TOKEN`, only when that secret is set |
 | `CONFLUENCE_BASE_URL`, `CONFLUENCE_EMAIL`, `CONFLUENCE_PAGES` | `.env`, unset by default, so Confluence is not connected | the `CONFLUENCE_BASE_URL`, `CONFLUENCE_EMAIL` and `CONFLUENCE_PAGES` variables, unset by default. The email names the account and is not secret. `CONFLUENCE_PAGES` lists the only pages platform-api reads, as `id=title` separated by `;` |
@@ -305,6 +306,7 @@ If the repository is made public later, add required reviewers and "Prevent self
    | Variable | Value |
    |---|---|
    | `TEAMS_CHANNEL` | optional. The Teams channel's name, as the approval card and the activity log name it. Unset means `CODESparks Ops` |
+   | `PLANNER_MODE` | optional. `ai_led` lets the Planner's model lead through checked tools on top of the rules (ADR 0049). Unset means `rules`, today's Planner. Set it only after the team lead reads the eval runs ADR 0049 asks for. Going back is setting it to `rules` |
    | `TEAM_TIME_ZONE` | optional. The zone the team works in, such as `Europe/London`. Unset means `Asia/Singapore`. Set it before the first workflow is made. Changing it later grades each workflow laid out on the old zone Needs a fix (ADR 0046). n8n still fires its Schedule Trigger on the old zone, and our API refuses each run at its first block, before it reads anything, until its schedule is saved again or its zone is changed in n8n. Terraform checks only that the value looks like a zone name, so a name that is not a real zone passes the plan, and platform-api then refuses to start |
    | `AZURE_LOCATION` | optional. The region for every resource. Unset means `southeastasia`. Set it before the first deploy only: changing it later replaces everything, PostgreSQL included |
    | `COSMOS_LOCATION` | optional. A region for Cosmos DB alone, when it is refused in `AZURE_LOCATION` |

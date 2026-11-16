@@ -28,7 +28,7 @@ from agent_runtime.planner import FixedPlanner
 from agent_runtime.reply_verifier import Verdict
 from agent_runtime.summary import TemplateSummarizer
 from agent_runtime.version_checker import VersionChecker
-from tests.fakes import FakeClock, FakeJira, FakeSource, ScriptedChat, langgraph_tags
+from tests.fakes import FakeClock, FakeJira, FakeSource, ScriptedChat, asks, call, langgraph_tags
 from tests.test_api import BASE_ENV, KEY, SETTINGS, Posts
 from tests.test_free_reply import HELPFUL, WEATHER
 from tests.test_questions import reading
@@ -281,3 +281,42 @@ def test_the_secret_key_goes_only_over_https_or_inside_the_stack(address: str, a
     else:
         with pytest.raises(SettingsError, match="LANGFUSE_BASE_URL"):
             Settings.from_env(env)
+
+
+def led_app(recorded: Recorded, chat: BaseChatModel) -> TestClient:
+    clock = FakeClock()
+    runtime = Runtime(
+        checker=VersionChecker(
+            FakeSource(langgraph_tags()), TemplateSummarizer(), sleep=clock.sleep
+        ),
+        planner=FixedPlanner(),
+        clock=clock,
+        callbacks=HttpCallbacks(transport=httpx.MockTransport(Posts())),
+        chat_source=lambda access: (lambda timeout: chat) if access else None,
+    )
+    settings = Settings.from_env({**BASE_ENV, "PLANNER_MODE": "ai_led"})
+    return TestClient(
+        create_app(settings, runtime, tracing=recorded.tracing), headers={"X-Agent-Key": KEY}
+    )
+
+
+def test_an_ai_led_turn_whose_reply_is_refused_twice_writes_flag_fallback(recorded: Recorded):
+    said_done = {"form": "answer", "text": "I set it up."}
+    chat = ScriptedChat(
+        script=[asks(call("reply", said_done, "c1")), asks(call("reply", said_done, "c2"))],
+        structured=[reading()],
+    )
+    led_app(recorded, chat).post("/v1/planner/answer", json=turn("hi"))
+    assert "flag_fallback" in [s["name"] for s in recorded.scores()]
+    attributes = recorded.root("planner-turn").attributes or {}
+    assert json.loads(str(attributes["langfuse.trace.metadata.fell_back"])) == "invalid"
+
+
+def test_an_ai_led_turn_whose_model_call_failed_fell_back_but_was_not_rejected(
+    recorded: Recorded,
+):
+    chat = ScriptedChat(script=[TimeoutError("slow")], structured=[reading()])
+    led_app(recorded, chat).post("/v1/planner/answer", json=turn("hi"))
+    assert "flag_fallback" not in [s["name"] for s in recorded.scores()]
+    attributes = recorded.root("planner-turn").attributes or {}
+    assert json.loads(str(attributes["langfuse.trace.metadata.fell_back"])) == "call"

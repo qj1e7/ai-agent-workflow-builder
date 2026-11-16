@@ -52,7 +52,7 @@ describe('the thread', () => {
 
   it('sends tapped words with the turn before, so a choice after a clarifying question says so', () => {
     expect(askOf('Redis', EMPTY)).toEqual({ text: 'Redis' })
-    const clarify: PlannerReply = { trace_id: null, answer: 'reply', form: 'clarify', text: 'Which software?', choices: ['Redis', 'Kafka'], offer: null, looked_at: [], parts: [] }
+    const clarify: PlannerReply = { trace_id: null, answer: 'reply', form: 'clarify', text: 'Which software?', choices: ['Redis', 'Kafka'], offer: null, looked_at: [], about: [], parts: [] }
     const asked = threadReducer(threadReducer(EMPTY, { type: 'sent', text: 'watch it', chat: 'c1' }), { type: 'answered', reply: clarify, typed: 'watch it' })
     expect(askOf('Redis', asked)).toEqual({ text: 'Redis', previous: { request: 'watch it', software: null, answer: 'Which software?', kind: 'reply_clarify', trace_id: null } })
   })
@@ -80,7 +80,7 @@ describe('the thread', () => {
 })
 
 describe('the turn before, for a free reply', () => {
-  const free = (form: 'answer' | 'clarify' | 'cant', text: string): PlannerReply => ({ trace_id: null, answer: 'reply', form, text, choices: form === 'clarify' ? ['a', 'b'] : [], offer: null, looked_at: [], parts: [] })
+  const free = (form: 'answer' | 'clarify' | 'cant', text: string): PlannerReply => ({ trace_id: null, answer: 'reply', form, text, choices: form === 'clarify' ? ['a', 'b'] : [], offer: null, looked_at: [], about: [], parts: [] })
   const after = (reply: PlannerReply) => previousOf(threadReducer(threadReducer(EMPTY, { type: 'sent', text: 'hmm', chat: 'c1' }), { type: 'answered', reply, typed: 'hmm' }))
 
   it('sends a clarifying question as reply_clarify, with its words, so the runtime refuses a second one in a row', () => {

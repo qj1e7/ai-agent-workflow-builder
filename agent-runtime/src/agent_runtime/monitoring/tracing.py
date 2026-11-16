@@ -68,8 +68,9 @@ class Traced(Protocol):
 
 
 class TracedTurn(Traced, Protocol):
-    def answered(self, result: AnswerResult) -> None:
-        """Records the answer the person saw, and writes the turn's code flags."""
+    def answered(self, result: AnswerResult, fell_back: str | None = None) -> None:
+        """Records the answer the person saw, and writes the turn's code flags. `fell_back` is
+        why the turn fell back, when the caller knows it: the AI-led Planner says so itself."""
         ...
 
 
@@ -87,7 +88,7 @@ class _Untraced:
     def models(self, chat_for: ChatFor) -> ChatFor:
         return chat_for
 
-    def answered(self, result: AnswerResult) -> None:
+    def answered(self, result: AnswerResult, fell_back: str | None = None) -> None:
         pass
 
 

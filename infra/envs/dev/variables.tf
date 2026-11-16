@@ -361,6 +361,17 @@ variable "watchlist_jira_project" {
   }
 }
 
+variable "planner_mode" {
+  description = "Which Planner answers on Home (PLANNER_MODE): rules, today's Planner, or ai_led, where the model leads through checked tools on top of the rules (ADR 0049)."
+  type        = string
+  default     = "rules"
+
+  validation {
+    condition     = contains(["rules", "ai_led"], var.planner_mode)
+    error_message = "planner_mode must be rules or ai_led."
+  }
+}
+
 variable "team_time_zone" {
   description = "The zone the team works in, an IANA name such as Asia/Singapore (TEAM_TIME_ZONE). The Portal's times, a new schedule, the agents' today and the Jira days are in it, and n8n runs on it (GENERIC_TIMEZONE)."
   type        = string

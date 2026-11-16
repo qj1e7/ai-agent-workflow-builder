@@ -5912,6 +5912,14 @@
         "additionalProperties": false,
         "description": "The Planner's own words for a message no other answer fits, checked before they are sent\n(ADR 0047). It changes nothing: a choice and an offer are sent as the next message.",
         "properties": {
+          "about": {
+            "description": "The watched software and workflows the reply names, each held by the facts. The Portal draws each one's state line from its own data, for every role.",
+            "items": {
+              "$ref": "#/components/schemas/ReplyAboutView"
+            },
+            "title": "About",
+            "type": "array"
+          },
           "answer": {
             "const": "reply",
             "default": "reply",
@@ -5983,7 +5991,8 @@
           "text",
           "choices",
           "offer",
-          "looked_at"
+          "looked_at",
+          "about"
         ],
         "title": "FreeReply",
         "type": "object"
@@ -9802,6 +9811,29 @@
           "step"
         ],
         "title": "RejectedView",
+        "type": "object"
+      },
+      "ReplyAboutView": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "section": {
+            "enum": [
+              "watchlist",
+              "workflows"
+            ],
+            "title": "Section",
+            "type": "string"
+          }
+        },
+        "required": [
+          "section",
+          "name"
+        ],
+        "title": "ReplyAboutView",
         "type": "object"
       },
       "ReplyForm": {

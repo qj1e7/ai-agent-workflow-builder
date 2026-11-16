@@ -65,6 +65,7 @@ from agent_runtime.monitoring.masking import Masker
 from agent_runtime.monitoring.tracing import NoTracing, Tracing
 from agent_runtime.origins import Origin, origin_of, parse_origin_list
 from agent_runtime.planner import FixedPlanner, Planner, run_cards, run_task
+from agent_runtime.planner_led import PLANNER_MODES, PlannerMode, led
 from agent_runtime.release_source import ReleaseSource, releases_of
 from agent_runtime.summary import (
     ChatFor,
@@ -173,6 +174,14 @@ def _langfuse(env: Mapping[str, str]) -> LangfuseSettings | None:
     )
 
 
+def _planner_mode(env: Mapping[str, str]) -> PlannerMode:
+    named = env.get("PLANNER_MODE", "").strip() or "rules"
+    for mode in PLANNER_MODES:
+        if named == mode:
+            return mode
+    raise SettingsError(f"PLANNER_MODE must be one of {', '.join(PLANNER_MODES)}")
+
+
 def _github_token(env: Mapping[str, str]) -> str | None:
     token = env.get("GITHUB_TOKEN", "").strip()
     if not all(33 <= ord(character) < 127 for character in token):
@@ -202,6 +211,9 @@ class Settings:
     connection. None runs it on the connected model, the Planner's own (ADR 0048)."""
     langfuse: LangfuseSettings | None = None
     """Where traces go. None keeps tracing off (ADR 0050)."""
+    planner_mode: PlannerMode = "rules"
+    """PLANNER_MODE: rules, today's Planner and the default, or ai_led, where the model leads
+    through checked tools on top of the rules (ADR 0049)."""
 
     @classmethod
     def from_env(cls, env: Mapping[str, str]) -> Self:
@@ -228,6 +240,7 @@ class Settings:
             free_reply=env.get("PLANNER_FREE_REPLY", "").strip().casefold() != "off",
             verifier_model=env.get("PLANNER_VERIFIER_MODEL", "").strip() or None,
             langfuse=_langfuse(env),
+            planner_mode=_planner_mode(env),
         )
 
     @property
@@ -499,13 +512,14 @@ def create_app(
             active.chat_source(body.model.model_copy(update={"model": named})) if named else None
         )
         with traces.turn(body) as turn:
-            result = answer_task(
-                body,
-                turn.models(chat),
-                config.free_reply,
-                verify_with=turn.models(verifier or chat),
-            )
-            turn.answered(result)
+            traced, verify = turn.models(chat), turn.models(verifier or chat)
+            if config.planner_mode == "ai_led":
+                done = led(body, traced, verify_with=verify)
+                result, fell_back = done.result, done.fell_back
+            else:
+                result = answer_task(body, traced, config.free_reply, verify_with=verify)
+                fell_back = None
+            turn.answered(result, fell_back)
         return result
 
     @app.post("/v1/planner/check-part", dependencies=[Depends(require_key)])
