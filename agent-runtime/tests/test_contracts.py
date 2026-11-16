@@ -35,6 +35,7 @@ from agent_runtime.contract import (
     explain_wording_result_adapter,
     task_result_adapter,
 )
+from agent_runtime.contracts import answer_request
 from agent_runtime.explain_wording import explain_guard, fact_check
 
 FIXTURES = Path(__file__).resolve().parents[2] / "contracts" / "fixtures" / "agent"
@@ -172,12 +173,12 @@ def test_the_reworded_fixture_passes_every_check_against_the_request_fixture():
     assert explain_guard(reworded.text, request) is None
 
 
-@pytest.mark.parametrize(
-    "path",
-    WORDINGS
-    or [pytest.param(None, marks=pytest.mark.skip(reason="platform-api wrote no wording yet"))],
-    ids=lambda path: path.stem if isinstance(path, Path) else "none",
-)
+def test_platform_api_wrote_a_wording_for_each_golden_document():
+    assert len(WORDINGS) >= 4
+
+
+@pytest.mark.parametrize("path", WORDINGS, ids=lambda path: path.stem)
 def test_codes_own_wording_in_each_platform_request_keeps_to_its_facts(path: Path):
-    request = ExplainWordingRequest.model_validate_json(path.read_text())
+    body = {**json.loads(path.read_text()), "model": answer_request().model.model_dump()}
+    request = ExplainWordingRequest.model_validate(body)
     assert fact_check(request.wording, request) is None

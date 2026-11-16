@@ -154,8 +154,9 @@ def test_a_read_dropped_into_a_writes_sentence_is_refused():
     assert explain_guard(dropped, FASTAPI) == "together"
 
 
-def test_an_added_sentence_that_only_quotes_is_refused():
-    assert explain_guard(SMOOTHED + " “MOCK”.", FASTAPI) == "together"
+@pytest.mark.parametrize("added", [" “MOCK”.", " “MOCK”"], ids=["with-a-stop", "without-one"])
+def test_an_added_sentence_that_only_quotes_is_refused(added: str):
+    assert explain_guard(SMOOTHED + added, FASTAPI) == "together"
 
 
 def test_a_word_of_a_kind_of_fact_the_workflow_lacks_is_refused():

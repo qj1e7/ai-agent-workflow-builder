@@ -77,13 +77,16 @@ NEGATIONS: Final = words("not no never nothing none nor cannot without")
 QUOTED: Final = re.compile(r"“[^”]*”|\"[^\"]*\"")
 WORD: Final = re.compile(r"[A-Za-z0-9]+(?:['’:.][A-Za-z0-9]+)*")
 SENTENCE_BREAK: Final = re.compile(r"(?<=[.!?])\s+")
+HIDDEN: Final = "\x00"
+"""What a quoted span is masked with: no word and no space, so a sentence break never swallows
+a quote, and a sentence that only quotes is still a sentence."""
 
 
 @dataclass(frozen=True)
 class _Sentence:
     quoted: frozenset[str]
     unquoted: str
-    """The sentence with each quoted span turned to spaces."""
+    """The sentence with each quoted span masked."""
 
 
 @dataclass(frozen=True)
@@ -99,7 +102,7 @@ class _Said:
 
 def _said(text: str) -> _Said:
     spans = list(QUOTED.finditer(text))
-    masked = QUOTED.sub(lambda m: " " * len(m.group(0)), text)
+    masked = QUOTED.sub(lambda m: HIDDEN * len(m.group(0)), text)
     cuts = [0, *(at for m in SENTENCE_BREAK.finditer(masked) for at in m.span()), len(text)]
     sentences = tuple(
         _Sentence(
@@ -107,7 +110,7 @@ def _said(text: str) -> _Said:
             unquoted=masked[a:b],
         )
         for a, b in zip(cuts[::2], cuts[1::2], strict=True)
-        if masked[a:b].strip() or any(a <= m.start() < b for m in spans)
+        if masked[a:b].strip()
     )
     found = tuple(w.casefold().replace("’", "'") for w in WORD.findall(masked))
     return _Said(sentences, frozenset(m.group(0)[1:-1] for m in spans), found)
