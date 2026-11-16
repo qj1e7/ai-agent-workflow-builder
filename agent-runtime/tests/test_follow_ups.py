@@ -244,7 +244,7 @@ def which(word: str, software: str | None = None) -> TaskRead:
     return reading("none", belongs_on_watchlist=True, watchlist_word=word, software=software)
 
 
-@pytest.mark.parametrize("kind", ["cant", "watchlist", "question", "remove_software", None])
+@pytest.mark.parametrize("kind", ["cant", "watchlist", "question", "remove_software"])
 @pytest.mark.parametrize(
     ("task", "verb"),
     [
@@ -284,6 +284,11 @@ def test_a_watch_of_it_offers_the_turn_befores_software_whatever_the_reading_nam
         named_node_js(software="MOCK-12"),
         named_node_js(software="it"),
         named_node_js(software="Jira"),
+        named_node_js(software="mock-12"),
+        named_node_js(kind=None),
+        named_node_js(kind="reply", software="Weekly bug list"),
+        named_node_js(kind="setup_card"),
+        named_node_js(kind="which_software"),
     ],
 )
 def test_a_watch_of_it_with_no_plain_software_before_still_asks_which(
