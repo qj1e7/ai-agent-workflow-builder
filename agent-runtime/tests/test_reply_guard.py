@@ -3,12 +3,19 @@ from typing import Any
 import pytest
 
 from agent_runtime.abilities import CAPABILITIES
-from agent_runtime.contract import FreeReplyAnswer, ReplyEnvelope, ReplyOffer
+from agent_runtime.contract import (
+    ABOUT_LIMIT,
+    FreeReplyAnswer,
+    ReplyAbout,
+    ReplyEnvelope,
+    ReplyOffer,
+)
 from agent_runtime.how_to import HOW_TO
 from agent_runtime.reply_guard import (
     CHECKS,
     NOT_READY,
     Given,
+    about_of,
     claims_nothing_done,
     claims_only_what_is_built,
     failed_check,
@@ -541,3 +548,24 @@ def test_the_words_shown_are_exactly_the_words_checked():
 
 def said_raw(text: str) -> ReplyEnvelope:
     return ReplyEnvelope(form="answer", text=text)
+
+
+# The names a reply speaks of (ADR 0049): code keeps each the facts hold and the text names.
+
+
+def test_about_keeps_each_name_the_facts_hold_and_the_text_names_in_the_facts_spelling():
+    text = "Your Watchlist holds langgraph and Redis. To pause the Morning bug list, type Pause."
+    names = ["langgraph", "Kubernetes", "Morning bug list", "Redis", "Friday summary", "redis"]
+
+    assert about_of(names, text, HELD.facts) == [
+        ReplyAbout(section="watchlist", name="LangGraph"),
+        ReplyAbout(section="workflows", name="Morning bug list"),
+        ReplyAbout(section="watchlist", name="Redis"),
+    ]
+
+
+def test_about_keeps_nothing_without_facts_and_never_more_than_the_limit():
+    assert about_of(["Redis"], "Your Watchlist holds Redis.", "") == []
+    many = '{"watchlist":[' + ",".join(f'{{"name":"S{n}"}}' for n in range(9)) + "]}"
+    text = " ".join(f"S{n}" for n in range(9))
+    assert len(about_of([f"S{n}" for n in range(9)], text, many)) == ABOUT_LIMIT

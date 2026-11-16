@@ -10,7 +10,7 @@ needs a card and a yes."""
 
 import re
 import unicodedata
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Final, Literal
 
@@ -29,10 +29,12 @@ from agent_runtime.abilities import (
     words,
 )
 from agent_runtime.contract import (
+    ABOUT_LIMIT,
     CHOICE_LIMIT,
     REPLY_TEXT_LIMIT,
     FactSection,
     FreeReplyAnswer,
+    ReplyAbout,
     ReplyEnvelope,
     ReplyForm,
     ReplyOffer,
@@ -676,8 +678,7 @@ def _item_made_up(item: str, names: tuple[str, ...]) -> bool:
     if first is None:
         return False
     for name in sorted(names, key=len, reverse=True):
-        spelled = r"\s+".join(re.escape(part) for part in name.split())
-        held = re.match(rf"{spelled}(?![\w-])", rest, re.IGNORECASE)
+        held = re.match(rf"{_spelled(name)}(?![\w-])", rest, re.IGNORECASE)
         if held is not None:
             longer = re.match(rf"\s+({TOKEN.pattern})", rest[held.end() :])
             return longer is not None and _name_like(longer.group(1))
@@ -708,6 +709,31 @@ def holds_only_what_the_facts_hold(text: str, facts: str) -> bool:
         for name, words_held in _claims_held(sentence)
         for item in ITEM_BREAK.split(words_held)
     )
+
+
+def _spelled(name: str) -> str:
+    return r"\s+".join(re.escape(part) for part in name.split())
+
+
+def about_of(names: Sequence[str], text: str, facts: str) -> list[ReplyAbout]:
+    """The watched software and workflows a reply speaks of (ADR 0049): each name the model gave
+    that a list in the facts holds, case aside, and that the text names, spelled as the facts
+    spell it, in the model's order, at most `ABOUT_LIMIT`. The Portal draws each one's line."""
+    held = _held(facts)
+    kept: list[ReplyAbout] = []
+    for given in names:
+        for section in ("watchlist", "workflows"):
+            name = next(
+                (n for n in held[section] if n.casefold() == given.strip().casefold()), None
+            )
+            about = None if name is None else ReplyAbout(section=section, name=name)
+            named = name is not None and re.search(
+                rf"(?<![\w-]){_spelled(name)}(?![\w-])", text, re.I
+            )
+            if about is not None and named and about not in kept:
+                kept.append(about)
+                break
+    return kept[:ABOUT_LIMIT]
 
 
 def makes_nothing_up(reply: Shown, given: Given) -> bool:
