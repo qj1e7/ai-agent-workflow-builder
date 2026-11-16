@@ -30,7 +30,6 @@ export function writeWords(blocks: readonly Pick<N8nBlockView, 'kind' | 'name'>[
 /** The workflow page's banner for a version whose writes are refused, as the sketch says it. */
 export const refusedBanner = (blocks: readonly Pick<N8nBlockView, 'kind' | 'name'>[] | undefined): string => `Writes refused: there’s no yes before ${writeWords(blocks)}.`
 
-/** Every finding, since each is its own thing to fix. */
 export const needsFixBanner = (findings: readonly string[]): string => `Needs a fix: ${findings.length > 0 ? findings.join(' ') : 'it can’t run as the platform expects.'}`
 
 /** The card's line under a refused write. It says "the ticket" only when a change names one. */

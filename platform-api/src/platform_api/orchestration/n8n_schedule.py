@@ -177,7 +177,7 @@ def next_run(
     return min(fires, default=None)
 
 
-SHOWN: Mapping[str, Mapping[str, JsonValue]] = {
+EDITOR_DEFAULTS: Mapping[str, Mapping[str, JsonValue]] = {
     "seconds": {"secondsInterval": 30},
     "minutes": {"minutesInterval": 5},
     "hours": {"hoursInterval": 1, "triggerAtMinute": 0},
@@ -191,18 +191,16 @@ SHOWN: Mapping[str, Mapping[str, JsonValue]] = {
     },
     CRON: {"expression": ""},
 }
-"""What n8n's editor shows for each field of a rule, at its default. The editor saves only what a
-person changed, and n8n 2.42.6 fills in the rest as it loads the workflow, before it makes the
-cron (`getNodeParameters` with its defaults), so a time left at what the editor showed runs at
-that time. A part saved as null is not filled in, so n8n picks it."""
+"""The editor saves only what a person changed, and n8n 2.42.6 fills in the rest as it loads the
+workflow, before it makes the cron (`getNodeParameters` with its defaults), so a time left at what
+the editor showed runs at that time. A part saved as null is not filled in, so n8n picks it."""
 DEFAULT_RULE: Mapping[str, JsonValue] = {"interval": [{"field": "days"}]}
 """The Schedule Trigger's rule when none is saved: every day, at midnight once filled in."""
 
 
 def schedule_intervals(parameters: Mapping[str, JsonValue]) -> list[Mapping[str, JsonValue]]:
     """A Schedule Trigger's rules as n8n runs them, with what n8n fills in. A rule with no
-    `interval` runs one empty entry that n8n does not fill in, as the trigger reads it. An entry
-    that is not an object reads as an empty one."""
+    `interval` runs one empty entry that n8n does not fill in, as the trigger reads it."""
     rule = parameters.get("rule", DEFAULT_RULE)
     if not isinstance(rule, dict) or "interval" not in rule:
         return [{}]
@@ -217,7 +215,7 @@ NOTHING_SHOWN: Mapping[str, JsonValue] = {}
 
 def _filled(interval: Mapping[str, JsonValue]) -> dict[str, JsonValue]:
     field = interval.get("field", "days")
-    shown = SHOWN.get(field, NOTHING_SHOWN) if isinstance(field, str) else NOTHING_SHOWN
+    shown = EDITOR_DEFAULTS.get(field, NOTHING_SHOWN) if isinstance(field, str) else NOTHING_SHOWN
     return {"field": field, **shown, **interval}
 
 

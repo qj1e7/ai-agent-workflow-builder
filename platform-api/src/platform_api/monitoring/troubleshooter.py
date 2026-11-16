@@ -175,7 +175,7 @@ STOPPED_WHILE_WRITING = Advice(
 )
 
 
-NO_START = Advice(
+MISSING_START = Advice(
     explanation="The workflow has no Start from the Portal block, so the Portal couldn't start it.",
     likely_cause="It was made or changed in n8n without that block.",
     suggested_action="ask_maintainer",
@@ -205,7 +205,7 @@ def explain_failure(failure: RunFailedData) -> Advice:
         and not failure.retryable
         and NO_START_BLOCK in failure.message
     ):
-        return NO_START
+        return MISSING_START
     return ADVICE[failure.reason]
 
 

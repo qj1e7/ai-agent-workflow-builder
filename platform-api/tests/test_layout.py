@@ -34,7 +34,7 @@ from platform_api.builder.n8n_draft import (
     Checked,
     DraftRefused,
     check_draft,
-    read_steps,
+    read_only_steps,
 )
 from platform_api.orchestration import (
     ASK_EXITS,
@@ -444,13 +444,13 @@ def test_a_workflow_that_only_reads_has_a_read_step_for_each_read_block() -> Non
     second = {"id": "r2", "name": "Read again", "type": TYPE_OF["read"], "parameters": {}}
     made = made_in_the_editor(second)
     made["connections"]["Read"] = {"main": [[{"node": "Read again", "type": "main", "index": 0}]]}
-    steps = read_steps(made)
+    steps = read_only_steps(made)
     assert [(step.key, step.name, step.kind) for step in steps] == [
         ("read_1", "Read", "agent"),
         ("read_2", "Read", "agent"),
     ]
-    assert read_steps(None) == []
+    assert read_only_steps(None) == []
 
 
 def test_a_workflow_with_an_agent_names_its_steps_after_its_agents() -> None:
-    assert read_steps(lay_out(RELEASE_CHECK)) == [], "the Version checker names the step"
+    assert read_only_steps(lay_out(RELEASE_CHECK)) == [], "the Version checker names the step"

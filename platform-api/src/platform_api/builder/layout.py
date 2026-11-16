@@ -397,21 +397,18 @@ ADDS_START = "adds Start from the Portal for Run now"
 @dataclass(frozen=True)
 class FixedForYou:
     """A workflow made in n8n as Set up leaves it, with the platform's own plumbing put right,
-    which is never its maker's job (ADR 0051, Fixed for you). A member's n8n editor can't even
-    offer the platform's error workflow."""
+    which is never its maker's job (ADR 0051, Fixed for you)."""
 
     document: Document
     fixed: tuple[str, ...]
-    """What Set up changed, each in words that follow "Set up also", in a fixed order."""
+    """What Set up changed, each in words that follow "Set up also"."""
 
 
 def fixed_for_you(
-    document: Mapping[str, Any], key: str, error_workflow: str | None, time_zone: str
+    document: Mapping[str, Any], workflow_id: str, error_workflow: str | None, time_zone: str
 ) -> FixedForYou:
     """The settings every layout has, and Start from the Portal beside the schedule, joined to
-    what the schedule starts, so Run now and a test run can start it. `key` makes the new block's
-    ids the same every time for the same workflow. A document the checker can't read is left as
-    it is."""
+    what the schedule starts, so Run now and a test run can start it."""
     try:
         read_flow(document)
     except Unreadable:
@@ -431,12 +428,12 @@ def fixed_for_you(
             settings[setting] = value
             fixed.append(FIXED_SETTINGS[setting].format(zone=zone_words(time_zone)))
     result["settings"] = settings
-    if _start_added(result, key):
+    if _start_added(result, workflow_id):
         fixed.append(ADDS_START)
     return FixedForYou(result, tuple(fixed))
 
 
-def _start_added(document: Document, key: str) -> bool:
+def _start_added(document: Document, workflow_id: str) -> bool:
     nodes = cast(list[dict[str, Any]], document["nodes"])
     on = [node for node in nodes if not node.get("disabled")]
     if any(node.get("type") == TYPE_OF["start"] for node in on):
@@ -453,13 +450,13 @@ def _start_added(document: Document, key: str) -> bool:
     x, y = cast(list[float], schedules[0].get("position") or [0, 0])
     nodes.append(
         {
-            "id": block_id(key, START),
+            "id": block_id(workflow_id, START),
             "name": name,
             "type": TYPE_OF["start"],
             "typeVersion": 1,
             "position": [x, y + ROW],
             "parameters": {},
-            "webhookId": block_id(key, "webhook/start"),
+            "webhookId": block_id(workflow_id, "webhook/start"),
         }
     )
     connections[name] = {"main": [[dict(target) for target in targets.values()]]}

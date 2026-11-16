@@ -175,17 +175,22 @@ def test_the_next_run_is_on_the_workflow_s_clock_and_the_team_s_when_it_has_none
     assert london.replace(second=0) == london_8, "8:30 in Singapore is 0:30 in London"
 
 
+N8N_SECOND = 41
+"""The second n8n adds for node key "w1:n1", as its own code gave it in
+docs/evidence/prototypes/p7-n8n-engine-facts/q12b_schedule_defaults.txt."""
+
+
 @pytest.mark.parametrize(
     ("parameters", "fires"),
     [
-        ({"rule": {"interval": [{"triggerAtHour": 3}]}}, datetime(2026, 11, 14, 3, 0, 41)),
-        ({"rule": {"interval": [{}]}}, datetime(2026, 11, 14, 0, 0, 41)),
-        ({}, datetime(2026, 11, 14, 0, 0, 41)),
+        ({"rule": {"interval": [{"triggerAtHour": 3}]}}, datetime(2026, 11, 14, 3, 0, N8N_SECOND)),
+        ({"rule": {"interval": [{}]}}, datetime(2026, 11, 14, 0, 0, N8N_SECOND)),
+        ({}, datetime(2026, 11, 14, 0, 0, N8N_SECOND)),
         (
             {"rule": {"interval": [{"field": "weeks", "triggerAtHour": 9}]}},
-            datetime(2026, 11, 15, 9, 0, 41),
+            datetime(2026, 11, 15, 9, 0, N8N_SECOND),
         ),
-        ({"rule": {"interval": [{"field": "months"}]}}, datetime(2026, 12, 1, 0, 0, 41)),
+        ({"rule": {"interval": [{"field": "months"}]}}, datetime(2026, 12, 1, 0, 0, N8N_SECOND)),
     ],
     ids=["3:00, minute left", "nothing changed", "no rule saved", "weeks, day left", "months"],
 )

@@ -168,7 +168,6 @@ export interface When {
   readonly small: string
 }
 
-/** When it runs, and under it the zone or how else it starts. With no Start from the Portal, it says why there is no Run now. */
 export function whenWords({ schedule, start_refused: refused }: Pick<UseCaseView, 'schedule'> & Partial<Pick<UseCaseView, 'start_refused'>>): When {
   if (!schedule) return { words: 'No schedule', small: refused ?? 'An Operator starts it with Run now.' }
   const words = repeatWords(schedule)
@@ -209,7 +208,7 @@ export const PLACES_IN_PAGE_ORDER: readonly Place[] = ['switch', 'more']
 const PLACE_OF: Record<Control, Place> = { run: 'more', pause: 'switch', resume: 'switch', delete: 'more', test: 'switch', turn_on: 'switch' }
 export const placeOf = (control: Control): Place => PLACE_OF[control]
 
-/** Only an Operator changes a schedule. The Software watchlist's is changed on the Software page, and one made in n8n is changed in n8n (ENGINE-PLAN E15). */
+/** Only an Operator changes a schedule. The Software watchlist's is changed on the Software page, and one made in n8n is changed in n8n (ENGINE-PLAN section 12). */
 export function mayChangeSchedule(useCase: Pick<UseCaseView, 'template'> & Partial<Pick<UseCaseView, 'made_in_n8n_by'>>, viewer: Viewer): boolean {
   return viewer.operator && !looksAfterOnSoftwarePage(useCase) && !useCase.made_in_n8n_by
 }
@@ -343,8 +342,7 @@ export function menuActionsOf(useCase: Pick<UseCaseView, 'template' | 'state'> &
 
 /**
  * What an Operator can do to a workflow. A draft never runs on its schedule or by Run now, so it has a test run instead, and Turn it on
- * once a test run passed (ADR 0044). Pausing a draft would change nothing, so it has no Pause. With no Start from the Portal, neither Run now
- * nor a test run is offered, and When says why.
+ * once a test run passed (ADR 0044). Pausing a draft would change nothing, so it has no Pause.
  */
 export function controlsOf(useCase: Pick<UseCaseView, 'template' | 'state'> & Partial<Pick<UseCaseView, 'last_run' | 'start_refused'>>, viewer: Viewer): readonly Control[] {
   if (!viewer.operator || looksAfterOnSoftwarePage(useCase)) return []
@@ -581,7 +579,7 @@ export function whoSaysYes(owner: string, viewer: Pick<Viewer, 'id'>, nameOf: Na
   return `Any Approver but ${owner === viewer.id ? 'you' : nameOf(owner)}, in Teams.`
 }
 
-/** The rule the approval gate keeps, in full: the people on a run can't approve it. A scheduled run starts as the schedule's owner, when one saved it here. */
+/** The rule the approval gate keeps, in full: the people on a run can't approve it. A scheduled run starts as the schedule's owner. */
 export function ownWorkRule(schedule: Pick<NonNullable<UseCaseView['schedule']>, 'owner_name'> | null): string {
   const started = schedule?.owner_name ? ` A scheduled run starts as ${schedule.owner_name}.` : ''
   return `Nobody says yes to their own work. The workflow’s owner, whoever starts a run and whoever retries it can’t say yes to that run.${started}`

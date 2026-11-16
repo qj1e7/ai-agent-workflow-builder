@@ -163,7 +163,7 @@ def blocks_of(document: Mapping[str, Any]) -> list[N8nBlockView]:
 READ_STEP = "Read"
 
 
-def read_steps(document: Mapping[str, Any] | None) -> list[BlockView]:
+def read_only_steps(document: Mapping[str, Any] | None) -> list[BlockView]:
     """The run line's steps for a workflow that only reads, with no agent to name a step after,
     as one made in n8n may be: one step for each of our Read blocks, in the order a run meets
     them, named by what the block is."""

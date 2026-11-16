@@ -19,10 +19,9 @@ function gradeSentence({ grade, findings }: Pick<MadeInN8nView, 'grade' | 'findi
   }
 }
 
-/** What set up puts right that is the platform's to set, never its maker's, such as its error workflow. */
 const fixedWords = ({ fixed_for_you }: Pick<MadeInN8nView, 'fixed_for_you'>): string => (fixed_for_you.length > 0 ? `Set up also ${andList(fixed_for_you)}.` : '')
 
-/** A workflow made in n8n that waits to be set up, in the plan's words (ENGINE-PLAN section 1, row 14): who made it, its grade, what set up puts right, and what setting it up does or why it can't yet. */
+/** A workflow made in n8n that waits to be set up, in the plan's words (ENGINE-PLAN section 1, row 14): who made it, its grade, and what setting it up does or why it can't yet. */
 export function madeInN8nWords(workflow: MadeInN8nView, makerName: string): MadeInN8nWords {
   const after = workflow.why_not ?? (workflow.published ? 'Published in n8n, so it runs once set up.' : 'It is set up as a draft, since it isn’t published in n8n.')
   const { label, tone } = gradePill(workflow.grade)
