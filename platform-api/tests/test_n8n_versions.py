@@ -690,7 +690,7 @@ async def test_settings_put_back_in_n8n_grade_safe_again(v: Versions):
     assert (view["version"], view["grade"], view["findings"]) == (3, "safe", [])
 
 
-N8N_DEFAULTS: tuple[tuple[str, object], ...] = (
+RULE_DEFAULTS: tuple[tuple[str, object], ...] = (
     ("field", "days"),
     ("triggerAtDay", [0]),
     ("triggerAtHour", 0),
@@ -700,9 +700,9 @@ N8N_DEFAULTS: tuple[tuple[str, object], ...] = (
 
 def saved_in_n8ns_editor(workflow: dict[str, Any]) -> None:
     """What n8n 2.42.6's editor writes as it saves a workflow the platform laid out, with no block
-    touched, as its own load and save (getNodeParameters) gave it for every layout: a parameter
-    at its default is left out, IF's condition options gain its leftValue, and the settings
-    gain its binary mode."""
+    touched, as docs/evidence/n8n-editor-save/editor_save.txt shows for every layout: a
+    parameter at its default is left out, IF's condition options gain its leftValue, and the
+    settings gain its binary mode."""
     editors_own = {"executionOrder": "v1", "binaryMode": "separate"}
     workflow["settings"] = {**editors_own, **workflow["settings"]}
     for node in workflow["nodes"]:
@@ -713,7 +713,7 @@ def saved_in_n8ns_editor(workflow: dict[str, Any]) -> None:
             parameters["conditions"]["options"]["leftValue"] = ""
         if node["type"] == "n8n-nodes-base.scheduleTrigger":
             for interval in parameters["rule"]["interval"]:
-                for key, default in N8N_DEFAULTS:
+                for key, default in RULE_DEFAULTS:
                     if interval.get(key) == default:
                         del interval[key]
 
