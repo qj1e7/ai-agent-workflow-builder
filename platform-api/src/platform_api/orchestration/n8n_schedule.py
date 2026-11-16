@@ -211,9 +211,12 @@ def schedule_intervals(parameters: Mapping[str, JsonValue]) -> list[Mapping[str,
     return [_filled(interval if isinstance(interval, dict) else {}) for interval in intervals]
 
 
+NOTHING_SHOWN: Mapping[str, JsonValue] = {}
+
+
 def _filled(interval: Mapping[str, JsonValue]) -> dict[str, JsonValue]:
     field = interval.get("field", "days")
-    shown = SHOWN.get(field, {}) if isinstance(field, str) else {}
+    shown = SHOWN.get(field, NOTHING_SHOWN) if isinstance(field, str) else NOTHING_SHOWN
     return {"field": field, **shown, **interval}
 
 

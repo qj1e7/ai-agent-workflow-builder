@@ -6585,6 +6585,14 @@
             "title": "Findings",
             "type": "array"
           },
+          "fixed_for_you": {
+            "description": "What Set up puts right that is the platform's to set, never its maker's: its error workflow, its time zone, its kept test runs and progress, and Start from the Portal. Each is words that follow \"Set up also\". The grade and findings are of the workflow once these are put right.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Fixed For You",
+            "type": "array"
+          },
           "grade": {
             "$ref": "#/components/schemas/Grade",
             "description": "The safety checker's grade of the version n8n runs, or of its draft when nothing is published. Only a safe version asks for a yes and writes."
@@ -6627,6 +6635,7 @@
           "published",
           "grade",
           "findings",
+          "fixed_for_you",
           "can_set_up",
           "why_not"
         ],

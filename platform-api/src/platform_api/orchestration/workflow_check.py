@@ -430,7 +430,7 @@ _FIXED = re.compile(r"Etc/GMT([+-])(\d+)")
 _CITY = re.compile(r"(?!Etc/)[A-Z][A-Za-z]+/(?:[A-Za-z_-]+/)?([A-Z][A-Za-z_-]+)")
 
 
-def _zone_words(time_zone: str) -> str:
+def zone_words(time_zone: str) -> str:
     """A zone named as the Portal names it: "London time", "UTC", or "GMT+8" for Etc/GMT-8, whose
     sign is the other way round. A zone with no city shows its id: "EST5EDT time"."""
     if time_zone in _UTC_NAMES:
@@ -687,7 +687,7 @@ def _settings(flow: Flow, error_workflow: str | None, time_zone: str) -> Iterabl
     if settings.get("timezone") != time_zone:
         yield _fix(
             None,
-            f"It does not run on {_zone_words(time_zone)}. "
+            f"It does not run on {zone_words(time_zone)}. "
             "Save its schedule again, or change its time zone in n8n.",
         )
     if settings.get("saveManualExecutions") is not True:

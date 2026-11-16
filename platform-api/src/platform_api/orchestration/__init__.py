@@ -242,11 +242,13 @@ from platform_api.orchestration.workflow_check import (
     unchecked,
     unpinned_notices,
     writes,
+    zone_words,
 )
 from platform_api.orchestration.write_actions import Binding
 
 __all__ = [
     "Face",
+    "zone_words",
     "face",
     "skipped_in_tests",
     "unchecked",

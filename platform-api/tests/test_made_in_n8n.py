@@ -206,6 +206,7 @@ async def test_each_workflow_in_a_member_s_space_waits_with_its_maker_and_its_gr
         "published": True,
         "grade": "safe",
         "findings": [],
+        "fixed_for_you": [],
         "can_set_up": True,
         "why_not": None,
     }
@@ -216,6 +217,7 @@ async def test_each_workflow_in_a_member_s_space_waits_with_its_maker_and_its_gr
         "published": False,
         "grade": "writes_refused",
         "findings": ['"Create ticket" can run without a yes.'],
+        "fixed_for_you": [],
         "can_set_up": False,
         "why_not": FIX_IN_N8N,
     }
