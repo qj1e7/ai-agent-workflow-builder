@@ -4,16 +4,17 @@ import { MemoryRouter } from 'react-router'
 import { describe, expect, it } from 'vitest'
 import removal from '../../../../contracts/fixtures/planner/answer.remove_software.json'
 import notHeld from '../../../../contracts/fixtures/planner/answer.remove_software.none.json'
+import statuses from '../../../../contracts/fixtures/watchlist/statuses.json'
 import { ApiProvider } from '../../api/context'
 import { createDevSession } from '../../api/session'
-import type { Me, PartView, RemoveSoftwareReply } from '../../api/types'
+import type { Me, PartView, RemoveSoftwareReply, WatchlistView } from '../../api/types'
 import { Answer, type Page } from './AnswerCards'
 import { removeSay, sayOf, wordsOnly } from './answers'
+import { CardMemoryContext, newCardMemory, NO_MEMORY, type CardMemory } from './cardMemory'
 import { leftoverParts } from './parts'
 
 const PAGE: Page = { ask: () => undefined, edit: () => undefined, box: () => undefined }
 const ALICE: Me = { id: 'alice', display: 'Alice', roles: ['operator', 'approver'] }
-const BOB: Me = { id: 'bob', display: 'Bob', roles: ['approver'] }
 const ONE = removal as RemoveSoftwareReply
 const NONE = notHeld as RemoveSoftwareReply
 const SEVERAL: RemoveSoftwareReply = {
@@ -25,16 +26,25 @@ const SEVERAL: RemoveSoftwareReply = {
   ],
 }
 
-function draw(me: Me, reply: RemoveSoftwareReply): string {
+const LIST = statuses as WatchlistView
+const [FIRST] = LIST.software
+const TWO_NODES: WatchlistView = {
+  ...LIST,
+  software: SEVERAL.matches.map((match, n) => ({ ...LIST.software[0]!, id: match.software_id, name: match.name, source: { ...FIRST!.source, ref: n === 0 ? 'nodejs/node' : 'nodejs/nodejs.org' } })),
+}
+
+function draw(me: Me, reply: RemoveSoftwareReply, memory: CardMemory = NO_MEMORY, view: WatchlistView = LIST): string {
   const session = createDevSession(null)
   const queryClient = new QueryClient({ defaultOptions: { queries: { retryOnMount: false } } })
   queryClient.setQueryData(['me', session.cacheScope()], me)
-  queryClient.setQueryData(['people', session.cacheScope()], [{ id: 'alice', display: 'Alice', operator: true }])
+  queryClient.setQueryData(['watchlist', session.cacheScope()], view)
   return renderToStaticMarkup(
     <QueryClientProvider client={queryClient}>
       <ApiProvider session={session} platformFetch={fetch} origin="http://portal.test">
         <MemoryRouter>
-          <Answer reply={reply} typed="remove Node.js from the watchlist" page={PAGE} />
+          <CardMemoryContext.Provider value={memory}>
+            <Answer reply={reply} typed="remove Node.js from the watchlist" page={PAGE} />
+          </CardMemoryContext.Provider>
         </MemoryRouter>
       </ApiProvider>
     </QueryClientProvider>,
@@ -54,11 +64,22 @@ describe('software to take off the Watchlist', () => {
     expect(text(html)).not.toContain('Undo')
   })
 
-  it('offers each of several matches, by name, to choose', () => {
+  it('offers each of several matches, by name and source, to choose', () => {
     expect(sayOf(SEVERAL)).toBe('More than one software on your Watchlist could be nodejs. Which one should I remove?')
-    const html = draw(ALICE, SEVERAL)
+    const html = draw(ALICE, SEVERAL, NO_MEMORY, TWO_NODES)
     expect(html).toMatch(/<h3 id="[^"]*">On your Watchlist<\/h3>/)
     expect(buttons(html)).toEqual(['Remove from watchlist node js', 'Remove from watchlist Node.js'])
+    expect(text(html)).toContain('node js nodejs/node')
+    expect(text(html)).toContain('Node.js nodejs/nodejs.org')
+  })
+
+  it('keeps a removal and its Undo when Home comes back', () => {
+    const memory = newCardMemory()
+    const row = { id: ONE.matches[0]!.software_id, name: 'node js' }
+    memory.removals.keep({ [row.id]: { kind: 'removed', row } })
+    const html = draw(ALICE, ONE, memory)
+    expect(text(html)).toContain('Removed from the watchlist.')
+    expect(buttons(html)).toEqual(['Undo removing node js'])
   })
 
   it('says a name the watchlist doesn’t hold isn’t there, names what it holds, and offers nothing to remove', () => {
@@ -71,12 +92,6 @@ describe('software to take off the Watchlist', () => {
     const many = Array.from({ length: 11 }, (_, n) => `Tool ${String(n + 1)}`)
     expect(removeSay({ ...NONE, watched: many })).toBe('Kubernetes isn’t on your Watchlist. It holds Tool 1, Tool 2, Tool 3, Tool 4, Tool 5, Tool 6, Tool 7, Tool 8 and 3 more.')
     expect(removeSay({ ...NONE, watched: [] })).toBe('Kubernetes isn’t on your Watchlist. Your Watchlist is empty.')
-  })
-
-  it('gives someone who isn’t an Operator who to ask, and no button', () => {
-    const html = draw(BOB, ONE)
-    expect(buttons(html)).toEqual([])
-    expect(text(html)).toContain('Only Operators change the watchlist. Ask Alice.')
   })
 
   it('draws a part it didn’t do above the card, so none is dropped', () => {

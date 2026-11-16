@@ -805,6 +805,12 @@ test.describe('with the AI model on', () => {
     await expect(undo, 'focus moves to Undo').toBeFocused()
     expect(await names()).toEqual(['Redis'])
 
+    const rail = page.getByRole('navigation', { name: 'Browse' }).filter({ visible: true })
+    await rail.getByRole('link', { name: /^Watchlist/ }).click()
+    await expect(page.locator('li[data-status]').filter({ hasText: 'node js' }), 'the Watchlist no longer holds it').toHaveCount(0)
+    await rail.getByRole('link', { name: /^Chat/ }).click()
+    await expect(answer, 'coming back to the chat keeps the removal and its Undo').toContainText('Removed from the watchlist.')
+
     await undo.click()
     await expect(answer).toContainText('Put node js back on the list.')
     await expect(remove, 'focus goes back to Remove').toBeFocused()
