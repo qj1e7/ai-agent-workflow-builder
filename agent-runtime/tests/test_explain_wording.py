@@ -21,6 +21,7 @@ from agent_runtime.contracts import answer_request
 from agent_runtime.explain_wording import (
     ExplainWording,
     explain_guard,
+    fact_check,
     reword,
     wording_messages,
 )
@@ -140,7 +141,7 @@ def test_every_negation_is_kept_and_none_is_added(
         (SMOOTHED.replace("“fastapi/fastapi”", "“fastapi”"), "quotes"),
         (SMOOTHED.replace("and Jira “MOCK”", "and Jira “MOCK” and “WEB”"), "quotes"),
         (SMOOTHED.replace("GitHub “fastapi/fastapi” and ", ""), "quotes"),
-        (SMOOTHED.replace("“MOCK”.", "MOCK."), "together"),
+        (SMOOTHED.replace("“MOCK”.", "MOCK."), "quotes"),
         (SMOOTHED.replace("Each day at 8:00 it", "It"), "together"),
     ],
     ids=["changed", "added", "dropped-place", "unquoted", "dropped-time"],
@@ -151,12 +152,12 @@ def test_nothing_quoted_or_said_is_added_dropped_or_changed(text: str, check: st
 
 def test_a_read_dropped_into_a_writes_sentence_is_refused():
     dropped = SMOOTHED.replace(" and Jira “MOCK”. It can", ". It can")
-    assert explain_guard(dropped, FASTAPI) == "together"
+    assert explain_guard(dropped, FASTAPI) == "quotes"
 
 
 @pytest.mark.parametrize("added", [" “MOCK”.", " “MOCK”"], ids=["with-a-stop", "without-one"])
 def test_an_added_sentence_that_only_quotes_is_refused(added: str):
-    assert explain_guard(SMOOTHED + added, FASTAPI) == "together"
+    assert explain_guard(SMOOTHED + added, FASTAPI) == "sentences"
 
 
 def test_a_word_of_a_kind_of_fact_the_workflow_lacks_is_refused():
@@ -169,6 +170,195 @@ def test_the_text_is_judged_and_shown_as_the_person_sees_it():
     assert explain_guard(hidden, FASTAPI) is None
     shown, _ = asked_with(ExplainWording(text=hidden), CLEAN)
     assert shown == ExplainReworded(text=SMOOTHED)
+
+
+WEEKLY = request(
+    "Every Monday at 9:00, it reads GitHub “langchain-ai/langgraph” and Jira “MOCK”. "
+    "It can create Jira tickets in “MOCK”, each after a yes. It changes nothing else.",
+    fact("runs", "Monday", "9:00"),
+    fact("reads", "reads", "GitHub", "langchain-ai/langgraph"),
+    fact("reads", "reads", "Jira", "MOCK"),
+    fact("writes", "create", "Jira", "MOCK", "yes"),
+    fact("changes", "changes", "nothing", "else", negated=True),
+)
+"""Code's In short for platform-api's golden agent_cards.json."""
+TICKETS_AND_A_POST = request(
+    "Every day at 8:00, it reads GitHub “fastapi/fastapi”. "
+    "It can create Jira tickets in “MOCK”, each after a yes. "
+    "It posts “A newer release is out.” in Teams “Ops”. It changes nothing else.",
+    fact("runs", "day", "8:00"),
+    fact("reads", "reads", "GitHub", "fastapi/fastapi"),
+    fact("writes", "create", "Jira", "MOCK", "yes"),
+    fact("posts", "post", "Teams", "A newer release is out.", "Ops"),
+    fact("changes", "changes", "nothing", "else", negated=True),
+)
+NO_YES_EACH_RUN = request(
+    "Every day at 8:00, it reads GitHub “fastapi/fastapi”. "
+    "It creates Jira tickets in “MOCK” with no yes on each run. It changes nothing else.",
+    fact("runs", "day", "8:00"),
+    fact("reads", "reads", "GitHub", "fastapi/fastapi"),
+    fact("writes", "create", "Jira", "MOCK", negated=True),
+    fact("changes", "changes", "nothing", "else", negated=True),
+)
+
+
+@pytest.mark.parametrize(
+    ("asked", "text", "check"),
+    [
+        (
+            WEEKLY,
+            "Every day at 9:00 it reads GitHub “langchain-ai/langgraph” and Jira “MOCK”, and on "
+            "Monday it can create Jira tickets in “MOCK”, each after a yes. "
+            "It changes nothing else.",
+            "sentences",
+        ),
+        (
+            WEEKLY,
+            "Every day at 9:00, it reads GitHub “langchain-ai/langgraph” and Jira “MOCK” each "
+            "Monday. It can create Jira tickets in “MOCK”, each after a yes. Nothing else changes.",
+            "words",
+        ),
+        (
+            FASTAPI,
+            "Every day at 8:00, it reads GitHub “MOCK” and Jira “fastapi/fastapi”. "
+            "It can create Jira tickets in “MOCK”, each after a yes. It changes nothing else.",
+            "places",
+        ),
+        (
+            FASTAPI,
+            "Every day at 8:00, it reads GitHub “fastapi/fastapi” and Jira “MOCK”. After a yes it "
+            "reads Jira “MOCK”, and it can create Jira tickets in “MOCK” each day. "
+            "It changes nothing else.",
+            "together",
+        ),
+        (
+            FASTAPI,
+            "Every day at 8:00, it reads GitHub “fastapi/fastapi” and Jira “MOCK”. After a yes it "
+            "looks at Jira “MOCK”, and it can create Jira tickets in “MOCK”. "
+            "It changes nothing else.",
+            "words",
+        ),
+        (
+            FASTAPI,
+            "Every day at 8:00, it reads GitHub “fastapi/fastapi” and Jira “MOCK”. "
+            "It can create a Jira ticket in “MOCK” after a yes. It changes nothing else.",
+            "words",
+        ),
+    ],
+    ids=[
+        "weekly-to-daily-merged",
+        "weekly-to-daily",
+        "places-swapped",
+        "yes-moved-within-a-sentence",
+        "yes-left-on-a-look",
+        "tickets-to-one-ticket",
+    ],
+)
+def test_a_fact_moved_or_changed_inside_the_paragraph_is_refused(
+    asked: ExplainWordingRequest, text: str, check: str
+):
+    assert explain_guard(text, asked) == check
+
+
+@pytest.mark.parametrize(
+    ("asked", "text", "check"),
+    [
+        (
+            TICKETS_AND_A_POST,
+            "Every day at 8:00, it reads GitHub “fastapi/fastapi”. It can create Jira tickets in "
+            "“MOCK”, each after a yes. After a yes it posts “A newer release is out.” in Teams "
+            "“Ops”. It changes nothing else.",
+            "words",
+        ),
+        (
+            TICKETS_AND_A_POST,
+            "Every day at 8:00, it reads GitHub “fastapi/fastapi”. It can create Jira tickets in "
+            "“MOCK” and, after a yes, posts “A newer release is out.” in Teams “Ops”. "
+            "It changes nothing else.",
+            "sentences",
+        ),
+        (
+            TICKETS_AND_A_POST,
+            "Every day at 8:00, it reads GitHub “fastapi/fastapi”. It can create Jira tickets in "
+            "“MOCK”, each after a yes. It posts “Ops” in Teams “A newer release is out.”. "
+            "It changes nothing else.",
+            "places",
+        ),
+        (
+            NO_YES_EACH_RUN,
+            "Every day at 8:00, it reads GitHub “fastapi/fastapi”. "
+            "It creates no Jira tickets in “MOCK”, with a yes on each run. "
+            "It changes nothing else.",
+            "negation",
+        ),
+        (
+            FASTAPI,
+            "Every day at 8:00, it reads GitHub “fastapi/fastapi” and Jira “MOCK”, creates nothing "
+            "else and changes Jira tickets in “MOCK”, each after a yes.",
+            "sentences",
+        ),
+    ],
+    ids=[
+        "yes-added-to-a-post",
+        "yes-moved-to-a-post",
+        "post-words-and-place-swapped",
+        "no-moved",
+        "negation-moved-by-merging",
+    ],
+)
+def test_a_yes_or_a_negation_stays_on_the_fact_it_belongs_to(
+    asked: ExplainWordingRequest, text: str, check: str
+):
+    assert fact_check(text, asked) == check
+
+
+@pytest.mark.parametrize(
+    ("asked", "text"),
+    [
+        (
+            FASTAPI,
+            "Every day at 8:00 it reads GitHub “fastapi/fastapi” and Jira “MOCK”. "
+            "After a yes, it can create Jira tickets in “MOCK”. It changes nothing else.",
+        ),
+        (
+            FASTAPI,
+            "Each day at 8:00 it reads Jira “MOCK” and GitHub “fastapi/fastapi”. "
+            "It can create Jira tickets in “MOCK”, but only after a yes. Nothing else changes.",
+        ),
+        (
+            WEEKLY,
+            "Each Monday at 9:00 it reads GitHub “langchain-ai/langgraph” and Jira “MOCK”. "
+            "It can create Jira tickets in “MOCK”, each after a yes. Nothing else changes.",
+        ),
+    ],
+    ids=["yes-first", "reads-reordered", "each-monday"],
+)
+def test_a_true_reword_of_each_sentence_still_passes(asked: ExplainWordingRequest, text: str):
+    assert explain_guard(text, asked) is None
+
+
+@pytest.mark.parametrize(
+    ("asked", "text"),
+    [
+        (
+            TICKETS_AND_A_POST,
+            "Each day at 8:00 it reads GitHub “fastapi/fastapi”. After a yes, it can create Jira "
+            "tickets in “MOCK”. It posts “A newer release is out.” in Teams “Ops”. "
+            "Nothing else changes.",
+        ),
+        (
+            NO_YES_EACH_RUN,
+            "Each day at 8:00 it reads GitHub “fastapi/fastapi”. "
+            "It creates Jira tickets in “MOCK”, with no yes on each run. Nothing else changes.",
+        ),
+    ],
+    ids=["tickets-and-a-post", "no-yes-each-run"],
+)
+def test_a_true_reword_keeps_to_the_facts_of_a_paragraph_adr_0047_turns_down(
+    asked: ExplainWordingRequest, text: str
+):
+    assert fact_check(asked.wording, asked) is None
+    assert fact_check(text, asked) is None
 
 
 def test_a_new_system_is_never_named():
