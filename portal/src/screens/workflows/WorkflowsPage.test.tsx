@@ -534,6 +534,9 @@ describe('workflows made in n8n, for someone with n8n access', () => {
     const findings = ['"Read" reads a place the platform does not allow.', '"Schedule Trigger" leaves its hour or minute for n8n to pick.']
     const row = madeRow(render({ me: MAINTAINER, made: [{ ...SAFE, grade: 'needs_a_fix', findings }] }), 'wf7')
     expect(text(row).replaceAll('&quot;', '"')).toContain(`Needs a fix: ${findings.join(' ')}`)
+    const writes = ['"Create ticket" can run without a yes.', '"Close ticket" can run without a yes.']
+    const refused = madeRow(render({ me: MAINTAINER, made: [{ ...SAFE, grade: 'writes_refused', findings: writes }] }), 'wf7')
+    expect(text(refused).replaceAll('&quot;', '"')).toContain(`Writes refused: ${writes.join(' ')}`)
   })
 
   it('says a safe one that is not published is set up as a draft', () => {

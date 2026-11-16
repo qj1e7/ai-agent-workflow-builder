@@ -786,7 +786,9 @@ async def test_a_published_one_keeps_its_own_name_and_shows_when_it_runs(s: Staf
     )
     assert stored == {"name": "React read"}
     assert s.lab.builder.sweep is not None
-    assert await s.lab.builder.sweep.sweep() == [], "the version the platform published is on record"
+    assert await s.lab.builder.sweep.sweep() == [], (
+        "the version the platform published is on record"
+    )
 
 
 async def test_one_n8n_did_not_keep_put_right_waits_and_asking_again_finishes(

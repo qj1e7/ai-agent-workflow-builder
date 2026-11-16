@@ -348,6 +348,21 @@ def test_a_schedule_whose_next_run_n8n_decides_needs_a_fix(interval: dict[str, A
 
 
 @pytest.mark.parametrize(
+    ("rule", "said"),
+    [
+        ({}, '"Daily 8:00" leaves its hour or minute for n8n to pick.'),
+        ({"interval": []}, '"Daily 8:00" has no time to run.'),
+    ],
+)
+def test_a_rule_with_no_interval_runs_at_a_time_n8n_picks_and_an_empty_one_never(
+    rule: dict[str, Any], said: str
+) -> None:
+    document = release_check()
+    node(document, "Daily 8:00")["parameters"] = {"rule": rule}
+    assert said in findings(document)
+
+
+@pytest.mark.parametrize(
     "interval",
     [
         {"field": "hours", "hoursInterval": 6, "triggerAtMinute": 15},

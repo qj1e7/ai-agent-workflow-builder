@@ -381,6 +381,8 @@ def test_with_no_error_workflow_loaded_its_failures_are_left_to_the_check() -> N
     fixed = fixed_for_you(made_in_the_editor(), "wf9", None, TEAM_ZONE)
     assert "errorWorkflow" not in fixed.document["settings"]
     assert "sends its failures to the platform's error workflow" not in fixed.fixed
+    own = fixed_for_you(made_in_the_editor(errorWorkflow="wfTheirs"), "wf9", None, TEAM_ZONE)
+    assert own.document["settings"]["errorWorkflow"] == "wfTheirs", "never named as nothing"
 
 
 def test_start_from_the_portal_starts_every_block_each_schedule_starts_once() -> None:
