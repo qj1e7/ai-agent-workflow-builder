@@ -59,6 +59,7 @@ from agent_runtime.github import GitHubConnection, GitHubReleaseSource
 from agent_runtime.guarded import GuardedModels
 from agent_runtime.jira import JiraReaderFor, PlatformJiraFor, no_jira
 from agent_runtime.model_access import ModelProbe, chat_for, summarizer_for
+from agent_runtime.monitoring.tracing import NoTracing, Tracing
 from agent_runtime.origins import Origin, origin_of, parse_origin_list
 from agent_runtime.planner import FixedPlanner, Planner, run_cards, run_task
 from agent_runtime.release_source import ReleaseSource, releases_of
@@ -362,9 +363,11 @@ def create_app(
     settings: Settings | None = None,
     runtime: Runtime | None = None,
     models: ModelChecks | None = None,
+    tracing: Tracing | None = None,
 ) -> FastAPI:
     config = settings or Settings.from_env(os.environ)
     active = runtime or build_runtime(config)
+    traces = tracing or NoTracing()
     probe = models or ModelProbe(config.address_policy)
     store = TaskStore()
     app = FastAPI(title="Agent API", version="0.1.0")
@@ -417,7 +420,10 @@ def create_app(
 
         def run() -> TaskResult:
             events = EventLog(active.clock, active.callbacks.sink_for(body))
-            return run_cards(body, inputs, active.planner, runner, chat, today, events)
+            with traces.run(body) as traced:
+                return run_cards(
+                    body, inputs, active.planner, runner, traced.models(chat), today, events
+                )
 
         try:
             return store.run_once(body, run)
@@ -453,7 +459,15 @@ def create_app(
         verifier = (
             active.chat_source(body.model.model_copy(update={"model": named})) if named else None
         )
-        return answer_task(body, chat, config.free_reply, verify_with=verifier or chat)
+        with traces.turn(body) as turn:
+            result = answer_task(
+                body,
+                turn.models(chat),
+                config.free_reply,
+                verify_with=turn.models(verifier or chat),
+            )
+            turn.answered(result)
+        return result
 
     @app.post("/v1/planner/check-part", dependencies=[Depends(require_key)])
     def check_part(body: CheckPartRequest) -> CheckPartResult:

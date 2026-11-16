@@ -297,7 +297,7 @@ def reply_to(
         timeout=FREE_REPLY_TIMEOUT_SECONDS,
     )
     if isinstance(envelope, ModelProblem):
-        log.warning("Free reply %s fell back: call", reply_id)
+        log.warning("Free reply %s fell back: call", reply_id, extra={"fell_back": "call"})
         return DidntFollowAnswer()
     shown = answer_of_envelope(envelope, request)
     if isinstance(shown, str):
@@ -308,5 +308,5 @@ def reply_to(
         failed = verify(shown, verify_with or chat_for)
         if failed is None:
             return shown
-    log.warning("Free reply %s fell back: %s", reply_id, failed)
+    log.warning("Free reply %s fell back: %s", reply_id, failed, extra={"fell_back": failed})
     return DidntFollowAnswer()
