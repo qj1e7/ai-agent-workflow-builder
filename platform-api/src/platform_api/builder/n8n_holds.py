@@ -174,7 +174,8 @@ _ROW = (
 
 
 def held_words(name: str, since: datetime, zone: ZoneInfo = TEAM_TIME_ZONE) -> str:
-    return f"{name} has it open in n8n since {since.astimezone(zone):%H:%M}."
+    """The name starts the sentence, and it may be "a colleague", so it starts with a capital."""
+    return f"{name[:1].upper()}{name[1:]} has it open in n8n since {since.astimezone(zone):%H:%M}."
 
 
 async def held_in(conn: Connection, use_case_id: str) -> Held | None:

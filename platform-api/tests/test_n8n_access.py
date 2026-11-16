@@ -803,6 +803,38 @@ async def test_everyone_sees_who_has_a_workflow_open_in_n8n_by_their_name(s: Sta
     assert view["held_in_n8n"] is None
 
 
+async def held_by_nobody_listed(s: Staffed, use_case_id: str) -> str:
+    """A hold by someone whose row is no longer on the People list."""
+    gone = "per_01JB8GONE"
+    async with s.lab.h.db.transaction("builder") as uow:
+        await uow.conn.execute(
+            "UPDATE builder.use_cases SET held_by = %s, held_since = %s WHERE use_case_id = %s",
+            (gone, uow.now, use_case_id),
+        )
+    return gone
+
+
+async def test_a_holder_nobody_can_name_is_a_colleague_never_an_id(s: Staffed):
+    await s.member()
+    use_case_id, _ = await held(s)
+    gone = await held_by_nobody_listed(s, use_case_id)
+    shown = (await s.call("bob", "GET", f"/api/v1/use-cases/{use_case_id}")).json()
+    assert (shown["held_in_n8n"]["id"], shown["held_in_n8n"]["name"]) == (gone, "a colleague")
+    in_n8n = (await s.call("carol", "GET", f"/api/v1/use-cases/{use_case_id}/n8n")).json()
+    assert in_n8n["holder"]["name"] == "a colleague"
+    saved = await s.call(
+        "alice",
+        "PUT",
+        f"/api/v1/use-cases/{use_case_id}/schedule",
+        {"day": "monday", "at": "07:30", "via": "page", "expected_version": 1},
+    )
+    assert saved.status_code == 409
+    assert saved.json()["detail"].startswith("A colleague has it open in n8n since ")
+    assert saved.json()["detail"].endswith(
+        "Ask a colleague, or anyone with n8n access, to take it back."
+    )
+
+
 async def test_home_names_whoever_published_in_n8n_from_the_people_list(s: Staffed):
     dana = await s.operator("dana")
     dana_in_n8n = await s.member(dana)

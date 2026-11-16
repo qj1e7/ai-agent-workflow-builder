@@ -28,7 +28,7 @@ import { StatusPills } from './Status'
 import { Versions } from './Versions'
 import { DraftActions } from './DraftActions'
 import { HeldInN8n, OpenInN8nEditor, WorkflowInN8n } from './InN8n'
-import { cantChangeWords, heldOf, holdOf, mayOpen } from './n8nHold'
+import { cantChangeWords, heldOf, holdOf, mayOpen, openingOf } from './n8nHold'
 import { When } from './When'
 import {
   bannerOf,
@@ -184,7 +184,7 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
   const [view, showView] = useView()
   const shownView = n8nAccess ? view : 'main'
   const inN8n = useUseCaseInN8n(id, { enabled: n8nAccess, poll: REFRESH_MS })
-  const held = heldOf(useCase, me, n8nAccess ? (inN8n.data ?? null) : null)
+  const held = heldOf(useCase, me, n8nAccess ? openingOf(inN8n) : null)
   const hold = n8nAccess && inN8n.data ? holdOf(inN8n.data, useCase, me) : null
   const openable = hold !== null && mayOpen(hold) ? hold : null
   useArrivalScroll()
