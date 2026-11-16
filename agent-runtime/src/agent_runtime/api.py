@@ -7,7 +7,7 @@ import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Protocol, Self
+from typing import Final, Protocol, Self
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -59,6 +59,8 @@ from agent_runtime.github import GitHubConnection, GitHubReleaseSource
 from agent_runtime.guarded import GuardedModels
 from agent_runtime.jira import JiraReaderFor, PlatformJiraFor, no_jira
 from agent_runtime.model_access import ModelProbe, chat_for, summarizer_for
+from agent_runtime.monitoring.langfuse_tracing import LangfuseSettings, LangfuseTracing
+from agent_runtime.monitoring.masking import Masker
 from agent_runtime.monitoring.tracing import NoTracing, Tracing
 from agent_runtime.origins import Origin, origin_of, parse_origin_list
 from agent_runtime.planner import FixedPlanner, Planner, run_cards, run_task
@@ -143,6 +145,29 @@ def _platform_jira_url(env: Mapping[str, str], origins: frozenset[Origin]) -> st
     return url
 
 
+LANGFUSE_NAMES: Final = ("LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY", "LANGFUSE_BASE_URL")
+
+
+def _langfuse(env: Mapping[str, str]) -> LangfuseSettings | None:
+    """Tracing is on only when all three are set (ADR 0050). One set alone is a mistake, so it
+    stops the start rather than tracing nothing."""
+    public_key, secret_key, base_url = (env.get(name, "").strip() for name in LANGFUSE_NAMES)
+    if not (public_key or secret_key or base_url):
+        return None
+    missing = [name for name in LANGFUSE_NAMES if not env.get(name, "").strip()]
+    if missing:
+        raise SettingsError(
+            f"{' and '.join(missing)} must be set too. Set all three Langfuse settings, or none."
+        )
+    return LangfuseSettings(
+        public_key=public_key,
+        secret_key=secret_key,
+        base_url=base_url,
+        environment=env.get("LANGFUSE_TRACING_ENVIRONMENT", "").strip() or None,
+        release=env.get("LANGFUSE_RELEASE", "").strip() or None,
+    )
+
+
 def _github_token(env: Mapping[str, str]) -> str | None:
     token = env.get("GITHUB_TOKEN", "").strip()
     if not all(33 <= ord(character) < 127 for character in token):
@@ -170,6 +195,8 @@ class Settings:
     verifier_model: str | None = None
     """PLANNER_VERIFIER_MODEL: the model the free reply's verifier runs on, through the same
     connection. None runs it on the connected model, the Planner's own (ADR 0048)."""
+    langfuse: LangfuseSettings | None = None
+    """Where traces go. None keeps tracing off (ADR 0050)."""
 
     @classmethod
     def from_env(cls, env: Mapping[str, str]) -> Self:
@@ -195,6 +222,7 @@ class Settings:
             platform_jira_url=_platform_jira_url(env, origins),
             free_reply=env.get("PLANNER_FREE_REPLY", "").strip().casefold() != "off",
             verifier_model=env.get("PLANNER_VERIFIER_MODEL", "").strip() or None,
+            langfuse=_langfuse(env),
         )
 
     @property
@@ -359,6 +387,12 @@ class TaskStore:
             return result
 
 
+def _tracing_for(settings: Settings) -> Tracing:
+    if settings.langfuse is None:
+        return NoTracing()
+    return LangfuseTracing(settings.langfuse, Masker.from_env(os.environ))
+
+
 def create_app(
     settings: Settings | None = None,
     runtime: Runtime | None = None,
@@ -367,7 +401,7 @@ def create_app(
 ) -> FastAPI:
     config = settings or Settings.from_env(os.environ)
     active = runtime or build_runtime(config)
-    traces = tracing or NoTracing()
+    traces = tracing or _tracing_for(config)
     probe = models or ModelProbe(config.address_policy)
     store = TaskStore()
     app = FastAPI(title="Agent API", version="0.1.0")

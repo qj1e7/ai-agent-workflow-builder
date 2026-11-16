@@ -11,7 +11,7 @@ from langchain_core.messages import AIMessage
 from opentelemetry.sdk.trace import ReadableSpan
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
-from agent_runtime.api import HttpCallbacks, Runtime, create_app
+from agent_runtime.api import HttpCallbacks, Runtime, Settings, SettingsError, create_app
 from agent_runtime.card_runner import CardRunner
 from agent_runtime.contract import (
     Answered,
@@ -29,7 +29,7 @@ from agent_runtime.reply_verifier import Verdict
 from agent_runtime.summary import TemplateSummarizer
 from agent_runtime.version_checker import VersionChecker
 from tests.fakes import FakeClock, FakeJira, FakeSource, ScriptedChat, langgraph_tags
-from tests.test_api import KEY, SETTINGS, Posts
+from tests.test_api import BASE_ENV, KEY, SETTINGS, Posts
 from tests.test_free_reply import HELPFUL, WEATHER
 from tests.test_questions import reading
 
@@ -229,3 +229,36 @@ DONE = [RequestPart(text="check it", mark="will_do")]
 )
 def test_each_code_flag_is_raised_only_by_its_own_fact(outcome: TurnOutcome, flags: list[CodeFlag]):
     assert code_flags(outcome) == flags
+
+
+LANGFUSE_ENV = {
+    "LANGFUSE_PUBLIC_KEY": "pk-lf-settings",
+    "LANGFUSE_SECRET_KEY": "sk-lf-settings-not-a-secret",
+    "LANGFUSE_BASE_URL": "http://langfuse-web:3000",
+}
+
+
+def test_tracing_is_off_unless_the_three_langfuse_settings_are_set():
+    assert Settings.from_env(BASE_ENV).langfuse is None
+    on = Settings.from_env(
+        {
+            **BASE_ENV,
+            **LANGFUSE_ENV,
+            "LANGFUSE_TRACING_ENVIRONMENT": "local",
+            "LANGFUSE_RELEASE": "abc",
+        }
+    )
+    assert on.langfuse == LangfuseSettings(
+        public_key="pk-lf-settings",
+        secret_key="sk-lf-settings-not-a-secret",
+        base_url="http://langfuse-web:3000",
+        environment="local",
+        release="abc",
+    )
+
+
+@pytest.mark.parametrize("left_out", sorted(LANGFUSE_ENV))
+def test_a_langfuse_setting_left_out_is_refused_by_name(left_out: str):
+    env = {**BASE_ENV, **LANGFUSE_ENV, left_out: ""}
+    with pytest.raises(SettingsError, match=left_out):
+        Settings.from_env(env)
