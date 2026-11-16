@@ -6,7 +6,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-from agent_runtime.contract import FreeReplyAnswer
+from agent_runtime.contract import FreeReplyAnswer, PlannerFacts
 from agent_runtime.drafting import UNUSABLE
 from agent_runtime.reply_verifier import Verdict, flag_of, verify_messages
 from evals.checks import Check, check
@@ -22,6 +22,9 @@ class RedTeamCase(Case):
     verifier: bool
     """Whether the verifier's three questions cover the row. Links, markup, made-up keys and
     look-alike letters are the code checks' alone, so the verifier is not asked about them."""
+    facts: PlannerFacts | None = None
+    """What the reply was given, for a row that names what a list holds (ADR 0049). The verifier
+    never sees it."""
 
 
 def reply_of(case: RedTeamCase) -> FreeReplyAnswer:

@@ -641,6 +641,15 @@ class ReplyOffer(WireModel):
     request: str = Field(min_length=1, max_length=2000)
 
 
+type AboutSection = Literal["watchlist", "workflows"]
+ABOUT_LIMIT: Final = 5
+
+
+class ReplyAbout(WireModel):
+    section: AboutSection
+    name: str = Field(min_length=1, max_length=80)
+
+
 class FreeReplyAnswer(WireModel):
     """The model's own reply to a message no other answer fits, checked by the runtime's guard
     before it is sent (ADR 0047)."""
@@ -653,6 +662,12 @@ class FreeReplyAnswer(WireModel):
     )
     offer: ReplyOffer | None = None
     looked_at: list[FactSection] = Field(default_factory=list[FactSection], max_length=3)
+    # Left out when empty, so a runtime from before ADR 0049 still parses and re-serializes alike.
+    about: list[ReplyAbout] = Field(
+        default_factory=list[ReplyAbout],
+        max_length=ABOUT_LIMIT,
+        exclude_if=lambda about: not about,
+    )
 
     @model_validator(mode="after")
     def _form_fits(self) -> Self:
