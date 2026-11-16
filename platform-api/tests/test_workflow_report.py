@@ -23,6 +23,7 @@ from platform_api.builder.n8n_draft import Checked, check_draft
 from platform_api.builder.workflow_report import (
     TOOL_PLACES,
     AtSetUp,
+    CantRunYet,
     Drafted,
     DraftSetting,
     EachRun,
@@ -63,6 +64,8 @@ KNOWN = KnownOptions(
     {SLACK_KEY: "slackApi", JIRA_KEY: PAT},
 )
 TEAM = Team(ERROR_WORKFLOW, TEAM_ZONE, KNOWN)
+OVERRIDES = Team(ERROR_WORKFLOW, TEAM_ZONE, KNOWN, override_built=True)
+"""Once set-up approvals of flagged workflows exist (ADR 0051, build step 10)."""
 CARDS = {VERSION_CHECKER_ID: VERSION_CHECKER}
 FAKE_KEY = "_".join(("ghp", "Fak3" * 9))
 """Shaped like a GitHub token, and built here so no scanner takes the file for one."""
@@ -216,9 +219,9 @@ def parts(value: object) -> Iterator[str | Quoted]:
             return
 
 
-def report_of(document: Doc, laid_by: str = "planner") -> WorkflowReport:
+def report_of(document: Doc, laid_by: str = "planner", team: Team = TEAM) -> WorkflowReport:
     assert laid_by in ("planner", "n8n")
-    return workflow_report(SetUp(laid_by, document, CARDS), TEAM)  # pyright: ignore[reportArgumentType]
+    return workflow_report(SetUp(laid_by, document, CARDS), team)  # pyright: ignore[reportArgumentType]
 
 
 def test_the_fastapi_release_check_reads_github_and_writes_jira_after_a_yes() -> None:
@@ -280,15 +283,44 @@ def test_a_made_in_n8n_workflow_flags_each_of_n8n_s_blocks_and_who_clears_it() -
     ], "in FLAG_RULES order"
     clears = {f.rule: f.clears for f in report.flags}
     assert clears["block_off"] == CantRun()
-    assert isinstance(clears["operation_off"], ApproverMayAccept)
-    assert isinstance(clears["notice_words_expression"], ApproverMayAccept)
+    assert clears["operation_off"] == CantRun(), "no set-up approval can accept it yet"
+    assert clears["notice_words_expression"] == CantRun()
     assert isinstance(clears["no_error_workflow"], FixedForYou)
     assert isinstance(clears["key_not_made"], FixedForYou)
     for flag in report.flags:
         row = FLAG_RULES[flag.rule]
         assert (flag.what, flag.why) == (row.what, row.why)
-        assert flag.takes, "who can clear it"
+    takes = {f.rule: f.takes for f in report.flags}
+    assert takes["operation_off"] == takes["block_off"]
+    assert "Approver" not in " ".join(takes.values())
     assert report.fixed == (), "code laid out none of it"
+
+
+def test_once_set_up_approvals_exist_an_approver_may_accept_what_the_table_says() -> None:
+    report = report_of(made_in_n8n(), "n8n", OVERRIDES)
+    clears = {f.rule: f.clears for f in report.flags}
+    assert clears["operation_off"] == FLAG_RULES["operation_off"].clears
+    assert isinstance(clears["notice_words_expression"], ApproverMayAccept)
+    assert clears["block_off"] == CantRun(), "a block our n8n doesn't load still can't run"
+    takes = {f.rule: f.takes for f in report.flags}
+    assert takes["operation_off"] == "An Approver may accept it at set-up."
+    assert [(a.block.text, a.decides, a.words) for a in report.approves] == [
+        ("Open an issue", AtSetUp(), "Runs on the set-up approval, with no yes on each run."),
+        ("Post summary", AtSetUp(), "Posts on the set-up approval, with no yes on each run."),
+        ("Call the hook", CantRunYet(), "Can't run on this platform yet."),
+    ]
+    tags = {s.name.text: s.tag for s in report.steps}
+    assert (tags["Open an issue"], tags["Call the hook"]) == (
+        "Writes on the set-up approval",
+        "Can't run on this platform yet",
+    )
+    assert text(report.in_short) == (
+        "Every Monday at 9:00, it reads GitHub “fastapi/fastapi”. "
+        "It could change data in Jira through “Open an issue”, with no yes on each run. "
+        "It posts what “Read FastAPI” returned in Slack “C0TEAM”, with no yes on each run. "
+        "It could change or send data through “Call the hook”, but it can't run on this "
+        "platform yet. It changes nothing else."
+    )
 
 
 def test_a_made_in_n8n_workflow_says_what_each_of_n8n_s_blocks_reads_writes_and_posts() -> None:
@@ -302,16 +334,17 @@ def test_a_made_in_n8n_workflow_says_what_each_of_n8n_s_blocks_reads_writes_and_
     post = next(t for t in report.touches if t.action == "posts")
     assert "“Read FastAPI”" in text(post.phrase), "which block's output the words read"
     assert [(a.block.text, a.decides) for a in report.approves] == [
-        ("Open an issue", AtSetUp()),
-        ("Post summary", AtSetUp()),
-        ("Call the hook", AtSetUp()),
-    ]
+        ("Open an issue", CantRunYet()),
+        ("Post summary", CantRunYet()),
+        ("Call the hook", CantRunYet()),
+    ], "nothing runs on a set-up approval before set-up approvals exist"
+    assert {a.words for a in report.approves} == {"Can't run on this platform yet."}
     assert [(s.name.text, s.ours, s.tag) for s in report.steps] == [
         ("Every Monday", False, "Starts it"),
         ("Read FastAPI", True, "Reads GitHub"),
-        ("Open an issue", False, "Writes on the set-up approval"),
+        ("Open an issue", False, "Can't run on this platform yet"),
         ("Post summary", False, "Posts in Slack"),
-        ("Call the hook", False, "Writes on the set-up approval"),
+        ("Call the hook", False, "Can't run on this platform yet"),
     ]
 
 
@@ -326,8 +359,12 @@ def test_an_older_version_is_graded_again_under_today_s_rules_beside_its_grade_t
         ("calls_everyone", "Tell #releases")
     ]
     assert [(a.block.text, a.decides) for a in report.approves] == [
-        ("Tell #releases", AtSetUp())
-    ], "a post that breaks the Tell rule runs on the set-up approval"
+        ("Tell #releases", CantRunYet())
+    ]
+    later = workflow_report(Older(SetUp("planner", older, CARDS), 2, "safe"), OVERRIDES)
+    assert [(a.block.text, a.decides) for a in later.approves] == [("Tell #releases", AtSetUp())], (
+        "a post that breaks the Tell rule runs on the set-up approval, once there is one"
+    )
     assert report_of(react()).then is None
 
 
@@ -491,13 +528,17 @@ def test_a_drafted_workflow_shows_each_setting_s_mark_and_counts_what_needs_an_a
     )
 
 
-def test_a_flag_that_needs_an_answer_counts_with_the_settings_still_needed() -> None:
+def test_a_drafted_workflow_needs_as_many_answers_as_the_questions_its_card_asks() -> None:
+    """The run time a Needed setting stands for also leaves the checker with nothing that
+    starts the workflow. That is one question, not two."""
     document = made_in_n8n()
     del document["connections"]["Every Monday"]
     document["nodes"] = [n for n in document["nodes"] if n["name"] != "Every Monday"]
     report = workflow_report(Drafted(document, CARDS, (DraftSetting("Run time", Needed()),)), TEAM)
     assert "nothing_starts" in {f.rule for f in report.flags}
-    assert report.needs_an_answer == 2
+    assert report.needs_an_answer == 1
+    set_up = report_of(document, "n8n")
+    assert set_up.needs_an_answer == 1, "a set-up workflow's flag that needs an answer"
 
 
 def test_the_report_never_changes_the_workflow_it_is_given() -> None:
@@ -541,10 +582,12 @@ def test_a_read_says_its_system_and_place_and_a_post_names_its_platform_key() ->
 def test_a_made_in_n8n_workflow_says_in_short_what_each_of_n8n_s_blocks_can_do() -> None:
     assert text(report_of(made_in_n8n(), "n8n").in_short) == (
         "Every Monday at 9:00, it reads GitHub “fastapi/fastapi”. "
-        "It can change data in Jira through “Open an issue”, with no yes on each run. "
-        "It posts what “Read FastAPI” returned in Slack “C0TEAM”. "
-        "It can change or send data through “Call the hook”, with no yes on each run. "
-        "It changes nothing else."
+        "It could change data in Jira through “Open an issue”, but it can't run on this "
+        "platform yet. "
+        "It would post what “Read FastAPI” returned in Slack “C0TEAM”, but it can't run on "
+        "this platform yet. "
+        "It could change or send data through “Call the hook”, but it can't run on this "
+        "platform yet. It changes nothing else."
     )
 
 
@@ -562,7 +605,7 @@ def test_a_post_from_an_expression_names_which_block_s_output_it_reads(
 ) -> None:
     document = made_in_n8n()
     node(document, "Post summary")["parameters"]["text"] = words
-    [post] = [t for t in report_of(document, "n8n").touches if t.action == "posts"]
+    [post] = [t for t in report_of(document, "n8n", OVERRIDES).touches if t.action == "posts"]
     assert text(post.phrase).startswith(said)
 
 
@@ -572,7 +615,7 @@ def test_a_post_to_a_place_the_run_s_data_picks_names_no_place() -> None:
     report = report_of(document, "n8n")
     [post] = [t for t in report.touches if t.action == "posts"]
     assert post.place is None
-    assert text(post.phrase).endswith("in Slack, in a place the run's data picks")
+    assert "in Slack, in a place the run's data picks" in text(post.phrase)
     assert "notice_place_expression" in {f.rule for f in report.flags}
 
 
@@ -655,3 +698,53 @@ def test_a_workflow_started_only_from_the_portal_that_reads_nothing_says_so() ->
         "When someone starts it, it runs. It tells the team in its Teams channel. "
         "It changes nothing."
     )
+
+
+@pytest.mark.parametrize(
+    "secret",
+    [
+        "Basic dXNlcjpwYXNzd29yZA==",
+        "https://example.com/hook?token=9f8e7d6c5b4a39281706f5e4d3c2b1a0",
+        "https://example.com/hook?api_key=Zx9-Kq2Lm4Np6Rs8",
+        "https://hooks.slack.com/services/T0/B0/abcDEF123456",
+        "https://acme.webhook.office.com/webhookb2/abc@def/IncomingWebhook/123/456",
+        "".join(("0123456789", "abcdef0123", "456789abcd", "ef01234567")),
+    ],
+    ids=["basic-auth", "query-token", "query-api-key", "slack-webhook", "teams-webhook", "hex-40"],
+)
+def test_a_value_shaped_like_a_key_in_a_post_or_a_place_shows_as_hidden(secret: str) -> None:
+    document = made_in_n8n()
+    node(document, "Post summary")["parameters"]["text"] = f"Post to {secret}"
+    node(document, "Post summary")["parameters"]["channelId"]["value"] = secret
+    document["name"] = f"see {secret}"
+    report = report_of(document, "n8n")
+    assert secret not in repr(report)
+    [post] = [t for t in report.touches if t.action == "posts"]
+    assert "(a key, hidden)" in text(post.phrase)
+
+
+def test_a_block_off_by_its_version_could_change_or_send_data_and_an_off_write_changes_it() -> None:
+    document = react()
+    node(document, "Tell #releases")["typeVersion"] = 1
+    [post] = [t for t in report_of(document).touches if t.block.text == "Tell #releases"]
+    assert (post.action, post.system) == ("writes", "Slack"), (
+        "it is Slack's block, doing who knows what"
+    )
+    assert text(post.phrase).startswith("could change or send data through “Tell #releases”")
+    [write] = [t for t in report_of(made_in_n8n(), "n8n").touches if t.system == "Jira"]
+    assert text(write.phrase).startswith("could change data in Jira through “Open an issue”")
+
+
+def test_a_place_held_in_a_collection_shows_its_value() -> None:
+    document = react()
+    node(document, "Tell #releases")["parameters"]["channelId"] = {"value": "C9", "mode": "id"}
+    [post] = [t for t in report_of(document).touches if t.action == "posts"]
+    assert post.place == Quoted("C9")
+
+
+def test_a_write_with_its_yes_and_a_flag_of_another_kind_still_waits_for_its_yes() -> None:
+    document = fastapi()
+    node(document, "Create ticket")["credentials"] = {"jiraApi": {"id": "alices", "name": "x"}}
+    report = report_of(document)
+    assert [f.rule for f in report.flags] == ["key_not_made"]
+    assert [(a.block.text, a.decides) for a in report.approves] == [("Create ticket", EachRun(1))]

@@ -26,6 +26,7 @@ from platform_api.orchestration import (
     NODE_CLASSES,
     RULES,
     ApproverMayAccept,
+    Block,
     BlockKind,
     CantRun,
     Clears,
@@ -68,6 +69,9 @@ class Team:
     error_workflow: str | None
     time_zone: str
     known: KnownOptions
+    override_built: bool = False
+    """Whether an Approver can approve a flagged version at set-up (ADR 0051, build step 10).
+    Until then the report says nothing can run on that approval."""
 
 
 @dataclass(frozen=True)
@@ -148,7 +152,8 @@ class Touch:
     phrase: Words
     """What it does, as In short says it after "it"."""
     key: str | None = None
-    """The platform's key one of n8n's blocks uses. Never the key's secret."""
+    """The display name of the platform's key that one of n8n's blocks uses, never the key's
+    secret."""
 
 
 @dataclass(frozen=True)
@@ -187,9 +192,14 @@ class Refused:
 
 
 @dataclass(frozen=True)
+class CantRunYet:
+    """No approval lets it run on this platform yet."""
+
+
+@dataclass(frozen=True)
 class WriteApproval:
     block: Quoted
-    decides: EachRun | AtSetUp | Refused
+    decides: EachRun | AtSetUp | Refused | CantRunYet
     words: str
 
 
@@ -225,20 +235,22 @@ class WorkflowReport:
     approves: tuple[WriteApproval, ...]
     settings: tuple[Setting, ...]
     approval: str
-
-    @property
-    def needs_an_answer(self) -> int:
-        asked = sum(isinstance(f.clears, NeedsAnAnswer) for f in self.flags)
-        return asked + sum(s.mark == "needed" for s in self.settings)
+    needs_an_answer: int
+    """The questions left: a drafted workflow's settings still needed, or a set-up workflow's
+    flags that need an answer."""
 
 
 KEY_SHAPE = re.compile(
     r"sk-ant-[\w-]+|sk-[A-Za-z0-9]{16,}|gh[pousr]_\w{16,}|github_pat_\w{16,}|glpat-[\w-]{16,}"
     r"|xox[abposr]-[\w-]+|ATATT[\w=-]{16,}|AKIA[0-9A-Z]{16}|eyJ[\w-]+\.eyJ[\w-]+\.[\w-]+"
-    r"|(?i:bearer)\s+[\w.~+/=-]{8,}|-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*"
+    r"|(?i:bearer)\s+[\w.~+/=-]{8,}|(?i:basic)\s+[A-Za-z0-9+/=]{8,}"
+    r"|(?i:token|key|secret|sig|password|api[_-]?key)=[^&\s\"']{8,}"
+    r"|hooks\.slack\.com/services/\S+|webhook\.office\.com/\S+|\b[0-9a-f]{40}\b"
+    r"|-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*"
 )
 """The shapes of keys and tokens: Anthropic, OpenAI, GitHub, GitLab, Slack, Atlassian and AWS
-keys, a signed token, a bearer header and a private key."""
+keys, a signed token, a bearer or basic header, a key in a query, a Slack or Teams incoming
+webhook, a classic 40-hex token and a private key."""
 HIDDEN = "(a key, hidden)"
 CHOOSERS = frozenset({"select"})
 """Target parameters that only pick which other one applies, as Slack's select picks a channel
@@ -282,6 +294,7 @@ OUR_TAGS: Mapping[BlockKind, str] = {
 UNCLASSED = "Does something the platform hasn't classed"
 UNREAD = "The checker can't read this workflow, so nothing more can be said of it."
 ON_SET_UP = "Writes on the set-up approval"
+NOT_YET = "Can't run on this platform yet"
 WAITS = {
     1: "Waits for a yes in Teams on each run. Nobody who started the run or made the workflow "
     "can give it.",
@@ -289,8 +302,10 @@ WAITS = {
     "Nobody who started the run or made the workflow can give one.",
 }
 REFUSED = "Can't write. No yes comes before it, so our platform refuses the write."
-WRITES_ON_SET_UP = "Runs only on a set-up approval, with no yes on each run."
-POSTS_ON_SET_UP = "Posts only on a set-up approval, with no yes on each run."
+WRITES_ON_SET_UP = "Runs on the set-up approval, with no yes on each run."
+POSTS_ON_SET_UP = "Posts on the set-up approval, with no yes on each run."
+NO_YES_EACH_RUN = ", with no yes on each run"
+HELD = ", but it can't run on this platform yet"
 TELL_RULE: frozenset[RuleId] = frozenset(
     {
         "notice_place_expression",
@@ -330,28 +345,44 @@ def _report(
 ) -> WorkflowReport:
     graded = grade(document, team.error_workflow, team.time_zone, team.known)
     name = _quote(str(document.get("name") or ""))
+    flags = _flags(graded.findings, team.override_built)
+    asked = sum(isinstance(f.clears, NeedsAnAnswer) for f in flags)
     try:
         flow = read_flow(document)
     except Unreadable:
-        flow = None
-    flags = _flags(graded.findings)
-    if flow is None:
         return WorkflowReport(
-            name, graded.grade, None, (UNREAD,), (), (), flags, (), (), (), (), APPROVAL[laid_by]
+            name,
+            graded.grade,
+            None,
+            (UNREAD,),
+            (),
+            (),
+            flags,
+            (),
+            (),
+            (),
+            (),
+            APPROVAL[laid_by],
+            asked,
         )
     fixed, passed = _cleared(graded.findings, flow, laid_by != "n8n")
     order = [view.name for view in blocks_of(document)]
+    held = {f.block for f in flags if not isinstance(f.clears, ApproverMayAccept | FixedForYou)}
+    version = _Version(
+        flow,
+        order,
+        cards,
+        frozenset(f.block for f in graded.findings if f.block and f.rule == "no_yes_before_write"),
+        frozenset(f.block for f in graded.findings if f.block and f.rule in TELL_RULE),
+        frozenset(f.block for f in graded.findings if f.block and f.rule == "operation_off"),
+        frozenset(n for n in order if team.override_built and _quote(n) not in held),
+    )
     used = [cards[a] for a in _agents(flow) if a in cards]
     approvers = approvers_needed(
         [card_spec(c) for c in used],
         max((a.approvers for c in used for a in c.approvals), default=1),
     )
-    refused = {f.block for f in graded.findings if f.rule == "no_yes_before_write"}
-    told = {f.block for f in graded.findings if f.rule in TELL_RULE}
-    touches = tuple(
-        touch for name_ in order for touch in _touches(flow, name_, cards, order, name_ in refused)
-    )
-    approves = tuple(_approves(flow, order, approvers, refused, told))
+    touches = tuple(touch for n in order for touch in _touches(version, n))
     settings = (
         _set_settings(flow, order, document, team.time_zone, approvers, SAID[laid_by])
         if drafted is None
@@ -362,35 +393,60 @@ def _report(
         graded.grade,
         None,
         _in_short(_when(flow, document, team.time_zone), touches),
-        tuple(_step(flow, n) for n in order),
+        tuple(_step(version, n) for n in order),
         touches,
         flags,
         fixed,
         passed,
-        approves,
+        tuple(_approves(version, approvers)),
         settings,
         APPROVAL[laid_by],
+        asked if drafted is None else sum(s.mark == "needed" for s in settings),
     )
+
+
+@dataclass(frozen=True)
+class _Version:
+    """One graded version, as the report's sections read it."""
+
+    flow: Flow
+    order: Sequence[str]
+    cards: Mapping[str, CardView]
+    refused: frozenset[str]
+    """Writes with no yes before them."""
+    told: frozenset[str]
+    """n8n's notices that break the Tell rule."""
+    changes: frozenset[str]
+    """n8n's blocks set to do something off, such as a write."""
+    on_approval: frozenset[str]
+    """The blocks that would run on a set-up approval."""
 
 
 def _quote(text: str) -> Quoted:
     return Quoted(KEY_SHAPE.sub(HIDDEN, text))
 
 
-def _flags(findings: Sequence[Finding]) -> tuple[Flag, ...]:
-    return tuple(
-        Flag(
-            rule,
-            None if f.block is None else _quote(f.block),
-            row.what,
-            row.why,
-            row.clears,
-            _takes(row.clears),
-        )
-        for rule, row in FLAG_RULES.items()
-        for f in findings
-        if f.rule == rule
-    )
+def _flags(findings: Sequence[Finding], override_built: bool) -> tuple[Flag, ...]:
+    """Each finding in FLAG_RULES order. Until an Approver can accept a flag at set-up, nobody
+    can clear one in the app."""
+    flags: list[Flag] = []
+    for rule, row in FLAG_RULES.items():
+        clears = row.clears
+        if isinstance(clears, ApproverMayAccept) and not override_built:
+            clears = CantRun()
+        flags += [
+            Flag(
+                rule,
+                None if f.block is None else _quote(f.block),
+                row.what,
+                row.why,
+                clears,
+                _takes(clears),
+            )
+            for f in findings
+            if f.rule == rule
+        ]
+    return tuple(flags)
 
 
 def _takes(clears: Clears) -> str:
@@ -442,12 +498,12 @@ def _kind(flow: Flow, name: str) -> BlockKind | None:
     return face(block.type, block.version, block.parameters).kind
 
 
-def _step(flow: Flow, name: str) -> Step:
-    block = flow.blocks[name]
+def _step(version: _Version, name: str) -> Step:
+    block = version.flow.blocks[name]
     seen = face(block.type, block.version, block.parameters)
     match seen.kind:
         case None:
-            tag = UNCLASSED if seen.ours else ON_SET_UP
+            tag = UNCLASSED if seen.ours else ON_SET_UP if name in version.on_approval else NOT_YET
         case "read":
             tag = f"Reads {_read_system(block.parameters)}"
         case "shape" | "system":
@@ -482,9 +538,8 @@ def _card_place(
     return _quote(given[names[0]]) if len(names) == 1 and names[0] in given else None
 
 
-def _touches(
-    flow: Flow, name: str, cards: Mapping[str, CardView], order: Sequence[str], refused: bool
-) -> list[Touch]:
+def _touches(version: _Version, name: str) -> list[Touch]:
+    flow = version.flow
     block = flow.blocks[name]
     seen = face(block.type, block.version, block.parameters)
     quoted = _quote(name)
@@ -495,7 +550,7 @@ def _touches(
             at = _quote(place) if isinstance(place, str) else None
             return [Touch("reads", system, at, quoted, _reads(system, at))]
         case "agent":
-            card = cards.get(str(block.parameters.get("agent")))
+            card = version.cards.get(str(block.parameters.get("agent")))
             if card is None:
                 return []
             values = _inputs(block.parameters)
@@ -509,22 +564,24 @@ def _touches(
                 touches.append(Touch("reads", system, at, quoted, _reads(system, at)))
             return touches
         case "write":
-            return _writes(flow, name, cards, order, refused)
+            return _writes(version, name)
         case "tell":
             where = str(block.parameters.get("where", "channel"))
             system, tells = TELL_PLACES.get(where, ("Teams", "tells a place that isn't fixed"))
             return [Touch("posts", system, None, quoted, (tells,))]
         case "system":
-            return _n8n_touches(flow, name)
+            told = name in version.told
+            return _n8n_touches(flow, name, told, told and name not in version.on_approval)
         case None if not seen.ours:
             spec = KEY_FOR_TYPE.get(block.type)
             system = None if spec is None else spec.said
-            phrase: Words = (
-                ("can change or send data through ", quoted, ", with no yes on each run")
-                if system is None
-                else (f"can change data in {system} through ", quoted, ", with no yes on each run")
+            does = (
+                f"could change data in {system} through "
+                if system is not None and name in version.changes
+                else "could change or send data through "
             )
-            return [Touch("writes", system, None, quoted, phrase)]
+            then = NO_YES_EACH_RUN if name in version.on_approval else HELD
+            return [Touch("writes", system, None, quoted, (does, quoted, then))]
         case _:
             return []
 
@@ -533,14 +590,13 @@ def _reads(system: str, at: Quoted | None) -> Words:
     return (f"reads {system}",) if at is None else (f"reads {system} ", at)
 
 
-def _writes(
-    flow: Flow, name: str, cards: Mapping[str, CardView], order: Sequence[str], refused: bool
-) -> list[Touch]:
+def _writes(version: _Version, name: str) -> list[Touch]:
     """What a Make the approved changes block writes: each change proposed before it, by an
     agent's write tool or a Propose a change block."""
+    flow, cards, refused = version.flow, version.cards, name in version.refused
     before = _before(flow, name)
     proposed: dict[tuple[str, Quoted | None, str], None] = {}
-    for earlier in (n for n in order if n in before):
+    for earlier in (n for n in version.order if n in before):
         block = flow.blocks[earlier]
         match _kind(flow, earlier):
             case "agent":
@@ -595,22 +651,19 @@ def _before(flow: Flow, name: str) -> set[str]:
     return seen
 
 
-def _n8n_touches(flow: Flow, name: str) -> list[Touch]:
-    """What one of n8n's blocks for a system reads or posts, as its class row says."""
+def _n8n_touches(flow: Flow, name: str, told: bool, held: bool) -> list[Touch]:
+    """What one of n8n's blocks for a system reads or posts, as its class row says. A notice that
+    breaks the Tell rule posts with no yes on each run, or can't run at all while it is held."""
     block = flow.blocks[name]
-    match NODE_CLASSES.verdict(block.type, block.version, block.parameters):
-        case Runs(on, Use() as use):
-            pass
-        case _:
-            return []
+    row = _n8n_row(block)
+    if row is None:
+        return []
+    on, use = row
     quoted = _quote(name)
     spec = KEY_FOR_TYPE.get(block.type)
     system = spec.said if spec is not None else use.tag.split()[-1]
     key = None if spec is None else spec.name
-    targets = [_at(block.parameters, path) for path in use.target if path not in CHOOSERS]
-    written = [t for t in targets if t is not None]
-    picked = any(isinstance(t, str) and t.startswith("=") for t in written)
-    at = None if picked or not written else _quote(", ".join(str(t) for t in written))
+    at = _n8n_place(block, use)
     if on == "read":
         return [Touch("reads", system, at, quoted, _reads(system, at), key)]
     where: Words = (
@@ -619,7 +672,29 @@ def _n8n_touches(flow: Flow, name: str) -> list[Touch]:
         else (f" in {system} ", at)
     )
     said = _said(flow, name, [_at(block.parameters, path) for path in use.text])
-    return [Touch("posts", system, at, quoted, ("posts ", *said, *where), key)]
+    then = HELD if held else NO_YES_EACH_RUN if told else ""
+    does = "would post " if held else "posts "
+    return [Touch("posts", system, at, quoted, (does, *said, *where, then), key)]
+
+
+def _n8n_row(block: Block) -> tuple[str, Use] | None:
+    match NODE_CLASSES.verdict(block.type, block.version, block.parameters):
+        case Runs(on, Use() as use):
+            return on, use
+        case _:
+            return None
+
+
+def _n8n_place(block: Block, use: Use) -> Quoted | None:
+    """Where it reads or posts, or None when an expression picks it or nothing names it."""
+    shown = [
+        t
+        for path in use.target
+        if path not in CHOOSERS
+        for t in _shown(_at(block.parameters, path))
+    ]
+    picked = any(t.startswith("=") for t in shown)
+    return None if picked or not shown else _quote(", ".join(shown))
 
 
 def _at(parameters: Mapping[str, JsonValue], path: str) -> JsonValue:
@@ -628,11 +703,20 @@ def _at(parameters: Mapping[str, JsonValue], path: str) -> JsonValue:
         if not isinstance(value, dict):
             return None
         value = value.get(part)
+    return value
+
+
+def _shown(value: JsonValue) -> list[str]:
+    """A place as it is written: a resource locator, or any collection, by its value."""
     match value:
-        case {"__rl": True, **rest}:
-            return rest.get("value")
+        case None:
+            return []
+        case {"value": inner}:
+            return _shown(inner)
+        case dict() | list():
+            return list(_texts(value))
         case _:
-            return value
+            return [str(value)]
 
 
 def _texts(value: JsonValue) -> Iterable[str]:
@@ -673,26 +757,24 @@ def _joined(items: Sequence[Words]) -> Words:
     return tuple(out)
 
 
-def _approves(
-    flow: Flow,
-    order: Sequence[str],
-    approvers: int,
-    refused: set[str | None],
-    told: set[str | None],
-) -> Iterable[WriteApproval]:
-    for name in order:
-        block = flow.blocks[name]
+def _approves(version: _Version, approvers: int) -> Iterable[WriteApproval]:
+    for name in version.order:
+        block = version.flow.blocks[name]
         seen = face(block.type, block.version, block.parameters)
         quoted = _quote(name)
+        on_approval = name in version.on_approval
         if seen.kind == "write":
-            if name in refused:
+            if name in version.refused:
                 yield WriteApproval(quoted, Refused(), REFUSED)
             else:
                 yield WriteApproval(quoted, EachRun(approvers), WAITS[approvers])
-        elif seen.kind is None and not seen.ours:
-            yield WriteApproval(quoted, AtSetUp(), WRITES_ON_SET_UP)
-        elif name in told:
-            yield WriteApproval(quoted, AtSetUp(), POSTS_ON_SET_UP)
+        elif (seen.kind is None and not seen.ours) or name in version.told:
+            if not on_approval:
+                yield WriteApproval(quoted, CantRunYet(), f"{NOT_YET}.")
+            elif name in version.told:
+                yield WriteApproval(quoted, AtSetUp(), POSTS_ON_SET_UP)
+            else:
+                yield WriteApproval(quoted, AtSetUp(), WRITES_ON_SET_UP)
 
 
 def _when(flow: Flow, document: Mapping[str, Any], team_zone: str) -> Words:
@@ -765,12 +847,15 @@ def _set_settings(
 
 
 def _n8n_settings(flow: Flow, name: str, said: str) -> list[Setting]:
-    touch = next(iter(_n8n_touches(flow, name)), None)
-    if touch is None:
+    block = flow.blocks[name]
+    row = _n8n_row(block)
+    if row is None:
         return []
-    verb = " reads" if touch.action == "reads" else " posts"
-    value: Words = ("a place the run's data picks",) if touch.place is None else (touch.place,)
-    return [Setting(("Where ", touch.block, verb), value, "set", said)]
+    on, use = row
+    at = _n8n_place(block, use)
+    verb = " reads" if on == "read" else " posts"
+    value: Words = ("a place the run's data picks",) if at is None else (at,)
+    return [Setting(("Where ", _quote(name), verb), value, "set", said)]
 
 
 def _draft_setting(setting: DraftSetting) -> Setting:

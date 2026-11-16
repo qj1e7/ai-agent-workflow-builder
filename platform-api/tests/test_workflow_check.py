@@ -13,6 +13,7 @@ from platform_api.orchestration import (
     ASK_EXITS,
     FLAG_RULES,
     NODE_TYPES,
+    ApproverMayAccept,
     KnownOptions,
     RuleId,
     add_yes,
@@ -994,3 +995,13 @@ def test_each_finding_names_the_one_rule_it_breaks(rule: str) -> None:
     assert grade(release_check(), ERROR_WORKFLOW, TEAM_ZONE, ALLOWED).findings == ()
     found = grade(BREAKS[rule](), ERROR_WORKFLOW, TEAM_ZONE, ALLOWED).findings
     assert {f.rule for f in found} == {rule}
+
+
+def test_two_approvers_accept_a_flag_when_code_can_t_tell_what_the_block_does() -> None:
+    """Code can't tell such a block leaves everyone's access as it was (ADR 0051, section 3)."""
+    twos = {
+        rule
+        for rule, row in FLAG_RULES.items()
+        if isinstance(row.clears, ApproverMayAccept) and row.clears.approvers == 2
+    }
+    assert twos == {"version_off", "picked_by_expression", "operation_off"}

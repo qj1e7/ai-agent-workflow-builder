@@ -1005,6 +1005,9 @@ class ApproverMayAccept:
 
     agrees: str
     """What the Approver agrees to by accepting it."""
+    approvers: int = 1
+    """How many Approvers accept it, one after the other. Two when code can't tell what a block
+    does, so can't tell that it leaves everyone's access as it was (ADR 0051, section 3)."""
 
 
 type Clears = FixedForYou | NeedsAnAnswer | NeedsASetting | CantRun | ApproverMayAccept
@@ -1037,19 +1040,21 @@ FLAG_RULES: Mapping[RuleId, FlagRow] = {
         "Uses a version of a block the platform hasn't classed",
         "Nobody has checked what this version of the block does, and n8n runs it as it is.",
         "Every block is a version the platform has classed.",
-        ApproverMayAccept("The block runs as n8n made it, in a version nobody here has checked."),
+        ApproverMayAccept(
+            "The block runs as n8n made it, in a version nobody here has checked.", approvers=2
+        ),
     ),
     "picked_by_expression": FlagRow(
         "Picks what it does from the run's data",
         "What the block does is known only when it runs, so nobody can check it first.",
         "Every block does one thing, written in the block.",
-        ApproverMayAccept("The block does whatever the run's data picks."),
+        ApproverMayAccept("The block does whatever the run's data picks.", approvers=2),
     ),
     "operation_off": FlagRow(
         "Does something the platform hasn't classed",
         "It could change data, and n8n's own blocks don't ask for a yes on each run.",
         "Each of n8n's blocks only reads, posts or shapes the data.",
-        ApproverMayAccept("It does this on every run, with no yes on each run."),
+        ApproverMayAccept("It does this on every run, with no yes on each run.", approvers=2),
     ),
     "nothing_starts": FlagRow(
         "Nothing starts it",
@@ -1190,10 +1195,10 @@ FLAG_RULES: Mapping[RuleId, FlagRow] = {
         FixedForYou("Added a yes before each write."),
     ),
     "second_yes": FlagRow(
-        "Asks for a second yes on the same path",
-        "Each change on that path would wait for two yeses, one after the other.",
-        "No change waits for a second yes on the same path.",
-        ApproverMayAccept("Each change on that path waits for two yeses."),
+        "Asks for a yes twice on one path",
+        "A path needs one yes before its write, and this one asks twice.",
+        "No path asks for a yes twice.",
+        ApproverMayAccept("It asks for a yes twice on one path."),
     ),
 }
 """What each rule is, why it matters and who can clear it, in plain words (ADR 0051, section 2).

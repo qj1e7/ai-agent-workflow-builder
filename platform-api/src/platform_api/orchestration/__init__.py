@@ -223,6 +223,7 @@ from platform_api.orchestration.workflow_check import (
     NOTHING_TO_CHANGE_BLOCK,
     TYPE_OF,
     ApproverMayAccept,
+    Block,
     BlockKind,
     CantRun,
     Clears,
@@ -257,6 +258,7 @@ from platform_api.orchestration.write_actions import Binding
 
 __all__ = [
     "ApproverMayAccept",
+    "Block",
     "CantRun",
     "Clears",
     "FLAG_RULES",
