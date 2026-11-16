@@ -272,6 +272,32 @@ export function useVersions(useCaseId: string, version: number) {
   })
 }
 
+interface ExplainOptions {
+  /** The version to explain, as the versions list numbers it. Null for the one in use. */
+  readonly version?: number | null
+  /** Asks the AI model to smooth In short. Only the chat card asks. */
+  readonly reworded?: boolean
+  readonly enabled?: boolean
+}
+
+/** One version of a workflow, explained from the report the platform builds. A refusal (404, 409) carries words to show, so it is not tried again. */
+export function useExplain(useCaseId: string, { version = null, reworded = false, enabled = true }: ExplainOptions = {}) {
+  const client = useApiClient()
+  const user = useCacheScope()
+  return useQuery({
+    queryKey: keys.explained(user, useCaseId, version, reworded),
+    queryFn: async () =>
+      unwrap(
+        await client.GET('/api/v1/use-cases/{use_case_id}/explain', {
+          params: { path: { use_case_id: useCaseId }, query: { ...(version === null ? {} : { version }), reworded } },
+        }),
+      ),
+    enabled,
+    staleTime: reworded ? 5 * 60_000 : 30_000,
+    refetchOnWindowFocus: !reworded,
+  })
+}
+
 /**
  * What Set up made, held for the set-up card and the build panel: the platform's answer with its build log and blocks, when it came,
  * which the log's replay counts from, and the test run the card started. Only the card writes it. The panel reads it.
