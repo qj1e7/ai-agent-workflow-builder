@@ -176,14 +176,45 @@ def next_run(
     return min(fires, default=None)
 
 
+SHOWN: Mapping[str, Mapping[str, JsonValue]] = {
+    "seconds": {"secondsInterval": 30},
+    "minutes": {"minutesInterval": 5},
+    "hours": {"hoursInterval": 1, "triggerAtMinute": 0},
+    "days": {"daysInterval": 1, "triggerAtHour": 0, "triggerAtMinute": 0},
+    "weeks": {"weeksInterval": 1, "triggerAtDay": [0], "triggerAtHour": 0, "triggerAtMinute": 0},
+    "months": {
+        "monthsInterval": 1,
+        "triggerAtDayOfMonth": 1,
+        "triggerAtHour": 0,
+        "triggerAtMinute": 0,
+    },
+    CRON: {"expression": ""},
+}
+"""What n8n's editor shows for each field of a rule, at its default. The editor saves only what a
+person changed, and n8n 2.42.6 fills in the rest as it loads the workflow, before it makes the
+cron (`getNodeParameters` with its defaults), so a time left at what the editor showed runs at
+that time. A part saved as null is not filled in, so n8n picks it."""
+DEFAULT_RULE: Mapping[str, JsonValue] = {"interval": [{"field": "days"}]}
+"""The Schedule Trigger's rule when none is saved: every day, at midnight once filled in."""
+
+
 def schedule_intervals(parameters: Mapping[str, JsonValue]) -> list[Mapping[str, JsonValue]]:
-    """A Schedule Trigger's rules, from its `rule.interval`. An entry that is not an object reads
-    as an empty one, which n8n would fill in by itself."""
-    rule = parameters.get("rule")
-    intervals = rule.get("interval") if isinstance(rule, dict) else None
+    """A Schedule Trigger's rules as n8n runs them, with what n8n fills in. A rule with no
+    `interval` runs one empty entry that n8n does not fill in, as the trigger reads it. An entry
+    that is not an object reads as an empty one."""
+    rule = parameters.get("rule", DEFAULT_RULE)
+    if not isinstance(rule, dict) or "interval" not in rule:
+        return [{}]
+    intervals = rule["interval"]
     if not isinstance(intervals, list):
         return []
-    return [interval if isinstance(interval, dict) else {} for interval in intervals]
+    return [_filled(interval if isinstance(interval, dict) else {}) for interval in intervals]
+
+
+def _filled(interval: Mapping[str, JsonValue]) -> dict[str, JsonValue]:
+    field = interval.get("field", "days")
+    shown = SHOWN.get(field, {}) if isinstance(field, str) else {}
+    return {"field": field, **shown, **interval}
 
 
 class _Node(BaseModel):
