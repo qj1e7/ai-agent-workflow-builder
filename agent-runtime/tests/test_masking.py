@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from agent_runtime.monitoring.masking import KEPT_LIMIT, MASKED, Masker
+from agent_runtime.monitoring.masking import MASKED, RECENTLY_RELEASED, Masker
 
 
 @pytest.mark.parametrize(
@@ -44,11 +44,25 @@ def test_a_secret_inside_json_text_is_masked_with_its_escapes():
     assert json.loads(masker.mask(encoded)) == {"note": MASKED}
 
 
-def test_a_secret_handed_over_with_a_call_is_masked_once_kept_until_newer_ones_push_it_out():
+def test_a_held_secret_is_masked_until_released_and_a_while_after():
     masker = Masker()
-    masker.keep("callback-token-first")
+    held = masker.hold("callback-token-first", None, "short")
+    assert held == ("callback-token-first",)
+    for n in range(RECENTLY_RELEASED * 2):
+        masker.hold(f"callback-token-{n:04}")
     assert masker.mask("callback-token-first") == MASKED
-    for n in range(KEPT_LIMIT):
-        masker.keep(f"callback-token-{n:04}")
+    masker.release(held)
+    assert masker.mask("callback-token-first") == MASKED
+    for n in range(RECENTLY_RELEASED):
+        masker.release(masker.hold(f"another-token-{n:04}"))
     assert masker.mask("callback-token-first") == "callback-token-first"
-    assert masker.mask(f"callback-token-{KEPT_LIMIT - 1:04}") == MASKED
+
+
+def test_a_secret_held_twice_stays_held_until_both_release():
+    masker = Masker()
+    first, second = masker.hold("model-key-shared"), masker.hold("model-key-shared")
+    masker.release(first)
+    for n in range(RECENTLY_RELEASED):
+        masker.release(masker.hold(f"another-token-{n:04}"))
+    assert masker.mask("model-key-shared") == MASKED
+    masker.release(second)

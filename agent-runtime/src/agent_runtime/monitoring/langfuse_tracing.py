@@ -1,5 +1,6 @@
 """The Langfuse adapter of the tracing port (ADR 0050). Only the API's start-up code builds it."""
 
+import threading
 import time
 from collections.abc import Callable, Generator, Sequence
 from contextlib import contextmanager
@@ -22,7 +23,7 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SpanExporter
 
 from agent_runtime.contract import AnswerRequest, AnswerResult, TaskRequest
-from agent_runtime.monitoring.masking import Masker
+from agent_runtime.monitoring.masking import Held, Masker
 from agent_runtime.monitoring.tracing import (
     Traced,
     TracedTurn,
@@ -103,6 +104,10 @@ class LangfuseTracing:
     ) -> None:
         self._masker = masker
         self._public_key = settings.public_key
+        # Each open trace's secrets, by its top span's id, until that span has been exported. It
+        # ends last, so every span of the trace has been masked by then.
+        self._holding: dict[str, Held] = {}
+        self._holding_lock = threading.Lock()
         # A provider of its own, so no other OpenTelemetry instrumentation sends spans here.
         self._client = Langfuse(
             public_key=settings.public_key,
@@ -118,7 +123,7 @@ class LangfuseTracing:
 
     @contextmanager
     def turn(self, request: AnswerRequest) -> Generator[TracedTurn]:
-        self._masker.keep(request.model.api_key)
+        held = self._masker.hold(request.model.api_key)
         trace = request.trace
         started = time.monotonic()
         raised: BaseException | None = None
@@ -137,6 +142,7 @@ class LangfuseTracing:
             ),
             fell_back_notes() as notes,
         ):
+            self._release_when_exported(span.id, held)
 
             def finish(result: AnswerResult) -> None:
                 outcome = TurnOutcome(result, time.monotonic() - started, next(iter(notes), None))
@@ -171,9 +177,9 @@ class LangfuseTracing:
 
     @contextmanager
     def run(self, request: TaskRequest) -> Generator[Traced]:
-        self._masker.keep(request.callback.token)
-        if request.model is not None:
-            self._masker.keep(request.model.api_key)
+        held = self._masker.hold(
+            request.callback.token, request.model.api_key if request.model else None
+        )
         raised: BaseException | None = None
         with (
             self._client.start_as_current_observation(
@@ -181,6 +187,7 @@ class LangfuseTracing:
             ) as span,
             propagate_attributes(trace_name=RUN_NAME, session_id=request.run_id),
         ):
+            self._release_when_exported(span.id, held)
             try:
                 yield _Trace(self._callbacks())
             except BaseException as error:
@@ -198,6 +205,10 @@ class LangfuseTracing:
     def _callbacks(self) -> _Callbacks:
         return _Callbacks(self._masker, self._public_key)
 
+    def _release_when_exported(self, span_id: str, held: Held) -> None:
+        with self._holding_lock:
+            self._holding[span_id] = held
+
     def _mask_spans(self, *, params: MaskOtelSpansParams) -> MaskOtelSpansResult:
         patches: dict[OtelSpanIdentifier, OtelSpanPatch | None] = {}
         for identifier, span in params.spans.items():
@@ -208,6 +219,10 @@ class LangfuseTracing:
             }
             if changed:
                 patches[identifier] = OtelSpanPatch(set_attributes=changed)
+        with self._holding_lock:
+            done = [self._holding.pop(s.span_id, ()) for s in params.spans.values()]
+        for held in done:
+            self._masker.release(held)
         return MaskOtelSpansResult(span_patches=patches)
 
     def _masked(self, value: AttributeValue) -> AttributeValue:

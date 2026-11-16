@@ -4,6 +4,7 @@ environment until this passes in CI, and a later failure blocks the merge."""
 import json
 import uuid
 from collections.abc import Iterator
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 import httpx
@@ -17,11 +18,11 @@ from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanE
 
 from agent_runtime.api import HttpCallbacks, Runtime, create_app
 from agent_runtime.card_runner import CardRunner
-from agent_runtime.contract import AnswerRequest, ModelAccess
+from agent_runtime.contract import Answered, AnswerRequest, DidntFollowAnswer, ModelAccess
 from agent_runtime.contracts import GATEWAY, REPO, card_request, traced_answer_request
 from agent_runtime.jira import JiraTicket
 from agent_runtime.monitoring.langfuse_tracing import LangfuseSettings, LangfuseTracing
-from agent_runtime.monitoring.masking import Masker
+from agent_runtime.monitoring.masking import RECENTLY_RELEASED, Masker
 from agent_runtime.planner import FixedPlanner
 from agent_runtime.summary import TemplateSummarizer
 from agent_runtime.version_checker import VersionChecker
@@ -186,3 +187,28 @@ def test_no_planted_key_in_run_metadata_or_a_raised_error_reaches_an_exported_sp
     text = sent(tracing, exporter)
     assert MARKER in text
     assert [p for p in PLANTED if p in text] == []
+
+
+def test_a_secret_stays_masked_while_its_trace_is_open_however_many_tasks_come_and_go(
+    exported: Any,
+):
+    tracing, exporter = exported
+    request = AnswerRequest.model_validate(planted_turn())
+
+    def another_task(n: int) -> None:
+        task = card_request(f"run_{n:04}")
+        task.callback.token = f"another-callback-token-{n:04}"
+        with tracing.run(task):
+            pass
+
+    chat = ScriptedChat(script=[AIMessage(f"{MARKER} the key was {MODEL_KEY}")])
+    with tracing.turn(request) as turn:
+        # Other requests run on other threads, each its own trace, and leave first.
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            list(pool.map(another_task, range(RECENTLY_RELEASED + 100)))
+        tracing.flush()
+        turn.models(lambda timeout: chat)(10).invoke("hello")
+        turn.answered(Answered(answer=DidntFollowAnswer(), parts=[]))
+    text = sent(tracing, exporter)
+    assert MARKER in text
+    assert MODEL_KEY not in text
