@@ -41,7 +41,7 @@ type Person = Pick<Me, 'id' | 'n8n_access'>
 type Opening = Pick<UseCaseN8nView, 'can_open' | 'why_not' | 'editor_url'>
 
 /** For someone who may not take it back, in the platform's own words (builder/n8n_holds.py). */
-export const askForIt = (name: string): string => `Ask ${name}, or anyone with n8n access, to take it back.`
+const askForIt = (name: string): string => `Ask ${name}, or anyone with n8n access, to take it back.`
 
 /**
  * Who holds the workflow, said from this person's side, or null while it sits in the platform's own n8n project. The hold is read
