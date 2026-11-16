@@ -330,11 +330,38 @@ def test_a_yes_or_a_negation_stays_on_the_fact_it_belongs_to(
             "Each Monday at 9:00 it reads GitHub “langchain-ai/langgraph” and Jira “MOCK”. "
             "It can create Jira tickets in “MOCK”, each after a yes. Nothing else changes.",
         ),
+        (
+            FASTAPI,
+            "Each day at 8:00 it reads GitHub “fastapi/fastapi” and Jira “MOCK”. "
+            "It can create Jira tickets for “MOCK”, each after a yes. Nothing else changes.",
+        ),
+        (
+            NOTHING_STARTS_IT,
+            "Nothing starts it. When it runs, it reads Jira “MOCK”. Nothing changes.",
+        ),
     ],
-    ids=["yes-first", "reads-reordered", "each-monday"],
+    ids=["yes-first", "reads-reordered", "each-monday", "for-a-place", "nothing-changes"],
 )
 def test_a_true_reword_of_each_sentence_still_passes(asked: ExplainWordingRequest, text: str):
     assert explain_guard(text, asked) is None
+
+
+HELD = request(
+    "Every Monday at 9:00, it reads GitHub “fastapi/fastapi”. It could change data in Jira "
+    "through “Open an issue”, but it can't run on this platform yet. It changes nothing else.",
+    fact("runs", "Monday", "9:00"),
+    fact("reads", "reads", "GitHub", "fastapi/fastapi"),
+    fact("writes", "change", "Jira", "Open an issue", negated=True),
+    fact("changes", "changes", "nothing", "else", negated=True),
+)
+
+
+def test_a_block_that_can_t_run_never_reads_as_one_that_runs():
+    ran = HELD.wording.replace(
+        "but it can't run on this platform yet", "and it can run on this platform"
+    )
+    assert fact_check(HELD.wording, HELD) is None
+    assert fact_check(ran, HELD) == "negation"
 
 
 @pytest.mark.parametrize(

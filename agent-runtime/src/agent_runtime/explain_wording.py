@@ -188,9 +188,7 @@ def keeps_each_place_on_its_word(
         pair in s.before
         for s, c in pairs
         for pair in c.before
-        if pair[0] in items
-        or pair[0].removesuffix("es") in items
-        or pair[0].removesuffix("s") in items
+        if {pair[0], pair[0].removesuffix("s")} & items
     )
 
 
