@@ -7,12 +7,23 @@
   "anthropic:claude-haiku-5-5": {
     "input_usd_per_mtok": 0.10,
     "output_usd_per_mtok": 0.50,
-    "source": "Anthropic first-party API list price for prompts up to 100K tokens, from Anthropic's Claude API reference cached 2026-10-06. Checked 2026-10-22."
+    "cache_read_usd_per_mtok": 0.01,
+    "cache_write_usd_per_mtok": 0.125,
+    "source": "Anthropic first-party API list price for prompts up to 100K tokens, from Anthropic's Claude API reference cached 2026-10-06. Checked 2026-10-22. Cache prices from the same reference, checked 2026-11-16: reads at the listed cache-read price, five-minute writes at 1.25 times input."
   },
   "anthropic:claude-sonnet-5-5": {
     "input_usd_per_mtok": 2.00,
     "output_usd_per_mtok": 10.00,
-    "source": "Anthropic first-party API list price, from Anthropic's Claude API reference cached 2026-10-06. Checked 2026-10-22."
+    "cache_read_usd_per_mtok": 0.20,
+    "cache_write_usd_per_mtok": 2.50,
+    "source": "Anthropic first-party API list price, from Anthropic's Claude API reference cached 2026-10-06. Checked 2026-10-22. Cache prices from the same reference, checked 2026-11-16: reads at the listed cache-read price, five-minute writes at 1.25 times input."
+  },
+  "anthropic:claude-opus-5-5": {
+    "input_usd_per_mtok": 4.00,
+    "output_usd_per_mtok": 20.00,
+    "cache_read_usd_per_mtok": 0.20,
+    "cache_write_usd_per_mtok": 5.00,
+    "source": "Anthropic first-party API list price, from Anthropic's Claude API reference cached 2026-10-06. Checked 2026-11-16. Cache prices from the same reference, checked 2026-11-16: reads at the listed cache-read price, five-minute writes at 1.25 times input. Its thinking can't be turned off, so a judge's thinking is billed as output."
   },
   "gateway:claude-haiku-4-5-20251001": {
     "input_usd_per_mtok": 1.00,

@@ -20,6 +20,7 @@ BUDGET_USED_UP: Final = "The model gateway's budget is used up"
 DEFAULT_MAX_CALLS: Final = 300
 DEFAULT_MAX_DOLLARS: Final = 5.0
 _SPENT_WORDS: Final = ("budget", "quota", "credit")
+_CACHE_WRITES: Final = ("cache_creation", "ephemeral_5m_input_tokens", "ephemeral_1h_input_tokens")
 
 
 def budget_spent(error: BaseException) -> bool:
@@ -28,6 +29,26 @@ def budget_spent(error: BaseException) -> bool:
     status = getattr(error, "status_code", None)
     text = str(error).casefold()
     return status in (402, 422, 429) and any(word in text for word in _SPENT_WORDS)
+
+
+def cached_tokens(usage: Mapping[str, Any]) -> tuple[int, int]:
+    """The input tokens a call read from the prompt cache, and those it wrote to it."""
+    details = usage.get("input_token_details") or {}
+    read = int(details.get("cache_read") or 0)
+    written = sum(int(details.get(key) or 0) for key in _CACHE_WRITES)
+    return read, written
+
+
+def dollars_for(
+    tokens_in: float, tokens_out: float, read: float, written: float, price: Mapping[str, Any]
+) -> float:
+    """A call's cost at `price`. Cached input costs the model's cache prices when
+    `pricing.json` names them, and the fresh input price when it doesn't."""
+    fresh = price["input_usd_per_mtok"]
+    cost = (tokens_in - read - written) * fresh + tokens_out * price["output_usd_per_mtok"]
+    cost += read * price.get("cache_read_usd_per_mtok", fresh)
+    cost += written * price.get("cache_write_usd_per_mtok", fresh)
+    return cost / 1_000_000
 
 
 class Spend(BaseCallbackHandler):
@@ -76,10 +97,9 @@ class Spend(BaseCallbackHandler):
         if price is None:
             self.unpriced.add(model or "an unnamed model")
             return
-        self.dollars += (
-            usage.get("input_tokens", 0) * price["input_usd_per_mtok"]
-            + usage.get("output_tokens", 0) * price["output_usd_per_mtok"]
-        ) / 1_000_000
+        read, written = cached_tokens(usage)
+        tokens_in, tokens_out = usage.get("input_tokens", 0), usage.get("output_tokens", 0)
+        self.dollars += dollars_for(tokens_in, tokens_out, read, written, price)
 
     def stop_reason(self, calls_ahead: int) -> str | None:
         """Why the run must stop before it makes `calls_ahead` more calls, or None. The call cap is
