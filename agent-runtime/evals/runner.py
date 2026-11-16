@@ -33,6 +33,7 @@ from evals.checks import Check
 from evals.choose import CHOOSE
 from evals.draft import DRAFT
 from evals.explain import EXPLAIN
+from evals.explain_wording import EXPLAIN_WORDING
 from evals.jobs import Answer, Case, Job, marked
 from evals.providers import PROVIDERS, Env, NotRun, Target, plan
 from evals.red_team import RED_TEAM
@@ -53,6 +54,7 @@ JOBS: tuple[Job[Any], ...] = (
     RED_TEAM,
     SPIKE,
     SPIKE_DEV,
+    EXPLAIN_WORDING,
 )
 PARTS_OF_REPLY: Final = frozenset({REPLY_GATE.name, REPLY_DEV.name, SPIKE_DEV.name})
 """Jobs that run part of the reply job's cases. A run of every job leaves them out, so it runs

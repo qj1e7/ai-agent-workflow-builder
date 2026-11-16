@@ -53,6 +53,7 @@ from agent_runtime.contract import (
     CheckWorkflowsAnswer,
     DidntFollowAnswer,
     EditAnswer,
+    ExplainAnswer,
     ModelProblem,
     NeedsMeAnswer,
     PartAnswer,
@@ -84,6 +85,7 @@ from agent_runtime.edits import (
     how_often,
     left_over,
 )
+from agent_runtime.explaining import explain_of
 from agent_runtime.follow_ups import VERSION, follow_up_of, named_when_asked, watch_offer_of
 from agent_runtime.free_reply import dead_end, reply_to
 from agent_runtime.parts import (
@@ -983,13 +985,13 @@ def _answer_of(
 ) -> PlannerAnswer:
     """The answer code decides from the model's reading: refused, by the word rule, by the
     model's answer to the skip question, or by words naming a yes that nothing explains in a
-    request that writes; then software to take off the watchlist, a change to a workflow the
-    person has, then the watchlist, a question about the person's workflows, then the
-    structures. A request the model called a task is always read against its structures, so
-    words they do not hold come back; "abilities" is the catch-all, so a request that asks for a
-    change wins over it: a planted "close all tickets" comes back as a can't. `facts` name the
-    person's workflows, so a word in a name is never a command, and say when the Software
-    watchlist checks, so a time a watch request names that matches it is no cross."""
+    request that writes; then a workflow to explain, software to take off the watchlist, a
+    change to a workflow the person has, then the watchlist, a question about the person's
+    workflows, then the structures. A request the model called a task is always read against its
+    structures, so words they do not hold come back; "abilities" is the catch-all, so a request
+    that asks for a change wins over it: a planted "close all tickets" comes back as a can't.
+    `facts` name the person's workflows, so a word in a name is never a command, and say when the
+    Software watchlist checks, so a time a watch request names that matches it is no cross."""
     watch_schedule = facts.watchlist_schedule if facts is not None else None
     text = visible_words(request)
     refused = _refusal(text)
@@ -998,6 +1000,9 @@ def _answer_of(
     skip = _skip_verdict(read.skips_the_yes, text)
     if skip.refused is not None:
         return skip.refused
+    explain = explain_of(text, facts)
+    if explain is not None:
+        return explain
     elsewhere = _other_source(read, text)
     if elsewhere is not None:
         return elsewhere
@@ -1110,7 +1115,7 @@ def decide(read: TaskRead, request: AnswerRequest) -> PlannerAnswer | AskTheQues
     if named is not None:
         return named
     if question_messages(request) is None or isinstance(
-        answer, EditAnswer | PauseAnswer | ResumeAnswer | RemoveSoftwareAnswer
+        answer, EditAnswer | PauseAnswer | ResumeAnswer | RemoveSoftwareAnswer | ExplainAnswer
     ):
         return answer
     text = visible_words(request.task)

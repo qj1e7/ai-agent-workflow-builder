@@ -228,7 +228,7 @@ def _names(read: TaskRead | None, text: str, facts: PlannerFacts | None) -> list
     said = _said(read.workflow_words if read is not None else None, text)
     found += [said] if said is not None else []
     for name in _workflow_names(facts):
-        found += _name_runs(text, name)
+        found += name_runs(text, name)
     for name in [w.name for w in (facts.watchlist if facts is not None else None) or []]:
         at = _whole(text, name)
         found += [at] if at is not None else []
@@ -267,7 +267,7 @@ def _said(words_: str | None, text: str) -> Span | None:
     return _whole(text, wanted)
 
 
-def _name_runs(text: str, name: str) -> list[Span]:
+def name_runs(text: str, name: str) -> list[Span]:
     """The stretches of the request that name a workflow: its whole name, or two or more of its
     words in a row after "the", "my" or "our", as "the weekly summary" for "Weekly closed-ticket
     summary". "a weekly summary" is a new one."""
@@ -389,7 +389,7 @@ def _deletes_tickets(text: str, facts: PlannerFacts | None) -> bool:
     """A delete of tickets, as "delete the MOCK ticket", changes Jira, never a workflow, whatever
     the reading named. A ticket inside one of the person's workflow names is that workflow's. A
     pause beside it is still a pause, with the delete crossed."""
-    names = [r for name in _workflow_names(facts) for r in _name_runs(text, name)]
+    names = [r for name in _workflow_names(facts) for r in name_runs(text, name)]
     unnamed = _blank(text, names)
     return _deletes_tickets_in(unnamed) and not _orders_switch(unnamed)
 
@@ -514,7 +514,7 @@ def _orders_one(read: TaskRead, text: str, facts: PlannerFacts | None) -> bool:
     clause that asks for a new workflow, or a question, orders nothing."""
     named = [s for s in [_said(read.workflow_words, text)] if s is not None]
     for name in _workflow_names(facts):
-        named += _name_runs(text, name)
+        named += name_runs(text, name)
     software = whole_word_of(text, read.software)
     named += [
         m.span()
@@ -545,7 +545,7 @@ def _target(read: TaskRead, text: str, facts: PlannerFacts | None) -> str | None
     "the morning check", else the software the reading named. None for "make it daily". The
     words widen to the longest name that holds them, so a whole name said wins over the words it
     shares with another workflow's name."""
-    runs = [r for name in _workflow_names(facts) for r in _name_runs(text, name)]
+    runs = [r for name in _workflow_names(facts) for r in name_runs(text, name)]
     said = _said(read.workflow_words, text) or (runs[0] if runs else None)
     if said is not None:
         known = [r for r in runs if r[0] <= said[0] and said[1] <= r[1]]
