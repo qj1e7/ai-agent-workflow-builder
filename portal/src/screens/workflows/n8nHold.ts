@@ -35,24 +35,38 @@ export type Hold =
 
 export type Held = Extract<Hold, { kind: 'mine' | 'theirs' }>
 
-type Workflow = Pick<UseCaseView, 'state' | 'deleted_in_n8n_at'>
+type Workflow = Pick<UseCaseView, 'state' | 'deleted_in_n8n_at' | 'held_in_n8n'>
+type Person = Pick<Me, 'id' | 'n8n_access'>
+/** What the In n8n view adds: whether this person can open n8n now, and the editor's address for its holder. */
+type Opening = Pick<UseCaseN8nView, 'can_open' | 'why_not' | 'editor_url'>
 
-/** Who holds the workflow, said from this person's side, or null while it sits in the platform's own n8n project. */
-export function heldOf(view: UseCaseN8nView, me: Pick<Me, 'id'>): Held | null {
-  const { holder } = view
+/** For someone who may not take it back, in the platform's own words (builder/n8n_holds.py). */
+export const askForIt = (name: string): string => `Ask ${name}, or anyone with n8n access, to take it back.`
+
+/**
+ * Who holds the workflow, said from this person's side, or null while it sits in the platform's own n8n project. The hold is read
+ * from the workflow itself, so everyone sees it the same on every page. The In n8n view, read only with n8n access, says whether
+ * this person can take it back now.
+ */
+export function heldOf(useCase: Pick<UseCaseView, 'held_in_n8n'>, me: Person, opening: Opening | null = null): Held | null {
+  const holder = useCase.held_in_n8n
   if (!holder) return null
-  if (holder.id === me.id) return { kind: 'mine', since: holder.since, editorUrl: view.editor_url }
-  return { kind: 'theirs', name: holder.name, since: holder.since, cant: view.can_open ? null : (view.why_not ?? CANT_OPEN) }
+  if (holder.id === me.id) return { kind: 'mine', since: holder.since, editorUrl: opening?.editor_url ?? null }
+  const cant = me.n8n_access !== true ? askForIt(holder.name) : opening && !opening.can_open ? (opening.why_not ?? CANT_OPEN) : null
+  return { kind: 'theirs', name: holder.name, since: holder.since, cant }
 }
 
-export function holdOf(view: UseCaseN8nView, useCase: Workflow, me: Pick<Me, 'id'>): Hold {
-  const held = heldOf(view, me)
+export function holdOf(opening: Opening, useCase: Workflow, me: Person): Hold {
+  const held = heldOf(useCase, me, opening)
   if (held) return held
   if (useCase.deleted_in_n8n_at) return { kind: 'shut', words: GONE }
   if (useCase.state === 'draft') return { kind: 'shut', words: DRAFT }
-  if (!view.can_open) return { kind: 'shut', words: view.why_not ?? CANT_OPEN }
+  if (!opening.can_open) return { kind: 'shut', words: opening.why_not ?? CANT_OPEN }
   return { kind: 'free' }
 }
+
+/** In place of a change the platform refuses while anyone, its holder too, has the workflow open in n8n. */
+export const cantChangeWords = (held: Held): string => (held.kind === 'mine' ? 'Can’t change it here while you have it open in n8n.' : `Can’t change it while ${held.name} has it open in n8n.`)
 
 /** Whether this person may press Take it back: its holder may, and so may anyone else with n8n access. */
 export const mayTakeBack = (held: Held): boolean => held.kind === 'mine' || held.cant === null

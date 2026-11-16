@@ -768,10 +768,3 @@ details.rule > p {
   color: var(--red-ink);
   font-weight: 600;
 }
-
-/* Who has it open in n8n, where Open in n8n editor would be. */
-.heldLine {
-  align-self: center;
-  color: var(--muted);
-  font-size: 0.875rem;
-}

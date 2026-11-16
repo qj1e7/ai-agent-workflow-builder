@@ -3,10 +3,14 @@ import { Link, Navigate, useLocation, useNavigate, useParams, useSearchParams } 
 import { useErrorWords } from '../../api/context'
 import { useLatch } from '../../api/latch'
 import { useDisplayName } from '../../api/people'
-import { useMe, usePutAddressBack, useRemoveSoftware, useRestoreSoftware, useRun, useStartRun, useUseNewAddress, useWatchlist } from '../../api/queries'
-import type { LastCheckView, WatchedSoftwareView, WatchlistView } from '../../api/types'
+import { useMe, usePutAddressBack, useRemoveSoftware, useRestoreSoftware, useRun, useStartRun, useUseCase, useUseNewAddress, useWatchlist } from '../../api/queries'
+import type { LastCheckView, Me, WatchedSoftwareView, WatchlistView } from '../../api/types'
+import { useUseCaseInN8n } from '../../api/workflowQueries'
 import { Button } from '../../ui/Button'
 import { IconChevronRight } from '../../ui/icons'
+import { Toast } from '../../ui/Toast'
+import { useView, ViewTabs } from '../../ui/ViewTabs'
+import { WorkflowInN8n } from '../workflows/InN8n'
 import { AddSoftware } from './AddSoftware'
 import { pressCheckNow } from './checkNow'
 import { FindSoftware } from './FindSoftware'
@@ -326,10 +330,43 @@ function Loaded({ view, operator, answeredAt, now, rowId }: LoadedProps) {
   )
 }
 
+interface Said {
+  readonly id: number
+  readonly text: string
+}
+
+/**
+ * The Software watchlist is a workflow too, so people with n8n access get the In n8n tab every workflow has: its version, who holds
+ * it, its canvas and Open in n8n editor. Its Summary is the watchlist itself.
+ */
+function WatchlistInN8n({ useCaseId, me, now }: { useCaseId: string; me: Me; now: Date }) {
+  const useCase = useUseCase(useCaseId, true, { poll: REFRESH_MS })
+  const inN8n = useUseCaseInN8n(useCaseId, { enabled: true, poll: REFRESH_MS })
+  const [said, setSaid] = useState<Said | null>(null)
+  if (!useCase.data) {
+    return useCase.isError ? (
+      <p>
+        The workflow in n8n could not be loaded. <Button onClick={() => void useCase.refetch()}>Try again</Button>
+      </p>
+    ) : (
+      <p className="muted" role="status">
+        Loading the workflow in n8n
+      </p>
+    )
+  }
+  return (
+    <>
+      <WorkflowInN8n useCase={useCase.data} inN8n={inN8n} me={me} now={now} say={(text) => setSaid((before) => ({ id: (before?.id ?? 0) + 1, text }))} />
+      <Toast message={said} onDismiss={() => setSaid(null)} focusAfter={() => document.querySelector<HTMLElement>('main h1')} />
+    </>
+  )
+}
+
 export function SoftwareRoute({ now }: { now: Date }) {
   const me = useMe()
   const watchlist = useWatchlist({ poll: REFRESH_MS })
   const { softwareId = null } = useParams()
+  const [view, showView] = useView()
   if ((watchlist.isError && !watchlist.data) || me.isError) {
     return (
       <>
@@ -345,5 +382,13 @@ export function SoftwareRoute({ now }: { now: Date }) {
       </p>
     )
   }
-  return <Loaded view={watchlist.data} operator={me.data.roles.includes('operator')} answeredAt={Math.max(watchlist.dataUpdatedAt, watchlist.errorUpdatedAt)} now={now} rowId={softwareId} />
+  const loaded = <Loaded view={watchlist.data} operator={me.data.roles.includes('operator')} answeredAt={Math.max(watchlist.dataUpdatedAt, watchlist.errorUpdatedAt)} now={now} rowId={softwareId} />
+  const workflow = me.data.n8n_access === true && softwareId === null ? watchlist.data?.use_case_id : undefined
+  if (workflow === undefined) return loaded
+  return (
+    <>
+      <ViewTabs main="Software" shown={view} onShow={showView} className={styles['views']} />
+      {view === 'n8n' ? <WatchlistInN8n useCaseId={workflow} me={me.data} now={now} /> : loaded}
+    </>
+  )
 }

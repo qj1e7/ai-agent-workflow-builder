@@ -73,7 +73,7 @@ describe('the workflow page’s banner for a graded version', () => {
     const fix = { ...on, grade: 'needs_a_fix', findings: ['“Send email” is not a block we run.'], held_in_n8n: held } as UseCaseView
     expect(bannerOf(facts(fix))).toEqual({ tone: 'bad', text: 'Needs a fix: “Send email” is not a block we run.', action: null })
     expect(bannerOf(facts({ ...fix, grade: 'writes_refused' })).action).toBeNull()
-    expect(bannerOf(facts({ ...on, state: 'paused', held_in_n8n: held } as UseCaseView)).action, 'Resume would publish').toBeNull()
+    expect(bannerOf(facts({ ...on, state: 'paused', held_in_n8n: held })).action, 'Resume would publish').toBeNull()
   })
 
   it('leaves a safe version to the usual banner', () => {

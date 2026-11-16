@@ -44,7 +44,7 @@ describe('what the In n8n tab offers', () => {
     expect(heldOf(BY_CAROL, ALICE_NO_ACCESS)).toEqual({ kind: 'theirs', name: 'Carol', since: HELD.holder?.since, cant: 'Ask Carol, or anyone with n8n access, to take it back.' })
     expect(heldOf(BY_CAROL, CAROL)).toEqual({ kind: 'mine', since: HELD.holder?.since, editorUrl: null })
     expect(heldOf(ON, ALICE_NO_ACCESS)).toBeNull()
-    expect(holdOf({ ...HELD, holder: null }, BY_CAROL, ALICE), 'the workflow’s own record wins over an older In n8n view').toMatchObject({ kind: 'theirs', name: 'Carol' })
+    expect(holdOf({ ...HELD, holder: null } as UseCaseN8nView, BY_CAROL, ALICE), 'the workflow’s own record wins over an older In n8n view').toMatchObject({ kind: 'theirs', name: 'Carol' })
   })
 
   it('draws no button for a draft, a workflow deleted in n8n, or a person n8n is closed to, and says why', () => {

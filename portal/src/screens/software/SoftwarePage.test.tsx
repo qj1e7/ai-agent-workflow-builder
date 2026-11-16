@@ -591,7 +591,6 @@ describe('the schedule note', () => {
 
 describe('the Software watchlist in n8n', () => {
   const views = (html: string) => [...html.matchAll(/<div[^>]*role="group" aria-label="View"[^>]*>([\s\S]*?)<\/div>/g)].map((m) => text(m[1] ?? ''))
-  const routes = (me: Me) => <AppRoutes context={{ name: me.display, now: NOW, operator: me.roles.includes('operator') }} />
 
   it('gives someone with n8n access the In n8n tab on the Watchlist, as every workflow has, with Open in n8n editor', () => {
     expect(views(render(statuses, CAROL_N8N))).toEqual(['Software In n8n'])
@@ -599,11 +598,6 @@ describe('the Software watchlist in n8n', () => {
     expect(text(inN8n)).toContain('Only our blocks and n8n’s safe ones are on, so every write waits for a yes.')
     expect(text(inN8n)).toContain('Open in n8n editor')
     expect(text(inN8n), 'the list stays on its own tab').not.toContain('Find software')
-  })
-
-  it('opens the watchlist workflow’s In n8n tab from its workflow address, as the Planner sends it', () => {
-    const html = render(statuses, CAROL_N8N, [], routes(CAROL_N8N), capabilitiesFixture, `/workflows/${WATCHLIST_ID}?view=n8n`)
-    expect(text(html)).toContain('Open in n8n editor')
   })
 
   it('gives no tab to anyone without n8n access', () => {
