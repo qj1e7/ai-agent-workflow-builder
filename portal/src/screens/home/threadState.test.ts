@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { PlannerReply } from '../../api/types'
+import type { CantRowView, PlannerReply, WatchlistReply } from '../../api/types'
 import { EMPTY_FORM } from './card'
 import { askOf, chatOf, EMPTY, isThinking, previousOf, threadReducer } from './threadState'
 
@@ -40,6 +40,22 @@ describe('the thread', () => {
     const said = ask({ trace_id: null, answer: 'question', text: 'LangGraph is at 1.2.14.', looked_at: ['watchlist'], about_software: [], parts: [] }, 'What is the newest version of LangGraph?')
     expect(previousOf(said)).toEqual({ request: 'What is the newest version of LangGraph?', software: null, answer: 'LangGraph is at 1.2.14.', kind: 'question', trace_id: null })
     expect(previousOf(ask({ trace_id: null, answer: 'offline', why: 'trouble', message: 'x', starters: [], parts: [] }, 'x'))).toBeNull()
+  })
+
+  it('hands over the one software any answer named, so “keep track of it” after it means that software', () => {
+    const softwareAfter = (reply: PlannerReply) => previousOf(threadReducer(threadReducer(EMPTY, { type: 'sent', text: 'x', chat: 'c1' }), { type: 'answered', reply, typed: 'x' }))?.software
+    const watch: WatchlistReply = { trace_id: null, answer: 'watchlist', word: 'add', software: 'Node Js', already_listed: null, also: null, parts: [] }
+    const crossed: CantRowView = { kind: 'look_for', text: 'keep track of it', note: 'I didn’t follow this part.', needs: null, system: null, instead: null, unsupported: false }
+    expect(softwareAfter({ trace_id: null, answer: 'cant', cant: [crossed], alternative: watch, parts: [] })).toBe('Node Js')
+    expect(softwareAfter({ trace_id: null, answer: 'cant', cant: [crossed], alternative: null, parts: [] })).toBeNull()
+    const about = (names: string[]): PlannerReply => ({ trace_id: null, answer: 'question', text: 'Redis is up to date.', looked_at: ['watchlist'], about_software: names, parts: [] })
+    expect(softwareAfter(about(['Redis']))).toBe('Redis')
+    expect(softwareAfter(about(['Redis', 'n8n']))).toBeNull()
+    const match = (name: string) => ({ software_id: `sw_${name}`, name, source: `x/${name}` })
+    const removal = (matches: { software_id: string; name: string; source: string }[]): PlannerReply => ({ trace_id: null, answer: 'remove_software', software: 'node.js', matches, watched: [], parts: [] })
+    expect(softwareAfter(removal([match('Node.js')]))).toBe('Node.js')
+    expect(softwareAfter(removal([]))).toBe('node.js')
+    expect(softwareAfter(removal([match('Node.js'), match('node')]))).toBeNull()
   })
 
   it('hands the next message the trace of the answer before it, so typing again soon after flags that answer', () => {
