@@ -207,3 +207,9 @@
   margin: 0;
   color: var(--red-ink);
 }
+
+.name {
+  margin: 0 0 4px;
+  font-size: 1.05rem;
+  overflow-wrap: anywhere;
+}

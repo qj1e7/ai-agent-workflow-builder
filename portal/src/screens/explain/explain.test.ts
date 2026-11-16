@@ -5,7 +5,8 @@ import explainOne from '../../../../contracts/fixtures/planner/answer.explain.js
 import explainSeveral from '../../../../contracts/fixtures/planner/answer.explain.choices.json'
 import type { ExplainReply, PlannerReply, WorkflowExplained } from '../../api/types'
 import missingOne from '../../../../contracts/fixtures/planner/answer.explain.missing.json'
-import { approvesGist, approvalGist, explainAnswerOf, explainPath, explainTitle, explainsFocus, flagsGist, segmentsOfText, settingsGist, stepsGist, touchesGist, workflowInFocus } from './explain'
+import { ApiError } from '../../api/client'
+import { approvesGist, approvalGist, explainAnswerOf, explainAsk, explainStateOf, explainPath, explainTitle, explainsFocus, flagsGist, segmentsOfText, settingsGist, stepsGist, touchesGist, workflowInFocus } from './explain'
 
 const REPORT = current as WorkflowExplained
 const OLDER = older as WorkflowExplained
@@ -159,5 +160,32 @@ describe('the reworded In short', () => {
 
   it('is one plain segment when nothing is quoted', () => {
     expect(segmentsOfText('Nothing changes.')).toEqual([{ text: 'Nothing changes.', quoted: false }])
+  })
+})
+
+describe('what the report shows while it loads, and when it cannot', () => {
+  it('is loading until the report or an error comes', () => {
+    expect(explainStateOf({ data: undefined, error: null })).toEqual({ kind: 'loading' })
+  })
+
+  it('is the report once it came', () => {
+    expect(explainStateOf({ data: REPORT, error: null })).toEqual({ kind: 'report', report: REPORT })
+  })
+
+  it('says the server’s own words for a workflow that is gone or has nothing to explain', () => {
+    const words = 'Nothing to explain: this version ran on the shared n8n workflow, so the platform kept no copy of its blocks.'
+    expect(explainStateOf({ data: undefined, error: new ApiError(409, { detail: words }) })).toEqual({ kind: 'said', words })
+    expect(explainStateOf({ data: undefined, error: new ApiError(404, { detail: 'That workflow isn’t here.' }) })).toEqual({ kind: 'said', words: 'That workflow isn’t here.' })
+  })
+
+  it('is a failed load, with a reason to try again, for anything else', () => {
+    expect(explainStateOf({ data: undefined, error: new ApiError(500, {}) })).toEqual({ kind: 'failed' })
+    expect(explainStateOf({ data: undefined, error: new TypeError('network') })).toEqual({ kind: 'failed' })
+  })
+})
+
+describe('a choice on Which workflow?', () => {
+  it('asks the Planner to explain the one she picked, by its name', () => {
+    expect(explainAsk('FastAPI release check')).toBe('Explain the FastAPI release check')
   })
 })

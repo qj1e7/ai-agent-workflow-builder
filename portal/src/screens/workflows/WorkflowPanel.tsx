@@ -10,6 +10,7 @@ import { useMoveWorkflow, useRereadWorkflow } from '../../api/workflowQueries'
 import { Button } from '../../ui/Button'
 import { IconPause, IconPlay } from '../../ui/icons'
 import { useAfterPanelAction } from '../../ui/sidePanel'
+import { ExplainButton } from '../explain/ExplainButton'
 import { Troubleshooting } from '../run/Outcome'
 import { StatusBanner } from './Banner'
 import { needsFix } from './n8nChange'
@@ -89,6 +90,7 @@ function Summary({ useCase, me, now }: { useCase: UseCaseView; me: Me; now: Date
         </div>
       </dl>
       <div className={styles['panelBtns']}>
+        <ExplainButton useCaseId={useCase.use_case_id} name={useCase.name} />
         <PauseOrResume useCase={useCase} me={me} now={now} />
         <DraftActions useCase={useCase} viewer={viewerOf(me)} />
       </div>

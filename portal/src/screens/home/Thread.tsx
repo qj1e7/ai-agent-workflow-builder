@@ -1,6 +1,8 @@
-import { useState } from 'react'
+import { useContext, useState } from 'react'
 import type { PlannerReply } from '../../api/types'
 import { PlannerBot, type BotState } from '../../ui/PlannerBot'
+import { OpensInPanel, type PanelItem } from '../../ui/sidePanel'
+import { workflowInFocus } from '../explain/explain'
 import { AboutRows } from './AboutRows'
 import { Answer, type Page } from './AnswerCards'
 import { EditCard } from './EditCard'
@@ -42,7 +44,13 @@ function aboutBefore(messages: readonly Message[], index: number, memory: Thread
   return reply.answer === 'why_stopped' || reply.answer === 'check_workflows' ? reply.use_case_id : null
 }
 
-function ReplyBody({ message, now, page, say, about }: { message: Extract<Message, { kind: 'reply' }>; now: Date; page: Page; say: Say; about: string | null }) {
+/** The workflow “explain it” means: the one open in the side panel, else the one the newest earlier answer named. */
+function focusBefore(messages: readonly Message[], index: number, panel: PanelItem | null): string | null {
+  const replies = messages.slice(0, index).flatMap((message) => (message.kind === 'reply' ? [message.reply] : []))
+  return workflowInFocus(panel, replies)
+}
+
+function ReplyBody({ message, now, page, say, about, focus }: { message: Extract<Message, { kind: 'reply' }>; now: Date; page: Page; say: Say; about: string | null; focus: string | null }) {
   const { reply } = message
   const asker = useAsker()
   const sentence = sayOf(reply, asker)
@@ -67,7 +75,7 @@ function ReplyBody({ message, now, page, say, about }: { message: Extract<Messag
       {reply.answer === 'decided' ? <DecidedAnswer only={reply.only} now={now} say={say} /> : null}
       {reply.answer === 'decide' ? <DecideAnswer say={say} /> : null}
       {reply.answer === 'reply' ? <AboutRows about={reply.about} now={now} /> : null}
-      <Answer reply={reply} typed={message.typed} page={page} />
+      <Answer reply={reply} typed={message.typed} page={page} focus={focus} />
       {reply.answer === 'refused' && asker === 'approver' ? <RequestsToOpen /> : null}
     </div>
   )
@@ -80,6 +88,7 @@ function ReplyBody({ message, now, page, say, about }: { message: Extract<Messag
 export function Thread({ thread, now, page, memory }: ThreadProps) {
   const [said, setSaid] = useState<{ id: number; text: string } | null>(null)
   const newest = thread.messages.at(-1)?.id ?? 0
+  const panel = useContext(OpensInPanel)?.shown ?? null
   const sayFor = (id: number): Say => (text) => setSaid((now) => (now?.id === id ? now : { id, text }))
   return (
     <AskPlanner.Provider value={page.ask}>
@@ -143,7 +152,7 @@ export function Thread({ thread, now, page, memory }: ThreadProps) {
                 ) : (
                   <NewestAnswer.Provider value={message.id === newest}>
                     <CardLive.Provider value={message.id === newest}>
-                      <ReplyBody message={message} now={now} page={page} say={message.id === newest ? sayFor(message.id) : () => undefined} about={aboutBefore(thread.messages, index, memory)} />
+                      <ReplyBody message={message} now={now} page={page} say={message.id === newest ? sayFor(message.id) : () => undefined} about={aboutBefore(thread.messages, index, memory)} focus={focusBefore(thread.messages, index, panel)} />
                     </CardLive.Provider>
                   </NewestAnswer.Provider>
                 )}

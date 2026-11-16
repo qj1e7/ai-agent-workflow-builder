@@ -81,7 +81,7 @@ describe('the Planner’s short answers, as the chat-first sketch draws them', (
   it('lists what I can do in the registry’s short words, with what isn’t built yet in one Not yet line', () => {
     const reply: PlannerReply = { trace_id: null, answer: 'abilities', how_to_start: false, parts: [asked('What can you do', 'will_do')] }
     expect(text(draw(reply, { registry: REGISTRY }))).toBe(
-      'What I can do Watch software for new releases Create Jira tickets, after a yes Explain a stopped run, and retry it Change or pause your workflows Not yet: Teams channels, email, Confluence.',
+      'What I can do Watch software for new releases Create Jira tickets, after a yes Explain a stopped run, and retry it Change or pause your workflows Explain any workflow Not yet: Teams channels, email, Confluence.',
     )
     expect(sayOf(reply)).toBeNull()
   })

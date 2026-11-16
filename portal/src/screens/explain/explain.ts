@@ -1,3 +1,4 @@
+import { ApiError } from '../../api/client'
 import type { ExplainReply, ExplainSetting, ExplainStep, ExplainTouch, ExplainWrite, PlannerReply, Segment, WorkflowExplained } from '../../api/types'
 import type { PanelItem } from '../../ui/sidePanel'
 import { andList, count } from '../run/words'
@@ -63,6 +64,9 @@ export const approvalGist = (approval: string): string => /^[^.]*/.exec(approval
 export const explainPath = (useCaseId: string, version: number | null): string =>
   `/workflows/${encodeURIComponent(useCaseId)}/explain${version === null ? '' : `?version=${String(version)}`}`
 
+/** What a choice on “Which workflow?” sends, so the Planner explains the one she picked. */
+export const explainAsk = (name: string): string => `Explain the ${name}`
+
 export const explainTitle = (version: number | null): string => (version === null ? 'Explain' : `Explain, version ${String(version)}`)
 
 /** The one workflow an answer was about, or null when it named none or several. */
@@ -112,4 +116,18 @@ export function segmentsOfText(text: string): Segment[] {
     .split(/(“[^”]*”)/)
     .filter((piece) => piece !== '')
     .map((piece) => (piece.startsWith('“') && piece.endsWith('”') ? { text: piece.slice(1, -1), quoted: true } : { text: piece, quoted: false }))
+}
+
+export type ExplainState =
+  | { readonly kind: 'loading' }
+  | { readonly kind: 'report'; readonly report: WorkflowExplained }
+  | { readonly kind: 'said'; readonly words: string }
+  | { readonly kind: 'failed' }
+
+/** A report, or the server's own words when it has nothing to explain (a workflow that is gone, a version that isn't there, a workflow on the shared n8n workflow), or a failed load. */
+export function explainStateOf({ data, error }: { readonly data: WorkflowExplained | undefined; readonly error: unknown }): ExplainState {
+  if (data !== undefined && error === null) return { kind: 'report', report: data }
+  if (error === null || error === undefined) return { kind: 'loading' }
+  if (error instanceof ApiError && (error.status === 404 || error.status === 409)) return { kind: 'said', words: error.message }
+  return { kind: 'failed' }
 }
