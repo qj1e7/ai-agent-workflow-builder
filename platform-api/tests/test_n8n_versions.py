@@ -862,6 +862,18 @@ def test_a_layout_n8ns_editor_saved_untouched_has_no_change(schedule: Schedule):
     assert changes_between(laid_out, saved) == ["Published again, with no change to its blocks."]
 
 
+async def test_a_holder_is_a_colleague_where_n8n_access_is_not_set_up(v: Versions):
+    """With no n8n access set up, the platform can't look anyone up, and never shows an id."""
+    use_case_id, _ = await made(v.own, on=True)
+    async with v.own.lab.h.db.transaction("builder") as uow:
+        await uow.conn.execute(
+            "UPDATE builder.use_cases SET held_by = 'carol', held_since = %s"
+            " WHERE use_case_id = %s",
+            (uow.now, use_case_id),
+        )
+    assert (await v.view(use_case_id))["held_in_n8n"]["name"] == "a colleague"
+
+
 async def test_settings_saved_in_another_order_are_no_change(v: Versions):
     use_case_id, workflow_id = await made(v.own, on=True)
 
