@@ -120,6 +120,7 @@ from platform_api.builder.versions import (
 )
 from platform_api.builder.views import template_view
 from platform_api.builder.watchlist import Watchlist
+from platform_api.builder.workflow_report import Team
 from platform_api.db import Connection, Database, UnitOfWork, hold_workflow, json
 from platform_api.orchestration import (
     GITHUB_RELEASES,
@@ -707,6 +708,10 @@ class Builder:
             case _:
                 return await self.get_use_case(use_case_id, principal)
 
+    async def todays_rules(self) -> Team:
+        error_workflow = None if self._n8n is None else await self._n8n.error_workflow_id()
+        return Team(error_workflow, self._zone, await self.facts.known({}))
+
     async def list_versions(self, use_case_id: str) -> VersionList | None:
         async with self._db.connection("builder") as conn:
             row = await (await conn.execute(_USE_CASE_ROW, (use_case_id,))).fetchone()
@@ -940,8 +945,8 @@ class Builder:
         """In n8n, under the version compare: live when the workflow is on, else ready to publish
         when it is resumed. n8n's live version and draft must be the ones the platform saw."""
         assert self._n8n is not None and current.held is not None
-        error_workflow = await self._n8n.error_workflow_id()
-        graded = grade(held.document, error_workflow, self._zone, await self.facts.known({}))
+        rules = await self.todays_rules()
+        graded = grade(held.document, rules.error_workflow, rules.time_zone, rules.known)
         if graded.grade != "safe":
             return NotSafeToPublish(tuple(f.text for f in graded.findings))
         workflow_id = row["n8n_workflow_id"]
