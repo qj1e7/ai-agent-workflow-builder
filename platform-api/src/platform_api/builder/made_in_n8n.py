@@ -107,6 +107,11 @@ class MadeInN8nView(WireModel):
         'Portal. Each is words that follow "Set up also". The grade and findings are of the '
         "workflow once these are put right."
     )
+    set_up_notes: list[str] = Field(
+        description="What else to know before pressing Set up, in words to show: that it drops "
+        "changes saved in n8n since the version n8n runs, or that it can't add Start from the "
+        "Portal."
+    )
     can_set_up: bool
     why_not: str | None = Field(description="Why it can't be set up now, in words to show.")
 
@@ -207,6 +212,16 @@ class Candidate:
             return FIX_N8N_BLOCKS
         return None if self.published or self.graded.grade == "safe" else FIX_IN_N8N
 
+    @property
+    def notes(self) -> list[str]:
+        """Set up writes its fixes onto the version n8n runs, so a draft saved since is dropped."""
+        workflow = self.listed.workflow
+        edited = self.published and workflow.version_id != workflow.active_version_id
+        return [
+            *([REPLACES_DRAFT] if edited and self.fixed.fixed else []),
+            *([NO_START_ADDED] if self.fixed.no_start else []),
+        ]
+
     def view(self, closed: str | None = None) -> MadeInN8nView:
         """`closed` says why nothing can be set up now, whatever its grade."""
         workflow = self.listed.workflow
@@ -222,6 +237,7 @@ class Candidate:
                 *(f"In its draft: {f.text}" for f in self.draft),
             ],
             fixed_for_you=list(self.fixed.fixed),
+            set_up_notes=self.notes,
             can_set_up=why_not is None,
             why_not=why_not,
         )

@@ -6611,6 +6611,14 @@
             "title": "Published",
             "type": "boolean"
           },
+          "set_up_notes": {
+            "description": "What else to know before pressing Set up, in words to show: that it drops changes saved in n8n since the version n8n runs, or that it can't add Start from the Portal.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Set Up Notes",
+            "type": "array"
+          },
           "why_not": {
             "anyOf": [
               {
@@ -6636,6 +6644,7 @@
           "grade",
           "findings",
           "fixed_for_you",
+          "set_up_notes",
           "can_set_up",
           "why_not"
         ],

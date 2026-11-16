@@ -27,7 +27,7 @@ export function madeInN8nWords(workflow: MadeInN8nView, makerName: string): Made
   const { label, tone } = gradePill(workflow.grade)
   return {
     line: 'is in n8n but not registered',
-    sub: [`Made in n8n by ${makerName}.`, gradeSentence(workflow), fixedWords(workflow), after].filter(Boolean).join(' '),
+    sub: [`Made in n8n by ${makerName}.`, gradeSentence(workflow), fixedWords(workflow), ...workflow.set_up_notes, after].filter(Boolean).join(' '),
     pill: { label, tone: tone === 'ok' ? 'ok' : 'bad' },
   }
 }

@@ -402,6 +402,9 @@ class FixedForYou:
     document: Document
     fixed: tuple[str, ...]
     """What Set up changed, each in words that follow "Set up also"."""
+    no_start: bool = False
+    """It has a schedule, but no Start from the Portal, since no schedule that is on starts a
+    block."""
 
 
 def fixed_for_you(
@@ -430,7 +433,10 @@ def fixed_for_you(
     result["settings"] = settings
     if _start_added(result, workflow_id):
         fixed.append(ADDS_START)
-    return FixedForYou(result, tuple(fixed))
+    nodes = cast(list[dict[str, Any]], result["nodes"])
+    starts = any(n.get("type") == TYPE_OF["start"] and not n.get("disabled") for n in nodes)
+    scheduled = any(n.get("type") == TYPE_OF["schedule"] for n in nodes)
+    return FixedForYou(result, tuple(fixed), scheduled and not starts)
 
 
 def _start_added(document: Document, workflow_id: str) -> bool:
