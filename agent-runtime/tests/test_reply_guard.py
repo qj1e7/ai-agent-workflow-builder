@@ -3,12 +3,19 @@ from typing import Any
 import pytest
 
 from agent_runtime.abilities import CAPABILITIES
-from agent_runtime.contract import FreeReplyAnswer, ReplyEnvelope, ReplyOffer
+from agent_runtime.contract import (
+    ABOUT_LIMIT,
+    FreeReplyAnswer,
+    ReplyAbout,
+    ReplyEnvelope,
+    ReplyOffer,
+)
 from agent_runtime.how_to import HOW_TO
 from agent_runtime.reply_guard import (
     CHECKS,
     NOT_READY,
     Given,
+    about_of,
     claims_nothing_done,
     claims_only_what_is_built,
     failed_check,
@@ -408,6 +415,80 @@ def test_a_version_the_person_typed_is_theirs_to_quote():
     assert makes_nothing_up(shown_of(said("LangGraph 1.3 isn't on your Watchlist yet.")), given)
 
 
+# 7, grown (ADR 0049): a name the text says a list holds must be in that list in the facts.
+
+HELD = Given(
+    message="add redis",
+    facts=(
+        '{"watchlist":[{"name":"LangGraph","our_version":"1.2.14"},{"name":"Redis"},'
+        '{"name":"React Native"}],'
+        '"workflows":[{"name":"Morning bug list"}],"other_workflows":["Friday summary"],'
+        '"needs_you":{"total":2}}'
+    ),
+)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Your Watchlist already holds Kubernetes.",
+        "Your Watchlist holds LangGraph and Kubernetes.",
+        "The Watchlist has Redis, LangGraph, and Kubernetes.",
+        "Your Watchlist already holds LangGraph Studio.",
+        "Kubernetes is on your Watchlist.",
+        "LangGraph and Kubernetes are already on the Watchlist.",
+        "Your Software watchlist includes Kafka at 3.7.0.",
+        "You already watch Kubernetes.",
+        "Your workflows include Night audit.",
+        "Your workflow list has a workflow called Night audit.",
+        "Night audit is one of your workflows.",
+        "Needs you holds Kubernetes.",
+        "Your Watchlist holds both Redis and Kafka.",
+        "Your Watchlist holds React.",
+        "Your workflows include Redis.",
+        "Your Watchlist holds Morning bug list.",
+        "Needs you shows Morning bug list.",
+        "Your Watchlist already holds Go. Open the Watchlist to see its line.",
+        "Go is on your Watchlist.",
+        "Next is on your Watchlist, and so is Redis.",
+        "Your Watchlist holds Redis and Next.",
+        "If so, Go is on your Watchlist.",
+    ],
+)
+def test_a_name_a_list_is_said_to_hold_but_the_facts_dont_is_made_up(text: str):
+    assert not makes_nothing_up(shown_of(said(text)), HELD), text
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Your Watchlist already holds Redis.",
+        "Your Watchlist holds langgraph at 1.2.14, and Redis.",
+        "LangGraph and Redis are on your Watchlist.",
+        "Your Watchlist holds React Native.",
+        "Your workflows include Morning bug list and Friday summary.",
+        "The Watchlist holds the software your team runs.",
+        "Your Watchlist holds no software called Kubernetes yet.",
+        "Kubernetes isn't on your Watchlist. To add it, type Check Kubernetes for new releases.",
+        "Your Watchlist holds Redis, so open the Watchlist to see its line.",
+        "Needs you lists what waits for you.",
+        "If a run stops, Needs you lists it, and the AI troubleshooter explains why.",
+        "Your workflows list shows them, and an Approver says yes in Teams.",
+        "It is on your Watchlist, so open the Watchlist to see its line.",
+        "Everything you watch is on your Watchlist.",
+        "Your Watchlist holds Redis, and I can't add Go to it from here.",
+        "Your workflows list shows them, and Monday is when the next run starts.",
+    ],
+)
+def test_a_list_said_to_hold_only_what_the_facts_hold_passes(text: str):
+    assert makes_nothing_up(shown_of(said(text)), HELD), text
+
+
+def test_with_no_facts_sent_no_list_can_be_said_to_hold_a_name():
+    bare = Given(message="add redis", facts="")
+    assert not makes_nothing_up(shown_of(said("Your Watchlist already holds Redis.")), bare)
+
+
 # 8. Offers the person can use.
 
 
@@ -505,3 +586,24 @@ def test_the_words_shown_are_exactly_the_words_checked():
 
 def said_raw(text: str) -> ReplyEnvelope:
     return ReplyEnvelope(form="answer", text=text)
+
+
+# The names a reply speaks of (ADR 0049): code keeps each the facts hold and the text names.
+
+
+def test_about_keeps_each_name_the_facts_hold_and_the_text_names_in_the_facts_spelling():
+    text = "Your Watchlist holds langgraph and Redis. To pause the Morning bug list, type Pause."
+    names = ["langgraph", "Kubernetes", "Morning bug list", "Redis", "Friday summary", "redis"]
+
+    assert about_of(names, text, HELD.facts) == [
+        ReplyAbout(section="watchlist", name="LangGraph"),
+        ReplyAbout(section="workflows", name="Morning bug list"),
+        ReplyAbout(section="watchlist", name="Redis"),
+    ]
+
+
+def test_about_keeps_nothing_without_facts_and_never_more_than_the_limit():
+    assert about_of(["Redis"], "Your Watchlist holds Redis.", "") == []
+    many = '{"watchlist":[' + ",".join(f'{{"name":"S{n}"}}' for n in range(9)) + "]}"
+    text = " ".join(f"S{n}" for n in range(9))
+    assert len(about_of([f"S{n}" for n in range(9)], text, many)) == ABOUT_LIMIT

@@ -1,6 +1,7 @@
 from typing import Any
 
 import pytest
+from langchain_core.messages import AIMessage
 
 from agent_runtime.answers import answer_of, answer_task, decide
 from agent_runtime.contract import (
@@ -10,13 +11,15 @@ from agent_runtime.contract import (
     PlannerFacts,
     RefusedAnswer,
     RemoveSoftwareAnswer,
+    RequestPart,
     WatchedFact,
     WorkflowFact,
 )
 from agent_runtime.contracts import answer_request
 from agent_runtime.parts import parts_of
+from agent_runtime.planner_led import led
 from agent_runtime.reading import SkipRead, TaskRead
-from tests.fakes import ScriptedChat
+from tests.fakes import ScriptedChat, asks, call
 
 HELD = ("FastAPI", "LangGraph", "React", "React Native", "node js", "Ruby on Rails")
 """The team lead's watchlist on 16 Nov, with "node js" saved as typed."""
@@ -277,3 +280,37 @@ def test_a_removal_needs_no_second_model_call():
     assert isinstance(result, Answered)
     assert result.answer == removed("node js", "node js")
     assert [p.mark for p in result.parts] == ["will_do"]
+
+
+TEAM_LEAD = "help me remove node js from watchlist"
+ANY_LEAD = [
+    asks(call("reply", {"form": "answer", "text": "Open the Watchlist to remove it."}, "c1")),
+    asks(call("change_workflow", {"action": "pause", "workflow_words": "watchlist"}, "c1")),
+    asks(call("show", {"what": "abilities"}, "c1")),
+]
+
+
+@pytest.mark.parametrize("lead", ANY_LEAD)
+def test_the_ai_led_planner_shows_the_rules_removal_whatever_the_model_chose(lead: AIMessage):
+    chat = ScriptedChat(script=[lead], structured=[AS_AN_EDIT])
+    request = AnswerRequest(task=TEAM_LEAD, model=answer_request().model, facts=FACTS)
+    result = led(request, lambda timeout: chat)
+    assert result.tools == ("front_removal",)
+    assert result.result == Answered(
+        answer=removed("node js", "node js"),
+        parts=[RequestPart(text="remove node js from watchlist", mark="will_do")],
+    )
+
+
+@pytest.mark.parametrize("mode", ["rules", "ai_led"])
+def test_both_planner_modes_give_the_team_leads_request_the_remove_card(mode: str):
+    chat = ScriptedChat(script=list(ANY_LEAD[:1]), structured=[AS_AN_EDIT])
+    request = AnswerRequest(task=TEAM_LEAD, model=answer_request().model, facts=FACTS)
+    answered = (
+        answer_task(request, lambda timeout: chat, free_reply=False)
+        if mode == "rules"
+        else led(request, lambda timeout: chat).result
+    )
+    assert isinstance(answered, Answered)
+    assert answered.answer == removed("node js", "node js")
+    assert [p.mark for p in answered.parts] == ["will_do"]

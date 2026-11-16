@@ -80,6 +80,7 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "planner-answered-reply.json": answer_result_adapter,
     "planner-answered-reply-clarify.json": answer_result_adapter,
     "planner-answered-reply-cant.json": answer_result_adapter,
+    "planner-answered-reply-about.json": answer_result_adapter,
     "planner-answered-didnt-follow.json": answer_result_adapter,
     "planner-check-part-request.json": TypeAdapter(CheckPartRequest),
     "planner-check-part-cant.json": check_part_result_adapter,

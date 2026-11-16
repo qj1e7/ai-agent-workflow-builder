@@ -10,9 +10,11 @@ needs a card and a yes."""
 
 import re
 import unicodedata
-from collections.abc import Callable
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Final, Literal
+
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 from agent_runtime.abilities import (
     CAPABILITIES,
@@ -27,10 +29,12 @@ from agent_runtime.abilities import (
     words,
 )
 from agent_runtime.contract import (
+    ABOUT_LIMIT,
     CHOICE_LIMIT,
     REPLY_TEXT_LIMIT,
     FactSection,
     FreeReplyAnswer,
+    ReplyAbout,
     ReplyEnvelope,
     ReplyForm,
     ReplyOffer,
@@ -579,13 +583,204 @@ COUNT: Final = re.compile(
 )
 
 
+type ListName = Literal["watchlist", "workflows", "needs_you"]
+
+A_LIST: Final = (
+    r"(?P<list>(?:(?:the|your|our|this)\s+(?:team['’]s\s+)?)"
+    r"(?:(?:software\s+)?watch\s*list|list\s+of\s+workflows|workflows?\s+(?:list|page)|workflows)"
+    r"|needs\s+you)"
+)
+STILL: Final = r"(?:(?:already|also|still|now|currently|only)\s+)*"
+SAYS_IT_HOLDS: Final = re.compile(
+    rf"\b{A_LIST}\s+{STILL}(?:holds?|has|have|includes?|contains?|lists?|shows?|keeps?|tracks?|"
+    r"watch(?:es)?|covers?|carries|is\s+(?:watching|tracking|holding|showing))\b",
+    re.IGNORECASE,
+)
+"""A list said to hold what follows, as "Your Watchlist already holds Redis"."""
+YOU_WATCH: Final = re.compile(
+    rf"\b(?:you|we|your\s+team|the\s+team)\s+{STILL}(?:watch|track|follow|"
+    r"are\s+(?:watching|tracking|following))\b",
+    re.IGNORECASE,
+)
+"""The Watchlist said to hold what follows, in other words, as "You already watch Redis"."""
+IS_ON: Final = re.compile(
+    rf"\b(?:is|are|['’]s|['’]re)\s+{STILL}(?:on|in|among|listed\s+(?:on|in)|part\s+of|"
+    rf"one\s+of)\s+{A_LIST}",
+    re.IGNORECASE,
+)
+"""What comes before said to be on a list, as "Redis is on your Watchlist". A negation, as
+"isn't on", says it is not, and claims nothing held."""
+SUBJECT_START: Final = re.compile(
+    r"[;:]|\b(?:but|so|while|whereas|because|although|though|however|then|yet|if|when|once)\b",
+    re.IGNORECASE,
+)
+ITEM_BREAK: Final = re.compile(
+    r"\s*,\s*(?:(?:and|or)\s+)?|\s+(?:and|or|plus|as\s+well\s+as|along\s+with)\s+",
+    re.IGNORECASE,
+)
+LEADING: Final = re.compile(
+    r"^(?:(?:the|a|an|your|our|their|its|this|that|both|also|only|just|already|still|now|"
+    r"currently|even|software|workflows?|called|named|one)\s+)+",
+    re.IGNORECASE,
+)
+TOKEN: Final = re.compile(r"[A-Za-z0-9][\w.+#'’-]*")
+NUMBER: Final = re.compile(r"v?\d[\d.]*", re.IGNORECASE)
+NOT_A_NAME: Final = ENGLISH | words(
+    "software workflow workflows watchlist list lists page pages ticket tickets version versions "
+    "release releases newest latest current older team run runs ran check checks checked state "
+    "states nothing none everything anything something everyone approval approvals request "
+    "requests items things whatever less several many few most date behind ahead waiting stopped "
+    "paused draft drafts people person once twice since till yet either neither such another two "
+    "three four five six seven eight nine ten zero approve open add type tap pick"
+)
+"""Plain lowercase words that open a description or a new clause, never a name: "the software
+your team runs", "no software yet", "so open the Watchlist". Written with a capital mid-sentence,
+as "holds Go", the same word is a name."""
+APP_WORDS: Final = words(
+    "ai troubleshooter planner operator operators approver approvers rail card cards button chat "
+    "guide needs watchlist workflow workflows home teams jira github confluence"
+)
+"""The app's own words, as "the AI troubleshooter explains why" or "an Approver says yes". They
+are never a name a list holds, capitalised or not."""
+ALWAYS_CAPITAL: Final = words(
+    "i i'm i've i'll i'd monday tuesday wednesday thursday friday saturday sunday january "
+    "february march april june july august september october november december"
+)
+"""Words written with a capital wherever they stand, so the capital says nothing about them."""
+SUBJECT_WORDS: Final = words(
+    "it its this that these those they them all each every everything anything something nothing "
+    "none both either neither which what who whatever one some any many most few several another "
+    "other such you we i your our their my"
+)
+"""What opens a sentence that says something is on a list without naming it, as "It is on your
+Watchlist". At the start of a sentence a capital says nothing, so any other word is a name."""
+
+
+class _Named(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    name: str
+
+
+class _Lists(BaseModel):
+    """The lists in the facts as the prompt carried them, and nothing else of them."""
+
+    model_config = ConfigDict(extra="ignore")
+    watchlist: list[_Named] | None = None
+    workflows: list[_Named] | None = None
+    other_workflows: list[str] | None = None
+
+
+def _held(facts: str) -> Mapping[ListName, tuple[str, ...]]:
+    """The names each list holds in the facts. Needs you holds counts, never names. Facts that
+    don't parse hold nothing, so no name can be said to be held."""
+    try:
+        lists = _Lists.model_validate_json(facts) if facts else _Lists()
+    except ValidationError:
+        lists = _Lists()
+    flows = [w.name for w in lists.workflows or []] + list(lists.other_workflows or [])
+    return {
+        "watchlist": tuple(w.name for w in lists.watchlist or []),
+        "workflows": tuple(flows),
+        "needs_you": (),
+    }
+
+
+def _list_of(said: str) -> ListName:
+    low = said.casefold()
+    return "watchlist" if "watch" in low else "needs_you" if "needs" in low else "workflows"
+
+
+def _name_like(token: str, opens: bool = False) -> bool:
+    """Whether a word reads as a name. A number, or a word of the app or the calendar, never does.
+    At the start of a sentence any word but a pronoun or a determiner does, so "Go is on your
+    Watchlist" names Go. Elsewhere a capital makes a name of a plain word, as "holds Go", and a
+    plain lowercase word opens a description or a new clause."""
+    word = token.casefold().rstrip(".").replace("’", "'")
+    if NUMBER.fullmatch(word) or word in APP_WORDS or word in ALWAYS_CAPITAL:
+        return False
+    if opens:
+        return word not in SUBJECT_WORDS
+    return word not in NOT_A_NAME or any(c.isupper() for c in token)
+
+
+def _item_made_up(item: str, names: tuple[str, ...], opens: bool) -> bool:
+    """Whether a thing a list is said to hold names something the list doesn't: a name that is
+    none of the facts' names, exactly, case aside. A longer name that starts with a held one, as
+    "LangGraph Studio", is another name. `opens` is true for the words that open the sentence."""
+    said = item.strip(" \"'“”‘’([)]")
+    rest = LEADING.sub("", said)
+    opens = opens and rest == said
+    first = TOKEN.match(rest)
+    if first is None:
+        return False
+    for name in sorted(names, key=len, reverse=True):
+        held = re.match(rf"{_spelled(name)}(?![\w-])", rest, re.IGNORECASE)
+        if held is not None:
+            longer = re.match(rf"\s+({TOKEN.pattern})", rest[held.end() :])
+            return longer is not None and _name_like(longer.group(1))
+    return _name_like(first.group(0), opens)
+
+
+def _claims_held(sentence: str) -> list[tuple[ListName, str, bool]]:
+    """Each list the sentence says holds something, the words for what it holds, and whether
+    those words open the sentence."""
+    found: list[tuple[ListName, str, bool]] = []
+    for m in SAYS_IT_HOLDS.finditer(sentence):
+        found.append((_list_of(m.group("list")), sentence[m.end() :], False))
+    for m in YOU_WATCH.finditer(sentence):
+        found.append(("watchlist", sentence[m.end() :], False))
+    for m in IS_ON.finditer(sentence):
+        start = max((b.end() for b in SUBJECT_START.finditer(sentence, 0, m.start())), default=0)
+        found.append((_list_of(m.group("list")), sentence[start : m.start()], start == 0))
+    return found
+
+
+def holds_only_what_the_facts_hold(text: str, facts: str) -> bool:
+    """Every name the text says a list holds is in that list in the facts (ADR 0049). The third
+    check lets "holds" through, so without this a reply could say the Watchlist holds software it
+    doesn't."""
+    held = _held(facts)
+    return not any(
+        _item_made_up(item, held[name], opens and n == 0)
+        for sentence in sentences(text)
+        for name, words_held, opens in _claims_held(sentence)
+        for n, item in enumerate(ITEM_BREAK.split(words_held))
+    )
+
+
+def _spelled(name: str) -> str:
+    return r"\s+".join(re.escape(part) for part in name.split())
+
+
+def about_of(names: Sequence[str], text: str, facts: str) -> list[ReplyAbout]:
+    """The watched software and workflows a reply speaks of (ADR 0049): each name the model gave
+    that a list in the facts holds, case aside, and that the text names, spelled as the facts
+    spell it, in the model's order, at most `ABOUT_LIMIT`. The Portal draws each one's line."""
+    held = _held(facts)
+    kept: list[ReplyAbout] = []
+    for given in names:
+        for section in ("watchlist", "workflows"):
+            name = next(
+                (n for n in held[section] if n.casefold() == given.strip().casefold()), None
+            )
+            about = None if name is None else ReplyAbout(section=section, name=name)
+            named = name is not None and re.search(
+                rf"(?<![\w-]){_spelled(name)}(?![\w-])", text, re.I
+            )
+            if about is not None and named and about not in kept:
+                kept.append(about)
+                break
+    return kept[:ABOUT_LIMIT]
+
+
 def makes_nothing_up(reply: Shown, given: Given) -> bool:
     """A ticket key, a version number, or a count of the person's things in the text appears in
-    the facts sent or the message."""
+    the facts sent or the message, and every name a list is said to hold is in that list."""
     keys = TICKET_KEY.findall(reply.text)
     versions = [found.group(1) for found in VERSION.finditer(reply.text)]
     counts = COUNT.findall(reply.text)
-    return all(_seen(token, given) for token in [*keys, *versions, *counts])
+    seen = all(_seen(token, given) for token in [*keys, *versions, *counts])
+    return seen and holds_only_what_the_facts_hold(reply.text, given.facts)
 
 
 CHECKS: Final[tuple[tuple[GuardCheck, Callable[[Shown, Given], bool]], ...]] = (

@@ -382,6 +382,7 @@ locals {
         GITHUB_API_BASE          = var.github_api_base
         CALLBACK_ALLOWED_ORIGINS = local.url["platform-api"]
         PLATFORM_JIRA_URL        = local.url["platform-api"]
+        PLANNER_MODE             = var.planner_mode
       }
       secrets = merge(
         { AGENT_API_KEY = local.secret["agent-api-key"] },

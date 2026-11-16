@@ -128,6 +128,8 @@ services:
       AGENT_MODEL_BASE_URL: ${AGENT_MODEL_BASE_URL:-}
       AGENT_MODEL_API_KEY: ${AGENT_MODEL_API_KEY:-}
       AGENT_MODEL_PRIVATE_HOSTS: ${AGENT_MODEL_PRIVATE_HOSTS:-}
+      # rules is today's Planner. ai_led lets the model lead through checked tools (ADR 0049).
+      PLANNER_MODE: ${PLANNER_MODE:-rules}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8100/healthz', timeout=2)"]
       interval: 3s

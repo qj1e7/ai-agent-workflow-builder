@@ -2,6 +2,9 @@ import re
 from collections.abc import Iterable
 from dataclasses import dataclass
 
+from agent_runtime.parts import locate
+from agent_runtime.planner_led import Led, clause_holding, clauses_in
+
 
 @dataclass(frozen=True)
 class Check:
@@ -224,3 +227,19 @@ def no_write_claim(text: str, source: str) -> Check:
         "no_write_claim",
         write_claims(text) + sorted(ticket_keys(text) - ticket_keys(source)),
     )
+
+
+def false_ticks(led: Led) -> list[str]:
+    """Each part the answer ticks on a clause its tool call's arguments don't reach, counted by
+    code from the recorded call and the answer's parts, never by the judge (ADR 0049, decision
+    6). An answer from the rules' own marks or a whole-message reply records no reach."""
+    shown = led.shown
+    if shown is None or shown.reached is None:
+        return []
+    clauses = clauses_in(shown.text)
+    return [
+        part.text
+        for part in shown.answered.parts
+        if part.mark == "will_do"
+        and clause_holding(clauses, locate(shown.text, part.text)) not in shown.reached
+    ]

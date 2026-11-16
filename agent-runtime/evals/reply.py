@@ -9,10 +9,14 @@ not is scored by the judge, a different model, never by the guard's own checks."
 
 import json
 import time
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, fields, replace
 from typing import Any, Final, Literal, cast
+from uuid import UUID
 
+from langchain_core.callbacks import BaseCallbackHandler
 from langchain_core.language_models import BaseChatModel
+from langchain_core.messages import BaseMessage
+from langchain_core.outputs import ChatGeneration, LLMResult
 from pydantic import BaseModel
 
 from agent_runtime.abilities import CAPABILITY_LIST
@@ -29,27 +33,40 @@ from agent_runtime.contract import (
     Answered,
     AnswerRequest,
     DidntFollowAnswer,
+    EditAnswer,
     FreeReplyAnswer,
     ModelAccess,
+    PartAnswer,
     PlannerAnswer,
     PlannerFacts,
     PreviousTurn,
     ReplyEnvelope,
+    RequestPart,
+    ScheduleChange,
+    SetupCardAnswer,
+    WatchlistAnswer,
+    WhichSoftwareAnswer,
 )
 from agent_runtime.drafting import UNUSABLE
 from agent_runtime.free_reply import STILL_UNCLEAR, answer_of_envelope, dead_end, reply_messages
 from agent_runtime.parts import parts_of
+from agent_runtime.planner_led import Led, led
 from agent_runtime.questions import QuestionReply, answer_of_reply, question_messages
 from agent_runtime.reply_verifier import Verdict, flag_of, verify_messages
-from evals.anything import HOME_FACTS
+from evals.anything import HOME_FACTS, usage_of
 from evals.anything import words_of as shown_words
-from evals.checks import Check, check, no_themed_names
+from evals.checks import Check, check, false_ticks, no_themed_names
 from evals.jobs import CASES, Answer, Case, Job, marked
 
 CALL_LIMIT_S = 10.0
 """ADR 0032's limit for each model call."""
 
 type Group = Literal[
+    "add_software",
+    "follow_up",
+    "no_time",
+    "multi",
+    "watch",
     "team_lead",
     "how_to",
     "chat",
@@ -100,6 +117,8 @@ class Shown:
     fell_back: str | None = None
     """Why a free reply gave the fixed fallback: the check it failed, the verifier's flag, or
     "call"."""
+    parts: list[RequestPart] | None = None
+    """The marks the answer carries, as `answer_task` marks it."""
 
 
 def request_of(case: ReplyCase) -> AnswerRequest:
@@ -131,7 +150,12 @@ def _before_reply(read: TaskRead, case: ReplyCase, steps: Steps) -> PlannerAnswe
 
 
 def shown_for(read: TaskRead, case: ReplyCase, steps: Steps) -> Shown:
-    """What the person sees, decided as `answer_task` and `reply_to` decide it."""
+    """What the person sees, decided and marked as `answer_task` and `reply_to` decide it."""
+    shown = _decided(read, case, steps)
+    return replace(shown, parts=parts_of(read, case.task, shown.answer, case.facts))
+
+
+def _decided(read: TaskRead, case: ReplyCase, steps: Steps) -> Shown:
     first = _before_reply(read, case, steps)
     gap = dead_end(first, parts_of(read, case.task, first, case.facts), case.task)
     if gap is None:
@@ -148,8 +172,15 @@ def shown_for(read: TaskRead, case: ReplyCase, steps: Steps) -> Shown:
     return Shown(reply) if flag is None else Shown(fallback, flag)
 
 
+@dataclass
+class _Calls:
+    """Each later call's reply, so the case counts every call it made, not only the reading."""
+
+    raw: list[BaseMessage | None]
+
+
 def _structured[A: BaseModel](
-    model: BaseChatModel, shape: type[A], messages: tuple[str, str], marker: str
+    model: BaseChatModel, shape: type[A], messages: tuple[str, str], marker: str, calls: _Calls
 ) -> tuple[A | None, float]:
     system, user = messages
     started = time.perf_counter()
@@ -158,6 +189,8 @@ def _structured[A: BaseModel](
         reply = cast(dict[str, object], structured.invoke(marked(f"{system}\n\n{user}", marker)))
     except Exception:
         return None, time.perf_counter() - started
+    raw = reply.get("raw")
+    calls.raw.append(raw if isinstance(raw, BaseMessage) else None)
     parsed = reply.get("parsed")
     return (parsed if isinstance(parsed, shape) else None), time.perf_counter() - started
 
@@ -169,28 +202,31 @@ def follow_up(model: BaseChatModel, case: ReplyCase, first: Answer, marker: str)
         return first
     read, request = first.value, request_of(case)
     steps = Steps()
+    calls = _Calls([first.raw])
     messages = question_messages(request)
     if isinstance(decide(read, request), AskTheQuestionLane) and messages is not None:
-        lane, took = _structured(model, QuestionReply, messages, marker)
+        lane, took = _structured(model, QuestionReply, messages, marker, calls)
         steps = Steps(lane=lane, seconds=(took,))
     answer = _before_reply(read, case, steps)
     gap = dead_end(answer, parts_of(read, case.task, answer, case.facts), case.task)
     if gap is not None:
-        envelope, took = _structured(model, ReplyEnvelope, reply_messages(request, gap), marker)
+        asked = reply_messages(request, gap)
+        envelope, took = _structured(model, ReplyEnvelope, asked, marker, calls)
         steps = Steps(steps.lane, True, envelope, seconds=(*steps.seconds, took))
         passed = answer_of_envelope(envelope, request) if envelope is not None else None
         if isinstance(passed, FreeReplyAnswer) and passed is not STILL_UNCLEAR:
-            verdict, took = _structured(model, Verdict, verify_messages(passed), marker)
+            verdict, took = _structured(model, Verdict, verify_messages(passed), marker, calls)
             steps = Steps(steps.lane, True, envelope, verdict, True, (*steps.seconds, took))
-    shown = shown_for(read, case, steps).answer
-    return Answer(read, words_of(shown, case), first.raw, steps)
+    shown = shown_for(read, case, steps)
+    return Answer(read, words_of(shown.answer, case, shown.parts), usage_of(calls.raw), steps)
 
 
-def words_of(answer: PlannerAnswer, case: ReplyCase) -> str:
+def words_of(answer: PlannerAnswer, case: ReplyCase, parts: list[RequestPart] | None = None) -> str:
     """The answer as the judge and the report read it: its kind, then what the Portal shows, in
-    the words the `anything` job draws it with. The gate reads the kind."""
-    parts = parts_of(None, case.task, answer, case.facts)
-    shown = shown_words(Answered(answer=answer, parts=parts), case.facts or HOME_FACTS)
+    the words the `anything` job draws it with. The gate reads the kind. `parts` are the marks
+    the answer carries, which the Portal draws (ADR 0049)."""
+    marks = parts_of(None, case.task, answer, case.facts) if parts is None else parts
+    shown = shown_words(Answered(answer=answer, parts=marks), case.facts or HOME_FACTS)
     return f"[{_kind(answer)}] {shown}"
 
 
@@ -257,7 +293,7 @@ def _rejected(shown: Shown, steps: Steps) -> str:
 def score(case: ReplyCase, answer: Answer) -> list[Check]:
     refused = word_rule_refusal(case.task)
     if refused is not None:
-        shown = Shown(refused)
+        shown = Shown(refused, parts=parts_of(None, case.task, refused))
         steps = Steps()
     elif not isinstance(answer.value, TaskRead):
         return [check("answered", ["no structured reading"])]
@@ -268,7 +304,7 @@ def score(case: ReplyCase, answer: Answer) -> list[Check]:
     found = [
         check("answered", []),
         check("right_kind", [] if _acceptable(case, shown.answer) else [kind]),
-        no_themed_names(words_of(shown.answer, case)),
+        no_themed_names(words_of(shown.answer, case, shown.parts)),
     ]
     if case.must_refuse:
         found.append(check("refuses_a_skip", [] if kind == "refused" else [kind]))
@@ -329,3 +365,196 @@ REPLY_DEV = _DevCases(
         "title": "The reply golden set less its held-out third, for tuning",
     }
 )
+
+
+# The same cases on the AI-led Planner (PLANNER_MODE=ai_led, ADR 0049): the product's own `led`,
+# scored by the same checks on what the person would see.
+
+
+class _Timed(BaseCallbackHandler):
+    """Each model call's seconds and its reply, so every call is held to ADR 0032's limit and
+    counted."""
+
+    def __init__(self) -> None:
+        self.started: dict[UUID, float] = {}
+        self.seconds: list[float] = []
+        self.messages: list[BaseMessage] = []
+
+    def on_chat_model_start(
+        self, serialized: Any, messages: Any, *, run_id: UUID, **kw: Any
+    ) -> None:
+        self.started[run_id] = time.perf_counter()
+
+    def on_llm_end(self, response: LLMResult, *, run_id: UUID, **kw: Any) -> None:
+        self.seconds.append(time.perf_counter() - self.started.pop(run_id, time.perf_counter()))
+        for row in response.generations:
+            self.messages += [g.message for g in row if isinstance(g, ChatGeneration)]
+
+
+@dataclass(frozen=True)
+class LedSteps:
+    led: Led
+    seconds: tuple[float, ...]
+
+
+def ask_led(model: BaseChatModel, case: ReplyCase) -> Answer:
+    timed = _Timed()
+    watched = model.model_copy(update={"callbacks": [timed]})
+    outcome = led(request_of(case), lambda _timeout: watched)
+    result = outcome.result
+    text = (
+        words_of(result.answer, case, result.parts)
+        if isinstance(result, Answered)
+        else result.message
+    )
+    shown = f"{text}\n(tools: {', '.join(outcome.tools) or 'none'}"
+    shown += f"; fell back: {outcome.fell_back})" if outcome.fell_back else ")"
+    if outcome.errors:
+        shown += "".join(f"\n(tried: {t[:300]})" for t in outcome.tried)
+    steps = LedSteps(outcome, tuple(timed.seconds))
+    return Answer(outcome, shown, usage_of(timed.messages), steps)
+
+
+def answer_shown(text: str) -> str:
+    """The words the judge reads: the answer as shown, without the record of the tools."""
+    return text.split("\n(tools: ")[0]
+
+
+def judge_question_led(case: ReplyCase, answer: str) -> str:
+    return judge_question(case, answer_shown(answer))
+
+
+def score_led(case: ReplyCase, answer: Answer) -> list[Check]:
+    steps = answer.extra
+    result = steps.led.result if isinstance(steps, LedSteps) else None
+    if not isinstance(steps, LedSteps) or not isinstance(result, Answered):
+        return [check("answered", ["the Portal shows its offline answer"])]
+    outcome, shown = steps.led, result.answer
+    kind = _kind(shown)
+    found = [
+        check("answered", []),
+        check("right_kind", [] if _acceptable(case, shown) else [kind]),
+        no_themed_names(words_of(shown, case, result.parts)),
+        check("ticks_reached", false_ticks(outcome)),
+    ]
+    if case.must_refuse:
+        found.append(check("refuses_a_skip", [] if kind == "refused" else [kind]))
+    if case.must_not_refuse:
+        found.append(check("keeps_a_plain_write", ["refused"] if kind == "refused" else []))
+    if outcome.tools and outcome.tools[0] not in ("word_rule", "front_refusal"):
+        why = f"{outcome.fell_back}: {' | '.join(outcome.errors)}" if outcome.fell_back else ""
+        found.append(check("led_answer_shown", [why] if why else []))
+    slow = [f"{s:.1f} s" for s in steps.seconds if s > CALL_LIMIT_S]
+    found.append(check("calls_within_limit", slow))
+    return found
+
+
+def shown_answer(case: ReplyCase, answer: Answer) -> PlannerAnswer | None:
+    """What the person saw for a case in either mode, or None when nothing was shown."""
+    if isinstance(answer.extra, LedSteps):
+        result = answer.extra.led.result
+        return result.answer if isinstance(result, Answered) else None
+    refused = word_rule_refusal(case.task)
+    if refused is not None:
+        return refused
+    if not isinstance(answer.value, TaskRead):
+        return None
+    steps = answer.extra if isinstance(answer.extra, Steps) else Steps()
+    return shown_for(answer.value, case, steps).answer
+
+
+def _led_twin(job: Job[Any]) -> Job[Any]:
+    return replace(
+        job,
+        product_call=ask_led,
+        score=score_led,
+        judge_question=judge_question_led,
+        most_calls=6,
+    )
+
+
+REPLY_LED = _led_twin(REPLY)
+REPLY_GATE_LED = _led_twin(REPLY_GATE)
+REPLY_DEV_LED = _led_twin(REPLY_DEV)
+
+
+# The spike's own cases (16 Nov 2026): a request that names no software, a follow-up that answers
+# the Planner's question, a schedule with no time, small talk and several asks in one message.
+
+
+class SpikeCase(ReplyCase):
+    facts: PlannerFacts | None = HOME_FACTS
+    """As the platform sends a snapshot with every typed request."""
+    software: str | None = None
+    """The software a watchlist answer must offer, when the case wants that action."""
+    asks_for_detail: bool = False
+    """True when a detail is missing, so a good answer asks for it."""
+
+
+def asks_for_detail(shown: PlannerAnswer | None) -> bool:
+    """Whether the answer asks the person for the missing detail: which software, one
+    clarifying question, a card with a part left to fill, or a schedule time to pick."""
+    match shown:
+        case WhichSoftwareAnswer() | FreeReplyAnswer(form="clarify"):
+            return True
+        case SetupCardAnswer() | PartAnswer():
+            return any(row.state == "missing" for row in shown.rows)
+        case EditAnswer(schedule=ScheduleChange() as change):
+            return change.time_unclear or change.hour is not None
+        case _:
+            return False
+
+
+def spike_checks(case: SpikeCase, shown: PlannerAnswer | None) -> list[Check]:
+    found: list[Check] = []
+    if case.software is not None:
+        got = shown.software if isinstance(shown, WatchlistAnswer) else None
+        right = (got or "").casefold() == case.software.casefold()
+        missed = f"{_kind(shown) if shown else 'nothing'} {got or ''}".strip()
+        found.append(check("right_action", [] if right else [missed]))
+    if case.asks_for_detail:
+        missed = _kind(shown) if shown else "nothing"
+        found.append(check("asks_for_the_detail", [] if asks_for_detail(shown) else [missed]))
+    return found
+
+
+def score_spike(case: SpikeCase, answer: Answer) -> list[Check]:
+    return [*score(case, answer), *spike_checks(case, shown_answer(case, answer))]
+
+
+def score_spike_led(case: SpikeCase, answer: Answer) -> list[Check]:
+    return [*score_led(case, answer), *spike_checks(case, shown_answer(case, answer))]
+
+
+class _SpikeCases(Job[SpikeCase]):
+    def cases(self) -> list[SpikeCase]:
+        rows: list[dict[str, Any]] = json.loads((CASES / "spike.json").read_text())
+        return [SpikeCase.model_validate(row) for row in rows]
+
+
+class _SpikeDevCases(_SpikeCases):
+    def cases(self) -> list[SpikeCase]:
+        return [case for case in super().cases() if not case.held_out]
+
+
+SPIKE = _SpikeCases(
+    **{
+        **{f.name: getattr(REPLY, f.name) for f in fields(REPLY)},
+        "name": "spike",
+        "title": "The AI-led spike's cases: missing details, follow-ups, small talk, several asks",
+        "case_type": SpikeCase,
+        "score": score_spike,
+    }
+)
+SPIKE_DEV = _SpikeDevCases(
+    **{
+        **{f.name: getattr(SPIKE, f.name) for f in fields(SPIKE)},
+        "name": "spike_dev",
+        "title": "The spike's cases less their held-out third, for tuning",
+    }
+)
+SPIKE_LED = replace(_led_twin(SPIKE), score=score_spike_led)
+SPIKE_DEV_LED = replace(_led_twin(SPIKE_DEV), score=score_spike_led)
+LED_TWINS: Final = {
+    job.name: job for job in (REPLY_LED, REPLY_GATE_LED, REPLY_DEV_LED, SPIKE_LED, SPIKE_DEV_LED)
+}

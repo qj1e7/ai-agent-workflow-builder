@@ -1,0 +1,26 @@
+{
+  "status": "answered",
+  "answer": {
+    "kind": "reply",
+    "form": "answer",
+    "text": "To see where LangGraph stands, open the Watchlist. Its line below shows the version.",
+    "choices": [],
+    "offer": null,
+    "looked_at": [],
+    "about": [
+      {
+        "section": "watchlist",
+        "name": "LangGraph"
+      }
+    ]
+  },
+  "parts": [
+    {
+      "text": "where is langgraph at",
+      "mark": "will_do",
+      "reason": null,
+      "note": null,
+      "choices": []
+    }
+  ]
+}

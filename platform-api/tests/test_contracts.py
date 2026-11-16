@@ -154,6 +154,7 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "agent/planner-answered-reply.json": answer_result_adapter,
     "agent/planner-answered-reply-clarify.json": answer_result_adapter,
     "agent/planner-answered-reply-cant.json": answer_result_adapter,
+    "agent/planner-answered-reply-about.json": answer_result_adapter,
     "agent/planner-answered-didnt-follow.json": answer_result_adapter,
     "agent/planner-check-part-request.json": TypeAdapter(CheckPartRequest),
     "agent/planner-check-part-cant.json": check_part_result_adapter,

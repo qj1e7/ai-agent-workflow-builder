@@ -68,6 +68,7 @@ from agent_runtime.contract import (
     ReadReleasesRequest,
     ReleaseRead,
     ReleasesRead,
+    ReplyAbout,
     ReplyEnvelope,
     RoomAddressee,
     SoftwareMatch,
@@ -995,6 +996,16 @@ def answered_reply_cant() -> Answered:
     return _free_reply("email the bug list to my manager", envelope)
 
 
+def answered_reply_about() -> Answered:
+    """A reply that names watched software: the Portal draws LangGraph's state line under it
+    (ADR 0049)."""
+    text = "To see where LangGraph stands, open the Watchlist. Its line below shows the version."
+    answered = _free_reply("where is langgraph at?", ReplyEnvelope(form="answer", text=text))
+    about = [ReplyAbout(section="watchlist", name="LangGraph")]
+    answer = answered.answer.model_copy(update={"about": about})
+    return answered.model_copy(update={"answer": answer})
+
+
 def answered_didnt_follow() -> Answered:
     answer = DidntFollowAnswer()
     return Answered(answer=answer, parts=parts_of(None, "flibber the wotsit", answer))
@@ -1056,6 +1067,7 @@ def fixtures() -> dict[str, WireModel]:
         "planner-answered-reply.json": answered_reply(),
         "planner-answered-reply-clarify.json": answered_reply_clarify(),
         "planner-answered-reply-cant.json": answered_reply_cant(),
+        "planner-answered-reply-about.json": answered_reply_about(),
         "planner-answered-didnt-follow.json": answered_didnt_follow(),
         "planner-check-part-request.json": CheckPartRequest(kind="do", text="Email the list"),
         "planner-check-part-cant.json": check_one_part(
