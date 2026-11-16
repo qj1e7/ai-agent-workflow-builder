@@ -32,6 +32,8 @@ HOW_TO: Final = (
     "To change when a workflow runs, say so in the box, such as Move the morning check to 10am.",
     "To pause a workflow, type Pause and its name, and type Resume and its name to turn it back "
     "on.",
+    "To see what a workflow does, type Explain and its name in the box, such as Explain the "
+    "morning check, or press Explain on its row in Workflows.",
     "When a run stops, the AI troubleshooter explains why, and an Operator can retry it.",
     "To report a problem, or to ask for something the Planner can't do yet, tap Ask the team.",
 )

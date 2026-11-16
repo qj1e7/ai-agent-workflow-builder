@@ -1,0 +1,16 @@
+{
+  "status": "answered",
+  "answer": {
+    "kind": "explain",
+    "workflow_words": "FastAPI release check"
+  },
+  "parts": [
+    {
+      "text": "Please explain the FastAPI release check",
+      "mark": "will_do",
+      "reason": null,
+      "note": null,
+      "choices": []
+    }
+  ]
+}

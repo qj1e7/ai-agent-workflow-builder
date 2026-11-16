@@ -82,6 +82,7 @@ from agent_runtime.contract import (
     WatchlistInputs,
     WatchlistScheduleFact,
     WireModel,
+    WorkflowFact,
     agent_event_adapter,
 )
 from agent_runtime.free_reply import answer_of_envelope
@@ -924,6 +925,24 @@ def answered_removal() -> Answered:
     return Answered(answer=answer, parts=parts_of(read, task, answer, facts))
 
 
+def answered_explain() -> Answered:
+    read = TaskRead(
+        asks_about="my_workflows",
+        workflow_words="the FastAPI release check",
+        skips_the_yes=NO_SKIP,
+    )
+    task = "Please explain the FastAPI release check"
+    facts = PlannerFacts(
+        workflows=[
+            WorkflowFact(
+                name="FastAPI release check", state="on", last_run="Done", last_run_at=None
+            )
+        ]
+    )
+    answer = answer_of(read, task, facts)
+    return Answered(answer=answer, parts=parts_of(read, task, answer, facts))
+
+
 def question_request() -> AnswerRequest:
     watched = [
         WatchedFact(name=n, repo=r, our_version=o, newest_version=v, state=t)
@@ -1062,6 +1081,7 @@ def fixtures() -> dict[str, WireModel]:
         "planner-answered-edit.json": answered_edit(),
         "planner-answered-pause.json": answered_pause(),
         "planner-answered-remove.json": answered_removal(),
+        "planner-answered-explain.json": answered_explain(),
         "planner-question-request.json": question_request(),
         "planner-answered-question.json": answered_question(),
         "planner-answered-reply.json": answered_reply(),

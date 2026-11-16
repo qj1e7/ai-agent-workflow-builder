@@ -50,7 +50,7 @@ from agent_runtime.contract import (
 from agent_runtime.drafting import UNUSABLE
 from agent_runtime.free_reply import STILL_UNCLEAR, answer_of_envelope, dead_end, reply_messages
 from agent_runtime.parts import parts_of
-from agent_runtime.planner_led import Led, led
+from agent_runtime.planner_led import FRONT_STANDS, Led, led
 from agent_runtime.questions import QuestionReply, answer_of_reply, question_messages
 from agent_runtime.reply_verifier import Verdict, flag_of, verify_messages
 from evals.anything import HOME_FACTS, usage_of
@@ -441,7 +441,7 @@ def score_led(case: ReplyCase, answer: Answer) -> list[Check]:
         found.append(check("refuses_a_skip", [] if kind == "refused" else [kind]))
     if case.must_not_refuse:
         found.append(check("keeps_a_plain_write", ["refused"] if kind == "refused" else []))
-    if outcome.tools and outcome.tools[0] not in ("word_rule", "front_refusal", "front_removal"):
+    if outcome.tools and outcome.tools[0] not in ("word_rule", *FRONT_STANDS.values()):
         why = f"{outcome.fell_back}: {' | '.join(outcome.errors)}" if outcome.fell_back else ""
         found.append(check("led_answer_shown", [why] if why else []))
     slow = [f"{s:.1f} s" for s in steps.seconds if s > CALL_LIMIT_S]

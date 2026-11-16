@@ -30,6 +30,7 @@ from agent_runtime.contract import (
     CheckWorkflowsAnswer,
     DidntFollowAnswer,
     EditAnswer,
+    ExplainAnswer,
     FreeReplyAnswer,
     ModelAccess,
     ModelProblem,
@@ -110,6 +111,7 @@ type Kind = Literal[
     "pause",
     "resume",
     "remove_software",
+    "explain",
 ]
 FREE_REPLY_FITS: Final = frozenset({"abilities", "question", "cant"})
 """A case that accepts the list of abilities, a question answer or a can't also accepts a free
@@ -575,6 +577,8 @@ def _said(shown: PlannerAnswer, facts: PlannerFacts) -> list[str]:
             return [f"{shown.kind.capitalize()} {_which(shown.workflow_words)}, one of yours."]
         case RemoveSoftwareAnswer():
             return _removal(shown, facts)
+        case ExplainAnswer():
+            return _explained(shown, facts)
         case FreeReplyAnswer():
             taps = [f"[{choice}]" for choice in shown.choices]
             if shown.form == "cant":
@@ -592,6 +596,23 @@ def _removal(shown: RemoveSoftwareAnswer, facts: PlannerFacts) -> list[str]:
     return [
         f"Remove {name} from the Watchlist? [Remove from watchlist]" for name in shown.watched_as
     ]
+
+
+def _explained(shown: ExplainAnswer, facts: PlannerFacts) -> list[str]:
+    """The Portal's explain card, for each workflow whose name holds every word the answer gives,
+    as the platform matches them."""
+    words = shown.workflow_words
+    if words is None:
+        return ["[The report of the workflow in focus opens, In short first.]"]
+    said = set(re.findall(r"\w+", words.casefold())) - {"the", "my", "our"}
+    rows = [w for w in facts.workflows or [] if said <= set(re.findall(r"\w+", w.name.casefold()))]
+    if not rows:
+        return [
+            f"I can't find a workflow called that. I looked for “{words}”. [Check my workflows]"
+        ]
+    if len(rows) > 1:
+        return ["Which workflow?", " ".join(f"[Explain the {w.name}]" for w in rows)]
+    return [f"“{rows[0].name}”: [its report, In short first] [Open the workflow]"]
 
 
 def _named(facts: PlannerFacts, workflow_words: str | None) -> list[WorkflowFact]:

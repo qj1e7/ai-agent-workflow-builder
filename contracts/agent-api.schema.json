@@ -1735,6 +1735,34 @@
       "title": "ExampleSpec",
       "type": "object"
     },
+    "ExplainAnswer": {
+      "additionalProperties": false,
+      "description": "A request to explain a workflow the person has (ADR 0051). The platform matches the words\nto one of the person's workflows and shows its report. It changes nothing, so both roles may\nask.",
+      "properties": {
+        "kind": {
+          "const": "explain",
+          "default": "explain",
+          "title": "Kind",
+          "type": "string"
+        },
+        "workflow_words": {
+          "anyOf": [
+            {
+              "maxLength": 80,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The words of the request that name the workflow, as it wrote them, as \"the FastAPI release check\" names FastAPI release check. None for \"explain it\", so the Portal explains the workflow in focus.",
+          "title": "Workflow Words"
+        }
+      },
+      "title": "ExplainAnswer",
+      "type": "object"
+    },
     "FactSection": {
       "enum": [
         "watchlist",
@@ -2531,6 +2559,7 @@
           "check_workflows": "#/$defs/CheckWorkflowsAnswer",
           "didnt_follow": "#/$defs/DidntFollowAnswer",
           "edit": "#/$defs/EditAnswer",
+          "explain": "#/$defs/ExplainAnswer",
           "needs_me": "#/$defs/NeedsMeAnswer",
           "part": "#/$defs/PartAnswer",
           "pause": "#/$defs/PauseAnswer",
@@ -2591,6 +2620,9 @@
         },
         {
           "$ref": "#/$defs/RemoveSoftwareAnswer"
+        },
+        {
+          "$ref": "#/$defs/ExplainAnswer"
         },
         {
           "$ref": "#/$defs/FreeReplyAnswer"

@@ -1365,6 +1365,21 @@ class RemoveSoftwareAnswer(WireModel):
     )
 
 
+class ExplainAnswer(WireModel):
+    """A request to explain a workflow the person has (ADR 0051). The platform matches the words
+    to one of the person's workflows and shows its report. It changes nothing, so both roles may
+    ask."""
+
+    kind: Literal["explain"] = "explain"
+    workflow_words: str | None = Field(
+        default=None,
+        max_length=80,
+        description='The words of the request that name the workflow, as it wrote them, as "the '
+        'FastAPI release check" names FastAPI release check. None for "explain it", so the '
+        "Portal explains the workflow in focus.",
+    )
+
+
 type PlannerAnswer = Annotated[
     SetupCardAnswer
     | PartAnswer
@@ -1381,6 +1396,7 @@ type PlannerAnswer = Annotated[
     | PauseAnswer
     | ResumeAnswer
     | RemoveSoftwareAnswer
+    | ExplainAnswer
     | FreeReplyAnswer
     | DidntFollowAnswer,
     Field(discriminator="kind"),
