@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 ---
 
 # A workflow drafter may propose any n8n block, code explains every workflow, and an Approver's yes sets up a flagged workflow
