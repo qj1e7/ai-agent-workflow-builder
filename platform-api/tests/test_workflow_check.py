@@ -139,6 +139,46 @@ def test_a_second_yes_on_one_path_needs_a_fix() -> None:
     assert graded(document) == "needs_a_fix"
 
 
+def turned_off(document: Doc, *names: str) -> Doc:
+    """Ticks Deactivate on each block in n8n's editor."""
+    for name in names:
+        node(document, name)["disabled"] = True
+    return document
+
+
+def test_a_yes_turned_off_in_n8n_is_no_yes() -> None:
+    """n8n passes items straight through a turned-off block, so it asks nobody (ADR 0051)."""
+    result = grade(turned_off(release_check(), "Ask for a yes"), ERROR_WORKFLOW, TEAM_ZONE)
+    assert result.grade == "writes_refused"
+    assert [f.text for f in result.findings] == ['"Create ticket" can run without a yes.']
+
+
+def test_a_write_turned_off_in_n8n_still_needs_its_yes() -> None:
+    """Turning a write off never makes a workflow safer: turning it on again is a publish the
+    checker grades again, and until then the checker denies by default."""
+    assert graded(turned_off(gate_removed(), "Create ticket")) == "writes_refused"
+    assert graded(turned_off(release_check(), "Create ticket")) == "safe"
+
+
+def test_the_yes_put_back_after_a_turned_off_one_is_the_only_yes_on_its_path() -> None:
+    with_yes = add_yes(turned_off(release_check(), "Ask for a yes"), "uc_01JB8RELEASE")
+    assert with_yes.added_before == ("Create ticket",)
+    assert grade(with_yes.document, ERROR_WORKFLOW, TEAM_ZONE).findings == ()
+
+
+def test_our_step_turned_off_is_no_step_before_n8n_s_blocks() -> None:
+    """Our first step links the run and checks its version. Turned off, it does neither."""
+    document = turned_off(release_notice(), "Read release")
+    assert notice_findings(document) == [], "Compare still calls the platform first"
+    turned_off(document, "Compare")
+    assert notice_findings(document) == [(FIRST.format("Tell Slack"), True)]
+    assert [f.text for f in unchecked(document, KEYS_MADE)] == [FIRST.format("Tell Slack")]
+    turned_off(document, "Tell Slack")
+    assert notice_findings(document) == [(FIRST.format("Tell Slack"), True)], (
+        "n8n's own block turned off still counts, as a write does"
+    )
+
+
 @pytest.mark.parametrize(
     "block_type",
     [

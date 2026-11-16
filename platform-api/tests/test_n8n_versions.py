@@ -241,6 +241,40 @@ def test_the_changes_are_a_plain_comparison_of_blocks_the_schedule_and_settings(
     assert changes_between(before, before) == ["Published again, with no change to its blocks."]
 
 
+def test_the_changes_name_a_block_turned_off_or_on_its_key_and_its_version():
+    """Each of these changes what n8n runs, though the block's type and parameters stay."""
+    ask = {"name": "Ask for a yes", "type": "CUSTOM.wabAskForYes", "parameters": {}}
+    read = {
+        "name": "Read tickets",
+        "type": "n8n-nodes-base.jira",
+        "typeVersion": 1,
+        "parameters": {"operation": "getAll"},
+        "credentials": {"jiraSoftwareCloudApi": {"id": "wab-jira-read", "name": "Jira"}},
+    }
+    before = {"nodes": [ask, read], "connections": {}, "settings": {}}
+    off = {**before, "nodes": [{**ask, "disabled": True}, read]}
+    assert changes_between(before, off) == ["Turned off “Ask for a yes”."]
+    assert changes_between(off, before) == ["Turned on “Ask for a yes”."]
+    assert changes_between(before, {**before, "nodes": [{**ask, "disabled": False}, read]}) == [
+        "Published again, with no change to its blocks."
+    ], "n8n runs a block with disabled false as one with none"
+    other_key = {**read, "credentials": {"jiraSoftwareCloudApi": {"id": "dave-own-jira"}}}
+    renamed_key = {**read, "credentials": {"jiraSoftwareCloudApi": {"id": "wab-jira-read"}}}
+    newer = {**read, "typeVersion": 2}
+    assert changes_between(before, {**before, "nodes": [ask, other_key]}) == [
+        "Changed the key on “Read tickets”."
+    ]
+    assert changes_between(before, {**before, "nodes": [ask, {**read, "credentials": {}}]}) == [
+        "Changed the key on “Read tickets”."
+    ]
+    assert changes_between(before, {**before, "nodes": [ask, renamed_key]}) == [
+        "Published again, with no change to its blocks."
+    ], "a key is the same key by its id, whatever name n8n shows for it"
+    assert changes_between(before, {**before, "nodes": [ask, newer]}) == [
+        "Changed “Read tickets” to another version of its block."
+    ]
+
+
 async def test_safety_a_version_published_in_n8n_without_its_yes_is_kept_as_writes_refused(
     v: Versions,
 ):
@@ -264,6 +298,29 @@ async def test_safety_a_version_published_in_n8n_without_its_yes_is_kept_as_writ
     assert card.changes == ["Deleted “Ask for a yes”."]
     assert card.findings == view["findings"]
     assert await v.sweep() == 0, "a version is kept once"
+
+
+def yes_turned_off(workflow: dict[str, Any]) -> None:
+    """Ticks Deactivate on Ask for a yes in n8n's editor, which leaves it on the canvas."""
+    for node in workflow["nodes"]:
+        if node["name"] == "Ask for a yes":
+            node["disabled"] = True
+
+
+async def test_safety_a_version_published_in_n8n_with_its_yes_turned_off_is_writes_refused(
+    v: Versions,
+):
+    use_case_id, workflow_id = await on_and_changed(v, yes_turned_off)
+    view = await v.view(use_case_id)
+    assert (view["version"], view["grade"]) == (2, "writes_refused")
+    assert view["findings"] == ['"Create ticket" can run without a yes.']
+    second = await version_row(v.own, use_case_id, 2)
+    ran = await v.builder.facts.version(workflow_id, second["n8n_version_id"])
+    assert ran == RanVersion("writes_refused", Publisher(DAVE))
+    [card] = await v.builder.changed_in_n8n(10)
+    assert (card.grade, card.changes) == ("writes_refused", ["Turned off “Ask for a yes”."])
+    versions = (await v.call("alice", "GET", f"/api/v1/use-cases/{use_case_id}/versions")).json()
+    assert versions["versions"][0]["changes"] == ["Turned off “Ask for a yes”."]
 
 
 async def test_safety_a_publisher_the_people_list_cant_match_is_never_guessed(v: Versions):
