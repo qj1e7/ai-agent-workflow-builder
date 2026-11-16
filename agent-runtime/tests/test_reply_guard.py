@@ -384,6 +384,66 @@ def test_a_version_the_person_typed_is_theirs_to_quote():
     assert makes_nothing_up(shown_of(said("LangGraph 1.3 isn't on your Watchlist yet.")), given)
 
 
+# 7, grown (ADR 0049): a name the text says a list holds must be in that list in the facts.
+
+HELD = Given(
+    message="add redis",
+    facts=(
+        '{"watchlist":[{"name":"LangGraph","our_version":"1.2.14"},{"name":"Redis"},'
+        '{"name":"React Native"}],'
+        '"workflows":[{"name":"Morning bug list"}],"other_workflows":["Friday summary"],'
+        '"needs_you":{"total":2}}'
+    ),
+)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Your Watchlist already holds Kubernetes.",
+        "Your Watchlist holds LangGraph and Kubernetes.",
+        "The Watchlist has Redis, LangGraph, and Kubernetes.",
+        "Your Watchlist already holds LangGraph Studio.",
+        "Kubernetes is on your Watchlist.",
+        "LangGraph and Kubernetes are already on the Watchlist.",
+        "Your Software watchlist includes Kafka at 3.7.0.",
+        "You already watch Kubernetes.",
+        "Your workflows include Night audit.",
+        "Your workflow list has a workflow called Night audit.",
+        "Night audit is one of your workflows.",
+        "Needs you holds Kubernetes.",
+        "Your Watchlist holds both Redis and Kafka.",
+        "Your Watchlist holds React.",
+    ],
+)
+def test_a_name_a_list_is_said_to_hold_but_the_facts_dont_is_made_up(text: str):
+    assert not makes_nothing_up(shown_of(said(text)), HELD), text
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Your Watchlist already holds Redis.",
+        "Your Watchlist holds langgraph at 1.2.14, and Redis.",
+        "LangGraph and Redis are on your Watchlist.",
+        "Your Watchlist holds React Native.",
+        "Your workflows include Morning bug list and Friday summary.",
+        "The Watchlist holds the software your team runs.",
+        "Your Watchlist holds no software called Kubernetes yet.",
+        "Kubernetes isn't on your Watchlist. To add it, type Check Kubernetes for new releases.",
+        "Your Watchlist holds Redis, so open the Watchlist to see its line.",
+        "Needs you lists what waits for you.",
+    ],
+)
+def test_a_list_said_to_hold_only_what_the_facts_hold_passes(text: str):
+    assert makes_nothing_up(shown_of(said(text)), HELD), text
+
+
+def test_with_no_facts_sent_no_list_can_be_said_to_hold_a_name():
+    bare = Given(message="add redis", facts="")
+    assert not makes_nothing_up(shown_of(said("Your Watchlist already holds Redis.")), bare)
+
+
 # 8. Offers the person can use.
 
 

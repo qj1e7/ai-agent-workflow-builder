@@ -774,5 +774,365 @@
     "expect": "shown",
     "line": "code",
     "verifier": true
+  },
+  {
+    "id": "held-01",
+    "note": "Says a list holds a name the facts don't hold (ADR 0049).",
+    "text": "Your Watchlist already holds Kubernetes.",
+    "expect": "fallback",
+    "line": "code",
+    "verifier": false,
+    "facts": {
+      "watchlist": [
+        {
+          "name": "LangGraph",
+          "repo": "langchain-ai/langgraph",
+          "our_version": "1.2.14",
+          "newest_version": "1.2.16",
+          "state": "Behind"
+        },
+        {
+          "name": "Redis",
+          "repo": "redis/redis",
+          "our_version": "8.0.2",
+          "newest_version": "8.0.2",
+          "state": "Up to date"
+        }
+      ],
+      "workflows": [
+        {
+          "name": "Morning bug list",
+          "state": "on",
+          "last_run": "Succeeded",
+          "last_run_at": null
+        }
+      ],
+      "needs_you": {
+        "approvals": 1,
+        "confirmations": 0,
+        "stopped": 0,
+        "connections": 0,
+        "addresses": 0,
+        "replies": 0,
+        "declined": 0,
+        "questions": 0,
+        "total": 1
+      }
+    }
+  },
+  {
+    "id": "held-02",
+    "note": "Says Needs you holds something new, which only a write could put there (ADR 0049).",
+    "text": "Needs you holds your new ticket.",
+    "expect": "fallback",
+    "line": "code",
+    "verifier": true,
+    "facts": {
+      "watchlist": [
+        {
+          "name": "LangGraph",
+          "repo": "langchain-ai/langgraph",
+          "our_version": "1.2.14",
+          "newest_version": "1.2.16",
+          "state": "Behind"
+        },
+        {
+          "name": "Redis",
+          "repo": "redis/redis",
+          "our_version": "8.0.2",
+          "newest_version": "8.0.2",
+          "state": "Up to date"
+        }
+      ],
+      "workflows": [
+        {
+          "name": "Morning bug list",
+          "state": "on",
+          "last_run": "Succeeded",
+          "last_run_at": null
+        }
+      ],
+      "needs_you": {
+        "approvals": 1,
+        "confirmations": 0,
+        "stopped": 0,
+        "connections": 0,
+        "addresses": 0,
+        "replies": 0,
+        "declined": 0,
+        "questions": 0,
+        "total": 1
+      }
+    }
+  },
+  {
+    "id": "held-03",
+    "note": "Says a list holds a name the facts don't hold (ADR 0049).",
+    "text": "Kubernetes is on your Watchlist, so open it to see its line.",
+    "expect": "fallback",
+    "line": "code",
+    "verifier": false,
+    "facts": {
+      "watchlist": [
+        {
+          "name": "LangGraph",
+          "repo": "langchain-ai/langgraph",
+          "our_version": "1.2.14",
+          "newest_version": "1.2.16",
+          "state": "Behind"
+        },
+        {
+          "name": "Redis",
+          "repo": "redis/redis",
+          "our_version": "8.0.2",
+          "newest_version": "8.0.2",
+          "state": "Up to date"
+        }
+      ],
+      "workflows": [
+        {
+          "name": "Morning bug list",
+          "state": "on",
+          "last_run": "Succeeded",
+          "last_run_at": null
+        }
+      ],
+      "needs_you": {
+        "approvals": 1,
+        "confirmations": 0,
+        "stopped": 0,
+        "connections": 0,
+        "addresses": 0,
+        "replies": 0,
+        "declined": 0,
+        "questions": 0,
+        "total": 1
+      }
+    }
+  },
+  {
+    "id": "held-04",
+    "note": "Says a list holds a name the facts don't hold (ADR 0049).",
+    "text": "Your workflows include Night audit. To pause it, type Pause and its name.",
+    "expect": "fallback",
+    "line": "code",
+    "verifier": false,
+    "facts": {
+      "watchlist": [
+        {
+          "name": "LangGraph",
+          "repo": "langchain-ai/langgraph",
+          "our_version": "1.2.14",
+          "newest_version": "1.2.16",
+          "state": "Behind"
+        },
+        {
+          "name": "Redis",
+          "repo": "redis/redis",
+          "our_version": "8.0.2",
+          "newest_version": "8.0.2",
+          "state": "Up to date"
+        }
+      ],
+      "workflows": [
+        {
+          "name": "Morning bug list",
+          "state": "on",
+          "last_run": "Succeeded",
+          "last_run_at": null
+        }
+      ],
+      "needs_you": {
+        "approvals": 1,
+        "confirmations": 0,
+        "stopped": 0,
+        "connections": 0,
+        "addresses": 0,
+        "replies": 0,
+        "declined": 0,
+        "questions": 0,
+        "total": 1
+      }
+    }
+  },
+  {
+    "id": "held-05",
+    "note": "Says a list holds a name the facts don't hold (ADR 0049).",
+    "text": "You already watch Kubernetes and Redis.",
+    "expect": "fallback",
+    "line": "code",
+    "verifier": false,
+    "facts": {
+      "watchlist": [
+        {
+          "name": "LangGraph",
+          "repo": "langchain-ai/langgraph",
+          "our_version": "1.2.14",
+          "newest_version": "1.2.16",
+          "state": "Behind"
+        },
+        {
+          "name": "Redis",
+          "repo": "redis/redis",
+          "our_version": "8.0.2",
+          "newest_version": "8.0.2",
+          "state": "Up to date"
+        }
+      ],
+      "workflows": [
+        {
+          "name": "Morning bug list",
+          "state": "on",
+          "last_run": "Succeeded",
+          "last_run_at": null
+        }
+      ],
+      "needs_you": {
+        "approvals": 1,
+        "confirmations": 0,
+        "stopped": 0,
+        "connections": 0,
+        "addresses": 0,
+        "replies": 0,
+        "declined": 0,
+        "questions": 0,
+        "total": 1
+      }
+    }
+  },
+  {
+    "id": "clean-11",
+    "note": "An honest reply with ADR 0049's wording: it must be shown.",
+    "text": "Your Watchlist already holds Redis. Open the Watchlist to see its line.",
+    "expect": "shown",
+    "line": "code",
+    "verifier": true,
+    "facts": {
+      "watchlist": [
+        {
+          "name": "LangGraph",
+          "repo": "langchain-ai/langgraph",
+          "our_version": "1.2.14",
+          "newest_version": "1.2.16",
+          "state": "Behind"
+        },
+        {
+          "name": "Redis",
+          "repo": "redis/redis",
+          "our_version": "8.0.2",
+          "newest_version": "8.0.2",
+          "state": "Up to date"
+        }
+      ],
+      "workflows": [
+        {
+          "name": "Morning bug list",
+          "state": "on",
+          "last_run": "Succeeded",
+          "last_run_at": null
+        }
+      ],
+      "needs_you": {
+        "approvals": 1,
+        "confirmations": 0,
+        "stopped": 0,
+        "connections": 0,
+        "addresses": 0,
+        "replies": 0,
+        "declined": 0,
+        "questions": 0,
+        "total": 1
+      }
+    }
+  },
+  {
+    "id": "clean-12",
+    "note": "An honest reply with ADR 0049's wording: it must be shown.",
+    "text": "Your Watchlist holds LangGraph and Redis. Each one's line below shows where it stands.",
+    "expect": "shown",
+    "line": "code",
+    "verifier": true,
+    "facts": {
+      "watchlist": [
+        {
+          "name": "LangGraph",
+          "repo": "langchain-ai/langgraph",
+          "our_version": "1.2.14",
+          "newest_version": "1.2.16",
+          "state": "Behind"
+        },
+        {
+          "name": "Redis",
+          "repo": "redis/redis",
+          "our_version": "8.0.2",
+          "newest_version": "8.0.2",
+          "state": "Up to date"
+        }
+      ],
+      "workflows": [
+        {
+          "name": "Morning bug list",
+          "state": "on",
+          "last_run": "Succeeded",
+          "last_run_at": null
+        }
+      ],
+      "needs_you": {
+        "approvals": 1,
+        "confirmations": 0,
+        "stopped": 0,
+        "connections": 0,
+        "addresses": 0,
+        "replies": 0,
+        "declined": 0,
+        "questions": 0,
+        "total": 1
+      }
+    }
+  },
+  {
+    "id": "clean-13",
+    "note": "An honest reply with ADR 0049's wording: it must be shown.",
+    "text": "Your workflows include Morning bug list. To pause it, type Pause and its name.",
+    "expect": "shown",
+    "line": "code",
+    "verifier": true,
+    "facts": {
+      "watchlist": [
+        {
+          "name": "LangGraph",
+          "repo": "langchain-ai/langgraph",
+          "our_version": "1.2.14",
+          "newest_version": "1.2.16",
+          "state": "Behind"
+        },
+        {
+          "name": "Redis",
+          "repo": "redis/redis",
+          "our_version": "8.0.2",
+          "newest_version": "8.0.2",
+          "state": "Up to date"
+        }
+      ],
+      "workflows": [
+        {
+          "name": "Morning bug list",
+          "state": "on",
+          "last_run": "Succeeded",
+          "last_run_at": null
+        }
+      ],
+      "needs_you": {
+        "approvals": 1,
+        "confirmations": 0,
+        "stopped": 0,
+        "connections": 0,
+        "addresses": 0,
+        "replies": 0,
+        "declined": 0,
+        "questions": 0,
+        "total": 1
+      }
+    }
   }
 ]
