@@ -317,9 +317,9 @@ def test_an_unknown_error_workflow_is_never_taken_for_the_platform_s() -> None:
     [
         {"field": "days", "daysInterval": 2, "triggerAtHour": 8, "triggerAtMinute": 0},
         {"field": "hours", "hoursInterval": 5, "triggerAtMinute": 0},
-        {"field": "days", "triggerAtHour": 8},
-        {"field": "weeks", "triggerAtDay": [1], "triggerAtMinute": 0},
-        {"field": "hours", "hoursInterval": 1},
+        {"field": "days", "triggerAtHour": 8, "triggerAtMinute": None},
+        {"field": "weeks", "triggerAtDay": [1], "triggerAtHour": None, "triggerAtMinute": 0},
+        {"field": "hours", "hoursInterval": 1, "triggerAtMinute": None},
         {
             "field": "weeks",
             "weeksInterval": 2,
@@ -335,12 +335,13 @@ def test_an_unknown_error_workflow_is_never_taken_for_the_platform_s() -> None:
             "triggerAtHour": 9,
             "triggerAtMinute": 0,
         },
-        {"field": "months", "triggerAtHour": 9, "triggerAtMinute": 0},
+        {"field": "months", "triggerAtDayOfMonth": None, "triggerAtHour": 9, "triggerAtMinute": 0},
         {"field": "seconds", "secondsInterval": 30},
         {"field": "cronExpression", "expression": "at nine on weekdays"},
     ],
 )
 def test_a_schedule_whose_next_run_n8n_decides_needs_a_fix(interval: dict[str, Any]) -> None:
+    """A part saved as null is one n8n picks by itself, so its next run can't be shown."""
     document = release_check()
     node(document, "Daily 8:00")["parameters"] = {"rule": {"interval": [interval]}}
     assert graded(document) == "needs_a_fix"
@@ -365,9 +366,15 @@ def test_a_schedule_whose_next_run_n8n_decides_needs_a_fix(interval: dict[str, A
             "triggerAtMinute": 0,
         },
         {"field": "cronExpression", "expression": "0 30 7 * * 1-5"},
+        {"field": "days", "triggerAtHour": 8},
+        {"field": "weeks", "triggerAtDay": [1], "triggerAtMinute": 0},
+        {"field": "hours", "hoursInterval": 1},
+        {"field": "months", "triggerAtHour": 9, "triggerAtMinute": 0},
     ],
 )
 def test_a_schedule_the_portal_can_show_to_the_minute_is_fine(interval: dict[str, Any]) -> None:
+    """A part left out is one n8n's editor showed at its default and n8n fills in as it loads the
+    workflow, so it runs at that default."""
     document = release_check()
     node(document, "Daily 8:00")["parameters"] = {"rule": {"interval": [interval]}}
     assert graded(document) == "safe"
