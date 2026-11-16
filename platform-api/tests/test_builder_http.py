@@ -54,6 +54,7 @@ from platform_api.orchestration import (
     PreviousTurn,
     QuestionAnswer,
     RefusedAnswer,
+    ReplyAbout,
     ReplyOffer,
     RequestPart,
     ResumeAnswer,
@@ -2060,7 +2061,26 @@ async def test_a_free_reply_comes_back_in_the_planners_words_with_its_button(fro
             "request": "Keep track of the LangGraph version",
         },
         "looked_at": [],
+        "about": [],
     }
+
+
+async def test_a_free_reply_carries_the_software_and_workflows_it_names(front: Front):
+    front.answers.result = answered(
+        FreeReplyAnswer(
+            form="answer",
+            text="LangGraph is watched. Say pause to stop it.",
+            about=[
+                ReplyAbout(section="watchlist", name="LangGraph"),
+                ReplyAbout(section="workflows", name="Release check"),
+            ],
+        )
+    )
+    reply = await say(front, "what about LangGraph")
+    assert reply["about"] == [
+        {"section": "watchlist", "name": "LangGraph"},
+        {"section": "workflows", "name": "Release check"},
+    ]
 
 
 async def test_a_clarifying_free_reply_carries_its_choices(front: Front):

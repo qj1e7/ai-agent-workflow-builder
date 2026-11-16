@@ -334,6 +334,11 @@ class ReplyOfferView(WireModel):
     )
 
 
+class ReplyAboutView(WireModel):
+    section: Literal["watchlist", "workflows"]
+    name: str
+
+
 class FreeReply(Reply):
     """The Planner's own words for a message no other answer fits, checked before they are sent
     (ADR 0047). It changes nothing: a choice and an offer are sent as the next message."""
@@ -353,6 +358,10 @@ class FreeReply(Reply):
     )
     looked_at: list[FactSection] = Field(
         description="The sections of the facts the reply used, as a question answer's are."
+    )
+    about: list[ReplyAboutView] = Field(
+        description="The watched software and workflows the reply names, each held by the facts. "
+        "The Portal draws each one's state line from its own data, for every role."
     )
 
 
@@ -1023,6 +1032,7 @@ class PlannerFront:
                     if offer is not None and operator
                     else None,
                     looked_at=list(answer.looked_at),
+                    about=[ReplyAboutView(section=a.section, name=a.name) for a in answer.about],
                 )
             case DidntFollowAnswer():
                 return DidntFollowReply()
