@@ -271,6 +271,10 @@ class NodeClasses:
         """Whether n8n loads this type with the allow list, so it runs whatever a grade says."""
         return node_type in self._loaded
 
+    def entry(self, node_type: str) -> OnType | OffType | None:
+        """What the file says of one type, or None when it does not name it."""
+        return self._types.get(node_type)
+
     def verdict(
         self, node_type: str, version: object, parameters: Mapping[str, object]
     ) -> Runs | Off:
