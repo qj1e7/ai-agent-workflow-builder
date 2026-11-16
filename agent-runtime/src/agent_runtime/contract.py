@@ -1322,6 +1322,20 @@ class EditAnswer(WireModel):
         return self
 
 
+class RemoveSoftwareAnswer(WireModel):
+    """A request to take one software off the Software watchlist. The platform matches the name to
+    the watchlist and shows the Software page's own Remove, with its Undo. It is a setting of the
+    platform: nothing outside it is written, so no Approver is asked."""
+
+    kind: Literal["remove_software"] = "remove_software"
+    software: str = Field(
+        min_length=1,
+        max_length=80,
+        description="The software's name as the request wrote it. The platform matches it to the "
+        "watchlist with case, spaces, dots and hyphens aside, so node js is Node.js.",
+    )
+
+
 type PlannerAnswer = Annotated[
     SetupCardAnswer
     | PartAnswer
@@ -1337,6 +1351,7 @@ type PlannerAnswer = Annotated[
     | EditAnswer
     | PauseAnswer
     | ResumeAnswer
+    | RemoveSoftwareAnswer
     | FreeReplyAnswer
     | DidntFollowAnswer,
     Field(discriminator="kind"),
