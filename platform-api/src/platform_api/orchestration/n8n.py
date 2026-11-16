@@ -1519,11 +1519,17 @@ class N8nWorkflows:
     async def _as_run(self, workflow: N8nWorkflow, version_id: str) -> dict[str, Any] | None:
         """n8n's history keeps a version's blocks and edges, never its settings: the workflow holds
         those once, and runs every version with them. So a version is graded and compared with the
-        workflow's settings now, which are what its runs would have."""
+        workflow's settings now, which are what its runs would have. Its name is the workflow's
+        too: the name n8n's history gives a published version is the version's own label, such
+        as "Version b2fb48ee"."""
         version = await self._api.version(workflow.id, version_id)
         if version is None:
             return None
-        return {**version, "settings": workflow.document["settings"]}
+        return {
+            **version,
+            "name": workflow.document["name"],
+            "settings": workflow.document["settings"],
+        }
 
     async def timeline(self, workflow_id: str) -> list[PublishEvent]:
         return await self._api.publish_timeline(workflow_id)
