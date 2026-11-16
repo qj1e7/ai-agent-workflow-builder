@@ -20,8 +20,9 @@ me=$(az ad signed-in-user show --query id --output tsv)
 echo "1. Register the resource providers the environment uses"
 # The deploy identity has no rights on the subscription, so Terraform cannot register these
 # itself. The list covers every resource type in infra/, plus Storage for the state account.
-for namespace in Microsoft.App Microsoft.ContainerRegistry Microsoft.DBforPostgreSQL Microsoft.DocumentDB \
-  Microsoft.Insights Microsoft.KeyVault Microsoft.ManagedIdentity Microsoft.OperationalInsights Microsoft.Storage; do
+for namespace in Microsoft.App Microsoft.Compute Microsoft.ContainerRegistry Microsoft.DBforPostgreSQL \
+  Microsoft.DocumentDB Microsoft.Insights Microsoft.KeyVault Microsoft.ManagedIdentity Microsoft.Network \
+  Microsoft.OperationalInsights Microsoft.Storage; do
   az provider register --namespace "$namespace" --wait
 done
 
@@ -74,14 +75,48 @@ az role assignment create --assignee-object-id "$principal_id" --assignee-princi
   --role "Storage Blob Data Contributor" --scope "$account_id/blobServices/default/containers/tfstate" --output none
 az role assignment create --assignee-object-id "$principal_id" --assignee-principal-type ServicePrincipal \
   --role Contributor --scope "$app_group_id" --output none
-# In $app_group the deploy may only hand out or remove the four roles the Terraform code assigns
-# (AcrPull, AcrPush, Key Vault Secrets User and Key Vault Secrets Officer), and only to service
-# principals, which include our managed identities. It can never give a person a role.
-roles="7f951dda-4ed3-4680-a7ca-43fe172d538d, 8311e382-0749-4cb8-b61a-304f252e45ec, 4633458b-17de-408a-b874-0445c86b69e6, b86a8fe4-44ce-4948-aee5-eccb2c155cd7"
+# The Langfuse VM's run-command role (ADR 0050): read the VM and run scripts on it, nothing else.
+# The deploy may not write role definitions, so this script makes the role, and Terraform gives it
+# to the deploy identity on that one VM. The name must match local.run_command_role in
+# infra/modules/langfuse_vm/main.tf.
+run_command_role="Langfuse VM run command ($app_group)"
+find_run_command_role() {
+  az role definition list --name "$run_command_role" --scope "$app_group_id" --query '[0].name' --output tsv
+}
+if [ -z "$(find_run_command_role)" ]; then
+  az role definition create --output none --role-definition "{
+    \"Name\": \"$run_command_role\",
+    \"Description\": \"Read the Langfuse VM and run scripts on it with run-command. Nothing else.\",
+    \"Actions\": [
+      \"Microsoft.Compute/virtualMachines/read\",
+      \"Microsoft.Compute/virtualMachines/runCommand/action\",
+      \"Microsoft.Compute/virtualMachines/runCommands/read\",
+      \"Microsoft.Compute/virtualMachines/runCommands/write\",
+      \"Microsoft.Compute/virtualMachines/runCommands/delete\"
+    ],
+    \"AssignableScopes\": [\"$app_group_id\"]
+  }"
+  echo "   Waiting a minute for the new role to take effect"
+  sleep 60
+fi
+run_command_role_id=$(find_run_command_role)
+# In $app_group the deploy may only hand out or remove the five roles the Terraform code assigns
+# (AcrPull, AcrPush, Key Vault Secrets User, Key Vault Secrets Officer and the run-command role),
+# and only to service principals, which include our managed identities. It can never give a person a role.
+roles="7f951dda-4ed3-4680-a7ca-43fe172d538d, 8311e382-0749-4cb8-b61a-304f252e45ec, 4633458b-17de-408a-b874-0445c86b69e6, b86a8fe4-44ce-4948-aee5-eccb2c155cd7, $run_command_role_id"
 condition="((!(ActionMatches{'Microsoft.Authorization/roleAssignments/write'})) OR (@Request[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {$roles} AND @Request[Microsoft.Authorization/roleAssignments:PrincipalType] ForAnyOfAnyValues:StringEqualsIgnoreCase {'ServicePrincipal'})) AND ((!(ActionMatches{'Microsoft.Authorization/roleAssignments/delete'})) OR (@Resource[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {$roles} AND @Resource[Microsoft.Authorization/roleAssignments:PrincipalType] ForAnyOfAnyValues:StringEqualsIgnoreCase {'ServicePrincipal'}))"
-az role assignment create --assignee-object-id "$principal_id" --assignee-principal-type ServicePrincipal \
-  --role "Role Based Access Control Administrator" --scope "$app_group_id" \
-  --condition "$condition" --condition-version 2.0 --output none
+# An assignment's condition cannot be edited in place by az, so a changed one is replaced.
+current=$(az role assignment list --assignee "$principal_id" --role "Role Based Access Control Administrator" \
+  --scope "$app_group_id" --query '[0].condition' --output tsv)
+if [ "$current" != "$condition" ]; then
+  if [ -n "$current" ]; then
+    az role assignment delete --assignee "$principal_id" --role "Role Based Access Control Administrator" \
+      --scope "$app_group_id" --output none
+  fi
+  az role assignment create --assignee-object-id "$principal_id" --assignee-principal-type ServicePrincipal \
+    --role "Role Based Access Control Administrator" --scope "$app_group_id" \
+    --condition "$condition" --condition-version 2.0 --output none
+fi
 
 echo
 echo "Done. On the azure-dev GitHub environment, set these five as secrets, so GitHub masks them"

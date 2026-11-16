@@ -48,6 +48,15 @@ from platform_api.monitoring.events import (
     user_actor,
 )
 from platform_api.monitoring.log import ActivityLog
+from platform_api.monitoring.traces import (
+    LangfuseScores,
+    NoTraceScores,
+    TraceFlag,
+    TraceIds,
+    TraceScores,
+    pseudonym,
+    typed_again,
+)
 from platform_api.monitoring.troubleshooter import Advice, explain_failure
 
 __all__ = [
@@ -73,7 +82,9 @@ __all__ = [
     "DeniedReason",
     "ExecutionLinkedData",
     "ExecutionResumedData",
+    "LangfuseScores",
     "LegDispatchedData",
+    "NoTraceScores",
     "PendingEvent",
     "RunCreatedData",
     "RunFailedData",
@@ -89,6 +100,9 @@ __all__ = [
     "SupportReportedData",
     "ToldData",
     "ToldStatus",
+    "TraceFlag",
+    "TraceIds",
+    "TraceScores",
     "WireVerdict",
     "WriteActionDeniedData",
     "WriteActionDoneData",
@@ -99,6 +113,8 @@ __all__ = [
     "agent_event_adapter",
     "callback_for",
     "explain_failure",
+    "pseudonym",
+    "typed_again",
     "user_actor",
     "verify_callback",
 ]

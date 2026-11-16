@@ -7,7 +7,7 @@ import { deskOf, desksReducer, panelOf, type DeskAction, type Desks, type Note }
 import { newCardMemory, type CardMemory } from './cardMemory'
 import { arrivalKey, unseenArrivals } from './changed'
 import type { CardStart } from './SetupCard'
-import { askOf, isThinking, type Thread } from './threadState'
+import { askOf, chatOf, isThinking, type Thread } from './threadState'
 
 export const SEND_FAILED = 'That didn’t send. Try again.'
 export const DRAFT_SAVED = 'Your draft is saved. Find it on Workflows.'
@@ -85,8 +85,9 @@ export function ChatProvider({ children, initial = {} }: { children: ReactNode; 
   const send = useCallback(
     (ask: PlannerAnswerIn, shown: string, restore: string | null) => {
       const to = act(user)
-      to({ type: 'sent', text: shown })
-      askPlanner(ask).then(
+      const chat = chatOf(thread)
+      to({ type: 'sent', text: shown, chat })
+      askPlanner({ ...ask, chat }).then(
         (reply) => to({ type: 'answered', reply, typed: shown }),
         () => {
           to({ type: 'failed' })
@@ -95,7 +96,7 @@ export function ChatProvider({ children, initial = {} }: { children: ReactNode; 
         },
       )
     },
-    [act, askPlanner, user],
+    [act, askPlanner, thread, user],
   )
 
   const scroll = useMemo(() => ({ get: () => scrolls.current.get(user) ?? 0, set: (top: number) => void scrolls.current.set(user, top) }), [user])

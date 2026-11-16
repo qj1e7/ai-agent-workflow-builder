@@ -22,6 +22,7 @@
       "choices": []
     }
   ],
+  "trace_id": null,
   "answer": "cant",
   "cant": [
     {
@@ -36,6 +37,7 @@
   ],
   "alternative": {
     "parts": [],
+    "trace_id": null,
     "answer": "setup_card",
     "name": "Weekly summary of closed tickets",
     "rows": [

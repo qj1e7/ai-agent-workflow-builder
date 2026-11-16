@@ -22,6 +22,7 @@
       "choices": []
     }
   ],
+  "trace_id": null,
   "answer": "setup_card",
   "name": "Friday closed ticket summary",
   "rows": [

@@ -8,6 +8,7 @@
       "choices": []
     }
   ],
+  "trace_id": null,
   "use_case_id": "uc_01JB8",
   "name": "React release check",
   "already": false,

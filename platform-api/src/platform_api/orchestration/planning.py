@@ -27,6 +27,7 @@ from platform_api.orchestration.agents import (
     PlannerFacts,
     PreviousTurn,
     RowKind,
+    TurnTrace,
 )
 from platform_api.orchestration.service import ActiveModel
 
@@ -92,6 +93,7 @@ class PlannerAnswers:
         facts: PlannerFacts | None = None,
         previous: PreviousTurn | None = None,
         changes_workflows: bool = True,
+        trace: TurnTrace | None = None,
     ) -> AnswerResult | NoModel | RuntimeDown:
         async with self._db.transaction("orchestration") as uow:
             model = await self._models.access(uow)
@@ -101,6 +103,7 @@ class PlannerAnswers:
             AnswerRequest(
                 task=task,
                 model=model,
+                trace=trace,
                 facts=facts,
                 previous=previous,
                 changes_workflows=changes_workflows,

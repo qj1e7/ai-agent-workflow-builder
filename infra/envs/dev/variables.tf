@@ -512,3 +512,102 @@ variable "n8n_key_slack_token" {
     error_message = "n8n_key_slack_token must be empty, or one line of plain letters, digits and symbols."
   }
 }
+
+# Langfuse (ADR 0050). Off, plan makes nothing for it, and agent-runtime and platform-api get no
+# Langfuse setting, so tracing stays off. infra/README.md says what a person does before turning it on.
+
+variable "langfuse_enabled" {
+  description = "True makes the Langfuse VM with its storage, database, secrets and alerts, and gives agent-runtime and platform-api Langfuse's keys and address. False makes none of them."
+  type        = bool
+  default     = false
+
+  validation {
+    condition     = !var.langfuse_enabled || can(regex("^https://login\\.microsoftonline\\.com/[0-9a-fA-F-]{36}/", var.oidc_issuer))
+    error_message = "Langfuse's Entra app takes its tenant from oidc_issuer, which must then be https://login.microsoftonline.com/<tenant-id>/v2.0."
+  }
+}
+
+# Sensitive only keeps the address out of Terraform's errors in the public deploy log.
+variable "langfuse_owner_email" {
+  description = "Work email of the team lead, whom Langfuse makes its organization's Owner at first start (LANGFUSE_INIT_USER_EMAIL). They sign in with Entra ID under this email. Needed with langfuse_enabled."
+  type        = string
+  default     = ""
+  sensitive   = true
+
+  validation {
+    condition     = !var.langfuse_enabled || can(regex("^[^@,\"$[:space:]]+@[^,\"$[:space:]]*[.][^,\"$[:space:]]*$", trimspace(var.langfuse_owner_email)))
+    error_message = "langfuse_owner_email must be one email address when langfuse_enabled is true."
+  }
+}
+
+variable "deploy_principal_object_id" {
+  description = "Object ID of the deploy workflow's identity, id-wab-deploy, which gets run-command on the Langfuse VM. Terraform does not take it from whoever runs apply, so a person applying from a laptop never gets the role. infra/bootstrap/setup-azure.sh prints it. Needed with langfuse_enabled."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = !var.langfuse_enabled || can(regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$", var.deploy_principal_object_id))
+    error_message = "deploy_principal_object_id must be the deploy identity's object ID, a GUID, when langfuse_enabled is true."
+  }
+}
+
+variable "langfuse_entra_client_id" {
+  description = "Application (client) ID of Langfuse's own Entra app registration (AUTH_AZURE_AD_CLIENT_ID), which only the team's group may use. A person puts its secret in Key Vault as langfuse-entra-client-secret. Needed with langfuse_enabled."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = !var.langfuse_enabled || can(regex("^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$", var.langfuse_entra_client_id))
+    error_message = "langfuse_entra_client_id must be an Application (client) ID, such as 11111111-2222-3333-4444-555555555555, when langfuse_enabled is true."
+  }
+}
+
+# The addresses are not secret, but they point at people, and the deploy logs are public.
+variable "langfuse_allowed_ips" {
+  description = "The team's public IPv4 addresses or ranges, separated by commas, that may reach Langfuse on port 443, such as 203.0.113.7,198.51.100.0/24. One address means that address alone (/32). The apps' own outbound addresses are always allowed. Empty lets in only the apps."
+  type        = string
+  default     = ""
+  sensitive   = true
+
+  validation {
+    condition = alltrue([
+      for entry in split(",", var.langfuse_allowed_ips) :
+      can(regex("^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])[.]){3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])(/(1[6-9]|2[0-9]|3[0-2]))?$", trimspace(entry)))
+      if trimspace(entry) != ""
+    ])
+    error_message = "Each entry in langfuse_allowed_ips must be an IPv4 address, such as 203.0.113.7, or a range of /16 or narrower, such as 198.51.100.0/24."
+  }
+
+  validation {
+    condition = alltrue([
+      for entry in split(",", var.langfuse_allowed_ips) :
+      try(cidrhost(trimspace(entry), 0) == split("/", trimspace(entry))[0], true)
+      if strcontains(entry, "/")
+    ])
+    error_message = "A range in langfuse_allowed_ips must start at its first address, such as 198.51.100.0/24, not 198.51.100.7/24."
+  }
+
+  validation {
+    condition = alltrue([
+      for entry in split(",", var.langfuse_allowed_ips) :
+      !anytrue([
+        for private in ["0.0.0.0/8", "10.0.0.0/8", "100.64.0.0/10", "127.0.0.0/8", "169.254.0.0/16", "172.16.0.0/12", "192.168.0.0/16"] :
+        try(cidrhost("${split("/", trimspace(entry))[0]}/${split("/", private)[1]}", 0) == split("/", private)[0], false)
+      ])
+      if trimspace(entry) != ""
+    ])
+    error_message = "langfuse_allowed_ips must hold public addresses. Addresses such as 10.x, 172.16.x to 172.31.x, 192.168.x and 100.64.x to 100.127.x are inside a network, so Azure never sees them. Use the address that a \"what is my IP\" page shows."
+  }
+}
+
+variable "langfuse_alert_email" {
+  description = "Email that the Langfuse VM's CPU credit and disk alerts go to. Empty sends them nowhere, and they show only in Azure Monitor."
+  type        = string
+  default     = ""
+  sensitive   = true
+
+  validation {
+    condition     = trimspace(var.langfuse_alert_email) == "" || can(regex("^[^@,\"$[:space:]]+@[^,\"$[:space:]]*[.][^,\"$[:space:]]*$", trimspace(var.langfuse_alert_email)))
+    error_message = "langfuse_alert_email must be empty or one email address."
+  }
+}
