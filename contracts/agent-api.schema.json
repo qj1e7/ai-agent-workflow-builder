@@ -1634,6 +1634,69 @@
       "title": "Drafted",
       "type": "object"
     },
+    "DrafterFacts": {
+      "additionalProperties": false,
+      "description": "The team's facts the drafter may use. No Approver's name and no secret.",
+      "properties": {
+        "agent_cards": {
+          "items": {
+            "$ref": "#/$defs/LibraryCard"
+          },
+          "maxItems": 50,
+          "title": "Agent Cards",
+          "type": "array"
+        },
+        "channels": {
+          "description": "The Slack channels the platform's key can see, when the platform has read them. A channel the person names counts as filled only when it is here.",
+          "items": {
+            "maxLength": 80,
+            "type": "string"
+          },
+          "maxItems": 200,
+          "title": "Channels",
+          "type": "array"
+        },
+        "confluence_pages": {
+          "description": "The allowed Confluence pages.",
+          "items": {
+            "maxLength": 200,
+            "type": "string"
+          },
+          "maxItems": 100,
+          "title": "Confluence Pages",
+          "type": "array"
+        },
+        "jira_projects": {
+          "description": "The allowed Jira projects.",
+          "items": {
+            "maxLength": 20,
+            "type": "string"
+          },
+          "maxItems": 100,
+          "title": "Jira Projects",
+          "type": "array"
+        },
+        "repositories": {
+          "description": "The allowed repositories.",
+          "items": {
+            "$ref": "#/$defs/RepoName"
+          },
+          "maxItems": 100,
+          "title": "Repositories",
+          "type": "array"
+        },
+        "write_keys": {
+          "items": {
+            "$ref": "#/$defs/WriteKeyFact"
+          },
+          "maxItems": 50,
+          "title": "Write Keys",
+          "type": "array"
+        }
+      },
+      "title": "DrafterFacts",
+      "type": "object"
+    },
     "EditAnswer": {
       "additionalProperties": false,
       "properties": {
@@ -2262,6 +2325,25 @@
       ],
       "type": "string"
     },
+    "KeyPasted": {
+      "additionalProperties": false,
+      "description": "The words hold the shape of a key, so no model read them (ADR 0051, section 5).",
+      "properties": {
+        "message": {
+          "default": "Don't paste keys here. An Operator adds keys in Settings.",
+          "title": "Message",
+          "type": "string"
+        },
+        "status": {
+          "const": "key_pasted",
+          "default": "key_pasted",
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "title": "KeyPasted",
+      "type": "object"
+    },
     "LibraryCard": {
       "additionalProperties": false,
       "properties": {
@@ -2529,6 +2611,14 @@
       "title": "NeedsYouFact",
       "type": "object"
     },
+    "NotDraftedWhy": {
+      "enum": [
+        "gave_up",
+        "no_tool_call",
+        "too_long"
+      ],
+      "type": "string"
+    },
     "PartAnswer": {
       "additionalProperties": false,
       "properties": {
@@ -2690,6 +2780,164 @@
         }
       },
       "title": "PauseAnswer",
+      "type": "object"
+    },
+    "PlanBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "maxLength": 60,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "parameters": {
+          "additionalProperties": true,
+          "description": "As n8n holds them. A setting stands in a value as its placeholder, <<setting id>>, never as a guessed value.",
+          "title": "Parameters",
+          "type": "object"
+        },
+        "type": {
+          "maxLength": 120,
+          "minLength": 1,
+          "title": "Type",
+          "type": "string"
+        },
+        "version": {
+          "title": "Version",
+          "type": "number"
+        }
+      },
+      "required": [
+        "name",
+        "type",
+        "version",
+        "parameters"
+      ],
+      "title": "PlanBlock",
+      "type": "object"
+    },
+    "PlanProblem": {
+      "additionalProperties": false,
+      "properties": {
+        "block": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Block"
+        },
+        "code": {
+          "$ref": "#/$defs/ProblemCode"
+        },
+        "text": {
+          "description": "What is wrong, in words the drafter can act on.",
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "text"
+      ],
+      "title": "PlanProblem",
+      "type": "object"
+    },
+    "PlanSetting": {
+      "additionalProperties": false,
+      "properties": {
+        "fills": {
+          "items": {
+            "$ref": "#/$defs/SettingPlace"
+          },
+          "minItems": 1,
+          "title": "Fills",
+          "type": "array"
+        },
+        "id": {
+          "pattern": "^[a-z][a-z0-9_]{0,39}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/SettingKind"
+        },
+        "label": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "mark": {
+          "$ref": "#/$defs/SettingMark",
+          "description": "filled: code found it in the person's words, and for a kind that is never guessed, in the team's facts too. guessed: the drafter picked it. needed: nobody has given it."
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "A run time is code's reading, as monday 09:00, or the person's own words for one code can't read. None while it is needed.",
+          "title": "Value"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "label",
+        "fills",
+        "value",
+        "mark"
+      ],
+      "title": "PlanSetting",
+      "type": "object"
+    },
+    "PlanWire": {
+      "additionalProperties": false,
+      "properties": {
+        "exit": {
+          "description": "The exit's name, as \"main\", \"true\" or \"Yes\".",
+          "title": "Exit",
+          "type": "string"
+        },
+        "exit_index": {
+          "description": "The exit's place in n8n's outputs of from_block.",
+          "minimum": 0,
+          "title": "Exit Index",
+          "type": "integer"
+        },
+        "from_block": {
+          "title": "From Block",
+          "type": "string"
+        },
+        "input_index": {
+          "description": "The input of to_block it joins.",
+          "minimum": 0,
+          "title": "Input Index",
+          "type": "integer"
+        },
+        "to_block": {
+          "title": "To Block",
+          "type": "string"
+        }
+      },
+      "required": [
+        "from_block",
+        "exit",
+        "to_block",
+        "exit_index",
+        "input_index"
+      ],
+      "title": "PlanWire",
       "type": "object"
     },
     "PlannerAnswer": {
@@ -2925,6 +3173,29 @@
       ],
       "title": "PreviousTurn",
       "type": "object"
+    },
+    "ProblemCode": {
+      "enum": [
+        "unreadable",
+        "name",
+        "no_block",
+        "no_version",
+        "no_resource",
+        "no_operation",
+        "no_parameter",
+        "bad_value",
+        "missing_value",
+        "held",
+        "left_out",
+        "community",
+        "platform_adds",
+        "cant_run",
+        "native_write",
+        "guessed",
+        "wire",
+        "setting"
+      ],
+      "type": "string"
     },
     "ProblemReason": {
       "enum": [
@@ -3462,6 +3733,65 @@
         }
       },
       "title": "ScheduleChange",
+      "type": "object"
+    },
+    "SentBack": {
+      "additionalProperties": false,
+      "description": "One plan the catalogue check sent back to the drafter, and why.",
+      "properties": {
+        "problems": {
+          "items": {
+            "$ref": "#/$defs/PlanProblem"
+          },
+          "minItems": 1,
+          "title": "Problems",
+          "type": "array"
+        }
+      },
+      "required": [
+        "problems"
+      ],
+      "title": "SentBack",
+      "type": "object"
+    },
+    "SettingKind": {
+      "enum": [
+        "run_time",
+        "jira_project",
+        "channel",
+        "address",
+        "repository",
+        "confluence_page",
+        "text"
+      ],
+      "type": "string"
+    },
+    "SettingMark": {
+      "enum": [
+        "filled",
+        "guessed",
+        "needed"
+      ],
+      "type": "string"
+    },
+    "SettingPlace": {
+      "additionalProperties": false,
+      "properties": {
+        "block": {
+          "title": "Block",
+          "type": "string"
+        },
+        "parameter": {
+          "description": "The parameter's path in the block, as \"channelId\".",
+          "title": "Parameter",
+          "type": "string"
+        }
+      },
+      "required": [
+        "block",
+        "parameter"
+      ],
+      "title": "SettingPlace",
       "type": "object"
     },
     "SetupCardAnswer": {
@@ -4354,6 +4684,109 @@
       "title": "WhyStoppedAnswer",
       "type": "object"
     },
+    "WorkflowDraftRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "current": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorkflowPlan"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "For an edit, the plan as it stands, with each setting's value. The drafter returns a whole new plan, and a setting with the same id and kind keeps its value unless the words change it."
+        },
+        "facts": {
+          "$ref": "#/$defs/DrafterFacts"
+        },
+        "model": {
+          "$ref": "#/$defs/ModelAccess"
+        },
+        "words": {
+          "description": "The person's words, unchanged. For an edit, the words that ask for it.",
+          "maxLength": 2000,
+          "minLength": 1,
+          "title": "Words",
+          "type": "string"
+        }
+      },
+      "required": [
+        "words",
+        "facts",
+        "model"
+      ],
+      "title": "WorkflowDraftRequest",
+      "type": "object"
+    },
+    "WorkflowDraftResult": {
+      "discriminator": {
+        "mapping": {
+          "drafted": "#/$defs/WorkflowDrafted",
+          "key_pasted": "#/$defs/KeyPasted",
+          "not_drafted": "#/$defs/WorkflowNotDrafted",
+          "problem": "#/$defs/ModelProblem"
+        },
+        "propertyName": "status"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/WorkflowDrafted"
+        },
+        {
+          "$ref": "#/$defs/WorkflowNotDrafted"
+        },
+        {
+          "$ref": "#/$defs/KeyPasted"
+        },
+        {
+          "$ref": "#/$defs/ModelProblem"
+        }
+      ]
+    },
+    "WorkflowDrafted": {
+      "additionalProperties": false,
+      "properties": {
+        "catalogue": {
+          "description": "The n8n image, with its digest, the plan was checked by.",
+          "title": "Catalogue",
+          "type": "string"
+        },
+        "plan": {
+          "$ref": "#/$defs/WorkflowPlan"
+        },
+        "sent_back": {
+          "description": "The plans the check sent back first.",
+          "items": {
+            "$ref": "#/$defs/SentBack"
+          },
+          "title": "Sent Back",
+          "type": "array"
+        },
+        "status": {
+          "const": "drafted",
+          "default": "drafted",
+          "title": "Status",
+          "type": "string"
+        },
+        "turns": {
+          "description": "The model's turns.",
+          "minimum": 1,
+          "title": "Turns",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "plan",
+        "catalogue",
+        "sent_back",
+        "turns"
+      ],
+      "title": "WorkflowDrafted",
+      "type": "object"
+    },
     "WorkflowFact": {
       "additionalProperties": false,
       "properties": {
@@ -4407,6 +4840,117 @@
     "WorkflowName": {
       "maxLength": 80,
       "type": "string"
+    },
+    "WorkflowNotDrafted": {
+      "additionalProperties": false,
+      "description": "Nothing is shown as working: the person sees \"I couldn't draft that\", with Ask the team.",
+      "properties": {
+        "catalogue": {
+          "title": "Catalogue",
+          "type": "string"
+        },
+        "message": {
+          "default": "I couldn't draft that.",
+          "title": "Message",
+          "type": "string"
+        },
+        "sent_back": {
+          "items": {
+            "$ref": "#/$defs/SentBack"
+          },
+          "title": "Sent Back",
+          "type": "array"
+        },
+        "status": {
+          "const": "not_drafted",
+          "default": "not_drafted",
+          "title": "Status",
+          "type": "string"
+        },
+        "turns": {
+          "minimum": 0,
+          "title": "Turns",
+          "type": "integer"
+        },
+        "why": {
+          "$ref": "#/$defs/NotDraftedWhy",
+          "description": "gave_up: no plan passed the check after it went back three times. no_tool_call: the model answered without a tool. too_long: it ran out of turns or time."
+        }
+      },
+      "required": [
+        "why",
+        "catalogue",
+        "sent_back",
+        "turns"
+      ],
+      "title": "WorkflowNotDrafted",
+      "type": "object"
+    },
+    "WorkflowPlan": {
+      "additionalProperties": false,
+      "description": "A drafted workflow as the drafter planned it and code checked it against the catalogue.\nThe builder lays it out as an n8n workflow and adds what every layout adds.",
+      "properties": {
+        "blocks": {
+          "items": {
+            "$ref": "#/$defs/PlanBlock"
+          },
+          "minItems": 1,
+          "title": "Blocks",
+          "type": "array"
+        },
+        "name": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "settings": {
+          "items": {
+            "$ref": "#/$defs/PlanSetting"
+          },
+          "title": "Settings",
+          "type": "array"
+        },
+        "wires": {
+          "items": {
+            "$ref": "#/$defs/PlanWire"
+          },
+          "title": "Wires",
+          "type": "array"
+        }
+      },
+      "required": [
+        "name",
+        "blocks",
+        "wires",
+        "settings"
+      ],
+      "title": "WorkflowPlan",
+      "type": "object"
+    },
+    "WriteKeyFact": {
+      "additionalProperties": false,
+      "description": "A write key an Operator added in Settings: its name and the system it writes to. Never its\nsecret.",
+      "properties": {
+        "name": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "system": {
+          "maxLength": 40,
+          "minLength": 1,
+          "title": "System",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "system"
+      ],
+      "title": "WriteKeyFact",
+      "type": "object"
     }
   },
   "additionalProperties": false,
@@ -4480,6 +5024,12 @@
     "tool_list": {
       "$ref": "#/$defs/ToolList"
     },
+    "workflow_draft_request": {
+      "$ref": "#/$defs/WorkflowDraftRequest"
+    },
+    "workflow_draft_result": {
+      "$ref": "#/$defs/WorkflowDraftResult"
+    },
     "workflow_explain_request": {
       "$ref": "#/$defs/ExplainWordingRequest"
     },
@@ -4512,7 +5062,9 @@
     "planner_check_part_request",
     "planner_check_part_result",
     "workflow_explain_request",
-    "workflow_explain_result"
+    "workflow_explain_result",
+    "workflow_draft_request",
+    "workflow_draft_result"
   ],
   "title": "AgentApiSchema",
   "type": "object"

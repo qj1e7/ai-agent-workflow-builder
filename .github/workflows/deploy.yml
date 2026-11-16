@@ -148,7 +148,9 @@ jobs:
             done
           # Local tags, so the build log does not print the registry's host name.
           docker build --target runtime --tag "wab/platform-api:$GITHUB_SHA" platform-api
-          docker build --target runtime --tag "wab/agent-runtime:$GITHUB_SHA" agent-runtime
+          # The image carries contracts/n8n/catalogue.json for the workflow drafter (ADR 0051).
+          docker build --target runtime --build-context contracts=contracts \
+            --tag "wab/agent-runtime:$GITHUB_SHA" agent-runtime
           docker build --file portal/Dockerfile --tag "wab/portal:$GITHUB_SHA" .
           docker build --file deploy/n8n/Dockerfile --tag "wab/n8n:$GITHUB_SHA" .
           # The deploy identity's AcrPush can still be on its way after Terraform's wait.

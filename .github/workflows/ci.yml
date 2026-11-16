@@ -151,9 +151,17 @@ jobs:
             exit 1
           fi
 
+      # agent-runtime's image carries contracts/n8n/catalogue.json (ADR 0051). platform-api's
+      # Dockerfile names no such context, so the flag changes nothing there.
       - name: Build the runtime image
         if: matrix.project != 'e2e'
-        run: docker build --target runtime --tag ${{ matrix.project }}:runtime ${{ matrix.project }}
+        run: |
+          docker build --target runtime --build-context contracts=contracts \
+            --tag ${{ matrix.project }}:runtime ${{ matrix.project }}
+
+      - name: The runtime image carries the n8n block catalogue
+        if: matrix.project == 'agent-runtime'
+        run: docker run --rm agent-runtime:runtime python -m agent_runtime.catalogue
 
       - name: Mock GitHub, mock model, mock Confluence and mock Slack tests in their images
         if: matrix.project == 'e2e'

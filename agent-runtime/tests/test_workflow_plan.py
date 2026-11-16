@@ -1,0 +1,593 @@
+"""Code's check of a drafted plan against the catalogue of the pinned n8n image, and the marks on
+its settings (ADR 0051, sections 1, 2 and 5). Each test checks a plan as the drafter would submit
+it. CI mounts contracts/ into the test image, where it is /contracts."""
+
+import json
+from pathlib import Path
+from typing import Any
+
+import pytest
+
+from agent_runtime.catalogue import Catalogue, load
+from agent_runtime.contract import (
+    INVENTED_CODES,
+    DrafterFacts,
+    ModelAccess,
+    PlanProblem,
+    PlanSetting,
+    SettingPlace,
+    WorkflowDraftRequest,
+    WorkflowPlan,
+)
+from agent_runtime.plan_settings import run_time_in
+from agent_runtime.workflow_drafter import check_plan
+from agent_runtime.workflow_plan import USE_OURS, ProposedPlan
+
+CATALOGUE = Path(__file__).resolve().parents[2] / "contracts" / "n8n" / "catalogue.json"
+WORDS = (
+    "Every Monday at 9am, check langchain-ai/langgraph for new releases, open a Jira ticket in "
+    "MOCK for each one, and post it in #support."
+)
+FACTS = DrafterFacts(
+    jira_projects=["MOCK", "OPS"],
+    repositories=["langchain-ai/langgraph"],
+    channels=["#support", "#ops"],
+    confluence_pages=["Software inventory"],
+)
+ACCESS = ModelAccess(style="anthropic", base_url="https://x.invalid", model="m", api_key="unused")
+
+type Json = dict[str, Any]
+
+
+@pytest.fixture(scope="module")
+def catalogue() -> Catalogue:
+    return load(CATALOGUE)
+
+
+def block(name: str, node_type: str, version: float, **parameters: object) -> Json:
+    return {
+        "name": name,
+        "type": node_type,
+        "version": version,
+        "parameters": json.dumps(parameters),
+    }
+
+
+def wire(source: str, target: str, exit_name: str = "main") -> Json:
+    return {"from_block": source, "exit": exit_name, "to_block": target}
+
+
+def setting(id_: str, kind: str, value: str | None = None, label: str = "A setting") -> Json:
+    return {"id": id_, "kind": kind, "label": label, "value": value}
+
+
+SCHEDULE = block("Every Monday", "n8n-nodes-base.scheduleTrigger", 1.4, rule="<<run_time>>")
+READ = block("Read releases", "CUSTOM.wabRead", 1, source="github_releases", place="<<repository>>")
+PROPOSE = block(
+    "Propose a ticket",
+    "CUSTOM.wabProposeChange",
+    1,
+    action="jira.create_ticket",
+    place="<<jira_project>>",
+    title="={{ 'New release ' + $json.tag }}",
+    subject="={{ $json.tag }}",
+)
+ASK = block("Ask for a yes", "CUSTOM.wabAskForYes", 1)
+MAKE = block("Make the ticket", "CUSTOM.wabMakeApprovedChanges", 1)
+SLACK = block(
+    "Post in Slack",
+    "n8n-nodes-base.slack",
+    2.7,
+    resource="message",
+    operation="post",
+    select="channel",
+    channelId={"__rl": True, "mode": "name", "value": "<<channel>>"},
+    text="={{ 'Ticket for ' + $json.tag }}",
+)
+RELEASE_WIRES = [
+    wire("Every Monday", "Read releases"),
+    wire("Read releases", "Propose a ticket"),
+    wire("Propose a ticket", "Ask for a yes"),
+    wire("Ask for a yes", "Make the ticket", "Yes"),
+    wire("Make the ticket", "Post in Slack"),
+]
+RELEASE_SETTINGS = [
+    setting("run_time", "run_time"),
+    setting("repository", "repository", "langchain-ai/langgraph"),
+    setting("jira_project", "jira_project", "MOCK"),
+    setting("channel", "channel", "#support"),
+]
+
+
+def plan(
+    blocks: list[Json],
+    wires: list[Json] | None = None,
+    settings: list[Json] | None = None,
+    name: str = "Release tickets",
+) -> ProposedPlan:
+    return ProposedPlan.model_validate(
+        {"name": name, "blocks": blocks, "wires": wires or [], "settings": settings or []}
+    )
+
+
+def checked(
+    catalogue: Catalogue,
+    proposed: ProposedPlan,
+    words: str = WORDS,
+    current: WorkflowPlan | None = None,
+) -> WorkflowPlan | list[PlanProblem]:
+    request = WorkflowDraftRequest(words=words, facts=FACTS, model=ACCESS, current=current)
+    return check_plan(proposed, catalogue, request)
+
+
+def passed(catalogue: Catalogue, proposed: ProposedPlan, words: str = WORDS) -> WorkflowPlan:
+    result = checked(catalogue, proposed, words)
+    assert isinstance(result, WorkflowPlan), [p.text for p in result]
+    return result
+
+
+def problems(catalogue: Catalogue, proposed: ProposedPlan, words: str = WORDS) -> list[PlanProblem]:
+    result = checked(catalogue, proposed, words)
+    assert isinstance(result, list), "the plan passed"
+    return result
+
+
+def release(catalogue: Catalogue) -> WorkflowPlan:
+    return passed(
+        catalogue,
+        plan([SCHEDULE, READ, PROPOSE, ASK, MAKE, SLACK], RELEASE_WIRES, RELEASE_SETTINGS),
+    )
+
+
+def test_a_whole_plan_passes_with_its_exits_and_settings_placed(catalogue: Catalogue):
+    done = release(catalogue)
+
+    yes = next(w for w in done.wires if w.from_block == "Ask for a yes")
+    assert (yes.exit, yes.exit_index, yes.input_index) == ("Yes", 1, 0)
+    by_id = {s.id: s for s in done.settings}
+    assert by_id["run_time"].fills == [SettingPlace(block="Every Monday", parameter="rule")]
+    assert by_id["channel"].fills == [
+        SettingPlace(block="Post in Slack", parameter="channelId.value")
+    ]
+    assert {s.id: (s.value, s.mark) for s in done.settings} == {
+        "run_time": ("monday 09:00", "filled"),
+        "repository": ("langchain-ai/langgraph", "filled"),
+        "jira_project": ("MOCK", "filled"),
+        "channel": ("#support", "filled"),
+    }
+
+
+@pytest.mark.parametrize(
+    ("bad", "code", "said"),
+    [
+        (block("X", "n8n-nodes-base.nothing", 1), "no_block", "n8n has no block"),
+        (block("X", "n8n-nodes-base.slack", 9, resource="message"), "no_version", "no version 9"),
+        (
+            block("X", "n8n-nodes-base.jira", 1, resource="ticket", operation="create"),
+            "no_resource",
+            "has no resource 'ticket'",
+        ),
+        (
+            block("X", "n8n-nodes-base.jira", 1, resource="issue", operation="close"),
+            "no_operation",
+            "has no operation 'close'",
+        ),
+        (
+            block(
+                "X",
+                "n8n-nodes-base.jira",
+                1,
+                resource="issue",
+                operation="get",
+                issueKey="A-1",
+                issue="A-1",
+            ),
+            "no_parameter",
+            "there is no parameter 'issue'",
+        ),
+        (
+            block("X", "n8n-nodes-base.aggregate", 1, aggregate="all"),
+            "bad_value",
+            'aggregate must be one of "aggregateIndividualFields", "aggregateAllItemData"',
+        ),
+        (
+            block("X", "n8n-nodes-base.jira", 1, resource="issue", operation="getAll", limit=500),
+            "bad_value",
+            "limit is at most 100",
+        ),
+        (
+            block("X", "CUSTOM.wabTell", 1, where="={{ $json.where }}"),
+            "bad_value",
+            "where takes a value written out, not an expression",
+        ),
+        (
+            block("X", "n8n-nodes-base.jira", 1, resource="issue"),
+            "missing_value",
+            "Jira Software needs an operation",
+        ),
+        (
+            block(
+                "X", "n8n-nodes-base.slack", 2.7, resource="message", operation="post", text="Hi"
+            ),
+            "missing_value",
+            "Send Message To (select) needs a value",
+        ),
+        (
+            block(
+                "X",
+                "n8n-nodes-base.jira",
+                1,
+                resource="issue",
+                operation="getAll",
+                options={"x": 1},
+            ),
+            "no_parameter",
+            "options has no 'x'",
+        ),
+    ],
+)
+def test_what_n8n_doesn_t_have_or_won_t_take_goes_back_named(
+    catalogue: Catalogue, bad: Json, code: str, said: str
+):
+    found = problems(catalogue, plan([bad]))
+
+    assert [p.code for p in found] == [code]
+    assert said in found[0].text
+    assert found[0].block == "X"
+    assert (code in INVENTED_CODES) == (code.startswith("no_"))
+
+
+@pytest.mark.parametrize(
+    ("bad", "code", "said"),
+    [
+        (block("X", "n8n-nodes-base.code", 2), "held", "It runs code. It waits for spike P9."),
+        (
+            block("X", "n8n-nodes-base.merge", 3.2, mode="combineBySql"),
+            "held",
+            'Merge with mode "combineBySql" can\'t run on this platform yet',
+        ),
+        (
+            block("X", "n8n-nodes-base.executeWorkflow", 1.3),
+            "held",
+            "It runs another workflow, which its approval doesn't cover",
+        ),
+        (block("X", "n8n-nodes-base.executeCommand", 1), "left_out", "Execute Command never loads"),
+        (block("X", "n8n-nodes-base.localFileTrigger", 1), "left_out", "Local File Trigger"),
+        (block("X", "n8n-nodes-acme.thing", 1), "community", "Community nodes stay off"),
+        (block("X", "@acme/n8n-nodes-x.thing", 1), "community", "Community nodes stay off"),
+        (block("X", "n8n-nodes-base.stickyNote", 1), "platform_adds", "the Sticky Note"),
+        (block("X", "CUSTOM.wabStartFromPortal", 1), "platform_adds", "Start from the Portal"),
+        (block("X", "n8n-nodes-base.n8n", 1), "cant_run", "n8n's own API"),
+        (block("X", "n8n-nodes-base.microsoftTeams", 2), "cant_run", "a person's own sign-in"),
+    ],
+)
+def test_what_can_t_run_on_this_platform_goes_back_with_its_reason(
+    catalogue: Catalogue, bad: Json, code: str, said: str
+):
+    found = problems(catalogue, plan([bad]))
+
+    assert [p.code for p in found] == [code]
+    assert said in found[0].text
+
+
+def test_a_mode_that_is_held_holds_only_that_mode(catalogue: Catalogue):
+    merge = block("Merge", "n8n-nodes-base.merge", 3.2, mode="append")
+
+    assert passed(catalogue, plan([merge])).blocks[0].type == "n8n-nodes-base.merge"
+    found = problems(catalogue, plan([block("Sort", "n8n-nodes-base.sort", 1, type="code")]))
+    assert [p.code for p in found] == ["held"]
+
+
+@pytest.mark.parametrize(
+    "writes",
+    [
+        block("X", "n8n-nodes-base.jira", 1, resource="issue", operation="create"),
+        block("X", "n8n-nodes-base.jira", 1, resource="issueComment", operation="add"),
+        block("X", "n8n-nodes-base.confluence", 1, resource="page", operation="update"),
+        block("X", "n8n-nodes-base.jiraTool", 1, resource="issue", operation="delete"),
+        block(
+            "X",
+            "n8n-nodes-base.httpRequest",
+            4.5,
+            method="POST",
+            url="https://acme.atlassian.net/rest/api/3/issue",
+        ),
+        block(
+            "X",
+            "n8n-nodes-base.httpRequest",
+            4.5,
+            method="={{ $json.how }}",
+            url="=https://acme.atlassian.net/wiki/rest/api/content/{{ $json.id }}",
+        ),
+    ],
+)
+def test_a_jira_or_confluence_write_with_n8n_s_own_block_goes_back_to_use_ours(
+    catalogue: Catalogue, writes: Json
+):
+    found = [p for p in problems(catalogue, plan([writes])) if p.code == "native_write"]
+
+    assert len(found) == 1
+    assert USE_OURS in found[0].text
+
+
+@pytest.mark.parametrize(
+    "reads",
+    [
+        block("X", "n8n-nodes-base.jira", 1, resource="issue", operation="getAll"),
+        block("X", "n8n-nodes-base.confluence", 1, resource="page", operation="get"),
+        block(
+            "X",
+            "n8n-nodes-base.httpRequest",
+            4.5,
+            url="https://acme.atlassian.net/rest/api/3/myself",
+        ),
+    ],
+)
+def test_n8n_s_own_jira_and_confluence_blocks_may_read(catalogue: Catalogue, reads: Json):
+    found = checked(catalogue, plan([reads]))
+
+    assert not isinstance(found, list) or not [p for p in found if p.code == "native_write"]
+
+
+@pytest.mark.parametrize(
+    ("guess", "kind"),
+    [
+        (
+            block(
+                "X", "n8n-nodes-base.scheduleTrigger", 1.4, rule={"interval": [{"field": "days"}]}
+            ),
+            "run_time",
+        ),
+        (
+            block(
+                "X",
+                "n8n-nodes-base.slack",
+                2.7,
+                resource="message",
+                operation="post",
+                select="channel",
+                channelId={"__rl": True, "mode": "name", "value": "#support"},
+                text="Hello",
+            ),
+            "channel",
+        ),
+        (block("X", "CUSTOM.wabRead", 1, source="jira_tickets", place="MOCK"), "jira_project"),
+        (
+            block(
+                "X", "n8n-nodes-base.jira", 1, resource="issue", operation="getAll", project="MOCK"
+            ),
+            None,
+        ),
+    ],
+)
+def test_a_value_the_drafter_never_writes_must_be_a_setting(
+    catalogue: Catalogue, guess: Json, kind: str | None
+):
+    found = problems(catalogue, plan([guess]))
+
+    if kind is None:  # Jira's getAll has no project: it goes in the JQL.
+        assert [p.code for p in found] == ["no_parameter"]
+        return
+    assert [p.code for p in found] == ["guessed"]
+    assert f"<<{kind}>>" in found[0].text
+
+
+@pytest.mark.parametrize(
+    ("wires", "said"),
+    [
+        ([wire("Every Monday", "Nowhere")], "'Nowhere', which no block in the plan is called"),
+        ([wire("Ask for a yes", "Make the ticket", "Maybe")], 'has the exits "No answer", "Yes"'),
+        ([wire("Make the ticket", "Every Monday")], "starts the workflow and takes no wire in"),
+        ([wire("Ask for a yes", "Ask for a yes", "Yes")], "joins a block to itself"),
+        ([wire("Every Monday", "Ask for a yes")] * 2, "is in the plan twice"),
+    ],
+)
+def test_each_wire_must_join_blocks_and_exits_that_exist(
+    catalogue: Catalogue, wires: list[Json], said: str
+):
+    found = problems(
+        catalogue, plan([SCHEDULE, ASK, MAKE], wires, [setting("run_time", "run_time")])
+    )
+
+    assert [p.code for p in found] == ["wire"]
+    assert said in found[0].text
+
+
+def test_wires_into_merge_fill_its_inputs_in_order(catalogue: Catalogue):
+    sources = [block(f"Read {n}", "CUSTOM.wabTell", 1) for n in "ABC"]
+    merge = block("Merge", "n8n-nodes-base.merge", 3.2, mode="append")
+    two = plan([*sources, merge], [wire("Read A", "Merge"), wire("Read B", "Merge")])
+
+    assert [w.input_index for w in passed(catalogue, two).wires] == [0, 1]
+    three = plan([*sources, merge], [wire(f"Read {n}", "Merge") for n in "ABC"])
+    assert "takes 2 wires in" in problems(catalogue, three)[0].text
+
+
+@pytest.mark.parametrize(
+    ("blocks", "settings", "said"),
+    [
+        ([SCHEDULE], [], "holds <<run_time>>, but the plan has no setting 'run_time'"),
+        ([ASK], [setting("spare", "text", "x")], "The setting 'spare' stands in no parameter"),
+        (
+            [SCHEDULE],
+            [setting("run_time", "text")],
+            "so the setting 'run_time' is of kind run_time",
+        ),
+        ([SCHEDULE], [setting("Run Time", "run_time")], "must be lowercase letters"),
+    ],
+)
+def test_every_placeholder_has_its_setting_and_every_setting_a_place(
+    catalogue: Catalogue, blocks: list[Json], settings: list[Json], said: str
+):
+    found = problems(catalogue, plan(blocks, [], settings))
+
+    assert any(said in p.text for p in found), [p.text for p in found]
+    assert {p.code for p in found} == {"setting"}
+
+
+@pytest.mark.parametrize(
+    ("blocks", "name", "said"),
+    [
+        ([ASK], "Ember release check", "uses an old themed name"),
+        ([ASK, ASK], "Release check", "Two blocks are named 'Ask for a yes'"),
+        ([block("Scout the releases", "CUSTOM.wabTell", 1)], "Release check", "old themed name"),
+        ([], "Release check", "A plan needs at least one block"),
+    ],
+)
+def test_names_are_plain_and_unique(catalogue: Catalogue, blocks: list[Json], name: str, said: str):
+    found = problems(catalogue, plan(blocks, name=name))
+
+    assert any(said in p.text for p in found), [p.text for p in found]
+
+
+# The marks on the settings: code's, never the model's.
+
+
+def marks(
+    catalogue: Catalogue, settings: list[Json], words: str, current: WorkflowPlan | None = None
+) -> dict[str, tuple[str | None, str]]:
+    blocks = [SCHEDULE, READ, PROPOSE, ASK, MAKE, SLACK]
+    result = checked(catalogue, plan(blocks, RELEASE_WIRES, settings), words, current)
+    assert isinstance(result, WorkflowPlan), result
+    return {s.id: (s.value, s.mark) for s in result.settings}
+
+
+def test_a_value_the_words_don_t_hold_is_never_filled(catalogue: Catalogue):
+    words = "Check LangGraph for new releases and open a ticket for each one."
+
+    assert marks(catalogue, RELEASE_SETTINGS, words) == {
+        "run_time": (None, "needed"),
+        "repository": ("langchain-ai/langgraph", "guessed"),
+        "jira_project": (None, "needed"),
+        "channel": (None, "needed"),
+    }
+
+
+def test_a_never_guessed_value_must_be_in_the_team_s_facts_too(catalogue: Catalogue):
+    words = "Every day at 08:00, open a ticket in SECRET for LangGraph and post it in #random."
+    settings = [
+        setting("run_time", "run_time"),
+        setting("repository", "repository"),
+        setting("jira_project", "jira_project", "SECRET"),
+        setting("channel", "channel", "#random"),
+    ]
+
+    assert marks(catalogue, settings, words) == {
+        "run_time": ("every_day 08:00", "filled"),
+        "repository": (None, "needed"),
+        "jira_project": (None, "needed"),
+        "channel": (None, "needed"),
+    }
+
+
+def test_code_finds_the_one_fact_the_words_name_when_the_drafter_gives_none(catalogue: Catalogue):
+    words = (
+        "Every Friday at 17:00 read langchain-ai/langgraph, ticket it in OPS, post in the ops "
+        "channel."
+    )
+    settings = [
+        setting("run_time", "run_time"),
+        setting("repository", "repository"),
+        setting("jira_project", "jira_project"),
+        setting("channel", "channel"),
+    ]
+
+    assert marks(catalogue, settings, words) == {
+        "run_time": ("friday 17:00", "filled"),
+        "repository": ("langchain-ai/langgraph", "filled"),
+        "jira_project": ("OPS", "filled"),
+        "channel": ("#ops", "filled"),
+    }
+
+
+def test_a_project_key_counts_only_as_written(catalogue: Catalogue):
+    words = "Every day at 08:00, check the mock project and the MOCK-142 ticket in #support."
+
+    assert marks(catalogue, RELEASE_SETTINGS, words)["jira_project"] == (None, "needed")
+
+
+@pytest.mark.parametrize(
+    ("words", "read"),
+    [
+        ("every Monday at 9am", ("monday 09:00", True)),
+        ("each weekday at 08:30", ("weekdays 08:30", True)),
+        ("every Monday at 9", (None, True)),
+        ("every Monday", (None, True)),
+        ("open a ticket for each release", (None, False)),
+    ],
+)
+def test_a_run_time_is_code_s_reading_and_never_a_guessed_hour(
+    words: str, read: tuple[str | None, bool]
+):
+    assert run_time_in(words) == read
+
+
+def edited(settings: dict[str, tuple[str | None, str]]) -> WorkflowPlan:
+    places = {
+        "run_time": SettingPlace(block="Every Monday", parameter="rule"),
+        "repository": SettingPlace(block="Read releases", parameter="place"),
+        "jira_project": SettingPlace(block="Propose a ticket", parameter="place"),
+        "channel": SettingPlace(block="Post in Slack", parameter="channelId.value"),
+    }
+    kinds = {"run_time": "run_time", "repository": "repository", "jira_project": "jira_project"}
+    return WorkflowPlan.model_validate(
+        {
+            "name": "Release tickets",
+            "blocks": [{"name": "X", "type": "CUSTOM.wabTell", "version": 1, "parameters": {}}],
+            "wires": [],
+            "settings": [
+                PlanSetting(
+                    id=id_,
+                    kind=kinds.get(id_, "channel"),  # type: ignore[arg-type]
+                    label="A setting",
+                    fills=[places[id_]],
+                    value=value,
+                    mark=mark,  # type: ignore[arg-type]
+                ).model_dump()
+                for id_, (value, mark) in settings.items()
+            ],
+        }
+    )
+
+
+def test_an_edit_keeps_each_value_its_words_don_t_change(catalogue: Catalogue):
+    current = edited(
+        {
+            "run_time": ("monday 09:00", "filled"),
+            "repository": ("langchain-ai/langgraph", "filled"),
+            "jira_project": ("MOCK", "filled"),
+            "channel": ("#support", "filled"),
+        }
+    )
+    # The model changes the project and the channel without the words saying so.
+    settings = [
+        setting("run_time", "run_time"),
+        setting("repository", "repository", "langchain-ai/langgraph"),
+        setting("jira_project", "jira_project", "OPS"),
+        setting("channel", "channel", "#ops"),
+    ]
+
+    assert marks(catalogue, settings, "post at 17:30 instead", current) == {
+        "run_time": ("monday 17:30", "filled"),
+        "repository": ("langchain-ai/langgraph", "filled"),
+        "jira_project": ("MOCK", "filled"),
+        "channel": ("#support", "filled"),
+    }
+    assert marks(catalogue, settings, "post in #ops instead", current)["channel"] == (
+        "#ops",
+        "filled",
+    )
+    assert marks(catalogue, settings, "post at 9 instead", current)["run_time"] == (None, "needed")
+
+
+def test_a_switch_s_exits_follow_its_rules_and_a_written_count_is_held(catalogue: Catalogue):
+    rules = {"values": [{"outputKey": "a"}, {"outputKey": "b"}]}
+    switch = block("Route", "n8n-nodes-base.switch", 3.4, rules=rules)
+    targets = [block(f"Tell {n}", "CUSTOM.wabTell", 1) for n in (1, 2)]
+    wires = [wire("Route", "Tell 1", "rule 1"), wire("Route", "Tell 2", "Rule 2")]
+
+    done = passed(catalogue, plan([switch, *targets], wires))
+    assert [w.exit_index for w in done.wires] == [0, 1]
+    huge = block("Route", "n8n-nodes-base.switch", 3.4, mode="expression", numberOutputs=10**9)
+    out_of_range = plan([huge, targets[0]], [wire("Route", "Tell 1", "output 81")])
+    assert any("has the exits" in p.text for p in problems(catalogue, out_of_range))

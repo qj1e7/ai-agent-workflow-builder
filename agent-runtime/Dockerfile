@@ -39,6 +39,10 @@ ENV PATH=/opt/venv/bin:$PATH \
     PYTHONUNBUFFERED=1
 RUN useradd --system --uid 10001 --no-create-home app
 COPY --from=build /opt/venv /opt/venv
+# The catalogue of n8n's blocks, which the workflow drafter reads (ADR 0051). It lives outside this
+# folder, so every build of this stage names it: --build-context contracts=contracts from the
+# repository root, or additional_contexts in deploy/compose.yaml.
+COPY --from=contracts n8n/catalogue.json /app/contracts/n8n/catalogue.json
 USER app
 EXPOSE 8100
 CMD ["uvicorn", "agent_runtime.api:create_app", "--factory", "--host", "0.0.0.0", "--port", "8100"]

@@ -6,17 +6,27 @@ code, with no model.
 scripts/n8n-catalogue.sh writes the catalogue, contracts/n8n/catalogue.json, from the pinned n8n
 image. Each version of a block holds n8n's own parameters, each with the `displayOptions` that say
 when n8n's editor shows it, and what our class file says of each operation.
+
+The agent-runtime image carries the file at `IN_THE_IMAGE`.
+
+    python -m agent_runtime.catalogue [path]
+
+prints the image the catalogue was made from, or why it can't be used.
 """
 
 import json
 import re
-from collections.abc import Mapping, Sequence
+import sys
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Final, cast
 
 type Json = dict[str, Any]
 
+IN_THE_IMAGE: Final = Path("/app/contracts/n8n/catalogue.json")
+PINNED: Final = re.compile(r"[^\s@:]+(?:/[^\s@:]+)*:[^\s@:]+@sha256:[0-9a-f]{64}")
+"""An image named by its tag and its digest, as the catalogue's stamp must be."""
 OURS: Final = "CUSTOM."
 """How n8n names the types of our node pack."""
 CUSTOM_API_CALL: Final = "__CUSTOM_API_CALL__"
@@ -39,6 +49,41 @@ _UNKNOWN: Final = object()
 class NotInCatalogue(ValueError):
     """The catalogue has no such block, version, resource or operation. The words say what it has
     instead, so that the drafter can choose again."""
+
+
+class CatalogueUnusable(Exception):
+    """The catalogue file is missing, can't be read, or doesn't name the n8n image it was made
+    from by its digest. Drafting stops until it is fixed."""
+
+
+def load(path: Path) -> Catalogue:
+    """The catalogue at `path`, or `CatalogueUnusable` with words an operator can act on."""
+    try:
+        read: object = json.loads(path.read_bytes())
+    except FileNotFoundError:
+        raise CatalogueUnusable(
+            f"The n8n block catalogue is missing at {path}. The agent-runtime image must carry "
+            "contracts/n8n/catalogue.json."
+        ) from None
+    except (OSError, ValueError) as error:
+        raise CatalogueUnusable(
+            f"The n8n block catalogue at {path} can't be read ({type(error).__name__})."
+        ) from None
+    raw = cast(Json, read) if isinstance(read, dict) else {}
+    image = raw.get("image")
+    if not isinstance(image, str) or PINNED.fullmatch(image) is None:
+        raise CatalogueUnusable(
+            f"The n8n block catalogue at {path} doesn't name the n8n image it was made from by "
+            "its digest, so nobody can tell which n8n it describes. Run scripts/n8n-catalogue.sh."
+        )
+    if not isinstance(raw.get("blocks"), dict):
+        raise CatalogueUnusable(f"The n8n block catalogue at {path} holds no blocks.")
+    return Catalogue(cast(Mapping[str, Any], raw))
+
+
+def is_expression(value: object) -> bool:
+    """Whether n8n reads the value as an expression, as it reads any text that starts with =."""
+    return isinstance(value, str) and value.startswith("=")
 
 
 @dataclass(frozen=True)
@@ -131,7 +176,43 @@ class Catalogue:
         if resource is not None:
             described["resource"] = resource
         parameters = cast(list[Json], group["parameters"])
-        return described | {"parameters": _shown(parameters, known, top=True)}
+        return described | {"parameters": _shown(parameters, known, top=True, skip=known)}
+
+    def block(self, node_type: str) -> Json:
+        """The block as the catalogue holds it: its name, its default version, and what the
+        platform marks on it (`key`, `held`, `hidden`, `tool_of`)."""
+        return self._block(node_type)
+
+    def settled(
+        self, node_type: str, version: float, values: Mapping[str, object]
+    ) -> dict[str, object]:
+        """The block's top-level parameter values as n8n settles them: the given ones, and each
+        other one n8n shows at its default, in n8n's order. An expression's value is unknown, so
+        it is left out, and so is `@version` and `@tool`, which the conditions read."""
+        block = self._block(node_type)
+        group = self._version(node_type, version)
+        known: dict[str, object] = {"@version": version, "@tool": "tool_of" in block}
+        known |= {name: value for name, value in values.items() if not is_expression(value)}
+        for parameter in cast(list[Json], group["parameters"]):
+            name = str(parameter.get("name"))
+            if name in known or name in values or "default" not in parameter:
+                continue
+            # Only a parameter n8n surely shows has its default. One it may show stays unknown.
+            if (
+                _left(cast(Mapping[str, Any], parameter.get("displayOptions") or {}), known, True)
+                == {}
+            ):
+                known[name] = parameter["default"]
+        return known
+
+    def shown(self, node_type: str, version: float, values: Mapping[str, object]) -> list[Json]:
+        """Every parameter of the version that n8n shows when the block's parameters have these
+        values, the rest at their defaults, each with what is left of the conditions an
+        expression's value keeps open. Unlike `describe_block`, the resource and operation stay
+        in, so that their values can be checked."""
+        known = self.settled(node_type, version, values)
+        parameters = cast(list[Json], self._version(node_type, version)["parameters"])
+        return _shown(parameters, known, top=True, skip=())
 
     def _block(self, node_type: str) -> Json:
         block = self._blocks.get(node_type)
@@ -254,12 +335,14 @@ def _spaced(text: str) -> str:
     return re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", text)
 
 
-def _shown(parameters: Sequence[Json], known: Mapping[str, object], top: bool) -> list[Json]:
+def _shown(
+    parameters: Sequence[Json], known: Mapping[str, object], top: bool, skip: Collection[str]
+) -> list[Json]:
     """The parameters n8n shows when the known parameters have these values, each with what is
-    left of its conditions. The choice itself is not a parameter to fill."""
+    left of its conditions, without the top-level ones named in `skip`."""
     shown: list[Json] = []
     for parameter in parameters:
-        if top and parameter.get("name") in known:
+        if top and parameter.get("name") in skip:
             continue
         options = cast(Mapping[str, Any] | None, parameter.get("displayOptions"))
         left = _left(options or {}, known, top)
@@ -271,13 +354,15 @@ def _shown(parameters: Sequence[Json], known: Mapping[str, object], top: bool) -
         match parameter.get("type"):
             case "collection":
                 kept["options"] = _shown(
-                    cast(list[Json], parameter.get("options") or []), known, False
+                    cast(list[Json], parameter.get("options") or []), known, False, ()
                 )
             case "fixedCollection":
                 kept["options"] = [
                     {
                         **group,
-                        "values": _shown(cast(list[Json], group.get("values") or []), known, False),
+                        "values": _shown(
+                            cast(list[Json], group.get("values") or []), known, False, ()
+                        ),
                     }
                     for group in cast(list[Json], parameter.get("options") or [])
                 ]
@@ -364,3 +449,17 @@ def _holds(condition: object, value: object) -> bool | None:
                 return None
     except TypeError, KeyError, re.error:
         return None
+
+
+def main(argv: Sequence[str]) -> int:
+    try:
+        catalogue = load(Path(argv[0]) if argv else IN_THE_IMAGE)
+    except CatalogueUnusable as unusable:
+        print(unusable, file=sys.stderr)
+        return 1
+    print(catalogue.image)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
