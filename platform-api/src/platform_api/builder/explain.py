@@ -326,7 +326,7 @@ def explain_facts(report: WorkflowReport) -> list[ExplainFact]:
     for system, place in dict.fromkeys(
         (t.system, t.place) for t in report.touches if t.action == "reads"
     ):
-        named = [*([system] if system else []), *([place.text] if place else [])]
+        named = ["reads", *([system] if system else []), *([place.text] if place else [])]
         facts.append(ExplainFact(kind="reads", together=named, negated=False))
     phrases: dict[Words, Touch] = {}
     for touch in report.touches:

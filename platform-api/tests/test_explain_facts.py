@@ -63,8 +63,8 @@ def test_the_fastapi_release_check_states_when_it_runs_what_it_reads_writes_and_
     )
     assert explain_facts(report) == [
         fact("runs", "day", "8:00"),
-        fact("reads", "GitHub", "fastapi/fastapi"),
-        fact("reads", "Jira", "MOCK"),
+        fact("reads", "reads", "GitHub", "fastapi/fastapi"),
+        fact("reads", "reads", "Jira", "MOCK"),
         fact("writes", "create", "Jira", "MOCK", "yes"),
         fact("changes", "changes", "nothing", "else", negated=True),
     ]
@@ -73,8 +73,8 @@ def test_the_fastapi_release_check_states_when_it_runs_what_it_reads_writes_and_
 def test_a_post_with_its_words_written_out_keeps_them_and_the_place():
     assert explain_facts(report_of(react())) == [
         fact("runs", "Monday", "9:00"),
-        fact("reads", "GitHub", "facebook/react"),
-        fact("reads", "Jira", "WEB"),
+        fact("reads", "reads", "GitHub", "facebook/react"),
+        fact("reads", "reads", "Jira", "WEB"),
         fact("posts", "post", "Slack", "A new React release is out.", "C0RELEASES"),
         fact("changes", "changes", "nothing", negated=True),
     ]
@@ -83,7 +83,7 @@ def test_a_post_with_its_words_written_out_keeps_them_and_the_place():
 def test_each_of_n8n_s_blocks_that_can_t_run_yet_is_a_negated_fact():
     assert explain_facts(report_of(made_in_n8n(), "n8n")) == [
         fact("runs", "Monday", "9:00"),
-        fact("reads", "GitHub", "fastapi/fastapi"),
+        fact("reads", "reads", "GitHub", "fastapi/fastapi"),
         fact("writes", "change", "Jira", "Open an issue", negated=True),
         fact("posts", "post", "Slack", "Read FastAPI", "C0TEAM", negated=True),
         fact("writes", "change", "send", "Call the hook", negated=True),

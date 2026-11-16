@@ -283,7 +283,10 @@ async def test_the_chat_card_gets_the_smoothed_in_short_only_when_the_runtime_re
     assert path == "/v1/workflows/explain"
     assert sent["model"] == ACCESS.model_dump(mode="json")
     assert sent["wording"] == IN_SHORT
-    assert sent["facts"][0] == {"kind": "runs", "together": ["day", "8:00"], "negated": False}
+    assert sent["facts"][:2] == [
+        {"kind": "runs", "together": ["day", "8:00"], "negated": False},
+        {"kind": "reads", "together": ["reads", "GitHub", "fastapi/fastapi"], "negated": False},
+    ]
 
 
 async def test_the_log_names_only_the_status_or_the_error_never_the_words_or_the_key(

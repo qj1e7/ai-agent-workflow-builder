@@ -12,6 +12,7 @@
     {
       "kind": "reads",
       "together": [
+        "reads",
         "GitHub",
         "langchain-ai/langgraph"
       ],
@@ -20,6 +21,7 @@
     {
       "kind": "reads",
       "together": [
+        "reads",
         "Jira",
         "MOCK"
       ],
