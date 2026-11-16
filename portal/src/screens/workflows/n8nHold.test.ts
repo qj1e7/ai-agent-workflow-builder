@@ -3,7 +3,7 @@ import free from '@contracts/fixtures/builder/use-case.n8n.json'
 import { describe, expect, it } from 'vitest'
 import { ApiError } from '../../api/client'
 import type { UseCaseN8nView } from '../../api/types'
-import { DRAFT, editorAddressOf, GONE, heldLine, heldOf, heldWords, NO_EDITOR, holdOf, inUseLine, mayOpen, mayTakeBack, n8nRefusalWords, openEditorTab, takenBackWords, theirsNote, type Hold } from './n8nHold'
+import { DRAFT, editorAddressOf, GONE, heldLine, heldOf, heldWords, NO_EDITOR, NOT_LOADED, holdOf, inUseLine, mayOpen, mayTakeBack, n8nRefusalWords, openEditorTab, openingOf, takenBackWords, theirsNote, type Hold } from './n8nHold'
 
 const FREE = free as UseCaseN8nView
 const HELD = held as UseCaseN8nView
@@ -63,6 +63,19 @@ describe('what the In n8n tab offers', () => {
     const mine = heldOf(BY_CAROL, CAROL, 'loading')
     expect(mine && mayTakeBack(mine), 'its holder may always take it back').toBe(true)
     expect(heldOf(BY_CAROL, ALICE_NO_ACCESS, 'loading'), 'without n8n access the answer needs no view').toMatchObject({ cant: 'Ask Carol, or anyone with n8n access, to take it back.' })
+  })
+
+  it('says why there is no Take it back when the In n8n view could not be read, in the platform’s words when it gave them', () => {
+    expect(openingOf({ data: HELD, isError: false, error: null })).toBe(HELD)
+    expect(openingOf({ data: undefined, isError: false, error: null })).toBe('loading')
+    const failed = heldOf(BY_CAROL, ALICE, openingOf({ data: undefined, isError: true, error: new Error('offline') }))
+    if (failed?.kind !== 'theirs') throw new Error('held by Carol')
+    expect(mayTakeBack(failed)).toBe(false)
+    expect(heldWords(failed, SAME_DAY)).toBe(`Carol has it open in n8n since 13:40. ${NOT_LOADED}`)
+    const refused = openingOf({ data: undefined, isError: true, error: new ApiError(409, { detail: 'Opening n8n is coming once the block list is on.' }) })
+    expect(heldOf(BY_CAROL, ALICE, refused)).toMatchObject({ cant: 'Opening n8n is coming once the block list is on.' })
+    const mine = heldOf(BY_CAROL, CAROL, openingOf({ data: undefined, isError: true, error: new Error('offline') }))
+    expect(mine && mayTakeBack(mine), 'its holder may always take it back').toBe(true)
   })
 
   it('draws no button for a draft, a workflow deleted in n8n, or a person n8n is closed to, and says why', () => {
