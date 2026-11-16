@@ -37,7 +37,7 @@ async def test_the_runtimes_match_is_the_software_to_remove(front: Front):
     await watch(front, "LangGraph", "langchain-ai/langgraph")
     reply = await removal(front, "Node.js", "node js")
     assert reply["software"] == "Node.js"
-    assert reply["matches"] == [{"software_id": node, "name": "node js"}]
+    assert reply["matches"] == [{"software_id": node, "name": "node js", "source": "nodejs/node"}]
     assert reply["watched"] == ["LangGraph", "node js"]
 
 

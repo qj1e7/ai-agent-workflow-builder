@@ -21,17 +21,12 @@ const SEVERAL: RemoveSoftwareReply = {
   ...ONE,
   software: 'nodejs',
   matches: [
-    { software_id: 'sw_01JD4', name: 'node js' },
-    { software_id: 'sw_01JD5', name: 'Node.js' },
+    { software_id: 'sw_01JD4', name: 'node js', source: 'nodejs/node' },
+    { software_id: 'sw_01JD5', name: 'Node.js', source: 'nodejs/nodejs.org' },
   ],
 }
 
 const LIST = statuses as WatchlistView
-const [FIRST] = LIST.software
-const TWO_NODES: WatchlistView = {
-  ...LIST,
-  software: SEVERAL.matches.map((match, n) => ({ ...LIST.software[0]!, id: match.software_id, name: match.name, source: { ...FIRST!.source, ref: n === 0 ? 'nodejs/node' : 'nodejs/nodejs.org' } })),
-}
 
 function draw(me: Me, reply: RemoveSoftwareReply, memory: CardMemory = NO_MEMORY, view: WatchlistView = LIST): string {
   const session = createDevSession(null)
@@ -64,9 +59,9 @@ describe('software to take off the Watchlist', () => {
     expect(text(html)).not.toContain('Undo')
   })
 
-  it('offers each of several matches, by name and source, to choose', () => {
+  it('offers each of several matches, by name and the source the answer carries, to choose', () => {
     expect(sayOf(SEVERAL)).toBe('More than one software on your Watchlist could be nodejs. Which one should I remove?')
-    const html = draw(ALICE, SEVERAL, NO_MEMORY, TWO_NODES)
+    const html = draw(ALICE, SEVERAL)
     expect(html).toMatch(/<h3 id="[^"]*">On your Watchlist<\/h3>/)
     expect(buttons(html)).toEqual(['Remove from watchlist node js', 'Remove from watchlist Node.js'])
     expect(text(html)).toContain('node js nodejs/node')

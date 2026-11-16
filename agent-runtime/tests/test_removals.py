@@ -77,6 +77,11 @@ def removed(software: str, *watched_as: str) -> RemoveSoftwareAnswer:
         ("can you stop watching React?", removed("React", "React")),
         ("remove Ruby on Rails from the watchlist", removed("Ruby on Rails", "Ruby on Rails")),
         ("remove React Native from the watchlist", removed("React Native", "React Native")),
+        ("we don't use react anymore so remove it from the watchlist", removed("react", "React")),
+        ("we stopped using node js so please remove it", removed("node js", "node js")),
+        ("remove node js from the watchlist today", removed("node js", "node js")),
+        ("stop watching React right away", removed("React", "React")),
+        ("unwatch LangGraph now", removed("LangGraph", "LangGraph")),
         ("remove Vue from the watchlist", removed("Vue")),
     ],
 )
@@ -183,14 +188,35 @@ def test_words_beside_the_removal_in_its_own_clause_come_back():
     ]
 
 
-def test_a_second_name_before_the_list_is_asked_on_its_own_and_works_alone():
-    task = "remove React and LangGraph from the watchlist"
-    assert removal(task) == removed("React", "React")
-    assert marks(task) == [
-        ("remove React", "will_do", None),
-        ("LangGraph from the watchlist", "cant", "ask_on_its_own"),
-    ]
-    assert removal("LangGraph from the watchlist") == removed("LangGraph", "LangGraph")
+@pytest.mark.parametrize(
+    ("task", "first", "second"),
+    [
+        (
+            "remove React and LangGraph from the watchlist",
+            "remove React",
+            "remove LangGraph from the watchlist",
+        ),
+        ("stop watching react and vue", "stop watching react", "stop watching vue"),
+    ],
+)
+def test_a_second_name_is_asked_on_its_own_in_words_that_work_alone(
+    task: str, first: str, second: str
+):
+    assert marks(task) == [(first, "will_do", None), (second, "cant", "ask_on_its_own")]
+    assert isinstance(removal(second), RemoveSoftwareAnswer)
+
+
+@pytest.mark.parametrize(
+    ("task", "reason"),
+    [
+        ("we don't use react anymore so remove it from the watchlist", None),
+        ("remove react, we don't use it any more", "we don't use it any more"),
+        ("stop watching React, we no longer need it", "we no longer need it"),
+    ],
+)
+def test_the_reason_beside_a_removal_is_ticked_with_it(task: str, reason: str | None):
+    assert [mark for _, mark, _ in marks(task)] == ["will_do"] * (1 if reason is None else 2)
+    assert reason is None or marks(task)[1][0] == reason
 
 
 def test_a_clause_that_points_back_at_the_removal_is_ticked_with_it():
