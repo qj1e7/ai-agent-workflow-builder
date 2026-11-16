@@ -291,6 +291,7 @@ def test_every_job_is_registered_once() -> None:
         "red_team",
         "spike",
         "spike_dev",
+        "explain_wording",
     ]
 
 
