@@ -60,6 +60,7 @@ Every check is deterministic. A case passes only when all of its checks pass. Th
 | `can_do_as_expected`, `explains_why_not` | draft | The draft takes on a task it should refuse, or refuses one it can do, or refuses with no reason. |
 | `only_listed_tools`, `avoids_forbidden_tools` | draft | A step names a tool that is not on the list, or one the case forbids. |
 | `write_has_target_input`, `input_kinds_valid`, `has_steps` | draft | A write has no input of the kind it needs, an input kind is unknown, or there are no steps. |
+| `jira_tool_has_project_input`, `stated_values_in_steps` | draft | A step uses a Jira tool but the draft has no single Jira project input, or a value the task states, such as "14 days", is missing from the steps or made an input that would ask for it again. |
 | `approvals_asked_for`, `no_invented_keys` | draft | The number of approvers differs from the one asked for, or the draft names a Jira project or ticket the task does not. |
 | `right_decision`, `right_agents`, `only_saved_agents` | choose | The decision or the agents brought in are wrong, or an agent is not in the library. |
 | `inputs_exist`, `values_from_task`, `states_given_values`, `describes_new_agent` | choose | A value goes to an input the agent does not have, a value is not in the task, a value the task says is missing, or a new agent has no description. |

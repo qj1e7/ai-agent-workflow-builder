@@ -593,10 +593,14 @@ def _refused_span(task: _Task, text: str) -> RefusedAnswer | None:
 def _offers(task: _Task) -> bool:
     """Whether the task reads something to look for or to do, so a card is worth offering. A
     search that only asks how many days ("the stale tickets") is one beside another part the
-    card holds, as a schedule: the card asks it. Alone it is no card worth offering."""
+    card holds, as a schedule, even one that asks only its time: the card asks it. Alone it is
+    no card worth offering."""
     accepted = [r for r in task.rows if r.state in ACCEPTED]
     asks_days = any(r.kind == "look_for" and r.state == "missing" and r.text for r in task.rows)
-    return any(r.kind in ("look_for", "do") for r in accepted) or (asks_days and bool(accepted))
+    asks_time = any(r.kind == "schedule" and r.state == "missing" and r.text for r in task.rows)
+    return any(r.kind in ("look_for", "do") for r in accepted) or (
+        asks_days and (bool(accepted) or asks_time)
+    )
 
 
 def _from_task(read: TaskRead, task: _Task, text: str) -> PlannerAnswer:

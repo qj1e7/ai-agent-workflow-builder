@@ -14,6 +14,7 @@ from platform_api.builder.cards import (
     plan_for_cards,
     sorted_for_library,
     tool_list,
+    with_needed_inputs,
 )
 from platform_api.builder.models import (
     AgentChoice,
@@ -162,7 +163,7 @@ def plan_use_one() -> UseSaved:
 
 
 def plan_new_agent() -> NewAgent:
-    checked = check_card(BROKEN)
+    checked = check_card(with_needed_inputs(BROKEN))
     return NewAgent(
         draft=checked.card,
         approvals=checked.approvals,
