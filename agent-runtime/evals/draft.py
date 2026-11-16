@@ -45,21 +45,28 @@ def _invented_keys(draft: DraftAnswer, task: str) -> list[str]:
     return sorted(key for key in found if key not in task)
 
 
+def _as_said(value: str) -> re.Pattern[str]:
+    """The value as whole words with its unit, written with a space or a hyphen and with or
+    without a plural: "14 days" is also "14-day", but "Friday" or "MOCK-14" is not it."""
+    words = [
+        re.escape(w) if w.isdigit() else re.escape(w.rstrip("s")) + "s?" for w in value.split()
+    ]
+    return re.compile(r"\b" + r"[\s-]+".join(words) + r"\b", re.IGNORECASE)
+
+
 def _stated_values_lost(case: DraftCase, draft: DraftAnswer) -> list[str]:
     """Each value the task states that no step carries, or that an input asks for again."""
-    steps = " ".join(b.say for b in draft.blocks).casefold()
+    steps = " ".join(b.say for b in draft.blocks)
     lost: list[str] = []
     for value in case.in_steps:
-        stems = [w.casefold().rstrip("s") for w in re.findall(r"\w+", value)]
-        asked = [
-            i.name
-            for i in draft.inputs
-            if i.kind == "text"
-            and any(stem in f"{i.name} {i.what} {i.example}".casefold() for stem in stems)
-        ]
-        if value.casefold() not in steps:
+        said = _as_said(value)
+        if said.search(steps) is None:
             lost.append(f'no step says "{value}"')
-        lost.extend(f'the input "{name}" asks for "{value}" again' for name in asked)
+        lost.extend(
+            f'the input "{i.name}" asks for "{value}" again'
+            for i in draft.inputs
+            if i.kind == "text" and said.search(f"{i.name} {i.what} {i.example}")
+        )
     return lost
 
 

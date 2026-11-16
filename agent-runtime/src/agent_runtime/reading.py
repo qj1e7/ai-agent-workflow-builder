@@ -255,8 +255,15 @@ SCHEDULE_VOCAB: Final = SCHEDULE_WORDS | words(
     "every each on at in the and or to from by before after first last other twice once per a an "
     "am pm o'clock start end of beginning eod"
 )
+TWELVE_HOUR: Final = r"\d{1,2}(?:[:.]\d{2})?\s*(?:am|pm)"
+"""A 12-hour time, "9am", "9:30am" or "9.30am", whole, so its hour is never left out."""
+TWENTY_FOUR_HOUR: Final = r"(?:[01]?\d|2[0-3]):[0-5]\d"
+"""A 24-hour time from 0:00 to 23:59, as "16:00". "16.00" is not one: with a dot, "9.30" could
+be morning or evening, so it is asked."""
+NOT_INSIDE_A_NUMBER: Final = r"(?<![\d.:])\b"
 TIME_OF_DAY: Final = re.compile(
-    r"\b(?:at\s+)?\d{1,2}(?::\d{2})?\s*(?:am|pm)\b|\b(?:at\s+)?\d{1,2}:\d{2}\b|\bat\s+\d{1,2}\b|"
+    rf"{NOT_INSIDE_A_NUMBER}(?:at\s+)?{TWELVE_HOUR}\b|"
+    rf"{NOT_INSIDE_A_NUMBER}(?:at\s+)?{TWENTY_FOUR_HOUR}\b|\bat\s+\d{{1,2}}\b|"
     r"\bat\s+(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\b|"
     r"\b(?:noon|midday|midnight|morning|afternoon|evening|night)\b",
     re.IGNORECASE,
@@ -286,19 +293,17 @@ DAY_RANGE: Final = re.compile(
     rf"\b(?:{DAY_NAMES})s?\s*(?:to|through|thru|till|until|-)\s*(?:{DAY_NAMES})s?\b",
     re.IGNORECASE,
 )
-HOUR_24: Final = r"([01]?\d|2[0-3]):([0-5]\d)"
-"""A 24-hour time from 0:00 to 23:59, as "16:00". "16.00" is not one: with a dot, "9.30" could
-be morning or evening, so it is asked."""
 CLOCK: Final = re.compile(
-    r"(?<![\d.:])\b(\d{1,2})(?:[:.](\d{2}))?\s*(am|pm)\b|"
-    rf"(?<![\d.:])\b{HOUR_24}\b(?![.:]\d)|"
-    r"\b(?:at|or|and)\s+(\d{1,2})\b(?![:.]\d)(?!\s*(?:am|pm)\b)|\b(noon|midday|midnight)\b",
+    rf"{NOT_INSIDE_A_NUMBER}(?P<twelve>{TWELVE_HOUR})\b|"
+    rf"{NOT_INSIDE_A_NUMBER}(?P<day>{TWENTY_FOUR_HOUR})\b(?![.:]\d)|"
+    r"\b(?:at|or|and)\s+(?P<bare>\d{1,2})\b(?![:.]\d)(?!\s*(?:am|pm)\b)|"
+    r"\b(?P<named>noon|midday|midnight)\b",
     re.IGNORECASE,
 )
 """A time of day as the request writes it: "9am", "9.30am", "17:00", "noon", or a bare hour after
 "at", "or" or "and", as in "at 9 or 10"."""
 CLOCK_TOKEN: Final = re.compile(
-    rf"^\d{{1,2}}(?:[:.]\d{{2}})?(?:am|pm)$|^{HOUR_24}$|^\d{{1,2}}(?:st|nd|rd|th)$"
+    rf"^{TWELVE_HOUR}$|^{TWENTY_FOUR_HOUR}$|^\d{{1,2}}(?:st|nd|rd|th)$", re.IGNORECASE
 )
 TIME_SHAPED: Final = re.compile(r"\b\d{1,2}[:.]\d{1,2}\b|\bat\s+\d+\b|\bat$", re.IGNORECASE)
 """Words that held a time, read or not, as "24:00", "16.00", "at 1600", or an "at" left at the end
@@ -1067,14 +1072,16 @@ class Clash:
 
 
 def _clock(match: re.Match[str]) -> str:
-    hour, minute, half, hour24, minute24, bare, named = match.groups()
-    if named is not None:
+    """A CLOCK match as a 24-hour time, 09:00, except a bare hour, which stays as written."""
+    if (named := match.group("named")) is not None:
         return "00:00" if named.casefold() == "midnight" else "12:00"
-    if bare is not None:
+    if (bare := match.group("bare")) is not None:
         return bare
-    if half is None:
-        return f"{int(hour24):02d}:{minute24}"
-    return f"{int(hour) % 12 + (12 if half.casefold() == 'pm' else 0):02d}:{minute or '00'}"
+    said = match.group("twelve") or match.group("day")
+    hour, minute = (re.findall(r"\d+", said) + ["00"])[:2]
+    if match.group("twelve") is None:
+        return f"{int(hour):02d}:{minute}"
+    return f"{int(hour) % 12 + (12 if said.casefold().endswith('pm') else 0):02d}:{minute}"
 
 
 def _schedule_run(text: str, said: tuple[int, int] | None) -> tuple[int, int] | None:
