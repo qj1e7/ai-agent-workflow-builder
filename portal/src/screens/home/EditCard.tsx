@@ -8,6 +8,7 @@ import { Card } from '../../ui/Card'
 import { cx } from '../../ui/cx'
 import { IconCheck } from '../../ui/icons'
 import { OpenButton } from '../../ui/OpenItem'
+import { WATCHLIST_PATH } from '../software/software'
 import { nextRunAt, undoProblem } from '../workflows/workflow'
 import type { Page } from './AnswerCards'
 import { CardMemoryContext } from './cardMemory'
@@ -183,7 +184,7 @@ export function EditCard({ reply, typed, page, say, now, about }: EditCardProps)
       {sentence}
     </p>
   )
-  const crosses = phase.kind === 'open' ? crossParts(crossesOf(reply, view), { workflow: target?.name ?? '' }) : []
+  const crosses = phase.kind === 'open' ? crossParts(crossesOf(reply, view), { workflow: target?.name ?? '', editsWatchlist: target?.watchlist === true }) : []
   const asked = (key: string, label: string, { words: asks, choices }: Pick<Question, 'words' | 'choices'>, choose: (value: string) => void, more?: ReactNode, before?: ReactNode): Part => ({
     key,
     mark: 'ask',
@@ -227,6 +228,10 @@ export function EditCard({ reply, typed, page, say, now, about }: EditCardProps)
         <Button variant={main} onClick={() => page.ask(`Keep track of the ${view.software ?? ''} version`)}>
           Watch {view.software}
         </Button>
+      ) : view.kind === 'cant' && view.target?.watchlist === true ? (
+        <OpenButton variant={main} item={{ kind: 'watchlist' }} to={WATCHLIST_PATH}>
+          Open the Watchlist
+        </OpenButton>
       ) : view.kind === 'cant' && view.target !== null ? (
         <OpenButton variant={main} item={{ kind: 'workflow', id: view.target.use_case_id }} to={`/workflows/${encodeURIComponent(view.target.use_case_id)}`}>
           Open {view.target.name}

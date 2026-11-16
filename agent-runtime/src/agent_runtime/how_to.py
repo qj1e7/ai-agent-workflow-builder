@@ -26,6 +26,9 @@ HOW_TO: Final = (
     "one schedule.",
     "To add software to the Watchlist, open the Watchlist and fill in Add software, or type "
     "Check and its name in the box, such as Check LangGraph for new releases.",
+    "To take software off the Watchlist, type Remove and its name in the box, such as Remove "
+    "LangGraph from the Watchlist, or press Remove from watchlist on the Watchlist. Undo puts it "
+    "back.",
     "To change when a workflow runs, say so in the box, such as Move the morning check to 10am.",
     "To pause a workflow, type Pause and its name, and type Resume and its name to turn it back "
     "on.",

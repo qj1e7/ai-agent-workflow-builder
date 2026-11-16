@@ -441,7 +441,7 @@ def score_led(case: ReplyCase, answer: Answer) -> list[Check]:
         found.append(check("refuses_a_skip", [] if kind == "refused" else [kind]))
     if case.must_not_refuse:
         found.append(check("keeps_a_plain_write", ["refused"] if kind == "refused" else []))
-    if outcome.tools and outcome.tools[0] not in ("word_rule", "front_refusal"):
+    if outcome.tools and outcome.tools[0] not in ("word_rule", "front_refusal", "front_removal"):
         why = f"{outcome.fell_back}: {' | '.join(outcome.errors)}" if outcome.fell_back else ""
         found.append(check("led_answer_shown", [why] if why else []))
     slow = [f"{s:.1f} s" for s in steps.seconds if s > CALL_LIMIT_S]

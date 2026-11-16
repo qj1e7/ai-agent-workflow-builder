@@ -116,10 +116,10 @@ class FakeWatchlist:
     async def add(self, principal: object, body: object) -> object:
         raise AssertionError("not asked in these tests")
 
-    async def remove(self, software_id: str) -> object:
+    async def remove(self, principal: object, software_id: str) -> object:
         return NoSuchSoftware(SoftwareId(software_id))
 
-    async def restore(self, software_id: str) -> object:
+    async def restore(self, principal: object, software_id: str) -> object:
         if software_id == "sw_again":
             return RepoAddedAgainSinceRemoval("langchain-ai/langgraph")
         if software_id == "sw_full":

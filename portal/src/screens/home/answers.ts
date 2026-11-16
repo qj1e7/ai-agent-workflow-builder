@@ -1,5 +1,5 @@
-import type { CantRowView, CapabilitiesView, CapabilityView, OfflineReply, PauseReply, PlannerReply, QuestionReply, ResumeReply, RowKind, UnderstoodRowView } from '../../api/types'
-import { count } from '../run/words'
+import type { CantRowView, CapabilitiesView, CapabilityView, OfflineReply, PauseReply, PlannerReply, QuestionReply, RemoveSoftwareReply, ResumeReply, RowKind, UnderstoodRowView } from '../../api/types'
+import { andList, count } from '../run/words'
 import { isRunning, type Row } from '../workflows/workflow'
 import { sayChanged } from './changed'
 import { cantOnCard, quote } from './parts'
@@ -92,6 +92,7 @@ export function wordsOnly(reply: PlannerReply, asker: Asker): boolean {
   if (reply.answer === 'question') return questionActions(reply, asker).length === 0
   if (reply.answer === 'pause' || reply.answer === 'resume') return reply.choices.length === 0
   if (reply.answer === 'n8n') return true
+  if (reply.answer === 'remove_software') return reply.matches.length === 0
   // A free reply is the Planner's own words, with its chips or button under them inside the same message.
   return reply.answer === 'reply' || reply.answer === 'operators' || (reply.answer === 'offline' && asker === 'approver')
 }
@@ -134,6 +135,24 @@ export const watchlistSay = (software: string | null, listed: boolean): string =
     : `${software} is software, so it belongs on the Software watchlist, which checks the software on it for new releases.`
 }
 
+/** The most names a sentence lists before it counts the rest. */
+const NAMED = 8
+
+/** What the Watchlist holds, for a name it doesn’t hold. */
+function heldWords(names: readonly string[]): string {
+  if (names.length === 0) return 'Your Watchlist is empty.'
+  if (names.length <= NAMED) return `It holds ${andList(names)}.`
+  return `It holds ${names.slice(0, NAMED).join(', ')} and ${names.length - NAMED} more.`
+}
+
+/** Software to take off the Watchlist: the one match, a choice of several, or what it holds when the name isn’t on it. */
+export function removeSay(reply: RemoveSoftwareReply): string {
+  const [only, ...others] = reply.matches
+  if (only === undefined) return `${reply.software} isn’t on your Watchlist. ${heldWords(reply.watched)}`
+  if (others.length > 0) return `More than one software on your Watchlist could be ${reply.software}. Which one should I remove?`
+  return `Remove ${only.name} from the Watchlist? It won’t be checked any more.`
+}
+
 /** “Set up another workflow”: the sentence counts the places to start it shows, so the words and the chips never disagree. */
 export const ideasSay = (places: number): string =>
   places === 0 ? 'I have no places to start to suggest right now. Tell me what you would like.' : places === 1 ? 'Here is a place to start. Pick it, or tell me something else.' : `Here are ${places} places to start. Pick one, or tell me something else.`
@@ -165,6 +184,8 @@ export function sayOf(reply: PlannerReply, asker: Asker = 'operator'): string | 
     case 'pause':
     case 'resume':
       return switchSay(reply)
+    case 'remove_software':
+      return removeSay(reply)
     case 'abilities':
     case 'ideas':
     case 'didnt_follow':

@@ -1343,6 +1343,28 @@ class EditAnswer(WireModel):
         return self
 
 
+SOFTWARE_NAME_LIMIT: Final = 80
+
+
+class RemoveSoftwareAnswer(WireModel):
+    """A request to take one software off the Software watchlist. The platform shows each name in
+    watched_as with the Software page's own Remove, with its Undo. It is a setting of the
+    platform: nothing outside it is written, so no Approver is asked."""
+
+    kind: Literal["remove_software"] = "remove_software"
+    software: str = Field(
+        min_length=1,
+        max_length=SOFTWARE_NAME_LIMIT,
+        description="The software's name as the request wrote it.",
+    )
+    watched_as: list[Annotated[str, Field(max_length=SOFTWARE_NAME_LIMIT)]] = Field(
+        default_factory=list[str],
+        max_length=100,
+        description="Each name in the facts' watchlist that is this software, with case, spaces, "
+        "dots and hyphens aside, so node js is Node.js. Empty when the watchlist holds none.",
+    )
+
+
 type PlannerAnswer = Annotated[
     SetupCardAnswer
     | PartAnswer
@@ -1358,6 +1380,7 @@ type PlannerAnswer = Annotated[
     | EditAnswer
     | PauseAnswer
     | ResumeAnswer
+    | RemoveSoftwareAnswer
     | FreeReplyAnswer
     | DidntFollowAnswer,
     Field(discriminator="kind"),

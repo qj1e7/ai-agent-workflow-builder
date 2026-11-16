@@ -2536,6 +2536,7 @@
           "pause": "#/$defs/PauseAnswer",
           "question": "#/$defs/QuestionAnswer",
           "refused": "#/$defs/RefusedAnswer",
+          "remove_software": "#/$defs/RemoveSoftwareAnswer",
           "reply": "#/$defs/FreeReplyAnswer",
           "resume": "#/$defs/ResumeAnswer",
           "setup_card": "#/$defs/SetupCardAnswer",
@@ -2587,6 +2588,9 @@
         },
         {
           "$ref": "#/$defs/ResumeAnswer"
+        },
+        {
+          "$ref": "#/$defs/RemoveSoftwareAnswer"
         },
         {
           "$ref": "#/$defs/FreeReplyAnswer"
@@ -3003,6 +3007,40 @@
         "releases"
       ],
       "title": "ReleasesRead",
+      "type": "object"
+    },
+    "RemoveSoftwareAnswer": {
+      "additionalProperties": false,
+      "description": "A request to take one software off the Software watchlist. The platform shows each name in\nwatched_as with the Software page's own Remove, with its Undo. It is a setting of the\nplatform: nothing outside it is written, so no Approver is asked.",
+      "properties": {
+        "kind": {
+          "const": "remove_software",
+          "default": "remove_software",
+          "title": "Kind",
+          "type": "string"
+        },
+        "software": {
+          "description": "The software's name as the request wrote it.",
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Software",
+          "type": "string"
+        },
+        "watched_as": {
+          "description": "Each name in the facts' watchlist that is this software, with case, spaces, dots and hyphens aside, so node js is Node.js. Empty when the watchlist holds none.",
+          "items": {
+            "maxLength": 80,
+            "type": "string"
+          },
+          "maxItems": 100,
+          "title": "Watched As",
+          "type": "array"
+        }
+      },
+      "required": [
+        "software"
+      ],
+      "title": "RemoveSoftwareAnswer",
       "type": "object"
     },
     "ReplyAbout": {

@@ -35,6 +35,7 @@ from agent_runtime.contract import (
     PlannerFacts,
     QuestionAnswer,
     RefusedAnswer,
+    RemoveSoftwareAnswer,
     RequestPart,
     ResumeAnswer,
     SetupCardAnswer,
@@ -66,6 +67,7 @@ from agent_runtime.reading import (
     trim,
     without_runs_by_itself,
 )
+from agent_runtime.removals import another, points_back, removal_of
 
 NOT_FOLLOWED: Final = "I didn't follow this part."
 SKIP_PART_NOTE: Final = "I can't skip the yes. Nothing is written without a yes."
@@ -165,6 +167,8 @@ def parts_of(
             _part(text, trim(text, m.start, m.end), m.mark, m.reason, choices=m.choices)
             for m in marked
         ]
+    if isinstance(answer, RemoveSoftwareAnswer):
+        return _removal_parts(text, clauses, facts)
     crosses = _crosses(read, text, answer)
     alone = len(clauses) == 1
     found: list[RequestPart] = []
@@ -175,6 +179,36 @@ def parts_of(
         else:
             found.append(_unmarked(answer, text, clause))
     return found
+
+
+def _removal_parts(text: str, clauses: list[Span], facts: PlannerFacts | None) -> list[RequestPart]:
+    """A removal ticks the words that ask for it, and a clause that asks for it again, as "remove
+    it". Anything else in its clause comes back as not followed, and each other clause, a second
+    removal included, is asked on its own when it asks for something."""
+    found = removal_of(text, facts)
+    parts: list[RequestPart] = []
+    for clause in clauses:
+        said = text[clause[0] : clause[1]]
+        if found is not None and clause != found.clause and points_back(said):
+            parts.append(_part(text, clause, "will_do"))
+            continue
+        again = None
+        if found is not None and clause != found.clause and not _orders(said):
+            again = another(found, said)
+        if again is not None:
+            words = plain(again, TEXT_LIMIT)
+            parts.append(RequestPart(text=words, mark="cant", reason="ask_on_its_own"))
+            continue
+        if found is None or clause != found.clause:
+            ask = _asks(text, clause) or _a_task(said) or removal_of(said, facts) is not None
+            parts.append(_part(text, clause, "cant", "ask_on_its_own" if ask else "not_followed"))
+            continue
+        marked = [
+            (found.asked, _part(text, found.asked, "will_do")),
+            *((span, _part(text, span, "cant", "not_followed")) for span in found.unread),
+        ]
+        parts += [part for _, part in sorted(marked, key=lambda m: m[0])]
+    return parts
 
 
 def _whole_message(

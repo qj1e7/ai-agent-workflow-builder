@@ -197,7 +197,7 @@ async def test_adding_and_removing_make_new_versions_and_keep_the_rest_of_the_li
     langgraph, redis = ids(second)["LangGraph"], ids(second)["Redis"]
     assert ids(first)["LangGraph"] == langgraph
 
-    third = await watchlist.remove(langgraph)
+    third = await watchlist.remove(ALICE, langgraph)
     assert isinstance(third, WatchlistView)
     assert third.version == 3
     assert [row.id for row in third.software] == [redis]
@@ -222,9 +222,10 @@ async def test_a_repository_is_watched_once_whatever_its_case(watchlist: Watchli
 
 
 async def test_removing_software_that_is_not_listed_changes_nothing(watchlist: Watchlist):
-    assert await watchlist.remove(SoftwareId("sw_nope")) == NoSuchSoftware(SoftwareId("sw_nope"))
+    nope = SoftwareId("sw_nope")
+    assert await watchlist.remove(ALICE, nope) == NoSuchSoftware(nope)
     view = await added(watchlist, LANGGRAPH)
-    assert await watchlist.remove(SoftwareId("sw_nope")) == NoSuchSoftware(SoftwareId("sw_nope"))
+    assert await watchlist.remove(ALICE, nope) == NoSuchSoftware(nope)
     assert await watchlist.view() == view
 
 
@@ -240,10 +241,10 @@ async def test_restoring_removed_software_lists_it_again_as_it_was(
     shown = await watchlist.view()
     assert shown is not None
     before = next(row for row in shown.software if row.id == langgraph)
-    removed = await watchlist.remove(langgraph)
+    removed = await watchlist.remove(ALICE, langgraph)
     assert isinstance(removed, WatchlistView) and removed.version == 3
 
-    restored = await watchlist.restore(langgraph)
+    restored = await watchlist.restore(ALICE, langgraph)
     assert isinstance(restored, WatchlistView)
     assert restored.version == 4
     assert next(row for row in restored.software if row.id == langgraph) == before
@@ -252,16 +253,16 @@ async def test_restoring_removed_software_lists_it_again_as_it_was(
         redis: None,
         langgraph: Given("1.2.14", first.software[0].added_at),
     }
-    assert await watchlist.restore(langgraph) == restored, "a repeat restore changes nothing"
+    assert await watchlist.restore(ALICE, langgraph) == restored, "a repeat restore changes nothing"
     again = await watchlist.view()
     assert again is not None and again.version == 4
 
 
 async def test_restoring_software_that_was_never_listed_changes_nothing(watchlist: Watchlist):
     nope = SoftwareId("sw_nope")
-    assert await watchlist.restore(nope) == NoSuchSoftware(nope)
+    assert await watchlist.restore(ALICE, nope) == NoSuchSoftware(nope)
     view = await added(watchlist, LANGGRAPH)
-    assert await watchlist.restore(nope) == NoSuchSoftware(nope)
+    assert await watchlist.restore(ALICE, nope) == NoSuchSoftware(nope)
     assert await watchlist.view() == view
 
 
@@ -270,10 +271,11 @@ async def test_a_repository_added_again_since_its_removal_cannot_be_restored(
 ):
     first = await added(watchlist, LANGGRAPH)
     old = first.software[0].id
-    await watchlist.remove(old)
+    await watchlist.remove(ALICE, old)
     again = await added(watchlist, software("LangGraph", "LangChain-AI/LangGraph"))
     assert ids(again)["LangGraph"] != old
-    assert await watchlist.restore(old) == RepoAddedAgainSinceRemoval("langchain-ai/langgraph")
+    refused = RepoAddedAgainSinceRemoval("langchain-ai/langgraph")
+    assert await watchlist.restore(ALICE, old) == refused
     assert await watchlist.view() == again
 
 
@@ -283,9 +285,9 @@ async def test_removed_software_can_be_restored_until_a_day_after_its_removal(
     langgraph = ids(await added(timed, LANGGRAPH))["LangGraph"]
     await added(timed, REDIS)
     clock.now = NOW + timedelta(hours=3)
-    await timed.remove(langgraph)
+    await timed.remove(ALICE, langgraph)
     clock.now += RESTORE_WINDOW
-    restored = await timed.restore(langgraph)
+    restored = await timed.restore(ALICE, langgraph)
     assert isinstance(restored, WatchlistView)
     assert ids(restored)["LangGraph"] == langgraph
 
@@ -297,10 +299,10 @@ async def test_restoring_more_than_a_day_after_the_removal_is_refused(
     await added(timed, REDIS)
     removed_at = NOW + timedelta(hours=3)
     clock.now = removed_at
-    left = await timed.remove(langgraph)
+    left = await timed.remove(ALICE, langgraph)
     assert isinstance(left, WatchlistView)
     clock.now = removed_at + RESTORE_WINDOW + timedelta(seconds=1)
-    assert await timed.restore(langgraph) == TooLate(removed_at + RESTORE_WINDOW)
+    assert await timed.restore(ALICE, langgraph) == TooLate(removed_at + RESTORE_WINDOW)
     after = await timed.view()
     assert after is not None
     assert (after.version, ids(after)) == (left.version, ids(left))
@@ -310,16 +312,16 @@ async def test_the_day_to_restore_counts_from_the_latest_removal(
     timed: Watchlist, clock: MovingClock
 ):
     langgraph = ids(await added(timed, LANGGRAPH))["LangGraph"]
-    await timed.remove(langgraph)
+    await timed.remove(ALICE, langgraph)
     clock.now = NOW + timedelta(hours=20)
-    await timed.restore(langgraph)
+    await timed.restore(ALICE, langgraph)
     removed_again = NOW + timedelta(hours=30)
     clock.now = removed_again
-    await timed.remove(langgraph)
+    await timed.remove(ALICE, langgraph)
     clock.now = removed_again + timedelta(hours=5)
     await added(timed, REDIS)
     clock.now = removed_again + RESTORE_WINDOW
-    restored = await timed.restore(langgraph)
+    restored = await timed.restore(ALICE, langgraph)
     assert isinstance(restored, WatchlistView)
     assert sorted(ids(restored)) == ["LangGraph", "Redis"]
 
@@ -330,9 +332,9 @@ async def test_restoring_into_a_full_list_is_refused(watchlist: Watchlist):
     full = await watchlist.view()
     assert full is not None
     gone = ids(full)["Tool 0"]
-    await watchlist.remove(gone)
+    await watchlist.remove(ALICE, gone)
     refilled = await added(watchlist, software("One more", "owner/one-more"))
-    assert await watchlist.restore(gone) == WatchlistFull(100)
+    assert await watchlist.restore(ALICE, gone) == WatchlistFull(100)
     assert await watchlist.view() == refilled
 
 
@@ -533,7 +535,7 @@ async def test_the_task_says_when_our_version_is_only_what_the_first_check_read(
 
 async def test_an_emptied_watchlist_has_nothing_to_check(watchlist: Watchlist, builder: Builder):
     view = await added(watchlist, LANGGRAPH)
-    await watchlist.remove(view.software[0].id)
+    await watchlist.remove(ALICE, view.software[0].id)
     assert await builder.run_spec_for(UseCaseId(view.use_case_id)) == NothingToCheck()
     assert await builder.start_run(UseCaseId(view.use_case_id), ALICE, "k") == NothingToCheck()
 
@@ -574,6 +576,21 @@ async def test_the_same_project_setting_or_no_watchlist_changes_nothing(
     await watchlist.adopt_ticket_project()
     view = await watchlist.view()
     assert view is not None and view.version == first.version
+
+
+async def test_removing_and_putting_back_say_who_did_it_in_the_log(
+    watchlist: Watchlist, caplog: pytest.LogCaptureFixture
+):
+    langgraph = ids(await added(watchlist, LANGGRAPH))["LangGraph"]
+    await added(watchlist, REDIS)
+    with caplog.at_level(logging.INFO, logger="platform_api"):
+        await watchlist.remove(ALICE, langgraph)
+        await watchlist.restore(CAROL, langgraph)
+        await watchlist.restore(CAROL, langgraph)
+    assert caplog.messages == [
+        f"alice removed {langgraph} (langchain-ai/langgraph) from the watchlist, version 3",
+        f"carol put {langgraph} (langchain-ai/langgraph) back on the watchlist, version 4",
+    ]
 
 
 async def test_moving_the_watchlist_to_the_settings_project_says_so_in_the_log(

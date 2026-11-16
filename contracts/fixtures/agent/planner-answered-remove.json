@@ -1,0 +1,19 @@
+{
+  "status": "answered",
+  "answer": {
+    "kind": "remove_software",
+    "software": "node js",
+    "watched_as": [
+      "node js"
+    ]
+  },
+  "parts": [
+    {
+      "text": "remove node js from watchlist",
+      "mark": "will_do",
+      "reason": null,
+      "note": null,
+      "choices": []
+    }
+  ]
+}

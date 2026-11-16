@@ -43,9 +43,13 @@ export interface CrossContext {
   readonly watchlist?: ScheduleView | null
   readonly operators?: string
   readonly workflow?: string
+  /** The edit changes the Software watchlist, so a change it can't make names what the chat can do to the watchlist. */
+  readonly editsWatchlist?: boolean
   /** The set-up card names each cross in the sketch's short form, her words as a sentence, rather than quoted. */
   readonly short?: boolean
 }
+
+export const WATCHLIST_CANT = 'From the chat I can add software to the Software watchlist, remove it, or change when the watchlist runs.'
 
 /** The request that moves the whole Software watchlist to the time she asked of one software. */
 export const watchlistRuns = (time: string): string => `Make the Software watchlist run ${time.trim()}`
@@ -65,6 +69,7 @@ export function crossWords(part: PartView, context: CrossContext = {}): string {
   if (part.reason === 'cant_do' && part.note !== null && part.note.trim() !== '') return part.note
   if (part.reason === 'operators' && context.operators) return context.operators
   if (part.reason === 'how_often') return howOftenWords(part.text)
+  if (part.reason === 'only_schedule' && context.editsWatchlist === true) return WATCHLIST_CANT
   if (part.reason === 'only_schedule' && context.workflow) return `From the chat I can only change when ${context.workflow} runs.`
   if (part.reason === 'own_time' && context.watchlist)
     return `The Software watchlist checks all your software together, ${repeatWords(context.watchlist)}. I can’t give one software its own time yet.`
@@ -179,6 +184,7 @@ export function leftoverParts(reply: PlannerReply): PartView[] {
       return followedNothing(reply) ? [] : above(reply.parts)
     case 'pause':
     case 'resume':
+    case 'remove_software':
     case 'watchlist':
     case 'check_workflows':
     case 'why_stopped':
