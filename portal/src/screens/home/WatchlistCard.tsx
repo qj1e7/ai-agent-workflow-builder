@@ -1,11 +1,14 @@
-import { useEffect, useId, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { Link } from '../../ui/Link'
 import { useErrorWords } from '../../api/context'
 import { useLatch } from '../../api/latch'
 import { useAddSoftware, useFindSoftware } from '../../api/queries'
 import { Button } from '../../ui/Button'
+import { Card } from '../../ui/Card'
 import { IconCheck } from '../../ui/icons'
 import { alreadyWords, verdictOf } from '../software/addByName'
+import { describedBy, Field } from '../software/Field'
+import { checkName, NAME_HELP } from '../software/software'
 import { useMainButton } from './primary'
 import styles from './Planner.module.css'
 
@@ -109,29 +112,70 @@ export function AddToWatchlist({ name }: { name: string }) {
   )
 }
 
-/** Which software: the Planner heard a release word with no name. */
+/**
+ * Which software: the Planner heard a watch word with no name. It asks for the name as Add software does on the Software page, in a
+ * card like the chat's other answers, with no title: the Planner's question above it already says what it is for. Find it is never
+ * dead: with no name, the field says why and keeps focus.
+ */
 export function WhichSoftware({ onNever }: { onNever: () => void }) {
   const fieldId = useId()
+  const titleId = useId()
   const main = useMainButton()
+  const field = useRef<HTMLInputElement>(null)
   const [typed, setTyped] = useState('')
+  const [error, setError] = useState<string | undefined>(undefined)
   const [name, setName] = useState<string | null>(null)
-  if (name !== null) return <AddToWatchlist name={name} />
+  // The form goes once she names it, so focus moves to the card for that name rather than dropping to the page.
+  useEffect(() => {
+    if (name !== null) document.getElementById(titleId)?.focus()
+  }, [name, titleId])
+  if (name !== null) {
+    return (
+      <Card title={name} headingId={titleId}>
+        <AddToWatchlist name={name} />
+      </Card>
+    )
+  }
+  const find = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const checked = checkName(typed)
+    if (checked.ok) {
+      setName(checked.value)
+      return
+    }
+    setError(checked.words)
+    field.current?.focus()
+  }
   return (
-    <form
-      className={styles['ask']}
-      onSubmit={(event) => {
-        event.preventDefault()
-        if (typed.trim() !== '') setName(typed.trim())
-      }}
-    >
-      <label htmlFor={fieldId}>Software name</label>
-      <input id={fieldId} type="text" value={typed} maxLength={80} autoComplete="off" placeholder="Kubernetes" onChange={(event) => setTyped(event.target.value)} />
-      <div className={styles['buttons']}>
-        <Button variant={main} type="submit" disabled={typed.trim() === ''}>
-          Find it
-        </Button>
-        <Button onClick={onNever}>Never mind</Button>
-      </div>
+    <form onSubmit={find} noValidate>
+      <Card
+        label="Software to watch"
+        actions={
+          <>
+            <Button variant={main} type="submit">
+              Find it
+            </Button>
+            <Button onClick={onNever}>Never mind</Button>
+          </>
+        }
+      >
+        <Field id={fieldId} label="Software name" help={NAME_HELP} error={error}>
+          <input
+            ref={field}
+            id={fieldId}
+            type="text"
+            value={typed}
+            maxLength={80}
+            autoComplete="off"
+            aria-invalid={error ? true : undefined}
+            aria-describedby={describedBy(fieldId, error)}
+            onChange={(event) => {
+              setTyped(event.target.value)
+              setError(undefined)
+            }}
+          />
+        </Field>
+      </Card>
     </form>
   )
 }

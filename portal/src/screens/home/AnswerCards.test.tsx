@@ -237,6 +237,45 @@ describe('the software card', () => {
     expect(text(html)).toContain('Kubernetes It isn’t on the watchlist, so I don’t know which version you run.')
     expect(buttons(html)).toEqual(['Watch it'])
   })
+
+  it.each(['add', 'Add', 'watch', 'keep track of', 'monitor', 'Keep an eye on', 'track', 'follow'])('says only that it isn’t on the watchlist yet when she asked to %s it', (word) => {
+    const html = draw({ ...ask('Node Js', null), word })
+    expect(text(html)).toContain('Node Js It isn’t on the watchlist yet.')
+    expect(text(html)).not.toContain('which version you run')
+    expect(buttons(html)).toEqual(['Watch it'])
+  })
+
+  it('keeps the version sentence inside a can’t whose alternative is the watch offer, when the word asks about the version', () => {
+    const offer = ask('Node Js', null)
+    const html = draw({ trace_id: null, answer: 'cant', cant: [], alternative: offer, parts: [] })
+    expect(text(html)).toContain('It isn’t on the watchlist, so I don’t know which version you run.')
+  })
+})
+
+describe('which software', () => {
+  const which: PlannerReply = { trace_id: null, answer: 'which_software', word: 'add', parts: [] }
+
+  it('asks for the name in a card, as Add software does: the label above the box, the help under it, and Find it never disabled', () => {
+    const html = draw(which)
+    const card = /<section[\s\S]*<\/section>/.exec(html)?.[0] ?? ''
+    const input = /<input[^>]*>/.exec(card)?.[0] ?? ''
+    const id = /id="([^"]+)"/.exec(input)?.[1] ?? 'none'
+    expect(text(card)).toContain('Software name Type the name, such as Kubernetes. I’ll find its GitHub project.')
+    expect(card).toContain(`for="${id}"`)
+    expect(input).toContain(`aria-describedby="${id}-help"`)
+    expect(buttons(card)).toEqual(['Find it', 'Never mind'])
+    expect(html).not.toContain('disabled')
+    expect(/<form[^>]*novalidate/i.test(html)).toBe(true)
+  })
+
+  it('says it once: no title over the field and no placeholder, while the card keeps its name for a screen reader', () => {
+    const card = /<section[\s\S]*<\/section>/.exec(draw(which))?.[0] ?? ''
+    expect(card).toMatch(/^<section[^>]*aria-label="Software to watch"/)
+    expect(card).not.toContain('<h3')
+    expect(text(card)).toMatch(/^Software name /)
+    expect(card).not.toContain('placeholder')
+    expect(text(card).match(/Kubernetes/g)).toHaveLength(1)
+  })
 })
 
 describe('PartsList on a set-up card', () => {

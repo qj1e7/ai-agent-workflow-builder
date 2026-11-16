@@ -1,7 +1,9 @@
+import gc
 import os
 import re
 import subprocess
 import sys
+import weakref
 
 import pytest
 from fastapi.testclient import TestClient
@@ -182,6 +184,19 @@ def test_a_trailing_slash_is_not_found_and_never_redirects(client: TestClient):
 
 def test_healthz(client: TestClient):
     assert client.get("/healthz").json() == {"status": "ok"}
+
+
+def test_an_app_that_is_let_go_is_freed():
+    """FastAPI caches every endpoint function it has seen. An endpoint that held the app would
+    keep each test's app alive, and the full garbage collections, slower as the heap grows, came
+    to stall the event loop for more than five seconds mid-suite."""
+    client = TestClient(create_app(LOCAL))
+    assert client.get("/healthz").status_code == 200
+    app = weakref.ref(client.app)
+    client.close()
+    del client
+    gc.collect()
+    assert app() is None
 
 
 def test_events_route_documents_both_content_types(client: TestClient):

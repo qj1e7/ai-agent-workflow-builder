@@ -2916,7 +2916,7 @@
             }
           ],
           "default": null,
-          "description": "The software the Planner named in its answer.",
+          "description": "The one software the Planner named in its answer. Client input: a message that only asks to watch it, such as keep track of it, gets the offer to watch this software, which the person must tap.",
           "title": "Software"
         }
       },

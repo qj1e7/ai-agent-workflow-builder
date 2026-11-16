@@ -86,7 +86,13 @@ from agent_runtime.edits import (
     left_over,
 )
 from agent_runtime.explaining import explain_of
-from agent_runtime.follow_ups import VERSION, follow_up_of, named_when_asked, watch_offer_of
+from agent_runtime.follow_ups import (
+    VERSION,
+    follow_up_of,
+    named_before,
+    named_when_asked,
+    watch_offer_of,
+)
 from agent_runtime.free_reply import dead_end, reply_to
 from agent_runtime.parts import (
     HOW_OFTEN,
@@ -429,14 +435,20 @@ def _about_releases_only(clause: str) -> bool:
 
 
 def _watch_clauses(read: TaskRead, text: str) -> list[tuple[int, int]]:
-    """The clauses a watchlist answer already carries: one that names the software, and one
-    about its releases with nothing else in it. Any other clause comes back if nothing reads
-    it."""
+    """The clauses a watchlist answer already carries: one that names the software, one that
+    only asks to watch it again ("keep track of it"), and one about its releases with nothing
+    else in it. Any other clause comes back if nothing reads it."""
     software = _software_of(read, text)
     return [
         (start, end)
         for start, end in clauses_of(text)
-        if (software is not None and whole_word_of(text[start:end], software) is not None)
+        if (
+            software is not None
+            and (
+                whole_word_of(text[start:end], software) is not None
+                or watches_it(text[start:end]) is not None
+            )
+        )
         or _about_releases_only(text[start:end])
     ]
 
@@ -595,10 +607,14 @@ def _refused_span(task: _Task, text: str) -> RefusedAnswer | None:
 def _offers(task: _Task) -> bool:
     """Whether the task reads something to look for or to do, so a card is worth offering. A
     search that only asks how many days ("the stale tickets") is one beside another part the
-    card holds, as a schedule: the card asks it. Alone it is no card worth offering."""
+    card holds, as a schedule, even one that asks only its time: the card asks it. Alone it is
+    no card worth offering."""
     accepted = [r for r in task.rows if r.state in ACCEPTED]
     asks_days = any(r.kind == "look_for" and r.state == "missing" and r.text for r in task.rows)
-    return any(r.kind in ("look_for", "do") for r in accepted) or (asks_days and bool(accepted))
+    asks_time = any(r.kind == "schedule" and r.state == "missing" and r.text for r in task.rows)
+    return any(r.kind in ("look_for", "do") for r in accepted) or (
+        asks_days and (bool(accepted) or asks_time)
+    )
 
 
 def _from_task(read: TaskRead, task: _Task, text: str) -> PlannerAnswer:
@@ -642,6 +658,12 @@ WATCH_VERBS: Final = (
 """Verbs that start a watch request. The model's reading of one is taken only when the request
 says it and names the software."""
 _VERB_PATTERN: Final = "|".join(r"\s+".join(v.split()) for v in WATCH_VERBS)
+_WATCHES_IT: Final = re.compile(
+    r"^\W*(?:(?:and|then|also|so|please|pls|now|(?:can|could|would)\s+you|help\s+me)\s+)*"
+    rf"(?P<verb>{_VERB_PATTERN})\s+(?:it|this(?:\s+one)?|that(?:\s+one)?|them)"
+    r"(?:\s+(?:please|pls|for\s+me|for\s+us|too|as\s+well|also|now))*\W*$",
+    re.IGNORECASE,
+)
 _TICKET_KEY: Final = re.compile(r"\b[A-Z][A-Z0-9]+-\d+\b")
 _NOT_A_WATCH: Final = re.compile(
     r"\b(?:tickets?|issues?|projects?|boards?|approvers?|approvals?|workflows?|comments?|"
@@ -662,6 +684,14 @@ ASKS_TO_WATCH: Final = (
     | ME_WORDS
 )
 """The words of a request that only asks to watch some software, as "help me add a software"."""
+
+
+def watches_it(words: str) -> str | None:
+    """The watch verb, as written, of words that ask only to watch "it", as "keep track of it" or
+    "please monitor this one": a watch of the one software named beside them, or in the turn
+    before. A word more, as a time or another verb, and they ask for more."""
+    found = _WATCHES_IT.match(visible_words(words))
+    return None if found is None else found.group("verb")
 
 
 def _which_software(read: TaskRead, request: str) -> WhichSoftwareAnswer | None:
@@ -1114,6 +1144,9 @@ def decide(read: TaskRead, request: AnswerRequest) -> PlannerAnswer | AskTheQues
     named = _named_when_asked(read, request, answer)
     if named is not None:
         return named
+    again = None if isinstance(answer, RefusedAnswer) else watch_of_it(read, request)
+    if again is not None:
+        return again
     if question_messages(request) is None or isinstance(
         answer, EditAnswer | PauseAnswer | ResumeAnswer | RemoveSoftwareAnswer | ExplainAnswer
     ):
@@ -1170,6 +1203,20 @@ def _named_when_asked(
     if names_a_yes(named) or any(w in SCHEDULE_WORDS for w in said):
         return None
     return WatchlistAnswer(word=VERSION, software=named)
+
+
+def watch_of_it(read: TaskRead | None, request: AnswerRequest) -> WatchlistAnswer | None:
+    """The offer to watch the software the turn before named, for a message that only asks to
+    watch it, as "keep track of it" after "help me add Node Js". The name comes from the client,
+    so it must name no ticket and no yes, the reading must ask to skip no yes, and the person
+    still taps Watch it. With no software before, which software is asked as before."""
+    verb = watches_it(request.task)
+    named = named_before(request)
+    if verb is None or named is None or _TICKET_KEY.search(named.upper()) or names_a_yes(named):
+        return None
+    if read is not None and read.skips_the_yes.whose != "nobody":
+        return None
+    return WatchlistAnswer(word=verb, software=named)
 
 
 WHY: Final = re.compile(r"\bwhy\b|\bwent\s+wrong\b|\bwhat\s+happened\b", re.IGNORECASE)

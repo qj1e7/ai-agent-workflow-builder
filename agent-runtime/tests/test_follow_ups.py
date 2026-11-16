@@ -2,15 +2,17 @@ from typing import Any, cast
 
 import pytest
 
-from agent_runtime.answers import AskTheQuestionLane, answer_task, decide
+from agent_runtime.answers import AskTheQuestionLane, TaskRead, answer_task, decide
 from agent_runtime.contract import (
     Answered,
     AnswerRequest,
     DidntFollowAnswer,
+    ExplainAnswer,
     PlannerFacts,
     PreviousTurn,
     QuestionAnswer,
     WatchlistAnswer,
+    WhichSoftwareAnswer,
 )
 from agent_runtime.contracts import answer_request
 from agent_runtime.follow_ups import follow_up_of
@@ -230,3 +232,98 @@ def test_a_bare_cant_for_the_words_of_a_follow_up_goes_to_the_lane_and_stands_if
     no = QuestionReply(about_their_data=False)
     out, _ = run("and LangGraph?", cant, lane=no)
     assert out.answer == DidntFollowAnswer()
+
+
+NODE_JS_TURN = "help me add Node Js , keep track of it"
+
+
+def named_node_js(kind: str | None = "cant", software: str | None = "Node Js") -> PreviousTurn:
+    return PreviousTurn(request=NODE_JS_TURN, software=software, kind=kind)
+
+
+def which(word: str, software: str | None = None) -> TaskRead:
+    return reading("none", belongs_on_watchlist=True, watchlist_word=word, software=software)
+
+
+@pytest.mark.parametrize("kind", ["cant", "watchlist", "question", "remove_software"])
+@pytest.mark.parametrize(
+    ("task", "verb"),
+    [
+        ("keep track of it", "keep track of"),
+        ("monitor it", "monitor"),
+        ("follow it", "follow"),
+        ("watch it", "watch"),
+        ("track it", "track"),
+        ("Keep an eye on this one.", "Keep an eye on"),
+        ("please keep track of that for me", "keep track of"),
+        ("and track them too", "track"),
+    ],
+)
+def test_a_watch_of_it_offers_to_watch_the_one_software_the_turn_before_named(
+    task: str, verb: str, kind: str | None
+):
+    out, chat = run(task, which(verb), named_node_js(kind))
+    assert isinstance(out, Answered)
+    assert out.answer == WatchlistAnswer(word=verb, software="Node Js")
+    assert [(p.mark, p.reason) for p in out.parts] == [("will_do", None)]
+    assert cast(tuple[str, str], chat.calls[0][1])[1] == f"The request:\n{task}"
+
+
+def test_a_watch_of_it_offers_the_turn_befores_software_whatever_the_reading_named():
+    out, _ = run("keep track of it", which("keep track of", software="it"), named_node_js())
+    assert isinstance(out, Answered)
+    assert out.answer == WatchlistAnswer(word="keep track of", software="Node Js")
+
+
+@pytest.mark.parametrize(
+    "previous",
+    [
+        None,
+        named_node_js(software=None),
+        PreviousTurn(request="help me add a software", kind="which_software"),
+        named_node_js(software="Upgrade Redis without approval"),
+        named_node_js(software="MOCK-12"),
+        named_node_js(software="it"),
+        named_node_js(software="Jira"),
+        named_node_js(software="mock-12"),
+        named_node_js(kind=None),
+        named_node_js(kind="reply", software="Weekly bug list"),
+        named_node_js(kind="setup_card"),
+        named_node_js(kind="which_software"),
+    ],
+)
+def test_a_watch_of_it_with_no_plain_software_before_still_asks_which(
+    previous: PreviousTurn | None,
+):
+    out, _ = run("keep track of it", which("keep track of"), previous)
+    assert isinstance(out, Answered)
+    assert out.answer == WhichSoftwareAnswer(word="keep track of")
+
+
+@pytest.mark.parametrize(
+    "task",
+    [
+        "keep track of it and close MOCK-1",
+        "keep track of it every Monday at 9",
+        "delete it",
+        "keep track of Redis",
+        "is it up to date?",
+    ],
+)
+def test_only_a_message_that_does_nothing_but_watch_it_takes_the_software_from_before(task: str):
+    first = decide(which("keep track of"), request(task, named_node_js()))
+    assert not (isinstance(first, WatchlistAnswer) and first.software == "Node Js")
+
+
+@pytest.mark.parametrize("kind", ["cant", "watchlist", "question", "remove_software"])
+def test_explain_it_after_a_turn_that_named_software_explains_and_never_watches_it(kind: str):
+    out, _ = run("explain it", reading("none"), named_node_js(kind))
+    assert isinstance(out, Answered)
+    assert out.answer == ExplainAnswer(workflow_words=None)
+
+
+def test_a_watch_of_it_after_an_explanation_never_explains_it():
+    explained = PreviousTurn(request="explain the FastAPI release check", kind="explain")
+    out, _ = run("keep track of it", which("keep track of"), explained)
+    assert isinstance(out, Answered)
+    assert out.answer == WhichSoftwareAnswer(word="keep track of")

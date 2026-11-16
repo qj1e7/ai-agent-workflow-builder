@@ -233,6 +233,12 @@
       "good_for": [],
       "inputs": [
         {
+          "name": "Jira project",
+          "kind": "jira_project",
+          "what": "",
+          "example": ""
+        },
+        {
           "name": "Ticket key",
           "kind": "text",
           "what": "",
@@ -300,6 +306,50 @@
     },
     "forbid_tools": [],
     "approvers": null
+  },
+  {
+    "id": "stated-days-stay-in-the-step",
+    "note": "Carol's request on the team lead's stack, 16 Nov. Her words name the project and the days. The project is the agent's one jira_project input, which the platform fills from her words. The 14 days belong in the search step: a text input is never filled from her words, so it would ask her again.",
+    "task": "Every Friday at 16:00, find Jira tickets in project MOCK that nobody updated for 14 days, and raise one Jira ticket in MOCK that lists them",
+    "can_do": true,
+    "approvers": 1,
+    "in_steps": [
+      "14 days"
+    ],
+    "reference": {
+      "can_do": true,
+      "why_not": null,
+      "name": "Stale ticket lister",
+      "purpose": "Lists the tickets in a project that nobody updated for a while, in one new ticket.",
+      "good_for": [],
+      "inputs": [
+        {
+          "name": "Jira project",
+          "kind": "jira_project",
+          "what": "",
+          "example": ""
+        }
+      ],
+      "blocks": [
+        {
+          "say": "Find the tickets in the project that nobody updated for 14 days.",
+          "tool": "jira.search"
+        },
+        {
+          "say": "Propose one ticket that lists them.",
+          "tool": "jira.create_ticket"
+        }
+      ],
+      "approvals": [
+        {
+          "tool": "jira.create_ticket",
+          "approvers": 1,
+          "why": ""
+        }
+      ],
+      "missing_tools": [],
+      "questions": []
+    }
   },
   {
     "id": "teams-post",

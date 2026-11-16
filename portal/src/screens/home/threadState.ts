@@ -78,14 +78,40 @@ export function askOf(text: string, thread: Thread): PlannerAnswerIn {
 /** The chat a message to the Planner goes in: the thread's own, or a new one for its first message. */
 export const chatOf = (thread: Thread, fresh: () => string = newIdempotencyKey): string => thread.chat ?? fresh()
 
+/**
+ * The one software an answer named, so a request that only asks to watch it, such as “keep track of it”, means that software. A
+ * free reply is left out: its names can be workflows too.
+ */
+export function softwareNamed(reply: PlannerReply): string | null {
+  switch (reply.answer) {
+    case 'watchlist':
+      return reply.software
+    case 'cant':
+      return reply.alternative?.answer === 'watchlist' ? reply.alternative.software : null
+    case 'question': {
+      const [only, ...others] = reply.about_software ?? []
+      return others.length === 0 ? (only ?? null) : null
+    }
+    case 'remove_software': {
+      const [only, ...others] = reply.matches
+      if (others.length > 0) return null
+      return only === undefined ? reply.software : only.name
+    }
+    default:
+      return null
+  }
+}
+
 export function previousOf(thread: Thread): PreviousTurn | null {
   // A Changed in n8n card answers no question, so a request typed after it follows on from the last answer to a person.
   const last = thread.messages.findLast((m) => m.kind === 'reply' && m.reply.answer !== 'changed_in_n8n')
   if (last === undefined || last.kind !== 'reply' || last.reply.answer === 'offline' || last.reply.answer === 'changed_in_n8n') return null
   const { reply, typed } = last
+  // A card since that answer puts something else between them, so “it” no longer points at the software it named.
+  const cardSince = thread.messages.slice(thread.messages.indexOf(last) + 1).some((m) => m.kind === 'reply' && m.reply.answer === 'changed_in_n8n')
   return {
     request: typed,
-    software: reply.answer === 'watchlist' ? reply.software : null,
+    software: cardSince ? null : softwareNamed(reply),
     answer: reply.answer === 'question' || reply.answer === 'reply' ? reply.text : null,
     // The runtime refuses a second clarifying question in a row, and tells one from an answer by this word.
     kind: reply.answer === 'reply' && reply.form === 'clarify' ? 'reply_clarify' : reply.answer,

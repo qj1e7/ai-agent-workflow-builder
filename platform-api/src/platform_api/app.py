@@ -5,7 +5,7 @@ from collections.abc import AsyncGenerator, Mapping
 from contextlib import asynccontextmanager
 from typing import Literal
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import Field
@@ -151,11 +151,14 @@ def create_app(env: Mapping[str, str] | None = None) -> FastAPI:
         response_model=Readiness,
         responses={503: {"model": Readiness, "description": "Not ready to take traffic"}},
     )
-    async def ready() -> JSONResponse:
-        copier: Copier | None = app.state.copier
+    async def ready(request: Request) -> JSONResponse:
+        # From the request, not the enclosing app: FastAPI caches this function, and a closure
+        # over the app would keep every app made in one process alive.
+        state = request.app.state
+        copier: Copier | None = state.copier
         readiness = await readiness_of(
-            app.state.db,
-            app.state.activity_log.listening,
+            state.db,
+            state.activity_log.listening,
             None if copier is None else copier.listening,
             copy_behind=copier is not None and copier.behind,
         )

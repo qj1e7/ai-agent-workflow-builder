@@ -13,7 +13,7 @@ import softwareStyles from '../software/Software.module.css'
 import { ChangedInN8nAnswer } from './ChangedCard'
 import { AskTheTeam } from './AskTheTeam'
 import { useAsker } from './asker'
-import { cantLines, capabilityCard, offerLabel, oneLine, questionActions, refusalNext, SAY_ANOTHER_WAY, startingPoints, startSteps, stateWords, switchedSay, watchlistSwitchNote, type Asker } from './answers'
+import { cantLines, capabilityCard, offerLabel, oneLine, questionActions, refusalNext, SAY_ANOTHER_WAY, startingPoints, startSteps, stateWords, switchedSay, unwatchedSay, watchlistSwitchNote, type Asker } from './answers'
 import { cardFrom } from './card'
 import { asksOnCard, cantOnCard, crossesInstead, crossesOnCard, followedNothing } from './parts'
 import { SetupCard, type CardStart } from './SetupCard'
@@ -121,11 +121,11 @@ export function CantAnswer({ reply, typed }: { reply: CantReply; typed: string }
 }
 
 /**
- * The sketch's software card: a watched software's name, its pill and where it stands, in the watchlist's own words, or that the
- * version she runs isn't known because it isn't on the watchlist yet, with Watch it. Watch it adds it to the Software watchlist,
- * which is where watched software lives here, after finding its GitHub project.
+ * The sketch's software card: a watched software's name, its pill and where it stands, in the watchlist's own words, or that it
+ * isn't on the watchlist yet, with Watch it. Asked about its version, it also says the version she runs isn't known. Watch it adds
+ * it to the Software watchlist, which is where watched software lives here, after finding its GitHub project.
  */
-function SoftwareCard({ name, listed }: { name: string; listed: WatchlistReply['already_listed'] }) {
+function SoftwareCard({ name, listed, word }: { name: string; listed: WatchlistReply['already_listed']; word: string }) {
   const main = useMainButton()
   const operator = useAsker() === 'operator'
   const watchlist = useWatchlist({ enabled: listed !== null })
@@ -164,7 +164,7 @@ function SoftwareCard({ name, listed }: { name: string; listed: WatchlistReply['
         ) : undefined
       }
     >
-      <p className="muted">It isn’t on the watchlist, so I don’t know which version you run.</p>
+      <p className="muted">{unwatchedSay(word)}</p>
       {watching ? <AddToWatchlist name={name} /> : null}
     </Card>
   )
@@ -176,7 +176,7 @@ export function WatchlistAnswer({ reply, typed }: { reply: WatchlistReply; typed
   return (
     <>
       {listed || reply.software ? (
-        <SoftwareCard name={listed?.name ?? reply.software ?? ''} listed={listed} />
+        <SoftwareCard name={listed?.name ?? reply.software ?? ''} listed={listed} word={reply.word} />
       ) : (
         <Card title="The Software watchlist" actions={<ButtonLink variant={main} to="/software">Open the Software watchlist</ButtonLink>} />
       )}

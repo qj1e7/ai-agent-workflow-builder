@@ -139,12 +139,13 @@ PRONOUN: Final = re.compile(r"\b(?:it|them|this\s+one|that\s+one)\b", re.IGNOREC
 UNREAD_TIME: Final = re.compile(
     r"\b(?:in\s+the\s+)?(?:morning|afternoon|evening|night)\b|\btonight\b|"
     r"\b(?:(?:an?|one|two|three|\d+)\s+hours?\s+)?(?:later|earlier|sooner)\b|"
-    r"\bat\s+(?:\d{1,2}(?:\.\d{2})?|one|two|three|four|five|six|seven|eight|nine|ten|eleven|"
-    r"twelve)\b(?!\s*(?:am|pm|:))",
+    r"\bat\s+(?:\d{1,2}(?:[.:]\d{1,2})?|one|two|three|four|five|six|seven|eight|nine|ten|"
+    r"eleven|twelve)\b(?!\s*(?:am|pm|:))",
     re.IGNORECASE,
 )
-"""A time the schedule can't read, as "in the afternoon", "an hour later" or "at nine". The
-person picks one, and it is never guessed."""
+"""A time the schedule can't read, as "in the afternoon", "an hour later", "at nine" or "at
+24:00". The person picks one, and it is never guessed. A time the schedule reads, as "at 16:00",
+is never asked: this is only looked for when no time was read."""
 START: Final = re.compile(
     r"\b(?:from|starting|beginning|as\s+of)\s+(?:next\s+\w+|tomorrow)\b|"
     rf"\b(?:starting|beginning|as\s+of)\s+(?:on\s+)?(?:{DAY_NAMES})s?\b",

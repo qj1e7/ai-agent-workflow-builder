@@ -881,6 +881,29 @@ def answered_card() -> Answered:
     return _answered(read, FOLLOW_UP_TASK)
 
 
+CAROL_TASK = (
+    "Every Friday at 16:00, find Jira tickets in project MOCK that nobody updated for 14 days, "
+    "and raise one Jira ticket in MOCK that lists them"
+)
+
+
+def answered_card_24_hour() -> Answered:
+    """A request with a 24-hour time, which the schedule row keeps, so the Portal reads it."""
+    read = TaskRead(
+        name="Stale MOCK ticket list",
+        schedule="Every Friday at 16:00",
+        search=SearchRead(
+            project="MOCK",
+            updated=DaysRead(how="before", days=14),
+            said="Jira tickets in project MOCK that nobody updated for 14 days",
+        ),
+        ticket=TicketRead(creates=True, says="list", said="lists them"),
+        place=PlaceRead(project="MOCK", said="raise one Jira ticket in MOCK"),
+        skips_the_yes=NO_SKIP,
+    )
+    return _answered(read, CAROL_TASK)
+
+
 def answered_cant() -> Answered:
     read = TaskRead(
         name="Stale ticket list",
@@ -1105,6 +1128,7 @@ def fixtures() -> dict[str, WireModel]:
         "releases-read.json": releases_read(),
         "planner-answer-request.json": traced_answer_request(),
         "planner-answered-card.json": answered_card(),
+        "planner-answered-card-24-hour.json": answered_card_24_hour(),
         "planner-answered-cant.json": answered_cant(),
         "planner-answered-watchlist.json": answered_watchlist(),
         "planner-answered-refused.json": answered_refused(),

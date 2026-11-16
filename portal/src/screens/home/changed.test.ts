@@ -138,4 +138,13 @@ describe('what arrives in the chat', () => {
     expect(previousOf(threadReducer(asked, { type: 'arrived', reply: REFUSED }))?.request).toBe('Check my workflows')
     expect(previousOf(threadReducer(EMPTY, { type: 'arrived', reply: REFUSED }))).toBeNull()
   })
+
+  it('sends no software after a card that came since the answer that named it, so “keep track of it” never means the software before the card', () => {
+    const watch: PlannerReply = { trace_id: null, answer: 'watchlist', word: 'add', software: 'Node Js', already_listed: null, also: null, parts: [] }
+    const asked = threadReducer(threadReducer(EMPTY, { type: 'sent', text: 'add Node Js', chat: 'c1' }), { type: 'answered', reply: watch, typed: 'add Node Js' })
+    expect(previousOf(asked)?.software).toBe('Node Js')
+    const after = previousOf(threadReducer(asked, { type: 'arrived', reply: REFUSED }))
+    expect(after?.request).toBe('add Node Js')
+    expect(after?.software).toBeNull()
+  })
 })
