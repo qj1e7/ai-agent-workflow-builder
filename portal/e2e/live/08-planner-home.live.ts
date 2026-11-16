@@ -1100,6 +1100,35 @@ test.describe('the chat after the first message', () => {
     await context.close()
   })
 
+  test('Which software asks for the name in a card: focus in the field, an empty Find it says why and keeps focus, and Never mind backs out', async ({ browser }) => {
+    for (const phone of [false, true]) {
+      const context = await devContext(browser, 'alice', { phone })
+      const page = await context.newPage()
+      await page.route('**/api/v1/planner/answer', (route) => route.fulfill({ json: { answer: 'which_software', word: 'add', parts: [], trace_id: null } }))
+      await page.goto('/')
+      await ask(page, 'help me add a software')
+      const card = thread(page).getByRole('region', { name: 'Software to watch' })
+      const field = card.getByLabel('Software name')
+      await expect(field, 'focus goes to the field').toBeFocused()
+      await expect(card).toContainText('Type the name, such as Kubernetes. I’ll find its GitHub project.')
+      const find = card.getByRole('button', { name: 'Find it' })
+      await expect(find, 'Find it is never shown dead').toBeEnabled()
+      await field.press('Enter')
+      await expect(card).toContainText('Give the software a name.')
+      await expect(field).toHaveAttribute('aria-invalid', 'true')
+      await expect(field, 'focus stays in the field').toBeFocused()
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), 'nothing scrolls sideways').toBe(true)
+      await expectAccessible(page, path.join(OUT, 'axe'), `which-software-${phone ? '390' : '1440'}`)
+      await page.keyboard.press('Tab')
+      await expect(find).toBeFocused()
+      await page.keyboard.press('Tab')
+      await expect(card.getByRole('button', { name: 'Never mind' })).toBeFocused()
+      await page.keyboard.press('Enter')
+      await expect(thread(page)).toContainText('All right, never mind.')
+      await context.close()
+    }
+  })
+
   test('Resume on Workflows with a conversation open adds the draft’s card after it, with focus on the card', async ({ browser, backend }) => {
     const id = await cardDraft(backend, 'Resume in chat')
     const context = await devContext(browser, 'alice')

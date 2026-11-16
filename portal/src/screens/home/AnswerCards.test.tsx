@@ -252,6 +252,23 @@ describe('the software card', () => {
   })
 })
 
+describe('which software', () => {
+  const which: PlannerReply = { trace_id: null, answer: 'which_software', word: 'add', parts: [] }
+
+  it('asks for the name in a card, as Add software does: the label above the box, the help under it, and Find it never disabled', () => {
+    const html = draw(which)
+    const card = /<section[\s\S]*<\/section>/.exec(html)?.[0] ?? ''
+    const input = /<input[^>]*>/.exec(card)?.[0] ?? ''
+    const id = /id="([^"]+)"/.exec(input)?.[1] ?? 'none'
+    expect(text(card)).toContain('Software name Type the name, such as Kubernetes. I’ll find its GitHub project.')
+    expect(card).toContain(`for="${id}"`)
+    expect(input).toContain(`aria-describedby="${id}-help"`)
+    expect(buttons(card)).toEqual(['Find it', 'Never mind'])
+    expect(html).not.toContain('disabled')
+    expect(/<form[^>]*novalidate/i.test(html)).toBe(true)
+  })
+})
+
 describe('PartsList on a set-up card', () => {
   it('quotes a clause the Planner didn’t follow with a cross, and the button sets up the part it can', () => {
     const html = draw(setupCross as SetupCardReply)
