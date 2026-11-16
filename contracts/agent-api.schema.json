@@ -2327,7 +2327,7 @@
     },
     "KeyPasted": {
       "additionalProperties": false,
-      "description": "The words hold the shape of a key, so no model read them (ADR 0051, section 5).",
+      "description": "Something the drafter would read holds the shape of a key: the words, the team's facts or\nthe current plan. So no model read any of it (ADR 0051, section 5).",
       "properties": {
         "message": {
           "default": "Don't paste keys here. An Operator adds keys in Settings.",
@@ -2615,7 +2615,8 @@
       "enum": [
         "gave_up",
         "no_tool_call",
-        "too_long"
+        "too_long",
+        "failed"
       ],
       "type": "string"
     },
@@ -3178,6 +3179,7 @@
       "enum": [
         "unreadable",
         "name",
+        "too_big",
         "no_block",
         "no_version",
         "no_resource",
@@ -3186,11 +3188,13 @@
         "bad_value",
         "missing_value",
         "held",
+        "hidden",
         "left_out",
         "community",
         "platform_adds",
         "cant_run",
         "native_write",
+        "address_unread",
         "guessed",
         "wire",
         "setting"
@@ -4874,7 +4878,7 @@
         },
         "why": {
           "$ref": "#/$defs/NotDraftedWhy",
-          "description": "gave_up: no plan passed the check after it went back three times. no_tool_call: the model answered without a tool. too_long: it ran out of turns or time."
+          "description": "gave_up: no plan passed the check after it went back three times. no_tool_call: the model answered without a tool. too_long: it ran out of turns or time. failed: the platform's own code failed while it answered a tool, so it stopped."
         }
       },
       "required": [

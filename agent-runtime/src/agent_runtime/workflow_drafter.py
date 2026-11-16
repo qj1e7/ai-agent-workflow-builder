@@ -10,7 +10,9 @@ Neither candidate model accepts a forced tool choice, so the tools are strict an
 draft at a turn that calls none.
 
 The fixed part of the prompt comes first, so the prompt cache keeps it, and the person's part
-follows. Words with the shape of a key never reach the model."""
+follows. When anything the model would read has the shape of a key, the words, the facts or the
+current plan, none of it reaches the model. An error in code's own answer to a tool ends the
+draft with "I couldn't draft that", never with the error's words."""
 
 import json
 import logging
@@ -147,18 +149,22 @@ BRIEFING: Final = (
     "- Tell (CUSTOM.wabTell) tells the team in Teams or by email. It is the only way to post in "
     "Teams.\n"
     "- Agent (CUSTOM.wabAgent) runs one of the team's saved agent cards, by its id in the facts.\n"
-    "- n8n's own Jira and Confluence blocks may read, but never change anything: the platform "
-    "sends such a plan back.\n"
-    "- Leave out Start from the Portal, Report failure and the Sticky Note. The platform adds "
-    "them, with its error workflow and an Ask for a yes before each of our writes.\n\n"
+    "- n8n's own Jira and Confluence blocks may read, but never change anything, and nor may "
+    "HTTP Request or GraphQL: the platform sends such a plan back.\n"
+    "- A request that may change something, by any method but GET, names its address written "
+    "out, never as an expression or a setting.\n"
+    "- Leave out Start from the Portal, Report failure and the Sticky Note, and blocks n8n hides. "
+    "The platform adds the first three, with its error workflow and an Ask for a yes before each "
+    "of our writes.\n\n"
     "How it starts:\n"
     "- A task that runs again and again starts with a Schedule Trigger "
     "(n8n-nodes-base.scheduleTrigger) whose rule is the placeholder <<run_time>>, with a setting "
     "of kind run_time. The platform also lets people run it now.\n"
     "- A task the person only runs by hand needs no trigger.\n\n"
     "Settings:\n"
-    "- A run time, a Jira project, and a channel or an address a notice posts to are never "
-    "written into parameters. Put a setting's placeholder there as the whole value, as "
+    "- A run time, a Jira project, and a channel or an address a notice posts to, copies or "
+    "replies to, as cc and bcc, are never written into parameters, not even as an expression. "
+    "Put a setting's placeholder there as the whole value, as "
     '"channelId": "<<channel>>", and add the setting with that id and kind. The platform fills '
     "each from the person's words and the team's facts, or asks the person. Never guess one.\n"
     "- A value the person states for anything else, such as 14 days or open bugs, goes straight "
@@ -350,7 +356,9 @@ def drafting(
 ) -> tuple[WorkflowDraftResult, Draft]:
     """The answer, with the draft as it went, which the eval reads."""
     draft = Draft(catalogue, request)
-    if KEY_SHAPES.search(request.words):
+    asked = person_part(request)
+    # Everything the model would read: the words, the facts and the current plan.
+    if KEY_SHAPES.search(asked):
         return KeyPasted(), draft
     started = clock()
     try:
@@ -360,7 +368,7 @@ def drafting(
     except Exception as error:
         log.warning("drafter: the model could not be built: %s", type(error).__name__)
         return problem_for(error, runs_fall_back=False), draft
-    messages: list[BaseMessage] = [HumanMessage(person_part(request))]
+    messages: list[BaseMessage] = [HumanMessage(asked)]
     while draft.turns < MOST_TURNS and clock() - started < MOST_SECONDS:
         try:
             reply = bound.invoke([system, *messages])
@@ -372,7 +380,12 @@ def drafting(
             return draft.not_drafted("no_tool_call"), draft
         messages.append(reply)
         for call in reply.tool_calls:
-            said = draft.answer(cast(Mapping[str, Any], call))
+            try:
+                said = draft.answer(cast(Mapping[str, Any], call))
+            except Exception as error:
+                # Only the type is logged: the error's words can quote the plan.
+                log.warning("drafter: answering %s failed: %s", call["name"], type(error).__name__)
+                return draft.not_drafted("failed"), draft
             if isinstance(said, WorkflowPlan):
                 log.info("drafter: drafted in %d turns", draft.turns)
                 return (

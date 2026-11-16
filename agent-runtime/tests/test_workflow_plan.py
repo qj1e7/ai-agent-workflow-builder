@@ -297,7 +297,7 @@ def test_a_mode_that_is_held_holds_only_that_mode(catalogue: Catalogue):
             "n8n-nodes-base.httpRequest",
             4.5,
             method="={{ $json.how }}",
-            url="=https://acme.atlassian.net/wiki/rest/api/content/{{ $json.id }}",
+            url="https://acme.atlassian.net/wiki/rest/api/content",
         ),
     ],
 )

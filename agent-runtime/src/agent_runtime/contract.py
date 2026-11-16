@@ -1690,6 +1690,7 @@ class WorkflowDraftRequest(WireModel):
 type ProblemCode = Literal[
     "unreadable",
     "name",
+    "too_big",
     "no_block",
     "no_version",
     "no_resource",
@@ -1698,11 +1699,13 @@ type ProblemCode = Literal[
     "bad_value",
     "missing_value",
     "held",
+    "hidden",
     "left_out",
     "community",
     "platform_adds",
     "cant_run",
     "native_write",
+    "address_unread",
     "guessed",
     "wire",
     "setting",
@@ -1737,7 +1740,7 @@ class WorkflowDrafted(WireModel):
     turns: int = Field(ge=1, description="The model's turns.")
 
 
-type NotDraftedWhy = Literal["gave_up", "no_tool_call", "too_long"]
+type NotDraftedWhy = Literal["gave_up", "no_tool_call", "too_long", "failed"]
 
 
 class WorkflowNotDrafted(WireModel):
@@ -1746,7 +1749,8 @@ class WorkflowNotDrafted(WireModel):
     status: Literal["not_drafted"] = "not_drafted"
     why: NotDraftedWhy = Field(
         description="gave_up: no plan passed the check after it went back three times. "
-        "no_tool_call: the model answered without a tool. too_long: it ran out of turns or time."
+        "no_tool_call: the model answered without a tool. too_long: it ran out of turns or time. "
+        "failed: the platform's own code failed while it answered a tool, so it stopped."
     )
     message: str = COULDNT_DRAFT
     catalogue: str
@@ -1755,7 +1759,8 @@ class WorkflowNotDrafted(WireModel):
 
 
 class KeyPasted(WireModel):
-    """The words hold the shape of a key, so no model read them (ADR 0051, section 5)."""
+    """Something the drafter would read holds the shape of a key: the words, the team's facts or
+    the current plan. So no model read any of it (ADR 0051, section 5)."""
 
     status: Literal["key_pasted"] = "key_pasted"
     message: str = KEY_PASTED

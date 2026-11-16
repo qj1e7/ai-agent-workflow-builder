@@ -127,8 +127,30 @@ ATLASSIAN: Final[Mapping[str, str]] = {
 }
 READ_OPERATION: Final = re.compile(r"^(?:get|query|search)")
 """An operation of n8n's Confluence block, which the class file doesn't class, that only reads."""
-ATLASSIAN_URL: Final = re.compile(r"atlassian\.net|/rest/api/|/wiki/rest/", re.IGNORECASE)
+ATLASSIAN_URL: Final = re.compile(
+    r"atlassian\.(?:net|com)|/rest/(?:api|agile)/|/wiki/(?:rest|api)/", re.IGNORECASE
+)
+"""Jira's and Confluence's APIs, in the cloud, through Atlassian's gateway, or self-hosted."""
 READ_METHODS: Final = frozenset({"GET", "HEAD", "OPTIONS"})
+
+
+@dataclass(frozen=True)
+class Requester:
+    """A block that sends a request to an address its parameters name."""
+
+    method: str | None
+    """The parameter that holds the method, or None for GraphQL, whose query decides."""
+    address: str
+
+
+REQUESTERS: Final[Mapping[str, Requester]] = {
+    "n8n-nodes-base.httpRequest": Requester("method", "url"),
+    "@n8n/n8n-nodes-langchain.toolHttpRequest": Requester("method", "url"),
+    "n8n-nodes-base.graphql": Requester(None, "endpoint"),
+}
+MUTATION: Final = re.compile(r"\bmutation\b", re.IGNORECASE)
+PARAMETERS_LIMIT: Final = 20_000
+"""The most characters of one block's parameters, as JSON."""
 
 
 def refused_type(node_type: str) -> PlanProblem | None:
@@ -251,16 +273,38 @@ NEVER_GUESSED: Final[Mapping[str, Mapping[str, SettingKind]]] = {
     "n8n-nodes-base.scheduleTrigger": {"rule": "run_time"},
     "n8n-nodes-base.cron": {"triggerTimes": "run_time"},
     "n8n-nodes-base.jira": {"project": "jira_project"},
-    "n8n-nodes-base.slack": {"channelId": "channel", "user": "channel"},
+    "n8n-nodes-base.slack": {
+        "channelId": "channel",
+        "user": "channel",
+        "otherOptions.ephemeral.ephemeralValues.user": "channel",
+    },
     "n8n-nodes-base.mattermost": {"channelId": "channel"},
-    "n8n-nodes-base.discord": {"channelId": "channel"},
+    "n8n-nodes-base.discord": {"channelId": "channel", "userId": "channel"},
     "n8n-nodes-base.telegram": {"chatId": "channel"},
-    "n8n-nodes-base.emailSend": {"toEmail": "address"},
-    "n8n-nodes-base.gmail": {"sendTo": "address"},
-    "n8n-nodes-base.microsoftOutlook": {"toRecipients": "address"},
+    "n8n-nodes-base.emailSend": {
+        "toEmail": "address",
+        "options.ccEmail": "address",
+        "options.bccEmail": "address",
+        "options.replyTo": "address",
+    },
+    "n8n-nodes-base.gmail": {
+        "sendTo": "address",
+        "options.sendTo": "address",
+        "options.ccList": "address",
+        "options.bccList": "address",
+        "options.replyTo": "address",
+    },
+    "n8n-nodes-base.microsoftOutlook": {
+        "toRecipients": "address",
+        "additionalFields.toRecipients": "address",
+        "additionalFields.ccRecipients": "address",
+        "additionalFields.bccRecipients": "address",
+        "additionalFields.replyTo": "address",
+    },
 }
-"""The run time, the Jira project, and a place a notice posts to, by the parameter that holds
-it. ADR 0051, section 5, never lets the drafter guess these."""
+"""The run time, the Jira project, and each place a notice posts to, by the full path of the
+parameter that holds it. ADR 0051, section 5, never lets the drafter guess these, so only a
+setting's placeholder may stand there: never a value, and never an expression."""
 READ_PLACES: Final[Mapping[str, SettingKind]] = {
     "jira_tickets": "jira_project",
     "github_releases": "repository",
@@ -277,16 +321,17 @@ KIND_WORDS: Final[Mapping[SettingKind, str]] = {
 }
 
 
-def setting_kind_for(base: str, name: str, values: Mapping[str, object]) -> SettingKind | None:
-    """The kind of setting a top-level parameter must hold, or None when it may hold a value."""
-    if base == f"{OURS}wabRead" and name == "place":
-        return READ_PLACES.get(str(values.get("source")))
-    if base == f"{OURS}wabProposeChange" and name == "place":
+def setting_places(base: str, values: Mapping[str, object]) -> dict[str, SettingKind]:
+    """The kind of setting each parameter path of the block must hold. Only a placeholder may
+    stand there. Our Read's and Propose a change's place is always a setting, so code can check
+    it against the places the team allows."""
+    places: dict[str, SettingKind] = dict(NEVER_GUESSED.get(base, {}))
+    if base == f"{OURS}wabRead":
+        places["place"] = READ_PLACES.get(str(values.get("source")), "text")
+    if base == f"{OURS}wabProposeChange":
         action = str(values.get("action") or "")
-        if action.startswith("jira."):
-            return "jira_project"
-        return "confluence_page" if action.startswith("confluence.") else None
-    return NEVER_GUESSED.get(base, {}).get(name)
+        places["place"] = "confluence_page" if action.startswith("confluence.") else "jira_project"
+    return places
 
 
 def placeholder_of(value: object) -> str | None:
@@ -294,11 +339,6 @@ def placeholder_of(value: object) -> str | None:
         return None
     found = PLACEHOLDER.fullmatch(value)
     return None if found is None else found.group(1)
-
-
-def _located_value(value: object) -> object:
-    """A resource locator's value, or the value itself."""
-    return cast(Json, value).get("value") if isinstance(value, dict) else value
 
 
 def _empty(value: object) -> bool:
@@ -314,9 +354,14 @@ def _empty(value: object) -> bool:
 @dataclass
 class _Walk:
     block: str
+    held: Mapping[str, SettingKind] = field(default_factory=dict[str, SettingKind])
+    """The parameter paths only a setting's placeholder may fill, with the setting's kind."""
     problems: list[PlanProblem] = field(default_factory=list[PlanProblem])
-    placeholders: list[tuple[str, str]] = field(default_factory=list[tuple[str, str]])
-    """Each placeholder's setting id and the parameter path it stands in."""
+    placeholders: list[tuple[str, str, SettingKind | None]] = field(
+        default_factory=list[tuple[str, str, SettingKind | None]]
+    )
+    """Each placeholder's setting id, the parameter path it stands in, and the kind of setting
+    that path must hold, if it must hold one kind."""
 
     def bad(self, code: ProblemCode, text: str) -> None:
         self.problems.append(
@@ -331,9 +376,13 @@ def _listed(values: Sequence[object], most: int = 15) -> str:
 
 def _fit(parameter: Json, value: object, path: str, walk: _Walk) -> None:
     """Whether the value fits the parameter, as n8n's editor would hold it."""
+    kind = walk.held.get(path)
+    if kind is not None:
+        _setting_only(parameter, value, path, kind, walk)
+        return
     said = placeholder_of(value)
     if said is not None:
-        walk.placeholders.append((said, path))
+        walk.placeholders.append((said, path, None))
         return
     if is_expression(value):
         if parameter.get("noDataExpression"):
@@ -371,6 +420,36 @@ def _fit(parameter: Json, value: object, path: str, walk: _Walk) -> None:
             _locator(parameter, value, path, walk)
         case _:
             pass
+
+
+def _locator_of(parameter: Json, value: object) -> Json | None:
+    """The value as a resource locator, when the parameter is one and the value is an object."""
+    if parameter.get("type") != "resourceLocator" or not isinstance(value, dict):
+        return None
+    return cast(Json, value)
+
+
+def _setting_only(
+    parameter: Json, value: object, path: str, kind: SettingKind, walk: _Walk
+) -> None:
+    """A path a setting holds takes only its placeholder, as the whole value or as a resource
+    locator's value. A value or an expression there is a guess."""
+    said = placeholder_of(value)
+    if said is not None:
+        walk.placeholders.append((said, path, kind))
+        return
+    locator = _locator_of(parameter, value)
+    if locator is not None and (inner := placeholder_of(locator.get("value"))) is not None:
+        if _locator_fits(parameter, locator, path, walk):
+            walk.placeholders.append((inner, f"{path}.value", kind))
+        return
+    if not _empty(value):
+        walk.bad(
+            "guessed",
+            f"{path} is {KIND_WORDS[kind]}, which a setting holds and the drafter never writes, "
+            f'not even as an expression. Put a placeholder there, as "<<{kind}>>", and add a '
+            f"setting of kind {kind}.",
+        )
 
 
 def _number(options: Json, value: object, path: str, walk: _Walk) -> None:
@@ -436,23 +515,29 @@ LOCATOR_KEYS: Final = frozenset({"__rl", "mode", "value", "cachedResultName", "c
 def _locator(parameter: Json, value: object, path: str, walk: _Walk) -> None:
     if isinstance(value, str):
         return
-    modes = [str(m.get("name")) for m in cast(list[Json], parameter.get("modes") or [])]
     if not isinstance(value, dict):
         walk.bad("bad_value", f'{path} takes {{"__rl": true, "mode": ..., "value": ...}}.')
         return
     locator = cast(Json, value)
+    if not _locator_fits(parameter, locator, path, walk):
+        return
+    inner = locator.get("value")
+    if (said := placeholder_of(inner)) is not None:
+        walk.placeholders.append((said, f"{path}.value", None))
+    elif isinstance(inner, bool) or not isinstance(inner, str | int | float):
+        walk.bad("bad_value", f"{path}.value takes text.")
+
+
+def _locator_fits(parameter: Json, locator: Json, path: str, walk: _Walk) -> bool:
+    modes = [str(m.get("name")) for m in cast(list[Json], parameter.get("modes") or [])]
     if set(locator) - LOCATOR_KEYS or locator.get("mode") not in modes:
         walk.bad(
             "bad_value",
             f'{path} takes {{"__rl": true, "mode": ..., "value": ...}} with a mode of '
             f"{_listed(modes)}.",
         )
-        return
-    inner = locator.get("value")
-    if (said := placeholder_of(inner)) is not None:
-        walk.placeholders.append((said, f"{path}.value"))
-    elif isinstance(inner, bool) or not isinstance(inner, str | int | float):
-        walk.bad("bad_value", f"{path}.value takes text.")
+        return False
+    return True
 
 
 # One block.
@@ -473,6 +558,13 @@ def check_block(proposed: ProposedBlock, catalogue: Catalogue) -> CheckedBlock |
     refused = refused_type(proposed.type)
     if refused is not None:
         return [refused.model_copy(update={"block": proposed.name})]
+    if len(proposed.parameters) > PARAMETERS_LIMIT:
+        walk.bad(
+            "too_big",
+            f"its parameters are longer than {PARAMETERS_LIMIT} characters. Keep only what the "
+            "task needs.",
+        )
+        return walk.problems
     try:
         block = catalogue.block(proposed.type)
     except NotInCatalogue as missing:
@@ -481,6 +573,14 @@ def check_block(proposed: ProposedBlock, catalogue: Catalogue) -> CheckedBlock |
     base = str(block.get("tool_of") or proposed.type)
     if base in CANT_RUN:
         walk.bad("cant_run", f"{block['name']} can't run on this platform. {CANT_RUN[base]}")
+        return walk.problems
+    if block.get("hidden") and not block.get("held"):
+        # A held block is refused below, with the reason it waits.
+        walk.bad(
+            "hidden",
+            f"n8n hides {block['name']} from its editor, as old or replaced, so the drafter "
+            "doesn't use it. Find another block with find_blocks.",
+        )
         return walk.problems
     try:
         loaded = json.loads(proposed.parameters)
@@ -501,19 +601,17 @@ def check_block(proposed: ProposedBlock, catalogue: Catalogue) -> CheckedBlock |
         # The block must go, so its parameters don't matter.
         return walk.problems
     shown = catalogue.shown(proposed.type, proposed.version, known)
-    kinds = _parameters(shown, values, base, walk)
+    walk.held = setting_places(base, values)
+    _parameters(shown, values, walk)
     if walk.problems:
         return walk.problems
-    placed: list[tuple[str, str, SettingKind | None]] = [
-        (said, path, kinds.get(path.split(".")[0])) for said, path in walk.placeholders
-    ]
     return CheckedBlock(
         PlanBlock(
             name=proposed.name, type=proposed.type, version=proposed.version, parameters=values
         ),
         exits_of(proposed.type, proposed.version, values, block),
         inputs_of(proposed.type, proposed.version, values),
-        placed,
+        walk.placeholders,
     )
 
 
@@ -586,9 +684,9 @@ def _native_write(
     walk: _Walk,
 ) -> None:
     """A write to Jira or Confluence by one of n8n's own blocks goes back: our blocks give that
-    write a yes on each run. It is the drafter's rule, not a limit on people. An HTTP Request's
-    address counts even inside an expression, and a method an expression picks counts as a
-    write."""
+    write a yes on each run. It is the drafter's rule, not a limit on people. A block that sends
+    a request (`REQUESTERS`) and writes must name its address written out, so the check can read
+    it."""
     system = ATLASSIAN.get(base)
     operation = str(described.get("operation") or "")
     if system is not None:
@@ -602,21 +700,38 @@ def _native_write(
                 f"{block['name']} writes to {system} with n8n's own block. "
                 f"{USE_OURS}, which give that write a yes on each run.",
             )
-    if base == "n8n-nodes-base.httpRequest":
-        url = values.get("url")
-        said = values.get("method")
-        method = "=" if is_expression(said) else str(settled.get("method") or "GET").upper()
-        if method not in READ_METHODS and isinstance(url, str) and ATLASSIAN_URL.search(url):
-            walk.bad(
-                "native_write",
-                f"HTTP Request writes to Jira or Confluence. {USE_OURS}, "
-                "which give that write a yes on each run.",
-            )
+    requester = REQUESTERS.get(base)
+    if requester is None or not _writes(requester, settled, values):
+        return
+    address = values.get(requester.address)
+    if is_expression(address) or placeholder_of(address) is not None:
+        walk.bad(
+            "address_unread",
+            f"{block['name']} sends a change to an address an expression or a setting picks. "
+            "Write the address out, so the check can read it.",
+        )
+    elif isinstance(address, str) and ATLASSIAN_URL.search(address):
+        walk.bad(
+            "native_write",
+            f"{block['name']} writes to Jira or Confluence. {USE_OURS}, which give that write a "
+            "yes on each run.",
+        )
 
 
-def _parameters(shown: list[Json], values: Json, base: str, walk: _Walk) -> dict[str, SettingKind]:
+def _writes(requester: Requester, settled: Mapping[str, object], values: Json) -> bool:
+    """Whether the request may change something. A method or a query that code can't read counts
+    as a change."""
+    if requester.method is None:
+        query = values.get("query")
+        return not isinstance(query, str) or is_expression(query) or bool(MUTATION.search(query))
+    if is_expression(values.get(requester.method)):
+        return True
+    return str(settled.get(requester.method) or "GET").upper() not in READ_METHODS
+
+
+def _parameters(shown: list[Json], values: Json, walk: _Walk) -> None:
     """Checks each value against the parameter n8n shows for it, and each parameter n8n needs
-    against the values. Returns the kind of setting each top-level parameter must hold."""
+    against the values."""
     by_name: dict[str, Json] = {}
     for parameter in shown:
         name = str(parameter.get("name"))
@@ -625,7 +740,6 @@ def _parameters(shown: list[Json], values: Json, base: str, walk: _Walk) -> dict
             "displayOptions" in by_name[name] and "displayOptions" not in parameter
         ):
             by_name[name] = parameter
-    kinds: dict[str, SettingKind] = {}
     for name, value in cast(Mapping[str, object], values).items():
         parameter = by_name.get(name)
         if parameter is None:
@@ -636,23 +750,6 @@ def _parameters(shown: list[Json], values: Json, base: str, walk: _Walk) -> dict
             )
             continue
         _fit(parameter, value, name, walk)
-        kind = setting_kind_for(base, name, values)
-        if kind is None:
-            continue
-        kinds[name] = kind
-        inner = _located_value(value)
-        if (
-            placeholder_of(value) is None
-            and placeholder_of(inner) is None
-            and not is_expression(inner)
-            and not _empty(value)
-        ):
-            walk.bad(
-                "guessed",
-                f"{name} is {KIND_WORDS[kind]}, which a setting holds and the drafter never "
-                f'writes. Put a placeholder there, as "<<{kind}>>", and add a setting of kind '
-                f"{kind}.",
-            )
     for name, parameter in by_name.items():
         if (
             parameter.get("required")
@@ -662,7 +759,6 @@ def _parameters(shown: list[Json], values: Json, base: str, walk: _Walk) -> dict
         ):
             label = parameter.get("displayName") or name
             walk.bad("missing_value", f"{label} ({name}) needs a value.")
-    return kinds
 
 
 # The whole plan's blocks and wires.
