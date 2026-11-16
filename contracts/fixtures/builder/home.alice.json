@@ -139,6 +139,7 @@
   "changed_in_n8n": [
     {
       "parts": [],
+      "trace_id": null,
       "answer": "changed_in_n8n",
       "use_case_id": "uc_fastapi",
       "name": "FastAPI release check",

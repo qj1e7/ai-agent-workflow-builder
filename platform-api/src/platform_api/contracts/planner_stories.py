@@ -35,6 +35,7 @@ from platform_api.builder.planner import (
     PartView,
     PauseReply,
     PlannerFront,
+    PreviousIn,
     QuestionReply,
     RefusedReply,
     ReplyReason,
@@ -57,6 +58,7 @@ from platform_api.orchestration import (
     PlannerFacts,
     PreviousTurn,
     RuntimeDown,
+    TurnTrace,
 )
 from platform_api.shared import Principal
 from platform_api.wire import WireModel
@@ -170,6 +172,7 @@ class _Answers:
         facts: PlannerFacts | None = None,
         previous: PreviousTurn | None = None,
         changes_workflows: bool = True,
+        trace: TurnTrace | None = None,
     ) -> NoModel:
         return NoModel()
 
@@ -237,9 +240,24 @@ def _capabilities(root: Path, *checks: ConnectionCheck) -> WireModel:
     return view
 
 
+TRACE_ID = "019a8c3e5b2f7c41a3d29e6f0b7d1c55"
+CHAT = "5f0c2a7e-3b1d-4e8f-9a6c-2d4b7e1f0a93"
+
+
 def planner_fixtures(root: Path) -> dict[str, WireModel]:
     return {
         "planner/answer.text.json": AnswerIn(text=FRIDAY),
+        "planner/answer.text.follow_up.json": AnswerIn(
+            text="and Redis?",
+            chat=CHAT,
+            previous=PreviousIn(
+                request="What is the newest version of LangGraph?",
+                software="LangGraph",
+                answer="LangGraph is behind. You run 1.2.14 and the newest is 1.2.16.",
+                kind="question",
+                trace_id=TRACE_ID,
+            ),
+        ),
         "planner/answer.intent.json": AnswerIn(intent="why_stopped", use_case_id="uc_01JB8"),
         "planner/answer.setup_card.json": SETUP_CARD.model_copy(
             update={"similar": SimilarWorkflow(use_case_id="uc_01JB8", name=SETUP_CARD.name)}
@@ -349,6 +367,7 @@ def planner_fixtures(root: Path) -> dict[str, WireModel]:
             text="LangGraph is behind. You run 1.2.14 and the newest is 1.2.16.",
             looked_at=["watchlist"],
             about_software=["LangGraph"],
+            trace_id=TRACE_ID,
         ),
         "planner/answer.edit.json": EDIT,
         "planner/answer.edit.unclear.json": EditReply(

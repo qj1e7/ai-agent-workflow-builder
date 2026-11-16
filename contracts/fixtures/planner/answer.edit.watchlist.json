@@ -8,6 +8,7 @@
       "choices": []
     }
   ],
+  "trace_id": null,
   "answer": "edit",
   "use_case_id": "uc_01WL",
   "name": "Keep our software up to date",
