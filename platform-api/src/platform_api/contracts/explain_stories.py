@@ -16,13 +16,16 @@ ERROR_WORKFLOW = "wfErrorReporter01"
 ZONE = TEAM_TIME_ZONE.key
 USE_CASE_ID = "uc_01JFASTAPI"
 NAME = "FastAPI release check"
+PAT = "jiraSoftwareServerPatApi"
+SLACK_KEY = "wab-slack-send"
+JIRA_KEY = "wab-jira-read"
 CARDS = {VERSION_CHECKER_ID: VERSION_CHECKER}
 KNOWN = KnownOptions(
     frozenset({VERSION_CHECKER_ID}),
     {"github_releases": frozenset({"fastapi/fastapi", "facebook/react", "langchain-ai/langgraph"})},
     {"jira.create_ticket": frozenset({"MOCK", "WEB"})},
     {VERSION_CHECKER_ID: {"GitHub repository": None, "Jira project": frozenset({"MOCK", "WEB"})}},
-    {"wab-slack-send": "slackApi", "wab-jira-read": "jiraSoftwareServerPatApi"},
+    {SLACK_KEY: "slackApi", JIRA_KEY: PAT},
 )
 TODAY = Team(ERROR_WORKFLOW, ZONE, KNOWN)
 LAID = check_draft(
