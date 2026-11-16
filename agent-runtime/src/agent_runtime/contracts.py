@@ -910,6 +910,19 @@ def answered_pause() -> Answered:
     return _answered(read, "Pause the React check")
 
 
+def answered_removal() -> Answered:
+    read = TaskRead(
+        asks_about="change", workflow_words="watchlist", software="node js", skips_the_yes=NO_SKIP
+    )
+    task = "help me remove node js from watchlist"
+    watched = WatchedFact(
+        name="node js", repo="nodejs/node", our_version=None, newest_version=None, state="Watching"
+    )
+    facts = PlannerFacts(watchlist=[watched])
+    answer = answer_of(read, task, facts)
+    return Answered(answer=answer, parts=parts_of(read, task, answer, facts))
+
+
 def question_request() -> AnswerRequest:
     watched = [
         WatchedFact(name=n, repo=r, our_version=o, newest_version=v, state=t)
@@ -1037,6 +1050,7 @@ def fixtures() -> dict[str, WireModel]:
         "planner-answered-refused.json": answered_refused(),
         "planner-answered-edit.json": answered_edit(),
         "planner-answered-pause.json": answered_pause(),
+        "planner-answered-remove.json": answered_removal(),
         "planner-question-request.json": question_request(),
         "planner-answered-question.json": answered_question(),
         "planner-answered-reply.json": answered_reply(),

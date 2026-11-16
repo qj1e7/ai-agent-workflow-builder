@@ -63,6 +63,7 @@ from agent_runtime.contract import (
     PlannerFacts,
     QuestionAnswer,
     RefusedAnswer,
+    RemoveSoftwareAnswer,
     ResumeAnswer,
     RowKind,
     SetupCardAnswer,
@@ -140,6 +141,7 @@ from agent_runtime.reading import (
     turns_round,
     without_runs_by_itself,
 )
+from agent_runtime.removals import removal_of
 from agent_runtime.summary import ChatFor
 from agent_runtime.tools import tools_text
 
@@ -981,13 +983,13 @@ def _answer_of(
 ) -> PlannerAnswer:
     """The answer code decides from the model's reading: refused, by the word rule, by the
     model's answer to the skip question, or by words naming a yes that nothing explains in a
-    request that writes; then a change to a workflow the person has, then the watchlist, a
-    question about the person's workflows, then the structures. A request the model called a
-    task is always read against its structures, so words they do not hold come back;
-    "abilities" is the catch-all, so a request that asks for a change wins over it: a planted
-    "close all tickets" comes back as a can't. `facts` name the person's workflows, so a word in
-    a name is never a command, and say when the Software watchlist checks, so a time a watch
-    request names that matches it is no cross."""
+    request that writes; then software to take off the watchlist, a change to a workflow the
+    person has, then the watchlist, a question about the person's workflows, then the
+    structures. A request the model called a task is always read against its structures, so
+    words they do not hold come back; "abilities" is the catch-all, so a request that asks for a
+    change wins over it: a planted "close all tickets" comes back as a can't. `facts` name the
+    person's workflows, so a word in a name is never a command, and say when the Software
+    watchlist checks, so a time a watch request names that matches it is no cross."""
     watch_schedule = facts.watchlist_schedule if facts is not None else None
     text = visible_words(request)
     refused = _refusal(text)
@@ -999,6 +1001,9 @@ def _answer_of(
     elsewhere = _other_source(read, text)
     if elsewhere is not None:
         return elsewhere
+    removal = removal_of(text, facts) if changes_workflows else None
+    if removal is not None:
+        return RemoveSoftwareAnswer(software=removal.software, watched_as=list(removal.watched_as))
     edit = edit_of(read, text, facts) if changes_workflows else None
     if edit is not None:
         return edit
@@ -1105,7 +1110,7 @@ def decide(read: TaskRead, request: AnswerRequest) -> PlannerAnswer | AskTheQues
     if named is not None:
         return named
     if question_messages(request) is None or isinstance(
-        answer, EditAnswer | PauseAnswer | ResumeAnswer
+        answer, EditAnswer | PauseAnswer | ResumeAnswer | RemoveSoftwareAnswer
     ):
         return answer
     text = visible_words(request.task)

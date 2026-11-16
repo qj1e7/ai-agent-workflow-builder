@@ -39,6 +39,7 @@ from agent_runtime.contract import (
     PreviousTurn,
     QuestionAnswer,
     RefusedAnswer,
+    RemoveSoftwareAnswer,
     RequestPart,
     ResumeAnswer,
     SetupCardAnswer,
@@ -103,6 +104,7 @@ type Kind = Literal[
     "edit",
     "pause",
     "resume",
+    "remove_software",
 ]
 FREE_REPLY_FITS: Final = frozenset({"abilities", "question", "cant"})
 """A case that accepts the list of abilities, a question answer or a can't also accepts a free
@@ -540,6 +542,8 @@ def _said(shown: PlannerAnswer, facts: PlannerFacts) -> list[str]:
             return [f"Change {_which(shown.workflow_words)}: {change}."]
         case PauseAnswer() | ResumeAnswer():
             return [f"{shown.kind.capitalize()} {_which(shown.workflow_words)}, one of yours."]
+        case RemoveSoftwareAnswer():
+            return _removal(shown, facts)
         case FreeReplyAnswer():
             taps = [f"[{choice}]" for choice in shown.choices]
             if shown.form == "cant":
@@ -547,6 +551,16 @@ def _said(shown: PlannerAnswer, facts: PlannerFacts) -> list[str]:
             return [shown.text, *taps]
         case DidntFollowAnswer():
             return ["I didn't follow that. [Say it another way]"]
+
+
+def _removal(shown: RemoveSoftwareAnswer, facts: PlannerFacts) -> list[str]:
+    """The Portal's card for software to take off the watchlist."""
+    if not shown.watched_as:
+        held = ", ".join(w.name for w in facts.watchlist or []) or "nothing"
+        return [f"{shown.software} isn't on your Watchlist. It holds {held}."]
+    return [
+        f"Remove {name} from the Watchlist? [Remove from watchlist]" for name in shown.watched_as
+    ]
 
 
 def _named(facts: PlannerFacts, workflow_words: str | None) -> list[WorkflowFact]:

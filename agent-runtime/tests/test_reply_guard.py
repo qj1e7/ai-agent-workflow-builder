@@ -255,6 +255,30 @@ def test_what_you_can_do_is_held_to_your_role():
     assert not claims_only_what_is_built(shown_of(approving), OPERATOR)
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        "You can remove LangGraph from the Watchlist.",
+        "You can take node js off your watchlist, then undo it.",
+    ],
+)
+def test_taking_software_off_the_watchlist_is_an_operators_own_action(text: str):
+    assert claims_only_what_is_built(shown_of(said(text)), OPERATOR)
+    assert not claims_only_what_is_built(shown_of(said(text)), APPROVER)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "You can remove the old tickets.",
+        "You can remove the Confluence page.",
+        "You can remove Bob from the approvers.",
+    ],
+)
+def test_removing_anything_but_watched_software_is_still_unbuilt(text: str):
+    assert not claims_only_what_is_built(shown_of(said(text)), OPERATOR)
+
+
 def test_what_the_planner_can_do_is_not_held_to_the_persons_role():
     assert claims_only_what_is_built(
         shown_of(said("I can watch software for new releases.")), APPROVER

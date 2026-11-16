@@ -1323,16 +1323,19 @@ class EditAnswer(WireModel):
 
 
 class RemoveSoftwareAnswer(WireModel):
-    """A request to take one software off the Software watchlist. The platform matches the name to
-    the watchlist and shows the Software page's own Remove, with its Undo. It is a setting of the
+    """A request to take one software off the Software watchlist. The platform shows each name in
+    watched_as with the Software page's own Remove, with its Undo. It is a setting of the
     platform: nothing outside it is written, so no Approver is asked."""
 
     kind: Literal["remove_software"] = "remove_software"
     software: str = Field(
-        min_length=1,
-        max_length=80,
-        description="The software's name as the request wrote it. The platform matches it to the "
-        "watchlist with case, spaces, dots and hyphens aside, so node js is Node.js.",
+        min_length=1, max_length=80, description="The software's name as the request wrote it."
+    )
+    watched_as: list[Annotated[str, Field(max_length=80)]] = Field(
+        default_factory=list[str],
+        max_length=100,
+        description="Each name in the facts' watchlist that is this software, with case, spaces, "
+        "dots and hyphens aside, so node js is Node.js. Empty when the watchlist holds none.",
     )
 
 

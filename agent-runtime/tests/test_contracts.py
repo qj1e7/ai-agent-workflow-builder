@@ -74,6 +74,7 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "planner-answered-refused.json": answer_result_adapter,
     "planner-answered-edit.json": answer_result_adapter,
     "planner-answered-pause.json": answer_result_adapter,
+    "planner-answered-remove.json": answer_result_adapter,
     "planner-question-request.json": TypeAdapter(AnswerRequest),
     "planner-answered-question.json": answer_result_adapter,
     "planner-answered-reply.json": answer_result_adapter,
