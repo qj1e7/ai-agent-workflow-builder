@@ -31,7 +31,13 @@ from agent_runtime.abilities import (
     release_word_in,
     without_the_phrase,
 )
-from agent_runtime.answers import ANSWER_SYSTEM, TaskRead, answer_of, word_rule_refusal
+from agent_runtime.answers import (
+    ANSWER_SYSTEM,
+    TaskRead,
+    answer_of,
+    watches_it,
+    word_rule_refusal,
+)
 from agent_runtime.contract import (
     CLOCK_PATTERN,
     AbilitiesAnswer,
@@ -414,12 +420,15 @@ def _watch(raw: Mapping[str, Any], turn: Turn) -> Acted:
             f"{name} in about, make the Watchlist the subject of holds, and say what the person "
             "can do next."
         )
+    # A clause that only asks to watch it again, as "keep track of it", is the same watch.
+    again = (c for c in turn.clauses if watches_it(turn.text[c[0] : c[1]]) is not None)
+    reach = frozenset({clause, *again})
     rules = turn.front.answer
     if isinstance(rules, WatchlistAnswer) and _same_name(rules.software or "", name):
-        return _shown(turn, rules, frozenset({clause}))
+        return _shown(turn, rules, reach)
     word = release_word_in(turn.text) or name
     answer = WatchlistAnswer(word=plain(word, NAME_LIMIT), software=plain(name, NAME_LIMIT))
-    return _shown(turn, answer, frozenset({clause}))
+    return _shown(turn, answer, reach)
 
 
 def _which_software(raw: Mapping[str, Any], turn: Turn) -> Acted:
