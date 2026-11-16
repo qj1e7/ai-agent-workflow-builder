@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 # Boots our n8n image twice, with the guards deploy/compose.yaml sets, and checks what n8n allows:
 # - with no allow list: all eight of our blocks load, and Execute Command and Local File Trigger
-#   do not;
+#   do not, and contracts/n8n/catalogue.json is what n8n serves (scripts/n8n-catalogue.sh, ADR
+#   0051);
 # - with the allow list scripts/nodes-include.sh makes from node_classes.json, as deployed:
 #   exactly the types the file says n8n loads, a workflow with an HTTP Request node cannot be
 #   turned on, and the pin check finds every version and choice of every type n8n serves classed
 #   (ADR 0045).
 # Needs Docker, jq and uv. Publishes no port. PACK_SMOKE_IMAGE names an image already built.
+# PACK_SMOKE_CATALOGUE=write writes the catalogue instead of checking it.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -38,6 +40,7 @@ check_n8n() {
   shift
   docker run --detach --name "$name" --env N8N_DIAGNOSTICS_ENABLED=false \
     --env N8N_VERSION_NOTIFICATIONS_ENABLED=false --env N8N_BLOCK_ENV_ACCESS_IN_NODE=true \
+    --env N8N_DISABLED_MODULES=mcp-registry \
     --env "NODES_EXCLUDE=$never" --env N8N_COMMUNITY_PACKAGES_ENABLED=false "$@" "$image" >/dev/null
   for _ in $(seq 1 90); do
     if docker exec "$name" wget -Y off -qO- http://localhost:5678/healthz/readiness >/dev/null 2>&1; then break; fi
@@ -121,6 +124,13 @@ if [ "$present" = "[]" ]; then
   pass "with no allow list, n8n does not load $never."
 else
   fail "with no allow list, n8n still loads $present."
+fi
+check=--check
+if [ "${PACK_SMOKE_CATALOGUE:-check}" = write ]; then check=; fi
+if scripts/n8n-catalogue.sh ${check:+"$check"} "$served/off.json" "$image"; then
+  pass "the catalogue is what n8n serves with no allow list, and the pin check of its code holds."
+else
+  fail "the catalogue or the pin check of its code failed, as above."
 fi
 
 on=$(check_n8n on --env "NODES_INCLUDE=$allow_list")

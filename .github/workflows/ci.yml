@@ -243,12 +243,15 @@ jobs:
             exit 1
           fi
 
-      # The pin check in the pack smoke runs platform-api's code against what the image serves.
+      # The pin checks and the catalogue in the pack smoke run platform-api's code against what
+      # the image serves and holds.
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
           enable-cache: false
 
-      - name: Pack smoke, n8n loads exactly the classed types and the pin check holds
+      # One start of the image without the allow list also checks contracts/n8n/catalogue.json
+      # (scripts/n8n-catalogue.sh, ADR 0051).
+      - name: Pack smoke, n8n loads exactly the classed types, the pin checks hold, and the catalogue is current
         working-directory: .
         run: scripts/pack-smoke.sh
 
