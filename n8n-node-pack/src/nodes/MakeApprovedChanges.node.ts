@@ -6,6 +6,7 @@ export class MakeApprovedChanges implements INodeType {
   description: INodeTypeDescription = {
     displayName: 'Make the approved changes',
     name: 'wabMakeApprovedChanges',
+    icon: 'file:write.svg',
     group: ['output'],
     version: 1,
     subtitle: 'Jira',

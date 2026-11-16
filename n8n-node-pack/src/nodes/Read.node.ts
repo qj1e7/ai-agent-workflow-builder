@@ -15,6 +15,7 @@ export class Read implements INodeType {
   description: INodeTypeDescription = {
     displayName: 'Read',
     name: 'wabRead',
+    icon: 'file:read.svg',
     group: ['input'],
     version: 1,
     subtitle: '={{ {"github_releases": "GitHub", "jira_tickets": "Jira", "confluence_page": "Confluence"}[$parameter["source"]] }}',
