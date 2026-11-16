@@ -403,7 +403,11 @@ def _watch(raw: Mapping[str, Any], turn: Turn) -> Acted:
         return _not_found("software", args.software)
     name = turn.text[at[0] : at[1]]
     if _watched(turn, name):
-        return Invalid(f"The Watchlist already holds {name}. Use reply, with {name} in about.")
+        return Invalid(
+            f"The Watchlist already holds {name}, so it can't be offered again. Use reply: put "
+            f"{name} in about, make the Watchlist the subject of holds, and say what the person "
+            "can do next."
+        )
     rules = turn.front.answer
     if isinstance(rules, WatchlistAnswer) and _same_name(rules.software or "", name):
         return _shown(turn, rules, frozenset({clause}))
@@ -440,7 +444,10 @@ def _schedule_of(args: ChangeWorkflow, text: str) -> ScheduleChange | Invalid:
     if args.weekly and not WEEKLY.search(text):
         return Invalid("The message doesn't say weekly. Leave weekly out.")
     if args.day is None and args.at is None and args.hour is None and not args.weekly:
-        return Invalid("The call names no day and no time to change. Ask with reply.")
+        return Invalid(
+            "The call names no day and no time to change. Use reply, form clarify, to ask for the "
+            "time, and leave the workflow's state to its line."
+        )
     try:
         return ScheduleChange(day=args.day, weekly=args.weekly, at=args.at, hour=args.hour)
     except ValidationError:
@@ -738,9 +745,11 @@ BRIEFING: Final = (
     "something is done, is on, is already on or is running. Say what the person can do next.\n"
     "- Never offer or promise to do something: no I'll, I will, let me, want me to, shall I or "
     "keep you posted. Tell the person what to type or tap.\n"
-    "- To say what a list holds, make the Watchlist or their workflows the subject of the verb "
-    "holds. Never say what Needs you holds, and never say what happened to a run, a ticket or a "
-    "request: name the page that shows it.\n"
+    "- Never write the state, version or last run of a workflow or a software, such as on, "
+    "paused, stopped, behind or up to date, and never say what happened to a run, a ticket or a "
+    "request. Put its name in about, and the line under the reply shows those. To say a list "
+    "holds something, make the Watchlist or their workflows the subject of the verb holds, "
+    "never Needs you.\n"
     "- For a greeting, thanks or small talk, reply in kind in one or two short sentences, then "
     "say where to start.\n"
     "- A cant says plainly what you can't do yet, then the nearest Ready thing to what they "
