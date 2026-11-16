@@ -33,6 +33,7 @@ export class StartFromPortal implements INodeType {
   description: INodeTypeDescription = {
     displayName: 'Start from the Portal',
     name: 'wabStartFromPortal',
+    icon: 'file:start.svg',
     group: ['trigger'],
     version: 1,
     subtitle: 'Portal',

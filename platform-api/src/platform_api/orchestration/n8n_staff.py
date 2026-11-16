@@ -30,6 +30,14 @@ log = logging.getLogger(__name__)
 SETTLE_EVERY = timedelta(seconds=15)
 
 NO_ACCESS = "Only people with n8n access can open n8n. An admin can add it in Settings."
+APPROVERS_NO_ACCESS = "Approvers can't have n8n access. An Operator with n8n access can open it."
+
+
+def no_access_words(approver: bool) -> str:
+    """No one can add n8n access for an Approver, so they are told who can open it instead."""
+    return APPROVERS_NO_ACCESS if approver else NO_ACCESS
+
+
 OFF = "Opening n8n is coming once the block list is on."
 NOT_READY = (
     "n8n can't be opened from here until its block list is checked again. Your own n8n space "
@@ -277,7 +285,7 @@ class StaffAccounts:
     async def access(self, person: UserId) -> StaffAccess:
         row = await self._person(person)
         if row is None or not row.may_hold:
-            return NoN8nAccess()
+            return NoN8nAccess(no_access_words(row is not None and row.approver))
         if (closed := (await self.gate()).closed) is not None:
             return StaffClosed(closed)
         return _ready_or_not(row, await self._account(row), self.editor_url is not None)
@@ -285,7 +293,8 @@ class StaffAccounts:
     async def mine(self, person: UserId) -> MyN8n:
         row = await self._person(person)
         if row is None or not row.may_hold:
-            return MyN8n(False, "none", None, False, NO_ACCESS, None)
+            words = no_access_words(row is not None and row.approver)
+            return MyN8n(False, "none", None, False, words, None)
         account = await self._account(row)
         closed = (await self.gate()).closed
         access = (

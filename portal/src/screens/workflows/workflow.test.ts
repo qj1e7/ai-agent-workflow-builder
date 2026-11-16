@@ -155,6 +155,11 @@ describe('a workflow row’s line', () => {
     expect(rowLine({ schedule: { day: 'monday', at: '09:00', time_zone: 'Asia/Singapore', owner_name: 'Alice', held: null }, last_run: null }, NOW, nameOf)).toBe('Mon 9:00 · no runs yet')
   })
 
+  it('says who has it open in n8n, from the workflow’s own record, so the row, the page and the chat agree', () => {
+    const held = { id: 'per_01M7HH1YX20KNDD6FB2ERHWAZG', name: 'Dana', since: '2026-11-04T06:40:00Z' }
+    expect(rowLine({ schedule: null, last_run: null, held_in_n8n: held }, NOW, nameOf)).toBe('No schedule · Dana has it open in n8n · no runs yet')
+  })
+
   it('gives its schedule, then the day of the last run and where it stands', () => {
     expect(line({ state: 'failed', declined_by: null, reason: 'AgentError', at: '2026-11-04T00:00:00Z' })).toBe('Daily 8:00 · last run today, an agent could not finish its work')
     expect(line({ state: 'awaiting_approval', declined_by: null })).toBe('Daily 8:00 · last run Mon 26 Oct, waiting for a yes')

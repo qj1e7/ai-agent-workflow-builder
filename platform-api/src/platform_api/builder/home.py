@@ -574,7 +574,10 @@ class Home:
         connections = await self._connections.needing_attention() if operator else []
         addresses = await self._addresses.needing_attention() if operator else []
         replied = await self._requests.replied(viewer)
-        changed = await self._builder.changed_in_n8n(SHOWN) if operator else []
+        changed = [
+            card.model_copy(update={"by_name": None if card.by is None else names.get(card.by)})
+            for card in (await self._builder.changed_in_n8n(SHOWN) if operator else [])
+        ]
         return HomeOut(
             approvals=needs.approvals,
             approvals_total=needs.approvals_total,

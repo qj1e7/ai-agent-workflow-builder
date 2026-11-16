@@ -49,6 +49,7 @@ from platform_api.builder.models import (
     DraftList,
     DraftView,
     LastRunView,
+    N8nHolderView,
     PlanOut,
     RepublishIn,
     SuggestOut,
@@ -163,7 +164,8 @@ log = logging.getLogger(__name__)
 _CURRENT_VERSION = """
     SELECT u.use_case_id, u.owner, u.paused_at, u.paused_by, u.deleted_at, u.deleted_by,
            u.draft, u.left_out, u.engine, u.n8n_workflow_id, u.deleted_in_n8n_at,
-           u.move_refused, u.made_in_n8n_by, u.n8n_key_finding, v.version,
+           u.move_refused, u.made_in_n8n_by, u.n8n_key_finding, u.held_by, u.held_since,
+           v.version,
            v.template, v.name, v.instruction, v.params, v.created_at, v.document,
            v.n8n_version_id, v.grade, v.findings
     FROM builder.use_cases u
@@ -273,6 +275,7 @@ def _view(
     now: datetime,
     team_zone: str,
     moving: bool = False,
+    holder: N8nHolderView | None = None,
 ) -> UseCaseView:
     template = TEMPLATES[row["template"]]
     state = _state(lifecycle_of(row))
@@ -317,6 +320,7 @@ def _view(
         move_refused=None if _own(row) else row["move_refused"],
         start_refused=NO_START if _no_start(row) else None,
         made_in_n8n_by=row["made_in_n8n_by"],
+        held_in_n8n=holder,
     )
 
 
@@ -590,6 +594,7 @@ class Builder:
         )
         now = self._db.clock()
         moving = await self._moving(rows)
+        holders = {row["use_case_id"]: await self._holder(row) for row in rows if row["held_by"]}
         return [
             _view(
                 row,
@@ -599,9 +604,15 @@ class Builder:
                 now,
                 self._zone,
                 row["use_case_id"] in moving,
+                holders.get(row["use_case_id"]),
             )
             for row in rows
         ]
+
+    async def _holder(self, row: Mapping[str, Any]) -> N8nHolderView:
+        by = UserId(row["held_by"])
+        name = by if self.holding is None else await self.holding.name_of(by)
+        return N8nHolderView(id=by, name=name, since=row["held_since"])
 
     async def _moving(self, rows: Sequence[Mapping[str, Any]]) -> set[str]:
         """The workflows still on the shared run workflow only because a run has not ended."""

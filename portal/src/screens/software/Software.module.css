@@ -554,3 +554,8 @@ a.src {
 .addressBar b {
   overflow-wrap: anywhere;
 }
+
+/* Software and In n8n, for people with n8n access, under the title as on a workflow's page. */
+.views {
+  margin-top: var(--space-4);
+}

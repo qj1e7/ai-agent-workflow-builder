@@ -1,3 +1,4 @@
+import { displayName } from '../../api/people'
 import type { ChangedInN8nReply } from '../../api/types'
 import { refusedLine, SETTINGS_SAVED, UNKNOWN_PUBLISHER, UNKNOWN_PUBLISHER_STOPS } from '../workflows/n8nChange'
 
@@ -44,10 +45,11 @@ export interface ChangedWords {
   readonly refused: string | null
 }
 
-export function wordsOf(reply: ChangedInN8nReply): ChangedWords {
+/** The publisher's name as the platform gave it, or else from the People list, so an id is never shown. */
+export function wordsOf(reply: ChangedInN8nReply, nameOf: (id: string) => string = (id) => displayName(undefined, id)): ChangedWords {
   // A save of the settings in n8n publishes nothing, and n8n names nobody for it.
   const saved = reply.made === 'settings_changed_in_n8n'
-  const by = reply.by === null ? UNKNOWN_PUBLISHER : (reply.by_name ?? reply.by)
+  const by = reply.by === null ? UNKNOWN_PUBLISHER : (reply.by_name ?? nameOf(reply.by))
   return {
     who: saved ? `${reply.name}, version ${reply.version}. ${SETTINGS_SAVED}` : `${reply.name}, version ${reply.version}, by ${by}.`,
     unknown: reply.by === null && !saved ? UNKNOWN_PUBLISHER_STOPS : null,

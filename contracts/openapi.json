@@ -13433,6 +13433,17 @@
             ],
             "description": "The safety checker's grade of the version in use, for a workflow n8n carries. writes_refused: a write can run without a yes, so the platform refuses this version's writes and asks nobody, until the yes is put back or the change undone. needs_a_fix: it uses a block that is off, or cannot run as the platform expects, so each run stops at its first block. Null for a workflow on the shared n8n workflow."
           },
+          "held_in_n8n": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/N8nHolderView"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Who has it open in n8n now, for everyone to see. While someone does, the platform refuses every change that would publish over their work: a schedule change, Undo, roll back, Add the yes back and Resume. Pause and Delete still work."
+          },
           "instruction": {
             "title": "Instruction",
             "type": "string"

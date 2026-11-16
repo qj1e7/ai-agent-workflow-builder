@@ -298,9 +298,53 @@ SETTING_WORDS: Mapping[str, str] = {
 }
 
 
+SETTING_FILLS: Mapping[str, Any] = {"binaryMode": "separate"}
+"""Settings n8n's editor writes in on every save, at the value n8n runs a workflow without them.
+It writes executionOrder "v1" too, but n8n runs a workflow without one in the old order."""
+
+PARAMETER_FILLS: Mapping[str, Mapping[str, Any]] = {
+    "CUSTOM.wabRead": {"source": "github_releases"},
+    "n8n-nodes-base.if": {"conditions": {"options": {"leftValue": ""}}},
+}
+"""n8n's own value for a parameter a block leaves out, which n8n fills in before it runs. Its
+editor leaves a parameter at that value out as it saves, or writes it in, so a block nobody
+touched would read as changed. Only the blocks a layout writes otherwise than the editor saves
+them, as docs/evidence/n8n-editor-save shows."""
+
+
 def _settings(settings: Mapping[str, Any] | None) -> dict[str, Any]:
     """Settings as n8n runs with them: a setting with no value is one left out."""
-    return {key: value for key, value in (settings or {}).items() if value is not None}
+    given = {key: value for key, value in (settings or {}).items() if value is not None}
+    return {**SETTING_FILLS, **given}
+
+
+def _as_n8n_runs(document: Mapping[str, Any]) -> dict[str, Any]:
+    """The workflow with n8n's own value wherever a block leaves one out, so two workflows n8n
+    runs the same way compare equal however its editor saved them."""
+    nodes = document.get("nodes")
+    if not isinstance(nodes, list):
+        return dict(document)
+    return {**document, "nodes": [_node_as_n8n_runs(node) for node in cast(list[object], nodes)]}
+
+
+def _node_as_n8n_runs(node: object) -> object:
+    given = _object(node)
+    kind, parameters = given.get("type"), given.get("parameters")
+    if not isinstance(kind, str) or not isinstance(parameters, dict):
+        return node
+    filled = _filled(PARAMETER_FILLS.get(kind, {}), cast(dict[str, Any], parameters))
+    if kind == SCHEDULE_TYPE:
+        filled["rule"] = {**_object(filled.get("rule")), "interval": schedule_intervals(filled)}
+    return {**given, "parameters": filled}
+
+
+def _filled(fills: Mapping[str, Any], given: Mapping[str, Any]) -> dict[str, Any]:
+    filled = {**fills, **given}
+    for key, fill in fills.items():
+        value = given.get(key)
+        if isinstance(fill, Mapping) and isinstance(value, Mapping):
+            filled[key] = _filled(cast(Mapping[str, Any], fill), cast(Mapping[str, Any], value))
+    return filled
 
 
 def settings_changed(
@@ -320,7 +364,9 @@ def settings_changed(
 def changes_between(before: Mapping[str, Any] | None, after: Mapping[str, Any]) -> list[str]:
     """What a version published in n8n changed, in the Changed in n8n card's words: when it
     runs, each block deleted, added or changed by name, then how the blocks connect and its
-    settings. A plain comparison of the two workflows, never a guess at why."""
+    settings. A plain comparison of the two workflows as n8n runs them, never a guess at why."""
+    after = _as_n8n_runs(after)
+    before = None if before is None else _as_n8n_runs(before)
     try:
         new = read_flow(after)
         old = None if before is None else read_flow(before)

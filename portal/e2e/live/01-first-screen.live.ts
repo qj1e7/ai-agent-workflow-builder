@@ -43,6 +43,8 @@ async function loaded(page: Page): Promise<void> {
   if (new URL(page.url()).pathname !== '/') return
   const drawn = main.locator('[data-home-item]').or(main.getByText('All quiet', { exact: true })).or(main.locator('#planner-box'))
   await expect(drawn.first()).toBeVisible()
+  // The chips wait on the watchlist and the capability registry, which can answer after the box draws.
+  await expect(main.getByRole('group', { name: /^(Suggestions|Starting points)$/ }).getByRole('button').first()).toBeVisible()
 }
 
 /** A rail link's text. The count sits beside the name, so a reused stack with something waiting reads “Workflows2”. */

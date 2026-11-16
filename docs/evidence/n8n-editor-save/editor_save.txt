@@ -1,0 +1,88 @@
+n8n 2.42.6
+
+release check, every day at 8:00
+  "Daily 8:00", n8n-nodes-base.scheduleTrigger 1.2
+    laid out {"rule":{"interval":[{"field":"days","triggerAtHour":8,"triggerAtMinute":0}]}}
+    saved    {"rule":{"interval":[{"triggerAtHour":8}]}}
+  "Read release", CUSTOM.wabRead 1
+    laid out {"source":"github_releases","place":"a/b"}
+    saved    {"place":"a/b"}
+  "Newer?", n8n-nodes-base.if 2
+    laid out {"conditions":{"options":{"caseSensitive":true,"typeValidation":"loose","version":2},"conditions":[{"id":"826f1cf6-4139-5ef6-a66c-873571869658","leftValue":"={{ $json.newer }}","rightValue":"","operator":{"type":"boolean","operation":"true","singleValue":true}}],"combinator":"and"},"options":{}}
+    saved    {"conditions":{"options":{"caseSensitive":true,"leftValue":"","typeValidation":"loose","version":2},"conditions":[{"id":"826f1cf6-4139-5ef6-a66c-873571869658","leftValue":"={{ $json.newer }}","rightValue":"","operator":{"type":"boolean","operation":"true","singleValue":true}}],"combinator":"and"},"options":{}}
+  settings gain binaryMode: separate
+
+release check, every day at 0:00
+  "Daily 0:00", n8n-nodes-base.scheduleTrigger 1.2
+    laid out {"rule":{"interval":[{"field":"days","triggerAtHour":0,"triggerAtMinute":0}]}}
+    saved    {"rule":{"interval":[{}]}}
+  "Read release", CUSTOM.wabRead 1
+    laid out {"source":"github_releases","place":"a/b"}
+    saved    {"place":"a/b"}
+  "Newer?", n8n-nodes-base.if 2
+    laid out {"conditions":{"options":{"caseSensitive":true,"typeValidation":"loose","version":2},"conditions":[{"id":"826f1cf6-4139-5ef6-a66c-873571869658","leftValue":"={{ $json.newer }}","rightValue":"","operator":{"type":"boolean","operation":"true","singleValue":true}}],"combinator":"and"},"options":{}}
+    saved    {"conditions":{"options":{"caseSensitive":true,"leftValue":"","typeValidation":"loose","version":2},"conditions":[{"id":"826f1cf6-4139-5ef6-a66c-873571869658","leftValue":"={{ $json.newer }}","rightValue":"","operator":{"type":"boolean","operation":"true","singleValue":true}}],"combinator":"and"},"options":{}}
+  settings gain binaryMode: separate
+
+release check, Sundays at 7:00
+  "Sun 7:00", n8n-nodes-base.scheduleTrigger 1.2
+    laid out {"rule":{"interval":[{"field":"weeks","triggerAtDay":[0],"triggerAtHour":7,"triggerAtMinute":0}]}}
+    saved    {"rule":{"interval":[{"field":"weeks","triggerAtHour":7}]}}
+  "Read release", CUSTOM.wabRead 1
+    laid out {"source":"github_releases","place":"a/b"}
+    saved    {"place":"a/b"}
+  "Newer?", n8n-nodes-base.if 2
+    laid out {"conditions":{"options":{"caseSensitive":true,"typeValidation":"loose","version":2},"conditions":[{"id":"826f1cf6-4139-5ef6-a66c-873571869658","leftValue":"={{ $json.newer }}","rightValue":"","operator":{"type":"boolean","operation":"true","singleValue":true}}],"combinator":"and"},"options":{}}
+    saved    {"conditions":{"options":{"caseSensitive":true,"leftValue":"","typeValidation":"loose","version":2},"conditions":[{"id":"826f1cf6-4139-5ef6-a66c-873571869658","leftValue":"={{ $json.newer }}","rightValue":"","operator":{"type":"boolean","operation":"true","singleValue":true}}],"combinator":"and"},"options":{}}
+  settings gain binaryMode: separate
+
+release check, weekdays at 9:15
+  "Read release", CUSTOM.wabRead 1
+    laid out {"source":"github_releases","place":"a/b"}
+    saved    {"place":"a/b"}
+  "Newer?", n8n-nodes-base.if 2
+    laid out {"conditions":{"options":{"caseSensitive":true,"typeValidation":"loose","version":2},"conditions":[{"id":"826f1cf6-4139-5ef6-a66c-873571869658","leftValue":"={{ $json.newer }}","rightValue":"","operator":{"type":"boolean","operation":"true","singleValue":true}}],"combinator":"and"},"options":{}}
+    saved    {"conditions":{"options":{"caseSensitive":true,"leftValue":"","typeValidation":"loose","version":2},"conditions":[{"id":"826f1cf6-4139-5ef6-a66c-873571869658","leftValue":"={{ $json.newer }}","rightValue":"","operator":{"type":"boolean","operation":"true","singleValue":true}}],"combinator":"and"},"options":{}}
+  settings gain binaryMode: separate
+
+release check, Run now only
+  "Read release", CUSTOM.wabRead 1
+    laid out {"source":"github_releases","place":"a/b"}
+    saved    {"place":"a/b"}
+  "Newer?", n8n-nodes-base.if 2
+    laid out {"conditions":{"options":{"caseSensitive":true,"typeValidation":"loose","version":2},"conditions":[{"id":"826f1cf6-4139-5ef6-a66c-873571869658","leftValue":"={{ $json.newer }}","rightValue":"","operator":{"type":"boolean","operation":"true","singleValue":true}}],"combinator":"and"},"options":{}}
+    saved    {"conditions":{"options":{"caseSensitive":true,"leftValue":"","typeValidation":"loose","version":2},"conditions":[{"id":"826f1cf6-4139-5ef6-a66c-873571869658","leftValue":"={{ $json.newer }}","rightValue":"","operator":{"type":"boolean","operation":"true","singleValue":true}}],"combinator":"and"},"options":{}}
+  settings gain binaryMode: separate
+
+release notice to Slack
+  "Daily 8:00", n8n-nodes-base.scheduleTrigger 1.2
+    laid out {"rule":{"interval":[{"field":"days","triggerAtHour":8,"triggerAtMinute":0}]}}
+    saved    {"rule":{"interval":[{"triggerAtHour":8}]}}
+  "Read release", CUSTOM.wabRead 1
+    laid out {"source":"github_releases","place":"a/b"}
+    saved    {"place":"a/b"}
+  "Newer?", n8n-nodes-base.if 2
+    laid out {"conditions":{"options":{"caseSensitive":true,"typeValidation":"loose","version":2},"conditions":[{"id":"826f1cf6-4139-5ef6-a66c-873571869658","leftValue":"={{ $json.newer }}","rightValue":"","operator":{"type":"boolean","operation":"true","singleValue":true}}],"combinator":"and"},"options":{}}
+    saved    {"conditions":{"options":{"caseSensitive":true,"leftValue":"","typeValidation":"loose","version":2},"conditions":[{"id":"826f1cf6-4139-5ef6-a66c-873571869658","leftValue":"={{ $json.newer }}","rightValue":"","operator":{"type":"boolean","operation":"true","singleValue":true}}],"combinator":"and"},"options":{}}
+  settings gain binaryMode: separate
+
+agent cards
+  "Daily 8:00", n8n-nodes-base.scheduleTrigger 1.2
+    laid out {"rule":{"interval":[{"field":"days","triggerAtHour":8,"triggerAtMinute":0}]}}
+    saved    {"rule":{"interval":[{"triggerAtHour":8}]}}
+  settings gain binaryMode: separate
+
+watchlist
+  "Daily 8:00", n8n-nodes-base.scheduleTrigger 1.2
+    laid out {"rule":{"interval":[{"field":"days","triggerAtHour":8,"triggerAtMinute":0}]}}
+    saved    {"rule":{"interval":[{"triggerAtHour":8}]}}
+  "Read the watchlist", CUSTOM.wabRead 1
+    laid out {"source":"github_releases","place":"watchlist"}
+    saved    {"place":"watchlist"}
+  settings gain binaryMode: separate
+
+agent cards, with the yes the checker adds
+  "Daily 8:00", n8n-nodes-base.scheduleTrigger 1.2
+    laid out {"rule":{"interval":[{"field":"days","triggerAtHour":8,"triggerAtMinute":0}]}}
+    saved    {"rule":{"interval":[{"triggerAtHour":8}]}}
+  settings gain binaryMode: separate

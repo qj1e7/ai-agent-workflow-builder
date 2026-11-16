@@ -10,6 +10,7 @@ import failed from '../../../../contracts/fixtures/views/failure.final.json'
 import done from '../../../../contracts/fixtures/views/success.final.json'
 import peopleList from '../../../../contracts/fixtures/people/list.json'
 import versionedUseCase from '../../../../contracts/fixtures/builder/use-case.versioned.json'
+import openInN8n from '../../../../contracts/fixtures/builder/use-case.open-in-n8n.json'
 import undoneUseCase from '../../../../contracts/fixtures/builder/use-case.undone.json'
 import changed from '../../../../contracts/fixtures/builder/versions.json'
 import undone from '../../../../contracts/fixtures/builder/versions.undone.json'
@@ -374,6 +375,17 @@ describe('a workflow page', () => {
     expect(text(banner)).toBe('Paused. It won’t run until you resume it. Resume')
     expect(buttons(html)).not.toContain('Pause')
     expect(text(mainOf(html)).match(/Resume/g)).toHaveLength(1)
+  })
+
+  it('tells everyone on its Summary who has it open in n8n, and offers no change the platform would refuse', () => {
+    const held = { ...(openInN8n as UseCaseView), grade: 'needs_a_fix', findings: ['“Send email” is not a block we run.'] } as UseCaseView
+    const html = render({ useCase: held })
+    expect(text(html)).toMatch(/Carol has it open in n8n since (Mon 9 Nov, )?10:02\. Ask Carol, or anyone with n8n access, to take it back\./)
+    expect(sectionText(html, 'When')).toContain('Can’t change it while Carol has it open in n8n.')
+    const pressable = buttons(html)
+    for (const refused of ['Undo', 'Add the yes back', 'Change when it runs', 'Set when it runs', 'Resume']) expect(pressable, `${refused} would be refused`).not.toContain(refused)
+    expect(pressable, 'Pause still works, so the safety lever never waits').toContain('Pause')
+    expect(text(render({ me: BOB, useCase: held }))).toMatch(/Carol has it open in n8n since/)
   })
 
   it('goes back to the list', () => {

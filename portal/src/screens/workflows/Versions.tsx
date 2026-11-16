@@ -20,7 +20,8 @@ interface VersionsProps {
 /**
  * Versions, as the sketch draws them: a details with a row for each, "Version 3, in use" and what changed. An Operator can roll an
  * n8n workflow back to any version but the one in use, which publishes it again as a new version. A change of when it runs is
- * undone on the chat's edit card, so a workflow on the shared n8n workflow shows no Roll back.
+ * undone on the chat's edit card, so a workflow on the shared n8n workflow shows no Roll back. Nor does one someone has open in
+ * n8n, where the platform would refuse it.
  */
 export function Versions({ useCase, now, nameOf, operator, say }: VersionsProps) {
   const versions = useVersions(useCase.use_case_id, useCase.version)
@@ -58,7 +59,7 @@ export function Versions({ useCase, now, nameOf, operator, say }: VersionsProps)
                 </b>
                 <span className={styles['sub']}>{versionLine(version, now, nameOf)}</span>
               </span>
-              {operator && !version.running && version.grade ? (
+              {operator && !version.running && version.grade && !useCase.held_in_n8n ? (
                 <Button loading={rollback.isPending && pressed === version.version} onClick={() => rollBackTo(version)}>
                   Roll back<span className="visually-hidden"> to version {version.version}</span>
                 </Button>

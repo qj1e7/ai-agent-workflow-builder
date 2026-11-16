@@ -225,6 +225,12 @@ class LastRunView(WireModel):
     )
 
 
+class N8nHolderView(WireModel):
+    id: UserId
+    name: str
+    since: datetime
+
+
 class UseCaseView(WireModel):
     use_case_id: str
     version: int
@@ -312,6 +318,12 @@ class UseCaseView(WireModel):
         description="Who made it in n8n, for a workflow made in n8n and then set up from "
         "Workflows (ENGINE-PLAN E15). Change it in n8n: its runs are their work, so they never "
         "approve them. Null for a workflow the Planner laid out.",
+    )
+    held_in_n8n: N8nHolderView | None = Field(
+        default=None,
+        description="Who has it open in n8n now, for everyone to see. While someone does, the "
+        "platform refuses every change that would publish over their work: a schedule change, "
+        "Undo, roll back, Add the yes back and Resume. Pause and Delete still work.",
     )
 
 

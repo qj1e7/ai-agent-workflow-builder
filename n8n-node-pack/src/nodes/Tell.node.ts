@@ -5,6 +5,7 @@ export class Tell implements INodeType {
   description: INodeTypeDescription = {
     displayName: 'Tell',
     name: 'wabTell',
+    icon: 'file:tell.svg',
     group: ['output'],
     version: 1,
     subtitle: '={{ {"channel": "Teams", "email": "Email", "both": "Teams and email"}[$parameter["where"]] }}',

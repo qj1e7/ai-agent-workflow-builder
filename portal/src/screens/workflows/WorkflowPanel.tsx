@@ -12,6 +12,7 @@ import { IconPause, IconPlay } from '../../ui/icons'
 import { useAfterPanelAction } from '../../ui/sidePanel'
 import { Troubleshooting } from '../run/Outcome'
 import { StatusBanner } from './Banner'
+import { heldLine, heldOf, theirsNote } from './n8nHold'
 import { needsFix } from './n8nChange'
 import { StatusPills } from './Status'
 import { bannerOf, changeProblem, changeWords, controlsOf, lastRunWords, leftOutWords, NO_RUNS, nextRunWords, pillOf, pressChange, REFRESH_MS, rereadWhenOutOfDate, sentenceOf, viewerOf, type Banner, type LastRun } from './workflow'
@@ -52,6 +53,7 @@ function Summary({ useCase, me, now }: { useCase: UseCaseView; me: Me; now: Date
   const modelOff = useModelOff()
   const last = useCase.last_run
   const whole = bannerOf({ useCase, viewer: viewerOf(me), now, nameOf })
+  const held = heldOf(useCase, me)
   const stopped = stopOf(useCase, whole)
   const troubleshoot = useTroubleshoot(stopped?.run_id ?? '', stopped !== null, 0)
   // Resume is beside Pause, so the banner leaves it out. One primary action for the state.
@@ -65,6 +67,7 @@ function Summary({ useCase, me, now }: { useCase: UseCaseView; me: Me; now: Date
       </div>
       <p>{sentenceOf(useCase)}</p>
       {leftOutWords(useCase.left_out) ? <p className="muted">{leftOutWords(useCase.left_out)}</p> : null}
+      {held ? <p className="muted">{held.kind === 'theirs' ? `${heldLine(held, now)} ${theirsNote(held)}` : heldLine(held, now)}</p> : null}
       <StatusBanner banner={banner} resuming={false} onResume={() => undefined} />
       {stopped ? (
         <Troubleshooting
@@ -106,7 +109,7 @@ function PauseOrResume({ useCase, me, now }: { useCase: UseCaseView; me: Me; now
   const [said, setSaid] = useState<string | null>(null)
   const [problem, setProblem] = useState<string | null>(null)
   const controls = controlsOf(useCase, viewerOf(me))
-  const what = controls.includes('pause') ? 'pause' : controls.includes('resume') ? 'resume' : null
+  const what = controls.includes('pause') ? 'pause' : controls.includes('resume') && !useCase.held_in_n8n ? 'resume' : null
   if (what === null) return null
 
   const press = () =>

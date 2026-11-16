@@ -270,6 +270,9 @@ class Holding:
     async def words(self, held: Held) -> str:
         return held_words(await self._staff.display_of(held.by), held.since, self._zone)
 
+    async def name_of(self, person: UserId) -> str:
+        return await self._staff.display_of(person)
+
     async def refused_while_held(
         self, conn: Connection, use_case_id: str, actor: UserId
     ) -> HeldInN8n | None:

@@ -171,9 +171,11 @@ interface ScheduleProps {
   readonly useCaseId: string
   readonly answeredAt: number
   readonly onResumed: () => void
+  /** Why nothing here can change now: someone has the watchlist open in n8n, so the platform would refuse it. */
+  readonly held: string | null
 }
 
-export function Schedule({ schedule, version, operator, paused, useCaseId, answeredAt, onResumed }: ScheduleProps) {
+export function Schedule({ schedule, version, operator, paused, useCaseId, answeredAt, onResumed, held }: ScheduleProps) {
   const { editing, opener, open, close } = useEditorThatRefocusesItsOpener()
   const [refused, setRefused] = useState<string | null>(null)
   const stale = () => {
@@ -191,7 +193,9 @@ export function Schedule({ schedule, version, operator, paused, useCaseId, answe
       <div className={styles['scheduleText']}>
         <ScheduleNote schedule={schedule} operator={operator} paused={paused} />
       </div>
-      {operator && !editing ? (
+      {operator && held ? (
+        <p className="muted">{held}</p>
+      ) : operator && !editing ? (
         <div className={styles['actions']}>
           {paused ? (
             <Button data-place="resume" icon={IconPlay} loading={resume.pending} onClick={resume.press}>
@@ -230,7 +234,7 @@ export function Schedule({ schedule, version, operator, paused, useCaseId, answe
           {refused}
         </p>
       ) : null}
-      {operator && editing ? <ScheduleEditor schedule={schedule} version={version} onDone={close} onStale={stale} /> : null}
+      {operator && editing && !held ? <ScheduleEditor schedule={schedule} version={version} onDone={close} onStale={stale} /> : null}
     </section>
   )
 }
