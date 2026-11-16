@@ -7,6 +7,8 @@ import moved from '@contracts/fixtures/watchlist/moved.json'
 import held from '@contracts/fixtures/watchlist/schedule.held.json'
 import statuses from '@contracts/fixtures/watchlist/statuses.json'
 import peopleList from '@contracts/fixtures/people/list.json'
+import watchlistUseCase from '@contracts/fixtures/builder/use-case.json'
+import inN8nView from '@contracts/fixtures/builder/use-case.n8n.json'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
@@ -15,7 +17,7 @@ import { describe, expect, it } from 'vitest'
 import { ApiProvider } from '../../api/context'
 import { TicketLinksProvider } from '../../api/ticketLinks'
 import { createDevSession } from '../../api/session'
-import type { FindOut, Me, PersonOut, ProjectGuess, ScheduleHold, WatchedSoftwareView, WatchlistView } from '../../api/types'
+import type { FindOut, Me, PersonOut, ProjectGuess, ScheduleHold, UseCaseN8nView, UseCaseView, WatchedSoftwareView, WatchlistView } from '../../api/types'
 import { AppRoutes } from '../../shell/routes'
 import { AddSoftwareForm } from './AddSoftware'
 import { addReducer, readyToAdd, START, type AddAction, type AddState } from './addByName'
@@ -32,9 +34,15 @@ const TEAM = (peopleList.people as PersonOut[]).filter((person) => ['alice', 'bo
 
 const NOW = new Date('2026-11-16T12:00:00+08:00')
 
+const CAROL_N8N: Me = { id: 'carol', display: 'Carol', roles: ['operator'], n8n_access: true }
+const WATCHLIST_ID = (statuses as WatchlistView).use_case_id
+const WATCHLIST_WORKFLOW = { ...(watchlistUseCase as UseCaseView), use_case_id: WATCHLIST_ID }
+
 function render(view: unknown, me: Me, runs: readonly { run_id: string }[] = [], page: ReactNode = <SoftwareRoute now={NOW} />, capabilities: unknown = capabilitiesFixture, path = '/software'): string {
   const session = createDevSession(null)
   const queryClient = new QueryClient({ defaultOptions: { queries: { retryOnMount: false } } })
+  queryClient.setQueryData(['use-case', session.cacheScope(), WATCHLIST_ID], WATCHLIST_WORKFLOW)
+  queryClient.setQueryData(['use-case', session.cacheScope(), WATCHLIST_ID, 'n8n'], { ...(inN8nView as UseCaseN8nView), use_case_id: WATCHLIST_ID })
   queryClient.setQueryData(['me', session.cacheScope()], me)
   queryClient.setQueryData(['watchlist', session.cacheScope()], view)
   for (const run of runs) queryClient.setQueryData(['run', session.cacheScope(), run.run_id], run)
@@ -578,6 +586,28 @@ describe('the schedule note', () => {
   it('says no schedule is set and how a check starts then', () => {
     expect(text(renderToStaticMarkup(<ScheduleNote schedule={null} operator paused={false} />))).toBe('No schedule. Press Check now to check by hand. One approval covers all the upgrade tickets.')
     expect(text(renderToStaticMarkup(<ScheduleNote schedule={null} operator={false} paused={false} />))).toBe('No schedule. An Operator can press Check now to check by hand. One approval covers all the upgrade tickets.')
+  })
+})
+
+describe('the Software watchlist in n8n', () => {
+  const views = (html: string) => [...html.matchAll(/<div[^>]*role="group" aria-label="View"[^>]*>([\s\S]*?)<\/div>/g)].map((m) => text(m[1] ?? ''))
+  const routes = (me: Me) => <AppRoutes context={{ name: me.display, now: NOW, operator: me.roles.includes('operator') }} />
+
+  it('gives someone with n8n access the In n8n tab on the Watchlist, as every workflow has, with Open in n8n editor', () => {
+    expect(views(render(statuses, CAROL_N8N))).toEqual(['Software In n8n'])
+    const inN8n = render(statuses, CAROL_N8N, [], <SoftwareRoute now={NOW} />, capabilitiesFixture, '/software?view=n8n')
+    expect(text(inN8n)).toContain('Only our blocks and n8n’s safe ones are on, so every write waits for a yes.')
+    expect(text(inN8n)).toContain('Open in n8n editor')
+    expect(text(inN8n), 'the list stays on its own tab').not.toContain('Find software')
+  })
+
+  it('opens the watchlist workflow’s In n8n tab from its workflow address, as the Planner sends it', () => {
+    const html = render(statuses, CAROL_N8N, [], routes(CAROL_N8N), capabilitiesFixture, `/workflows/${WATCHLIST_ID}?view=n8n`)
+    expect(text(html)).toContain('Open in n8n editor')
+  })
+
+  it('gives no tab to anyone without n8n access', () => {
+    for (const me of [ALICE, BOB]) expect(views(render(statuses, me, [], <SoftwareRoute now={NOW} />, capabilitiesFixture, '/software?view=n8n'))).toEqual([])
   })
 })
 

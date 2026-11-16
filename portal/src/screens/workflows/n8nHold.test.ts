@@ -3,13 +3,15 @@ import free from '@contracts/fixtures/builder/use-case.n8n.json'
 import { describe, expect, it } from 'vitest'
 import { ApiError } from '../../api/client'
 import type { UseCaseN8nView } from '../../api/types'
-import { DRAFT, editorAddressOf, GONE, heldLine, NO_EDITOR, holdOf, inUseLine, mayOpen, n8nRefusalWords, openEditorTab, takenBackWords, theirsNote, type Hold } from './n8nHold'
+import { DRAFT, editorAddressOf, GONE, heldLine, heldOf, NO_EDITOR, holdOf, inUseLine, mayOpen, n8nRefusalWords, openEditorTab, takenBackWords, theirsNote, type Hold } from './n8nHold'
 
 const FREE = free as UseCaseN8nView
 const HELD = held as UseCaseN8nView
-const ON = { state: 'on', deleted_in_n8n_at: null } as const
-const CAROL = { id: 'carol' }
-const ALICE = { id: 'alice' }
+const ON = { state: 'on', deleted_in_n8n_at: null, held_in_n8n: null } as const
+const BY_CAROL = { ...ON, held_in_n8n: HELD.holder }
+const CAROL = { id: 'carol', n8n_access: true }
+const ALICE = { id: 'alice', n8n_access: true }
+const ALICE_NO_ACCESS = { id: 'alice', n8n_access: false }
 const SET_PASSWORD = 'Set your n8n password first. The link is on your Settings page.'
 /** 9:00 in Singapore on the day Carol opened it at 13:40. */
 const SAME_DAY = new Date('2026-11-10T09:00:00Z')
@@ -22,20 +24,27 @@ describe('what the In n8n tab offers', () => {
   })
 
   it('names the holder to themselves, with the editor’s address, and lets them open it', () => {
-    const hold = holdOf(HELD, ON, CAROL)
+    const hold = holdOf(HELD, BY_CAROL, CAROL)
     expect(hold).toEqual({ kind: 'mine', since: HELD.holder?.since, editorUrl: HELD.editor_url })
     expect(mayOpen(hold)).toBe(true)
   })
 
   it('names the holder to anyone else, who may take it back with n8n access, and never open it', () => {
-    const hold = holdOf({ ...HELD, editor_url: null }, ON, ALICE)
+    const hold = holdOf({ ...HELD, editor_url: null }, BY_CAROL, ALICE)
     expect(hold).toEqual({ kind: 'theirs', name: 'Carol', since: HELD.holder?.since, cant: null })
     expect(mayOpen(hold)).toBe(false)
   })
 
   it('says why someone whose n8n is not ready can’t take it back either', () => {
-    const hold = holdOf({ ...HELD, can_open: false, why_not: SET_PASSWORD, editor_url: null }, ON, ALICE)
+    const hold = holdOf({ ...HELD, can_open: false, why_not: SET_PASSWORD, editor_url: null }, BY_CAROL, ALICE)
     expect(hold).toMatchObject({ kind: 'theirs', cant: SET_PASSWORD })
+  })
+
+  it('reads the hold from the workflow itself, so it is known without n8n access and without the In n8n view', () => {
+    expect(heldOf(BY_CAROL, ALICE_NO_ACCESS)).toEqual({ kind: 'theirs', name: 'Carol', since: HELD.holder?.since, cant: 'Ask Carol, or anyone with n8n access, to take it back.' })
+    expect(heldOf(BY_CAROL, CAROL)).toEqual({ kind: 'mine', since: HELD.holder?.since, editorUrl: null })
+    expect(heldOf(ON, ALICE_NO_ACCESS)).toBeNull()
+    expect(holdOf({ ...HELD, holder: null }, BY_CAROL, ALICE), 'the workflow’s own record wins over an older In n8n view').toMatchObject({ kind: 'theirs', name: 'Carol' })
   })
 
   it('draws no button for a draft, a workflow deleted in n8n, or a person n8n is closed to, and says why', () => {
@@ -63,8 +72,8 @@ describe('the In n8n tab’s words', () => {
   })
 
   it('says who has it open since when, in the platform’s words, and to its holder as you', () => {
-    const mine = holdOf(HELD, ON, CAROL)
-    const theirs = holdOf(HELD, ON, ALICE)
+    const mine = holdOf(HELD, BY_CAROL, CAROL)
+    const theirs = holdOf(HELD, BY_CAROL, ALICE)
     if (mine.kind !== 'mine' || theirs.kind !== 'theirs') throw new Error('both are held')
     expect(heldLine(theirs, SAME_DAY)).toBe('Carol has it open in n8n since 13:40.')
     expect(heldLine(mine, SAME_DAY)).toBe('You have it open in n8n since 13:40.')
@@ -72,7 +81,7 @@ describe('the In n8n tab’s words', () => {
   })
 
   it('makes clear that anyone with n8n access may take it back, by design', () => {
-    const theirs = holdOf(HELD, ON, ALICE)
+    const theirs = holdOf(HELD, BY_CAROL, ALICE)
     if (theirs.kind !== 'theirs') throw new Error('held by Carol')
     expect(theirsNote(theirs)).toBe('Anyone with n8n access can take it back from Carol.')
     expect(takenBackWords(theirs)).toBe('Taken back from Carol. You can change it here again.')
