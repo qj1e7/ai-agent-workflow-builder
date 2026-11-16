@@ -285,6 +285,13 @@ def test_a_fact_moved_or_changed_inside_the_paragraph_is_refused(
             "places",
         ),
         (
+            TICKETS_AND_A_POST,
+            "Every day at 8:00, it reads GitHub “fastapi/fastapi”. It can create Jira tickets in "
+            "“MOCK”, each after a yes. It posts “A newer release is out.” in “Ops” on Teams. "
+            "It changes nothing else.",
+            "places",
+        ),
+        (
             NO_YES_EACH_RUN,
             "Every day at 8:00, it reads GitHub “fastapi/fastapi”. "
             "It creates no Jira tickets in “MOCK”, with a yes on each run. "
@@ -302,6 +309,7 @@ def test_a_fact_moved_or_changed_inside_the_paragraph_is_refused(
         "yes-added-to-a-post",
         "yes-moved-to-a-post",
         "post-words-and-place-swapped",
+        "channel-off-its-system",
         "no-moved",
         "negation-moved-by-merging",
     ],
