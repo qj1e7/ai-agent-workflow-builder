@@ -293,6 +293,26 @@ def test_which_software_asks_about_its_clause_and_crosses_the_rest() -> None:
     ]
 
 
+NAMED_NODE_JS = PreviousTurn(
+    request="help me add Node Js , keep track of it", software="Node Js", kind="cant"
+)
+
+
+def test_a_watch_offer_reaches_the_clause_that_watches_it_too() -> None:
+    result, _ = run(
+        "help me add Node Js , keep track of it",
+        tool("watch_software", software="Node Js"),
+        read=reading("none", belongs_on_watchlist=True, watchlist_word="add", software="Node Js"),
+        facts=FACTS,
+    )
+
+    assert shown(result) == WatchlistAnswer(word="add", software="Node Js")
+    assert marks(result) == [
+        ("help me add Node Js", "will_do", None),
+        ("keep track of it", "will_do", None),
+    ]
+
+
 def test_a_paraphrased_argument_locates_nothing_and_is_never_a_tick() -> None:
     result, _ = run(
         "add a tool please",
