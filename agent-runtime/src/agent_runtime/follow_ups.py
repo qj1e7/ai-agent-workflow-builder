@@ -17,6 +17,9 @@ from agent_runtime.contract import AnswerRequest, PlannerAnswer, WatchlistAnswer
 from agent_runtime.planner import visible_words
 
 FOLLOWS: Final = frozenset({"question", "watchlist"})
+NAMES_ONE_SOFTWARE: Final = frozenset({"watchlist", "cant", "question", "remove_software"})
+"""The answers whose one software the Portal sends as `previous.software`: a watchlist offer, a
+can't with one as its alternative, a question about one software, and a removal of one name."""
 ASKED_WHICH_SOFTWARE: Final = "which_software"
 FOLLOW_UP: Final = re.compile(
     r"^\s*(?:and|what\s+about|how\s+about)\s+(?P<name>[^?]{1,60}?)\s*\??\s*$", re.IGNORECASE
@@ -101,11 +104,12 @@ def named_when_asked(request: AnswerRequest) -> str | None:
 
 
 def named_before(request: AnswerRequest) -> str | None:
-    """The one software the turn before named, for a message that only asks to watch "it". The
-    name is client input, so it is held to what a typed name must be: a plausible name that is
-    software, not a pronoun, a system the platform uses or a change."""
+    """The one software the turn before named, for a message that only asks to watch "it". Only
+    an answer that names one software carries it. The name is client input, so it is held to what
+    a typed name must be: a plausible name that is software, not a pronoun, a system the platform
+    uses or a change."""
     earlier = request.previous
-    if earlier is None or earlier.software is None:
+    if earlier is None or earlier.software is None or earlier.kind not in NAMES_ONE_SOFTWARE:
         return None
     name = plausible_name(visible_words(earlier.software).strip())
     return None if name is None else software_name(name)

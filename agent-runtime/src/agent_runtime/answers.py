@@ -1203,7 +1203,7 @@ def watch_of_it(read: TaskRead | None, request: AnswerRequest) -> WatchlistAnswe
     still taps Watch it. With no software before, which software is asked as before."""
     verb = watches_it(request.task)
     named = named_before(request)
-    if verb is None or named is None or _TICKET_KEY.search(named) or names_a_yes(named):
+    if verb is None or named is None or _TICKET_KEY.search(named.upper()) or names_a_yes(named):
         return None
     if read is not None and read.skips_the_yes.whose != "nobody":
         return None
