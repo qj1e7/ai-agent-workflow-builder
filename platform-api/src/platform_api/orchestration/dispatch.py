@@ -130,6 +130,11 @@ class Sealer(Protocol):
 class DispatchFailure(Exception): ...
 
 
+class DispatchRefused(DispatchFailure):
+    """n8n can't take it however often it is tried, so the run stops at once and is not offered
+    a retry."""
+
+
 class WorkflowEngine(Protocol):
     async def start_leg(self, workflow: str, leg: Leg, run_id: RunId) -> N8nExecutionId: ...
 

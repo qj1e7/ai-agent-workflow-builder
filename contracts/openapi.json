@@ -13223,6 +13223,18 @@
             ],
             "description": "When it runs on its own, and who owns the schedule. Kept while it is a draft, paused or held. Null for a workflow with no schedule."
           },
+          "start_refused": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why neither Run now nor a test run can start it, in words to show: the version in use has no Start from the Portal block. Null when they can.",
+            "title": "Start Refused"
+          },
           "state": {
             "$ref": "#/components/schemas/UseCaseState",
             "description": "on, paused until an Operator resumes it, or draft until an Operator turns it on (ADR 0044). A paused workflow starts no run, on its schedule or by hand. A draft never runs on its schedule, and by hand only a test run, which stops before the yes and writes nothing. A deleted workflow is not shown."
@@ -20878,7 +20890,7 @@
                 }
               }
             },
-            "description": "The watchlist is empty, so there is nothing to check, an agent use case has no AI model connected, the workflow is paused, or it is a draft and this is not a test run. A test run also waits while someone holds the workflow in n8n, or while its n8n draft has a block the platform can't check"
+            "description": "The watchlist is empty, so there is nothing to check, an agent use case has no AI model connected, the workflow is paused, or it is a draft and this is not a test run. A test run also waits while someone holds the workflow in n8n, or while its n8n draft has a block the platform can't check. Neither starts a workflow with no Start from the Portal block"
           },
           "422": {
             "content": {

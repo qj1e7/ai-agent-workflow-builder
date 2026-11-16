@@ -68,6 +68,7 @@ from platform_api.orchestration.dispatch import (
     AskedStep,
     Delivered,
     DispatchFailure,
+    DispatchRefused,
     Gone,
     HeldWait,
     MessageRef,
@@ -1445,7 +1446,7 @@ class Orchestrator:
             else:
                 raise DispatchFailure(f"unknown outbox kind {row.kind}")
         except DispatchFailure as error:
-            await self._dispatch_failed(row, now, str(error))
+            await self._dispatch_failed(row, now, str(error), isinstance(error, DispatchRefused))
 
     async def _dispatch_leg(self, row: OutboxRow) -> None:
         leg = Leg(row.payload["leg"])
@@ -1724,7 +1725,11 @@ class Orchestrator:
             why = "n8n could not be reached for a day"
             await self._lose(uow, record, approval_id, row.payload["decision"], why)
 
-    async def _dispatch_failed(self, row: OutboxRow, now: datetime, error: str) -> None:
+    async def _dispatch_failed(
+        self, row: OutboxRow, now: datetime, error: str, lasting: bool = False
+    ) -> None:
+        """`lasting` for a send that can never succeed as things are, which is not tried again
+        and stops its run with no retry."""
         tried = row.attempt + 1
         said = without_addresses(error)
         log.warning("outbox %s for %s failed on try %d: %s", row.kind, row.run_id, tried, said)
@@ -1732,7 +1737,7 @@ class Orchestrator:
             await self._wake_failed(row, now, error)
             return
         failures = row.attempt + 1
-        if failures <= len(self._retry.delays):
+        if not lasting and failures <= len(self._retry.delays):
             async with self._db.transaction("orchestration") as uow:
                 await self._store.outbox_retry(
                     uow, row.id, now + self._retry.delays[failures - 1], error
@@ -1783,7 +1788,7 @@ class Orchestrator:
                         f"{row.payload.get('leg', 'next')} leg"
                     )
                     failure = Failure(
-                        FailureReason.DISPATCH_FAILED, f"{what}: {error}", retryable=True
+                        FailureReason.DISPATCH_FAILED, f"{what}: {error}", retryable=not lasting
                     )
                     await self._commit(uow, record, fail(state, failure))
                     await self._store.cancel_outbox(uow, row.run_id)

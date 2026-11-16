@@ -225,6 +225,12 @@ def _start_webhook(document: Mapping[str, Any] | None) -> str | None:
     return None
 
 
+def _no_start(row: Mapping[str, Any]) -> bool:
+    """An own workflow whose version in use has no Start from the Portal, which Run now and a
+    test run start. One made in n8n before Set up added it, or one it was taken out of there."""
+    return _own(row) and row["document"] is not None and _start_webhook(row["document"]) is None
+
+
 def _target(row: Mapping[str, Any]) -> N8nTarget | None:
     if not _own(row):
         return None
@@ -312,6 +318,7 @@ def _view(
         deleted_in_n8n_at=row["deleted_in_n8n_at"],
         moving_to_n8n=moving,
         move_refused=None if _own(row) else row["move_refused"],
+        start_refused=NO_START if _no_start(row) else None,
         made_in_n8n_by=row["made_in_n8n_by"],
     )
 
@@ -394,6 +401,11 @@ UNCHECKED_TEST = (
 )
 UNREAD_TEST = "n8n did not show the draft, so no test run started. Try again in a minute."
 NOT_SHOWN = "n8n did not show this version, so it stayed off. Try again in a minute."
+
+
+@dataclass(frozen=True)
+class NoStart:
+    """Neither Run now nor a test run can start it: it has no Start from the Portal block."""
 
 
 @dataclass(frozen=True)
@@ -1517,6 +1529,7 @@ class Builder:
         | NotOnYet
         | NotMovedYet
         | NoTestRun
+        | NoStart
     ):
         """A test run of a draft stops at the approval gate (ADR 0044). Whether it is a draft
         is read under the lock, so a draft turned on since runs as any test run does. A test run
@@ -1545,6 +1558,8 @@ class Builder:
         if spec.n8n is None and self.moves is not None:
             # The shared run workflow is made of blocks the allow list turns off (E11).
             return NotMovedYet(view.move_refused or NOT_MOVED_YET)
+        if view.start_refused is not None:
+            return NoStart()
         spec = replace(spec, test=test)
         if test and spec.n8n is not None:
             checked = await self._checked_draft(use_case_id, spec.n8n)

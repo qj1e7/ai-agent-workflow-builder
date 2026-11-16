@@ -302,6 +302,11 @@ class UseCaseView(WireModel):
         "in plain words with what to do: a step the safety checker refused, or n8n not taking "
         "it yet. Null once it moved, and while it only waits for a run to end.",
     )
+    start_refused: str | None = Field(
+        default=None,
+        description="Why neither Run now nor a test run can start it, in words to show: the "
+        "version in use has no Start from the Portal block. Null when they can.",
+    )
     made_in_n8n_by: UserId | None = Field(
         default=None,
         description="Who made it in n8n, for a workflow made in n8n and then set up from "
