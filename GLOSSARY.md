@@ -336,6 +336,30 @@ _Avoid_: Heartbeat, canary
 One running instance of a platform service, such as platform-api in Container Apps. Several replicas share one database, and PostgreSQL wakes each one when events are added or copied, so any replica can stream any run. Call the activity log in Cosmos DB the copy, never a replica.
 _Avoid_: Pod, node
 
+**Trace**:
+The record of one Planner turn or one agent step, kept 60 days in Langfuse, which we host ourselves (ADR 0050). It names the person only by a pseudonymous id.
+_Avoid_: Log (the activity log is a different record), transcript
+
+**Rating**:
+The thumbs up or down a person gives a Planner answer on Home. It is stored on the answer's trace and nowhere else.
+_Avoid_: Feedback, vote, like
+
+**Code flag**:
+A mark our code puts on a trace when an answer is likely poor, such as a "didn't follow" dead end or the person typing again within a minute. No model decides it.
+_Avoid_: Alert, error
+
+**Judge**:
+The model that scores Planner answers against the eval's rubric. It is always a different model from the Planner (ADR 0047).
+_Avoid_: Grader, reviewer (a reviewer is a person)
+
+**Review queue**:
+The list in Langfuse of traces a teammate checks: those with a code flag, a low judge score or a thumbs down. The teammate marks each one a real problem or fine.
+_Avoid_: Inbox, triage list
+
+**Regression case**:
+An eval case made from a real problem found in the review queue. It is committed with the fix, and the eval runs it on every later change to the Planner, so the same miss cannot come back.
+_Avoid_: Bug case, golden (the golden sets are written by the team)
+
 ### Setting up
 
 **Connection**:
