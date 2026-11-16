@@ -4,6 +4,8 @@ status: proposed
 
 # Build agents with LangGraph and trace them with LangSmith
 
+> Amended by ADR 0050 (16 Nov 2026): agents are traced with Langfuse, which we host ourselves, not with LangSmith. Traces stay on our servers, and later inside DevNet.
+
 Agents are the part of the platform that NCS may reuse. The sponsor wants them clean enough to go into NCS's internal agent hub. We build them in Python with LangChain and LangGraph, and trace them with LangSmith. LangGraph keeps an agent's state in a graph with checkpoints, so an agent can pause, resume and stream its steps. The October sandbox showed pause, resume and event streaming working for the AI troubleshooter.
 
 ## Considered options

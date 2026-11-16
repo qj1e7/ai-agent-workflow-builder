@@ -26,12 +26,12 @@ Four bounded contexts. Code in one context does not reach into another context's
 | Use case builder | Blocks, templates, use case definitions | `builder` |
 | Agent runtime | LangGraph agents, the Planner, tools | `runtime` |
 | Orchestration | n8n workflows, Teams approvals, triggers | `orchestration` |
-| Run monitoring | Event stream, live activity view, AI troubleshooter | `monitoring` |
+| Run monitoring | Event stream, live activity view, AI troubleshooter, traces and the Planner's review loop | `monitoring` |
 
 Other commit scopes: `infra`, `ci`, `docs`.
 
 - n8n workflows do the plumbing. Our own code goes into the builder, the Planner, the live activity view and the AI troubleshooter.
-- Agents use LangChain and LangGraph, traced with LangSmith. The backend is Python.
+- Agents use LangChain and LangGraph, traced with Langfuse, which we host ourselves and which keeps traces inside (ADR 0050). The backend is Python.
 - PostgreSQL is the relational store.
 - Infrastructure as code is Terraform, kept working under OpenTofu (ADR 0013).
 - Azure first (Container Apps, Static Web Apps, PostgreSQL, Azure OpenAI, Key Vault, App Insights), behind ports and adapters so it can move to AWS.
