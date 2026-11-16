@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any, cast
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 import httpx
 import pytest
@@ -16,7 +16,7 @@ import pytest
 from platform_api.builder import PlannerFront
 from platform_api.builder.models import CardList, UseCaseList, Via
 from platform_api.db import Database
-from platform_api.monitoring import LangfuseScores, TraceFlag, pseudonym
+from platform_api.monitoring import LangfuseScores, TraceFlag, TraceIds, pseudonym
 from platform_api.orchestration import CapabilityList, ConnectionCheck, PlannerFacts
 from platform_api.orchestration.agents import HttpAgentRuntime, ModelAccess
 from platform_api.orchestration.planning import PlannerAnswers
@@ -31,13 +31,11 @@ KEY = "pseudonym-key-not-real"
 CHAT = "5f0c2a7e-3b1d-4e8f-9a6c-2d4b7e1f0a93"
 QUESTION = json.loads((FIXTURES / "agent" / "planner-answered-question.json").read_text())
 CARD = json.loads((FIXTURES / "agent" / "planner-answered-card.json").read_text())
-EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
 
 
-def trace_made(ago: timedelta) -> str:
-    """A trace id as the platform made it `ago` before now."""
-    ms = (datetime.now(UTC) - ago - EPOCH) // timedelta(milliseconds=1)
-    return UUID(int=(ms << 80) | (0x7 << 76) | (0x123 << 64) | (0b10 << 62) | 0x42).hex
+def trace_made(ago: timedelta, person: str = "alice") -> str:
+    """A trace id as the platform made it for `person`, `ago` before now."""
+    return TraceIds(KEY.encode()).new(UserId(person), datetime.now(UTC) - ago)
 
 
 @dataclass
@@ -210,6 +208,9 @@ async def test_someone_who_isnt_an_operator_keeps_the_trace_of_the_turn_the_runt
         pytest.param(lambda: trace_made(timedelta(seconds=61)), False, id="61 s"),
         pytest.param(lambda: trace_made(timedelta(seconds=-30)), False, id="from the future"),
         pytest.param(lambda: uuid4().hex, False, id="not a trace the platform made"),
+        pytest.param(
+            lambda: trace_made(timedelta(seconds=5), "bob"), False, id="someone else's trace"
+        ),
     ],
 )
 async def test_typing_again_within_a_minute_flags_the_earlier_turn(
@@ -261,3 +262,20 @@ async def test_langfuse_down_or_slow_never_holds_up_or_changes_the_answer():
     await scores.close()
     assert {**flagged, "trace_id": None} == {**quiet, "trace_id": None}
     assert flagged["answer"] == "question" and flagged["trace_id"] is not None
+
+
+@pytest.mark.parametrize("pseudonym_key", [KEY, None])
+async def test_the_answers_own_trace_id_sent_back_at_once_flags_that_turn(
+    pseudonym_key: str | None,
+):
+    flags = Flags()
+    async with home(scores=flags, pseudonym_key=pseudonym_key) as h:
+        first = await ask(h, {"text": "how many software are on our watchlist", "chat": CHAT})
+        previous = {
+            "request": "how many software",
+            "kind": "question",
+            "trace_id": first["trace_id"],
+        }
+        await ask(h, {"text": "and on Monday?", "chat": CHAT, "previous": previous})
+        await ask(h, {"text": "and Tuesday?", "chat": CHAT, "previous": previous}, who=BOB)
+    assert [f.trace_id for f in flags.sent] == [first["trace_id"]]

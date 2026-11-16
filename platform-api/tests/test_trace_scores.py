@@ -12,7 +12,7 @@ import pytest
 from platform_api.monitoring import (
     LangfuseScores,
     TraceFlag,
-    new_trace_id,
+    TraceIds,
     pseudonym,
     typed_again,
 )
@@ -25,20 +25,20 @@ EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
 LANGFUSE = "http://langfuse-web:3000"
 
 
-def trace_made_at(at: datetime) -> str:
-    """A version 7 UUID made at `at`, in the shape the platform gives each turn's trace."""
-    ms = (at - EPOCH) // timedelta(milliseconds=1)
-    rand_a, rand_b = 0x5A3, 0x2D9E6F0B7D1C55
-    return UUID(int=(ms << 80) | (0x7 << 76) | (rand_a << 64) | (0b10 << 62) | rand_b).hex
+IDS = TraceIds(b"trace-key-not-real")
+ALICE = UserId("alice")
+TRACE = IDS.new(ALICE, AT)
 
 
-TRACE = trace_made_at(AT)
-
-
-def test_a_new_trace_id_is_32_lowercase_hex_digits_made_now():
-    made = new_trace_id()
+def test_a_new_trace_id_is_a_version_7_uuid_made_now_for_its_person():
+    made = IDS.new(ALICE)
     assert re.fullmatch(r"[0-9a-f]{32}", made)
-    assert typed_again(made, datetime.now(UTC)) is not None
+    assert UUID(hex=made).version == 7
+    assert typed_again(made, datetime.now(UTC), IDS, ALICE) is not None
+
+
+def test_two_ids_made_for_one_person_in_one_millisecond_differ():
+    assert len({IDS.new(ALICE, AT) for _ in range(20)}) > 1
 
 
 @pytest.mark.parametrize(
@@ -53,7 +53,7 @@ def test_a_new_trace_id_is_32_lowercase_hex_digits_made_now():
     ],
 )
 def test_typing_again_within_60_seconds_flags_the_earlier_trace(later: timedelta, flagged: bool):
-    flag = typed_again(TRACE, AT + later)
+    flag = typed_again(TRACE, AT + later, IDS, ALICE)
     expected = TraceFlag(trace_id=TRACE, name="flag_typed_again", at=AT) if flagged else None
     assert flag == expected
 
@@ -67,16 +67,20 @@ def test_typing_again_within_60_seconds_flags_the_earlier_trace(later: timedelta
         pytest.param(f"{{{TRACE}}}", id="braces"),
         pytest.param("not-a-trace", id="not hex"),
         pytest.param("", id="empty"),
+        pytest.param(IDS.new(UserId("bob"), AT), id="made for someone else"),
+        pytest.param(TraceIds(b"another-key").new(ALICE, AT), id="made with another key"),
+        pytest.param(UUID(int=UUID(hex=TRACE).int ^ 1).hex, id="one bit of the signature changed"),
+        pytest.param(UUID(int=UUID(hex=TRACE).int + (1 << 80)).hex, id="a millisecond later"),
     ],
 )
-def test_an_id_the_platform_did_not_make_flags_nothing(trace_id: str):
-    assert typed_again(trace_id, AT) is None
+def test_an_id_the_platform_did_not_make_for_this_person_flags_nothing(trace_id: str):
+    assert typed_again(trace_id, AT + timedelta(seconds=1), IDS, ALICE) is None
 
 
 def test_the_flags_score_id_is_the_trace_and_the_flag_so_a_resend_updates_it():
-    flag = typed_again(TRACE, AT + timedelta(seconds=5))
+    flag = typed_again(TRACE, AT + timedelta(seconds=5), IDS, ALICE)
     assert flag is not None and flag.score_id == f"{TRACE}-flag_typed_again"
-    assert typed_again(TRACE, AT + timedelta(seconds=40)) == flag
+    assert typed_again(TRACE, AT + timedelta(seconds=40), IDS, ALICE) == flag
 
 
 def test_the_pseudonym_is_an_hmac_sha256_of_the_person_id_and_never_the_id():
@@ -172,3 +176,11 @@ async def test_a_write_that_fails_is_logged_by_its_kind_and_raises_nothing(
         await scores.close()
     assert len(langfuse.seen) == 1
     assert logged in caplog.text
+
+
+async def test_a_write_that_fails_in_an_unexpected_way_still_lets_the_platform_shut_down():
+    langfuse = Langfuse(error=RuntimeError("not an HTTP error"))
+    scores = langfuse.scores()
+    scores.send(TraceFlag(trace_id=TRACE, name="flag_typed_again", at=AT))
+    await scores.close()
+    assert len(langfuse.seen) == 1

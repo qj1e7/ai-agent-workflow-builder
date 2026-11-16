@@ -10,6 +10,7 @@ import hashlib
 import hmac
 import logging
 import re
+import secrets
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -26,6 +27,7 @@ TYPED_AGAIN_WITHIN: Final = timedelta(seconds=60)
 measured from the earlier message to this one."""
 SCORE_TIMEOUT_SECONDS: Final = 5.0
 TRACE_ID: Final = re.compile(r"[0-9a-f]{32}")
+TAG_MASK: Final = (1 << 62) - 1
 EPOCH: Final = datetime(1970, 1, 1, tzinfo=UTC)
 
 type FlagName = Literal["flag_typed_again"]
@@ -45,9 +47,40 @@ class TraceFlag:
         return f"{self.trace_id}-{self.name}"
 
 
-def new_trace_id() -> str:
-    """A version 7 UUID, which carries the millisecond it was made in."""
-    return uuid.uuid7().hex
+class TraceIds:
+    """Makes each typed turn's trace id, and tells whether an id was made for a given person.
+
+    An id is a version 7 UUID. Its time is when the turn came in, and its last 62 bits are an
+    HMAC of that time and the person. So a person can flag only their own earlier turn as typed
+    again, never someone else's, and the platform keeps nothing to check it."""
+
+    def __init__(self, key: bytes) -> None:
+        self._key = key
+
+    def new(self, person: UserId, now: datetime | None = None) -> str:
+        made = now or datetime.now(UTC)
+        ms = (made - EPOCH) // timedelta(milliseconds=1)
+        rand_a = secrets.randbits(12)
+        value = (
+            (ms << 80) | (0x7 << 76) | (rand_a << 64) | (0b10 << 62) | self._tag(person, ms, rand_a)
+        )
+        return uuid.UUID(int=value).hex
+
+    def made_for(self, trace_id: str, person: UserId) -> datetime | None:
+        """When the id was made, if the platform made it for this person. None otherwise."""
+        if TRACE_ID.fullmatch(trace_id) is None:
+            return None
+        made = uuid.UUID(hex=trace_id)
+        if made.version != 7 or made.variant != uuid.RFC_4122:
+            return None
+        ms, rand_a, tag = made.int >> 80, (made.int >> 64) & 0xFFF, made.int & TAG_MASK
+        if not hmac.compare_digest(tag.to_bytes(8), self._tag(person, ms, rand_a).to_bytes(8)):
+            return None
+        return EPOCH + timedelta(milliseconds=ms)
+
+    def _tag(self, person: UserId, ms: int, rand_a: int) -> int:
+        signed = f"trace-id:{person}:{ms}:{rand_a}".encode()
+        return int.from_bytes(hmac.new(self._key, signed, hashlib.sha256).digest()[:8]) & TAG_MASK
 
 
 def pseudonym(key: str, person: UserId) -> str:
@@ -55,19 +88,10 @@ def pseudonym(key: str, person: UserId) -> str:
     return hmac.new(key.encode(), person.encode(), hashlib.sha256).hexdigest()
 
 
-def traced_at(trace_id: str) -> datetime | None:
-    """When the platform made the trace id. None for anything that is not one."""
-    if TRACE_ID.fullmatch(trace_id) is None:
-        return None
-    made = uuid.UUID(hex=trace_id)
-    if made.version != 7:
-        return None
-    return EPOCH + timedelta(milliseconds=made.time)
-
-
-def typed_again(trace_id: str, now: datetime) -> TraceFlag | None:
-    """The flag for an earlier turn whose next message came at `now`, when that is within 60 s."""
-    made = traced_at(trace_id)
+def typed_again(trace_id: str, now: datetime, ids: TraceIds, person: UserId) -> TraceFlag | None:
+    """The flag for this person's earlier turn whose next message came at `now`, when that is
+    within 60 s."""
+    made = ids.made_for(trace_id, person)
     if made is None or not timedelta(0) <= now - made <= TYPED_AGAIN_WITHIN:
         return None
     return TraceFlag(trace_id=trace_id, name="flag_typed_again", at=made)
@@ -114,7 +138,7 @@ class LangfuseScores:
         write.add_done_callback(self._writes.discard)
 
     async def close(self) -> None:
-        await asyncio.gather(*self._writes)
+        await asyncio.gather(*self._writes, return_exceptions=True)
         await self._client.aclose()
 
     async def _write(self, flag: TraceFlag) -> None:

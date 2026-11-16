@@ -11,6 +11,7 @@ Operator's pause or resume of the one workflow its words name.
 import asyncio
 import logging
 import re
+import secrets
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -36,8 +37,8 @@ from platform_api.builder.planning import FALLBACK_WORDS, STARTERS, FallbackWhy
 from platform_api.builder.templates import SOFTWARE_WATCHLIST
 from platform_api.monitoring import (
     NoTraceScores,
+    TraceIds,
     TraceScores,
-    new_trace_id,
     pseudonym,
     typed_again,
 )
@@ -952,6 +953,11 @@ class PlannerFront:
     ) -> None:
         self._scores = scores or NoTraceScores()
         self._pseudonym_key = pseudonym_key
+        # Without the key, ids are signed with one this process makes, so a typed-again flag needs
+        # the same process to have made the earlier id. A missed flag is the worst that happens.
+        self._trace_ids = TraceIds(
+            pseudonym_key.encode() if pseudonym_key else secrets.token_bytes(32)
+        )
         self._facts = facts
         self._staff = staff
         self._answers = answers
@@ -962,7 +968,9 @@ class PlannerFront:
 
     async def answer(self, body: AnswerIn, viewer: Principal) -> PlannerReply | NoSuchWorkflow:
         if body.previous is not None and body.previous.trace_id is not None:
-            flag = typed_again(body.previous.trace_id, datetime.now(UTC))
+            flag = typed_again(
+                body.previous.trace_id, datetime.now(UTC), self._trace_ids, viewer.user_id
+            )
             if flag is not None:
                 self._scores.send(flag)
         if body.text is not None and N8N_WORD.search(body.text) and not YES_WORDS.search(body.text):
@@ -1010,7 +1018,7 @@ class PlannerFront:
         )
         key = self._pseudonym_key
         person = None if key is None else pseudonym(key, viewer.user_id)
-        trace = TurnTrace(id=new_trace_id(), chat=chat, person=person)
+        trace = TurnTrace(id=self._trace_ids.new(viewer.user_id), chat=chat, person=person)
         try:
             async with asyncio.timeout(ANSWER_LIMIT_SECONDS):
                 result = await self._answers.answer(
