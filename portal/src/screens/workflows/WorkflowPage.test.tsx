@@ -431,8 +431,8 @@ describe('Explain on the workflow page', () => {
 
   it('puts Explain on each version, with that version, for both roles', () => {
     for (const me of [ALICE, BOB]) {
-      const id = (CHANGED.useCase as UseCaseView).use_case_id
-      const name = (CHANGED.useCase as UseCaseView).name
+      const id = CHANGED.useCase.use_case_id
+      const name = CHANGED.useCase.name
       expect(explainLinks(render({ ...CHANGED, me })), me.id).toEqual([
         [`Explain ${name}, version 2`, `/workflows/${id}/explain?version=2`],
         [`Explain ${name}, version 1`, `/workflows/${id}/explain?version=1`],
