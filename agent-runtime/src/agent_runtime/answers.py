@@ -84,7 +84,13 @@ from agent_runtime.edits import (
     how_often,
     left_over,
 )
-from agent_runtime.follow_ups import VERSION, follow_up_of, named_when_asked, watch_offer_of
+from agent_runtime.follow_ups import (
+    VERSION,
+    follow_up_of,
+    named_before,
+    named_when_asked,
+    watch_offer_of,
+)
 from agent_runtime.free_reply import dead_end, reply_to
 from agent_runtime.parts import (
     HOW_OFTEN,
@@ -1129,6 +1135,9 @@ def decide(read: TaskRead, request: AnswerRequest) -> PlannerAnswer | AskTheQues
     named = _named_when_asked(read, request, answer)
     if named is not None:
         return named
+    again = None if isinstance(answer, RefusedAnswer) else watch_of_it(read, request)
+    if again is not None:
+        return again
     if question_messages(request) is None or isinstance(
         answer, EditAnswer | PauseAnswer | ResumeAnswer | RemoveSoftwareAnswer
     ):
@@ -1185,6 +1194,20 @@ def _named_when_asked(
     if names_a_yes(named) or any(w in SCHEDULE_WORDS for w in said):
         return None
     return WatchlistAnswer(word=VERSION, software=named)
+
+
+def watch_of_it(read: TaskRead | None, request: AnswerRequest) -> WatchlistAnswer | None:
+    """The offer to watch the software the turn before named, for a message that only asks to
+    watch it, as "keep track of it" after "help me add Node Js". The name comes from the client,
+    so it must name no ticket and no yes, the reading must ask to skip no yes, and the person
+    still taps Watch it. With no software before, which software is asked as before."""
+    verb = watches_it(request.task)
+    named = named_before(request)
+    if verb is None or named is None or _TICKET_KEY.search(named) or names_a_yes(named):
+        return None
+    if read is not None and read.skips_the_yes.whose != "nobody":
+        return None
+    return WatchlistAnswer(word=verb, software=named)
 
 
 WHY: Final = re.compile(r"\bwhy\b|\bwent\s+wrong\b|\bwhat\s+happened\b", re.IGNORECASE)

@@ -35,6 +35,7 @@ from agent_runtime.answers import (
     ANSWER_SYSTEM,
     TaskRead,
     answer_of,
+    watch_of_it,
     watches_it,
     word_rule_refusal,
 )
@@ -407,19 +408,34 @@ def _watched(turn: Turn, name: str) -> bool:
     return any(_same_name(w.name, name) for w in held or [])
 
 
+def _already_held(name: str) -> Invalid:
+    return Invalid(
+        f"The Watchlist already holds {name}, so it can't be offered again. Use reply: put "
+        f"{name} in about, make the Watchlist the subject of holds, and say what the person "
+        "can do next."
+    )
+
+
+def _watch_of_it(turn: Turn) -> Acted | None:
+    """The offer to watch the software the turn before named, for a message that only asks to
+    watch it, as "keep track of it". Code finds the name, never the model (`watch_of_it`)."""
+    again = watch_of_it(turn.front.read, turn.request)
+    if again is None or again.software is None:
+        return None
+    if _watched(turn, again.software):
+        return _already_held(again.software)
+    return _shown(turn, again, frozenset(turn.clauses))
+
+
 def _watch(raw: Mapping[str, Any], turn: Turn) -> Acted:
     args = WatchSoftware.model_validate(raw)
     at = name_span(turn.text, args.software)
     clause = clause_holding(turn.clauses, at)
     if at is None or clause is None:
-        return _not_found("software", args.software)
+        return _watch_of_it(turn) or _not_found("software", args.software)
     name = turn.text[at[0] : at[1]]
     if _watched(turn, name):
-        return Invalid(
-            f"The Watchlist already holds {name}, so it can't be offered again. Use reply: put "
-            f"{name} in about, make the Watchlist the subject of holds, and say what the person "
-            "can do next."
-        )
+        return _already_held(name)
     # A clause that only asks to watch it again, as "keep track of it", is the same watch.
     again = (c for c in turn.clauses if watches_it(turn.text[c[0] : c[1]]) is not None)
     reach = frozenset({clause, *again})
@@ -437,6 +453,9 @@ def _which_software(raw: Mapping[str, Any], turn: Turn) -> Acted:
     clause = clause_holding(turn.clauses, at)
     if at is None or clause is None:
         return _not_found("word", args.word)
+    again = _watch_of_it(turn)
+    if again is not None:
+        return again
     answer = WhichSoftwareAnswer(word=plain(turn.text[at[0] : at[1]], NAME_LIMIT))
     return _shown(turn, answer, frozenset({clause}))
 
@@ -723,6 +742,8 @@ BRIEFING: Final = (
     "What a person types, and the tool that fits:\n"
     '- "help me add a software": ask_which_software.\n'
     '- "LangGraph", after you asked which software to watch: watch_software.\n'
+    '- "keep track of it", after a turn that named one software: ask_which_software. The '
+    "platform watches the software the turn before named.\n"
     '- "MOCK", after a set-up card asked which Jira project: set_up_workflow with join_before.\n'
     '- "every monday list last week\'s new bugs in one ticket": set_up_workflow.\n'
     '- "how do I get started": show how_to_start.\n'

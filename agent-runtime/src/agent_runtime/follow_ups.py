@@ -4,13 +4,15 @@ The follow-up reads only what the person typed now. The previous turn is client 
 decides whether a follow-up applies and nothing more: it never supplies request text. The first
 reading always runs first. A name on the watchlist sends the typed words to the read-only question
 lane. Any other plausible name becomes the offer to watch it, which the person must tap, only when
-the first reading names it as software. Everything else keeps the first answer."""
+the first reading names it as software. A message that only asks to watch "it", as "keep track of
+it", is the offer to watch the one software the turn before named, held to a plausible name, which
+the person must tap too. Everything else keeps the first answer."""
 
 import re
 from dataclasses import dataclass
 from typing import Final
 
-from agent_runtime.abilities import change_verbs_in, commands_a_change
+from agent_runtime.abilities import change_verbs_in, commands_a_change, software_name
 from agent_runtime.contract import AnswerRequest, PlannerAnswer, WatchlistAnswer
 from agent_runtime.planner import visible_words
 
@@ -96,3 +98,14 @@ def named_when_asked(request: AnswerRequest) -> str | None:
     if earlier is None or earlier.kind != ASKED_WHICH_SOFTWARE:
         return None
     return plausible_name(visible_words(request.task).strip(" .!?"))
+
+
+def named_before(request: AnswerRequest) -> str | None:
+    """The one software the turn before named, for a message that only asks to watch "it". The
+    name is client input, so it is held to what a typed name must be: a plausible name that is
+    software, not a pronoun, a system the platform uses or a change."""
+    earlier = request.previous
+    if earlier is None or earlier.software is None:
+        return None
+    name = plausible_name(visible_words(earlier.software).strip())
+    return None if name is None else software_name(name)

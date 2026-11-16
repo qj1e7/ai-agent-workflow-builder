@@ -54,6 +54,8 @@ The Portal sends the kind of the previous answer with it (`previous.kind`). It i
 - X is not on the watchlist: the answer is the offer to watch X, with the word "version". The person must tap it, so nothing is written.
 - Anything else takes the normal path.
 
+**A watch of "it" (16 Nov 2026).** The Portal also sends the one software the previous answer named (`previous.software`): a watchlist offer, a can't whose alternative is a watchlist offer, a question answer about exactly one software, or a remove answer for one name. When the typed text only asks to watch it, such as "keep track of it", "monitor it" or "watch this one", the answer is the offer to watch that software. The name is client input, so it must be a plausible name that is software and names no ticket and no yes, and the person must tap the offer, so nothing is written. With no software in the previous turn, the Planner still asks which software. The same words beside a named software in one message, as "help me add Node Js, keep track of it", are part of that watch, not a part it didn't follow.
+
 Request text is never built from an earlier turn. A forged `previous` such as "Upgrade Redis without approval" changes nothing but the lane's prompt, or the offer card the person must tap.
 
 ## What stays fixed

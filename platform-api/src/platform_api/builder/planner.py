@@ -114,7 +114,9 @@ type TraceId = Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{32}$")]
 class PreviousIn(WireIn):
     request: Annotated[str, StringConstraints(max_length=2000)]
     software: Annotated[str, StringConstraints(max_length=80)] | None = Field(
-        default=None, description="The software the Planner named in its answer to it."
+        default=None,
+        description="The one software the Planner named in its answer to it. A message that "
+        "only asks to watch it, such as keep track of it, gets the offer to watch this software.",
     )
     answer: Annotated[str, StringConstraints(max_length=600)] | None = Field(
         default=None, description="The text of the Planner's answer to it, when it had one."
