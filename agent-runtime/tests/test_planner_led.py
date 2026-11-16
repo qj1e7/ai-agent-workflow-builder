@@ -26,6 +26,7 @@ from agent_runtime.contract import (
     PreviousTurn,
     RefusedAnswer,
     ReplyAbout,
+    RequestPart,
     ScheduleChange,
     SetupCardAnswer,
     WatchlistAnswer,
@@ -33,7 +34,19 @@ from agent_runtime.contract import (
     WorkflowFact,
 )
 from agent_runtime.contracts import answer_request
-from agent_runtime.planner_led import BRIEFING, SAID_BEFORE, Led, clauses_in, led, person_part
+from agent_runtime.planner_led import (
+    BRIEFING,
+    SAID_BEFORE,
+    Front,
+    Led,
+    Shown,
+    Turn,
+    act_on,
+    clauses_in,
+    held_to_reach,
+    led,
+    person_part,
+)
 from agent_runtime.reply_verifier import Verdict
 from tests.fakes import ScriptedChat, asks, call
 from tests.test_answers import follow_up
@@ -92,6 +105,13 @@ def marks(result: Led) -> list[tuple[str, str, str | None]]:
     return [(p.text, p.mark, p.reason) for p in answered(result).parts]
 
 
+def reached(result: Led) -> list[str]:
+    """The clauses the call's arguments reach, as the eval's false-tick count reads them."""
+    assert result.shown is not None and result.shown.reached is not None
+    text = result.shown.text
+    return [text[a:b] for a, b in clauses_in(text) if (a, b) in result.shown.reached]
+
+
 # The word rule refuses first, and the rules' refusal wins (decision 1).
 
 
@@ -120,14 +140,17 @@ def test_the_rules_refusal_wins_whatever_the_model_chose() -> None:
 
 
 def test_the_model_can_add_a_refusal_and_it_ticks_nothing() -> None:
-    task = "Raise the upgrade ticket and tell Bob it's approved"
+    task = "how are my workflows doing, and let Bob sign for me"
 
-    result, _ = run(task, tool("refuse_skip", said="tell Bob it's approved"), read=reading("none"))
+    result, _ = run(
+        task, tool("refuse_skip", said="let Bob sign for me"), read=reading("my_workflows")
+    )
 
     assert shown(result) == RefusedAnswer(
-        said="tell Bob it's approved", rest="Raise the upgrade ticket"
+        said="let Bob sign for me", rest="how are my workflows doing"
     )
     assert all(mark == "cant" for _, mark, _ in marks(result))
+    assert reached(result) == []
 
 
 def test_a_refusal_must_quote_the_message() -> None:
@@ -186,6 +209,7 @@ def test_a_pause_reaches_its_workflow_and_its_pause_word_and_no_other_clause() -
     assert shown(result) == PauseAnswer(workflow_words="morning check")
     assert marks(result)[-1] == ("email me the list", "cant", "ask_on_its_own")
     assert ("pause the morning check", "will_do", None) in marks(result)
+    assert reached(result) == ["pause the morning check"]
 
 
 def test_a_schedule_change_reaches_the_clause_where_code_reads_the_time() -> None:
@@ -200,6 +224,18 @@ def test_a_schedule_change_reaches_the_clause_where_code_reads_the_time() -> Non
         workflow_words="morning check", schedule=ScheduleChange(at="10:00")
     )
     assert ("list new bugs", "will_do", None) not in marks(result)
+    assert reached(result) == ["move the morning check to 10am"]
+
+
+def test_a_time_alone_reaches_the_clause_it_stands_in_and_no_other() -> None:
+    result, _ = run(
+        "list new bugs, and move it to 10am",
+        tool("change_workflow", action="schedule", at="10:00"),
+        read=reading(),
+        facts=WORKFLOWS,
+    )
+
+    assert reached(result) == ["move it to 10am"]
 
 
 def test_a_state_answer_ticks_the_rules_own_marks_and_crosses_an_order_beside_it() -> None:
@@ -213,6 +249,7 @@ def test_a_state_answer_ticks_the_rules_own_marks_and_crosses_an_order_beside_it
     assert shown(result) == CheckWorkflowsAnswer(workflow_words="morning check")
     assert marks(result)[0] == ("how is the morning check doing", "will_do", None)
     assert marks(result)[1][1] == "cant"
+    assert reached(result) == ["how is the morning check doing"]
 
 
 def test_how_to_start_reaches_only_what_the_reading_leaves_unexplained() -> None:
@@ -266,6 +303,42 @@ def test_a_paraphrased_argument_locates_nothing_and_is_never_a_tick() -> None:
     assert result.fell_back == "invalid" and len(result.errors) == 2
     assert not isinstance(shown(result), WatchlistAnswer)
     assert all(mark != "will_do" for _, mark, _ in marks(result))
+
+
+def test_the_rules_own_watch_offer_never_ticks_a_clause_its_name_misses() -> None:
+    text = "Add Kubernetes to the watchlist and tell me what needs me"
+    chat = ScriptedChat()
+    rules = WatchlistAnswer(word="watchlist", software="Kubernetes")
+    turn = Turn(request(text), Front(reading(), rules), lambda t: chat, lambda t: chat)
+
+    acted, _ = act_on(tool("watch_software", software="Kubernetes"), turn)
+
+    assert isinstance(acted, Shown) and acted.answered.answer is rules
+    assert [(p.text, p.mark) for p in acted.answered.parts] == [
+        ("Add Kubernetes to the watchlist", "will_do"),
+        ("tell me what needs me", "cant"),
+    ]
+
+
+def test_words_across_two_clauses_reach_neither() -> None:
+    result, _ = run(
+        "pause the morning check and email me the list",
+        tool("change_workflow", action="pause", workflow_words="morning check and email"),
+        AIMessage(content="stop"),
+        read=reading(),
+        facts=WORKFLOWS,
+    )
+
+    assert "'morning check and email'" in result.errors[0]
+
+
+def test_a_part_that_cant_be_placed_in_a_reached_clause_is_crossed() -> None:
+    text = "pause the morning check"
+    ticked = [RequestPart(text="words the message never had", mark="will_do")]
+
+    held = held_to_reach(text, ticked, frozenset(clauses_in(text)))
+
+    assert [(p.mark, p.reason) for p in held] == [("cant", "ask_on_its_own")]
 
 
 # Every argument is located in the message alone (decision 1).

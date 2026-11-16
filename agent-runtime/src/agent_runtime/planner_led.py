@@ -564,8 +564,9 @@ def _refuse(raw: Mapping[str, Any], turn: Turn) -> Acted:
     said = turn.text[at[0] : at[1]]
     rest = without_the_phrase(turn.text, said) or ""
     answer = RefusedAnswer(said=plain(said, SAID_LIMIT), rest=plain(rest, TASK_LIMIT))
-    parts = held_to_reach(turn.text, turn.marks(answer), frozenset())
-    return Shown(Answered(answer=answer, parts=parts), turn.text, frozenset())
+    reached = frozenset[Span]()
+    parts = held_to_reach(turn.text, turn.marks(answer), reached)
+    return Shown(Answered(answer=answer, parts=parts), turn.text, reached)
 
 
 GUARD_WORDS: Final[dict[GuardCheck, str]] = {
