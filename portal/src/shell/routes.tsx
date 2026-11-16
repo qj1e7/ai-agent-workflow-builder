@@ -3,6 +3,7 @@ import { Navigate, Route, Routes, useParams, useSearchParams } from 'react-route
 import { HomePage } from '../screens/home/HomePage'
 import { SettingsPage } from '../screens/settings/SettingsPage'
 import type { Icon } from '../ui/icons'
+import { ExplainRoute } from '../screens/explain/ExplainPage'
 import { WorkflowRoute } from '../screens/workflows/WorkflowPage'
 import { WorkflowsPage } from '../screens/workflows/WorkflowsPage'
 import { WatchLine } from '../screens/software/WatchLine'
@@ -152,6 +153,7 @@ export function AppRoutes({ context }: { context: PageContext }) {
         element={<WorkflowsPage heading={wordsOf(PAGES.workflows.heading, context)} now={context.now} />}
       />
       <Route path={`${PAGES.workflows.path}/:useCaseId`} element={<WorkflowRoute now={context.now} />} />
+      <Route path={`${PAGES.workflows.path}/:useCaseId/explain`} element={<ExplainRoute />} />
       <Route path={PAGES.home.path} element={<HomePage greeting={wordsOf(PAGES.home.heading, context)} today={wordsOf(PAGES.home.lead, context)} now={context.now} />} />
       <Route
         path={PAGES.software.path}

@@ -18,6 +18,7 @@ import { openedFromList } from '../../ui/fromList'
 import { IconChevronLeft, IconPause, IconPlay, IconTrash } from '../../ui/icons'
 import { Toast, type ToastMessage } from '../../ui/Toast'
 import { useView, ViewTabs } from '../../ui/ViewTabs'
+import { ExplainButton } from '../explain/ExplainButton'
 import { RunLine } from '../run/RunLine'
 import { StatusBanner } from './Banner'
 import { useArrivalScroll } from './arrival'
@@ -340,18 +341,17 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
           )}
           <Versions useCase={useCase} now={now} nameOf={nameOf} operator={viewer.operator} say={say} />
           <DraftActions useCase={useCase} viewer={viewer} />
-          {mayPause || items.length > 0 || openable || hold?.kind === 'theirs' ? (
-            <div className={styles['actions']}>
-              {mayPause ? (
-                <Button icon={IconPause} data-place={placeOf('pause')} loading={move.isPending} onClick={() => pauseOrResume('pause')}>
-                  Pause
-                </Button>
-              ) : null}
-              {openable ? <OpenInN8nEditor useCaseId={id} hold={openable} variant="secondary" /> : null}
-              {items.length > 0 ? <ActionMenu items={items} buttonRef={moreButton} busy={runNow.pending} place={placeOf('run')} /> : null}
-              {hold?.kind === 'theirs' ? <p className={styles['heldLine']}>{heldLine(hold, now)}</p> : null}
-            </div>
-          ) : null}
+          <div className={styles['actions']}>
+            <ExplainButton useCaseId={id} name={useCase.name} />
+            {mayPause ? (
+              <Button icon={IconPause} data-place={placeOf('pause')} loading={move.isPending} onClick={() => pauseOrResume('pause')}>
+                Pause
+              </Button>
+            ) : null}
+            {openable ? <OpenInN8nEditor useCaseId={id} hold={openable} variant="secondary" /> : null}
+            {items.length > 0 ? <ActionMenu items={items} buttonRef={moreButton} busy={runNow.pending} place={placeOf('run')} /> : null}
+            {hold?.kind === 'theirs' ? <p className={styles['heldLine']}>{heldLine(hold, now)}</p> : null}
+          </div>
         </>
       )}
       {asking ? (

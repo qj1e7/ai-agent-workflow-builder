@@ -10,6 +10,18 @@
   border-top: 1px solid var(--rule);
 }
 
+.withBeside {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.withBeside .row {
+  flex: 1;
+  width: auto;
+  min-width: 0;
+}
+
 .row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

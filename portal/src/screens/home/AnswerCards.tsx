@@ -22,6 +22,7 @@ import { CardMemoryContext } from './cardMemory'
 import { useChatNavigate } from '../../ui/fromChat'
 import { AddToWatchlist, WhichSoftware } from './WatchlistCard'
 import { SoftwareActions } from './WatchlistActions'
+import { ExplainAnswer } from '../explain/ExplainAnswer'
 import { RemoveSoftwareAnswer } from './RemoveSoftware'
 import styles from './Planner.module.css'
 
@@ -511,10 +512,11 @@ interface AnswerProps {
   readonly reply: PlannerReply
   readonly typed: string
   readonly page: Page
+  readonly focus?: string | null
 }
 
 /** The body of one Planner answer, past its sentence. The state answers are in StateAnswers, and the edit card draws its own sentence. */
-export function Answer({ reply, typed, page }: AnswerProps) {
+export function Answer({ reply, typed, page, focus = null }: AnswerProps) {
   const asker = useAsker()
   switch (reply.answer) {
     case 'setup_card':
@@ -535,6 +537,8 @@ export function Answer({ reply, typed, page }: AnswerProps) {
       return <SwitchChoices reply={reply} />
     case 'remove_software':
       return <RemoveSoftwareAnswer reply={reply} />
+    case 'explain':
+      return <ExplainAnswer reply={reply} typed={typed} focus={focus} page={page} />
     case 'ideas':
       return <IdeasAnswer page={page} />
     case 'offline':

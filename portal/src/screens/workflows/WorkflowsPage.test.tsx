@@ -242,6 +242,27 @@ const navNames = (html: string) =>
 const primaries = (html: string) => (html.match(/<(?:a|button)\b[^>]*class="[^"]*_primary_[^"]*"[^>]*>/g) ?? []).length
 const labelsOf = (html: string, ...label: string[]) => label.flatMap((words) => [...html.matchAll(new RegExp(`>${words}<`, 'g'))])
 
+describe('Explain beside each row', () => {
+  const explains = (html: string, id: string) => [...rowOf(html, id).matchAll(/<a\b[^>]*href="([^"]*explain[^"]*)"[^>]*>([\s\S]*?)<\/a>/g)].map((m) => [text(m[2] ?? ''), m[1]])
+
+  it('puts an Explain link to the workflow’s report beside every workflow row, for an Operator and for an Approver', () => {
+    for (const me of [ALICE, BOB]) {
+      const html = render({ me, useCases: [STOPPED_BUGS, LANGGRAPH] })
+      expect(explains(html, 'uc_bugs'), me.id).toEqual([['Explain Morning bug report check', '/workflows/uc_bugs/explain']])
+      expect(explains(html, 'uc_lang'), me.id).toEqual([[`Explain ${LANGGRAPH.name}`, '/workflows/uc_lang/explain']])
+    }
+  })
+
+  it('keeps the row’s own link as it was, so the row still opens the workflow', () => {
+    const row = rowOf(render({ useCases: [STOPPED_BUGS] }), 'uc_bugs')
+    expect(row).toMatch(/<a\b[^>]*href="\/workflows\/uc_bugs"/)
+  })
+
+  it('gives the Software watchlist no Explain, since it has no blocks to explain', () => {
+    expect(explains(render({ useCases: [WAITING_WATCHLIST] }), 'uc_01JB7')).toEqual([])
+  })
+})
+
 describe('Workflows has no button of its own to press', () => {
   it('keeps every row a link, and offers no primary button while Needs you lists a stopped run', () => {
     const html = render({ home: aliceHome as HomeOut, useCases: [{ ...WATCHLIST, last_run: lr({ run_id: 'run_01JB9', state: 'failed', retryable: true, reason: 'AgentError' }) }] })

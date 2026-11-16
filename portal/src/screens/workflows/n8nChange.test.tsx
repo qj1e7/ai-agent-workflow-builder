@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { MemoryRouter } from 'react-router'
 import { afterEach, describe, expect, it } from 'vitest'
 import agentUseCase from '../../../../contracts/fixtures/cards/use-case.json'
 import { ApiProvider } from '../../api/context'
@@ -146,7 +147,9 @@ describe('Roll back in the versions list', () => {
     return renderToStaticMarkup(
       <QueryClientProvider client={queryClient}>
         <ApiProvider session={session} platformFetch={fetch} origin="http://portal.test">
-          <Versions useCase={useCase} now={NOW} nameOf={nameOf} operator={operator} say={() => undefined} />
+          <MemoryRouter>
+            <Versions useCase={useCase} now={NOW} nameOf={nameOf} operator={operator} say={() => undefined} />
+          </MemoryRouter>
         </ApiProvider>
       </QueryClientProvider>,
     )

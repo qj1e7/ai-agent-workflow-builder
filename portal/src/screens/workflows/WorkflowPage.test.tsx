@@ -390,13 +390,13 @@ describe('the Versions list', () => {
 
   it('lists each version newest first, with when, who and what changed, as the prototype says it', () => {
     expect(versionsOf(render(CHANGED))).toBe(
-      'Version 2, in use Today, 9:10. Alice changed when it runs from every weekday at 8:00 to every Monday at 8:00. ' +
-        'Version 1 The version it was turned on with.',
+      'Version 2, in use Today, 9:10. Alice changed when it runs from every weekday at 8:00 to every Monday at 8:00. Explain LangGraph release check, version 2 ' +
+        'Version 1 The version it was turned on with. Explain LangGraph release check, version 1',
     )
   })
 
   it('names an Undo as a new version that undid the one before', () => {
-    expect(versionsOf(render(UNDONE))).toMatch(/^Version 3, in use Today, 9:12\. Alice undid version 2, so it runs every weekday at 8:00 again\. Version 2 Today, 9:10\. Alice changed .* to every Monday at 8:00\. Version 1/)
+    expect(versionsOf(render(UNDONE))).toMatch(/^Version 3, in use Today, 9:12\. Alice undid version 2, so it runs every weekday at 8:00 again\. Explain LangGraph release check, version 3 Version 2 Today, 9:10\. Alice changed .* to every Monday at 8:00\. Explain LangGraph release check, version 2 Version 1/)
   })
 
   it('only reads, for an Operator and an Approver alike: Undo is on the chat’s edit card, as in the prototype', () => {
@@ -417,6 +417,28 @@ describe('the Versions list', () => {
 
   it('shows the schedule the newest version runs on under When', () => {
     expect(whenOf(render(UNDONE))).toBe('Every weekday at 8:00 Singapore time (SGT).')
+  })
+})
+
+describe('Explain on the workflow page', () => {
+  const explainLinks = (html: string) => [...mainOf(html).matchAll(/<a\b[^>]*href="([^"]*\/explain[^"]*)"[^>]*>([\s\S]*?)<\/a>/g)].map((m) => [text(m[2] ?? ''), m[1]])
+
+  it('puts Explain in the page’s actions for an Operator and for an Approver', () => {
+    for (const me of [ALICE, BOB]) {
+      expect(explainLinks(render({ me })), me.id).toEqual([[`Explain ${AGENTS.name}`, `/workflows/${AGENTS.use_case_id}/explain`]])
+    }
+  })
+
+  it('puts Explain on each version, with that version, for both roles', () => {
+    for (const me of [ALICE, BOB]) {
+      const id = CHANGED.useCase.use_case_id
+      const name = CHANGED.useCase.name
+      expect(explainLinks(render({ ...CHANGED, me })), me.id).toEqual([
+        [`Explain ${name}, version 2`, `/workflows/${id}/explain?version=2`],
+        [`Explain ${name}, version 1`, `/workflows/${id}/explain?version=1`],
+        [`Explain ${name}`, `/workflows/${id}/explain`],
+      ])
+    }
   })
 })
 
