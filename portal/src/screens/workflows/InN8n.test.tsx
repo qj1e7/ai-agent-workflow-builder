@@ -75,6 +75,18 @@ describe('the workflow page’s Summary and In n8n tabs', () => {
     expect(buttons(html)).not.toContain(OPEN)
   })
 
+  it('says on Summary who has it open, with Take it back only once the In n8n view says the platform would allow it', () => {
+    const summary = `/workflows/${ON.use_case_id}`
+    const loading = render({ view: null, useCase: { ...ON, held_in_n8n: HELD.holder }, path: summary })
+    expect(text(main(loading))).toContain('Carol has it open in n8n since 13:40.')
+    expect(text(main(loading))).not.toContain('can take it back')
+    expect(buttons(loading)).not.toContain('Take it back')
+    expect(buttons(render({ view: { ...HELD, editor_url: null }, path: summary }))).toContain('Take it back')
+    const refused = render({ view: { ...HELD, editor_url: null, can_open: false, why_not: 'Set your n8n password first.' }, path: summary })
+    expect(text(main(refused))).toContain('Set your n8n password first.')
+    expect(buttons(refused)).not.toContain('Take it back')
+  })
+
   it('offers Open in n8n editor beside Pause on Summary too, as the sketch does', () => {
     const html = render({ path: `/workflows/${ON.use_case_id}` })
     expect(buttons(html)).toContain(OPEN)
@@ -128,13 +140,13 @@ describe('the In n8n tab', () => {
 })
 
 describe('Take it back on a refused change', () => {
-  function drawTakeBack(me: Me, view: UseCaseN8nView, refused = true): string {
+  function drawTakeBack(me: Me, view: UseCaseN8nView, refused = true, loaded = true): string {
     const session = createDevSession(null)
     const scope = session.cacheScope()
     const queryClient = new QueryClient({ defaultOptions: { queries: { retryOnMount: false } } })
     queryClient.setQueryData(['me', scope], me)
     queryClient.setQueryData(['use-case', scope, ON.use_case_id], { ...ON, held_in_n8n: view.holder })
-    queryClient.setQueryData(['use-case', scope, ON.use_case_id, 'n8n'], view)
+    if (loaded) queryClient.setQueryData(['use-case', scope, ON.use_case_id, 'n8n'], view)
     return renderToStaticMarkup(
       <QueryClientProvider client={queryClient}>
         <ApiProvider session={session} platformFetch={fetch} origin="http://portal.test">
@@ -148,6 +160,10 @@ describe('Take it back on a refused change', () => {
   it('offers Take it back to someone who may take it back, once the platform refused the change', () => {
     expect(all(drawTakeBack(ALICE, { ...HELD, editor_url: null }))).toEqual(['Take it back'])
     expect(all(drawTakeBack(CAROL, HELD)), 'its holder too').toEqual(['Take it back'])
+  })
+
+  it('offers nothing while the In n8n view that says whether the platform would allow it is loading', () => {
+    expect(all(drawTakeBack(ALICE, { ...HELD, editor_url: null }, true, false))).toEqual([])
   })
 
   it('offers nothing before a refusal, to someone without n8n access, or while nobody holds it', () => {
