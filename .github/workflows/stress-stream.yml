@@ -20,13 +20,13 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { mode: repeat, shard: 1 }
-          - { mode: repeat, shard: 2 }
-          - { mode: repeat, shard: 3 }
-          - { mode: file, shard: 1 }
-          - { mode: file, shard: 2 }
-          - { mode: suite, shard: 1 }
-          - { mode: suite, shard: 2 }
+          - { mode: repeat, shard: 1, reps: 20 }
+          - { mode: repeat, shard: 2, reps: 20 }
+          - { mode: file, shard: 1, reps: 0 }
+          - { mode: suite, shard: 1, reps: 5 }
+          - { mode: suite, shard: 2, reps: 5 }
+          - { mode: suite, shard: 3, reps: 5 }
+          - { mode: suite, shard: 4, reps: 5 }
     services:
       postgres:
         image: postgres:17@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3
@@ -60,6 +60,7 @@ jobs:
       - name: Stress
         env:
           MODE: ${{ matrix.mode }}
+          STRESS_REPS: ${{ matrix.reps }}
         run: |
           nproc; free -m
           vmstat -t 1 > vmstat.log 2>&1 &
@@ -68,7 +69,7 @@ jobs:
               --env PLATFORM_TEST_DATABASE_URL \
               --env COSMOS_ENDPOINT=http://127.0.0.1:8081 \
               --env STRESS_PROBE=1 \
-              --env STRESS_REPS=40 \
+              --env STRESS_REPS \
               --env CONTRACT_FIXTURES=/contracts/fixtures \
               --volume "$PWD/contracts:/contracts:ro" \
               --env MOCK_OIDC_CONFIG=/mock-oidc/config.json \

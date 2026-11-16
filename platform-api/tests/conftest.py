@@ -328,4 +328,12 @@ def _stress_probe(
     monkeypatch.setattr(test_monitoring_http, "append", append)
     stress_sse.begin(nodeid)
     yield
-    stress_sse.end(nodeid)
+    stress_sse.end(nodeid, failed=bool(getattr(request.node, "_stress_failed", False)))
+
+
+@pytest.hookimpl(wrapper=True)
+def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo[None]):  # noqa: ANN201
+    report = yield
+    if report.when == "call" and report.failed:
+        item._stress_failed = True  # type: ignore[attr-defined]
+    return report

@@ -22,9 +22,10 @@ def begin(nodeid: str) -> None:
     probe.mark(f"test begins: {nodeid}")
 
 
-def end(nodeid: str) -> None:
+def end(nodeid: str, failed: bool = False) -> None:
     if not _state:
         return
+    _state["failed"] = _state["failed"] or failed
     wall = time.perf_counter() - _state["wall"]
     used = probe.cpu() - _state["cpu"]
     latencies = " ".join(f"{t:.3f}" for t in _state["latencies"])
