@@ -188,6 +188,22 @@
       "instead": null
     },
     {
+      "id": "workflows.explain",
+      "plain": "Explain any workflow",
+      "kind": "none",
+      "system": null,
+      "state": "ready",
+      "cant": null,
+      "why": null,
+      "connection": null,
+      "needs_model": false,
+      "platform": true,
+      "focus": false,
+      "tools": [],
+      "short": "Explain any workflow",
+      "instead": null
+    },
+    {
       "id": "watchlist.remove",
       "plain": "Take software off the Watchlist, with Undo",
       "kind": "none",

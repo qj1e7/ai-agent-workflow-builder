@@ -50,6 +50,7 @@ from agent_runtime.contract import (
     CheckWorkflowsAnswer,
     DidntFollowAnswer,
     EditAnswer,
+    ExplainAnswer,
     FreeReplyAnswer,
     ModelProblem,
     NeedsMeAnswer,
@@ -937,6 +938,16 @@ def _told(message: AIMessage, why: str) -> list[BaseMessage]:
     return [ToolMessage(f"Not used: {why}", tool_call_id=i, status="error") for i in ids]
 
 
+FRONT_STANDS: Final[Mapping[type[BaseModel], str]] = {
+    RefusedAnswer: "front_refusal",
+    RemoveSoftwareAnswer: "front_removal",
+    ExplainAnswer: "front_explain",
+}
+"""The rules' answers that stand whatever the model leads with, with the name the eval reads:
+their refusal wins, and no tool draws the remove card or the explanation, as ADR 0049 has the
+rules build every card."""
+
+
 def led(request: AnswerRequest, chat_for: ChatFor, verify_with: ChatFor | None = None) -> Led:
     """The Planner's one answer in ai_led mode, with what the eval reads."""
     refused = word_rule_refusal(request.task)
@@ -950,14 +961,10 @@ def led(request: AnswerRequest, chat_for: ChatFor, verify_with: ChatFor | None =
         front = reading.result()
     if isinstance(front, ModelProblem):
         return Led(front)
-    if isinstance(front.answer, RefusedAnswer):
+    stands = FRONT_STANDS.get(type(front.answer))
+    if stands is not None:
         parts = parts_of(front.read, request.task, front.answer, request.facts)
-        return Led(Answered(answer=front.answer, parts=parts), ("front_refusal",))
-    if isinstance(front.answer, RemoveSoftwareAnswer):
-        # No tool draws the remove card, so the rules' own card stands, as ADR 0049 has them
-        # build every card.
-        parts = parts_of(front.read, request.task, front.answer, request.facts)
-        return Led(Answered(answer=front.answer, parts=parts), ("front_removal",))
+        return Led(Answered(answer=front.answer, parts=parts), (stands,))
     turn = Turn(request, front, chat_for, verify_with or chat_for)
     return _two_tries(asked, first, turn)
 

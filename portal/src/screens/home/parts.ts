@@ -185,6 +185,7 @@ export function leftoverParts(reply: PlannerReply): PartView[] {
     case 'pause':
     case 'resume':
     case 'remove_software':
+    case 'explain':
     case 'watchlist':
     case 'check_workflows':
     case 'why_stopped':

@@ -14,6 +14,7 @@ from platform_api import auth, wiring
 from platform_api.body_guard import RefuseDeepJson, refuse_invalid_request
 from platform_api.builder import (
     drafts_http,
+    explain_http,
     lifecycle_http,
     n8n_http,
     planner_http,
@@ -122,6 +123,7 @@ def create_app(env: Mapping[str, str] | None = None) -> FastAPI:
     app.add_middleware(SecurityHeaders)
     app.include_router(builder_http.router)
     app.include_router(lifecycle_http.router)
+    app.include_router(explain_http.router)
     app.include_router(n8n_http.router)
     app.include_router(drafts_http.router)
     app.include_router(planner_http.router)

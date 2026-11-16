@@ -4,6 +4,7 @@ import type { PastDecisionView, UseCaseView, WatchedSoftwareView, WatchlistView 
 import { OpenLink } from '../../../ui/OpenItem'
 import type { PanelItem } from '../../../ui/sidePanel'
 import { CHECKER, checksOnItsOwn, softwareLine, softwarePath, stateOf, watchRank } from '../../software/software'
+import { ExplainButton } from '../../explain/ExplainButton'
 import { needsFix } from '../../workflows/n8nChange'
 import { StatusPills } from '../../workflows/Status'
 import { pillOf, rowLine, SOFTWARE_PAGE, workflowPath } from '../../workflows/workflow'
@@ -12,10 +13,10 @@ import { decisionSub } from '../decided'
 import styles from './Lists.module.css'
 
 /** The row is one button. Its name is the workflow or software, and its line and state are read after it as its description. */
-function Row({ item, to, name, line, state, data }: { item: PanelItem; to: string; name: string; line: string; state: ReactNode; data: Record<string, string> }) {
+function Row({ item, to, name, line, state, data, beside }: { item: PanelItem; to: string; name: string; line: string; state: ReactNode; data: Record<string, string>; beside?: ReactNode }) {
   const id = useId()
   return (
-    <li {...data}>
+    <li {...data} className={beside === undefined ? undefined : styles['withBeside']}>
       <OpenLink item={item} to={to} className={styles['row']} aria-labelledby={`${id}n`} aria-describedby={`${id}l ${id}s`}>
         <span>
           <b id={`${id}n`}>{name}</b>
@@ -25,6 +26,7 @@ function Row({ item, to, name, line, state, data }: { item: PanelItem; to: strin
         </span>
         <span id={`${id}s`}>{state}</span>
       </OpenLink>
+      {beside}
     </li>
   )
 }
@@ -43,6 +45,7 @@ export function WorkflowRows({ useCases, label, now }: { useCases: readonly UseC
           line={rowLine(useCase, now, nameOf)}
           state={<StatusPills state={useCase.state} fact={useCase.last_run ? pillOf(useCase.last_run) : null} fix={needsFix(useCase)} test={useCase.last_run?.test === true} />}
           data={{ 'data-workflow-id': useCase.use_case_id }}
+          beside={<ExplainButton useCaseId={useCase.use_case_id} name={useCase.name} />}
         />
       ))}
     </ul>

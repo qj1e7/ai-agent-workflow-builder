@@ -7,6 +7,7 @@ from agent_runtime.contract import (
     Answered,
     AnswerRequest,
     DidntFollowAnswer,
+    ExplainAnswer,
     PlannerFacts,
     PreviousTurn,
     QuestionAnswer,
@@ -312,3 +313,17 @@ def test_a_watch_of_it_with_no_plain_software_before_still_asks_which(
 def test_only_a_message_that_does_nothing_but_watch_it_takes_the_software_from_before(task: str):
     first = decide(which("keep track of"), request(task, named_node_js()))
     assert not (isinstance(first, WatchlistAnswer) and first.software == "Node Js")
+
+
+@pytest.mark.parametrize("kind", ["cant", "watchlist", "question", "remove_software"])
+def test_explain_it_after_a_turn_that_named_software_explains_and_never_watches_it(kind: str):
+    out, _ = run("explain it", reading("none"), named_node_js(kind))
+    assert isinstance(out, Answered)
+    assert out.answer == ExplainAnswer(workflow_words=None)
+
+
+def test_a_watch_of_it_after_an_explanation_never_explains_it():
+    explained = PreviousTurn(request="explain the FastAPI release check", kind="explain")
+    out, _ = run("keep track of it", which("keep track of"), explained)
+    assert isinstance(out, Answered)
+    assert out.answer == WhichSoftwareAnswer(word="keep track of")

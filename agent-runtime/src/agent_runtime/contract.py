@@ -1394,6 +1394,21 @@ class RemoveSoftwareAnswer(WireModel):
     )
 
 
+class ExplainAnswer(WireModel):
+    """A request to explain a workflow the person has (ADR 0051). The platform matches the words
+    to one of the person's workflows and shows its report. It changes nothing, so both roles may
+    ask."""
+
+    kind: Literal["explain"] = "explain"
+    workflow_words: str | None = Field(
+        default=None,
+        max_length=80,
+        description='The words of the request that name the workflow, as it wrote them, as "the '
+        'FastAPI release check" names FastAPI release check. None for "explain it", so the '
+        "Portal explains the workflow in focus.",
+    )
+
+
 type PlannerAnswer = Annotated[
     SetupCardAnswer
     | PartAnswer
@@ -1410,6 +1425,7 @@ type PlannerAnswer = Annotated[
     | PauseAnswer
     | ResumeAnswer
     | RemoveSoftwareAnswer
+    | ExplainAnswer
     | FreeReplyAnswer
     | DidntFollowAnswer,
     Field(discriminator="kind"),
@@ -1505,6 +1521,63 @@ type CheckPartResult = Annotated[PartFits | PartCantDo, Field(discriminator="sta
 check_part_result_adapter: TypeAdapter[CheckPartResult] = TypeAdapter(CheckPartResult)
 
 
+type ExplainKind = Literal["runs", "reads", "writes", "posts", "changes"]
+
+EXPLAIN_WORDING_LIMIT: Final = 1200
+EXPLAIN_TEXT_LIMIT: Final = 700
+
+
+class ExplainFact(WireModel):
+    """One fact of a workflow's In short (ADR 0051): when it runs, a place it reads, a write or a
+    post code's wording says after "It", or the closing "It changes nothing"."""
+
+    kind: ExplainKind
+    together: list[Annotated[str, Field(min_length=1, max_length=EXPLAIN_WORDING_LIMIT)]] = Field(
+        min_length=1,
+        max_length=12,
+        description="The words and quoted values code's wording keeps in one sentence for this "
+        'fact, as ["day", "8:00"] or ["GitHub", "fastapi/fastapi"]. A quoted value is given '
+        "without its quotes.",
+    )
+    negated: bool = Field(description="True when code's words for this fact hold a negation.")
+
+
+class ExplainWordingRequest(WireModel):
+    """Code's In short for one workflow, to be reworded so it reads naturally. The model may only
+    smooth the wording: anything in doubt keeps code's."""
+
+    model: ModelAccess
+    wording: str = Field(
+        max_length=EXPLAIN_WORDING_LIMIT,
+        description="Code's In short as one string, each quoted value in curly quotes.",
+    )
+    facts: list[ExplainFact] = Field(max_length=40)
+
+
+class ExplainReworded(WireModel):
+    kind: Literal["reworded"] = "reworded"
+    text: str = Field(
+        max_length=EXPLAIN_TEXT_LIMIT,
+        description="The In short as the model reworded it, as the person sees it. It passed every "
+        "check and the verifier.",
+    )
+
+
+class ExplainKept(WireModel):
+    kind: Literal["kept"] = "kept"
+    why: str = Field(
+        description="Why code's wording stays: the id of the check that failed, the verifier's "
+        "flag, or call when the model's call failed.",
+    )
+
+
+type ExplainWordingResult = ExplainReworded | ExplainKept | ModelProblem
+
+explain_wording_result_adapter: TypeAdapter[ExplainWordingResult] = TypeAdapter(
+    ExplainWordingResult
+)
+
+
 class AgentCard(WireModel):
     id: str
     display: str
@@ -1544,3 +1617,5 @@ class AgentApiSchema(WireModel):
     planner_answer_result: AnswerResult
     planner_check_part_request: CheckPartRequest
     planner_check_part_result: CheckPartResult
+    workflow_explain_request: ExplainWordingRequest
+    workflow_explain_result: ExplainWordingResult

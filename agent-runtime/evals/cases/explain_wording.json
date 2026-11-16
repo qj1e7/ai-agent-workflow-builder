@@ -1,0 +1,368 @@
+[
+  {
+    "id": "agent-cards",
+    "note": "platform-api's golden agent_cards.json: a release check laid out with its agent card.",
+    "wording": "Every Monday at 9:00, it reads GitHub “langchain-ai/langgraph” and Jira “MOCK”. It can create Jira tickets in “MOCK”, each after a yes. It changes nothing else.",
+    "facts": [
+      {
+        "kind": "runs",
+        "together": [
+          "Monday",
+          "9:00"
+        ],
+        "negated": false
+      },
+      {
+        "kind": "reads",
+        "together": [
+          "reads",
+          "GitHub",
+          "langchain-ai/langgraph"
+        ],
+        "negated": false
+      },
+      {
+        "kind": "reads",
+        "together": [
+          "reads",
+          "Jira",
+          "MOCK"
+        ],
+        "negated": false
+      },
+      {
+        "kind": "writes",
+        "together": [
+          "create",
+          "Jira",
+          "MOCK",
+          "yes"
+        ],
+        "negated": false
+      },
+      {
+        "kind": "changes",
+        "together": [
+          "changes",
+          "nothing",
+          "else"
+        ],
+        "negated": true
+      }
+    ],
+    "can_reword": true
+  },
+  {
+    "id": "release-check",
+    "note": "platform-api's golden release_check.json.",
+    "wording": "Every day at 8:00, it reads GitHub “langchain-ai/langgraph” and Jira “MOCK”. It can create Jira tickets in “MOCK”, each after a yes. It changes nothing else.",
+    "facts": [
+      {
+        "kind": "runs",
+        "together": [
+          "day",
+          "8:00"
+        ],
+        "negated": false
+      },
+      {
+        "kind": "reads",
+        "together": [
+          "reads",
+          "GitHub",
+          "langchain-ai/langgraph"
+        ],
+        "negated": false
+      },
+      {
+        "kind": "reads",
+        "together": [
+          "reads",
+          "Jira",
+          "MOCK"
+        ],
+        "negated": false
+      },
+      {
+        "kind": "writes",
+        "together": [
+          "create",
+          "Jira",
+          "MOCK",
+          "yes"
+        ],
+        "negated": false
+      },
+      {
+        "kind": "changes",
+        "together": [
+          "changes",
+          "nothing",
+          "else"
+        ],
+        "negated": true
+      }
+    ],
+    "can_reword": true
+  },
+  {
+    "id": "release-notice",
+    "note": "platform-api's golden release_notice.json. ADR 0047's check refuses any text that names Slack, so code's wording stays.",
+    "wording": "Every day at 8:00, it reads GitHub “langchain-ai/langgraph” and Jira “MOCK”. It posts “A newer LangGraph release is out.” in Slack “C0123ABCD”. It changes nothing.",
+    "facts": [
+      {
+        "kind": "runs",
+        "together": [
+          "day",
+          "8:00"
+        ],
+        "negated": false
+      },
+      {
+        "kind": "reads",
+        "together": [
+          "reads",
+          "GitHub",
+          "langchain-ai/langgraph"
+        ],
+        "negated": false
+      },
+      {
+        "kind": "reads",
+        "together": [
+          "reads",
+          "Jira",
+          "MOCK"
+        ],
+        "negated": false
+      },
+      {
+        "kind": "posts",
+        "together": [
+          "post",
+          "Slack",
+          "A newer LangGraph release is out.",
+          "C0123ABCD"
+        ],
+        "negated": false
+      },
+      {
+        "kind": "changes",
+        "together": [
+          "changes",
+          "nothing"
+        ],
+        "negated": true
+      }
+    ],
+    "can_reword": false
+  },
+  {
+    "id": "watchlist",
+    "note": "platform-api's golden watchlist.json. ADR 0047's check reads \"can make the changes\" as an ability it can't name, so code's wording stays.",
+    "wording": "Every Monday at 9:00, it reads GitHub “watchlist”. It can make the changes approved in the run, each after a yes. It changes nothing else.",
+    "facts": [
+      {
+        "kind": "runs",
+        "together": [
+          "Monday",
+          "9:00"
+        ],
+        "negated": false
+      },
+      {
+        "kind": "reads",
+        "together": [
+          "reads",
+          "GitHub",
+          "watchlist"
+        ],
+        "negated": false
+      },
+      {
+        "kind": "writes",
+        "together": [
+          "make",
+          "yes"
+        ],
+        "negated": false
+      },
+      {
+        "kind": "changes",
+        "together": [
+          "changes",
+          "nothing",
+          "else"
+        ],
+        "negated": true
+      }
+    ],
+    "can_reword": false
+  },
+  {
+    "id": "fastapi",
+    "note": "The FastAPI release check the Planner lays out (platform-api's report tests).",
+    "wording": "Every day at 8:00, it reads GitHub “fastapi/fastapi” and Jira “MOCK”. It can create Jira tickets in “MOCK”, each after a yes. It changes nothing else.",
+    "facts": [
+      {
+        "kind": "runs",
+        "together": [
+          "day",
+          "8:00"
+        ],
+        "negated": false
+      },
+      {
+        "kind": "reads",
+        "together": [
+          "reads",
+          "GitHub",
+          "fastapi/fastapi"
+        ],
+        "negated": false
+      },
+      {
+        "kind": "reads",
+        "together": [
+          "reads",
+          "Jira",
+          "MOCK"
+        ],
+        "negated": false
+      },
+      {
+        "kind": "writes",
+        "together": [
+          "create",
+          "Jira",
+          "MOCK",
+          "yes"
+        ],
+        "negated": false
+      },
+      {
+        "kind": "changes",
+        "together": [
+          "changes",
+          "nothing",
+          "else"
+        ],
+        "negated": true
+      }
+    ],
+    "can_reword": true
+  },
+  {
+    "id": "react",
+    "note": "The React release check with its Slack notice (platform-api's report tests).",
+    "wording": "Every Monday at 9:00, it reads GitHub “facebook/react” and Jira “WEB”. It posts “A new React release is out.” in Slack “C0RELEASES”. It changes nothing.",
+    "facts": [
+      {
+        "kind": "runs",
+        "together": [
+          "Monday",
+          "9:00"
+        ],
+        "negated": false
+      },
+      {
+        "kind": "reads",
+        "together": [
+          "reads",
+          "GitHub",
+          "facebook/react"
+        ],
+        "negated": false
+      },
+      {
+        "kind": "reads",
+        "together": [
+          "reads",
+          "Jira",
+          "WEB"
+        ],
+        "negated": false
+      },
+      {
+        "kind": "posts",
+        "together": [
+          "post",
+          "Slack",
+          "A new React release is out.",
+          "C0RELEASES"
+        ],
+        "negated": false
+      },
+      {
+        "kind": "changes",
+        "together": [
+          "changes",
+          "nothing"
+        ],
+        "negated": true
+      }
+    ],
+    "can_reword": false
+  },
+  {
+    "id": "made-in-n8n",
+    "note": "A workflow made in n8n whose own blocks can't run on this platform yet (platform-api's report tests). Every write keeps its negation.",
+    "wording": "Every Monday at 9:00, it reads GitHub “fastapi/fastapi”. It could change data in Jira through “Open an issue”, but it can't run on this platform yet. It would post what “Read FastAPI” returned in Slack “C0TEAM”, but it can't run on this platform yet. It could change or send data through “Call the hook”, but it can't run on this platform yet. It changes nothing else.",
+    "facts": [
+      {
+        "kind": "runs",
+        "together": [
+          "Monday",
+          "9:00"
+        ],
+        "negated": false
+      },
+      {
+        "kind": "reads",
+        "together": [
+          "reads",
+          "GitHub",
+          "fastapi/fastapi"
+        ],
+        "negated": false
+      },
+      {
+        "kind": "writes",
+        "together": [
+          "change",
+          "Jira",
+          "Open an issue"
+        ],
+        "negated": true
+      },
+      {
+        "kind": "posts",
+        "together": [
+          "post",
+          "Read FastAPI",
+          "Slack",
+          "C0TEAM"
+        ],
+        "negated": true
+      },
+      {
+        "kind": "writes",
+        "together": [
+          "change",
+          "Call the hook"
+        ],
+        "negated": true
+      },
+      {
+        "kind": "changes",
+        "together": [
+          "changes",
+          "nothing",
+          "else"
+        ],
+        "negated": true
+      }
+    ],
+    "can_reword": false
+  }
+]

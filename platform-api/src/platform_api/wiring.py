@@ -8,6 +8,7 @@ from fastapi import FastAPI
 
 from platform_api.auth import DEV_PEOPLE, DevAuth, OidcAuth
 from platform_api.builder import Builder, Home, PlannerFront, TeamRequests, Watchlist
+from platform_api.builder.explain import Explainer
 from platform_api.builder.key_sweep import KeySweep
 from platform_api.builder.made_in_n8n import MadeInN8n
 from platform_api.builder.n8n_holds import Holding
@@ -85,6 +86,7 @@ from platform_api.orchestration.people_store import People
 from platform_api.orchestration.planning import (
     CapabilityRegistry,
     CardPlanning,
+    ExplainWordings,
     PlannerAnswers,
     ProjectFinding,
 )
@@ -118,6 +120,7 @@ class Services:
     node_calls: NodeCalls
     builder: Builder
     planner_front: PlannerFront
+    explainer: Explainer
     home: Home
     watchlist: Watchlist
     team_requests: TeamRequests
@@ -187,6 +190,7 @@ def install(app: FastAPI, services: Services) -> None:
     app.state.node_calls = services.node_calls
     app.state.builder = services.builder
     app.state.planner_front = services.planner_front
+    app.state.explainer = services.explainer
     app.state.home = services.home
     app.state.watchlist = services.watchlist
     app.state.team_requests = services.team_requests
@@ -544,6 +548,7 @@ async def build(settings: Settings) -> Services:
             scores=trace_scores,
             pseudonym_key=settings.trace_pseudonym_key,
         ),
+        explainer=Explainer(db, builder, ExplainWordings(db, model_settings, agents)),
         home=home,
         watchlist=watchlist,
         team_requests=team_requests,

@@ -269,6 +269,16 @@ CAPABILITIES: Final = (
         short="Change or pause your workflows",
     ),
     _ready(
+        "workflows.explain",
+        "Explain any workflow",
+        "none",
+        None,
+        None,
+        [],
+        platform=True,
+        short="Explain any workflow",
+    ),
+    _ready(
         "watchlist.remove",
         "Take software off the Watchlist, with Undo",
         "none",

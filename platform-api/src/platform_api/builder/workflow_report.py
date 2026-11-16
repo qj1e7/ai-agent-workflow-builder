@@ -293,6 +293,11 @@ OUR_TAGS: Mapping[BlockKind, str] = {
 }
 UNCLASSED = "Does something the platform hasn't classed"
 UNREAD = "The checker can't read this workflow, so nothing more can be said of it."
+UNSHOWN_SCHEDULE = "On a schedule the Portal can't show"
+SOMEONE_STARTS = "When someone starts it"
+NOTHING_STARTS = "Nothing starts it. When it runs"
+CHANGES_NOTHING_ELSE = " It changes nothing else."
+CHANGES_NOTHING = " It changes nothing."
 ON_SET_UP = "Writes on the set-up approval"
 NOT_YET = "Can't run on this platform yet"
 NOT_YET_TAKES = "This can't run on this platform yet."
@@ -785,10 +790,10 @@ def _when(flow: Flow, document: Mapping[str, Any], team_zone: str) -> Words:
         said = schedule_words(schedule.day, schedule.at)
         return (said[:1].upper() + said[1:],)
     if flow.of_kind("schedule"):
-        return ("On a schedule the Portal can't show",)
+        return (UNSHOWN_SCHEDULE,)
     if flow.of_kind("start", "manual"):
-        return ("When someone starts it",)
-    return ("Nothing starts it. When it runs",)
+        return (SOMEONE_STARTS,)
+    return (NOTHING_STARTS,)
 
 
 def _in_short(when: Words, touches: Sequence[Touch]) -> Words:
@@ -802,7 +807,7 @@ def _in_short(when: Words, touches: Sequence[Touch]) -> Words:
     for phrase in dict.fromkeys(t.phrase for t in touches if t.action != "reads"):
         said += [" It ", *phrase, "."]
     writes = any(t.action == "writes" for t in touches)
-    said.append(" It changes nothing else." if writes else " It changes nothing.")
+    said.append(CHANGES_NOTHING_ELSE if writes else CHANGES_NOTHING)
     return tuple(said)
 
 

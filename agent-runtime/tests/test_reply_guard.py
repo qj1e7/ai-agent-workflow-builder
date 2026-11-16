@@ -286,6 +286,18 @@ def test_removing_anything_but_watched_software_is_still_unbuilt(text: str):
     assert not claims_only_what_is_built(shown_of(said(text)), OPERATOR)
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        "You can type Explain and a workflow's name to see what it does.",
+        "You can explain the morning check from its row in Workflows.",
+    ],
+)
+def test_explaining_a_workflow_is_open_to_both_roles(text: str):
+    assert claims_only_what_is_built(shown_of(said(text)), OPERATOR)
+    assert claims_only_what_is_built(shown_of(said(text)), APPROVER)
+
+
 def test_what_the_planner_can_do_is_not_held_to_the_persons_role():
     assert claims_only_what_is_built(
         shown_of(said("I can watch software for new releases.")), APPROVER

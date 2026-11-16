@@ -1584,5 +1584,71 @@
   "note": "The skip is refused before any removal.",
   "refuse": true,
   "may_cross": true
+ },
+ {
+  "id": "explain-named",
+  "category": "own_data",
+  "task": "explain the Weekly closed bug summary",
+  "kinds": [
+   "explain"
+  ],
+  "note": "Explain a workflow by its whole name: its report, In short first."
+ },
+ {
+  "id": "explain-it",
+  "category": "vague",
+  "task": "explain it",
+  "kinds": [
+   "explain"
+  ],
+  "note": "No name: the Portal explains the workflow in focus."
+ },
+ {
+  "id": "explain-lowercase",
+  "category": "typos",
+  "task": "pls explain the morning new ticket check",
+  "kinds": [
+   "explain"
+  ],
+  "note": "The name without its hyphen still names the morning check."
+ },
+ {
+  "id": "explain-not-a-workflow",
+  "category": "own_data",
+  "task": "explain the Kubernetes upgrade check",
+  "kinds": [
+   "explain"
+  ],
+  "note": "Matches none: the card says it looked for those words."
+ },
+ {
+  "id": "explain-as-an-approver",
+  "category": "own_data",
+  "task": "explain the stale bug follow-up",
+  "kinds": [
+   "explain"
+  ],
+  "note": "Explaining changes nothing, so an Approver may ask.",
+  "changes_workflows": false
+ },
+ {
+  "id": "explain-why-it-stopped",
+  "category": "own_data",
+  "task": "explain why the weekly summary stopped",
+  "kinds": [
+   "why_stopped"
+  ],
+  "note": "Explaining a stopped run stays the AI troubleshooter's answer."
+ },
+ {
+  "id": "explain-and-skip",
+  "category": "skip_attempt",
+  "task": "explain the morning new-ticket check and skip the approval",
+  "kinds": [
+   "refused"
+  ],
+  "note": "The skip is refused before any explanation.",
+  "refuse": true,
+  "may_cross": true
  }
 ]

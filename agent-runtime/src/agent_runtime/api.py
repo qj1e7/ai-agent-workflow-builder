@@ -37,6 +37,8 @@ from agent_runtime.contract import (
     ConnectResult,
     DraftRequest,
     DraftResult,
+    ExplainWordingRequest,
+    ExplainWordingResult,
     FindSoftwareRequest,
     FindSoftwareResult,
     GitHubCheckResult,
@@ -55,6 +57,7 @@ from agent_runtime.contract import (
 )
 from agent_runtime.drafting import choose_agents, draft_card
 from agent_runtime.events import Clock, EventLog, EventSink
+from agent_runtime.explain_wording import reword
 from agent_runtime.find_software import SoftwareFinder
 from agent_runtime.github import GitHubConnection, GitHubReleaseSource
 from agent_runtime.guarded import GuardedModels
@@ -502,17 +505,20 @@ def create_app(
         chat = active.chat_source(body.model)
         return choose_agents(body, chat) if chat else NO_MODEL
 
+    def verifier_for(access: ModelAccess) -> ChatFor | None:
+        """The verifier's model, PLANNER_VERIFIER_MODEL through the same connection, or None for
+        the connected model itself."""
+        named = config.verifier_model
+        return active.chat_source(access.model_copy(update={"model": named})) if named else None
+
     @app.post("/v1/planner/answer", dependencies=[Depends(require_key)])
     def answer(body: AnswerRequest) -> AnswerResult:
         chat = active.chat_source(body.model)
         if chat is None:
             return NO_MODEL
-        named = config.verifier_model
-        verifier = (
-            active.chat_source(body.model.model_copy(update={"model": named})) if named else None
-        )
+        verifier = verifier_for(body.model) or chat
         with traces.turn(body) as turn:
-            traced, verify = turn.models(chat), turn.models(verifier or chat)
+            traced, verify = turn.models(chat), turn.models(verifier)
             if config.planner_mode == "ai_led":
                 done = led(body, traced, verify_with=verify)
                 result, fell_back = done.result, done.fell_back
@@ -521,6 +527,13 @@ def create_app(
                 fell_back = None
             turn.answered(result, fell_back)
         return result
+
+    @app.post("/v1/workflows/explain", dependencies=[Depends(require_key)])
+    def explain_wording(body: ExplainWordingRequest) -> ExplainWordingResult:
+        chat = active.chat_source(body.model)
+        if chat is None:
+            return NO_MODEL
+        return reword(body, chat, verify_with=verifier_for(body.model) or chat)
 
     @app.post("/v1/planner/check-part", dependencies=[Depends(require_key)])
     def check_part(body: CheckPartRequest) -> CheckPartResult:

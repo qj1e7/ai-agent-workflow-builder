@@ -7,6 +7,7 @@ from pydantic import TypeAdapter
 
 from platform_api.auth import DevUsers
 from platform_api.builder import TEMPLATES
+from platform_api.builder.explain import WorkflowExplained
 from platform_api.builder.home import HomeOut
 from platform_api.builder.http import SuggestOut, TemplateList, UseCaseView
 from platform_api.builder.models import (
@@ -47,8 +48,10 @@ from platform_api.orchestration.agents import (
     AnswerRequest,
     CheckPartRequest,
     ChooseRequest,
+    CodeWording,
     ConnectRequest,
     DraftRequest,
+    ExplainWordingRequest,
     FindSoftwareRequest,
     ModelAccess,
     ReadReleasesRequest,
@@ -60,6 +63,7 @@ from platform_api.orchestration.agents import (
     choose_result_adapter,
     connect_result_adapter,
     draft_result_adapter,
+    explain_wording_result_adapter,
     find_software_result_adapter,
     github_check_result_adapter,
     model_test_result_adapter,
@@ -107,6 +111,7 @@ from platform_api.wire import FailureStage
 from platform_api.wire import Leg as WireLeg
 from platform_api.wire import StepName as WireStepName
 from tests.support import FIXTURES
+from tests.test_workflow_report import GOLDEN
 
 pytestmark = pytest.mark.skipif(
     not FIXTURES.exists(), reason="contracts/ is not in the test image. CI runs this on the host."
@@ -150,6 +155,7 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "agent/planner-answered-edit.json": answer_result_adapter,
     "agent/planner-answered-pause.json": answer_result_adapter,
     "agent/planner-answered-remove.json": answer_result_adapter,
+    "agent/planner-answered-explain.json": answer_result_adapter,
     "agent/planner-question-request.json": TypeAdapter(AnswerRequest),
     "agent/planner-answered-question.json": answer_result_adapter,
     "agent/planner-answered-reply.json": answer_result_adapter,
@@ -157,6 +163,9 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "agent/planner-answered-reply-cant.json": answer_result_adapter,
     "agent/planner-answered-reply-about.json": answer_result_adapter,
     "agent/planner-answered-didnt-follow.json": answer_result_adapter,
+    "agent/explain-wording-request.json": TypeAdapter(ExplainWordingRequest),
+    "agent/explain-wording-reworded.json": explain_wording_result_adapter,
+    "agent/explain-wording-kept.json": explain_wording_result_adapter,
     "agent/planner-check-part-request.json": TypeAdapter(CheckPartRequest),
     "agent/planner-check-part-cant.json": check_part_result_adapter,
     "agent/planner-check-part-fits.json": check_part_result_adapter,
@@ -213,6 +222,10 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "planner/answer.pause.json": TypeAdapter(PlannerReply),
     "planner/answer.remove_software.json": TypeAdapter(PlannerReply),
     "planner/answer.remove_software.none.json": TypeAdapter(PlannerReply),
+    "planner/answer.explain.json": TypeAdapter(PlannerReply),
+    "planner/answer.explain.choices.json": TypeAdapter(PlannerReply),
+    "planner/answer.explain.missing.json": TypeAdapter(PlannerReply),
+    "planner/answer.explain.it.json": TypeAdapter(PlannerReply),
     "planner/answer.pause.choices.json": TypeAdapter(PlannerReply),
     "planner/answer.resume.json": TypeAdapter(PlannerReply),
     "planner/answer.edit.unclear.json": TypeAdapter(PlannerReply),
@@ -321,6 +334,14 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "builder/opened-in-n8n.json": TypeAdapter(HoldOut),
     "builder/run.n8n.waiting.json": TypeAdapter(RunN8nView),
     "builder/run.n8n.ended.json": TypeAdapter(RunN8nView),
+    "builder/explain.json": TypeAdapter(WorkflowExplained),
+    "builder/explain.older.json": TypeAdapter(WorkflowExplained),
+    "builder/explain.reworded.json": TypeAdapter(WorkflowExplained),
+    **{
+        f"builder/explain-wording.{path.stem}.json": TypeAdapter(CodeWording)
+        for path in GOLDEN.glob("*.json")
+        if isinstance(json.loads(path.read_text()), dict)
+    },
 }
 
 

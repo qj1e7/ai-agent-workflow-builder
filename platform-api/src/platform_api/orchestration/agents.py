@@ -753,6 +753,11 @@ class RemoveSoftwareAnswer(WireModel):
     )
 
 
+class ExplainAnswer(WireModel):
+    kind: Literal["explain"] = "explain"
+    workflow_words: str | None = Field(default=None, max_length=80)
+
+
 type PlannerAnswer = Annotated[
     SetupCardAnswer
     | PartAnswer
@@ -769,6 +774,7 @@ type PlannerAnswer = Annotated[
     | PauseAnswer
     | ResumeAnswer
     | RemoveSoftwareAnswer
+    | ExplainAnswer
     | FreeReplyAnswer
     | DidntFollowAnswer,
     Field(discriminator="kind"),
@@ -833,6 +839,41 @@ type CheckPartResult = Annotated[PartFits | PartCantDo, Field(discriminator="sta
 check_part_result_adapter: TypeAdapter[CheckPartResult] = TypeAdapter(CheckPartResult)
 
 
+type ExplainFactKind = Literal["runs", "reads", "writes", "posts", "changes"]
+
+
+class ExplainFact(WireModel):
+    kind: ExplainFactKind
+    together: list[str] = Field(min_length=1, max_length=12)
+    negated: bool
+
+
+class CodeWording(WireModel):
+    wording: str = Field(min_length=1, max_length=1200)
+    facts: list[ExplainFact] = Field(max_length=40)
+
+
+class ExplainWordingRequest(CodeWording):
+    model: ModelAccess
+
+
+class ExplainReworded(WireModel):
+    kind: Literal["reworded"] = "reworded"
+    text: str = Field(min_length=1, max_length=700)
+
+
+class ExplainKept(WireModel):
+    kind: Literal["kept"] = "kept"
+    why: str
+
+
+type ExplainWordingResult = ExplainReworded | ExplainKept | ModelProblem
+
+explain_wording_result_adapter: TypeAdapter[ExplainWordingResult] = TypeAdapter(
+    ExplainWordingResult
+)
+
+
 class AgentCard(WireModel):
     id: str
     display: str
@@ -863,6 +904,9 @@ class AgentRuntime(Protocol):
 
 AGENT_KEY_HEADER = "X-Agent-Key"
 AGENT_TIMEOUT_SECONDS = 60.0
+RUNTIME_SMOOTHS_IN_SECONDS = 8.0
+RUNTIME_VERIFIES_IN_SECONDS = 8.0
+EXPLAIN_WAIT_SECONDS = RUNTIME_SMOOTHS_IN_SECONDS + RUNTIME_VERIFIES_IN_SECONDS + 4.0
 
 
 class HttpAgentRuntime:
@@ -931,6 +975,16 @@ class HttpAgentRuntime:
     ) -> CheckPartResult | AgentUnavailable | AgentRejected:
         return await self._model_call("/v1/planner/check-part", request, check_part_result_adapter)
 
+    async def explain_wording(
+        self, request: ExplainWordingRequest
+    ) -> ExplainWordingResult | AgentUnavailable | AgentRejected:
+        return await self._model_call(
+            "/v1/workflows/explain",
+            request,
+            explain_wording_result_adapter,
+            EXPLAIN_WAIT_SECONDS,
+        )
+
     async def capabilities(self) -> CapabilityList | AgentUnavailable | AgentRejected:
         try:
             response = await self._client.get(
@@ -955,7 +1009,11 @@ class HttpAgentRuntime:
         )
 
     async def _model_call[T](
-        self, path: str, body: WireModel | None, adapter: TypeAdapter[T]
+        self,
+        path: str,
+        body: WireModel | None,
+        adapter: TypeAdapter[T],
+        timeout: float = AGENT_TIMEOUT_SECONDS,
     ) -> T | AgentUnavailable | AgentRejected:
         # The body holds a model key, and an error answer can echo the body, so no text is kept.
         try:
@@ -963,7 +1021,7 @@ class HttpAgentRuntime:
                 f"{self._base_url}{path}",
                 json=None if body is None else body.model_dump(mode="json"),
                 headers={AGENT_KEY_HEADER: self._api_key},
-                timeout=AGENT_TIMEOUT_SECONDS,
+                timeout=timeout,
             )
         except httpx.HTTPError as error:
             return AgentUnavailable(f"The agent runtime did not answer: {type(error).__name__}")

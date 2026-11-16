@@ -195,6 +195,7 @@ export function sayOf(reply: PlannerReply, asker: Asker = 'operator'): string | 
       return switchSay(reply)
     case 'remove_software':
       return removeSay(reply)
+    case 'explain':
     case 'abilities':
     case 'ideas':
     case 'didnt_follow':

@@ -17,6 +17,10 @@ can be tested without a real model:
   it also asks for
   known vulnerabilities. One named part, such as "Where it goes: Jira project MOCK", is read as
   that part alone, the others missing.
+- A forced ExplainWording is the In short of a workflow to reword. The mock smooths code's own
+  wording as the real model is asked, so the platform shows it Reworded, except a wording for
+  facebook/react, which gets one bad smoothing that drops its negation, so the platform keeps
+  code's wording. A forced Verdict, the verifier's, answers no to every question.
 - A request with tools and no forced tool is a card run. The mock calls github_read_releases,
   then jira_search, then jira_create_ticket, then writes a report, by what the conversation holds.
   A card that reads a Confluence page calls confluence_read_page on its page instead.
@@ -632,6 +636,37 @@ def question_reply(text: str) -> dict[str, Any]:
     }
 
 
+WORDING_MARK = "The wording:\n"
+FACTS_MARK = "\n\nThe facts:\n"
+EVERY = re.compile(r"\bEvery (\w+) at (\d{1,2}:\d{2}),")
+SMOOTHER = (
+    ("It changes nothing else.", "Nothing else changes."),
+    ("It changes nothing.", "Nothing changes."),
+)
+DROPS_THE_NEGATION = "facebook/react"
+NO_FLAGS: dict[str, Any] = {
+    "says_it_happened": False,
+    "happened_words": "",
+    "skips_a_yes": False,
+    "skip_words": "",
+    "claims_unbuilt": False,
+    "unbuilt_words": "",
+}
+
+
+def reworded(body: dict[str, Any]) -> dict[str, Any]:
+    """Code's In short made smoother: "Every day at 8:00, it" becomes "Each day at 8:00 it", and
+    the closing "It changes nothing else." becomes "Nothing else changes."."""
+    wording = user_text(body).partition(WORDING_MARK)[2].partition(FACTS_MARK)[0]
+    if DROPS_THE_NEGATION in wording:
+        kept = wording.rpartition(" It changes nothing")[0]
+        return {"text": f"{kept} It changes Jira too.".strip()}
+    text = EVERY.sub(r"Each \1 at \2", wording)
+    for said, smoother in SMOOTHER:
+        text = text.replace(said, smoother)
+    return {"text": text}
+
+
 def forced(body: dict[str, Any], name: str) -> dict[str, Any]:
     lowered = name.lower()
     if mode == "broken":
@@ -648,6 +683,10 @@ def forced(body: dict[str, Any], name: str) -> dict[str, Any]:
         return call(name, question_reply(user_text(body)), 0)
     if "taskread" in lowered:
         return call(name, reading(task_text(body)), 0)
+    if "explainwording" in lowered:
+        return call(name, reworded(body), 0)
+    if lowered == "verdict":
+        return call(name, NO_FLAGS, 0)
     return say(SENTENCE)
 
 

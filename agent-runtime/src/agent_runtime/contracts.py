@@ -47,6 +47,10 @@ from agent_runtime.contract import (
     Drafted,
     DraftInput,
     DraftRequest,
+    ExplainFact,
+    ExplainKept,
+    ExplainReworded,
+    ExplainWordingRequest,
     Finding,
     FindSoftwareRequest,
     FoundModel,
@@ -83,6 +87,7 @@ from agent_runtime.contract import (
     WatchlistInputs,
     WatchlistScheduleFact,
     WireModel,
+    WorkflowFact,
     agent_event_adapter,
 )
 from agent_runtime.free_reply import answer_of_envelope
@@ -957,6 +962,40 @@ def answered_removal() -> Answered:
     return Answered(answer=answer, parts=parts_of(read, task, answer, facts))
 
 
+def answered_explain() -> Answered:
+    read = TaskRead(
+        asks_about="my_workflows",
+        workflow_words="the FastAPI release check",
+        skips_the_yes=NO_SKIP,
+    )
+    task = "Please explain the FastAPI release check"
+    facts = PlannerFacts(
+        workflows=[
+            WorkflowFact(
+                name="FastAPI release check", state="on", last_run="Done", last_run_at=None
+            )
+        ]
+    )
+    answer = answer_of(read, task, facts)
+    return Answered(answer=answer, parts=parts_of(read, task, answer, facts))
+
+
+def explain_wording_request() -> ExplainWordingRequest:
+    facts = [
+        ExplainFact(kind="runs", together=["day", "8:00"], negated=False),
+        ExplainFact(kind="reads", together=["reads", "GitHub", "fastapi/fastapi"], negated=False),
+        ExplainFact(kind="reads", together=["reads", "Jira", "MOCK"], negated=False),
+        ExplainFact(kind="writes", together=["create", "Jira", "MOCK", "yes"], negated=False),
+        ExplainFact(kind="changes", together=["changes", "nothing", "else"], negated=True),
+    ]
+    return ExplainWordingRequest(
+        model=draft_request().model,
+        wording="Every day at 8:00, it reads GitHub “fastapi/fastapi” and Jira “MOCK”. It can "
+        "create Jira tickets in “MOCK”, each after a yes. It changes nothing else.",
+        facts=facts,
+    )
+
+
 def question_request() -> AnswerRequest:
     watched = [
         WatchedFact(name=n, repo=r, our_version=o, newest_version=v, state=t)
@@ -1096,6 +1135,7 @@ def fixtures() -> dict[str, WireModel]:
         "planner-answered-edit.json": answered_edit(),
         "planner-answered-pause.json": answered_pause(),
         "planner-answered-remove.json": answered_removal(),
+        "planner-answered-explain.json": answered_explain(),
         "planner-question-request.json": question_request(),
         "planner-answered-question.json": answered_question(),
         "planner-answered-reply.json": answered_reply(),
@@ -1103,6 +1143,12 @@ def fixtures() -> dict[str, WireModel]:
         "planner-answered-reply-cant.json": answered_reply_cant(),
         "planner-answered-reply-about.json": answered_reply_about(),
         "planner-answered-didnt-follow.json": answered_didnt_follow(),
+        "explain-wording-request.json": explain_wording_request(),
+        "explain-wording-reworded.json": ExplainReworded(
+            text="Each day at 8:00 it reads GitHub “fastapi/fastapi” and Jira “MOCK”. It can "
+            "create Jira tickets in “MOCK”, each after a yes. Nothing else changes."
+        ),
+        "explain-wording-kept.json": ExplainKept(why="negation"),
         "planner-check-part-request.json": CheckPartRequest(kind="do", text="Email the list"),
         "planner-check-part-cant.json": check_one_part(
             CheckPartRequest(kind="do", text="Email the list")
