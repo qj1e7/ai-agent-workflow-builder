@@ -26,6 +26,7 @@ One environment, `dev`, in the resource group `rg-wab-dev`. The region is Southe
 | Container Apps Job | `migrate` | Applies the database migrations with the new platform-api image, before the apps change ([Migrations on a deploy](#migrations-on-a-deploy)). Runs on every deploy |
 | Container Apps Job | `bootstrap` | Migrations again, which finds nothing to do on Azure, then n8n owner, workflow load and lint. Runs on every deploy |
 | Managed identities | `id-<app>-wab-dev`, one per app and job | AcrPull on the registry, and Key Vault Secrets User on each secret it reads. platform-api's also has Cosmos DB's built-in Data Contributor role on the `activity` database |
+| Langfuse VM and its parts | `vm-langfuse-wab-dev` and others | Only while `langfuse_enabled` is `true`. Off by default ([Langfuse](#langfuse)) |
 
 PostgreSQL 17 matches Compose and is listed as supported in [Azure's version list](https://learn.microsoft.com/en-us/azure/postgresql/configure-maintain/concepts-supported-versions). We did not check that the Southeast Asia region offers it, because nothing here contacts Azure. If the first deploy says it does not, set `version = "16"` in `modules/postgres/main.tf`.
 
@@ -46,7 +47,9 @@ infra/
     workload_identity/ one identity and its role assignments
     container_app/     one Container App
     container_app_job/ one Container Apps Job
+    langfuse_vm/       the Langfuse VM, its network, storage, alerts and compose file (ADR 0050)
   sql/db-init.sql      the role setup that the db-init job runs
+  sql/db-init-langfuse.sql  Langfuse's role, added to the db-init job only while Langfuse is on
   public-images.json   the pins of n8n and PostgreSQL. PostgreSQL is copied into our registry; our n8n image builds on the n8n pin
   bootstrap/           one-time setup by a person: state storage and the deploy identity
   scripts/             the offline checks, and the job runner the deploy workflow uses
@@ -166,6 +169,68 @@ With no `JIRA_BASE_URL`, platform-api serves a practice Jira at `/practice-jira`
 Before you deploy, wait until no run is between an Approver's yes and its write, or expect those runs to stop. A write approved for the practice Jira is never made in the real one: the safety checker stops it, and the run says that Jira's settings changed after the yes ([ADR 0041](../docs/adr/0041-an-approved-jira-write-is-made-only-in-the-jira-it-was-approved-for.md)). The same holds for a move to another Jira address. A new token for the same address changes nothing.
 
 The plan updates platform-api and the Portal in place, and adds the `jira-api-token` secret to Key Vault. The practice Jira's routes are then not served. The Portal gets `JIRA_BROWSE_URL` too, so ticket keys with no address of their own link to the real Jira, and the Portal hides its Practice Jira page. `platform-api/tests/test_jira_contract.py` runs against the real Jira first, with `JIRA_CONTRACT_URL` and the settings its docstring names.
+
+## Langfuse
+
+[ADR 0050](../docs/adr/0050-trace-the-planner-in-self-hosted-langfuse-and-people-decide-what-it-learns.md) traces the Planner in self-hosted Langfuse. On Azure, Langfuse runs on one small VM, not on Container Apps. **It is off.** `langfuse_enabled` defaults to `false`, and then plan makes nothing for it and agent-runtime and platform-api get no Langfuse setting, so tracing stays off. **Nothing here is applied until the team lead approves the monthly cost,** as the ADR says.
+
+### What it creates
+
+With `langfuse_enabled = true`, `modules/langfuse_vm` and `envs/dev` add:
+
+- **One VM**, `vm-langfuse-wab-dev`, `Standard_B2as_v2` (2 vCPUs, 8 GiB), Ubuntu 24.04 with Secure Boot and vTPM. SSH password sign-in is off, and nobody holds a key: the key Azure requires had its private half deleted. People reach the VM with `az vm run-command`.
+- **One disk**, the VM's own 32 GiB Standard SSD, the one E4 disk the ADR prices. ClickHouse keeps its data there. A separate data disk would be a second E4, because Ubuntu's image needs 30 GiB of its own. Any change to the VM's compose file replaces the VM and that disk with it, so its traces go. The deploy's plan guard stops for `allow_destroy` first. Traces are a 60-day working record, and what must last lives in git.
+- **A static public address** with the name `langfuse-wab-dev-<suffix>.<region>.cloudapp.azure.com`. It stays when the VM is replaced, so the Entra redirect URI does too. `terraform output -raw langfuse_url` prints it.
+- **A network security group.** Port 443 takes only the apps' outbound addresses, which Terraform reads from the Container Apps, and the team's addresses in `langfuse_allowed_ips`. Other Azure customers can share the apps' addresses, so Langfuse's keys and sign-in still guard it. Port 80 is open to everyone, because Let's Encrypt checks the certificate request there, and Caddy redirects the rest to 443. Nothing else comes in.
+- **The compose stack**, written by cloud-init to `/etc/langfuse/compose.yaml`: Langfuse web and worker 4.80.0, ClickHouse 26.3.62.3 capped at 4 GiB, Valkey 8.1.11 with a password and `noeviction`, and Caddy 2.11.9 in front of web, each pinned by digest. Only Caddy publishes a port. Every service restarts by itself after a reboot. Telemetry and the signup newsletter are off. Unattended security updates stay on, and a kernel update reboots the VM at 03:00 Singapore time. `scripts/check-langfuse-images.sh` fails when an image differs from `deploy/compose.yaml`'s `langfuse` profile.
+- **Secrets in Key Vault only.** The VM's own managed identity may read Langfuse's secrets and nothing else. At every start, `langfuse.service` reads them into `/etc/langfuse/secrets.env`, which only root can read. Terraform generates the project keys, `SALT`, `ENCRYPTION_KEY`, `NEXTAUTH_SECRET`, the passwords for PostgreSQL, ClickHouse, Valkey and the first user, and `trace-pseudonym-key`, which only platform-api reads. Two secrets come from other systems, so Terraform makes each with a placeholder and a person sets it: `langfuse-entra-client-secret` and `langfuse-judge-anthropic-key`. The VM never reads the judge's key.
+- **A storage account** `stlfwabdev<suffix>` with a private `langfuse` container for events and media, TLS 1.2, HTTPS only and no public blob access. Langfuse signs in with its account key, which goes to Key Vault.
+- **A `langfuse` database** on the existing PostgreSQL server, and a `langfuse` role that the db-init job creates from `sql/db-init-langfuse.sql`. With Langfuse off, the job runs exactly what it ran before.
+- **Two alerts.** One fires when the VM has fewer than 50 CPU credits left, about 40 minutes at full load before Azure throttles it. One fires when its disk is 80% full: Azure Monitor Agent sends the disk's use to the Log Analytics workspace, and a log alert reads it, because a VM has no platform metric for that. Both email `langfuse_alert_email` when it is set.
+- **Settings for the apps.** agent-runtime gets `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL`, `LANGFUSE_TRACING_ENVIRONMENT` (`azure-dev`) and `LANGFUSE_RELEASE` (the image tag). platform-api gets the keys, `LANGFUSE_BASE_URL` and `TRACE_PSEUDONYM_KEY`.
+- **Run-command for the deploy identity on this VM only,** through the role `Langfuse VM run command (rg-wab-dev)`, for the nightly housekeeping job.
+
+`tests/langfuse.tftest.hcl` checks both states against mocked providers: off adds nothing and gives no app a Langfuse setting, and on gives each app exactly the settings above.
+
+### Cost
+
+From ADR 0050, at pay-as-you-go list prices for Southeast Asia on 16 Nov 2026: about **USD 75 a month while the VM runs** (about USD 69 for the VM, USD 2.40 for the disk and USD 3.65 for the address), and **about USD 6 a month while it is stopped** (deallocated). The storage account, the two alerts and the disk samples add well under USD 2 a month. That last figure is a guess, not checked against the price list. Against the USD 100 credit, run the VM only in test weeks and demos.
+
+### Run-command and Contributor
+
+- **"This VM only" is not true yet.** The deploy identity has Contributor on `rg-wab-dev`, and Contributor already includes run-command on every VM in it. The custom role limits the deploy only once Contributor is narrowed.
+- **The bootstrap must widen first.** The deploy identity may not create role definitions, and its RBAC Administrator role may only assign the four roles its condition lists. So `bootstrap/setup-azure.sh` now creates the custom role on `rg-wab-dev` and adds its ID to that condition. It also registers `Microsoft.Compute` and `Microsoft.Network`. An Owner of the subscription runs it again by hand. No agent or workflow runs it. Until then, a plan with Langfuse on stops with "role not found".
+
+### How a person turns it on
+
+Every step changes cloud resources or settings, so a person does it, and only after the team lead approves the cost.
+
+1. **Run the bootstrap again** as an Owner: `STATE_ACCOUNT=<name> infra/bootstrap/setup-azure.sh <owner>/<repo>`. It registers the two providers, creates the run-command role and replaces the deploy identity's RBAC Administrator assignment with the wider condition.
+2. **Register Langfuse's Entra app** in the tenant of `OIDC_ISSUER`. Make it a web app with assignment required, assign only the team's group, and add the `email` claim. Langfuse identifies people by email.
+3. **Pass the variables to the deploy.** `.github/workflows/deploy.yml` does not pass them yet. A follow-up adds these lines to its `env`:
+
+   ```yaml
+   TF_VAR_langfuse_enabled: ${{ vars.LANGFUSE_ENABLED || 'false' }}
+   TF_VAR_langfuse_entra_client_id: ${{ vars.LANGFUSE_ENTRA_CLIENT_ID }}
+   TF_VAR_langfuse_owner_email: ${{ secrets.LANGFUSE_OWNER_EMAIL }}
+   TF_VAR_langfuse_allowed_ips: ${{ secrets.LANGFUSE_ALLOWED_IPS }}
+   TF_VAR_langfuse_alert_email: ${{ secrets.LANGFUSE_ALERT_EMAIL }}
+   ```
+
+   The owner email, the team's addresses and the alert email name people, so they are secrets on `azure-dev`, as for n8n.
+4. **Deploy with `allow_destroy` ticked.** Turning Langfuse on gives platform-api, agent-runtime and the db-init job a new Key Vault secret each, which replaces their 90-second role waits, and the plan guard stops on any replace. Read the listed addresses first: they should be `time_sleep` waits only. Turning it off destroys the VM, its disk and its storage, so it needs the tick too.
+5. **Finish the Entra app.** Add `<langfuse_url>/api/auth/callback/azure-ad` as its redirect URI. Create a client secret, and put its value, not its ID, in Key Vault: `az keyvault secret set --vault-name kv-wab-dev-<suffix> --name langfuse-entra-client-secret --value <value>`. Then restart Langfuse so it reads the secret: `az vm run-command invoke --resource-group rg-wab-dev --name vm-langfuse-wab-dev --command-id RunShellScript --scripts "systemctl restart langfuse"`.
+6. **Sign in** at `langfuse_url` with the Entra account whose email is `langfuse_owner_email`. Langfuse made that account the Owner of the `CODESparks` organization and its `AI Workflow Builder` project at first start. Invite each teammate by email as a Member.
+
+### What the first apply must confirm
+
+The offline checks cannot show these:
+
+- The VM boots, `systemctl status langfuse` is active, and `docker compose --file /etc/langfuse/compose.yaml ps` shows five healthy services. If not, the VM's serial log in boot diagnostics shows cloud-init's output.
+- Caddy gets a certificate, and `<langfuse_url>` opens Langfuse's sign-in page from a listed address and times out from any other.
+- A Planner turn in the Portal shows up as a trace, which proves the apps' outbound addresses are the ones the security group lets in.
+- `az vm run-command invoke` works for the deploy identity, and `Perf` in the Log Analytics workspace gets the root disk's `% Used Space` every 5 minutes.
+- The VM's peak memory under `docker stats` stays under 6 GiB. ADR 0050 moves it to `Standard_B4as_v2` if not.
 
 ## Cost estimate
 
@@ -292,10 +357,12 @@ The script runs, each in a Docker image pinned by digest:
 1. `terraform fmt -check -recursive`
 2. `terraform init -backend=false`, then `terraform validate`, for each environment
 3. `scripts/check-variables.sh`, which plans each environment's `variables.tf` alone with good sign-in values and with each kind of value that platform-api or the Portal would refuse at startup, or that would open n8n wider than meant
-4. `tofu init -backend=false`, then `tofu validate`, on a copy without the lock file
-5. `scripts/check-n8n-editor-gate.sh`, which runs the deploy's gate for n8n's editor against a fake `az`
-6. `tflint` with the `terraform` and `azurerm` rulesets (`.tflint.hcl`)
-7. Checkov's Terraform checks
+4. `terraform test`, which applies each environment's `tests/*.tftest.hcl` against mocked providers, with Langfuse off and on
+5. `tofu init -backend=false`, then `tofu validate`, on a copy without the lock file
+6. `scripts/check-n8n-editor-gate.sh`, which runs the deploy's gate for n8n's editor against a fake `az`
+7. `scripts/check-langfuse-images.sh`, which fails when the Langfuse VM's images differ from `deploy/compose.yaml`'s `langfuse` profile
+8. `tflint` with the `terraform` and `azurerm` rulesets (`.tflint.hcl`)
+9. Checkov's Terraform checks
 
 CI runs the same script in the `infra` workflow, only when a pull request changes `infra/` or one of the two infrastructure workflows. It also runs `actionlint` on every workflow. Semgrep's `p/terraform` rules run in the main CI's SAST step.
 
