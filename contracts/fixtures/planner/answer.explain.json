@@ -13,5 +13,6 @@
   "use_case_id": "uc_01JFASTAPI",
   "name": "FastAPI release check",
   "missing": null,
-  "choices": []
+  "choices": [],
+  "in_focus": false
 }

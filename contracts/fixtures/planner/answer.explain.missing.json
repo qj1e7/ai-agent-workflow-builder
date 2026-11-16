@@ -13,5 +13,6 @@
   "use_case_id": null,
   "name": null,
   "missing": "Kubernetes check",
-  "choices": []
+  "choices": [],
+  "in_focus": false
 }

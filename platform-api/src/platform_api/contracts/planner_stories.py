@@ -435,6 +435,7 @@ def planner_fixtures(root: Path) -> dict[str, WireModel]:
             name="FastAPI release check",
             missing=None,
             choices=[],
+            in_focus=False,
             parts=[does("explain the FastAPI release check")],
         ),
         "planner/answer.explain.choices.json": ExplainReply(
@@ -445,6 +446,7 @@ def planner_fixtures(root: Path) -> dict[str, WireModel]:
                 ExplainChoice(use_case_id="uc_01JFASTAPI", name="FastAPI release check"),
                 ExplainChoice(use_case_id="uc_01JB8", name="React release check"),
             ],
+            in_focus=False,
             parts=[does("explain the release check")],
         ),
         "planner/answer.explain.missing.json": ExplainReply(
@@ -452,7 +454,19 @@ def planner_fixtures(root: Path) -> dict[str, WireModel]:
             name=None,
             missing="Kubernetes check",
             choices=[],
+            in_focus=False,
             parts=[does("explain the Kubernetes check")],
+        ),
+        "planner/answer.explain.it.json": ExplainReply(
+            use_case_id=None,
+            name=None,
+            missing=None,
+            choices=[
+                ExplainChoice(use_case_id="uc_01JFASTAPI", name="FastAPI release check"),
+                ExplainChoice(use_case_id="uc_01JB8", name="React release check"),
+            ],
+            in_focus=True,
+            parts=[does("explain it")],
         ),
         "planner/answer.pause.json": PauseReply(
             use_case_id="uc_01JB8",

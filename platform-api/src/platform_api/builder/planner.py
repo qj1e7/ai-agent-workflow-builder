@@ -582,6 +582,10 @@ class ExplainReply(Reply):
         'one its words match when they match several, or every workflow for "it", so the '
         "Portal can explain the one in focus. Empty when one matched or the words name none."
     )
+    in_focus: bool = Field(
+        description='True when the words name no workflow, as "explain it": the Portal explains '
+        "the workflow in focus when it is one of the choices, and otherwise asks which."
+    )
 
 
 class OperatorsReply(Reply):
@@ -1239,6 +1243,7 @@ class PlannerFront:
             name=None if one is None else one.name,
             missing=named.missing,
             choices=[ExplainChoice(use_case_id=u.use_case_id, name=u.name) for u in named.several],
+            in_focus=words is None or not _own_words(words, keep_check=True),
         )
 
     async def _use_cases(self) -> list[UseCaseView]:

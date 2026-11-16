@@ -5626,6 +5626,11 @@
             "title": "Choices",
             "type": "array"
           },
+          "in_focus": {
+            "description": "True when the words name no workflow, as \"explain it\": the Portal explains the workflow in focus when it is one of the choices, and otherwise asks which.",
+            "title": "In Focus",
+            "type": "boolean"
+          },
           "missing": {
             "anyOf": [
               {
@@ -5690,7 +5695,8 @@
           "use_case_id",
           "name",
           "missing",
-          "choices"
+          "choices",
+          "in_focus"
         ],
         "title": "ExplainReply",
         "type": "object"

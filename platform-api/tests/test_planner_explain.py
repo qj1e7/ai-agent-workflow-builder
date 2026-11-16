@@ -33,7 +33,7 @@ async def test_the_one_workflow_its_words_name_is_explained(front: Front):
     await make_workflow(front, "React release check")
     reply = await explained(front, "FastAPI release check", "explain the FastAPI release check")
     assert (reply["use_case_id"], reply["name"]) == (fastapi, "FastAPI release check")
-    assert (reply["missing"], reply["choices"]) == (None, [])
+    assert (reply["missing"], reply["choices"], reply["in_focus"]) == (None, [], False)
 
 
 async def test_words_that_name_several_offer_each_to_choose(front: Front):
@@ -42,6 +42,7 @@ async def test_words_that_name_several_offer_each_to_choose(front: Front):
     await make_workflow(front, "React release check")
     reply = await explained(front, "FastAPI", "explain the FastAPI one")
     assert (reply["use_case_id"], reply["name"], reply["missing"]) == (None, None, None)
+    assert reply["in_focus"] is False, "several matches ask which, whatever is in focus"
     assert {(c["use_case_id"], c["name"]) for c in choices(reply)} == {
         (fastapi, "FastAPI release check"),
         (nightly, "FastAPI nightly check"),
@@ -62,7 +63,7 @@ async def test_explain_it_offers_every_workflow_for_the_one_in_focus(front: Fron
     fastapi = await make_workflow(front, "FastAPI release check")
     react = await make_workflow(front, "React release check")
     reply = await explained(front, None, "explain it")
-    assert reply["use_case_id"] is None
+    assert (reply["use_case_id"], reply["in_focus"]) == (None, True)
     assert {c["use_case_id"] for c in choices(reply)} == {fastapi, react}
 
 

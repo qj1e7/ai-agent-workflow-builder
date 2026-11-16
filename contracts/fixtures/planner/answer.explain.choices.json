@@ -22,5 +22,6 @@
       "use_case_id": "uc_01JB8",
       "name": "React release check"
     }
-  ]
+  ],
+  "in_focus": false
 }

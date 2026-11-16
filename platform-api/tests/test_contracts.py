@@ -224,6 +224,7 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "planner/answer.explain.json": TypeAdapter(PlannerReply),
     "planner/answer.explain.choices.json": TypeAdapter(PlannerReply),
     "planner/answer.explain.missing.json": TypeAdapter(PlannerReply),
+    "planner/answer.explain.it.json": TypeAdapter(PlannerReply),
     "planner/answer.pause.choices.json": TypeAdapter(PlannerReply),
     "planner/answer.resume.json": TypeAdapter(PlannerReply),
     "planner/answer.edit.unclear.json": TypeAdapter(PlannerReply),
