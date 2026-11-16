@@ -1894,6 +1894,10 @@ async function respond(t) {
   if (/(need|attention|waiting|to ?do|pending|urgent|my day|today|anything for me)/.test(s)) return pushCard(needsCard());
   if (/(watchlist|software)/.test(s)) return pushCard(watchCard());
   if (/(workflow|running|my checks|list|show (me )?(all|everything))/.test(s)) return pushCard(listCard());
+  if (/\bwhat about\b/.test(s) && findSoft(s) && W.soft[findSoft(s)]) {
+    const k = findSoft(s);
+    return pushCard(`<div class="card"><ul class="wl">${softRow(k)}</ul></div>`, 'lead', `${W.soft[k].name} is on your watchlist. Its line comes from the watchlist, not from my words.`);
+  }
   const c = CANT.find(([re]) => re.test(s));
   if (c) return pushCard(cantCard(c[1], c[2], c[3]));
   return pushCard(cantCard('I didn’t follow that', W.user === 'bob' ? 'I can show what waits for your yes, and your past decisions.' : 'I can watch software releases, fix stopped runs and change your workflows.'));
