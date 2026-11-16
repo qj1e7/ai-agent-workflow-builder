@@ -12,7 +12,7 @@ const REWORDED = reworded as WorkflowExplained
 
 const decoded = (html: string) => html.replace(/&#x27;/g, '’').replace(/&quot;/g, '"').replace(/&amp;/g, '&')
 const text = (html: string) => decoded(html.replace(/<[^>]*>/g, ' ')).replace(/\s+/g, ' ').trim()
-const short = (html: string) => decoded(/<p class="[^"]*short[^"]*">([\s\S]*?)<\/p>/.exec(html)?.[1] ?? '').replace(/<[^>]*>/g, '')
+const short = (html: string) => decoded(/<p class="[^"]*short[^"]*"[^>]*>([\s\S]*?)<\/p>/.exec(html)?.[1] ?? '').replace(/<[^>]*>/g, '')
 const titles = (html: string) => [...html.matchAll(/<summary[^>]*><span[^>]*>([^<]*)<\/span><span[^>]*>([^<]*)<\/span><\/summary>/g)].map((m) => [m[1], m[2]])
 const buttons = (html: string) => [...html.matchAll(/<button\b[^>]*>([\s\S]*?)<\/button>/g)].map((m) => text(m[1] ?? ''))
 const draw = (report: WorkflowExplained, props: { code?: boolean; onWording?: () => void } = {}) => renderToStaticMarkup(<Report report={report} {...props} />)

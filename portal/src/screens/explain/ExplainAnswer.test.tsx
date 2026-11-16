@@ -48,7 +48,7 @@ function draw(reply: ExplainReply, { typed = 'explain the FastAPI release check'
 const text = (html: string) => html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
 const buttons = (html: string) => [...html.matchAll(/<(?:button|a)\b[^>]*>([\s\S]*?)<\/(?:button|a)>/g)].map((m) => text(m[1] ?? ''))
 const title = (html: string) => text(/<h3\b[^>]*>([\s\S]*?)<\/h3>/.exec(html)?.[1] ?? '')
-const short = (html: string) => (/<p class="[^"]*short[^"]*">([\s\S]*?)<\/p>/.exec(html)?.[1] ?? '').replace(/<[^>]*>/g, '')
+const short = (html: string) => (/<p class="[^"]*short[^"]*"[^>]*>([\s\S]*?)<\/p>/.exec(html)?.[1] ?? '').replace(/<[^>]*>/g, '')
 
 const PLAIN: Held = { id: FASTAPI, report: current as WorkflowExplained }
 const SMOOTH: Held = { id: FASTAPI, report: reworded as WorkflowExplained }

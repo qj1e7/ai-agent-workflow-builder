@@ -107,7 +107,7 @@ export function Report({ report, code = false, onWording }: ReportProps) {
   const thenGrade = report.then === null ? null : gradePill(report.then.grade).label
   return (
     <div className={styles['report']}>
-      <p className={styles['short']}>
+      <p className={styles['short']} data-in-short>
         <Words segments={rewordedShown && report.reworded !== null ? segmentsOfText(report.reworded) : report.in_short} />
       </p>
       {report.reworded !== null && onWording ? (
