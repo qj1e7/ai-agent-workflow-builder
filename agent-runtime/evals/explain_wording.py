@@ -6,6 +6,7 @@ tests, with the facts the platform sends beside it. The product's own path runs 
 test: one call, the guard, then the verifier. The score reads what the person would see against the
 case's facts in its own way, apart from the guard."""
 
+import itertools
 import re
 from typing import Final
 
@@ -30,6 +31,19 @@ QUOTED: Final = re.compile(r"“([^”]*)”|\"([^\"]*)\"")
 NEGATION: Final = re.compile(
     r"\b(?:not|no|never|nothing|none|nor|cannot|without)\b|n['’]t\b", re.IGNORECASE
 )
+SENTENCE_END: Final = re.compile(r"(?<=[.!?])\s+")
+WHEN: Final = re.compile(
+    r"\b(?:day|daily|week|weekly|month|monday|tuesday|wednesday|thursday|friday|saturday|"
+    r"sunday|\d{1,2}:\d{2})\b",
+    re.IGNORECASE,
+)
+ACTIONS: Final = re.compile(
+    r"\b(?:reads?|looks?|checks?|posts?|sends?|shares?|creates?|changes?|makes?|writes?|"
+    r"deletes?|removes?|closes?|updates?|edits?)\b",
+    re.IGNORECASE,
+)
+YES: Final = re.compile(r"\byes\b", re.IGNORECASE)
+NAMED: Final = re.compile(r"([A-Z][\w-]*)\s+(?:“([^”]*)”|\"([^\"]*)\")")
 
 
 class WordingCase(Case):
@@ -52,22 +66,59 @@ def ask(model: BaseChatModel, case: WordingCase) -> Answer:
     return Answer(shown, shown.model_dump_json(), usage_of(replies.messages))
 
 
+def _sentences(text: str) -> list[str]:
+    """The text cut into sentences, never inside quotes."""
+    masked = QUOTED.sub(lambda m: "_" * len(m.group(0)), text)
+    cuts = [0, *(m.end() for m in SENTENCE_END.finditer(masked)), len(text)]
+    return [text[a:b].strip() for a, b in itertools.pairwise(cuts) if text[a:b].strip()]
+
+
+def _outside(sentence: str) -> str:
+    return QUOTED.sub(" ", sentence)
+
+
+def _found(pattern: re.Pattern[str], sentence: str) -> list[str]:
+    """The words the pattern finds outside quotes, case and a closing "s" aside, so "changes" and
+    "change" are one action."""
+    return sorted(m.casefold().removesuffix("s") for m in pattern.findall(_outside(sentence)))
+
+
 def _untrue(text: str, case: WordingCase) -> list[str]:
-    """What the shown text changes in the facts: a quoted value added or dropped, an item of a fact
-    left out, or a negation added or dropped."""
-    quoted = {a or b for a, b in QUOTED.findall(case.wording)}
-    shown = {a or b for a, b in QUOTED.findall(text)}
-    found = [f"quotes “{value}”" for value in sorted(quoted ^ shown)]
-    low = text.casefold()
-    found += [
-        f"leaves out “{item}”"
-        for fact in case.facts
-        for item in fact.together
-        if item.casefold() not in low
-    ]
-    if len(NEGATION.findall(text)) != len(NEGATION.findall(case.wording)):
-        found.append("adds or drops a negation")
+    """What the shown text changes in the facts, sentence by sentence against code's wording: a
+    sentence merged, split or moved, a quoted value moved, added or dropped, a place on another
+    system, a fact's item left out of its sentence, a run time, an action, a yes or a negation
+    added, dropped or moved."""
+    code, shown = _sentences(case.wording), _sentences(text)
+    if len(code) != len(shown):
+        return [f"has {len(shown)} sentences, not {len(code)}"]
+    found: list[str] = []
+    for at, (c, s) in enumerate(zip(code, shown, strict=True), start=1):
+        quoted = {a or b for a, b in QUOTED.findall(c)}
+        said = {a or b for a, b in QUOTED.findall(s)}
+        found += [f"sentence {at} quotes “{value}”" for value in sorted(quoted ^ said)]
+        named = {(m[0], m[1] or m[2]) for m in NAMED.findall(s)}
+        found += [
+            f"sentence {at} has “{value}” off {word}"
+            for word, a, b in NAMED.findall(c)
+            if (word, value := a or b) not in named
+        ]
+        held = [f for f in case.facts if all(_item_in(i, c) for i in f.together)]
+        found += [
+            f"sentence {at} leaves out “{item}”"
+            for fact in held
+            for item in fact.together
+            if not _item_in(item, s)
+        ]
+        for name, pattern in (("run time", WHEN), ("action", ACTIONS), ("yes", YES)):
+            if _found(pattern, c) != _found(pattern, s):
+                found.append(f"sentence {at} changes its {name} words")
+        if len(NEGATION.findall(_outside(c))) != len(NEGATION.findall(_outside(s))):
+            found.append(f"sentence {at} adds or drops a negation")
     return found
+
+
+def _item_in(item: str, sentence: str) -> bool:
+    return item.casefold() in sentence.casefold()
 
 
 def score(case: WordingCase, answer: Answer) -> list[Check]:
