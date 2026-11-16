@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 ---
 
 # Trace the Planner in self-hosted Langfuse, and people decide what it learns
