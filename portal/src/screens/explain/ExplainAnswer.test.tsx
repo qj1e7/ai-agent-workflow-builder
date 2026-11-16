@@ -7,6 +7,7 @@ import reworded from '../../../../contracts/fixtures/builder/explain.reworded.js
 import explainOne from '../../../../contracts/fixtures/planner/answer.explain.json'
 import explainSeveral from '../../../../contracts/fixtures/planner/answer.explain.choices.json'
 import explainMissing from '../../../../contracts/fixtures/planner/answer.explain.missing.json'
+import explainIt from '../../../../contracts/fixtures/planner/answer.explain.it.json'
 import { ApiProvider } from '../../api/context'
 import { createDevSession } from '../../api/session'
 import type { ExplainReply, WorkflowExplained } from '../../api/types'
@@ -19,6 +20,7 @@ import { ExplainAnswer, MOST_WHICH } from './ExplainAnswer'
 const PAGE: Page = { ask: () => undefined, edit: () => undefined, box: () => undefined }
 const ONE = explainOne as ExplainReply
 const SEVERAL = explainSeveral as ExplainReply
+const IT = explainIt as ExplainReply
 const MISSING = explainMissing as ExplainReply
 const FASTAPI = 'uc_01JFASTAPI'
 const REACT = 'uc_01JB8'
@@ -28,7 +30,7 @@ interface Held {
   readonly report: WorkflowExplained
 }
 
-function draw(reply: ExplainReply, { typed = 'explain the FastAPI release check', focus = null, held = [], memory = NO_MEMORY }: { typed?: string; focus?: string | null; held?: readonly Held[]; memory?: CardMemory } = {}): string {
+function draw(reply: ExplainReply, { focus = null, held = [], memory = NO_MEMORY }: { focus?: string | null; held?: readonly Held[]; memory?: CardMemory } = {}): string {
   const session = createDevSession(null)
   const queryClient = new QueryClient({ defaultOptions: { queries: { retryOnMount: false } } })
   for (const { id, report } of held) queryClient.setQueryData(['use-case', session.cacheScope(), id, 'explain', null, true], report)
@@ -37,7 +39,7 @@ function draw(reply: ExplainReply, { typed = 'explain the FastAPI release check'
       <ApiProvider session={session} platformFetch={fetch} origin="http://portal.test">
         <MemoryRouter>
           <CardMemoryContext.Provider value={memory}>
-            <ExplainAnswer reply={reply} typed={typed} focus={focus} page={PAGE} />
+            <ExplainAnswer reply={reply} focus={focus} page={PAGE} />
           </CardMemoryContext.Provider>
         </MemoryRouter>
       </ApiProvider>
@@ -104,14 +106,14 @@ describe('the Explain answer in the chat', () => {
 
   describe('several workflows matched', () => {
     it('asks Which workflow? with a button for each', () => {
-      const html = draw(SEVERAL, { typed: 'explain the release check' })
+      const html = draw(SEVERAL)
       expect(title(html)).toBe('Which workflow?')
       expect(buttons(html)).toEqual(['FastAPI release check', 'React release check'])
     })
 
     it('counts the choices past the most it lists, with a way to the rest', () => {
       const many = { ...SEVERAL, choices: Array.from({ length: MOST_WHICH + 3 }, (_, n) => ({ use_case_id: `uc_${String(n)}`, name: `Check ${String(n)}` })) }
-      const html = draw(many, { typed: 'explain the check' })
+      const html = draw(many)
       expect(buttons(html)).toHaveLength(MOST_WHICH + 1)
       expect(buttons(html).at(-1)).toBe('and 3 more')
       expect(html).toContain('href="/workflows"')
@@ -120,7 +122,7 @@ describe('the Explain answer in the chat', () => {
 
   describe('words that match nothing', () => {
     it('says it can’t find the workflow, what it looked for, and offers Check my workflows', () => {
-      const html = draw(MISSING, { typed: 'explain the Kubernetes check' })
+      const html = draw(MISSING)
       expect(title(html)).toBe('I can’t find a workflow called that.')
       expect(text(html)).toContain('I looked for “Kubernetes check”.')
       expect(buttons(html)).toEqual(['Check my workflows'])
@@ -130,28 +132,28 @@ describe('the Explain answer in the chat', () => {
 
   describe('“explain it”', () => {
     it('explains the workflow in focus, by the name its choices carry', () => {
-      const html = draw(SEVERAL, { typed: 'explain it', focus: FASTAPI, held: [PLAIN] })
+      const html = draw(IT, { focus: FASTAPI, held: [PLAIN] })
       expect(title(html)).toBe('FastAPI release check')
       expect(buttons(html)).toEqual(['Open the workflow'])
     })
 
     it('asks which workflow when none is in focus', () => {
-      const html = draw(SEVERAL, { typed: 'explain it', focus: null })
+      const html = draw(IT, { focus: null })
       expect(title(html)).toBe('Which workflow?')
       expect(buttons(html)).toEqual(['FastAPI release check', 'React release check'])
     })
 
     it('keeps the workflow it explained when the focus changes later, so the card in the chat stays', () => {
       const memory = newCardMemory()
-      draw(SEVERAL, { typed: 'explain it', focus: FASTAPI, held: [PLAIN], memory })
-      const later = draw(SEVERAL, { typed: 'explain it', focus: REACT, held: [PLAIN], memory })
+      draw(IT, { focus: FASTAPI, held: [PLAIN], memory })
+      const later = draw(IT, { focus: REACT, held: [PLAIN], memory })
       expect(title(later)).toBe('FastAPI release check')
     })
 
     it('keeps asking which when it asked, even if the panel shows a workflow later', () => {
       const memory = newCardMemory()
-      draw(SEVERAL, { typed: 'explain it', focus: null, memory })
-      expect(title(draw(SEVERAL, { typed: 'explain it', focus: REACT, memory }))).toBe('Which workflow?')
+      draw(IT, { focus: null, memory })
+      expect(title(draw(IT, { focus: REACT, memory }))).toBe('Which workflow?')
     })
   })
 })

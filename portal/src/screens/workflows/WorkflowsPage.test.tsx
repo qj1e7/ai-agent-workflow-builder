@@ -258,8 +258,9 @@ describe('Explain beside each row', () => {
     expect(row).toMatch(/<a\b[^>]*href="\/workflows\/uc_bugs"/)
   })
 
-  it('gives the Software watchlist no Explain, since it has no blocks to explain', () => {
-    expect(explains(render({ useCases: [WAITING_WATCHLIST] }), 'uc_01JB7')).toEqual([])
+  it('gives the Software watchlist its Explain too, while its row still opens the Software page', () => {
+    const html = render({ useCases: [WAITING_WATCHLIST] })
+    expect(explains(html, 'uc_01JB7')).toEqual([[`Explain ${WAITING_WATCHLIST.name}`, '/workflows/uc_01JB7/explain']])
   })
 })
 

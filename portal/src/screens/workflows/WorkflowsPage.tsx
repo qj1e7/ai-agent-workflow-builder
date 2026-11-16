@@ -104,7 +104,7 @@ export function WorkflowRow({ row, index, arrive, now, nameOf }: RowProps) {
           {inside}
         </OpenLink>
       )}
-      {path === SOFTWARE_PAGE ? null : <ExplainButton useCaseId={useCase.use_case_id} name={useCase.name} />}
+      <ExplainButton useCaseId={useCase.use_case_id} name={useCase.name} />
     </li>
   )
 }

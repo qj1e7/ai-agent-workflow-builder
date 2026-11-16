@@ -79,12 +79,11 @@ function ExplainCard({ useCaseId, name }: { useCaseId: string; name: string | nu
 
 interface ExplainAnswerProps {
   readonly reply: ExplainReply
-  readonly typed: string
   readonly focus: string | null
   readonly page: Page
 }
 
-export function ExplainAnswer({ reply, typed, focus, page }: ExplainAnswerProps) {
+export function ExplainAnswer({ reply, focus, page }: ExplainAnswerProps) {
   const memory = useContext(CardMemoryContext)
   const [settled] = useState(() => {
     const kept = memory.focus.kept()
@@ -92,7 +91,7 @@ export function ExplainAnswer({ reply, typed, focus, page }: ExplainAnswerProps)
     memory.focus.keep(value)
     return value
   })
-  const answer = explainAnswerOf(reply, typed, settled)
+  const answer = explainAnswerOf(reply, settled)
   if (answer.kind === 'one') return <ExplainCard useCaseId={answer.id} name={answer.name} />
   if (answer.kind === 'missing') return <Missing looked={reply.missing ?? ''} />
   return <Which reply={reply} page={page} />

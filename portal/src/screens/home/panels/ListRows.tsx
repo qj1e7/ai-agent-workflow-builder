@@ -45,7 +45,7 @@ export function WorkflowRows({ useCases, label, now }: { useCases: readonly UseC
           line={rowLine(useCase, now, nameOf)}
           state={<StatusPills state={useCase.state} fact={useCase.last_run ? pillOf(useCase.last_run) : null} fix={needsFix(useCase)} test={useCase.last_run?.test === true} />}
           data={{ 'data-workflow-id': useCase.use_case_id }}
-          beside={workflowPath(useCase) === SOFTWARE_PAGE ? undefined : <ExplainButton useCaseId={useCase.use_case_id} name={useCase.name} />}
+          beside={<ExplainButton useCaseId={useCase.use_case_id} name={useCase.name} />}
         />
       ))}
     </ul>

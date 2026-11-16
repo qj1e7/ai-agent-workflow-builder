@@ -3,15 +3,17 @@ import current from '../../../../contracts/fixtures/builder/explain.json'
 import older from '../../../../contracts/fixtures/builder/explain.older.json'
 import explainOne from '../../../../contracts/fixtures/planner/answer.explain.json'
 import explainSeveral from '../../../../contracts/fixtures/planner/answer.explain.choices.json'
+import explainIt from '../../../../contracts/fixtures/planner/answer.explain.it.json'
 import type { ExplainReply, PlannerReply, WorkflowExplained } from '../../api/types'
 import missingOne from '../../../../contracts/fixtures/planner/answer.explain.missing.json'
 import { ApiError } from '../../api/client'
-import { approvesGist, approvalGist, explainAnswerOf, explainAsk, explainStateOf, explainPath, explainTitle, explainsFocus, flagsGist, segmentsOfText, settingsGist, stepsGist, touchesGist, workflowInFocus } from './explain'
+import { approvesGist, approvalGist, explainAnswerOf, explainAsk, explainStateOf, explainPath, explainTitle, flagsGist, segmentsOfText, settingsGist, stepsGist, touchesGist, workflowInFocus } from './explain'
 
 const REPORT = current as WorkflowExplained
 const OLDER = older as WorkflowExplained
 const ONE = explainOne as ExplainReply
 const SEVERAL = explainSeveral as ExplainReply
+const IT = explainIt as ExplainReply
 
 describe('the gist of each section', () => {
   it('counts the blocks', () => {
@@ -113,37 +115,31 @@ describe('the workflow in focus', () => {
   })
 })
 
-describe('an Explain request that names no workflow', () => {
-  it('is “explain”, “explain it”, “explain this” or “explain that”, however it is padded', () => {
-    for (const typed of ['explain', 'Explain it', 'please explain this', 'Explain that.', '  explain it!  ']) expect(explainsFocus(typed), typed).toBe(true)
-  })
-
-  it('is not a request that names words, even when they match many workflows', () => {
-    for (const typed of ['explain the release check', 'explain it to me', 'explain the FastAPI release check']) expect(explainsFocus(typed), typed).toBe(false)
-  })
-})
-
 describe('what an Explain answer asks of the page', () => {
   const MISSING = missingOne as ExplainReply
 
   it('explains the one workflow it named, whatever is in focus', () => {
-    expect(explainAnswerOf(ONE, 'explain the FastAPI release check', 'uc_other')).toEqual({ kind: 'one', id: 'uc_01JFASTAPI', name: 'FastAPI release check' })
+    expect(explainAnswerOf(ONE, 'uc_other')).toEqual({ kind: 'one', id: 'uc_01JFASTAPI', name: 'FastAPI release check' })
   })
 
   it('explains the one in focus for “explain it”, by the name its choices carry', () => {
-    expect(explainAnswerOf(SEVERAL, 'explain it', 'uc_01JB8')).toEqual({ kind: 'one', id: 'uc_01JB8', name: 'React release check' })
+    expect(explainAnswerOf(IT, 'uc_01JB8')).toEqual({ kind: 'one', id: 'uc_01JB8', name: 'React release check' })
   })
 
   it('asks which when “explain it” has nothing in focus', () => {
-    expect(explainAnswerOf(SEVERAL, 'explain it', null)).toEqual({ kind: 'which' })
+    expect(explainAnswerOf(IT, null)).toEqual({ kind: 'which' })
   })
 
   it('asks which when several workflows matched words, even with one in focus', () => {
-    expect(explainAnswerOf(SEVERAL, 'explain the release check', 'uc_01JB8')).toEqual({ kind: 'which' })
+    expect(explainAnswerOf(SEVERAL, 'uc_01JB8')).toEqual({ kind: 'which' })
+  })
+
+  it('asks which when the workflow in focus is not one of the choices', () => {
+    expect(explainAnswerOf(IT, 'uc_gone')).toEqual({ kind: 'which' })
   })
 
   it('says it found none when the words matched nothing', () => {
-    expect(explainAnswerOf(MISSING, 'explain the Kubernetes check', 'uc_01JB8')).toEqual({ kind: 'missing' })
+    expect(explainAnswerOf(MISSING, 'uc_01JB8')).toEqual({ kind: 'missing' })
   })
 })
 

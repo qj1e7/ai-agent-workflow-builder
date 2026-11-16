@@ -538,7 +538,7 @@ export function Answer({ reply, typed, page, focus = null }: AnswerProps) {
     case 'remove_software':
       return <RemoveSoftwareAnswer reply={reply} />
     case 'explain':
-      return <ExplainAnswer reply={reply} typed={typed} focus={focus} page={page} />
+      return <ExplainAnswer reply={reply} focus={focus} page={page} />
     case 'ideas':
       return <IdeasAnswer page={page} />
     case 'offline':
