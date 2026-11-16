@@ -5,12 +5,18 @@ on:
   pull_request:
     paths:
       - "infra/**"
+      # The Langfuse VM must run what the local langfuse profile runs (ADR 0050).
+      - "deploy/compose.yaml"
+      - "deploy/langfuse/**"
       - ".github/workflows/infra.yml"
       - ".github/workflows/deploy.yml"
   push:
     branches: [main]
     paths:
       - "infra/**"
+      # The Langfuse VM must run what the local langfuse profile runs (ADR 0050).
+      - "deploy/compose.yaml"
+      - "deploy/langfuse/**"
       - ".github/workflows/infra.yml"
       - ".github/workflows/deploy.yml"
   workflow_dispatch:

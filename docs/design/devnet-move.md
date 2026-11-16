@@ -18,7 +18,7 @@ It was written on 29 Oct 2026 from a check of the repo at commit `9ab68f5`.
 | AI model | Must change | The AI Singapore gateway is on the public internet (ADR 0021). Azure OpenAI in NCS's own Azure is the likely choice, and ADR 0032 already names it for handover. |
 | Teams approvals | Half works | A Teams message that links to the run page needs only calls out from DevNet (ADR 0009). Approve buttons inside Teams need Microsoft's Bot Service to call into our app, which a private network may refuse. |
 | Software watchlist sources | Needs a route out | GitHub, Maven Central, NVD, OSV, endoflife.date and CISA's list are public sites (ADR 0025). DevNet needs a proxy or an allow list. Our address guard ignores proxies today (ADR 0022). |
-| LangSmith | Needs a decision | It is a hosted service, so traces would leave DevNet (ADR 0003). It is not wired up yet. |
+| Langfuse | Needs a VM | We host Langfuse ourselves, so traces stay inside (ADR 0050). On Azure it runs on one small VM with its own disk, because ClickHouse needs one. Its judge calls an AI model, as the Planner does. |
 | Code and CI | Moves at handover | The code is on GitHub with GitHub Actions. NCS uses GitLab, so the pipeline becomes GitLab CI. Every scan already runs in a container, so the jobs carry over. |
 
 ## What NCS needs to answer
@@ -32,8 +32,9 @@ Each answer settles one or more rows above. The sponsor can forward the question
 5. Is there a proxy out to the internet, and could it allow the watchlist's sources? Does the proxy keep its own allow list? This settles the watchlist sources and the address guard.
 6. Is there an internal container registry and a package mirror for Python and npm? This settles how images get into DevNet.
 7. Who registers an Entra app for us, and can we have one group for the people who may sign in (ADR 0029)? This settles sign-in.
-8. May traces go to a hosted service such as LangSmith? This settles LangSmith.
-9. Where does the code live after handover, and who owns it? This is already open with the sponsor, and it settles code and CI.
+8. Which AI model may Langfuse's judge call? It is the same answer as question 2. This settles part of Langfuse.
+9. May we run one Linux VM with its own disk inside DevNet? This settles the rest of Langfuse.
+10. Where does the code live after handover, and who owns it? This is already open with the sponsor, and it settles code and CI.
 
 ## Choices we hold to now
 
@@ -65,4 +66,4 @@ Each step starts once NCS answers the question it depends on.
 - Point the AI model at the service NCS allows (question 2).
 - Point Jira at NCS's Jira with its settings, run the Jira contract suite against it, and build the Confluence adapter and the GitLab tools with their ADRs (question 3).
 - Set the proxy and the address guard for the watchlist's sources (question 5).
-- Move the code to GitLab and the pipeline to GitLab CI (question 9).
+- Move the code to GitLab and the pipeline to GitLab CI (question 10).
