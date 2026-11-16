@@ -11,7 +11,7 @@ from pydantic import BaseModel
 
 MASKED: Final = "[masked]"
 # Settings whose names end like this hold secrets. A shorter value is too common a string to mask.
-SECRET_NAME: Final = re.compile(r"(KEY|TOKEN|SECRET|PASSWORD)$")
+SECRET_NAME: Final = re.compile(r"(KEY|TOKEN|SECRET|PASSWORD|CONNECTION_STRING)$")
 SHORTEST_SECRET: Final = 8
 KEY_SHAPES: Final = re.compile(
     r"sk-ant-[A-Za-z0-9_\-]{8,}"

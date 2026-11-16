@@ -1,4 +1,5 @@
 import json
+import logging
 import uuid
 from collections.abc import Iterator, Mapping
 from typing import Any
@@ -40,9 +41,14 @@ CLAIMS_DONE = ReplyEnvelope(form="answer", text="I've created a ticket for you."
 class Recorded:
     """A Langfuse adapter whose spans and scores stay in the test."""
 
-    def __init__(self, env: Mapping[str, str] | None = None) -> None:
+    def __init__(
+        self,
+        env: Mapping[str, str] | None = None,
+        fail: Exception | None = None,
+    ) -> None:
         self.spans = InMemorySpanExporter()
         self.posts: list[tuple[str, Any]] = []
+        self.fail = fail
         self.tracing = LangfuseTracing(
             LangfuseSettings(
                 # Langfuse keeps one client per public key for the whole process.
@@ -58,6 +64,8 @@ class Recorded:
         )
 
     def _post(self, request: httpx.Request) -> httpx.Response:
+        if self.fail is not None:
+            raise self.fail
         self.posts.append((request.url.path, json.loads(request.content)))
         return httpx.Response(200, json={})
 
@@ -320,3 +328,32 @@ def test_an_ai_led_turn_whose_model_call_failed_fell_back_but_was_not_rejected(
     assert "flag_fallback" not in [s["name"] for s in recorded.scores()]
     attributes = recorded.root("planner-turn").attributes or {}
     assert json.loads(str(attributes["langfuse.trace.metadata.fell_back"])) == "call"
+
+
+@pytest.mark.parametrize(
+    "fail",
+    [httpx.ReadTimeout("Langfuse is slow"), httpx.ConnectError("Langfuse is down")],
+)
+def test_a_turn_still_answers_when_langfuse_does_not(fail: Exception):
+    recording = Recorded(fail=fail)
+    chat = ScriptedChat(structured=[reading(), CLAIMS_DONE])
+    reply = app_with(recording, chat).post("/v1/planner/answer", json=turn())
+    recording.tracing.flush()
+    recording.tracing.shutdown()
+    assert reply.status_code == 200 and reply.json()["answer"]["kind"] == "didnt_follow"
+
+
+def test_a_turn_still_answers_when_recording_its_answer_raises(
+    recorded: Recorded, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+):
+    def broken(**_: Any) -> None:
+        raise RuntimeError("the SDK changed")
+
+    monkeypatch.setattr(recorded.tracing._client, "create_score", broken)  # pyright: ignore[reportPrivateUsage]
+    chat = ScriptedChat(structured=[reading(), CLAIMS_DONE])
+    with caplog.at_level(logging.WARNING):
+        reply = app_with(recorded, chat).post("/v1/planner/answer", json=turn())
+    assert reply.status_code == 200 and reply.json()["answer"]["kind"] == "didnt_follow"
+    assert "The turn's answer was not traced: RuntimeError" in [
+        r.getMessage() for r in caplog.records
+    ]

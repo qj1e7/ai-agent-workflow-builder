@@ -30,12 +30,16 @@ def test_every_secret_setting_is_masked_by_its_exact_value_and_others_are_not():
             "AGENT_MODEL_API_KEY": "gateway-key-value-2",
             "LANGFUSE_SECRET_KEY": "lf-secret-value-3",
             "N8N_DB_PASSWORD": "db-password-value-4",
+            "COSMOS_CONNECTION_STRING": "AccountKey=connection-value-5",
             "AGENT_SUMMARY_MODEL": "claude-haiku-5-5",
             "SHORT_KEY": "abc",
         }
     )
-    text = "plain-token-value-1 gateway-key-value-2 lf-secret-value-3 db-password-value-4 abc"
-    assert masker.mask(text) == " ".join([MASKED] * 4 + ["abc"])
+    text = (
+        "plain-token-value-1 gateway-key-value-2 lf-secret-value-3 db-password-value-4 "
+        "AccountKey=connection-value-5 abc"
+    )
+    assert masker.mask(text) == " ".join([MASKED] * 5 + ["abc"])
     assert masker.mask("claude-haiku-5-5") == "claude-haiku-5-5"
 
 

@@ -3,8 +3,8 @@
 import logging
 import threading
 import time
-from collections.abc import Callable, Generator, Sequence
-from contextlib import contextmanager
+from collections.abc import Callable, Generator, Mapping, Sequence
+from contextlib import AbstractContextManager, ExitStack, contextmanager
 from dataclasses import dataclass
 from typing import Any, Final, cast
 from uuid import UUID
@@ -24,7 +24,7 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SpanExporter
 
 from agent_runtime.contract import AnswerRequest, AnswerResult, TaskRequest
-from agent_runtime.monitoring.masking import Held, Masker
+from agent_runtime.monitoring.masking import MASKED, Held, Masker
 from agent_runtime.monitoring.tracing import (
     NoTracing,
     Traced,
@@ -47,9 +47,21 @@ TRACES_LIMIT: Final = 1024
 # An ended trace whose top span has not been exported in this long may be forgotten to make room.
 # That is safe: a span of a forgotten trace is dropped at export, never sent unmasked.
 FORGET_AFTER_SECONDS: Final = 600.0
-# Langfuse drops a span whose patch is not an OtelSpanPatch (MaskOtelSpansResult's docs).
-# test_trace_masking.py checks that it still does.
-DROP: Final = cast(OtelSpanPatch, "drop")
+
+
+@dataclass(frozen=True)
+class _Dropped:
+    """The patch for a span of a trace this adapter does not track. Langfuse drops a span whose
+    patch is not an OtelSpanPatch (MaskOtelSpansResult's docs), and test_trace_masking.py checks
+    that it still does. Should a later Langfuse apply it as a patch instead, every attribute is
+    `[masked]`."""
+
+    set_attributes: Mapping[str, AttributeValue]
+    delete_attributes: Sequence[str] = ()
+
+
+def _dropped(attributes: Mapping[str, AttributeValue]) -> OtelSpanPatch:
+    return cast(OtelSpanPatch, _Dropped({key: MASKED for key in attributes}))
 
 
 @dataclass(frozen=True)
@@ -107,7 +119,11 @@ class _Turn(_Trace):
         self._finish = finish
 
     def answered(self, result: AnswerResult, fell_back: str | None = None) -> None:
-        self._finish(result, fell_back)
+        # Tracing never fails a turn: the person still gets the answer.
+        try:
+            self._finish(result, fell_back)
+        except Exception as error:
+            log.warning("The turn's answer was not traced: %s", type(error).__name__)
 
 
 @dataclass
@@ -165,28 +181,41 @@ class LangfuseTracing:
     @contextmanager
     def turn(self, request: AnswerRequest) -> Generator[TracedTurn]:
         trace_id = request.trace.id if request.trace else Langfuse.create_trace_id()
-        with self._tracking(trace_id, request.model.api_key) as tracked:
-            if not tracked:
+        with self._tracking(trace_id, request.model.api_key) as tracked, ExitStack() as stack:
+            started = (
+                self._started_or_none(self._turn(request, trace_id), stack) if tracked else None
+            )
+            if started is None:
                 with NoTracing().turn(request) as untraced:
                     yield untraced
                 return
-            with self._turn(request, trace_id) as turn:
-                yield turn
+            yield started
 
     @contextmanager
     def run(self, request: TaskRequest) -> Generator[Traced]:
         trace_id = Langfuse.create_trace_id()
         secrets = (request.callback.token, request.model.api_key if request.model else None)
-        with self._tracking(trace_id, *secrets) as tracked:
-            if not tracked:
+        with self._tracking(trace_id, *secrets) as tracked, ExitStack() as stack:
+            started = (
+                self._started_or_none(self._run(request, trace_id), stack) if tracked else None
+            )
+            if started is None:
                 with NoTracing().run(request) as untraced:
                     yield untraced
                 return
-            with self._run(request, trace_id) as run:
-                yield run
+            yield started
 
     def flush(self) -> None:
         self._client.flush()
+
+    def _started_or_none[T](self, trace: AbstractContextManager[T], stack: ExitStack) -> T | None:
+        """The trace, started. None when its span would not start: tracing never fails a turn
+        or a task, so it goes on untraced."""
+        try:
+            return stack.enter_context(trace)
+        except Exception as error:
+            log.warning("Not traced: the trace did not start: %s", type(error).__name__)
+            return None
 
     def shutdown(self) -> None:
         self._client.shutdown()
@@ -327,7 +356,7 @@ class LangfuseTracing:
             for identifier, span in params.spans.items():
                 trace = self._open.get(span.trace_id)
                 if trace is None:
-                    patches[identifier] = DROP
+                    patches[identifier] = _dropped(span.attributes)
                     continue
                 if span.span_id == trace.top:
                     exported.append(span.trace_id)

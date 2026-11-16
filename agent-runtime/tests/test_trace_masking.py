@@ -15,6 +15,7 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage
 from langchain_core.runnables import Runnable
 from langfuse import get_client
+from langfuse.types import MaskOtelSpansParams, OtelSpanData, OtelSpanIdentifier, OtelSpanPatch
 from opentelemetry.sdk.trace import ReadableSpan
 from opentelemetry.sdk.trace.export import SpanExporter
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
@@ -29,7 +30,7 @@ from agent_runtime.monitoring.langfuse_tracing import (
     LangfuseSettings,
     LangfuseTracing,
 )
-from agent_runtime.monitoring.masking import Masker
+from agent_runtime.monitoring.masking import MASKED, Masker
 from agent_runtime.planner import FixedPlanner
 from agent_runtime.summary import TemplateSummarizer
 from agent_runtime.version_checker import VersionChecker
@@ -153,6 +154,10 @@ def planted_turn() -> dict[str, Any]:
         }
     )
     return json.loads(request.model_dump_json())
+
+
+def planted_request() -> AnswerRequest:
+    return AnswerRequest.model_validate(planted_turn())
 
 
 def test_no_planted_key_in_a_planner_turn_reaches_an_exported_span(exported: Any):
@@ -284,19 +289,54 @@ def test_a_span_exported_long_after_its_trace_ended_is_masked_or_dropped_never_s
     assert first_key not in text and second_gateway not in text
 
 
-def test_a_trace_whose_span_never_starts_lets_its_secret_go(monkeypatch: pytest.MonkeyPatch):
+def test_a_trace_whose_span_never_starts_runs_untraced_and_lets_its_secret_go(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+):
     masker = Masker()
-    tracing = langfuse(masker, InMemorySpanExporter())
+    exporter = InMemorySpanExporter()
+    tracing = langfuse(masker, exporter)
 
     def refused(**_: Any) -> Any:
-        raise RuntimeError("no span")
+        raise RuntimeError(f"no span for {MODEL_KEY}")
 
     monkeypatch.setattr(tracing._client, "start_as_current_observation", refused)  # pyright: ignore[reportPrivateUsage]
-    with pytest.raises(RuntimeError), tracing.turn(AnswerRequest.model_validate(planted_turn())):
-        pass
+    chat = ScriptedChat(script=[AIMessage("hello")])
+    with caplog.at_level(logging.WARNING), tracing.turn(planted_request()) as turn:
+        assert turn.models(lambda timeout: chat)(10).invoke("hi").text == "hello"
+        turn.answered(Answered(answer=DidntFollowAnswer(), parts=[]))
+    tracing.flush()
+    tracing.shutdown()
+    assert exporter.get_finished_spans() == ()
     assert tracing.tracked == 0
     assert masker.mask(MODEL_KEY) == MODEL_KEY
+    assert [r.getMessage() for r in caplog.records if r.name.endswith("langfuse_tracing")] == [
+        "Not traced: the trace did not start: RuntimeError"
+    ]
+
+
+def test_a_span_of_an_untracked_trace_would_leave_with_every_attribute_masked_if_kept():
+    tracing = langfuse(Masker(), InMemorySpanExporter())
+    stray = OtelSpanIdentifier(trace_id="a" * 32, span_id="b" * 16)
+    attributes = {"langfuse.observation.input": "stray-secret-no-rule-knows", "count": 3}
+    params = MaskOtelSpansParams(
+        spans={
+            stray: OtelSpanData(
+                trace_id="a" * 32,
+                span_id="b" * 16,
+                parent_span_id=None,
+                name="stray",
+                instrumentation_scope_name="langfuse-sdk",
+                instrumentation_scope_version=None,
+                attributes=attributes,
+                resource_attributes={},
+            )
+        }
+    )
+    patch: Any = tracing._mask_spans(params=params).span_patches[stray]  # pyright: ignore[reportPrivateUsage]
     tracing.shutdown()
+    assert not isinstance(patch, OtelSpanPatch)
+    assert dict(patch.set_attributes) == dict.fromkeys(attributes, MASKED)
+    assert tuple(patch.delete_attributes) == ()
 
 
 def test_at_the_limit_a_new_trace_is_not_sent_and_no_open_trace_is_forgotten(
