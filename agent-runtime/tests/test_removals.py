@@ -101,10 +101,64 @@ def test_a_request_to_stop_watching_software_is_a_removal_with_the_watchlists_na
         "rename the Software watchlist",
         "why did we stop watching React?",
         "did I remove node js from the watchlist?",
+        "stop watching " + "A" * 90,
     ],
 )
 def test_words_that_name_no_software_to_take_off_are_no_removal(task: str):
     assert not isinstance(removal(task), RemoveSoftwareAnswer)
+
+
+@pytest.mark.parametrize(
+    "task",
+    [
+        "don't remove react from the watchlist",
+        "we don't want to stop watching react",
+        "please don't stop watching react",
+        "Do not remove React",
+        "never take node js off the watchlist",
+        "no need to unwatch LangGraph",
+        "I wouldn't remove React from the watchlist",
+        "dont remove React from the watchlist",
+    ],
+)
+def test_a_request_not_to_remove_is_no_removal(task: str):
+    assert not isinstance(removal(task), RemoveSoftwareAnswer)
+
+
+@pytest.mark.parametrize(
+    "task",
+    [
+        "stop checking React on weekends",
+        "stop watching React until next month",
+        "stop watching React for a week",
+        "remove Friday from the watchlist schedule",
+        "remove LangGraph from the watchlist schedule",
+        "remove node js from the watchlist every Monday",
+        "take React off the watchlist at 9am",
+    ],
+)
+def test_a_time_or_the_schedule_beside_it_keeps_the_request_out_of_the_removal(task: str):
+    assert not isinstance(removal(task), RemoveSoftwareAnswer)
+
+
+ONLY_RUBY = FACTS.model_copy(
+    update={"watchlist": [w.model_copy(update={"name": "Ruby"}) for w in FACTS.watchlist or []][:1]}
+)
+
+
+@pytest.mark.parametrize(
+    "task", ["remove Ruby on Rails from the watchlist", "stop watching Ruby on Rails"]
+)
+def test_a_whole_name_is_never_cut_down_to_a_shorter_one_the_watchlist_holds(task: str):
+    assert answer_of(AS_AN_EDIT, task, ONLY_RUBY) == removed("Ruby on Rails")
+
+
+def test_a_name_too_long_for_the_answer_never_breaks_it():
+    chat = ScriptedChat(structured=[AS_AN_EDIT])
+    request = AnswerRequest(
+        task="stop watching " + "A" * 90, model=answer_request().model, facts=FACTS
+    )
+    assert isinstance(answer_task(request, lambda timeout: chat, free_reply=False), Answered)
 
 
 def test_a_name_beside_its_list_is_only_the_name():
@@ -121,11 +175,30 @@ def test_a_removal_beside_another_request_keeps_both_parts():
 
 
 def test_words_beside_the_removal_in_its_own_clause_come_back():
-    task = "remove node js from the watchlist every Monday"
+    task = "remove node js from the watchlist in Confluence"
     assert removal(task) == removed("node js", "node js")
     assert marks(task) == [
         ("remove node js from the watchlist", "will_do", None),
-        ("every Monday", "cant", "not_followed"),
+        ("in Confluence", "cant", "not_followed"),
+    ]
+
+
+def test_a_second_name_before_the_list_is_asked_on_its_own_and_works_alone():
+    task = "remove React and LangGraph from the watchlist"
+    assert removal(task) == removed("React", "React")
+    assert marks(task) == [
+        ("remove React", "will_do", None),
+        ("LangGraph from the watchlist", "cant", "ask_on_its_own"),
+    ]
+    assert removal("LangGraph from the watchlist") == removed("LangGraph", "LangGraph")
+
+
+def test_a_clause_that_points_back_at_the_removal_is_ticked_with_it():
+    task = "we don't use react native, remove it"
+    assert removal(task) == removed("react native", "React Native")
+    assert marks(task) == [
+        ("we don't use react native", "will_do", None),
+        ("remove it", "will_do", None),
     ]
 
 
