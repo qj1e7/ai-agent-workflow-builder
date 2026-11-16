@@ -73,7 +73,7 @@ test.describe('Explain this workflow', () => {
     await expect(panel(page).getByText('Reworded', { exact: true }), 'the panel never asks for the reworded line').toHaveCount(0)
     await expect(panel(page).locator('details[open]'), 'every row starts closed while nothing needs an answer').toHaveCount(0)
     await panel(page).locator('summary', { hasText: 'Step by step' }).click()
-    await expect(panel(page).getByText('“Read release”')).toBeVisible()
+    await expect(panel(page).locator('details[open]').getByText('“Read release”')).toBeVisible()
     await expect(panel(page).getByRole('link', { name: 'More details' })).toHaveAttribute('href', `/workflows/${fastapi.id}/explain`)
     await expectAccessible(page, path.join(OUT, 'axe'), 'explain-panel')
     await shot(page, info, 'explain-panel')

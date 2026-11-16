@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import type { APIRequestContext, Page } from '@playwright/test'
+import type { APIRequestContext, Locator, Page } from '@playwright/test'
 import path from 'node:path'
 import { expectAccessible } from '../support/axe'
 import { MOCK_MODEL, MOCK_MODEL_URL, SettingsApi } from './support/settings'
@@ -8,6 +8,7 @@ import { devContext, expectReadOnly, OUT, shot } from './support/ui'
 
 const heading = (page: Page) => page.getByRole('heading', { level: 1 })
 const rowOf = (page: Page, useCaseId: string) => page.locator(`li[data-workflow-id="${useCaseId}"]`)
+const ownLink = (row: Locator) => row.getByRole('link', { name: /^(?!Explain )/ })
 const nextRun = (page: Page) => page.locator('section', { has: page.getByRole('heading', { name: 'When', exact: true }) }).locator('p')
 const changeWhen = (page: Page) => page.getByRole('button', { name: /^(Change|Set) when it runs$/ })
 const versionsList = (page: Page) => page.getByRole('list', { name: 'Versions, newest first' })
@@ -59,8 +60,8 @@ test('alice opens a workflow from Workflows, presses Run now, and lands on the n
   await expect(heading(page)).toHaveText('Workflows')
   const row = rowOf(page, workflow.id)
   await expect(row).toContainText('On')
-  await expect(row.getByRole('link')).toContainText(workflow.name)
-  await row.getByRole('link').click()
+  await expect(ownLink(row)).toContainText(workflow.name)
+  await ownLink(row).click()
   await expect(page).toHaveURL(new RegExp(`/workflows/${workflow.id}$`))
   await expect(heading(page)).toHaveText(workflow.name)
   await shot(page, info, 'p9-04-workflow-page')
@@ -151,7 +152,7 @@ test('alice deletes a workflow, it leaves the list, and Undo puts it back', asyn
   await shot(page, info, 'p9-04-deleted')
   await page.getByRole('button', { name: 'Undo' }).click()
   await expect(rowOf(page, useCaseId)).toBeVisible()
-  await expect(rowOf(page, useCaseId).getByRole('link')).toBeFocused()
+  await expect(ownLink(rowOf(page, useCaseId))).toBeFocused()
   await expect(page.getByText('Put back.', { exact: true }).last()).toBeVisible()
   const listed = await request.get('/api/v1/use-cases', { headers: { 'X-Dev-User': 'alice' } })
   expect(((await listed.json()) as { use_cases: { use_case_id: string }[] }).use_cases.map((item) => item.use_case_id)).toContain(useCaseId)
@@ -185,7 +186,7 @@ test('the Software watchlist opens on the Software page, from its row and from i
   const context = await devContext(browser, 'alice')
   const page = await context.newPage()
   await page.goto('/workflows')
-  const link = rowOf(page, watchlist).getByRole('link')
+  const link = ownLink(rowOf(page, watchlist))
   await expect(link).toContainText('Software watchlist')
   await expect(link).toHaveAttribute('href', '/software')
   await link.click()
