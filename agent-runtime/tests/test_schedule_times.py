@@ -7,6 +7,7 @@ import pytest
 from agent_runtime.answers import answer_of, parts_of
 from agent_runtime.contract import CantAnswer, SetupCardAnswer, UnderstoodRow
 from agent_runtime.reading import (
+    NO_TIME_BUT,
     NO_TIME_READ,
     DaysRead,
     PlaceRead,
@@ -58,6 +59,23 @@ def test_a_time_the_clock_cant_read_is_asked_for_and_her_day_stays(at: str):
     said = f"Every Friday at {at}"
     row = carols_row(said, said)
     assert (row.text, row.state, row.note) == ("Every Friday", "missing", NO_TIME_READ)
+
+
+@pytest.mark.parametrize(
+    "model",
+    ["Every Friday 8.30am", "Every Friday 9.15am", "Every Friday at 8.30am", "Every Friday 8:30am"],
+)
+def test_a_dotted_time_she_never_said_is_asked_for_never_shown_as_hers(model: str):
+    """The model's "8.30am" against her "9.30am" was checked only as "30am", so the card took
+    08:30 as her time."""
+    row = carols_row(model, "Every Friday 9.30am")
+    assert (row.text, row.state) == ("", "missing")
+    assert row.note == NO_TIME_BUT.format("Every Friday")
+
+
+def test_her_own_dotted_time_with_no_at_stays_on_the_row():
+    row = carols_row("Every Friday 9.30am", "Every Friday 9.30am")
+    assert (row.text, row.state) == ("Every Friday 9.30am", "understood")
 
 
 def test_a_row_that_lost_its_time_never_keeps_a_dangling_at():
