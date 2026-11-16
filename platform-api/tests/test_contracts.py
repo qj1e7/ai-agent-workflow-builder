@@ -7,6 +7,7 @@ from pydantic import TypeAdapter
 
 from platform_api.auth import DevUsers
 from platform_api.builder import TEMPLATES
+from platform_api.builder.explain import WorkflowExplained
 from platform_api.builder.home import HomeOut
 from platform_api.builder.http import SuggestOut, TemplateList, UseCaseView
 from platform_api.builder.models import (
@@ -47,6 +48,7 @@ from platform_api.orchestration.agents import (
     AnswerRequest,
     CheckPartRequest,
     ChooseRequest,
+    CodeWording,
     ConnectRequest,
     DraftRequest,
     FindSoftwareRequest,
@@ -107,6 +109,7 @@ from platform_api.wire import FailureStage
 from platform_api.wire import Leg as WireLeg
 from platform_api.wire import StepName as WireStepName
 from tests.support import FIXTURES
+from tests.test_workflow_report import GOLDEN
 
 pytestmark = pytest.mark.skipif(
     not FIXTURES.exists(), reason="contracts/ is not in the test image. CI runs this on the host."
@@ -211,6 +214,9 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "planner/answer.pause.json": TypeAdapter(PlannerReply),
     "planner/answer.remove_software.json": TypeAdapter(PlannerReply),
     "planner/answer.remove_software.none.json": TypeAdapter(PlannerReply),
+    "planner/answer.explain.json": TypeAdapter(PlannerReply),
+    "planner/answer.explain.choices.json": TypeAdapter(PlannerReply),
+    "planner/answer.explain.missing.json": TypeAdapter(PlannerReply),
     "planner/answer.pause.choices.json": TypeAdapter(PlannerReply),
     "planner/answer.resume.json": TypeAdapter(PlannerReply),
     "planner/answer.edit.unclear.json": TypeAdapter(PlannerReply),
@@ -318,6 +324,14 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "builder/opened-in-n8n.json": TypeAdapter(HoldOut),
     "builder/run.n8n.waiting.json": TypeAdapter(RunN8nView),
     "builder/run.n8n.ended.json": TypeAdapter(RunN8nView),
+    "builder/explain.json": TypeAdapter(WorkflowExplained),
+    "builder/explain.older.json": TypeAdapter(WorkflowExplained),
+    "builder/explain.reworded.json": TypeAdapter(WorkflowExplained),
+    **{
+        f"builder/explain-wording.{path.stem}.json": TypeAdapter(CodeWording)
+        for path in GOLDEN.glob("*.json")
+        if isinstance(json.loads(path.read_text()), dict)
+    },
 }
 
 

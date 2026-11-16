@@ -1,0 +1,38 @@
+{
+  "wording": "Every Monday at 9:00, it reads GitHub \u201cwatchlist\u201d. It can make the changes approved in the run, each after a yes. It changes nothing else.",
+  "facts": [
+    {
+      "kind": "runs",
+      "together": [
+        "Monday",
+        "9:00"
+      ],
+      "negated": false
+    },
+    {
+      "kind": "reads",
+      "together": [
+        "GitHub",
+        "watchlist"
+      ],
+      "negated": false
+    },
+    {
+      "kind": "writes",
+      "together": [
+        "make",
+        "yes"
+      ],
+      "negated": false
+    },
+    {
+      "kind": "changes",
+      "together": [
+        "changes",
+        "nothing",
+        "else"
+      ],
+      "negated": true
+    }
+  ]
+}

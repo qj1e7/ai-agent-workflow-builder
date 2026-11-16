@@ -1,0 +1,16 @@
+{
+  "parts": [
+    {
+      "text": "explain the FastAPI release check",
+      "mark": "will_do",
+      "reason": null,
+      "note": null,
+      "choices": []
+    }
+  ],
+  "answer": "explain",
+  "use_case_id": "uc_01JFASTAPI",
+  "name": "FastAPI release check",
+  "missing": null,
+  "choices": []
+}

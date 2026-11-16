@@ -3549,6 +3549,16 @@
         "title": "CheckWorkflowsReply",
         "type": "object"
       },
+      "ClearedBy": {
+        "enum": [
+          "fixed_for_you",
+          "needs_an_answer",
+          "needs_a_setting",
+          "cant_run",
+          "approver_may_accept"
+        ],
+        "type": "string"
+      },
       "ClockTime": {
         "examples": [
           "09:00"
@@ -5393,6 +5403,391 @@
           "approval"
         ],
         "title": "ExpiredView",
+        "type": "object"
+      },
+      "ExplainChoice": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "use_case_id": {
+            "title": "Use Case Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "use_case_id",
+          "name"
+        ],
+        "title": "ExplainChoice",
+        "type": "object"
+      },
+      "ExplainCleared": {
+        "additionalProperties": false,
+        "properties": {
+          "rule": {
+            "title": "Rule",
+            "type": "string"
+          },
+          "words": {
+            "title": "Words",
+            "type": "string"
+          }
+        },
+        "required": [
+          "rule",
+          "words"
+        ],
+        "title": "ExplainCleared",
+        "type": "object"
+      },
+      "ExplainFlag": {
+        "additionalProperties": false,
+        "properties": {
+          "block": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The block that breaks it. Null for the whole workflow.",
+            "title": "Block"
+          },
+          "clears": {
+            "$ref": "#/components/schemas/ClearedBy",
+            "description": "fixed_for_you: code puts it right whenever it lays a workflow out. needs_an_answer: the person setting it up answers it. needs_a_setting: an Operator fixes it in Settings or the agent library. cant_run: nobody can clear it in the app. approver_may_accept: an Approver may accept it at set-up."
+          },
+          "rule": {
+            "title": "Rule",
+            "type": "string"
+          },
+          "takes": {
+            "description": "Who can clear it, in words to show.",
+            "title": "Takes",
+            "type": "string"
+          },
+          "what": {
+            "title": "What",
+            "type": "string"
+          },
+          "why": {
+            "title": "Why",
+            "type": "string"
+          }
+        },
+        "required": [
+          "rule",
+          "block",
+          "what",
+          "why",
+          "clears",
+          "takes"
+        ],
+        "title": "ExplainFlag",
+        "type": "object"
+      },
+      "ExplainReply": {
+        "additionalProperties": false,
+        "description": "A workflow to explain, matched by its words. The Portal shows it with GET\n/api/v1/use-cases/{use_case_id}/explain?reworded=true. Explaining changes nothing, so\nanyone signed in may ask.",
+        "properties": {
+          "answer": {
+            "const": "explain",
+            "default": "explain",
+            "title": "Answer",
+            "type": "string"
+          },
+          "choices": {
+            "description": "The workflows the request could mean, for the person to pick one: every one its words match when they match several, or every workflow for \"it\", so the Portal can explain the one in focus. Empty when one matched or the words name none.",
+            "items": {
+              "$ref": "#/components/schemas/ExplainChoice"
+            },
+            "title": "Choices",
+            "type": "array"
+          },
+          "missing": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The words looked for, when they name no workflow the person has. Null otherwise.",
+            "title": "Missing"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Its name. Null with use_case_id.",
+            "title": "Name"
+          },
+          "parts": {
+            "description": "Every clause of what the person typed, in order, with what happened to it (spec 6.5). None is dropped. Empty for a chip they tapped, for an answer inside another answer, and when no model read the request.",
+            "items": {
+              "$ref": "#/components/schemas/PartView"
+            },
+            "title": "Parts",
+            "type": "array"
+          },
+          "use_case_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The workflow to explain. Null when the words name none of the person's workflows, name several, or are \"it\".",
+            "title": "Use Case Id"
+          }
+        },
+        "required": [
+          "parts",
+          "answer",
+          "use_case_id",
+          "name",
+          "missing",
+          "choices"
+        ],
+        "title": "ExplainReply",
+        "type": "object"
+      },
+      "ExplainSetting": {
+        "additionalProperties": false,
+        "properties": {
+          "label": {
+            "items": {
+              "$ref": "#/components/schemas/Segment"
+            },
+            "title": "Label",
+            "type": "array"
+          },
+          "mark": {
+            "enum": [
+              "filled",
+              "guessed",
+              "needed",
+              "set"
+            ],
+            "title": "Mark",
+            "type": "string"
+          },
+          "said": {
+            "description": "Where it was set, or its mark, in words to show.",
+            "title": "Said",
+            "type": "string"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/Segment"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null while it is needed.",
+            "title": "Value"
+          }
+        },
+        "required": [
+          "label",
+          "value",
+          "mark",
+          "said"
+        ],
+        "title": "ExplainSetting",
+        "type": "object"
+      },
+      "ExplainStep": {
+        "additionalProperties": false,
+        "properties": {
+          "block_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "n8n's type of the block. Null unless you have n8n access.",
+            "title": "Block Type"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "ours": {
+            "description": "A block of our node pack. False for one of n8n's own.",
+            "title": "Ours",
+            "type": "boolean"
+          },
+          "tag": {
+            "description": "What it does, such as Reads Jira or Writes after a yes.",
+            "title": "Tag",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "ours",
+          "block_type",
+          "tag"
+        ],
+        "title": "ExplainStep",
+        "type": "object"
+      },
+      "ExplainThen": {
+        "additionalProperties": false,
+        "properties": {
+          "grade": {
+            "$ref": "#/components/schemas/Grade",
+            "description": "The grade it had when it was published."
+          },
+          "number": {
+            "title": "Number",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "number",
+          "grade"
+        ],
+        "title": "ExplainThen",
+        "type": "object"
+      },
+      "ExplainTouch": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "enum": [
+              "reads",
+              "writes",
+              "posts"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "block": {
+            "description": "The block that does it.",
+            "title": "Block",
+            "type": "string"
+          },
+          "key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Which of the platform's keys one of n8n's blocks uses, never its secret.",
+            "title": "Key"
+          },
+          "phrase": {
+            "description": "What it does, as In short says it after \"It\".",
+            "items": {
+              "$ref": "#/components/schemas/Segment"
+            },
+            "title": "Phrase",
+            "type": "array"
+          },
+          "place": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Where, as the plan or the document names it. Null when nothing names it or the run's data picks it.",
+            "title": "Place"
+          },
+          "system": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null when code can't tell which system.",
+            "title": "System"
+          }
+        },
+        "required": [
+          "action",
+          "system",
+          "place",
+          "block",
+          "phrase",
+          "key"
+        ],
+        "title": "ExplainTouch",
+        "type": "object"
+      },
+      "ExplainWrite": {
+        "additionalProperties": false,
+        "properties": {
+          "approvers": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How many Approvers say yes on each run, one after the other. Null unless each_run.",
+            "title": "Approvers"
+          },
+          "block": {
+            "title": "Block",
+            "type": "string"
+          },
+          "decides": {
+            "description": "each_run: Approvers say yes on each run. set_up: it runs on the set-up approval, with no yes on each run. refused: no yes comes before it, so the platform refuses the write. cant_run_yet: no approval lets it run on this platform yet.",
+            "enum": [
+              "each_run",
+              "set_up",
+              "refused",
+              "cant_run_yet"
+            ],
+            "title": "Decides",
+            "type": "string"
+          },
+          "words": {
+            "title": "Words",
+            "type": "string"
+          }
+        },
+        "required": [
+          "block",
+          "decides",
+          "approvers",
+          "words"
+        ],
+        "title": "ExplainWrite",
         "type": "object"
       },
       "FactSection": {
@@ -8512,6 +8907,7 @@
             "decided": "#/components/schemas/DecidedReply",
             "didnt_follow": "#/components/schemas/DidntFollowReply",
             "edit": "#/components/schemas/EditReply",
+            "explain": "#/components/schemas/ExplainReply",
             "ideas": "#/components/schemas/IdeasReply",
             "n8n": "#/components/schemas/N8nReply",
             "needs_me": "#/components/schemas/NeedsMeReply",
@@ -8585,6 +8981,9 @@
           },
           {
             "$ref": "#/components/schemas/RemoveSoftwareReply"
+          },
+          {
+            "$ref": "#/components/schemas/ExplainReply"
           },
           {
             "$ref": "#/components/schemas/OperatorsReply"
@@ -11039,6 +11438,26 @@
           "through"
         ],
         "title": "SeenIn",
+        "type": "object"
+      },
+      "Segment": {
+        "additionalProperties": false,
+        "properties": {
+          "quoted": {
+            "description": "A string from the plan or the document, such as a block's name or a notice's words. Show it in quotes, apart from code's own words.",
+            "title": "Quoted",
+            "type": "boolean"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text",
+          "quoted"
+        ],
+        "title": "Segment",
         "type": "object"
       },
       "SetUpFromN8n": {
@@ -14076,6 +14495,152 @@
           "decline"
         ],
         "type": "string"
+      },
+      "WorkflowExplained": {
+        "additionalProperties": false,
+        "description": "One version of a workflow, explained from the report code builds. In in_short, phrase,\nlabel and value, each string from the plan or the document is a quoted segment, so a block\nnamed \"Security approved\" can't read as code's verdict.",
+        "properties": {
+          "approval": {
+            "description": "Whether its set-up needed an approval, in words to show.",
+            "title": "Approval",
+            "type": "string"
+          },
+          "approves": {
+            "description": "Who decides each write.",
+            "items": {
+              "$ref": "#/components/schemas/ExplainWrite"
+            },
+            "title": "Approves",
+            "type": "array"
+          },
+          "fixed": {
+            "description": "What code made sure of when it laid the workflow out.",
+            "items": {
+              "$ref": "#/components/schemas/ExplainCleared"
+            },
+            "title": "Fixed",
+            "type": "array"
+          },
+          "flags": {
+            "description": "Each rule a block breaks, in the rules' order.",
+            "items": {
+              "$ref": "#/components/schemas/ExplainFlag"
+            },
+            "title": "Flags",
+            "type": "array"
+          },
+          "grade": {
+            "$ref": "#/components/schemas/Grade",
+            "description": "The safety checker's grade under today's rules."
+          },
+          "in_short": {
+            "description": "One or two sentences in code's own words: when it runs, what it reads, what it changes or posts, and what waits for a yes.",
+            "items": {
+              "$ref": "#/components/schemas/Segment"
+            },
+            "title": "In Short",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "needs_an_answer": {
+            "description": "The questions left to answer.",
+            "title": "Needs An Answer",
+            "type": "integer"
+          },
+          "passed": {
+            "description": "Every other rule no block breaks.",
+            "items": {
+              "$ref": "#/components/schemas/ExplainCleared"
+            },
+            "title": "Passed",
+            "type": "array"
+          },
+          "reworded": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "In short as the AI model smoothed it, when asked with reworded=true and it passed every check. Show it labelled Reworded, with a way back to in_short. Null otherwise.",
+            "title": "Reworded"
+          },
+          "settings": {
+            "items": {
+              "$ref": "#/components/schemas/ExplainSetting"
+            },
+            "title": "Settings",
+            "type": "array"
+          },
+          "steps": {
+            "description": "Each block in run order.",
+            "items": {
+              "$ref": "#/components/schemas/ExplainStep"
+            },
+            "title": "Steps",
+            "type": "array"
+          },
+          "then": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExplainThen"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "An older version's number and the grade it had when it was published. Null for the version in use and for a draft."
+          },
+          "touches": {
+            "description": "What it reads, writes and posts.",
+            "items": {
+              "$ref": "#/components/schemas/ExplainTouch"
+            },
+            "title": "Touches",
+            "type": "array"
+          },
+          "use_case_id": {
+            "title": "Use Case Id",
+            "type": "string"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null for a draft, which has no published version.",
+            "title": "Version"
+          }
+        },
+        "required": [
+          "use_case_id",
+          "name",
+          "version",
+          "grade",
+          "then",
+          "in_short",
+          "reworded",
+          "steps",
+          "touches",
+          "flags",
+          "fixed",
+          "passed",
+          "approves",
+          "settings",
+          "approval",
+          "needs_an_answer"
+        ],
+        "title": "WorkflowExplained",
+        "type": "object"
       },
       "WorkflowFailureIn": {
         "additionalProperties": false,
@@ -20267,6 +20832,138 @@
           }
         ],
         "summary": "Add The Yes Back",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/use-cases/{use_case_id}/explain": {
+      "get": {
+        "description": "One version of a workflow, explained from the report code builds (ADR 0051, section 6): In short, each step, what it reads, writes and posts, every flag, who approves each write, its settings and its approval. Anyone signed in may ask. Block types come only to people with n8n access. An older version is checked again under today's rules, with the grade it had when it was published beside it. With reworded=true the AI model may smooth In short, and reworded holds its text only when it passed every check. Anything else leaves reworded null, and the answer is still 200. It writes nothing, starts nothing and asks no Approver.",
+        "operationId": "explain_workflow_api_v1_use_cases__use_case_id__explain_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "use_case_id",
+            "required": true,
+            "schema": {
+              "title": "Use Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The version to explain, as the versions list numbers it. Leave it out for the version in use, or for a draft.",
+            "in": "query",
+            "name": "version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The version to explain, as the versions list numbers it. Leave it out for the version in use, or for a draft.",
+              "title": "Version"
+            }
+          },
+          {
+            "description": "Ask the AI model to smooth In short, as the chat card does.",
+            "in": "query",
+            "name": "reworded",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Ask the AI model to smooth In short, as the chat card does.",
+              "title": "Reworded",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowExplained"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Signed in, but not on the People list. Ask an Operator to add you"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "No such workflow, or it is deleted, or no such version"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Nothing to explain: this version ran on the shared n8n workflow, so the platform kept no copy of its blocks."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Explain Workflow",
         "tags": [
           "builder"
         ]

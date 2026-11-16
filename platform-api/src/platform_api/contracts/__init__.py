@@ -5,6 +5,7 @@ from pathlib import Path
 from platform_api.app import create_app
 from platform_api.contracts.cards_stories import card_fixtures
 from platform_api.contracts.decisions_stories import decisions_fixtures
+from platform_api.contracts.explain_stories import explain_fixtures
 from platform_api.contracts.home_stories import home_fixtures
 from platform_api.contracts.lifecycle_stories import lifecycle_fixtures
 from platform_api.contracts.n8n_access_stories import n8n_access_fixtures
@@ -81,6 +82,7 @@ def write_all(root: Path) -> list[Path]:
         **n8n_access_fixtures(),
         **home_fixtures(),
         **decisions_fixtures(),
+        **explain_fixtures(),
         **planner_fixtures(root),
     }.items():
         path = fixture_root / relative
