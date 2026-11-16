@@ -42,6 +42,12 @@ for env_dir in "$infra"/envs/*/; do
     --workdir "/infra/envs/$env" --entrypoint /bin/sh "$TERRAFORM_IMAGE" -c \
     'terraform init -backend=false -input=false -lockfile=readonly -no-color >/dev/null && terraform validate -no-color'
 
+  # The tests apply against mocked providers, so they touch nothing and need no credentials. They
+  # reuse the init above.
+  run "terraform-test-$env" tool \
+    --volume "$infra:/infra" --volume "$cache/terraform:/cache" --env TF_PLUGIN_CACHE_DIR=/cache \
+    --workdir "/infra/envs/$env" "$TERRAFORM_IMAGE" test -no-color
+
   run "terraform-variables-$env" tool --volume "$infra:/infra:ro" --entrypoint /bin/sh "$TERRAFORM_IMAGE" \
     /infra/scripts/check-variables.sh "/infra/envs/$env/variables.tf"
 

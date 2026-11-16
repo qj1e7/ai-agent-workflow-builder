@@ -1,0 +1,122 @@
+# Langfuse on its Azure VM (ADR 0050), the same parts as deploy/compose.yaml's langfuse profile,
+# with PostgreSQL and blob storage moved to Azure and Caddy in front. infra/scripts/
+# check-langfuse-images.sh keeps the images the same as that profile's. Only Caddy publishes a
+# port. The secrets come from /etc/langfuse/secrets.env, which langfuse-secrets writes.
+name: langfuse
+
+x-langfuse-env: &langfuse-env
+  NEXTAUTH_URL: https://${fqdn}
+  DATABASE_URL: postgresql://langfuse:$${LANGFUSE_DB_PASSWORD:?not in secrets.env}@${postgres_host}:5432/langfuse?sslmode=require
+  SALT: $${SALT:?not in secrets.env}
+  ENCRYPTION_KEY: $${ENCRYPTION_KEY:?not in secrets.env}
+  TELEMETRY_ENABLED: "false"
+  CLICKHOUSE_MIGRATION_URL: clickhouse://clickhouse:9000
+  CLICKHOUSE_URL: http://clickhouse:8123
+  CLICKHOUSE_USER: clickhouse
+  CLICKHOUSE_PASSWORD: $${CLICKHOUSE_PASSWORD:?not in secrets.env}
+  CLICKHOUSE_CLUSTER_ENABLED: "false"
+  REDIS_HOST: valkey
+  REDIS_PORT: "6379"
+  REDIS_AUTH: $${VALKEY_PASSWORD:?not in secrets.env}
+  LANGFUSE_USE_AZURE_BLOB: "true"
+  LANGFUSE_S3_EVENT_UPLOAD_BUCKET: ${container}
+  LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: ${storage_account}
+  LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: $${STORAGE_ACCOUNT_KEY:?not in secrets.env}
+  LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: ${blob_endpoint}
+  LANGFUSE_S3_EVENT_UPLOAD_PREFIX: events/
+  LANGFUSE_S3_MEDIA_UPLOAD_BUCKET: ${container}
+  LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID: ${storage_account}
+  LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: $${STORAGE_ACCOUNT_KEY:?not in secrets.env}
+  LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT: ${blob_endpoint}
+  LANGFUSE_S3_MEDIA_UPLOAD_PREFIX: media/
+
+services:
+  langfuse-worker:
+    image: langfuse/langfuse-worker:4.80.0@sha256:da9f618dd784219aa6508ab6941c4a89c4ef6fb429fb1734c4163df3baa8f1ca
+    restart: unless-stopped
+    depends_on: &langfuse-depends-on
+      clickhouse:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+    environment:
+      <<: *langfuse-env
+
+  langfuse-web:
+    image: langfuse/langfuse:4.80.0@sha256:0814758db3db8e923f733be3884e7d7a9e3afd60568d874a610d78aae47476c5
+    restart: unless-stopped
+    depends_on: *langfuse-depends-on
+    environment:
+      <<: *langfuse-env
+      NEXTAUTH_SECRET: $${NEXTAUTH_SECRET:?not in secrets.env}
+      LANGFUSE_DISABLE_SIGNUP_ONBOARDING: "true"
+      # Only the team's Entra group may sign in, and password sign-in is off. The team lead's
+      # account below is linked to their Entra sign-in by email.
+      AUTH_DISABLE_USERNAME_PASSWORD: "true"
+      AUTH_AZURE_AD_CLIENT_ID: ${jsonencode(entra_client_id)}
+      AUTH_AZURE_AD_CLIENT_SECRET: $${AUTH_AZURE_AD_CLIENT_SECRET:?not in secrets.env}
+      AUTH_AZURE_AD_TENANT_ID: ${jsonencode(entra_tenant_id)}
+      AUTH_AZURE_AD_ALLOW_ACCOUNT_LINKING: "true"
+      LANGFUSE_INIT_ORG_ID: codesparks
+      LANGFUSE_INIT_ORG_NAME: CODESparks
+      LANGFUSE_INIT_PROJECT_ID: ai-workflow-builder
+      LANGFUSE_INIT_PROJECT_NAME: AI Workflow Builder
+      LANGFUSE_INIT_PROJECT_PUBLIC_KEY: $${LANGFUSE_INIT_PROJECT_PUBLIC_KEY:?not in secrets.env}
+      LANGFUSE_INIT_PROJECT_SECRET_KEY: $${LANGFUSE_INIT_PROJECT_SECRET_KEY:?not in secrets.env}
+      LANGFUSE_INIT_USER_EMAIL: ${jsonencode(owner_email)}
+      LANGFUSE_INIT_USER_PASSWORD: $${LANGFUSE_INIT_USER_PASSWORD:?not in secrets.env}
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:26.3.62.3@sha256:de3e47c64078aa196dae2349e048fc98ba81947f651f5c20e06e46baea8ae40a
+    restart: unless-stopped
+    user: "101:101"
+    # The VM has 8 GiB. ADR 0050 moves it to Standard_B4as_v2 if the stack's peak passes 6 GiB.
+    mem_limit: 4g
+    environment:
+      CLICKHOUSE_DB: default
+      CLICKHOUSE_USER: clickhouse
+      CLICKHOUSE_PASSWORD: $${CLICKHOUSE_PASSWORD:?not in secrets.env}
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+      - clickhouse_logs:/var/log/clickhouse-server
+      - /etc/langfuse/clickhouse-logs.xml:/etc/clickhouse-server/config.d/logs.xml:ro
+    healthcheck:
+      test: wget --no-verbose --tries=1 --spider http://localhost:8123/ping || exit 1
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 1s
+
+  valkey:
+    image: valkey/valkey:8.1.11@sha256:8f836008e0986c36adf50da714c7060cf689dbb335f61fe077939d90fa650809
+    restart: unless-stopped
+    command: ["valkey-server", "--requirepass", "$${VALKEY_PASSWORD:?not in secrets.env}", "--maxmemory-policy", "noeviction"]
+    environment:
+      VALKEY_PASSWORD: $${VALKEY_PASSWORD:?not in secrets.env}
+    volumes:
+      - valkey_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "valkey-cli --no-auth-warning -a \"$$VALKEY_PASSWORD\" ping | grep -q PONG"]
+      interval: 3s
+      timeout: 10s
+      retries: 10
+
+  caddy:
+    image: caddy:2.11.9@sha256:4e2425f6009577e7c651010f16679c28f7d12df3e7b1914f941a7a3370746b3c
+    restart: unless-stopped
+    depends_on:
+      - langfuse-web
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /etc/langfuse/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  clickhouse_data:
+  clickhouse_logs:
+  valkey_data:
+  caddy_data:
+  caddy_config:

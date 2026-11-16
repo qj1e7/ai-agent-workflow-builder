@@ -1,0 +1,66 @@
+#cloud-config
+# The Langfuse VM (ADR 0050). Docker and Compose come from Ubuntu's own packages, so unattended
+# security updates cover them. langfuse.service reads the secrets and starts the stack on every boot.
+package_update: true
+package_upgrade: true
+packages:
+  - docker.io
+  - docker-compose-v2
+  - unattended-upgrades
+
+write_files:
+  - path: /etc/docker/daemon.json
+    permissions: "0644"
+    content: |
+      {"log-driver": "json-file", "log-opts": {"max-size": "10m", "max-file": "3"}}
+  - path: /etc/apt/apt.conf.d/20auto-upgrades
+    permissions: "0644"
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+  # A kernel update needs a reboot. Every service comes back by itself, at 03:00 in Singapore.
+  - path: /etc/apt/apt.conf.d/52langfuse-reboot
+    permissions: "0644"
+    content: |
+      Unattended-Upgrade::Automatic-Reboot "true";
+      Unattended-Upgrade::Automatic-Reboot-Time "19:00";
+  - path: /etc/langfuse/compose.yaml
+    permissions: "0600"
+    content: |
+      ${indent(6, chomp(compose))}
+  - path: /etc/langfuse/Caddyfile
+    permissions: "0644"
+    content: |
+      ${indent(6, chomp(caddyfile))}
+  - path: /etc/langfuse/clickhouse-logs.xml
+    permissions: "0644"
+    content: |
+      ${indent(6, chomp(clickhouse))}
+  - path: /usr/local/sbin/langfuse-secrets
+    permissions: "0700"
+    content: |
+      ${indent(6, chomp(secrets_script))}
+  - path: /etc/systemd/system/langfuse.service
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=Langfuse (ADR 0050)
+      Requires=docker.service
+      After=docker.service network-online.target
+      Wants=network-online.target
+
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      ExecStartPre=/usr/local/sbin/langfuse-secrets
+      ExecStart=/usr/bin/docker compose --file /etc/langfuse/compose.yaml --env-file /etc/langfuse/secrets.env up --detach --remove-orphans
+      Restart=on-failure
+      RestartSec=30
+      TimeoutStartSec=30min
+
+      [Install]
+      WantedBy=multi-user.target
+
+runcmd:
+  - [systemctl, daemon-reload]
+  - [systemctl, enable, --now, langfuse.service]
