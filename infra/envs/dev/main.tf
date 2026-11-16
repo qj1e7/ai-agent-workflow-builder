@@ -146,6 +146,38 @@ locals {
     orchestration = "wab_orchestration"
     monitoring    = "wab_monitoring"
   }
+
+  # Langfuse (ADR 0050). Its secrets by Key Vault name, with the name the VM's env file gives each.
+  # The VM's identity may read these and no other secret.
+  langfuse_vm_secrets = {
+    "langfuse-public-key"          = "LANGFUSE_INIT_PROJECT_PUBLIC_KEY"
+    "langfuse-secret-key"          = "LANGFUSE_INIT_PROJECT_SECRET_KEY"
+    "langfuse-salt"                = "SALT"
+    "langfuse-encryption-key"      = "ENCRYPTION_KEY"
+    "langfuse-nextauth-secret"     = "NEXTAUTH_SECRET"
+    "langfuse-db-password"         = "LANGFUSE_DB_PASSWORD"
+    "langfuse-clickhouse-password" = "CLICKHOUSE_PASSWORD"
+    "langfuse-valkey-password"     = "VALKEY_PASSWORD"
+    "langfuse-init-user-password"  = "LANGFUSE_INIT_USER_PASSWORD"
+    "langfuse-storage-key"         = "STORAGE_ACCOUNT_KEY"
+    "langfuse-entra-client-secret" = "AUTH_AZURE_AD_CLIENT_SECRET"
+  }
+  # Langfuse's own key formats.
+  langfuse_key_prefix = {
+    "langfuse-public-key" = "pk-lf-"
+    "langfuse-secret-key" = "sk-lf-"
+  }
+  # Another system issues these, so a person sets them in Key Vault. The judge's key is for
+  # Langfuse's LLM connection, which the setup script makes (ADR 0050, PR B). The VM never reads it.
+  langfuse_secrets_set_by_a_person = ["langfuse-entra-client-secret", "langfuse-judge-anthropic-key"]
+  # Langfuse's Entra app lives in the tenant the Portal signs people in with.
+  langfuse_entra_tenant_id = try(regex("^https://login\\.microsoftonline\\.com/([0-9a-fA-F-]{36})/", var.oidc_issuer)[0], "")
+  # The team's addresses for Langfuse, written as n8n's are. One address is /32.
+  langfuse_team_cidrs = [
+    for entry in split(",", nonsensitive(var.langfuse_allowed_ips)) :
+    strcontains(entry, "/") ? trimspace(entry) : "${trimspace(entry)}/32"
+    if trimspace(entry) != ""
+  ]
 }
 
 # infra/bootstrap/setup-azure.sh creates the group and gives the deploy identity its roles on it,
@@ -208,6 +240,41 @@ resource "random_password" "generated" {
   min_numeric = 1
 }
 
+# Langfuse's secrets (ADR 0050), and the pseudonym key that platform-api names people in traces
+# with. None exists while langfuse_enabled is false.
+resource "random_password" "langfuse" {
+  for_each = var.langfuse_enabled ? toset([
+    "langfuse-public-key",
+    "langfuse-secret-key",
+    "langfuse-salt",
+    "langfuse-nextauth-secret",
+    "langfuse-db-password",
+    "langfuse-clickhouse-password",
+    "langfuse-valkey-password",
+    "langfuse-init-user-password",
+    "trace-pseudonym-key",
+  ]) : toset([])
+
+  length      = 48
+  special     = false
+  min_upper   = 1
+  min_lower   = 1
+  min_numeric = 1
+}
+
+# Langfuse's ENCRYPTION_KEY is 256 bits written as 64 hex characters. The digits plus "abcdef" as
+# the only special characters make exactly that alphabet, and the value stays sensitive.
+resource "random_password" "langfuse_encryption_key" {
+  count = var.langfuse_enabled ? 1 : 0
+
+  length           = 64
+  upper            = false
+  lower            = false
+  numeric          = true
+  special          = true
+  override_special = "abcdef"
+}
+
 module "postgres" {
   source = "../../modules/postgres"
 
@@ -216,7 +283,7 @@ module "postgres" {
   resource_group_name    = data.azurerm_resource_group.this.name
   administrator_login    = local.postgres_admin_login
   administrator_password = random_password.generated["pg-admin-password"].result
-  databases              = ["platform", "n8n"]
+  databases              = concat(["platform", "n8n"], var.langfuse_enabled ? ["langfuse"] : [])
   tags                   = local.tags
 }
 
@@ -253,7 +320,46 @@ module "key_vault" {
     local.teams_webhook_set ? { "teams-webhook-url" = var.teams_webhook_url } : {},
     local.teams_tell_webhook_set ? { "teams-tell-webhook-url" = var.teams_tell_webhook_url } : {},
     local.n8n_key_secrets,
+    var.langfuse_enabled ? merge(
+      {
+        for name, password in random_password.langfuse :
+        name => "${lookup(local.langfuse_key_prefix, name, "")}${password.result}"
+      },
+      {
+        "langfuse-encryption-key" = random_password.langfuse_encryption_key[0].result
+        "langfuse-storage-key"    = module.langfuse_vm[0].storage_account_key
+      },
+    ) : {},
   )
+  secrets_set_by_a_person = var.langfuse_enabled ? local.langfuse_secrets_set_by_a_person : []
+}
+
+# Langfuse on one small VM, not on Container Apps (ADR 0050). Off by default, so plan makes nothing.
+module "langfuse_vm" {
+  source = "../../modules/langfuse_vm"
+  count  = var.langfuse_enabled ? 1 : 0
+
+  name                 = "langfuse-${local.stem}"
+  location             = var.location
+  resource_group_name  = data.azurerm_resource_group.this.name
+  dns_label            = "langfuse-${local.stem}-${local.suffix}"
+  storage_account_name = "stlf${replace(local.stem, "-", "")}${local.suffix}"
+  secrets              = { for name, env_name in local.langfuse_vm_secrets : env_name => local.secret[name] }
+  # The apps share the environment's outbound addresses, which other Azure customers can share
+  # too, so Langfuse's keys and sign-in still guard it.
+  allowed_https_cidrs = distinct(concat(
+    module.app["platform-api"].outbound_ip_addresses,
+    module.app["agent-runtime"].outbound_ip_addresses,
+    local.langfuse_team_cidrs,
+  ))
+  postgres_host              = module.postgres.fqdn
+  owner_email                = trimspace(var.langfuse_owner_email)
+  entra_tenant_id            = local.langfuse_entra_tenant_id
+  entra_client_id            = var.langfuse_entra_client_id
+  log_analytics_workspace_id = module.observability.log_analytics_workspace_id
+  alert_email                = trimspace(var.langfuse_alert_email)
+  deployer_principal_id      = var.deploy_principal_object_id
+  tags                       = local.tags
 }
 
 locals {
@@ -303,6 +409,15 @@ locals {
 locals {
   secret = module.key_vault.secrets
 
+  # Tracing (ADR 0050). Off, neither app gets any Langfuse setting, and tracing stays off.
+  langfuse_env = var.langfuse_enabled ? {
+    LANGFUSE_BASE_URL = module.langfuse_vm[0].url
+  } : {}
+  langfuse_keys = var.langfuse_enabled ? {
+    LANGFUSE_PUBLIC_KEY = local.secret["langfuse-public-key"]
+    LANGFUSE_SECRET_KEY = local.secret["langfuse-secret-key"]
+  } : {}
+
   apps = {
     platform-api = {
       image        = local.images["platform-api"]
@@ -344,6 +459,7 @@ locals {
         local.jira_settings,
         local.confluence_settings,
         local.n8n_key_settings,
+        local.langfuse_env,
       )
       secrets = merge(
         {
@@ -368,6 +484,8 @@ locals {
           TEAMS_TELL_WEBHOOK_URL = local.secret["teams-tell-webhook-url"]
         } : {},
         { for name in keys(local.n8n_key_secrets) : local.n8n_key_env[name] => local.secret[name] },
+        local.langfuse_keys,
+        var.langfuse_enabled ? { TRACE_PSEUDONYM_KEY = local.secret["trace-pseudonym-key"] } : {},
       )
     }
 
@@ -378,15 +496,23 @@ locals {
       memory       = "0.5Gi"
       min_replicas = 0
       max_replicas = 1
-      env = {
-        GITHUB_API_BASE          = var.github_api_base
-        CALLBACK_ALLOWED_ORIGINS = local.url["platform-api"]
-        PLATFORM_JIRA_URL        = local.url["platform-api"]
-        PLANNER_MODE             = var.planner_mode
-      }
+      env = merge(
+        {
+          GITHUB_API_BASE          = var.github_api_base
+          CALLBACK_ALLOWED_ORIGINS = local.url["platform-api"]
+          PLATFORM_JIRA_URL        = local.url["platform-api"]
+          PLANNER_MODE             = var.planner_mode
+        },
+        local.langfuse_env,
+        var.langfuse_enabled ? {
+          LANGFUSE_TRACING_ENVIRONMENT = "azure-${var.environment}"
+          LANGFUSE_RELEASE             = var.image_tag
+        } : {},
+      )
       secrets = merge(
         { AGENT_API_KEY = local.secret["agent-api-key"] },
         local.github_token_set ? { GITHUB_TOKEN = local.secret["github-token"] } : {},
+        local.langfuse_keys,
       )
     }
 
@@ -497,24 +623,30 @@ locals {
       timeout_seconds = 300
       command = [
         "/bin/sh", "-c",
-        "printf '%s\\n' \"$DB_INIT_SQL\" | psql -v ON_ERROR_STOP=1 -v n8n_pw=\"$N8N_DB_PASSWORD\" -v owner_pw=\"$WAB_OWNER_PASSWORD\" -v builder_pw=\"$WAB_BUILDER_PASSWORD\" -v orchestration_pw=\"$WAB_ORCHESTRATION_PASSWORD\" -v monitoring_pw=\"$WAB_MONITORING_PASSWORD\"",
+        "printf '%s\\n' \"$DB_INIT_SQL\" | psql -v ON_ERROR_STOP=1 -v n8n_pw=\"$N8N_DB_PASSWORD\" -v owner_pw=\"$WAB_OWNER_PASSWORD\" -v builder_pw=\"$WAB_BUILDER_PASSWORD\" -v orchestration_pw=\"$WAB_ORCHESTRATION_PASSWORD\" -v monitoring_pw=\"$WAB_MONITORING_PASSWORD\"${var.langfuse_enabled ? " -v langfuse_pw=\"$LANGFUSE_DB_PASSWORD\"" : ""}",
       ]
       env = {
-        PGHOST      = module.postgres.fqdn
-        PGPORT      = "5432"
-        PGDATABASE  = "postgres"
-        PGUSER      = local.postgres_admin_login
-        PGSSLMODE   = "require"
-        DB_INIT_SQL = file("${path.module}/../../sql/db-init.sql")
+        PGHOST     = module.postgres.fqdn
+        PGPORT     = "5432"
+        PGDATABASE = "postgres"
+        PGUSER     = local.postgres_admin_login
+        PGSSLMODE  = "require"
+        DB_INIT_SQL = join("\n", concat(
+          [file("${path.module}/../../sql/db-init.sql")],
+          var.langfuse_enabled ? [file("${path.module}/../../sql/db-init-langfuse.sql")] : [],
+        ))
       }
-      secrets = {
-        PGPASSWORD                 = local.secret["pg-admin-password"]
-        N8N_DB_PASSWORD            = local.secret["n8n-db-password"]
-        WAB_OWNER_PASSWORD         = local.secret["wab-owner-password"]
-        WAB_BUILDER_PASSWORD       = local.secret["wab-builder-password"]
-        WAB_ORCHESTRATION_PASSWORD = local.secret["wab-orchestration-password"]
-        WAB_MONITORING_PASSWORD    = local.secret["wab-monitoring-password"]
-      }
+      secrets = merge(
+        {
+          PGPASSWORD                 = local.secret["pg-admin-password"]
+          N8N_DB_PASSWORD            = local.secret["n8n-db-password"]
+          WAB_OWNER_PASSWORD         = local.secret["wab-owner-password"]
+          WAB_BUILDER_PASSWORD       = local.secret["wab-builder-password"]
+          WAB_ORCHESTRATION_PASSWORD = local.secret["wab-orchestration-password"]
+          WAB_MONITORING_PASSWORD    = local.secret["wab-monitoring-password"]
+        },
+        var.langfuse_enabled ? { LANGFUSE_DB_PASSWORD = local.secret["langfuse-db-password"] } : {},
+      )
     }
 
     migrate = {

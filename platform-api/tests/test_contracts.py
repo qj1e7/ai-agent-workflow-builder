@@ -180,6 +180,7 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "builder/use-case.json": TypeAdapter(UseCaseView),
     "builder/suggest.json": TypeAdapter(SuggestOut),
     "planner/answer.text.json": TypeAdapter(AnswerIn),
+    "planner/answer.text.follow_up.json": TypeAdapter(AnswerIn),
     "planner/answer.intent.json": TypeAdapter(AnswerIn),
     "planner/answer.setup_card.json": TypeAdapter(PlannerReply),
     "planner/answer.setup_card.cross.json": TypeAdapter(PlannerReply),

@@ -51,7 +51,14 @@ from platform_api.orchestration.spec import CardRun, CardsTask, N8nTarget, RunSp
 from platform_api.orchestration.store import RETRY, START, RunRecord, Store
 from platform_api.orchestration.write_actions import WriteGateway
 from platform_api.settings import N8nOwner
-from platform_api.shared import TEAM_TIME_ZONE, N8nExecutionId, Principal, RunId, UserId
+from platform_api.shared import (
+    NO_START_BLOCK,
+    TEAM_TIME_ZONE,
+    N8nExecutionId,
+    Principal,
+    RunId,
+    UserId,
+)
 from tests.conftest import PostgresUrls
 from tests.fake_n8n import OWNER_EMAIL, OWNER_PASSWORD
 from tests.fake_n8n import FakeN8n as N8nRecords
@@ -370,6 +377,21 @@ async def test_a_start_n8n_does_not_take_fails_the_run_in_its_words_and_a_retry_
     [execution] = e.trigger.executions
     await e.call(execution, READ, "Read release")
     assert isinstance(await e.state(run_id), Working)
+
+
+async def test_a_workflow_with_no_start_from_the_portal_stops_at_once_and_says_so(e: Engine):
+    """Trying again could never start it, so the run stops on the first try, and a retry is
+    not offered until someone adds the block."""
+    run_id = await e.start(replace(SPEC, n8n=N8nTarget(WORKFLOW, None)))
+    await e.tick()
+    failed = await e.state(run_id)
+    assert isinstance(failed, Failed)
+    assert (failed.failure.reason, failed.failure.retryable) == (
+        FailureReason.DISPATCH_FAILED,
+        False,
+    )
+    assert failed.failure.message == f"n8n did not take the start: {NO_START_BLOCK}"
+    assert e.trigger.posts == []
 
 
 async def test_retry_is_n8n_s_own_retry_of_the_run_s_newest_execution_from_the_outbox(e: Engine):

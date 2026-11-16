@@ -37,6 +37,10 @@ _Avoid_: Job, recipe, routine
 What Operators see a use case called in the app. Always write "n8n workflow" for n8n's own workflows, and "Jira workflow" for a ticket's statuses.
 _Avoid_: Routine
 
+**Workflow report**:
+The plain-words account that code builds of one version of any workflow: when it runs, each step, what it reads, writes and posts, every safety checker rule as flagged, fixed for you or passed, who approves each write, and its settings. A model never writes it. Strings from the workflow, such as a block's name, show in quotes, apart from code's own words (ADR 0051).
+_Avoid_: Summary, explanation
+
 **Set-up card**:
 The Planner's reply on Home when it can do a request: the whole workflow filled in from the request, with every guess marked and what it can't know asked for. The Operator turns it on. Each write it makes still waits for an Approver's yes.
 _Avoid_: Wizard, form, New workflow (the old 4-step page)

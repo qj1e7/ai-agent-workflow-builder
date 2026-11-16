@@ -5,14 +5,17 @@ import json
 from collections.abc import Callable
 from copy import deepcopy
 from pathlib import Path
-from typing import Any
+from typing import Any, get_args
 
 import pytest
 
 from platform_api.orchestration import (
     ASK_EXITS,
+    FLAG_RULES,
     NODE_TYPES,
+    ApproverMayAccept,
     KnownOptions,
+    RuleId,
     add_yes,
     grade,
 )
@@ -317,9 +320,9 @@ def test_an_unknown_error_workflow_is_never_taken_for_the_platform_s() -> None:
     [
         {"field": "days", "daysInterval": 2, "triggerAtHour": 8, "triggerAtMinute": 0},
         {"field": "hours", "hoursInterval": 5, "triggerAtMinute": 0},
-        {"field": "days", "triggerAtHour": 8},
-        {"field": "weeks", "triggerAtDay": [1], "triggerAtMinute": 0},
-        {"field": "hours", "hoursInterval": 1},
+        {"field": "days", "triggerAtHour": 8, "triggerAtMinute": None},
+        {"field": "weeks", "triggerAtDay": [1], "triggerAtHour": None, "triggerAtMinute": 0},
+        {"field": "hours", "hoursInterval": 1, "triggerAtMinute": None},
         {
             "field": "weeks",
             "weeksInterval": 2,
@@ -335,15 +338,32 @@ def test_an_unknown_error_workflow_is_never_taken_for_the_platform_s() -> None:
             "triggerAtHour": 9,
             "triggerAtMinute": 0,
         },
-        {"field": "months", "triggerAtHour": 9, "triggerAtMinute": 0},
+        {"field": "months", "triggerAtDayOfMonth": None, "triggerAtHour": 9, "triggerAtMinute": 0},
         {"field": "seconds", "secondsInterval": 30},
         {"field": "cronExpression", "expression": "at nine on weekdays"},
     ],
 )
 def test_a_schedule_whose_next_run_n8n_decides_needs_a_fix(interval: dict[str, Any]) -> None:
+    """A part saved as null is one n8n picks by itself, so its next run can't be shown."""
     document = release_check()
     node(document, "Daily 8:00")["parameters"] = {"rule": {"interval": [interval]}}
     assert graded(document) == "needs_a_fix"
+
+
+@pytest.mark.parametrize(
+    ("rule", "said"),
+    [
+        ({}, '"Daily 8:00" leaves its hour or minute for n8n to pick.'),
+        ({"interval": [None]}, '"Daily 8:00" leaves its hour or minute for n8n to pick.'),
+        ({"interval": []}, '"Daily 8:00" has no time to run.'),
+    ],
+)
+def test_a_rule_with_no_interval_runs_at_a_time_n8n_picks_and_an_empty_one_never(
+    rule: dict[str, Any], said: str
+) -> None:
+    document = release_check()
+    node(document, "Daily 8:00")["parameters"] = {"rule": rule}
+    assert said in findings(document)
 
 
 @pytest.mark.parametrize(
@@ -365,9 +385,15 @@ def test_a_schedule_whose_next_run_n8n_decides_needs_a_fix(interval: dict[str, A
             "triggerAtMinute": 0,
         },
         {"field": "cronExpression", "expression": "0 30 7 * * 1-5"},
+        {"field": "days", "triggerAtHour": 8},
+        {"field": "weeks", "triggerAtDay": [1], "triggerAtMinute": 0},
+        {"field": "hours", "hoursInterval": 1},
+        {"field": "months", "triggerAtHour": 9, "triggerAtMinute": 0},
     ],
 )
 def test_a_schedule_the_portal_can_show_to_the_minute_is_fine(interval: dict[str, Any]) -> None:
+    """A part left out is one n8n's editor showed at its default and n8n fills in as it loads the
+    workflow, so it runs at that default."""
     document = release_check()
     node(document, "Daily 8:00")["parameters"] = {"rule": {"interval": [interval]}}
     assert graded(document) == "safe"
@@ -853,3 +879,152 @@ def test_unchecked_counts_a_block_before_ours_and_a_key_the_platform_no_longer_h
 def test_a_document_the_checker_can_t_read_counts_as_unchecked() -> None:
     [found] = unchecked({"nodes": "not a list"}, KEYS_MADE)
     assert found.runs_anyway
+
+
+ALLOWED = KnownOptions(
+    frozenset({"crd_version_checker"}),
+    {"github_releases": frozenset({"langchain-ai/langgraph"})},
+    {"jira.create_ticket": frozenset({"MOCK"})},
+    {"crd_version_checker": {"GitHub repository": None, "Jira project": frozenset({"MOCK"})}},
+    KEYS_MADE,
+)
+"""Every list the editor shows, so every rule the checker has is checked."""
+
+
+def setting(name: str, value: object) -> Callable[[], Doc]:
+    def changed() -> Doc:
+        document = release_check()
+        document["settings"][name] = value
+        return document
+
+    return changed
+
+
+def changed(make: Callable[[], Doc], name: str, *path: str, value: object) -> Callable[[], Doc]:
+    def change() -> Doc:
+        document = make()
+        held: Any = node(document, name)
+        for part in path[:-1]:
+            held = held[part]
+        held[path[-1]] = value
+        return document
+
+    return change
+
+
+def second_yes() -> Doc:
+    document = with_block(release_check(), "CUSTOM.wabAskForYes", "Ask again", "Ask for a yes")
+    return link(without(document, "Create ticket"), "Ask for a yes", "Ask again", 1)
+
+
+def notice_channel(value: object) -> Callable[[], Doc]:
+    return changed(release_notice, "Tell Slack", "parameters", "channelId", "value", value=value)
+
+
+BREAKS: dict[str, Callable[[], Doc]] = {
+    "unreadable": lambda: {"nodes": "none"},
+    "block_off": lambda: with_block(release_check(), "n8n-nodes-base.httpRequest", "Call out"),
+    "version_off": lambda: with_block(release_check(), "n8n-nodes-base.if", "Old", version=99),
+    "picked_by_expression": lambda: with_block(
+        release_check(), "n8n-nodes-base.merge", "Mix", version=3.2, parameters={"mode": "={{ 1 }}"}
+    ),
+    "operation_off": lambda: jira_read(release_check(), {"operation": "create"}),
+    "nothing_starts": lambda: without(release_check(), "Daily 8:00", "Start from the Portal"),
+    "no_error_workflow": setting("errorWorkflow", "someone_else"),
+    "other_time_zone": setting("timezone", "Europe/London"),
+    "test_runs_not_kept": setting("saveManualExecutions", False),
+    "progress_not_saved": setting("saveExecutionProgress", False),
+    "tell_place": lambda: with_block(
+        release_check(), "CUSTOM.wabTell", "Tell you", parameters={"where": "https://x.example"}
+    ),
+    "notice_place_expression": notice_channel("={{ $json.channel }}"),
+    "notice_words_expression": changed(
+        release_notice, "Tell Slack", "parameters", "text", value="={{ $json.summary }}"
+    ),
+    "notice_words_unreadable": changed(
+        release_notice, "Tell Slack", "parameters", "blocksUi", value='{"blocks": ['
+    ),
+    "calls_everyone": changed(
+        release_notice, "Tell Slack", "parameters", "text", value="Look <!channel>"
+    ),
+    "no_platform_key": lambda: with_block(
+        release_check(),
+        "n8n-nodes-base.microsoftTeams",
+        "Tell Teams",
+        version=2,
+        parameters={
+            "resource": "channelMessage",
+            "teamId": {"__rl": True, "value": "T1", "mode": "id"},
+            "channelId": {"__rl": True, "value": "C1", "mode": "id"},
+        },
+    ),
+    "not_platform_key": changed(release_notice, "Tell Slack", "credentials", value={}),
+    "key_not_made": changed(
+        release_check, "Read release", "credentials", value={"githubApi": {"id": "alices"}}
+    ),
+    "key_for_other_block": changed(
+        release_check, "Read release", "credentials", value={"slackApi": {"id": JIRA_KEY}}
+    ),
+    "runs_before_ours": lambda: link(release_notice(), "Start from the Portal", "Tell Slack"),
+    "no_run_time": changed(
+        release_check, "Daily 8:00", "parameters", "rule", value={"interval": []}
+    ),
+    "run_time_unshowable": changed(
+        release_check,
+        "Daily 8:00",
+        "parameters",
+        "rule",
+        value={"interval": [{"field": "hours", "hoursInterval": 5, "triggerAtMinute": 0}]},
+    ),
+    "unknown_agent": changed(release_check, "Compare", "parameters", "agent", value="crd_x"),
+    "unknown_agent_input": changed(
+        release_check,
+        "Compare",
+        "parameters",
+        "inputs",
+        "input",
+        value=[{"name": "Repo", "value": "evil/repo"}],
+    ),
+    "write_place_not_allowed": changed(
+        release_check,
+        "Compare",
+        "parameters",
+        "inputs",
+        "input",
+        value=[{"name": "Jira project", "value": "PROD"}],
+    ),
+    "read_place_not_allowed": changed(
+        release_check, "Read release", "parameters", "place", value="someone/else"
+    ),
+    "change_not_allowed": lambda: with_block(
+        release_check(),
+        "CUSTOM.wabProposeChange",
+        "Propose",
+        parameters={"action": "jira.create_ticket", "place": "PROD"},
+    ),
+    "no_yes_before_write": gate_removed,
+    "second_yes": second_yes,
+}
+"""For each rule, the release check broken in that one way."""
+
+
+def test_every_rule_has_a_row_saying_what_it_is_why_it_matters_and_who_clears_it() -> None:
+    assert set(get_args(RuleId.__value__)) == set(FLAG_RULES)
+    assert set(BREAKS) == set(FLAG_RULES), "and a test that breaks it"
+
+
+@pytest.mark.parametrize("rule", list(BREAKS))
+def test_each_finding_names_the_one_rule_it_breaks(rule: str) -> None:
+    assert grade(release_check(), ERROR_WORKFLOW, TEAM_ZONE, ALLOWED).findings == ()
+    found = grade(BREAKS[rule](), ERROR_WORKFLOW, TEAM_ZONE, ALLOWED).findings
+    assert {f.rule for f in found} == {rule}
+
+
+def test_two_approvers_accept_a_flag_when_code_can_t_tell_what_the_block_does() -> None:
+    """Code can't tell such a block leaves everyone's access as it was (ADR 0051, section 3)."""
+    twos = {
+        rule
+        for rule, row in FLAG_RULES.items()
+        if isinstance(row.clears, ApproverMayAccept) and row.clears.approvers == 2
+    }
+    assert twos == {"version_off", "picked_by_expression", "operation_off"}

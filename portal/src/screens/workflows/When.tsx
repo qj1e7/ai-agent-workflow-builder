@@ -134,7 +134,7 @@ export function When({ useCase, now, mayChange, held, onSaved }: WhenProps) {
       )}
       <p className={styles['small']}>
         {small}
-        {useCase.schedule ? ` Set by ${useCase.schedule.owner_name}.` : ''}{' '}
+        {useCase.schedule ? (useCase.schedule.owner_name ? ` Set by ${useCase.schedule.owner_name}.` : ' Set in n8n.') : ''}{' '}
         <span key={changes} className={changes > 0 ? styles['changed'] : undefined}>
           {next}
         </span>

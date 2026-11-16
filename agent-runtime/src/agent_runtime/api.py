@@ -7,7 +7,8 @@ import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Protocol, Self
+from typing import Final, Protocol, Self
+from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -59,9 +60,12 @@ from agent_runtime.github import GitHubConnection, GitHubReleaseSource
 from agent_runtime.guarded import GuardedModels
 from agent_runtime.jira import JiraReaderFor, PlatformJiraFor, no_jira
 from agent_runtime.model_access import ModelProbe, chat_for, summarizer_for
+from agent_runtime.monitoring.langfuse_tracing import LangfuseSettings, LangfuseTracing
+from agent_runtime.monitoring.masking import Masker
+from agent_runtime.monitoring.tracing import NoTracing, Tracing
 from agent_runtime.origins import Origin, origin_of, parse_origin_list
 from agent_runtime.planner import FixedPlanner, Planner, run_cards, run_task
-from agent_runtime.planner_led import PLANNER_MODES, PlannerMode, answer_led
+from agent_runtime.planner_led import PLANNER_MODES, PlannerMode, led
 from agent_runtime.release_source import ReleaseSource, releases_of
 from agent_runtime.summary import (
     ChatFor,
@@ -143,6 +147,33 @@ def _platform_jira_url(env: Mapping[str, str], origins: frozenset[Origin]) -> st
     return url
 
 
+LANGFUSE_NAMES: Final = ("LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY", "LANGFUSE_BASE_URL")
+
+
+def _langfuse(env: Mapping[str, str]) -> LangfuseSettings | None:
+    public_key, secret_key, base_url = (env.get(name, "").strip() for name in LANGFUSE_NAMES)
+    if not (public_key or secret_key or base_url):
+        return None
+    missing = [name for name in LANGFUSE_NAMES if not env.get(name, "").strip()]
+    if missing:
+        raise SettingsError(
+            f"{' and '.join(missing)} must be set too. Set all three Langfuse settings, or none."
+        )
+    address = urlsplit(base_url)
+    on_the_stack = address.scheme == "http" and "." not in (address.hostname or ".")
+    if not (on_the_stack or (address.scheme == "https" and address.hostname)):
+        raise SettingsError(
+            "LANGFUSE_BASE_URL must be an https address, or http to a service on the stack"
+        )
+    return LangfuseSettings(
+        public_key=public_key,
+        secret_key=secret_key,
+        base_url=base_url,
+        environment=env.get("LANGFUSE_TRACING_ENVIRONMENT", "").strip() or None,
+        release=env.get("LANGFUSE_RELEASE", "").strip() or None,
+    )
+
+
 def _planner_mode(env: Mapping[str, str]) -> PlannerMode:
     named = env.get("PLANNER_MODE", "").strip() or "rules"
     for mode in PLANNER_MODES:
@@ -178,6 +209,8 @@ class Settings:
     verifier_model: str | None = None
     """PLANNER_VERIFIER_MODEL: the model the free reply's verifier runs on, through the same
     connection. None runs it on the connected model, the Planner's own (ADR 0048)."""
+    langfuse: LangfuseSettings | None = None
+    """Where traces go. None keeps tracing off (ADR 0050)."""
     planner_mode: PlannerMode = "rules"
     """PLANNER_MODE: rules, today's Planner and the default, or ai_led, where the model leads
     through checked tools on top of the rules (ADR 0049)."""
@@ -206,6 +239,7 @@ class Settings:
             platform_jira_url=_platform_jira_url(env, origins),
             free_reply=env.get("PLANNER_FREE_REPLY", "").strip().casefold() != "off",
             verifier_model=env.get("PLANNER_VERIFIER_MODEL", "").strip() or None,
+            langfuse=_langfuse(env),
             planner_mode=_planner_mode(env),
         )
 
@@ -371,13 +405,21 @@ class TaskStore:
             return result
 
 
+def _tracing_for(settings: Settings) -> Tracing:
+    if settings.langfuse is None:
+        return NoTracing()
+    return LangfuseTracing(settings.langfuse, Masker.from_env(os.environ))
+
+
 def create_app(
     settings: Settings | None = None,
     runtime: Runtime | None = None,
     models: ModelChecks | None = None,
+    tracing: Tracing | None = None,
 ) -> FastAPI:
     config = settings or Settings.from_env(os.environ)
     active = runtime or build_runtime(config)
+    traces = tracing or _tracing_for(config)
     probe = models or ModelProbe(config.address_policy)
     store = TaskStore()
     app = FastAPI(title="Agent API", version="0.1.0")
@@ -430,7 +472,10 @@ def create_app(
 
         def run() -> TaskResult:
             events = EventLog(active.clock, active.callbacks.sink_for(body))
-            return run_cards(body, inputs, active.planner, runner, chat, today, events)
+            with traces.run(body) as traced:
+                return run_cards(
+                    body, inputs, active.planner, runner, traced.models(chat), today, events
+                )
 
         try:
             return store.run_once(body, run)
@@ -466,9 +511,16 @@ def create_app(
         verifier = (
             active.chat_source(body.model.model_copy(update={"model": named})) if named else None
         )
-        if config.planner_mode == "ai_led":
-            return answer_led(body, chat, verify_with=verifier or chat)
-        return answer_task(body, chat, config.free_reply, verify_with=verifier or chat)
+        with traces.turn(body) as turn:
+            traced, verify = turn.models(chat), turn.models(verifier or chat)
+            if config.planner_mode == "ai_led":
+                done = led(body, traced, verify_with=verify)
+                result, fell_back = done.result, done.fell_back
+            else:
+                result = answer_task(body, traced, config.free_reply, verify_with=verify)
+                fell_back = None
+            turn.answered(result, fell_back)
+        return result
 
     @app.post("/v1/planner/check-part", dependencies=[Depends(require_key)])
     def check_part(body: CheckPartRequest) -> CheckPartResult:

@@ -19,7 +19,15 @@ from platform_api.builder.models import (
     Via,
 )
 from platform_api.db import Connection, UnitOfWork, json
-from platform_api.orchestration import Day, Grade, Schedule, Unreadable, read_flow, zone_name
+from platform_api.orchestration import (
+    Day,
+    Grade,
+    Schedule,
+    Unreadable,
+    read_flow,
+    schedule_intervals,
+    zone_name,
+)
 from platform_api.shared import UserId
 
 type Where = Literal["portal", "n8n"]
@@ -246,8 +254,7 @@ def _when(document: Mapping[str, Any] | None) -> tuple[Day, str] | None:
     ]
     if len(triggers) != 1:
         return None
-    rule = _object(_object(triggers[0].get("parameters")).get("rule"))
-    intervals = _objects(rule.get("interval"))
+    intervals = schedule_intervals(_object(triggers[0].get("parameters")))
     if len(intervals) != 1:
         return None
     interval = intervals[0]

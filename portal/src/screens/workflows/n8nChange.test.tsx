@@ -36,9 +36,9 @@ describe('the workflow page’s banner for a graded version', () => {
     expect(writeWords(undefined)).toBe('the write')
   })
 
-  it('leads with the first finding of a version that needs a fix, and offers Undo to the version before', () => {
+  it('names every finding of a version that needs a fix, and offers Undo to the version before', () => {
     const fix = { ...on, grade: 'needs_a_fix', findings: ['“Send email” is not a block we run.', 'Another.'] } as UseCaseView
-    expect(bannerOf(facts(fix))).toEqual({ tone: 'bad', text: 'Needs a fix: “Send email” is not a block we run.', action: { kind: 'undo', to: 3, inUse: 4 } })
+    expect(bannerOf(facts(fix))).toEqual({ tone: 'bad', text: 'Needs a fix: “Send email” is not a block we run. Another.', action: { kind: 'undo', to: 3, inUse: 4 } })
     expect(bannerOf(facts({ ...fix, version: 1 })).action, 'there is no version before the first').toBeNull()
     expect(bannerOf(facts(fix, BOB)).action).toBeNull()
   })

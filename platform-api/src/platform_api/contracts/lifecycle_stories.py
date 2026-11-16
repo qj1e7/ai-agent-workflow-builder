@@ -98,7 +98,7 @@ HELD = USE_CASE.model_copy(
         "schedule": USE_CASE_SCHEDULE.model_copy(
             update={
                 "held": "owner_removed",
-                "held_words": held_words("owner_removed", USE_CASE_SCHEDULE.owner_name),
+                "held_words": held_words("owner_removed", "Alice"),
             }
         ),
     }

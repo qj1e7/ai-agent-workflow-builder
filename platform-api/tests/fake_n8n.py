@@ -304,6 +304,11 @@ class FakeN8n:
                 return httpx.Response(404, json={"message": f"no /rest{path} in the fake"})
 
     def _activate(self, workflow_id: str, version_id: str, user_id: str = OWNER_ID) -> None:
+        kept = self.history.get(workflow_id, {}).get(version_id)
+        if kept is not None:
+            # n8n's editor names a version as it publishes it. The fake names every published
+            # version, so no read of one may take that label for the workflow's name.
+            kept["name"] = f"Version {version_id[:8]}"
         self.workflows[workflow_id]["activeVersionId"] = version_id
         self.workflows[workflow_id]["active"] = True
         self.timeline.setdefault(workflow_id, []).append(

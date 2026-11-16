@@ -1,0 +1,371 @@
+"""The gate of ADR 0050: no planted key reaches an exported span. Tracing stays off in every
+environment until this passes in CI, and a later failure blocks the merge."""
+
+import json
+import logging
+import uuid
+from collections.abc import Iterator
+from concurrent.futures import ThreadPoolExecutor
+from typing import Any
+
+import httpx
+import pytest
+from fastapi.testclient import TestClient
+from langchain_core.language_models import BaseChatModel
+from langchain_core.messages import AIMessage
+from langchain_core.runnables import Runnable
+from langfuse import get_client
+from langfuse.types import MaskOtelSpansParams, OtelSpanData, OtelSpanIdentifier, OtelSpanPatch
+from opentelemetry.sdk.trace import ReadableSpan
+from opentelemetry.sdk.trace.export import SpanExporter
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+
+from agent_runtime.api import HttpCallbacks, Runtime, create_app
+from agent_runtime.card_runner import CardRunner
+from agent_runtime.contract import Answered, AnswerRequest, DidntFollowAnswer, ModelAccess
+from agent_runtime.contracts import GATEWAY, REPO, card_request, traced_answer_request
+from agent_runtime.jira import JiraTicket
+from agent_runtime.monitoring.langfuse_tracing import (
+    FORGET_AFTER_SECONDS,
+    LangfuseSettings,
+    LangfuseTracing,
+)
+from agent_runtime.monitoring.masking import MASKED, Masker
+from agent_runtime.planner import FixedPlanner
+from agent_runtime.summary import TemplateSummarizer
+from agent_runtime.version_checker import VersionChecker
+from tests.fakes import FakeClock, FakeJira, FakeSource, ScriptedChat, asks, call, langgraph_tags
+from tests.test_api import KEY, SETTINGS, Posts
+
+MARKER = "PLANTMARKER-visible"
+IN_MESSAGE = "sk-ant-api03-plantedINmessage0123456789abcdefXYZ"
+MODEL_KEY = "gw-plantedmodelkey-7f3a9c2e1b5d"
+IN_SETTINGS = "settingsecret-plantedgithub-91ab77"
+CALLBACK_TOKEN = "cbtoken-planted-in-tool-result-55e1c0"
+IN_HEADER = "plantedheaderbearer0123456789abcd"
+IN_METADATA = "ghp_plantedINmetadata01"
+IN_ERROR = "sk-ant-api03-plantedINerror0123456789abcdefXYZ"
+IN_EXCEPTION = "sk-ant-api03-plantedINexception0123456789abcdef"
+
+PLANTED = (
+    IN_MESSAGE,
+    MODEL_KEY,
+    IN_SETTINGS,
+    CALLBACK_TOKEN,
+    IN_HEADER,
+    IN_METADATA,
+    IN_ERROR,
+    IN_EXCEPTION,
+)
+ENV = {"GITHUB_TOKEN": IN_SETTINGS, "AGENT_API_KEY": KEY}
+
+
+class ToolChat(ScriptedChat):
+    """A scripted chat whose structured answers go through the model call, as a real
+    provider's do, so the callbacks see them."""
+
+    def bind_tools(self, tools: Any, **kwargs: Any) -> Runnable[Any, AIMessage]:  # type: ignore[override]
+        return self  # type: ignore[return-value]
+
+    def with_structured_output(self, schema: Any, **kwargs: Any) -> Runnable[Any, Any]:  # type: ignore[override]
+        return BaseChatModel.with_structured_output(self, schema, **kwargs)
+
+
+def everything_in(span: ReadableSpan) -> str:
+    """All of a span that an exporter sends: its name, attributes, status, events, links and
+    resource."""
+    lines = [span.name, span.status.description or ""]
+    lines += [f"{k}={v}" for k, v in (span.attributes or {}).items()]
+    for event in span.events:
+        lines += [event.name, *(f"{k}={v}" for k, v in (event.attributes or {}).items())]
+    for link in span.links:
+        lines += [f"{k}={v}" for k, v in (link.attributes or {}).items()]
+    lines += [f"{k}={v}" for k, v in span.resource.attributes.items()]
+    return "\n".join(lines)
+
+
+def langfuse(
+    masker: Masker, exporter: SpanExporter, public_key: str | None = None, **options: Any
+) -> LangfuseTracing:
+    return LangfuseTracing(
+        LangfuseSettings(
+            # Langfuse keeps one client per public key for the whole process.
+            public_key=public_key or f"pk-lf-{uuid.uuid4().hex}",
+            secret_key="sk-lf-masking-test-not-a-secret",
+            base_url="http://langfuse.invalid",
+            environment="test",
+            release="test",
+        ),
+        masker,
+        span_exporter=exporter,
+        httpx_client=httpx.Client(transport=httpx.MockTransport(lambda _: httpx.Response(207))),
+        **options,
+    )
+
+
+@pytest.fixture
+def exported() -> Iterator[tuple[LangfuseTracing, InMemorySpanExporter]]:
+    exporter = InMemorySpanExporter()
+    tracing = langfuse(Masker.from_env(ENV), exporter)
+    yield tracing, exporter
+    tracing.shutdown()
+
+
+class Clock:
+    def __init__(self) -> None:
+        self.now = 1000.0
+
+    def __call__(self) -> float:
+        return self.now
+
+
+def sent(tracing: LangfuseTracing, exporter: InMemorySpanExporter) -> str:
+    tracing.flush()
+    spans = exporter.get_finished_spans()
+    assert spans, "nothing was exported, so the test proves nothing"
+    return "\n".join(everything_in(span) for span in spans)
+
+
+def app_with(tracing: LangfuseTracing, chat: BaseChatModel) -> TestClient:
+    clock = FakeClock()
+    jira = FakeJira(
+        [JiraTicket(key="MOCK-7", project="MOCK", title=f"Rotate {CALLBACK_TOKEN}", status="Open")]
+    )
+    runtime = Runtime(
+        checker=VersionChecker(
+            FakeSource(langgraph_tags()), TemplateSummarizer(), sleep=clock.sleep
+        ),
+        planner=FixedPlanner(),
+        clock=clock,
+        callbacks=HttpCallbacks(transport=httpx.MockTransport(Posts())),
+        cards=CardRunner(FakeSource(langgraph_tags()[:8]), lambda _: jira, sleep=clock.sleep),
+        chat_source=lambda access: (lambda timeout: chat) if access else None,
+    )
+    return TestClient(create_app(SETTINGS, runtime, tracing=tracing), headers={"X-Agent-Key": KEY})
+
+
+def planted_turn() -> dict[str, Any]:
+    request = traced_answer_request().model_copy(
+        update={
+            "task": f"{MARKER} add {IN_MESSAGE} to the watchlist",
+            "model": ModelAccess(
+                style="anthropic", base_url=GATEWAY, model="claude-sonnet-5-5", api_key=MODEL_KEY
+            ),
+        }
+    )
+    return json.loads(request.model_dump_json())
+
+
+def planted_request() -> AnswerRequest:
+    return AnswerRequest.model_validate(planted_turn())
+
+
+def test_no_planted_key_in_a_planner_turn_reaches_an_exported_span(exported: Any):
+    tracing, exporter = exported
+    chat = ToolChat(
+        script=[
+            RuntimeError(f"401 from the gateway for {IN_ERROR}"),
+            AIMessage(f"I read your key {MODEL_KEY} and the token {IN_SETTINGS}"),
+        ]
+    )
+    client = app_with(tracing, chat)
+    for _ in range(2):
+        assert client.post("/v1/planner/answer", json=planted_turn()).status_code == 200
+    assert chat.script == []
+    text = sent(tracing, exporter)
+    assert MARKER in text
+    assert [p for p in PLANTED if p in text] == []
+
+
+def test_no_planted_key_in_an_agent_run_reaches_an_exported_span(exported: Any):
+    tracing, exporter = exported
+    header = {"Authorization": f"Bearer {IN_HEADER}"}
+    chat = ScriptedChat(
+        script=[
+            asks(call("github_read_releases", {"repo": REPO, "headers": header}, "t1")),
+            asks(call("jira_search", {"project": "MOCK", "text": MARKER}, "t2")),
+            AIMessage(f"Done. The model key was {MODEL_KEY}."),
+        ]
+    )
+    body = json.loads(card_request("run_01JD1").model_dump_json())
+    body["callback"]["token"] = CALLBACK_TOKEN
+    body["model"] = {
+        "style": "anthropic",
+        "base_url": GATEWAY,
+        "model": "claude-sonnet-5-5",
+        "api_key": MODEL_KEY,
+    }
+    assert app_with(tracing, chat).post("/v1/tasks", json=body).json()["status"] == "finished"
+    text = sent(tracing, exporter)
+    assert MARKER in text
+    assert [p for p in PLANTED if p in text] == []
+
+
+def test_no_planted_key_in_run_metadata_or_a_raised_error_reaches_an_exported_span(exported: Any):
+    tracing, exporter = exported
+    chat = ScriptedChat(script=[AIMessage(MARKER)])
+    request = AnswerRequest.model_validate(planted_turn())
+    with pytest.raises(RuntimeError), tracing.turn(request) as turn:
+        model = turn.models(lambda timeout: chat)(10)
+        model.invoke("hello", config={"metadata": {"ticket_note": IN_METADATA}})
+        raise RuntimeError(f"the provider said {IN_EXCEPTION}")
+    with pytest.raises(RuntimeError), tracing.run(card_request("run_01JD1")):
+        raise RuntimeError(f"the tool said {IN_EXCEPTION}")
+    text = sent(tracing, exporter)
+    assert MARKER in text
+    assert [p for p in PLANTED if p in text] == []
+
+
+def test_a_secret_stays_masked_while_its_trace_is_open_however_many_tasks_come_and_go():
+    exporter = InMemorySpanExporter()
+    tracing = langfuse(Masker(), exporter)
+    request = AnswerRequest.model_validate(planted_turn())
+
+    def another_task(n: int) -> None:
+        task = card_request(f"run_{n:04}")
+        task.callback.token = f"another-callback-token-{n:04}"
+        with tracing.run(task):
+            pass
+
+    chat = ScriptedChat(script=[AIMessage(f"{MARKER} the key was {MODEL_KEY}")])
+    with tracing.turn(request) as turn:
+        # Other requests run on other threads, each its own trace, and leave first.
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            list(pool.map(another_task, range(300)))
+        tracing.flush()
+        turn.models(lambda timeout: chat)(10).invoke("hello")
+        turn.answered(Answered(answer=DidntFollowAnswer(), parts=[]))
+    text = sent(tracing, exporter)
+    tracing.shutdown()
+    assert MARKER in text
+    assert MODEL_KEY not in text
+    assert tracing.tracked == 0
+
+
+def test_a_span_of_a_trace_this_adapter_does_not_track_is_dropped_at_export():
+    exporter = InMemorySpanExporter()
+    public_key = f"pk-lf-{uuid.uuid4().hex}"
+    tracing = langfuse(Masker(), exporter, public_key)
+    unknown = "stray-secret-no-rule-knows-4b1d"
+    with get_client(public_key=public_key).start_as_current_observation(
+        name="stray", as_type="span", input=unknown
+    ):
+        pass
+    with tracing.turn(AnswerRequest.model_validate(planted_turn())) as turn:
+        turn.answered(Answered(answer=DidntFollowAnswer(), parts=[]))
+    text = sent(tracing, exporter)
+    tracing.shutdown()
+    assert [span.name for span in exporter.get_finished_spans()] == ["planner-turn"]
+    assert unknown not in text
+
+
+def test_a_span_exported_long_after_its_trace_ended_is_masked_or_dropped_never_sent_plain():
+    clock = Clock()
+    exporter = InMemorySpanExporter()
+    tracing = langfuse(Masker(), exporter, limit=1, clock=clock)
+    first_key = "gw-first-turn-plant-77aa"
+    second_gateway = "gw-second-turn-plant-0b9e"
+    first = AnswerRequest.model_validate(planted_turn())
+    first = first.model_copy(
+        update={"model": first.model.model_copy(update={"api_key": first_key})}
+    )
+    second = first.model_copy(
+        update={
+            "trace": None,
+            "model": first.model.model_copy(update={"api_key": second_gateway}),
+        }
+    )
+    chat = ScriptedChat(
+        script=[AIMessage(f"first {first_key}"), AIMessage(f"{MARKER} {second_gateway}")]
+    )
+    with tracing.turn(first) as turn:
+        turn.models(lambda timeout: chat)(10).invoke("hello")
+    clock.now += FORGET_AFTER_SECONDS
+    with tracing.turn(second) as turn:
+        turn.models(lambda timeout: chat)(10).invoke("hello")
+    text = sent(tracing, exporter)
+    tracing.shutdown()
+    assert MARKER in text
+    assert first_key not in text and second_gateway not in text
+
+
+def test_a_trace_whose_span_never_starts_runs_untraced_and_lets_its_secret_go(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+):
+    masker = Masker()
+    exporter = InMemorySpanExporter()
+    tracing = langfuse(masker, exporter)
+
+    def refused(**_: Any) -> Any:
+        raise RuntimeError(f"no span for {MODEL_KEY}")
+
+    monkeypatch.setattr(tracing._client, "start_as_current_observation", refused)  # pyright: ignore[reportPrivateUsage]
+    chat = ScriptedChat(script=[AIMessage("hello")])
+    with caplog.at_level(logging.WARNING), tracing.turn(planted_request()) as turn:
+        assert turn.models(lambda timeout: chat)(10).invoke("hi").text == "hello"
+        turn.answered(Answered(answer=DidntFollowAnswer(), parts=[]))
+    tracing.flush()
+    tracing.shutdown()
+    assert exporter.get_finished_spans() == ()
+    assert tracing.tracked == 0
+    assert masker.mask(MODEL_KEY) == MODEL_KEY
+    assert [r.getMessage() for r in caplog.records if r.name.endswith("langfuse_tracing")] == [
+        "Not traced: the trace did not start: RuntimeError"
+    ]
+
+
+def test_a_span_of_an_untracked_trace_would_leave_with_every_attribute_masked_if_kept():
+    tracing = langfuse(Masker(), InMemorySpanExporter())
+    stray = OtelSpanIdentifier(trace_id="a" * 32, span_id="b" * 16)
+    attributes = {"langfuse.observation.input": "stray-secret-no-rule-knows", "count": 3}
+    params = MaskOtelSpansParams(
+        spans={
+            stray: OtelSpanData(
+                trace_id="a" * 32,
+                span_id="b" * 16,
+                parent_span_id=None,
+                name="stray",
+                instrumentation_scope_name="langfuse-sdk",
+                instrumentation_scope_version=None,
+                attributes=attributes,
+                resource_attributes={},
+            )
+        }
+    )
+    patch: Any = tracing._mask_spans(params=params).span_patches[stray]  # pyright: ignore[reportPrivateUsage]
+    tracing.shutdown()
+    assert not isinstance(patch, OtelSpanPatch)
+    assert dict(patch.set_attributes) == dict.fromkeys(attributes, MASKED)
+    assert tuple(patch.delete_attributes) == ()
+
+
+def test_at_the_limit_a_new_trace_is_not_sent_and_no_open_trace_is_forgotten(
+    caplog: pytest.LogCaptureFixture,
+):
+    exporter = InMemorySpanExporter()
+    tracing = langfuse(Masker(), exporter, limit=1)
+    first = AnswerRequest.model_validate(planted_turn())
+    second_gateway = "gw-second-turn-plant-0b9e"
+    second = first.model_copy(
+        update={
+            "task": "the second turn",
+            "trace": None,
+            "model": first.model.model_copy(update={"api_key": second_gateway}),
+        }
+    )
+    chat = ScriptedChat(
+        script=[AIMessage(f"second {second_gateway}"), AIMessage(f"{MARKER} {MODEL_KEY}")]
+    )
+    with tracing.turn(first) as first_turn:
+        with caplog.at_level(logging.WARNING), tracing.turn(second) as second_turn:
+            second_turn.models(lambda timeout: chat)(10).invoke("hello")
+            second_turn.answered(Answered(answer=DidntFollowAnswer(), parts=[]))
+        first_turn.models(lambda timeout: chat)(10).invoke("hello")
+        first_turn.answered(Answered(answer=DidntFollowAnswer(), parts=[]))
+    text = sent(tracing, exporter)
+    tracing.shutdown()
+    assert MARKER in text
+    assert "the second turn" not in text and second_gateway not in text and MODEL_KEY not in text
+    assert [r.getMessage() for r in caplog.records if r.name.endswith("langfuse_tracing")] == [
+        "Not traced: 1 traces are already tracked"
+    ]

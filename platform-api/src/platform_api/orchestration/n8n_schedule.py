@@ -38,7 +38,8 @@ PART = re.compile(r"([0-9]+)(?:-([0-9]+))?(?:/([0-9]+))?")
 @dataclass(frozen=True)
 class Rule:
     """One kind of rule: n8n's interval when it is left out, the intervals whose runs the cron
-    alone spaces, and the parts of the time n8n picks itself when they are left out."""
+    alone spaces, and the parts of the time n8n picks itself when one is saved as null, or the
+    rule has no interval at all."""
 
     every_default: int
     shown_every: frozenset[int]
@@ -176,14 +177,62 @@ def next_run(
     return min(fires, default=None)
 
 
+EDITOR_DEFAULTS: Mapping[str, Mapping[str, JsonValue]] = {
+    "seconds": {"secondsInterval": 30},
+    "minutes": {"minutesInterval": 5},
+    "hours": {"hoursInterval": 1, "triggerAtMinute": 0},
+    "days": {"daysInterval": 1, "triggerAtHour": 0, "triggerAtMinute": 0},
+    "weeks": {"weeksInterval": 1, "triggerAtDay": [0], "triggerAtHour": 0, "triggerAtMinute": 0},
+    "months": {
+        "monthsInterval": 1,
+        "triggerAtDayOfMonth": 1,
+        "triggerAtHour": 0,
+        "triggerAtMinute": 0,
+    },
+    CRON: {"expression": ""},
+}
+"""The editor saves only what a person changed, and n8n 2.42.6 fills in the rest as it loads the
+workflow, before it makes the cron (`getNodeParameters` with its defaults), so a time left at what
+the editor showed runs at that time. A part saved as null is not filled in, so n8n picks it."""
+NULL_IS_DEFAULT = frozenset(
+    {
+        "secondsInterval",
+        "minutesInterval",
+        "hoursInterval",
+        "daysInterval",
+        "weeksInterval",
+        "monthsInterval",
+        "triggerAtDay",
+        "expression",
+    }
+)
+"""The parts n8n runs at their default when saved as null, as q12b_schedule_defaults.txt shows.
+The hour, the minute and the day of the month it picks instead."""
+DEFAULT_RULE: Mapping[str, JsonValue] = {"interval": [{"field": "days"}]}
+"""The Schedule Trigger's rule when none is saved: every day, at midnight once filled in."""
+
+
 def schedule_intervals(parameters: Mapping[str, JsonValue]) -> list[Mapping[str, JsonValue]]:
-    """A Schedule Trigger's rules, from its `rule.interval`. An entry that is not an object reads
-    as an empty one, which n8n would fill in by itself."""
-    rule = parameters.get("rule")
-    intervals = rule.get("interval") if isinstance(rule, dict) else None
+    """A Schedule Trigger's rules as n8n runs them, with what n8n fills in. A rule with no
+    `interval`, or an entry saved as null, runs as an empty entry that n8n does not fill in. Any
+    other entry that is not an object reads the same way, so no time is shown for it."""
+    rule = parameters.get("rule", DEFAULT_RULE)
+    if not isinstance(rule, dict) or "interval" not in rule:
+        return [{}]
+    intervals = rule["interval"]
     if not isinstance(intervals, list):
         return []
-    return [interval if isinstance(interval, dict) else {} for interval in intervals]
+    return [_filled(interval) if isinstance(interval, dict) else {} for interval in intervals]
+
+
+NOTHING_SHOWN: Mapping[str, JsonValue] = {}
+
+
+def _filled(interval: Mapping[str, JsonValue]) -> dict[str, JsonValue]:
+    field = interval.get("field", "days")
+    shown = EDITOR_DEFAULTS.get(field, NOTHING_SHOWN) if isinstance(field, str) else NOTHING_SHOWN
+    saved = {k: v for k, v in interval.items() if v is not None or k not in NULL_IS_DEFAULT}
+    return {"field": field, **shown, **saved}
 
 
 class _Node(BaseModel):

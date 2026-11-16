@@ -8,6 +8,7 @@
       "choices": []
     }
   ],
+  "trace_id": null,
   "answer": "remove_software",
   "software": "Kubernetes",
   "matches": [],

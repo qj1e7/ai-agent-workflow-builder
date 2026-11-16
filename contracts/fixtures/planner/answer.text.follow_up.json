@@ -1,0 +1,13 @@
+{
+  "text": "and Redis?",
+  "intent": null,
+  "use_case_id": null,
+  "previous": {
+    "request": "What is the newest version of LangGraph?",
+    "software": "LangGraph",
+    "answer": "LangGraph is behind. You run 1.2.14 and the newest is 1.2.16.",
+    "kind": "question",
+    "trace_id": "019a8c3e5b2f7c41a3d29e6f0b7d1c55"
+  },
+  "chat": "5f0c2a7e-3b1d-4e8f-9a6c-2d4b7e1f0a93"
+}

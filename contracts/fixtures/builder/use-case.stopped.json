@@ -64,6 +64,7 @@
   "deleted_in_n8n_at": null,
   "moving_to_n8n": false,
   "move_refused": null,
+  "start_refused": null,
   "made_in_n8n_by": null,
   "held_in_n8n": null
 }

@@ -19,8 +19,8 @@ const NOTE = 'Back to version 2, saved as version 4.'
 const noted = (desks: Desks): Desks => desksReducer(desks, { user: 'alice', action: { type: 'note', text: NOTE } })
 const IN_CHAT = noted(
   desksReducer(
-    desksReducer({}, { user: 'alice', action: { type: 'sent', text: 'What can you do?' } }),
-    { user: 'alice', action: { type: 'answered', reply: { answer: 'abilities', how_to_start: false, parts: [] }, typed: 'What can you do?' } },
+    desksReducer({}, { user: 'alice', action: { type: 'sent', text: 'What can you do?', chat: 'c1' } }),
+    { user: 'alice', action: { type: 'answered', reply: { trace_id: null, answer: 'abilities', how_to_start: false, parts: [] }, typed: 'What can you do?' } },
   ),
 )
 const ON_HOME = noted({})

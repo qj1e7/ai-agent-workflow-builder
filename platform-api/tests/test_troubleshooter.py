@@ -5,7 +5,7 @@ import pytest
 
 from platform_api.monitoring.events import RunFailedData
 from platform_api.monitoring.troubleshooter import ADVICE, answers, explain, explain_failure
-from platform_api.shared import TEAM_TIME_ZONE, WRITE_STOP_ADVICE
+from platform_api.shared import NO_START_BLOCK, TEAM_TIME_ZONE, WRITE_STOP_ADVICE
 from platform_api.wire import FailureReason, FailureStage
 
 
@@ -396,3 +396,16 @@ def test_a_rate_limited_stop_is_told_to_wait_before_retrying():
     assert "GitHub" not in advice.likely_cause
     other = explain_failure(failure("AgentError", True, message="UpstreamUnavailable: down"))
     assert other == explain("AgentError")
+
+
+def test_a_workflow_with_no_start_from_the_portal_is_named_and_not_safe_to_retry():
+    stop = failure(
+        "DispatchFailed", False, "pending", f"n8n did not take the start: {NO_START_BLOCK}"
+    )
+    advice = explain_failure(stop)
+    assert "Start from the Portal" in advice.explanation
+    assert "workflow engine" not in f"{advice.likely_cause} {advice.suggestion}"
+    said = answers(stop)
+    assert said.what_happened == advice.explanation
+    assert said.safe_to_retry == f"No. This kind of stop can't be retried. {advice.suggestion}"
+    assert (said.retry.possible, said.next) == (False, "report")

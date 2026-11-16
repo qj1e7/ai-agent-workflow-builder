@@ -65,6 +65,7 @@ from platform_api.orchestration.agents import (
     SoftwareNotKnown,
     ToolId,
     ToolKind,
+    TurnTrace,
     UnderstoodRow,
     WatchedFact,
     WatchlistAnswer,
@@ -132,7 +133,7 @@ from platform_api.orchestration.n8n_credentials import (
     credentials_named,
 )
 from platform_api.orchestration.n8n_run_view import NodeState, RunInN8n
-from platform_api.orchestration.n8n_schedule import next_run, zone_name
+from platform_api.orchestration.n8n_schedule import next_run, schedule_intervals, zone_name
 from platform_api.orchestration.n8n_staff import (
     NO_ACCESS,
     OFF,
@@ -141,6 +142,7 @@ from platform_api.orchestration.n8n_staff import (
     StaffAccess,
     no_access_words,
 )
+from platform_api.orchestration.node_classes import NODE_CLASSES, Runs, Use
 from platform_api.orchestration.people_store import ConfirmationRow
 from platform_api.orchestration.person_runs import (
     Ask,
@@ -160,7 +162,7 @@ from platform_api.orchestration.planning import (
     ProjectFinding,
     RuntimeDown,
 )
-from platform_api.orchestration.platform_keys import KEYS, KeySpec, attach_keys
+from platform_api.orchestration.platform_keys import KEY_FOR_TYPE, KEYS, KeySpec, attach_keys
 from platform_api.orchestration.run_gist import RunGist
 from platform_api.orchestration.runs import state_name
 from platform_api.orchestration.schedule import (
@@ -218,18 +220,29 @@ from platform_api.orchestration.watch_store import (
 )
 from platform_api.orchestration.workflow_check import (
     ASK_EXITS,
+    FLAG_RULES,
     GRADING_RULES,
     NODE_TYPES,
     NOTHING_TO_CHANGE_BLOCK,
     TYPE_OF,
+    ApproverMayAccept,
+    Block,
     BlockKind,
+    CantRun,
+    Clears,
     Document,
     Edge,
     Face,
     Finding,
+    FixedForYou,
+    FlagRow,
+    Flow,
     Graded,
     KnownOptions,
     N8nDocument,
+    NeedsAnAnswer,
+    NeedsASetting,
+    RuleId,
     Unreadable,
     WithYes,
     add_yes,
@@ -243,11 +256,28 @@ from platform_api.orchestration.workflow_check import (
     unchecked,
     unpinned_notices,
     writes,
+    zone_words,
 )
 from platform_api.orchestration.write_actions import Binding
 
 __all__ = [
+    "ApproverMayAccept",
+    "Block",
+    "CantRun",
+    "Clears",
+    "FLAG_RULES",
+    "FixedForYou",
+    "FlagRow",
+    "Flow",
+    "KEY_FOR_TYPE",
+    "NODE_CLASSES",
+    "NeedsAnAnswer",
+    "NeedsASetting",
+    "RuleId",
+    "Runs",
+    "Use",
     "Face",
+    "zone_words",
     "face",
     "skipped_in_tests",
     "unchecked",
@@ -286,6 +316,7 @@ __all__ = [
     "publisher_of",
     "N8nTarget",
     "next_run",
+    "schedule_intervals",
     "zone_name",
     "read_flow",
     "GITHUB_RELEASES",
@@ -424,6 +455,7 @@ __all__ = [
     "ToolId",
     "ToolKind",
     "ToolRule",
+    "TurnTrace",
     "UnderstoodRow",
     "Waiting",
     "approvers_needed",

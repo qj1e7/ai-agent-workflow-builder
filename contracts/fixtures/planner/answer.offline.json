@@ -1,5 +1,6 @@
 {
   "parts": [],
+  "trace_id": null,
   "answer": "offline",
   "why": "no_model",
   "message": "No AI model is connected, so the Planner can't read your task yet. Start from one of these, or connect a model in Settings.",
