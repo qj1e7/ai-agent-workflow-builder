@@ -77,6 +77,7 @@ from agent_runtime.contract import (
     TaskFinished,
     TaskOutput,
     TaskRequest,
+    TurnTrace,
     WatchedFact,
     WatchlistInputs,
     WatchlistScheduleFact,
@@ -841,6 +842,15 @@ def answer_request(task: str = FOLLOW_UP_TASK) -> AnswerRequest:
     return AnswerRequest(task=task, model=draft_request().model)
 
 
+def traced_answer_request() -> AnswerRequest:
+    trace = TurnTrace(
+        id="019a8c3e5b2f7c41a3d29e6f0b7d1c55",
+        chat="5f0c2a7e-3b1d-4e8f-9a6c-2d4b7e1f0a93",
+        person="9c4f1e2a7b3d5c6e8f0a1b2c3d4e5f60718293a4b5c6d7e8f9a0b1c2d3e4f5a6",
+    )
+    return answer_request().model_copy(update={"trace": trace})
+
+
 def _answered(read: TaskRead, task: str) -> Answered:
     answer = answer_of(read, task)
     return Answered(answer=answer, parts=parts_of(read, task, answer))
@@ -1030,7 +1040,7 @@ def fixtures() -> dict[str, WireModel]:
         "software-found.json": found_software(),
         "releases-read-request.json": read_releases_request(),
         "releases-read.json": releases_read(),
-        "planner-answer-request.json": answer_request(),
+        "planner-answer-request.json": traced_answer_request(),
         "planner-answered-card.json": answered_card(),
         "planner-answered-cant.json": answered_cant(),
         "planner-answered-watchlist.json": answered_watchlist(),

@@ -544,6 +544,18 @@
           "minLength": 1,
           "title": "Task",
           "type": "string"
+        },
+        "trace": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TurnTrace"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Where the turn is traced. None leaves it untraced."
         }
       },
       "required": [
@@ -3706,6 +3718,51 @@
         "input_schema"
       ],
       "title": "ToolSpec",
+      "type": "object"
+    },
+    "TurnTrace": {
+      "additionalProperties": false,
+      "description": "Where the turn is traced (ADR 0050). The platform makes it. The runtime traces only when\nits own tracing is on.",
+      "properties": {
+        "chat": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f-]{1,36}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The Portal's chat, which groups its turns into one session.",
+          "title": "Chat"
+        },
+        "id": {
+          "description": "The turn's trace id, 32 lowercase hex digits. The platform makes a new one for each typed message.",
+          "pattern": "^[0-9a-f]{32}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "person": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "A pseudonym for the person: an HMAC-SHA256 of their platform id. Never their email or name.",
+          "title": "Person"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "title": "TurnTrace",
       "type": "object"
     },
     "UnderstoodRow": {

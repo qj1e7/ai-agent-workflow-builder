@@ -538,9 +538,18 @@ class PreviousTurn(WireModel):
     kind: str | None = Field(default=None, max_length=40)
 
 
+class TurnTrace(WireModel):
+    """Where the runtime traces the turn (ADR 0050)."""
+
+    id: str = Field(pattern=r"^[0-9a-f]{32}$")
+    chat: str | None = Field(default=None, pattern=r"^[0-9a-f-]{1,36}$")
+    person: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+
+
 class AnswerRequest(WireModel):
     task: str
     model: ModelAccess
+    trace: TurnTrace | None = None
     facts: PlannerFacts | None = None
     previous: PreviousTurn | None = None
     changes_workflows: bool = True
