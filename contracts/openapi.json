@@ -9056,7 +9056,7 @@
                 "type": "null"
               }
             ],
-            "description": "The software the Planner named in its answer to it.",
+            "description": "The one software the Planner named in its answer to it. A message that only asks to watch it, such as keep track of it, gets the offer to watch this software.",
             "title": "Software"
           },
           "trace_id": {

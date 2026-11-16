@@ -2,9 +2,10 @@ import { useId, type ReactNode } from 'react'
 import { cx } from './cx'
 import styles from './Card.module.css'
 
-interface CardProps {
-  /** The bold title, which names the card for a screen reader. */
-  readonly title: ReactNode
+/** A card is named by its bold title, or, when the words above it already say what it is, by a label a screen reader reads alone. */
+type Named = { readonly title: ReactNode; readonly label?: never } | { readonly title?: never; readonly label: string }
+
+type CardProps = Named & {
   /** A state pill or tag at the end of the title’s line. */
   readonly pill?: ReactNode
   readonly children?: ReactNode
@@ -18,18 +19,20 @@ interface CardProps {
   readonly headingId?: string
 }
 
-/** The chrome every card in the chat shares (the sketch’s `.card`): a head, the body, and a foot only when there is something in it. */
-export function Card({ title, pill, children, status, actions, foot, headingId }: CardProps) {
+/** The chrome every card in the chat shares (the sketch’s `.card`): a head unless it is named by a label, the body, and a foot only when there is something in it. */
+export function Card({ title, label, pill, children, status, actions, foot, headingId }: CardProps) {
   const ownId = useId()
   const titleId = headingId ?? ownId
   return (
-    <section className={styles['card']} aria-labelledby={titleId}>
-      <div className={styles['head']}>
-        <h3 id={titleId} tabIndex={headingId === undefined ? undefined : -1}>
-          {title}
-        </h3>
-        {pill}
-      </div>
+    <section className={styles['card']} aria-labelledby={label === undefined ? titleId : undefined} aria-label={label}>
+      {label === undefined ? (
+        <div className={styles['head']}>
+          <h3 id={titleId} tabIndex={headingId === undefined ? undefined : -1}>
+            {title}
+          </h3>
+          {pill}
+        </div>
+      ) : null}
       {children}
       {foot !== undefined ? <div className={cx(styles['foot'], styles['own'])}>{foot}</div> : null}
       {foot === undefined && (status !== undefined || actions !== undefined) ? (

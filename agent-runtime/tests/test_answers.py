@@ -1708,6 +1708,30 @@ def test_a_watch_with_no_software_name_asks_which_software(task: str, verb: str)
     assert answer_of(reading, task) == WhichSoftwareAnswer(word=verb)
 
 
+@pytest.mark.parametrize(
+    ("task", "verb"),
+    [
+        ("help me add Node Js , keep track of it", "add"),
+        ("add Node Js and keep track of it", "add"),
+        ("Add Node Js, monitor it", "Add"),
+        ("add Node Js, please watch this one", "add"),
+        ("add Node Js, follow it.", "add"),
+        ("add Node Js, track them for me", "add"),
+    ],
+)
+def test_a_clause_that_watches_it_is_the_same_watch_of_the_software_named(task: str, verb: str):
+    reading = read(belongs_on_watchlist=True, watchlist_word="add", software="Node Js")
+    assert answer_of(reading, task) == WatchlistAnswer(word=verb, software="Node Js")
+    assert {mark for _, mark, _ in parts(reading, task)} == {"will_do"}
+
+
+def test_a_clause_that_does_more_to_it_than_watch_still_comes_back():
+    reading = read(belongs_on_watchlist=True, watchlist_word="add", software="Node Js")
+    answer = answer_of(reading, "add Node Js, and delete it")
+    assert isinstance(answer, CantAnswer)
+    assert answer.alternative == WatchlistAnswer(word="add", software="Node Js")
+
+
 def test_more_words_after_a_software_noun_are_not_the_which_software_ask():
     reading = read(belongs_on_watchlist=True, watchlist_word="add")
     answer = answer_of(reading, "add a software and email the team")

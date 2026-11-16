@@ -135,6 +135,15 @@ export const watchlistSay = (software: string | null, listed: boolean): string =
     : `${software} is software, so it belongs on the Software watchlist, which checks the software on it for new releases.`
 }
 
+/** The Planner's release words, as its `RELEASE_ROOTS`: a request with one asks about the version or the releases. */
+const VERSION_WORD = /\b(?:versions?|releas(?:e|es|ed|ing)|upgrad(?:e|es|ed|ing)|patch(?:es|ed|ing)?)\b/i
+
+/**
+ * The software card's line for software the watchlist doesn't hold. Why the version she runs isn't known fits only a question about
+ * the version. Asked to add, watch or keep track of it, it isn't on the watchlist yet, and that is all.
+ */
+export const unwatchedSay = (word: string): string => (VERSION_WORD.test(word) ? 'It isn’t on the watchlist, so I don’t know which version you run.' : 'It isn’t on the watchlist yet.')
+
 /** The most names a sentence lists before it counts the rest. */
 const NAMED = 8
 

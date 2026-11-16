@@ -921,7 +921,11 @@ class PreviousTurn(WireModel):
 
     request: str = Field(max_length=2000, description="What the person typed, or the chip's words.")
     software: str | None = Field(
-        default=None, max_length=80, description="The software the Planner named in its answer."
+        default=None,
+        max_length=80,
+        description="The one software the Planner named in its answer. Client input: a message "
+        "that only asks to watch it, such as keep track of it, gets the offer to watch this "
+        "software, which the person must tap.",
     )
     answer: str | None = Field(
         default=None,

@@ -27,6 +27,13 @@ describe('a card in the chat', () => {
     expect(bare.match(/<div/g)).toHaveLength(1)
   })
 
+  it('can be named for a screen reader only, with no title drawn, when the words above it already say what it is', () => {
+    const quiet = renderToStaticMarkup(<Card label="Software to watch">body</Card>)
+    expect(quiet).toMatch(/^<section[^>]*aria-label="Software to watch"/)
+    expect(quiet).not.toContain('<h3')
+    expect(text(quiet)).toBe('body')
+  })
+
   it('lets a foot lay itself out, so Ask the team’s open box spans the card instead of sitting squeezed in the buttons’ corner', () => {
     const open = renderToStaticMarkup(
       <Card title="What I can’t do yet" foot={<div data-box="ask"><textarea /></div>}>
