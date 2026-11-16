@@ -50,7 +50,12 @@ from platform_api.orchestration.n8n_calls import (
     refuses_writes,
     version_problem,
 )
-from platform_api.orchestration.n8n_staff import NO_ACCESS, OFF, Ended, StaffAccounts
+from platform_api.orchestration.n8n_staff import (
+    APPROVERS_NO_ACCESS,
+    OFF,
+    Ended,
+    StaffAccounts,
+)
 from platform_api.orchestration.workflow_check import ERROR_WORKFLOW as ERROR_WORKFLOW_NAME
 from platform_api.orchestration.workflow_check import SELF_TEST
 from platform_api.shared import UseCaseId, UserId
@@ -173,9 +178,9 @@ async def test_only_someone_who_can_open_n8n_lists_and_sets_up(s: Staffed):
     approver = await s.lab.call("bob", "GET", LISTED, template=LISTED)
     assert (approver.status_code, approver.json()["detail"]) == (403, SEE_MADE_IN_N8N)
     listed = await s.lab.call("alice", "GET", LISTED, template=LISTED)
-    assert (listed.status_code, listed.json()["detail"]) == (403, NO_ACCESS)
+    assert (listed.status_code, listed.json()["detail"]) == (403, APPROVERS_NO_ACCESS)
     refused = await set_up(s, "alice", workflow_id)
-    assert (refused.status_code, refused.json()["detail"]) == (403, NO_ACCESS)
+    assert (refused.status_code, refused.json()["detail"]) == (403, APPROVERS_NO_ACCESS)
     assert (await set_up(s, "bob", workflow_id)).status_code == 403, "an Approver never"
 
     made_in_n8n(s, staff_for(s.lab, s.n8n, switched_on=False), Workflows(s.n8n, s.lab.h.db))
