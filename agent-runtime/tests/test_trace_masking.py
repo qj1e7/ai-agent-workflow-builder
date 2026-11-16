@@ -4,7 +4,7 @@ environment until this passes in CI, and a later failure blocks the merge."""
 import json
 import logging
 import uuid
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
@@ -14,8 +14,9 @@ from fastapi.testclient import TestClient
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage
 from langchain_core.runnables import Runnable
+from langfuse import get_client
 from opentelemetry.sdk.trace import ReadableSpan
-from opentelemetry.sdk.trace.export import SpanExporter, SpanExportResult
+from opentelemetry.sdk.trace.export import SpanExporter
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
 from agent_runtime.api import HttpCallbacks, Runtime, create_app
@@ -24,11 +25,11 @@ from agent_runtime.contract import Answered, AnswerRequest, DidntFollowAnswer, M
 from agent_runtime.contracts import GATEWAY, REPO, card_request, traced_answer_request
 from agent_runtime.jira import JiraTicket
 from agent_runtime.monitoring.langfuse_tracing import (
-    LONGEST_EXPORT_WAIT,
+    FORGET_AFTER_SECONDS,
     LangfuseSettings,
     LangfuseTracing,
 )
-from agent_runtime.monitoring.masking import GRACE_SECONDS, MASKED, Masker
+from agent_runtime.monitoring.masking import Masker
 from agent_runtime.planner import FixedPlanner
 from agent_runtime.summary import TemplateSummarizer
 from agent_runtime.version_checker import VersionChecker
@@ -82,11 +83,13 @@ def everything_in(span: ReadableSpan) -> str:
     return "\n".join(lines)
 
 
-def langfuse(masker: Masker, exporter: SpanExporter) -> LangfuseTracing:
+def langfuse(
+    masker: Masker, exporter: SpanExporter, public_key: str | None = None, **options: Any
+) -> LangfuseTracing:
     return LangfuseTracing(
         LangfuseSettings(
             # Langfuse keeps one client per public key for the whole process.
-            public_key=f"pk-lf-{uuid.uuid4().hex}",
+            public_key=public_key or f"pk-lf-{uuid.uuid4().hex}",
             secret_key="sk-lf-masking-test-not-a-secret",
             base_url="http://langfuse.invalid",
             environment="test",
@@ -95,6 +98,7 @@ def langfuse(masker: Masker, exporter: SpanExporter) -> LangfuseTracing:
         masker,
         span_exporter=exporter,
         httpx_client=httpx.Client(transport=httpx.MockTransport(lambda _: httpx.Response(207))),
+        **options,
     )
 
 
@@ -112,13 +116,6 @@ class Clock:
 
     def __call__(self) -> float:
         return self.now
-
-
-class Lost(SpanExporter):
-    """An exporter that never gets a span out, as when Langfuse is down."""
-
-    def export(self, spans: Sequence[ReadableSpan]) -> SpanExportResult:
-        return SpanExportResult.FAILURE
 
 
 def sent(tracing: LangfuseTracing, exporter: InMemorySpanExporter) -> str:
@@ -215,23 +212,21 @@ def test_no_planted_key_in_run_metadata_or_a_raised_error_reaches_an_exported_sp
 
 
 def test_a_secret_stays_masked_while_its_trace_is_open_however_many_tasks_come_and_go():
-    clock = Clock()
     exporter = InMemorySpanExporter()
-    tracing = langfuse(Masker(clock=clock), exporter)
+    tracing = langfuse(Masker(), exporter)
     request = AnswerRequest.model_validate(planted_turn())
 
     def another_task(n: int) -> None:
         task = card_request(f"run_{n:04}")
         task.callback.token = f"another-callback-token-{n:04}"
         with tracing.run(task):
-            clock.now += 1
+            pass
 
     chat = ScriptedChat(script=[AIMessage(f"{MARKER} the key was {MODEL_KEY}")])
     with tracing.turn(request) as turn:
-        # Other requests run on other threads, each its own trace, and leave first. Together they
-        # take longer than a released secret's grace.
+        # Other requests run on other threads, each its own trace, and leave first.
         with ThreadPoolExecutor(max_workers=4) as pool:
-            list(pool.map(another_task, range(int(GRACE_SECONDS) + 100)))
+            list(pool.map(another_task, range(300)))
         tracing.flush()
         turn.models(lambda timeout: chat)(10).invoke("hello")
         turn.answered(Answered(answer=DidntFollowAnswer(), parts=[]))
@@ -239,13 +234,58 @@ def test_a_secret_stays_masked_while_its_trace_is_open_however_many_tasks_come_a
     tracing.shutdown()
     assert MARKER in text
     assert MODEL_KEY not in text
+    assert tracing.tracked == 0
 
 
-def test_a_trace_whose_span_never_starts_holds_its_secret_only_for_the_grace(
-    monkeypatch: pytest.MonkeyPatch,
-):
+def test_a_span_of_a_trace_this_adapter_does_not_track_is_dropped_at_export():
+    exporter = InMemorySpanExporter()
+    public_key = f"pk-lf-{uuid.uuid4().hex}"
+    tracing = langfuse(Masker(), exporter, public_key)
+    unknown = "stray-secret-no-rule-knows-4b1d"
+    with get_client(public_key=public_key).start_as_current_observation(
+        name="stray", as_type="span", input=unknown
+    ):
+        pass
+    with tracing.turn(AnswerRequest.model_validate(planted_turn())) as turn:
+        turn.answered(Answered(answer=DidntFollowAnswer(), parts=[]))
+    text = sent(tracing, exporter)
+    tracing.shutdown()
+    assert [span.name for span in exporter.get_finished_spans()] == ["planner-turn"]
+    assert unknown not in text
+
+
+def test_a_span_exported_long_after_its_trace_ended_is_masked_or_dropped_never_sent_plain():
     clock = Clock()
-    masker = Masker(clock=clock)
+    exporter = InMemorySpanExporter()
+    tracing = langfuse(Masker(), exporter, limit=1, clock=clock)
+    first_key = "gw-first-turn-plant-77aa"
+    second_gateway = "gw-second-turn-plant-0b9e"
+    first = AnswerRequest.model_validate(planted_turn())
+    first = first.model_copy(
+        update={"model": first.model.model_copy(update={"api_key": first_key})}
+    )
+    second = first.model_copy(
+        update={
+            "trace": None,
+            "model": first.model.model_copy(update={"api_key": second_gateway}),
+        }
+    )
+    chat = ScriptedChat(
+        script=[AIMessage(f"first {first_key}"), AIMessage(f"{MARKER} {second_gateway}")]
+    )
+    with tracing.turn(first) as turn:
+        turn.models(lambda timeout: chat)(10).invoke("hello")
+    clock.now += FORGET_AFTER_SECONDS
+    with tracing.turn(second) as turn:
+        turn.models(lambda timeout: chat)(10).invoke("hello")
+    text = sent(tracing, exporter)
+    tracing.shutdown()
+    assert MARKER in text
+    assert first_key not in text and second_gateway not in text
+
+
+def test_a_trace_whose_span_never_starts_lets_its_secret_go(monkeypatch: pytest.MonkeyPatch):
+    masker = Masker()
     tracing = langfuse(masker, InMemorySpanExporter())
 
     def refused(**_: Any) -> Any:
@@ -254,40 +294,22 @@ def test_a_trace_whose_span_never_starts_holds_its_secret_only_for_the_grace(
     monkeypatch.setattr(tracing._client, "start_as_current_observation", refused)  # pyright: ignore[reportPrivateUsage]
     with pytest.raises(RuntimeError), tracing.turn(AnswerRequest.model_validate(planted_turn())):
         pass
-    assert masker.holding == 1
-    clock.now += GRACE_SECONDS
-    assert masker.holding == 0
+    assert tracing.tracked == 0
+    assert masker.mask(MODEL_KEY) == MODEL_KEY
     tracing.shutdown()
 
 
-def test_a_trace_that_is_never_exported_holds_its_secret_only_for_the_grace():
-    clock = Clock()
-    masker = Masker(clock=clock)
-    tracing = langfuse(masker, Lost())
-    chat = ScriptedChat(script=[AIMessage(f"the key was {MODEL_KEY}")])
-    with tracing.turn(AnswerRequest.model_validate(planted_turn())) as turn:
-        turn.models(lambda timeout: chat)(10).invoke("hello")
-        clock.now += GRACE_SECONDS * 2
-        assert masker.mask(MODEL_KEY) == MASKED
-    tracing.flush()
-    clock.now += GRACE_SECONDS - 1
-    assert masker.mask(MODEL_KEY) == MASKED
-    clock.now += 1
-    assert masker.holding == 0
-    tracing.shutdown()
-
-
-def test_when_the_masker_is_full_a_trace_is_not_sent_rather_than_anything_unmasked(
+def test_at_the_limit_a_new_trace_is_not_sent_and_no_open_trace_is_forgotten(
     caplog: pytest.LogCaptureFixture,
 ):
     exporter = InMemorySpanExporter()
-    masker = Masker(limit=1)
-    tracing = langfuse(masker, exporter)
+    tracing = langfuse(Masker(), exporter, limit=1)
     first = AnswerRequest.model_validate(planted_turn())
-    second_gateway = "gw-second-turn-key-0b9e"
+    second_gateway = "gw-second-turn-plant-0b9e"
     second = first.model_copy(
         update={
             "task": "the second turn",
+            "trace": None,
             "model": first.model.model_copy(update={"api_key": second_gateway}),
         }
     )
@@ -305,9 +327,5 @@ def test_when_the_masker_is_full_a_trace_is_not_sent_rather_than_anything_unmask
     assert MARKER in text
     assert "the second turn" not in text and second_gateway not in text and MODEL_KEY not in text
     assert [r.getMessage() for r in caplog.records if r.name.endswith("langfuse_tracing")] == [
-        "Not traced: the masker already holds 1 secrets"
+        "Not traced: 1 traces are already tracked"
     ]
-
-
-def test_a_released_secret_outlasts_the_longest_a_span_can_wait_to_be_masked():
-    assert GRACE_SECONDS >= 4 * LONGEST_EXPORT_WAIT
