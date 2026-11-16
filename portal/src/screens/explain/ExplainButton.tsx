@@ -4,7 +4,6 @@ import { explainPath } from './explain'
 interface ExplainButtonProps {
   readonly useCaseId: string
   readonly name: string
-  /** One version of it, from Versions. Leave out for the version in use. */
   readonly version?: number
 }
 

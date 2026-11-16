@@ -11,7 +11,6 @@ import { Explained } from './Explained'
 import { explainAnswerOf, explainAsk, explainStateOf } from './explain'
 import { Report } from './Report'
 
-/** The most workflows “Which workflow?” lists before it counts the rest. */
 export const MOST_WHICH = 8
 
 function Which({ reply, page }: { reply: ExplainReply; page: Page }) {
@@ -81,12 +80,10 @@ function ExplainCard({ useCaseId, name }: { useCaseId: string; name: string | nu
 interface ExplainAnswerProps {
   readonly reply: ExplainReply
   readonly typed: string
-  /** The workflow “it” means, when the Planner was given no words. Settled when the answer arrived. */
   readonly focus: string | null
   readonly page: Page
 }
 
-/** One match explains it, several ask which, none says so, and “explain it” explains the workflow in focus. */
 export function ExplainAnswer({ reply, typed, focus, page }: ExplainAnswerProps) {
   const memory = useContext(CardMemoryContext)
   const [settled] = useState(() => {

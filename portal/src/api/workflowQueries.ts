@@ -273,9 +273,7 @@ export function useVersions(useCaseId: string, version: number) {
 }
 
 interface ExplainOptions {
-  /** The version to explain, as the versions list numbers it. Null for the one in use. */
   readonly version?: number | null
-  /** Asks the AI model to smooth In short. Only the chat card asks. */
   readonly reworded?: boolean
   readonly enabled?: boolean
 }

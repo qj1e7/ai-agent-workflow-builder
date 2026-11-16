@@ -47,7 +47,6 @@ interface Options {
   onOpen?: (item: PanelItem) => void
   /** The pages of Needs you that Show more has read. */
   pages?: NeedsPage[]
-  /** A report held for an Explain item, or an error the platform answered it with. */
   explained?: { version: number | null; report: WorkflowExplained | ApiError }
 }
 

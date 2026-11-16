@@ -5,7 +5,7 @@ import { approvalGist, approvesGist, flagsGist, segmentsOfText, settingsGist, st
 import styles from './Report.module.css'
 
 /** A string from the plan or the document shows in curly quotes, apart from code's own words, so a block named “Security approved” can't read as a verdict. */
-export function Words({ segments }: { segments: readonly Segment[] }): ReactNode {
+function Words({ segments }: { segments: readonly Segment[] }): ReactNode {
   return segments.map((segment, index) =>
     segment.quoted ? (
       <span key={index} className={styles['quoted']}>
@@ -92,7 +92,6 @@ function Setting({ setting }: { setting: ExplainSetting }) {
 
 interface ReportProps {
   readonly report: WorkflowExplained
-  /** Show code's own In short even when a reworded one came. */
   readonly code?: boolean
   /** Swaps between the reworded In short and code's. Only the chat card gives it. */
   readonly onWording?: () => void

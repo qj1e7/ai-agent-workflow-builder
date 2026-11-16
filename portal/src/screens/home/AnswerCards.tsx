@@ -512,7 +512,6 @@ interface AnswerProps {
   readonly reply: PlannerReply
   readonly typed: string
   readonly page: Page
-  /** The workflow “it” means, for an Explain request that named none. */
   readonly focus?: string | null
 }
 

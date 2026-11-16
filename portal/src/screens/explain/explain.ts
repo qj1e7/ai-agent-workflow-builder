@@ -102,7 +102,6 @@ const NO_WORDS = /^\s*(?:please\s+)?explain(?:\s+(?:it|this|that))?\s*[.!?]*\s*$
 /** The request names no workflow: the Planner then answers with every workflow as a choice, so the one in focus can be explained. */
 export const explainsFocus = (typed: string): boolean => NO_WORDS.test(typed)
 
-/** What an Explain answer asks of the page, once the one in focus is known. */
 export function explainAnswerOf(reply: ExplainReply, typed: string, focus: string | null): { readonly kind: 'one'; readonly id: string; readonly name: string | null } | { readonly kind: 'which' | 'missing' } {
   if (reply.use_case_id !== null) return { kind: 'one', id: reply.use_case_id, name: reply.name }
   if (reply.missing !== null) return { kind: 'missing' }
