@@ -63,18 +63,12 @@ WAYS: Final = (
         held_only=True,
     ),
     _Way(re.compile(r"\b(?:remove|delete|drop)\s+(?P<name>.+)", re.IGNORECASE), held_only=True),
-    _Way(
-        re.compile(rf"^(?P<name>.+?)\s+(?:off|out\s+of|from)\s+{LIST}$", re.IGNORECASE),
-        held_only=True,
-        bounded=True,
-    ),
 )
-"""Each way to ask, first match wins in a clause. The last is a name and its list alone, as
-"LangGraph from the watchlist" left over from "remove React and LangGraph from the watchlist",
-which Ask about this sends on its own."""
+"""Each way to ask, first match wins in a clause."""
 
 AFTER_A_NAME: Final = (
-    r"(?:[\s,]+(?:any\s*more|now|please|for\s+(?:me|us|now|good)|too|as\s+well|"
+    r"(?:[\s,]+(?:any\s*more|now|right\s+(?:now|away)|today|immediately|asap|please|"
+    r"for\s+(?:me|us|now|good)|too|as\s+well|"
     r"from\s+now\s+on|(?:for\s+)?(?:new\s+)?(?:releases?|versions?|updates?)|"
     rf"(?:on|in|from|off)\s+{LIST}))"
 )
@@ -83,7 +77,7 @@ TAIL: Final = re.compile(rf"{AFTER_A_NAME}*", re.IGNORECASE)
 NAME_TAIL: Final = re.compile(rf"{AFTER_A_NAME}+$", re.IGNORECASE)
 TIMED: Final = re.compile(
     r"\b(?:until|till|for\s+(?:a|an|one|two|three|\d+)\s+(?:days?|weeks?|months?|years?)|"
-    r"next\s+(?:week|month|year)|tomorrow|today|tonight|temporarily|weekends?)\b",
+    r"next\s+(?:week|month|year)|tomorrow|tonight|temporarily|weekends?)\b",
     re.IGNORECASE,
 )
 """A time that makes it a pause or a schedule, as "until next month", not a removal."""
@@ -106,6 +100,18 @@ POINTS_BACK: Final = re.compile(
     re.IGNORECASE,
 )
 """A clause that asks again for the removal beside it, as "remove it"."""
+REASON: Final = re.compile(
+    r"(?:(?:as|because|since|so)\s+)?(?:we|i)\s+(?:(?:don['’]?t|do\s+not|no\s+longer)\s+"
+    r"(?:use|run|need)|(?:have\s+)?stopped\s+using|(?:aren['’]?t|are\s+not)\s+using)\s+"
+    r"(?:it|them|that|this(?:\s+one)?)(?:\s+(?:any\s*more|now))*",
+    re.IGNORECASE,
+)
+"""A clause that gives the reason for the removal beside it, as "we don't use it any more"."""
+THEN: Final = re.compile(r"\s+(?:so|and|then)\s+(?P<rest>.+)$", re.IGNORECASE)
+"""Where a name ends at a join, as "react anymore so remove it from the watchlist"."""
+ANOTHER: Final = re.compile(
+    rf"(?P<name>.+?)(?P<list>\s+(?:off|out\s+of|from)\s+{LIST})?", re.IGNORECASE
+)
 
 
 def name_key(name: str) -> str:
@@ -119,6 +125,10 @@ class Removal:
     """The name as the request wrote it."""
     watched_as: tuple[str, ...]
     """The watchlist's names for it, from the facts."""
+    order: str
+    """The request's words before the name, as "stop watching "."""
+    after: str
+    """The request's words after the name that it asks with, as " from the watchlist"."""
     clause: Span
     asked: Span
     """The words that ask for it: the order, the name and the list it names."""
@@ -136,7 +146,23 @@ def removal_of(text: str, facts: PlannerFacts | None) -> Removal | None:
 
 
 def points_back(clause: str) -> bool:
-    return POINTS_BACK.fullmatch(clause.strip(QUOTES + "!?")) is not None
+    """Whether the clause asks again for the removal beside it, or gives its reason."""
+    said = clause.strip(QUOTES + "!?")
+    return POINTS_BACK.fullmatch(said) is not None or REASON.fullmatch(said) is not None
+
+
+def another(found: Removal, clause: str) -> str | None:
+    """The removal's own words for another name the clause holds alone, as "stop watching vue"
+    for the "vue" of "stop watching react and vue", so it can be asked on its own."""
+    named = ANOTHER.fullmatch(clause.strip(QUOTES))
+    name = None if named is None else plausible_name(named.group("name"))
+    if named is None or name is None or not _software(name) or _timed(clause):
+        return None
+    return f"{found.order}{name}{named.group('list') or found.after}"
+
+
+def _software(name: str) -> bool:
+    return len(name) <= SOFTWARE_NAME_LIMIT and not set(name.casefold().split()) & NOT_SOFTWARE
 
 
 def _in_clause(text: str, clause: Span, facts: PlannerFacts | None) -> Removal | None:
@@ -151,23 +177,31 @@ def _in_clause(text: str, clause: Span, facts: PlannerFacts | None) -> Removal |
         if found is None or _says_no(said[: found.start()]):
             continue
         raw = found.group("name")
+        back = None if way.bounded else _asked_again(raw)
+        raw = raw if back is None else raw[:back]
         cut = None if way.bounded else NAME_TAIL.search(raw)
         name = plausible_name((raw[: cut.start()] if cut else raw).strip(QUOTES))
-        if name is None or len(name) > SOFTWARE_NAME_LIMIT:
-            continue
-        if set(name.casefold().split()) & NOT_SOFTWARE:
+        if name is None or not _software(name):
             continue
         if (way.held_only or name_key(name) in workflows) and name_key(name) not in held:
             continue
         start = said.index(name, found.start("name"))
         tail = TAIL.match(said, found.end() if way.bounded else start + len(name))
-        asked = (found.start(), tail.end() if tail else found.end())
+        asked = (found.start(), found.end() if back is not None or tail is None else tail.end())
         if _timed(said.replace(name, " ") if name_key(name) in held else said):
             return None
         watched_as = tuple(n for n in names if name_key(n) == name_key(name))
+        order = said[found.start() : start]
+        after = said[start + len(name) : asked[1]] if way.bounded else ""
         at = (clause[0] + asked[0], clause[0] + asked[1])
-        return Removal(name, watched_as, clause, at, _unread(text, clause, at))
+        return Removal(name, watched_as, order, after, clause, at, _unread(text, clause, at))
     return None
+
+
+def _asked_again(raw: str) -> int | None:
+    """Where the name's words end at a join that asks for the removal again, as the "so" of
+    "react anymore so remove it from the watchlist"."""
+    return next((m.start() for m in THEN.finditer(raw) if points_back(m.group("rest"))), None)
 
 
 def _says_no(before: str) -> bool:

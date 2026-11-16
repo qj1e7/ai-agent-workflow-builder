@@ -231,6 +231,13 @@ class ListedSoftware(WireModel):
     name: str
 
 
+class RemovalMatch(ListedSoftware):
+    source: str = Field(
+        description="The GitHub repository it is read from, as owner/name, so two with the same "
+        "name can be told apart, even after one is removed."
+    )
+
+
 class SetupCardReply(Reply):
     answer: Literal["setup_card"] = "setup_card"
     name: str
@@ -495,7 +502,7 @@ class RemoveSoftwareReply(Reply):
 
     answer: Literal["remove_software"] = "remove_software"
     software: str = Field(description="The name as the request wrote it.")
-    matches: list[ListedSoftware] = Field(
+    matches: list[RemovalMatch] = Field(
         description="The watched software with that name, case, spaces, dots and hyphens aside, "
         "in the watchlist's order. Empty when the watchlist holds none, and more than one for the "
         "person to choose."
@@ -1118,7 +1125,7 @@ class PlannerFront:
         return RemoveSoftwareReply(
             software=removal.software,
             matches=[
-                ListedSoftware(software_id=s.id, name=s.name)
+                RemovalMatch(software_id=s.id, name=s.name, source=s.source.ref)
                 for s in held
                 if s.name in removal.watched_as
             ],

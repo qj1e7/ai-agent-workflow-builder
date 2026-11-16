@@ -13,7 +13,8 @@
   "matches": [
     {
       "software_id": "sw_01JD4",
-      "name": "node js"
+      "name": "node js",
+      "source": "nodejs/node"
     }
   ],
   "watched": [

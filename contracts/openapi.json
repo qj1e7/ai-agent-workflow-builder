@@ -9550,6 +9550,31 @@
         "title": "RejectedView",
         "type": "object"
       },
+      "RemovalMatch": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "software_id": {
+            "title": "Software Id",
+            "type": "string"
+          },
+          "source": {
+            "description": "The GitHub repository it is read from, as owner/name, so two with the same name can be told apart, even after one is removed.",
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "software_id",
+          "name",
+          "source"
+        ],
+        "title": "RemovalMatch",
+        "type": "object"
+      },
       "RemoveSoftwareReply": {
         "additionalProperties": false,
         "description": "Software to take off the Software watchlist, matched by name. An Operator removes each match\nwith DELETE /api/v1/watchlist/software/{software_id} and undoes it with POST\n/api/v1/watchlist/software/{software_id}/restore, as the Software page does. It is a setting\nof the platform: nothing outside it is written, so no Approver is asked. Someone who isn't an\nOperator gets operators instead.",
@@ -9563,7 +9588,7 @@
           "matches": {
             "description": "The watched software with that name, case, spaces, dots and hyphens aside, in the watchlist's order. Empty when the watchlist holds none, and more than one for the person to choose.",
             "items": {
-              "$ref": "#/components/schemas/ListedSoftware"
+              "$ref": "#/components/schemas/RemovalMatch"
             },
             "title": "Matches",
             "type": "array"

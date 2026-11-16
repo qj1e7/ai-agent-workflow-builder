@@ -37,6 +37,7 @@ from platform_api.builder.planner import (
     PlannerFront,
     QuestionReply,
     RefusedReply,
+    RemovalMatch,
     RemoveSoftwareReply,
     ReplyReason,
     ResumeReply,
@@ -398,7 +399,7 @@ def planner_fixtures(root: Path) -> dict[str, WireModel]:
         ),
         "planner/answer.remove_software.json": RemoveSoftwareReply(
             software="Node.js",
-            matches=[ListedSoftware(software_id="sw_01JD4", name="node js")],
+            matches=[RemovalMatch(software_id="sw_01JD4", name="node js", source="nodejs/node")],
             watched=["FastAPI", "LangGraph", "node js", "React"],
             parts=[does("remove Node.js from the watchlist")],
         ),

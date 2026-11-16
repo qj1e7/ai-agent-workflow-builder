@@ -67,7 +67,7 @@ from agent_runtime.reading import (
     trim,
     without_runs_by_itself,
 )
-from agent_runtime.removals import points_back, removal_of
+from agent_runtime.removals import another, points_back, removal_of
 
 NOT_FOLLOWED: Final = "I didn't follow this part."
 SKIP_PART_NOTE: Final = "I can't skip the yes. Nothing is written without a yes."
@@ -191,6 +191,13 @@ def _removal_parts(text: str, clauses: list[Span], facts: PlannerFacts | None) -
         said = text[clause[0] : clause[1]]
         if found is not None and clause != found.clause and points_back(said):
             parts.append(_part(text, clause, "will_do"))
+            continue
+        again = None
+        if found is not None and clause != found.clause and not _orders(said):
+            again = another(found, said)
+        if again is not None:
+            words = plain(again, TEXT_LIMIT)
+            parts.append(RequestPart(text=words, mark="cant", reason="ask_on_its_own"))
             continue
         if found is None or clause != found.clause:
             ask = _asks(text, clause) or _a_task(said) or removal_of(said, facts) is not None

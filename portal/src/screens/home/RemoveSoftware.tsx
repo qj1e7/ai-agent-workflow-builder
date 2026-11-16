@@ -1,8 +1,8 @@
 import { useContext, useEffect, useReducer, useRef } from 'react'
 import { useErrorWords } from '../../api/context'
 import { useLatch } from '../../api/latch'
-import { useRemoveSoftware, useRestoreSoftware, useWatchlist } from '../../api/queries'
-import type { ListedSoftware, RemoveSoftwareReply } from '../../api/types'
+import { useRemoveSoftware, useRestoreSoftware } from '../../api/queries'
+import type { RemovalMatch, RemoveSoftwareReply } from '../../api/types'
 import { Button } from '../../ui/Button'
 import { Card } from '../../ui/Card'
 import { cx } from '../../ui/cx'
@@ -14,10 +14,9 @@ import styles from './Planner.module.css'
 export const REMOVED = 'Removed from the watchlist.'
 
 /** One watched software, with the Software page’s own Remove and Undo. Several rows name their source, since two can share a name. */
-function RemoveOne({ row, several }: { row: ListedSoftware; several: boolean }) {
+function RemoveOne({ row, several }: { row: RemovalMatch; several: boolean }) {
   const removal = useRemoveSoftware()
   const restore = useRestoreSoftware()
-  const watchlist = useWatchlist()
   const words = useErrorWords()
   const changes = useLatch()
   const memory = useContext(CardMemoryContext)
@@ -35,12 +34,11 @@ function RemoveOne({ row, several }: { row: ListedSoftware; several: boolean }) 
     if (notice?.kind === 'restored') removeButton.current?.focus()
   }, [notice, memory, row.software_id])
 
-  const source = several ? watchlist.data?.software.find((entry) => entry.id === row.software_id)?.source.ref : undefined
   const said = notice === null || !isRemoval(notice) ? '' : notice.kind === 'removed' ? REMOVED : removalWords(notice)
   return (
     <li>
       {several ? <b>{row.name}</b> : null}
-      {source ? <span className="muted">{source}</span> : null}
+      {several ? <span className="muted">{row.source}</span> : null}
       <span className={cx(styles['cardDone'], notice?.kind === 'removed' && styles['cardOk'])} role="status">
         {notice?.kind === 'removed' ? <IconCheck size={15} /> : null}
         {said}
