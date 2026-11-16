@@ -38,10 +38,10 @@ const CAROL_N8N: Me = { id: 'carol', display: 'Carol', roles: ['operator'], n8n_
 const WATCHLIST_ID = (statuses as WatchlistView).use_case_id
 const WATCHLIST_WORKFLOW = { ...(watchlistUseCase as UseCaseView), use_case_id: WATCHLIST_ID }
 
-function render(view: unknown, me: Me, runs: readonly { run_id: string }[] = [], page: ReactNode = <SoftwareRoute now={NOW} />, capabilities: unknown = capabilitiesFixture, path = '/software'): string {
+function render(view: unknown, me: Me, runs: readonly { run_id: string }[] = [], page: ReactNode = <SoftwareRoute now={NOW} />, capabilities: unknown = capabilitiesFixture, path = '/software', workflow: UseCaseView = WATCHLIST_WORKFLOW): string {
   const session = createDevSession(null)
   const queryClient = new QueryClient({ defaultOptions: { queries: { retryOnMount: false } } })
-  queryClient.setQueryData(['use-case', session.cacheScope(), WATCHLIST_ID], WATCHLIST_WORKFLOW)
+  queryClient.setQueryData(['use-case', session.cacheScope(), WATCHLIST_ID], workflow)
   queryClient.setQueryData(['use-case', session.cacheScope(), WATCHLIST_ID, 'n8n'], { ...(inN8nView as UseCaseN8nView), use_case_id: WATCHLIST_ID })
   queryClient.setQueryData(['me', session.cacheScope()], me)
   queryClient.setQueryData(['watchlist', session.cacheScope()], view)
@@ -598,6 +598,14 @@ describe('the Software watchlist in n8n', () => {
     expect(text(inN8n)).toContain('Only our blocks and n8n’s safe ones are on, so every write waits for a yes.')
     expect(text(inN8n)).toContain('Open in n8n editor')
     expect(text(inN8n), 'the list stays on its own tab').not.toContain('Find software')
+  })
+
+  it('says who has the watchlist open in n8n where its schedule is changed, with no change the platform would refuse', () => {
+    const held = { ...WATCHLIST_WORKFLOW, held_in_n8n: { id: 'carol', name: 'Carol', since: '2026-11-16T02:02:00Z' } }
+    const html = render(statuses, ALICE, [], <SoftwareRoute now={NOW} />, capabilitiesFixture, '/software', held)
+    expect(text(html)).toContain('Can’t change it while Carol has it open in n8n. Ask Carol, or anyone with n8n access, to take it back.')
+    for (const refused of ['Change schedule', 'Turn off schedule', 'Set a schedule']) expect(text(html)).not.toContain(refused)
+    expect(text(render(statuses, ALICE)), 'nobody holds it, so the schedule can change').toContain('Change schedule')
   })
 
   it('gives no tab to anyone without n8n access', () => {
