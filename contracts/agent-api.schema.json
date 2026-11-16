@@ -19,6 +19,13 @@
       "title": "AbilitiesAnswer",
       "type": "object"
     },
+    "AboutSection": {
+      "enum": [
+        "watchlist",
+        "workflows"
+      ],
+      "type": "string"
+    },
     "Addressee": {
       "discriminator": {
         "mapping": {
@@ -1907,6 +1914,15 @@
       "additionalProperties": false,
       "description": "The model's own reply to a message no other answer fits, shown only after code checked it\n(ADR 0047). It writes nothing: a choice or an offer is sent as the person's next message.",
       "properties": {
+        "about": {
+          "description": "The watched software and workflows the reply names, each kept only when the facts hold it. The Portal draws each one's state line. Left out when empty, so a reply that names none reads as it did before ADR 0049.",
+          "items": {
+            "$ref": "#/$defs/ReplyAbout"
+          },
+          "maxItems": 5,
+          "title": "About",
+          "type": "array"
+        },
         "choices": {
           "description": "For clarify only, 2 to 4 replies to tap. Each is sent as the next message.",
           "items": {
@@ -2987,6 +3003,27 @@
         "releases"
       ],
       "title": "ReleasesRead",
+      "type": "object"
+    },
+    "ReplyAbout": {
+      "additionalProperties": false,
+      "description": "One watched software or workflow a free reply speaks of. Code keeps it only when the facts\nhold the name, spelled as they spell it, and the Portal draws its state line from its own data,\nso the reply never has to state a version, a state or a run (ADR 0049).",
+      "properties": {
+        "name": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "section": {
+          "$ref": "#/$defs/AboutSection"
+        }
+      },
+      "required": [
+        "section",
+        "name"
+      ],
+      "title": "ReplyAbout",
       "type": "object"
     },
     "ReplyForm": {
