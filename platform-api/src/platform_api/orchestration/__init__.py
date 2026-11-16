@@ -135,6 +135,7 @@ from platform_api.orchestration.n8n_credentials import (
 from platform_api.orchestration.n8n_run_view import NodeState, RunInN8n
 from platform_api.orchestration.n8n_schedule import next_run, schedule_intervals, zone_name
 from platform_api.orchestration.n8n_staff import (
+    A_COLLEAGUE,
     NO_ACCESS,
     OFF,
     CanOpen,
@@ -290,6 +291,7 @@ __all__ = [
     "answered",
     "credentials_named",
     "NO_ACCESS",
+    "A_COLLEAGUE",
     "no_access_words",
     "OFF",
     "CanOpen",

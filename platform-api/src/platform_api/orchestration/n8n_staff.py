@@ -30,6 +30,8 @@ log = logging.getLogger(__name__)
 SETTLE_EVERY = timedelta(seconds=15)
 
 NO_ACCESS = "Only people with n8n access can open n8n. An admin can add it in Settings."
+A_COLLEAGUE = "a colleague"
+"""Who someone is when the platform can't name them, as a user id means nothing to anyone."""
 APPROVERS_NO_ACCESS = "Approvers can't have n8n access. An Operator with n8n access can open it."
 
 
@@ -280,7 +282,7 @@ class StaffAccounts:
                     "SELECT display FROM orchestration.people WHERE id = %s", (person,)
                 )
             ).fetchone()
-        return person if row is None else str(row["display"])
+        return A_COLLEAGUE if row is None else str(row["display"])
 
     async def access(self, person: UserId) -> StaffAccess:
         row = await self._person(person)
