@@ -8,6 +8,7 @@ import partAnswer from '../../../../contracts/fixtures/planner/answer.part.json'
 import clashAnswer from '../../../../contracts/fixtures/planner/answer.setup_card.clash.json'
 import crossAnswer from '../../../../contracts/fixtures/planner/answer.setup_card.cross.json'
 import checkCant from '../../../../contracts/fixtures/planner/check-part.cant.json'
+import answered24Hour from '../../../../contracts/fixtures/agent/planner-answered-card-24-hour.json'
 import { ApiError } from '../../api/client'
 import type { CardView, DraftView, PartReply, PlanOut, RowKind, RowState, SetupCardReply, ToolId } from '../../api/types'
 import {
@@ -803,5 +804,31 @@ describe('the card’s draft saves and deletes', () => {
       return Promise.resolve()
     })
     expect(handled.at(-1)).toBe('delete again')
+  })
+})
+
+describe('a 24-hour time from the Planner', () => {
+  const CAROL = 'Every Friday at 16:00, find Jira tickets in project MOCK that nobody updated for 14 days, and raise one Jira ticket in MOCK that lists them'
+  const timed = (schedule: string) => cardFrom('x', [{ kind: 'schedule', text: schedule, state: 'understood', note: null }], schedule)
+
+  it('reads her time from the schedule row the runtime sends, and never asks for it again', () => {
+    const { name, rows } = answered24Hour.answer
+    const form = cardFrom(name, rows as SetupCardReply['rows'], CAROL)
+    expect(form.when).toMatchObject({ often: 'week', day: 'friday', at: '16:00' })
+    expect(whenSaid(form.when)).toBe('Every Friday at 16:00')
+    expect(nextQuestion(form, null)?.kind).not.toBe('when')
+  })
+
+  it.each([
+    ['Every Friday at 00:00', '00:00'],
+    ['Every Friday at 23:55', '23:55'],
+    ['Every Friday at 4pm', '16:00'],
+  ])('reads “%s” as %s', (schedule, at) => {
+    expect(timed(schedule).when.at).toBe(at)
+    expect(nextQuestion(timed(schedule), null)).toBeNull()
+  })
+
+  it.each(['Every Friday at 24:00', 'Every Friday at 7:5', 'Every Friday at 1600', 'Every Friday at 23:59'])('asks the time for “%s”, never a guess', (schedule) => {
+    expect(nextQuestion(timed(schedule), null)).toMatchObject({ kind: 'when', field: 'at' })
   })
 })

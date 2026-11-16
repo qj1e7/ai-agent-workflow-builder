@@ -47,6 +47,7 @@ FILLED_IN_FROM: Final = 'I filled some of this in from your words "{}". Please c
 READ_FROM: Final = 'Read from your words "{}".'
 NO_TIME_SAID: Final = "Your words didn't say a time. Please choose one."
 NO_TIME_BUT: Final = 'Your words said "{}" but not a time. Please choose one.'
+NO_TIME_READ: Final = "I couldn't read the time in your words. Please choose one."
 NO_DAYS: Final = 'Your words said "{}" but not how many days. Please say how many.'
 ONE_DAY: Final = "Your words said {}. I can only set one day, so please choose one."
 ONE_TIME: Final = "Your words said {}. I can only set one time, so please choose one."
@@ -285,14 +286,23 @@ DAY_RANGE: Final = re.compile(
     rf"\b(?:{DAY_NAMES})s?\s*(?:to|through|thru|till|until|-)\s*(?:{DAY_NAMES})s?\b",
     re.IGNORECASE,
 )
+HOUR_24: Final = r"([01]?\d|2[0-3]):([0-5]\d)"
+"""A 24-hour time from 0:00 to 23:59, as "16:00". "16.00" is not one: with a dot, "9.30" could
+be morning or evening, so it is asked."""
 CLOCK: Final = re.compile(
-    r"(?<![\d.:])\b(\d{1,2})(?:[:.](\d{2}))?\s*(am|pm)\b|(?<![\d.:])\b(\d{1,2}):(\d{2})\b|"
+    r"(?<![\d.:])\b(\d{1,2})(?:[:.](\d{2}))?\s*(am|pm)\b|"
+    rf"(?<![\d.:])\b{HOUR_24}\b(?![.:]\d)|"
     r"\b(?:at|or|and)\s+(\d{1,2})\b(?![:.]\d)(?!\s*(?:am|pm)\b)|\b(noon|midday|midnight)\b",
     re.IGNORECASE,
 )
 """A time of day as the request writes it: "9am", "9.30am", "17:00", "noon", or a bare hour after
 "at", "or" or "and", as in "at 9 or 10"."""
-CLOCK_TOKEN: Final = re.compile(r"^\d{1,2}(?::\d{2})?(?:am|pm)$|^\d{1,2}(?:st|nd|rd|th)$")
+CLOCK_TOKEN: Final = re.compile(
+    rf"^\d{{1,2}}(?:[:.]\d{{2}})?(?:am|pm)$|^{HOUR_24}$|^\d{{1,2}}(?:st|nd|rd|th)$"
+)
+TIME_SHAPED: Final = re.compile(r"\b\d{1,2}[:.]\d{1,2}\b|\bat\s+\d+\b|\bat$", re.IGNORECASE)
+"""Words that held a time, read or not, as "24:00", "16.00", "at 1600", or an "at" left at the end
+when its time was dropped."""
 SEARCH_VOCAB: Final = words(
     "ticket tickets issue issues item items entry entries find finds finding found list lists "
     "listing listed show shows showing get gather gathers gathering collect collects "
@@ -1171,6 +1181,32 @@ def _clash_note(clashes: list[Clash]) -> str:
     )
 
 
+def _time_lost(schedule: str | None, shown: str, text: str, said: tuple[int, int] | None) -> bool:
+    """Whether a time was written for the schedule, by the person or the model, but the row
+    reads none. Such a row is never marked understood: the card asks for the time again."""
+    if CLOCK.search(shown) is not None:
+        return False
+    run = _schedule_run(text, said)
+    stretch = text[run[0] : run[1]] if run is not None else ""
+    return any(TIME_SHAPED.search(w) for w in (stretch, visible_words(schedule) or "", shown))
+
+
+def _time_not_read(shown: str, text: str) -> UnderstoodRow:
+    """The row for a schedule whose time could not be read. Its day words stay when they are
+    the person's own, so the card asks only for the time, and nothing after them does, such as
+    a dangling "at"."""
+    tokens = shown.split()
+    days = [i for i, t in enumerate(tokens) if _low(t.strip(",.")) in SCHEDULE_WORDS]
+    day = " ".join(tokens[: days[-1] + 1]).strip(" ,") if days else ""
+    theirs = bool(day) and all(said_in(w, text) for w in re.findall(r"\w+", day))
+    return UnderstoodRow(
+        kind="schedule",
+        text=plain(day[:1].upper() + day[1:], TEXT_LIMIT) if theirs else "",
+        state="missing",
+        note=NO_TIME_READ,
+    )
+
+
 def render_schedule(schedule: str | None, text: str) -> Rendered:
     """The schedule row: the model's words kept to schedule words only, with a time the request
     never said asked for, not filled in, and a day it never said shown as a guess. Two days or
@@ -1188,6 +1224,8 @@ def render_schedule(schedule: str | None, text: str) -> Rendered:
         return Rendered(missing_row("schedule"), explained, said)
     if any(not said_in(time.strip(), text) for time in TIME_OF_DAY.findall(shown)):
         return Rendered(missing_row("schedule", _no_time_said(shown, text)), explained, said)
+    if _time_lost(schedule, shown, text, said):
+        return Rendered(_time_not_read(shown, text), explained, said)
     guessed = [w for w in re.findall(r"\w+", shown) if w.casefold() in SCHEDULE_WORDS]
     sourced = _find(text, shown) is not None and all(said_in(w, text) for w in guessed)
     row = UnderstoodRow(
