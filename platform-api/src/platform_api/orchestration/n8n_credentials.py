@@ -49,6 +49,7 @@ log = logging.getLogger(__name__)
 
 PLANTED_KIND = "slackApi"
 PLANTED_NAME = "Platform self-test: a key the platform did not make"
+PLANT_FAILED = "the daily self-test could not plant its key ({why}), so the sweep is not tested"
 TEST_EVERY = timedelta(days=1)
 GONE_WITHIN = timedelta(minutes=2)
 """The sweep runs every minute, so a planted key is gone within one, and a second covers a slow
@@ -320,6 +321,8 @@ class PlatformKeys:
         self._lock = asyncio.Lock()
         """One look at n8n's keys at a time, so a sweep never deletes a key another is making
         before it is recorded. platform-api runs as one replica."""
+        self._plant_failed: str | None = None
+        """Why the last try to plant the daily key failed, until one succeeds."""
 
     async def close(self) -> None:
         await self._http.aclose()
@@ -552,20 +555,28 @@ class PlatformKeys:
             and self._db.clock() - last["at"] < TEST_EVERY
         ):
             return None
-        key = f"wab-test-{secrets.token_hex(4)}"
+        key = f"wab-test-{secrets.token_hex(3)}"
         data = {"accessToken": f"not-a-key-{secrets.token_hex(8)}"}
         async with self._lock:
+            try:
+                await self._api.create_credential(key, PLANTED_NAME, PLANTED_KIND, data, home)
+            except (N8nError, httpx.HTTPError) as error:
+                self._plant_failed = answered(error)
+                raise
+            self._plant_failed = None
             async with self._db.transaction("orchestration") as uow:
                 await uow.conn.execute(
                     "INSERT INTO orchestration.n8n_key_tests (key_id, planted_at) VALUES (%s, %s)",
                     (key, uow.now),
                 )
-            await self._api.create_credential(key, PLANTED_NAME, PLANTED_KIND, data, home)
         log.info("planted key %s for the credential sweep's daily self-test", key)
         return key
 
     async def tested(self) -> tuple[bool, str]:
-        """The /healthz/ready line: whether the last planted key was gone within GONE_WITHIN."""
+        """The /healthz/ready line: whether the last planted key was gone within GONE_WITHIN, or
+        why the last try to plant one failed."""
+        if self._plant_failed is not None:
+            return False, PLANT_FAILED.format(why=self._plant_failed)
         async with self._db.connection("orchestration") as conn:
             row = await (
                 await conn.execute(
@@ -575,6 +586,12 @@ class PlatformKeys:
             ).fetchone()
         now = self._db.clock()
         return key_test_line(None if row is None else (row["planted_at"], row["gone_at"]), now)
+
+
+def answered(error: N8nError | httpx.HTTPError) -> str:
+    """What n8n answered, by its HTTP status alone, for a log or the health line."""
+    status = error.status if isinstance(error, N8nError) else None
+    return f"n8n answered {status}" if status is not None else type(error).__name__
 
 
 def key_test_line(last: tuple[datetime, datetime | None] | None, now: datetime) -> tuple[bool, str]:
