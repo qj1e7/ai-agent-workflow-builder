@@ -100,7 +100,7 @@ export function TakeItBackHere({ useCaseId, refused, say }: TakeItBackHereProps)
   const n8nAccess = refused && me?.n8n_access === true
   const inN8n = useUseCaseInN8n(useCaseId, { enabled: n8nAccess })
   const useCase = useUseCase(useCaseId, n8nAccess).data
-  const held = n8nAccess && me && useCase ? heldOf(useCase, me, inN8n.data ?? null) : null
+  const held = n8nAccess && me && useCase ? heldOf(useCase, me, inN8n.data ?? 'loading') : null
   const takeBack = useTakeBackPress(useCaseId, held, say)
   if (!held || !mayTakeBack(held)) return null
   return (
@@ -147,7 +147,7 @@ export function HeldInN8n({ useCaseId, hold, now, say }: HeldProps) {
         <p className={styles['problem']} role="alert">
           {takeBack.problem}
         </p>
-      ) : hold.kind === 'theirs' ? (
+      ) : hold.kind === 'theirs' && hold.checking !== true ? (
         <p>{theirsNote(hold)}</p>
       ) : null}
     </div>

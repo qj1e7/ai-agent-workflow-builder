@@ -10,7 +10,7 @@ import { cx } from '../../ui/cx'
 import { IconCheck } from '../../ui/icons'
 import { useTakeBackPress } from '../workflows/InN8n'
 import { ADD_THE_YES_BACK, backToVersionToast, gradePill, UNDO, yesBackToast } from '../workflows/n8nChange'
-import { heldLine, heldOf, mayTakeBack, TAKE_IT_BACK, theirsNote } from '../workflows/n8nHold'
+import { heldOf, heldWords, mayTakeBack, TAKE_IT_BACK } from '../workflows/n8nHold'
 import runStyles from '../run/RunPage.module.css'
 import { useAsker } from './asker'
 import { CardMemoryContext } from './cardMemory'
@@ -42,7 +42,7 @@ export function ChangedInN8nAnswer({ reply }: { reply: ChangedInN8nReply }) {
   const n8nAccess = operator && me?.n8n_access === true
   const useCase = useUseCase(reply.use_case_id, operator).data
   const inN8n = useUseCaseInN8n(reply.use_case_id, { enabled: n8nAccess })
-  const held = operator && me && useCase ? heldOf(useCase, me, inN8n.data ?? null) : null
+  const held = operator && me && useCase ? heldOf(useCase, me, inN8n.data ?? 'loading') : null
   const takeBack = useTakeBackPress(reply.use_case_id, held, note)
   const settle = (next: Phase) => {
     memory.changed.keep(next)
@@ -113,7 +113,7 @@ export function ChangedInN8nAnswer({ reply }: { reply: ChangedInN8nReply }) {
         </ul>
       ) : null}
       {words.refused ? <p className={styles['note']}>{words.refused}</p> : null}
-      {held ? <p className={styles['note']}>{held.kind === 'theirs' ? `${heldLine(held, new Date())} ${theirsNote(held)}` : heldLine(held, new Date())}</p> : null}
+      {held ? <p className={styles['note']}>{heldWords(held, new Date())}</p> : null}
       {words.findings.length > 0 ? (
         <ul className={styles['lines']}>
           {words.findings.map((line) => (

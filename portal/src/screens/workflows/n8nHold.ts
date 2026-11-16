@@ -29,15 +29,18 @@ export const editorAddressOf = (held: Pick<HoldOut, 'editor_url'>): { readonly u
 export type Hold =
   | { readonly kind: 'free' }
   | { readonly kind: 'mine'; readonly since: string; readonly editorUrl: string | null }
-  /** `cant` says why this person can't take it back, or is null when they can. */
-  | { readonly kind: 'theirs'; readonly name: string; readonly since: string; readonly cant: string | null }
+  /**
+   * `cant` says why this person can't take it back, or is null when they can. `checking` is set while the In n8n view that says which
+   * is still loading: until it arrives neither Take it back nor the note shows, so nobody is offered a press the platform would refuse.
+   */
+  | { readonly kind: 'theirs'; readonly name: string; readonly since: string; readonly cant: string | null; readonly checking?: true }
   | { readonly kind: 'shut'; readonly words: string }
 
 export type Held = Extract<Hold, { kind: 'mine' | 'theirs' }>
 
 type Workflow = Pick<UseCaseView, 'state' | 'deleted_in_n8n_at' | 'held_in_n8n'>
 type Person = Pick<Me, 'id' | 'n8n_access'>
-/** What the In n8n view adds: whether this person can open n8n now, and the editor's address for its holder. */
+/** What the In n8n view adds: whether this person can open n8n now, and the editor's address for its holder. `loading` until it arrives. */
 type Opening = Pick<UseCaseN8nView, 'can_open' | 'why_not' | 'editor_url'>
 
 /** For someone who may not take it back, in the platform's own words (builder/n8n_holds.py). */
@@ -48,12 +51,15 @@ const askForIt = (name: string): string => `Ask ${name}, or anyone with n8n acce
  * from the workflow itself, so everyone sees it the same on every page. The In n8n view, read only with n8n access, says whether
  * this person can take it back now.
  */
-export function heldOf(useCase: Pick<UseCaseView, 'held_in_n8n'>, me: Person, opening: Opening | null = null): Held | null {
+export function heldOf(useCase: Pick<UseCaseView, 'held_in_n8n'>, me: Person, opening: Opening | 'loading' | null = null): Held | null {
   const holder = useCase.held_in_n8n
   if (!holder) return null
-  if (holder.id === me.id) return { kind: 'mine', since: holder.since, editorUrl: opening?.editor_url ?? null }
-  const cant = me.n8n_access !== true ? askForIt(holder.name) : opening && !opening.can_open ? (opening.why_not ?? CANT_OPEN) : null
-  return { kind: 'theirs', name: holder.name, since: holder.since, cant }
+  const view = opening === 'loading' ? null : opening
+  if (holder.id === me.id) return { kind: 'mine', since: holder.since, editorUrl: view?.editor_url ?? null }
+  const theirs = { kind: 'theirs', name: holder.name, since: holder.since } as const
+  if (me.n8n_access !== true) return { ...theirs, cant: askForIt(holder.name) }
+  if (opening === 'loading') return { ...theirs, cant: null, checking: true }
+  return { ...theirs, cant: view && !view.can_open ? (view.why_not ?? CANT_OPEN) : null }
 }
 
 export function holdOf(opening: Opening, useCase: Workflow, me: Person): Hold {
@@ -68,8 +74,8 @@ export function holdOf(opening: Opening, useCase: Workflow, me: Person): Hold {
 /** In place of a change the platform refuses while anyone, its holder too, has the workflow open in n8n. */
 export const cantChangeWords = (held: Held): string => (held.kind === 'mine' ? 'Can’t change it here while you have it open in n8n.' : `Can’t change it while ${held.name} has it open in n8n.`)
 
-/** Whether this person may press Take it back: its holder may, and so may anyone else with n8n access. */
-export const mayTakeBack = (held: Held): boolean => held.kind === 'mine' || held.cant === null
+/** Whether this person may press Take it back: its holder may, and so may anyone else with n8n access once the platform says so. */
+export const mayTakeBack = (held: Held): boolean => held.kind === 'mine' || (held.cant === null && held.checking !== true)
 
 /** Whether Open in n8n editor is drawn: only when the platform would open it for this person. */
 export const mayOpen = (hold: Hold): hold is Extract<Hold, { kind: 'free' | 'mine' }> => hold.kind === 'free' || hold.kind === 'mine'
@@ -83,11 +89,16 @@ export function inUseLine(view: Pick<UseCaseN8nView, 'version' | 'published_by' 
 /** "Alice has it open in n8n since 10:02.", the platform's words for a hold, or the same said to its holder. */
 export function heldLine(hold: Held, now: Date): string {
   const since = sinceWhen(hold.since, now)
-  return hold.kind === 'mine' ? `You have it open in n8n since ${since}.` : `${hold.name} has it open in n8n since ${since}.`
+  // The platform names someone it can't name "a colleague", and here the name starts the sentence.
+  return hold.kind === 'mine' ? `You have it open in n8n since ${since}.` : `${hold.name.charAt(0).toUpperCase()}${hold.name.slice(1)} has it open in n8n since ${since}.`
 }
 
 /** Under a hold someone else has: that anyone with n8n access may take it back, by design (ENGINE-PLAN 2.9), or why this person can't. */
 export const theirsNote = (hold: Extract<Hold, { kind: 'theirs' }>): string => hold.cant ?? `Anyone with n8n access can take it back from ${hold.name}.`
+
+/** The holder line, then for someone else's hold who can take it back, once that is known. */
+export const heldWords = (hold: Held, now: Date): string =>
+  hold.kind === 'theirs' && hold.checking !== true ? `${heldLine(hold, now)} ${theirsNote(hold)}` : heldLine(hold, now)
 
 export const takenBackWords = (hold: Held): string =>
   `Taken back from ${hold.kind === 'mine' ? 'your n8n space' : hold.name}. You can change it here again.`
