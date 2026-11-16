@@ -88,6 +88,35 @@ def _one_line(text: str) -> str:
     return " ".join(text.split())
 
 
+# The input a draft is given when a tool it uses needs one and the model left it out. Only
+# the Jira tools need one today; a kind not here is left for check_card to flag.
+NEEDED_INPUTS: Mapping[str, CardInput] = {
+    "jira_project": CardInput(
+        name="Jira project",
+        kind="jira_project",
+        what="The Jira project the agent works in.",
+        example="MOCK",
+    ),
+}
+
+
+def with_needed_inputs(card: CardDefinition) -> CardDefinition:
+    """The card with the one input each of its tools needs, added when the model left it out,
+    such as a Jira project for jira.search. Its value is never filled in here: the person gives
+    it, from her words or when the card asks. Two inputs of one kind are left for check_card to
+    flag, because which one is the target is the person's choice."""
+    kinds = {item.kind.strip() for item in card.inputs}
+    added: list[CardInput] = []
+    for block in card.blocks:
+        rule = RULES.get((block.tool or "").strip())
+        kind = None if rule is None else rule.target_input or rule.scope_input
+        needed = NEEDED_INPUTS.get(kind or "")
+        if needed is not None and needed.kind not in kinds:
+            kinds.add(needed.kind)
+            added.append(needed)
+    return card.model_copy(update={"inputs": [*card.inputs, *added]}) if added else card
+
+
 def check_card(card: CardDefinition) -> CardChecked:
     """Cleans a card up, works out its approvals and lists what stops it being saved.
 

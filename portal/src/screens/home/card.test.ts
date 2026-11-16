@@ -262,14 +262,17 @@ describe('the plan in step 2', () => {
   it('stops at a drafted agent with problems, and at a task the Planner can’t do', () => {
     const form = read(ROWS)
     const drafted = planView(NEW_AGENT, form.rows)
-    expect(drafted.kind === 'agents' && drafted.problems).toEqual([
-      'Add a Jira project detail, so the agent knows which project it may read.',
-      'Forge is an old name that confused the sponsor. Use plain words.',
-    ])
+    expect(drafted.kind === 'agents' && drafted.problems).toEqual(['Forge is an old name that confused the sponsor. Use plain words.'])
     expect(nextBlockers(form, drafted).words).toBe('Next opens when you change your words so the new agent has no problems.')
     const cannot = planView(CANNOT, form.rows)
     expect(cannot).toMatchObject({ kind: 'cannot', reason: 'Booking a meeting room needs a calendar, and the platform has no calendar tool.' })
     expect(nextBlockers(form, cannot).words).toBe('Next opens when you change your words to something I can do.')
+  })
+
+  it('fills the Jira project the platform added to a draft from her words, so it is not asked', () => {
+    const { name, rows } = answered24Hour.answer
+    const drafted = planView(NEW_AGENT, cardFrom(name, rows as SetupCardReply['rows'], '').rows)
+    expect(drafted.kind === 'agents' && drafted.agents[0]?.found).toEqual({ 'Jira project': 'MOCK' })
   })
 
   it('keeps Next off while the plan leaves a part out, even once the Planner clears the changed part', () => {
