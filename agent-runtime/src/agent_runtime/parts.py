@@ -67,7 +67,7 @@ from agent_runtime.reading import (
     trim,
     without_runs_by_itself,
 )
-from agent_runtime.removals import Removal, removal_of
+from agent_runtime.removals import points_back, removal_of
 
 NOT_FOLLOWED: Final = "I didn't follow this part."
 SKIP_PART_NOTE: Final = "I can't skip the yes. Nothing is written without a yes."
@@ -168,7 +168,7 @@ def parts_of(
             for m in marked
         ]
     if isinstance(answer, RemoveSoftwareAnswer):
-        return _removal_parts(text, clauses, removal_of(text, facts))
+        return _removal_parts(text, clauses, facts)
     crosses = _crosses(read, text, answer)
     alone = len(clauses) == 1
     found: list[RequestPart] = []
@@ -181,14 +181,19 @@ def parts_of(
     return found
 
 
-def _removal_parts(text: str, clauses: list[Span], found: Removal | None) -> list[RequestPart]:
-    """A removal ticks the words that ask for it. Anything else in its clause comes back as not
-    followed, and each other clause, a second removal included, is asked on its own when it asks
-    for something."""
+def _removal_parts(text: str, clauses: list[Span], facts: PlannerFacts | None) -> list[RequestPart]:
+    """A removal ticks the words that ask for it, and a clause that asks for it again, as "remove
+    it". Anything else in its clause comes back as not followed, and each other clause, a second
+    removal included, is asked on its own when it asks for something."""
+    found = removal_of(text, facts)
     parts: list[RequestPart] = []
     for clause in clauses:
+        said = text[clause[0] : clause[1]]
+        if found is not None and clause != found.clause and points_back(said):
+            parts.append(_part(text, clause, "will_do"))
+            continue
         if found is None or clause != found.clause:
-            ask = _asks(text, clause) or _a_task(text[clause[0] : clause[1]])
+            ask = _asks(text, clause) or _a_task(said) or removal_of(said, facts) is not None
             parts.append(_part(text, clause, "cant", "ask_on_its_own" if ask else "not_followed"))
             continue
         marked = [
