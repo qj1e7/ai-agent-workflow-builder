@@ -311,13 +311,6 @@ editor leaves a parameter at that value out as it saves, or writes it in, so a b
 touched would read as changed. Only the blocks a layout writes otherwise than the editor saves
 them, as docs/evidence/n8n-editor-save shows."""
 
-INTERVAL_FILLS: Mapping[str, Mapping[str, Any]] = {
-    "days": {"daysInterval": 1, "triggerAtHour": 0, "triggerAtMinute": 0},
-    "weeks": {"weeksInterval": 1, "triggerAtDay": [0], "triggerAtHour": 0, "triggerAtMinute": 0},
-}
-"""The same for each rule of a Schedule Trigger, by its kind, for the kinds the Portal lays out.
-A rule that names no kind runs every so many days."""
-
 
 def _settings(settings: Mapping[str, Any] | None) -> dict[str, Any]:
     """Settings as n8n runs with them: a setting with no value is one left out."""
@@ -340,21 +333,9 @@ def _node_as_n8n_runs(node: object) -> object:
     if not isinstance(kind, str) or not isinstance(parameters, dict):
         return node
     filled = _filled(PARAMETER_FILLS.get(kind, {}), cast(dict[str, Any], parameters))
-    rule = _object(filled.get("rule"))
-    intervals = rule.get("interval")
-    if kind == SCHEDULE_TYPE and isinstance(intervals, list):
-        rules = [_interval_as_n8n_runs(interval) for interval in cast(list[object], intervals)]
-        filled["rule"] = {**rule, "interval": rules}
+    if kind == SCHEDULE_TYPE:
+        filled["rule"] = {**_object(filled.get("rule")), "interval": schedule_intervals(filled)}
     return {**given, "parameters": filled}
-
-
-def _interval_as_n8n_runs(interval: object) -> object:
-    if not isinstance(interval, dict):
-        return interval
-    given = cast(dict[str, Any], interval)
-    field = given.get("field", "days")
-    fills: Mapping[str, Any] = INTERVAL_FILLS.get(field, {}) if isinstance(field, str) else {}
-    return {"field": field, **fills, **given}
 
 
 def _filled(fills: Mapping[str, Any], given: Mapping[str, Any]) -> dict[str, Any]:
