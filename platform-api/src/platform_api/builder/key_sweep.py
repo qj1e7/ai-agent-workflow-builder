@@ -50,6 +50,10 @@ OFF_IN_N8N = (
     "It is on here, but n8n has it off, so it does not run. Pause it and resume it to put it "
     "back on, or open it in n8n to see why."
 )
+STILL_ON = (
+    "The version published in n8n has a block the platform can't check, and n8n did not take it "
+    "off when asked. The platform tries again each minute."
+)
 UNCHECKED_DRAFT = (
     "Its draft in n8n has a block the platform can't check, so no test run starts until it is "
     "fixed in n8n."
@@ -188,6 +192,7 @@ class KeySweep:
             return []
         made = await self._keys.made()
         taken: list[str] = []
+        stuck: list[str] = []
         listed_home = await self._n8n.workflows_in(home)
         for listed in listed_home:
             workflow = listed.workflow
@@ -203,39 +208,53 @@ class KeySweep:
             try:
                 await self._n8n.go_off(workflow.id)
             except (N8nError, httpx.HTTPError) as error:
-                log.error("could not take %s off in n8n: %s", workflow.id, error)
+                log.error("could not take %s off in n8n: %s", workflow.id, answered(error))
+                stuck.append(workflow.id)
                 continue
             log.warning("took %s off in n8n: it would run a block unchecked", workflow.id)
             taken.append(workflow.id)
-        on = [w.workflow.id for w in listed_home if w.workflow.active_version_id is not None]
+        live = [w.workflow.id for w in listed_home if w.workflow.active_version_id is not None]
         off = [w.workflow.id for w in listed_home if w.workflow.active_version_id is None]
-        await self._mark_off(taken, [*off, *taken], [w for w in on if w not in taken])
+        checked = [w for w in live if w not in taken and w not in stuck]
+        await self._mark_off(taken, stuck, [*off, *taken, *stuck], checked)
         return taken
 
-    async def _mark_off(self, taken: list[str], off: list[str], on: list[str]) -> None:
+    async def _mark_off(
+        self, taken: list[str], stuck: list[str], off: list[str], checked: list[str]
+    ) -> None:
         """Marks from what n8n shows, not from what this process remembers: each workflow in the
         platform's project that the records say is on, and n8n has off, is marked Needs a fix, so
-        it never shows as on and safe while it does not run. One taken off just now says why. One
-        live again loses that mark. A workflow paused, a draft, deleted, held or on its way back
-        is off on purpose, so it is left alone. A row held too long is marked at the next sweep."""
+        it never shows as on and safe while it does not run. One taken off just now says why, and
+        so does one n8n would not take off, which is tried again at the next sweep. One live again
+        and checked loses that mark. A workflow paused, a draft, deleted, held or on its way back
+        is off on purpose, so it is left alone, and loses a mark that says it is on here. A row
+        held too long is marked at the next sweep."""
+        said = [*taken, *stuck]
         try:
             async with self._db.transaction("builder") as uow:
                 await uow.conn.execute(MARK_WAIT)
                 await uow.conn.execute(
                     "UPDATE builder.use_cases SET n8n_key_finding = CASE"
-                    " WHEN n8n_workflow_id = ANY(%s) THEN %s ELSE %s END, n8n_key_found_at = %s"
+                    " WHEN n8n_workflow_id = ANY(%s) THEN %s WHEN n8n_workflow_id = ANY(%s) THEN %s"
+                    " ELSE %s END, n8n_key_found_at = %s"
                     " WHERE n8n_workflow_id = ANY(%s) AND NOT draft AND paused_at IS NULL"
                     " AND deleted_at IS NULL AND held_by IS NULL AND n8n_stranded_at IS NULL"
                     " AND deleted_in_n8n_at IS NULL"
                     " AND (n8n_key_finding IS NULL OR n8n_workflow_id = ANY(%s))",
-                    (taken, TAKEN_OFF, OFF_IN_N8N, uow.now, off, taken),
+                    (taken, TAKEN_OFF, stuck, STILL_ON, OFF_IN_N8N, uow.now, off, said),
                 )
                 await uow.conn.execute(
                     "UPDATE builder.use_cases SET n8n_key_finding = NULL, n8n_key_found_at = NULL"
                     " WHERE n8n_workflow_id = ANY(%s) AND NOT draft AND paused_at IS NULL"
                     " AND deleted_at IS NULL AND held_by IS NULL AND n8n_stranded_at IS NULL"
                     " AND n8n_key_finding = ANY(%s)",
-                    (on, [TAKEN_OFF, OFF_IN_N8N]),
+                    (checked, [TAKEN_OFF, OFF_IN_N8N, STILL_ON]),
+                )
+                await uow.conn.execute(
+                    "UPDATE builder.use_cases SET n8n_key_finding = NULL, n8n_key_found_at = NULL"
+                    " WHERE n8n_key_finding = %s"
+                    " AND (draft OR paused_at IS NOT NULL OR deleted_at IS NOT NULL)",
+                    (OFF_IN_N8N,),
                 )
         except psycopg.errors.LockNotAvailable:
             log.error("a held row kept workflows n8n has off from being marked; next sweep")

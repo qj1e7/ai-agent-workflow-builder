@@ -155,8 +155,10 @@ this ADR gives, or makes it stronger.
    takes off before it marks, and a mark waits at most five seconds on any row, so a lock cycle
    fails in place of stopping the sweep. The marks come from state, not from what the process
    remembers: each sweep marks every workflow the records say is on and n8n has off in the
-   platform's project, and clears that mark once it is live again. One paused, a draft, deleted,
-   held or on its way back is off on purpose and left alone. So a mark lost to a lock or a restart
+   platform's project, and clears that mark once it is live again and checked. One n8n would not
+   take off is marked as still running, never as on and safe, and tried again each minute. One
+   paused, a draft, deleted, held or on its way back is off on purpose and left alone, and loses
+   a mark that says it is on here. So a mark lost to a lock or a restart
    is made at the next sweep. A turn-on that lands between the sweep's look and its mark can be
    marked for one sweep, until the next look sees it live. A key Open in n8n removed is still
    remembered in the process until the next sweep marks the holder's workflows; a restart in

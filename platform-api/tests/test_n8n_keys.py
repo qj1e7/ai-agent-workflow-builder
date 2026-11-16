@@ -22,6 +22,7 @@ from platform_api.builder.key_sweep import (
     KEY_CHANGED,
     NOT_BACK_YET,
     OFF_IN_N8N,
+    STILL_ON,
     TAKEN_OFF,
     UNCHECKED_DRAFT,
     KeySweep,
@@ -1156,3 +1157,54 @@ async def test_a_plant_n8n_refuses_is_tried_again_and_the_health_line_says_so(
     assert [key for key in k.n8n.credentials if key.startswith("wab-test-")], "planted again"
     await k.sweep.sweep()
     assert (await k.keys.tested())[0], "and the sweep removed it"
+
+
+async def test_a_workflow_n8n_did_not_take_off_is_marked_and_tried_again(k: Keyed):
+    """n8n answers 502 to the unpublish, so the workflow still runs unchecked. It is marked, never
+    shown as on and safe, and the next sweep takes it off."""
+    await settled(k)
+    carol = await k.s.member()
+    use_case_id, workflow_id = await held(k.s)
+    with_slack(k, workflow_id)
+    k.n8n.publish_as(workflow_id, carol, deletes_in_slack)
+    k.n8n.unpublish_answers = [502]
+    assert (await k.sweep.sweep()).taken_off == ()
+    assert k.n8n.workflows[workflow_id]["activeVersionId"] is not None
+    assert await finding(k, use_case_id) == ("needs_a_fix", STILL_ON)
+    assert (await k.sweep.sweep()).taken_off == (workflow_id,)
+    assert await finding(k, use_case_id) == ("needs_a_fix", TAKEN_OFF)
+
+
+async def test_a_workflow_marked_off_in_n8n_and_then_paused_loses_that_mark(k: Keyed):
+    """Its words are for a workflow that is on here. Paused, it is off on purpose."""
+    await settled(k)
+    use_case_id, workflow_id = await held(k.s)
+    k.n8n.workflows[workflow_id].update(activeVersionId=None, active=False)
+    await k.sweep.sweep()
+    assert await finding(k, use_case_id) == ("needs_a_fix", OFF_IN_N8N)
+    assert (await k.s.lab.move("alice", "pause", use_case_id)).status_code == 200
+    await k.sweep.sweep()
+    view = (await k.s.call("alice", "GET", f"/api/v1/use-cases/{use_case_id}")).json()
+    assert (view["grade"], view["findings"]) == ("safe", [])
+
+
+@pytest.mark.parametrize("state", ["paused", "draft"])
+async def test_a_workflow_off_here_that_n8n_runs_unchecked_is_taken_off_with_no_mark(
+    k: Keyed, state: str
+):
+    """The records say it is off, so once n8n has it off too, nothing is wrong to show."""
+    await settled(k)
+    carol = await k.s.member()
+    if state == "paused":
+        use_case_id, workflow_id = await held(k.s)
+        assert (await k.s.lab.move("alice", "pause", use_case_id)).status_code == 200
+    else:
+        use_case_id, workflow_id = await made(k.s.own, on=False)
+        k.n8n.workflows[workflow_id]["shared"] = [
+            {"projectId": PLATFORM_PROJECT, "role": "workflow:owner"}
+        ]
+    with_slack(k, workflow_id)
+    k.n8n.publish_as(workflow_id, carol, deletes_in_slack)
+    assert (await k.sweep.sweep()).taken_off == (workflow_id,)
+    view = (await k.s.call("alice", "GET", f"/api/v1/use-cases/{use_case_id}")).json()
+    assert TAKEN_OFF not in view["findings"], view

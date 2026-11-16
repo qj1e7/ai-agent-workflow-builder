@@ -86,6 +86,8 @@ class FakeN8n:
     """How n8n answers the next transfers, in turn. A transfer it refuses moves nothing."""
     transfers_lost: int = 0
     """How many of the next transfers move the workflow but lose their answer."""
+    unpublish_answers: list[int] = field(default_factory=list[int])
+    """How n8n answers the next unpublishes, in turn. One it refuses leaves the workflow live."""
     list_page: int | None = None
     """How many workflows one page of a project's list holds. All of them unless a test says."""
     list_answers: list[int] = field(default_factory=list[int])
@@ -373,6 +375,8 @@ class FakeN8n:
                 self._activate(workflow_id, version)
                 return httpx.Response(200, json=self.workflows[workflow_id])
             case "POST", ["workflows", workflow_id, "unpublish"]:
+                if self.unpublish_answers and (answer := self.unpublish_answers.pop(0)) != 200:
+                    return httpx.Response(answer, json={"message": "Bad Gateway"})
                 workflow = self.workflows[workflow_id]
                 self.timeline.setdefault(workflow_id, []).append(
                     {
