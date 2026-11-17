@@ -97,6 +97,7 @@ from agent_runtime.follow_ups import (
     watch_offer_of,
 )
 from agent_runtime.free_reply import dead_end, reply_to
+from agent_runtime.newest import asks_for_the_newest
 from agent_runtime.parts import (
     HOW_OFTEN,
     NOT_FOLLOWED,
@@ -152,7 +153,7 @@ from agent_runtime.reading import (
     turns_round,
     without_runs_by_itself,
 )
-from agent_runtime.removals import removal_of
+from agent_runtime.removals import name_key, removal_of
 from agent_runtime.summary import ChatFor
 from agent_runtime.tools import tools_text
 
@@ -840,6 +841,24 @@ def _watchlist(
     return CantAnswer(cant=rows, alternative=watching) if rows else watching
 
 
+def _newest_of(read: TaskRead, request: str, facts: PlannerFacts | None) -> WatchlistAnswer | None:
+    """The software card for a question that asks only for the newest version of the one software
+    the reading names, as "what's new in node js?". The request's words decide, so the card is the
+    same whatever the reading made of the question, and a reading that asks to skip a yes never
+    gets it. The software is held as a free reply's is (`_reply_software`), so a second name is
+    never watched with it. Software the watchlist holds under another spelling, as "Node.js" for
+    "node js", is named as the watchlist names it, so the answer is about the one it holds."""
+    if read.skips_the_yes.whose != "nobody":
+        return None
+    software = _reply_software(request, _software_of(read, request))
+    word = None if software is None else asks_for_the_newest(request, software)
+    if software is None or word is None:
+        return None
+    held = facts.watchlist if facts is not None else None
+    same = {w.name.strip() for w in held or [] if name_key(w.name) == name_key(software)}
+    return WatchlistAnswer(word=word, software=same.pop() if len(same) == 1 else software)
+
+
 def _watchlist_holds(schedule: str | None) -> bool:
     """Whether the watchlist's one schedule could run on the whole schedule the model read, by
     the edit card's own checks: no frequency it can't run at, and one day and one time."""
@@ -1055,10 +1074,11 @@ def _answer_of(
     """The answer code decides from the model's reading: refused, by the word rule, by the
     model's answer to the skip question, or by words naming a yes that nothing explains in a
     request that writes; then a workflow to explain, software to take off the watchlist, a
-    change to a workflow the person has, then the watchlist, a question about the person's
-    workflows, then the structures. A request the model called a task is always read against its
-    structures, so words they do not hold come back; "abilities" is the catch-all, so a request
-    that asks for a change wins over it: a planted "close all tickets" comes back as a can't.
+    change to a workflow the person has, then a question about the newest version of one software,
+    the watchlist, a question about the person's workflows, then the structures. A request the
+    model called a task is always read against its structures, so words they do not hold come
+    back; "abilities" is the catch-all, so a request that asks for a change wins over it: a
+    planted "close all tickets" comes back as a can't.
     `facts` name the person's workflows, so a word in a name is never a command, and say when the
     Software watchlist checks, so a time a watch request names that matches it is no cross."""
     watch_schedule = facts.watchlist_schedule if facts is not None else None
@@ -1119,6 +1139,9 @@ def _answer_of(
             return refused
     if skip.unverified is not None:
         return _refused(text, skip.unverified)
+    newest = _newest_of(read, text, facts)
+    if newest is not None:
+        return newest
     if read.belongs_on_watchlist:
         answer = _watchlist(read, task, text, watch_schedule)
         if answer is not None:

@@ -6311,5 +6311,143 @@
       "ask_on_its_own",
       "not_followed"
     ]
+  },
+  {
+    "id": "nw-whats-new-node",
+    "note": "The team lead's own sentence, 17 Nov, on the local stack with a real model. The free reply told her to type another sentence. The software card offers Watch it instead.",
+    "task": "what's new in node js?",
+    "kind": [
+      "watchlist"
+    ],
+    "software": "node js",
+    "word": [
+      "new"
+    ]
+  },
+  {
+    "id": "nw-latest-node",
+    "note": "The team lead's own sentence, 17 Nov, on the local stack with a real model. It got I didn't follow this. The software card offers Watch it instead.",
+    "task": "what is the latest node js?",
+    "kind": [
+      "watchlist"
+    ],
+    "software": "node js",
+    "word": [
+      "latest"
+    ]
+  },
+  {
+    "id": "nw-latest-version-of",
+    "note": "Asks for the newest version of one software in other words, 17 Nov.",
+    "task": "latest version of redis",
+    "kind": [
+      "watchlist"
+    ],
+    "software": "redis",
+    "word": [
+      "version"
+    ]
+  },
+  {
+    "id": "nw-new-release",
+    "note": "Asks for the newest version of one software in other words, 17 Nov.",
+    "task": "is there a new kafka release",
+    "kind": [
+      "watchlist"
+    ],
+    "software": "kafka",
+    "word": [
+      "release"
+    ]
+  },
+  {
+    "id": "nw-newest",
+    "note": "Asks for the newest version of one software in other words, 17 Nov.",
+    "task": "what's the newest python",
+    "kind": [
+      "watchlist"
+    ],
+    "software": "python",
+    "word": [
+      "newest"
+    ]
+  },
+  {
+    "id": "nw-any-updates",
+    "note": "Asks for the newest version of one software in other words, 17 Nov.",
+    "task": "any updates for langgraph",
+    "kind": [
+      "watchlist"
+    ],
+    "software": "langgraph",
+    "word": [
+      "updates"
+    ]
+  },
+  {
+    "id": "nw-version-on",
+    "note": "Asks for the newest version of one software in other words, 17 Nov.",
+    "task": "what version is node on",
+    "kind": [
+      "watchlist"
+    ],
+    "software": "node",
+    "word": [
+      "version"
+    ]
+  },
+  {
+    "id": "nw-watched",
+    "note": "LangGraph is held, so the answer is about it: either lane, never a can't or the list of abilities.",
+    "task": "what's new in LangGraph?",
+    "kind": [
+      "question",
+      "watchlist"
+    ],
+    "not_kind": [
+      "cant",
+      "abilities"
+    ],
+    "facts": {
+      "watchlist": [
+        {
+          "name": "LangGraph",
+          "repo": "x/langgraph",
+          "our_version": "1.2.14",
+          "newest_version": "1.2.16",
+          "state": "New version"
+        },
+        {
+          "name": "Redis",
+          "repo": "x/redis",
+          "our_version": "8.0.2",
+          "newest_version": "8.0.2",
+          "state": "Up to date"
+        },
+        {
+          "name": "n8n",
+          "repo": "x/n8n",
+          "our_version": null,
+          "newest_version": "2.42.6",
+          "state": "Not checked yet"
+        }
+      ]
+    }
+  },
+  {
+    "id": "nw-not-the-team",
+    "note": "Not about software: no watch is offered.",
+    "task": "what's new with the team",
+    "not_kind": [
+      "watchlist"
+    ]
+  },
+  {
+    "id": "nw-not-news",
+    "note": "Not about software: no watch is offered.",
+    "task": "latest news",
+    "not_kind": [
+      "watchlist"
+    ]
   }
 ]

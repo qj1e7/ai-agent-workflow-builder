@@ -1650,5 +1650,34 @@
   "note": "The skip is refused before any explanation.",
   "refuse": true,
   "may_cross": true
+ },
+ {
+  "id": "whats-new-in-node",
+  "category": "vague",
+  "task": "what's new in node js?",
+  "kinds": [
+   "watchlist"
+  ],
+  "note": "The team lead's own sentence, 17 Nov, on the local stack with a real model. Not on the watchlist: the software card with Watch it, never a sentence to type instead."
+ },
+ {
+  "id": "latest-node",
+  "category": "typos",
+  "task": "what is the latest node js?",
+  "kinds": [
+   "watchlist"
+  ],
+  "note": "The team lead's own sentence, 17 Nov, on the local stack with a real model. It got I didn't follow this."
+ },
+ {
+  "id": "whats-new-with-the-team",
+  "category": "off_topic",
+  "task": "what's new with the team",
+  "kinds": [
+   "abilities",
+   "question",
+   "cant"
+  ],
+  "note": "Asks what's new, but not about software, so no watch is offered."
  }
 ]
