@@ -4,6 +4,7 @@ import { useAnswerDrafted } from '../../api/draftedQueries'
 import { pressOnce, useLatch } from '../../api/latch'
 import type { DraftedWorkflowView, DraftSettingView } from '../../api/types'
 import { Button } from '../../ui/Button'
+import { IconPencil } from '../../ui/icons'
 import { Words } from '../explain/Report'
 import { guessesOf, questionOf, typedPlaceholder, waitingOf } from './drafted'
 import styles from './Drafted.module.css'
@@ -35,7 +36,9 @@ function AnswerPicks({ view, setting, onAnswered }: Picks) {
     })
   const submit = (event: FormEvent) => {
     event.preventDefault()
-    send({ typed: text })
+    // An empty box answers nothing, so nothing is sent.
+    if (text.trim() === '') return
+    send({ typed: text.trim() })
   }
   return (
     <>
@@ -100,7 +103,7 @@ function GuessRow({ view, setting }: { view: DraftedWorkflowView; setting: Draft
   return (
     <li className={styles['part']}>
       <span className={styles['icon']} role="img" aria-label="Guess">
-        ~
+        <IconPencil aria-hidden="true" />
       </span>
       <span className={styles['key']}>{setting.key}</span>
       <span className={styles['value']}>
