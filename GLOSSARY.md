@@ -45,6 +45,14 @@ _Avoid_: Generator, builder agent
 What the workflow drafter wrote, with every change made to it, before it is set up. Its plan holds blocks, the wires between their exits, and settings that stand in parameters as placeholders, never as guessed values. Once set up, it is a Draft until someone turns it on (ADR 0051).
 _Avoid_: Draft (that is a set-up workflow not yet turned on)
 
+**Revision**:
+One whole plan of a drafted workflow. The first comes from the person's words. Each change asked for in the chat makes the next one, and only the newest can be sent (ADR 0051).
+_Avoid_: Version (that is a set-up workflow's)
+
+**Set-up approval**:
+An Approver's yes to set up one revision of a drafted workflow, bound to its digest. Any Approver who is not a party decides it: not the person who described it, changed it or sent it. It comes to Teams with a link to its own page (ADR 0051).
+_Avoid_: Approval (that is a run's yes to a write)
+
 **Workflow report**:
 The plain-words account that code builds of one version of any workflow: when it runs, each step, what it reads, writes and posts, every safety checker rule as flagged, fixed for you or passed, who approves each write, and its settings. A model never writes it. Strings from the workflow, such as a block's name, show in quotes, apart from code's own words (ADR 0051).
 _Avoid_: Summary, explanation

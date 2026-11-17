@@ -60,11 +60,11 @@ from platform_api.orchestration import (
     KeyPasted,
     KnownOptions,
     ModelProblem,
-    N8nDrafts,
     N8nError,
     NoModel,
     Refusal,
     RuntimeDown,
+    SavedDraft,
     SetUpApprovals,
     SetUpAsk,
     SetUpDecided,
@@ -292,6 +292,16 @@ class Facts(Protocol):
     async def known(self, adding: Mapping[str, Sequence[str]]) -> KnownOptions: ...
 
 
+class SettingUp(Protocol):
+    """What the set-up needs of n8n: N8nDrafts, which reads a workflow back after creating it."""
+
+    async def error_workflow_id(self) -> str | None: ...
+
+    async def save_draft(self, document: Mapping[str, Any]) -> SavedDraft: ...
+
+    async def remove(self, workflow_id: str) -> None: ...
+
+
 @dataclass(frozen=True)
 class Checked:
     """A revision as code laid it out and checked it, under today's rules."""
@@ -308,7 +318,7 @@ class DraftedWorkflows:
         drafting: Drafting,
         approvals: SetUpApprovals,
         facts: Facts,
-        n8n: N8nDrafts | None,
+        n8n: SettingUp | None,
         public_base_url: str,
         time_zone: str,
     ) -> None:

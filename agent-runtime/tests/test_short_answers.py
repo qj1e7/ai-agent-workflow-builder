@@ -30,6 +30,7 @@ def test_the_capabilities_card_lists_the_ready_entries_by_their_short_words():
         "Create Jira tickets, after a yes",
         "Explain a stopped run, and retry it",
         "Change or pause your workflows",
+        "Draft an n8n workflow from your words, for an Approver to check",
         "Explain any workflow",
     ]
 

@@ -1,0 +1,18 @@
+{
+  "drafted_id": "dw_01JDRAFTRELEASE",
+  "revision": 1,
+  "name": null,
+  "state": "drafting",
+  "words": "Draft an n8n workflow that every Monday at 9:00 checks langchain-ai/langgraph for a new release and raises a ticket in MOCK",
+  "said": null,
+  "started_at": "2026-11-17T01:00:00Z",
+  "blocks": [],
+  "report": null,
+  "needed": 0,
+  "flags": 0,
+  "can_send": false,
+  "why_not_send": "It's still drafting.",
+  "replaced_waiting": false,
+  "approval": null,
+  "set_up": null
+}

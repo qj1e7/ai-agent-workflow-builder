@@ -2633,6 +2633,18 @@
             "title": "Cant",
             "type": "array"
           },
+          "draft_words": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The request's words, unchanged, when the Workflow drafter may draft it as an n8n workflow: for an Operator, when a part it can't do is not one the platform refuses (ADR 0051). The card shows Draft it as an n8n workflow, which sends these words. Null otherwise.",
+            "title": "Draft Words"
+          },
           "parts": {
             "description": "Every clause of what the person typed, in order, with what happened to it (spec 6.5). None is dropped. Empty for a chip they tapped, for an answer inside another answer, and when no model read the request.",
             "items": {
@@ -2659,7 +2671,8 @@
           "trace_id",
           "answer",
           "cant",
-          "alternative"
+          "alternative",
+          "draft_words"
         ],
         "title": "CantReply",
         "type": "object"
@@ -3312,6 +3325,29 @@
           "tools"
         ],
         "title": "CardView",
+        "type": "object"
+      },
+      "ChangeIn": {
+        "additionalProperties": false,
+        "properties": {
+          "revision": {
+            "description": "The revision the person asks to change.",
+            "minimum": 1.0,
+            "title": "Revision",
+            "type": "integer"
+          },
+          "words": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Words",
+            "type": "string"
+          }
+        },
+        "required": [
+          "words",
+          "revision"
+        ],
+        "title": "ChangeIn",
         "type": "object"
       },
       "ChangeLine": {
@@ -4531,7 +4567,7 @@
           "reason": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/DeclineReason"
+                "$ref": "#/components/schemas/platform_api__wire__DeclineReason"
               },
               {
                 "type": "null"
@@ -4643,11 +4679,6 @@
         ],
         "title": "DecisionsView",
         "type": "object"
-      },
-      "DeclineReason": {
-        "maxLength": 200,
-        "minLength": 1,
-        "type": "string"
       },
       "DeclinedItem": {
         "additionalProperties": false,
@@ -4813,49 +4844,6 @@
         "title": "DidntFollowReply",
         "type": "object"
       },
-      "DraftIn": {
-        "additionalProperties": false,
-        "properties": {
-          "content": {
-            "additionalProperties": {
-              "$ref": "#/components/schemas/JsonValue"
-            },
-            "description": "The set-up card's form as the Portal keeps it, at most 32 KB as JSON. The platform stores it as it is. It reads only a top-level `name`, which Home shows.",
-            "title": "Content",
-            "type": "object"
-          },
-          "put_back": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/DraftTimes"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Set when Undo puts back a draft that was just discarded: the times it had. They are used only if no draft with this id exists, and never later than now, so `Last saved` stays true. An ordinary save leaves it out."
-          },
-          "step": {
-            "anyOf": [
-              {
-                "maximum": 4.0,
-                "minimum": 1.0,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "The step of the old four-step screen the draft was saved at, from 1 to 4. A draft saved from a Planner card has no step.",
-            "title": "Step"
-          }
-        },
-        "required": [
-          "content"
-        ],
-        "title": "DraftIn",
-        "type": "object"
-      },
       "DraftItem": {
         "additionalProperties": false,
         "properties": {
@@ -4917,6 +4905,71 @@
           "drafts"
         ],
         "title": "DraftList",
+        "type": "object"
+      },
+      "DraftStartedReply": {
+        "additionalProperties": false,
+        "description": "An Operator asked for a draft in words, as \"draft an n8n workflow that ...\". Code read it,\nnever a model, and the Workflow drafter started on the words unchanged (ADR 0051). The Portal\nshows the drafted workflow's card and follows GET /api/v1/drafted-workflows/{drafted_id}.",
+        "properties": {
+          "answer": {
+            "const": "draft_started",
+            "default": "draft_started",
+            "title": "Answer",
+            "type": "string"
+          },
+          "drafted_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null when the words were refused.",
+            "title": "Drafted Id"
+          },
+          "parts": {
+            "description": "Every clause of what the person typed, in order, with what happened to it (spec 6.5). None is dropped. Empty for a chip they tapped, for an answer inside another answer, and when no model read the request.",
+            "items": {
+              "$ref": "#/components/schemas/PartView"
+            },
+            "title": "Parts",
+            "type": "array"
+          },
+          "refused": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why nothing was drafted, in words to show, such as a pasted key. Null when it started.",
+            "title": "Refused"
+          },
+          "trace_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The trace of this turn, when the runtime's answer is shown. The Portal sends it back as previous.trace_id with the next message (ADR 0050). Null for a chip, an answer the platform gives alone, the offline answer, and an answer inside another.",
+            "title": "Trace Id"
+          }
+        },
+        "required": [
+          "parts",
+          "trace_id",
+          "answer",
+          "drafted_id",
+          "refused"
+        ],
+        "title": "DraftStartedReply",
         "type": "object"
       },
       "DraftTimes": {
@@ -4984,6 +5037,313 @@
           "saved_at"
         ],
         "title": "DraftView",
+        "type": "object"
+      },
+      "DraftedApprovalView": {
+        "additionalProperties": false,
+        "properties": {
+          "approval_id": {
+            "title": "Approval Id",
+            "type": "string"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "link": {
+            "description": "The set-up approval page, as the Teams card opens it.",
+            "title": "Link",
+            "type": "string"
+          },
+          "posted": {
+            "description": "Whether the request is in the Teams channel yet.",
+            "enum": [
+              "waiting",
+              "sent",
+              "failed"
+            ],
+            "title": "Posted",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why it was declined, from the short list.",
+            "title": "Reason"
+          },
+          "sent_at": {
+            "format": "date-time",
+            "title": "Sent At",
+            "type": "string"
+          },
+          "sent_by": {
+            "title": "Sent By",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "waiting",
+              "approved",
+              "declined",
+              "expired",
+              "replaced"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "approval_id",
+          "link",
+          "status",
+          "sent_by",
+          "sent_at",
+          "expires_at",
+          "decided_by",
+          "decided_at",
+          "reason",
+          "posted"
+        ],
+        "title": "DraftedApprovalView",
+        "type": "object"
+      },
+      "DraftedSetUpView": {
+        "additionalProperties": false,
+        "properties": {
+          "state": {
+            "description": "setting_up until n8n holds it. set_up once it is a Draft on Workflows. failed when n8n didn't take it, which an Operator can try again. refused when it changed since it was approved, or no longer passes the check, which only a new approval fixes.",
+            "enum": [
+              "setting_up",
+              "set_up",
+              "failed",
+              "refused"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "use_case_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The workflow it is now. Null until set up.",
+            "title": "Use Case Id"
+          },
+          "words": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why not, in words to show.",
+            "title": "Words"
+          }
+        },
+        "required": [
+          "state",
+          "use_case_id",
+          "words"
+        ],
+        "title": "DraftedSetUpView",
+        "type": "object"
+      },
+      "DraftedState": {
+        "enum": [
+          "drafting",
+          "not_drafted",
+          "draft",
+          "waiting",
+          "approved",
+          "declined"
+        ],
+        "type": "string"
+      },
+      "DraftedWorkflowView": {
+        "additionalProperties": false,
+        "properties": {
+          "approval": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DraftedApprovalView"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "This revision's set-up approval, once sent."
+          },
+          "blocks": {
+            "description": "Its blocks in the order a run meets them.",
+            "items": {
+              "$ref": "#/components/schemas/N8nBlockView"
+            },
+            "title": "Blocks",
+            "type": "array"
+          },
+          "can_send": {
+            "title": "Can Send",
+            "type": "boolean"
+          },
+          "drafted_id": {
+            "title": "Drafted Id",
+            "type": "string"
+          },
+          "flags": {
+            "description": "The flags the check found.",
+            "title": "Flags",
+            "type": "integer"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The plan's name. Null until the first plan.",
+            "title": "Name"
+          },
+          "needed": {
+            "description": "The settings still needed.",
+            "title": "Needed",
+            "type": "integer"
+          },
+          "replaced_waiting": {
+            "description": "This revision replaced a set-up approval that was still waiting.",
+            "title": "Replaced Waiting",
+            "type": "boolean"
+          },
+          "report": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WorkflowExplained"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Code's workflow report of this revision. Null while drafting or when not drafted."
+          },
+          "revision": {
+            "description": "The newest revision. A card for an older one settles.",
+            "title": "Revision",
+            "type": "integer"
+          },
+          "said": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why it wasn't drafted, in words to show.",
+            "title": "Said"
+          },
+          "set_up": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DraftedSetUpView"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Its set-up, once approved."
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/DraftedState",
+            "description": "drafting while the drafter works; not_drafted with said; draft until it is sent; waiting for a yes; approved; declined. An approval that expired or was replaced leaves it a draft."
+          },
+          "why_not_send": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why Send for approval can't work now, in words shown in its place.",
+            "title": "Why Not Send"
+          },
+          "words": {
+            "description": "The words this revision was drafted from.",
+            "title": "Words",
+            "type": "string"
+          }
+        },
+        "required": [
+          "drafted_id",
+          "revision",
+          "name",
+          "state",
+          "words",
+          "said",
+          "started_at",
+          "blocks",
+          "report",
+          "needed",
+          "flags",
+          "can_send",
+          "why_not_send",
+          "replaced_waiting",
+          "approval",
+          "set_up"
+        ],
+        "title": "DraftedWorkflowView",
         "type": "object"
       },
       "EditAfter": {
@@ -8466,6 +8826,18 @@
             "title": "Cant",
             "type": "array"
           },
+          "draft_words": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The request's words, unchanged, when the Workflow drafter may draft it as an n8n workflow: for an Operator, when a part it can't do is not one the platform refuses (ADR 0051). The card shows Draft it as an n8n workflow, which sends these words. Null otherwise.",
+            "title": "Draft Words"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -8515,7 +8887,8 @@
           "name",
           "rows",
           "cant",
-          "similar"
+          "similar",
+          "draft_words"
         ],
         "title": "PartReply",
         "type": "object"
@@ -9164,6 +9537,7 @@
             "decide": "#/components/schemas/DecideReply",
             "decided": "#/components/schemas/DecidedReply",
             "didnt_follow": "#/components/schemas/DidntFollowReply",
+            "draft_started": "#/components/schemas/DraftStartedReply",
             "edit": "#/components/schemas/EditReply",
             "explain": "#/components/schemas/ExplainReply",
             "ideas": "#/components/schemas/IdeasReply",
@@ -9242,6 +9616,9 @@
           },
           {
             "$ref": "#/components/schemas/ExplainReply"
+          },
+          {
+            "$ref": "#/components/schemas/DraftStartedReply"
           },
           {
             "$ref": "#/components/schemas/OperatorsReply"
@@ -11781,6 +12158,136 @@
         "title": "Segment",
         "type": "object"
       },
+      "SendIn": {
+        "additionalProperties": false,
+        "properties": {
+          "revision": {
+            "minimum": 1.0,
+            "title": "Revision",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "revision"
+        ],
+        "title": "SendIn",
+        "type": "object"
+      },
+      "SetUpApprovalView": {
+        "additionalProperties": false,
+        "description": "A set-up approval as the approval page shows it: code's report of the exact revision the\ndigest binds, and whether this person may decide it now, by the run gate's own rule.",
+        "properties": {
+          "approval": {
+            "$ref": "#/components/schemas/DraftedApprovalView"
+          },
+          "approval_id": {
+            "title": "Approval Id",
+            "type": "string"
+          },
+          "decline_reasons": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Decline Reasons",
+            "type": "array"
+          },
+          "digest": {
+            "description": "Send it back with the decision.",
+            "title": "Digest",
+            "type": "string"
+          },
+          "drafted_id": {
+            "title": "Drafted Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "report": {
+            "$ref": "#/components/schemas/WorkflowExplained"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          },
+          "set_up": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DraftedSetUpView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "why_not": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why this person can't decide it now.",
+            "title": "Why Not"
+          },
+          "you_can_decide": {
+            "title": "You Can Decide",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "approval_id",
+          "drafted_id",
+          "revision",
+          "name",
+          "digest",
+          "approval",
+          "report",
+          "you_can_decide",
+          "why_not",
+          "decline_reasons",
+          "set_up"
+        ],
+        "title": "SetUpApprovalView",
+        "type": "object"
+      },
+      "SetUpDecisionIn": {
+        "additionalProperties": false,
+        "properties": {
+          "digest": {
+            "title": "Digest",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/platform_api__orchestration__setup_approvals__DeclineReason"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Needed to decline, from the short list. None to approve."
+          },
+          "verdict": {
+            "enum": [
+              "approve",
+              "decline"
+            ],
+            "title": "Verdict",
+            "type": "string"
+          }
+        },
+        "required": [
+          "verdict",
+          "digest"
+        ],
+        "title": "SetUpDecisionIn",
+        "type": "object"
+      },
       "SetUpFromN8n": {
         "additionalProperties": false,
         "properties": {
@@ -12858,8 +13365,16 @@
             "type": "string"
           },
           "run_id": {
-            "title": "Run Id",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null for a set-up approval, which has no run.",
+            "title": "Run Id"
           },
           "text": {
             "title": "Text",
@@ -15536,6 +16051,78 @@
         ],
         "title": "WriteOut",
         "type": "object"
+      },
+      "platform_api__builder__drafted_workflows__DraftIn": {
+        "additionalProperties": false,
+        "properties": {
+          "words": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Words",
+            "type": "string"
+          }
+        },
+        "required": [
+          "words"
+        ],
+        "title": "DraftIn",
+        "type": "object"
+      },
+      "platform_api__builder__models__DraftIn": {
+        "additionalProperties": false,
+        "properties": {
+          "content": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "description": "The set-up card's form as the Portal keeps it, at most 32 KB as JSON. The platform stores it as it is. It reads only a top-level `name`, which Home shows.",
+            "title": "Content",
+            "type": "object"
+          },
+          "put_back": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DraftTimes"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set when Undo puts back a draft that was just discarded: the times it had. They are used only if no draft with this id exists, and never later than now, so `Last saved` stays true. An ordinary save leaves it out."
+          },
+          "step": {
+            "anyOf": [
+              {
+                "maximum": 4.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The step of the old four-step screen the draft was saved at, from 1 to 4. A draft saved from a Planner card has no step.",
+            "title": "Step"
+          }
+        },
+        "required": [
+          "content"
+        ],
+        "title": "DraftIn",
+        "type": "object"
+      },
+      "platform_api__orchestration__setup_approvals__DeclineReason": {
+        "enum": [
+          "Too risky without a yes",
+          "Wrong project or channel",
+          "Not needed"
+        ],
+        "type": "string"
+      },
+      "platform_api__wire__DeclineReason": {
+        "maxLength": 200,
+        "minLength": 1,
+        "type": "string"
       }
     },
     "securitySchemes": {
@@ -16983,6 +17570,500 @@
         ]
       }
     },
+    "/api/v1/drafted-workflows": {
+      "post": {
+        "description": "Starts the workflow drafter on an Operator's words, unchanged (ADR 0051). It answers at once with the drafted workflow drafting its first revision. Read it again to see the plan laid out, checked and reported. Words shaped like a key are refused, and nothing is kept or sent. The same Idempotency-Key answers the drafted workflow it started.",
+        "operationId": "start_drafting_api_v1_drafted_workflows_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/platform_api__builder__drafted_workflows__DraftIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftedWorkflowView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Only an Operator can draft workflows. Ask an Operator on the team."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Don't paste keys here. An Operator adds keys in Settings."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Start Drafting",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/drafted-workflows/{drafted_id}": {
+      "get": {
+        "description": "A drafted workflow's newest revision: its state, steps, code's report, the settings still needed, the flags, whether it can be sent for approval and why not, and its set-up approval and set-up once there are.",
+        "operationId": "read_drafted_api_v1_drafted_workflows__drafted_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "drafted_id",
+            "required": true,
+            "schema": {
+              "title": "Drafted Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftedWorkflowView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Signed in, but not on the People list. Ask an Operator to add you"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "No such drafted workflow"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Read Drafted",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/drafted-workflows/{drafted_id}/changes": {
+      "post": {
+        "description": "A change asked for in the chat. The drafter gets the plan as it stands and these words, and its whole new plan becomes the next revision, drafting now. A setting with the same id and kind keeps its value unless the words change it. A set-up approval still waiting is replaced. 409 when the revision named is not the newest, it is still drafting, or it is set up already.",
+        "operationId": "change_drafted_api_v1_drafted_workflows__drafted_id__changes_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "drafted_id",
+            "required": true,
+            "schema": {
+              "title": "Drafted Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftedWorkflowView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Only an Operator can draft workflows. Ask an Operator on the team."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "No such drafted workflow"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Change Drafted",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/drafted-workflows/{drafted_id}/send": {
+      "post": {
+        "description": "Sends the newest revision for a set-up approval, to any Approver who is not a party: the person who described it, everyone who changed it, and the sender. It goes to the Teams channel with a link to the approval page. 409, with the words the card shows, while any setting is still needed, when the check found a flag, or when it changes someone's access, until those steps are built.",
+        "operationId": "send_drafted_api_v1_drafted_workflows__drafted_id__send_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "drafted_id",
+            "required": true,
+            "schema": {
+              "title": "Drafted Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftedWorkflowView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Only an Operator can draft workflows. Ask an Operator on the team."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "No such drafted workflow"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Send Drafted",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/drafted-workflows/{drafted_id}/set-up": {
+      "post": {
+        "description": "Tries the set-up of an approved revision again, after n8n didn't take it.",
+        "operationId": "set_up_drafted_again_api_v1_drafted_workflows__drafted_id__set_up_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "drafted_id",
+            "required": true,
+            "schema": {
+              "title": "Drafted Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftedWorkflowView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Only an Operator can draft workflows. Ask an Operator on the team."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "No such drafted workflow"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Set Up Drafted Again",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
     "/api/v1/drafts": {
       "get": {
         "description": "The signed-in Operator's own drafts. Nobody else's are listed.",
@@ -17149,7 +18230,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/DraftIn"
+                "$ref": "#/components/schemas/platform_api__builder__models__DraftIn"
               }
             }
           },
@@ -19993,6 +21074,208 @@
         "summary": "Connect Model",
         "tags": [
           "settings"
+        ]
+      }
+    },
+    "/api/v1/setup-approvals/{approval_id}": {
+      "get": {
+        "description": "A set-up approval as its page shows it: code's report of the exact revision its digest binds, and whether the signed-in person may decide it now. A party to it never may.",
+        "operationId": "read_set_up_approval_api_v1_setup_approvals__approval_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "approval_id",
+            "required": true,
+            "schema": {
+              "title": "Approval Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SetUpApprovalView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Signed in, but not on the People list. Ask an Operator to add you"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "No such set-up approval"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Read Set Up Approval",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/setup-approvals/{approval_id}/decisions": {
+      "post": {
+        "description": "An Approver's yes or no to set up the revision with this digest. One Approver who is not a party decides. A decline needs a reason from the short list. Once approved, the platform sets it up as a Draft in n8n, read back and compared by digest. 200 when the same decision was recorded before.",
+        "operationId": "decide_set_up_api_v1_setup_approvals__approval_id__decisions_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "approval_id",
+            "required": true,
+            "schema": {
+              "title": "Approval Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetUpDecisionIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SetUpApprovalView"
+                }
+              }
+            },
+            "description": "Recorded before"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SetUpApprovalView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "This person can't decide it now, with why"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "No such set-up approval"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Pick a reason to decline."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Decide Set Up",
+        "tags": [
+          "builder"
         ]
       }
     },

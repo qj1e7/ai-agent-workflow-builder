@@ -9,6 +9,7 @@ import pytest
 from platform_api.db import Database
 from platform_api.orchestration.approvals import Approved, Closed, Declined, Open, Refusal, Verdict
 from platform_api.orchestration.dispatch import (
+    PRACTICE,
     ApprovalOutcome,
     DispatchFailure,
     MessageRef,
@@ -56,7 +57,7 @@ class Channel:
         if self.fails:
             raise DispatchFailure("Teams answered 502")
         self.posted.append(notice)
-        return MessageRef("CODESparks Ops", f"msg-{notice.approval_id}", "practice")
+        return MessageRef("CODESparks Ops", f"msg-{notice.approval_id}", PRACTICE)
 
     async def update(self, ref: MessageRef, outcome: ApprovalOutcome) -> None:
         self.updated.append(outcome)
