@@ -81,6 +81,7 @@ export const PAGES: Readonly<Record<PageId, PageEntry>> = {
 const RunRoute = lazy(() => import('../screens/run/RunPage').then((module) => ({ default: module.RunRoute })))
 const JiraRoute = lazy(() => import('../screens/jira/JiraPage').then((module) => ({ default: module.JiraRoute })))
 const SoftwareRoute = lazy(() => import('../screens/software/SoftwarePage').then((module) => ({ default: module.SoftwareRoute })))
+const SetUpApprovalRoute = lazy(() => import('../screens/drafted/SetUpApprovalPage').then((module) => ({ default: module.SetUpApprovalRoute })))
 const ApprovalRoute = lazy(() => import('../screens/run/RunPage').then((module) => ({ default: module.ApprovalRoute })))
 
 function Lazy({ children }: { children: ReactNode }) {
@@ -106,7 +107,7 @@ export function railCurrent(pathname: string, ofRun: PageId): PageId | null {
   if (pathname === PAGES.home.path) return 'home'
   if (under(pathname, PAGES.workflows.path)) return 'workflows'
   if (under(pathname, PAGES.software.path)) return 'software'
-  if (under(pathname, '/runs') || under(pathname, '/approvals')) return ofRun
+  if (under(pathname, '/runs') || under(pathname, '/approvals') || under(pathname, '/setup-approvals')) return ofRun
   return null
 }
 
@@ -195,6 +196,7 @@ export function AppRoutes({ context }: { context: PageContext }) {
       <Route path={`${OLD_NEW_PATH}/*`} element={<OldNewAddress />} />
       <Route path="/runs/:runId" element={<Lazy><RunRoute /></Lazy>} />
       <Route path="/approvals/:approvalId" element={<Lazy><ApprovalRoute /></Lazy>} />
+      <Route path="/setup-approvals/:approvalId" element={<Lazy><SetUpApprovalRoute /></Lazy>} />
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
   )

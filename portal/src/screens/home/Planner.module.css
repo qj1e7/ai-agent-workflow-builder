@@ -730,3 +730,15 @@
 .cardOk {
   color: var(--green-ink);
 }
+
+.changing {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 12px;
+  margin: 0 0 6px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 600;
+}

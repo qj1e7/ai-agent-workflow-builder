@@ -168,6 +168,7 @@ export function leftoverParts(reply: PlannerReply): PartView[] {
     case 'offline':
     case 'reply':
     case 'didnt_follow':
+    case 'draft_started':
       return []
     case 'cant': {
       // The card names only the can'ts with something to build. One with nothing to build, as a yes that can't be skipped, is drawn here.

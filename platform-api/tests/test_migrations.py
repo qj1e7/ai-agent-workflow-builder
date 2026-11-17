@@ -1298,3 +1298,64 @@ async def test_migration_0021_keeps_one_practice_notice_per_block_of_a_run_and_g
             ).fetchone() == (None,)
         finally:
             upgrade("orchestration", postgres.owner)
+
+
+def test_builder_migration_0022_keeps_each_revision_whole_and_goes_back(postgres: PostgresUrls):
+    drafted = (
+        "INSERT INTO builder.drafted_workflows (drafted_id, owner, created_at, use_case_id)"
+        " VALUES ('dw_m', 'alice', %s, 'uc_m')"
+    )
+    revision = (
+        "INSERT INTO builder.drafted_revisions (drafted_id, revision, asked_by, words,"
+        " started_at, state, finished_at, document, digest, said)"
+        " VALUES ('dw_m', %s, 'alice', 'w', %s, %s, %s, %s, %s, %s)"
+    )
+    with psycopg.connect(postgres.owner, autocommit=True) as conn:
+        try:
+            conn.execute(drafted, (NOW,))
+            conn.execute(revision, (1, NOW, "drafting", None, None, None, None))
+            conn.execute(revision, (2, NOW, "drafted", NOW, '{"nodes": []}', "d", None))
+            with pytest.raises(psycopg.errors.CheckViolation):
+                conn.execute(revision, (3, NOW, "drafted", NOW, None, None, None))
+            with pytest.raises(psycopg.errors.CheckViolation):
+                conn.execute(revision, (3, NOW, "not_drafted", NOW, None, None, None))
+            downgrade("builder", postgres.owner, "0021")
+            assert conn.execute(
+                "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'builder'"
+                " AND table_name LIKE 'drafted_%'"
+            ).fetchone() == (0,)
+        finally:
+            upgrade("builder", postgres.owner)
+
+
+def test_migration_0029_keeps_set_up_approvals_apart_and_a_decline_says_why(
+    postgres: PostgresUrls,
+):
+    request = (
+        "INSERT INTO orchestration.setup_requests (approval_id, drafted_id, revision, digest,"
+        " name, in_short, policy, parties, sent_by, created_at, expires_at)"
+        " VALUES ('apr_m', 'dw_m', 1, 'd', 'n', 's', '[]', '[]', 'alice', %s, %s)"
+    )
+    decision = (
+        "INSERT INTO orchestration.setup_decisions (approval_id, step_index, by, verdict,"
+        " seen_digest, at, reason) VALUES ('apr_m', 0, 'bob', %s, 'd', %s, %s)"
+    )
+    with psycopg.connect(postgres.owner, autocommit=True) as conn:
+        try:
+            conn.execute(request, (NOW, NOW))
+            with pytest.raises(psycopg.errors.CheckViolation):
+                conn.execute(decision, ("decline", NOW, None))
+            conn.execute(decision, ("approve", NOW, None))
+            conn.execute(
+                "INSERT INTO orchestration.teams_stub_messages"
+                " (id, ts, channel, text, link, run_id, approval_id)"
+                " VALUES ('tm_m', %s, 'c', 't', '/setup-approvals/apr_m', NULL, 'apr_m')",
+                (NOW,),
+            )
+            downgrade("orchestration", postgres.owner, "0028")
+            assert conn.execute(
+                "SELECT count(*) FROM information_schema.tables WHERE table_schema ="
+                " 'orchestration' AND table_name LIKE 'setup_%'"
+            ).fetchone() == (0,)
+        finally:
+            upgrade("orchestration", postgres.owner)

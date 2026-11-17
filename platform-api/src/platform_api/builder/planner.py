@@ -20,6 +20,8 @@ from typing import Annotated, Final, Literal, Protocol, Self
 from pydantic import AwareDatetime, ConfigDict, Field, StringConstraints, model_validator
 
 from platform_api.builder import asks
+from platform_api.builder.drafted_workflows import SAME_WORDS_WITHIN, DraftedWorkflows
+from platform_api.builder.drafted_workflows import Refused as DraftRefused
 from platform_api.builder.models import (
     CardList,
     ClockTime,
@@ -286,12 +288,21 @@ class SetupCardReply(Reply):
     )
 
 
+DRAFT_WORDS_FIELD: Final = Field(
+    default=None,
+    description="The request's words, unchanged, when the Workflow drafter may draft it as an n8n "
+    "workflow: for an Operator, when a part it can't do is not one the platform refuses (ADR "
+    "0051). The card shows Draft it as an n8n workflow, which sends these words. Null otherwise.",
+)
+
+
 class PartReply(Reply):
     answer: Literal["part"] = "part"
     name: str
     rows: list[UnderstoodRowView]
     cant: list[CantRowView]
     similar: SimilarWorkflow | None
+    draft_words: str | None = DRAFT_WORDS_FIELD
 
 
 class WatchlistReply(Reply):
@@ -311,6 +322,7 @@ class CantReply(Reply):
     answer: Literal["cant"] = "cant"
     cant: list[CantRowView]
     alternative: Annotated[SetupCardReply | WatchlistReply, Field(discriminator="answer")] | None
+    draft_words: str | None = DRAFT_WORDS_FIELD
 
 
 class WhichSoftwareReply(Reply):
@@ -596,6 +608,19 @@ class ExplainReply(Reply):
     )
 
 
+class DraftStartedReply(Reply):
+    """An Operator asked for a draft in words, as "draft an n8n workflow that ...". Code read it,
+    never a model, and the Workflow drafter started on the words unchanged (ADR 0051). The Portal
+    shows the drafted workflow's card and follows GET /api/v1/drafted-workflows/{drafted_id}."""
+
+    answer: Literal["draft_started"] = "draft_started"
+    drafted_id: str | None = Field(description="Null when the words were refused.")
+    refused: str | None = Field(
+        description="Why nothing was drafted, in words to show, such as a pasted key. Null when "
+        "it started."
+    )
+
+
 class OperatorsReply(Reply):
     """A change asked by someone who isn't an Operator. Only Operators set up and change
     workflows, so nothing is offered that changes anything (ADR 0043)."""
@@ -680,6 +705,13 @@ class N8nReply(Reply):
 
 
 N8N_WORD = re.compile(r"(?<!\w)n8n(?!\w)", re.IGNORECASE)
+DRAFT_WORDS: Final = re.compile(
+    r"^\W*(?:(?:please|pls|kindly|can|could|would|will|you|u|just)\s+)*draft\s+(?:me\s+|us\s+)?"
+    r"(?:an?\s+)?(?:new\s+)?(?:n8n\s+)?workflow\b\W*\w",
+    re.IGNORECASE,
+)
+"""A request for a draft in words, as "draft an n8n workflow that ...", with something to draft
+after it (ADR 0051, flow step 1)."""
 YES_WORDS: Final = re.compile(
     r"\b(?:approv\w*|yes|sign[- ]?off|review\w*|ask\w*|any(?:one|body)|no(?:one|body)|bypass\w*|"
     r"skip\w*|loop|permission|consent|ok(?:ay)?|go-?ahead|without|auto\w*|myself|own)\b",
@@ -713,6 +745,7 @@ type PlannerReply = Annotated[
     | ResumeReply
     | RemoveSoftwareReply
     | ExplainReply
+    | DraftStartedReply
     | OperatorsReply
     | DecidedReply
     | DecideReply
@@ -1021,7 +1054,9 @@ class PlannerFront:
         staff: N8nAccessPort | None = None,
         scores: TraceScores | None = None,
         pseudonym_key: str | None = None,
+        drafted: DraftedWorkflows | None = None,
     ) -> None:
+        self._drafted = drafted
         self._scores = scores or NoTraceScores()
         self._pseudonym_key = pseudonym_key
         # Without the key, ids are signed with one this process makes, so a typed-again flag needs
@@ -1044,6 +1079,13 @@ class PlannerFront:
             )
             if flag is not None:
                 self._scores.send(flag)
+        if (
+            body.text is not None
+            and DRAFT_WORDS.search(body.text)
+            and not YES_WORDS.search(body.text)
+            and self._drafted is not None
+        ):
+            return await self._draft(body.text, viewer, self._drafted)
         if body.text is not None and N8N_WORD.search(body.text) and not YES_WORDS.search(body.text):
             return await self._n8n(body.text, viewer)
         operator = Role.OPERATOR in viewer.roles
@@ -1055,9 +1097,35 @@ class PlannerFront:
         else:
             assert body.intent is not None
             reply = await self._intent(body.intent, body.use_case_id)
-        if operator or isinstance(reply, NoSuchWorkflow):
+        if isinstance(reply, NoSuchWorkflow):
             return reply
+        if operator:
+            return self._offer_draft(reply, body.text)
         return questions_only(reply, body.text).model_copy(update={"trace_id": reply.trace_id})
+
+    async def _draft(self, text: str, viewer: Principal, drafted: DraftedWorkflows) -> PlannerReply:
+        """Answered by the platform, never a model: only an Operator may draft, and the drafter
+        starts on the words unchanged (ADR 0051, flow step 1). A request that names a yes goes to
+        the runtime first, whose word rule refuses a skipped yes (ADR 0047)."""
+        if Role.OPERATOR not in viewer.roles:
+            return OperatorsReply(parts=[_cross(text, "operators")])
+        match await drafted.start(viewer, text, same_words_within=SAME_WORDS_WITHIN):
+            case DraftRefused(words=words):
+                return DraftStartedReply(drafted_id=None, refused=words)
+            case started:
+                return DraftStartedReply(drafted_id=started.drafted_id, refused=None)
+
+    def _offer_draft(self, reply: PlannerReply, text: str | None) -> PlannerReply:
+        """A can't, or a part card, gains Draft it as an n8n workflow when a part it can't do is
+        one the drafter might reach. A part the platform refuses outright offers nothing."""
+        if (
+            self._drafted is None
+            or text is None
+            or not isinstance(reply, CantReply | PartReply)
+            or all(row.unsupported for row in reply.cant)
+        ):
+            return reply
+        return reply.model_copy(update={"draft_words": text})
 
     async def _intent(
         self, intent: Intent, use_case_id: str | None

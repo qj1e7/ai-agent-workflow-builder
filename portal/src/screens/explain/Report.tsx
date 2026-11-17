@@ -5,7 +5,7 @@ import { approvalGist, approvesGist, flagsGist, segmentsOfText, settingsGist, st
 import styles from './Report.module.css'
 
 /** A string from the plan or the document shows in curly quotes, apart from code's own words, so a block named “Security approved” can't read as a verdict. */
-function Words({ segments }: { segments: readonly Segment[] }): ReactNode {
+export function Words({ segments }: { segments: readonly Segment[] }): ReactNode {
   return segments.map((segment, index) =>
     segment.quoted ? (
       <span key={index} className={styles['quoted']}>
@@ -60,7 +60,20 @@ function Touch({ touch }: { touch: ExplainTouch }) {
   )
 }
 
-function Flag({ flag }: { flag: ExplainFlag }) {
+/** What it reads, writes and posts, one row for each. The approval page draws it open, the report as a row. */
+export function Touches({ touches }: { touches: readonly ExplainTouch[] }) {
+  if (touches.length === 0) return <p>It reads, writes and posts nothing.</p>
+  return (
+    <dl className={styles['touches']}>
+      {touches.map((touch, index) => (
+        <Touch key={index} touch={touch} />
+      ))}
+    </dl>
+  )
+}
+
+/** One flag the check found, with where, why and what accepting it means. */
+export function Flag({ flag }: { flag: ExplainFlag }) {
   return (
     <li>
       <b>{flag.what}</b>
@@ -95,21 +108,25 @@ interface ReportProps {
   readonly code?: boolean
   /** Swaps between the reworded In short and code's. Only the chat card gives it. */
   readonly onWording?: () => void
+  /** Leaves out In short and the row of what it reads, writes and posts, for a page that already says them above. */
+  readonly rest?: boolean
 }
 
 /**
  * The workflow report (layout B): In short first, then one row per section with its gist. The chat card, the side panel and the
  * full page draw this one component. Everything under In short is code's own words. Settings opens by itself while an answer is needed.
  */
-export function Report({ report, code = false, onWording }: ReportProps) {
+export function Report({ report, code = false, onWording, rest = false }: ReportProps) {
   const rewordedShown = report.reworded !== null && !code
   const thenGrade = report.then === null ? null : gradePill(report.then.grade).label
   return (
     <div className={styles['report']}>
-      <p className={styles['short']} data-in-short>
-        <Words segments={rewordedShown && report.reworded !== null ? segmentsOfText(report.reworded) : report.in_short} />
-      </p>
-      {report.reworded !== null && onWording ? (
+      {rest ? null : (
+        <p className={styles['short']} data-in-short>
+          <Words segments={rewordedShown && report.reworded !== null ? segmentsOfText(report.reworded) : report.in_short} />
+        </p>
+      )}
+      {report.reworded !== null && onWording && !rest ? (
         <p className={styles['wording']}>
           <span className={styles['label']}>{rewordedShown ? 'Reworded' : 'Code’s wording'}</span>
           <button type="button" className={styles['linkButton']} onClick={onWording}>
@@ -138,17 +155,11 @@ export function Report({ report, code = false, onWording }: ReportProps) {
             ))}
           </ol>
         </Section>
-        <Section title="What it reads, writes and posts" gist={touchesGist(report.touches)} startOpen={false}>
-          {report.touches.length === 0 ? (
-            <p>It reads, writes and posts nothing.</p>
-          ) : (
-            <dl className={styles['touches']}>
-              {report.touches.map((touch, index) => (
-                <Touch key={index} touch={touch} />
-              ))}
-            </dl>
-          )}
-        </Section>
+        {rest ? null : (
+          <Section title="What it reads, writes and posts" gist={touchesGist(report.touches)} startOpen={false}>
+            <Touches touches={report.touches} />
+          </Section>
+        )}
         <Section title="Flags" gist={flagsGist(report)} startOpen={false}>
           {report.flags.length === 0 ? <p>No flags.</p> : <ul className={styles['rows']}>{report.flags.map((flag, index) => <Flag key={index} flag={flag} />)}</ul>}
           {report.fixed.length > 0 ? (

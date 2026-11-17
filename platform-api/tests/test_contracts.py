@@ -7,6 +7,7 @@ from pydantic import TypeAdapter
 
 from platform_api.auth import DevUsers
 from platform_api.builder import TEMPLATES
+from platform_api.builder.drafted_workflows import DraftedWorkflowView, SetUpApprovalView
 from platform_api.builder.explain import WorkflowExplained
 from platform_api.builder.home import HomeOut
 from platform_api.builder.http import SuggestOut, TemplateList, UseCaseView
@@ -337,6 +338,12 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "builder/explain.json": TypeAdapter(WorkflowExplained),
     "builder/explain.older.json": TypeAdapter(WorkflowExplained),
     "builder/explain.reworded.json": TypeAdapter(WorkflowExplained),
+    **{
+        f"builder/drafted.{state}.json": TypeAdapter(DraftedWorkflowView)
+        for state in ("drafting", "ready", "question", "not-drafted", "waiting", "set-up")
+    },
+    "builder/setup-approval.bob.json": TypeAdapter(SetUpApprovalView),
+    "builder/setup-approval.carol.json": TypeAdapter(SetUpApprovalView),
     **{
         f"builder/explain-wording.{path.stem}.json": TypeAdapter(CodeWording)
         for path in GOLDEN.glob("*.json")

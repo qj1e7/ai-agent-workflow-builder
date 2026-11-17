@@ -269,6 +269,16 @@ CAPABILITIES: Final = (
         short="Change or pause your workflows",
     ),
     _ready(
+        "workflows.draft",
+        "Draft an n8n workflow from your words, for an Approver to check",
+        "none",
+        None,
+        None,
+        [],
+        platform=True,
+        short="Draft an n8n workflow from your words, for an Approver to check",
+    ),
+    _ready(
         "workflows.explain",
         "Explain any workflow",
         "none",

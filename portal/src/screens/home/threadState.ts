@@ -9,6 +9,8 @@ export type Message =
   | { readonly kind: 'card'; readonly id: number; readonly start: CardStart }
   /** The watchlist’s newer versions, drawn from the watchlist itself with no model, so it needs no Planner reply. */
   | { readonly kind: 'behind'; readonly id: number }
+  /** A new revision of a drafted workflow, made by a change she asked for in the box. Its card is drawn from the drafted workflow itself. */
+  | { readonly kind: 'drafted'; readonly id: number; readonly draftedId: string; readonly revision: number }
 
 export interface Thread {
   readonly messages: readonly Message[]
@@ -27,6 +29,8 @@ export type ThreadAction =
   | { readonly type: 'arrived'; readonly reply: PlannerReply }
   | { readonly type: 'resumed'; readonly start: CardStart }
   | { readonly type: 'asked_behind'; readonly text: string }
+  /** A change she asked for was taken: her words, then the new revision's card. */
+  | { readonly type: 'changed'; readonly text: string; readonly draftedId: string; readonly revision: number }
   | { readonly type: 'new_chat' }
 
 /** The thread lives only on the page. It is never saved: the chat is not the record. */
@@ -41,6 +45,10 @@ export function threadReducer(state: Thread, action: ThreadAction): Thread {
     case 'asked_behind': {
       const me = state.last + 1
       return { ...state, messages: [...state.messages, { kind: 'me', id: me, text: action.text }, { kind: 'behind', id: me + 1 }], last: me + 1 }
+    }
+    case 'changed': {
+      const me = state.last + 1
+      return { ...state, messages: [...state.messages, { kind: 'me', id: me, text: action.text }, { kind: 'drafted', id: me + 1, draftedId: action.draftedId, revision: action.revision }], last: me + 1 }
     }
     case 'arrived': {
       // A request still waiting for its answer stays last, so a failed send takes back only the request.
@@ -59,7 +67,7 @@ export function threadReducer(state: Thread, action: ThreadAction): Thread {
 }
 
 /** A message the Planner answered, however it was made. */
-export const isAnswer = (message: Message): boolean => message.kind === 'reply' || message.kind === 'behind'
+export const isAnswer = (message: Message): boolean => message.kind === 'reply' || message.kind === 'behind' || message.kind === 'drafted'
 
 export const isThinking = (thread: Thread): boolean => thread.messages.some((m) => m.kind === 'thinking')
 

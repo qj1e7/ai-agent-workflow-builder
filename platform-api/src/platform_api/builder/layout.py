@@ -20,7 +20,9 @@ from typing import Any, cast
 from platform_api.builder.cards import VERSION_CHECKER_ID
 from platform_api.orchestration import (
     GITHUB_RELEASES,
+    KEY_FOR_TYPE,
     KEYS,
+    NODE_CLASSES,
     NODE_TYPES,
     NOTHING_TO_CHANGE_BLOCK,
     TYPE_OF,
@@ -30,8 +32,11 @@ from platform_api.orchestration import (
     Day,
     Document,
     KeySpec,
+    PlanBlock,
+    Runs,
     Schedule,
     Unreadable,
+    WorkflowPlan,
     block_id,
     face,
     free_name,
@@ -199,13 +204,36 @@ class _Canvas:
             self.pins[block.name] = [{"json": {"skipped": skipped_in_tests(block.key.said)}}]
         return block.name
 
-    def link(self, source: str, target: str, exit_index: int = 0) -> None:
+    def drafted(
+        self, block: PlanBlock, column: int, row: int, parameters: Mapping[str, Any]
+    ) -> str:
+        """One block of a drafted plan, as the drafter chose it. Our blocks get the retries every
+        layout gives them, and each of n8n's own blocks that could change or send something gets
+        pinned output, so a test run changes and sends nothing (ADR 0051, section 4)."""
+        version = int(block.version) if block.version.is_integer() else block.version
+        node: dict[str, Any] = {
+            "id": block_id(self.key, block.name),
+            "name": block.name,
+            "type": block.type,
+            "typeVersion": version,
+            "position": [column * STEP, row * ROW],
+            "parameters": dict(parameters),
+        }
+        spec = NODE_TYPES.get(block.type)
+        if spec is not None and spec.retried:
+            node.update(RETRY)
+        self.nodes.append(node)
+        if _could_change_or_send(block.type, version, parameters):
+            self.pins[block.name] = [{"json": {"skipped": _skipped(block)}}]
+        return block.name
+
+    def link(self, source: str, target: str, exit_index: int = 0, input_index: int = 0) -> None:
         outputs = self.connections.setdefault(source, {"main": []})["main"]
         while len(outputs) <= exit_index:
             outputs.append([])
-        outputs[exit_index].append({"node": target, "type": "main", "index": 0})
+        outputs[exit_index].append({"node": target, "type": "main", "index": input_index})
 
-    def document(self, plan: LayoutPlan) -> Document:
+    def document(self, plan: LayoutPlan | DraftedLayout) -> Document:
         return {
             "name": plan.name,
             "nodes": self.nodes,
@@ -234,8 +262,12 @@ def _starts(canvas: _Canvas, plan: LayoutPlan) -> list[str]:
 
 
 def _about(canvas: _Canvas, plan: LayoutPlan, what: str) -> None:
+    _note(canvas, plan.name, plan.portal_link, what)
+
+
+def _note(canvas: _Canvas, name: str, portal_link: str, what: str) -> None:
     content = (
-        f"## {plan.name}\n{what}\n\nSet up in the Portal: {plan.portal_link}\n\n"
+        f"## {name}\n{what}\n\nSet up in the Portal: {portal_link}\n\n"
         "Safe to change here: when it runs, and the words in a block. Every change to Jira "
         "waits for a yes in Teams before it is made."
     )
@@ -383,6 +415,142 @@ def when_label(schedule: Schedule) -> str:
     """The sketch's short words for when it runs, such as "Daily 8:00" or "Mon 9:00"."""
     hour, minute = schedule.at.split(":")
     return f"{DAY_LABELS[schedule.day]} {int(hour)}:{minute}"
+
+
+@dataclass(frozen=True)
+class DraftedLayout:
+    """A drafted workflow's checked plan, and what the platform puts in every layout of it."""
+
+    use_case_id: str
+    """The id the workflow will have once it is set up, which its blocks' ids come from."""
+    portal_link: str
+    plan: WorkflowPlan
+    error_workflow: str
+    time_zone: str
+
+    @property
+    def name(self) -> str:
+        return self.plan.name
+
+
+def lay_out_drafted(drafted: DraftedLayout, values: Mapping[str, str]) -> Document:
+    """The workflow drafter's plan as an n8n workflow (ADR 0051, flow step 3). Each setting's
+    value goes where its placeholder stands, and a setting with no value keeps its placeholder, so
+    the check reads it as still needed. Then it adds what every layout adds and the model never
+    writes: the Sticky Note, Start from the Portal joined to what each trigger starts, the team
+    time zone, the error workflow, saved progress, retries on our blocks, and pinned output on
+    n8n's own blocks that could change or send something. Record the run after each trigger comes
+    with build step 10, here, before the wires. The yes and the keys go on after this, as for
+    every layout (`add_yes`, `attach_keys`)."""
+    plan = drafted.plan
+    canvas = _Canvas(drafted.use_case_id)
+    _note(canvas, plan.name, drafted.portal_link, "Drafted by the Workflow drafter.")
+    placed = _placed(plan, values, drafted.time_zone)
+    columns = _columns(plan)
+    rows: dict[int, int] = {}
+    for block in plan.blocks:
+        column = columns[block.name]
+        rows[column] = rows.get(column, -1) + 1
+        canvas.drafted(block, column, rows[column], placed[block.name])
+    for wire in plan.wires:
+        canvas.link(wire.from_block, wire.to_block, wire.exit_index, wire.input_index)
+    _start_beside_triggers(canvas, plan, rows.get(0, -1) + 1)
+    return canvas.document(drafted)
+
+
+def _placed(
+    plan: WorkflowPlan, values: Mapping[str, str], time_zone: str
+) -> dict[str, dict[str, Any]]:
+    """Each block's parameters with every value that has one in place of its placeholder."""
+    placed = {block.name: deepcopy(block.parameters) for block in plan.blocks}
+    for setting in plan.settings:
+        value = values.get(setting.id)
+        if value is None:
+            continue
+        put: Any = value
+        if setting.kind == "run_time":
+            schedule = _schedule_of(value, time_zone)
+            if schedule is None:
+                continue
+            put = schedule_rule(schedule)["rule"]
+        for place in setting.fills:
+            _put(placed[place.block], place.parameter, f"<<{setting.id}>>", put)
+    return placed
+
+
+def _schedule_of(value: str, time_zone: str) -> Schedule | None:
+    """Code's reading of a run time, as "monday 09:00". The person's own words for one code
+    can't read stay a placeholder, so the run time is still needed."""
+    day, _, at = value.partition(" ")
+    if day not in DAY_LABELS or len(at) != 5 or at[2] != ":":
+        return None
+    hour, minute = at.split(":")
+    if not (hour.isdigit() and minute.isdigit() and int(hour) < 24 and int(minute) < 60):
+        return None
+    return Schedule(cast(Day, day), at, time_zone)
+
+
+def _put(parameters: dict[str, Any], path: str, placeholder: str, value: Any) -> None:
+    """The value at the path, only where the placeholder stands, so nothing else changes."""
+    *parents, last = path.split(".")
+    held: dict[str, Any] | None = parameters
+    for part in parents:
+        inner: object = None if held is None else held.get(part)
+        held = cast(dict[str, Any], inner) if isinstance(inner, dict) else None
+    if held is not None and held.get(last) == placeholder:
+        held[last] = value
+
+
+def _columns(plan: WorkflowPlan) -> dict[str, int]:
+    """Each block's column: how many wires a run crosses to reach it from the nearest trigger."""
+    targets = {wire.to_block for wire in plan.wires}
+    column = {b.name: 0 for b in plan.blocks if b.name not in targets}
+    queue = list(column)
+    while queue:
+        name = queue.pop(0)
+        for wire in plan.wires:
+            if wire.from_block == name and wire.to_block not in column:
+                column[wire.to_block] = column[name] + 1
+                queue.append(wire.to_block)
+    return {b.name: column.get(b.name, 0) for b in plan.blocks}
+
+
+def _start_beside_triggers(canvas: _Canvas, plan: WorkflowPlan, row: int) -> None:
+    """Start from the Portal, joined to every block a trigger starts, so Run now and a test run
+    can start it."""
+    starts = {b.name for b in plan.blocks if _is_trigger(b.type)}
+    joined = dict.fromkeys(
+        (wire.to_block, wire.input_index) for wire in plan.wires if wire.from_block in starts
+    )
+    name = free_name(START, {b.name for b in plan.blocks} | {ABOUT})
+    canvas.node(name, "start", 0, row, webhookId=block_id(canvas.key, "webhook/start"))
+    for target, input_index in joined:
+        canvas.link(name, target, 0, input_index)
+
+
+def _is_trigger(node_type: str) -> bool:
+    spec = NODE_TYPES.get(node_type)
+    if spec is not None:
+        return spec.starts
+    return node_type.endswith("Trigger")
+
+
+def _could_change_or_send(node_type: str, version: Any, parameters: Mapping[str, Any]) -> bool:
+    """One of n8n's own blocks that isn't classed to read, or that the class file doesn't know."""
+    if node_type.startswith("CUSTOM."):
+        return False
+    spec = NODE_TYPES.get(node_type)
+    if spec is not None and spec.kind != "system":
+        return False
+    verdict = NODE_CLASSES.verdict(node_type, version, parameters)
+    return not (isinstance(verdict, Runs) and verdict.on == "read")
+
+
+def _skipped(block: PlanBlock) -> str:
+    key = KEY_FOR_TYPE.get(block.type)
+    return (
+        skipped_in_tests(key.said) if key is not None else f"{block.name} skipped in the test run."
+    )
 
 
 FIXED_SETTINGS: Mapping[str, str] = {

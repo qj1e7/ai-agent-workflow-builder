@@ -65,6 +65,11 @@ class N8nError(Exception):
         echo what was sent."""
 
 
+class NotKeptAsSent(N8nError):
+    """n8n created the workflow but holds something other than what was sent, so it was removed
+    again. Sending the same document again would end the same way."""
+
+
 class OwnerOutcome(Enum):
     CREATED = "created"
     SIGNED_IN = "signed in"
@@ -411,6 +416,9 @@ class N8nWorkflow:
     active_version_id: str | None
     """The published version, or None while nothing is published."""
     document: dict[str, Any]
+    pins: dict[str, Any] | None = None
+    """The draft's pinned output by block, which n8n uses in place of running a block only in a
+    run by hand. Kept apart from the document, as the versions n8n keeps have none."""
 
 
 @dataclass(frozen=True)
@@ -595,6 +603,7 @@ class _WorkflowOut(_Data):
     nodes: list[dict[str, JsonValue]]
     connections: dict[str, JsonValue]
     settings: dict[str, JsonValue] = Field(default_factory=dict[str, JsonValue])
+    pin_data: dict[str, JsonValue] | None = Field(default=None, alias="pinData")
 
 
 class _LiveVersion(_Data):
@@ -1290,7 +1299,9 @@ def _workflow(out: _WorkflowOut) -> N8nWorkflow:
         "connections": out.connections,
         "settings": out.settings,
     }
-    return N8nWorkflow(out.id, out.version_id, out.active_version_id, document)
+    return N8nWorkflow(
+        out.id, out.version_id, out.active_version_id, document, out.pin_data or None
+    )
 
 
 def _listed(out: _ListedOut) -> ListedWorkflow:
@@ -1354,6 +1365,8 @@ class SavedDraft:
     version_id: str
     document: dict[str, Any]
     """What n8n holds, which is what the platform keeps as this version's record."""
+    pins: dict[str, Any] | None = None
+    """The pinned output n8n holds for it."""
 
 
 class N8nDrafts(Protocol):
@@ -1472,15 +1485,29 @@ class N8nWorkflows:
             return N8N_UNREADABLE
         return home == workflow.project
 
-    async def save_draft(self, document: Mapping[str, Any]) -> SavedDraft:
+    async def save_draft(
+        self,
+        document: Mapping[str, Any],
+        created: Callable[[str], Awaitable[None]] | None = None,
+    ) -> SavedDraft:
         """Creates the workflow, then reads it back and compares, because n8n may keep something
-        other than what was sent. A draft that did not land as sent is removed again."""
-        created = await self._api.create(document)
-        held = await self._api.workflow(created.id)
+        other than what was sent. A draft that did not land as sent is removed again. `created`
+        hears n8n's id as soon as n8n gives it, so a caller can record it before anything else
+        can fail."""
+        made = await self._api.create(document)
+        try:
+            if created is not None:
+                await created(made.id)
+            held = await self._api.workflow(made.id)
+        except Exception:
+            # A copy the platform can't read back, or can't record, is one it doesn't track,
+            # keys and all.
+            await self.remove(made.id)
+            raise
         if held is None or not same_as_sent(document, held.document):
-            await self.remove(created.id)
-            raise N8nError("n8n did not keep the draft as the platform sent it")
-        return SavedDraft(held.id, held.version_id, held.document)
+            await self.remove(made.id)
+            raise NotKeptAsSent("n8n did not keep the draft as the platform sent it")
+        return SavedDraft(held.id, held.version_id, held.document, held.pins)
 
     async def remove(self, workflow_id: str) -> None:
         try:

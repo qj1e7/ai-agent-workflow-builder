@@ -24,6 +24,8 @@ import { AddToWatchlist, WhichSoftware } from './WatchlistCard'
 import { SoftwareActions } from './WatchlistActions'
 import { ExplainAnswer } from '../explain/ExplainAnswer'
 import { RemoveSoftwareAnswer } from './RemoveSoftware'
+import { DraftButton } from '../drafted/DraftButton'
+import { DraftedCard } from '../drafted/DraftedCard'
 import styles from './Planner.module.css'
 
 /** What a card can ask the page to do. Both go through the Planner or the box, so nothing here reaches a set-up on its own. */
@@ -520,10 +522,21 @@ export function Answer({ reply, typed, page, focus = null }: AnswerProps) {
   const asker = useAsker()
   switch (reply.answer) {
     case 'setup_card':
-    case 'part':
       return <SetupCardAnswer reply={reply} typed={typed} />
+    case 'part':
+      return (
+        <>
+          <SetupCardAnswer reply={reply} typed={typed} />
+          <DraftButton words={reply.draft_words} />
+        </>
+      )
     case 'cant':
-      return <CantAnswer reply={reply} typed={typed} />
+      return (
+        <>
+          <CantAnswer reply={reply} typed={typed} />
+          <DraftButton words={reply.draft_words} />
+        </>
+      )
     case 'watchlist':
       return <WatchlistAnswer reply={reply} typed={typed} />
     case 'which_software':
@@ -569,6 +582,8 @@ export function Answer({ reply, typed, page, focus = null }: AnswerProps) {
     case 'decided':
     case 'decide':
       return null
+    case 'draft_started':
+      return reply.drafted_id === null ? null : <DraftedCard draftedId={reply.drafted_id} revision={1} />
   }
 }
 

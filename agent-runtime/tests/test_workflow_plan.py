@@ -21,7 +21,7 @@ from agent_runtime.contract import (
 )
 from agent_runtime.plan_settings import run_time_in
 from agent_runtime.workflow_drafter import check_plan
-from agent_runtime.workflow_plan import USE_OURS, ProposedPlan
+from agent_runtime.workflow_plan import NEVER_GUESSED, USE_OURS, ProposedPlan
 
 CATALOGUE = Path(__file__).resolve().parents[2] / "contracts" / "n8n" / "catalogue.json"
 WORDS = (
@@ -706,6 +706,54 @@ def test_a_never_guessed_place_takes_only_a_placeholder_never_a_value_or_an_expr
 
     assert [p.code for p in found] == ["guessed"], [p.text for p in found]
     assert f'"Mail": {path} is ' in found[0].text
+
+
+@pytest.mark.parametrize(
+    "empty",
+    [
+        send_email(toEmail=""),
+        block(
+            "Mail",
+            "n8n-nodes-base.slack",
+            2.7,
+            resource="message",
+            operation="post",
+            select="channel",
+            channelId={"__rl": True, "mode": "id", "value": ""},
+            text="Hi",
+        ),
+    ],
+)
+def test_an_empty_required_never_guessed_place_goes_back_for_a_needed_setting(
+    catalogue: Catalogue, empty: Json
+):
+    found = problems(catalogue, plan([empty], [], []))
+
+    assert [p.code for p in found] == ["missing_value"], [p.text for p in found]
+    assert "add a setting" in found[0].text
+    assert "with no value" in found[0].text
+
+
+def test_an_empty_optional_never_guessed_place_is_not_used(catalogue: Catalogue):
+    mail = send_email(toEmail="<<address>>", options={"ccEmail": ""})
+
+    done = passed(catalogue, plan([mail], [], ADDRESS))
+
+    assert [s.id for s in done.settings] == ["address"]
+
+
+def test_the_needed_setting_the_check_asks_for_is_marked_needed(catalogue: Catalogue):
+    mail = send_email(toEmail="<<address>>")
+
+    done = passed(catalogue, plan([mail], [], ADDRESS), "Email the team each Monday")
+
+    assert [(s.id, s.mark, s.value) for s in done.settings] == [("address", "needed", None)]
+
+
+def test_every_never_guessed_block_is_one_the_drafter_may_propose(catalogue: Catalogue):
+    hidden = [t for t in NEVER_GUESSED if catalogue.block(t).get("hidden")]
+
+    assert hidden == []
 
 
 def test_a_nested_address_placeholder_is_placed_with_its_kind(catalogue: Catalogue):

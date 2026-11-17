@@ -271,7 +271,6 @@ def inputs_of(node_type: str, version: float, values: Mapping[str, object]) -> i
 
 NEVER_GUESSED: Final[Mapping[str, Mapping[str, SettingKind]]] = {
     "n8n-nodes-base.scheduleTrigger": {"rule": "run_time"},
-    "n8n-nodes-base.cron": {"triggerTimes": "run_time"},
     "n8n-nodes-base.jira": {"project": "jira_project"},
     "n8n-nodes-base.slack": {
         "channelId": "channel",
@@ -443,7 +442,15 @@ def _setting_only(
         if _locator_fits(parameter, locator, path, walk):
             walk.placeholders.append((inner, f"{path}.value", kind))
         return
-    if not _empty(value):
+    if _empty(value):
+        if parameter.get("required"):
+            walk.bad(
+                "missing_value",
+                f"{path} is {KIND_WORDS[kind]}, which the workflow can't run without. Put a "
+                f'placeholder there, as "<<{kind}>>", and add a setting of kind {kind} with no '
+                "value, so the person is asked for it.",
+            )
+    else:
         walk.bad(
             "guessed",
             f"{path} is {KIND_WORDS[kind]}, which a setting holds and the drafter never writes, "
