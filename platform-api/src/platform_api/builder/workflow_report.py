@@ -274,7 +274,9 @@ RUNTIME_KEY_SHAPES = (
     r"(?:(?<=\\)(?![bfnrt]|u[0-9A-Fa-f]{4})|(?<=\\[bfnrt])|(?<=\\u[0-9A-Fa-f]{4})"
     r"|(?<![A-Za-z0-9_\-\\]))"
     r"(?=[A-Za-z0-9_\-]*?eyJ)[A-Za-z0-9_\-]++\.eyJ[A-Za-z0-9_\-]++\.[A-Za-z0-9_\-]+",
-    r'-----BEGIN [A-Z ]*PRIVATE KEY-----[^"]*?(?:-----END [A-Z ]*PRIVATE KEY-----|(?=\\?")|\Z)',
+    r'-----BEGIN [A-Z ]*PRIVATE KEY-----(?:[^"\\-]|\\(?!")|-(?!----END))*+'
+    r"(?:-----END [A-Z ]*PRIVATE KEY-----"
+    r'|(?:(?:\\[nr]|[\s",+])++[A-Za-z0-9+/=]{16,}+(?!\\?"\s*:))*+)',
     r"(?i:bearer)\s+(?=[A-Za-z._~\-]*[0-9+/=]|[A-Za-z]{24})[A-Za-z0-9._~+/=\-]{8,}",
     r"(?i:basic)\s+(?=[A-Za-z]*[0-9+/=])[A-Za-z0-9+/=]{8,}",
 )
@@ -282,14 +284,14 @@ RUNTIME_KEY_SHAPES = (
 contracts/fixtures/agent/key-shapes.json. A test holds the two lists together."""
 KEY_SHAPE_SOURCES = (
     *RUNTIME_KEY_SHAPES,
-    r"\b(?i:token|key|secret|sig|password|api[_-]?key)=[^&\s\"'\\{}]{8,}",
-    r"(?i:api[_-]?key|token|secret|password|passwd)\s*[:=]\s*[^&\s\"'\\{}]{16,}",
-    r"(?i:authorization)\s*[:=]\s*[A-Za-z]+\s+[^&\s\"'\\{}]{16,}",
+    r"\b(?i:token|key|secret|sig|password|api[_-]?key)=(?!\s*\{\{)[^&\s\"']{8,}",
+    r"(?i:api[_-]?key|token|secret|password|passwd)\s*[:=]\s*(?!\{\{)[^&\s\"']{16,}",
+    r"(?i:authorization)\s*[:=]\s*[A-Za-z]+\s+(?!\{\{)[^&\s\"']{16,}",
 )
 """Every shape of a key or token platform-api knows: the runtime's, a key or password in a query,
 and one in a header such as Azure OpenAI's "api-key: ..." or "Authorization: token ...". The
-masker leaves the last two out, as a model's own words in a trace often read like them. A value
-in braces, as an n8n expression, is never a key. Nor is a git commit's 40 hex letters on its own,
+masker leaves the last two out, as a model's own words in a trace often read like them. An n8n
+expression, which starts with {{, is never a key. Nor is a git commit's 40 hex letters on its own,
 so a person may paste one."""
 KEY_SHAPE = re.compile("|".join(KEY_SHAPE_SOURCES))
 """Refused in a person's words, an answer and a read-back from n8n, and hidden in a report."""

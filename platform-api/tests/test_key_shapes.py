@@ -185,6 +185,10 @@ HOSTILE = {
     "BEGIN then letters": "-----BEGIN " + "A " * (N // 2),
     "END then letters": PEM_BEGIN + "-----END " + "A" * N,
     "BEGIN then backslashes": PEM_BEGIN + "\\" * N,
+    "BEGIN then short lines": PEM_BEGIN + '"' + ('", "' + "A" * 15) * (N // 19),
+    "BEGIN then field names": PEM_BEGIN + '"' + ('", "' + "A" * 20 + '": ') * (N // 27),
+    "BEGIN then dashes": PEM_BEGIN + "-" * N,
+    "token={{": "token={{" * (N // 8),
     "Bearer then spaces": "Bearer" + " " * N + "x",
     "Bearer then letters": "Bearer " + "a" * N,
     "basic ": "basic " * (N // 6),
@@ -237,6 +241,44 @@ def test_each_shape_reads_a_long_hostile_text_in_linear_time(shape: str):
         pattern.sub(HIDDEN, text)
         took = time.perf_counter() - begun
         assert took < 0.1, f"{name}: {took:.3f}s"
+
+
+PEM_LINES = [
+    "-----BEGIN " + "RSA PRIVATE" + " KEY-----",
+    "MIIEow" + "Ab3d" * 15,
+    "Zx9y" * 16,
+    "Qr7t" * 4,
+    "-----END " + "RSA PRIVATE" + " KEY-----",
+]
+
+
+@pytest.mark.parametrize(
+    "text",
+    ['"' + '\\n" + "'.join(PEM_LINES) + '"', json.dumps(PEM_LINES)],
+    ids=["split by quotes", "a JSON array of lines"],
+)
+def test_a_private_key_split_into_lines_is_refused_and_hidden_line_by_line(text: str):
+    assert PASTED_KEY.search(f"use {text} here")
+    hidden = KEY_SHAPE.sub(HIDDEN, f"use {text} here")
+    assert not any(line[-8:] in hidden for line in PEM_LINES[1:4])
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["abc{def0123456789", "abc\\def0123456789"],
+    ids=["a brace inside", "a backslash inside"],
+)
+def test_a_key_in_a_query_or_header_is_refused_whatever_letters_it_holds(value: str):
+    for text in (f"token={value}", f"api-key: {value}", f"Authorization: token {value}"):
+        assert PASTED_KEY.search(text), text
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["token={{ $json.t }}", "token={{$json.token}}", "api-key: {{ $json.key }}"],
+)
+def test_an_n8n_expression_after_a_key_s_name_is_not_a_key(text: str):
+    assert PASTED_KEY.search(text) is None
 
 
 @pytest.mark.parametrize("text", PLAIN_WORDS)
