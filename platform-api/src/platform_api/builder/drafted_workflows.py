@@ -1042,13 +1042,14 @@ def _ours(document: Mapping[str, Any], use_case_id: str) -> bool:
 async def _left_by_an_earlier_try(
     n8n: SettingUp, kept: Kept, approved: ApprovedSetUp
 ) -> Held | None:
-    """A try of this approval's set-up that was cut off after n8n created the workflow leaves it
-    there. The next try takes the id that try recorded, or, when it was cut off before it could
-    record one, the workflow its layout alone could have made: Start from the Portal with this
-    workflow's own webhook id. It looks only in the platform's own n8n project, never in a
-    member's space. It keeps a draft whose digest is the approved one and removes any other, so
-    asking twice never makes two. The first try looks for nothing."""
-    if kept.set_up_approval != approved.approval_id or kept.set_up_trying_at is None:
+    """A try that was cut off after n8n created the workflow leaves it there, under this approval
+    or under an earlier one that gave up. The next try takes the id the last try recorded, or,
+    when it was cut off before it could record one, the workflow its layout alone could have
+    made: Start from the Portal with this workflow's own webhook id. It looks only in the
+    platform's own n8n project, never in a member's space. It keeps a draft whose digest is the
+    approved one and removes any other, so asking twice, or sending again, never makes two. The
+    first try looks for nothing."""
+    if kept.set_up_trying_at is None or kept.set_up_at is not None:
         return None
     project = await n8n.platform_project()
     if project is None:

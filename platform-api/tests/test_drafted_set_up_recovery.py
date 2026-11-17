@@ -240,6 +240,31 @@ async def test_a_copy_left_by_an_earlier_try_that_differs_from_the_approved_one_
     assert use_case["n8n_workflow_id"] == "wf2"
 
 
+async def test_a_copy_left_under_a_set_up_that_gave_up_is_adopted_when_it_is_sent_again(
+    lab: Lab, db: Database
+):
+    n8n = DiesAfterCreate(recorded=True)
+    with_n8n(lab, n8n)
+    drafted_id, first = await sent(lab)
+    assert (await decide(lab, first)).status_code == 201
+    await lab.approvals.work_once()
+    n8n.down = True
+    await retried(lab, db, 9)
+    assert (await lab.read(drafted_id))["set_up"]["state"] == "failed"
+    n8n.down = False
+    resent = await lab.send(drafted_id, 1)
+    second = resent.json()["approval"]["approval_id"]
+    assert second != first
+
+    assert (await decide(lab, second)).status_code == 201
+    await retried(lab, db)
+
+    assert (await lab.read(drafted_id))["set_up"]["state"] == "set_up"
+    assert (len(n8n.saved), n8n.removed, list(n8n.held)) == (1, [], ["wf1"])
+    [use_case] = await lab.use_cases()
+    assert use_case["n8n_workflow_id"] == "wf1"
+
+
 async def test_a_look_alike_in_a_member_s_space_is_neither_adopted_nor_removed(
     lab: Lab, db: Database
 ):
