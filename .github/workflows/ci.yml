@@ -259,7 +259,7 @@ jobs:
 
       # One start of the image also checks contracts/n8n/catalogue.json, and the defaults and the
       # task runner's config that spike P9 rests on (scripts/n8n-catalogue.sh, ADR 0051).
-      - name: Pack smoke, n8n loads every built-in block but two, the pin checks hold, and the catalogue is current
+      - name: Pack smoke, n8n loads every built-in block but seven, the pin checks hold, and the catalogue is current
         working-directory: .
         run: scripts/pack-smoke.sh
 

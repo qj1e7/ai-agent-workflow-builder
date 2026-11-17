@@ -120,11 +120,8 @@ locals {
     strcontains(entry, "/") ? trimspace(entry) : "${trimspace(entry)}/32"
     if trimspace(entry) != ""
   ]
-  # n8n loads every built-in block (ADR 0051), so anyone who reaches n8n can call a Webhook or a
-  # Form a member published. Its editor opens only with addresses listed, and then Container Apps
-  # lets in only those and the inside ranges.
-  n8n_editor_open = var.n8n_editor_external && length(local.n8n_editor_cidrs) > 0
-  n8n_allowed_cidrs = local.n8n_editor_open ? concat(
+  # With no addresses listed, there are no rules, and every address reaches n8n's sign-in page.
+  n8n_allowed_cidrs = var.n8n_editor_external && length(local.n8n_editor_cidrs) > 0 ? concat(
     [for i, cidr in local.n8n_editor_cidrs : { name = "editor-${i + 1}", cidr = cidr }],
     [for i, cidr in local.n8n_internal_cidrs : { name = "inside-environment-${i + 1}", cidr = cidr }],
   ) : []
@@ -134,7 +131,7 @@ locals {
   ingress = {
     platform-api  = { external = true, target_port = 8000 }
     agent-runtime = { external = false, target_port = 8100 }
-    n8n           = { external = local.n8n_editor_open, target_port = 5678, allowed_cidrs = local.n8n_allowed_cidrs }
+    n8n           = { external = var.n8n_editor_external, target_port = 5678, allowed_cidrs = local.n8n_allowed_cidrs }
     portal        = { external = true, target_port = 8080 }
   }
   url = {
@@ -447,7 +444,7 @@ locals {
         var.teams_channel == "" ? {} : { TEAMS_CHANNEL = var.teams_channel },
         # Staff reach n8n's editor only while it is open, so only then do they get n8n accounts
         # (ENGINE-PLAN 2.9). platform-api still waits for a bootstrap that proved n8n's guards.
-        local.n8n_editor_open ? {
+        var.n8n_editor_external ? {
           N8N_STAFF_ACCESS = "on"
           N8N_EDITOR_URL   = local.url["n8n"]
         } : {},
@@ -566,7 +563,7 @@ locals {
           EXECUTIONS_DATA_SAVE_ON_SUCCESS = "all"
           WAB_API_URL                     = local.url["platform-api"]
         },
-        local.n8n_editor_open ? {
+        var.n8n_editor_external ? {
           N8N_PROTOCOL                      = "https"
           N8N_HOST                          = trimprefix(local.url["n8n"], "https://")
           N8N_EDITOR_BASE_URL               = "${local.url["n8n"]}/"
@@ -614,7 +611,7 @@ locals {
   # for_each needs plain values. n8n's owner password hash is the stored bcrypt hash of the
   # password the bootstrap signs in with, so it is the same on every plan.
   inline_secrets = {
-    n8n = local.n8n_editor_open ? {
+    n8n = var.n8n_editor_external ? {
       N8N_INSTANCE_OWNER_PASSWORD_HASH = random_password.generated["n8n-owner-password"].bcrypt_hash
     } : {}
   }

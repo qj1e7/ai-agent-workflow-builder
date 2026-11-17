@@ -20,6 +20,7 @@ from platform_api.builder.drafted_settings import ANY_APPROVER, APPROVERS
 from platform_api.builder.drafted_workflows import (
     CHANGED,
     KEY_PASTED,
+    N8N_NOT_READY,
     PAUSED,
     DraftedWorkflows,
 )
@@ -95,9 +96,11 @@ class N8n:
     down: bool = False
     version: str | None = "2.42.6"
     """The n8n version the last bootstrap read."""
+    error_workflow: str | None = ERROR_WORKFLOW
+    """The error workflow the last bootstrap loaded."""
 
     async def error_workflow_id(self) -> str | None:
-        return ERROR_WORKFLOW
+        return self.error_workflow
 
     async def n8n_version(self) -> str | None:
         return self.version
@@ -384,10 +387,21 @@ async def test_drafting_is_paused_while_the_drafter_s_catalogue_is_not_the_n8n_t
 
 
 async def test_drafting_is_paused_before_any_model_while_no_bootstrap_has_read_n8n(lab: Lab):
+    """A bootstrap loaded the error workflow but read no version: one from before the version
+    was recorded, so the platform is part way through an update."""
     lab.n8n.version = None
     view = await lab.start()
 
     assert (view["state"], view["said"]) == ("not_drafted", PAUSED)
+    assert lab.drafter.asked == [], "no model reads anything"
+
+
+async def test_before_any_bootstrap_has_run_n8n_is_not_ready_rather_than_updating(lab: Lab):
+    lab.n8n.version = None
+    lab.n8n.error_workflow = None
+    view = await lab.start()
+
+    assert (view["state"], view["said"]) == ("not_drafted", N8N_NOT_READY)
     assert lab.drafter.asked == [], "no model reads anything"
 
 

@@ -1,7 +1,7 @@
 # n8n with every built-in block (ADR 0051, spike P9, build step 12): n8n and the bootstrap job get
 # the same guards, n8n has no allow list, the task runner runs in an app of its own that holds none
-# of n8n's secrets and gives no container its identity, and n8n's editor opens only with addresses
-# listed. Every provider is mocked, so this runs offline. deploy/compose.yaml holds the same, and
+# of n8n's secrets and gives no container its identity, and n8n's editor opens as ADR 0034 chose,
+# to the addresses listed or, with none, to every address. Every provider is mocked, so this runs offline. deploy/compose.yaml holds the same, and
 # scripts/n8n-guards.sh checks it there.
 
 mock_provider "azapi" {}
@@ -199,7 +199,9 @@ run "the_task_runner_holds_none_of_n8n_s_secrets_and_no_identity" {
   }
 }
 
-run "n8n_s_editor_stays_internal_without_addresses" {
+# The team lead kept ADR 0034's choice of 1 Nov: with the switch on and no addresses listed, the
+# editor's sign-in page answers every address.
+run "n8n_s_editor_opens_to_every_address_without_a_list" {
   command = apply
 
   variables {
@@ -207,13 +209,22 @@ run "n8n_s_editor_stays_internal_without_addresses" {
   }
 
   assert {
-    condition     = !local.ingress.n8n.external && output.n8n_editor_url == ""
-    error_message = "With no addresses listed, n8n must stay internal: a published Webhook would answer every address."
+    condition     = local.ingress.n8n.external && output.n8n_editor_url != "" && length(local.n8n_allowed_cidrs) == 0
+    error_message = "With the switch on and no addresses listed, n8n's editor opens to every address, as ADR 0034 chose."
   }
 
   assert {
-    condition     = !contains(keys(local.apps["platform-api"].env), "N8N_STAFF_ACCESS")
-    error_message = "Staff get n8n accounts only while its editor is open."
+    condition     = local.apps["platform-api"].env["N8N_STAFF_ACCESS"] == "on"
+    error_message = "Staff get n8n accounts while its editor is open."
+  }
+}
+
+run "n8n_s_editor_stays_internal_while_the_switch_is_off" {
+  command = apply
+
+  assert {
+    condition     = !local.ingress.n8n.external && output.n8n_editor_url == "" && !contains(keys(local.apps["platform-api"].env), "N8N_STAFF_ACCESS")
+    error_message = "With the switch off, n8n stays internal and staff get no n8n accounts."
   }
 }
 

@@ -92,12 +92,11 @@ variable "n8n_owner_email" {
 }
 
 # n8n's editor on Azure (ADR 0034). Off, n8n is internal, as before. On, its ingress is external.
-# n8n loads every built-in block (ADR 0051), so anyone who reaches n8n can call a Webhook or a Form
-# a member published. With no addresses listed, n8n stays internal. With addresses, Container Apps
-# lets in only those and the inside ranges below, and refuses the rest.
+# With no addresses listed, every address reaches n8n's sign-in page. With addresses, Container
+# Apps lets in only those and the inside ranges below, and refuses the rest.
 
 variable "n8n_editor_external" {
-  description = "True opens n8n's editor at https://n8n.<domain>, behind n8n's own sign-in, once n8n_editor_allowed_ips names who may reach it. False keeps n8n internal, reachable only by the other apps."
+  description = "True opens n8n's editor at https://n8n.<domain>, behind n8n's own sign-in. False keeps n8n internal, reachable only by the other apps."
   type        = bool
   default     = false
 }
@@ -105,7 +104,7 @@ variable "n8n_editor_external" {
 # The addresses are not secret, but they point at people, and the deploy logs are public. Sensitive
 # only keeps them out of Terraform's errors there.
 variable "n8n_editor_allowed_ips" {
-  description = "Public IPv4 addresses or ranges, separated by commas, that may reach n8n when n8n_editor_external is true, such as 203.0.113.7,198.51.100.0/24. One address means that address alone (/32). Empty keeps n8n internal, since a Webhook a member published would answer every address (ADR 0051). Unused while n8n_editor_external is false."
+  description = "Public IPv4 addresses or ranges, separated by commas, that may reach n8n when n8n_editor_external is true, such as 203.0.113.7,198.51.100.0/24. One address means that address alone (/32). Empty lets every address reach n8n. Unused while n8n_editor_external is false."
   type        = string
   default     = ""
   sensitive   = true

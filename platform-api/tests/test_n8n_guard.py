@@ -74,6 +74,12 @@ def test_each_block_n8n_loads_that_it_must_not_or_misses_is_named(
         ({"N8N_RUNNERS_MODE": "internal"}, "N8N_RUNNERS_MODE must be external"),
         ({"N8N_RUNNERS_MODE": None}, "N8N_RUNNERS_MODE must be external"),
         ({"N8N_DEPRECATED_NODES_BLOCK": "False"}, "N8N_DEPRECATED_NODES_BLOCK must not be false"),
+        ({"N8N_DEPRECATED_NODES_BLOCK": "0"}, "N8N_DEPRECATED_NODES_BLOCK must not be false"),
+        ({"N8N_DEPRECATED_NODES_BLOCK": " 0 "}, "N8N_DEPRECATED_NODES_BLOCK must not be false"),
+        (
+            {"N8N_BLOCK_FILE_ACCESS_TO_N8N_FILES": "0"},
+            "N8N_BLOCK_FILE_ACCESS_TO_N8N_FILES must not be false",
+        ),
         (
             {"N8N_BLOCK_FILE_ACCESS_TO_N8N_FILES": "false"},
             "N8N_BLOCK_FILE_ACCESS_TO_N8N_FILES must not be false",
@@ -136,6 +142,15 @@ def test_folders_that_hold_nothing_of_n8n_s_pass(folders: str) -> None:
         ("/opt/wab/n8n-nodes-wab", "/opt/wab"),
         ("/usr/local/lib", "/usr/local/lib/node_modules"),
         ("files", "is not an absolute folder"),
+        ("//proc", "/proc"),
+        ("///proc/self", "/proc"),
+        ("//home/node/.n8n", "holds or is part of /home/node/.n8n"),
+        ("/tmp", "a system folder"),
+        ("/tmp/uploads", "a system folder"),
+        ("/etc", "a system folder"),
+        ("//etc/n8n", "a system folder"),
+        ("/root", "a system folder"),
+        ("/dev/shm", "/dev"),
     ],
 )
 def test_a_folder_that_holds_something_of_n8n_s_or_none_at_all_is_named(

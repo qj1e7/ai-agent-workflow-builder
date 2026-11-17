@@ -7,7 +7,7 @@ refused: `writes_refused` when a write can run without a yes, `needs_a_fix` when
 the platform expects at all, as when a block, its version or what it was asked to do is off in
 the class file (ADR 0045), or n8n loads the block but it can't run on this platform (ADR 0051).
 
-n8n's own blocks never call our API, and n8n loads every built-in block but two (`n8n_blocks`), so
+n8n's own blocks never call our API, and n8n loads every built-in block but seven (`n8n_blocks`), so
 n8n runs them whatever the grade says. A finding about one of them `runs_anyway`: a version with
 such a finding must not run at all. For those blocks the grade is the guard, with the platform's
 keys, which can only read or post, and the credential sweep (ADR 0045, section 2): a notice posts

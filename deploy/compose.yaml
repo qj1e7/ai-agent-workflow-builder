@@ -185,7 +185,7 @@ services:
   # n8n's external task runner (ADR 0051, spike P9). The code of Code, AI Transform, the Code Tool,
   # Sort and Item Lists runs here, in a container with none of n8n's secrets, only the token that
   # lets it take n8n's tasks. Its own config allows JavaScript only crypto and moment, and Python
-  # no module. It sits on the runners network alone with n8n, which has no way out.
+  # no module. It sits on the runners network alone with n8n, which has no way out of it.
   n8n-runners:
     # The same version as n8n's pin, as infra/public-images.json names both.
     image: n8nio/runners:2.42.6@sha256:b78816286beb0a14e874abfda31eb4621d47f5ebb38f194271df7e39b7bd63a7
@@ -480,8 +480,9 @@ services:
 
 networks:
   default: {}
-  # n8n and its task runner only. It has no way out, so the runner reaches n8n's broker and nothing
-  # else.
+  # n8n and its task runner only. It has no way out to the internet or the other services. The
+  # runner reaches n8n's broker, and n8n's own port 5678 too, as any service on the default network
+  # does, which takes code that got out of the runner's sandbox.
   runners:
     internal: true
 

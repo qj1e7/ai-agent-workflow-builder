@@ -2,9 +2,9 @@
 classes them (ADR 0045): `read`, `notice`, `write` or `off`. Anything the file does not class is
 off.
 
-n8n loads every built-in block but two (ADR 0051, `n8n_blocks`), so the file no longer decides what
-n8n loads. It classes the blocks it knows, for their tags, their `says` and their keys. The safety
-checker grades each block by it and flags every type it doesn't class, and the pin check
+n8n loads every built-in block but seven (ADR 0051, `n8n_blocks`), so the file no longer decides
+what n8n loads. It classes the blocks it knows, for their tags, their `says` and their keys. The
+safety checker grades each block by it and flags every type it doesn't class, and the pin check
 (`platform_api.pin_check`) keeps each of its rows true to the node types the pinned image serves.
 
 The file maps each type to `{"off": why}`, or to its block kind and its rows. A row classes some

@@ -225,10 +225,28 @@ class FakeN8n:
         """What n8n loaded: every built-in block, cut down to the ones the class file names
         and one more."""
         self.settings = deepcopy(SHOWN)
+        self.env_open = False
+        """n8n hands `$env` to an expression, as with N8N_BLOCK_ENV_ACCESS_IN_NODE false."""
+        self.runner_up = True
+        """n8n's external task runner is connected, so a Python Code block runs."""
+        self.executions: dict[str, dict[str, Any]] = {}
         self.runs_deprecated = False
         """n8n runs a workflow with a deprecated block by hand, as when NODES_EXCLUDE leaves it in
         and N8N_DEPRECATED_NODES_BLOCK is false. Either way n8n saves it, as it saves a block it
         doesn't load."""
+
+    def ran(self, nodes: list[dict[str, Any]]) -> dict[str, Any]:
+        last = nodes[-1]
+        parameters = last.get("parameters", {})
+        if "$env" in json.dumps(parameters):
+            if self.env_open:
+                return ran_ok(last["name"], {"home": "/home/node"})
+            return ran_into(last["name"], "access to env vars denied")
+        if parameters.get("language") == "pythonNative":
+            if self.runner_up:
+                return ran_ok(last["name"], {"ran": "python"})
+            return ran_into(last["name"], "Python runner unavailable")
+        return ran_ok(last["name"], {})
 
     def handle(self, request: httpx.Request) -> httpx.Response:
         path, method = request.url.path, request.method
@@ -250,7 +268,11 @@ class FakeN8n:
                 return httpx.Response(
                     400, json={"message": f"Unrecognized node type: {deprecated[0]}"}
                 )
-            return httpx.Response(200, json={"data": {"executionId": "E1"}})
+            execution_id = f"E{len(self.executions) + 1}"
+            self.executions[execution_id] = self.ran(held["nodes"])
+            return httpx.Response(200, json={"data": {"executionId": execution_id}})
+        if path.startswith("/api/v1/executions/") and method == "GET":
+            return httpx.Response(200, json=self.executions[path.split("/")[4]])
         if path == "/rest/projects/personal":
             return httpx.Response(200, json={"data": {"id": PLATFORM_PROJECT, "type": "personal"}})
         if path == "/rest/api-keys" and method == "GET":
@@ -320,6 +342,16 @@ class FakeN8n:
                 del self.workflows[workflow_id]
             return httpx.Response(200, json=self.workflows.get(workflow_id, {}))
         return httpx.Response(404, json={"message": f"no fake for {method} {path}"})
+
+
+def ran_ok(node: str, item: dict[str, Any]) -> dict[str, Any]:
+    run = {"data": {"main": [[{"json": item}]]}}
+    return {"status": "success", "data": {"resultData": {"runData": {node: [run]}}}}
+
+
+def ran_into(node: str, message: str) -> dict[str, Any]:
+    run = {"error": {"message": message}}
+    return {"status": "error", "data": {"resultData": {"runData": {node: [run]}}}}
 
 
 def serve(monkeypatch: pytest.MonkeyPatch, n8n: FakeN8n) -> FakeN8n:
@@ -578,6 +610,34 @@ def test_bootstrap_is_not_ready_when_n8n_runs_a_deprecated_block_and_removes_wha
     assert engine_status(postgres.owner) == GUARDS_FAIL
 
 
+def test_bootstrap_is_not_ready_when_the_running_n8n_hands_env_to_an_expression(
+    postgres: PostgresUrls, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+):
+    """The deploy's settings can say one thing and n8n run with another, so bootstrap asks n8n."""
+    truncate_all(postgres.owner)
+    n8n = serve(monkeypatch, FakeN8n([]))
+    n8n.env_open = True
+
+    assert main(env_for(postgres.owner)) == 1
+
+    assert "n8n read $env in an expression on a run by hand" in capsys.readouterr().out
+    assert engine_status(postgres.owner) == GUARDS_FAIL
+
+
+def test_bootstrap_is_not_ready_when_no_external_runner_runs_python(
+    postgres: PostgresUrls, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+):
+    """n8n's image has no Python, so a Python Code block runs only in the external runner."""
+    truncate_all(postgres.owner)
+    n8n = serve(monkeypatch, FakeN8n([]))
+    n8n.runner_up = False
+
+    assert main(env_for(postgres.owner)) == 1
+
+    assert "n8n ran no Python Code block by hand (error)" in capsys.readouterr().out
+    assert engine_status(postgres.owner) == GUARDS_FAIL
+
+
 def test_bootstrap_records_the_n8n_version_it_checked(
     postgres: PostgresUrls, monkeypatch: pytest.MonkeyPatch
 ):
@@ -634,8 +694,9 @@ def test_bootstrap_removes_the_old_run_workflow_by_its_exact_name_and_nothing_el
     assert load.findings == [] and load.guards == []
     assert sorted(w.name for w in loaded) == ["run_failure_reporter", "self_test_failure"]
     assert all(w.active for w in loaded)
-    probes = len(DEPRECATED)
-    assert n8n.deleted[probes:] == ["W1"], "after the probes of the deprecated blocks, only W1"
+    assert [w for w in n8n.deleted if w in ("W1", "W2", "W3")] == ["W1"], (
+        "of what n8n held, only W1. The rest are bootstrap's own probes"
+    )
     assert [c for c in n8n.calls if c.split()[1].split("/")[0] == "W1"] == [
         "POST W1/deactivate",
         "DELETE W1",

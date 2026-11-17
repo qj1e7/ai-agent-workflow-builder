@@ -208,19 +208,32 @@ class N8nClient:
         and the guards it can show (ADR 0051)."""
         return cast(dict[str, Any], self._rest("GET", "/rest/settings")["data"])
 
-    def runs_by_hand(self, body: dict[str, Any], node: str) -> bool:
-        """/rest: whether n8n saves this workflow and starts a run of it by hand, up to `node`, as
-        n8n's editor does. Whatever n8n saved is deleted again."""
+    def run_by_hand(self, body: dict[str, Any], node: str, timeout: float = 120) -> HandRun:
+        """/rest: saves this workflow, runs it by hand up to `node` as n8n's editor does, and
+        waits up to `timeout` seconds for the run to end. Whatever n8n saved is deleted again."""
         response = self._send("POST", "/workflows", json=body)
         if response.status_code == 400:
-            return False
+            return HandRun(started=False)
         workflow_id = str(_ok(response)["id"])
         try:
             started = self._http.post(
                 f"/rest/workflows/{workflow_id}/run",
                 json={"destinationNode": {"nodeName": node, "mode": "inclusive"}},
             )
-            return started.status_code == 200
+            if started.status_code != 200:
+                return HandRun(started=False)
+            execution_id = str(started.json()["data"]["executionId"])
+            deadline = time.monotonic() + timeout
+            while True:
+                execution = self._public(
+                    "GET", f"/executions/{execution_id}", params={"includeData": "true"}
+                )
+                status = str(execution.get("status") or "")
+                if status not in ("new", "running", "waiting", ""):
+                    return HandRun(True, status, _first_item(execution, node))
+                if time.monotonic() > deadline:
+                    return HandRun(True)
+                self._sleep(1)
         finally:
             self.delete_workflow(workflow_id)
 
@@ -338,6 +351,24 @@ class N8nClient:
             params=params,
             headers={"X-N8N-API-KEY": self._api_key},
         )
+
+
+@dataclass(frozen=True)
+class HandRun:
+    """A run by hand: whether n8n started it, how it ended, or None while it hadn't, and the
+    first item the block it ran up to gave."""
+
+    started: bool
+    status: str | None = None
+    output: Mapping[str, Any] | None = None
+
+
+def _first_item(execution: Mapping[str, Any], node: str) -> Mapping[str, Any] | None:
+    try:
+        runs = execution["data"]["resultData"]["runData"][node]
+        return cast(Mapping[str, Any], runs[0]["data"]["main"][0][0]["json"])
+    except KeyError, IndexError, TypeError:
+        return None
 
 
 def _type_names(listed: object) -> set[str]:

@@ -915,7 +915,8 @@ class DraftedWorkflows:
         if revision.state != "drafting":
             return
         if self._n8n is not None and await self._n8n.n8n_version() is None:
-            await _finish(self._db, drafted_id, number, said=PAUSED)
+            ready = await self._n8n.error_workflow_id() is not None
+            await _finish(self._db, drafted_id, number, said=PAUSED if ready else N8N_NOT_READY)
             return
         current = kept.current_plan(number)
         result = await self._drafting.draft(revision.words, await self._facts_for(), current)

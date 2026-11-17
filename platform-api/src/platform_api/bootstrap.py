@@ -15,9 +15,12 @@ from platform_api.migrations import upgrade_all
 from platform_api.n8n_guard import (
     DEPRECATED,
     PROBED,
+    PYTHON_RAN,
     deployed_findings,
     deprecated_probe,
+    env_probe,
     loaded_findings,
+    python_probe,
     shown_findings,
 )
 from platform_api.orchestration.n8n import PLATFORM_API_KEY_LABEL, N8nClient, N8nError
@@ -164,7 +167,9 @@ def load_into_n8n(settings: BootstrapSettings, say: Say) -> N8nLoad:
         say(f"n8n runs version {version or 'unknown'}")
         removed = client.fresh_api_key(API_KEY_LABEL)
         say(f"api key '{API_KEY_LABEL}': created, {removed} older removed")
-        took = [t for t in DEPRECATED if client.runs_by_hand(deprecated_probe(t), PROBED)]
+        took = [t for t in DEPRECATED if client.run_by_hand(deprecated_probe(t), PROBED).started]
+        env = client.run_by_hand(env_probe(), PROBED)
+        python = client.run_by_hand(python_probe(), PROBED)
         lost = lost_workflows(client, settings.owner_database_url, recorded, say)
         if lost is not None:
             ask_for_restore(settings.owner_database_url, lost, say)
@@ -198,6 +203,18 @@ def load_into_n8n(settings: BootstrapSettings, say: Say) -> N8nLoad:
             if w.project != place.project
         ),
     ]
+    ran: list[str] = []
+    if env.status == "success":
+        ran.append(
+            "n8n read $env in an expression on a run by hand: N8N_BLOCK_ENV_ACCESS_IN_NODE must "
+            "be true on n8n itself"
+        )
+    if python.status != "success" or python.output != PYTHON_RAN:
+        ran.append(
+            f"n8n ran no Python Code block by hand ({python.status or 'no run'}): its external "
+            "task runner must be connected, with N8N_RUNNERS_MODE external and the token "
+            "n8n-runners holds"
+        )
     guards = [
         *loaded_findings(loaded_types),
         *deployed_findings(settings.n8n_settings),
@@ -207,6 +224,7 @@ def load_into_n8n(settings: BootstrapSettings, say: Say) -> N8nLoad:
             "which runs code in n8n's own process"
             for t in took
         ),
+        *ran,
     ]
     return N8nLoad(platform.loaded, findings, guards, version)
 

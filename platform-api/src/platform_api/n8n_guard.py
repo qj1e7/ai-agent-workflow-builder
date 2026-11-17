@@ -1,18 +1,20 @@
 """What bootstrap checks of n8n before the platform starts on it (ADR 0051, section 2, as spike
 P9 and build step 12 settled it).
 
-n8n loads every built-in block but two, so its own settings are what keep a workflow's code and
+n8n loads every built-in block but seven, so its own settings are what keep a workflow's code and
 files away from n8n's secrets. Bootstrap fails the start unless all of these hold:
 
-- n8n loads every type the class file names and all of our blocks, neither of the two left out,
+- n8n loads every type the class file names and all of our blocks, none of the seven left out,
   and no community or fetched block (`loaded_findings`);
 - the settings the deploy gives n8n keep `$env` closed, run code in the external task runner,
   refuse the deprecated blocks, keep the file blocks out of n8n's own folders and `/proc`, and
   let code load no module of its own choosing (`deployed_findings`). The deploy gives bootstrap the
   same block of settings it gives n8n: `x-n8n-guards` in deploy/compose.yaml and
   `local.n8n_guards` in infra/envs/dev/main.tf;
-- what n8n itself shows of those settings agrees (`shown_findings`), and n8n refuses to run a
-  workflow with a deprecated block (`DEPRECATED`), which bootstrap tries.
+- what n8n itself shows of those settings agrees (`shown_findings`), and what n8n does when
+  bootstrap runs a workflow by hand: it refuses each deprecated block (`DEPRECATED`), refuses an
+  expression that reads `$env` (`env_probe`), and runs a Python Code block, which only the
+  external task runner can (`python_probe`).
 
 Pure. The folder rules know where n8n's image keeps its own files (`N8NS_FOLDERS`).
 """
@@ -53,7 +55,14 @@ N8NS_FOLDERS = (
     "/usr/local/lib/node_modules",
 )
 """Where n8n keeps something of its own: its settings, encryption key and the blocks it loads at
-start, its environment (/proc), the kernel's views of it, our node pack, and n8n's own code."""
+start, its environment (/proc), the kernel's views of it, our node pack, and n8n's own code. The
+file blocks may use none of them, nor a folder that holds one."""
+SYSTEM_FOLDERS = ("/etc", "/root", "/tmp")
+"""Folders of the host the file blocks may not use either, nor any folder inside one: its own
+settings, root's home, and `/tmp`, where Webhook, Form, Edit Image, SSH and FTP keep other runs'
+files while they work."""
+FALSE = frozenset({"false", "0"})
+"""What n8n's config reads as false (`@n8n/config`'s decorators.js)."""
 DEPRECATED = (
     "n8n-nodes-base.function",
     "n8n-nodes-base.functionItem",
@@ -113,7 +122,7 @@ def deployed_findings(settings: Mapping[str, str]) -> list[str]:
         ("N8N_DEPRECATED_NODES_BLOCK", "Function, Function Item and LangChain Code run in n8n"),
         ("N8N_BLOCK_FILE_ACCESS_TO_N8N_FILES", "the file blocks could reach n8n's own folders"),
     ):
-        if said.get(name, "").lower() == "false":
+        if said.get(name, "").lower() in FALSE:
             findings.append(f"{name} must not be false: {why}")
     if "N8N_RESTRICT_FILE_ACCESS_TO" in said:
         findings += folder_findings(said["N8N_RESTRICT_FILE_ACCESS_TO"])
@@ -144,6 +153,11 @@ def folder_findings(value: str) -> list[str]:
                 f"N8N_RESTRICT_FILE_ACCESS_TO names {folder}, which holds or is part of "
                 f"{', '.join(clash)}, where n8n keeps its own files"
             )
+        elif system := [own for own in SYSTEM_FOLDERS if path == own or _inside(path, own)]:
+            findings.append(
+                f"N8N_RESTRICT_FILE_ACCESS_TO names {folder}, a system folder ({system[0]}) that "
+                "holds the host's settings or other runs' files"
+            )
     return findings
 
 
@@ -171,19 +185,44 @@ def shown_findings(shown: Mapping[str, Any]) -> list[str]:
     return findings
 
 
-PROBED = "Deprecated"
+PROBED = "Probe"
 """The name of the block a probe asks n8n to run to."""
+PYTHON_RAN = {"ran": "python"}
+"""What the Python probe gives back when it ran."""
 
 
 def deprecated_probe(node_type: str) -> dict[str, Any]:
     """A workflow that runs one deprecated block by hand, which n8n must refuse to run. n8n saves
     it while NODES_EXCLUDE leaves the block out, as it saves any block it doesn't load, and refuses
     to save it while it loads the block and N8N_DEPRECATED_NODES_BLOCK is on."""
+    return _probe(f"n8n refuses {node_type}", node_type, 1, {})
+
+
+def env_probe() -> dict[str, Any]:
+    """A workflow whose Edit Fields block reads `$env`, which the running n8n must refuse while
+    N8N_BLOCK_ENV_ACCESS_IN_NODE is on. It reads HOME, which holds nothing secret."""
+    assignment = {"id": "home", "name": "home", "value": "={{ $env.HOME }}", "type": "string"}
+    parameters = {"assignments": {"assignments": [assignment]}, "options": {}}
+    return _probe("n8n refuses $env", "n8n-nodes-base.set", 3.4, parameters)
+
+
+def python_probe() -> dict[str, Any]:
+    """A workflow whose Code block runs Python. n8n's own image has no Python, so it runs only in
+    the external task runner, connected with n8n's token."""
+    parameters = {
+        "language": "pythonNative",
+        "mode": "runOnceForAllItems",
+        "pythonCode": f"return [{{'json': {PYTHON_RAN!r}}}]",
+    }
+    return _probe("the external runner runs code", "n8n-nodes-base.code", 2, parameters)
+
+
+def _probe(what: str, node_type: str, version: float, parameters: dict[str, Any]) -> dict[str, Any]:
     return {
-        "name": f"Platform check: n8n refuses {node_type}",
+        "name": f"Platform check: {what}",
         "nodes": [
             {
-                "id": "deprecated-probe-start",
+                "id": "probe-start",
                 "name": "Run by hand",
                 "type": "n8n-nodes-base.manualTrigger",
                 "typeVersion": 1,
@@ -191,12 +230,12 @@ def deprecated_probe(node_type: str) -> dict[str, Any]:
                 "parameters": {},
             },
             {
-                "id": "deprecated-probe",
+                "id": "probe",
                 "name": PROBED,
                 "type": node_type,
-                "typeVersion": 1,
+                "typeVersion": version,
                 "position": [220, 0],
-                "parameters": {},
+                "parameters": parameters,
             },
         ],
         "connections": {"Run by hand": {"main": [[{"node": PROBED, "type": "main", "index": 0}]]}},
@@ -225,7 +264,13 @@ def _resolved(folder: str) -> str | None:
         folder = HOME + folder[1:]
     if not folder.startswith("/"):
         return None
-    return posixpath.normpath(folder)
+    # n8n resolves the folder with Node's path.resolve, which reads //proc as /proc, while POSIX
+    # keeps a leading // apart.
+    return posixpath.normpath("/" + folder.lstrip("/"))
+
+
+def _inside(path: str, folder: str) -> bool:
+    return path.startswith(folder + "/")
 
 
 def _overlaps(path: str, own: str) -> bool:

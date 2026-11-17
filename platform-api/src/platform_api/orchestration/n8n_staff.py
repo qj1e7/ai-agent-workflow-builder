@@ -69,7 +69,7 @@ class StaffGate:
     """N8N_STAFF_ACCESS."""
     ready: bool
     """The last bootstrap was ready, so it proved that n8n loads every built-in block but
-    the two left out, and runs with the guards that keep a workflow's code from n8n's secrets."""
+    the seven left out, and runs with the guards that keep a workflow's code from n8n's secrets."""
 
     @property
     def closed(self) -> str | None:
