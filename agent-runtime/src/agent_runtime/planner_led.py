@@ -37,6 +37,7 @@ from agent_runtime.answers import (
     answer_of,
     watch_of_it,
     watches_it,
+    with_software_named,
     word_rule_refusal,
 )
 from agent_runtime.contract import (
@@ -646,6 +647,7 @@ def _reply(raw: Mapping[str, Any], turn: Turn) -> Acted:
             return Invalid(f"The checker refused the reply ({flag}). {VERIFIER_WORDS[flag]}")
         about = about_of(envelope.about, shown.text, given_of(turn.request).facts)
         shown = shown.model_copy(update={"about": about})
+    shown = with_software_named(shown, turn.front.read, turn.request.task)
     parts = parts_of(None, turn.request.task, shown)
     return Shown(Answered(answer=shown, parts=parts), turn.text)
 

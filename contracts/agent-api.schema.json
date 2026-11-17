@@ -2134,6 +2134,20 @@
           "default": null,
           "description": "For cant only. None on a can't means the button is Ask the team."
         },
+        "software": {
+          "anyOf": [
+            {
+              "maxLength": 80,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The one software the message named, as it wrote it: code finds the reading's software in the message's words, never in the reply. The Portal sends it back as previous.software, so a next message such as keep track of it means it. Left out when none.",
+          "title": "Software"
+        },
         "text": {
           "description": "Plain words only.",
           "maxLength": 600,
@@ -2916,7 +2930,7 @@
             }
           ],
           "default": null,
-          "description": "The one software the Planner named in its answer. Client input: a message that only asks to watch it, such as keep track of it, gets the offer to watch this software, which the person must tap.",
+          "description": "The one software the Planner named in its answer, or for a free reply the one its request named, which must be in the request's words. Client input: a message that only asks to watch it, such as keep track of it, gets the offer to watch this software, which the person must tap.",
           "title": "Software"
         }
       },

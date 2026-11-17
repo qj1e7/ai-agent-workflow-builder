@@ -8,15 +8,18 @@ from agent_runtime.contract import (
     AnswerRequest,
     DidntFollowAnswer,
     ExplainAnswer,
+    FreeReplyAnswer,
     PlannerFacts,
     PreviousTurn,
     QuestionAnswer,
+    ReplyEnvelope,
     WatchlistAnswer,
     WhichSoftwareAnswer,
 )
 from agent_runtime.contracts import answer_request
 from agent_runtime.follow_ups import follow_up_of
 from agent_runtime.questions import QuestionReply
+from agent_runtime.reply_verifier import Verdict
 from tests.fakes import ScriptedChat
 from tests.test_questions import FACTS, reading, watch_reading
 
@@ -245,7 +248,10 @@ def which(word: str, software: str | None = None) -> TaskRead:
     return reading("none", belongs_on_watchlist=True, watchlist_word=word, software=software)
 
 
-@pytest.mark.parametrize("kind", ["cant", "watchlist", "question", "remove_software"])
+NAMES_ONE = ["cant", "watchlist", "question", "remove_software", "reply", "reply_clarify"]
+
+
+@pytest.mark.parametrize("kind", NAMES_ONE)
 @pytest.mark.parametrize(
     ("task", "verb"),
     [
@@ -288,6 +294,9 @@ def test_a_watch_of_it_offers_the_turn_befores_software_whatever_the_reading_nam
         named_node_js(software="mock-12"),
         named_node_js(kind=None),
         named_node_js(kind="reply", software="Weekly bug list"),
+        named_node_js(kind="reply", software=None),
+        named_node_js(kind="reply_clarify", software="Redis"),
+        PreviousTurn(request="what is the newest JS runtime?", software="Node.js", kind="reply"),
         named_node_js(kind="setup_card"),
         named_node_js(kind="which_software"),
     ],
@@ -315,7 +324,7 @@ def test_only_a_message_that_does_nothing_but_watch_it_takes_the_software_from_b
     assert not (isinstance(first, WatchlistAnswer) and first.software == "Node Js")
 
 
-@pytest.mark.parametrize("kind", ["cant", "watchlist", "question", "remove_software"])
+@pytest.mark.parametrize("kind", NAMES_ONE)
 def test_explain_it_after_a_turn_that_named_software_explains_and_never_watches_it(kind: str):
     out, _ = run("explain it", reading("none"), named_node_js(kind))
     assert isinstance(out, Answered)
@@ -325,5 +334,65 @@ def test_explain_it_after_a_turn_that_named_software_explains_and_never_watches_
 def test_a_watch_of_it_after_an_explanation_never_explains_it():
     explained = PreviousTurn(request="explain the FastAPI release check", kind="explain")
     out, _ = run("keep track of it", which("keep track of"), explained)
+    assert isinstance(out, Answered)
+    assert out.answer == WhichSoftwareAnswer(word="keep track of")
+
+
+LATEST_NODE_JS = "what is the latest node js?"
+CLEAN = Verdict(says_it_happened=False, skips_a_yes=False, claims_unbuilt=False)
+REPLIES = {
+    "answer": ReplyEnvelope(
+        form="answer",
+        text="I can't look that up. Type keep track of node js to watch it for new releases.",
+    ),
+    "clarify": ReplyEnvelope(
+        form="clarify",
+        text="What would you like to do with node js?",
+        choices=["Watch its releases", "Something else"],
+    ),
+}
+
+
+def replied(task: str, first: TaskRead, form: str = "answer") -> FreeReplyAnswer:
+    """The free reply to `task`, with no facts, so the catch-all is a dead end at once."""
+    chat = ScriptedChat(structured=[first, REPLIES[form], CLEAN])
+    out = answer_task(request(task, None, facts=None), lambda timeout: chat)
+    assert isinstance(out, Answered) and isinstance(out.answer, FreeReplyAnswer), out
+    return out.answer
+
+
+def after(task: str, reply: FreeReplyAnswer) -> PreviousTurn:
+    """The turn before as the Portal sends it after a free reply (`previousOf`)."""
+    kind = "reply_clarify" if reply.form == "clarify" else "reply"
+    return PreviousTurn(request=task, software=reply.software, answer=reply.text, kind=kind)
+
+
+@pytest.mark.parametrize("form", ["answer", "clarify"])
+def test_keep_track_of_it_after_a_free_reply_watches_the_software_its_message_named(form: str):
+    reply = replied(LATEST_NODE_JS, reading("abilities", software="node js"), form)
+    assert reply.software == "node js"
+    out, _ = run("keep track of it", which("keep track of"), after(LATEST_NODE_JS, reply))
+    named, _ = run("keep track of node js", which("keep track of", software="node js"), None)
+    assert isinstance(out, Answered) and isinstance(named, Answered)
+    assert out.answer == named.answer == WatchlistAnswer(word="keep track of", software="node js")
+    assert [p.mark for p in out.parts] == [p.mark for p in named.parts] == ["will_do"]
+
+
+@pytest.mark.parametrize(
+    ("task", "said"),
+    [
+        (LATEST_NODE_JS, None),
+        ("what is the newest JS runtime?", "Node.js"),
+        ("what is the latest node js and redis?", "node js and redis"),
+        ("tell me about Jira", "Jira"),
+        ("tell me about MOCK-12", "MOCK-12"),
+    ],
+)
+def test_a_free_reply_carries_no_software_its_message_does_not_name_as_one_plain_name(
+    task: str, said: str | None
+):
+    reply = replied(task, reading("abilities", software=said))
+    assert reply.software is None
+    out, _ = run("keep track of it", which("keep track of"), after(task, reply))
     assert isinstance(out, Answered)
     assert out.answer == WhichSoftwareAnswer(word="keep track of")

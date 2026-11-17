@@ -2092,7 +2092,17 @@ async def test_a_free_reply_comes_back_in_the_planners_words_with_its_button(fro
         },
         "looked_at": [],
         "about": [],
+        "software": None,
     }
+
+
+async def test_a_free_reply_carries_the_one_software_its_request_named(front: Front):
+    """The Portal sends it back as previous.software, so "keep track of it" means it."""
+    front.answers.result = answered(
+        FreeReplyAnswer(form="answer", text="I can't look that up yet.", software="node js")
+    )
+    reply = await say(front, "what is the latest node js?")
+    assert (reply["answer"], reply["software"]) == ("reply", "node js")
 
 
 async def test_a_free_reply_carries_the_software_and_workflows_it_names(front: Front):

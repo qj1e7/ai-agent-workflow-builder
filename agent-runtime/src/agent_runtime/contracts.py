@@ -1070,11 +1070,12 @@ def answered_reply_cant() -> Answered:
 
 def answered_reply_about() -> Answered:
     """A reply that names watched software: the Portal draws LangGraph's state line under it
-    (ADR 0049)."""
+    (ADR 0049). It carries the software the request named, as it wrote it, so "keep track of
+    it" next means LangGraph."""
     text = "To see where LangGraph stands, open the Watchlist. Its line below shows the version."
     answered = _free_reply("where is langgraph at?", ReplyEnvelope(form="answer", text=text))
     about = [ReplyAbout(section="watchlist", name="LangGraph")]
-    answer = answered.answer.model_copy(update={"about": about})
+    answer = answered.answer.model_copy(update={"about": about, "software": "langgraph"})
     return answered.model_copy(update={"answer": answer})
 
 

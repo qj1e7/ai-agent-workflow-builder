@@ -54,6 +54,7 @@ from agent_runtime.contract import (
     DidntFollowAnswer,
     EditAnswer,
     ExplainAnswer,
+    FreeReplyAnswer,
     ModelProblem,
     NeedsMeAnswer,
     PartAnswer,
@@ -91,6 +92,7 @@ from agent_runtime.follow_ups import (
     follow_up_of,
     named_before,
     named_when_asked,
+    plain_software,
     watch_offer_of,
 )
 from agent_runtime.free_reply import dead_end, reply_to
@@ -1212,11 +1214,26 @@ def watch_of_it(read: TaskRead | None, request: AnswerRequest) -> WatchlistAnswe
     still taps Watch it. With no software before, which software is asked as before."""
     verb = watches_it(request.task)
     named = named_before(request)
-    if verb is None or named is None or _TICKET_KEY.search(named.upper()) or names_a_yes(named):
+    if verb is None or named is None or not _names_no_ticket_or_yes(named):
         return None
     if read is not None and read.skips_the_yes.whose != "nobody":
         return None
     return WatchlistAnswer(word=verb, software=named)
+
+
+def _names_no_ticket_or_yes(name: str) -> bool:
+    return _TICKET_KEY.search(name.upper()) is None and not names_a_yes(name)
+
+
+def with_software_named(reply: FreeReplyAnswer, read: TaskRead, request: str) -> FreeReplyAnswer:
+    """The free reply with the one software its request named, as the request wrote it, so a
+    next message that only asks to watch "it" means it (`watch_of_it`). Code finds the reading's
+    software in the request's words, as for a watch, and never takes a name from the reply."""
+    said = _software_of(read, request)
+    named = None if said is None else plain_software(said)
+    if named is not None and not _names_no_ticket_or_yes(named):
+        named = None
+    return reply.model_copy(update={"software": named})
 
 
 WHY: Final = re.compile(r"\bwhy\b|\bwent\s+wrong\b|\bwhat\s+happened\b", re.IGNORECASE)
@@ -1320,6 +1337,8 @@ def answer_task(
     if gap is not None:
         verifier = verify_with or chat_for
         answer = reply_to(request, gap, chat_for, verifier) if free_reply else DidntFollowAnswer()
+        if isinstance(answer, FreeReplyAnswer):
+            answer = with_software_named(answer, read, request.task)
         if isinstance(answer, DidntFollowAnswer) and gap.keep is not None:
             answer = gap.keep
         parts = parts_of(read, request.task, answer, request.facts)
