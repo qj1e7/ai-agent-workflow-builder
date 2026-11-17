@@ -12,14 +12,18 @@ from agent_runtime.answers import AskTheQuestionLane, TaskRead, answer_of, answe
 from agent_runtime.contract import (
     Answered,
     AnswerRequest,
+    CantAnswer,
+    EditAnswer,
     PlannerFacts,
     PreviousTurn,
     QuestionAnswer,
     WatchedFact,
     WatchlistAnswer,
+    WorkflowFact,
 )
 from agent_runtime.contracts import answer_request
 from agent_runtime.questions import QuestionReply
+from agent_runtime.reading import SearchRead
 from tests.fakes import ScriptedChat
 
 FACTS = PlannerFacts(
@@ -177,6 +181,8 @@ def test_watched_software_goes_to_the_question_lane_and_keeps_its_card_when_the_
         (f"what is the latest {'x' * 90}?", "x" * 90),
         ("what's new in c++?", "c++"),
         ("what's the latest .NET version?", ".NET"),
+        ("what's new in node js? check now", "Node.js"),
+        ("what's new in node js? tell me now", "Node.js"),
     ],
 )
 def test_words_that_ask_for_more_or_name_no_software_are_not_this_question(
@@ -184,6 +190,159 @@ def test_words_that_ask_for_more_or_name_no_software_are_not_this_question(
 ) -> None:
     for read in (reading(software), reading(software, "none")):
         assert not isinstance(answer_of(read, task, FACTS), WatchlistAnswer), read
+
+
+@pytest.mark.parametrize(
+    ("task", "software"),
+    [
+        ("can we update redis?", "Redis"),
+        ("could we patch kafka?", "Kafka"),
+        ("can I upgrade node js?", "Node.js"),
+        ("please do update redis", "Redis"),
+        ("do the redis update", "Redis"),
+        ("run the latest redis update", "Redis"),
+        ("run the update for kafka now", "Kafka"),
+        ("use the latest node js", "Node.js"),
+        ("we update redis to the latest", "Redis"),
+    ],
+)
+def test_an_order_asked_as_a_question_keeps_its_answer_and_gets_no_card(
+    task: str, software: str
+) -> None:
+    for read in (reading(software), reading(software, "none")):
+        assert not isinstance(answer_of(read, task, FACTS), WatchlistAnswer), read
+
+
+WORKFLOWS = PlannerFacts(
+    watchlist=FACTS.watchlist,
+    workflows=[
+        WorkflowFact(name="Kafka check", state="on", last_run="Stopped", last_run_at=None),
+        WorkflowFact(name="LangGraph release check", state="on", last_run="Done", last_run_at=None),
+    ],
+)
+
+
+@pytest.mark.parametrize(
+    ("task", "about", "words", "software"),
+    [
+        ("what's the latest on the kafka check?", "why_stopped", "kafka check", "kafka"),
+        ("what's the latest on the kafka check?", "my_workflows", "kafka check", "kafka"),
+        ("what's the latest on the kafka check?", "abilities", None, "kafka"),
+        (
+            "what's the latest run of the LangGraph release check?",
+            "my_workflows",
+            None,
+            "LangGraph",
+        ),
+        ("is the LangGraph release check up to date?", "my_workflows", None, "LangGraph"),
+        ("is the LangGraph release check up to date?", "none", None, "LangGraph"),
+        ("is the watchlist up to date?", "my_workflows", None, None),
+    ],
+)
+def test_a_question_about_their_own_workflow_keeps_its_answer(
+    task: str, about: str, words: str | None, software: str | None
+) -> None:
+    read = reading(software, about, workflow_words=words)
+    assert not isinstance(answer_of(read, task, WORKFLOWS), WatchlistAnswer)
+
+
+@pytest.mark.parametrize(
+    ("task", "software"),
+    [
+        ("anything new in my outlook?", "Outlook"),
+        ("any updates in entra?", "Entra"),
+        ("what's new in servicenow?", "ServiceNow"),
+        ("anything new on sharepoint?", "SharePoint"),
+        ("any new in slack?", "Slack"),
+        ("what's the latest in gmail?", "Gmail"),
+        ("any updates on azure?", "Azure"),
+        ("what's new in my gitlab?", "GitLab"),
+        ("what's new in jenkins?", "Jenkins"),
+    ],
+)
+def test_a_system_the_platform_does_not_reach_keeps_its_cant(task: str, software: str) -> None:
+    """Read as a task, the can't names the system. Read as something it can't place, the list of
+    abilities leads to the free reply, which is told the system is one the platform can't reach."""
+    shown = answer_of(reading(software, "none"), task, FACTS)
+    assert isinstance(shown, CantAnswer) and shown.cant[0].system == software, shown
+    assert not isinstance(answer_of(reading(software), task, FACTS), WatchlistAnswer)
+
+
+@pytest.mark.parametrize(
+    ("task", "software"),
+    [
+        ("what's new in the planner?", "Planner"),
+        ("is the AI troubleshooter up to date?", "AI troubleshooter"),
+        ("what's new in the live activity view?", "live activity view"),
+        ("what's new in the agent api?", "Agent API"),
+        ("any updates from the safety checker?", "safety checker"),
+        ("what's new in the portal?", "Portal"),
+        ("is the watchlist up to date?", "watchlist"),
+        ("latest news", "news"),
+        ("what's new with the team", "team"),
+    ],
+)
+def test_the_platforms_own_names_and_plain_words_get_no_card(task: str, software: str) -> None:
+    for read in (reading(software), reading(software, "none")):
+        assert not isinstance(answer_of(read, task, FACTS), WatchlistAnswer), read
+
+
+def test_a_reading_of_tickets_gets_no_card() -> None:
+    tickets = SearchRead(project="MOCK", said="MOCK")
+    read = reading("MOCK", "none", search=tickets)
+    assert not isinstance(answer_of(read, "what's new in MOCK?", FACTS), WatchlistAnswer)
+
+
+@pytest.mark.parametrize(
+    "task",
+    [
+        "what's new in sk-ant-api03-AbCdEf1234567890XyZ?",
+        "latest version of ghp_AbCdEf1234567890XyZaBcD",
+    ],
+)
+def test_a_key_shaped_name_is_never_put_on_a_card(task: str) -> None:
+    key = task.split()[-1].rstrip("?")
+    for read in (reading(key), reading(key, "none")):
+        assert not isinstance(answer_of(read, task, FACTS), WatchlistAnswer), read
+
+
+@pytest.mark.parametrize(
+    ("task", "read_as", "written", "word"),
+    [
+        ("what's new in node?", "Node.js", "node", "new"),
+        ("what version is node on", "Node.js", "node", "version"),
+        ("any updates for spring?", "Spring Boot", "spring", "updates"),
+    ],
+)
+def test_a_short_name_matches_the_official_name_the_model_wrote(
+    task: str, read_as: str, written: str, word: str
+) -> None:
+    for read in readings(read_as, word):
+        assert answer_of(read, task, FACTS) == WatchlistAnswer(word=word, software=written), read
+
+
+@pytest.mark.parametrize(
+    ("task", "software", "word"),
+    [
+        ("did we upgrade kafka?", "Kafka", "upgrade"),
+        ("has kafka been patched?", "Kafka", "patched"),
+        ("is node js out yet? any updates?", "Node.js", "updates"),
+    ],
+)
+def test_a_question_about_what_was_done_or_asked_twice_still_gets_the_card(
+    task: str, software: str, word: str
+) -> None:
+    shown = answer_of(reading(software), task, FACTS)
+    assert isinstance(shown, WatchlistAnswer) and shown.word == word
+
+
+def test_the_check_comes_after_the_branches_that_answer_first() -> None:
+    """A release source the platform doesn't read keeps its can't, and an edit stays an edit, so
+    the check can't move above them."""
+    npm = answer_of(reading("npm"), "latest npm release", FACTS)
+    assert isinstance(npm, CantAnswer) and npm.cant[0].system == "npm"
+    edit = answer_of(reading("Redis", "change"), "can we update redis?", FACTS)
+    assert isinstance(edit, EditAnswer)
 
 
 def test_a_reading_that_asks_to_skip_a_yes_gets_no_offer() -> None:
@@ -202,9 +361,18 @@ def test_a_reading_that_asks_to_skip_a_yes_gets_no_offer() -> None:
 )
 def test_the_golden_cases_pass_on_a_reading_that_names_only_the_software(case: AnswerCase) -> None:
     """The rules-mode golden set's cases, scored as the eval scores them, on the plainest reading a
-    model gives: the software, if the request names one, and nothing else."""
-    named = {"node js": "Node.js", None: "LangGraph" if case.facts else None}
-    read = reading(named.get(case.software, case.software))
+    model gives: the software, if the request names one, and nothing else. A case that must not
+    get the card names a software too, so it can fail."""
+    named = {
+        "nw-whats-new-node": "Node.js",
+        "nw-latest-node": "Node.js",
+        "nw-whats-new-in-node": "Node.js",
+        "nw-version-on": "Node.js",
+        "nw-watched": "LangGraph",
+        "nw-not-the-team": "team",
+        "nw-not-news": "news",
+    }
+    read = reading(named.get(case.id, case.software))
     lane = QuestionReply(about_their_data=False)
     checks = ANSWER.score(case, Answer(read, read.model_dump_json(), None, lane))
     assert [c.name for c in checks if not c.passed] == []

@@ -1662,7 +1662,7 @@
  },
  {
   "id": "latest-node",
-  "category": "typos",
+  "category": "vague",
   "task": "what is the latest node js?",
   "kinds": [
    "watchlist"

@@ -6337,6 +6337,18 @@
     ]
   },
   {
+    "id": "nw-whats-new-in-node",
+    "note": "The short name. A model may write the official name, Node.js, for it.",
+    "task": "what's new in node?",
+    "kind": [
+      "watchlist"
+    ],
+    "software": "node",
+    "word": [
+      "new"
+    ]
+  },
+  {
     "id": "nw-latest-version-of",
     "note": "Asks for the newest version of one software in other words, 17 Nov.",
     "task": "latest version of redis",
