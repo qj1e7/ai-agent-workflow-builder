@@ -5286,6 +5286,17 @@
     ]
   },
   {
+    "id": "bound-time-is-asked",
+    "note": "A review follow-up to #309. A run at 5pm is not before 5pm, so the card asks the time and never takes the bound as it.",
+    "task": "Every Friday before 5pm, sum up the closed tickets in MOCK",
+    "kind": [
+      "setup_card"
+    ],
+    "schedule": [
+      "missing"
+    ]
+  },
+  {
     "id": "r4-approver-change-alone",
     "note": "Plan 7.5, an Approver's change alone. platform-api answers operators for Bob (R16); the runtime sets nothing up and keeps the part. The asker can't change workflows, so the runtime proposes no edit.",
     "task": "Pause the weekly closed-ticket summary",

@@ -652,6 +652,18 @@ def test_a_model_that_reads_a_range_as_one_time_still_gets_the_card_asking_which
     assert failed(ANSWER.score(case, read_answer(**CAROL_READ, schedule=schedule))) == set()
 
 
+@pytest.mark.parametrize("schedule", ["Every Friday at 4pm", "Every Friday 5pm", "Every Friday"])
+def test_a_bound_on_the_time_is_asked_never_taken_as_the_run_time(schedule: str):
+    read = {
+        "name": "Weekly summary",
+        "schedule": schedule,
+        "search": {"project": "MOCK", "status": "done", "said": "the closed tickets in MOCK"},
+        "ticket": {"creates": False, "says": "summary", "said": "sum up"},
+    }
+    case = answer_case("bound-time-is-asked")
+    assert failed(ANSWER.score(case, read_answer(**read))) == set()
+
+
 def test_a_range_with_one_am_or_pm_is_asked_never_read_as_its_last_end():
     read = {
         "name": "Weekly summary",
@@ -663,7 +675,16 @@ def test_a_range_with_one_am_or_pm_is_asked_never_read_as_its_last_end():
     assert failed(ANSWER.score(case, read_answer(**read))) == set()
 
 
-@pytest.mark.parametrize("schedule", ["Every Friday", "Every Friday at", "Every Friday at 4pm"])
+@pytest.mark.parametrize(
+    "schedule",
+    [
+        "Every Friday",
+        "Every Friday at",
+        "Every Friday at 4pm",
+        "Every Monday at 9am",
+        "Every Monday",
+    ],
+)
 def test_carols_time_stays_when_the_model_leaves_it_out_or_rewrites_it(schedule: str):
     """Before, the card asked for their time again, with a note that it couldn't read one."""
     case = answer_case("carol-24-hour-time")

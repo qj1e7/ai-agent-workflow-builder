@@ -630,8 +630,14 @@ def test_a_schedule_keeps_only_schedule_words_and_a_time_never_said_is_asked_for
     assert rows_of(guessed)[0] == ("schedule", "", "missing")
     assert isinstance(guessed, SetupCardAnswer)
     assert guessed.rows[0].note == NO_TIME_BUT.format("Every Friday")
+    # The model's 5pm in place of their day: their own "Every Friday" comes back, and the card
+    # asks the time they never said.
     only_time = answer_of(read(schedule="At 5pm", search=closed, ticket=summed), task)
-    assert isinstance(only_time, SetupCardAnswer) and only_time.rows[0].note == NO_TIME_SAID
+    assert rows_of(only_time)[0] == ("schedule", "Every Friday", "understood")
+    no_day = answer_of(
+        read(schedule="At 5pm", search=closed, ticket=summed), "Sum up closed tickets"
+    )
+    assert isinstance(no_day, SetupCardAnswer) and no_day.rows[0].note == NO_TIME_SAID
     day = answer_of(
         read(schedule="Every Monday", search=search(said="tickets")), "Each week, list tickets"
     )

@@ -9,12 +9,14 @@ from agent_runtime.answers import answer_of, parts_of
 from agent_runtime.contract import CantAnswer, RequestPart, SetupCardAnswer, UnderstoodRow
 from agent_runtime.reading import (
     NO_TIME_READ,
+    NOT_A_RUN_TIME,
     ONE_TIME,
     DaysRead,
     PlaceRead,
     SearchRead,
     TicketRead,
     said_schedule,
+    time_ranges,
 )
 from tests.test_answers import read
 
@@ -154,11 +156,104 @@ def test_a_time_the_model_drops_or_changes_is_read_from_their_words(said: str, m
     assert (row.text, row.state, row.note) == (said, "understood", None)
 
 
-def test_their_time_comes_back_beside_a_day_the_model_guessed_which_stays_a_guess():
+def test_their_time_never_stands_beside_a_day_the_model_guessed():
+    """Their own words come back whole, so the card asks which day, never Monday."""
     task = read(schedule="Every Monday", search=SearchRead(said="tickets"))
     answer = answer_of(task, "Each week at 16:00, list tickets")
     assert isinstance(answer, SetupCardAnswer)
-    assert (answer.rows[0].text, answer.rows[0].state) == ("Every Monday at 16:00", "changed")
+    assert (answer.rows[0].text, answer.rows[0].state) == ("Each week at 16:00", "understood")
+
+
+@pytest.mark.parametrize(
+    "model", ["Every Monday at 9am", "Every Monday", "Every Monday at 16:00", "Fridays at 9am"]
+)
+def test_a_day_or_time_the_model_contradicts_never_mixes_with_theirs(model: str):
+    """Before, "Every Monday at 16:00" came back, which the Portal set as asked for."""
+    row = carols_row(model, "Every Friday at 16:00")
+    assert (row.text, row.state, row.note) == ("Every Friday at 16:00", "understood", None)
+
+
+@pytest.mark.parametrize(
+    "model", ["Every Friday morning", "Every Friday at 4pm and 5pm", "Every Friday at 4pm or so"]
+)
+def test_the_models_extra_words_never_garble_their_time(model: str):
+    """Before, these came back as a note that their words had no time, "Every Friday and at
+    4pm", or "Every Friday at 4pm or"."""
+    row = carols_row(model, "Every Friday at 4pm")
+    assert (row.text, row.state, row.note) == ("Every Friday at 4pm", "understood", None)
+
+
+@pytest.mark.parametrize(
+    ("said", "model", "bound"),
+    [
+        ("Every Friday before 5pm", "Every Friday at 4pm", "before 5pm"),
+        ("Every Friday before 5pm", "Every Friday", "before 5pm"),
+        ("Every Friday by 5pm", "Every Friday", "by 5pm"),
+        ("Every Friday by 5pm", "Every Friday 5pm", "by 5pm"),
+        ("Every Friday after 9am", "Every Friday at 10am", "after 9am"),
+        ("Every Friday around 4pm", "Every Friday at 4pm", "around 4pm"),
+        ("Every Friday until 17:00", "Every Friday", "until 17:00"),
+    ],
+)
+def test_a_bound_on_the_time_is_never_taken_as_the_time_it_runs(said: str, model: str, bound: str):
+    """A run at 5pm is not before 5pm, so the card asks the time and says why. Before, the row
+    was "Every Friday 5pm", which the Portal set as asked for."""
+    row = carols_row(model, said)
+    assert (row.text, row.state, row.note) == (
+        "Every Friday",
+        "missing",
+        NOT_A_RUN_TIME.format(bound),
+    )
+
+
+@pytest.mark.parametrize("words", ["Fridays before 5pm", "Fridays by 5pm", "Fridays after 9am"])
+def test_a_new_schedule_never_takes_a_bound_as_its_time(words: str):
+    assert said_schedule(words) == ("friday", None)
+
+
+@pytest.mark.parametrize(
+    ("said", "model"),
+    [
+        ("Every Friday 16.00", "Every Friday at 4pm"),
+        ("Every Friday at 9.30", "Every Friday at 9:30am"),
+    ],
+)
+def test_a_time_code_cant_read_says_so_when_the_model_writes_another(said: str, model: str):
+    """Before, the note said their words had no time."""
+    row = carols_row(model, said)
+    assert (row.text, row.state, row.note) == ("Every Friday", "missing", NO_TIME_READ)
+
+
+@pytest.mark.parametrize(
+    "words",
+    [
+        "between 10 and 14 days",
+        "from 10 to 14 days",
+        "between 2 and 3 approvers",
+        "at 9am - 20 tickets max",
+        "at 9am to 3 managers",
+        "between 30 and 40",
+    ],
+)
+def test_counts_are_no_range_of_times(words: str):
+    assert time_ranges(words) == []
+
+
+def test_a_day_count_beside_the_schedule_is_never_asked_as_a_time():
+    """Before, "10 and 14" was offered as two times."""
+    task = read(
+        name="Idle tickets",
+        schedule="Every Friday",
+        search=SearchRead(project="MOCK", said="tickets in MOCK idle between 10 and 14 days"),
+    )
+    text = "Find tickets in MOCK idle between 10 and 14 days every Friday"
+    answer = answer_of(task, text)
+    assert not any(p.reason == "one_time" for p in parts_of(task, text, answer))
+    assert said_schedule("Every Friday at 9am - 20 tickets max") == ("friday", "09:00")
+    assert said_schedule("Every Friday between 10 and 14 days") == ("friday", None)
+    row, parts = carols_card("Every Friday at 9am", "Every Friday at 9am - 20 tickets max -")
+    assert (row.text, row.state) == ("Every Friday at 9am", "understood")
+    assert not any(p.reason == "one_time" for p in parts)
 
 
 RANGES = [
