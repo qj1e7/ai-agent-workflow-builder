@@ -518,11 +518,11 @@ class Builder:
         self._n8n = n8n
         self.public_base_url = public_base_url
         self.facts = BuilderWorkflowFacts(db, self, releases, writes, keys)
+        """What node calls ask of the builder, and what a draft is graded against."""
         self._jira_projects = frozenset(
             place.id for entry in writes if entry.connector == "jira" for place in entry.places
         )
         """The Jira projects the team's writes may land in, which the Planner reads in any case."""
-        """What node calls ask of the builder, and what a draft is graded against."""
         self._requests = requests
         self.holding = holding
         """Open in n8n and Take back, for a platform that gives staff n8n accounts."""

@@ -59,18 +59,38 @@ def _words(text: str) -> frozenset[str]:
     return frozenset(text.split())
 
 
-KEY_SHAPED: Final = re.compile(r"(?<![\w-])[A-Za-z][A-Za-z0-9_]{1,9}(?!\w)")
-NOT_PROJECTS: Final = _words(
+KEY: Final = r"[A-Za-z][A-Za-z0-9_]{1,9}"
+LEAD: Final = re.compile(
+    rf"(?<![\w-])(?:[Pp]rojects?|[Ii]n|[Ii]nto|[Ff]rom|[Tt]o)\s+"
+    rf"(?P<lead>(?:(?:[Tt]he|[Jj]ira|[Pp]rojects?)\s+)*)(?P<keys>{KEY}(?:\s*(?:,|and|or|&)\s*{KEY})*)"
+    r"(?!\w)"
+)
+"""A key where a project stands: after "project", "in", "into", "from" or "to", as "in MOCK",
+"from MOCK to OPS" or "in projects MOCK and OPS". "IN" in capitals is no lead, so "status IN
+PROGRESS" names no project."""
+BEFORE_A_PROJECT_WORD: Final = re.compile(
+    r"(?<![\w-])(?P<key>[A-Z][A-Z0-9_]{1,9})(?:-\d+\b|\s+(?:tickets?|issues?|board|backlog|"
+    r"project)\b)"
+)
+"""A key before a ticket number or a ticket word, as "MOCK-14" or "the MOCK tickets"."""
+IN_A_LINK: Final = re.compile(rf"/(?:browse|projects)/(?P<key>{KEY})(?:-\d+)?(?![\w])")
+"""A key in a Jira link, as /browse/MOCK-12 or /projects/mock/issues."""
+NEVER_PROJECTS: Final = _words(
     "AM PM SGT UTC GMT BST CET CEST EST EDT CST CDT PST PDT IST JST HKT AEST AEDT "
     "PDF CSV JSON XML HTML TXT PNG JPG XLSX DOCX PPTX "
-    "AI API CI CD DM HR ID IT KPI MR NCS PR QA SLA SQL SSO UI URL UX VPN "
-    "JIRA GITHUB GITLAB SLACK TEAMS CONFLUENCE ENTRA N8N "
-    "MON TUE WED THU FRI SAT SUN JAN FEB MAR APR JUN JUL AUG SEP SEPT OCT NOV DEC "
-    "ALL AND ANY ASAP BUT EOD EOW FYI NEW NO NOT NOW OK OLD ONE ONLY OR THE TBC TBD TODO "
-    "URGENT YES P0 P1 P2 P3 P4"
+    "ALL ANY EACH EVERY BOTH THE "
+    "DONE TODO OPEN CLOSED RESOLVED BLOCKED BACKLOG PROGRESS"
 )
-"""Words in capitals that name no Jira project: time zones, file types, systems, days, months and
-common words a person types in capitals."""
+"""Words that stand where a project could and name none: a time zone, a file type, a word such as
+ALL, or a ticket status, as "in SGT", "to PDF" or "moved to DONE"."""
+NOT_PROJECTS: Final = NEVER_PROJECTS | _words(
+    "AI API CI CD DM HR ID IT KPI MR NCS PR QA SLA SQL SSO UI URL UX VPN "
+    "CVE EOL LTS SRE NPS BUG BUGS NOTE ISO RFC SHA UTF HTTP HTTPS COVID "
+    "JIRA GITHUB GITLAB SLACK TEAMS CONFLUENCE ENTRA N8N "
+    "ASAP EOD EOW FYI NEW NO NOT NOW OK OLD ONE ONLY OR TBC TBD URGENT YES P0 P1 P2 P3 P4"
+)
+"""Capital words before a ticket number or a ticket word that name no project, as CVE-2024-3094
+or "the BUG tickets". After "in" or "project", IT, HR and QA are projects."""
 
 
 def _squashed(text: str) -> str:
@@ -90,6 +110,8 @@ class Repaired:
 
     card: CardDefinition
     left_out: list[str]
+    project: str | None = None
+    """The one Jira project the task's words name, for a card that uses a Jira tool."""
 
 
 @dataclass(frozen=True)
@@ -136,17 +158,34 @@ def one_project_input(names: Sequence[str]) -> str:
 
 
 def projects_named(task: str, known: Collection[str] = ()) -> list[str]:
-    """Each Jira project the task names, once, in the order it names them: a key in capitals,
-    such as MOCK or MOCK in MOCK-14, and a key the team's Jira allows in any case, such as
-    "mock". A word in capitals that is no project, such as SGT or PDF, is not one."""
+    """Each Jira project the task names, once, in the order it names them. A key counts where a
+    project stands: in capitals after "project", "in", "into", "from" or "to"; in any case after
+    the word "project" or when the team's Jira allows it; in capitals before a ticket number or
+    a ticket word; and in a Jira link. A project the team's Jira allows counts in capitals
+    anywhere. A status, a time zone or a word such as CVE is never one."""
     allowed = {key.upper() for key in known}
-    found: list[str] = []
-    for match in KEY_SHAPED.finditer(task):
-        word = match.group(0)
-        key = word.upper()
-        if key in allowed or (word == key and key not in NOT_PROJECTS):
-            found.append(key)
-    return list(dict.fromkeys(found))
+    found: list[tuple[int, str]] = []
+    for match in LEAD.finditer(task):
+        named = "project" in f"{task[match.start() : match.start('lead')]}{match.group('lead')}"
+        keys = [k for k in re.finditer(KEY, match.group("keys")) if k.group(0) not in ("and", "or")]
+        for n, key in enumerate(keys):
+            word = key.group(0)
+            upper = word.upper()
+            # The first key may be in small letters after "project". One after "and" or a comma
+            # is a project only in capitals, as "projects MOCK and OPS", so "and raise" is not.
+            first = n == 0 and (word == upper or named) and upper not in NEVER_PROJECTS
+            listed = n > 0 and word == upper and upper not in NOT_PROJECTS
+            if upper in allowed or first or listed:
+                found.append((match.start("keys") + key.start(), upper))
+    for match in BEFORE_A_PROJECT_WORD.finditer(task):
+        if match.group("key") not in NOT_PROJECTS or match.group("key") in allowed:
+            found.append((match.start(), match.group("key")))
+    for match in IN_A_LINK.finditer(task):
+        found.append((match.start("key"), match.group("key").upper()))
+    for match in re.finditer(rf"(?<![\w-]){KEY}(?!\w)", task):
+        if match.group(0) in allowed:
+            found.append((match.start(), match.group(0)))
+    return list(dict.fromkeys(key for _, key in sorted(found)))
 
 
 def repaired(
@@ -165,6 +204,7 @@ def repaired(
         return approvals
     inputs = [_tidied(i) for i in card.inputs]
     needed = needed_kinds(blocks)
+    keys: list[str] = []
     if "jira_project" in needed:
         keys = projects_named(task, known)
         if len(keys) > 1:
@@ -195,6 +235,7 @@ def repaired(
             }
         ),
         left_out=left_out,
+        project=keys[0] if len(keys) == 1 else None,
     )
 
 

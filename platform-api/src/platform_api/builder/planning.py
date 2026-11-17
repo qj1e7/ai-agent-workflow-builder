@@ -256,6 +256,7 @@ async def _draft(
         reason=reason,
         missing_tools=missing,
         questions=_questions(questions, draft.questions),
+        project=repair.project,
     )
 
 

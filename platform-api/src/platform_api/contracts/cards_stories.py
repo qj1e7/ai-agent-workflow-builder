@@ -171,6 +171,7 @@ def plan_new_agent() -> NewAgent:
         reason="No saved agent raises tickets from finished work.",
         missing_tools=[MissingTool(need="Post in Teams", why="To share the list with the team.")],
         questions=["Which Jira project?"],
+        project="MOCK",
     )
 
 

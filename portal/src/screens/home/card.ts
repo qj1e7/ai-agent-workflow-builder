@@ -197,8 +197,10 @@ export function planView(answer: PlanOut, rows: readonly Row[]): PlanView {
         kind: INPUT_KINDS.includes(kind as InputKind) ? (kind as InputKind) : 'text',
         what: what ?? '',
       }))
+      // The builder reads the one Jira project their words name, so the two never disagree. An older reply has no project.
+      const read = (kind: InputKind) => (kind === 'jira_project' && answer.project !== undefined ? answer.project : foundIn(rows, kind))
       const found = Object.fromEntries(inputs.flatMap((input) => {
-        const value = foundIn(rows, input.kind)
+        const value = read(input.kind)
         return value === null ? [] : [[input.name, value]]
       }))
       return {
@@ -509,6 +511,8 @@ export function checkedRows(form: Form): Checked[] {
     if (row.kind === 'schedule') {
       const chosen = whenWords(form.when)
       const asked = row.text
+      // A schedule the Planner filled in from their words is never as they asked. Its note says what it filled in.
+      if (row.state === 'changed') return { ok: false, words: `${label}: ${chosen}. ${row.note ?? ''}`.trim() }
       if (asked !== '' && sameWhen(readWhen(asked), form.when)) return { ok: true, words: `${label}: ${chosen}, as you asked.` }
       return { ok: false, words: asked !== '' ? `${label}: ${chosen}. You asked for “${asked}”.` : `${label}: ${chosen}. You chose this.` }
     }

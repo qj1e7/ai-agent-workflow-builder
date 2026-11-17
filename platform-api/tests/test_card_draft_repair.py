@@ -91,6 +91,9 @@ TWO_PROJECTS = [
     "Find the MOCK tickets nobody updated and raise one OPS ticket that lists them",
     "Find stale tickets in projects MOCK and OPS",
     "Find stale tickets in MOCK-14 and raise one ticket in OPS",
+    "Find stale tickets in project mock and raise one ticket in project ops",
+    "Read https://jira.example.com/browse/MOCK-12 and raise one ticket in OPS",
+    "Read https://jira.example.com/projects/mock/issues and raise one ticket in OPS",
 ]
 
 
@@ -133,10 +136,49 @@ async def test_a_project_the_team_allows_counts_in_small_letters():
         ("Find ALL the stale tickets in MOCK, ASAP", ["MOCK"]),
         ("Find the stale tickets in Jira and raise one", []),
         ("x", []),
+        ("Find tickets in MOCK with status DONE and raise one ticket", ["MOCK"]),
+        ("Find tickets in MOCK with status IN PROGRESS and raise one ticket", ["MOCK"]),
+        ("For each CVE in the list, raise one ticket in MOCK", ["MOCK"]),
+        ("Fix CVE-2024-3094 and raise one ticket in MOCK", ["MOCK"]),
+        ("For each EOL software and each new LTS release, raise one ticket in MOCK", ["MOCK"]),
+        ("Raise a BUG in MOCK", ["MOCK"]),
+        ("NOTE: raise one ticket in MOCK for the SRE team", ["MOCK"]),
+        ("Raise one ticket in MOCK about the CODESparks NPS survey", ["MOCK"]),
+        ("RAISE ONE TICKET IN MOCK", ["MOCK"]),
+        ("Read HTTPS://JIRA.NCS.COM.SG/browse/MOCK-1 and raise one", ["MOCK"]),
+        ("Find tickets in MOCK moved to DONE this week", ["MOCK"]),
     ],
 )
 def test_words_in_capitals_that_name_no_project_are_not_read_as_one(task: str, named: list[str]):
-    assert projects_named(task) == named
+    """Before, DONE, PROGRESS, CVE, EOL, LTS, BUG, NOTE, SRE and NPS were read as projects, so
+    these were told they named two. A capital word is a project only where it stands as one."""
+    assert projects_named(task, ("MOCK",)) == named
+
+
+@pytest.mark.parametrize(
+    ("task", "named"),
+    [
+        ("Find stale tickets in IT and raise one ticket in MOCK", ["IT", "MOCK"]),
+        ("Find stale tickets in HR, raise one in QA", ["HR", "QA"]),
+        ("find stale tickets in mock and raise one in project ops", ["MOCK", "OPS"]),
+        ("Raise it in MOCK", ["MOCK"]),
+    ],
+)
+def test_a_key_where_a_project_stands_is_read_even_a_short_or_small_one(
+    task: str, named: list[str]
+):
+    """Before, IT, HR and QA were on the list of words that name no project, so "in IT ... in
+    MOCK" read as one project and the Portal filled IT."""
+    assert projects_named(task, ("MOCK", "IT")) == named
+    assert projects_named(task, ("MOCK",)) == named
+
+
+async def test_the_one_project_the_words_name_comes_with_the_plan_for_the_portal_to_fill():
+    """The Portal fills the project input from this key, so the builder and the Portal read the
+    words the same way."""
+    result = await planned(TASK)
+    assert isinstance(result, NewAgent) and result.project == "MOCK"
+    assert isinstance(none := await planned("x"), NewAgent) and none.project is None
 
 
 async def test_a_card_that_uses_no_jira_tool_never_counts_projects():
