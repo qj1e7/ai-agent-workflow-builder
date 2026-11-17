@@ -24,6 +24,7 @@ from platform_api.orchestration import (
     DrafterFacts,
     KnownOptions,
     ModelProblem,
+    N8nWorkflow,
     NoModel,
     RuntimeDown,
     SavedDraft,
@@ -73,6 +74,9 @@ def drafted(plan: WorkflowPlan) -> WorkflowDrafted:
 @dataclass
 class N8n:
     saved: list[dict[str, Any]] = field(default_factory=list[dict[str, Any]])
+    """Every workflow n8n created, in order."""
+    held: dict[str, N8nWorkflow] = field(default_factory=dict[str, N8nWorkflow])
+    """What n8n still holds, by id."""
     removed: list[str] = field(default_factory=list[str])
     changes_it: bool = False
     down: bool = False
@@ -83,17 +87,25 @@ class N8n:
     async def save_draft(self, document: Mapping[str, Any]) -> SavedDraft:
         if self.down:
             raise httpx.ConnectError("n8n is down")
-        held = deepcopy(dict(document))
-        pins = held.pop("pinData", None)
+        kept = deepcopy(dict(document))
+        pins = kept.pop("pinData", None)
         if self.changes_it:
-            held["settings"]["callerPolicy"] = "any"
-        for number, node in enumerate(held["nodes"]):
+            kept["settings"]["callerPolicy"] = "any"
+        for number, node in enumerate(kept["nodes"]):
             node["id"] = f"n8n-{number}"
-        self.saved.append(held)
-        return SavedDraft(f"wf{len(self.saved)}", "v1", held, pins)
+        self.saved.append(kept)
+        workflow_id = f"wf{len(self.saved)}"
+        self.held[workflow_id] = N8nWorkflow(workflow_id, "v1", None, kept, pins)
+        return SavedDraft(workflow_id, "v1", kept, pins)
+
+    async def named(self, name: str) -> list[N8nWorkflow]:
+        if self.down:
+            raise httpx.ConnectError("n8n is down")
+        return [w for w in self.held.values() if w.document["name"] == name]
 
     async def remove(self, workflow_id: str) -> None:
         self.removed.append(workflow_id)
+        self.held.pop(workflow_id, None)
 
 
 class Facts:

@@ -401,3 +401,6 @@ Building drafted workflows without flags (`builder/drafted_workflows.py`, `orche
 11. **The set-up grades the revision again under today's rules** and sets up nothing that no longer passes. It also refuses a revision that is not the newest, or whose stored document no longer has the approved digest.
 12. **The draft button shows for every Operator.** Section 7's "only the team sees the draft button" holds because the team lead decides when the drafter is deployed to Azure.
 
+13. **The set-up is idempotent on our request id.** Before it creates the workflow in n8n, it looks for one that an earlier try left there, found by name and by the webhook id that only this workflow's Start from the Portal has. It keeps a draft whose digest is the approved one and removes any other. A read-back that fails removes what n8n created and tries again later. Only n8n holding something other than what was sent is final.
+14. **A set-up that was refused or given up leaves the drafted workflow a draft,** to change or send for approval again. An approval holds the drafted workflow only while its set-up is done or still to come, and a yes on an older revision holds nothing.
+15. **The approval page takes no yes on a revision that today's rules would not set up:** one with a flag, a setting still needed, or a change to someone's access. The route refuses such a yes too.

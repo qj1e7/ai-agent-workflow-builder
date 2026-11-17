@@ -130,6 +130,7 @@ from platform_api.orchestration.n8n import (
     N8nDrafts,
     N8nError,
     N8nWorkflow,
+    NotKeptAsSent,
     PublishEvent,
     PutBack,
     SavedDraft,
@@ -306,6 +307,7 @@ from platform_api.orchestration.workflow_check import (
 from platform_api.orchestration.write_actions import Binding
 
 __all__ = [
+    "NotKeptAsSent",
     "Approved",
     "Closed",
     "Declined",

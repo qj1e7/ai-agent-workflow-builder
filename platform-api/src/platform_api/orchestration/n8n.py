@@ -65,6 +65,11 @@ class N8nError(Exception):
         echo what was sent."""
 
 
+class NotKeptAsSent(N8nError):
+    """n8n created the workflow but holds something other than what was sent, so it was removed
+    again. Sending the same document again would end the same way."""
+
+
 class OwnerOutcome(Enum):
     CREATED = "created"
     SIGNED_IN = "signed in"
@@ -999,6 +1004,19 @@ class N8nApi:
                 return found
             params = {**params, "cursor": page.next_cursor}
 
+    async def workflows_named(self, name: str) -> list[N8nWorkflow]:
+        params = {"name": name, "limit": "250"}
+        found: list[N8nWorkflow] = []
+        while True:
+            response = _expect(await self._public("GET", "/workflows", params=params))
+            page = _parse(_Listing, response)
+            found.extend(
+                _workflow(item) for item in page.data if not item.is_archived and item.name == name
+            )
+            if not page.next_cursor:
+                return found
+            params = {**params, "cursor": page.next_cursor}
+
     async def home_project(self, workflow_id: str) -> str | None:
         """None when n8n no longer has the workflow."""
         response = await self._public("GET", f"/workflows/{workflow_id}")
@@ -1484,11 +1502,20 @@ class N8nWorkflows:
         """Creates the workflow, then reads it back and compares, because n8n may keep something
         other than what was sent. A draft that did not land as sent is removed again."""
         created = await self._api.create(document)
-        held = await self._api.workflow(created.id)
+        try:
+            held = await self._api.workflow(created.id)
+        except N8nError, httpx.HTTPError:
+            # A copy the platform can't read back is one it doesn't track, keys and all.
+            await self.remove(created.id)
+            raise
         if held is None or not same_as_sent(document, held.document):
             await self.remove(created.id)
-            raise N8nError("n8n did not keep the draft as the platform sent it")
+            raise NotKeptAsSent("n8n did not keep the draft as the platform sent it")
         return SavedDraft(held.id, held.version_id, held.document, held.pins)
+
+    async def named(self, name: str) -> list[N8nWorkflow]:
+        """Every workflow n8n holds with this name, with its pins, archived ones left out."""
+        return await self._api.workflows_named(name)
 
     async def remove(self, workflow_id: str) -> None:
         try:

@@ -285,7 +285,14 @@ class SetUpApprovals:
             decisions = await _decisions(uow, approval_id)
             roles = await self._people.roles_now(uow, principal.user_id)
             principal = replace(principal, roles=roles or frozenset())
-            step = _next_step(request, decisions)
+            step = next(
+                (
+                    d.step_index
+                    for d in decisions
+                    if d.by == principal.user_id and d.verdict is verdict
+                ),
+                _next_step(request, decisions),
+            )
             outcome = approvals.decide(
                 request, decisions, principal, step, verdict, seen_digest, uow.now
             )

@@ -78,7 +78,8 @@ async def start_drafting(
     "/drafted-workflows/{drafted_id}",
     description="A drafted workflow's newest revision: its state, steps, code's report, the "
     "settings still needed, the flags, whether it can be sent for approval and why not, and its "
-    "set-up approval and set-up once there are.",
+    "set-up approval and set-up once there are. Anyone on the team who is signed in may read it, "
+    "as anyone may read a workflow's report.",
     responses={**SIGNED_IN, 404: error_response(NO_SUCH_DRAFT)},
 )
 async def read_drafted(
@@ -96,8 +97,10 @@ async def read_drafted(
     description="A change asked for in the chat. The drafter gets the plan as it stands and these "
     "words, and its whole new plan becomes the next revision, drafting now. A setting with the "
     "same id and kind keeps its value unless the words change it. A set-up approval still waiting "
-    "is replaced. 409 when the revision named is not the newest, it is still drafting, or it is "
-    "set up already.",
+    "is replaced. Any Operator may ask for a change, and so becomes a party to its set-up "
+    "approval. 409 when the revision named is not the newest, it is still drafting, or its "
+    "approval is set up or being set up. A set-up that was refused or given up leaves it a draft "
+    "to change.",
     responses={**OPERATORS_ONLY, 404: error_response(NO_SUCH_DRAFT)},
 )
 async def change_drafted(
@@ -145,7 +148,8 @@ async def set_up_drafted_again(
     "/setup-approvals/{approval_id}",
     description="A set-up approval as its page shows it: code's report of the exact revision "
     "its digest binds, and whether the signed-in person may decide it now. A party to it never "
-    "may.",
+    "may, and nobody may while today's rules find a flag in it, a setting still needed, or a "
+    "change to someone's access. Anyone on the team who is signed in may read it.",
     responses={**SIGNED_IN, 404: error_response(NO_SUCH_SET_UP)},
 )
 async def read_set_up_approval(
@@ -162,8 +166,9 @@ async def read_set_up_approval(
     status_code=201,
     description="An Approver's yes or no to set up the revision with this digest. One Approver "
     "who is not a party decides. A decline needs a reason from the short list. Once approved, the "
-    "platform sets it up as a Draft in n8n, read back and compared by digest. 200 when the same "
-    "decision was recorded before.",
+    "platform sets it up as a Draft in n8n, read back and compared by digest. A yes is refused "
+    "while today's rules find a flag in the revision, a setting still needed, or a change to "
+    "someone's access. 200 when the same decision was recorded before.",
     responses={
         **SIGNED_IN,
         200: {"model": SetUpApprovalView, "description": "Recorded before"},
