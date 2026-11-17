@@ -120,7 +120,8 @@ def needed_kinds(blocks: Iterable[CardBlock]) -> list[str]:
     return kinds
 
 
-def _names_kind(item: CardInput, kind: str) -> bool:
+def names_kind(item: CardInput, kind: str) -> bool:
+    """Whether the item is a text input named for the kind, as "Jira project"."""
     return (
         item.kind.strip() == "text"
         and " ".join(item.name.casefold().split()) in NAMES_OF_KIND[kind]
@@ -135,7 +136,7 @@ def with_needed_inputs(card: CardDefinition) -> CardDefinition:
     card asks."""
     inputs = list(card.inputs)
     for kind in needed_kinds(card.blocks):
-        named = [n for n, item in enumerate(inputs) if _names_kind(item, kind)]
+        named = [n for n, item in enumerate(inputs) if names_kind(item, kind)]
         if any(item.kind.strip() == kind for item in inputs):
             inputs = [item for n, item in enumerate(inputs) if n not in named]
         elif named:

@@ -3,6 +3,7 @@ when changing the words can't fix it. Code repairs what it safely can, and says 
 left: a part no tool does yet, the two projects the words name, or a draft to try again. Only a
 word the person wrote, such as an old themed name, is theirs to change."""
 
+from datetime import UTC, datetime
 from typing import Any
 
 import pytest
@@ -13,17 +14,27 @@ from platform_api.builder.cards import (
     NAME_LIMIT,
     PURPOSE_LIMIT,
     SAY_LIMIT,
+    card_spec,
+    card_view,
     check_card,
 )
-from platform_api.builder.draft_repair import NEW_AGENT_NAME, one_project_only
+from platform_api.builder.draft_repair import (
+    NEW_AGENT_NAME,
+    one_project_input,
+    one_project_only,
+    projects_named,
+)
 from platform_api.builder.models import CannotDo, ModelTrouble, NewAgent, PlanOut
 from platform_api.builder.planning import (
+    MISSING_COUNT,
     PROBLEM_WORDS,
     NoModelConnected,
     RuntimeNotAnswering,
     plan,
 )
-from platform_api.orchestration.agents import DraftBlock, DraftInput
+from platform_api.orchestration import cards_policy
+from platform_api.orchestration.agents import DraftApproval, DraftBlock, DraftInput, MissingTool
+from platform_api.shared import UserId
 from tests.test_card_planning import LIBRARY, FakePlanner, chosen, draft
 
 pytestmark = pytest.mark.anyio
@@ -38,13 +49,13 @@ TASK = (
 
 
 async def planned(
-    task: str = TASK, **changes: Any
+    task: str = TASK, known: tuple[str, ...] = (), **changes: Any
 ) -> PlanOut | NoModelConnected | RuntimeNotAnswering:
-    """The plan for a draft with the changes, its steps Carol's two Jira steps by default."""
+    """The plan for a draft with the changes, its steps Carol's two Jira steps by default, for a
+    team whose Jira allows the known projects."""
     changes.setdefault("blocks", [SEARCH, RAISE])
-    return await plan(
-        FakePlanner(chose=chosen("new_agent"), drafted=draft(**changes)), LIBRARY, task
-    )
+    planner = FakePlanner(chose=chosen("new_agent"), drafted=draft(**changes))
+    return await plan(planner, LIBRARY, task, known)
 
 
 def inputs_of(result: PlanOut | NoModelConnected | RuntimeNotAnswering) -> list[tuple[str, str]]:
@@ -53,31 +64,146 @@ def inputs_of(result: PlanOut | NoModelConnected | RuntimeNotAnswering) -> list[
     return [(i.name, i.kind) for i in result.draft.inputs]
 
 
-# Two Jira project inputs
+# Two Jira project inputs, and two projects in the words
 
 
-@pytest.mark.parametrize("task", [TASK, "x"])
-async def test_two_jira_project_inputs_become_one_when_the_words_name_one_project_or_none(
-    task: str,
-):
+TWO = [DraftInput(name="From", kind="jira_project"), DraftInput(name="To", kind="jira_project")]
+
+
+async def test_two_jira_project_inputs_become_one_when_the_words_name_one_project():
     """An agent reads and writes in one project, and the Portal fills every project input with
     the one the words name, so two inputs only asked the same thing twice."""
-    two = [DraftInput(name="From", kind="jira_project"), DraftInput(name="To", kind="jira_project")]
-    assert inputs_of(await planned(task, inputs=two)) == [(PROJECT, "jira_project")]
+    assert inputs_of(await planned(TASK, inputs=TWO)) == [(PROJECT, "jira_project")]
+
+
+async def test_two_jira_project_inputs_are_never_joined_when_the_words_name_no_project():
+    """Which of two projects is the target is the person's choice, so it is never picked, and
+    the two are never decided to be one (#309)."""
+    result = await planned("x", inputs=TWO)
+    assert result == CannotDo(reason=one_project_input(["From", "To"]), missing_tools=[])
+
+
+TWO_PROJECTS = [
+    "Find tickets in MOCK. Raise one ticket that lists them. Where it goes: Jira project OPS.",
+    "In MOCK, find the stale tickets. Project OPS gets one ticket that lists them.",
+    "Find stale tickets from MOCK and raise one ticket into OPS that lists them",
+    "Copy stale tickets from MOCK to OPS",
+    "Find the MOCK tickets nobody updated and raise one OPS ticket that lists them",
+    "Find stale tickets in projects MOCK and OPS",
+    "Find stale tickets in MOCK-14 and raise one ticket in OPS",
+]
+
+
+@pytest.mark.parametrize("task", TWO_PROJECTS)
+@pytest.mark.parametrize(
+    "inputs",
+    [
+        TWO,
+        [DraftInput(name="Jira project", kind="jira_project")],
+        [
+            DraftInput(name="Jira project", kind="text", what="Where to search"),
+            DraftInput(name="Project", kind="text", what="Where the ticket goes"),
+        ],
+        [],
+    ],
+    ids=["two project inputs", "one project input", "two text inputs named for it", "none"],
+)
+async def test_two_projects_in_the_words_say_which_two_whatever_the_inputs(
+    task: str, inputs: list[DraftInput]
+):
+    """Before, two text inputs named for the project, one input, or wording such as "from MOCK
+    to OPS" went through as one project, and the Portal filled the first, MOCK."""
+    result = await planned(task, inputs=inputs)
+    assert result == CannotDo(reason=one_project_only(["MOCK", "OPS"]), missing_tools=[])
+    assert "your words name MOCK and OPS" in one_project_only(["MOCK", "OPS"])
+
+
+async def test_a_project_the_team_allows_counts_in_small_letters():
+    result = await planned(
+        "find stale tickets in mock and raise one in ops", ("MOCK", "OPS"), inputs=TWO
+    )
+    assert result == CannotDo(reason=one_project_only(["MOCK", "OPS"]), missing_tools=[])
 
 
 @pytest.mark.parametrize(
-    "task",
+    ("task", "named"),
     [
-        "Find tickets in MOCK. Raise one ticket that lists them. Where it goes: Jira project OPS.",
-        "In MOCK, find the stale tickets. Project OPS gets one ticket that lists them.",
+        ("Every Friday at 16:00 in SGT, find stale tickets in MOCK", ["MOCK"]),
+        ("Find tickets in MOCK, raise one in MOCK, report in PDF", ["MOCK"]),
+        ("Find ALL the stale tickets in MOCK, ASAP", ["MOCK"]),
+        ("Find the stale tickets in Jira and raise one", []),
+        ("x", []),
     ],
 )
-async def test_two_jira_project_inputs_for_two_named_projects_say_which_two(task: str):
-    two = [DraftInput(name="From", kind="jira_project"), DraftInput(name="To", kind="jira_project")]
-    result = await planned(task, inputs=two)
-    assert result == CannotDo(reason=one_project_only(["MOCK", "OPS"]), missing_tools=[])
-    assert "your words name MOCK and OPS" in one_project_only(["MOCK", "OPS"])
+def test_words_in_capitals_that_name_no_project_are_not_read_as_one(task: str, named: list[str]):
+    assert projects_named(task) == named
+
+
+async def test_a_card_that_uses_no_jira_tool_never_counts_projects():
+    blocks = [DraftBlock(say="Read the releases.", tool="github.read_releases")]
+    result = await planned("Check MOCK and OPS releases", inputs=[], blocks=blocks)
+    assert isinstance(result, NewAgent) and result.problems == []
+
+
+# Approvals
+
+
+async def test_a_write_written_another_way_keeps_the_approvers_asked_for_and_its_two_yeses():
+    """Before, "Jira.Create_Ticket" with two approvers came back as jira.create_ticket with one,
+    and the run asked only one Approver in Teams."""
+    result = await planned(
+        blocks=[SEARCH, DraftBlock(say="Raise one ticket.", tool="Jira.Create_Ticket")],
+        approvals=[DraftApproval(tool="Jira.Create_Ticket", approvers=2)],
+    )
+    assert isinstance(result, NewAgent) and result.problems == []
+    assert [(a.tool, a.approvers) for a in result.approvals] == [("jira.create_ticket", 2)]
+    saved = card_view(
+        card_id="crd_x",
+        version=1,
+        starter=False,
+        owner=UserId("alice"),
+        created_at=datetime(2026, 11, 18, tzinfo=UTC),
+        definition=result.draft,
+    )
+    asked = max(a.approvers for a in saved.approvals)
+    assert len(cards_policy([card_spec(saved)], asked).steps) == 2
+
+
+@pytest.mark.parametrize(
+    "approvals",
+    [
+        [DraftApproval(tool="create_ticket", approvers=2)],
+        [
+            DraftApproval(tool="jira.create_ticket", approvers=1),
+            DraftApproval(tool="Jira.Create_Ticket", approvers=2),
+        ],
+    ],
+    ids=["an approval for no tool", "two approvals for one tool"],
+)
+async def test_approvals_that_cant_be_read_for_sure_ask_to_try_again(
+    approvals: list[DraftApproval],
+):
+    """Never a lower count than the model asked for: a fresh draft instead."""
+    result = await planned(approvals=approvals)
+    assert result == ModelTrouble(message=PROBLEM_WORDS["unusable_answer"])
+
+
+async def test_an_approval_for_a_step_set_aside_goes_with_it():
+    post = DraftBlock(say="Post the list in Teams.", tool="teams.post_message")
+    result = await planned(
+        blocks=[SEARCH, post, RAISE],
+        approvals=[DraftApproval(tool="teams.post_message", approvers=1)],
+    )
+    assert isinstance(result, NewAgent) and result.problems == []
+    assert [m.need for m in result.missing_tools] == ["Post the list in Teams"]
+
+
+@pytest.mark.parametrize("tool", ["jira.create_ticket2", "1jira2search3", "jira.\u017fearch"])
+async def test_a_tool_id_with_other_digits_or_letters_is_no_tool(tool: str):
+    result = await planned(blocks=[SEARCH, DraftBlock(say="Do the thing.", tool=tool)])
+    assert isinstance(result, NewAgent) and result.problems == []
+    assert [b.tool for b in result.draft.blocks] == ["jira.search"]
+    assert [m.need for m in result.missing_tools] == ["Do the thing"]
 
 
 # Words that are only labels
@@ -129,6 +255,10 @@ async def test_too_many_long_or_themed_examples_are_left_out():
         ("repository", "github_repo"),
         ("number", "text"),
         ("", "text"),
+        ("jira_user", "text"),
+        ("jira_issue_key", "text"),
+        ("jira_status", "text"),
+        ("report_format", "text"),
     ],
 )
 async def test_an_input_kind_the_platform_does_not_have_is_one_it_has(given: str, kind: str):
@@ -145,6 +275,24 @@ async def test_an_input_with_no_name_long_words_or_a_long_example_is_tidied():
     [kept] = result.draft.inputs
     assert (kept.name, kept.example) == ("GitHub repository", "")
     assert len(kept.what) <= 200
+
+
+@pytest.mark.parametrize(
+    ("kind", "name"), [("jira_user", "Assignee"), ("jira_issue_key", "Ticket key")]
+)
+async def test_a_jira_kind_that_is_no_project_stays_beside_the_project_as_text(
+    kind: str, name: str
+):
+    """Before, it became the input a write goes to, so "bob" under Assignee was project BOB, or
+    it was joined into the project input without a word."""
+    read = DraftBlock(say="Read the ticket.", tool="jira.read_ticket")
+    alone = await planned(inputs=[DraftInput(name=name, kind=kind)], blocks=[read, RAISE])
+    assert inputs_of(alone) == [(name, "text"), (PROJECT, "jira_project")]
+    beside = [DraftInput(name=PROJECT, kind="jira_project"), DraftInput(name=name, kind=kind)]
+    assert inputs_of(await planned(inputs=beside, blocks=[read, RAISE])) == [
+        (PROJECT, "jira_project"),
+        (name, "text"),
+    ]
 
 
 @pytest.mark.parametrize("second", ["text", "github_repo"])
@@ -169,6 +317,29 @@ async def test_a_step_with_a_tool_the_platform_does_not_have_comes_back_as_left_
     assert isinstance(result, NewAgent) and result.problems == []
     assert [b.tool for b in result.draft.blocks] == ["jira.search", "jira.create_ticket"]
     assert [m.need for m in result.missing_tools] == ["Post the list in Teams"]
+
+
+async def test_every_step_set_aside_is_named_beside_the_models_own_list():
+    """Before, the list was cut at five, so a step set aside could go untold."""
+    five = [MissingTool(need=f"Need {n}", why="x") for n in range(5)]
+    post = DraftBlock(say="Post the list in Teams.", tool="teams.post_message")
+    result = await planned(blocks=[SEARCH, post, RAISE], missing_tools=five)
+    assert isinstance(result, NewAgent)
+    assert [m.need for m in result.missing_tools] == [
+        "Post the list in Teams",
+        *[f"Need {n}" for n in range(MISSING_COUNT - 1)],
+        "and 1 more",
+    ]
+    six = [DraftBlock(say=f"Step {n}.", tool=f"x.tool{n}") for n in range(6)]
+    result = await planned(blocks=[SEARCH, *six])
+    assert isinstance(result, NewAgent)
+    assert [m.need for m in result.missing_tools] == [f"Step {n}" for n in range(6)]
+
+
+async def test_a_step_with_no_words_and_no_tool_we_have_is_told_in_plain_words():
+    result = await planned(blocks=[SEARCH, DraftBlock(say="", tool="teams.post"), RAISE])
+    assert isinstance(result, NewAgent)
+    assert [m.need for m in result.missing_tools] == ['A step with no words, for "teams.post"']
 
 
 async def test_a_draft_whose_every_step_needs_a_missing_tool_is_a_cant_naming_them():

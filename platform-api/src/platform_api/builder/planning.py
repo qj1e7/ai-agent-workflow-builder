@@ -6,12 +6,16 @@ never saves anything.
 """
 
 import logging
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from typing import Final, Literal, Protocol
 
 from platform_api.builder.cards import check_card, library_card
 from platform_api.builder.draft_repair import (
+    NotUsable,
+    Repaired,
+    TwoProjectInputs,
     TwoProjects,
+    one_project_input,
     one_project_only,
     repaired,
     theirs_to_change,
@@ -55,6 +59,8 @@ PART_LIMIT = 300
 MISSING_COUNT = 5
 NO_TOOL: Final = "No tool on the platform does this step yet."
 NO_TOOL_FOR_ANY_STEP: Final = "No tool on the platform does any step of this yet."
+MORE: Final = "and {} more"
+MORE_WHY: Final = "The AI model listed more missing tools than the card shows."
 
 
 class CardPlanner(Protocol):
@@ -154,17 +160,26 @@ def _definition(draft: CardDraft) -> CardDefinition:
     )
 
 
-def _missing(draft: CardDraft) -> list[MissingTool]:
-    return [
+def _missing(draft: CardDraft, left_out: Sequence[str] = ()) -> list[MissingTool]:
+    """Every step set aside, each in its own words, then the tools the model said are missing,
+    as many as fit, and how many more there are, so no part is cut without a word."""
+    steps = [MissingTool(need=_short(need, QUESTION_LIMIT), why=NO_TOOL) for need in left_out]
+    told = {m.need.casefold() for m in steps}
+    said = [
         MissingTool(need=_short(m.need, QUESTION_LIMIT), why=_short(m.why, QUESTION_LIMIT))
-        for m in draft.missing_tools[:MISSING_COUNT]
+        for m in draft.missing_tools
     ]
+    said = [m for m in said if m.need.casefold() not in told]
+    room = max(0, MISSING_COUNT - len(steps))
+    more = [MORE.format(len(said) - room)] if len(said) > room else []
+    return [*steps, *said[:room], *(MissingTool(need=need, why=MORE_WHY) for need in more)]
 
 
 async def plan(
-    planner: CardPlanner, library: Sequence[CardView], task: str
+    planner: CardPlanner, library: Sequence[CardView], task: str, projects: Collection[str] = ()
 ) -> PlanOut | NoModelConnected | RuntimeNotAnswering:
-    """The Planner's plan for a task, from the library of saved agents."""
+    """The Planner's plan for a task, from the library of saved agents. The projects are those
+    the team's Jira allows, so a key the task writes in small letters is read too."""
     by_id = {card.card_id: card for card in library}
     chosen = await planner.choose(task, [library_card(card) for card in library])
     match chosen:
@@ -192,11 +207,11 @@ async def plan(
                 )
         case "new_agent":
             pass
-    return await _draft(planner, task, reason, questions)
+    return await _draft(planner, task, reason, questions, projects)
 
 
 async def _draft(
-    planner: CardPlanner, task: str, reason: str, questions: list[str]
+    planner: CardPlanner, task: str, reason: str, questions: list[str], projects: Collection[str]
 ) -> PlanOut | NoModelConnected | RuntimeNotAnswering:
     drafted = await planner.draft(task)
     match drafted:
@@ -215,14 +230,18 @@ async def _draft(
             ),
             missing_tools=_missing(draft),
         )
-    repair = repaired(_definition(draft), task)
-    if isinstance(repair, TwoProjects):
-        return CannotDo(reason=one_project_only(repair.keys), missing_tools=_missing(draft))
-    left_out = [
-        MissingTool(need=_short(need, QUESTION_LIMIT), why=NO_TOOL) for need in repair.left_out
-    ]
-    missing = [*_missing(draft), *left_out][:MISSING_COUNT]
-    if not repair.card.blocks and left_out:
+    match repaired(_definition(draft), task, projects):
+        case TwoProjects(keys=keys):
+            return CannotDo(reason=one_project_only(keys), missing_tools=_missing(draft))
+        case TwoProjectInputs(names=names):
+            return CannotDo(reason=one_project_input(names), missing_tools=_missing(draft))
+        case NotUsable(why=why):
+            log.warning("A drafted card is unusable: %s", why)
+            return ModelTrouble(message=PROBLEM_WORDS["unusable_answer"])
+        case Repaired() as repair:
+            pass
+    missing = _missing(draft, repair.left_out)
+    if not repair.card.blocks and repair.left_out:
         return CannotDo(reason=NO_TOOL_FOR_ANY_STEP, missing_tools=missing)
     checked = check_card(repair.card)
     if not all(theirs_to_change(problem, task) for problem in checked.problems):
