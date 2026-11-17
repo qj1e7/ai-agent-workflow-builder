@@ -97,7 +97,7 @@ from agent_runtime.follow_ups import (
     watch_offer_of,
 )
 from agent_runtime.free_reply import dead_end, reply_to
-from agent_runtime.newest import asks_for_the_newest
+from agent_runtime.newest import NEWEST, asks_for_the_newest
 from agent_runtime.parts import (
     HOW_OFTEN,
     NOT_FOLLOWED,
@@ -781,9 +781,16 @@ def _verb_in(request: str) -> str | None:
 
 def _other_source(read: TaskRead, request: str) -> CantAnswer | None:
     """A can't for a release source other than GitHub, with the watch offered when a software
-    name was read."""
+    name was read. A word that asks what is newest asks about software too, as "what's new on
+    pypi?"."""
     source = other_release_source(request)
-    word = _watch_verb(read, request) or _verb_in(request) or release_word_in(request)
+    newest = NEWEST.search(request)
+    word = (
+        _watch_verb(read, request)
+        or _verb_in(request)
+        or release_word_in(request)
+        or (None if newest is None else newest.group(0))
+    )
     asks_for_software = word is not None or re.search(r"\bsoftware\b", request, re.IGNORECASE)
     if source is None or not asks_for_software:
         return None
@@ -872,17 +879,17 @@ def _newest_of(read: TaskRead, request: str, facts: PlannerFacts | None) -> Watc
 
 
 def _named_in(read: TaskRead, request: str) -> str | None:
-    """The reading's software as the request wrote it, else the first word of the name the model
-    wrote that the request writes whole, as "node" for "Node.js" or "spring" for "Spring Boot":
-    the model often writes the official name for a short one."""
+    """The reading's software as the request wrote it, else the leading word of the name the model
+    wrote, when the request writes it whole, as "node" for "Node.js" or "spring" for "Spring
+    Boot": the model often writes the official name for a short one. Only the leading word, so
+    "server" of "SQL Server" is never taken, and only from a name no longer than a software name
+    can be."""
     found = _software_of(read, request)
     said = software_name(read.software)
-    if found is not None or said is None:
+    if found is not None or said is None or len(said) > SOFTWARE_LIMIT:
         return found
-    return next(
-        (w for part in re.findall(r"[^\W_]{2,}", said) if (w := whole_word_of(request, part))),
-        None,
-    )
+    leading = re.match(r"[^\W_]{2,}", said)
+    return None if leading is None else whole_word_of(request, leading.group(0))
 
 
 def _watchlist_holds(schedule: str | None) -> bool:

@@ -9,7 +9,7 @@ The model names the software, and code finds it in the request's words, as for a
 import re
 from typing import Final
 
-from agent_runtime.abilities import RELEASE_ROOTS, other_systems, words
+from agent_runtime.abilities import RELEASE_ROOTS, other_release_source, other_systems, words
 from agent_runtime.monitoring.masking import KEY_SHAPES
 from agent_runtime.parts import a_lone_write
 from agent_runtime.reading import clauses_of, polite
@@ -68,10 +68,15 @@ def asks_for_the_newest(request: str, software: str) -> str | None:
     """The word, as written, that asks for the newest version of `software` in `request`: a release
     word first, as a watch request names it, else the first word of `NEWEST`. None when the request
     asks anything more, in any clause, or orders a change; when it names a system the platform
-    doesn't reach, which keeps its can't, or holds a key; when the name is one of the platform's
-    own; or when the name is glued to a sign, as "c" in "c++" or "NET" in ".NET", which makes it
-    part of a longer name."""
+    doesn't reach or a release source it doesn't read, which keep their can't, or holds a key;
+    when the name is one of the platform's own, or a word of `NEWEST` or `ASKS_ONLY`, as "current"
+    read from "is the version current?"; or when the name is glued to a sign, as "c" in "c++" or
+    "NET" in ".NET", which makes it part of a longer name."""
     if name_key(software) in NOT_NAMES or other_systems(request) or KEY_SHAPES.search(request):
+        return None
+    if NEWEST.fullmatch(software) or software.casefold() in ASKS_ONLY:
+        return None
+    if other_release_source(request):
         return None
     if a_lone_write(request):
         return None

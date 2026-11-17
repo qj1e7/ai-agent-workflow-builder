@@ -13,6 +13,7 @@ from agent_runtime.contract import (
     Answered,
     AnswerRequest,
     CantAnswer,
+    CheckWorkflowsAnswer,
     EditAnswer,
     PlannerFacts,
     PreviousTurn,
@@ -334,6 +335,57 @@ def test_a_question_about_what_was_done_or_asked_twice_still_gets_the_card(
 ) -> None:
     shown = answer_of(reading(software), task, FACTS)
     assert isinstance(shown, WatchlistAnswer) and shown.word == word
+
+
+@pytest.mark.parametrize(
+    ("task", "read_as"),
+    [
+        ("is the server up to date?", "SQL Server"),
+        ("is the database up to date?", "PostgreSQL Database"),
+        ("is the browser up to date?", "Chrome Browser"),
+        ("is the agent up to date?", "Datadog Agent"),
+        ("is the runtime up to date?", "Node.js Runtime"),
+        ("any updates for boot?", "Spring Boot"),
+        ("is the version current?", "Current Version"),
+        ("what's new in node?", "Node " + "x" * 90),
+    ],
+)
+def test_a_longer_name_lends_only_its_leading_word_and_never_a_plain_one(
+    task: str, read_as: str
+) -> None:
+    """A plain noun the model's name ends with, as "server" of "SQL Server", is not the software
+    the person asked about. Nor is a word that asks what is newest, or the start of a name too long
+    to be one."""
+    for read in (reading(read_as), reading(read_as, "none")):
+        assert not isinstance(answer_of(read, task, FACTS), WatchlistAnswer), read
+
+
+@pytest.mark.parametrize(
+    ("task", "software", "source"),
+    [
+        ("what's new on pypi?", "pypi", "pypi"),
+        ("what's the latest in npm?", "npm", "npm"),
+        ("what's new in docker hub?", "Docker Hub", "docker hub"),
+    ],
+)
+def test_a_release_source_the_platform_does_not_read_keeps_its_cant_without_a_release_word(
+    task: str, software: str, source: str
+) -> None:
+    for read in (reading(software), reading(software, "none")):
+        shown = answer_of(read, task, FACTS)
+        assert isinstance(shown, CantAnswer), shown
+        assert (shown.cant[0].system or "").casefold() == source
+
+
+def test_helm_is_software_as_well_as_a_source_so_it_keeps_its_card() -> None:
+    shown = answer_of(reading("Helm"), "is helm up to date?", FACTS)
+    assert shown == WatchlistAnswer(word="up to date", software="helm")
+
+
+def test_a_question_about_a_workflow_with_no_facts_sent_keeps_its_answer() -> None:
+    """With no facts, no workflow name can be matched, so only the reading says it is about one."""
+    shown = answer_of(reading("kafka", "my_workflows"), "what's the latest on the kafka check?")
+    assert isinstance(shown, CheckWorkflowsAnswer)
 
 
 def test_the_check_comes_after_the_branches_that_answer_first() -> None:

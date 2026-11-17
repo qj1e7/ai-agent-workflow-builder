@@ -6314,7 +6314,7 @@
   },
   {
     "id": "nw-whats-new-node",
-    "note": "The team lead's own sentence, 17 Nov, on the local stack with a real model. The free reply told her to type another sentence. The software card offers Watch it instead.",
+    "note": "The team lead's own sentence, 17 Nov, on the local stack with a real model. The free reply told the person to type another sentence. The software card offers Watch it instead.",
     "task": "what's new in node js?",
     "kind": [
       "watchlist"
