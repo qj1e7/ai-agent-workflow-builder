@@ -88,11 +88,12 @@ export const chatOf = (thread: Thread, fresh: () => string = newIdempotencyKey):
 
 /**
  * The one software an answer named, so a request that only asks to watch it, such as “keep track of it”, means that software. A
- * free reply is left out: its names can be workflows too.
+ * free reply gives the one its request named, never a name from its `about`, which can be a workflow.
  */
 export function softwareNamed(reply: PlannerReply): string | null {
   switch (reply.answer) {
     case 'watchlist':
+    case 'reply':
       return reply.software
     case 'cant':
       return reply.alternative?.answer === 'watchlist' ? reply.alternative.software : null

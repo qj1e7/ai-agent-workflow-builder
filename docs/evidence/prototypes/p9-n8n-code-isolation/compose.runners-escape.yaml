@@ -1,0 +1,6 @@
+# The external-escape variant: the runner may load every Node module and every Python module,
+# which stands for code that got out of the runner's sandbox. n8n's own settings don't change.
+services:
+  runners:
+    volumes:
+      - ./runners-escape.json:/etc/n8n-task-runners.json:ro

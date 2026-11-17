@@ -146,5 +146,9 @@ describe('what arrives in the chat', () => {
     const after = previousOf(threadReducer(asked, { type: 'arrived', reply: REFUSED }))
     expect(after?.request).toBe('add Node Js')
     expect(after?.software).toBeNull()
+    const reply: PlannerReply = { trace_id: null, answer: 'reply', form: 'answer', text: 'I can’t look that up yet.', choices: [], offer: null, looked_at: [], about: [], software: 'node js', parts: [] }
+    const replied = threadReducer(threadReducer(EMPTY, { type: 'sent', text: 'what is the latest node js?', chat: 'c1' }), { type: 'answered', reply, typed: 'what is the latest node js?' })
+    expect(previousOf(replied)?.software).toBe('node js')
+    expect(previousOf(threadReducer(replied, { type: 'arrived', reply: REFUSED }))?.software).toBeNull()
   })
 })

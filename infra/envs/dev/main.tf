@@ -553,6 +553,9 @@ locals {
           N8N_VERSION_NOTIFICATIONS_ENABLED = "false"
           N8N_PERSONALIZATION_ENABLED       = "false"
           N8N_HIRING_BANNER_ENABLED         = "false"
+          # Stops n8n asking api.n8n.io for its list of MCP servers every 8 hours (issue #86). We use no
+          # MCP servers in n8n, and the block catalogue leaves those blocks out (ADR 0051), as local does.
+          N8N_DISABLED_MODULES = "mcp-registry"
           # The node key is in this environment, so nothing a person adds to a workflow may read it.
           # n8n excludes these two nodes by default; pinned so an upgrade cannot drop them.
           N8N_BLOCK_ENV_ACCESS_IN_NODE   = "true"

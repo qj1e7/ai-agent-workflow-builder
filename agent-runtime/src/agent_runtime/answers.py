@@ -42,6 +42,7 @@ from agent_runtime.abilities import (
     words,
 )
 from agent_runtime.contract import (
+    SOFTWARE_LIMIT,
     AbilitiesAnswer,
     Answered,
     AnswerRequest,
@@ -54,6 +55,7 @@ from agent_runtime.contract import (
     DidntFollowAnswer,
     EditAnswer,
     ExplainAnswer,
+    FreeReplyAnswer,
     ModelProblem,
     NeedsMeAnswer,
     PartAnswer,
@@ -91,6 +93,7 @@ from agent_runtime.follow_ups import (
     follow_up_of,
     named_before,
     named_when_asked,
+    plain_software,
     watch_offer_of,
 )
 from agent_runtime.free_reply import dead_end, reply_to
@@ -658,11 +661,30 @@ WATCH_VERBS: Final = (
 """Verbs that start a watch request. The model's reading of one is taken only when the request
 says it and names the software."""
 _VERB_PATTERN: Final = "|".join(r"\s+".join(v.split()) for v in WATCH_VERBS)
-_WATCHES_IT: Final = re.compile(
-    r"^\W*(?:(?:and|then|also|so|please|pls|now|(?:can|could|would)\s+you|help\s+me)\s+)*"
-    rf"(?P<verb>{_VERB_PATTERN})\s+(?:it|this(?:\s+one)?|that(?:\s+one)?|them)"
-    r"(?:\s+(?:please|pls|for\s+me|for\s+us|too|as\s+well|also|now))*\W*$",
-    re.IGNORECASE,
+_IT: Final = r"it|this(?:\s+one)?|that(?:\s+one)?"
+_FEW: Final = r"two|three|four|five"
+_THEM: Final = (
+    r"them(?:\s+(?:all|both))?|['’]?em|"
+    rf"(?:those|these)(?:\s+(?:ones|{_FEW}))?|both(?:\s+of\s+them)?|"
+    rf"all(?:\s+(?:of\s+)?(?:them|those|these|{_FEW}))?|each(?:\s+(?:one|of\s+them))?|"
+    rf"the\s+(?:{_FEW})(?:\s+of\s+them)?"
+)
+"""Words that point at more than one thing, so they can't mean one software."""
+_POLITE_TAIL: Final = r"(?:\s+(?:please|pls|for\s+me|for\s+us|too|as\s+well|also|now))*"
+
+
+def _only_watching(pronoun: str, verbs: str) -> re.Pattern[str]:
+    return re.compile(
+        r"^\W*(?:(?:and|then|also|so|please|pls|now|(?:can|could|would)\s+you|help\s+me)\s+)*"
+        rf"(?P<verb>{verbs})\s+(?:{pronoun}){_POLITE_TAIL}\W*$",
+        re.IGNORECASE,
+    )
+
+
+_WATCHES_IT: Final = _only_watching(_IT, _VERB_PATTERN)
+_WATCHES_THEM: Final = _only_watching(_THEM, rf"{_VERB_PATTERN}|keep")
+_A_WATCH_OF_IT: Final = re.compile(
+    rf"\b(?:{_VERB_PATTERN})\s+(?:{_IT})\b{_POLITE_TAIL}", re.IGNORECASE
 )
 _TICKET_KEY: Final = re.compile(r"\b[A-Z][A-Z0-9]+-\d+\b")
 _NOT_A_WATCH: Final = re.compile(
@@ -689,8 +711,17 @@ ASKS_TO_WATCH: Final = (
 def watches_it(words: str) -> str | None:
     """The watch verb, as written, of words that ask only to watch "it", as "keep track of it" or
     "please monitor this one": a watch of the one software named beside them, or in the turn
-    before. A word more, as a time or another verb, and they ask for more."""
+    before. A word more, as a time or another verb, and they ask for more. "them" is not "it"
+    (`watches_them`)."""
     found = _WATCHES_IT.match(visible_words(words))
+    return None if found is None else found.group("verb")
+
+
+def watches_them(words: str) -> str | None:
+    """The watch verb, as written, of words that ask only to watch more than one thing, as "track
+    them", "follow both" or "keep all of them". A plural can't mean one software, so they never
+    take the software named beside them or in the turn before."""
+    found = _WATCHES_THEM.match(visible_words(words))
     return None if found is None else found.group("verb")
 
 
@@ -714,12 +745,20 @@ def _watch_verb(read: TaskRead, request: str) -> str | None:
     said = " ".join(visible_words(read.watchlist_word).strip(QUOTES).casefold().split())
     if not read.belongs_on_watchlist or said not in WATCH_VERBS:
         return None
-    software = _software_of(read, request)
+    if _watchable(request, _software_of(read, request)) is None:
+        return None
+    return whole_word_of(request, said)
+
+
+def _watchable(request: str, software: str | None) -> str | None:
+    """The software, when a watch of it is all the request can mean: no ticket key or ticket
+    field, in a request that names no ticket, project, person or workflow. A watch typed in one
+    turn and the software a free reply carries are held to this one check."""
     if software is None or _TICKET_KEY.fullmatch(software) or names_a_ticket_field(software):
         return None
     if _TICKET_KEY.search(request) or _NOT_A_WATCH.search(_without_systems(request)):
         return None
-    return whole_word_of(request, said)
+    return software
 
 
 def _without_systems(request: str) -> str:
@@ -1205,18 +1244,177 @@ def _named_when_asked(
     return WatchlistAnswer(word=VERSION, software=named)
 
 
-def watch_of_it(read: TaskRead | None, request: AnswerRequest) -> WatchlistAnswer | None:
+def watch_of_it(
+    read: TaskRead | None, request: AnswerRequest
+) -> WatchlistAnswer | WhichSoftwareAnswer | None:
     """The offer to watch the software the turn before named, for a message that only asks to
     watch it, as "keep track of it" after "help me add Node Js". The name comes from the client,
     so it must name no ticket and no yes, the reading must ask to skip no yes, and the person
-    still taps Watch it. With no software before, which software is asked as before."""
+    still taps Watch it. With no software before, which software is asked as before. A message
+    that only asks to watch "them" asks which software, whatever the turn before named."""
+    plural = watches_them(request.task)
+    if plural is not None:
+        return WhichSoftwareAnswer(word=plural)
     verb = watches_it(request.task)
-    named = named_before(request)
-    if verb is None or named is None or _TICKET_KEY.search(named.upper()) or names_a_yes(named):
+    named = _named_before(request)
+    if verb is None or named is None or not _names_no_ticket_or_yes(named):
         return None
     if read is not None and read.skips_the_yes.whose != "nobody":
         return None
     return WatchlistAnswer(word=verb, software=named)
+
+
+def _names_no_ticket_or_yes(name: str) -> bool:
+    return _TICKET_KEY.search(name.upper()) is None and not names_a_yes(name)
+
+
+FREE_REPLIES: Final = frozenset({"reply", "reply_clarify"})
+"""The kinds the Portal sends for a free reply and a clarifying one (`previous.kind`)."""
+_TOKEN: Final = re.compile(r"[^\W_][\w.#-]*|[^\w\s]")
+"""A word, as "node.js" or "c#", or one mark. Each match is greedy with nothing after it, so the
+text is split in one pass and never backtracks."""
+_JOIN_MARKS: Final = frozenset(",;&/+")
+_JOIN_WORDS: Final = words("and or nor vs versus than with plus then against besides")
+_JOIN_PAIRS: Final = frozenset(
+    {
+        ("instead", "of"),
+        ("rather", "than"),
+        ("what", "about"),
+        ("compared", "to"),
+        ("compared", "with"),
+    }
+)
+_ADDED_WORDS: Final = words("too also")
+_ARTICLES: Final = words("the a an")
+_NOT_NAMES: Final = words(
+    "is are was were be been am do does did has have had can could will would shall should may "
+    "might must how what when where why which who whom whose i me my we us our you your it its "
+    "they them their he she him her this that these those briefly now yet still please again "
+    "here there today soon really actually ever already very so not no yes ok okay hi hello hey "
+    "thanks"
+)
+"""Common words that never name a software after a join: auxiliaries, question words, pronouns
+and plain adverbs, so "node js and should I upgrade?" names one software. Never a list of
+software."""
+
+type _Piece = tuple[str, str, int]
+"""What a token is (join, added, article, mark or word), its words, and where it starts."""
+
+
+def _named_before(request: AnswerRequest) -> str | None:
+    """The one software the turn before named. After a free reply, the software it carried, found
+    again in its request's words and held as on the turn it came from (`_reply_software`)."""
+    earlier = request.previous
+    if earlier is None or earlier.kind not in FREE_REPLIES:
+        return named_before(request)
+    if earlier.software is None:
+        return None
+    words = _single_spaced(earlier.request)
+    return _reply_software(words, whole_word_of(words, _single_spaced(earlier.software)))
+
+
+def with_software_named(reply: FreeReplyAnswer, read: TaskRead, request: str) -> FreeReplyAnswer:
+    """The free reply with the one software its request named, so a next message that only asks
+    to watch "it" means it (`watch_of_it`). Code finds the reading's software in the request's
+    words, as for a watch, and never takes a name from the reply."""
+    software = _reply_software(request, _software_of(read, request))
+    return FreeReplyAnswer.model_validate({**dict(reply), "software": software})
+
+
+def _reply_software(request: str, said: str | None) -> str | None:
+    """The software a free reply carries, from `said`, the request's own words for it: held as a
+    watch typed in one turn is (`_watchable`), a plain name of at most `SOFTWARE_LIMIT`
+    characters, and the only name the request gives (`_names_another`), so "it" next is asked,
+    never one of several watched alone."""
+    request = _single_spaced(request)
+    software = _watchable(request, said)
+    name = None if software is None else plain_software(software)
+    if name is None or len(name) > SOFTWARE_LIMIT or not _names_no_ticket_or_yes(name):
+        return None
+    # "keep track of it" beside the name is the same watch, so it joins no second name.
+    text = _single_spaced(_A_WATCH_OF_IT.sub(" ", request))
+    at = re.search(rf"(?<!\w){re.escape(name)}(?!\w)", text, re.IGNORECASE)
+    return None if at is None or _names_another(text, at.span()) else name
+
+
+def _names_another(text: str, at: tuple[int, int]) -> bool:
+    """Whether the text names a second software beside the one at `at`. One is a plain name after
+    a join (and, or, than, with, plus, then, against, besides, as well as, instead of, rather
+    than, what about, compared to, a comma, a semicolon, an ampersand, a slash or a plus sign)
+    anywhere in the text. Another is a plain name joined just before this one. A third is a name
+    added with too, also or as well, this one included. Marks, quotes and articles may stand
+    between. A plain name is a word `plain_software` keeps that is not a common word
+    (`_NOT_NAMES`). One pass over the tokens, so the time is linear in the text."""
+    start, end = at
+    pieces = _pieces(text)
+    kept: dict[str, bool] = {}
+
+    def plain(word: str) -> bool:
+        low = word.casefold().rstrip(".")
+        if low not in kept:
+            kept[low] = low not in _NOT_NAMES and plain_software(word.rstrip(".")) is not None
+        return kept[low]
+
+    def other(piece: _Piece) -> bool:
+        kind, word, begins = piece
+        return kind == "word" and not start <= begins < end and plain(word)
+
+    joined = False
+    for piece in pieces:
+        if piece[0] in ("article", "mark"):
+            continue
+        if joined and other(piece):
+            return True
+        joined = piece[0] == "join"
+    first = next((i for i, piece in enumerate(pieces) if piece[2] >= start), len(pieces))
+    joined = False
+    for piece in reversed(pieces[:first]):
+        if piece[0] == "join":
+            joined = True
+        elif piece[0] not in ("article", "mark"):
+            if joined and other(piece):
+                return True
+            break
+    before: _Piece | None = None
+    for piece in pieces:
+        added_to = None if piece[0] != "added" else before
+        if added_to is not None and (start <= added_to[2] < end or other(added_to)):
+            return True
+        if piece[0] != "mark":
+            before = piece if piece[0] == "word" else None
+    return False
+
+
+def _pieces(text: str) -> list[_Piece]:
+    """The text's tokens, each marked as a join, a word that adds (too, also, as well), an
+    article, a mark or a word. Two- and three-word joins, as "instead of" and "as well as", are
+    one piece."""
+    tokens = [(found.group(0), found.start()) for found in _TOKEN.finditer(text)]
+    lows = [word.casefold().rstrip(".") for word, _ in tokens]
+    pieces: list[_Piece] = []
+    i = 0
+    while i < len(tokens):
+        word, begins = tokens[i]
+        low, two, three = lows[i], tuple(lows[i : i + 2]), tuple(lows[i + 1 : i + 3])
+        if two == ("as", "well"):
+            kind, size = ("join", 3) if three == ("well", "as") else ("added", 2)
+        elif two in _JOIN_PAIRS:
+            kind, size = "join", 2
+        elif low in _JOIN_WORDS or word in _JOIN_MARKS:
+            kind, size = "join", 1
+        elif low in _ADDED_WORDS:
+            kind, size = "added", 1
+        elif low in _ARTICLES:
+            kind, size = "article", 1
+        else:
+            kind, size = ("word" if word[0].isalnum() else "mark"), 1
+        pieces.append((kind, word, begins))
+        i += size
+    return pieces
+
+
+def _single_spaced(words: str) -> str:
+    return " ".join(words.split())
 
 
 WHY: Final = re.compile(r"\bwhy\b|\bwent\s+wrong\b|\bwhat\s+happened\b", re.IGNORECASE)
@@ -1320,6 +1518,8 @@ def answer_task(
     if gap is not None:
         verifier = verify_with or chat_for
         answer = reply_to(request, gap, chat_for, verifier) if free_reply else DidntFollowAnswer()
+        if isinstance(answer, FreeReplyAnswer):
+            answer = with_software_named(answer, read, request.task)
         if isinstance(answer, DidntFollowAnswer) and gap.keep is not None:
             answer = gap.keep
         parts = parts_of(read, request.task, answer, request.facts)

@@ -21,7 +21,7 @@ import { EMPTY, threadReducer } from './threadState'
 const ALICE: Me = { id: 'alice', display: 'Alice', roles: ['operator', 'approver'] }
 const BOB: Me = { id: 'bob', display: 'Bob', roles: ['approver'] }
 
-const free = (form: FreeReply['form'], over: Partial<FreeReply> = {}): FreeReply => ({ trace_id: null, answer: 'reply', form, text: 'Some words.', choices: [], offer: null, looked_at: [], about: [], parts: [], ...over })
+const free = (form: FreeReply['form'], over: Partial<FreeReply> = {}): FreeReply => ({ trace_id: null, answer: 'reply', form, text: 'Some words.', choices: [], offer: null, looked_at: [], about: [], software: null, parts: [], ...over })
 const crossed = (text: string, reason: PartView['reason']): PartView => ({ text, mark: 'cant', reason, note: null, choices: [] })
 const NO_PAGE: Page = { ask: () => undefined, edit: () => undefined, box: () => undefined }
 

@@ -677,6 +677,10 @@ class FreeReplyAnswer(WireModel):
         max_length=ABOUT_LIMIT,
         exclude_if=lambda about: not about,
     )
+    # The one software the request named, which the Portal sends back as previous.software.
+    software: str | None = Field(
+        default=None, max_length=80, exclude_if=lambda software: software is None
+    )
 
     @model_validator(mode="after")
     def _form_fits(self) -> Self:

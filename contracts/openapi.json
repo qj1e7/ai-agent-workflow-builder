@@ -6818,6 +6818,18 @@
             "title": "Parts",
             "type": "array"
           },
+          "software": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The one software the request named, as it wrote it. The Portal sends it back as previous.software, so a next message such as keep track of it means it. Null when the request named none.",
+            "title": "Software"
+          },
           "text": {
             "description": "Plain words only, to draw as text.",
             "title": "Text",
@@ -6845,7 +6857,8 @@
           "choices",
           "offer",
           "looked_at",
-          "about"
+          "about",
+          "software"
         ],
         "title": "FreeReply",
         "type": "object"
@@ -9930,7 +9943,7 @@
                 "type": "null"
               }
             ],
-            "description": "The one software the Planner named in its answer to it. A message that only asks to watch it, such as keep track of it, gets the offer to watch this software.",
+            "description": "The one software the Planner named in its answer to it, or a free reply's software. A message that only asks to watch it, such as keep track of it, gets the offer to watch this software.",
             "title": "Software"
           },
           "trace_id": {
