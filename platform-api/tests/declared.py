@@ -7,6 +7,7 @@ import httpx
 from fastapi import FastAPI
 
 from platform_api.app import create_app
+from platform_api.builder.drafted_workflows import NotFound as DraftNotFound
 from platform_api.builder.explain import NoSuchWorkflow
 from platform_api.builder.lifecycle import TooLate
 from platform_api.builder.models import ScheduleSaveIn
@@ -216,6 +217,31 @@ class FakeExplainer:
         return NoSuchWorkflow()
 
 
+class FakeDrafted:
+    """No drafted workflow and no set-up approval exists."""
+
+    async def start(self, *args: object) -> object:
+        return DraftNotFound()
+
+    async def view(self, *args: object) -> object:
+        return None
+
+    async def change(self, *args: object) -> object:
+        return DraftNotFound()
+
+    async def send(self, *args: object) -> object:
+        return DraftNotFound()
+
+    async def set_up_again(self, *args: object) -> object:
+        return DraftNotFound()
+
+    async def approval(self, *args: object) -> object:
+        return None
+
+    async def decide(self, *args: object) -> object:
+        return DraftNotFound()
+
+
 def app_with(
     orchestrator: object = None,
     builder: object = None,
@@ -229,6 +255,7 @@ def app_with(
     app.state.builder = builder or FakeBuilder()
     app.state.planner_front = planner_front or FakePlannerFront()
     app.state.explainer = FakeExplainer()
+    app.state.drafted = FakeDrafted()
     app.state.activity_log = log or FakeLog()
     app.state.practice_jira = FakeMockJira()
     app.state.watchlist = FakeWatchlist()
