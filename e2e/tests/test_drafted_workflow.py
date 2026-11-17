@@ -26,7 +26,8 @@ def drafted_now(api: Api, drafted_id: str, states: tuple[str, ...], seconds: flo
     deadline = time.monotonic() + seconds
     while True:
         view = api.get("bob", f"/api/v1/drafted-workflows/{drafted_id}")
-        if view["state"] in states or (view.get("set_up") or {}).get("state") in states:
+        set_up: Json = view["set_up"] or {}
+        if view["state"] in states or set_up.get("state") in states:
             return view
         if time.monotonic() > deadline:
             fail(f"drafted workflow {drafted_id} stayed {view['state']}: {view!r}"[:600])
