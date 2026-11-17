@@ -195,6 +195,7 @@ def _view(run_time: str | None, answered: bool = True, **changes: object) -> Dra
         flags=len(report.flags),
         settings=setting_views(settings, OPTIONS, CAROL, NAMES),
         question=None if question is None else question.id,
+        notes=[],
         in_n8n=None,
         can_edit_in_n8n=True,
         can_send=needed == 0 and not report.flags,

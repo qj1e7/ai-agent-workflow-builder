@@ -527,6 +527,7 @@
     }
   ],
   "question": null,
+  "notes": [],
   "in_n8n": null,
   "can_edit_in_n8n": false,
   "can_send": false,

@@ -143,6 +143,10 @@ class DraftedWorkflowView(WireModel):
         description="The id of the one setting the card asks for now, in the ADR's order. Null "
         "when nothing can be asked now, or it isn't a draft."
     )
+    notes: list[str] = Field(
+        description="What came back from n8n with this revision that didn't count, such as a "
+        "channel typed there that the platform can't post in, in words to show on the card."
+    )
     in_n8n: DraftedInN8nView | None = Field(
         description="Who has it open in their own n8n space, without its keys. Done in n8n reads "
         "it back as a new revision."
@@ -230,9 +234,13 @@ def setting_views(
     options: DrafterFacts,
     viewer: UserId | None,
     names: Mapping[UserId, str],
+    listed_at: str | None = None,
 ) -> list[DraftSettingView]:
-    """Each setting as the draft card shows it, with its question and choices."""
-    return [_setting_view(s, asking(s, options), _said(s, viewer, names)) for s in settings]
+    """Each setting as the draft card shows it, with its question and choices. `listed_at` is when
+    Slack last listed its channels, once it stopped answering."""
+    return [
+        _setting_view(s, asking(s, options, listed_at), _said(s, viewer, names)) for s in settings
+    ]
 
 
 def _setting_view(setting: SettingNow, question: Asking, said: str) -> DraftSettingView:

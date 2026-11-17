@@ -206,6 +206,15 @@ function Revision({ view }: { view: DraftedWorkflowView }) {
       {view.state === 'waiting' ? <p className={styles['note']}>{WAITING_WORDS}</p> : null}
       {view.state === 'approved' ? <SetUpLines view={view} approved /> : null}
       {view.state === 'draft' && view.set_up !== null ? <SetUpLines view={view} approved={false} /> : null}
+      {view.state === 'draft' && view.notes.length > 0 ? (
+        <ul className={styles['notes']} data-n8n-notes>
+          {view.notes.map((note) => (
+            <li key={note} className={styles['note']}>
+              {note}
+            </li>
+          ))}
+        </ul>
+      ) : null}
       <DraftedSettings view={view} />
       {view.state === 'declined' ? <p className={styles['said']}>{declinedWords(view.approval)}</p> : null}
       {problem ? (

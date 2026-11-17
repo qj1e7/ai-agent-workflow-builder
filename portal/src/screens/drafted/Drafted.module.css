@@ -16,6 +16,15 @@
   font-size: 0.9rem;
 }
 
+/* What came back from n8n that didn't count, each in its own words. */
+.notes {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.25rem;
+}
+
 .ok {
   color: var(--ink);
   font-weight: 600;

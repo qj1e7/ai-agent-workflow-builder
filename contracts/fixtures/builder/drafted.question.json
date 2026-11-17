@@ -513,6 +513,7 @@
     }
   ],
   "question": "run_time",
+  "notes": [],
   "in_n8n": null,
   "can_edit_in_n8n": true,
   "can_send": false,

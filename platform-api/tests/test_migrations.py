@@ -1348,8 +1348,8 @@ def test_builder_migration_0023_says_how_each_revision_was_made_and_who_has_it_i
             with pytest.raises(psycopg.errors.CheckViolation):
                 conn.execute(revision, (4, NOW, "model"))
             assert conn.execute(
-                "SELECT sources FROM builder.drafted_revisions WHERE revision = 1"
-            ).fetchone() == ({},)
+                "SELECT sources, notes FROM builder.drafted_revisions WHERE revision = 1"
+            ).fetchone() == ({}, [])
             with pytest.raises(psycopg.errors.CheckViolation):
                 conn.execute(
                     "UPDATE builder.drafted_workflows SET in_n8n_id = 'wf1'"
@@ -1365,7 +1365,7 @@ def test_builder_migration_0023_says_how_each_revision_was_made_and_who_has_it_i
             assert conn.execute(
                 "SELECT count(*) FROM information_schema.columns WHERE table_schema = 'builder'"
                 " AND table_name LIKE 'drafted_%'"
-                " AND column_name IN ('made_by', 'sources', 'in_n8n_id')"
+                " AND column_name IN ('made_by', 'sources', 'notes', 'in_n8n_id')"
             ).fetchone() == (0,)
         finally:
             upgrade("builder", postgres.owner)

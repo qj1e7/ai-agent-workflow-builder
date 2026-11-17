@@ -13,7 +13,7 @@ written out in the plan, becomes a setting too, so nothing there stands as a gue
 Pure."""
 
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any, Final, Literal, cast
@@ -26,6 +26,7 @@ from platform_api.orchestration import (
     DrafterFacts,
     Off,
     OnType,
+    PlanBlock,
     PlanSetting,
     Runs,
     SettingKind,
@@ -243,9 +244,10 @@ def next_question(settings: Sequence[SettingNow], facts: DrafterFacts) -> Settin
     return min(asked, key=lambda found: found[:2])[2] if asked else None
 
 
-def asking(setting: SettingNow, facts: DrafterFacts) -> Asking:
+def asking(setting: SettingNow, facts: DrafterFacts, listed_at: str | None = None) -> Asking:
     """The question for one setting, in code's fixed words for its kind, with 2 to 4 choices from
-    the platform's own data where there are any. A guessed setting's Change offers the same."""
+    the platform's own data where there are any. A guessed setting's Change offers the same.
+    `listed_at` is when Slack last listed its channels, once it stopped answering."""
     match setting.kind:
         case "run_time":
             day = setting.value if setting.value in DAYS_SAID else None
@@ -261,7 +263,13 @@ def asking(setting: SettingNow, facts: DrafterFacts) -> Asking:
                 return Asking(
                     "Slack", "Which Slack channel should it post in?", (), None, NO_CHANNEL
                 )
-            return _pick("Slack", "Which Slack channel should it post in?", facts.channels, False)
+            words = "Which Slack channel should it post in?"
+            if listed_at is not None:
+                words += (
+                    " Slack didn't answer just now, so these are the channels it listed at "
+                    f"{listed_at}."
+                )
+            return _pick("Slack", words, facts.channels, False)
         case "repository":
             return _pick(
                 "GitHub", "Which GitHub repository should it read?", facts.repositories, True
@@ -418,6 +426,41 @@ def never_guessed(plan: WorkflowPlan) -> WorkflowPlan:
     if not added:
         return plan
     return plan.model_copy(update={"blocks": blocks, "settings": [*plan.settings, *added]})
+
+
+def placeholders(blocks: Iterable[PlanBlock]) -> list[tuple[str, str, str]]:
+    """Every placeholder standing in a block's parameters: the block, the path and the id."""
+    found: list[tuple[str, str, str]] = []
+    for block in blocks:
+        for path, value in _leaves(block.parameters, ""):
+            if isinstance(value, str) and (match := PLACEHOLDER.fullmatch(value)) is not None:
+                found.append((block.name, path, match.group(1)))
+    return found
+
+
+def strays(plan: WorkflowPlan) -> list[tuple[str, str, str]]:
+    """Each placeholder no setting fills where it stands. Whatever made it, a revision with one
+    is never sent, since it would run with the placeholder as its value."""
+    held = {(s.id, f.block, f.parameter) for s in plan.settings for f in s.fills}
+    return [(b, path, i) for b, path, i in placeholders(plan.blocks) if (i, b, path) not in held]
+
+
+def _leaves(value: Any, path: str) -> list[tuple[str, Any]]:
+    """Each value in a block's parameters with its dotted path. A value inside a list has a path
+    no setting can fill, so it keeps the list's index in brackets."""
+    if isinstance(value, dict):
+        return [
+            leaf
+            for key, inner in cast(dict[str, Any], value).items()
+            for leaf in _leaves(inner, f"{path}.{key}" if path else key)
+        ]
+    if isinstance(value, list):
+        return [
+            leaf
+            for index, inner in enumerate(cast(list[Any], value))
+            for leaf in _leaves(inner, f"{path}[{index}]")
+        ]
+    return [(path, value)]
 
 
 def never_guessed_places(

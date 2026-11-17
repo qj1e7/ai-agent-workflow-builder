@@ -11,7 +11,8 @@ def upgrade() -> None:
     # model. sources says, for each setting with a value, where the value came from and who gave
     # it: their words, a choice, what they typed, or what they typed in n8n. It holds the
     # Approvers too, which are not the plan's. No key's secret is ever here: a key setting holds
-    # only a key's name, which build step 13 fills.
+    # only a key's name, which build step 13 fills. notes says, for a revision read back from
+    # n8n, what came back that didn't count, in words for the card.
     #
     # in_n8n_id is the workflow n8n holds while someone has the drafted workflow open in their
     # own n8n space, without its keys: in_n8n_by opened it at in_n8n_since, from revision
@@ -20,7 +21,8 @@ def upgrade() -> None:
         ALTER TABLE builder.drafted_revisions
             ADD COLUMN made_by text NOT NULL DEFAULT 'drafter'
                 CHECK (made_by IN ('drafter', 'answer', 'n8n')),
-            ADD COLUMN sources jsonb NOT NULL DEFAULT '{}';
+            ADD COLUMN sources jsonb NOT NULL DEFAULT '{}',
+            ADD COLUMN notes jsonb NOT NULL DEFAULT '[]';
 
         ALTER TABLE builder.drafted_workflows
             ADD COLUMN in_n8n_id text,
@@ -45,6 +47,7 @@ def downgrade() -> None:
             DROP COLUMN in_n8n_id;
 
         ALTER TABLE builder.drafted_revisions
+            DROP COLUMN notes,
             DROP COLUMN sources,
             DROP COLUMN made_by;
     """)

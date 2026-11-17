@@ -5608,6 +5608,14 @@
             "title": "Needed",
             "type": "integer"
           },
+          "notes": {
+            "description": "What came back from n8n with this revision that didn't count, such as a channel typed there that the platform can't post in, in words to show on the card.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Notes",
+            "type": "array"
+          },
           "question": {
             "anyOf": [
               {
@@ -5715,6 +5723,7 @@
           "flags",
           "settings",
           "question",
+          "notes",
           "in_n8n",
           "can_edit_in_n8n",
           "can_send",

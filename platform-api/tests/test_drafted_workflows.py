@@ -8,6 +8,7 @@ import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
 from copy import deepcopy
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any
 
 import httpx
@@ -42,6 +43,7 @@ from platform_api.orchestration import (
 )
 from platform_api.orchestration.people_store import People
 from platform_api.orchestration.setup_approvals import SetUpApprovals
+from platform_api.orchestration.slack_channels import ChannelList
 from platform_api.shared import TEAM_TIME_ZONE, UserId
 from tests.conftest import PostgresUrls
 from tests.support import LOCAL_ENV
@@ -158,9 +160,11 @@ class Staff:
 @dataclass
 class Channels:
     seen: list[str] = field(default_factory=lambda: ["#support", "#eng-housekeeping"])
+    stale_since: datetime | None = None
+    """When Slack last listed them, once it stopped answering."""
 
-    async def visible(self) -> list[str]:
-        return list(self.seen)
+    async def listed(self) -> ChannelList:
+        return ChannelList(list(self.seen), self.stale_since, self.stale_since is not None)
 
 
 class Facts:

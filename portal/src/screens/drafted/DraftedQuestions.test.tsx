@@ -48,6 +48,20 @@ const withSetting = (view: DraftedWorkflowView, id: string, change: Partial<Draf
   settings: view.settings.map((setting) => (setting.id === id ? { ...setting, ...change } : setting)),
 })
 
+describe('what came back from n8n that did not count', () => {
+  it('says each one on the card, above the question it asks again', () => {
+    const said = 'You typed “#random” in n8n for “Slack channel”, but that isn’t a Slack channel the platform’s key can see. So it’s asked again.'
+    const html = card({ ...QUESTION, notes: [said] })
+    expect(html).toContain('data-n8n-notes')
+    expect(text(html)).toContain('You typed “#random” in n8n for “Slack channel”')
+    expect(text(html).indexOf('You typed')).toBeLessThan(text(html).indexOf('Mondays, at what time?'))
+  })
+
+  it('says nothing when everything counted', () => {
+    expect(card(QUESTION)).not.toContain('data-n8n-notes')
+  })
+})
+
 describe('the question a draft asks', () => {
   it('asks the run time first, with a button for each time and one to type a time', () => {
     const html = card(QUESTION)

@@ -41,6 +41,7 @@ from platform_api.builder.drafted_settings import (
     next_question,
     read_answer,
     settings_of,
+    strays,
     with_answer,
 )
 from platform_api.builder.drafted_views import (
@@ -78,6 +79,7 @@ from platform_api.orchestration import (
     Approved,
     ApprovedSetUp,
     CanOpen,
+    ChannelList,
     Closed,
     Declined,
     DrafterFacts,
@@ -227,6 +229,7 @@ class Revision:
     made_by: Literal["drafter", "answer", "n8n"] = "drafter"
     sources: Sources = field(default_factory=dict[str, Source])
     catalogue: str | None = None
+    notes: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -289,8 +292,9 @@ class Facts(Protocol):
 
 
 class Channels(Protocol):
-    async def visible(self) -> list[str]:
-        """The Slack channels the platform's key can see, as "#name"."""
+    async def listed(self) -> ChannelList:
+        """The Slack channels the platform's key can post in, as "#name", and how old the list
+        is."""
         ...
 
 
@@ -337,6 +341,8 @@ class Made:
     plan: WorkflowPlan
     sources: Sources
     catalogue: str | None
+    notes: tuple[str, ...] = ()
+    """What came back from n8n that didn't count, in words for the card."""
 
 
 @dataclass(frozen=True)
@@ -672,6 +678,7 @@ class DraftedWorkflows:
                     plan,
                     carried(opened.sources, plan, read.sources, person.user_id),
                     opened.catalogue,
+                    read.notes,
                 ),
                 await self._laid(kept, plan, error_workflow),
                 uow.now,
@@ -681,7 +688,7 @@ class DraftedWorkflows:
             await n8n.remove_for_good(held.workflow_id)
         except (N8nError, httpx.HTTPError) as error:
             # The revision is kept. A copy n8n kept is the person's own, and holds no key.
-            log.warning("n8n kept %s after Done in n8n: %s", held.workflow_id, error)
+            log.warning("n8n kept %s after Done in n8n: %s", held.workflow_id, type(error).__name__)
         log.info("%s read %s back from n8n", person.user_id, drafted_id)
         return await self._viewed(drafted_id, person)
 
@@ -706,8 +713,8 @@ class DraftedWorkflows:
         await conn.execute(
             "INSERT INTO builder.drafted_revisions (drafted_id, revision, asked_by, words,"
             " started_at, state, finished_at, plan, catalogue, document, digest, grade,"
-            " findings, made_by, sources)"
-            " VALUES (%s, %s, %s, %s, %s, 'drafted', %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            " findings, made_by, sources, notes)"
+            " VALUES (%s, %s, %s, %s, %s, 'drafted', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
             (
                 kept.drafted_id,
                 kept.newest.number + 1,
@@ -723,6 +730,7 @@ class DraftedWorkflows:
                 json(laid.findings),
                 made.how,
                 _sources_json(made.sources),
+                json(list(made.notes)),
             ),
         )
 
@@ -1069,6 +1077,7 @@ class DraftedWorkflows:
             flags=0,
             settings=[],
             question=None,
+            notes=[],
             in_n8n=await self._in_n8n_view(kept, viewer),
             can_edit_in_n8n=False,
             can_send=False,
@@ -1089,18 +1098,22 @@ class DraftedWorkflows:
             )
         checked = await self._checked(kept, newest, None if viewer is None else viewer.user_id)
         report = checked.report
-        options = await self._options()
+        options, listed_at = await self._options_listed()
         asked = [(s, asking(s, options)) for s in checked.settings]
-        needed = sum(s.mark == "needed" for s, _ in asked)
+        loose = strays(newest.plan)
+        needed = sum(s.mark == "needed" for s, _ in asked) + len(loose)
         answerable = sum(s.mark == "needed" and q.waits is None for s, q in asked)
+        waiting = [(s, q) for s, q in asked if s.mark == "needed" and q.waits is not None]
         flags = len(report.flags)
         why = (
             answer_first(answerable)
             if answerable
+            else stray_words(loose[0][0])
+            if loose
             else flags_later(flags)
             if flags
-            else KEYS_WAIT
-            if needed
+            else (KEYS_WAIT if waiting[0][0].kind == "key" else waiting[0][1].waits)
+            if waiting
             else ACCESS_LATER
             if checked.changes_access
             else None
@@ -1130,9 +1143,10 @@ class DraftedWorkflows:
                 "needed": needed,
                 "flags": flags,
                 "settings": setting_views(
-                    checked.settings, options, viewer and viewer.user_id, checked.names
+                    checked.settings, options, viewer and viewer.user_id, checked.names, listed_at
                 ),
                 "question": None if question is None else question.id,
+                "notes": list(newest.notes),
                 "can_edit_in_n8n": editing and await self._may_edit_in_n8n(viewer),
                 "can_send": editing and why is None,
                 "why_not_send": why if lived == "draft" else _not_now(lived),
@@ -1166,15 +1180,31 @@ class DraftedWorkflows:
 
     async def _options(self) -> DrafterFacts:
         """The team's own data the questions offer, and the drafter may use, without the cards."""
+        options, _ = await self._options_listed()
+        return options
+
+    async def _options_listed(self) -> tuple[DrafterFacts, str | None]:
+        """The team's own data, and when Slack last listed its channels once it stopped
+        answering, in the team's time, as 10:05."""
+        listed = (
+            ChannelList([], None, False)
+            if self._channels is None
+            else (await self._channels.listed())
+        )
         known = await self._facts.known({})
+        when = (
+            f"{listed.as_of.astimezone(ZoneInfo(self._zone)):%H:%M}"
+            if listed.stale and listed.as_of is not None
+            else None
+        )
         return DrafterFacts(
             jira_projects=_places(known, "jira."),
             confluence_pages=_places(known, "confluence."),
             repositories=sorted(
                 known.places.get(GITHUB_RELEASES, frozenset()) - {WATCHLIST_PLACE.id}
             ),
-            channels=[] if self._channels is None else await self._channels.visible(),
-        )
+            channels=listed.channels,
+        ), when
 
 
 def _places(known: KnownOptions, prefix: str) -> list[str]:
@@ -1239,6 +1269,13 @@ async def _out_of_n8n(conn: Connection, drafted_id: str) -> None:
         "UPDATE builder.drafted_workflows SET in_n8n_id = NULL, in_n8n_by = NULL,"
         " in_n8n_since = NULL, in_n8n_revision = NULL WHERE drafted_id = %s",
         (drafted_id,),
+    )
+
+
+def stray_words(block: str) -> str:
+    return (
+        f"“{block}” holds a placeholder no setting fills, so it can't be sent. Ask for a change "
+        "to draft it again."
     )
 
 
@@ -1469,7 +1506,7 @@ async def _kept(conn: Connection, drafted_id: str) -> Kept | None:
     rows = await (
         await conn.execute(
             "SELECT revision, asked_by, words, started_at, state, plan, document, digest, said,"
-            " made_by, sources, catalogue"
+            " made_by, sources, catalogue, notes"
             " FROM builder.drafted_revisions WHERE drafted_id = %s ORDER BY revision",
             (drafted_id,),
         )
@@ -1488,6 +1525,7 @@ async def _kept(conn: Connection, drafted_id: str) -> Kept | None:
             r["made_by"],
             _sources_of(r["sources"]),
             r["catalogue"],
+            tuple(str(n) for n in r["notes"] or ()),
         )
         for r in rows
     )
