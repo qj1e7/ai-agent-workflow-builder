@@ -347,6 +347,37 @@ def test_a_watch_of_it_with_no_software_before_still_asks_which() -> None:
     assert shown(result) == WhichSoftwareAnswer(word="keep track of")
 
 
+def test_a_watch_offer_never_reaches_a_clause_that_watches_them() -> None:
+    result, _ = run(
+        "help me add Node Js , keep track of them",
+        tool("watch_software", software="Node Js"),
+        read=reading("none", belongs_on_watchlist=True, watchlist_word="add", software="Node Js"),
+        facts=FACTS,
+    )
+
+    assert ("keep track of them", "will_do", None) not in marks(result)
+    assert "keep track of them" not in reached(result)
+
+
+@pytest.mark.parametrize(
+    "call",
+    [
+        tool("ask_which_software", word="track"),
+        tool("watch_software", software="Node Js"),
+    ],
+)
+def test_a_plural_after_a_turn_that_named_one_software_asks_which(call: AIMessage) -> None:
+    result, _ = run(
+        "track them",
+        call,
+        read=reading("none", belongs_on_watchlist=True, watchlist_word="track"),
+        previous=NAMED_NODE_JS,
+        facts=FACTS,
+    )
+
+    assert shown(result) == WhichSoftwareAnswer(word="track")
+
+
 def test_a_free_reply_carries_the_one_software_its_message_named() -> None:
     result, _ = run(
         "what is the latest node js?",

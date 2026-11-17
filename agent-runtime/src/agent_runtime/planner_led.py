@@ -420,13 +420,15 @@ def _already_held(name: str) -> Invalid:
 
 def _watch_of_it(turn: Turn) -> Acted | None:
     """The offer to watch the software the turn before named, for a message that only asks to
-    watch it, as "keep track of it". Code finds the name, never the model (`watch_of_it`)."""
+    watch it, as "keep track of it", or which software for one that asks to watch "them". Code
+    finds the name, never the model (`watch_of_it`)."""
     again = watch_of_it(turn.front.read, turn.request)
-    if again is None or again.software is None:
-        return None
-    if _watched(turn, again.software):
-        return _already_held(again.software)
-    return _shown(turn, again, frozenset(turn.clauses))
+    if isinstance(again, WatchlistAnswer):
+        if again.software is None:
+            return None
+        if _watched(turn, again.software):
+            return _already_held(again.software)
+    return None if again is None else _shown(turn, again, frozenset(turn.clauses))
 
 
 def _watch(raw: Mapping[str, Any], turn: Turn) -> Acted:

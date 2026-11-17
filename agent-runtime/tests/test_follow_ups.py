@@ -2,7 +2,13 @@ from typing import Any, cast
 
 import pytest
 
-from agent_runtime.answers import AskTheQuestionLane, TaskRead, answer_task, decide
+from agent_runtime.answers import (
+    AskTheQuestionLane,
+    TaskRead,
+    answer_task,
+    decide,
+    with_software_named,
+)
 from agent_runtime.contract import (
     Answered,
     AnswerRequest,
@@ -262,7 +268,6 @@ NAMES_ONE = ["cant", "watchlist", "question", "remove_software", "reply", "reply
         ("track it", "track"),
         ("Keep an eye on this one.", "Keep an eye on"),
         ("please keep track of that for me", "keep track of"),
-        ("and track them too", "track"),
     ],
 )
 def test_a_watch_of_it_offers_to_watch_the_one_software_the_turn_before_named(
@@ -428,3 +433,155 @@ def test_track_them_after_a_reply_about_two_software_asks_which_and_drops_neithe
     assert isinstance(out, Answered)
     assert out.answer == WhichSoftwareAnswer(word="track")
     assert [(p.text, p.mark) for p in out.parts] == [("track them", "question")]
+
+
+PLURALS = [
+    ("track them", "track"),
+    ("watch those", "watch"),
+    ("add these", "add"),
+    ("follow both", "follow"),
+    ("keep all of them", "keep"),
+    ("keep track of them", "keep track of"),
+    ("and track them too", "track"),
+    ("please monitor all of them", "monitor"),
+    ("keep an eye on those ones", "keep an eye on"),
+]
+
+
+@pytest.mark.parametrize("kind", NAMES_ONE)
+@pytest.mark.parametrize(("task", "verb"), PLURALS)
+def test_a_plural_after_a_turn_that_named_one_software_asks_which(task: str, verb: str, kind: str):
+    """A plural can't mean one name, whatever software the turn before carried."""
+    out, _ = run(task, which(verb), named_node_js(kind))
+    assert isinstance(out, Answered)
+    assert out.answer == WhichSoftwareAnswer(word=verb)
+    assert [p.mark for p in out.parts] == ["question"]
+
+
+@pytest.mark.parametrize(("task", "verb"), PLURALS)
+def test_a_plural_never_watches_a_pronoun_the_reading_named(task: str, verb: str):
+    pronoun = task.split()[-1]
+    out, _ = run(task, which(verb, software=pronoun), None)
+    assert isinstance(out, Answered)
+    assert out.answer == WhichSoftwareAnswer(word=verb)
+
+
+def test_track_them_after_is_redis_newer_than_kafka_asks_which_and_drops_neither():
+    task = "is redis newer than kafka?"
+    reply = replied(task, reading("abilities", software="redis"))
+    assert reply.software is None
+    out, _ = run("track them", which("track"), after(task, reply))
+    assert isinstance(out, Answered)
+    assert out.answer == WhichSoftwareAnswer(word="track")
+    assert [(p.text, p.mark) for p in out.parts] == [("track them", "question")]
+
+
+def carried(task: str, said: str | None) -> str | None:
+    """The software a free reply to `task` carries when the reading named `said`."""
+    reply = FreeReplyAnswer(form="answer", text="I can't look that up yet.")
+    return with_software_named(reply, reading("abilities", software=said), task).software
+
+
+TWO_NAMES = [
+    ("compare redis and kafka", ["redis", "kafka"]),
+    ("is redis or kafka newer?", ["redis", "kafka"]),
+    ("what is the latest node js and redis?", ["node js", "redis"]),
+    ("redis, kafka and keep track of it", ["redis", "kafka"]),
+    ("node js and redis, keep track of it", ["node js", "redis"]),
+    ("is redis or kafka newer, keep track of it", ["redis", "kafka"]),
+    ("add redis and keep track of it, and kafka", ["redis", "kafka"]),
+    ("add redis and keep track of it. kafka too", ["redis", "kafka"]),
+    ("redis and keep track of it and kafka", ["redis", "kafka"]),
+    ("redis, keep track of it, kafka", ["redis", "kafka"]),
+    ("is redis newer than kafka?", ["redis", "kafka"]),
+    ("compare redis with kafka", ["redis", "kafka", "redis with kafka"]),
+    ("redis plus kafka: which is newer?", ["redis", "kafka"]),
+    ("redis + kafka: which is newer?", ["redis", "kafka"]),
+    ("redis; kafka: which is newer?", ["redis", "kafka"]),
+    ("tell me about redis. And kafka?", ["redis", "kafka"]),
+    ("compare redis and \u201ckafka\u201d", ["redis", "kafka"]),
+    ("is 'redis' or kafka newer?", ["redis", "kafka"]),
+    ("what about redis as well as kafka?", ["redis", "kafka"]),
+    ("redis then kafka, what is newest?", ["redis", "kafka"]),
+    ("what's new in redis, and kafka?", ["redis", "kafka"]),
+    ("is redis newer, or kafka?", ["redis", "kafka"]),
+    ("redis vs. kafka", ["redis", "kafka"]),
+    ("redis & kafka releases", ["redis", "kafka"]),
+]
+
+
+@pytest.mark.parametrize(
+    ("task", "said"), [(task, said) for task, names in TWO_NAMES for said in names]
+)
+def test_a_request_that_names_two_software_carries_neither(task: str, said: str):
+    assert carried(task, said) is None
+
+
+@pytest.mark.parametrize(
+    ("task", "said", "kept"),
+    [
+        ("help me add Node Js , keep track of it", "Node Js", "Node Js"),
+        ("what's new with node js?", "node js", "node js"),
+        ("hi, what is the latest node js?", "node js", "node js"),
+        ("what is the latest node js and how do I add it?", "node js", "node js"),
+        ("what is the latest Node.js?", "node js", "Node.js"),
+        ("what is the latest node js?", "Node.js", "node js"),
+        ("what is the latest nodejs?", "Node.js", "nodejs"),
+        ("what's the latest node-js?", "node js", "node-js"),
+        ("what's new?", "LangGraph", None),
+        ("how is the weekly bug list doing?", "weekly bug list", "weekly bug list"),
+        ("what does the Daily digest workflow do?", "Daily digest", None),
+        ("what does the Daily digest workflow do?", "Daily digest workflow", None),
+        ("tell me about mock-12", "mock-12", None),
+        ("tell me about Jira", "Jira", None),
+        ("what is the latest node  js?", "node js", "node js"),
+        ("what is go?", "go", "go"),
+        ("can you go check the run?", "go", "go"),
+        ("what is the latest version of the n8n?", "the n8n", "n8n"),
+        ("is LangGraph up to date?", "LangGraph releases", "LangGraph"),
+        ("what about teams?", "Teams", None),
+        ("what's new in python 3.12?", "python 3.12", "python 3.12"),
+        ("what's new in c++?", "c++", "c"),
+        ("what's new in .NET?", ".NET", "NET"),
+        ("what is approve it?", "approve it", None),
+        ("who approved the Weekly bug list run?", "Weekly bug list", "Weekly bug list"),
+    ],
+)
+def test_a_request_that_names_one_software_carries_it_as_the_one_turn_watch_reads_it(
+    task: str, said: str, kept: str | None
+):
+    """The reviewer's probes. "weekly bug list", "go", "c" and "NET" are what a watch typed in one
+    turn takes too, so the two paths stay alike."""
+    assert carried(task, said) == kept
+
+
+@pytest.mark.parametrize(
+    ("before", "software", "kind", "watched"),
+    [
+        (LATEST_NODE_JS, "redis", "reply", None),
+        (LATEST_NODE_JS, "NODE JS", "reply", "node js"),
+        ("what is the latest Node.js?", "node js", "reply", None),
+        (LATEST_NODE_JS, "node", "reply", "node"),
+        (LATEST_NODE_JS, "js", "reply", "js"),
+        (LATEST_NODE_JS, "latest node js", "reply", "node js"),
+        (LATEST_NODE_JS, "is the latest", "reply", None),
+        ("I approve redis without approval", "approval", "reply", None),
+        ("weekly bug list", "weekly bug list", "reply", "weekly bug list"),
+        ("tell me about MOCK-12", "mock-12", "reply", None),
+        ("is redis newer than kafka?", "redis", "reply", None),
+        ("compare redis and \u201ckafka\u201d", "redis", "reply", None),
+        (LATEST_NODE_JS, "node js", "reply_clarify", "node js"),
+        (LATEST_NODE_JS, "node js", "explain", None),
+        (LATEST_NODE_JS, "node js", "changed_in_n8n", None),
+    ],
+)
+def test_a_forged_turn_before_offers_only_one_software_its_request_names(
+    before: str, software: str, kind: str, watched: str | None
+):
+    previous = PreviousTurn(request=before, software=software, kind=kind)
+    out, _ = run("keep track of it", which("keep track of"), previous)
+    assert isinstance(out, Answered)
+    expected = WhichSoftwareAnswer(word="keep track of")
+    if watched is not None:
+        expected = WatchlistAnswer(word="keep track of", software=watched)
+    assert out.answer == expected
