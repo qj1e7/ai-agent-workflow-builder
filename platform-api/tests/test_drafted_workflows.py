@@ -18,6 +18,7 @@ from platform_api.auth import DEV_PEOPLE
 from platform_api.builder.drafted_workflows import (
     CHANGED,
     KEY_PASTED,
+    PAUSED,
     DraftedWorkflows,
 )
 from platform_api.db import Database
@@ -84,9 +85,14 @@ class N8n:
     removed: list[str] = field(default_factory=list[str])
     changes_it: bool = False
     down: bool = False
+    version: str | None = "2.42.6"
+    """The n8n version the last bootstrap read."""
 
     async def error_workflow_id(self) -> str | None:
         return ERROR_WORKFLOW
+
+    async def n8n_version(self) -> str | None:
+        return self.version
 
     async def save_draft(
         self,
@@ -278,6 +284,36 @@ async def test_a_draft_that_didn_t_work_says_so_and_offers_nothing_to_send(
     view = await lab.start()
 
     assert (view["state"], view["said"], view["can_send"]) == ("not_drafted", said, False)
+
+
+@pytest.mark.parametrize(
+    ("running", "catalogue"),
+    [
+        ("2.43.0", "n8nio/n8n:2.42.6@sha256:x"),
+        ("2.42.6", "n8nio/n8n:2.43.0@sha256:y"),
+        ("2.42.6", "someone/n8n:2.42.6@sha256:z"),
+    ],
+    ids=["n8n-moved-on", "drafter-moved-on", "another-image"],
+)
+async def test_drafting_is_paused_while_the_drafter_s_catalogue_is_not_the_n8n_that_runs(
+    lab: Lab, running: str, catalogue: str
+):
+    """ADR 0051, section 8: bootstrap reads which n8n runs, and each draft names the image its
+    catalogue came from."""
+    lab.n8n.version = running
+    lab.drafter.answers = [drafted(release_check()).model_copy(update={"catalogue": catalogue})]
+    view = await lab.start()
+
+    assert (view["state"], view["said"], view["can_send"]) == ("not_drafted", PAUSED, False)
+    assert lab.n8n.saved == []
+
+
+async def test_drafting_is_paused_before_any_model_while_no_bootstrap_has_read_n8n(lab: Lab):
+    lab.n8n.version = None
+    view = await lab.start()
+
+    assert (view["state"], view["said"]) == ("not_drafted", PAUSED)
+    assert lab.drafter.asked == [], "no model reads anything"
 
 
 async def test_words_shaped_like_a_key_are_refused_before_anything_is_kept_or_sent(lab: Lab):

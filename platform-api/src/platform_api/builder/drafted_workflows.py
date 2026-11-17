@@ -106,6 +106,9 @@ KEY_PASTED: Final = "Don't paste keys here. An Operator adds keys in Settings."
 COULDNT_DRAFT: Final = "I couldn't draft that."
 NO_MODEL: Final = "I couldn't draft that. No AI model is connected yet."
 N8N_NOT_READY: Final = "I couldn't draft that. n8n is not ready yet."
+PAUSED: Final = "Drafting is paused while the platform updates."
+N8N_IMAGE: Final = "n8nio/n8n"
+"""The repository of the n8n image the drafter's catalogue names (contracts/n8n/catalogue.json)."""
 CHANGED: Final = "Changed since it was approved. Send it for approval again."
 NO_LONGER_PASSES: Final = (
     "It no longer passes the safety check, so it isn't set up. Ask for a change to draft it again."
@@ -315,6 +318,10 @@ class SettingUp(Protocol):
     """What the set-up needs of n8n: N8nDrafts, which reads a workflow back after creating it."""
 
     async def error_workflow_id(self) -> str | None: ...
+
+    async def n8n_version(self) -> str | None:
+        """The n8n version the last bootstrap read from n8n itself, or None before any did."""
+        ...
 
     async def save_draft(
         self,
@@ -655,6 +662,9 @@ class DraftedWorkflows:
         revision = next(r for r in kept.revisions if r.number == number)
         if revision.state != "drafting":
             return
+        if self._n8n is not None and await self._n8n.n8n_version() is None:
+            await _finish(self._db, drafted_id, number, said=PAUSED)
+            return
         current = kept.current_plan(number)
         result = await self._drafting.draft(revision.words, await self._facts_for(), current)
         match result:
@@ -690,6 +700,9 @@ class DraftedWorkflows:
     async def _lay_out(self, kept: Kept, number: int, plan: WorkflowPlan, catalogue: str) -> None:
         if self._n8n is None or (error_workflow := await self._n8n.error_workflow_id()) is None:
             await _finish(self._db, kept.drafted_id, number, said=N8N_NOT_READY)
+            return
+        if not drafts_for(catalogue, await self._n8n.n8n_version()):
+            await _finish(self._db, kept.drafted_id, number, said=PAUSED)
             return
         checked = await self._check(kept, plan, error_workflow)
         graded = grade(checked, error_workflow, self._zone, await self._known(plan))
@@ -888,6 +901,14 @@ WHY_NOT: Final[Mapping[Refusal, str]] = {
     Refusal.DECIDED_EARLIER_STEP: "You decided an earlier step.",
     Refusal.NOT_ELIGIBLE: "You're not one of the Approvers who can decide it.",
 }
+
+
+def drafts_for(catalogue: str, n8n_version: str | None) -> bool:
+    """Whether the drafter's catalogue, named by the n8n image it was made from, describes the
+    n8n the platform runs. During an update the two can differ, and a draft could then name a
+    block or a parameter the running n8n doesn't have (ADR 0051, section 8)."""
+    repository, _, tag = catalogue.partition("@")[0].rpartition(":")
+    return n8n_version is not None and repository == N8N_IMAGE and tag == n8n_version
 
 
 def _not_now(state: DraftedState) -> str | None:
