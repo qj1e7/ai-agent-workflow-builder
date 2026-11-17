@@ -85,6 +85,22 @@ class MockModelTest(unittest.TestCase):
             post(done)["content"][0]["text"], "I read Software inventory in Confluence."
         )
 
+    def test_the_drafter_finds_describes_then_submits_one_plan(self) -> None:
+        drafter = [{"name": "find_blocks"}, {"name": "describe_block"}, {"name": "submit_plan"}]
+
+        def turn(*turns: tuple[str, dict[str, Any], str]) -> dict[str, Any]:
+            return post({**run(*turns), "tools": drafter})
+
+        found = ("find_blocks", {"words": "read github releases"}, "[]")
+        self.assertEqual(tool_use(turn()), found[:2])
+        name, described = tool_use(turn(found))
+        self.assertEqual((name, described["type"]), ("describe_block", "CUSTOM.wabRead"))
+        described_turn = ("describe_block", described, "{}")
+        name, plan = tool_use(turn(found, described_turn))
+        self.assertEqual((name, plan), ("submit_plan", server.DRAFTED_PLAN))
+        sent_back = ("submit_plan", plan, "The platform sent the plan back.")
+        self.assertEqual(turn(found, described_turn, sent_back)["stop_reason"], "end_turn")
+
     def test_a_card_without_the_github_tool_never_reads_releases(self) -> None:
         body = {**run(), "tools": TOOLS[1:]}
         self.assertEqual(tool_use(post(body)), SEARCH[:2])

@@ -7,6 +7,7 @@ import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Final, Protocol, Self
 from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo
@@ -19,6 +20,7 @@ from agent_runtime.abilities import CAPABILITY_LIST
 from agent_runtime.addresses import AddressPolicy
 from agent_runtime.answers import answer_task, check_one_part
 from agent_runtime.card_runner import CardRunner
+from agent_runtime.catalogue import IN_THE_IMAGE, Catalogue, CatalogueUnusable, load
 from agent_runtime.confluence import ConfluenceReaderFor, PlatformConfluenceFor, no_confluence
 from agent_runtime.contract import (
     AgentCard,
@@ -54,6 +56,8 @@ from agent_runtime.contract import (
     TaskRequest,
     TaskResult,
     ToolList,
+    WorkflowDraftRequest,
+    WorkflowDraftResult,
 )
 from agent_runtime.drafting import choose_agents, draft_card
 from agent_runtime.events import Clock, EventLog, EventSink
@@ -79,6 +83,7 @@ from agent_runtime.summary import (
 )
 from agent_runtime.tools import tool_list, value_problem
 from agent_runtime.version_checker import VersionChecker
+from agent_runtime.workflow_drafter import DEFAULT_DRAFTER_MODEL, draft_workflow
 
 log = logging.getLogger(__name__)
 
@@ -217,6 +222,11 @@ class Settings:
     planner_mode: PlannerMode = "rules"
     """PLANNER_MODE: rules, today's Planner and the default, or ai_led, where the model leads
     through checked tools on top of the rules (ADR 0049)."""
+    drafter_model: str = DEFAULT_DRAFTER_MODEL
+    """DRAFTER_MODEL: the model the workflow drafter runs on, through the same connection as the
+    Planner's (ADR 0051, section 7)."""
+    n8n_catalogue: Path = IN_THE_IMAGE
+    """N8N_CATALOGUE: where the catalogue of n8n's blocks is. The image carries it."""
 
     @classmethod
     def from_env(cls, env: Mapping[str, str]) -> Self:
@@ -244,6 +254,8 @@ class Settings:
             verifier_model=env.get("PLANNER_VERIFIER_MODEL", "").strip() or None,
             langfuse=_langfuse(env),
             planner_mode=_planner_mode(env),
+            drafter_model=env.get("DRAFTER_MODEL", "").strip() or DEFAULT_DRAFTER_MODEL,
+            n8n_catalogue=Path(env.get("N8N_CATALOGUE", "").strip() or IN_THE_IMAGE),
         )
 
     @property
@@ -408,6 +420,22 @@ class TaskStore:
             return result
 
 
+class CatalogueSource:
+    """The catalogue of n8n's blocks, read on the first draft and kept. A catalogue that can't
+    be used is read again on the next draft, so the error stays until the file is fixed."""
+
+    def __init__(self, path: Path) -> None:
+        self._path = path
+        self._read: Catalogue | None = None
+        self._lock = threading.Lock()
+
+    def get(self) -> Catalogue:
+        with self._lock:
+            if self._read is None:
+                self._read = load(self._path)
+            return self._read
+
+
 def _tracing_for(settings: Settings) -> Tracing:
     if settings.langfuse is None:
         return NoTracing()
@@ -425,6 +453,7 @@ def create_app(
     traces = tracing or _tracing_for(config)
     probe = models or ModelProbe(config.address_policy)
     store = TaskStore()
+    catalogues = CatalogueSource(config.n8n_catalogue)
     app = FastAPI(title="Agent API", version="0.1.0")
     expected_key = config.agent_api_key.encode()
     key_header = APIKeyHeader(name=KEY_HEADER, auto_error=False)
@@ -534,6 +563,17 @@ def create_app(
         if chat is None:
             return NO_MODEL
         return reword(body, chat, verify_with=verifier_for(body.model) or chat)
+
+    @app.post("/v1/workflows/draft", dependencies=[Depends(require_key)])
+    def draft_a_workflow(body: WorkflowDraftRequest) -> WorkflowDraftResult:
+        try:
+            catalogue = catalogues.get()
+        except CatalogueUnusable as unusable:
+            log.error("drafter: %s", unusable)
+            raise HTTPException(status_code=503, detail=str(unusable)) from unusable
+        drafter = body.model.model_copy(update={"model": config.drafter_model})
+        chat = active.chat_source(drafter)
+        return draft_workflow(body, chat, catalogue) if chat else NO_MODEL
 
     @app.post("/v1/planner/check-part", dependencies=[Depends(require_key)])
     def check_part(body: CheckPartRequest) -> CheckPartResult:

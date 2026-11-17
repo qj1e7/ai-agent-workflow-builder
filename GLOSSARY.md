@@ -37,6 +37,14 @@ _Avoid_: Job, recipe, routine
 What Operators see a use case called in the app. Always write "n8n workflow" for n8n's own workflows, and "Jira workflow" for a ticket's statuses.
 _Avoid_: Routine
 
+**Workflow drafter**:
+The agent that drafts an n8n workflow from a person's words. It may propose any block the pinned n8n image ships, through three tools: find a block, describe it, and submit the plan. Code checks every plan against the block catalogue and marks each setting filled, guessed or needed (ADR 0051).
+_Avoid_: Generator, builder agent
+
+**Drafted workflow**:
+What the workflow drafter wrote, with every change made to it, before it is set up. Its plan holds blocks, the wires between their exits, and settings that stand in parameters as placeholders, never as guessed values. Once set up, it is a Draft until someone turns it on (ADR 0051).
+_Avoid_: Draft (that is a set-up workflow not yet turned on)
+
 **Workflow report**:
 The plain-words account that code builds of one version of any workflow: when it runs, each step, what it reads, writes and posts, every safety checker rule as flagged, fixed for you or passed, who approves each write, and its settings. A model never writes it. Strings from the workflow, such as a block's name, show in quotes, apart from code's own words (ADR 0051).
 _Avoid_: Summary, explanation

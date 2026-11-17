@@ -154,6 +154,9 @@ services:
     build:
       context: ../agent-runtime
       target: runtime
+      # The image carries contracts/n8n/catalogue.json for the workflow drafter (ADR 0051).
+      additional_contexts:
+        contracts: ../contracts
     image: wab/agent-runtime:${WAB_IMAGE_TAG:-dev}
     environment:
       GITHUB_API_BASE: ${GITHUB_API_BASE:-https://api.github.com}

@@ -40,6 +40,7 @@ from evals.red_team import RED_TEAM
 from evals.reply import LED_TWINS, REPLY, REPLY_DEV, REPLY_GATE, SPIKE, SPIKE_DEV
 from evals.report import report
 from evals.summarise import SUMMARISE
+from evals.workflow_draft import WORKFLOW_DRAFT
 
 JOBS: tuple[Job[Any], ...] = (
     SUMMARISE,
@@ -55,10 +56,14 @@ JOBS: tuple[Job[Any], ...] = (
     SPIKE,
     SPIKE_DEV,
     EXPLAIN_WORDING,
+    WORKFLOW_DRAFT,
 )
 PARTS_OF_REPLY: Final = frozenset({REPLY_GATE.name, REPLY_DEV.name, SPIKE_DEV.name})
 """Jobs that run part of the reply job's cases. A run of every job leaves them out, so it runs
 each case once."""
+ONLY_WHEN_NAMED: Final = frozenset({*PARTS_OF_REPLY, WORKFLOW_DRAFT.name})
+"""Jobs a run of every job leaves out: the parts of the reply job, and the workflow drafter, whose
+one draft costs as much as 17 to 33 Planner messages (ADR 0051, section 7)."""
 PRICING = Path(__file__).parent / "pricing.json"
 # CI keeps the endpoints as secrets too. A URL can hold a password or a private host name.
 URL_ENVS = ("AZURE_OPENAI_ENDPOINT", "OLLAMA_BASE_URL", "AGENT_MODEL_BASE_URL")
@@ -328,7 +333,7 @@ def jobs_chosen(env: Env) -> tuple[Job[Any], ...]:
     if unknown:
         raise ValueError(f"EVAL_JOBS names no job: {', '.join(unknown)}")
     chosen = [
-        job for job in JOBS if (job.name in wanted if wanted else job.name not in PARTS_OF_REPLY)
+        job for job in JOBS if (job.name in wanted if wanted else job.name not in ONLY_WHEN_NAMED)
     ]
     if planner_mode(env) == "ai_led":
         chosen = [AI_LED.get(job.name, job) for job in chosen]

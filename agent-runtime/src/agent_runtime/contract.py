@@ -1578,6 +1578,202 @@ explain_wording_result_adapter: TypeAdapter[ExplainWordingResult] = TypeAdapter(
 )
 
 
+# The workflow drafter (ADR 0051): a person's words in, a plan of n8n blocks out.
+
+PLAN_NAME_LIMIT: Final = 80
+BLOCK_NAME_LIMIT: Final = 60
+SETTING_ID_PATTERN: Final = r"^[a-z][a-z0-9_]{0,39}$"
+
+type SettingKind = Literal[
+    "run_time", "jira_project", "channel", "address", "repository", "confluence_page", "text"
+]
+"""What a setting holds. A run time, a Jira project, and a channel or an address a notice posts
+to are never guessed (ADR 0051, section 5)."""
+type SettingMark = Literal["filled", "guessed", "needed"]
+
+
+class WriteKeyFact(WireModel):
+    """A write key an Operator added in Settings: its name and the system it writes to. Never its
+    secret."""
+
+    name: str = Field(min_length=1, max_length=80)
+    system: str = Field(min_length=1, max_length=40)
+
+
+class DrafterFacts(WireModel):
+    """The team's facts the drafter may use. No Approver's name and no secret."""
+
+    jira_projects: list[Annotated[str, Field(max_length=20)]] = Field(
+        default_factory=list[str], max_length=100, description="The allowed Jira projects."
+    )
+    confluence_pages: list[Annotated[str, Field(max_length=200)]] = Field(
+        default_factory=list[str], max_length=100, description="The allowed Confluence pages."
+    )
+    repositories: list[RepoName] = Field(
+        default_factory=list[str], max_length=100, description="The allowed repositories."
+    )
+    channels: list[Annotated[str, Field(max_length=80)]] = Field(
+        default_factory=list[str],
+        max_length=200,
+        description="The Slack channels the platform's key can see, when the platform has read "
+        "them. A channel the person names counts as filled only when it is here.",
+    )
+    agent_cards: list[LibraryCard] = Field(default_factory=list[LibraryCard], max_length=50)
+    write_keys: list[WriteKeyFact] = Field(default_factory=list[WriteKeyFact], max_length=50)
+
+
+class PlanBlock(WireModel):
+    name: str = Field(min_length=1, max_length=BLOCK_NAME_LIMIT)
+    type: str = Field(min_length=1, max_length=120)
+    version: float
+    parameters: dict[str, Any] = Field(
+        description="As n8n holds them. A setting stands in a value as its placeholder, "
+        "<<setting id>>, never as a guessed value."
+    )
+
+
+class PlanWire(WireModel):
+    from_block: str
+    exit: str = Field(description='The exit\'s name, as "main", "true" or "Yes".')
+    to_block: str
+    exit_index: int = Field(ge=0, description="The exit's place in n8n's outputs of from_block.")
+    input_index: int = Field(ge=0, description="The input of to_block it joins.")
+
+
+class SettingPlace(WireModel):
+    block: str
+    parameter: str = Field(description='The parameter\'s path in the block, as "channelId".')
+
+
+class PlanSetting(WireModel):
+    id: str = Field(pattern=SETTING_ID_PATTERN)
+    kind: SettingKind
+    label: str = Field(min_length=1, max_length=80)
+    fills: list[SettingPlace] = Field(min_length=1)
+    value: str | None = Field(
+        description="A run time is code's reading, as monday 09:00, or the person's own words "
+        "for one code can't read. None while it is needed."
+    )
+    mark: SettingMark = Field(
+        description="filled: code found it in the person's words, and for a kind that is never "
+        "guessed, in the team's facts too. guessed: the drafter picked it. needed: nobody has "
+        "given it."
+    )
+
+
+class WorkflowPlan(WireModel):
+    """A drafted workflow as the drafter planned it and code checked it against the catalogue.
+    The builder lays it out as an n8n workflow and adds what every layout adds."""
+
+    name: str = Field(min_length=1, max_length=PLAN_NAME_LIMIT)
+    blocks: list[PlanBlock] = Field(min_length=1)
+    wires: list[PlanWire]
+    settings: list[PlanSetting]
+
+
+class WorkflowDraftRequest(WireModel):
+    words: str = Field(
+        min_length=1,
+        max_length=2000,
+        description="The person's words, unchanged. For an edit, the words that ask for it.",
+    )
+    facts: DrafterFacts
+    current: WorkflowPlan | None = Field(
+        default=None,
+        description="For an edit, the plan as it stands, with each setting's value. The drafter "
+        "returns a whole new plan, and a setting with the same id and kind keeps its value unless "
+        "the words change it.",
+    )
+    model: ModelAccess
+
+
+type ProblemCode = Literal[
+    "unreadable",
+    "name",
+    "too_big",
+    "no_block",
+    "no_version",
+    "no_resource",
+    "no_operation",
+    "no_parameter",
+    "bad_value",
+    "missing_value",
+    "held",
+    "hidden",
+    "left_out",
+    "community",
+    "platform_adds",
+    "cant_run",
+    "native_write",
+    "address_unread",
+    "guessed",
+    "wire",
+    "setting",
+]
+INVENTED_CODES: Final[frozenset[ProblemCode]] = frozenset(
+    {"no_block", "no_version", "no_resource", "no_operation", "no_parameter"}
+)
+"""A plan sent back for one of these named something the pinned n8n image doesn't have."""
+
+
+class PlanProblem(WireModel):
+    code: ProblemCode
+    block: str | None = None
+    text: str = Field(description="What is wrong, in words the drafter can act on.")
+
+
+class SentBack(WireModel):
+    """One plan the catalogue check sent back to the drafter, and why."""
+
+    problems: list[PlanProblem] = Field(min_length=1)
+
+
+COULDNT_DRAFT: Final = "I couldn't draft that."
+KEY_PASTED: Final = "Don't paste keys here. An Operator adds keys in Settings."
+
+
+class WorkflowDrafted(WireModel):
+    status: Literal["drafted"] = "drafted"
+    plan: WorkflowPlan
+    catalogue: str = Field(description="The n8n image, with its digest, the plan was checked by.")
+    sent_back: list[SentBack] = Field(description="The plans the check sent back first.")
+    turns: int = Field(ge=1, description="The model's turns.")
+
+
+type NotDraftedWhy = Literal["gave_up", "no_tool_call", "too_long", "failed"]
+
+
+class WorkflowNotDrafted(WireModel):
+    """Nothing is shown as working: the person sees "I couldn't draft that", with Ask the team."""
+
+    status: Literal["not_drafted"] = "not_drafted"
+    why: NotDraftedWhy = Field(
+        description="gave_up: no plan passed the check after it went back three times. "
+        "no_tool_call: the model answered without a tool. too_long: it ran out of turns or time. "
+        "failed: the platform's own code failed while it answered a tool, so it stopped."
+    )
+    message: str = COULDNT_DRAFT
+    catalogue: str
+    sent_back: list[SentBack]
+    turns: int = Field(ge=0)
+
+
+class KeyPasted(WireModel):
+    """Something the drafter would read holds the shape of a key: the words, the team's facts or
+    the current plan. So no model read any of it (ADR 0051, section 5)."""
+
+    status: Literal["key_pasted"] = "key_pasted"
+    message: str = KEY_PASTED
+
+
+type WorkflowDraftResult = Annotated[
+    WorkflowDrafted | WorkflowNotDrafted | KeyPasted | ModelProblem,
+    Field(discriminator="status"),
+]
+
+workflow_draft_result_adapter: TypeAdapter[WorkflowDraftResult] = TypeAdapter(WorkflowDraftResult)
+
+
 class AgentCard(WireModel):
     id: str
     display: str
@@ -1619,3 +1815,5 @@ class AgentApiSchema(WireModel):
     planner_check_part_result: CheckPartResult
     workflow_explain_request: ExplainWordingRequest
     workflow_explain_result: ExplainWordingResult
+    workflow_draft_request: WorkflowDraftRequest
+    workflow_draft_result: WorkflowDraftResult
