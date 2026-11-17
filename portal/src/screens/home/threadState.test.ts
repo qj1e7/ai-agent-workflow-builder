@@ -46,8 +46,8 @@ describe('the thread', () => {
     const softwareAfter = (reply: PlannerReply) => previousOf(threadReducer(threadReducer(EMPTY, { type: 'sent', text: 'x', chat: 'c1' }), { type: 'answered', reply, typed: 'x' }))?.software
     const watch: WatchlistReply = { trace_id: null, answer: 'watchlist', word: 'add', software: 'Node Js', already_listed: null, also: null, parts: [] }
     const crossed: CantRowView = { kind: 'look_for', text: 'keep track of it', note: 'I didn’t follow this part.', needs: null, system: null, instead: null, unsupported: false }
-    expect(softwareAfter({ trace_id: null, answer: 'cant', cant: [crossed], alternative: watch, parts: [] })).toBe('Node Js')
-    expect(softwareAfter({ trace_id: null, answer: 'cant', cant: [crossed], alternative: null, parts: [] })).toBeNull()
+    expect(softwareAfter({ trace_id: null, answer: 'cant', cant: [crossed], alternative: watch, draft_words: null, parts: [] })).toBe('Node Js')
+    expect(softwareAfter({ trace_id: null, answer: 'cant', cant: [crossed], alternative: null, draft_words: null, parts: [] })).toBeNull()
     const about = (names: string[]): PlannerReply => ({ trace_id: null, answer: 'question', text: 'Redis is up to date.', looked_at: ['watchlist'], about_software: names, parts: [] })
     expect(softwareAfter(about(['Redis']))).toBe('Redis')
     expect(softwareAfter(about(['Redis', 'n8n']))).toBeNull()

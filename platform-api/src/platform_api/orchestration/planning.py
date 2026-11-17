@@ -19,6 +19,7 @@ from platform_api.orchestration.agents import (
     ChooseRequest,
     ChooseResult,
     CodeWording,
+    DrafterFacts,
     DraftRequest,
     DraftResult,
     ExplainWordingRequest,
@@ -31,6 +32,9 @@ from platform_api.orchestration.agents import (
     PreviousTurn,
     RowKind,
     TurnTrace,
+    WorkflowDraftRequest,
+    WorkflowDraftResult,
+    WorkflowPlan,
 )
 from platform_api.orchestration.service import ActiveModel
 
@@ -136,6 +140,29 @@ class ExplainWordings:
             return NoModel()
         reply = await self._agents.explain_wording(
             ExplainWordingRequest(wording=asked.wording, facts=asked.facts, model=model)
+        )
+        if isinstance(reply, AgentUnavailable | AgentRejected):
+            return RuntimeDown(reply.detail)
+        return reply
+
+
+class WorkflowDrafting:
+    """The workflow drafter (ADR 0051), with the model key added here and nowhere else."""
+
+    def __init__(self, db: Database, models: ActiveModel, agents: HttpAgentRuntime) -> None:
+        self._db = db
+        self._models = models
+        self._agents = agents
+
+    async def draft(
+        self, words: str, facts: DrafterFacts, current: WorkflowPlan | None
+    ) -> WorkflowDraftResult | NoModel | RuntimeDown:
+        async with self._db.transaction("orchestration") as uow:
+            model = await self._models.access(uow)
+        if model is None:
+            return NoModel()
+        reply = await self._agents.draft_workflow(
+            WorkflowDraftRequest(words=words, facts=facts, current=current, model=model)
         )
         if isinstance(reply, AgentUnavailable | AgentRejected):
             return RuntimeDown(reply.detail)

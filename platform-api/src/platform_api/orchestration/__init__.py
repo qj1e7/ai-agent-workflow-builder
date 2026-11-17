@@ -23,6 +23,7 @@ from platform_api.orchestration.agents import (
     CodeWording,
     DidntFollowAnswer,
     Drafted,
+    DrafterFacts,
     DraftResult,
     EditAnswer,
     EditCant,
@@ -37,6 +38,7 @@ from platform_api.orchestration.agents import (
     FoundSoftware,
     FreeReplyAnswer,
     InputKind,
+    KeyPasted,
     LibraryCard,
     LibraryInput,
     ModelProblem,
@@ -48,8 +50,11 @@ from platform_api.orchestration.agents import (
     PartMark,
     PartReason,
     PauseAnswer,
+    PlanBlock,
     PlannerAnswer,
     PlannerFacts,
+    PlanSetting,
+    PlanWire,
     PreviousTurn,
     QuestionAnswer,
     ReadReleasesRequest,
@@ -66,6 +71,7 @@ from platform_api.orchestration.agents import (
     RowKind,
     RowState,
     ScheduleChange,
+    SettingPlace,
     SetupCardAnswer,
     SoftwareNotChecked,
     SoftwareNotKnown,
@@ -78,9 +84,23 @@ from platform_api.orchestration.agents import (
     WatchlistScheduleFact,
     WhichSoftwareAnswer,
     WhyStoppedAnswer,
+    WorkflowDrafted,
+    WorkflowDraftResult,
     WorkflowFact,
+    WorkflowNotDrafted,
+    WorkflowPlan,
 )
-from platform_api.orchestration.approvals import AnyApprover, ApprovalPolicy, ApprovalStep
+from platform_api.orchestration.approvals import (
+    AnyApprover,
+    ApprovalPolicy,
+    ApprovalStep,
+    Approved,
+    Closed,
+    Declined,
+    Ended,
+    Refusal,
+    Verdict,
+)
 from platform_api.orchestration.cards import (
     INPUT_KINDS,
     KIND_EXAMPLES,
@@ -110,6 +130,7 @@ from platform_api.orchestration.n8n import (
     N8nDrafts,
     N8nError,
     N8nWorkflow,
+    NotKeptAsSent,
     PublishEvent,
     PutBack,
     SavedDraft,
@@ -169,6 +190,7 @@ from platform_api.orchestration.planning import (
     PlannerAnswers,
     ProjectFinding,
     RuntimeDown,
+    WorkflowDrafting,
 )
 from platform_api.orchestration.platform_keys import KEY_FOR_TYPE, KEYS, KeySpec, attach_keys
 from platform_api.orchestration.run_gist import RunGist
@@ -186,6 +208,21 @@ from platform_api.orchestration.schedule_store import (
     held_words,
 )
 from platform_api.orchestration.service import RunDetail
+from platform_api.orchestration.setup_approvals import (
+    DECLINE_REASONS,
+    ApprovedSetUp,
+    NoSuchRequest,
+    SetUpApprovals,
+    SetUpAsk,
+    SetUpDeclineReason,
+    SetUpFinished,
+    SetUps,
+    SetUpState,
+    TryAgain,
+    set_up_link,
+)
+from platform_api.orchestration.setup_approvals import Decided as SetUpDecided
+from platform_api.orchestration.setup_approvals import DecisionRefused as SetUpRefused
 from platform_api.orchestration.spec import (
     CardRun,
     CardsTask,
@@ -204,6 +241,7 @@ from platform_api.orchestration.team_request_card import (
     TeamsPost,
     TeamsRequestChannel,
 )
+from platform_api.orchestration.version_digest import workflow_digest
 from platform_api.orchestration.watch import (
     ATTENTION_ORDER,
     Checked,
@@ -269,6 +307,38 @@ from platform_api.orchestration.workflow_check import (
 from platform_api.orchestration.write_actions import Binding
 
 __all__ = [
+    "NotKeptAsSent",
+    "Approved",
+    "Closed",
+    "Declined",
+    "Ended",
+    "Refusal",
+    "Verdict",
+    "DECLINE_REASONS",
+    "ApprovedSetUp",
+    "SetUpDeclineReason",
+    "NoSuchRequest",
+    "SetUpApprovals",
+    "SetUpAsk",
+    "SetUpFinished",
+    "SetUps",
+    "SetUpState",
+    "TryAgain",
+    "set_up_link",
+    "SetUpDecided",
+    "SetUpRefused",
+    "DrafterFacts",
+    "KeyPasted",
+    "PlanBlock",
+    "PlanSetting",
+    "PlanWire",
+    "SettingPlace",
+    "WorkflowDrafted",
+    "WorkflowDraftResult",
+    "WorkflowNotDrafted",
+    "WorkflowPlan",
+    "WorkflowDrafting",
+    "workflow_digest",
     "ApproverMayAccept",
     "Block",
     "CantRun",

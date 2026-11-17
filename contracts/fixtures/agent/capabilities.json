@@ -188,6 +188,22 @@
       "instead": null
     },
     {
+      "id": "workflows.draft",
+      "plain": "Draft an n8n workflow from your words, for an Approver to check",
+      "kind": "none",
+      "system": null,
+      "state": "ready",
+      "cant": null,
+      "why": null,
+      "connection": null,
+      "needs_model": false,
+      "platform": true,
+      "focus": false,
+      "tools": [],
+      "short": "Draft an n8n workflow from your words, for an Approver to check",
+      "instead": null
+    },
+    {
       "id": "workflows.explain",
       "plain": "Explain any workflow",
       "kind": "none",

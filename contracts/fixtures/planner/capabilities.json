@@ -229,6 +229,25 @@
       "agents": []
     },
     {
+      "id": "workflows.draft",
+      "plain": "Draft an n8n workflow from your words, for an Approver to check",
+      "kind": "none",
+      "system": null,
+      "state": "ready",
+      "cant": null,
+      "short": "Draft an n8n workflow from your words, for an Approver to check",
+      "instead": null,
+      "why": null,
+      "fix": null,
+      "connection": null,
+      "last_ok_at": null,
+      "needs_model": false,
+      "platform": true,
+      "focus": false,
+      "tools": [],
+      "agents": []
+    },
+    {
       "id": "workflows.explain",
       "plain": "Explain any workflow",
       "kind": "none",

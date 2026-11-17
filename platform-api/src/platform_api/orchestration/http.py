@@ -350,7 +350,7 @@ class TeamsStubMessage(WireModel):
     channel: str
     text: str
     link: str
-    run_id: RunId
+    run_id: RunId | None = Field(description="Null for a set-up approval, which has no run.")
     approval_id: ApprovalId
     card: AdaptiveCard | None = Field(
         description="The Adaptive Card a real Teams channel gets, with its outcome on top once "

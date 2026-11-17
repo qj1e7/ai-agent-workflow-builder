@@ -878,6 +878,113 @@ explain_wording_result_adapter: TypeAdapter[ExplainWordingResult] = TypeAdapter(
 )
 
 
+# The workflow drafter (ADR 0051): the runtime's POST /v1/workflows/draft, as this side reads it.
+
+type SettingKind = Literal[
+    "run_time", "jira_project", "channel", "address", "repository", "confluence_page", "text"
+]
+type SettingMark = Literal["filled", "guessed", "needed"]
+
+
+class WriteKeyFact(WireModel):
+    name: str
+    system: str
+
+
+class DrafterFacts(WireModel):
+    """The team's facts the drafter may use. No Approver's name and no secret."""
+
+    jira_projects: list[str] = Field(default_factory=list[str])
+    confluence_pages: list[str] = Field(default_factory=list[str])
+    repositories: list[str] = Field(default_factory=list[str])
+    channels: list[str] = Field(default_factory=list[str])
+    agent_cards: list[LibraryCard] = Field(default_factory=list[LibraryCard])
+    write_keys: list[WriteKeyFact] = Field(default_factory=list[WriteKeyFact])
+
+
+class PlanBlock(WireModel):
+    name: str
+    type: str
+    version: float
+    parameters: dict[str, Any]
+
+
+class PlanWire(WireModel):
+    from_block: str
+    exit: str
+    to_block: str
+    exit_index: int = Field(ge=0)
+    input_index: int = Field(ge=0)
+
+
+class SettingPlace(WireModel):
+    block: str
+    parameter: str
+
+
+class PlanSetting(WireModel):
+    id: str
+    kind: SettingKind
+    label: str
+    fills: list[SettingPlace]
+    value: str | None
+    mark: SettingMark
+
+
+class WorkflowPlan(WireModel):
+    name: str
+    blocks: list[PlanBlock] = Field(min_length=1)
+    wires: list[PlanWire]
+    settings: list[PlanSetting]
+
+
+class WorkflowDraftRequest(WireModel):
+    words: str
+    facts: DrafterFacts
+    current: WorkflowPlan | None = None
+    model: ModelAccess
+
+
+class PlanProblem(WireModel):
+    code: str
+    block: str | None = None
+    text: str
+
+
+class SentBack(WireModel):
+    problems: list[PlanProblem]
+
+
+class WorkflowDrafted(WireModel):
+    status: Literal["drafted"] = "drafted"
+    plan: WorkflowPlan
+    catalogue: str
+    sent_back: list[SentBack]
+    turns: int
+
+
+class WorkflowNotDrafted(WireModel):
+    status: Literal["not_drafted"] = "not_drafted"
+    why: Literal["gave_up", "no_tool_call", "too_long", "failed"]
+    message: str
+    catalogue: str
+    sent_back: list[SentBack]
+    turns: int
+
+
+class KeyPasted(WireModel):
+    status: Literal["key_pasted"] = "key_pasted"
+    message: str
+
+
+type WorkflowDraftResult = Annotated[
+    WorkflowDrafted | WorkflowNotDrafted | KeyPasted | ModelProblem,
+    Field(discriminator="status"),
+]
+
+workflow_draft_result_adapter: TypeAdapter[WorkflowDraftResult] = TypeAdapter(WorkflowDraftResult)
+
+
 class AgentCard(WireModel):
     id: str
     display: str
@@ -911,6 +1018,8 @@ AGENT_TIMEOUT_SECONDS = 60.0
 RUNTIME_SMOOTHS_IN_SECONDS = 8.0
 RUNTIME_VERIFIES_IN_SECONDS = 8.0
 EXPLAIN_WAIT_SECONDS = RUNTIME_SMOOTHS_IN_SECONDS + RUNTIME_VERIFIES_IN_SECONDS + 4.0
+DRAFT_WAIT_SECONDS = 200.0
+"""The drafter stops itself at 170 seconds (ADR 0051, amended for step 5), with room to answer."""
 
 
 class HttpAgentRuntime:
@@ -987,6 +1096,13 @@ class HttpAgentRuntime:
             request,
             explain_wording_result_adapter,
             EXPLAIN_WAIT_SECONDS,
+        )
+
+    async def draft_workflow(
+        self, request: WorkflowDraftRequest
+    ) -> WorkflowDraftResult | AgentUnavailable | AgentRejected:
+        return await self._model_call(
+            "/v1/workflows/draft", request, workflow_draft_result_adapter, DRAFT_WAIT_SECONDS
         )
 
     async def capabilities(self) -> CapabilityList | AgentUnavailable | AgentRejected:

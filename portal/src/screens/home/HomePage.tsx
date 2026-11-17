@@ -267,6 +267,7 @@ function PlannerHome({ greeting, home, now, operator }: { greeting: string; home
         setKeys((count) => count + 1)
       }}
       onSend={() => send(chat.sendText)}
+      changing={chat.changing ? { name: chat.changing.name, revision: chat.changing.revision, onCancel: () => { chat.cancelChange(); boxRef.current?.focus() } } : null}
     />
   )
   const chips = (

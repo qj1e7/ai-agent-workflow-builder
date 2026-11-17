@@ -12,6 +12,7 @@ import { AskPlanner, CardLive, NewestAnswer } from './primary'
 import { SetupCard } from './SetupCard'
 import { sayOf, whoOf, wordsOnly } from './answers'
 import { useAsker } from './asker'
+import { DraftedCard } from '../drafted/DraftedCard'
 import { RunCardMessage } from './RunCard'
 import { BehindAnswer, CheckWorkflowsAnswer, DecideAnswer, DecidedAnswer, IdeasSentence, NeedsMeAnswer, OperatorsAnswer, RequestsToOpen, useSaidOnce, type Say } from './StateAnswers'
 import { isAnswer, type Message, type Thread as ThreadState } from './threadState'
@@ -138,6 +139,13 @@ export function Thread({ thread, now, page, memory }: ThreadProps) {
                     <span className="visually-hidden">Planner: </span>
                     <NewestAnswer.Provider value={message.id === newest}>
                       <BehindAnswer now={now} say={message.id === newest ? sayFor(message.id) : () => undefined} />
+                    </NewestAnswer.Provider>
+                  </div>
+                ) : message.kind === 'drafted' ? (
+                  <div className={styles['cards']}>
+                    <span className="visually-hidden">Planner: </span>
+                    <NewestAnswer.Provider value={message.id === newest}>
+                      <DraftedCard draftedId={message.draftedId} revision={message.revision} />
                     </NewestAnswer.Provider>
                   </div>
                 ) : message.kind === 'thinking' ? (
