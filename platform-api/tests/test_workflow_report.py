@@ -762,9 +762,8 @@ def test_a_workflow_started_only_from_the_portal_that_reads_nothing_says_so() ->
         "=".join(("https://example.com/hook?api_key", "Zx9-Kq2L" * 2)),
         "https://hooks.slack.com/services/T0/B0/abcDEF123456",
         "https://acme.webhook.office.com/webhookb2/abc@def/IncomingWebhook/123/456",
-        "".join(("0123456789", "abcdef0123", "456789abcd", "ef01234567")),
     ],
-    ids=["basic-auth", "query-token", "query-api-key", "slack-webhook", "teams-webhook", "hex-40"],
+    ids=["basic-auth", "query-token", "query-api-key", "slack-webhook", "teams-webhook"],
 )
 def test_a_value_shaped_like_a_key_in_a_post_or_a_place_shows_as_hidden(secret: str) -> None:
     document = made_in_n8n()
@@ -785,6 +784,7 @@ def test_a_value_shaped_like_a_key_in_a_post_or_a_place_shows_as_hidden(secret: 
         "monkey=12345678",
         "passkey=whatever1",
         "issuekey=PROJ-1234",
+        "pinned to commit " + "".join(("0123456789", "abcdef0123", "456789abcd", "ef01234567")),
     ],
 )
 def test_ordinary_words_near_a_key_s_shape_stay_shown(words: str) -> None:

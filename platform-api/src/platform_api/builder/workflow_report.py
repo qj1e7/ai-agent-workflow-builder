@@ -245,35 +245,33 @@ class WorkflowReport:
 
 
 RUNTIME_KEY_SHAPES = (
-    r"sk-ant-[A-Za-z0-9_\-]{8,}",
-    r"sk-[A-Za-z0-9_\-]{16,}",
-    r"gh[pousr]_[A-Za-z0-9]{16,}",
-    r"github_pat_[A-Za-z0-9_]{16,}",
-    r"(?i:bearer|basic)\s+(?=[A-Za-z._~\-]*[0-9+/=])[A-Za-z0-9._~+/=\-]{8,}",
+    r"\bsk-ant-[A-Za-z0-9_\-]{8,}",
+    r"\bsk-[A-Za-z0-9_\-]{16,}",
+    r"\bgh[pousr]_[A-Za-z0-9]{16,}",
+    r"\bgithub_pat_[A-Za-z0-9_]{16,}",
+    r"\bglpat-[A-Za-z0-9_\-]{16,}",
+    r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b",
+    r"\bxox[abeprs]-[A-Za-z0-9\-]{10,}",
+    r"\bxapp-[0-9]-[A-Za-z0-9\-]{10,}",
+    r"hooks\.slack\.com/(?:services|triggers|workflows)/[A-Za-z0-9_/\-]+",
+    r"webhook\.office\.com/[A-Za-z0-9@_/\-]+",
+    r"\bATATT[A-Za-z0-9_=\-]{16,}",
+    r"\bAIza[A-Za-z0-9_\-]{35}",
+    r"(?i:accountkey|sharedaccesskey)=[A-Za-z0-9+/=]{32,}",
+    r"\bsig=[A-Za-z0-9%+/=_\-]{40,}",
+    r"\beyJ[A-Za-z0-9_\-]+\.eyJ[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+",
+    r"-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z ]*PRIVATE KEY-----|\Z)",
+    r"(?i:bearer)\s+(?=[A-Za-z._~\-]*[0-9+/=])[A-Za-z0-9._~+/=\-]{8,}",
+    r"(?i:basic)\s+(?=[A-Za-z]*[0-9+/=])[A-Za-z0-9+/=]{8,}",
 )
 """The agent runtime's masker's shapes, each as it writes it in
 contracts/fixtures/agent/key-shapes.json. A test holds the two lists together."""
 KEY_SHAPE_SOURCES = (
     *RUNTIME_KEY_SHAPES,
-    r"sk-ant-[\w-]+",
-    r"gh[pousr]_\w{16,}",
-    r"github_pat_\w{16,}",
-    r"glpat-[\w-]{16,}",
-    r"xox[abposr]-[\w-]+",
-    r"ATATT[\w=-]{16,}",
-    r"AKIA[0-9A-Z]{16}",
-    r"eyJ[\w-]+\.eyJ[\w-]+\.[\w-]+",
-    r"(?i:bearer)\s+[\w.~+/=-]{8,}",
-    r"(?i:basic)\s+(?=[A-Za-z0-9+/=]*[0-9+/=])[A-Za-z0-9+/=]{8,}",
     r"\b(?i:token|key|secret|sig|password|api[_-]?key)=[^&\s\"']{8,}",
-    r"hooks\.slack\.com/services/\S+",
-    r"webhook\.office\.com/\S+",
-    r"\b[0-9a-f]{40}\b",
-    r"-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*",
 )
-"""Every shape of a key or token platform-api knows: the runtime's, then Anthropic, GitHub,
-GitLab, Slack, Atlassian and AWS keys, a signed token, a bearer or basic header, a key in a
-query, a Slack or Teams incoming webhook, a classic 40-hex token and a private key."""
+"""Every shape of a key or token platform-api knows: the runtime's, and a key or password in a
+query. A git commit's 40 hex letters are not a key, so a person may paste one."""
 KEY_SHAPE = re.compile("|".join(KEY_SHAPE_SOURCES))
 """Refused in a person's words, an answer and a read-back from n8n, and hidden in a report."""
 HIDDEN = "(hidden, looks like a key)"
