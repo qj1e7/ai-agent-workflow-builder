@@ -45,6 +45,8 @@ LEAD_SENTENCES = (
     "Every weekday at 9, check LangGraph for new releases and raise a Jira ticket if there's a "
     "new one.",
     "Check LangGraph for new releases every weekday at 9",
+    "what's new in node js?",
+    "what is the latest node js?",
 )
 
 
