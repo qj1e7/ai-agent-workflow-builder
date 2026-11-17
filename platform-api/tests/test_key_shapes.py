@@ -4,6 +4,8 @@ section 5). The two lists are held together by contracts/fixtures/agent/key-shap
 the runtime writes from its masker."""
 
 import json
+import re
+import time
 
 import pytest
 
@@ -51,7 +53,89 @@ PLAIN_WORDS = [
     "a basic understanding.",
     "set up a basic 2-step-approval-flow",
     "bearer instruments",
+    "highs_and_lows_of_the_quarter",
+    "assign the design=final sign-off",
+    "the ASIA PACIFIC region",
 ]
+BEFORE = {
+    "space": " ",
+    "underscore": "_",
+    "digit": "7",
+    "letter": "x",
+    "escaped newline": "\\n",
+    "escaped tab": "\\t",
+    "unicode escape": "\\u003d",
+    "URL escape": "%3D",
+    "equals": "=",
+    "colon": ":",
+    "quote": '"',
+}
+"""What may stand just before a key in what a person types or n8n sends back."""
+GLUED_TO_A_WORD = ("OpenAI project key", "OpenAI key", "Langfuse secret key")
+"""Keys read as part of a word when glued to a letter, as "sk-" is in "task-management-workflow"."""
+PLACED = [
+    pytest.param(before, key, id=f"{name} after {where}")
+    for name, key in KEYS.items()
+    for where, before in BEFORE.items()
+    if not (where == "letter" and name in GLUED_TO_A_WORD)
+]
+MAIN_SHAPES = re.compile(
+    "|".join(
+        (
+            r"sk-ant-[A-Za-z0-9_\-]{8,}",
+            r"sk-[A-Za-z0-9_\-]{16,}",
+            r"gh[pousr]_[A-Za-z0-9]{16,}",
+            r"github_pat_[A-Za-z0-9_]{16,}",
+            r"(?i:bearer|basic)\s+(?=[A-Za-z._~\-]*[0-9+/=])[A-Za-z0-9._~+/=\-]{8,}",
+            r"sk-ant-[\w-]+",
+            r"gh[pousr]_\w{16,}",
+            r"github_pat_\w{16,}",
+            r"glpat-[\w-]{16,}",
+            r"xox[abposr]-[\w-]+",
+            r"ATATT[\w=-]{16,}",
+            r"AKIA[0-9A-Z]{16}",
+            r"eyJ[\w-]+\.eyJ[\w-]+\.[\w-]+",
+            r"(?i:basic)\s+(?=[A-Za-z0-9+/=]*[0-9+/=])[A-Za-z0-9+/=]{8,}",
+            r"\b(?i:token|key|secret|sig|password|api[_-]?key)=[^&\s\"']{8,}",
+            r"hooks\.slack\.com/services/\S+",
+            r"webhook\.office\.com/\S+",
+            r"-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*",
+        )
+    )
+)
+"""platform-api's shapes on main, to show that no key they refused is let through now. Left out on
+purpose: 40 hex letters, which a git commit's SHA also is, and a bearer shape that refused "bearer
+instruments"."""
+MAIN_EXAMPLES = [
+    "ghp_abcdefghijklmnopqrstuvwxyz0123",
+    "ghp_" + "a" * 36,
+    "Basic dXNlcjpwYXNzd29yZA==",
+    "https://hooks.slack.com/services/T0/B0/abcDEF123456",
+    "https://acme.webhook.office.com/webhookb2/abc@def/IncomingWebhook/123/456",
+    *KEYS.values(),
+]
+"""The keys main's own tests used, and each key above."""
+N = 100_000
+HOSTILE = {
+    "sk-": "sk-" * (N // 3),
+    "xsk-": "xsk-" * (N // 4),
+    "eyJ-": "eyJ-" * (N // 4),
+    "_eyJ": "_eyJ" * (N // 4),
+    "eyJ then letters": "eyJ" + "a" * N,
+    "AKIA": "AKIA" * (N // 4),
+    "xoxb-": "xoxb-" * (N // 5),
+    "sig=": "sig=" * (N // 4),
+    "token=": "token=" * (N // 6),
+    "BEGIN then letters": "-----BEGIN " + "A " * (N // 2),
+    "END then letters": "-----BEGIN PRIVATE KEY-----" + "-----END " + "A" * N,
+    "Bearer then spaces": "Bearer" + " " * N + "x",
+    "basic ": "basic " * (N // 6),
+    "escaped newlines": "\\n" * (N // 2),
+    "URL escapes": "%41" * (N // 3),
+    "letters": "a" * N,
+    "hyphens": "-" * N,
+}
+"""Long texts that would make a shape read the same letters again and again, if it could."""
 
 
 def test_platform_api_refuses_every_shape_the_runtime_masks():
@@ -60,12 +144,32 @@ def test_platform_api_refuses_every_shape_the_runtime_masks():
     assert set(shapes) <= set(KEY_SHAPE_SOURCES)
 
 
-@pytest.mark.parametrize("key", KEYS.values(), ids=list(KEYS))
-def test_each_shape_is_refused_typed_or_read_back_and_hidden_in_a_report(key: str):
-    assert PASTED_KEY.search(f"post it with {key} please")
-    assert _holds_a_key({"name": "x", "nodes": [{"name": "Call", "parameters": {"url": key}}]})
-    hidden = KEY_SHAPE.sub(HIDDEN, f"the words {key} here")
+@pytest.mark.parametrize(("before", "key"), PLACED)
+def test_each_shape_is_refused_typed_or_read_back_and_hidden_in_a_report(before: str, key: str):
+    placed = before + key
+    assert PASTED_KEY.search(f"post it with {placed} please")
+    assert _holds_a_key({"name": "x", "nodes": [{"name": "Call", "parameters": {"url": placed}}]})
+    hidden = KEY_SHAPE.sub(HIDDEN, f"the words {placed} here")
     assert key not in hidden and key[-8:] not in hidden
+
+
+def test_nothing_main_refused_is_let_through_wherever_it_sits():
+    for example in MAIN_EXAMPLES:
+        for where, before in BEFORE.items():
+            text = f"post it with {before}{example} please"
+            glued = where == "letter" and re.match(r"sk-(?!ant-)", example) is not None
+            if MAIN_SHAPES.search(text) and not glued:
+                assert PASTED_KEY.search(text), text
+
+
+@pytest.mark.parametrize("shape", KEY_SHAPE_SOURCES)
+def test_each_shape_reads_a_long_hostile_text_in_linear_time(shape: str):
+    pattern = re.compile(shape)
+    for name, text in HOSTILE.items():
+        begun = time.perf_counter()
+        pattern.sub(HIDDEN, text)
+        took = time.perf_counter() - begun
+        assert took < 0.1, f"{name}: {took:.3f}s"
 
 
 @pytest.mark.parametrize("text", PLAIN_WORDS)
