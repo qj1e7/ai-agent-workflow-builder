@@ -7,7 +7,6 @@ import { pressOnce, useLatch } from '../../api/latch'
 import { Button } from '../../ui/Button'
 import { useAsker } from '../home/asker'
 import { useShowDraft } from '../home/ChatProvider'
-import { useMainButton } from '../home/primary'
 import { DRAFT_BUTTON } from './drafted'
 import styles from './Drafted.module.css'
 
@@ -17,7 +16,6 @@ import styles from './Drafted.module.css'
  */
 export function DraftButton({ words }: { words: string | null }) {
   const operator = useAsker() === 'operator'
-  const main = useMainButton()
   const show = useShowDraft()
   const start = useStartDrafting()
   const latch = useLatch()
@@ -28,7 +26,6 @@ export function DraftButton({ words }: { words: string | null }) {
   return (
     <div>
       <Button
-        variant={main}
         loading={start.isPending}
         onClick={() =>
           pressOnce<DraftedWorkflowView>(latch, (outcome) => start.mutate({ words, idempotencyKey: key }, outcome), {
