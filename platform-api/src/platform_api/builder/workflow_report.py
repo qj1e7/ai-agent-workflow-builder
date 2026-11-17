@@ -246,35 +246,51 @@ class WorkflowReport:
 
 RUNTIME_KEY_SHAPES = (
     r"sk-ant-[A-Za-z0-9_\-]{8,}",
-    r"(?:(?<=\\[bfnrt])|(?<=\\u[0-9A-Fa-f]{4})|(?<=[%=][0-9A-Fa-f]{2})|(?<![A-Za-z]))"
+    r"sk-(?:proj|svcacct|admin)-[A-Za-z0-9_\-]{40,}",
+    r"sk-lf-[0-9a-f\-]{36}",
+    r"sk-or-v1-[0-9a-f]{64}",
+    r"(?=sk-)(?:(?<=\\[bfnrt])|(?<=\\u[0-9A-Fa-f]{4})|(?<=[%=][0-9A-Fa-f]{2})|(?<![A-Za-z]))"
     r"sk-[A-Za-z0-9_\-]{16,}",
+    r"[sr]k_(?:live|test)_[A-Za-z0-9]{20,}",
     r"gh[pousr]_[A-Za-z0-9]{16,}",
     r"github_pat_[A-Za-z0-9_]{16,}",
-    r"glpat-[A-Za-z0-9_\-]{16,}",
+    r"gl(?:pat|rt|dt|ptt|soat)-[A-Za-z0-9_\-]{16,}",
     r"(?:AKIA|ASIA)[0-9A-Z]{16}",
-    r"xox[abeprs]-[A-Za-z0-9\-]{10,}",
+    r"xox[abcdeprs]-[A-Za-z0-9%\-]{10,}",
     r"xapp-[0-9]-[A-Za-z0-9\-]{10,}",
+    r"npm_[A-Za-z0-9]{36}",
+    r"pypi-AgEIcHlwaS5vcmc[A-Za-z0-9_\-]{50,}",
+    r"hf_[A-Za-z0-9]{34}",
+    r"sq[upa]_[0-9a-f]{40}",
+    r"[A-Za-z0-9_~.]{3}\dQ~[A-Za-z0-9_~.\-]{31,34}",
     r"hooks\.slack\.com/(?:services|triggers|workflows)/[A-Za-z0-9_/\-]+",
     r"webhook\.office\.com/[A-Za-z0-9@_/\-]+",
     r"ATATT[A-Za-z0-9_=\-]{16,}",
     r"AIza[A-Za-z0-9_\-]{35}",
     r"(?i:accountkey|sharedaccesskey)=[A-Za-z0-9+/=]{32,}",
     r"sig=[A-Za-z0-9%+/=_\-]{40,}",
+    r"(?i:token|key|secret|password|pat|auth)\b\W{1,10}[0-9a-f]{40}\b",
+    r":\\?/\\?/[^\s:/@]+:[^\s/@]+@",
     r"(?:(?<=\\)(?![bfnrt]|u[0-9A-Fa-f]{4})|(?<=\\[bfnrt])|(?<=\\u[0-9A-Fa-f]{4})"
     r"|(?<![A-Za-z0-9_\-\\]))"
     r"(?=[A-Za-z0-9_\-]*?eyJ)[A-Za-z0-9_\-]++\.eyJ[A-Za-z0-9_\-]++\.[A-Za-z0-9_\-]+",
-    r"-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z ]*PRIVATE KEY-----|\Z)",
-    r"(?i:bearer)\s+(?=[A-Za-z._~\-]*[0-9+/=])[A-Za-z0-9._~+/=\-]{8,}",
+    r'-----BEGIN [A-Z ]*PRIVATE KEY-----[^"]*?(?:-----END [A-Z ]*PRIVATE KEY-----|(?=\\?")|\Z)',
+    r"(?i:bearer)\s+(?=[A-Za-z._~\-]*[0-9+/=]|[A-Za-z]{24})[A-Za-z0-9._~+/=\-]{8,}",
     r"(?i:basic)\s+(?=[A-Za-z]*[0-9+/=])[A-Za-z0-9+/=]{8,}",
 )
 """The agent runtime's masker's shapes, each as it writes it in
 contracts/fixtures/agent/key-shapes.json. A test holds the two lists together."""
 KEY_SHAPE_SOURCES = (
     *RUNTIME_KEY_SHAPES,
-    r"\b(?i:token|key|secret|sig|password|api[_-]?key)=[^&\s\"']{8,}",
+    r"\b(?i:token|key|secret|sig|password|api[_-]?key)=[^&\s\"'\\{}]{8,}",
+    r"(?i:api[_-]?key|token|secret|password|passwd)\s*[:=]\s*[^&\s\"'\\{}]{16,}",
+    r"(?i:authorization)\s*[:=]\s*[A-Za-z]+\s+[^&\s\"'\\{}]{16,}",
 )
-"""Every shape of a key or token platform-api knows: the runtime's, and a key or password in a
-query. A git commit's 40 hex letters are not a key, so a person may paste one."""
+"""Every shape of a key or token platform-api knows: the runtime's, a key or password in a query,
+and one in a header such as Azure OpenAI's "api-key: ..." or "Authorization: token ...". The
+masker leaves the last two out, as a model's own words in a trace often read like them. A value
+in braces, as an n8n expression, is never a key. Nor is a git commit's 40 hex letters on its own,
+so a person may paste one."""
 KEY_SHAPE = re.compile("|".join(KEY_SHAPE_SOURCES))
 """Refused in a person's words, an answer and a read-back from n8n, and hidden in a report."""
 HIDDEN = "(hidden, looks like a key)"
