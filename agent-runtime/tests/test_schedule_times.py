@@ -8,9 +8,9 @@ import pytest
 from agent_runtime.answers import answer_of, parts_of
 from agent_runtime.contract import CantAnswer, RequestPart, SetupCardAnswer, UnderstoodRow
 from agent_runtime.reading import (
-    FILLED_IN_FROM,
     NO_TIME_READ,
     NOT_A_RUN_TIME,
+    NOT_HELD,
     ONE_TIME,
     DaysRead,
     PlaceRead,
@@ -313,54 +313,56 @@ def test_one_time_beside_other_numbers_is_no_range(said: str):
 
 
 UNHELD = [
-    ("Every other Friday at 9am", "Every Friday", "Every Friday at 9am", "Every other Friday"),
     (
         "Every other Friday at 9am",
-        "Every 2 weeks on Friday at 9am",
-        "Every Friday at 9am",
-        "Every other Friday",
+        ["Every Friday", "Every 2 weeks on Friday at 9am", "Every other Friday at 9am"],
     ),
-    ("Every 2 weeks on Friday at 9am", "Every Friday", "Every Friday at 9am", "Every 2 weeks"),
+    ("Every 2 weeks on Friday at 9am", ["Every Friday"]),
+    ("Every second Tuesday at 3pm", ["Every Tuesday"]),
+    ("Fortnightly on Friday at 9am", ["Every Friday at 9am"]),
+    ("On the first Monday of the month at 10am", ["Monthly", "Monthly on Monday at 10am"]),
+    ("On the last Friday of each month at 4pm", ["Every Friday at 4pm"]),
+    ("On the 1st of every month at 9am", ["Monthly at 9am"]),
+    ("Every quarter at 9am", ["Quarterly"]),
     (
-        "Every second Tuesday at 3pm",
-        "Every Tuesday",
-        "Every Tuesday at 3pm",
-        "Every second Tuesday",
+        "Every 3rd Friday at 9am",
+        ["Every Friday at 9am", "Every third Friday at 9am", "Monthly on Friday at 9am"],
     ),
-    ("Fortnightly on Friday at 9am", "Every Friday at 9am", "Every Friday at 9am", "Fortnightly"),
-    (
-        "On the first Monday of the month at 10am",
-        "Monthly",
-        "Every Monday at 10am",
-        "On the first Monday of the month",
-    ),
-    (
-        "On the last Friday of each month at 4pm",
-        "Every Friday at 4pm",
-        "Every Friday at 4pm",
-        "On the last Friday of each month",
-    ),
-    ("On the 1st of every month at 9am", "Monthly at 9am", "At 9am", "On the 1st of every month"),
-    ("Every quarter at 9am", "Quarterly", "At 9am", "Every quarter"),
-    (
-        "Every other Friday at 9am",
-        "Every other Friday at 9am",
-        "Every Friday at 9am",
-        "Every other Friday",
-    ),
+    ("Alternate Fridays at 9am", ["Every Friday at 9am", "Every other Friday at 9am"]),
+    ("On alternate Fridays at 9am", ["Every Friday at 9am"]),
+    ("Twice a week at 9am", ["Every Monday at 9am", "Twice a week at 9am", "Every day at 9am"]),
+    ("On weekends at 9am", ["Every Saturday at 9am", "Every day at 9am"]),
+    ("Every weekday except Friday at 9am", ["Every weekday at 9am"]),
+    ("Every 30 minutes", ["Every day", "Every 30 minutes"]),
+    ("Every 15 mins", ["Every day"]),
+    ("Once a month on Friday at 9am", ["Monthly on Friday at 9am", "Every Friday at 9am"]),
+    ("Once a month at 9am", ["Monthly at 9am", "Every day at 9am"]),
+    ("Bi-weekly on Friday at 9am", ["Every Friday at 9am", "Biweekly on Friday at 9am"]),
+    ("Every couple of weeks on Friday at 9am", ["Every Friday at 9am"]),
+    ("Every few days at 9am", ["Every day at 9am"]),
+    ("Every working day at 9am", ["Every weekday at 9am"]),
+    ("Every Friday fortnightly at 9am", ["Every Friday at 9am"]),
+    ("Every other week on Friday at 9am", ["Every Friday at 9am"]),
+    ("At the end of each month at 5pm", ["Monthly at 5pm", "Every Friday at 5pm"]),
+    ("On the last working day of the month at 5pm", ["Every Friday at 5pm"]),
+    ("Every hour", ["Hourly", "Every day"]),
+    ("Three times a day", ["Every day"]),
+    ("Every other Friday before 5pm", ["Every Friday"]),
 ]
 
 
-@pytest.mark.parametrize(("said", "model", "held", "unheld"), UNHELD)
-def test_a_schedule_it_cant_hold_is_never_understood_and_its_words_are_crossed(
-    said: str, model: str, held: str, unheld: str
-):
-    """The Portal keeps only a day and a time, so "every other Friday at 9am" ran every Friday,
-    and the final check said it was as asked. Now the row holds the day and time it can, as a
-    guess from their words, and the words it can't hold are a part it can't do."""
+@pytest.mark.parametrize(
+    ("said", "model"), [(said, model) for said, models in UNHELD for model in models]
+)
+def test_a_schedule_it_cant_hold_is_asked_and_its_whole_phrase_crossed(said: str, model: str):
+    """The schedule holds one or more days, every day, every weekday or once a week, and one
+    time. Any other word, as "other", "3rd", "once a month", "alternate", "bi-weekly", "except"
+    or "minutes", is a schedule it can't hold. The card asks, never filling a day or time, and
+    crosses the whole phrase. Before, "every weekday except Friday" filled "Every Friday", and
+    "alternate Fridays" showed as understood."""
     row, parts = carols_card(model, said)
-    assert (row.text, row.state, row.note) == (held, "changed", FILLED_IN_FROM.format(said))
-    assert [(p.text, p.reason) for p in parts if p.mark == "cant"] == [(unheld, "how_often")]
+    assert (row.text, row.state, row.note) == ("", "missing", NOT_HELD.format(said))
+    assert [(p.text, p.reason) for p in parts if p.mark == "cant"] == [(said, "how_often")]
 
 
 @pytest.mark.parametrize(
@@ -370,6 +372,11 @@ def test_a_schedule_it_cant_hold_is_never_understood_and_its_words_are_crossed(
         "Every weekday at 3pm",
         "Each Monday at 09:30",
         "Every Friday morning at 9",
+        "Every Monday at 9am",
+        "Daily at 8.30am",
+        "Every day at 8.30am",
+        "Monday to Friday at 9am",
+        "Once a week on Friday at 9am",
     ],
 )
 def test_a_schedule_it_holds_stays_their_own_words_with_nothing_crossed(said: str):
