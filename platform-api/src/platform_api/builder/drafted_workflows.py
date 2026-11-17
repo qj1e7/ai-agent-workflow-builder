@@ -16,7 +16,7 @@ before anything is kept or sent."""
 import asyncio
 import logging
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, Final, Literal, Protocol, cast
@@ -59,6 +59,7 @@ from platform_api.orchestration import (
     Ended,
     KeyPasted,
     KnownOptions,
+    ListedWorkflow,
     ModelProblem,
     N8nError,
     N8nWorkflow,
@@ -277,7 +278,11 @@ class Kept:
     use_case_id: str
     set_up_at: datetime | None
     set_up_approval: str | None
-    """The set-up approval the set-up, or its last problem, was for."""
+    """The set-up approval the set-up, its last try or its last problem, was for."""
+    set_up_trying_at: datetime | None
+    """When a try of that approval's set-up began to create the workflow in n8n."""
+    set_up_n8n_id: str | None
+    """The workflow n8n created on that try, recorded as soon as n8n named it."""
     set_up_problem: str | None
     revisions: tuple[Revision, ...]
 
@@ -311,9 +316,17 @@ class SettingUp(Protocol):
 
     async def error_workflow_id(self) -> str | None: ...
 
-    async def save_draft(self, document: Mapping[str, Any]) -> SavedDraft: ...
+    async def save_draft(
+        self,
+        document: Mapping[str, Any],
+        created: Callable[[str], Awaitable[None]] | None = None,
+    ) -> SavedDraft: ...
 
-    async def named(self, name: str) -> list[N8nWorkflow]: ...
+    async def platform_project(self) -> str | None: ...
+
+    async def workflows_in(self, project_id: str) -> list[ListedWorkflow]: ...
+
+    async def look(self, workflow_id: str) -> N8nWorkflow | None: ...
 
     async def remove(self, workflow_id: str) -> None: ...
 
@@ -565,9 +578,14 @@ class DraftedWorkflows:
             if graded.findings:
                 return await _refused(uow.conn, kept, approved, NO_LONGER_PASSES)
             try:
-                held = await _left_by_an_earlier_try(n8n, kept, newest.plan.name, approved.digest)
+                held = await _left_by_an_earlier_try(n8n, kept, approved)
                 if held is None:
-                    saved = await n8n.save_draft(newest.document)
+                    await self._tried(kept.drafted_id, approved, None)
+
+                    async def created(workflow_id: str) -> None:
+                        await self._tried(kept.drafted_id, approved, workflow_id)
+
+                    saved = await n8n.save_draft(newest.document, created)
                     held = Held(saved.workflow_id, saved.version_id, _with_pins(saved))
             except NotKeptAsSent:
                 return await _refused(uow.conn, kept, approved, CHANGED)
@@ -599,6 +617,19 @@ class DraftedWorkflows:
             approved.approval_id,
         )
         return SetUpFinished()
+
+    async def _tried(
+        self, drafted_id: str, approved: ApprovedSetUp, workflow_id: str | None
+    ) -> None:
+        """Kept at once, outside the set-up's own transaction, so a try cut off after n8n
+        created the workflow leaves the next try the id to look for."""
+        async with self._db.transaction("builder") as uow:
+            await uow.conn.execute(
+                "UPDATE builder.drafted_workflows SET set_up_approval = %s,"
+                " set_up_trying_at = %s, set_up_n8n_id = %s, set_up_problem = NULL"
+                " WHERE drafted_id = %s AND set_up_at IS NULL",
+                (approved.approval_id, uow.now, workflow_id, drafted_id),
+            )
 
     async def gave_up(self, approved: ApprovedSetUp, detail: str) -> None:
         async with self._db.transaction("builder") as uow:
@@ -1009,27 +1040,43 @@ def _ours(document: Mapping[str, Any], use_case_id: str) -> bool:
 
 
 async def _left_by_an_earlier_try(
-    n8n: SettingUp, kept: Kept, name: str, digest: str
+    n8n: SettingUp, kept: Kept, approved: ApprovedSetUp
 ) -> Held | None:
-    """A set-up cut off after n8n created the workflow leaves it there, untracked. The next try
-    finds it by this workflow's own id, keeps a draft whose digest is the approved one, and
-    removes any other, so asking twice never makes two."""
+    """A try of this approval's set-up that was cut off after n8n created the workflow leaves it
+    there. The next try takes the id that try recorded, or, when it was cut off before it could
+    record one, the workflow its layout alone could have made: Start from the Portal with this
+    workflow's own webhook id. It looks only in the platform's own n8n project, never in a
+    member's space. It keeps a draft whose digest is the approved one and removes any other, so
+    asking twice never makes two. The first try looks for nothing."""
+    if kept.set_up_approval != approved.approval_id or kept.set_up_trying_at is None:
+        return None
+    project = await n8n.platform_project()
+    if project is None:
+        raise N8nError("the platform's n8n project is not recorded")
+    there = [listed.workflow for listed in await n8n.workflows_in(project)]
+    recorded = kept.set_up_n8n_id
+    left = [
+        w
+        for w in there
+        if (w.id == recorded if recorded is not None else _ours(w.document, kept.use_case_id))
+    ]
     kept_one: Held | None = None
-    for found in await n8n.named(name):
-        if not _ours(found.document, kept.use_case_id):
+    for found in left:
+        whole = await n8n.look(found.id)
+        if whole is None:
             continue
-        document = _with_pins(found)
+        document = _with_pins(whole)
         if (
             kept_one is None
-            and found.active_version_id is None
-            and workflow_digest(document) == digest
+            and whole.active_version_id is None
+            and workflow_digest(document) == approved.digest
         ):
-            kept_one = Held(found.id, found.version_id, document)
+            kept_one = Held(whole.id, whole.version_id, document)
         else:
             log.warning(
-                "removing %s, left in n8n by an earlier set-up of %s", found.id, kept.drafted_id
+                "removing %s, left in n8n by an earlier set-up of %s", whole.id, kept.drafted_id
             )
-            await n8n.remove(found.id)
+            await n8n.remove(whole.id)
     return kept_one
 
 
@@ -1049,7 +1096,8 @@ async def _kept(conn: Connection, drafted_id: str) -> Kept | None:
     row = await (
         await conn.execute(
             "SELECT drafted_id, owner, use_case_id, set_up_at, set_up_approval,"
-            " set_up_problem FROM builder.drafted_workflows WHERE drafted_id = %s",
+            " set_up_trying_at, set_up_n8n_id, set_up_problem"
+            " FROM builder.drafted_workflows WHERE drafted_id = %s",
             (drafted_id,),
         )
     ).fetchone()
@@ -1082,6 +1130,8 @@ async def _kept(conn: Connection, drafted_id: str) -> Kept | None:
         str(row["use_case_id"]),
         row["set_up_at"],
         row["set_up_approval"],
+        row["set_up_trying_at"],
+        row["set_up_n8n_id"],
         row["set_up_problem"],
         revisions,
     )

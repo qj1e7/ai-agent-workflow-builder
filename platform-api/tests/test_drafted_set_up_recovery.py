@@ -3,7 +3,7 @@ safety review, S1 to S3 and N2 to N4). The set-up is idempotent on our own reque
 that can't finish never strands the drafted workflow, and the approval page and its route never
 take a yes the platform wouldn't set up."""
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from copy import deepcopy
 from datetime import timedelta
 from typing import Any
@@ -12,8 +12,10 @@ import httpx
 import pytest
 
 from platform_api.builder.drafted_workflows import CHANGED
+from platform_api.builder.n8n_facts import BuilderWorkflowFacts
 from platform_api.db import Database
 from platform_api.orchestration import (
+    GITHUB_RELEASES,
     KnownOptions,
     N8nError,
     N8nWorkflow,
@@ -140,18 +142,24 @@ async def test_the_same_yes_again_answers_200_with_the_decision_recorded_before(
 
 
 class DiesAfterCreate(N8n):
-    """n8n created the workflow, and then the platform crashed before it kept a record of it."""
+    """n8n created the workflow, and then the platform's process died: before it could record
+    n8n's id, or after."""
 
-    def __init__(self) -> None:
+    def __init__(self, recorded: bool) -> None:
         super().__init__()
         self.dies = True
+        self.recorded = recorded
 
-    async def save_draft(self, document: Mapping[str, Any]) -> SavedDraft:
-        saved = await super().save_draft(document)
-        if self.dies:
-            self.dies = False
-            raise RuntimeError("the process died")
-        return saved
+    async def save_draft(
+        self,
+        document: Mapping[str, Any],
+        created: Callable[[str], Awaitable[None]] | None = None,
+    ) -> SavedDraft:
+        if not self.dies:
+            return await super().save_draft(document, created)
+        self.dies = False
+        await super().save_draft(document, created if self.recorded else None)
+        raise RuntimeError("the process died")
 
 
 class ReadBackFails(N8n):
@@ -162,8 +170,12 @@ class ReadBackFails(N8n):
         super().__init__()
         self.fails = True
 
-    async def save_draft(self, document: Mapping[str, Any]) -> SavedDraft:
-        saved = await super().save_draft(document)
+    async def save_draft(
+        self,
+        document: Mapping[str, Any],
+        created: Callable[[str], Awaitable[None]] | None = None,
+    ) -> SavedDraft:
+        saved = await super().save_draft(document, created)
         if self.fails:
             self.fails = False
             await self.remove(saved.workflow_id)
@@ -176,10 +188,11 @@ def with_n8n(lab: Lab, n8n: N8n) -> None:
     lab.drafted._n8n = n8n  # type: ignore[attr-defined]
 
 
+@pytest.mark.parametrize("recorded", [True, False], ids=["id recorded", "before the record"])
 async def test_after_a_crash_the_retry_adopts_the_copy_n8n_made_and_creates_no_second(
-    lab: Lab, db: Database
+    lab: Lab, db: Database, recorded: bool
 ):
-    with_n8n(lab, DiesAfterCreate())
+    with_n8n(lab, DiesAfterCreate(recorded))
     drafted_id, approval_id = await sent(lab)
     assert (await decide(lab, approval_id)).status_code == 201
 
@@ -207,18 +220,49 @@ async def test_a_read_back_error_is_tried_again_and_never_refused_as_changed(
     assert list(lab.n8n.held) == ["wf2"]
 
 
-async def test_a_copy_of_ours_that_differs_from_the_approved_one_is_deleted_first(
+async def test_a_copy_left_by_an_earlier_try_that_differs_from_the_approved_one_is_removed(
     lab: Lab, db: Database
 ):
+    with_n8n(lab, DiesAfterCreate(recorded=False))
     drafted_id, approval_id = await sent(lab)
-    other = deepcopy(await laid_out(lab, drafted_id))
-    other["settings"]["timezone"] = "UTC"
-    lab.n8n.held["wf0"] = N8nWorkflow("wf0", "v0", None, other, None)
     assert (await decide(lab, approval_id)).status_code == 201
-
     await lab.approvals.work_once()
+    left = lab.n8n.held["wf1"]
+    other = deepcopy(left.document)
+    other["settings"]["timezone"] = "UTC"
+    lab.n8n.held["wf1"] = N8nWorkflow("wf1", "v1", None, other, None)
 
-    assert lab.n8n.removed == ["wf0"]
+    await retried(lab, db)
+
+    assert lab.n8n.removed == ["wf1"]
+    assert (await lab.read(drafted_id))["set_up"]["state"] == "set_up"
+    [use_case] = await lab.use_cases()
+    assert use_case["n8n_workflow_id"] == "wf2"
+
+
+async def test_a_look_alike_in_a_member_s_space_is_neither_adopted_nor_removed(
+    lab: Lab, db: Database
+):
+    with_n8n(lab, DiesAfterCreate(recorded=False))
+    drafted_id, approval_id = await sent(lab)
+    assert (await decide(lab, approval_id)).status_code == 201
+    await lab.approvals.work_once()
+    ours = lab.n8n.held.pop("wf1")
+    del lab.n8n.projects["wf1"]
+    same = N8nWorkflow("planted-same", "v1", None, deepcopy(ours.document), None)
+    other_document = deepcopy(ours.document)
+    other_document["settings"]["timezone"] = "UTC"
+    other = N8nWorkflow("planted-other", "v1", None, other_document, None)
+    for planted in (same, other):
+        lab.n8n.held[planted.id] = planted
+        lab.n8n.projects[planted.id] = "dana's space"
+
+    await retried(lab, db)
+
+    assert lab.n8n.removed == []
+    assert {"planted-same", "planted-other"} <= set(lab.n8n.held)
+    [use_case] = await lab.use_cases()
+    assert use_case["n8n_workflow_id"] == "wf2"
     assert (await lab.read(drafted_id))["set_up"]["state"] == "set_up"
 
 
@@ -262,4 +306,29 @@ async def test_save_draft_removes_what_it_created_when_the_read_back_fails(db: D
         await drafts.save_draft({"name": "x", "nodes": [], "connections": {}})
 
     assert not isinstance(raised.value, NotKeptAsSent)
+    assert api.deleted == ["wf9"]
+
+
+async def test_the_repository_a_drafted_workflow_reads_is_one_its_runs_may_read(lab: Lab):
+    drafted_id, approval_id = await sent(lab)
+    facts = BuilderWorkflowFacts(lab.db, None, None, ())  # type: ignore[arg-type]
+    before = [o.id for o in await facts.places(GITHUB_RELEASES)]
+    await decide(lab, approval_id)
+    await lab.approvals.work_once()
+    after = [o.id for o in await facts.places(GITHUB_RELEASES)]
+
+    assert "langchain-ai/langgraph" not in before
+    assert "langchain-ai/langgraph" in after
+
+
+async def test_save_draft_removes_what_it_created_when_its_id_can_t_be_recorded(db: Database):
+    api = Api()
+    drafts = N8nWorkflows(api, db)  # type: ignore[arg-type]
+
+    async def no_record(workflow_id: str) -> None:
+        raise RuntimeError("the database is gone")
+
+    with pytest.raises(RuntimeError):
+        await drafts.save_draft({"name": "x", "nodes": [], "connections": {}}, no_record)
+
     assert api.deleted == ["wf9"]
