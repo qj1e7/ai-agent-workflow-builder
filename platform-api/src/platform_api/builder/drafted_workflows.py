@@ -640,9 +640,11 @@ class DraftedWorkflows:
             )
 
     async def settle(self) -> None:
-        """Waits for every draft this process started, as a test or a shutdown does."""
-        while self._running:
-            await asyncio.gather(*self._running, return_exceptions=True)
+        """Waits for every draft this process started, as a test or a shutdown does. It waits only
+        for drafts still going: an ended one leaves the set in a callback that needs a turn of the
+        loop, and gather() on ended drafts gives it none."""
+        while going := [task for task in self._running if not task.done()]:
+            await asyncio.gather(*going, return_exceptions=True)
 
     async def draft(self, drafted_id: str, number: int) -> None:
         """Drafts one revision: the drafter plans, and code lays it out and checks it."""
