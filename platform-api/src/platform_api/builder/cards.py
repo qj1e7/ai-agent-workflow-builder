@@ -100,21 +100,53 @@ NEEDED_INPUTS: Mapping[str, CardInput] = {
 }
 
 
-def with_needed_inputs(card: CardDefinition) -> CardDefinition:
-    """The card with the one input each of its tools needs, added when the model left it out,
-    such as a Jira project for jira.search. Its value is never filled in here: the person gives
-    it, from her words or when the card asks. Two inputs of one kind are left for check_card to
-    flag, because which one is the target is the person's choice."""
-    kinds = {item.kind.strip() for item in card.inputs}
-    added: list[CardInput] = []
-    for block in card.blocks:
+# What a text input is called when it is really the input of a kind a tool needs.
+NAMES_OF_KIND: Mapping[str, frozenset[str]] = {
+    "jira_project": frozenset(
+        {"jira project", "jira project key", "jira key", "project", "project key"}
+    ),
+}
+
+
+def needed_kinds(blocks: Iterable[CardBlock]) -> list[str]:
+    """The kinds of input the blocks' tools need, each once, as the Jira project any Jira tool
+    reads or writes in."""
+    kinds: list[str] = []
+    for block in blocks:
         rule = RULES.get((block.tool or "").strip())
         kind = None if rule is None else rule.target_input or rule.scope_input
-        needed = NEEDED_INPUTS.get(kind or "")
-        if needed is not None and needed.kind not in kinds:
-            kinds.add(needed.kind)
-            added.append(needed)
-    return card.model_copy(update={"inputs": [*card.inputs, *added]}) if added else card
+        if kind is not None and kind in NEEDED_INPUTS and kind not in kinds:
+            kinds.append(kind)
+    return kinds
+
+
+def _names_kind(item: CardInput, kind: str) -> bool:
+    return (
+        item.kind.strip() == "text"
+        and " ".join(item.name.casefold().split()) in NAMES_OF_KIND[kind]
+    )
+
+
+def with_needed_inputs(card: CardDefinition) -> CardDefinition:
+    """The card with the one input each of its tools needs, such as a Jira project for
+    jira.search. A text input the model already named for it, as "Jira project", becomes that
+    input, and is dropped beside a real one, so it is never asked twice. Otherwise the input is
+    added. Its value is never filled in here: the person gives it, from their words or when the
+    card asks."""
+    inputs = list(card.inputs)
+    for kind in needed_kinds(card.blocks):
+        named = [n for n, item in enumerate(inputs) if _names_kind(item, kind)]
+        if any(item.kind.strip() == kind for item in inputs):
+            inputs = [item for n, item in enumerate(inputs) if n not in named]
+        elif named:
+            inputs = [
+                item.model_copy(update={"kind": kind}) if n == named[0] else item
+                for n, item in enumerate(inputs)
+                if n == named[0] or n not in named
+            ]
+        else:
+            inputs.append(NEEDED_INPUTS[kind])
+    return card.model_copy(update={"inputs": inputs})
 
 
 def check_card(card: CardDefinition) -> CardChecked:
