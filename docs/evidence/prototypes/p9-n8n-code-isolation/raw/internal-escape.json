@@ -1,0 +1,971 @@
+{
+ "agent": {
+  "JS tool": {
+   "ran": true,
+   "result": {
+    "dollar_env_defined": true,
+    "dollar_env_refused": true,
+    "escape": {
+     "async_function": {
+      "got_a_process": false,
+      "made_a_function": true,
+      "ran_and_threw": true
+     },
+     "buffer_constructor": {
+      "got_a_process": false,
+      "made_a_function": false
+     },
+     "require_constructor": {
+      "got_a_process": false,
+      "made_a_function": false
+     },
+     "this_constructor": {
+      "got_a_process": false,
+      "made_a_function": false
+     }
+    },
+    "fetch_defined": false,
+    "files": {
+     "n8n_config": {
+      "DBPASS": false,
+      "ENCKEY": true,
+      "IDHEADER": false,
+      "NODEKEY": false,
+      "RUNNERTOKEN": false,
+      "STARTSECRET": false,
+      "control_marker": false,
+      "encryptionKey_marker": true,
+      "exists": true,
+      "opened": true,
+      "outside_marker": false
+     },
+     "proc_1_environ": {
+      "DBPASS": true,
+      "ENCKEY": true,
+      "IDHEADER": true,
+      "NODEKEY": true,
+      "RUNNERTOKEN": true,
+      "STARTSECRET": true,
+      "control_marker": false,
+      "encryptionKey_marker": false,
+      "exists": true,
+      "opened": true,
+      "outside_marker": false
+     },
+     "proc_parent_environ": {
+      "DBPASS": true,
+      "ENCKEY": true,
+      "IDHEADER": true,
+      "NODEKEY": true,
+      "RUNNERTOKEN": true,
+      "STARTSECRET": true,
+      "control_marker": false,
+      "encryptionKey_marker": false,
+      "exists": true,
+      "opened": true,
+      "outside_marker": false
+     },
+     "proc_self_environ": {
+      "DBPASS": false,
+      "ENCKEY": false,
+      "IDHEADER": false,
+      "NODEKEY": false,
+      "RUNNERTOKEN": false,
+      "STARTSECRET": false,
+      "control_marker": false,
+      "encryptionKey_marker": false,
+      "exists": true,
+      "opened": true,
+      "outside_marker": false
+     }
+    },
+    "helper_files": {
+     "allowed_folder": {
+      "blocked": false,
+      "opened": false,
+      "unsupported": true
+     },
+     "link_to_n8n_config": {
+      "blocked": false,
+      "opened": false,
+      "unsupported": true
+     },
+     "n8n_config": {
+      "blocked": false,
+      "opened": false,
+      "unsupported": true
+     },
+     "outside": {
+      "blocked": false,
+      "opened": false,
+      "unsupported": true
+     },
+     "proc_1_environ": {
+      "blocked": false,
+      "opened": false,
+      "unsupported": true
+     },
+     "proc_self_environ": {
+      "blocked": false,
+      "opened": false,
+      "unsupported": true
+     }
+    },
+    "helpers_defined": true,
+    "identity": {
+     "direct_no_header": 400,
+     "direct_with_header": 200,
+     "header_visible": true,
+     "helper_no_header": 400,
+     "helper_with_header": 200
+    },
+    "langchain_env_module": false,
+    "process_defined": false,
+    "ran": true,
+    "require": {
+     "child_process": true,
+     "fs": true,
+     "http": true,
+     "process": true
+    },
+    "require_process_env": {
+     "DBPASS": false,
+     "ENCKEY": false,
+     "IDHEADER": false,
+     "NODEKEY": false,
+     "RUNNERTOKEN": false,
+     "STARTSECRET": false,
+     "control_marker": false,
+     "encryptionKey_marker": false,
+     "outside_marker": false
+    }
+   }
+  },
+  "Python tool": {
+   "error_class": "timed out",
+   "ran": true
+  },
+  "agent_ran": true
+ },
+ "code_blocks": {
+  "ai_transform": {
+   "ran": true,
+   "result": {
+    "dollar_env_defined": true,
+    "dollar_env_refused": true,
+    "escape": {
+     "async_function": {
+      "got_a_process": false,
+      "made_a_function": true,
+      "ran_and_threw": true
+     },
+     "buffer_constructor": {
+      "got_a_process": false,
+      "made_a_function": false
+     },
+     "require_constructor": {
+      "got_a_process": false,
+      "made_a_function": false
+     },
+     "this_constructor": {
+      "got_a_process": false,
+      "made_a_function": false
+     }
+    },
+    "fetch_defined": false,
+    "files": {
+     "n8n_config": {
+      "DBPASS": false,
+      "ENCKEY": true,
+      "IDHEADER": false,
+      "NODEKEY": false,
+      "RUNNERTOKEN": false,
+      "STARTSECRET": false,
+      "control_marker": false,
+      "encryptionKey_marker": true,
+      "exists": true,
+      "opened": true,
+      "outside_marker": false
+     },
+     "proc_1_environ": {
+      "DBPASS": true,
+      "ENCKEY": true,
+      "IDHEADER": true,
+      "NODEKEY": true,
+      "RUNNERTOKEN": true,
+      "STARTSECRET": true,
+      "control_marker": false,
+      "encryptionKey_marker": false,
+      "exists": true,
+      "opened": true,
+      "outside_marker": false
+     },
+     "proc_parent_environ": {
+      "DBPASS": true,
+      "ENCKEY": true,
+      "IDHEADER": true,
+      "NODEKEY": true,
+      "RUNNERTOKEN": true,
+      "STARTSECRET": true,
+      "control_marker": false,
+      "encryptionKey_marker": false,
+      "exists": true,
+      "opened": true,
+      "outside_marker": false
+     },
+     "proc_self_environ": {
+      "DBPASS": false,
+      "ENCKEY": false,
+      "IDHEADER": false,
+      "NODEKEY": false,
+      "RUNNERTOKEN": false,
+      "STARTSECRET": false,
+      "control_marker": false,
+      "encryptionKey_marker": false,
+      "exists": true,
+      "opened": true,
+      "outside_marker": false
+     }
+    },
+    "helper_files": {
+     "allowed_folder": {
+      "blocked": false,
+      "opened": false,
+      "unsupported": true
+     },
+     "link_to_n8n_config": {
+      "blocked": false,
+      "opened": false,
+      "unsupported": true
+     },
+     "n8n_config": {
+      "blocked": false,
+      "opened": false,
+      "unsupported": true
+     },
+     "outside": {
+      "blocked": false,
+      "opened": false,
+      "unsupported": true
+     },
+     "proc_1_environ": {
+      "blocked": false,
+      "opened": false,
+      "unsupported": true
+     },
+     "proc_self_environ": {
+      "blocked": false,
+      "opened": false,
+      "unsupported": true
+     }
+    },
+    "helpers_defined": true,
+    "identity": {
+     "direct_no_header": 400,
+     "direct_with_header": 200,
+     "header_visible": true,
+     "helper_no_header": 400,
+     "helper_with_header": 200
+    },
+    "langchain_env_module": false,
+    "process_defined": false,
+    "ran": true,
+    "require": {
+     "child_process": true,
+     "fs": true,
+     "http": true,
+     "process": true
+    },
+    "require_process_env": {
+     "DBPASS": false,
+     "ENCKEY": false,
+     "IDHEADER": false,
+     "NODEKEY": false,
+     "RUNNERTOKEN": false,
+     "STARTSECRET": false,
+     "control_marker": false,
+     "encryptionKey_marker": false,
+     "outside_marker": false
+    }
+   }
+  },
+  "code_js": {
+   "ran": true,
+   "result": {
+    "dollar_env_defined": true,
+    "dollar_env_refused": true,
+    "escape": {
+     "async_function": {
+      "got_a_process": false,
+      "made_a_function": true,
+      "ran_and_threw": true
+     },
+     "buffer_constructor": {
+      "got_a_process": false,
+      "made_a_function": false
+     },
+     "require_constructor": {
+      "got_a_process": false,
+      "made_a_function": false
+     },
+     "this_constructor": {
+      "got_a_process": false,
+      "made_a_function": false
+     }
+    },
+    "fetch_defined": false,
+    "files": {
+     "n8n_config": {
+      "DBPASS": false,
+      "ENCKEY": true,
+      "IDHEADER": false,
+      "NODEKEY": false,
+      "RUNNERTOKEN": false,
+      "STARTSECRET": false,
+      "control_marker": false,
+      "encryptionKey_marker": true,
+      "exists": true,
+      "opened": true,
+      "outside_marker": false
+     },
+     "proc_1_environ": {
+      "DBPASS": true,
+      "ENCKEY": true,
+      "IDHEADER": true,
+      "NODEKEY": true,
+      "RUNNERTOKEN": true,
+      "STARTSECRET": true,
+      "control_marker": false,
+      "encryptionKey_marker": false,
+      "exists": true,
+      "opened": true,
+      "outside_marker": false
+     },
+     "proc_parent_environ": {
+      "DBPASS": true,
+      "ENCKEY": true,
+      "IDHEADER": true,
+      "NODEKEY": true,
+      "RUNNERTOKEN": true,
+      "STARTSECRET": true,
+      "control_marker": false,
+      "encryptionKey_marker": false,
+      "exists": true,
+      "opened": true,
+      "outside_marker": false
+     },
+     "proc_self_environ": {
+      "DBPASS": false,
+      "ENCKEY": false,
+      "IDHEADER": false,
+      "NODEKEY": false,
+      "RUNNERTOKEN": false,
+      "STARTSECRET": false,
+      "control_marker": false,
+      "encryptionKey_marker": false,
+      "exists": true,
+      "opened": true,
+      "outside_marker": false
+     }
+    },
+    "helper_files": {
+     "allowed_folder": {
+      "blocked": false,
+      "opened": false,
+      "unsupported": true
+     },
+     "link_to_n8n_config": {
+      "blocked": false,
+      "opened": false,
+      "unsupported": true
+     },
+     "n8n_config": {
+      "blocked": false,
+      "opened": false,
+      "unsupported": true
+     },
+     "outside": {
+      "blocked": false,
+      "opened": false,
+      "unsupported": true
+     },
+     "proc_1_environ": {
+      "blocked": false,
+      "opened": false,
+      "unsupported": true
+     },
+     "proc_self_environ": {
+      "blocked": false,
+      "opened": false,
+      "unsupported": true
+     }
+    },
+    "helpers_defined": true,
+    "identity": {
+     "direct_no_header": 400,
+     "direct_with_header": 200,
+     "header_visible": true,
+     "helper_no_header": 400,
+     "helper_with_header": 200
+    },
+    "langchain_env_module": false,
+    "process_defined": false,
+    "ran": true,
+    "require": {
+     "child_process": true,
+     "fs": true,
+     "http": true,
+     "process": true
+    },
+    "require_process_env": {
+     "DBPASS": false,
+     "ENCKEY": false,
+     "IDHEADER": false,
+     "NODEKEY": false,
+     "RUNNERTOKEN": false,
+     "STARTSECRET": false,
+     "control_marker": false,
+     "encryptionKey_marker": false,
+     "outside_marker": false
+    }
+   }
+  },
+  "code_python_dunder": {
+   "error_class": "python runner unavailable",
+   "ran": true
+  },
+  "code_python_import_os": {
+   "error_class": "python runner unavailable",
+   "ran": true
+  },
+  "code_python_plain": {
+   "error_class": "python runner unavailable",
+   "ran": true
+  },
+  "function": {
+   "workflow_not_run": 400
+  },
+  "function_item": {
+   "workflow_not_run": 400
+  },
+  "http_request_control": {
+   "ran": true,
+   "result": {
+    "body": {},
+    "headers": {},
+    "statusCode": 400
+   }
+  },
+  "item_lists_code": {
+   "ran": true,
+   "result": {
+    "dollar_env_defined": false,
+    "escape": {
+     "async_function": {
+      "got_a_process": false,
+      "made_a_function": true
+     },
+     "buffer_constructor": {
+      "got_a_process": false,
+      "made_a_function": false
+     },
+     "require_constructor": {
+      "got_a_process": false,
+      "made_a_function": false
+     },
+     "this_constructor": {
+      "got_a_process": false,
+      "made_a_function": false
+     }
+    },
+    "fetch_defined": false,
+    "helpers_defined": false,
+    "langchain_env_module": false,
+    "process_defined": false,
+    "ran": true,
+    "require": {
+     "child_process": false,
+     "fs": false,
+     "http": false,
+     "process": false
+    }
+   }
+  },
+  "langchain_code": {
+   "workflow_not_run": 400
+  },
+  "merge_sql_allowed_folder": {
+   "error_class": "refused by the SQL sandbox",
+   "ran": true
+  },
+  "merge_sql_control": {
+   "output_scan": {
+    "DBPASS": false,
+    "ENCKEY": false,
+    "IDHEADER": false,
+    "NODEKEY": false,
+    "RUNNERTOKEN": false,
+    "STARTSECRET": false,
+    "control_marker": false,
+    "encryptionKey_marker": false,
+    "outside_marker": false
+   },
+   "ran": true,
+   "rows": 1
+  },
+  "merge_sql_n8n_config": {
+   "error_class": "refused by the SQL sandbox",
+   "ran": true
+  },
+  "merge_sql_proc_self_environ": {
+   "error_class": "refused by the SQL sandbox",
+   "ran": true
+  },
+  "merge_sql_url": {
+   "error_class": "refused by the SQL sandbox",
+   "ran": true
+  },
+  "sort_code": {
+   "ran": true,
+   "result": {
+    "dollar_env_defined": false,
+    "escape": {
+     "async_function": {
+      "got_a_process": false,
+      "made_a_function": true
+     },
+     "buffer_constructor": {
+      "got_a_process": false,
+      "made_a_function": false
+     },
+     "require_constructor": {
+      "got_a_process": false,
+      "made_a_function": false
+     },
+     "this_constructor": {
+      "got_a_process": false,
+      "made_a_function": false
+     }
+    },
+    "fetch_defined": false,
+    "helpers_defined": false,
+    "langchain_env_module": false,
+    "process_defined": false,
+    "ran": true,
+    "require": {
+     "child_process": false,
+     "fs": false,
+     "http": false,
+     "process": false
+    }
+   }
+  }
+ },
+ "disk": {
+  "execute_sub_workflow_file:allowed_folder": {
+   "error_class": "read, but not a workflow",
+   "ran": true
+  },
+  "execute_sub_workflow_file:n8n_config": {
+   "error_class": "blocked by n8n",
+   "ran": true
+  },
+  "execute_sub_workflow_file:outside": {
+   "error_class": "blocked by n8n",
+   "ran": true
+  },
+  "git_clone_from:n8n_folder": {
+   "error_class": "blocked by n8n",
+   "ran": true
+  },
+  "git_clone_into:n8n_custom_folder": {
+   "error_class": "blocked by n8n",
+   "ran": true
+  },
+  "git_status:allowed_folder": {
+   "error_class": "not a git repository",
+   "ran": true
+  },
+  "git_status:n8n_folder": {
+   "error_class": "blocked by n8n",
+   "ran": true
+  },
+  "read_binary_file:read:allowed_folder": {
+   "content": {
+    "DBPASS": false,
+    "ENCKEY": false,
+    "IDHEADER": false,
+    "NODEKEY": false,
+    "RUNNERTOKEN": false,
+    "STARTSECRET": false,
+    "control_marker": true,
+    "encryptionKey_marker": false,
+    "outside_marker": false
+   },
+   "ran": true,
+   "read": true
+  },
+  "read_binary_file:read:link_to_n8n_config": {
+   "content": {
+    "DBPASS": false,
+    "ENCKEY": false,
+    "IDHEADER": false,
+    "NODEKEY": false,
+    "RUNNERTOKEN": false,
+    "STARTSECRET": false,
+    "control_marker": false,
+    "encryptionKey_marker": false,
+    "outside_marker": false
+   },
+   "error_class": "blocked by n8n",
+   "ran": true
+  },
+  "read_binary_file:read:n8n_config": {
+   "content": {
+    "DBPASS": false,
+    "ENCKEY": false,
+    "IDHEADER": false,
+    "NODEKEY": false,
+    "RUNNERTOKEN": false,
+    "STARTSECRET": false,
+    "control_marker": false,
+    "encryptionKey_marker": false,
+    "outside_marker": false
+   },
+   "error_class": "blocked by n8n",
+   "ran": true
+  },
+  "read_binary_file:read:outside": {
+   "content": {
+    "DBPASS": false,
+    "ENCKEY": false,
+    "IDHEADER": false,
+    "NODEKEY": false,
+    "RUNNERTOKEN": false,
+    "STARTSECRET": false,
+    "control_marker": false,
+    "encryptionKey_marker": false,
+    "outside_marker": false
+   },
+   "error_class": "blocked by n8n",
+   "ran": true
+  },
+  "read_binary_file:read:proc_1_environ": {
+   "content": {
+    "DBPASS": false,
+    "ENCKEY": false,
+    "IDHEADER": false,
+    "NODEKEY": false,
+    "RUNNERTOKEN": false,
+    "STARTSECRET": false,
+    "control_marker": false,
+    "encryptionKey_marker": false,
+    "outside_marker": false
+   },
+   "error_class": "blocked by n8n",
+   "ran": true
+  },
+  "read_binary_file:read:proc_self_environ": {
+   "content": {
+    "DBPASS": false,
+    "ENCKEY": false,
+    "IDHEADER": false,
+    "NODEKEY": false,
+    "RUNNERTOKEN": false,
+    "STARTSECRET": false,
+    "control_marker": false,
+    "encryptionKey_marker": false,
+    "outside_marker": false
+   },
+   "error_class": "blocked by n8n",
+   "ran": true
+  },
+  "read_binary_files:read:allowed_folder": {
+   "content": {
+    "DBPASS": false,
+    "ENCKEY": false,
+    "IDHEADER": false,
+    "NODEKEY": false,
+    "RUNNERTOKEN": false,
+    "STARTSECRET": false,
+    "control_marker": true,
+    "encryptionKey_marker": false,
+    "outside_marker": false
+   },
+   "ran": true,
+   "read": true
+  },
+  "read_binary_files:read:link_to_n8n_config": {
+   "content": {
+    "DBPASS": false,
+    "ENCKEY": false,
+    "IDHEADER": false,
+    "NODEKEY": false,
+    "RUNNERTOKEN": false,
+    "STARTSECRET": false,
+    "control_marker": false,
+    "encryptionKey_marker": false,
+    "outside_marker": false
+   },
+   "error_class": "blocked by n8n",
+   "ran": true
+  },
+  "read_binary_files:read:n8n_config": {
+   "content": {
+    "DBPASS": false,
+    "ENCKEY": false,
+    "IDHEADER": false,
+    "NODEKEY": false,
+    "RUNNERTOKEN": false,
+    "STARTSECRET": false,
+    "control_marker": false,
+    "encryptionKey_marker": false,
+    "outside_marker": false
+   },
+   "error_class": "blocked by n8n",
+   "ran": true
+  },
+  "read_binary_files:read:outside": {
+   "content": {
+    "DBPASS": false,
+    "ENCKEY": false,
+    "IDHEADER": false,
+    "NODEKEY": false,
+    "RUNNERTOKEN": false,
+    "STARTSECRET": false,
+    "control_marker": false,
+    "encryptionKey_marker": false,
+    "outside_marker": false
+   },
+   "error_class": "blocked by n8n",
+   "ran": true
+  },
+  "read_binary_files:read:proc_1_environ": {
+   "content": {
+    "DBPASS": false,
+    "ENCKEY": false,
+    "IDHEADER": false,
+    "NODEKEY": false,
+    "RUNNERTOKEN": false,
+    "STARTSECRET": false,
+    "control_marker": false,
+    "encryptionKey_marker": false,
+    "outside_marker": false
+   },
+   "error_class": "blocked by n8n",
+   "ran": true
+  },
+  "read_binary_files:read:proc_self_environ": {
+   "content": {
+    "DBPASS": false,
+    "ENCKEY": false,
+    "IDHEADER": false,
+    "NODEKEY": false,
+    "RUNNERTOKEN": false,
+    "STARTSECRET": false,
+    "control_marker": false,
+    "encryptionKey_marker": false,
+    "outside_marker": false
+   },
+   "error_class": "blocked by n8n",
+   "ran": true
+  },
+  "read_write_file:read:allowed_folder": {
+   "content": {
+    "DBPASS": false,
+    "ENCKEY": false,
+    "IDHEADER": false,
+    "NODEKEY": false,
+    "RUNNERTOKEN": false,
+    "STARTSECRET": false,
+    "control_marker": true,
+    "encryptionKey_marker": false,
+    "outside_marker": false
+   },
+   "ran": true,
+   "read": true
+  },
+  "read_write_file:read:link_to_n8n_config": {
+   "content": {
+    "DBPASS": false,
+    "ENCKEY": false,
+    "IDHEADER": false,
+    "NODEKEY": false,
+    "RUNNERTOKEN": false,
+    "STARTSECRET": false,
+    "control_marker": false,
+    "encryptionKey_marker": false,
+    "outside_marker": false
+   },
+   "error_class": "blocked by n8n",
+   "ran": true
+  },
+  "read_write_file:read:n8n_config": {
+   "content": {
+    "DBPASS": false,
+    "ENCKEY": false,
+    "IDHEADER": false,
+    "NODEKEY": false,
+    "RUNNERTOKEN": false,
+    "STARTSECRET": false,
+    "control_marker": false,
+    "encryptionKey_marker": false,
+    "outside_marker": false
+   },
+   "error_class": "blocked by n8n",
+   "ran": true
+  },
+  "read_write_file:read:outside": {
+   "content": {
+    "DBPASS": false,
+    "ENCKEY": false,
+    "IDHEADER": false,
+    "NODEKEY": false,
+    "RUNNERTOKEN": false,
+    "STARTSECRET": false,
+    "control_marker": false,
+    "encryptionKey_marker": false,
+    "outside_marker": false
+   },
+   "error_class": "blocked by n8n",
+   "ran": true
+  },
+  "read_write_file:read:proc_1_environ": {
+   "content": {
+    "DBPASS": false,
+    "ENCKEY": false,
+    "IDHEADER": false,
+    "NODEKEY": false,
+    "RUNNERTOKEN": false,
+    "STARTSECRET": false,
+    "control_marker": false,
+    "encryptionKey_marker": false,
+    "outside_marker": false
+   },
+   "error_class": "blocked by n8n",
+   "ran": true
+  },
+  "read_write_file:read:proc_self_environ": {
+   "content": {
+    "DBPASS": false,
+    "ENCKEY": false,
+    "IDHEADER": false,
+    "NODEKEY": false,
+    "RUNNERTOKEN": false,
+    "STARTSECRET": false,
+    "control_marker": false,
+    "encryptionKey_marker": false,
+    "outside_marker": false
+   },
+   "error_class": "blocked by n8n",
+   "ran": true
+  },
+  "read_write_file:write:allowed_folder": {
+   "file_written": true,
+   "ran": true
+  },
+  "read_write_file:write:n8n_custom_folder": {
+   "error_class": "blocked by n8n",
+   "file_written": false,
+   "ran": true
+  },
+  "read_write_file:write:outside": {
+   "error_class": "blocked by n8n",
+   "file_written": false,
+   "ran": true
+  },
+  "write_binary_file:write:allowed_folder": {
+   "file_written": true,
+   "ran": true
+  },
+  "write_binary_file:write:n8n_custom_folder": {
+   "error_class": "blocked by n8n",
+   "file_written": false,
+   "ran": true
+  },
+  "write_binary_file:write:outside": {
+   "error_class": "blocked by n8n",
+   "file_written": false,
+   "ran": true
+  }
+ },
+ "identity_record": {
+  "internal-escape-ai-transform-direct-header": {
+   "requests": 1,
+   "with_canary_header": 1
+  },
+  "internal-escape-ai-transform-direct-noheader": {
+   "requests": 1,
+   "with_canary_header": 0
+  },
+  "internal-escape-ai-transform-helper-header": {
+   "requests": 1,
+   "with_canary_header": 1
+  },
+  "internal-escape-ai-transform-helper-noheader": {
+   "requests": 1,
+   "with_canary_header": 0
+  },
+  "internal-escape-code-js-direct-header": {
+   "requests": 1,
+   "with_canary_header": 1
+  },
+  "internal-escape-code-js-direct-noheader": {
+   "requests": 1,
+   "with_canary_header": 0
+  },
+  "internal-escape-code-js-helper-header": {
+   "requests": 1,
+   "with_canary_header": 1
+  },
+  "internal-escape-code-js-helper-noheader": {
+   "requests": 1,
+   "with_canary_header": 0
+  },
+  "internal-escape-code-tool-js-direct-header": {
+   "requests": 1,
+   "with_canary_header": 1
+  },
+  "internal-escape-code-tool-js-direct-noheader": {
+   "requests": 1,
+   "with_canary_header": 0
+  },
+  "internal-escape-code-tool-js-helper-header": {
+   "requests": 1,
+   "with_canary_header": 1
+  },
+  "internal-escape-code-tool-js-helper-noheader": {
+   "requests": 1,
+   "with_canary_header": 0
+  },
+  "internal-escape-http-request": {
+   "requests": 1,
+   "with_canary_header": 0
+  }
+ },
+ "model_calls": 2,
+ "types": {
+  "@n8n/n8n-nodes-langchain.agent": true,
+  "@n8n/n8n-nodes-langchain.code": true,
+  "@n8n/n8n-nodes-langchain.lmChatOpenAi": true,
+  "@n8n/n8n-nodes-langchain.toolCode": true,
+  "n8n-nodes-base.aiTransform": true,
+  "n8n-nodes-base.code": true,
+  "n8n-nodes-base.executeCommand": false,
+  "n8n-nodes-base.executeWorkflow": true,
+  "n8n-nodes-base.function": true,
+  "n8n-nodes-base.functionItem": true,
+  "n8n-nodes-base.git": true,
+  "n8n-nodes-base.httpRequest": true,
+  "n8n-nodes-base.itemLists": true,
+  "n8n-nodes-base.localFileTrigger": false,
+  "n8n-nodes-base.merge": true,
+  "n8n-nodes-base.readBinaryFile": true,
+  "n8n-nodes-base.readBinaryFiles": true,
+  "n8n-nodes-base.readWriteFile": true,
+  "n8n-nodes-base.sort": true,
+  "n8n-nodes-base.writeBinaryFile": true,
+  "total": 851
+ },
+ "variant": "internal-escape"
+}

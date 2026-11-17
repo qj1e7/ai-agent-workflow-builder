@@ -1,0 +1,97 @@
+# Spike P9: a throwaway n8n, set up as the platform runs it, that holds made-up canary values only.
+# run.py makes p9.env with fresh made-up values (git ignores it) and picks the variant file.
+# Nothing here mounts the repo's .env or reads a real key.
+name: p9
+services:
+  postgres:
+    image: postgres:17@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3
+    environment:
+      POSTGRES_USER: n8n
+      POSTGRES_DB: n8n
+      POSTGRES_PASSWORD: ${P9_DB_PASSWORD:?run run.py}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U n8n -d n8n"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  n8n:
+    # The platform's own image: n8nio/n8n:2.42.6 with our node pack (deploy/n8n/Dockerfile).
+    image: wab/n8n:dev
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - path: variants/${P9_VARIANT:-internal}.env
+        required: true
+    # As deploy/compose.yaml and infra/envs/dev/main.tf set n8n, without NODES_INCLUDE, which ADR 0051
+    # step 12 removes. Each secret the platform gives n8n holds a made-up canary instead.
+    environment:
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: postgres
+      DB_POSTGRESDB_PORT: "5432"
+      DB_POSTGRESDB_DATABASE: n8n
+      DB_POSTGRESDB_USER: n8n
+      DB_POSTGRESDB_PASSWORD: ${P9_DB_PASSWORD:?run run.py}
+      WEBHOOK_URL: http://n8n:5678/
+      GENERIC_TIMEZONE: Asia/Singapore
+      N8N_ENCRYPTION_KEY: ${P9_ENCRYPTION_KEY:?run run.py}
+      N8N_DIAGNOSTICS_ENABLED: "false"
+      N8N_VERSION_NOTIFICATIONS_ENABLED: "false"
+      N8N_PERSONALIZATION_ENABLED: "false"
+      N8N_HIRING_BANNER_ENABLED: "false"
+      N8N_SECURE_COOKIE: "false"
+      N8N_DISABLED_MODULES: mcp-registry
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "true"
+      NODES_EXCLUDE: '["n8n-nodes-base.executeCommand","n8n-nodes-base.localFileTrigger"]'
+      N8N_COMMUNITY_PACKAGES_ENABLED: "false"
+      WAB_API_URL: http://localhost:42356/wab
+      WAB_NODE_KEY: ${P9_NODE_KEY:?run run.py}
+      WAB_START_SECRET: ${P9_START_SECRET:?run run.py}
+      # On Azure, Container Apps puts these two in the environment of an app with a managed identity.
+      # The endpoint is on the app's own localhost, so the stand-in below shares n8n's network.
+      IDENTITY_ENDPOINT: http://localhost:42356/msi/token
+      IDENTITY_HEADER: ${P9_IDENTITY_HEADER:?run run.py}
+      # The platform leaves this unset, and n8n then makes one. A canary shows whether code can read it.
+      N8N_RUNNERS_AUTH_TOKEN: ${P9_RUNNER_TOKEN:?run run.py}
+    ports:
+      - "127.0.0.1:15790:5678"
+      # The stand-in identity endpoint's record, which only run.py reads.
+      - "127.0.0.1:15791:42356"
+    volumes:
+      - n8ndata:/home/node/.n8n
+    healthcheck:
+      test: ["CMD-SHELL", "wget -Y off -qO- http://localhost:5678/healthz/readiness || exit 1"]
+      interval: 3s
+      timeout: 3s
+      retries: 60
+
+  # Stands in for the Container Apps identity endpoint, the token endpoint of a key, and a model.
+  # It records only whether a request came and whether it carried the identity header's canary.
+  stand-in:
+    image: python:3.12-slim@sha256:a6e34c598f2467ed0e9a8d349809fcd8b5c603269512df273a0bb1784edc11b1
+    network_mode: "service:n8n"
+    depends_on:
+      - n8n
+    command: ["python", "-u", "/app/fake.py"]
+    environment:
+      P9_IDENTITY_HEADER: ${P9_IDENTITY_HEADER:?run run.py}
+    volumes:
+      - ./fake.py:/app/fake.py:ro
+
+  # n8n's external task runner, in its own container with no managed identity, as a separate app would be.
+  runners:
+    image: n8nio/runners:2.42.6@sha256:b78816286beb0a14e874abfda31eb4621d47f5ebb38f194271df7e39b7bd63a7
+    profiles: ["external"]
+    depends_on:
+      - n8n
+    environment:
+      N8N_RUNNERS_TASK_BROKER_URI: http://n8n:5679
+      N8N_RUNNERS_AUTH_TOKEN: ${P9_RUNNER_TOKEN:?run run.py}
+      N8N_RUNNERS_AUTO_SHUTDOWN_TIMEOUT: "15"
+
+volumes:
+  pgdata: {}
+  n8ndata: {}
