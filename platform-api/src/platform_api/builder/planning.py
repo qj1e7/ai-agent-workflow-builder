@@ -9,7 +9,13 @@ import logging
 from collections.abc import Mapping, Sequence
 from typing import Final, Literal, Protocol
 
-from platform_api.builder.cards import check_card, library_card, with_needed_inputs
+from platform_api.builder.cards import check_card, library_card
+from platform_api.builder.draft_repair import (
+    TwoProjects,
+    one_project_only,
+    repaired,
+    theirs_to_change,
+)
 from platform_api.builder.models import (
     CannotDo,
     CardApprovalView,
@@ -47,6 +53,8 @@ QUESTION_LIMIT = 300
 QUESTION_COUNT = 5
 PART_LIMIT = 300
 MISSING_COUNT = 5
+NO_TOOL: Final = "No tool on the platform does this step yet."
+NO_TOOL_FOR_ANY_STEP: Final = "No tool on the platform does any step of this yet."
 
 
 class CardPlanner(Protocol):
@@ -207,13 +215,27 @@ async def _draft(
             ),
             missing_tools=_missing(draft),
         )
-    checked = check_card(with_needed_inputs(_definition(draft)))
+    repair = repaired(_definition(draft), task)
+    if isinstance(repair, TwoProjects):
+        return CannotDo(reason=one_project_only(repair.keys), missing_tools=_missing(draft))
+    left_out = [
+        MissingTool(need=_short(need, QUESTION_LIMIT), why=NO_TOOL) for need in repair.left_out
+    ]
+    missing = [*_missing(draft), *left_out][:MISSING_COUNT]
+    if not repair.card.blocks and left_out:
+        return CannotDo(reason=NO_TOOL_FOR_ANY_STEP, missing_tools=missing)
+    checked = check_card(repair.card)
+    if not all(theirs_to_change(problem, task) for problem in checked.problems):
+        # What is left only the model can fix, such as a step too long to cut or no step at
+        # all: a fresh draft is the way on, and the card's Try again asks for one.
+        log.warning("A drafted card is unusable: %s", [p.field for p in checked.problems])
+        return ModelTrouble(message=PROBLEM_WORDS["unusable_answer"])
     return NewAgent(
         draft=checked.card,
         approvals=checked.approvals,
         problems=checked.problems,
         reason=reason,
-        missing_tools=_missing(draft),
+        missing_tools=missing,
         questions=_questions(questions, draft.questions),
     )
 

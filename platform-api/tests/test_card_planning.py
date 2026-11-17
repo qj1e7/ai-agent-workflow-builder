@@ -175,18 +175,25 @@ async def test_a_new_agent_comes_back_checked_and_never_saved():
     assert [m.need for m in result.missing_tools] == ["Teams"]
 
 
-async def test_a_draft_with_problems_comes_back_with_them_listed():
+async def test_a_draft_with_problems_its_words_cant_fix_comes_back_repaired():
+    """Before, the old name and the missing tool were listed as problems, and the card said to
+    change the words, which could fix neither. test_card_draft_repair.py has each case."""
     planner = FakePlanner(
         chose=chosen("new_agent"),
         drafted=draft(
             name="Forge",
-            blocks=[DraftBlock(say="Remove.", tool="gitlab.remove_member")],
+            blocks=[
+                DraftBlock(say="Remove.", tool="gitlab.remove_member"),
+                DraftBlock(say="Search.", tool="jira.search"),
+            ],
             inputs=[],
         ),
     )
     result = await plan(planner, LIBRARY, "x")
     assert isinstance(result, NewAgent)
-    assert {p.field for p in result.problems} == {"name", "blocks.0.tool"}
+    assert result.problems == []
+    assert result.draft.name == "New agent"
+    assert [m.need for m in result.missing_tools] == ["Remove"]
 
 
 CAROL = (
@@ -269,19 +276,6 @@ async def test_a_draft_missing_the_input_its_tool_needs_is_given_it_once(tool: s
     assert [(i.name, i.kind, i.example) for i in result.draft.inputs] == [
         (PROJECT, "jira_project", "MOCK")
     ]
-
-
-async def test_a_draft_with_two_jira_project_inputs_is_still_flagged_never_trimmed():
-    """Which of two projects is the target is the person's choice, so it is never picked."""
-    two = [DraftInput(name="From", kind="jira_project"), DraftInput(name="To", kind="jira_project")]
-    planner = FakePlanner(
-        chose=chosen("new_agent"),
-        drafted=draft(blocks=[DraftBlock(say="Raise it.", tool="jira.create_ticket")], inputs=two),
-    )
-    result = await plan(planner, LIBRARY, "x")
-    assert isinstance(result, NewAgent)
-    assert [p.field for p in result.problems] == ["inputs"]
-    assert len(result.draft.inputs) == 2
 
 
 async def test_a_draft_that_reads_github_only_gets_no_input_it_does_not_need():
