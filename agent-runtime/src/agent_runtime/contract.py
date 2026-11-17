@@ -1664,7 +1664,8 @@ class PlanSetting(WireModel):
     fills: list[SettingPlace] = Field(min_length=1)
     value: str | None = Field(
         description="A run time is code's reading, as monday 09:00, or the person's own words "
-        "for one code can't read. None while it is needed."
+        "for one code can't read. None while it is needed, except a run time still needed for "
+        "want of a time, which keeps the day the words name, as monday."
     )
     mark: SettingMark = Field(
         description="filled: code found it in the person's words, and for a kind that is never "
