@@ -112,7 +112,7 @@ test.describe('Drafted workflow', () => {
     await card.getByRole('button', { name: 'Type a time' }).click()
     await card.getByRole('textbox', { name: 'Type a time' }).fill('9')
     await card.getByRole('button', { name: 'Set' }).click()
-    await expect(card.getByRole('alert'), 'a time it cannot read stays a question, with the words under the box').toContainText('I couldn’t read a time in that.')
+    await expect(card.getByRole('alert'), 'a time it cannot read stays a question, with the words under the box').toContainText("I couldn't read a time in that.")
     await expect(card.getByText('Mondays, at what time?')).toBeVisible()
 
     await card.getByRole('textbox', { name: 'Type a time' }).fill('9:30')
