@@ -240,8 +240,9 @@ def test_what_n8n_doesn_t_have_or_won_t_take_goes_back_named(
 @pytest.mark.parametrize(
     ("bad", "code", "said"),
     [
-        (block("X", "n8n-nodes-base.function", 1), "held", "It runs code inside n8n's own"),
-        (block("X", "@n8n/n8n-nodes-langchain.code", 1), "held", "It runs code inside n8n's"),
+        (block("X", "n8n-nodes-base.function", 1), "left_out", "Function never loads"),
+        (block("X", "@n8n/n8n-nodes-langchain.code", 1), "left_out", "LangChain Code never"),
+        (block("X", "n8n-nodes-base.git", 1.1), "left_out", "Git never loads"),
         (
             block("X", "n8n-nodes-base.executeWorkflow", 1.3),
             "held",

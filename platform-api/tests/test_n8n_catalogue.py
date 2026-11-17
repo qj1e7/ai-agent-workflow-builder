@@ -9,9 +9,9 @@ from typing import Any
 import pytest
 
 from platform_api.n8n_catalogue import PINS, catalogue, dump, main, pin_problems
-from platform_api.n8n_code_check import scan
+from platform_api.n8n_code_check import Scan, scan
 from platform_api.n8n_defaults_check import CONFIGS
-from platform_api.orchestration.n8n_blocks import GIT
+from platform_api.orchestration.n8n_blocks import CALLS
 from tests.test_n8n_code_check import a_package
 from tests.test_n8n_defaults_check import PINS as TWO_PINS
 from tests.test_n8n_defaults_check import sources as sources_of_defaults
@@ -130,21 +130,22 @@ def served() -> list[Json]:
             "properties": [],
         },
         {
-            "name": "n8n-nodes-base.git",
-            "displayName": "Git",
-            "description": "Control git.",
+            "name": "n8n-nodes-base.executeWorkflow",
+            "displayName": "Execute Sub-workflow",
+            "description": "Runs another workflow.",
             "version": 1,
             "hidden": True,
             "properties": [],
         },
         {
-            "name": "n8n-nodes-base.gitTool",
-            "displayName": "Git Tool",
-            "description": "Control git.",
+            "name": "n8n-nodes-base.executeWorkflowTool",
+            "displayName": "Execute Sub-workflow Tool",
+            "description": "Runs another workflow.",
             "version": 1,
             "properties": [],
         },
         {"name": "n8n-nodes-base.executeCommand", "version": 1, "properties": []},
+        {"name": "n8n-nodes-base.git", "version": 1, "properties": []},
         {"name": "@n8n/mcp-registry.airtable", "version": [1, 1.1], "properties": []},
         {
             "name": "@n8n/n8n-nodes-langchain.mcpRegistryClientTool",
@@ -154,7 +155,7 @@ def served() -> list[Json]:
     ]
 
 
-OWN = {"n8n-nodes-base.jira", "n8n-nodes-base.merge", "n8n-nodes-base.git"}
+OWN = {"n8n-nodes-base.jira", "n8n-nodes-base.merge", "n8n-nodes-base.executeWorkflow"}
 
 
 @pytest.fixture
@@ -166,8 +167,8 @@ def test_it_holds_what_the_image_ships_and_our_blocks_and_leaves_out_the_rest(ma
     assert made["image"] == PIN
     assert sorted(made["blocks"]) == [
         "CUSTOM.wabRead",
-        "n8n-nodes-base.git",
-        "n8n-nodes-base.gitTool",
+        "n8n-nodes-base.executeWorkflow",
+        "n8n-nodes-base.executeWorkflowTool",
         "n8n-nodes-base.jira",
         "n8n-nodes-base.jiraTool",
         "n8n-nodes-base.merge",
@@ -282,11 +283,11 @@ def test_a_block_classed_by_another_parameter_says_so_and_each_version_is_kept(m
 
 
 def test_a_held_block_and_the_tool_made_of_it_are_both_marked(made: Json):
-    git = [GIT.as_json()]
+    calls = [CALLS.as_json()]
 
-    assert made["blocks"]["n8n-nodes-base.git"]["held"] == git
-    assert made["blocks"]["n8n-nodes-base.git"]["hidden"] is True
-    assert made["blocks"]["n8n-nodes-base.gitTool"]["held"] == git
+    assert made["blocks"]["n8n-nodes-base.executeWorkflow"]["held"] == calls
+    assert made["blocks"]["n8n-nodes-base.executeWorkflow"]["hidden"] is True
+    assert made["blocks"]["n8n-nodes-base.executeWorkflowTool"]["held"] == calls
     assert "held" not in made["blocks"]["n8n-nodes-base.jira"]
 
 
@@ -416,4 +417,23 @@ def test_a_block_whose_code_the_check_did_not_read_fails(tmp_path: Path):
 
     assert pin_problems(scan(tmp_path), [*served, "CUSTOM.wabRead"], []) == [
         "n8n serves n8n-nodes-base.newThing, whose code the pin check didn't read."
+    ]
+
+
+def test_a_block_that_runs_shell_commands_must_be_left_out_at_load_time():
+    """The security review of step 12: a block that reaches child_process can run anything in
+    n8n's container, so the pin check fails until NODES_EXCLUDE leaves it out."""
+    found = Scan(
+        blocks={
+            "n8n-nodes-base.executeCommand": frozenset({"child_process"}),
+            "n8n-nodes-base.shellNew": frozenset({"child_process"}),
+        },
+        shared={},
+        imports=frozenset(),
+    )
+    said = pin_problems(found, ["n8n-nodes-base.executeCommand", "n8n-nodes-base.shellNew"], [])
+    assert [p for p in said if "LEFT_OUT" in p] == [
+        "n8n-nodes-base.shellNew reaches child_process, so it can run anything in n8n's container. "
+        "Add it to LEFT_OUT in platform_api/orchestration/n8n_blocks.py, which NODES_EXCLUDE and "
+        "bootstrap's check follow."
     ]

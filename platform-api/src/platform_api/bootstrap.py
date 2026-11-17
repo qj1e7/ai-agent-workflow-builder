@@ -14,6 +14,7 @@ from platform_api.auth import ConfigError
 from platform_api.migrations import upgrade_all
 from platform_api.n8n_guard import (
     DEPRECATED,
+    PROBED,
     deployed_findings,
     deprecated_probe,
     loaded_findings,
@@ -163,7 +164,7 @@ def load_into_n8n(settings: BootstrapSettings, say: Say) -> N8nLoad:
         say(f"n8n runs version {version or 'unknown'}")
         removed = client.fresh_api_key(API_KEY_LABEL)
         say(f"api key '{API_KEY_LABEL}': created, {removed} older removed")
-        took = [t for t in DEPRECATED if not client.refuses(deprecated_probe(t))]
+        took = [t for t in DEPRECATED if client.runs_by_hand(deprecated_probe(t), PROBED)]
         lost = lost_workflows(client, settings.owner_database_url, recorded, say)
         if lost is not None:
             ask_for_restore(settings.owner_database_url, lost, say)
@@ -202,8 +203,8 @@ def load_into_n8n(settings: BootstrapSettings, say: Say) -> N8nLoad:
         *deployed_findings(settings.n8n_settings),
         *shown_findings(shown),
         *(
-            f"n8n saved a workflow with {t}, which runs code in its own process: "
-            "N8N_DEPRECATED_NODES_BLOCK must not be false"
+            f"n8n runs a workflow with {t} by hand, which NODES_EXCLUDE must leave out, and "
+            "which runs code in n8n's own process"
             for t in took
         ),
     ]

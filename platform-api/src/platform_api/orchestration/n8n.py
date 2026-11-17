@@ -208,13 +208,21 @@ class N8nClient:
         and the guards it can show (ADR 0051)."""
         return cast(dict[str, Any], self._rest("GET", "/rest/settings")["data"])
 
-    def refuses(self, body: dict[str, Any]) -> bool:
-        """Whether n8n refuses to save this workflow. One it saved is deleted again."""
+    def runs_by_hand(self, body: dict[str, Any], node: str) -> bool:
+        """/rest: whether n8n saves this workflow and starts a run of it by hand, up to `node`, as
+        n8n's editor does. Whatever n8n saved is deleted again."""
         response = self._send("POST", "/workflows", json=body)
         if response.status_code == 400:
-            return True
-        self.delete_workflow(str(_ok(response)["id"]))
-        return False
+            return False
+        workflow_id = str(_ok(response)["id"])
+        try:
+            started = self._http.post(
+                f"/rest/workflows/{workflow_id}/run",
+                json={"destinationNode": {"nodeName": node, "mode": "inclusive"}},
+            )
+            return started.status_code == 200
+        finally:
+            self.delete_workflow(workflow_id)
 
     def remove_api_keys(self, label: str) -> int:
         listed = self._rest("GET", "/rest/api-keys")

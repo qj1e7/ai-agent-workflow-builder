@@ -609,6 +609,7 @@ def n8n_owner_from_env(env: Mapping[str, str]) -> N8nOwner | None:
 
 
 N8N_GUARDED = (
+    "NODES_EXCLUDE",
     "N8N_BLOCK_ENV_ACCESS_IN_NODE",
     "N8N_RUNNERS_MODE",
     "N8N_DEPRECATED_NODES_BLOCK",

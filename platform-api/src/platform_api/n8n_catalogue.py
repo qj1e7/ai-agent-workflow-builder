@@ -135,9 +135,16 @@ def dump(made: Json) -> str:
 def pin_problems(
     found: Scan, served: Iterable[str], listed: Collection[str] | None = None
 ) -> list[str]:
-    """What the pin check of the blocks' code found (`n8n_code_check`), and each type n8n serves
-    whose code it didn't read."""
+    """What the pin check of the blocks' code found (`n8n_code_check`), each type n8n serves
+    whose code it didn't read, and each block that runs shell commands that n8n still loads."""
     said = problems(found, listed)
+    said += [
+        f"{name} reaches child_process, so it can run anything in n8n's container. Add it to "
+        "LEFT_OUT in platform_api/orchestration/n8n_blocks.py, which NODES_EXCLUDE and "
+        "bootstrap's check follow."
+        for name, reached in sorted(found.blocks.items())
+        if "child_process" in reached and name not in LEFT_OUT
+    ]
     names = set(served)
     for name in sorted(names):
         if _kept(name) and not name.startswith(OURS) and name not in found.blocks:

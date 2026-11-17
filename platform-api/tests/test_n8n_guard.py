@@ -1,6 +1,7 @@
 """What bootstrap checks of n8n before the platform starts on it (ADR 0051, spike P9, build step
 12). Each guard broken alone is named, and the settings as deployed pass."""
 
+import json
 from typing import Any
 
 import pytest
@@ -14,6 +15,7 @@ from platform_api.n8n_guard import (
     loaded_findings,
     shown_findings,
 )
+from platform_api.orchestration.n8n_blocks import LEFT_OUT
 from platform_api.orchestration.node_classes import NODE_CLASSES
 
 LOADED = [*NODE_CLASSES.names(), "n8n-nodes-base.airtable", "@n8n/n8n-nodes-langchain.agent"]
@@ -22,7 +24,7 @@ LOADED = [*NODE_CLASSES.names(), "n8n-nodes-base.airtable", "@n8n/n8n-nodes-lang
 SHOWN: dict[str, Any] = {
     "allowedModules": {},
     "security": {"blockFileAccessToN8nFiles": True},
-    "excludeNodes": ["n8n-nodes-base.executeCommand", "n8n-nodes-base.localFileTrigger"],
+    "excludeNodes": sorted(LEFT_OUT),
     "communityNodesEnabled": False,
 }
 """What n8n's /rest/settings shows with the platform's settings."""
@@ -80,6 +82,12 @@ def test_each_block_n8n_loads_that_it_must_not_or_misses_is_named(
         ({"NODE_FUNCTION_ALLOW_BUILTIN": "*"}, "NODE_FUNCTION_ALLOW_BUILTIN must be unset"),
         ({"NODE_FUNCTION_ALLOW_EXTERNAL": "lodash"}, "NODE_FUNCTION_ALLOW_EXTERNAL must be unset"),
         ({"N8N_RUNNERS_INSECURE_MODE": "false"}, "N8N_RUNNERS_INSECURE_MODE must be unset"),
+        ({"NODES_EXCLUDE": None}, "NODES_EXCLUDE must leave out"),
+        (
+            {"NODES_EXCLUDE": json.dumps(["n8n-nodes-base.executeCommand"])},
+            "NODES_EXCLUDE must leave out @n8n/n8n-nodes-langchain.code, n8n-nodes-base.function",
+        ),
+        ({"NODES_EXCLUDE": "executeCommand"}, "NODES_EXCLUDE must leave out"),
     ],
 )
 def test_each_deployed_setting_that_breaks_a_guard_is_named(
@@ -144,8 +152,15 @@ def test_a_folder_that_holds_something_of_n8n_s_or_none_at_all_is_named(
         ({"allowedModules": {"external": ["lodash"]}}, "NODE_FUNCTION_ALLOW_EXTERNAL set"),
         ({"security": {"blockFileAccessToN8nFiles": False}}, "reach its own folders"),
         ({"security": {}}, "reach its own folders"),
-        ({"excludeNodes": []}, "NODES_EXCLUDE leaves out nothing"),
-        ({"excludeNodes": ["n8n-nodes-base.executeCommand"]}, "not n8n-nodes-base.executeCommand"),
+        ({"excludeNodes": []}, "NODES_EXCLUDE leaves in @n8n/n8n-nodes-langchain.code"),
+        (
+            {"excludeNodes": ["n8n-nodes-base.executeCommand"]},
+            "leaves in @n8n/n8n-nodes-langchain.code",
+        ),
+        (
+            {"excludeNodes": sorted(LEFT_OUT - {"n8n-nodes-base.git"})},
+            "leaves in n8n-nodes-base.git",
+        ),
         ({"communityNodesEnabled": True}, "install community nodes"),
         ({"communityNodesEnabled": None}, "install community nodes"),
     ],
@@ -153,6 +168,20 @@ def test_a_folder_that_holds_something_of_n8n_s_or_none_at_all_is_named(
 def test_each_guard_n8n_shows_broken_is_named(change: dict[str, Any], says: str) -> None:
     found = shown_findings({**SHOWN, **change})
     assert len(found) == 1 and says in found[0], found
+
+
+def test_n8n_never_loads_a_block_that_reaches_its_own_secrets_or_disk() -> None:
+    """Spike P9, and the security review of step 12: a load-time exclusion doesn't rest on n8n
+    still calling a block deprecated, or on a probe nobody has run."""
+    assert {
+        "n8n-nodes-base.executeCommand",
+        "n8n-nodes-base.localFileTrigger",
+        "n8n-nodes-base.function",
+        "n8n-nodes-base.functionItem",
+        "@n8n/n8n-nodes-langchain.code",
+        "n8n-nodes-base.git",
+        "n8n-nodes-base.gitTool",
+    } <= LEFT_OUT
 
 
 def test_bootstrap_reads_every_guard_it_checks_from_the_deploy_s_settings() -> None:

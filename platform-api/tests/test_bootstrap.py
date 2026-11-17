@@ -26,6 +26,7 @@ from platform_api.db import PLATFORM_DATABASE, ROLE_OWNER
 from platform_api.migrations import MIGRATION_ORDER, downgrade, upgrade_all
 from platform_api.n8n_guard import DEPRECATED, SAFE
 from platform_api.orchestration.n8n import N8nClient
+from platform_api.orchestration.n8n_blocks import LEFT_OUT
 from platform_api.orchestration.node_classes import NODE_CLASSES
 from platform_api.orchestration.spec import RunSpec
 from platform_api.settings import BootstrapSettings
@@ -42,7 +43,7 @@ SHOWN: dict[str, Any] = {
     "versionCli": N8N_VERSION,
     "allowedModules": {},
     "security": {"blockFileAccessToN8nFiles": True},
-    "excludeNodes": ["n8n-nodes-base.executeCommand", "n8n-nodes-base.localFileTrigger"],
+    "excludeNodes": sorted(LEFT_OUT),
     "communityNodesEnabled": False,
 }
 """What n8n 2.42.6 shows at /rest/settings with the platform's settings, cut down."""
@@ -224,9 +225,10 @@ class FakeN8n:
         """What n8n loaded: every built-in block, cut down to the ones the class file names
         and one more."""
         self.settings = deepcopy(SHOWN)
-        self.takes_deprecated = False
-        """n8n saves a workflow with a deprecated block, as with N8N_DEPRECATED_NODES_BLOCK
-        false."""
+        self.runs_deprecated = False
+        """n8n runs a workflow with a deprecated block by hand, as when NODES_EXCLUDE leaves it in
+        and N8N_DEPRECATED_NODES_BLOCK is false. Either way n8n saves it, as it saves a block it
+        doesn't load."""
 
     def handle(self, request: httpx.Request) -> httpx.Response:
         path, method = request.url.path, request.method
@@ -241,6 +243,14 @@ class FakeN8n:
             return httpx.Response(200, json=[{"name": t, "version": 1} for t in self.node_types])
         if path == "/rest/settings":
             return httpx.Response(200, json={"data": self.settings})
+        if path.startswith("/rest/workflows/") and path.endswith("/run"):
+            held = self.workflows[path.split("/")[3]]
+            deprecated = [n["type"] for n in held["nodes"] if n["type"] in DEPRECATED]
+            if deprecated and not self.runs_deprecated:
+                return httpx.Response(
+                    400, json={"message": f"Unrecognized node type: {deprecated[0]}"}
+                )
+            return httpx.Response(200, json={"data": {"executionId": "E1"}})
         if path == "/rest/projects/personal":
             return httpx.Response(200, json={"data": {"id": PLATFORM_PROJECT, "type": "personal"}})
         if path == "/rest/api-keys" and method == "GET":
@@ -266,15 +276,6 @@ class FakeN8n:
             listed = [w for w in self.workflows.values() if wanted in (None, w["name"])]
             return httpx.Response(200, json={"data": listed})
         if path == "/api/v1/workflows" and method == "POST":
-            deprecated = [n["type"] for n in body["nodes"] if n["type"] in DEPRECATED]
-            if deprecated and not self.takes_deprecated:
-                return httpx.Response(
-                    400,
-                    json={
-                        "message": f"Cannot use a {deprecated[0]} node: this node type is "
-                        "deprecated"
-                    },
-                )
             workflow_id = f"W{self.next_id}"
             self.next_id += 1
             created = {**body, "id": workflow_id, "active": False}
@@ -524,8 +525,23 @@ def test_bootstrap_is_not_ready_unless_n8n_loads_every_built_in_block_but_the_tw
         ({"N8N_RUNNERS_INSECURE_MODE": "true"}, {}, "N8N_RUNNERS_INSECURE_MODE must be unset"),
         ({}, {"allowedModules": {"builtIn": ["*"]}}, "NODE_FUNCTION_ALLOW_BUILTIN set"),
         ({}, {"security": {"blockFileAccessToN8nFiles": False}}, "reach its own folders"),
+        (
+            {"NODES_EXCLUDE": '["n8n-nodes-base.executeCommand"]'},
+            {},
+            "NODES_EXCLUDE must leave out",
+        ),
+        ({}, {"excludeNodes": ["n8n-nodes-base.executeCommand"]}, "n8n's NODES_EXCLUDE leaves in"),
     ],
-    ids=["internal-runner", "env-open", "files-open", "insecure", "modules", "n8n-files"],
+    ids=[
+        "internal-runner",
+        "env-open",
+        "files-open",
+        "insecure",
+        "modules",
+        "n8n-files",
+        "exclude-deployed",
+        "exclude-shown",
+    ],
 )
 def test_bootstrap_is_not_ready_when_n8n_s_settings_break_a_guard(
     postgres: PostgresUrls,
@@ -546,18 +562,18 @@ def test_bootstrap_is_not_ready_when_n8n_s_settings_break_a_guard(
     assert engine_status(postgres.owner) == GUARDS_FAIL
 
 
-def test_bootstrap_is_not_ready_when_n8n_takes_a_deprecated_block_and_removes_what_it_took(
+def test_bootstrap_is_not_ready_when_n8n_runs_a_deprecated_block_and_removes_what_it_saved(
     postgres: PostgresUrls, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ):
     truncate_all(postgres.owner)
     n8n = serve(monkeypatch, FakeN8n([]))
-    n8n.takes_deprecated = True
+    n8n.runs_deprecated = True
 
     assert main(env_for(postgres.owner)) == 1
 
     said = capsys.readouterr().out
     for node_type in DEPRECATED:
-        assert f"n8n saved a workflow with {node_type}, which runs code in its own process" in said
+        assert f"n8n runs a workflow with {node_type} by hand, which NODES_EXCLUDE must" in said
     assert names_in(n8n) == ["run_failure_reporter", "self_test_failure"], "it took none back"
     assert engine_status(postgres.owner) == GUARDS_FAIL
 
@@ -618,7 +634,8 @@ def test_bootstrap_removes_the_old_run_workflow_by_its_exact_name_and_nothing_el
     assert load.findings == [] and load.guards == []
     assert sorted(w.name for w in loaded) == ["run_failure_reporter", "self_test_failure"]
     assert all(w.active for w in loaded)
-    assert n8n.deleted == ["W1"]
+    probes = len(DEPRECATED)
+    assert n8n.deleted[probes:] == ["W1"], "after the probes of the deprecated blocks, only W1"
     assert [c for c in n8n.calls if c.split()[1].split("/")[0] == "W1"] == [
         "POST W1/deactivate",
         "DELETE W1",

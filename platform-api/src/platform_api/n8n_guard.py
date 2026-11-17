@@ -11,12 +11,13 @@ files away from n8n's secrets. Bootstrap fails the start unless all of these hol
   let code load no module of its own choosing (`deployed_findings`). The deploy gives bootstrap the
   same block of settings it gives n8n: `x-n8n-guards` in deploy/compose.yaml and
   `local.n8n_guards` in infra/envs/dev/main.tf;
-- what n8n itself shows of those settings agrees (`shown_findings`), and n8n refuses a workflow
-  with a deprecated block (`DEPRECATED`), which bootstrap tries.
+- what n8n itself shows of those settings agrees (`shown_findings`), and n8n refuses to run a
+  workflow with a deprecated block (`DEPRECATED`), which bootstrap tries.
 
 Pure. The folder rules know where n8n's image keeps its own files (`N8NS_FOLDERS`).
 """
 
+import json
 import posixpath
 from collections.abc import Collection, Mapping, Sequence
 from typing import Any, cast
@@ -26,6 +27,7 @@ from platform_api.orchestration.node_classes import NODE_CLASSES
 from platform_api.settings import N8N_GUARDED
 
 SAFE: Mapping[str, str] = {
+    "NODES_EXCLUDE": json.dumps(sorted(LEFT_OUT), separators=(",", ":")),
     "N8N_BLOCK_ENV_ACCESS_IN_NODE": "true",
     "N8N_RUNNERS_MODE": "external",
     "N8N_DEPRECATED_NODES_BLOCK": "true",
@@ -57,8 +59,9 @@ DEPRECATED = (
     "n8n-nodes-base.functionItem",
     "@n8n/n8n-nodes-langchain.code",
 )
-"""The blocks that run code inside n8n's own process, which n8n refuses while
-N8N_DEPRECATED_NODES_BLOCK is anything but false (spike P9)."""
+"""The blocks that run code inside n8n's own process (spike P9). NODES_EXCLUDE leaves them
+out, and n8n refuses them as deprecated while N8N_DEPRECATED_NODES_BLOCK is anything but false,
+so bootstrap checks that n8n refuses each, whichever stops it."""
 SHOWN = 5
 
 
@@ -75,7 +78,10 @@ def loaded_findings(served: Collection[str]) -> list[str]:
             f"{_named(strangers)}: community nodes and fetched blocks stay off"
         )
     if left_in := sorted(LEFT_OUT & loaded):
-        findings.append(f"n8n loads {', '.join(left_in)}, which NODES_EXCLUDE must leave out")
+        findings.append(
+            f"n8n loads {', '.join(left_in)}, which NODES_EXCLUDE must leave out: each reaches "
+            "n8n's own secrets, disk or host"
+        )
     if missing := sorted(set(NODE_CLASSES.names()) - loaded):
         findings.append(
             f"n8n does not load {len(missing)} block(s) the class file names, {_named(missing)}: "
@@ -88,6 +94,11 @@ def deployed_findings(settings: Mapping[str, str]) -> list[str]:
     """Each guard the deploy's settings for n8n break."""
     findings: list[str] = []
     said = {name: value.strip() for name, value in settings.items()}
+    if missing := sorted(LEFT_OUT - _excluded(said.get("NODES_EXCLUDE"))):
+        findings.append(
+            f"NODES_EXCLUDE must leave out {', '.join(missing)}, as a JSON list: each reaches "
+            "n8n's own secrets, disk or host"
+        )
     if said.get("N8N_BLOCK_ENV_ACCESS_IN_NODE", "").lower() != "true":
         findings.append(
             "N8N_BLOCK_ENV_ACCESS_IN_NODE must be true, or n8n hands its whole environment to "
@@ -150,33 +161,59 @@ def shown_findings(shown: Mapping[str, Any]) -> list[str]:
         findings.append("n8n lets the file blocks reach its own folders")
     excluded = shown.get("excludeNodes")
     left_out = set(cast(Sequence[str], excluded)) if isinstance(excluded, list) else set[str]()
-    if not left_out >= LEFT_OUT:
+    if missing := sorted(LEFT_OUT - left_out):
         findings.append(
-            f"n8n's NODES_EXCLUDE leaves out {_named(sorted(left_out)) or 'nothing'}, not "
-            f"{', '.join(sorted(LEFT_OUT))}"
+            f"n8n's NODES_EXCLUDE leaves in {', '.join(missing)}, which reach its own secrets, "
+            "disk or host"
         )
     if shown.get("communityNodesEnabled") is not False:
         findings.append("n8n lets people install community nodes")
     return findings
 
 
+PROBED = "Deprecated"
+"""The name of the block a probe asks n8n to run to."""
+
+
 def deprecated_probe(node_type: str) -> dict[str, Any]:
-    """A workflow with one deprecated block, which n8n must refuse to save."""
+    """A workflow that runs one deprecated block by hand, which n8n must refuse to run. n8n saves
+    it while NODES_EXCLUDE leaves the block out, as it saves any block it doesn't load, and refuses
+    to save it while it loads the block and N8N_DEPRECATED_NODES_BLOCK is on."""
     return {
         "name": f"Platform check: n8n refuses {node_type}",
         "nodes": [
             {
-                "id": "deprecated-probe",
-                "name": "Deprecated",
-                "type": node_type,
+                "id": "deprecated-probe-start",
+                "name": "Run by hand",
+                "type": "n8n-nodes-base.manualTrigger",
                 "typeVersion": 1,
                 "position": [0, 0],
                 "parameters": {},
-            }
+            },
+            {
+                "id": "deprecated-probe",
+                "name": PROBED,
+                "type": node_type,
+                "typeVersion": 1,
+                "position": [220, 0],
+                "parameters": {},
+            },
         ],
-        "connections": {},
+        "connections": {"Run by hand": {"main": [[{"node": PROBED, "type": "main", "index": 0}]]}},
         "settings": {"executionOrder": "v1"},
     }
+
+
+def _excluded(value: str | None) -> set[str]:
+    """The types a NODES_EXCLUDE value names, as n8n reads it: a JSON list. Anything else names
+    none."""
+    try:
+        listed: object = json.loads(value or "")
+    except ValueError:
+        return set()
+    if not isinstance(listed, list):
+        return set()
+    return {str(name) for name in cast(list[object], listed)}
 
 
 def _named(names: Sequence[str]) -> str:

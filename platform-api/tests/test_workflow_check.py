@@ -256,15 +256,10 @@ def test_a_block_n8n_loads_that_the_platform_has_not_classed_is_a_flag_that_runs
 @pytest.mark.parametrize(
     ("block_type", "because"),
     [
-        ("n8n-nodes-base.function", "It runs code inside n8n's own process"),
-        ("n8n-nodes-base.functionItem", "It runs code inside n8n's own process"),
-        ("@n8n/n8n-nodes-langchain.code", "It runs code inside n8n's own process"),
         ("n8n-nodes-base.executeWorkflow", "It runs another workflow"),
         ("n8n-nodes-base.executeWorkflowTrigger", "It runs another workflow"),
         ("@n8n/n8n-nodes-langchain.toolWorkflow", "It runs another workflow"),
         ("@n8n/n8n-nodes-langchain.retrieverWorkflow", "It runs another workflow"),
-        ("n8n-nodes-base.git", "It runs git on n8n's disk"),
-        ("n8n-nodes-base.gitTool", "It runs git on n8n's disk"),
         ("n8n-nodes-base.n8n", "It changes n8n itself"),
     ],
 )
@@ -283,6 +278,11 @@ def test_a_block_n8n_loads_that_can_t_run_here_says_why_and_runs_anyway(
     [
         "n8n-nodes-base.executeCommand",
         "n8n-nodes-base.localFileTrigger",
+        "n8n-nodes-base.function",
+        "n8n-nodes-base.functionItem",
+        "@n8n/n8n-nodes-langchain.code",
+        "n8n-nodes-base.git",
+        "n8n-nodes-base.gitTool",
         "n8n-nodes-community.anything",
         "wab.read",
     ],

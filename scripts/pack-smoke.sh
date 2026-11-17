@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Boots our n8n image once, with the exclusions deploy/compose.yaml sets but n8n's own defaults for
-# the guards bootstrap checks, and checks what n8n allows (ADR 0051):
-# - all eight of our blocks load, Execute Command and Local File Trigger do not, and no allow list
+# the other guards bootstrap checks, and checks what n8n allows (ADR 0051):
+# - all eight of our blocks load, none of the blocks in n8n_blocks.LEFT_OUT does, and no allow list
 #   limits the rest;
-# - with its defaults, n8n refuses a workflow with Function, Function Item or LangChain Code, which
-#   run code in its own process, keeps the file blocks out of its own folders, and lets code load
-#   no module of its own choosing (spike P9);
+# - n8n refuses a workflow with Function, Function Item or LangChain Code, which run code in its
+#   own process, and with its defaults keeps the file blocks out of its own folders and lets code
+#   load no module of its own choosing (spike P9);
 # - the pin check finds each row of node_classes.json still true to what n8n serves (ADR 0045);
 # - contracts/n8n/catalogue.json is what n8n serves, and the pin checks of the blocks' code and of
 #   the defaults and the runner's config hold (scripts/n8n-catalogue.sh).
@@ -21,7 +21,15 @@ if [ -z "$image" ]; then
 fi
 
 ours=$(jq -c '[.nodes[].type]' n8n-node-pack/node-types.json)
-never='["n8n-nodes-base.executeCommand","n8n-nodes-base.localFileTrigger"]'
+# The blocks n8n never loads, as deploy/compose.yaml and Terraform leave them out. n8n_blocks.py
+# reads in nothing but the standard library.
+never=$(python3 -I -c '
+import importlib.util, json, sys
+spec = importlib.util.spec_from_file_location("n8n_blocks", sys.argv[1])
+blocks = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(blocks)
+print(json.dumps(sorted(blocks.LEFT_OUT), separators=(",", ":")))
+' platform-api/src/platform_api/orchestration/n8n_blocks.py)
 deprecated='["n8n-nodes-base.function","n8n-nodes-base.functionItem","@n8n/n8n-nodes-langchain.code"]'
 served=$(mktemp -d)
 name="pack-smoke-$$"
@@ -78,15 +86,23 @@ for (let attempt = 1; !types; attempt++) {
   }
 }
 
+// n8n saves a workflow with a block it doesn't load, so each one is also run by hand, as the
+// editor's Execute does, and n8n must refuse one or the other.
 const deprecated = {};
 for (const type of JSON.parse(process.env.DEPRECATED)) {
   const saved = await rest('POST', '/workflows', {
     name: `Pack smoke: ${type}`,
-    nodes: [{ id: 'old', name: 'Old', type, typeVersion: 1, position: [0, 0], parameters: {} }],
-    connections: {},
+    nodes: [
+      { id: 'start', name: 'Run by hand', type: 'n8n-nodes-base.manualTrigger', typeVersion: 1, position: [0, 0], parameters: {} },
+      { id: 'old', name: 'Old', type, typeVersion: 1, position: [220, 0], parameters: {} },
+    ],
+    connections: { 'Run by hand': { main: [[{ node: 'Old', type: 'main', index: 0 }]] } },
     settings: { executionOrder: 'v1' },
   });
-  deprecated[type] = { status: saved.status, message: saved.body?.message ?? null };
+  const ran = saved.status === 200
+    ? await rest('POST', `/workflows/${saved.body.data.id}/run`, { destinationNode: { nodeName: 'Old', mode: 'inclusive' } })
+    : saved;
+  deprecated[type] = { saved: saved.status, ran: ran.status, message: ran.body?.message ?? null };
 }
 
 const settings = (await rest('GET', '/settings')).body?.data ?? {};
@@ -128,11 +144,11 @@ for sentinel in n8n-nodes-base.httpRequest n8n-nodes-base.code @n8n/n8n-nodes-la
   fi
 done
 
-refused=$(jq -c '.deprecated | to_entries | map(select(.value.status != 400 or (.value.message | test("deprecated") | not))) | map(.key)' <<<"$out")
+refused=$(jq -c '.deprecated | to_entries | map(select(.value.saved == 200 and .value.ran == 200)) | map(.key)' <<<"$out")
 if [ "$refused" = "[]" ]; then
-  pass "with its defaults, n8n refuses a workflow with any of $deprecated."
+  pass "n8n refuses to run a workflow with any of $deprecated."
 else
-  fail "with its defaults, n8n took a workflow with $refused: $(jq -c .deprecated <<<"$out")."
+  fail "n8n ran a workflow with $refused: $(jq -c .deprecated <<<"$out")."
 fi
 if jq -e '.settings.blockFileAccessToN8nFiles == true and (.settings.allowedModules | (.builtIn == null and .external == null))' <<<"$out" >/dev/null; then
   pass "with its defaults, n8n keeps the file blocks out of its own folders and lets code load no module it picks."
