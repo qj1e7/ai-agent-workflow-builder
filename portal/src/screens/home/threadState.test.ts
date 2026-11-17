@@ -68,7 +68,7 @@ describe('the thread', () => {
 
   it('sends tapped words with the turn before, so a choice after a clarifying question says so', () => {
     expect(askOf('Redis', EMPTY)).toEqual({ text: 'Redis' })
-    const clarify: PlannerReply = { trace_id: null, answer: 'reply', form: 'clarify', text: 'Which software?', choices: ['Redis', 'Kafka'], offer: null, looked_at: [], about: [], parts: [] }
+    const clarify: PlannerReply = { trace_id: null, answer: 'reply', form: 'clarify', text: 'Which software?', choices: ['Redis', 'Kafka'], offer: null, looked_at: [], about: [], software: null, parts: [] }
     const asked = threadReducer(threadReducer(EMPTY, { type: 'sent', text: 'watch it', chat: 'c1' }), { type: 'answered', reply: clarify, typed: 'watch it' })
     expect(askOf('Redis', asked)).toEqual({ text: 'Redis', previous: { request: 'watch it', software: null, answer: 'Which software?', kind: 'reply_clarify', trace_id: null } })
   })
@@ -96,8 +96,14 @@ describe('the thread', () => {
 })
 
 describe('the turn before, for a free reply', () => {
-  const free = (form: 'answer' | 'clarify' | 'cant', text: string): PlannerReply => ({ trace_id: null, answer: 'reply', form, text, choices: form === 'clarify' ? ['a', 'b'] : [], offer: null, looked_at: [], about: [], parts: [] })
+  const free = (form: 'answer' | 'clarify' | 'cant', text: string, software: string | null = null): PlannerReply => ({ trace_id: null, answer: 'reply', form, text, choices: form === 'clarify' ? ['a', 'b'] : [], offer: null, looked_at: [], about: [], software, parts: [] })
   const after = (reply: PlannerReply) => previousOf(threadReducer(threadReducer(EMPTY, { type: 'sent', text: 'hmm', chat: 'c1' }), { type: 'answered', reply, typed: 'hmm' }))
+
+  it('sends the one software the reply’s request named, so “keep track of it” after it means that software', () => {
+    expect(after(free('clarify', 'What would you like to do with node js?', 'node js'))?.software).toBe('node js')
+    expect(after(free('answer', 'I can’t look that up yet.', 'node js'))?.software).toBe('node js')
+    expect(after(free('answer', 'Type what you want.'))?.software).toBeNull()
+  })
 
   it('sends a clarifying question as reply_clarify, with its words, so the runtime refuses a second one in a row', () => {
     expect(after(free('clarify', 'Which one?'))).toEqual({ request: 'hmm', software: null, answer: 'Which one?', kind: 'reply_clarify', trace_id: null })

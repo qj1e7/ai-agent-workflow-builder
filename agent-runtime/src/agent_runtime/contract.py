@@ -875,6 +875,8 @@ type WatchDay = Literal[
 
 
 CLOCK_PATTERN: Final = r"^(?:[01]\d|2[0-3]):[0-5]\d$"
+SOFTWARE_LIMIT: Final = 80
+"""The longest software name one turn hands the next (`previous.software`)."""
 
 
 class WatchlistScheduleFact(WireModel):
@@ -922,8 +924,9 @@ class PreviousTurn(WireModel):
     request: str = Field(max_length=2000, description="What the person typed, or the chip's words.")
     software: str | None = Field(
         default=None,
-        max_length=80,
-        description="The one software the Planner named in its answer. Client input: a message "
+        max_length=SOFTWARE_LIMIT,
+        description="The one software the Planner named in its answer, or for a free reply the "
+        "one its request named, which must be in the request's words. Client input: a message "
         "that only asks to watch it, such as keep track of it, gets the offer to watch this "
         "software, which the person must tap.",
     )
@@ -1246,6 +1249,15 @@ class FreeReplyAnswer(WireModel):
         "facts hold it. The Portal draws each one's state line. Left out when empty, so a reply "
         "that names none reads as it did before ADR 0049.",
         exclude_if=lambda about: not about,
+    )
+    software: str | None = Field(
+        default=None,
+        max_length=SOFTWARE_LIMIT,
+        description="The one software the message named, as it wrote it: code finds the "
+        "reading's software in the message's words, never in the reply. The Portal sends it back "
+        "as previous.software, so a next message such as keep track of it means it. Left out "
+        "when none.",
+        exclude_if=lambda software: software is None,
     )
 
     @model_validator(mode="after")

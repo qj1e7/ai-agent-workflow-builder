@@ -116,8 +116,9 @@ class PreviousIn(WireIn):
     request: Annotated[str, StringConstraints(max_length=2000)]
     software: Annotated[str, StringConstraints(max_length=80)] | None = Field(
         default=None,
-        description="The one software the Planner named in its answer to it. A message that "
-        "only asks to watch it, such as keep track of it, gets the offer to watch this software.",
+        description="The one software the Planner named in its answer to it, or a free reply's "
+        "software. A message that only asks to watch it, such as keep track of it, gets the "
+        "offer to watch this software.",
     )
     answer: Annotated[str, StringConstraints(max_length=600)] | None = Field(
         default=None, description="The text of the Planner's answer to it, when it had one."
@@ -407,6 +408,11 @@ class FreeReply(Reply):
     about: list[ReplyAboutView] = Field(
         description="The watched software and workflows the reply names, each held by the facts. "
         "The Portal draws each one's state line from its own data, for every role."
+    )
+    software: str | None = Field(
+        description="The one software the request named, as it wrote it. The Portal sends it "
+        "back as previous.software, so a next message such as keep track of it means it. Null "
+        "when the request named none."
     )
 
 
@@ -1155,6 +1161,7 @@ class PlannerFront:
                     else None,
                     looked_at=list(answer.looked_at),
                     about=[ReplyAboutView(section=a.section, name=a.name) for a in answer.about],
+                    software=answer.software,
                 )
             case DidntFollowAnswer():
                 return DidntFollowReply()

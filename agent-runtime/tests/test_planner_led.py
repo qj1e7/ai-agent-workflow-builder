@@ -347,6 +347,73 @@ def test_a_watch_of_it_with_no_software_before_still_asks_which() -> None:
     assert shown(result) == WhichSoftwareAnswer(word="keep track of")
 
 
+def test_a_watch_offer_never_reaches_a_clause_that_watches_them() -> None:
+    result, _ = run(
+        "help me add Node Js , keep track of them",
+        tool("watch_software", software="Node Js"),
+        read=reading("none", belongs_on_watchlist=True, watchlist_word="add", software="Node Js"),
+        facts=FACTS,
+    )
+
+    assert ("keep track of them", "will_do", None) not in marks(result)
+    assert "keep track of them" not in reached(result)
+
+
+@pytest.mark.parametrize(
+    "call",
+    [
+        tool("ask_which_software", word="track"),
+        tool("watch_software", software="Node Js"),
+    ],
+)
+def test_a_plural_after_a_turn_that_named_one_software_asks_which(call: AIMessage) -> None:
+    result, _ = run(
+        "track them",
+        call,
+        read=reading("none", belongs_on_watchlist=True, watchlist_word="track"),
+        previous=NAMED_NODE_JS,
+        facts=FACTS,
+    )
+
+    assert shown(result) == WhichSoftwareAnswer(word="track")
+
+
+def test_a_free_reply_carries_the_one_software_its_message_named() -> None:
+    result, _ = run(
+        "what is the latest node js?",
+        tool("reply", form="answer", text="I can't look that up. Type keep track of node js."),
+        read=reading("abilities", software="node js"),
+        then=[CLEAN],
+    )
+
+    reply = shown(result)
+    assert isinstance(reply, FreeReplyAnswer) and reply.software == "node js"
+
+
+@pytest.mark.parametrize(
+    "call",
+    [
+        tool("ask_which_software", word="keep track of"),
+        tool("watch_software", software="node js"),
+    ],
+)
+def test_a_watch_of_it_after_a_free_reply_watches_the_software_its_message_named(
+    call: AIMessage,
+) -> None:
+    before = PreviousTurn(request="what is the latest node js?", software="node js", kind="reply")
+
+    result, _ = run(
+        "keep track of it",
+        call,
+        read=reading("none", belongs_on_watchlist=True, watchlist_word="keep track of"),
+        previous=before,
+        facts=FACTS,
+    )
+
+    assert shown(result) == WatchlistAnswer(word="keep track of", software="node js")
+    assert marks(result) == [("keep track of it", "will_do", None)]
+
+
 def test_a_paraphrased_argument_locates_nothing_and_is_never_a_tick() -> None:
     result, _ = run(
         "add a tool please",

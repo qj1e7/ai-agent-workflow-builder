@@ -12,7 +12,8 @@
         "section": "watchlist",
         "name": "LangGraph"
       }
-    ]
+    ],
+    "software": "langgraph"
   },
   "parts": [
     {

@@ -1716,13 +1716,30 @@ def test_a_watch_with_no_software_name_asks_which_software(task: str, verb: str)
         ("Add Node Js, monitor it", "Add"),
         ("add Node Js, please watch this one", "add"),
         ("add Node Js, follow it.", "add"),
-        ("add Node Js, track them for me", "add"),
     ],
 )
 def test_a_clause_that_watches_it_is_the_same_watch_of_the_software_named(task: str, verb: str):
     reading = read(belongs_on_watchlist=True, watchlist_word="add", software="Node Js")
     assert answer_of(reading, task) == WatchlistAnswer(word=verb, software="Node Js")
     assert {mark for _, mark, _ in parts(reading, task)} == {"will_do"}
+
+
+@pytest.mark.parametrize(
+    ("task", "named", "plural"),
+    [
+        ("add Node Js, track them for me", "Node Js", "track them for me"),
+        ("add redis and kafka, track them", "redis", "track them"),
+        ("add redis, kafka and keep track of them", "redis", "keep track of them"),
+        ("add redis and kafka, keep an eye on both", "redis", "keep an eye on both"),
+    ],
+)
+def test_a_clause_that_watches_them_is_never_ticked_as_the_watch_of_one_software(
+    task: str, named: str, plural: str
+):
+    """A plural can't mean one name, so "them" beside a software comes back, never ticked."""
+    reading = read(belongs_on_watchlist=True, watchlist_word="add", software=named)
+    marks = {text: mark for text, mark, _ in parts(reading, task)}
+    assert marks[plural] != "will_do"
 
 
 def test_a_clause_that_does_more_to_it_than_watch_still_comes_back():
