@@ -9,9 +9,10 @@ def upgrade() -> None:
     # before it is set up. Not builder.drafts, which keeps a set-up card someone saved to come back
     # to. use_case_id is the id the workflow gets once it is set up, kept from the first draft so
     # its Sticky Note can link to it and its blocks' ids never change. set_up_at says the approved
-    # revision is set up as that use case, on the set-up approval set_up_approval names. A try of
-    # that approval's set-up records when it began to create the workflow in n8n, and n8n's id as
-    # soon as n8n gives it, so a try cut off in between leaves the next one what to look for.
+    # revision, set_up_revision, is set up as that use case, on the set-up approval set_up_approval
+    # names. What that revision reads is what its runs may read, whatever later versions hold. A
+    # try of that approval's set-up records when it began to create the workflow in n8n, and n8n's
+    # id as soon as n8n gives it, so a try cut off in between leaves the next one what to look for.
     # set_up_problem says why the last try to set it up did not, in words to show.
     #
     # Each revision is one whole plan, in its own row, never changed once drafted. A revision is
@@ -27,6 +28,7 @@ def upgrade() -> None:
             created_at timestamptz NOT NULL,
             use_case_id text NOT NULL UNIQUE,
             set_up_at timestamptz,
+            set_up_revision integer,
             set_up_approval text,
             set_up_trying_at timestamptz,
             set_up_n8n_id text,
