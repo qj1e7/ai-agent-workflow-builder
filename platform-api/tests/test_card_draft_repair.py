@@ -192,6 +192,18 @@ NOT_TO_FILL = [
     "Find tickets from Bob and raise one in MOCK",
     "Raise a ticket in Jira for each new release",
     "Raise a ticket into the backlog",
+    "Find stale tickets in MOCK and raise one ticket somewhere else",
+    "Find stale tickets in MOCK and raise one ticket elsewhere",
+    "Find stale tickets in MOCK and raise one ticket in a different project",
+    "Find stale tickets in MOCK and raise one ticket on OPS",
+    "Find stale tickets in MOCK and raise one ticket under OPS",
+    "Find stale tickets in MOCK and raise one ticket for OPS",
+    "Find stale tickets in MOCK and raise one ticket at OPS",
+    "Find stale tickets in MOCK and file one with OPS",
+    "Find stale tickets in MOCK and raise one ticket, OPS",
+    "Find stale tickets in MOCK; raise one ticket: OPS",
+    "Find stale tickets in MOCK and raise one ticket in our ops project",
+    "Find stale tickets in MOCK and raise one ticket for the ops team",
 ]
 
 
@@ -208,8 +220,25 @@ async def test_the_project_input_is_never_filled_with_words_that_name_no_project
 
 
 @pytest.mark.parametrize(
+    ("task", "known"),
+    [
+        ("Find stale tickets in MOCK and raise one ticket on ops", ("MOCK", "OPS")),
+        ("Find stale tickets in MOCK and raise one ticket under ops", ("MOCK", "OPS")),
+        ("Raise one ticket in MOCK for OPS", ()),
+    ],
+)
+async def test_the_project_input_is_never_filled_when_the_words_send_the_ticket_elsewhere(
+    task: str, known: tuple[str, ...]
+):
+    """Before, MOCK, where the search runs, was filled though the ticket goes to OPS."""
+    result = await planned(task, known)
+    assert isinstance(result, CannotDo) or (isinstance(result, NewAgent) and result.project is None)
+
+
+@pytest.mark.parametrize(
     ("task", "project"),
     [
+        ("Find stale tickets in MOCK and raise one ticket", "MOCK"),
         ("every Monday at 9am raise tickets in MOCK", "MOCK"),
         (TASK, "MOCK"),
         ("Find tickets in MOCK, and email the list to me", "MOCK"),

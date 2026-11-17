@@ -211,12 +211,23 @@ def projects_named(task: str, known: Collection[str] = ()) -> list[str]:
     return list(dict.fromkeys(key for _, key in sorted(found)))
 
 
+ELSEWHERE: Final = re.compile(
+    r"\b(?:elsewhere|somewhere\s+else|(?:different|another|other|separate)\s+(?:jira\s+)?"
+    r"(?:project|board|queue|place|team))\b",
+    re.IGNORECASE,
+)
+"""Words that send the ticket away from the project named, as "elsewhere" or "a different
+project", so the project is never filled for it."""
+PLACE_WORD: Final = re.compile(r"\s+(?:projects?|board|queue|space|team)\b", re.IGNORECASE)
+
+
 def project_to_fill(task: str, known: Collection[str] = ()) -> str | None:
     """The one Jira project to fill the agent's project input with, or None so the Portal asks.
     It decides where the ticket is written, so it is read narrowly: the one project the words
     name must be one the team's Jira allows. With no list of those, it must be in capitals right
-    after "project" or "in", and no common word. Any other word where a project could stand, as
-    "ops" in "raise one in ops", leaves it unsure, so it is None."""
+    after "project" or "in", and no common word. It is filled only when it is the one place the
+    words name: any other word where a project could stand, as "ops" in "raise one in ops",
+    another key anywhere, as "for OPS", or "elsewhere", leaves it unsure, so it is None."""
     keys = projects_named(task, known)
     if len(keys) != 1:
         return None
@@ -227,11 +238,23 @@ def project_to_fill(task: str, known: Collection[str] = ()) -> str | None:
         return None
     if not allowed and (key in NOT_PROJECTS or key not in stands):
         return None
+    if ELSEWHERE.search(task):
+        return None
     for match in WHERE_A_PROJECT_STANDS.finditer(task):
         word = match.group("key")
         if word.upper() == key or word.casefold() in PLAIN_WORDS or word.upper() in NOT_PROJECTS:
             continue
         return None
+    for match in re.finditer(rf"(?<![\w-]){KEY}(?!\w)", task):
+        # Another place anywhere: a key in capitals, a project the team allows in any case, or a
+        # word before "project" or "board". The ticket may go there, so the Portal asks.
+        word = match.group(0)
+        upper = word.upper()
+        if upper == key:
+            continue
+        before_a_place = PLACE_WORD.match(task, match.end()) and word.casefold() not in PLAIN_WORDS
+        if (word == upper and upper not in NOT_PROJECTS) or upper in allowed or before_a_place:
+            return None
     return key
 
 
