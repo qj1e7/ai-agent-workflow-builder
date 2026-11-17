@@ -84,7 +84,7 @@ from platform_api.orchestration import (
     workflow_digest,
 )
 from platform_api.shared import ApprovalId, Digest, Principal, UserId, new_id
-from platform_api.wire import WireModel
+from platform_api.wire import WireIn, WireModel
 
 log = logging.getLogger(__name__)
 
@@ -204,20 +204,20 @@ class SetUpApprovalView(WireModel):
     set_up: DraftedSetUpView | None
 
 
-class DraftWorkflowIn(WireModel):
+class DraftWorkflowIn(WireIn):
     words: str = Field(min_length=1, max_length=2000)
 
 
-class DraftChangeIn(WireModel):
+class DraftChangeIn(WireIn):
     words: str = Field(min_length=1, max_length=2000)
     revision: int = Field(ge=1, description="The revision the person asks to change.")
 
 
-class DraftSendIn(WireModel):
+class DraftSendIn(WireIn):
     revision: int = Field(ge=1)
 
 
-class SetUpDecisionIn(WireModel):
+class SetUpDecisionIn(WireIn):
     verdict: Literal["approve", "decline"]
     digest: str
     reason: SetUpDeclineReason | None = Field(
