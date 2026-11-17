@@ -2,7 +2,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 
-from platform_api.auth import SIGNED_IN, CurrentPrincipal
+from platform_api.auth import OPERATORS_ONLY, SIGNED_IN, CurrentPrincipal
 from platform_api.builder.drafted_workflows import (
     DraftChangeIn,
     DraftedWorkflows,
@@ -56,8 +56,7 @@ def _refused(answer: object) -> None:
     "the plan laid out, checked and reported. Words shaped like a key are refused, and nothing is "
     "kept or sent. The same Idempotency-Key answers the drafted workflow it started.",
     responses={
-        **SIGNED_IN,
-        403: error_response(DRAFT_WORKFLOWS),
+        **OPERATORS_ONLY,
         409: error_response("Don't paste keys here. An Operator adds keys in Settings."),
     },
 )
@@ -99,11 +98,7 @@ async def read_drafted(
     "same id and kind keeps its value unless the words change it. A set-up approval still waiting "
     "is replaced. 409 when the revision named is not the newest, it is still drafting, or it is "
     "set up already.",
-    responses={
-        **SIGNED_IN,
-        403: error_response(DRAFT_WORKFLOWS),
-        404: error_response(NO_SUCH_DRAFT),
-    },
+    responses={**OPERATORS_ONLY, 404: error_response(NO_SUCH_DRAFT)},
 )
 async def change_drafted(
     drafted_id: str, body: DraftChangeIn, principal: Drafter, drafted: CurrentDrafted
@@ -121,11 +116,7 @@ async def change_drafted(
     "Teams channel with a link to the approval page. 409, with the words the card shows, while "
     "any setting is still needed, when the check found a flag, or when it changes someone's "
     "access, until those steps are built.",
-    responses={
-        **SIGNED_IN,
-        403: error_response(DRAFT_WORKFLOWS),
-        404: error_response(NO_SUCH_DRAFT),
-    },
+    responses={**OPERATORS_ONLY, 404: error_response(NO_SUCH_DRAFT)},
 )
 async def send_drafted(
     drafted_id: str, body: DraftSendIn, principal: Drafter, drafted: CurrentDrafted
@@ -139,11 +130,7 @@ async def send_drafted(
 @router.post(
     "/drafted-workflows/{drafted_id}/set-up",
     description="Tries the set-up of an approved revision again, after n8n didn't take it.",
-    responses={
-        **SIGNED_IN,
-        403: error_response(DRAFT_WORKFLOWS),
-        404: error_response(NO_SUCH_DRAFT),
-    },
+    responses={**OPERATORS_ONLY, 404: error_response(NO_SUCH_DRAFT)},
 )
 async def set_up_drafted_again(
     drafted_id: str, principal: Drafter, drafted: CurrentDrafted

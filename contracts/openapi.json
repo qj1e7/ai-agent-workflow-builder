@@ -17633,7 +17633,7 @@
                 }
               }
             },
-            "description": "Only an Operator can draft workflows. Ask an Operator on the team."
+            "description": "Only an Operator can do this, or the person is not on the People list"
           },
           "409": {
             "content": {
@@ -17825,7 +17825,7 @@
                 }
               }
             },
-            "description": "Only an Operator can draft workflows. Ask an Operator on the team."
+            "description": "Only an Operator can do this, or the person is not on the People list"
           },
           "404": {
             "content": {
@@ -17926,7 +17926,7 @@
                 }
               }
             },
-            "description": "Only an Operator can draft workflows. Ask an Operator on the team."
+            "description": "Only an Operator can do this, or the person is not on the People list"
           },
           "404": {
             "content": {
@@ -18017,7 +18017,7 @@
                 }
               }
             },
-            "description": "Only an Operator can draft workflows. Ask an Operator on the team."
+            "description": "Only an Operator can do this, or the person is not on the People list"
           },
           "404": {
             "content": {
