@@ -173,6 +173,73 @@ def test_a_key_where_a_project_stands_is_read_even_a_short_or_small_one(
     assert projects_named(task, ("MOCK",)) == named
 
 
+NOT_TO_FILL = [
+    "Raise a ticket in the Jira project for each new LangGraph release",
+    "Find the closed tickets and raise one ticket with the project status",
+    "Raise one ticket for each project update",
+    "Find tickets about project management and raise one",
+    "Find stale tickets and send the list to HR",
+    "Find tickets closed in Q4 and raise one ticket that lists them",
+    "Find tickets in UAT and raise one ticket",
+    "Raise a ticket for each service deployed to PROD",
+    "Find the DEV tickets and raise one",
+    "Escalate stale tickets to L2 and raise one",
+    "Find HIGH issues and raise one ticket",
+    "Raise a ticket for each server still on PHP-7",
+    "Raise a ticket for each server still on RHEL-7",
+    "Raise a ticket for each repo listed at https://example.com/projects/langgraph",
+    "find stale tickets in mock and raise one in ops",
+    "Find tickets from Bob and raise one in MOCK",
+    "Raise a ticket in Jira for each new release",
+    "Raise a ticket into the backlog",
+]
+
+
+@pytest.mark.parametrize("task", NOT_TO_FILL)
+async def test_the_project_input_is_never_filled_with_words_that_name_no_project_of_the_team(
+    task: str,
+):
+    """The input decides where the ticket is written. Before, it was filled with FOR, STATUS,
+    UPDATE, MANAGEMENT, HR, Q4, PROD, L2, HIGH, PHP, RHEL or LANGGRAPH, or with MOCK while "in
+    ops" was dropped. Now it is filled only with a project the team's Jira allows, and the
+    Portal asks otherwise, or the card names two projects."""
+    result = await planned(task, ("MOCK",))
+    assert isinstance(result, CannotDo) or (isinstance(result, NewAgent) and result.project is None)
+
+
+@pytest.mark.parametrize(
+    ("task", "project"),
+    [
+        ("every Monday at 9am raise tickets in MOCK", "MOCK"),
+        (TASK, "MOCK"),
+        ("Find tickets in MOCK, and email the list to me", "MOCK"),
+        ("Raise a ticket in the MOCK project", "MOCK"),
+        ("Find tickets in MOCK closed in Q4", "MOCK"),
+    ],
+)
+async def test_a_project_the_team_allows_is_filled(task: str, project: str):
+    result = await planned(task, ("MOCK",))
+    assert isinstance(result, NewAgent) and result.project == project
+
+
+@pytest.mark.parametrize(
+    ("task", "project"),
+    [
+        ("Raise a ticket in OPS", "OPS"),
+        ("Find tickets in project OPS and raise one", "OPS"),
+        ("Raise a ticket in the Jira project for each new LangGraph release", None),
+        ("Find stale tickets and send the list to HR", None),
+        ("Find tickets closed in Q4 and raise one ticket", None),
+        ("Find the DEV tickets and raise one", None),
+    ],
+)
+async def test_with_no_team_list_only_a_capital_key_after_project_or_in_is_filled(
+    task: str, project: str | None
+):
+    result = await planned(task)
+    assert isinstance(result, NewAgent) and result.project == project
+
+
 async def test_the_one_project_the_words_name_comes_with_the_plan_for_the_portal_to_fill():
     """The Portal fills the project input from this key, so the builder and the Portal read the
     words the same way."""

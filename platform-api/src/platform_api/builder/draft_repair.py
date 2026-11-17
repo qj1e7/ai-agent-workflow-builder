@@ -79,7 +79,8 @@ NEVER_PROJECTS: Final = _words(
     "AM PM SGT UTC GMT BST CET CEST EST EDT CST CDT PST PDT IST JST HKT AEST AEDT "
     "PDF CSV JSON XML HTML TXT PNG JPG XLSX DOCX PPTX "
     "ALL ANY EACH EVERY BOTH THE "
-    "DONE TODO OPEN CLOSED RESOLVED BLOCKED BACKLOG PROGRESS"
+    "DONE TODO OPEN CLOSED RESOLVED BLOCKED BACKLOG PROGRESS "
+    "Q1 Q2 Q3 Q4 UAT PROD DEV SIT STAGING L1 L2 L3"
 )
 """Words that stand where a project could and name none: a time zone, a file type, a word such as
 ALL, or a ticket status, as "in SGT", "to PDF" or "moved to DONE"."""
@@ -87,10 +88,31 @@ NOT_PROJECTS: Final = NEVER_PROJECTS | _words(
     "AI API CI CD DM HR ID IT KPI MR NCS PR QA SLA SQL SSO UI URL UX VPN "
     "CVE EOL LTS SRE NPS BUG BUGS NOTE ISO RFC SHA UTF HTTP HTTPS COVID "
     "JIRA GITHUB GITLAB SLACK TEAMS CONFLUENCE ENTRA N8N "
-    "ASAP EOD EOW FYI NEW NO NOT NOW OK OLD ONE ONLY OR TBC TBD URGENT YES P0 P1 P2 P3 P4"
+    "ASAP EOD EOW FYI NEW NO NOT NOW OK OLD ONE ONLY OR TBC TBD URGENT YES P0 P1 P2 P3 P4 "
+    "HIGH LOW MEDIUM CRITICAL MAJOR MINOR"
 )
 """Capital words before a ticket number or a ticket word that name no project, as CVE-2024-3094
 or "the BUG tickets". After "in" or "project", IT, HR and QA are projects."""
+PLAIN_WORDS: Final = _words(
+    "the a an me us you him her them it this that these those my our your their its each every "
+    "all any some for of with about from to into in on at by and or which what where when there "
+    "here jira teams slack confluence github gitlab email chat time order case progress review "
+    "detail line full general short summary list table team channel backlog board status update "
+    "updates management page name lead manager owner plan today tomorrow week month year day "
+    "morning afternoon evening night english bulk advance addition total place front mind "
+    "january february march april may june july august september october november december"
+)
+"""Words in small letters that follow "in", "to" or "project" and name no project, as "in the
+backlog", "to me" or "project status"."""
+FILL_LEAD: Final = re.compile(
+    rf"(?<![\w-])(?:[Pp]roject|[Ii]n)\s+(?:(?:[Tt]he|[Jj]ira|[Pp]roject)\s+)*(?P<key>{KEY})(?!\w)"
+)
+"""A key right after "project" or "in", as "in MOCK" or "project OPS"."""
+WHERE_A_PROJECT_STANDS: Final = re.compile(
+    rf"(?<![\w-])(?:[Pp]rojects?|[Ii]n|[Ii]nto|[Ff]rom|[Tt]o)\s+(?:(?:[Tt]he|[Jj]ira|[Pp]rojects?)\s+)*"
+    rf"(?P<key>{KEY})(?!\w)"
+)
+"""Any word where a project could stand, to tell whether the words may name a second one."""
 
 
 def _squashed(text: str) -> str:
@@ -166,14 +188,15 @@ def projects_named(task: str, known: Collection[str] = ()) -> list[str]:
     allowed = {key.upper() for key in known}
     found: list[tuple[int, str]] = []
     for match in LEAD.finditer(task):
-        named = "project" in f"{task[match.start() : match.start('lead')]}{match.group('lead')}"
+        named = "project" in match.group("lead").casefold()
         keys = [k for k in re.finditer(KEY, match.group("keys")) if k.group(0) not in ("and", "or")]
         for n, key in enumerate(keys):
             word = key.group(0)
             upper = word.upper()
             # The first key may be in small letters after "project". One after "and" or a comma
             # is a project only in capitals, as "projects MOCK and OPS", so "and raise" is not.
-            first = n == 0 and (word == upper or named) and upper not in NEVER_PROJECTS
+            small = named and word.casefold() not in PLAIN_WORDS
+            first = n == 0 and (word == upper or small) and upper not in NEVER_PROJECTS
             listed = n > 0 and word == upper and upper not in NOT_PROJECTS
             if upper in allowed or first or listed:
                 found.append((match.start("keys") + key.start(), upper))
@@ -186,6 +209,30 @@ def projects_named(task: str, known: Collection[str] = ()) -> list[str]:
         if match.group(0) in allowed:
             found.append((match.start(), match.group(0)))
     return list(dict.fromkeys(key for _, key in sorted(found)))
+
+
+def project_to_fill(task: str, known: Collection[str] = ()) -> str | None:
+    """The one Jira project to fill the agent's project input with, or None so the Portal asks.
+    It decides where the ticket is written, so it is read narrowly: the one project the words
+    name must be one the team's Jira allows. With no list of those, it must be in capitals right
+    after "project" or "in", and no common word. Any other word where a project could stand, as
+    "ops" in "raise one in ops", leaves it unsure, so it is None."""
+    keys = projects_named(task, known)
+    if len(keys) != 1:
+        return None
+    key = keys[0]
+    allowed = {k.upper() for k in known}
+    stands = {m.group("key") for m in FILL_LEAD.finditer(task)}
+    if allowed and key not in allowed:
+        return None
+    if not allowed and (key in NOT_PROJECTS or key not in stands):
+        return None
+    for match in WHERE_A_PROJECT_STANDS.finditer(task):
+        word = match.group("key")
+        if word.upper() == key or word.casefold() in PLAIN_WORDS or word.upper() in NOT_PROJECTS:
+            continue
+        return None
+    return key
 
 
 def repaired(
@@ -235,7 +282,7 @@ def repaired(
             }
         ),
         left_out=left_out,
-        project=keys[0] if len(keys) == 1 else None,
+        project=project_to_fill(task, known) if "jira_project" in needed else None,
     )
 
 

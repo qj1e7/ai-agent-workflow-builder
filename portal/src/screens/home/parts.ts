@@ -55,12 +55,16 @@ export const WATCHLIST_CANT = 'From the chat I can add software to the Software 
 export const watchlistRuns = (time: string): string => `Make the Software watchlist run ${time.trim()}`
 
 /** “every weekday except Friday” leaves a day out, which no schedule here can hold. Anything else reads as how often. */
-const LEAVES_OUT = /^(?:except|excluding|but not|apart from|other than)\b/i
+const LEAVES_OUT = /\b(?:except|excluding|but not|apart from|other than)\b/i
+const STARTS_WITH_A_DAY = /^(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)s?\b/i
 
 export function howOftenWords(text: string): string {
   const said = text.trim()
   if (said === '') return REASON_WORDS.how_often
-  return LEAVES_OUT.test(said) ? 'I can’t leave days out of a schedule yet.' : `I can’t run things ${said} yet.`
+  if (LEAVES_OUT.test(said)) return 'I can’t leave days out of a schedule yet.'
+  // The whole phrase is their words, as a sentence: “Every other Friday” reads “every other Friday”, and a day stays a name.
+  const inSentence = STARTS_WITH_A_DAY.test(said) ? said : `${said.charAt(0).toLowerCase()}${said.slice(1)}`
+  return `I can’t run things ${inSentence} yet.`
 }
 
 /** Why a part has a cross or a question, in the prototype’s words. A can’t names the registry’s reason. */
