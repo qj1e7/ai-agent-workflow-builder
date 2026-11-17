@@ -1,5 +1,6 @@
 import json
 import re
+import time
 
 import pytest
 from pydantic import BaseModel
@@ -61,20 +62,129 @@ PLAIN_WORDS = [
     "sk-short",
     "see https://github.com/langchain-ai/langgraph/releases/tag/0.2.34",
     "-----BEGIN " + "PUBLIC KEY-----",
+    "highs_and_lows_of_the_quarter",
+    "assign the design=final sign-off",
+    "xoxo, see you soon",
+    "the ASIA PACIFIC region",
 ]
 
 
-@pytest.mark.parametrize("key", KEYS.values(), ids=list(KEYS))
-def test_each_key_the_team_pastes_is_masked_to_its_end(key: str):
-    masked = Masker().mask(f"keep {key} words")
+BEFORE = {
+    "space": " ",
+    "underscore": "_",
+    "digit": "7",
+    "letter": "x",
+    "JSON newline": "\\n",
+    "JSON tab": "\\t",
+    "JSON unicode escape": "\\u003d",
+    "URL escape": "%3D",
+    "equals": "=",
+    "colon": ":",
+    "quote": '"',
+}
+"""What may stand just before a key in text the masker sees. Serialised JSON writes a newline as
+two characters, a backslash and then a letter."""
+GLUED_TO_A_WORD = ("OpenAI project key", "Langfuse secret key")
+"""Keys read as part of a word when glued to a letter, as "sk-" is in "task-management-workflow"."""
+PLACED = [
+    pytest.param(before, key, id=f"{name} after {where}")
+    for name, key in KEYS.items()
+    for where, before in BEFORE.items()
+    if not (where == "letter" and name in GLUED_TO_A_WORD)
+]
+MAIN_SHAPES = re.compile(
+    "|".join(
+        (
+            r"sk-ant-[A-Za-z0-9_\-]{8,}",
+            r"sk-[A-Za-z0-9_\-]{16,}",
+            r"gh[pousr]_[A-Za-z0-9]{16,}",
+            r"github_pat_[A-Za-z0-9_]{16,}",
+            r"(?i:bearer|basic)\s+(?=[A-Za-z._~\-]*[0-9+/=])[A-Za-z0-9._~+/=\-]{8,}",
+        )
+    )
+)
+"""The masker's shapes on main before this list grew, to show that nothing they caught is lost."""
+MAIN_EXAMPLES = [
+    "sk-ant-api03-abcDEF123_-xyz",
+    "sk-proj-0123456789abcdefABCD",
+    "ghp_0123456789abcdefABCDEF0123",
+    "Bearer eyJhbGciOi.eyJzdWIi.c2ln",
+    "basic dXNlcjpwYXNz=",
+    "sk-ant-api03-FAKEKEYFAKEKEY",
+    "sk-ant-example-not-a-key",
+    "ghp_plantedINmetadata01",
+    "ghp_ABCDEFGHIJKLMNOPQRSTUV",
+    *KEYS.values(),
+]
+"""The keys main's own tests used, and each key above."""
+N = 100_000
+HOSTILE = {
+    "sk-": "sk-" * (N // 3),
+    "xsk-": "xsk-" * (N // 4),
+    "task-": "task-" * (N // 5),
+    "eyJ-": "eyJ-" * (N // 4),
+    "_eyJ": "_eyJ" * (N // 4),
+    "eyJ.": "eyJ." * (N // 4),
+    "eyJ then letters": "eyJ" + "a" * N,
+    "x.eyJ": "x.eyJ" * (N // 5),
+    "AKIA": "AKIA" * (N // 4),
+    "xoxb-": "xoxb-" * (N // 5),
+    "Slack webhook": "hooks.slack.com/services/" * (N // 25),
+    "sig=": "sig=" * (N // 4),
+    "AccountKey=": "AccountKey=" * (N // 11),
+    "BEGIN": "-----BEGIN " * (N // 11),
+    "BEGIN then letters": "-----BEGIN " + "A " * (N // 2),
+    "END then letters": "-----BEGIN PRIVATE KEY-----" + "-----END " + "A" * N,
+    "bearer ": "bearer " * (N // 7),
+    "Bearer then letters": "Bearer " + "a" * N,
+    "Bearer then spaces": "Bearer" + " " * N + "x",
+    "basic ": "basic " * (N // 6),
+    "JSON newlines": "\\n" * (N // 2),
+    "JSON newline then eyJ-": "\\neyJ-" * (N // 6),
+    "URL escapes": "%41" * (N // 3),
+    "JSON unicode escapes": "\\u0041" * (N // 6),
+    "letters": "a" * N,
+    "hyphens": "-" * N,
+    "underscores": "_" * N,
+}
+"""Long texts that would make a shape read the same letters again and again, if it could."""
+
+
+@pytest.mark.parametrize(("before", "key"), PLACED)
+def test_each_key_is_masked_to_its_end_wherever_it_sits(before: str, key: str):
+    masked = Masker().mask(f"keep {before}{key} words")
     assert MASKED in masked and key[-8:] not in masked
     assert masked.startswith("keep ") and masked.endswith(" words")
+
+
+@pytest.mark.parametrize("name", GLUED_TO_A_WORD)
+def test_only_an_sk_key_glued_to_a_letter_is_read_as_part_of_a_word(name: str):
+    text = f"keep x{KEYS[name]} words"
+    assert Masker().mask(text) == text
+
+
+@pytest.mark.parametrize("key", KEYS.values(), ids=list(KEYS))
+@pytest.mark.parametrize("before", ["\n", "\t", "_"], ids=["newline", "tab", "underscore"])
+def test_a_key_in_serialised_json_is_masked_and_the_json_still_reads(before: str, key: str):
+    note = json.loads(Masker().mask(json.dumps({"note": f"line{before}{key}"})))["note"]
+    assert MASKED in note and key[-8:] not in note
+
+
+def test_nothing_main_s_shapes_caught_is_lost_wherever_it_sits():
+    for example in MAIN_EXAMPLES:
+        for where, before in BEFORE.items():
+            text = f"keep {before}{example} words"
+            glued = where == "letter" and re.match(r"sk-(?!ant-)", example) is not None
+            if MAIN_SHAPES.search(text) and not glued:
+                assert KEY_SHAPES.search(text), text
 
 
 def test_a_private_key_block_is_masked_to_its_end_line_or_to_the_end_of_the_text():
     assert Masker().mask(f"here {PEM} thanks") == f"here {MASKED} thanks"
     cut = PEM.split("\n-----END")[0]
     assert Masker().mask(f"here {cut}") == f"here {MASKED}"
+    note = json.loads(Masker().mask(json.dumps({"note": f"here {PEM} thanks"})))["note"]
+    assert note == f"here {MASKED} thanks"
 
 
 @pytest.mark.parametrize("text", PLAIN_WORDS)
@@ -84,8 +194,22 @@ def test_plain_words_never_look_like_a_key(text: str):
 
 
 @pytest.mark.parametrize("shape", KEY_SHAPE_SOURCES)
-def test_no_shape_repeats_a_group_so_each_runs_in_linear_time(shape: str):
-    assert re.search(r"\)[*+?{]", shape) is None
+def test_each_shape_reads_a_long_hostile_text_in_linear_time(shape: str):
+    pattern = re.compile(shape)
+    for name, text in HOSTILE.items():
+        begun = time.perf_counter()
+        pattern.sub(MASKED, text)
+        took = time.perf_counter() - begun
+        assert took < 0.1, f"{name}: {took:.3f}s"
+
+
+def test_the_masker_reads_a_long_hostile_text_in_linear_time():
+    masker = Masker(["callback-token-first"])
+    for name, text in HOSTILE.items():
+        begun = time.perf_counter()
+        masker.mask(text)
+        took = time.perf_counter() - begun
+        assert took < 0.1, f"{name}: {took:.3f}s"
 
 
 @pytest.mark.parametrize(
