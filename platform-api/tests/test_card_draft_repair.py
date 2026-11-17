@@ -66,11 +66,15 @@ async def test_two_jira_project_inputs_become_one_when_the_words_name_one_projec
     assert inputs_of(await planned(task, inputs=two)) == [(PROJECT, "jira_project")]
 
 
-async def test_two_jira_project_inputs_for_two_named_projects_say_which_two():
+@pytest.mark.parametrize(
+    "task",
+    [
+        "Find tickets in MOCK. Raise one ticket that lists them. Where it goes: Jira project OPS.",
+        "In MOCK, find the stale tickets. Project OPS gets one ticket that lists them.",
+    ],
+)
+async def test_two_jira_project_inputs_for_two_named_projects_say_which_two(task: str):
     two = [DraftInput(name="From", kind="jira_project"), DraftInput(name="To", kind="jira_project")]
-    task = (
-        "Find tickets in MOCK. Raise one ticket that lists them. Where it goes: Jira project OPS."
-    )
     result = await planned(task, inputs=two)
     assert result == CannotDo(reason=one_project_only(["MOCK", "OPS"]), missing_tools=[])
     assert "your words name MOCK and OPS" in one_project_only(["MOCK", "OPS"])

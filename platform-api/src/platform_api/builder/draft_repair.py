@@ -33,8 +33,9 @@ NAMELESS: Final = {
     "jira_project": "Jira project",
     "text": "Detail",
 }
-PROJECT_IN: Final = re.compile(r"\b(?:project|in)\s+([A-Z][A-Z0-9_]{1,9})\b")
-"""A Jira project key as a task names it, "project MOCK" or "in MOCK", as the Portal reads it."""
+PROJECT_IN: Final = re.compile(r"\b(?i:project|in)\s+([A-Z][A-Z0-9_]{1,9})\b")
+"""A Jira project key as a task names it, "project MOCK" or "in MOCK", as the Portal reads it,
+and at the start of a sentence too."""
 
 
 def _squashed(text: str) -> str:
