@@ -2,18 +2,16 @@
 classes them (ADR 0045): `read`, `notice`, `write` or `off`. Anything the file does not class is
 off.
 
-One file decides it everywhere. n8n's allow list, `NODES_INCLUDE`, is generated from it by
-`scripts/nodes-include.sh` as every type that is not off. The safety checker grades each block by
-it, bootstrap checks that n8n loaded exactly its types, and the pin check (`platform_api.pin_check`)
-keeps it complete against the node types the pinned n8n image serves.
+n8n loads every built-in block but two (ADR 0051, `n8n_blocks`), so the file no longer decides what
+n8n loads. It classes the blocks it knows, for their tags, their `says` and their keys. The safety
+checker grades each block by it and flags every type it doesn't class, and the pin check
+(`platform_api.pin_check`) keeps each of its rows true to the node types the pinned image serves.
 
 The file maps each type to `{"off": why}`, or to its block kind and its rows. A row classes some
 versions of the type, either whole (`class`) or by the parameter that picks what the node does
 (`by`), with n8n's default for it and a class for each choice. A node that picks a resource and
 then an operation on it is classed by both together (`by` is `["resource", "operation"]`), with
-each resource's own default operation. An off type that n8n makes itself from one that is on,
-whatever NODES_INCLUDE says, names that type in `loaded_with`: n8n makes an AI agent's tool of
-every node marked usable as one.
+each resource's own default operation.
 
 A row of one of n8n's own nodes for an outside system (block `system`) also says what the block
 is to a person and to the checker (`Use`): its tag and what it does, the parameters that name
@@ -144,7 +142,6 @@ class _On(BaseModel):
 class _Off(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     off: str = Field(min_length=1)
-    loaded_with: str | None = None
 
 
 _FILE = TypeAdapter(dict[str, _On | _Off])
@@ -210,8 +207,6 @@ class OnType:
 @dataclass(frozen=True)
 class OffType:
     why: str
-    loaded_with: str | None = None
-    """The type that is on whose loading makes n8n load this one too."""
 
 
 @dataclass(frozen=True)
@@ -241,35 +236,21 @@ class NodeClasses:
     def __init__(self, types: Mapping[str, OnType | OffType]) -> None:
         self._types = dict(types)
         _check(self._types)
-        self._loaded = frozenset(self.loaded())
 
     @classmethod
     def read(cls, path: Path = CLASS_FILE) -> NodeClasses:
         parsed = _FILE.validate_json(path.read_bytes())
         return cls({name: _domain(entry) for name, entry in parsed.items()})
 
-    def included(self) -> tuple[str, ...]:
-        """n8n's allow list: every type the file does not turn off, in the file's order."""
-        return tuple(name for name, entry in self._types.items() if isinstance(entry, OnType))
-
-    def loaded(self) -> tuple[str, ...]:
-        """Every type n8n loads with the allow list: the types that are on, and the off types n8n
-        makes from them."""
-        made = (
-            name
-            for name, entry in self._types.items()
-            if isinstance(entry, OffType) and entry.loaded_with is not None
-        )
-        return (*self.included(), *made)
+    def names(self) -> tuple[str, ...]:
+        """Every type the file names, on or off, in the file's order."""
+        return tuple(self._types)
 
     def blocks(self) -> Mapping[str, BlockKind]:
+        """Every type the file turns on, with what it is to the checker, in the file's order."""
         return {
             name: entry.block for name, entry in self._types.items() if isinstance(entry, OnType)
         }
-
-    def loads(self, node_type: str) -> bool:
-        """Whether n8n loads this type with the allow list, so it runs whatever a grade says."""
-        return node_type in self._loaded
 
     def entry(self, node_type: str) -> OnType | OffType | None:
         """What the file says of one type, or None when it does not name it."""
@@ -298,20 +279,21 @@ class NodeClasses:
 
     def unclassed(self, served: Iterable[Mapping[str, Any]]) -> list[str]:
         """Every way the node types n8n serves, as its `/types/nodes.json` lists them, and the
-        file disagree: a type, a version or a choice n8n has that the file does not class, n8n's
-        default for a choice changed, or a type or version the file classes that n8n does not
-        load. None when they agree."""
+        file's rows disagree: a version or a choice of a type the file turns on that the file does
+        not class, n8n's default for a choice changed, a type or version the file names that n8n
+        does not load, or one of our blocks the file does not class. A type the file doesn't name
+        is no problem: the checker flags it (ADR 0051). None when they agree."""
         problems: list[str] = []
         seen: dict[str, set[str]] = {}
-        made = set(self.loaded()) - set(self.included())
         for description in served:
             name = str(description.get("name"))
             entry = self._types.get(name)
-            if name in made:
-                made.discard(name)
-                continue
+            seen.setdefault(name, set())
+            if entry is None and name.startswith(OURS):
+                problems.append(
+                    f"n8n loads {name}, one of our blocks, which the class file does not class."
+                )
             if not isinstance(entry, OnType):
-                problems.append(f"n8n loads {name}, which the class file does not turn on.")
                 continue
             properties = cast(Sequence[Mapping[str, Any]], description.get("properties") or [])
             for version in _served_versions(description.get("version")):
@@ -322,8 +304,9 @@ class NodeClasses:
                 elif classed != "off":
                     problems += _choices(f"{name} version {version}", classed, properties)
         problems += [
-            f"The class file says n8n makes {name}, which n8n does not load."
-            for name in sorted(made)
+            f"The class file names {name}, which n8n does not load."
+            for name, entry in self._types.items()
+            if isinstance(entry, OffType) and name not in seen
         ]
         for name, entry in self._types.items():
             if isinstance(entry, OnType):
@@ -383,7 +366,7 @@ def _classed(row: _Row) -> Classed:
 
 def _domain(entry: _On | _Off) -> OnType | OffType:
     if isinstance(entry, _Off):
-        return OffType(entry.off, entry.loaded_with)
+        return OffType(entry.off)
     versions: dict[str, Classed] = {}
     uses: dict[str, Use] = {}
     for row in entry.rows:
@@ -412,10 +395,6 @@ def _check(types: Mapping[str, OnType | OffType]) -> None:
     holders: dict[BlockKind, list[str]] = {}
     for name, entry in types.items():
         if isinstance(entry, OffType):
-            if entry.loaded_with is not None and not isinstance(
-                types.get(entry.loaded_with), OnType
-            ):
-                raise ValueError(f"{name} is loaded with {entry.loaded_with}, which is not on")
             continue
         holders.setdefault(entry.block, []).append(name)
         classes = set[Class]().union(*(_classes(c) for c in entry.versions.values()))

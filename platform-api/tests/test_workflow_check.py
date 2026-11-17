@@ -190,7 +190,7 @@ def test_our_step_turned_off_is_no_step_before_n8n_s_blocks() -> None:
         "",
     ],
 )
-def test_a_block_that_is_not_on_the_allow_list_needs_a_fix(block_type: str) -> None:
+def test_a_block_the_platform_has_not_classed_needs_a_fix(block_type: str) -> None:
     assert graded(with_block(release_check(), block_type)) == "needs_a_fix"
 
 
@@ -221,6 +221,12 @@ def test_each_of_n8n_s_data_nodes_is_on(block_type: str, version: float) -> None
     assert findings(shaped) == []
 
 
+def off_findings(document: Doc) -> list[tuple[str, str, bool]]:
+    return [
+        (f.rule, f.text, f.runs_anyway) for f in grade(document, ERROR_WORKFLOW, TEAM_ZONE).findings
+    ]
+
+
 @pytest.mark.parametrize(
     "block_type",
     [
@@ -228,15 +234,62 @@ def test_each_of_n8n_s_data_nodes_is_on(block_type: str, version: float) -> None
         "n8n-nodes-base.itemLists",
         "n8n-nodes-base.httpRequest",
         "n8n-nodes-base.code",
+        "n8n-nodes-base.aiTransform",
+        "@n8n/n8n-nodes-langchain.toolCode",
+        "n8n-nodes-base.readWriteFile",
         "n8n-nodes-base.webhook",
         "n8n-nodes-base.wait",
-        "n8n-nodes-base.executeWorkflow",
         "n8n-nodes-base.respondToWebhook",
+        "n8n-nodes-base.httpRequestTool",
     ],
 )
-def test_sort_and_every_block_that_can_reach_out_or_run_code_is_off(block_type: str) -> None:
-    assert findings(with_block(release_check(), block_type, "Off")) == [
-        f'"Off" uses a block that is off: {block_type}.'
+def test_a_block_n8n_loads_that_the_platform_has_not_classed_is_a_flag_that_runs_anyway(
+    block_type: str,
+) -> None:
+    """n8n loads every built-in block (ADR 0051, build step 12), so it would run this one as it
+    is, and nothing in the platform's project may be live with it."""
+    assert off_findings(with_block(release_check(), block_type, "Off")) == [
+        ("operation_off", f'"Off" uses {block_type}, which the platform hasn\'t classed.', True)
+    ]
+
+
+@pytest.mark.parametrize(
+    ("block_type", "because"),
+    [
+        ("n8n-nodes-base.function", "It runs code inside n8n's own process"),
+        ("n8n-nodes-base.functionItem", "It runs code inside n8n's own process"),
+        ("@n8n/n8n-nodes-langchain.code", "It runs code inside n8n's own process"),
+        ("n8n-nodes-base.executeWorkflow", "It runs another workflow"),
+        ("n8n-nodes-base.executeWorkflowTrigger", "It runs another workflow"),
+        ("@n8n/n8n-nodes-langchain.toolWorkflow", "It runs another workflow"),
+        ("@n8n/n8n-nodes-langchain.retrieverWorkflow", "It runs another workflow"),
+        ("n8n-nodes-base.git", "It runs git on n8n's disk"),
+        ("n8n-nodes-base.gitTool", "It runs git on n8n's disk"),
+        ("n8n-nodes-base.n8n", "It changes n8n itself"),
+    ],
+)
+def test_a_block_n8n_loads_that_can_t_run_here_says_why_and_runs_anyway(
+    block_type: str, because: str
+) -> None:
+    [(rule, text, runs_anyway)] = off_findings(with_block(release_check(), block_type, "Held"))
+    assert (rule, runs_anyway) == ("block_held", True)
+    assert text.startswith(
+        f'"Held" uses {block_type}, which can\'t run on this platform. {because}'
+    )
+
+
+@pytest.mark.parametrize(
+    "block_type",
+    [
+        "n8n-nodes-base.executeCommand",
+        "n8n-nodes-base.localFileTrigger",
+        "n8n-nodes-community.anything",
+        "wab.read",
+    ],
+)
+def test_a_block_n8n_does_not_load_can_t_run_and_never_runs(block_type: str) -> None:
+    assert off_findings(with_block(release_check(), block_type, "Off")) == [
+        ("block_off", f'"Off" uses {block_type}, which our n8n doesn\'t load.', False)
     ]
 
 
@@ -554,7 +607,7 @@ def unlinked(document: Doc) -> None:
     ("name", "change", "says"),
     [
         (ERROR_WORKFLOW_NAME, lambda d: d["settings"].pop("callerPolicy"), "callerPolicy"),
-        (ERROR_WORKFLOW_NAME, http_reporter, "is off"),
+        (ERROR_WORKFLOW_NAME, http_reporter, "hasn't classed"),
         (ERROR_WORKFLOW_NAME, second_report, "nothing else"),
         (ERROR_WORKFLOW_NAME, unlinked, "nothing else"),
         (SELF_TEST, lambda d: d["settings"].pop("errorWorkflow"), "error workflow"),
@@ -771,10 +824,10 @@ def test_a_key_on_one_of_our_own_blocks_is_not_the_platform_s_either() -> None:
     assert ('"Compare" uses a key the platform did not make.', True) in notice_findings(document)
 
 
-def test_a_block_n8n_does_not_load_needs_a_fix_but_never_runs() -> None:
+def test_a_block_n8n_loads_but_the_platform_has_not_classed_needs_a_fix_that_runs_anyway() -> None:
     document = with_block(release_notice(), "n8n-nodes-base.httpRequest", "Post it", "Newer?", 4.2)
     assert notice_findings(document) == [
-        ('"Post it" uses a block that is off: n8n-nodes-base.httpRequest.', False)
+        ('"Post it" uses n8n-nodes-base.httpRequest, which the platform hasn\'t classed.', True)
     ]
 
 
@@ -900,8 +953,10 @@ def test_unchecked_names_only_what_n8n_would_run_whatever_the_platform_says() ->
     node(document, "Tell Slack")["parameters"]["operation"] = "delete"
     node(document, "Compare")["credentials"] = {"slackApi": {"id": "aliceSlack", "name": "x"}}
     with_block(document, "n8n-nodes-base.httpRequest", "Post it", "Newer?", 4.2)
+    with_block(document, "n8n-nodes-base.executeCommand", "Run it", "Newer?")
     assert [f.text for f in unchecked(document, KEYS_MADE)] == [
         '"Tell Slack" does something that is off: message delete.',
+        '"Post it" uses n8n-nodes-base.httpRequest, which the platform hasn\'t classed.',
         '"Compare" uses a key the platform did not make.',
     ], "a block n8n does not load never runs, so it is not one"
 
@@ -963,7 +1018,8 @@ def notice_channel(value: object) -> Callable[[], Doc]:
 
 BREAKS: dict[str, Callable[[], Doc]] = {
     "unreadable": lambda: {"nodes": "none"},
-    "block_off": lambda: with_block(release_check(), "n8n-nodes-base.httpRequest", "Call out"),
+    "block_off": lambda: with_block(release_check(), "n8n-nodes-base.executeCommand", "Run it"),
+    "block_held": lambda: with_block(release_check(), "n8n-nodes-base.executeWorkflow", "Call it"),
     "version_off": lambda: with_block(release_check(), "n8n-nodes-base.if", "Old", version=99),
     "picked_by_expression": lambda: with_block(
         release_check(), "n8n-nodes-base.merge", "Mix", version=3.2, parameters={"mode": "={{ 1 }}"}

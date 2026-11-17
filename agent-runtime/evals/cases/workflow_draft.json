@@ -148,7 +148,7 @@
     "must_not_use": ["n8n-nodes-base.code"],
     "filled": ["run_time", "channel"],
     "needed": [],
-    "flags": ["block_off", "notice_words_expression"],
+    "flags": ["operation_off", "notice_words_expression"],
     "changes_access": false,
     "can_run": true,
     "cant_run_because": null,

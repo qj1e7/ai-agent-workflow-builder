@@ -345,19 +345,22 @@ async def test_safety_a_publisher_the_people_list_cant_match_is_never_guessed(v:
 
 
 @pytest.mark.parametrize(
-    "node_type",
+    ("node_type", "said"),
     [
-        "n8n-nodes-base.httpRequest",
-        "n8n-nodes-base.code",
-        "n8n-nodes-base.webhook",
-        "n8n-nodes-base.somethingNobodyClassed",
+        ("n8n-nodes-base.httpRequest", "which the platform hasn't classed"),
+        ("n8n-nodes-base.code", "which the platform hasn't classed"),
+        ("n8n-nodes-base.webhook", "which the platform hasn't classed"),
+        ("n8n-nodes-base.somethingNobodyClassed", "which the platform hasn't classed"),
+        ("n8n-nodes-base.executeWorkflow", "which can't run on this platform"),
+        ("n8n-nodes-base.executeCommand", "which our n8n doesn't load"),
     ],
 )
-async def test_safety_a_block_that_is_off_needs_a_fix(v: Versions, node_type: str):
+async def test_safety_a_block_that_is_off_needs_a_fix(v: Versions, node_type: str, said: str):
     use_case_id, _ = await on_and_changed(v, adding(node_type))
     view = await v.view(use_case_id)
     assert view["grade"] == "needs_a_fix"
-    assert view["findings"] == [f'"Added in n8n" uses a block that is off: {node_type}.']
+    [finding] = view["findings"]
+    assert finding.startswith(f'"Added in n8n" uses {node_type}, {said}'), finding
 
 
 async def test_the_platforms_own_publish_is_never_taken_for_one_made_in_n8n(v: Versions):
@@ -921,7 +924,7 @@ async def test_safety_the_sweep_grades_every_workflow_again_under_new_rules_and_
     view = await v.view(use_case_id)
     assert (view["version"], view["grade"]) == (1, "needs_a_fix")
     assert view["findings"] == [
-        '"Send it out" uses a block that is off: n8n-nodes-base.httpRequest.'
+        '"Send it out" uses n8n-nodes-base.httpRequest, which the platform hasn\'t classed.'
     ]
     assert await version_row(v.own, use_case_id, 1) == before
     row = await v.own.row(
@@ -981,7 +984,7 @@ async def test_safety_while_bootstrap_is_not_ready_the_grade_uses_the_error_work
     monkeypatch.setattr(drafts, "recorded_error_workflow_id", recorded)
     assert await v.builder.sweep.sweep() == [Regraded(use_case_id, 1, "needs_a_fix")]
     assert (await v.view(use_case_id))["findings"] == [
-        '"Send it out" uses a block that is off: n8n-nodes-base.httpRequest.'
+        '"Send it out" uses n8n-nodes-base.httpRequest, which the platform hasn\'t classed.'
     ]
 
 

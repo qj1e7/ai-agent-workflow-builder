@@ -260,48 +260,15 @@
   "n8n-nodes-base.respondToWebhook": {"off": "It answers a webhook call and takes a credential (P7 Q10)."},
   "n8n-nodes-base.sort": {"off": "Its code mode runs JavaScript (P7 Q10)."},
   "n8n-nodes-base.itemLists": {"off": "Its sort has the same code mode as Sort (P7 Q10)."},
-  "n8n-nodes-base.dateTimeTool": {
-    "off": "An AI agent's tool, which n8n makes from Date & Time whatever NODES_INCLUDE says. It has no main input, and AI agents are off (ADR 0023).",
-    "loaded_with": "n8n-nodes-base.dateTime"
-  },
-  "n8n-nodes-base.jiraTool": {
-    "off": "An AI agent's tool, which n8n makes from Jira whatever NODES_INCLUDE says. AI agents are off (ADR 0023).",
-    "loaded_with": "n8n-nodes-base.jira"
-  },
-  "n8n-nodes-base.githubTool": {
-    "off": "An AI agent's tool, which n8n makes from GitHub whatever NODES_INCLUDE says. AI agents are off (ADR 0023).",
-    "loaded_with": "n8n-nodes-base.github"
-  },
-  "n8n-nodes-base.microsoftTeamsTool": {
-    "off": "An AI agent's tool, which n8n makes from Microsoft Teams whatever NODES_INCLUDE says. AI agents are off (ADR 0023).",
-    "loaded_with": "n8n-nodes-base.microsoftTeams"
-  },
-  "n8n-nodes-base.microsoftOutlookTool": {
-    "off": "An AI agent's tool, which n8n makes from Microsoft Outlook whatever NODES_INCLUDE says. AI agents are off (ADR 0023).",
-    "loaded_with": "n8n-nodes-base.microsoftOutlook"
-  },
-  "n8n-nodes-base.gmailTool": {
-    "off": "An AI agent's tool, which n8n makes from Gmail whatever NODES_INCLUDE says. AI agents are off (ADR 0023).",
-    "loaded_with": "n8n-nodes-base.gmail"
-  },
-  "n8n-nodes-base.slackTool": {
-    "off": "An AI agent's tool, which n8n makes from Slack whatever NODES_INCLUDE says. AI agents are off (ADR 0023).",
-    "loaded_with": "n8n-nodes-base.slack"
-  },
-  "n8n-nodes-base.gmailHitlTool": {
-    "off": "An AI agent's tool that sends and waits for a person's answer, which n8n makes from Gmail whatever NODES_INCLUDE says. AI agents are off (ADR 0023).",
-    "loaded_with": "n8n-nodes-base.gmail"
-  },
-  "n8n-nodes-base.microsoftOutlookHitlTool": {
-    "off": "An AI agent's tool that sends and waits for a person's answer, which n8n makes from Microsoft Outlook whatever NODES_INCLUDE says. AI agents are off (ADR 0023).",
-    "loaded_with": "n8n-nodes-base.microsoftOutlook"
-  },
-  "n8n-nodes-base.microsoftTeamsHitlTool": {
-    "off": "An AI agent's tool that sends and waits for a person's answer, which n8n makes from Microsoft Teams whatever NODES_INCLUDE says. AI agents are off (ADR 0023).",
-    "loaded_with": "n8n-nodes-base.microsoftTeams"
-  },
-  "n8n-nodes-base.slackHitlTool": {
-    "off": "An AI agent's tool that sends and waits for a person's answer, which n8n makes from Slack whatever NODES_INCLUDE says. AI agents are off (ADR 0023).",
-    "loaded_with": "n8n-nodes-base.slack"
-  }
+  "n8n-nodes-base.dateTimeTool": {"off": "An AI agent's tool, which n8n makes from Date & Time. It has no main input, and AI agents are off (ADR 0023)."},
+  "n8n-nodes-base.jiraTool": {"off": "An AI agent's tool, which n8n makes from Jira. AI agents are off (ADR 0023)."},
+  "n8n-nodes-base.githubTool": {"off": "An AI agent's tool, which n8n makes from GitHub. AI agents are off (ADR 0023)."},
+  "n8n-nodes-base.microsoftTeamsTool": {"off": "An AI agent's tool, which n8n makes from Microsoft Teams. AI agents are off (ADR 0023)."},
+  "n8n-nodes-base.microsoftOutlookTool": {"off": "An AI agent's tool, which n8n makes from Microsoft Outlook. AI agents are off (ADR 0023)."},
+  "n8n-nodes-base.gmailTool": {"off": "An AI agent's tool, which n8n makes from Gmail. AI agents are off (ADR 0023)."},
+  "n8n-nodes-base.slackTool": {"off": "An AI agent's tool, which n8n makes from Slack. AI agents are off (ADR 0023)."},
+  "n8n-nodes-base.gmailHitlTool": {"off": "An AI agent's tool that sends and waits for a person's answer, which n8n makes from Gmail. AI agents are off (ADR 0023)."},
+  "n8n-nodes-base.microsoftOutlookHitlTool": {"off": "An AI agent's tool that sends and waits for a person's answer, which n8n makes from Microsoft Outlook. AI agents are off (ADR 0023)."},
+  "n8n-nodes-base.microsoftTeamsHitlTool": {"off": "An AI agent's tool that sends and waits for a person's answer, which n8n makes from Microsoft Teams. AI agents are off (ADR 0023)."},
+  "n8n-nodes-base.slackHitlTool": {"off": "An AI agent's tool that sends and waits for a person's answer, which n8n makes from Slack. AI agents are off (ADR 0023)."}
 }

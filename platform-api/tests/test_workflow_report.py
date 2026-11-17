@@ -275,14 +275,13 @@ def test_a_made_in_n8n_workflow_flags_each_of_n8n_s_blocks_and_who_clears_it() -
     report = report_of(made_in_n8n(), "n8n")
     assert report.grade == "needs_a_fix"
     assert [(f.rule, None if f.block is None else f.block.text) for f in report.flags] == [
-        ("block_off", "Call the hook"),
         ("operation_off", "Open an issue"),
+        ("operation_off", "Call the hook"),
         ("no_error_workflow", None),
         ("notice_words_expression", "Post summary"),
         ("key_not_made", "Call the hook"),
     ], "in FLAG_RULES order"
     clears = {f.rule: f.clears for f in report.flags}
-    assert clears["block_off"] == CantRun()
     assert clears["operation_off"] == CantRun(), "no set-up approval can accept it yet"
     assert clears["notice_words_expression"] == CantRun()
     assert isinstance(clears["no_error_workflow"], FixedForYou)
@@ -292,9 +291,6 @@ def test_a_made_in_n8n_workflow_flags_each_of_n8n_s_blocks_and_who_clears_it() -
         assert (flag.what, flag.why) == (row.what, row.why)
     takes = {f.rule: f.takes for f in report.flags}
     assert takes["operation_off"] == "This can't run on this platform yet."
-    assert takes["block_off"] == (
-        "Nobody can clear it in the app. The platform itself would have to change."
-    )
     assert "Approver" not in " ".join(takes.values())
     assert report.fixed == (), "code laid out none of it"
 
@@ -304,14 +300,32 @@ def test_once_set_up_approvals_exist_an_approver_may_accept_what_the_table_says(
     clears = {f.rule: f.clears for f in report.flags}
     assert clears["operation_off"] == FLAG_RULES["operation_off"].clears
     assert isinstance(clears["notice_words_expression"], ApproverMayAccept)
-    assert clears["block_off"] == CantRun(), "a block our n8n doesn't load still can't run"
     takes = {f.rule: f.takes for f in report.flags}
     assert takes["operation_off"] == "An Approver may accept it at set-up."
     assert [(a.block.text, a.decides, a.words) for a in report.approves] == [
         ("Open an issue", AtSetUp(), "Runs on the set-up approval, with no yes on each run."),
         ("Post summary", AtSetUp(), "Posts on the set-up approval, with no yes on each run."),
-        ("Call the hook", CantRunYet(), "Can't run on this platform yet."),
-    ]
+        ("Call the hook", AtSetUp(), "Runs on the set-up approval, with no yes on each run."),
+    ], "n8n loads HTTP Request (ADR 0051, build step 12), so an Approver may accept it"
+
+
+@pytest.mark.parametrize(
+    ("block_type", "rule"),
+    [
+        ("n8n-nodes-base.executeCommand", "block_off"),
+        ("n8n-nodes-base.executeWorkflow", "block_held"),
+    ],
+)
+def test_a_block_our_n8n_doesn_t_load_or_holds_off_can_t_run_whatever_an_approval_says(
+    block_type: str, rule: str
+) -> None:
+    document = made_in_n8n()
+    node(document, "Call the hook")["type"] = block_type
+    report = report_of(document, "n8n", OVERRIDES)
+    [flag] = [f for f in report.flags if f.rule == rule]
+    assert flag.clears == CantRun()
+    assert flag.takes == "Nobody can clear it in the app. The platform itself would have to change."
+    assert ("Call the hook", CantRunYet()) in [(a.block.text, a.decides) for a in report.approves]
     tags = {s.name.text: s.tag for s in report.steps}
     assert (tags["Open an issue"], tags["Call the hook"]) == (
         "Writes on the set-up approval",

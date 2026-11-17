@@ -2,16 +2,16 @@
 (ENGINE-PLAN 2.4 and 2.5, ADR 0027).
 
 For our own blocks the grade is not the barrier. The write gateway checks our records at the
-moment of each write, and n8n's allow list leaves no block that can reach anything else. The
-grade tells a person, before anything runs, whether a workflow will be refused: `writes_refused`
-when a write can run without a yes, `needs_a_fix` when it cannot run as the platform expects at
-all, as when a block, its version or what it was asked to do is off in the class file (ADR 0045).
+moment of each write. The grade tells a person, before anything runs, whether a workflow will be
+refused: `writes_refused` when a write can run without a yes, `needs_a_fix` when it cannot run as
+the platform expects at all, as when a block, its version or what it was asked to do is off in
+the class file (ADR 0045), or n8n loads the block but it can't run on this platform (ADR 0051).
 
-n8n's own blocks never call our API, so n8n runs them whatever the grade says. A finding about
-one of them `runs_anyway`: a version with such a finding must not run at all. For those blocks
-the grade is the guard, with the platform's keys, which can only read or post, and the
-credential sweep (ADR 0045, section 2): a notice posts only to a place written in the block, and
-every key a block names must be one the platform made.
+n8n's own blocks never call our API, and n8n loads every built-in block but two (`n8n_blocks`), so
+n8n runs them whatever the grade says. A finding about one of them `runs_anyway`: a version with
+such a finding must not run at all. For those blocks the grade is the guard, with the platform's
+keys, which can only read or post, and the credential sweep (ADR 0045, section 2): a notice posts
+only to a place written in the block, and every key a block names must be one the platform made.
 
 In the platform's own n8n project n8n lets a workflow use every key there is. So no version with
 a finding that `runs_anyway` is ever live there, and no draft with one is ever run (`unchecked`).
@@ -33,7 +33,7 @@ from typing import Any, Literal, cast
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, ValidationError
 
-from platform_api.orchestration import n8n_schedule, node_classes
+from platform_api.orchestration import n8n_blocks, n8n_schedule, node_classes
 from platform_api.orchestration.agents import CardInput
 from platform_api.orchestration.n8n_calls import WRITE_TARGETS, Grade, WriteEntry
 from platform_api.orchestration.n8n_schedule import interval_problem, schedule_intervals
@@ -76,11 +76,18 @@ nodes. Whether one block may run also depends on its version and what it does.""
 GRADING_RULES = hashlib.sha256(
     b"".join(
         Path(f).read_bytes()
-        for f in (__file__, node_classes.__file__, CLASS_FILE, n8n_schedule.__file__)
+        for f in (
+            __file__,
+            node_classes.__file__,
+            CLASS_FILE,
+            n8n_blocks.__file__,
+            n8n_schedule.__file__,
+        )
     )
 ).hexdigest()[:16]
-"""The rules a grade is made under: this checker, the class file and the schedule rules, as this
-release holds them. The versions sweep grades again a version graded under others."""
+"""The rules a grade is made under: this checker, the class file, the blocks n8n loads and holds,
+and the schedule rules, as this release holds them. The versions sweep grades again a version
+graded under others."""
 
 TYPE_OF: Mapping[BlockKind, str] = {
     spec.kind: name for name, spec in NODE_TYPES.items() if spec.kind != "shape"
@@ -103,6 +110,7 @@ ADDED_SPACING = 220
 type RuleId = Literal[
     "unreadable",
     "block_off",
+    "block_held",
     "version_off",
     "picked_by_expression",
     "operation_off",
@@ -503,17 +511,33 @@ OFF_RULES: Mapping[OffBecause, RuleId] = {
 
 
 def _off_blocks(flow: Flow) -> Iterable[Finding]:
-    """Every block the class file does not let run: its type, its version, or what it was asked
-    to do. Unknown means off (ADR 0045)."""
+    """Every block that can't run as it is: one n8n holds off here, and one the class file does
+    not let run, by its type, its version, or what it was asked to do. A type the class file
+    doesn't class is a flag when n8n loads it (ADR 0051), and can't run when n8n doesn't."""
     for block in flow.blocks.values():
-        verdict = NODE_CLASSES.verdict(block.type, block.version, block.parameters)
-        if isinstance(verdict, Off):
+        if (hold := n8n_blocks.held(block.type)) is not None:
             yield _fix(
-                OFF_RULES[verdict.because],
+                "block_held",
                 block.name,
-                _off_words(block, verdict),
+                f'"{block.name}" uses {block.type}, which can\'t run on this platform. '
+                f"{hold.because} It waits for {hold.waits_for}.",
                 _runs_anyway(block),
             )
+            continue
+        verdict = NODE_CLASSES.verdict(block.type, block.version, block.parameters)
+        if not isinstance(verdict, Off):
+            continue
+        if verdict.because == "type" and n8n_blocks.loads(block.type):
+            yield _fix(
+                "operation_off",
+                block.name,
+                f'"{block.name}" uses {block.type}, which the platform hasn\'t classed.',
+                _runs_anyway(block),
+            )
+            continue
+        yield _fix(
+            OFF_RULES[verdict.because], block.name, _off_words(block, verdict), _runs_anyway(block)
+        )
 
 
 SHAPES = "Shapes the data"
@@ -569,7 +593,7 @@ def unpinned_notices(document: Mapping[str, Any]) -> list[str]:
 
 def _runs_anyway(block: Block) -> bool:
     """n8n loads the type, so it runs the block, and it is not one of ours, so it never asks."""
-    return NODE_CLASSES.loads(block.type) and not block.type.startswith(OURS)
+    return n8n_blocks.loads(block.type) and not block.type.startswith(OURS)
 
 
 CALLS: frozenset[BlockKind] = frozenset({"read", "agent", "propose", "ask", "write", "tell"})
@@ -756,7 +780,7 @@ def _keys(flow: Flow, keys: Mapping[str, str]) -> Iterable[Finding]:
 def _off_words(block: Block, off: Off) -> str:
     match off.because:
         case "type":
-            return f'"{block.name}" uses a block that is off: {block.type}.'
+            return f'"{block.name}" uses {block.type}, which our n8n doesn\'t load.'
         case "version":
             return f'"{block.name}" uses version {off.value} of {block.type}, which is off.'
         case "expression":
@@ -1004,7 +1028,7 @@ class NeedsASetting:
 
 @dataclass(frozen=True)
 class CantRun:
-    """Nobody can clear it in the app. It needs a new ADR, or spike P9."""
+    """Nobody can clear it in the app. It needs a new ADR, or what its hold waits for."""
 
 
 @dataclass(frozen=True)
@@ -1042,6 +1066,13 @@ FLAG_RULES: Mapping[RuleId, FlagRow] = {
         "Uses a block our n8n doesn't load",
         "n8n can't run a block it doesn't load, so the workflow can't run as it is.",
         "Every block loads in our n8n.",
+        CantRun(),
+    ),
+    "block_held": FlagRow(
+        "Uses a block that can't run on this platform",
+        "n8n loads it, but it could reach n8n's own secrets or run a workflow nobody approved, "
+        "so no approval lets it run here.",
+        "No block is one this platform holds off.",
         CantRun(),
     ),
     "version_off": FlagRow(

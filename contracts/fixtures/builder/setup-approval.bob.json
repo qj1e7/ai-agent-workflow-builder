@@ -192,6 +192,10 @@
         "words": "Every block loads in our n8n."
       },
       {
+        "rule": "block_held",
+        "words": "No block is one this platform holds off."
+      },
+      {
         "rule": "version_off",
         "words": "Every block is a version the platform has classed."
       },

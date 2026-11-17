@@ -4,6 +4,11 @@
     "tag": "2.42.6",
     "digest": "sha256:526daa38b68e923cc00c5280d18b4da5d489f115a73bdbf3b8e452b184197a9a"
   },
+  "n8n-runners": {
+    "repository": "n8nio/runners",
+    "tag": "2.42.6",
+    "digest": "sha256:b78816286beb0a14e874abfda31eb4621d47f5ebb38f194271df7e39b7bd63a7"
+  },
   "postgres": {
     "repository": "library/postgres",
     "tag": "17",
