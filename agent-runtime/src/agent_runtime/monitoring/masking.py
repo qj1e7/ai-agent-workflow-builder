@@ -55,9 +55,13 @@ KEY_SHAPE_SOURCES: Final = (
     r"(?:(?<=\\)(?![bfnrt]|u[0-9A-Fa-f]{4})|(?<=\\[bfnrt])|(?<=\\u[0-9A-Fa-f]{4})"
     r"|(?<![A-Za-z0-9_\-\\]))"
     r"(?=[A-Za-z0-9_\-]*?eyJ)[A-Za-z0-9_\-]++\.eyJ[A-Za-z0-9_\-]++\.[A-Za-z0-9_\-]+",
-    # A private key's lines never hold a quote, so one without its END line stops at the end of
-    # its JSON string and leaves the fields after it.
-    r'-----BEGIN [A-Z ]*PRIVATE KEY-----[^"]*?(?:-----END [A-Z ]*PRIVATE KEY-----|(?=\\?")|\Z)',
+    # A private key is read to its END line, or to a quote. From a quote it goes on through each
+    # base64 line after a quote, comma, plus or newline, as in a JSON array of lines or
+    # "..." + "...". So masked JSON stays JSON, and a JSON field's name is never taken. Its BEGIN
+    # line alone is a match, which is all a refusal needs. Possessive, so nothing is read twice.
+    r'-----BEGIN [A-Z ]*PRIVATE KEY-----(?:[^"\\-]|\\(?!")|-(?!----END))*+'
+    r"(?:-----END [A-Z ]*PRIVATE KEY-----"
+    r'|(?:(?:\\[nr]|[\s",+])++[A-Za-z0-9+/=]{16,}+(?!\\?"\s*:))*+)',
     # A credential after Bearer holds a digit, +, / or =, or is a long run of letters, so
     # "bearer instruments" stays.
     r"(?i:bearer)\s+(?=[A-Za-z._~\-]*[0-9+/=]|[A-Za-z]{24})[A-Za-z0-9._~+/=\-]{8,}",

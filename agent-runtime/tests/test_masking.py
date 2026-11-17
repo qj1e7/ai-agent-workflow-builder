@@ -200,6 +200,12 @@ HOSTILE = {
     "pypi-": "pypi-AgEIcHlwaS5vcmc" * (N // 20),
     "sk-proj-": "sk-proj-" * (N // 8),
     "BEGIN then backslashes": PEM_BEGIN + "\\" * N,
+    "BEGIN then separators": PEM_BEGIN + '"' + '", +' * (N // 4),
+    "BEGIN then short lines": PEM_BEGIN + '"' + ('", "' + "A" * 15) * (N // 19),
+    "BEGIN then long lines": PEM_BEGIN + '"' + ('", "' + "A" * 20) * (N // 24),
+    "BEGIN then field names": PEM_BEGIN + '"' + ('", "' + "A" * 20 + '": ') * (N // 27),
+    "BEGIN then dashes": PEM_BEGIN + "-" * N,
+    "BEGIN then END marks": PEM_BEGIN + "-----END " * (N // 9),
     "xoxd-%2F": "xoxd-%2F" * (N // 8),
     "glrt-": "glrt-" * (N // 5),
     "letters": "a" * N,
@@ -259,6 +265,29 @@ def test_a_private_key_without_its_end_line_is_masked_only_to_the_end_of_its_jso
     assert json.loads(Masker().mask(once)) == {"input": MASKED, "other": 1}
     twice = json.dumps(once)
     assert json.loads(json.loads(Masker().mask(twice))) == {"input": MASKED, "other": 1}
+    long_name = json.dumps({"input": cut, "configurationValues": 1})
+    assert json.loads(Masker().mask(long_name)) == {"input": MASKED, "configurationValues": 1}
+
+
+PEM_LINES = [
+    "-----BEGIN " + "RSA PRIVATE" + " KEY-----",
+    "MIIEow" + "Ab3d" * 15,
+    "Zx9y" * 16,
+    "Qr7t" * 4,
+    "-----END " + "RSA PRIVATE" + " KEY-----",
+]
+
+
+def test_a_private_key_split_by_quotes_is_masked_through_every_line():
+    joined = '"' + '\\n" + "'.join(PEM_LINES) + '"'
+    masked = Masker().mask(f"key = {joined};")
+    assert not any(line[-8:] in masked for line in PEM_LINES[1:4])
+
+
+def test_a_private_key_as_a_json_array_of_lines_is_masked_and_the_json_still_reads():
+    data = json.loads(Masker().mask(json.dumps({"key": PEM_LINES, "configurationValues": 1})))
+    assert data["configurationValues"] == 1
+    assert not any(line[-8:] in json.dumps(data) for line in PEM_LINES[1:4])
 
 
 @pytest.mark.parametrize("text", PLAIN_WORDS)
