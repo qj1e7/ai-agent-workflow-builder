@@ -17,6 +17,7 @@ from platform_api.builder.drafted_settings import (
     asking,
     never_guessed,
     next_question,
+    place_kinds,
     read_answer,
     settings_of,
     typed_time,
@@ -250,3 +251,22 @@ def test_a_place_that_already_holds_a_setting_s_placeholder_is_left_as_it_is():
     drafted = WorkflowPlan.model_validate(plan)
 
     assert never_guessed(drafted) == drafted
+
+
+def test_each_place_takes_the_kind_the_drafter_gives_it():
+    """As the drafter's own classes: a Slack user is a channel a notice posts to, an email's
+    recipients are addresses, a schedule's rule is a run time and our places are their own."""
+    slack = block("Tell", "n8n-nodes-base.slack", 2.3, **{**SLACK_POST, "select": "user"})
+    slack["parameters"]["user"] = {"__rl": True, "mode": "username", "value": "<<channel>>"}
+    gmail = block("Mail", "n8n-nodes-base.gmail", 2.1, resource="message", operation="send")
+    jira = block("Find", "n8n-nodes-base.jira", 1, resource="issue", operation="getAll")
+    plan = release_check().model_dump()
+    plan["blocks"] += [slack, gmail, jira]
+    blocks = {b.name: b for b in WorkflowPlan.model_validate(plan).blocks}
+
+    assert place_kinds(blocks["Tell"])["user.value"] == "channel"
+    assert place_kinds(blocks["Mail"])["sendTo"] == "address"
+    assert place_kinds(blocks["Find"])["project"] == "jira_project"
+    assert place_kinds(blocks["Every Monday"]) == {"rule": "run_time"}
+    assert place_kinds(blocks["Read new releases"]) == {"place": "repository"}
+    assert place_kinds(blocks["Propose a ticket"]) == {"place": "jira_project"}

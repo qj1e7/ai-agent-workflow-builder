@@ -279,10 +279,37 @@ def test_a_block_renamed_in_n8n_keeps_its_settings_needed_or_filled():
     assert propose.parameters["place"] == "<<jira_project>>"
 
 
-def test_a_placeholder_moved_in_n8n_takes_its_setting_along():
+def added(
+    document: dict[str, Any], name: str, node_type: str, version: float, **parameters: Any
+) -> None:
+    document["nodes"].append(
+        {
+            "id": f"n-{name}",
+            "name": name,
+            "type": node_type,
+            "typeVersion": version,
+            "position": [0, 0],
+            "parameters": parameters,
+        }
+    )
+    document["connections"].setdefault("Make the ticket", {"main": [[]]})["main"][0].append(
+        {"node": name, "type": "main", "index": 0}
+    )
+
+
+SLACK_POST = {
+    "resource": "message",
+    "operation": "post",
+    "select": "channel",
+    "text": "Again.",
+}
+
+
+def test_a_placeholder_moved_to_another_place_of_its_kind_takes_its_setting_along():
     before = with_slack(None)
     document = edited_from(before)
-    nodes(document)["Tell support"]["parameters"]["text"] = "<<channel_1>>"
+    channel_id = {"__rl": True, "mode": "name", "value": "<<channel_1>>"}
+    added(document, "Tell again", "n8n-nodes-base.slack", 2.3, channelId=channel_id, **SLACK_POST)
 
     read = read_back(document, before, checked(before), FACTS, DAN, ZONE)
 
@@ -290,8 +317,49 @@ def test_a_placeholder_moved_in_n8n_takes_its_setting_along():
     [channel] = [s for s in read.plan.settings if s.id == "channel_1"]
     assert {(f.block, f.parameter) for f in channel.fills} == {
         ("Tell support", "channelId.value"),
-        ("Tell support", "text"),
+        ("Tell again", "channelId.value"),
     }
+
+
+def test_a_repository_s_placeholder_moved_to_where_a_channel_goes_is_refused():
+    before = with_slack(None)
+    document = edited_from(before)
+    nodes(document)["Tell support"]["parameters"]["channelId"]["value"] = "<<repository>>"
+
+    read = read_back(document, before, checked(before), FACTS, DAN, ZONE)
+
+    assert isinstance(read, NotReadBack), read
+    assert read.words == (
+        "<<repository>> moved to a place that takes a Slack channel, in “Tell support”. Put it "
+        "back, or type the Slack channel in n8n, then press Done in n8n again."
+    )
+
+
+def test_a_channel_s_placeholder_moved_to_where_an_address_goes_is_refused():
+    before = with_slack(None)
+    document = edited_from(before)
+    gmail = {"resource": "message", "operation": "send", "subject": "S", "message": "M"}
+    added(document, "Mail it", "n8n-nodes-base.gmail", 2.1, sendTo="<<channel_1>>", **gmail)
+
+    read = read_back(document, before, checked(before), FACTS, DAN, ZONE)
+
+    assert isinstance(read, NotReadBack), read
+    assert read.words.startswith("<<channel_1>> moved to a place that takes an address")
+
+
+def test_a_placeholder_moved_to_a_place_no_setting_fills_is_refused():
+    before = with_slack(None)
+    for move in ("http", "text"):
+        document = edited_from(before)
+        if move == "http":
+            added(document, "Call it", "n8n-nodes-base.httpRequest", 4.2, url="<<channel_1>>")
+        else:
+            nodes(document)["Tell support"]["parameters"]["text"] = "<<channel_1>>"
+
+        read = read_back(document, before, checked(before), FACTS, DAN, ZONE)
+
+        assert isinstance(read, NotReadBack), (move, read)
+        assert "moved to a place no setting fills" in read.words
 
 
 def test_a_placeholder_nothing_fills_comes_back_as_words():

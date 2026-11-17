@@ -25,6 +25,7 @@ from dataclasses import dataclass
 from typing import Any, Final, cast
 
 from platform_api.builder.drafted_settings import (
+    PLACE_WORDS,
     PLACEHOLDER,
     UNREAD,
     Source,
@@ -32,6 +33,7 @@ from platform_api.builder.drafted_settings import (
     never_guessed_places,
     passes,
     place_at,
+    place_kinds,
     placeholders,
     put_at,
 )
@@ -124,6 +126,7 @@ def read_back(
     notes = [_key_picked(str(n["name"])) for n in kept if n.get("credentials")]
     for setting in before.settings:
         placeholder = f"<<{setting.id}>>"
+        laid_out = {(now_named.get(f.block, f.block), f.parameter) for f in setting.fills}
         places = [(now_named.get(f.block, f.block), f.parameter, f.block) for f in setting.fills]
         places += [(b, path, b) for b, path, i in held if i == setting.id]
         fills: list[SettingPlace] = []
@@ -133,6 +136,10 @@ def read_back(
                 continue
             if any(f.block == block and f.parameter == path for f in fills):
                 continue
+            takes = place_kinds(blocks[block]).get(path)
+            moved = (block, path) not in laid_out
+            if (moved and takes != setting.kind) or (takes is not None and takes != setting.kind):
+                return NotReadBack(_moved_words(setting.id, block, takes))
             fills.append(SettingPlace(block=block, parameter=path))
             then.append(place_at(was.get(old, {}), path))
         if not fills:
@@ -233,6 +240,21 @@ def _short(text: str) -> str:
     return text if len(text) <= SHOWN else f"{text[:SHOWN]}…"
 
 
+def _moved_words(setting_id: str, block: str, takes: SettingKind | None) -> str:
+    """Why a placeholder can't stand where the person moved it in n8n."""
+    if takes is None:
+        return (
+            f"<<{setting_id}>> moved to a place no setting fills, in “{block}”. Put it back, then "
+            "press Done in n8n again."
+        )
+    what = PLACE_WORDS[takes]
+    return (
+        f"<<{setting_id}>> moved to a place that takes {what}, in “{block}”. Put it back, or "
+        f"type the {what.removeprefix('a ').removeprefix('an ')} in n8n, then press Done in n8n "
+        "again."
+    )
+
+
 def _key_picked(block: str) -> str:
     return (
         f"The key picked on “{block}” in n8n isn't kept. The platform puts on only the keys "
@@ -326,7 +348,13 @@ def _with_places_typed(
     held by a new setting: filled by the person when what they typed passes the check, else
     still needed."""
     taken = {s.id for s in plan.settings}
-    held = {(f.block, f.parameter) for s in plan.settings for f in s.fills}
+    blocks = {b.name: b for b in plan.blocks}
+    held = {
+        (f.block, f.parameter)
+        for s in plan.settings
+        for f in s.fills
+        if f.block in blocks and place_kinds(blocks[f.block]).get(f.parameter) == s.kind
+    }
     added: list[PlanSetting] = []
     for block in plan.blocks:
         places = list(never_guessed_places(block.type, block.version, block.parameters))

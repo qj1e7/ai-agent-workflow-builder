@@ -463,6 +463,45 @@ def _leaves(value: Any, path: str) -> list[tuple[str, Any]]:
     return [(path, value)]
 
 
+EMAILS: Final = frozenset(
+    {"n8n-nodes-base.gmail", "n8n-nodes-base.microsoftOutlook", "n8n-nodes-base.emailSend"}
+)
+"""The notices that send email, where each place is an address. Every other notice's place is a
+channel, a Slack user included, as the drafter classes them."""
+READ_PLACES: Final[Mapping[str, SettingKind]] = {
+    "jira_tickets": "jira_project",
+    "github_releases": "repository",
+    "confluence_page": "confluence_page",
+}
+"""The kind of setting our Read's place takes, by what it reads, as the drafter classes it."""
+PLACE_WORDS: Final[Mapping[SettingKind, str]] = {
+    "run_time": "a run time",
+    "jira_project": "a Jira project",
+    "channel": "a Slack channel",
+    "address": "an address",
+    "repository": "a repository",
+    "confluence_page": "a Confluence page",
+    "text": "words",
+}
+
+
+def place_kinds(block: PlanBlock) -> dict[str, SettingKind]:
+    """The kind of setting each place in the block takes, by its full path: where a notice of
+    n8n's posts, a schedule's rule, and our Read's and Propose a change's place. Any other
+    parameter takes no setting a person can move there."""
+    kinds = dict(never_guessed_places(block.type, block.version, block.parameters))
+    if block.type == SCHEDULE_TYPE:
+        kinds["rule"] = "run_time"
+    if block.type == "n8n-nodes-base.jira":
+        kinds["project"] = "jira_project"
+    if block.type == TYPE_OF["read"]:
+        kinds["place"] = READ_PLACES.get(str(block.parameters.get("source")), "text")
+    if block.type == TYPE_OF["propose"]:
+        action = str(block.parameters.get("action") or "")
+        kinds["place"] = "confluence_page" if action.startswith("confluence.") else "jira_project"
+    return kinds
+
+
 def never_guessed_places(
     node_type: str, version: object, parameters: Mapping[str, Any]
 ) -> list[tuple[str, SettingKind]]:
@@ -479,7 +518,7 @@ def never_guessed_places(
             continue
         value = place_at(parameters, path)
         full = f"{path}.value" if isinstance(value, dict) and "value" in value else path
-        kind: SettingKind = "channel" if re.search("channel|team", path, re.I) else "address"
+        kind: SettingKind = "address" if node_type in EMAILS else "channel"
         places.append((full, kind))
     return places
 
