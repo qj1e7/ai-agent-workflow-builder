@@ -290,11 +290,11 @@ def _pick(key: str, words: str, known: Sequence[str], typed_too: bool) -> Asking
     choices = tuple(Choice(v, v) for v in known[:4])
     typed = TYPE_ONE if typed_too or len(known) > len(choices) else None
     if not choices and typed is None:
-        return Asking(key, words, (), None, f"The team has none to pick from. {SETTINGS_FIRST}")
+        return Asking(key, words, (), None, NONE_TO_PICK)
     return Asking(key, words, choices, typed, None)
 
 
-SETTINGS_FIRST: Final = "An Operator adds them in Settings first."
+NONE_TO_PICK: Final = "The team has none to pick from yet, so it waits."
 
 
 def _clock(at: str) -> str:
