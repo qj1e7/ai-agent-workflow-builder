@@ -62,11 +62,15 @@ class MockSlack(unittest.TestCase):
 
     def test_the_stack_s_key_lists_its_channels(self) -> None:
         with running() as (host, _, _):
-            _, _, listed = call(host, "GET", "/api/conversations.list", server.TOKEN)
+            path = "/api/conversations.list?types=public_channel"
+            _, _, listed = call(host, "GET", path, server.TOKEN)
             self.assertEqual(
                 [(c["name"], c["is_member"]) for c in listed["channels"]],
                 [("support", True), ("eng-housekeeping", True), ("random", False)],
             )
+            private = "/api/conversations.list?types=public_channel,private_channel"
+            _, _, refused = call(host, "GET", private, server.TOKEN)
+            self.assertEqual(refused["error"], "missing_scope", "the key has no groups:read")
 
     def test_every_message_is_recorded_with_the_key_it_came_with(self) -> None:
         with running() as (host, _, _):

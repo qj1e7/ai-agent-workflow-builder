@@ -141,6 +141,10 @@ def make_handler(state: State) -> type[BaseHTTPRequestHandler]:
                 case "auth.test":
                     said = {"ok": True, "team": "Mock", "user": "platform", "user_id": "UBOT"}
                     self.send_json(200, said, {"x-oauth-scopes": SCOPES})
+                case "conversations.list" if "private_channel" in str(body.get("types", "")):
+                    # As Slack does: private channels need groups:read, which the key lacks.
+                    error = {"ok": False, "error": "missing_scope", "needed": "groups:read"}
+                    self.send_json(200, error)
                 case "conversations.list":
                     self.send_json(200, {"ok": True, "channels": CHANNELS, "response_metadata": {}})
                 case "users.profile.get":
