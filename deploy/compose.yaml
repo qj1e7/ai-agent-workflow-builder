@@ -46,17 +46,21 @@ x-langfuse-depends: &langfuse-depends
     condition: service_started
 
 # n8n's settings that keep what a workflow runs away from n8n's secrets (ADR 0051, spike P9). n8n
-# loads every built-in block but the two in NODES_EXCLUDE, so these settings are the guard.
+# loads every built-in block but those in NODES_EXCLUDE, so these settings are the guard.
 # bootstrap gets the same block and refuses to start the platform unless each holds
 # (platform-api's n8n_guard.py). NODE_FUNCTION_ALLOW_BUILTIN, NODE_FUNCTION_ALLOW_EXTERNAL and
 # N8N_RUNNERS_INSECURE_MODE stay unset: the first two let code load modules it picks, also in n8n's
 # own process, and the third drops the runner's own guards.
 x-n8n-guards: &n8n-guards
+  # n8n never loads a block that reaches its own secrets, disk or host: Execute Command, Local File
+  # Trigger, Function, Function Item, LangChain Code, and Git with its tool (n8n_blocks.LEFT_OUT).
+  NODES_EXCLUDE: '["n8n-nodes-base.executeCommand","n8n-nodes-base.localFileTrigger","n8n-nodes-base.function","n8n-nodes-base.functionItem","@n8n/n8n-nodes-langchain.code","n8n-nodes-base.git","n8n-nodes-base.gitTool"]'
+  N8N_COMMUNITY_PACKAGES_ENABLED: "false"
   # No $env in expressions, and n8n hands none of its environment to the task runner.
   N8N_BLOCK_ENV_ACCESS_IN_NODE: "true"
   # Code, AI Transform, the Code Tool, Sort and Item Lists run their code in n8n-runners below.
   N8N_RUNNERS_MODE: external
-  # n8n refuses Function, Function Item and LangChain Code, which run code in its own process.
+  # n8n also refuses Function, Function Item and LangChain Code as deprecated.
   N8N_DEPRECATED_NODES_BLOCK: "true"
   # The file blocks reach only this folder, never n8n's own folders, and never /proc.
   N8N_RESTRICT_FILE_ACCESS_TO: /home/node/.n8n-files
@@ -138,13 +142,7 @@ services:
       # n8n, and a locked-down network refuses the call (issue #86). n8n 2.42.6 reads this setting in
       # @n8n/backend-common's ModulesConfig, and docs/evidence/devnet/n8n-proxy.test.sh checks it.
       N8N_DISABLED_MODULES: mcp-registry
-      # n8n loads every built-in block but these two, which would open its own environment, and no
-      # community package (ADR 0051). They are n8n's own default exclusions, pinned here so an
-      # upgrade cannot drop them. The guards above keep the rest away from the keys below.
-      NODES_EXCLUDE: '["n8n-nodes-base.executeCommand","n8n-nodes-base.localFileTrigger"]'
-      N8N_COMMUNITY_PACKAGES_ENABLED: "false"
-      # The task runner's broker, on port 5679 of n8n's networks. Only the token guards it.
-      N8N_RUNNERS_BROKER_LISTEN_ADDRESS: 0.0.0.0
+      # The token that lets the task runner take n8n's tasks. n8n-runners holds the same.
       N8N_RUNNERS_AUTH_TOKEN: ${N8N_RUNNERS_AUTH_TOKEN:?run deploy/make-env.sh}
       # n8n keeps 30 days of executions (ENGINE-PLAN D10). Our API keeps every node's answer, so the
       # Portal loses nothing, and n8n never prunes a waiting execution (P7 Q16).
@@ -155,10 +153,25 @@ services:
       WAB_API_URL: http://platform-api:8000
       WAB_NODE_KEY: ${WAB_NODE_KEY:?run deploy/make-env.sh}
       WAB_START_SECRET: ${WAB_START_SECRET:?run deploy/make-env.sh}
+    # The task runner's broker listens on port 5679 of n8n's address on the runners network alone,
+    # so no other service reaches it. Docker gives that address only as n8n starts, so n8n looks up
+    # its own name there, n8n-broker, first, and doesn't start without it.
+    entrypoint:
+      - tini
+      - --
+      - /bin/sh
+      - -c
+      - >-
+        N8N_RUNNERS_BROKER_LISTEN_ADDRESS="$$(node -e "require('dns').lookup('n8n-broker', {family: 4},
+        (e, a) => { if (e) process.exit(1); console.log(a); })")"
+        && export N8N_RUNNERS_BROKER_LISTEN_ADDRESS && exec /docker-entrypoint.sh
     # The laptop only: anyone who reaches n8n can call a published Webhook or Form (ADR 0051).
     ports:
       - "127.0.0.1:${N8N_HOST_PORT:-5678}:5678"
-    networks: [default, runners]
+    networks:
+      default: {}
+      runners:
+        aliases: [n8n-broker]
     volumes:
       - n8ndata:/home/node/.n8n
     # BusyBox wget ignores NO_PROXY and asks a proxy even for localhost, so the check never uses one.
@@ -180,7 +193,7 @@ services:
       n8n:
         condition: service_healthy
     environment:
-      N8N_RUNNERS_TASK_BROKER_URI: http://n8n:5679
+      N8N_RUNNERS_TASK_BROKER_URI: http://n8n-broker:5679
       N8N_RUNNERS_AUTH_TOKEN: ${N8N_RUNNERS_AUTH_TOKEN:?run deploy/make-env.sh}
       # A runner the launcher started stops after 15 idle seconds, and the next task starts another.
       N8N_RUNNERS_AUTO_SHUTDOWN_TIMEOUT: "15"

@@ -368,17 +368,29 @@ module "langfuse_vm" {
 
 locals {
   # n8n's settings that keep what a workflow runs away from n8n's secrets (ADR 0051, spike P9). n8n
-  # loads every built-in block but the two in NODES_EXCLUDE, so these settings are the guard. n8n
+  # loads every built-in block but those in NODES_EXCLUDE, so these settings are the guard. n8n
   # and the bootstrap job get the same map, and bootstrap refuses to start the platform unless each
   # holds (platform-api's n8n_guard.py). NODE_FUNCTION_ALLOW_BUILTIN, NODE_FUNCTION_ALLOW_EXTERNAL
   # and N8N_RUNNERS_INSECURE_MODE stay unset. deploy/compose.yaml's x-n8n-guards holds the same.
   n8n_guards = {
+    # n8n never loads a block that reaches its own secrets, disk or host: Execute Command, Local File
+    # Trigger, Function, Function Item, LangChain Code, and Git with its tool (n8n_blocks.LEFT_OUT).
+    NODES_EXCLUDE = jsonencode([
+      "n8n-nodes-base.executeCommand",
+      "n8n-nodes-base.localFileTrigger",
+      "n8n-nodes-base.function",
+      "n8n-nodes-base.functionItem",
+      "@n8n/n8n-nodes-langchain.code",
+      "n8n-nodes-base.git",
+      "n8n-nodes-base.gitTool",
+    ])
+    N8N_COMMUNITY_PACKAGES_ENABLED = "false"
     # No $env in expressions, and n8n hands none of its environment to the task runner.
     N8N_BLOCK_ENV_ACCESS_IN_NODE = "true"
     # Code, AI Transform, the Code Tool, Sort and Item Lists run their code in the task runner
     # app, module.n8n_runners, which holds none of n8n's secrets.
     N8N_RUNNERS_MODE = "external"
-    # n8n refuses Function, Function Item and LangChain Code, which run code in its own process.
+    # n8n also refuses Function, Function Item and LangChain Code as deprecated.
     N8N_DEPRECATED_NODES_BLOCK = "true"
     # The file blocks reach only this folder, never n8n's own folders, and never /proc.
     N8N_RESTRICT_FILE_ACCESS_TO        = "/home/node/.n8n-files"
@@ -542,13 +554,11 @@ locals {
           # Stops n8n asking api.n8n.io for its list of MCP servers every 8 hours (issue #86). We use no
           # MCP servers in n8n, and the block catalogue leaves those blocks out (ADR 0051), as local does.
           N8N_DISABLED_MODULES = "mcp-registry"
-          # n8n loads every built-in block but these two, which would open its own environment, and
-          # no community package (ADR 0051). They are n8n's own default exclusions, pinned so an
-          # upgrade cannot drop them. local.n8n_guards keeps the rest away from the keys below.
-          NODES_EXCLUDE                  = jsonencode(["n8n-nodes-base.executeCommand", "n8n-nodes-base.localFileTrigger"])
-          N8N_COMMUNITY_PACKAGES_ENABLED = "false"
           # The broker the task runner app connects to, on port 5679, which only apps inside the
-          # environment reach (internal_ports). Only the token guards it.
+          # environment reach (internal_ports). Container Apps' ingress reaches the container on
+          # its own address, which n8n can't know before it starts, so the broker listens on every
+          # address of the container. The token guards it, and infra/README.md lists who else
+          # in the environment reaches it as a check for the deploy.
           N8N_RUNNERS_BROKER_LISTEN_ADDRESS = "0.0.0.0"
           # 30 days of executions (ENGINE-PLAN D10). A waiting execution is never pruned (P7 Q16).
           EXECUTIONS_DATA_PRUNE           = "true"

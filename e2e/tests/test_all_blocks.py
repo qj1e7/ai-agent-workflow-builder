@@ -1,11 +1,13 @@
 """n8n with every built-in block on the real n8n (ADR 0051, spike P9, build step 12). n8n loads
-every built-in block but Execute Command and Local File Trigger, and refuses Function, which runs
-code in n8n's own process. Code runs in n8n's external task runner, in JavaScript and in Python:
-the n8n image has no Python, so a Python block that runs at all ran there. A block n8n loads that
+every built-in block but the ones that reach its own secrets, disk or host, and won't run Function,
+which runs code in its own process. Code runs in n8n's external task runner, in JavaScript and in
+Python: the n8n image has no Python, so a Python block that runs at all ran there, and code there
+can't read the runner's environment. Only the runner reaches n8n's broker. A block n8n loads that
 the class file turns off, published by a member, is graded Needs a fix by the platform, so its run
 stops at the first block and writes nothing."""
 
 import json
+import socket
 from typing import Any, cast
 
 from harness import N8N_OWNER, Api, Json
@@ -20,10 +22,21 @@ LOADED = (
     "n8n-nodes-base.merge",
     "CUSTOM.wabAskForYes",
 )
-NEVER = ("n8n-nodes-base.executeCommand", "n8n-nodes-base.localFileTrigger")
+NEVER = (
+    "n8n-nodes-base.executeCommand",
+    "n8n-nodes-base.localFileTrigger",
+    "n8n-nodes-base.function",
+    "n8n-nodes-base.functionItem",
+    "@n8n/n8n-nodes-langchain.code",
+    "n8n-nodes-base.git",
+    "n8n-nodes-base.gitTool",
+)
+"""The blocks that reach n8n's own secrets, disk or host, which NODES_EXCLUDE leaves out."""
 
 JAVASCRIPT = "return [{ json: { ran: 'javascript', sum: 2 + 3, process: typeof process } }];"
 PYTHON = "return [{'json': {'ran': 'python', 'sum': 2 + 3}}]"
+READS_THE_RUNNER = "return [{'json': {'read': len(open('/proc/1/environ').read())}}]"
+"""Where spike P9 found the runner's own token, for code that got out of the sandbox."""
 
 
 def by_hand(name: str, *blocks: Json) -> Json:
@@ -86,13 +99,34 @@ def first_item(execution: Json, node: str) -> Json:
     return run["data"]["main"][0][0]["json"]
 
 
-def test_n8n_loads_every_built_in_block_but_two_and_refuses_the_deprecated_ones(
+def run_by_hand(api: Api, workflow: Json, last: str) -> Json:
+    """The execution of a run by hand up to `last`, as the editor's Execute starts it, once it
+    ends. The workflow is deleted afterwards."""
+    saved = N8N_OWNER.call("POST", "/workflows", workflow)
+    try:
+        started = N8N_OWNER.call(
+            "POST",
+            f"/workflows/{saved['id']}/run",
+            {"destinationNode": {"nodeName": last, "mode": "inclusive"}},
+        )
+        execution_id = str(started["executionId"])
+
+        def ended() -> Json | None:
+            found = cast(Json, N8N_OWNER.call("GET", f"/executions/{execution_id}"))
+            return found if found.get("status") not in ("new", "running", "waiting") else None
+
+        return cast(Json, api.poll(f"the run of {workflow['name']}", ended))
+    finally:
+        N8N_OWNER.send("DELETE", f"/rest/workflows/{saved['id']}")
+
+
+def test_n8n_loads_every_built_in_block_but_those_that_reach_its_secrets(
     api: Api, mock_model: None
 ):
     served = N8N_OWNER.send("GET", "/types/nodes.json")
     loaded = {t["name"] for t in served.raise_for_status().json()}
     assert set(LOADED) <= loaded, "n8n loads every built-in block, with no allow list"
-    assert not set(NEVER) & loaded, "Execute Command and Local File Trigger never load"
+    assert not set(NEVER) & loaded, "n8n never loads a block that reaches its secrets or disk"
 
     old = by_hand(
         "e2e all blocks: Function",
@@ -105,9 +139,17 @@ def test_n8n_loads_every_built_in_block_but_two_and_refuses_the_deprecated_ones(
             "parameters": {"functionCode": "return items;"},
         },
     )
-    refused = N8N_OWNER.send("POST", "/rest/workflows", old)
-    assert refused.status_code == 400, refused.text
-    assert "deprecated" in refused.text, "Function would run code in n8n's own process"
+    saved = N8N_OWNER.call("POST", "/workflows", old)
+    try:
+        refused = N8N_OWNER.send(
+            "POST",
+            f"/rest/workflows/{saved['id']}/run",
+            {"destinationNode": {"nodeName": "Old code", "mode": "inclusive"}},
+        )
+        assert refused.status_code == 400, refused.text
+        assert "Unrecognized node type: n8n-nodes-base.function" in refused.text
+    finally:
+        N8N_OWNER.send("DELETE", f"/rest/workflows/{saved['id']}")
 
 
 def test_code_runs_in_the_external_task_runner_in_javascript_and_python(api: Api, mock_model: None):
@@ -116,31 +158,40 @@ def test_code_runs_in_the_external_task_runner_in_javascript_and_python(api: Api
         code("JavaScript", "javaScript", JAVASCRIPT, 220),
         code("Python", "pythonNative", PYTHON, 440),
     )
-    saved = N8N_OWNER.call("POST", "/workflows", workflow)
+    execution = run_by_hand(api, workflow, "Python")
+    assert execution["status"] == "success", execution["status"]
+    assert first_item(execution, "JavaScript") == {
+        "ran": "javascript",
+        "sum": 5,
+        "process": "undefined",
+    }, "the runner's sandbox has no process, so no environment to read"
+    assert first_item(execution, "Python") == {"ran": "python", "sum": 5}, (
+        "n8n's own image has no Python, so only the external runner could run it"
+    )
+
+
+def test_code_in_the_runner_can_t_read_the_runner_s_own_environment(api: Api, mock_model: None):
+    """The runner's token sits in its launcher's environment (spike P9). The sandbox refuses
+    `open`, so the run stops before it reads anything."""
+    workflow = by_hand(
+        "e2e all blocks: Python reads the runner",
+        code("Read", "pythonNative", READS_THE_RUNNER, 220),
+    )
+    execution = run_by_hand(api, workflow, "Read")
+    assert execution["status"] == "error", execution["status"]
+    [run] = cast(list[Json], unflatted(execution["data"])["resultData"]["runData"]["Read"])
+    output = cast(Json, run.get("data") or {})
+    assert run.get("error") and not output.get("main"), "it read nothing"
+
+
+def test_only_the_task_runner_reaches_n8n_s_broker(api: Api, mock_model: None):
+    """n8n's broker listens only on its address on the runners network, so this test, on the
+    stack's default network like every other service, can't reach it."""
     try:
-        started = N8N_OWNER.call(
-            "POST",
-            f"/workflows/{saved['id']}/run",
-            {"destinationNode": {"nodeName": "Python", "mode": "inclusive"}},
-        )
-        execution_id = str(started["executionId"])
-
-        def ended() -> Json | None:
-            found = cast(Json, N8N_OWNER.call("GET", f"/executions/{execution_id}"))
-            return found if found.get("status") not in ("new", "running", "waiting") else None
-
-        execution = cast(Json, api.poll("the Code blocks' run", ended))
-        assert execution["status"] == "success", execution["status"]
-        assert first_item(execution, "JavaScript") == {
-            "ran": "javascript",
-            "sum": 5,
-            "process": "undefined",
-        }, "the runner's sandbox has no process of n8n's"
-        assert first_item(execution, "Python") == {"ran": "python", "sum": 5}, (
-            "n8n's own image has no Python, so only the external runner could run it"
-        )
-    finally:
-        N8N_OWNER.send("DELETE", f"/rest/workflows/{saved['id']}")
+        socket.create_connection(("n8n", 5679), timeout=5).close()
+    except OSError:
+        return
+    raise AssertionError("n8n's broker answers on the default network")
 
 
 def by_sql(nodes: list[Json], connections: Json) -> None:

@@ -266,7 +266,7 @@ A Teams card or an email that only reports what a run read or found. It may go o
 _Avoid_: Notification, alert
 
 **n8n block**:
-One of n8n's own blocks in a workflow, beside our node pack's. n8n loads every built-in block but Execute Command and Local File Trigger (ADR 0051). In the platform's n8n project, a block for an outside system, such as Jira or Slack, may only read or post a notice, as `node_classes.json` classes each operation, and runs with a platform key, and the checker flags every block the class file doesn't class. The run line and the canvas badge it `n8n block` and tag it with what it does, such as Reads Jira or Posts in Slack (ADR 0045).
+One of n8n's own blocks in a workflow, beside our node pack's. n8n loads every built-in block but those that reach its own secrets, disk or host: Execute Command, Local File Trigger, Function, Function Item, LangChain Code and Git (ADR 0051). In the platform's n8n project, a block for an outside system, such as Jira or Slack, may only read or post a notice, as `node_classes.json` classes each operation, and runs with a platform key, and the checker flags every block the class file doesn't class. The run line and the canvas badge it `n8n block` and tag it with what it does, such as Reads Jira or Posts in Slack (ADR 0045).
 _Avoid_: built-in node, native node
 
 **Task runner**:
@@ -274,7 +274,7 @@ The container where n8n runs the code a workflow gives Code, AI Transform, the C
 _Avoid_: worker, sandbox
 
 **Held block**:
-One of n8n's built-in blocks that n8n loads but that can't run on this platform, because it would reach past what an approval covers: Function, Function Item and LangChain Code, which run code in n8n's own process; the sub-workflow blocks; Git, until a probe with a real repository; and the n8n block. The checker flags each as Can't run on this platform, and the block catalogue marks it, so the workflow drafter never proposes it (`n8n_blocks.HELD`, ADR 0051).
+One of n8n's built-in blocks that n8n loads but that can't run on this platform, because it would reach past what an approval covers: the sub-workflow blocks and the n8n block. The checker flags each as Can't run on this platform, and the block catalogue marks it, so the workflow drafter never proposes it (`n8n_blocks.HELD`, ADR 0051). A block that would reach n8n's own secrets, disk or host isn't held but left out: n8n never loads it.
 _Avoid_: blocked node, disabled node
 
 **Platform key**:

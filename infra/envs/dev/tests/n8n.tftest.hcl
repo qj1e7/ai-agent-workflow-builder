@@ -146,6 +146,22 @@ run "n8n_and_bootstrap_get_the_same_guards_and_n8n_has_no_allow_list" {
   }
 
   assert {
+    condition = length(setsubtract(
+      [
+        "n8n-nodes-base.executeCommand",
+        "n8n-nodes-base.localFileTrigger",
+        "n8n-nodes-base.function",
+        "n8n-nodes-base.functionItem",
+        "@n8n/n8n-nodes-langchain.code",
+        "n8n-nodes-base.git",
+        "n8n-nodes-base.gitTool",
+      ],
+      jsondecode(local.apps.n8n.env.NODES_EXCLUDE),
+    )) == 0
+    error_message = "NODES_EXCLUDE must leave out every block that reaches n8n's own secrets, disk or host (n8n_blocks.LEFT_OUT)."
+  }
+
+  assert {
     condition = alltrue([
       for name in ["NODES_INCLUDE", "NODE_FUNCTION_ALLOW_BUILTIN", "NODE_FUNCTION_ALLOW_EXTERNAL", "N8N_RUNNERS_INSECURE_MODE"] :
       !contains(keys(local.apps.n8n.env), name) && !contains(keys(local.apps.n8n.secrets), name)
