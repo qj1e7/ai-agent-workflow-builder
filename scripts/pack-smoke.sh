@@ -6,6 +6,8 @@
 # - n8n refuses a workflow with Function, Function Item or LangChain Code, which run code in its
 #   own process, and with its defaults keeps the file blocks out of its own folders and lets code
 #   load no module of its own choosing (spike P9);
+# - the image has no Python, so only an external task runner can run a Python Code block, which
+#   is what bootstrap's Python check rests on;
 # - the pin check finds each row of node_classes.json still true to what n8n serves (ADR 0045);
 # - contracts/n8n/catalogue.json is what n8n serves, and the pin checks of the blocks' code and of
 #   the defaults and the runner's config hold (scripts/n8n-catalogue.sh).
@@ -154,6 +156,20 @@ if jq -e '.settings.blockFileAccessToN8nFiles == true and (.settings.allowedModu
   pass "with its defaults, n8n keeps the file blocks out of its own folders and lets code load no module it picks."
 else
   fail "n8n's settings show $(jq -c .settings <<<"$out")."
+fi
+
+# Bootstrap's Python check (n8n_guard.python_probe) shows that a runner holding n8n's token is
+# registered with n8n's broker, only because n8n can't run Python itself. It doesn't show that the
+# runner sits in a container of its own: deploy/compose.yaml and Terraform make that so, and
+# scripts/n8n-guards.sh and infra/envs/dev/tests/n8n.tftest.hcl check it.
+if pythons=$(docker exec "$name" sh -c 'for p in python3 python; do command -v "$p"; done; true'); then
+  if [ -z "$pythons" ]; then
+    pass "the image has no Python, so only an external task runner runs a Python Code block."
+  else
+    fail "the image has Python ($pythons), so a Python Code block could run without the external runner."
+  fi
+else
+  fail "could not look for Python in the image."
 fi
 
 if (cd platform-api && uv run --locked --quiet python -m platform_api.pin_check "$served/served.json"); then

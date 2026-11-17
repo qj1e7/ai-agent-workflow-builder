@@ -225,10 +225,15 @@ class FakeN8n:
         """What n8n loaded: every built-in block, cut down to the ones the class file names
         and one more."""
         self.settings = deepcopy(SHOWN)
-        self.env_open = False
-        """n8n hands `$env` to an expression, as with N8N_BLOCK_ENV_ACCESS_IN_NODE false."""
-        self.runner_up = True
-        """n8n's external task runner is connected, so a Python Code block runs."""
+        self.env_run = "refused"
+        """How a run that reads `$env` goes: "refused", as n8n refuses it while
+        N8N_BLOCK_ENV_ACCESS_IN_NODE is on; "open", as with it off; "never_starts", as when n8n
+        doesn't know the block's version; "never_ends"; or "breaks", with another error."""
+        self.fields_work = True
+        """Edit Fields gives back what it was given, as on a pin that still has version 3.4."""
+        self.python_run = "ok"
+        """How a Python Code run goes: "ok", as with the external task runner connected;
+        "down", with none; or "never_ends"."""
         self.executions: dict[str, dict[str, Any]] = {}
         self.runs_deprecated = False
         """n8n runs a workflow with a deprecated block by hand, as when NODES_EXCLUDE leaves it in
@@ -238,15 +243,31 @@ class FakeN8n:
     def ran(self, nodes: list[dict[str, Any]]) -> dict[str, Any]:
         last = nodes[-1]
         parameters = last.get("parameters", {})
+        name = last["name"]
         if "$env" in json.dumps(parameters):
-            if self.env_open:
-                return ran_ok(last["name"], {"home": "/home/node"})
-            return ran_into(last["name"], "access to env vars denied")
+            match self.env_run:
+                case "open":
+                    return ran_ok(name, {"home": "/home/node"})
+                case "never_ends":
+                    return {"status": "running"}
+                case "breaks":
+                    return ran_into(name, "Cannot read properties of undefined (reading 'x')")
+                case _:
+                    return ran_into(name, "access to env vars denied")
         if parameters.get("language") == "pythonNative":
-            if self.runner_up:
-                return ran_ok(last["name"], {"ran": "python"})
-            return ran_into(last["name"], "Python runner unavailable")
-        return ran_ok(last["name"], {})
+            match self.python_run:
+                case "ok":
+                    return ran_ok(name, {"ran": "python"})
+                case "never_ends":
+                    return {"status": "running"}
+                case _:
+                    return ran_into(name, "Python runner unavailable")
+        if last["type"] == "n8n-nodes-base.set":
+            if not self.fields_work:
+                return ran_ok(name, {"home": None})
+            assigned = parameters["assignments"]["assignments"]
+            return ran_ok(name, {a["name"]: str(a["value"]).removeprefix("=") for a in assigned})
+        return ran_ok(name, {})
 
     def handle(self, request: httpx.Request) -> httpx.Response:
         path, method = request.url.path, request.method
@@ -267,6 +288,10 @@ class FakeN8n:
             if deprecated and not self.runs_deprecated:
                 return httpx.Response(
                     400, json={"message": f"Unrecognized node type: {deprecated[0]}"}
+                )
+            if self.env_run == "never_starts" and "$env" in json.dumps(held["nodes"]):
+                return httpx.Response(
+                    400, json={"message": "Node type set is not available in version 3.4"}
                 )
             execution_id = f"E{len(self.executions) + 1}"
             self.executions[execution_id] = self.ran(held["nodes"])
@@ -610,31 +635,72 @@ def test_bootstrap_is_not_ready_when_n8n_runs_a_deprecated_block_and_removes_wha
     assert engine_status(postgres.owner) == GUARDS_FAIL
 
 
-def test_bootstrap_is_not_ready_when_the_running_n8n_hands_env_to_an_expression(
-    postgres: PostgresUrls, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+@pytest.mark.parametrize(
+    ("env_run", "said"),
+    [
+        ("open", "n8n read $env in an expression on a run by hand"),
+        ("never_starts", "n8n's $env check didn't start"),
+        ("never_ends", "n8n's $env check didn't end in time"),
+        ("breaks", "n8n's $env check ended in an error other than"),
+    ],
+)
+def test_bootstrap_is_not_ready_unless_the_running_n8n_refuses_env(
+    postgres: PostgresUrls,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    env_run: str,
+    said: str,
 ):
-    """The deploy's settings can say one thing and n8n run with another, so bootstrap asks n8n."""
+    """The deploy's settings can say one thing and n8n run with another, so bootstrap asks n8n.
+    Only n8n's own refusal shows `$env` is closed: a run that never starts, never ends or fails
+    for another reason shows nothing."""
     truncate_all(postgres.owner)
     n8n = serve(monkeypatch, FakeN8n([]))
-    n8n.env_open = True
+    n8n.env_run = env_run
 
     assert main(env_for(postgres.owner)) == 1
 
-    assert "n8n read $env in an expression on a run by hand" in capsys.readouterr().out
+    assert said in capsys.readouterr().out
     assert engine_status(postgres.owner) == GUARDS_FAIL
 
 
-def test_bootstrap_is_not_ready_when_no_external_runner_runs_python(
+def test_bootstrap_is_not_ready_when_edit_fields_doesn_t_run_as_the_env_check_expects(
     postgres: PostgresUrls, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+):
+    """The control: the same block with a plain expression must give back what it was given,
+    or the `$env` run's refusal could come from a block that no longer works on this pin."""
+    truncate_all(postgres.owner)
+    n8n = serve(monkeypatch, FakeN8n([]))
+    n8n.fields_work = False
+
+    assert main(env_for(postgres.owner)) == 1
+
+    assert "n8n's Edit Fields check gave back something else" in capsys.readouterr().out
+    assert engine_status(postgres.owner) == GUARDS_FAIL
+
+
+@pytest.mark.parametrize(
+    ("python_run", "said"),
+    [
+        ("down", "n8n's Python check ended with status error"),
+        ("never_ends", "n8n's Python check didn't end in time"),
+    ],
+)
+def test_bootstrap_is_not_ready_unless_the_external_runner_runs_python(
+    postgres: PostgresUrls,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    python_run: str,
+    said: str,
 ):
     """n8n's image has no Python, so a Python Code block runs only in the external runner."""
     truncate_all(postgres.owner)
     n8n = serve(monkeypatch, FakeN8n([]))
-    n8n.runner_up = False
+    n8n.python_run = python_run
 
     assert main(env_for(postgres.owner)) == 1
 
-    assert "n8n ran no Python Code block by hand (error)" in capsys.readouterr().out
+    assert said in capsys.readouterr().out
     assert engine_status(postgres.owner) == GUARDS_FAIL
 
 

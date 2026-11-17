@@ -14,16 +14,19 @@ from platform_api.auth import ConfigError
 from platform_api.migrations import upgrade_all
 from platform_api.n8n_guard import (
     DEPRECATED,
+    ENV_REFUSED,
+    FIELDS_RAN,
     PROBED,
     PYTHON_RAN,
     deployed_findings,
     deprecated_probe,
     env_probe,
+    fields_probe,
     loaded_findings,
     python_probe,
     shown_findings,
 )
-from platform_api.orchestration.n8n import PLATFORM_API_KEY_LABEL, N8nClient, N8nError
+from platform_api.orchestration.n8n import PLATFORM_API_KEY_LABEL, HandRun, N8nClient, N8nError
 from platform_api.orchestration.workflow_check import (
     ERROR_WORKFLOW,
     SELF_TEST,
@@ -151,6 +154,46 @@ def _finish(
     return 0 if ready else 1
 
 
+def _ran_findings(fields: HandRun, env: HandRun, python: HandRun) -> list[str]:
+    """What the runs by hand show. Each check fails closed: only the one answer that shows the
+    guard holds passes, and a run that didn't start or didn't end in time fails."""
+    findings: list[str] = []
+    if fields.status != "success" or fields.output != FIELDS_RAN:
+        findings.append(
+            f"n8n's Edit Fields check {_how(fields)}, so its $env check proves nothing on this n8n"
+        )
+    if env.status == "success":
+        findings.append(
+            "n8n read $env in an expression on a run by hand: N8N_BLOCK_ENV_ACCESS_IN_NODE must "
+            "be true on n8n itself"
+        )
+    elif env.status == "error" and ENV_REFUSED not in (env.error or ""):
+        findings.append(
+            f"n8n's $env check ended in an error other than \"{ENV_REFUSED}\", so bootstrap can't "
+            "tell that $env is closed"
+        )
+    elif env.status != "error":
+        findings.append(
+            f"n8n's $env check {_how(env)}, so bootstrap can't tell that $env is closed"
+        )
+    if python.status != "success" or python.output != PYTHON_RAN:
+        findings.append(
+            f"n8n's Python check {_how(python)}: its external task runner must be connected, "
+            "with N8N_RUNNERS_MODE external and the token n8n-runners holds"
+        )
+    return findings
+
+
+def _how(run: HandRun) -> str:
+    if not run.started:
+        return "didn't start"
+    if run.status is None:
+        return "didn't end in time"
+    if run.status == "success":
+        return "gave back something else"
+    return f"ended with status {run.status}"
+
+
 def load_into_n8n(settings: BootstrapSettings, say: Say) -> N8nLoad:
     previous = _previous(settings.owner_database_url)
     recorded = {w["name"]: w["id"] for w in previous}
@@ -168,6 +211,7 @@ def load_into_n8n(settings: BootstrapSettings, say: Say) -> N8nLoad:
         removed = client.fresh_api_key(API_KEY_LABEL)
         say(f"api key '{API_KEY_LABEL}': created, {removed} older removed")
         took = [t for t in DEPRECATED if client.run_by_hand(deprecated_probe(t), PROBED).started]
+        fields = client.run_by_hand(fields_probe(), PROBED)
         env = client.run_by_hand(env_probe(), PROBED)
         python = client.run_by_hand(python_probe(), PROBED)
         lost = lost_workflows(client, settings.owner_database_url, recorded, say)
@@ -203,18 +247,7 @@ def load_into_n8n(settings: BootstrapSettings, say: Say) -> N8nLoad:
             if w.project != place.project
         ),
     ]
-    ran: list[str] = []
-    if env.status == "success":
-        ran.append(
-            "n8n read $env in an expression on a run by hand: N8N_BLOCK_ENV_ACCESS_IN_NODE must "
-            "be true on n8n itself"
-        )
-    if python.status != "success" or python.output != PYTHON_RAN:
-        ran.append(
-            f"n8n ran no Python Code block by hand ({python.status or 'no run'}): its external "
-            "task runner must be connected, with N8N_RUNNERS_MODE external and the token "
-            "n8n-runners holds"
-        )
+    ran = _ran_findings(fields, env, python)
     guards = [
         *loaded_findings(loaded_types),
         *deployed_findings(settings.n8n_settings),

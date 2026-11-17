@@ -13,8 +13,9 @@ files away from n8n's secrets. Bootstrap fails the start unless all of these hol
   `local.n8n_guards` in infra/envs/dev/main.tf;
 - what n8n itself shows of those settings agrees (`shown_findings`), and what n8n does when
   bootstrap runs a workflow by hand: it refuses each deprecated block (`DEPRECATED`), refuses an
-  expression that reads `$env` (`env_probe`), and runs a Python Code block, which only the
-  external task runner can (`python_probe`).
+  expression that reads `$env` with its own words (`env_probe`) while the same block runs a plain
+  one (`fields_probe`), and runs a Python Code block, which only the external task runner can
+  (`python_probe`). A run that doesn't start or doesn't end in time fails the check.
 
 Pure. The folder rules know where n8n's image keeps its own files (`N8NS_FOLDERS`).
 """
@@ -189,6 +190,10 @@ PROBED = "Probe"
 """The name of the block a probe asks n8n to run to."""
 PYTHON_RAN = {"ran": "python"}
 """What the Python probe gives back when it ran."""
+ENV_REFUSED = "access to env vars denied"
+"""n8n's own words when an expression reads `$env` while N8N_BLOCK_ENV_ACCESS_IN_NODE is on."""
+FIELDS_RAN = {"home": "ok"}
+"""What the Edit Fields control gives back when it ran."""
 
 
 def deprecated_probe(node_type: str) -> dict[str, Any]:
@@ -199,16 +204,31 @@ def deprecated_probe(node_type: str) -> dict[str, Any]:
 
 
 def env_probe() -> dict[str, Any]:
-    """A workflow whose Edit Fields block reads `$env`, which the running n8n must refuse while
-    N8N_BLOCK_ENV_ACCESS_IN_NODE is on. It reads HOME, which holds nothing secret."""
-    assignment = {"id": "home", "name": "home", "value": "={{ $env.HOME }}", "type": "string"}
+    """A workflow whose Edit Fields block reads `$env`, which the running n8n must refuse with
+    `ENV_REFUSED` while N8N_BLOCK_ENV_ACCESS_IN_NODE is on. It reads HOME, which holds nothing
+    secret."""
+    return _fields_probe("n8n refuses $env", "={{ $env.HOME }}")
+
+
+def fields_probe() -> dict[str, Any]:
+    """The `$env` probe's control: the same block, version and parameters with a plain
+    expression, which must give back `FIELDS_RAN`. Only then does the `$env` run's refusal show
+    that `$env` is closed, and not that the block no longer runs on this pin."""
+    return _fields_probe("Edit Fields runs", "=ok")
+
+
+def _fields_probe(what: str, value: str) -> dict[str, Any]:
+    assignment = {"id": "home", "name": "home", "value": value, "type": "string"}
     parameters = {"assignments": {"assignments": [assignment]}, "options": {}}
-    return _probe("n8n refuses $env", "n8n-nodes-base.set", 3.4, parameters)
+    return _probe(what, "n8n-nodes-base.set", 3.4, parameters)
 
 
 def python_probe() -> dict[str, Any]:
-    """A workflow whose Code block runs Python. n8n's own image has no Python, so it runs only in
-    the external task runner, connected with n8n's token."""
+    """A workflow whose Code block runs Python. n8n's own image has no Python, which pack smoke
+    checks on every pin, so it runs only in an external task runner connected with n8n's token.
+    It shows that such a runner is registered with n8n's broker, not that the runner sits in a
+    container of its own: deploy/compose.yaml and Terraform make that so, and
+    scripts/n8n-guards.sh and infra/envs/dev/tests/n8n.tftest.hcl check it."""
     parameters = {
         "language": "pythonNative",
         "mode": "runOnceForAllItems",
