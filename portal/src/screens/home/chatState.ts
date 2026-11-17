@@ -9,6 +9,14 @@ export interface Desk {
   readonly problem: string | null
   readonly note: Note | null
   readonly panel: PanelState | null
+  /** The drafted workflow the next message changes, once she pressed Ask for a change. The next message goes to it, never to the Planner. */
+  readonly changing: Changing | null
+}
+
+export interface Changing {
+  readonly draftedId: string
+  readonly name: string
+  readonly revision: number
 }
 
 /** The items the side panel has shown since the chat opened it, the first at the bottom. `from` is the chat control that opened the first, or null when an answer showed it. */
@@ -25,7 +33,7 @@ export interface Note {
   readonly text: string
 }
 
-export const EMPTY_DESK: Desk = { thread: EMPTY, text: '', problem: null, note: null, panel: null }
+export const EMPTY_DESK: Desk = { thread: EMPTY, text: '', problem: null, note: null, panel: null, changing: null }
 
 /** One desk for each person, so signing in as someone else never shows the last person's chat (spec 5.3). */
 export type Desks = Readonly<Record<string, Desk>>
@@ -36,6 +44,8 @@ export type DeskAction =
   | { readonly type: 'problem'; readonly problem: string | null }
   | { readonly type: 'note'; readonly text: string }
   | { readonly type: 'note_read' }
+  | { readonly type: 'change_start'; readonly changing: Changing }
+  | { readonly type: 'change_cancel' }
   | { readonly type: 'panel_open'; readonly item: PanelItem; readonly from: number | null }
   | { readonly type: 'panel_push'; readonly item: PanelItem }
   | { readonly type: 'panel_back' }
@@ -66,6 +76,12 @@ function deskReducer(desk: Desk, action: DeskAction): Desk {
       return { ...desk, problem: action.problem }
     case 'note':
       return { ...desk, note: { id: (desk.note?.id ?? 0) + 1, text: action.text } }
+    case 'change_start':
+      return { ...desk, changing: action.changing }
+    case 'change_cancel':
+      return { ...desk, changing: null }
+    case 'changed':
+      return { ...desk, thread: threadReducer(desk.thread, action), text: '', problem: null, changing: null }
     case 'note_read':
       return { ...desk, note: null }
     case 'panel_open':
@@ -79,7 +95,7 @@ function deskReducer(desk: Desk, action: DeskAction): Desk {
     case 'sent':
       return { ...desk, thread: threadReducer(desk.thread, action), text: '', problem: null }
     case 'new_chat':
-      return { ...desk, thread: EMPTY, text: '', problem: null, panel: null }
+      return { ...desk, thread: EMPTY, text: '', problem: null, panel: null, changing: null }
     default:
       return { ...desk, thread: threadReducer(desk.thread, action) }
   }
