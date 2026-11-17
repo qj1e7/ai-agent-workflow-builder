@@ -54,7 +54,6 @@ from platform_api.orchestration import (
     ApprovedSetUp,
     Closed,
     Declined,
-    DeclineReason,
     DrafterFacts,
     Ended,
     KeyPasted,
@@ -68,6 +67,7 @@ from platform_api.orchestration import (
     SetUpApprovals,
     SetUpAsk,
     SetUpDecided,
+    SetUpDeclineReason,
     SetUpFinished,
     SetUpRefused,
     SetUpState,
@@ -204,23 +204,23 @@ class SetUpApprovalView(WireModel):
     set_up: DraftedSetUpView | None
 
 
-class DraftIn(WireModel):
+class DraftWorkflowIn(WireModel):
     words: str = Field(min_length=1, max_length=2000)
 
 
-class ChangeIn(WireModel):
+class DraftChangeIn(WireModel):
     words: str = Field(min_length=1, max_length=2000)
     revision: int = Field(ge=1, description="The revision the person asks to change.")
 
 
-class SendIn(WireModel):
+class DraftSendIn(WireModel):
     revision: int = Field(ge=1)
 
 
 class SetUpDecisionIn(WireModel):
     verdict: Literal["approve", "decline"]
     digest: str
-    reason: DeclineReason | None = Field(
+    reason: SetUpDeclineReason | None = Field(
         default=None, description="Needed to decline, from the short list. None to approve."
     )
 

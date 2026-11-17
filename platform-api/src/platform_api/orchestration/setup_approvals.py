@@ -59,7 +59,9 @@ log = logging.getLogger(__name__)
 SET_UP_LINK: Final = "/setup-approvals/{approval_id}"
 DECLINE_REASONS: Final = ("Too risky without a yes", "Wrong project or channel", "Not needed")
 """Why an Approver declines a set-up, picked from a short list (chat-first README, decision 3)."""
-type DeclineReason = Literal["Too risky without a yes", "Wrong project or channel", "Not needed"]
+type SetUpDeclineReason = Literal[
+    "Too risky without a yes", "Wrong project or channel", "Not needed"
+]
 NOTHING_SET_UP: Final = "Nothing was set up."
 LEASE: Final = timedelta(minutes=5)
 """Long enough for a set-up to create the workflow in n8n and read it back."""
@@ -272,7 +274,7 @@ class SetUpApprovals:
         principal: Principal,
         verdict: Verdict,
         seen_digest: Digest,
-        reason: DeclineReason | None,
+        reason: SetUpDeclineReason | None,
     ) -> SetUpDecision:
         """The gate's rules decide alone. A decline needs a reason from the short list, which the
         route holds to; it rides along only on a decline the gate recorded."""

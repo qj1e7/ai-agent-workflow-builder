@@ -4,14 +4,14 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 
 from platform_api.auth import SIGNED_IN, CurrentPrincipal
 from platform_api.builder.drafted_workflows import (
-    ChangeIn,
+    DraftChangeIn,
     DraftedWorkflows,
     DraftedWorkflowView,
-    DraftIn,
+    DraftSendIn,
+    DraftWorkflowIn,
     Forbidden,
     NotFound,
     Refused,
-    SendIn,
     SetUpApprovalView,
     SetUpDecisionIn,
 )
@@ -62,7 +62,7 @@ def _refused(answer: object) -> None:
     },
 )
 async def start_drafting(
-    body: DraftIn,
+    body: DraftWorkflowIn,
     principal: Drafter,
     drafted: CurrentDrafted,
     idempotency_key: Annotated[
@@ -106,7 +106,7 @@ async def read_drafted(
     },
 )
 async def change_drafted(
-    drafted_id: str, body: ChangeIn, principal: Drafter, drafted: CurrentDrafted
+    drafted_id: str, body: DraftChangeIn, principal: Drafter, drafted: CurrentDrafted
 ) -> DraftedWorkflowView:
     answer = await drafted.change(drafted_id, principal, body.revision, body.words)
     _refused(answer)
@@ -128,7 +128,7 @@ async def change_drafted(
     },
 )
 async def send_drafted(
-    drafted_id: str, body: SendIn, principal: Drafter, drafted: CurrentDrafted
+    drafted_id: str, body: DraftSendIn, principal: Drafter, drafted: CurrentDrafted
 ) -> DraftedWorkflowView:
     answer = await drafted.send(drafted_id, principal, body.revision)
     _refused(answer)

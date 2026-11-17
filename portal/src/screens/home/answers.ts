@@ -91,7 +91,7 @@ export const questionActions = (reply: QuestionReply, asker: Asker): readonly st
 export function wordsOnly(reply: PlannerReply, asker: Asker): boolean {
   if (reply.answer === 'question') return questionActions(reply, asker).length === 0
   if (reply.answer === 'pause' || reply.answer === 'resume') return reply.choices.length === 0
-  if (reply.answer === 'n8n') return true
+  if (reply.answer === 'n8n' || reply.answer === 'draft_started') return true
   if (reply.answer === 'remove_software') return reply.matches.length === 0
   // A free reply is the Planner's own words, with its chips or button under them inside the same message.
   return reply.answer === 'reply' || reply.answer === 'operators' || (reply.answer === 'offline' && asker === 'approver')
@@ -209,6 +209,8 @@ export function sayOf(reply: PlannerReply, asker: Asker = 'operator'): string | 
       return sayChanged(reply)
     case 'n8n':
       return reply.said
+    case 'draft_started':
+      return reply.refused ?? 'Drafting it as an n8n workflow.'
     case 'edit':
     case 'check_workflows':
     case 'why_stopped':

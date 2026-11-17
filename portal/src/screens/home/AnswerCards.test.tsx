@@ -81,7 +81,7 @@ describe('the Planner’s short answers, as the chat-first sketch draws them', (
   it('lists what I can do in the registry’s short words, with what isn’t built yet in one Not yet line', () => {
     const reply: PlannerReply = { trace_id: null, answer: 'abilities', how_to_start: false, parts: [asked('What can you do', 'will_do')] }
     expect(text(draw(reply, { registry: REGISTRY }))).toBe(
-      'What I can do Watch software for new releases Create Jira tickets, after a yes Explain a stopped run, and retry it Change or pause your workflows Explain any workflow Not yet: Teams channels, email, Confluence.',
+      'What I can do Watch software for new releases Create Jira tickets, after a yes Explain a stopped run, and retry it Change or pause your workflows Draft an n8n workflow from your words, for an Approver to check Explain any workflow Not yet: Teams channels, email, Confluence.',
     )
     expect(sayOf(reply)).toBeNull()
   })
@@ -111,7 +111,7 @@ describe('the Planner’s short answers, as the chat-first sketch draws them', (
 
   const TEAMS: CantRowView = { kind: 'do', text: 'Post the FastAPI news in our Teams channel', note: 'I can\'t post in Teams channels yet.', needs: 'new_system', system: 'Teams', instead: 'Run results show here, in the chat.', unsupported: false }
   const DELETE: CantRowView = { kind: 'do', text: 'delete the MOCK ticket', note: 'I don\'t delete anything in Jira.', needs: 'new_tool', system: 'Jira', instead: 'A Jira admin can do that.', unsupported: true }
-  const cantOf = (row: CantRowView): CantReply => ({ trace_id: null, answer: 'cant', cant: [row], alternative: null, parts: [{ text: row.text, mark: 'cant', reason: 'cant_do', note: row.note, choices: [] }] })
+  const cantOf = (row: CantRowView): CantReply => ({ trace_id: null, answer: 'cant', cant: [row], alternative: null, draft_words: null, parts: [{ text: row.text, mark: 'cant', reason: 'cant_do', note: row.note, choices: [] }] })
 
   it('gives a can’t the registry names one card: the line, what she has instead, and Ask the team', () => {
     const html = draw(cantOf(TEAMS))
@@ -247,7 +247,7 @@ describe('the software card', () => {
 
   it('keeps the version sentence inside a can’t whose alternative is the watch offer, when the word asks about the version', () => {
     const offer = ask('Node Js', null)
-    const html = draw({ trace_id: null, answer: 'cant', cant: [], alternative: offer, parts: [] })
+    const html = draw({ trace_id: null, answer: 'cant', cant: [], alternative: offer, draft_words: null, parts: [] })
     expect(text(html)).toContain('It isn’t on the watchlist, so I don’t know which version you run.')
   })
 })
@@ -310,6 +310,7 @@ describe('a clause the Planner didn’t follow, sent as a can’t with the rest 
     answer: 'cant',
     cant: [{ kind: 'look_for', text: 'Colour them by team', note: 'I didn’t follow this part.', needs: null, system: null, instead: null, unsupported: false }],
     alternative: { ...SETUP, parts: [] },
+    draft_words: null,
     parts: [{ text: 'Every Friday', mark: 'will_do', reason: null, note: null, choices: [] }, NOT_FOLLOWED],
   }
 
@@ -344,6 +345,7 @@ describe('a clause the Planner didn’t follow, sent as a can’t with the rest 
       answer: 'cant',
       cant: [emailRow],
       alternative: { ...SETUP, parts: [] },
+      draft_words: null,
       parts: [
         { text: 'Every Friday', mark: 'will_do', reason: null, note: null, choices: [] },
         { text: 'list the stale tickets in MOCK', mark: 'question', reason: 'how_many_days', note: null, choices: [] },
@@ -371,7 +373,7 @@ describe('a clause the Planner didn’t follow, sent as a can’t with the rest 
 describe('a can’t answer with nothing it can’t do', () => {
   it('draws no can’t card, since the clauses it didn’t follow are drawn above', () => {
     const notFollowed: PartView = { text: 'only the major releases', mark: 'cant', reason: 'not_followed', note: null, choices: [] }
-    const bare: CantReply = { trace_id: null, answer: 'cant', cant: [{ kind: 'look_for', text: 'only the major releases', note: 'I didn’t follow this part.', needs: null, system: null, instead: null, unsupported: false }], alternative: null, parts: [notFollowed] }
+    const bare: CantReply = { trace_id: null, answer: 'cant', cant: [{ kind: 'look_for', text: 'only the major releases', note: 'I didn’t follow this part.', needs: null, system: null, instead: null, unsupported: false }], alternative: null, draft_words: null, parts: [notFollowed] }
     expect(draw(bare)).toBe('')
     expect(text(draw(bare, { leftovers: true }))).toBe('Can’t do: “only the major releases” I didn’t follow this part.')
   })
@@ -412,7 +414,7 @@ describe('the clauses an answer didn’t read', () => {
   it('show a can’t the card doesn’t name, as the yes that can’t be skipped', () => {
     const note = 'I can’t skip the yes. Nothing is written without a yes.'
     const words = 'how do I create a workflow without Bob'
-    const skip: CantReply = { trace_id: null, answer: 'cant', cant: [{ kind: 'do', text: words, note, needs: null, system: null, instead: null, unsupported: false }], alternative: null, parts: [{ text: words, mark: 'cant', reason: 'cant_do', note, choices: [] }] }
+    const skip: CantReply = { trace_id: null, answer: 'cant', cant: [{ kind: 'do', text: words, note, needs: null, system: null, instead: null, unsupported: false }], alternative: null, draft_words: null, parts: [{ text: words, mark: 'cant', reason: 'cant_do', note, choices: [] }] }
     expect(text(draw(skip, { leftovers: true }))).toBe(`Can’t do: “${words}” ${note}`)
   })
 

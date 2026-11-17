@@ -568,6 +568,7 @@ export function Answer({ reply, typed, page, focus = null }: AnswerProps) {
     case 'operators':
     case 'decided':
     case 'decide':
+    case 'draft_started':
       return null
   }
 }
