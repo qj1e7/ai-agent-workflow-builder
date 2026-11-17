@@ -16,7 +16,7 @@ before anything is kept or sent."""
 import asyncio
 import logging
 import re
-from collections.abc import Awaitable, Callable, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
 from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -129,6 +129,10 @@ PASTED_KEY: Final = re.compile(
 """The shapes the runtime's masker knows, and the report's, so neither a log nor the records
 ever hold a pasted key."""
 KEY_PASTED: Final = "Don't paste keys here. An Operator adds keys in Settings."
+KEY_IN_N8N: Final = (
+    "A block in n8n holds something shaped like a key. Remove it in n8n, then press Done in n8n "
+    "again. An Operator adds keys in Settings."
+)
 COULDNT_DRAFT: Final = "I couldn't draft that."
 NO_MODEL: Final = "I couldn't draft that. No AI model is connected yet."
 N8N_NOT_READY: Final = "I couldn't draft that. n8n is not ready yet."
@@ -643,6 +647,10 @@ class DraftedWorkflows:
             if whole is None:
                 await _out_of_n8n(uow.conn, drafted_id)
                 return Refused(GONE_IN_N8N)
+            if _holds_a_key(whole.document):
+                # Never the value, nor where it is: only that the read-back was refused.
+                log.warning("refused to read %s back from n8n: it holds a key", drafted_id)
+                return Refused(KEY_IN_N8N)
             if (error_workflow := await n8n.error_workflow_id()) is None:
                 return Refused(N8N_NOT_READY)
             opened = kept.revision(held.revision)
@@ -1195,6 +1203,29 @@ def _answered_words(setting: SettingNow, read: Answered) -> str:
     """The answer, as the revision's words: code's label and the value, never a key's."""
     label = setting.label if setting.block is None else f"{setting.label} {setting.block}"
     return f"{label}: {read.value}"
+
+
+def _holds_a_key(document: Mapping[str, Any]) -> bool:
+    """Whether anything a read-back could keep is shaped like a key: the workflow's name, or any
+    string anywhere in a block, its name and parameters, expressions and code included."""
+    return any(
+        PASTED_KEY.search(text) for text in _strings([document.get("name"), document.get("nodes")])
+    )
+
+
+def _strings(value: object) -> Iterable[str]:
+    match value:
+        case str():
+            yield value
+        case dict():
+            for key, inner in cast(dict[object, object], value).items():
+                yield from _strings(key)
+                yield from _strings(inner)
+        case list() | tuple():
+            for inner in cast(Sequence[object], value):
+                yield from _strings(inner)
+        case _:
+            return
 
 
 def _without_keys(document: Mapping[str, Any]) -> dict[str, Any]:

@@ -11,6 +11,8 @@ from platform_api.builder.drafted_settings import Asking, How, SettingNow, askin
 from platform_api.builder.explain import Segment, WorkflowExplained, segments
 from platform_api.builder.models import N8nBlockView
 from platform_api.builder.workflow_report import (
+    HIDDEN,
+    KEY_SHAPE,
     DraftSetting,
     Filled,
     Guessed,
@@ -240,7 +242,7 @@ def _setting_view(setting: SettingNow, question: Asking, said: str) -> DraftSett
         kind=setting.kind,
         key=question.key,
         label=segments((quoted(label),) if isinstance(label, str) else label),
-        value=shown(setting),
+        value=None if (value := shown(setting)) is None else KEY_SHAPE.sub(HIDDEN, value),
         mark=setting.mark,
         said=said,
         question=question.words,

@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 
 from platform_api.builder.drafted_settings import ANY_APPROVER, APPROVERS
-from platform_api.builder.drafted_workflows import IN_N8N_NOW, KEY_PASTED
+from platform_api.builder.drafted_workflows import IN_N8N_NOW, KEY_IN_N8N, KEY_PASTED
 from platform_api.orchestration import WorkflowPlan
 from tests.test_drafted_layout import block, release_check, wire
 from tests.test_drafted_workflows import Lab, drafted, lab
@@ -228,6 +228,99 @@ async def test_what_n8n_holds_that_a_plan_can_t_comes_back_as_words_and_stays_th
     assert "onError" in done.json()["detail"]
     assert (await lab.read(drafted_id))["in_n8n"] is not None
     assert lab.n8n.removed == []
+
+
+TOKEN = "ghp_abcdefghijklmnopqrstuvwxyz0123456789"
+
+
+def nested(nodes: list[dict[str, Any]]) -> None:
+    for node in nodes:
+        if node["name"] == "Propose a ticket":
+            node["parameters"]["options"] = {"labels": [{"text": f"see {TOKEN}"}]}
+
+
+def in_a_header(nodes: list[dict[str, Any]]) -> None:
+    nodes.append(
+        {
+            "id": "n-http",
+            "name": "Call it",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.2,
+            "position": [0, 0],
+            "parameters": {
+                "method": "GET",
+                "url": "https://api.example.com/x",
+                "sendHeaders": True,
+                "headerParameters": {
+                    "parameters": [{"name": "Authorization", "value": f"Bearer {TOKEN}"}]
+                },
+            },
+        }
+    )
+
+
+def in_code(nodes: list[dict[str, Any]]) -> None:
+    nodes.append(
+        {
+            "id": "n-code",
+            "name": "Shape it",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [0, 0],
+            "parameters": {"jsCode": f"const key = '{TOKEN}';\nreturn items;"},
+        }
+    )
+
+
+def in_an_expression(nodes: list[dict[str, Any]]) -> None:
+    for node in nodes:
+        if node["name"] == "Propose a ticket":
+            node["parameters"]["title"] = f"={{{{ 'token=' + '{TOKEN}' }}}}"
+
+
+def in_a_name(nodes: list[dict[str, Any]]) -> None:
+    for node in nodes:
+        if node["name"] == "Ask for a yes":
+            node["name"] = f"Ask {TOKEN}"
+
+
+@pytest.mark.parametrize("hide", [nested, in_a_header, in_code, in_an_expression, in_a_name])
+async def test_a_key_typed_in_n8n_is_never_read_back_kept_or_echoed(lab: Lab, hide: Any):
+    view = await lab.start()
+    drafted_id = view["drafted_id"]
+    await lab.call(
+        "alice",
+        "POST",
+        f"/api/v1/drafted-workflows/{drafted_id}/n8n",
+        {"revision": view["revision"]},
+    )
+    hide(lab.n8n.held["wf1"].document["nodes"])
+    async with lab.db.connection("builder") as conn:
+        before = await (
+            await conn.execute("SELECT count(*) AS n FROM builder.drafted_revisions")
+        ).fetchone()
+
+    done = await lab.call("alice", "POST", f"/api/v1/drafted-workflows/{drafted_id}/n8n/done")
+
+    assert done.status_code == 409
+    assert TOKEN not in done.text
+    assert done.json()["detail"] == KEY_IN_N8N
+    async with lab.db.connection("builder") as conn:
+        rows = await (await conn.execute("SELECT * FROM builder.drafted_revisions")).fetchall()
+    assert before is not None and len(rows) == before["n"], "nothing new was kept"
+    assert all(TOKEN not in str(dict(row)) for row in rows)
+    assert lab.n8n.removed == [], "it stays in n8n, to be put right there"
+    assert (await lab.read(drafted_id))["in_n8n"] is not None
+
+
+async def test_a_value_shaped_like_a_key_is_never_shown_even_if_one_slips_in(lab: Lab):
+    plan = release_check().model_dump()
+    plan["settings"][1].update({"value": TOKEN, "mark": "guessed"})
+    lab.drafter.answers = [drafted(WorkflowPlan.model_validate(plan))]
+    view = await lab.start()
+
+    assert TOKEN not in str(view)
+    assert setting_of(view, "repository")["value"] == "(hidden, looks like a key)"
 
 
 async def test_only_an_operator_with_n8n_access_can_edit_in_n8n(lab: Lab):
