@@ -507,7 +507,7 @@ describe('the answer to a question about the person’s own data', () => {
 
 describe('an Approver’s answers in the chat (spec 5.3)', () => {
   const BOB: Me = { id: 'bob', display: 'Bob', roles: ['approver'] }
-  const HOME = bobHome as HomeOut
+  const HOME: HomeOut = { ...(bobHome as HomeOut), setup_approvals: [] }
   const NOW = new Date('2026-11-13T15:00:00+08:00')
   const OPS = 'Operators set up workflows. Ask Alice, Carol or Dave.'
 

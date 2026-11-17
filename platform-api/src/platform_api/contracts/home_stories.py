@@ -14,12 +14,14 @@ from platform_api.builder.home import (
     DraftItem,
     HomeOut,
     QuestionItem,
+    SetUpApprovalItem,
     StoppedItem,
     WaitingItem,
 )
 from platform_api.builder.planner import ChangedInN8nReply
 from platform_api.builder.team_requests import FollowingUpItem, ReplyView
 from platform_api.builder.templates import SOFTWARE_WATCHLIST
+from platform_api.contracts.drafted_stories import APPROVAL_ID, DRAFTED_ID, SENT
 from platform_api.contracts.stories import (
     ALICE,
     BOB,
@@ -33,8 +35,8 @@ from platform_api.contracts.stories import (
     failure_events,
 )
 from platform_api.monitoring.troubleshooter import explain
-from platform_api.orchestration import ConfirmationKind
-from platform_api.shared import RunId, UserId
+from platform_api.orchestration import ConfirmationKind, set_up_link
+from platform_api.shared import ApprovalId, RunId, UserId
 from platform_api.wire import WireModel
 
 CONFIRMATIONS_ASKED = datetime(2026, 11, 9, 3, 41, tzinfo=UTC)
@@ -95,6 +97,16 @@ def home_for_bob() -> HomeOut:
         questions_for_me=[],
         questions_for_me_total=0,
         needs_next=None,
+        setup_approvals=[
+            SetUpApprovalItem(
+                approval_id=APPROVAL_ID,
+                drafted_id=DRAFTED_ID,
+                name="Release check",
+                sent_by_name="Carol",
+                sent_at=SENT,
+                link=set_up_link(ApprovalId(APPROVAL_ID)),
+            )
+        ],
         waiting_on_others=[],
         waiting_on_others_total=0,
         waiting_on_others_next=None,
@@ -153,6 +165,7 @@ def home_for_alice(failure: Timeline) -> HomeOut:
         questions_for_me=[],
         questions_for_me_total=0,
         needs_next=None,
+        setup_approvals=[],
         waiting_on_others=[
             WaitingItem(
                 run_id=SUCCESS.run_id,
@@ -250,6 +263,7 @@ DAY_ONE = HomeOut(
     questions_for_me=[],
     questions_for_me_total=0,
     needs_next=None,
+    setup_approvals=[],
     waiting_on_others=[],
     waiting_on_others_total=0,
     waiting_on_others_next=None,

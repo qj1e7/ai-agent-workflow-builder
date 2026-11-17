@@ -10,7 +10,7 @@ import { createApiClient } from '../api/client'
 import { approvalQuery } from '../api/queries'
 import { authorizedFetch, createDevSession } from '../api/session'
 import type { ApprovalView, RunView, RunViewOf, TeamsStubMessage } from '../api/types'
-import { BADGE_MAX_ASKS, BADGE_POLL_MS, badgeAsks, badgeText, MessageBody, teamsLabel, TEAMS_TITLE } from './TeamsPanel'
+import { BADGE_MAX_ASKS, BADGE_POLL_MS, badgeAsks, badgeText, MessageBody, teamsLabel, TEAMS_TITLE, withSetUps } from './TeamsPanel'
 
 const BOB = bob as ApprovalView
 const text = (html: string) => html.replace(/<[^>]*>/g, ' ').replaceAll('&#x27;', "'").replace(/\s+/g, ' ').trim()
@@ -60,6 +60,19 @@ describe('the Teams button', () => {
     expect(badgeText({ count: 0, atLeast: false })).toBeNull()
     expect(badgeText({ count: 3, atLeast: false })).toBe('3')
     expect(badgeText({ count: BADGE_MAX_ASKS, atLeast: true })).toBe(`${BADGE_MAX_ASKS}+`)
+  })
+})
+
+describe('the badge with set-up approvals', () => {
+  it('adds the set-up approvals this person may decide to the approvals waiting for them', () => {
+    expect(withSetUps({ count: 2, atLeast: false }, 1)).toEqual({ count: 3, atLeast: false })
+    expect(withSetUps({ count: 0, atLeast: false }, 2)).toEqual({ count: 2, atLeast: false })
+    expect(badgeText(withSetUps({ count: 0, atLeast: false }, 1))).toBe('1')
+    expect(teamsLabel(withSetUps({ count: 1, atLeast: false }, 1))).toBe('Teams, practice copy, 2 approvals waiting for you')
+  })
+
+  it('keeps counting “or more” when the runs were cut at the most it asks about', () => {
+    expect(withSetUps({ count: BADGE_MAX_ASKS, atLeast: true }, 1)).toEqual({ count: BADGE_MAX_ASKS + 1, atLeast: true })
   })
 })
 

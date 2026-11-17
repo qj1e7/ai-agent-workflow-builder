@@ -17,7 +17,7 @@ const ALICE: Me = { id: 'alice', display: 'Alice', roles: ['operator', 'approver
 const BOB: Me = { id: 'bob', display: 'Bob', roles: ['approver'] }
 const ERIN: Me = { id: 'erin', display: 'Erin', roles: ['operator'] }
 
-const BOB_HOME = bobHome as HomeOut
+const BOB_HOME: HomeOut = { ...(bobHome as HomeOut), setup_approvals: [] }
 const ALICE_HOME = aliceHome as HomeOut
 const DAY_ONE = dayOne as HomeOut
 const NOW = new Date('2026-11-03T15:00:00+08:00')

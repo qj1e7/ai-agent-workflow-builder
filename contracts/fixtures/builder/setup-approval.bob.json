@@ -1,7 +1,7 @@
 {
   "approval_id": "apr_01JDRAFTRELEASE",
   "drafted_id": "dw_01JDRAFTRELEASE",
-  "revision": 1,
+  "revision": 2,
   "name": "Release check",
   "digest": "6655955afce688184abb8e2a6ff389c03184a6a1e40da67c915912b09d3b9586",
   "approval": {
@@ -302,12 +302,12 @@
         ],
         "value": [
           {
-            "text": "monday 09:00",
-            "quoted": true
+            "text": "every Monday at 9:00",
+            "quoted": false
           }
         ],
         "mark": "filled",
-        "said": "Filled"
+        "said": "From your words"
       },
       {
         "label": [
@@ -323,7 +323,7 @@
           }
         ],
         "mark": "filled",
-        "said": "Filled"
+        "said": "From your words"
       },
       {
         "label": [
@@ -339,7 +339,23 @@
           }
         ],
         "mark": "filled",
-        "said": "Filled"
+        "said": "From your words"
+      },
+      {
+        "label": [
+          {
+            "text": "Who says yes on each run",
+            "quoted": false
+          }
+        ],
+        "value": [
+          {
+            "text": "Any Approver on the team",
+            "quoted": false
+          }
+        ],
+        "mark": "filled",
+        "said": "You chose"
       }
     ],
     "approval": "It is set up only after an Approver approves it.",

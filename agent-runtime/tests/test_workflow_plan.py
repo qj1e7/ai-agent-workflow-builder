@@ -528,6 +528,36 @@ def test_a_run_time_is_code_s_reading_and_never_a_guessed_hour(
     assert run_time_in(words) == read
 
 
+@pytest.mark.parametrize(
+    ("words", "kept"),
+    [
+        ("Every Monday, open a ticket for LangGraph.", "monday"),
+        ("Each weekday at 9, open a ticket for LangGraph.", "weekdays"),
+        ("At 9:00, open a ticket for LangGraph.", None),
+    ],
+)
+def test_a_needed_run_time_keeps_the_day_the_words_name_so_only_the_time_is_asked(
+    catalogue: Catalogue, words: str, kept: str | None
+):
+    assert marks(catalogue, RELEASE_SETTINGS, words)["run_time"] == (kept, "needed")
+
+
+def test_an_edit_that_names_the_time_fills_a_run_time_that_kept_its_day(catalogue: Catalogue):
+    current = edited(
+        {
+            "run_time": ("monday", "needed"),
+            "repository": ("langchain-ai/langgraph", "filled"),
+            "jira_project": ("MOCK", "filled"),
+            "channel": ("#support", "filled"),
+        }
+    )
+
+    assert marks(catalogue, RELEASE_SETTINGS, "at 17:30 please", current)["run_time"] == (
+        "monday 17:30",
+        "filled",
+    )
+
+
 def edited(settings: dict[str, tuple[str | None, str]]) -> WorkflowPlan:
     places = {
         "run_time": SettingPlace(block="Every Monday", parameter="rule"),
@@ -583,7 +613,10 @@ def test_an_edit_keeps_each_value_its_words_don_t_change(catalogue: Catalogue):
         "#ops",
         "filled",
     )
-    assert marks(catalogue, settings, "post at 9 instead", current)["run_time"] == (None, "needed")
+    assert marks(catalogue, settings, "post at 9 instead", current)["run_time"] == (
+        "monday",
+        "needed",
+    )
 
 
 def test_a_switch_s_exits_follow_its_rules_and_a_written_count_is_held(catalogue: Catalogue):

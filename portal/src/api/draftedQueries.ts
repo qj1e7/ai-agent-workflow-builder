@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { unwrap } from './client'
 import { useApiClient, useCacheScope } from './context'
-import type { DraftedWorkflowView, SetUpApprovalView, SetUpDecisionIn } from './types'
+import type { DraftAnswerIn, DraftedWorkflowView, SetUpApprovalView, SetUpDecisionIn } from './types'
 
 export const DRAFTED_POLL_MS = 2000
 
@@ -80,6 +80,42 @@ export function useSendDrafted(draftedId: string) {
   const keep = useKeepDrafted()
   return useMutation({
     mutationFn: async (revision: number) => unwrap(await client.POST('/api/v1/drafted-workflows/{drafted_id}/send', { params: { path: { drafted_id: draftedId } }, body: { revision } })),
+    onSuccess: keep,
+    onSettled: reread,
+  })
+}
+
+/** Answers one setting of a drafted workflow. The answer makes a new revision, which stays on the same card. A 409 carries words to show. */
+export function useAnswerDrafted(draftedId: string) {
+  const client = useApiClient()
+  const reread = useRereadDrafted()
+  const keep = useKeepDrafted()
+  return useMutation({
+    mutationFn: async (body: DraftAnswerIn) => unwrap(await client.POST('/api/v1/drafted-workflows/{drafted_id}/answers', { params: { path: { drafted_id: draftedId } }, body })),
+    onSuccess: keep,
+    onSettled: reread,
+  })
+}
+
+/** Opens the newest revision in the Operator's own n8n space. */
+export function useEditInN8n(draftedId: string) {
+  const client = useApiClient()
+  const reread = useRereadDrafted()
+  const keep = useKeepDrafted()
+  return useMutation({
+    mutationFn: async (revision: number) => unwrap(await client.POST('/api/v1/drafted-workflows/{drafted_id}/n8n', { params: { path: { drafted_id: draftedId } }, body: { revision } })),
+    onSuccess: keep,
+    onSettled: reread,
+  })
+}
+
+/** Reads what was edited in n8n back as a new revision. */
+export function useDoneInN8n(draftedId: string) {
+  const client = useApiClient()
+  const reread = useRereadDrafted()
+  const keep = useKeepDrafted()
+  return useMutation({
+    mutationFn: async () => unwrap(await client.POST('/api/v1/drafted-workflows/{drafted_id}/n8n/done', { params: { path: { drafted_id: draftedId } } })),
     onSuccess: keep,
     onSettled: reread,
   })

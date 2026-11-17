@@ -1,4 +1,4 @@
-import type { DraftedApprovalView, DraftedSetUpView, DraftedWorkflowView, N8nBlockView } from '../../api/types'
+import type { DraftedApprovalView, DraftedSetUpView, DraftedWorkflowView, DraftSettingView, N8nBlockView } from '../../api/types'
 import { approvalPill } from '../run/approvalWords'
 import type { Station, StepIcon } from '../run/runModel'
 import type { StageTone } from '../run/words'
@@ -15,14 +15,15 @@ export const DRAFT_BUTTON = 'Draft it as an n8n workflow'
 
 const DRAFTING: PillWords = { label: 'Drafting', tone: 'new' }
 const DRAFT: PillWords = { label: 'Draft', tone: 'quiet' }
+const IN_N8N: PillWords = { label: 'In n8n', tone: 'quiet' }
 
 /** The one pill, in the words the same states have everywhere: the approval's own for a yes awaited, given or refused. A draft that could not be made has none. */
-export function draftedPill(state: DraftedWorkflowView['state']): PillWords | null {
+export function draftedPill(state: DraftedWorkflowView['state'], inN8n = false): PillWords | null {
   switch (state) {
     case 'drafting':
       return DRAFTING
     case 'draft':
-      return DRAFT
+      return inN8n ? IN_N8N : DRAFT
     case 'waiting':
       return approvalPill({ is: 'open', step: 0, steps: 1, approvedBy: [] }, false)
     case 'approved':
@@ -40,6 +41,26 @@ export const revisionWords = (revision: number): string => `Revision ${String(re
 
 /** An older revision's card settles into this one line, so only the newest card asks anything. */
 export const settledWords = (revision: number, newest: number): string => `${revisionWords(revision)}. ${revisionWords(newest)} is below.`
+
+export const IN_N8N_WORDS = 'Open in your own n8n space, without its keys.'
+export const inN8nByWords = (name: string): string => `${name} has it open in n8n.`
+
+/** What a draft open in n8n says at the left of its foot: how to use it for the person who opened it, and who has it for anyone else. Null when it is not open there. */
+export function inN8nWords(view: Pick<DraftedWorkflowView, 'state' | 'in_n8n'>): string | null {
+  const held = view.in_n8n
+  if (held === null || view.state !== 'draft') return null
+  return held.editor_url === null ? inN8nByWords(held.by_name) : IN_N8N_WORDS
+}
+
+/** The setting the server asks now, or null. */
+export const questionOf = (view: DraftedWorkflowView): DraftSettingView | null => view.settings.find((setting) => setting.id === view.question) ?? null
+
+export const guessesOf = (view: DraftedWorkflowView): DraftSettingView[] => view.settings.filter((setting) => setting.mark === 'guessed')
+
+/** Needed settings that cannot be answered now, such as a write key an Operator adds later. */
+export const waitingOf = (view: DraftedWorkflowView): DraftSettingView[] => view.settings.filter((setting) => setting.mark === 'needed' && setting.waits !== null)
+
+export const typedPlaceholder = (kind: DraftSettingView['kind']): string => (kind === 'run_time' ? 'Like 7:45 or 6pm' : 'Type it here')
 
 const ICON: Readonly<Record<N8nBlockView['kind'], StepIcon>> = {
   schedule: 'schedule',

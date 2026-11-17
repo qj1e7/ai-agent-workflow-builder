@@ -12,6 +12,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 import httpx
+import psycopg
 import pytest
 
 from platform_api.bootstrap import LoadedWorkflow, record_status
@@ -626,6 +627,22 @@ async def test_the_platform_s_own_workflows_never_wait_to_be_set_up(s: Staffed):
     assert copy_id not in {w["workflow_id"] for w in await waiting(s, "carol")}
     refused = await set_up(s, "carol", copy_id)
     assert refused.status_code == 404
+
+
+async def test_a_drafted_workflow_open_for_edit_in_n8n_never_waits_to_be_set_up(s: Staffed):
+    """It is still the drafted workflow's, and Done in n8n reads it back (ADR 0051, step 7)."""
+    carol_n8n, space = await space_of(s, "carol")
+    held_id = s.n8n.make_in(space, named(await laid_out(s), "Being edited"), carol_n8n)
+    with psycopg.connect(s.postgres.owner, autocommit=True) as conn:
+        conn.execute(
+            "INSERT INTO builder.drafted_workflows (drafted_id, owner, created_at, use_case_id,"
+            " in_n8n_id, in_n8n_by, in_n8n_since, in_n8n_revision)"
+            " VALUES ('dw_edit', 'carol', now(), 'uc_edit', %s, 'carol', now(), 1)",
+            (held_id,),
+        )
+
+    assert held_id not in {w["workflow_id"] for w in await waiting(s, "carol")}
+    assert (await set_up(s, "carol", held_id)).status_code == 409
 
 
 async def published_with_draft(s: Staffed, change: Callable[[dict[str, Any]], None]) -> str:

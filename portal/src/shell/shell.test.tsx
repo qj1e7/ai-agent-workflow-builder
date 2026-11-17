@@ -157,7 +157,7 @@ describe('the rail', () => {
 })
 
 const ALICE_HOME = aliceHome as HomeOut
-const BOB_HOME = bobHome as HomeOut
+const BOB_HOME: HomeOut = { ...(bobHome as HomeOut), setup_approvals: [] }
 const plain = (html: string) => html.replace(/<[^>]*>/g, '')
 const linkNames = (html: string) =>
   [...html.matchAll(/<nav\b[^>]*aria-label="Browse"[^>]*>([\s\S]*?)<\/nav>/g)].flatMap((nav) =>

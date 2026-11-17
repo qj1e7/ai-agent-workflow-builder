@@ -1,6 +1,6 @@
 import json
 from pathlib import Path
-from typing import Any, TypeAliasType, get_args
+from typing import Any, Literal, TypeAliasType, get_args
 
 import pytest
 from pydantic import TypeAdapter
@@ -141,6 +141,7 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "agent/card-task-finished.json": task_result_adapter,
     "agent/card-draft-request.json": TypeAdapter(DraftRequest),
     "agent/card-drafted.json": draft_result_adapter,
+    "agent/key-shapes.json": TypeAdapter(dict[Literal["shapes"], list[str]]),
     "agent/planner-choose-request.json": TypeAdapter(ChooseRequest),
     "agent/planner-chosen.json": choose_result_adapter,
     "agent/software-find-request.json": TypeAdapter(FindSoftwareRequest),
@@ -340,7 +341,7 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "builder/explain.reworded.json": TypeAdapter(WorkflowExplained),
     **{
         f"builder/drafted.{state}.json": TypeAdapter(DraftedWorkflowView)
-        for state in ("drafting", "ready", "question", "not-drafted", "waiting", "set-up")
+        for state in ("drafting", "ready", "question", "in-n8n", "not-drafted", "waiting", "set-up")
     },
     "builder/setup-approval.bob.json": TypeAdapter(SetUpApprovalView),
     "builder/setup-approval.carol.json": TypeAdapter(SetUpApprovalView),

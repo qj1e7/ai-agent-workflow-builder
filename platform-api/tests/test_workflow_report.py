@@ -47,6 +47,7 @@ from platform_api.orchestration import (
     KnownOptions,
     Schedule,
     ToolId,
+    WorkflowPlan,
 )
 from tests.support import TEAM_ZONE
 
@@ -556,6 +557,42 @@ def test_a_drafted_workflow_needs_as_many_answers_as_the_questions_its_card_asks
     assert report.needs_an_answer == 1
     set_up = report_of(document, "n8n")
     assert set_up.needs_an_answer == 1, "a set-up workflow's flag that needs an answer"
+
+
+def test_a_place_still_needed_is_one_question_and_not_a_flag_too() -> None:
+    """A placeholder stands where a needed setting goes, and the checker can't allow a place
+    nobody has named. Until it is answered, that is the question, not a flag besides."""
+    from tests.test_drafted_layout import ERROR_WORKFLOW as LAID_ERROR
+    from tests.test_drafted_layout import KNOWN as LAID_KNOWN
+    from tests.test_drafted_layout import checked, release_check
+
+    plan = release_check(run_time=None).model_dump()
+    plan["settings"][2].update({"value": None, "mark": "needed"})
+    document = checked(WorkflowPlan.model_validate(plan))
+    team = Team(LAID_ERROR, TEAM_ZONE, LAID_KNOWN)
+    report = workflow_report(
+        Drafted(
+            document,
+            {},
+            (
+                DraftSetting("Run time", Needed()),
+                DraftSetting("Jira project", Needed()),
+                DraftSetting(("Write key for ", Quoted("Close it")), Needed(), "Needs a write key"),
+                DraftSetting("Repository", Filled("a/b"), "From Alice's words"),
+                DraftSetting("When", Filled(("every Monday at 9:00",)), "You chose"),
+            ),
+        ),
+        team,
+    )
+
+    assert report.flags == ()
+    assert report.needs_an_answer == 3
+    assert text(report.in_short).startswith("At a run time still needed, it reads GitHub")
+    assert [(text(s.label), text(s.value), s.said) for s in report.settings][2:] == [
+        ("Write key for “Close it”", "", "Needs a write key"),
+        ("“Repository”", "“a/b”", "From Alice's words"),
+        ("“When”", "every Monday at 9:00", "You chose"),
+    ]
 
 
 def test_the_report_never_changes_the_workflow_it_is_given() -> None:

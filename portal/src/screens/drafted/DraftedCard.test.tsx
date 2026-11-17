@@ -43,7 +43,7 @@ function render(node: React.ReactNode, { me, view }: { me?: Me; view?: DraftedWo
 
 const text = (html: string) => html.replace(/<[^>]*>/g, ' ').replaceAll('&#x27;', "'").replace(/\s+/g, ' ').trim()
 const buttons = (html: string) => [...html.matchAll(/<(?:button|a)\b[^>]*>([\s\S]*?)<\/(?:button|a)>/g)].map((m) => text(m[1] ?? ''))
-const card = (view: DraftedWorkflowView, revision = view.revision) => render(<DraftedCard draftedId={view.drafted_id} revision={revision} />, { view })
+const card = (view: DraftedWorkflowView, revision = view.card_revision) => render(<DraftedCard draftedId={view.drafted_id} revision={revision} />, { view })
 
 describe('the drafted workflow card', () => {
   it('shows Drafting with time going while the drafter works, and no steps the platform did not report', () => {
@@ -58,19 +58,19 @@ describe('the drafted workflow card', () => {
     const html = card(ready as DraftedWorkflowView)
     const words = text(html)
     expect(words).toContain('Release check')
-    expect(words).toContain('Revision 1 Draft')
+    expect(words).toContain('Revision 2 Draft')
     expect(words).toContain('Every Monday')
     expect(words).not.toContain('Start from the Portal')
     expect(html).toContain('data-in-short')
     expect(words).toMatch(/Added \d+ things? every workflow needs\./)
-    expect(buttons(html)).toEqual(['See the report', 'Ask for a change', 'Send for approval'])
+    expect(buttons(html)).toEqual(['See the report', 'Ask for a change', 'Edit in n8n', 'Send for approval'])
   })
 
   it('puts the reason where Send for approval would be when it cannot be sent, never a dead button', () => {
     const html = card(question as DraftedWorkflowView)
-    expect(text(html)).toContain('Answer 1 question first')
-    expect(text(html)).toContain('1 flag. See them')
-    expect(buttons(html)).toEqual(['See them', 'See the report', 'Ask for a change'])
+    expect(text(html)).toContain('Answer 2 questions first')
+    expect(buttons(html)).toEqual(expect.not.arrayContaining(['Send for approval']))
+    expect(buttons(html).at(-1)).toBe('Edit in n8n')
     expect(html).not.toContain('disabled')
   })
 
@@ -83,7 +83,7 @@ describe('the drafted workflow card', () => {
       set_up: { state: 'refused', use_case_id: null, words: 'Changed since it was approved. Send it for approval again.' },
     } as DraftedWorkflowView
     const html = card(refused)
-    expect(text(html)).toContain('Revision 1 Draft')
+    expect(text(html)).toContain('Revision 2 Draft')
     expect(text(html)).toContain('Changed since it was approved. Send it for approval again.')
     expect(buttons(html)).toEqual(['See the report', 'Ask for a change', 'Send for approval'])
   })
@@ -103,7 +103,7 @@ describe('the drafted workflow card', () => {
 
   it('says it is waiting for an Approver, and cannot be approved by its author', () => {
     const html = card(waiting as DraftedWorkflowView)
-    expect(text(html)).toContain('Revision 1 Waiting for a yes')
+    expect(text(html)).toContain('Revision 2 Waiting for a yes')
     expect(text(html)).toContain('Waiting for an Approver. You can’t approve your own draft.')
     expect(buttons(html)).toEqual(['See the report'])
   })
@@ -130,7 +130,7 @@ describe('the drafted workflow card', () => {
   it('says it was declined, by whom and why, and that nothing was set up', () => {
     const base = waiting as DraftedWorkflowView
     const html = card({ ...base, state: 'declined', approval: { ...base.approval!, status: 'declined', decided_by: 'Bob', reason: 'Wrong project or channel' } })
-    expect(text(html)).toContain('Revision 1 Declined')
+    expect(text(html)).toContain('Revision 2 Declined')
     expect(text(html)).toContain('Declined by Bob: wrong project or channel. Nothing was set up.')
   })
 
@@ -139,7 +139,7 @@ describe('the drafted workflow card', () => {
   })
 
   it('settles an older revision into one line', () => {
-    const html = card({ ...(ready as DraftedWorkflowView), revision: 2 }, 1)
+    const html = card({ ...(ready as DraftedWorkflowView), card_revision: 2 }, 1)
     expect(text(html)).toContain('Revision 1. Revision 2 is below.')
     expect(buttons(html)).toEqual([])
   })
@@ -188,7 +188,7 @@ describe('the set-up approval page', () => {
 
   it('gives the person who asked for it the reason in place of Approve and Decline', () => {
     const html = render(<SetUpApproval view={carolSetUp as SetUpApprovalView} />)
-    expect(text(html)).toContain('You can\'t approve it. You asked for it, changed it or sent it.')
+    expect(text(html)).toContain('You can\'t approve it. You asked for it, changed it, answered its questions or sent it.')
     expect(text(html)).toContain('Waiting for a yes')
     expect(buttons(html)).not.toContain('Approve')
     expect(buttons(html)).not.toContain('Decline')

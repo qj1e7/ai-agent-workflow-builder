@@ -59,6 +59,7 @@ from agent_runtime.contract import (
     GitHubProblem,
     GithubSource,
     GitHubWorking,
+    KeyShapes,
     LibraryCard,
     LibraryInput,
     MissingTool,
@@ -93,6 +94,7 @@ from agent_runtime.contract import (
 from agent_runtime.free_reply import answer_of_envelope
 from agent_runtime.github import TOKEN_REFUSED
 from agent_runtime.model_access import KEY_REFUSED
+from agent_runtime.monitoring.masking import KEY_SHAPE_SOURCES
 from agent_runtime.reading import DaysRead, PlaceRead, SearchRead, TicketRead
 from agent_runtime.tools import tool_list
 
@@ -1157,6 +1159,7 @@ def fixtures() -> dict[str, WireModel]:
         "planner-check-part-fits.json": check_one_part(
             CheckPartRequest(kind="where", text="In the MOCK project")
         ),
+        "key-shapes.json": KeyShapes(shapes=list(KEY_SHAPE_SOURCES)),
     }
 
 

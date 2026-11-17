@@ -46,11 +46,23 @@ What the workflow drafter wrote, with every change made to it, before it is set 
 _Avoid_: Draft (that is a set-up workflow not yet turned on)
 
 **Revision**:
-One whole plan of a drafted workflow. The first comes from the person's words. Each change asked for in the chat makes the next one, and only the newest can be sent (ADR 0051).
+One whole plan of a drafted workflow. The first comes from the person's words. Each change asked for in the chat makes the next one, and so does each answer to one of its questions and each read-back after Edit in n8n. Only the newest can be sent (ADR 0051).
 _Avoid_: Version (that is a set-up workflow's)
 
+**Drafted setting**:
+A value a drafted workflow needs, such as its run time, a Jira project, a channel, who says yes on each run, or a write key. Each is filled, guessed or needed, and the card says where a filled one came from: the person's words, a choice, what they typed, or what they typed in n8n. A run time, a Jira project, a channel or an address a notice posts to, the Approvers and a write key are never guessed (ADR 0051).
+_Avoid_: Parameter (that is a block's, in n8n)
+
+**Drafted question**:
+What the draft card asks to fill one setting still needed, one at a time, in code's own words, with two to four choices from the team's own data and, where code can read it, a box to type in. Each answer makes the next revision, with no model (ADR 0051).
+_Avoid_: Clarifying question (that is the Planner's)
+
+**Edit in n8n**:
+Opening a drafted workflow in your own n8n space, without its keys, to change it there. Done in n8n reads it back as the next revision and checks it again. Only an Operator with n8n access can (ADR 0051).
+_Avoid_: Open in n8n (that is a set-up workflow's)
+
 **Set-up approval**:
-An Approver's yes to set up one revision of a drafted workflow, bound to its digest. Any Approver who is not a party decides it: not the person who described it, changed it or sent it. It comes to Teams with a link to its own page (ADR 0051).
+An Approver's yes to set up one revision of a drafted workflow, bound to its digest. Any Approver who is not a party decides it: not the person who described it, changed it, answered its questions or sent it. It comes to Teams with a link to its own page, and is in Needs you for each Approver who may decide it (ADR 0051).
 _Avoid_: Approval (that is a run's yes to a write)
 
 **Workflow report**:

@@ -3,17 +3,22 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 
 from platform_api.auth import OPERATORS_ONLY, SIGNED_IN, CurrentPrincipal
-from platform_api.builder.drafted_workflows import (
+from platform_api.builder.drafted_views import (
+    DraftAnswerIn,
     DraftChangeIn,
-    DraftedWorkflows,
     DraftedWorkflowView,
+    DraftInN8nIn,
     DraftSendIn,
     DraftWorkflowIn,
+    SetUpApprovalView,
+    SetUpDecisionIn,
+)
+from platform_api.builder.drafted_workflows import (
+    DraftedWorkflows,
     Forbidden,
     NotFound,
     Refused,
-    SetUpApprovalView,
-    SetUpDecisionIn,
+    Unavailable,
 )
 from platform_api.builder.http import operators_only
 from platform_api.shared import Principal
@@ -44,6 +49,10 @@ def _refused(answer: object) -> None:
             raise HTTPException(404, NO_SUCH_DRAFT)
         case Refused(words):
             raise HTTPException(409, words)
+        case Forbidden(words):
+            raise HTTPException(403, words)
+        case Unavailable(words):
+            raise HTTPException(503, words)
         case _:
             pass
 
@@ -85,7 +94,7 @@ async def start_drafting(
 async def read_drafted(
     drafted_id: str, principal: CurrentPrincipal, drafted: CurrentDrafted
 ) -> DraftedWorkflowView:
-    view = await drafted.view(drafted_id)
+    view = await drafted.view(drafted_id, principal)
     if view is None:
         raise HTTPException(404, NO_SUCH_DRAFT)
     return view
@@ -125,6 +134,71 @@ async def send_drafted(
     drafted_id: str, body: DraftSendIn, principal: Drafter, drafted: CurrentDrafted
 ) -> DraftedWorkflowView:
     answer = await drafted.send(drafted_id, principal, body.revision)
+    _refused(answer)
+    assert isinstance(answer, DraftedWorkflowView)
+    return answer
+
+
+@router.post(
+    "/drafted-workflows/{drafted_id}/answers",
+    description="An answer to the drafted workflow's question, or a guessed setting changed: one "
+    "of the question's choices, or what the person typed (ADR 0051, section 5). Code reads it and "
+    "lays out the next revision, with no model. A run time, a Jira project, a channel, an "
+    "address, the Approvers and a write key are never guessed: a typed one counts only when code "
+    "reads it and finds it in the team's own data. 409, with the words the card shows, when code "
+    "reads nothing in it, when it is shaped like a key, when the revision named is not the newest, "
+    "or while it is open in n8n or isn't a draft. The person who answers becomes a party to its "
+    "set-up approval.",
+    responses={**OPERATORS_ONLY, 404: error_response(NO_SUCH_DRAFT)},
+)
+async def answer_drafted(
+    drafted_id: str, body: DraftAnswerIn, principal: Drafter, drafted: CurrentDrafted
+) -> DraftedWorkflowView:
+    answer = await drafted.answer(drafted_id, principal, body)
+    _refused(answer)
+    assert isinstance(answer, DraftedWorkflowView)
+    return answer
+
+
+@router.post(
+    "/drafted-workflows/{drafted_id}/n8n",
+    description="Edit in n8n: puts the newest revision in your own n8n space, without its keys, "
+    "and answers where it is in n8n's editor. Only an Operator with n8n access can. Nothing else "
+    "changes it until Done in n8n reads it back. Opening it again changes nothing. 403 without "
+    "n8n access, 409 while it isn't a draft or staff access to n8n is off, 503 when n8n didn't "
+    "take it.",
+    responses={
+        **OPERATORS_ONLY,
+        404: error_response(NO_SUCH_DRAFT),
+        503: error_response("n8n didn't take it"),
+    },
+)
+async def edit_drafted_in_n8n(
+    drafted_id: str, body: DraftInN8nIn, principal: Drafter, drafted: CurrentDrafted
+) -> DraftedWorkflowView:
+    answer = await drafted.open_in_n8n(drafted_id, principal, body.revision)
+    _refused(answer)
+    assert isinstance(answer, DraftedWorkflowView)
+    return answer
+
+
+@router.post(
+    "/drafted-workflows/{drafted_id}/n8n/done",
+    description="Done in n8n: reads what n8n holds back as a new revision, laid out and checked "
+    "again, and takes it out of your n8n space. A value typed in n8n counts as filled once it "
+    "passes the same check as in the chat, and a placeholder left there is still needed. Only "
+    "the person who opened it can. 409, with what n8n holds that the platform can't read back, "
+    "and it stays in n8n to put right. 503 when n8n didn't show it.",
+    responses={
+        **OPERATORS_ONLY,
+        404: error_response(NO_SUCH_DRAFT),
+        503: error_response("n8n didn't show it"),
+    },
+)
+async def done_drafted_in_n8n(
+    drafted_id: str, principal: Drafter, drafted: CurrentDrafted
+) -> DraftedWorkflowView:
+    answer = await drafted.done_in_n8n(drafted_id, principal)
     _refused(answer)
     assert isinstance(answer, DraftedWorkflowView)
     return answer
