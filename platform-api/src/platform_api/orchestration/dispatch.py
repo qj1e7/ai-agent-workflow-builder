@@ -172,6 +172,20 @@ class ApprovalNotice:
     owner_name: str = ""
 
 
+@dataclass(frozen=True)
+class SetUpNotice:
+    """What the card for a set-up approval shows (ADR 0051): the workflow's name and In short in
+    code's own words, never a model's, who sent it, and who can't decide. No token or key."""
+
+    approval_id: ApprovalId
+    name: str
+    in_short: str
+    sent_by: str
+    link: str
+    open_url: str
+    not_deciding: tuple[str, ...] = ()
+
+
 Identity = NewType("Identity", str)
 PRACTICE: Final = Identity("practice")
 
@@ -188,9 +202,11 @@ class MessageRef:
     identity: Identity
 
 
-type OutcomeVerdict = Literal["approved", "declined", "cancelled", "closed"]
+type OutcomeVerdict = Literal["approved", "declined", "cancelled", "closed", "replaced", "expired"]
 """cancelled: the workflow was deleted before an answer (ENGINE-PLAN D7). closed: an update
-ended the shared run workflow the run waited in (E11)."""
+ended the shared run workflow the run waited in (E11). replaced: a new revision of a drafted
+workflow replaced the one sent for its set-up approval. expired: nobody answered a set-up
+approval in time (ADR 0024)."""
 
 
 @dataclass(frozen=True)
@@ -203,6 +219,8 @@ class ApprovalOutcome:
     """On a decline, who said yes to the steps before it, in step order."""
     reason: str | None = None
     """On a decline, the reason the Approver gave, if any."""
+    nothing: str = "Nothing was written."
+    """What a decline left undone, in words to show."""
 
 
 class ApprovalChannel(Protocol):
@@ -215,6 +233,18 @@ class ApprovalChannel(Protocol):
     def identity(self) -> Identity: ...
 
     async def announce(self, notice: ApprovalNotice) -> MessageRef: ...
+
+    async def update(self, ref: MessageRef, outcome: ApprovalOutcome) -> None: ...
+
+
+class SetUpChannel(Protocol):
+    """Where set-up approvals are posted: the same Teams channel as a run's, or its practice
+    copy. An adapter raises DispatchFailure when the post fails."""
+
+    @property
+    def name(self) -> str: ...
+
+    async def announce_set_up(self, notice: SetUpNotice) -> MessageRef: ...
 
     async def update(self, ref: MessageRef, outcome: ApprovalOutcome) -> None: ...
 

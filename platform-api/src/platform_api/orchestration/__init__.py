@@ -90,7 +90,17 @@ from platform_api.orchestration.agents import (
     WorkflowNotDrafted,
     WorkflowPlan,
 )
-from platform_api.orchestration.approvals import AnyApprover, ApprovalPolicy, ApprovalStep
+from platform_api.orchestration.approvals import (
+    AnyApprover,
+    ApprovalPolicy,
+    ApprovalStep,
+    Approved,
+    Closed,
+    Declined,
+    Ended,
+    Refusal,
+    Verdict,
+)
 from platform_api.orchestration.cards import (
     INPUT_KINDS,
     KIND_EXAMPLES,
@@ -197,6 +207,21 @@ from platform_api.orchestration.schedule_store import (
     held_words,
 )
 from platform_api.orchestration.service import RunDetail
+from platform_api.orchestration.setup_approvals import (
+    DECLINE_REASONS,
+    ApprovedSetUp,
+    DeclineReason,
+    NoSuchRequest,
+    SetUpApprovals,
+    SetUpAsk,
+    SetUpFinished,
+    SetUps,
+    SetUpState,
+    TryAgain,
+    set_up_link,
+)
+from platform_api.orchestration.setup_approvals import Decided as SetUpDecided
+from platform_api.orchestration.setup_approvals import DecisionRefused as SetUpRefused
 from platform_api.orchestration.spec import (
     CardRun,
     CardsTask,
@@ -281,6 +306,25 @@ from platform_api.orchestration.workflow_digest import workflow_digest
 from platform_api.orchestration.write_actions import Binding
 
 __all__ = [
+    "Approved",
+    "Closed",
+    "Declined",
+    "Ended",
+    "Refusal",
+    "Verdict",
+    "DECLINE_REASONS",
+    "ApprovedSetUp",
+    "DeclineReason",
+    "NoSuchRequest",
+    "SetUpApprovals",
+    "SetUpAsk",
+    "SetUpFinished",
+    "SetUps",
+    "SetUpState",
+    "TryAgain",
+    "set_up_link",
+    "SetUpDecided",
+    "SetUpRefused",
     "DrafterFacts",
     "KeyPasted",
     "PlanBlock",
