@@ -6,8 +6,7 @@ reading always runs first. A name on the watchlist sends the typed words to the 
 lane. Any other plausible name becomes the offer to watch it, which the person must tap, only when
 the first reading names it as software. A message that only asks to watch "it", as "keep track of
 it", is the offer to watch the one software the turn before named, held to a plausible name, which
-the person must tap too. After a free reply that is the software its request named, in the
-request's own words. Everything else keeps the first answer."""
+the person must tap too. Everything else keeps the first answer."""
 
 import re
 from dataclasses import dataclass
@@ -15,15 +14,12 @@ from typing import Final
 
 from agent_runtime.abilities import change_verbs_in, commands_a_change, software_name
 from agent_runtime.contract import AnswerRequest, PlannerAnswer, WatchlistAnswer
-from agent_runtime.planner import visible_words, whole_word_of
+from agent_runtime.planner import visible_words
 
 FOLLOWS: Final = frozenset({"question", "watchlist"})
 NAMES_ONE_SOFTWARE: Final = frozenset({"watchlist", "cant", "question", "remove_software"})
 """The answers whose one software the Portal sends as `previous.software`: a watchlist offer, a
 can't with one as its alternative, a question about one software, and a removal of one name."""
-FREE_REPLIES: Final = frozenset({"reply", "reply_clarify"})
-"""A free reply and a clarifying one, whose `previous.software` is the one software their request
-named (`with_software_named`), so it must be in that request's words."""
 ASKED_WHICH_SOFTWARE: Final = "which_software"
 FOLLOW_UP: Final = re.compile(
     r"^\s*(?:and|what\s+about|how\s+about)\s+(?P<name>[^?]{1,60}?)\s*\??\s*$", re.IGNORECASE
@@ -109,17 +105,12 @@ def named_when_asked(request: AnswerRequest) -> str | None:
 
 def named_before(request: AnswerRequest) -> str | None:
     """The one software the turn before named, for a message that only asks to watch "it". Only
-    an answer that names one software carries it, and a free reply carries the one its request
-    named, found again in that request's words. The name is client input, so it is held to what
+    an answer that names one software carries it. The name is client input, so it is held to what
     a typed name must be (`plain_software`)."""
     earlier = request.previous
-    if earlier is None or earlier.software is None:
+    if earlier is None or earlier.software is None or earlier.kind not in NAMES_ONE_SOFTWARE:
         return None
-    if earlier.kind in FREE_REPLIES:
-        said = whole_word_of(earlier.request, earlier.software)
-    else:
-        said = earlier.software if earlier.kind in NAMES_ONE_SOFTWARE else None
-    return None if said is None else plain_software(said)
+    return plain_software(earlier.software)
 
 
 def plain_software(said: str) -> str | None:

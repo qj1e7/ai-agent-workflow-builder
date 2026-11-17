@@ -875,6 +875,8 @@ type WatchDay = Literal[
 
 
 CLOCK_PATTERN: Final = r"^(?:[01]\d|2[0-3]):[0-5]\d$"
+SOFTWARE_LIMIT: Final = 80
+"""The longest software name one turn hands the next (`previous.software`)."""
 
 
 class WatchlistScheduleFact(WireModel):
@@ -922,7 +924,7 @@ class PreviousTurn(WireModel):
     request: str = Field(max_length=2000, description="What the person typed, or the chip's words.")
     software: str | None = Field(
         default=None,
-        max_length=80,
+        max_length=SOFTWARE_LIMIT,
         description="The one software the Planner named in its answer, or for a free reply the "
         "one its request named, which must be in the request's words. Client input: a message "
         "that only asks to watch it, such as keep track of it, gets the offer to watch this "
@@ -1250,7 +1252,7 @@ class FreeReplyAnswer(WireModel):
     )
     software: str | None = Field(
         default=None,
-        max_length=80,
+        max_length=SOFTWARE_LIMIT,
         description="The one software the message named, as it wrote it: code finds the "
         "reading's software in the message's words, never in the reply. The Portal sends it back "
         "as previous.software, so a next message such as keep track of it means it. Left out "

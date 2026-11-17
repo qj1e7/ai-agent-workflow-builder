@@ -297,6 +297,13 @@ def test_a_watch_of_it_offers_the_turn_befores_software_whatever_the_reading_nam
         named_node_js(kind="reply", software=None),
         named_node_js(kind="reply_clarify", software="Redis"),
         PreviousTurn(request="what is the newest JS runtime?", software="Node.js", kind="reply"),
+        PreviousTurn(request="is redis or kafka newer?", software="redis", kind="reply"),
+        PreviousTurn(
+            request="what does the Daily digest workflow do?", software="Daily digest", kind="reply"
+        ),
+        PreviousTurn(
+            request="open tickets in the Payments project", software="Payments", kind="reply"
+        ),
         named_node_js(kind="setup_card"),
         named_node_js(kind="which_software"),
     ],
@@ -339,6 +346,7 @@ def test_a_watch_of_it_after_an_explanation_never_explains_it():
 
 
 LATEST_NODE_JS = "what is the latest node js?"
+LONG_NAME = "org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBeanExtendedX"
 CLEAN = Verdict(says_it_happened=False, skips_a_yes=False, claims_unbuilt=False)
 REPLIES = {
     "answer": ReplyEnvelope(
@@ -367,11 +375,14 @@ def after(task: str, reply: FreeReplyAnswer) -> PreviousTurn:
     return PreviousTurn(request=task, software=reply.software, answer=reply.text, kind=kind)
 
 
+@pytest.mark.parametrize("task", [LATEST_NODE_JS, "what is the latest node  js?"])
 @pytest.mark.parametrize("form", ["answer", "clarify"])
-def test_keep_track_of_it_after_a_free_reply_watches_the_software_its_message_named(form: str):
-    reply = replied(LATEST_NODE_JS, reading("abilities", software="node js"), form)
+def test_keep_track_of_it_after_a_free_reply_watches_the_software_its_message_named(
+    form: str, task: str
+):
+    reply = replied(task, reading("abilities", software="node js"), form)
     assert reply.software == "node js"
-    out, _ = run("keep track of it", which("keep track of"), after(LATEST_NODE_JS, reply))
+    out, _ = run("keep track of it", which("keep track of"), after(task, reply))
     named, _ = run("keep track of node js", which("keep track of", software="node js"), None)
     assert isinstance(out, Answered) and isinstance(named, Answered)
     assert out.answer == named.answer == WatchlistAnswer(word="keep track of", software="node js")
@@ -386,13 +397,34 @@ def test_keep_track_of_it_after_a_free_reply_watches_the_software_its_message_na
         ("what is the latest node js and redis?", "node js and redis"),
         ("tell me about Jira", "Jira"),
         ("tell me about MOCK-12", "MOCK-12"),
+        ("is redis or kafka newer?", "redis"),
+        ("is redis or kafka newer?", "kafka"),
+        ("compare redis and kafka", "redis"),
+        ("what is the latest node js and redis?", "node js"),
+        ("redis vs kafka: which is newer?", "kafka"),
+        ("what is new in redis, kafka?", "redis"),
+        ("what does the Daily digest workflow do?", "Daily digest"),
+        ("how many open tickets in the Payments project?", "Payments"),
+        (f"what is the latest {LONG_NAME}?", LONG_NAME),
     ],
 )
 def test_a_free_reply_carries_no_software_its_message_does_not_name_as_one_plain_name(
     task: str, said: str | None
 ):
+    """Held as a watch typed in one turn is: one name, no ticket, project or workflow, and no
+    longer than the field, so the reply stays valid and "it" next is asked."""
     reply = replied(task, reading("abilities", software=said))
     assert reply.software is None
+    assert FreeReplyAnswer.model_validate(reply.model_dump()) == reply
     out, _ = run("keep track of it", which("keep track of"), after(task, reply))
     assert isinstance(out, Answered)
     assert out.answer == WhichSoftwareAnswer(word="keep track of")
+
+
+def test_track_them_after_a_reply_about_two_software_asks_which_and_drops_neither():
+    task = "is redis or kafka newer?"
+    reply = replied(task, reading("abilities", software="redis"))
+    out, _ = run("track them", which("track"), after(task, reply))
+    assert isinstance(out, Answered)
+    assert out.answer == WhichSoftwareAnswer(word="track")
+    assert [(p.text, p.mark) for p in out.parts] == [("track them", "question")]

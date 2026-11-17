@@ -42,6 +42,7 @@ from agent_runtime.abilities import (
     words,
 )
 from agent_runtime.contract import (
+    SOFTWARE_LIMIT,
     AbilitiesAnswer,
     Answered,
     AnswerRequest,
@@ -716,12 +717,20 @@ def _watch_verb(read: TaskRead, request: str) -> str | None:
     said = " ".join(visible_words(read.watchlist_word).strip(QUOTES).casefold().split())
     if not read.belongs_on_watchlist or said not in WATCH_VERBS:
         return None
-    software = _software_of(read, request)
+    if _watchable(request, _software_of(read, request)) is None:
+        return None
+    return whole_word_of(request, said)
+
+
+def _watchable(request: str, software: str | None) -> str | None:
+    """The software, when a watch of it is all the request can mean: no ticket key or ticket
+    field, in a request that names no ticket, project, person or workflow. A watch typed in one
+    turn and the software a free reply carries are held to this one check."""
     if software is None or _TICKET_KEY.fullmatch(software) or names_a_ticket_field(software):
         return None
     if _TICKET_KEY.search(request) or _NOT_A_WATCH.search(_without_systems(request)):
         return None
-    return whole_word_of(request, said)
+    return software
 
 
 def _without_systems(request: str) -> str:
@@ -1213,7 +1222,7 @@ def watch_of_it(read: TaskRead | None, request: AnswerRequest) -> WatchlistAnswe
     so it must name no ticket and no yes, the reading must ask to skip no yes, and the person
     still taps Watch it. With no software before, which software is asked as before."""
     verb = watches_it(request.task)
-    named = named_before(request)
+    named = _named_before(request)
     if verb is None or named is None or not _names_no_ticket_or_yes(named):
         return None
     if read is not None and read.skips_the_yes.whose != "nobody":
@@ -1225,15 +1234,53 @@ def _names_no_ticket_or_yes(name: str) -> bool:
     return _TICKET_KEY.search(name.upper()) is None and not names_a_yes(name)
 
 
+FREE_REPLIES: Final = frozenset({"reply", "reply_clarify"})
+"""The kinds the Portal sends for a free reply and a clarifying one (`previous.kind`)."""
+_JOINS: Final = r"(?:,|&|/|\band\b|\bor\b|\bvs\b\.?|\bversus\b)"
+
+
+def _named_before(request: AnswerRequest) -> str | None:
+    """The one software the turn before named. After a free reply, the software it carried, found
+    again in its request's words and held as on the turn it came from (`_reply_software`)."""
+    earlier = request.previous
+    if earlier is None or earlier.kind not in FREE_REPLIES:
+        return named_before(request)
+    if earlier.software is None:
+        return None
+    words = _single_spaced(earlier.request)
+    return _reply_software(words, whole_word_of(words, _single_spaced(earlier.software)))
+
+
 def with_software_named(reply: FreeReplyAnswer, read: TaskRead, request: str) -> FreeReplyAnswer:
-    """The free reply with the one software its request named, as the request wrote it, so a
-    next message that only asks to watch "it" means it (`watch_of_it`). Code finds the reading's
-    software in the request's words, as for a watch, and never takes a name from the reply."""
-    said = _software_of(read, request)
-    named = None if said is None else plain_software(said)
-    if named is not None and not _names_no_ticket_or_yes(named):
-        named = None
-    return reply.model_copy(update={"software": named})
+    """The free reply with the one software its request named, so a next message that only asks
+    to watch "it" means it (`watch_of_it`). Code finds the reading's software in the request's
+    words, as for a watch, and never takes a name from the reply."""
+    software = _reply_software(request, _software_of(read, request))
+    return FreeReplyAnswer.model_validate({**dict(reply), "software": software})
+
+
+def _reply_software(request: str, said: str | None) -> str | None:
+    """The software a free reply carries, from `said`, the request's own words for it: held as a
+    watch typed in one turn is (`_watchable`), a plain name of at most `SOFTWARE_LIMIT`
+    characters, and the only name the request gives. A name joined to another by and, or, vs or
+    a comma is one of several, so "it" next is asked, never one of them watched alone. Joined
+    only to a watch of "it", as "add Node Js, keep track of it", it is still the one name."""
+    request = _single_spaced(request)
+    software = _watchable(request, said)
+    name = None if software is None else plain_software(software)
+    if name is None or len(name) > SOFTWARE_LIMIT or not _names_no_ticket_or_yes(name):
+        return None
+    at = re.search(rf"(?<!\w){re.escape(name)}(?!\w)", request, re.IGNORECASE)
+    if at is None:
+        return None
+    before = re.search(rf"\w\s*{_JOINS}\s*$", request[: at.start()], re.IGNORECASE)
+    after = re.match(rf"\s*{_JOINS}\s*(?P<rest>\w.*)$", request[at.end() :], re.IGNORECASE)
+    another = after is not None and watches_it(after.group("rest")) is None
+    return None if before or another else name
+
+
+def _single_spaced(words: str) -> str:
+    return " ".join(words.split())
 
 
 WHY: Final = re.compile(r"\bwhy\b|\bwent\s+wrong\b|\bwhat\s+happened\b", re.IGNORECASE)
