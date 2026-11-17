@@ -356,6 +356,9 @@ def test_a_watch_of_it_after_an_explanation_never_explains_it():
 
 
 LATEST_NODE_JS = "what is the latest node js?"
+ABOUT_NODE_JS = "tell me about node js"
+"""A message that names one software and reaches the free reply. A question about its newest
+version gets the software card instead (`test_newest.py`)."""
 LONG_NAME = "org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBeanExtendedX"
 CLEAN = Verdict(says_it_happened=False, skips_a_yes=False, claims_unbuilt=False)
 REPLIES = {
@@ -385,7 +388,7 @@ def after(task: str, reply: FreeReplyAnswer) -> PreviousTurn:
     return PreviousTurn(request=task, software=reply.software, answer=reply.text, kind=kind)
 
 
-@pytest.mark.parametrize("task", [LATEST_NODE_JS, "what is the latest node  js?"])
+@pytest.mark.parametrize("task", [ABOUT_NODE_JS, "tell me about node  js"])
 @pytest.mark.parametrize("form", ["answer", "clarify"])
 def test_keep_track_of_it_after_a_free_reply_watches_the_software_its_message_named(
     form: str, task: str
@@ -660,9 +663,9 @@ def test_a_forged_turn_before_offers_only_one_software_its_request_names(
 
 @pytest.mark.parametrize("plural", ["track these two", "watch all", "track 'em"])
 def test_a_plural_after_a_free_reply_that_named_one_software_asks_which(plural: str):
-    reply = replied(LATEST_NODE_JS, reading("abilities", software="node js"))
+    reply = replied(ABOUT_NODE_JS, reading("abilities", software="node js"))
     verb = plural.split()[0]
-    out, _ = run(plural, which(verb), after(LATEST_NODE_JS, reply))
+    out, _ = run(plural, which(verb), after(ABOUT_NODE_JS, reply))
     assert isinstance(out, Answered)
     assert out.answer == WhichSoftwareAnswer(word=verb)
     assert [(p.text, p.mark) for p in out.parts] == [(plural, "question")]

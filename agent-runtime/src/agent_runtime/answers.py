@@ -97,6 +97,7 @@ from agent_runtime.follow_ups import (
     watch_offer_of,
 )
 from agent_runtime.free_reply import dead_end, reply_to
+from agent_runtime.newest import NEWEST, asks_for_the_newest
 from agent_runtime.parts import (
     HOW_OFTEN,
     NOT_FOLLOWED,
@@ -152,7 +153,7 @@ from agent_runtime.reading import (
     turns_round,
     without_runs_by_itself,
 )
-from agent_runtime.removals import removal_of
+from agent_runtime.removals import name_key, removal_of
 from agent_runtime.summary import ChatFor
 from agent_runtime.tools import tools_text
 
@@ -780,9 +781,16 @@ def _verb_in(request: str) -> str | None:
 
 def _other_source(read: TaskRead, request: str) -> CantAnswer | None:
     """A can't for a release source other than GitHub, with the watch offered when a software
-    name was read."""
+    name was read. A word that asks what is newest asks about software too, as "what's new on
+    pypi?"."""
     source = other_release_source(request)
-    word = _watch_verb(read, request) or _verb_in(request) or release_word_in(request)
+    newest = NEWEST.search(request)
+    word = (
+        _watch_verb(read, request)
+        or _verb_in(request)
+        or release_word_in(request)
+        or (None if newest is None else newest.group(0))
+    )
     asks_for_software = word is not None or re.search(r"\bsoftware\b", request, re.IGNORECASE)
     if source is None or not asks_for_software:
         return None
@@ -838,6 +846,50 @@ def _watchlist(
     changes = request if verb is None else _without(request, f"{verb} {software}")
     rows = _watch_rows(read, task, request, system_row, changes, schedule)
     return CantAnswer(cant=rows, alternative=watching) if rows else watching
+
+
+QUESTIONS_OF_ANY_KIND: Final = ("none", "abilities")
+"""The readings that may be a question about software. The others ask about the person's own
+workflows or what waits for them, and keep those answers."""
+
+
+def _newest_of(read: TaskRead, request: str, facts: PlannerFacts | None) -> WatchlistAnswer | None:
+    """The software card for a question that asks only for the newest version of the one software
+    the reading names, as "what's new in node js?". Code checks the question's words itself
+    (`asks_for_the_newest`); the model only names the software. A reading that skips anyone's yes
+    or attention, reads a question about the person's workflows or a ticket search, or a request
+    that names one of their workflows, gets no card. The software is held as a free reply's is
+    (`_reply_software`), so a second name is never watched with it. Software the watchlist holds
+    under another spelling, as "Node.js" for "node js", is named as the watchlist names it, so
+    the answer is about the one it holds."""
+    if read.skips_the_yes.whose != "nobody" or read.asks_about not in QUESTIONS_OF_ANY_KIND:
+        return None
+    if read.workflow_words or any((read.search, read.ticket, read.place)):
+        return None
+    workflows = facts.workflow_names() if facts is not None else []
+    if any(whole_word_of(request, name) for name in workflows):
+        return None
+    software = _reply_software(request, _named_in(read, request))
+    word = None if software is None else asks_for_the_newest(request, software)
+    if software is None or word is None:
+        return None
+    held = facts.watchlist if facts is not None else None
+    same = {w.name.strip() for w in held or [] if name_key(w.name) == name_key(software)}
+    return WatchlistAnswer(word=word, software=same.pop() if len(same) == 1 else software)
+
+
+def _named_in(read: TaskRead, request: str) -> str | None:
+    """The reading's software as the request wrote it, else the leading word of the name the model
+    wrote, when the request writes it whole, as "node" for "Node.js" or "spring" for "Spring
+    Boot": the model often writes the official name for a short one. Only the leading word, so
+    "server" of "SQL Server" is never taken, and only from a name no longer than a software name
+    can be."""
+    found = _software_of(read, request)
+    said = software_name(read.software)
+    if found is not None or said is None or len(said) > SOFTWARE_LIMIT:
+        return found
+    leading = re.match(r"[^\W_]{2,}", said)
+    return None if leading is None else whole_word_of(request, leading.group(0))
 
 
 def _watchlist_holds(schedule: str | None) -> bool:
@@ -1055,10 +1107,11 @@ def _answer_of(
     """The answer code decides from the model's reading: refused, by the word rule, by the
     model's answer to the skip question, or by words naming a yes that nothing explains in a
     request that writes; then a workflow to explain, software to take off the watchlist, a
-    change to a workflow the person has, then the watchlist, a question about the person's
-    workflows, then the structures. A request the model called a task is always read against its
-    structures, so words they do not hold come back; "abilities" is the catch-all, so a request
-    that asks for a change wins over it: a planted "close all tickets" comes back as a can't.
+    change to a workflow the person has, then a question about the newest version of one software,
+    the watchlist, a question about the person's workflows, then the structures. A request the
+    model called a task is always read against its structures, so words they do not hold come
+    back; "abilities" is the catch-all, so a request that asks for a change wins over it: a
+    planted "close all tickets" comes back as a can't.
     `facts` name the person's workflows, so a word in a name is never a command, and say when the
     Software watchlist checks, so a time a watch request names that matches it is no cross."""
     watch_schedule = facts.watchlist_schedule if facts is not None else None
@@ -1119,6 +1172,9 @@ def _answer_of(
             return refused
     if skip.unverified is not None:
         return _refused(text, skip.unverified)
+    newest = _newest_of(read, text, facts)
+    if newest is not None:
+        return newest
     if read.belongs_on_watchlist:
         answer = _watchlist(read, task, text, watch_schedule)
         if answer is not None:
