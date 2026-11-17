@@ -3,6 +3,7 @@ build step 6): the words go to the drafter unchanged, code lays the plan out and
 revision is sent only when nothing is needed and nothing is flagged, any Approver who is not a
 party approves that exact digest, and only that digest is set up as a Draft."""
 
+import asyncio
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
 from copy import deepcopy
@@ -318,6 +319,29 @@ async def test_the_same_idempotency_key_answers_the_draft_it_started(lab: Lab):
 
     assert first.json()["drafted_id"] == again.json()["drafted_id"]
     assert len(lab.drafter.asked) == 1
+
+
+async def test_settle_returns_when_a_draft_ended_before_its_clean_up_ran(
+    lab: Lab, monkeypatch: pytest.MonkeyPatch
+):
+    # A draft task that has ended but whose done callback, which takes it off the running set,
+    # hasn't run yet. gather() on futures that are all done completes without giving the loop a
+    # turn, so a settle that waits while the set is non-empty spun here for good (CI, 17 Nov).
+    ended = asyncio.get_running_loop().create_future()
+    ended.set_result(None)
+    lab.drafted._running.add(ended)  # pyright: ignore[reportPrivateUsage, reportArgumentType]
+    real_gather = asyncio.gather
+    gathers = 0
+
+    def counted_gather(*futures: Any, return_exceptions: bool = False) -> Any:
+        nonlocal gathers
+        gathers += 1
+        assert gathers < 100, "settle keeps gathering drafts that have already ended"
+        return real_gather(*futures, return_exceptions=return_exceptions)
+
+    monkeypatch.setattr(asyncio, "gather", counted_gather)
+
+    await lab.drafted.settle()
 
 
 async def test_a_change_sends_the_plan_as_it_stands_and_replaces_a_waiting_approval(lab: Lab):
