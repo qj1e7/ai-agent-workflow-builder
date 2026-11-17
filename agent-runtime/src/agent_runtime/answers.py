@@ -662,9 +662,12 @@ WATCH_VERBS: Final = (
 says it and names the software."""
 _VERB_PATTERN: Final = "|".join(r"\s+".join(v.split()) for v in WATCH_VERBS)
 _IT: Final = r"it|this(?:\s+one)?|that(?:\s+one)?"
+_FEW: Final = r"two|three|four|five"
 _THEM: Final = (
-    r"them(?:\s+all|\s+both)?|those(?:\s+ones)?|these(?:\s+ones)?|both(?:\s+of\s+them)?|"
-    r"all(?:\s+of)?\s+(?:them|those|these)|each\s+of\s+them|the\s+two(?:\s+of\s+them)?"
+    r"them(?:\s+(?:all|both))?|['’]?em|"
+    rf"(?:those|these)(?:\s+(?:ones|{_FEW}))?|both(?:\s+of\s+them)?|"
+    rf"all(?:\s+(?:of\s+)?(?:them|those|these|{_FEW}))?|each(?:\s+(?:one|of\s+them))?|"
+    rf"the\s+(?:{_FEW})(?:\s+of\s+them)?"
 )
 """Words that point at more than one thing, so they can't mean one software."""
 _POLITE_TAIL: Final = r"(?:\s+(?:please|pls|for\s+me|for\s+us|too|as\s+well|also|now))*"
@@ -1267,20 +1270,35 @@ def _names_no_ticket_or_yes(name: str) -> bool:
 
 FREE_REPLIES: Final = frozenset({"reply", "reply_clarify"})
 """The kinds the Portal sends for a free reply and a clarifying one (`previous.kind`)."""
-_JOIN_WORDS: Final = (
-    r"and|or|nor|vs|versus|than|with|plus|then|as\s+well\s+as|compared\s+(?:to|with)"
+_TOKEN: Final = re.compile(r"[^\W_][\w.#-]*|[^\w\s]")
+"""A word, as "node.js" or "c#", or one mark. Each match is greedy with nothing after it, so the
+text is split in one pass and never backtracks."""
+_JOIN_MARKS: Final = frozenset(",;&/+")
+_JOIN_WORDS: Final = words("and or nor vs versus than with plus then against besides")
+_JOIN_PAIRS: Final = frozenset(
+    {
+        ("instead", "of"),
+        ("rather", "than"),
+        ("what", "about"),
+        ("compared", "to"),
+        ("compared", "with"),
+    }
 )
-_JOIN: Final = re.compile(rf"[,;&/+]|\b(?:{_JOIN_WORDS})\b", re.IGNORECASE)
-_GAP: Final = rf"(?:[^\w]|\b(?:{_JOIN_WORDS}|the|a|an)\b)*"
-"""What may stand between two joined names: marks, quotes, joins and articles."""
-_NAME_WORD: Final = r"[A-Za-z0-9][\w.+#-]*"
-_AFTER_A_JOIN: Final = re.compile(
-    rf"(?:[,;&/+]|\b(?:{_JOIN_WORDS})\b){_GAP}(?P<word>{_NAME_WORD})", re.IGNORECASE
+_ADDED_WORDS: Final = words("too also")
+_ARTICLES: Final = words("the a an")
+_NOT_NAMES: Final = words(
+    "is are was were be been am do does did has have had can could will would shall should may "
+    "might must how what when where why which who whom whose i me my we us our you your it its "
+    "they them their he she him her this that these those briefly now yet still please again "
+    "here there today soon really actually ever already very so not no yes ok okay hi hello hey "
+    "thanks"
 )
-_JOINED_BEFORE: Final = re.compile(rf"(?P<word>{_NAME_WORD})(?P<gap>{_GAP})$", re.IGNORECASE)
-_ADDED: Final = re.compile(
-    rf"(?P<word>{_NAME_WORD})[^\w]*\b(?:too|also|as\s+well)\b(?!\s+as\b)", re.IGNORECASE
-)
+"""Common words that never name a software after a join: auxiliaries, question words, pronouns
+and plain adverbs, so "node js and should I upgrade?" names one software. Never a list of
+software."""
+
+type _Piece = tuple[str, str, int]
+"""What a token is (join, added, article, mark or word), its words, and where it starts."""
 
 
 def _named_before(request: AnswerRequest) -> str | None:
@@ -1320,25 +1338,79 @@ def _reply_software(request: str, said: str | None) -> str | None:
 
 
 def _names_another(text: str, at: tuple[int, int]) -> bool:
-    """Whether the text names a second software beside the one at `at`: a plain name after a
-    join (and, or, than, with, plus, then, as well as, a comma, a semicolon, a plus sign) anywhere
-    in it, a plain name joined just before this one, or a name added with too, also or as well.
-    Marks, quotes and articles may stand between. A plain name is one `plain_software` keeps, so
-    "how" in "node js and how do I add it" names none."""
+    """Whether the text names a second software beside the one at `at`. One is a plain name after
+    a join (and, or, than, with, plus, then, against, besides, as well as, instead of, rather
+    than, what about, compared to, a comma, a semicolon, an ampersand, a slash or a plus sign)
+    anywhere in the text. Another is a plain name joined just before this one. A third is a name
+    added with too, also or as well, this one included. Marks, quotes and articles may stand
+    between. A plain name is a word `plain_software` keeps that is not a common word
+    (`_NOT_NAMES`). One pass over the tokens, so the time is linear in the text."""
     start, end = at
+    pieces = _pieces(text)
+    kept: dict[str, bool] = {}
 
-    def other(found: re.Match[str]) -> bool:
-        inside = start <= found.start("word") < end
-        return not inside and plain_software(found.group("word")) is not None
+    def plain(word: str) -> bool:
+        low = word.casefold().rstrip(".")
+        if low not in kept:
+            kept[low] = low not in _NOT_NAMES and plain_software(word.rstrip(".")) is not None
+        return kept[low]
 
-    if any(other(found) for found in _AFTER_A_JOIN.finditer(text)):
-        return True
-    before = _JOINED_BEFORE.search(text[:start])
-    if before is not None and _JOIN.search(before.group("gap")) and other(before):
-        return True
-    return any(
-        start <= found.start("word") < end or other(found) for found in _ADDED.finditer(text)
-    )
+    def other(piece: _Piece) -> bool:
+        kind, word, begins = piece
+        return kind == "word" and not start <= begins < end and plain(word)
+
+    joined = False
+    for piece in pieces:
+        if piece[0] in ("article", "mark"):
+            continue
+        if joined and other(piece):
+            return True
+        joined = piece[0] == "join"
+    first = next((i for i, piece in enumerate(pieces) if piece[2] >= start), len(pieces))
+    joined = False
+    for piece in reversed(pieces[:first]):
+        if piece[0] == "join":
+            joined = True
+        elif piece[0] not in ("article", "mark"):
+            if joined and other(piece):
+                return True
+            break
+    before: _Piece | None = None
+    for piece in pieces:
+        added_to = None if piece[0] != "added" else before
+        if added_to is not None and (start <= added_to[2] < end or other(added_to)):
+            return True
+        if piece[0] != "mark":
+            before = piece if piece[0] == "word" else None
+    return False
+
+
+def _pieces(text: str) -> list[_Piece]:
+    """The text's tokens, each marked as a join, a word that adds (too, also, as well), an
+    article, a mark or a word. Two- and three-word joins, as "instead of" and "as well as", are
+    one piece."""
+    tokens = [(found.group(0), found.start()) for found in _TOKEN.finditer(text)]
+    lows = [word.casefold().rstrip(".") for word, _ in tokens]
+    pieces: list[_Piece] = []
+    i = 0
+    while i < len(tokens):
+        word, begins = tokens[i]
+        low, two, three = lows[i], tuple(lows[i : i + 2]), tuple(lows[i + 1 : i + 3])
+        if two == ("as", "well"):
+            kind, size = ("join", 3) if three == ("well", "as") else ("added", 2)
+        elif two in _JOIN_PAIRS:
+            kind, size = "join", 2
+        elif low in _JOIN_WORDS or word in _JOIN_MARKS:
+            kind, size = "join", 1
+        elif low in _ADDED_WORDS:
+            kind, size = "added", 1
+        elif low in _ARTICLES:
+            kind, size = "article", 1
+        else:
+            kind, size = ("word" if word[0].isalnum() else "mark"), 1
+        pieces.append((kind, word, begins))
+        i += size
+    return pieces
 
 
 def _single_spaced(words: str) -> str:

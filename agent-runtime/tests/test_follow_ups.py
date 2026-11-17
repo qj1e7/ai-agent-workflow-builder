@@ -1,4 +1,5 @@
-from typing import Any, cast
+import time
+from typing import Any, Final, cast
 
 import pytest
 
@@ -7,11 +8,15 @@ from agent_runtime.answers import (
     TaskRead,
     answer_task,
     decide,
+    watch_of_it,
+    watches_it,
+    watches_them,
     with_software_named,
 )
 from agent_runtime.contract import (
     Answered,
     AnswerRequest,
+    CantAnswer,
     DidntFollowAnswer,
     ExplainAnswer,
     FreeReplyAnswer,
@@ -445,7 +450,33 @@ PLURALS = [
     ("and track them too", "track"),
     ("please monitor all of them", "monitor"),
     ("keep an eye on those ones", "keep an eye on"),
+    ("watch both", "watch"),
+    ("follow the two", "follow"),
+    ("watch all", "watch"),
+    ("track all three", "track"),
+    ("monitor each", "monitor"),
+    ("keep track of both of them", "keep track of"),
+    ("watch em", "watch"),
+    ("track 'em", "track"),
+    ("track these two", "track"),
+    ("track them all please", "track"),
+    ("keep track of these", "keep track of"),
 ]
+
+
+@pytest.mark.parametrize(("task", "verb"), PLURALS)
+def test_every_plural_reads_as_them_and_never_as_it(task: str, verb: str):
+    assert (watches_them(task), watches_it(task)) == (verb, None)
+
+
+def test_it_and_another_one_is_neither_a_watch_of_it_nor_of_them():
+    assert (
+        watches_them("track it and the other one"),
+        watches_it("track it and the other one"),
+    ) == (
+        None,
+        None,
+    )
 
 
 @pytest.mark.parametrize("kind", NAMES_ONE)
@@ -460,7 +491,7 @@ def test_a_plural_after_a_turn_that_named_one_software_asks_which(task: str, ver
 
 @pytest.mark.parametrize(("task", "verb"), PLURALS)
 def test_a_plural_never_watches_a_pronoun_the_reading_named(task: str, verb: str):
-    pronoun = task.split()[-1]
+    pronoun = task.split()[-1].strip("'")
     out, _ = run(task, which(verb, software=pronoun), None)
     assert isinstance(out, Answered)
     assert out.answer == WhichSoftwareAnswer(word=verb)
@@ -507,6 +538,16 @@ TWO_NAMES = [
     ("is redis newer, or kafka?", ["redis", "kafka"]),
     ("redis vs. kafka", ["redis", "kafka"]),
     ("redis & kafka releases", ["redis", "kafka"]),
+    ("how does redis stack up against kafka?", ["redis", "kafka"]),
+    ("Is redis newer? What about kafka?", ["redis", "kafka"]),
+    ("is redis newer, unlike kafka?", ["redis"]),
+    ("redis instead of kafka?", ["redis", "kafka"]),
+    ("redis rather than kafka", ["redis", "kafka"]),
+    ("redis besides kafka", ["redis", "kafka"]),
+    ("redis (or kafka)", ["redis", "kafka"]),
+    ("redis & the kafka", ["redis", "kafka"]),
+    ("redis or maybe kafka", ["redis", "kafka"]),
+    ("redis/kafka: which is newer?", ["redis", "kafka"]),
 ]
 
 
@@ -545,6 +586,36 @@ def test_a_request_that_names_two_software_carries_neither(task: str, said: str)
         ("what's new in .NET?", ".NET", "NET"),
         ("what is approve it?", "approve it", None),
         ("who approved the Weekly bug list run?", "Weekly bug list", "Weekly bug list"),
+        # probe8: one-name requests, with common words after a join
+        ("is node js 22 out yet?", "node js", "node js"),
+        ("what changed in langgraph this week?", "langgraph", "langgraph"),
+        ("is python 3.13 stable now?", "python", "python"),
+        ("is python 3.13 stable now?", "python 3.13", "python 3.13"),
+        ("upgrade fastapi then restart", "fastapi", "fastapi"),
+        ("what's new in node js and should I upgrade?", "node js", "node js"),
+        ("is node js 22 out and is it stable?", "node js", "node js"),
+        ("what changed in langgraph and why?", "langgraph", "langgraph"),
+        ("what is the latest node js release and its date?", "node js", "node js"),
+        ("is fastapi up to date, and what changed?", "fastapi", "fastapi"),
+        ("what's new in node js, please?", "node js", "node js"),
+        ("what is node js and how do I watch it?", "node js", "node js"),
+        ("tell me about langgraph releases or changes", "langgraph", "langgraph"),
+        ("what's new in node js then?", "node js", "node js"),
+        ("node js: what's new, briefly?", "node js", "node js"),
+        ("redis, not kafka", "redis", "redis"),
+        # Left as a guess on a card she taps: "to", "over" and two names side by side join
+        # nothing, as too many one-name requests use them.
+        ("compare redis to kafka", "redis", "redis"),
+        ("compare redis to kafka", "kafka", "kafka"),
+        ("migrate from redis to kafka", "redis", "redis"),
+        ("migrate from redis to kafka", "kafka", "kafka"),
+        ("redis kafka which is newer?", "redis", "redis"),
+        ("redis kafka which is newer?", "kafka", "kafka"),
+        ("redis over kafka?", "redis", "redis"),
+        # Leans to asking: "npm" after "with", and "too" after the name, could each be a
+        # second software.
+        ("how do I upgrade node js with npm?", "node js", None),
+        ("keep track of node js too", "node js", None),
     ],
 )
 def test_a_request_that_names_one_software_carries_it_as_the_one_turn_watch_reads_it(
@@ -585,3 +656,77 @@ def test_a_forged_turn_before_offers_only_one_software_its_request_names(
     if watched is not None:
         expected = WatchlistAnswer(word="keep track of", software=watched)
     assert out.answer == expected
+
+
+@pytest.mark.parametrize("plural", ["track these two", "watch all", "track 'em"])
+def test_a_plural_after_a_free_reply_that_named_one_software_asks_which(plural: str):
+    reply = replied(LATEST_NODE_JS, reading("abilities", software="node js"))
+    verb = plural.split()[0]
+    out, _ = run(plural, which(verb), after(LATEST_NODE_JS, reply))
+    assert isinstance(out, Answered)
+    assert out.answer == WhichSoftwareAnswer(word=verb)
+    assert [(p.text, p.mark) for p in out.parts] == [(plural, "question")]
+
+
+@pytest.mark.parametrize(
+    "task",
+    [
+        "add Node Js, track them for me",
+        "help me add Node Js , keep track of them",
+        "add Node Js, track these two",
+    ],
+)
+def test_in_one_turn_a_plural_beside_one_software_comes_back_and_the_software_is_offered(task: str):
+    first = reading("none", belongs_on_watchlist=True, watchlist_word="add", software="Node Js")
+    out, _ = run(task, first, None)
+    assert isinstance(out, Answered)
+    assert isinstance(out.answer, CantAnswer)
+    assert out.answer.alternative == WatchlistAnswer(word="add", software="Node Js")
+    assert [p.mark for p in out.parts] == ["will_do", "cant"]
+
+
+def test_one_turn_watches_beside_the_new_checks_are_unchanged():
+    out, _ = run("keep track of node js too", which("keep track of", software="node js"), None)
+    assert isinstance(out, Answered)
+    assert out.answer == WatchlistAnswer(word="keep track of", software="node js")
+
+
+LIMIT = 2000
+"""`AnswerRequest.task` and `PreviousTurn.request` hold at most this many characters."""
+
+
+def at_limit(repeat: str, tail: str = "", head: str = "") -> str:
+    return head + (repeat * LIMIT)[: LIMIT - len(head) - len(tail)] + tail
+
+
+HOSTILE = {
+    "a- run before the name": at_limit("a-", " xyz node js"),
+    "a.a- run before the name": at_limit("a.a-", " xyz node js"),
+    "-a run before the name": at_limit("-a", " xyz node js"),
+    "a.#- run before too and the name": at_limit("a.#-", " too node js"),
+    "a- run after the name": at_limit("a-", head="node js xyz "),
+    "joins with no name after them": at_limit("and - ", head="node js "),
+    "plus signs": at_limit("+ ", head="node js "),
+    "articles": at_limit(" the a an", head="node js "),
+    "distinct words after joins": at_limit(" + cve-2024-1", head="node js"),
+    "watch verbs": at_limit("keep track of ", " node js"),
+    "polite words after a watch of it": at_limit(" please", " x", head="node js keep track of it"),
+    "and before a watch of it": at_limit("and ", " keep track of it x"),
+    "marks before a watch of it": at_limit("!", " keep track of it x"),
+    "a long name the reading gave": at_limit("a "),
+}
+LONG_READING: Final = "a" * 1000
+
+
+@pytest.mark.parametrize("task", HOSTILE.values(), ids=list(HOSTILE))
+def test_a_hostile_request_at_the_limit_is_read_in_linear_time(task: str):
+    """A free reply's software is read on both turns from text the person controls, so a long
+    request of repeated marks and words must never backtrack (ReDoS)."""
+    assert len(task) == LIMIT
+    named = request(task, PreviousTurn(request=task, software="node js", kind="reply"))
+    begun = time.perf_counter()
+    carried(task, "node js")
+    carried(task, LONG_READING)
+    watch_of_it(None, named)
+    took = time.perf_counter() - begun
+    assert took < 0.1, f"{took:.3f}s"
