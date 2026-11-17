@@ -519,6 +519,31 @@ def test_a_schedule_change_holds_only_what_the_message_says(args: dict[str, Any]
     assert why in result.errors[0]
 
 
+@pytest.mark.parametrize(
+    "said",
+    [
+        "every other Friday at 9am",
+        "the first Monday of the month at 9am",
+        "fortnightly",
+        "every 3rd Friday",
+        "alternate Fridays",
+        "once a month on Friday",
+        "bi-weekly on Friday",
+        "every weekday except Friday",
+    ],
+)
+def test_a_schedule_change_it_cant_hold_is_never_made_as_a_weekly_one(said: str) -> None:
+    """Before, "every other Friday at 9am" became a change to every Friday at 09:00."""
+    result, _ = run(
+        f"move the morning check to {said}",
+        tool("change_workflow", action="schedule", workflow_words="morning check", day="friday"),
+        AIMessage(content="stop"),
+        facts=WORKFLOWS,
+    )
+
+    assert "can't hold" in result.errors[0]
+
+
 def test_an_approver_cannot_change_a_workflow() -> None:
     result, _ = run(
         "pause the morning check",

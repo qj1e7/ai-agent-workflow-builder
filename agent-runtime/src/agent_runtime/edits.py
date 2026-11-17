@@ -36,6 +36,7 @@ from agent_runtime.reading import (
     TaskRead,
     clashes_in,
     clauses_of,
+    how_often,
     said_schedule,
 )
 
@@ -103,17 +104,6 @@ NOUN: Final = re.compile(
     re.IGNORECASE,
 )
 """A change verb after an article is a noun, as "the last run" or "an update"."""
-CANT_HOLD: Final = frozenset({"month", "quarter", "year", "fortnight", "hour"})
-SO_OFTEN: Final = re.compile(
-    rf"\bevery\s+(?:other|second|third|\d+|two|three|four|five|six)\s+"
-    rf"(?:days?|weeks?|months?|hours?|(?:{DAY_NAMES})s?)\b|"
-    r"\b(?:twice|(?:three|four|five|\d+)\s+times)\s+(?:a|an|per|each|every)\s+\w+|"
-    r"\b(?:on\s+)?(?:the\s+)?weekends?\b|"
-    r"\b(?:except|excluding|but\s+not|apart\s+from|other\s+than)\b[^,.;!?]*",
-    re.IGNORECASE,
-)
-"""A schedule it can't hold beyond the frequencies, as "every other day", "twice a week", "on
-weekends" or "every weekday except Friday"."""
 NEW_WORKFLOW: Final = re.compile(
     r"^(?:(?:and|then|also|please)\s+)*(?:(?:can|could|would|will)\s+you\s+)?"
     r"(?:set\s+up|make|build)\s+(?:a|an|another|one|some)\s+(?:new\s+)?"
@@ -699,16 +689,6 @@ def _day(day: str | None) -> WatchDay | None:
             return day
         case _:
             return None
-
-
-def how_often(rest: str) -> Span | None:
-    """Where the words ask for a schedule it can't hold, as "monthly" or "twice a week"."""
-    for match in FREQUENCY.finditer(rest):
-        word = (match.group(1) or match.group(2)).casefold()
-        if OFTEN.get(word, word) in CANT_HOLD:
-            return match.span()
-    found = SO_OFTEN.search(rest)
-    return None if found is None else found.span()
 
 
 @dataclass(frozen=True)

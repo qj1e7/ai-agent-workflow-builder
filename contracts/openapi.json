@@ -8852,6 +8852,18 @@
             "title": "Problems",
             "type": "array"
           },
+          "project": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The one Jira project the task's words name, read by code, which the Portal fills the agent's Jira project input with. Null when the words name none, or the agent uses no Jira tool.",
+            "title": "Project"
+          },
           "questions": {
             "items": {
               "type": "string"

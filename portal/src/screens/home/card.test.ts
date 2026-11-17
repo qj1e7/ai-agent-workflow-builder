@@ -269,6 +269,15 @@ describe('the plan in step 2', () => {
     expect(nextBlockers(form, cannot).words).toBe('Next opens when you change your words to something I can do.')
   })
 
+  it('fills the Jira project from the one project the builder read in their words, never the first “in X” of the rows', () => {
+    const rows = [...ROWS.rows.slice(0, 3), { kind: 'where' as const, text: 'Jira project OPS', state: 'understood' as const, note: null }]
+    const form = cardFrom('x', rows, '')
+    const drafted = planView({ ...NEW_AGENT, project: 'OPS' } as PlanOut, form.rows)
+    expect(drafted.kind === 'agents' && drafted.agents[0]?.found).toEqual({ 'Jira project': 'OPS' })
+    const none = planView({ ...NEW_AGENT, project: null } as PlanOut, form.rows)
+    expect(none.kind === 'agents' && none.agents[0]?.found).toEqual({})
+  })
+
   it('fills the Jira project the platform added to a draft from her words, so it is not asked', () => {
     const { name, rows } = answered24Hour.answer
     const drafted = planView(NEW_AGENT, cardFrom(name, rows as SetupCardReply['rows'], '').rows)
@@ -344,6 +353,12 @@ describe('step 4, turn it on', () => {
       { ok: true, words: 'Where it goes: Jira project MOCK, as you asked.' },
     ])
     expect(checkedRows(ready())[0]).toEqual({ ok: true, words: 'When: Every weekday at 15:00, as you asked.' })
+  })
+
+  it('never says a schedule the Planner filled in from their words is as they asked', () => {
+    const note = 'I filled some of this in from your words “Every other Friday at 9am”. Please check it.'
+    const rows = [{ kind: 'schedule' as const, text: 'Every Friday at 9am', state: 'changed' as const, note }, ...ROWS.rows.slice(1)]
+    expect(checkedRows({ ...enterWhen(cardFrom('x', rows, '')), step: 4 })[0]).toEqual({ ok: false, words: `When: Every Friday at 9:00. ${note}` })
   })
 
   it('sends the name, the rows as the instruction, each agent’s values and the schedule, as a draft that is not on yet', () => {

@@ -819,6 +819,12 @@ class NewAgent(WireModel):
     reason: str
     missing_tools: list[MissingTool]
     questions: list[str]
+    project: str | None = Field(
+        default=None,
+        description="The one Jira project the task's words name, read by code, which the "
+        "Portal fills the agent's Jira project input with. Null when the words name none, or "
+        "the agent uses no Jira tool.",
+    )
 
 
 class CannotDo(WireModel):
