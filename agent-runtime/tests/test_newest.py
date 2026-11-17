@@ -323,6 +323,46 @@ def test_a_short_name_matches_the_official_name_the_model_wrote(
 
 
 @pytest.mark.parametrize(
+    ("task", "read_as", "written", "word"),
+    [
+        ("what's new in kafka?", "Apache Kafka", "kafka", "new"),
+        ("is terraform up to date?", "HashiCorp Terraform", "terraform", "up to date"),
+        ("what's the latest chrome?", "Google Chrome", "chrome", "latest"),
+        ("any updates for openshift?", "Red Hat OpenShift", "openshift", "updates"),
+        ("what's new in jetty?", "Eclipse Jetty", "jetty", "new"),
+        ("latest version of corretto", "amazon corretto", "corretto", "version"),
+        ("what's new in apache kafka?", "Apache Kafka", "apache kafka", "new"),
+    ],
+)
+def test_a_vendor_before_the_official_name_lends_the_next_word(
+    task: str, read_as: str, written: str, word: str
+) -> None:
+    """A maker's name the model writes first, as "Apache" in "Apache Kafka", is not the software.
+    The word after it is, when the request writes it whole. A name the request writes whole is
+    kept as it is."""
+    for read in readings(read_as, word):
+        assert answer_of(read, task, FACTS) == WatchlistAnswer(word=word, software=written), read
+
+
+@pytest.mark.parametrize(
+    ("task", "read_as", "vendor"),
+    [
+        ("what's new in apache?", "Apache Kafka", "apache"),
+        ("what's new in apache?", "Apache HTTP Server", "apache"),
+        ("what's new in apache kafka?", "Apache Kafka Streams", "apache"),
+        ("any updates for apache airflow?", "Apache Airflow 2", "apache"),
+        ("is google up to date?", "Google Chrome", "google"),
+        ("any updates from hashicorp?", "HashiCorp Vault", "hashicorp"),
+        ("what's new in red hat?", "Red Hat OpenShift", "red"),
+    ],
+)
+def test_a_vendor_is_never_the_software_on_the_card(task: str, read_as: str, vendor: str) -> None:
+    for read in (reading(read_as), reading(read_as, "none")):
+        shown = answer_of(read, task, FACTS)
+        assert not (isinstance(shown, WatchlistAnswer) and shown.software == vendor), read
+
+
+@pytest.mark.parametrize(
     ("task", "software", "word"),
     [
         ("did we upgrade kafka?", "Kafka", "upgrade"),
@@ -341,6 +381,7 @@ def test_a_question_about_what_was_done_or_asked_twice_still_gets_the_card(
     ("task", "read_as"),
     [
         ("is the server up to date?", "SQL Server"),
+        ("is the server up to date?", "Microsoft SQL Server"),
         ("is the database up to date?", "PostgreSQL Database"),
         ("is the browser up to date?", "Chrome Browser"),
         ("is the agent up to date?", "Datadog Agent"),

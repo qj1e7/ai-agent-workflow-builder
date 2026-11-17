@@ -878,17 +878,27 @@ def _newest_of(read: TaskRead, request: str, facts: PlannerFacts | None) -> Watc
     return WatchlistAnswer(word=word, software=same.pop() if len(same) == 1 else software)
 
 
+_VENDOR: Final = re.compile(
+    r"(?:apache|hashicorp|microsoft|google|amazon|aws|azure|oracle|ibm|red\s+hat|eclipse)\b\W*",
+    re.IGNORECASE,
+)
+"""A maker's name that leads a product's official name, as "Apache" in "Apache Kafka"."""
+_LEADING_WORD: Final = re.compile(r"[^\W_]{2,}")
+
+
 def _named_in(read: TaskRead, request: str) -> str | None:
     """The reading's software as the request wrote it, else the leading word of the name the model
     wrote, when the request writes it whole, as "node" for "Node.js" or "spring" for "Spring
     Boot": the model often writes the official name for a short one. Only the leading word, so
     "server" of "SQL Server" is never taken, and only from a name no longer than a software name
-    can be."""
+    can be. A maker's name that leads, as "Apache" in "Apache Kafka", is not the leading word, so
+    "kafka" is taken and "apache" never is."""
     found = _software_of(read, request)
     said = software_name(read.software)
     if found is not None or said is None or len(said) > SOFTWARE_LIMIT:
         return found
-    leading = re.match(r"[^\W_]{2,}", said)
+    vendor = _VENDOR.match(said)
+    leading = _LEADING_WORD.match(said, 0 if vendor is None else vendor.end())
     return None if leading is None else whole_word_of(request, leading.group(0))
 
 
