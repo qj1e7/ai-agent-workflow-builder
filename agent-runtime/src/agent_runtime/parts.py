@@ -65,6 +65,7 @@ from agent_runtime.reading import (
     negated,
     polite,
     schedule_clashes,
+    schedule_unheld,
     trim,
     without_runs_by_itself,
 )
@@ -408,10 +409,14 @@ def _crosses(read: TaskRead | None, text: str, answer: PlannerAnswer) -> list[_C
         note = row.note if reason == "cant_do" else None
         found.append(_Cross(*at, reason, note, quote=row.text))
     if read is not None and _sets_up(answer):
-        found += [
-            _Cross(c.start, c.end, c.reason, choices=c.choices)
-            for c in schedule_clashes(read.schedule, text)
-        ]
+        clashes = schedule_clashes(read.schedule, text)
+        found += [_Cross(c.start, c.end, c.reason, choices=c.choices) for c in clashes]
+        unheld = schedule_unheld(read.schedule, text)
+        # A clash already asks about the words, as "weekly or monthly", so they get one cross.
+        if unheld is not None and not any(
+            c.start < unheld[1] and unheld[0] < c.end for c in clashes
+        ):
+            found.append(_Cross(*unheld, "how_often"))
         asked = days_asked(read.search, text)
         if asked is not None:
             found.append(_Cross(*asked, "how_many_days", mark="question"))

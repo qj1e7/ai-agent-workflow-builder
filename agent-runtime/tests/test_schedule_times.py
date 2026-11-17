@@ -8,6 +8,7 @@ import pytest
 from agent_runtime.answers import answer_of, parts_of
 from agent_runtime.contract import CantAnswer, RequestPart, SetupCardAnswer, UnderstoodRow
 from agent_runtime.reading import (
+    FILLED_IN_FROM,
     NO_TIME_READ,
     NOT_A_RUN_TIME,
     ONE_TIME,
@@ -305,9 +306,73 @@ def test_a_new_schedule_never_reads_a_range_as_one_time(words: str):
     assert said_schedule(words) == (None, None)
 
 
-@pytest.mark.parametrize(
-    "said", ["Every Friday at 16:00", "Every Friday at 4pm", "Every 2 weeks on Friday at 9am"]
-)
+@pytest.mark.parametrize("said", ["Every Friday at 16:00", "Every Friday at 4pm"])
 def test_one_time_beside_other_numbers_is_no_range(said: str):
     row = carols_row(said, said)
     assert row.state == "understood"
+
+
+UNHELD = [
+    ("Every other Friday at 9am", "Every Friday", "Every Friday at 9am", "Every other Friday"),
+    (
+        "Every other Friday at 9am",
+        "Every 2 weeks on Friday at 9am",
+        "Every Friday at 9am",
+        "Every other Friday",
+    ),
+    ("Every 2 weeks on Friday at 9am", "Every Friday", "Every Friday at 9am", "Every 2 weeks"),
+    (
+        "Every second Tuesday at 3pm",
+        "Every Tuesday",
+        "Every Tuesday at 3pm",
+        "Every second Tuesday",
+    ),
+    ("Fortnightly on Friday at 9am", "Every Friday at 9am", "Every Friday at 9am", "Fortnightly"),
+    (
+        "On the first Monday of the month at 10am",
+        "Monthly",
+        "Every Monday at 10am",
+        "On the first Monday of the month",
+    ),
+    (
+        "On the last Friday of each month at 4pm",
+        "Every Friday at 4pm",
+        "Every Friday at 4pm",
+        "On the last Friday of each month",
+    ),
+    ("On the 1st of every month at 9am", "Monthly at 9am", "At 9am", "On the 1st of every month"),
+    ("Every quarter at 9am", "Quarterly", "At 9am", "Every quarter"),
+    (
+        "Every other Friday at 9am",
+        "Every other Friday at 9am",
+        "Every Friday at 9am",
+        "Every other Friday",
+    ),
+]
+
+
+@pytest.mark.parametrize(("said", "model", "held", "unheld"), UNHELD)
+def test_a_schedule_it_cant_hold_is_never_understood_and_its_words_are_crossed(
+    said: str, model: str, held: str, unheld: str
+):
+    """The Portal keeps only a day and a time, so "every other Friday at 9am" ran every Friday,
+    and the final check said it was as asked. Now the row holds the day and time it can, as a
+    guess from their words, and the words it can't hold are a part it can't do."""
+    row, parts = carols_card(model, said)
+    assert (row.text, row.state, row.note) == (held, "changed", FILLED_IN_FROM.format(said))
+    assert [(p.text, p.reason) for p in parts if p.mark == "cant"] == [(unheld, "how_often")]
+
+
+@pytest.mark.parametrize(
+    "said",
+    [
+        "Every Friday at 16:00",
+        "Every weekday at 3pm",
+        "Each Monday at 09:30",
+        "Every Friday morning at 9",
+    ],
+)
+def test_a_schedule_it_holds_stays_their_own_words_with_nothing_crossed(said: str):
+    row, parts = carols_card("Every Friday", said)
+    assert (row.text, row.state) == (said, "understood")
+    assert [p for p in parts if p.mark == "cant"] == []
