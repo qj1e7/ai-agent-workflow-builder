@@ -11,7 +11,7 @@ import { PinnedLine } from './PinnedLine'
 
 const NOW = new Date('2026-11-03T15:00:00+08:00')
 const ALICE = aliceHome as HomeOut
-const BOB = bobHome as HomeOut
+const BOB: HomeOut = { ...(bobHome as HomeOut), setup_approvals: [] }
 
 const draw = (home: HomeOut) =>
   renderToStaticMarkup(

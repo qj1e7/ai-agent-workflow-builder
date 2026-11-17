@@ -1,18 +1,19 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useErrorWords } from '../../api/context'
-import { useDrafted, useSendDrafted, useSetUpAgain } from '../../api/draftedQueries'
+import { useDoneInN8n, useDrafted, useEditInN8n, useSendDrafted, useSetUpAgain } from '../../api/draftedQueries'
 import { pressOnce, useLatch } from '../../api/latch'
 import type { DraftedWorkflowView } from '../../api/types'
-import { Button, ButtonLink } from '../../ui/Button'
+import { Button, ButtonAnchor, ButtonLink } from '../../ui/Button'
 import { Card } from '../../ui/Card'
 import { AskTheTeam } from '../home/AskTheTeam'
 import { DraftPill } from '../home/Building'
-import { useAskForChange } from '../home/ChatProvider'
+import { useAskForChange, useShowRevision } from '../home/ChatProvider'
 import { useMainButton } from '../home/primary'
 import { Report, Words } from '../explain/Report'
 import { RunLine } from '../run/RunLine'
 import { workingWords } from '../run/words'
-import { addedWords, approvedWords, CANCELLED_WAITING_WORDS, declinedWords, draftedPill, draftedTitle, flagsWords, revisionWords, setUpLine, settledWords, stationsOf, WAITING_WORDS } from './drafted'
+import { addedWords, approvedWords, CANCELLED_WAITING_WORDS, declinedWords, draftedPill, draftedTitle, flagsWords, inN8nWords, revisionWords, setUpLine, settledWords, stationsOf, WAITING_WORDS } from './drafted'
+import { DraftedSettings } from './DraftedSettings'
 import styles from './Drafted.module.css'
 
 const TICK_MS = 1000
@@ -32,8 +33,8 @@ function Elapsed({ since }: { since: string | null }) {
   )
 }
 
-function Head({ view, revision }: { view: Pick<DraftedWorkflowView, 'state'>; revision: number }) {
-  const pill = draftedPill(view.state)
+function Head({ view, revision }: { view: Pick<DraftedWorkflowView, 'state'> & { in_n8n?: DraftedWorkflowView['in_n8n'] }; revision: number }) {
+  const pill = draftedPill(view.state, view.in_n8n != null)
   return (
     <>
       <span className={styles['revision']}>{revisionWords(revision)}</span>
@@ -69,6 +70,55 @@ function SetUpLines({ view, approved }: { view: DraftedWorkflowView; approved: b
   )
 }
 
+/** The buttons while the draft is open in n8n: for the person who opened it, a link to it and Done in n8n. Anyone else has the words in the status. */
+function InN8nActions({ view, onProblem }: { view: DraftedWorkflowView; onProblem: (words: string | null) => void }) {
+  const main = useMainButton()
+  const words = useErrorWords()
+  const done = useDoneInN8n(view.drafted_id)
+  const latch = useLatch()
+  const showRevision = useShowRevision()
+  const editor = view.in_n8n?.editor_url ?? null
+  if (editor === null) return null
+  return (
+    <>
+      <ButtonAnchor key="open-n8n" href={editor}>
+        Open n8n
+      </ButtonAnchor>
+      <Button
+        key="done"
+        variant={main}
+        loading={done.isPending}
+        onClick={() =>
+          pressOnce<DraftedWorkflowView>(latch, (outcome) => done.mutate(undefined, outcome), {
+            onSuccess: (next) => {
+              onProblem(null)
+              showRevision?.(next.drafted_id, next.card_revision)
+            },
+            onError: (error) => onProblem(words(error)),
+          })
+        }
+      >
+        Done in n8n
+      </Button>
+    </>
+  )
+}
+
+function EditInN8n({ view, onProblem }: { view: DraftedWorkflowView; onProblem: (words: string | null) => void }) {
+  const words = useErrorWords()
+  const edit = useEditInN8n(view.drafted_id)
+  const latch = useLatch()
+  return (
+    <Button
+      key="edit-n8n"
+      loading={edit.isPending}
+      onClick={() => pressOnce(latch, (outcome) => edit.mutate(view.revision, outcome), { onSuccess: () => onProblem(null), onError: (error) => onProblem(words(error)) })}
+    >
+      Edit in n8n
+    </Button>
+  )
+}
+
 function Foot({ view, onReport, onProblem }: { view: DraftedWorkflowView; onReport: () => void; onProblem: (words: string | null) => void }) {
   const main = useMainButton()
   const words = useErrorWords()
@@ -83,7 +133,10 @@ function Foot({ view, onReport, onProblem }: { view: DraftedWorkflowView; onRepo
     </Button>
   )
   const actions: ReactNode[] = [report]
-  if (view.state === 'draft') {
+  const inN8n = view.state === 'draft' && view.in_n8n !== null
+  if (inN8n) {
+    actions.push(<InN8nActions key="in-n8n" view={view} onProblem={onProblem} />)
+  } else if (view.state === 'draft') {
     if (askForChange) {
       actions.push(
         <Button
@@ -97,6 +150,7 @@ function Foot({ view, onReport, onProblem }: { view: DraftedWorkflowView; onRepo
         </Button>,
       )
     }
+    if (view.can_edit_in_n8n) actions.push(<EditInN8n key="edit" view={view} onProblem={onProblem} />)
     actions.push(
       view.can_send ? (
         <Button
@@ -125,14 +179,14 @@ function Foot({ view, onReport, onProblem }: { view: DraftedWorkflowView; onRepo
 }
 
 /** A revision that has been read: the step line, In short, what was added, the flags, and where it stands. */
-function Revision({ view, revision }: { view: DraftedWorkflowView; revision: number }) {
+function Revision({ view }: { view: DraftedWorkflowView }) {
   const [shown, setShown] = useState(false)
   const [problem, setProblem] = useState<string | null>(null)
   const report = view.report
   const stations = stationsOf(view.blocks)
   const added = report ? addedWords(report.fixed.length) : null
   return (
-    <Card title={draftedTitle(view)} pill={<Head view={view} revision={revision} />} actions={<Foot view={view} onReport={() => setShown((was) => !was)} onProblem={setProblem} />}>
+    <Card title={draftedTitle(view)} pill={<Head view={view} revision={view.revision} />} status={inN8nWords(view) ?? undefined} actions={<Foot view={view} onReport={() => setShown((was) => !was)} onProblem={setProblem} />}>
       {stations.length > 0 ? <RunLine stations={stations} arrivedLive={null} settled={null} small /> : null}
       {report ? (
         <p className={styles['said']} data-in-short>
@@ -152,6 +206,7 @@ function Revision({ view, revision }: { view: DraftedWorkflowView; revision: num
       {view.state === 'waiting' ? <p className={styles['note']}>{WAITING_WORDS}</p> : null}
       {view.state === 'approved' ? <SetUpLines view={view} approved /> : null}
       {view.state === 'draft' && view.set_up !== null ? <SetUpLines view={view} approved={false} /> : null}
+      <DraftedSettings view={view} />
       {view.state === 'declined' ? <p className={styles['said']}>{declinedWords(view.approval)}</p> : null}
       {problem ? (
         <p className={styles['problem']} role="alert">
@@ -183,10 +238,10 @@ export function DraftedCard({ draftedId, revision }: { draftedId: string; revisi
       </Card>
     )
   }
-  if (revision < view.revision) {
+  if (revision < view.card_revision) {
     return (
       <Card title={draftedTitle(view)}>
-        <p className={styles['note']}>{settledWords(revision, view.revision)}</p>
+        <p className={styles['note']}>{settledWords(revision, view.card_revision)}</p>
       </Card>
     )
   }
@@ -205,5 +260,5 @@ export function DraftedCard({ draftedId, revision }: { draftedId: string; revisi
       </Card>
     )
   }
-  return <Revision view={view} revision={revision} />
+  return <Revision view={view} />
 }

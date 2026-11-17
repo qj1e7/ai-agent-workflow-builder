@@ -31,6 +31,8 @@ export type ThreadAction =
   | { readonly type: 'asked_behind'; readonly text: string }
   /** A change she asked for was taken: her words, then the new revision's card. */
   | { readonly type: 'changed'; readonly text: string; readonly draftedId: string; readonly revision: number }
+  /** A new card for a drafted workflow's newest revision, with no message of hers before it, such as the one read back from n8n. */
+  | { readonly type: 'draft_card'; readonly draftedId: string; readonly revision: number }
   | { readonly type: 'new_chat' }
 
 /** The thread lives only on the page. It is never saved: the chat is not the record. */
@@ -50,6 +52,8 @@ export function threadReducer(state: Thread, action: ThreadAction): Thread {
       const me = state.last + 1
       return { ...state, messages: [...state.messages, { kind: 'me', id: me, text: action.text }, { kind: 'drafted', id: me + 1, draftedId: action.draftedId, revision: action.revision }], last: me + 1 }
     }
+    case 'draft_card':
+      return { ...state, messages: [...state.messages, { kind: 'drafted', id: state.last + 1, draftedId: action.draftedId, revision: action.revision }], last: state.last + 1 }
     case 'arrived': {
       // A request still waiting for its answer stays last, so a failed send takes back only the request.
       const card: Message = { kind: 'reply', id: state.last + 1, reply: action.reply, typed: '' }
