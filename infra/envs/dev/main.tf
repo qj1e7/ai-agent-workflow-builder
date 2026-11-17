@@ -120,8 +120,11 @@ locals {
     strcontains(entry, "/") ? trimspace(entry) : "${trimspace(entry)}/32"
     if trimspace(entry) != ""
   ]
-  # With no addresses listed, there are no rules, and every address reaches n8n's sign-in page.
-  n8n_allowed_cidrs = var.n8n_editor_external && length(local.n8n_editor_cidrs) > 0 ? concat(
+  # n8n loads every built-in block (ADR 0051), so anyone who reaches n8n can call a Webhook or a
+  # Form a member published. Its editor opens only with addresses listed, and then Container Apps
+  # lets in only those and the inside ranges.
+  n8n_editor_open = var.n8n_editor_external && length(local.n8n_editor_cidrs) > 0
+  n8n_allowed_cidrs = local.n8n_editor_open ? concat(
     [for i, cidr in local.n8n_editor_cidrs : { name = "editor-${i + 1}", cidr = cidr }],
     [for i, cidr in local.n8n_internal_cidrs : { name = "inside-environment-${i + 1}", cidr = cidr }],
   ) : []
@@ -131,7 +134,7 @@ locals {
   ingress = {
     platform-api  = { external = true, target_port = 8000 }
     agent-runtime = { external = false, target_port = 8100 }
-    n8n           = { external = var.n8n_editor_external, target_port = 5678, allowed_cidrs = local.n8n_allowed_cidrs }
+    n8n           = { external = local.n8n_editor_open, target_port = 5678, allowed_cidrs = local.n8n_allowed_cidrs }
     portal        = { external = true, target_port = 8080 }
   }
   url = {
@@ -225,6 +228,7 @@ resource "random_password" "generated" {
     "wab-monitoring-password",
     "n8n-encryption-key",
     "n8n-owner-password",
+    "n8n-runners-auth-token",
     "step-key",
     "wab-node-key",
     "wab-start-secret",
@@ -363,47 +367,28 @@ module "langfuse_vm" {
 }
 
 locals {
-  # n8n's allow list. scripts/nodes-include.sh writes it from platform-api's node_classes.json
-  # (ADR 0045), and CI fails when the two differ.
-  n8n_nodes_include = [
-    "CUSTOM.wabStartFromPortal",
-    "CUSTOM.wabRead",
-    "CUSTOM.wabAgent",
-    "CUSTOM.wabProposeChange",
-    "CUSTOM.wabAskForYes",
-    "CUSTOM.wabMakeApprovedChanges",
-    "CUSTOM.wabTell",
-    "CUSTOM.wabReportFailure",
-    "n8n-nodes-base.scheduleTrigger",
-    "n8n-nodes-base.manualTrigger",
-    "n8n-nodes-base.errorTrigger",
-    "n8n-nodes-base.if",
-    "n8n-nodes-base.merge",
-    "n8n-nodes-base.noOp",
-    "n8n-nodes-base.stickyNote",
-    "n8n-nodes-base.filter",
-    "n8n-nodes-base.switch",
-    "n8n-nodes-base.set",
-    "n8n-nodes-base.limit",
-    "n8n-nodes-base.aggregate",
-    "n8n-nodes-base.splitOut",
-    "n8n-nodes-base.removeDuplicates",
-    "n8n-nodes-base.summarize",
-    "n8n-nodes-base.renameKeys",
-    "n8n-nodes-base.dateTime",
-    "n8n-nodes-base.compareDatasets",
-    "n8n-nodes-base.splitInBatches",
-    "n8n-nodes-base.xml",
-    "n8n-nodes-base.markdown",
-    "n8n-nodes-base.executionData",
-    "n8n-nodes-base.stopAndError",
-    "n8n-nodes-base.jira",
-    "n8n-nodes-base.github",
-    "n8n-nodes-base.microsoftTeams",
-    "n8n-nodes-base.microsoftOutlook",
-    "n8n-nodes-base.gmail",
-    "n8n-nodes-base.slack",
-  ]
+  # n8n's settings that keep what a workflow runs away from n8n's secrets (ADR 0051, spike P9). n8n
+  # loads every built-in block but the two in NODES_EXCLUDE, so these settings are the guard. n8n
+  # and the bootstrap job get the same map, and bootstrap refuses to start the platform unless each
+  # holds (platform-api's n8n_guard.py). NODE_FUNCTION_ALLOW_BUILTIN, NODE_FUNCTION_ALLOW_EXTERNAL
+  # and N8N_RUNNERS_INSECURE_MODE stay unset. deploy/compose.yaml's x-n8n-guards holds the same.
+  n8n_guards = {
+    # No $env in expressions, and n8n hands none of its environment to the task runner.
+    N8N_BLOCK_ENV_ACCESS_IN_NODE = "true"
+    # Code, AI Transform, the Code Tool, Sort and Item Lists run their code in the task runner
+    # app, module.n8n_runners, which holds none of n8n's secrets.
+    N8N_RUNNERS_MODE = "external"
+    # n8n refuses Function, Function Item and LangChain Code, which run code in its own process.
+    N8N_DEPRECATED_NODES_BLOCK = "true"
+    # The file blocks reach only this folder, never n8n's own folders, and never /proc.
+    N8N_RESTRICT_FILE_ACCESS_TO        = "/home/node/.n8n-files"
+    N8N_BLOCK_FILE_ACCESS_TO_N8N_FILES = "true"
+  }
+
+  # More ports each app listens on, reachable only from inside the environment.
+  internal_ports = {
+    n8n = [5679]
+  }
 }
 
 locals {
@@ -449,8 +434,8 @@ locals {
         var.oidc_jwks_url == "" ? {} : { OIDC_JWKS_URL = var.oidc_jwks_url },
         var.teams_channel == "" ? {} : { TEAMS_CHANNEL = var.teams_channel },
         # Staff reach n8n's editor only while it is open, so only then do they get n8n accounts
-        # (ENGINE-PLAN 2.9). platform-api still waits for a bootstrap that proved the allow list.
-        var.n8n_editor_external ? {
+        # (ENGINE-PLAN 2.9). platform-api still waits for a bootstrap that proved n8n's guards.
+        local.n8n_editor_open ? {
           N8N_STAFF_ACCESS = "on"
           N8N_EDITOR_URL   = local.url["n8n"]
         } : {},
@@ -540,6 +525,7 @@ locals {
       # GENERIC_TIMEZONE is the team time zone, so a workflow set to n8n's default zone runs on the
       # team's, as platform-api reads it.
       env = merge(
+        local.n8n_guards,
         {
           DB_TYPE                           = "postgresdb"
           DB_POSTGRESDB_HOST                = module.postgres.fqdn
@@ -556,19 +542,21 @@ locals {
           # Stops n8n asking api.n8n.io for its list of MCP servers every 8 hours (issue #86). We use no
           # MCP servers in n8n, and the block catalogue leaves those blocks out (ADR 0051), as local does.
           N8N_DISABLED_MODULES = "mcp-registry"
-          # The node key is in this environment, so nothing a person adds to a workflow may read it.
-          # n8n excludes these two nodes by default; pinned so an upgrade cannot drop them.
-          N8N_BLOCK_ENV_ACCESS_IN_NODE   = "true"
+          # n8n loads every built-in block but these two, which would open its own environment, and
+          # no community package (ADR 0051). They are n8n's own default exclusions, pinned so an
+          # upgrade cannot drop them. local.n8n_guards keeps the rest away from the keys below.
           NODES_EXCLUDE                  = jsonencode(["n8n-nodes-base.executeCommand", "n8n-nodes-base.localFileTrigger"])
           N8N_COMMUNITY_PACKAGES_ENABLED = "false"
-          NODES_INCLUDE                  = jsonencode(local.n8n_nodes_include)
+          # The broker the task runner app connects to, on port 5679, which only apps inside the
+          # environment reach (internal_ports). Only the token guards it.
+          N8N_RUNNERS_BROKER_LISTEN_ADDRESS = "0.0.0.0"
           # 30 days of executions (ENGINE-PLAN D10). A waiting execution is never pruned (P7 Q16).
           EXECUTIONS_DATA_PRUNE           = "true"
           EXECUTIONS_DATA_MAX_AGE         = "720"
           EXECUTIONS_DATA_SAVE_ON_SUCCESS = "all"
           WAB_API_URL                     = local.url["platform-api"]
         },
-        var.n8n_editor_external ? {
+        local.n8n_editor_open ? {
           N8N_PROTOCOL                      = "https"
           N8N_HOST                          = trimprefix(local.url["n8n"], "https://")
           N8N_EDITOR_BASE_URL               = "${local.url["n8n"]}/"
@@ -584,6 +572,7 @@ locals {
         N8N_ENCRYPTION_KEY     = local.secret["n8n-encryption-key"]
         WAB_NODE_KEY           = local.secret["wab-node-key"]
         WAB_START_SECRET       = local.secret["wab-start-secret"]
+        N8N_RUNNERS_AUTH_TOKEN = local.secret["n8n-runners-auth-token"]
       }
     }
 
@@ -615,7 +604,7 @@ locals {
   # for_each needs plain values. n8n's owner password hash is the stored bcrypt hash of the
   # password the bootstrap signs in with, so it is the same on every plan.
   inline_secrets = {
-    n8n = var.n8n_editor_external ? {
+    n8n = local.n8n_editor_open ? {
       N8N_INSTANCE_OWNER_PASSWORD_HASH = random_password.generated["n8n-owner-password"].bcrypt_hash
     } : {}
   }
@@ -666,12 +655,13 @@ locals {
       image           = local.images["platform-api"]
       timeout_seconds = 600
       command         = ["python", "-m", "platform_api.bootstrap"]
-      env = {
+      # The same guards n8n gets, which bootstrap checks before the platform starts (ADR 0051).
+      env = merge(local.n8n_guards, {
         N8N_BASE_URL          = local.url["n8n"]
         N8N_OWNER_EMAIL       = var.n8n_owner_email
         PLATFORM_INTERNAL_URL = local.url["platform-api"]
         TEAM_TIME_ZONE        = var.team_time_zone
-      }
+      })
       secrets = {
         DATABASE_URL_OWNER = local.secret["database-url-owner"]
         N8N_OWNER_PASSWORD = local.secret["n8n-owner-password"]
@@ -699,6 +689,7 @@ module "app" {
   min_replicas        = each.value.min_replicas
   max_replicas        = each.value.max_replicas
   ingress             = local.ingress[each.key]
+  internal_ports      = lookup(local.internal_ports, each.key, [])
   env                 = each.value.env
   secrets             = each.value.secrets
   inline_secrets      = lookup(local.inline_secrets, each.key, {})
@@ -723,5 +714,25 @@ module "job" {
   timeout_seconds     = each.value.timeout_seconds
   env                 = each.value.env
   secrets             = each.value.secrets
+  tags                = local.tags
+}
+
+# n8n's external task runner, in an app of its own with none of n8n's secrets (ADR 0051, spike
+# P9). It calls n8n's broker on the port n8n's app opens inside the environment.
+module "n8n_runners" {
+  source = "../../modules/task_runner"
+
+  name                = "n8n-runners"
+  name_stem           = local.stem
+  location            = var.location
+  resource_group_name = data.azurerm_resource_group.this.name
+  resource_group_id   = data.azurerm_resource_group.this.id
+  environment_id      = module.container_env.id
+  registry_id         = module.registry.id
+  registry_server     = module.registry.login_server
+  image               = local.images["n8n-runners"]
+  broker_uri          = "http://n8n:${local.internal_ports.n8n[0]}"
+  auth_token          = local.secret["n8n-runners-auth-token"]
+  time_zone           = var.team_time_zone
   tags                = local.tags
 }

@@ -86,6 +86,17 @@ variable "ingress" {
   }
 }
 
+variable "internal_ports" {
+  description = "More ports the app listens on, reachable only from inside the Container Apps environment, on the app's name and the same port. Empty adds none."
+  type        = list(number)
+  default     = []
+
+  validation {
+    condition     = alltrue([for port in var.internal_ports : port >= 1 && port <= 65535 && floor(port) == port])
+    error_message = "Each internal port must be a whole number from 1 to 65535."
+  }
+}
+
 variable "env" {
   description = "Plain environment variables."
   type        = map(string)

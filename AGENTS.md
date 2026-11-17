@@ -57,7 +57,7 @@ These come from the sponsor and from our October feasibility test. Do not weaken
 - Wait a short delay before a retry.
 - Log every agent action with who approved it.
 - n8n holds no write key. Only our own node writes to Jira or Confluence, through the write gateway, which checks every approval against our records at the moment of writing (ADR 0026). One of n8n's own nodes may not write until ADR 0045's write proxy exists for that system.
-- n8n's own nodes may only read, or post a notice under the Tell rule. A node or an operation runs only when `node_classes.json` classes it; unknown means off. Only the platform creates credentials in n8n, scoped to reading or sending (ADR 0045).
+- n8n loads all its built-in blocks except Execute Command and Local File Trigger, and no community nodes. It runs a workflow's code only in its external task runner, which holds none of n8n's secrets, and bootstrap refuses to start the platform without the settings that keep it so (ADR 0051). In the platform's n8n project, n8n's own nodes may only read, or post a notice under the Tell rule: a node or an operation runs there only when `node_classes.json` classes it, and a version with any other block is never live. Only the platform creates credentials in n8n, scoped to reading or sending (ADR 0045).
 - A notice that only reports what was read may go out without a yes, under the Tell rule in ADR 0026. A change to data always needs a yes.
 
 ## Designing screens

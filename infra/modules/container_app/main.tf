@@ -104,3 +104,33 @@ resource "azurerm_container_app" "this" {
     }
   }
 }
+
+# More ports on the app's internal address, only from inside the Container Apps environment, such
+# as the broker n8n's task runner connects to (ADR 0051). azurerm 5.7.0 can't set
+# additionalPortMappings, so this sends the PATCH that adds them. azurerm keeps the fields it
+# doesn't manage when it updates the app, except when the ingress changes: it then writes the
+# ingress whole, without them. So the action runs again whenever the ingress or the app's revision
+# changes, which the header carries. The header means nothing to Azure.
+resource "azapi_resource_action" "internal_ports" {
+  count = length(var.internal_ports) > 0 ? 1 : 0
+
+  type        = "Microsoft.App/containerApps@2025-07-01"
+  resource_id = azurerm_container_app.this.id
+  method      = "PATCH"
+
+  headers = {
+    x-wab-after = sha256(jsonencode([var.ingress, var.internal_ports, azurerm_container_app.this.latest_revision_name]))
+  }
+
+  body = {
+    properties = {
+      configuration = {
+        ingress = {
+          additionalPortMappings = [
+            for port in var.internal_ports : { external = false, targetPort = port, exposedPort = port }
+          ]
+        }
+      }
+    }
+  }
+}

@@ -24,8 +24,13 @@ output "platform_api_url" {
 }
 
 output "n8n_editor_url" {
-  description = "Where n8n's editor opens when n8n_editor_external is true. Empty while n8n is internal."
-  value       = var.n8n_editor_external ? local.url["n8n"] : ""
+  description = "Where n8n's editor opens when n8n_editor_external is true and n8n_editor_allowed_ips names who may reach it. Empty while n8n is internal."
+  value       = local.n8n_editor_open ? local.url["n8n"] : ""
+}
+
+output "n8n_runners_app_name" {
+  description = "n8n's task runner app, for the checks before a deploy: its environment holds no identity endpoint, and it reaches n8n's broker."
+  value       = module.n8n_runners.name
 }
 
 output "job_names" {
