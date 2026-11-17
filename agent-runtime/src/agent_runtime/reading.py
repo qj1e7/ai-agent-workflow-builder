@@ -302,6 +302,43 @@ CLOCK: Final = re.compile(
 )
 """A time of day as the request writes it: "9am", "9.30am", "17:00", "noon", or a bare hour after
 "at", "or" or "and", as in "at 9 or 10"."""
+_CLOCK_END: Final = rf"(?:{TWELVE_HOUR}|{TWENTY_FOUR_HOUR}|noon|midday|midnight)"
+_RANGE_END: Final = rf"(?:{_CLOCK_END}|\d{{1,2}})"
+_UNTIL: Final = r"(?:-|\u2013|\u2014|\bto\b|\btill\b|\btil\b|\buntil\b|\bthrough\b|\bthru\b)"
+TIME_RANGE: Final = re.compile(
+    rf"\bbetween\s+(?P<between>{_RANGE_END})\s*(?:\band\b|{_UNTIL})\s*(?P<upto>{_RANGE_END})\b|"
+    rf"\bfrom\s+(?P<from>{_RANGE_END})\s*{_UNTIL}\s*(?P<to>{_RANGE_END})\b|"
+    rf"{NOT_INSIDE_A_NUMBER}(?P<start>{_RANGE_END})\s*{_UNTIL}\s*(?P<end>{_RANGE_END})\b",
+    re.IGNORECASE,
+)
+"""Two times joined as a range: "between 16:00 and 17:00", "from 4 to 5pm", "9am-5pm" or "16:00
+till 17:00". A bare number counts only after "between" or "from", or beside a clock time, so
+"10-14 days" is no range."""
+
+
+@dataclass(frozen=True)
+class TimeRange:
+    """A range of times in the words: its two ends as written, where they stand from the first
+    end to the last, and where the whole range stands, "between" and all."""
+
+    ends: tuple[str, str]
+    start: int
+    end: int
+    whole: tuple[int, int]
+
+
+def time_ranges(text: str) -> list[TimeRange]:
+    found: list[TimeRange] = []
+    for match in TIME_RANGE.finditer(text):
+        first = next(g for g in ("between", "from", "start") if match.group(g) is not None)
+        last = next(g for g in ("upto", "to", "end") if match.group(g) is not None)
+        ends = (match.group(first), match.group(last))
+        if first == "start" and not any(re.fullmatch(_CLOCK_END, e, re.I) for e in ends):
+            continue
+        found.append(TimeRange(ends, match.start(first), match.end(last), match.span()))
+    return found
+
+
 CLOCK_TOKEN: Final = re.compile(
     rf"^{TWELVE_HOUR}$|^{TWENTY_FOUR_HOUR}$|^\d{{1,2}}(?:st|nd|rd|th)$", re.IGNORECASE
 )
@@ -1009,6 +1046,16 @@ def _schedule_token(token: str) -> bool:
     return low in SCHEDULE_VOCAB or CLOCK_TOKEN.match(low) is not None or low.isdigit()
 
 
+def _schedule_tokens(text: str) -> list[tuple[str, int, int, bool]]:
+    """The request's tokens, each with whether it is a schedule's: a schedule word, a time or a
+    number, or any word of a range of times, as "till" in "16:00 till 17:00" or "9am-5pm"."""
+    ranges = [r.whole for r in time_ranges(text)]
+    return [
+        (raw, start, end, _schedule_token(raw) or any(a <= start and end <= b for a, b in ranges))
+        for raw, start, end in _request_tokens(text)
+    ]
+
+
 def _a_schedule_word(token: str) -> bool:
     """A word only a schedule uses, which the schedule row carries or asks for, so it is never
     a part the platform can't do. "first" or "last" can be a filter, so they are not here."""
@@ -1040,8 +1087,8 @@ def _schedule_span(text: str, shown: str) -> tuple[int, int] | None:
     if found is not None:
         return found
     run: list[tuple[int, int]] = []
-    for raw, start, end in _request_tokens(text):
-        if _schedule_token(raw):
+    for _, start, end, scheduled in _schedule_tokens(text):
+        if scheduled:
             run.append((start, end))
         elif run:
             break
@@ -1053,10 +1100,10 @@ def _schedule_span(text: str, shown: str) -> tuple[int, int] | None:
 
 
 def _schedule_explained(text: str) -> frozenset[str]:
-    """What the schedule explains inside its own span: schedule words, and clock tokens and
-    numbers as the request writes them."""
+    """What the schedule explains inside its own span: schedule words, and clock tokens, numbers
+    and the words of a range of times as the request writes them."""
     return SCHEDULE_VOCAB | frozenset(
-        _low(raw) for raw, _, _ in _request_tokens(text) if _schedule_token(raw)
+        _low(raw) for raw, _, _, scheduled in _schedule_tokens(text) if scheduled
     )
 
 
@@ -1087,18 +1134,18 @@ def _clock(match: re.Match[str]) -> str:
 def _schedule_run(text: str, said: tuple[int, int] | None) -> tuple[int, int] | None:
     """Where the schedule stands, grown over the schedule words beside it in its clause, so
     "every Monday at 9am and every Friday at 9am" is one stretch, whichever part was quoted."""
-    tokens = _request_tokens(text)
-    inside = [i for i, (_, a, b) in enumerate(tokens) if said and a < said[1] and b > said[0]]
+    tokens = _schedule_tokens(text)
+    inside = [i for i, (_, a, b, _) in enumerate(tokens) if said and a < said[1] and b > said[0]]
     if not inside:
         return None
-    clause_of = _clause_of(text, tokens)
+    clause_of = _clause_of(text, [(raw, a, b) for raw, a, b, _ in tokens])
     first, last = inside[0], inside[-1]
     while first > 0 and clause_of[first - 1] == clause_of[first]:
-        if not _schedule_token(tokens[first - 1][0]):
+        if not tokens[first - 1][3]:
             break
         first -= 1
     while last + 1 < len(tokens) and clause_of[last + 1] == clause_of[last]:
-        if not _schedule_token(tokens[last + 1][0]):
+        if not tokens[last + 1][3]:
             break
         last += 1
     return tokens[first][1], tokens[last][2]
@@ -1129,8 +1176,18 @@ def _clashes(text: str, said: tuple[int, int] | None) -> list[Clash]:
     return (
         _clash("one_frequency", often, _often, run[0])
         + _clash("one_day", days, lambda m: m.group(1).casefold(), run[0])
-        + _clash("one_time", times, _clock, run[0])
+        + (_clash("one_time", times, _clock, run[0]) or _range_clash(stretch, run[0]))
     )
+
+
+def _range_clash(stretch: str, at: int) -> list[Clash]:
+    """A range of times, as "from 4 to 5pm", which the clock reads as one time or none. The
+    schedule runs at one time, so the person picks an end, and neither is picked for them."""
+    return [
+        Clash("one_time", r.ends, at + r.start, at + r.end)
+        for r in time_ranges(stretch)[:1]
+        if r.ends[0].casefold() != r.ends[1].casefold()
+    ]
 
 
 def _often(match: re.Match[str]) -> str:
@@ -1214,6 +1271,45 @@ def _time_not_read(shown: str, text: str) -> UnderstoodRow:
     )
 
 
+MODELS_TIME: Final = re.compile(
+    rf"(?:\bat\s+)?{NOT_INSIDE_A_NUMBER}(?:{TWELVE_HOUR}|\d{{1,2}}[:.h]\d{{1,2}}|\d{{3,4}})\b|"
+    r"\bat\s+(?:\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\b|"
+    r"(?:\bat\s+)?\b(?:noon|midday|midnight)\b|\bat\s*$",
+    re.IGNORECASE,
+)
+"""A time in the model's schedule words, read or not, with its "at", and an "at" it left at the
+end, so its day words stay when the person's own time takes its place."""
+
+
+def _their_time(text: str, said: tuple[int, int] | None) -> re.Match[str] | None:
+    """The one time code reads in the person's schedule words, or None when it reads none.
+    Two different times are a clash, asked for before this."""
+    run = _schedule_run(text, said)
+    return None if run is None else CLOCK.search(text, run[0], run[1])
+
+
+def _not_their_time(shown: str, text: str, theirs: re.Match[str]) -> bool:
+    """Whether the model's schedule left out the person's time, or wrote another in its place,
+    or the same time in words the person never wrote, as "4pm" for their "16:00"."""
+    times = {_clock(m) for m in CLOCK.finditer(shown)}
+    unsaid = any(not said_in(t.strip(), text) for t in TIME_OF_DAY.findall(shown))
+    return times != {_clock(theirs)} or unsaid
+
+
+def _with_their_time(shown: str, text: str, theirs: re.Match[str]) -> str:
+    """The model's day words with the person's own time, "at" and all, where the person put
+    it, as the request writes it when it does."""
+    start = theirs.start()
+    lead = re.search(r"\bat\s+$", text[:start], re.IGNORECASE)
+    time = text[lead.start() if lead else start : theirs.end()]
+    day = " ".join(MODELS_TIME.sub(" ", shown).split()).strip(" ,")
+    day_at = _find(text, day) if day else None
+    before = day_at is not None and theirs.end() <= day_at[0]
+    joined = " ".join(p for p in ((time, day) if before else (day, time)) if p)
+    found = _find(text, joined)
+    return joined if found is None else text[found[0] : found[1]]
+
+
 def render_schedule(schedule: str | None, text: str) -> Rendered:
     """The schedule row: the model's words kept to schedule words only, with a time the request
     never said asked for, not filled in, and a day it never said shown as a guess. Two days or
@@ -1229,6 +1325,10 @@ def render_schedule(schedule: str | None, text: str) -> Rendered:
         return Rendered(missing_row("schedule", _clash_note(clashes)), explained, said)
     if not any(_low(t) in SCHEDULE_WORDS or CLOCK_TOKEN.match(_low(t)) for t in kept):
         return Rendered(missing_row("schedule"), explained, said)
+    theirs = _their_time(text, said)
+    if theirs is not None and _not_their_time(shown, text, theirs):
+        shown = _with_their_time(shown, text, theirs)
+        said = _schedule_span(text, shown)
     if any(not said_in(time.strip(), text) for time in TIME_OF_DAY.findall(shown)):
         return Rendered(missing_row("schedule", _no_time_said(shown, text)), explained, said)
     if _time_lost(schedule, shown, text, said):

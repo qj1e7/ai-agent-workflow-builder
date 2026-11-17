@@ -5240,6 +5240,52 @@
     ]
   },
   {
+    "id": "carol-range-of-times",
+    "note": "A follow-up to Carol's request (#309). A range is two times, and the schedule runs at one, so the card asks which, never the first one.",
+    "task": "Every Friday between 16:00 and 17:00, find Jira tickets in project MOCK that nobody updated for 14 days, and raise one Jira ticket in MOCK that lists them",
+    "kind": [
+      "setup_card",
+      "part",
+      "cant"
+    ],
+    "schedule": [
+      "missing"
+    ],
+    "reasons": [
+      "one_time"
+    ]
+  },
+  {
+    "id": "range-with-one-am-pm",
+    "note": "A range whose first end has no am or pm. Read as one time, it was the last end, 5pm.",
+    "task": "Every Friday from 4 to 5pm, sum up the closed tickets in MOCK",
+    "kind": [
+      "setup_card",
+      "part",
+      "cant"
+    ],
+    "schedule": [
+      "missing"
+    ],
+    "reasons": [
+      "one_time"
+    ]
+  },
+  {
+    "id": "carol-24-hour-time",
+    "note": "Carol's request (#309). Code reads their 16:00, so the card keeps it even when the model leaves it out, and never says it couldn't read a time.",
+    "task": "Every Friday at 16:00, find Jira tickets in project MOCK that nobody updated for 14 days, and raise one Jira ticket in MOCK that lists them",
+    "kind": [
+      "setup_card"
+    ],
+    "understood": [
+      "16:00"
+    ],
+    "schedule": [
+      "understood"
+    ]
+  },
+  {
     "id": "r4-approver-change-alone",
     "note": "Plan 7.5, an Approver's change alone. platform-api answers operators for Bob (R16); the runtime sets nothing up and keeps the part. The asker can't change workflows, so the runtime proposes no edit.",
     "task": "Pause the weekly closed-ticket summary",

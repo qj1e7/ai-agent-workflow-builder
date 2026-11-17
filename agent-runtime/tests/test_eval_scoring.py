@@ -631,6 +631,45 @@ def test_a_guessed_time_and_an_invented_key_fail_the_card():
     assert next(c.detail for c in checks if c.name == "no_invented_keys") == "SUP"
 
 
+CAROL_READ = {
+    "name": "Stale MOCK ticket list",
+    "search": {
+        "project": "MOCK",
+        "updated": {"how": "before", "days": 14},
+        "said": "Jira tickets in project MOCK that nobody updated for 14 days",
+    },
+    "ticket": {"creates": True, "says": "list", "said": "lists them"},
+    "place": {"project": "MOCK", "said": "raise one Jira ticket in MOCK"},
+}
+
+
+@pytest.mark.parametrize(
+    "schedule", ["Every Friday at 16:00", "Every Friday 16:00", "Every Friday"]
+)
+def test_a_model_that_reads_a_range_as_one_time_still_gets_the_card_asking_which(schedule: str):
+    """Before, the card took 16:00, or asked with a note that said their words had no time."""
+    case = answer_case("carol-range-of-times")
+    assert failed(ANSWER.score(case, read_answer(**CAROL_READ, schedule=schedule))) == set()
+
+
+def test_a_range_with_one_am_or_pm_is_asked_never_read_as_its_last_end():
+    read = {
+        "name": "Weekly summary",
+        "schedule": "Every Friday at 5pm",
+        "search": {"project": "MOCK", "status": "done", "said": "the closed tickets in MOCK"},
+        "ticket": {"creates": False, "says": "summary", "said": "sum up"},
+    }
+    case = answer_case("range-with-one-am-pm")
+    assert failed(ANSWER.score(case, read_answer(**read))) == set()
+
+
+@pytest.mark.parametrize("schedule", ["Every Friday", "Every Friday at", "Every Friday at 4pm"])
+def test_carols_time_stays_when_the_model_leaves_it_out_or_rewrites_it(schedule: str):
+    """Before, the card asked for their time again, with a note that it couldn't read one."""
+    case = answer_case("carol-24-hour-time")
+    assert failed(ANSWER.score(case, read_answer(**CAROL_READ, schedule=schedule))) == set()
+
+
 @pytest.mark.parametrize(
     ("case_id", "offered"),
     [
