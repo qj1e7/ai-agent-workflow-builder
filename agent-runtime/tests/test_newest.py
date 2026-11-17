@@ -382,6 +382,10 @@ def test_a_question_about_what_was_done_or_asked_twice_still_gets_the_card(
     [
         ("is the server up to date?", "SQL Server"),
         ("is the server up to date?", "Microsoft SQL Server"),
+        ("is our database up to date?", "Oracle Database"),
+        ("is the sql current?", "Microsoft SQL Server"),
+        ("is the ide current?", "Eclipse IDE"),
+        ("is linux up to date?", "Amazon Linux"),
         ("is the database up to date?", "PostgreSQL Database"),
         ("is the browser up to date?", "Chrome Browser"),
         ("is the agent up to date?", "Datadog Agent"),
