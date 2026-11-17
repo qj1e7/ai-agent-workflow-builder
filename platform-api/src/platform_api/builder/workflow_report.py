@@ -244,17 +244,38 @@ class WorkflowReport:
     flags that need an answer."""
 
 
-KEY_SHAPE = re.compile(
-    r"sk-ant-[\w-]+|sk-[A-Za-z0-9]{16,}|gh[pousr]_\w{16,}|github_pat_\w{16,}|glpat-[\w-]{16,}"
-    r"|xox[abposr]-[\w-]+|ATATT[\w=-]{16,}|AKIA[0-9A-Z]{16}|eyJ[\w-]+\.eyJ[\w-]+\.[\w-]+"
-    r"|(?i:bearer)\s+[\w.~+/=-]{8,}|(?i:basic)\s+(?=[A-Za-z0-9+/=]*[0-9+/=])[A-Za-z0-9+/=]{8,}"
-    r"|\b(?i:token|key|secret|sig|password|api[_-]?key)=[^&\s\"']{8,}"
-    r"|hooks\.slack\.com/services/\S+|webhook\.office\.com/\S+|\b[0-9a-f]{40}\b"
-    r"|-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*"
+RUNTIME_KEY_SHAPES = (
+    r"sk-ant-[A-Za-z0-9_\-]{8,}",
+    r"sk-[A-Za-z0-9_\-]{16,}",
+    r"gh[pousr]_[A-Za-z0-9]{16,}",
+    r"github_pat_[A-Za-z0-9_]{16,}",
+    r"(?i:bearer|basic)\s+(?=[A-Za-z._~\-]*[0-9+/=])[A-Za-z0-9._~+/=\-]{8,}",
 )
-"""The shapes of keys and tokens: Anthropic, OpenAI, GitHub, GitLab, Slack, Atlassian and AWS
-keys, a signed token, a bearer or basic header, a key in a query, a Slack or Teams incoming
-webhook, a classic 40-hex token and a private key."""
+"""The agent runtime's masker's shapes, each as it writes it in
+contracts/fixtures/agent/key-shapes.json. A test holds the two lists together."""
+KEY_SHAPE_SOURCES = (
+    *RUNTIME_KEY_SHAPES,
+    r"sk-ant-[\w-]+",
+    r"gh[pousr]_\w{16,}",
+    r"github_pat_\w{16,}",
+    r"glpat-[\w-]{16,}",
+    r"xox[abposr]-[\w-]+",
+    r"ATATT[\w=-]{16,}",
+    r"AKIA[0-9A-Z]{16}",
+    r"eyJ[\w-]+\.eyJ[\w-]+\.[\w-]+",
+    r"(?i:bearer)\s+[\w.~+/=-]{8,}",
+    r"(?i:basic)\s+(?=[A-Za-z0-9+/=]*[0-9+/=])[A-Za-z0-9+/=]{8,}",
+    r"\b(?i:token|key|secret|sig|password|api[_-]?key)=[^&\s\"']{8,}",
+    r"hooks\.slack\.com/services/\S+",
+    r"webhook\.office\.com/\S+",
+    r"\b[0-9a-f]{40}\b",
+    r"-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*",
+)
+"""Every shape of a key or token platform-api knows: the runtime's, then Anthropic, GitHub,
+GitLab, Slack, Atlassian and AWS keys, a signed token, a bearer or basic header, a key in a
+query, a Slack or Teams incoming webhook, a classic 40-hex token and a private key."""
+KEY_SHAPE = re.compile("|".join(KEY_SHAPE_SOURCES))
+"""Refused in a person's words, an answer and a read-back from n8n, and hidden in a report."""
 HIDDEN = "(hidden, looks like a key)"
 CHOOSERS = frozenset({"select"})
 """Target parameters that only pick which other one applies, as Slack's select picks a channel

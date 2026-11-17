@@ -15,7 +15,6 @@ before anything is kept or sent."""
 
 import asyncio
 import logging
-import re
 from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
 from copy import deepcopy
 from dataclasses import dataclass, field
@@ -122,11 +121,8 @@ log = logging.getLogger(__name__)
 DRAFTING_LIMIT: Final = timedelta(minutes=5)
 """The drafter stops itself in under three minutes. A revision still drafting after this was cut
 off, as by a restart, and reads as not drafted."""
-PASTED_KEY: Final = re.compile(
-    rf"{KEY_SHAPE.pattern}"
-    r"|(?i:bearer|basic)\s+(?=[A-Za-z._~\-]*[0-9+/=])[A-Za-z0-9._~+/=\-]{8,}"
-)
-"""The shapes the runtime's masker knows, and the report's, so neither a log nor the records
+PASTED_KEY: Final = KEY_SHAPE
+"""Every shape the runtime's masker knows, and the report's, so neither a log nor the records
 ever hold a pasted key."""
 KEY_PASTED: Final = "Don't paste keys here. An Operator adds keys in Settings."
 KEY_IN_N8N: Final = (

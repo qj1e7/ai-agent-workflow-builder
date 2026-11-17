@@ -573,6 +573,13 @@ class ExampleSpec(WireModel):
     needs: list[str] = Field(description="The ids of the capabilities the example uses.")
 
 
+class KeyShapes(WireModel):
+    """The shapes of keys the masker knows, as regular expressions. platform-api refuses each
+    of them in a person's words, answers and what comes back from n8n (ADR 0051)."""
+
+    shapes: list[str]
+
+
 class CapabilityList(WireModel):
     capabilities: list[CapabilitySpec]
     examples: list[ExampleSpec]
