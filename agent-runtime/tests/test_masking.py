@@ -41,10 +41,26 @@ KEYS = {
     "Azure SAS signature": "sig=" + "Ab3dEf9h%2B" * 4 + "%3D",
     "Power Automate signature": "sig=" + "Ab3_dEf9-h" * 4 + "Xyz",
     "Anthropic key": "sk-ant-" + "api03-" + "Zx9_" * 10,
-    "OpenAI project key": "sk-proj-" + "Ab3dEf9h" * 6,
+    "OpenAI project key": "sk-proj-" + "Ab3dEf9h_-" * 16,
+    "OpenAI service account key": "sk-svcacct-" + "Ab3dEf9h_-" * 8,
+    "OpenAI legacy key": "sk-" + "Q1w2E3r4" * 6,
+    "OpenRouter key": "sk-or-v1-" + "3f2a9c1e" * 8,
     "Langfuse secret key": "sk-lf-" + UUID,
+    "Entra client secret": "Q8k" + "8Q~" + ("Ab3_dEf9~h.K" * 3)[:34],
+    "Stripe secret key": "sk_" + "live_" + "Ab3dEf9h" * 3,
+    "Stripe restricted key": "rk_" + "test_" + "Ab3dEf9h" * 3,
+    "npm token": "npm_" + ("Ab3dEf9h" * 5)[:36],
+    "PyPI token": "pypi-" + "AgEIcHlwaS5vcmc" + "Ab3dEf9h_-" * 6,
+    "Hugging Face token": "hf_" + ("Ab3dEf9h" * 5)[:34],
+    "SonarQube token": "squ_" + "3f2a9c1e" * 5,
+    "Slack session token": "xoxc-" + "1234567890-" * 2 + "Ab3dEf9h" * 3,
+    "Slack session cookie": "xoxd-" + "%2FAb3dEf9h%2B" * 4,
+    "GitLab runner token": "glrt-" + "Ab3dEf9h" * 3,
+    "40 hex after token": "token: " + "3f2a9c1e" * 5,
+    "password in a URL": "postgresql://app:" + "S3cr3tPassw0rd" + "@",
     "JWT": "eyJ" + "hbGciOiJIUzI1NiJ9.eyJ" + "zdWIiOiIxMjM0NTY3ODkwIn0." + "Ab3dEf9h-_" * 3,
     "bearer header": "Bearer " + "abc.123/" * 3,
+    "bearer of letters only": "Bearer " + "abcdefghijklmnopqrstuvwxyz",
     "basic header": "Basic " + "dXNlcjpwYXNz=",
 }
 PEM = (
@@ -70,10 +86,19 @@ PLAIN_WORDS = [
     "assign the design=final sign-off",
     "xoxo, see you soon",
     "the ASIA PACIFIC region",
+    "the key commit " + "3f2a9c1e" * 5 + " was reverted",
+    "token for commit " + "3f2a9c1e" * 5,
+    "password reset for commit " + "3f2a9c1e" * 5,
+    "a bearer authentication header",
+    "bearer instrumentation-ready",
+    "secret santa 2026",
+    "see https://someone@example.com/path and http://localhost:8080/path",
+    "hf_transfer and npm_config_cache and pypi-server",
 ]
 WORDS_LIKE_A_GLUED_KEY = [
     "set up a task-management-workflow for the risk-assessment-report",
     "ask-the-team-before-merging and the desk-booking-workflow",
+    "desk-proj-tracker-2026-q1",
 ]
 """Words that hold "sk-" glued to a letter. They are never refused, but the masker hides them."""
 BEFORE = {
@@ -95,9 +120,10 @@ BEFORE = {
 }
 """What may stand just before a key in text the masker sees. Serialised JSON writes a newline as
 two characters, a backslash and then a letter."""
-GLUED_TO_A_WORD = ("OpenAI project key", "Langfuse secret key")
-"""Keys refused as part of a word when glued to a letter, as "sk-" is in "task-management-workflow".
-The masker still hides them."""
+GLUED_TO_A_WORD = ("OpenAI legacy key",)
+"""Keys read as part of a word when glued to a letter, as "sk-" is in "task-management-workflow",
+so they are not refused there. The masker still hides them. The longer vendor forms, as sk-proj-
+and sk-lf-, are refused even glued."""
 PLACED = [
     pytest.param(before, key, id=f"{name} after {where}")
     for name, key in KEYS.items()
@@ -129,6 +155,7 @@ MAIN_EXAMPLES = [
 ]
 """The keys main's own tests used, and each key above."""
 N = 100_000
+PEM_BEGIN = "-----BEGIN " + "PRIVATE" + " KEY-----"
 HOSTILE = {
     "sk-": "sk-" * (N // 3),
     "xsk-": "xsk-" * (N // 4),
@@ -145,7 +172,7 @@ HOSTILE = {
     "AccountKey=": "AccountKey=" * (N // 11),
     "BEGIN": "-----BEGIN " * (N // 11),
     "BEGIN then letters": "-----BEGIN " + "A " * (N // 2),
-    "END then letters": "-----BEGIN PRIVATE KEY-----" + "-----END " + "A" * N,
+    "END then letters": PEM_BEGIN + "-----END " + "A" * N,
     "bearer ": "bearer " * (N // 7),
     "Bearer then letters": "Bearer " + "a" * N,
     "Bearer then spaces": "Bearer" + " " * N + "x",
@@ -159,6 +186,22 @@ HOSTILE = {
     "email escapes": "=3D" * (N // 3),
     "JSON unicode escapes": "\\u0041" * (N // 6),
     "JSON unicode escape then eyJ-": "\\u0041eyJ-" * (N // 10),
+    "Q~": "Q~" * (N // 2),
+    "digit then Q~": "a8Q~" * (N // 4),
+    "token: ": "token: " * (N // 7),
+    "key then hex letters": "key " + "a" * N,
+    "://a:": "://a:" * (N // 5),
+    ":// then letters": "://" + "a" * N,
+    "://a: then letters": "://a:" + "a" * N,
+    "sk_live_": "sk_live_" * (N // 8),
+    "npm_": "npm_" * (N // 4),
+    "hf_": "hf_" * (N // 3),
+    "squ_": "squ_" * (N // 4),
+    "pypi-": "pypi-AgEIcHlwaS5vcmc" * (N // 20),
+    "sk-proj-": "sk-proj-" * (N // 8),
+    "BEGIN then backslashes": PEM_BEGIN + "\\" * N,
+    "xoxd-%2F": "xoxd-%2F" * (N // 8),
+    "glrt-": "glrt-" * (N // 5),
     "letters": "a" * N,
     "hyphens": "-" * N,
     "underscores": "_" * N,
@@ -207,6 +250,15 @@ def test_a_private_key_block_is_masked_to_its_end_line_or_to_the_end_of_the_text
     assert Masker().mask(f"here {cut}") == f"here {MASKED}"
     note = json.loads(Masker().mask(json.dumps({"note": f"here {PEM} thanks"})))["note"]
     assert note == f"here {MASKED} thanks"
+
+
+def test_a_private_key_without_its_end_line_is_masked_only_to_the_end_of_its_json_string():
+    """Langfuse's input is a whole JSON document, so the fields after the key must survive."""
+    cut = PEM.split("\n-----END")[0]
+    once = json.dumps({"input": cut, "other": 1})
+    assert json.loads(Masker().mask(once)) == {"input": MASKED, "other": 1}
+    twice = json.dumps(once)
+    assert json.loads(json.loads(Masker().mask(twice))) == {"input": MASKED, "other": 1}
 
 
 @pytest.mark.parametrize("text", PLAIN_WORDS)
