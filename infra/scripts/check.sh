@@ -63,6 +63,15 @@ done
 run n8n-editor-gate tool --volume "$infra:/infra:ro" --entrypoint /bin/sh "$TERRAFORM_IMAGE" \
   /infra/scripts/check-n8n-editor-gate.sh
 
+# The deploy's check that n8n's public paths refuse an address outside its list (ADR 0051),
+# against a fake curl.
+run n8n-paths-closed tool --volume "$infra:/infra:ro" --entrypoint /bin/sh "$TERRAFORM_IMAGE" \
+  /infra/scripts/check-n8n-paths-closed.sh
+
+# The deploy's plan guard, on made-up plans. It needs jq, which no pinned tool image here has, so it
+# runs on the host, as the deploy runs it.
+run plan-guard sh "$infra/scripts/check-plan-guard.sh"
+
 # The deploy's job runner, against a fake az, so a failed status check is retried.
 run run-job tool --volume "$infra:/infra:ro" --entrypoint /bin/sh "$TERRAFORM_IMAGE" \
   /infra/scripts/check-run-job.sh

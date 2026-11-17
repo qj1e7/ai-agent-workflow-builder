@@ -45,6 +45,27 @@ x-langfuse-depends: &langfuse-depends
   azurite:
     condition: service_started
 
+# n8n's settings that keep what a workflow runs away from n8n's secrets (ADR 0051, spike P9). n8n
+# loads every built-in block but those in NODES_EXCLUDE, so these settings are the guard.
+# bootstrap gets the same block and refuses to start the platform unless each holds
+# (platform-api's n8n_guard.py). NODE_FUNCTION_ALLOW_BUILTIN, NODE_FUNCTION_ALLOW_EXTERNAL and
+# N8N_RUNNERS_INSECURE_MODE stay unset: the first two let code load modules it picks, also in n8n's
+# own process, and the third drops the runner's own guards.
+x-n8n-guards: &n8n-guards
+  # n8n never loads a block that reaches its own secrets, disk or host: Execute Command, Local File
+  # Trigger, Function, Function Item, LangChain Code, and Git with its tool (n8n_blocks.LEFT_OUT).
+  NODES_EXCLUDE: '["n8n-nodes-base.executeCommand","n8n-nodes-base.localFileTrigger","n8n-nodes-base.function","n8n-nodes-base.functionItem","@n8n/n8n-nodes-langchain.code","n8n-nodes-base.git","n8n-nodes-base.gitTool"]'
+  N8N_COMMUNITY_PACKAGES_ENABLED: "false"
+  # No $env in expressions, and n8n hands none of its environment to the task runner.
+  N8N_BLOCK_ENV_ACCESS_IN_NODE: "true"
+  # Code, AI Transform, the Code Tool, Sort and Item Lists run their code in n8n-runners below.
+  N8N_RUNNERS_MODE: external
+  # n8n also refuses Function, Function Item and LangChain Code as deprecated.
+  N8N_DEPRECATED_NODES_BLOCK: "true"
+  # The file blocks reach only this folder, never n8n's own folders, and never /proc.
+  N8N_RESTRICT_FILE_ACCESS_TO: /home/node/.n8n-files
+  N8N_BLOCK_FILE_ACCESS_TO_N8N_FILES: "true"
+
 # The Cosmos DB emulator's published key.
 x-cosmos: &cosmos-account
   COSMOS_ENDPOINT: http://cosmos:8081
@@ -101,6 +122,7 @@ services:
       postgres:
         condition: service_healthy
     environment:
+      <<: *n8n-guards
       DB_TYPE: postgresdb
       DB_POSTGRESDB_HOST: postgres
       DB_POSTGRESDB_PORT: "5432"
@@ -120,15 +142,8 @@ services:
       # n8n, and a locked-down network refuses the call (issue #86). n8n 2.42.6 reads this setting in
       # @n8n/backend-common's ModulesConfig, and docs/evidence/devnet/n8n-proxy.test.sh checks it.
       N8N_DISABLED_MODULES: mcp-registry
-      # The keys below are in this container's environment, so nothing a person adds to a workflow may
-      # read it: no $env in expressions, no Execute Command, no community packages. Execute Command and
-      # Local File Trigger are n8n's own default exclusions, pinned here so an upgrade cannot drop them.
-      N8N_BLOCK_ENV_ACCESS_IN_NODE: "true"
-      NODES_EXCLUDE: '["n8n-nodes-base.executeCommand","n8n-nodes-base.localFileTrigger"]'
-      N8N_COMMUNITY_PACKAGES_ENABLED: "false"
-      # The allow list: n8n loads only these node types. scripts/nodes-include.sh writes it from
-      # platform-api's node_classes.json (ADR 0045), and CI fails when the two differ.
-      NODES_INCLUDE: '["CUSTOM.wabStartFromPortal","CUSTOM.wabRead","CUSTOM.wabAgent","CUSTOM.wabProposeChange","CUSTOM.wabAskForYes","CUSTOM.wabMakeApprovedChanges","CUSTOM.wabTell","CUSTOM.wabReportFailure","n8n-nodes-base.scheduleTrigger","n8n-nodes-base.manualTrigger","n8n-nodes-base.errorTrigger","n8n-nodes-base.if","n8n-nodes-base.merge","n8n-nodes-base.noOp","n8n-nodes-base.stickyNote","n8n-nodes-base.filter","n8n-nodes-base.switch","n8n-nodes-base.set","n8n-nodes-base.limit","n8n-nodes-base.aggregate","n8n-nodes-base.splitOut","n8n-nodes-base.removeDuplicates","n8n-nodes-base.summarize","n8n-nodes-base.renameKeys","n8n-nodes-base.dateTime","n8n-nodes-base.compareDatasets","n8n-nodes-base.splitInBatches","n8n-nodes-base.xml","n8n-nodes-base.markdown","n8n-nodes-base.executionData","n8n-nodes-base.stopAndError","n8n-nodes-base.jira","n8n-nodes-base.github","n8n-nodes-base.microsoftTeams","n8n-nodes-base.microsoftOutlook","n8n-nodes-base.gmail","n8n-nodes-base.slack"]'
+      # The token that lets the task runner take n8n's tasks. n8n-runners holds the same.
+      N8N_RUNNERS_AUTH_TOKEN: ${N8N_RUNNERS_AUTH_TOKEN:?run deploy/make-env.sh}
       # n8n keeps 30 days of executions (ENGINE-PLAN D10). Our API keeps every node's answer, so the
       # Portal loses nothing, and n8n never prunes a waiting execution (P7 Q16).
       EXECUTIONS_DATA_PRUNE: "true"
@@ -138,8 +153,25 @@ services:
       WAB_API_URL: http://platform-api:8000
       WAB_NODE_KEY: ${WAB_NODE_KEY:?run deploy/make-env.sh}
       WAB_START_SECRET: ${WAB_START_SECRET:?run deploy/make-env.sh}
+    # The task runner's broker listens on port 5679 of n8n's address on the runners network alone,
+    # so no other service reaches it. Docker gives that address only as n8n starts, so n8n looks up
+    # its own name there, n8n-broker, first, and doesn't start without it.
+    entrypoint:
+      - tini
+      - --
+      - /bin/sh
+      - -c
+      - >-
+        N8N_RUNNERS_BROKER_LISTEN_ADDRESS="$$(node -e "require('dns').lookup('n8n-broker', {family: 4},
+        (e, a) => { if (e) process.exit(1); console.log(a); })")"
+        && export N8N_RUNNERS_BROKER_LISTEN_ADDRESS && exec /docker-entrypoint.sh
+    # The laptop only: anyone who reaches n8n can call a published Webhook or Form (ADR 0051).
     ports:
-      - "${N8N_HOST_PORT:-5678}:5678"
+      - "127.0.0.1:${N8N_HOST_PORT:-5678}:5678"
+    networks:
+      default: {}
+      runners:
+        aliases: [n8n-broker]
     volumes:
       - n8ndata:/home/node/.n8n
     # BusyBox wget ignores NO_PROXY and asks a proxy even for localhost, so the check never uses one.
@@ -149,6 +181,24 @@ services:
       interval: 3s
       timeout: 3s
       retries: 40
+
+  # n8n's external task runner (ADR 0051, spike P9). The code of Code, AI Transform, the Code Tool,
+  # Sort and Item Lists runs here, in a container with none of n8n's secrets, only the token that
+  # lets it take n8n's tasks. Its own config allows JavaScript only crypto and moment, and Python
+  # no module. It sits on the runners network alone with n8n, which has no way out of it.
+  n8n-runners:
+    # The same version as n8n's pin, as infra/public-images.json names both.
+    image: n8nio/runners:2.42.6@sha256:b78816286beb0a14e874abfda31eb4621d47f5ebb38f194271df7e39b7bd63a7
+    depends_on:
+      n8n:
+        condition: service_healthy
+    environment:
+      N8N_RUNNERS_TASK_BROKER_URI: http://n8n-broker:5679
+      N8N_RUNNERS_AUTH_TOKEN: ${N8N_RUNNERS_AUTH_TOKEN:?run deploy/make-env.sh}
+      # A runner the launcher started stops after 15 idle seconds, and the next task starts another.
+      N8N_RUNNERS_AUTO_SHUTDOWN_TIMEOUT: "15"
+      GENERIC_TIMEZONE: ${TEAM_TIME_ZONE:-Asia/Singapore}
+    networks: [runners]
 
   agent-runtime:
     build:
@@ -195,6 +245,8 @@ services:
       n8n:
         condition: service_healthy
     environment:
+      # The same guards n8n gets, which bootstrap checks before the platform starts (ADR 0051).
+      <<: *n8n-guards
       DATABASE_URL_OWNER: postgresql://wab_owner:${WAB_OWNER_PASSWORD:?run deploy/make-env.sh}@postgres:5432/platform
       N8N_BASE_URL: http://n8n:5678
       N8N_OWNER_EMAIL: ${N8N_OWNER_EMAIL:?run deploy/make-env.sh}
@@ -232,7 +284,7 @@ services:
       N8N_OWNER_EMAIL: ${N8N_OWNER_EMAIL:?run deploy/make-env.sh}
       N8N_OWNER_PASSWORD: ${N8N_OWNER_PASSWORD:?run deploy/make-env.sh}
       # on lets an Operator give a person n8n access: the platform makes their n8n account and
-      # opens workflows in it, once bootstrap has proved the allow list (ENGINE-PLAN 2.9). It needs
+      # opens workflows in it, once bootstrap has proved n8n's blocks and guards (ADR 0051). It needs
       # SETTINGS_ENCRYPTION_KEY, which seals each password link. N8N_EDITOR_URL is where people open
       # n8n's editor from their browser.
       N8N_STAFF_ACCESS: ${N8N_STAFF_ACCESS:-off}
@@ -425,6 +477,14 @@ services:
       API_UPSTREAM: http://platform-api:8000
     ports:
       - "${PORTAL_HOST_PORT:-8080}:8080"
+
+networks:
+  default: {}
+  # n8n and its task runner only. It has no way out to the internet or the other services. The
+  # runner reaches n8n's broker, and n8n's own port 5678 too, as any service on the default network
+  # does, which takes code that got out of the runner's sandbox.
+  runners:
+    internal: true
 
 volumes:
   pgdata:

@@ -203,6 +203,41 @@ class N8nClient:
                 self._sleep(3)
         return _type_names(self._http.get("/types/nodes.json").raise_for_status().json())
 
+    def settings(self) -> dict[str, Any]:
+        """/rest: what n8n's own settings page shows the signed-in owner, such as its version
+        and the guards it can show (ADR 0051)."""
+        return cast(dict[str, Any], self._rest("GET", "/rest/settings")["data"])
+
+    def run_by_hand(self, body: dict[str, Any], node: str, timeout: float = 120) -> HandRun:
+        """/rest: saves this workflow, runs it by hand up to `node` as n8n's editor does, and
+        reads the run once a second, `timeout` times at most, until it ends. Whatever n8n saved
+        is deleted again."""
+        response = self._send("POST", "/workflows", json=body)
+        if response.status_code == 400:
+            return HandRun(started=False)
+        workflow_id = str(_ok(response)["id"])
+        try:
+            started = self._http.post(
+                f"/rest/workflows/{workflow_id}/run",
+                json={"destinationNode": {"nodeName": node, "mode": "inclusive"}},
+            )
+            if started.status_code != 200:
+                return HandRun(started=False)
+            execution_id = str(started.json()["data"]["executionId"])
+            for _ in range(int(timeout)):
+                execution = self._public(
+                    "GET", f"/executions/{execution_id}", params={"includeData": "true"}
+                )
+                status = str(execution.get("status") or "")
+                if status not in ("new", "running", "waiting", ""):
+                    return HandRun(
+                        True, status, _first_item(execution, node), _first_error(execution, node)
+                    )
+                self._sleep(1)
+            return HandRun(True)
+        finally:
+            self.delete_workflow(workflow_id)
+
     def remove_api_keys(self, label: str) -> int:
         listed = self._rest("GET", "/rest/api-keys")
         stale = [item for item in listed["data"]["items"] if item["label"] == label]
@@ -317,6 +352,43 @@ class N8nClient:
             params=params,
             headers={"X-N8N-API-KEY": self._api_key},
         )
+
+
+@dataclass(frozen=True)
+class HandRun:
+    """A run by hand: whether n8n started it, how it ended, or None while it hadn't, the first
+    item the block it ran up to gave, and that block's error."""
+
+    started: bool
+    status: str | None = None
+    output: Mapping[str, Any] | None = None
+    error: str | None = None
+
+
+def _first_item(execution: Mapping[str, Any], node: str) -> Mapping[str, Any] | None:
+    try:
+        runs = execution["data"]["resultData"]["runData"][node]
+        return cast(Mapping[str, Any], runs[0]["data"]["main"][0][0]["json"])
+    except KeyError, IndexError, TypeError:
+        return None
+
+
+def _first_error(execution: Mapping[str, Any], node: str) -> str | None:
+    """The block's own error, or the run's when the block has none."""
+    try:
+        result = execution["data"]["resultData"]
+    except KeyError, TypeError:
+        return None
+    for path in (("runData", node, 0, "error", "message"), ("error", "message")):
+        found: Any = result
+        try:
+            for step in path:
+                found = found[step]
+        except KeyError, IndexError, TypeError:
+            continue
+        if isinstance(found, str):
+            return found
+    return None
 
 
 def _type_names(listed: object) -> set[str]:
@@ -1453,6 +1525,17 @@ class N8nWorkflows:
         """The error workflow, as the last bootstrap that was ready loaded it."""
         loaded = (await self.platform_workflows()).get(ERROR_WORKFLOW)
         return None if loaded is None else loaded.id
+
+    async def n8n_version(self) -> str | None:
+        """The n8n version the last bootstrap read from n8n itself, or None before any did. The
+        workflow drafter's catalogue must name the same (ADR 0051, section 8)."""
+        async with self._db.connection("orchestration") as conn:
+            row = await (
+                await conn.execute(
+                    "SELECT n8n_version FROM orchestration.engine_status WHERE id = 1"
+                )
+            ).fetchone()
+        return None if row is None else row["n8n_version"]
 
     async def recorded_error_workflow_id(self) -> str | None:
         """The error workflow the last bootstrap recorded, whether or not it was ready, as a

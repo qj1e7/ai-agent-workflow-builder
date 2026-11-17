@@ -17,8 +17,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, cast
 
-SHIPPED = ("n8n-nodes-base", "@n8n/n8n-nodes-langchain")
-"""The packages of blocks in the image."""
+from platform_api.orchestration.n8n_blocks import SHIPPED
+
 SHARED = "dist/utils"
 """Where each package keeps the helpers its blocks share."""
 CODE_SUFFIXES = frozenset({".js", ".cjs", ".mjs"})
@@ -59,9 +59,11 @@ n8n's file helpers, anything that runs code it is given, and running another wor
 KNOWN: Mapping[str, frozenset[Reach]] = {
     # Execute Command, which n8n never loads.
     "n8n-nodes-base.executeCommand": frozenset({"child_process"}),
-    # The blocks that run code a workflow gives them, held for spike P9. Code and LangChain Code
-    # also read process.env. Merge runs AlaSQL in its SQL mode, in an isolate, and reads
-    # AlaSQL's own bundle from n8n's packages with fs.
+    # The blocks that run code a workflow gives them. Code, the Code Tool, AI Transform, Sort and
+    # Item Lists run it in n8n's external task runner, and Merge's SQL mode in an isolate, so
+    # they load (spike P9). Function, Function Item and LangChain Code run it in n8n's own
+    # process and stay held (orchestration/n8n_blocks.py). Code and LangChain Code also read
+    # process.env. Merge reads AlaSQL's own bundle from n8n's packages with fs.
     "n8n-nodes-base.code": frozenset({"runs code", "process.env"}),
     "@n8n/n8n-nodes-langchain.code": frozenset({"runs code", "process.env"}),
     "@n8n/n8n-nodes-langchain.toolCode": frozenset({"runs code"}),
@@ -71,7 +73,8 @@ KNOWN: Mapping[str, frozenset[Reach]] = {
     "n8n-nodes-base.sort": frozenset({"runs code"}),
     "n8n-nodes-base.itemLists": frozenset({"runs code"}),
     "n8n-nodes-base.merge": frozenset({"runs code", "fs"}),
-    # The blocks that read or write a path on n8n's disk, held for spike P9.
+    # The blocks that read or write a path on n8n's disk. n8n keeps them in ~/.n8n-files, so they
+    # load (spike P9), except Git, which stays held until a probe with a real repository.
     "n8n-nodes-base.readWriteFile": frozenset({"fs", "file helpers"}),
     "n8n-nodes-base.readBinaryFile": frozenset({"file helpers"}),
     "n8n-nodes-base.readBinaryFiles": frozenset({"file helpers"}),

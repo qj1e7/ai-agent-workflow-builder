@@ -6,28 +6,36 @@ words n8n finds it by, its versions, its resources and operations, and the param
 version with n8n's `displayOptions`, so that a reader can return only what n8n shows for one
 resource and operation. Fields that only shape n8n's editor are left out. From our own files it
 adds each operation's class, tag and `says` from the class file, which key of the platform's the
-type runs with (`KEY_FOR_TYPE`), and the blocks section 2 holds off. The workflow drafter reads it
-through `agent_runtime.catalogue`.
+type runs with (`KEY_FOR_TYPE`), and the blocks n8n loads that can't run on this platform
+(`n8n_blocks.HELD`, which the safety checker reads too). The workflow drafter reads it through
+`agent_runtime.catalogue`.
 
     python -m platform_api.n8n_catalogue <served nodes.json> <image> <sources>
 
-prints the catalogue. `<served nodes.json>` is what the image serves at /types/nodes.json without
-the allow list, `<image>` is the pin it came from, and `<sources>` holds each package in
+prints the catalogue. `<served nodes.json>` is what the image serves at /types/nodes.json as the
+platform runs it, `<image>` is the pin it came from, and `<sources>` holds each package in
 `SHIPPED` as the image has it: `<package>/dist/known/nodes.json`, `<package>/dist/nodes` and
-`<package>/dist/utils`. scripts/n8n-catalogue.sh runs it.
+`<package>/dist/utils`, with `@n8n/config`'s configs, the runner image's own config and
+infra/public-images.json, as `n8n_defaults_check` names them. scripts/n8n-catalogue.sh runs it.
 
-It also runs the pin check of the blocks' code (`n8n_code_check`), and fails when that finds
-anything new.
+It also runs the pin check of the blocks' code (`n8n_code_check`) and of the defaults spike P9's
+verdicts rest on (`n8n_defaults_check`), and fails when either finds anything new.
 """
 
 import json
 import sys
 from collections.abc import Collection, Iterable, Mapping, Sequence
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, cast
 
-from platform_api.n8n_code_check import SHIPPED, Scan, problems, scan
+from platform_api.n8n_code_check import Scan, problems, scan
+from platform_api.n8n_defaults_check import (
+    RUNNERS_CONFIG,
+    config_problems,
+    runner_problems,
+    version_problems,
+)
+from platform_api.orchestration.n8n_blocks import HELD, LEFT_OUT, SHIPPED, package
 from platform_api.orchestration.node_classes import (
     NODE_CLASSES,
     OURS,
@@ -50,58 +58,11 @@ the catalogue leaves them out."""
 FETCHED_BACKING = frozenset({"@n8n/n8n-nodes-langchain.mcpRegistryClientTool"})
 """The hidden block that runs the fetched ones. n8n serves it once more each time it fetches the
 list, so what n8n serves of it changes while n8n runs."""
-LEFT_OUT = frozenset({"n8n-nodes-base.executeCommand", "n8n-nodes-base.localFileTrigger"})
-"""n8n never loads these (NODES_EXCLUDE): either one opens n8n's own environment."""
+PINS = "public-images.json"
+"""infra/public-images.json, under the sources folder."""
 NOT_PARAMETERS = frozenset({"notice", "callout"})
 """Property types that only show words in n8n's editor and hold no value."""
 
-
-@dataclass(frozen=True)
-class Hold:
-    """Why a block can't run on this platform yet, and what it waits for (ADR 0051, section 2)."""
-
-    because: str
-    waits_for: str
-    when: Mapping[str, tuple[str, ...]] = field(default_factory=dict[str, tuple[str, ...]])
-    """Only while each of these parameters has one of these values. Empty: whatever it does."""
-
-    def as_json(self) -> Json:
-        held: Json = {"because": self.because, "waits_for": self.waits_for}
-        if self.when:
-            held["when"] = {name: list(values) for name, values in self.when.items()}
-        return held
-
-
-P9 = "spike P9"
-AMENDMENT = "an amendment that makes a version's approval cover the workflows it calls"
-CODE = Hold("It runs code.", P9)
-DISK = Hold("It reads or writes a path on n8n's disk.", P9)
-CALLS = Hold("It runs another workflow, which its approval doesn't cover.", AMENDMENT)
-
-HELD: Mapping[str, tuple[Hold, ...]] = {
-    "n8n-nodes-base.code": (CODE,),
-    "@n8n/n8n-nodes-langchain.code": (CODE,),
-    "@n8n/n8n-nodes-langchain.toolCode": (CODE,),
-    "n8n-nodes-base.function": (CODE,),
-    "n8n-nodes-base.functionItem": (CODE,),
-    "n8n-nodes-base.aiTransform": (CODE,),
-    "n8n-nodes-base.sort": (Hold(CODE.because, P9, {"type": ("code",)}),),
-    "n8n-nodes-base.itemLists": (Hold(CODE.because, P9, {"type": ("code",)}),),
-    "n8n-nodes-base.merge": (Hold(CODE.because, P9, {"mode": ("combineBySql",)}),),
-    "n8n-nodes-base.readWriteFile": (DISK,),
-    "n8n-nodes-base.readBinaryFile": (DISK,),
-    "n8n-nodes-base.readBinaryFiles": (DISK,),
-    "n8n-nodes-base.writeBinaryFile": (DISK,),
-    "n8n-nodes-base.git": (DISK,),
-    "n8n-nodes-base.executeWorkflow": (
-        CALLS,
-        Hold(DISK.because, P9, {"source": ("localFile",)}),
-    ),
-    "n8n-nodes-base.executeWorkflowTrigger": (CALLS,),
-    "@n8n/n8n-nodes-langchain.toolWorkflow": (CALLS,),
-    "@n8n/n8n-nodes-langchain.retrieverWorkflow": (CALLS,),
-}
-"""The blocks section 2 holds off. A tool n8n makes from one of them is held the same way."""
 
 _PARAMETER_KEYS = (
     "name",
@@ -174,9 +135,16 @@ def dump(made: Json) -> str:
 def pin_problems(
     found: Scan, served: Iterable[str], listed: Collection[str] | None = None
 ) -> list[str]:
-    """What the pin check of the blocks' code found (`n8n_code_check`), and each type n8n serves
-    whose code it didn't read."""
+    """What the pin check of the blocks' code found (`n8n_code_check`), each type n8n serves
+    whose code it didn't read, and each block that runs shell commands that n8n still loads."""
     said = problems(found, listed)
+    said += [
+        f"{name} reaches child_process, so it can run anything in n8n's container. Add it to "
+        "LEFT_OUT in platform_api/orchestration/n8n_blocks.py, which NODES_EXCLUDE and "
+        "bootstrap's check follow."
+        for name, reached in sorted(found.blocks.items())
+        if "child_process" in reached and name not in LEFT_OUT
+    ]
     names = set(served)
     for name in sorted(names):
         if _kept(name) and not name.startswith(OURS) and name not in found.blocks:
@@ -202,10 +170,24 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"catalogue: {error}", file=sys.stderr)
         return 1
     sys.stdout.write(dump(made))
-    problems = pin_problems(found, (str(d.get("name")) for d in served))
+    sources = Path(args[2])
+    problems = [
+        *pin_problems(found, (str(d.get("name")) for d in served)),
+        *config_problems(sources),
+        *_read_then(sources / RUNNERS_CONFIG, runner_problems),
+        *_read_then(sources / PINS, version_problems),
+    ]
     for problem in problems:
         print(f"pin check: {problem}", file=sys.stderr)
     return 1 if problems else 0
+
+
+def _read_then(path: Path, check: Any) -> list[str]:
+    try:
+        read = json.loads(path.read_text())
+    except OSError, ValueError:
+        return [f"The pin check could not read {path.name}."]
+    return cast(list[str], check(read))
 
 
 def _compact(value: object) -> str:
@@ -244,19 +226,16 @@ def _unclassed(listed: object) -> list[Json]:
     ]
 
 
-def _package(name: str) -> str:
-    return name.rpartition(".")[0]
-
-
 def _kept(name: str) -> bool:
     """Whether the catalogue holds this type. A type from a package nobody has placed fails."""
-    package = _package(name)
-    if name.startswith(OURS) or package in SHIPPED:
+    from_package = package(name)
+    if name.startswith(OURS) or from_package in SHIPPED:
         return name not in LEFT_OUT and name not in FETCHED_BACKING
-    if package in FETCHED:
+    if from_package in FETCHED:
         return False
     raise ValueError(
-        f"n8n serves {name}, from {package}, which platform_api/n8n_catalogue.py doesn't know. "
+        f"n8n serves {name}, from {from_package}, which platform_api/n8n_catalogue.py "
+        "doesn't know. "
         "Say whether the image ships it (SHIPPED) or n8n fetches it (FETCHED). Community "
         "nodes stay off."
     )
@@ -300,9 +279,9 @@ def _block(
         block["tool_of"] = made_from
     if (spec := KEY_FOR_TYPE.get(name)) is not None:
         block["key"] = {"system": spec.system, "for": spec.on}
-    holds = HELD.get(name) or HELD.get(made_from or "", ())
-    if holds:
-        block["held"] = [hold.as_json() for hold in holds]
+    hold = HELD.get(name) or HELD.get(made_from or "")
+    if hold is not None:
+        block["held"] = [hold.as_json()]
     block["versions"] = [_version(name, d, classes) for d in ordered]
     return block
 

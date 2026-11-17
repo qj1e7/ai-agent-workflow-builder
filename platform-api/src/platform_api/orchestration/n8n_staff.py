@@ -1,7 +1,7 @@
 """Staff n8n accounts (ENGINE-PLAN 2.9, D17, M5). The People list decides who has n8n access; the
 platform makes and ends each person's n8n account to match, and keeps n8n's user id for it, which
 every later match uses. An account is made only while N8N_STAFF_ACCESS is on and the last
-bootstrap proved the node allow list, so no staff account exists while the list is unproven.
+bootstrap proved n8n's blocks and guards (ADR 0051), so no staff account exists until it has.
 
 The account follows the flag on its own: each settle reads the list and n8n and does only what
 differs, so a settle cut off anywhere is finished by the next. An account is ended only once its
@@ -68,7 +68,8 @@ class StaffGate:
     switched_on: bool
     """N8N_STAFF_ACCESS."""
     ready: bool
-    """The last bootstrap proved that n8n loads exactly the class file's node types."""
+    """The last bootstrap was ready, so it proved that n8n loads every built-in block but
+    the seven left out, and runs with the guards that keep a workflow's code from n8n's secrets."""
 
     @property
     def closed(self) -> str | None:

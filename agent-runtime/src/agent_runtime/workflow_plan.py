@@ -110,7 +110,14 @@ class ProposedPlan(_Shape):
 NEVER_LOADED: Final[Mapping[str, str]] = {
     "n8n-nodes-base.executeCommand": "Execute Command",
     "n8n-nodes-base.localFileTrigger": "Local File Trigger",
+    "n8n-nodes-base.function": "Function",
+    "n8n-nodes-base.functionItem": "Function Item",
+    "@n8n/n8n-nodes-langchain.code": "LangChain Code",
+    "n8n-nodes-base.git": "Git",
+    "n8n-nodes-base.gitTool": "Git Tool",
 }
+"""The blocks n8n never loads on this platform (NODES_EXCLUDE, platform-api's n8n_blocks.LEFT_OUT),
+because each reaches n8n's own secrets, disk or host."""
 PLATFORM_ADDS: Final[Mapping[str, str]] = {
     "n8n-nodes-base.stickyNote": "the Sticky Note",
     f"{OURS}wabStartFromPortal": "Start from the Portal, beside any schedule",
@@ -158,8 +165,8 @@ def refused_type(node_type: str) -> PlanProblem | None:
     if node_type in NEVER_LOADED:
         return PlanProblem(
             code="left_out",
-            text=f"{NEVER_LOADED[node_type]} never loads on this platform, because it would open "
-            "n8n's own environment. Use another block.",
+            text=f"{NEVER_LOADED[node_type]} never loads on this platform, because it would reach "
+            "n8n's own secrets, disk or host. Use another block.",
         )
     if not node_type.startswith(SHIPPED):
         return PlanProblem(

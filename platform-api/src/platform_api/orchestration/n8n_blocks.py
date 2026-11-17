@@ -1,0 +1,95 @@
+"""Which of n8n's blocks the platform's n8n loads, and which of those can't run on this platform
+(ADR 0051, section 2, as spike P9 and build step 12 settled it).
+
+n8n loads every built-in block of the packages in `SHIPPED`, except those in `LEFT_OUT`, and no
+community node. Our node pack's blocks load too. `HELD` names the blocks n8n loads that still can't
+run here, each with why and what it waits for, and a tool n8n makes of a held block is held the
+same way. The safety checker flags each of them, and the block catalogue marks each, so the
+workflow drafter and the checker say the same.
+
+Pure.
+"""
+
+from collections.abc import Mapping
+from dataclasses import dataclass
+
+OURS = "CUSTOM."
+"""How n8n names the types of our node pack (P7 Q11)."""
+SHIPPED = ("n8n-nodes-base", "@n8n/n8n-nodes-langchain")
+"""The packages of blocks in n8n's image."""
+LEFT_OUT = frozenset(
+    {
+        "n8n-nodes-base.executeCommand",
+        "n8n-nodes-base.localFileTrigger",
+        "n8n-nodes-base.function",
+        "n8n-nodes-base.functionItem",
+        "@n8n/n8n-nodes-langchain.code",
+        "n8n-nodes-base.git",
+        "n8n-nodes-base.gitTool",
+    }
+)
+"""n8n never loads these (NODES_EXCLUDE), because each reaches n8n's own secrets, disk or host.
+Execute Command runs shell commands in n8n's container, and Local File Trigger watches its disk.
+Function, Function Item and LangChain Code run code inside n8n's own process (spike P9). n8n also
+refuses them as deprecated, but a later pin may drop that, and the exclusion doesn't rest on it.
+Git runs git on n8n's disk, and no probe with a real repository has shown that its hooks and
+settings can't run code there. Its tool goes too. Bootstrap fails the start unless n8n leaves out
+each one."""
+TOOL_SUFFIXES = ("HitlTool", "Tool")
+"""How n8n names an AI agent's tool it makes of a block."""
+
+
+@dataclass(frozen=True)
+class Hold:
+    """Why a block n8n loads can't run on this platform, and what it waits for."""
+
+    because: str
+    waits_for: str
+
+    def as_json(self) -> dict[str, str]:
+        return {"because": self.because, "waits_for": self.waits_for}
+
+
+A_NEW_ADR = "a new ADR"
+CALLS = Hold(
+    "It runs another workflow, which its approval doesn't cover.",
+    "an amendment that makes a version's approval cover the workflows it calls",
+)
+N8N_ITSELF = Hold("It changes n8n itself, and Settings refuses a key to n8n's own API.", A_NEW_ADR)
+
+HELD: Mapping[str, Hold] = {
+    "n8n-nodes-base.executeWorkflow": CALLS,
+    "n8n-nodes-base.executeWorkflowTrigger": CALLS,
+    "@n8n/n8n-nodes-langchain.toolWorkflow": CALLS,
+    "@n8n/n8n-nodes-langchain.retrieverWorkflow": CALLS,
+    "n8n-nodes-base.n8n": N8N_ITSELF,
+}
+"""The blocks n8n loads that can't run on this platform, by the platform's own rules: none of them
+reaches n8n's secrets, disk or host, which `LEFT_OUT` keeps out at load time. Code, AI Transform,
+the Code Tool, Sort, Item Lists and Merge's SQL mode run (spike P9), because n8n runs the first
+five in its external task runner, which holds none of n8n's secrets, and Merge's SQL in an isolate
+that reaches no file or address. The disk blocks other than Git run, because n8n keeps them in
+`~/.n8n-files`."""
+
+
+def package(node_type: str) -> str:
+    return node_type.rpartition(".")[0]
+
+
+def loads(node_type: str) -> bool:
+    """Whether the platform's n8n loads this type: one of ours, or a built-in block it doesn't
+    leave out."""
+    if node_type.startswith(OURS):
+        return True
+    return package(node_type) in SHIPPED and node_type not in LEFT_OUT
+
+
+def held(node_type: str) -> Hold | None:
+    """Why n8n loads this type but it can't run here, or None. A tool n8n makes of a held block
+    is held the same way."""
+    if (hold := HELD.get(node_type)) is not None:
+        return hold
+    for suffix in TOOL_SUFFIXES:
+        if node_type.endswith(suffix):
+            return HELD.get(node_type.removesuffix(suffix))
+    return None

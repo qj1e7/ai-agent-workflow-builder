@@ -97,10 +97,10 @@ jobs:
             exit 1
           fi
 
-      - name: n8n's allow list in compose and Terraform is the one node_classes.json makes
+      - name: n8n and bootstrap get the same guards, and the task runner holds none of n8n's secrets
         if: matrix.project == 'e2e'
         working-directory: .
-        run: scripts/nodes-include.sh --check
+        run: scripts/n8n-guards.sh
 
       - name: Check import rules
         if: matrix.project == 'platform-api'
@@ -257,9 +257,9 @@ jobs:
         with:
           enable-cache: false
 
-      # One start of the image without the allow list also checks contracts/n8n/catalogue.json
-      # (scripts/n8n-catalogue.sh, ADR 0051).
-      - name: Pack smoke, n8n loads exactly the classed types, the pin checks hold, and the catalogue is current
+      # One start of the image also checks contracts/n8n/catalogue.json, and the defaults and the
+      # task runner's config that spike P9 rests on (scripts/n8n-catalogue.sh, ADR 0051).
+      - name: Pack smoke, n8n loads every built-in block but seven, the pin checks hold, and the catalogue is current
         working-directory: .
         run: scripts/pack-smoke.sh
 

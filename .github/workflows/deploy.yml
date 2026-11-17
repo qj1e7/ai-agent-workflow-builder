@@ -206,6 +206,14 @@ jobs:
       - name: Run the bootstrap job
         run: ../../scripts/run-job.sh "$(terraform output -raw resource_group_name)" bootstrap 1200
 
+      # n8n loads every built-in block (ADR 0051), so a Webhook or Form a member publishes answers
+      # anyone who reaches n8n. With N8N_EDITOR_ALLOWED_IPS set, this runner is outside n8n's
+      # address list, so each path must refuse it. Without a list, every address reaches n8n, as
+      # ADR 0034 chose, and there is nothing to check.
+      - name: Check that n8n's public paths refuse an address outside its list
+        if: env.TF_VAR_n8n_editor_allowed_ips != ''
+        run: ../../scripts/n8n-paths-closed.sh "$(terraform output -raw n8n_editor_url)"
+
       - name: Say where the Portal is
         run: |
           {

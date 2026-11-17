@@ -1,5 +1,6 @@
-"""The class file (ADR 0045): what n8n is allowed to load, what the file may say, and the pin check
-that keeps it complete against the node types the pinned image serves."""
+"""The class file (ADR 0045): what each block it knows may do, what the file may say, and the pin
+check that keeps each of its rows true to the node types the pinned image serves. n8n loads every
+built-in block (ADR 0051), so the file no longer decides what n8n loads."""
 
 import json
 from collections.abc import Callable
@@ -21,9 +22,9 @@ from platform_api.pin_check import main as pin_check
 from tests.support import FIXTURES
 
 SERVED = Path(__file__).parent / "golden" / "n8n" / "served_types.json"
-"""What n8n 2.42.6 serves at /types/nodes.json with the allow list on, cut down to each type's
-name, versions and the parameters that pick what it does. scripts/pack-smoke.sh checks the
-image itself."""
+"""What n8n 2.42.6 serves at /types/nodes.json, cut down to the types the class file names, each
+with its name, versions and the parameters that pick what it does. scripts/pack-smoke.sh checks
+the image itself."""
 PACK = FIXTURES.parent / "n8n" / "node-types.json"
 OFF = {
     "n8n-nodes-base.httpRequest",
@@ -53,8 +54,8 @@ def classes_from(raw: Raw, tmp_path: Path) -> NodeClasses:
     return NodeClasses.read(path)
 
 
-def test_n8n_loads_our_pack_n8n_s_triggers_and_flow_nodes_and_its_data_nodes_and_nothing_off():
-    included = set(NODE_CLASSES.included())
+def test_the_file_classes_our_pack_n8n_s_triggers_flow_and_data_nodes_and_names_the_rest_off():
+    included = set(NODE_CLASSES.blocks())
     pack = {entry["type"] for entry in json.loads(PACK.read_text())["nodes"]}
     assert {t for t in included if t.startswith("CUSTOM.")} == pack
     assert {
@@ -79,10 +80,10 @@ SYSTEMS = {
 """n8n's own nodes for outside systems that may read or post a notice (ADR 0045, E16)."""
 
 
-def test_n8n_also_loads_the_ai_tools_it_makes_and_each_is_off():
-    """n8n makes a tool of each node marked usable by an AI agent after NODES_INCLUDE has picked
-    the nodes, so the list cannot leave it out. AI agents are off (ADR 0023)."""
-    made = set(NODE_CLASSES.loaded()) - set(NODE_CLASSES.included())
+def test_the_ai_tools_n8n_makes_of_the_classed_blocks_are_each_off():
+    """n8n makes a tool of each block marked usable by an AI agent. AI agents are off (ADR 0023),
+    so the file names each tool off."""
+    made = {name for name in the_file() if name.endswith("Tool")}
     hitl = {f"{name}HitlTool" for name in SYSTEMS if "jira" not in name and "github" not in name}
     tools = {f"{name}Tool" for name in SYSTEMS}
     assert made == {"n8n-nodes-base.dateTimeTool", *tools, *hitl}
@@ -176,10 +177,6 @@ def drop_operation(raw: Raw) -> None:
     del raw["n8n-nodes-base.dateTime"]["rows"][0]["operations"]["addToDate"]
 
 
-def drop_type(raw: Raw) -> None:
-    del raw["n8n-nodes-base.limit"]
-
-
 def drop_version(raw: Raw) -> None:
     raw["n8n-nodes-base.if"]["rows"][0]["versions"].remove(2.3)
 
@@ -198,10 +195,6 @@ def add_operation(raw: Raw) -> None:
 
 def change_default(raw: Raw) -> None:
     raw["n8n-nodes-base.merge"]["rows"][0]["default"] = "combine"
-
-
-def drop_the_made_tool(raw: Raw) -> None:
-    del raw["n8n-nodes-base.dateTimeTool"]
 
 
 def whole_where_n8n_picks(raw: Raw) -> None:
@@ -226,17 +219,12 @@ def by_operation_only(raw: Raw) -> None:
     row.update(by="operation", default=message["default"], operations=message["operations"])
 
 
-def drop_a_made_system_tool(raw: Raw) -> None:
-    del raw["n8n-nodes-base.slackTool"]
-
-
 @pytest.mark.parametrize(
     ("change", "says"),
     [
         (drop_operation, "n8n-nodes-base.dateTime version 2 can addToDate, which the class"),
-        (drop_type, "n8n loads n8n-nodes-base.limit, which the class file does not turn on."),
         (drop_version, "n8n-nodes-base.if version 2.3 is not classed."),
-        (drop_our_block, "n8n loads CUSTOM.wabTell, which the class file does not turn on."),
+        (drop_our_block, "n8n loads CUSTOM.wabTell, one of our blocks, which the class file"),
         (add_version, "classes n8n-nodes-base.noOp version 2, which n8n does not load."),
         (add_operation, "classes n8n-nodes-base.executionData version 1 delete, which n8n"),
         (change_default, "n8n's default for n8n-nodes-base.merge version 3 is append, not combine"),
@@ -244,28 +232,23 @@ def drop_a_made_system_tool(raw: Raw) -> None:
             whole_where_n8n_picks,
             "n8n-nodes-base.dateTime version 2 picks what it does by operation",
         ),
-        (drop_the_made_tool, "n8n loads n8n-nodes-base.dateTimeTool, which the class file"),
         (drop_a_resource_operation, "n8n-nodes-base.jira version 1 issue can notify, which"),
         (drop_a_resource, "n8n-nodes-base.slack version 2.7 can star, which the class"),
         (change_a_resource_default, "n8n's default for n8n-nodes-base.slack version 2 message"),
         (by_operation_only, "n8n-nodes-base.gmail version 2.2 picks what it does by resource"),
-        (drop_a_made_system_tool, "n8n loads n8n-nodes-base.slackTool, which the class file"),
     ],
     ids=[
         "an-operation",
-        "a-type",
         "a-version",
         "one-of-ours",
         "a-version-n8n-lacks",
         "an-operation-n8n-lacks",
         "a-default",
         "a-whole-class",
-        "a-type-n8n-makes",
         "a-resource-s-operation",
         "a-resource",
         "a-resource-s-default",
         "an-operation-without-its-resource",
-        "a-system-tool-n8n-makes",
     ],
 )
 def test_the_pin_check_fails_when_the_file_and_the_image_disagree(
@@ -277,19 +260,26 @@ def test_the_pin_check_fails_when_the_file_and_the_image_disagree(
     assert any(says in problem for problem in problems), problems
 
 
-def test_the_pin_check_names_a_type_n8n_loads_that_the_file_turns_off():
-    """As when n8n runs without the allow list."""
-    leaky = [*served(), {"name": "n8n-nodes-base.httpRequest", "version": 4.2, "properties": []}]
-    assert NODE_CLASSES.unclassed(leaky) == [
-        "n8n loads n8n-nodes-base.httpRequest, which the class file does not turn on."
-    ]
+def test_the_pin_check_asks_for_no_row_for_a_type_the_file_does_not_name(tmp_path: Path):
+    """n8n loads every built-in block (ADR 0051), and the checker flags each one the file
+    doesn't class, so only the file's own rows must match the image."""
+    newer = [*served(), {"name": "n8n-nodes-base.airtable", "version": [1, 2], "properties": []}]
+    assert NODE_CLASSES.unclassed(newer) == []
+    raw = the_file()
+    raw.pop("n8n-nodes-base.limit")
+    assert classes_from(raw, tmp_path).unclassed(served()) == []
 
 
-def test_the_pin_check_names_a_made_type_n8n_no_longer_makes():
-    gone = [d for d in served() if d["name"] != "n8n-nodes-base.dateTimeTool"]
-    assert NODE_CLASSES.unclassed(gone) == [
-        "The class file says n8n makes n8n-nodes-base.dateTimeTool, which n8n does not load."
-    ]
+@pytest.mark.parametrize(
+    "gone", ["n8n-nodes-base.dateTimeTool", "n8n-nodes-base.httpRequest", "n8n-nodes-base.limit"]
+)
+def test_the_pin_check_names_a_type_the_file_names_that_n8n_no_longer_loads(gone: str):
+    left = [d for d in served() if d["name"] != gone]
+    assert any(
+        f"The class file names {gone}, which n8n does not load." in problem
+        or f"The class file classes {gone} version" in problem
+        for problem in NODE_CLASSES.unclassed(left)
+    ), NODE_CLASSES.unclassed(left)
 
 
 def test_the_pin_check_names_an_operation_a_new_image_adds(tmp_path: Path):
@@ -347,8 +337,9 @@ def twice(raw: Raw) -> None:
     raw["n8n-nodes-base.if"]["rows"].append({"versions": [1], "class": "read"})
 
 
-def made_from_an_off_type(raw: Raw) -> None:
-    raw["n8n-nodes-base.dateTimeTool"]["loaded_with"] = "n8n-nodes-base.sort"
+def says_what_n8n_loads(raw: Raw) -> None:
+    """The file no longer decides what n8n loads (ADR 0051), so it has no field for it."""
+    raw["n8n-nodes-base.dateTimeTool"]["loaded_with"] = "n8n-nodes-base.dateTime"
 
 
 def default_unclassed(raw: Raw) -> None:
@@ -412,7 +403,7 @@ def picked_by_three(raw: Raw) -> None:
         both_ways,
         twice,
         default_unclassed,
-        made_from_an_off_type,
+        says_what_n8n_loads,
         slack_writes,
         a_notice_without_its_place,
         a_notice_without_its_text,

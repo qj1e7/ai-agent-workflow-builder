@@ -171,7 +171,8 @@ class Settings:
     in n8n, and new use cases run on the shared n8n workflow."""
     n8n_staff_access: bool = False
     """N8N_STAFF_ACCESS. Off, the platform makes no staff n8n account and opens no workflow in
-    n8n (ENGINE-PLAN 2.9, M5). On, it still waits for a bootstrap that proved the allow list."""
+    n8n (ENGINE-PLAN 2.9, M5). On, it still waits for a bootstrap that proved n8n's blocks and
+    guards (ADR 0051)."""
     n8n_editor_url: str | None = None
     """N8N_EDITOR_URL, where people open n8n's editor, as ADR 0034's n8n_editor_url output. Each
     password link n8n makes is shown at this address."""
@@ -607,6 +608,21 @@ def n8n_owner_from_env(env: Mapping[str, str]) -> N8nOwner | None:
     return N8nOwner(email, password)
 
 
+N8N_GUARDED = (
+    "NODES_EXCLUDE",
+    "N8N_BLOCK_ENV_ACCESS_IN_NODE",
+    "N8N_RUNNERS_MODE",
+    "N8N_DEPRECATED_NODES_BLOCK",
+    "N8N_BLOCK_FILE_ACCESS_TO_N8N_FILES",
+    "N8N_RESTRICT_FILE_ACCESS_TO",
+    "NODE_FUNCTION_ALLOW_BUILTIN",
+    "NODE_FUNCTION_ALLOW_EXTERNAL",
+    "N8N_RUNNERS_INSECURE_MODE",
+)
+"""The n8n settings bootstrap reads from the block the deploy gives both n8n and bootstrap
+(ADR 0051, spike P9). `platform_api.n8n_guard` says what each must be."""
+
+
 @dataclass(frozen=True)
 class BootstrapSettings:
     owner_database_url: str = field(repr=False)
@@ -617,6 +633,9 @@ class BootstrapSettings:
     platform_internal_url: str
     team_time_zone: ZoneInfo = TEAM_TIME_ZONE
     """The self-test runs on it, as every workflow does."""
+    n8n_settings: Mapping[str, str] = field(default_factory=dict[str, str])
+    """The guards the deploy gives n8n, as it gives bootstrap the same block of settings, which
+    bootstrap checks (`platform_api.n8n_guard.WATCHED`)."""
 
 
 def owner_database_url_from_env(env: Mapping[str, str]) -> str:
@@ -632,4 +651,5 @@ def bootstrap_settings_from_env(env: Mapping[str, str]) -> BootstrapSettings:
         step_key=_required(env, "STEP_KEY"),
         platform_internal_url=_required(env, "PLATFORM_INTERNAL_URL").rstrip("/"),
         team_time_zone=team_time_zone_from_env(env),
+        n8n_settings={name: env[name] for name in N8N_GUARDED if name in env},
     )

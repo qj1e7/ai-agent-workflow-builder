@@ -1,10 +1,12 @@
-"""The pin check (ADR 0045): every node type, version and choice the pinned n8n image serves is
-classed in `node_classes.json`, and the file classes nothing the image does not have. Moving the
-pin therefore means classing again in the same change.
+"""The pin check (ADR 0045, as ADR 0051 changed it): each row of `node_classes.json` still matches
+the pinned n8n image. Every version and choice of a type the file turns on is classed, and the file
+names nothing the image does not have. A type the file doesn't name needs no row, since n8n loads
+every built-in block and the checker flags each one the file doesn't class. Moving the pin
+therefore means checking the file's rows again in the same change.
 
     python -m platform_api.pin_check <the image's /types/nodes.json, as n8n serves it>
 
-scripts/pack-smoke.sh saves that file from the image with the allow list on, and runs this.
+scripts/pack-smoke.sh saves that file from the image as the platform runs it, and runs this.
 """
 
 import json
@@ -25,8 +27,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"pin check: {problem}", file=sys.stderr)
     if problems:
         return 1
-    loaded = len(NODE_CLASSES.loaded())
-    print(f"pin check: every type, version and choice of the {loaded} n8n serves is classed.")
+    named = len(NODE_CLASSES.names())
+    print(f"pin check: each of the {named} types the class file names still matches the image.")
     return 0
 
 

@@ -240,12 +240,9 @@ def test_what_n8n_doesn_t_have_or_won_t_take_goes_back_named(
 @pytest.mark.parametrize(
     ("bad", "code", "said"),
     [
-        (block("X", "n8n-nodes-base.code", 2), "held", "It runs code. It waits for spike P9."),
-        (
-            block("X", "n8n-nodes-base.merge", 3.2, mode="combineBySql"),
-            "held",
-            'Merge with mode "combineBySql" can\'t run on this platform yet',
-        ),
+        (block("X", "n8n-nodes-base.function", 1), "left_out", "Function never loads"),
+        (block("X", "@n8n/n8n-nodes-langchain.code", 1), "left_out", "LangChain Code never"),
+        (block("X", "n8n-nodes-base.git", 1.1), "left_out", "Git never loads"),
         (
             block("X", "n8n-nodes-base.executeWorkflow", 1.3),
             "held",
@@ -270,12 +267,21 @@ def test_what_can_t_run_on_this_platform_goes_back_with_its_reason(
     assert said in found[0].text
 
 
-def test_a_mode_that_is_held_holds_only_that_mode(catalogue: Catalogue):
-    merge = block("Merge", "n8n-nodes-base.merge", 3.2, mode="append")
-
-    assert passed(catalogue, plan([merge])).blocks[0].type == "n8n-nodes-base.merge"
-    found = problems(catalogue, plan([block("Sort", "n8n-nodes-base.sort", 1, type="code")]))
-    assert [p.code for p in found] == ["held"]
+@pytest.mark.parametrize(
+    "runs_code",
+    [
+        block("Code", "n8n-nodes-base.code", 2, jsCode="return $input.all();"),
+        block("Sort", "n8n-nodes-base.sort", 1, type="code", code="return a.json.n - b.json.n;"),
+        block("Merge", "n8n-nodes-base.merge", 3.2, mode="combineBySql"),
+    ],
+    ids=["code", "sort", "merge-sql"],
+)
+def test_a_block_that_runs_code_in_the_external_runner_or_an_isolate_is_not_held(
+    catalogue: Catalogue, runs_code: Json
+):
+    """Spike P9: n8n runs Code and Sort's code mode in its external task runner, and Merge's SQL
+    in an isolate, so build step 12 loads them. The checker still flags them."""
+    assert passed(catalogue, plan([runs_code])).blocks[0].type == runs_code["type"]
 
 
 @pytest.mark.parametrize(

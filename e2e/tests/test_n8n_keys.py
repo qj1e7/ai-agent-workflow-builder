@@ -219,7 +219,7 @@ def test_foreign_credential_is_removed(api: Api):
 
 
 def test_member_hand_run_with_own_key_is_swept(api: Api, mock_model: None):
-    """n8n's allow list is by type, so a holder can set n8n's Slack block to delete and run it by
+    """n8n loads every built-in block, so a holder can set n8n's Slack block to delete and run it by
     hand with a key of their own. The sweep removes that key within a minute, and the platform's
     keys never come to the holder's space."""
     platform_keys(api)

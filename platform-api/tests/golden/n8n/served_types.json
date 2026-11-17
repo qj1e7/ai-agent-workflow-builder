@@ -61,5 +61,13 @@
 {"name":"n8n-nodes-base.gmailHitlTool","version":1,"properties":[]},
 {"name":"n8n-nodes-base.microsoftOutlookHitlTool","version":1,"properties":[]},
 {"name":"n8n-nodes-base.microsoftTeamsHitlTool","version":1,"properties":[]},
-{"name":"n8n-nodes-base.slackHitlTool","version":1,"properties":[]}
+{"name":"n8n-nodes-base.slackHitlTool","version":1,"properties":[]},
+{"name":"n8n-nodes-base.httpRequest","version":[1,2,3,4,4.1,4.2,4.3,4.4,4.5],"properties":[]},
+{"name":"n8n-nodes-base.code","version":[1,2],"properties":[]},
+{"name":"n8n-nodes-base.webhook","version":[1,1.1,2,2.1,2.2],"properties":[]},
+{"name":"n8n-nodes-base.wait","version":[1,1.1],"properties":[]},
+{"name":"n8n-nodes-base.executeWorkflow","version":[1,1.1,1.2,1.3,1.4],"properties":[]},
+{"name":"n8n-nodes-base.respondToWebhook","version":[1,1.1,1.2,1.3,1.4,1.5],"properties":[]},
+{"name":"n8n-nodes-base.sort","version":[1],"properties":[]},
+{"name":"n8n-nodes-base.itemLists","version":[1,2,2.1,2.2,3,3.1],"properties":[]}
 ]

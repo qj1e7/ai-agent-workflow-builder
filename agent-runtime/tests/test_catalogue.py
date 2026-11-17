@@ -177,14 +177,15 @@ def test_a_tool_n8n_made_is_its_block_with_the_tool_s_own_parameters_and_class(
     assert "tag" not in tool
 
 
-def test_a_block_classed_by_mode_and_held_in_one_mode_says_both(catalogue: Catalogue):
+def test_a_block_classed_by_mode_says_so_and_merge_s_sql_mode_is_no_longer_held(
+    catalogue: Catalogue,
+):
+    """Spike P9 found Merge's SQL isolate reaches no file or address (ADR 0051, build step 12)."""
     merge = catalogue.describe_block("n8n-nodes-base.merge")
 
     assert merge["class_by"]["parameter"] == "mode"
     assert merge["class_by"]["classes"]["combineBySql"] == "off"
-    assert merge["held"] == [
-        {"because": "It runs code.", "waits_for": "spike P9", "when": {"mode": ["combineBySql"]}}
-    ]
+    assert "held" not in merge
 
 
 def test_our_own_blocks_are_in_it(catalogue: Catalogue):
@@ -224,10 +225,13 @@ def test_find_knows_n8n_s_other_words_for_a_block(catalogue: Catalogue, words: s
     assert catalogue.find_blocks(words, limit=1)[0]["type"] == node_type
 
 
-def test_find_marks_a_held_block(catalogue: Catalogue):
-    found = {b["type"]: b for b in catalogue.find_blocks("write a file to disk")}
+def test_find_marks_a_held_block_and_not_one_spike_p9_let_load(catalogue: Catalogue):
+    found = {b["type"]: b for b in catalogue.find_blocks("run a sub-workflow")}
+    held = found["n8n-nodes-base.executeWorkflow"]["held"][0]
+    assert held["waits_for"].startswith("an amendment that makes a version's approval cover")
 
-    assert found["n8n-nodes-base.readWriteFile"]["held"][0]["waits_for"] == "spike P9"
+    files = {b["type"]: b for b in catalogue.find_blocks("write a file to disk")}
+    assert "held" not in files["n8n-nodes-base.readWriteFile"]
 
 
 def test_find_with_no_telling_word_finds_nothing(catalogue: Catalogue):

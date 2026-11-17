@@ -84,7 +84,8 @@ N8nViewer = Annotated[Principal, Depends(_with_access)]
     "editor (ENGINE-PLAN 2.5). Only an Operator with n8n access can, and never an Approver. "
     "While you hold it, anything you publish there is a new version, which the safety check "
     "grades, with you as its publisher, who can never approve its runs. Opening it again "
-    "changes nothing. 409 while staff access to n8n is off, the allow list is unproven, or "
+    "changes nothing. 409 while staff access to n8n is off, bootstrap has not proved n8n's "
+    "blocks and guards, or "
     "someone else holds it.",
     responses={**OPERATORS_ONLY, 404: NOT_FOUND, **REFUSED},
 )

@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 # Writes contracts/n8n/catalogue.json, the catalogue of n8n's blocks that the workflow drafter
-# reads (ADR 0051, section 8), from what the image serves without the allow list, stamped with the
-# n8n pin in infra/public-images.json. It also runs section 2's pin check: it reads each block's
-# code and the blocks' shared helpers in the image, and fails on code that reaches n8n's
-# environment, its disk, code it runs or another workflow when ADR 0051 doesn't name it for that,
-# and on a package the blocks read in that nobody has looked at (platform_api.n8n_code_check).
+# reads (ADR 0051, section 8), from what the image serves, stamped with the n8n pin in
+# infra/public-images.json. It also runs section 2's pin check: it reads each block's code and the
+# blocks' shared helpers in the image, and fails on code that reaches n8n's environment, its disk,
+# code it runs or another workflow when ADR 0051 doesn't name it for that, and on a package the
+# blocks read in that nobody has looked at (platform_api.n8n_code_check). And it reads n8n's
+# defaults and the runner image's own config, which spike P9's verdicts rest on, and fails when a
+# new pin changes them (platform_api.n8n_defaults_check, ADR 0051 build step 12).
 #   scripts/n8n-catalogue.sh          runs pack smoke, which starts the image once and calls this
 #                                     script back with what n8n served, and writes the file
 #   scripts/n8n-catalogue.sh --check  the same, but fails when the committed file differs
@@ -31,7 +33,7 @@ file=contracts/n8n/catalogue.json
 pin=$(jq -r '.n8n | "\(.repository):\(.tag)@\(.digest)"' infra/public-images.json)
 work=$(mktemp -d)
 box="n8n-catalogue-$$"
-trap 'docker rm -f "$box" >/dev/null 2>&1 || true; rm -rf "$work"' EXIT
+trap 'docker rm -f "$box" "$box-runners" >/dev/null 2>&1 || true; rm -rf "$work"' EXIT
 
 version=$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.version" }}' "$image")
 if [ "$version" != "$(jq -r .n8n.tag infra/public-images.json)" ]; then
@@ -48,6 +50,14 @@ for package in n8n-nodes-base @n8n/n8n-nodes-langchain; do
     docker cp --quiet "$box:$modules/$package/dist/$part" "$work/sources/$package/dist/$part"
   done
 done
+# The defaults and the runner's own config that spike P9's verdicts rest on, and the pins, for
+# platform_api.n8n_defaults_check. Nothing starts here either.
+mkdir -p "$work/sources/config" "$work/sources/runners"
+docker cp --quiet "$box:$modules/@n8n/config/dist/configs" "$work/sources/config/configs"
+runners=$(jq -r '."n8n-runners" | "\(.repository):\(.tag)@\(.digest)"' infra/public-images.json)
+docker create --name "$box-runners" "$runners" >/dev/null
+docker cp --quiet "$box-runners:/etc/n8n-task-runners.json" "$work/sources/runners/n8n-task-runners.json"
+cp infra/public-images.json "$work/sources/public-images.json"
 
 status=0
 (cd platform-api && uv run --locked --quiet python -m platform_api.n8n_catalogue \

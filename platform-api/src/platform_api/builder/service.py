@@ -1570,7 +1570,7 @@ class Builder:
         if isinstance(spec, NothingToCheck):
             return spec
         if spec.n8n is None and self.moves is not None:
-            # The shared run workflow is made of blocks the allow list turns off (E11).
+            # The shared run workflow is made of blocks the class file doesn't let run (E11).
             return NotMovedYet(view.move_refused or NOT_MOVED_YET)
         if view.start_refused is not None:
             return NoStart()

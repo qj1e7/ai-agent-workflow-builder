@@ -28,6 +28,11 @@ output "n8n_editor_url" {
   value       = var.n8n_editor_external ? local.url["n8n"] : ""
 }
 
+output "n8n_runners_app_name" {
+  description = "n8n's task runner app, for the checks before a deploy: its environment holds no identity endpoint, and it reaches n8n's broker."
+  value       = module.n8n_runners.name
+}
+
 output "job_names" {
   description = "Container Apps Jobs, in the order the deploy workflow runs them."
   value       = [module.job["db-init"].name, module.job["bootstrap"].name]

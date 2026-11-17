@@ -55,3 +55,7 @@ So the allow list also lets in those four ranges, through the setting `N8N_INTER
 ## Changed on 13 Nov 2026
 
 ADR 0027 changes what dropping the address allow list would take: the run webhooks are replaced by our signed Start from the Portal trigger, and the Webhook node is off the node allow list. Sign-in in front of n8n remains.
+
+## Changed on 18 Nov 2026
+
+ADR 0051's build step 12 loads every built-in n8n block but seven, Webhook, Form and Code included. The team lead kept this ADR's choice of 1 Nov: with the switch on and no list, every address reaches n8n's sign-in page, and now also each Webhook, Form, Wait or MCP Server Trigger a member publishes. The recommendation above stands, and matters more: set `N8N_EDITOR_ALLOWED_IPS` before the sponsor demo. While a list is set, the deploy checks that each of n8n's public paths refuses an address outside it.

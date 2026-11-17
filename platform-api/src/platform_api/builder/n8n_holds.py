@@ -3,7 +3,8 @@ Open in n8n transfers it to the person's own space, where only they see it, and 
 transfers it to the platform's project. Each move is read back, and a move that lost the
 workflow's settings, which carry its error workflow, time zone and saved progress, puts them back
 or moves it no further. The platform takes back by itself every workflow held by someone who may
-hold none now: whose n8n access ended, or while staff access is off or the allow list unproven."""
+hold none now: whose n8n access ended, or while staff access is off or bootstrap has not
+proved n8n's blocks and guards (ADR 0051)."""
 
 import logging
 from collections.abc import Mapping
