@@ -49,6 +49,7 @@ NO_TIME_SAID: Final = "Your words didn't say a time. Please choose one."
 NO_TIME_BUT: Final = 'Your words said "{}" but not a time. Please choose one.'
 NO_TIME_READ: Final = "I couldn't read the time in your words. Please choose one."
 NOT_A_RUN_TIME: Final = 'Your words said "{}", which is not a time it runs at. Please choose one.'
+NOT_EXACT: Final = 'Your words said "{}", which is not an exact time. Please choose one.'
 NOT_HELD: Final = (
     'Your words said "{}". I can run it every day, every weekday or on one day a week, so please '
     "choose one."
@@ -305,7 +306,9 @@ SCHEDULE_PHRASE: Final = re.compile(
     r"\bonce\s+(?:a|an|per|every)\s+\w+|"
     r"\b(?:twice|thrice|(?:two|three|four|five|six|\d+)\s+times)\s+(?:a|an|per|each|every)\s+\w+|"
     r"\b(?:on\s+)?(?:the\s+)?weekends?\b|"
-    r"\b(?:except|excluding|but\s+not|apart\s+from|other\s+than)\b[^,.;!?]*",
+    r"\b(?:except|excluding|but\s+not|apart\s+from|other\s+than)\b[^,.;!?]*|"
+    r"\b(?:mon|tue|tues|wed|thu|thur|thurs|fri|sat|sun)\s*(?:-|to|through|thru|till|until)\s*"
+    r"(?:mon|tue|tues|wed|thu|thur|thurs|fri|sat|sun)\b",
     re.IGNORECASE,
 )
 """Words that belong to a schedule's phrase though the schedule words don't name them, as
@@ -315,6 +318,18 @@ RELATIVE_TIME: Final = re.compile(
     r"\b(?:(?:an?|one|two|three|\d+)\s+hours?\s+)?(?:later|earlier|sooner)\b", re.IGNORECASE
 )
 """A time moved from the one set, as "an hour later", which is the time's own question."""
+APPROXIMATE: Final = re.compile(
+    r"(?:\b\d{1,2}(?:[:.]\d{2})?(?:\s*(?:am|pm))?)?-ish\b|\b(?:or\s+so|roughly|approximately|approx)\b",
+    re.IGNORECASE,
+)
+"""A time made approximate, as "9am or so", "16:00-ish" or "roughly", so it is asked exactly."""
+VAGUE_TIME: Final = re.compile(
+    r"\b(?:first\s+thing|eod|cob|close\s+of\s+business|(?:the\s+)?(?:end|start|beginning)\s+of\s+"
+    r"(?:the\s+)?(?:business\s+|working\s+|work\s+)?day)\b",
+    re.IGNORECASE,
+)
+"""A part of the day named in words, as "first thing" or "the end of the day", which is asked as
+a time unless a clock time stands beside it."""
 DAY_RANGE: Final = re.compile(
     rf"\b(?:{DAY_NAMES})s?\s*(?:to|through|thru|till|until|-)\s*(?:{DAY_NAMES})s?\b",
     re.IGNORECASE,
@@ -325,6 +340,8 @@ _NOT_A_COUNT: Final = (
     r"times|max|percent)\b)"
 )
 """Not followed by a unit or a thing counted, so "14" in "14 days" is no hour."""
+UNITS: Final = words("day days week weeks month months year years hour hours minute minutes")
+"""Units a number counts, as "days" in "14 days", which belong to the count, not the schedule."""
 COUNTED: Final = re.compile(_NOT_A_COUNT.replace("(?!", "(?=", 1))
 """A unit or a thing counted, after a number, as " days" in "14 days" or " tickets"."""
 CLOCK: Final = re.compile(
@@ -1094,9 +1111,17 @@ def _schedule_tokens(text: str) -> list[tuple[str, int, int, bool]]:
     number, or any word of a range of times, a bound on one or a schedule it can't hold, as
     "till" in "16:00 till 17:00", "around" in "around 4pm" or "second" in "every second
     Tuesday"."""
+    tokens = _request_tokens(text)
     ranges = [r.whole for r in time_ranges(text)] + [
         m.span()
-        for pattern in (BOUND_TIME, SCHEDULE_PHRASE, RELATIVE_TIME)
+        for pattern in (
+            DAY_RANGE,
+            BOUND_TIME,
+            SCHEDULE_PHRASE,
+            RELATIVE_TIME,
+            APPROXIMATE,
+            VAGUE_TIME,
+        )
         for m in pattern.finditer(text)
     ]
     return [
@@ -1105,9 +1130,13 @@ def _schedule_tokens(text: str) -> list[tuple[str, int, int, bool]]:
             start,
             end,
             any(a <= start and end <= b for a, b in ranges)
-            or (_schedule_token(raw) and not (raw.isdigit() and COUNTED.match(text, end))),
+            or (
+                _schedule_token(raw)
+                and not (raw.isdigit() and COUNTED.match(text, end))
+                and not (n > 0 and tokens[n - 1][0].isdigit() and _low(raw) in UNITS)
+            ),
         )
-        for raw, start, end in _request_tokens(text)
+        for n, (raw, start, end) in enumerate(tokens)
     ]
 
 
@@ -1319,7 +1348,10 @@ def said_schedule(words: str) -> tuple[str | None, str | None]:
         return None, None
     low = words.casefold()
     day = None
-    if DAY_RANGE.search(low) or re.search(r"\bweekdays?\b", low):
+    ranges = [m.group(0) for m in DAY_RANGE.finditer(low)]
+    if ranges and any(_unheld_words(r) for r in ranges):
+        day = None
+    elif ranges or re.search(r"\bweekdays?\b", low):
         day = "weekdays"
     elif re.search(r"\b(?:every|each)\s+day\b|\bdaily\b", low):
         day = "every_day"
@@ -1378,12 +1410,38 @@ UNREAD_TIME: Final = re.compile(r"(?:\bat\s+)?\b\d{1,2}[:.]\d{1,2}\b|\bat\s+\d+\
 """A time written for the schedule, read or not, as "24:00", "16.00" or "at 1600"."""
 
 
-def _unheld(phrase: str) -> bool:
-    """Whether a schedule phrase has a word the schedule doesn't hold. A time, read or not, and a
-    bound on one, as "before 5pm", are the time's own question, so they are set aside first."""
-    for pattern in (BOUND_TIME, RELATIVE_TIME, CLOCK, UNREAD_TIME, TIME_OF_DAY):
+JOINING: Final = words("before after by of or per start end beginning first last eod")
+"""Schedule words that say nothing about how often on their own, as "before" in "before the
+weekly meeting". They end a schedule's own words."""
+
+
+def _unheld_words(phrase: str) -> list[str]:
+    """The words of a schedule phrase the schedule doesn't hold. A time, read or not, a bound on
+    one, as "before 5pm", and a time that is not exact are the time's own question, so they are
+    set aside first. A day range holds only as Monday to Friday, every weekday."""
+    ranges = [m.group(0) for m in DAY_RANGE.finditer(phrase)]
+    weekdays = re.compile(r"monday\w*\W+(?:to|through|thru|till|until|-)\W*friday", re.I)
+    unheld = [r for r in ranges if not weekdays.fullmatch(r.strip())]
+    patterns = (BOUND_TIME, RELATIVE_TIME, APPROXIMATE, VAGUE_TIME, CLOCK, UNREAD_TIME, TIME_OF_DAY)
+    for pattern in patterns:
         phrase = pattern.sub(" ", phrase)
-    return any(_low(t) not in HELD_WORDS for t, _, _ in _request_tokens(phrase))
+    return unheld + [t for t, _, _ in _request_tokens(phrase) if _low(t) not in HELD_WORDS]
+
+
+def _unheld(phrase: str) -> bool:
+    """Whether a schedule phrase asks for one it can't hold: a word it doesn't hold that is about
+    how often, as "other", "month" or "except". A joining word alone, as "before the weekly
+    meeting", leaves the schedule as it is, and comes back on its own."""
+    found = _unheld_words(phrase)
+    spans = [m.group(0).casefold() for m in SCHEDULE_PHRASE.finditer(phrase)]
+    return any(
+        _low(w) not in JOINING or any(_low(w) in span.split() for span in spans) for w in found
+    )
+
+
+def _all_held(phrase: str) -> bool:
+    """Whether every word of a schedule phrase is one the schedule holds."""
+    return not _unheld_words(phrase)
 
 
 RUN_TIME_LEADS: Final = SCHEDULE_WORDS - words("noon midday midnight") | words("at")
@@ -1403,7 +1461,9 @@ def _their_schedule(text: str, said: tuple[int, int] | None) -> str | None:
     clocks = list(CLOCK.finditer(stretch))
     if BOUND_TIME.search(stretch) or (not clocks and TIME_SHAPED.search(stretch)):
         return None
-    if (clocks and _run_time(stretch, clocks[0]) is None) or _unheld(stretch):
+    if (clocks and _run_time(stretch, clocks[0]) is None) or not _all_held(stretch):
+        return None
+    if APPROXIMATE.search(stretch) or (VAGUE_TIME.search(stretch) and not clocks):
         return None
     return _trimmed(stretch) or None
 
@@ -1428,31 +1488,10 @@ def _run_time(stretch: str, clock: re.Match[str]) -> str | None:
     return None if lead and _low(lead[-1]) not in RUN_TIME_LEADS else clock.group(0)
 
 
-def _not_theirs(shown: str, theirs: str, text: str) -> bool:
-    """Whether the model's schedule leaves out or rewrites the person's time, or writes it in
-    words they never used, as "4pm" for their "16:00", or leaves out or contradicts the day
-    they name, as "Every Monday" for their "Every Friday" or "every weekday". A day the model
-    adds to their "each week" is a guess the row shows as one."""
-    times = {_clock(m) for m in CLOCK.finditer(theirs)}
-    if times and (
-        {_clock(m) for m in CLOCK.finditer(shown)} != times
-        or any(not said_in(t.strip(), text) for t in TIME_OF_DAY.findall(shown))
-    ):
-        return True
-    days = {m.group(1).casefold() for m in DAY.finditer(theirs)}
-    if days and {m.group(1).casefold() for m in DAY.finditer(shown)} != days:
-        return True
-    often = {_often(m) for m in FREQUENCY.finditer(theirs)}
-    return (
-        bool(often & {"day", "weekday"}) and {_often(m) for m in FREQUENCY.finditer(shown)} != often
-    )
-
-
-def _bound_row(shown: str, text: str, bound: str) -> UnderstoodRow:
-    """The row for a schedule whose time is a bound, as "before 5pm": the person's day words,
-    and the time asked for, with why."""
-    row = _time_not_read(shown, text)
-    return row.model_copy(update={"note": NOT_A_RUN_TIME.format(bound)})
+def _time_asked(shown: str, text: str, note: str) -> UnderstoodRow:
+    """The row for a schedule whose time is a bound, as "before 5pm", or not exact, as "9am or
+    so": the person's day words, and the time asked for, with why."""
+    return _time_not_read(shown, text).model_copy(update={"note": note})
 
 
 def render_schedule(schedule: str | None, text: str) -> Rendered:
@@ -1478,9 +1517,25 @@ def render_schedule(schedule: str | None, text: str) -> Rendered:
     if not any(_low(t) in SCHEDULE_WORDS or CLOCK_TOKEN.match(_low(t)) for t in kept):
         return Rendered(missing_row("schedule"), explained, said)
     if (bound := BOUND_TIME.search(stretch)) is not None:
-        return Rendered(_bound_row(shown, text, plain(bound.group(0), SAID_LIMIT)), explained, said)
+        note = NOT_A_RUN_TIME.format(plain(bound.group(0), SAID_LIMIT))
+        return Rendered(_time_asked(shown, text, note), explained, said)
+    vague = APPROXIMATE.search(stretch) or (
+        VAGUE_TIME.search(stretch) if CLOCK.search(stretch) is None else None
+    )
+    if vague is not None:
+        note = NOT_EXACT.format(plain(vague.group(0), SAID_LIMIT))
+        return Rendered(_time_asked(shown, text, note), explained, said)
     theirs = _their_schedule(text, said)
-    if theirs is not None and (_not_theirs(shown, theirs, text) or how_often(shown) is not None):
+    if theirs is not None:
+        # Their own words, whenever the schedule holds every one of them, so the card never says
+        # their words lacked what they hold, whatever the model wrote. A time the model guessed
+        # for words with none is asked, keeping their day.
+        guessed = any(not said_in(time.strip(), text) for time in TIME_OF_DAY.findall(shown))
+        if guessed and CLOCK.search(theirs) is None:
+            note = NO_TIME_BUT.format(theirs)
+            return Rendered(
+                _time_asked(theirs, text, note), explained, _schedule_span(text, theirs)
+            )
         shown = theirs
         said = _schedule_span(text, shown)
     if any(not said_in(time.strip(), text) for time in TIME_OF_DAY.findall(shown)):

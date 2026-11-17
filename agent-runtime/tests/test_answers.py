@@ -49,7 +49,6 @@ from agent_runtime.contracts import FOLLOW_UP_TASK, answer_request
 from agent_runtime.edits import commanded
 from agent_runtime.questions import QuestionReply
 from agent_runtime.reading import (
-    FILLED_IN,
     NO_TIME_BUT,
     NO_TIME_SAID,
     DayHow,
@@ -626,14 +625,13 @@ def test_a_schedule_keeps_only_schedule_words_and_a_time_never_said_is_asked_for
     task = "Every Friday, sum up the tickets we closed this week"
     closed = search(status="done", done=DaysRead(how="within", days=7), said="tickets we closed")
     summed = TicketRead(creates=False, says="summary", said="sum up")
-    guessed = answer_of(read(schedule="Every Friday at 5pm", search=closed, ticket=summed), task)
-    assert rows_of(guessed)[0] == ("schedule", "", "missing")
-    assert isinstance(guessed, SetupCardAnswer)
-    assert guessed.rows[0].note == NO_TIME_BUT.format("Every Friday")
-    # The model's 5pm in place of their day: their own "Every Friday" comes back, and the card
-    # asks the time they never said.
-    only_time = answer_of(read(schedule="At 5pm", search=closed, ticket=summed), task)
-    assert rows_of(only_time)[0] == ("schedule", "Every Friday", "understood")
+    # The model's 5pm, beside their day or in place of it: their own "Every Friday" stays, and
+    # the card asks the time they never said.
+    for model in ("Every Friday at 5pm", "At 5pm"):
+        guessed = answer_of(read(schedule=model, search=closed, ticket=summed), task)
+        assert rows_of(guessed)[0] == ("schedule", "Every Friday", "missing")
+        assert isinstance(guessed, SetupCardAnswer)
+        assert guessed.rows[0].note == NO_TIME_BUT.format("Every Friday")
     no_day = answer_of(
         read(schedule="At 5pm", search=closed, ticket=summed), "Sum up closed tickets"
     )
@@ -641,8 +639,8 @@ def test_a_schedule_keeps_only_schedule_words_and_a_time_never_said_is_asked_for
     day = answer_of(
         read(schedule="Every Monday", search=search(said="tickets")), "Each week, list tickets"
     )
-    assert rows_of(day)[0] == ("schedule", "Every Monday", "changed")
-    assert isinstance(day, SetupCardAnswer) and day.rows[0].note == FILLED_IN
+    # Their own "Each week" stands, and the card asks the day, never the model's Monday.
+    assert rows_of(day)[0] == ("schedule", "Each week", "understood")
     stuffed = read(schedule="Every Friday for P1 bugs", search=closed, ticket=summed)
     assert rows_of(answer_of(stuffed, task))[0] == ("schedule", "Every Friday", "understood")
 

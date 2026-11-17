@@ -10,6 +10,7 @@ from agent_runtime.contract import CantAnswer, RequestPart, SetupCardAnswer, Und
 from agent_runtime.reading import (
     NO_TIME_READ,
     NOT_A_RUN_TIME,
+    NOT_EXACT,
     NOT_HELD,
     ONE_TIME,
     DaysRead,
@@ -348,6 +349,10 @@ UNHELD = [
     ("Every hour", ["Hourly", "Every day"]),
     ("Three times a day", ["Every day"]),
     ("Every other Friday before 5pm", ["Every Friday"]),
+    ("Monday to Wednesday at 9am", ["Every weekday at 9am", "Every Monday at 9am"]),
+    ("Tuesday through Thursday at 9am", ["Every Tuesday through Thursday at 9am"]),
+    ("Saturday to Sunday at 9am", ["Every Saturday to Sunday at 9am", "Every Saturday at 9am"]),
+    ("Mon-Wed at 9am", ["Every Monday at 9am"]),
 ]
 
 
@@ -383,3 +388,85 @@ def test_a_schedule_it_holds_stays_their_own_words_with_nothing_crossed(said: st
     row, parts = carols_card("Every Friday", said)
     assert (row.text, row.state) == (said, "understood")
     assert [p for p in parts if p.mark == "cant"] == []
+
+
+@pytest.mark.parametrize("words", ["Monday to Wednesday at 9am", "Saturday to Sunday at 9am"])
+def test_a_new_schedule_reads_no_day_from_a_range_other_than_the_weekdays(words: str):
+    """Before, any range was read as every weekday."""
+    assert said_schedule(words) == (None, "09:00")
+    assert said_schedule("Monday to Friday at 9am") == ("weekdays", "09:00")
+
+
+def test_a_count_before_the_schedule_is_never_part_of_it():
+    """Carol's request, reordered. Before, "days every Friday at 16:00" was crossed as a
+    schedule it can't hold."""
+    text = (
+        "Find Jira tickets in project MOCK that nobody updated for 14 days every Friday at 16:00 "
+        "and raise one Jira ticket in MOCK that lists them"
+    )
+    task = read(
+        name="Stale MOCK ticket list",
+        schedule="Every Friday at 16:00",
+        search=SearchRead(
+            project="MOCK",
+            updated=DaysRead(how="before", days=14),
+            said="Jira tickets in project MOCK that nobody updated for 14 days",
+        ),
+        ticket=TicketRead(creates=True, says="list", said="lists them"),
+        place=PlaceRead(project="MOCK", said="raise one Jira ticket in MOCK"),
+    )
+    answer = answer_of(task, text)
+    card = answer.alternative if isinstance(answer, CantAnswer) else answer
+    assert isinstance(card, SetupCardAnswer)
+    assert (card.rows[0].text, card.rows[0].state) == ("Every Friday at 16:00", "understood")
+    assert not any(p.reason == "how_often" for p in parts_of(task, text, answer))
+
+
+@pytest.mark.parametrize(
+    ("said", "model", "vague"),
+    [
+        ("Every day at 9am or so", "Every day at 9am", "or so"),
+        ("Every Friday at 16:00-ish", "Every Friday at 16:00", "16:00-ish"),
+        ("Every Friday roughly at 4pm", "Every Friday at 4pm", "roughly"),
+        ("Every Friday at the end of the day", "Every Friday at 5pm", "the end of the day"),
+        ("Every Friday at EOD", "Every Friday at 5pm", "EOD"),
+    ],
+)
+def test_a_time_that_is_not_exact_is_asked_and_the_day_stays(said: str, model: str, vague: str):
+    """Before, "Every day at 9am or so" said it couldn't run things every day at 9am."""
+    row, parts = carols_card(model, said)
+    day = "Every day" if said.startswith("Every day") else "Every Friday"
+    assert (row.text, row.state, row.note) == (day, "missing", NOT_EXACT.format(vague))
+    assert not any(p.reason == "how_often" for p in parts)
+
+
+@pytest.mark.parametrize(
+    ("said", "model"),
+    [
+        ("Every Friday at 4pm before the weekly meeting", "Every Friday at 4pm"),
+        ("Every Monday first thing at 9am", "Every Monday at 9am"),
+    ],
+)
+def test_words_beside_a_schedule_it_holds_never_blame_how_often(said: str, model: str):
+    row, parts = carols_card(model, said)
+    assert row.state == "understood" and row.note is None
+    assert not any(p.reason == "how_often" for p in parts)
+
+
+@pytest.mark.parametrize(
+    ("said", "model"),
+    [
+        ("At 9am every Friday", "Every Friday at 9am"),
+        ("Fridays at 9am", "Every Friday at 9am"),
+        ("Each Tuesday at 10:30", "Every Tuesday at 10:30"),
+        ("Weekly on Monday at 9am", "Every Monday at 9am"),
+        ("Every week on Monday at 9am", "Every Monday at 9am"),
+        ("Once a week on Monday at 9am", "Every Monday at 9am"),
+        ("Daily", "Every day"),
+    ],
+)
+def test_their_own_schedule_is_shown_whatever_the_model_wrote(said: str, model: str):
+    """Before, the row was the model's words with "Your words didn't say it", which the final
+    check repeated, though their words said it."""
+    row = carols_row(model, said)
+    assert (row.text, row.state, row.note) == (said, "understood", None)
