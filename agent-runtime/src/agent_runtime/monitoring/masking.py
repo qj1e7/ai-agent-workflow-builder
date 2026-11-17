@@ -16,7 +16,8 @@ SHORTEST_SECRET: Final = 8
 KEY_SHAPE_SOURCES: Final = (
     r"sk-ant-[A-Za-z0-9_\-]{8,}",
     # Not glued to a letter, so "task-management-workflow" is a word. An escape that ends in a
-    # letter, as \n or = in JSON text, %3D in a URL or =3D in an email, is not a word.
+    # letter, as \n or a unicode escape in JSON text, %3D in a URL or =3D in an email, is not a
+    # word.
     r"(?:(?<=\\[bfnrt])|(?<=\\u[0-9A-Fa-f]{4})|(?<=[%=][0-9A-Fa-f]{2})|(?<![A-Za-z]))"
     r"sk-[A-Za-z0-9_\-]{16,}",
     r"gh[pousr]_[A-Za-z0-9]{16,}",
@@ -33,8 +34,8 @@ KEY_SHAPE_SOURCES: Final = (
     r"sig=[A-Za-z0-9%+/=_\-]{40,}",
     # A signed token's letters are also the letters around it, as in token_eyJ..., so it is read
     # from where that run of letters starts: after any other mark, or after a backslash. After an
-    # escape such as \n or = it starts past the escape, so JSON text stays JSON. Read from
-    # each eyJ instead, "eyJ-eyJ-..." would be read again at each one, in quadratic time.
+    # escape such as \n or a unicode escape it starts past the escape, so JSON text stays JSON.
+    # Read from each eyJ instead, "eyJ-eyJ-..." would be read again at each one, in quadratic time.
     r"(?:(?<=\\)(?![bfnrt]|u[0-9A-Fa-f]{4})|(?<=\\[bfnrt])|(?<=\\u[0-9A-Fa-f]{4})"
     r"|(?<![A-Za-z0-9_\-\\]))"
     r"(?=[A-Za-z0-9_\-]*?eyJ)[A-Za-z0-9_\-]++\.eyJ[A-Za-z0-9_\-]++\.[A-Za-z0-9_\-]+",
