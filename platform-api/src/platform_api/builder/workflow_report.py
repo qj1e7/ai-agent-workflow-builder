@@ -246,7 +246,7 @@ class WorkflowReport:
 
 RUNTIME_KEY_SHAPES = (
     r"sk-ant-[A-Za-z0-9_\-]{8,}",
-    r"(?:(?<=\\[bfnrt])|(?<=\\u[0-9A-Fa-f]{4})|(?<=%[0-9A-Fa-f]{2})|(?<![A-Za-z]))"
+    r"(?:(?<=\\[bfnrt])|(?<=\\u[0-9A-Fa-f]{4})|(?<=[%=][0-9A-Fa-f]{2})|(?<![A-Za-z]))"
     r"sk-[A-Za-z0-9_\-]{16,}",
     r"gh[pousr]_[A-Za-z0-9]{16,}",
     r"github_pat_[A-Za-z0-9_]{16,}",
@@ -260,7 +260,8 @@ RUNTIME_KEY_SHAPES = (
     r"AIza[A-Za-z0-9_\-]{35}",
     r"(?i:accountkey|sharedaccesskey)=[A-Za-z0-9+/=]{32,}",
     r"sig=[A-Za-z0-9%+/=_\-]{40,}",
-    r"(?:(?<=\\[bfnrt])|(?<=\\u[0-9A-Fa-f]{4})|(?<![A-Za-z0-9_\-\\]))"
+    r"(?:(?<=\\)(?![bfnrt]|u[0-9A-Fa-f]{4})|(?<=\\[bfnrt])|(?<=\\u[0-9A-Fa-f]{4})"
+    r"|(?<![A-Za-z0-9_\-\\]))"
     r"(?=[A-Za-z0-9_\-]*?eyJ)[A-Za-z0-9_\-]++\.eyJ[A-Za-z0-9_\-]++\.[A-Za-z0-9_\-]+",
     r"-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z ]*PRIVATE KEY-----|\Z)",
     r"(?i:bearer)\s+(?=[A-Za-z._~\-]*[0-9+/=])[A-Za-z0-9._~+/=\-]{8,}",
