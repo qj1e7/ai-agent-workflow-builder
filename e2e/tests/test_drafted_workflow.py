@@ -13,6 +13,15 @@ WORDS = (
 SETTLED = ("draft", "not_drafted")
 
 
+def in_n8n(use_case_id: str) -> Json:
+    """The workflow in n8n whose Sticky Note links to this workflow's page."""
+    for listed in N8N_OWNER.call("GET", "/workflows"):
+        held = N8N_OWNER.call("GET", f"/workflows/{listed['id']}")
+        if any(f"/workflows/{use_case_id}" in str(n["parameters"]) for n in held["nodes"]):
+            return held
+    fail(f"n8n holds no workflow for {use_case_id}")
+
+
 def drafted_now(api: Api, drafted_id: str, states: tuple[str, ...], seconds: float = 60) -> Json:
     deadline = time.monotonic() + seconds
     while True:
@@ -61,11 +70,24 @@ def test_a_drafted_release_check_is_approved_by_another_and_set_up_as_a_draft(
     workflow = api.get("alice", f"/api/v1/use-cases/{use_case_id}")
     assert workflow["state"] == "draft"
 
-    held = N8N_OWNER.call("GET", f"/workflows/{workflow['n8n_workflow_id']}")
+    held = in_n8n(use_case_id)
     assert held["activeVersionId"] is None, "set up as a draft, not published"
     types = {node["name"]: node["type"] for node in held["nodes"]}
     assert types["Ask for a yes"] == "CUSTOM.wabAskForYes"
     assert types["Start from the Portal"] == "CUSTOM.wabStartFromPortal"
+
+    tickets = len(api.tickets())
+    test_run = api.post(
+        "carol",
+        f"/api/v1/use-cases/{use_case_id}/runs",
+        {"test": True},
+        expect=(201,),
+        headers={"Idempotency-Key": f"t-{use_case_id}"},
+    ).json()
+    finished = api.wait_for_state("carol", test_run["run_id"], {"succeeded", "failed"})
+    assert finished["state"] == "succeeded", finished
+    assert finished["outcome"] in ("test_passed", "nothing_to_write"), finished["outcome"]
+    assert (finished["written"], len(api.tickets())) == ([], tickets), "a test run writes nothing"
 
     messages = api.get("bob", "/api/v1/teams-stub/messages")["messages"]
     [card] = [m for m in messages if m["approval_id"] == approval_id]
