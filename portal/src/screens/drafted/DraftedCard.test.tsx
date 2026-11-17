@@ -74,6 +74,33 @@ describe('the drafted workflow card', () => {
     expect(html).not.toContain('disabled')
   })
 
+  it('after a refused set-up, it is a draft again: it says why, and offers Send for approval and Ask for a change', () => {
+    const refused = {
+      ...(setUp as DraftedWorkflowView),
+      state: 'draft',
+      can_send: true,
+      why_not_send: null,
+      set_up: { state: 'refused', use_case_id: null, words: 'Changed since it was approved. Send it for approval again.' },
+    } as DraftedWorkflowView
+    const html = card(refused)
+    expect(text(html)).toContain('Revision 1 Draft')
+    expect(text(html)).toContain('Changed since it was approved. Send it for approval again.')
+    expect(buttons(html)).toEqual(['See the report', 'Ask for a change', 'Send for approval'])
+  })
+
+  it('after n8n did not take it, it says so and offers Try again beside Send and Ask for a change', () => {
+    const failed = {
+      ...(setUp as DraftedWorkflowView),
+      state: 'draft',
+      can_send: true,
+      why_not_send: null,
+      set_up: { state: 'failed', use_case_id: null, words: 'n8n didn’t take it, so it isn’t set up yet. Try again.' },
+    } as DraftedWorkflowView
+    const html = card(failed)
+    expect(text(html)).toContain('n8n didn’t take it, so it isn’t set up yet. Try again.')
+    expect(buttons(html)).toEqual(['Try again', 'See the report', 'Ask for a change', 'Send for approval'])
+  })
+
   it('says it is waiting for an Approver, and cannot be approved by its author', () => {
     const html = card(waiting as DraftedWorkflowView)
     expect(text(html)).toContain('Revision 1 Waiting for a yes')

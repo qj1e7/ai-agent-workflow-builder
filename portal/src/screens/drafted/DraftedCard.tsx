@@ -42,7 +42,8 @@ function Head({ view, revision }: { view: Pick<DraftedWorkflowView, 'state'>; re
   )
 }
 
-function SetUpLines({ view }: { view: DraftedWorkflowView }) {
+/** Where an approved set-up stands. A set-up refused or given up leaves a draft, which says why, without the approval line. */
+function SetUpLines({ view, approved }: { view: DraftedWorkflowView; approved: boolean }) {
   const words = useErrorWords()
   const again = useSetUpAgain(view.drafted_id)
   const latch = useLatch()
@@ -50,7 +51,7 @@ function SetUpLines({ view }: { view: DraftedWorkflowView }) {
   const line = setUpLine(view.set_up)
   return (
     <>
-      <p className={styles['ok']}>{approvedWords(view.approval)}</p>
+      {approved ? <p className={styles['ok']}>{approvedWords(view.approval)}</p> : null}
       <p className={line.kind === 'set_up' ? styles['ok'] : styles['said']}>{line.words}</p>
       {line.kind === 'failed' ? (
         <p>
@@ -149,7 +150,8 @@ function Revision({ view, revision }: { view: DraftedWorkflowView; revision: num
       ) : null}
       {view.replaced_waiting ? <p className={styles['note']}>{CANCELLED_WAITING_WORDS}</p> : null}
       {view.state === 'waiting' ? <p className={styles['note']}>{WAITING_WORDS}</p> : null}
-      {view.state === 'approved' ? <SetUpLines view={view} /> : null}
+      {view.state === 'approved' ? <SetUpLines view={view} approved /> : null}
+      {view.state === 'draft' && view.set_up !== null ? <SetUpLines view={view} approved={false} /> : null}
       {view.state === 'declined' ? <p className={styles['said']}>{declinedWords(view.approval)}</p> : null}
       {problem ? (
         <p className={styles['problem']} role="alert">
