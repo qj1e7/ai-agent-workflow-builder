@@ -15,7 +15,7 @@ changed, moved, or deleted and made again by someone else, and is deleted and ma
 
 The sweep lists every key in n8n as its owner, every minute and whenever a workflow opens in n8n
 or comes back from one, and deletes each one the platform did not make, a member's own above
-all: n8n's allow list is by node type, so with the Slack type on it, a member could run a draft
+all: n8n loads every built-in block (ADR 0051), so a member could run a draft
 by hand with another operation and a key of their own, which no grade sees. The one kind it
 keeps is a member's key that n8n moved into the platform's project as the member's account ended,
 which the platform noted then and never treats as its own (quarantined).

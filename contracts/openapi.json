@@ -8323,7 +8323,7 @@
       },
       "N8nReply": {
         "additionalProperties": false,
-        "description": "Asked to open n8n (ENGINE-PLAN 2.9). Only an Operator with n8n access, while staff access\nto n8n is on and the allow list proven, can: said tells everyone else why not.",
+        "description": "Asked to open n8n (ENGINE-PLAN 2.9). Only an Operator with n8n access, while staff access\nto n8n is on and bootstrap has proved n8n's blocks and guards, can: said tells everyone\nelse why not.",
         "properties": {
           "answer": {
             "const": "n8n",
@@ -22765,7 +22765,7 @@
     },
     "/api/v1/use-cases/{use_case_id}/open-in-n8n": {
       "post": {
-        "description": "Moves the workflow to your own n8n space and answers its address in n8n's editor (ENGINE-PLAN 2.5). Only an Operator with n8n access can, and never an Approver. While you hold it, anything you publish there is a new version, which the safety check grades, with you as its publisher, who can never approve its runs. Opening it again changes nothing. 409 while staff access to n8n is off, the allow list is unproven, or someone else holds it.",
+        "description": "Moves the workflow to your own n8n space and answers its address in n8n's editor (ENGINE-PLAN 2.5). Only an Operator with n8n access can, and never an Approver. While you hold it, anything you publish there is a new version, which the safety check grades, with you as its publisher, who can never approve its runs. Opening it again changes nothing. 409 while staff access to n8n is off, bootstrap has not proved n8n's blocks and guards, or someone else holds it.",
         "operationId": "open_in_n8n_api_v1_use_cases__use_case_id__open_in_n8n_post",
         "parameters": [
           {

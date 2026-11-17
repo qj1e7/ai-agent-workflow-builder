@@ -693,7 +693,8 @@ class ChangedInN8nReply(Reply):
 
 class N8nReply(Reply):
     """Asked to open n8n (ENGINE-PLAN 2.9). Only an Operator with n8n access, while staff access
-    to n8n is on and the allow list proven, can: said tells everyone else why not."""
+    to n8n is on and bootstrap has proved n8n's blocks and guards, can: said tells everyone
+    else why not."""
 
     answer: Literal["n8n"] = "n8n"
     said: str

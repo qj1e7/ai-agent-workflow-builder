@@ -203,6 +203,19 @@ class N8nClient:
                 self._sleep(3)
         return _type_names(self._http.get("/types/nodes.json").raise_for_status().json())
 
+    def settings(self) -> dict[str, Any]:
+        """/rest: what n8n's own settings page shows the signed-in owner, such as its version
+        and the guards it can show (ADR 0051)."""
+        return cast(dict[str, Any], self._rest("GET", "/rest/settings")["data"])
+
+    def refuses(self, body: dict[str, Any]) -> bool:
+        """Whether n8n refuses to save this workflow. One it saved is deleted again."""
+        response = self._send("POST", "/workflows", json=body)
+        if response.status_code == 400:
+            return True
+        self.delete_workflow(str(_ok(response)["id"]))
+        return False
+
     def remove_api_keys(self, label: str) -> int:
         listed = self._rest("GET", "/rest/api-keys")
         stale = [item for item in listed["data"]["items"] if item["label"] == label]
@@ -1453,6 +1466,17 @@ class N8nWorkflows:
         """The error workflow, as the last bootstrap that was ready loaded it."""
         loaded = (await self.platform_workflows()).get(ERROR_WORKFLOW)
         return None if loaded is None else loaded.id
+
+    async def n8n_version(self) -> str | None:
+        """The n8n version the last bootstrap read from n8n itself, or None before any did. The
+        workflow drafter's catalogue must name the same (ADR 0051, section 8)."""
+        async with self._db.connection("orchestration") as conn:
+            row = await (
+                await conn.execute(
+                    "SELECT n8n_version FROM orchestration.engine_status WHERE id = 1"
+                )
+            ).fetchone()
+        return None if row is None else row["n8n_version"]
 
     async def recorded_error_workflow_id(self) -> str | None:
         """The error workflow the last bootstrap recorded, whether or not it was ready, as a

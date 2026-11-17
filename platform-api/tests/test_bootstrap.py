@@ -1,5 +1,6 @@
 import json
 from collections.abc import Iterator
+from copy import deepcopy
 from dataclasses import replace
 from typing import Any
 
@@ -23,6 +24,7 @@ from platform_api.bootstrap import (
 )
 from platform_api.db import PLATFORM_DATABASE, ROLE_OWNER
 from platform_api.migrations import MIGRATION_ORDER, downgrade, upgrade_all
+from platform_api.n8n_guard import DEPRECATED, SAFE
 from platform_api.orchestration.n8n import N8nClient
 from platform_api.orchestration.node_classes import NODE_CLASSES
 from platform_api.orchestration.spec import RunSpec
@@ -33,7 +35,17 @@ from tests.support import LOCAL_ENV, NOW, SPEC
 N8N = "http://n8n.test"
 TRUNK_HEADS = {"monitoring": "0001", "orchestration": "0004", "builder": "0003"}
 READY = (True, "all workflows loaded, active and linted")
+GUARDS_FAIL = (False, "n8n's blocks or settings fail the check")
 OWNER_EXISTS = "Instance owner already setup"
+N8N_VERSION = "2.42.6"
+SHOWN: dict[str, Any] = {
+    "versionCli": N8N_VERSION,
+    "allowedModules": {},
+    "security": {"blockFileAccessToN8nFiles": True},
+    "excludeNodes": ["n8n-nodes-base.executeCommand", "n8n-nodes-base.localFileTrigger"],
+    "communityNodesEnabled": False,
+}
+"""What n8n 2.42.6 shows at /rest/settings with the platform's settings, cut down."""
 
 
 def env_for(owner_url: str) -> dict[str, str]:
@@ -44,6 +56,7 @@ def env_for(owner_url: str) -> dict[str, str]:
         "N8N_OWNER_PASSWORD": "Aa1secret",
         "STEP_KEY": "step-key",
         "PLATFORM_INTERNAL_URL": "http://platform-api:8000",
+        **SAFE,
     }
 
 
@@ -207,8 +220,13 @@ class FakeN8n:
             {"id": "k1", "label": "platform-api"},
             {"id": "k2", "label": "Alice's own key"},
         ]
-        self.node_types = list(NODE_CLASSES.loaded())
-        """What n8n loaded, as NODES_INCLUDE from the class file makes it."""
+        self.node_types = [*NODE_CLASSES.names(), "n8n-nodes-base.airtable"]
+        """What n8n loaded: every built-in block, cut down to the ones the class file names
+        and one more."""
+        self.settings = deepcopy(SHOWN)
+        self.takes_deprecated = False
+        """n8n saves a workflow with a deprecated block, as with N8N_DEPRECATED_NODES_BLOCK
+        false."""
 
     def handle(self, request: httpx.Request) -> httpx.Response:
         path, method = request.url.path, request.method
@@ -221,6 +239,8 @@ class FakeN8n:
             return httpx.Response(200, json={"data": {"id": "1"}})
         if path == "/types/nodes.json":
             return httpx.Response(200, json=[{"name": t, "version": 1} for t in self.node_types])
+        if path == "/rest/settings":
+            return httpx.Response(200, json={"data": self.settings})
         if path == "/rest/projects/personal":
             return httpx.Response(200, json={"data": {"id": PLATFORM_PROJECT, "type": "personal"}})
         if path == "/rest/api-keys" and method == "GET":
@@ -246,6 +266,15 @@ class FakeN8n:
             listed = [w for w in self.workflows.values() if wanted in (None, w["name"])]
             return httpx.Response(200, json={"data": listed})
         if path == "/api/v1/workflows" and method == "POST":
+            deprecated = [n["type"] for n in body["nodes"] if n["type"] in DEPRECATED]
+            if deprecated and not self.takes_deprecated:
+                return httpx.Response(
+                    400,
+                    json={
+                        "message": f"Cannot use a {deprecated[0]} node: this node type is "
+                        "deprecated"
+                    },
+                )
             workflow_id = f"W{self.next_id}"
             self.next_id += 1
             created = {**body, "id": workflow_id, "active": False}
@@ -389,6 +418,7 @@ def settings_for(owner_url: str) -> BootstrapSettings:
         n8n_owner_password="Aa1secret",
         step_key="step-key",
         platform_internal_url="http://platform-api:8000",
+        n8n_settings=dict(SAFE),
     )
 
 
@@ -453,25 +483,22 @@ def test_a_run_on_the_shared_run_workflow_that_has_not_ended_leaves_bootstrap_re
     ("loads", "says"),
     [
         (
-            [*NODE_CLASSES.loaded(), "n8n-nodes-base.httpRequest", "n8n-nodes-base.code"],
-            "n8n loads 2 node type(s) that node_classes.json does not turn on, "
-            "n8n-nodes-base.code, n8n-nodes-base.httpRequest: NODES_INCLUDE is not the class "
-            "file's allow list",
+            [t for t in NODE_CLASSES.names() if t != "n8n-nodes-base.httpRequest"],
+            "n8n does not load 1 block(s) the class file names, n8n-nodes-base.httpRequest: "
+            "NODES_INCLUDE must be unset, so n8n loads every built-in block",
         ),
         (
-            [t for t in NODE_CLASSES.loaded() if t != "CUSTOM.wabAskForYes"],
-            "n8n does not load CUSTOM.wabAskForYes, which node_classes.json says it loads",
+            [*NODE_CLASSES.names(), "n8n-nodes-base.executeCommand"],
+            "n8n loads n8n-nodes-base.executeCommand, which NODES_EXCLUDE must leave out",
         ),
         (
-            list(NODE_CLASSES.included()),
-            "n8n does not load "
-            + ", ".join(sorted(set(NODE_CLASSES.loaded()) - set(NODE_CLASSES.included())))
-            + ", which node_classes.json says it loads",
+            [*NODE_CLASSES.names(), "n8n-nodes-community.anything"],
+            "n8n loads 1 block(s) that are not n8n's own or ours, n8n-nodes-community.anything",
         ),
     ],
-    ids=["more", "fewer", "without-the-tool-n8n-makes"],
+    ids=["an-allow-list", "a-block-left-out", "a-community-node"],
 )
-def test_bootstrap_is_not_ready_unless_n8n_loads_exactly_the_class_file_s_types(
+def test_bootstrap_is_not_ready_unless_n8n_loads_every_built_in_block_but_the_two(
     postgres: PostgresUrls,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -485,7 +512,69 @@ def test_bootstrap_is_not_ready_unless_n8n_loads_exactly_the_class_file_s_types(
     assert main(env_for(postgres.owner)) == 1
 
     assert says in capsys.readouterr().out
-    assert engine_status(postgres.owner) == (False, "the live workflows fail the lint")
+    assert engine_status(postgres.owner) == GUARDS_FAIL
+
+
+@pytest.mark.parametrize(
+    ("deployed", "shown", "says"),
+    [
+        ({"N8N_RUNNERS_MODE": "internal"}, {}, "N8N_RUNNERS_MODE must be external"),
+        ({"N8N_BLOCK_ENV_ACCESS_IN_NODE": None}, {}, "N8N_BLOCK_ENV_ACCESS_IN_NODE must be true"),
+        ({"N8N_RESTRICT_FILE_ACCESS_TO": ""}, {}, "N8N_RESTRICT_FILE_ACCESS_TO is empty"),
+        ({"N8N_RUNNERS_INSECURE_MODE": "true"}, {}, "N8N_RUNNERS_INSECURE_MODE must be unset"),
+        ({}, {"allowedModules": {"builtIn": ["*"]}}, "NODE_FUNCTION_ALLOW_BUILTIN set"),
+        ({}, {"security": {"blockFileAccessToN8nFiles": False}}, "reach its own folders"),
+    ],
+    ids=["internal-runner", "env-open", "files-open", "insecure", "modules", "n8n-files"],
+)
+def test_bootstrap_is_not_ready_when_n8n_s_settings_break_a_guard(
+    postgres: PostgresUrls,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    deployed: dict[str, str | None],
+    shown: dict[str, Any],
+    says: str,
+):
+    truncate_all(postgres.owner)
+    n8n = serve(monkeypatch, FakeN8n([]))
+    n8n.settings.update(shown)
+    env = {**env_for(postgres.owner), **deployed}
+
+    assert main({k: v for k, v in env.items() if v is not None}) == 1
+
+    assert says in capsys.readouterr().out
+    assert engine_status(postgres.owner) == GUARDS_FAIL
+
+
+def test_bootstrap_is_not_ready_when_n8n_takes_a_deprecated_block_and_removes_what_it_took(
+    postgres: PostgresUrls, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+):
+    truncate_all(postgres.owner)
+    n8n = serve(monkeypatch, FakeN8n([]))
+    n8n.takes_deprecated = True
+
+    assert main(env_for(postgres.owner)) == 1
+
+    said = capsys.readouterr().out
+    for node_type in DEPRECATED:
+        assert f"n8n saved a workflow with {node_type}, which runs code in its own process" in said
+    assert names_in(n8n) == ["run_failure_reporter", "self_test_failure"], "it took none back"
+    assert engine_status(postgres.owner) == GUARDS_FAIL
+
+
+def test_bootstrap_records_the_n8n_version_it_checked(
+    postgres: PostgresUrls, monkeypatch: pytest.MonkeyPatch
+):
+    """The workflow drafter's catalogue names the n8n it was made from, and drafting pauses
+    while the two differ (ADR 0051, section 8)."""
+    truncate_all(postgres.owner)
+    serve(monkeypatch, FakeN8n([]))
+
+    assert main(env_for(postgres.owner)) == 0
+
+    with psycopg.connect(postgres.owner) as conn:
+        row = conn.execute("SELECT n8n_version FROM orchestration.engine_status").fetchone()
+    assert row == (N8N_VERSION,)
 
 
 def test_once_nothing_runs_on_it_bootstrap_removes_the_shared_run_and_tick_workflows(
@@ -500,7 +589,7 @@ def test_once_nothing_runs_on_it_bootstrap_removes_the_shared_run_and_tick_workf
         conn.execute("UPDATE builder.use_cases SET engine = 'own', n8n_workflow_id = 'wf_moved'")
     said: list[str] = []
 
-    loaded, _ = load_into_n8n(settings_for(postgres.owner), said.append)
+    loaded = load_into_n8n(settings_for(postgres.owner), said.append).workflows
 
     assert [w.name for w in loaded] == ["run_failure_reporter", "self_test_failure"]
     assert names_in(n8n) == [
@@ -523,9 +612,10 @@ def test_bootstrap_removes_the_old_run_workflow_by_its_exact_name_and_nothing_el
     )
     said: list[str] = []
 
-    loaded, findings = load_into_n8n(settings_for(postgres.owner), said.append)
+    load = load_into_n8n(settings_for(postgres.owner), said.append)
+    loaded = load.workflows
 
-    assert findings == []
+    assert load.findings == [] and load.guards == []
     assert sorted(w.name for w in loaded) == ["run_failure_reporter", "self_test_failure"]
     assert all(w.active for w in loaded)
     assert n8n.deleted == ["W1"]
