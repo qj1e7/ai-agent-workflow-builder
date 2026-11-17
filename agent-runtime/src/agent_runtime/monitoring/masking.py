@@ -14,15 +14,34 @@ MASKED: Final = "[masked]"
 SECRET_NAME: Final = re.compile(r"(KEY|TOKEN|SECRET|PASSWORD|CONNECTION_STRING)$")
 SHORTEST_SECRET: Final = 8
 KEY_SHAPE_SOURCES: Final = (
-    r"sk-ant-[A-Za-z0-9_\-]{8,}",
-    r"sk-[A-Za-z0-9_\-]{16,}",
-    r"gh[pousr]_[A-Za-z0-9]{16,}",
-    r"github_pat_[A-Za-z0-9_]{16,}",
-    # A credential after Bearer or Basic holds a digit, +, / or =, so "basic understanding." stays.
-    r"(?i:bearer|basic)\s+(?=[A-Za-z._~\-]*[0-9+/=])[A-Za-z0-9._~+/=\-]{8,}",
+    # A key starts a word, so "task-management-workflow" never reads as "sk-...".
+    r"\bsk-ant-[A-Za-z0-9_\-]{8,}",
+    r"\bsk-[A-Za-z0-9_\-]{16,}",
+    r"\bgh[pousr]_[A-Za-z0-9]{16,}",
+    r"\bgithub_pat_[A-Za-z0-9_]{16,}",
+    r"\bglpat-[A-Za-z0-9_\-]{16,}",
+    r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b",
+    r"\bxox[abeprs]-[A-Za-z0-9\-]{10,}",
+    r"\bxapp-[0-9]-[A-Za-z0-9\-]{10,}",
+    r"hooks\.slack\.com/(?:services|triggers|workflows)/[A-Za-z0-9_/\-]+",
+    r"webhook\.office\.com/[A-Za-z0-9@_/\-]+",
+    r"\bATATT[A-Za-z0-9_=\-]{16,}",
+    r"\bAIza[A-Za-z0-9_\-]{35}",
+    r"(?i:accountkey|sharedaccesskey)=[A-Za-z0-9+/=]{32,}",
+    r"\bsig=[A-Za-z0-9%+/=_\-]{40,}",
+    r"\beyJ[A-Za-z0-9_\-]+\.eyJ[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+",
+    r"-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z ]*PRIVATE KEY-----|\Z)",
+    # A credential after Bearer holds a digit, +, / or =, so "bearer instruments" stays.
+    r"(?i:bearer)\s+(?=[A-Za-z._~\-]*[0-9+/=])[A-Za-z0-9._~+/=\-]{8,}",
+    # Basic carries base64 with a digit, +, / or =, so "a basic 2-step-approval-flow" stays.
+    r"(?i:basic)\s+(?=[A-Za-z]*[0-9+/=])[A-Za-z0-9+/=]{8,}",
 )
-"""Each shape of a key the masker knows. contracts/fixtures/agent/key-shapes.json carries them,
-and platform-api refuses every one before it keeps anything (ADR 0051)."""
+"""Each shape of a key the masker knows: OpenAI, Anthropic and Langfuse keys, GitHub and GitLab
+tokens, AWS access key ids, Slack tokens, Slack and Teams incoming webhooks, Atlassian and Google
+API keys, an Azure storage or Service Bus key and a SAS signature, a signed token, a private key,
+and a bearer or basic header. Each is distinctive, so a person's plain words never match one, and
+none repeats a group, so each runs in linear time. contracts/fixtures/agent/key-shapes.json
+carries them, and platform-api refuses every one before it keeps anything (ADR 0051)."""
 KEY_SHAPES: Final = re.compile("|".join(KEY_SHAPE_SOURCES))
 
 

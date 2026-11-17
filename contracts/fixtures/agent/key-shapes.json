@@ -1,9 +1,22 @@
 {
   "shapes": [
-    "sk-ant-[A-Za-z0-9_\\-]{8,}",
-    "sk-[A-Za-z0-9_\\-]{16,}",
-    "gh[pousr]_[A-Za-z0-9]{16,}",
-    "github_pat_[A-Za-z0-9_]{16,}",
-    "(?i:bearer|basic)\\s+(?=[A-Za-z._~\\-]*[0-9+/=])[A-Za-z0-9._~+/=\\-]{8,}"
+    "\\bsk-ant-[A-Za-z0-9_\\-]{8,}",
+    "\\bsk-[A-Za-z0-9_\\-]{16,}",
+    "\\bgh[pousr]_[A-Za-z0-9]{16,}",
+    "\\bgithub_pat_[A-Za-z0-9_]{16,}",
+    "\\bglpat-[A-Za-z0-9_\\-]{16,}",
+    "\\b(?:AKIA|ASIA)[0-9A-Z]{16}\\b",
+    "\\bxox[abeprs]-[A-Za-z0-9\\-]{10,}",
+    "\\bxapp-[0-9]-[A-Za-z0-9\\-]{10,}",
+    "hooks\\.slack\\.com/(?:services|triggers|workflows)/[A-Za-z0-9_/\\-]+",
+    "webhook\\.office\\.com/[A-Za-z0-9@_/\\-]+",
+    "\\bATATT[A-Za-z0-9_=\\-]{16,}",
+    "\\bAIza[A-Za-z0-9_\\-]{35}",
+    "(?i:accountkey|sharedaccesskey)=[A-Za-z0-9+/=]{32,}",
+    "\\bsig=[A-Za-z0-9%+/=_\\-]{40,}",
+    "\\beyJ[A-Za-z0-9_\\-]+\\.eyJ[A-Za-z0-9_\\-]+\\.[A-Za-z0-9_\\-]+",
+    "-----BEGIN [A-Z ]*PRIVATE KEY-----[\\s\\S]*?(?:-----END [A-Z ]*PRIVATE KEY-----|\\Z)",
+    "(?i:bearer)\\s+(?=[A-Za-z._~\\-]*[0-9+/=])[A-Za-z0-9._~+/=\\-]{8,}",
+    "(?i:basic)\\s+(?=[A-Za-z]*[0-9+/=])[A-Za-z0-9+/=]{8,}"
   ]
 }

@@ -73,6 +73,22 @@ def test_redact_removes_a_whole_secret_however_short() -> None:
     assert redact("key=k9", {"GOOGLE_API_KEY": "k9"}) == "key=[redacted]"
 
 
+@pytest.mark.parametrize(
+    "key",
+    [
+        "sk-" + "****" + "ab3d",
+        "ghp_" + "Zx9" * 12,
+        "AKIA" + "Z7Q2" * 4,
+        "eyJ" + "hbGciOiJIUzI1NiJ9.eyJ" + "zdWIiOiIxMjM0NTY3ODkwIn0." + "Ab3dEf9h-_" * 3,
+    ],
+    ids=["key a provider cut short", "GitHub token", "AWS access key id", "JWT"],
+)
+def test_redact_removes_every_shape_of_key_the_masker_knows_and_one_a_provider_cut(
+    key: str,
+) -> None:
+    assert key not in redact(f"401 refused {key} for this call", {})
+
+
 def test_redact_hides_values_that_pydantic_echoes_cut_short() -> None:
     message = (
         "1 validation error for AzureChatOpenAI\n  Value error [type=value_error, "
