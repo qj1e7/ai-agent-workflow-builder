@@ -8,6 +8,7 @@ from fastapi import FastAPI
 
 from platform_api.auth import DEV_PEOPLE, DevAuth, OidcAuth
 from platform_api.builder import Builder, Home, PlannerFront, TeamRequests, Watchlist
+from platform_api.builder.drafted_workflows import DraftedWorkflows
 from platform_api.builder.explain import Explainer
 from platform_api.builder.key_sweep import KeySweep
 from platform_api.builder.made_in_n8n import MadeInN8n
@@ -89,10 +90,12 @@ from platform_api.orchestration.planning import (
     ExplainWordings,
     PlannerAnswers,
     ProjectFinding,
+    WorkflowDrafting,
 )
 from platform_api.orchestration.runs import Leg
 from platform_api.orchestration.schedule_store import ScheduleBook
 from platform_api.orchestration.service import Orchestrator
+from platform_api.orchestration.setup_approvals import SetUpApprovals
 from platform_api.orchestration.team_request_card import TeamsRequestChannel
 from platform_api.orchestration.teams import TeamsStub, TeamsWorkflowsWebhook
 from platform_api.orchestration.tell import TellFlow, TellOutlet, TellPractice, TellSetup
@@ -121,6 +124,8 @@ class Services:
     builder: Builder
     planner_front: PlannerFront
     explainer: Explainer
+    drafted: DraftedWorkflows
+    setup_approvals: SetUpApprovals
     home: Home
     watchlist: Watchlist
     team_requests: TeamRequests
@@ -191,6 +196,7 @@ def install(app: FastAPI, services: Services) -> None:
     app.state.builder = services.builder
     app.state.planner_front = services.planner_front
     app.state.explainer = services.explainer
+    app.state.drafted = services.drafted
     app.state.home = services.home
     app.state.watchlist = services.watchlist
     app.state.team_requests = services.team_requests
@@ -530,6 +536,19 @@ async def build(settings: Settings) -> Services:
     )
     home = Home(builder, orchestrator, people, team_requests, connections, watchlist)
     trace_scores = trace_scores_for(settings)
+    setup_approvals = SetUpApprovals(
+        db, webhook or teams, people, settings.public_base_url, settings.team_time_zone
+    )
+    drafted = DraftedWorkflows(
+        db,
+        WorkflowDrafting(db, model_settings, agents),
+        setup_approvals,
+        facts,
+        n8n.drafts,
+        settings.public_base_url,
+        settings.team_time_zone.key,
+    )
+    setup_approvals.serve(drafted)
     return Services(
         settings=settings,
         db=db,
@@ -547,8 +566,11 @@ async def build(settings: Settings) -> Services:
             staff,
             scores=trace_scores,
             pseudonym_key=settings.trace_pseudonym_key,
+            drafted=drafted,
         ),
         explainer=Explainer(db, builder, ExplainWordings(db, model_settings, agents)),
+        drafted=drafted,
+        setup_approvals=setup_approvals,
         home=home,
         watchlist=watchlist,
         team_requests=team_requests,
@@ -627,11 +649,16 @@ class Runner:
         self._tasks.append(
             asyncio.create_task(self._services.connections.check_forever(self._stop))
         )
+        self._tasks.append(
+            asyncio.create_task(self._services.setup_approvals.work_forever(self._stop))
+        )
 
     async def stop(self) -> None:
         self._stop.set()
         self._services.orchestrator.nudge()
         self._services.staff.nudge()
+        self._services.setup_approvals.nudge()
+        await self._services.drafted.settle()
         for task in self._tasks:
             await task
         if self._services.tell_flow is not None:

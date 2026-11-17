@@ -240,6 +240,7 @@ from platform_api.orchestration.team_request_card import (
     TeamsPost,
     TeamsRequestChannel,
 )
+from platform_api.orchestration.version_digest import workflow_digest
 from platform_api.orchestration.watch import (
     ATTENTION_ORDER,
     Checked,
@@ -302,7 +303,6 @@ from platform_api.orchestration.workflow_check import (
     writes,
     zone_words,
 )
-from platform_api.orchestration.workflow_digest import workflow_digest
 from platform_api.orchestration.write_actions import Binding
 
 __all__ = [

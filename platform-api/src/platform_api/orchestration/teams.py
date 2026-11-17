@@ -290,8 +290,7 @@ def set_up_card(notice: SetUpNotice) -> AdaptiveCard:
             _runs(
                 _plain(
                     _first_upper(
-                        f"{listed(notice.not_deciding)} can’t decide, because it is their own "
-                        "work."
+                        f"{listed(notice.not_deciding)} can’t decide, because it is their own work."
                     )
                 )
             )

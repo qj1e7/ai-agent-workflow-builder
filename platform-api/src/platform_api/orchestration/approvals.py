@@ -232,9 +232,7 @@ def _refusal(
     return None
 
 
-def why_not(
-    request: Gated, decisions: Iterable[Decision], principal: Principal
-) -> Refusal | None:
+def why_not(request: Gated, decisions: Iterable[Decision], principal: Principal) -> Refusal | None:
     recorded = _recorded(request, decisions)
     status = approval_status(request, recorded)
     if not isinstance(status, Open):
