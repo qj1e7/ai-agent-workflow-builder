@@ -17,6 +17,7 @@ from platform_api.builder.versions import authors_from
 from platform_api.db import Database
 from platform_api.orchestration import (
     GITHUB_RELEASES,
+    TYPE_OF,
     WATCHLIST_CHECKER,
     WATCHLIST_PLACE,
     AgentRejected,
@@ -54,6 +55,16 @@ _PLACES = """
     JOIN builder.use_case_cards c
       ON c.use_case_id = u.use_case_id AND c.version = u.current_version
     WHERE u.deleted_at IS NULL AND c.card_id = %(card)s AND c."values" ? %(input)s
+    UNION
+    SELECT n -> 'parameters' ->> 'place', n -> 'parameters' ->> 'place'
+    FROM builder.drafted_workflows d
+    JOIN builder.use_cases u ON u.use_case_id = d.use_case_id
+    JOIN builder.use_case_versions v
+      ON v.use_case_id = u.use_case_id AND v.version = u.current_version
+    CROSS JOIN LATERAL jsonb_array_elements(v.document -> 'nodes') AS n
+    WHERE u.deleted_at IS NULL AND d.set_up_at IS NOT NULL
+      AND n ->> 'type' = %(read)s AND n -> 'parameters' ->> 'source' = %(source)s
+      AND n -> 'parameters' ->> 'place' IS NOT NULL
 """
 
 
@@ -214,14 +225,23 @@ class BuilderWorkflowFacts:
         return AgentToRun(CardRun(spec, dict(values), bindings), release_of)
 
     async def places(self, source: str) -> Sequence[NodeOption]:
-        """GitHub releases: the watched software and the repositories the Version checker
-        watches. Nothing else is set up to be read yet. The watchlist as a whole is offered only
+        """GitHub releases: the watched software, the repositories the Version checker
+        watches, and those a drafted workflow that is set up reads, which its set-up approval
+        named. Nothing else is set up to be read yet. The watchlist as a whole is offered only
         in its own workflow (NodeCatalog)."""
         if source != GITHUB_RELEASES:
             return []
         async with self._db.connection("builder") as conn:
             rows = await (
-                await conn.execute(_PLACES, {"input": REPO_INPUT, "card": VERSION_CHECKER_ID})
+                await conn.execute(
+                    _PLACES,
+                    {
+                        "input": REPO_INPUT,
+                        "card": VERSION_CHECKER_ID,
+                        "read": TYPE_OF["read"],
+                        "source": GITHUB_RELEASES,
+                    },
+                )
             ).fetchall()
         named = {str(row["repo"]): str(row["name"]) for row in rows}
         return [NodeOption(repo, name) for repo, name in sorted(named.items())]

@@ -16,7 +16,7 @@ before anything is kept or sent."""
 import asyncio
 import logging
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, Final, Literal, Protocol, cast
@@ -49,6 +49,7 @@ from platform_api.db import Connection, Database, hold_workflow, json
 from platform_api.orchestration import (
     DECLINE_REASONS,
     GITHUB_RELEASES,
+    TYPE_OF,
     WATCHLIST_PLACE,
     Approved,
     ApprovedSetUp,
@@ -58,9 +59,12 @@ from platform_api.orchestration import (
     Ended,
     KeyPasted,
     KnownOptions,
+    ListedWorkflow,
     ModelProblem,
     N8nError,
+    N8nWorkflow,
     NoModel,
+    NotKeptAsSent,
     Refusal,
     RuntimeDown,
     SavedDraft,
@@ -79,6 +83,7 @@ from platform_api.orchestration import (
     WorkflowPlan,
     add_yes,
     attach_keys,
+    block_id,
     grade,
     set_up_link,
     workflow_digest,
@@ -113,6 +118,15 @@ ACCESS_LATER: Final = (
 )
 NEWER_BELOW: Final = "A newer revision is below."
 SET_UP_ALREADY: Final = "It's set up already. Change it from Workflows."
+SETTING_UP: Final = "It's approved, and it's being set up in n8n now."
+FLAGGED_NOW: Final = (
+    "It has a flag under today's rules, so it can't be approved now. Ask the sender to draft it "
+    "again."
+)
+NEEDED_NOW: Final = "A setting is still needed, so it can't be approved now."
+SAME_WORDS_WITHIN: Final = timedelta(minutes=2)
+"""The same words from the same Operator within this long are one request asked twice, as a
+retried send of the chat would ask it, so they answer the drafted workflow already started."""
 STILL_DRAFTING: Final = "It's still drafting."
 
 type DraftedState = Literal["drafting", "not_drafted", "draft", "waiting", "approved", "declined"]
@@ -236,7 +250,6 @@ class Refused:
 class Forbidden:
     """403, with the words the page shows."""
 
-    refusal: Refusal
     words: str
 
 
@@ -264,6 +277,12 @@ class Kept:
     owner: UserId
     use_case_id: str
     set_up_at: datetime | None
+    set_up_approval: str | None
+    """The set-up approval the set-up, its last try or its last problem, was for."""
+    set_up_trying_at: datetime | None
+    """When a try of that approval's set-up began to create the workflow in n8n."""
+    set_up_n8n_id: str | None
+    """The workflow n8n created on that try, recorded as soon as n8n named it."""
     set_up_problem: str | None
     revisions: tuple[Revision, ...]
 
@@ -297,7 +316,17 @@ class SettingUp(Protocol):
 
     async def error_workflow_id(self) -> str | None: ...
 
-    async def save_draft(self, document: Mapping[str, Any]) -> SavedDraft: ...
+    async def save_draft(
+        self,
+        document: Mapping[str, Any],
+        created: Callable[[str], Awaitable[None]] | None = None,
+    ) -> SavedDraft: ...
+
+    async def platform_project(self) -> str | None: ...
+
+    async def workflows_in(self, project_id: str) -> list[ListedWorkflow]: ...
+
+    async def look(self, workflow_id: str) -> N8nWorkflow | None: ...
 
     async def remove(self, workflow_id: str) -> None: ...
 
@@ -333,19 +362,39 @@ class DraftedWorkflows:
         self._running: set[asyncio.Task[None]] = set()
 
     async def start(
-        self, owner: Principal, words: str, idempotency_key: str | None = None
+        self,
+        owner: Principal,
+        words: str,
+        idempotency_key: str | None = None,
+        same_words_within: timedelta | None = None,
     ) -> DraftedWorkflowView | Refused:
         """A new drafted workflow, drafting its first revision now. The same key from the same
-        Operator answers the drafted workflow it started."""
+        Operator answers the drafted workflow it started, and so do the same words within
+        `same_words_within`, for a request with no key of its own."""
         if PASTED_KEY.search(words):
             return Refused(KEY_PASTED)
         async with self._db.transaction("builder") as uow:
-            if idempotency_key is not None:
+            await uow.conn.execute(
+                "SELECT pg_advisory_xact_lock(hashtext(%s))", (f"drafted.start:{owner.user_id}",)
+            )
+            if idempotency_key is not None or same_words_within is not None:
                 row = await (
                     await uow.conn.execute(
-                        "SELECT drafted_id FROM builder.drafted_workflows"
-                        " WHERE owner = %s AND idempotency_key = %s",
-                        (owner.user_id, idempotency_key),
+                        "SELECT d.drafted_id FROM builder.drafted_workflows d"
+                        " JOIN builder.drafted_revisions r"
+                        " ON r.drafted_id = d.drafted_id AND r.revision = 1"
+                        " WHERE d.owner = %s AND (d.idempotency_key = %s"
+                        " OR (%s::interval IS NOT NULL AND r.words = %s"
+                        " AND d.created_at > %s - %s::interval))"
+                        " ORDER BY d.created_at DESC LIMIT 1",
+                        (
+                            owner.user_id,
+                            idempotency_key,
+                            same_words_within,
+                            words,
+                            uow.now,
+                            same_words_within,
+                        ),
                     )
                 ).fetchone()
                 if row is not None:
@@ -383,8 +432,8 @@ class DraftedWorkflows:
             if self._drafting_now(kept.newest):
                 return Refused(STILL_DRAFTING)
             state = await self._approvals.latest(drafted_id)
-            if state is not None and isinstance(state.status, Approved):
-                return Refused(SET_UP_ALREADY)
+            if state is not None and _holds(kept, state):
+                return Refused(SETTING_UP)
             number = kept.newest.number + 1
             await _begin(uow.conn, drafted_id, number, asker.user_id, words, uow.now)
         await self._approvals.replace_waiting(drafted_id)
@@ -443,8 +492,9 @@ class DraftedWorkflows:
             return Refused("There's nothing to try again.")
         async with self._db.transaction("builder") as uow:
             await uow.conn.execute(
-                "UPDATE builder.drafted_workflows SET set_up_problem = NULL WHERE drafted_id = %s",
-                (drafted_id,),
+                "UPDATE builder.drafted_workflows SET set_up_problem = NULL"
+                " WHERE drafted_id = %s AND set_up_approval = %s",
+                (drafted_id, state.request.id),
             )
         log.info("%s asked to set %s up again", asker.user_id, drafted_id)
         return await self._viewed(drafted_id)
@@ -460,6 +510,7 @@ class DraftedWorkflows:
         assert revision.document is not None and revision.plan is not None
         checked = await self._checked(kept, revision.plan, revision.document)
         refusal = await self._approvals.why_not(state, viewer)
+        why_not = WHY_NOT[refusal] if refusal is not None else _held_by_today(checked)
         return SetUpApprovalView(
             approval_id=state.request.id,
             drafted_id=kept.drafted_id,
@@ -468,8 +519,8 @@ class DraftedWorkflows:
             digest=state.request.digest,
             approval=_approval_view(state),
             report=view_of(checked.report, kept.use_case_id, revision.plan.name, None, False),
-            you_can_decide=refusal is None,
-            why_not=None if refusal is None else WHY_NOT[refusal],
+            you_can_decide=why_not is None,
+            why_not=why_not,
             decline_reasons=list(DECLINE_REASONS),
             set_up=_set_up_view(kept, state),
         )
@@ -479,12 +530,18 @@ class DraftedWorkflows:
     ) -> tuple[SetUpApprovalView, bool] | Forbidden | NotFound:
         """The gate decides. True with a decision recorded now, False with one recorded before."""
         verdict = Verdict.APPROVE if decision.verdict == "approve" else Verdict.DECLINE
+        if verdict is Verdict.APPROVE:
+            held = await self._held_now(approval_id)
+            if isinstance(held, NotFound):
+                return held
+            if held is not None:
+                return Forbidden(held)
         decided = await self._approvals.decide(
             ApprovalId(approval_id), viewer, verdict, Digest(decision.digest), decision.reason
         )
         match decided:
             case SetUpRefused(refusal):
-                return Forbidden(refusal, WHY_NOT[refusal])
+                return Forbidden(WHY_NOT[refusal])
             case SetUpDecided(repeated=repeated):
                 view = await self.approval(approval_id, viewer)
                 assert view is not None
@@ -509,40 +566,47 @@ class DraftedWorkflows:
                 or newest.plan is None
                 or workflow_digest(newest.document) != approved.digest
             ):
-                return await _refused(uow.conn, kept, CHANGED)
+                return await _refused(uow.conn, kept, approved, CHANGED)
             n8n = self._n8n
             if n8n is None:
-                return await _refused(uow.conn, kept, NO_N8N)
+                return await _refused(uow.conn, kept, approved, NO_N8N)
             error_workflow = await n8n.error_workflow_id()
             if error_workflow is None:
                 return TryAgain("n8n's error workflow is not loaded")
             known = await self._known(newest.plan)
             graded = grade(newest.document, error_workflow, self._zone, known)
             if graded.findings:
-                return await _refused(uow.conn, kept, NO_LONGER_PASSES)
+                return await _refused(uow.conn, kept, approved, NO_LONGER_PASSES)
             try:
-                saved = await n8n.save_draft(newest.document)
-            except N8nError:
-                return await _refused(uow.conn, kept, CHANGED)
-            except httpx.HTTPError as error:
+                held = await _left_by_an_earlier_try(n8n, kept, approved)
+                if held is None:
+                    await self._tried(kept.drafted_id, approved, None)
+
+                    async def created(workflow_id: str) -> None:
+                        await self._tried(kept.drafted_id, approved, workflow_id)
+
+                    saved = await n8n.save_draft(newest.document, created)
+                    held = Held(saved.workflow_id, saved.version_id, _with_pins(saved))
+            except NotKeptAsSent:
+                return await _refused(uow.conn, kept, approved, CHANGED)
+            except (N8nError, httpx.HTTPError) as error:
                 return TryAgain(f"n8n did not answer ({type(error).__name__})")
-            held = {**saved.document, **({"pinData": saved.pins} if saved.pins else {})}
-            if workflow_digest(held) != approved.digest:
-                await n8n.remove(saved.workflow_id)
-                return await _refused(uow.conn, kept, CHANGED)
+            if workflow_digest(held.document) != approved.digest:
+                await n8n.remove(held.workflow_id)
+                return await _refused(uow.conn, kept, approved, CHANGED)
             try:
                 await _insert_use_case(
                     uow.conn,
                     kept,
-                    saved.workflow_id,
-                    saved.version_id,
-                    held,
+                    held.workflow_id,
+                    held.version_id,
+                    held.document,
                     grading_mark(error_workflow, self._zone),
                     approved,
                     uow.now,
                 )
             except Exception:
-                await n8n.remove(saved.workflow_id)
+                await n8n.remove(held.workflow_id)
                 raise
         log.info(
             "set up %s revision %d as %s, a draft, on %s's approval %s",
@@ -554,12 +618,25 @@ class DraftedWorkflows:
         )
         return SetUpFinished()
 
+    async def _tried(
+        self, drafted_id: str, approved: ApprovedSetUp, workflow_id: str | None
+    ) -> None:
+        """Kept at once, outside the set-up's own transaction, so a try cut off after n8n
+        created the workflow leaves the next try the id to look for."""
+        async with self._db.transaction("builder") as uow:
+            await uow.conn.execute(
+                "UPDATE builder.drafted_workflows SET set_up_approval = %s,"
+                " set_up_trying_at = %s, set_up_n8n_id = %s, set_up_problem = NULL"
+                " WHERE drafted_id = %s AND set_up_at IS NULL",
+                (approved.approval_id, uow.now, workflow_id, drafted_id),
+            )
+
     async def gave_up(self, approved: ApprovedSetUp, detail: str) -> None:
         async with self._db.transaction("builder") as uow:
             await uow.conn.execute(
-                "UPDATE builder.drafted_workflows SET set_up_problem = %s"
+                "UPDATE builder.drafted_workflows SET set_up_problem = %s, set_up_approval = %s"
                 " WHERE drafted_id = %s AND set_up_at IS NULL",
-                (NOT_TAKEN, approved.drafted_id),
+                (NOT_TAKEN, approved.approval_id, approved.drafted_id),
             )
 
     async def settle(self) -> None:
@@ -701,6 +778,18 @@ class DraftedWorkflows:
             agent_cards=[library_card(card) for card in cards[:50]],
         )
 
+    async def _held_now(self, approval_id: str) -> str | None | NotFound:
+        """Why a yes would be taken on a revision today's rules wouldn't set up."""
+        state = await self._approvals.get(ApprovalId(approval_id))
+        if state is None:
+            return NotFound()
+        async with self._db.connection("builder") as conn:
+            kept = await _kept(conn, state.request.drafted_id)
+        assert kept is not None
+        revision = next(r for r in kept.revisions if r.number == state.request.revision)
+        assert revision.document is not None and revision.plan is not None
+        return _held_by_today(await self._checked(kept, revision.plan, revision.document))
+
     def _drafting_now(self, revision: Revision) -> bool:
         return revision.state == "drafting" and self._db.clock() - revision.started_at < (
             DRAFTING_LIMIT
@@ -764,8 +853,10 @@ class DraftedWorkflows:
         lived: DraftedState = "draft"
         if mine is not None:
             match mine.status:
-                case Approved():
+                case Approved() if _holds(kept, mine):
                     lived = "approved"
+                case Approved():
+                    lived = "draft"
                 case Declined():
                     lived = "declined"
                 case Closed():
@@ -838,15 +929,45 @@ def _approval_view(state: SetUpState) -> DraftedApprovalView:
     )
 
 
+def _problem_of(kept: Kept, state: SetUpState) -> str | None:
+    """Why this approval's set-up did not finish. A problem left by an earlier approval is not
+    this one's."""
+    return kept.set_up_problem if kept.set_up_approval == state.request.id else None
+
+
+def _holds(kept: Kept, state: SetUpState) -> bool:
+    """An approval of the newest revision holds it while its set-up is done or still to come. A
+    set-up refused or given up leaves it a draft again, to change or send again, and a yes on an
+    older revision holds nothing."""
+    if not isinstance(state.status, Approved) or state.request.revision != kept.newest.number:
+        return False
+    if kept.set_up_at is not None:
+        return True
+    return _problem_of(kept, state) is None and state.set_up == "waiting"
+
+
+def _held_by_today(checked: Checked) -> str | None:
+    """Why the revision can't be approved under today's rules, which the set-up grades it by."""
+    report = checked.report
+    if report.flags:
+        return FLAGGED_NOW
+    if report.needs_an_answer:
+        return NEEDED_NOW
+    if checked.changes_access:
+        return ACCESS_LATER
+    return None
+
+
 def _set_up_view(kept: Kept, state: SetUpState) -> DraftedSetUpView | None:
     if not isinstance(state.status, Approved):
         return None
     if kept.set_up_at is not None:
         return DraftedSetUpView(state="set_up", use_case_id=kept.use_case_id, words=None)
-    if kept.set_up_problem is not None:
-        retry = kept.set_up_problem == NOT_TAKEN
+    problem = _problem_of(kept, state)
+    if problem is not None:
+        retry = problem == NOT_TAKEN
         return DraftedSetUpView(
-            state="failed" if retry else "refused", use_case_id=None, words=kept.set_up_problem
+            state="failed" if retry else "refused", use_case_id=None, words=problem
         )
     if state.set_up == "failed":
         return DraftedSetUpView(state="failed", use_case_id=None, words=NOT_TAKEN)
@@ -897,10 +1018,75 @@ async def _finish(
         )
 
 
-async def _refused(conn: Connection, kept: Kept, words: str) -> SetUpFinished:
+@dataclass(frozen=True)
+class Held:
+    """A workflow n8n holds for the approved revision, with its pins, as its digest reads it."""
+
+    workflow_id: str
+    version_id: str
+    document: dict[str, Any]
+
+
+def _with_pins(saved: SavedDraft | N8nWorkflow) -> dict[str, Any]:
+    return {**saved.document, **({"pinData": saved.pins} if saved.pins else {})}
+
+
+def _ours(document: Mapping[str, Any], use_case_id: str) -> bool:
+    """Laid out for this workflow: its Start from the Portal has the webhook id only this
+    workflow's layout gives it."""
+    start = block_id(use_case_id, "webhook/start")
+    nodes = cast(list[dict[str, Any]], document.get("nodes") or [])
+    return any(n.get("type") == TYPE_OF["start"] and n.get("webhookId") == start for n in nodes)
+
+
+async def _left_by_an_earlier_try(
+    n8n: SettingUp, kept: Kept, approved: ApprovedSetUp
+) -> Held | None:
+    """A try of this approval's set-up that was cut off after n8n created the workflow leaves it
+    there. The next try takes the id that try recorded, or, when it was cut off before it could
+    record one, the workflow its layout alone could have made: Start from the Portal with this
+    workflow's own webhook id. It looks only in the platform's own n8n project, never in a
+    member's space. It keeps a draft whose digest is the approved one and removes any other, so
+    asking twice never makes two. The first try looks for nothing."""
+    if kept.set_up_approval != approved.approval_id or kept.set_up_trying_at is None:
+        return None
+    project = await n8n.platform_project()
+    if project is None:
+        raise N8nError("the platform's n8n project is not recorded")
+    there = [listed.workflow for listed in await n8n.workflows_in(project)]
+    recorded = kept.set_up_n8n_id
+    left = [
+        w
+        for w in there
+        if (w.id == recorded if recorded is not None else _ours(w.document, kept.use_case_id))
+    ]
+    kept_one: Held | None = None
+    for found in left:
+        whole = await n8n.look(found.id)
+        if whole is None:
+            continue
+        document = _with_pins(whole)
+        if (
+            kept_one is None
+            and whole.active_version_id is None
+            and workflow_digest(document) == approved.digest
+        ):
+            kept_one = Held(whole.id, whole.version_id, document)
+        else:
+            log.warning(
+                "removing %s, left in n8n by an earlier set-up of %s", whole.id, kept.drafted_id
+            )
+            await n8n.remove(whole.id)
+    return kept_one
+
+
+async def _refused(
+    conn: Connection, kept: Kept, approved: ApprovedSetUp, words: str
+) -> SetUpFinished:
     await conn.execute(
-        "UPDATE builder.drafted_workflows SET set_up_problem = %s WHERE drafted_id = %s",
-        (words, kept.drafted_id),
+        "UPDATE builder.drafted_workflows SET set_up_problem = %s, set_up_approval = %s"
+        " WHERE drafted_id = %s",
+        (words, approved.approval_id, kept.drafted_id),
     )
     log.warning("the set-up of %s was refused: %s", kept.drafted_id, words)
     return SetUpFinished()
@@ -909,7 +1095,8 @@ async def _refused(conn: Connection, kept: Kept, words: str) -> SetUpFinished:
 async def _kept(conn: Connection, drafted_id: str) -> Kept | None:
     row = await (
         await conn.execute(
-            "SELECT drafted_id, owner, use_case_id, set_up_at, set_up_problem"
+            "SELECT drafted_id, owner, use_case_id, set_up_at, set_up_approval,"
+            " set_up_trying_at, set_up_n8n_id, set_up_problem"
             " FROM builder.drafted_workflows WHERE drafted_id = %s",
             (drafted_id,),
         )
@@ -942,6 +1129,9 @@ async def _kept(conn: Connection, drafted_id: str) -> Kept | None:
         UserId(row["owner"]),
         str(row["use_case_id"]),
         row["set_up_at"],
+        row["set_up_approval"],
+        row["set_up_trying_at"],
+        row["set_up_n8n_id"],
         row["set_up_problem"],
         revisions,
     )

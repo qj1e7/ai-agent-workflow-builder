@@ -4,7 +4,7 @@ revision is sent only when nothing is needed and nothing is flagged, any Approve
 party approves that exact digest, and only that digest is set up as a Draft."""
 
 import uuid
-from collections.abc import AsyncIterator, Mapping, Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
 from copy import deepcopy
 from dataclasses import dataclass, field
 from typing import Any
@@ -23,7 +23,9 @@ from platform_api.db import Database
 from platform_api.orchestration import (
     DrafterFacts,
     KnownOptions,
+    ListedWorkflow,
     ModelProblem,
+    N8nWorkflow,
     NoModel,
     RuntimeDown,
     SavedDraft,
@@ -73,6 +75,11 @@ def drafted(plan: WorkflowPlan) -> WorkflowDrafted:
 @dataclass
 class N8n:
     saved: list[dict[str, Any]] = field(default_factory=list[dict[str, Any]])
+    """Every workflow n8n created, in order."""
+    held: dict[str, N8nWorkflow] = field(default_factory=dict[str, N8nWorkflow])
+    """What n8n still holds, by id."""
+    projects: dict[str, str] = field(default_factory=dict[str, str])
+    """Where each workflow n8n holds sits. The platform's own project is "platform"."""
     removed: list[str] = field(default_factory=list[str])
     changes_it: bool = False
     down: bool = False
@@ -80,20 +87,44 @@ class N8n:
     async def error_workflow_id(self) -> str | None:
         return ERROR_WORKFLOW
 
-    async def save_draft(self, document: Mapping[str, Any]) -> SavedDraft:
+    async def save_draft(
+        self,
+        document: Mapping[str, Any],
+        created: Callable[[str], Awaitable[None]] | None = None,
+    ) -> SavedDraft:
         if self.down:
             raise httpx.ConnectError("n8n is down")
-        held = deepcopy(dict(document))
-        pins = held.pop("pinData", None)
+        kept = deepcopy(dict(document))
+        pins = kept.pop("pinData", None)
         if self.changes_it:
-            held["settings"]["callerPolicy"] = "any"
-        for number, node in enumerate(held["nodes"]):
+            kept["settings"]["callerPolicy"] = "any"
+        for number, node in enumerate(kept["nodes"]):
             node["id"] = f"n8n-{number}"
-        self.saved.append(held)
-        return SavedDraft(f"wf{len(self.saved)}", "v1", held, pins)
+        self.saved.append(kept)
+        workflow_id = f"wf{len(self.saved)}"
+        self.held[workflow_id] = N8nWorkflow(workflow_id, "v1", None, kept, pins)
+        self.projects[workflow_id] = "platform"
+        if created is not None:
+            await created(workflow_id)
+        return SavedDraft(workflow_id, "v1", kept, pins)
+
+    async def platform_project(self) -> str | None:
+        return "platform"
+
+    async def workflows_in(self, project_id: str) -> list[ListedWorkflow]:
+        if self.down:
+            raise httpx.ConnectError("n8n is down")
+        return [
+            ListedWorkflow(w, None) for w in self.held.values() if self.projects[w.id] == project_id
+        ]
+
+    async def look(self, workflow_id: str) -> N8nWorkflow | None:
+        return self.held.get(workflow_id)
 
     async def remove(self, workflow_id: str) -> None:
         self.removed.append(workflow_id)
+        self.held.pop(workflow_id, None)
+        self.projects.pop(workflow_id, None)
 
 
 class Facts:

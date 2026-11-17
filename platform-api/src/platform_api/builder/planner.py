@@ -20,7 +20,7 @@ from typing import Annotated, Final, Literal, Protocol, Self
 from pydantic import AwareDatetime, ConfigDict, Field, StringConstraints, model_validator
 
 from platform_api.builder import asks
-from platform_api.builder.drafted_workflows import DraftedWorkflows
+from platform_api.builder.drafted_workflows import SAME_WORDS_WITHIN, DraftedWorkflows
 from platform_api.builder.drafted_workflows import Refused as DraftRefused
 from platform_api.builder.models import (
     CardList,
@@ -1103,7 +1103,7 @@ class PlannerFront:
         the runtime first, whose word rule refuses a skipped yes (ADR 0047)."""
         if Role.OPERATOR not in viewer.roles:
             return OperatorsReply(parts=[_cross(text, "operators")])
-        match await drafted.start(viewer, text):
+        match await drafted.start(viewer, text, same_words_within=SAME_WORDS_WITHIN):
             case DraftRefused(words=words):
                 return DraftStartedReply(drafted_id=None, refused=words)
             case started:

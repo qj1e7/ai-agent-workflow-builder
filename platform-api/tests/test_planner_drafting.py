@@ -170,3 +170,12 @@ async def test_a_can_t_the_platform_refuses_outright_offers_no_draft(chat: Chat)
     reply = await chat.say("carol", "text me the results")
 
     assert reply["draft_words"] is None
+
+
+async def test_the_same_words_sent_twice_in_a_row_start_one_draft(chat: Chat):
+    first = await chat.say("carol", WORDS)
+    again = await chat.say("carol", WORDS)
+    await chat.drafted.settle()
+
+    assert first["drafted_id"] == again["drafted_id"]
+    assert len(chat.drafter.asked) == 1
