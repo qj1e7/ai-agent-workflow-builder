@@ -131,6 +131,21 @@ def test_a_drafted_release_check_is_approved_by_another_and_set_up_as_a_draft(
     api.delete("alice", f"/api/v1/use-cases/{use_case_id}", expect=(200,))
 
 
+def renamed(workflow: Json, old: str, new: str) -> None:
+    """As n8n's editor renames a block: its id stays, and every link follows the name."""
+    for node in workflow["nodes"]:
+        if node["name"] == old:
+            node["name"] = new
+    links: Json = workflow["connections"]
+    if old in links:
+        links[new] = links.pop(old)
+    for outputs in links.values():
+        for targets in outputs.get("main", []):
+            for target in targets:
+                if target["node"] == old:
+                    target["node"] = new
+
+
 NO_TIME = (
     "Draft an n8n workflow that every Monday checks langchain-ai/langgraph for a new release and "
     "raises a ticket in MOCK"
@@ -192,6 +207,7 @@ def test_a_draft_edited_in_n8n_is_read_back_and_checked_again(api: Api, mock_mod
     for node in held["nodes"]:
         if node["type"] == "n8n-nodes-base.scheduleTrigger":
             node["parameters"]["rule"]["interval"][0]["triggerAtHour"] = 17
+    renamed(held, "Propose a ticket", "Propose it")
     edit = {
         "nodes": held["nodes"],
         "connections": held["connections"],
@@ -207,5 +223,8 @@ def test_a_draft_edited_in_n8n_is_read_back_and_checked_again(api: Api, mock_mod
     run_time = setting_of(done, "run_time")
     assert (run_time["value"], run_time["said"]) == ("every Monday at 17:00", "You typed it in n8n")
     assert done["question"] == APPROVERS, "the Approvers are still asked"
+    project = setting_of(done, "jira_project")
+    assert (project["value"], project["mark"]) == ("MOCK", "filled"), "it follows its renamed block"
+    assert "Propose it" in [b["name"] for b in done["blocks"]]
     gone = N8N_OWNER.send("GET", f"/rest/workflows/{workflow_id}")
     assert gone.status_code in (403, 404), "taken out of Erin's n8n space"

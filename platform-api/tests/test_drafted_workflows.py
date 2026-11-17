@@ -83,6 +83,8 @@ def drafted(plan: WorkflowPlan) -> WorkflowDrafted:
 class N8n:
     saved: list[dict[str, Any]] = field(default_factory=list[dict[str, Any]])
     """Every workflow n8n created, in order."""
+    sent: list[dict[str, Any]] = field(default_factory=list[dict[str, Any]])
+    """Every document the platform sent n8n to create, as it was sent."""
     held: dict[str, N8nWorkflow] = field(default_factory=dict[str, N8nWorkflow])
     """What n8n still holds, by id."""
     projects: dict[str, str] = field(default_factory=dict[str, str])
@@ -105,8 +107,10 @@ class N8n:
         pins = kept.pop("pinData", None)
         if self.changes_it:
             kept["settings"]["callerPolicy"] = "any"
+        self.sent.append(deepcopy(dict(document)))
         for number, node in enumerate(kept["nodes"]):
-            node["id"] = f"n8n-{number}"
+            # As real n8n, which keeps the ids the API sends and makes one only when none came.
+            node.setdefault("id", f"n8n-{number}")
         self.saved.append(kept)
         workflow_id = f"wf{len(self.saved)}"
         self.held[workflow_id] = N8nWorkflow(workflow_id, "v1", None, kept, pins)

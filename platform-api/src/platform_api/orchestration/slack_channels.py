@@ -4,7 +4,8 @@ when it is one of them, since a channel is never guessed.
 
 The platform's key reads the list with its channels:read scope, which ADR 0045's check of what
 the key may do allows. It asks for private channels too, which need groups:read, and when Slack
-answers that the key lacks that scope it lists public channels only from then on. Only channels
+answers that the key lacks that scope it lists public channels only for the next hour, then asks
+again, so a key later given that scope lists them without a restart. Only channels
 Slack says the key is a member of are listed, as only those take its posts.
 
 A list is kept for a minute, so a card that refreshes doesn't ask Slack each time. When Slack
@@ -26,6 +27,9 @@ log = logging.getLogger(__name__)
 
 KEPT_FOR: Final = timedelta(minutes=1)
 FAILED_FOR: Final = timedelta(seconds=30)
+PRIVATE_AGAIN: Final = timedelta(hours=1)
+"""How long a key Slack refused private channels lists public ones only, before it asks again,
+so a key later given groups:read lists them without a restart."""
 WAITS: Final = 5.0
 """The longest a card read waits on Slack, in seconds."""
 PAGES: Final = 5
@@ -64,7 +68,8 @@ class SlackChannels:
         self._clock = clock
         self._good: tuple[datetime, list[str]] | None = None
         self._failed_at: datetime | None = None
-        self._types = WITH_PRIVATE
+        self._public_since: datetime | None = None
+        """When Slack last refused this key private channels."""
 
     async def visible(self) -> list[str]:
         """Each channel the key can post in, as "#name"; none at all when there is no key or
@@ -80,7 +85,7 @@ class SlackChannels:
         if self._failed_at is not None and now - self._failed_at < FAILED_FOR:
             return self._last(stale=True)
         try:
-            channels = await self._list(self._key)
+            channels = await self._list(self._key, now)
         except (httpx.HTTPError, SlackListFailed, ValueError) as error:
             log.warning("Slack did not list its channels: %s", type(error).__name__)
             self._failed_at = now
@@ -93,14 +98,15 @@ class SlackChannels:
             return ChannelList([], None, stale)
         return ChannelList(list(self._good[1]), self._good[0], stale)
 
-    async def _list(self, key: N8nKey) -> list[str]:
+    async def _list(self, key: N8nKey, now: datetime) -> list[str]:
         http = self._http or httpx.AsyncClient(timeout=WAITS)
+        public = self._public_since is not None and now - self._public_since < PRIVATE_AGAIN
         try:
             try:
-                return await self._pages(http, key, self._types)
+                return await self._pages(http, key, PUBLIC_ONLY if public else WITH_PRIVATE)
             except SlackListFailed as refused:
-                if self._types == WITH_PRIVATE and str(refused) == "missing_scope":
-                    self._types = PUBLIC_ONLY
+                if not public and str(refused) == "missing_scope":
+                    self._public_since = now
                     return await self._pages(http, key, PUBLIC_ONLY)
                 raise
         finally:

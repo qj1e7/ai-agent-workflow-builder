@@ -30,7 +30,6 @@ from platform_api.builder.drafted_settings import (
     UNREAD,
     Source,
     free_id,
-    never_guessed_places,
     passes,
     place_at,
     place_kinds,
@@ -38,7 +37,7 @@ from platform_api.builder.drafted_settings import (
     put_at,
 )
 from platform_api.builder.n8n_draft import BRANCH_EXITS
-from platform_api.builder.versions import SCHEDULE_TYPE, schedule_of
+from platform_api.builder.versions import schedule_of
 from platform_api.orchestration import (
     ASK_EXITS,
     TYPE_OF,
@@ -113,6 +112,11 @@ def read_back(
     wires = _wires(cast(dict[str, Any], connections), blocks)
     laid_nodes = cast(list[dict[str, Any]], laid.get("nodes") or [])
     was = {str(n.get("name")): cast(dict[str, Any], n.get("parameters") or {}) for n in laid_nodes}
+    if (twins := _shared_id(kept)) is not None:
+        return NotReadBack(
+            f"“{twins[0]}” and “{twins[1]}” in n8n share one id, which n8n's editor never makes. "
+            "Delete one of them in n8n, then press Done in n8n again."
+        )
     now_named = _renamed(kept, laid_nodes)
     held = placeholders(blocks.values())
     ids = {setting.id for setting in before.settings}
@@ -127,14 +131,23 @@ def read_back(
     for setting in before.settings:
         placeholder = f"<<{setting.id}>>"
         laid_out = {(now_named.get(f.block, f.block), f.parameter) for f in setting.fills}
+        standing = {(b, path) for b, path, i in held if i == setting.id}
         places = [(now_named.get(f.block, f.block), f.parameter, f.block) for f in setting.fills]
-        places += [(b, path, b) for b, path, i in held if i == setting.id]
+        places += [(b, path, b) for b, path in sorted(standing)]
         fills: list[SettingPlace] = []
         then: list[Any] = []
         for block, path, old in places:
             if block not in blocks or not _holds(blocks[block].parameters, path):
                 continue
             if any(f.block == block and f.parameter == path for f in fills):
+                continue
+            if (
+                standing
+                and (block, path) not in standing
+                and place_at(blocks[block].parameters, path) != place_at(was.get(old, {}), path)
+            ):
+                # Its placeholder moved away and the person typed a value here. That value is
+                # for this place only, so it becomes a setting of its own below.
                 continue
             takes = place_kinds(blocks[block]).get(path)
             moved = (block, path) not in laid_out
@@ -178,6 +191,20 @@ NAME_CUT: Final = (
 )
 SHOWN: Final = 60
 """The most of a typed value the card shows."""
+
+
+def _shared_id(kept: Sequence[Mapping[str, Any]]) -> tuple[str, str] | None:
+    """Two blocks that share one id, which n8n's editor never makes, so code can't tell which is
+    the one the platform laid out."""
+    seen: dict[str, str] = {}
+    for node in kept:
+        node_id = node.get("id")
+        if not node_id:
+            continue
+        if str(node_id) in seen:
+            return seen[str(node_id)], str(node["name"])
+        seen[str(node_id)] = str(node["name"])
+    return None
 
 
 def _renamed(
@@ -357,9 +384,7 @@ def _with_places_typed(
     }
     added: list[PlanSetting] = []
     for block in plan.blocks:
-        places = list(never_guessed_places(block.type, block.version, block.parameters))
-        if block.type == SCHEDULE_TYPE:
-            places.append(("rule", "run_time"))
+        places = list(place_kinds(block).items())
         for path, kind in places:
             if (block.name, path) in held:
                 continue

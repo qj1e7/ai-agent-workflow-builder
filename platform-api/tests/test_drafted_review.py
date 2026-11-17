@@ -137,3 +137,23 @@ async def test_a_channel_list_slack_gave_before_it_stopped_answering_says_how_ol
         "channels it listed at 10:05."
     )
     assert [c["value"] for c in channel["choices"]] == ["#support", "#eng-housekeeping"]
+
+
+async def test_a_filled_setting_on_a_block_renamed_in_n8n_stays_with_where_it_came_from(lab: Lab):
+    view = await opened(lab)
+    document = lab.n8n.held["wf1"].document
+    sent = {n["name"]: n["id"] for n in lab.n8n.sent[0]["nodes"]}
+    kept = {n["name"]: n["id"] for n in document["nodes"]}
+    assert kept == sent, "n8n keeps the ids the platform sent, as real n8n does"
+    renamed("Propose a ticket", "Propose it")(document)
+
+    r = await done(lab, view["drafted_id"])
+
+    assert r.status_code == 200, r.text
+    project = next(s for s in r.json()["settings"] if s["id"] == "jira_project")
+    assert (project["value"], project["mark"], project["said"]) == (
+        "MOCK",
+        "filled",
+        "From your words",
+    )
+    assert "Propose it" in [b["name"] for b in r.json()["blocks"]]

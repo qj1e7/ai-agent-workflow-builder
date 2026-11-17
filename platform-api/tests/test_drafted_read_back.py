@@ -370,3 +370,43 @@ def test_a_placeholder_nothing_fills_comes_back_as_words():
 
     assert isinstance(read, NotReadBack)
     assert "“Read new releases”" in read.words and "nothing fills" in read.words
+
+
+def test_a_value_typed_where_a_placeholder_moved_away_is_its_own_setting_never_the_moved_one():
+    """The person moves <<channel_1>> to a new block and types #support where it was. #support
+    is for the old block only: it becomes its own setting there, typed by them, and the moved
+    placeholder's block still needs its channel asked."""
+    before = with_slack(None)
+    document = edited_from(before)
+    nodes(document)["Tell support"]["parameters"]["channelId"]["value"] = "#support"
+    channel_id = {"__rl": True, "mode": "name", "value": "<<channel_1>>"}
+    added(document, "Tell again", "n8n-nodes-base.slack", 2.3, channelId=channel_id, **SLACK_POST)
+
+    read = read_back(document, before, checked(before), FACTS, DAN, ZONE)
+
+    assert isinstance(read, ReadBack), read
+    by_block = {f.block: (s.id, s.value, s.mark) for s in read.plan.settings for f in s.fills}
+    assert by_block["Tell again"] == ("channel_1", None, "needed")
+    left_id, left_value, left_mark = by_block["Tell support"]
+    assert (left_value, left_mark) == ("#support", "filled") and left_id != "channel_1"
+    assert read.sources[left_id] == Source("#support", "n8n", DAN)
+    assert "channel_1" not in read.sources
+
+
+def test_two_blocks_sharing_one_id_are_refused_with_words():
+    """n8n's editor gives a pasted block a new id, so two blocks with one id came some other way.
+    Code can't tell which is the block the platform laid out."""
+    before = with_slack(None)
+    document = edited_from(before)
+    original = nodes(document)["Tell support"]
+    channel_id = {"__rl": True, "mode": "name", "value": "#support"}
+    added(document, "Tell copy", "n8n-nodes-base.slack", 2.3, channelId=channel_id, **SLACK_POST)
+    nodes(document)["Tell copy"]["id"] = original["id"]
+
+    read = read_back(document, before, checked(before), FACTS, DAN, ZONE)
+
+    assert isinstance(read, NotReadBack), read
+    assert read.words == (
+        "“Tell support” and “Tell copy” in n8n share one id, which n8n's editor never makes. "
+        "Delete one of them in n8n, then press Done in n8n again."
+    )

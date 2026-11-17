@@ -493,7 +493,8 @@ def place_kinds(block: PlanBlock) -> dict[str, SettingKind]:
     if block.type == SCHEDULE_TYPE:
         kinds["rule"] = "run_time"
     if block.type == "n8n-nodes-base.jira":
-        kinds["project"] = "jira_project"
+        project = block.parameters.get("project")
+        kinds["project.value" if isinstance(project, dict) else "project"] = "jira_project"
     if block.type == TYPE_OF["read"]:
         kinds["place"] = READ_PLACES.get(str(block.parameters.get("source")), "text")
     if block.type == TYPE_OF["propose"]:

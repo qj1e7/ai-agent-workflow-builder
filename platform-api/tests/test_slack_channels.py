@@ -124,3 +124,17 @@ async def test_a_key_without_groups_read_lists_the_public_channels():
     assert [r.url.params["types"] for r in slack.asked[before:]] == ["public_channel"] * 2, (
         "it remembers the key can't list private channels"
     )
+
+
+async def test_a_key_given_groups_read_later_lists_private_channels_within_the_hour():
+    slack = Slack()
+    slack.private_refused = True
+    clock = Clock()
+    channels = SlackChannels(KEY, slack.client(), clock=clock)
+    await channels.visible()
+
+    slack.private_refused = False
+    clock.now += timedelta(minutes=61)
+    before = len(slack.asked)
+    assert await channels.visible() == ["#eng-housekeeping", "#support"]
+    assert slack.asked[before].url.params["types"] == "public_channel,private_channel"
