@@ -5,7 +5,13 @@ import time
 import pytest
 from pydantic import BaseModel
 
-from agent_runtime.monitoring.masking import KEY_SHAPE_SOURCES, KEY_SHAPES, MASKED, Masker
+from agent_runtime.monitoring.masking import (
+    GLUED_SK_KEY,
+    KEY_SHAPE_SOURCES,
+    KEY_SHAPES,
+    MASKED,
+    Masker,
+)
 
 UUID = "1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d"
 # Each fake is built at run time, so no secret scanner reads one as leaked. None is a real key.
@@ -54,8 +60,6 @@ PLAIN_WORDS = [
     "run 123e4567-e89b-12d3-a456-426614174000 failed",
     "move MOCK-123 and MOCK-4567 to done",
     "ask the team about this task",
-    "set up a task-management-workflow for the risk-assessment-report",
-    "ask-the-team-before-merging and the desk-booking-workflow",
     "a basic understanding.",
     "set up a basic 2-step-approval-flow",
     "bearer instruments",
@@ -67,17 +71,24 @@ PLAIN_WORDS = [
     "xoxo, see you soon",
     "the ASIA PACIFIC region",
 ]
-
-
+WORDS_LIKE_A_GLUED_KEY = [
+    "set up a task-management-workflow for the risk-assessment-report",
+    "ask-the-team-before-merging and the desk-booking-workflow",
+]
+"""Words that hold "sk-" glued to a letter. They are never refused, but the masker hides them."""
 BEFORE = {
     "space": " ",
     "underscore": "_",
     "digit": "7",
     "letter": "x",
+    "backslash": "\\",
+    "JSON backslash": "\\\\",
+    "JSON quote": '\\"',
     "JSON newline": "\\n",
     "JSON tab": "\\t",
     "JSON unicode escape": "\\u003d",
     "URL escape": "%3D",
+    "email escape": "=3D",
     "equals": "=",
     "colon": ":",
     "quote": '"',
@@ -85,12 +96,12 @@ BEFORE = {
 """What may stand just before a key in text the masker sees. Serialised JSON writes a newline as
 two characters, a backslash and then a letter."""
 GLUED_TO_A_WORD = ("OpenAI project key", "Langfuse secret key")
-"""Keys read as part of a word when glued to a letter, as "sk-" is in "task-management-workflow"."""
+"""Keys refused as part of a word when glued to a letter, as "sk-" is in "task-management-workflow".
+The masker still hides them."""
 PLACED = [
     pytest.param(before, key, id=f"{name} after {where}")
     for name, key in KEYS.items()
     for where, before in BEFORE.items()
-    if not (where == "letter" and name in GLUED_TO_A_WORD)
 ]
 MAIN_SHAPES = re.compile(
     "|".join(
@@ -141,8 +152,13 @@ HOSTILE = {
     "basic ": "basic " * (N // 6),
     "JSON newlines": "\\n" * (N // 2),
     "JSON newline then eyJ-": "\\neyJ-" * (N // 6),
+    "backslash then eyJ-": "\\eyJ-" * (N // 5),
+    "backslash then sk-": "\\sk-" * (N // 4),
+    "backslashes": "\\" * N,
     "URL escapes": "%41" * (N // 3),
+    "email escapes": "=3D" * (N // 3),
     "JSON unicode escapes": "\\u0041" * (N // 6),
+    "JSON unicode escape then eyJ-": "\\u0041eyJ-" * (N // 10),
     "letters": "a" * N,
     "hyphens": "-" * N,
     "underscores": "_" * N,
@@ -157,26 +173,32 @@ def test_each_key_is_masked_to_its_end_wherever_it_sits(before: str, key: str):
     assert masked.startswith("keep ") and masked.endswith(" words")
 
 
-@pytest.mark.parametrize("name", GLUED_TO_A_WORD)
-def test_only_an_sk_key_glued_to_a_letter_is_read_as_part_of_a_word(name: str):
-    text = f"keep x{KEYS[name]} words"
-    assert Masker().mask(text) == text
+@pytest.mark.parametrize(("before", "key"), PLACED)
+def test_each_key_is_refused_wherever_it_sits_unless_an_sk_key_is_glued_to_a_letter(
+    before: str, key: str
+):
+    glued = before == BEFORE["letter"] and key in (KEYS[name] for name in GLUED_TO_A_WORD)
+    assert (KEY_SHAPES.search(f"keep {before}{key} words") is None) == glued
 
 
 @pytest.mark.parametrize("key", KEYS.values(), ids=list(KEYS))
-@pytest.mark.parametrize("before", ["\n", "\t", "_"], ids=["newline", "tab", "underscore"])
+@pytest.mark.parametrize(
+    "before",
+    ["\n", "\t", "_", "\\", '"', "\\n"],
+    ids=["newline", "tab", "underscore", "backslash", "quote", "backslash then n"],
+)
 def test_a_key_in_serialised_json_is_masked_and_the_json_still_reads(before: str, key: str):
     note = json.loads(Masker().mask(json.dumps({"note": f"line{before}{key}"})))["note"]
     assert MASKED in note and key[-8:] not in note
 
 
 def test_nothing_main_s_shapes_caught_is_lost_wherever_it_sits():
+    masker = Masker()
     for example in MAIN_EXAMPLES:
-        for where, before in BEFORE.items():
+        for before in BEFORE.values():
             text = f"keep {before}{example} words"
-            glued = where == "letter" and re.match(r"sk-(?!ant-)", example) is not None
-            if MAIN_SHAPES.search(text) and not glued:
-                assert KEY_SHAPES.search(text), text
+            if MAIN_SHAPES.search(text):
+                assert masker.mask(text) != text, text
 
 
 def test_a_private_key_block_is_masked_to_its_end_line_or_to_the_end_of_the_text():
@@ -193,7 +215,14 @@ def test_plain_words_never_look_like_a_key(text: str):
     assert Masker().mask(text) == text
 
 
-@pytest.mark.parametrize("shape", KEY_SHAPE_SOURCES)
+@pytest.mark.parametrize("text", WORDS_LIKE_A_GLUED_KEY)
+def test_words_like_a_glued_key_are_never_refused_but_the_masker_hides_them(text: str):
+    """A few hidden letters in a trace cost less than a leaked key."""
+    assert KEY_SHAPES.search(text) is None
+    assert MASKED in Masker().mask(text)
+
+
+@pytest.mark.parametrize("shape", [*KEY_SHAPE_SOURCES, GLUED_SK_KEY])
 def test_each_shape_reads_a_long_hostile_text_in_linear_time(shape: str):
     pattern = re.compile(shape)
     for name, text in HOSTILE.items():

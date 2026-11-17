@@ -16,7 +16,7 @@ from urllib.parse import unquote
 from langchain_core.language_models import BaseChatModel
 from pydantic import BaseModel, Field
 
-from agent_runtime.monitoring.masking import KEY_SHAPES
+from agent_runtime.monitoring.masking import MASKED_SHAPES
 from agent_runtime.planner_led import PLANNER_MODES, PlannerMode
 from evals.answer import ANSWER, ANSWER_LED
 from evals.anything import ANYTHING, ANYTHING_LED
@@ -76,7 +76,7 @@ SECRET_ENVS = (
     *URL_ENVS,
 )
 # Every shape the masker knows, and a key a provider's error prints cut short, as "sk-****ab3d".
-_KEY_SHAPES = re.compile("|".join([r"\b(?:sk-[\w*-]{8,}|AIza[\w-]{8,})", KEY_SHAPES.pattern]))
+_KEY_SHAPES = re.compile("|".join([r"\b(?:sk-[\w*-]{8,}|AIza[\w-]{8,})", MASKED_SHAPES.pattern]))
 # A gateway names the key's owner in its own errors, such as a spent budget.
 _EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+(?::[\w-]+)?")
 WARM_UP = "Reply with the word ready."
