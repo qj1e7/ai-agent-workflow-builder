@@ -208,7 +208,7 @@ def view_of(
         version=version,
         grade=report.grade,
         then=None if then is None else ExplainThen(number=then.number, grade=then.grade),
-        in_short=_segments(report.in_short),
+        in_short=segments(report.in_short),
         reworded=reworded,
         steps=[
             ExplainStep(
@@ -236,8 +236,8 @@ def view_of(
         approves=[_write(a) for a in report.approves],
         settings=[
             ExplainSetting(
-                label=_segments(s.label),
-                value=None if s.value is None else _segments(s.value),
+                label=segments(s.label),
+                value=None if s.value is None else segments(s.value),
                 mark=s.mark,
                 said=s.said,
             )
@@ -248,7 +248,7 @@ def view_of(
     )
 
 
-def _segments(words: Words) -> list[Segment]:
+def segments(words: Words) -> list[Segment]:
     return [
         Segment(text=w.text, quoted=True)
         if isinstance(w, Quoted)
@@ -263,7 +263,7 @@ def _touch(touch: Touch) -> ExplainTouch:
         system=touch.system,
         place=None if touch.place is None else touch.place.text,
         block=touch.block.text,
-        phrase=_segments(touch.phrase),
+        phrase=segments(touch.phrase),
         key=touch.key,
     )
 

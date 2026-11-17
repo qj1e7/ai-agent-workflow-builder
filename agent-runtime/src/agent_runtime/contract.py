@@ -573,6 +573,13 @@ class ExampleSpec(WireModel):
     needs: list[str] = Field(description="The ids of the capabilities the example uses.")
 
 
+class KeyShapes(WireModel):
+    """The shapes of keys the masker knows, as regular expressions. platform-api refuses each
+    of them in a person's words, answers and what comes back from n8n (ADR 0051)."""
+
+    shapes: list[str]
+
+
 class CapabilityList(WireModel):
     capabilities: list[CapabilitySpec]
     examples: list[ExampleSpec]
@@ -1664,7 +1671,8 @@ class PlanSetting(WireModel):
     fills: list[SettingPlace] = Field(min_length=1)
     value: str | None = Field(
         description="A run time is code's reading, as monday 09:00, or the person's own words "
-        "for one code can't read. None while it is needed."
+        "for one code can't read. None while it is needed, except a run time still needed for "
+        "want of a time, which keeps the day the words name, as monday."
     )
     mark: SettingMark = Field(
         description="filled: code found it in the person's words, and for a kind that is never "

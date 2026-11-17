@@ -8,6 +8,7 @@ import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
 from copy import deepcopy
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any
 
 import httpx
@@ -15,6 +16,7 @@ import pytest
 
 from platform_api.app import create_app
 from platform_api.auth import DEV_PEOPLE
+from platform_api.builder.drafted_settings import ANY_APPROVER, APPROVERS
 from platform_api.builder.drafted_workflows import (
     CHANGED,
     KEY_PASTED,
@@ -22,14 +24,17 @@ from platform_api.builder.drafted_workflows import (
 )
 from platform_api.db import Database
 from platform_api.orchestration import (
+    CanOpen,
     DrafterFacts,
     KnownOptions,
     ListedWorkflow,
     ModelProblem,
     N8nWorkflow,
     NoModel,
+    NoN8nAccess,
     RuntimeDown,
     SavedDraft,
+    StaffAccess,
     WorkflowDrafted,
     WorkflowDraftResult,
     WorkflowNotDrafted,
@@ -38,7 +43,8 @@ from platform_api.orchestration import (
 )
 from platform_api.orchestration.people_store import People
 from platform_api.orchestration.setup_approvals import SetUpApprovals
-from platform_api.shared import TEAM_TIME_ZONE
+from platform_api.orchestration.slack_channels import ChannelList
+from platform_api.shared import TEAM_TIME_ZONE, UserId
 from tests.conftest import PostgresUrls
 from tests.support import LOCAL_ENV
 from tests.test_drafted_layout import release_check
@@ -77,6 +83,8 @@ def drafted(plan: WorkflowPlan) -> WorkflowDrafted:
 class N8n:
     saved: list[dict[str, Any]] = field(default_factory=list[dict[str, Any]])
     """Every workflow n8n created, in order."""
+    sent: list[dict[str, Any]] = field(default_factory=list[dict[str, Any]])
+    """Every document the platform sent n8n to create, as it was sent."""
     held: dict[str, N8nWorkflow] = field(default_factory=dict[str, N8nWorkflow])
     """What n8n still holds, by id."""
     projects: dict[str, str] = field(default_factory=dict[str, str])
@@ -99,8 +107,10 @@ class N8n:
         pins = kept.pop("pinData", None)
         if self.changes_it:
             kept["settings"]["callerPolicy"] = "any"
+        self.sent.append(deepcopy(dict(document)))
         for number, node in enumerate(kept["nodes"]):
-            node["id"] = f"n8n-{number}"
+            # As real n8n, which keeps the ids the API sends and makes one only when none came.
+            node.setdefault("id", f"n8n-{number}")
         self.saved.append(kept)
         workflow_id = f"wf{len(self.saved)}"
         self.held[workflow_id] = N8nWorkflow(workflow_id, "v1", None, kept, pins)
@@ -126,6 +136,39 @@ class N8n:
         self.removed.append(workflow_id)
         self.held.pop(workflow_id, None)
         self.projects.pop(workflow_id, None)
+
+    async def remove_for_good(self, workflow_id: str) -> None:
+        await self.remove(workflow_id)
+
+    async def member_project(self, n8n_user_id: str) -> str | None:
+        return f"space-{n8n_user_id}"
+
+    async def move(self, workflow_id: str, project_id: str) -> None:
+        if self.down:
+            raise httpx.ConnectError("n8n is down")
+        self.projects[workflow_id] = project_id
+
+
+@dataclass
+class Staff:
+    """Alice and Carol have n8n access, as Operators with an account there."""
+
+    with_access: frozenset[str] = frozenset({"alice", "carol"})
+
+    async def access(self, person: UserId) -> StaffAccess:
+        if person in self.with_access:
+            return CanOpen(person, f"n8n-{person}")
+        return NoN8nAccess()
+
+
+@dataclass
+class Channels:
+    seen: list[str] = field(default_factory=lambda: ["#support", "#eng-housekeeping"])
+    stale_since: datetime | None = None
+    """When Slack last listed them, once it stopped answering."""
+
+    async def listed(self) -> ChannelList:
+        return ChannelList(list(self.seen), self.stale_since, self.stale_since is not None)
 
 
 class Facts:
@@ -153,11 +196,33 @@ class Lab:
     async def call(self, user: str, method: str, path: str, body: Any = None) -> httpx.Response:
         return await self.client.request(method, path, headers={"X-Dev-User": user}, json=body)
 
-    async def start(self, user: str = "alice", words: str = WORDS) -> dict[str, Any]:
+    async def start(
+        self, user: str = "alice", words: str = WORDS, answered: bool = True
+    ) -> dict[str, Any]:
+        """The drafted workflow, with who says yes on each run answered by its starter."""
         r = await self.call(user, "POST", "/api/v1/drafted-workflows", {"words": words})
         assert r.status_code == 202, r.text
         await self.drafted.settle()
-        return await self.read(r.json()["drafted_id"])
+        view = await self.read(r.json()["drafted_id"])
+        if answered and view["question"] == APPROVERS:
+            view = await self.answer(view, APPROVERS, user, choice=ANY_APPROVER)
+        return view
+
+    async def answer(
+        self,
+        view: dict[str, Any],
+        setting: str,
+        user: str = "alice",
+        choice: str | None = None,
+        typed: str | None = None,
+        status: int = 200,
+    ) -> dict[str, Any]:
+        body = {"revision": view["revision"], "setting": setting, "choice": choice, "typed": typed}
+        r = await self.call(
+            user, "POST", f"/api/v1/drafted-workflows/{view['drafted_id']}/answers", body
+        )
+        assert r.status_code == status, r.text
+        return r.json()
 
     async def read(self, drafted_id: str) -> dict[str, Any]:
         r = await self.call("bob", "GET", f"/api/v1/drafted-workflows/{drafted_id}")
@@ -188,7 +253,16 @@ async def lab(postgres: PostgresUrls, db: Database) -> AsyncIterator[Lab]:
     channel, drafter, n8n = Channel(), Drafter(), N8n()
     approvals = SetUpApprovals(db, channel, people, "https://portal.example", TEAM_TIME_ZONE)
     drafted = DraftedWorkflows(
-        db, drafter, approvals, Facts(), n8n, "https://portal.example", TEAM_TIME_ZONE.key
+        db,
+        drafter,
+        approvals,
+        Facts(),
+        n8n,
+        "https://portal.example",
+        TEAM_TIME_ZONE.key,
+        Channels(),
+        Staff(),
+        "https://n8n.example",
     )
     approvals.serve(drafted)
     app = create_app(LOCAL_ENV)
@@ -215,7 +289,8 @@ async def test_the_drafter_gets_the_words_unchanged_and_the_team_s_facts_but_no_
 async def test_a_drafted_release_check_with_nothing_needed_and_no_flags_can_be_sent(lab: Lab):
     view = await lab.start()
 
-    assert (view["state"], view["revision"], view["name"]) == ("draft", 1, "Release check")
+    assert (view["state"], view["revision"], view["name"]) == ("draft", 2, "Release check")
+    assert (view["made_by"], view["card_revision"]) == ("answer", 1)
     assert (view["needed"], view["flags"], view["can_send"]) == (0, 0, True)
     assert view["why_not_send"] is None
     assert [b["name"] for b in view["blocks"]][:2] == ["Every Monday", "Start from the Portal"]
@@ -235,10 +310,10 @@ async def test_a_setting_still_needed_holds_the_send_with_how_many_are_left(lab:
     lab.drafter.answers = [drafted(release_check(run_time=None))]
     view = await lab.start()
 
-    assert (view["needed"], view["can_send"]) == (1, False)
-    assert view["why_not_send"] == "Answer 1 question first"
-    r = await lab.send(view["drafted_id"], 1)
-    assert (r.status_code, r.json()["detail"]) == (409, "Answer 1 question first")
+    assert (view["needed"], view["can_send"], view["question"]) == (2, False, "run_time")
+    assert view["why_not_send"] == "Answer 2 questions first"
+    r = await lab.send(view["drafted_id"], view["revision"])
+    assert (r.status_code, r.json()["detail"]) == (409, "Answer 2 questions first")
     assert lab.channel.posted == []
 
 
@@ -250,7 +325,7 @@ async def test_a_flagged_draft_can_t_be_sent_in_this_step(lab: Lab):
 
     assert view["flags"] >= 1 and view["can_send"] is False
     assert "comes in a later step" in view["why_not_send"]
-    assert (await lab.send(view["drafted_id"], 1)).status_code == 409
+    assert (await lab.send(view["drafted_id"], view["revision"])).status_code == 409
 
 
 @pytest.mark.parametrize(
@@ -307,7 +382,7 @@ async def test_only_an_operator_may_draft_change_or_send(lab: Lab):
     change = {"words": "post at 9 instead", "revision": 1}
     path = f"/api/v1/drafted-workflows/{drafted_id}/changes"
     assert (await lab.call("bob", "POST", path, change)).status_code == 403
-    assert (await lab.send(drafted_id, 1, user="bob")).status_code == 403
+    assert (await lab.send(drafted_id, view["revision"], user="bob")).status_code == 403
 
 
 async def test_the_same_idempotency_key_answers_the_draft_it_started(lab: Lab):
@@ -347,13 +422,13 @@ async def test_settle_returns_when_a_draft_ended_before_its_clean_up_ran(
 async def test_a_change_sends_the_plan_as_it_stands_and_replaces_a_waiting_approval(lab: Lab):
     view = await lab.start()
     drafted_id = view["drafted_id"]
-    assert (await lab.send(drafted_id, 1)).status_code == 200
+    assert (await lab.send(drafted_id, view["revision"])).status_code == 200
 
     r = await lab.call(
         "alice",
         "POST",
         f"/api/v1/drafted-workflows/{drafted_id}/changes",
-        {"words": "post at 10:00 instead", "revision": 1},
+        {"words": "post at 10:00 instead", "revision": 2},
     )
     assert r.status_code == 202, r.text
     assert r.json()["state"] == "drafting"
@@ -363,13 +438,13 @@ async def test_a_change_sends_the_plan_as_it_stands_and_replaces_a_waiting_appro
     words, _, current = lab.drafter.asked[-1]
     assert words == "post at 10:00 instead"
     assert current is not None and current.name == "Release check"
-    assert (after["revision"], after["state"], after["replaced_waiting"]) == (2, "draft", True)
-    assert after["approval"] is None
+    assert (after["revision"], after["state"], after["replaced_waiting"]) == (3, "draft", True)
+    assert (after["approval"], after["card_revision"], after["question"]) == (None, 3, None)
     stale = await lab.call(
         "alice",
         "POST",
         f"/api/v1/drafted-workflows/{drafted_id}/changes",
-        {"words": "drop it", "revision": 1},
+        {"words": "drop it", "revision": 2},
     )
     assert (stale.status_code, stale.json()["detail"]) == (409, "A newer revision is below.")
 
@@ -378,7 +453,7 @@ async def test_a_sent_revision_waits_for_an_approver_who_is_not_a_party(lab: Lab
     view = await lab.start(user="alice")
     drafted_id = view["drafted_id"]
 
-    sent = await lab.send(drafted_id, 1, user="carol")
+    sent = await lab.send(drafted_id, view["revision"], user="carol")
     await lab.approvals.work_once()
 
     assert sent.json()["state"] == "waiting"
@@ -401,7 +476,7 @@ async def test_a_sent_revision_waits_for_an_approver_who_is_not_a_party(lab: Lab
 async def test_bob_s_yes_sets_the_approved_digest_up_as_a_draft(lab: Lab):
     view = await lab.start()
     drafted_id = view["drafted_id"]
-    sent = (await lab.send(drafted_id, 1)).json()
+    sent = (await lab.send(drafted_id, view["revision"])).json()
     approval_id = sent["approval"]["approval_id"]
     page = (await lab.call("bob", "GET", f"/api/v1/setup-approvals/{approval_id}")).json()
     assert page["you_can_decide"] is True
@@ -437,7 +512,7 @@ async def test_bob_s_yes_sets_the_approved_digest_up_as_a_draft(lab: Lab):
 async def test_a_workflow_n8n_holds_otherwise_than_approved_is_not_set_up(lab: Lab):
     lab.n8n.changes_it = True
     view = await lab.start()
-    sent = (await lab.send(view["drafted_id"], 1)).json()
+    sent = (await lab.send(view["drafted_id"], view["revision"])).json()
     approval_id = sent["approval"]["approval_id"]
     page = (await lab.call("bob", "GET", f"/api/v1/setup-approvals/{approval_id}")).json()
 
@@ -457,7 +532,7 @@ async def test_a_workflow_n8n_holds_otherwise_than_approved_is_not_set_up(lab: L
 
 async def test_a_decline_needs_a_reason_from_the_short_list(lab: Lab):
     view = await lab.start()
-    sent = (await lab.send(view["drafted_id"], 1)).json()
+    sent = (await lab.send(view["drafted_id"], view["revision"])).json()
     approval_id = sent["approval"]["approval_id"]
     page = (await lab.call("bob", "GET", f"/api/v1/setup-approvals/{approval_id}")).json()
     path = f"/api/v1/setup-approvals/{approval_id}/decisions"
@@ -483,7 +558,7 @@ async def test_a_decline_needs_a_reason_from_the_short_list(lab: Lab):
 async def test_a_set_up_n8n_didn_t_take_can_be_tried_again(lab: Lab, db: Database):
     lab.n8n.down = True
     view = await lab.start()
-    sent = (await lab.send(view["drafted_id"], 1)).json()
+    sent = (await lab.send(view["drafted_id"], view["revision"])).json()
     approval_id = sent["approval"]["approval_id"]
     page = (await lab.call("bob", "GET", f"/api/v1/setup-approvals/{approval_id}")).json()
     await lab.call(

@@ -51,6 +51,16 @@
   "questions_for_me": [],
   "questions_for_me_total": 0,
   "needs_next": null,
+  "setup_approvals": [
+    {
+      "approval_id": "apr_01JDRAFTRELEASE",
+      "drafted_id": "dw_01JDRAFTRELEASE",
+      "name": "Release check",
+      "sent_by_name": "Carol",
+      "sent_at": "2026-11-17T01:03:00Z",
+      "link": "/setup-approvals/apr_01JDRAFTRELEASE"
+    }
+  ],
   "drafts": [],
   "following_up": [],
   "following_up_total": 0,

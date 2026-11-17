@@ -96,12 +96,13 @@ class Older:
 
 @dataclass(frozen=True)
 class Filled:
-    value: str
+    value: str | Words
+    """A string from the plan, shown in quotes, or code's own words, as for a run time."""
 
 
 @dataclass(frozen=True)
 class Guessed:
-    value: str
+    value: str | Words
 
 
 @dataclass(frozen=True)
@@ -111,8 +112,11 @@ class Needed:
 
 @dataclass(frozen=True)
 class DraftSetting:
-    label: str
+    label: str | Words
+    """The plan's label, shown in quotes, or code's own words for a setting the builder adds."""
     given: Filled | Guessed | Needed
+    said: str | None = None
+    """Where the value came from, in words to show. Its mark when None."""
 
 
 @dataclass(frozen=True)
@@ -240,17 +244,38 @@ class WorkflowReport:
     flags that need an answer."""
 
 
-KEY_SHAPE = re.compile(
-    r"sk-ant-[\w-]+|sk-[A-Za-z0-9]{16,}|gh[pousr]_\w{16,}|github_pat_\w{16,}|glpat-[\w-]{16,}"
-    r"|xox[abposr]-[\w-]+|ATATT[\w=-]{16,}|AKIA[0-9A-Z]{16}|eyJ[\w-]+\.eyJ[\w-]+\.[\w-]+"
-    r"|(?i:bearer)\s+[\w.~+/=-]{8,}|(?i:basic)\s+(?=[A-Za-z0-9+/=]*[0-9+/=])[A-Za-z0-9+/=]{8,}"
-    r"|\b(?i:token|key|secret|sig|password|api[_-]?key)=[^&\s\"']{8,}"
-    r"|hooks\.slack\.com/services/\S+|webhook\.office\.com/\S+|\b[0-9a-f]{40}\b"
-    r"|-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*"
+RUNTIME_KEY_SHAPES = (
+    r"sk-ant-[A-Za-z0-9_\-]{8,}",
+    r"sk-[A-Za-z0-9_\-]{16,}",
+    r"gh[pousr]_[A-Za-z0-9]{16,}",
+    r"github_pat_[A-Za-z0-9_]{16,}",
+    r"(?i:bearer|basic)\s+(?=[A-Za-z._~\-]*[0-9+/=])[A-Za-z0-9._~+/=\-]{8,}",
 )
-"""The shapes of keys and tokens: Anthropic, OpenAI, GitHub, GitLab, Slack, Atlassian and AWS
-keys, a signed token, a bearer or basic header, a key in a query, a Slack or Teams incoming
-webhook, a classic 40-hex token and a private key."""
+"""The agent runtime's masker's shapes, each as it writes it in
+contracts/fixtures/agent/key-shapes.json. A test holds the two lists together."""
+KEY_SHAPE_SOURCES = (
+    *RUNTIME_KEY_SHAPES,
+    r"sk-ant-[\w-]+",
+    r"gh[pousr]_\w{16,}",
+    r"github_pat_\w{16,}",
+    r"glpat-[\w-]{16,}",
+    r"xox[abposr]-[\w-]+",
+    r"ATATT[\w=-]{16,}",
+    r"AKIA[0-9A-Z]{16}",
+    r"eyJ[\w-]+\.eyJ[\w-]+\.[\w-]+",
+    r"(?i:bearer)\s+[\w.~+/=-]{8,}",
+    r"(?i:basic)\s+(?=[A-Za-z0-9+/=]*[0-9+/=])[A-Za-z0-9+/=]{8,}",
+    r"\b(?i:token|key|secret|sig|password|api[_-]?key)=[^&\s\"']{8,}",
+    r"hooks\.slack\.com/services/\S+",
+    r"webhook\.office\.com/\S+",
+    r"\b[0-9a-f]{40}\b",
+    r"-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*",
+)
+"""Every shape of a key or token platform-api knows: the runtime's, then Anthropic, GitHub,
+GitLab, Slack, Atlassian and AWS keys, a signed token, a bearer or basic header, a key in a
+query, a Slack or Teams incoming webhook, a classic 40-hex token and a private key."""
+KEY_SHAPE = re.compile("|".join(KEY_SHAPE_SOURCES))
+"""Refused in a person's words, an answer and a read-back from n8n, and hidden in a report."""
 HIDDEN = "(hidden, looks like a key)"
 CHOOSERS = frozenset({"select"})
 """Target parameters that only pick which other one applies, as Slack's select picks a channel
@@ -294,6 +319,7 @@ OUR_TAGS: Mapping[BlockKind, str] = {
 UNCLASSED = "Does something the platform hasn't classed"
 UNREAD = "The checker can't read this workflow, so nothing more can be said of it."
 UNSHOWN_SCHEDULE = "On a schedule the Portal can't show"
+RUN_TIME_NEEDED = "At a run time still needed"
 SOMEONE_STARTS = "When someone starts it"
 NOTHING_STARTS = "Nothing starts it. When it runs"
 CHANGES_NOTHING_ELSE = " It changes nothing else."
@@ -328,6 +354,21 @@ APPROVAL = {
 }
 SAID = {"planner": "Set in the Portal", "n8n": "Set in n8n"}
 DRAFT_SAID = {"filled": "Filled", "guessed": "Guessed, and can be changed", "needed": "Needed"}
+PLACEHOLDER = re.compile(r"<<[a-z][a-z0-9_]{0,39}>>")
+"""Where a drafted workflow's setting goes, while nobody has given it (ADR 0051, section 5)."""
+AWAITS: frozenset[RuleId] = frozenset(
+    {
+        "no_run_time",
+        "run_time_unshowable",
+        "read_place_not_allowed",
+        "write_place_not_allowed",
+        "change_not_allowed",
+        "tell_place",
+        "unknown_agent_input",
+    }
+)
+"""What a block finds while a setting it holds is still needed. Until it is answered, that is
+the question the card asks, not a flag besides."""
 _NAMED = re.compile(r"""\$\(\s*(['"])(.+?)\1\s*\)|\$node\[\s*(['"])(.+?)\3\s*\]""")
 _THIS_ITEM = re.compile(r"\$(?:json|input|binary)\b")
 
@@ -351,7 +392,11 @@ def _report(
 ) -> WorkflowReport:
     graded = grade(document, team.error_workflow, team.time_zone, team.known)
     name = _quote(str(document.get("name") or ""))
-    flags = _flags(graded.findings, team.override_built)
+    awaiting = set[str]() if drafted is None else _awaiting(document)
+    flags = _flags(
+        [f for f in graded.findings if not (f.block in awaiting and f.rule in AWAITS)],
+        team.override_built,
+    )
     asked = sum(isinstance(f.clears, NeedsAnAnswer) for f in flags)
     try:
         flow = read_flow(document)
@@ -398,7 +443,7 @@ def _report(
         name,
         graded.grade,
         None,
-        _in_short(_when(flow, document, team.time_zone), touches),
+        _in_short(_when(flow, document, team.time_zone, awaiting), touches),
         tuple(_step(version, n) for n in order),
         touches,
         flags,
@@ -428,8 +473,12 @@ class _Version:
     """The blocks that would run on a set-up approval."""
 
 
-def _quote(text: str) -> Quoted:
+def quoted(text: str) -> Quoted:
+    """A string from the plan or the document, with anything shaped like a key hidden."""
     return Quoted(KEY_SHAPE.sub(HIDDEN, text))
+
+
+_quote = quoted
 
 
 def _flags(findings: Sequence[Finding], override_built: bool) -> tuple[Flag, ...]:
@@ -784,11 +833,15 @@ def _approves(version: _Version, approvers: int) -> Iterable[WriteApproval]:
                 yield WriteApproval(quoted, AtSetUp(), WRITES_ON_SET_UP)
 
 
-def _when(flow: Flow, document: Mapping[str, Any], team_zone: str) -> Words:
+def _when(
+    flow: Flow, document: Mapping[str, Any], team_zone: str, awaiting: set[str] | None = None
+) -> Words:
     schedule = schedule_of(document, team_zone)
     if schedule is not None:
         said = schedule_words(schedule.day, schedule.at)
         return (said[:1].upper() + said[1:],)
+    if any(b.name in (awaiting or set()) for b in flow.of_kind("schedule")):
+        return (RUN_TIME_NEEDED,)
     if flow.of_kind("schedule"):
         return (UNSHOWN_SCHEDULE,)
     if flow.of_kind("start", "manual"):
@@ -866,11 +919,29 @@ def _n8n_settings(flow: Flow, name: str, said: str) -> list[Setting]:
 
 
 def _draft_setting(setting: DraftSetting) -> Setting:
-    label: Words = (_quote(setting.label),)
+    label = _given_words(setting.label)
     match setting.given:
         case Filled(value):
-            return Setting(label, (_quote(value),), "filled", DRAFT_SAID["filled"])
+            words, mark = _given_words(value), "filled"
         case Guessed(value):
-            return Setting(label, (_quote(value),), "guessed", DRAFT_SAID["guessed"])
+            words, mark = _given_words(value), "guessed"
         case Needed():
-            return Setting(label, None, "needed", DRAFT_SAID["needed"])
+            words, mark = None, "needed"
+    return Setting(label, words, mark, setting.said or DRAFT_SAID[mark])
+
+
+def _given_words(value: str | Words) -> Words:
+    return (_quote(value),) if isinstance(value, str) else value
+
+
+def _awaiting(document: Mapping[str, Any]) -> set[str]:
+    """The blocks where a setting still needed stands as its placeholder."""
+    try:
+        flow = read_flow(document)
+    except Unreadable:
+        return set()
+    return {
+        name
+        for name, block in flow.blocks.items()
+        if any(PLACEHOLDER.fullmatch(t) for t in _texts(dict(block.parameters)))
+    }

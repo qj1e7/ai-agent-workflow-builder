@@ -2901,7 +2901,7 @@
               "type": "null"
             }
           ],
-          "description": "A run time is code's reading, as monday 09:00, or the person's own words for one code can't read. None while it is needed.",
+          "description": "A run time is code's reading, as monday 09:00, or the person's own words for one code can't read. None while it is needed, except a run time still needed for want of a time, which keeps the day the words name, as monday.",
           "title": "Value"
         }
       },

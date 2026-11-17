@@ -27,9 +27,11 @@ from platform_api.orchestration import (
     DeclinedTest,
     PersonRuns,
     QuestionForYou,
+    SetUpState,
     Stopped,
     Waiting,
     confirmation_summary,
+    set_up_link,
 )
 from platform_api.shared import ApprovalId, Principal, Role, RunId, UserId
 from platform_api.wire import FailureReason, RepoName, Trigger, WireModel
@@ -129,6 +131,17 @@ class QuestionItem(WireModel):
     )
     asked_at: datetime
     text: str
+
+
+class SetUpApprovalItem(WireModel):
+    """A drafted workflow's set-up approval that this person may decide now (ADR 0051)."""
+
+    approval_id: str
+    drafted_id: str
+    name: str
+    sent_by_name: str
+    sent_at: datetime
+    link: str = Field(description="Its approval page, as the Teams card opens it.")
 
 
 class DraftItem(WireModel):
@@ -257,6 +270,10 @@ class HomeOut(WireModel):
         description="Pass it as `after` to `/api/v1/home/needs` for the rest of approvals, "
         "stopped, declined and questions_for_me. Null when all are here."
     )
+    setup_approvals: list[SetUpApprovalItem] = Field(
+        description="Drafted workflows' set-up approvals this person may decide now, the newest "
+        "first. They are part of Needs you, and the Teams button counts them with the runs."
+    )
     drafts: list[DraftItem] = Field(description="An Operator's own drafts, the last saved first.")
     following_up: list[FollowingUpItem] = Field(
         description="This person's own requests to the team, Ask the team and Report to "
@@ -294,6 +311,10 @@ class HomeOut(WireModel):
 
 class RunsForPerson(Protocol):
     async def runs_for(self, viewer: Principal) -> PersonRuns: ...
+
+
+class SetUpsForHome(Protocol):
+    async def waiting_for(self, principal: Principal) -> list[SetUpState]: ...
 
 
 class ConnectionsForHome(Protocol):
@@ -429,6 +450,18 @@ def _confirmation(row: ConfirmationRow) -> ConfirmationItem:
     )
 
 
+def _set_up(state: SetUpState) -> SetUpApprovalItem:
+    request = state.request
+    return SetUpApprovalItem(
+        approval_id=request.id,
+        drafted_id=request.drafted_id,
+        name=request.name,
+        sent_by_name=state.names.get(request.sent_by, "Someone"),
+        sent_at=request.created_at,
+        link=set_up_link(request.id),
+    )
+
+
 def _draft(draft: DraftView) -> DraftItem:
     saved = draft.content.get("name")
     name = saved.strip() if isinstance(saved, str) and saved.strip() else None
@@ -532,6 +565,7 @@ class Home:
         requests: TeamRequests,
         connections: ConnectionsForHome,
         addresses: AddressesForHome,
+        setups: SetUpsForHome | None = None,
     ) -> None:
         self._builder = builder
         self._runs = runs
@@ -539,6 +573,7 @@ class Home:
         self._requests = requests
         self._connections = connections
         self._addresses = addresses
+        self._setups = setups
 
     async def _names(self) -> dict[UserId, str]:
         return {p.user_id: p.display for p in await self._people.listed()}
@@ -592,6 +627,12 @@ class Home:
             waiting_on_others=waiting.waiting_on_others,
             waiting_on_others_total=waiting.waiting_on_others_total,
             waiting_on_others_next=waiting.next,
+            setup_approvals=[
+                _set_up(state)
+                for state in (
+                    [] if self._setups is None else await self._setups.waiting_for(viewer)
+                )
+            ],
             drafts=[_draft(d) for d in drafts],
             following_up=following.following_up,
             following_up_total=following.following_up_total,

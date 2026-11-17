@@ -54,7 +54,8 @@ OPEN_TO: dict[tuple[str, str], str] = {
     ),
     ("POST", "/api/v1/setup-approvals/{approval_id}/decisions"): (
         "Approvers decide whether to set up a drafted workflow. The same gate as a run's "
-        "refuses anyone else and every party to it: who described it, changed it or sent it "
+        "refuses anyone else and every party to it: who described it, changed it, answered its "
+        "questions or sent it "
         "(ADR 0051)."
     ),
     ("POST", "/api/v1/approvals/{approval_id}/questions"): (

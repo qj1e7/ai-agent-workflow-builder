@@ -1,30 +1,36 @@
-"""A drafted release check (ADR 0051, build step 6), as the draft card and the set-up approval
-page read it: drafting, ready to send, with a question left, waiting for a yes as Alice and as
-Bob see it, and set up. Built from the same layout and report code the routes use."""
+"""A drafted release check (ADR 0051, build steps 6 and 7), as the draft card and the set-up
+approval page read it: drafting, with a question left, ready to send, open in n8n, waiting for a
+yes as Alice and as Bob see it, and set up. Built from the same layout, settings and report code
+the routes use."""
 
 from datetime import UTC, datetime, timedelta
 
+from platform_api.builder.drafted_settings import (
+    ANY_APPROVER,
+    APPROVERS,
+    Source,
+    next_question,
+    settings_of,
+)
 from platform_api.builder.drafted_workflows import (
+    IN_N8N_NOW,
     STILL_DRAFTING,
     DraftedApprovalView,
+    DraftedInN8nView,
     DraftedSetUpView,
     DraftedWorkflowView,
     SetUpApprovalView,
     answer_first,
+    report_settings,
+    setting_views,
 )
 from platform_api.builder.explain import view_of
 from platform_api.builder.layout import DraftedLayout, lay_out_drafted
 from platform_api.builder.n8n_draft import blocks_of
-from platform_api.builder.workflow_report import (
-    Drafted,
-    DraftSetting,
-    Filled,
-    Needed,
-    Team,
-    workflow_report,
-)
+from platform_api.builder.workflow_report import Drafted, Team, workflow_report
 from platform_api.orchestration import (
     DECLINE_REASONS,
+    DrafterFacts,
     KnownOptions,
     WorkflowPlan,
     add_yes,
@@ -32,7 +38,7 @@ from platform_api.orchestration import (
     set_up_link,
     workflow_digest,
 )
-from platform_api.shared import TEAM_TIME_ZONE, ApprovalId
+from platform_api.shared import TEAM_TIME_ZONE, ApprovalId, UserId
 from platform_api.wire import WireModel
 
 ZONE = TEAM_TIME_ZONE.key
@@ -53,6 +59,13 @@ KNOWN = KnownOptions(
     {},
     {},
 )
+OPTIONS = DrafterFacts(
+    jira_projects=["MOCK"],
+    repositories=["langchain-ai/langgraph"],
+    channels=["#support", "#eng-housekeeping"],
+)
+CAROL = UserId("carol")
+NAMES = {CAROL: "Carol"}
 
 
 def _block(name: str, node_type: str, **parameters: object) -> dict[str, object]:
@@ -66,8 +79,15 @@ def _setting(id_: str, kind: str, label: str, value: str | None, block: str, pat
         "label": label,
         "fills": [{"block": block, "parameter": path}],
         "value": value,
-        "mark": "needed" if value is None else "filled",
+        "mark": _mark(kind, value),
     }
+
+
+def _mark(kind: str, value: str | None) -> str:
+    """A run time that holds only its day, as "monday", still needs its time."""
+    if value is None or (kind == "run_time" and " " not in value):
+        return "needed"
+    return "filled"
 
 
 def release_check(run_time: str | None) -> WorkflowPlan:
@@ -143,17 +163,27 @@ def _drafted(run_time: str | None) -> tuple[WorkflowPlan, dict[str, object]]:
     return plan, attach_keys(add_yes(laid, USE_CASE_ID).document, KNOWN.keys)
 
 
-def _view(run_time: str | None, **changes: object) -> DraftedWorkflowView:
+def _view(run_time: str | None, answered: bool = True, **changes: object) -> DraftedWorkflowView:
+    """Carol's drafted release check. Her words named the run time, or only its day, and she
+    chose who says yes on each run, or hasn't yet."""
     plan, document = _drafted(run_time)
-    settings = tuple(
-        DraftSetting(s.label, Needed() if s.value is None else Filled(s.value))
-        for s in plan.settings
+    sources = {
+        s.id: Source(str(s.value), "words", CAROL) for s in plan.settings if s.mark == "filled"
+    }
+    if answered:
+        sources[APPROVERS] = Source(ANY_APPROVER, "chose", CAROL)
+    settings = settings_of(plan, sources)
+    report = workflow_report(
+        Drafted(document, {}, report_settings(settings, CAROL, NAMES)),
+        Team(ERROR_WORKFLOW, ZONE, KNOWN),
     )
-    report = workflow_report(Drafted(document, {}, settings), Team(ERROR_WORKFLOW, ZONE, KNOWN))
     needed = report.needs_an_answer
+    question = next_question(settings, OPTIONS)
     view = DraftedWorkflowView(
         drafted_id=DRAFTED_ID,
-        revision=1,
+        revision=2 if answered else 1,
+        card_revision=1,
+        made_by="answer" if answered else "drafter",
         name=plan.name,
         state="draft",
         words=WORDS,
@@ -163,6 +193,11 @@ def _view(run_time: str | None, **changes: object) -> DraftedWorkflowView:
         report=view_of(report, USE_CASE_ID, plan.name, None, False),
         needed=needed,
         flags=len(report.flags),
+        settings=setting_views(settings, OPTIONS, CAROL, NAMES),
+        question=None if question is None else question.id,
+        notes=[],
+        in_n8n=None,
+        can_edit_in_n8n=True,
         can_send=needed == 0 and not report.flags,
         why_not_send=answer_first(needed) if needed else None,
         replaced_waiting=False,
@@ -198,6 +233,7 @@ def drafted_fixtures() -> dict[str, WireModel]:
         update={
             "state": "waiting",
             "can_send": False,
+            "can_edit_in_n8n": False,
             "why_not_send": "Waiting for an Approver. You can't approve your own draft.",
             "approval": _approval("waiting"),
         }
@@ -206,6 +242,7 @@ def drafted_fixtures() -> dict[str, WireModel]:
         update={
             "state": "approved",
             "can_send": False,
+            "can_edit_in_n8n": False,
             "why_not_send": "Approved.",
             "approval": _approval("approved"),
             "set_up": DraftedSetUpView(state="set_up", use_case_id=USE_CASE_ID, words=None),
@@ -214,7 +251,7 @@ def drafted_fixtures() -> dict[str, WireModel]:
     page = SetUpApprovalView(
         approval_id=APPROVAL_ID,
         drafted_id=DRAFTED_ID,
-        revision=1,
+        revision=2,
         name="Release check",
         digest=workflow_digest(document),
         approval=_approval("waiting"),
@@ -233,12 +270,31 @@ def drafted_fixtures() -> dict[str, WireModel]:
                 "report": None,
                 "needed": 0,
                 "flags": 0,
+                "settings": [],
+                "question": None,
+                "can_edit_in_n8n": False,
                 "can_send": False,
                 "why_not_send": STILL_DRAFTING,
+                "revision": 1,
+                "made_by": "drafter",
             }
         ),
         "builder/drafted.ready.json": ready,
-        "builder/drafted.question.json": _view(None),
+        "builder/drafted.question.json": _view("monday", answered=False),
+        "builder/drafted.in-n8n.json": ready.model_copy(
+            update={
+                "in_n8n": DraftedInN8nView(
+                    by=CAROL,
+                    by_name="Carol",
+                    since=SENT,
+                    revision=2,
+                    editor_url="https://n8n.example/workflow/wfDraftEdit01",
+                ),
+                "can_edit_in_n8n": False,
+                "can_send": False,
+                "why_not_send": IN_N8N_NOW,
+            }
+        ),
         "builder/drafted.not-drafted.json": ready.model_copy(
             update={
                 "name": None,
@@ -246,8 +302,13 @@ def drafted_fixtures() -> dict[str, WireModel]:
                 "said": "I couldn't draft that.",
                 "blocks": [],
                 "report": None,
+                "settings": [],
+                "question": None,
+                "can_edit_in_n8n": False,
                 "can_send": False,
                 "why_not_send": None,
+                "revision": 1,
+                "made_by": "drafter",
             }
         ),
         "builder/drafted.waiting.json": waiting,
@@ -256,7 +317,10 @@ def drafted_fixtures() -> dict[str, WireModel]:
         "builder/setup-approval.carol.json": page.model_copy(
             update={
                 "you_can_decide": False,
-                "why_not": "You can't approve it. You asked for it, changed it or sent it.",
+                "why_not": (
+                    "You can't approve it. You asked for it, changed it, answered its questions "
+                    "or sent it."
+                ),
             }
         ),
     }

@@ -1328,6 +1328,50 @@ def test_builder_migration_0022_keeps_each_revision_whole_and_goes_back(postgres
             upgrade("builder", postgres.owner)
 
 
+def test_builder_migration_0023_says_how_each_revision_was_made_and_who_has_it_in_n8n(
+    postgres: PostgresUrls,
+):
+    drafted = (
+        "INSERT INTO builder.drafted_workflows (drafted_id, owner, created_at, use_case_id)"
+        " VALUES ('dw_n', 'alice', %s, 'uc_n')"
+    )
+    revision = (
+        "INSERT INTO builder.drafted_revisions (drafted_id, revision, asked_by, words,"
+        " started_at, state, made_by) VALUES ('dw_n', %s, 'alice', 'w', %s, 'drafting', %s)"
+    )
+    with psycopg.connect(postgres.owner, autocommit=True) as conn:
+        try:
+            conn.execute(drafted, (NOW,))
+            conn.execute(revision, (1, NOW, "drafter"))
+            conn.execute(revision, (2, NOW, "answer"))
+            conn.execute(revision, (3, NOW, "n8n"))
+            with pytest.raises(psycopg.errors.CheckViolation):
+                conn.execute(revision, (4, NOW, "model"))
+            assert conn.execute(
+                "SELECT sources, notes FROM builder.drafted_revisions WHERE revision = 1"
+            ).fetchone() == ({}, [])
+            with pytest.raises(psycopg.errors.CheckViolation):
+                conn.execute(
+                    "UPDATE builder.drafted_workflows SET in_n8n_id = 'wf1'"
+                    " WHERE drafted_id = 'dw_n'"
+                )
+            conn.execute(
+                "UPDATE builder.drafted_workflows SET in_n8n_id = 'wf1', in_n8n_by = 'alice',"
+                " in_n8n_since = %s, in_n8n_revision = 3 WHERE drafted_id = 'dw_n'",
+                (NOW,),
+            )
+            conn.execute("DELETE FROM builder.drafted_revisions WHERE drafted_id = 'dw_n'")
+            downgrade("builder", postgres.owner, "0022")
+            assert conn.execute(
+                "SELECT count(*) FROM information_schema.columns WHERE table_schema = 'builder'"
+                " AND table_name LIKE 'drafted_%'"
+                " AND column_name IN ('made_by', 'sources', 'notes', 'in_n8n_id')"
+            ).fetchone() == (0,)
+        finally:
+            upgrade("builder", postgres.owner)
+            conn.execute("DELETE FROM builder.drafted_workflows WHERE drafted_id = 'dw_n'")
+
+
 def test_migration_0029_keeps_set_up_approvals_apart_and_a_decline_says_why(
     postgres: PostgresUrls,
 ):

@@ -13,14 +13,17 @@ MASKED: Final = "[masked]"
 # Settings whose names end like this hold secrets. A shorter value is too common a string to mask.
 SECRET_NAME: Final = re.compile(r"(KEY|TOKEN|SECRET|PASSWORD|CONNECTION_STRING)$")
 SHORTEST_SECRET: Final = 8
-KEY_SHAPES: Final = re.compile(
-    r"sk-ant-[A-Za-z0-9_\-]{8,}"
-    r"|sk-[A-Za-z0-9_\-]{16,}"
-    r"|gh[pousr]_[A-Za-z0-9]{16,}"
-    r"|github_pat_[A-Za-z0-9_]{16,}"
+KEY_SHAPE_SOURCES: Final = (
+    r"sk-ant-[A-Za-z0-9_\-]{8,}",
+    r"sk-[A-Za-z0-9_\-]{16,}",
+    r"gh[pousr]_[A-Za-z0-9]{16,}",
+    r"github_pat_[A-Za-z0-9_]{16,}",
     # A credential after Bearer or Basic holds a digit, +, / or =, so "basic understanding." stays.
-    r"|(?i:bearer|basic)\s+(?=[A-Za-z._~\-]*[0-9+/=])[A-Za-z0-9._~+/=\-]{8,}"
+    r"(?i:bearer|basic)\s+(?=[A-Za-z._~\-]*[0-9+/=])[A-Za-z0-9._~+/=\-]{8,}",
 )
+"""Each shape of a key the masker knows. contracts/fixtures/agent/key-shapes.json carries them,
+and platform-api refuses every one before it keeps anything (ADR 0051)."""
+KEY_SHAPES: Final = re.compile("|".join(KEY_SHAPE_SOURCES))
 
 
 type Held = tuple[str, ...]

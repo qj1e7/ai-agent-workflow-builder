@@ -235,6 +235,15 @@ class FakeDrafted:
     async def set_up_again(self, *args: object) -> object:
         return DraftNotFound()
 
+    async def answer(self, *args: object) -> object:
+        return DraftNotFound()
+
+    async def open_in_n8n(self, *args: object) -> object:
+        return DraftNotFound()
+
+    async def done_in_n8n(self, *args: object) -> object:
+        return DraftNotFound()
+
     async def approval(self, *args: object) -> object:
         return None
 

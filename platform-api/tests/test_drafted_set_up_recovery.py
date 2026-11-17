@@ -48,7 +48,7 @@ async def decide(
 
 async def sent(lab: Lab) -> tuple[str, str]:
     drafted_id = (await lab.start())["drafted_id"]
-    approval = (await lab.send(drafted_id, 1)).json()["approval"]
+    approval = (await lab.send(drafted_id, 2)).json()["approval"]
     return drafted_id, approval["approval_id"]
 
 
@@ -84,9 +84,9 @@ async def test_after_a_refused_set_up_the_draft_can_be_changed_or_sent_again(lab
     assert refused["state"] == "draft"
     assert refused["set_up"] == {"state": "refused", "use_case_id": None, "words": CHANGED}
     assert refused["can_send"] is True
-    again = await lab.send(drafted_id, 1)
+    again = await lab.send(drafted_id, 2)
     assert (again.status_code, again.json()["state"]) == (200, "waiting")
-    assert (await change(lab, drafted_id, 1)).status_code == 202
+    assert (await change(lab, drafted_id, 2)).status_code == 202
 
 
 async def test_a_yes_that_lands_before_a_new_revision_replaces_it_blocks_nothing(lab: Lab):
@@ -96,15 +96,15 @@ async def test_a_yes_that_lands_before_a_new_revision_replaces_it_blocks_nothing
         pass
 
     lab.approvals.replace_waiting = too_late  # type: ignore[method-assign]
-    assert (await change(lab, drafted_id, 1)).status_code == 202
+    assert (await change(lab, drafted_id, 2)).status_code == 202
     await lab.drafted.settle()
     assert (await decide(lab, approval_id)).status_code == 201
     await lab.approvals.work_once()
 
     assert lab.n8n.saved == [], "nothing is set up for a revision that is not the newest"
-    assert (await change(lab, drafted_id, 2)).status_code == 202
+    assert (await change(lab, drafted_id, 3)).status_code == 202
     await lab.drafted.settle()
-    assert (await lab.send(drafted_id, 3)).json()["state"] == "waiting"
+    assert (await lab.send(drafted_id, 4)).json()["state"] == "waiting"
 
 
 class NoProjects:
@@ -252,7 +252,7 @@ async def test_a_copy_left_under_a_set_up_that_gave_up_is_adopted_when_it_is_sen
     await retried(lab, db, 9)
     assert (await lab.read(drafted_id))["set_up"]["state"] == "failed"
     n8n.down = False
-    resent = await lab.send(drafted_id, 1)
+    resent = await lab.send(drafted_id, 2)
     second = resent.json()["approval"]["approval_id"]
     assert second != first
 
@@ -297,14 +297,14 @@ async def test_a_new_approval_never_shows_the_last_one_s_refusal(lab: Lab, db: D
     await decide(lab, approval_id)
     await lab.approvals.work_once()
     lab.n8n.changes_it = False
-    again = (await lab.send(drafted_id, 1)).json()["approval"]["approval_id"]
+    again = (await lab.send(drafted_id, 2)).json()["approval"]["approval_id"]
 
     await decide(lab, again)
     pending = await lab.read(drafted_id)
 
     assert pending["state"] == "approved"
     assert pending["set_up"] == {"state": "setting_up", "use_case_id": None, "words": None}
-    assert (await change(lab, drafted_id, 1)).status_code == 409
+    assert (await change(lab, drafted_id, 2)).status_code == 409
 
 
 class Api:

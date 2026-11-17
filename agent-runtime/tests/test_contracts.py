@@ -24,6 +24,7 @@ from agent_runtime.contract import (
     FindSoftwareRequest,
     FindSoftwareResult,
     GitHubCheckResult,
+    KeyShapes,
     ModelAccess,
     ModelTestResult,
     ReadReleasesRequest,
@@ -37,6 +38,7 @@ from agent_runtime.contract import (
 )
 from agent_runtime.contracts import answer_request
 from agent_runtime.explain_wording import explain_guard, fact_check
+from agent_runtime.monitoring.masking import KEY_SHAPE_SOURCES, KEY_SHAPES
 
 FIXTURES = Path(__file__).resolve().parents[2] / "contracts" / "fixtures" / "agent"
 WORDINGS = sorted((FIXTURES.parent / "builder").glob("explain-wording.*.json"))
@@ -97,6 +99,7 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "planner-check-part-request.json": TypeAdapter(CheckPartRequest),
     "planner-check-part-cant.json": check_part_result_adapter,
     "planner-check-part-fits.json": check_part_result_adapter,
+    "key-shapes.json": TypeAdapter(KeyShapes),
 }
 
 
@@ -107,6 +110,13 @@ def load(name: str) -> object:
 @pytest.mark.parametrize("name", sorted(PARSERS))
 def test_fixture_parses(name: str):
     PARSERS[name].validate_python(load(name))
+
+
+def test_the_key_shapes_platform_api_holds_to_are_the_masker_s_own():
+    """platform-api refuses every shape in this file before it keeps anything (ADR 0051)."""
+    shapes = KeyShapes.model_validate(load("key-shapes.json")).shapes
+    assert shapes == list(KEY_SHAPE_SOURCES)
+    assert KEY_SHAPES.pattern == "|".join(KEY_SHAPE_SOURCES)
 
 
 def test_every_fixture_file_has_a_parser():
@@ -163,8 +173,9 @@ def test_the_card_task_request_runs_a_card_with_its_values():
 
 
 def test_no_fixture_holds_a_model_key_that_looks_real():
+    # key-shapes.json holds the shapes of keys as patterns, not a key.
     for path in FIXTURES.glob("*.json"):
-        assert "sk-" not in path.read_text()
+        assert path.name == "key-shapes.json" or "sk-" not in path.read_text()
 
 
 def test_the_reworded_fixture_passes_every_check_against_the_request_fixture():

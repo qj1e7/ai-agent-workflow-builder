@@ -30,7 +30,7 @@ const REGISTRY = capabilities as CapabilitiesView
 
 const EMPTY_PAGE: NeedsPage = { approvals: [], approvals_total: 0, stopped: [], stopped_total: 0, declined: [], declined_total: 0, questions_for_me: [], questions_for_me_total: 0, next: null }
 const ALICE_HOME = aliceHome as HomeOut
-const BOB_HOME = bobHome as HomeOut
+const BOB_HOME: HomeOut = { ...(bobHome as HomeOut), setup_approvals: [] }
 const OPEN_BESIDE = () => undefined
 
 const text = (html: string) => html.replace(/<[^>]*>/g, ' ').replaceAll('&#x27;', "'").replace(/\s+/g, ' ').trim()

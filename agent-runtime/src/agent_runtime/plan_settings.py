@@ -147,8 +147,9 @@ def _value_and_mark(
         if said is not None and words_span(words, said) is not None:
             return _span_of(words, said), "filled"
         if tried:
-            # The words try to change the time, but not in a way code can read. Ask.
-            return None, "needed"
+            # The words try to change the time, but not in a way code can read. Ask, keeping
+            # the day they name, so the question asks only for the time.
+            return day_in(words, before.value if before else None), "needed"
     else:
         found = found_in(setting.kind, said, words, facts)
         if found is not None:
@@ -175,6 +176,13 @@ def run_time_in(words: str, before: str | None = None) -> tuple[str | None, bool
     if day and at:
         return f"{day} {at}", tried
     return None, tried
+
+
+def day_in(words: str, before: str | None = None) -> str | None:
+    """The day the words name, as "monday", or the day `before` held. A run time still needed
+    keeps it as its value."""
+    day, _ = said_schedule(words)
+    return day or ((before or "").partition(" ")[0] or None)
 
 
 def found_in(kind: SettingKind, said: str | None, words: str, facts: DrafterFacts) -> str | None:

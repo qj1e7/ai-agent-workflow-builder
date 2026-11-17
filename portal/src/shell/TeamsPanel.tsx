@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type SyntheticEvent } from 'react'
+import { useHome } from '../api/homeQueries'
 import { useApprovals, useRuns, useTeamsMessages } from '../api/queries'
 import type { Me, RunView, TeamsStubMessage } from '../api/types'
 import { shortTime } from '../screens/run/words'
@@ -159,6 +160,11 @@ function Drawer({ me, onClose, onOpen }: { me: Me; onClose: () => void; onOpen: 
   )
 }
 
+/** Set-up approvals this person may decide wait for them too, and the platform lists them on Home, so the badge adds the same number Needs you shows. */
+export function withSetUps({ count, atLeast }: WaitingCount, setUps: number): WaitingCount {
+  return { count: count + setUps, atLeast }
+}
+
 function useWaitingForYou(person: Me | null): WaitingCount {
   const enabled = person !== null
   const messages = useTeamsMessages({ poll: BADGE_POLL_MS, enabled })
@@ -166,7 +172,8 @@ function useWaitingForYou(person: Me | null): WaitingCount {
   const asks = badgeAsks(runs.data ?? [], messages.data ?? [])
   const approvals = useApprovals(asks.ids, { poll: BADGE_POLL_MS })
   const count = approvals.filter((query) => query.data?.you_can_decide === true).length
-  return { count, atLeast: asks.more && count === asks.ids.length }
+  const home = useHome({ enabled })
+  return withSetUps({ count, atLeast: asks.more && count === asks.ids.length }, home.data?.setup_approvals.length ?? 0)
 }
 
 export function TeamsButton({ person }: { person: Me | null }) {

@@ -4826,6 +4826,56 @@
         "title": "DidntFollowReply",
         "type": "object"
       },
+      "DraftAnswerIn": {
+        "additionalProperties": false,
+        "properties": {
+          "choice": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "One of the question's choices, as its value.",
+            "title": "Choice"
+          },
+          "revision": {
+            "description": "The revision the question was asked on.",
+            "minimum": 1.0,
+            "title": "Revision",
+            "type": "integer"
+          },
+          "setting": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Setting",
+            "type": "string"
+          },
+          "typed": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What the person typed.",
+            "title": "Typed"
+          }
+        },
+        "required": [
+          "revision",
+          "setting"
+        ],
+        "title": "DraftAnswerIn",
+        "type": "object"
+      },
       "DraftChangeIn": {
         "additionalProperties": false,
         "properties": {
@@ -4847,6 +4897,26 @@
           "revision"
         ],
         "title": "DraftChangeIn",
+        "type": "object"
+      },
+      "DraftChoiceView": {
+        "additionalProperties": false,
+        "properties": {
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "value": {
+            "description": "Send it back as the answer's choice.",
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "value",
+          "label"
+        ],
+        "title": "DraftChoiceView",
         "type": "object"
       },
       "DraftIn": {
@@ -4890,6 +4960,21 @@
           "content"
         ],
         "title": "DraftIn",
+        "type": "object"
+      },
+      "DraftInN8nIn": {
+        "additionalProperties": false,
+        "properties": {
+          "revision": {
+            "minimum": 1.0,
+            "title": "Revision",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "revision"
+        ],
+        "title": "DraftInN8nIn",
         "type": "object"
       },
       "DraftItem": {
@@ -4968,6 +5053,121 @@
           "revision"
         ],
         "title": "DraftSendIn",
+        "type": "object"
+      },
+      "DraftSettingView": {
+        "additionalProperties": false,
+        "description": "One setting of the newest revision, with the question that fills it. Code writes every\nword, and a string from the plan, such as its label, is a quoted segment.",
+        "properties": {
+          "choices": {
+            "description": "2 to 4 from the team's own data.",
+            "items": {
+              "$ref": "#/components/schemas/DraftChoiceView"
+            },
+            "title": "Choices",
+            "type": "array"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "key": {
+            "description": "The short words before its question, as When or Jira.",
+            "title": "Key",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "run_time",
+              "jira_project",
+              "channel",
+              "address",
+              "repository",
+              "confluence_page",
+              "text",
+              "approvers",
+              "key"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "items": {
+              "$ref": "#/components/schemas/Segment"
+            },
+            "title": "Label",
+            "type": "array"
+          },
+          "mark": {
+            "enum": [
+              "filled",
+              "guessed",
+              "needed"
+            ],
+            "title": "Mark",
+            "type": "string"
+          },
+          "question": {
+            "description": "Its question, which a guessed one's Change asks too.",
+            "title": "Question",
+            "type": "string"
+          },
+          "said": {
+            "description": "Where the value came from, as You chose or From Alice's words, or I guessed or Needed.",
+            "title": "Said",
+            "type": "string"
+          },
+          "typed": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The words on the button that opens a box to type an answer in. Null when typing isn't read.",
+            "title": "Typed"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "As a person reads it. Null while it is needed.",
+            "title": "Value"
+          },
+          "waits": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why it can't be answered now, as for a write key, which comes in a later step. It then has no choices.",
+            "title": "Waits"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "key",
+          "label",
+          "value",
+          "mark",
+          "said",
+          "question",
+          "choices",
+          "typed",
+          "waits"
+        ],
+        "title": "DraftSettingView",
         "type": "object"
       },
       "DraftStartedReply": {
@@ -5223,6 +5423,50 @@
         "title": "DraftedApprovalView",
         "type": "object"
       },
+      "DraftedInN8nView": {
+        "additionalProperties": false,
+        "properties": {
+          "by": {
+            "title": "By",
+            "type": "string"
+          },
+          "by_name": {
+            "title": "By Name",
+            "type": "string"
+          },
+          "editor_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Where it is in n8n's editor, for the person who has it open. Null for anyone else, or when the editor's address isn't set.",
+            "title": "Editor Url"
+          },
+          "revision": {
+            "description": "The revision that was opened in n8n.",
+            "title": "Revision",
+            "type": "integer"
+          },
+          "since": {
+            "format": "date-time",
+            "title": "Since",
+            "type": "string"
+          }
+        },
+        "required": [
+          "by",
+          "by_name",
+          "since",
+          "revision",
+          "editor_url"
+        ],
+        "title": "DraftedInN8nView",
+        "type": "object"
+      },
       "DraftedSetUpView": {
         "additionalProperties": false,
         "properties": {
@@ -5303,18 +5547,49 @@
             "title": "Blocks",
             "type": "array"
           },
+          "can_edit_in_n8n": {
+            "description": "Whether Edit in n8n works for this person now: an Operator with n8n access, on a draft nobody has open in n8n.",
+            "title": "Can Edit In N8N",
+            "type": "boolean"
+          },
           "can_send": {
             "title": "Can Send",
             "type": "boolean"
+          },
+          "card_revision": {
+            "description": "The newest revision that started a card: the first, a change asked for in the chat, or a read-back from n8n. An answer makes a revision on the same card. A card for an older revision settles.",
+            "title": "Card Revision",
+            "type": "integer"
           },
           "drafted_id": {
             "title": "Drafted Id",
             "type": "string"
           },
           "flags": {
-            "description": "The flags the check found.",
+            "description": "The flags the check found, leaving out what a setting still needed causes, which its question covers.",
             "title": "Flags",
             "type": "integer"
+          },
+          "in_n8n": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DraftedInN8nView"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Who has it open in their own n8n space, without its keys. Done in n8n reads it back as a new revision."
+          },
+          "made_by": {
+            "description": "How the newest revision was made: by the drafter, by code from an answer, or read back from n8n.",
+            "enum": [
+              "drafter",
+              "answer",
+              "n8n"
+            ],
+            "title": "Made By",
+            "type": "string"
           },
           "name": {
             "anyOf": [
@@ -5329,9 +5604,29 @@
             "title": "Name"
           },
           "needed": {
-            "description": "The settings still needed.",
+            "description": "The settings still needed, write keys included.",
             "title": "Needed",
             "type": "integer"
+          },
+          "notes": {
+            "description": "What came back from n8n with this revision that didn't count, such as a channel typed there that the platform can't post in, in words to show on the card.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Notes",
+            "type": "array"
+          },
+          "question": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The id of the one setting the card asks for now, in the ADR's order. Null when nothing can be asked now, or it isn't a draft.",
+            "title": "Question"
           },
           "replaced_waiting": {
             "description": "This revision replaced a set-up approval that was still waiting.",
@@ -5350,7 +5645,7 @@
             "description": "Code's workflow report of this revision. Null while drafting or when not drafted."
           },
           "revision": {
-            "description": "The newest revision. A card for an older one settles.",
+            "description": "The newest revision.",
             "title": "Revision",
             "type": "integer"
           },
@@ -5376,6 +5671,14 @@
               }
             ],
             "description": "Its set-up, once approved."
+          },
+          "settings": {
+            "description": "Every setting, in the plan's order, then the write keys and the Approvers.",
+            "items": {
+              "$ref": "#/components/schemas/DraftSettingView"
+            },
+            "title": "Settings",
+            "type": "array"
           },
           "started_at": {
             "format": "date-time",
@@ -5407,6 +5710,8 @@
         "required": [
           "drafted_id",
           "revision",
+          "card_revision",
+          "made_by",
           "name",
           "state",
           "words",
@@ -5416,6 +5721,11 @@
           "report",
           "needed",
           "flags",
+          "settings",
+          "question",
+          "notes",
+          "in_n8n",
+          "can_edit_in_n8n",
           "can_send",
           "why_not_send",
           "replaced_waiting",
@@ -7090,6 +7400,14 @@
             "title": "Replied",
             "type": "array"
           },
+          "setup_approvals": {
+            "description": "Drafted workflows' set-up approvals this person may decide now, the newest first. They are part of Needs you, and the Teams button counts them with the runs.",
+            "items": {
+              "$ref": "#/components/schemas/SetUpApprovalItem"
+            },
+            "title": "Setup Approvals",
+            "type": "array"
+          },
           "stopped": {
             "description": "Stopped runs an Operator started, owns or retried, while each is the newest run of its workflow. The newest first. The first 10.",
             "items": {
@@ -7146,6 +7464,7 @@
           "questions_for_me",
           "questions_for_me_total",
           "needs_next",
+          "setup_approvals",
           "drafts",
           "following_up",
           "following_up_total",
@@ -12248,6 +12567,48 @@
           "quoted"
         ],
         "title": "Segment",
+        "type": "object"
+      },
+      "SetUpApprovalItem": {
+        "additionalProperties": false,
+        "description": "A drafted workflow's set-up approval that this person may decide now (ADR 0051).",
+        "properties": {
+          "approval_id": {
+            "title": "Approval Id",
+            "type": "string"
+          },
+          "drafted_id": {
+            "title": "Drafted Id",
+            "type": "string"
+          },
+          "link": {
+            "description": "Its approval page, as the Teams card opens it.",
+            "title": "Link",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "sent_at": {
+            "format": "date-time",
+            "title": "Sent At",
+            "type": "string"
+          },
+          "sent_by_name": {
+            "title": "Sent By Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "approval_id",
+          "drafted_id",
+          "name",
+          "sent_by_name",
+          "sent_at",
+          "link"
+        ],
+        "title": "SetUpApprovalItem",
         "type": "object"
       },
       "SetUpApprovalView": {
@@ -17784,6 +18145,107 @@
         ]
       }
     },
+    "/api/v1/drafted-workflows/{drafted_id}/answers": {
+      "post": {
+        "description": "An answer to the drafted workflow's question, or a guessed setting changed: one of the question's choices, or what the person typed (ADR 0051, section 5). Code reads it and lays out the next revision, with no model. A run time, a Jira project, a channel, an address, the Approvers and a write key are never guessed: a typed one counts only when code reads it and finds it in the team's own data. 409, with the words the card shows, when code reads nothing in it, when it is shaped like a key, when the revision named is not the newest, or while it is open in n8n or isn't a draft. The person who answers becomes a party to its set-up approval.",
+        "operationId": "answer_drafted_api_v1_drafted_workflows__drafted_id__answers_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "drafted_id",
+            "required": true,
+            "schema": {
+              "title": "Drafted Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DraftAnswerIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftedWorkflowView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Only an Operator can do this, or the person is not on the People list"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "No such drafted workflow"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Answer Drafted",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
     "/api/v1/drafted-workflows/{drafted_id}/changes": {
       "post": {
         "description": "A change asked for in the chat. The drafter gets the plan as it stands and these words, and its whole new plan becomes the next revision, drafting now. A setting with the same id and kind keeps its value unless the words change it. A set-up approval still waiting is replaced. Any Operator may ask for a change, and so becomes a party to its set-up approval. 409 when the revision named is not the newest, it is still drafting, or its approval is set up or being set up. A set-up that was refused or given up leaves it a draft to change.",
@@ -17880,6 +18342,198 @@
           }
         ],
         "summary": "Change Drafted",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/drafted-workflows/{drafted_id}/n8n": {
+      "post": {
+        "description": "Edit in n8n: puts the newest revision in your own n8n space, without its keys, and answers where it is in n8n's editor. Only an Operator with n8n access can. Nothing else changes it until Done in n8n reads it back. Opening it again changes nothing. 403 without n8n access, 409 while it isn't a draft or staff access to n8n is off, 503 when n8n didn't take it.",
+        "operationId": "edit_drafted_in_n8n_api_v1_drafted_workflows__drafted_id__n8n_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "drafted_id",
+            "required": true,
+            "schema": {
+              "title": "Drafted Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DraftInN8nIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftedWorkflowView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Only an Operator can do this, or the person is not on the People list"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "No such drafted workflow"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "n8n didn't take it"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Edit Drafted In N8N",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/drafted-workflows/{drafted_id}/n8n/done": {
+      "post": {
+        "description": "Done in n8n: reads what n8n holds back as a new revision, laid out and checked again, and takes it out of your n8n space. A value typed in n8n counts as filled once it passes the same check as in the chat, and a placeholder left there is still needed. Only the person who opened it can. 409, with what n8n holds that the platform can't read back, and it stays in n8n to put right. 503 when n8n didn't show it.",
+        "operationId": "done_drafted_in_n8n_api_v1_drafted_workflows__drafted_id__n8n_done_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "drafted_id",
+            "required": true,
+            "schema": {
+              "title": "Drafted Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftedWorkflowView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Only an Operator can do this, or the person is not on the People list"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "No such drafted workflow"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "n8n didn't show it"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Done Drafted In N8N",
         "tags": [
           "builder"
         ]
