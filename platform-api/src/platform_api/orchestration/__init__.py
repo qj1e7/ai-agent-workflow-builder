@@ -71,6 +71,8 @@ from platform_api.orchestration.agents import (
     RowKind,
     RowState,
     ScheduleChange,
+    SettingKind,
+    SettingMark,
     SettingPlace,
     SetupCardAnswer,
     SoftwareNotChecked,
@@ -170,7 +172,7 @@ from platform_api.orchestration.n8n_staff import (
     StaffAccess,
     no_access_words,
 )
-from platform_api.orchestration.node_classes import NODE_CLASSES, Runs, Use
+from platform_api.orchestration.node_classes import NODE_CLASSES, Off, OnType, Runs, Use
 from platform_api.orchestration.people_store import ConfirmationRow
 from platform_api.orchestration.person_runs import (
     Ask,
@@ -223,6 +225,7 @@ from platform_api.orchestration.setup_approvals import (
 )
 from platform_api.orchestration.setup_approvals import Decided as SetUpDecided
 from platform_api.orchestration.setup_approvals import DecisionRefused as SetUpRefused
+from platform_api.orchestration.slack_channels import SlackChannels
 from platform_api.orchestration.spec import (
     CardRun,
     CardsTask,
@@ -319,6 +322,7 @@ __all__ = [
     "SetUpDeclineReason",
     "NoSuchRequest",
     "SetUpApprovals",
+    "SlackChannels",
     "SetUpAsk",
     "SetUpFinished",
     "SetUps",
@@ -331,6 +335,8 @@ __all__ = [
     "KeyPasted",
     "PlanBlock",
     "PlanSetting",
+    "SettingKind",
+    "SettingMark",
     "PlanWire",
     "SettingPlace",
     "WorkflowDrafted",
@@ -353,6 +359,8 @@ __all__ = [
     "NeedsASetting",
     "RuleId",
     "Runs",
+    "Off",
+    "OnType",
     "Use",
     "Face",
     "zone_words",

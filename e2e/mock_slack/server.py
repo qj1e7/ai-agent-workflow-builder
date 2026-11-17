@@ -31,6 +31,12 @@ HOST = "slack.com"
 CA_DIR = Path(os.environ.get("CA_DIR", "/ca"))
 KEYS_DIR = Path(os.environ.get("KEYS_DIR", "/tmp/mock-slack"))
 SENT = frozenset({"chat.postMessage", "chat.update", "chat.delete", "chat.postEphemeral"})
+CHANNELS = [
+    {"id": "C0SUPPORT", "name": "support", "is_member": True},
+    {"id": "C0HOUSE", "name": "eng-housekeeping", "is_member": True},
+    {"id": "C0RANDOM", "name": "random", "is_member": False},
+]
+"""The channels the stack's key can see. It is a member of the first two, so it posts there."""
 
 
 class State:
@@ -135,6 +141,8 @@ def make_handler(state: State) -> type[BaseHTTPRequestHandler]:
                 case "auth.test":
                     said = {"ok": True, "team": "Mock", "user": "platform", "user_id": "UBOT"}
                     self.send_json(200, said, {"x-oauth-scopes": SCOPES})
+                case "conversations.list":
+                    self.send_json(200, {"ok": True, "channels": CHANNELS, "response_metadata": {}})
                 case "users.profile.get":
                     self.send_json(200, {"ok": True, "profile": {"real_name": "Platform"}})
                 case "chat.postMessage" | "chat.postEphemeral" | "chat.update" | "chat.delete":

@@ -1,0 +1,543 @@
+{
+  "drafted_id": "dw_01JDRAFTRELEASE",
+  "revision": 2,
+  "card_revision": 1,
+  "made_by": "answer",
+  "name": "Release check",
+  "state": "draft",
+  "words": "Draft an n8n workflow that every Monday at 9:00 checks langchain-ai/langgraph for a new release and raises a ticket in MOCK",
+  "said": null,
+  "started_at": "2026-11-17T01:00:00Z",
+  "blocks": [
+    {
+      "name": "Every Monday",
+      "kind": "schedule",
+      "badge": "n8n",
+      "tag": null,
+      "next": [
+        {
+          "exit": null,
+          "to": "Read new releases"
+        }
+      ]
+    },
+    {
+      "name": "Start from the Portal",
+      "kind": "start",
+      "badge": "ours",
+      "tag": null,
+      "next": [
+        {
+          "exit": null,
+          "to": "Read new releases"
+        }
+      ]
+    },
+    {
+      "name": "Read new releases",
+      "kind": "read",
+      "badge": "ours",
+      "tag": null,
+      "next": [
+        {
+          "exit": null,
+          "to": "Propose a ticket"
+        }
+      ]
+    },
+    {
+      "name": "Propose a ticket",
+      "kind": "propose",
+      "badge": "ours",
+      "tag": null,
+      "next": [
+        {
+          "exit": null,
+          "to": "Ask for a yes"
+        }
+      ]
+    },
+    {
+      "name": "Ask for a yes",
+      "kind": "ask",
+      "badge": "ours",
+      "tag": null,
+      "next": [
+        {
+          "exit": "Yes",
+          "to": "Make the ticket"
+        }
+      ]
+    },
+    {
+      "name": "Make the ticket",
+      "kind": "write",
+      "badge": "ours",
+      "tag": null,
+      "next": []
+    }
+  ],
+  "report": {
+    "use_case_id": "uc_01JDRAFTRELEASE",
+    "name": "Release check",
+    "version": null,
+    "grade": "safe",
+    "then": null,
+    "in_short": [
+      {
+        "text": "Every Monday at 9:00",
+        "quoted": false
+      },
+      {
+        "text": ", it ",
+        "quoted": false
+      },
+      {
+        "text": "reads ",
+        "quoted": false
+      },
+      {
+        "text": "GitHub ",
+        "quoted": false
+      },
+      {
+        "text": "langchain-ai/langgraph",
+        "quoted": true
+      },
+      {
+        "text": ".",
+        "quoted": false
+      },
+      {
+        "text": " It ",
+        "quoted": false
+      },
+      {
+        "text": "can create Jira tickets",
+        "quoted": false
+      },
+      {
+        "text": " in ",
+        "quoted": false
+      },
+      {
+        "text": "MOCK",
+        "quoted": true
+      },
+      {
+        "text": ", each after a yes",
+        "quoted": false
+      },
+      {
+        "text": ".",
+        "quoted": false
+      },
+      {
+        "text": " It changes nothing else.",
+        "quoted": false
+      }
+    ],
+    "reworded": null,
+    "steps": [
+      {
+        "name": "Every Monday",
+        "ours": false,
+        "block_type": null,
+        "tag": "Starts it"
+      },
+      {
+        "name": "Start from the Portal",
+        "ours": true,
+        "block_type": null,
+        "tag": "Starts it"
+      },
+      {
+        "name": "Read new releases",
+        "ours": true,
+        "block_type": null,
+        "tag": "Reads GitHub"
+      },
+      {
+        "name": "Propose a ticket",
+        "ours": true,
+        "block_type": null,
+        "tag": "Shapes the change"
+      },
+      {
+        "name": "Ask for a yes",
+        "ours": true,
+        "block_type": null,
+        "tag": "Waits for a yes"
+      },
+      {
+        "name": "Make the ticket",
+        "ours": true,
+        "block_type": null,
+        "tag": "Writes after a yes"
+      }
+    ],
+    "touches": [
+      {
+        "action": "reads",
+        "system": "GitHub",
+        "place": "langchain-ai/langgraph",
+        "block": "Read new releases",
+        "phrase": [
+          {
+            "text": "reads GitHub ",
+            "quoted": false
+          },
+          {
+            "text": "langchain-ai/langgraph",
+            "quoted": true
+          }
+        ],
+        "key": null
+      },
+      {
+        "action": "writes",
+        "system": "Jira",
+        "place": "MOCK",
+        "block": "Make the ticket",
+        "phrase": [
+          {
+            "text": "can create Jira tickets",
+            "quoted": false
+          },
+          {
+            "text": " in ",
+            "quoted": false
+          },
+          {
+            "text": "MOCK",
+            "quoted": true
+          },
+          {
+            "text": ", each after a yes",
+            "quoted": false
+          }
+        ],
+        "key": null
+      }
+    ],
+    "flags": [],
+    "fixed": [
+      {
+        "rule": "no_error_workflow",
+        "words": "Added our error workflow, so a stopped run shows in the Portal."
+      },
+      {
+        "rule": "other_time_zone",
+        "words": "Set the team's time zone."
+      },
+      {
+        "rule": "test_runs_not_kept",
+        "words": "Turned on keeping test runs."
+      },
+      {
+        "rule": "progress_not_saved",
+        "words": "Turned on saved progress."
+      },
+      {
+        "rule": "no_yes_before_write",
+        "words": "Added a yes before each write."
+      }
+    ],
+    "passed": [
+      {
+        "rule": "unreadable",
+        "words": "The checker read the whole workflow."
+      },
+      {
+        "rule": "block_off",
+        "words": "Every block loads in our n8n."
+      },
+      {
+        "rule": "version_off",
+        "words": "Every block is a version the platform has classed."
+      },
+      {
+        "rule": "picked_by_expression",
+        "words": "Every block does one thing, written in the block."
+      },
+      {
+        "rule": "operation_off",
+        "words": "Each of n8n's blocks only reads, posts or shapes the data."
+      },
+      {
+        "rule": "nothing_starts",
+        "words": "A schedule or Start from the Portal starts it."
+      },
+      {
+        "rule": "tell_place",
+        "words": "Every Tell goes to one of the fixed places."
+      },
+      {
+        "rule": "notice_place_expression",
+        "words": "Every post goes to a place written in the block."
+      },
+      {
+        "rule": "notice_words_expression",
+        "words": "Every post's words are written in the block."
+      },
+      {
+        "rule": "notice_words_unreadable",
+        "words": "The checker read every post's words."
+      },
+      {
+        "rule": "calls_everyone",
+        "words": "No post calls out a whole channel."
+      },
+      {
+        "rule": "no_platform_key",
+        "words": "The platform has a key for every system a block uses."
+      },
+      {
+        "rule": "not_platform_key",
+        "words": "Every block uses the platform's key for its system."
+      },
+      {
+        "rule": "key_not_made",
+        "words": "No block uses a key the platform didn't make."
+      },
+      {
+        "rule": "key_for_other_block",
+        "words": "Each key is on the kind of block it was made for."
+      },
+      {
+        "rule": "runs_before_ours",
+        "words": "One of our steps comes first, so every run is recorded."
+      },
+      {
+        "rule": "no_run_time",
+        "words": "Its schedule names a time."
+      },
+      {
+        "rule": "run_time_unshowable",
+        "words": "The Portal can show each next run."
+      },
+      {
+        "rule": "unknown_agent",
+        "words": "Every agent is a saved card."
+      },
+      {
+        "rule": "unknown_agent_input",
+        "words": "Every agent gets only its own inputs."
+      },
+      {
+        "rule": "write_place_not_allowed",
+        "words": "Writes only to places the team allows."
+      },
+      {
+        "rule": "read_place_not_allowed",
+        "words": "Reads only places the team allows."
+      },
+      {
+        "rule": "change_not_allowed",
+        "words": "Proposes only changes the team allows."
+      },
+      {
+        "rule": "second_yes",
+        "words": "No path asks for a yes twice."
+      }
+    ],
+    "approves": [
+      {
+        "block": "Make the ticket",
+        "decides": "each_run",
+        "approvers": 1,
+        "words": "Waits for a yes in Teams on each run. Nobody who started the run or made the workflow can give it."
+      }
+    ],
+    "settings": [
+      {
+        "label": [
+          {
+            "text": "When it runs",
+            "quoted": true
+          }
+        ],
+        "value": [
+          {
+            "text": "every Monday at 9:00",
+            "quoted": false
+          }
+        ],
+        "mark": "filled",
+        "said": "From your words"
+      },
+      {
+        "label": [
+          {
+            "text": "The repository",
+            "quoted": true
+          }
+        ],
+        "value": [
+          {
+            "text": "langchain-ai/langgraph",
+            "quoted": true
+          }
+        ],
+        "mark": "filled",
+        "said": "From your words"
+      },
+      {
+        "label": [
+          {
+            "text": "The Jira project",
+            "quoted": true
+          }
+        ],
+        "value": [
+          {
+            "text": "MOCK",
+            "quoted": true
+          }
+        ],
+        "mark": "filled",
+        "said": "From your words"
+      },
+      {
+        "label": [
+          {
+            "text": "Who says yes on each run",
+            "quoted": false
+          }
+        ],
+        "value": [
+          {
+            "text": "Any Approver on the team",
+            "quoted": false
+          }
+        ],
+        "mark": "filled",
+        "said": "You chose"
+      }
+    ],
+    "approval": "It is set up only after an Approver approves it.",
+    "needs_an_answer": 0
+  },
+  "needed": 0,
+  "flags": 0,
+  "settings": [
+    {
+      "id": "run_time",
+      "kind": "run_time",
+      "key": "When",
+      "label": [
+        {
+          "text": "When it runs",
+          "quoted": true
+        }
+      ],
+      "value": "every Monday at 9:00",
+      "mark": "filled",
+      "said": "From your words",
+      "question": "How often should it run?",
+      "choices": [
+        {
+          "value": "every_day",
+          "label": "Every day"
+        },
+        {
+          "value": "weekdays",
+          "label": "Weekdays"
+        },
+        {
+          "value": "monday",
+          "label": "Mondays"
+        },
+        {
+          "value": "friday",
+          "label": "Fridays"
+        }
+      ],
+      "typed": null,
+      "waits": null
+    },
+    {
+      "id": "repository",
+      "kind": "repository",
+      "key": "GitHub",
+      "label": [
+        {
+          "text": "The repository",
+          "quoted": true
+        }
+      ],
+      "value": "langchain-ai/langgraph",
+      "mark": "filled",
+      "said": "From your words",
+      "question": "Which GitHub repository should it read?",
+      "choices": [
+        {
+          "value": "langchain-ai/langgraph",
+          "label": "langchain-ai/langgraph"
+        }
+      ],
+      "typed": "Type one",
+      "waits": null
+    },
+    {
+      "id": "jira_project",
+      "kind": "jira_project",
+      "key": "Jira",
+      "label": [
+        {
+          "text": "The Jira project",
+          "quoted": true
+        }
+      ],
+      "value": "MOCK",
+      "mark": "filled",
+      "said": "From your words",
+      "question": "Which Jira project should it use?",
+      "choices": [
+        {
+          "value": "MOCK",
+          "label": "MOCK"
+        }
+      ],
+      "typed": null,
+      "waits": null
+    },
+    {
+      "id": "approvers",
+      "kind": "approvers",
+      "key": "Yes from",
+      "label": [
+        {
+          "text": "Who says yes on each run",
+          "quoted": false
+        }
+      ],
+      "value": "Any Approver on the team",
+      "mark": "filled",
+      "said": "You chose",
+      "question": "Who says yes to \u201cMake the ticket\u201d on each run?",
+      "choices": [
+        {
+          "value": "Any Approver on the team",
+          "label": "Any Approver on the team"
+        }
+      ],
+      "typed": null,
+      "waits": null
+    }
+  ],
+  "question": null,
+  "in_n8n": {
+    "by": "carol",
+    "by_name": "Carol",
+    "since": "2026-11-17T01:03:00Z",
+    "revision": 2,
+    "editor_url": "https://n8n.example/workflow/wfDraftEdit01"
+  },
+  "can_edit_in_n8n": false,
+  "can_send": false,
+  "why_not_send": "It's open in n8n. Press Done in n8n first.",
+  "replaced_waiting": false,
+  "approval": null,
+  "set_up": null
+}

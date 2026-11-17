@@ -60,6 +60,14 @@ class MockSlack(unittest.TestCase):
             _, _, refused = call(host, "POST", "/api/auth.test", "someone-else")
             self.assertEqual(refused, {"ok": False, "error": "invalid_auth"})
 
+    def test_the_stack_s_key_lists_its_channels(self) -> None:
+        with running() as (host, _, _):
+            _, _, listed = call(host, "GET", "/api/conversations.list", server.TOKEN)
+            self.assertEqual(
+                [(c["name"], c["is_member"]) for c in listed["channels"]],
+                [("support", True), ("eng-housekeeping", True), ("random", False)],
+            )
+
     def test_every_message_is_recorded_with_the_key_it_came_with(self) -> None:
         with running() as (host, _, _):
             call(

@@ -1,6 +1,8 @@
 {
   "drafted_id": "dw_01JDRAFTRELEASE",
-  "revision": 1,
+  "revision": 2,
+  "card_revision": 1,
+  "made_by": "answer",
   "name": "Release check",
   "state": "waiting",
   "words": "Draft an n8n workflow that every Monday at 9:00 checks langchain-ai/langgraph for a new release and raises a ticket in MOCK",
@@ -357,12 +359,12 @@
         ],
         "value": [
           {
-            "text": "monday 09:00",
-            "quoted": true
+            "text": "every Monday at 9:00",
+            "quoted": false
           }
         ],
         "mark": "filled",
-        "said": "Filled"
+        "said": "From your words"
       },
       {
         "label": [
@@ -378,7 +380,7 @@
           }
         ],
         "mark": "filled",
-        "said": "Filled"
+        "said": "From your words"
       },
       {
         "label": [
@@ -394,7 +396,23 @@
           }
         ],
         "mark": "filled",
-        "said": "Filled"
+        "said": "From your words"
+      },
+      {
+        "label": [
+          {
+            "text": "Who says yes on each run",
+            "quoted": false
+          }
+        ],
+        "value": [
+          {
+            "text": "Any Approver on the team",
+            "quoted": false
+          }
+        ],
+        "mark": "filled",
+        "said": "You chose"
       }
     ],
     "approval": "It is set up only after an Approver approves it.",
@@ -402,6 +420,115 @@
   },
   "needed": 0,
   "flags": 0,
+  "settings": [
+    {
+      "id": "run_time",
+      "kind": "run_time",
+      "key": "When",
+      "label": [
+        {
+          "text": "When it runs",
+          "quoted": true
+        }
+      ],
+      "value": "every Monday at 9:00",
+      "mark": "filled",
+      "said": "From your words",
+      "question": "How often should it run?",
+      "choices": [
+        {
+          "value": "every_day",
+          "label": "Every day"
+        },
+        {
+          "value": "weekdays",
+          "label": "Weekdays"
+        },
+        {
+          "value": "monday",
+          "label": "Mondays"
+        },
+        {
+          "value": "friday",
+          "label": "Fridays"
+        }
+      ],
+      "typed": null,
+      "waits": null
+    },
+    {
+      "id": "repository",
+      "kind": "repository",
+      "key": "GitHub",
+      "label": [
+        {
+          "text": "The repository",
+          "quoted": true
+        }
+      ],
+      "value": "langchain-ai/langgraph",
+      "mark": "filled",
+      "said": "From your words",
+      "question": "Which GitHub repository should it read?",
+      "choices": [
+        {
+          "value": "langchain-ai/langgraph",
+          "label": "langchain-ai/langgraph"
+        }
+      ],
+      "typed": "Type one",
+      "waits": null
+    },
+    {
+      "id": "jira_project",
+      "kind": "jira_project",
+      "key": "Jira",
+      "label": [
+        {
+          "text": "The Jira project",
+          "quoted": true
+        }
+      ],
+      "value": "MOCK",
+      "mark": "filled",
+      "said": "From your words",
+      "question": "Which Jira project should it use?",
+      "choices": [
+        {
+          "value": "MOCK",
+          "label": "MOCK"
+        }
+      ],
+      "typed": null,
+      "waits": null
+    },
+    {
+      "id": "approvers",
+      "kind": "approvers",
+      "key": "Yes from",
+      "label": [
+        {
+          "text": "Who says yes on each run",
+          "quoted": false
+        }
+      ],
+      "value": "Any Approver on the team",
+      "mark": "filled",
+      "said": "You chose",
+      "question": "Who says yes to \u201cMake the ticket\u201d on each run?",
+      "choices": [
+        {
+          "value": "Any Approver on the team",
+          "label": "Any Approver on the team"
+        }
+      ],
+      "typed": null,
+      "waits": null
+    }
+  ],
+  "question": null,
+  "in_n8n": null,
+  "can_edit_in_n8n": false,
   "can_send": false,
   "why_not_send": "Waiting for an Approver. You can't approve your own draft.",
   "replaced_waiting": false,

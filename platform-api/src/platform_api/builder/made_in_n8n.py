@@ -6,7 +6,8 @@ runs.
 What waits to be set up is read from n8n each time, never kept: every workflow in the own space of
 a person the platform made an n8n account for, and every workflow n8n moved to the platform's
 project when its maker's account ended, which the platform noted then. A workflow a use case
-names, deleted ones included, is never offered. Its maker is the person whose space it sits in,
+names, deleted ones included, is never offered, and nor is a drafted workflow someone has open
+for Edit in n8n (ADR 0051). Its maker is the person whose space it sits in,
 matched by the n8n user id the platform stored for them, never by a name or an email.
 
 Setting one up moves it to the platform's project first, read back as every move is, puts right
@@ -432,6 +433,8 @@ class MadeInN8n:
                 await conn.execute(
                     "SELECT n8n_workflow_id FROM builder.use_cases"
                     " WHERE n8n_workflow_id IS NOT NULL"
+                    " UNION SELECT in_n8n_id FROM builder.drafted_workflows"
+                    " WHERE in_n8n_id IS NOT NULL"
                 )
             ).fetchall()
         named = {row["n8n_workflow_id"] for row in rows} | await self._n8n.own_workflow_ids()
@@ -496,9 +499,13 @@ def _draft(workflow: N8nWorkflow, known: KnownOptions) -> tuple[Finding, ...]:
 
 
 async def _named(conn: Connection, workflow_id: str) -> bool:
+    """Whether a use case names it, or a drafted workflow has it open in n8n (ADR 0051), so it
+    never waits to be set up."""
     row = await (
         await conn.execute(
-            "SELECT 1 FROM builder.use_cases WHERE n8n_workflow_id = %s", (workflow_id,)
+            "SELECT 1 FROM builder.use_cases WHERE n8n_workflow_id = %s"
+            " UNION ALL SELECT 1 FROM builder.drafted_workflows WHERE in_n8n_id = %s",
+            (workflow_id, workflow_id),
         )
     ).fetchone()
     return row is not None

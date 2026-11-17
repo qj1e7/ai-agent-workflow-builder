@@ -28,6 +28,7 @@ from platform_api.orchestration.approvals import (
     ApprovalStatus,
     ApprovalStep,
     Approved,
+    Closed,
     Decision,
     Declined,
     Ended,
@@ -260,6 +261,31 @@ class SetUpApprovals:
         async with self._db.transaction("orchestration") as uow:
             request = await _request(uow, approval_id)
             return None if request is None else await self._state(uow, request)
+
+    async def names(self, ids: Iterable[UserId]) -> dict[UserId, str]:
+        """Each person's name on the People list, or "Someone" for one no longer on it."""
+        async with self._db.transaction("orchestration") as uow:
+            return await _names(uow, ids)
+
+    async def waiting_for(self, principal: Principal) -> list[SetUpState]:
+        """Every set-up approval still waiting that this person may decide now, by the gate's own
+        rule, the newest first."""
+        async with self._db.transaction("orchestration") as uow:
+            rows = await (
+                await uow.conn.execute(
+                    f"SELECT {COLUMNS} FROM orchestration.setup_requests WHERE ended IS NULL"
+                    " ORDER BY created_at DESC, approval_id"
+                )
+            ).fetchall()
+            states = [await self._state(uow, _row_request(row)) for row in rows]
+            roles = await self._people.roles_now(uow, principal.user_id)
+        now = replace(principal, roles=roles or frozenset())
+        return [
+            state
+            for state in states
+            if not isinstance(state.status, Approved | Declined | Closed)
+            and approvals.why_not(state.request, state.decisions, now) is None
+        ]
 
     async def why_not(self, state: SetUpState, principal: Principal) -> Refusal | None:
         """Why this person can't decide it now, by the gate's own rule, with their roles now."""

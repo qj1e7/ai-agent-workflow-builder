@@ -340,7 +340,7 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "builder/explain.reworded.json": TypeAdapter(WorkflowExplained),
     **{
         f"builder/drafted.{state}.json": TypeAdapter(DraftedWorkflowView)
-        for state in ("drafting", "ready", "question", "not-drafted", "waiting", "set-up")
+        for state in ("drafting", "ready", "question", "in-n8n", "not-drafted", "waiting", "set-up")
     },
     "builder/setup-approval.bob.json": TypeAdapter(SetUpApprovalView),
     "builder/setup-approval.carol.json": TypeAdapter(SetUpApprovalView),

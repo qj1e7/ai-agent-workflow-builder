@@ -96,6 +96,7 @@ from platform_api.orchestration.runs import Leg
 from platform_api.orchestration.schedule_store import ScheduleBook
 from platform_api.orchestration.service import Orchestrator
 from platform_api.orchestration.setup_approvals import SetUpApprovals
+from platform_api.orchestration.slack_channels import SlackChannels
 from platform_api.orchestration.team_request_card import TeamsRequestChannel
 from platform_api.orchestration.teams import TeamsStub, TeamsWorkflowsWebhook
 from platform_api.orchestration.tell import TellFlow, TellOutlet, TellPractice, TellSetup
@@ -534,11 +535,13 @@ async def build(settings: Settings) -> Services:
     team_requests = TeamRequests(
         db, request_channel, orchestrator, activity, settings.public_base_url
     )
-    home = Home(builder, orchestrator, people, team_requests, connections, watchlist)
-    trace_scores = trace_scores_for(settings)
     setup_approvals = SetUpApprovals(
         db, webhook or teams, people, settings.public_base_url, settings.team_time_zone
     )
+    home = Home(
+        builder, orchestrator, people, team_requests, connections, watchlist, setup_approvals
+    )
+    trace_scores = trace_scores_for(settings)
     drafted = DraftedWorkflows(
         db,
         WorkflowDrafting(db, model_settings, agents),
@@ -547,6 +550,9 @@ async def build(settings: Settings) -> Services:
         n8n.drafts,
         settings.public_base_url,
         settings.team_time_zone.key,
+        SlackChannels(settings.n8n_keys.get("slack")),
+        staff,
+        settings.n8n_editor_url,
     )
     setup_approvals.serve(drafted)
     return Services(

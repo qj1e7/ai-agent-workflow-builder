@@ -118,6 +118,17 @@ async def test_a_sent_revision_is_posted_in_teams_with_who_can_t_decide(lab: Lab
     assert isinstance(state.status, Open)
 
 
+async def test_only_an_approver_who_may_decide_it_sees_it_waiting_for_them(lab: Lab):
+    """Needs you and the Teams button count the set-up approvals each person may decide."""
+    request = await lab.approvals.send(ASK)
+
+    assert [s.request.id for s in await lab.approvals.waiting_for(BOB)] == [request.id]
+    assert await lab.approvals.waiting_for(ALICE) == [], "a party never may"
+    assert await lab.approvals.waiting_for(CAROL) == [], "nor someone who is no Approver"
+    await lab.approvals.decide(request.id, BOB, Verdict.APPROVE, DIGEST, None)
+    assert await lab.approvals.waiting_for(BOB) == []
+
+
 async def test_sending_the_same_revision_again_answers_the_same_request(lab: Lab):
     first = await lab.approvals.send(ASK)
 
