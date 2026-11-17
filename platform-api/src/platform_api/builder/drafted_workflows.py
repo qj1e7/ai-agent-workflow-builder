@@ -1180,6 +1180,6 @@ async def _insert_use_case(
     )
     await conn.execute(
         "UPDATE builder.drafted_workflows SET set_up_at = %s, set_up_problem = NULL,"
-        " set_up_approval = %s WHERE drafted_id = %s",
-        (now, approved.approval_id, kept.drafted_id),
+        " set_up_approval = %s, set_up_revision = %s WHERE drafted_id = %s",
+        (now, approved.approval_id, newest.number, kept.drafted_id),
     )

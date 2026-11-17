@@ -13,7 +13,7 @@ import pytest
 
 from platform_api.builder.drafted_workflows import CHANGED
 from platform_api.builder.n8n_facts import BuilderWorkflowFacts
-from platform_api.db import Database
+from platform_api.db import Database, json
 from platform_api.orchestration import (
     GITHUB_RELEASES,
     KnownOptions,
@@ -332,3 +332,38 @@ async def test_save_draft_removes_what_it_created_when_its_id_can_t_be_recorded(
         await drafts.save_draft({"name": "x", "nodes": [], "connections": {}}, no_record)
 
     assert api.deleted == ["wf9"]
+
+
+async def test_a_place_added_after_the_set_up_approval_never_joins_what_runs_may_read(lab: Lab):
+    _, approval_id = await sent(lab)
+    await decide(lab, approval_id)
+    await lab.approvals.work_once()
+    [use_case] = await lab.use_cases()
+    edited = deepcopy(use_case["document"])
+    read = next(n for n in edited["nodes"] if n["type"] == "CUSTOM.wabRead")
+    edited["nodes"].append(
+        {
+            **deepcopy(read),
+            "name": "Read more",
+            "parameters": {**read["parameters"], "place": "evil/repo"},
+        }
+    )
+    async with lab.db.transaction("builder") as uow:
+        await uow.conn.execute(
+            "INSERT INTO builder.use_case_versions (use_case_id, version, template, name,"
+            " instruction, params, created_at, n8n_version_id, grade, document)"
+            " SELECT use_case_id, 2, template, name, instruction, params, created_at, 'v2',"
+            " grade, %s"
+            " FROM builder.use_case_versions WHERE use_case_id = %s AND version = 1",
+            (json(edited), use_case["use_case_id"]),
+        )
+        await uow.conn.execute(
+            "UPDATE builder.use_cases SET current_version = 2 WHERE use_case_id = %s",
+            (use_case["use_case_id"],),
+        )
+    facts = BuilderWorkflowFacts(lab.db, None, None, ())  # type: ignore[arg-type]
+
+    places = [o.id for o in await facts.places(GITHUB_RELEASES)]
+
+    assert "langchain-ai/langgraph" in places
+    assert "evil/repo" not in places

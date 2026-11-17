@@ -59,9 +59,9 @@ _PLACES = """
     SELECT n -> 'parameters' ->> 'place', n -> 'parameters' ->> 'place'
     FROM builder.drafted_workflows d
     JOIN builder.use_cases u ON u.use_case_id = d.use_case_id
-    JOIN builder.use_case_versions v
-      ON v.use_case_id = u.use_case_id AND v.version = u.current_version
-    CROSS JOIN LATERAL jsonb_array_elements(v.document -> 'nodes') AS n
+    JOIN builder.drafted_revisions r
+      ON r.drafted_id = d.drafted_id AND r.revision = d.set_up_revision
+    CROSS JOIN LATERAL jsonb_array_elements(r.document -> 'nodes') AS n
     WHERE u.deleted_at IS NULL AND d.set_up_at IS NOT NULL
       AND n ->> 'type' = %(read)s AND n -> 'parameters' ->> 'source' = %(source)s
       AND n -> 'parameters' ->> 'place' IS NOT NULL
@@ -226,8 +226,9 @@ class BuilderWorkflowFacts:
 
     async def places(self, source: str) -> Sequence[NodeOption]:
         """GitHub releases: the watched software, the repositories the Version checker
-        watches, and those a drafted workflow that is set up reads, which its set-up approval
-        named. Nothing else is set up to be read yet. The watchlist as a whole is offered only
+        watches, and those a drafted workflow that is set up reads in the revision its set-up
+        approval named, which no later version can add to. Nothing else is set up to be read
+        yet. The watchlist as a whole is offered only
         in its own workflow (NodeCatalog)."""
         if source != GITHUB_RELEASES:
             return []
