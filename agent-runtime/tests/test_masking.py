@@ -58,6 +58,8 @@ KEYS = {
     "GitLab runner token": "glrt-" + "Ab3dEf9h" * 3,
     "40 hex after token": "token: " + "3f2a9c1e" * 5,
     "password in a URL": "postgresql://app:" + "S3cr3tPassw0rd" + "@",
+    "password in a URL with no user": "redis://:" + "p4ssw0rdS3cret" + "@",
+    "AMQP password with no user": "amqp://:" + "gu3stPassw0rd" + "@",
     "JWT": "eyJ" + "hbGciOiJIUzI1NiJ9.eyJ" + "zdWIiOiIxMjM0NTY3ODkwIn0." + "Ab3dEf9h-_" * 3,
     "bearer header": "Bearer " + "abc.123/" * 3,
     "bearer of letters only": "Bearer " + "abcdefghijklmnopqrstuvwxyz",
@@ -94,6 +96,10 @@ PLAIN_WORDS = [
     "secret santa 2026",
     "see https://someone@example.com/path and http://localhost:8080/path",
     "hf_transfer and npm_config_cache and pypi-server",
+    "open https://confluence.example.com:8443/display/MOCK and http://localhost:8080/",
+    "npm install git+https://github.com/example/y@v1 and @scope/pkg",
+    "mailto:someone@example.com",
+    "meet at 10:30 @bob",
 ]
 WORDS_LIKE_A_GLUED_KEY = [
     "set up a task-management-workflow for the risk-assessment-report",
