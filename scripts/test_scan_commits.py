@@ -205,7 +205,8 @@ class ScanTest(unittest.TestCase):
         self.assertEqual(code, 1, output)
         self.assertEqual(output.count("  commit "), 1, output)
         self.assertIn(f"d/{commits // 2}.txt  line {lines + 1}  Atlassian API token", output)
-        # 60,000 lines took about 2 seconds on a laptop on 18 Nov 2026.
+        # This whole test, the history's import included, took about 3 seconds on a laptop on
+        # 18 Nov 2026.
         self.assertLess(took, 30, f"{took:.1f} s")
 
 
