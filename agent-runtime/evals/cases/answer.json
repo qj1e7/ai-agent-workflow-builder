@@ -5297,6 +5297,106 @@
     ]
   },
   {
+    "id": "later-day-is-asked",
+    "note": "A review follow-up to #325 (R12). A later clause that corrects the day is asked as a choice of both days, and the first schedule is never shown as understood.",
+    "task": "Every Friday at 9am, actually make it Monday, sum up the closed tickets in MOCK",
+    "kind": [
+      "setup_card"
+    ],
+    "schedule": [
+      "missing"
+    ],
+    "reasons": [
+      "one_day"
+    ]
+  },
+  {
+    "id": "mon-fri-is-weekdays",
+    "note": "A review follow-up to #325 (R13). Mon-Fri is every weekday, as Monday to Friday is, never a schedule it can't hold.",
+    "task": "Mon-Fri at 9am, sum up the closed tickets in MOCK",
+    "kind": [
+      "setup_card"
+    ],
+    "schedule": [
+      "understood"
+    ],
+    "not_reasons": [
+      "how_often"
+    ]
+  },
+  {
+    "id": "daily-except-weekends-is-weekdays",
+    "note": "A review follow-up to #325 (R13). Before, the card said it couldn't run things daily at 9am.",
+    "task": "Daily at 9am, except weekends, sum up the closed tickets in MOCK",
+    "kind": [
+      "setup_card"
+    ],
+    "schedule": [
+      "understood"
+    ],
+    "not_reasons": [
+      "how_often"
+    ]
+  },
+  {
+    "id": "edit-time-or-so-is-asked",
+    "note": "A review follow-up to #325. A new time that is not exact is asked, never changed to exactly 09:00.",
+    "task": "Make the morning new-ticket check run every Friday at 9am or so",
+    "kind": [
+      "edit"
+    ],
+    "workflow_words": "morning new-ticket check",
+    "change": {
+      "day": "friday",
+      "time_unclear": true
+    },
+    "facts": {
+      "watchlist": [
+        {
+          "name": "LangGraph",
+          "repo": "x/langgraph",
+          "our_version": "1.2.14",
+          "newest_version": "1.2.16",
+          "state": "New version"
+        },
+        {
+          "name": "React",
+          "repo": "x/react",
+          "our_version": "19.1.0",
+          "newest_version": "19.2.0",
+          "state": "New version"
+        },
+        {
+          "name": "Redis",
+          "repo": "x/redis",
+          "our_version": "8.0.2",
+          "newest_version": "8.0.2",
+          "state": "Up to date"
+        }
+      ],
+      "workflows": [
+        {
+          "name": "Morning new-ticket check",
+          "state": "on",
+          "last_run": "Stopped",
+          "last_run_at": "2026-11-10T00:00:00Z"
+        },
+        {
+          "name": "Weekly closed-ticket summary",
+          "state": "on",
+          "last_run": "Stopped",
+          "last_run_at": "2026-11-06T08:00:00Z"
+        },
+        {
+          "name": "Keep our software up to date",
+          "state": "on",
+          "last_run": "Waiting for a yes",
+          "last_run_at": "2026-11-09T01:00:00Z"
+        }
+      ]
+    }
+  },
+  {
     "id": "r4-approver-change-alone",
     "note": "Plan 7.5, an Approver's change alone. platform-api answers operators for Bob (R16); the runtime sets nothing up and keeps the part. The asker can't change workflows, so the runtime proposes no edit.",
     "task": "Pause the weekly closed-ticket summary",

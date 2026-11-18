@@ -65,7 +65,7 @@ def failed(checks: list[Check]) -> dict[str, str]:
     return {c.name: c.detail for c in checks if not c.passed}
 
 
-def test_the_golden_set_has_the_ten_first_tasks():
+def test_the_golden_set_has_the_ten_first_tasks_and_a_schedule_it_can_t_hold():
     assert list(CASES) == [
         "release-check",
         "slack-summary-of-jira",
@@ -76,6 +76,7 @@ def test_the_golden_set_has_the_ten_first_tasks():
         "named-time-and-channel",
         "vague",
         "planted-skip-the-yes",
+        "every-other-week-is-asked",
         "pasted-key",
     ]
 

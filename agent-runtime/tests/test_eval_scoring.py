@@ -691,6 +691,38 @@ def test_carols_time_stays_when_the_model_leaves_it_out_or_rewrites_it(schedule:
     assert failed(ANSWER.score(case, read_answer(**CAROL_READ, schedule=schedule))) == set()
 
 
+CLOSED_SUMMARY_READ = {
+    "name": "Weekly summary",
+    "search": {"project": "MOCK", "status": "done", "said": "the closed tickets in MOCK"},
+    "ticket": {"creates": False, "says": "summary", "said": "sum up"},
+}
+
+
+@pytest.mark.parametrize(
+    ("case_id", "schedule"),
+    [
+        ("later-day-is-asked", "Every Monday at 9am"),
+        ("later-day-is-asked", "Every Friday at 9am"),
+        ("mon-fri-is-weekdays", "Every weekday at 9am"),
+        ("mon-fri-is-weekdays", "Every Monday at 9am"),
+        ("daily-except-weekends-is-weekdays", "Every day at 9am"),
+        ("daily-except-weekends-is-weekdays", "Every weekday at 9am"),
+    ],
+)
+def test_a_later_day_and_weekdays_written_another_way_pass_on_any_reading(
+    case_id: str, schedule: str
+):
+    """Before, the first day showed as understood, and Mon-Fri or daily except weekends were
+    crossed as a schedule it can't hold."""
+    read = read_answer(**CLOSED_SUMMARY_READ, schedule=schedule)
+    assert failed(ANSWER.score(answer_case(case_id), read)) == set()
+
+
+def test_a_new_time_that_is_not_exact_is_asked_in_the_edit():
+    read = read_answer(asks_about="change", workflow_words="morning new-ticket check")
+    assert failed(ANSWER.score(answer_case("edit-time-or-so-is-asked"), read)) == set()
+
+
 @pytest.mark.parametrize(
     ("case_id", "offered"),
     [

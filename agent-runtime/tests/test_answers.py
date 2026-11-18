@@ -2945,6 +2945,22 @@ def test_the_new_schedule_is_read_whole_and_ticked(task: str, change: ScheduleCh
     assert all(mark == "will_do" for _, mark, _ in marks(fields, task))
 
 
+@pytest.mark.parametrize(
+    "task",
+    [
+        "make the morning check run every Friday at 9am or so",
+        "make the morning check run every Friday at 9am roughly",
+        "make the morning check run every Friday at 9am-ish",
+        "make the morning check run every Friday before 5pm",
+    ],
+)
+def test_a_new_time_that_is_not_exact_is_asked_never_taken_or_left_as_it_was(task: str):
+    """Before, "9am or so" changed the time to exactly 09:00, and "before 5pm" kept the old
+    time without a word."""
+    fields = read(asks_about="change", workflow_words="morning check")
+    assert edited(fields, task).schedule == ScheduleChange(day="friday", time_unclear=True)
+
+
 def test_another_workflow_named_beside_the_edit_is_kept_to_ask_on_its_own():
     task = "Make the morning check run at 10am and the weekly summary run on Mondays"
     fields = read(asks_about="change", workflow_words="morning check")

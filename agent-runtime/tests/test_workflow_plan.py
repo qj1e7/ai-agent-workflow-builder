@@ -619,6 +619,77 @@ def test_an_edit_keeps_each_value_its_words_don_t_change(catalogue: Catalogue):
     )
 
 
+@pytest.mark.parametrize(
+    "when",
+    [
+        "Every other Friday at 9am",
+        "Every 2 weeks on Friday at 9am",
+        "Once a month on Friday at 9am",
+        "Every weekday except Friday at 9am",
+        "Monday to Wednesday at 9am",
+        "Every Friday at 9am, actually make it Monday",
+    ],
+)
+def test_a_schedule_the_platform_can_t_hold_leaves_the_run_time_needed(
+    catalogue: Catalogue, when: str
+):
+    """Before, "every other Friday at 9am" filled the run time as every Friday at 09:00, and
+    "every weekday except Friday" as every weekday."""
+    words = f"{when}, check langchain-ai/langgraph and open a ticket in MOCK for each release."
+    settings = [setting("run_time", "run_time", "friday 09:00"), *RELEASE_SETTINGS[1:]]
+
+    assert marks(catalogue, settings, words)["run_time"] == (None, "needed")
+
+
+@pytest.mark.parametrize(
+    ("when", "kept"),
+    [
+        ("Every Friday at 9am or so", ("friday", "needed")),
+        ("Every Friday at 9am roughly", ("friday", "needed")),
+        ("Every Friday by the end of the day at 5pm", ("friday", "needed")),
+        ("Mon-Fri at 9am", ("weekdays 09:00", "filled")),
+        ("Daily at 9am, except weekends", ("weekdays 09:00", "filled")),
+        ("Every Friday. Run it at 9am", ("friday 09:00", "filled")),
+    ],
+)
+def test_a_run_time_holds_only_what_the_words_say_whole(
+    catalogue: Catalogue, when: str, kept: tuple[str, str]
+):
+    """A time that is not exact keeps the day and asks the time. Weekdays written another way
+    are every weekday."""
+    words = f"{when}, check langchain-ai/langgraph and open a ticket in MOCK for each release."
+
+    assert marks(catalogue, RELEASE_SETTINGS, words)["run_time"] == kept
+
+
+@pytest.mark.parametrize(
+    ("words", "kept"),
+    [
+        ("make it every other Friday", (None, "needed")),
+        ("run it once a month instead", (None, "needed")),
+        ("make it Friday, no wait, Thursday", (None, "needed")),
+        ("move it to Fridays at 9am or so", ("friday", "needed")),
+        ("post in #ops instead", ("monday 09:00", "filled")),
+    ],
+)
+def test_a_change_the_run_time_can_t_take_never_keeps_the_old_one_without_a_word(
+    catalogue: Catalogue, words: str, kept: tuple[str | None, str]
+):
+    """Code now reads no day from a schedule it can't hold. Before, words it read nothing from
+    kept the old run time, so "every other Friday" stayed every Monday at 09:00 with no
+    question, and a day that clashed did the same."""
+    current = edited(
+        {
+            "run_time": ("monday 09:00", "filled"),
+            "repository": ("langchain-ai/langgraph", "filled"),
+            "jira_project": ("MOCK", "filled"),
+            "channel": ("#support", "filled"),
+        }
+    )
+
+    assert marks(catalogue, RELEASE_SETTINGS, words, current)["run_time"] == kept
+
+
 def test_a_switch_s_exits_follow_its_rules_and_a_written_count_is_held(catalogue: Catalogue):
     rules = {"values": [{"outputKey": "a"}, {"outputKey": "b"}]}
     switch = block("Route", "n8n-nodes-base.switch", 3.4, rules=rules)

@@ -12,7 +12,9 @@ from agent_runtime.reading import (
     NOT_A_RUN_TIME,
     NOT_EXACT,
     NOT_HELD,
+    ONE_DAY,
     ONE_TIME,
+    READ_FROM,
     DaysRead,
     PlaceRead,
     SearchRead,
@@ -392,8 +394,9 @@ def test_a_schedule_it_holds_stays_their_own_words_with_nothing_crossed(said: st
 
 @pytest.mark.parametrize("words", ["Monday to Wednesday at 9am", "Saturday to Sunday at 9am"])
 def test_a_new_schedule_reads_no_day_from_a_range_other_than_the_weekdays(words: str):
-    """Before, any range was read as every weekday."""
-    assert said_schedule(words) == (None, "09:00")
+    """Before, any range was read as every weekday. A schedule it can't hold is asked whole, so
+    its time is not read either."""
+    assert said_schedule(words) == (None, None)
     assert said_schedule("Monday to Friday at 9am") == ("weekdays", "09:00")
 
 
@@ -470,3 +473,135 @@ def test_their_own_schedule_is_shown_whatever_the_model_wrote(said: str, model: 
     check repeated, though their words said it."""
     row = carols_row(model, said)
     assert (row.text, row.state, row.note) == (said, "understood", None)
+
+
+# A day or a time in a later clause
+
+
+@pytest.mark.parametrize(
+    ("said", "model", "reason", "choices"),
+    [
+        (
+            "Every Friday at 9am, actually make it Monday",
+            "Every Monday at 9am",
+            ONE_DAY,
+            ["Friday", "Monday"],
+        ),
+        (
+            "Every Friday at 9am actually Monday",
+            "Every Monday at 9am",
+            ONE_DAY,
+            ["Friday", "Monday"],
+        ),
+        (
+            "Every Friday at 9am, sorry, I mean Thursday",
+            "Every Thursday at 9am",
+            ONE_DAY,
+            ["Friday", "Thursday"],
+        ),
+        ("Every Friday at 9am, no wait, 10am", "Every Friday at 10am", ONE_TIME, ["9am", "10am"]),
+        (
+            "Every Friday at 9am, actually make it Monday",
+            "Every Friday at 9am",
+            ONE_DAY,
+            ["Friday", "Monday"],
+        ),
+        ("Every Friday at 9am then Monday", "Every Friday at 9am", ONE_DAY, ["Friday", "Monday"]),
+        (
+            "Every Friday at 9am, and also on Mondays",
+            "Every Friday at 9am",
+            ONE_DAY,
+            ["Friday", "Monday"],
+        ),
+    ],
+)
+def test_a_later_day_or_time_is_asked_with_both_and_the_first_is_never_understood(
+    said: str, model: str, reason: str, choices: list[str]
+):
+    """Before, the row was the first schedule, understood, so the final check said "as you
+    asked" for the day or time they took back, and "then Monday" went without a word."""
+    row, parts = carols_card(model, said)
+    quoted = " and ".join(f'"{choice}"' for choice in choices)
+    assert (row.text, row.state, row.note) == ("", "missing", reason.format(quoted))
+    clash = "one_day" if reason == ONE_DAY else "one_time"
+    assert [p.choices for p in parts if p.reason == clash] == [choices]
+
+
+@pytest.mark.parametrize(
+    "said",
+    [
+        "Mon-Fri at 9am",
+        "Mon to Fri at 9am",
+        "Mon - Fri at 9am",
+        "Daily at 9am, except weekends",
+        "Every day at 9am except weekends",
+        "Every day at 9am except Saturdays and Sundays",
+    ],
+)
+def test_weekdays_written_another_way_are_every_weekday(said: str):
+    """Before, each was asked as a schedule it can't hold, and "Daily at 9am" was crossed with
+    "I can't run things daily at 9am yet"."""
+    row, parts = carols_card("Every weekday at 9am", said)
+    assert (row.text, row.state, row.note) == (
+        "Every weekday at 9am",
+        "understood",
+        READ_FROM.format(said),
+    )
+    assert [p for p in parts if p.mark == "cant"] == []
+    assert said_schedule(said) == ("weekdays", "09:00")
+
+
+@pytest.mark.parametrize("model", ["Every Friday", "Every Friday at 5pm"])
+def test_a_bound_in_words_with_its_time_is_asked_never_dropped(model: str):
+    """Before, "by the end of the day at 5pm" went without a word."""
+    row = carols_row(model, "Every Friday by the end of the day at 5pm")
+    note = NOT_A_RUN_TIME.format("by the end of the day at 5pm")
+    assert (row.text, row.state, row.note) == ("Every Friday", "missing", note)
+
+
+@pytest.mark.parametrize(
+    ("said", "model", "shown"),
+    [
+        ("Every Friday. Run it at 9am", "Every Friday at 9am", "Every Friday at 9am"),
+        ("Every Friday. Run it at 9am", "Every Friday", "Every Friday at 9am"),
+        ("Mon-Fri. Run it at 9am", "Every weekday at 9am", "Every weekday at 9am"),
+    ],
+)
+def test_a_time_in_its_own_sentence_stays_on_the_row(said: str, model: str, shown: str):
+    """Before, "Run it at 9am" was crossed as a part it can't do, and the card asked the time."""
+    row, parts = carols_card(model, said)
+    assert (row.text, row.state) == (shown, "understood")
+    assert [p for p in parts if p.mark == "cant"] == []
+
+
+@pytest.mark.parametrize(
+    ("words", "read"),
+    [
+        ("Every Friday at 9am or so", ("friday", None)),
+        ("Every Friday at 9am roughly", ("friday", None)),
+        ("Every Friday at 16:00-ish", ("friday", None)),
+        ("every other Friday at 9am", (None, None)),
+        ("once a month on Friday at 9am", (None, None)),
+    ],
+)
+def test_a_new_schedule_never_takes_a_time_that_is_not_exact_or_a_schedule_it_cant_hold(
+    words: str, read: tuple[str | None, str | None]
+):
+    """Before, each read 09:00 or 16:00, and "every other Friday" read Friday."""
+    assert said_schedule(words) == read
+
+
+@pytest.mark.parametrize(
+    "said",
+    [
+        "Every other Friday " * 15,
+        "Every Monday Tuesday Wednesday Thursday Friday Saturday Sunday at "
+        + " ".join(f"{hour}am" for hour in range(1, 12))
+        + " "
+        + " ".join(f"{hour}pm" for hour in range(1, 12)),
+    ],
+)
+def test_a_long_schedule_phrase_is_asked_with_a_note_that_fits(said: str):
+    """Before, the note quoted too many words for its limit, and the request failed."""
+    row = carols_row("Every Friday", said.strip())
+    assert row.state == "missing" and row.note is not None and len(row.note) <= 300

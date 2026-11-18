@@ -37,6 +37,7 @@ from agent_runtime.reading import (
     clashes_in,
     clauses_of,
     how_often,
+    inexact_times,
     said_schedule,
 )
 
@@ -658,7 +659,10 @@ def _schedule_of(
     hour = None
     if at is not None and at.isdigit():
         hour, at = _hour(int(at))
-    unclear = at is None and hour is None and UNREAD_TIME.search(rest) is not None
+    # A time that only bounds the run or is not exact, as "before 5pm" or "9am or so", is asked,
+    # never taken as the time and never left as the time it ran at.
+    named = UNREAD_TIME.search(rest) is not None or bool(inexact_times(rest))
+    unclear = at is None and hour is None and named
     if day is None and at is None and hour is None and not weekly and not unclear:
         return None, "only_schedule", []
     change = ScheduleChange(day=_day(day), weekly=weekly, at=at, hour=hour, time_unclear=unclear)
@@ -740,6 +744,7 @@ def edit_marks(
         unread=[
             *(m.span() for m in START.finditer(text)),
             *(m.span() for m in UNREAD_TIME.finditer(rest) if _unclear(answer)),
+            *(inexact_times(rest) if _unclear(answer) else []),
         ],
         read=[*names.all, *_now(text, kept), *(m.span() for m in TIME.finditer(text))],
     )
