@@ -270,6 +270,8 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           persist-credentials: false
+          # The commit scans read every commit of the pull request, so they need its history.
+          fetch-depth: 0
 
       - name: SAST with Semgrep
         run: |
@@ -293,6 +295,58 @@ jobs:
         run: |
           docker run --rm --volume "$PWD:/repo" "$GITLEAKS_IMAGE" \
             detect --no-git --source /repo --redact --verbose
+
+      # A key added in one commit and removed in a later one is not in the files, but GitHub
+      # keeps every commit of a pull request, even after a squash merge. A pull request's range is
+      # its commits that are not on its base branch. A push's range is what it pushed. A manual
+      # run's range is its branch's commits that are not on main.
+      - name: Find the commits to scan
+        id: range
+        if: ${{ !cancelled() }}
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          case "$EVENT" in
+            pull_request) base=$(git rev-parse "origin/$BASE_REF") head=$PR_HEAD ;;
+            push) base=$BEFORE head=$GITHUB_SHA ;;
+            *) base=$(git merge-base origin/main HEAD) head=$GITHUB_SHA ;;
+          esac
+          case "$base" in
+            "" | *[!0]*) ;;
+            *) base= ;;
+          esac
+          if [ -z "$base" ]; then
+            echo "No range of commits is known for this run, so the commit scans skip it."
+          else
+            echo "Scanning the commits $base..$head."
+          fi
+          echo "base=$base" >> "$GITHUB_OUTPUT"
+          echo "head=$head" >> "$GITHUB_OUTPUT"
+
+      - name: Secret scan of every commit in the range with gitleaks
+        if: ${{ !cancelled() && steps.range.outputs.base != '' }}
+        env:
+          RANGE: ${{ steps.range.outputs.base }}..${{ steps.range.outputs.head }}
+        run: |
+          docker run --rm --volume "$PWD:/repo:ro" \
+            --env GIT_CONFIG_COUNT=1 --env GIT_CONFIG_KEY_0=safe.directory --env GIT_CONFIG_VALUE_0=/repo \
+            "$GITLEAKS_IMAGE" detect --source /repo --log-opts="$RANGE" --redact --verbose
+
+      - name: Test the commit scan
+        if: ${{ !cancelled() }}
+        run: python3 -I -B -m unittest discover -s scripts -p test_scan_commits.py
+
+      # gitleaks' default rules miss some keys, such as an Atlassian API token. This reads every
+      # added line of every commit in the range against the agent runtime's key shapes.
+      - name: Key shapes in every commit in the range
+        if: ${{ !cancelled() }}
+        env:
+          BASE: ${{ steps.range.outputs.base }}
+          HEAD: ${{ steps.range.outputs.head }}
+        run: python3 -I -B scripts/scan_commits.py "$BASE" "$HEAD"
 
   e2e:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
