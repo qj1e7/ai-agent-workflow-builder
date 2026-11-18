@@ -605,3 +605,60 @@ def test_a_long_schedule_phrase_is_asked_with_a_note_that_fits(said: str):
     """Before, the note quoted too many words for its limit, and the request failed."""
     row = carols_row("Every Friday", said.strip())
     assert row.state == "missing" and row.note is not None and len(row.note) <= 300
+
+
+@pytest.mark.parametrize(
+    ("said", "shown"),
+    [
+        ("Monday to Fri at 9am", "Every weekday at 9am"),
+        ("Mon–Fri at 9am", "Every weekday at 9am"),
+        ("every Mon at 09:00", "Every Monday at 09:00"),
+        ("Every Tue at 10am", "Every Tuesday at 10am"),
+    ],
+)
+def test_short_day_names_and_a_dash_read_as_the_whole_day(said: str, shown: str):
+    """Before, "Monday to Fri" read as Monday, "Mon–Fri" was crossed, and "every Mon" was
+    crossed as a part it can't do."""
+    row, parts = carols_card("Every weekday at 9am", said)
+    assert (row.text, row.state, row.note) == (shown, "understood", READ_FROM.format(said))
+    assert [p for p in parts if p.mark == "cant"] == []
+
+
+@pytest.mark.parametrize(
+    ("said", "crossed"),
+    [
+        ("Mon-Fri and Sat at 9am", None),
+        ("Mon-Fri at 9am, also Sat", None),
+        ("Daily at 9am, except weekends and holidays", "except weekends and holidays"),
+        ("Every day at 9am but skip Fridays", "skip Fridays"),
+        ("Every weekday at 9am, never on Mondays", "never on Mondays"),
+    ],
+)
+def test_weekdays_beside_another_day_or_a_day_left_out_are_asked(said: str, crossed: str | None):
+    """Before, "Mon-Fri and Sat" showed every weekday as understood, "skip Fridays" ran every
+    day, and "Daily at 9am" was crossed as a schedule it can't run."""
+    row, parts = carols_card("Every weekday at 9am", said)
+    assert (row.text, row.state) == ("", "missing")
+    if crossed is not None:
+        assert [(p.text, p.reason) for p in parts if p.mark == "cant"] == [(crossed, "how_often")]
+
+
+@pytest.mark.parametrize(
+    ("words", "read"),
+    [
+        ("make it Mon-Fri at 9am, also Sat", (None, None)),
+        ("make it Mon-Fri and Sat at 9am", (None, None)),
+        ("make it daily at 9am except weekends and holidays", (None, None)),
+        ("make it daily except weekends, holidays", (None, None)),
+        ("make it daily except weekends, and holidays", (None, None)),
+        ("skip Fridays", (None, None)),
+        ("don't run it on Mondays any more", (None, None)),
+        ("run it on Tue at 10am", ("tuesday", "10:00")),
+        ("make it Monday to Fri", ("weekdays", None)),
+        ("make it daily at 9am, except weekends", ("weekdays", "09:00")),
+    ],
+)
+def test_a_new_schedule_reads_short_days_and_never_a_day_left_out(
+    words: str, read: tuple[str | None, str | None]
+):
+    assert said_schedule(words) == read

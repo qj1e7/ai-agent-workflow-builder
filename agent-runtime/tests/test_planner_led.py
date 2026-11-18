@@ -544,6 +544,32 @@ def test_a_schedule_change_it_cant_hold_is_never_made_as_a_weekly_one(said: str)
     assert "can't hold" in result.errors[0]
 
 
+@pytest.mark.parametrize(
+    ("said", "day", "at"),
+    [
+        ("daily at 9am except weekends and holidays", "every_day", "09:00"),
+        ("Mon-Fri at 9am, also Sat", "weekdays", "09:00"),
+        ("Mon-Fri and Sat at 9am", "weekdays", "09:00"),
+        ("daily except weekends, holidays", "weekdays", None),
+        ("skip Fridays", "friday", None),
+        ("every day but skip Fridays", "every_day", None),
+    ],
+)
+def test_a_change_with_a_day_added_or_left_out_beside_weekdays_is_never_made(
+    said: str, day: str, at: str | None
+) -> None:
+    """Before, each was accepted as the day the model gave, so Saturday or the holidays were
+    dropped, and "skip Fridays" ran it on Fridays."""
+    result, _ = run(
+        f"make the morning check run {said}",
+        tool("change_workflow", action="schedule", workflow_words="morning check", day=day, at=at),
+        AIMessage(content="stop"),
+        facts=WORKFLOWS,
+    )
+
+    assert result.errors
+
+
 def test_an_approver_cannot_change_a_workflow() -> None:
     result, _ = run(
         "pause the morning check",

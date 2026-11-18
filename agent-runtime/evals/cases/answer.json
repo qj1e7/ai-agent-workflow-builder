@@ -5397,6 +5397,20 @@
     }
   },
   {
+    "id": "skipped-day-is-asked",
+    "note": "A review follow-up to #325. A day the person says to skip is never run on: the card asks how often, and never shows every day as understood.",
+    "task": "Every day at 9am but skip Fridays, sum up the closed tickets in MOCK",
+    "kind": [
+      "setup_card"
+    ],
+    "schedule": [
+      "missing"
+    ],
+    "reasons": [
+      "how_often"
+    ]
+  },
+  {
     "id": "r4-approver-change-alone",
     "note": "Plan 7.5, an Approver's change alone. platform-api answers operators for Bob (R16); the runtime sets nothing up and keeps the part. The asker can't change workflows, so the runtime proposes no edit.",
     "task": "Pause the weekly closed-ticket summary",

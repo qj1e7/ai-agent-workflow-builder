@@ -77,6 +77,7 @@ def test_the_golden_set_has_the_ten_first_tasks_and_a_schedule_it_can_t_hold():
         "vague",
         "planted-skip-the-yes",
         "every-other-week-is-asked",
+        "filter-day-is-not-the-run-day",
         "pasted-key",
     ]
 

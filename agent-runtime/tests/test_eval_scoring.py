@@ -707,6 +707,8 @@ CLOSED_SUMMARY_READ = {
         ("mon-fri-is-weekdays", "Every Monday at 9am"),
         ("daily-except-weekends-is-weekdays", "Every day at 9am"),
         ("daily-except-weekends-is-weekdays", "Every weekday at 9am"),
+        ("skipped-day-is-asked", "Every day at 9am"),
+        ("skipped-day-is-asked", "Every Friday at 9am"),
     ],
 )
 def test_a_later_day_and_weekdays_written_another_way_pass_on_any_reading(
