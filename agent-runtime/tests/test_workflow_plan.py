@@ -1439,6 +1439,25 @@ def test_a_change_with_a_day_and_its_time_or_beside_a_ticket_date_sets_the_right
 
 
 @pytest.mark.parametrize(
+    ("words", "day"),
+    [
+        ("Check every Monday", "monday"),
+        ("Check langgraph Mondays", "monday"),
+        ("drop every Monday", None),
+        ("cancel Mondays", None),
+        ("Mondays off", None),
+    ],
+)
+def test_an_untimed_day_after_a_task_word_keeps_the_day_unless_a_word_drops_it(
+    words: str, day: str | None
+):
+    """ "Check every Monday" keeps Monday and asks only the time, as on main; at acdcef14 it
+    asked how often too. A word that drops the day, or one after it, still asks how often."""
+    assert run_time_in(words) == (None, True)
+    assert day_in(words) == day
+
+
+@pytest.mark.parametrize(
     "words",
     [
         "make the release check drop every Friday",

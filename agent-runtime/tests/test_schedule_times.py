@@ -837,20 +837,23 @@ def test_a_day_with_its_run_time_after_a_task_word_is_never_crossed_on_the_card(
 
 
 @pytest.mark.parametrize(
-    ("said", "schedule"),
-    [("Check every Monday", "Every Monday"), ("Check langgraph Mondays", "Every Monday")],
+    ("said", "schedule", "shown"),
+    [
+        ("Check every Monday", "Every Monday", "Every Monday"),
+        ("Check langgraph Mondays", "Every Monday", "Mondays"),
+    ],
 )
-def test_a_day_the_card_can_t_place_is_asked_without_crossing_the_task_s_words(
-    said: str, schedule: str
+def test_every_day_or_a_plural_day_after_a_task_word_keeps_the_day_on_the_card(
+    said: str, schedule: str, shown: str
 ):
-    """With no time, code can't tell whether "Check" acts on the day, as "drop" would, so the
-    day is asked. At acdcef14, the card also crossed "Check every Monday" and "langgraph
-    Mondays" as schedules it can't hold."""
+    """At acdcef14, the card crossed "Check every Monday" and "langgraph Mondays" as schedules
+    it can't hold, and asked the day."""
     row, parts = card_for(
         f"{said}, list tickets in MOCK and raise one ticket that lists them", schedule
     )
-    assert row.state == "missing"
+    assert (row.text, row.state) == (shown, "understood")
     assert not any(p.reason == "how_often" for p in parts)
+    assert said_schedule(said) == ("monday", None)
 
 
 @pytest.mark.parametrize(
