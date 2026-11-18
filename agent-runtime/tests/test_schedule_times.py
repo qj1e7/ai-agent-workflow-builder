@@ -796,6 +796,64 @@ def test_a_new_schedule_never_reads_a_ticket_s_due_date_or_deadline(
 
 
 @pytest.mark.parametrize(
+    ("words", "read_"),
+    [
+        ("Check every Friday at 9am", ("friday", "09:00")),
+        ("Check langgraph Fridays at 9am", ("friday", "09:00")),
+        ("make it Thursday, deadline Friday", ("thursday", None)),
+        ("run it Fridays, due date Monday", ("friday", None)),
+        ("Remind #ops of the deadline at 9am on Fridays", ("friday", "09:00")),
+        ("Check SLAs on Mondays at 9am", ("monday", "09:00")),
+        ("make the release check drop every Friday", (None, None)),
+        ("make the release check cancel every Friday", (None, None)),
+    ],
+)
+def test_a_new_schedule_reads_a_day_with_its_time_and_never_one_a_verb_drops(
+    words: str, read_: tuple[str | None, str | None]
+):
+    """At acdcef14, "Check every Friday at 9am" read nothing, a ticket's date across a comma hid
+    the schedule's day, and "drop every Friday" after a workflow's name read Friday."""
+    assert said_schedule(words) == read_
+
+
+@pytest.mark.parametrize(
+    ("said", "schedule"),
+    [
+        ("Check every Friday at 9am", "Every Friday at 9am"),
+        ("Check langgraph Fridays at 9am", "Every Friday at 9am"),
+        ("Find stale tickets in MOCK Fridays at 9am", "Every Friday at 9am"),
+    ],
+)
+def test_a_day_with_its_run_time_after_a_task_word_is_never_crossed_on_the_card(
+    said: str, schedule: str
+):
+    """At acdcef14, the card crossed "Check every Friday at 9am" and "MOCK Fridays at 9am" as
+    schedules it can't hold, the task's verb and project with them."""
+    row, parts = card_for(
+        f"{said}, list tickets in MOCK and raise one ticket that lists them", schedule
+    )
+    assert row.state != "missing"
+    assert not any(p.reason == "how_often" for p in parts)
+
+
+@pytest.mark.parametrize(
+    ("said", "schedule"),
+    [("Check every Monday", "Every Monday"), ("Check langgraph Mondays", "Every Monday")],
+)
+def test_a_day_the_card_can_t_place_is_asked_without_crossing_the_task_s_words(
+    said: str, schedule: str
+):
+    """With no time, code can't tell whether "Check" acts on the day, as "drop" would, so the
+    day is asked. At acdcef14, the card also crossed "Check every Monday" and "langgraph
+    Mondays" as schedules it can't hold."""
+    row, parts = card_for(
+        f"{said}, list tickets in MOCK and raise one ticket that lists them", schedule
+    )
+    assert row.state == "missing"
+    assert not any(p.reason == "how_often" for p in parts)
+
+
+@pytest.mark.parametrize(
     ("said", "crossed"),
     [
         ("Every day at 9am unless it's a Friday", "unless it's a Friday"),
