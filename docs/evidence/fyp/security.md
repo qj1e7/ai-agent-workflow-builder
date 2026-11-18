@@ -79,7 +79,7 @@ Since 13 Nov each workflow is its own n8n workflow, built from our node pack ([A
 | AI model keys saved in Settings | Encrypted at rest by `KeyBox`, under a key made from `SETTINGS_ENCRYPTION_KEY`. The Settings view never holds the key | [`model_settings.py`][ms], [`test_the_key_is_stored_sealed_and_never_in_plain_text`][t-ms] |
 | GitHub, Confluence, Tell flow and n8n owner keys | The GitHub token stays in the agent runtime only. The n8n API key asks for nine scopes and expires in three days. The Confluence token and the Tell flow URL are never logged or returned | [PR #253][pr253], [PR #259][pr259], [PR #252][pr252] |
 | `.env` files | Git ignores `.env` and `.env.*`, except `.env.example`. `deploy/make-env.sh` makes local secrets | [`.gitignore`][gi], [`make-env.sh`][mkenv] |
-| A secret committed by mistake | gitleaks runs with its default rules on every PR and push to `main`. The only exceptions are two public Azure role ids | [`.gitleaks.toml`][gl], [`ci.yml`][ci] `scans` job, [`gitleaks.txt`][gltxt] |
+| A secret committed by mistake | gitleaks runs with its default rules on every PR and push to `main`. The only exceptions are two public Azure role ids. It reads the files, then every commit of the PR or push. `scripts/scan_commits.py` also checks each line those commits add against the agent runtime's key shapes, so a key that a later commit removed still fails the job | [`.gitleaks.toml`][gl], [`ci.yml`][ci] `scans` job, [`gitleaks.txt`][gltxt], [`scan_commits.py`][scancommits] |
 
 ## Sign-in and roles
 
@@ -190,6 +190,7 @@ Each review was by a separate AI model, named in the PR, and the table quotes wh
 [sast]: ../sast/README.md
 [iac]: ../iac/README.md
 [gltxt]: ../iac/gitleaks.txt
+[scancommits]: ../../../scripts/scan_commits.py
 [infrachecks]: ../deploy/infra-checks/
 [dast1]: ../dast/README.md
 [dast2]: ../dast/2026-11-rebuild/README.md

@@ -127,6 +127,7 @@ Our additions to pstack's playbooks are in `.agents/playbooks/`. Claude Code, Co
 ### Secrets
 
 - Never commit secrets, keys or tokens. Use Azure Key Vault or GitHub Actions secrets. `.env` files stay out of git.
+- A made-up key in a test is built from pieces at run time, never written out whole.
 
 ### Writing for the sponsor or the professor
 
