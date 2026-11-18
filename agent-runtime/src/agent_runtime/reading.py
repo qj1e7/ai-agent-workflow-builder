@@ -1538,7 +1538,14 @@ def own_left_out(text: str) -> list[tuple[int, int]]:
             )
             for p in own
         )
-        if beside or talk(0, start, clause):
+        # A clause that changes when it runs is the schedule's words, after a workflow's name
+        # too, as "make the release check skip Fridays".
+        changes = any(
+            clause_of[n] == clause and not scheduled and _low(raw) in CHANGE_VERBS
+            for n, (raw, a, _, scheduled) in enumerate(tokens)
+            if a < start
+        )
+        if beside or changes or talk(0, start, clause):
             found.append((start, end))
     return sorted(found + off)
 
@@ -1724,7 +1731,7 @@ def said_schedule(words: str) -> tuple[str | None, str | None]:
     if (
         _clashes(words, (0, len(words)))
         or how_often(words) is not None
-        or _not_run_on(words, everywhere=True)
+        or _days_named(words, everywhere=True)
     ):
         return None, None
     days = {day.key for day in _when(words, words)[0]}
@@ -1832,6 +1839,9 @@ TICKET_DATES: Final = words(
 DATE_LINKS: Final = words("is are was be set for as")
 """Words that may stand between a ticket's date and its value, as "is" in "the deadline is
 Friday"."""
+CLAUSE_MARK: Final = re.compile(r"[,;.:!?()\[\]–—]|(?<!\w)-(?!\w)")
+"""A mark between two words that ends the phrase one of them stands in, as the comma in "make
+it Thursday, deadline Friday"."""
 
 type Token = tuple[str, int, int, bool]
 
@@ -1848,13 +1858,33 @@ def _tied(text: str, tokens: list[Token], first: int, last: int) -> bool:
     def low(n: int) -> str:
         return _low(tokens[n][0]) if 0 <= n < len(tokens) else ""
 
+    def joined(a: int, b: int) -> bool:
+        """Whether two tokens stand in one phrase, with no comma or other mark between."""
+        return (
+            a >= 0
+            and b < len(tokens)
+            and CLAUSE_MARK.search(text[tokens[a][2] : tokens[b][1]]) is None
+        )
+
     if low(first) == "by" or low(first - 1) in FILTER_LEADS:
         return True
     n = first - 1
-    while low(n) in DATE_LINKS:
+    while low(n) in DATE_LINKS and joined(n, n + 1):
         n -= 1
-    return low(n) in TICKET_DATES or (
-        low(last + 1) in TICKET_DATES and (low(last + 1), low(last + 2)) != ("due", "to")
+    if low(n) in TICKET_DATES and joined(n, n + 1):
+        # A ticket's date right before a day in the plural and a time is what a reminder is about,
+        # as "the deadline at 9am on Fridays": the run is the schedule's own.
+        run = text[tokens[first][1] : tokens[last][2]]
+        return not (
+            n == first - 1
+            and low(first) in ("at", "on")
+            and _marked(run)
+            and CLOCK.search(run) is not None
+        )
+    return (
+        low(last + 1) in TICKET_DATES
+        and joined(last, last + 1)
+        and (low(last + 1), low(last + 2)) != ("due", "to")
     )
 
 
@@ -1904,6 +1934,13 @@ RUN_WORDS: Final = RUN_VERBS | RUN_TALK
 NOT_A_TASK: Final = RUN_WORDS | TALK_WORDS
 """Words that are no part of a task: talk and the words about running it."""
 NOT_WORDS: Final = NEGATIONS | words("don't doesn't didn't won't can't cannot shouldn't")
+LEAVING: Final = words(
+    "drop drops dropping remove removes removing cut cuts cancel cancels cancelled canceled delete "
+    "deletes scrap scraps ditch ditches omit omits exclude excludes excluding skip skips skipping "
+    "pause pauses stop stops stopping lose take leave minus unless except besides without rid"
+)
+"""Words that leave out the day after them, as "drop" in "make the release check drop every
+Friday". It only ever makes the reader ask."""
 LABELS: Final = words("the a an this that these those our their its my your his her")
 """Words before a day that make it a label of the word after it, as "the Mon-Fri rota"."""
 DAY_NAMED: Final = re.compile(
@@ -1915,19 +1952,33 @@ DAY_NAMED: Final = re.compile(
 the weekend or holidays."""
 
 
-@lru_cache(maxsize=64)
 def _not_run_on(text: str, everywhere: bool = False) -> tuple[tuple[int, int], ...]:
-    """Where the schedule's own words name a day without saying to run on it, so the day is left
-    out of the schedule and asked, never the day it runs. The schedule's own words are a clause
-    that holds the schedule's own phrase, and, beside one, a clause that is little more than a
-    day, as "minus Friday"; with `everywhere`, as for words that only change a schedule, they
-    are every clause. A day there counts only when the words around it say to run on it:
-    "every Friday", "on Fridays", "make it Friday", "Fridays instead" or "weekdays only". Any
-    other word beside it, as "drop Fridays", "Fridays excluded", "Friday is off" or "unless it's
-    a Friday", and a day written "Friday's", leave it out. A day that labels the word after it,
-    as "Monday's tickets" or "the Mon-Fri rota", or that a filter or a ticket's date holds, as
-    "created on Monday" or "the due date to Friday", is no part of the schedule. Kept per
-    request, since its readers ask more than once."""
+    """Where the schedule's own words leave a day out, so it is asked and never the day it
+    runs, as "drop Fridays", "Fridays excluded", "unless it's a Friday" or "except Friday's"."""
+    return tuple(span for span, left in _days_named(text, everywhere) if left)
+
+
+def _unplaced(text: str) -> tuple[tuple[int, int], ...]:
+    """Where the schedule's own words name a day with no time after a word of the task, as
+    "Check every Monday" or "Check langgraph Mondays", so code can't tell whether the word acts
+    on the day, as "drop" would: the day is asked, and nothing is crossed."""
+    return tuple(span for span, left in _days_named(text) if not left)
+
+
+@lru_cache(maxsize=64)
+def _days_named(text: str, everywhere: bool = False) -> tuple[tuple[tuple[int, int], bool], ...]:
+    """Each day the schedule's own words name without saying to run on it, with whether the
+    words leave it out. The schedule's own words are a clause that holds the schedule's own
+    phrase, and, beside one, a clause that is little more than a day, as "minus Friday"; with
+    `everywhere`, as for words that only change a schedule, they are every clause. A day there
+    counts only when the words around it say to run on it: "every Friday", "on Fridays", "make
+    it Friday", "Fridays instead", "weekdays only", or the day with the time it runs at after
+    a task's words, as "Check every Friday at 9am" or "Check langgraph Fridays at 9am". A word
+    that leaves it out, as "drop Fridays", "Fridays excluded", "Friday is off" or "unless it's
+    a Friday", or a day written "Friday's", leaves it out, with or without a time. A day that
+    labels the word after it, as "Monday's tickets" or "the Mon-Fri rota", or that a filter or
+    a ticket's date holds, as "created on Monday" or "the due date to Friday", is no part of the
+    schedule. Kept per request, since its readers ask more than once."""
     tokens = _schedule_tokens(text)
     clause_of = _clause_of(text, [(raw, a, b) for raw, a, b, _ in tokens])
     first_words: dict[int, int] = {}
@@ -1945,8 +1996,9 @@ def _not_run_on(text: str, everywhere: bool = False) -> tuple[tuple[int, int], .
     token_at = {a: n for n, (_, a, _, _) in enumerate(tokens)}
     runs = _runs_of(tokens, clause_of)
     tied: dict[tuple[int, int], bool] = {}
+    timed: dict[tuple[int, int], bool] = {}
     left = _left_out_spans(text)
-    found: list[tuple[int, int]] = []
+    found: list[tuple[tuple[int, int], bool]] = []
     for match in DAY_NAMED.finditer(text):
         # A day inside a word, as "Mon-Fri" in "2026-Mon-Fri", names none.
         first = token_at.get(match.start())
@@ -1960,21 +2012,22 @@ def _not_run_on(text: str, everywhere: bool = False) -> tuple[tuple[int, int], .
         run = (runs.get(first, (first, first, None))[0], runs.get(last, (last, last, None))[1])
         if run not in tied:
             tied[run] = _tied(text, tokens, *run)
+            timed[run] = CLOCK.search(text, tokens[run[0]][1], tokens[run[1]][2]) is not None
         if tied[run]:
             continue
         frame = runs.get(first, (first, first, None))[2]
-        day = _Day(first, last, run, frame is not None and frame < first, match)
+        day = _Day(first, last, run, frame is not None and frame < first, timed[run], match)
         clause = clause_of[first]
         # The clause's first word, when no verb that runs it comes before it, as "drop" in "drop
         # every Friday" but not "check" in "Move the morning check to Tuesdays".
         lone = first_words.get(clause)
         if lone is not None and first_verbs.get(clause, lone) < lone:
             lone = None
-        span = _off_the_schedule(text, tokens, clause_of, day, lone)
-        if span is not None:
+        off = _off_the_schedule(text, tokens, clause_of, day, lone)
+        if off is not None:
             # A clause beside the schedule's own is the schedule's words whole, as "or Monday if
             # Friday is a holiday".
-            found.append(span if clause in owned else clauses_of(text)[clause])
+            found.append((off[0] if clause in owned else clauses_of(text)[clause], off[1]))
     return tuple(sorted(set(found)))
 
 
@@ -2007,12 +2060,14 @@ def _runs_of(tokens: list[Token], clause_of: list[int]) -> dict[int, tuple[int, 
 @dataclass(frozen=True)
 class _Day:
     """A day the words name: its first and last token, the run of schedule words it stands in,
-    whether a word that says when it runs leads it there, as "every" or "on", and its match."""
+    whether a word that says when it runs leads it there, as "every" or "on", whether the run
+    holds the time it runs at, as "every Friday at 9am", and its match."""
 
     first: int
     last: int
     run: tuple[int, int]
     every: bool
+    timed: bool
     match: re.Match[str]
 
 
@@ -2030,10 +2085,11 @@ def _a_word(raw: str, scheduled: bool) -> bool:
 
 def _off_the_schedule(
     text: str, tokens: list[Token], clause_of: list[int], day: _Day, lone: int | None
-) -> tuple[int, int] | None:
-    """The day's words with what leaves it out, when the words around it don't say to run on
-    it, or None when they do, or when it labels the word after it. `lone` is the clause's first
-    word when no verb that runs it comes before it."""
+) -> tuple[tuple[int, int], bool] | None:
+    """The day's words with what leaves it out and True, when the words leave it out; the day's
+    run of schedule words and False, when code can't place it; or None when the words say to run
+    on it, or when it labels the word after it. `lone` is the clause's first word when no verb
+    that runs it comes before it."""
     clause = clause_of[day.first]
 
     def inside(n: int) -> bool:
@@ -2060,42 +2116,46 @@ def _off_the_schedule(
         n for n in ([] if led is None else [led - 1, led]) if inside(n) and low(n) in NOT_WORDS
     ]
     negated = bool(turned) or any(low(n) in NOT_WORDS for n in lead)
+    dropped = led is not None and low(led) in LEAVING
     if every:
-        # "every Friday" and "on Fridays" say when a task runs, unless a negation leads them, a
-        # word that is not about running stands alone beside them, as "nothing on Fridays" or
-        # "every Friday off", or the clause's only verb takes them, as "drop every Friday".
-        verb = before == "word" and led == first - 1 == lone and after == "edge"
-        lead_off = negated or (before == "edge" and bool(odd)) or verb
+        # "every Friday" and "on Fridays" say when a task runs, unless a negation or a word that
+        # leaves it out leads them, or a word that is not about running stands alone beside
+        # them, as "nothing on Fridays" or "every Friday off". With no time, the clause's only
+        # verb before them may take the day, as "drop every Friday" does.
+        lead_off = negated or dropped or (before == "edge" and bool(odd))
+        unplaced = before == "word" and led == first - 1 == lone and after == "edge"
         trail_off = after == "edge" and bool(odd_after)
     else:
-        # A day on its own says when it runs only beside words about running it, and with no
-        # one word after it, as "excluded" in "Fridays excluded".
+        # A day on its own says when it runs beside words about running it, or with its time
+        # after a task's words, and with no one word after it, as "excluded" in "Fridays
+        # excluded".
         later, n = 0, last + 1
         while inside(n) and not tokens[n][3] and later < 2:
             later, n = later + word(n), n + 1
-        lead_off = negated or bool(odd) or before == "word"
+        lead_off = negated or dropped or bool(odd)
+        unplaced = before == "word"
         trail_off = bool(odd_after) or later == 1
-    if not (possessive or lead_off or trail_off):
-        return None
-    start, end = first, last
-    if lead_off:
-        start = min([led, *turned]) if led is not None else (lead or [first])[-1]
-    if trail_off:
-        end = tail if after == "word" and tail is not None else (trail or [last])[-1]
-    return tokens[start][1], tokens[end][2]
+    if possessive or lead_off or trail_off:
+        start, end = first, last
+        if lead_off:
+            start = min([led, *turned]) if led is not None else (lead or [first])[-1]
+        if trail_off:
+            end = tail if after == "word" and tail is not None else (trail or [last])[-1]
+        return (tokens[start][1], tokens[end][2]), True
+    # The time it runs at beside the day, as "every Friday at 9am", says it is a schedule.
+    if unplaced and not day.timed:
+        return (tokens[first][1], tokens[last][2]), False
+    return None
 
 
 type Stop = Literal["edge", "run", "verb", "word"]
-BREAK: Final = re.compile(r"[-\u2013\u2014:;()\[\]]")
-"""A mark between two words that ends what one says of the other, as the dash in "raise one
-ticket - Fridays excluded"."""
 
 
 def _talk_beside(
     text: str, tokens: list[Token], clause_of: list[int], at: int, step: int
 ) -> tuple[list[int], Stop, int | None]:
     """The talk beside a run of schedule words, walking from `at` by `step`, and what ends it:
-    the clause's edge or a dash, a colon or a bracket, another run or a number, which the
+    the clause's edge or a mark such as a dash, another run or a number, which the
     schedule's own readers judge, a verb that runs it (before the run only), or a word of the
     task, with where that stands."""
     talk: list[int] = []
@@ -2103,7 +2163,7 @@ def _talk_beside(
     n = at
     while 0 <= n < len(tokens) and clause_of[n] == clause:
         gap = text[tokens[min(n, n - step)][2] : tokens[max(n, n - step)][1]]
-        if BREAK.search(gap) is not None:
+        if CLAUSE_MARK.search(gap) is not None:
             break
         raw, _, _, scheduled = tokens[n]
         if scheduled or any(c.isdigit() for c in raw):
@@ -2166,6 +2226,7 @@ def when_said(words: str) -> WhenSaid:
         or len(often) > 1
         or bool(reasons & {"one_day", "one_frequency"})
         or UNREAD_DAY.search(words) is not None
+        or bool(_unplaced(words))
     )
     day = None if day_asked or not days else next(iter(days))
     times = {time.key for n in chosen for time in named[n][1]}
@@ -2386,6 +2447,10 @@ def render_schedule(schedule: str | None, text: str) -> Rendered:
         # A day left out anywhere, as "but skip Fridays", is never run on: the card asks.
         quoted = plain(text[left[0][0] : left[0][1]], NOTE_LIMIT - len(NOT_HELD.format("")))
         return rendered(missing_row("schedule", NOT_HELD.format(quoted)), said)
+    if _unplaced(text):
+        # A day code can't place, as "Check every Monday", is asked, and the task's words are
+        # never crossed as a schedule it can't hold.
+        return rendered(missing_row("schedule"), said)
     if not any(_low(t) in SCHEDULE_WORDS or CLOCK_TOKEN.match(_low(t)) for t in kept):
         return rendered(missing_row("schedule"), said)
     if (bound := BOUND_TIME.search(stretch)) is not None:
@@ -2517,6 +2582,12 @@ def clauses_of(text: str) -> list[tuple[int, int]]:
     punctuation, or at "and", "then", "but", "also" or "plus", except inside a schedule, so
     "every Monday and Friday at 9am" stays one clause, and between two lone words, so "set and
     forget" stays one too."""
+    return list(_clauses(text))
+
+
+@lru_cache(maxsize=64)
+def _clauses(text: str) -> tuple[tuple[int, int], ...]:
+    """Kept per request, since each of its readers asks."""
     found: list[tuple[int, int]] = []
     at = 0
     for start, end in [*_clause_ends(text), (len(text), len(text))]:
@@ -2529,7 +2600,7 @@ def clauses_of(text: str) -> list[tuple[int, int]]:
                 clause = (found.pop()[0], clause[1])
             found.append(clause)
         at = max(at, end)
-    return found
+    return tuple(found)
 
 
 def _joined_words(text: str, before: tuple[int, int], after: tuple[int, int]) -> bool:
