@@ -46,8 +46,9 @@ KEY_SHAPE_SOURCES: Final = (
     # 40 hex letters are also a git commit's SHA, so they are a key only just after a word that
     # names one, as "token: <hex>" or "my PAT <hex>", and never in "commit <hex> fixed it".
     r"(?i:token|key|secret|password|pat|auth)\b\W{1,10}[0-9a-f]{40}\b",
-    # A password in a URL, as postgresql://app:password@db, with its slashes escaped or not.
-    r":\\?/\\?/[^\s:/@]+:[^\s/@]+@",
+    # A password in a URL, as postgresql://app:password@db or redis://:password@host with no
+    # user, with its slashes escaped or not.
+    r":\\?/\\?/[^\s:/@]*:[^\s/@]+@",
     # A signed token's letters are also the letters around it, as in token_eyJ..., so it is read
     # from where that run of letters starts: after any other mark, or after a backslash. After an
     # escape such as \n or a unicode escape it starts past the escape, so JSON text stays JSON.
