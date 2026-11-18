@@ -43,6 +43,8 @@ KEYS = {
     "API key header": "X-API-Key: " + "Ab3dEf9h" * 4,
     "token in an Authorization header": "Authorization: token " + "Ab3dEf9h" * 4,
     "password in a URL": "postgresql://app:" + "S3cr3tPassw0rd" + "@",
+    "password in a URL with no user": "redis://:" + "p4ssw0rdS3cret" + "@",
+    "AMQP password with no user": "amqp://:" + "gu3stPassw0rd" + "@",
     "AWS access key id": "AKIA" + "Z7Q2" * 4,
     "AWS session key id": "ASIA" + "K3V9" * 4,
     "Slack bot token": "xoxb-" + "1234567890-" * 2 + "Ab3dEf9h" * 3,
@@ -83,6 +85,10 @@ PLAIN_WORDS = [
     "see https://someone@example.com/path and http://localhost:8080/path",
     "hf_transfer and npm_config_cache and pypi-server",
     "Authorization: Bearer {{$json.accessToken}}",
+    "open https://confluence.example.com:8443/display/MOCK and http://localhost:8080/",
+    "npm install git+https://github.com/example/y@v1 and @scope/pkg",
+    "mailto:someone@example.com",
+    "meet at 10:30 @bob",
 ]
 BEFORE = {
     "space": " ",
