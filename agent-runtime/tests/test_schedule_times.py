@@ -722,11 +722,12 @@ def test_a_day_left_out_in_a_filter_never_makes_the_schedule_asked(
 @pytest.mark.parametrize(
     "text",
     [
-        "Every day at 9am, but not holidays, list tickets in MOCK and raise one ticket that lists them",
-        "Every day at 9am though not on Fridays, list tickets in MOCK and raise one ticket that lists them",
+        "Every day at 9am, but not holidays, list tickets in MOCK",
+        "Every day at 9am though not on Fridays, list tickets in MOCK",
     ],
 )
 def test_a_day_left_out_beside_the_schedule_is_asked_on_the_card(text: str):
+    text = f"{text} and raise one ticket that lists them"
     row, parts = card_for(text, "Every day at 9am")
     assert row.state == "missing"
     assert any(p.reason == "how_often" for p in parts)
