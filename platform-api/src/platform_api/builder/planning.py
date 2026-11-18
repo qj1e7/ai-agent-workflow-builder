@@ -17,6 +17,7 @@ from platform_api.builder.draft_repair import (
     TwoProjects,
     one_project_input,
     one_project_only,
+    project_to_fill,
     repaired,
     theirs_to_change,
 )
@@ -122,9 +123,15 @@ def _questions(*groups: Sequence[str]) -> list[str]:
     return list(kept)[:QUESTION_COUNT]
 
 
-def planned_agents(choice: Choice, library: Mapping[str, CardView]) -> list[PlannedAgent]:
+def planned_agents(
+    choice: Choice, library: Mapping[str, CardView], task: str, projects: Collection[str] = ()
+) -> list[PlannedAgent]:
     """The chosen agents that are real: a card in the library, once, with only the values that
-    belong to its inputs and fit their kinds. What is not given is listed as missing."""
+    belong to its inputs and fit their kinds. A Jira project decides where a ticket is written,
+    so the model's value for one is kept only when it is the one project of the team's the
+    words name as the place, as a drafted agent's is filled. What is not given is listed as
+    missing, and the Portal asks for it."""
+    project = project_to_fill(task, projects)
     agents: list[PlannedAgent] = []
     for chosen in choice.agents:
         card = library.get(chosen.card_id)
@@ -132,11 +139,11 @@ def planned_agents(choice: Choice, library: Mapping[str, CardView]) -> list[Plan
             continue
         values: dict[str, str] = {}
         for item in card.inputs:
-            given = chosen.values.get(item.name)
-            if given is None:
-                continue
-            if check_value(item.kind, given.strip()) is None:
-                values[item.name] = given.strip()
+            given = (chosen.values.get(item.name) or "").strip()
+            if item.kind == "jira_project":
+                given = project if project is not None and given.upper() == project else ""
+            if given and check_value(item.kind, given) is None:
+                values[item.name] = given
         missing = [item.name for item in card.inputs if item.name not in values]
         agents.append(
             PlannedAgent(
@@ -197,7 +204,7 @@ async def plan(
         case "cannot_do":
             return CannotDo(reason=reason, missing_tools=[])
         case "use_one" | "use_several":
-            agents = planned_agents(choice, by_id)
+            agents = planned_agents(choice, by_id, task, projects)
             if agents:
                 return UseSaved(
                     decision="use_one" if len(agents) == 1 else "use_several",

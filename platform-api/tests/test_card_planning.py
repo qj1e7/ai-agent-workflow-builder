@@ -101,7 +101,7 @@ async def test_one_saved_agent_with_values_from_the_task():
     planner = FakePlanner(
         chose=chosen("use_one", agent(**{REPO: "langchain-ai/langgraph", PROJECT: "MOCK"}))
     )
-    result = await plan(planner, LIBRARY, "check langgraph")
+    result = await plan(planner, LIBRARY, "check langgraph and raise a ticket in MOCK", ("MOCK",))
     assert isinstance(result, UseSaved)
     assert result.decision == "use_one"
     [planned] = result.agents
@@ -124,10 +124,41 @@ async def test_a_value_that_does_not_fit_its_kind_is_dropped_and_listed_as_missi
 
 async def test_values_for_inputs_the_card_does_not_have_are_ignored():
     planner = FakePlanner(chose=chosen("use_one", agent(**{"Target": "SECRET", PROJECT: "MOCK"})))
-    result = await plan(planner, LIBRARY, "x")
+    result = await plan(planner, LIBRARY, "raise a ticket in MOCK", ("MOCK",))
     assert isinstance(result, UseSaved)
     assert result.agents[0].values == {PROJECT: "MOCK"}
     assert result.agents[0].missing == [REPO]
+
+
+@pytest.mark.parametrize(
+    ("task", "value"),
+    [
+        ("Check langchain-ai/langgraph, read tickets in MOCK and raise a ticket in OPS", "MOCK"),
+        ("Check langchain-ai/langgraph, read tickets in MOCK and raise a ticket in OPS", "OPS"),
+        ("Check langchain-ai/langgraph and raise a ticket in MOCK or OPS", "MOCK"),
+        ("Check langchain-ai/langgraph and raise a ticket", "MOCK"),
+        ("Check langchain-ai/langgraph and raise a ticket in SECRET", "SECRET"),
+        ("Check langchain-ai/langgraph and raise a ticket not in MOCK", "MOCK"),
+    ],
+)
+async def test_a_saved_agent_s_project_is_filled_only_with_the_one_listed_project_named(
+    task: str, value: str
+):
+    """The project decides where the ticket is written. Before, the model's value was kept, so
+    words that name two projects filled the first, and words that name none kept its guess."""
+    values = {REPO: "langchain-ai/langgraph", PROJECT: value}
+    planner = FakePlanner(chose=chosen("use_one", agent(**values)))
+    result = await plan(planner, LIBRARY, task, ("MOCK", "OPS"))
+    assert isinstance(result, UseSaved)
+    [planned] = result.agents
+    assert (planned.values, planned.missing) == ({REPO: "langchain-ai/langgraph"}, [PROJECT])
+
+
+async def test_a_saved_agent_s_project_is_the_listed_one_the_words_name():
+    values = {REPO: "langchain-ai/langgraph", PROJECT: "MOCK"}
+    planner = FakePlanner(chose=chosen("use_one", agent(**values)))
+    result = await plan(planner, LIBRARY, "check langgraph and raise a ticket in MOCK", ("MOCK",))
+    assert isinstance(result, UseSaved) and result.agents[0].values == values
 
 
 async def test_agents_not_in_the_library_are_dropped_and_a_repeat_is_kept_once():

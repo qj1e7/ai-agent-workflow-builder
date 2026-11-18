@@ -104,15 +104,6 @@ PLAIN_WORDS: Final = _words(
 )
 """Words in small letters that follow "in", "to" or "project" and name no project, as "in the
 backlog", "to me" or "project status"."""
-FILL_LEAD: Final = re.compile(
-    rf"(?<![\w-])(?:[Pp]roject|[Ii]n)\s+(?:(?:[Tt]he|[Jj]ira|[Pp]roject)\s+)*(?P<key>{KEY})(?!\w)"
-)
-"""A key right after "project" or "in", as "in MOCK" or "project OPS"."""
-WHERE_A_PROJECT_STANDS: Final = re.compile(
-    rf"(?<![\w-])(?:[Pp]rojects?|[Ii]n|[Ii]nto|[Ff]rom|[Tt]o)\s+(?:(?:[Tt]he|[Jj]ira|[Pp]rojects?)\s+)*"
-    rf"(?P<key>{KEY})(?!\w)"
-)
-"""Any word where a project could stand, to tell whether the words may name a second one."""
 
 
 def _squashed(text: str) -> str:
@@ -219,30 +210,70 @@ ELSEWHERE: Final = re.compile(
 """Words that send the ticket away from the project named, as "elsewhere" or "a different
 project", so the project is never filled for it."""
 PLACE_WORD: Final = re.compile(r"\s+(?:projects?|board|queue|space|team)\b", re.IGNORECASE)
+BEFORE_THE_PLACE: Final = (
+    r"tickets?|issues?|bugs?|tasks?|stor(?:y|ies)|epics?|items?|incidents?|requests?|problems?|"
+    r"changes?|ones?|it|them|everything|anything|all|work|raised?|created?|filed?|logged?|"
+    r"opened?|open|closed?|finished|resolved?|done|updated?|found|find|listed?|put|added?|made|"
+    r"make|posted?|moved?|stale|idle|new|old|latest"
+)
+"""The words that may stand right before "in", "into" or "from" when the project after it is
+the place the words name, as "tickets" in "tickets in MOCK" or "finished" in "the tickets we
+finished in MOCK". Any other, as "not" or "except", leaves the place unsure."""
+THE_PLACE: Final = (
+    rf"(?:^|(?<=[,.;:!?(])\s*|\b(?:{BEFORE_THE_PLACE})\s+)(?:in|into|from)\s+"
+    r"(?:(?:the|jira|projects?)\s+)*(?P<key>{key})\b",
+    r"(?:^|(?<=[,.;:!?(])\s*)(?:the\s+)?(?:jira\s+)?project\s+(?P<key>{key})\b",
+    r"(?:^|(?<=[,.;:!?(])\s*|\b(?:the|all|any|open|stale|idle|new|old|our|my|each|every|find|"
+    r"list|check|raise|get|show|read|search|sum\s+up|summarise|summarize)\s+)"
+    r"(?P<key>{key})\s+(?:tickets?|issues?|bugs?|project|board|backlog)\b",
+)
+"""Where the words name the project as the place: after "in", "into" or "from" that follows a
+ticket word, as "tickets in MOCK"; after "project" at a clause's start, as "Where it goes: Jira
+project MOCK"; or before a ticket word, as "the MOCK tickets". Each mention of the project must
+stand so, never inside a negation such as "not in MOCK" or "anywhere but MOCK"."""
+A_PLACE_LEAD: Final = re.compile(
+    r"(?<![\w-])(?:in|into|to|from|on|onto|under|for|with|at|inside|within|via|outside|beyond)\s+"
+    r"(?:(?:the|a|an|our|my|your|their|its|this|that|these|those|jira|projects?)\s+)*"
+    r"(?P<word>[^\W\d_][\w-]*)",
+    re.IGNORECASE,
+)
+"""A word where another place could stand: after a word such as "in", "for", "with" or "on"."""
+NO_PLACE: Final = PLAIN_WORDS | _words(
+    "new latest last next no none nobody every each all any both other same status priority "
+    "label labels assignee approval approvals approver approvers release releases version "
+    "versions software update ticket tickets issue issues bug bugs it them me us one two three "
+    "four five six seven eight nine ten days weeks hours minutes monday tuesday wednesday "
+    "thursday friday saturday sunday mondays tuesdays wednesdays thursdays fridays saturdays "
+    "sundays weekday weekdays weekend weekends noon midday midnight end start beginning close "
+    "least most details link links comment comments sprint"
+)
+"""Words in small letters after "in", "for", "with", "on" and the like that name no place, as
+"each" in "for each release" or "status" in "with status DONE". Any other word there may be a
+place, as "ops" in "for ops" or "service" in "with the service desk", so the project is asked."""
 
 
 def project_to_fill(task: str, known: Collection[str] = ()) -> str | None:
     """The one Jira project to fill the agent's project input with, or None so the Portal asks.
-    It decides where the ticket is written, so it is read narrowly: the one project the words
-    name must be one the team's Jira allows. With no list of those, it must be in capitals right
-    after "project" or "in", and no common word. It is filled only when it is the one place the
-    words name: any other word where a project could stand, as "ops" in "raise one in ops",
-    another key anywhere, as "for OPS", or "elsewhere", leaves it unsure, so it is None."""
+    It decides where the ticket is written, so it is read narrowly, from a list of what is
+    allowed: the one project the words name must be one the team's Jira allows, and every
+    mention of it must name it as the place, as "tickets in MOCK", never inside a negation such
+    as "not in MOCK". It is filled only when it is the one place the words name: every word after
+    "in", "for", "with", "on" and the like must be one that names no place, so "for ops" or
+    "with the service desk" leaves it unsure, and so does another key anywhere, as "for OPS", or
+    "elsewhere". With no list of the team's projects, nothing is filled."""
+    allowed = {k.upper() for k in known}
     keys = projects_named(task, known)
-    if len(keys) != 1:
+    if len(keys) != 1 or keys[0] not in allowed or ELSEWHERE.search(task):
         return None
     key = keys[0]
-    allowed = {k.upper() for k in known}
-    stands = {m.group("key") for m in FILL_LEAD.finditer(task)}
-    if allowed and key not in allowed:
+    frames = [re.compile(frame.format(key=re.escape(key)), re.IGNORECASE) for frame in THE_PLACE]
+    placed = {m.start("key") for frame in frames for m in frame.finditer(task)}
+    mentions = [m.start() for m in re.finditer(rf"(?<![\w-]){re.escape(key)}(?![\w-])", task, re.I)]
+    if not mentions or any(at not in placed for at in mentions):
         return None
-    if not allowed and (key in NOT_PROJECTS or key not in stands):
-        return None
-    if ELSEWHERE.search(task):
-        return None
-    for match in WHERE_A_PROJECT_STANDS.finditer(task):
-        word = match.group("key")
-        if word.upper() == key or word.casefold() in PLAIN_WORDS or word.upper() in NOT_PROJECTS:
+    for match in A_PLACE_LEAD.finditer(task):
+        word = match.group("word")
+        if word.upper() == key or word.casefold() in NO_PLACE or word.upper() in NOT_PROJECTS:
             continue
         return None
     for match in re.finditer(rf"(?<![\w-]){KEY}(?!\w)", task):
