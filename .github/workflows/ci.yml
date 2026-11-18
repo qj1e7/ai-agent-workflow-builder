@@ -20,17 +20,19 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+# A newer push cancels an older run's jobs, each in its own group, except scans. Nothing cancels
+# scans, so every pushed head has its commits scanned once, even when a force-push replaces it.
 
 env:
   SEMGREP_IMAGE: semgrep/semgrep:1.179.0@sha256:93963d9295a366f59e4850127b1550400ee7b388f04fe144e4a1f6325d96e01b
   GITLEAKS_IMAGE: zricethezav/gitleaks:v8.21.2@sha256:0e99e8821643ea5b235718642b93bb32486af9c8162c8b8731f7cbdc951a7f46
 
-# The private repo is billed per job, each rounded up to a whole minute, so stages are steps, not jobs.
+# Each job starts its own runner and checks out the repo again, so stages are steps, not jobs.
 jobs:
   checks:
+    concurrency:
+      group: ci-checks-${{ matrix.project }}-${{ github.ref }}
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     # The platform-api suite passed 3,000 tests and took 12 to 15 minutes on 15 Nov 2026.
     timeout-minutes: 25
@@ -176,6 +178,9 @@ jobs:
           docker run --rm mock-slack:test
 
   portal:
+    concurrency:
+      group: ci-portal-${{ github.ref }}
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:
@@ -213,6 +218,9 @@ jobs:
           sh nginx/render.test.sh
 
   n8n-node-pack:
+    concurrency:
+      group: ci-n8n-node-pack-${{ github.ref }}
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     timeout-minutes: 15
     defaults:
@@ -326,21 +334,12 @@ jobs:
           echo "base=$base" >> "$GITHUB_OUTPUT"
           echo "head=$head" >> "$GITHUB_OUTPUT"
 
-      - name: Secret scan of every commit in the range with gitleaks
-        if: ${{ !cancelled() && steps.range.outputs.base != '' }}
-        env:
-          RANGE: ${{ steps.range.outputs.base }}..${{ steps.range.outputs.head }}
-        run: |
-          docker run --rm --volume "$PWD:/repo:ro" \
-            --env GIT_CONFIG_COUNT=1 --env GIT_CONFIG_KEY_0=safe.directory --env GIT_CONFIG_VALUE_0=/repo \
-            "$GITLEAKS_IMAGE" detect --source /repo --log-opts="$RANGE" --redact --verbose
-
-      - name: Test the commit scan
+      - name: Test the commit scans
         if: ${{ !cancelled() }}
         run: python3 -I -B -m unittest discover -s scripts -p test_scan_commits.py
 
-      # gitleaks' default rules miss some keys, such as an Atlassian API token. This reads every
-      # added line of every commit in the range against the agent runtime's key shapes.
+      # The main check of the commits. It reads every added line of every commit in the range,
+      # a merge's own lines included, against the agent runtime's key shapes.
       - name: Key shapes in every commit in the range
         if: ${{ !cancelled() }}
         env:
@@ -348,8 +347,20 @@ jobs:
           HEAD: ${{ steps.range.outputs.head }}
         run: python3 -I -B scripts/scan_commits.py "$BASE" "$HEAD"
 
+      # The second check. gitleaks' default rules miss some keys, such as an Atlassian API token,
+      # and it doesn't read a merge's own lines. The script fails when gitleaks can't read the range.
+      - name: Secret scan of every commit in the range with gitleaks
+        if: ${{ !cancelled() && steps.range.outputs.base != '' }}
+        env:
+          BASE: ${{ steps.range.outputs.base }}
+          HEAD: ${{ steps.range.outputs.head }}
+        run: scripts/gitleaks-commits.sh "$BASE" "$HEAD"
+
   e2e:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    concurrency:
+      group: ci-e2e-${{ github.ref }}
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     # The browser suite alone took 27 minutes on 13 Nov 2026, then ZAP and k6 need about 8 more,
     # and the move from an old-engine database about 8.

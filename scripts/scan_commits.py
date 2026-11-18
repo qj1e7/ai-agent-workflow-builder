@@ -4,12 +4,22 @@ GitHub keeps every commit of a pull request, even after a squash merge, and the 
 a key added in one commit and removed in a later one is still out there. CI's gitleaks scan of the
 files can't see one, and gitleaks' default rules miss some shapes, such as an Atlassian API token.
 This reads each added line of each commit in the range, a merge's own lines included, against the
-agent runtime's key shapes (contracts/fixtures/agent/key-shapes.json).
+agent runtime's key shapes (contracts/fixtures/agent/key-shapes.json). It is CI's main check of the
+commits. gitleaks reads them too, as a second check.
 
-It prints the commit, the file, the line, the shape's name and the first four letters of what
-matched, never more, as the CI log is public.
+It prints the commit, the file, the line, the shape's name and at most the first four letters of
+what matched, never more, as the CI log is public. A shape that starts with letters of the key
+itself shows fewer, or none.
 
-usage: python3 -I scripts/scan_commits.py <base> <head>
+A line with a gitleaks:allow comment, and an example URL with a password in n8n's catalogue, are
+listed as allowed and don't fail the check. A password in a URL that starts with $, {, < or %, or
+is shorter than 8 letters, is a placeholder or a test value, so it doesn't count.
+
+It doesn't read binary files, which include UTF-16 text, a key split across lines, or commit
+messages.
+
+usage: uv run --no-project --python 3.14 scripts/scan_commits.py <base> <head>
+       python3 -I scripts/scan_commits.py <base> <head>    with Python 3.11 or later
 
 Exits 0 when nothing matched, or when <base> is empty or all zeros, as no range is known then.
 Exits 1 on any match, and 2 when git can't read the range.
@@ -64,12 +74,27 @@ NAMES = {
 }
 """A name for each shape in key-shapes.json, for the report. A test fails when a shape has none."""
 SHOWN = 4
-"""Letters of a match shown in the report. Each shape's own prefix is about this long."""
+"""Letters of a match shown in the report. Most shapes start with fixed letters this long."""
+SHOWN_BY_SHAPE = {
+    "Entra client secret": 0,
+    "OpenAI key": 3,
+    "Hugging Face token": 3,
+    "password in a URL": 3,
+}
+"""Shapes whose fixed start is shorter, so a fourth letter, or any, would be part of the key."""
 ALLOW_MARK = "gitleaks:allow"
-"""A line that holds this is skipped, as gitleaks skips it, so one comment covers both scans."""
-SKIPPED_PATHS = frozenset({"contracts/n8n/catalogue.json"})
-"""Written from n8n's public image by scripts/n8n-catalogue.sh, and pack smoke fails when it
-differs from what n8n serves. n8n's help texts in it hold example URLs with a password."""
+"""A line that holds this is allowed, as gitleaks skips it, so one comment covers both scans."""
+ALLOWED_SHAPES = frozenset({("contracts/n8n/catalogue.json", "password in a URL")})
+"""The catalogue is written from n8n's public image by scripts/n8n-catalogue.sh, and pack smoke
+fails when it differs from what n8n serves. n8n's help texts in it hold example URLs with a
+password. Any other shape in it still fails."""
+URL_PASSWORD = re.compile(r":\\?/\\?/[^\s:/@]*:(?P<password>[^\s/@]+)@")
+"""The password in a match of the "password in a URL" shape."""
+PLACEHOLDER_STARTS = ("$", "{", "<", "%")
+"""A password in a URL that starts like this is a variable or a template, such as ${DB_PASSWORD}."""
+SHORTEST_URL_PASSWORD = 8
+"""A shorter password in a URL, such as postgres:test@, is a test value. The masker still hides it
+in the product, so key-shapes.json keeps the shape whole."""
 GIT_LOG = (
     "git",
     "-c",
@@ -107,7 +132,9 @@ class Finding:
     line: int
     shape: str
     shown: str
-    """The first few letters of the match, then <redacted>."""
+    """At most the first few letters of the match, then <redacted>."""
+    allowed: bool
+    """Listed, but doesn't fail the check."""
 
 
 def load_shapes(path: Path = SHAPES_FILE) -> Shapes:
@@ -117,16 +144,28 @@ def load_shapes(path: Path = SHAPES_FILE) -> Shapes:
     return [(NAMES.get(s, f"key shape {i + 1}"), re.compile(s)) for i, s in enumerate(sources)]
 
 
+def is_placeholder(shape: str, matched: str) -> bool:
+    if shape != "password in a URL" or not (url := URL_PASSWORD.fullmatch(matched)):
+        return False
+    password = url["password"]
+    return password.startswith(PLACEHOLDER_STARTS) or len(password) < SHORTEST_URL_PASSWORD
+
+
 def matches_in(shapes: Shapes, text: str) -> list[tuple[str, str]]:
-    """Each match's shape name and its first few letters, then <redacted>, in the order they
-    sit. Where two shapes match the same letters, the one listed first names it."""
+    """Each match's shape name and at most its first few letters, then <redacted>, in the order
+    they sit. Where two shapes match the same letters, the one listed first names it."""
     found: list[tuple[int, int, str]] = []
     for name, pattern in shapes:
         for match in pattern.finditer(text):
             start, end = match.span()
+            if is_placeholder(name, match.group()):
+                continue
             if all(end <= s or e <= start for s, e, _ in found):
                 found.append((start, end, name))
-    return [(name, text[s : s + SHOWN] + "<redacted>") for s, _, name in sorted(found)]
+    return [
+        (name, text[s : s + SHOWN_BY_SHAPE.get(name, SHOWN)] + "<redacted>")
+        for s, _, name in sorted(found)
+    ]
 
 
 def added_lines(lines: Iterable[str]) -> Iterator[tuple[str, str, int, str]]:
@@ -153,10 +192,10 @@ def added_lines(lines: Iterable[str]) -> Iterator[tuple[str, str, int, str]]:
 
 def scan(lines: Iterable[str], shapes: Shapes) -> Iterator[Finding]:
     for commit, path, number, text in added_lines(lines):
-        if path in SKIPPED_PATHS or ALLOW_MARK in text:
-            continue
+        marked = ALLOW_MARK in text
         for shape, shown in matches_in(shapes, text):
-            yield Finding(commit, path, number, shape, shown)
+            allowed = marked or (path, shape) in ALLOWED_SHAPES
+            yield Finding(commit, path, number, shape, shown, allowed)
 
 
 def git_log(base: str, head: str, cwd: Path | None = None) -> Iterator[str]:
@@ -175,6 +214,18 @@ def git_log(base: str, head: str, cwd: Path | None = None) -> Iterator[str]:
             raise RangeError(message or f"git log exited {git.returncode}")
 
 
+def allowed_report(allowed: list[Finding]) -> str:
+    rows = [f"  allowed  {f.commit}  {f.path}  line {f.line}  {f.shape}" for f in allowed]
+    return "\n".join(
+        [
+            f"Allowed {len(allowed)} value(s) shaped like a key, by a gitleaks:allow comment or"
+            " as an example in n8n's catalogue. Check that each one is made up:",
+            *rows,
+            "",
+        ]
+    )
+
+
 def report(findings: list[Finding], base: str, head: str) -> str:
     rows = [f"  commit {f.commit}  {f.path}  line {f.line}  {f.shape}  {f.shown}" for f in findings]
     return "\n".join(
@@ -187,10 +238,13 @@ def report(findings: list[Finding], base: str, head: str) -> str:
             "pull request, and anyone can read them. So treat each real key here as leaked:",
             "  1. Revoke it where it was made, and make a new one. Keep the new one out of git,",
             "     in Azure Key Vault or a GitHub Actions secret.",
-            "  2. Then take it out of the history. Rewrite the branch so no commit holds it and",
-            "     force-push, or open a fresh branch from main without it and close this one.",
+            "  2. Take it out of the files, then out of the history. To squash the branch into",
+            "     one commit and push it:",
+            "       git reset --soft $(git merge-base origin/main HEAD) && git commit"
+            " && git push --force-with-lease",
+            "     Or open a fresh branch from main without it, and close this one.",
             "If it is a made-up value for a test, build it from pieces at run time, as in",
-            '"ghp_" + "Zx9" * 12, or add a gitleaks:allow comment on that line. Then rewrite the',
+            '"ghp_" + "Zx9" * 12, or add a gitleaks:allow comment on that line. Then squash the',
             "branch the same way, as the commit that added it still fails this check.",
         ]
     )
@@ -198,7 +252,7 @@ def report(findings: list[Finding], base: str, head: str) -> str:
 
 def main(argv: list[str]) -> int:
     if len(argv) != 3 or any(arg.startswith("-") for arg in argv[1:]):
-        print("usage: python3 -I scripts/scan_commits.py <base> <head>", file=sys.stderr)
+        print("usage: scripts/scan_commits.py <base> <head>", file=sys.stderr)
         return 2
     base, head = argv[1].strip(), argv[2].strip()
     if base in NO_RANGE:
@@ -209,10 +263,13 @@ def main(argv: list[str]) -> int:
     except RangeError as error:
         print(f"Couldn't read the commits {base}..{head}: {error}", file=sys.stderr)
         return 2
-    if findings:
-        print(report(findings, base, head))
+    if allowed := [f for f in findings if f.allowed]:
+        print(allowed_report(allowed))
+    if failing := [f for f in findings if not f.allowed]:
+        print(report(failing, base, head))
         return 1
-    print(f"No line added in the commits {base}..{head} is shaped like a key.")
+    no_line = "No other line" if allowed else "No line"
+    print(f"{no_line} added in the commits {base}..{head} is shaped like a key.")
     return 0
 
 
