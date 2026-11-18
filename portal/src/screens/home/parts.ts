@@ -54,14 +54,19 @@ export const WATCHLIST_CANT = 'From the chat I can add software to the Software 
 /** The request that moves the whole Software watchlist to the time she asked of one software. */
 export const watchlistRuns = (time: string): string => `Make the Software watchlist run ${time.trim()}`
 
-/** “every weekday except Friday” or “skip Fridays” leaves a day out, which no schedule here can hold. Anything else reads as how often. */
-const LEAVES_OUT = /\b(?:except|excluding|but not|apart from|other than|skip|skipping|never|not on|no longer|don[’']t|do not|stop|stopping|without)\b/i
+/** “every weekday except Friday”, “skip Fridays” or “drop every Friday” leaves a day out, which no schedule here can hold. */
+const LEAVES_OUT =
+  /\b(?:except|excluding|excluded|but not|apart from|other than|skip|skipping|never|not on|no longer|don[’']t|do not|stop|stopping|without|unless|drop|remove|cut|minus|(?:take|leave)(?: \w+)? out)\b|\b(?:mon|tue|wed|thu|fri|sat|sun)[a-z]*['’]s?(?!\w)/i
+/** A day named with no word that says how often, as “Fridays off” or “unless it’s a Friday”, is one the words don’t say to run on: the runtime asks about it as a day left out. */
+const NAMES_A_DAY = /\b(?:mon|tue|tues|wed|thu|thur|thurs|fri|sat|sun)(?:day)?s?\b|\bholidays?\b/i
+const SAYS_HOW_OFTEN =
+  /\b(?:every|each|other|once|twice|thrice|times|alternate|alternating|bi-?weekly|fortnightly|weekly|monthly|quarterly|yearly|annually|hourly|daily|month|week|weekends?|first|second|third|fourth|fifth|last|\d+(?:st|nd|rd|th)|to|through|thru|till|until)\b|[-\u2013\u2014]/i
 const STARTS_WITH_A_DAY = /^(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)s?\b/i
 
 export function howOftenWords(text: string): string {
   const said = text.trim()
   if (said === '') return REASON_WORDS.how_often
-  if (LEAVES_OUT.test(said)) return 'I can’t leave days out of a schedule yet.'
+  if (LEAVES_OUT.test(said) || (NAMES_A_DAY.test(said) && !SAYS_HOW_OFTEN.test(said))) return 'I can’t leave days out of a schedule yet.'
   // The whole phrase is their words, as a sentence: “Every other Friday” reads “every other Friday”, and a day stays a name.
   const inSentence = STARTS_WITH_A_DAY.test(said) ? said : `${said.charAt(0).toLowerCase()}${said.slice(1)}`
   return `I can’t run things ${inSentence} yet.`
