@@ -236,6 +236,66 @@ async def test_the_project_input_is_never_filled_when_the_words_send_the_ticket_
 
 
 @pytest.mark.parametrize(
+    "task",
+    [
+        "Find stale tickets in MOCK and raise one ticket not in MOCK",
+        "Find stale tickets in MOCK and raise one ticket outside MOCK",
+        "Find stale tickets in MOCK and raise one ticket anywhere but MOCK",
+        "Find stale tickets in MOCK and raise one ticket except in MOCK",
+        "Find stale tickets not in MOCK and raise one ticket",
+        "Find stale tickets in MOCK and raise one ticket anywhere bar MOCK",
+        "Find stale tickets in MOCK and keep the new ticket out of MOCK",
+    ],
+)
+async def test_a_project_the_words_say_not_to_use_is_never_filled(task: str):
+    """Before, each filled MOCK as the place the ticket is written. A project fills the input
+    only where the words name it as the place, so the Portal asks."""
+    result = await planned(task, ("MOCK",))
+    assert isinstance(result, NewAgent) and result.project is None
+
+
+@pytest.mark.parametrize(
+    "task",
+    [
+        "Find stale tickets and raise one ticket, but don't raise tickets in MOCK",
+        "Never put tickets in MOCK; find the stale ones and list them",
+        "Find the stale bugs in MOCK, but don't create the summary ticket in MOCK",
+        "Avoid creating tickets in MOCK",
+        "Stop raising tickets in MOCK and list the stale ones",
+        "Find stale tickets and no longer raise tickets in MOCK",
+    ],
+)
+async def test_a_project_after_a_verb_the_words_say_not_to_do_is_never_filled(task: str):
+    """Before, each filled MOCK as the place the ticket is written."""
+    result = await planned(task, ("MOCK",))
+    assert isinstance(result, NewAgent) and result.project is None
+
+
+async def test_a_project_after_project_and_a_colon_is_the_place():
+    result = await planned("Find stale tickets and raise one ticket. Jira project: MOCK", ("MOCK",))
+    assert isinstance(result, NewAgent) and result.project == "MOCK"
+
+
+@pytest.mark.parametrize(
+    "task",
+    [
+        "Find stale tickets in MOCK and raise one ticket for ops",
+        "Find stale tickets in MOCK and raise one ticket with the service desk",
+        "Find stale tickets in MOCK and raise one ticket for support",
+        "Find stale tickets in MOCK and raise one ticket for the devops folks",
+        "Find stale tickets in MOCK and raise one ticket on Ops",
+        "Find stale tickets in MOCK and raise one ticket under ops",
+    ],
+)
+async def test_a_place_in_small_letters_beside_the_project_leaves_it_to_ask(task: str):
+    """Before, each filled MOCK though the ticket may go to ops or the service desk. A word
+    after "for", "with", "on" or "under" counts as no place only when it is one the platform
+    knows names none, as "each" or "status"."""
+    result = await planned(task, ("MOCK",))
+    assert isinstance(result, NewAgent) and result.project is None
+
+
+@pytest.mark.parametrize(
     ("task", "project"),
     [
         ("Find stale tickets in MOCK and raise one ticket", "MOCK"),
@@ -244,6 +304,22 @@ async def test_the_project_input_is_never_filled_when_the_words_send_the_ticket_
         ("Find tickets in MOCK, and email the list to me", "MOCK"),
         ("Raise a ticket in the MOCK project", "MOCK"),
         ("Find tickets in MOCK closed in Q4", "MOCK"),
+        ("Check acme/planted for a new release and raise a ticket in MOCK.", "MOCK"),
+        ("Raise a ticket in MOCK for each new LangGraph release", "MOCK"),
+        ("Find tickets in MOCK with status DONE and raise one ticket", "MOCK"),
+        ("For each EOL software and each new LTS release, raise one ticket in MOCK", "MOCK"),
+        ("Every Friday summarise the tickets we finished in MOCK.", "MOCK"),
+        (
+            "Every weekday at 3pm, find bug tickets in MOCK with no update for 10 days and "
+            "create one follow-up ticket that lists them",
+            "MOCK",
+        ),
+        (
+            "Every Friday at 4pm, find the tickets in MOCK closed this week and create one "
+            "ticket that sums them up",
+            "MOCK",
+        ),
+        ("In MOCK, find stale tickets and raise one ticket", "MOCK"),
     ],
 )
 async def test_a_project_the_team_allows_is_filled(task: str, project: str):
@@ -252,29 +328,27 @@ async def test_a_project_the_team_allows_is_filled(task: str, project: str):
 
 
 @pytest.mark.parametrize(
-    ("task", "project"),
+    "task",
     [
-        ("Raise a ticket in OPS", "OPS"),
-        ("Find tickets in project OPS and raise one", "OPS"),
-        ("Raise a ticket in the Jira project for each new LangGraph release", None),
-        ("Find stale tickets and send the list to HR", None),
-        ("Find tickets closed in Q4 and raise one ticket", None),
-        ("Find the DEV tickets and raise one", None),
+        "Raise a ticket in OPS",
+        "Find tickets in project OPS and raise one",
+        TASK,
+        "Raise a ticket in the Jira project for each new LangGraph release",
     ],
 )
-async def test_with_no_team_list_only_a_capital_key_after_project_or_in_is_filled(
-    task: str, project: str | None
-):
+async def test_with_no_team_list_no_project_is_filled(task: str):
+    """Only a project on the team's own list is filled. Before, a capital key after "project"
+    or "in" was filled when the team had no list."""
     result = await planned(task)
-    assert isinstance(result, NewAgent) and result.project == project
+    assert isinstance(result, NewAgent) and result.project is None
 
 
 async def test_the_one_project_the_words_name_comes_with_the_plan_for_the_portal_to_fill():
     """The Portal fills the project input from this key, so the builder and the Portal read the
     words the same way."""
-    result = await planned(TASK)
+    result = await planned(TASK, ("MOCK",))
     assert isinstance(result, NewAgent) and result.project == "MOCK"
-    assert isinstance(none := await planned("x"), NewAgent) and none.project is None
+    assert isinstance(none := await planned("x", ("MOCK",)), NewAgent) and none.project is None
 
 
 async def test_a_card_that_uses_no_jira_tool_never_counts_projects():

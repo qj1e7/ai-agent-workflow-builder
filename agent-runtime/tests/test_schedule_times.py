@@ -12,7 +12,9 @@ from agent_runtime.reading import (
     NOT_A_RUN_TIME,
     NOT_EXACT,
     NOT_HELD,
+    ONE_DAY,
     ONE_TIME,
+    READ_FROM,
     DaysRead,
     PlaceRead,
     SearchRead,
@@ -392,8 +394,9 @@ def test_a_schedule_it_holds_stays_their_own_words_with_nothing_crossed(said: st
 
 @pytest.mark.parametrize("words", ["Monday to Wednesday at 9am", "Saturday to Sunday at 9am"])
 def test_a_new_schedule_reads_no_day_from_a_range_other_than_the_weekdays(words: str):
-    """Before, any range was read as every weekday."""
-    assert said_schedule(words) == (None, "09:00")
+    """Before, any range was read as every weekday. A schedule it can't hold is asked whole, so
+    its time is not read either."""
+    assert said_schedule(words) == (None, None)
     assert said_schedule("Monday to Friday at 9am") == ("weekdays", "09:00")
 
 
@@ -470,3 +473,261 @@ def test_their_own_schedule_is_shown_whatever_the_model_wrote(said: str, model: 
     check repeated, though their words said it."""
     row = carols_row(model, said)
     assert (row.text, row.state, row.note) == (said, "understood", None)
+
+
+# A day or a time in a later clause
+
+
+@pytest.mark.parametrize(
+    ("said", "model", "reason", "choices"),
+    [
+        (
+            "Every Friday at 9am, actually make it Monday",
+            "Every Monday at 9am",
+            ONE_DAY,
+            ["Friday", "Monday"],
+        ),
+        (
+            "Every Friday at 9am actually Monday",
+            "Every Monday at 9am",
+            ONE_DAY,
+            ["Friday", "Monday"],
+        ),
+        (
+            "Every Friday at 9am, sorry, I mean Thursday",
+            "Every Thursday at 9am",
+            ONE_DAY,
+            ["Friday", "Thursday"],
+        ),
+        ("Every Friday at 9am, no wait, 10am", "Every Friday at 10am", ONE_TIME, ["9am", "10am"]),
+        (
+            "Every Friday at 9am, actually make it Monday",
+            "Every Friday at 9am",
+            ONE_DAY,
+            ["Friday", "Monday"],
+        ),
+        ("Every Friday at 9am then Monday", "Every Friday at 9am", ONE_DAY, ["Friday", "Monday"]),
+        (
+            "Every Friday at 9am, and also on Mondays",
+            "Every Friday at 9am",
+            ONE_DAY,
+            ["Friday", "Monday"],
+        ),
+    ],
+)
+def test_a_later_day_or_time_is_asked_with_both_and_the_first_is_never_understood(
+    said: str, model: str, reason: str, choices: list[str]
+):
+    """Before, the row was the first schedule, understood, so the final check said "as you
+    asked" for the day or time they took back, and "then Monday" went without a word."""
+    row, parts = carols_card(model, said)
+    quoted = " and ".join(f'"{choice}"' for choice in choices)
+    assert (row.text, row.state, row.note) == ("", "missing", reason.format(quoted))
+    clash = "one_day" if reason == ONE_DAY else "one_time"
+    assert [p.choices for p in parts if p.reason == clash] == [choices]
+
+
+@pytest.mark.parametrize(
+    "said",
+    [
+        "Mon-Fri at 9am",
+        "Mon to Fri at 9am",
+        "Mon - Fri at 9am",
+        "Daily at 9am, except weekends",
+        "Every day at 9am except weekends",
+        "Every day at 9am except Saturdays and Sundays",
+    ],
+)
+def test_weekdays_written_another_way_are_every_weekday(said: str):
+    """Before, each was asked as a schedule it can't hold, and "Daily at 9am" was crossed with
+    "I can't run things daily at 9am yet"."""
+    row, parts = carols_card("Every weekday at 9am", said)
+    assert (row.text, row.state, row.note) == (
+        "Every weekday at 9am",
+        "understood",
+        READ_FROM.format(said),
+    )
+    assert [p for p in parts if p.mark == "cant"] == []
+    assert said_schedule(said) == ("weekdays", "09:00")
+
+
+@pytest.mark.parametrize("model", ["Every Friday", "Every Friday at 5pm"])
+def test_a_bound_in_words_with_its_time_is_asked_never_dropped(model: str):
+    """Before, "by the end of the day at 5pm" went without a word."""
+    row = carols_row(model, "Every Friday by the end of the day at 5pm")
+    note = NOT_A_RUN_TIME.format("by the end of the day at 5pm")
+    assert (row.text, row.state, row.note) == ("Every Friday", "missing", note)
+
+
+@pytest.mark.parametrize(
+    ("said", "model", "shown"),
+    [
+        ("Every Friday. Run it at 9am", "Every Friday at 9am", "Every Friday at 9am"),
+        ("Every Friday. Run it at 9am", "Every Friday", "Every Friday at 9am"),
+        ("Mon-Fri. Run it at 9am", "Every weekday at 9am", "Every weekday at 9am"),
+    ],
+)
+def test_a_time_in_its_own_sentence_stays_on_the_row(said: str, model: str, shown: str):
+    """Before, "Run it at 9am" was crossed as a part it can't do, and the card asked the time."""
+    row, parts = carols_card(model, said)
+    assert (row.text, row.state) == (shown, "understood")
+    assert [p for p in parts if p.mark == "cant"] == []
+
+
+@pytest.mark.parametrize(
+    ("words", "read"),
+    [
+        ("Every Friday at 9am or so", ("friday", None)),
+        ("Every Friday at 9am roughly", ("friday", None)),
+        ("Every Friday at 16:00-ish", ("friday", None)),
+        ("every other Friday at 9am", (None, None)),
+        ("once a month on Friday at 9am", (None, None)),
+    ],
+)
+def test_a_new_schedule_never_takes_a_time_that_is_not_exact_or_a_schedule_it_cant_hold(
+    words: str, read: tuple[str | None, str | None]
+):
+    """Before, each read 09:00 or 16:00, and "every other Friday" read Friday."""
+    assert said_schedule(words) == read
+
+
+@pytest.mark.parametrize(
+    "said",
+    [
+        "Every other Friday " * 15,
+        "Every Monday Tuesday Wednesday Thursday Friday Saturday Sunday at "
+        + " ".join(f"{hour}am" for hour in range(1, 12))
+        + " "
+        + " ".join(f"{hour}pm" for hour in range(1, 12)),
+    ],
+)
+def test_a_long_schedule_phrase_is_asked_with_a_note_that_fits(said: str):
+    """Before, the note quoted too many words for its limit, and the request failed."""
+    row = carols_row("Every Friday", said.strip())
+    assert row.state == "missing" and row.note is not None and len(row.note) <= 300
+
+
+@pytest.mark.parametrize(
+    ("said", "shown"),
+    [
+        ("Monday to Fri at 9am", "Every weekday at 9am"),
+        ("Mon–Fri at 9am", "Every weekday at 9am"),
+        ("every Mon at 09:00", "Every Monday at 09:00"),
+        ("Every Tue at 10am", "Every Tuesday at 10am"),
+    ],
+)
+def test_short_day_names_and_a_dash_read_as_the_whole_day(said: str, shown: str):
+    """Before, "Monday to Fri" read as Monday, "Mon–Fri" was crossed, and "every Mon" was
+    crossed as a part it can't do."""
+    row, parts = carols_card("Every weekday at 9am", said)
+    assert (row.text, row.state, row.note) == (shown, "understood", READ_FROM.format(said))
+    assert [p for p in parts if p.mark == "cant"] == []
+
+
+@pytest.mark.parametrize(
+    ("said", "crossed"),
+    [
+        ("Mon-Fri and Sat at 9am", None),
+        ("Mon-Fri at 9am, also Sat", None),
+        ("Daily at 9am, except weekends and holidays", "except weekends and holidays"),
+        ("Every day at 9am but skip Fridays", "skip Fridays"),
+        ("Every weekday at 9am, never on Mondays", "never on Mondays"),
+    ],
+)
+def test_weekdays_beside_another_day_or_a_day_left_out_are_asked(said: str, crossed: str | None):
+    """Before, "Mon-Fri and Sat" showed every weekday as understood, "skip Fridays" ran every
+    day, and "Daily at 9am" was crossed as a schedule it can't run."""
+    row, parts = carols_card("Every weekday at 9am", said)
+    assert (row.text, row.state) == ("", "missing")
+    if crossed is not None:
+        assert [(p.text, p.reason) for p in parts if p.mark == "cant"] == [(crossed, "how_often")]
+
+
+@pytest.mark.parametrize(
+    ("words", "read"),
+    [
+        ("make it Mon-Fri at 9am, also Sat", (None, None)),
+        ("make it Mon-Fri and Sat at 9am", (None, None)),
+        ("make it daily at 9am except weekends and holidays", (None, None)),
+        ("make it daily except weekends, holidays", (None, None)),
+        ("make it daily except weekends, and holidays", (None, None)),
+        ("skip Fridays", (None, None)),
+        ("don't run it on Mondays any more", (None, None)),
+        ("run it on Tue at 10am", ("tuesday", "10:00")),
+        ("make it Monday to Fri", ("weekdays", None)),
+        ("make it daily at 9am, except weekends", ("weekdays", "09:00")),
+    ],
+)
+def test_a_new_schedule_reads_short_days_and_never_a_day_left_out(
+    words: str, read: tuple[str | None, str | None]
+):
+    assert said_schedule(words) == read
+
+
+def card_for(text: str, schedule: str) -> tuple[UnderstoodRow, list[RequestPart]]:
+    """The schedule row and the parts for a request that finds tickets in MOCK and raises one
+    ticket that lists them, with the model reading the schedule as `schedule`."""
+    task = read(
+        name="Ticket list",
+        schedule=schedule,
+        search=SearchRead(project="MOCK", said="tickets in MOCK"),
+        ticket=TicketRead(creates=True, says="list", said="raise one ticket that lists them"),
+    )
+    answer = answer_of(task, text)
+    card = answer.alternative if isinstance(answer, CantAnswer) else answer
+    assert isinstance(card, SetupCardAnswer)
+    row = next(r for r in card.rows if r.kind == "schedule")
+    return row, parts_of(task, text, answer)
+
+
+@pytest.mark.parametrize(
+    ("text", "day"),
+    [
+        ("Check tickets in WED at 4pm and raise one ticket that lists them", "Wednesday"),
+        ("Check the SAT tickets at 9am and raise one ticket that lists them", "Saturday"),
+        ("Check tickets in project MON at 9am and raise one ticket that lists them", "Monday"),
+    ],
+)
+def test_a_project_key_that_looks_like_a_short_day_is_never_read_as_the_day(text: str, day: str):
+    """Before, "in WED at 4pm" showed "In Wednesday at 4pm" understood, and "the SAT tickets"
+    ran on Saturdays "as you asked"."""
+    row, _ = card_for(text, "Every day at 9am")
+    assert day not in row.text and row.state != "understood"
+    assert said_schedule(text)[0] is None
+
+
+@pytest.mark.parametrize(
+    ("filter_words", "schedule"),
+    [
+        ("that are not on Monday's board", "Every Friday at 9am"),
+        ("titled Pause on Monday", "Every Friday at 9am"),
+        ("besides Monday's", "Every Friday at 9am"),
+        ("we skip on Mondays", "Every Friday at 9am"),
+        ("that stop on Monday", "Every Friday at 9am"),
+        ("for staff not on holiday", "Every Friday at 9am"),
+        ("except Friday's hotfixes", "Every Monday at 9am"),
+        ("that are not weekend work", "Every day at 9am"),
+    ],
+)
+def test_a_day_left_out_in_a_filter_never_makes_the_schedule_asked(
+    filter_words: str, schedule: str
+):
+    """Before, each made the row missing and crossed the filter as a schedule it can't hold."""
+    text = f"{schedule}, list tickets in MOCK {filter_words} and raise one ticket that lists them"
+    row, parts = card_for(text, schedule)
+    assert (row.text, row.state) == (schedule, "understood")
+    assert not any(p.reason == "how_often" for p in parts)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Every day at 9am, but not holidays, list tickets in MOCK",
+        "Every day at 9am though not on Fridays, list tickets in MOCK",
+    ],
+)
+def test_a_day_left_out_beside_the_schedule_is_asked_on_the_card(text: str):
+    text = f"{text} and raise one ticket that lists them"
+    row, parts = card_for(text, "Every day at 9am")
+    assert row.state == "missing"
+    assert any(p.reason == "how_often" for p in parts)

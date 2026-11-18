@@ -39,7 +39,7 @@ from agent_runtime.parts import parts_of
 from agent_runtime.planner import said_in, visible_words
 from agent_runtime.planner_led import Led, led
 from agent_runtime.questions import QuestionReply, answer_of_reply, question_messages
-from agent_runtime.reading import polite
+from agent_runtime.reading import polite, weekdays_said
 from evals.anything import Replies, usage_of
 from evals.checks import (
     Check,
@@ -258,11 +258,18 @@ def _cant_checks(case: AnswerCase, shown: PlannerAnswer) -> list[Check]:
 
 def _guessed_time(schedule: UnderstoodRow, task: str) -> list[str]:
     """The words of a schedule the request never said: a time of day on any accepted row, and a
-    day too on one the Planner called the person's own. A day shown as filled in is allowed."""
+    day too on one the Planner called the person's own. A day shown as filled in is allowed, and
+    so is every weekday for a request that names it another way, as "Mon-Fri"."""
     if schedule.state not in ACCEPTED:
         return []
     patterns = [_CLOCK_WORDS] + ([_DAY_WORDS] if schedule.state == "understood" else [])
-    return [w for p in patterns for w in p.findall(schedule.text) if not said_in(w, task)]
+    weekdays = weekdays_said(task)
+    return [
+        w
+        for p in patterns
+        for w in p.findall(schedule.text)
+        if not said_in(w, task) and not (weekdays and w.casefold().startswith("weekday"))
+    ]
 
 
 def _card_checks(case: AnswerCase, shown: PlannerAnswer) -> list[Check]:

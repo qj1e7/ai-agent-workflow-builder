@@ -23,7 +23,7 @@ from agent_runtime.contract import (
     WorkflowPlan,
 )
 from agent_runtime.planner_led import words_span
-from agent_runtime.reading import said_schedule
+from agent_runtime.reading import when_said
 from agent_runtime.workflow_plan import KIND_WORDS, ProposedSetting
 
 MOST_SETTINGS: Final = 20
@@ -31,7 +31,6 @@ LABEL_LIMIT: Final = 80
 NEVER_GUESSED_KINDS: Final[frozenset[SettingKind]] = frozenset(
     {"run_time", "jira_project", "channel", "address"}
 )
-TWENTY_FOUR_HOUR: Final = re.compile(r"\d{2}:\d{2}")
 
 type Located = Callable[[str, str], bool]
 
@@ -141,14 +140,14 @@ def _value_and_mark(
 ) -> tuple[str | None, SettingMark]:
     said = (setting.value or "").strip() or None
     if setting.kind == "run_time":
+        # Only code's own reading of the words fills a run time, never the drafter's value.
         reading, tried = run_time_in(words, before.value if before else None)
         if reading is not None:
             return reading, "filled"
-        if said is not None and words_span(words, said) is not None:
-            return _span_of(words, said), "filled"
         if tried:
-            # The words try to change the time, but not in a way code can read. Ask, keeping
-            # the day they name, so the question asks only for the time.
+            # The words say when it runs, but not in a way a schedule holds whole. Ask, keeping
+            # only a day they name whole, so the question asks only for what is missing. The
+            # run time before is never kept for them.
             return day_in(words, before.value if before else None), "needed"
     else:
         found = found_in(setting.kind, said, words, facts)
@@ -162,27 +161,29 @@ def _value_and_mark(
 
 
 def run_time_in(words: str, before: str | None = None) -> tuple[str | None, bool]:
-    """The run time the words name, as code reads it ("monday 09:00", "every_day 08:30"), with
-    the day or the time of `before` where the words name only the other. The second value says
-    whether the words name a day or a time at all."""
-    day, at = said_schedule(words)
-    tried = day is not None or at is not None
-    if at is not None and TWENTY_FOUR_HOUR.fullmatch(at) is None:
-        # A bare hour, as "at 9", might be morning or evening. A time is never guessed.
-        return None, True
+    """The run time the words name, as code reads it ("monday 09:00", "every_day 08:30"), by the
+    same list of what a schedule holds as the card's schedule row, with the day or the time of
+    `before` where the words don't name the other. The second value says whether the words say
+    anything about when it runs. A day or a time they name that a schedule can't hold whole,
+    as "every other Friday", "9am or so" or two days, is asked, so `before` never stands in
+    for it."""
+    said = when_said(words)
     old_day, _, old_at = (before or "").partition(" ")
-    day = day or (old_day if before else None)
-    at = at or (old_at if before else None)
+    day = said.day or (None if said.day_asked else old_day or None)
+    at = said.at or (None if said.time_asked else old_at or None)
     if day and at:
-        return f"{day} {at}", tried
-    return None, tried
+        return f"{day} {at}", said.said
+    return None, said.said
 
 
 def day_in(words: str, before: str | None = None) -> str | None:
-    """The day the words name, as "monday", or the day `before` held. A run time still needed
-    keeps it as its value."""
-    day, _ = said_schedule(words)
-    return day or ((before or "").partition(" ")[0] or None)
+    """The day the words name, as "monday", or the day `before` held when the words name none.
+    A run time still needed keeps it as its value. A day the words name that a schedule can't
+    hold whole gives none, so the question asks how often it runs."""
+    said = when_said(words)
+    if said.day_asked:
+        return None
+    return said.day or ((before or "").partition(" ")[0] or None)
 
 
 def found_in(kind: SettingKind, said: str | None, words: str, facts: DrafterFacts) -> str | None:

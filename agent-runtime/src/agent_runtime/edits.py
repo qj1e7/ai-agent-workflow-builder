@@ -27,16 +27,20 @@ from agent_runtime.contract import (
 )
 from agent_runtime.planner import visible_words, whole_word_of
 from agent_runtime.reading import (
-    DAY_NAMES,
+    DAY_FORMS,
     FILLER,
     FREQUENCY,
+    LEFT_OUT,
     OFTEN,
     SCHEDULE_VOCAB,
+    SHORT_FORMS,
     Clash,
     TaskRead,
     clashes_in,
     clauses_of,
     how_often,
+    inexact_times,
+    left_out,
     said_schedule,
 )
 
@@ -138,7 +142,7 @@ UNREAD_TIME: Final = re.compile(
 is never asked: this is only looked for when no time was read."""
 START: Final = re.compile(
     r"\b(?:from|starting|beginning|as\s+of)\s+(?:next\s+\w+|tomorrow)\b|"
-    rf"\b(?:starting|beginning|as\s+of)\s+(?:on\s+)?(?:{DAY_NAMES})s?\b",
+    rf"\b(?:starting|beginning|as\s+of)\s+(?:on\s+)?(?:{DAY_FORMS})s?\b",
     re.IGNORECASE,
 )
 """When the change should start, as "from next week", which the chat can't set: a change starts
@@ -149,7 +153,7 @@ TIME: Final = re.compile(
     re.IGNORECASE,
 )
 UNIT: Final = (
-    rf"(?:(?:every|each|on|the|at)\s+)?(?:(?:{DAY_NAMES})s?|weekdays?|weekends?|day|week|daily|"
+    rf"(?:(?:every|each|on|the|at)\s+)?(?:(?:{DAY_FORMS})s?|weekdays?|weekends?|day|week|daily|"
     r"weekly|\d{1,2}(?:[:.]\d{2})?\s*(?:am|pm)|\d{1,2}:\d{2}|noon|midnight|\d{1,2})"
 )
 INSTEAD: Final = re.compile(rf"\b(?:instead\s+of|rather\s+than)\s+{UNIT}\b", re.IGNORECASE)
@@ -157,7 +161,7 @@ INSTEAD: Final = re.compile(rf"\b(?:instead\s+of|rather\s+than)\s+{UNIT}\b", re.
 FROM: Final = re.compile(rf"\bfrom\s+{UNIT}\b", re.IGNORECASE)
 NOW: Final = re.compile(r"\b(?:now|currently|at\s+the\s+moment|these\s+days)\b", re.IGNORECASE)
 SCHEDULE_SAID: Final = re.compile(
-    rf"\b(?:{DAY_NAMES})s?\b|\bweekdays?\b|{TIME.pattern}|{FREQUENCY.pattern}", re.IGNORECASE
+    rf"\b(?:{DAY_FORMS})s?\b|\bweekdays?\b|{TIME.pattern}|{FREQUENCY.pattern}", re.IGNORECASE
 )
 EDIT_WORDS: Final = (
     FILLER | SCHEDULE_VOCAB | EDIT_VERBS | words("runs only instead rather than o clock")
@@ -598,7 +602,14 @@ def change_clauses(text: str, names: _Names) -> list[Span]:
         target = names.target is not None and _inside(names.target, clause)
         if names.others(clause) and not target:
             elsewhere.append(clause)
-        elif tokens & EDIT_VERBS or target or "it" in tokens or tokens <= EDIT_WORDS:
+        elif (
+            tokens & EDIT_VERBS
+            or target
+            or "it" in tokens
+            or tokens <= EDIT_WORDS
+            or LEFT_OUT.search(text, *clause) is not None
+        ):
+            # A day left out, as "except weekends" or "but skip Fridays", is part of the change.
             found.append(clause)
     scheduled = any(SCHEDULE_SAID.search(text[a:b]) for a, b in found)
     return sorted(found + ([] if scheduled else elsewhere))
@@ -658,7 +669,10 @@ def _schedule_of(
     hour = None
     if at is not None and at.isdigit():
         hour, at = _hour(int(at))
-    unclear = at is None and hour is None and UNREAD_TIME.search(rest) is not None
+    # A time that only bounds the run or is not exact, as "before 5pm" or "9am or so", is asked,
+    # never taken as the time and never left as the time it ran at.
+    named = UNREAD_TIME.search(rest) is not None or bool(inexact_times(rest))
+    unclear = at is None and hour is None and named
     if day is None and at is None and hour is None and not weekly and not unclear:
         return None, "only_schedule", []
     change = ScheduleChange(day=_day(day), weekly=weekly, at=at, hour=hour, time_unclear=unclear)
@@ -740,8 +754,15 @@ def edit_marks(
         unread=[
             *(m.span() for m in START.finditer(text)),
             *(m.span() for m in UNREAD_TIME.finditer(rest) if _unclear(answer)),
+            *(inexact_times(rest) if _unclear(answer) else []),
         ],
-        read=[*names.all, *_now(text, kept), *(m.span() for m in TIME.finditer(text))],
+        read=[
+            *names.all,
+            *_now(text, kept),
+            *(m.span() for m in TIME.finditer(text)),
+            # The weekend left out beside every day is every weekday, which the change reads.
+            *([] if left_out(rest) else [m.span() for m in LEFT_OUT.finditer(text)]),
+        ],
     )
     return [
         mark
@@ -801,7 +822,9 @@ def unexplained(text: str, clause: Span, explained: list[Span]) -> list[Span]:
         if not any(a <= clause[0] + t[1] < b for a, b in explained)
     ]
     for word, start, end in [*tokens, ("", -1, -1)]:
-        if word and (word not in EDIT_WORDS or (run and word in FILLER)):
+        # A short day in capitals is a project key, as "MON", never a schedule word.
+        key = word in SHORT_FORMS and text[clause[0] + start : clause[0] + end].isupper()
+        if word and (key or word not in EDIT_WORDS or (run and word in FILLER)):
             run.append((word, start, end))
             continue
         while run and run[-1][0] in FILLER:

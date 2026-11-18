@@ -2945,6 +2945,68 @@ def test_the_new_schedule_is_read_whole_and_ticked(task: str, change: ScheduleCh
     assert all(mark == "will_do" for _, mark, _ in marks(fields, task))
 
 
+@pytest.mark.parametrize(
+    "task",
+    [
+        "make the morning check run every Friday at 9am or so",
+        "make the morning check run every Friday at 9am roughly",
+        "make the morning check run every Friday at 9am-ish",
+        "make the morning check run every Friday before 5pm",
+    ],
+)
+def test_a_new_time_that_is_not_exact_is_asked_never_taken_or_left_as_it_was(task: str):
+    """Before, "9am or so" changed the time to exactly 09:00, and "before 5pm" kept the old
+    time without a word."""
+    fields = read(asks_about="change", workflow_words="morning check")
+    assert edited(fields, task).schedule == ScheduleChange(day="friday", time_unclear=True)
+
+
+@pytest.mark.parametrize(
+    ("task", "change"),
+    [
+        ("make the morning check run Mon-Fri at 9am", ScheduleChange(day="weekdays", at="09:00")),
+        (
+            "make the morning check run daily at 9am, except weekends",
+            ScheduleChange(day="weekdays", at="09:00"),
+        ),
+        ("make the morning check run on Tue at 10am", ScheduleChange(day="tuesday", at="10:00")),
+    ],
+)
+def test_an_edit_reads_weekdays_and_short_days_as_the_card_does(task: str, change: ScheduleChange):
+    """Before, "Mon-Fri" was applied and crossed as not followed, "except weekends" made it
+    every day, and "Tue" was dropped, so only the time changed."""
+    fields = read(asks_about="change", workflow_words="morning check")
+    assert edited(fields, task).schedule == change
+    assert all(mark == "will_do" for _, mark, _ in marks(fields, task))
+
+
+def test_an_edit_never_reads_a_project_key_as_a_short_day():
+    """Before, "for project MON" moved the morning check to Mondays."""
+    fields = read(asks_about="change", workflow_words="morning check")
+    task = "make the morning check run at 9am for project MON"
+    assert edited(fields, task).schedule == ScheduleChange(at="09:00")
+    assert crossed(fields, task) == [("project MON", "not_followed")]
+
+
+@pytest.mark.parametrize(
+    ("task", "cant"),
+    [
+        ("make the morning check skip Fridays", "how_often"),
+        ("make the morning check run every day but skip Fridays", "how_often"),
+        ("make the morning check run daily except weekends, holidays", "how_often"),
+        ("make the morning check run Mon-Fri at 9am, also Sat", None),
+    ],
+)
+def test_an_edit_that_leaves_out_or_adds_a_day_beside_weekdays_is_never_made(
+    task: str, cant: str | None
+):
+    """Before, "skip Fridays" moved it to Fridays, and "also Sat" made it every weekday. A day
+    left out is a schedule it can't hold. A day added asks which, as two days do."""
+    fields = read(asks_about="change", workflow_words="morning check")
+    answer = edited(fields, task)
+    assert (answer.schedule, answer.cant) == (None, cant)
+
+
 def test_another_workflow_named_beside_the_edit_is_kept_to_ask_on_its_own():
     task = "Make the morning check run at 10am and the weekly summary run on Mondays"
     fields = read(asks_about="change", workflow_words="morning check")

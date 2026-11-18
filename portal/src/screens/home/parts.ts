@@ -54,8 +54,8 @@ export const WATCHLIST_CANT = 'From the chat I can add software to the Software 
 /** The request that moves the whole Software watchlist to the time she asked of one software. */
 export const watchlistRuns = (time: string): string => `Make the Software watchlist run ${time.trim()}`
 
-/** “every weekday except Friday” leaves a day out, which no schedule here can hold. Anything else reads as how often. */
-const LEAVES_OUT = /\b(?:except|excluding|but not|apart from|other than)\b/i
+/** “every weekday except Friday” or “skip Fridays” leaves a day out, which no schedule here can hold. Anything else reads as how often. */
+const LEAVES_OUT = /\b(?:except|excluding|but not|apart from|other than|skip|skipping|never|not on|no longer|don[’']t|do not|stop|stopping|without)\b/i
 const STARTS_WITH_A_DAY = /^(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)s?\b/i
 
 export function howOftenWords(text: string): string {
