@@ -257,6 +257,28 @@ async def test_a_project_the_words_say_not_to_use_is_never_filled(task: str):
 @pytest.mark.parametrize(
     "task",
     [
+        "Find stale tickets and raise one ticket, but don't raise tickets in MOCK",
+        "Never put tickets in MOCK; find the stale ones and list them",
+        "Find the stale bugs in MOCK, but don't create the summary ticket in MOCK",
+        "Avoid creating tickets in MOCK",
+        "Stop raising tickets in MOCK and list the stale ones",
+        "Find stale tickets and no longer raise tickets in MOCK",
+    ],
+)
+async def test_a_project_after_a_verb_the_words_say_not_to_do_is_never_filled(task: str):
+    """Before, each filled MOCK as the place the ticket is written."""
+    result = await planned(task, ("MOCK",))
+    assert isinstance(result, NewAgent) and result.project is None
+
+
+async def test_a_project_after_project_and_a_colon_is_the_place():
+    result = await planned("Find stale tickets and raise one ticket. Jira project: MOCK", ("MOCK",))
+    assert isinstance(result, NewAgent) and result.project == "MOCK"
+
+
+@pytest.mark.parametrize(
+    "task",
+    [
         "Find stale tickets in MOCK and raise one ticket for ops",
         "Find stale tickets in MOCK and raise one ticket with the service desk",
         "Find stale tickets in MOCK and raise one ticket for support",

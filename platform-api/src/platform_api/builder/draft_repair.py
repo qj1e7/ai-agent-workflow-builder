@@ -222,15 +222,23 @@ finished in MOCK". Any other, as "not" or "except", leaves the place unsure."""
 THE_PLACE: Final = (
     rf"(?:^|(?<=[,.;:!?(])\s*|\b(?:{BEFORE_THE_PLACE})\s+)(?:in|into|from)\s+"
     r"(?:(?:the|jira|projects?)\s+)*(?P<key>{key})\b",
-    r"(?:^|(?<=[,.;:!?(])\s*)(?:the\s+)?(?:jira\s+)?project\s+(?P<key>{key})\b",
+    r"(?:^|(?<=[,.;:!?(])\s*)(?:the\s+)?(?:jira\s+)?project\s*:?\s+(?P<key>{key})\b",
     r"(?:^|(?<=[,.;:!?(])\s*|\b(?:the|all|any|open|stale|idle|new|old|our|my|each|every|find|"
     r"list|check|raise|get|show|read|search|sum\s+up|summarise|summarize)\s+)"
     r"(?P<key>{key})\s+(?:tickets?|issues?|bugs?|project|board|backlog)\b",
 )
 """Where the words name the project as the place: after "in", "into" or "from" that follows a
 ticket word, as "tickets in MOCK"; after "project" at a clause's start, as "Where it goes: Jira
-project MOCK"; or before a ticket word, as "the MOCK tickets". Each mention of the project must
-stand so, never inside a negation such as "not in MOCK" or "anywhere but MOCK"."""
+project MOCK" or "Jira project: MOCK"; or before a ticket word, as "the MOCK tickets". Each
+mention of the project must stand so, never inside a negation such as "not in MOCK" or "anywhere
+but MOCK"."""
+NOT_DONE: Final = re.compile(
+    r"\b(?:not|never|nor|without|avoid(?:s|ing)?|stop(?:s|ping)?|no\s+longer|cannot|"
+    r"(?:can|don|doesn|won|shouldn|mustn|isn|aren)['\u2019]?t)\b",
+    re.IGNORECASE,
+)
+"""Words that say not to do what follows, as "don't raise", "never put" or "avoid creating"."""
+CLAUSE_START: Final = re.compile(r"[,.;:!?]|\bbut\b", re.IGNORECASE)
 A_PLACE_LEAD: Final = re.compile(
     r"(?<![\w-])(?:in|into|to|from|on|onto|under|for|with|at|inside|within|via|outside|beyond)\s+"
     r"(?:(?:the|a|an|our|my|your|their|its|this|that|these|those|jira|projects?)\s+)*"
@@ -257,7 +265,8 @@ def project_to_fill(task: str, known: Collection[str] = ()) -> str | None:
     It decides where the ticket is written, so it is read narrowly, from a list of what is
     allowed: the one project the words name must be one the team's Jira allows, and every
     mention of it must name it as the place, as "tickets in MOCK", never inside a negation such
-    as "not in MOCK". It is filled only when it is the one place the words name: every word after
+    as "not in MOCK" or after a verb the words say not to do, as "don't raise tickets in MOCK".
+    It is filled only when it is the one place the words name: every word after
     "in", "for", "with", "on" and the like must be one that names no place, so "for ops" or
     "with the service desk" leaves it unsure, and so does another key anywhere, as "for OPS", or
     "elsewhere". With no list of the team's projects, nothing is filled."""
@@ -271,6 +280,12 @@ def project_to_fill(task: str, known: Collection[str] = ()) -> str | None:
     mentions = [m.start() for m in re.finditer(rf"(?<![\w-]){re.escape(key)}(?![\w-])", task, re.I)]
     if not mentions or any(at not in placed for at in mentions):
         return None
+    for at in mentions:
+        # A project after a verb the words say not to do, as "don't raise tickets in MOCK", is no
+        # place to write. It reads more than it must, as a reader that only asks may.
+        starts = [m.end() for m in CLAUSE_START.finditer(task, 0, at)]
+        if NOT_DONE.search(task, starts[-1] if starts else 0, at):
+            return None
     for match in A_PLACE_LEAD.finditer(task):
         word = match.group("word")
         if word.upper() == key or word.casefold() in NO_PLACE or word.upper() in NOT_PROJECTS:
