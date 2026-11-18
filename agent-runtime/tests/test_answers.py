@@ -3007,6 +3007,32 @@ def test_an_edit_that_leaves_out_or_adds_a_day_beside_weekdays_is_never_made(
     assert (answer.schedule, answer.cant) == (None, cant)
 
 
+@pytest.mark.parametrize(
+    ("task", "crossed"),
+    [
+        ("make the morning check leave out Fridays", "leave out Fridays"),
+        ("make the morning check take Fridays out", "take Fridays out"),
+        ("make the morning check run daily, Fridays off", "Fridays off"),
+        ("make the morning check run daily, Fridays excluded", "Fridays excluded"),
+        ("make the morning check run daily unless it's a Friday", "unless it's a Friday"),
+        ("make the morning check run daily except Friday's", "except Friday's"),
+    ],
+)
+def test_an_edit_that_names_a_day_but_not_to_run_on_it_is_never_made(task: str, crossed: str):
+    """Before, each moved the morning check to Fridays, or kept it daily and dropped Friday."""
+    fields = read(asks_about="change", workflow_words="morning check")
+    answer = edited(fields, task)
+    assert (answer.schedule, answer.cant) == (None, "how_often")
+    assert (crossed, "cant", "how_often") in marks(fields, task)
+
+
+def test_an_edit_never_reads_a_ticket_s_due_date_as_its_schedule():
+    """Before, it moved the morning check to Fridays at 17:00."""
+    fields = read(asks_about="change", workflow_words="morning check")
+    answer = edited(fields, "make the morning check set the due date to Friday at 5pm")
+    assert answer.schedule is None
+
+
 def test_another_workflow_named_beside_the_edit_is_kept_to_ask_on_its_own():
     task = "Make the morning check run at 10am and the weekly summary run on Mondays"
     fields = read(asks_about="change", workflow_words="morning check")
