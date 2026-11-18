@@ -270,7 +270,7 @@ RUNTIME_KEY_SHAPES = (
     r"(?i:accountkey|sharedaccesskey)=[A-Za-z0-9+/=]{32,}",
     r"sig=[A-Za-z0-9%+/=_\-]{40,}",
     r"(?i:token|key|secret|password|pat|auth)\b\W{1,10}[0-9a-f]{40}\b",
-    r":\\?/\\?/[^\s:/@]+:[^\s/@]+@",
+    r":\\?/\\?/[^\s:/@]*:[^\s/@]+@",
     r"(?:(?<=\\)(?![bfnrt]|u[0-9A-Fa-f]{4})|(?<=\\[bfnrt])|(?<=\\u[0-9A-Fa-f]{4})"
     r"|(?<![A-Za-z0-9_\-\\]))"
     r"(?=[A-Za-z0-9_\-]*?eyJ)[A-Za-z0-9_\-]++\.eyJ[A-Za-z0-9_\-]++\.[A-Za-z0-9_\-]+",
