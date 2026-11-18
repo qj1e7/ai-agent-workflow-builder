@@ -36,9 +36,9 @@ from agent_runtime.reading import (
     SHORT_FORMS,
     Clash,
     TaskRead,
+    change_unheld,
     clashes_in,
     clauses_of,
-    how_often,
     inexact_times,
     left_out,
     said_schedule,
@@ -593,6 +593,7 @@ def change_clauses(text: str, names: _Names) -> list[Span]:
     A clause that names another workflow belongs to the change only when the target's own clause
     names no schedule, as "Make the morning check and the weekly summary run at 10am"."""
     unnamed = _blank(text, [*names.all, *(m.span() for m in TIME.finditer(text))])
+    leaves = left_out(text)
     found: list[Span] = []
     elsewhere: list[Span] = []
     for clause in _split(text, clauses_of(text), names):
@@ -608,8 +609,10 @@ def change_clauses(text: str, names: _Names) -> list[Span]:
             or "it" in tokens
             or tokens <= EDIT_WORDS
             or LEFT_OUT.search(text, *clause) is not None
+            or any(a < clause[1] and clause[0] < b for a, b in leaves)
         ):
-            # A day left out, as "except weekends" or "but skip Fridays", is part of the change.
+            # A day left out, as "except weekends", "but skip Fridays" or "Fridays off", is part
+            # of the change.
             found.append(clause)
     scheduled = any(SCHEDULE_SAID.search(text[a:b]) for a, b in found)
     return sorted(found + ([] if scheduled else elsewhere))
@@ -658,7 +661,7 @@ def _schedule_of(
     rest = _rest(text, names)
     if OTHER_CHANGES & {w for w, _, _ in _tokens(rest)}:
         return None, "only_schedule", []
-    if how_often(rest) is not None:
+    if change_unheld(rest) is not None:
         return None, "how_often", []
     clashes = clashes_in(rest)
     if clashes:
@@ -750,7 +753,7 @@ def edit_marks(
         unnamed=_blank(text, names.all),
         kept=kept,
         clashes=clashes_in(rest) if answer.holds_save else [],
-        often=how_often(rest) if answer.cant == "how_often" else None,
+        often=change_unheld(rest) if answer.cant == "how_often" else None,
         unread=[
             *(m.span() for m in START.finditer(text)),
             *(m.span() for m in UNREAD_TIME.finditer(rest) if _unclear(answer)),

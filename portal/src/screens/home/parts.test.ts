@@ -35,6 +35,29 @@ describe('the edit answer’s parts', () => {
     expect(crossWords(crossed('except weekends and holidays', 'how_often'))).toBe('I can’t leave days out of a schedule yet.')
   })
 
+  it('says a day named any way but to run on it as a day left out, never “run things drop Fridays”', () => {
+    for (const words of [
+      'drop Fridays',
+      'drop every Friday',
+      'take out Fridays',
+      'take Fridays out',
+      'Fridays excluded',
+      'Fridays off',
+      'Friday is off',
+      'Fridays are cancelled',
+      'ditch Fridays',
+      'unless it’s a Friday',
+      'except Friday’s',
+      'Every Friday’s at 9am',
+      'or Monday if Friday is a holiday',
+    ]) {
+      expect(crossWords(crossed(words, 'how_often'))).toBe('I can’t leave days out of a schedule yet.')
+    }
+    for (const words of ['Monday to Wednesday at 9am', 'Mon-Wed at 9am', 'Once a month on Friday at 9am', 'Alternate Fridays at 9am', 'On weekends at 9am']) {
+      expect(crossWords(crossed(words, 'how_often'))).toMatch(/^I can’t run things /)
+    }
+  })
+
   it('words a whole schedule phrase it can’t hold as a sentence, a day it names left in capitals', () => {
     expect(crossWords(crossed('Every other Friday at 9am', 'how_often'))).toBe('I can’t run things every other Friday at 9am yet.')
     expect(crossWords(crossed('Fridays every other week', 'how_often'))).toBe('I can’t run things Fridays every other week yet.')

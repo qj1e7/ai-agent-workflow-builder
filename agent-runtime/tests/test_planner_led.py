@@ -570,6 +570,34 @@ def test_a_change_with_a_day_added_or_left_out_beside_weekdays_is_never_made(
     assert result.errors
 
 
+@pytest.mark.parametrize(
+    ("message", "day", "at"),
+    [
+        ("make the morning check drop Fridays", "friday", None),
+        ("make the morning check run daily, Fridays off", "friday", None),
+        ("make the morning check leave out Fridays", "friday", None),
+        ("make the morning check run daily unless it's a Friday", "friday", None),
+        ("make the morning check drop every Friday", "friday", None),
+        ("make the morning check cancel every Friday", "friday", None),
+        ("make the morning check set the due date to Friday at 5pm", "friday", "17:00"),
+        ("make the morning check raise it for 5pm deadlines", None, "17:00"),
+    ],
+)
+def test_a_change_to_a_day_it_isn_t_told_to_run_on_or_a_ticket_s_deadline_is_never_made(
+    message: str, day: str | None, at: str | None
+) -> None:
+    """Before, each was accepted as the day or time the model gave, so the morning check moved
+    to Fridays, or to the ticket's 17:00 deadline."""
+    result, _ = run(
+        message,
+        tool("change_workflow", action="schedule", workflow_words="morning check", day=day, at=at),
+        AIMessage(content="stop"),
+        facts=WORKFLOWS,
+    )
+
+    assert result.errors
+
+
 def test_an_approver_cannot_change_a_workflow() -> None:
     result, _ = run(
         "pause the morning check",

@@ -1219,3 +1219,264 @@ def test_a_day_left_out_in_the_schedule_s_own_words_is_always_asked(words: str):
 )
 def test_a_change_that_leaves_a_day_out_never_keeps_the_run_time(words: str):
     assert run_time_in(words, "monday 09:00") == (None, True)
+
+
+EVERY_DAY_SET: dict[str, tuple[str | None, str]] = {
+    "run_time": ("every_day 09:00", "filled"),
+    "repository": ("langchain-ai/langgraph", "filled"),
+    "jira_project": ("MOCK", "filled"),
+    "channel": ("#support", "filled"),
+}
+
+
+@pytest.mark.parametrize(
+    "words",
+    [
+        "drop Fridays",
+        "remove Fridays",
+        "cut Fridays",
+        "take out Fridays",
+        "leave out Fridays",
+        "minus Fridays",
+        "Fridays excluded",
+        "Fridays off",
+        "Friday is off",
+        "not on Friday's",
+        # No list names these words: a day counts only when the words say to run on it.
+        "ditch Fridays",
+        "scrap Fridays",
+        "lose the Fridays",
+        "get rid of Fridays",
+        "take Fridays out",
+        "Fridays are off",
+        "Fridays are cancelled",
+        "Fridays not needed",
+        "Fridays aside",
+        "nothing on Fridays",
+        "I want Fridays off",
+        "please don't bother with Fridays",
+        "drop every Friday",
+        "remove every Friday",
+        "skip Friday's",
+        "except Friday's",
+        "unless it's a Friday",
+        "drop Fridays at 10am",
+        "make the release check drop Fridays",
+    ],
+)
+def test_a_change_that_names_a_day_but_not_to_run_on_it_never_makes_it_the_run_day(
+    catalogue: Catalogue, words: str
+):
+    """Before, "drop Fridays", "Fridays off" or "not on Friday's" turned a daily workflow into a
+    Friday one, filled, with no question."""
+    current = edited(EVERY_DAY_SET)
+
+    assert marks(catalogue, RELEASE_SETTINGS, words, current)["run_time"] == (None, "needed")
+
+
+@pytest.mark.parametrize(
+    "when",
+    [
+        "Every day at 9am unless it's a Friday",
+        "Every day at 9am, unless it is Friday",
+        "Every day at 9am except Friday's",
+        "Every day at 9am, skip Friday's",
+        "Every weekday at 9am except Monday's",
+        "Every weekday at 9am, but never on Monday's",
+        "Every day at 9am, Friday excluded",
+        "Every day at 9am, minus Friday",
+        "Every day at 9am, drop Friday",
+        "Every day at 9am, Fridays off",
+        "Every day at 9am drop Fridays",
+        "Every Friday's at 9am",
+        "Every Friday at 9am, or Monday if Friday is a holiday",
+    ],
+)
+def test_a_first_draft_that_names_a_day_but_not_to_run_on_it_is_asked(when: str):
+    """Before, "unless it's a Friday" and "except Friday's" filled every day at 09:00 and
+    dropped the Friday without a word."""
+    words = f"{when}, check langchain-ai/langgraph"
+
+    assert run_time_in(words) == (None, True)
+    assert day_in(words) is None
+
+
+@pytest.mark.parametrize(
+    ("words", "kept"),
+    [
+        ("run it on Fridays", ("friday 09:00", "filled")),
+        ("make it Friday", ("friday 09:00", "filled")),
+        ("change it to Friday", ("friday 09:00", "filled")),
+        ("switch to Fridays", ("friday 09:00", "filled")),
+        ("set it for Friday", ("friday 09:00", "filled")),
+        ("move it to Fridays please", ("friday 09:00", "filled")),
+        ("Fridays instead", ("friday 09:00", "filled")),
+        ("only on Fridays", ("friday 09:00", "filled")),
+        ("weekdays only", ("weekdays 09:00", "filled")),
+        ("make it Fridays at 10am", ("friday 10:00", "filled")),
+        ("make it run every Friday", ("friday 09:00", "filled")),
+        ("make the release check run Fridays", ("friday 09:00", "filled")),
+        ("I want it on Fridays", ("friday 09:00", "filled")),
+        ("actually Monday", ("monday 09:00", "filled")),
+        ("move the release check to Tuesdays", ("tuesday 09:00", "filled")),
+        ("run it by itself every Monday", ("monday 09:00", "filled")),
+    ],
+)
+def test_a_change_that_says_to_run_on_a_day_still_sets_it(
+    catalogue: Catalogue, words: str, kept: tuple[str, str]
+):
+    current = edited(EVERY_DAY_SET)
+
+    assert marks(catalogue, RELEASE_SETTINGS, words, current)["run_time"] == kept
+
+
+@pytest.mark.parametrize(
+    ("words", "read"),
+    [
+        ("Summarise Monday's tickets every Friday at 4pm", "friday 16:00"),
+        ("Check langchain-ai/langgraph every Friday at 9am", "friday 09:00"),
+        ("Find stale tickets in MOCK and post them every Friday at 9am", "friday 09:00"),
+        ("Check every Friday at 9am for new langgraph releases", "friday 09:00"),
+        ("Fridays at 9am, check langchain-ai/langgraph", "friday 09:00"),
+        ("Every day at 9am except weekends, check langgraph", "weekdays 09:00"),
+        ("Post deadlines every Friday at 9am", "friday 09:00"),
+        ("Every Monday at 9am, raise one ticket with a 5pm deadline", "monday 09:00"),
+    ],
+)
+def test_a_first_draft_that_says_to_run_on_a_day_still_fills_it(words: str, read: str):
+    assert run_time_in(words) == (read, True)
+
+
+MONDAY_SET: dict[str, tuple[str | None, str]] = {
+    **EVERY_DAY_SET,
+    "run_time": ("monday 09:00", "filled"),
+}
+
+
+@pytest.mark.parametrize(
+    ("words", "kept"),
+    [
+        ("set the due date to Friday at 5pm", (None, "needed")),
+        ("the deadline is Friday at 5pm", (None, "needed")),
+        ("set the expiry to Friday at 5pm", (None, "needed")),
+        ("set the start date to Monday 9am", (None, "needed")),
+        ("set the end date to Friday at 5pm", (None, "needed")),
+        ("move the deadlines to Fridays at 5pm", (None, "needed")),
+        ("raise it with a Friday deadline", (None, "needed")),
+        ("make them due by Friday 5pm", (None, "needed")),
+        ("raise it for 5pm deadlines", ("monday", "needed")),
+        ("make the deadline 5pm", ("monday", "needed")),
+        ("give it a 5pm SLA", ("monday", "needed")),
+        ("set the due date to Friday at 5pm and run it at 10am", ("monday 10:00", "filled")),
+    ],
+)
+def test_a_ticket_s_due_date_or_deadline_is_never_the_run_time(
+    catalogue: Catalogue, words: str, kept: tuple[str | None, str]
+):
+    """Before, "set the due date to Friday at 5pm" ran the workflow every Friday at 17:00, and
+    "raise it for 5pm deadlines" ran it every Monday at 17:00."""
+    current = edited(MONDAY_SET)
+
+    assert marks(catalogue, RELEASE_SETTINGS, words, current)["run_time"] == kept
+
+
+@pytest.mark.parametrize(
+    ("words", "read"),
+    [
+        ("Check every Friday at 9am", "friday 09:00"),
+        ("Post every Friday at 9am", "friday 09:00"),
+        ("Report every Monday at 9am", "monday 09:00"),
+        ("Summarise every Friday at 4pm", "friday 16:00"),
+        ("Close every Friday at 9am", "friday 09:00"),
+        ("Archive every Friday at 9am", "friday 09:00"),
+        ("Sync every Friday at 9am", "friday 09:00"),
+        ("Backup every Friday at 9am", "friday 09:00"),
+        ("Clean up every Friday at 9am", "friday 09:00"),
+        ("Scan every weekday at 8am", "weekdays 08:00"),
+        (
+            "Check every Friday at 9am, list tickets in MOCK and raise one ticket that lists them",
+            "friday 09:00",
+        ),
+        ("Check langgraph Fridays at 9am", "friday 09:00"),
+        ("post them Fridays at 9am", "friday 09:00"),
+        ("Find stale tickets in MOCK Fridays at 9am", "friday 09:00"),
+        ("List stale tickets weekdays at 3pm", "weekdays 15:00"),
+        ("Send a summary Fridays at 9am", "friday 09:00"),
+        ("Send deadline reminders Fridays at 9am", "friday 09:00"),
+        ("Check releases Mondays at 9am", "monday 09:00"),
+        ("Check releases Monday at 9am", "monday 09:00"),
+        ("Check langchain-ai/langgraph for new releases Mondays at 9am", "monday 09:00"),
+        ("Remind #ops of the deadline at 9am on Fridays", "friday 09:00"),
+        ("Check SLAs on Mondays at 9am", "monday 09:00"),
+    ],
+)
+def test_a_day_with_its_run_time_after_a_task_word_is_the_run_time(words: str, read: str):
+    """At acdcef14, a day after the clause's only verb or after a task's own words asked, as
+    "Check every Friday at 9am" or "Check langgraph Fridays at 9am", and "the deadline at 9am on
+    Fridays" was read as the deadline's. A day whose own phrase holds the time it runs at is
+    the run time, whatever task words come before it."""
+    assert run_time_in(words) == (read, True)
+
+
+@pytest.mark.parametrize(
+    ("words", "kept", "before"),
+    [
+        ("check every Friday at 9am", ("friday 09:00", "filled"), EVERY_DAY_SET),
+        ("post every Friday at 10am instead", ("friday 10:00", "filled"), EVERY_DAY_SET),
+        ("make it Thursday, deadline Friday", ("thursday 09:00", "filled"), MONDAY_SET),
+        ("run it Fridays, due date Monday", ("friday 09:00", "filled"), MONDAY_SET),
+    ],
+)
+def test_a_change_with_a_day_and_its_time_or_beside_a_ticket_date_sets_the_right_day(
+    catalogue: Catalogue,
+    words: str,
+    kept: tuple[str, str],
+    before: dict[str, tuple[str | None, str]],
+):
+    """At acdcef14, each asked: a ticket's date across a comma held the schedule's day, and a
+    day with its time after a verb was left out."""
+    assert marks(catalogue, RELEASE_SETTINGS, words, edited(before))["run_time"] == kept
+
+
+@pytest.mark.parametrize(
+    ("words", "day"),
+    [
+        ("Check every Monday", "monday"),
+        ("Check langgraph Mondays", "monday"),
+        ("drop every Monday", None),
+        ("cancel Mondays", None),
+        ("Mondays off", None),
+    ],
+)
+def test_an_untimed_day_after_a_task_word_keeps_the_day_unless_a_word_drops_it(
+    words: str, day: str | None
+):
+    """ "Check every Monday" keeps Monday and asks only the time, as on main; at acdcef14 it
+    asked how often too. A word that drops the day, or one after it, still asks how often."""
+    assert run_time_in(words) == (None, True)
+    assert day_in(words) == day
+
+
+@pytest.mark.parametrize(
+    "words",
+    [
+        "make the release check drop every Friday",
+        "make the release check cancel every Friday",
+        "make the release check skip every Friday",
+        "make the release check stop every Friday",
+        "make the release check pause every Friday",
+        "make the release check skip Fridays",
+        "drop every Friday at 9am",
+        "cancel every Friday at 9am",
+        "drop Fridays at 9am",
+        "scrap every Monday at 9am",
+    ],
+)
+def test_a_verb_that_drops_a_day_never_makes_it_the_run_day_or_keeps_the_old_one(
+    catalogue: Catalogue, words: str
+):
+    """Before, "make the release check drop every Friday" turned a daily workflow into a Friday
+    one, and "make the release check skip Fridays" kept it daily without a word."""
+    current = edited(EVERY_DAY_SET)
+
+    assert marks(catalogue, RELEASE_SETTINGS, words, current)["run_time"] == (None, "needed")

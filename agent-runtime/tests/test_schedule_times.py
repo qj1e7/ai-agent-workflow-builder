@@ -731,3 +731,152 @@ def test_a_day_left_out_beside_the_schedule_is_asked_on_the_card(text: str):
     row, parts = card_for(text, "Every day at 9am")
     assert row.state == "missing"
     assert any(p.reason == "how_often" for p in parts)
+
+
+@pytest.mark.parametrize(
+    "words",
+    [
+        "drop Fridays",
+        "remove Fridays",
+        "cut Fridays",
+        "take out Fridays",
+        "leave out Fridays",
+        "minus Fridays",
+        "Fridays excluded",
+        "Fridays off",
+        "Friday is off",
+        "not on Friday's",
+        "ditch Fridays",
+        "Fridays are cancelled",
+        "nothing on Fridays",
+        "drop every Friday",
+        "skip Friday's",
+        "except Friday's",
+        "unless it's a Friday",
+        "make it daily, Fridays off",
+    ],
+)
+def test_a_new_schedule_never_reads_a_day_it_isn_t_told_to_run_on(words: str):
+    """Before, each read Friday as the day it runs, so a schedule change moved it to Fridays."""
+    assert said_schedule(words) == (None, None)
+
+
+@pytest.mark.parametrize(
+    ("words", "read_"),
+    [
+        ("run it on Fridays", ("friday", None)),
+        ("make it Friday", ("friday", None)),
+        ("Fridays instead", ("friday", None)),
+        ("weekdays only", ("weekdays", None)),
+        ("make it Fridays at 10am", ("friday", "10:00")),
+        ("make it daily at 9am, except weekends", ("weekdays", "09:00")),
+    ],
+)
+def test_a_new_schedule_still_reads_a_day_it_is_told_to_run_on(
+    words: str, read_: tuple[str | None, str | None]
+):
+    assert said_schedule(words) == read_
+
+
+@pytest.mark.parametrize(
+    ("words", "read_"),
+    [
+        ("set the due date to Friday at 5pm", (None, None)),
+        ("the deadline is Friday at 5pm", (None, None)),
+        ("raise it for 5pm deadlines", (None, None)),
+        ("set the start date to Monday 9am", (None, None)),
+        ("set the due date to Friday and run it at 10am", (None, "10:00")),
+    ],
+)
+def test_a_new_schedule_never_reads_a_ticket_s_due_date_or_deadline(
+    words: str, read_: tuple[str | None, str | None]
+):
+    """Before, "set the due date to Friday at 5pm" moved the workflow to Fridays at 17:00."""
+    assert said_schedule(words) == read_
+
+
+@pytest.mark.parametrize(
+    ("words", "read_"),
+    [
+        ("Check every Friday at 9am", ("friday", "09:00")),
+        ("Check langgraph Fridays at 9am", ("friday", "09:00")),
+        ("make it Thursday, deadline Friday", ("thursday", None)),
+        ("run it Fridays, due date Monday", ("friday", None)),
+        ("Remind #ops of the deadline at 9am on Fridays", ("friday", "09:00")),
+        ("Check SLAs on Mondays at 9am", ("monday", "09:00")),
+        ("make the release check drop every Friday", (None, None)),
+        ("make the release check cancel every Friday", (None, None)),
+    ],
+)
+def test_a_new_schedule_reads_a_day_with_its_time_and_never_one_a_verb_drops(
+    words: str, read_: tuple[str | None, str | None]
+):
+    """At acdcef14, "Check every Friday at 9am" read nothing, a ticket's date across a comma hid
+    the schedule's day, and "drop every Friday" after a workflow's name read Friday."""
+    assert said_schedule(words) == read_
+
+
+@pytest.mark.parametrize(
+    ("said", "schedule"),
+    [
+        ("Check every Friday at 9am", "Every Friday at 9am"),
+        ("Check langgraph Fridays at 9am", "Every Friday at 9am"),
+        ("Find stale tickets in MOCK Fridays at 9am", "Every Friday at 9am"),
+    ],
+)
+def test_a_day_with_its_run_time_after_a_task_word_is_never_crossed_on_the_card(
+    said: str, schedule: str
+):
+    """At acdcef14, the card crossed "Check every Friday at 9am" and "MOCK Fridays at 9am" as
+    schedules it can't hold, the task's verb and project with them."""
+    row, parts = card_for(
+        f"{said}, list tickets in MOCK and raise one ticket that lists them", schedule
+    )
+    assert row.state != "missing"
+    assert not any(p.reason == "how_often" for p in parts)
+
+
+@pytest.mark.parametrize(
+    ("said", "schedule", "shown"),
+    [
+        ("Check every Monday", "Every Monday", "Every Monday"),
+        ("Check langgraph Mondays", "Every Monday", "Mondays"),
+    ],
+)
+def test_every_day_or_a_plural_day_after_a_task_word_keeps_the_day_on_the_card(
+    said: str, schedule: str, shown: str
+):
+    """At acdcef14, the card crossed "Check every Monday" and "langgraph Mondays" as schedules
+    it can't hold, and asked the day."""
+    row, parts = card_for(
+        f"{said}, list tickets in MOCK and raise one ticket that lists them", schedule
+    )
+    assert (row.text, row.state) == (shown, "understood")
+    assert not any(p.reason == "how_often" for p in parts)
+    assert said_schedule(said) == ("monday", None)
+
+
+@pytest.mark.parametrize(
+    ("said", "crossed"),
+    [
+        ("Every day at 9am unless it's a Friday", "unless it's a Friday"),
+        ("Every day at 9am except Friday's", "except Friday's"),
+        ("Every day at 9am, skip Friday's", "skip Friday's"),
+        ("Every day at 9am, Fridays excluded", "Fridays excluded"),
+        ("Every day at 9am, Friday excluded", "Friday excluded"),
+        ("Every day at 9am, minus Friday", "minus Friday"),
+        ("Every day at 9am, Fridays off", "Fridays off"),
+        ("Every day at 9am, drop Fridays", "drop Fridays"),
+    ],
+)
+def test_a_day_the_schedule_s_words_don_t_say_to_run_on_is_asked_on_the_card(
+    said: str, crossed: str
+):
+    """Before, "unless it's a Friday" and "except Friday's" showed "Every day at 9am" as
+    understood, and "Fridays off" asked whether to run every day or on Fridays."""
+    row, parts = card_for(
+        f"{said}, list tickets in MOCK and raise one ticket that lists them", "Every day at 9am"
+    )
+    assert (row.text, row.state) == ("", "missing")
+    assert row.note == NOT_HELD.format(crossed)
+    assert [(p.text, p.reason) for p in parts if p.mark == "cant"] == [(crossed, "how_often")]

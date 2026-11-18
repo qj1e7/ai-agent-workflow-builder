@@ -84,7 +84,6 @@ from agent_runtime.edits import (
     changes_a_workflow,
     commanded,
     edit_of,
-    how_often,
     left_over,
 )
 from agent_runtime.explaining import explain_of
@@ -135,6 +134,7 @@ from agent_runtime.reading import (
     a_statement,
     clashes_in,
     clauses_of,
+    how_often,
     instructs_the_planner,
     leftovers,
     names_a_person,
