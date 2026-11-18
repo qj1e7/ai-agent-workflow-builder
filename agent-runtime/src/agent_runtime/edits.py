@@ -33,6 +33,7 @@ from agent_runtime.reading import (
     LEFT_OUT,
     OFTEN,
     SCHEDULE_VOCAB,
+    SHORT_FORMS,
     Clash,
     TaskRead,
     clashes_in,
@@ -821,7 +822,9 @@ def unexplained(text: str, clause: Span, explained: list[Span]) -> list[Span]:
         if not any(a <= clause[0] + t[1] < b for a, b in explained)
     ]
     for word, start, end in [*tokens, ("", -1, -1)]:
-        if word and (word not in EDIT_WORDS or (run and word in FILLER)):
+        # A short day in capitals is a project key, as "MON", never a schedule word.
+        key = word in SHORT_FORMS and text[clause[0] + start : clause[0] + end].isupper()
+        if word and (key or word not in EDIT_WORDS or (run and word in FILLER)):
             run.append((word, start, end))
             continue
         while run and run[-1][0] in FILLER:

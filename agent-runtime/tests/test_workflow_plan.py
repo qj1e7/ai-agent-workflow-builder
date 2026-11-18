@@ -791,6 +791,111 @@ def test_monday_to_friday_written_short_or_with_a_dash_is_every_weekday(when: st
     assert run_time_in(f"{when}, check langgraph") == ("weekdays 09:00", True)
 
 
+@pytest.mark.parametrize(
+    ("words", "before", "read"),
+    [
+        ("Check tickets in project MON at 9am and raise one ticket that lists them", None, None),
+        (
+            "Check tickets in project MON at 9am and raise one ticket that lists them",
+            "friday 10:00",
+            "friday 09:00",
+        ),
+        ("Check tickets in WED at 4pm and raise one ticket that lists them", None, None),
+        ("Check the SAT tickets at 9am and raise one ticket that lists them", None, None),
+        ("Check the THU tickets every day at 9am", None, "every_day 09:00"),
+    ],
+)
+def test_a_project_key_that_looks_like_a_short_day_is_never_the_run_day(
+    words: str, before: str | None, read: str | None
+):
+    """Before, "project MON at 9am" filled Monday at 09:00 and "the SAT tickets" ran on
+    Saturdays. A short day in capitals is a project key, never a day."""
+    assert run_time_in(words, before)[0] == read
+
+
+@pytest.mark.parametrize(
+    ("words", "read"),
+    [
+        (
+            "Every Friday at 9am, list tickets in MOCK that are not on Monday's board",
+            "friday 09:00",
+        ),
+        ("Every Friday at 9am, find tickets in MOCK titled Pause on Monday", "friday 09:00"),
+        ("Every Friday at 9am, list tickets in MOCK besides Monday's", "friday 09:00"),
+        ("Every Friday at 9am, list tickets in MOCK we skip on Mondays", "friday 09:00"),
+        ("Every Friday at 9am, find tickets in MOCK for staff not on holiday", "friday 09:00"),
+        ("Every Monday at 9am, find tickets in MOCK, except Friday's hotfixes", "monday 09:00"),
+        ("Every day at 9am, find tickets in MOCK that are not weekend work", "every_day 09:00"),
+        ("Every Monday at 9am, find tickets in MOCK not done over the weekend", "monday 09:00"),
+        ("Every Monday at 9am, find tickets not updated during the weekend", "monday 09:00"),
+    ],
+)
+def test_a_day_left_out_in_a_filter_never_makes_the_schedule_asked(words: str, read: str):
+    """Before, a negation and a day anywhere in the words, as "not on Monday's board", asked
+    the run time though the schedule was whole."""
+    assert run_time_in(words) == (read, True)
+
+
+@pytest.mark.parametrize(
+    ("words", "kept"),
+    [
+        ("change it to 10am", ("monday 10:00", "filled")),
+        ("set it to 9am", ("monday 09:00", "filled")),
+        ("move it to 3pm", ("monday 15:00", "filled")),
+        ("push it to 10am", ("monday 10:00", "filled")),
+        ("switch the time to 16:00", ("monday 16:00", "filled")),
+        ("change the run time to 10am", ("monday 10:00", "filled")),
+        ("change it to 10am on Fridays", ("friday 10:00", "filled")),
+    ],
+)
+def test_a_change_to_a_new_time_sets_it_and_keeps_the_day(
+    catalogue: Catalogue, words: str, kept: tuple[str, str]
+):
+    """At db3cb386, "change it to 10am" asked the time again, though a schedule change reads
+    it."""
+    current = edited(
+        {
+            "run_time": ("monday 09:00", "filled"),
+            "repository": ("langchain-ai/langgraph", "filled"),
+            "jira_project": ("MOCK", "filled"),
+            "channel": ("#support", "filled"),
+        }
+    )
+
+    assert marks(catalogue, RELEASE_SETTINGS, words, current)["run_time"] == kept
+
+
+@pytest.mark.parametrize(
+    "words",
+    [
+        "List tickets due Friday at 5pm",
+        "Post a summary of the tickets due on Friday at 5pm",
+        "Check langchain-ai/langgraph for releases published on Monday at 9am",
+        "Raise one ticket for the tickets created on Monday at 9am",
+    ],
+)
+def test_a_filter_s_day_and_time_is_never_the_run_time_even_alone(words: str):
+    """Before, "tickets due Friday at 5pm" ran every Friday at 17:00."""
+    assert run_time_in(words) == (None, True)
+    assert day_in(words) is None
+
+
+@pytest.mark.parametrize(
+    ("words", "day"),
+    [
+        ("Find tickets created at 9am on Monday and post them every day", "every_day"),
+        ("Every day, post tickets created on Monday at 9am", "every_day"),
+        ("Each week on Friday, post tickets updated on Monday at 9am", "friday"),
+    ],
+)
+def test_a_filter_s_time_beside_the_schedule_is_asked_and_the_schedule_s_day_kept(
+    words: str, day: str
+):
+    """Before, the filter's 9am became the run time beside the schedule's day."""
+    assert run_time_in(words) == (None, True)
+    assert day_in(words) == day
+
+
 def test_a_switch_s_exits_follow_its_rules_and_a_written_count_is_held(catalogue: Catalogue):
     rules = {"values": [{"outputKey": "a"}, {"outputKey": "b"}]}
     switch = block("Route", "n8n-nodes-base.switch", 3.4, rules=rules)
@@ -1084,3 +1189,33 @@ def test_a_block_s_parameters_have_a_size_limit(catalogue: Catalogue):
     found = problems(catalogue, plan([huge]))
 
     assert [p.code for p in found] == ["too_big"]
+
+
+@pytest.mark.parametrize(
+    "words",
+    [
+        "Every day at 9am, but not holidays, check langgraph",
+        "Every day at 9am, not on public holidays, check langgraph",
+        "Every weekday at 9am but not on holidays, check langgraph",
+        "Daily at 9am but not public holidays, check langgraph",
+        "Check langgraph every day at 9am, though not on Fridays",
+        "Check langgraph every day at 9am though not on Fridays",
+        "Every day at 9am, though not on Friday, check langgraph",
+        "Check langgraph every day at 9am, but not on holidays",
+        "Every Friday at 9am, find tickets in MOCK, no holidays, and raise one ticket",
+        "Every day at 9am, though not on Mondays obviously, check langgraph",
+        "Every day at 9am, skip Fridays if it is quiet, check langgraph",
+        "Check langgraph every day at 9am. Not on public holidays of course.",
+    ],
+)
+def test_a_day_left_out_in_the_schedule_s_own_words_is_always_asked(words: str):
+    """A holiday left out, or a day after "though", stands in the schedule's own words, so the
+    run time is asked, never filled as every day."""
+    assert run_time_in(words) == (None, True)
+
+
+@pytest.mark.parametrize(
+    "words", ["but not holidays", "make it though not on Friday", "run it daily, but not holidays"]
+)
+def test_a_change_that_leaves_a_day_out_never_keeps_the_run_time(words: str):
+    assert run_time_in(words, "monday 09:00") == (None, True)

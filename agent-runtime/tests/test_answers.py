@@ -2980,6 +2980,14 @@ def test_an_edit_reads_weekdays_and_short_days_as_the_card_does(task: str, chang
     assert all(mark == "will_do" for _, mark, _ in marks(fields, task))
 
 
+def test_an_edit_never_reads_a_project_key_as_a_short_day():
+    """Before, "for project MON" moved the morning check to Mondays."""
+    fields = read(asks_about="change", workflow_words="morning check")
+    task = "make the morning check run at 9am for project MON"
+    assert edited(fields, task).schedule == ScheduleChange(at="09:00")
+    assert crossed(fields, task) == [("project MON", "not_followed")]
+
+
 @pytest.mark.parametrize(
     ("task", "cant"),
     [
