@@ -203,6 +203,20 @@ class Unusable:
     detail: str
 
 
+URGENT_SCORE = 9.0
+"""A known vulnerability scored this high or more makes the upgrade ticket urgent (ADR 0025).
+The same rule as the Version checker's, so the platform knows which titles to expect."""
+URGENT_PREFIX = "Urgent: "
+
+
+def is_urgent(finding: Finding) -> bool:
+    """Whether the finding's checked vulnerabilities make its upgrade ticket urgent: one is
+    critical, or scored URGENT_SCORE or more. An unchecked or failed lookup is never urgent."""
+    return finding.vulnerability_check == "checked" and any(
+        v.severity == "critical" or (v.score or 0) >= URGENT_SCORE for v in finding.vulnerabilities
+    )
+
+
 def review(
     task: WatchlistTask, findings: Sequence[Finding], proposed: Sequence[ProposedIntentIn]
 ) -> Reviewed | Unusable:
@@ -212,7 +226,8 @@ def review(
     until it fits the list: exactly one finding per listed software, every version shaped like
     the tag pattern, a starting point only where the platform sent no version, and a ticket only
     for listed software that is behind, not held, and titled with the versions the platform
-    knows, so the version our version moves to on Done is the one the Approver saw.
+    knows, so the version our version moves to on Done is the one the Approver saw. The title
+    starts "Urgent: " exactly when the finding's own vulnerabilities make it urgent.
     """
     listed = {software.id: software for software in task.software}
     # ASCII and fullmatch: "$" alone would allow a trailing newline, and "\d" other scripts.
@@ -292,6 +307,8 @@ def review(
             if software.from_first_check
             else f"Upgrade {software.name} from {software.our_version} to {finding.newest}"
         )
+        if is_urgent(finding):
+            expected = f"{URGENT_PREFIX}{expected}"
         if intent.fields.get("title") != expected:
             return Unusable(
                 f'The agents titled the ticket for {software.name} differently from "{expected}"'

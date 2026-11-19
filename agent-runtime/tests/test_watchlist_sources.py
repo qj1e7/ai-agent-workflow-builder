@@ -16,7 +16,7 @@ from agent_runtime.contract import (
     TaskRequest,
     WatchlistInputs,
 )
-from agent_runtime.contracts import watchlist_request
+from agent_runtime.contracts import urgent_output, urgent_request, watchlist_request
 from agent_runtime.events import EventLog
 from agent_runtime.planner import FixedPlanner, run_task
 from agent_runtime.release_source import Release, SourceRejected, SourceUnavailable
@@ -122,6 +122,18 @@ class Check:
 
 def room_texts(events: Sequence[object]) -> list[str]:
     return [e.data.text for e in events if isinstance(e, AgentMessageEvent)]
+
+
+def test_the_urgent_fixture_platform_api_reviews_is_what_the_check_answers():
+    """platform-api's review() reads this pair from contracts/ (test_watch.py), so the urgent
+    title it must accept is the runtime's own, not a copy."""
+    services = Services(LOG4SHELL, {"CVE-2021-44228": nvd_answer(10.0, "CRITICAL")})
+    check = Check(maven=Registry({LOG4J: LOG4J_VERSIONS}), services=services)
+    request = urgent_request("run_01JC3")
+    assert isinstance(request.inputs, WatchlistInputs)
+    result = check.run(*request.inputs.software)
+    assert isinstance(result, TaskFinished)
+    assert result.output == urgent_output()
 
 
 def test_a_maven_package_behind_with_a_critical_flaw_gets_an_urgent_ticket_with_the_evidence():
