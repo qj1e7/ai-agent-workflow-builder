@@ -170,7 +170,7 @@ describe('which card shows the newest view', () => {
     expect(buttons(html)).toEqual([])
   })
 
-  it('puts a new card in the thread, with no message of hers before it', () => {
+  it('puts a new card in the thread, with no message of theirs before it', () => {
     const next = threadReducer(EMPTY, { type: 'draft_card', draftedId: 'dw_1', revision: 3 })
     expect(next.messages).toEqual([{ kind: 'drafted', id: 1, draftedId: 'dw_1', revision: 3 }])
   })

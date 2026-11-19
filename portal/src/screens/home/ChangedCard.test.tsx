@@ -140,12 +140,12 @@ describe('the Changed in n8n card', () => {
     expect(buttons(draw({ ...REFUSED, in_use: 6 }, { me: { ...ALICE, n8n_access: true }, inN8n: held, heldBy })), 'a card about a version no longer in use offers nothing').toEqual([])
   })
 
-  it('names who has it open but offers no Take it back while the In n8n view that says whether she may is loading', () => {
+  it('names who has it open but offers no Take it back while the In n8n view that says whether they may is loading', () => {
     const heldBy = (heldInN8n as UseCaseN8nView).holder
     const html = draw(REFUSED, { me: { ...ALICE, n8n_access: true }, heldBy })
     expect(text(html)).toMatch(/Carol has it open in n8n since (Tue 10 Nov, )?13:40\./)
     expect(text(html)).not.toContain('can take it back')
-    expect(buttons(html), 'the platform may still refuse her, until her n8n password is set').toEqual([])
+    expect(buttons(html), 'the platform may still refuse them, until their n8n password is set').toEqual([])
   })
 
   it('says why there is no Take it back when the In n8n view could not be read', () => {
@@ -155,14 +155,14 @@ describe('the Changed in n8n card', () => {
     expect(buttons(html)).toEqual([])
   })
 
-  it('tells an Operator without n8n access who holds it and who can take it back, before she presses anything', () => {
+  it('tells an Operator without n8n access who holds it and who can take it back, before they press anything', () => {
     const heldBy = (heldInN8n as UseCaseN8nView).holder
     const html = draw(REFUSED, { heldBy })
     expect(text(html)).toMatch(/Carol has it open in n8n since (Tue 10 Nov, )?13:40\. Ask Carol, or anyone with n8n access, to take it back\./)
     expect(buttons(html), 'Undo and Add the yes back would be refused, so neither is offered').toEqual([])
   })
 
-  it('tells an Operator without n8n access who can take it back, with no press she can’t make', () => {
+  it('tells an Operator without n8n access who can take it back, with no press they can’t make', () => {
     const words = 'Carol has it open in n8n since 13:40. Ask Carol, or anyone with n8n access, to take it back.'
     const html = draw(REFUSED, { phase: { kind: 'refused', words } })
     expect(text(html)).toContain(words)

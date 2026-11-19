@@ -278,7 +278,7 @@ describe('the plan in step 2', () => {
     expect(none.kind === 'agents' && none.agents[0]?.found).toEqual({})
   })
 
-  it('fills the Jira project the platform added to a draft from her words, so it is not asked', () => {
+  it('fills the Jira project the platform added to a draft from their words, so it is not asked', () => {
     const { name, rows } = answered24Hour.answer
     const drafted = planView(NEW_AGENT, cardFrom(name, rows as SetupCardReply['rows'], '').rows)
     expect(drafted.kind === 'agents' && drafted.agents[0]?.found).toEqual({ 'Jira project': 'MOCK' })
@@ -596,7 +596,7 @@ describe('the Planner’s set-up card', () => {
       expect(leftWords({ choices: [], leftOut: [] }), 'nothing left to answer says nothing: the button says what it sets up').toBe('')
       expect(leftWords({ choices: ['when it runs'], leftOut: [] })).toBe('1 question to answer')
       expect(leftWords({ choices: ['when it runs', 'the Jira project'], leftOut: [] })).toBe('2 questions to answer')
-      expect(leftWords({ choices: ['the Planner to choose the agents'], leftOut: [] }), 'waiting on the Planner is no question for her').toBe('Waiting for the Planner…')
+      expect(leftWords({ choices: ['the Planner to choose the agents'], leftOut: [] }), 'waiting on the Planner is no question for them').toBe('Waiting for the Planner…')
       expect(leftWords({ choices: ['my check of your new words'], leftOut: [] })).toBe('Checking your new words…')
       expect(andList(['a', 'b', 'c'])).toBe('a, b and c')
     })
@@ -678,7 +678,7 @@ describe('the Planner’s set-up card', () => {
     const CLASH = clashAnswer as SetupCardReply
     const plan = AGENTS([])
 
-    it('keeps her words for each cross, which never stop Turn it on but change its name and the footer', () => {
+    it('keeps them words for each cross, which never stop Turn it on but change its name and the footer', () => {
       const form = cardFrom(CROSS.name, CROSS.rows, 'Every Friday at 5pm, sum up the tickets we closed this week in MOCK and colour them by team', CROSS.parts)
       const left = setupLeft(form, plan)
       expect(left).toEqual({ choices: [], leftOut: ['colour them by team'] })
@@ -692,7 +692,7 @@ describe('the Planner’s set-up card', () => {
       expect(leftWords(setupLeft(form, plan))).toBe('1 question to answer')
     })
 
-    it('names only the day left out once she picks one of two, and sends that as left_out', () => {
+    it('names only the day left out once they pick one of two, and sends that as left_out', () => {
       const form = cardFrom(CLASH.name, CLASH.rows, 'Every Monday and Friday at 9am, sum up the closed tickets in MOCK', CLASH.parts)
       expect(setupLeft(form, plan)).toEqual({ choices: ['when it runs'], leftOut: ['Monday and Friday'] })
       const monday = answerWhen(form, { often: 'week', day: 'monday' })
@@ -702,7 +702,7 @@ describe('the Planner’s set-up card', () => {
       expect(setupLeft(tuesday, plan).leftOut).toEqual(['Monday and Friday'])
     })
 
-    it('asks how many days when the words name none, until she changes which tickets it finds', () => {
+    it('asks how many days when the words name none, until they change which tickets it finds', () => {
       const asked = { ...fresh(), when: { often: 'week' as const, day: 'friday' as const, at: '16:00', filledFrom: 'x' }, marked: [{ text: 'stale', mark: 'question' as const, reason: 'how_many_days' as const, note: null, choices: [] }] }
       expect(setupLeft(asked, plan).choices).toEqual(['how many days'])
       expect(nextQuestion(asked, plan)?.kind).toBe('days')
@@ -749,7 +749,7 @@ describe('pressing on the set-up card', () => {
 
 describe('what the footer counts', () => {
   it('counts only the questions the card asks, and says what else waits in its own words', () => {
-    expect(leftWords({ choices: ['when it runs', 'a part I can’t do yet'], leftOut: [] }), 'a part she must change is no question').toBe('1 question to answer')
+    expect(leftWords({ choices: ['when it runs', 'a part I can’t do yet'], leftOut: [] }), 'a part they must change is no question').toBe('1 question to answer')
     expect(leftWords({ choices: ['a part I can’t do yet'], leftOut: [] })).toBe('Change the part I can’t do yet, or leave it out.')
     expect(leftWords({ choices: ['a request I can do'], leftOut: [] })).toBe('Change your words to something I can do.')
     expect(isQuestion('the Jira project')).toBe(true)
@@ -829,7 +829,7 @@ describe('a 24-hour time from the Planner', () => {
   const CAROL = 'Every Friday at 16:00, find Jira tickets in project MOCK that nobody updated for 14 days, and raise one Jira ticket in MOCK that lists them'
   const timed = (schedule: string) => cardFrom('x', [{ kind: 'schedule', text: schedule, state: 'understood', note: null }], schedule)
 
-  it('reads her time from the schedule row the runtime sends, and never asks for it again', () => {
+  it('reads their time from the schedule row the runtime sends, and never asks for it again', () => {
     const { name, rows } = answered24Hour.answer
     const form = cardFrom(name, rows as SetupCardReply['rows'], CAROL)
     expect(form.when).toMatchObject({ often: 'week', day: 'friday', at: '16:00' })

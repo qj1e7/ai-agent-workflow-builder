@@ -41,12 +41,12 @@ export interface Chat {
   readonly askBehind: (shown: string) => void
   /** Sends what is in the box, following on from the last answer. */
   readonly sendText: () => void
-  /** Sends words she tapped, such as a choice or an offer, following on from the last answer as typed words do. */
+  /** Sends words they tapped, such as a choice or an offer, following on from the last answer as typed words do. */
   readonly sendWords: (words: string) => void
   readonly resume: (start: CardStart) => void
   /** Shows each version published in n8n that this chat has not shown yet, oldest first. A new chat does not show one again. */
   readonly arrive: (found: readonly ChangedInN8nReply[]) => void
-  /** Shows the card of a drafted workflow she started with a button. */
+  /** Shows the card of a drafted workflow they started with a button. */
   readonly arriveDraft: (draftedId: string) => void
   /** Puts a new card for a drafted workflow's revision in the thread, so the older card settles. */
   readonly arriveRevision: (draftedId: string, revision: number) => void
@@ -171,7 +171,7 @@ export function ChatProvider({ children, initial = {} }: { children: ReactNode; 
       },
       arriveDraft: (draftedId) => here({ type: 'arrived', reply: { answer: 'draft_started', drafted_id: draftedId, refused: null, parts: [], trace_id: null } }),
       arriveRevision: (draftedId, revision) => here({ type: 'draft_card', draftedId, revision }),
-      // A card she hadn't finished saves itself as a draft as it leaves the page, so New chat only needs to know there was one.
+      // A card they hadn't finished saves itself as a draft as it leaves the page, so New chat only needs to know there was one.
       newChat: () => {
         const unfinished = thread.messages.some((message) => cards.current.get(`${user}:${String(message.id)}`)?.kept()?.phase.kind === 'open')
         for (const key of [...cards.current.keys()]) if (key.startsWith(`${user}:`)) cards.current.delete(key)
@@ -213,7 +213,7 @@ export function useAskForChange(): ((changing: Changing) => void) | null {
   return chat === null ? null : chat.startChange
 }
 
-/** Adds a drafted workflow's card to the thread, as an answer with no message of hers before it. Null outside the chat. */
+/** Adds a drafted workflow's card to the thread, as an answer with no message of theirs before it. Null outside the chat. */
 export function useShowDraft(): ((draftedId: string) => void) | null {
   const chat = useContext(ChatContext)
   return chat === null ? null : chat.arriveDraft

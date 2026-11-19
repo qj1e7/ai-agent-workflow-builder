@@ -52,7 +52,7 @@ import { Thread } from './Thread'
 import { EMPTY, threadReducer } from './threadState'
 
 const PAGE: Page = { ask: () => undefined, edit: () => undefined, box: () => undefined }
-/** The fixture's set-up card, as it is when she has no workflow of that name yet. */
+/** The fixture's set-up card, as it is when they have no workflow of that name yet. */
 const SETUP: SetupCardReply = { ...(setupCard as SetupCardReply), similar: null }
 
 function draw(reply: PlannerReply, { typed = 'Every Friday, sum up the tickets we closed this week', leftovers = false, registry, watched, useCase }: { typed?: string; leftovers?: boolean; registry?: CapabilitiesView; watched?: WatchlistView; useCase?: UseCaseView } = {}): string {
@@ -91,7 +91,7 @@ describe('the Planner’s short answers, as the chat-first sketch draws them', (
     expect(text(draw({ trace_id: null, answer: 'abilities', how_to_start: false, parts: [] }, { registry: jiraOff }))).toContain('Create Jira tickets, after a yes Needs setup')
   })
 
-  it('answers how to start with the steps, and the registry’s example as a chip, with no cross on her question', () => {
+  it('answers how to start with the steps, and the registry’s example as a chip, with no cross on their question', () => {
     const reply: PlannerReply = { trace_id: null, answer: 'abilities', how_to_start: true, parts: [asked('list me the steps to use this app', 'will_do')] }
     const html = draw(reply, { registry: REGISTRY })
     expect(text(html)).toBe(
@@ -113,7 +113,7 @@ describe('the Planner’s short answers, as the chat-first sketch draws them', (
   const DELETE: CantRowView = { kind: 'do', text: 'delete the MOCK ticket', note: 'I don\'t delete anything in Jira.', needs: 'new_tool', system: 'Jira', instead: 'A Jira admin can do that.', unsupported: true }
   const cantOf = (row: CantRowView): CantReply => ({ trace_id: null, answer: 'cant', cant: [row], alternative: null, draft_words: null, parts: [{ text: row.text, mark: 'cant', reason: 'cant_do', note: row.note, choices: [] }] })
 
-  it('gives a can’t the registry names one card: the line, what she has instead, and Ask the team', () => {
+  it('gives a can’t the registry names one card: the line, what they have instead, and Ask the team', () => {
     const html = draw(cantOf(TEAMS))
     expect(text(html)).toBe('I can\'t post in Teams channels yet Run results show here, in the chat. Ask the team')
     expect(buttons(html)).toEqual(['Ask the team'])
@@ -200,14 +200,14 @@ describe('a set-up card', () => {
     expect(text(html)).toMatch(/\d questions? to answer/)
   })
 
-  it('is the already-have card when she has a workflow of that name, with Open it and a way to set up another', () => {
+  it('is the already-have card when they have a workflow of that name, with Open it and a way to set up another', () => {
     const html = draw(setupCard as SetupCardReply)
     expect(text(html)).toContain('Weekly summary of closed tickets')
     expect(buttons(html)).toEqual(['Set up another', 'Open it'])
     expect(html).not.toContain('data-card=')
   })
 
-  it('says the workflow she has already watches its software only while it is on', () => {
+  it('says the workflow they have already watches its software only while it is on', () => {
     const reply = setupCard as SetupCardReply
     const react: UseCaseView = {
       ...(runUseCase as UseCaseView),
@@ -238,7 +238,7 @@ describe('the software card', () => {
     expect(buttons(html)).toEqual(['Watch it'])
   })
 
-  it.each(['add', 'Add', 'watch', 'keep track of', 'monitor', 'Keep an eye on', 'track', 'follow'])('says only that it isn’t on the watchlist yet when she asked to %s it', (word) => {
+  it.each(['add', 'Add', 'watch', 'keep track of', 'monitor', 'Keep an eye on', 'track', 'follow'])('says only that it isn’t on the watchlist yet when they asked to %s it', (word) => {
     const html = draw({ ...ask('Node Js', null), word })
     expect(text(html)).toContain('Node Js It isn’t on the watchlist yet.')
     expect(text(html)).not.toContain('which version you run')
@@ -553,7 +553,7 @@ describe('an Approver’s answers in the chat (spec 5.3)', () => {
     expect(answerOf(html)).not.toContain('What is waiting for my yes')
   })
 
-  it('lists his own decisions newest first in the sketch’s decisions card: the workflow, the day with the reason or what the yes led to, and the verdict (ROLE-asks)', () => {
+  it('lists their own decisions newest first in the sketch’s decisions card: the workflow, the day with the reason or what the yes led to, and the verdict (ROLE-asks)', () => {
     const html = ask(decidedReply as PlannerReply)
     const said = answerOf(html)
     expect(said).toMatch(/^Your recent decisions /)
@@ -564,13 +564,13 @@ describe('an Approver’s answers in the chat (spec 5.3)', () => {
     expect(html.match(/data-decision=/g), 'one row each, which opens its run').toHaveLength(3)
   })
 
-  it('says plainly when he has declined nothing, with no rows (FIX-decisions-detail)', () => {
+  it('says plainly when they have declined nothing, with no rows (FIX-decisions-detail)', () => {
     const html = ask(decidedDeclines as PlannerReply, { decisions: noDecisions })
     expect(answerOf(html)).toBe('You haven’t declined any requests yet.')
     expect(html).not.toContain('aria-label="Your decisions"')
   })
 
-  it('answers what waits for him with the requests themselves, three cards at most, then how many more', () => {
+  it('answers what waits for them with the requests themselves, three cards at most, then how many more', () => {
     const [request] = HOME.approvals
     const many = { ...HOME, approvals: Array.from({ length: 10 }, (_, n) => ({ ...request!, approval_id: `apr_${String(n)}`, run_id: `run_${String(n)}` })), approvals_total: 25, confirmations: [] }
     const html = ask({ trace_id: null, answer: 'needs_me', parts: [] }, { home: many })
@@ -597,7 +597,7 @@ describe('an Approver’s answers in the chat (spec 5.3)', () => {
     }
   })
 
-  it('after Bob approves one request, its card follows the record with Open, and only the requests still waiting ask him to decide', () => {
+  it('after Bob approves one request, its card follows the record with Open, and only the requests still waiting ask them to decide', () => {
     const memory = newCardMemory()
     memory.approvals.keep([
       { approvalId: 'apr_done', runId: 'run_done' },
@@ -637,21 +637,21 @@ describe('an Approver’s answers in the chat (spec 5.3)', () => {
     expect(answerOf(ask(decideQuestion as PlannerReply))).toContain('Can’t do: “is LangGraph up to date” Ask this on its own, and I’ll answer it.')
   })
 
-  it('says there is nothing to decide when nothing waits for his yes', () => {
+  it('says there is nothing to decide when nothing waits for their yes', () => {
     const quiet = { ...HOME, approvals: [], approvals_total: 0 }
     expect(answerOf(ask(decideReply as PlannerReply, { home: quiet }))).toContain('Nothing is waiting for your yes, so there’s nothing to decide.')
   })
 
-  it('answers what he can ask in the sketch’s three lines', () => {
+  it('answers what they can ask in the sketch’s three lines', () => {
     const html = ask({ trace_id: null, answer: 'abilities', how_to_start: false, parts: [{ text: 'What can you do', mark: 'will_do', reason: null, note: null, choices: [] }] })
     expect(answerOf(html)).toBe('What I can do Show what waits for your yes Show exactly what a change will write Show your past decisions')
     const unknown = ask({ trace_id: null, answer: 'abilities', how_to_start: false, parts: [{ text: 'What’s the weather', mark: 'cant', reason: 'not_followed', note: null, choices: [] }] })
     expect(answerOf(unknown)).toContain('I didn’t follow that I can show what waits for your yes, and your past decisions.')
     const start = ask({ trace_id: null, answer: 'abilities', how_to_start: true, parts: [{ text: 'help', mark: 'will_do', reason: null, note: null, choices: [] }] })
-    expect(answerOf(start), 'he sets nothing up, so he gets what he can ask, not the steps').toBe('What I can do Show what waits for your yes Show exactly what a change will write Show your past decisions')
+    expect(answerOf(start), 'they set nothing up, so they get what they can ask, not the steps').toBe('What I can do Show what waits for your yes Show exactly what a change will write Show your past decisions')
   })
 
-  it('gives a refusal with no set-up offered, and his request to open where he decides', () => {
+  it('gives a refusal with no set-up offered, and their request to open where they decide', () => {
     const html = ask(refused as PlannerReply)
     expect(buttons(html)).toEqual(['Say it another way', 'Review and decide'])
     expect(answerOf(html)).toContain('Nobody approves their own work')
@@ -678,7 +678,7 @@ describe('an Approver’s answers in the chat (spec 5.3)', () => {
     expect(html).not.toMatch(/<h2[^>]*>\s*Needs you/)
   })
 
-  it('speaks of the team’s workflows, and of why one stopped with who can retry, from his Workflows page’s rows', () => {
+  it('speaks of the team’s workflows, and of why one stopped with who can retry, from their Workflows page’s rows', () => {
     const stopped = stoppedUseCase as UseCaseView
     expect(answerOf(ask({ trace_id: null, answer: 'check_workflows', use_case_id: null, parts: [] }, { useCases: [stopped] }))).toMatch(/^The team has 1 workflow\. 1 stopped\./)
   })

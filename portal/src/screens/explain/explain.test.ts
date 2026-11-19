@@ -181,7 +181,7 @@ describe('what the report shows while it loads, and when it cannot', () => {
 })
 
 describe('a choice on Which workflow?', () => {
-  it('asks the Planner to explain the one she picked, by its name', () => {
+  it('asks the Planner to explain the one they picked, by its name', () => {
     expect(explainAsk('FastAPI release check')).toBe('Explain the FastAPI release check')
   })
 })

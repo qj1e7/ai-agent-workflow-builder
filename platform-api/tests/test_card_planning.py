@@ -234,8 +234,8 @@ CAROL = (
 
 
 async def test_carols_draft_gets_the_jira_project_input_it_left_out_so_she_has_a_way_on():
-    """The model's draft for Carol used two Jira tools and no Jira project input. Changing her
-    words could not fix that, so the platform adds the input, empty, and she fills it in."""
+    """The model's draft for Carol used two Jira tools and no Jira project input. Changing their
+    words could not fix that, so the platform adds the input, empty, and they fill it in."""
     planner = FakePlanner(
         chose=chosen("new_agent"),
         drafted=draft(

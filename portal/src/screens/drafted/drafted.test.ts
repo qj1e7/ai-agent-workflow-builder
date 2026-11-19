@@ -62,7 +62,7 @@ describe('asking for a change', () => {
     expect(done?.thread.messages.map((message) => message.kind)).toEqual(['me', 'drafted'])
   })
 
-  it('shows her words, then the next revision’s card', () => {
+  it('shows their words, then the next revision’s card', () => {
     const thread = threadReducer(EMPTY, { type: 'changed', text: 'post at 9 instead', draftedId: 'dw_1', revision: 2 })
     expect(thread.messages[0]).toMatchObject({ kind: 'me', text: 'post at 9 instead' })
     expect(thread.messages[1]).toMatchObject({ kind: 'drafted', draftedId: 'dw_1', revision: 2 })

@@ -1,7 +1,7 @@
 """A workflow made in n8n and set up from Workflows, on the real n8n (ENGINE-PLAN E15): Erin, an
-Operator with n8n access, builds a workflow from our blocks in her own n8n space and publishes it;
-it waits on Workflows with her as its maker, graded safe, for her and nobody without n8n access;
-she sets it up, so it moves to the platform's project and is on; Run now reads and asks, Erin,
+Operator with n8n access, builds a workflow from our blocks in their own n8n space and publishes it;
+it waits on Workflows with them as its maker, graded safe, for them and nobody without n8n access;
+they set it up, so it moves to the platform's project and is on; Run now reads and asks, Erin,
 an Approver by then, can never approve it, and Bob's yes makes one ticket. One saved as n8n's
 editor saves it, with none of the platform's settings, sets up and passes its test run too."""
 
@@ -17,7 +17,7 @@ from test_n8n_versions import Member, staff_member
 
 
 def built_from_our_blocks(member: Member, source_id: str, name: str) -> str:
-    """Erin draws a workflow in her own space from the blocks the Planner lays out, each a new
+    """Erin draws a workflow in their own space from the blocks the Planner lays out, each a new
     block with the new ids n8n's editor gives one, then saves and publishes it."""
     laid = N8N_OWNER.call("GET", f"/workflows/{source_id}")
     nodes: list[Json] = copy.deepcopy(laid["nodes"])
@@ -135,9 +135,9 @@ def as_the_editor_saves(name: str) -> Json:
 
 
 def test_one_made_in_the_n8n_editor_is_set_up_and_its_test_run_passes(api: Api, mock_model: None):
-    """Ivy saves a workflow in her own n8n space as the editor saves it. It waits graded safe,
+    """Ivy saves a workflow in their own n8n space as the editor saves it. It waits graded safe,
     with what Set up puts right listed. Set up writes those settings and Start from the Portal
-    in n8n, and keeps her name for it. Its test run passes, and once on it runs at 3:00."""
+    in n8n, and keeps their name for it. Its test run passes, and once on it runs at 3:00."""
     source = set_up(api, "e2e made in the editor, the repository it reads", on=False)
     ivy = staff_member(api, "Ivy")
     name = f"e2e made in the editor {uuid.uuid4().hex[:6]}"

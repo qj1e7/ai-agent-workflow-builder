@@ -78,7 +78,7 @@ const PHONE = '(max-width: 600px)'
 const DRAFT_GONE = 'That draft is gone. Ask for it again below.'
 /** Answers that are a card to work on. Focus goes to the card's heading; any other answer hands it back to the box. */
 const CARD_ANSWERS: ReadonlySet<PlannerReply['answer']> = new Set(['setup_card', 'part', 'watchlist', 'edit'])
-/** Answers that ask her to type one thing in a field of their own. Focus goes to the field. */
+/** Answers that ask them to type one thing in a field of their own. Focus goes to the field. */
 const FIELD_ANSWERS: ReadonlySet<PlannerReply['answer']> = new Set(['which_software'])
 /** An Operator's question on Home, day one included (the sketch's heading). */
 export const OPERATOR_HEADING = 'What should run by itself?'

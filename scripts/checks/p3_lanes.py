@@ -12,12 +12,12 @@ usage: python3 -I scripts/checks/p3_lanes.py <command> <api-base-url> <out-dir> 
                                 At head, bob's roles also follow a change to the People list
   lane2 <api> <out> <issuer>    mallory signs in: /me says ask an Operator, and every signed-in
                                 route in the served OpenAPI document answers 403 (oidc)
-  lane3 <api> <out> <issuer>    alice adds erin by email; erin's first sign-in binds her record;
-                                her oid with another user name still matches it, and her email
+  lane3 <api> <out> <issuer>    alice adds erin by email; erin's first sign-in binds their record;
+                                their oid with another user name still matches it, and their email
                                 with another oid does not (oidc)
   lane4 <api> <out>             alice asks to make dave an Approver, then tries to confirm it
   lane5 <api> <out>             bob confirms dave; dave's /me shows Approver; history names both
-  lane6 <api> <out>             alice removes her own Operator role: refused
+  lane6 <api> <out>             alice removes their own Operator role: refused
   lane7 <api> <out>             carol removes bob's Approver role with two Approvers: refused
   lane8 <api> <out> [trials]    three Approvers; two removals released together, 20 times by
                                 default; each time one is refused and two Approvers remain
@@ -335,14 +335,14 @@ def people_list_proof(api: Api) -> list[tuple[bool, str]]:
             bob["id"] == "bob" and bob["approver"] and not bob["operator"],
             f"the People list has bob as an Approver only: {bob}",
         ),
-        (roles(api, "bob") == ["approver"], "bob's /me matches his row"),
+        (roles(api, "bob") == ["approver"], "bob's /me matches their row"),
     ]
     status, body = api.call("alice", "PUT", "/api/v1/people/bob/operator", {"operator": True})
     lines.append(
         (status == 200 and body["operator"] is True, f"alice makes bob an Operator: HTTP {status}")
     )
     after = roles(api, "bob")
-    lines.append((after == ["operator", "approver"], f"bob's /me on his next request: {after}"))
+    lines.append((after == ["operator", "approver"], f"bob's /me on their next request: {after}"))
     status, body = api.call("alice", "PUT", "/api/v1/people/bob/operator", {"operator": False})
     lines.append(
         (status == 200 and body["operator"] is False, f"alice takes it back: HTTP {status}")
@@ -459,13 +459,13 @@ def lane3(api: Api, out: Path, issuer: str) -> bool:
     lines.append(
         (
             me1["on_list"] is True and me1["id"] == erin_before["id"],
-            f"erin's first sign-in matched her record by email: {me1}",
+            f"erin's first sign-in matched their record by email: {me1}",
         )
     )
     lines.append(
         (
             me1["display"] == "Erin (added by Alice)",
-            f"her name stays as the Operator entered it: {me1['display']}",
+            f"their name stays as the Operator entered it: {me1['display']}",
         )
     )
     erin_after = people_by_email(api, alice)["erin@example.test"]
@@ -475,7 +475,7 @@ def lane3(api: Api, out: Path, issuer: str) -> bool:
     lines.append(
         (
             s == 200 and me2.get("on_list") is True and me2.get("id") == erin_before["id"],
-            f"her oid with another user name matches on oid alone: HTTP {s} {me2}",
+            f"their oid with another user name matches on oid alone: HTTP {s} {me2}",
         )
     )
     impostor = identity(
@@ -489,7 +489,7 @@ def lane3(api: Api, out: Path, issuer: str) -> bool:
     lines.append(
         (
             s == 200 and me3.get("on_list") is False,
-            f"another oid with erin's email does not get her record: HTTP {s} {me3}",
+            f"another oid with erin's email does not get their record: HTTP {s} {me3}",
         )
     )
     save(
@@ -531,7 +531,7 @@ def lane4(api: Api, out: Path) -> bool:
     lines.append(
         (
             status == 403 and refused.get("refusal") == "you_asked",
-            f"alice confirming herself: HTTP {status} {refused}",
+            f"alice confirming the request alice made: HTTP {status} {refused}",
         )
     )
     me = api.get({"X-Dev-User": dave["id"]}, "/api/v1/me")
@@ -584,7 +584,7 @@ def lane6(api: Api, out: Path) -> bool:
     lines = [
         (
             status == 409 and refused.get("refusal") == "own_operator_role",
-            f"alice removing her own Operator role: HTTP {status} {refused}",
+            f"alice removing their own Operator role: HTTP {status} {refused}",
         ),
         ("operator" in me["roles"], f"alice still an Operator: {me['roles']}"),
     ]
@@ -694,7 +694,7 @@ def lane9(api: Api, out: Path) -> bool:
     ]
     approval_id = run["approval"]["approval_id"]
     view = api.get(dave_hdr, f"/api/v1/approvals/{approval_id}")
-    lines.append((view["you_can_decide"], "dave may decide the run while he is an Approver"))
+    lines.append((view["you_can_decide"], "dave may decide the run while they are an Approver"))
     waiting = pending_about(api, dave_hdr, frank["id"])
     lines.append(
         (
@@ -896,7 +896,7 @@ def readd(api: Api, out: Path, issuer: str) -> bool:
     lines.append(
         (
             s == 200 and me.get("on_list") is True and me.get("id") == moved["id"],
-            f"carol's oid with her new email signs in to the new record: {me}",
+            f"carol's oid with their new email signs in to the new record: {me}",
         )
     )
 

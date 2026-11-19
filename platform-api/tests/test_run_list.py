@@ -27,7 +27,7 @@ async def decidable(lab: Lab, user: str) -> dict[str, bool]:
 
 async def nine_retried_ahead_of_one_to_decide(lab: Lab) -> tuple[RunId, list[RunId]]:
     """The issue's steps: carol owns the workflow and starts every run. One waits for alice.
-    Nine newer ones fail, and alice retries them, so each is her own work."""
+    Nine newer ones fail, and alice retries them, so each is their own work."""
     use_case_id = await workflow(lab, owner="carol")
     theirs = await waiting_run(lab, use_case_id, by="carol")
     retried: list[RunId] = []

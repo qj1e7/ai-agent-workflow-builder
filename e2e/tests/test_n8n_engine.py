@@ -202,7 +202,7 @@ def test_gate_removed(api: Api, mock_model: None):
 
 def test_publisher_cannot_approve(api: Api, mock_model: None):
     """Carol sets it up and Alice turns it on, so Alice published it. Its schedule fires in n8n,
-    and the run is Alice's work: she can never approve it, and Bob can."""
+    and the run is Alice's work: they can never approve it, and Bob can."""
     early = datetime.now(SINGAPORE) + timedelta(minutes=2)
     slot = early + timedelta(minutes=-early.minute % 5)
     soon = slot.strftime("%H:%M")

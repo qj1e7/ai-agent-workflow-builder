@@ -330,7 +330,7 @@ async def test_a_draft_that_fails_the_check_waits_in_its_maker_s_space(s: Staffe
     workflow_id = s.n8n.make_in(carol_space, named(without_the_yes(await laid_out(s)), "Draft"))
     refused = await set_up(s, "carol", workflow_id)
     assert (refused.status_code, refused.json()["detail"]) == (409, FIX_IN_N8N)
-    assert s.n8n.home_of(workflow_id) == carol_space, "still hers to fix"
+    assert s.n8n.home_of(workflow_id) == carol_space, "still theirs to fix"
 
 
 async def test_a_safe_draft_is_set_up_as_a_draft_whose_maker_and_setter_join_its_runs(s: Staffed):
@@ -382,7 +382,7 @@ async def test_an_ended_account_s_workflows_wait_with_the_maker_noted_as_it_ende
     await s.member(dana)
     assert (await s.give("carol", on=False)).status_code == 200
     assert Ended(CAROL) in await s.settle()
-    assert s.n8n.home_of(workflow_id) == PLATFORM_PROJECT, "n8n moved it as her account ended"
+    assert s.n8n.home_of(workflow_id) == PLATFORM_PROJECT, "n8n moved it as their account ended"
 
     [listed] = await waiting(s, dana)
     assert (listed["workflow_id"], listed["made_by"]) == (workflow_id, "carol"), "only noted"
@@ -392,7 +392,7 @@ async def test_an_ended_account_s_workflows_wait_with_the_maker_noted_as_it_ende
     assert (row["made_in_n8n_by"], row["published_by"], row["draft"]) == ("carol", "carol", False)
     live = s.n8n.workflows[workflow_id]["activeVersionId"]
     ran = await s.lab.builder.facts.version(workflow_id, live)
-    assert ran is not None and not ran.unknown, "n8n emptied the timeline, the note kept her"
+    assert ran is not None and not ran.unknown, "n8n emptied the timeline, the note kept them"
 
 
 async def test_a_move_n8n_refuses_sets_up_nothing(s: Staffed):
@@ -403,9 +403,9 @@ async def test_a_move_n8n_refuses_sets_up_nothing(s: Staffed):
     refused = await set_up(s, "carol", workflow_id)
     assert (refused.status_code, refused.json()["detail"]) == (503, NOT_MOVED)
     assert s.n8n.home_of(workflow_id) == carol_space
-    assert s.n8n.workflows[workflow_id]["activeVersionId"] == live, "back on, in her space"
+    assert s.n8n.workflows[workflow_id]["activeVersionId"] == live, "back on, in their space"
     assert [w["workflow_id"] for w in await waiting(s, "carol")] == [workflow_id]
-    assert workflow_id not in await s.staff.makers(), "no note left for a workflow still hers"
+    assert workflow_id not in await s.staff.makers(), "no note left for a workflow still theirs"
 
 
 async def test_a_draft_changed_to_fail_the_check_as_it_is_set_up_goes_back_to_its_maker(
@@ -418,7 +418,7 @@ async def test_a_draft_changed_to_fail_the_check_as_it_is_set_up_goes_back_to_it
     looks.edited = (s.n8n, workflow_id)
     refused = await set_up(s, dana, workflow_id)
     assert (refused.status_code, refused.json()["detail"]) == (409, CHANGED_AS_SET_UP)
-    assert s.n8n.home_of(workflow_id) == carol_space, "back in her space, where she can fix it"
+    assert s.n8n.home_of(workflow_id) == carol_space, "back in their space, where they can fix it"
     assert (
         await s.own.row("SELECT 1 FROM builder.use_cases WHERE n8n_workflow_id = %s", workflow_id)
         is None
@@ -646,7 +646,7 @@ async def test_a_drafted_workflow_open_for_edit_in_n8n_never_waits_to_be_set_up(
 
 
 async def published_with_draft(s: Staffed, change: Callable[[dict[str, Any]], None]) -> str:
-    """Carol's published workflow, as checked, whose draft she then changed and saved."""
+    """Carol's published workflow, as checked, whose draft they then changed and saved."""
     carol_n8n, space = await space_of(s, "carol")
     workflow_id = s.n8n.make_in(space, named(await laid_out(s), "Draft differs"), carol_n8n)
     change(s.n8n.workflows[workflow_id])
@@ -687,7 +687,7 @@ async def test_set_up_puts_the_platform_s_keys_back_on_the_draft_it_takes_in(s: 
 
 
 async def test_a_move_that_stops_in_the_platform_s_project_leaves_it_off(s: Staffed):
-    """It took her version off to move it. Stuck in the platform's project, where n8n lets it use
+    """It took their version off to move it. Stuck in the platform's project, where n8n lets it use
     every key there is, it stays off: nothing goes back on there unchecked."""
     carol_n8n, carol_space = await space_of(s, "carol")
     workflow_id = s.n8n.make_in(carol_space, named(await laid_out(s), "Stuck"), carol_n8n)

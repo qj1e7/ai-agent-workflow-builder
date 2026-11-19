@@ -11,8 +11,8 @@ import { pillOf, workflowPath } from '../workflows/workflow'
 import { useMainButton } from './primary'
 
 /**
- * The sketch's already-have card: she asked for a workflow she already has, one of the same name that watches a GitHub repository,
- * so the answer leads with that workflow and Open it. Set up another still sets up the one she asked for, never a dead end. What
+ * The sketch's already-have card: they asked for a workflow they already have, one of the same name that watches a GitHub repository,
+ * so the answer leads with that workflow and Open it. Set up another still sets up the one they asked for, never a dead end. What
  * the workflow does and when are read from it as the platform holds it now, and said only while it is on: a draft or a paused
  * workflow watches nothing, and its pill says so.
  */

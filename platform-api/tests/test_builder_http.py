@@ -1973,7 +1973,7 @@ async def test_a_watched_softwares_check_is_offered_as_the_watchlist_and_nothing
     front: Front,
 ):
     """The Software watchlist checks every software on it, so pausing it for "the LangGraph
-    check" would stop more than she asked. She picks it herself."""
+    check" would stop more than they asked. They pick it themselves."""
     alice = Principal(UserId("alice"), frozenset({Role.OPERATOR}), "Alice")
     await front.watchlist.add(alice, AddSoftware.model_validate(LANGGRAPH))
     pause = PauseAnswer(workflow_words="LangGraph check", software="LangGraph")

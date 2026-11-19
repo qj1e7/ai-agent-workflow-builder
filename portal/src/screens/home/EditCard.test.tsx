@@ -121,14 +121,14 @@ describe('the edit card while it proposes a change', () => {
     expect(html, 'it is an edit card like every other state, with a heading that takes focus').toMatch(/<div data-card="edit"><section[^>]*><div[^>]*><h3[^>]*tabindex="-1">Change a workflow<\/h3>/)
   })
 
-  it('reads “it” as the workflow the answer before was about, names it on the card, and lets her pick another', () => {
+  it('reads “it” as the workflow the answer before was about, names it on the card, and lets them pick another', () => {
     const html = draw(editChoices as EditReply, { about: 'uc_01JB8', typed: 'make it daily' })
     expect(text(html)).toContain('Change Morning new-ticket check')
     expect(text(html)).toContain('Weekdays 8:00 becomes Daily 8:00')
     expect(buttons(html)).toEqual(['Pick another workflow', 'Never mind', 'Save change'])
   })
 
-  it('never picks one of several workflows her words fit, even the one talked about before', () => {
+  it('never picks one of several workflows their words fit, even the one talked about before', () => {
     expect(sentence(draw(editChoices as EditReply, { about: 'uc_01JB8', typed: 'make the summary one daily' }))).toBe('Which workflow should I change?')
   })
 
@@ -192,7 +192,7 @@ describe('the edit card while it proposes a change', () => {
     expect(buttons(html)).toEqual([])
   })
 
-  it('tells her saving the watchlist’s schedule makes her its owner', () => {
+  it('tells them saving the watchlist’s schedule makes them its owner', () => {
     const html = draw(editWatchlist as EditReply, { useCase: { ...MORNING, use_case_id: 'uc_01WL', version: 3, schedule: { ...MONDAY_8, at: '09:00' } } })
     expect(text(html)).toContain('Mon 9:00 becomes Daily 9:00')
     expect(text(html)).toContain('This changes when all 6 software on the watchlist are checked. Saving makes you the owner of this schedule.')
@@ -200,7 +200,7 @@ describe('the edit card while it proposes a change', () => {
   })
 })
 
-describe('the edit card once she has pressed', () => {
+describe('the edit card once they have pressed', () => {
   it('saved: Saved, says the version, with Open beside it and Undo, and no primary', () => {
     const html = draw(EDIT, { kept: SAVED, useCase: MORNING })
     expect(pill(html)).toBe('Saved')
@@ -210,7 +210,7 @@ describe('the edit card once she has pressed', () => {
     expect(primaries(html)).toBe(0)
   })
 
-  it('saved while paused: says it won’t run until she resumes it', () => {
+  it('saved while paused: says it won’t run until they resume it', () => {
     const html = draw(EDIT, { kept: SAVED, useCase: { ...MORNING, state: 'paused', next_run_at: null } })
     expect(status(html)).toBe('Saved as version 2. It’s paused, so it won’t run until you resume it.')
   })
@@ -249,7 +249,7 @@ describe('the edit card once she has pressed', () => {
     const phase = { kind: 'saved' as const, target: watch, after: { day: 'every_day' as const, at: '09:00' }, version: null }
     const since = sinceUnversioned(phase.after, read({ day: 'friday', at: '17:30' }))
     expect(since).toBe('Changed again since.')
-    expect(sinceUnversioned(phase.after, read(phase.after)), 'still what she saved').toBeNull()
+    expect(sinceUnversioned(phase.after, read(phase.after)), 'still what they saved').toBeNull()
     expect(sinceUnversioned(phase.after, { kind: 'reading' }), 'not read yet').toBeNull()
     const now = { paused: false, next: 'Mon 23 Nov, 9:00' }
     expect(doneSay(phase, now, since, undefined)).toBe('Saved. Changed again since.')
@@ -333,7 +333,7 @@ describe('saving and undoing from the card', () => {
     expect(publishedVersion(target, { version: 3 }, mine, 'alice', 2)).toBe(3)
     expect(publishedVersion(target, { version: 3 }, mine, 'alice', undefined), 'with no read of the version before, nothing can be claimed').toBeNull()
     expect(publishedVersion(target, { version: 3 }, { ...mine, by: 'carol' }, 'alice', 2), 'a teammate made the same change first, so nothing was published').toBeNull()
-    expect(publishedVersion(target, { version: 3 }, { ...mine, via: 'page' }, 'alice', 2), 'her own change on the page is not this card’s').toBeNull()
+    expect(publishedVersion(target, { version: 3 }, { ...mine, via: 'page' }, 'alice', 2), 'their own change on the page is not this card’s').toBeNull()
     expect(publishedVersion(target, { version: 1 }, version(1, null), 'alice', 1), 'the same schedule saved again, or a version lost after version 1').toBeNull()
     expect(publishedVersion(target, { version: 3 }, undefined, 'alice', 2), 'the versions could not be read').toBeNull()
     expect(publishedVersion({ ...target, watchlist: true }, { version: 4 }, mine, 'alice', 3), 'the watchlist keeps no versions').toBeNull()

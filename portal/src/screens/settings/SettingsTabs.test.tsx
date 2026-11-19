@@ -396,7 +396,7 @@ describe('the People and permissions tab', () => {
     expect(buttonsIn(html)).toContain('Add')
   })
 
-  it('is read-only for an Approver who is not an Operator: each person’s roles in words, and no control he can’t use', () => {
+  it('is read-only for an Approver who is not an Operator: each person’s roles in words, and no control they can’t use', () => {
     const html = render({ me: BOB, tab: 'people', people: CONFIRMED })
     expect(text(html)).toContain(ONLY_OPERATORS_WORDS)
     expect(checkboxes(html)).toEqual([])

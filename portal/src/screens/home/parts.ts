@@ -45,13 +45,13 @@ export interface CrossContext {
   readonly workflow?: string
   /** The edit changes the Software watchlist, so a change it can't make names what the chat can do to the watchlist. */
   readonly editsWatchlist?: boolean
-  /** The set-up card names each cross in the sketch's short form, her words as a sentence, rather than quoted. */
+  /** The set-up card names each cross in the sketch's short form, their words as a sentence, rather than quoted. */
   readonly short?: boolean
 }
 
 export const WATCHLIST_CANT = 'From the chat I can add software to the Software watchlist, remove it, or change when the watchlist runs.'
 
-/** The request that moves the whole Software watchlist to the time she asked of one software. */
+/** The request that moves the whole Software watchlist to the time they asked of one software. */
 export const watchlistRuns = (time: string): string => `Make the Software watchlist run ${time.trim()}`
 
 /** “every weekday except Friday”, “skip Fridays” or “drop every Friday” leaves a day out, which no schedule here can hold. */
@@ -95,17 +95,17 @@ const asSentence = (text: string): string => {
   return `${said.charAt(0).toUpperCase()}${said.slice(1)}.`
 }
 
-/** Her words for a cross, quoted, or as a sentence in the short form. Once she picks one of a clash’s choices, only the others are named. */
+/** Their words for a cross, quoted, or as a sentence in the short form. Once they pick one of a clash’s choices, only the others are named. */
 export function crossLabel(part: PartView, when?: When, short = false): string {
   const chosen = when && isClash(part) ? clashChosen(when, part) : null
   const others = chosen === null ? [] : part.choices.filter((choice) => choice !== chosen)
-  // A clause it didn't follow stays in her own words, quoted, as the sketch keeps it.
+  // A clause it didn't follow stays in their own words, quoted, as the sketch keeps it.
   if (short && part.reason !== 'not_followed' && part.reason !== null) return asSentence(others.length > 0 ? andList(others) : part.text)
   return others.length > 0 ? andList(others.map(quote)) : quote(part.text)
 }
 
 /**
- * What a cross sends as its own message when she taps Ask about this (ADR 0047): a clause the Planner didn’t follow, or a
+ * What a cross sends as its own message when they tap Ask about this (ADR 0047): a clause the Planner didn’t follow, or a
  * question it answers on its own. A time on a watch request has the Software watchlist’s offer instead, and the rest already sit
  * on a card with its own button. Null when the cross has no such step.
  */

@@ -606,7 +606,7 @@ def test_a_request_that_names_two_software_carries_neither(task: str, said: str)
         ("what's new in node js then?", "node js", "node js"),
         ("node js: what's new, briefly?", "node js", "node js"),
         ("redis, not kafka", "redis", "redis"),
-        # Left as a guess on a card she taps: "to", "over" and two names side by side join
+        # Left as a guess on a card they tap: "to", "over" and two names side by side join
         # nothing, as too many one-name requests use them.
         ("compare redis to kafka", "redis", "redis"),
         ("compare redis to kafka", "kafka", "kafka"),

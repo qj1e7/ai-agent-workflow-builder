@@ -1328,9 +1328,9 @@ class PlannerFront:
         return (await self._workflows.list_use_cases()).use_cases
 
     async def _similar(self, name: str) -> SimilarWorkflow | None:
-        """The workflow she already has that is the one she asks for: the same name, and it
+        """The workflow they already have that is the one they ask for: the same name, and it
         watches a GitHub repository, as a release check does. A same-named workflow that watches
-        none may do something else, so her request is set up as she asked."""
+        none may do something else, so their request is set up as they asked."""
         wanted = _norm(name)
         named = [
             u
@@ -1391,7 +1391,7 @@ class PlannerFront:
         named = words if words is not None and _own_words(words, keep_check=True) else None
         matched = [] if named is None else await self._matching(named, software)
         missing = named if named is not None and not matched and _own_words(named) else None
-        # "it", or "the check" that fits none, names no workflow: she picks from every one.
+        # "it", or "the check" that fits none, names no workflow: they pick from every one.
         several = matched if matched else [] if missing is not None else await self._use_cases()
         one = matched[0] if len(matched) == 1 else None
         return _Named(one=one, missing=missing, several=[] if one is not None else several)
@@ -1421,7 +1421,7 @@ class PlannerFront:
         """Pauses or resumes the one workflow the words name, for an Operator. The words are
         matched to workflow names first. A watched software's check is also the Software
         watchlist's, which checks every software on it, so when it fits it is offered beside the
-        workflow, never paused for her. Several matches, or "it", change nothing either: she
+        workflow, never paused for them. Several matches, or "it", change nothing either: they
         picks one."""
         pausing = isinstance(answer, PauseAnswer)
         reply = PauseReply if pausing else ResumeReply
@@ -1431,7 +1431,7 @@ class PlannerFront:
         if one is not None and listed is None and _operates(viewer):
             move = self._workflows.pause_use_case if pausing else self._workflows.resume_use_case
             moved = await move(one.use_case_id, viewer, "chat")
-            # When n8n could not take the change, nothing changed, and she is offered the
+            # When n8n could not take the change, nothing changed, and they are offered the
             # workflow again to try once more.
             if isinstance(moved, UseCaseView):
                 return reply(

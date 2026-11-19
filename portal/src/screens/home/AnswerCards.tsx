@@ -34,7 +34,7 @@ export interface Page {
   readonly ask: (text: string) => void
   /** Puts words back in the box for the person to change. */
   readonly edit: (text: string) => void
-  /** Puts focus back in the box, as when she backs out of a card. */
+  /** Puts focus back in the box, as when they back out of a card. */
   readonly box: () => void
 }
 
@@ -60,7 +60,7 @@ export function SetupCardAnswer({ reply, typed }: { reply: SetupCardReply | Part
 }
 
 /**
- * A can’t the registry says in one line: the line as the head, what she has instead under it, and Ask the team. Even what the
+ * A can’t the registry says in one line: the line as the head, what they have instead under it, and Ask the team. Even what the
  * platform won’t do gets Ask the team, so no can’t is ever bare (ADR 0047): the team can still hear that someone needs it.
  */
 function OneLineCant({ row, typed }: { row: CantRowView; typed: string }) {
@@ -124,7 +124,7 @@ export function CantAnswer({ reply, typed }: { reply: CantReply; typed: string }
 
 /**
  * The sketch's software card: a watched software's name, its pill and where it stands, in the watchlist's own words, or that it
- * isn't on the watchlist yet, with Watch it. Asked about its version, it also says the version she runs isn't known. Watch it adds
+ * isn't on the watchlist yet, with Watch it. Asked about its version, it also says the version they run isn't known. Watch it adds
  * it to the Software watchlist, which is where watched software lives here, after finding its GitHub project.
  */
 function SoftwareCard({ name, listed, word }: { name: string; listed: WatchlistReply['already_listed']; word: string }) {
@@ -273,7 +273,7 @@ export function DidntFollowCard({ typed, page }: { typed: string; page: Page }) 
   )
 }
 
-/** How to start: the steps from her words to the yes, then the registry’s examples as chips that ask the Planner for them. */
+/** How to start: the steps from their words to the yes, then the registry’s examples as chips that ask the Planner for them. */
 function HowToStart({ view, page }: { view: CapabilitiesView; page: Page }) {
   const examples = startingPoints(view)
   return (
@@ -319,7 +319,7 @@ const MOST_CHOICES = 5
 
 /**
  * Which workflow a pause or a resume means, when the words fit several, none, or a watched software’s check, which is the whole
- * Software watchlist. Nothing changed yet: the one she picks is paused or resumed through its own route, and the line says so.
+ * Software watchlist. Nothing changed yet: the one they pick is paused or resumed through its own route, and the line says so.
  */
 function SwitchChoices({ reply }: { reply: PauseReply | ResumeReply }) {
   const move = useMoveWorkflow()

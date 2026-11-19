@@ -183,7 +183,7 @@ describe('the request’s words', () => {
     it('drops the person who just said yes from the steps after, by id, until the next read', () => {
       const twoBobs: ApprovalStepView[] = [sent(step(0, 'open'), ['bob', 'carol']), { ...sent(step(1, 'waiting'), ['bob', 'carol']), sent_to: [ref('bob'), { id: 'bob_2', display: 'Bob' }, ref('carol')] }]
       const after = stepsAfter(twoBobs, { step: 0, verdict: 'approve', by: 'bob', at: AT, reason: null })
-      expect(after[0]?.sent_to?.map((p) => p.id), 'the step he decided keeps who it went to').toEqual(['bob', 'carol'])
+      expect(after[0]?.sent_to?.map((p) => p.id), 'the step they decided keeps who it went to').toEqual(['bob', 'carol'])
       expect(after[1]?.sent_to?.map((p) => p.id)).toEqual(['bob_2', 'carol'])
       expect(waitingFor(after), 'the other Bob may still say the second yes').toEqual(['Bob', 'Carol'])
     })

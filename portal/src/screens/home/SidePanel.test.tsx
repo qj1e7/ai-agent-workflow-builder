@@ -156,7 +156,7 @@ describe('the side panel', () => {
     ])
   })
 
-  it('gives an Approver who isn’t an Operator the same answers, and no control he can’t use', () => {
+  it('gives an Approver who isn’t an Operator the same answers, and no control they can’t use', () => {
     const html = draw({ kind: 'workflow', id: STOPPED.use_case_id }, { me: BOB })
     expect(text(html)).toContain('Safe to retry')
     expect(text(html)).toContain('An Operator can retry the run.')
