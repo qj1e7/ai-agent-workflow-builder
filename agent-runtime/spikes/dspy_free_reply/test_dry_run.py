@@ -23,7 +23,7 @@ from agent_runtime.reading import SkipRead
 from agent_runtime.reply_verifier import Verdict as Verifier
 from spikes.dspy_free_reply import run, scoring
 from spikes.dspy_free_reply.cases import all_cases
-from spikes.dspy_free_reply.wrapper import FreeReply
+from spikes.dspy_free_reply.wrapper import FreeReply, ProductAdapter
 
 HELPFUL = ReplyEnvelope(form="answer", text="Hi. Type what you want done in the box on Home.")
 CLAIMS_DONE = ReplyEnvelope(form="answer", text="I created the workflow for you.")
@@ -67,16 +67,15 @@ def fake(envelope: ReplyEnvelope, judged: int = 5) -> ByShape:
     )
 
 
-def use_dspy(envelope: ReplyEnvelope) -> None:
-    dspy.configure(
-        lm=DummyLM([{"envelope": envelope.model_dump_json()}]), adapter=dspy.ChatAdapter()
-    )
+def use_dspy(model: ByShape) -> None:
+    """The wrapper on the fake model; DSPy's own LM must never be called."""
+    dspy.configure(lm=DummyLM([]), adapter=ProductAdapter(model))
 
 
 def test_both_paths_show_the_same_reply_from_one_reading() -> None:
     case = all_cases()["reply:chat-01"]
     model = fake(HELPFUL)
-    use_dspy(HELPFUL)
+    use_dspy(model)
     frozen, by_eval = run.eval_path(model, model, case)
     assert by_eval is not None
     by_wrapper = run.wrapper_path(FreeReply(), model, model, case, frozen)
@@ -93,6 +92,7 @@ def test_both_paths_show_the_same_reply_from_one_reading() -> None:
         "contract.ReplyEnvelope",
         "reply_verifier.Verdict",
         "runner.Verdict",
+        "contract.ReplyEnvelope",
         "reply_verifier.Verdict",
         "runner.Verdict",
     ]
@@ -103,7 +103,7 @@ def test_both_paths_show_the_same_reply_from_one_reading() -> None:
 def test_the_baseline_reads_and_routes_as_the_eval_path_does(case_id: str) -> None:
     case = all_cases()[case_id]
     model = fake(HELPFUL)
-    use_dspy(HELPFUL)
+    use_dspy(model)
     by_eval, _ = run.eval_path(model, model, case)
     model.asked.clear()
     by_baseline = scoring.read_and_route(model, case)
@@ -116,8 +116,9 @@ def test_the_baseline_reads_and_routes_as_the_eval_path_does(case_id: str) -> No
 def test_a_reply_the_guard_stops_falls_back_scores_0_and_skips_the_verifier() -> None:
     case = all_cases()["reply:chat-01"]
     model = fake(HELPFUL, judged=2)
-    use_dspy(CLAIMS_DONE)
+    use_dspy(model)
     frozen, _ = run.eval_path(model, model, case)
+    model.answers[ReplyEnvelope] = CLAIMS_DONE
     model.asked.clear()
     shown = run.wrapper_path(FreeReply(), model, model, case, frozen)
     assert shown is not None
@@ -127,13 +128,13 @@ def test_a_reply_the_guard_stops_falls_back_scores_0_and_skips_the_verifier() ->
         "didnt_follow",
         0.0,
     )
-    assert model.asked == ["runner.Verdict"]
+    assert model.asked == ["contract.ReplyEnvelope", "runner.Verdict"]
 
 
 def test_a_judge_1_scores_0() -> None:
     case = all_cases()["reply:chat-01"]
     model = fake(HELPFUL, judged=1)
-    use_dspy(HELPFUL)
+    use_dspy(model)
     frozen, _ = run.eval_path(model, model, case)
     shown = run.wrapper_path(FreeReply(), model, model, case, frozen)
     assert shown is not None and shown.fell_back is None and shown.score == 0.0
@@ -145,11 +146,14 @@ def test_the_meter_stops_before_a_case_would_pass_the_round_cap(
     ledger = tmp_path / "spend.json"
     monkeypatch.setattr(scoring, "LEDGER", ledger)
     assert scoring.Meter("first").stop_reason() is None
-    spent = {"round": 1, "step": "earlier", "started": "x", "usd": 3.95}
-    ledger.write_text(json.dumps({"runs": [spent]}))
-    assert scoring.Meter("next").stop_reason() == "round 1's cap of $4.00"
+    earlier = {"round": 1, "step": "earlier", "started": "x", "usd": 3.05}
+    ledger.write_text(json.dumps({"runs": [earlier]}))
+    assert scoring.Meter("next").stop_reason() is None
+    spent = {"round": 2, "step": "earlier", "started": "y", "usd": 1.45}
+    ledger.write_text(json.dumps({"runs": [earlier, spent]}))
+    assert scoring.Meter("next").stop_reason() == "round 2's cap of $1.50"
     saved = scoring.Meter("next").save()
-    assert saved["usd"] == 0 and json.loads(ledger.read_text())["total_usd"] == 3.95
+    assert saved["usd"] == 0 and json.loads(ledger.read_text())["total_usd"] == 4.5
 
 
 def test_labels_spread_across_groups_and_drop_the_kind() -> None:
@@ -161,3 +165,32 @@ def test_labels_spread_across_groups_and_drop_the_kind() -> None:
     picked = run._spread(rows, 6)  # pyright: ignore[reportPrivateUsage]
     assert sorted(r["group"] for r in picked) == ["a", "a", "b", "b", "c", "c"]
     assert run.shown_words(rows[0]) == "reply a 0"
+
+
+def test_parity2_runs_both_paths_twice_on_frozen_readings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    model = fake(HELPFUL)
+    case_ids = ["reply:chat-01", "reply:approver-13"]
+    store: dict[str, Any] = {}
+    for case_id in case_ids:
+        frozen, _ = run.eval_path(model, model, all_cases()[case_id])
+        store[case_id] = frozen.record()
+    model.asked.clear()
+    monkeypatch.setattr(scoring, "LEDGER", tmp_path / "spend.json")
+    monkeypatch.setattr(scoring, "RUNS", tmp_path)
+    monkeypatch.setattr(run, "planner", lambda: model)
+    monkeypatch.setattr(run, "frozen_store", lambda: store)
+    monkeypatch.setattr(run, "load", lambda: {"score": [{"id": i} for i in case_ids]})
+    monkeypatch.setattr(
+        run, "write_run", lambda name, made: scoring.write_json(tmp_path / f"{name}.json", made)
+    )
+    monkeypatch.setattr(run, "report", lambda title, summary: None)
+    run.parity2()
+    made = json.loads((tmp_path / "parity2.json").read_text())
+    summary = made["summary"]
+    assert summary["cases"] == 2 and summary["passes"]
+    assert summary["kind_agrees_across_paths"] == summary["kind_agrees_eval_with_itself"] == 2
+    assert summary["useful_eval_per_run"] == summary["useful_wrapper_per_run"] == [2, 2]
+    assert "reading.TaskRead" not in model.asked
+    assert model.asked.count("contract.ReplyEnvelope") == 8

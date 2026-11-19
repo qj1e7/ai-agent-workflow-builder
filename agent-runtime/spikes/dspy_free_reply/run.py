@@ -1,11 +1,12 @@
-"""Steps 2 and 3: parity, the baseline and the 30 replies for the team lead to label.
+"""Steps 2 and 3: parity, the baseline and the 30 replies for the team lead to label (round 1),
+and parity again, both paths twice on 20 cases (round 2, `parity2`).
 
 Runs on GitHub Actions (`.github/workflows/spike-dspy.yml`) when `STEP` changes, with the
 Anthropic key in ANTHROPIC_API_KEY for that one step:
-    uv run --group spike python -m spikes.dspy_free_reply.run parity baseline labels
+    uv run --group spike python -m spikes.dspy_free_reply.run parity2
 
-Each run stops before a case would pass round 1's $4 or the spike's $30 (`scoring.Meter`), and
-writes its spend to `spend.json` and its rows to `runs/` after every case."""
+Each run stops before a case would pass the round's cap or the spike's $30 (`scoring.Meter`),
+and writes its spend to `spend.json` and its rows to `runs/` after every case."""
 
 import os
 from pathlib import Path
@@ -38,6 +39,7 @@ from spikes.dspy_free_reply.scoring import (  # noqa: E402
     Meter,
     assess,
     env,
+    eval_reply,
     frozen_of,
     planner,
     read_and_route,
@@ -46,7 +48,7 @@ from spikes.dspy_free_reply.scoring import (  # noqa: E402
     write_run,
 )
 from spikes.dspy_free_reply.split import load, recorded  # noqa: E402
-from spikes.dspy_free_reply.wrapper import FreeReply, fields_of  # noqa: E402
+from spikes.dspy_free_reply.wrapper import FreeReply, ProductAdapter, fields_of  # noqa: E402
 
 FROZEN: Final = RUNS / "frozen.json"
 PARITY: Final = RUNS / "parity.json"
@@ -54,7 +56,9 @@ BASELINE: Final = RUNS / "baseline.json"
 LABELS: Final = RUNS / "label-input.json"
 PARITY_CASES: Final = 10
 SEED: Final = 20261120
-PAID: Final = frozenset({"smoke", "parity", "baseline"})
+PAID: Final = frozenset({"parity", "baseline", "parity2"})
+PARITY2_CASES: Final = 20
+RUNS_EACH: Final = 2
 QUIET: Final = ("LiteLLM", "litellm", "httpx", "httpcore", "anthropic", "urllib3")
 
 
@@ -66,10 +70,12 @@ def quiet() -> None:
         logging.getLogger(name).setLevel(logging.ERROR)
 
 
-def lm() -> dspy.LM:
-    built = dspy.LM(f"anthropic/{MODEL}", max_tokens=2000, num_retries=2, timeout=120)
-    dspy.configure(lm=built, adapter=dspy.ChatAdapter())
-    return built
+def configure(model: Any) -> dspy.LM:
+    """DSPy with the product adapter on the eval path's model. DSPy's own LM is a placeholder that
+    no step calls; the meter still reads its history, so a call would be counted."""
+    placeholder = dspy.LM(f"anthropic/{MODEL}", num_retries=0)
+    dspy.configure(lm=placeholder, adapter=ProductAdapter(model))
+    return placeholder
 
 
 def failure(error: Exception) -> str:
@@ -84,19 +90,6 @@ def save_frozen(case_id: str, frozen: Frozen) -> None:
     store = frozen_store()
     store[case_id] = frozen.record()
     write_json(FROZEN, store)
-
-
-def smoke() -> None:
-    """One tiny call, to see the engine, the history and the cost line before any case."""
-    meter = Meter("smoke", lm())
-    with metered(meter.spend):
-        said = dspy.Predict("question -> answer")(question="Reply with the word ready.")
-    entry = meter.lm.history[-1]
-    print("answer:", said.answer)
-    print(
-        "usage:", entry["usage"], "litellm cost:", entry["cost"], "model:", entry["response_model"]
-    )
-    print("spend:", meter.save())
 
 
 def recorded_form(case_id: str, outcome: dict[str, Any] | None) -> str:
@@ -168,8 +161,8 @@ def wrapper_path(
 
 
 def parity() -> None:
-    meter = Meter("parity", lm())
     model, module = planner(), FreeReply()
+    meter = Meter("parity", configure(model))
     cases = all_cases()
     rows: list[dict[str, Any]] = []
     stopped = None
@@ -227,6 +220,104 @@ def parity() -> None:
     report("Parity", summary)
 
 
+def parity2() -> None:
+    """Round 2: both paths twice on 20 SCORE cases, from round 1's frozen readings, so chance
+    shows. The wrapper now sends the eval path's request word for word."""
+    model, module = planner(), FreeReply()
+    meter = Meter("parity2", configure(model))
+    cases, store = all_cases(), frozen_store()
+    reached = [
+        i
+        for i in parity_order([r["id"] for r in load()["score"]])
+        if i in store and Frozen.of(store[i]).gap(cases[i]) is not None
+    ]
+    rows: list[dict[str, Any]] = []
+    stopped = None
+    with metered(meter.spend):
+        for case_id in reached[:PARITY2_CASES]:
+            if (stopped := meter.stop_reason()) is not None:
+                break
+            case, frozen = cases[case_id], Frozen.of(store[case_id])
+            gap = frozen.gap(case)
+            assert gap is not None
+            row: dict[str, Any] = {"case": case_id, "eval": [], "wrapper": []}
+            try:
+                for _ in range(RUNS_EACH):
+                    said = eval_reply(model, case, gap)
+                    row["eval"].append(
+                        assess(
+                            case, frozen, *said[:2], model, model, "eval", error=said[2]
+                        ).record()
+                    )
+                    said = wrapper_reply(module, fields_of(request_of(case), gap))
+                    row["wrapper"].append(
+                        assess(
+                            case, frozen, *said[:2], model, model, "wrapper", error=said[2]
+                        ).record()
+                    )
+            except Exception as error:
+                row["error"] = failure(error)
+            rows.append(row)
+            meter.save()
+            write_run("parity2", {"summary": None, "rows": rows})
+            print(_parity2_line(row), flush=True)
+    summary = _parity2_summary(rows, stopped, meter.save())
+    write_run("parity2", {"summary": summary, "rows": rows})
+    report("Parity, twice on each path", summary)
+
+
+def _parity2_line(row: dict[str, Any]) -> str:
+    if "error" in row:
+        return f"  {row['case']}: {row['error']}"
+    said = {p: [f"{r['kind']}/{r['judge']}" for r in row[p]] for p in ("eval", "wrapper")}
+    return f"  {row['case']}: eval {said['eval']}  wrapper {said['wrapper']}"
+
+
+def _parity2_summary(rows: list[dict[str, Any]], stopped: str | None, spend: Any) -> dict[str, Any]:
+    done = [
+        r for r in rows if "error" not in r and len(r["eval"]) == len(r["wrapper"]) == RUNS_EACH
+    ]
+    n = len(done)
+
+    def agrees_with_itself(path: str) -> int:
+        return sum(r[path][0]["kind"] == r[path][1]["kind"] for r in done)
+
+    cross = sum(
+        sum(e["kind"] == w["kind"] for e in r["eval"] for w in r["wrapper"]) / RUNS_EACH**2
+        for r in done
+    )
+    useful = {
+        p: [sum(r[p][i]["useful"] for r in done) for i in range(RUNS_EACH)]
+        for p in ("eval", "wrapper")
+    }
+    self_eval, self_wrapper = agrees_with_itself("eval"), agrees_with_itself("wrapper")
+    mean_useful = {p: statistics.fmean(u) if n else 0.0 for p, u in useful.items()}
+    kind_bar = cross >= statistics.fmean([self_eval, self_wrapper]) if n else False
+    useful_bar = abs(mean_useful["eval"] - mean_useful["wrapper"]) <= 2
+    return {
+        "cases": n,
+        "runs_each": RUNS_EACH,
+        "kind_agrees_eval_with_itself": self_eval,
+        "kind_agrees_wrapper_with_itself": self_wrapper,
+        "kind_agrees_across_paths": round(cross, 2),
+        "useful_eval_per_run": useful["eval"],
+        "useful_wrapper_per_run": useful["wrapper"],
+        "fallbacks_eval": sum(x["fell_back"] is not None for r in done for x in r["eval"]),
+        "fallbacks_wrapper": sum(x["fell_back"] is not None for r in done for x in r["wrapper"]),
+        "judge_mean_eval": _mean([x["judge"] for r in done for x in r["eval"]]),
+        "judge_mean_wrapper": _mean([x["judge"] for r in done for x in r["wrapper"]]),
+        "safety_failures": sum(
+            bool(x["safety"]) for r in done for p in ("eval", "wrapper") for x in r[p]
+        ),
+        "bar_kind": kind_bar,
+        "bar_useful_within_2": useful_bar,
+        "passes": kind_bar and useful_bar,
+        "errors": len(rows) - n,
+        "stopped": stopped,
+        "spend": spend,
+    }
+
+
 def _family(row: dict[str, Any]) -> str:
     return "fallback" if row["fell_back"] else row["kind"]
 
@@ -247,8 +338,8 @@ def _parity_line(row: dict[str, Any]) -> str:
 
 
 def baseline() -> None:
-    meter = Meter("baseline", lm())
     model, module = planner(), FreeReply()
+    meter = Meter("baseline", configure(model))
     cases = all_cases()
     by_parity = {
         r["case"]: r["wrapper"] for r in json.loads(PARITY.read_text())["rows"] if r["wrapper"]
@@ -401,7 +492,7 @@ def _spread(rows: list[dict[str, Any]], n: int) -> list[dict[str, Any]]:
     return picked
 
 
-STEPS: Final = {"smoke": smoke, "parity": parity, "baseline": baseline, "labels": labels}
+STEPS: Final = {"parity": parity, "baseline": baseline, "labels": labels, "parity2": parity2}
 
 
 def main() -> int:

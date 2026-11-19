@@ -41,7 +41,13 @@ from langchain_core.language_models import BaseChatModel
 from agent_runtime.answers import AskTheQuestionLane, TaskRead, decide
 from agent_runtime.contract import FreeReplyAnswer, PlannerAnswer, ReplyEnvelope
 from agent_runtime.drafting import UNUSABLE
-from agent_runtime.free_reply import STILL_UNCLEAR, DeadEnd, answer_of_envelope, dead_end
+from agent_runtime.free_reply import (
+    STILL_UNCLEAR,
+    DeadEnd,
+    answer_of_envelope,
+    dead_end,
+    reply_messages,
+)
 from agent_runtime.parts import parts_of
 from agent_runtime.questions import QuestionReply, question_messages
 from agent_runtime.reply_verifier import Verdict, flag_of, verify_messages
@@ -52,12 +58,14 @@ RUNS: Final = HERE / "runs"
 LEDGER: Final = HERE / "spend.json"
 MODEL: Final = "claude-sonnet-5-5"
 LABEL: Final = f"anthropic:{MODEL}"
-ROUND: Final = 1
-ROUND_CAP: Final = 4.0
+ROUND: Final = 2
+ROUND_CAP: Final = 1.50
+"""Round 1 (parity, baseline, labels) had $4. Round 2 (parity again, twice on 20 cases) has
+$1.50. The spike's cap counts every round."""
 SPIKE_CAP: Final = 30.0
 RESERVE: Final = 0.08
-"""More than one case can cost: the reading, the question lane, the free reply twice (DSPy's
-JSON fallback), the verifier and the judge."""
+"""More than one case can cost: the reading, the question lane, the free reply, the verifier and
+the judge, or four free replies with their verifiers and judges."""
 SAFETY_CHECKS: Final = ("refuses_a_skip", "keeps_a_plain_write")
 UNREPORTED_IN: Final = 8000
 UNREPORTED_OUT: Final = 1000
@@ -324,6 +332,16 @@ def assess(
         envelope=None if envelope is None else envelope.model_dump(mode="json"),
         error=error,
     )
+
+
+def eval_reply(
+    model: BaseChatModel, case: SpikeCase, gap: DeadEnd
+) -> tuple[ReplyEnvelope | None, float, str | None]:
+    """The eval path's free reply on a frozen reading: the call `evals.reply.follow_up` makes
+    after the reading and the question lane."""
+    messages = reply_messages(request_of(case), gap)
+    envelope, took = _structured(model, ReplyEnvelope, messages, "", _Calls([]))
+    return envelope, took, None if envelope is not None else "call"
 
 
 def wrapper_reply(

@@ -1,17 +1,22 @@
 """The free reply's model call as one DSPy module (step 1).
 
-The inputs are the product's own sections, built with the product's own helpers: the guide (the
-how-to notes), the capabilities (the registry), the person's read-only facts, the notes from the
-rules, the turn before and the message. `product_text` joins them back into the exact user text
-`free_reply.reply_messages` sends, which `test_offline.py` checks for every case. The output is
-the same closed envelope, `ReplyEnvelope`. The starting instructions are today's `SYSTEM`, with
-one change: its role line names an input field, because DSPy instructions are the same for every
-case and the person's role is not. The guard and the verifier run on the output elsewhere,
-exactly as in the product."""
+DSPy holds one thing: the instruction text, `SYSTEM` from `free_reply.py` to start with, `{role}`
+placeholder and all. Everything else is the eval path's own call. `ProductAdapter` takes the
+place of DSPy's chat format: it builds the system and user text exactly as
+`free_reply.reply_messages` does and sends them through `evals.reply._structured`, the call the
+reply job makes, so the request carries the same words, the same envelope schema as a tool, the
+same model settings and the same retries. `test_offline.py` holds the request the wrapper sends to
+the one the eval path sends, word for word, for every case.
 
-from typing import Final
+The first wrapper used DSPy's ChatAdapter. Its own prompt format (field markers, field
+descriptions, a preamble, the envelope as JSON in plain text instead of a tool call) changed the
+replies, and the old test only checked the pieces, not the request."""
+
+from typing import Any, Final
 
 import dspy
+from evals.reply import _Calls, _structured  # pyright: ignore[reportPrivateUsage]
+from langchain_core.language_models import BaseChatModel
 
 from agent_runtime.abilities import CAPABILITIES
 from agent_runtime.contract import AnswerRequest, ReplyEnvelope
@@ -25,9 +30,8 @@ from agent_runtime.free_reply import (
 )
 from agent_runtime.how_to import HOW_TO
 
-ROLE_LINE: Final = "- {role}"
-ROLE_FROM_FIELD: Final = "- The person's role is given in role. Follow it."
-INSTRUCTIONS: Final = SYSTEM.replace(ROLE_LINE, ROLE_FROM_FIELD)
+ROLE: Final = "{role}"
+INSTRUCTIONS: Final = SYSTEM
 NONE: Final = "None."
 
 GUIDE: Final = "The guide"
@@ -61,6 +65,30 @@ class FreeReply(dspy.Module):
         return self.reply(**fields)
 
 
+class ProductAdapter(dspy.Adapter):
+    """Sends the product's messages through the eval path's call, with the predictor's current
+    instructions as the system text. DSPy's own LM is never called."""
+
+    def __init__(self, model: BaseChatModel, marker: str = "") -> None:
+        super().__init__()
+        self.model = model
+        self.marker = marker
+
+    def __call__(
+        self,
+        lm: Any,
+        lm_kwargs: dict[str, Any],
+        signature: type[dspy.Signature],
+        demos: list[dict[str, Any]],
+        inputs: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        messages = messages_of(signature.instructions, inputs)
+        envelope, _ = _structured(self.model, ReplyEnvelope, messages, self.marker, _Calls([]))
+        if envelope is None:
+            raise ValueError("the free reply's call failed or its answer did not parse")
+        return [{"envelope": envelope}]
+
+
 def fields_of(request: AnswerRequest, gap: DeadEnd) -> dict[str, str]:
     """The module's inputs for one dead end, from the same pieces `reply_messages` uses."""
     earlier = request.previous
@@ -80,9 +108,10 @@ def fields_of(request: AnswerRequest, gap: DeadEnd) -> dict[str, str]:
     }
 
 
-def product_text(fields: dict[str, str]) -> tuple[str, str]:
-    """The system and user text the product would send for these inputs, so a test can hold the
-    wrapper to `reply_messages`."""
+def messages_of(instructions: str, fields: dict[str, str]) -> tuple[str, str]:
+    """The system and user text for these instructions and inputs, as `reply_messages` builds
+    them. Instructions that lost the `{role}` placeholder get the role as a last line, so a
+    rewrite can't drop it."""
     sections = [
         f"{GUIDE}:\n{fields['guide']}",
         f"{CAPABILITIES_HEAD}:\n{fields['capabilities']}",
@@ -93,5 +122,8 @@ def product_text(fields: dict[str, str]) -> tuple[str, str]:
     if fields["turn_before"] != NONE:
         sections.append(f"{TURN_BEFORE}:\n{fields['turn_before']}")
     sections.append(f"{MESSAGE}:\n{fields['message']}")
-    system = INSTRUCTIONS.replace(ROLE_FROM_FIELD, f"- {fields['role']}")
+    role = fields["role"]
+    system = (
+        instructions.replace(ROLE, role) if ROLE in instructions else f"{instructions}\n- {role}"
+    )
     return system, "\n\n".join(sections)
