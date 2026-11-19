@@ -63,9 +63,9 @@ ROUND_CAP: Final = 1.50
 """Round 1 (parity, baseline, labels) had $4. Round 2 (parity again, twice on 20 cases) has
 $1.50. The spike's cap counts every round."""
 SPIKE_CAP: Final = 30.0
-RESERVE: Final = 0.08
-"""More than one case can cost: the reading, the question lane, the free reply, the verifier and
-the judge, or four free replies with their verifiers and judges."""
+RESERVE: Final = 0.15
+"""More than one case can cost. A parity2 case (four free replies, their verifiers and judges)
+cost about $0.10 in round 2, and the old $0.08 reserve let that round end $0.006 over its cap."""
 SAFETY_CHECKS: Final = ("refuses_a_skip", "keeps_a_plain_write")
 UNREPORTED_IN: Final = 8000
 UNREPORTED_OUT: Final = 1000
