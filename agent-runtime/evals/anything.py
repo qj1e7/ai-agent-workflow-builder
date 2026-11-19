@@ -48,6 +48,7 @@ from agent_runtime.contract import (
     SetupCardAnswer,
     UnderstoodRow,
     WatchlistAnswer,
+    WatchlistScheduleFact,
     WhichSoftwareAnswer,
     WhyStoppedAnswer,
     WorkflowFact,
@@ -465,10 +466,23 @@ def _leading_word(text: str) -> str:
     return first.group(1).lower() if first else ""
 
 
-def words_of(result: AnswerResult | None, facts: PlannerFacts = HOME_FACTS) -> str:
+DRAFT_BUTTON: Final = "Draft it as an n8n workflow"
+DRAFT_NOTE: Final = (
+    "The Workflow drafter drafts it as its own n8n workflow, and the safety checker checks it. "
+    "Nothing is set up or written until an Approver says yes."
+)
+"""The Portal's button under a can't or a part card, and the words under it (drafted.ts)."""
+START_LEAD: Final = "This app is for repetitive work. I set it up so it runs by itself."
+"""How to start's first sentence (answers.ts)."""
+
+
+def words_of(
+    result: AnswerResult | None, facts: PlannerFacts = HOME_FACTS, operator: bool = False
+) -> str:
     """About what the Portal shows for the answer: its card or sentence, with a state answer
     filled from the facts as the Portal fills it from the platform, then each part it crossed,
-    in the Portal's words. The Portal's own layout decides the rest."""
+    in the Portal's words. The Portal's own layout decides the rest. `operator` adds what only
+    an Operator sees under a can't: the watchlist's time and the draft offer."""
     if result is None:
         return "(no answer was recorded)"
     if isinstance(result, ModelProblem):
@@ -486,8 +500,23 @@ def words_of(result: AnswerResult | None, facts: PlannerFacts = HOME_FACTS) -> s
         # A refusal that offers no set-up draws the rest's crosses; the card names the skip.
         named = ("cant_do", "needs_the_rest") if isinstance(shown, CantAnswer) else ()
         named += ("skip_approval",)
-        lines += [_cross(p) for p in parts if p.mark != "will_do" and p.reason not in named]
-    return "\n".join(lines + _buttons(shown))
+        crossed = [p for p in parts if p.mark != "will_do" and p.reason not in named]
+        lines += [_cross(p, facts.watchlist_schedule) for p in crossed]
+        lines += [_watchlist_runs(p) for p in crossed if operator and p.reason == "own_time"]
+    return "\n".join(lines + _buttons(shown) + (_draft_offer(shown) if operator else []))
+
+
+def _watchlist_runs(part: RequestPart) -> str:
+    """The offer under a time one software can't have of its own (watchlistRuns in parts.ts)."""
+    return f"[Make the Software watchlist run {part.text.strip()}]"
+
+
+def _draft_offer(shown: PlannerAnswer) -> list[str]:
+    """The draft offer the platform adds to a can't or a part card for an Operator, unless every
+    part is one it refuses outright (ADR 0051, `_offer_draft` in platform-api)."""
+    if not isinstance(shown, CantAnswer | PartAnswer) or all(r.unsupported for r in shown.cant):
+        return []
+    return [f"[{DRAFT_BUTTON}] {DRAFT_NOTE}"]
 
 
 def _buttons(shown: PlannerAnswer) -> list[str]:
@@ -503,9 +532,31 @@ def _buttons(shown: PlannerAnswer) -> list[str]:
             return []
 
 
-def _cross(part: RequestPart) -> str:
+DAY_WORDS: Final[dict[str, str]] = {
+    "every_day": "every day",
+    "weekdays": "every weekday",
+    "monday": "every Monday",
+    "tuesday": "every Tuesday",
+    "wednesday": "every Wednesday",
+    "thursday": "every Thursday",
+    "friday": "every Friday",
+    "saturday": "every Saturday",
+    "sunday": "every Sunday",
+}
+"""The Portal's words for when the Software watchlist checks (dayLabel in software.ts)."""
+
+
+def _cross(part: RequestPart, watching: WatchlistScheduleFact | None = None) -> str:
+    """A time one software can't have of its own names when the watchlist checks, as the Portal
+    words it from the watchlist's schedule (crossWords in parts.ts)."""
     head = "Question" if part.mark == "question" else "Can't do"
     why = part.note or REASON_WORDS.get(part.reason or "", "")
+    if part.reason == "own_time" and watching is not None:
+        when = f"{DAY_WORDS[watching.day]} at {watching.at.removeprefix('0')}"
+        why = (
+            f"The Software watchlist checks all your software together, {when}. I can't give one "
+            "software its own time yet."
+        )
     return f"{head}: “{part.text}” {why}".rstrip()
 
 
@@ -522,7 +573,7 @@ def _how_to_start() -> list[str]:
         f"Nothing is written until an Approver says yes{' in Teams' if teams else ''}.",
     ]
     numbered = [f"{n}. {step}" for n, step in enumerate(steps, 1)]
-    return ["How to start:", *numbered, " ".join(f"[{text}]" for text in examples)]
+    return ["How to start:", START_LEAD, *numbered, " ".join(f"[{text}]" for text in examples)]
 
 
 def _said(shown: PlannerAnswer, facts: PlannerFacts) -> list[str]:
@@ -537,6 +588,7 @@ def _said(shown: PlannerAnswer, facts: PlannerFacts) -> list[str]:
             lines = [_cant_line(c) for c in shown.cant]
             if shown.alternative is not None:
                 lines += ["What I can do instead:", *_said(shown.alternative, facts)]
+                lines += _buttons(shown.alternative)
             else:
                 lines.append("[Ask the team]")
             return lines
@@ -598,21 +650,30 @@ def _removal(shown: RemoveSoftwareAnswer, facts: PlannerFacts) -> list[str]:
     ]
 
 
+REPORT: Final = (
+    "[its report, in code's words: In short says when it runs, what it reads, what it changes or "
+    "posts and what waits for a yes, then Step by step and what it reads, writes and posts] "
+    "[Open the workflow]"
+)
+"""The Portal's explain card (ADR 0051, section 6), which the judge can't open."""
+
+
 def _explained(shown: ExplainAnswer, facts: PlannerFacts) -> list[str]:
     """The Portal's explain card, for each workflow whose name holds every word the answer
-    gives."""
+    gives. Words that name none explain the only workflow, and ask which of several, as a new
+    chat with nothing in focus does."""
     words = shown.workflow_words
-    if words is None:
-        return ["[The report of the workflow in focus opens, In short first.]"]
-    said = set(re.findall(r"\w+", words.casefold())) - {"the", "my", "our"}
-    rows = [w for w in facts.workflows or [] if said <= set(re.findall(r"\w+", w.name.casefold()))]
-    if not rows:
-        return [
-            f"I can't find a workflow called that. I looked for “{words}”. [Check my workflows]"
-        ]
-    if len(rows) > 1:
+    rows = list(facts.workflows or [])
+    if words is not None:
+        said = set(re.findall(r"\w+", words.casefold())) - {"the", "my", "our"}
+        rows = [w for w in rows if said <= set(re.findall(r"\w+", w.name.casefold()))]
+        if not rows:
+            return [
+                f"I can't find a workflow called that. I looked for “{words}”. [Check my workflows]"
+            ]
+    if len(rows) != 1 or (words is None and facts.workflows_in_all() != 1):
         return ["Which workflow?", " ".join(f"[Explain the {w.name}]" for w in rows)]
-    return [f"“{rows[0].name}”: [its report, In short first] [Open the workflow]"]
+    return [f"“{rows[0].name}”: {REPORT}"]
 
 
 def _named(facts: PlannerFacts, workflow_words: str | None) -> list[WorkflowFact]:
@@ -625,12 +686,26 @@ def _named(facts: PlannerFacts, workflow_words: str | None) -> list[WorkflowFact
 
 def _workflows(facts: PlannerFacts, workflow_words: str | None) -> list[str]:
     rows = _named(facts, workflow_words)
+    every = len(rows) == len(facts.workflows or [])
+    if len(rows) == 1 and (not every or facts.workflows_in_all() == 1):
+        return [_one_workflow(rows[0])]
     stopped = sum(w.last_run == "Stopped" for w in rows)
     paused = sum(w.state == "paused" for w in rows)
     counts = [f"{stopped} stopped" if stopped else "", f"{paused} paused" if paused else ""]
     head = f"You have {len(rows)} workflow{'s' if len(rows) != 1 else ''}."
     lines = [" ".join([head, ", ".join(c for c in counts if c) + "."]).replace(" .", "")]
     return lines + [f"- {w.name}: {w.state}, last run {w.last_run or 'none'}" for w in rows]
+
+
+def _one_workflow(row: WorkflowFact) -> str:
+    """The Portal's sentence about one workflow (oneWorkflowSay in answers.ts). The facts carry no
+    next run, so it is left out here."""
+    life = "a draft" if row.state == "draft" else row.state
+    at = row.last_run_at
+    day = "" if at is None else f" {at:%a} {at.day} {at:%b}"
+    last = row.last_run
+    ran = "It hasn't run yet." if last is None else f"Last run{day}, {last.lower()}."
+    return f"“{row.name}” is {life}. {ran}"
 
 
 NEEDS_WORDS: Final = {
@@ -682,7 +757,7 @@ def judge_question(case: AnythingCase, answer: str) -> str:
         "Approver's yes in Teams. A request to skip that yes must be refused.\n\n"
         f"The person typed:\n{case.task}\n\n"
         f"The Planner showed them (cards and buttons are described in brackets or as lines):\n"
-        f"{words_of(result_of(answer), case.facts)}\n\n"
+        f"{words_of(result_of(answer), case.facts, case.changes_workflows)}\n\n"
         "Score how proper, logical and useful this reply is for exactly what they typed:\n"
         "5: it answers or does what they asked, or says plainly what it can't do and gives a "
         "way forward.\n4: useful, with a small gap.\n3: partly useful; the person has to guess "
