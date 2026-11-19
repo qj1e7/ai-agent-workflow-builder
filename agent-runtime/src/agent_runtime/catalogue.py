@@ -5,7 +5,8 @@ code, with no model.
 
 scripts/n8n-catalogue.sh writes the catalogue, contracts/n8n/catalogue.json, from the pinned n8n
 image. Each version of a block holds n8n's own parameters, each with the `displayOptions` that say
-when n8n's editor shows it, and what our class file says of each operation.
+when n8n's editor shows it, what our class file says of each operation, and n8n's inputs and
+outputs, which `connections` reads as the block's exits and inputs.
 
 The agent-runtime image carries the file at `IN_THE_IMAGE`.
 
@@ -21,6 +22,9 @@ from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Final, cast
+
+from agent_runtime import connections
+from agent_runtime.connections import Inputs, Link
 
 type Json = dict[str, Any]
 
@@ -43,6 +47,27 @@ _STOP_WORDS: Final = frozenset(
 )
 """Words too common in a request to tell one block from another."""
 _WEIGHTS: Final = {"name": 3, "type": 3, "aliases": 2, "operations": 2, "description": 1}
+LEANS_TO_WRITE: Final = frozenset({f"{OURS}wabProposeChange", f"{OURS}wabMakeApprovedChanges"})
+"""Our blocks that make a change after a yes. Their only change is to create a ticket, so they
+rank below our other blocks, such as Read, unless the words say to create one (`CREATE`)."""
+PROPOSES: Final = f"{OURS}wabProposeChange"
+"""The block of ours that creates a ticket. Only it ranks first, and is found if it matches at
+all, when the words say to create one."""
+_TICKET: Final = r"(?:(?:jira\s+)?(?:ticket|issue|bug)s?|jira\s+tasks?)\b"
+_HOW_MANY: Final = r"(?:a\s+new|an|a|one|two|new)\s+"
+_ONE: Final = r"(?:a\s+new|an|a|one|two)\s+"
+CREATE: Final = re.compile(
+    r"\b(?:(?:creat(?:e|es|ing)|rais(?:e|es|ing)|mak(?:e|es|ing)|"
+    rf"submit(?:s|ting)?|propos(?:e|es|ing))\s+(?:{_HOW_MANY})?|"
+    rf"(?:add(?:s|ing)?|open(?:s|ing)?|log(?:s|ging)?|fil(?:e|es|ing))\s+{_ONE}){_TICKET}",
+    re.IGNORECASE,
+)
+"""A create verb acting on a ticket, an allow-list: the verb, then a, an, one, two, a new or new,
+then jira, each if it is there, then ticket, issue or bug, or a Jira task. Add, open, log and file
+mean other things as often, so they need a, an, one, two or a new: "open jira tickets", "check
+log issues" and "add new issues to the summary" read. A noun such as "the jira ticket log", a
+ticket that is new, a bare task, and a summary created from tickets aren't, and nor is any other
+word that leans toward a change, such as update or close, which Propose a change can't do."""
 _UNKNOWN: Final = object()
 
 
@@ -110,15 +135,19 @@ class Catalogue:
     def find_blocks(self, words: str, limit: int = 8) -> list[Json]:
         """The blocks whose name, description or operations match the words at least half as well
         as the best match does: our own blocks and the ones the class file lets run first, then
-        the best matches. Each comes with its operations that match, so the drafter can describe
+        the best matches. Our own blocks have no operations in n8n's sense, so the choices they
+        list count as theirs: the sources Read reads and the changes Propose a change proposes.
+        When the words say to create a ticket, Propose a change is found if it matches at all.
+        Each block comes with its operations or choices that match, so the drafter can describe
         one next."""
         asked = _stems(words)
+        creates = CREATE.search(words) is not None
         scored = [(sum(e.words.get(stem, 0) for stem in asked), e) for e in self._index]
         best = max((score for score, _ in scored), default=0)
         found = sorted(
-            (entry.rank, -score, entry.type)
+            (entry.rank, _leaning(entry.type, creates), -score, entry.type)
             for score, entry in scored
-            if score and score * 2 >= best
+            if score and (score * 2 >= best or (creates and entry.type == PROPOSES))
         )
         return [self._summary(name, asked) for *_, name in found[:limit]]
 
@@ -133,12 +162,14 @@ class Catalogue:
         operation, by n8n's `displayOptions`. A condition on any other parameter stays on the
         parameter, so the drafter sees when it applies. Without a resource or operation that the
         block needs, it returns the choices instead, with no parameters. With no version, it is
-        the version n8n gives a new block."""
+        the version n8n gives a new block. Either way it gives the block's exits and inputs, as a
+        wire names them, or how its parameters set them."""
         block = self._block(node_type)
         chosen = block["default_version"] if version is None else version
         group = self._version(node_type, chosen)
         described: Json = {"type": node_type, "version": chosen, "name": block["name"]}
         described |= {mark: block[mark] for mark in _MARKS if mark in block}
+        described |= connections.described(group)
         operations = cast(list[Json], group.get("operations") or [])
         resources = [str(r["value"]) for r in cast(list[Json], group.get("resources") or [])]
         offered = [o for o in operations if o.get("resource") == resource]
@@ -205,6 +236,18 @@ class Catalogue:
                 known[name] = parameter["default"]
         return known
 
+    def exits(
+        self, node_type: str, version: float, values: Mapping[str, object]
+    ) -> tuple[Link, ...]:
+        """The block's exits, in n8n's order of its outputs, for these parameter values."""
+        settled = self.settled(node_type, version, values)
+        return connections.exits(self._version(node_type, version), version, settled)
+
+    def inputs(self, node_type: str, version: float, values: Mapping[str, object]) -> Inputs:
+        """The block's inputs, in n8n's order, for these parameter values."""
+        settled = self.settled(node_type, version, values)
+        return connections.inputs(self._version(node_type, version), version, settled)
+
     def shown(self, node_type: str, version: float, values: Mapping[str, object]) -> list[Json]:
         """Every parameter of the version that n8n shows when the block's parameters have these
         values, the rest at their defaults, each with what is left of the conditions an
@@ -256,7 +299,7 @@ class Catalogue:
             "aliases": " ".join(cast(list[str], block.get("aliases") or [])),
             "operations": " ".join(
                 str(item.get(key) or "")
-                for item in (*_specific(operations), *_specific(resources))
+                for item in (*_specific(operations), *_specific(resources), *_choices(name, group))
                 for key in ("name", "action")
             ),
             "description": str(block.get("description") or ""),
@@ -297,6 +340,8 @@ class Catalogue:
                 {key: o[key] for key in ("resource", "value", "name", "class") if key in o}
                 for *_, o in sorted(ranked, key=lambda r: r[:3])[:6]
             ]
+        if chosen := [c for c in _choices(name, group) if set(_stems(c["name"])) & set(asked)]:
+            summary["choices"] = chosen[:6]
         return summary
 
 
@@ -307,6 +352,30 @@ def _offered_in(items: object, version: float) -> list[Json]:
         {key: value for key, value in item.items() if key != "versions"}
         for item in cast(list[Json], items or [])
         if version in item.get("versions", [version])
+    ]
+
+
+def _leaning(name: str, creates: bool) -> int:
+    """Within a rank, Propose a change comes first when the words say to create a ticket. Without
+    such words, ours that make a change come last, whatever their score: "create a summary of
+    jira tickets" finds Read first. With them, Make the approved changes ranks by its score."""
+    if name == PROPOSES and creates:
+        return 0
+    if name in LEANS_TO_WRITE and not creates:
+        return 2
+    return 1
+
+
+def _choices(name: str, group: Json) -> list[Json]:
+    """The choices one of our own blocks lists for its top-level parameters, each with the
+    parameter it is for. n8n's blocks are found by their operations instead."""
+    if not name.startswith(OURS):
+        return []
+    return [
+        {"parameter": parameter["name"], "value": choice["value"], "name": str(choice["name"])}
+        for parameter in cast(list[Json], group.get("parameters") or [])
+        if parameter.get("type") in ("options", "multiOptions")
+        for choice in cast(list[Json], parameter.get("options") or [])
     ]
 
 

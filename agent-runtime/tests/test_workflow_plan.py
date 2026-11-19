@@ -335,6 +335,42 @@ def test_n8n_s_own_jira_and_confluence_blocks_may_read(catalogue: Catalogue, rea
     assert not isinstance(found, list) or not [p for p in found if p.code == "native_write"]
 
 
+def test_propose_a_change_takes_only_a_change_the_platform_offers(catalogue: Catalogue):
+    """Before, any written action passed the check, so a Confluence change the platform doesn't
+    offer passed too, and the run refused it later."""
+    confluence = json.loads(PROPOSE["parameters"]) | {
+        "action": "confluence.update_page",
+        "place": "<<confluence_page>>",
+    }
+    proposed = plan(
+        [PROPOSE | {"parameters": json.dumps(confluence)}],
+        settings=[setting("confluence_page", "confluence_page", "Software inventory")],
+    )
+
+    found = problems(catalogue, proposed)
+    assert [p.code for p in found] == ["bad_value"]
+    assert 'action must be one of "jira.create_ticket"' in found[0].text
+
+
+def test_propose_a_change_s_action_is_written_out_never_a_setting(catalogue: Catalogue):
+    """Before, a placeholder stood in for the action, so a text setting could carry a change the
+    platform doesn't offer past the check."""
+    dodged = json.loads(PROPOSE["parameters"]) | {"action": "<<action>>"}
+    proposed = plan(
+        [PROPOSE | {"parameters": json.dumps(dodged)}],
+        settings=[
+            setting("action", "text", "confluence.update_page"),
+            setting("jira_project", "jira_project", "MOCK"),
+        ],
+    )
+
+    found = problems(catalogue, proposed)
+    assert [p.code for p in found] == ["bad_value"]
+    assert 'action takes one of "jira.create_ticket", written out, never a setting' in (
+        found[0].text
+    )
+
+
 @pytest.mark.parametrize(
     ("guess", "kind"),
     [
@@ -407,6 +443,123 @@ def test_wires_into_merge_fill_its_inputs_in_order(catalogue: Catalogue):
     assert [w.input_index for w in passed(catalogue, two).wires] == [0, 1]
     three = plan([*sources, merge], [wire(f"Read {n}", "Merge") for n in "ABC"])
     assert "takes 2 wires in" in problems(catalogue, three)[0].text
+
+
+IF = block("Is it new", "n8n-nodes-base.if", 2.3)
+ROUTE = block("Route", "n8n-nodes-base.switch", 3.4, rules={"values": [{}, {}, {}]})
+MERGE = block("Merge", "n8n-nodes-base.merge", 3.2, mode="append", numberInputs=3)
+TELL = block("Tell", "CUSTOM.wabTell", 1)
+MODEL = block("Model", "@n8n/n8n-nodes-langchain.lmChatOpenAi", 1.3, model="gpt-5")
+
+
+def into(source: str, target: str, exit_name: str, input_index: int | None) -> Json:
+    return wire(source, target, exit_name) | {"input": input_index}
+
+
+def test_exits_and_inputs_are_n8n_s_own_from_the_catalogue(catalogue: Catalogue):
+    """If's false exit, Switch's third output and Merge's second input, by the outputs, output
+    names and inputs the pinned image serves, as the catalogue holds them."""
+    wires = [
+        wire("Is it new", "Route", "false"),
+        into("Route", "Merge", "2", 1),
+        into("Tell", "Merge", "main", 0),
+    ]
+
+    done = passed(catalogue, plan([IF, ROUTE, MERGE, TELL], wires))
+
+    assert [(w.exit, w.exit_index, w.input_index) for w in done.wires] == [
+        ("false", 1, 0),
+        ("2", 2, 1),
+        ("main", 0, 0),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("wires", "said"),
+    [
+        ([wire("Route", "Tell", "3")], '\'Route\' has the exits "0", "1", "2"'),
+        ([wire("Route", "Tell", "rule 1")], '\'Route\' has the exits "0", "1", "2"'),
+        ([wire("Is it new", "Tell", "main")], '\'Is it new\' has the exits "true", "false"'),
+        ([into("Is it new", "Merge", "true", 3)], "joins input 3 of 'Merge', which takes 3"),
+        ([into("Is it new", "Tell", "true", 1)], "joins input 1 of 'Tell', which takes 1"),
+        ([into("Is it new", "Merge", "true", -1)], "joins input -1 of 'Merge'"),
+        ([wire("Is it new", "Model", "true")], "'Model', which takes no main wire in"),
+        ([wire("Model", "Tell", "ai_languageModel")], "'Tell', which takes no ai_languageModel"),
+    ],
+)
+def test_a_wire_to_an_exit_or_an_input_n8n_doesn_t_give_goes_back(
+    catalogue: Catalogue, wires: list[Json], said: str
+):
+    found = problems(catalogue, plan([IF, ROUTE, MERGE, TELL, MODEL], wires))
+
+    assert [p.code for p in found] == ["wire"]
+    assert said in found[0].text
+
+
+SLACK_TOOL = block(
+    "Post in Slack",
+    "n8n-nodes-base.slackTool",
+    2.7,
+    resource="message",
+    operation="post",
+    select="channel",
+    channelId={"__rl": True, "mode": "name", "value": "<<channel>>"},
+    text="A note",
+)
+MCP = block("Outside callers", "@n8n/n8n-nodes-langchain.mcpTrigger", 2.1, path="tools")
+
+
+def test_nothing_wires_into_a_trigger_not_even_a_tool_into_an_mcp_server_trigger(
+    catalogue: Catalogue,
+):
+    """A tool wired into MCP Server Trigger would let any outside MCP caller post in Slack with
+    no yes. main refused every wire into a trigger, and so does this check."""
+    found = problems(
+        catalogue,
+        plan(
+            [SLACK_TOOL, MCP],
+            [wire("Post in Slack", "Outside callers", "ai_tool")],
+            [setting("channel", "channel", "#support")],
+        ),
+    )
+
+    assert [p.code for p in found] == ["wire"]
+    assert "'Outside callers', which starts the workflow and takes no wire in" in found[0].text
+
+
+def test_a_wire_with_no_input_skips_the_inputs_other_wires_name(catalogue: Catalogue):
+    """Before, both wires joined input 0 and Merge's input 1 stayed empty."""
+    merge = block("Merge", "n8n-nodes-base.merge", 3.2, mode="append")
+    sources = [block(f"Tell {n}", "CUSTOM.wabTell", 1) for n in "AB"]
+    wires = [into("Tell A", "Merge", "main", None), into("Tell B", "Merge", "main", 0)]
+
+    done = passed(catalogue, plan([*sources, merge], wires))
+    assert [(w.from_block, w.input_index) for w in done.wires] == [("Tell A", 1), ("Tell B", 0)]
+
+
+def test_two_wires_on_one_input_of_a_block_with_more_go_back(catalogue: Catalogue):
+    merge = block("Merge", "n8n-nodes-base.merge", 3.2, mode="append")
+    sources = [block(f"Tell {n}", "CUSTOM.wabTell", 1) for n in "AB"]
+    wires = [into("Tell A", "Merge", "main", 1), into("Tell B", "Merge", "main", 1)]
+
+    found = problems(catalogue, plan([*sources, merge], wires))
+    assert [p.code for p in found] == ["wire"]
+    assert "joins input 1 of 'Merge', which another wire already joins" in found[0].text
+
+
+AGENT = block("Agent", "@n8n/n8n-nodes-langchain.agent", 3.1, text="Sum up the tickets")
+EMBEDDINGS = block("Embeddings", "@n8n/n8n-nodes-langchain.embeddingsOpenAi", 1.2)
+
+
+def test_known_tradeoff_a_block_kept_by_hand_takes_any_ai_wire_even_embeddings_into_an_agent(
+    catalogue: Catalogue,
+):
+    """Code keeps the AI Agent's AI inputs by hand (connections.BY_HAND), so it lets any AI wire
+    join, though n8n's agent takes no embeddings. The builder can't lay out an AI wire yet."""
+    wires = [wire("Embeddings", "Agent", "ai_embedding")]
+
+    done = passed(catalogue, plan([EMBEDDINGS, AGENT], wires))
+    assert [(w.exit, w.input_index) for w in done.wires] == [("ai_embedding", 0)]
 
 
 @pytest.mark.parametrize(
@@ -897,16 +1050,39 @@ def test_a_filter_s_time_beside_the_schedule_is_asked_and_the_schedule_s_day_kep
 
 
 def test_a_switch_s_exits_follow_its_rules_and_a_written_count_is_held(catalogue: Catalogue):
-    rules = {"values": [{"outputKey": "a"}, {"outputKey": "b"}]}
-    switch = block("Route", "n8n-nodes-base.switch", 3.4, rules=rules)
-    targets = [block(f"Tell {n}", "CUSTOM.wabTell", 1) for n in (1, 2)]
-    wires = [wire("Route", "Tell 1", "rule 1"), wire("Route", "Tell 2", "Rule 2")]
+    """n8n names each rule's exit by its output key, else its number from 0, then Fallback."""
+    rules = {"values": [{"outputKey": "a"}, {}]}
+    options = {"fallbackOutput": "extra"}
+    switch = block("Route", "n8n-nodes-base.switch", 3.4, rules=rules, options=options)
+    targets = [block(f"Tell {n}", "CUSTOM.wabTell", 1) for n in (1, 2, 3)]
+    wires = [
+        wire("Route", "Tell 1", "A"),
+        wire("Route", "Tell 2", "1"),
+        wire("Route", "Tell 3", "fallback"),
+    ]
 
     done = passed(catalogue, plan([switch, *targets], wires))
-    assert [w.exit_index for w in done.wires] == [0, 1]
+    assert [(w.exit, w.exit_index) for w in done.wires] == [("a", 0), ("1", 1), ("Fallback", 2)]
     huge = block("Route", "n8n-nodes-base.switch", 3.4, mode="expression", numberOutputs=10**9)
-    out_of_range = plan([huge, targets[0]], [wire("Route", "Tell 1", "output 81")])
+    assert passed(catalogue, plan([huge, targets[0]], [wire("Route", "Tell 1", "79")]))
+    out_of_range = plan([huge, targets[0]], [wire("Route", "Tell 1", "80")])
     assert any("has the exits" in p.text for p in problems(catalogue, out_of_range))
+    same = block("Route", "n8n-nodes-base.switch", 3.4, rules={"values": [{"outputKey": "a"}] * 2})
+    either = plan([same, targets[0]], [wire("Route", "Tell 1", "a")])
+    assert any('has the exits "a", "a"' in p.text for p in problems(catalogue, either))
+
+
+def test_a_switch_with_many_rules_keeps_fallback_after_the_last_as_n8n_does(catalogue: Catalogue):
+    """n8n makes one exit for every rule and puts Fallback after them. Before, code stopped at 80
+    rules, so with 81 Fallback stood at 80, where n8n has rule 80."""
+    rules = {"values": [{}] * 81}
+    switch = block(
+        "Route", "n8n-nodes-base.switch", 3.4, rules=rules, options={"fallbackOutput": "extra"}
+    )
+    tell = block("Tell", "CUSTOM.wabTell", 1)
+
+    done = passed(catalogue, plan([switch, tell], [wire("Route", "Tell", "Fallback")]))
+    assert [(w.exit, w.exit_index) for w in done.wires] == [("Fallback", 81)]
 
 
 # Found by the safety review of 7901cd7f. Each of these passed the check there.
