@@ -50,19 +50,23 @@ _WEIGHTS: Final = {"name": 3, "type": 3, "aliases": 2, "operations": 2, "descrip
 LEANS_TO_WRITE: Final = frozenset({f"{OURS}wabProposeChange", f"{OURS}wabMakeApprovedChanges"})
 """Our blocks that make a change after a yes. Their only change is to create a ticket, so they
 rank below our other blocks, such as Read, unless the words say to create one (`CREATE`)."""
-_TICKET: Final = r"(?:jira\s+)?(?:ticket|issue|bug|task)s?\b"
+PROPOSES: Final = f"{OURS}wabProposeChange"
+"""The block of ours that creates a ticket. Only it ranks first, and is found if it matches at
+all, when the words say to create one."""
+_TICKET: Final = r"(?:(?:jira\s+)?(?:ticket|issue|bug)s?|jira\s+tasks?)\b"
 _HOW_MANY: Final = r"(?:a\s+new|an|a|one|two|new)\s+"
 CREATE: Final = re.compile(
-    r"\b(?:(?:creat(?:e|es|ing)|rais(?:e|es|ing)|fil(?:e|es|ing)|log(?:s|ging)?|"
-    r"mak(?:e|es|ing)|add(?:s|ing)?|submit(?:s|ting)?|propos(?:e|es|ing))\s+"
-    rf"(?:{_HOW_MANY})?|open(?:s|ing)?\s+{_HOW_MANY}){_TICKET}",
+    r"\b(?:(?:creat(?:e|es|ing)|rais(?:e|es|ing)|mak(?:e|es|ing)|add(?:s|ing)?|"
+    rf"submit(?:s|ting)?|propos(?:e|es|ing))\s+(?:{_HOW_MANY})?|"
+    rf"(?:open(?:s|ing)?|log(?:s|ging)?|fil(?:e|es|ing))\s+{_HOW_MANY}){_TICKET}",
     re.IGNORECASE,
 )
 """A create verb acting on a ticket, an allow-list: the verb, then a, an, one, two, a new or new,
-then jira, each if it is there, then ticket, issue, bug or task. Open needs a, an, one, two or
-new, so "open jira tickets" reads. A noun such as "the jira ticket log" or "a file", a ticket
-that is new, and a summary created from tickets aren't, and nor is any other word that leans
-toward a change, such as update or close, which Propose a change can't do."""
+then jira, each if it is there, then ticket, issue or bug, or a Jira task. Open, log and file are
+nouns as often as verbs, so they need a, an, one, two or new: "open jira tickets" and "check log
+issues" read. A noun such as "the jira ticket log", a ticket that is new, a bare task, and a
+summary created from tickets aren't, and nor is any other word that leans toward a change, such
+as update or close, which Propose a change can't do."""
 _UNKNOWN: Final = object()
 
 
@@ -132,9 +136,9 @@ class Catalogue:
         as the best match does: our own blocks and the ones the class file lets run first, then
         the best matches. Our own blocks have no operations in n8n's sense, so the choices they
         list count as theirs: the sources Read reads and the changes Propose a change proposes.
-        When the words say to create a ticket, ours that create one are found if they match at
-        all. Each block comes with its operations or choices that match, so the drafter can
-        describe one next."""
+        When the words say to create a ticket, Propose a change is found if it matches at all.
+        Each block comes with its operations or choices that match, so the drafter can describe
+        one next."""
         asked = _stems(words)
         creates = CREATE.search(words) is not None
         scored = [(sum(e.words.get(stem, 0) for stem in asked), e) for e in self._index]
@@ -142,7 +146,7 @@ class Catalogue:
         found = sorted(
             (entry.rank, _leaning(entry.type, creates), -score, entry.type)
             for score, entry in scored
-            if score and (score * 2 >= best or (creates and entry.type in LEANS_TO_WRITE))
+            if score and (score * 2 >= best or (creates and entry.type == PROPOSES))
         )
         return [self._summary(name, asked) for *_, name in found[:limit]]
 
@@ -351,11 +355,14 @@ def _offered_in(items: object, version: float) -> list[Json]:
 
 
 def _leaning(name: str, creates: bool) -> int:
-    """Within a rank, ours that create a ticket come first when the words say to create one, and
-    last otherwise, whatever their score: "create a summary of jira tickets" finds Read first."""
-    if name not in LEANS_TO_WRITE:
-        return 1
-    return 0 if creates else 2
+    """Within a rank, Propose a change comes first when the words say to create a ticket. Without
+    such words, ours that make a change come last, whatever their score: "create a summary of
+    jira tickets" finds Read first. With them, Make the approved changes ranks by its score."""
+    if name == PROPOSES and creates:
+        return 0
+    if name in LEANS_TO_WRITE and not creates:
+        return 2
+    return 1
 
 
 def _choices(name: str, group: Json) -> list[Json]:
