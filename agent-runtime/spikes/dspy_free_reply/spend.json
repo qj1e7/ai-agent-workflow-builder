@@ -1,0 +1,32 @@
+{
+  "round_cap": 4.0,
+  "spike_cap": 30.0,
+  "runs": [
+    {
+      "round": 1,
+      "step": "parity",
+      "started": "2026-11-19T20:19:33+00:00",
+      "langchain_calls": 56,
+      "langchain_usd": 0.4803,
+      "dspy_calls": 10,
+      "dspy_usd_at_our_price": 0.1155,
+      "dspy_usd_litellm": 0.1155,
+      "usd": 0.5958
+    },
+    {
+      "round": 1,
+      "step": "baseline",
+      "started": "2026-11-19T20:22:17+00:00",
+      "langchain_calls": 196,
+      "langchain_usd": 1.6817,
+      "dspy_calls": 65,
+      "dspy_usd_at_our_price": 0.7735,
+      "dspy_usd_litellm": 0.7735,
+      "usd": 2.4552
+    }
+  ],
+  "total_usd": 3.051,
+  "round_usd": {
+    "1": 3.051
+  }
+}
