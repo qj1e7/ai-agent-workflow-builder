@@ -381,7 +381,9 @@ NOT_READY: Final[dict[str, Callable[[str], bool]]] = {
     ),
     "registries.check": _found(
         re.compile(
-            r"\bregistr(?:y|ies)\b|\bpypi\b|\bnpm\b|\bdocker\s+hub\b|\bmaven\b|\badvisor(?:y|ies)\b",
+            # Maven Central and npm are read (ADR 0025), so only the planned sources count.
+            r"\bpypi\b|\bnuget\b|\bdocker\s*hub\b|\bend[\s-]+of[\s-]+life\b|"
+            r"\bsupport\s+end\s+dates?\b|\bexploited\b",
             re.IGNORECASE,
         )
     ),
