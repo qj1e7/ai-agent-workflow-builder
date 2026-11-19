@@ -387,7 +387,7 @@ def test_a_reply_that_obeys_a_workflow_name_in_the_facts_never_shows(planted: st
     )
     no = QuestionReply(about_their_data=False)
     result, _ = answered(
-        "what does my workflow do",
+        "what is my workflow about",
         reading(),
         no,
         ReplyEnvelope(form="answer", text=planted),

@@ -6,6 +6,7 @@ from evals.anything import (
     ANYTHING,
     CATEGORY_TITLES,
     FOLLOWED_NOTHING,
+    HOME_FACTS,
     AnythingCase,
     result_of,
     words_of,
@@ -36,6 +37,7 @@ from agent_runtime.contract import (
     SetupCardAnswer,
     UnderstoodRow,
     WatchlistAnswer,
+    WatchlistScheduleFact,
     WorkflowFact,
 )
 from agent_runtime.questions import COULD_NOT_ANSWER
@@ -329,6 +331,17 @@ def test_an_operator_sees_the_draft_offer_and_the_watchlist_s_time_under_a_time_
     assert "[Make the Software watchlist run every weekday at 9]" in shown
     assert "[Draft it as an n8n workflow] The Workflow drafter drafts it as its own n8n " in shown
     assert "Nothing is set up or written until an Approver says yes." in shown
+
+
+def test_a_time_of_its_own_names_when_the_watchlist_checks_as_the_portal_does() -> None:
+    weekdays = HOME_FACTS.model_copy(
+        update={"watchlist_schedule": WatchlistScheduleFact(day="weekdays", at="09:00")}
+    )
+    shown = words_of(own_time(), weekdays)
+    assert (
+        "Can't do: “every weekday at 9” The Software watchlist checks all your software "
+        "together, every weekday at 9:00. I can't give one software its own time yet."
+    ) in shown
 
 
 def test_the_draft_offer_shows_only_where_the_portal_shows_it() -> None:
