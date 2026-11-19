@@ -260,7 +260,11 @@ APPROVALS = {"n8n-nodes-base.slack", "n8n-nodes-base.gmail", "n8n-nodes-base.mic
         ("raise a jira ticket", PROPOSE, {JIRA, READ}),
         ("file a jira ticket", PROPOSE, {JIRA, READ}),
         ("log a jira ticket", PROPOSE, {JIRA, READ}),
-        ("new jira ticket", PROPOSE, {JIRA, READ}),
+        ("add a jira ticket", PROPOSE, {JIRA, READ}),
+        ("make a jira ticket", PROPOSE, {JIRA, READ}),
+        ("file a bug in jira", PROPOSE, {JIRA, READ}),
+        ("log a jira issue", PROPOSE, {JIRA, READ}),
+        ("read the log of jira tickets", READ, {PROPOSE}),
         ("list jira tickets", READ, {PROPOSE, JIRA}),
         ("find jira tickets", READ, {PROPOSE, JIRA}),
         ("search jira tickets", READ, {PROPOSE, JIRA}),
@@ -288,6 +292,32 @@ def test_find_puts_the_block_of_ours_for_the_job_above_n8n_s_own(
 
     assert found[0] == ours, found
     assert all(found.index(ours) < found.index(t) for t in theirs if t in found), found
+
+
+@pytest.mark.parametrize(
+    "words",
+    [
+        "show the jira ticket log",
+        "jira tickets in a file",
+        "file of jira tickets",
+        "check the jira log",
+        "export jira tickets to a file",
+        "tell me about each new jira ticket",
+        "alert on every new jira ticket",
+        "create a summary of jira tickets",
+        "read the log of jira tickets",
+    ],
+)
+def test_words_that_don_t_create_a_ticket_never_find_propose_a_change_first(
+    catalogue: Catalogue, words: str
+):
+    """Before, "file", "log" and "new ... ticket" counted as words to create wherever they
+    stood, and "create" counted whatever it made. Only a create verb acting on a ticket counts:
+    elsewhere Read, or n8n's Jira, ranks above Propose a change."""
+    found = [b["type"] for b in catalogue.find_blocks(words)]
+
+    if PROPOSE in found:
+        assert {READ, JIRA} & set(found[: found.index(PROPOSE)]), found
 
 
 def test_find_shows_the_choice_of_ours_that_matches(catalogue: Catalogue):
