@@ -77,6 +77,32 @@ const idOf = (status: string, from: readonly WatchedSoftwareView[] = ROW) => fro
 const text = (html: string) => html.replace(/<[^>]*>/g, ' ').replaceAll('&#x27;', "'").replace(/\s+/g, ' ').trim()
 const buttons = (html: string) => [...html.matchAll(/<button\b[^>]*>([\s\S]*?)<\/button>/g)].map((match) => text(match[1] ?? ''))
 
+describe('a package’s known vulnerabilities on its page (ADR 0025)', () => {
+  const base = ROW[0]!
+  const asPackage = (changes: Partial<WatchedSoftwareView>): WatchlistView => ({
+    ...(statuses as WatchlistView),
+    software: [{ ...base, source: { kind: 'maven', ref: 'org.apache.logging.log4j:log4j-core', url: 'https://central.sonatype.com/artifact/org.apache.logging.log4j/log4j-core/versions' }, ...changes }],
+  })
+
+  it('says where a looked-up version’s vulnerabilities are listed, and links the last check', () => {
+    const html = renderItem(asPackage({}), ALICE, base.id)
+    const words = text(html)
+    expect(words).toContain('Known vulnerabilities')
+    expect(words).toContain('Each check lists them in its run, and an upgrade ticket names them, with links to NVD or OSV.')
+    expect(html).toContain('href="/runs/run_01JBB"')
+  })
+
+  it('says a version the first check read is not looked up, with no link', () => {
+    const html = renderItem(asPackage({ our_version_source: { kind: 'first_check', at: '2026-11-02T10:00:00Z', ticket: null } }), ALICE, base.id)
+    expect(text(html)).toContain('Not looked up. They’re looked up only in a version someone gave, or one an upgrade ticket set when marked Done.')
+    expect(html).not.toContain('Open the last check')
+  })
+
+  it('says nothing about vulnerabilities for a GitHub project', () => {
+    expect(text(renderItem(statuses, ALICE, base.id))).not.toContain('Known vulnerabilities')
+  })
+})
+
 describe('the Software watchlist page', () => {
   it('says the watchlist moves to n8n after the check that holds it back, and only then', () => {
     expect(text(render({ ...statuses, moving_to_n8n: true }, ALICE))).toContain('Moving to n8n after this run.')
@@ -825,8 +851,8 @@ describe('add a Maven Central or npm package (ADR 0025)', () => {
     expect(words).toContain('Maven Central · org.apache.logging.log4j:log4j-core')
     expect(html).toContain('href="https://central.sonatype.com/artifact/org.apache.logging.log4j/log4j-core/versions"')
     expect(words).toContain('(opens Maven Central in a new tab)')
-    expect(words).toContain('Each check also looks up known vulnerabilities in the version you run.')
-    expect(words).toContain('Give it, and each check also looks up known vulnerabilities in it.')
+    expect(words).toContain('Give the version you run, and each check also looks up known vulnerabilities in it.')
+    expect(words).toContain('Give it, and each check also looks up known vulnerabilities in it. Each check lists them in its run, and an upgrade ticket names them, with links to NVD or OSV.')
   })
 
   it('sends a confirmed package as package, never as repo', () => {

@@ -133,7 +133,7 @@ export function releaseWords(match: ProjectGuess): string {
   const kind = kindOf(match)
   if (match.releases === 'none') return noReleaseWords(match.repo, kind)
   if (kind === 'github') return `Checked just now. The project is on GitHub and its newest release is ${match.newest ?? 'known'}.`
-  return `Checked just now. The package is on ${SOURCE_NAMES[kind]} and its newest version is ${match.newest ?? 'known'}. Each check also looks up known vulnerabilities in the version you run.`
+  return `Checked just now. The package is on ${SOURCE_NAMES[kind]} and its newest version is ${match.newest ?? 'known'}. Give the version you run, and each check also looks up known vulnerabilities in it.`
 }
 
 /** The source the form would save: the one chosen by hand, else the match that is picked or the only one. */

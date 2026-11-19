@@ -375,7 +375,21 @@ export function checkName(text: string, watched: readonly string[] = []): Checke
 }
 
 export const VERSION_HELP = 'Leave it empty if you don’t know. It shows as Not known, and the check tells you about releases newer than the newest one it first reads.'
-export const PACKAGE_VERSION_HELP = `${VERSION_HELP} Give it, and each check also looks up known vulnerabilities in it.`
+/** Where a package's known vulnerabilities show. The Software page keeps no copy of them (ADR 0025). */
+export const VULNERABILITIES_WHERE = 'Each check lists them in its run, and an upgrade ticket names them, with links to NVD or OSV.'
+export const PACKAGE_VERSION_HELP = `${VERSION_HELP} Give it, and each check also looks up known vulnerabilities in it. ${VULNERABILITIES_WHERE}`
+
+/**
+ * What the Software page says about a package's known vulnerabilities, or null for a GitHub project, which names no package. They are
+ * looked up only in a version someone gave or an upgrade ticket set when marked Done, never in one the first check read.
+ */
+export function vulnerabilityFact(row: WatchedSoftwareView): { readonly words: string; readonly looked: boolean } | null {
+  if (!isPackage(row.source.kind)) return null
+  if (row.our_version === null || row.our_version_source?.kind === 'first_check') {
+    return { words: 'Not looked up. They’re looked up only in a version someone gave, or one an upgrade ticket set when marked Done.', looked: false }
+  }
+  return { words: VULNERABILITIES_WHERE, looked: true }
+}
 
 const VERSION_BAD = 'Type the version as three numbers, such as 1.2.14.'
 const PACKAGE_VERSION_BAD = 'Type the version as three numbers, such as 1.2.14. A final build’s ending, such as .Final or -jre, can follow them.'

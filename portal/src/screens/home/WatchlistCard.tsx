@@ -99,7 +99,7 @@ export function AddToWatchlist({ name }: { name: string }) {
     <>
       <p>
         <b>{only.repo}</b> on {SOURCE_NAMES[kind]}. {only.what} {only.why}
-        {isPackage(kind) ? ' Each check also looks up known vulnerabilities in the version you run, once you give it on the Software watchlist.' : ''}
+        {isPackage(kind) ? ' Known vulnerabilities are looked up only in a version someone gives, so to have them looked up, add it on the Software watchlist with the version you run.' : ''}
       </p>
       <div className={styles['buttons']}>
         <Button variant={main} loading={add.isPending} onClick={press}>
