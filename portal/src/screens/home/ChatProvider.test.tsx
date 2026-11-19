@@ -8,9 +8,9 @@ import { EMPTY_FORM } from './card'
 import { ChatProvider, useChat, type Chat } from './ChatProvider'
 import { desksReducer, type Desks } from './chatState'
 
-const REPLY: PlannerReply = { answer: 'abilities', how_to_start: false, parts: [] }
+const REPLY: PlannerReply = { trace_id: null, answer: 'abilities', how_to_start: false, parts: [] }
 const ALICES = desksReducer(
-  desksReducer({}, { user: 'alice', action: { type: 'sent', text: 'Check my workflows' } }),
+  desksReducer({}, { user: 'alice', action: { type: 'sent', text: 'Check my workflows', chat: 'c1' } }),
   { user: 'alice', action: { type: 'answered', reply: REPLY, typed: 'Check my workflows' } },
 )
 

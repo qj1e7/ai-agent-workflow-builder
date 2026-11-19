@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useRef, type FormEvent, type ReactNode, type RefObject } from 'react'
+import { useEffect, useReducer, useRef, type FormEvent, type RefObject } from 'react'
 import { ApiError } from '../../api/client'
 import type { WatchedSoftwareView } from '../../api/types'
 import { useErrorWords } from '../../api/context'
@@ -7,29 +7,9 @@ import { useAddSoftware, useFindSoftware } from '../../api/queries'
 import { Button } from '../../ui/Button'
 import { IconExternal } from '../../ui/icons'
 import { addReducer, alreadyWords, canAdd, chosenKind, kindOf, matchesOf, modeOf, readyToAdd, releaseWords, START, verdictOf, type AddAction, type AddState } from './addByName'
-import { addProblems, checkName, isPackage, PACKAGE_VERSION_HELP, refOf, rowDomId, SOURCE_FIELDS, SOURCE_KINDS, SOURCE_NAMES, sourceUrl, VERSION_HELP, type SourceKind, type Watched } from './software'
+import { describedBy, Field } from './Field'
+import { addProblems, checkName, isPackage, NAME_HELP, PACKAGE_VERSION_HELP, refOf, rowDomId, SOURCE_FIELDS, SOURCE_KINDS, SOURCE_NAMES, sourceUrl, VERSION_HELP, type SourceKind, type Watched } from './software'
 import styles from './Software.module.css'
-
-function Field({ id, label, optional, help, error, children }: { id: string; label: string; optional?: boolean; help: string; error: string | undefined; children: ReactNode }) {
-  return (
-    <div className={styles['field']}>
-      <label htmlFor={id}>
-        {label}
-        {optional ? <span className="muted"> (optional)</span> : null}
-      </label>
-      {children}
-      {error ? (
-        <p className={styles['error']} id={`${id}-error`}>
-          {error}
-        </p>
-      ) : (
-        <p className={styles['help']} id={`${id}-help`}>
-          {help}
-        </p>
-      )}
-    </div>
-  )
-}
 
 interface FormProps {
   readonly state: AddState
@@ -40,8 +20,6 @@ interface FormProps {
   readonly rowIdOf?: ((kind: SourceKind, repo: string) => string | undefined) | undefined
   readonly onShowRow?: ((id: string) => void) | undefined
 }
-
-const describedBy = (id: string, error: string | undefined) => (error ? `${id}-error` : `${id}-help`)
 
 function VersionField({ state, refs, dispatch }: Pick<FormProps, 'state' | 'refs' | 'dispatch'>) {
   const error = state.errors.version
@@ -71,7 +49,7 @@ function NameStep({ state, busy, refs, dispatch }: FormProps) {
   return (
     <>
       <h3 id="add-software-heading">Add software</h3>
-      <Field id="sw-name" label="Software name" help="I know common software, such as Kubernetes. If I don’t know yours, you can choose where it’s published." error={error}>
+      <Field id="sw-name" label="Software name" help={NAME_HELP} error={error}>
         <input
           id="sw-name"
           ref={refs?.name}

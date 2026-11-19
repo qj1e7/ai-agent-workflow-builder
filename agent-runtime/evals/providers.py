@@ -1,6 +1,6 @@
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Final
 
 import httpx
 from langchain.chat_models import init_chat_model
@@ -23,6 +23,11 @@ class Provider:
     client: str | None = None
 
 
+PRICE_KEY: Final = "eval_price_key"
+"""The metadata each built model carries: its `provider:model` label, the key `pricing.json` uses,
+so the spend line prices a call by who served it, not by the model's name alone."""
+
+
 @dataclass(frozen=True)
 class Target:
     provider: str
@@ -35,8 +40,12 @@ class Target:
         return f"{self.provider}:{self.model}"
 
     def build(self, **overrides: Any) -> BaseChatModel:
-        settings = self.kwargs | overrides
-        return init_chat_model(self.model, model_provider=self.client or self.provider, **settings)
+        settings: dict[str, Any] = self.kwargs | overrides
+        provider = self.client or self.provider
+        model = init_chat_model(self.model, model_provider=provider, **settings)
+        return model.model_copy(
+            update={"metadata": {**(model.metadata or {}), PRICE_KEY: self.label}}
+        )
 
 
 @dataclass(frozen=True)

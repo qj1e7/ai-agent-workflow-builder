@@ -18,8 +18,12 @@ from platform_api.orchestration.agents import (
     CheckPartResult,
     ChooseRequest,
     ChooseResult,
+    CodeWording,
+    DrafterFacts,
     DraftRequest,
     DraftResult,
+    ExplainWordingRequest,
+    ExplainWordingResult,
     FindSoftwareRequest,
     FindSoftwareResult,
     HttpAgentRuntime,
@@ -27,6 +31,10 @@ from platform_api.orchestration.agents import (
     PlannerFacts,
     PreviousTurn,
     RowKind,
+    TurnTrace,
+    WorkflowDraftRequest,
+    WorkflowDraftResult,
+    WorkflowPlan,
 )
 from platform_api.orchestration.service import ActiveModel
 
@@ -92,6 +100,7 @@ class PlannerAnswers:
         facts: PlannerFacts | None = None,
         previous: PreviousTurn | None = None,
         changes_workflows: bool = True,
+        trace: TurnTrace | None = None,
     ) -> AnswerResult | NoModel | RuntimeDown:
         async with self._db.transaction("orchestration") as uow:
             model = await self._models.access(uow)
@@ -101,6 +110,7 @@ class PlannerAnswers:
             AnswerRequest(
                 task=task,
                 model=model,
+                trace=trace,
                 facts=facts,
                 previous=previous,
                 changes_workflows=changes_workflows,
@@ -112,6 +122,48 @@ class PlannerAnswers:
 
     async def check_part(self, kind: RowKind, text: str) -> CheckPartResult | RuntimeDown:
         reply = await self._agents.check_part(CheckPartRequest(kind=kind, text=text))
+        if isinstance(reply, AgentUnavailable | AgentRejected):
+            return RuntimeDown(reply.detail)
+        return reply
+
+
+class ExplainWordings:
+    def __init__(self, db: Database, models: ActiveModel, agents: HttpAgentRuntime) -> None:
+        self._db = db
+        self._models = models
+        self._agents = agents
+
+    async def reword(self, asked: CodeWording) -> ExplainWordingResult | NoModel | RuntimeDown:
+        async with self._db.transaction("orchestration") as uow:
+            model = await self._models.access(uow)
+        if model is None:
+            return NoModel()
+        reply = await self._agents.explain_wording(
+            ExplainWordingRequest(wording=asked.wording, facts=asked.facts, model=model)
+        )
+        if isinstance(reply, AgentUnavailable | AgentRejected):
+            return RuntimeDown(reply.detail)
+        return reply
+
+
+class WorkflowDrafting:
+    """The workflow drafter (ADR 0051), with the model key added here and nowhere else."""
+
+    def __init__(self, db: Database, models: ActiveModel, agents: HttpAgentRuntime) -> None:
+        self._db = db
+        self._models = models
+        self._agents = agents
+
+    async def draft(
+        self, words: str, facts: DrafterFacts, current: WorkflowPlan | None
+    ) -> WorkflowDraftResult | NoModel | RuntimeDown:
+        async with self._db.transaction("orchestration") as uow:
+            model = await self._models.access(uow)
+        if model is None:
+            return NoModel()
+        reply = await self._agents.draft_workflow(
+            WorkflowDraftRequest(words=words, facts=facts, current=current, model=model)
+        )
         if isinstance(reply, AgentUnavailable | AgentRejected):
             return RuntimeDown(reply.detail)
         return reply

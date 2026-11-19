@@ -27,7 +27,8 @@ from platform_api.orchestration.n8n_calls import (
     Publisher,
     TryLater,
 )
-from platform_api.orchestration.workflow_check import ERROR_WORKFLOW
+from platform_api.orchestration.platform_keys import attach_keys
+from platform_api.orchestration.workflow_check import ERROR_WORKFLOW, unpinned_notices
 from platform_api.settings import N8nOwner
 from platform_api.shared import N8nExecutionId, UserId
 
@@ -57,7 +58,16 @@ _RETRY_AFTER_DEFAULT = 10.0
 
 
 class N8nError(Exception):
-    pass
+    def __init__(self, message: str = "", status: int | None = None) -> None:
+        super().__init__(message)
+        self.status = status
+        """n8n's HTTP answer, when it gave one. A log names this, never n8n's words, which may
+        echo what was sent."""
+
+
+class NotKeptAsSent(N8nError):
+    """n8n created the workflow but holds something other than what was sent, so it was removed
+    again. Sending the same document again would end the same way."""
 
 
 class OwnerOutcome(Enum):
@@ -193,6 +203,41 @@ class N8nClient:
                 self._sleep(3)
         return _type_names(self._http.get("/types/nodes.json").raise_for_status().json())
 
+    def settings(self) -> dict[str, Any]:
+        """/rest: what n8n's own settings page shows the signed-in owner, such as its version
+        and the guards it can show (ADR 0051)."""
+        return cast(dict[str, Any], self._rest("GET", "/rest/settings")["data"])
+
+    def run_by_hand(self, body: dict[str, Any], node: str, timeout: float = 120) -> HandRun:
+        """/rest: saves this workflow, runs it by hand up to `node` as n8n's editor does, and
+        reads the run once a second, `timeout` times at most, until it ends. Whatever n8n saved
+        is deleted again."""
+        response = self._send("POST", "/workflows", json=body)
+        if response.status_code == 400:
+            return HandRun(started=False)
+        workflow_id = str(_ok(response)["id"])
+        try:
+            started = self._http.post(
+                f"/rest/workflows/{workflow_id}/run",
+                json={"destinationNode": {"nodeName": node, "mode": "inclusive"}},
+            )
+            if started.status_code != 200:
+                return HandRun(started=False)
+            execution_id = str(started.json()["data"]["executionId"])
+            for _ in range(int(timeout)):
+                execution = self._public(
+                    "GET", f"/executions/{execution_id}", params={"includeData": "true"}
+                )
+                status = str(execution.get("status") or "")
+                if status not in ("new", "running", "waiting", ""):
+                    return HandRun(
+                        True, status, _first_item(execution, node), _first_error(execution, node)
+                    )
+                self._sleep(1)
+            return HandRun(True)
+        finally:
+            self.delete_workflow(workflow_id)
+
     def remove_api_keys(self, label: str) -> int:
         listed = self._rest("GET", "/rest/api-keys")
         stale = [item for item in listed["data"]["items"] if item["label"] == label]
@@ -309,6 +354,43 @@ class N8nClient:
         )
 
 
+@dataclass(frozen=True)
+class HandRun:
+    """A run by hand: whether n8n started it, how it ended, or None while it hadn't, the first
+    item the block it ran up to gave, and that block's error."""
+
+    started: bool
+    status: str | None = None
+    output: Mapping[str, Any] | None = None
+    error: str | None = None
+
+
+def _first_item(execution: Mapping[str, Any], node: str) -> Mapping[str, Any] | None:
+    try:
+        runs = execution["data"]["resultData"]["runData"][node]
+        return cast(Mapping[str, Any], runs[0]["data"]["main"][0][0]["json"])
+    except KeyError, IndexError, TypeError:
+        return None
+
+
+def _first_error(execution: Mapping[str, Any], node: str) -> str | None:
+    """The block's own error, or the run's when the block has none."""
+    try:
+        result = execution["data"]["resultData"]
+    except KeyError, TypeError:
+        return None
+    for path in (("runData", node, 0, "error", "message"), ("error", "message")):
+        found: Any = result
+        try:
+            for step in path:
+                found = found[step]
+        except KeyError, IndexError, TypeError:
+            continue
+        if isinstance(found, str):
+            return found
+    return None
+
+
 def _type_names(listed: object) -> set[str]:
     if not isinstance(listed, list):
         raise N8nError("n8n's /types/nodes.json is not a list of node types")
@@ -367,11 +449,17 @@ PLATFORM_API_SCOPES = (
     "user:create",
     "user:read",
     "user:delete",
+    "credential:create",
+    "credential:read",
+    "credential:delete",
+    "credential:list",
 )
 """Only what the platform's calls need, as n8n 2.42.6's public controllers check them: read covers
 history and versions, activate covers publish, move covers transfer, list covers a project's
 workflows (E15), and the retry of an execution has a scope of its own. The user scopes make and
-end staff accounts (ENGINE-PLAN 2.9)."""
+end staff accounts (ENGINE-PLAN 2.9). The credential scopes make the platform's own keys, test
+them, and remove every key the platform did not make (ADR 0045). A key is never changed or moved:
+one that must change is deleted and made anew."""
 KEY_LIFETIME = timedelta(days=3)
 """A key that leaks stops working within days. When n8n refuses it, the platform makes another."""
 STALE_KEY_AGE = timedelta(days=1)
@@ -400,6 +488,9 @@ class N8nWorkflow:
     active_version_id: str | None
     """The published version, or None while nothing is published."""
     document: dict[str, Any]
+    pins: dict[str, Any] | None = None
+    """The draft's pinned output by block, which n8n uses in place of running a block only in a
+    run by hand. Kept apart from the document, as the versions n8n keeps have none."""
 
 
 @dataclass(frozen=True)
@@ -469,6 +560,20 @@ class HistoryEntry:
     authors: str
     """A display name such as "Alice Tester", never an id (P7 Q4): a hint, never a party."""
     created_at: str
+
+
+@dataclass(frozen=True)
+class N8nCredential:
+    """A key in n8n's credential store, as the owner sees every one. Never its secret."""
+
+    id: str
+    name: str
+    kind: str
+    """n8n's credential type, such as slackApi."""
+    created_at: datetime
+    updated_at: datetime
+    project: str | None
+    """The project that owns it."""
 
 
 @dataclass(frozen=True)
@@ -570,6 +675,7 @@ class _WorkflowOut(_Data):
     nodes: list[dict[str, JsonValue]]
     connections: dict[str, JsonValue]
     settings: dict[str, JsonValue] = Field(default_factory=dict[str, JsonValue])
+    pin_data: dict[str, JsonValue] | None = Field(default=None, alias="pinData")
 
 
 class _LiveVersion(_Data):
@@ -678,6 +784,30 @@ class _Page[T](_Data):
     data: list[T]
 
 
+class _Sharing(_Data):
+    id: str
+    role: str
+
+
+class _CredentialOut(_Data):
+    id: str
+    name: str
+    type: str
+    created_at: datetime = Field(alias="createdAt")
+    updated_at: datetime = Field(alias="updatedAt")
+    shared: list[_Sharing] = Field(default_factory=list[_Sharing])
+
+
+class _CredentialPage(_Data):
+    data: list[_CredentialOut]
+    next_cursor: str | None = Field(default=None, alias="nextCursor")
+
+
+class _CredentialTest(_Data):
+    status: str
+    message: str = ""
+
+
 class _Rest[T](_Data):
     data: T
 
@@ -692,10 +822,23 @@ def _parse[T](model: type[T], response: httpx.Response) -> T:
         ) from None
 
 
+def _credential(out: _CredentialOut) -> N8nCredential:
+    owners = [s.id for s in out.shared if s.role == "credential:owner"]
+    return N8nCredential(
+        out.id,
+        out.name,
+        out.type,
+        out.created_at,
+        out.updated_at,
+        owners[0] if owners else None,
+    )
+
+
 def _expect(response: httpx.Response, *ok: int) -> httpx.Response:
     if response.status_code not in (ok or (200,)):
         raise N8nError(
-            f"{response.request.method} {response.request.url.path} failed: {_short(response)}"
+            f"{response.request.method} {response.request.url.path} failed: {_short(response)}",
+            response.status_code,
         )
     return response
 
@@ -988,9 +1131,23 @@ class N8nApi:
             return
         _expect(await self._public("POST", f"/workflows/{workflow_id}/unpublish", {}))
 
+    async def draft(self, workflow_id: str) -> dict[str, Any] | None:
+        """The workflow as the public API holds it, with its draft's version id. None when n8n no
+        longer has it."""
+        response = await self._public("GET", f"/workflows/{workflow_id}")
+        if response.status_code == 404:
+            return None
+        found: dict[str, Any] = _expect(response).json()
+        return found
+
+    async def unpinned(self, workflow_id: str) -> list[str]:
+        """The draft's notice blocks whose output is not pinned, so a test run would post."""
+        return unpinned_notices(await self.draft(workflow_id) or {})
+
     async def run_draft(self, workflow_id: str, item: Mapping[str, Any]) -> str:
         """/rest: runs the draft by hand from Start from the Portal with this item as its output,
-        and answers the execution's id at once (P7 Q3, body B). n8n runs the stored draft."""
+        and answers the execution's id at once (P7 Q3, body B). n8n runs the stored draft, with
+        the output pinned for each notice block, so a test run posts nothing."""
         body: dict[str, Any] = {
             "triggerToStartFrom": {
                 "name": START_NAME,
@@ -1031,6 +1188,54 @@ class N8nApi:
     async def transfer(self, workflow_id: str, project_id: str) -> None:
         body = {"destinationProjectId": project_id}
         _expect(await self._public("PUT", f"/workflows/{workflow_id}/transfer", body), 200, 204)
+
+    async def credentials(self) -> list[N8nCredential]:
+        """Every key in n8n, in every project, page by page. Only the owner may list them all."""
+        params = {"limit": "250"}
+        found: list[N8nCredential] = []
+        while True:
+            response = _expect(await self._public("GET", "/credentials", params=params))
+            page = _parse(_CredentialPage, response)
+            found.extend(_credential(item) for item in page.data)
+            if not page.next_cursor:
+                return found
+            params = {**params, "cursor": page.next_cursor}
+
+    async def credential(self, credential_id: str) -> N8nCredential | None:
+        response = await self._public("GET", f"/credentials/{credential_id}")
+        if response.status_code == 404:
+            return None
+        return _credential(_parse(_CredentialOut, _expect(response)))
+
+    async def create_credential(
+        self,
+        credential_id: str,
+        name: str,
+        kind: str,
+        data: Mapping[str, str],
+        project_id: str,
+    ) -> N8nCredential:
+        """With the id the platform picks, so a key made again keeps every workflow that names
+        it. n8n answers 409 when a key with that id is there already."""
+        body = {
+            "id": credential_id,
+            "name": name,
+            "type": kind,
+            "data": dict(data),
+            "projectId": project_id,
+        }
+        created = _expect(await self._public("POST", "/credentials", body))
+        return _credential(_parse(_CredentialOut, created))
+
+    async def test_credential(self, credential_id: str) -> tuple[bool, str]:
+        """n8n's own connection test of a stored key: whether n8n reached the system with it, and
+        what n8n said."""
+        response = _expect(await self._public("POST", f"/credentials/{credential_id}/test"))
+        tested = _parse(_CredentialTest, response)
+        return tested.status == "OK", tested.message
+
+    async def delete_credential(self, credential_id: str) -> None:
+        _expect(await self._public("DELETE", f"/credentials/{credential_id}"), 200, 204, 404)
 
     async def execution(self, execution_id: str, data: bool = True) -> ExecutionRecord | None:
         """With data, the start item and a failure's block and words too. Without, its status
@@ -1166,7 +1371,9 @@ def _workflow(out: _WorkflowOut) -> N8nWorkflow:
         "connections": out.connections,
         "settings": out.settings,
     }
-    return N8nWorkflow(out.id, out.version_id, out.active_version_id, document)
+    return N8nWorkflow(
+        out.id, out.version_id, out.active_version_id, document, out.pin_data or None
+    )
 
 
 def _listed(out: _ListedOut) -> ListedWorkflow:
@@ -1230,6 +1437,8 @@ class SavedDraft:
     version_id: str
     document: dict[str, Any]
     """What n8n holds, which is what the platform keeps as this version's record."""
+    pins: dict[str, Any] | None = None
+    """The pinned output n8n holds for it."""
 
 
 class N8nDrafts(Protocol):
@@ -1317,6 +1526,17 @@ class N8nWorkflows:
         loaded = (await self.platform_workflows()).get(ERROR_WORKFLOW)
         return None if loaded is None else loaded.id
 
+    async def n8n_version(self) -> str | None:
+        """The n8n version the last bootstrap read from n8n itself, or None before any did. The
+        workflow drafter's catalogue must name the same (ADR 0051, section 8)."""
+        async with self._db.connection("orchestration") as conn:
+            row = await (
+                await conn.execute(
+                    "SELECT n8n_version FROM orchestration.engine_status WHERE id = 1"
+                )
+            ).fetchone()
+        return None if row is None else row["n8n_version"]
+
     async def recorded_error_workflow_id(self) -> str | None:
         """The error workflow the last bootstrap recorded, whether or not it was ready, as a
         bootstrap that loads nothing keeps what the one before recorded."""
@@ -1348,15 +1568,29 @@ class N8nWorkflows:
             return N8N_UNREADABLE
         return home == workflow.project
 
-    async def save_draft(self, document: Mapping[str, Any]) -> SavedDraft:
+    async def save_draft(
+        self,
+        document: Mapping[str, Any],
+        created: Callable[[str], Awaitable[None]] | None = None,
+    ) -> SavedDraft:
         """Creates the workflow, then reads it back and compares, because n8n may keep something
-        other than what was sent. A draft that did not land as sent is removed again."""
-        created = await self._api.create(document)
-        held = await self._api.workflow(created.id)
+        other than what was sent. A draft that did not land as sent is removed again. `created`
+        hears n8n's id as soon as n8n gives it, so a caller can record it before anything else
+        can fail."""
+        made = await self._api.create(document)
+        try:
+            if created is not None:
+                await created(made.id)
+            held = await self._api.workflow(made.id)
+        except Exception:
+            # A copy the platform can't read back, or can't record, is one it doesn't track,
+            # keys and all.
+            await self.remove(made.id)
+            raise
         if held is None or not same_as_sent(document, held.document):
-            await self.remove(created.id)
-            raise N8nError("n8n did not keep the draft as the platform sent it")
-        return SavedDraft(held.id, held.version_id, held.document)
+            await self.remove(made.id)
+            raise NotKeptAsSent("n8n did not keep the draft as the platform sent it")
+        return SavedDraft(held.id, held.version_id, held.document, held.pins)
 
     async def remove(self, workflow_id: str) -> None:
         try:
@@ -1395,11 +1629,17 @@ class N8nWorkflows:
     async def _as_run(self, workflow: N8nWorkflow, version_id: str) -> dict[str, Any] | None:
         """n8n's history keeps a version's blocks and edges, never its settings: the workflow holds
         those once, and runs every version with them. So a version is graded and compared with the
-        workflow's settings now, which are what its runs would have."""
+        workflow's settings now, which are what its runs would have. Its name is the workflow's
+        too: the name n8n's history gives a published version is the version's own label, such
+        as "Version b2fb48ee"."""
         version = await self._api.version(workflow.id, version_id)
         if version is None:
             return None
-        return {**version, "settings": workflow.document["settings"]}
+        return {
+            **version,
+            "name": workflow.document["name"],
+            "settings": workflow.document["settings"],
+        }
 
     async def timeline(self, workflow_id: str) -> list[PublishEvent]:
         return await self._api.publish_timeline(workflow_id)
@@ -1443,6 +1683,16 @@ class N8nWorkflows:
         """The member's own space, found by n8n's id for them, never by name or email (P7 Q9)."""
         return (await personal_spaces(self._api)).get(n8n_user_id)
 
+    async def own_workflow_ids(self) -> set[str]:
+        """Every workflow the platform recorded as its own, ready or not, so none waits to be set
+        up. M4's copy of the self-test in a member's space is to be recorded here too."""
+        async with self._db.connection("orchestration") as conn:
+            row = await (
+                await conn.execute("SELECT workflows FROM orchestration.engine_status WHERE id = 1")
+            ).fetchone()
+        loaded: list[dict[str, Any]] = [] if row is None else row["workflows"]
+        return {str(w["id"]) for w in loaded}
+
     async def spaces(self) -> dict[str, str]:
         """Each member's own space by n8n's id for the member, as n8n names its creator."""
         return await personal_spaces(self._api)
@@ -1458,6 +1708,18 @@ class N8nWorkflows:
 
     async def triggers_live(self, workflow_id: str, version_id: str) -> None:
         await self._live(workflow_id, version_id)
+
+    async def keep_keys(
+        self, workflow_id: str, expected_draft: str, made: Mapping[str, str]
+    ) -> Written | ChangedInN8n:
+        """Puts the platform's key back on each block for a system in the draft, by the block's
+        type, and takes off every other key, publishing nothing (ADR 0045, as amended)."""
+        return await self._api.write(
+            workflow_id,
+            expected_draft,
+            lambda document: attach_keys(document, made),
+            publish=False,
+        )
 
     async def keep_settings(
         self, workflow_id: str, expected_draft: str, settings: Mapping[str, Any]

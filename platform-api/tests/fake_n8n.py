@@ -2,6 +2,7 @@
 (docs/evidence/prototypes/p7-n8n-engine-facts), kept in memory."""
 
 import json
+import re
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -85,12 +86,59 @@ class FakeN8n:
     """How n8n answers the next transfers, in turn. A transfer it refuses moves nothing."""
     transfers_lost: int = 0
     """How many of the next transfers move the workflow but lose their answer."""
+    unpublish_answers: list[int] = field(default_factory=list[int])
+    """How n8n answers the next unpublishes, in turn. One it refuses leaves the workflow live."""
     list_page: int | None = None
     """How many workflows one page of a project's list holds. All of them unless a test says."""
     list_answers: list[int] = field(default_factory=list[int])
     """How n8n answers the next lists of a project's workflows, in turn, before it lists."""
     user_delete_answers: list[int] = field(default_factory=list[int])
     """How n8n answers the next deletes of an account, in turn. One it refuses deletes nothing."""
+    credentials: dict[str, dict[str, Any]] = field(default_factory=dict[str, dict[str, Any]])
+    """Each key in n8n's credential store by its id: its name, type, data and owning project."""
+    credential_tests: dict[str, tuple[str, str]] = field(default_factory=dict[str, tuple[str, str]])
+    """How n8n's connection test of a key answers, by its id. OK unless a test says."""
+    ticks: int = 0
+    """n8n's clock for when it made or last changed a key, a second a change."""
+
+    def _now(self) -> str:
+        self.ticks += 1
+        return f"2026-11-15T08:{self.ticks // 60:02d}:{self.ticks % 60:02d}.000Z"
+
+    def add_credential(
+        self, project_id: str, kind: str = "slackApi", credential_id: str | None = None
+    ) -> str:
+        """Someone adds a key in n8n's editor, in their own space or the owner's."""
+        key = credential_id or f"cred{len(self.credentials) + 1}"
+        at = self._now()
+        self.credentials[key] = {
+            "id": key,
+            "name": f"{kind} of {project_id}",
+            "type": kind,
+            "data": {"accessToken": "someone's own"},
+            "createdAt": at,
+            "updatedAt": at,
+            "projectId": project_id,
+        }
+        return key
+
+    def edit_credential(self, credential_id: str, **data: str) -> None:
+        """Its holder edits a key in n8n's editor, as to send it somewhere else."""
+        self.credentials[credential_id]["data"].update(data)
+        self.credentials[credential_id]["updatedAt"] = self._now()
+
+    def _credential_out(self, credential: dict[str, Any]) -> dict[str, Any]:
+        shared = [
+            {
+                "id": credential["projectId"],
+                "name": credential["projectId"],
+                "role": "credential:owner",
+                "createdAt": credential["createdAt"],
+                "updatedAt": credential["createdAt"],
+            }
+        ]
+        kept = ("id", "name", "type", "createdAt", "updatedAt")
+        return {**{k: credential[k] for k in kept}, "shared": shared}
 
     def client(self) -> httpx.AsyncClient:
         return httpx.AsyncClient(transport=httpx.MockTransport(self.handle), base_url="http://n8n")
@@ -119,8 +167,13 @@ class FakeN8n:
     def save_settings(self, workflow_id: str, change: Callable[[dict[str, Any]], None]) -> None:
         """A member changes the workflow's settings in n8n's editor and saves, publishing nothing.
         n8n runs the live version with the new settings at once."""
+        self.save_draft(workflow_id, lambda workflow: change(workflow["settings"]))
+
+    def save_draft(self, workflow_id: str, change: Callable[[dict[str, Any]], None]) -> None:
+        """n8n's editor saves the draft, publishing nothing, as it does on its own while someone
+        has the workflow open."""
         workflow = self.workflows[workflow_id]
-        change(workflow["settings"])
+        change(workflow)
         workflow["versionId"] = _new_version()
         workflow["checksum"] = _new_version()
         self._remember(workflow_id)
@@ -251,6 +304,11 @@ class FakeN8n:
                 return httpx.Response(404, json={"message": f"no /rest{path} in the fake"})
 
     def _activate(self, workflow_id: str, version_id: str, user_id: str = OWNER_ID) -> None:
+        kept = self.history.get(workflow_id, {}).get(version_id)
+        if kept is not None:
+            # n8n's editor names a version as it publishes it. The fake names every published
+            # version, so no read of one may take that label for the workflow's name.
+            kept["name"] = f"Version {version_id[:8]}"
         self.workflows[workflow_id]["activeVersionId"] = version_id
         self.workflows[workflow_id]["active"] = True
         self.timeline.setdefault(workflow_id, []).append(
@@ -327,6 +385,8 @@ class FakeN8n:
                 self._activate(workflow_id, version)
                 return httpx.Response(200, json=self.workflows[workflow_id])
             case "POST", ["workflows", workflow_id, "unpublish"]:
+                if self.unpublish_answers and (answer := self.unpublish_answers.pop(0)) != 200:
+                    return httpx.Response(answer, json={"message": "Bad Gateway"})
                 workflow = self.workflows[workflow_id]
                 self.timeline.setdefault(workflow_id, []).append(
                     {
@@ -394,6 +454,12 @@ class FakeN8n:
                     if transfer is not None and workflow.get("projectId") == own:
                         workflow["projectId"] = transfer
                         workflow["shared"] = [{"projectId": transfer, "role": "workflow:owner"}]
+                for credential in list(self.credentials.values()):
+                    if credential["projectId"] == own:
+                        if transfer is None:
+                            del self.credentials[credential["id"]]
+                        else:
+                            credential["projectId"] = transfer
                 self.projects = [p for p in self.projects if p["id"] != own]
                 for events in self.timeline.values():
                     for event in events:
@@ -401,6 +467,56 @@ class FakeN8n:
                             event["user"] = None
                 self.deleted_users.append((user_id, transfer))
                 return httpx.Response(204)
+            case "GET", ["credentials"]:
+                key = request.headers.get("X-N8N-API-KEY", "")
+                if "credential:list" not in self.scopes.get(key, {"credential:list"}):
+                    return httpx.Response(403, json={"message": "Forbidden"})
+                listed = [self._credential_out(c) for c in self.credentials.values()]
+                start = int(request.url.params.get("cursor", "0"))
+                size = self.list_page or len(listed) or 1
+                after = start + size
+                return httpx.Response(
+                    200,
+                    json={
+                        "data": listed[start:after],
+                        "nextCursor": str(after) if after < len(listed) else None,
+                    },
+                )
+            case "POST", ["credentials"]:
+                key = body.get("id") or f"cred{len(self.credentials) + 1}"
+                if not re.fullmatch(r"[a-zA-Z0-9_-]{1,16}", key):
+                    # n8n 2.42.6's public API: "An unused credential ID of 1-16 letters, digits,
+                    # underscores, or hyphens" (its openapi.yml, seen live in E17's follow-up).
+                    message = "request/body/id String must contain at most 16 character(s)"
+                    return httpx.Response(400, json={"message": message})
+                if key in self.credentials:
+                    return httpx.Response(409, json={"message": "That id is in use"})
+                at = self._now()
+                self.credentials[key] = {
+                    "id": key,
+                    "name": body["name"],
+                    "type": body["type"],
+                    "data": dict(body["data"]),
+                    "createdAt": at,
+                    "updatedAt": at,
+                    "projectId": body.get("projectId", "proj-owner"),
+                }
+                return httpx.Response(200, json=self._credential_out(self.credentials[key]))
+            case "GET", ["credentials", key] if key in self.credentials:
+                return httpx.Response(200, json=self._credential_out(self.credentials[key]))
+            case "PATCH", ["credentials", key] if key in self.credentials:
+                self.credentials[key]["data"] = dict(body["data"])
+                self.credentials[key]["updatedAt"] = self._now()
+                return httpx.Response(200, json=self._credential_out(self.credentials[key]))
+            case "DELETE", ["credentials", key] if key in self.credentials:
+                return httpx.Response(200, json=self._credential_out(self.credentials.pop(key)))
+            case "PUT", ["credentials", key, "transfer"] if key in self.credentials:
+                self.credentials[key]["projectId"] = body["destinationProjectId"]
+                self.credentials[key]["updatedAt"] = self._now()
+                return httpx.Response(204)
+            case "POST", ["credentials", key, "test"] if key in self.credentials:
+                status, message = self.credential_tests.get(key, ("OK", "Connection successful!"))
+                return httpx.Response(200, json={"status": status, "message": message})
             case "GET", ["executions", execution_id] if execution_id in self.executions:
                 if request.url.params.get("includeData") == "true":
                     self.data_reads.append(execution_id)

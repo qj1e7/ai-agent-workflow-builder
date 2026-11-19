@@ -33,7 +33,7 @@ describe('the canvas laid out from the workflow’s blocks', () => {
   })
 
   it('draws every block, even one no way out leads to, and sizes itself to hold them', () => {
-    const lone = layOut([...BLOCKS, { name: 'Sticky', kind: 'other', next: [] }])
+    const lone = layOut([...BLOCKS, { name: 'Sticky', kind: 'other', badge: 'n8n', next: [] }])
     expect(lone.nodes.map((node) => node.name)).toContain('Sticky')
     expect(lone.width, 'a block no way out reaches goes after the rest').toBeGreaterThan(laid.width)
     for (const node of laid.nodes) expect(node.x + 84 <= laid.width && node.y + 84 <= laid.height, `${node.name} fits`).toBe(true)

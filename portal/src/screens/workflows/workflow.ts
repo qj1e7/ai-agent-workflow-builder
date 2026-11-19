@@ -131,9 +131,10 @@ const lowerFirst = (words: string): string => `${words.charAt(0).toLowerCase()}$
  * A workflow row's second line, as the sketch has it: "Daily 8:00 · last run today, an agent could not finish its work", or "Daily 8:00 · no runs yet".
  * The Workflows page and the chat's check card both read it, so they cannot disagree.
  */
-export function rowLine(useCase: Pick<UseCaseView, 'last_run' | 'schedule'> & Partial<Pick<UseCaseView, 'move_refused'>>, now: Date, nameOf: NameOf): string {
+export function rowLine(useCase: Pick<UseCaseView, 'last_run' | 'schedule'> & Partial<Pick<UseCaseView, 'move_refused' | 'held_in_n8n'>>, now: Date, nameOf: NameOf): string {
   const schedule = useCase.schedule ? scheduleShort(useCase.schedule) : 'No schedule'
-  const when = useCase.move_refused ? `${schedule}, not running` : schedule
+  const running = useCase.move_refused ? `${schedule}, not running` : schedule
+  const when = useCase.held_in_n8n ? `${running} · ${useCase.held_in_n8n.name} has it open in n8n` : running
   const last = useCase.last_run
   return last ? `${when} · last run ${dayOf(last.at, now)}, ${lowerFirst(lastRunWhat(last, nameOf, 'line'))}` : `${when} · no runs yet`
 }
@@ -168,10 +169,10 @@ export interface When {
   readonly small: string
 }
 
-export function whenWords({ schedule }: Pick<UseCaseView, 'schedule'>): When {
-  if (!schedule) return { words: 'No schedule', small: 'An Operator starts it with Run now.' }
+export function whenWords({ schedule, start_refused: refused }: Pick<UseCaseView, 'schedule'> & Partial<Pick<UseCaseView, 'start_refused'>>): When {
+  if (!schedule) return { words: 'No schedule', small: refused ?? 'An Operator starts it with Run now.' }
   const words = repeatWords(schedule)
-  return { words: words.charAt(0).toUpperCase() + words.slice(1), small: zoneWords(schedule.time_zone) }
+  return { words: words.charAt(0).toUpperCase() + words.slice(1), small: refused ? `${zoneWords(schedule.time_zone)} ${refused}` : zoneWords(schedule.time_zone) }
 }
 
 const STEP_TAGS: Record<BlockKind, { readonly words: string; readonly writes: boolean }> = {
@@ -208,9 +209,9 @@ export const PLACES_IN_PAGE_ORDER: readonly Place[] = ['switch', 'more']
 const PLACE_OF: Record<Control, Place> = { run: 'more', pause: 'switch', resume: 'switch', delete: 'more', test: 'switch', turn_on: 'switch' }
 export const placeOf = (control: Control): Place => PLACE_OF[control]
 
-/** Only an Operator changes a schedule. The Software watchlist's is changed on the Software page. */
-export function mayChangeSchedule(useCase: Pick<UseCaseView, 'template'>, viewer: Viewer): boolean {
-  return viewer.operator && !looksAfterOnSoftwarePage(useCase)
+/** Only an Operator changes a schedule. The Software watchlist's is changed on the Software page, and one made in n8n is changed in n8n (ENGINE-PLAN section 12). */
+export function mayChangeSchedule(useCase: Pick<UseCaseView, 'template'> & Partial<Pick<UseCaseView, 'made_in_n8n_by'>>, viewer: Viewer): boolean {
+  return viewer.operator && !looksAfterOnSoftwarePage(useCase) && !useCase.made_in_n8n_by
 }
 
 /** The toast after a save: when it runs next. The owner is named under When, so the toast does not repeat it. */
@@ -331,7 +332,7 @@ export function undoProblem(version: number, name: string, error: unknown, words
 /** What the More actions menu holds, in order. Delete is last. A workflow with none shows no menu. */
 export type MenuAction = 'run' | 'schedule' | 'delete'
 
-export function menuActionsOf(useCase: Pick<UseCaseView, 'template' | 'state'>, viewer: Viewer): readonly MenuAction[] {
+export function menuActionsOf(useCase: Pick<UseCaseView, 'template' | 'state'> & Partial<Pick<UseCaseView, 'start_refused' | 'made_in_n8n_by'>>, viewer: Viewer): readonly MenuAction[] {
   const controls = controlsOf(useCase, viewer)
   const actions: MenuAction[] = []
   if (controls.includes('run')) actions.push('run')
@@ -344,10 +345,17 @@ export function menuActionsOf(useCase: Pick<UseCaseView, 'template' | 'state'>, 
  * What an Operator can do to a workflow. A draft never runs on its schedule or by Run now, so it has a test run instead, and Turn it on
  * once a test run passed (ADR 0044). Pausing a draft would change nothing, so it has no Pause.
  */
-export function controlsOf(useCase: Pick<UseCaseView, 'template' | 'state'> & Partial<Pick<UseCaseView, 'last_run'>>, viewer: Viewer): readonly Control[] {
+export function controlsOf(useCase: Pick<UseCaseView, 'template' | 'state'> & Partial<Pick<UseCaseView, 'last_run' | 'start_refused'>>, viewer: Viewer): readonly Control[] {
   if (!viewer.operator || looksAfterOnSoftwarePage(useCase)) return []
-  if (useCase.state === 'draft') return testPassed(useCase.last_run ?? null) ? ['test', 'turn_on', 'delete'] : ['test', 'delete']
-  return useCase.state === 'paused' ? ['resume', 'delete'] : ['run', 'pause', 'delete']
+  const offered: readonly Control[] =
+    useCase.state === 'draft'
+      ? testPassed(useCase.last_run ?? null)
+        ? ['test', 'turn_on', 'delete']
+        : ['test', 'delete']
+      : useCase.state === 'paused'
+        ? ['resume', 'delete']
+        : ['run', 'pause', 'delete']
+  return useCase.start_refused ? offered.filter((control) => control !== 'run' && control !== 'test') : offered
 }
 
 /** The agent cards a workflow runs. The Software watchlist's is the Version checker. */
@@ -497,7 +505,7 @@ export interface Banner {
 }
 
 interface BannerFacts {
-  readonly useCase: Pick<UseCaseView, 'state' | 'next_run_at' | 'schedule' | 'last_run'> & Partial<Pick<UseCaseView, 'grade' | 'findings' | 'blocks' | 'deleted_in_n8n_at' | 'version' | 'move_refused'>>
+  readonly useCase: Pick<UseCaseView, 'state' | 'next_run_at' | 'schedule' | 'last_run'> & Partial<Pick<UseCaseView, 'grade' | 'findings' | 'blocks' | 'deleted_in_n8n_at' | 'version' | 'move_refused' | 'held_in_n8n'>>
   readonly viewer: Viewer
   readonly now: Date
   readonly nameOf: NameOf
@@ -521,13 +529,22 @@ function needsFixOf(useCase: BannerFacts['useCase'], viewer: Viewer, version: nu
   return { tone: 'bad', text, action: version > 1 ? { kind: 'undo', to: version - 1, inUse: version } : null }
 }
 
+/** Every change that publishes again, which the platform refuses while anyone has the workflow open in n8n (ENGINE-PLAN 11). */
+const PUBLISHES: ReadonlySet<BannerAction['kind']> = new Set(['yes', 'undo', 'resave', 'resume'])
+
+/** While someone has it open in n8n, the banner offers nothing the platform would refuse. The hold's own line says why. */
+export function bannerOf(facts: BannerFacts): Banner {
+  const banner = bannerOfState(facts)
+  return facts.useCase.held_in_n8n && banner.action && PUBLISHES.has(banner.action.kind) ? { ...banner, action: null } : banner
+}
+
 /**
  * One sentence on the state, and the one action that moves it on. Pause wins over the last run, because a paused workflow starts nothing.
  * Otherwise the newest run's pill decides, and its stage words say the rest, so the banner, the pill, the row and Recent runs never disagree:
  * "Stopped today at 8:00. An agent could not finish its work.", "Lost today at 8:00. Approved, but the run stopped before it could make the change. Nothing was written.",
  * "Waiting for a yes.", "Running now.". A run that settled, declined, got no answer or was skipped leaves the workflow On.
  */
-export function bannerOf({ useCase, viewer, now, nameOf }: BannerFacts): Banner {
+function bannerOfState({ useCase, viewer, now, nameOf }: BannerFacts): Banner {
   const last = useCase.last_run
   if (useCase.deleted_in_n8n_at) return { tone: 'off', text: DELETED_IN_N8N, action: null }
   // Still on the shared run workflow, it starts no scheduled run, so why leads, before any run or pause.
@@ -574,7 +591,7 @@ export function whoSaysYes(owner: string, viewer: Pick<Viewer, 'id'>, nameOf: Na
 
 /** The rule the approval gate keeps, in full: the people on a run can't approve it. A scheduled run starts as the schedule's owner. */
 export function ownWorkRule(schedule: Pick<NonNullable<UseCaseView['schedule']>, 'owner_name'> | null): string {
-  const started = schedule ? ` A scheduled run starts as ${schedule.owner_name}.` : ''
+  const started = schedule?.owner_name ? ` A scheduled run starts as ${schedule.owner_name}.` : ''
   return `Nobody says yes to their own work. The workflow’s owner, whoever starts a run and whoever retries it can’t say yes to that run.${started}`
 }
 

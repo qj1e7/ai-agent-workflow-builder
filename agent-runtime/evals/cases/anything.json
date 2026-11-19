@@ -768,9 +768,10 @@
   "kinds": [
    "watchlist",
    "setup_card",
-   "part"
+   "part",
+   "cant"
   ],
-  "note": "The team lead's own sentence, from a local test on Haiku 4.5. Refused as skipping a yes when it skips none."
+  "note": "The team lead's own sentence, from a local test on Haiku 4.5. Refused as skipping a yes when it skips none. Without the watchlist's own time in the facts, the time is crossed with the watchlist's one schedule, never ticked (principle 4)."
  },
  {
   "id": "more-than-ten",
@@ -1418,5 +1419,265 @@
    "watchlist"
   ],
   "note": "Asks for advice at length."
+ },
+ {
+  "id": "help-me-add-a-software",
+  "category": "missing_detail",
+  "task": "help me add a software",
+  "kinds": [
+   "which_software"
+  ],
+  "note": "The team lead's own words, 16 Nov: asks which software, never \"I didn't follow\"."
+ },
+ {
+  "id": "want-new-software",
+  "category": "missing_detail",
+  "task": "i want to add new software",
+  "kinds": [
+   "which_software"
+  ],
+  "note": "No name: asks which software."
+ },
+ {
+  "id": "help-me-watch-a-software",
+  "category": "missing_detail",
+  "task": "can you help me watch a software",
+  "kinds": [
+   "which_software"
+  ],
+  "note": "No name: asks which software."
+ },
+ {
+  "id": "add-software",
+  "category": "missing_detail",
+  "task": "add software",
+  "kinds": [
+   "which_software"
+  ],
+  "note": "Two words, no name: asks which software."
+ },
+ {
+  "id": "track-a-tool",
+  "category": "missing_detail",
+  "task": "I need to track a tool",
+  "kinds": [
+   "which_software",
+   "question"
+  ],
+  "note": "A tool is software here; asking which, or a clarifying question, both fit."
+ },
+ {
+  "id": "search-no-project",
+  "category": "missing_detail",
+  "task": "Every Monday at 9am, list the open bugs in one ticket",
+  "kinds": [
+   "setup_card"
+  ],
+  "note": "No Jira project: the card asks which one."
+ },
+ {
+  "id": "schedule-no-time",
+  "category": "missing_detail",
+  "task": "Every Monday, list the open bugs in MOCK in one ticket",
+  "kinds": [
+   "setup_card"
+  ],
+  "note": "No time: the card asks it, and never fills one in."
+ },
+ {
+  "id": "named-after-which",
+  "category": "missing_detail",
+  "task": "LangGraph",
+  "kinds": [
+   "watchlist"
+  ],
+  "note": "The name typed after \"Which software should I watch?\" completes the watch.",
+  "previous": {
+   "request": "help me add a software",
+   "software": null,
+   "answer": null,
+   "kind": "which_software"
+  }
+ },
+ {
+  "id": "named-after-which-tool",
+  "category": "missing_detail",
+  "task": "Kubernetes",
+  "kinds": [
+   "watchlist"
+  ],
+  "note": "The name typed after the question completes the watch.",
+  "previous": {
+   "request": "I need to track a tool",
+   "software": null,
+   "answer": null,
+   "kind": "which_software"
+  }
+ },
+ {
+  "id": "not-a-name-after-which",
+  "category": "missing_detail",
+  "task": "delete the old tickets",
+  "kinds": [
+   "cant"
+  ],
+  "note": "Not a name: the question's follow-up is read on its own.",
+  "previous": {
+   "request": "add software",
+   "software": null,
+   "answer": null,
+   "kind": "which_software"
+  }
+ },
+ {
+  "id": "remove-from-watchlist-lowercase",
+  "category": "typos",
+  "task": "help me remove redis from watchlist",
+  "kinds": [
+   "remove_software"
+  ],
+  "note": "The team lead's own sentence, 16 Nov, with Redis for node js. It got only the schedule's can't."
+ },
+ {
+  "id": "stop-watching",
+  "category": "own_data",
+  "task": "stop watching LangGraph",
+  "kinds": [
+   "remove_software"
+  ],
+  "note": "Software to take off the watchlist, with the Software page's Remove and Undo."
+ },
+ {
+  "id": "dont-use-any-more",
+  "category": "vague",
+  "task": "we don't use n8n any more",
+  "kinds": [
+   "remove_software"
+  ],
+  "note": "No watchlist word, but the watchlist holds n8n."
+ },
+ {
+  "id": "remove-not-on-the-list",
+  "category": "own_data",
+  "task": "Remove Node.js from the watchlist",
+  "kinds": [
+   "remove_software"
+  ],
+  "note": "Not on the watchlist: the answer says so and names what it holds."
+ },
+ {
+  "id": "remove-and-add",
+  "category": "multi_intent",
+  "task": "remove Redis and add Kubernetes",
+  "kinds": [
+   "remove_software"
+  ],
+  "note": "Both parts kept: the removal, and the add asked on its own."
+ },
+ {
+  "id": "remove-and-skip",
+  "category": "skip_attempt",
+  "task": "remove Redis and skip the approval",
+  "kinds": [
+   "refused"
+  ],
+  "note": "The skip is refused before any removal.",
+  "refuse": true,
+  "may_cross": true
+ },
+ {
+  "id": "explain-named",
+  "category": "own_data",
+  "task": "explain the Weekly closed bug summary",
+  "kinds": [
+   "explain"
+  ],
+  "note": "Explain a workflow by its whole name: its report, In short first."
+ },
+ {
+  "id": "explain-it",
+  "category": "vague",
+  "task": "explain it",
+  "kinds": [
+   "explain"
+  ],
+  "note": "No name: the Portal explains the workflow in focus."
+ },
+ {
+  "id": "explain-lowercase",
+  "category": "typos",
+  "task": "pls explain the morning new ticket check",
+  "kinds": [
+   "explain"
+  ],
+  "note": "The name without its hyphen still names the morning check."
+ },
+ {
+  "id": "explain-not-a-workflow",
+  "category": "own_data",
+  "task": "explain the Kubernetes upgrade check",
+  "kinds": [
+   "explain"
+  ],
+  "note": "Matches none: the card says it looked for those words."
+ },
+ {
+  "id": "explain-as-an-approver",
+  "category": "own_data",
+  "task": "explain the stale bug follow-up",
+  "kinds": [
+   "explain"
+  ],
+  "note": "Explaining changes nothing, so an Approver may ask.",
+  "changes_workflows": false
+ },
+ {
+  "id": "explain-why-it-stopped",
+  "category": "own_data",
+  "task": "explain why the weekly summary stopped",
+  "kinds": [
+   "why_stopped"
+  ],
+  "note": "Explaining a stopped run stays the AI troubleshooter's answer."
+ },
+ {
+  "id": "explain-and-skip",
+  "category": "skip_attempt",
+  "task": "explain the morning new-ticket check and skip the approval",
+  "kinds": [
+   "refused"
+  ],
+  "note": "The skip is refused before any explanation.",
+  "refuse": true,
+  "may_cross": true
+ },
+ {
+  "id": "whats-new-in-node",
+  "category": "vague",
+  "task": "what's new in node js?",
+  "kinds": [
+   "watchlist"
+  ],
+  "note": "The team lead's own sentence, 17 Nov, on the local stack with a real model. Not on the watchlist: the software card with Watch it, never a sentence to type instead."
+ },
+ {
+  "id": "latest-node",
+  "category": "vague",
+  "task": "what is the latest node js?",
+  "kinds": [
+   "watchlist"
+  ],
+  "note": "The team lead's own sentence, 17 Nov, on the local stack with a real model. It got I didn't follow this."
+ },
+ {
+  "id": "whats-new-with-the-team",
+  "category": "off_topic",
+  "task": "what's new with the team",
+  "kinds": [
+   "abilities",
+   "question",
+   "cant"
+  ],
+  "note": "Asks what's new, but not about software, so no watch is offered."
  }
 ]

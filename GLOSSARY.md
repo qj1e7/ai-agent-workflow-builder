@@ -37,13 +37,49 @@ _Avoid_: Job, recipe, routine
 What Operators see a use case called in the app. Always write "n8n workflow" for n8n's own workflows, and "Jira workflow" for a ticket's statuses.
 _Avoid_: Routine
 
+**Workflow drafter**:
+The agent that drafts an n8n workflow from a person's words. It may propose any block the pinned n8n image ships, through three tools: find a block, describe it, and submit the plan. Code checks every plan against the block catalogue and marks each setting filled, guessed or needed (ADR 0051).
+_Avoid_: Generator, builder agent
+
+**Drafted workflow**:
+What the workflow drafter wrote, with every change made to it, before it is set up. Its plan holds blocks, the wires between their exits, and settings that stand in parameters as placeholders, never as guessed values. Once set up, it is a Draft until someone turns it on (ADR 0051).
+_Avoid_: Draft (that is a set-up workflow not yet turned on)
+
+**Revision**:
+One whole plan of a drafted workflow. The first comes from the person's words. Each change asked for in the chat makes the next one, and so does each answer to one of its questions and each read-back after Edit in n8n. Only the newest can be sent (ADR 0051).
+_Avoid_: Version (that is a set-up workflow's)
+
+**Drafted setting**:
+A value a drafted workflow needs, such as its run time, a Jira project, a channel, who says yes on each run, or a write key. Each is filled, guessed or needed, and the card says where a filled one came from: the person's words, a choice, what they typed, or what they typed in n8n. A run time, a Jira project, a channel or an address a notice posts to, the Approvers and a write key are never guessed (ADR 0051).
+_Avoid_: Parameter (that is a block's, in n8n)
+
+**Drafted question**:
+What the draft card asks to fill one setting still needed, one at a time, in code's own words, with two to four choices from the team's own data and, where code can read it, a box to type in. Each answer makes the next revision, with no model (ADR 0051).
+_Avoid_: Clarifying question (that is the Planner's)
+
+**Edit in n8n**:
+Opening a drafted workflow in your own n8n space, without its keys, to change it there. Done in n8n reads it back as the next revision and checks it again. Only an Operator with n8n access can (ADR 0051).
+_Avoid_: Open in n8n (that is a set-up workflow's)
+
+**Set-up approval**:
+An Approver's yes to set up one revision of a drafted workflow, bound to its digest. Any Approver who is not a party decides it: not the person who described it, changed it, answered its questions or sent it. It comes to Teams with a link to its own page, and is in Needs you for each Approver who may decide it (ADR 0051).
+_Avoid_: Approval (that is a run's yes to a write)
+
+**Workflow report**:
+The plain-words account that code builds of one version of any workflow: when it runs, each step, what it reads, writes and posts, every safety checker rule as flagged, fixed for you or passed, who approves each write, and its settings. A model never writes it. Strings from the workflow, such as a block's name, show in quotes, apart from code's own words (ADR 0051).
+_Avoid_: Summary, explanation
+
 **Set-up card**:
 The Planner's reply on Home when it can do a request: the whole workflow filled in from the request, with every guess marked and what it can't know asked for. The Operator turns it on. Each write it makes still waits for an Approver's yes.
 _Avoid_: Wizard, form, New workflow (the old 4-step page)
 
 **Planner answer**:
-What the Planner replies to one request typed on Home: a set-up card, an edit card, a watchlist row, a question about which software, the part it can do, a can't with the nearest alternative, a refusal to skip a yes, an answer about the person's workflows (check my workflows, why it stopped, what needs me), a question answer, the list of what it can do, or offline. Code decides which one from the model's reading, and the reply sentences are fixed text (ADR 0037), except for the question answer (ADR 0042).
+What the Planner replies to one request typed on Home: a set-up card, an edit card, a watchlist row, a question about which software, the part it can do, a can't with the nearest alternative, a refusal to skip a yes, an answer about the person's workflows (check my workflows, why it stopped, what needs me), a question answer, the list of what it can do, a free reply, the I didn't follow that card, or offline. With the rules Planner, code decides which one from the model's reading. With the AI-led Planner, the model picks the tool, and code checks the call and builds every card (ADR 0049). The reply sentences are fixed text (ADR 0037), except for the question answer (ADR 0042) and the free reply (ADR 0047).
 _Avoid_: Reply, response, intent (in the app)
+
+**AI-led Planner**:
+The Planner when `PLANNER_MODE` is `ai_led`: the model leads each conversation through seven tools that code checks, on top of the rules. The word rule still refuses first, the rules' refusal wins, the rules build every card, and a part of the request no tool reaches is crossed with Ask this on its own. The rules Planner stays the default until the team lead reads the eval runs (ADR 0049).
+_Avoid_: Agent mode, autopilot
 
 **Edit card**:
 The Planner's reply when someone asks to change a workflow they already have: only what changes, before and after. Saving it publishes a new version, with Undo (ADR 0043).
@@ -70,10 +106,10 @@ Where something opened from a card in the chat shows, beside the chat, so the co
 _Avoid_: Drawer, modal
 
 **Question answer**:
-The Planner's reply to a question about the person's own data, such as how many software are on the watchlist. The model writes it in its own words from a facts snapshot read when the question arrives, and only from those facts. It names the sections it used, and it never offers to act. It is the one answer whose text is not fixed (ADR 0042).
+The Planner's reply to a question about the person's own data, such as how many software are on the watchlist. The model writes it in its own words from a facts snapshot read when the question arrives, and only from those facts. It names the sections it used, and it never offers to act. With the free reply, it is one of two answers whose text is not fixed (ADR 0042).
 
 **Free reply**:
-The Planner's reply in its own words to a message that no card or fixed answer fits: a direct answer, one clarifying question with choices to tap, or a can't with the closest thing the platform can do. It never writes, and it never says that anything was done (ADR 0047, proposed).
+The Planner's reply in its own words to a message that no card or fixed answer fits: a direct answer, one clarifying question with choices to tap, or a can't with the closest thing the platform can do. It never writes, and it never says that anything was done. Code checks it before the person sees it, and a failed check shows the I didn't follow that card, with Say it another way (ADR 0047). When it names watched software or a workflow from the facts, the Portal draws that one's line under it, so the reply never states a version or a run (ADR 0049).
 _Avoid_: Chat reply, fallback, free text
 
 **Capability**:
@@ -241,6 +277,25 @@ The step that pauses a run before a write action until an Approver approves it i
 A Teams card or an email that only reports what a run read or found. It may go out without a yes, because it changes no data, under the Tell rule: its recipients are the ones fixed in the Portal, our API writes its words from the run's own reads and agent results, and a test run sends nothing (ADR 0026). The node pack's Tell node sends one.
 _Avoid_: Notification, alert
 
+**n8n block**:
+One of n8n's own blocks in a workflow, beside our node pack's. n8n loads every built-in block but those that reach its own secrets, disk or host: Execute Command, Local File Trigger, Function, Function Item, LangChain Code and Git (ADR 0051). In the platform's n8n project, a block for an outside system, such as Jira or Slack, may only read or post a notice, as `node_classes.json` classes each operation, and runs with a platform key, and the checker flags every block the class file doesn't class. The run line and the canvas badge it `n8n block` and tag it with what it does, such as Reads Jira or Posts in Slack (ADR 0045).
+_Avoid_: built-in node, native node
+
+**Task runner**:
+The container where n8n runs the code a workflow gives Code, AI Transform, the Code Tool, Sort and Item Lists. The platform runs it apart from n8n, as `n8n-runners`, with none of n8n's secrets, only the token that lets it take n8n's tasks, and bootstrap refuses to start the platform while n8n would run code in its own container (ADR 0051, spike P9).
+_Avoid_: worker, sandbox
+
+**Held block**:
+One of n8n's built-in blocks that n8n loads but that can't run on this platform, because it would reach past what an approval covers: the sub-workflow blocks and the n8n block. The checker flags each as Can't run on this platform, and the block catalogue marks it, so the workflow drafter never proposes it (`n8n_blocks.HELD`, ADR 0051). A block that would reach n8n's own secrets, disk or host isn't held but left out: n8n never loads it.
+_Avoid_: blocked node, disabled node
+
+**Platform key**:
+A key in n8n's credential store that the platform made, in its own n8n project, from Key Vault, only once the system showed it can do no more than read or post. It never leaves that project. The checker lets an n8n block name only a platform key. Jira, GitHub and Slack have one; Teams, Outlook and Gmail have none (ADR 0045, as amended).
+_Avoid_: credential, token
+
+**Credential sweep**:
+The platform's look at every key in n8n, every minute, whenever a workflow opens in n8n and whenever one comes back. It deletes each key the platform did not make, makes a platform key anew when it was changed or moved, marks a workflow its holder added a key for, and takes off a workflow in the platform's project that would run with someone else's key. A key it plants each day proves it (ENGINE-PLAN E17).
+
 **Tell flow**:
 The team's one Power Automate flow that posts a Tell's card in the team's channel and emails the team's list. Its address is a secret, kept in Key Vault and never shown. Until it is set, a Tell goes to the practice copy. Setting it alone does not make "Posts in Teams and emails" ready. That waits for E14, when the Planner can lay out a Tell block.
 
@@ -324,6 +379,30 @@ _Avoid_: Heartbeat, canary
 **Replica**:
 One running instance of a platform service, such as platform-api in Container Apps. Several replicas share one database, and PostgreSQL wakes each one when events are added or copied, so any replica can stream any run. Call the activity log in Cosmos DB the copy, never a replica.
 _Avoid_: Pod, node
+
+**Trace**:
+The record of one Planner turn or one agent step, kept 60 days in Langfuse, which we host ourselves (ADR 0050). It names the person only by a pseudonymous id.
+_Avoid_: Log (the activity log is a different record), transcript
+
+**Rating**:
+The thumbs up or down a person gives a Planner answer on Home. It is stored on the answer's trace and nowhere else.
+_Avoid_: Feedback, vote, like
+
+**Code flag**:
+A mark our code puts on a trace when an answer is likely poor, such as a "didn't follow" dead end or the person typing again within a minute. No model decides it.
+_Avoid_: Alert, error
+
+**Judge**:
+The model that scores Planner answers against the eval's rubric. It is always a different model from the Planner (ADR 0047).
+_Avoid_: Grader, reviewer (a reviewer is a person)
+
+**Review queue**:
+The list in Langfuse of traces a teammate checks: those with a code flag, a low judge score or a thumbs down. The teammate marks each one a real problem or fine.
+_Avoid_: Inbox, triage list
+
+**Regression case**:
+An eval case made from a real problem found in the review queue. It is committed with the fix, and the eval runs it on every later change to the Planner, so the same miss cannot come back.
+_Avoid_: Bug case, golden (the golden sets are written by the team)
 
 ### Setting up
 

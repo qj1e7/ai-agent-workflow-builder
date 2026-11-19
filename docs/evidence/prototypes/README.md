@@ -13,6 +13,7 @@ Start with each folder's `findings.md`. The other files are the scripts and raw 
 | [P5](p5-iac-terraform-vs-bicep/findings.md) | Can Terraform and Bicep both express our Azure setup, and how do they compare? | Terraform 1.16.5, OpenTofu 1.12.7 and Bicep 0.48.1 in Docker, offline |
 | [P6](p6-n8n-node-pack/findings.md) | On n8n's free Community edition, does our node pack load, can it pause a run, can editing be kept apart from publishing, and who published? | n8n 2.42.6 in Docker, no licence key |
 | [P7](p7-n8n-engine-facts/findings.md) | Which facts about n8n 2.42.6 can the new engine (ENGINE-PLAN) build on, and which fallback works where one is false? | n8n 2.42.6 and PostgreSQL 17 in Docker, no licence key |
+| [P9](p9-n8n-code-isolation/README.md) | Can a block that runs code, or uses n8n's disk, reach n8n's secrets, its files or Azure's identity endpoint? Does the external task runner close what the internal one leaves open? Does a token refresh look like a changed key? | `wab/n8n:dev` (n8n 2.42.6 with our node pack), `n8nio/runners:2.42.6` and PostgreSQL 17 in Docker, made-up canary values only |
 
 ## What each one showed
 
@@ -57,6 +58,12 @@ Start with each folder's `findings.md`. The other files are the scripts and raw 
 - Our nodes are named `CUSTOM.<name>` or `n8n-nodes-wab.<name>`, never `wab.<name>`, and the allow list works with either.
 - The findings list fifteen changes to the engine plan.
 
+**P9.**
+- With the platform's settings, no block that runs code in n8n's task runner reached n8n's environment, its files or the identity header, with either runner. But the internal runner runs in n8n's own container, and code given Node's modules there read every secret n8n holds. In the external runner the same code found only the runner's own token.
+- Function, Function Item and LangChain Code run inside n8n itself, and n8n 2.42.6 refuses them by default. Let in, LangChain Code read n8n's whole environment with no escape.
+- With n8n's defaults the disk blocks reach only `~/.n8n-files`. An empty `N8N_RESTRICT_FILE_ACCESS_TO` lets them read n8n's environment from `/proc`.
+- n8n changes a key's `updatedAt` each time it saves a token, so the credential sweep would delete a valid Gmail or Outlook key on a refresh.
+
 ## What was removed before commit
 
 - **Local n8n API keys and login cookies.** These are the files `apikey`, `apikey_resp.json` and `cj`. Two workflow files had a key inside, which now reads `<redacted: local n8n API key>`.
@@ -65,6 +72,7 @@ Start with each folder's `findings.md`. The other files are the scripts and raw 
 - **The database password and n8n encryption key.** In the compose files and findings they are now `${PROTO_DB_PASSWORD}` and `${PROTO_ENCRYPTION_KEY}`.
 - **P6's local logins, API key and n8n encryption key** (`p6-secrets.json`, `p6-encryption-key`). They were never committed and were deleted after the run.
 - **P7's keys and logins** (`p7.env`, `p7-secrets.json`). The harness made them for one run and masks them in every raw line. They were never committed.
+- **P9's made-up canaries and logins** (`p9.env`, `p9-secrets.json`). The harness refuses to write a raw line that holds one, and keeps errors as their class only. They were never committed.
 - **Installed packages, n8n's local data folder, process ID files and `package-lock.json`.** Local machine paths in the logs now read `./` or `<scratch>`.
 
 Every key above worked only on local containers or processes that were deleted after each test.

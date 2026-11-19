@@ -287,6 +287,35 @@ CAPABILITIES: Final = (
         platform=True,
         short="Change or pause your workflows",
     ),
+    _ready(
+        "workflows.draft",
+        "Draft an n8n workflow from your words, for an Approver to check",
+        "none",
+        None,
+        None,
+        [],
+        platform=True,
+        short="Draft an n8n workflow from your words, for an Approver to check",
+    ),
+    _ready(
+        "workflows.explain",
+        "Explain any workflow",
+        "none",
+        None,
+        None,
+        [],
+        platform=True,
+        short="Explain any workflow",
+    ),
+    _ready(
+        "watchlist.remove",
+        "Take software off the Watchlist, with Undo",
+        "none",
+        None,
+        None,
+        [],
+        platform=True,
+    ),
     _not_yet(
         "teams.post",
         "Posts in Teams and emails",
@@ -351,6 +380,67 @@ CAPABILITIES: Final = (
         "That needs a new tool. The team decides on new tools.",
     ),
     _not_yet(
+        "jira.block_read",
+        "Read Jira with n8n's own Jira block",
+        "read",
+        "Jira",
+        "jira",
+        "add n8n's Jira block for you",
+        "n8n's own blocks are set up in n8n, not from the chat. Someone with n8n access adds one "
+        "there, and it reads with the platform's key, which can only read.",
+    ),
+    _not_yet(
+        "github.block_read",
+        "Read GitHub with n8n's own GitHub block",
+        "read",
+        "GitHub",
+        "github",
+        "add n8n's GitHub block for you",
+        "n8n's own blocks are set up in n8n, not from the chat. Someone with n8n access adds one "
+        "there, and it reads with the platform's key, which can only read.",
+    ),
+    _not_yet(
+        "slack.post",
+        "Post in a Slack channel with n8n's Slack block",
+        "notify",
+        "Slack",
+        None,
+        "add n8n's Slack block for you",
+        "n8n's own blocks are set up in n8n, not from the chat. Someone with n8n access adds one "
+        "there. It posts only to the channel written in the block, with the platform's key, "
+        "which can only post.",
+    ),
+    _not_yet(
+        "teams.block_post",
+        "Post in Teams with n8n's Teams block",
+        "notify",
+        "Teams",
+        None,
+        "add n8n's Teams block for you",
+        "n8n's Teams block can post only with a person's own sign-in, so the platform has no key "
+        "for it. Run results reach Teams through the platform's own Tell.",
+    ),
+    _not_yet(
+        "outlook.send",
+        "Send email with n8n's Outlook block",
+        "notify",
+        "Outlook",
+        None,
+        "add n8n's Outlook block for you",
+        "n8n rewrites an Outlook app key each time it gets a token, so the platform can't check "
+        "the key stays the one it made. It has no Outlook key.",
+    ),
+    _not_yet(
+        "gmail.send",
+        "Send email with n8n's Gmail block",
+        "notify",
+        "Gmail",
+        None,
+        "add n8n's Gmail block for you",
+        "n8n's Gmail block asks Google for the right to change mail, so no key that can only "
+        "send works with it. The platform has no Gmail key.",
+    ),
+    _not_yet(
         "slack.send",
         "Send Slack or text messages",
         "write",
@@ -395,6 +485,17 @@ EXAMPLES: Final = (
     ExampleSpec(text="What can you do?", kind="learn", needs=[]),
 )
 CAPABILITY_LIST: Final = CapabilityList(capabilities=list(CAPABILITIES), examples=list(EXAMPLES))
+
+WEEKLY_BUGS: Final = "Every Monday at 9am, list last week's new bugs in one new Jira ticket"
+OFFER_REQUESTS: Final = {
+    "github.releases": EXAMPLES[0].text,
+    "jira.read": WEEKLY_BUGS,
+    "jira.find_by_update": WEEKLY_BUGS,
+    "summarise": WEEKLY_BUGS,
+    "jira.create": WEEKLY_BUGS,
+}
+"""For each Ready capability a free reply's can't may offer, the request its button sends
+(ADR 0047). They are not Home's ideas, so they live here and not in `EXAMPLES`."""
 
 WRITES: Final = words(
     "close resolve cancel reopen delete remove purge erase wipe destroy trash discard drop archive "
@@ -1369,7 +1470,8 @@ def cant_entry(text: str, system: str | None) -> CapabilitySpec | None:
     found = _reader(ABILITIES).verb(row[at]) if at is not None else None
     verb = None if found is None else found[0]
     tickets = system == SYSTEMS[JIRA] or any(w.low in TICKETS for w in row)
-    if verb in DELETES and tickets:
+    # A delete anywhere in the part is the reason, as in "create and delete".
+    if tickets and any(v in DELETES for v in change_verbs_in(text)):
         return next(c for c in CAPABILITIES if c.id == "jira.delete")
     named = SAID_FOR.get(system or "")
     if named is None or (verb is not None and verb not in WRITES):
@@ -1386,9 +1488,71 @@ def one_line_cant(entry: CapabilitySpec) -> str:
     return f"I can't {entry.cant} yet."
 
 
+PERSONS: Final = words(
+    "i i'd i'm i'll i've me my mine myself we we'd we're we've us our ours ourselves you you'd "
+    "you're you've your yours yourself"
+)
+
+
+LEADS: Final = words("bulk mass")
+NOT_ADVERBS: Final = words(
+    "only early daily weekly monthly yearly hourly quarterly fortnightly reply apply supply rely"
+)
+"""Words ending in "ly" that never lead an order as "permanently" does: "I can't only create"."""
+OPENS_AN_ORDER: Final = CAUSATIVES | words("ensure")
+
+
+def _an_order(what: str, reader: _Reader) -> bool:
+    """Whether the words read as an order after "I can't": a verb, or a verb after an adverb as
+    in "permanently delete", then more words, and no I, me, we or you, which would change whose
+    they are ("I can't send me a summary")."""
+    row = [w for w in _tokens(what) if not w.mark]
+    if len(row) < 2 or any(w.low in PERSONS for w in row):
+        return False
+    first, second = row[0], row[1]
+    lead = (first.low.endswith("ly") and first.low not in NOT_ADVERBS) or first.low in LEADS
+    return (
+        reader.verb(first) is not None
+        or first.low in OPENS_AN_ORDER
+        or (lead and reader.verb(second) is not None)
+    )
+
+
 def _cant_sentence(what: str, reader: _Reader) -> str:
+    """The can't in the Planner's own voice. The card shows the person's words beside it, so
+    words that don't read as an order are said as "this"."""
     yet = "" if _is_unsupported(what) else " yet"
-    return f"I can't {what}{yet}. {reader.can()}"
+    said = what if _an_order(what, reader) else "do this"
+    return f"I can't {said}{yet}. {reader.can()}"
+
+
+def orders_only_what_it_can(clauses: list[str]) -> bool:
+    """Whether some clause gives an order and every order is one of the abilities' own, by the
+    first verb of its clause: "raise" in "raise the LangGraph upgrade ticket now", never "close"
+    in "close the old tickets". A clause with no verb, as "for me", orders nothing."""
+    reader = _reader(ABILITIES)
+    able = {verb for ability in ABILITIES for verb in ability.verbs}
+    orders = [
+        next((found[0] for w in _tokens(c) if (found := reader.verb(w)) and found[1] != "ed"), None)
+        for c in clauses
+    ]
+    given = [verb for verb in orders if verb is not None]
+    return bool(given) and all(verb in able for verb in given)
+
+
+def changes_beyond_the_abilities(text: str) -> bool:
+    """Whether the words ask for a change no ability makes, as "delete" or "set". A release
+    word where it names a thing, as "upgrade" in "the LangGraph upgrade ticket", asks for none;
+    the same word where it is an order, as in "to upgrade Redis", does."""
+    able = {verb for ability in ABILITIES for verb in ability.verbs}
+    row = _tokens(text)
+    return any(verb not in able and not _release_noun(row, at) for at, verb in _changes(row))
+
+
+def names_no_ability(note: str) -> bool:
+    """Whether a can't's note is only the request's own words before "I can only ...": the
+    sentence the Planner writes when it found no ability the request is close to."""
+    return note.endswith(f". {_reader(ABILITIES).can()}")
 
 
 def why_not(kind: RowKind, text: str, abilities: tuple[Ability, ...] = ABILITIES) -> str | None:
@@ -1639,9 +1803,13 @@ def change_verbs_in(text: str) -> list[str]:
     """The verbs in the text that ask for a change, in base, -s or -ing form. A past form
     describes tickets ("tickets closed"), and "open" is also the state of a ticket, so neither
     counts."""
+    return [verb for _, verb in _changes(_tokens(text))]
+
+
+def _changes(row: Clause) -> list[tuple[int, str]]:
+    """Where each verb that asks for a change stands, with its base form."""
     reader = _reader(ABILITIES)
-    row = _tokens(text)
-    found: list[str] = []
+    found: list[tuple[int, str]] = []
     for at, word in enumerate(row):
         verb = reader.verb(word)
         if verb is None or word.proper or verb[1] == "ed":
@@ -1650,7 +1818,7 @@ def change_verbs_in(text: str) -> list[str]:
         if verb[0] == "open" and after not in OPENS_A_TICKET_BEFORE:
             continue
         if verb[0] in WRITE_VERBS:
-            found.append(verb[0])
+            found.append((at, verb[0]))
     return found
 
 

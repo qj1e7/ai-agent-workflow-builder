@@ -103,6 +103,7 @@ class ScriptedChat(BaseChatModel):
     structured: list[object] = Field(default_factory=list[object])
     calls: list[list[BaseMessage]] = Field(default_factory=list[list[BaseMessage]])
     offered: list[list[str]] = Field(default_factory=list[list[str]])
+    bound_with: list[dict[str, Any]] = Field(default_factory=list[dict[str, Any]])
     asked: list[type[BaseModel]] = Field(default_factory=list[type[BaseModel]])
     on_call: Callable[[], object] = lambda: None
 
@@ -126,6 +127,7 @@ class ScriptedChat(BaseChatModel):
 
     def bind_tools(self, tools: Sequence[Any], **kwargs: Any) -> Runnable[Any, AIMessage]:  # type: ignore[override]
         self.offered.append([tool["function"]["name"] for tool in tools])
+        self.bound_with.append(kwargs)
         return self  # type: ignore[return-value]
 
     def with_structured_output(self, schema: Any, **kwargs: Any) -> Runnable[Any, Any]:  # type: ignore[override]

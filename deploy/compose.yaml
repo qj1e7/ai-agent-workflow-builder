@@ -6,6 +6,66 @@ x-platform-image: &platform-image
     target: runtime
   image: wab/platform-api:${WAB_IMAGE_TAG:-dev}
 
+# Langfuse's web app and worker read the same settings (ADR 0050). Every part listens only inside
+# the network, except the web app on the host's localhost.
+x-langfuse-env: &langfuse-env
+  DATABASE_URL: postgresql://langfuse:${LANGFUSE_DB_PASSWORD:-}@postgres:5432/langfuse
+  NEXTAUTH_URL: http://localhost:${LANGFUSE_HOST_PORT:-3000}
+  SALT: ${LANGFUSE_SALT:-}
+  ENCRYPTION_KEY: ${LANGFUSE_ENCRYPTION_KEY:-}
+  TELEMETRY_ENABLED: "false"
+  CLICKHOUSE_MIGRATION_URL: clickhouse://clickhouse:9000
+  CLICKHOUSE_URL: http://clickhouse:8123
+  CLICKHOUSE_USER: langfuse
+  CLICKHOUSE_PASSWORD: ${LANGFUSE_CLICKHOUSE_PASSWORD:-}
+  CLICKHOUSE_CLUSTER_ENABLED: "false"
+  REDIS_HOST: valkey
+  REDIS_PORT: "6379"
+  REDIS_AUTH: ${LANGFUSE_VALKEY_PASSWORD:-}
+  LANGFUSE_USE_AZURE_BLOB: "true"
+  LANGFUSE_S3_EVENT_UPLOAD_BUCKET: langfuse
+  LANGFUSE_S3_EVENT_UPLOAD_PREFIX: events/
+  LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://azurite:10000/devstoreaccount1
+  LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: devstoreaccount1
+  # Azurite's published development key.
+  LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: &azurite-key ${AZURITE_KEY:-Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==}
+  LANGFUSE_S3_MEDIA_UPLOAD_BUCKET: langfuse
+  LANGFUSE_S3_MEDIA_UPLOAD_PREFIX: media/
+  LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT: http://azurite:10000/devstoreaccount1
+  LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID: devstoreaccount1
+  LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: *azurite-key
+
+x-langfuse-depends: &langfuse-depends
+  langfuse-db:
+    condition: service_completed_successfully
+  clickhouse:
+    condition: service_healthy
+  valkey:
+    condition: service_healthy
+  azurite:
+    condition: service_started
+
+# n8n's settings that keep what a workflow runs away from n8n's secrets (ADR 0051, spike P9). n8n
+# loads every built-in block but those in NODES_EXCLUDE, so these settings are the guard.
+# bootstrap gets the same block and refuses to start the platform unless each holds
+# (platform-api's n8n_guard.py). NODE_FUNCTION_ALLOW_BUILTIN, NODE_FUNCTION_ALLOW_EXTERNAL and
+# N8N_RUNNERS_INSECURE_MODE stay unset: the first two let code load modules it picks, also in n8n's
+# own process, and the third drops the runner's own guards.
+x-n8n-guards: &n8n-guards
+  # n8n never loads a block that reaches its own secrets, disk or host: Execute Command, Local File
+  # Trigger, Function, Function Item, LangChain Code, and Git with its tool (n8n_blocks.LEFT_OUT).
+  NODES_EXCLUDE: '["n8n-nodes-base.executeCommand","n8n-nodes-base.localFileTrigger","n8n-nodes-base.function","n8n-nodes-base.functionItem","@n8n/n8n-nodes-langchain.code","n8n-nodes-base.git","n8n-nodes-base.gitTool"]'
+  N8N_COMMUNITY_PACKAGES_ENABLED: "false"
+  # No $env in expressions, and n8n hands none of its environment to the task runner.
+  N8N_BLOCK_ENV_ACCESS_IN_NODE: "true"
+  # Code, AI Transform, the Code Tool, Sort and Item Lists run their code in n8n-runners below.
+  N8N_RUNNERS_MODE: external
+  # n8n also refuses Function, Function Item and LangChain Code as deprecated.
+  N8N_DEPRECATED_NODES_BLOCK: "true"
+  # The file blocks reach only this folder, never n8n's own folders, and never /proc.
+  N8N_RESTRICT_FILE_ACCESS_TO: /home/node/.n8n-files
+  N8N_BLOCK_FILE_ACCESS_TO_N8N_FILES: "true"
+
 # The Cosmos DB emulator's published key.
 x-cosmos: &cosmos-account
   COSMOS_ENDPOINT: http://cosmos:8081
@@ -62,6 +122,7 @@ services:
       postgres:
         condition: service_healthy
     environment:
+      <<: *n8n-guards
       DB_TYPE: postgresdb
       DB_POSTGRESDB_HOST: postgres
       DB_POSTGRESDB_PORT: "5432"
@@ -81,15 +142,8 @@ services:
       # n8n, and a locked-down network refuses the call (issue #86). n8n 2.42.6 reads this setting in
       # @n8n/backend-common's ModulesConfig, and docs/evidence/devnet/n8n-proxy.test.sh checks it.
       N8N_DISABLED_MODULES: mcp-registry
-      # The keys below are in this container's environment, so nothing a person adds to a workflow may
-      # read it: no $env in expressions, no Execute Command, no community packages. Execute Command and
-      # Local File Trigger are n8n's own default exclusions, pinned here so an upgrade cannot drop them.
-      N8N_BLOCK_ENV_ACCESS_IN_NODE: "true"
-      NODES_EXCLUDE: '["n8n-nodes-base.executeCommand","n8n-nodes-base.localFileTrigger"]'
-      N8N_COMMUNITY_PACKAGES_ENABLED: "false"
-      # The allow list: n8n loads only these node types. scripts/nodes-include.sh writes it from
-      # platform-api's node_classes.json (ADR 0045), and CI fails when the two differ.
-      NODES_INCLUDE: '["CUSTOM.wabStartFromPortal","CUSTOM.wabRead","CUSTOM.wabAgent","CUSTOM.wabProposeChange","CUSTOM.wabAskForYes","CUSTOM.wabMakeApprovedChanges","CUSTOM.wabTell","CUSTOM.wabReportFailure","n8n-nodes-base.scheduleTrigger","n8n-nodes-base.manualTrigger","n8n-nodes-base.errorTrigger","n8n-nodes-base.if","n8n-nodes-base.merge","n8n-nodes-base.noOp","n8n-nodes-base.stickyNote","n8n-nodes-base.filter","n8n-nodes-base.switch","n8n-nodes-base.set","n8n-nodes-base.limit","n8n-nodes-base.aggregate","n8n-nodes-base.splitOut","n8n-nodes-base.removeDuplicates","n8n-nodes-base.summarize","n8n-nodes-base.renameKeys","n8n-nodes-base.dateTime","n8n-nodes-base.compareDatasets","n8n-nodes-base.splitInBatches","n8n-nodes-base.xml","n8n-nodes-base.markdown","n8n-nodes-base.executionData","n8n-nodes-base.stopAndError"]'
+      # The token that lets the task runner take n8n's tasks. n8n-runners holds the same.
+      N8N_RUNNERS_AUTH_TOKEN: ${N8N_RUNNERS_AUTH_TOKEN:?run deploy/make-env.sh}
       # n8n keeps 30 days of executions (ENGINE-PLAN D10). Our API keeps every node's answer, so the
       # Portal loses nothing, and n8n never prunes a waiting execution (P7 Q16).
       EXECUTIONS_DATA_PRUNE: "true"
@@ -99,8 +153,25 @@ services:
       WAB_API_URL: http://platform-api:8000
       WAB_NODE_KEY: ${WAB_NODE_KEY:?run deploy/make-env.sh}
       WAB_START_SECRET: ${WAB_START_SECRET:?run deploy/make-env.sh}
+    # The task runner's broker listens on port 5679 of n8n's address on the runners network alone,
+    # so no other service reaches it. Docker gives that address only as n8n starts, so n8n looks up
+    # its own name there, n8n-broker, first, and doesn't start without it.
+    entrypoint:
+      - tini
+      - --
+      - /bin/sh
+      - -c
+      - >-
+        N8N_RUNNERS_BROKER_LISTEN_ADDRESS="$$(node -e "require('dns').lookup('n8n-broker', {family: 4},
+        (e, a) => { if (e) process.exit(1); console.log(a); })")"
+        && export N8N_RUNNERS_BROKER_LISTEN_ADDRESS && exec /docker-entrypoint.sh
+    # The laptop only: anyone who reaches n8n can call a published Webhook or Form (ADR 0051).
     ports:
-      - "${N8N_HOST_PORT:-5678}:5678"
+      - "127.0.0.1:${N8N_HOST_PORT:-5678}:5678"
+    networks:
+      default: {}
+      runners:
+        aliases: [n8n-broker]
     volumes:
       - n8ndata:/home/node/.n8n
     # BusyBox wget ignores NO_PROXY and asks a proxy even for localhost, so the check never uses one.
@@ -111,10 +182,31 @@ services:
       timeout: 3s
       retries: 40
 
+  # n8n's external task runner (ADR 0051, spike P9). The code of Code, AI Transform, the Code Tool,
+  # Sort and Item Lists runs here, in a container with none of n8n's secrets, only the token that
+  # lets it take n8n's tasks. Its own config allows JavaScript only crypto and moment, and Python
+  # no module. It sits on the runners network alone with n8n, which has no way out of it.
+  n8n-runners:
+    # The same version as n8n's pin, as infra/public-images.json names both.
+    image: n8nio/runners:2.42.6@sha256:b78816286beb0a14e874abfda31eb4621d47f5ebb38f194271df7e39b7bd63a7
+    depends_on:
+      n8n:
+        condition: service_healthy
+    environment:
+      N8N_RUNNERS_TASK_BROKER_URI: http://n8n-broker:5679
+      N8N_RUNNERS_AUTH_TOKEN: ${N8N_RUNNERS_AUTH_TOKEN:?run deploy/make-env.sh}
+      # A runner the launcher started stops after 15 idle seconds, and the next task starts another.
+      N8N_RUNNERS_AUTO_SHUTDOWN_TIMEOUT: "15"
+      GENERIC_TIMEZONE: ${TEAM_TIME_ZONE:-Asia/Singapore}
+    networks: [runners]
+
   agent-runtime:
     build:
       context: ../agent-runtime
       target: runtime
+      # The image carries contracts/n8n/catalogue.json for the workflow drafter (ADR 0051).
+      additional_contexts:
+        contracts: ../contracts
     image: wab/agent-runtime:${WAB_IMAGE_TAG:-dev}
     environment:
       GITHUB_API_BASE: ${GITHUB_API_BASE:-https://api.github.com}
@@ -130,6 +222,15 @@ services:
       AGENT_MODEL_BASE_URL: ${AGENT_MODEL_BASE_URL:-}
       AGENT_MODEL_API_KEY: ${AGENT_MODEL_API_KEY:-}
       AGENT_MODEL_PRIVATE_HOSTS: ${AGENT_MODEL_PRIVATE_HOSTS:-}
+      # rules is today's Planner. ai_led lets the model lead through checked tools (ADR 0049).
+      PLANNER_MODE: ${PLANNER_MODE:-rules}
+      # Tracing stays off until LANGFUSE_BASE_URL is set, for example to http://langfuse-web:3000 with
+      # the langfuse profile on. The keys follow it, so all three are set or none is (ADR 0050).
+      LANGFUSE_BASE_URL: ${LANGFUSE_BASE_URL:-}
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_BASE_URL:+${LANGFUSE_INIT_PROJECT_PUBLIC_KEY:-}}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_BASE_URL:+${LANGFUSE_INIT_PROJECT_SECRET_KEY:-}}
+      LANGFUSE_TRACING_ENVIRONMENT: local
+      LANGFUSE_RELEASE: ${WAB_IMAGE_TAG:-dev}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8100/healthz', timeout=2)"]
       interval: 3s
@@ -146,6 +247,8 @@ services:
       n8n:
         condition: service_healthy
     environment:
+      # The same guards n8n gets, which bootstrap checks before the platform starts (ADR 0051).
+      <<: *n8n-guards
       DATABASE_URL_OWNER: postgresql://wab_owner:${WAB_OWNER_PASSWORD:?run deploy/make-env.sh}@postgres:5432/platform
       N8N_BASE_URL: http://n8n:5678
       N8N_OWNER_EMAIL: ${N8N_OWNER_EMAIL:?run deploy/make-env.sh}
@@ -172,12 +275,18 @@ services:
       DATABASE_URL_MONITORING: postgresql://wab_monitoring:${WAB_MONITORING_PASSWORD:?run deploy/make-env.sh}@postgres:5432/platform
       AGENT_RUNTIME_URL: http://agent-runtime:8100
       AGENT_API_KEY: ${AGENT_API_KEY:?run deploy/make-env.sh}
+      # The same switch as the agent runtime's: scores go to Langfuse only once LANGFUSE_BASE_URL is set.
+      LANGFUSE_BASE_URL: ${LANGFUSE_BASE_URL:-}
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_BASE_URL:+${LANGFUSE_INIT_PROJECT_PUBLIC_KEY:-}}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_BASE_URL:+${LANGFUSE_INIT_PROJECT_SECRET_KEY:-}}
+      LANGFUSE_TRACING_ENVIRONMENT: local
+      TRACE_PSEUDONYM_KEY: ${TRACE_PSEUDONYM_KEY:-}
       N8N_BASE_URL: http://n8n:5678
       # n8n's owner, as bootstrap uses it: the platform lays each new workflow out in n8n as a draft.
       N8N_OWNER_EMAIL: ${N8N_OWNER_EMAIL:?run deploy/make-env.sh}
       N8N_OWNER_PASSWORD: ${N8N_OWNER_PASSWORD:?run deploy/make-env.sh}
       # on lets an Operator give a person n8n access: the platform makes their n8n account and
-      # opens workflows in it, once bootstrap has proved the allow list (ENGINE-PLAN 2.9). It needs
+      # opens workflows in it, once bootstrap has proved n8n's blocks and guards (ADR 0051). It needs
       # SETTINGS_ENCRYPTION_KEY, which seals each password link. N8N_EDITOR_URL is where people open
       # n8n's editor from their browser.
       N8N_STAFF_ACCESS: ${N8N_STAFF_ACCESS:-off}
@@ -226,6 +335,16 @@ services:
       CONFLUENCE_EMAIL: ${CONFLUENCE_EMAIL:-}
       CONFLUENCE_API_TOKEN: ${CONFLUENCE_API_TOKEN:-}
       CONFLUENCE_PAGES: ${CONFLUENCE_PAGES:-}
+      # The keys the platform makes in n8n for n8n's own Jira, GitHub and Slack blocks (ADR 0045).
+      # Each is made only once its system shows it can only read or post. With none for Jira, the
+      # practice Jira lends its browse-only account. SLACK_API_URL is where the platform asks Slack.
+      N8N_KEY_JIRA_URL: ${N8N_KEY_JIRA_URL:-}
+      N8N_KEY_JIRA_EMAIL: ${N8N_KEY_JIRA_EMAIL:-}
+      N8N_KEY_JIRA_TOKEN: ${N8N_KEY_JIRA_TOKEN:-}
+      N8N_KEY_GITHUB_URL: ${N8N_KEY_GITHUB_URL:-}
+      N8N_KEY_GITHUB_TOKEN: ${N8N_KEY_GITHUB_TOKEN:-}
+      N8N_KEY_SLACK_TOKEN: ${N8N_KEY_SLACK_TOKEN:-}
+      SLACK_API_URL: ${SLACK_API_URL:-}
     ports:
       - "${PLATFORM_API_HOST_PORT:-8000}:8000"
     healthcheck:
@@ -233,6 +352,119 @@ services:
       interval: 3s
       timeout: 3s
       retries: 20
+
+  # Makes Langfuse's role and database in our postgres, on a new volume or an old one.
+  langfuse-db:
+    image: postgres:17@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3
+    profiles: [langfuse]
+    # A one-shot job: unless-stopped would start it again after every success.
+    restart: on-failure
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGHOST: postgres
+      PGUSER: postgres
+      PGPASSWORD: ${POSTGRES_PASSWORD:?run deploy/make-env.sh}
+      LANGFUSE_DB_PASSWORD: ${LANGFUSE_DB_PASSWORD:-}
+      LANGFUSE_SALT: ${LANGFUSE_SALT:-}
+      LANGFUSE_ENCRYPTION_KEY: ${LANGFUSE_ENCRYPTION_KEY:-}
+      LANGFUSE_NEXTAUTH_SECRET: ${LANGFUSE_NEXTAUTH_SECRET:-}
+      LANGFUSE_CLICKHOUSE_PASSWORD: ${LANGFUSE_CLICKHOUSE_PASSWORD:-}
+      LANGFUSE_VALKEY_PASSWORD: ${LANGFUSE_VALKEY_PASSWORD:-}
+    volumes:
+      - ./postgres/langfuse-db.sh:/langfuse-db.sh:ro
+    command: ["sh", "/langfuse-db.sh"]
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:26.3.62.3@sha256:de3e47c64078aa196dae2349e048fc98ba81947f651f5c20e06e46baea8ae40a
+    profiles: [langfuse]
+    restart: unless-stopped
+    user: "101:101"
+    # Langfuse asks for more. The whole profile peaked at 3.3 GiB with this cap (ADR 0050).
+    mem_limit: 1536m
+    environment:
+      CLICKHOUSE_DB: default
+      CLICKHOUSE_USER: langfuse
+      CLICKHOUSE_PASSWORD: ${LANGFUSE_CLICKHOUSE_PASSWORD:-}
+    volumes:
+      - clickhousedata:/var/lib/clickhouse
+      - clickhouselogs:/var/log/clickhouse-server
+      - ./langfuse/clickhouse.xml:/etc/clickhouse-server/config.d/langfuse.xml:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8123/ping || exit 1"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+
+  valkey:
+    image: valkey/valkey:8.1.11@sha256:8f836008e0986c36adf50da714c7060cf689dbb335f61fe077939d90fa650809
+    profiles: [langfuse]
+    restart: unless-stopped
+    command:
+      - sh
+      - -c
+      - exec valkey-server --requirepass "$$VALKEY_PASSWORD" --maxmemory-policy noeviction
+    environment:
+      VALKEY_PASSWORD: ${LANGFUSE_VALKEY_PASSWORD:-}
+    volumes:
+      - valkeydata:/data
+    healthcheck:
+      test: ["CMD-SHELL", "valkey-cli -a \"$$VALKEY_PASSWORD\" --no-auth-warning ping | grep -q PONG"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite:3.37.0@sha256:830430c1da1a2d537e08f3e6764dd1f5ae00cf0346bcaf625b968ec3f0971fd5
+    profiles: [langfuse]
+    restart: unless-stopped
+    environment:
+      AZURITE_KEY: *azurite-key
+    # Langfuse does not make its blob container, so a small script makes it once Azurite answers.
+    command:
+      - sh
+      - -c
+      - node /opt/langfuse/blob-container.js & exec azurite-blob --blobHost 0.0.0.0 --location /data --skipApiVersionCheck
+    volumes:
+      - azuritedata:/data
+      - ./langfuse/blob-container.js:/opt/langfuse/blob-container.js:ro
+
+  langfuse-worker:
+    image: langfuse/langfuse-worker:4.80.0@sha256:da9f618dd784219aa6508ab6941c4a89c4ef6fb429fb1734c4163df3baa8f1ca
+    profiles: [langfuse]
+    restart: unless-stopped
+    depends_on: *langfuse-depends
+    environment:
+      <<: *langfuse-env
+
+  langfuse-web:
+    image: langfuse/langfuse:4.80.0@sha256:0814758db3db8e923f733be3884e7d7a9e3afd60568d874a610d78aae47476c5
+    profiles: [langfuse]
+    restart: unless-stopped
+    depends_on: *langfuse-depends
+    environment:
+      <<: *langfuse-env
+      NEXTAUTH_SECRET: ${LANGFUSE_NEXTAUTH_SECRET:-}
+      LANGFUSE_DISABLE_SIGNUP_ONBOARDING: "true"
+      LANGFUSE_INIT_ORG_ID: codesparks
+      LANGFUSE_INIT_ORG_NAME: CODESparks
+      LANGFUSE_INIT_PROJECT_ID: ai-workflow-builder
+      LANGFUSE_INIT_PROJECT_NAME: AI Workflow Builder
+      LANGFUSE_INIT_PROJECT_PUBLIC_KEY: ${LANGFUSE_INIT_PROJECT_PUBLIC_KEY:-}
+      LANGFUSE_INIT_PROJECT_SECRET_KEY: ${LANGFUSE_INIT_PROJECT_SECRET_KEY:-}
+      LANGFUSE_INIT_USER_EMAIL: ${LANGFUSE_INIT_USER_EMAIL:-}
+      LANGFUSE_INIT_USER_NAME: Team lead
+      LANGFUSE_INIT_USER_PASSWORD: ${LANGFUSE_INIT_USER_PASSWORD:-}
+    ports:
+      - "127.0.0.1:${LANGFUSE_HOST_PORT:-3000}:3000"
+    healthcheck:
+      # The web app listens on the container's own name, not on localhost.
+      test: ["CMD-SHELL", "wget -qO- http://$$HOSTNAME:3000/api/public/health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 60
+      start_period: 20s
 
   portal:
     build:
@@ -248,6 +480,18 @@ services:
     ports:
       - "${PORTAL_HOST_PORT:-8080}:8080"
 
+networks:
+  default: {}
+  # n8n and its task runner only. It has no way out to the internet or the other services. The
+  # runner reaches n8n's broker, and n8n's own port 5678 too, as any service on the default network
+  # does, which takes code that got out of the runner's sandbox.
+  runners:
+    internal: true
+
 volumes:
   pgdata:
   n8ndata:
+  clickhousedata:
+  clickhouselogs:
+  valkeydata:
+  azuritedata:

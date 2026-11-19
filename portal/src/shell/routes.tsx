@@ -3,6 +3,7 @@ import { Navigate, Route, Routes, useParams, useSearchParams } from 'react-route
 import { HomePage } from '../screens/home/HomePage'
 import { SettingsPage } from '../screens/settings/SettingsPage'
 import type { Icon } from '../ui/icons'
+import { ExplainRoute } from '../screens/explain/ExplainPage'
 import { WorkflowRoute } from '../screens/workflows/WorkflowPage'
 import { WorkflowsPage } from '../screens/workflows/WorkflowsPage'
 import { WatchLine } from '../screens/software/WatchLine'
@@ -80,6 +81,7 @@ export const PAGES: Readonly<Record<PageId, PageEntry>> = {
 const RunRoute = lazy(() => import('../screens/run/RunPage').then((module) => ({ default: module.RunRoute })))
 const JiraRoute = lazy(() => import('../screens/jira/JiraPage').then((module) => ({ default: module.JiraRoute })))
 const SoftwareRoute = lazy(() => import('../screens/software/SoftwarePage').then((module) => ({ default: module.SoftwareRoute })))
+const SetUpApprovalRoute = lazy(() => import('../screens/drafted/SetUpApprovalPage').then((module) => ({ default: module.SetUpApprovalRoute })))
 const ApprovalRoute = lazy(() => import('../screens/run/RunPage').then((module) => ({ default: module.ApprovalRoute })))
 
 function Lazy({ children }: { children: ReactNode }) {
@@ -105,7 +107,7 @@ export function railCurrent(pathname: string, ofRun: PageId): PageId | null {
   if (pathname === PAGES.home.path) return 'home'
   if (under(pathname, PAGES.workflows.path)) return 'workflows'
   if (under(pathname, PAGES.software.path)) return 'software'
-  if (under(pathname, '/runs') || under(pathname, '/approvals')) return ofRun
+  if (under(pathname, '/runs') || under(pathname, '/approvals') || under(pathname, '/setup-approvals')) return ofRun
   return null
 }
 
@@ -152,6 +154,7 @@ export function AppRoutes({ context }: { context: PageContext }) {
         element={<WorkflowsPage heading={wordsOf(PAGES.workflows.heading, context)} now={context.now} />}
       />
       <Route path={`${PAGES.workflows.path}/:useCaseId`} element={<WorkflowRoute now={context.now} />} />
+      <Route path={`${PAGES.workflows.path}/:useCaseId/explain`} element={<ExplainRoute />} />
       <Route path={PAGES.home.path} element={<HomePage greeting={wordsOf(PAGES.home.heading, context)} today={wordsOf(PAGES.home.lead, context)} now={context.now} />} />
       <Route
         path={PAGES.software.path}
@@ -193,6 +196,7 @@ export function AppRoutes({ context }: { context: PageContext }) {
       <Route path={`${OLD_NEW_PATH}/*`} element={<OldNewAddress />} />
       <Route path="/runs/:runId" element={<Lazy><RunRoute /></Lazy>} />
       <Route path="/approvals/:approvalId" element={<Lazy><ApprovalRoute /></Lazy>} />
+      <Route path="/setup-approvals/:approvalId" element={<Lazy><SetUpApprovalRoute /></Lazy>} />
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
   )

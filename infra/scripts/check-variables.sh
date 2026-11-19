@@ -1,6 +1,6 @@
 #!/bin/sh
 # Checks the variable rules in a variables.tf for sign-in, the first people, n8n's allow list,
-# Teams, a real Jira and Confluence: good values pass, and plan refuses what platform-api,
+# Teams, a real Jira, Confluence and Langfuse: good values pass, and plan refuses what platform-api,
 # agent-runtime or the Portal would refuse, or what would open n8n wider than meant. It plans a module that holds only that
 # file, so it needs no provider and no credentials. check.sh runs it in the Terraform image.
 # Usage: check-variables.sh <variables.tf>
@@ -78,6 +78,7 @@ expect accepted - "a Jira browse address and another project" \
   -var 'jira_browse_url=https://jira.example.test/browse/{key}' -var watchlist_jira_project=AB_1
 expect accepted - "another team time zone" -var team_time_zone=America/Argentina/Buenos_Aires
 expect accepted - "UTC as the team time zone" -var team_time_zone=UTC
+expect accepted - "the AI-led Planner" -var planner_mode=ai_led
 
 expect refused oidc_issuer "issuer over http" -var oidc_issuer=http://mock-oidc:8080/default
 expect refused oidc_issuer "issuer with no host" -var oidc_issuer=https:///tenant/v2.0
@@ -100,6 +101,7 @@ expect refused tell_email_to "email list with a name in it" -var 'tell_email_to=
 expect refused teams_channel "Teams channel on two lines" -var "teams_channel=Ops${nl}Other"
 expect refused team_time_zone "a zone written as words" -var 'team_time_zone=Singapore Time'
 expect refused team_time_zone "a zone written as an offset" -var 'team_time_zone=+08:00'
+expect refused planner_mode "a Planner that doesn't exist" -var planner_mode=free
 expect refused oidc_audience "audience as the api:// URI" -var "oidc_audience=api://$AUDIENCE"
 
 expect refused oidc_client_id "client ID not set" -var oidc_client_id=
@@ -165,6 +167,27 @@ expect refused jira_browse_url "a Jira browse address with no path" -var 'jira_b
 expect refused jira_base_url "a Jira host with an underscore" -var jira_base_url=https://jira_1.example.test -var jira_api_token=pat
 expect refused watchlist_jira_project "a project key in small letters" -var watchlist_jira_project=ops
 expect refused watchlist_jira_project "a one-letter project key" -var watchlist_jira_project=A
+
+LANGFUSE_APP=12345678-1234-1234-1234-123456789012
+DEPLOYER=87654321-4321-4321-4321-210987654321
+expect accepted - "Langfuse on with its owner, Entra app and deployer" -var langfuse_enabled=true \
+  -var langfuse_owner_email=lead@example.test -var "langfuse_entra_client_id=$LANGFUSE_APP" \
+  -var "deploy_principal_object_id=$DEPLOYER"
+expect refused deploy_principal_object_id "Langfuse on with no deployer" -var langfuse_enabled=true \
+  -var langfuse_owner_email=lead@example.test -var "langfuse_entra_client_id=$LANGFUSE_APP"
+expect accepted - "the team's addresses for Langfuse, with spaces" -var 'langfuse_allowed_ips= 203.0.113.7 , 198.51.100.0/24'
+expect accepted - "an email for Langfuse's alerts" -var langfuse_alert_email=ops@example.test
+expect refused langfuse_owner_email "Langfuse on with no owner" -var langfuse_enabled=true \
+  -var "langfuse_entra_client_id=$LANGFUSE_APP" -var "deploy_principal_object_id=$DEPLOYER"
+expect refused langfuse_entra_client_id "Langfuse on with no Entra app" -var langfuse_enabled=true \
+  -var langfuse_owner_email=lead@example.test -var "deploy_principal_object_id=$DEPLOYER"
+expect refused langfuse_enabled "Langfuse on with an issuer outside Entra" -var langfuse_enabled=true \
+  -var langfuse_owner_email=lead@example.test -var "langfuse_entra_client_id=$LANGFUSE_APP" \
+  -var "deploy_principal_object_id=$DEPLOYER" \
+  -var oidc_issuer=https://idp.example.test/realms/team
+expect refused langfuse_allowed_ips "a home network address for Langfuse" -var langfuse_allowed_ips=192.168.1.23
+expect refused langfuse_allowed_ips "the whole internet for Langfuse" -var langfuse_allowed_ips=0.0.0.0/0
+expect refused langfuse_alert_email "an alert email that is a name" -var 'langfuse_alert_email=Ops Team'
 
 if [ "$failures" = 0 ]; then
   echo "check-variables.sh: all cases behaved as expected"

@@ -28,6 +28,11 @@ output "n8n_editor_url" {
   value       = var.n8n_editor_external ? local.url["n8n"] : ""
 }
 
+output "n8n_runners_app_name" {
+  description = "n8n's task runner app, for the checks before a deploy: its environment holds no identity endpoint, and it reaches n8n's broker."
+  value       = module.n8n_runners.name
+}
+
 output "job_names" {
   description = "Container Apps Jobs, in the order the deploy workflow runs them."
   value       = [module.job["db-init"].name, module.job["bootstrap"].name]
@@ -36,4 +41,14 @@ output "job_names" {
 output "cosmos_account_name" {
   description = "Cosmos DB account that holds the activity log's copy."
   value       = module.cosmos.account_name
+}
+
+output "langfuse_url" {
+  description = "Langfuse's address while langfuse_enabled is true. Its Entra app's redirect URI is this address plus /api/auth/callback/azure-ad. Empty while it is off."
+  value       = var.langfuse_enabled ? module.langfuse_vm[0].url : ""
+}
+
+output "langfuse_vm_name" {
+  description = "The Langfuse VM's name, for az vm run-command. Empty while langfuse_enabled is false."
+  value       = var.langfuse_enabled ? module.langfuse_vm[0].vm_name : ""
 }

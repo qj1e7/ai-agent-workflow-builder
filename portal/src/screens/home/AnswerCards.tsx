@@ -1,6 +1,6 @@
 import { useContext, useEffect, useState, type ReactNode } from 'react'
 import { Link } from '../../ui/Link'
-import type { AbilitiesReply, N8nReply, CantReply, CantRowView, CapabilitiesView, OfflineReply, PartReply, PartView, PauseReply, PlannerReply, QuestionReply, ResumeReply, SetupCardReply, SwitchChoice, WatchlistReply } from '../../api/types'
+import type { AbilitiesReply, N8nReply, CantReply, CantRowView, CapabilitiesView, FreeReply, OfflineReply, PartReply, PartView, PauseReply, PlannerReply, QuestionReply, ResumeReply, SetupCardReply, SwitchChoice, WatchlistReply } from '../../api/types'
 import { useErrorWords } from '../../api/context'
 import { useCapabilities } from '../../api/plannerQueries'
 import { useMoveWorkflow } from '../../api/workflowQueries'
@@ -13,7 +13,7 @@ import softwareStyles from '../software/Software.module.css'
 import { ChangedInN8nAnswer } from './ChangedCard'
 import { AskTheTeam } from './AskTheTeam'
 import { useAsker } from './asker'
-import { cantLines, capabilityCard, oneLine, questionActions, refusalNext, SAY_ANOTHER_WAY, startingPoints, startSteps, stateWords, switchedSay, watchlistSwitchNote, type Asker } from './answers'
+import { cantLines, capabilityCard, offerLabel, oneLine, questionActions, refusalNext, SAY_ANOTHER_WAY, startingPoints, startSteps, stateWords, switchedSay, unwatchedSay, watchlistSwitchNote, type Asker } from './answers'
 import { cardFrom } from './card'
 import { asksOnCard, cantOnCard, crossesInstead, crossesOnCard, followedNothing } from './parts'
 import { SetupCard, type CardStart } from './SetupCard'
@@ -22,6 +22,10 @@ import { CardMemoryContext } from './cardMemory'
 import { useChatNavigate } from '../../ui/fromChat'
 import { AddToWatchlist, WhichSoftware } from './WatchlistCard'
 import { SoftwareActions } from './WatchlistActions'
+import { ExplainAnswer } from '../explain/ExplainAnswer'
+import { RemoveSoftwareAnswer } from './RemoveSoftware'
+import { DraftButton } from '../drafted/DraftButton'
+import { DraftedCard } from '../drafted/DraftedCard'
 import styles from './Planner.module.css'
 
 /** What a card can ask the page to do. Both go through the Planner or the box, so nothing here reaches a set-up on its own. */
@@ -55,13 +59,14 @@ export function SetupCardAnswer({ reply, typed }: { reply: SetupCardReply | Part
   return <SetupCard start={startOf(reply, typed)} />
 }
 
-/** A can’t the registry says in one line: the line as the head, what she has instead under it, and Ask the team unless the platform won’t do it. */
+/**
+ * A can’t the registry says in one line: the line as the head, what she has instead under it, and Ask the team. Even what the
+ * platform won’t do gets Ask the team, so no can’t is ever bare (ADR 0047): the team can still hear that someone needs it.
+ */
 function OneLineCant({ row, typed }: { row: CantRowView; typed: string }) {
+  const why = row.unsupported ? 'It won\'t do this' : 'It can\'t do this yet'
   return (
-    <Card
-      title={row.note.replace(/\.$/, '')}
-      {...(row.unsupported ? {} : { foot: <AskTheTeam capability={row.system ?? row.text} starter={`I asked the Planner for: ${typed}\n\nIt can't do this yet: ${row.text}`} /> })}
-    >
+    <Card title={row.note.replace(/\.$/, '')} foot={<AskTheTeam capability={row.system ?? row.text} starter={`I asked the Planner for: ${typed}\n\n${why}: ${row.text}`} />}>
       <p className="muted">{row.instead}</p>
     </Card>
   )
@@ -118,11 +123,11 @@ export function CantAnswer({ reply, typed }: { reply: CantReply; typed: string }
 }
 
 /**
- * The sketch's software card: a watched software's name, its pill and where it stands, in the watchlist's own words, or that the
- * version she runs isn't known because it isn't on the watchlist yet, with Watch it. Watch it adds it to the Software watchlist,
- * which is where watched software lives here, after finding its GitHub project.
+ * The sketch's software card: a watched software's name, its pill and where it stands, in the watchlist's own words, or that it
+ * isn't on the watchlist yet, with Watch it. Asked about its version, it also says the version she runs isn't known. Watch it adds
+ * it to the Software watchlist, which is where watched software lives here, after finding its GitHub project.
  */
-function SoftwareCard({ name, listed }: { name: string; listed: WatchlistReply['already_listed'] }) {
+function SoftwareCard({ name, listed, word }: { name: string; listed: WatchlistReply['already_listed']; word: string }) {
   const main = useMainButton()
   const operator = useAsker() === 'operator'
   const watchlist = useWatchlist({ enabled: listed !== null })
@@ -161,7 +166,7 @@ function SoftwareCard({ name, listed }: { name: string; listed: WatchlistReply['
         ) : undefined
       }
     >
-      <p className="muted">It isn’t on the watchlist, so I don’t know which version you run.</p>
+      <p className="muted">{unwatchedSay(word)}</p>
       {watching ? <AddToWatchlist name={name} /> : null}
     </Card>
   )
@@ -173,7 +178,7 @@ export function WatchlistAnswer({ reply, typed }: { reply: WatchlistReply; typed
   return (
     <>
       {listed || reply.software ? (
-        <SoftwareCard name={listed?.name ?? reply.software ?? ''} listed={listed} />
+        <SoftwareCard name={listed?.name ?? reply.software ?? ''} listed={listed} word={reply.word} />
       ) : (
         <Card title="The Software watchlist" actions={<ButtonLink variant={main} to="/software">Open the Software watchlist</ButtonLink>} />
       )}
@@ -225,7 +230,7 @@ function RefusedAnswer({ reply, typed, page }: { reply: Extract<PlannerReply, { 
 /** What someone who isn't an Operator can ask, each a question the Planner answers (ADR 0043). */
 export const APPROVER_CAN = ['Show what waits for your yes', 'Show exactly what a change will write', 'Show your past decisions'] as const
 
-const FOLLOWED_NOTHING: Readonly<Record<Asker, string>> = {
+export const FOLLOWED_NOTHING: Readonly<Record<Asker, string>> = {
   operator: 'I can watch software releases, fix stopped runs and change your workflows.',
   approver: 'I can show what waits for your yes, and your past decisions.',
 }
@@ -242,6 +247,28 @@ function WhatICanDo({ lines, notYet = [] }: { lines: readonly { key: string; tex
         ))}
       </ul>
       {notYet.length > 0 ? <p className={styles['note']}>Not yet: {notYet.join(', ')}.</p> : null}
+    </Card>
+  )
+}
+
+export function SayItAnotherWay({ typed, page, variant }: { typed: string; page: Page; variant: 'primary' | 'secondary' }) {
+  return (
+    <Button variant={variant} onClick={() => page.edit(typed)}>
+      Say it another way
+    </Button>
+  )
+}
+
+/** The sketch’s I didn’t follow that card: what the role can ask, and the way back to the box to say it another way. Never a bare cross. */
+export function DidntFollowCard({ typed, page }: { typed: string; page: Page }) {
+  const asker = useAsker()
+  const main = useMainButton()
+  return (
+    <Card
+      title="I didn’t follow that"
+      actions={<SayItAnotherWay typed={typed} page={page} variant={main} />}
+    >
+      <p className="muted">{FOLLOWED_NOTHING[asker]}</p>
     </Card>
   )
 }
@@ -270,17 +297,11 @@ function HowToStart({ view, page }: { view: CapabilitiesView; page: Page }) {
 }
 
 /** What I can do, in the registry’s short words with the platform’s state of each, or how to start when that was asked, or that it followed none of the request. */
-function AbilitiesAnswer({ reply, page }: { reply: AbilitiesReply; page: Page }) {
+function AbilitiesAnswer({ reply, typed, page }: { reply: AbilitiesReply; typed: string; page: Page }) {
   const asker = useAsker()
   const nothing = followedNothing(reply)
   const capabilities = useCapabilities({ enabled: asker === 'operator' && !nothing })
-  if (nothing) {
-    return (
-      <Card title="I didn’t follow that">
-        <p className="muted">{FOLLOWED_NOTHING[asker]}</p>
-      </Card>
-    )
-  }
+  if (nothing) return <DidntFollowCard typed={typed} page={page} />
   if (asker === 'approver') return <WhatICanDo lines={APPROVER_CAN.map((text) => ({ key: text, text, state: null }))} />
   if (!capabilities.data) {
     return (
@@ -417,6 +438,54 @@ export function LookedAt({ sections }: { sections: QuestionReply['looked_at'] })
   )
 }
 
+/** A free reply’s choices as the sketch’s 36 px chips. Each is sent to the Planner as the person’s next message. */
+export function ReplyChoices({ choices, ask }: { choices: readonly string[]; ask: (text: string) => void }) {
+  return (
+    <div className={styles['chips']}>
+      {choices.map((choice) => (
+        <button key={choice} type="button" className={styles['chip']} onClick={() => ask(choice)}>
+          {choice}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+/** The one button under a free reply that can’t: its offer, which says the request it sends, or Ask the team when nothing is close. */
+export function ReplyCant({ reply, typed, ask, variant }: { reply: FreeReply; typed: string; ask: (text: string) => void; variant: 'primary' | 'secondary' }) {
+  const offer = reply.offer
+  if (offer) return <Button variant={variant} onClick={() => ask(offer.request)}>{offerLabel(offer.request)}</Button>
+  return <AskTheTeam capability={typed} starter={`I asked the Planner for: ${typed}`} secondary={variant === 'secondary'} />
+}
+
+/** What sits under a free reply’s words, one case for each form. The words themselves are drawn as the answer’s sentence, as plain text. */
+function FreeReplyAnswer({ reply, typed, page }: { reply: FreeReply; typed: string; page: Page }) {
+  const main = useMainButton()
+  const looked = <LookedAt sections={reply.looked_at} />
+  switch (reply.form) {
+    case 'answer':
+      return looked
+    case 'clarify':
+      return (
+        <>
+          {looked}
+          <ReplyChoices choices={reply.choices} ask={page.ask} />
+        </>
+      )
+    case 'cant':
+      return (
+        <>
+          {looked}
+          <div className={styles['buttons']}>
+            <ReplyCant reply={reply} typed={typed} ask={page.ask} variant={main} />
+          </div>
+        </>
+      )
+    default:
+      return reply.form satisfies never
+  }
+}
+
 function Dismissable({ children }: { children: (never: () => void) => ReactNode }) {
   const [gone, setGone] = useState(false)
   return gone ? <p className="muted">All right, never mind.</p> : children(() => setGone(true))
@@ -445,17 +514,29 @@ interface AnswerProps {
   readonly reply: PlannerReply
   readonly typed: string
   readonly page: Page
+  readonly focus?: string | null
 }
 
 /** The body of one Planner answer, past its sentence. The state answers are in StateAnswers, and the edit card draws its own sentence. */
-export function Answer({ reply, typed, page }: AnswerProps) {
+export function Answer({ reply, typed, page, focus = null }: AnswerProps) {
   const asker = useAsker()
   switch (reply.answer) {
     case 'setup_card':
-    case 'part':
       return <SetupCardAnswer reply={reply} typed={typed} />
+    case 'part':
+      return (
+        <>
+          <SetupCardAnswer reply={reply} typed={typed} />
+          <DraftButton words={reply.draft_words} />
+        </>
+      )
     case 'cant':
-      return <CantAnswer reply={reply} typed={typed} />
+      return (
+        <>
+          <CantAnswer reply={reply} typed={typed} />
+          <DraftButton words={reply.draft_words} />
+        </>
+      )
     case 'watchlist':
       return <WatchlistAnswer reply={reply} typed={typed} />
     case 'which_software':
@@ -463,10 +544,14 @@ export function Answer({ reply, typed, page }: AnswerProps) {
     case 'refused':
       return <RefusedAnswer reply={reply} typed={typed} page={page} />
     case 'abilities':
-      return <AbilitiesAnswer reply={reply} page={page} />
+      return <AbilitiesAnswer reply={reply} typed={typed} page={page} />
     case 'pause':
     case 'resume':
       return <SwitchChoices reply={reply} />
+    case 'remove_software':
+      return <RemoveSoftwareAnswer reply={reply} />
+    case 'explain':
+      return <ExplainAnswer reply={reply} focus={focus} page={page} />
     case 'ideas':
       return <IdeasAnswer page={page} />
     case 'offline':
@@ -481,6 +566,10 @@ export function Answer({ reply, typed, page }: AnswerProps) {
         </Card>
       )
     }
+    case 'reply':
+      return <FreeReplyAnswer reply={reply} typed={typed} page={page} />
+    case 'didnt_follow':
+      return <DidntFollowCard typed={typed} page={page} />
     case 'changed_in_n8n':
       return <ChangedInN8nAnswer reply={reply} />
     case 'n8n':
@@ -493,6 +582,8 @@ export function Answer({ reply, typed, page }: AnswerProps) {
     case 'decided':
     case 'decide':
       return null
+    case 'draft_started':
+      return reply.drafted_id === null ? null : <DraftedCard draftedId={reply.drafted_id} revision={1} />
   }
 }
 

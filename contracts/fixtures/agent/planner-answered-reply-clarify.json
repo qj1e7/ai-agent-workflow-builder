@@ -1,0 +1,23 @@
+{
+  "status": "answered",
+  "answer": {
+    "kind": "reply",
+    "form": "clarify",
+    "text": "Which would you like to keep an eye on?",
+    "choices": [
+      "New releases of some software",
+      "Jira tickets every week"
+    ],
+    "offer": null,
+    "looked_at": []
+  },
+  "parts": [
+    {
+      "text": "help me keep an eye on things",
+      "mark": "question",
+      "reason": null,
+      "note": null,
+      "choices": []
+    }
+  ]
+}

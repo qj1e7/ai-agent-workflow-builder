@@ -26,12 +26,12 @@ Four bounded contexts. Code in one context does not reach into another context's
 | Use case builder | Blocks, templates, use case definitions | `builder` |
 | Agent runtime | LangGraph agents, the Planner, tools | `runtime` |
 | Orchestration | n8n workflows, Teams approvals, triggers | `orchestration` |
-| Run monitoring | Event stream, live activity view, AI troubleshooter | `monitoring` |
+| Run monitoring | Event stream, live activity view, AI troubleshooter, traces and the Planner's review loop | `monitoring` |
 
 Other commit scopes: `infra`, `ci`, `docs`.
 
 - n8n workflows do the plumbing. Our own code goes into the builder, the Planner, the live activity view and the AI troubleshooter.
-- Agents use LangChain and LangGraph, traced with LangSmith. The backend is Python.
+- Agents use LangChain and LangGraph, traced with Langfuse, which we host ourselves and which keeps traces inside (ADR 0050). The backend is Python.
 - PostgreSQL is the relational store.
 - Infrastructure as code is Terraform, kept working under OpenTofu (ADR 0013).
 - Azure first (Container Apps, Static Web Apps, PostgreSQL, Azure OpenAI, Key Vault, App Insights), behind ports and adapters so it can move to AWS.
@@ -57,7 +57,7 @@ These come from the sponsor and from our October feasibility test. Do not weaken
 - Wait a short delay before a retry.
 - Log every agent action with who approved it.
 - n8n holds no write key. Only our own node writes to Jira or Confluence, through the write gateway, which checks every approval against our records at the moment of writing (ADR 0026). One of n8n's own nodes may not write until ADR 0045's write proxy exists for that system.
-- n8n's own nodes may only read, or post a notice under the Tell rule. A node or an operation runs only when `node_classes.json` classes it; unknown means off. Only the platform creates credentials in n8n, scoped to reading or sending (ADR 0045).
+- n8n loads all its built-in blocks except those that reach its own secrets, disk or host (Execute Command, Local File Trigger, Function, Function Item, LangChain Code and Git), and no community nodes. It runs a workflow's code only in its external task runner, which holds none of n8n's secrets, and bootstrap refuses to start the platform without the settings that keep it so (ADR 0051). In the platform's n8n project, n8n's own nodes may only read, or post a notice under the Tell rule: a node or an operation runs there only when `node_classes.json` classes it, and a version with any other block is never live. Only the platform creates credentials in n8n, scoped to reading or sending (ADR 0045).
 - A notice that only reports what was read may go out without a yes, under the Tell rule in ADR 0026. A change to data always needs a yes.
 
 ## Designing screens
@@ -127,6 +127,7 @@ Our additions to pstack's playbooks are in `.agents/playbooks/`. Claude Code, Co
 ### Secrets
 
 - Never commit secrets, keys or tokens. Use Azure Key Vault or GitHub Actions secrets. `.env` files stay out of git.
+- A made-up key in a test is built from pieces at run time, never written out whole.
 
 ### Writing for the sponsor or the professor
 

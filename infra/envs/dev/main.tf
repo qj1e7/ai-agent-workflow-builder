@@ -60,6 +60,30 @@ locals {
     } : name => value if value != ""
   }
 
+  # The keys the platform makes in n8n for n8n's own Jira, GitHub and Slack blocks (ADR 0045,
+  # ENGINE-PLAN E16). Each secret sits in Key Vault, and platform-api makes the key in n8n only
+  # once the system shows it can only read or post. Unset makes no key: a Jira key then reads the
+  # practice Jira while it serves, and the other blocks never pass the check.
+  n8n_key_secrets = {
+    for name, value in {
+      "n8n-key-jira-token"   = var.n8n_key_jira_token
+      "n8n-key-github-token" = var.n8n_key_github_token
+      "n8n-key-slack-token"  = var.n8n_key_slack_token
+    } : name => value if nonsensitive(value != "")
+  }
+  n8n_key_env = {
+    "n8n-key-jira-token"   = "N8N_KEY_JIRA_TOKEN"
+    "n8n-key-github-token" = "N8N_KEY_GITHUB_TOKEN"
+    "n8n-key-slack-token"  = "N8N_KEY_SLACK_TOKEN"
+  }
+  n8n_key_settings = {
+    for name, value in {
+      N8N_KEY_JIRA_URL   = var.n8n_key_jira_url
+      N8N_KEY_JIRA_EMAIL = trimspace(var.n8n_key_jira_email)
+      N8N_KEY_GITHUB_URL = var.n8n_key_github_url
+    } : name => value if value != ""
+  }
+
   # The same for the Teams Workflows webhook (ADR 0036). Unset keeps the practice Teams copy.
   teams_webhook_set = nonsensitive(var.teams_webhook_url != "")
   # And for the Tell flow, which posts a run's notice and emails it (ENGINE-PLAN D1). Unset keeps
@@ -122,6 +146,38 @@ locals {
     orchestration = "wab_orchestration"
     monitoring    = "wab_monitoring"
   }
+
+  # Langfuse (ADR 0050). Its secrets by Key Vault name, with the name the VM's env file gives each.
+  # The VM's identity may read these and no other secret.
+  langfuse_vm_secrets = {
+    "langfuse-public-key"          = "LANGFUSE_INIT_PROJECT_PUBLIC_KEY"
+    "langfuse-secret-key"          = "LANGFUSE_INIT_PROJECT_SECRET_KEY"
+    "langfuse-salt"                = "SALT"
+    "langfuse-encryption-key"      = "ENCRYPTION_KEY"
+    "langfuse-nextauth-secret"     = "NEXTAUTH_SECRET"
+    "langfuse-db-password"         = "LANGFUSE_DB_PASSWORD"
+    "langfuse-clickhouse-password" = "CLICKHOUSE_PASSWORD"
+    "langfuse-valkey-password"     = "VALKEY_PASSWORD"
+    "langfuse-init-user-password"  = "LANGFUSE_INIT_USER_PASSWORD"
+    "langfuse-storage-key"         = "STORAGE_ACCOUNT_KEY"
+    "langfuse-entra-client-secret" = "AUTH_AZURE_AD_CLIENT_SECRET"
+  }
+  # Langfuse's own key formats.
+  langfuse_key_prefix = {
+    "langfuse-public-key" = "pk-lf-"
+    "langfuse-secret-key" = "sk-lf-"
+  }
+  # Another system issues these, so a person sets them in Key Vault. The judge's key is for
+  # Langfuse's LLM connection, which the setup script makes (ADR 0050, PR B). The VM never reads it.
+  langfuse_secrets_set_by_a_person = ["langfuse-entra-client-secret", "langfuse-judge-anthropic-key"]
+  # Langfuse's Entra app lives in the tenant the Portal signs people in with.
+  langfuse_entra_tenant_id = try(regex("^https://login\\.microsoftonline\\.com/([0-9a-fA-F-]{36})/", var.oidc_issuer)[0], "")
+  # The team's addresses for Langfuse, written as n8n's are. One address is /32.
+  langfuse_team_cidrs = [
+    for entry in split(",", nonsensitive(var.langfuse_allowed_ips)) :
+    strcontains(entry, "/") ? trimspace(entry) : "${trimspace(entry)}/32"
+    if trimspace(entry) != ""
+  ]
 }
 
 # infra/bootstrap/setup-azure.sh creates the group and gives the deploy identity its roles on it,
@@ -169,6 +225,7 @@ resource "random_password" "generated" {
     "wab-monitoring-password",
     "n8n-encryption-key",
     "n8n-owner-password",
+    "n8n-runners-auth-token",
     "step-key",
     "wab-node-key",
     "wab-start-secret",
@@ -184,6 +241,41 @@ resource "random_password" "generated" {
   min_numeric = 1
 }
 
+# Langfuse's secrets (ADR 0050), and the pseudonym key that platform-api names people in traces
+# with. None exists while langfuse_enabled is false.
+resource "random_password" "langfuse" {
+  for_each = var.langfuse_enabled ? toset([
+    "langfuse-public-key",
+    "langfuse-secret-key",
+    "langfuse-salt",
+    "langfuse-nextauth-secret",
+    "langfuse-db-password",
+    "langfuse-clickhouse-password",
+    "langfuse-valkey-password",
+    "langfuse-init-user-password",
+    "trace-pseudonym-key",
+  ]) : toset([])
+
+  length      = 48
+  special     = false
+  min_upper   = 1
+  min_lower   = 1
+  min_numeric = 1
+}
+
+# Langfuse's ENCRYPTION_KEY is 256 bits written as 64 hex characters. The digits plus "abcdef" as
+# the only special characters make exactly that alphabet, and the value stays sensitive.
+resource "random_password" "langfuse_encryption_key" {
+  count = var.langfuse_enabled ? 1 : 0
+
+  length           = 64
+  upper            = false
+  lower            = false
+  numeric          = true
+  special          = true
+  override_special = "abcdef"
+}
+
 module "postgres" {
   source = "../../modules/postgres"
 
@@ -192,7 +284,7 @@ module "postgres" {
   resource_group_name    = data.azurerm_resource_group.this.name
   administrator_login    = local.postgres_admin_login
   administrator_password = random_password.generated["pg-admin-password"].result
-  databases              = ["platform", "n8n"]
+  databases              = concat(["platform", "n8n"], var.langfuse_enabled ? ["langfuse"] : [])
   tags                   = local.tags
 }
 
@@ -228,49 +320,97 @@ module "key_vault" {
     local.confluence_token_set ? { "confluence-api-token" = var.confluence_api_token } : {},
     local.teams_webhook_set ? { "teams-webhook-url" = var.teams_webhook_url } : {},
     local.teams_tell_webhook_set ? { "teams-tell-webhook-url" = var.teams_tell_webhook_url } : {},
+    local.n8n_key_secrets,
+    var.langfuse_enabled ? merge(
+      {
+        for name, password in random_password.langfuse :
+        name => "${lookup(local.langfuse_key_prefix, name, "")}${password.result}"
+      },
+      {
+        "langfuse-encryption-key" = random_password.langfuse_encryption_key[0].result
+        "langfuse-storage-key"    = module.langfuse_vm[0].storage_account_key
+      },
+    ) : {},
   )
+  secrets_set_by_a_person = var.langfuse_enabled ? local.langfuse_secrets_set_by_a_person : []
+}
+
+# Langfuse on one small VM, not on Container Apps (ADR 0050). Off by default, so plan makes nothing.
+module "langfuse_vm" {
+  source = "../../modules/langfuse_vm"
+  count  = var.langfuse_enabled ? 1 : 0
+
+  name                 = "langfuse-${local.stem}"
+  location             = var.location
+  resource_group_name  = data.azurerm_resource_group.this.name
+  dns_label            = "langfuse-${local.stem}-${local.suffix}"
+  storage_account_name = "stlf${replace(local.stem, "-", "")}${local.suffix}"
+  secrets              = { for name, env_name in local.langfuse_vm_secrets : env_name => local.secret[name] }
+  # The apps share the environment's outbound addresses, which other Azure customers can share
+  # too, so Langfuse's keys and sign-in still guard it.
+  allowed_https_cidrs = distinct(concat(
+    module.app["platform-api"].outbound_ip_addresses,
+    module.app["agent-runtime"].outbound_ip_addresses,
+    local.langfuse_team_cidrs,
+  ))
+  postgres_host              = module.postgres.fqdn
+  owner_email                = trimspace(var.langfuse_owner_email)
+  entra_tenant_id            = local.langfuse_entra_tenant_id
+  entra_client_id            = var.langfuse_entra_client_id
+  log_analytics_workspace_id = module.observability.log_analytics_workspace_id
+  alert_email                = trimspace(var.langfuse_alert_email)
+  deployer_principal_id      = var.deploy_principal_object_id
+  tags                       = local.tags
 }
 
 locals {
-  # n8n's allow list. scripts/nodes-include.sh writes it from platform-api's node_classes.json
-  # (ADR 0045), and CI fails when the two differ.
-  n8n_nodes_include = [
-    "CUSTOM.wabStartFromPortal",
-    "CUSTOM.wabRead",
-    "CUSTOM.wabAgent",
-    "CUSTOM.wabProposeChange",
-    "CUSTOM.wabAskForYes",
-    "CUSTOM.wabMakeApprovedChanges",
-    "CUSTOM.wabTell",
-    "CUSTOM.wabReportFailure",
-    "n8n-nodes-base.scheduleTrigger",
-    "n8n-nodes-base.manualTrigger",
-    "n8n-nodes-base.errorTrigger",
-    "n8n-nodes-base.if",
-    "n8n-nodes-base.merge",
-    "n8n-nodes-base.noOp",
-    "n8n-nodes-base.stickyNote",
-    "n8n-nodes-base.filter",
-    "n8n-nodes-base.switch",
-    "n8n-nodes-base.set",
-    "n8n-nodes-base.limit",
-    "n8n-nodes-base.aggregate",
-    "n8n-nodes-base.splitOut",
-    "n8n-nodes-base.removeDuplicates",
-    "n8n-nodes-base.summarize",
-    "n8n-nodes-base.renameKeys",
-    "n8n-nodes-base.dateTime",
-    "n8n-nodes-base.compareDatasets",
-    "n8n-nodes-base.splitInBatches",
-    "n8n-nodes-base.xml",
-    "n8n-nodes-base.markdown",
-    "n8n-nodes-base.executionData",
-    "n8n-nodes-base.stopAndError",
-  ]
+  # n8n's settings that keep what a workflow runs away from n8n's secrets (ADR 0051, spike P9). n8n
+  # loads every built-in block but those in NODES_EXCLUDE, so these settings are the guard. n8n
+  # and the bootstrap job get the same map, and bootstrap refuses to start the platform unless each
+  # holds (platform-api's n8n_guard.py). NODE_FUNCTION_ALLOW_BUILTIN, NODE_FUNCTION_ALLOW_EXTERNAL
+  # and N8N_RUNNERS_INSECURE_MODE stay unset. deploy/compose.yaml's x-n8n-guards holds the same.
+  n8n_guards = {
+    # n8n never loads a block that reaches its own secrets, disk or host: Execute Command, Local File
+    # Trigger, Function, Function Item, LangChain Code, and Git with its tool (n8n_blocks.LEFT_OUT).
+    NODES_EXCLUDE = jsonencode([
+      "n8n-nodes-base.executeCommand",
+      "n8n-nodes-base.localFileTrigger",
+      "n8n-nodes-base.function",
+      "n8n-nodes-base.functionItem",
+      "@n8n/n8n-nodes-langchain.code",
+      "n8n-nodes-base.git",
+      "n8n-nodes-base.gitTool",
+    ])
+    N8N_COMMUNITY_PACKAGES_ENABLED = "false"
+    # No $env in expressions, and n8n hands none of its environment to the task runner.
+    N8N_BLOCK_ENV_ACCESS_IN_NODE = "true"
+    # Code, AI Transform, the Code Tool, Sort and Item Lists run their code in the task runner
+    # app, module.n8n_runners, which holds none of n8n's secrets.
+    N8N_RUNNERS_MODE = "external"
+    # n8n also refuses Function, Function Item and LangChain Code as deprecated.
+    N8N_DEPRECATED_NODES_BLOCK = "true"
+    # The file blocks reach only this folder, never n8n's own folders, and never /proc.
+    N8N_RESTRICT_FILE_ACCESS_TO        = "/home/node/.n8n-files"
+    N8N_BLOCK_FILE_ACCESS_TO_N8N_FILES = "true"
+  }
+
+  # More ports each app listens on, reachable only from inside the environment.
+  internal_ports = {
+    n8n = [5679]
+  }
 }
 
 locals {
   secret = module.key_vault.secrets
+
+  # Tracing (ADR 0050). Off, neither app gets any Langfuse setting, and tracing stays off.
+  langfuse_env = var.langfuse_enabled ? {
+    LANGFUSE_BASE_URL = module.langfuse_vm[0].url
+  } : {}
+  langfuse_keys = var.langfuse_enabled ? {
+    LANGFUSE_PUBLIC_KEY = local.secret["langfuse-public-key"]
+    LANGFUSE_SECRET_KEY = local.secret["langfuse-secret-key"]
+  } : {}
 
   apps = {
     platform-api = {
@@ -303,7 +443,7 @@ locals {
         var.oidc_jwks_url == "" ? {} : { OIDC_JWKS_URL = var.oidc_jwks_url },
         var.teams_channel == "" ? {} : { TEAMS_CHANNEL = var.teams_channel },
         # Staff reach n8n's editor only while it is open, so only then do they get n8n accounts
-        # (ENGINE-PLAN 2.9). platform-api still waits for a bootstrap that proved the allow list.
+        # (ENGINE-PLAN 2.9). platform-api still waits for a bootstrap that proved n8n's guards.
         var.n8n_editor_external ? {
           N8N_STAFF_ACCESS = "on"
           N8N_EDITOR_URL   = local.url["n8n"]
@@ -312,6 +452,8 @@ locals {
         local.first_people,
         local.jira_settings,
         local.confluence_settings,
+        local.n8n_key_settings,
+        local.langfuse_env,
       )
       secrets = merge(
         {
@@ -335,6 +477,9 @@ locals {
         local.teams_tell_webhook_set ? {
           TEAMS_TELL_WEBHOOK_URL = local.secret["teams-tell-webhook-url"]
         } : {},
+        { for name in keys(local.n8n_key_secrets) : local.n8n_key_env[name] => local.secret[name] },
+        local.langfuse_keys,
+        var.langfuse_enabled ? { TRACE_PSEUDONYM_KEY = local.secret["trace-pseudonym-key"] } : {},
       )
     }
 
@@ -345,14 +490,23 @@ locals {
       memory       = "0.5Gi"
       min_replicas = 0
       max_replicas = 1
-      env = {
-        GITHUB_API_BASE          = var.github_api_base
-        CALLBACK_ALLOWED_ORIGINS = local.url["platform-api"]
-        PLATFORM_JIRA_URL        = local.url["platform-api"]
-      }
+      env = merge(
+        {
+          GITHUB_API_BASE          = var.github_api_base
+          CALLBACK_ALLOWED_ORIGINS = local.url["platform-api"]
+          PLATFORM_JIRA_URL        = local.url["platform-api"]
+          PLANNER_MODE             = var.planner_mode
+        },
+        local.langfuse_env,
+        var.langfuse_enabled ? {
+          LANGFUSE_TRACING_ENVIRONMENT = "azure-${var.environment}"
+          LANGFUSE_RELEASE             = var.image_tag
+        } : {},
+      )
       secrets = merge(
         { AGENT_API_KEY = local.secret["agent-api-key"] },
         local.github_token_set ? { GITHUB_TOKEN = local.secret["github-token"] } : {},
+        local.langfuse_keys,
       )
     }
 
@@ -380,6 +534,7 @@ locals {
       # GENERIC_TIMEZONE is the team time zone, so a workflow set to n8n's default zone runs on the
       # team's, as platform-api reads it.
       env = merge(
+        local.n8n_guards,
         {
           DB_TYPE                           = "postgresdb"
           DB_POSTGRESDB_HOST                = module.postgres.fqdn
@@ -393,12 +548,15 @@ locals {
           N8N_VERSION_NOTIFICATIONS_ENABLED = "false"
           N8N_PERSONALIZATION_ENABLED       = "false"
           N8N_HIRING_BANNER_ENABLED         = "false"
-          # The node key is in this environment, so nothing a person adds to a workflow may read it.
-          # n8n excludes these two nodes by default; pinned so an upgrade cannot drop them.
-          N8N_BLOCK_ENV_ACCESS_IN_NODE   = "true"
-          NODES_EXCLUDE                  = jsonencode(["n8n-nodes-base.executeCommand", "n8n-nodes-base.localFileTrigger"])
-          N8N_COMMUNITY_PACKAGES_ENABLED = "false"
-          NODES_INCLUDE                  = jsonencode(local.n8n_nodes_include)
+          # Stops n8n asking api.n8n.io for its list of MCP servers every 8 hours (issue #86). We use no
+          # MCP servers in n8n, and the block catalogue leaves those blocks out (ADR 0051), as local does.
+          N8N_DISABLED_MODULES = "mcp-registry"
+          # The broker the task runner app connects to, on port 5679, which only apps inside the
+          # environment reach (internal_ports). Container Apps' ingress reaches the container on
+          # its own address, which n8n can't know before it starts, so the broker listens on every
+          # address of the container. The token guards it, and infra/README.md lists who else
+          # in the environment reaches it as a check for the deploy.
+          N8N_RUNNERS_BROKER_LISTEN_ADDRESS = "0.0.0.0"
           # 30 days of executions (ENGINE-PLAN D10). A waiting execution is never pruned (P7 Q16).
           EXECUTIONS_DATA_PRUNE           = "true"
           EXECUTIONS_DATA_MAX_AGE         = "720"
@@ -421,6 +579,7 @@ locals {
         N8N_ENCRYPTION_KEY     = local.secret["n8n-encryption-key"]
         WAB_NODE_KEY           = local.secret["wab-node-key"]
         WAB_START_SECRET       = local.secret["wab-start-secret"]
+        N8N_RUNNERS_AUTH_TOKEN = local.secret["n8n-runners-auth-token"]
       }
     }
 
@@ -463,24 +622,30 @@ locals {
       timeout_seconds = 300
       command = [
         "/bin/sh", "-c",
-        "printf '%s\\n' \"$DB_INIT_SQL\" | psql -v ON_ERROR_STOP=1 -v n8n_pw=\"$N8N_DB_PASSWORD\" -v owner_pw=\"$WAB_OWNER_PASSWORD\" -v builder_pw=\"$WAB_BUILDER_PASSWORD\" -v orchestration_pw=\"$WAB_ORCHESTRATION_PASSWORD\" -v monitoring_pw=\"$WAB_MONITORING_PASSWORD\"",
+        "printf '%s\\n' \"$DB_INIT_SQL\" | psql -v ON_ERROR_STOP=1 -v n8n_pw=\"$N8N_DB_PASSWORD\" -v owner_pw=\"$WAB_OWNER_PASSWORD\" -v builder_pw=\"$WAB_BUILDER_PASSWORD\" -v orchestration_pw=\"$WAB_ORCHESTRATION_PASSWORD\" -v monitoring_pw=\"$WAB_MONITORING_PASSWORD\"${var.langfuse_enabled ? " -v langfuse_pw=\"$LANGFUSE_DB_PASSWORD\"" : ""}",
       ]
       env = {
-        PGHOST      = module.postgres.fqdn
-        PGPORT      = "5432"
-        PGDATABASE  = "postgres"
-        PGUSER      = local.postgres_admin_login
-        PGSSLMODE   = "require"
-        DB_INIT_SQL = file("${path.module}/../../sql/db-init.sql")
+        PGHOST     = module.postgres.fqdn
+        PGPORT     = "5432"
+        PGDATABASE = "postgres"
+        PGUSER     = local.postgres_admin_login
+        PGSSLMODE  = "require"
+        DB_INIT_SQL = join("\n", concat(
+          [file("${path.module}/../../sql/db-init.sql")],
+          var.langfuse_enabled ? [file("${path.module}/../../sql/db-init-langfuse.sql")] : [],
+        ))
       }
-      secrets = {
-        PGPASSWORD                 = local.secret["pg-admin-password"]
-        N8N_DB_PASSWORD            = local.secret["n8n-db-password"]
-        WAB_OWNER_PASSWORD         = local.secret["wab-owner-password"]
-        WAB_BUILDER_PASSWORD       = local.secret["wab-builder-password"]
-        WAB_ORCHESTRATION_PASSWORD = local.secret["wab-orchestration-password"]
-        WAB_MONITORING_PASSWORD    = local.secret["wab-monitoring-password"]
-      }
+      secrets = merge(
+        {
+          PGPASSWORD                 = local.secret["pg-admin-password"]
+          N8N_DB_PASSWORD            = local.secret["n8n-db-password"]
+          WAB_OWNER_PASSWORD         = local.secret["wab-owner-password"]
+          WAB_BUILDER_PASSWORD       = local.secret["wab-builder-password"]
+          WAB_ORCHESTRATION_PASSWORD = local.secret["wab-orchestration-password"]
+          WAB_MONITORING_PASSWORD    = local.secret["wab-monitoring-password"]
+        },
+        var.langfuse_enabled ? { LANGFUSE_DB_PASSWORD = local.secret["langfuse-db-password"] } : {},
+      )
     }
 
     migrate = {
@@ -497,12 +662,13 @@ locals {
       image           = local.images["platform-api"]
       timeout_seconds = 600
       command         = ["python", "-m", "platform_api.bootstrap"]
-      env = {
+      # The same guards n8n gets, which bootstrap checks before the platform starts (ADR 0051).
+      env = merge(local.n8n_guards, {
         N8N_BASE_URL          = local.url["n8n"]
         N8N_OWNER_EMAIL       = var.n8n_owner_email
         PLATFORM_INTERNAL_URL = local.url["platform-api"]
         TEAM_TIME_ZONE        = var.team_time_zone
-      }
+      })
       secrets = {
         DATABASE_URL_OWNER = local.secret["database-url-owner"]
         N8N_OWNER_PASSWORD = local.secret["n8n-owner-password"]
@@ -530,6 +696,7 @@ module "app" {
   min_replicas        = each.value.min_replicas
   max_replicas        = each.value.max_replicas
   ingress             = local.ingress[each.key]
+  internal_ports      = lookup(local.internal_ports, each.key, [])
   env                 = each.value.env
   secrets             = each.value.secrets
   inline_secrets      = lookup(local.inline_secrets, each.key, {})
@@ -554,5 +721,25 @@ module "job" {
   timeout_seconds     = each.value.timeout_seconds
   env                 = each.value.env
   secrets             = each.value.secrets
+  tags                = local.tags
+}
+
+# n8n's external task runner, in an app of its own with none of n8n's secrets (ADR 0051, spike
+# P9). It calls n8n's broker on the port n8n's app opens inside the environment.
+module "n8n_runners" {
+  source = "../../modules/task_runner"
+
+  name                = "n8n-runners"
+  name_stem           = local.stem
+  location            = var.location
+  resource_group_name = data.azurerm_resource_group.this.name
+  resource_group_id   = data.azurerm_resource_group.this.id
+  environment_id      = module.container_env.id
+  registry_id         = module.registry.id
+  registry_server     = module.registry.login_server
+  image               = local.images["n8n-runners"]
+  broker_uri          = "http://n8n:${local.internal_ports.n8n[0]}"
+  auth_token          = local.secret["n8n-runners-auth-token"]
+  time_zone           = var.team_time_zone
   tags                = local.tags
 }

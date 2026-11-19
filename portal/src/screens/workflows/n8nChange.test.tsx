@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { MemoryRouter } from 'react-router'
 import { afterEach, describe, expect, it } from 'vitest'
 import agentUseCase from '../../../../contracts/fixtures/cards/use-case.json'
 import { ApiProvider } from '../../api/context'
@@ -36,9 +37,9 @@ describe('the workflow page’s banner for a graded version', () => {
     expect(writeWords(undefined)).toBe('the write')
   })
 
-  it('leads with the first finding of a version that needs a fix, and offers Undo to the version before', () => {
+  it('names every finding of a version that needs a fix, and offers Undo to the version before', () => {
     const fix = { ...on, grade: 'needs_a_fix', findings: ['“Send email” is not a block we run.', 'Another.'] } as UseCaseView
-    expect(bannerOf(facts(fix))).toEqual({ tone: 'bad', text: 'Needs a fix: “Send email” is not a block we run.', action: { kind: 'undo', to: 3, inUse: 4 } })
+    expect(bannerOf(facts(fix))).toEqual({ tone: 'bad', text: 'Needs a fix: “Send email” is not a block we run. Another.', action: { kind: 'undo', to: 3, inUse: 4 } })
     expect(bannerOf(facts({ ...fix, version: 1 })).action, 'there is no version before the first').toBeNull()
     expect(bannerOf(facts(fix, BOB)).action).toBeNull()
   })
@@ -66,6 +67,14 @@ describe('the workflow page’s banner for a graded version', () => {
   it('says a workflow deleted in n8n will not run again, with no action, and says it before anything else', () => {
     const gone = { ...on, grade: 'writes_refused', deleted_in_n8n_at: '2026-11-09T01:00:00Z' } as UseCaseView
     expect(bannerOf(facts(gone))).toEqual({ tone: 'off', text: 'Deleted in n8n. It won’t run again. Its runs and versions are kept.', action: null })
+  })
+
+  it('offers nothing the platform would refuse while someone has it open in n8n, so the hold line can say why', () => {
+    const held = { id: 'carol', name: 'Carol', since: '2026-11-09T02:02:00Z' }
+    const fix = { ...on, grade: 'needs_a_fix', findings: ['“Send email” is not a block we run.'], held_in_n8n: held } as UseCaseView
+    expect(bannerOf(facts(fix))).toEqual({ tone: 'bad', text: 'Needs a fix: “Send email” is not a block we run.', action: null })
+    expect(bannerOf(facts({ ...fix, grade: 'writes_refused' })).action).toBeNull()
+    expect(bannerOf(facts({ ...on, state: 'paused', held_in_n8n: held })).action, 'Resume would publish').toBeNull()
   })
 
   it('leaves a safe version to the usual banner', () => {
@@ -138,15 +147,17 @@ describe('Roll back in the versions list', () => {
     { version: 3, at: '2026-11-08T01:00:00Z', by: 'alice', via: 'page', change: null, undid: null, running: false, publisher_unknown: false, grade: 'safe' },
     { version: 2, at: '2026-11-07T01:00:00Z', by: 'alice', via: 'page', change: null, undid: null, running: false, publisher_unknown: false },
   ]
-  const draw = (operator: boolean, rows: VersionView[] = versions) => {
+  const draw = (operator: boolean, rows: VersionView[] = versions, held: UseCaseView['held_in_n8n'] = null) => {
     const session = createDevSession(null)
-    const useCase = { ...on, version: 4 }
+    const useCase = { ...on, version: 4, held_in_n8n: held }
     const queryClient = new QueryClient({ defaultOptions: { queries: { retryOnMount: false } } })
     queryClient.setQueryData(['versions', session.cacheScope(), useCase.use_case_id, 4], rows)
     return renderToStaticMarkup(
       <QueryClientProvider client={queryClient}>
         <ApiProvider session={session} platformFetch={fetch} origin="http://portal.test">
-          <Versions useCase={useCase} now={NOW} nameOf={nameOf} operator={operator} say={() => undefined} />
+          <MemoryRouter>
+            <Versions useCase={useCase} now={NOW} nameOf={nameOf} operator={operator} say={() => undefined} />
+          </MemoryRouter>
         </ApiProvider>
       </QueryClientProvider>,
     )
@@ -159,6 +170,10 @@ describe('Roll back in the versions list', () => {
 
   it('shows an Approver no Roll back', () => {
     expect(rollBacks(draw(false))).toEqual([])
+  })
+
+  it('shows no Roll back while someone has it open in n8n, which would refuse it', () => {
+    expect(rollBacks(draw(true, versions, { id: 'carol', name: 'Carol', since: '2026-11-09T02:02:00Z' }))).toEqual([])
   })
 
   it('shows none on a workflow that runs on the shared n8n workflow', () => {

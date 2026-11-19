@@ -69,6 +69,8 @@ jobs:
       TF_VAR_watchlist_jira_project: ${{ vars.WATCHLIST_JIRA_PROJECT || 'MOCK' }}
       # Optional. The zone the team works in. Unset keeps Asia/Singapore.
       TF_VAR_team_time_zone: ${{ vars.TEAM_TIME_ZONE || 'Asia/Singapore' }}
+      # Optional (ADR 0049). Unset keeps today's Planner, rules.
+      TF_VAR_planner_mode: ${{ vars.PLANNER_MODE || 'rules' }}
       # Optional, Confluence (ENGINE-PLAN E12). Unset CONFLUENCE_BASE_URL keeps it not connected.
       TF_VAR_confluence_base_url: ${{ vars.CONFLUENCE_BASE_URL }}
       TF_VAR_confluence_pages: ${{ vars.CONFLUENCE_PAGES }}
@@ -81,6 +83,14 @@ jobs:
       # list, a plain variable that the Portal shows. Unset keeps the practice copy.
       TF_VAR_teams_tell_webhook_url: ${{ secrets.TEAMS_TELL_WEBHOOK_URL }}
       TF_VAR_tell_email_to: ${{ vars.TELL_EMAIL_TO }}
+      # Optional (ADR 0045, ENGINE-PLAN E16). The keys the platform makes in n8n for n8n's own Jira,
+      # GitHub and Slack blocks, each kept in Key Vault. Unset makes none.
+      TF_VAR_n8n_key_jira_token: ${{ secrets.N8N_KEY_JIRA_TOKEN }}
+      TF_VAR_n8n_key_jira_url: ${{ vars.N8N_KEY_JIRA_URL }}
+      TF_VAR_n8n_key_jira_email: ${{ vars.N8N_KEY_JIRA_EMAIL }}
+      TF_VAR_n8n_key_github_token: ${{ secrets.N8N_KEY_GITHUB_TOKEN }}
+      TF_VAR_n8n_key_github_url: ${{ vars.N8N_KEY_GITHUB_URL }}
+      TF_VAR_n8n_key_slack_token: ${{ secrets.N8N_KEY_SLACK_TOKEN }}
       # Optional, for a subscription that refuses Cosmos DB's free tier or its region (ADR 0031).
       TF_VAR_cosmos_location: ${{ vars.COSMOS_LOCATION }}
       TF_VAR_cosmos_serverless: ${{ vars.COSMOS_SERVERLESS || 'false' }}
@@ -138,7 +148,9 @@ jobs:
             done
           # Local tags, so the build log does not print the registry's host name.
           docker build --target runtime --tag "wab/platform-api:$GITHUB_SHA" platform-api
-          docker build --target runtime --tag "wab/agent-runtime:$GITHUB_SHA" agent-runtime
+          # The image carries contracts/n8n/catalogue.json for the workflow drafter (ADR 0051).
+          docker build --target runtime --build-context contracts=contracts \
+            --tag "wab/agent-runtime:$GITHUB_SHA" agent-runtime
           docker build --file portal/Dockerfile --tag "wab/portal:$GITHUB_SHA" .
           docker build --file deploy/n8n/Dockerfile --tag "wab/n8n:$GITHUB_SHA" .
           # The deploy identity's AcrPush can still be on its way after Terraform's wait.
@@ -193,6 +205,14 @@ jobs:
 
       - name: Run the bootstrap job
         run: ../../scripts/run-job.sh "$(terraform output -raw resource_group_name)" bootstrap 1200
+
+      # n8n loads every built-in block (ADR 0051), so a Webhook or Form a member publishes answers
+      # anyone who reaches n8n. With N8N_EDITOR_ALLOWED_IPS set, this runner is outside n8n's
+      # address list, so each path must refuse it. Without a list, every address reaches n8n, as
+      # ADR 0034 chose, and there is nothing to check.
+      - name: Check that n8n's public paths refuse an address outside its list
+        if: env.TF_VAR_n8n_editor_allowed_ips != ''
+        run: ../../scripts/n8n-paths-closed.sh "$(terraform output -raw n8n_editor_url)"
 
       - name: Say where the Portal is
         run: |

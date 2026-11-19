@@ -1,0 +1,112 @@
+name: planner-gate
+
+# ADR 0047: a pull request that changes the Planner is scored on the real model, on the reply
+# set's gate cases and the verifier's red-team set, through Anthropic with the team lead's key.
+#
+# Budget. The key draws on a $200 monthly Anthropic credit, so each run is capped at 250 calls
+# and $5, and the gate refuses a run with higher caps. There is no scheduled run: the nightly
+# runs ADR 0047 asks for wait for the team lead to set a budget for them. The judge's scores are
+# reported, and gate only once it has agreed with the team lead's own labels (REPLY_JUDGE_AGREED).
+#
+# Report-only for now. The bars are not met yet, so the gate comments its numbers on the pull
+# request and never fails it. The pull request that reaches the bars sets GATE_BLOCKS to 'true'
+# below, and from then on a run under the bars fails.
+on:
+  pull_request:
+    paths:
+      - agent-runtime/src/agent_runtime/**
+      - agent-runtime/evals/cases/reply.json
+      - agent-runtime/evals/cases/red_team.json
+  workflow_dispatch:
+    inputs:
+      models:
+        description: The Anthropic models to score, comma separated. Empty uses PLANNER_GATE_MODEL, else Claude Sonnet 5.5 (ADR 0048).
+        required: false
+        default: ''
+        type: string
+      jobs:
+        description: The jobs to run, comma separated. Empty runs reply_gate,red_team. red_team alone measures the verifier.
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: planner-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+
+      # Without the key the gate cannot run, and says so instead of passing quietly.
+      - name: Check the Anthropic key is set
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -z "${ANTHROPIC_API_KEY}" ]; then
+            echo "::error::ANTHROPIC_API_KEY is not set, so the Planner gate cannot run."
+            exit 1
+          fi
+
+      # Anthropic only: no gateway setting is passed. The caps match evals.gate's GATE_MAX_CALLS
+      # and GATE_MAX_DOLLARS, and every run has its own marker.
+      - name: Score the gate cases and the red-team set
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_MODELS: ${{ inputs.models || vars.PLANNER_GATE_MODEL || 'claude-sonnet-5-5' }}
+          EVAL_TEMPERATURE: ${{ vars.EVAL_TEMPERATURE }}
+          EVAL_JUDGE: anthropic:claude-sonnet-5-5
+          EVAL_JOBS: ${{ inputs.jobs || 'reply_gate,red_team' }}
+          EVAL_MAX_CALLS: '250'
+          EVAL_MAX_DOLLARS: '5'
+          EVAL_MARKER: gate-${{ github.run_id }}-${{ github.run_attempt }}
+          OLLAMA_BASE_URL: ''
+        run: scripts/evals.sh
+
+      - name: Hold the run to the ADR's bars
+        working-directory: agent-runtime
+        env:
+          JUDGE_AGREED: ${{ vars.REPLY_JUDGE_AGREED }}
+          GATE_BLOCKS: 'false'
+        run: |
+          agreed=()
+          if [ "${JUDGE_AGREED}" = "true" ]; then agreed=(--judge-agreed); fi
+          set +e
+          uv run --locked python -m evals.gate evals/out/results.json "${agreed[@]}" > evals/out/gate.md
+          code=$?
+          set -e
+          mode="report-only: it does not fail the pull request"
+          if [ "${GATE_BLOCKS}" = "true" ]; then mode="blocking"; fi
+          { echo "**Planner gate (${mode})**"; echo; cat evals/out/gate.md; } > evals/out/gate-comment.md
+          cat evals/out/gate-comment.md >> "$GITHUB_STEP_SUMMARY"
+          if [ "${code}" -ne 0 ]; then echo "::warning::The run is under the ADR 0047 bars."; fi
+          if [ "${GATE_BLOCKS}" = "true" ]; then exit "${code}"; fi
+
+      - name: Comment the numbers on the pull request
+        if: ${{ !cancelled() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          [ -f agent-runtime/evals/out/gate-comment.md ] || exit 0
+          gh pr comment "${PR}" --edit-last --body-file agent-runtime/evals/out/gate-comment.md \
+            || gh pr comment "${PR}" --body-file agent-runtime/evals/out/gate-comment.md
+
+      - name: Keep the results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: planner-gate
+          path: agent-runtime/evals/out/
+          if-no-files-found: ignore

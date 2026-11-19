@@ -10,13 +10,23 @@ import re
 from dataclasses import dataclass
 from typing import Final
 
-from agent_runtime.abilities import change_verbs_in, commands_a_change
+from agent_runtime.abilities import (
+    change_verbs_in,
+    changes_beyond_the_abilities,
+    commands_a_change,
+    orders_only_what_it_can,
+    other_systems,
+    why_not,
+)
 from agent_runtime.contract import (
     AbilitiesAnswer,
     CantAnswer,
     CantRow,
     CheckWorkflowsAnswer,
+    DidntFollowAnswer,
     EditAnswer,
+    ExplainAnswer,
+    FreeReplyAnswer,
     NeedsMeAnswer,
     PartAnswer,
     PartMark,
@@ -26,6 +36,7 @@ from agent_runtime.contract import (
     PlannerFacts,
     QuestionAnswer,
     RefusedAnswer,
+    RemoveSoftwareAnswer,
     RequestPart,
     ResumeAnswer,
     SetupCardAnswer,
@@ -49,12 +60,16 @@ from agent_runtime.reading import (
     TaskRead,
     clauses_of,
     days_asked,
+    instructs_the_planner,
     names_a_yes,
     negated,
     polite,
     schedule_clashes,
+    schedule_unheld,
     trim,
+    without_runs_by_itself,
 )
+from agent_runtime.removals import another, points_back, removal_of
 
 NOT_FOLLOWED: Final = "I didn't follow this part."
 SKIP_PART_NOTE: Final = "I can't skip the yes. Nothing is written without a yes."
@@ -134,6 +149,9 @@ def parts_of(
     workflows, as the answer read them."""
     text = visible_words(request)
     clauses = [c for c in clauses_of(text) if not polite(text[c[0] : c[1]])]
+    if isinstance(answer, FreeReplyAnswer | DidntFollowAnswer):
+        mark, reason = _whole_message(answer)
+        return [_part(text, c, mark, reason) for c in clauses]
     skips = [c for c in clauses if _skips_a_yes(read, text[c[0] : c[1]], facts)]
     if isinstance(answer, STATE_ANSWERS):
         asked = _about_state(text, clauses, _names_of(answer))
@@ -151,6 +169,10 @@ def parts_of(
             _part(text, trim(text, m.start, m.end), m.mark, m.reason, choices=m.choices)
             for m in marked
         ]
+    if isinstance(answer, RemoveSoftwareAnswer):
+        return _removal_parts(text, clauses, facts)
+    if isinstance(answer, ExplainAnswer):
+        return [_part(text, c, "will_do") for c in clauses]
     crosses = _crosses(read, text, answer)
     alone = len(clauses) == 1
     found: list[RequestPart] = []
@@ -161,6 +183,53 @@ def parts_of(
         else:
             found.append(_unmarked(answer, text, clause))
     return found
+
+
+def _removal_parts(text: str, clauses: list[Span], facts: PlannerFacts | None) -> list[RequestPart]:
+    """A removal ticks the words that ask for it, and a clause that asks for it again, as "remove
+    it". Anything else in its clause comes back as not followed, and each other clause, a second
+    removal included, is asked on its own when it asks for something."""
+    found = removal_of(text, facts)
+    parts: list[RequestPart] = []
+    for clause in clauses:
+        said = text[clause[0] : clause[1]]
+        if found is not None and clause != found.clause and points_back(said):
+            parts.append(_part(text, clause, "will_do"))
+            continue
+        again = None
+        if found is not None and clause != found.clause and not _orders(said):
+            again = another(found, said)
+        if again is not None:
+            words = plain(again, TEXT_LIMIT)
+            parts.append(RequestPart(text=words, mark="cant", reason="ask_on_its_own"))
+            continue
+        if found is None or clause != found.clause:
+            ask = _asks(text, clause) or _a_task(said) or removal_of(said, facts) is not None
+            parts.append(_part(text, clause, "cant", "ask_on_its_own" if ask else "not_followed"))
+            continue
+        marked = [
+            (found.asked, _part(text, found.asked, "will_do")),
+            *((span, _part(text, span, "cant", "not_followed")) for span in found.unread),
+        ]
+        parts += [part for _, part in sorted(marked, key=lambda m: m[0])]
+    return parts
+
+
+def _whole_message(
+    answer: FreeReplyAnswer | DidntFollowAnswer,
+) -> tuple[PartMark, PartReason | None]:
+    """A free reply answers the whole message at once, so every clause gets its one mark: a tick
+    for an answer, the question for a clarifying question, and a cross for a can't. The fallback
+    followed none of it."""
+    match answer:
+        case FreeReplyAnswer(form="answer"):
+            return "will_do", None
+        case FreeReplyAnswer(form="clarify"):
+            return "question", None
+        case FreeReplyAnswer():
+            return "cant", "cant_do"
+        case DidntFollowAnswer():
+            return "cant", "not_followed"
 
 
 def _about_the_app(clause: str) -> bool:
@@ -340,10 +409,14 @@ def _crosses(read: TaskRead | None, text: str, answer: PlannerAnswer) -> list[_C
         note = row.note if reason == "cant_do" else None
         found.append(_Cross(*at, reason, note, quote=row.text))
     if read is not None and _sets_up(answer):
-        found += [
-            _Cross(c.start, c.end, c.reason, choices=c.choices)
-            for c in schedule_clashes(read.schedule, text)
-        ]
+        clashes = schedule_clashes(read.schedule, text)
+        found += [_Cross(c.start, c.end, c.reason, choices=c.choices) for c in clashes]
+        unheld = schedule_unheld(read.schedule, text)
+        # A clash already asks about the words, as "weekly or monthly", so they get one cross.
+        if unheld is not None and not any(
+            c.start < unheld[1] and unheld[0] < c.end for c in clashes
+        ):
+            found.append(_Cross(*unheld, "how_often"))
         asked = days_asked(read.search, text)
         if asked is not None:
             found.append(_Cross(*asked, "how_many_days", mark="question"))
@@ -379,9 +452,31 @@ def _unmarked(answer: PlannerAnswer, text: str, clause: Span) -> RequestPart:
         case WhichSoftwareAnswer():
             return _part(text, clause, "question")
         case RefusedAnswer():
-            reason: PartReason = "ask_on_its_own" if _asks(text, clause) else "with_a_yes"
-            return _part(text, clause, "cant", reason)
+            if _asks(text, clause):
+                return _part(text, clause, "cant", "ask_on_its_own")
+            if answer.rest:
+                return _part(text, clause, "cant", "with_a_yes")
+            return _not_offered(text, clause)
         case CantAnswer(alternative=None):
             return _part(text, clause, "cant", "needs_the_rest")
         case _:
             return _part(text, clause, "will_do")
+
+
+def _not_offered(text: str, clause: Span) -> RequestPart:
+    """A clause beside a refusal that offers no set-up: the registry's can't for a change no
+    ability makes or a system the platform doesn't reach; "It can't run without the part I
+    can't do" for an order an ability gives, or words that say it runs by itself; and not
+    followed for words that tell the Planner what to say or that name nothing."""
+    words = text[clause[0] : clause[1]]
+    if instructs_the_planner(words):
+        return _part(text, clause, "cant", "not_followed")
+    task = without_runs_by_itself(words)
+    if not task:
+        return _part(text, clause, "cant", "needs_the_rest")
+    note = why_not("schedule", task) or why_not("do", task)
+    if note is not None and (changes_beyond_the_abilities(task) or other_systems(task)):
+        return _part(text, clause, "cant", "cant_do", note)
+    if orders_only_what_it_can([task]):
+        return _part(text, clause, "cant", "needs_the_rest")
+    return _part(text, clause, "cant", "not_followed")

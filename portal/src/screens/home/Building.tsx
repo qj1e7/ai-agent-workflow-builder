@@ -15,7 +15,7 @@ import { useLiveRun } from '../run/liveRun'
 import { RunLine } from '../run/RunLine'
 import { emptyModel, stationsOf, type RunModel } from '../run/runModel'
 import { planOf } from '../run/useRunStory'
-import { scheduleShort } from '../run/words'
+import { scheduleShort, type StageTone } from '../run/words'
 import { firstRunWhen } from '../workflows/times'
 import { buildLine, buildStage, draftPill, LINE_STEP_MS, notesOf, replayAt, shownOf, testStatus, testStep, type BuildStage, type PillTone, type Replay } from './build'
 import { useShowBesideOnWide } from './autoOpen'
@@ -24,7 +24,7 @@ import runStyles from '../run/RunPage.module.css'
 import styles from './SetupCard.module.css'
 
 /** A draft's one pill: Draft, Building, Ready, On or Dropped. */
-export function DraftPill({ label, tone }: { label: string; tone: PillTone }) {
+export function DraftPill({ label, tone }: { label: string; tone: PillTone | StageTone }) {
   return (
     <span className={cx(runStyles['pill'], runStyles[tone])} data-draft-pill>
       {label}

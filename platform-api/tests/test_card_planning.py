@@ -101,7 +101,7 @@ async def test_one_saved_agent_with_values_from_the_task():
     planner = FakePlanner(
         chose=chosen("use_one", agent(**{REPO: "langchain-ai/langgraph", PROJECT: "MOCK"}))
     )
-    result = await plan(planner, LIBRARY, "check langgraph")
+    result = await plan(planner, LIBRARY, "check langgraph and raise a ticket in MOCK", ("MOCK",))
     assert isinstance(result, UseSaved)
     assert result.decision == "use_one"
     [planned] = result.agents
@@ -124,10 +124,41 @@ async def test_a_value_that_does_not_fit_its_kind_is_dropped_and_listed_as_missi
 
 async def test_values_for_inputs_the_card_does_not_have_are_ignored():
     planner = FakePlanner(chose=chosen("use_one", agent(**{"Target": "SECRET", PROJECT: "MOCK"})))
-    result = await plan(planner, LIBRARY, "x")
+    result = await plan(planner, LIBRARY, "raise a ticket in MOCK", ("MOCK",))
     assert isinstance(result, UseSaved)
     assert result.agents[0].values == {PROJECT: "MOCK"}
     assert result.agents[0].missing == [REPO]
+
+
+@pytest.mark.parametrize(
+    ("task", "value"),
+    [
+        ("Check langchain-ai/langgraph, read tickets in MOCK and raise a ticket in OPS", "MOCK"),
+        ("Check langchain-ai/langgraph, read tickets in MOCK and raise a ticket in OPS", "OPS"),
+        ("Check langchain-ai/langgraph and raise a ticket in MOCK or OPS", "MOCK"),
+        ("Check langchain-ai/langgraph and raise a ticket", "MOCK"),
+        ("Check langchain-ai/langgraph and raise a ticket in SECRET", "SECRET"),
+        ("Check langchain-ai/langgraph and raise a ticket not in MOCK", "MOCK"),
+    ],
+)
+async def test_a_saved_agent_s_project_is_filled_only_with_the_one_listed_project_named(
+    task: str, value: str
+):
+    """The project decides where the ticket is written. Before, the model's value was kept, so
+    words that name two projects filled the first, and words that name none kept its guess."""
+    values = {REPO: "langchain-ai/langgraph", PROJECT: value}
+    planner = FakePlanner(chose=chosen("use_one", agent(**values)))
+    result = await plan(planner, LIBRARY, task, ("MOCK", "OPS"))
+    assert isinstance(result, UseSaved)
+    [planned] = result.agents
+    assert (planned.values, planned.missing) == ({REPO: "langchain-ai/langgraph"}, [PROJECT])
+
+
+async def test_a_saved_agent_s_project_is_the_listed_one_the_words_name():
+    values = {REPO: "langchain-ai/langgraph", PROJECT: "MOCK"}
+    planner = FakePlanner(chose=chosen("use_one", agent(**values)))
+    result = await plan(planner, LIBRARY, "check langgraph and raise a ticket in MOCK", ("MOCK",))
+    assert isinstance(result, UseSaved) and result.agents[0].values == values
 
 
 async def test_agents_not_in_the_library_are_dropped_and_a_repeat_is_kept_once():
@@ -175,28 +206,115 @@ async def test_a_new_agent_comes_back_checked_and_never_saved():
     assert [m.need for m in result.missing_tools] == ["Teams"]
 
 
-async def test_a_draft_with_problems_comes_back_with_them_listed():
+async def test_a_draft_with_problems_its_words_cant_fix_comes_back_repaired():
+    """Before, the old name and the missing tool were listed as problems, and the card said to
+    change the words, which could fix neither. test_card_draft_repair.py has each case."""
     planner = FakePlanner(
         chose=chosen("new_agent"),
         drafted=draft(
             name="Forge",
-            blocks=[DraftBlock(say="Remove.", tool="gitlab.remove_member")],
+            blocks=[
+                DraftBlock(say="Remove.", tool="gitlab.remove_member"),
+                DraftBlock(say="Search.", tool="jira.search"),
+            ],
             inputs=[],
         ),
     )
     result = await plan(planner, LIBRARY, "x")
     assert isinstance(result, NewAgent)
-    assert {p.field for p in result.problems} == {"name", "blocks.0.tool"}
+    assert result.problems == []
+    assert result.draft.name == "New agent"
+    assert [m.need for m in result.missing_tools] == ["Remove"]
 
 
-async def test_a_draft_that_writes_without_a_target_input_is_flagged_not_fixed():
+CAROL = (
+    "Every Friday at 16:00, find Jira tickets in project MOCK that nobody updated for 14 days, "
+    "and raise one Jira ticket in MOCK that lists them"
+)
+
+
+async def test_carols_draft_gets_the_jira_project_input_it_left_out_so_she_has_a_way_on():
+    """The model's draft for Carol used two Jira tools and no Jira project input. Changing her
+    words could not fix that, so the platform adds the input, empty, and she fills it in."""
     planner = FakePlanner(
         chose=chosen("new_agent"),
-        drafted=draft(blocks=[DraftBlock(say="Raise it.", tool="jira.create_ticket")], inputs=[]),
+        drafted=draft(
+            name="Stale ticket lister",
+            inputs=[DraftInput(name="Days without update", kind="text", example="14")],
+            blocks=[
+                DraftBlock(
+                    say="Find tickets nobody updated for that many days.", tool="jira.search"
+                ),
+                DraftBlock(say="Raise one ticket that lists them.", tool="jira.create_ticket"),
+            ],
+            approvals=[DraftApproval(tool="jira.create_ticket", approvers=1, why="")],
+        ),
     )
+    result = await plan(planner, LIBRARY, CAROL)
+    assert isinstance(result, NewAgent)
+    assert result.problems == []
+    assert [i.name for i in result.draft.inputs if i.kind == "jira_project"] == [PROJECT]
+    assert [(a.tool, a.approvers) for a in result.approvals] == [("jira.create_ticket", 1)]
+
+
+CAROL_STEPS = [
+    DraftBlock(say="Find tickets nobody updated for 14 days.", tool="jira.search"),
+    DraftBlock(say="Raise one ticket that lists them.", tool="jira.create_ticket"),
+]
+
+
+async def drafted_inputs(*inputs: DraftInput) -> list[tuple[str, str]]:
+    planner = FakePlanner(
+        chose=chosen("new_agent"), drafted=draft(inputs=list(inputs), blocks=CAROL_STEPS)
+    )
+    result = await plan(planner, LIBRARY, CAROL)
+    assert isinstance(result, NewAgent)
+    assert result.problems == []
+    return [(i.name, i.kind) for i in result.draft.inputs]
+
+
+@pytest.mark.parametrize("name", ["Jira project", "jira project", "Project", "Project key"])
+async def test_a_text_input_already_named_for_the_jira_project_is_that_input_not_a_second(
+    name: str,
+):
+    """Before, the platform added its own Jira project input beside it, and the two names
+    clashed, so Set up stopped at "Two inputs are called Jira project"."""
+    given = DraftInput(name=name, kind="text", example="MOCK")
+    assert await drafted_inputs(given) == [(name, "jira_project")]
+
+
+async def test_a_text_input_named_for_the_project_beside_the_real_one_is_dropped():
+    text = DraftInput(name="Jira project", kind="text")
+    real = DraftInput(name="Project", kind="jira_project")
+    assert await drafted_inputs(text, real) == [("Project", "jira_project")]
+
+
+async def test_a_text_input_named_otherwise_stays_beside_the_added_project():
+    days = DraftInput(name="Days without update", kind="text")
+    assert await drafted_inputs(days) == [
+        ("Days without update", "text"),
+        (PROJECT, "jira_project"),
+    ]
+
+
+@pytest.mark.parametrize("tool", ["jira.search", "jira.read_ticket", "jira.create_ticket"])
+async def test_a_draft_missing_the_input_its_tool_needs_is_given_it_once(tool: str):
+    blocks = [DraftBlock(say="Do it.", tool=tool), DraftBlock(say="Again.", tool=tool)]
+    planner = FakePlanner(chose=chosen("new_agent"), drafted=draft(blocks=blocks, inputs=[]))
     result = await plan(planner, LIBRARY, "x")
     assert isinstance(result, NewAgent)
-    assert [p.field for p in result.problems] == ["inputs"]
+    assert result.problems == []
+    assert [(i.name, i.kind, i.example) for i in result.draft.inputs] == [
+        (PROJECT, "jira_project", "MOCK")
+    ]
+
+
+async def test_a_draft_that_reads_github_only_gets_no_input_it_does_not_need():
+    blocks = [DraftBlock(say="Read the releases.", tool="github.read_releases")]
+    planner = FakePlanner(chose=chosen("new_agent"), drafted=draft(blocks=blocks, inputs=[]))
+    result = await plan(planner, LIBRARY, "x")
+    assert isinstance(result, NewAgent)
+    assert result.draft.inputs == []
 
 
 async def test_a_draft_that_cannot_be_done_is_a_refusal_with_the_missing_tools():

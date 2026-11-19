@@ -18,6 +18,7 @@
       "choices": []
     }
   ],
+  "trace_id": null,
   "answer": "setup_card",
   "name": "Closed ticket summary",
   "rows": [

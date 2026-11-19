@@ -140,6 +140,20 @@ docker run --rm --volume "$PWD:/repo" "$GITLEAKS_IMAGE" \
 
 Set `SEMGREP_IMAGE` and `GITLEAKS_IMAGE` first. Copy their values from the `env` block of `ci.yml`.
 
+CI also scans every commit of a pull request, not only its files. GitHub keeps those commits after the squash merge, and the repo is public. `scripts/scan_commits.py` checks each added line against the key shapes in `contracts/fixtures/agent/key-shapes.json`, and gitleaks reads the commits as a second check. Nothing cancels this job, so a force-push doesn't skip it. To check your branch before you push, run this. macOS's own `python3` is too old for it.
+
+```sh
+uv run --no-project --python 3.14 scripts/scan_commits.py origin/main HEAD
+```
+
+When it fires, the key is public even if a later commit removed it. Revoke the key first. Then take it out of the files, and squash the branch into one commit so no commit holds it:
+
+```sh
+git reset --soft $(git merge-base origin/main HEAD) && git commit && git push --force-with-lease
+```
+
+Or open a fresh branch from `main` without it. A made-up key in a test is built from pieces at run time, as in `"ghp_" + "Zx9" * 12`, or its line has a `gitleaks:allow` comment. The scan lists each allowed line in the CI log, so a reviewer can check it.
+
 ## Costs and plan limits
 
 pstack starts subagents. By default, `arena`, `architect` and `interrogate` run several models in parallel, so they can use up a Claude Pro plan quickly.

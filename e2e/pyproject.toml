@@ -20,7 +20,7 @@ exclude-newer = "7 days"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-ra"
+addopts = "-raP"
 
 [tool.pyright]
 include = ["tests", "mock_github", "mock_model", "mock_confluence"]

@@ -12,6 +12,7 @@ from typing import Any
 
 from evals.anything import ANYTHING, CATEGORY_TITLES, HOME_FACTS, result_of, words_of
 from evals.budget import spent_words
+from evals.explain_wording import EXPLAIN_WORDING
 from evals.jobs import Case
 
 type Cases = Mapping[str, Mapping[str, Case]]
@@ -104,6 +105,29 @@ def _by_category(rows: list[Row], cases: Mapping[str, Case]) -> list[str]:
     return _table(["Category (cases)", *(f"`{m}`" for m in models)], body)
 
 
+def _kind(answer: str) -> str | None:
+    try:
+        said = json.loads(answer)
+    except ValueError:
+        return None
+    return said.get("kind") if isinstance(said, dict) else None
+
+
+def _explain_guard(rows: list[Row], cases: Mapping[str, Case]) -> list[str]:
+    """Of the smoothings asked for cases code's own wording could pass, how many the guard and the
+    verifier let through, and how many shown were untrue to the facts."""
+    body: list[list[str]] = []
+    for row in rows:
+        if row["job"] != EXPLAIN_WORDING.name:
+            continue
+        outcomes: list[dict[str, Any]] = row["outcomes"]
+        asked = [o for o in outcomes if getattr(cases.get(o["case"]), "can_reword", False)]
+        passed = sum(_kind(o["answer"]) == "reworded" for o in asked)
+        untrue = sum("true_to_the_facts" in o["failed"] for o in outcomes)
+        body.append([f"`{row['model']}`", _rate(passed, len(asked)), str(untrue)])
+    return _table(["Model", "Guard passed", "Shown untrue"], body) if body else []
+
+
 def _speed_and_cost(rows: list[Row]) -> list[str]:
     body = [
         [
@@ -190,6 +214,18 @@ def report(runs: list[dict[str, Any]], cases: Cases) -> str:
             "5 out of 5 for being proper, logical and useful.",
             "",
             *_by_category(rows, cases.get(ANYTHING.name, {})),
+        ]
+    guard = _explain_guard(rows, cases.get(EXPLAIN_WORDING.name, {}))
+    if guard:
+        lines += [
+            "",
+            "## Explain's guard-pass rate",
+            "",
+            "ADR 0051 asks the guard to pass at least 95% of smoothings, and none shown that drops "
+            "or adds a fact. It counts only the cases where code's own wording passes the guard. "
+            "No bar is enforced yet.",
+            "",
+            *guard,
         ]
     lines += ["", "## Speed and cost per answer", "", *_speed_and_cost(rows)]
     failures = [line for row in rows for line in _failures(row, cases)]

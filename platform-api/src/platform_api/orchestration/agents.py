@@ -601,9 +601,18 @@ class PreviousTurn(WireModel):
     kind: str | None = Field(default=None, max_length=40)
 
 
+class TurnTrace(WireModel):
+    """Where the runtime traces the turn (ADR 0050)."""
+
+    id: str = Field(pattern=r"^[0-9a-f]{32}$")
+    chat: str | None = Field(default=None, pattern=r"^[0-9a-f-]{1,36}$")
+    person: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+
+
 class AnswerRequest(WireModel):
     task: str
     model: ModelAccess
+    trace: TurnTrace | None = None
     facts: PlannerFacts | None = None
     previous: PreviousTurn | None = None
     changes_workflows: bool = True
@@ -696,6 +705,61 @@ class QuestionAnswer(WireModel):
     )
 
 
+type ReplyForm = Literal["answer", "clarify", "cant"]
+
+
+class ReplyOffer(WireModel):
+    capability: str
+    request: str = Field(min_length=1, max_length=2000)
+
+
+type AboutSection = Literal["watchlist", "workflows"]
+ABOUT_LIMIT: Final = 5
+
+
+class ReplyAbout(WireModel):
+    section: AboutSection
+    name: str = Field(min_length=1, max_length=80)
+
+
+class FreeReplyAnswer(WireModel):
+    """The model's own reply to a message no other answer fits, checked by the runtime's guard
+    before it is sent (ADR 0047)."""
+
+    kind: Literal["reply"] = "reply"
+    form: ReplyForm
+    text: str = Field(min_length=1, max_length=600)
+    choices: list[Annotated[str, Field(min_length=1, max_length=40)]] = Field(
+        default_factory=list[str], max_length=4
+    )
+    offer: ReplyOffer | None = None
+    looked_at: list[FactSection] = Field(default_factory=list[FactSection], max_length=3)
+    # Left out when empty, so a runtime from before ADR 0049 still parses and re-serializes alike.
+    about: list[ReplyAbout] = Field(
+        default_factory=list[ReplyAbout],
+        max_length=ABOUT_LIMIT,
+        exclude_if=lambda about: not about,
+    )
+    # The one software the request named, which the Portal sends back as previous.software.
+    software: str | None = Field(
+        default=None, max_length=80, exclude_if=lambda software: software is None
+    )
+
+    @model_validator(mode="after")
+    def _form_fits(self) -> Self:
+        if (self.form == "clarify") != (len(self.choices) >= 2) or (
+            self.form != "clarify" and self.choices
+        ):
+            raise ValueError("Only a clarifying question has choices, 2 to 4 of them")
+        if self.offer is not None and self.form != "cant":
+            raise ValueError("Only a can't offers something instead")
+        return self
+
+
+class DidntFollowAnswer(WireModel):
+    kind: Literal["didnt_follow"] = "didnt_follow"
+
+
 class _OnOrOff(WireModel):
     workflow_words: str | None = Field(default=None, max_length=80)
     software: str | None = Field(default=None, max_length=80)
@@ -745,6 +809,22 @@ class EditAnswer(WireModel):
         return self
 
 
+class RemoveSoftwareAnswer(WireModel):
+    """Software to take off the Software watchlist, named as the request wrote it, with the
+    watchlist's own names for it."""
+
+    kind: Literal["remove_software"] = "remove_software"
+    software: str = Field(min_length=1, max_length=80)
+    watched_as: list[Annotated[str, Field(max_length=80)]] = Field(
+        default_factory=list[str], max_length=100
+    )
+
+
+class ExplainAnswer(WireModel):
+    kind: Literal["explain"] = "explain"
+    workflow_words: str | None = Field(default=None, max_length=80)
+
+
 type PlannerAnswer = Annotated[
     SetupCardAnswer
     | PartAnswer
@@ -759,7 +839,11 @@ type PlannerAnswer = Annotated[
     | QuestionAnswer
     | EditAnswer
     | PauseAnswer
-    | ResumeAnswer,
+    | ResumeAnswer
+    | RemoveSoftwareAnswer
+    | ExplainAnswer
+    | FreeReplyAnswer
+    | DidntFollowAnswer,
     Field(discriminator="kind"),
 ]
 
@@ -822,6 +906,148 @@ type CheckPartResult = Annotated[PartFits | PartCantDo, Field(discriminator="sta
 check_part_result_adapter: TypeAdapter[CheckPartResult] = TypeAdapter(CheckPartResult)
 
 
+type ExplainFactKind = Literal["runs", "reads", "writes", "posts", "changes"]
+
+
+class ExplainFact(WireModel):
+    kind: ExplainFactKind
+    together: list[str] = Field(min_length=1, max_length=12)
+    negated: bool
+
+
+class CodeWording(WireModel):
+    wording: str = Field(min_length=1, max_length=1200)
+    facts: list[ExplainFact] = Field(max_length=40)
+
+
+class ExplainWordingRequest(CodeWording):
+    model: ModelAccess
+
+
+class ExplainReworded(WireModel):
+    kind: Literal["reworded"] = "reworded"
+    text: str = Field(min_length=1, max_length=700)
+
+
+class ExplainKept(WireModel):
+    kind: Literal["kept"] = "kept"
+    why: str
+
+
+type ExplainWordingResult = ExplainReworded | ExplainKept | ModelProblem
+
+explain_wording_result_adapter: TypeAdapter[ExplainWordingResult] = TypeAdapter(
+    ExplainWordingResult
+)
+
+
+# The workflow drafter (ADR 0051): the runtime's POST /v1/workflows/draft, as this side reads it.
+
+type SettingKind = Literal[
+    "run_time", "jira_project", "channel", "address", "repository", "confluence_page", "text"
+]
+type SettingMark = Literal["filled", "guessed", "needed"]
+
+
+class WriteKeyFact(WireModel):
+    name: str
+    system: str
+
+
+class DrafterFacts(WireModel):
+    """The team's facts the drafter may use. No Approver's name and no secret."""
+
+    jira_projects: list[str] = Field(default_factory=list[str])
+    confluence_pages: list[str] = Field(default_factory=list[str])
+    repositories: list[str] = Field(default_factory=list[str])
+    channels: list[str] = Field(default_factory=list[str])
+    agent_cards: list[LibraryCard] = Field(default_factory=list[LibraryCard])
+    write_keys: list[WriteKeyFact] = Field(default_factory=list[WriteKeyFact])
+
+
+class PlanBlock(WireModel):
+    name: str
+    type: str
+    version: float
+    parameters: dict[str, Any]
+
+
+class PlanWire(WireModel):
+    from_block: str
+    exit: str
+    to_block: str
+    exit_index: int = Field(ge=0)
+    input_index: int = Field(ge=0)
+
+
+class SettingPlace(WireModel):
+    block: str
+    parameter: str
+
+
+class PlanSetting(WireModel):
+    id: str
+    kind: SettingKind
+    label: str
+    fills: list[SettingPlace]
+    value: str | None
+    mark: SettingMark
+
+
+class WorkflowPlan(WireModel):
+    name: str
+    blocks: list[PlanBlock] = Field(min_length=1)
+    wires: list[PlanWire]
+    settings: list[PlanSetting]
+
+
+class WorkflowDraftRequest(WireModel):
+    words: str
+    facts: DrafterFacts
+    current: WorkflowPlan | None = None
+    model: ModelAccess
+
+
+class PlanProblem(WireModel):
+    code: str
+    block: str | None = None
+    text: str
+
+
+class SentBack(WireModel):
+    problems: list[PlanProblem]
+
+
+class WorkflowDrafted(WireModel):
+    status: Literal["drafted"] = "drafted"
+    plan: WorkflowPlan
+    catalogue: str
+    sent_back: list[SentBack]
+    turns: int
+
+
+class WorkflowNotDrafted(WireModel):
+    status: Literal["not_drafted"] = "not_drafted"
+    why: Literal["gave_up", "no_tool_call", "too_long", "failed"]
+    message: str
+    catalogue: str
+    sent_back: list[SentBack]
+    turns: int
+
+
+class KeyPasted(WireModel):
+    status: Literal["key_pasted"] = "key_pasted"
+    message: str
+
+
+type WorkflowDraftResult = Annotated[
+    WorkflowDrafted | WorkflowNotDrafted | KeyPasted | ModelProblem,
+    Field(discriminator="status"),
+]
+
+workflow_draft_result_adapter: TypeAdapter[WorkflowDraftResult] = TypeAdapter(WorkflowDraftResult)
+
+
 class AgentCard(WireModel):
     id: str
     display: str
@@ -852,6 +1078,11 @@ class AgentRuntime(Protocol):
 
 AGENT_KEY_HEADER = "X-Agent-Key"
 AGENT_TIMEOUT_SECONDS = 60.0
+RUNTIME_SMOOTHS_IN_SECONDS = 8.0
+RUNTIME_VERIFIES_IN_SECONDS = 8.0
+EXPLAIN_WAIT_SECONDS = RUNTIME_SMOOTHS_IN_SECONDS + RUNTIME_VERIFIES_IN_SECONDS + 4.0
+DRAFT_WAIT_SECONDS = 200.0
+"""The drafter stops itself at 170 seconds (ADR 0051, amended for step 5), with room to answer."""
 
 
 class HttpAgentRuntime:
@@ -920,6 +1151,23 @@ class HttpAgentRuntime:
     ) -> CheckPartResult | AgentUnavailable | AgentRejected:
         return await self._model_call("/v1/planner/check-part", request, check_part_result_adapter)
 
+    async def explain_wording(
+        self, request: ExplainWordingRequest
+    ) -> ExplainWordingResult | AgentUnavailable | AgentRejected:
+        return await self._model_call(
+            "/v1/workflows/explain",
+            request,
+            explain_wording_result_adapter,
+            EXPLAIN_WAIT_SECONDS,
+        )
+
+    async def draft_workflow(
+        self, request: WorkflowDraftRequest
+    ) -> WorkflowDraftResult | AgentUnavailable | AgentRejected:
+        return await self._model_call(
+            "/v1/workflows/draft", request, workflow_draft_result_adapter, DRAFT_WAIT_SECONDS
+        )
+
     async def capabilities(self) -> CapabilityList | AgentUnavailable | AgentRejected:
         try:
             response = await self._client.get(
@@ -944,7 +1192,11 @@ class HttpAgentRuntime:
         )
 
     async def _model_call[T](
-        self, path: str, body: WireModel | None, adapter: TypeAdapter[T]
+        self,
+        path: str,
+        body: WireModel | None,
+        adapter: TypeAdapter[T],
+        timeout: float = AGENT_TIMEOUT_SECONDS,
     ) -> T | AgentUnavailable | AgentRejected:
         # The body holds a model key, and an error answer can echo the body, so no text is kept.
         try:
@@ -952,7 +1204,7 @@ class HttpAgentRuntime:
                 f"{self._base_url}{path}",
                 json=None if body is None else body.model_dump(mode="json"),
                 headers={AGENT_KEY_HEADER: self._api_key},
-                timeout=AGENT_TIMEOUT_SECONDS,
+                timeout=timeout,
             )
         except httpx.HTTPError as error:
             return AgentUnavailable(f"The agent runtime did not answer: {type(error).__name__}")

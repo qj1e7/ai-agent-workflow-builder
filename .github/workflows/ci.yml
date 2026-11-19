@@ -20,17 +20,19 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+# A newer push cancels an older run's jobs, each in its own group, except scans. Nothing cancels
+# scans, so every pushed head has its commits scanned once, even when a force-push replaces it.
 
 env:
   SEMGREP_IMAGE: semgrep/semgrep:1.179.0@sha256:93963d9295a366f59e4850127b1550400ee7b388f04fe144e4a1f6325d96e01b
   GITLEAKS_IMAGE: zricethezav/gitleaks:v8.21.2@sha256:0e99e8821643ea5b235718642b93bb32486af9c8162c8b8731f7cbdc951a7f46
 
-# The private repo is billed per job, each rounded up to a whole minute, so stages are steps, not jobs.
+# Each job starts its own runner and checks out the repo again, so stages are steps, not jobs.
 jobs:
   checks:
+    concurrency:
+      group: ci-checks-${{ matrix.project }}-${{ github.ref }}
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     # The platform-api suite passed 3,000 tests and took 12 to 15 minutes on 15 Nov 2026.
     timeout-minutes: 25
@@ -97,10 +99,10 @@ jobs:
             exit 1
           fi
 
-      - name: n8n's allow list in compose and Terraform is the one node_classes.json makes
+      - name: n8n and bootstrap get the same guards, and the task runner holds none of n8n's secrets
         if: matrix.project == 'e2e'
         working-directory: .
-        run: scripts/nodes-include.sh --check
+        run: scripts/n8n-guards.sh
 
       - name: Check import rules
         if: matrix.project == 'platform-api'
@@ -151,11 +153,19 @@ jobs:
             exit 1
           fi
 
+      # agent-runtime's image carries contracts/n8n/catalogue.json (ADR 0051). platform-api's
+      # Dockerfile names no such context, so the flag changes nothing there.
       - name: Build the runtime image
         if: matrix.project != 'e2e'
-        run: docker build --target runtime --tag ${{ matrix.project }}:runtime ${{ matrix.project }}
+        run: |
+          docker build --target runtime --build-context contracts=contracts \
+            --tag ${{ matrix.project }}:runtime ${{ matrix.project }}
 
-      - name: Mock GitHub, mock model and mock Confluence tests in their images
+      - name: The runtime image carries the n8n block catalogue
+        if: matrix.project == 'agent-runtime'
+        run: docker run --rm agent-runtime:runtime python -m agent_runtime.catalogue
+
+      - name: Mock GitHub, mock model, mock Confluence and mock Slack tests in their images
         if: matrix.project == 'e2e'
         run: |
           docker build --target test --tag mock-github:test e2e/mock_github
@@ -164,8 +174,13 @@ jobs:
           docker run --rm mock-model:test
           docker build --target test --tag mock-confluence:test e2e/mock_confluence
           docker run --rm mock-confluence:test
+          docker build --target test --tag mock-slack:test e2e/mock_slack
+          docker run --rm mock-slack:test
 
   portal:
+    concurrency:
+      group: ci-portal-${{ github.ref }}
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:
@@ -203,6 +218,9 @@ jobs:
           sh nginx/render.test.sh
 
   n8n-node-pack:
+    concurrency:
+      group: ci-n8n-node-pack-${{ github.ref }}
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     timeout-minutes: 15
     defaults:
@@ -241,12 +259,15 @@ jobs:
             exit 1
           fi
 
-      # The pin check in the pack smoke runs platform-api's code against what the image serves.
+      # The pin checks and the catalogue in the pack smoke run platform-api's code against what
+      # the image serves and holds.
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
           enable-cache: false
 
-      - name: Pack smoke, n8n loads exactly the classed types and the pin check holds
+      # One start of the image also checks contracts/n8n/catalogue.json, and the defaults and the
+      # task runner's config that spike P9 rests on (scripts/n8n-catalogue.sh, ADR 0051).
+      - name: Pack smoke, n8n loads every built-in block but seven, the pin checks hold, and the catalogue is current
         working-directory: .
         run: scripts/pack-smoke.sh
 
@@ -257,6 +278,8 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           persist-credentials: false
+          # The commit scans read every commit of the pull request, so they need its history.
+          fetch-depth: 0
 
       - name: SAST with Semgrep
         run: |
@@ -281,8 +304,63 @@ jobs:
           docker run --rm --volume "$PWD:/repo" "$GITLEAKS_IMAGE" \
             detect --no-git --source /repo --redact --verbose
 
+      # A key added in one commit and removed in a later one is not in the files, but GitHub
+      # keeps every commit of a pull request, even after a squash merge. A pull request's range is
+      # its commits that are not on its base branch. A push's range is what it pushed. A manual
+      # run's range is its branch's commits that are not on main.
+      - name: Find the commits to scan
+        id: range
+        if: ${{ !cancelled() }}
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          case "$EVENT" in
+            pull_request) base=$(git rev-parse "origin/$BASE_REF") head=$PR_HEAD ;;
+            push) base=$BEFORE head=$GITHUB_SHA ;;
+            *) base=$(git merge-base origin/main HEAD) head=$GITHUB_SHA ;;
+          esac
+          case "$base" in
+            "" | *[!0]*) ;;
+            *) base= ;;
+          esac
+          if [ -z "$base" ]; then
+            echo "No range of commits is known for this run, so the commit scans skip it."
+          else
+            echo "Scanning the commits $base..$head."
+          fi
+          echo "base=$base" >> "$GITHUB_OUTPUT"
+          echo "head=$head" >> "$GITHUB_OUTPUT"
+
+      - name: Test the commit scans
+        if: ${{ !cancelled() }}
+        run: python3 -I -B -m unittest discover -s scripts -p test_scan_commits.py
+
+      # The main check of the commits. It reads every added line of every commit in the range,
+      # a merge's own lines included, against the agent runtime's key shapes.
+      - name: Key shapes in every commit in the range
+        if: ${{ !cancelled() }}
+        env:
+          BASE: ${{ steps.range.outputs.base }}
+          HEAD: ${{ steps.range.outputs.head }}
+        run: python3 -I -B scripts/scan_commits.py "$BASE" "$HEAD"
+
+      # The second check. gitleaks' default rules miss some keys, such as an Atlassian API token,
+      # and it doesn't read a merge's own lines. The script fails when gitleaks can't read the range.
+      - name: Secret scan of every commit in the range with gitleaks
+        if: ${{ !cancelled() && steps.range.outputs.base != '' }}
+        env:
+          BASE: ${{ steps.range.outputs.base }}
+          HEAD: ${{ steps.range.outputs.head }}
+        run: scripts/gitleaks-commits.sh "$BASE" "$HEAD"
+
   e2e:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    concurrency:
+      group: ci-e2e-${{ github.ref }}
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     # The browser suite alone took 27 minutes on 13 Nov 2026, then ZAP and k6 need about 8 more,
     # and the move from an old-engine database about 8.

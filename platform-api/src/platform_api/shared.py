@@ -50,6 +50,10 @@ WRITE_STOP_ADVICE = (
 """What to do after a stop at the write step that retrying cannot fix. A new run does not look
 for this run's ticket, so it can make a duplicate. The run's failure summary, the retry refusal
 and the AI troubleshooter all use this one text (ADR 0035)."""
+NO_START_BLOCK = "the workflow has no Start from the Portal block to start it"
+"""Why n8n can't take a start from the Portal. The run stops at once, since trying again can't
+start it, and the troubleshooter names the block."""
+
 JIRA_SITE_CHANGED = (
     "Jira's settings changed after the Approvers said yes, so the platform did not make the "
     "ticket in a Jira they did not approve."
@@ -131,3 +135,8 @@ def has_id_shape(value: str, prefix: str) -> bool:
         and len(body) == 26
         and all(c in _CROCKFORD for c in body)
     )
+
+
+ANSWERS_PER_MINUTE = 20
+"""How many typed requests one person may send the Planner in a minute, unless
+PLANNER_ANSWERS_PER_MINUTE says otherwise (ADR 0047)."""

@@ -7,8 +7,10 @@ import { createContext, useContext } from 'react'
 export type PanelItem =
   | { readonly kind: 'needs' | 'workflows' | 'watchlist'; readonly id?: undefined }
   | { readonly kind: 'workflow' | 'run' | 'approval' | 'software' | 'connection' | 'build'; readonly id: string }
+  /** A workflow's report, for the version in use or for one version of it. */
+  | { readonly kind: 'explain'; readonly id: string; readonly version?: number | null }
 
-export const panelKey = (item: PanelItem): string => `${item.kind}:${item.id ?? ''}`
+export const panelKey = (item: PanelItem): string => `${item.kind}:${item.id ?? ''}${item.kind === 'explain' && item.version != null ? `@${String(item.version)}` : ''}`
 
 export const sameItem = (shown: PanelItem | null, item: PanelItem): boolean => shown !== null && panelKey(shown) === panelKey(item)
 
@@ -26,6 +28,7 @@ const BACK_TITLES: Readonly<Record<PanelItem['kind'], string>> = {
   software: 'Software',
   connection: 'Connection',
   build: 'Build',
+  explain: 'Explain',
 }
 export const backTitle = (item: PanelItem): string => BACK_TITLES[item.kind]
 

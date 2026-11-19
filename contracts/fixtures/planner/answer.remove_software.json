@@ -1,0 +1,27 @@
+{
+  "parts": [
+    {
+      "text": "remove Node.js from the watchlist",
+      "mark": "will_do",
+      "reason": null,
+      "note": null,
+      "choices": []
+    }
+  ],
+  "trace_id": null,
+  "answer": "remove_software",
+  "software": "Node.js",
+  "matches": [
+    {
+      "software_id": "sw_01JD4",
+      "name": "node js",
+      "source": "nodejs/node"
+    }
+  ],
+  "watched": [
+    "FastAPI",
+    "LangGraph",
+    "node js",
+    "React"
+  ]
+}

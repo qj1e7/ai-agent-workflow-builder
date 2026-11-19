@@ -7,7 +7,9 @@ import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Protocol, Self
+from pathlib import Path
+from typing import Final, Protocol, Self
+from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -18,6 +20,7 @@ from agent_runtime.abilities import CAPABILITY_LIST
 from agent_runtime.addresses import AddressPolicy
 from agent_runtime.answers import answer_task, check_one_part
 from agent_runtime.card_runner import CardRunner
+from agent_runtime.catalogue import IN_THE_IMAGE, Catalogue, CatalogueUnusable, load
 from agent_runtime.confluence import ConfluenceReaderFor, PlatformConfluenceFor, no_confluence
 from agent_runtime.contract import (
     AgentCard,
@@ -36,6 +39,8 @@ from agent_runtime.contract import (
     ConnectResult,
     DraftRequest,
     DraftResult,
+    ExplainWordingRequest,
+    ExplainWordingResult,
     FindSoftwareRequest,
     FindSoftwareResult,
     GitHubCheckResult,
@@ -51,16 +56,23 @@ from agent_runtime.contract import (
     TaskRequest,
     TaskResult,
     ToolList,
+    WorkflowDraftRequest,
+    WorkflowDraftResult,
 )
 from agent_runtime.drafting import choose_agents, draft_card
 from agent_runtime.events import Clock, EventLog, EventSink
+from agent_runtime.explain_wording import reword
 from agent_runtime.find_software import SoftwareFinder
 from agent_runtime.github import GitHubConnection, GitHubReleaseSource
 from agent_runtime.guarded import GuardedModels
 from agent_runtime.jira import JiraReaderFor, PlatformJiraFor, no_jira
 from agent_runtime.model_access import ModelProbe, chat_for, summarizer_for
+from agent_runtime.monitoring.langfuse_tracing import LangfuseSettings, LangfuseTracing
+from agent_runtime.monitoring.masking import Masker
+from agent_runtime.monitoring.tracing import NoTracing, Tracing
 from agent_runtime.origins import Origin, origin_of, parse_origin_list
 from agent_runtime.planner import FixedPlanner, Planner, run_cards, run_task
+from agent_runtime.planner_led import PLANNER_MODES, PlannerMode, led
 from agent_runtime.registries import (
     DEFAULT_MAVEN_BASE,
     DEFAULT_NPM_BASE,
@@ -84,6 +96,7 @@ from agent_runtime.vulnerabilities import (
     Nvd,
     Osv,
 )
+from agent_runtime.workflow_drafter import DEFAULT_DRAFTER_MODEL, draft_workflow
 
 log = logging.getLogger(__name__)
 
@@ -158,6 +171,41 @@ def _platform_jira_url(env: Mapping[str, str], origins: frozenset[Origin]) -> st
     return url
 
 
+LANGFUSE_NAMES: Final = ("LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY", "LANGFUSE_BASE_URL")
+
+
+def _langfuse(env: Mapping[str, str]) -> LangfuseSettings | None:
+    public_key, secret_key, base_url = (env.get(name, "").strip() for name in LANGFUSE_NAMES)
+    if not (public_key or secret_key or base_url):
+        return None
+    missing = [name for name in LANGFUSE_NAMES if not env.get(name, "").strip()]
+    if missing:
+        raise SettingsError(
+            f"{' and '.join(missing)} must be set too. Set all three Langfuse settings, or none."
+        )
+    address = urlsplit(base_url)
+    on_the_stack = address.scheme == "http" and "." not in (address.hostname or ".")
+    if not (on_the_stack or (address.scheme == "https" and address.hostname)):
+        raise SettingsError(
+            "LANGFUSE_BASE_URL must be an https address, or http to a service on the stack"
+        )
+    return LangfuseSettings(
+        public_key=public_key,
+        secret_key=secret_key,
+        base_url=base_url,
+        environment=env.get("LANGFUSE_TRACING_ENVIRONMENT", "").strip() or None,
+        release=env.get("LANGFUSE_RELEASE", "").strip() or None,
+    )
+
+
+def _planner_mode(env: Mapping[str, str]) -> PlannerMode:
+    named = env.get("PLANNER_MODE", "").strip() or "rules"
+    for mode in PLANNER_MODES:
+        if named == mode:
+            return mode
+    raise SettingsError(f"PLANNER_MODE must be one of {', '.join(PLANNER_MODES)}")
+
+
 def _github_token(env: Mapping[str, str]) -> str | None:
     token = env.get("GITHUB_TOKEN", "").strip()
     if not all(33 <= ord(character) < 127 for character in token):
@@ -212,6 +260,22 @@ class Settings:
     model_private_hosts: frozenset[str] = frozenset()
     platform_jira_url: str | None = None
     sources: Sources = field(default_factory=Sources)
+    free_reply: bool = True
+    """PLANNER_FREE_REPLY=off gives every dead end the fixed fallback, with no model call
+    (ADR 0047)."""
+    verifier_model: str | None = None
+    """PLANNER_VERIFIER_MODEL: the model the free reply's verifier runs on, through the same
+    connection. None runs it on the connected model, the Planner's own (ADR 0048)."""
+    langfuse: LangfuseSettings | None = None
+    """Where traces go. None keeps tracing off (ADR 0050)."""
+    planner_mode: PlannerMode = "rules"
+    """PLANNER_MODE: rules, today's Planner and the default, or ai_led, where the model leads
+    through checked tools on top of the rules (ADR 0049)."""
+    drafter_model: str = DEFAULT_DRAFTER_MODEL
+    """DRAFTER_MODEL: the model the workflow drafter runs on, through the same connection as the
+    Planner's (ADR 0051, section 7)."""
+    n8n_catalogue: Path = IN_THE_IMAGE
+    """N8N_CATALOGUE: where the catalogue of n8n's blocks is. The image carries it."""
 
     @classmethod
     def from_env(cls, env: Mapping[str, str]) -> Self:
@@ -236,6 +300,12 @@ class Settings:
             ),
             platform_jira_url=_platform_jira_url(env, origins),
             sources=Sources.from_env(env),
+            free_reply=env.get("PLANNER_FREE_REPLY", "").strip().casefold() != "off",
+            verifier_model=env.get("PLANNER_VERIFIER_MODEL", "").strip() or None,
+            langfuse=_langfuse(env),
+            planner_mode=_planner_mode(env),
+            drafter_model=env.get("DRAFTER_MODEL", "").strip() or DEFAULT_DRAFTER_MODEL,
+            n8n_catalogue=Path(env.get("N8N_CATALOGUE", "").strip() or IN_THE_IMAGE),
         )
 
     @property
@@ -414,15 +484,40 @@ class TaskStore:
             return result
 
 
+class CatalogueSource:
+    """The catalogue of n8n's blocks, read on the first draft and kept. A catalogue that can't
+    be used is read again on the next draft, so the error stays until the file is fixed."""
+
+    def __init__(self, path: Path) -> None:
+        self._path = path
+        self._read: Catalogue | None = None
+        self._lock = threading.Lock()
+
+    def get(self) -> Catalogue:
+        with self._lock:
+            if self._read is None:
+                self._read = load(self._path)
+            return self._read
+
+
+def _tracing_for(settings: Settings) -> Tracing:
+    if settings.langfuse is None:
+        return NoTracing()
+    return LangfuseTracing(settings.langfuse, Masker.from_env(os.environ))
+
+
 def create_app(
     settings: Settings | None = None,
     runtime: Runtime | None = None,
     models: ModelChecks | None = None,
+    tracing: Tracing | None = None,
 ) -> FastAPI:
     config = settings or Settings.from_env(os.environ)
     active = runtime or build_runtime(config)
+    traces = tracing or _tracing_for(config)
     probe = models or ModelProbe(config.address_policy)
     store = TaskStore()
+    catalogues = CatalogueSource(config.n8n_catalogue)
     app = FastAPI(title="Agent API", version="0.1.0")
     expected_key = config.agent_api_key.encode()
     key_header = APIKeyHeader(name=KEY_HEADER, auto_error=False)
@@ -473,7 +568,10 @@ def create_app(
 
         def run() -> TaskResult:
             events = EventLog(active.clock, active.callbacks.sink_for(body))
-            return run_cards(body, inputs, active.planner, runner, chat, today, events)
+            with traces.run(body) as traced:
+                return run_cards(
+                    body, inputs, active.planner, runner, traced.models(chat), today, events
+                )
 
         try:
             return store.run_once(body, run)
@@ -500,10 +598,46 @@ def create_app(
         chat = active.chat_source(body.model)
         return choose_agents(body, chat) if chat else NO_MODEL
 
+    def verifier_for(access: ModelAccess) -> ChatFor | None:
+        """The verifier's model, PLANNER_VERIFIER_MODEL through the same connection, or None for
+        the connected model itself."""
+        named = config.verifier_model
+        return active.chat_source(access.model_copy(update={"model": named})) if named else None
+
     @app.post("/v1/planner/answer", dependencies=[Depends(require_key)])
     def answer(body: AnswerRequest) -> AnswerResult:
         chat = active.chat_source(body.model)
-        return answer_task(body, chat) if chat else NO_MODEL
+        if chat is None:
+            return NO_MODEL
+        verifier = verifier_for(body.model) or chat
+        with traces.turn(body) as turn:
+            traced, verify = turn.models(chat), turn.models(verifier)
+            if config.planner_mode == "ai_led":
+                done = led(body, traced, verify_with=verify)
+                result, fell_back = done.result, done.fell_back
+            else:
+                result = answer_task(body, traced, config.free_reply, verify_with=verify)
+                fell_back = None
+            turn.answered(result, fell_back)
+        return result
+
+    @app.post("/v1/workflows/explain", dependencies=[Depends(require_key)])
+    def explain_wording(body: ExplainWordingRequest) -> ExplainWordingResult:
+        chat = active.chat_source(body.model)
+        if chat is None:
+            return NO_MODEL
+        return reword(body, chat, verify_with=verifier_for(body.model) or chat)
+
+    @app.post("/v1/workflows/draft", dependencies=[Depends(require_key)])
+    def draft_a_workflow(body: WorkflowDraftRequest) -> WorkflowDraftResult:
+        try:
+            catalogue = catalogues.get()
+        except CatalogueUnusable as unusable:
+            log.error("drafter: %s", unusable)
+            raise HTTPException(status_code=503, detail=str(unusable)) from unusable
+        drafter = body.model.model_copy(update={"model": config.drafter_model})
+        chat = active.chat_source(drafter)
+        return draft_workflow(body, chat, catalogue) if chat else NO_MODEL
 
     @app.post("/v1/planner/check-part", dependencies=[Depends(require_key)])
     def check_part(body: CheckPartRequest) -> CheckPartResult:

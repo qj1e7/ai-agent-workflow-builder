@@ -11,7 +11,8 @@ import { displayName } from '../../api/people'
 import type { CapabilitiesView } from '../../api/types'
 import { actionsOf, approverHeading, approverLine, drawnKeys, draftWords, groupOf, HOME_NEEDS_SHOWN, lineOf, needsOf, needsTotal, openPathOf, panelItemOf, pinnedOf, retriedFirstWords, retryProblem, suggestionsOf, waitingWords, wordsOf, type Need } from './home'
 
-const BOB = bobHome as HomeOut
+/** Bob's Home without his set-up approval, which the tests of the set-up row bring in themselves. */
+const BOB: HomeOut = { ...(bobHome as HomeOut), setup_approvals: [] }
 const ALICE = aliceHome as HomeOut
 const DAY_ONE = dayOne as HomeOut
 const DECLINED_TEST = declinedTest as HomeOut
@@ -533,5 +534,33 @@ describe('each row of Needs you in a few words', () => {
     expect(lineOf(question, NOW)).toEqual({ tone: 'wait', subject: 'Bob', rest: 'asked you about Software watchlist', short: 'asked you a question' })
     const reply = need({ replied: ALICE.replied })
     expect(lineOf(reply, NOW)).toEqual({ tone: 'wait', subject: 'Bob', rest: 'replied to your report', short: 'replied' })
+  })
+})
+
+describe('a set-up approval waiting for this person’s yes', () => {
+  const WITH_SETUP = bobHome as HomeOut
+  const [row] = WITH_SETUP.setup_approvals
+
+  it('is one row of Do now, counted with the rest, so the counts agree', () => {
+    const needs = needsOf(WITH_SETUP)
+    const setup = needs.shown.find((need) => need.kind === 'setup')
+    expect(setup?.key).toBe(`setup:${row?.approval_id ?? ''}`)
+    expect(groupOf(setup as Need)).toBe('now')
+    expect(needs.total).toBe(needsTotal(WITH_SETUP))
+    expect(needsTotal(WITH_SETUP)).toBe(needsTotal(BOB) + 1)
+    expect(needs.shown).toHaveLength(needs.total)
+  })
+
+  it('says <name> needs your yes to set up, and opens its approval page', () => {
+    const setup = needsOf(WITH_SETUP).shown.find((need) => need.kind === 'setup') as Need
+    expect(wordsOf(setup, NOW).title).toBe('Release check needs your yes to set up')
+    expect(lineOf(setup, NOW)).toEqual({ tone: 'wait', subject: 'Release check', rest: 'needs your yes to set up', short: 'needs your yes' })
+    expect(actionsOf(setup)).toEqual([{ kind: 'open', label: 'Review and decide', to: row?.link }])
+    expect(openPathOf(setup)).toBe('/setup-approvals/apr_01JDRAFTRELEASE')
+    expect(panelItemOf(setup)).toBeNull()
+  })
+
+  it('counts in the Approver’s line, which then says things instead of changes', () => {
+    expect(approverLine(WITH_SETUP)).toBe(`${needsTotal(WITH_SETUP)} things need you.`)
   })
 })

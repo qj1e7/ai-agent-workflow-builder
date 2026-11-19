@@ -10,25 +10,61 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 from urllib.parse import unquote
 
 from langchain_core.language_models import BaseChatModel
 from pydantic import BaseModel, Field
 
-from evals.answer import ANSWER
-from evals.anything import ANYTHING
-from evals.budget import BUDGET_USED_UP, Spend, budget_spent, metered, spend_for, spent_words
+from agent_runtime.monitoring.masking import MASKED_SHAPES
+from agent_runtime.planner_led import PLANNER_MODES, PlannerMode
+from evals.answer import ANSWER, ANSWER_LED
+from evals.anything import ANYTHING, ANYTHING_LED
+from evals.budget import (
+    BUDGET_USED_UP,
+    Spend,
+    budget_spent,
+    cached_tokens,
+    dollars_for,
+    metered,
+    spend_for,
+    spent_words,
+)
 from evals.checks import Check
 from evals.choose import CHOOSE
 from evals.draft import DRAFT
 from evals.explain import EXPLAIN
+from evals.explain_wording import EXPLAIN_WORDING
 from evals.jobs import Answer, Case, Job, marked
 from evals.providers import PROVIDERS, Env, NotRun, Target, plan
+from evals.red_team import RED_TEAM
+from evals.reply import LED_TWINS, REPLY, REPLY_DEV, REPLY_GATE, SPIKE, SPIKE_DEV
 from evals.report import report
 from evals.summarise import SUMMARISE
+from evals.workflow_draft import WORKFLOW_DRAFT
 
-JOBS: tuple[Job[Any], ...] = (SUMMARISE, EXPLAIN, DRAFT, CHOOSE, ANSWER, ANYTHING)
+JOBS: tuple[Job[Any], ...] = (
+    SUMMARISE,
+    EXPLAIN,
+    DRAFT,
+    CHOOSE,
+    ANSWER,
+    ANYTHING,
+    REPLY,
+    REPLY_GATE,
+    REPLY_DEV,
+    RED_TEAM,
+    SPIKE,
+    SPIKE_DEV,
+    EXPLAIN_WORDING,
+    WORKFLOW_DRAFT,
+)
+PARTS_OF_REPLY: Final = frozenset({REPLY_GATE.name, REPLY_DEV.name, SPIKE_DEV.name})
+"""Jobs that run part of the reply job's cases. A run of every job leaves them out, so it runs
+each case once."""
+ONLY_WHEN_NAMED: Final = frozenset({*PARTS_OF_REPLY, WORKFLOW_DRAFT.name})
+"""Jobs a run of every job leaves out: the parts of the reply job, and the workflow drafter, whose
+one draft costs as much as 17 to 33 Planner messages (ADR 0051, section 7)."""
 PRICING = Path(__file__).parent / "pricing.json"
 # CI keeps the endpoints as secrets too. A URL can hold a password or a private host name.
 URL_ENVS = ("AZURE_OPENAI_ENDPOINT", "OLLAMA_BASE_URL", "AGENT_MODEL_BASE_URL")
@@ -39,7 +75,8 @@ SECRET_ENVS = (
     "AGENT_MODEL_API_KEY",
     *URL_ENVS,
 )
-_KEY_SHAPES = re.compile(r"\b(?:sk-[\w*-]{8,}|AIza[\w-]{8,})")
+# Every shape the masker knows, and a key a provider's error prints cut short, as "sk-****ab3d".
+_KEY_SHAPES = re.compile("|".join([r"\b(?:sk-[\w*-]{8,}|AIza[\w-]{8,})", MASKED_SHAPES.pattern]))
 # A gateway names the key's owner in its own errors, such as a spent budget.
 _EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+(?::[\w-]+)?")
 WARM_UP = "Reply with the word ready."
@@ -116,15 +153,20 @@ class Outcome:
     output_tokens: int
     answer: str
     judge: int | None = None
+    cache_read: int = 0
+    cache_written: int = 0
 
     @property
     def passed(self) -> bool:
         return all(c.passed for c in self.checks)
 
 
-def _usage(answer: Answer) -> tuple[int, int]:
+def _usage(answer: Answer) -> tuple[int, int, int, int]:
+    """Every call the case made: its input and output tokens, and the input the prompt cache read
+    and wrote."""
     usage = getattr(answer.raw, "usage_metadata", None) or {}
-    return int(usage.get("input_tokens", 0)), int(usage.get("output_tokens", 0))
+    read, written = cached_tokens(usage)
+    return int(usage.get("input_tokens", 0)), int(usage.get("output_tokens", 0)), read, written
 
 
 def run_case(
@@ -136,8 +178,11 @@ def run_case(
     except Exception as error:
         return Outcome(case.id, [Check("answered", False, _failure(error, env))], None, 0, 0, "")
     latency = (time.perf_counter() - started) * 1000
-    tokens_in, tokens_out = _usage(answer)
-    return Outcome(case.id, job.score(case, answer), latency, tokens_in, tokens_out, answer.text)
+    tokens_in, tokens_out, read, written = _usage(answer)
+    checks = job.score(case, answer)
+    return Outcome(
+        case.id, checks, latency, tokens_in, tokens_out, answer.text, None, read, written
+    )
 
 
 class Verdict(BaseModel):
@@ -209,10 +254,10 @@ def summarise_job(
     price = price_for(target, pricing)
     cost = None
     if price is not None and answered:
-        per_call = (
-            statistics.fmean(tokens_in) * price["input_usd_per_mtok"]
-            + statistics.fmean(tokens_out) * price["output_usd_per_mtok"]
-        ) / 1_000_000
+        per_call = statistics.fmean(
+            dollars_for(o.input_tokens, o.output_tokens, o.cache_read, o.cache_written, price)
+            for o in answered
+        )
         cost = round(per_call * 100, 4)
     names = list(dict.fromkeys(c.name for o in outcomes for c in o.checks))
     judged = [o.judge for o in outcomes if o.judge is not None]
@@ -238,6 +283,8 @@ def summarise_job(
             "output_mean": round(statistics.fmean(tokens_out)) if answered else None,
             "input_total": sum(tokens_in),
             "output_total": sum(tokens_out),
+            "cache_read_total": sum(o.cache_read for o in answered),
+            "cache_written_total": sum(o.cache_written for o in answered),
         },
         "cost_per_100_runs_usd": cost,
         "price_source": price["source"] if price else "not known",
@@ -265,14 +312,34 @@ def model_for(job: Job[Any], target: Target, shared: BaseChatModel) -> BaseChatM
     return shared
 
 
+AI_LED: Final[dict[str, Job[Any]]] = {
+    ANSWER_LED.name: ANSWER_LED,
+    ANYTHING_LED.name: ANYTHING_LED,
+    **LED_TWINS,
+}
+"""The jobs that run the Planner, on the AI-led Planner (ADR 0049). A job not here runs as it is:
+red_team plays the verifier, which both modes share."""
+
+
+def planner_mode(env: Env) -> PlannerMode:
+    named = env.get("EVAL_PLANNER_MODE", "").strip() or "rules"
+    for mode in PLANNER_MODES:
+        if named == mode:
+            return mode
+    raise ValueError(f"EVAL_PLANNER_MODE must be one of {', '.join(PLANNER_MODES)}")
+
+
 def jobs_chosen(env: Env) -> tuple[Job[Any], ...]:
     wanted = [name.strip() for name in env.get("EVAL_JOBS", "").split(",") if name.strip()]
-    if not wanted:
-        return JOBS
     unknown = sorted(set(wanted) - {job.name for job in JOBS})
     if unknown:
         raise ValueError(f"EVAL_JOBS names no job: {', '.join(unknown)}")
-    return tuple(job for job in JOBS if job.name in wanted)
+    chosen = [
+        job for job in JOBS if (job.name in wanted if wanted else job.name not in ONLY_WHEN_NAMED)
+    ]
+    if planner_mode(env) == "ai_led":
+        chosen = [AI_LED.get(job.name, job) for job in chosen]
+    return tuple(chosen)
 
 
 def run_target(
@@ -410,6 +477,7 @@ def main(out: Path, env: Env | None = None) -> int:
     results_file = {
         "generated_at": datetime.now(UTC).isoformat(timespec="seconds"),
         "marker": marker,
+        "planner_mode": planner_mode(env),
         "cases": {job.name: len(job.cases()) for job in jobs},
         "judge": judge_spec.label if judge_spec else None,
         "models": models,

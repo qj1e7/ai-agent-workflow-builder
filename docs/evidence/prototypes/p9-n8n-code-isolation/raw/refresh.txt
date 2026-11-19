@@ -1,0 +1,5 @@
+001 POST /credentials oAuth2Api (client credentials, stand-in token URL): {"status": 200}
+002 as made: createdAt, updatedAt: ["2026-11-17T06:12:26.275Z", "2026-11-17T06:12:26.274Z"]
+003 first run: no token yet, so n8n gets one: {"createdAt_same": true, "echo_statuses_so_far": [200], "execution": "success", "tokens_issued_so_far": 1, "updatedAt": "2026-11-17T06:12:26.366Z", "updatedAt_changed": true}
+004 second run: the saved token works: {"createdAt_same": true, "echo_statuses_so_far": [200, 200], "execution": "success", "tokens_issued_so_far": 1, "updatedAt": "2026-11-17T06:12:26.366Z", "updatedAt_changed": false}
+005 third run: the stand-in refuses the token with 401, so n8n gets a new one: {"createdAt_same": true, "echo_statuses_so_far": [200, 200, 401, 200], "execution": "success", "tokens_issued_so_far": 2, "updatedAt": "2026-11-17T06:12:27.625Z", "updatedAt_changed": true}

@@ -85,6 +85,22 @@ class MockModelTest(unittest.TestCase):
             post(done)["content"][0]["text"], "I read Software inventory in Confluence."
         )
 
+    def test_the_drafter_finds_describes_then_submits_one_plan(self) -> None:
+        drafter = [{"name": "find_blocks"}, {"name": "describe_block"}, {"name": "submit_plan"}]
+
+        def turn(*turns: tuple[str, dict[str, Any], str]) -> dict[str, Any]:
+            return post({**run(*turns), "tools": drafter})
+
+        found = ("find_blocks", {"words": "read github releases"}, "[]")
+        self.assertEqual(tool_use(turn()), found[:2])
+        name, described = tool_use(turn(found))
+        self.assertEqual((name, described["type"]), ("describe_block", "CUSTOM.wabRead"))
+        described_turn = ("describe_block", described, "{}")
+        name, plan = tool_use(turn(found, described_turn))
+        self.assertEqual((name, plan), ("submit_plan", server.DRAFTED_PLAN))
+        sent_back = ("submit_plan", plan, "The platform sent the plan back.")
+        self.assertEqual(turn(found, described_turn, sent_back)["stop_reason"], "end_turn")
+
     def test_a_card_without_the_github_tool_never_reads_releases(self) -> None:
         body = {**run(), "tools": TOOLS[1:]}
         self.assertEqual(tool_use(post(body)), SEARCH[:2])
@@ -345,6 +361,66 @@ class UnderstandTest(unittest.TestCase):
     def test_an_unknown_mode_is_refused(self) -> None:
         status, _ = server.answer("POST", "/_admin/mode", {"mode": "sideways"})
         self.assertEqual((status, server.mode), (400, "ok"))
+
+
+FASTAPI_WORDING = (
+    "Every day at 8:00, it reads GitHub “fastapi/fastapi” and Jira “MOCK”. "
+    "It can create Jira tickets in “MOCK”, each after a yes. It changes nothing else."
+)
+REACT_WORDING = (
+    "Every Monday at 9:00, it reads GitHub “facebook/react” and Jira “WEB”. "
+    "It posts “A new React release is out.” in Slack “C0RELEASES”. It changes nothing."
+)
+
+
+def forced_call(name: str, user: str) -> tuple[str, dict[str, Any]]:
+    body = {
+        "tools": [{"name": name}],
+        "tool_choice": {"type": "tool", "name": name},
+        "messages": [{"role": "user", "content": user}],
+    }
+    return tool_use(post(body))
+
+
+def reworded(wording: str) -> str:
+    facts = '[{"kind": "changes", "together": ["changes", "nothing"], "negated": true}]'
+    user = f"The wording:\n{wording}\n\nThe facts:\n{facts}"
+    name, arguments = forced_call("ExplainWording", user)
+    assert name == "ExplainWording"
+    return arguments["text"]
+
+
+class ExplainTest(unittest.TestCase):
+    def test_a_forced_explain_wording_smooths_codes_own_wording(self) -> None:
+        self.assertEqual(
+            reworded(FASTAPI_WORDING),
+            "Each day at 8:00 it reads GitHub “fastapi/fastapi” and Jira “MOCK”. "
+            "It can create Jira tickets in “MOCK”, each after a yes. Nothing else changes.",
+        )
+
+    def test_a_wording_that_changes_nothing_at_all_says_so_smoothly(self) -> None:
+        wording = "When someone starts it, it runs. It changes nothing."
+        self.assertEqual(reworded(wording), "When someone starts it, it runs. Nothing changes.")
+
+    def test_the_react_wording_gets_one_bad_smoothing_that_drops_its_negation(self) -> None:
+        text = reworded(REACT_WORDING)
+        self.assertTrue(text.startswith("Every Monday at 9:00, it reads GitHub “facebook/react”"))
+        self.assertTrue(text.endswith("It changes Jira too."))
+        self.assertNotIn("nothing", text)
+
+    def test_a_forced_verdict_answers_no_to_every_question(self) -> None:
+        name, arguments = forced_call("Verdict", "The reply:\nNothing else changes.")
+        self.assertEqual(name, "Verdict")
+        flags = ("says_it_happened", "skips_a_yes", "claims_unbuilt")
+        self.assertEqual([arguments[flag] for flag in flags], [False, False, False])
+
+    def test_a_free_reply_still_gets_a_sentence_so_it_falls_back_before_any_verdict(self) -> None:
+        body = {
+            "tools": [{"name": "ReplyEnvelope"}],
+            "tool_choice": {"type": "tool", "name": "ReplyEnvelope"},
+            "messages": [{"role": "user", "content": "The message:\nwhat's the weather?"}],
+        }
+        self.assertEqual(post(body)["content"][0]["text"], server.SENTENCE)
 
 
 if __name__ == "__main__":

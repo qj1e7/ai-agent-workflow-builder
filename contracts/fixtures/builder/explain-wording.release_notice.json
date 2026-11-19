@@ -1,0 +1,49 @@
+{
+  "wording": "Every day at 8:00, it reads GitHub \u201clangchain-ai/langgraph\u201d and Jira \u201cMOCK\u201d. It posts \u201cA newer LangGraph release is out.\u201d in Slack \u201cC0123ABCD\u201d. It changes nothing.",
+  "facts": [
+    {
+      "kind": "runs",
+      "together": [
+        "day",
+        "8:00"
+      ],
+      "negated": false
+    },
+    {
+      "kind": "reads",
+      "together": [
+        "reads",
+        "GitHub",
+        "langchain-ai/langgraph"
+      ],
+      "negated": false
+    },
+    {
+      "kind": "reads",
+      "together": [
+        "reads",
+        "Jira",
+        "MOCK"
+      ],
+      "negated": false
+    },
+    {
+      "kind": "posts",
+      "together": [
+        "post",
+        "Slack",
+        "A newer LangGraph release is out.",
+        "C0123ABCD"
+      ],
+      "negated": false
+    },
+    {
+      "kind": "changes",
+      "together": [
+        "changes",
+        "nothing"
+      ],
+      "negated": true
+    }
+  ]
+}

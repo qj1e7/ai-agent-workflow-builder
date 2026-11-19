@@ -2,6 +2,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
+from typing import Protocol
 
 from platform_api.shared import ApprovalId, Digest, Principal, ProposalId, Role, RunId, UserId
 
@@ -55,6 +56,29 @@ class ApprovalRequest:
     expires_at: datetime | None = None
     """When it expires unanswered. A request made before ADR 0024's clock has none."""
     ended: Ended | None = None
+
+
+class Gated(Protocol):
+    """What the gate reads of a request: a run's, or a drafted workflow's set-up (ADR 0051). The
+    rules below are the same for both."""
+
+    @property
+    def id(self) -> ApprovalId: ...
+
+    @property
+    def digest(self) -> Digest: ...
+
+    @property
+    def policy(self) -> ApprovalPolicy: ...
+
+    @property
+    def parties(self) -> frozenset[UserId]: ...
+
+    @property
+    def expires_at(self) -> datetime | None: ...
+
+    @property
+    def ended(self) -> Ended | None: ...
 
 
 class Verdict(Enum):
@@ -113,11 +137,11 @@ class Closed:
 type ApprovalStatus = Open | Approved | Declined | Invalid | Closed
 
 
-def _recorded(request: ApprovalRequest, decisions: Iterable[Decision]) -> frozenset[Decision]:
+def _recorded(request: Gated, decisions: Iterable[Decision]) -> frozenset[Decision]:
     return frozenset(d for d in decisions if d.approval_id == request.id)
 
 
-def _fault(request: ApprovalRequest, recorded: frozenset[Decision]) -> DecisionFault | None:
+def _fault(request: Gated, recorded: frozenset[Decision]) -> DecisionFault | None:
     steps = [d.step_index for d in recorded]
     if len(set(steps)) < len(steps):
         return DecisionFault.CONFLICTING_DECISIONS
@@ -131,7 +155,7 @@ def _fault(request: ApprovalRequest, recorded: frozenset[Decision]) -> DecisionF
     return None
 
 
-def approval_status(request: ApprovalRequest, decisions: Iterable[Decision]) -> ApprovalStatus:
+def approval_status(request: Gated, decisions: Iterable[Decision]) -> ApprovalStatus:
     recorded = _recorded(request, decisions)
     fault = _fault(request, recorded)
     if fault is not None:
@@ -185,7 +209,7 @@ def _eligible(step: ApprovalStep, user: UserId) -> bool:
 
 
 def _refusal(
-    request: ApprovalRequest,
+    request: Gated,
     recorded: frozenset[Decision],
     status: ApprovalStatus,
     principal: Principal,
@@ -208,9 +232,7 @@ def _refusal(
     return None
 
 
-def why_not(
-    request: ApprovalRequest, decisions: Iterable[Decision], principal: Principal
-) -> Refusal | None:
+def why_not(request: Gated, decisions: Iterable[Decision], principal: Principal) -> Refusal | None:
     recorded = _recorded(request, decisions)
     status = approval_status(request, recorded)
     if not isinstance(status, Open):
@@ -219,7 +241,7 @@ def why_not(
 
 
 def decide(
-    request: ApprovalRequest,
+    request: Gated,
     decisions: Iterable[Decision],
     principal: Principal,
     step_index: int,

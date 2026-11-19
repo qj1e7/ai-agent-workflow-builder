@@ -33,8 +33,10 @@ from platform_api.orchestration.runs import (
     StepName,
 )
 from platform_api.orchestration.service import RunDetail
+from platform_api.orchestration.setup_approvals import SetUpApprovals
 from platform_api.orchestration.store import RunRecord
 from platform_api.shared import (
+    TEAM_TIME_ZONE,
     ApprovalId,
     ExternalIdentity,
     N8nExecutionId,
@@ -56,6 +58,7 @@ from tests.test_connections import DOWN, Rig
 from tests.test_n8n_builder import WRITES
 from tests.test_n8n_lifecycle import Workflows
 from tests.test_orchestrator import Harness, open_harness
+from tests.test_setup_approvals import ASK, Channel
 
 pytestmark = pytest.mark.anyio
 
@@ -79,6 +82,7 @@ EMPTY = {
     "questions_for_me": [],
     "questions_for_me_total": 0,
     "needs_next": None,
+    "setup_approvals": [],
     "waiting_on_others": [],
     "waiting_on_others_total": 0,
     "waiting_on_others_next": None,
@@ -134,6 +138,7 @@ class Lab:
     client: httpx.AsyncClient
     people: People
     rig: Rig
+    setups: SetUpApprovals
 
     async def call(self, user: str, method: str, path: str, body: Any = None) -> httpx.Response:
         headers = {"X-Dev-User": user}
@@ -186,10 +191,13 @@ async def lab(postgres: PostgresUrls) -> AsyncIterator[Lab]:
         app.state.people = people
         requests = TeamRequests(h.db, NoTeams(), h.orchestrator, h.log, "http://localhost:8000")
         app.state.team_requests = requests
-        app.state.home = Home(builder, h.orchestrator, people, requests, connections, watchlist)
+        setups = SetUpApprovals(h.db, Channel(), people, "http://localhost:8000", TEAM_TIME_ZONE)
+        app.state.home = Home(
+            builder, h.orchestrator, people, requests, connections, watchlist, setups
+        )
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-            yield Lab(h, app, client, people, rig)
+            yield Lab(h, app, client, people, rig, setups)
 
 
 async def workflow(lab: Lab, owner: str = "alice", name: str = "Watch LangGraph") -> str:
@@ -623,6 +631,24 @@ async def test_a_confirmation_shows_to_approvers_who_may_decide_it_and_not_to_th
     }
     for cannot in ("alice", "carol"):
         assert (await lab.home(cannot))["confirmations"] == [], cannot
+
+
+async def test_a_set_up_approval_is_in_needs_you_for_each_approver_who_may_decide_it(lab: Lab):
+    request = await lab.setups.send(ASK)
+
+    bob = await lab.home("bob")
+    assert bob["setup_approvals"] == [
+        {
+            "approval_id": request.id,
+            "drafted_id": "dw_1",
+            "name": "Release check",
+            "sent_by_name": "Alice",
+            "sent_at": bob["setup_approvals"][0]["sent_at"],
+            "link": f"/setup-approvals/{request.id}",
+        }
+    ]
+    assert (await lab.home("alice"))["setup_approvals"] == [], "Alice sent it"
+    assert (await lab.home("carol"))["setup_approvals"] == [], "Carol is no Approver"
 
 
 async def test_confirmations_come_the_newest_first(lab: Lab):

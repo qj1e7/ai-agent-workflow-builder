@@ -285,6 +285,14 @@ def test_every_job_is_registered_once() -> None:
         "choose",
         "answer",
         "anything",
+        "reply",
+        "reply_gate",
+        "reply_dev",
+        "red_team",
+        "spike",
+        "spike_dev",
+        "explain_wording",
+        "workflow_draft",
     ]
 
 
@@ -414,6 +422,60 @@ def test_a_draft_with_an_unlisted_tool_or_no_target_input_fails_those_checks() -
     assert "write_has_target_input" in failed(
         DRAFT.score(case, draft_answer(case, inputs=no_project))
     )
+
+
+def test_a_draft_that_makes_a_stated_number_an_input_fails() -> None:
+    """Carol's 14 days, made a text input, would be asked again: the Portal never fills one."""
+    case = draft_case("stated-days-stay-in-the-step")
+    project = case.reference.inputs[0]
+    days = project.model_copy(update={"name": "Days without update", "kind": "text"})
+    blocks = [b.model_copy(update={"say": "Find stale tickets."}) for b in case.reference.blocks]
+    asked = draft_answer(case, inputs=[project, days], blocks=blocks)
+    assert failed(DRAFT.score(case, asked)) == {"stated_values_in_steps"}
+
+
+@pytest.mark.parametrize(
+    ("name", "what", "example"),
+    [
+        ("Run on", "The day it runs, such as Friday", ""),
+        ("Report title", "A title for today's list", ""),
+        ("Ticket key", "A ticket to mention", "MOCK-14"),
+    ],
+)
+def test_an_input_that_only_shares_a_letter_run_with_a_stated_value_passes(
+    name: str, what: str, example: str
+) -> None:
+    """ "Friday", "today" and "MOCK-14" hold "day" or "14", but none asks for "14 days"."""
+    case = draft_case("stated-days-stay-in-the-step")
+    project = case.reference.inputs[0]
+    other = project.model_copy(
+        update={"name": name, "kind": "text", "what": what, "example": example}
+    )
+    assert failed(DRAFT.score(case, draft_answer(case, inputs=[project, other]))) == set()
+
+
+@pytest.mark.parametrize("words", ["Look back 14 days", "A 14-day window", "14 Days"])
+def test_an_input_that_asks_for_the_stated_value_with_its_unit_fails(words: str) -> None:
+    case = draft_case("stated-days-stay-in-the-step")
+    project = case.reference.inputs[0]
+    asks = project.model_copy(update={"name": "Window", "kind": "text", "what": words})
+    scored = DRAFT.score(case, draft_answer(case, inputs=[project, asks]))
+    assert failed(scored) == {"stated_values_in_steps"}
+
+
+def test_a_step_may_write_the_stated_value_with_a_hyphen() -> None:
+    case = draft_case("stated-days-stay-in-the-step")
+    blocks = [*case.reference.blocks]
+    blocks[0] = blocks[0].model_copy(update={"say": "Find the tickets idle for a 14-day stretch."})
+    assert failed(DRAFT.score(case, draft_answer(case, blocks=blocks))) == set()
+
+
+@pytest.mark.parametrize("tool", ["jira.search", "jira.read_ticket"])
+def test_a_draft_that_reads_jira_with_no_project_input_fails(tool: str) -> None:
+    case = draft_case("stated-days-stay-in-the-step")
+    blocks = [case.reference.blocks[0].model_copy(update={"tool": tool})]
+    unscoped = draft_answer(case, inputs=[], blocks=blocks, approvals=[])
+    assert "jira_tool_has_project_input" in failed(DRAFT.score(case, unscoped))
 
 
 def test_a_draft_with_an_invented_project_or_old_name_fails() -> None:
@@ -569,6 +631,100 @@ def test_a_guessed_time_and_an_invented_key_fail_the_card():
     assert next(c.detail for c in checks if c.name == "no_invented_keys") == "SUP"
 
 
+CAROL_READ = {
+    "name": "Stale MOCK ticket list",
+    "search": {
+        "project": "MOCK",
+        "updated": {"how": "before", "days": 14},
+        "said": "Jira tickets in project MOCK that nobody updated for 14 days",
+    },
+    "ticket": {"creates": True, "says": "list", "said": "lists them"},
+    "place": {"project": "MOCK", "said": "raise one Jira ticket in MOCK"},
+}
+
+
+@pytest.mark.parametrize(
+    "schedule", ["Every Friday at 16:00", "Every Friday 16:00", "Every Friday"]
+)
+def test_a_model_that_reads_a_range_as_one_time_still_gets_the_card_asking_which(schedule: str):
+    """Before, the card took 16:00, or asked with a note that said their words had no time."""
+    case = answer_case("carol-range-of-times")
+    assert failed(ANSWER.score(case, read_answer(**CAROL_READ, schedule=schedule))) == set()
+
+
+@pytest.mark.parametrize("schedule", ["Every Friday at 4pm", "Every Friday 5pm", "Every Friday"])
+def test_a_bound_on_the_time_is_asked_never_taken_as_the_run_time(schedule: str):
+    read = {
+        "name": "Weekly summary",
+        "schedule": schedule,
+        "search": {"project": "MOCK", "status": "done", "said": "the closed tickets in MOCK"},
+        "ticket": {"creates": False, "says": "summary", "said": "sum up"},
+    }
+    case = answer_case("bound-time-is-asked")
+    assert failed(ANSWER.score(case, read_answer(**read))) == set()
+
+
+def test_a_range_with_one_am_or_pm_is_asked_never_read_as_its_last_end():
+    read = {
+        "name": "Weekly summary",
+        "schedule": "Every Friday at 5pm",
+        "search": {"project": "MOCK", "status": "done", "said": "the closed tickets in MOCK"},
+        "ticket": {"creates": False, "says": "summary", "said": "sum up"},
+    }
+    case = answer_case("range-with-one-am-pm")
+    assert failed(ANSWER.score(case, read_answer(**read))) == set()
+
+
+@pytest.mark.parametrize(
+    "schedule",
+    [
+        "Every Friday",
+        "Every Friday at",
+        "Every Friday at 4pm",
+        "Every Monday at 9am",
+        "Every Monday",
+    ],
+)
+def test_carols_time_stays_when_the_model_leaves_it_out_or_rewrites_it(schedule: str):
+    """Before, the card asked for their time again, with a note that it couldn't read one."""
+    case = answer_case("carol-24-hour-time")
+    assert failed(ANSWER.score(case, read_answer(**CAROL_READ, schedule=schedule))) == set()
+
+
+CLOSED_SUMMARY_READ = {
+    "name": "Weekly summary",
+    "search": {"project": "MOCK", "status": "done", "said": "the closed tickets in MOCK"},
+    "ticket": {"creates": False, "says": "summary", "said": "sum up"},
+}
+
+
+@pytest.mark.parametrize(
+    ("case_id", "schedule"),
+    [
+        ("later-day-is-asked", "Every Monday at 9am"),
+        ("later-day-is-asked", "Every Friday at 9am"),
+        ("mon-fri-is-weekdays", "Every weekday at 9am"),
+        ("mon-fri-is-weekdays", "Every Monday at 9am"),
+        ("daily-except-weekends-is-weekdays", "Every day at 9am"),
+        ("daily-except-weekends-is-weekdays", "Every weekday at 9am"),
+        ("skipped-day-is-asked", "Every day at 9am"),
+        ("skipped-day-is-asked", "Every Friday at 9am"),
+    ],
+)
+def test_a_later_day_and_weekdays_written_another_way_pass_on_any_reading(
+    case_id: str, schedule: str
+):
+    """Before, the first day showed as understood, and Mon-Fri or daily except weekends were
+    crossed as a schedule it can't hold."""
+    read = read_answer(**CLOSED_SUMMARY_READ, schedule=schedule)
+    assert failed(ANSWER.score(answer_case(case_id), read)) == set()
+
+
+def test_a_new_time_that_is_not_exact_is_asked_in_the_edit():
+    read = read_answer(asks_about="change", workflow_words="morning new-ticket check")
+    assert failed(ANSWER.score(answer_case("edit-time-or-so-is-asked"), read)) == set()
+
+
 @pytest.mark.parametrize(
     ("case_id", "offered"),
     [
@@ -650,7 +806,8 @@ def test_a_mixed_request_is_scored_on_the_watchlist_and_the_rest():
 def test_only_the_jobs_named_in_eval_jobs_run():
     assert [j.name for j in jobs_chosen({"EVAL_JOBS": "answer"})] == ["answer"]
     assert [j.name for j in jobs_chosen({"EVAL_JOBS": " choose, answer "})] == ["choose", "answer"]
-    assert jobs_chosen({}) == JOBS
+    named_only = {"reply_gate", "reply_dev", "spike_dev", "workflow_draft"}
+    assert jobs_chosen({}) == tuple(j for j in JOBS if j.name not in named_only)
     with pytest.raises(ValueError, match="no job: nope"):
         jobs_chosen({"EVAL_JOBS": "nope"})
 

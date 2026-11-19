@@ -14,6 +14,7 @@ from platform_api.builder.models import (
     DraftList,
     DraftView,
     LastRunView,
+    N8nHolderView,
     ScheduleChangeView,
     ScheduleIn,
     UndoIn,
@@ -38,7 +39,7 @@ from platform_api.contracts.stories import (
 )
 from platform_api.contracts.watchlist_stories import SCHEDULE, STATUSES
 from platform_api.orchestration import Schedule, held_words
-from platform_api.shared import TEAM_TIME_ZONE
+from platform_api.shared import TEAM_TIME_ZONE, UserId
 from platform_api.wire import WireModel
 
 PAUSED = USE_CASE.model_copy(update={"state": "paused", "next_run_at": None})
@@ -97,7 +98,7 @@ HELD = USE_CASE.model_copy(
         "schedule": USE_CASE_SCHEDULE.model_copy(
             update={
                 "held": "owner_removed",
-                "held_words": held_words("owner_removed", USE_CASE_SCHEDULE.owner_name),
+                "held_words": held_words("owner_removed", "Alice"),
             }
         ),
     }
@@ -182,6 +183,13 @@ VERSIONED = AGENT_USE_CASE.model_copy(
         "next_run_at": datetime(2026, 11, 9, 0, 0, tzinfo=UTC),
     }
 )
+OPEN_IN_N8N = VERSIONED.model_copy(
+    update={
+        "held_in_n8n": N8nHolderView(
+            id=UserId("carol"), name="Carol", since=datetime(2026, 11, 9, 2, 2, tzinfo=UTC)
+        )
+    }
+)
 UNDONE_USE_CASE = AGENT_USE_CASE.model_copy(
     update={
         "version": 3,
@@ -263,6 +271,7 @@ def lifecycle_fixtures() -> dict[str, WireModel | list[WireModel]]:
         ),
         "builder/undo.in.json": UndoIn(via="page"),
         "builder/use-case.versioned.json": VERSIONED,
+        "builder/use-case.open-in-n8n.json": OPEN_IN_N8N,
         "builder/use-case.undone.json": UNDONE_USE_CASE,
         "builder/versions.json": VERSIONS,
         "builder/versions.undone.json": VERSIONS_UNDONE,

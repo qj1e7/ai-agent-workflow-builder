@@ -242,6 +242,28 @@ const navNames = (html: string) =>
 const primaries = (html: string) => (html.match(/<(?:a|button)\b[^>]*class="[^"]*_primary_[^"]*"[^>]*>/g) ?? []).length
 const labelsOf = (html: string, ...label: string[]) => label.flatMap((words) => [...html.matchAll(new RegExp(`>${words}<`, 'g'))])
 
+describe('Explain beside each row', () => {
+  const explains = (html: string, id: string) => [...rowOf(html, id).matchAll(/<a\b[^>]*href="([^"]*explain[^"]*)"[^>]*>([\s\S]*?)<\/a>/g)].map((m) => [text(m[2] ?? ''), m[1]])
+
+  it('puts an Explain link to the workflow’s report beside every workflow row, for an Operator and for an Approver', () => {
+    for (const me of [ALICE, BOB]) {
+      const html = render({ me, useCases: [STOPPED_BUGS, LANGGRAPH] })
+      expect(explains(html, 'uc_bugs'), me.id).toEqual([['Explain Morning bug report check', '/workflows/uc_bugs/explain']])
+      expect(explains(html, 'uc_lang'), me.id).toEqual([[`Explain ${LANGGRAPH.name}`, '/workflows/uc_lang/explain']])
+    }
+  })
+
+  it('keeps the row’s own link as it was, so the row still opens the workflow', () => {
+    const row = rowOf(render({ useCases: [STOPPED_BUGS] }), 'uc_bugs')
+    expect(row).toMatch(/<a\b[^>]*href="\/workflows\/uc_bugs"/)
+  })
+
+  it('gives the Software watchlist its Explain too, while its row still opens the Software page', () => {
+    const html = render({ useCases: [WAITING_WATCHLIST] })
+    expect(explains(html, 'uc_01JB7')).toEqual([[`Explain ${WAITING_WATCHLIST.name}`, '/workflows/uc_01JB7/explain']])
+  })
+})
+
 describe('Workflows has no button of its own to press', () => {
   it('keeps every row a link, and offers no primary button while Needs you lists a stopped run', () => {
     const html = render({ home: aliceHome as HomeOut, useCases: [{ ...WATCHLIST, last_run: lr({ run_id: 'run_01JB9', state: 'failed', retryable: true, reason: 'AgentError' }) }] })
@@ -501,7 +523,7 @@ describe('a request opened by its link', () => {
 
 describe('workflows made in n8n, for someone with n8n access', () => {
   const MAINTAINER: Me = { ...CAROL, n8n_access: true }
-  const SAFE: MadeInN8nView = { workflow_id: 'wf7', name: 'Morning check', made_by: 'carol', published: true, grade: 'safe', findings: [], can_set_up: true, why_not: null }
+  const SAFE: MadeInN8nView = { workflow_id: 'wf7', name: 'Morning check', made_by: 'carol', published: true, grade: 'safe', findings: [], fixed_for_you: [], set_up_notes: [], can_set_up: true, why_not: null }
   const NO_YES: MadeInN8nView = { ...SAFE, workflow_id: 'wf8', name: 'Quick fix', published: false, grade: 'writes_refused', findings: ['"Create ticket" can run without a yes.'], can_set_up: false, why_not: 'Fix it in n8n first. It isn’t published there, and only a workflow that passes the check can be turned on.' }
   const madeRow = (html: string, id: string) => new RegExp(`<li[^>]*data-made-in-n8n="${id}"[\\s\\S]*?</li>`).exec(html)?.[0] ?? ''
 
@@ -520,6 +542,29 @@ describe('workflows made in n8n, for someone with n8n access', () => {
     expect(text(row).replaceAll('&quot;', '"')).toContain('Writes refused: "Create ticket" can run without a yes. Fix it in n8n first.')
     expect(row).toMatch(/data-tone="bad"[^>]*>Writes refused<\/span>/)
     expect(labelsOf(row, 'Set up')).toHaveLength(0)
+  })
+
+  it('says what set up puts right, which is never its maker’s job', () => {
+    const fixed = ['sends its failures to the platform’s error workflow', 'runs it on Singapore time', 'adds Start from the Portal for Run now']
+    const row = madeRow(render({ me: MAINTAINER, made: [{ ...SAFE, fixed_for_you: fixed }] }), 'wf7')
+    expect(text(row)).toContain(
+      'Safe: every change waits for a yes. Set up also sends its failures to the platform’s error workflow, runs it on Singapore time and adds Start from the Portal for Run now. Published in n8n, so it runs once set up.',
+    )
+  })
+
+  it('says what set up drops, or can’t add, before anyone presses it', () => {
+    const notes = ['Set up starts from the published version, so changes saved in n8n since then are dropped.']
+    const row = madeRow(render({ me: MAINTAINER, made: [{ ...SAFE, fixed_for_you: ['keeps its test runs'], set_up_notes: notes }] }), 'wf7')
+    expect(text(row)).toContain(`Set up also keeps its test runs. ${notes[0]} Published in n8n, so it runs once set up.`)
+  })
+
+  it('names every finding that is left, not only the first', () => {
+    const findings = ['"Read" reads a place the platform does not allow.', '"Schedule Trigger" leaves its hour or minute for n8n to pick.']
+    const row = madeRow(render({ me: MAINTAINER, made: [{ ...SAFE, grade: 'needs_a_fix', findings }] }), 'wf7')
+    expect(text(row).replaceAll('&quot;', '"')).toContain(`Needs a fix: ${findings.join(' ')}`)
+    const writes = ['"Create ticket" can run without a yes.', '"Close ticket" can run without a yes.']
+    const refused = madeRow(render({ me: MAINTAINER, made: [{ ...SAFE, grade: 'writes_refused', findings: writes }] }), 'wf7')
+    expect(text(refused).replaceAll('&quot;', '"')).toContain(`Writes refused: ${writes.join(' ')}`)
   })
 
   it('says a safe one that is not published is set up as a draft', () => {

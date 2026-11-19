@@ -6,7 +6,7 @@ from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from platform_api.auth import AuthConfig, ConfigError, auth_config
-from platform_api.shared import JIRA_PROJECT_PATTERN, TEAM_TIME_ZONE
+from platform_api.shared import ANSWERS_PER_MINUTE, JIRA_PROJECT_PATTERN, TEAM_TIME_ZONE
 
 type Context = Literal["builder", "orchestration", "monitoring"]
 type ActivityReader = Literal["postgres", "cosmos"]
@@ -94,12 +94,40 @@ PRACTICE_JIRA_PROJECT = "MOCK"
 """The practice Jira's project, where the watchlist raises tickets unless told otherwise."""
 
 
+type KeySystem = Literal["jira", "github", "slack"]
+"""The systems the platform makes a key in n8n for, so n8n's own blocks can read them or post to
+them (ADR 0045). Teams, Outlook and Gmail have none: see orchestration/n8n_credentials.py."""
+
+
+@dataclass(frozen=True)
+class N8nKey:
+    """One key the platform makes in n8n for n8n's own blocks, from what Key Vault holds."""
+
+    kind: str
+    """n8n's credential type, such as slackApi."""
+    data: Mapping[str, str] = field(repr=False)
+    """What n8n keeps for it, the secret included."""
+    asks: str
+    """Where the platform asks the system what the key may do, before it makes the key."""
+
+
 @dataclass(frozen=True)
 class N8nOwner:
     """n8n's owner account, which the platform signs in as to lay out and publish workflows."""
 
     email: str
     password: str = field(repr=False)
+
+
+@dataclass(frozen=True)
+class LangfuseSettings:
+    """The Langfuse project that platform-api writes code flags to (ADR 0050)."""
+
+    base_url: str
+    public_key: str
+    secret_key: str = field(repr=False)
+    environment: str | None = None
+    """LANGFUSE_TRACING_ENVIRONMENT, sent with each score. Unset, Langfuse uses its default."""
 
 
 @dataclass(frozen=True)
@@ -131,6 +159,9 @@ class Settings:
     jira: JiraSettings = JiraSettings()
     confluence: ConfluenceSettings = ConfluenceSettings()
     team_time_zone: ZoneInfo = TEAM_TIME_ZONE
+    planner_answers_per_minute: int = ANSWERS_PER_MINUTE
+    """PLANNER_ANSWERS_PER_MINUTE: how many typed requests one person may send the Planner in a
+    minute (ADR 0047). The end-to-end suite raises it, since it sends many as one person."""
     node_key: str | None = field(default=None, repr=False)
     """WAB_NODE_KEY, which our n8n node pack sends. Without it no node call is taken."""
     start_secret: str | None = field(default=None, repr=False)
@@ -140,10 +171,20 @@ class Settings:
     in n8n, and new use cases run on the shared n8n workflow."""
     n8n_staff_access: bool = False
     """N8N_STAFF_ACCESS. Off, the platform makes no staff n8n account and opens no workflow in
-    n8n (ENGINE-PLAN 2.9, M5). On, it still waits for a bootstrap that proved the allow list."""
+    n8n (ENGINE-PLAN 2.9, M5). On, it still waits for a bootstrap that proved n8n's blocks and
+    guards (ADR 0051)."""
     n8n_editor_url: str | None = None
     """N8N_EDITOR_URL, where people open n8n's editor, as ADR 0034's n8n_editor_url output. Each
     password link n8n makes is shown at this address."""
+    n8n_keys: Mapping[KeySystem, N8nKey] = field(default_factory=dict[KeySystem, N8nKey])
+    """The keys the platform makes in n8n for n8n's own blocks, from the N8N_KEY_ settings. A
+    system with none set has no key, so its blocks never pass the check."""
+    langfuse: LangfuseSettings | None = None
+    """LANGFUSE_BASE_URL, LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY. Without them no score is
+    written."""
+    trace_pseudonym_key: str | None = field(default=None, repr=False)
+    """TRACE_PSEUDONYM_KEY, which keys the pseudonym a trace names the person by. Without it a
+    trace names nobody."""
 
 
 def _required(env: Mapping[str, str], name: str) -> str:
@@ -413,6 +454,82 @@ def confluence_from_env(env: Mapping[str, str], jira: JiraSettings) -> Confluenc
     return ConfluenceSettings(base_url, email, token, pages)
 
 
+GITHUB_API = "https://api.github.com"
+SLACK_API = "https://slack.com/api"
+
+
+def _stack_or_https(name: str, value: str) -> str:
+    """A key goes to this address, so it is https, or plain http only to a host with no dot in its
+    name, which is a service on the stack's own network."""
+    parts = urlsplit(value)
+    if parts.scheme == "http" and parts.hostname and "." not in parts.hostname:
+        return _web_address(name, value, https_only=False)
+    return _web_address(name, value, https_only=True)
+
+
+def _secret(env: Mapping[str, str], name: str) -> str | None:
+    value = env.get(name, "").strip()
+    if value and not all(33 <= ord(character) < 127 for character in value):
+        raise ConfigError(
+            f"{name} holds a space, a line break or a character that is not a plain letter, "
+            "digit or symbol. Paste it again."
+        )
+    return value or None
+
+
+def n8n_keys_from_env(env: Mapping[str, str], jira: JiraSettings) -> dict[KeySystem, N8nKey]:
+    """Each N8N_KEY_ secret comes from Key Vault on Azure, and from deploy/.env or the e2e
+    overlay elsewhere. The Jira key reads the platform's Jira unless N8N_KEY_JIRA_URL names
+    another, as the same flavor."""
+    keys: dict[KeySystem, N8nKey] = {}
+    if (token := _secret(env, "N8N_KEY_JIRA_TOKEN")) is not None:
+        raw = env.get("N8N_KEY_JIRA_URL", "").strip() or jira.base_url
+        if raw is None:
+            raise ConfigError("N8N_KEY_JIRA_TOKEN is set, so set N8N_KEY_JIRA_URL too.")
+        url = _stack_or_https("N8N_KEY_JIRA_URL", raw)
+        if jira.flavor == "cloud":
+            email = env.get("N8N_KEY_JIRA_EMAIL", "").strip()
+            if not email:
+                raise ConfigError("A Cloud Jira key signs in with N8N_KEY_JIRA_EMAIL too.")
+            data = {"domain": url, "email": email, "apiToken": token}
+            keys["jira"] = N8nKey("jiraSoftwareCloudApi", data, url)
+        else:
+            data = {"domain": url, "personalAccessToken": token}
+            keys["jira"] = N8nKey("jiraSoftwareServerPatApi", data, url)
+    if (token := _secret(env, "N8N_KEY_GITHUB_TOKEN")) is not None:
+        url = _stack_or_https("N8N_KEY_GITHUB_URL", env.get("N8N_KEY_GITHUB_URL", "") or GITHUB_API)
+        keys["github"] = N8nKey("githubApi", {"server": url, "accessToken": token}, url)
+    if (token := _secret(env, "N8N_KEY_SLACK_TOKEN")) is not None:
+        asks = _stack_or_https("SLACK_API_URL", env.get("SLACK_API_URL", "") or SLACK_API)
+        keys["slack"] = N8nKey("slackApi", {"accessToken": token}, asks)
+    return keys
+
+
+LANGFUSE_ENVIRONMENT = re.compile(r"[a-z0-9_-]{1,40}")
+
+
+def langfuse_from_env(env: Mapping[str, str]) -> LangfuseSettings | None:
+    raw_base = env.get("LANGFUSE_BASE_URL", "").strip()
+    public_key = _secret(env, "LANGFUSE_PUBLIC_KEY")
+    secret_key = _secret(env, "LANGFUSE_SECRET_KEY")
+    if not raw_base and public_key is None and secret_key is None:
+        return None
+    if not raw_base or public_key is None or secret_key is None:
+        raise ConfigError(
+            "LANGFUSE_BASE_URL, LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY go together."
+        )
+    environment = env.get("LANGFUSE_TRACING_ENVIRONMENT", "").strip() or None
+    if environment is not None and (
+        LANGFUSE_ENVIRONMENT.fullmatch(environment) is None or environment.startswith("langfuse")
+    ):
+        raise ConfigError(
+            "LANGFUSE_TRACING_ENVIRONMENT takes lower case letters, digits, hyphens and "
+            f"underscores, up to 40, and may not start with langfuse. {environment!r} is not one."
+        )
+    base_url = _stack_or_https("LANGFUSE_BASE_URL", raw_base)
+    return LangfuseSettings(base_url, public_key, secret_key, environment)
+
+
 def staff_access_from_env(env: Mapping[str, str], owner: N8nOwner | None) -> bool:
     on = n8n_staff_access_from_env(env)
     if on and (owner is None or not env.get("SETTINGS_ENCRYPTION_KEY")):
@@ -460,12 +577,25 @@ def settings_from_env(env: Mapping[str, str]) -> Settings:
         jira=jira,
         confluence=confluence_from_env(env, jira),
         team_time_zone=team_time_zone_from_env(env),
+        planner_answers_per_minute=answers_per_minute_from_env(env),
         node_key=env.get("WAB_NODE_KEY", "").strip() or None,
         start_secret=env.get("WAB_START_SECRET", "").strip() or None,
         n8n_owner=n8n_owner,
         n8n_staff_access=staff_access_from_env(env, n8n_owner),
         n8n_editor_url=n8n_editor_url_from_env(env),
+        n8n_keys=n8n_keys_from_env(env, jira),
+        langfuse=langfuse_from_env(env),
+        trace_pseudonym_key=_secret(env, "TRACE_PSEUDONYM_KEY"),
     )
+
+
+def answers_per_minute_from_env(env: Mapping[str, str]) -> int:
+    raw = env.get("PLANNER_ANSWERS_PER_MINUTE", "").strip()
+    if not raw:
+        return ANSWERS_PER_MINUTE
+    if not raw.isdigit() or int(raw) < 1:
+        raise ConfigError("PLANNER_ANSWERS_PER_MINUTE must be a whole number of at least 1.")
+    return int(raw)
 
 
 def n8n_owner_from_env(env: Mapping[str, str]) -> N8nOwner | None:
@@ -478,6 +608,21 @@ def n8n_owner_from_env(env: Mapping[str, str]) -> N8nOwner | None:
     return N8nOwner(email, password)
 
 
+N8N_GUARDED = (
+    "NODES_EXCLUDE",
+    "N8N_BLOCK_ENV_ACCESS_IN_NODE",
+    "N8N_RUNNERS_MODE",
+    "N8N_DEPRECATED_NODES_BLOCK",
+    "N8N_BLOCK_FILE_ACCESS_TO_N8N_FILES",
+    "N8N_RESTRICT_FILE_ACCESS_TO",
+    "NODE_FUNCTION_ALLOW_BUILTIN",
+    "NODE_FUNCTION_ALLOW_EXTERNAL",
+    "N8N_RUNNERS_INSECURE_MODE",
+)
+"""The n8n settings bootstrap reads from the block the deploy gives both n8n and bootstrap
+(ADR 0051, spike P9). `platform_api.n8n_guard` says what each must be."""
+
+
 @dataclass(frozen=True)
 class BootstrapSettings:
     owner_database_url: str = field(repr=False)
@@ -488,6 +633,9 @@ class BootstrapSettings:
     platform_internal_url: str
     team_time_zone: ZoneInfo = TEAM_TIME_ZONE
     """The self-test runs on it, as every workflow does."""
+    n8n_settings: Mapping[str, str] = field(default_factory=dict[str, str])
+    """The guards the deploy gives n8n, as it gives bootstrap the same block of settings, which
+    bootstrap checks (`platform_api.n8n_guard.WATCHED`)."""
 
 
 def owner_database_url_from_env(env: Mapping[str, str]) -> str:
@@ -503,4 +651,5 @@ def bootstrap_settings_from_env(env: Mapping[str, str]) -> BootstrapSettings:
         step_key=_required(env, "STEP_KEY"),
         platform_internal_url=_required(env, "PLATFORM_INTERNAL_URL").rstrip("/"),
         team_time_zone=team_time_zone_from_env(env),
+        n8n_settings={name: env[name] for name in N8N_GUARDED if name in env},
     )

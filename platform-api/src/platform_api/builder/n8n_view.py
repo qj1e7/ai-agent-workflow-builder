@@ -2,21 +2,20 @@
 in use holds them, who published it and who holds it now, and for a run, each block's state."""
 
 from collections.abc import Mapping
-from datetime import datetime
 from typing import Any, Literal, Protocol
 
 from pydantic import AwareDatetime, Field
 
-from platform_api.builder.models import N8nBlockKind, N8nBlockView
-from platform_api.builder.n8n_draft import blocks_of
+from platform_api.builder.models import N8nBadge, N8nBlockKind, N8nBlockView, N8nHolderView
+from platform_api.builder.n8n_draft import blocks_of, view_kind
 from platform_api.builder.n8n_holds import Held, Holding, StaffPort
 from platform_api.db import Database
 from platform_api.orchestration import (
-    NODE_TYPES,
     CanOpen,
     NodeState,
     RunInN8n,
     Unreadable,
+    face,
     read_flow,
 )
 from platform_api.shared import Principal, RunId, UserId
@@ -28,8 +27,18 @@ class N8nNodeView(WireModel):
     type: str
     kind: N8nBlockKind = Field(
         description="What the block does, as on the set-up card. other is a sticky note or one "
-        "of n8n's data blocks, and off a type the class file turns off or does not know; type "
-        "says which."
+        "of n8n's own blocks that shapes the data, reads a system or posts a notice, and off a "
+        "block the class file turns off, or does not know, for what it is or what it was asked "
+        "to do; type and tag say which."
+    )
+    badge: N8nBadge = Field(
+        default="ours",
+        description="ours for a block of our node pack, n8n for one of n8n's own (ADR 0045).",
+    )
+    tag: str | None = Field(
+        default=None,
+        description="What one of n8n's own blocks does, by its class: Reads Jira, Posts in "
+        "Slack, Shapes the data. Null for our blocks, n8n's flow blocks and sticky notes.",
     )
     position: list[float] = Field(description="Where n8n's editor draws it, as x and y.")
     disabled: bool
@@ -39,12 +48,6 @@ class N8nEdgeView(WireModel):
     source: str
     exit: int = Field(description="Which of the source block's exits, from 0.")
     target: str
-
-
-class N8nHolderView(WireModel):
-    id: UserId
-    name: str
-    since: datetime
 
 
 class UseCaseN8nView(WireModel):
@@ -108,16 +111,16 @@ def graph(document: Mapping[str, Any] | None) -> tuple[list[N8nNodeView], list[N
         return [], []
     nodes: list[N8nNodeView] = []
     for node in document["nodes"]:
-        spec = NODE_TYPES.get(str(node.get("type", "")))
-        kind: N8nBlockKind = (
-            "off" if spec is None else "other" if spec.kind in ("note", "shape") else spec.kind
-        )
+        block = flow.blocks[node["name"]]
+        seen = face(block.type, block.version, block.parameters)
         position = node.get("position") or [0, 0]
         nodes.append(
             N8nNodeView(
                 name=node["name"],
                 type=str(node.get("type", "")),
-                kind=kind,
+                kind=view_kind(seen),
+                badge="ours" if seen.ours else "n8n",
+                tag=seen.tag,
                 position=[float(position[0]), float(position[1])],
                 disabled=bool(node.get("disabled", False)),
             )

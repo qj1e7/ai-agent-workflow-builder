@@ -17,8 +17,16 @@ can be tested without a real model:
   it also asks for
   known vulnerabilities. One named part, such as "Where it goes: Jira project MOCK", is read as
   that part alone, the others missing.
-- A request with tools and no forced tool is a card run. The mock calls github_read_releases,
-  then jira_search, then jira_create_ticket, then writes a report, by what the conversation holds.
+- A forced ExplainWording is the In short of a workflow to reword. The mock smooths code's own
+  wording as the real model is asked, so the platform shows it Reworded, except a wording for
+  facebook/react, which gets one bad smoothing that drops its negation, so the platform keeps
+  code's wording. A forced Verdict, the verifier's, answers no to every question.
+- A request that offers submit_plan is the workflow drafter (ADR 0051). The mock calls
+  find_blocks, then describe_block, then submits one release check plan, and ends with a
+  sentence if the platform sends it back.
+- Any other request with tools and no forced tool is a card run. The mock calls
+  github_read_releases, then jira_search, then jira_create_ticket, then writes a report, by what
+  the conversation holds.
   A card that reads a Confluence page calls confluence_read_page on its page instead.
   The ticket's title follows the card: a release, a follow-up or a summary. The follow-up card
   searches for bug tickets with no update for the days its plan names, working the day out from
@@ -58,6 +66,11 @@ BROKEN: dict[str, Any] = {
     "rows": '[{"kind": "schedule", "text": "Every',
 }
 RELEASE_WORDS = re.compile(r"\b(?:releases?|versions?|upgrades?|patch(?:es)?)\b", re.IGNORECASE)
+WATCH_A_SOFTWARE = re.compile(
+    r"\b(add|watch|track|monitor|follow)\b(?:\s+(?:a|an|another|new|some))*\s+(?:software|tool|app)\b",
+    re.IGNORECASE,
+)
+"""As the real model does: a request to watch a piece of software that names none."""
 VULNERABILITY_WORDS = re.compile(
     r"\b(?:vulnerab\w*|cves?|nvd|advisor(?:y|ies)"
     r"|security (?:fix(?:es)?|patch(?:es)?|alerts?|bulletins?))\b",
@@ -392,6 +405,14 @@ def no_vulnerability_tool(row: dict[str, Any]) -> dict[str, Any]:
 
 
 def understanding(task: str) -> dict[str, Any]:
+    unnamed = WATCH_A_SOFTWARE.search(task)
+    if unnamed is not None and not any(name.lower() in task.lower() for name in SOFTWARE):
+        return {
+            "belongs_on_watchlist": True,
+            "watchlist_word": unnamed.group(1),
+            "software": None,
+            "rows": [],
+        }
     word = RELEASE_WORDS.search(task)
     if word is not None and VULNERABILITY_WORDS.search(task) is None:
         named = next((name for name in SOFTWARE if name.lower() in task.lower()), None)
@@ -517,6 +538,8 @@ def structures(task: str) -> dict[str, Any]:
 
 def reading(task: str) -> dict[str, Any]:
     about = next((kind for pattern, kind in ABOUT if pattern.search(task.strip())), "none")
+    if about == "abilities" and WATCH_A_SOFTWARE.search(task):
+        about = "none"
     change = CHANGE.match(task.strip()) if not task.lower().startswith("set up") else None
     if change is not None:
         about = "change"
@@ -569,6 +592,8 @@ def reading(task: str) -> dict[str, Any]:
         return read
     read["name"] = name_of(task)
     read.update(structures(task))
+    # As the real model does: a name typed alone, as "Redis", is the software it names.
+    read["software"] = next((n for n in SOFTWARE if n.lower() == task.strip(" .!?").lower()), None)
     return read
 
 
@@ -615,6 +640,37 @@ def question_reply(text: str) -> dict[str, Any]:
     }
 
 
+WORDING_MARK = "The wording:\n"
+FACTS_MARK = "\n\nThe facts:\n"
+EVERY = re.compile(r"\bEvery (\w+) at (\d{1,2}:\d{2}),")
+SMOOTHER = (
+    ("It changes nothing else.", "Nothing else changes."),
+    ("It changes nothing.", "Nothing changes."),
+)
+DROPS_THE_NEGATION = "facebook/react"
+NO_FLAGS: dict[str, Any] = {
+    "says_it_happened": False,
+    "happened_words": "",
+    "skips_a_yes": False,
+    "skip_words": "",
+    "claims_unbuilt": False,
+    "unbuilt_words": "",
+}
+
+
+def reworded(body: dict[str, Any]) -> dict[str, Any]:
+    """Code's In short made smoother: "Every day at 8:00, it" becomes "Each day at 8:00 it", and
+    the closing "It changes nothing else." becomes "Nothing else changes."."""
+    wording = user_text(body).partition(WORDING_MARK)[2].partition(FACTS_MARK)[0]
+    if DROPS_THE_NEGATION in wording:
+        kept = wording.rpartition(" It changes nothing")[0]
+        return {"text": f"{kept} It changes Jira too.".strip()}
+    text = EVERY.sub(r"Each \1 at \2", wording)
+    for said, smoother in SMOOTHER:
+        text = text.replace(said, smoother)
+    return {"text": text}
+
+
 def forced(body: dict[str, Any], name: str) -> dict[str, Any]:
     lowered = name.lower()
     if mode == "broken":
@@ -631,6 +687,10 @@ def forced(body: dict[str, Any], name: str) -> dict[str, Any]:
         return call(name, question_reply(user_text(body)), 0)
     if "taskread" in lowered:
         return call(name, reading(task_text(body)), 0)
+    if "explainwording" in lowered:
+        return call(name, reworded(body), 0)
+    if lowered == "verdict":
+        return call(name, NO_FLAGS, 0)
     return say(SENTENCE)
 
 
@@ -645,6 +705,78 @@ def history(body: dict[str, Any]) -> tuple[dict[str, int], str]:
             elif block.get("type") == "tool_result":
                 results.append(text_of(block.get("content")))
     return calls, "\n".join(results)
+
+
+def _plan_block(name: str, node_type: str, version: float, **parameters: Any) -> dict[str, Any]:
+    return {
+        "name": name,
+        "type": node_type,
+        "version": version,
+        "parameters": json.dumps(parameters),
+    }
+
+
+DRAFTED_PLAN: dict[str, Any] = {
+    "name": "Release check",
+    "blocks": [
+        _plan_block("Every Monday", "n8n-nodes-base.scheduleTrigger", 1.4, rule="<<run_time>>"),
+        _plan_block(
+            "Read new releases",
+            "CUSTOM.wabRead",
+            1,
+            source="github_releases",
+            place="<<repository>>",
+        ),
+        _plan_block(
+            "Propose a ticket",
+            "CUSTOM.wabProposeChange",
+            1,
+            action="jira.create_ticket",
+            place="<<jira_project>>",
+            title="={{ 'New release ' + $json.tag }}",
+            subject="={{ $json.tag }}",
+        ),
+        _plan_block("Ask for a yes", "CUSTOM.wabAskForYes", 1),
+        _plan_block("Make the ticket", "CUSTOM.wabMakeApprovedChanges", 1),
+    ],
+    "wires": [
+        {"from_block": "Every Monday", "exit": "main", "to_block": "Read new releases"},
+        {"from_block": "Read new releases", "exit": "main", "to_block": "Propose a ticket"},
+        {"from_block": "Propose a ticket", "exit": "main", "to_block": "Ask for a yes"},
+        {"from_block": "Ask for a yes", "exit": "Yes", "to_block": "Make the ticket"},
+    ],
+    "settings": [
+        {"id": "run_time", "kind": "run_time", "label": "When it runs", "value": None},
+        {
+            "id": "repository",
+            "kind": "repository",
+            "label": "The repository",
+            "value": "langchain-ai/langgraph",
+        },
+        {
+            "id": "jira_project",
+            "kind": "jira_project",
+            "label": "The Jira project",
+            "value": "MOCK",
+        },
+    ],
+}
+"""The one plan the mock drafts: the release check, as a drafter that read the catalogue would."""
+
+
+def draft_step(body: dict[str, Any]) -> dict[str, Any]:
+    """The next move of the workflow drafter: find a block, describe it, then submit the plan. A
+    plan sent back gets a sentence and no tool, which ends the draft."""
+    calls, _ = history(body)
+    number = sum(calls.values())
+    if "find_blocks" not in calls:
+        return call("find_blocks", {"words": "read github releases"}, number)
+    if "describe_block" not in calls:
+        described = {"type": "CUSTOM.wabRead", "version": None, "resource": None, "operation": None}
+        return call("describe_block", described, number)
+    if "submit_plan" not in calls:
+        return call("submit_plan", DRAFTED_PLAN, number)
+    return say("I couldn't draft that.")
 
 
 def run_step(body: dict[str, Any]) -> dict[str, Any]:
@@ -728,7 +860,8 @@ def answer(method: str, path: str, body: dict[str, Any] | None) -> tuple[int, di
             if wanted.get("type") == "tool":
                 return 200, forced(body, str(wanted.get("name", "")))
         if body.get("tools"):
-            return 200, run_step(body)
+            offered = {str(tool.get("name")) for tool in body.get("tools", [])}
+            return 200, draft_step(body) if "submit_plan" in offered else run_step(body)
         return 200, say(SENTENCE)
     return 404, {"type": "error", "error": {"type": "not_found_error", "message": "Not found"}}
 

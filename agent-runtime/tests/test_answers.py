@@ -49,7 +49,6 @@ from agent_runtime.contracts import FOLLOW_UP_TASK, answer_request
 from agent_runtime.edits import commanded
 from agent_runtime.questions import QuestionReply
 from agent_runtime.reading import (
-    FILLED_IN,
     NO_TIME_BUT,
     NO_TIME_SAID,
     DayHow,
@@ -626,17 +625,22 @@ def test_a_schedule_keeps_only_schedule_words_and_a_time_never_said_is_asked_for
     task = "Every Friday, sum up the tickets we closed this week"
     closed = search(status="done", done=DaysRead(how="within", days=7), said="tickets we closed")
     summed = TicketRead(creates=False, says="summary", said="sum up")
-    guessed = answer_of(read(schedule="Every Friday at 5pm", search=closed, ticket=summed), task)
-    assert rows_of(guessed)[0] == ("schedule", "", "missing")
-    assert isinstance(guessed, SetupCardAnswer)
-    assert guessed.rows[0].note == NO_TIME_BUT.format("Every Friday")
-    only_time = answer_of(read(schedule="At 5pm", search=closed, ticket=summed), task)
-    assert isinstance(only_time, SetupCardAnswer) and only_time.rows[0].note == NO_TIME_SAID
+    # The model's 5pm, beside their day or in place of it: their own "Every Friday" stays, and
+    # the card asks the time they never said.
+    for model in ("Every Friday at 5pm", "At 5pm"):
+        guessed = answer_of(read(schedule=model, search=closed, ticket=summed), task)
+        assert rows_of(guessed)[0] == ("schedule", "Every Friday", "missing")
+        assert isinstance(guessed, SetupCardAnswer)
+        assert guessed.rows[0].note == NO_TIME_BUT.format("Every Friday")
+    no_day = answer_of(
+        read(schedule="At 5pm", search=closed, ticket=summed), "Sum up closed tickets"
+    )
+    assert isinstance(no_day, SetupCardAnswer) and no_day.rows[0].note == NO_TIME_SAID
     day = answer_of(
         read(schedule="Every Monday", search=search(said="tickets")), "Each week, list tickets"
     )
-    assert rows_of(day)[0] == ("schedule", "Every Monday", "changed")
-    assert isinstance(day, SetupCardAnswer) and day.rows[0].note == FILLED_IN
+    # Their own "Each week" stands, and the card asks the day, never the model's Monday.
+    assert rows_of(day)[0] == ("schedule", "Each week", "understood")
     stuffed = read(schedule="Every Friday for P1 bugs", search=closed, ticket=summed)
     assert rows_of(answer_of(stuffed, task))[0] == ("schedule", "Every Friday", "understood")
 
@@ -1695,21 +1699,63 @@ def test_a_watch_verb_request_with_a_change_still_fails_closed():
 
 
 @pytest.mark.parametrize(
-    "task",
+    ("task", "verb"),
     [
-        "add a software for me",
-        "Add another software",
-        "please watch some software for me please",
-        "track a new software",
+        ("add a software for me", "add"),
+        ("Add another software", "Add"),
+        ("please watch some software for me please", "watch"),
+        ("track a new software", "track"),
     ],
 )
-def test_a_watch_verb_with_no_software_name_asks_which_software(task: str):
-    answer = answer_of(read(asks_about="abilities"), task)
-    assert isinstance(answer, WhichSoftwareAnswer)
+def test_a_watch_with_no_software_name_asks_which_software(task: str, verb: str):
+    reading = read(belongs_on_watchlist=True, watchlist_word=verb)
+    assert answer_of(reading, task) == WhichSoftwareAnswer(word=verb)
+
+
+@pytest.mark.parametrize(
+    ("task", "verb"),
+    [
+        ("help me add Node Js , keep track of it", "add"),
+        ("add Node Js and keep track of it", "add"),
+        ("Add Node Js, monitor it", "Add"),
+        ("add Node Js, please watch this one", "add"),
+        ("add Node Js, follow it.", "add"),
+    ],
+)
+def test_a_clause_that_watches_it_is_the_same_watch_of_the_software_named(task: str, verb: str):
+    reading = read(belongs_on_watchlist=True, watchlist_word="add", software="Node Js")
+    assert answer_of(reading, task) == WatchlistAnswer(word=verb, software="Node Js")
+    assert {mark for _, mark, _ in parts(reading, task)} == {"will_do"}
+
+
+@pytest.mark.parametrize(
+    ("task", "named", "plural"),
+    [
+        ("add Node Js, track them for me", "Node Js", "track them for me"),
+        ("add redis and kafka, track them", "redis", "track them"),
+        ("add redis, kafka and keep track of them", "redis", "keep track of them"),
+        ("add redis and kafka, keep an eye on both", "redis", "keep an eye on both"),
+    ],
+)
+def test_a_clause_that_watches_them_is_never_ticked_as_the_watch_of_one_software(
+    task: str, named: str, plural: str
+):
+    """A plural can't mean one name, so "them" beside a software comes back, never ticked."""
+    reading = read(belongs_on_watchlist=True, watchlist_word="add", software=named)
+    marks = {text: mark for text, mark, _ in parts(reading, task)}
+    assert marks[plural] != "will_do"
+
+
+def test_a_clause_that_does_more_to_it_than_watch_still_comes_back():
+    reading = read(belongs_on_watchlist=True, watchlist_word="add", software="Node Js")
+    answer = answer_of(reading, "add Node Js, and delete it")
+    assert isinstance(answer, CantAnswer)
+    assert answer.alternative == WatchlistAnswer(word="add", software="Node Js")
 
 
 def test_more_words_after_a_software_noun_are_not_the_which_software_ask():
-    answer = answer_of(read(asks_about="abilities"), "add a software and email the team")
+    reading = read(belongs_on_watchlist=True, watchlist_word="add")
+    answer = answer_of(reading, "add a software and email the team")
     assert not isinstance(answer, WhichSoftwareAnswer)
 
 
@@ -1748,7 +1794,8 @@ def test_a_source_i_read_is_no_cant_and_the_software_is_offered_to_watch(
 
 
 def test_a_software_from_a_source_i_read_with_no_name_asks_which_software():
-    answer = answer_of(read(asks_about="abilities"), "add a software from maven instead")
+    reading = read(belongs_on_watchlist=True, watchlist_word="add")
+    answer = answer_of(reading, "add a software from maven instead")
     assert answer == WhichSoftwareAnswer(word="add")
 
 
@@ -2155,7 +2202,8 @@ def test_a_refusal_keeps_the_question_asked_with_it():
 
 
 def test_which_software_marks_its_clause_as_the_question():
-    assert parts(read(), "watch a new software") == [("watch a new software", "question", None)]
+    reading = read(belongs_on_watchlist=True, watchlist_word="watch")
+    assert parts(reading, "watch a new software") == [("watch a new software", "question", None)]
 
 
 CLASH_TASK = "{when}, list open tickets in MOCK"
@@ -2239,7 +2287,11 @@ def test_the_route_returns_the_parts_with_the_answer():
         make_app(chat).post("/v1/planner/answer", json=body).json()
     )
     assert isinstance(result, Answered)
-    assert [(p.mark, p.reason) for p in result.parts] == [("will_do", None), ("cant", "cant_do")]
+    assert [(p.mark, p.reason) for p in result.parts] == [
+        ("will_do", None),
+        ("cant", "cant_do"),
+        ("question", "how_many_days"),
+    ]
 
 
 # The review's cases (R4 second round).
@@ -2905,6 +2957,94 @@ def test_the_new_schedule_is_read_whole_and_ticked(task: str, change: ScheduleCh
     assert all(mark == "will_do" for _, mark, _ in marks(fields, task))
 
 
+@pytest.mark.parametrize(
+    "task",
+    [
+        "make the morning check run every Friday at 9am or so",
+        "make the morning check run every Friday at 9am roughly",
+        "make the morning check run every Friday at 9am-ish",
+        "make the morning check run every Friday before 5pm",
+    ],
+)
+def test_a_new_time_that_is_not_exact_is_asked_never_taken_or_left_as_it_was(task: str):
+    """Before, "9am or so" changed the time to exactly 09:00, and "before 5pm" kept the old
+    time without a word."""
+    fields = read(asks_about="change", workflow_words="morning check")
+    assert edited(fields, task).schedule == ScheduleChange(day="friday", time_unclear=True)
+
+
+@pytest.mark.parametrize(
+    ("task", "change"),
+    [
+        ("make the morning check run Mon-Fri at 9am", ScheduleChange(day="weekdays", at="09:00")),
+        (
+            "make the morning check run daily at 9am, except weekends",
+            ScheduleChange(day="weekdays", at="09:00"),
+        ),
+        ("make the morning check run on Tue at 10am", ScheduleChange(day="tuesday", at="10:00")),
+    ],
+)
+def test_an_edit_reads_weekdays_and_short_days_as_the_card_does(task: str, change: ScheduleChange):
+    """Before, "Mon-Fri" was applied and crossed as not followed, "except weekends" made it
+    every day, and "Tue" was dropped, so only the time changed."""
+    fields = read(asks_about="change", workflow_words="morning check")
+    assert edited(fields, task).schedule == change
+    assert all(mark == "will_do" for _, mark, _ in marks(fields, task))
+
+
+def test_an_edit_never_reads_a_project_key_as_a_short_day():
+    """Before, "for project MON" moved the morning check to Mondays."""
+    fields = read(asks_about="change", workflow_words="morning check")
+    task = "make the morning check run at 9am for project MON"
+    assert edited(fields, task).schedule == ScheduleChange(at="09:00")
+    assert crossed(fields, task) == [("project MON", "not_followed")]
+
+
+@pytest.mark.parametrize(
+    ("task", "cant"),
+    [
+        ("make the morning check skip Fridays", "how_often"),
+        ("make the morning check run every day but skip Fridays", "how_often"),
+        ("make the morning check run daily except weekends, holidays", "how_often"),
+        ("make the morning check run Mon-Fri at 9am, also Sat", None),
+    ],
+)
+def test_an_edit_that_leaves_out_or_adds_a_day_beside_weekdays_is_never_made(
+    task: str, cant: str | None
+):
+    """Before, "skip Fridays" moved it to Fridays, and "also Sat" made it every weekday. A day
+    left out is a schedule it can't hold. A day added asks which, as two days do."""
+    fields = read(asks_about="change", workflow_words="morning check")
+    answer = edited(fields, task)
+    assert (answer.schedule, answer.cant) == (None, cant)
+
+
+@pytest.mark.parametrize(
+    ("task", "crossed"),
+    [
+        ("make the morning check leave out Fridays", "leave out Fridays"),
+        ("make the morning check take Fridays out", "take Fridays out"),
+        ("make the morning check run daily, Fridays off", "Fridays off"),
+        ("make the morning check run daily, Fridays excluded", "Fridays excluded"),
+        ("make the morning check run daily unless it's a Friday", "unless it's a Friday"),
+        ("make the morning check run daily except Friday's", "except Friday's"),
+    ],
+)
+def test_an_edit_that_names_a_day_but_not_to_run_on_it_is_never_made(task: str, crossed: str):
+    """Before, each moved the morning check to Fridays, or kept it daily and dropped Friday."""
+    fields = read(asks_about="change", workflow_words="morning check")
+    answer = edited(fields, task)
+    assert (answer.schedule, answer.cant) == (None, "how_often")
+    assert (crossed, "cant", "how_often") in marks(fields, task)
+
+
+def test_an_edit_never_reads_a_ticket_s_due_date_as_its_schedule():
+    """Before, it moved the morning check to Fridays at 17:00."""
+    fields = read(asks_about="change", workflow_words="morning check")
+    answer = edited(fields, "make the morning check set the due date to Friday at 5pm")
+    assert answer.schedule is None
+
+
 def test_another_workflow_named_beside_the_edit_is_kept_to_ask_on_its_own():
     task = "Make the morning check run at 10am and the weekly summary run on Mondays"
     fields = read(asks_about="change", workflow_words="morning check")
@@ -3001,6 +3141,8 @@ def test_another_workflow_beside_the_edit_is_crossed_once():
         ("make the morning check run at 9.30", "at 9.30"),
         ("make the morning check run at nine", "at nine"),
         ("make the morning check run at 24", "at 24"),
+        ("make the morning check run at 24:00", "at 24:00"),
+        ("make the morning check run at 7:5", "at 7:5"),
     ],
 )
 def test_a_time_it_cant_read_is_left_to_pick_and_crossed_never_guessed(task: str, unread: str):
@@ -3079,3 +3221,75 @@ def test_an_approvers_question_read_as_a_change_still_gets_its_answer():
         answer_of(read(asks_about="change"), task, WORKFLOWS, changes_workflows=False),
         CheckWorkflowsAnswer,
     )
+
+
+# ADR 0047 tuning: the yes said in the request's own words, and the watchlist's own ticket.
+
+
+def _watch(word: str, schedule: str | None = None) -> TaskRead:
+    return read(
+        belongs_on_watchlist=True, watchlist_word=word, software="LangGraph", schedule=schedule
+    )
+
+
+@pytest.mark.parametrize(
+    "task",
+    [
+        "Create a ticket in MOCK when there's a new LangGraph release, after the approver says yes",
+        "If LangGraph has a new release, raise an upgrade ticket after an Approver says yes",
+        "Raise a ticket for each new LangGraph release, only once an approver approves it",
+    ],
+)
+def test_a_write_that_names_the_yes_it_waits_for_is_not_refused(task: str):
+    assert not isinstance(answer_of(_watch("release"), task), RefusedAnswer)
+
+
+@pytest.mark.parametrize(
+    "task",
+    [
+        "Create a ticket for each new LangGraph release, the approver can say yes afterwards",
+        "Raise a ticket for each new LangGraph release, after I approve it myself",
+        "Create a ticket for each new LangGraph release without the approver's yes",
+        "Watch LangGraph and create a ticket with the approval skipped",
+        "Watch LangGraph and create a ticket after the approver says yes, or skip it if urgent",
+        "Watch LangGraph and create a ticket after the approver says yes later",
+        "Watch LangGraph and create a ticket after the approver says yes, unless it is Friday",
+        "Watch LangGraph and create a ticket after the approver says yes, then approve it myself",
+    ],
+)
+def test_a_real_skip_beside_a_yes_is_still_refused(task: str):
+    assert isinstance(answer_of(_watch("release"), task), RefusedAnswer)
+
+
+def test_the_team_leads_watch_with_a_ticket_is_the_watchlists_own_upgrade_ticket():
+    task = (
+        "Every weekday at 9, check LangGraph for new releases and raise a Jira ticket if there's "
+        "a new one."
+    )
+    answer = answer_of(_watch("check", "Every weekday at 9"), task)
+    crossed = [row.text for row in getattr(answer, "cant", [])]
+    assert not any("ticket" in text for text in crossed), crossed
+
+
+def test_a_ticket_with_a_detail_the_watchlist_cant_keep_still_comes_back():
+    task = "Watch LangGraph releases and open an upgrade ticket if it has a major release"
+    answer = answer_of(_watch("Watch"), task)
+    assert isinstance(answer, CantAnswer) and any("major" in row.text for row in answer.cant)
+
+
+from agent_runtime.parts import HOW_OFTEN, OWN_TIME  # noqa: E402
+
+
+def test_a_watch_time_the_reading_missed_is_read_from_the_request_itself():
+    """The team lead's sentence: with no schedule in the reading, "every weekday at 9" is still
+    one day and one time the watchlist's one schedule could hold, never "that often"."""
+    task = "Check LangGraph for new releases every weekday at 9"
+    answer = answer_of(_watch("releases"), task)
+    notes = [row.note for row in getattr(answer, "cant", [])]
+    assert notes == [OWN_TIME], notes
+
+
+def test_a_watch_time_too_often_for_the_watchlist_still_says_so():
+    task = "Check LangGraph for new releases every hour"
+    answer = answer_of(_watch("releases"), task)
+    assert [row.note for row in getattr(answer, "cant", [])] == [HOW_OFTEN]

@@ -6,3 +6,6 @@
 
 # Rubric evidence stays byte for byte as the tools wrote it. Some reports mix line endings.
 docs/evidence/** -text
+
+# Written by scripts/n8n-catalogue.sh from the pinned n8n image, so GitHub folds its diff.
+contracts/n8n/catalogue.json linguist-generated=true

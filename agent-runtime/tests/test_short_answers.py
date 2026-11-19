@@ -31,6 +31,8 @@ def test_the_capabilities_card_lists_the_ready_entries_by_their_short_words():
         "Create Jira tickets, after a yes",
         "Explain a stopped run, and retry it",
         "Change or pause your workflows",
+        "Draft an n8n workflow from your words, for an Approver to check",
+        "Explain any workflow",
     ]
 
 
@@ -100,7 +102,7 @@ def test_a_cant_no_entry_names_keeps_the_words_it_had():
 
 def test_a_text_message_is_the_registrys_unsupported_entry():
     note = why_not("do", "send me a text message")
-    assert note is not None and note.startswith("I can't send me a text message.")
+    assert note is not None and note.startswith("I can't do this.")
 
 
 def test_removing_a_label_from_tickets_is_not_deleting_them():

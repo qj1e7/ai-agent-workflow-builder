@@ -11,6 +11,7 @@ from platform_api.practice_jira.store import (
     PRACTICE_EMAIL,
     PracticeJira,
     PracticeTicket,
+    practice_reader_token,
     practice_token,
 )
 
@@ -20,6 +21,7 @@ __all__ = [
     "PracticeJira",
     "PracticeTicket",
     "dev_router",
+    "practice_reader_token",
     "practice_token",
     "router",
 ]

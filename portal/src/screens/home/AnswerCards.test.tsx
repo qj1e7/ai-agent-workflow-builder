@@ -79,20 +79,20 @@ describe('the Planner’s short answers, as the chat-first sketch draws them', (
   const asked = (text: string, mark: PartView['mark'], reason: PartView['reason'] = null): PartView => ({ text, mark, reason, note: null, choices: [] })
 
   it('lists what I can do in the registry’s short words, with what isn’t built yet in one Not yet line', () => {
-    const reply: PlannerReply = { answer: 'abilities', how_to_start: false, parts: [asked('What can you do', 'will_do')] }
+    const reply: PlannerReply = { trace_id: null, answer: 'abilities', how_to_start: false, parts: [asked('What can you do', 'will_do')] }
     expect(text(draw(reply, { registry: REGISTRY }))).toBe(
-      'What I can do Watch software for new releases Watch Maven and npm packages, and their known vulnerabilities Create Jira tickets, after a yes Explain a stopped run, and retry it Change or pause your workflows Not yet: Teams channels, email, Confluence.',
+      'What I can do Watch software for new releases Watch Maven and npm packages, and their known vulnerabilities Create Jira tickets, after a yes Explain a stopped run, and retry it Change or pause your workflows Draft an n8n workflow from your words, for an Approver to check Explain any workflow Not yet: Teams channels, email, Confluence.',
     )
     expect(sayOf(reply)).toBeNull()
   })
 
   it('never shows a line as working while its connection needs setting up', () => {
     const jiraOff: CapabilitiesView = { ...REGISTRY, capabilities: REGISTRY.capabilities.map((c) => (c.id === 'jira.create' ? { ...c, state: 'needs_setup' as const } : c)) }
-    expect(text(draw({ answer: 'abilities', how_to_start: false, parts: [] }, { registry: jiraOff }))).toContain('Create Jira tickets, after a yes Needs setup')
+    expect(text(draw({ trace_id: null, answer: 'abilities', how_to_start: false, parts: [] }, { registry: jiraOff }))).toContain('Create Jira tickets, after a yes Needs setup')
   })
 
   it('answers how to start with the steps, and the registry’s example as a chip, with no cross on her question', () => {
-    const reply: PlannerReply = { answer: 'abilities', how_to_start: true, parts: [asked('list me the steps to use this app', 'will_do')] }
+    const reply: PlannerReply = { trace_id: null, answer: 'abilities', how_to_start: true, parts: [asked('list me the steps to use this app', 'will_do')] }
     const html = draw(reply, { registry: REGISTRY })
     expect(text(html)).toBe(
       'How to start Tell me what should run by itself, in your own words, like “Keep track of the LangGraph version”. Check the card I make, and change anything I guessed. Press Set up. I do a test run, which writes nothing. If the test passes, press Turn it on. Nothing is written until an Approver says yes in Teams. Keep track of the LangGraph version',
@@ -104,14 +104,14 @@ describe('the Planner’s short answers, as the chat-first sketch draws them', (
   })
 
   it('says it didn’t follow a request it read none of, and what it can do instead', () => {
-    const reply: PlannerReply = { answer: 'abilities', how_to_start: false, parts: [asked('What’s the weather', 'cant', 'not_followed')] }
-    expect(text(draw(reply, { registry: REGISTRY }))).toBe('I didn’t follow that I can watch software releases, fix stopped runs and change your workflows.')
+    const reply: PlannerReply = { trace_id: null, answer: 'abilities', how_to_start: false, parts: [asked('What’s the weather', 'cant', 'not_followed')] }
+    expect(text(draw(reply, { registry: REGISTRY }))).toBe('I didn’t follow that I can watch software releases, fix stopped runs and change your workflows. Say it another way')
     expect(sayOf(reply)).toBeNull()
   })
 
   const TEAMS: CantRowView = { kind: 'do', text: 'Post the FastAPI news in our Teams channel', note: 'I can\'t post in Teams channels yet.', needs: 'new_system', system: 'Teams', instead: 'Run results show here, in the chat.', unsupported: false }
   const DELETE: CantRowView = { kind: 'do', text: 'delete the MOCK ticket', note: 'I don\'t delete anything in Jira.', needs: 'new_tool', system: 'Jira', instead: 'A Jira admin can do that.', unsupported: true }
-  const cantOf = (row: CantRowView): CantReply => ({ answer: 'cant', cant: [row], alternative: null, parts: [{ text: row.text, mark: 'cant', reason: 'cant_do', note: row.note, choices: [] }] })
+  const cantOf = (row: CantRowView): CantReply => ({ trace_id: null, answer: 'cant', cant: [row], alternative: null, draft_words: null, parts: [{ text: row.text, mark: 'cant', reason: 'cant_do', note: row.note, choices: [] }] })
 
   it('gives a can’t the registry names one card: the line, what she has instead, and Ask the team', () => {
     const html = draw(cantOf(TEAMS))
@@ -121,10 +121,10 @@ describe('the Planner’s short answers, as the chat-first sketch draws them', (
     expect(draw(cantOf(TEAMS), { leftovers: true }), 'the card already says it').toBe('')
   })
 
-  it('offers no Ask the team for what the platform won’t do', () => {
+  it('gives what the platform won’t do Ask the team too, so no can’t is bare (ADR 0047)', () => {
     const html = draw(cantOf(DELETE))
-    expect(text(html)).toBe('I don\'t delete anything in Jira A Jira admin can do that.')
-    expect(buttons(html)).toEqual([])
+    expect(text(html)).toBe('I don\'t delete anything in Jira A Jira admin can do that. Ask the team')
+    expect(buttons(html)).toEqual(['Ask the team'])
   })
 
   it('says a pause or a resume in one plain line, and when nothing changed', () => {
@@ -223,7 +223,7 @@ describe('a set-up card', () => {
 
 describe('the software card', () => {
   const WATCHED = statuses as WatchlistView
-  const ask = (software: string, listed: { name: string; software_id: string } | null): WatchlistReply => ({ answer: 'watchlist', software, word: 'version', already_listed: listed, also: null, parts: [] })
+  const ask = (software: string, listed: { name: string; software_id: string } | null): WatchlistReply => ({ trace_id: null, answer: 'watchlist', software, word: 'version', already_listed: listed, also: null, parts: [] })
 
   it('names a watched software with its pill and where it stands, in the watchlist’s own words', () => {
     const html = draw(ask('LangGraph', { name: 'LangGraph', software_id: 'sw_01JBW00000000000000000002' }), { watched: WATCHED })
@@ -236,6 +236,45 @@ describe('the software card', () => {
     const html = draw(ask('Kubernetes', null))
     expect(text(html)).toContain('Kubernetes It isn’t on the watchlist, so I don’t know which version you run.')
     expect(buttons(html)).toEqual(['Watch it'])
+  })
+
+  it.each(['add', 'Add', 'watch', 'keep track of', 'monitor', 'Keep an eye on', 'track', 'follow'])('says only that it isn’t on the watchlist yet when she asked to %s it', (word) => {
+    const html = draw({ ...ask('Node Js', null), word })
+    expect(text(html)).toContain('Node Js It isn’t on the watchlist yet.')
+    expect(text(html)).not.toContain('which version you run')
+    expect(buttons(html)).toEqual(['Watch it'])
+  })
+
+  it('keeps the version sentence inside a can’t whose alternative is the watch offer, when the word asks about the version', () => {
+    const offer = ask('Node Js', null)
+    const html = draw({ trace_id: null, answer: 'cant', cant: [], alternative: offer, draft_words: null, parts: [] })
+    expect(text(html)).toContain('It isn’t on the watchlist, so I don’t know which version you run.')
+  })
+})
+
+describe('which software', () => {
+  const which: PlannerReply = { trace_id: null, answer: 'which_software', word: 'add', parts: [] }
+
+  it('asks for the name in a card, as Add software does: the label above the box, the help under it, and Find it never disabled', () => {
+    const html = draw(which)
+    const card = /<section[\s\S]*<\/section>/.exec(html)?.[0] ?? ''
+    const input = /<input[^>]*>/.exec(card)?.[0] ?? ''
+    const id = /id="([^"]+)"/.exec(input)?.[1] ?? 'none'
+    expect(text(card)).toContain('Software name I know common software, such as Kubernetes. If I don’t know yours, you can choose where it’s published.')
+    expect(card).toContain(`for="${id}"`)
+    expect(input).toContain(`aria-describedby="${id}-help"`)
+    expect(buttons(card)).toEqual(['Find it', 'Never mind'])
+    expect(html).not.toContain('disabled')
+    expect(/<form[^>]*novalidate/i.test(html)).toBe(true)
+  })
+
+  it('says it once: no title over the field and no placeholder, while the card keeps its name for a screen reader', () => {
+    const card = /<section[\s\S]*<\/section>/.exec(draw(which))?.[0] ?? ''
+    expect(card).toMatch(/^<section[^>]*aria-label="Software to watch"/)
+    expect(card).not.toContain('<h3')
+    expect(text(card)).toMatch(/^Software name /)
+    expect(card).not.toContain('placeholder')
+    expect(text(card).match(/Kubernetes/g)).toHaveLength(1)
   })
 })
 
@@ -267,9 +306,11 @@ describe('PartsList on a set-up card', () => {
 describe('a clause the Planner didn’t follow, sent as a can’t with the rest to set up', () => {
   const NOT_FOLLOWED: PartView = { text: 'Colour them by team', mark: 'cant', reason: 'not_followed', note: null, choices: [] }
   const reply: CantReply = {
+    trace_id: null,
     answer: 'cant',
     cant: [{ kind: 'look_for', text: 'Colour them by team', note: 'I didn’t follow this part.', needs: null, system: null, instead: null, unsupported: false }],
     alternative: { ...SETUP, parts: [] },
+    draft_words: null,
     parts: [{ text: 'Every Friday', mark: 'will_do', reason: null, note: null, choices: [] }, NOT_FOLLOWED],
   }
 
@@ -300,9 +341,11 @@ describe('a clause the Planner didn’t follow, sent as a can’t with the rest 
     // “Every Friday, list the stale tickets in MOCK and email me”, as the runtime marks it.
     const emailRow = { kind: 'do', text: 'email me', note: 'I can’t send email.', needs: 'new_system', system: 'email', instead: null, unsupported: false } as const
     const stale: CantReply = {
+      trace_id: null,
       answer: 'cant',
       cant: [emailRow],
       alternative: { ...SETUP, parts: [] },
+      draft_words: null,
       parts: [
         { text: 'Every Friday', mark: 'will_do', reason: null, note: null, choices: [] },
         { text: 'list the stale tickets in MOCK', mark: 'question', reason: 'how_many_days', note: null, choices: [] },
@@ -330,7 +373,7 @@ describe('a clause the Planner didn’t follow, sent as a can’t with the rest 
 describe('a can’t answer with nothing it can’t do', () => {
   it('draws no can’t card, since the clauses it didn’t follow are drawn above', () => {
     const notFollowed: PartView = { text: 'only the major releases', mark: 'cant', reason: 'not_followed', note: null, choices: [] }
-    const bare: CantReply = { answer: 'cant', cant: [{ kind: 'look_for', text: 'only the major releases', note: 'I didn’t follow this part.', needs: null, system: null, instead: null, unsupported: false }], alternative: null, parts: [notFollowed] }
+    const bare: CantReply = { trace_id: null, answer: 'cant', cant: [{ kind: 'look_for', text: 'only the major releases', note: 'I didn’t follow this part.', needs: null, system: null, instead: null, unsupported: false }], alternative: null, draft_words: null, parts: [notFollowed] }
     expect(draw(bare)).toBe('')
     expect(text(draw(bare, { leftovers: true }))).toBe('Can’t do: “only the major releases” I didn’t follow this part.')
   })
@@ -371,7 +414,7 @@ describe('the clauses an answer didn’t read', () => {
   it('show a can’t the card doesn’t name, as the yes that can’t be skipped', () => {
     const note = 'I can’t skip the yes. Nothing is written without a yes.'
     const words = 'how do I create a workflow without Bob'
-    const skip: CantReply = { answer: 'cant', cant: [{ kind: 'do', text: words, note, needs: null, system: null, instead: null, unsupported: false }], alternative: null, parts: [{ text: words, mark: 'cant', reason: 'cant_do', note, choices: [] }] }
+    const skip: CantReply = { trace_id: null, answer: 'cant', cant: [{ kind: 'do', text: words, note, needs: null, system: null, instead: null, unsupported: false }], alternative: null, draft_words: null, parts: [{ text: words, mark: 'cant', reason: 'cant_do', note, choices: [] }] }
     expect(text(draw(skip, { leftovers: true }))).toBe(`Can’t do: “${words}” ${note}`)
   })
 
@@ -464,7 +507,7 @@ describe('the answer to a question about the person’s own data', () => {
 
 describe('an Approver’s answers in the chat (spec 5.3)', () => {
   const BOB: Me = { id: 'bob', display: 'Bob', roles: ['approver'] }
-  const HOME = bobHome as HomeOut
+  const HOME: HomeOut = { ...(bobHome as HomeOut), setup_approvals: [] }
   const NOW = new Date('2026-11-13T15:00:00+08:00')
   const OPS = 'Operators set up workflows. Ask Alice, Carol or Dave.'
 
@@ -483,7 +526,7 @@ describe('an Approver’s answers in the chat (spec 5.3)', () => {
     client.setQueryData(['use-cases', scope], seed.useCases ?? [])
     for (const useCase of seed.useCases ?? []) if (useCase.last_run) client.setQueryData(['troubleshoot', scope, useCase.last_run.run_id, 0], troubleshooting)
     client.setQueryData(['decisions', scope, reply.answer === 'decided' ? reply.only : null], seed.decisions ?? (decisionsOfBob as DecisionsView))
-    const thread = threadReducer(threadReducer(EMPTY, { type: 'sent', text: 'asked' }), { type: 'answered', reply, typed: 'asked' })
+    const thread = threadReducer(threadReducer(EMPTY, { type: 'sent', text: 'asked', chat: 'c1' }), { type: 'answered', reply, typed: 'asked' })
     return renderToStaticMarkup(
       <QueryClientProvider client={client}>
         <ApiProvider session={session} platformFetch={fetch} origin="http://portal.test">
@@ -530,7 +573,7 @@ describe('an Approver’s answers in the chat (spec 5.3)', () => {
   it('answers what waits for him with the requests themselves, three cards at most, then how many more', () => {
     const [request] = HOME.approvals
     const many = { ...HOME, approvals: Array.from({ length: 10 }, (_, n) => ({ ...request!, approval_id: `apr_${String(n)}`, run_id: `run_${String(n)}` })), approvals_total: 25, confirmations: [] }
-    const html = ask({ answer: 'needs_me', parts: [] }, { home: many })
+    const html = ask({ trace_id: null, answer: 'needs_me', parts: [] }, { home: many })
     expect(answerOf(html)).toMatch(/^These need your yes\. Create 1 Jira ticket Needs your yes Upgrade LangGraph from 1\.2\.14 to 1\.2\.16 Review and decide/)
     expect(buttons(html).filter((name) => name === 'Review and decide')).toHaveLength(3)
     expect(html).toMatch(/<a[^>]*href="\/workflows"[^>]*>22 more<\/a>/)
@@ -570,7 +613,7 @@ describe('an Approver’s answers in the chat (spec 5.3)', () => {
     }
     const stillOpen = { ...(bobApproval as ApprovalView), approval_id: 'apr_open', run_id: 'run_open' }
     const home = { ...HOME, approvals: [{ ...HOME.approvals[0]!, approval_id: 'apr_open', run_id: 'run_open' }], approvals_total: 1, confirmations: [] }
-    const html = ask({ answer: 'needs_me', parts: [] }, { home, memory, approval: approved, extra: [stillOpen] })
+    const html = ask({ trace_id: null, answer: 'needs_me', parts: [] }, { home, memory, approval: approved, extra: [stillOpen] })
     const cards = [...html.matchAll(/<section[^>]*>([\s\S]*?)<\/section>/g)].map((match) => text(match[1] ?? ''))
     expect(cards).toEqual([
       'Create 1 Jira ticket Approved Upgrade LangGraph from 1.2.14 to 1.2.16 Approved. Open',
@@ -580,7 +623,7 @@ describe('an Approver’s answers in the chat (spec 5.3)', () => {
 
   it('leads one request with the sketch’s line', () => {
     const one = { ...HOME, confirmations: [] }
-    expect(answerOf(ask({ answer: 'needs_me', parts: [] }, { home: one }))).toMatch(/^This needs your yes\. Create 1 Jira ticket Needs your yes/)
+    expect(answerOf(ask({ trace_id: null, answer: 'needs_me', parts: [] }, { home: one }))).toMatch(/^This needs your yes\. Create 1 Jira ticket Needs your yes/)
   })
 
   it('sends an approve to the request to decide there, never a decision in the chat', () => {
@@ -600,11 +643,11 @@ describe('an Approver’s answers in the chat (spec 5.3)', () => {
   })
 
   it('answers what he can ask in the sketch’s three lines', () => {
-    const html = ask({ answer: 'abilities', how_to_start: false, parts: [{ text: 'What can you do', mark: 'will_do', reason: null, note: null, choices: [] }] })
+    const html = ask({ trace_id: null, answer: 'abilities', how_to_start: false, parts: [{ text: 'What can you do', mark: 'will_do', reason: null, note: null, choices: [] }] })
     expect(answerOf(html)).toBe('What I can do Show what waits for your yes Show exactly what a change will write Show your past decisions')
-    const unknown = ask({ answer: 'abilities', how_to_start: false, parts: [{ text: 'What’s the weather', mark: 'cant', reason: 'not_followed', note: null, choices: [] }] })
+    const unknown = ask({ trace_id: null, answer: 'abilities', how_to_start: false, parts: [{ text: 'What’s the weather', mark: 'cant', reason: 'not_followed', note: null, choices: [] }] })
     expect(answerOf(unknown)).toContain('I didn’t follow that I can show what waits for your yes, and your past decisions.')
-    const start = ask({ answer: 'abilities', how_to_start: true, parts: [{ text: 'help', mark: 'will_do', reason: null, note: null, choices: [] }] })
+    const start = ask({ trace_id: null, answer: 'abilities', how_to_start: true, parts: [{ text: 'help', mark: 'will_do', reason: null, note: null, choices: [] }] })
     expect(answerOf(start), 'he sets nothing up, so he gets what he can ask, not the steps').toBe('What I can do Show what waits for your yes Show exactly what a change will write Show your past decisions')
   })
 
@@ -637,7 +680,7 @@ describe('an Approver’s answers in the chat (spec 5.3)', () => {
 
   it('speaks of the team’s workflows, and of why one stopped with who can retry, from his Workflows page’s rows', () => {
     const stopped = stoppedUseCase as UseCaseView
-    expect(answerOf(ask({ answer: 'check_workflows', use_case_id: null, parts: [] }, { useCases: [stopped] }))).toMatch(/^The team has 1 workflow\. 1 stopped\./)
+    expect(answerOf(ask({ trace_id: null, answer: 'check_workflows', use_case_id: null, parts: [] }, { useCases: [stopped] }))).toMatch(/^The team has 1 workflow\. 1 stopped\./)
   })
 })
 
@@ -690,7 +733,7 @@ describe('the run card: the AI troubleshooter’s answer that moves with the run
     expect(labels(html)).toEqual(['What happened', 'Affected', 'Safe to retry'])
     expect(buttons(html)).toEqual(['Open', 'Retry'])
     expect(html, 'its title can take focus when a press takes Retry away').toMatch(/<h3 id="[^"]+" tabindex="-1">LangGraph release check<\/h3>/)
-    expect(whoOf({ answer: 'why_stopped', use_case_id: null, parts: [] })).toBe('troubleshooter')
+    expect(whoOf({ trace_id: null, answer: 'why_stopped', use_case_id: null, parts: [] })).toBe('troubleshooter')
   })
 
   it('stopped, asked by an Approver: the same answers, and who can retry in place of a button', () => {
@@ -753,8 +796,8 @@ describe('the run card: the AI troubleshooter’s answer that moves with the run
   })
 
   it('keeps following its run when the chat draws it again, after a retry took the run off the stopped list', () => {
-    const why: PlannerReply = { answer: 'why_stopped', use_case_id: null, parts: [] }
-    const thread = threadReducer(threadReducer(EMPTY, { type: 'sent', text: 'Why did it stop?' }), { type: 'answered', reply: why, typed: 'Why did it stop?' })
+    const why: PlannerReply = { trace_id: null, answer: 'why_stopped', use_case_id: null, parts: [] }
+    const thread = threadReducer(threadReducer(EMPTY, { type: 'sent', text: 'Why did it stop?', chat: 'c1' }), { type: 'answered', reply: why, typed: 'Why did it stop?' })
     const drawn = (memory: (id: number) => CardMemory = () => newCardMemory()): string => {
       const session = createDevSession(null)
       const scope = session.cacheScope()
@@ -815,8 +858,8 @@ describe('the run card: the AI troubleshooter’s answer that moves with the run
 })
 
 describe('the Planner’s n8n answer', () => {
-  const noAccess: N8nReply = { answer: 'n8n', said: 'You do not have n8n access yet. An Operator can give it to you on the People page.', can_open: false, use_case_id: null, parts: [] }
-  const canOpen: N8nReply = { answer: 'n8n', said: 'You can open it in n8n.', can_open: true, use_case_id: 'uc_01JD0', parts: [] }
+  const noAccess: N8nReply = { trace_id: null, answer: 'n8n', said: 'You do not have n8n access yet. An Operator can give it to you on the People page.', can_open: false, use_case_id: null, parts: [] }
+  const canOpen: N8nReply = { trace_id: null, answer: 'n8n', said: 'You can open it in n8n.', can_open: true, use_case_id: 'uc_01JD0', parts: [] }
 
   it('says why not, and draws no button, to someone who can’t open n8n', () => {
     expect(sayOf(noAccess)).toBe(noAccess.said)

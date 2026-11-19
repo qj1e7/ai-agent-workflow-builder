@@ -4,7 +4,7 @@ import type { PanelItem } from '../../ui/sidePanel'
 import { deskOf, desksReducer, EMPTY_DESK, HISTORY_MAX, panelOf, type DeskAction, type Desks } from './chatState'
 import { isThinking } from './threadState'
 
-const REPLY: PlannerReply = { answer: 'abilities', how_to_start: false, parts: [] }
+const REPLY: PlannerReply = { trace_id: null, answer: 'abilities', how_to_start: false, parts: [] }
 
 const run = (actions: readonly (readonly [string, DeskAction])[], from: Desks = {}): Desks => actions.reduce((desks, [user, action]) => desksReducer(desks, { user, action }), from)
 
@@ -15,7 +15,7 @@ describe('the chat each person keeps', () => {
 
   it('keeps the conversation while the person is elsewhere, because nothing but the person’s own actions changes it', () => {
     const desks = run([
-      ['alice', { type: 'sent', text: 'Check my workflows' }],
+      ['alice', { type: 'sent', text: 'Check my workflows', chat: 'c1' }],
       ['alice', { type: 'answered', reply: REPLY, typed: 'Check my workflows' }],
     ])
     expect(deskOf(desks, 'alice').thread.messages.map((m) => m.kind)).toEqual(['me', 'reply'])
@@ -24,18 +24,18 @@ describe('the chat each person keeps', () => {
 
   it('never shows one person’s chat to another, and gives it back when the first comes back (ROLE-own-chat)', () => {
     const asAlice = run([
-      ['alice', { type: 'sent', text: 'Check my workflows' }],
+      ['alice', { type: 'sent', text: 'Check my workflows', chat: 'c1' }],
       ['alice', { type: 'answered', reply: REPLY, typed: 'Check my workflows' }],
     ])
     expect(deskOf(asAlice, 'bob').thread.messages).toEqual([])
-    const asBob = run([['bob', { type: 'sent', text: 'What did I decide before?' }]], asAlice)
+    const asBob = run([['bob', { type: 'sent', text: 'What did I decide before?', chat: 'c1' }]], asAlice)
     expect(deskOf(asBob, 'bob').thread.messages.map((m) => m.kind === 'me' && m.text)).toEqual(['What did I decide before?', false])
     expect(deskOf(asBob, 'alice').thread.messages.map((m) => m.kind === 'me' && m.text)).toEqual(['Check my workflows', false])
   })
 
   it('puts an answer in the chat of the person who asked, even when someone else is signed in by the time it arrives', () => {
     const desks = run([
-      ['alice', { type: 'sent', text: 'Check my workflows' }],
+      ['alice', { type: 'sent', text: 'Check my workflows', chat: 'c1' }],
       ['bob', { type: 'typed', text: 'hello' }],
       ['alice', { type: 'answered', reply: REPLY, typed: 'Check my workflows' }],
     ])
@@ -47,7 +47,7 @@ describe('the chat each person keeps', () => {
   it('empties the box when a message is sent, and puts the words back when the send fails', () => {
     const sent = run([
       ['alice', { type: 'typed', text: 'Watch Redis' }],
-      ['alice', { type: 'sent', text: 'Watch Redis' }],
+      ['alice', { type: 'sent', text: 'Watch Redis', chat: 'c1' }],
     ])
     expect(deskOf(sent, 'alice').text).toBe('')
     const failed = run(
@@ -64,8 +64,8 @@ describe('the chat each person keeps', () => {
 
   it('clears only that person’s chat on New chat, and leaves a note for them to read once', () => {
     const both = run([
-      ['alice', { type: 'sent', text: 'a' }],
-      ['bob', { type: 'sent', text: 'b' }],
+      ['alice', { type: 'sent', text: 'a', chat: 'c1' }],
+      ['bob', { type: 'sent', text: 'b', chat: 'c1' }],
     ])
     const cleared = run(
       [

@@ -6,10 +6,12 @@ runs.
 What waits to be set up is read from n8n each time, never kept: every workflow in the own space of
 a person the platform made an n8n account for, and every workflow n8n moved to the platform's
 project when its maker's account ended, which the platform noted then. A workflow a use case
-names, deleted ones included, is never offered. Its maker is the person whose space it sits in,
+names, deleted ones included, is never offered, and nor is a drafted workflow someone has open
+for Edit in n8n (ADR 0051). Its maker is the person whose space it sits in,
 matched by the n8n user id the platform stored for them, never by a name or an email.
 
-Setting one up moves it to the platform's project first, read back as every move is, and then
+Setting one up moves it to the platform's project first, read back as every move is, puts right
+there what is the platform's to set and never its maker's (ADR 0051, Fixed for you), and then
 registers what n8n holds there, which nobody else can change any more. The safety checker grades
 it, and only a safe version asks for a yes and writes (ENGINE-PLAN 2.3.11). One published in n8n
 is on at once. One that is not is set up as a draft, and only when it is safe, because only a
@@ -26,6 +28,7 @@ from zoneinfo import ZoneInfo
 import httpx
 from pydantic import Field
 
+from platform_api.builder.layout import FixedForYou, fixed_for_you
 from platform_api.builder.models import UseCaseCreated
 from platform_api.builder.n8n_draft import blocks_of
 from platform_api.builder.n8n_holds import HoldRefused
@@ -35,6 +38,8 @@ from platform_api.builder.versions import Publication, authors_json
 from platform_api.db import Connection, Database, hold_workflow, json
 from platform_api.orchestration import (
     CanOpen,
+    ChangedInN8n,
+    Finding,
     Grade,
     Graded,
     KnownOptions,
@@ -43,7 +48,10 @@ from platform_api.orchestration import (
     N8nWorkflow,
     NoN8nAccess,
     StaffAccess,
+    Written,
+    attach_keys,
     grade,
+    unchecked,
 )
 from platform_api.shared import TEAM_TIME_ZONE, Principal, UserId, new_id
 from platform_api.wire import WireIn, WireModel
@@ -53,6 +61,14 @@ log = logging.getLogger(__name__)
 SET_UP_ALREADY = "This workflow is set up already."
 NOT_LOADED = "n8n is not ready yet: its error workflow is not loaded."
 NOT_READ = "n8n did not show the workflow. Nothing is set up. Try again."
+REPLACES_DRAFT = (
+    "Set up starts from the published version, so changes saved in n8n since then are dropped."
+)
+NO_START_ADDED = (
+    "Set up can't add Start from the Portal, as no schedule that is on starts a block, so Run "
+    "now can't start it."
+)
+NOT_FIXED = "n8n did not keep the platform's settings on it, so it is not set up. Try again."
 CHANGED_AS_SET_UP = (
     "It changed in n8n while it was being set up, and it no longer passes the check, so it went "
     "back to its maker's n8n space. Fix it there first."
@@ -61,6 +77,14 @@ FIX_IN_N8N = (
     "Fix it in n8n first. It isn't published there, and only a workflow that passes the check "
     "can be turned on."
 )
+FIX_N8N_BLOCKS = (
+    "Fix it in n8n first. n8n runs its own blocks as they are, whatever the check says, and one "
+    "of them does not pass it."
+)
+"""For a workflow whose finding n8n would act on without the platform: one of n8n's own blocks
+that is off, posts to a place an expression picks, or names a key the platform did not make. In
+the platform's project n8n lets a workflow use every key there is, so such a workflow is never
+moved there (ADR 0045, ENGINE-PLAN E16)."""
 
 
 class MadeInN8nView(WireModel):
@@ -77,6 +101,17 @@ class MadeInN8nView(WireModel):
     )
     findings: list[str] = Field(
         description="Why it is not safe, in the safety checker's words, one per problem."
+    )
+    fixed_for_you: list[str] = Field(
+        description="What Set up puts right that is the platform's to set, never its maker's: "
+        "its error workflow, its time zone, its kept test runs and progress, and Start from the "
+        'Portal. Each is words that follow "Set up also". The grade and findings are of the '
+        "workflow once these are put right."
+    )
+    set_up_notes: list[str] = Field(
+        description="What else to know before pressing Set up, in words to show: that it drops "
+        "changes saved in n8n since the version n8n runs, or that it can't add Start from the "
+        "Portal."
     )
     can_set_up: bool
     why_not: str | None = Field(description="Why it can't be set up now, in words to show.")
@@ -105,7 +140,16 @@ class Spaces(Protocol):
 
     async def kept(self, workflow_id: str, version_id: str) -> dict[str, Any] | None: ...
 
+    async def change(
+        self, workflow_id: str, expected_version_id: str, document: Mapping[str, Any], live: bool
+    ) -> Written | ChangedInN8n: ...
+
     async def home(self, workflow_id: str) -> str | None: ...
+
+    async def own_workflow_ids(self) -> set[str]:
+        """The platform's own n8n workflows, as bootstrap recorded them, which never wait to be
+        set up: the error workflow, the self-test, and its copy in a member's space (M4)."""
+        ...
 
 
 class Makers(Protocol):
@@ -148,21 +192,36 @@ class Maker:
 class Candidate:
     listed: ListedWorkflow
     maker: Maker
-    document: dict[str, Any]
-    """The version n8n runs, or its draft while nothing is published."""
+    fixed: FixedForYou
+    """The version n8n runs, or its draft while nothing is published, as Set up leaves it."""
     graded: Graded
+    draft: tuple[Finding, ...] = ()
+    """What n8n would run unchecked in the draft of one that is published, once the platform's
+    keys are back on it. A test run runs the draft."""
 
     @property
     def published(self) -> bool:
         return self.listed.workflow.active_version_id is not None
 
     @property
-    def can_set_up(self) -> bool:
-        return self.published or self.graded.grade == "safe"
+    def runs_anyway(self) -> bool:
+        return bool(self.draft) or any(finding.runs_anyway for finding in self.graded.findings)
 
     @property
     def why_not(self) -> str | None:
-        return None if self.can_set_up else FIX_IN_N8N
+        if self.runs_anyway:
+            return FIX_N8N_BLOCKS
+        return None if self.published or self.graded.grade == "safe" else FIX_IN_N8N
+
+    @property
+    def notes(self) -> list[str]:
+        """Set up writes its fixes onto the version n8n runs, so a draft saved since is dropped."""
+        workflow = self.listed.workflow
+        edited = self.published and workflow.version_id != workflow.active_version_id
+        return [
+            *([REPLACES_DRAFT] if edited and self.fixed.fixed else []),
+            *([NO_START_ADDED] if self.fixed.no_start else []),
+        ]
 
     def view(self, closed: str | None = None) -> MadeInN8nView:
         """`closed` says why nothing can be set up now, whatever its grade."""
@@ -170,14 +229,34 @@ class Candidate:
         why_not = closed or self.why_not
         return MadeInN8nView(
             workflow_id=workflow.id,
-            name=str(self.document.get("name") or workflow.document.get("name") or workflow.id),
+            name=str(workflow.document.get("name") or workflow.id),
             made_by=self.maker.person,
             published=self.published,
             grade=self.graded.grade,
-            findings=[f.text for f in self.graded.findings],
+            findings=[
+                *(f.text for f in self.graded.findings),
+                *(f"In its draft: {f.text}" for f in self.draft),
+            ],
+            fixed_for_you=list(self.fixed.fixed),
+            set_up_notes=self.notes,
             can_set_up=why_not is None,
             why_not=why_not,
         )
+
+
+def _candidate(
+    listed: ListedWorkflow,
+    maker: Maker,
+    workflow: N8nWorkflow,
+    document: dict[str, Any],
+    error_workflow: str | None,
+    zone: str,
+    known: KnownOptions,
+) -> Candidate:
+    """Graded as Set up leaves it, so what is the platform's to put right is never a finding."""
+    fixed = fixed_for_you(document, workflow.id, error_workflow, zone)
+    graded = grade(fixed.document, error_workflow, zone, known)
+    return Candidate(listed, maker, fixed, graded, _draft(workflow, known))
 
 
 def _closed(access: StaffAccess) -> HoldRefused | None:
@@ -247,10 +326,23 @@ class MadeInN8n:
             if held is None:
                 return HoldRefused(503, NOT_READ)
             workflow, document = held
-            graded = grade(document, error_workflow, self._zone, known)
-            if workflow.active_version_id is None and graded.grade != "safe":
+            moved = _candidate(
+                candidate.listed, maker, workflow, document, error_workflow, self._zone, known
+            )
+            if moved.why_not is None and moved.fixed.fixed:
+                fixed = await self._put_right(workflow, moved.fixed)
+                if isinstance(fixed, HoldRefused):
+                    return fixed
+                workflow, document = fixed
+                moved = _candidate(
+                    candidate.listed, maker, workflow, document, error_workflow, self._zone, known
+                )
+                if moved.fixed.fixed:
+                    return HoldRefused(503, NOT_FIXED)
+            if moved.why_not is not None:
                 await self._give_back(workflow_id, maker)
                 return HoldRefused(409, CHANGED_AS_SET_UP)
+            graded = moved.graded
             use_case_id = new_id("uc")
             made_by = await self._staff.display_of(maker.person)
             await _insert(
@@ -281,6 +373,22 @@ class MadeInN8n:
             grade=graded.grade,
             blocks=blocks_of(document),
         )
+
+    async def _put_right(
+        self, workflow: N8nWorkflow, fixed: FixedForYou
+    ) -> tuple[N8nWorkflow, dict[str, Any]] | HoldRefused:
+        """Writes what Set up puts right in n8n, in the platform's project now, and publishes it
+        when the workflow is published, so the version n8n runs is the one the platform registers.
+        What n8n holds then, or why not: the workflow stays there with its maker noted, so asking
+        again finishes."""
+        live = workflow.active_version_id is not None
+        try:
+            written = await self._n8n.change(workflow.id, workflow.version_id, fixed.document, live)
+            held = None if isinstance(written, ChangedInN8n) else await self._held(workflow.id)
+        except (N8nError, httpx.HTTPError) as error:
+            log.warning("could not put right what %s needs in n8n: %s", workflow.id, error)
+            held = None
+        return HoldRefused(503, NOT_FIXED) if held is None else held
 
     async def _give_back(self, workflow_id: str, maker: Maker) -> None:
         """A draft changed to fail the check while it moved can't be set up, so it goes back to
@@ -325,9 +433,11 @@ class MadeInN8n:
                 await conn.execute(
                     "SELECT n8n_workflow_id FROM builder.use_cases"
                     " WHERE n8n_workflow_id IS NOT NULL"
+                    " UNION SELECT in_n8n_id FROM builder.drafted_workflows"
+                    " WHERE in_n8n_id IS NOT NULL"
                 )
             ).fetchall()
-        named = {row["n8n_workflow_id"] for row in rows}
+        named = {row["n8n_workflow_id"] for row in rows} | await self._n8n.own_workflow_ids()
         found: dict[str, Candidate] = {}
         for listed, maker in await self._made():
             workflow = listed.workflow
@@ -336,8 +446,9 @@ class MadeInN8n:
             document = await self._document(listed)
             if document is None:
                 continue
-            graded = grade(document, error_workflow, self._zone, known)
-            found[workflow.id] = Candidate(listed, maker, document, graded)
+            found[workflow.id] = _candidate(
+                listed, maker, workflow, document, error_workflow, self._zone, known
+            )
         return found
 
     async def _made(self) -> list[tuple[ListedWorkflow, Maker]]:
@@ -379,10 +490,22 @@ class MadeInN8n:
             return None
 
 
+def _draft(workflow: N8nWorkflow, known: KnownOptions) -> tuple[Finding, ...]:
+    """The draft of a published workflow is not what the grade read, and a test run runs it. It
+    is checked as it will be once the platform's keys are back on it."""
+    if workflow.active_version_id is None:
+        return ()
+    return unchecked(attach_keys(workflow.document, known.keys), known.keys)
+
+
 async def _named(conn: Connection, workflow_id: str) -> bool:
+    """Whether a use case names it, or a drafted workflow has it open in n8n (ADR 0051), so it
+    never waits to be set up."""
     row = await (
         await conn.execute(
-            "SELECT 1 FROM builder.use_cases WHERE n8n_workflow_id = %s", (workflow_id,)
+            "SELECT 1 FROM builder.use_cases WHERE n8n_workflow_id = %s"
+            " UNION ALL SELECT 1 FROM builder.drafted_workflows WHERE in_n8n_id = %s",
+            (workflow_id, workflow_id),
         )
     ).fetchone()
     return row is not None
@@ -422,7 +545,7 @@ async def _insert(
         (
             use_case_id,
             AGENT_CARDS.key,
-            str(document.get("name") or workflow.id),
+            str(workflow.document.get("name") or workflow.id),
             instruction,
             json({}),
             now,

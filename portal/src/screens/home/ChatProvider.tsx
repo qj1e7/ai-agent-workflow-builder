@@ -1,13 +1,14 @@
 import { createContext, useCallback, useContext, useMemo, useReducer, useRef, type ReactNode } from 'react'
-import { useCacheScope } from '../../api/context'
+import { useCacheScope, useErrorWords } from '../../api/context'
+import { useChangeDrafted } from '../../api/draftedQueries'
 import { usePlannerAnswer } from '../../api/plannerQueries'
 import type { ChangedInN8nReply, PlannerAnswerIn } from '../../api/types'
 import type { PanelItem } from '../../ui/sidePanel'
-import { deskOf, desksReducer, panelOf, type DeskAction, type Desks, type Note } from './chatState'
+import { deskOf, desksReducer, panelOf, type Changing, type DeskAction, type Desks, type Note } from './chatState'
 import { newCardMemory, type CardMemory } from './cardMemory'
 import { arrivalKey, unseenArrivals } from './changed'
 import type { CardStart } from './SetupCard'
-import { isThinking, previousOf, type Thread } from './threadState'
+import { askOf, chatOf, isThinking, type Thread } from './threadState'
 
 export const SEND_FAILED = 'That didn’t send. Try again.'
 export const DRAFT_SAVED = 'Your draft is saved. Find it on Workflows.'
@@ -27,6 +28,10 @@ export interface Chat {
   readonly text: string
   readonly problem: string | null
   readonly note: Note | null
+  /** The drafted workflow the next message changes, or null. */
+  readonly changing: Changing | null
+  readonly startChange: (changing: Changing) => void
+  readonly cancelChange: () => void
   readonly busy: boolean
   readonly type: (text: string) => void
   readonly setProblem: (problem: string | null) => void
@@ -36,9 +41,15 @@ export interface Chat {
   readonly askBehind: (shown: string) => void
   /** Sends what is in the box, following on from the last answer. */
   readonly sendText: () => void
+  /** Sends words she tapped, such as a choice or an offer, following on from the last answer as typed words do. */
+  readonly sendWords: (words: string) => void
   readonly resume: (start: CardStart) => void
   /** Shows each version published in n8n that this chat has not shown yet, oldest first. A new chat does not show one again. */
   readonly arrive: (found: readonly ChangedInN8nReply[]) => void
+  /** Shows the card of a drafted workflow she started with a button. */
+  readonly arriveDraft: (draftedId: string) => void
+  /** Puts a new card for a drafted workflow's revision in the thread, so the older card settles. */
+  readonly arriveRevision: (draftedId: string, revision: number) => void
   readonly newChat: () => void
   readonly readNote: () => void
   /** Shows words in Home's one message at the bottom of the page, as the side panel does after a decline. */
@@ -65,6 +76,9 @@ const ChatContext = createContext<Chat | null>(null)
 export function ChatProvider({ children, initial = {} }: { children: ReactNode; initial?: Desks }) {
   const user = useCacheScope()
   const { mutateAsync: askPlanner } = usePlannerAnswer()
+  const { mutateAsync: changeDrafted } = useChangeDrafted()
+  const words = useErrorWords()
+  const changeBusy = useRef(false)
   const [desks, dispatch] = useReducer(desksReducer, initial)
   const scrolls = useRef(new Map<string, number>())
   const cards = useRef(new Map<string, CardMemory>())
@@ -83,8 +97,9 @@ export function ChatProvider({ children, initial = {} }: { children: ReactNode; 
   const send = useCallback(
     (ask: PlannerAnswerIn, shown: string, restore: string | null) => {
       const to = act(user)
-      to({ type: 'sent', text: shown })
-      askPlanner(ask).then(
+      const chat = chatOf(thread)
+      to({ type: 'sent', text: shown, chat })
+      askPlanner({ ...ask, chat }).then(
         (reply) => to({ type: 'answered', reply, typed: shown }),
         () => {
           to({ type: 'failed' })
@@ -93,7 +108,7 @@ export function ChatProvider({ children, initial = {} }: { children: ReactNode; 
         },
       )
     },
-    [act, askPlanner, user],
+    [act, askPlanner, thread, user],
   )
 
   const scroll = useMemo(() => ({ get: () => scrolls.current.get(user) ?? 0, set: (top: number) => void scrolls.current.set(user, top) }), [user])
@@ -117,6 +132,9 @@ export function ChatProvider({ children, initial = {} }: { children: ReactNode; 
       text: desk.text,
       problem: desk.problem,
       note: desk.note,
+      changing: desk.changing,
+      startChange: (changing) => here({ type: 'change_start', changing }),
+      cancelChange: () => here({ type: 'change_cancel' }),
       busy,
       type: (text) => here({ type: 'typed', text }),
       setProblem: (problem) => here({ type: 'problem', problem }),
@@ -125,8 +143,22 @@ export function ChatProvider({ children, initial = {} }: { children: ReactNode; 
       sendText: () => {
         const typed = desk.text.trim()
         if (typed === '' || busy) return
-        const previous = previousOf(thread)
-        send(previous === null ? { text: typed } : { text: typed, previous }, typed, desk.text)
+        const changing = desk.changing
+        if (changing !== null) {
+          if (changeBusy.current) return
+          changeBusy.current = true
+          changeDrafted({ draftedId: changing.draftedId, words: typed, revision: changing.revision }).then(
+            (view) => here({ type: 'changed', text: typed, draftedId: changing.draftedId, revision: view.card_revision }),
+            (error: unknown) => here({ type: 'problem', problem: words(error) }),
+          ).finally(() => {
+            changeBusy.current = false
+          })
+          return
+        }
+        send(askOf(typed, thread), typed, desk.text)
+      },
+      sendWords: (words) => {
+        if (!busy) send(askOf(words, thread), words, null)
       },
       resume: (start) => here({ type: 'resumed', start }),
       arrive: (found) => {
@@ -137,6 +169,8 @@ export function ChatProvider({ children, initial = {} }: { children: ReactNode; 
           here({ type: 'arrived', reply })
         }
       },
+      arriveDraft: (draftedId) => here({ type: 'arrived', reply: { answer: 'draft_started', drafted_id: draftedId, refused: null, parts: [], trace_id: null } }),
+      arriveRevision: (draftedId, revision) => here({ type: 'draft_card', draftedId, revision }),
       // A card she hadn't finished saves itself as a draft as it leaves the page, so New chat only needs to know there was one.
       newChat: () => {
         const unfinished = thread.messages.some((message) => cards.current.get(`${user}:${String(message.id)}`)?.kept()?.phase.kind === 'open')
@@ -155,7 +189,7 @@ export function ChatProvider({ children, initial = {} }: { children: ReactNode; 
       backPanel,
       closePanel,
     }
-  }, [act, backPanel, busy, cardMemory, closePanel, desk.note, desk.problem, desk.text, openPanel, panel, pushPanel, scroll, send, thread, user])
+  }, [act, backPanel, busy, cardMemory, changeDrafted, closePanel, desk.changing, desk.note, desk.problem, desk.text, openPanel, panel, pushPanel, scroll, send, thread, user, words])
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>
 }
@@ -171,4 +205,22 @@ export function useChat(): Chat {
   const chat = useContext(ChatContext)
   if (!chat) throw new Error('ChatProvider is missing above this component.')
   return chat
+}
+
+/** Starts a change to a drafted workflow, or null outside the chat, where there is no box to put it in. */
+export function useAskForChange(): ((changing: Changing) => void) | null {
+  const chat = useContext(ChatContext)
+  return chat === null ? null : chat.startChange
+}
+
+/** Adds a drafted workflow's card to the thread, as an answer with no message of hers before it. Null outside the chat. */
+export function useShowDraft(): ((draftedId: string) => void) | null {
+  const chat = useContext(ChatContext)
+  return chat === null ? null : chat.arriveDraft
+}
+
+/** Puts a new card for a drafted workflow's revision in the thread, or null outside the chat. */
+export function useShowRevision(): ((draftedId: string, revision: number) => void) | null {
+  const chat = useContext(ChatContext)
+  return chat === null ? null : chat.arriveRevision
 }

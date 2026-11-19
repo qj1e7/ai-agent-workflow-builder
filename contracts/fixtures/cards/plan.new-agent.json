@@ -6,7 +6,14 @@
     "good_for": [
       "Raise a ticket listing what we finished this week"
     ],
-    "inputs": [],
+    "inputs": [
+      {
+        "name": "Jira project",
+        "kind": "jira_project",
+        "what": "The Jira project the agent works in.",
+        "example": "MOCK"
+      }
+    ],
     "blocks": [
       {
         "say": "Find the tickets finished this week.",
@@ -32,10 +39,6 @@
   ],
   "problems": [
     {
-      "field": "inputs",
-      "message": "Add a Jira project detail, so the agent knows which project it may read."
-    },
-    {
       "field": "name",
       "message": "Forge is an old name that confused the sponsor. Use plain words."
     }
@@ -49,5 +52,6 @@
   ],
   "questions": [
     "Which Jira project?"
-  ]
+  ],
+  "project": "MOCK"
 }

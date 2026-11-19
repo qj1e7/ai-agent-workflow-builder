@@ -21,9 +21,10 @@ export class Agent implements INodeType {
   description: INodeTypeDescription = {
     displayName: 'Agent',
     name: 'wabAgent',
+    icon: 'file:agent.svg',
     group: ['transform'],
     version: 1,
-    subtitle: '={{ $parameter["agent"] }}',
+    subtitle: 'Agent card',
     description: 'Our block. Runs one of the team’s agent cards. It can propose changes, never make them.',
     defaults: { name: 'Agent' },
     inputs: ['main'],

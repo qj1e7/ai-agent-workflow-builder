@@ -1,6 +1,6 @@
 import { andList, crossedWords, upperFirst, type Left } from './card'
 import { connectorLabel, starterName } from '../../api/labels'
-import type { AddressItem, CapabilitiesView, PlannerAnswerIn, ApprovalItem, ConfirmationItem, ConnectionItem, DeclinedItem, DraftItem, FollowingUpItem, HomeOut, QuestionItem, StoppedItem, WaitingItem } from '../../api/types'
+import type { AddressItem, CapabilitiesView, PlannerAnswerIn, ApprovalItem, ConfirmationItem, ConnectionItem, DeclinedItem, DraftItem, FollowingUpItem, HomeOut, QuestionItem, SetUpApprovalItem, StoppedItem, WaitingItem } from '../../api/types'
 import { count, declineTail, factsOf, stageWords, withCurrentNames } from '../run/words'
 import { requestKindWords, requestPath } from '../workflows/requests'
 import { movedHeadline, notFoundHeadline, softwarePath } from '../software/software'
@@ -18,6 +18,7 @@ export type Need =
   | { readonly kind: 'connection'; readonly key: string; readonly at: string; readonly item: ConnectionItem }
   | { readonly kind: 'address'; readonly key: string; readonly at: string; readonly item: AddressItem }
   | { readonly kind: 'confirmation'; readonly key: string; readonly at: string; readonly item: ConfirmationItem }
+  | { readonly kind: 'setup'; readonly key: string; readonly at: string; readonly item: SetUpApprovalItem }
   | { readonly kind: 'stopped'; readonly key: string; readonly at: string; readonly item: StoppedItem }
   | { readonly kind: 'declined'; readonly key: string; readonly at: string; readonly item: DeclinedItem }
   | { readonly kind: 'question'; readonly key: string; readonly at: string; readonly item: QuestionItem }
@@ -28,7 +29,7 @@ export interface Needs {
   readonly total: number
 }
 
-const KIND_ORDER: Record<Need['kind'], number> = { stopped: 0, approval: 1, question: 2, declined: 3, connection: 4, address: 5, confirmation: 6, reply: 7 }
+const KIND_ORDER: Record<Need['kind'], number> = { stopped: 0, approval: 1, setup: 1, question: 2, declined: 3, connection: 4, address: 5, confirmation: 6, reply: 7 }
 
 /** Needs you is grouped wherever it is listed in full (spec 3.5): what to do now, then what to set up. */
 export type NeedGroup = 'now' | 'set'
@@ -46,6 +47,7 @@ export function groupOf(need: Need): NeedGroup {
   switch (need.kind) {
     case 'stopped':
     case 'approval':
+    case 'setup':
     case 'declined':
     case 'question':
     case 'reply':
@@ -72,6 +74,7 @@ const urgentFirst = (a: Need, b: Need) =>
 export const needsTotal = (home: HomeOut) =>
   home.approvals_total +
   home.confirmations.length +
+  home.setup_approvals.length +
   home.stopped_total +
   home.declined_total +
   home.questions_for_me_total +
@@ -90,6 +93,7 @@ export function needsOf(home: HomeOut, limit = Infinity): Needs {
     ...home.connections.map((item): Need => ({ kind: 'connection', key: `connection:${item.id}`, at: item.checked_at ?? '', item })),
     ...home.addresses.map((item): Need => ({ kind: 'address', key: `address:${item.software_id}`, at: item.checked_at ?? '', item })),
     ...home.confirmations.map((item): Need => ({ kind: 'confirmation', key: `confirmation:${item.confirmation_id}`, at: item.asked_at, item })),
+    ...home.setup_approvals.map((item): Need => ({ kind: 'setup', key: `setup:${item.approval_id}`, at: item.sent_at, item })),
     ...home.stopped.map((item): Need => ({ kind: 'stopped', key: `stopped:${item.run_id}`, at: item.stopped_at, item })),
     ...home.declined.map((item): Need => ({ kind: 'declined', key: `declined:${item.run_id}`, at: item.declined_at, item })),
     ...home.questions_for_me.map((item): Need => ({ kind: 'question', key: `question:${item.question_id}`, at: item.asked_at, item })),
@@ -176,6 +180,17 @@ function approvalWords(item: ApprovalItem, now: Date): ItemWords {
     title,
     meta: `${item.use_case_name} · Started by ${starterOf(item)}, ${runWhen(item.started_at, now)}${step}`,
     lines: unlisted > 0 ? [...lines, `and ${unlisted} more`] : lines,
+    note: null,
+    why: null,
+  }
+}
+
+function setupWords(item: SetUpApprovalItem, now: Date): ItemWords {
+  return {
+    tone: 'wait',
+    title: `${item.name} needs your yes to set up`,
+    meta: `Sent by ${item.sent_by_name}, ${runWhen(item.sent_at, now)}`,
+    lines: [],
     note: null,
     why: null,
   }
@@ -299,6 +314,8 @@ export function wordsOf(need: Need, now: Date, modelOff = false): ItemWords {
       return addressWords(need.item)
     case 'confirmation':
       return confirmationWords(need.item, now)
+    case 'setup':
+      return setupWords(need.item, now)
     case 'stopped':
       return stoppedWords(need.item, now, modelOff)
     case 'declined':
@@ -356,6 +373,8 @@ export function lineOf(need: Need, now: Date): NeedLine {
     }
     case 'approval':
       return line('wait', need.item.use_case_name, 'needs your yes')
+    case 'setup':
+      return line('wait', need.item.name, 'needs your yes to set up', 'needs your yes')
     case 'connection':
       return connectionLine(need.item, now)
     case 'address':
@@ -388,6 +407,8 @@ export function actionsOf(need: Need, modelOff = false): readonly Action[] {
   switch (need.kind) {
     case 'approval':
       return [{ kind: 'open', label: 'Review and decide', to: `/runs/${need.item.run_id}`, item: approvalItem(need.item.run_id) }]
+    case 'setup':
+      return [{ kind: 'open', label: 'Review and decide', to: need.item.link }]
     case 'connection':
       return noModel(need.item)
         ? [{ kind: 'open', label: 'Connect a model', to: '/settings?tab=model' }]
@@ -430,6 +451,7 @@ export function panelItemOf(need: Need): PanelItem | null {
     case 'connection':
       return noModel(need.item) ? null : { kind: 'connection', id: need.item.id }
     case 'confirmation':
+    case 'setup':
     case 'reply':
       return null
   }

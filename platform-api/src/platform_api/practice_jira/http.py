@@ -12,7 +12,7 @@ import base64
 import binascii
 import hmac
 from datetime import datetime
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -54,7 +54,11 @@ def _errors(status: int, messages: list[str], errors: dict[str, str] | None = No
     return JSONResponse({"errorMessages": messages, "errors": errors or {}}, status_code=status)
 
 
-def _signed_in(practice: PracticeJira, header: str) -> bool:
+type Account = Literal["platform", "reader"]
+
+
+def _signed_in(practice: PracticeJira, header: str) -> Account | None:
+    """The platform's own account, or the second one, which may only browse."""
     scheme, _, value = header.partition(" ")
     match scheme.lower():
         case "bearer":
@@ -63,10 +67,21 @@ def _signed_in(practice: PracticeJira, header: str) -> bool:
             try:
                 _, _, token = base64.b64decode(value.strip(), validate=True).decode().partition(":")
             except binascii.Error, UnicodeDecodeError:
-                return False
+                return None
         case _:
-            return False
-    return bool(token) and hmac.compare_digest(token.encode(), practice.token.encode())
+            return None
+    if not token:
+        return None
+    if hmac.compare_digest(token.encode(), practice.token.encode()):
+        return "platform"
+    reader = practice.reader_token
+    if reader is not None and hmac.compare_digest(token.encode(), reader.encode()):
+        return "reader"
+    return None
+
+
+def _browses(request: Request) -> bool:
+    return request.method == "GET" or request.url.path.endswith(("/search", "/search/jql"))
 
 
 def _gate(request: Request, practice: PracticeJira, version: str) -> JSONResponse | None:
@@ -81,10 +96,13 @@ def _gate(request: Request, practice: PracticeJira, version: str) -> JSONRespons
         return _errors(503, ["The practice Jira is switched off."])
     if version not in {"2", "3"}:
         return _errors(404, ["No such API version."])
-    if not _signed_in(practice, request.headers.get("authorization", "")):
+    account = _signed_in(practice, request.headers.get("authorization", ""))
+    if account is None:
         return _errors(
             401, ["You are not authenticated. Authentication required to perform this operation."]
         )
+    if account == "reader" and not _browses(request):
+        return _errors(403, ["You do not have permission to do this."])
     practice.calls.append(f"{request.method} {request.url.path.removeprefix('/practice-jira')}")
     return None
 
@@ -329,6 +347,49 @@ async def make_transition(version: str, key: str, request: Request, practice: Pr
         return _errors(400, [f"Transition id '{wanted}' is not valid for this issue."])
     await practice.mark_done(key.upper())
     return Response(status_code=204)
+
+
+PERMISSIONS = (
+    "BROWSE_PROJECTS",
+    "CREATE_ISSUES",
+    "EDIT_ISSUES",
+    "TRANSITION_ISSUES",
+    "ADD_COMMENTS",
+    "ADMINISTER_PROJECTS",
+    "USER_PICKER",
+)
+"""The practice Jira's permissions, enough for both its accounts to answer what they may do."""
+
+
+@router.get(API + "/permissions", include_in_schema=False)
+async def all_permissions(version: str, request: Request, practice: Practice) -> Response:
+    if (refused := _gate(request, practice, version)) is not None:
+        return refused
+    listed = {name: {"key": name, "name": name.replace("_", " ").title()} for name in PERMISSIONS}
+    return JSONResponse({"permissions": listed})
+
+
+@router.get(API + "/mypermissions", include_in_schema=False)
+async def my_permissions(version: str, request: Request, practice: Practice) -> Response:
+    """Whether the account may do each thing asked about, in any project, as Jira answers with
+    no project named. The platform's account may do everything; the second may only browse."""
+    if (refused := _gate(request, practice, version)) is not None:
+        return refused
+    asked = [p for p in request.query_params.get("permissions", "").split(",") if p]
+    if not asked:
+        return _errors(400, ["The permissions query parameter is required."])
+    platform = _signed_in(practice, request.headers.get("authorization", "")) == "platform"
+    held = {
+        name: {
+            "id": str(number),
+            "key": name,
+            "name": name.replace("_", " ").title(),
+            "type": "PROJECT",
+            "havePermission": platform or name in ("BROWSE_PROJECTS", "USER_PICKER"),
+        }
+        for number, name in enumerate(asked, start=1)
+    }
+    return JSONResponse({"permissions": held})
 
 
 @router.get(API + "/myself", include_in_schema=False)

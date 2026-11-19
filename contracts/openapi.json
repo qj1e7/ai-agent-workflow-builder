@@ -23,10 +23,23 @@
             },
             "title": "Parts",
             "type": "array"
+          },
+          "trace_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The trace of this turn, when the runtime's answer is shown. The Portal sends it back as previous.trace_id with the next message (ADR 0050). Null for a chip, an answer the platform gives alone, the offline answer, and an answer inside another.",
+            "title": "Trace Id"
           }
         },
         "required": [
           "parts",
+          "trace_id",
           "answer",
           "how_to_start"
         ],
@@ -1368,6 +1381,19 @@
       "AnswerIn": {
         "additionalProperties": false,
         "properties": {
+          "chat": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The Portal's chat, a UUID it makes for each new chat. It groups the chat's turns into one session in the traces (ADR 0050).",
+            "title": "Chat"
+          },
           "intent": {
             "anyOf": [
               {
@@ -2625,6 +2651,18 @@
             "title": "Cant",
             "type": "array"
           },
+          "draft_words": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The request's words, unchanged, when the Workflow drafter may draft it as an n8n workflow: for an Operator, when a part it can't do is not one the platform refuses (ADR 0051). The card shows Draft it as an n8n workflow, which sends these words. Null otherwise.",
+            "title": "Draft Words"
+          },
           "parts": {
             "description": "Every clause of what the person typed, in order, with what happened to it (spec 6.5). None is dropped. Empty for a chip they tapped, for an answer inside another answer, and when no model read the request.",
             "items": {
@@ -2632,13 +2670,27 @@
             },
             "title": "Parts",
             "type": "array"
+          },
+          "trace_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The trace of this turn, when the runtime's answer is shown. The Portal sends it back as previous.trace_id with the next message (ADR 0050). Null for a chip, an answer the platform gives alone, the offline answer, and an answer inside another.",
+            "title": "Trace Id"
           }
         },
         "required": [
           "parts",
+          "trace_id",
           "answer",
           "cant",
-          "alternative"
+          "alternative",
+          "draft_words"
         ],
         "title": "CantReply",
         "type": "object"
@@ -3491,6 +3543,18 @@
             "title": "Parts",
             "type": "array"
           },
+          "trace_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The trace of this turn, when the runtime's answer is shown. The Portal sends it back as previous.trace_id with the next message (ADR 0050). Null for a chip, an answer the platform gives alone, the offline answer, and an answer inside another.",
+            "title": "Trace Id"
+          },
           "use_case_id": {
             "title": "Use Case Id",
             "type": "string"
@@ -3503,6 +3567,7 @@
         },
         "required": [
           "parts",
+          "trace_id",
           "answer",
           "use_case_id",
           "name",
@@ -3556,6 +3621,18 @@
             "title": "Parts",
             "type": "array"
           },
+          "trace_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The trace of this turn, when the runtime's answer is shown. The Portal sends it back as previous.trace_id with the next message (ADR 0050). Null for a chip, an answer the platform gives alone, the offline answer, and an answer inside another.",
+            "title": "Trace Id"
+          },
           "use_case_id": {
             "anyOf": [
               {
@@ -3571,11 +3648,22 @@
         },
         "required": [
           "parts",
+          "trace_id",
           "answer",
           "use_case_id"
         ],
         "title": "CheckWorkflowsReply",
         "type": "object"
+      },
+      "ClearedBy": {
+        "enum": [
+          "fixed_for_you",
+          "needs_an_answer",
+          "needs_a_setting",
+          "cant_run",
+          "approver_may_accept"
+        ],
+        "type": "string"
       },
       "ClockTime": {
         "examples": [
@@ -4396,10 +4484,23 @@
             },
             "title": "Parts",
             "type": "array"
+          },
+          "trace_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The trace of this turn, when the runtime's answer is shown. The Portal sends it back as previous.trace_id with the next message (ADR 0050). Null for a chip, an answer the platform gives alone, the offline answer, and an answer inside another.",
+            "title": "Trace Id"
           }
         },
         "required": [
           "parts",
+          "trace_id",
           "answer"
         ],
         "title": "DecideReply",
@@ -4438,10 +4539,23 @@
             },
             "title": "Parts",
             "type": "array"
+          },
+          "trace_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The trace of this turn, when the runtime's answer is shown. The Portal sends it back as previous.trace_id with the next message (ADR 0050). Null for a chip, an answer the platform gives alone, the offline answer, and an answer inside another.",
+            "title": "Trace Id"
           }
         },
         "required": [
           "parts",
+          "trace_id",
           "answer",
           "only"
         ],
@@ -4701,6 +4815,138 @@
         "title": "DevUsers",
         "type": "object"
       },
+      "DidntFollowReply": {
+        "additionalProperties": false,
+        "description": "The fixed fallback when the free reply failed or its checks refused it: the sketch's I\ndidn't follow that card, with Say it another way. The Portal words it for the person's role.",
+        "properties": {
+          "answer": {
+            "const": "didnt_follow",
+            "default": "didnt_follow",
+            "title": "Answer",
+            "type": "string"
+          },
+          "parts": {
+            "description": "Every clause of what the person typed, in order, with what happened to it (spec 6.5). None is dropped. Empty for a chip they tapped, for an answer inside another answer, and when no model read the request.",
+            "items": {
+              "$ref": "#/components/schemas/PartView"
+            },
+            "title": "Parts",
+            "type": "array"
+          },
+          "trace_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The trace of this turn, when the runtime's answer is shown. The Portal sends it back as previous.trace_id with the next message (ADR 0050). Null for a chip, an answer the platform gives alone, the offline answer, and an answer inside another.",
+            "title": "Trace Id"
+          }
+        },
+        "required": [
+          "parts",
+          "trace_id",
+          "answer"
+        ],
+        "title": "DidntFollowReply",
+        "type": "object"
+      },
+      "DraftAnswerIn": {
+        "additionalProperties": false,
+        "properties": {
+          "choice": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "One of the question's choices, as its value.",
+            "title": "Choice"
+          },
+          "revision": {
+            "description": "The revision the question was asked on.",
+            "minimum": 1.0,
+            "title": "Revision",
+            "type": "integer"
+          },
+          "setting": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Setting",
+            "type": "string"
+          },
+          "typed": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What the person typed.",
+            "title": "Typed"
+          }
+        },
+        "required": [
+          "revision",
+          "setting"
+        ],
+        "title": "DraftAnswerIn",
+        "type": "object"
+      },
+      "DraftChangeIn": {
+        "additionalProperties": false,
+        "properties": {
+          "revision": {
+            "description": "The revision the person asks to change.",
+            "minimum": 1.0,
+            "title": "Revision",
+            "type": "integer"
+          },
+          "words": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Words",
+            "type": "string"
+          }
+        },
+        "required": [
+          "words",
+          "revision"
+        ],
+        "title": "DraftChangeIn",
+        "type": "object"
+      },
+      "DraftChoiceView": {
+        "additionalProperties": false,
+        "properties": {
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "value": {
+            "description": "Send it back as the answer's choice.",
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "value",
+          "label"
+        ],
+        "title": "DraftChoiceView",
+        "type": "object"
+      },
       "DraftIn": {
         "additionalProperties": false,
         "properties": {
@@ -4742,6 +4988,21 @@
           "content"
         ],
         "title": "DraftIn",
+        "type": "object"
+      },
+      "DraftInN8nIn": {
+        "additionalProperties": false,
+        "properties": {
+          "revision": {
+            "minimum": 1.0,
+            "title": "Revision",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "revision"
+        ],
+        "title": "DraftInN8nIn",
         "type": "object"
       },
       "DraftItem": {
@@ -4805,6 +5066,201 @@
           "drafts"
         ],
         "title": "DraftList",
+        "type": "object"
+      },
+      "DraftSendIn": {
+        "additionalProperties": false,
+        "properties": {
+          "revision": {
+            "minimum": 1.0,
+            "title": "Revision",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "revision"
+        ],
+        "title": "DraftSendIn",
+        "type": "object"
+      },
+      "DraftSettingView": {
+        "additionalProperties": false,
+        "description": "One setting of the newest revision, with the question that fills it. Code writes every\nword, and a string from the plan, such as its label, is a quoted segment.",
+        "properties": {
+          "choices": {
+            "description": "2 to 4 from the team's own data.",
+            "items": {
+              "$ref": "#/components/schemas/DraftChoiceView"
+            },
+            "title": "Choices",
+            "type": "array"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "key": {
+            "description": "The short words before its question, as When or Jira.",
+            "title": "Key",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "run_time",
+              "jira_project",
+              "channel",
+              "address",
+              "repository",
+              "confluence_page",
+              "text",
+              "approvers",
+              "key"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "items": {
+              "$ref": "#/components/schemas/Segment"
+            },
+            "title": "Label",
+            "type": "array"
+          },
+          "mark": {
+            "enum": [
+              "filled",
+              "guessed",
+              "needed"
+            ],
+            "title": "Mark",
+            "type": "string"
+          },
+          "question": {
+            "description": "Its question, which a guessed one's Change asks too.",
+            "title": "Question",
+            "type": "string"
+          },
+          "said": {
+            "description": "Where the value came from, as You chose or From Alice's words, or I guessed or Needed.",
+            "title": "Said",
+            "type": "string"
+          },
+          "typed": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The words on the button that opens a box to type an answer in. Null when typing isn't read.",
+            "title": "Typed"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "As a person reads it. Null while it is needed.",
+            "title": "Value"
+          },
+          "waits": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why it can't be answered now, as for a write key, which comes in a later step. It then has no choices.",
+            "title": "Waits"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "key",
+          "label",
+          "value",
+          "mark",
+          "said",
+          "question",
+          "choices",
+          "typed",
+          "waits"
+        ],
+        "title": "DraftSettingView",
+        "type": "object"
+      },
+      "DraftStartedReply": {
+        "additionalProperties": false,
+        "description": "An Operator asked for a draft in words, as \"draft an n8n workflow that ...\". Code read it,\nnever a model, and the Workflow drafter started on the words unchanged (ADR 0051). The Portal\nshows the drafted workflow's card and follows GET /api/v1/drafted-workflows/{drafted_id}.",
+        "properties": {
+          "answer": {
+            "const": "draft_started",
+            "default": "draft_started",
+            "title": "Answer",
+            "type": "string"
+          },
+          "drafted_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null when the words were refused.",
+            "title": "Drafted Id"
+          },
+          "parts": {
+            "description": "Every clause of what the person typed, in order, with what happened to it (spec 6.5). None is dropped. Empty for a chip they tapped, for an answer inside another answer, and when no model read the request.",
+            "items": {
+              "$ref": "#/components/schemas/PartView"
+            },
+            "title": "Parts",
+            "type": "array"
+          },
+          "refused": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why nothing was drafted, in words to show, such as a pasted key. Null when it started.",
+            "title": "Refused"
+          },
+          "trace_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The trace of this turn, when the runtime's answer is shown. The Portal sends it back as previous.trace_id with the next message (ADR 0050). Null for a chip, an answer the platform gives alone, the offline answer, and an answer inside another.",
+            "title": "Trace Id"
+          }
+        },
+        "required": [
+          "parts",
+          "trace_id",
+          "answer",
+          "drafted_id",
+          "refused"
+        ],
+        "title": "DraftStartedReply",
         "type": "object"
       },
       "DraftTimes": {
@@ -4872,6 +5328,439 @@
           "saved_at"
         ],
         "title": "DraftView",
+        "type": "object"
+      },
+      "DraftWorkflowIn": {
+        "additionalProperties": false,
+        "properties": {
+          "words": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Words",
+            "type": "string"
+          }
+        },
+        "required": [
+          "words"
+        ],
+        "title": "DraftWorkflowIn",
+        "type": "object"
+      },
+      "DraftedApprovalView": {
+        "additionalProperties": false,
+        "properties": {
+          "approval_id": {
+            "title": "Approval Id",
+            "type": "string"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "link": {
+            "description": "The set-up approval page, as the Teams card opens it.",
+            "title": "Link",
+            "type": "string"
+          },
+          "posted": {
+            "description": "Whether the request is in the Teams channel yet.",
+            "enum": [
+              "waiting",
+              "sent",
+              "failed"
+            ],
+            "title": "Posted",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why it was declined, from the short list.",
+            "title": "Reason"
+          },
+          "sent_at": {
+            "format": "date-time",
+            "title": "Sent At",
+            "type": "string"
+          },
+          "sent_by": {
+            "title": "Sent By",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "waiting",
+              "approved",
+              "declined",
+              "expired",
+              "replaced"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "approval_id",
+          "link",
+          "status",
+          "sent_by",
+          "sent_at",
+          "expires_at",
+          "decided_by",
+          "decided_at",
+          "reason",
+          "posted"
+        ],
+        "title": "DraftedApprovalView",
+        "type": "object"
+      },
+      "DraftedInN8nView": {
+        "additionalProperties": false,
+        "properties": {
+          "by": {
+            "title": "By",
+            "type": "string"
+          },
+          "by_name": {
+            "title": "By Name",
+            "type": "string"
+          },
+          "editor_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Where it is in n8n's editor, for the person who has it open. Null for anyone else, or when the editor's address isn't set.",
+            "title": "Editor Url"
+          },
+          "revision": {
+            "description": "The revision that was opened in n8n.",
+            "title": "Revision",
+            "type": "integer"
+          },
+          "since": {
+            "format": "date-time",
+            "title": "Since",
+            "type": "string"
+          }
+        },
+        "required": [
+          "by",
+          "by_name",
+          "since",
+          "revision",
+          "editor_url"
+        ],
+        "title": "DraftedInN8nView",
+        "type": "object"
+      },
+      "DraftedSetUpView": {
+        "additionalProperties": false,
+        "properties": {
+          "state": {
+            "description": "setting_up until n8n holds it. set_up once it is a Draft on Workflows. failed when n8n didn't take it, which an Operator can try again. refused when it changed since it was approved, or no longer passes the check, which only a new approval fixes.",
+            "enum": [
+              "setting_up",
+              "set_up",
+              "failed",
+              "refused"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "use_case_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The workflow it is now. Null until set up.",
+            "title": "Use Case Id"
+          },
+          "words": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why not, in words to show.",
+            "title": "Words"
+          }
+        },
+        "required": [
+          "state",
+          "use_case_id",
+          "words"
+        ],
+        "title": "DraftedSetUpView",
+        "type": "object"
+      },
+      "DraftedState": {
+        "enum": [
+          "drafting",
+          "not_drafted",
+          "draft",
+          "waiting",
+          "approved",
+          "declined"
+        ],
+        "type": "string"
+      },
+      "DraftedWorkflowView": {
+        "additionalProperties": false,
+        "properties": {
+          "approval": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DraftedApprovalView"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "This revision's set-up approval, once sent."
+          },
+          "blocks": {
+            "description": "Its blocks in the order a run meets them.",
+            "items": {
+              "$ref": "#/components/schemas/N8nBlockView"
+            },
+            "title": "Blocks",
+            "type": "array"
+          },
+          "can_edit_in_n8n": {
+            "description": "Whether Edit in n8n works for this person now: an Operator with n8n access, on a draft nobody has open in n8n.",
+            "title": "Can Edit In N8N",
+            "type": "boolean"
+          },
+          "can_send": {
+            "title": "Can Send",
+            "type": "boolean"
+          },
+          "card_revision": {
+            "description": "The newest revision that started a card: the first, a change asked for in the chat, or a read-back from n8n. An answer makes a revision on the same card. A card for an older revision settles.",
+            "title": "Card Revision",
+            "type": "integer"
+          },
+          "drafted_id": {
+            "title": "Drafted Id",
+            "type": "string"
+          },
+          "flags": {
+            "description": "The flags the check found, leaving out what a setting still needed causes, which its question covers.",
+            "title": "Flags",
+            "type": "integer"
+          },
+          "in_n8n": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DraftedInN8nView"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Who has it open in their own n8n space, without its keys. Done in n8n reads it back as a new revision."
+          },
+          "made_by": {
+            "description": "How the newest revision was made: by the drafter, by code from an answer, or read back from n8n.",
+            "enum": [
+              "drafter",
+              "answer",
+              "n8n"
+            ],
+            "title": "Made By",
+            "type": "string"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The plan's name. Null until the first plan.",
+            "title": "Name"
+          },
+          "needed": {
+            "description": "The settings still needed, write keys included.",
+            "title": "Needed",
+            "type": "integer"
+          },
+          "notes": {
+            "description": "What came back from n8n with this revision that didn't count, such as a channel typed there that the platform can't post in, in words to show on the card.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Notes",
+            "type": "array"
+          },
+          "question": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The id of the one setting the card asks for now, in the ADR's order. Null when nothing can be asked now, or it isn't a draft.",
+            "title": "Question"
+          },
+          "replaced_waiting": {
+            "description": "This revision replaced a set-up approval that was still waiting.",
+            "title": "Replaced Waiting",
+            "type": "boolean"
+          },
+          "report": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WorkflowExplained"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Code's workflow report of this revision. Null while drafting or when not drafted."
+          },
+          "revision": {
+            "description": "The newest revision.",
+            "title": "Revision",
+            "type": "integer"
+          },
+          "said": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why it wasn't drafted, in words to show.",
+            "title": "Said"
+          },
+          "set_up": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DraftedSetUpView"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Its set-up, once approved."
+          },
+          "settings": {
+            "description": "Every setting, in the plan's order, then the write keys and the Approvers.",
+            "items": {
+              "$ref": "#/components/schemas/DraftSettingView"
+            },
+            "title": "Settings",
+            "type": "array"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/DraftedState",
+            "description": "drafting while the drafter works; not_drafted with said; draft until it is sent; waiting for a yes; approved; declined. An approval that expired or was replaced leaves it a draft."
+          },
+          "why_not_send": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why Send for approval can't work now, in words shown in its place.",
+            "title": "Why Not Send"
+          },
+          "words": {
+            "description": "The words this revision was drafted from.",
+            "title": "Words",
+            "type": "string"
+          }
+        },
+        "required": [
+          "drafted_id",
+          "revision",
+          "card_revision",
+          "made_by",
+          "name",
+          "state",
+          "words",
+          "said",
+          "started_at",
+          "blocks",
+          "report",
+          "needed",
+          "flags",
+          "settings",
+          "question",
+          "notes",
+          "in_n8n",
+          "can_edit_in_n8n",
+          "can_send",
+          "why_not_send",
+          "replaced_waiting",
+          "approval",
+          "set_up"
+        ],
+        "title": "DraftedWorkflowView",
         "type": "object"
       },
       "EditAfter": {
@@ -5093,6 +5982,18 @@
             "description": "The software those words name, as React in \"the React check\". With missing set, it isn't on the Software watchlist.",
             "title": "Software"
           },
+          "trace_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The trace of this turn, when the runtime's answer is shown. The Portal sends it back as previous.trace_id with the next message (ADR 0050). Null for a chip, an answer the platform gives alone, the offline answer, and an answer inside another.",
+            "title": "Trace Id"
+          },
           "use_case_id": {
             "anyOf": [
               {
@@ -5113,6 +6014,7 @@
         },
         "required": [
           "parts",
+          "trace_id",
           "answer",
           "use_case_id",
           "name",
@@ -5395,6 +6297,410 @@
           "approval"
         ],
         "title": "ExpiredView",
+        "type": "object"
+      },
+      "ExplainChoice": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "use_case_id": {
+            "title": "Use Case Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "use_case_id",
+          "name"
+        ],
+        "title": "ExplainChoice",
+        "type": "object"
+      },
+      "ExplainCleared": {
+        "additionalProperties": false,
+        "properties": {
+          "rule": {
+            "title": "Rule",
+            "type": "string"
+          },
+          "words": {
+            "title": "Words",
+            "type": "string"
+          }
+        },
+        "required": [
+          "rule",
+          "words"
+        ],
+        "title": "ExplainCleared",
+        "type": "object"
+      },
+      "ExplainFlag": {
+        "additionalProperties": false,
+        "properties": {
+          "block": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The block that breaks it. Null for the whole workflow.",
+            "title": "Block"
+          },
+          "clears": {
+            "$ref": "#/components/schemas/ClearedBy",
+            "description": "fixed_for_you: code puts it right whenever it lays a workflow out. needs_an_answer: the person setting it up answers it. needs_a_setting: an Operator fixes it in Settings or the agent library. cant_run: nobody can clear it in the app. approver_may_accept: an Approver may accept it at set-up."
+          },
+          "rule": {
+            "title": "Rule",
+            "type": "string"
+          },
+          "takes": {
+            "description": "Who can clear it, in words to show.",
+            "title": "Takes",
+            "type": "string"
+          },
+          "what": {
+            "title": "What",
+            "type": "string"
+          },
+          "why": {
+            "title": "Why",
+            "type": "string"
+          }
+        },
+        "required": [
+          "rule",
+          "block",
+          "what",
+          "why",
+          "clears",
+          "takes"
+        ],
+        "title": "ExplainFlag",
+        "type": "object"
+      },
+      "ExplainReply": {
+        "additionalProperties": false,
+        "description": "A workflow to explain, matched by its words. The Portal shows it with GET\n/api/v1/use-cases/{use_case_id}/explain?reworded=true. Explaining changes nothing, so\nanyone signed in may ask.",
+        "properties": {
+          "answer": {
+            "const": "explain",
+            "default": "explain",
+            "title": "Answer",
+            "type": "string"
+          },
+          "choices": {
+            "description": "The workflows the request could mean, for the person to pick one: every one its words match when they match several, or every workflow for \"it\", so the Portal can explain the one in focus. Empty when one matched or the words name none.",
+            "items": {
+              "$ref": "#/components/schemas/ExplainChoice"
+            },
+            "title": "Choices",
+            "type": "array"
+          },
+          "in_focus": {
+            "description": "True when the words name no workflow, as \"explain it\": the Portal explains the workflow in focus when it is one of the choices, and otherwise asks which.",
+            "title": "In Focus",
+            "type": "boolean"
+          },
+          "missing": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The words looked for, when they name no workflow the person has. Null otherwise.",
+            "title": "Missing"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Its name. Null with use_case_id.",
+            "title": "Name"
+          },
+          "parts": {
+            "description": "Every clause of what the person typed, in order, with what happened to it (spec 6.5). None is dropped. Empty for a chip they tapped, for an answer inside another answer, and when no model read the request.",
+            "items": {
+              "$ref": "#/components/schemas/PartView"
+            },
+            "title": "Parts",
+            "type": "array"
+          },
+          "trace_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The trace of this turn, when the runtime's answer is shown. The Portal sends it back as previous.trace_id with the next message (ADR 0050). Null for a chip, an answer the platform gives alone, the offline answer, and an answer inside another.",
+            "title": "Trace Id"
+          },
+          "use_case_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The workflow to explain. Null when the words name none of the person's workflows, name several, or are \"it\".",
+            "title": "Use Case Id"
+          }
+        },
+        "required": [
+          "parts",
+          "trace_id",
+          "answer",
+          "use_case_id",
+          "name",
+          "missing",
+          "choices",
+          "in_focus"
+        ],
+        "title": "ExplainReply",
+        "type": "object"
+      },
+      "ExplainSetting": {
+        "additionalProperties": false,
+        "properties": {
+          "label": {
+            "items": {
+              "$ref": "#/components/schemas/Segment"
+            },
+            "title": "Label",
+            "type": "array"
+          },
+          "mark": {
+            "enum": [
+              "filled",
+              "guessed",
+              "needed",
+              "set"
+            ],
+            "title": "Mark",
+            "type": "string"
+          },
+          "said": {
+            "description": "Where it was set, or its mark, in words to show.",
+            "title": "Said",
+            "type": "string"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/Segment"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null while it is needed.",
+            "title": "Value"
+          }
+        },
+        "required": [
+          "label",
+          "value",
+          "mark",
+          "said"
+        ],
+        "title": "ExplainSetting",
+        "type": "object"
+      },
+      "ExplainStep": {
+        "additionalProperties": false,
+        "properties": {
+          "block_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "n8n's type of the block. Null unless you have n8n access.",
+            "title": "Block Type"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "ours": {
+            "description": "A block of our node pack. False for one of n8n's own.",
+            "title": "Ours",
+            "type": "boolean"
+          },
+          "tag": {
+            "description": "What it does, such as Reads Jira or Writes after a yes.",
+            "title": "Tag",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "ours",
+          "block_type",
+          "tag"
+        ],
+        "title": "ExplainStep",
+        "type": "object"
+      },
+      "ExplainThen": {
+        "additionalProperties": false,
+        "properties": {
+          "grade": {
+            "$ref": "#/components/schemas/Grade",
+            "description": "The grade it had when it was published."
+          },
+          "number": {
+            "title": "Number",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "number",
+          "grade"
+        ],
+        "title": "ExplainThen",
+        "type": "object"
+      },
+      "ExplainTouch": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "enum": [
+              "reads",
+              "writes",
+              "posts"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "block": {
+            "description": "The block that does it.",
+            "title": "Block",
+            "type": "string"
+          },
+          "key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Which of the platform's keys one of n8n's blocks uses, never its secret.",
+            "title": "Key"
+          },
+          "phrase": {
+            "description": "What it does, as In short says it after \"It\".",
+            "items": {
+              "$ref": "#/components/schemas/Segment"
+            },
+            "title": "Phrase",
+            "type": "array"
+          },
+          "place": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Where, as the plan or the document names it. Null when nothing names it or the run's data picks it.",
+            "title": "Place"
+          },
+          "system": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null when code can't tell which system.",
+            "title": "System"
+          }
+        },
+        "required": [
+          "action",
+          "system",
+          "place",
+          "block",
+          "phrase",
+          "key"
+        ],
+        "title": "ExplainTouch",
+        "type": "object"
+      },
+      "ExplainWrite": {
+        "additionalProperties": false,
+        "properties": {
+          "approvers": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How many Approvers say yes on each run, one after the other. Null unless each_run.",
+            "title": "Approvers"
+          },
+          "block": {
+            "title": "Block",
+            "type": "string"
+          },
+          "decides": {
+            "description": "each_run: Approvers say yes on each run. set_up: it runs on the set-up approval, with no yes on each run. refused: no yes comes before it, so the platform refuses the write. cant_run_yet: no approval lets it run on this platform yet.",
+            "enum": [
+              "each_run",
+              "set_up",
+              "refused",
+              "cant_run_yet"
+            ],
+            "title": "Decides",
+            "type": "string"
+          },
+          "words": {
+            "title": "Words",
+            "type": "string"
+          }
+        },
+        "required": [
+          "block",
+          "decides",
+          "approvers",
+          "words"
+        ],
+        "title": "ExplainWrite",
         "type": "object"
       },
       "FactSection": {
@@ -5793,6 +7099,108 @@
         "title": "FoundProjects",
         "type": "object"
       },
+      "FreeReply": {
+        "additionalProperties": false,
+        "description": "The Planner's own words for a message no other answer fits, checked before they are sent\n(ADR 0047). It changes nothing: a choice and an offer are sent as the next message.",
+        "properties": {
+          "about": {
+            "description": "The watched software and workflows the reply names, each held by the facts. The Portal draws each one's state line from its own data, for every role.",
+            "items": {
+              "$ref": "#/components/schemas/ReplyAboutView"
+            },
+            "title": "About",
+            "type": "array"
+          },
+          "answer": {
+            "const": "reply",
+            "default": "reply",
+            "title": "Answer",
+            "type": "string"
+          },
+          "choices": {
+            "description": "For clarify only, 2 to 4 replies to tap, each sent as the next message.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Choices",
+            "type": "array"
+          },
+          "form": {
+            "$ref": "#/components/schemas/ReplyForm",
+            "description": "answer: a direct answer. clarify: one short question, with choices to tap. cant: an honest can't, with offer as its button, or Ask the team when offer is null."
+          },
+          "looked_at": {
+            "description": "The sections of the facts the reply used, as a question answer's are.",
+            "items": {
+              "$ref": "#/components/schemas/FactSection"
+            },
+            "title": "Looked At",
+            "type": "array"
+          },
+          "offer": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReplyOfferView"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "For cant only: the closest Ready capability. Null on a can't means the button is Ask the team. Always null for someone who isn't an Operator."
+          },
+          "parts": {
+            "description": "Every clause of what the person typed, in order, with what happened to it (spec 6.5). None is dropped. Empty for a chip they tapped, for an answer inside another answer, and when no model read the request.",
+            "items": {
+              "$ref": "#/components/schemas/PartView"
+            },
+            "title": "Parts",
+            "type": "array"
+          },
+          "software": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The one software the request named, as it wrote it. The Portal sends it back as previous.software, so a next message such as keep track of it means it. Null when the request named none.",
+            "title": "Software"
+          },
+          "text": {
+            "description": "Plain words only, to draw as text.",
+            "title": "Text",
+            "type": "string"
+          },
+          "trace_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The trace of this turn, when the runtime's answer is shown. The Portal sends it back as previous.trace_id with the next message (ADR 0050). Null for a chip, an answer the platform gives alone, the offline answer, and an answer inside another.",
+            "title": "Trace Id"
+          }
+        },
+        "required": [
+          "parts",
+          "trace_id",
+          "answer",
+          "form",
+          "text",
+          "choices",
+          "offer",
+          "looked_at",
+          "about",
+          "software"
+        ],
+        "title": "FreeReply",
+        "type": "object"
+      },
       "Grade": {
         "enum": [
           "safe",
@@ -6020,6 +7428,14 @@
             "title": "Replied",
             "type": "array"
           },
+          "setup_approvals": {
+            "description": "Drafted workflows' set-up approvals this person may decide now, the newest first. They are part of Needs you, and the Teams button counts them with the runs.",
+            "items": {
+              "$ref": "#/components/schemas/SetUpApprovalItem"
+            },
+            "title": "Setup Approvals",
+            "type": "array"
+          },
           "stopped": {
             "description": "Stopped runs an Operator started, owns or retried, while each is the newest run of its workflow. The newest first. The first 10.",
             "items": {
@@ -6076,6 +7492,7 @@
           "questions_for_me",
           "questions_for_me_total",
           "needs_next",
+          "setup_approvals",
           "drafts",
           "following_up",
           "following_up_total",
@@ -6106,10 +7523,23 @@
             },
             "title": "Parts",
             "type": "array"
+          },
+          "trace_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The trace of this turn, when the runtime's answer is shown. The Portal sends it back as previous.trace_id with the next message (ADR 0050). Null for a chip, an answer the platform gives alone, the offline answer, and an answer inside another.",
+            "title": "Trace Id"
           }
         },
         "required": [
           "parts",
+          "trace_id",
           "answer"
         ],
         "title": "IdeasReply",
@@ -6511,6 +7941,14 @@
             "title": "Findings",
             "type": "array"
           },
+          "fixed_for_you": {
+            "description": "What Set up puts right that is the platform's to set, never its maker's: its error workflow, its time zone, its kept test runs and progress, and Start from the Portal. Each is words that follow \"Set up also\". The grade and findings are of the workflow once these are put right.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Fixed For You",
+            "type": "array"
+          },
           "grade": {
             "$ref": "#/components/schemas/Grade",
             "description": "The safety checker's grade of the version n8n runs, or of its draft when nothing is published. Only a safe version asks for a yes and writes."
@@ -6528,6 +7966,14 @@
             "description": "Whether it is published in n8n, so it runs there.",
             "title": "Published",
             "type": "boolean"
+          },
+          "set_up_notes": {
+            "description": "What else to know before pressing Set up, in words to show: that it drops changes saved in n8n since the version n8n runs, or that it can't add Start from the Portal.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Set Up Notes",
+            "type": "array"
           },
           "why_not": {
             "anyOf": [
@@ -6553,6 +7999,8 @@
           "published",
           "grade",
           "findings",
+          "fixed_for_you",
+          "set_up_notes",
           "can_set_up",
           "why_not"
         ],
@@ -7013,6 +8461,13 @@
         ],
         "type": "string"
       },
+      "N8nBadge": {
+        "enum": [
+          "ours",
+          "n8n"
+        ],
+        "type": "string"
+      },
       "N8nBlockKind": {
         "enum": [
           "schedule",
@@ -7037,9 +8492,14 @@
       "N8nBlockView": {
         "additionalProperties": false,
         "properties": {
+          "badge": {
+            "$ref": "#/components/schemas/N8nBadge",
+            "default": "ours",
+            "description": "ours for a block of our node pack, which the sketch badges Our block; n8n for one of n8n's own, badged n8n block (ADR 0045, section 3)."
+          },
           "kind": {
             "$ref": "#/components/schemas/N8nBlockKind",
-            "description": "What the block does: schedule, start (Start from the Portal), manual and error start a run; read, agent, propose, ask (Ask for a yes), write (Make the approved changes), tell and report are our blocks; branch (IF), merge and end (No Op) are n8n's; other is one of n8n's data blocks; off is a block the class file turns off or does not know, which never runs."
+            "description": "What the block does: schedule, start (Start from the Portal), manual and error start a run; read, agent, propose, ask (Ask for a yes), write (Make the approved changes), tell and report are our blocks; branch (IF), merge and end (No Op) are n8n's; other is one of n8n's own blocks that shapes the data, reads a system or posts a notice, as its tag says; off is a block the class file turns off, or does not know, for what it is or what it was asked to do."
           },
           "name": {
             "description": "The block's name, as n8n, the canvas and the run line show it.",
@@ -7053,6 +8513,18 @@
             },
             "title": "Next",
             "type": "array"
+          },
+          "tag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What one of n8n's own blocks does, by its class: Reads Jira, Posts in Slack, Shapes the data. Null for our blocks and n8n's flow blocks, and for a block that is off.",
+            "title": "Tag"
           }
         },
         "required": [
@@ -7144,13 +8616,18 @@
       "N8nNodeView": {
         "additionalProperties": false,
         "properties": {
+          "badge": {
+            "$ref": "#/components/schemas/N8nBadge",
+            "default": "ours",
+            "description": "ours for a block of our node pack, n8n for one of n8n's own (ADR 0045)."
+          },
           "disabled": {
             "title": "Disabled",
             "type": "boolean"
           },
           "kind": {
             "$ref": "#/components/schemas/N8nBlockKind",
-            "description": "What the block does, as on the set-up card. other is a sticky note or one of n8n's data blocks, and off a type the class file turns off or does not know; type says which."
+            "description": "What the block does, as on the set-up card. other is a sticky note or one of n8n's own blocks that shapes the data, reads a system or posts a notice, and off a block the class file turns off, or does not know, for what it is or what it was asked to do; type and tag say which."
           },
           "name": {
             "title": "Name",
@@ -7163,6 +8640,18 @@
             },
             "title": "Position",
             "type": "array"
+          },
+          "tag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What one of n8n's own blocks does, by its class: Reads Jira, Posts in Slack, Shapes the data. Null for our blocks, n8n's flow blocks and sticky notes.",
+            "title": "Tag"
           },
           "type": {
             "title": "Type",
@@ -7181,7 +8670,7 @@
       },
       "N8nReply": {
         "additionalProperties": false,
-        "description": "Asked to open n8n (ENGINE-PLAN 2.9). Only an Operator with n8n access, while staff access\nto n8n is on and the allow list proven, can: said tells everyone else why not.",
+        "description": "Asked to open n8n (ENGINE-PLAN 2.9). Only an Operator with n8n access, while staff access\nto n8n is on and bootstrap has proved n8n's blocks and guards, can: said tells everyone\nelse why not.",
         "properties": {
           "answer": {
             "const": "n8n",
@@ -7205,6 +8694,18 @@
             "title": "Said",
             "type": "string"
           },
+          "trace_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The trace of this turn, when the runtime's answer is shown. The Portal sends it back as previous.trace_id with the next message (ADR 0050). Null for a chip, an answer the platform gives alone, the offline answer, and an answer inside another.",
+            "title": "Trace Id"
+          },
           "use_case_id": {
             "anyOf": [
               {
@@ -7220,6 +8721,7 @@
         },
         "required": [
           "parts",
+          "trace_id",
           "answer",
           "said",
           "can_open",
@@ -7244,10 +8746,23 @@
             },
             "title": "Parts",
             "type": "array"
+          },
+          "trace_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The trace of this turn, when the runtime's answer is shown. The Portal sends it back as previous.trace_id with the next message (ADR 0050). Null for a chip, an answer the platform gives alone, the offline answer, and an answer inside another.",
+            "title": "Trace Id"
           }
         },
         "required": [
           "parts",
+          "trace_id",
           "answer"
         ],
         "title": "NeedsMeReply",
@@ -7365,6 +8880,18 @@
             "title": "Problems",
             "type": "array"
           },
+          "project": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The one Jira project the task's words name, read by code, which the Portal fills the agent's Jira project input with. Null when the words name none, or the agent uses no Jira tool.",
+            "title": "Project"
+          },
           "questions": {
             "items": {
               "type": "string"
@@ -7471,6 +8998,18 @@
             "title": "Starters",
             "type": "array"
           },
+          "trace_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The trace of this turn, when the runtime's answer is shown. The Portal sends it back as previous.trace_id with the next message (ADR 0050). Null for a chip, an answer the platform gives alone, the offline answer, and an answer inside another.",
+            "title": "Trace Id"
+          },
           "why": {
             "$ref": "#/components/schemas/FallbackWhy",
             "description": "no_model: none is connected. too_slow: it took too long. trouble: it failed or gave an answer the platform could not use."
@@ -7478,6 +9017,7 @@
         },
         "required": [
           "parts",
+          "trace_id",
           "answer",
           "why",
           "message",
@@ -7542,10 +9082,23 @@
             },
             "title": "Parts",
             "type": "array"
+          },
+          "trace_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The trace of this turn, when the runtime's answer is shown. The Portal sends it back as previous.trace_id with the next message (ADR 0050). Null for a chip, an answer the platform gives alone, the offline answer, and an answer inside another.",
+            "title": "Trace Id"
           }
         },
         "required": [
           "parts",
+          "trace_id",
           "answer"
         ],
         "title": "OperatorsReply",
@@ -7752,6 +9305,18 @@
             "title": "Cant",
             "type": "array"
           },
+          "draft_words": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The request's words, unchanged, when the Workflow drafter may draft it as an n8n workflow: for an Operator, when a part it can't do is not one the platform refuses (ADR 0051). The card shows Draft it as an n8n workflow, which sends these words. Null otherwise.",
+            "title": "Draft Words"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -7780,15 +9345,29 @@
                 "type": "null"
               }
             ]
+          },
+          "trace_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The trace of this turn, when the runtime's answer is shown. The Portal sends it back as previous.trace_id with the next message (ADR 0050). Null for a chip, an answer the platform gives alone, the offline answer, and an answer inside another.",
+            "title": "Trace Id"
           }
         },
         "required": [
           "parts",
+          "trace_id",
           "answer",
           "name",
           "rows",
           "cant",
-          "similar"
+          "similar",
+          "draft_words"
         ],
         "title": "PartReply",
         "type": "object"
@@ -8008,6 +9587,18 @@
             "title": "Parts",
             "type": "array"
           },
+          "trace_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The trace of this turn, when the runtime's answer is shown. The Portal sends it back as previous.trace_id with the next message (ADR 0050). Null for a chip, an answer the platform gives alone, the offline answer, and an answer inside another.",
+            "title": "Trace Id"
+          },
           "use_case_id": {
             "anyOf": [
               {
@@ -8023,6 +9614,7 @@
         },
         "required": [
           "parts",
+          "trace_id",
           "use_case_id",
           "name",
           "already",
@@ -8423,7 +10015,10 @@
             "check_workflows": "#/components/schemas/CheckWorkflowsReply",
             "decide": "#/components/schemas/DecideReply",
             "decided": "#/components/schemas/DecidedReply",
+            "didnt_follow": "#/components/schemas/DidntFollowReply",
+            "draft_started": "#/components/schemas/DraftStartedReply",
             "edit": "#/components/schemas/EditReply",
+            "explain": "#/components/schemas/ExplainReply",
             "ideas": "#/components/schemas/IdeasReply",
             "n8n": "#/components/schemas/N8nReply",
             "needs_me": "#/components/schemas/NeedsMeReply",
@@ -8433,6 +10028,8 @@
             "pause": "#/components/schemas/PauseReply",
             "question": "#/components/schemas/QuestionReply",
             "refused": "#/components/schemas/RefusedReply",
+            "remove_software": "#/components/schemas/RemoveSoftwareReply",
+            "reply": "#/components/schemas/FreeReply",
             "resume": "#/components/schemas/ResumeReply",
             "setup_card": "#/components/schemas/SetupCardReply",
             "watchlist": "#/components/schemas/WatchlistReply",
@@ -8479,6 +10076,12 @@
             "$ref": "#/components/schemas/QuestionReply"
           },
           {
+            "$ref": "#/components/schemas/FreeReply"
+          },
+          {
+            "$ref": "#/components/schemas/DidntFollowReply"
+          },
+          {
             "$ref": "#/components/schemas/EditReply"
           },
           {
@@ -8486,6 +10089,15 @@
           },
           {
             "$ref": "#/components/schemas/ResumeReply"
+          },
+          {
+            "$ref": "#/components/schemas/RemoveSoftwareReply"
+          },
+          {
+            "$ref": "#/components/schemas/ExplainReply"
+          },
+          {
+            "$ref": "#/components/schemas/DraftStartedReply"
           },
           {
             "$ref": "#/components/schemas/OperatorsReply"
@@ -8718,8 +10330,19 @@
                 "type": "null"
               }
             ],
-            "description": "The software the Planner named in its answer to it.",
+            "description": "The one software the Planner named in its answer to it, or a free reply's software. A message that only asks to watch it, such as keep track of it, gets the offer to watch this software.",
             "title": "Software"
+          },
+          "trace_id": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TraceId"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The trace_id of its answer. When this message came within 60 seconds of it, the platform flags that trace as typed again (ADR 0050)."
           }
         },
         "required": [
@@ -9120,10 +10743,23 @@
             "description": "The Planner's answer to a question about the person's own data, in its own words, from the facts read when the question arrived (ADR 0042).",
             "title": "Text",
             "type": "string"
+          },
+          "trace_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The trace of this turn, when the runtime's answer is shown. The Portal sends it back as previous.trace_id with the next message (ADR 0050). Null for a chip, an answer the platform gives alone, the offline answer, and an answer inside another.",
+            "title": "Trace Id"
           }
         },
         "required": [
           "parts",
+          "trace_id",
           "answer",
           "text",
           "looked_at",
@@ -9364,10 +11000,23 @@
           "said": {
             "title": "Said",
             "type": "string"
+          },
+          "trace_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The trace of this turn, when the runtime's answer is shown. The Portal sends it back as previous.trace_id with the next message (ADR 0050). Null for a chip, an answer the platform gives alone, the offline answer, and an answer inside another.",
+            "title": "Trace Id"
           }
         },
         "required": [
           "parts",
+          "trace_id",
           "answer",
           "reason",
           "said",
@@ -9466,6 +11115,125 @@
         "title": "RejectedView",
         "type": "object"
       },
+      "RemovalMatch": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "software_id": {
+            "title": "Software Id",
+            "type": "string"
+          },
+          "source": {
+            "description": "The GitHub repository it is read from, as owner/name, so two with the same name can be told apart, even after one is removed.",
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "software_id",
+          "name",
+          "source"
+        ],
+        "title": "RemovalMatch",
+        "type": "object"
+      },
+      "RemoveSoftwareReply": {
+        "additionalProperties": false,
+        "description": "Software to take off the Software watchlist, matched by name. An Operator removes each match\nwith DELETE /api/v1/watchlist/software/{software_id} and undoes it with POST\n/api/v1/watchlist/software/{software_id}/restore, as the Software page does. It is a setting\nof the platform: nothing outside it is written, so no Approver is asked. Someone who isn't an\nOperator gets operators instead.",
+        "properties": {
+          "answer": {
+            "const": "remove_software",
+            "default": "remove_software",
+            "title": "Answer",
+            "type": "string"
+          },
+          "matches": {
+            "description": "The watched software with that name, case, spaces, dots and hyphens aside, in the watchlist's order. Empty when the watchlist holds none, and more than one for the person to choose.",
+            "items": {
+              "$ref": "#/components/schemas/RemovalMatch"
+            },
+            "title": "Matches",
+            "type": "array"
+          },
+          "parts": {
+            "description": "Every clause of what the person typed, in order, with what happened to it (spec 6.5). None is dropped. Empty for a chip they tapped, for an answer inside another answer, and when no model read the request.",
+            "items": {
+              "$ref": "#/components/schemas/PartView"
+            },
+            "title": "Parts",
+            "type": "array"
+          },
+          "software": {
+            "description": "The name as the request wrote it.",
+            "title": "Software",
+            "type": "string"
+          },
+          "trace_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The trace of this turn, when the runtime's answer is shown. The Portal sends it back as previous.trace_id with the next message (ADR 0050). Null for a chip, an answer the platform gives alone, the offline answer, and an answer inside another.",
+            "title": "Trace Id"
+          },
+          "watched": {
+            "description": "The names the watchlist holds, in its order, so a name it doesn't hold is answered with what it does hold. Empty when it holds nothing.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Watched",
+            "type": "array"
+          }
+        },
+        "required": [
+          "parts",
+          "trace_id",
+          "answer",
+          "software",
+          "matches",
+          "watched"
+        ],
+        "title": "RemoveSoftwareReply",
+        "type": "object"
+      },
+      "ReplyAboutView": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "section": {
+            "enum": [
+              "watchlist",
+              "workflows"
+            ],
+            "title": "Section",
+            "type": "string"
+          }
+        },
+        "required": [
+          "section",
+          "name"
+        ],
+        "title": "ReplyAboutView",
+        "type": "object"
+      },
+      "ReplyForm": {
+        "enum": [
+          "answer",
+          "clarify",
+          "cant"
+        ],
+        "type": "string"
+      },
       "ReplyIn": {
         "additionalProperties": false,
         "properties": {
@@ -9487,6 +11255,27 @@
           "text"
         ],
         "title": "ReplyIn",
+        "type": "object"
+      },
+      "ReplyOfferView": {
+        "additionalProperties": false,
+        "properties": {
+          "capability": {
+            "description": "The Ready capability it stands for.",
+            "title": "Capability",
+            "type": "string"
+          },
+          "request": {
+            "description": "The registry's example request. The Portal's button sends it as the person's next message, so the Planner reads it again and any write still waits for a yes.",
+            "title": "Request",
+            "type": "string"
+          }
+        },
+        "required": [
+          "capability",
+          "request"
+        ],
+        "title": "ReplyOfferView",
         "type": "object"
       },
       "ReplyReason": {
@@ -9639,6 +11428,18 @@
             "title": "Parts",
             "type": "array"
           },
+          "trace_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The trace of this turn, when the runtime's answer is shown. The Portal sends it back as previous.trace_id with the next message (ADR 0050). Null for a chip, an answer the platform gives alone, the offline answer, and an answer inside another.",
+            "title": "Trace Id"
+          },
           "use_case_id": {
             "anyOf": [
               {
@@ -9654,6 +11455,7 @@
         },
         "required": [
           "parts",
+          "trace_id",
           "use_case_id",
           "name",
           "already",
@@ -10821,6 +12623,191 @@
         "title": "SeenIn",
         "type": "object"
       },
+      "Segment": {
+        "additionalProperties": false,
+        "properties": {
+          "quoted": {
+            "description": "A string from the plan or the document, such as a block's name or a notice's words. Show it in quotes, apart from code's own words.",
+            "title": "Quoted",
+            "type": "boolean"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text",
+          "quoted"
+        ],
+        "title": "Segment",
+        "type": "object"
+      },
+      "SetUpApprovalItem": {
+        "additionalProperties": false,
+        "description": "A drafted workflow's set-up approval that this person may decide now (ADR 0051).",
+        "properties": {
+          "approval_id": {
+            "title": "Approval Id",
+            "type": "string"
+          },
+          "drafted_id": {
+            "title": "Drafted Id",
+            "type": "string"
+          },
+          "link": {
+            "description": "Its approval page, as the Teams card opens it.",
+            "title": "Link",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "sent_at": {
+            "format": "date-time",
+            "title": "Sent At",
+            "type": "string"
+          },
+          "sent_by_name": {
+            "title": "Sent By Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "approval_id",
+          "drafted_id",
+          "name",
+          "sent_by_name",
+          "sent_at",
+          "link"
+        ],
+        "title": "SetUpApprovalItem",
+        "type": "object"
+      },
+      "SetUpApprovalView": {
+        "additionalProperties": false,
+        "description": "A set-up approval as the approval page shows it: code's report of the exact revision the\ndigest binds, and whether this person may decide it now, by the run gate's own rule.",
+        "properties": {
+          "approval": {
+            "$ref": "#/components/schemas/DraftedApprovalView"
+          },
+          "approval_id": {
+            "title": "Approval Id",
+            "type": "string"
+          },
+          "decline_reasons": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Decline Reasons",
+            "type": "array"
+          },
+          "digest": {
+            "description": "Send it back with the decision.",
+            "title": "Digest",
+            "type": "string"
+          },
+          "drafted_id": {
+            "title": "Drafted Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "report": {
+            "$ref": "#/components/schemas/WorkflowExplained"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          },
+          "set_up": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DraftedSetUpView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "why_not": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why this person can't decide it now.",
+            "title": "Why Not"
+          },
+          "you_can_decide": {
+            "title": "You Can Decide",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "approval_id",
+          "drafted_id",
+          "revision",
+          "name",
+          "digest",
+          "approval",
+          "report",
+          "you_can_decide",
+          "why_not",
+          "decline_reasons",
+          "set_up"
+        ],
+        "title": "SetUpApprovalView",
+        "type": "object"
+      },
+      "SetUpDecisionIn": {
+        "additionalProperties": false,
+        "properties": {
+          "digest": {
+            "title": "Digest",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SetUpDeclineReason"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Needed to decline, from the short list. None to approve."
+          },
+          "verdict": {
+            "enum": [
+              "approve",
+              "decline"
+            ],
+            "title": "Verdict",
+            "type": "string"
+          }
+        },
+        "required": [
+          "verdict",
+          "digest"
+        ],
+        "title": "SetUpDecisionIn",
+        "type": "object"
+      },
+      "SetUpDeclineReason": {
+        "enum": [
+          "Too risky without a yes",
+          "Wrong project or channel",
+          "Not needed"
+        ],
+        "type": "string"
+      },
       "SetUpFromN8n": {
         "additionalProperties": false,
         "properties": {
@@ -10978,10 +12965,23 @@
               }
             ],
             "description": "A workflow of the team's with the same name that watches a GitHub repository, so it is the one asked for. Null when there is none."
+          },
+          "trace_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The trace of this turn, when the runtime's answer is shown. The Portal sends it back as previous.trace_id with the next message (ADR 0050). Null for a chip, an answer the platform gives alone, the offline answer, and an answer inside another.",
+            "title": "Trace Id"
           }
         },
         "required": [
           "parts",
+          "trace_id",
           "answer",
           "name",
           "rows",
@@ -11893,8 +13893,16 @@
             "type": "string"
           },
           "run_id": {
-            "title": "Run Id",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null for a set-up approval, which has no run.",
+            "title": "Run Id"
           },
           "text": {
             "title": "Text",
@@ -12397,6 +14405,10 @@
         "title": "ToolView",
         "type": "object"
       },
+      "TraceId": {
+        "pattern": "^[0-9a-f]{32}$",
+        "type": "string"
+      },
       "Trigger": {
         "enum": [
           "person",
@@ -12798,9 +14810,16 @@
             "title": "Held Words"
           },
           "owner_name": {
-            "description": "The name of the schedule owner. Its scheduled runs start as them.",
-            "title": "Owner Name",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The name of the schedule owner. Its scheduled runs start as them. Null for a schedule nobody saved in the Portal, such as one set in n8n's editor.",
+            "title": "Owner Name"
           },
           "time_zone": {
             "title": "Time Zone",
@@ -12909,6 +14928,17 @@
             ],
             "description": "The safety checker's grade of the version in use, for a workflow n8n carries. writes_refused: a write can run without a yes, so the platform refuses this version's writes and asks nobody, until the yes is put back or the change undone. needs_a_fix: it uses a block that is off, or cannot run as the platform expects, so each run stops at its first block. Null for a workflow on the shared n8n workflow."
           },
+          "held_in_n8n": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/N8nHolderView"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Who has it open in n8n now, for everyone to see. While someone does, the platform refuses every change that would publish over their work: a schedule change, Undo, roll back, Add the yes back and Resume. Pause and Delete still work."
+          },
           "instruction": {
             "title": "Instruction",
             "type": "string"
@@ -13008,6 +15038,18 @@
               }
             ],
             "description": "When it runs on its own, and who owns the schedule. Kept while it is a draft, paused or held. Null for a workflow with no schedule."
+          },
+          "start_refused": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why neither Run now nor a test run can start it, in words to show: the version in use has no Start from the Portal block. Null when they can.",
+            "title": "Start Refused"
           },
           "state": {
             "$ref": "#/components/schemas/UseCaseState",
@@ -13710,6 +15752,18 @@
             ],
             "title": "Software"
           },
+          "trace_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The trace of this turn, when the runtime's answer is shown. The Portal sends it back as previous.trace_id with the next message (ADR 0050). Null for a chip, an answer the platform gives alone, the offline answer, and an answer inside another.",
+            "title": "Trace Id"
+          },
           "word": {
             "title": "Word",
             "type": "string"
@@ -13717,6 +15771,7 @@
         },
         "required": [
           "parts",
+          "trace_id",
           "answer",
           "word",
           "software",
@@ -13822,6 +15877,18 @@
             "title": "Parts",
             "type": "array"
           },
+          "trace_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The trace of this turn, when the runtime's answer is shown. The Portal sends it back as previous.trace_id with the next message (ADR 0050). Null for a chip, an answer the platform gives alone, the offline answer, and an answer inside another.",
+            "title": "Trace Id"
+          },
           "word": {
             "title": "Word",
             "type": "string"
@@ -13829,6 +15896,7 @@
         },
         "required": [
           "parts",
+          "trace_id",
           "answer",
           "word"
         ],
@@ -13852,6 +15920,18 @@
             "title": "Parts",
             "type": "array"
           },
+          "trace_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The trace of this turn, when the runtime's answer is shown. The Portal sends it back as previous.trace_id with the next message (ADR 0050). Null for a chip, an answer the platform gives alone, the offline answer, and an answer inside another.",
+            "title": "Trace Id"
+          },
           "use_case_id": {
             "anyOf": [
               {
@@ -13866,6 +15946,7 @@
         },
         "required": [
           "parts",
+          "trace_id",
           "answer",
           "use_case_id"
         ],
@@ -13878,6 +15959,152 @@
           "decline"
         ],
         "type": "string"
+      },
+      "WorkflowExplained": {
+        "additionalProperties": false,
+        "description": "One version of a workflow, explained from the report code builds. In in_short, phrase,\nlabel and value, each string from the plan or the document is a quoted segment, so a block\nnamed \"Security approved\" can't read as code's verdict.",
+        "properties": {
+          "approval": {
+            "description": "Whether its set-up needed an approval, in words to show.",
+            "title": "Approval",
+            "type": "string"
+          },
+          "approves": {
+            "description": "Who decides each write.",
+            "items": {
+              "$ref": "#/components/schemas/ExplainWrite"
+            },
+            "title": "Approves",
+            "type": "array"
+          },
+          "fixed": {
+            "description": "What code made sure of when it laid the workflow out.",
+            "items": {
+              "$ref": "#/components/schemas/ExplainCleared"
+            },
+            "title": "Fixed",
+            "type": "array"
+          },
+          "flags": {
+            "description": "Each rule a block breaks, in the rules' order.",
+            "items": {
+              "$ref": "#/components/schemas/ExplainFlag"
+            },
+            "title": "Flags",
+            "type": "array"
+          },
+          "grade": {
+            "$ref": "#/components/schemas/Grade",
+            "description": "The safety checker's grade under today's rules."
+          },
+          "in_short": {
+            "description": "One or two sentences in code's own words: when it runs, what it reads, what it changes or posts, and what waits for a yes.",
+            "items": {
+              "$ref": "#/components/schemas/Segment"
+            },
+            "title": "In Short",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "needs_an_answer": {
+            "description": "The questions left to answer.",
+            "title": "Needs An Answer",
+            "type": "integer"
+          },
+          "passed": {
+            "description": "Every other rule no block breaks.",
+            "items": {
+              "$ref": "#/components/schemas/ExplainCleared"
+            },
+            "title": "Passed",
+            "type": "array"
+          },
+          "reworded": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "In short as the AI model smoothed it, when asked with reworded=true and it passed every check. Show it labelled Reworded, with a way back to in_short. Null otherwise.",
+            "title": "Reworded"
+          },
+          "settings": {
+            "items": {
+              "$ref": "#/components/schemas/ExplainSetting"
+            },
+            "title": "Settings",
+            "type": "array"
+          },
+          "steps": {
+            "description": "Each block in run order.",
+            "items": {
+              "$ref": "#/components/schemas/ExplainStep"
+            },
+            "title": "Steps",
+            "type": "array"
+          },
+          "then": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExplainThen"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "An older version's number and the grade it had when it was published. Null for the version in use and for a draft."
+          },
+          "touches": {
+            "description": "What it reads, writes and posts.",
+            "items": {
+              "$ref": "#/components/schemas/ExplainTouch"
+            },
+            "title": "Touches",
+            "type": "array"
+          },
+          "use_case_id": {
+            "title": "Use Case Id",
+            "type": "string"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null for a draft, which has no published version.",
+            "title": "Version"
+          }
+        },
+        "required": [
+          "use_case_id",
+          "name",
+          "version",
+          "grade",
+          "then",
+          "in_short",
+          "reworded",
+          "steps",
+          "touches",
+          "flags",
+          "fixed",
+          "passed",
+          "approves",
+          "settings",
+          "approval",
+          "needs_an_answer"
+        ],
+        "title": "WorkflowExplained",
+        "type": "object"
       },
       "WorkflowFailureIn": {
         "additionalProperties": false,
@@ -15813,6 +18040,793 @@
         ]
       }
     },
+    "/api/v1/drafted-workflows": {
+      "post": {
+        "description": "Starts the workflow drafter on an Operator's words, unchanged (ADR 0051). It answers at once with the drafted workflow drafting its first revision. Read it again to see the plan laid out, checked and reported. Words shaped like a key are refused, and nothing is kept or sent. The same Idempotency-Key answers the drafted workflow it started.",
+        "operationId": "start_drafting_api_v1_drafted_workflows_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DraftWorkflowIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftedWorkflowView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Only an Operator can do this, or the person is not on the People list"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Don't paste keys here. An Operator adds keys in Settings."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Start Drafting",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/drafted-workflows/{drafted_id}": {
+      "get": {
+        "description": "A drafted workflow's newest revision: its state, steps, code's report, the settings still needed, the flags, whether it can be sent for approval and why not, and its set-up approval and set-up once there are. Anyone on the team who is signed in may read it, as anyone may read a workflow's report.",
+        "operationId": "read_drafted_api_v1_drafted_workflows__drafted_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "drafted_id",
+            "required": true,
+            "schema": {
+              "title": "Drafted Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftedWorkflowView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Signed in, but not on the People list. Ask an Operator to add you"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "No such drafted workflow"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Read Drafted",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/drafted-workflows/{drafted_id}/answers": {
+      "post": {
+        "description": "An answer to the drafted workflow's question, or a guessed setting changed: one of the question's choices, or what the person typed (ADR 0051, section 5). Code reads it and lays out the next revision, with no model. A run time, a Jira project, a channel, an address, the Approvers and a write key are never guessed: a typed one counts only when code reads it and finds it in the team's own data. 409, with the words the card shows, when code reads nothing in it, when it is shaped like a key, when the revision named is not the newest, or while it is open in n8n or isn't a draft. The person who answers becomes a party to its set-up approval.",
+        "operationId": "answer_drafted_api_v1_drafted_workflows__drafted_id__answers_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "drafted_id",
+            "required": true,
+            "schema": {
+              "title": "Drafted Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DraftAnswerIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftedWorkflowView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Only an Operator can do this, or the person is not on the People list"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "No such drafted workflow"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Answer Drafted",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/drafted-workflows/{drafted_id}/changes": {
+      "post": {
+        "description": "A change asked for in the chat. The drafter gets the plan as it stands and these words, and its whole new plan becomes the next revision, drafting now. A setting with the same id and kind keeps its value unless the words change it. A set-up approval still waiting is replaced. Any Operator may ask for a change, and so becomes a party to its set-up approval. 409 when the revision named is not the newest, it is still drafting, or its approval is set up or being set up. A set-up that was refused or given up leaves it a draft to change.",
+        "operationId": "change_drafted_api_v1_drafted_workflows__drafted_id__changes_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "drafted_id",
+            "required": true,
+            "schema": {
+              "title": "Drafted Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DraftChangeIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftedWorkflowView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Only an Operator can do this, or the person is not on the People list"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "No such drafted workflow"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Change Drafted",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/drafted-workflows/{drafted_id}/n8n": {
+      "post": {
+        "description": "Edit in n8n: puts the newest revision in your own n8n space, without its keys, and answers where it is in n8n's editor. Only an Operator with n8n access can. Nothing else changes it until Done in n8n reads it back. Opening it again changes nothing. 403 without n8n access, 409 while it isn't a draft or staff access to n8n is off, 503 when n8n didn't take it.",
+        "operationId": "edit_drafted_in_n8n_api_v1_drafted_workflows__drafted_id__n8n_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "drafted_id",
+            "required": true,
+            "schema": {
+              "title": "Drafted Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DraftInN8nIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftedWorkflowView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Only an Operator can do this, or the person is not on the People list"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "No such drafted workflow"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "n8n didn't take it"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Edit Drafted In N8N",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/drafted-workflows/{drafted_id}/n8n/done": {
+      "post": {
+        "description": "Done in n8n: reads what n8n holds back as a new revision, laid out and checked again, and takes it out of your n8n space. A value typed in n8n counts as filled once it passes the same check as in the chat, and a placeholder left there is still needed. Only the person who opened it can. 409, with what n8n holds that the platform can't read back, and it stays in n8n to put right. 503 when n8n didn't show it.",
+        "operationId": "done_drafted_in_n8n_api_v1_drafted_workflows__drafted_id__n8n_done_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "drafted_id",
+            "required": true,
+            "schema": {
+              "title": "Drafted Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftedWorkflowView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Only an Operator can do this, or the person is not on the People list"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "No such drafted workflow"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "n8n didn't show it"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Done Drafted In N8N",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/drafted-workflows/{drafted_id}/send": {
+      "post": {
+        "description": "Sends the newest revision for a set-up approval, to any Approver who is not a party: the person who described it, everyone who changed it, and the sender. It goes to the Teams channel with a link to the approval page. 409, with the words the card shows, while any setting is still needed, when the check found a flag, or when it changes someone's access, until those steps are built.",
+        "operationId": "send_drafted_api_v1_drafted_workflows__drafted_id__send_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "drafted_id",
+            "required": true,
+            "schema": {
+              "title": "Drafted Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DraftSendIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftedWorkflowView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Only an Operator can do this, or the person is not on the People list"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "No such drafted workflow"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Send Drafted",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/drafted-workflows/{drafted_id}/set-up": {
+      "post": {
+        "description": "Tries the set-up of an approved revision again, after n8n didn't take it.",
+        "operationId": "set_up_drafted_again_api_v1_drafted_workflows__drafted_id__set_up_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "drafted_id",
+            "required": true,
+            "schema": {
+              "title": "Drafted Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftedWorkflowView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Only an Operator can do this, or the person is not on the People list"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "No such drafted workflow"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Set Up Drafted Again",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
     "/api/v1/drafts": {
       "get": {
         "description": "The signed-in Operator's own drafts. Nobody else's are listed.",
@@ -17470,7 +20484,7 @@
     },
     "/api/v1/planner/answer": {
       "post": {
-        "description": "The Planner's one answer to what a person types or taps on Home. A typed request is read by the AI model and answered as a set-up card, a part, a can't, a watchlist row, a question about software, a refusal, or one of the question kinds the Portal fills from its own routes. An intent chip never asks the model. Without a model, or after 10 seconds, or when the answer cannot be used, it answers `offline` with the starter workflows. Someone who isn't an Operator asks questions only (ADR 0043): they get the question kinds, `decided` for their own decisions and `decide` for an approve or decline, which goes to the request. Anything else answers `operators`, and a change beside a question is a part marked `operators`. Nothing is saved or written.",
+        "description": "The Planner's one answer to what a person types or taps on Home. A typed request is read by the AI model and answered as a set-up card, a part, a can't, a watchlist row, a question about software, a refusal, or one of the question kinds the Portal fills from its own routes. An intent chip never asks the model. Without a model, or after 35 seconds, or when the answer cannot be used, it answers `offline` with the starter workflows. Someone who isn't an Operator asks questions only (ADR 0043): they get the question kinds, `decided` for their own decisions and `decide` for an approve or decline, which goes to the request. Anything else answers `operators`, and a change beside a question is a part marked `operators`. Nothing is saved or written. One person may send typed words 20 times a minute; past that it answers 429 in plain words.",
         "operationId": "answer_api_v1_planner_answer_post",
         "requestBody": {
           "content": {
@@ -17532,6 +20546,16 @@
               }
             },
             "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "You've asked the Planner a lot in the last minute. Wait a moment, then ask again."
           },
           "503": {
             "content": {
@@ -18816,6 +21840,208 @@
         ]
       }
     },
+    "/api/v1/setup-approvals/{approval_id}": {
+      "get": {
+        "description": "A set-up approval as its page shows it: code's report of the exact revision its digest binds, and whether the signed-in person may decide it now. A party to it never may, and nobody may while today's rules find a flag in it, a setting still needed, or a change to someone's access. Anyone on the team who is signed in may read it.",
+        "operationId": "read_set_up_approval_api_v1_setup_approvals__approval_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "approval_id",
+            "required": true,
+            "schema": {
+              "title": "Approval Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SetUpApprovalView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Signed in, but not on the People list. Ask an Operator to add you"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "No such set-up approval"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Read Set Up Approval",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/setup-approvals/{approval_id}/decisions": {
+      "post": {
+        "description": "An Approver's yes or no to set up the revision with this digest. One Approver who is not a party decides. A decline needs a reason from the short list. Once approved, the platform sets it up as a Draft in n8n, read back and compared by digest. A yes is refused while today's rules find a flag in the revision, a setting still needed, or a change to someone's access. 200 when the same decision was recorded before.",
+        "operationId": "decide_set_up_api_v1_setup_approvals__approval_id__decisions_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "approval_id",
+            "required": true,
+            "schema": {
+              "title": "Approval Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetUpDecisionIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SetUpApprovalView"
+                }
+              }
+            },
+            "description": "Recorded before"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SetUpApprovalView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "This person can't decide it now, with why"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "No such set-up approval"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Pick a reason to decline."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Decide Set Up",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
     "/api/v1/team-requests": {
       "get": {
         "description": "Every request for the team, the newest first. Any Operator or Approver can read them. A request marked Done leaves the list after 30 days.",
@@ -20064,6 +23290,138 @@
         ]
       }
     },
+    "/api/v1/use-cases/{use_case_id}/explain": {
+      "get": {
+        "description": "One version of a workflow, explained from the report code builds (ADR 0051, section 6): In short, each step, what it reads, writes and posts, every flag, who approves each write, its settings and its approval. Anyone signed in may ask. Block types come only to people with n8n access. An older version is checked again under today's rules, with the grade it had when it was published beside it. With reworded=true the AI model may smooth In short, and reworded holds its text only when it passed every check. Anything else leaves reworded null, and the answer is still 200. It writes nothing, starts nothing and asks no Approver.",
+        "operationId": "explain_workflow_api_v1_use_cases__use_case_id__explain_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "use_case_id",
+            "required": true,
+            "schema": {
+              "title": "Use Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The version to explain, as the versions list numbers it. Leave it out for the version in use, or for a draft.",
+            "in": "query",
+            "name": "version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The version to explain, as the versions list numbers it. Leave it out for the version in use, or for a draft.",
+              "title": "Version"
+            }
+          },
+          {
+            "description": "Ask the AI model to smooth In short, as the chat card does.",
+            "in": "query",
+            "name": "reworded",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Ask the AI model to smooth In short, as the chat card does.",
+              "title": "Reworded",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowExplained"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Signed in, but not on the People list. Ask an Operator to add you"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "No such workflow, or it is deleted, or no such version"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Nothing to explain: this version ran on the shared n8n workflow, so the platform kept no copy of its blocks."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Explain Workflow",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
     "/api/v1/use-cases/{use_case_id}/n8n": {
       "get": {
         "description": "The workflow as n8n holds the version in use: its blocks and edges, who published it, who has it open in n8n, and whether you can open n8n's editor now. For people with n8n access.",
@@ -20157,7 +23515,7 @@
     },
     "/api/v1/use-cases/{use_case_id}/open-in-n8n": {
       "post": {
-        "description": "Moves the workflow to your own n8n space and answers its address in n8n's editor (ENGINE-PLAN 2.5). Only an Operator with n8n access can, and never an Approver. While you hold it, anything you publish there is a new version, which the safety check grades, with you as its publisher, who can never approve its runs. Opening it again changes nothing. 409 while staff access to n8n is off, the allow list is unproven, or someone else holds it.",
+        "description": "Moves the workflow to your own n8n space and answers its address in n8n's editor (ENGINE-PLAN 2.5). Only an Operator with n8n access can, and never an Approver. While you hold it, anything you publish there is a new version, which the safety check grades, with you as its publisher, who can never approve its runs. Opening it again changes nothing. 409 while staff access to n8n is off, bootstrap has not proved n8n's blocks and guards, or someone else holds it.",
         "operationId": "open_in_n8n_api_v1_use_cases__use_case_id__open_in_n8n_post",
         "parameters": [
           {
@@ -20654,7 +24012,7 @@
                 }
               }
             },
-            "description": "The watchlist is empty, so there is nothing to check, an agent use case has no AI model connected, the workflow is paused, or it is a draft and this is not a test run"
+            "description": "The watchlist is empty, so there is nothing to check, an agent use case has no AI model connected, the workflow is paused, or it is a draft and this is not a test run. A test run also waits while someone holds the workflow in n8n, or while its n8n draft has a block the platform can't check. Neither starts a workflow with no Start from the Portal block"
           },
           "422": {
             "content": {

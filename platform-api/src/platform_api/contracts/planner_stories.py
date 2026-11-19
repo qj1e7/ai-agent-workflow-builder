@@ -25,6 +25,8 @@ from platform_api.builder.planner import (
     EditBefore,
     EditChoice,
     EditReply,
+    ExplainChoice,
+    ExplainReply,
     IdeasReply,
     ListedSoftware,
     NeedsMeReply,
@@ -35,8 +37,11 @@ from platform_api.builder.planner import (
     PartView,
     PauseReply,
     PlannerFront,
+    PreviousIn,
     QuestionReply,
     RefusedReply,
+    RemovalMatch,
+    RemoveSoftwareReply,
     ReplyReason,
     ResumeReply,
     SetupCardReply,
@@ -57,6 +62,7 @@ from platform_api.orchestration import (
     PlannerFacts,
     PreviousTurn,
     RuntimeDown,
+    TurnTrace,
 )
 from platform_api.shared import Principal
 from platform_api.wire import WireModel
@@ -170,6 +176,7 @@ class _Answers:
         facts: PlannerFacts | None = None,
         previous: PreviousTurn | None = None,
         changes_workflows: bool = True,
+        trace: TurnTrace | None = None,
     ) -> NoModel:
         return NoModel()
 
@@ -237,9 +244,24 @@ def _capabilities(root: Path, *checks: ConnectionCheck) -> WireModel:
     return view
 
 
+TRACE_ID = "019a8c3e5b2f7c41a3d29e6f0b7d1c55"
+CHAT = "5f0c2a7e-3b1d-4e8f-9a6c-2d4b7e1f0a93"
+
+
 def planner_fixtures(root: Path) -> dict[str, WireModel]:
     return {
         "planner/answer.text.json": AnswerIn(text=FRIDAY),
+        "planner/answer.text.follow_up.json": AnswerIn(
+            text="and Redis?",
+            chat=CHAT,
+            previous=PreviousIn(
+                request="What is the newest version of LangGraph?",
+                software="LangGraph",
+                answer="LangGraph is behind. You run 1.2.14 and the newest is 1.2.16.",
+                kind="question",
+                trace_id=TRACE_ID,
+            ),
+        ),
         "planner/answer.intent.json": AnswerIn(intent="why_stopped", use_case_id="uc_01JB8"),
         "planner/answer.setup_card.json": SETUP_CARD.model_copy(
             update={"similar": SimilarWorkflow(use_case_id="uc_01JB8", name=SETUP_CARD.name)}
@@ -349,6 +371,7 @@ def planner_fixtures(root: Path) -> dict[str, WireModel]:
             text="LangGraph is behind. You run 1.2.14 and the newest is 1.2.16.",
             looked_at=["watchlist"],
             about_software=["LangGraph"],
+            trace_id=TRACE_ID,
         ),
         "planner/answer.edit.json": EDIT,
         "planner/answer.edit.unclear.json": EditReply(
@@ -394,6 +417,56 @@ def planner_fixtures(root: Path) -> dict[str, WireModel]:
                 crossed("What needs my attention", "ask_on_its_own"),
                 crossed("Rename the morning check", "only_schedule"),
             ],
+        ),
+        "planner/answer.remove_software.json": RemoveSoftwareReply(
+            software="Node.js",
+            matches=[RemovalMatch(software_id="sw_01JD4", name="node js", source="nodejs/node")],
+            watched=["FastAPI", "LangGraph", "node js", "React"],
+            parts=[does("remove Node.js from the watchlist")],
+        ),
+        "planner/answer.remove_software.none.json": RemoveSoftwareReply(
+            software="Kubernetes",
+            matches=[],
+            watched=["FastAPI", "LangGraph", "node js", "React"],
+            parts=[does("stop watching Kubernetes")],
+        ),
+        "planner/answer.explain.json": ExplainReply(
+            use_case_id="uc_01JFASTAPI",
+            name="FastAPI release check",
+            missing=None,
+            choices=[],
+            in_focus=False,
+            parts=[does("explain the FastAPI release check")],
+        ),
+        "planner/answer.explain.choices.json": ExplainReply(
+            use_case_id=None,
+            name=None,
+            missing=None,
+            choices=[
+                ExplainChoice(use_case_id="uc_01JFASTAPI", name="FastAPI release check"),
+                ExplainChoice(use_case_id="uc_01JB8", name="React release check"),
+            ],
+            in_focus=False,
+            parts=[does("explain the release check")],
+        ),
+        "planner/answer.explain.missing.json": ExplainReply(
+            use_case_id=None,
+            name=None,
+            missing="Kubernetes check",
+            choices=[],
+            in_focus=False,
+            parts=[does("explain the Kubernetes check")],
+        ),
+        "planner/answer.explain.it.json": ExplainReply(
+            use_case_id=None,
+            name=None,
+            missing=None,
+            choices=[
+                ExplainChoice(use_case_id="uc_01JFASTAPI", name="FastAPI release check"),
+                ExplainChoice(use_case_id="uc_01JB8", name="React release check"),
+            ],
+            in_focus=True,
+            parts=[does("explain it")],
         ),
         "planner/answer.pause.json": PauseReply(
             use_case_id="uc_01JB8",

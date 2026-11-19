@@ -20,12 +20,14 @@ One environment, `dev`, in the resource group `rg-wab-dev`. The region is Southe
 | Container Apps environment | `cae-wab-dev` | Workload profiles mode with the Consumption profile, logs to Log Analytics |
 | Container App | `platform-api` | External ingress on 8000, 0.25 vCPU, 1 replica always on for the `tick` loop |
 | Container App | `agent-runtime` | Internal ingress on 8100, 0.25 vCPU, scales to zero |
-| Container App | `n8n` | Internal ingress on 5678, or external when `N8N_EDITOR_EXTERNAL` is `true` ([n8n's editor](#n8ns-editor)), 0.5 vCPU, exactly 1 replica |
+| Container App | `n8n` | Internal ingress on 5678, or external when `N8N_EDITOR_EXTERNAL` is `true` ([n8n's editor](#n8ns-editor)), 0.5 vCPU, exactly 1 replica. Port 5679, its task runner's broker, opens only inside the environment ([n8n's task runner](#n8ns-task-runner)) |
+| Container App | `n8n-runners` | n8n's task runner, `n8nio/runners` at n8n's version. No ingress, 0.25 vCPU, exactly 1 replica. It holds none of n8n's secrets, and no container in it gets its identity ([n8n's task runner](#n8ns-task-runner)) |
 | Container App | `portal` | External ingress on 8080, 0.25 vCPU, scales to zero |
 | Container Apps Job | `db-init` | Creates the per-context database roles. Runs on every deploy |
 | Container Apps Job | `migrate` | Applies the database migrations with the new platform-api image, before the apps change ([Migrations on a deploy](#migrations-on-a-deploy)). Runs on every deploy |
 | Container Apps Job | `bootstrap` | Migrations again, which finds nothing to do on Azure, then n8n owner, workflow load and lint. Runs on every deploy |
 | Managed identities | `id-<app>-wab-dev`, one per app and job | AcrPull on the registry, and Key Vault Secrets User on each secret it reads. platform-api's also has Cosmos DB's built-in Data Contributor role on the `activity` database |
+| Langfuse VM and its parts | `vm-langfuse-wab-dev` and others | Only while `langfuse_enabled` is `true`. Off by default ([Langfuse](#langfuse)) |
 
 PostgreSQL 17 matches Compose and is listed as supported in [Azure's version list](https://learn.microsoft.com/en-us/azure/postgresql/configure-maintain/concepts-supported-versions). We did not check that the Southeast Asia region offers it, because nothing here contacts Azure. If the first deploy says it does not, set `version = "16"` in `modules/postgres/main.tf`.
 
@@ -46,8 +48,10 @@ infra/
     workload_identity/ one identity and its role assignments
     container_app/     one Container App
     container_app_job/ one Container Apps Job
+    langfuse_vm/       the Langfuse VM, its network, storage, alerts and compose file (ADR 0050)
   sql/db-init.sql      the role setup that the db-init job runs
-  public-images.json   the pins of n8n and PostgreSQL. PostgreSQL is copied into our registry; our n8n image builds on the n8n pin
+  sql/db-init-langfuse.sql  Langfuse's role, added to the db-init job only while Langfuse is on
+  public-images.json   the pins of n8n, its task runner and PostgreSQL. The runner and PostgreSQL are copied into our registry; our n8n image builds on the n8n pin
   bootstrap/           one-time setup by a person: state storage and the deploy identity
   scripts/             the offline checks, and the job runner the deploy workflow uses
 ```
@@ -61,6 +65,7 @@ infra/
 - The apps never hold a secret value in their own settings. Each Container App setting points at a Key Vault secret's URL, and Azure reads it with the app's own managed identity. Our code reads plain environment variables and never calls a Key Vault SDK, the same as in Compose.
 - **The generated secrets are also in the Terraform state file, in plain text.** That is how Terraform remembers a value so the next run keeps it. The state lives in Azure Storage with access keys turned off, so only identities with a blob data role can read it. [bootstrap/README.md](bootstrap/README.md) explains who that is. We kept stored random values over Terraform's newer write-only arguments, because a write-only value is new on every run, and a run that fails halfway would leave the database and Key Vault with different passwords.
 - The release checker in agent-runtime calls GitHub's API. Without a token, GitHub allows only 60 requests an hour per IP address. On the Consumption plan our outbound address can be shared with other Azure customers, so a demo could run out. A token raises the limit to 5,000 an hour. To use one, set the secret `GH_RELEASE_TOKEN` on the `azure-dev` environment (step 7 below). The deploy passes it to Terraform as `github_token`, Terraform stores it in Key Vault, and agent-runtime reads it as `GITHUB_TOKEN`. Leave the secret unset, and agent-runtime calls GitHub without a token. Where the token comes from is still open (placeholder: the team lead decides who owns it). A fine-grained personal access token with no extra permissions can read public repositories' releases.
+- n8n's own Jira, GitHub and Slack blocks run with keys the platform makes in n8n from Key Vault (ADR 0045, as amended): `N8N_KEY_JIRA_TOKEN` with `N8N_KEY_JIRA_URL` and, for Jira Cloud, `N8N_KEY_JIRA_EMAIL`; `N8N_KEY_GITHUB_TOKEN` with `N8N_KEY_GITHUB_URL`; and `N8N_KEY_SLACK_TOKEN`. The deploy passes each to Terraform, which stores it in Key Vault. Leave one unset and that system's blocks have no key. The platform asks each system what the key may do before it makes it, and again each day, and refuses a key that can do more than read, or than post in Slack. **A test run reads with these keys**, so whatever the Jira account can see, any Operator can read through a test run. Use a Jira account that only browses, and sees only the projects Operators may see. Use a classic GitHub token with read scopes, or none, for public repositories only. Use a Slack bot token with `chat:write` and the read scopes for channel and people lists only.
 - Approval cards go to a real Teams channel only when the secret `TEAMS_WEBHOOK_URL` is set (ADR 0036). The address carries its own signature, so the deploy passes it to Terraform as `teams_webhook_url`, Terraform stores it in Key Vault, and platform-api reads it as `TEAMS_WEBHOOK_URL`. **Before you set it, run a one-time check.** Nobody has yet confirmed how Teams shows markdown and web addresses in the card's text.
   1. In a test channel, not the real one, create a Workflows flow from "When a Teams webhook request is received" with "Post card in a chat or channel", and copy its address.
   2. From the repository root, run `TEAMS_TEST_WEBHOOK_URL='<that address>' scripts/teams-card-check.sh`. It should print `Teams answered 202`.
@@ -83,6 +88,7 @@ infra/
 | n8n's `N8N_INSTANCE_OWNER_*` | not set | not set while n8n is internal. With its editor open, `MANAGED_BY_ENV=true`, the `N8N_OWNER_EMAIL` address, the names `Platform Bootstrap`, and `PASSWORD_HASH` as the app's own secret |
 | `CALLBACK_ALLOWED_ORIGINS` | `http://platform-api:8000` | platform-api's HTTPS origin |
 | `PLATFORM_JIRA_URL` (agent-runtime) | `http://platform-api:8000` | platform-api's HTTPS URL. It must be one of `CALLBACK_ALLOWED_ORIGINS` (ADR 0035) |
+| `PLANNER_MODE` (agent-runtime) | `.env`, unset by default, so `rules`, today's Planner | the `planner_mode` variable, from the GitHub variable `PLANNER_MODE`, else `rules`. `ai_led` lets the model lead through checked tools on top of the rules (ADR 0049). The team lead turns it on after the eval runs ADR 0049 asks for. Any other value stops agent-runtime from starting, and Terraform's plan refuses it |
 | `JIRA_BASE_URL`, `JIRA_API_FLAVOR`, `JIRA_EMAIL`, `JIRA_ISSUE_TYPE`, `JIRA_BROWSE_URL`, `WATCHLIST_JIRA_PROJECT` | `.env`, unset by default: the practice Jira, `datacenter`, `Task`, `MOCK` | the `JIRA_*` and `WATCHLIST_JIRA_PROJECT` variables, unset by default ([A real Jira](#a-real-jira)) |
 | `JIRA_API_TOKEN` | `.env`, empty | a Key Vault secret, `jira-api-token`, from `JIRA_API_TOKEN`, only when that secret is set |
 | `CONFLUENCE_BASE_URL`, `CONFLUENCE_EMAIL`, `CONFLUENCE_PAGES` | `.env`, unset by default, so Confluence is not connected | the `CONFLUENCE_BASE_URL`, `CONFLUENCE_EMAIL` and `CONFLUENCE_PAGES` variables, unset by default. The email names the account and is not secret. `CONFLUENCE_PAGES` lists the only pages platform-api reads, as `id=title` separated by `;` |
@@ -137,7 +143,7 @@ Changing it later is not a small edit. Private access needs the Container Apps e
 n8n is internal unless the `N8N_EDITOR_EXTERNAL` variable is `true` ([ADR 0034](../docs/adr/0034-open-n8ns-editor-on-azure-with-an-optional-list-of-allowed-addresses.md)). Then its editor is at `https://n8n.<domain>`, the Portal's address with `portal` changed to `n8n`. `terraform output -raw n8n_editor_url` prints it.
 
 - **Sign-in.** Use n8n's owner account: the email in `N8N_OWNER_EMAIL`, and the password in the Key Vault secret `n8n-owner-password`. Reading the secret needs a data role on the vault, such as Key Vault Secrets User, which no person has by default. While the editor is open, n8n refuses to change that account's password or email, because its settings manage the account. The password stays as Terraform holds it: n8n rewrites the owner from Terraform's bcrypt hash on every start, so a hand edit in Key Vault breaks the bootstrap's sign-in until the next apply. To rotate it, mark `random_password.generated["n8n-owner-password"]` for replacement and deploy with `allow_destroy`, while the switch is on.
-- **Who can reach it.** With `N8N_EDITOR_ALLOWED_IPS` unset, every address reaches n8n's sign-in page. That is the operator's choice for now (1 Nov 2026). With it set, Container Apps lets in only those addresses and the ranges in `N8N_INTERNAL_ALLOWED_CIDRS`, and answers anyone else with "RBAC: access denied". n8n reads each visitor's own address (`N8N_PROXY_HOPS=1`), so its sign-in limit of 1000 tries in 5 minutes is per visitor. Its second limit, 5 tries a minute for one email, still lets anyone who knows the owner's email lock out the owner and the bootstrap, which waits up to three minutes and then fails the deploy. Only the list removes that. Set the list before the sponsor demo, and before any real credentials go into n8n. ADR 0034 lists the risks of running without it.
+- **Who can reach it.** With `N8N_EDITOR_ALLOWED_IPS` unset, every address reaches n8n's sign-in page. That is the operator's choice for now (1 Nov 2026). With it set, Container Apps lets in only those addresses and the ranges in `N8N_INTERNAL_ALLOWED_CIDRS`, and answers anyone else with "RBAC: access denied". n8n reads each visitor's own address (`N8N_PROXY_HOPS=1`), so its sign-in limit of 1000 tries in 5 minutes is per visitor. Its second limit, 5 tries a minute for one email, still lets anyone who knows the owner's email lock out the owner and the bootstrap, which waits up to three minutes and then fails the deploy. Only the list removes that. Set the list before the sponsor demo, and before any real credentials go into n8n. ADR 0034 lists the risks of running without it. Since every built-in block loads ([ADR 0051](../docs/adr/0051-a-workflow-drafter-may-propose-any-n8n-block-code-explains-every-workflow-and-an-approvers-yes-sets-up-a-flagged-workflow.md), step 12), the editor can also build workflows with Code, HTTP Request and Webhook, and a Webhook, Form, Wait or MCP Server Trigger that a member publishes answers anyone who reaches n8n, at `/webhook`, `/webhook-test`, `/webhook-waiting`, `/form`, `/form-test`, `/form-waiting`, `/mcp` and `/mcp-test`. The team lead kept the choice of 1 Nov on 18 Nov 2026, so nothing changes until the list is set. With the list set, the deploy checks that each of those paths refuses its runner.
 - **No race for the owner.** Until n8n has an owner, its setup page lets the first visitor become the owner. Two things close that gap:
   - **The deploy's gate.** The step "Check that n8n may open" (`scripts/n8n-editor-gate.sh`) opens n8n only once the `bootstrap` job has a Succeeded execution in the resource group. On a new environment, n8n stays internal for the first deploy, and the run summary says: "n8n stays internal until the first bootstrap has created its owner. Run the deploy again to open the editor." Later deploys pass the check, so nothing flips. If `az` fails, the deploy stops rather than closing an open editor.
   - **n8n's own setting.** While the switch is on, n8n creates the owner from its settings (`N8N_INSTANCE_OWNER_MANAGED_BY_ENV`) before it registers any REST route. The password hash is the stored bcrypt hash of `n8n-owner-password`, kept as the n8n app's own secret.
@@ -151,8 +157,29 @@ The offline checks cannot show these:
 1. **Switch on, no list.** The editor opens at `n8n_editor_url`, which the run summary prints, and the owner can sign in. n8n's log says "N8N_INSTANCE_OWNER_MANAGED_BY_ENV is enabled". The bootstrap job succeeds and logs "owner <email>: signed in", and a test run completes, so platform-api reaches n8n at its new address.
 2. **The gate on a new environment, if one is made.** The first deploy keeps n8n internal and writes the note to the run summary. The second deploy opens it.
 3. **With a list, from a listed address.** The editor opens.
-4. **With a list, from any other address,** such as a phone on mobile data. The answer is "RBAC: access denied". This also shows that the inside ranges do not let outsiders in.
+4. **With a list, from any other address,** such as a phone on mobile data. The answer is "RBAC: access denied". This also shows that the inside ranges do not let outsiders in. The deploy's step "Check that n8n's public paths refuse an address outside its list" (`scripts/n8n-paths-closed.sh`) does the same for each path above, from its runner, and runs only while the list is set.
 5. **With a list, the platform's own calls.** The bootstrap job succeeds, and a test run completes. This is the one check of the inside ranges. If either fails with HTTP 403 ("RBAC: access denied"), unset `N8N_EDITOR_ALLOWED_IPS` and deploy again, which restores runs. Then find where the calls come from. If they leave through the environment's public address, `az containerapp show --name platform-api --resource-group rg-wab-dev --query properties.outboundIpAddresses` lists it, and it goes in `N8N_INTERNAL_ALLOWED_CIDRS`. That address can be shared with other Azure customers, so n8n's sign-in matters again.
+
+## n8n's task runner
+
+n8n runs the code of Code, AI Transform, the Code Tool, Sort and Item Lists in its external task runner, the app `n8n-runners` ([ADR 0051](../docs/adr/0051-a-workflow-drafter-may-propose-any-n8n-block-code-explains-every-workflow-and-an-approvers-yes-sets-up-a-flagged-workflow.md), spike P9). Spike P9 showed that code which gets out of the runner's sandbox reads every secret n8n holds when the runner is n8n's own child, and none when it runs in a container of its own. So:
+
+- **n8n's guards.** `local.n8n_guards` gives n8n `N8N_RUNNERS_MODE=external`, keeps `$env` closed, refuses the deprecated blocks that run code in n8n's own process, and keeps the file blocks in `/home/node/.n8n-files`. The bootstrap job gets the same map and fails the start unless each holds. `tests/n8n.tftest.hcl` checks the map.
+- **The token.** n8n and the runner both read the Key Vault secret `n8n-runners-auth-token` as `N8N_RUNNERS_AUTH_TOKEN`. It lets a client take n8n's tasks, so only those two apps hold it. Giving n8n's identity that one more secret replaces its role wait, which the plan guard counts as a change, since a wait holds nothing.
+- **No identity in the runner.** The runner's identity pulls its image and reads its token. `identitySettings` with `lifecycle` `None` keeps it out of every container, so code in the runner can't ask Azure for a token. azurerm 5.7.0 can't set that, so `modules/task_runner` makes the whole app with azapi, and its first revision already has it.
+- **The broker.** The runner calls `http://n8n:5679`. n8n's app opens 5679 only inside the environment, through `additionalPortMappings`, which azurerm 5.7.0 can't set either. `modules/container_app`'s `internal_ports` sends that PATCH, and sends it again whenever n8n's ingress or revision changes, because azurerm writes the ingress whole, without the extra port, when the ingress changes. Container Apps reaches the container on an address n8n can't know before it starts, so the broker listens on every address, and any app in the environment can reach it. Only the token guards it. Locally, compose binds it to n8n's address on the runners network alone.
+- **What never loads.** `local.n8n_guards` gives n8n `NODES_EXCLUDE`, which leaves out every block that reaches n8n's own secrets, disk or host: Execute Command, Local File Trigger, Function, Function Item, LangChain Code, Git and Git's tool. `tests/n8n.tftest.hcl` checks the list.
+- **Changing the token.** Mark `random_password.generated["n8n-runners-auth-token"]` for replacement and deploy with `allow_destroy`, as for the owner's password above. That writes a new version of the Key Vault secret. Then restart both apps, so each reads the new version: `az containerapp revision restart` for `n8n` and for `n8n-runners`, n8n first. Runs that wait on the runner fail until both have restarted.
+- **What checks it offline.** Checkov reads no azapi body, so it checks nothing in the runner app or the broker's port. `tests/n8n.tftest.hcl` checks both: the runner gets only its own settings and token, no container gets its identity, and 5679 is internal.
+- **No network fence.** The environment isn't in a virtual network, so the runner app has open egress to the internet, and reaches every app's internal address. Code would have to get out of the runner's sandbox first, and then it holds only the token. Narrowing either needs the environment recreated in a virtual network, a decision for the team lead (the pull request for ADR 0051 step 12 lists the options).
+
+### What the deploy must confirm
+
+Spike P9 could not answer these, and the offline checks cannot either:
+
+1. **No identity in the runner.** `az containerapp exec --name n8n-runners --resource-group rg-wab-dev --command env` lists neither `IDENTITY_ENDPOINT` nor `IDENTITY_HEADER`, nor `MSI_ENDPOINT` or `MSI_SECRET`. If any shows, stop the `n8n-runners` app, so no code runs, before anything else.
+2. **The runner reaches the broker.** The runner's log says it registered with n8n's broker, and a Code block in a test workflow runs. `az containerapp show --name n8n --resource-group rg-wab-dev --query properties.configuration.ingress.additionalPortMappings` lists 5679, internal.
+3. **Who else reaches the broker.** Call `http://n8n:5679` from platform-api's console (`az containerapp exec --name platform-api ...`). If it answers, any app in the environment reaches the broker, and only the token guards it. Note which apps can, and whether n8n's address list also limits the extra port.
 
 ## A real Jira
 
@@ -167,6 +194,69 @@ With no `JIRA_BASE_URL`, platform-api serves a practice Jira at `/practice-jira`
 Before you deploy, wait until no run is between an Approver's yes and its write, or expect those runs to stop. A write approved for the practice Jira is never made in the real one: the safety checker stops it, and the run says that Jira's settings changed after the yes ([ADR 0041](../docs/adr/0041-an-approved-jira-write-is-made-only-in-the-jira-it-was-approved-for.md)). The same holds for a move to another Jira address. A new token for the same address changes nothing.
 
 The plan updates platform-api and the Portal in place, and adds the `jira-api-token` secret to Key Vault. The practice Jira's routes are then not served. The Portal gets `JIRA_BROWSE_URL` too, so ticket keys with no address of their own link to the real Jira, and the Portal hides its Practice Jira page. `platform-api/tests/test_jira_contract.py` runs against the real Jira first, with `JIRA_CONTRACT_URL` and the settings its docstring names.
+
+## Langfuse
+
+[ADR 0050](../docs/adr/0050-trace-the-planner-in-self-hosted-langfuse-and-people-decide-what-it-learns.md) traces the Planner in self-hosted Langfuse. On Azure, Langfuse runs on one small VM, not on Container Apps. **It is off.** `langfuse_enabled` defaults to `false`, and then plan makes nothing for it and agent-runtime and platform-api get no Langfuse setting, so tracing stays off. **Nothing here is applied until the team lead approves the monthly cost,** as the ADR says.
+
+### What it creates
+
+With `langfuse_enabled = true`, `modules/langfuse_vm` and `envs/dev` add:
+
+- **One VM**, `vm-langfuse-wab-dev`, `Standard_B2as_v2` (2 vCPUs, 8 GiB), Ubuntu 24.04 with Secure Boot and vTPM. SSH password sign-in is off, and nobody holds a key: the key Azure requires had its private half deleted. People reach the VM with `az vm run-command`.
+- **One disk**, the VM's own 32 GiB Standard SSD, the one E4 disk the ADR prices. ClickHouse keeps its data there. A separate data disk would be a second E4, because Ubuntu's image needs 30 GiB of its own. Any change to the VM's compose file replaces the VM and that disk with it, so its traces go. The deploy's plan guard stops for `allow_destroy` first. Traces are a 60-day working record, and what must last lives in git.
+- **A static public address** with the name `langfuse-wab-dev-<suffix>.<region>.cloudapp.azure.com`. It stays when the VM is replaced, so the Entra redirect URI does too. `terraform output -raw langfuse_url` prints it.
+- **A network security group.** Port 443 takes only the apps' outbound addresses, which Terraform reads from the Container Apps, and the team's addresses in `langfuse_allowed_ips`. Other Azure customers can share the apps' addresses, so Langfuse's keys and sign-in still guard it. Port 80 is open to everyone, because Let's Encrypt checks the certificate request there, and Caddy redirects the rest to 443. Nothing else comes in.
+- **The compose stack**, written by cloud-init to `/etc/langfuse/compose.yaml`: Langfuse web and worker 4.80.0, ClickHouse 26.3.62.3 capped at 1.5 GiB with `clickhouse.xml`, as the laptop profile was measured (3.3 GiB at peak for the whole stack), Valkey 8.1.11 with a password and `noeviction`, and Caddy 2.11.9 in front of web, each pinned by digest. Only Caddy publishes a port. Every service restarts by itself after a reboot. Telemetry and the signup newsletter are off. Unattended security updates stay on, and a kernel update reboots the VM at 03:00 Singapore time. `scripts/check-langfuse-images.sh` fails when an image or the ClickHouse config differs from `deploy/compose.yaml`'s `langfuse` profile.
+- **Secrets in Key Vault only.** The VM's own managed identity may read Langfuse's secrets and nothing else. At every start, `langfuse.service` reads them into `/etc/langfuse/secrets.env`, which only root can read. Terraform generates the project keys, `SALT`, `ENCRYPTION_KEY`, `NEXTAUTH_SECRET`, the passwords for PostgreSQL, ClickHouse, Valkey and the first user, and `trace-pseudonym-key`, which only platform-api reads. Two secrets come from other systems, so Terraform makes each with a placeholder and a person sets it: `langfuse-entra-client-secret` and `langfuse-judge-anthropic-key`. The VM never reads the judge's key.
+- **A storage account** `stlfwabdev<suffix>` with a private `langfuse` container for events and media, TLS 1.2, HTTPS only and no public blob access. Langfuse signs in with its account key, which goes to Key Vault.
+- **A `langfuse` database** on the existing PostgreSQL server, and a `langfuse` role that the db-init job creates from `sql/db-init-langfuse.sql`. With Langfuse off, the job runs exactly what it ran before.
+- **Two alerts.** One fires when the VM has fewer than 50 CPU credits left, about 40 minutes at full load before Azure throttles it. One fires when its disk is 80% full: Azure Monitor Agent sends the disk's use to the Log Analytics workspace, and a log alert reads it, because a VM has no platform metric for that. Both email `langfuse_alert_email` when it is set.
+- **Settings for the apps.** agent-runtime gets `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL`, `LANGFUSE_TRACING_ENVIRONMENT` (`azure-dev`) and `LANGFUSE_RELEASE` (the image tag). platform-api gets the keys, `LANGFUSE_BASE_URL` and `TRACE_PSEUDONYM_KEY`.
+- **Run-command for the deploy identity on this VM,** through the role `Langfuse VM run command (rg-wab-dev)`, for the nightly housekeeping job. The identity is `deploy_principal_object_id`, never whoever runs apply. It is limited to this VM only once Contributor is narrowed, below.
+
+`tests/langfuse.tftest.hcl` checks both states against mocked providers: off adds nothing and gives no app a Langfuse setting, and on gives each app exactly the settings above.
+
+### Cost
+
+From ADR 0050, at pay-as-you-go list prices for Southeast Asia on 16 Nov 2026: about **USD 75 a month while the VM runs** (about USD 69 for the VM, USD 2.40 for the disk and USD 3.65 for the address), and **about USD 6 a month while it is stopped** (deallocated). The storage account, the two alerts and the disk samples add well under USD 2 a month. That last figure is a guess, not checked against the price list. Against the USD 100 credit, run the VM only in test weeks and demos.
+
+### Run-command and Contributor
+
+- **"This VM only" is not true yet.** The deploy identity has Contributor on `rg-wab-dev`, and Contributor already includes run-command on every VM in it. The custom role limits the deploy only once Contributor is narrowed.
+- **The bootstrap must widen first.** The deploy identity may not create role definitions, and its RBAC Administrator role may only assign the four roles its condition lists. So `bootstrap/setup-azure.sh` now creates the custom role on `rg-wab-dev` and adds its ID to that condition. It also registers `Microsoft.Compute` and `Microsoft.Network`. An Owner of the subscription runs it again by hand. No agent or workflow runs it. Until then, a plan with Langfuse on stops with "role not found".
+
+### How a person turns it on
+
+Every step changes cloud resources or settings, so a person does it, and only after the team lead approves the cost.
+
+1. **Run the bootstrap again** as an Owner: `STATE_ACCOUNT=<name> infra/bootstrap/setup-azure.sh <owner>/<repo>`. It registers the two providers, creates the run-command role and replaces the deploy identity's RBAC Administrator assignment with the wider condition.
+2. **Register Langfuse's Entra app** in the tenant of `OIDC_ISSUER`. Make it a web app with assignment required, assign only the team's group, and add the `email` claim. Langfuse identifies people by email.
+3. **Pass the variables to the deploy.** `.github/workflows/deploy.yml` does not pass them yet. A follow-up adds these lines to its `env`:
+
+   ```yaml
+   TF_VAR_langfuse_enabled: ${{ vars.LANGFUSE_ENABLED || 'false' }}
+   TF_VAR_deploy_principal_object_id: ${{ vars.DEPLOY_PRINCIPAL_OBJECT_ID }}
+   TF_VAR_langfuse_entra_client_id: ${{ vars.LANGFUSE_ENTRA_CLIENT_ID }}
+   TF_VAR_langfuse_owner_email: ${{ secrets.LANGFUSE_OWNER_EMAIL }}
+   TF_VAR_langfuse_allowed_ips: ${{ secrets.LANGFUSE_ALLOWED_IPS }}
+   TF_VAR_langfuse_alert_email: ${{ secrets.LANGFUSE_ALERT_EMAIL }}
+   ```
+
+   The owner email, the team's addresses and the alert email name people, so they are secrets on `azure-dev`, as for n8n.
+4. **Deploy with `allow_destroy` ticked.** Turning Langfuse on gives platform-api, agent-runtime and the db-init job a new Key Vault secret each, which replaces their 90-second role waits, and the plan guard stops on any replace. Read the listed addresses first: they should be `time_sleep` waits only. Turning it off destroys the VM, its disk and its storage, so it needs the tick too.
+5. **Finish the Entra app.** Add `<langfuse_url>/api/auth/callback/azure-ad` as its redirect URI. Create a client secret, and put its value, not its ID, in Key Vault: `az keyvault secret set --vault-name kv-wab-dev-<suffix> --name langfuse-entra-client-secret --value <value>`. Then restart Langfuse so it reads the secret: `az vm run-command invoke --resource-group rg-wab-dev --name vm-langfuse-wab-dev --command-id RunShellScript --scripts "systemctl restart langfuse"`.
+6. **Sign in** at `langfuse_url` with the Entra account whose email is `langfuse_owner_email`. Langfuse made that account the Owner of the `CODESparks` organization and its `AI Workflow Builder` project at first start. Invite each teammate by email as a Member.
+
+### What the first apply must confirm
+
+The offline checks cannot show these:
+
+- The VM boots, `systemctl status langfuse` is active, and `docker compose --file /etc/langfuse/compose.yaml ps` shows five healthy services. If not, the VM's serial log in boot diagnostics shows cloud-init's output.
+- Caddy gets a certificate, and `<langfuse_url>` opens Langfuse's sign-in page from a listed address and times out from any other.
+- A Planner turn in the Portal shows up as a trace, which proves the apps' outbound addresses are the ones the security group lets in.
+- `az vm run-command invoke` works for the deploy identity, and `Perf` in the Log Analytics workspace gets the root disk's `% Used Space` every 5 minutes.
+- The VM's peak memory under `docker stats` stays under 6 GiB. ADR 0050 moves it to `Standard_B4as_v2` if not.
 
 ## Cost estimate
 
@@ -241,6 +331,7 @@ If the repository is made public later, add required reviewers and "Prevent self
    | Variable | Value |
    |---|---|
    | `TEAMS_CHANNEL` | optional. The Teams channel's name, as the approval card and the activity log name it. Unset means `CODESparks Ops` |
+   | `PLANNER_MODE` | optional. `ai_led` lets the Planner's model lead through checked tools on top of the rules (ADR 0049). Unset means `rules`, today's Planner. Set it only after the team lead reads the eval runs ADR 0049 asks for. Going back is setting it to `rules` |
    | `TEAM_TIME_ZONE` | optional. The zone the team works in, such as `Europe/London`. Unset means `Asia/Singapore`. Set it before the first workflow is made. Changing it later grades each workflow laid out on the old zone Needs a fix (ADR 0046). n8n still fires its Schedule Trigger on the old zone, and our API refuses each run at its first block, before it reads anything, until its schedule is saved again or its zone is changed in n8n. Terraform checks only that the value looks like a zone name, so a name that is not a real zone passes the plan, and platform-api then refuses to start |
    | `AZURE_LOCATION` | optional. The region for every resource. Unset means `southeastasia`. Set it before the first deploy only: changing it later replaces everything, PostgreSQL included |
    | `COSMOS_LOCATION` | optional. A region for Cosmos DB alone, when it is refused in `AZURE_LOCATION` |
@@ -293,10 +384,12 @@ The script runs, each in a Docker image pinned by digest:
 1. `terraform fmt -check -recursive`
 2. `terraform init -backend=false`, then `terraform validate`, for each environment
 3. `scripts/check-variables.sh`, which plans each environment's `variables.tf` alone with good sign-in values and with each kind of value that platform-api or the Portal would refuse at startup, or that would open n8n wider than meant
-4. `tofu init -backend=false`, then `tofu validate`, on a copy without the lock file
-5. `scripts/check-n8n-editor-gate.sh`, which runs the deploy's gate for n8n's editor against a fake `az`
-6. `tflint` with the `terraform` and `azurerm` rulesets (`.tflint.hcl`)
-7. Checkov's Terraform checks
+4. `terraform test`, which applies each environment's `tests/*.tftest.hcl` against mocked providers, with Langfuse off and on
+5. `tofu init -backend=false`, then `tofu validate`, on a copy without the lock file
+6. `scripts/check-n8n-editor-gate.sh`, which runs the deploy's gate for n8n's editor against a fake `az`
+7. `scripts/check-langfuse-images.sh`, which fails when the Langfuse VM's images differ from `deploy/compose.yaml`'s `langfuse` profile
+8. `tflint` with the `terraform` and `azurerm` rulesets (`.tflint.hcl`)
+9. Checkov's Terraform checks
 
 CI runs the same script in the `infra` workflow, only when a pull request changes `infra/` or one of the two infrastructure workflows. It also runs `actionlint` on every workflow. Semgrep's `p/terraform` rules run in the main CI's SAST step.
 

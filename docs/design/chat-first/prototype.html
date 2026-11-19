@@ -137,7 +137,6 @@ button, input { font: inherit; color: inherit; }
 .btn:active { transform: scale(0.97); }
 .btn.ghost { background: var(--surface); color: var(--ink); border: 1px solid var(--rail); }
 .btn.sm { min-height: 32px; padding: 0 11px; font-size: 0.84rem; }
-.btn[disabled] { background: var(--rail); color: var(--surface); cursor: default; }
 .pill { display: inline-flex; align-items: center; padding: 1px 9px; border-radius: 999px; font-size: 0.78rem; font-weight: 700; background: var(--sunk); color: var(--muted); border: 1px solid var(--hair); white-space: nowrap; }
 .pill.lg { font-size: 0.86rem; padding: 3px 12px; }
 .pill[data-s="ready"], .pill[data-s="run"] { background: var(--accent-soft); color: var(--accent-ink); border-color: transparent; }
@@ -238,7 +237,7 @@ button, input { font: inherit; color: inherit; }
 .read h2 { font-size: 1.1rem; font-weight: 800; }
 .read ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
 @media (hover: hover) and (pointer: fine) {
-  .btn:not([disabled]):not(.ghost):hover, .send:hover { background: var(--hover); }
+  .btn:not(.ghost):hover, .send:hover { background: var(--hover); }
   .btn.ghost:hover, .chips button:hover, .need:hover { border-color: var(--ink); }
   .wl-row:hover { background: var(--sunk); }
   .linkbtn:hover { color: var(--ink); }
@@ -520,6 +519,107 @@ button, input { font: inherit; color: inherit; }
 .mc > .mfill { position: absolute; inset: 0; border-radius: 2px; background: var(--ink); transform: scaleX(0); transform-origin: left center; }
 .nd.flowing::before { background: transparent; }
 .ce.flowing { stroke: var(--accent); stroke-dasharray: 8 6; animation: cvmarch 0.6s linear infinite; }
+
+/* The workflow drafter (ADR 0051): the draft card and its questions, the report, set-up approvals, Explain, and the thumbs */
+.c-hr { display: inline-flex; align-items: center; gap: 8px; }
+.dprog { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.dprog:empty { display: none; }
+.dprog li { display: flex; align-items: center; gap: 8px; min-height: 24px; font-size: 0.9rem; font-weight: 600; }
+.live .dprog li { animation: fadeup var(--t-small) var(--ease-out) both; }
+.dprog li.done { color: var(--green-ink); }
+.dprog li.done > svg { width: 15px; height: 15px; flex: none; margin-inline: 2.5px; }
+.dprog .tm { color: var(--muted); font-size: 0.82rem; }
+.dl-scroll { overflow-x: auto; }
+.dl-scroll .ml { min-width: 520px; padding-top: 6px; }
+.dl-scroll .ml.lg { min-width: 820px; }
+.fl-h .ic { flex: none; background: var(--amber-soft); color: var(--amber-ink); }
+.fl[data-done] .fl-h .ic { background: var(--green-soft); color: var(--green-ink); }
+.k-setup .ntag { color: var(--amber-ink); }
+.chip.ask { background: var(--amber-soft); border-color: var(--amber-line); color: var(--amber-ink); }
+.pt[data-s="guess"] .ic { background: var(--sunk); color: var(--muted); box-shadow: inset 0 0 0 1px var(--hair); }
+.pt[data-s="flag"] .ic { background: var(--amber-soft); color: var(--amber-ink); }
+.pt[data-s="yes"] .ic { background: var(--accent-soft); color: var(--accent-ink); }
+.dwait { font-weight: 700; font-size: 0.86rem; align-self: center; }
+.live .dwait, .live .c-act [data-dsend], .live .c-act .sapprove { animation: fadeup var(--t-small) var(--ease-out) both; }
+
+.rep { display: grid; gap: 12px; }
+.rep-short { font-size: 1rem; line-height: 1.65; }
+.rw { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.rp-acc { display: grid; border: 1px solid var(--hair); border-radius: 10px; }
+.rp-d + .rp-d { border-top: 1px solid var(--rule); }
+.rp-d summary { position: relative; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; padding: 11px 40px 11px 14px; cursor: pointer; list-style: none; border-radius: 10px; }
+.rp-d summary::-webkit-details-marker { display: none; }
+.rp-d summary::after { content: ""; position: absolute; right: 18px; top: 17px; width: 7px; height: 7px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(45deg); transition: transform var(--t-small) var(--ease-out); }
+.rp-d[open] summary::after { transform: translateY(3px) rotate(225deg); }
+.rp-t { flex: 1 1 auto; font-weight: 800; font-size: 0.95rem; }
+.rp-g { font-size: 0.84rem; color: var(--muted); font-weight: 600; }
+.rp-b { padding: 0 14px 14px; display: grid; gap: 8px; }
+.live .rp-d[open] .rp-b { animation: fadeup var(--t-small) var(--ease-out); }
+.rp-steps { margin: 0; padding-left: 22px; display: grid; gap: 6px; }
+.rp-steps .s, .rp-rwp .s { display: block; font-size: 0.84rem; color: var(--muted); font-weight: 400; }
+.rp-rwp dd { font-weight: 600; }
+.rp-sub { font-size: 0.82rem; font-weight: 700; color: var(--muted); }
+.rp-ok { font-size: 0.88rem; color: var(--muted); }
+.rows.rp-set li { grid-template-columns: minmax(0, 1fr) auto; }
+.rp-set .act { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.rp-set .act:empty { display: none; }
+.mk { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: 999px; font-size: 0.76rem; font-weight: 700; white-space: nowrap; border: 1px solid var(--hair); background: var(--sunk); color: var(--muted); }
+.mk svg { width: 11px; height: 11px; }
+.mk[data-m="filled"] { background: var(--green-soft); color: var(--green-ink); border-color: var(--green-line); }
+.mk[data-m="needed"] { background: var(--amber-soft); color: var(--amber-ink); border-color: var(--amber-line); }
+
+.callout { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border-radius: 8px; background: var(--amber-soft); border: 1px solid var(--amber-line); color: var(--amber-ink); font-weight: 600; font-size: 0.92rem; }
+.callout svg { width: 16px; height: 16px; flex: none; margin-top: 3px; }
+.fls { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.fl { display: grid; gap: 6px; padding: 12px 14px; border: 1px solid var(--amber-line); border-radius: 10px; background: var(--surface); transition: border-color var(--t-small) ease, background-color var(--t-small) ease; }
+.fl[data-on="true"], .fl[data-done] { border-color: var(--green-line); background: color-mix(in srgb, var(--green-soft) 45%, var(--surface)); }
+.fl-h, .fl-tick { display: flex; align-items: flex-start; gap: 10px; font-weight: 700; }
+.fl-tick { border: 0; background: none; padding: 0; text-align: left; cursor: pointer; }
+.fl-h .ic { flex: none; }
+.fl-box { flex: none; width: 22px; height: 22px; border-radius: 6px; border: 2px solid var(--ink); display: grid; place-items: center; color: var(--on-ink); background: var(--surface);
+  transition: background-color var(--t-press) ease, border-color var(--t-press) ease, transform var(--t-press) var(--ease-out); }
+.fl-box svg { width: 14px; height: 14px; }
+.fl-box svg path { stroke-dasharray: 14; stroke-dashoffset: 14; transition: stroke-dashoffset var(--t-small) var(--ease-out) 60ms; }
+.fl-tick[aria-checked="true"] .fl-box { background: var(--green); border-color: var(--green); color: #fff; }
+.fl-tick[aria-checked="true"] .fl-box svg path { stroke-dashoffset: 0; }
+.fl-tick:active .fl-box { transform: scale(0.9); }
+.fl > :not(.fl-tick):not(.fl-h) { margin-left: 32px; }
+.fl .s { font-size: 0.88rem; color: var(--muted); }
+.agree { font-size: 0.9rem; }
+.agree .k { display: block; font-size: 0.78rem; font-weight: 700; color: var(--muted); }
+.fl .first { display: grid; gap: 2px; font-size: 0.86rem; }
+.fl-why input { width: 100%; border: 1.5px solid var(--rail); border-radius: 8px; padding: 7px 10px; font-size: 0.92rem; min-height: 38px; background: var(--surface); }
+.fl-why input:focus { outline: none; border-color: var(--ink); }
+.live .fl-why:not([hidden]) { animation: fadeup var(--t-small) var(--ease-out); }
+.okl { display: inline-flex; align-items: center; gap: 6px; padding: 0; color: var(--green-ink); font-weight: 700; text-decoration-color: var(--green-line); text-align: left; }
+.okl svg { width: 15px; height: 15px; flex: none; }
+.wl li.wx { display: flex; align-items: center; gap: 8px; }
+.wl li.wx .wl-row { flex: 1; min-width: 0; }
+
+.mcol { display: grid; gap: 4px; min-width: 0; max-width: 88%; }
+.mcol .mb { max-width: none; }
+.fb { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.fbb { display: grid; place-items: center; width: 30px; height: 30px; border: 0; border-radius: var(--r-ctl); background: none; color: var(--muted); cursor: pointer; opacity: 0.7;
+  transition: background-color var(--t-press) ease, color var(--t-press) ease, opacity var(--t-press) ease, transform var(--t-press) var(--ease-out); }
+.fbb svg { width: 15px; height: 15px; }
+.fbb:active { transform: scale(0.9); }
+.fbb[aria-pressed="true"] { opacity: 1; color: var(--ink); background: var(--active); }
+.fb-t { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin-left: 4px; font-size: 0.84rem; color: var(--muted); flex: 1 1 auto; min-width: 0; }
+.fb-t:empty { display: none; }
+.live .fb-t > * { animation: fadeup var(--t-small) var(--ease-out) both; }
+.fb-why { display: flex; gap: 6px; flex: 1 1 240px; min-width: 0; max-width: 420px; }
+.fb-why input { flex: 1; min-width: 0; border: 1.5px solid var(--rail); border-radius: 8px; padding: 4px 9px; font-size: 0.88rem; min-height: 32px; background: var(--surface); }
+.fb-why input:focus { outline: none; border-color: var(--ink); }
+.app.notrace .fb { display: none; }
+@media (hover: hover) and (pointer: fine) {
+  .fbb:hover { opacity: 1; color: var(--ink); background: var(--sunk); }
+  .fl-tick:hover .fl-box { border-color: var(--green); }
+  .rp-d summary:hover { background: var(--sunk); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .live .dprog li, .live .fb-t > *, .live .rp-d[open] .rp-b, .live .fl-why:not([hidden]), .live .dwait, .live .c-act [data-dsend], .live .c-act .sapprove { animation-name: fadeonly !important; }
+  .fl-box svg path { transition: none; }
+}
 </style>
 
 <div class="wrap">
@@ -530,10 +630,11 @@ button, input { font: inherit; color: inherit; }
   <div class="demo">
     <div class="ctl"><span class="lbl" id="who-l">View as</span><div class="seg" id="whoSeg" role="group" aria-labelledby="who-l"><button type="button" data-u="alice">Alice</button><button type="button" data-u="maint">Alice, with n8n access</button><button type="button" data-u="bob">Bob, Approver</button></div></div>
     <div class="ctl"><span class="lbl" id="speed-l">Speed</span><div class="seg" id="speed" role="group" aria-labelledby="speed-l"><button type="button" data-k="1">1x</button><button type="button" data-k="0.5">2x</button><button type="button" data-k="0">Instant</button></div></div>
+    <div class="ctl"><span class="lbl" id="trace-l">Tracing</span><div class="seg" id="trace" role="group" aria-labelledby="trace-l"><button type="button" data-tr="on">On</button><button type="button" data-tr="off">Off</button></div></div>
   </div>
   <div class="demo">
     <div class="ctl"><span class="lbl" id="tasks-l">Play</span><div class="seg" id="tasks" role="group" aria-labelledby="tasks-l">
-      <button type="button" data-t="morning">Morning check</button><button type="button" data-t="words">Ask in my words</button><button type="button" data-t="edit">Change by talking</button><button type="button" data-t="cant">Something it can’t do</button><button type="button" data-t="decline">Bob declines</button><button type="button" data-t="browse">Browse</button><button type="button" data-t="n8n">Edit in n8n</button>
+      <button type="button" data-t="morning">Morning check</button><button type="button" data-t="words">Ask in my words</button><button type="button" data-t="edit">Change by talking</button><button type="button" data-t="cant">Something it can’t do</button><button type="button" data-t="decline">Bob declines</button><button type="button" data-t="browse">Browse</button><button type="button" data-t="n8n">Edit in n8n</button><button type="button" data-t="draft">Draft a workflow</button><button type="button" data-t="setupyes">Bob approves a draft</button><button type="button" data-t="second">Second Approver</button><button type="button" data-t="explain">Explain</button>
     </div></div>
     <button class="btn ghost sm" id="reset" type="button">Start over</button>
   </div>
@@ -589,6 +690,17 @@ button, input { font: inherit; color: inherit; }
       <li>n8n views show only for people with n8n access. Switch “View as” to compare.</li>
       <li>“help”, “how do I start?” or “list the steps to use this app” gets How to start: the steps from your words to the yes, and an example to try. “What can you do?” still lists what it can do.</li>
       <li>Try typing “what needs my attention today?”, “is LangGraph up to date?”, “watch Kubernetes and email me”, “make it daily” or “pause the React check”.</li>
+    </ul>
+    <h2 id="h-drafter">Added on 16 Nov: the workflow drafter (ADR 0051)</h2>
+    <ul>
+      <li>“Draft a workflow that …” brings in the Workflow drafter. Each step shows as it goes, and the blocks appear on the line as it lays them out. Play “Draft a workflow”.</li>
+      <li>The draft card asks one question at a time, with choices from the team’s own data. A run time is never guessed. A guess shows as a guess you can change. Keys are never typed in the chat, and an Operator adds them in Settings.</li>
+      <li>Send for approval appears only when nothing is still needed. Until then the card says how many questions are left.</li>
+      <li>The report is code’s own words. In short comes first, then one row per section with a short gist. A row opens on a click, and Settings opens by itself while anything is still needed.</li>
+      <li>Where something can’t go on yet, the reason sits where its button would be, such as “Answer 1 question first”. No button is ever shown dead. The Planner’s set-up card and the change card follow the same rule.</li>
+      <li>Bob ticks each flag and says why. Approve appears only when every flag has a tick and a reason. A write by n8n’s own blocks won’t ask on each run, and the page says so. Play “Bob approves a draft”, then “Second Approver” for a workflow that changes who can use GitLab.</li>
+      <li>Explain sits on each row of Workflows, on the workflow page and on each version. “Explain the FastAPI release check” answers in the chat, with a Reworded label and code’s own wording one tap away. Play “Explain”.</li>
+      <li>A thumbs up or down sits under each Planner answer, only while tracing is on. Switch “Tracing” to compare.</li>
     </ul>
   </section>
 </div>
@@ -773,7 +885,7 @@ const WORLD = {
     fastapi: [{ v: 3, what: 'Moved the run to 8:00', by: 'Alice', on: '2 Nov', sched: d8, yes: true }, { v: 2, what: 'Added a test run on practice Jira', by: 'Alice', on: '28 Oct', sched: d9, yes: true }, { v: 1, what: 'Built by the Planner', by: 'Alice', on: '20 Oct', sched: d9, yes: true }],
     react: [{ v: 2, what: 'Moved the run to 8:00', by: 'Alice', on: '30 Oct', sched: d8, yes: true }, { v: 1, what: 'Built by the Planner', by: 'Alice', on: '22 Oct', sched: d9, yes: true }],
   },
-  order: ['fastapi', 'react'], drafts: {}, edits: {},
+  order: ['fastapi', 'react'], drafts: {}, edits: {}, dw: {}, dwFocus: null,
 };
 const WAITING = { stage: 'waiting', appr: 'waiting', run: { when: 'done', read: 'done', compare: 'done', yes: 'wait', write: '' } };
 const DONE = { stage: 'done', appr: 'approved', run: { when: 'done', read: 'done', compare: 'done', yes: 'done', write: 'done' } };
@@ -800,7 +912,7 @@ function softState(k) {
   return s.run === s.latest ? ['Up to date', 'ok'] : ['Newer out', 'wait'];
 }
 function needs() {
-  if (W.user === 'bob') return W.appr === 'waiting' ? [{ g: 'now', t: '<b>FastAPI upgrade ticket</b> needs your yes', s: '<b>FastAPI ticket</b> needs your yes', open: 'appr', tone: 'wait' }] : [];
+  if (W.user === 'bob') return [...(W.appr === 'waiting' ? [{ g: 'now', t: '<b>FastAPI upgrade ticket</b> needs your yes', s: '<b>FastAPI ticket</b> needs your yes', open: 'appr', tone: 'wait' }] : []), ...setupNeeds()];
   const l = W.order.filter(flagged).map((id) => ({ g: 'now', t: `<b>${W.wf[id].name}</b> can’t write without a yes`, s: `<b>${W.soft[id].name} check</b> can’t write`, open: `wf:${id}`, tone: 'err' }));
   if (!flagged('fastapi') && W.stage === 'stopped' && !W.paused.fastapi) l.push({ g: 'now', t: '<b>FastAPI release check</b> stopped at 8:00', s: '<b>FastAPI check</b> stopped', open: 'run', tone: 'err' });
   if (W.langserve) l.push({ g: 'set', t: '<b>LangServe</b> can’t be found on GitHub', s: '<b>LangServe</b> not found', open: 'soft:langserve', tone: 'wait' });
@@ -812,10 +924,15 @@ function needsHTML(l) {
   if (!l.length) return '<p class="calm-line">Nothing needs you.</p>';
   return [['now', 'Do now'], ['set', 'Set up']].map(([g, h]) => { const r = l.filter((n) => n.g === g); return r.length ? `<div class="ng"><p class="needs-h">${h}</p>${r.map(needRow).join('')}</div>` : ''; }).join('');
 }
-const needsHead = () => { const n = needs().length; if (W.user === 'bob') return n ? '1 change waits for your yes' : 'Nothing waits for your yes'; return n ? `${n} ${n === 1 ? 'thing needs' : 'things need'} you` : 'Nothing needs you'; };
+const needsHead = () => {
+  const n = needs().length;
+  if (W.user === 'bob') return !n ? 'Nothing waits for your yes' : n > 1 ? `${n} things wait for your yes` : W.appr === 'waiting' ? '1 change waits for your yes' : '1 workflow waits for your yes';
+  return n ? `${n} ${n === 1 ? 'thing needs' : 'things need'} you` : 'Nothing needs you';
+};
 
 /* ---------- Lists ---------- */
-const listRows = () => W.order.map((id) => { const [t, s] = wfState(id); return `<li><button class="wl-row" type="button" data-open="wf:${id}"><span><b>${W.wf[id].name}</b><span class="s">${short(W.wf[id].sched)}</span></span><span class="pill" data-s="${s}">${t}</span></button></li>`; }).join('');
+const listRows = () => W.order.map((id) => { const [t, s] = wfState(id); return `<li><button class="wl-row" type="button" data-open="wf:${id}"><span><b>${W.wf[id].name}</b><span class="s">${short(W.wf[id].sched)}</span></span><span class="pill" data-s="${s}">${t}</span></button></li>`; }).join('')
+  + dwListed().map((k) => { const [t, s] = dwState(k); return `<li><button class="wl-row" type="button" data-open="dw:${k}"><span><b>${dT(W.dw[k]).name}</b><span class="s">${dwSub(k)}</span></span><span class="pill" data-s="${s}">${t}</span></button></li>`; }).join('');
 const softSub = (s) => (s.missing ? s.repo : !s.run ? 'Added today' : s.run === s.latest ? s.run : `${s.run} → ${s.latest}`);
 const softRow = (k) => { const s = W.soft[k]; const [t, c] = softState(k); return `<li><button class="wl-row" type="button" data-open="soft:${k}"><span><b>${s.name}</b><span class="s">${softSub(s)}</span></span><span class="pill" data-s="${c}">${t}</span></button></li>`; };
 const watchRows = () => softIds().map(softRow).join('');
@@ -828,8 +945,8 @@ const histCard = () => `<div class="card"><div class="c-head"><b>Your recent dec
   <li><span><b>React upgrade ticket</b><span class="s">Tue 4 Nov</span></span><span class="pill" data-s="ok">Approved</span></li>
   <li><span><b>FastAPI upgrade ticket</b><span class="s">28 Oct · Not this week</span></span><span class="pill">Declined</span></li></ul></div>`;
 const capsCard = () => (W.user === 'bob'
-  ? '<div class="card"><div class="c-head"><b>What I can do</b></div><ul class="caps"><li>Show what waits for your yes</li><li>Show exactly what a change will write</li><li>Show your past decisions</li></ul></div>'
-  : '<div class="card"><div class="c-head"><b>What I can do</b></div><ul class="caps"><li>Watch software for new releases</li><li>Create Jira tickets, after a yes</li><li>Explain a stopped run, and retry it</li><li>Change or pause your workflows</li></ul><p class="small muted">Not yet: Teams channels, email, Confluence.</p></div>');
+  ? '<div class="card"><div class="c-head"><b>What I can do</b></div><ul class="caps"><li>Show what waits for your yes</li><li>Show exactly what a change will write</li><li>Show your past decisions</li><li>Explain any workflow</li></ul></div>'
+  : '<div class="card"><div class="c-head"><b>What I can do</b></div><ul class="caps"><li>Watch software for new releases</li><li>Create Jira tickets, after a yes</li><li>Explain a stopped run, and retry it</li><li>Change or pause your workflows</li><li>Draft an n8n workflow from your words, for an Approver to check</li><li>Explain any workflow</li></ul><p class="small muted">Not yet: Teams channels, email, Confluence.</p></div>');
 const START_EXAMPLE = 'Keep track of the LangGraph version';
 const startCard = () => (W.user === 'bob'
   ? capsCard()
@@ -845,11 +962,11 @@ const CANT = [
 /* ---------- Line of steps ---------- */
 function line(o = {}) {
   const steps = o.steps || stepsFor('jira');
-  return `<ol class="ml${o.lg ? ' lg' : ''}"${o.live ? ' data-nodes' : ''}>${steps.map((s, i) => `<li class="nd k-${s.kind}${o.off ? ' off' : ''}" data-id="${s.id}">
+  return `<ol class="ml${o.lg ? ' lg' : ''}"${o.live ? ' data-nodes' : ''}>${steps.map((s, i) => `<li class="nd k-${s.kind}${o.off ? ' off' : ''}${s.added ? ' added' : ''}" data-id="${s.id}">
     ${i ? '<i class="mc" aria-hidden="true"><i class="mfill"></i></i>' : ''}
     ${o.lg && o.live ? `<span class="bwho">${s.agent ? fw(s.agent, 34) : ''}</span>` : ''}
     <span class="md">${ICON[s.icon]}<span class="tick">${ICON.check}</span></span>
-    <span class="nlbl">${s.id === 'when' && o.first ? o.first : s.short}</span>${o.lg ? `<span class="ntag">${KIND[s.kind]}</span>` : ''}
+    <span class="nlbl">${s.id === 'when' && o.first ? o.first : s.short}</span>${o.lg ? `<span class="ntag">${s.tag || KIND[s.kind]}</span>` : ''}
   </li>`).join('')}</ol>`;
 }
 /* ---------- The stopped run, with the troubleshooter’s answers ---------- */
@@ -1014,7 +1131,7 @@ function whenHTML(id) {
   if (W.schedEdit === id) return `<div class="sched"><select id="sdDay" aria-label="Day">${dayOpts(W.sd.day)}</select><select id="sdTime" aria-label="Time">${timeOpts(W.sd.time)}</select><button class="btn sm" type="button" data-sched-save="${id}">Save</button><button class="btn ghost sm" type="button" data-sched-cancel>Cancel</button></div>`;
   return `<div class="when-row"><span>${long(f.sched)}</span>${canEdit() ? `<button class="linkbtn" type="button" data-sched-edit="${id}">Change</button>` : ''}</div>`;
 }
-const versRows = (id) => W.hist[id].map((h, i) => `<li><span><b>Version ${h.v}${i === 0 ? ', in use' : ''}</b><span class="s">${h.what}. ${h.by}, ${h.on}.</span></span><span></span>${i === 0 || !canEdit() ? '<span></span>' : `<button class="btn ghost sm" type="button" data-rollback="${id}:${h.v}">Roll back</button>`}</li>`).join('');
+const versRows = (id) => W.hist[id].map((h, i) => `<li><span><b>Version ${h.v}${i === 0 ? ', in use' : ''}</b><span class="s">${h.what}. ${h.by}, ${h.on}.</span></span><button class="btn ghost sm" type="button" data-open="explain:${id}:${h.v}">Explain</button>${i === 0 || !canEdit() ? '<span></span>' : `<button class="btn ghost sm" type="button" data-rollback="${id}:${h.v}">Roll back</button>`}</li>`).join('');
 const lastRun = (id) => (id === 'fastapi' ? `Today 8:00: ${lower(TODAY[W.stage])}` : W.hist[id].length === 1 && W.hist[id][0].on === 'just now' ? 'No runs yet' : 'Today 8:00: nothing new');
 const nextRun = (id) => (W.paused[id] ? 'Paused' : cap(firstRun(W.wf[id].sched)));
 function wfView(id, full = false) {
@@ -1311,7 +1428,7 @@ function patchWf(el) {
   if (W.schedEdit !== id || !$('#sdDay', el)) $('[data-live="wf-when"]', el).innerHTML = whenHTML(id);
   $('[data-pane="sum"] .nd[data-id="when"] .nlbl', el).textContent = short(f.sched);
   $('[data-live="wf-vers"]', el).innerHTML = versRows(id);
-  $('[data-live="wf-acts"]', el).innerHTML = canEdit() ? `<button class="btn ghost" type="button" data-pause="${id}">${W.paused[id] ? 'Resume' : 'Pause'}</button>${W.maint ? `<button class="btn ghost" type="button" data-editor="${id}">Open in n8n editor</button>` : ''}` : '';
+  $('[data-live="wf-acts"]', el).innerHTML = `<button class="btn ghost" type="button" data-open="explain:${id}">Explain</button>${canEdit() ? `<button class="btn ghost" type="button" data-pause="${id}">${W.paused[id] ? 'Resume' : 'Pause'}</button>${W.maint ? `<button class="btn ghost" type="button" data-editor="${id}">Open in n8n editor</button>` : ''}` : ''}`;
   const ver = $('[data-live="n8n-ver"]', el);
   if (ver) { ver.textContent = `Version ${f.ver}, published by ${f.by}, ${f.on}`; $('[data-live="n8n-canvas"]', el).innerHTML = canvasSVG(id); }
 }
@@ -1330,7 +1447,7 @@ function refresh() {
   set('watch-full', watchRowsFull());
   set('watch-sum', watchSummary());
   $$('[data-live="soft-ticket"]').forEach((el) => { el.textContent = ticketFor(el.dataset.soft); });
-  set('n-wf', String(W.order.length));
+  set('n-wf', String(W.order.length + dwListed().length));
   set('n-watch', String(softIds().length));
   set('soft-act', W.langserve
     ? '<button class="btn ghost" type="button" data-toast="Asked the team where LangServe went. Their answer will show here.">Ask the team</button><button class="btn ghost" type="button" data-remove>Remove from watchlist</button>'
@@ -1339,6 +1456,7 @@ function refresh() {
   $$('[data-live="run"]').forEach(patchRun);
   $$('[data-live="appr"]').forEach(patchAppr);
   $$('[data-live="wf"]').forEach(patchWf);
+  refreshDrafts();
   /* A flow shows once: while a card's item is open beside the chat, the card drops its own copy. */
   $$('#msgs [data-spec]').forEach((c) => c.classList.toggle('beside', c.dataset.spec === P.stack.at(-1)));
 }
@@ -1387,8 +1505,13 @@ function renderChips() {
 }
 function scroll() { thread.scrollTop = thread.scrollHeight; }
 function push(html) { msgs.insertAdjacentHTML('beforeend', html); scroll(); return msgs.lastElementChild; }
-function pushCard(html, who = 'lead', lead = '') { const m = push(`<div class="m">${fw(who, 30)}<div class="mcard">${lead ? `<p class="lead-line">${lead}</p>` : ''}${html}</div></div>`); refresh(); scroll(); return m; }
-function pushText(t, who = 'lead') { return push(`<div class="m" style="--hue:${AG[who].hue}">${fw(who, 30)}<div class="mb"><b>${AG[who].name}</b><p>${esc(t)}</p></div></div>`); }
+/* Each Planner answer gets a quiet thumbs up or down (ADR 0050). It shows only while tracing is on. */
+const fbHTML = () => `<div class="fb" data-fb><button class="fbb" type="button" data-fbv="up" aria-pressed="false" aria-label="Good answer" title="Good answer">${ICON.up}</button><button class="fbb" type="button" data-fbv="down" aria-pressed="false" aria-label="Not what I needed" title="Not what I needed">${ICON.down}</button><span class="fb-t" data-fb-t aria-live="polite"></span></div>`;
+function pushCard(html, who = 'lead', lead = '') { const m = push(`<div class="m">${fw(who, 30)}<div class="mcard">${lead ? `<p class="lead-line">${lead}</p>` : ''}${html}${who === 'lead' ? fbHTML() : ''}</div></div>`); refresh(); scroll(); return m; }
+function pushText(t, who = 'lead') {
+  const mb = `<div class="mb"><b>${AG[who].name}</b><p>${esc(t)}</p></div>`;
+  return push(`<div class="m" style="--hue:${AG[who].hue}">${fw(who, 30)}${who === 'lead' ? `<div class="mcol">${mb}${fbHTML()}</div>` : mb}</div>`);
+}
 async function think(who = 'lead') { const t = push(`<div class="m">${fw(who, 30, 'thinking')}<span class="dots" aria-hidden="true"><i></i><i></i><i></i></span></div>`); await wait(650); t.remove(); }
 async function tap(el) { if (!el) return; el.classList.add('tap'); await wait(420); el.classList.remove('tap'); }
 let toastT;
@@ -1424,6 +1547,7 @@ function scene(over, fresh) {
   (fresh ? $('#heroDock') : $('#bottomDock')).appendChild(dock);
   $('#heroFace').innerHTML = fw('lead', 96);
   cin.value = '';
+  cin.placeholder = 'Ask, or describe a task';
   renderChips();
   renderPanel();
 }
@@ -1434,10 +1558,13 @@ function titleOf(spec) {
   if (v === 'list') return id === 'wf' ? 'Workflows' : 'Watchlist';
   if (v === 'wf') return W.wf[id].name;
   if (v === 'soft') return W.soft[id].name;
-  return { needs: 'Needs you', run: 'The run', appr: 'Approval', build: 'Build', key: 'Jira key' }[v];
+  if (v === 'dw') return dT(W.dw[id]).name;
+  return { needs: 'Needs you', run: 'The run', appr: 'Approval', build: 'Build', key: 'Jira key', report: 'The report', setup: 'Set-up approval', slog: 'Approval log', explain: 'Explain' }[v];
 }
 /* Rail pages carry more per row than chat cards: the last run, what checks each software, urgent first. */
-const listRowsFull = () => W.order.map((id) => { const [t, s] = wfState(id); return `<li><button class="wl-row" type="button" data-open="wf:${id}"><span><b>${W.wf[id].name}</b><span class="s">${short(W.wf[id].sched)} · ${lastRun(id) === 'No runs yet' ? 'no runs yet' : `last run today, ${lastRun(id).replace('Today 8:00: ', '')}`}</span></span><span class="pill" data-s="${s}">${t}</span></button></li>`; }).join('');
+const xBtn = (id) => `<button class="btn ghost sm" type="button" data-open="explain:${id}">Explain</button>`;
+const listRowsFull = () => W.order.map((id) => { const [t, s] = wfState(id); return `<li class="wx"><button class="wl-row" type="button" data-open="wf:${id}"><span><b>${W.wf[id].name}</b><span class="s">${short(W.wf[id].sched)} · ${lastRun(id) === 'No runs yet' ? 'no runs yet' : `last run today, ${lastRun(id).replace('Today 8:00: ', '')}`}</span></span><span class="pill" data-s="${s}">${t}</span></button>${xBtn(id)}</li>`; }).join('')
+  + dwListed().map((k) => { const [t, s] = dwState(k); return `<li class="wx"><button class="wl-row" type="button" data-open="dw:${k}"><span><b>${dT(W.dw[k]).name}</b><span class="s">${dwSub(k)}</span></span><span class="pill" data-s="${s}">${t}</span></button>${xBtn(k)}</li>`; }).join('');
 const RANK = { 'Can’t find': 0, 'Newer out': 1, Watching: 2, 'Up to date': 3 };
 const watchRowsFull = () => [...softIds()].sort((a, b) => RANK[softState(a)[0]] - RANK[softState(b)[0]]).map((k) => {
   const s = W.soft[k];
@@ -1459,6 +1586,11 @@ function viewHTML(spec, full = false) {
   if (v === 'appr') return apprView(full);
   if (v === 'build') return buildView(id);
   if (v === 'soft') return softView(id, full);
+  if (v === 'report') return reportView(id);
+  if (v === 'setup') return setupView(id, full);
+  if (v === 'dw') return dwView(id, full);
+  if (v === 'slog') return slogView(id);
+  if (v === 'explain') return explainView(id, spec.split(':')[2]);
   return keyView();
 }
 /* The side panel shows one thing from the chat. Anything opened from inside it goes full page. */
@@ -1518,6 +1650,7 @@ async function needGo(spec, stack) {
   await fold();
   if (spec === 'run') return runFlow(stack);
   if (spec === 'appr') return apprFlow(stack);
+  if (spec.startsWith('setup:')) return setupFlow(spec.slice(6), stack);
   return openView(spec, stack);
 }
 function apprWaiting() {
@@ -1681,8 +1814,9 @@ function patchParts(c) {
   const q = question(d);
   const left = $('[data-p-left]', c);
   left.className = 'c-left';
-  left.textContent = q ? '1 question to answer' : '';
-  $('[data-p-act]', c).innerHTML = `<button class="btn ghost" type="button" data-drop>Never mind</button><button class="btn" type="button" data-setup${q ? ' disabled' : ''}>${d.cant.length ? 'Set up the part I can' : 'Set up'}</button>`;
+  left.textContent = '';
+  const n = [!d.soft, d.sched.day === undefined, !d.sched.time].filter(Boolean).length;
+  $('[data-p-act]', c).innerHTML = `<button class="btn ghost" type="button" data-drop>Never mind</button>${q ? `<span class="waiting dwait">Answer ${n} ${n === 1 ? 'question' : 'questions'} first</span>` : `<button class="btn" type="button" data-setup>${d.cant.length ? 'Set up the part I can' : 'Set up'}</button>`}`;
 }
 function pickPart(btn) {
   const c = btn.closest('[data-parts]');
@@ -1838,7 +1972,7 @@ function patchEdit(c) {
   left.className = e.status === 'saved' ? 'c-left okline' : 'c-left';
   left.innerHTML = e.status === 'saved' ? `${ICON.check}Saved as version ${e.ver}.` : e.status === 'undone' ? `Back to ${short(e.from)}.` : '';
   act.innerHTML = e.status === 'asking'
-    ? `<button class="btn ghost" type="button" data-keep>Never mind</button><button class="btn" type="button" data-save${ask ? ' disabled' : ''}>Save change</button>`
+    ? `<button class="btn ghost" type="button" data-keep>Never mind</button>${ask ? '<span class="waiting dwait">Answer 1 question first</span>' : '<button class="btn" type="button" data-save>Save change</button>'}`
     : e.status === 'saved' ? `<button class="btn ghost sm" type="button" data-open="wf:${e.wf}">Open</button><button class="btn ghost sm" type="button" data-undo>Undo</button>` : '';
 }
 function saveEdit(c) {
@@ -1885,6 +2019,9 @@ const WATCH_RE = /\b(watch|track|monitor|keep an eye on|follow)\b|\bcheck\b.*\b(
 const EDIT_RE = /\b(make|change|switch|move|set|run|put|reschedule)\b/;
 async function respond(t) {
   const s = t.toLowerCase();
+  if (/\bdraft\b/.test(s) && /\b(workflow|n8n)\b/.test(s)) return draftAsk(t);
+  if (/^\s*(please\s+)?explain\b/.test(s)) return explainAsk(s);
+  if (dChangeFor(s)) return dChange(t);
   if (/\bn8n\b/.test(s)) return n8nAsk(s);
   if (/\b(help|how (do|can) i (start|use|begin)|steps|get started|how does (this|it) work)\b/.test(s)) return pushCard(startCard());
   if (/\b(what can you|how do i)\b/.test(s)) return pushCard(capsCard());
@@ -1898,6 +2035,10 @@ async function respond(t) {
   if (/(need|attention|waiting|to ?do|pending|urgent|my day|today|anything for me)/.test(s)) return pushCard(needsCard());
   if (/(watchlist|software)/.test(s)) return pushCard(watchCard());
   if (/(workflow|running|my checks|list|show (me )?(all|everything))/.test(s)) return pushCard(listCard());
+  if (/\bwhat about\b/.test(s) && findSoft(s) && W.soft[findSoft(s)]) {
+    const k = findSoft(s);
+    return pushCard(`<div class="card"><ul class="wl">${softRow(k)}</ul></div>`, 'lead', `Your Watchlist holds ${W.soft[k].name}. Its line below shows where it stands.`);
+  }
   const c = CANT.find(([re]) => re.test(s));
   if (c) return pushCard(cantCard(c[1], c[2], c[3]));
   return pushCard(cantCard('I didn’t follow that', W.user === 'bob' ? 'I can show what waits for your yes, and your past decisions.' : 'I can watch software releases, fix stopped runs and change your workflows.'));
@@ -1925,6 +2066,589 @@ async function typeIn(text) {
   $('.composer').classList.remove('typing');
   await tap($('.send'));
   return send(text);
+}
+
+/* ---------- The workflow drafter (ADR 0051) ----------
+   A drafted workflow is its template (blocks, settings, flags, what code adds) plus what the person answered.
+   The draft card, the report, the set-up approval and Explain all read the same facts, so they never disagree. */
+AG.drafter = { name: 'Workflow drafter', hue: '#a2397c', tint: '#fbe1f0', job: 'nodes' };
+GLYPH.nodes = '<path d="M37.6 39.5l3.8-2.3M37.6 39.5l3.8 2.3" stroke="#fff" stroke-width="1.1"/><circle cx="37.3" cy="39.5" r="1.6" fill="#fff"/><circle cx="41.9" cy="36.9" r="1.6" fill="#fff"/><circle cx="41.9" cy="42.1" r="1.6" fill="#fff"/>';
+Object.assign(ICON, {
+  rec: '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.4" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="8" cy="8" r="2.2" fill="currentColor"/></svg>',
+  pen: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.2 12.8l.7-3 6.8-6.8a1.4 1.4 0 0 1 2 0l.3.3a1.4 1.4 0 0 1 0 2l-6.8 6.8z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>',
+  alert: '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M8 4.8v3.6M8 11v.2" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>',
+  up: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5.2 7.2v6.3H3a.6.6 0 0 1-.6-.6V7.8a.6.6 0 0 1 .6-.6zM5.2 7.2l2.4-4.4a1.2 1.2 0 0 1 2.2.9l-.6 2.6h3.3a1.2 1.2 0 0 1 1.2 1.4l-.9 4.7a1.3 1.3 0 0 1-1.3 1.1H5.2" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>',
+});
+ICON.down = ICON.up.replace('<path ', '<path transform="matrix(1 0 0 -1 0 16)" ');
+
+const FIXED = ['Added “Record the run” after the trigger, so every run is in the log.', 'Added “Start from the Portal”, so Run now and a test run can start it.', 'Set the team’s time zone, Singapore.', 'Added our error workflow, so a stopped run shows here.', 'Turned on saved progress.'];
+const PASSED = ['Every block loads in our n8n.', 'Reads only places the team allows.', 'No key is typed into a block.', 'Every expression reads only this workflow’s blocks.', 'Nothing outside the platform can start it.', 'Runs no code.'];
+const ADDED = [
+  { id: 'portal', short: 'Start from the Portal', icon: 'send', kind: 'none', tag: 'Starts it', ours: true, added: true, side: true },
+  { id: 'rec', short: 'Record the run', icon: 'rec', kind: 'none', tag: 'Records the run', ours: true, added: true },
+];
+const DT = {
+  stale: {
+    name: 'Close stale GitLab issues',
+    ask: 'Draft a workflow that every Monday closes GitLab issues with no activity for 90 days, posts the list in Slack #eng-housekeeping, and logs it in a Jira ticket',
+    whenShort: (t) => `Mon ${t || '…'}`,
+    whenLong: (t) => `Every Monday at ${t}`,
+    blocks: [
+      { id: 'when', short: 'Every Monday', icon: 'when', kind: 'none', tag: 'Starts it', n8n: 'Schedule' }, ...ADDED,
+      { id: 'find', short: 'Find stale issues', icon: 'read', kind: 'read', tag: 'Reads GitLab', n8n: 'GitLab' },
+      { id: 'quiet', short: 'Quiet 90 days?', icon: 'fork', kind: 'none', tag: 'Shapes the data', n8n: 'Filter' },
+      { id: 'close', short: 'Close issues', icon: 'write', kind: 'setup', tag: 'Writes on the set-up approval', n8n: 'GitLab' },
+      { id: 'post', short: 'Post the list', icon: 'msg', kind: 'none', tag: 'Posts in Slack', n8n: 'Slack' },
+      { id: 'propose', short: 'Propose a ticket', icon: 'pen', kind: 'none', tag: 'Shapes the change', ours: true },
+      { id: 'yes', short: 'Ask for a yes', icon: 'gate', kind: 'gate', tag: 'Waits for a yes', ours: true },
+      { id: 'create', short: 'Create the ticket', icon: 'write', kind: 'write', tag: 'Writes after a yes', ours: true },
+    ],
+    settings: [
+      { id: 'time', k: 'When', label: 'Run time', q: 'Mondays, at what time?', opts: ['8:00', '9:00', '13:00', '17:00'], typed: true, ans: '9:00', nw: 'time needed' },
+      { id: 'repo', k: 'GitLab', label: 'GitLab project', guess: 'codesparks/portal', opts: ['codesparks/portal', 'codesparks/agent-hub', 'codesparks/infra'] },
+      { id: 'days', k: 'Quiet', label: 'No activity for', said: '90 days' },
+      { id: 'channel', k: 'Slack', label: 'Slack channel', said: '#eng-housekeeping', block: 'post' },
+      { id: 'jira', k: 'Jira', label: 'Jira project', q: 'Which Jira project should the ticket go in?', opts: ['MOCK', 'SUP', 'OPS'], ans: 'OPS', nw: 'project needed' },
+      { id: 'key', k: 'Key', label: 'Key for “Close issues”', q: 'Which key should “Close issues” use?', opts: ['GitLab ops'], sub: { 'GitLab ops': 'added by Carol' }, op: 'GitLab', ans: 'GitLab ops', nw: 'key needed' },
+      { id: 'appr', k: 'Yes from', label: 'Who says yes to the ticket', q: 'Who says yes to the ticket on each run?', opts: ['Any Approver on the team', 'Bob', 'Dan'], ans: 'Any Approver on the team', nw: 'Approver needed' },
+    ],
+    inShort: (v, has) => `Every Monday at ${v('time')}, it finds GitLab issues in ${v('repo')} with no activity for ${v('days')} and closes them.${has('post') ? ` It posts the list in Slack ${v('channel')}.` : ''} It creates 1 ticket in Jira project ${v('jira')} after a yes. It changes nothing else.`,
+    rwp: (v, has) => [
+      ['Reads', `GitLab, project ${v('repo')}`, `Issues with no activity for ${v('days', true)}, with the platform’s GitLab key.`],
+      ['Writes', `GitLab, project ${v('repo')}`, `Closes those issues with the write key ${v('key')}. No yes on each run.`],
+      ['Writes', `Jira project ${v('jira')}`, '1 ticket that lists the closed issues, after a yes.'],
+      ...(has('post') ? [['Posts', `Slack ${v('channel')}`, 'The words “Closed today:”, then the titles that “Close issues” returns.']] : []),
+    ],
+    who: (v, has) => [
+      ['Create the ticket', `Waits for a yes in Teams on each run, from ${v('appr', true)}.`, 'yes'],
+      ['Close issues', 'Runs on the set-up approval, with no yes on each run.', 'setup'],
+      ...(has('post') ? [['Post the list', 'Posts on the set-up approval, with no yes on each run.', 'setup']] : []),
+    ],
+    noYes: (has) => `“Close issues”${has('post') ? ' and “Post the list”' : ''} won’t ask for a yes on each run. Your approval now is the only one.`,
+    flags: [
+      { id: 'native_write', block: 'close', what: 'Closes GitLab issues with n8n’s own block', why: 'n8n’s own blocks don’t ask for a yes on each run, so this approval is the only one.', agree: 'Every Monday it closes each issue it finds, with the write key “GitLab ops”.' },
+      { id: 'post_read', block: 'post', what: 'Posts words from what the run read', why: 'Issue titles go to #eng-housekeeping as they are. A title could say anything.', agree: 'The titles of the issues it closed are posted as written.', words: '“Closed today:”, then the titles that “Close issues” returns' },
+      { id: 'goes_on', block: 'close', what: '“Close issues” goes on past a failure', why: 'If one issue can’t be closed, the run carries on, so the Slack list could name an issue that is still open.', agree: 'One failed close doesn’t stop the run.' },
+    ],
+    fixed: (has) => [...FIXED, `Pinned test output on “Close issues”${has('post') ? ' and “Post the list”' : ''}, so a test run changes and sends nothing.`],
+    bobWhy: { native_write: 'We agreed to close issues after 90 days with no activity.', post_read: 'The channel is only for our team.', goes_on: 'One locked issue shouldn’t stop the clean-up.' },
+  },
+  leavers: {
+    name: 'Remove leavers from GitLab',
+    ask: 'Draft a workflow that removes people on the leavers page from GitLab each quarter, and posts who was removed in Slack #access-review',
+    access: 'Remove from GitLab',
+    whenShort: (t) => `Quarterly ${t || '…'}`,
+    whenLong: (t) => `On the 1st of each quarter at ${t}`,
+    blocks: [
+      { id: 'when', short: 'Each quarter', icon: 'when', kind: 'none', tag: 'Starts it', n8n: 'Schedule' }, ...ADDED,
+      { id: 'page', short: 'Read the leavers page', icon: 'read', kind: 'read', tag: 'Reads Confluence', ours: true },
+      { id: 'find', short: 'Find their accounts', icon: 'read', kind: 'read', tag: 'Reads GitLab', n8n: 'GitLab' },
+      { id: 'remove', short: 'Remove from GitLab', icon: 'write', kind: 'setup', tag: 'Changes who can use GitLab', n8n: 'GitLab' },
+      { id: 'post', short: 'Post who was removed', icon: 'msg', kind: 'none', tag: 'Posts in Slack', n8n: 'Slack' },
+    ],
+    settings: [
+      { id: 'time', k: 'When', label: 'Run time', q: 'On the 1st of each quarter, at what time?', opts: ['8:00', '9:00', '13:00'], typed: true, ans: '9:00', nw: 'time needed' },
+      { id: 'page', k: 'Page', label: 'Confluence page', q: 'Which Confluence page lists the leavers?', opts: ['Team leavers', 'HR exits'], ans: 'Team leavers', nw: 'page needed' },
+      { id: 'channel', k: 'Slack', label: 'Slack channel', said: '#access-review', block: 'post' },
+      { id: 'key', k: 'Key', label: 'Key for “Remove from GitLab”', q: 'Which key should “Remove from GitLab” use?', opts: ['GitLab admin'], sub: { 'GitLab admin': 'added by Carol' }, op: 'GitLab', ans: 'GitLab admin', nw: 'key needed' },
+    ],
+    inShort: (v, has) => `On the 1st of each quarter at ${v('time')}, it reads the leavers on the Confluence page ${v('page')} and removes them from GitLab.${has('post') ? ` It posts who was removed in Slack ${v('channel')}.` : ''} It changes nothing else.`,
+    rwp: (v, has) => [
+      ['Reads', `Confluence, page ${v('page')}`, 'The names of people who left, with the platform’s Confluence key.'],
+      ['Reads', 'GitLab', 'The accounts of those people, with the platform’s GitLab key.'],
+      ['Writes', 'GitLab', `Removes those accounts from every project, with the write key ${v('key')}. No yes on each run.`],
+      ...(has('post') ? [['Posts', `Slack ${v('channel')}`, 'The words “Removed from GitLab today:”, then the names that “Find their accounts” returns.']] : []),
+    ],
+    who: (v, has) => [
+      ['Remove from GitLab', 'Runs on the set-up approval, with no yes on each run. It changes who can use GitLab, so its set-up needs two Approvers.', 'setup'],
+      ...(has('post') ? [['Post who was removed', 'Posts on the set-up approval, with no yes on each run.', 'setup']] : []),
+    ],
+    noYes: () => '“Remove from GitLab” won’t ask for a yes on each run. The two approvals now are the only ones.',
+    flags: [
+      { id: 'native_write', block: 'remove', what: 'Removes people from GitLab with n8n’s own block', why: 'This changes who can use GitLab, and nobody says yes on each run. So two Approvers decide now, one after the other.', agree: 'Each quarter it removes everyone on the leavers page from GitLab, with the write key “GitLab admin”.' },
+      { id: 'post_read', block: 'post', what: 'Posts names from what the run read', why: 'Names from the leavers page go to #access-review as written.', agree: 'The names it removed are posted as written.', words: '“Removed from GitLab today:”, then the names that “Find their accounts” returns' },
+    ],
+    fixed: (has) => [...FIXED, `Pinned test output on “Remove from GitLab”${has('post') ? ' and “Post who was removed”' : ''}, so a test run changes and sends nothing.`],
+    first: { by: 'Dan', at: '9:12', why: { native_write: 'It matches the leavers list from our quarterly access review.', post_read: '#access-review is private to the review team.' } },
+    bobWhy: { native_write: 'Same list as the access review, and the key only reaches GitLab.', post_read: 'Only the review team can read that channel.' },
+  },
+};
+const REQ_DRAFT = DT.stale.ask;
+const DSTEPS = ['Reading what you asked', 'Choosing n8n blocks', 'Checking each block is in our n8n', 'Laying it out', 'Safety checker is checking it', 'Writing the report'];
+const RESTEPS = ['Checking each block is in our n8n', 'Laying it out', 'Safety checker is checking it', 'Writing the report'];
+const SREASONS = ['Too risky without a yes', 'Wrong project or channel', 'Not needed'];
+
+const dT = (d) => DT[d.t];
+const has = (d, id) => !d.drop.includes(id);
+const dBlocks = (d) => dT(d).blocks.filter((b) => has(d, b.id));
+const dSets = (d) => dT(d).settings.filter((s) => !s.block || has(d, s.block));
+const dFlags = (d) => dT(d).flags.filter((f) => has(d, f.block));
+function dVal(d, s) {
+  const a = d.vals[s.id];
+  if (a) return { value: a.value, mark: 'filled', src: a.src };
+  if (s.said) return { value: s.said, mark: 'filled', src: 'From your words' };
+  if (s.guess) return { value: s.guess, mark: 'guessed', src: 'I guessed' };
+  return { value: '', mark: 'needed', src: 'Needed' };
+}
+const dNeeded = (d) => dSets(d).filter((s) => dVal(d, s).mark === 'needed');
+/* Questions come one at a time, in ADR 0051's order. A key someone asked an Operator for waits, and the next question comes up. */
+const dQ = (d) => dNeeded(d).find((s) => !(s.op && d.opAsked)) || null;
+const dNew = (t, key) => ({ key, t, rev: 1, status: 'drafting', vals: {}, drop: [], ticks: {}, by: 'Alice' });
+const dLine = (d, o = {}) => line({ steps: dBlocks(d).filter((b) => !b.side), first: dT(d).whenShort(dVal(d, dT(d).settings[0]).value), ...o });
+const dNote = (d) => `Added ${dT(d).fixed((id) => has(d, id)).length} things every workflow needs.`;
+const srcFor = (src) => (W.user === 'bob' ? src.replace('your words', 'Alice’s words').replace(/^You /, 'Alice ') : src);
+const isFirst = (d) => !!d.first && d.first.by === 'Bob';
+const canDecide = (d) => W.user === 'bob' && ['sent', 'half'].includes(d.status) && !isFirst(d);
+const flagsLeft = (d) => dFlags(d).filter((f) => !(d.ticks[f.id]?.on && d.ticks[f.id].why.trim())).length;
+const dWhys = (d, id) => [...(d.first ? [[d.first.by, d.first.why[id]]] : []), ...(d.status === 'approved' ? [[d.appr.at(-1), d.accepted[id]]] : [])].filter(([, r]) => r);
+function dAcceptLine(d) {
+  const n = dFlags(d).length;
+  return n ? `Approved with ${n} accepted ${n === 1 ? 'flag' : 'flags'} by ${d.appr.join(' and ')}` : `Approved by ${d.appr.join(' and ')}`;
+}
+function dPill(d) {
+  if (d.status === 'drafting') return ['Drafting', 'run'];
+  if (d.status === 'inn8n') return ['In n8n', 'idle'];
+  if (['sent', 'half'].includes(d.status)) return canDecide(d) ? ['Needs your yes', 'wait'] : ['Waiting for a yes', 'wait'];
+  if (d.status === 'approved') return ['Approved', 'ok'];
+  if (d.status === 'declined') return ['Declined', 'idle'];
+  return ['Draft', 'idle'];
+}
+const dwListed = () => Object.keys(W.dw).filter((k) => ['sent', 'half', 'approved'].includes(W.dw[k].status));
+const dwState = (k) => (W.dw[k].status === 'approved' ? ['Draft', 'idle'] : ['Waiting for a yes', 'wait']);
+function dwSub(k) {
+  const d = W.dw[k];
+  if (d.status === 'approved') return `${dAcceptLine(d)} · no runs yet`;
+  return d.status === 'half' ? '1 of 2 approved, waiting for a second Approver' : `Sent for approval at ${d.sentAt}`;
+}
+const setupNeeds = () => Object.keys(W.dw).filter((k) => canDecide(W.dw[k])).map((k) => {
+  const n = dT(W.dw[k]).name;
+  return { g: 'now', t: `<b>${n}</b> needs your yes to set up${W.dw[k].status === 'half' ? ', as the second Approver' : ''}`, s: `<b>${n}</b> needs your yes`, open: `setup:${k}`, tone: 'wait' };
+});
+const wfName = (id) => (W.wf[id] ? W.wf[id].name : dT(W.dw[id]).name);
+
+/* ---------- The report: code's own words, built from the facts ---------- */
+function dApprText(d) {
+  const T = dT(d);
+  const need = T.access ? `It needs 2 Approvers, one after the other, because “${T.access}” changes who can use GitLab.` : 'It needs 1 Approver.';
+  const party = 'Alice asked for it and answered its questions, so Alice can’t approve it.';
+  if (d.status === 'approved') return `Approved by ${d.appr.join(', then ')} at ${d.at}, with ${dFlags(d).length} accepted flags.`;
+  if (d.status === 'half') return `${need} ${d.first.by} approved at ${d.first.at}. It waits for a second Approver.`;
+  if (d.status === 'declined') return `Declined by Bob: ${lower(d.declWhy)}. Nothing was set up.`;
+  return `${need} ${party}${d.status === 'sent' ? ` Sent at ${d.sentAt}.` : ''}`;
+}
+function dFacts(d) {
+  const T = dT(d);
+  const v = (id, low) => {
+    const s = T.settings.find((x) => x.id === id);
+    const x = dVal(d, s);
+    return x.mark === 'needed' ? `<span class="chip ask">${s.nw}</span>` : `<span class="chip">${esc(low ? lower(x.value) : x.value)}</span>`;
+  };
+  const h = (id) => has(d, id);
+  const fl = dFlags(d);
+  return {
+    id: d.key, k: d.key, name: T.name,
+    short: T.inShort(v, h),
+    steps: dBlocks(d).map((b) => ({ name: b.short, tag: b.tag, ours: b.ours, n8n: b.n8n, added: b.added })),
+    rwp: T.rwp(v, h),
+    accept: fl, accepted: d.status === 'approved' || d.first ? fl.map((f) => [f, dWhys(d, f.id)]) : null,
+    answer: dNeeded(d).length, refused: [],
+    fixed: T.fixed(h), passed: PASSED,
+    who: T.who(v, h),
+    sets: dSets(d).map((s) => ({ s, label: s.label, ...dVal(d, s) })),
+    appr: dApprText(d),
+    apprG: { approved: `Approved by ${(d.appr || []).join(' and ')}`, half: '1 of 2 approved', sent: 'Waiting for an Approver', declined: 'Declined' }[d.status] || (T.access ? '2 Approvers, one after the other' : '1 Approver'),
+  };
+}
+function wfFacts(id, ver) {
+  const f = W.wf[id];
+  const h = ver ? W.hist[id].find((x) => x.v === +ver) : null;
+  const sched = h ? h.sched : f.sched;
+  const yes = h ? h.yes : f.yes;
+  const S = W.soft[f.soft] || EXTRA[f.soft];
+  const jira = f.then === 'jira';
+  const c = (x) => `<span class="chip">${x}</span>`;
+  const B = {
+    when: [long(sched), 'Starts it', 0, 'Schedule'], read: ['Read release', 'Reads GitHub', 1], compare: ['Newer?', 'Shapes the data', 0, 'IF'],
+    yes: ['Ask for a yes', 'Waits for a yes', 1], write: jira ? ['Make approved changes', 'Writes after a yes', 1] : ['Tell you', 'Shows here', 1],
+  };
+  const by = h || f;
+  return {
+    id: ver ? `${id}@${ver}` : id, name: f.name,
+    ver: h ? `${h.what}. ${h.by}, ${h.on}. Checked again under today’s rules.` : '',
+    short: `${long(sched)}, it reads the newest ${c(S.name)} release on GitHub. If it is newer than the version the team runs, it ${jira ? `creates 1 ticket in Jira project ${c('MOCK')}${yes ? ' after an Approver’s yes' : ''}` : 'tells you here'}. It changes nothing else.`,
+    reworded: jira && yes ? `${f.name} looks at ${S.name} on GitHub ${sched.day ? `every ${DAY[sched.day]}` : 'every day'} at ${sched.time}. When there’s a release newer than yours, it opens 1 Jira ticket in MOCK, but only after an Approver says yes. Nothing else changes.` : null,
+    steps: stepsFor(f.then).filter((s) => s.id !== 'yes' || yes).map((s) => ({ name: B[s.id][0], tag: B[s.id][1], ours: !!B[s.id][2], n8n: B[s.id][3] })),
+    rwp: [['Reads', `GitHub, ${c(S.repo)}`, 'Its newest release, with the platform’s GitHub key.'], jira ? ['Writes', `Jira project ${c('MOCK')}`, `1 upgrade ticket${yes ? ', after a yes' : ''}.`] : ['Shows', 'Here, in the chat', 'One line when there’s a new release.', 'in the app']],
+    accept: [], accepted: null, answer: 0,
+    refused: jira && !yes ? [['“Make approved changes” has no yes before it', 'Our platform refuses the write, so the next run stops before the ticket. Put the yes back to fix it.']] : [],
+    fixed: [...(jira ? ['Added a yes before the ticket.'] : []), 'Set the team’s time zone, Singapore.', 'Added our error workflow, so a stopped run shows here.'],
+    passed: ['Every block loads in our n8n.', 'Reads only places the team allows.', 'No key is typed into a block.', 'Runs no code.'],
+    who: jira ? [['Make approved changes', yes ? 'Waits for a yes in Teams on each run, from any Approver but the person who started the run.' : 'Can’t write. There’s no yes before it, so our platform refuses the write.', yes ? 'yes' : 'no']] : [],
+    sets: [['Run time', long(sched), `Set by ${by.by}, ${by.on}`], ['Software', S.name, 'From Alice’s words'], ...(jira ? [['Jira project', 'MOCK', 'The team’s allowed project'], ['Who says yes', 'Any Approver but the person who started the run', 'The team’s rule']] : [])].map(([label, value, src]) => ({ label, value, mark: 'set', src })),
+    appr: 'None needed. The Planner laid it out from a tested layout, and every write waits for a yes.',
+    apprG: 'No set-up approval needed',
+  };
+}
+const factsOf = (id, v) => (W.dw[id] ? dFacts(W.dw[id]) : W.wf[id] ? wfFacts(id, v) : null);
+
+const OPEN = new Map();
+const SECS = [['steps', 'Step by step'], ['rwp', 'What it reads, writes and posts'], ['flags', 'Flags'], ['who', 'Who approves each write'], ['set', 'Settings'], ['appr', 'Approval']];
+const MK = { filled: ICON.check, needed: '?', guessed: ICON.pen, set: '' };
+/* A string from the plan, such as a block's name, shows in quotes, apart from code's own words. */
+const qn = (s) => `“${s}”`;
+const pickFor = (d, s) => `<span class="pick">${s.opts.map((o) => `<button type="button" data-dq="${d.key}|${s.id}|${o}" aria-pressed="${dVal(d, s).value === o}">${o}${s.sub?.[o] ? `, ${s.sub[o]}` : ''}</button>`).join('')}</span>`;
+function rwpGist(F) {
+  const g = {};
+  F.rwp.forEach(([k, p, , sys]) => { const n = sys || p.replace(/<[^>]+>/g, '').split(/[ ,]/)[0]; g[k] = g[k] || []; if (!g[k].includes(n)) g[k].push(n); });
+  return Object.entries(g).map(([k, l]) => `${k} ${k === 'Posts' ? 'in ' : ''}${l.join(' and ')}`).join(' · ') || 'Changes nothing';
+}
+const RSEC = {
+  steps: (F) => [`${F.steps.length} blocks`, `<ol class="rp-steps">${F.steps.map((b) => `<li><b>${qn(b.name)}</b><span class="s">${b.tag}${W.maint ? ` · ${b.ours ? 'our block' : `n8n block, ${b.n8n}`}` : ''}${b.added ? ' · added for you' : ''}</span></li>`).join('')}</ol>`],
+  rwp: (F) => [rwpGist(F), `<dl class="dl2 rp-rwp">${F.rwp.map(([k, p, x]) => `<div><dt>${k}</dt><dd>${p}<span class="s">${x}</span></dd></div>`).join('')}</dl>`],
+  flags: (F) => {
+    const g = [F.accept.length ? `${F.accept.length} for an Approver` : '', F.refused.length ? `${F.refused.length} to fix` : '', F.answer ? `${F.answer} ${F.answer === 1 ? 'answer' : 'answers'} needed` : '', `${F.fixed.length} fixed for you`, `${F.passed.length} passed`].filter(Boolean).join(' · ');
+    const acc = (f) => { const w = F.accepted && F.accepted.find(([x]) => x === f); return w && w[1].length ? w[1].map(([n, r]) => `${n} accepted it: “${esc(r)}”`).join(' ') : 'An Approver can accept it at set-up.'; };
+    const rows = [
+      ...F.refused.map(([t, x]) => `<li class="pt wide" data-s="no"><span class="ic" aria-label="Refused">${ICON.x}</span><span class="v"><span><b>${t}</b></span><span class="s">${x}</span></span></li>`),
+      ...F.accept.map((f) => `<li class="pt wide" data-s="flag"><span class="ic" aria-label="Flag">!</span><span class="v"><span><b>${f.what}</b></span><span class="s">${f.why} ${acc(f)}</span></span></li>`),
+      F.answer ? `<li class="pt wide" data-s="ask"><span class="ic" aria-label="Question">?</span><span class="v"><span><b>${F.answer} ${F.answer === 1 ? 'setting is' : 'settings are'} still needed</b></span><span class="s">You answer them in the chat, one at a time.</span></span></li>` : '',
+    ].join('');
+    return [g, `${rows ? `<ul class="parts">${rows}</ul>` : '<p>No flags.</p>'}<p class="rp-sub">Fixed for you</p><ul class="caps rp-ok">${F.fixed.map((x) => `<li>${x}</li>`).join('')}</ul><p class="rp-sub">Passed</p><ul class="caps rp-ok">${F.passed.map((x) => `<li>${x}</li>`).join('')}</ul>`];
+  },
+  who: (F) => {
+    const y = F.who.filter((w) => w[2] === 'yes').length;
+    const s = F.who.filter((w) => w[2] === 'setup').length;
+    const g = F.who.length ? [y ? `${y} ${y === 1 ? 'waits' : 'wait'} for a yes on each run` : '', s ? `${s} on the set-up approval` : '', F.who.length - y - s ? 'Writes refused' : ''].filter(Boolean).join(' · ') : 'Writes nothing';
+    const ic = { yes: ICON.gate, setup: '!', no: ICON.x };
+    return [g, F.who.length ? `<ul class="parts">${F.who.map(([n, t, k]) => `<li class="pt wide" data-s="${k === 'setup' ? 'flag' : k}"><span class="ic" aria-hidden="true">${ic[k]}</span><span class="v"><span><b>${qn(n)}</b></span><span class="s">${t}</span></span></li>`).join('')}</ul>` : '<p>It writes nothing, so nobody approves a write.</p>'];
+  },
+  set: (F) => {
+    const n = F.sets.filter((x) => x.mark === 'needed').length;
+    const gu = F.sets.filter((x) => x.mark === 'guessed').length;
+    const d = F.k && W.dw[F.k];
+    const edit = d && d.status === 'draft' && canEdit();
+    const g = d ? [n ? `${n} needed` : 'Nothing needed', gu ? `${gu} guessed` : ''].filter(Boolean).join(' · ') : `${F.sets.length} settings`;
+    return [g, `<ul class="rows rp-set">${F.sets.map((x) => `<li><span><b>${x.label}</b><span class="s">${x.mark === 'needed' ? 'Not given yet' : esc(x.value)}</span></span><span class="mk" data-m="${x.mark}">${MK[x.mark]}${srcFor(x.src)}</span><span class="act">${edit && x.mark === 'guessed' ? `<button class="linkbtn" type="button" data-dchg="${F.k}|${x.s.id}">Change</button>${d.picking === x.s.id ? pickFor(d, x.s) : ''}` : ''}</span></li>`).join('')}</ul>`];
+  },
+  appr: (F) => [F.apprG, `<p>${F.appr}</p>`],
+};
+/* In short first, then one row per section with its gist. A row opens on a click, and Settings opens by itself while anything is needed. */
+function reportHTML(F, o = {}) {
+  const rw = o.where === 'card' && F.reworded;
+  const head = `<p class="rep-short">${rw && !o.code ? F.reworded : F.short}</p>${rw ? `<p class="rw"><span class="pill">${o.code ? 'Code’s wording' : 'Reworded'}</span><button class="linkbtn" type="button" data-rw>${o.code ? 'Show the reworded one' : 'Show code’s wording'}</button></p>` : ''}${F.ver ? `<p class="small muted">${F.ver}</p>` : ''}`;
+  const secs = SECS.filter(([k]) => !(o.skip || []).includes(k)).map(([k, t]) => [k, t, ...RSEC[k](F)]);
+  return `<div class="rep">${head}<div class="rp-acc">${secs.map(([k, t, g, b]) => {
+    const sk = `${F.id}:${o.where}:${k}`;
+    const open = OPEN.has(sk) ? OPEN.get(sk) : k === 'set' && F.answer > 0;
+    return `<details class="rp-d" data-sk="${sk}"${open ? ' open' : ''}><summary><span class="rp-t">${t}</span><span class="rp-g">${g}</span></summary><div class="rp-b">${b}</div></details>`;
+  }).join('')}</div></div>`;
+}
+const repBox = (id, where, o = {}) => `<div data-live="rep" data-rep="${id}" data-where="${where}"${o.v ? ` data-v="${o.v}"` : ''}${o.skip ? ` data-skip="${o.skip}"` : ''}></div>`;
+function patchRep(el) {
+  const F = factsOf(el.dataset.rep, el.dataset.v);
+  if (F) el.innerHTML = reportHTML(F, { where: el.dataset.where, code: el.closest('[data-x]')?.dataset.code === '1', skip: el.dataset.skip ? [el.dataset.skip] : [] });
+}
+function toggleRw(btn) { const c = btn.closest('[data-x]'); c.dataset.code = c.dataset.code === '1' ? '' : '1'; refresh(); }
+
+/* ---------- The draft card: the steps as they go, then the line, In short, one question at a time ---------- */
+const dCardShell = (d) => `<div class="card" data-live="dcard" data-k="${d.key}" data-rev="${d.rev}" data-spec="report:${d.key}"><div class="c-head"><b>${dT(d).name}</b><span class="c-hr"><span class="small muted">Revision ${d.rev}</span><span class="pill" data-s="run">Drafting</span></span></div><ul class="dprog" data-dprog></ul><div class="dl-scroll" data-dline hidden></div><p class="c-note" data-dnote hidden></p></div>`;
+function dQRow(d, s) {
+  const extra = (s.typed ? `<button type="button" data-dtype="${d.key}">Type a time</button>` : '') + (s.op ? `<button type="button" data-dop="${d.key}">Ask an Operator to add one</button>` : '');
+  const typing = s.typed && d.typing ? `<form class="askf" data-dtf="${d.key}"><input type="text" autocomplete="off" placeholder="Like 7:45 or 6pm" aria-label="Type a time"><button class="btn sm" type="submit">Set</button></form>${d.typeMiss ? '<span class="s">I couldn’t read a time in that.</span>' : ''}` : '';
+  return `<li class="pt" data-s="ask"><span class="ic" aria-label="Question">?</span><span class="k">${s.k}</span><span class="v"><span>${s.q}</span>${pickFor(d, s).replace(/ aria-pressed="false"/g, '').replace('</span>', `${extra}</span>`)}${typing}${s.op ? '<span class="s">Keys are never typed here. An Operator adds them in Settings.</span>' : ''}</span></li>`;
+}
+const dOpRow = (d, s) => `<li class="pt" data-s="ask"><span class="ic" aria-label="Waiting">?</span><span class="k">${s.k}</span><span class="v"><span>Asked the Operators for a ${s.op} write key.</span><span class="s">It waits until one adds it in Settings. You can still pick a key you have.</span>${pickFor(d, s)}</span></li>`;
+const dGuessRow = (d, s) => `<li class="pt" data-s="guess"><span class="ic" aria-label="Guess">${ICON.pen}</span><span class="k">${s.k}</span><span class="v"><span><span class="chip">${esc(dVal(d, s).value)}</span> <span class="s">I guessed.</span> <button class="linkbtn" type="button" data-dchg="${d.key}|${s.id}">Change</button></span>${d.picking === s.id ? pickFor(d, s) : ''}</span></li>`;
+function dFoot(d) {
+  const k = d.key;
+  const see = `<button class="btn ghost sm" type="button" data-open="report:${k}">See the report</button>`;
+  if (d.status === 'inn8n') return ['Open in your own n8n space, without its keys.', `<button class="btn sm" type="button" data-ddone="${k}">Done in n8n</button>`];
+  if (d.status === 'sent') return ['Waiting for an Approver. You can’t approve your own draft.', see];
+  if (d.status === 'half') return ['1 of 2 approved, waiting for a second Approver.', see];
+  if (d.status === 'approved') return [`ok:${ICON.check}${dAcceptLine(d)}. Set up as a draft.`, `<button class="btn ghost sm" type="button" data-open="dw:${k}">Open it</button>`];
+  if (d.status === 'declined') return [`Declined by Bob: ${lower(d.declWhy)}. Nothing was set up.`, see];
+  const n = dNeeded(d).length;
+  const asked = d.opAsked && dNeeded(d).some((s) => s.op) ? 1 : 0;
+  const wait = n - asked ? `Answer ${n - asked} ${n - asked === 1 ? 'question' : 'questions'} first` : 'Waiting for an Operator to add a key';
+  return [d.cancelled ? 'This revision cancelled the waiting approval.' : '', `${see}<button class="btn ghost sm" type="button" data-dask="${k}">Ask for a change</button>${W.maint ? `<button class="btn ghost sm" type="button" data-dn8n="${k}">Edit in n8n</button>` : ''}${n ? `<span class="waiting dwait">${wait}</span>` : `<button class="btn sm" type="button" data-dsend="${k}">Send for approval</button>`}`];
+}
+function dCardInner(d) {
+  const T = dT(d);
+  const [pt, ps] = dPill(d);
+  const editing = d.status === 'draft';
+  const q = editing ? dQ(d) : null;
+  const opS = editing && d.opAsked ? dNeeded(d).find((s) => s.op) : null;
+  const fl = dFlags(d).length;
+  const rows = editing ? [q ? dQRow(d, q) : '', opS ? dOpRow(d, opS) : '', ...dSets(d).filter((s) => dVal(d, s).mark === 'guessed').map((s) => dGuessRow(d, s)),
+    fl ? `<li class="pt wide" data-s="flag"><span class="ic" aria-hidden="true">!</span><span class="v"><span>${fl} ${fl === 1 ? 'flag' : 'flags'} for an Approver to accept. <button class="linkbtn" type="button" data-dsee="${d.key}">See them</button></span></span></li>` : ''].join('') : '';
+  const [left, act] = dFoot(d);
+  const ok = left.startsWith('ok:');
+  return `<div class="c-head"><b>${T.name}</b><span class="c-hr"><span class="small muted">Revision ${d.rev}</span><span class="pill" data-s="${ps}">${pt}</span></span></div>
+  <div class="dl-scroll">${dLine(d)}</div>
+  <p class="c-sent">${dFacts(d).short}</p>
+  ${editing ? `<p class="c-note">${fw('safety', 20, 'success')}<span>${dNote(d)}</span></p>` : ''}
+  ${rows ? `<ul class="parts">${rows}</ul>` : ''}
+  <div class="c-foot"><span class="c-left${ok ? ' okline' : ''}">${ok ? left.slice(3) : left}</span><span class="c-act">${act}</span></div>`;
+}
+/* An older revision's card settles into one line, so only the newest asks anything. */
+function patchDCard(c) {
+  const d = W.dw[c.dataset.k];
+  if (!d) return;
+  const rev = +c.dataset.rev;
+  if (rev < d.rev) {
+    if (c.dataset.old !== String(d.rev)) { c.dataset.old = String(d.rev); c.innerHTML = `<div class="c-head"><b>${dT(d).name}</b><span class="small muted">Revision ${rev}. Revision ${d.rev} is below.</span></div>`; }
+    return;
+  }
+  if (d.status === 'drafting') return;
+  c.innerHTML = dCardInner(d);
+}
+async function draftSteps(c, d, steps) {
+  const prog = $('[data-dprog]', c);
+  const box = $('[data-dline]', c);
+  if (!steps.includes('Laying it out')) { box.hidden = false; box.innerHTML = dLine(d); }
+  for (const [i, t] of steps.entries()) {
+    const safety = t.startsWith('Safety');
+    prog.insertAdjacentHTML('beforeend', `<li data-i="${i}">${fw(safety ? 'safety' : 'drafter', 20, 'working')}<span>${t}…</span><span class="tm" data-since="${Date.now()}" data-p=""></span></li>`);
+    scroll();
+    if (t === 'Laying it out') {
+      box.hidden = false;
+      box.innerHTML = dLine(d, { off: true });
+      for (const b of dBlocks(d).filter((x) => !x.side && !x.added)) { $(`.nd[data-id="${b.id}"]`, box).classList.remove('off'); await wait(220); }
+    } else if (safety) {
+      await wait(450);
+      $$('.nd.added', box).forEach((n) => n.classList.remove('off'));
+      const note = $('[data-dnote]', c);
+      note.hidden = false;
+      note.innerHTML = `${fw('safety', 20, 'success')}<span>${dNote(d)}</span>`;
+      await wait(650);
+    } else await wait(i ? 650 : 450);
+    const li = $(`[data-i="${i}"]`, prog);
+    li.className = 'done';
+    li.innerHTML = `${ICON.check}<span>${t}</span>`;
+  }
+  await wait(350);
+  d.status = 'draft';
+  refresh();
+  scroll();
+}
+async function draftAsk(t) {
+  if (!canEdit()) return pushText('Operators draft workflows. Ask Alice, or another Operator.');
+  const s = t.toLowerCase();
+  const tid = /(leaver|remov|offboard|access)/.test(s) ? 'leavers' : /(gitlab|stale|issue)/.test(s) ? 'stale' : '';
+  if (!tid) return pushCard(`<div class="card"><div class="c-head"><b>Try a sample draft</b></div><p class="muted">This sketch has two sample drafts. In the app, the drafter drafts what you describe.</p><div class="pick">${Object.keys(DT).map((k) => `<button type="button" data-say="${DT[k].ask}">${DT[k].name}</button>`).join('')}</div></div>`);
+  const d = dNew(tid, W.dw[tid] ? `${tid}${Object.keys(W.dw).length + 1}` : tid);
+  W.dw[d.key] = d;
+  W.dwFocus = d.key;
+  const m = pushCard(dCardShell(d), 'drafter', 'Drafting it as an n8n workflow.');
+  await draftSteps($('[data-live="dcard"]', m), d, DSTEPS);
+  return m;
+}
+async function redraft(d, steps, lead) {
+  Object.assign(d, { rev: d.rev + 1, status: 'drafting', ticks: {} });
+  delete d.first;
+  const m = pushCard(dCardShell(d), 'drafter', `Revision ${d.rev}. ${lead}`);
+  await draftSteps($('[data-live="dcard"]', m), d, steps);
+  return m;
+}
+function readTime(s) {
+  const t = timeOf(s);
+  if (t) return t;
+  const m = s.trim().match(/^(\d{1,2})(?::(\d{2}))?$/);
+  return m && +m[1] < 24 && (!m[2] || +m[2] < 60) ? `${+m[1]}:${m[2] || '00'}` : null;
+}
+/* "post at 9 instead" or "drop the Slack step" changes the draft in focus, and makes a new revision. */
+const dChangeFor = (s) => { const d = W.dw[W.dwFocus]; return !!d && canEdit() && ['draft', 'sent', 'half'].includes(d.status) && !/\bdraft\b/.test(s) && (/\b(instead|drop|skip|without)\b/.test(s) || (/\b(post|run)\b/.test(s) && !!readTime(s))); };
+async function dChange(t) {
+  const d = W.dw[W.dwFocus];
+  const s = t.toLowerCase();
+  const time = readTime(s);
+  const post = dT(d).blocks.find((b) => b.id === 'post');
+  const drop = /\b(drop|skip|without|no)\b/.test(s) && /\b(slack|post)/.test(s) && has(d, 'post');
+  if (!time && !drop) return pushCard(cantCard('I can redraft that in the app', 'In this sketch, try “post at 9 instead” or “drop the Slack step”.'), 'drafter');
+  const was = ['sent', 'half'].includes(d.status);
+  if (time) d.vals.time = { value: time, src: 'From your words' };
+  if (drop) d.drop.push('post');
+  d.cancelled = was;
+  return redraft(d, ['Reading your change', ...RESTEPS], [time ? `It now runs at ${time}.` : '', drop ? `Dropped “${post.short}”, and its flag.` : '', was ? 'This cancelled the waiting approval.' : ''].filter(Boolean).join(' '));
+}
+function dAnswer(btn) {
+  const [k, id, v] = btn.dataset.dq.split('|');
+  const d = W.dw[k];
+  if (!d || d.status !== 'draft') return;
+  d.vals[id] = { value: v, src: 'You chose' };
+  Object.assign(d, { picking: null, typing: false, typeMiss: false });
+  refresh();
+}
+function dTyped(form) {
+  const d = W.dw[form.dataset.dtf];
+  const t = readTime($('input', form).value.toLowerCase());
+  if (!t) { d.typeMiss = true; refresh(); vis(`[data-dtf="${d.key}"] input`)?.focus(); return; }
+  d.vals.time = { value: t, src: 'You typed it' };
+  Object.assign(d, { typing: false, typeMiss: false });
+  refresh();
+}
+function dSend(k) {
+  const d = W.dw[k];
+  if (!d || d.status !== 'draft' || dNeeded(d).length) return;
+  Object.assign(d, { status: 'sent', sentAt: '9:05', cancelled: false });
+  refresh();
+}
+async function dDone(k) {
+  const d = W.dw[k];
+  if (!d || d.status !== 'inn8n') return null;
+  const typed = !d.vals.time;
+  if (typed) d.vals.time = { value: '9:00', src: 'You typed it in n8n' };
+  return redraft(d, ['Reading it back from n8n', ...RESTEPS], `Read back from n8n.${typed ? ' You set the run time there, to 9:00.' : ''}`);
+}
+
+/* ---------- The set-up approval: each flag ticked, with a reason; never a party; two Approvers for access ---------- */
+function flagItem(d, f) {
+  const t = d.ticks[f.id] || { on: false, why: '' };
+  const body = `<p class="s">${f.why}</p><p class="agree"><span class="k">What accepting means</span>${f.agree}</p>${f.words ? `<p class="agree"><span class="k">The words it posts</span>${f.words}</p>` : ''}${dWhys(d, f.id).map(([n, r]) => `<p class="first"><span class="okline">${ICON.check}${n} accepted it</span><span class="s">“${esc(r)}”</span></p>`).join('')}`;
+  if (canDecide(d)) return `<li class="fl" data-on="${t.on}"><button class="fl-tick" type="button" role="checkbox" aria-checked="${t.on}" data-ftick="${d.key}|${f.id}"><span class="fl-box">${ICON.check}</span><span>${f.what}</span></button>${body}<label class="fl-why"${t.on ? '' : ' hidden'}><input type="text" autocomplete="off" data-fwhy="${d.key}|${f.id}" placeholder="Why do you accept it?" aria-label="Why do you accept “${f.what}”?" value="${esc(t.why)}"></label></li>`;
+  return `<li class="fl"${d.status === 'approved' ? ' data-done' : ''}><div class="fl-h"><span class="ic" aria-hidden="true">${d.status === 'approved' ? ICON.check : '!'}</span><span>${f.what}</span></div>${body}</li>`;
+}
+function setupFoot(d) {
+  const k = d.key;
+  if (['sent', 'half'].includes(d.status)) {
+    if (W.user !== 'bob') return '<span class="c-left">You can’t approve your own draft. You asked for it and sent it.</span>';
+    if (isFirst(d)) return '<span class="c-left">You approved it. A second Approver decides next.</span>';
+    if (d.declUI) return `<div class="why"><p><b>Why?</b> <span class="muted small">Alice will see it.</span></p><div class="pick">${SREASONS.map((r) => `<button type="button" data-sreason="${k}|${r}" aria-pressed="${d.declWhy === r}">${r}</button>`).join('')}</div><div class="c-act"><button class="btn ghost" type="button" data-sdecl="${k}|">Back</button>${d.declWhy ? `<button class="btn" type="button" data-sdecline="${k}">Decline</button>` : '<span class="waiting dwait">Pick a reason first</span>'}</div></div>`;
+    const left = flagsLeft(d);
+    return `<button class="btn ghost" type="button" data-sdecl="${k}|1">Decline</button><span class="c-act">${left ? `<span class="waiting dwait">Accept ${left} more ${left === 1 ? 'flag' : 'flags'} first</span>` : `<button class="btn sapprove" type="button" data-k="${k}">Approve</button>`}</span>`;
+  }
+  if (d.status === 'approved') return `<span class="c-left okline done-line">${ICON.check}${dAcceptLine(d)}. Set up as a draft.<span class="stamp" aria-hidden="true">Approved</span></span><span class="c-act"><button class="btn ghost" type="button" data-open="dw:${k}">Open the workflow</button></span>`;
+  if (d.status === 'declined') return `<span class="c-left">Declined by Bob: ${lower(d.declWhy)}. Nothing was set up.</span>`;
+  return '';
+}
+function setupView(k, full) {
+  const d = W.dw[k];
+  const T = dT(d);
+  const F = dFacts(d);
+  return `<div class="pv" data-live="setup" data-k="${k}">
+    <div class="pv-head"><div><p class="pv-kind">Set-up approval, from Alice’s draft</p><h3>${T.name}</h3></div><span class="pill lg" data-live="d-pill" data-k="${k}"></span></div>
+    <div class="banner" data-live="s-banner"></div>
+    <p class="pv-sent">${F.short}</p>
+    <p class="callout">${ICON.alert}<span>${T.noYes((id) => has(d, id))}</span></p>
+    <div class="pv-sec"><h4>Flags to accept</h4><p class="small muted" data-live="s-hint"></p><ul class="fls" data-live="s-flags"></ul></div>
+    ${full ? `<div class="pv-sec"><h4>The rest of the report</h4>${repBox(k, 'pane', { skip: 'flags' })}</div>` : `<div class="pv-sec"><h4>What it reads, writes and posts</h4>${RSEC.rwp(F)[1]}</div>`}
+    <div class="pv-foot" data-live="s-foot"></div>
+  </div>`;
+}
+const setupCard = (k) => `<div class="card" data-live="scard" data-k="${k}" data-spec="setup:${k}"><div class="c-head"><b>Set up ${qn(dT(W.dw[k]).name)}</b><span class="pill" data-live="d-pill" data-k="${k}"></span></div><p>${dFacts(W.dw[k]).short}</p><div class="c-foot"><span class="c-left"></span><span class="c-act"></span></div></div>`;
+async function setupFlow(k, stack = false) {
+  pushCard(setupCard(k), 'lead', W.user === 'bob' ? 'This needs your yes to set up.' : 'This waits for an Approver.');
+  if (wide() || stack) await openView(`setup:${k}`, stack);
+}
+function patchSetup(el) {
+  const d = W.dw[el.dataset.k];
+  if (!d) return;
+  const two = dT(d).access;
+  if (el.dataset.live === 'scard') {
+    const left = $('.c-left', el);
+    left.className = d.status === 'approved' ? 'c-left okline' : 'c-left';
+    const n = dFlags(d).length;
+    left.innerHTML = d.status === 'approved' ? `${ICON.check}${dAcceptLine(d)}` : d.status === 'declined' ? 'Declined. Nothing was set up.' : isFirst(d) ? 'You approved it. A second Approver decides next.' : `${n} ${n === 1 ? 'flag' : 'flags'} to accept${two ? ' · 2 Approvers' : ''}`;
+    $('.c-act', el).innerHTML = `<button class="btn ${canDecide(d) ? '' : 'ghost '}sm" type="button" data-open="setup:${d.key}">${canDecide(d) ? 'Review and decide' : 'Open'}</button>`;
+    return;
+  }
+  const sig = `${d.status}|${W.user}|${d.rev}`;
+  if (el.dataset.sig !== sig) { el.dataset.sig = sig; $('[data-live="s-flags"]', el).innerHTML = dFlags(d).map((f) => flagItem(d, f)).join(''); }
+  const b = $('[data-live="s-banner"]', el);
+  b.innerHTML = d.status === 'half' ? `<span>${canDecide(d) ? `1 of 2 approved. ${d.first.by} approved at ${d.first.at}, and you’re the second Approver.` : '1 of 2 approved, waiting for a second Approver.'}</span>`
+    : d.status === 'sent' && two ? `<span>It needs 2 Approvers, one after the other, because “${two}” changes who can use GitLab.</span>` : '';
+  $('[data-live="s-hint"]', el).textContent = canDecide(d) ? 'Tick each one, and say why you accept it.' : d.status === 'approved' ? 'Each one was accepted, with a reason.' : 'An Approver ticks each one, and says why.';
+  $('[data-live="s-foot"]', el).innerHTML = setupFoot(d);
+}
+const sFeet = (k) => $$(`[data-live="setup"][data-k="${k}"] [data-live="s-foot"]`).forEach((f) => { f.innerHTML = setupFoot(W.dw[k]); });
+function fTick(btn) {
+  const [k, id] = btn.dataset.ftick.split('|');
+  const d = W.dw[k];
+  if (!canDecide(d)) return;
+  const t = d.ticks[id] || (d.ticks[id] = { on: false, why: '' });
+  t.on = !t.on;
+  $$(`[data-ftick="${k}|${id}"]`).forEach((b) => { b.setAttribute('aria-checked', String(t.on)); const li = b.closest('.fl'); li.dataset.on = String(t.on); $('.fl-why', li).hidden = !t.on; });
+  sFeet(k);
+}
+function fWhy(inp) {
+  const [k, id] = inp.dataset.fwhy.split('|');
+  const d = W.dw[k];
+  (d.ticks[id] || (d.ticks[id] = { on: true, why: '' })).why = inp.value;
+  sFeet(k);
+}
+function sApprove(k) {
+  const d = W.dw[k];
+  if (!canDecide(d) || flagsLeft(d)) return;
+  const why = Object.fromEntries(dFlags(d).map((f) => [f.id, d.ticks[f.id].why.trim()]));
+  if (dT(d).access && !d.first) Object.assign(d, { status: 'half', first: { by: 'Bob', at: '9:20', why } });
+  else Object.assign(d, { status: 'approved', appr: [...(d.first ? [d.first.by] : []), 'Bob'], accepted: why, at: '9:20' });
+  refresh();
+}
+function sDecline(k) { const d = W.dw[k]; if (!canDecide(d) || !d.declWhy) return; Object.assign(d, { status: 'declined', declUI: false }); refresh(); }
+
+/* ---------- The drafted workflow's page, its approval log, and Explain ---------- */
+function dwView(k, full) {
+  const d = W.dw[k];
+  const F = dFacts(d);
+  const [t, s] = dwState(k);
+  const vers = `<li><span><b>Revision ${d.rev}${d.status === 'approved' ? ', in use' : ''}</b><span class="s">${d.status === 'approved' ? `${dAcceptLine(d)}, ${d.at}` : 'Drafted by the Workflow drafter for Alice'}.</span></span><button class="btn ghost sm" type="button" data-open="explain:${k}">Explain</button><span></span></li>`;
+  return `<div class="pv"><div class="pv-head"><div><p class="pv-kind">Workflow</p><h3>${F.name}</h3></div><span class="pill lg" data-s="${s}">${t}</span></div>
+    <p class="pv-sent">${F.short}</p>
+    ${d.status === 'approved' ? `<p><button class="linkbtn okl" type="button" data-open="slog:${k}">${ICON.check}${dAcceptLine(d)}</button></p>` : `<p class="muted">${dwSub(k)}.</p>`}
+    ${full ? `<div class="dl-scroll">${dLine(d, { lg: true })}</div>
+    <div class="pv-grid"><div class="pv-sec"><h4>When</h4><p>${dT(d).whenLong(dVal(d, dT(d).settings[0]).value)}</p></div><div class="pv-sec"><h4>Who says yes</h4>${F.who.map(([n, x]) => `<p><b>${qn(n)}</b> <span class="muted">${x}</span></p>`).join('')}</div></div>
+    <div class="pv-sec"><h4>Recent runs</h4><ul class="rows"><li><span><b>No runs yet</b><span class="s">${d.status === 'approved' ? 'A test run comes next. It changes and sends nothing.' : 'It runs only after it is approved and turned on.'}</span></span><span></span><span></span></li></ul></div>
+    <details class="pv-more"><summary>Versions</summary><ul class="rows">${vers}</ul></details>` : ''}
+    <div class="pv-actions"><button class="btn ghost" type="button" data-open="explain:${k}">Explain</button></div>
+  </div>`;
+}
+function slogView(k) {
+  const d = W.dw[k];
+  const fl = dFlags(d);
+  const steps = [['9:05', `Alice sent revision ${d.rev} for approval.`], ...(d.first ? [[d.first.at, `${d.first.by} accepted ${fl.length} flags and approved it, as the first of two.`]] : []), [d.at, `${d.appr.at(-1)} accepted ${fl.length} flags and approved it.`], [d.at, 'Set up as a draft in n8n. Its digest matches the approved one.']];
+  return `<div class="pv"><div class="pv-head"><div><p class="pv-kind">Set-up approval log</p><h3>${dT(d).name}</h3></div><span class="pill lg" data-s="ok">Approved</span></div>
+    <dl class="dl2"><div><dt>Version</dt><dd>Revision ${d.rev} <span class="muted small">digest a3f9 0c1e</span></dd></div><div><dt>Approved</dt><dd>${d.appr.join(', then ')}, today at ${d.at}</dd></div><div><dt>Parties</dt><dd>Alice <span class="muted small">asked for it, answered its questions and sent it</span></dd></div></dl>
+    <div class="pv-sec"><h4>Accepted flags</h4><ul class="parts">${fl.map((f) => `<li class="pt wide" data-s="flag"><span class="ic" aria-hidden="true">!</span><span class="v"><span><b>${f.what}</b></span>${dWhys(d, f.id).map(([n, r]) => `<span class="s">${n} accepted it: “${esc(r)}”</span>`).join('')}</span></li>`).join('')}</ul></div>
+    <div class="pv-sec"><h4>Step by step</h4><ol class="log">${steps.map(([t, s]) => `<li><span class="t">${t}</span><span>${s}</span></li>`).join('')}</ol></div></div>`;
+}
+const reportView = (k) => `<div class="pv"><div class="pv-head"><div><p class="pv-kind">Workflow report, revision ${W.dw[k].rev}</p><h3>${dT(W.dw[k]).name}</h3></div><span class="pill lg" data-live="d-pill" data-k="${k}"></span></div>${repBox(k, 'pane')}</div>`;
+const explainView = (id, v) => `<div class="pv"><div class="pv-head"><div><p class="pv-kind">Explain${v ? `, version ${v}` : ''}</p><h3>${wfName(id)}</h3></div></div>${repBox(id, 'pane', { v })}</div>`;
+const explainCard = (id) => `<div class="card" data-x="${id}"><div class="c-head"><b>${wfName(id)}</b></div>${repBox(id, 'card')}<div class="c-foot"><span class="c-act"><button class="btn ghost sm" type="button" data-open="${W.wf[id] ? 'wf' : 'dw'}:${id}">Open the workflow</button></span></div></div>`;
+/* "explain <workflow>" names it as an edit does: one match explains it, more ask which, none says so. */
+function explainAsk(s) {
+  const all = [...W.order, ...dwListed()];
+  const words = s.replace(/^.*?\bexplain\b/, '').replace(/[?.!,]/g, ' ').split(/\s+/).filter((w) => w.length > 1 && !['the', 'my', 'our', 'workflow', 'please', 'me', 'to', 'how', 'works', 'what', 'does'].includes(w));
+  const which = (ids) => `<div class="card"><div class="c-head"><b>Which workflow?</b></div><div class="pick">${ids.map((id) => `<button type="button" data-say="Explain the ${wfName(id)}">${wfName(id)}</button>`).join('')}</div></div>`;
+  if (words.length === 1 && /^(it|this|that)$/.test(words[0]) && W.focus && W.wf[W.focus]) return pushCard(explainCard(W.focus));
+  if (!words.length) return pushCard(which(all));
+  const hits = all.filter((id) => words.every((w) => wfName(id).toLowerCase().includes(w)));
+  if (hits.length === 1) return pushCard(explainCard(hits[0]));
+  if (hits.length > 1) return pushCard(which(hits));
+  return pushCard(`<div class="card"><div class="c-head"><b>I can’t find a workflow called that.</b></div><p class="muted">I looked for “${esc(words.join(' '))}”.</p><div class="c-foot"><span class="c-act"><button class="btn ghost sm" type="button" data-open="list:wf">Check my workflows</button></span></div></div>`);
+}
+
+/* ---------- Thumbs: one click records it, and a short reason is optional ---------- */
+let TRACE = true;
+function setTrace(on) { TRACE = on; app.classList.toggle('notrace', !on); press($('#trace'), 'data-tr', on ? 'on' : 'off'); }
+function vote(b) {
+  if (b.getAttribute('aria-pressed') === 'true') return;
+  const box = b.closest('[data-fb]');
+  $$('[data-fbv]', box).forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+  $('[data-fb-t]', box).innerHTML = b.dataset.fbv === 'up' ? '<span>Thanks.</span>'
+    : '<span>Thanks. A teammate will look at it.</span><form class="fb-why" data-fbf><input type="text" autocomplete="off" placeholder="What was missing? Optional" aria-label="What was missing? Optional"><button class="btn ghost sm" type="submit">Send</button></form>';
+}
+function fbSend(form) { const v = $('input', form).value.trim(); form.outerHTML = v ? '<span>Added your note.</span>' : ''; }
+
+function refreshDrafts() {
+  $$('[data-live="dcard"]').forEach(patchDCard);
+  $$('[data-live="rep"]').forEach(patchRep);
+  $$('[data-live="setup"], [data-live="scard"]').forEach(patchSetup);
+  $$('[data-live="d-pill"]').forEach((p) => { const d = W.dw[p.dataset.k]; if (!d) return; const [t, s] = dPill(d); p.textContent = t; p.dataset.s = s; });
+}
+function seeded(t, status, over = {}) {
+  const d = dNew(t, t);
+  DT[t].settings.forEach((s) => { if (s.ans) d.vals[s.id] = { value: s.ans, src: 'You chose' }; });
+  return Object.assign(d, { status, sentAt: '9:05' }, status === 'half' ? { first: clone(DT[t].first) } : {}, over);
 }
 
 /* ---------- Scripted tasks ---------- */
@@ -2026,6 +2750,96 @@ const TASKS = {
     },
   },
 };
+const lastDraft = () => lastIn('[data-live="dcard"]');
+const dqBtn = (v) => $$('#msgs [data-dq]').filter((b) => b.dataset.dq.split('|')[2] === v).pop();
+async function typeWhy(inp, text) {
+  inp.focus();
+  if (K === 0) inp.value = text; else for (let i = 1; i <= text.length; i += 1) { inp.value = text.slice(0, i); await wait(14); }
+  fWhy(inp);
+}
+async function acceptAll(k) {
+  const d = W.dw[k];
+  for (const f of dFlags(d)) {
+    const b = vis(`[data-ftick="${k}|${f.id}"]`);
+    await tap(b);
+    fTick(b);
+    await wait(300);
+    await typeWhy(vis(`[data-fwhy="${k}|${f.id}"]`), dT(d).bobWhy[f.id]);
+    await wait(400);
+  }
+}
+async function openSetup(k) {
+  await tap(vis(`[data-need="setup:${k}"]`));
+  await needGo(`setup:${k}`);
+  if (!wide()) { await wait(600); await tap(lastIn(`[data-open="setup:${k}"]`)); await openView(`setup:${k}`); }
+}
+Object.assign(TASKS, {
+  draft: {
+    start: () => scene({}, true),
+    async run() {
+      await wait(400);
+      await typeIn(REQ_DRAFT);
+      for (const v of ['9:00', 'OPS', 'GitLab ops', 'Any Approver on the team']) {
+        await wait(900);
+        const b = dqBtn(v);
+        await tap(b);
+        dAnswer(b);
+      }
+      await wait(900);
+      const c = lastDraft();
+      if (wide()) { await tap($('[data-open^="report:"]', c)); await openView(`report:${c.dataset.k}`); await wait(1600); }
+      await tap($('[data-dsend]', c));
+      dSend(c.dataset.k);
+    },
+  },
+  setupyes: {
+    start: () => scene({ user: 'bob', dw: { stale: seeded('stale', 'sent') } }, true),
+    async run() {
+      await wait(700);
+      await openSetup('stale');
+      await wait(1000);
+      await acceptAll('stale');
+      await wait(500);
+      await tap(vis('.sapprove'));
+      sApprove('stale');
+      await wait(1500);
+      await tap(vis('[data-open="dw:stale"]'));
+      await showPage('dw:stale', false, 'chat');
+      await wait(1100);
+      await tap(vis('[data-open="slog:stale"]'));
+      await showPage('slog:stale', true);
+    },
+  },
+  second: {
+    start: () => scene({ user: 'bob', dw: { leavers: seeded('leavers', 'half') } }, true),
+    async run() {
+      await wait(700);
+      await openSetup('leavers');
+      await wait(1400);
+      await acceptAll('leavers');
+      await wait(500);
+      await tap(vis('.sapprove'));
+      sApprove('leavers');
+    },
+  },
+  explain: {
+    start: () => scene({}, true),
+    async run() {
+      await wait(400);
+      await typeIn('Explain the FastAPI release check');
+      await wait(1800);
+      const rw = lastIn('[data-rw]');
+      await tap(rw);
+      toggleRw(rw);
+      await wait(1500);
+      await tap($('#rail [data-rail="wf"]'));
+      await railGo('wf');
+      await wait(1000);
+      await tap($('#page [data-open="explain:react"]'));
+      await showPage('explain:react', true);
+    },
+  },
+});
 async function playTask(t) {
   press($('#tasks'), 'data-t', t);
   TASKS[t].start();
@@ -2050,7 +2864,16 @@ $('#composer').addEventListener('submit', (e) => {
   const t = cin.value.trim();
   if (t) quiet(send(t));
 });
-app.addEventListener('submit', (e) => { if (e.target.matches('[data-askf]')) { e.preventDefault(); if (!playing) askSend(e.target); } });
+app.addEventListener('submit', (e) => {
+  const f = e.target;
+  const act = f.matches('[data-askf]') ? askSend : f.matches('[data-dtf]') ? dTyped : f.matches('[data-fbf]') ? fbSend : null;
+  if (!act) return;
+  e.preventDefault();
+  if (!playing) act(f);
+});
+app.addEventListener('input', (e) => { if (!playing && e.target.matches('[data-fwhy]')) fWhy(e.target); });
+app.addEventListener('toggle', (e) => { if (e.target.matches?.('.rp-d')) OPEN.set(e.target.dataset.sk, e.target.open); }, true);
+$('#trace').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) setTrace(b.dataset.tr === 'on'); });
 app.addEventListener('click', (e) => {
   if (playing || !e.isTrusted) return;
   const t = e.target;
@@ -2071,6 +2894,22 @@ app.addEventListener('click', (e) => {
   if (pick('[data-setup]')) { quiet(setupDraft(pick('[data-parts]'))); return; }
   if (pick('[data-drop]')) { dropDraft(pick('[data-parts]')); return; }
   if (pick('.turnon')) { turnOn(pick('[data-parts]')); return; }
+  if (pick('[data-dq]')) { dAnswer(pick('[data-dq]')); return; }
+  if (pick('[data-dtype]')) { const d = W.dw[pick('[data-dtype]').dataset.dtype]; d.typing = true; refresh(); vis(`[data-dtf="${d.key}"] input`)?.focus(); return; }
+  if (pick('[data-dop]')) { W.dw[pick('[data-dop]').dataset.dop].opAsked = true; refresh(); toast('Asked the Operators. Their answer will show here.'); return; }
+  if (pick('[data-dchg]')) { const [k, id] = pick('[data-dchg]').dataset.dchg.split('|'); const d = W.dw[k]; d.picking = d.picking === id ? null : id; refresh(); return; }
+  if (pick('[data-dsee]')) { const k = pick('[data-dsee]').dataset.dsee; OPEN.set(`${k}:pane:flags`, true); quiet(openView(`report:${k}`)); return; }
+  if (pick('[data-dsend]')) { dSend(pick('[data-dsend]').dataset.dsend); return; }
+  if (pick('[data-dask]')) { W.dwFocus = pick('[data-dask]').dataset.dask; cin.placeholder = 'Say what to change, like “post at 9 instead”'; cin.focus(); return; }
+  if (pick('[data-dn8n]')) { W.dw[pick('[data-dn8n]').dataset.dn8n].status = 'inn8n'; refresh(); toast('Opened in your own n8n space, without its keys.'); return; }
+  if (pick('[data-ddone]')) { quiet(dDone(pick('[data-ddone]').dataset.ddone)); return; }
+  if (pick('[data-ftick]')) { const b = pick('[data-ftick]'); fTick(b); if (b.getAttribute('aria-checked') === 'true') $('.fl-why input', b.closest('.fl'))?.focus(); return; }
+  if (pick('.sapprove')) { sApprove(pick('.sapprove').dataset.k); return; }
+  if (pick('[data-sdecl]')) { const [k, v] = pick('[data-sdecl]').dataset.sdecl.split('|'); W.dw[k].declUI = !!v; refresh(); return; }
+  if (pick('[data-sreason]')) { const [k, r] = pick('[data-sreason]').dataset.sreason.split('|'); W.dw[k].declWhy = r; refresh(); return; }
+  if (pick('[data-sdecline]')) { sDecline(pick('[data-sdecline]').dataset.sdecline); return; }
+  if (pick('[data-rw]')) { toggleRw(pick('[data-rw]')); return; }
+  if (pick('[data-fbv]')) { vote(pick('[data-fbv]')); return; }
   if (pick('[data-eday]')) { const c = pick('[data-edit]'); W.edits[c.dataset.edit].to.day = pick('[data-eday]').dataset.eday; patchEdit(c); return; }
   if (pick('[data-save]')) { saveEdit(pick('[data-edit]')); return; }
   if (pick('[data-keep]')) { keepEdit(pick('[data-edit]')); return; }
@@ -2116,6 +2955,7 @@ app.addEventListener('keydown', (e) => {
 });
 
 setSpeed(K);
+setTrace(true);
 scene({}, true);
 </script>
 

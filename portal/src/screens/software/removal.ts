@@ -91,7 +91,24 @@ function addedWords(name: string, { scheduled, paused }: Checking): string {
   return scheduled ? `Added ${name}. It is checked at the next check.` : `Added ${name}. Press Check now to check it.`
 }
 
+type RemovalNotice = Extract<Notice, { readonly kind: 'removed' | 'restored' | 'gone' }>
+
+export const isRemoval = (notice: Notice): notice is RemovalNotice => notice.kind === 'removed' || notice.kind === 'restored' || notice.kind === 'gone'
+
+/** What a removal, its Undo, and a removal made elsewhere first say. None of them reads the schedule. */
+export function removalWords(notice: RemovalNotice): string {
+  switch (notice.kind) {
+    case 'removed':
+      return `Removed ${notice.row.name}. It won’t be checked any more.`
+    case 'restored':
+      return `Put ${notice.row.name} back on the list.`
+    case 'gone':
+      return `${notice.name} was already removed.`
+  }
+}
+
 export function noticeWords(notice: Notice, checking: Checking): string {
+  if (isRemoval(notice)) return removalWords(notice)
   switch (notice.kind) {
     case 'added':
       return addedWords(notice.name, checking)
@@ -99,12 +116,6 @@ export function noticeWords(notice: Notice, checking: Checking): string {
       return `${notice.row.name} is now read from ${notice.to}. ${nextCheckWords(checking)}`
     case 'switchedBack':
       return `Put back. ${notice.row.name} is read from ${notice.to} again.`
-    case 'removed':
-      return `Removed ${notice.row.name}. It won’t be checked any more.`
-    case 'restored':
-      return `Put ${notice.row.name} back on the list.`
-    case 'gone':
-      return `${notice.name} was already removed.`
     case 'resumed':
       return checking.scheduled ? 'Resumed. Checks run on the schedule again.' : 'Resumed. Press Check now to check by hand.'
   }

@@ -49,6 +49,7 @@ from platform_api.builder.models import (
     DraftList,
     DraftView,
     LastRunView,
+    N8nHolderView,
     PlanOut,
     RepublishIn,
     SuggestOut,
@@ -76,8 +77,9 @@ from platform_api.builder.n8n_draft import (
     NotSafe,
     blocks_of,
     check_draft,
+    read_only_steps,
 )
-from platform_api.builder.n8n_facts import BuilderWorkflowFacts, ReleaseReader
+from platform_api.builder.n8n_facts import BuilderWorkflowFacts, MadeKeys, ReleaseReader
 from platform_api.builder.n8n_holds import HeldInN8n, Holding
 from platform_api.builder.planner import ChangedInN8nReply
 from platform_api.builder.planning import (
@@ -120,8 +122,10 @@ from platform_api.builder.versions import (
 )
 from platform_api.builder.views import template_view
 from platform_api.builder.watchlist import Watchlist
+from platform_api.builder.workflow_report import Team
 from platform_api.db import Connection, Database, UnitOfWork, hold_workflow, json
 from platform_api.orchestration import (
+    A_COLLEAGUE,
     GITHUB_RELEASES,
     TYPE_OF,
     CardRun,
@@ -152,6 +156,7 @@ from platform_api.orchestration import (
     next_run,
     read_flow,
     tools_used,
+    unchecked,
     write_tools_used,
 )
 from platform_api.shared import TEAM_TIME_ZONE, Principal, UseCaseId, UserId, new_id
@@ -161,7 +166,8 @@ log = logging.getLogger(__name__)
 _CURRENT_VERSION = """
     SELECT u.use_case_id, u.owner, u.paused_at, u.paused_by, u.deleted_at, u.deleted_by,
            u.draft, u.left_out, u.engine, u.n8n_workflow_id, u.deleted_in_n8n_at,
-           u.move_refused, u.made_in_n8n_by, v.version,
+           u.move_refused, u.made_in_n8n_by, u.n8n_key_finding, u.held_by, u.held_since,
+           v.version,
            v.template, v.name, v.instruction, v.params, v.created_at, v.document,
            v.n8n_version_id, v.grade, v.findings
     FROM builder.use_cases u
@@ -183,18 +189,25 @@ when a save waited on the lock had moved the current version on."""
 
 
 def _schedule_view(
-    saved: SavedSchedule, document: Mapping[str, Any] | None, team_zone: str
-) -> UseCaseSchedule:
-    """An own workflow runs when its Schedule Trigger says, which a version published in n8n
-    may have changed, so its day, time and zone are read from the version in use."""
-    schedule = schedule_of(document, team_zone) or saved.schedule
+    row: Mapping[str, Any], saved: SavedSchedule | None, team_zone: str
+) -> UseCaseSchedule | None:
+    """An own workflow runs when the Schedule Trigger of the version in use says, whatever was
+    saved in the Portal: a version published in n8n may have added, changed or taken out its
+    schedule. So its day, time and zone are read from that version alone, as its next run is. A
+    schedule saved in the Portal names its owner."""
+    if _own(row) and row["document"] is not None:
+        schedule = schedule_of(row["document"], team_zone)
+    else:
+        schedule = None if saved is None else saved.schedule
+    if schedule is None:
+        return None
     return UseCaseSchedule(
         day=schedule.day,
         at=schedule.at,
         time_zone=schedule.time_zone,
-        owner_name=saved.owner_name,
-        held=saved.held,
-        held_words=saved.held_words,
+        owner_name=None if saved is None else saved.owner_name,
+        held=None if saved is None else saved.held,
+        held_words=None if saved is None else saved.held_words,
     )
 
 
@@ -213,6 +226,12 @@ def _start_webhook(document: Mapping[str, Any] | None) -> str | None:
     return None
 
 
+def _no_start(row: Mapping[str, Any]) -> bool:
+    """An own workflow whose version in use has no Start from the Portal, which Run now and a
+    test run start. One made in n8n before Set up added it, or one it was taken out of there."""
+    return _own(row) and row["document"] is not None and _start_webhook(row["document"]) is None
+
+
 def _target(row: Mapping[str, Any]) -> N8nTarget | None:
     if not _own(row):
         return None
@@ -229,6 +248,14 @@ def _next_run_at(row: Mapping[str, Any], now: datetime, team_zone: str) -> datet
     if document is None or row["deleted_in_n8n_at"] is not None:
         return None
     return next_run(document, row["n8n_workflow_id"], now, team_zone)
+
+
+def _grade(row: Mapping[str, Any]) -> Grade | None:
+    """A key the credential sweep removed while someone held the workflow needs a fix too, until
+    the hold ends (ENGINE-PLAN E17)."""
+    if not _own(row):
+        return None
+    return "needs_a_fix" if row["n8n_key_finding"] else row["grade"]
 
 
 def _state(state: Lifecycle) -> UseCaseState:
@@ -250,12 +277,13 @@ def _view(
     now: datetime,
     team_zone: str,
     moving: bool = False,
+    holder: N8nHolderView | None = None,
 ) -> UseCaseView:
     template = TEMPLATES[row["template"]]
     state = _state(lifecycle_of(row))
     held = schedule is not None and schedule.held is not None
     plan = (
-        plan_for_cards([a.card for a in agents])
+        plan_for_cards([a.card for a in agents]) or read_only_steps(row["document"])
         if template.key == AGENT_CARDS.key
         else template_view(template).blocks
     )
@@ -270,9 +298,7 @@ def _view(
         created_at=row["created_at"],
         state=state,
         next_run_at=_next_run_at(row, now, team_zone) if state == "on" and not held else None,
-        schedule=None
-        if schedule is None
-        else _schedule_view(schedule, row["document"] if _own(row) else None, team_zone),
+        schedule=_schedule_view(row, schedule, team_zone),
         plan=plan,
         agents=[
             UseCaseAgentView(
@@ -286,12 +312,17 @@ def _view(
         last_run=last_run,
         left_out=list(row["left_out"]),
         blocks=[] if row["document"] is None else blocks_of(row["document"]),
-        grade=row["grade"] if _own(row) else None,
-        findings=list(row["findings"] or []),
+        grade=_grade(row),
+        findings=[
+            *(row["findings"] or []),
+            *([row["n8n_key_finding"]] if _own(row) and row["n8n_key_finding"] else []),
+        ],
         deleted_in_n8n_at=row["deleted_in_n8n_at"],
         moving_to_n8n=moving,
         move_refused=None if _own(row) else row["move_refused"],
+        start_refused=NO_START if _no_start(row) else None,
         made_in_n8n_by=row["made_in_n8n_by"],
+        held_in_n8n=holder,
     )
 
 
@@ -354,6 +385,30 @@ class UseCasePaused:
 @dataclass(frozen=True)
 class NotOnYet:
     """A draft runs by hand only as a test run."""
+
+
+@dataclass(frozen=True)
+class NoTestRun:
+    """A test run runs the draft in the platform's n8n project, where n8n lets it use every key
+    there is. So none starts while the draft is held in someone's space, or has a block n8n
+    would run unchecked. The words say why."""
+
+    words: str
+
+
+NO_START = (
+    "It has no Start from the Portal block, so the Portal can't start it. Add the block in n8n."
+)
+UNCHECKED_TEST = (
+    "The draft in n8n has a block the platform can't check: {found} Fix it in n8n, then test it."
+)
+UNREAD_TEST = "n8n did not show the draft, so no test run started. Try again in a minute."
+NOT_SHOWN = "n8n did not show this version, so it stayed off. Try again in a minute."
+
+
+@dataclass(frozen=True)
+class NoStart:
+    """Neither Run now nor a test run can start it: it has no Start from the Portal block."""
 
 
 @dataclass(frozen=True)
@@ -448,6 +503,7 @@ class Builder:
         open_runs: OpenRuns | None = None,
         holding: Holding | None = None,
         time_zone: ZoneInfo = TEAM_TIME_ZONE,
+        keys: MadeKeys | None = None,
     ) -> None:
         self._db = db
         self._zone = time_zone.key
@@ -461,8 +517,12 @@ class Builder:
         self._history = history
         self._n8n = n8n
         self.public_base_url = public_base_url
-        self.facts = BuilderWorkflowFacts(db, self, releases, writes)
+        self.facts = BuilderWorkflowFacts(db, self, releases, writes, keys)
         """What node calls ask of the builder, and what a draft is graded against."""
+        self._jira_projects = frozenset(
+            place.id for entry in writes if entry.connector == "jira" for place in entry.places
+        )
+        """The Jira projects the team's writes may land in, which the Planner reads in any case."""
         self._requests = requests
         self.holding = holding
         """Open in n8n and Take back, for a platform that gives staff n8n accounts."""
@@ -540,6 +600,7 @@ class Builder:
         )
         now = self._db.clock()
         moving = await self._moving(rows)
+        holders = {row["use_case_id"]: await self._holder(row) for row in rows if row["held_by"]}
         return [
             _view(
                 row,
@@ -549,9 +610,15 @@ class Builder:
                 now,
                 self._zone,
                 row["use_case_id"] in moving,
+                holders.get(row["use_case_id"]),
             )
             for row in rows
         ]
+
+    async def _holder(self, row: Mapping[str, Any]) -> N8nHolderView:
+        by = UserId(row["held_by"])
+        name = A_COLLEAGUE if self.holding is None else await self.holding.name_of(by)
+        return N8nHolderView(id=by, name=name, since=row["held_since"])
 
     async def _moving(self, rows: Sequence[Mapping[str, Any]]) -> set[str]:
         """The workflows still on the shared run workflow only because a run has not ended."""
@@ -677,6 +744,10 @@ class Builder:
                 return refused
             case _:
                 return await self.get_use_case(use_case_id, principal)
+
+    async def todays_rules(self) -> Team:
+        error_workflow = None if self._n8n is None else await self._n8n.error_workflow_id()
+        return Team(error_workflow, self._zone, await self.facts.known({}))
 
     async def list_versions(self, use_case_id: str) -> VersionList | None:
         async with self._db.connection("builder") as conn:
@@ -911,8 +982,8 @@ class Builder:
         """In n8n, under the version compare: live when the workflow is on, else ready to publish
         when it is resumed. n8n's live version and draft must be the ones the platform saw."""
         assert self._n8n is not None and current.held is not None
-        error_workflow = await self._n8n.error_workflow_id()
-        graded = grade(held.document, error_workflow, self._zone, await self.facts.known({}))
+        rules = await self.todays_rules()
+        graded = grade(held.document, rules.error_workflow, rules.time_zone, rules.known)
         if graded.grade != "safe":
             return NotSafeToPublish(tuple(f.text for f in graded.findings))
         workflow_id = row["n8n_workflow_id"]
@@ -1122,6 +1193,21 @@ class Builder:
         chosen = [(agent.card, agent.values) for agent in pinned]
         return await self._laid_out(use_case_id, row["name"], schedule, chosen)
 
+    async def _unchecked_in_n8n(
+        self, workflow_id: str, version_id: str
+    ) -> NotSafe | N8nNotReady | None:
+        """The version as n8n holds it, checked again now, just before it goes live: the keys the
+        platform holds may have changed since it was graded. One n8n can't show stays off."""
+        assert self._n8n is not None
+        try:
+            version = await self._n8n.kept(workflow_id, version_id)
+        except (N8nError, httpx.HTTPError) as error:
+            log.warning("could not read %s before it goes live: %s", workflow_id, error)
+            version = None
+        if version is None:
+            return N8nNotReady(NOT_SHOWN)
+        return NotSafe() if unchecked(version, (await self.facts.known({})).keys) else None
+
     async def _follow_in_n8n(
         self, row: Mapping[str, Any], after: Lifecycle
     ) -> N8nNotReady | NotSafe | None:
@@ -1139,6 +1225,8 @@ class Builder:
             return N8nNotReady("This version is not saved in n8n. Change when it runs to save it.")
         if is_on(after) and row["grade"] != "safe":
             return NotSafe()
+        if is_on(after) and (refused := await self._unchecked_in_n8n(workflow_id, version_id)):
+            return refused
         try:
             if is_on(after):
                 await self._n8n.go_live(workflow_id, version_id)
@@ -1205,7 +1293,7 @@ class Builder:
     async def plan(self, task: str) -> PlanOut | NoModelConnected | RuntimeNotAnswering:
         """The Planner's plan for a task. Nothing is saved."""
         library = (await self._cards.list())[:LIBRARY_LIMIT]
-        return await plan(self._planner, library, task)
+        return await plan(self._planner, library, task, self._jira_projects)
 
     async def create_agent_use_case(
         self, principal: Principal, body: CreateAgentUseCase
@@ -1450,9 +1538,21 @@ class Builder:
         principal: Principal,
         idempotency_key: str,
         test: bool = False,
-    ) -> RunStarted | None | NothingToCheck | NoModelToRun | UseCasePaused | NotOnYet | NotMovedYet:
+    ) -> (
+        RunStarted
+        | None
+        | NothingToCheck
+        | NoModelToRun
+        | UseCasePaused
+        | NotOnYet
+        | NotMovedYet
+        | NoTestRun
+        | NoStart
+    ):
         """A test run of a draft stops at the approval gate (ADR 0044). Whether it is a draft
-        is read under the lock, so a draft turned on since runs as any test run does."""
+        is read under the lock, so a draft turned on since runs as any test run does. A test run
+        runs the n8n draft, so it starts only when nobody holds it and n8n would run nothing in
+        it unchecked."""
         view = await self.get_use_case(use_case_id)
         # Its first run after a run that held it back runs on its own n8n workflow. Read it again
         # whatever the move answers, since a move may also have landed meanwhile.
@@ -1474,15 +1574,28 @@ class Builder:
         if isinstance(spec, NothingToCheck):
             return spec
         if spec.n8n is None and self.moves is not None:
-            # The shared run workflow is made of blocks the allow list turns off (E11).
+            # The shared run workflow is made of blocks the class file doesn't let run (E11).
             return NotMovedYet(view.move_refused or NOT_MOVED_YET)
+        if view.start_refused is not None:
+            return NoStart()
         spec = replace(spec, test=test)
+        if test and spec.n8n is not None:
+            checked = await self._checked_draft(use_case_id, spec.n8n)
+            if isinstance(checked, NoTestRun):
+                return checked
+            spec = replace(spec, n8n=replace(spec.n8n, draft_version=checked))
         if isinstance(spec.task, CardsTask) and not await self._planner.has_model():
             return NoModelToRun()
         async with self._db.transaction("builder") as uow:
             # Read the state again under the lock, on this one connection, and hold the lock
             # until the run is inserted, so a pause or delete can't land in between (#56).
             await hold_workflow(uow.conn, use_case_id, alone=False)
+            if test and self.holding is not None:
+                held = await self.holding.refused_while_held(
+                    uow.conn, use_case_id, principal.user_id
+                )
+                if held is not None:
+                    return NoTestRun(held.words)
             match await _lifecycle_now(uow.conn, use_case_id):
                 case None | Deleted():
                     return None
@@ -1495,6 +1608,23 @@ class Builder:
                     return await self._runs.start_run(trial, principal, idempotency_key)
                 case On():
                     return await self._runs.start_run(spec, principal, idempotency_key)
+
+    async def _checked_draft(self, use_case_id: str, target: N8nTarget) -> NoTestRun | str:
+        """The version id of the draft a test run would run, once n8n would run nothing in it
+        unchecked. The run is then held to that draft."""
+        if self._n8n is None:
+            return NoTestRun(UNREAD_TEST)
+        try:
+            draft = await self._n8n.look(target.workflow_id)
+        except (N8nError, httpx.HTTPError) as error:
+            log.warning("could not read the draft of %s before a test run: %s", use_case_id, error)
+            return NoTestRun(UNREAD_TEST)
+        if draft is None:
+            return NoTestRun(UNREAD_TEST)
+        found = unchecked(draft.document, (await self.facts.known({})).keys)
+        if found:
+            return NoTestRun(UNCHECKED_TEST.format(found=found[0].text))
+        return draft.version_id
 
 
 def _bound(card: CardView, values: Mapping[str, str]) -> CardRun:

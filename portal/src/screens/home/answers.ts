@@ -1,8 +1,8 @@
-import type { CantRowView, CapabilitiesView, CapabilityView, OfflineReply, PauseReply, PlannerReply, QuestionReply, ResumeReply, RowKind, UnderstoodRowView } from '../../api/types'
-import { count } from '../run/words'
+import type { CantRowView, CapabilitiesView, CapabilityView, OfflineReply, PauseReply, PlannerReply, QuestionReply, RemoveSoftwareReply, ResumeReply, RowKind, UnderstoodRowView } from '../../api/types'
+import { andList, count } from '../run/words'
 import { isRunning, type Row } from '../workflows/workflow'
 import { sayChanged } from './changed'
-import { cantOnCard } from './parts'
+import { cantOnCard, quote } from './parts'
 
 /** The words for each part of a request. They match the names the removed New workflow screen used. */
 export const ROW_LABEL: Readonly<Record<RowKind, string>> = {
@@ -92,7 +92,11 @@ export function wordsOnly(reply: PlannerReply, asker: Asker): boolean {
   if (reply.answer === 'question') return questionActions(reply, asker).length === 0
   if (reply.answer === 'pause' || reply.answer === 'resume') return reply.choices.length === 0
   if (reply.answer === 'n8n') return true
-  return reply.answer === 'operators' || (reply.answer === 'offline' && asker === 'approver')
+  // A draft with its card leads the card. Only a refusal is words.
+  if (reply.answer === 'draft_started') return reply.drafted_id === null
+  if (reply.answer === 'remove_software') return reply.matches.length === 0
+  // A free reply is the Planner's own words, with its chips or button under them inside the same message.
+  return reply.answer === 'reply' || reply.answer === 'operators' || (reply.answer === 'offline' && asker === 'approver')
 }
 
 /** Who fronts an answer: the AI troubleshooter owns the run card, and the Planner every other answer. */
@@ -133,6 +137,33 @@ export const watchlistSay = (software: string | null, listed: boolean): string =
     : `${software} is software, so it belongs on the Software watchlist, which checks the software on it for new releases.`
 }
 
+/** The Planner's release words, as its `RELEASE_ROOTS`: a request with one asks about the version or the releases. */
+const VERSION_WORD = /\b(?:versions?|releas(?:e|es|ed|ing)|upgrad(?:e|es|ed|ing)|patch(?:es|ed|ing)?)\b/i
+
+/**
+ * The software card's line for software the watchlist doesn't hold. Why the version she runs isn't known fits only a question about
+ * the version. Asked to add, watch or keep track of it, it isn't on the watchlist yet, and that is all.
+ */
+export const unwatchedSay = (word: string): string => (VERSION_WORD.test(word) ? 'It isn’t on the watchlist, so I don’t know which version you run.' : 'It isn’t on the watchlist yet.')
+
+/** The most names a sentence lists before it counts the rest. */
+const NAMED = 8
+
+/** What the Watchlist holds, for a name it doesn’t hold. */
+function heldWords(names: readonly string[]): string {
+  if (names.length === 0) return 'Your Watchlist is empty.'
+  if (names.length <= NAMED) return `It holds ${andList(names)}.`
+  return `It holds ${names.slice(0, NAMED).join(', ')} and ${names.length - NAMED} more.`
+}
+
+/** Software to take off the Watchlist: the one match, a choice of several, or what it holds when the name isn’t on it. */
+export function removeSay(reply: RemoveSoftwareReply): string {
+  const [only, ...others] = reply.matches
+  if (only === undefined) return `${reply.software} isn’t on your Watchlist. ${heldWords(reply.watched)}`
+  if (others.length > 0) return `More than one software on your Watchlist could be ${reply.software}. Which one should I remove?`
+  return `Remove ${only.name} from the Watchlist? It won’t be checked any more.`
+}
+
 /** “Set up another workflow”: the sentence counts the places to start it shows, so the words and the chips never disagree. */
 export const ideasSay = (places: number): string =>
   places === 0 ? 'I have no places to start to suggest right now. Tell me what you would like.' : places === 1 ? 'Here is a place to start. Pick it, or tell me something else.' : `Here are ${places} places to start. Pick one, or tell me something else.`
@@ -164,17 +195,24 @@ export function sayOf(reply: PlannerReply, asker: Asker = 'operator'): string | 
     case 'pause':
     case 'resume':
       return switchSay(reply)
+    case 'remove_software':
+      return removeSay(reply)
+    case 'explain':
     case 'abilities':
     case 'ideas':
+    case 'didnt_follow':
       return null
     case 'offline':
       return asker === 'operator' ? reply.message : APPROVER_OFFLINE[reply.why]
     case 'question':
+    case 'reply':
       return reply.text
     case 'changed_in_n8n':
       return sayChanged(reply)
     case 'n8n':
       return reply.said
+    case 'draft_started':
+      return reply.drafted_id === null ? (reply.refused ?? 'I couldn’t start that draft.') : null
     case 'edit':
     case 'check_workflows':
     case 'why_stopped':
@@ -185,6 +223,9 @@ export function sayOf(reply: PlannerReply, asker: Asker = 'operator'): string | 
       return null
   }
 }
+
+/** The button that sends a free reply’s offer. It says the request itself, so what she taps is exactly what is sent. */
+export const offerLabel = (request: string): string => `Try ${quote(request.trim())}`
 
 /** What a refusal can do next. The words after the unsafe part go back to the Planner, never straight to a set-up (they can ask for more). */
 export interface RefusalNext {

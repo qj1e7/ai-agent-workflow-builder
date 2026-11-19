@@ -14,12 +14,13 @@ from typing import Protocol
 import httpx
 
 from platform_api.db import Database
-from platform_api.orchestration.dispatch import DispatchFailure
+from platform_api.orchestration.dispatch import DispatchFailure, DispatchRefused
 from platform_api.orchestration.n8n import N8nApi, N8nError, RetryRefused, StillRetrying
 from platform_api.orchestration.n8n_call_book import CallBook
 from platform_api.orchestration.n8n_calls import StartKind, start_signature
 from platform_api.orchestration.spec import N8nTarget
-from platform_api.shared import N8nExecutionId, RunId
+from platform_api.orchestration.workflow_check import unpinned_notices
+from platform_api.shared import NO_START_BLOCK, N8nExecutionId, RunId
 
 
 @dataclass(frozen=True)
@@ -68,6 +69,13 @@ class RunStarts(Protocol):
         ...
 
 
+DRAFT_CHANGED = (
+    "The draft changed in n8n after the platform checked it, so the test run did not start. "
+    "Start it again."
+)
+"""A test run runs only the draft the platform checked (ADR 0045, as amended)."""
+
+
 class N8nStarts:
     def __init__(
         self,
@@ -91,7 +99,7 @@ class N8nStarts:
         if self._secret is None:
             raise DispatchFailure("WAB_START_SECRET is not set, so no start can be signed")
         if target.webhook_id is None:
-            raise DispatchFailure("the workflow has no Start from the Portal block to start it")
+            raise DispatchRefused(NO_START_BLOCK)
         signed = await issue_start(
             self._db, self._secret, run_id, kind, target.workflow_id, target.webhook_id
         )
@@ -113,6 +121,19 @@ class N8nStarts:
             start = await CallBook().issue_start(uow, run_id, "test", target.workflow_id)
         item = {"nonce": start.nonce, "kind": "test", "workflow_id": target.workflow_id}
         try:
+            draft = await self._api.draft(target.workflow_id)
+            if draft is None:
+                raise DispatchFailure(
+                    "n8n no longer has the workflow, so the test run did not start."
+                )
+            if target.draft_version is not None and draft.get("versionId") != target.draft_version:
+                raise DispatchFailure(DRAFT_CHANGED)
+            if unpinned := unpinned_notices(draft):
+                names = ", ".join(f'"{name}"' for name in unpinned)
+                raise DispatchFailure(
+                    f"{names} would post in a test run, so the test run did not start. Pin its "
+                    "output in n8n."
+                )
             return N8nExecutionId(await self._api.run_draft(target.workflow_id, item))
         except (N8nError, httpx.HTTPError) as error:
             raise DispatchFailure(f"n8n did not run the draft: {_words(error)}") from None

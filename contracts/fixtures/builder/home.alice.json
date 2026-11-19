@@ -39,6 +39,7 @@
   "questions_for_me": [],
   "questions_for_me_total": 0,
   "needs_next": null,
+  "setup_approvals": [],
   "drafts": [
     {
       "draft_id": "drf-7f3a2c",
@@ -139,6 +140,7 @@
   "changed_in_n8n": [
     {
       "parts": [],
+      "trace_id": null,
       "answer": "changed_in_n8n",
       "use_case_id": "uc_fastapi",
       "name": "FastAPI release check",

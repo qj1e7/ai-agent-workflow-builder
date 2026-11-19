@@ -5240,6 +5240,177 @@
     ]
   },
   {
+    "id": "carol-range-of-times",
+    "note": "A follow-up to Carol's request (#309). A range is two times, and the schedule runs at one, so the card asks which, never the first one.",
+    "task": "Every Friday between 16:00 and 17:00, find Jira tickets in project MOCK that nobody updated for 14 days, and raise one Jira ticket in MOCK that lists them",
+    "kind": [
+      "setup_card",
+      "part",
+      "cant"
+    ],
+    "schedule": [
+      "missing"
+    ],
+    "reasons": [
+      "one_time"
+    ]
+  },
+  {
+    "id": "range-with-one-am-pm",
+    "note": "A range whose first end has no am or pm. Read as one time, it was the last end, 5pm.",
+    "task": "Every Friday from 4 to 5pm, sum up the closed tickets in MOCK",
+    "kind": [
+      "setup_card",
+      "part",
+      "cant"
+    ],
+    "schedule": [
+      "missing"
+    ],
+    "reasons": [
+      "one_time"
+    ]
+  },
+  {
+    "id": "carol-24-hour-time",
+    "note": "Carol's request (#309). Code reads their 16:00, so the card keeps it even when the model leaves it out, and never says it couldn't read a time.",
+    "task": "Every Friday at 16:00, find Jira tickets in project MOCK that nobody updated for 14 days, and raise one Jira ticket in MOCK that lists them",
+    "kind": [
+      "setup_card"
+    ],
+    "understood": [
+      "16:00"
+    ],
+    "schedule": [
+      "understood"
+    ]
+  },
+  {
+    "id": "bound-time-is-asked",
+    "note": "A review follow-up to #309. A run at 5pm is not before 5pm, so the card asks the time and never takes the bound as it.",
+    "task": "Every Friday before 5pm, sum up the closed tickets in MOCK",
+    "kind": [
+      "setup_card"
+    ],
+    "schedule": [
+      "missing"
+    ]
+  },
+  {
+    "id": "later-day-is-asked",
+    "note": "A review follow-up to #325 (R12). A later clause that corrects the day is asked as a choice of both days, and the first schedule is never shown as understood.",
+    "task": "Every Friday at 9am, actually make it Monday, sum up the closed tickets in MOCK",
+    "kind": [
+      "setup_card"
+    ],
+    "schedule": [
+      "missing"
+    ],
+    "reasons": [
+      "one_day"
+    ]
+  },
+  {
+    "id": "mon-fri-is-weekdays",
+    "note": "A review follow-up to #325 (R13). Mon-Fri is every weekday, as Monday to Friday is, never a schedule it can't hold.",
+    "task": "Mon-Fri at 9am, sum up the closed tickets in MOCK",
+    "kind": [
+      "setup_card"
+    ],
+    "schedule": [
+      "understood"
+    ],
+    "not_reasons": [
+      "how_often"
+    ]
+  },
+  {
+    "id": "daily-except-weekends-is-weekdays",
+    "note": "A review follow-up to #325 (R13). Before, the card said it couldn't run things daily at 9am.",
+    "task": "Daily at 9am, except weekends, sum up the closed tickets in MOCK",
+    "kind": [
+      "setup_card"
+    ],
+    "schedule": [
+      "understood"
+    ],
+    "not_reasons": [
+      "how_often"
+    ]
+  },
+  {
+    "id": "edit-time-or-so-is-asked",
+    "note": "A review follow-up to #325. A new time that is not exact is asked, never changed to exactly 09:00.",
+    "task": "Make the morning new-ticket check run every Friday at 9am or so",
+    "kind": [
+      "edit"
+    ],
+    "workflow_words": "morning new-ticket check",
+    "change": {
+      "day": "friday",
+      "time_unclear": true
+    },
+    "facts": {
+      "watchlist": [
+        {
+          "name": "LangGraph",
+          "repo": "x/langgraph",
+          "our_version": "1.2.14",
+          "newest_version": "1.2.16",
+          "state": "New version"
+        },
+        {
+          "name": "React",
+          "repo": "x/react",
+          "our_version": "19.1.0",
+          "newest_version": "19.2.0",
+          "state": "New version"
+        },
+        {
+          "name": "Redis",
+          "repo": "x/redis",
+          "our_version": "8.0.2",
+          "newest_version": "8.0.2",
+          "state": "Up to date"
+        }
+      ],
+      "workflows": [
+        {
+          "name": "Morning new-ticket check",
+          "state": "on",
+          "last_run": "Stopped",
+          "last_run_at": "2026-11-10T00:00:00Z"
+        },
+        {
+          "name": "Weekly closed-ticket summary",
+          "state": "on",
+          "last_run": "Stopped",
+          "last_run_at": "2026-11-06T08:00:00Z"
+        },
+        {
+          "name": "Keep our software up to date",
+          "state": "on",
+          "last_run": "Waiting for a yes",
+          "last_run_at": "2026-11-09T01:00:00Z"
+        }
+      ]
+    }
+  },
+  {
+    "id": "skipped-day-is-asked",
+    "note": "A review follow-up to #325. A day the person says to skip is never run on: the card asks how often, and never shows every day as understood.",
+    "task": "Every day at 9am but skip Fridays, sum up the closed tickets in MOCK",
+    "kind": [
+      "setup_card"
+    ],
+    "schedule": [
+      "missing"
+    ],
+    "reasons": [
+      "how_often"
+    ]
+  },
+  {
     "id": "r4-approver-change-alone",
     "note": "Plan 7.5, an Approver's change alone. platform-api answers operators for Bob (R16); the runtime sets nothing up and keeps the part. The asker can't change workflows, so the runtime proposes no edit.",
     "task": "Pause the weekly closed-ticket summary",
@@ -6310,6 +6481,156 @@
     "not_reasons": [
       "ask_on_its_own",
       "not_followed"
+    ]
+  },
+  {
+    "id": "nw-whats-new-node",
+    "note": "The team lead's own sentence, 17 Nov, on the local stack with a real model. The free reply told the person to type another sentence. The software card offers Watch it instead.",
+    "task": "what's new in node js?",
+    "kind": [
+      "watchlist"
+    ],
+    "software": "node js",
+    "word": [
+      "new"
+    ]
+  },
+  {
+    "id": "nw-latest-node",
+    "note": "The team lead's own sentence, 17 Nov, on the local stack with a real model. It got I didn't follow this. The software card offers Watch it instead.",
+    "task": "what is the latest node js?",
+    "kind": [
+      "watchlist"
+    ],
+    "software": "node js",
+    "word": [
+      "latest"
+    ]
+  },
+  {
+    "id": "nw-whats-new-in-node",
+    "note": "The short name. A model may write the official name, Node.js, for it.",
+    "task": "what's new in node?",
+    "kind": [
+      "watchlist"
+    ],
+    "software": "node",
+    "word": [
+      "new"
+    ]
+  },
+  {
+    "id": "nw-latest-version-of",
+    "note": "Asks for the newest version of one software in other words, 17 Nov.",
+    "task": "latest version of redis",
+    "kind": [
+      "watchlist"
+    ],
+    "software": "redis",
+    "word": [
+      "version"
+    ]
+  },
+  {
+    "id": "nw-new-release",
+    "note": "Asks for the newest version of one software in other words, 17 Nov.",
+    "task": "is there a new kafka release",
+    "kind": [
+      "watchlist"
+    ],
+    "software": "kafka",
+    "word": [
+      "release"
+    ]
+  },
+  {
+    "id": "nw-newest",
+    "note": "Asks for the newest version of one software in other words, 17 Nov.",
+    "task": "what's the newest python",
+    "kind": [
+      "watchlist"
+    ],
+    "software": "python",
+    "word": [
+      "newest"
+    ]
+  },
+  {
+    "id": "nw-any-updates",
+    "note": "Asks for the newest version of one software in other words, 17 Nov.",
+    "task": "any updates for langgraph",
+    "kind": [
+      "watchlist"
+    ],
+    "software": "langgraph",
+    "word": [
+      "updates"
+    ]
+  },
+  {
+    "id": "nw-version-on",
+    "note": "Asks for the newest version of one software in other words, 17 Nov.",
+    "task": "what version is node on",
+    "kind": [
+      "watchlist"
+    ],
+    "software": "node",
+    "word": [
+      "version"
+    ]
+  },
+  {
+    "id": "nw-watched",
+    "note": "LangGraph is held, so the answer is about it: either lane, never a can't or the list of abilities.",
+    "task": "what's new in LangGraph?",
+    "kind": [
+      "question",
+      "watchlist"
+    ],
+    "not_kind": [
+      "cant",
+      "abilities"
+    ],
+    "facts": {
+      "watchlist": [
+        {
+          "name": "LangGraph",
+          "repo": "x/langgraph",
+          "our_version": "1.2.14",
+          "newest_version": "1.2.16",
+          "state": "New version"
+        },
+        {
+          "name": "Redis",
+          "repo": "x/redis",
+          "our_version": "8.0.2",
+          "newest_version": "8.0.2",
+          "state": "Up to date"
+        },
+        {
+          "name": "n8n",
+          "repo": "x/n8n",
+          "our_version": null,
+          "newest_version": "2.42.6",
+          "state": "Not checked yet"
+        }
+      ]
+    }
+  },
+  {
+    "id": "nw-not-the-team",
+    "note": "Not about software: no watch is offered.",
+    "task": "what's new with the team",
+    "not_kind": [
+      "watchlist"
+    ]
+  },
+  {
+    "id": "nw-not-news",
+    "note": "Not about software: no watch is offered.",
+    "task": "latest news",
+    "not_kind": [
+      "watchlist"
     ]
   }
 ]

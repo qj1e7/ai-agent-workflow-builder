@@ -1,12 +1,18 @@
 #!/usr/bin/env bash
-# Boots our n8n image twice, with the guards deploy/compose.yaml sets, and checks what n8n allows:
-# - with no allow list: all eight of our blocks load, and Execute Command and Local File Trigger
-#   do not;
-# - with the allow list scripts/nodes-include.sh makes from node_classes.json, as deployed:
-#   exactly the types the file says n8n loads, a workflow with an HTTP Request node cannot be
-#   turned on, and the pin check finds every version and choice of every type n8n serves classed
-#   (ADR 0045).
+# Boots our n8n image once, with the exclusions deploy/compose.yaml sets but n8n's own defaults for
+# the other guards bootstrap checks, and checks what n8n allows (ADR 0051):
+# - all eight of our blocks load, none of the blocks in n8n_blocks.LEFT_OUT does, and no allow list
+#   limits the rest;
+# - n8n refuses a workflow with Function, Function Item or LangChain Code, which run code in its
+#   own process, and with its defaults keeps the file blocks out of its own folders and lets code
+#   load no module of its own choosing (spike P9);
+# - the image has no Python, so only an external task runner can run a Python Code block, which
+#   is what bootstrap's Python check rests on;
+# - the pin check finds each row of node_classes.json still true to what n8n serves (ADR 0045);
+# - contracts/n8n/catalogue.json is what n8n serves, and the pin checks of the blocks' code and of
+#   the defaults and the runner's config hold (scripts/n8n-catalogue.sh).
 # Needs Docker, jq and uv. Publishes no port. PACK_SMOKE_IMAGE names an image already built.
+# PACK_SMOKE_CATALOGUE=write writes the catalogue instead of checking it.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -17,34 +23,38 @@ if [ -z "$image" ]; then
 fi
 
 ours=$(jq -c '[.nodes[].type]' n8n-node-pack/node-types.json)
-allow_list=$(scripts/nodes-include.sh --print)
-loads=$(scripts/nodes-include.sh --loaded)
-never='["n8n-nodes-base.executeCommand","n8n-nodes-base.localFileTrigger"]'
+# The blocks n8n never loads, as deploy/compose.yaml and Terraform leave them out. n8n_blocks.py
+# reads in nothing but the standard library.
+never=$(python3 -I -c '
+import importlib.util, json, sys
+spec = importlib.util.spec_from_file_location("n8n_blocks", sys.argv[1])
+blocks = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(blocks)
+print(json.dumps(sorted(blocks.LEFT_OUT), separators=(",", ":")))
+' platform-api/src/platform_api/orchestration/n8n_blocks.py)
+deprecated='["n8n-nodes-base.function","n8n-nodes-base.functionItem","@n8n/n8n-nodes-langchain.code"]'
 served=$(mktemp -d)
+name="pack-smoke-$$"
 
-# Each check runs in a subshell, so the containers are found by name, not kept in a variable.
 cleanup() {
-  docker ps -aq --filter "name=^pack-smoke-$$-" | xargs docker rm -f >/dev/null 2>&1 || true
+  docker rm -f "$name" >/dev/null 2>&1 || true
   rm -rf "$served"
 }
 trap cleanup EXIT
 
-# Prints {"types": [the node types n8n serves to a signed-in owner], "turnOn": what n8n answered
-# when asked to turn on a workflow with an HTTP Request node}, and copies what n8n serves at
-# /types/nodes.json to $served/<label>.json.
-check_n8n() {
-  local label=$1
-  local name="pack-smoke-$$-$label"
-  shift
-  docker run --detach --name "$name" --env N8N_DIAGNOSTICS_ENABLED=false \
-    --env N8N_VERSION_NOTIFICATIONS_ENABLED=false --env N8N_BLOCK_ENV_ACCESS_IN_NODE=true \
-    --env "NODES_EXCLUDE=$never" --env N8N_COMMUNITY_PACKAGES_ENABLED=false "$@" "$image" >/dev/null
-  for _ in $(seq 1 90); do
-    if docker exec "$name" wget -Y off -qO- http://localhost:5678/healthz/readiness >/dev/null 2>&1; then break; fi
-    sleep 2
-  done
-  local out
-  out=$(docker exec -i "$name" node --input-type=module - <<'JS'
+docker run --detach --name "$name" --env N8N_DIAGNOSTICS_ENABLED=false \
+  --env N8N_VERSION_NOTIFICATIONS_ENABLED=false --env N8N_BLOCK_ENV_ACCESS_IN_NODE=true \
+  --env N8N_DISABLED_MODULES=mcp-registry \
+  --env "NODES_EXCLUDE=$never" --env N8N_COMMUNITY_PACKAGES_ENABLED=false "$image" >/dev/null
+for _ in $(seq 1 90); do
+  if docker exec "$name" wget -Y off -qO- http://localhost:5678/healthz/readiness >/dev/null 2>&1; then break; fi
+  sleep 2
+done
+
+# Prints {"types": [the node types n8n serves to a signed-in owner], "deprecated": what n8n
+# answered to each workflow with a deprecated block, "settings": what n8n's settings show of the
+# guards}, and copies what n8n serves at /types/nodes.json to $served/served.json.
+out=$(docker exec -i --env "DEPRECATED=$deprecated" "$name" node --input-type=module - <<'JS'
 import { writeFileSync } from 'node:fs';
 const base = 'http://localhost:5678';
 const setup = await fetch(`${base}/rest/owner/setup`, {
@@ -78,70 +88,102 @@ for (let attempt = 1; !types; attempt++) {
   }
 }
 
-const saved = await rest('POST', '/workflows', {
-  name: 'Pack smoke: sends data out',
-  nodes: [
-    { id: 'when', name: 'Every hour', type: 'n8n-nodes-base.scheduleTrigger', typeVersion: 1.2, position: [0, 0],
-      parameters: { rule: { interval: [{ field: 'hours' }] } } },
-    { id: 'out', name: 'Send it out', type: 'n8n-nodes-base.httpRequest', typeVersion: 4.2, position: [220, 0],
-      parameters: { url: 'http://127.0.0.1:9/', options: {} } },
-  ],
-  connections: { 'Every hour': { main: [[{ node: 'Send it out', type: 'main', index: 0 }]] } },
-  settings: { executionOrder: 'v1' },
-});
-const turnOn = saved.status === 200
-  ? await rest('POST', `/workflows/${saved.body.data.id}/activate`, { versionId: saved.body.data.versionId })
-  : saved;
+// n8n saves a workflow with a block it doesn't load, so each one is also run by hand, as the
+// editor's Execute does, and n8n must refuse one or the other.
+const deprecated = {};
+for (const type of JSON.parse(process.env.DEPRECATED)) {
+  const saved = await rest('POST', '/workflows', {
+    name: `Pack smoke: ${type}`,
+    nodes: [
+      { id: 'start', name: 'Run by hand', type: 'n8n-nodes-base.manualTrigger', typeVersion: 1, position: [0, 0], parameters: {} },
+      { id: 'old', name: 'Old', type, typeVersion: 1, position: [220, 0], parameters: {} },
+    ],
+    connections: { 'Run by hand': { main: [[{ node: 'Old', type: 'main', index: 0 }]] } },
+    settings: { executionOrder: 'v1' },
+  });
+  const ran = saved.status === 200
+    ? await rest('POST', `/workflows/${saved.body.data.id}/run`, { destinationNode: { nodeName: 'Old', mode: 'inclusive' } })
+    : saved;
+  deprecated[type] = { saved: saved.status, ran: ran.status, message: ran.body?.message ?? null };
+}
 
+const settings = (await rest('GET', '/settings')).body?.data ?? {};
 console.log(JSON.stringify({
   types: [...new Set(types.map((n) => n.name))].sort(),
-  turnOn: { status: turnOn.status, message: turnOn.body?.message ?? null },
+  deprecated,
+  settings: {
+    blockFileAccessToN8nFiles: settings.security?.blockFileAccessToN8nFiles ?? null,
+    allowedModules: settings.allowedModules ?? null,
+  },
 }));
 JS
-  ) || { docker logs "$name" 2>&1 | tail -n 20 >&2; return 1; }
-  docker logs "$name" 2>&1 | grep -iE 'error.*(load|node)|class could not be found' >&2 || true
-  docker cp "$name:/tmp/served-types.json" "$served/$label.json" >/dev/null
-  echo "$out"
-}
+) || { docker logs "$name" 2>&1 | tail -n 20 >&2; exit 1; }
+docker logs "$name" 2>&1 | grep -iE 'error.*(load|node)|class could not be found' >&2 || true
+docker cp "$name:/tmp/served-types.json" "$served/served.json" >/dev/null
 
 status=0
 pass() { echo "PASS: $*"; }
 fail() { echo "FAIL: $*" >&2; status=1; }
 
-off=$(check_n8n off)
-off_types=$(jq -c .types <<<"$off")
-missing=$(jq -cn --argjson want "$ours" --argjson got "$off_types" '$want - $got')
-present=$(jq -cn --argjson never "$never" --argjson got "$off_types" '$never - ($never - $got)')
+types=$(jq -c .types <<<"$out")
+missing=$(jq -cn --argjson want "$ours" --argjson got "$types" '$want - $got')
+present=$(jq -cn --argjson never "$never" --argjson got "$types" '$never - ($never - $got)')
 if [ "$missing" = "[]" ]; then
-  pass "with no allow list, n8n loads all $(jq length <<<"$ours") of our blocks ($(jq length <<<"$off_types") types in all)."
+  pass "n8n loads all $(jq length <<<"$ours") of our blocks ($(jq length <<<"$types") types in all)."
 else
-  fail "with no allow list, n8n did not load $missing."
+  fail "n8n did not load $missing."
 fi
 if [ "$present" = "[]" ]; then
-  pass "with no allow list, n8n does not load $never."
+  pass "n8n does not load $never."
 else
-  fail "with no allow list, n8n still loads $present."
+  fail "n8n still loads $present."
+fi
+for sentinel in n8n-nodes-base.httpRequest n8n-nodes-base.code @n8n/n8n-nodes-langchain.agent; do
+  if jq -e --arg t "$sentinel" 'index($t) != null' <<<"$types" >/dev/null; then
+    pass "n8n loads $sentinel, as it loads every built-in block."
+  else
+    fail "n8n does not load $sentinel, so something limits the built-in blocks."
+  fi
+done
+
+refused=$(jq -c '.deprecated | to_entries | map(select(.value.saved == 200 and .value.ran == 200)) | map(.key)' <<<"$out")
+if [ "$refused" = "[]" ]; then
+  pass "n8n refuses to run a workflow with any of $deprecated."
+else
+  fail "n8n ran a workflow with $refused: $(jq -c .deprecated <<<"$out")."
+fi
+if jq -e '.settings.blockFileAccessToN8nFiles == true and (.settings.allowedModules | (.builtIn == null and .external == null))' <<<"$out" >/dev/null; then
+  pass "with its defaults, n8n keeps the file blocks out of its own folders and lets code load no module it picks."
+else
+  fail "n8n's settings show $(jq -c .settings <<<"$out")."
 fi
 
-on=$(check_n8n on --env "NODES_INCLUDE=$allow_list")
-on_types=$(jq -c .types <<<"$on")
-extra=$(jq -cn --argjson want "$loads" --argjson got "$on_types" '$got - $want')
-missing=$(jq -cn --argjson want "$loads" --argjson got "$on_types" '$want - $got')
-if [ "$extra" = "[]" ] && [ "$missing" = "[]" ]; then
-  pass "with the allow list of $(jq length <<<"$allow_list"), n8n loads exactly the $(jq length <<<"$loads") types node_classes.json says."
+# Bootstrap's Python check (n8n_guard.python_probe) shows that a runner holding n8n's token is
+# registered with n8n's broker, only because n8n can't run Python itself. It doesn't show that the
+# runner sits in a container of its own: deploy/compose.yaml and Terraform make that so, and
+# scripts/n8n-guards.sh and infra/envs/dev/tests/n8n.tftest.hcl check it.
+if pythons=$(docker exec "$name" sh -c 'for p in python3 python; do command -v "$p"; done; true'); then
+  if [ -z "$pythons" ]; then
+    pass "the image has no Python, so only an external task runner runs a Python Code block."
+  else
+    fail "the image has Python ($pythons), so a Python Code block could run without the external runner."
+  fi
 else
-  fail "with the allow list, n8n also loads $extra and is missing $missing."
+  fail "could not look for Python in the image."
 fi
-turn_on=$(jq -c .turnOn <<<"$on")
-if jq -e '.status == 400 and (.message | test("Unrecognized node type: n8n-nodes-base.httpRequest"))' <<<"$turn_on" >/dev/null; then
-  pass "with the allow list, n8n refuses to turn on a workflow with an HTTP Request node: $turn_on."
+
+if (cd platform-api && uv run --locked --quiet python -m platform_api.pin_check "$served/served.json"); then
+  pass "each row of node_classes.json still matches what n8n serves."
 else
-  fail "with the allow list, turning on a workflow with an HTTP Request node answered $turn_on."
+  fail "the pin check found node_classes.json and what n8n serves disagree, as above."
 fi
-if (cd platform-api && uv run --locked --quiet python -m platform_api.pin_check "$served/on.json"); then
-  pass "with the allow list, every version and choice of every type n8n serves is classed."
+
+check=--check
+if [ "${PACK_SMOKE_CATALOGUE:-check}" = write ]; then check=; fi
+if scripts/n8n-catalogue.sh ${check:+"$check"} "$served/served.json" "$image"; then
+  pass "the catalogue is what n8n serves, and the pin checks of its code, defaults and runner hold."
 else
-  fail "the pin check found what n8n serves and node_classes.json disagree, as above."
+  fail "the catalogue or a pin check failed, as above."
 fi
 
 exit "$status"

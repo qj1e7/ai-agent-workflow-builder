@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import type { UseQueryResult } from '@tanstack/react-query'
 import { useErrorWords } from '../../api/context'
-import { useMe } from '../../api/queries'
+import { useMe, useUseCase } from '../../api/queries'
 import type { Me, UseCaseN8nView, UseCaseView } from '../../api/types'
 import { useOpenInN8n, useSweepOnOpen, useTakeBack, useUseCaseInN8n } from '../../api/workflowQueries'
 import { Button, ButtonAnchor, type ButtonVariant } from '../../ui/Button'
 import { Canvas } from '../../ui/Canvas'
 import { IconExternal, IconLock } from '../../ui/icons'
-import { editorAddressOf, heldLine, heldOf, holdOf, inUseLine, mayOpen, mayTakeBack, n8nRefusalWords, NOT_OWN, OPEN_IN_N8N, openEditorTab, SAFE_BLOCKS, TAKE_IT_BACK, takenBackWords, theirsNote, type EditorTab, type Held, type Hold } from './n8nHold'
+import { editorAddressOf, heldLine, heldOf, holdOf, inUseLine, mayOpen, mayTakeBack, n8nRefusalWords, NOT_LOADED, NOT_OWN, OPEN_IN_N8N, openEditorTab, openingOf, SAFE_BLOCKS, TAKE_IT_BACK, takenBackWords, theirsNote, type EditorTab, type Held, type Hold } from './n8nHold'
 import styles from './Workflows.module.css'
 
 interface OpenProps {
@@ -99,9 +99,12 @@ export function TakeItBackHere({ useCaseId, refused, say }: TakeItBackHereProps)
   const me = useMe().data
   const n8nAccess = refused && me?.n8n_access === true
   const inN8n = useUseCaseInN8n(useCaseId, { enabled: n8nAccess })
-  const held = n8nAccess && me && inN8n.data ? heldOf(inN8n.data, me) : null
+  const useCase = useUseCase(useCaseId, n8nAccess).data
+  const held = n8nAccess && me && useCase ? heldOf(useCase, me, openingOf(inN8n)) : null
   const takeBack = useTakeBackPress(useCaseId, held, say)
-  if (!held || !mayTakeBack(held)) return null
+  if (!held) return null
+  // Once the platform has said why this person can't take it back, the refusal above is no dead end.
+  if (!mayTakeBack(held)) return held.kind === 'theirs' && held.checking !== true ? <p className={styles['small']}>{theirsNote(held)}</p> : null
   return (
     <>
       <Button loading={takeBack.pending} onClick={takeBack.press}>
@@ -123,8 +126,11 @@ interface HeldProps {
   readonly say: (text: string) => void
 }
 
-/** Who has the workflow open in n8n, and Take it back, which its holder and anyone else with n8n access may press. */
-function HeldInN8n({ useCaseId, hold, now, say }: HeldProps) {
+/**
+ * Who has the workflow open in n8n, and Take it back, which its holder and anyone else with n8n access may press. The Summary and the
+ * In n8n tab draw the same banner, from the same hold.
+ */
+export function HeldInN8n({ useCaseId, hold, now, say }: HeldProps) {
   const takeBack = useTakeBackPress(useCaseId, hold, say)
   return (
     <div className={styles['banner']} data-held>
@@ -143,7 +149,7 @@ function HeldInN8n({ useCaseId, hold, now, say }: HeldProps) {
         <p className={styles['problem']} role="alert">
           {takeBack.problem}
         </p>
-      ) : hold.kind === 'theirs' ? (
+      ) : hold.kind === 'theirs' && hold.checking !== true ? (
         <p>{theirsNote(hold)}</p>
       ) : null}
     </div>
@@ -153,7 +159,7 @@ function HeldInN8n({ useCaseId, hold, now, say }: HeldProps) {
 interface PaneProps {
   readonly useCase: UseCaseView
   readonly inN8n: UseQueryResult<UseCaseN8nView>
-  readonly me: Pick<Me, 'id'>
+  readonly me: Pick<Me, 'id' | 'n8n_access'>
   readonly now: Date
   readonly say: (text: string) => void
 }
@@ -168,7 +174,7 @@ export function WorkflowInN8n({ useCase, inN8n, me, now, say }: PaneProps) {
   if (!view) {
     return inN8n.isError ? (
       <p>
-        The workflow in n8n could not be loaded. <Button onClick={() => void inN8n.refetch()}>Try again</Button>
+        {NOT_LOADED} <Button onClick={() => void inN8n.refetch()}>Try again</Button>
       </p>
     ) : (
       <p className="muted" role="status">

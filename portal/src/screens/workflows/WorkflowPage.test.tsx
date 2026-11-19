@@ -10,6 +10,7 @@ import failed from '../../../../contracts/fixtures/views/failure.final.json'
 import done from '../../../../contracts/fixtures/views/success.final.json'
 import peopleList from '../../../../contracts/fixtures/people/list.json'
 import versionedUseCase from '../../../../contracts/fixtures/builder/use-case.versioned.json'
+import openInN8n from '../../../../contracts/fixtures/builder/use-case.open-in-n8n.json'
 import undoneUseCase from '../../../../contracts/fixtures/builder/use-case.undone.json'
 import changed from '../../../../contracts/fixtures/builder/versions.json'
 import undone from '../../../../contracts/fixtures/builder/versions.undone.json'
@@ -246,6 +247,13 @@ describe('a workflow page', () => {
     expect(sectionText(render({ useCase: SCHEDULED }), 'When')).toContain('Set by Carol.')
   })
 
+  it('says a schedule nobody saved here was set in n8n, and offers no change to one made in n8n', () => {
+    const inN8n = { ...SCHEDULED, schedule: { ...SCHEDULED.schedule!, owner_name: null } }
+    expect(sectionText(render({ useCase: inN8n }), 'When')).toContain('Set in n8n.')
+    expect(sectionText(render({ useCase: inN8n }), 'When')).not.toContain('null')
+    expect(buttons(render({ useCase: { ...inN8n, made_in_n8n_by: 'carol' } }))).not.toContain('Change when it runs')
+  })
+
   it('shows an Approver who is not an Operator neither control', () => {
     for (const useCase of [SCHEDULED, AGENTS]) expect(buttons(render({ me: BOB, useCase })).filter((label) => /when it runs/i.test(label))).toEqual([])
   })
@@ -369,6 +377,17 @@ describe('a workflow page', () => {
     expect(text(mainOf(html)).match(/Resume/g)).toHaveLength(1)
   })
 
+  it('tells everyone on its Summary who has it open in n8n, and offers no change the platform would refuse', () => {
+    const held = { ...(openInN8n as UseCaseView), grade: 'needs_a_fix', findings: ['“Send email” is not a block we run.'] } as UseCaseView
+    const html = render({ useCase: held })
+    expect(text(html)).toMatch(/Carol has it open in n8n since (Mon 9 Nov, )?10:02\. Ask Carol, or anyone with n8n access, to take it back\./)
+    expect(sectionText(html, 'When')).toContain('Can’t change it while Carol has it open in n8n.')
+    const pressable = buttons(html)
+    for (const refused of ['Undo', 'Add the yes back', 'Change when it runs', 'Set when it runs', 'Resume']) expect(pressable, `${refused} would be refused`).not.toContain(refused)
+    expect(pressable, 'Pause still works, so the safety lever never waits').toContain('Pause')
+    expect(text(render({ me: BOB, useCase: held }))).toMatch(/Carol has it open in n8n since/)
+  })
+
   it('goes back to the list', () => {
     expect(mainOf(render())).toMatch(/<a[^>]*href="\/workflows"[^>]*>[\s\S]*Workflows<\/a>/)
   })
@@ -390,13 +409,13 @@ describe('the Versions list', () => {
 
   it('lists each version newest first, with when, who and what changed, as the prototype says it', () => {
     expect(versionsOf(render(CHANGED))).toBe(
-      'Version 2, in use Today, 9:10. Alice changed when it runs from every weekday at 8:00 to every Monday at 8:00. ' +
-        'Version 1 The version it was turned on with.',
+      'Version 2, in use Today, 9:10. Alice changed when it runs from every weekday at 8:00 to every Monday at 8:00. Explain LangGraph release check, version 2 ' +
+        'Version 1 The version it was turned on with. Explain LangGraph release check, version 1',
     )
   })
 
   it('names an Undo as a new version that undid the one before', () => {
-    expect(versionsOf(render(UNDONE))).toMatch(/^Version 3, in use Today, 9:12\. Alice undid version 2, so it runs every weekday at 8:00 again\. Version 2 Today, 9:10\. Alice changed .* to every Monday at 8:00\. Version 1/)
+    expect(versionsOf(render(UNDONE))).toMatch(/^Version 3, in use Today, 9:12\. Alice undid version 2, so it runs every weekday at 8:00 again\. Explain LangGraph release check, version 3 Version 2 Today, 9:10\. Alice changed .* to every Monday at 8:00\. Explain LangGraph release check, version 2 Version 1/)
   })
 
   it('only reads, for an Operator and an Approver alike: Undo is on the chat’s edit card, as in the prototype', () => {
@@ -417,6 +436,28 @@ describe('the Versions list', () => {
 
   it('shows the schedule the newest version runs on under When', () => {
     expect(whenOf(render(UNDONE))).toBe('Every weekday at 8:00 Singapore time (SGT).')
+  })
+})
+
+describe('Explain on the workflow page', () => {
+  const explainLinks = (html: string) => [...mainOf(html).matchAll(/<a\b[^>]*href="([^"]*\/explain[^"]*)"[^>]*>([\s\S]*?)<\/a>/g)].map((m) => [text(m[2] ?? ''), m[1]])
+
+  it('puts Explain in the page’s actions for an Operator and for an Approver', () => {
+    for (const me of [ALICE, BOB]) {
+      expect(explainLinks(render({ me })), me.id).toEqual([[`Explain ${AGENTS.name}`, `/workflows/${AGENTS.use_case_id}/explain`]])
+    }
+  })
+
+  it('puts Explain on each version, with that version, for both roles', () => {
+    for (const me of [ALICE, BOB]) {
+      const id = CHANGED.useCase.use_case_id
+      const name = CHANGED.useCase.name
+      expect(explainLinks(render({ ...CHANGED, me })), me.id).toEqual([
+        [`Explain ${name}, version 2`, `/workflows/${id}/explain?version=2`],
+        [`Explain ${name}, version 1`, `/workflows/${id}/explain?version=1`],
+        [`Explain ${name}`, `/workflows/${id}/explain`],
+      ])
+    }
   })
 })
 

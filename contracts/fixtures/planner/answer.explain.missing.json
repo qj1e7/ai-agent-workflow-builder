@@ -1,0 +1,18 @@
+{
+  "parts": [
+    {
+      "text": "explain the Kubernetes check",
+      "mark": "will_do",
+      "reason": null,
+      "note": null,
+      "choices": []
+    }
+  ],
+  "trace_id": null,
+  "answer": "explain",
+  "use_case_id": null,
+  "name": null,
+  "missing": "Kubernetes check",
+  "choices": [],
+  "in_focus": false
+}

@@ -608,6 +608,25 @@ test.describe('with the AI model on', () => {
     await context.close()
   })
 
+  test('a watch that names no software asks which one, and the name typed next completes it, waiting for her Add', async ({ browser, backend }) => {
+    await backend.freshWatchlist('alice', [])
+    const context = await devContext(browser, 'alice')
+    const page = await context.newPage()
+    const watch = watchPage(page)
+    await page.goto('/')
+    await ask(page, 'help me add a software')
+    await expect(thread(page)).toContainText('Which software should I watch?')
+    await expect(thread(page), 'a missing name is asked for, never “I didn’t follow”').not.toContainText('I didn’t follow')
+    await ask(page, 'Redis')
+    await expect(thread(page).getByText('Redis is software, so it belongs on the Software watchlist', { exact: false })).toBeVisible()
+    await thread(page).getByRole('button', { name: 'Watch it', exact: true }).click()
+    await expect(thread(page).getByRole('button', { name: 'Add Redis' })).toBeVisible()
+    const { watchlist } = await backend.get<{ watchlist: { software: { name: string }[] } | null }>('alice', '/api/v1/watchlist')
+    expect(watchlist?.software.map((entry) => entry.name) ?? [], 'nothing is added until she presses Add').not.toContain('Redis')
+    assertClean(watch)
+    await context.close()
+  })
+
   test('scenario G: “Monitor Redis releases” ends with Redis on the watchlist, with its GitHub source shown first', async ({ browser, backend }, info) => {
     await backend.freshWatchlist('alice', [])
     const context = await devContext(browser, 'alice')
@@ -763,6 +782,54 @@ test.describe('with the AI model on', () => {
       await context.close()
     })
   }
+
+  test('REMOVE: the team lead’s “help me remove node js from watchlist” gets the Software page’s Remove, and Undo puts it back', async ({ browser, backend }, info) => {
+    const nodeJs = { name: 'node js', repo: 'nodejs/node', our_version: '22.11.0' }
+    await backend.freshWatchlist('alice', [REDIS, nodeJs])
+    const names = async () => (await backend.get<{ watchlist: { software: { name: string }[] } | null }>('alice', '/api/v1/watchlist')).watchlist?.software.map((entry) => entry.name)
+    const context = await devContext(browser, 'alice')
+    const page = await context.newPage()
+    const watch = watchPage(page)
+    await page.goto('/')
+    const answer = await askAndWait(page, 'help me remove node js from watchlist')
+    await expect(answer).toContainText('Remove node js from the Watchlist? It won’t be checked any more.')
+    await expect(answer, 'the edit lane’s can’t no longer answers a removal').not.toContainText('I can only change when')
+    const remove = answer.getByRole('button', { name: 'Remove from watchlist node js' })
+    await expect(remove).toBeVisible()
+    await shot(page, info, 'remove-software-card')
+    expect(await names(), 'nothing is removed until she presses Remove').toContain('node js')
+
+    await remove.click()
+    await expect(answer).toContainText('Removed from the watchlist.')
+    const undo = answer.getByRole('button', { name: 'Undo removing node js' })
+    await expect(undo, 'focus moves to Undo').toBeFocused()
+    expect(await names()).toEqual(['Redis'])
+
+    const rail = page.getByRole('navigation', { name: 'Browse' }).filter({ visible: true })
+    await rail.getByRole('link', { name: /^Watchlist/ }).click()
+    await expect(page.locator('li[data-status]').filter({ hasText: 'node js' }), 'the Watchlist no longer holds it').toHaveCount(0)
+    await rail.getByRole('link', { name: /^Chat/ }).click()
+    await expect(answer, 'coming back to the chat keeps the removal and its Undo').toContainText('Removed from the watchlist.')
+
+    await undo.click()
+    await expect(answer).toContainText('Put node js back on the list.')
+    await expect(remove, 'focus goes back to Remove').toBeFocused()
+    await page.goto('/software')
+    await expect(page.locator('li[data-status]').filter({ hasText: 'node js' }), 'it is back on the Software page').toBeVisible()
+    assertClean(watch)
+    await context.close()
+  })
+
+  test('REMOVE-none: a name the watchlist doesn’t hold is said so, with what it holds, and nothing to press', async ({ browser, backend }) => {
+    await backend.freshWatchlist('alice', [REDIS])
+    const context = await devContext(browser, 'alice')
+    const page = await context.newPage()
+    await page.goto('/')
+    const answer = await askAndWait(page, 'stop watching Kubernetes')
+    await expect(answer).toContainText('Kubernetes isn’t on your Watchlist. It holds Redis.')
+    await expect(answer.getByRole('button', { name: /Remove from watchlist/ })).toHaveCount(0)
+    await context.close()
+  })
 
   test('an unwatched name after a question is offered for the watchlist, never added on its own', async ({ browser, backend }) => {
     await backend.freshWatchlist('alice', [REDIS])
@@ -1031,6 +1098,40 @@ test.describe('the chat after the first message', () => {
     await expect(thread(page)).toContainText('Which software should I watch?')
     await expect(page.getByRole('region', { name: 'Conversation' })).not.toHaveAttribute('tabindex')
     await context.close()
+  })
+
+  test('Which software asks for the name in a card: focus in the field, an empty Find it says why and keeps focus, and Never mind backs out', async ({ browser }) => {
+    for (const phone of [false, true]) {
+      const context = await devContext(browser, 'alice', { phone })
+      const page = await context.newPage()
+      await page.route('**/api/v1/planner/answer', (route) => route.fulfill({ json: { answer: 'which_software', word: 'add', parts: [], trace_id: null } }))
+      await page.goto('/')
+      await ask(page, 'help me add a software')
+      const card = thread(page).getByRole('region', { name: 'Software to watch' })
+      const field = card.getByLabel('Software name')
+      await expect(field, 'focus goes to the field').toBeFocused()
+      await expect(card).toContainText('Type the name, such as Kubernetes. I’ll find its GitHub project.')
+      const find = card.getByRole('button', { name: 'Find it' })
+      await expect(find, 'Find it is never shown dead').toBeEnabled()
+      await field.press('Enter')
+      await expect(card).toContainText('Give the software a name.')
+      await expect(field).toHaveAttribute('aria-invalid', 'true')
+      await expect(field, 'focus stays in the field').toBeFocused()
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), 'nothing scrolls sideways').toBe(true)
+      await expectAccessible(page, path.join(OUT, 'axe'), `which-software-${phone ? '390' : '1440'}`)
+      await page.keyboard.press('Tab')
+      await expect(find).toBeFocused()
+      await page.keyboard.press('Tab')
+      await expect(card.getByRole('button', { name: 'Never mind' })).toBeFocused()
+      await page.keyboard.press('Enter')
+      await expect(thread(page)).toContainText('All right, never mind.')
+      await ask(page, 'help me add a software')
+      const again = thread(page).getByRole('region', { name: 'Software to watch' }).last()
+      await again.getByLabel('Software name').fill('Redis')
+      await again.getByLabel('Software name').press('Enter')
+      await expect(thread(page).getByRole('heading', { name: 'Redis', level: 3 }), 'focus goes to the card for the name, never to the page').toBeFocused()
+      await context.close()
+    }
   })
 
   test('Resume on Workflows with a conversation open adds the draft’s card after it, with focus on the card', async ({ browser, backend }) => {

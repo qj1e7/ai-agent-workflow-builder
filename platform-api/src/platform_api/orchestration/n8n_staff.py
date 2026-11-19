@@ -1,7 +1,7 @@
 """Staff n8n accounts (ENGINE-PLAN 2.9, D17, M5). The People list decides who has n8n access; the
 platform makes and ends each person's n8n account to match, and keeps n8n's user id for it, which
 every later match uses. An account is made only while N8N_STAFF_ACCESS is on and the last
-bootstrap proved the node allow list, so no staff account exists while the list is unproven.
+bootstrap proved n8n's blocks and guards (ADR 0051), so no staff account exists until it has.
 
 The account follows the flag on its own: each settle reads the list and n8n and does only what
 differs, so a settle cut off anywhere is finished by the next. An account is ended only once its
@@ -15,7 +15,7 @@ import logging
 from collections.abc import Awaitable, Callable, Iterable, Mapping
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
-from typing import Any, Literal
+from typing import Any, Literal, Protocol
 from urllib.parse import urlsplit, urlunsplit
 
 import httpx
@@ -30,6 +30,16 @@ log = logging.getLogger(__name__)
 SETTLE_EVERY = timedelta(seconds=15)
 
 NO_ACCESS = "Only people with n8n access can open n8n. An admin can add it in Settings."
+A_COLLEAGUE = "a colleague"
+"""Who someone is when the platform can't name them, as a user id means nothing to anyone."""
+APPROVERS_NO_ACCESS = "Approvers can't have n8n access. An Operator with n8n access can open it."
+
+
+def no_access_words(approver: bool) -> str:
+    """No one can add n8n access for an Approver, so they are told who can open it instead."""
+    return APPROVERS_NO_ACCESS if approver else NO_ACCESS
+
+
 OFF = "Opening n8n is coming once the block list is on."
 NOT_READY = (
     "n8n can't be opened from here until its block list is checked again. Your own n8n space "
@@ -46,12 +56,20 @@ NO_ADDRESS = (
 )
 
 
+class Quarantine(Protocol):
+    async def quarantine(self, project: str, n8n_user_id: str) -> list[str]:
+        """Notes the keys in this space, which n8n moves to the platform's project as the account
+        ends, so the credential sweep keeps them there unused, never as the platform's."""
+        ...
+
+
 @dataclass(frozen=True)
 class StaffGate:
     switched_on: bool
     """N8N_STAFF_ACCESS."""
     ready: bool
-    """The last bootstrap proved that n8n loads exactly the class file's node types."""
+    """The last bootstrap was ready, so it proved that n8n loads every built-in block but
+    the seven left out, and runs with the guards that keep a workflow's code from n8n's secrets."""
 
     @property
     def closed(self) -> str | None:
@@ -195,12 +213,15 @@ class StaffAccounts:
         box: KeyBox | None,
         switched_on: bool,
         editor_url: str | None = None,
+        keys: Quarantine | None = None,
     ) -> None:
         self._db = db
         self._api = api
         self._box = box
         self._switched_on = switched_on
         self.editor_url = editor_url
+        self.keys = keys
+        """The platform's keys in n8n, so the keys an ending account leaves are kept unused."""
         self._lock = asyncio.Lock()
         self._nudged = asyncio.Event()
 
@@ -262,12 +283,12 @@ class StaffAccounts:
                     "SELECT display FROM orchestration.people WHERE id = %s", (person,)
                 )
             ).fetchone()
-        return person if row is None else str(row["display"])
+        return A_COLLEAGUE if row is None else str(row["display"])
 
     async def access(self, person: UserId) -> StaffAccess:
         row = await self._person(person)
         if row is None or not row.may_hold:
-            return NoN8nAccess()
+            return NoN8nAccess(no_access_words(row is not None and row.approver))
         if (closed := (await self.gate()).closed) is not None:
             return StaffClosed(closed)
         return _ready_or_not(row, await self._account(row), self.editor_url is not None)
@@ -275,7 +296,8 @@ class StaffAccounts:
     async def mine(self, person: UserId) -> MyN8n:
         row = await self._person(person)
         if row is None or not row.may_hold:
-            return MyN8n(False, "none", None, False, NO_ACCESS, None)
+            words = no_access_words(row is not None and row.approver)
+            return MyN8n(False, "none", None, False, words, None)
         account = await self._account(row)
         closed = (await self.gate()).closed
         access = (
@@ -448,6 +470,15 @@ class StaffAccounts:
             log.warning("could not note what an ending n8n account made: %s", type(error).__name__)
             return
         await self.note_made(row.id, row.n8n_user_id, [w.workflow.id for w in left])
+        if self.keys is None:
+            return
+        try:
+            kept = await self.keys.quarantine(space, row.n8n_user_id)
+        except (N8nError, httpx.HTTPError) as error:
+            log.warning("could not note the keys an ending n8n account left: %s", error)
+            return
+        if kept:
+            log.info("kept %d key(s) an ending n8n account left, unused", len(kept))
 
     async def _delete(self, n8n_user_id: str) -> None:
         assert self._api is not None

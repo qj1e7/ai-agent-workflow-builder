@@ -2,8 +2,8 @@ import hashlib
 import json
 import os
 import sys
-from collections.abc import Callable, Collection, Mapping, Sequence
-from dataclasses import asdict, dataclass
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import asdict, dataclass, field
 from typing import Any, LiteralString
 
 import httpx
@@ -12,8 +12,21 @@ from psycopg.types.json import Jsonb
 
 from platform_api.auth import ConfigError
 from platform_api.migrations import upgrade_all
-from platform_api.orchestration.n8n import PLATFORM_API_KEY_LABEL, N8nClient, N8nError
-from platform_api.orchestration.node_classes import NODE_CLASSES
+from platform_api.n8n_guard import (
+    DEPRECATED,
+    ENV_REFUSED,
+    FIELDS_RAN,
+    PROBED,
+    PYTHON_RAN,
+    deployed_findings,
+    deprecated_probe,
+    env_probe,
+    fields_probe,
+    loaded_findings,
+    python_probe,
+    shown_findings,
+)
+from platform_api.orchestration.n8n import PLATFORM_API_KEY_LABEL, HandRun, N8nClient, N8nError
 from platform_api.orchestration.workflow_check import (
     ERROR_WORKFLOW,
     SELF_TEST,
@@ -31,10 +44,9 @@ OLD_TASK_KIND = "release"
 RETIRED_WORKFLOWS = ("schedule_tick", "run")
 """Removed by these exact names, as they are the platform's own. Nothing ticks schedules since
 E10: each workflow's own n8n workflow has its Schedule Trigger. The shared run workflow is made of
-Webhook, HTTP Request and Respond to Webhook blocks, which the allow list turns off (E11), and
+Webhook, HTTP Request and Respond to Webhook blocks, which the class file doesn't let run (E11), and
 platform-api ends any run still on it as it starts."""
-SHOWN = 5
-"""How many of the types n8n loads beyond the allow list bootstrap names, when it loads more."""
+GUARDS_FAIL = "n8n's blocks or settings fail the check"
 RESET_HINT = (
     "This stack holds data from before the release check was retired, which the platform can "
     "no longer read. Reset a local practice stack with "
@@ -42,6 +54,20 @@ RESET_HINT = (
 )
 
 type Say = Callable[[str], None]
+
+
+@dataclass(frozen=True)
+class N8nLoad:
+    """What bootstrap did to n8n and found there."""
+
+    workflows: list[LoadedWorkflow]
+    findings: list[str]
+    """Where the platform's own workflows are out of place or fail the lint."""
+    guards: list[str] = field(default_factory=list[str])
+    """Where n8n's blocks or settings let a workflow's code or files reach n8n's secrets
+    (`platform_api.n8n_guard`)."""
+    version: str | None = None
+    """The n8n version n8n says it runs."""
 
 
 @dataclass(frozen=True)
@@ -70,19 +96,24 @@ def main(env: Mapping[str, str] | None = None) -> int:
     if not migrate_to_head(settings.owner_database_url, say):
         return _finish(settings, say, [], [], "the database holds old release-check data")
     try:
-        loaded, findings = load_into_n8n(settings, say)
+        load = load_into_n8n(settings, say)
     except NotThePlatforms as error:
         return _finish(settings, say, [], [], str(error))
     except (N8nError, httpx.HTTPError) as error:
         say(f"could not load the workflows into n8n: {error}")
         detail = _detail_without_message("could not load the workflows into n8n", error)
         return _finish(settings, say, [], [], detail)
+    loaded, findings = load.workflows, [*load.guards, *load.findings]
     inactive = [w.name for w in loaded if not w.active]
-    if inactive:
-        return _finish(settings, say, loaded, findings, f"inactive in n8n: {', '.join(inactive)}")
-    if findings:
-        return _finish(settings, say, loaded, findings, "the live workflows fail the lint")
-    return _finish(settings, say, loaded, [], "all workflows loaded, active and linted")
+    if load.guards:
+        detail = GUARDS_FAIL
+    elif inactive:
+        detail = f"inactive in n8n: {', '.join(inactive)}"
+    elif findings:
+        detail = "the live workflows fail the lint"
+    else:
+        detail = "all workflows loaded, active and linted"
+    return _finish(settings, say, loaded, findings, detail, load.version)
 
 
 def migrate_to_head(owner_url: str, say: Say) -> bool:
@@ -107,16 +138,63 @@ def _finish(
     loaded: list[LoadedWorkflow],
     findings: Sequence[str],
     detail: str,
+    n8n_version: str | None = None,
 ) -> int:
     for finding in findings:
         say(finding)
     ready = not findings and bool(loaded)
-    record_status(settings.owner_database_url, ready=ready, detail=detail, workflows=loaded)
+    record_status(
+        settings.owner_database_url,
+        ready=ready,
+        detail=detail,
+        workflows=loaded,
+        n8n_version=n8n_version,
+    )
     say(f"{'ready' if ready else 'NOT ready'}: {detail}")
     return 0 if ready else 1
 
 
-def load_into_n8n(settings: BootstrapSettings, say: Say) -> tuple[list[LoadedWorkflow], list[str]]:
+def _ran_findings(fields: HandRun, env: HandRun, python: HandRun) -> list[str]:
+    """What the runs by hand show. Each check fails closed: only the one answer that shows the
+    guard holds passes, and a run that didn't start or didn't end in time fails."""
+    findings: list[str] = []
+    if fields.status != "success" or fields.output != FIELDS_RAN:
+        findings.append(
+            f"n8n's Edit Fields check {_how(fields)}, so its $env check proves nothing on this n8n"
+        )
+    if env.status == "success":
+        findings.append(
+            "n8n read $env in an expression on a run by hand: N8N_BLOCK_ENV_ACCESS_IN_NODE must "
+            "be true on n8n itself"
+        )
+    elif env.status == "error" and ENV_REFUSED not in (env.error or ""):
+        findings.append(
+            f"n8n's $env check ended in an error other than \"{ENV_REFUSED}\", so bootstrap can't "
+            "tell that $env is closed"
+        )
+    elif env.status != "error":
+        findings.append(
+            f"n8n's $env check {_how(env)}, so bootstrap can't tell that $env is closed"
+        )
+    if python.status != "success" or python.output != PYTHON_RAN:
+        findings.append(
+            f"n8n's Python check {_how(python)}: its external task runner must be connected, "
+            "with N8N_RUNNERS_MODE external and the token n8n-runners holds"
+        )
+    return findings
+
+
+def _how(run: HandRun) -> str:
+    if not run.started:
+        return "didn't start"
+    if run.status is None:
+        return "didn't end in time"
+    if run.status == "success":
+        return "gave back something else"
+    return f"ended with status {run.status}"
+
+
+def load_into_n8n(settings: BootstrapSettings, say: Say) -> N8nLoad:
     previous = _previous(settings.owner_database_url)
     recorded = {w["name"]: w["id"] for w in previous}
     client = N8nClient(settings.n8n_base_url)
@@ -127,8 +205,15 @@ def load_into_n8n(settings: BootstrapSettings, say: Say) -> tuple[list[LoadedWor
         say(f"owner {settings.n8n_owner_email}: {owner.value}")
         loaded_types = client.node_types()
         say(f"n8n loads {len(loaded_types)} node types")
+        shown = client.settings()
+        version = str(shown.get("versionCli") or "") or None
+        say(f"n8n runs version {version or 'unknown'}")
         removed = client.fresh_api_key(API_KEY_LABEL)
         say(f"api key '{API_KEY_LABEL}': created, {removed} older removed")
+        took = [t for t in DEPRECATED if client.run_by_hand(deprecated_probe(t), PROBED).started]
+        fields = client.run_by_hand(fields_probe(), PROBED)
+        env = client.run_by_hand(env_probe(), PROBED)
+        python = client.run_by_hand(python_probe(), PROBED)
         lost = lost_workflows(client, settings.owner_database_url, recorded, say)
         if lost is not None:
             ask_for_restore(settings.owner_database_url, lost, say)
@@ -155,7 +240,6 @@ def load_into_n8n(settings: BootstrapSettings, say: Say) -> tuple[list[LoadedWor
     finally:
         client.close()
     findings = [
-        *allow_list_findings(loaded_types),
         *platform.findings,
         *(
             f"{w.name} ({w.id}) is not in the platform's n8n project"
@@ -163,27 +247,19 @@ def load_into_n8n(settings: BootstrapSettings, say: Say) -> tuple[list[LoadedWor
             if w.project != place.project
         ),
     ]
-    return platform.loaded, findings
-
-
-def allow_list_findings(loaded: Collection[str]) -> list[str]:
-    """n8n must load exactly the types node_classes.json says it loads (ADR 0045). One more could
-    reach anything, as when NODES_INCLUDE is unset, and one fewer is a block a workflow cannot
-    run."""
-    wanted = set(NODE_CLASSES.loaded())
-    extra, missing = sorted(set(loaded) - wanted), sorted(wanted - set(loaded))
-    findings: list[str] = []
-    if extra:
-        named = ", ".join(extra[:SHOWN]) + (", …" if len(extra) > SHOWN else "")
-        findings.append(
-            f"n8n loads {len(extra)} node type(s) that node_classes.json does not turn on, "
-            f"{named}: NODES_INCLUDE is not the class file's allow list"
-        )
-    if missing:
-        findings.append(
-            f"n8n does not load {', '.join(missing)}, which node_classes.json says it loads"
-        )
-    return findings
+    ran = _ran_findings(fields, env, python)
+    guards = [
+        *loaded_findings(loaded_types),
+        *deployed_findings(settings.n8n_settings),
+        *shown_findings(shown),
+        *(
+            f"n8n runs a workflow with {t} by hand, which NODES_EXCLUDE must leave out, and "
+            "which runs code in n8n's own process"
+            for t in took
+        ),
+        *ran,
+    ]
+    return N8nLoad(platform.loaded, findings, guards, version)
 
 
 @dataclass(frozen=True)
@@ -363,10 +439,18 @@ def _previous(owner_url: str) -> list[dict[str, str]]:
 
 
 def record_status(
-    owner_url: str, *, ready: bool, detail: str, workflows: list[LoadedWorkflow]
+    owner_url: str,
+    *,
+    ready: bool,
+    detail: str,
+    workflows: list[LoadedWorkflow],
+    n8n_version: str | None = None,
 ) -> None:
     """A bootstrap that loaded nothing keeps the workflows the last one recorded, so the next
-    bootstrap still knows the platform's own by id. platform-api trusts them only while ready."""
+    bootstrap still knows the platform's own by id. platform-api trusts them only while ready.
+    One that could not read n8n's version keeps the last one too, and writes no version at all,
+    as a bootstrap that stopped before the migrations can't."""
+    workflows_json = Jsonb([asdict(w) for w in workflows])
     with psycopg.connect(owner_url) as conn:
         conn.execute(
             "INSERT INTO orchestration.engine_status (id, loaded_at, ready, detail, workflows) "
@@ -375,8 +459,13 @@ def record_status(
             "ready = EXCLUDED.ready, detail = EXCLUDED.detail, workflows = CASE "
             "WHEN EXCLUDED.workflows = '[]'::jsonb THEN orchestration.engine_status.workflows "
             "ELSE EXCLUDED.workflows END",
-            (ready, detail, Jsonb([asdict(w) for w in workflows])),
+            (ready, detail, workflows_json),
         )
+        if n8n_version is not None:
+            conn.execute(
+                "UPDATE orchestration.engine_status SET n8n_version = %s WHERE id = 1",
+                (n8n_version,),
+            )
 
 
 if __name__ == "__main__":

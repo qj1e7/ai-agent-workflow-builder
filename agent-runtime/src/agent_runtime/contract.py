@@ -664,6 +664,13 @@ class ExampleSpec(WireModel):
     needs: list[str] = Field(description="The ids of the capabilities the example uses.")
 
 
+class KeyShapes(WireModel):
+    """The shapes of keys the masker knows, as regular expressions. platform-api refuses each
+    of them in a person's words, answers and what comes back from n8n (ADR 0051)."""
+
+    shapes: list[str]
+
+
 class CapabilityList(WireModel):
     capabilities: list[CapabilitySpec]
     examples: list[ExampleSpec]
@@ -986,6 +993,8 @@ type WatchDay = Literal[
 
 
 CLOCK_PATTERN: Final = r"^(?:[01]\d|2[0-3]):[0-5]\d$"
+SOFTWARE_LIMIT: Final = 80
+"""The longest software name one turn hands the next (`previous.software`)."""
 
 
 class WatchlistScheduleFact(WireModel):
@@ -1032,7 +1041,12 @@ class PreviousTurn(WireModel):
 
     request: str = Field(max_length=2000, description="What the person typed, or the chip's words.")
     software: str | None = Field(
-        default=None, max_length=80, description="The software the Planner named in its answer."
+        default=None,
+        max_length=SOFTWARE_LIMIT,
+        description="The one software the Planner named in its answer, or for a free reply the "
+        "one its request named, which must be in the request's words. Client input: a message "
+        "that only asks to watch it, such as keep track of it, gets the offer to watch this "
+        "software, which the person must tap.",
     )
     answer: str | None = Field(
         default=None,
@@ -1047,9 +1061,34 @@ class PreviousTurn(WireModel):
     )
 
 
+class TurnTrace(WireModel):
+    """Where the turn is traced (ADR 0050). The platform makes it. The runtime traces only when
+    its own tracing is on."""
+
+    id: str = Field(
+        pattern=r"^[0-9a-f]{32}$",
+        description="The turn's trace id, 32 lowercase hex digits. The platform makes a new one "
+        "for each typed message.",
+    )
+    chat: str | None = Field(
+        default=None,
+        pattern=r"^[0-9a-f-]{1,36}$",
+        description="The Portal's chat, which groups its turns into one session.",
+    )
+    person: str | None = Field(
+        default=None,
+        pattern=r"^[0-9a-f]{64}$",
+        description="A pseudonym for the person: an HMAC-SHA256 of their platform id. Never "
+        "their email or name.",
+    )
+
+
 class AnswerRequest(WireModel):
     task: str = Field(min_length=1, max_length=2000)
     model: ModelAccess
+    trace: TurnTrace | None = Field(
+        default=None, description="Where the turn is traced. None leaves it untraced."
+    )
     previous: PreviousTurn | None = Field(
         default=None,
         description="The turn before this one. Context for the question lane only: the Planner "
@@ -1184,7 +1223,8 @@ class RefusedAnswer(WireModel):
     rest: str = Field(
         max_length=2000,
         description="The request without the words that asked to skip a yes, so it can be set "
-        "up with one. Empty when nothing is left.",
+        "up with one. Empty when nothing is left, or when the rest is nothing the platform can "
+        "set up: then the parts say why.",
     )
 
 
@@ -1233,6 +1273,127 @@ class QuestionAnswer(WireModel):
         description="The watched software the answer is about, named as the watchlist names "
         "them. Code keeps only names the facts hold and the text mentions (ADR 0042).",
     )
+
+
+type ReplyForm = Literal["answer", "clarify", "cant"]
+
+REPLY_TEXT_LIMIT: Final = 600
+CHOICE_LIMIT: Final = 40
+
+
+class ReplyEnvelope(BaseModel):
+    """What the model fills for a free reply (ADR 0047). It is loose on purpose: the guard's checks,
+    not the parser, decide whether it can be shown, so a broken rule counts as a reject."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    form: ReplyForm = Field(
+        description="answer: answer it from the guide, the capabilities or the facts. clarify: "
+        "a request too vague to act on, settled by one short question. cant: it asks for "
+        "something the platform can't do."
+    )
+    text: str = Field(
+        description="Plain words, at most 600 characters. No Markdown, list, link or HTML. A "
+        "clarify ends with a question mark."
+    )
+    choices: list[str] = Field(
+        default_factory=list[str],
+        description="For clarify only: 2 to 4 replies the person can tap, each 2 to 5 words and "
+        "never more than 40 characters, in their own voice.",
+    )
+    offer: str | None = Field(
+        default=None,
+        description="For cant only: the id of the one Ready capability that comes closest, or "
+        "null when none does.",
+    )
+    looked_at: list[str] = Field(
+        default_factory=list[str],
+        description="The sections of the facts you used: watchlist, workflows, needs_you.",
+    )
+
+
+class ReplyOffer(WireModel):
+    """The button on a free reply's can't. It sends the registry's example request for the
+    closest Ready capability as the person's next message, so the Planner reads it again and any
+    write it sets up still waits for a yes (ADR 0047)."""
+
+    capability: str = Field(description="The id of a Ready capability in the registry.")
+    request: str = Field(
+        min_length=1, max_length=2000, description="The registry's example request it sends."
+    )
+
+
+type AboutSection = Literal["watchlist", "workflows"]
+ABOUT_LIMIT: Final = 5
+
+
+class ReplyAbout(WireModel):
+    """One watched software or workflow a free reply speaks of. Code keeps it only when the facts
+    hold the name, spelled as they spell it, and the Portal draws its state line from its own data,
+    so the reply never has to state a version, a state or a run (ADR 0049)."""
+
+    section: AboutSection
+    name: str = Field(min_length=1, max_length=80)
+
+
+class FreeReplyAnswer(WireModel):
+    """The model's own reply to a message no other answer fits, shown only after code checked it
+    (ADR 0047). It writes nothing: a choice or an offer is sent as the person's next message."""
+
+    kind: Literal["reply"] = "reply"
+    form: ReplyForm = Field(
+        description="answer: a direct answer. clarify: one short question, with choices to tap. "
+        "cant: an honest can't, with the closest thing the platform can do as a button."
+    )
+    text: str = Field(min_length=1, max_length=REPLY_TEXT_LIMIT, description="Plain words only.")
+    choices: list[Annotated[str, Field(min_length=1, max_length=CHOICE_LIMIT)]] = Field(
+        default_factory=list[str],
+        max_length=4,
+        description="For clarify only, 2 to 4 replies to tap. Each is sent as the next message.",
+    )
+    offer: ReplyOffer | None = Field(
+        default=None,
+        description="For cant only. None on a can't means the button is Ask the team.",
+    )
+    looked_at: list[FactSection] = Field(
+        default_factory=list[FactSection],
+        max_length=3,
+        description="The sections of the facts the reply used, kept only when they were sent.",
+    )
+    about: list[ReplyAbout] = Field(
+        default_factory=list[ReplyAbout],
+        max_length=ABOUT_LIMIT,
+        description="The watched software and workflows the reply names, each kept only when the "
+        "facts hold it. The Portal draws each one's state line. Left out when empty, so a reply "
+        "that names none reads as it did before ADR 0049.",
+        exclude_if=lambda about: not about,
+    )
+    software: str | None = Field(
+        default=None,
+        max_length=SOFTWARE_LIMIT,
+        description="The one software the message named, as it wrote it: code finds the "
+        "reading's software in the message's words, never in the reply. The Portal sends it back "
+        "as previous.software, so a next message such as keep track of it means it. Left out "
+        "when none.",
+        exclude_if=lambda software: software is None,
+    )
+
+    @model_validator(mode="after")
+    def _form_fits(self) -> FreeReplyAnswer:
+        if (self.form == "clarify") != (len(self.choices) >= 2) or (
+            self.form != "clarify" and self.choices
+        ):
+            raise ValueError("Only a clarifying question has choices, 2 to 4 of them")
+        if self.offer is not None and self.form != "cant":
+            raise ValueError("Only a can't offers something instead")
+        return self
+
+
+class DidntFollowAnswer(WireModel):
+    """The fixed fallback for a free reply that failed or that the guard rejected: one line on
+    what the Planner can do for this person, and Say it another way. Never a bare cross."""
+
+    kind: Literal["didnt_follow"] = "didnt_follow"
 
 
 class _OnOrOff(WireModel):
@@ -1341,6 +1502,43 @@ class EditAnswer(WireModel):
         return self
 
 
+SOFTWARE_NAME_LIMIT: Final = 80
+
+
+class RemoveSoftwareAnswer(WireModel):
+    """A request to take one software off the Software watchlist. The platform shows each name in
+    watched_as with the Software page's own Remove, with its Undo. It is a setting of the
+    platform: nothing outside it is written, so no Approver is asked."""
+
+    kind: Literal["remove_software"] = "remove_software"
+    software: str = Field(
+        min_length=1,
+        max_length=SOFTWARE_NAME_LIMIT,
+        description="The software's name as the request wrote it.",
+    )
+    watched_as: list[Annotated[str, Field(max_length=SOFTWARE_NAME_LIMIT)]] = Field(
+        default_factory=list[str],
+        max_length=100,
+        description="Each name in the facts' watchlist that is this software, with case, spaces, "
+        "dots and hyphens aside, so node js is Node.js. Empty when the watchlist holds none.",
+    )
+
+
+class ExplainAnswer(WireModel):
+    """A request to explain a workflow the person has (ADR 0051). The platform matches the words
+    to one of the person's workflows and shows its report. It changes nothing, so both roles may
+    ask."""
+
+    kind: Literal["explain"] = "explain"
+    workflow_words: str | None = Field(
+        default=None,
+        max_length=80,
+        description='The words of the request that name the workflow, as it wrote them, as "the '
+        'FastAPI release check" names FastAPI release check. None for "explain it", so the '
+        "Portal explains the workflow in focus.",
+    )
+
+
 type PlannerAnswer = Annotated[
     SetupCardAnswer
     | PartAnswer
@@ -1355,7 +1553,11 @@ type PlannerAnswer = Annotated[
     | QuestionAnswer
     | EditAnswer
     | PauseAnswer
-    | ResumeAnswer,
+    | ResumeAnswer
+    | RemoveSoftwareAnswer
+    | ExplainAnswer
+    | FreeReplyAnswer
+    | DidntFollowAnswer,
     Field(discriminator="kind"),
 ]
 
@@ -1449,6 +1651,260 @@ type CheckPartResult = Annotated[PartFits | PartCantDo, Field(discriminator="sta
 check_part_result_adapter: TypeAdapter[CheckPartResult] = TypeAdapter(CheckPartResult)
 
 
+type ExplainKind = Literal["runs", "reads", "writes", "posts", "changes"]
+
+EXPLAIN_WORDING_LIMIT: Final = 1200
+EXPLAIN_TEXT_LIMIT: Final = 700
+
+
+class ExplainFact(WireModel):
+    """One fact of a workflow's In short (ADR 0051): when it runs, a place it reads, a write or a
+    post code's wording says after "It", or the closing "It changes nothing"."""
+
+    kind: ExplainKind
+    together: list[Annotated[str, Field(min_length=1, max_length=EXPLAIN_WORDING_LIMIT)]] = Field(
+        min_length=1,
+        max_length=12,
+        description="The words and quoted values code's wording keeps in one sentence for this "
+        'fact, as ["day", "8:00"] or ["GitHub", "fastapi/fastapi"]. A quoted value is given '
+        "without its quotes.",
+    )
+    negated: bool = Field(description="True when code's words for this fact hold a negation.")
+
+
+class ExplainWordingRequest(WireModel):
+    """Code's In short for one workflow, to be reworded so it reads naturally. The model may only
+    smooth the wording: anything in doubt keeps code's."""
+
+    model: ModelAccess
+    wording: str = Field(
+        max_length=EXPLAIN_WORDING_LIMIT,
+        description="Code's In short as one string, each quoted value in curly quotes.",
+    )
+    facts: list[ExplainFact] = Field(max_length=40)
+
+
+class ExplainReworded(WireModel):
+    kind: Literal["reworded"] = "reworded"
+    text: str = Field(
+        max_length=EXPLAIN_TEXT_LIMIT,
+        description="The In short as the model reworded it, as the person sees it. It passed every "
+        "check and the verifier.",
+    )
+
+
+class ExplainKept(WireModel):
+    kind: Literal["kept"] = "kept"
+    why: str = Field(
+        description="Why code's wording stays: the id of the check that failed, the verifier's "
+        "flag, or call when the model's call failed.",
+    )
+
+
+type ExplainWordingResult = ExplainReworded | ExplainKept | ModelProblem
+
+explain_wording_result_adapter: TypeAdapter[ExplainWordingResult] = TypeAdapter(
+    ExplainWordingResult
+)
+
+
+# The workflow drafter (ADR 0051): a person's words in, a plan of n8n blocks out.
+
+PLAN_NAME_LIMIT: Final = 80
+BLOCK_NAME_LIMIT: Final = 60
+SETTING_ID_PATTERN: Final = r"^[a-z][a-z0-9_]{0,39}$"
+
+type SettingKind = Literal[
+    "run_time", "jira_project", "channel", "address", "repository", "confluence_page", "text"
+]
+"""What a setting holds. A run time, a Jira project, and a channel or an address a notice posts
+to are never guessed (ADR 0051, section 5)."""
+type SettingMark = Literal["filled", "guessed", "needed"]
+
+
+class WriteKeyFact(WireModel):
+    """A write key an Operator added in Settings: its name and the system it writes to. Never its
+    secret."""
+
+    name: str = Field(min_length=1, max_length=80)
+    system: str = Field(min_length=1, max_length=40)
+
+
+class DrafterFacts(WireModel):
+    """The team's facts the drafter may use. No Approver's name and no secret."""
+
+    jira_projects: list[Annotated[str, Field(max_length=20)]] = Field(
+        default_factory=list[str], max_length=100, description="The allowed Jira projects."
+    )
+    confluence_pages: list[Annotated[str, Field(max_length=200)]] = Field(
+        default_factory=list[str], max_length=100, description="The allowed Confluence pages."
+    )
+    repositories: list[RepoName] = Field(
+        default_factory=list[str], max_length=100, description="The allowed repositories."
+    )
+    channels: list[Annotated[str, Field(max_length=80)]] = Field(
+        default_factory=list[str],
+        max_length=200,
+        description="The Slack channels the platform's key can see, when the platform has read "
+        "them. A channel the person names counts as filled only when it is here.",
+    )
+    agent_cards: list[LibraryCard] = Field(default_factory=list[LibraryCard], max_length=50)
+    write_keys: list[WriteKeyFact] = Field(default_factory=list[WriteKeyFact], max_length=50)
+
+
+class PlanBlock(WireModel):
+    name: str = Field(min_length=1, max_length=BLOCK_NAME_LIMIT)
+    type: str = Field(min_length=1, max_length=120)
+    version: float
+    parameters: dict[str, Any] = Field(
+        description="As n8n holds them. A setting stands in a value as its placeholder, "
+        "<<setting id>>, never as a guessed value."
+    )
+
+
+class PlanWire(WireModel):
+    from_block: str
+    exit: str = Field(description='The exit\'s name, as "main", "true" or "Yes".')
+    to_block: str
+    exit_index: int = Field(ge=0, description="The exit's place in n8n's outputs of from_block.")
+    input_index: int = Field(ge=0, description="The input of to_block it joins.")
+
+
+class SettingPlace(WireModel):
+    block: str
+    parameter: str = Field(description='The parameter\'s path in the block, as "channelId".')
+
+
+class PlanSetting(WireModel):
+    id: str = Field(pattern=SETTING_ID_PATTERN)
+    kind: SettingKind
+    label: str = Field(min_length=1, max_length=80)
+    fills: list[SettingPlace] = Field(min_length=1)
+    value: str | None = Field(
+        description="A run time is code's reading, as monday 09:00, or the person's own words "
+        "for one code can't read. None while it is needed, except a run time still needed for "
+        "want of a time, which keeps the day the words name, as monday."
+    )
+    mark: SettingMark = Field(
+        description="filled: code found it in the person's words, and for a kind that is never "
+        "guessed, in the team's facts too. guessed: the drafter picked it. needed: nobody has "
+        "given it."
+    )
+
+
+class WorkflowPlan(WireModel):
+    """A drafted workflow as the drafter planned it and code checked it against the catalogue.
+    The builder lays it out as an n8n workflow and adds what every layout adds."""
+
+    name: str = Field(min_length=1, max_length=PLAN_NAME_LIMIT)
+    blocks: list[PlanBlock] = Field(min_length=1)
+    wires: list[PlanWire]
+    settings: list[PlanSetting]
+
+
+class WorkflowDraftRequest(WireModel):
+    words: str = Field(
+        min_length=1,
+        max_length=2000,
+        description="The person's words, unchanged. For an edit, the words that ask for it.",
+    )
+    facts: DrafterFacts
+    current: WorkflowPlan | None = Field(
+        default=None,
+        description="For an edit, the plan as it stands, with each setting's value. The drafter "
+        "returns a whole new plan, and a setting with the same id and kind keeps its value unless "
+        "the words change it.",
+    )
+    model: ModelAccess
+
+
+type ProblemCode = Literal[
+    "unreadable",
+    "name",
+    "too_big",
+    "no_block",
+    "no_version",
+    "no_resource",
+    "no_operation",
+    "no_parameter",
+    "bad_value",
+    "missing_value",
+    "held",
+    "hidden",
+    "left_out",
+    "community",
+    "platform_adds",
+    "cant_run",
+    "native_write",
+    "address_unread",
+    "guessed",
+    "wire",
+    "setting",
+]
+INVENTED_CODES: Final[frozenset[ProblemCode]] = frozenset(
+    {"no_block", "no_version", "no_resource", "no_operation", "no_parameter"}
+)
+"""A plan sent back for one of these named something the pinned n8n image doesn't have."""
+
+
+class PlanProblem(WireModel):
+    code: ProblemCode
+    block: str | None = None
+    text: str = Field(description="What is wrong, in words the drafter can act on.")
+
+
+class SentBack(WireModel):
+    """One plan the catalogue check sent back to the drafter, and why."""
+
+    problems: list[PlanProblem] = Field(min_length=1)
+
+
+COULDNT_DRAFT: Final = "I couldn't draft that."
+KEY_PASTED: Final = "Don't paste keys here. An Operator adds keys in Settings."
+
+
+class WorkflowDrafted(WireModel):
+    status: Literal["drafted"] = "drafted"
+    plan: WorkflowPlan
+    catalogue: str = Field(description="The n8n image, with its digest, the plan was checked by.")
+    sent_back: list[SentBack] = Field(description="The plans the check sent back first.")
+    turns: int = Field(ge=1, description="The model's turns.")
+
+
+type NotDraftedWhy = Literal["gave_up", "no_tool_call", "too_long", "failed"]
+
+
+class WorkflowNotDrafted(WireModel):
+    """Nothing is shown as working: the person sees "I couldn't draft that", with Ask the team."""
+
+    status: Literal["not_drafted"] = "not_drafted"
+    why: NotDraftedWhy = Field(
+        description="gave_up: no plan passed the check after it went back three times. "
+        "no_tool_call: the model answered without a tool. too_long: it ran out of turns or time. "
+        "failed: the platform's own code failed while it answered a tool, so it stopped."
+    )
+    message: str = COULDNT_DRAFT
+    catalogue: str
+    sent_back: list[SentBack]
+    turns: int = Field(ge=0)
+
+
+class KeyPasted(WireModel):
+    """Something the drafter would read holds the shape of a key: the words, the team's facts or
+    the current plan. So no model read any of it (ADR 0051, section 5)."""
+
+    status: Literal["key_pasted"] = "key_pasted"
+    message: str = KEY_PASTED
+
+
+type WorkflowDraftResult = Annotated[
+    WorkflowDrafted | WorkflowNotDrafted | KeyPasted | ModelProblem,
+    Field(discriminator="status"),
+]
+
+workflow_draft_result_adapter: TypeAdapter[WorkflowDraftResult] = TypeAdapter(WorkflowDraftResult)
+
+
 class AgentCard(WireModel):
     id: str
     display: str
@@ -1488,3 +1944,7 @@ class AgentApiSchema(WireModel):
     planner_answer_result: AnswerResult
     planner_check_part_request: CheckPartRequest
     planner_check_part_result: CheckPartResult
+    workflow_explain_request: ExplainWordingRequest
+    workflow_explain_result: ExplainWordingResult
+    workflow_draft_request: WorkflowDraftRequest
+    workflow_draft_result: WorkflowDraftResult

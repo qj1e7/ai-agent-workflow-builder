@@ -108,7 +108,7 @@ async def add_software(
 async def remove_software(
     software_id: str, principal: Operator, watchlist: CurrentWatchlist
 ) -> WatchlistView:
-    match await watchlist.remove(SoftwareId(software_id)):
+    match await watchlist.remove(principal, SoftwareId(software_id)):
         case WatchlistView() as left:
             return left
         case NoSuchSoftware():
@@ -132,7 +132,7 @@ async def remove_software(
 async def restore_software(
     software_id: str, principal: Operator, watchlist: CurrentWatchlist
 ) -> WatchlistView:
-    match await watchlist.restore(SoftwareId(software_id)):
+    match await watchlist.restore(principal, SoftwareId(software_id)):
         case WatchlistView() as restored:
             return restored
         case NoSuchSoftware():

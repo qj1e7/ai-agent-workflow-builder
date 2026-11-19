@@ -19,6 +19,13 @@
       "title": "AbilitiesAnswer",
       "type": "object"
     },
+    "AboutSection": {
+      "enum": [
+        "watchlist",
+        "workflows"
+      ],
+      "type": "string"
+    },
     "Addressee": {
       "discriminator": {
         "mapping": {
@@ -544,6 +551,18 @@
           "minLength": 1,
           "title": "Task",
           "type": "string"
+        },
+        "trace": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TurnTrace"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Where the turn is traced. None leaves it untraced."
         }
       },
       "required": [
@@ -1476,6 +1495,20 @@
       ],
       "type": "string"
     },
+    "DidntFollowAnswer": {
+      "additionalProperties": false,
+      "description": "The fixed fallback for a free reply that failed or that the guard rejected: one line on\nwhat the Planner can do for this person, and Say it another way. Never a bare cross.",
+      "properties": {
+        "kind": {
+          "const": "didnt_follow",
+          "default": "didnt_follow",
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "title": "DidntFollowAnswer",
+      "type": "object"
+    },
     "DraftApproval": {
       "additionalProperties": false,
       "properties": {
@@ -1611,6 +1644,69 @@
       "title": "Drafted",
       "type": "object"
     },
+    "DrafterFacts": {
+      "additionalProperties": false,
+      "description": "The team's facts the drafter may use. No Approver's name and no secret.",
+      "properties": {
+        "agent_cards": {
+          "items": {
+            "$ref": "#/$defs/LibraryCard"
+          },
+          "maxItems": 50,
+          "title": "Agent Cards",
+          "type": "array"
+        },
+        "channels": {
+          "description": "The Slack channels the platform's key can see, when the platform has read them. A channel the person names counts as filled only when it is here.",
+          "items": {
+            "maxLength": 80,
+            "type": "string"
+          },
+          "maxItems": 200,
+          "title": "Channels",
+          "type": "array"
+        },
+        "confluence_pages": {
+          "description": "The allowed Confluence pages.",
+          "items": {
+            "maxLength": 200,
+            "type": "string"
+          },
+          "maxItems": 100,
+          "title": "Confluence Pages",
+          "type": "array"
+        },
+        "jira_projects": {
+          "description": "The allowed Jira projects.",
+          "items": {
+            "maxLength": 20,
+            "type": "string"
+          },
+          "maxItems": 100,
+          "title": "Jira Projects",
+          "type": "array"
+        },
+        "repositories": {
+          "description": "The allowed repositories.",
+          "items": {
+            "$ref": "#/$defs/RepoName"
+          },
+          "maxItems": 100,
+          "title": "Repositories",
+          "type": "array"
+        },
+        "write_keys": {
+          "items": {
+            "$ref": "#/$defs/WriteKeyFact"
+          },
+          "maxItems": 50,
+          "title": "Write Keys",
+          "type": "array"
+        }
+      },
+      "title": "DrafterFacts",
+      "type": "object"
+    },
     "EditAnswer": {
       "additionalProperties": false,
       "properties": {
@@ -1723,6 +1819,163 @@
       ],
       "title": "ExampleSpec",
       "type": "object"
+    },
+    "ExplainAnswer": {
+      "additionalProperties": false,
+      "description": "A request to explain a workflow the person has (ADR 0051). The platform matches the words\nto one of the person's workflows and shows its report. It changes nothing, so both roles may\nask.",
+      "properties": {
+        "kind": {
+          "const": "explain",
+          "default": "explain",
+          "title": "Kind",
+          "type": "string"
+        },
+        "workflow_words": {
+          "anyOf": [
+            {
+              "maxLength": 80,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The words of the request that name the workflow, as it wrote them, as \"the FastAPI release check\" names FastAPI release check. None for \"explain it\", so the Portal explains the workflow in focus.",
+          "title": "Workflow Words"
+        }
+      },
+      "title": "ExplainAnswer",
+      "type": "object"
+    },
+    "ExplainFact": {
+      "additionalProperties": false,
+      "description": "One fact of a workflow's In short (ADR 0051): when it runs, a place it reads, a write or a\npost code's wording says after \"It\", or the closing \"It changes nothing\".",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/ExplainKind"
+        },
+        "negated": {
+          "description": "True when code's words for this fact hold a negation.",
+          "title": "Negated",
+          "type": "boolean"
+        },
+        "together": {
+          "description": "The words and quoted values code's wording keeps in one sentence for this fact, as [\"day\", \"8:00\"] or [\"GitHub\", \"fastapi/fastapi\"]. A quoted value is given without its quotes.",
+          "items": {
+            "maxLength": 1200,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 12,
+          "minItems": 1,
+          "title": "Together",
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind",
+        "together",
+        "negated"
+      ],
+      "title": "ExplainFact",
+      "type": "object"
+    },
+    "ExplainKept": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "kept",
+          "default": "kept",
+          "title": "Kind",
+          "type": "string"
+        },
+        "why": {
+          "description": "Why code's wording stays: the id of the check that failed, the verifier's flag, or call when the model's call failed.",
+          "title": "Why",
+          "type": "string"
+        }
+      },
+      "required": [
+        "why"
+      ],
+      "title": "ExplainKept",
+      "type": "object"
+    },
+    "ExplainKind": {
+      "enum": [
+        "runs",
+        "reads",
+        "writes",
+        "posts",
+        "changes"
+      ],
+      "type": "string"
+    },
+    "ExplainReworded": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "reworded",
+          "default": "reworded",
+          "title": "Kind",
+          "type": "string"
+        },
+        "text": {
+          "description": "The In short as the model reworded it, as the person sees it. It passed every check and the verifier.",
+          "maxLength": 700,
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "ExplainReworded",
+      "type": "object"
+    },
+    "ExplainWordingRequest": {
+      "additionalProperties": false,
+      "description": "Code's In short for one workflow, to be reworded so it reads naturally. The model may only\nsmooth the wording: anything in doubt keeps code's.",
+      "properties": {
+        "facts": {
+          "items": {
+            "$ref": "#/$defs/ExplainFact"
+          },
+          "maxItems": 40,
+          "title": "Facts",
+          "type": "array"
+        },
+        "model": {
+          "$ref": "#/$defs/ModelAccess"
+        },
+        "wording": {
+          "description": "Code's In short as one string, each quoted value in curly quotes.",
+          "maxLength": 1200,
+          "title": "Wording",
+          "type": "string"
+        }
+      },
+      "required": [
+        "model",
+        "wording",
+        "facts"
+      ],
+      "title": "ExplainWordingRequest",
+      "type": "object"
+    },
+    "ExplainWordingResult": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ExplainReworded"
+        },
+        {
+          "$ref": "#/$defs/ExplainKept"
+        },
+        {
+          "$ref": "#/$defs/ModelProblem"
+        }
+      ]
     },
     "FactSection": {
       "enum": [
@@ -1912,6 +2165,90 @@
       "title": "FoundSoftware",
       "type": "object"
     },
+    "FreeReplyAnswer": {
+      "additionalProperties": false,
+      "description": "The model's own reply to a message no other answer fits, shown only after code checked it\n(ADR 0047). It writes nothing: a choice or an offer is sent as the person's next message.",
+      "properties": {
+        "about": {
+          "description": "The watched software and workflows the reply names, each kept only when the facts hold it. The Portal draws each one's state line. Left out when empty, so a reply that names none reads as it did before ADR 0049.",
+          "items": {
+            "$ref": "#/$defs/ReplyAbout"
+          },
+          "maxItems": 5,
+          "title": "About",
+          "type": "array"
+        },
+        "choices": {
+          "description": "For clarify only, 2 to 4 replies to tap. Each is sent as the next message.",
+          "items": {
+            "maxLength": 40,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 4,
+          "title": "Choices",
+          "type": "array"
+        },
+        "form": {
+          "$ref": "#/$defs/ReplyForm",
+          "description": "answer: a direct answer. clarify: one short question, with choices to tap. cant: an honest can't, with the closest thing the platform can do as a button."
+        },
+        "kind": {
+          "const": "reply",
+          "default": "reply",
+          "title": "Kind",
+          "type": "string"
+        },
+        "looked_at": {
+          "description": "The sections of the facts the reply used, kept only when they were sent.",
+          "items": {
+            "$ref": "#/$defs/FactSection"
+          },
+          "maxItems": 3,
+          "title": "Looked At",
+          "type": "array"
+        },
+        "offer": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReplyOffer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "For cant only. None on a can't means the button is Ask the team."
+        },
+        "software": {
+          "anyOf": [
+            {
+              "maxLength": 80,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The one software the message named, as it wrote it: code finds the reading's software in the message's words, never in the reply. The Portal sends it back as previous.software, so a next message such as keep track of it means it. Left out when none.",
+          "title": "Software"
+        },
+        "text": {
+          "description": "Plain words only.",
+          "maxLength": 600,
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "form",
+        "text"
+      ],
+      "title": "FreeReplyAnswer",
+      "type": "object"
+    },
     "GitHubCheckResult": {
       "discriminator": {
         "mapping": {
@@ -2024,6 +2361,25 @@
         "text"
       ],
       "type": "string"
+    },
+    "KeyPasted": {
+      "additionalProperties": false,
+      "description": "Something the drafter would read holds the shape of a key: the words, the team's facts or\nthe current plan. So no model read any of it (ADR 0051, section 5).",
+      "properties": {
+        "message": {
+          "default": "Don't paste keys here. An Operator adds keys in Settings.",
+          "title": "Message",
+          "type": "string"
+        },
+        "status": {
+          "const": "key_pasted",
+          "default": "key_pasted",
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "title": "KeyPasted",
+      "type": "object"
     },
     "LibraryCard": {
       "additionalProperties": false,
@@ -2314,6 +2670,15 @@
       "title": "NeedsYouFact",
       "type": "object"
     },
+    "NotDraftedWhy": {
+      "enum": [
+        "gave_up",
+        "no_tool_call",
+        "too_long",
+        "failed"
+      ],
+      "type": "string"
+    },
     "NpmSource": {
       "additionalProperties": false,
       "properties": {
@@ -2499,18 +2864,180 @@
       "title": "PauseAnswer",
       "type": "object"
     },
+    "PlanBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "maxLength": 60,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "parameters": {
+          "additionalProperties": true,
+          "description": "As n8n holds them. A setting stands in a value as its placeholder, <<setting id>>, never as a guessed value.",
+          "title": "Parameters",
+          "type": "object"
+        },
+        "type": {
+          "maxLength": 120,
+          "minLength": 1,
+          "title": "Type",
+          "type": "string"
+        },
+        "version": {
+          "title": "Version",
+          "type": "number"
+        }
+      },
+      "required": [
+        "name",
+        "type",
+        "version",
+        "parameters"
+      ],
+      "title": "PlanBlock",
+      "type": "object"
+    },
+    "PlanProblem": {
+      "additionalProperties": false,
+      "properties": {
+        "block": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Block"
+        },
+        "code": {
+          "$ref": "#/$defs/ProblemCode"
+        },
+        "text": {
+          "description": "What is wrong, in words the drafter can act on.",
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "text"
+      ],
+      "title": "PlanProblem",
+      "type": "object"
+    },
+    "PlanSetting": {
+      "additionalProperties": false,
+      "properties": {
+        "fills": {
+          "items": {
+            "$ref": "#/$defs/SettingPlace"
+          },
+          "minItems": 1,
+          "title": "Fills",
+          "type": "array"
+        },
+        "id": {
+          "pattern": "^[a-z][a-z0-9_]{0,39}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/SettingKind"
+        },
+        "label": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "mark": {
+          "$ref": "#/$defs/SettingMark",
+          "description": "filled: code found it in the person's words, and for a kind that is never guessed, in the team's facts too. guessed: the drafter picked it. needed: nobody has given it."
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "A run time is code's reading, as monday 09:00, or the person's own words for one code can't read. None while it is needed, except a run time still needed for want of a time, which keeps the day the words name, as monday.",
+          "title": "Value"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "label",
+        "fills",
+        "value",
+        "mark"
+      ],
+      "title": "PlanSetting",
+      "type": "object"
+    },
+    "PlanWire": {
+      "additionalProperties": false,
+      "properties": {
+        "exit": {
+          "description": "The exit's name, as \"main\", \"true\" or \"Yes\".",
+          "title": "Exit",
+          "type": "string"
+        },
+        "exit_index": {
+          "description": "The exit's place in n8n's outputs of from_block.",
+          "minimum": 0,
+          "title": "Exit Index",
+          "type": "integer"
+        },
+        "from_block": {
+          "title": "From Block",
+          "type": "string"
+        },
+        "input_index": {
+          "description": "The input of to_block it joins.",
+          "minimum": 0,
+          "title": "Input Index",
+          "type": "integer"
+        },
+        "to_block": {
+          "title": "To Block",
+          "type": "string"
+        }
+      },
+      "required": [
+        "from_block",
+        "exit",
+        "to_block",
+        "exit_index",
+        "input_index"
+      ],
+      "title": "PlanWire",
+      "type": "object"
+    },
     "PlannerAnswer": {
       "discriminator": {
         "mapping": {
           "abilities": "#/$defs/AbilitiesAnswer",
           "cant": "#/$defs/CantAnswer",
           "check_workflows": "#/$defs/CheckWorkflowsAnswer",
+          "didnt_follow": "#/$defs/DidntFollowAnswer",
           "edit": "#/$defs/EditAnswer",
+          "explain": "#/$defs/ExplainAnswer",
           "needs_me": "#/$defs/NeedsMeAnswer",
           "part": "#/$defs/PartAnswer",
           "pause": "#/$defs/PauseAnswer",
           "question": "#/$defs/QuestionAnswer",
           "refused": "#/$defs/RefusedAnswer",
+          "remove_software": "#/$defs/RemoveSoftwareAnswer",
+          "reply": "#/$defs/FreeReplyAnswer",
           "resume": "#/$defs/ResumeAnswer",
           "setup_card": "#/$defs/SetupCardAnswer",
           "watchlist": "#/$defs/WatchlistAnswer",
@@ -2561,6 +3088,18 @@
         },
         {
           "$ref": "#/$defs/ResumeAnswer"
+        },
+        {
+          "$ref": "#/$defs/RemoveSoftwareAnswer"
+        },
+        {
+          "$ref": "#/$defs/ExplainAnswer"
+        },
+        {
+          "$ref": "#/$defs/FreeReplyAnswer"
+        },
+        {
+          "$ref": "#/$defs/DidntFollowAnswer"
         }
       ]
     },
@@ -2707,7 +3246,7 @@
             }
           ],
           "default": null,
-          "description": "The software the Planner named in its answer.",
+          "description": "The one software the Planner named in its answer, or for a free reply the one its request named, which must be in the request's words. Client input: a message that only asks to watch it, such as keep track of it, gets the offer to watch this software, which the person must tap.",
           "title": "Software"
         }
       },
@@ -2716,6 +3255,32 @@
       ],
       "title": "PreviousTurn",
       "type": "object"
+    },
+    "ProblemCode": {
+      "enum": [
+        "unreadable",
+        "name",
+        "too_big",
+        "no_block",
+        "no_version",
+        "no_resource",
+        "no_operation",
+        "no_parameter",
+        "bad_value",
+        "missing_value",
+        "held",
+        "hidden",
+        "left_out",
+        "community",
+        "platform_adds",
+        "cant_run",
+        "native_write",
+        "address_unread",
+        "guessed",
+        "wire",
+        "setting"
+      ],
+      "type": "string"
     },
     "ProblemReason": {
       "enum": [
@@ -2863,7 +3428,7 @@
           "type": "string"
         },
         "rest": {
-          "description": "The request without the words that asked to skip a yes, so it can be set up with one. Empty when nothing is left.",
+          "description": "The request without the words that asked to skip a yes, so it can be set up with one. Empty when nothing is left, or when the rest is nothing the platform can set up: then the parts say why.",
           "maxLength": 2000,
           "title": "Rest",
           "type": "string"
@@ -2971,6 +3536,93 @@
         "releases"
       ],
       "title": "ReleasesRead",
+      "type": "object"
+    },
+    "RemoveSoftwareAnswer": {
+      "additionalProperties": false,
+      "description": "A request to take one software off the Software watchlist. The platform shows each name in\nwatched_as with the Software page's own Remove, with its Undo. It is a setting of the\nplatform: nothing outside it is written, so no Approver is asked.",
+      "properties": {
+        "kind": {
+          "const": "remove_software",
+          "default": "remove_software",
+          "title": "Kind",
+          "type": "string"
+        },
+        "software": {
+          "description": "The software's name as the request wrote it.",
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Software",
+          "type": "string"
+        },
+        "watched_as": {
+          "description": "Each name in the facts' watchlist that is this software, with case, spaces, dots and hyphens aside, so node js is Node.js. Empty when the watchlist holds none.",
+          "items": {
+            "maxLength": 80,
+            "type": "string"
+          },
+          "maxItems": 100,
+          "title": "Watched As",
+          "type": "array"
+        }
+      },
+      "required": [
+        "software"
+      ],
+      "title": "RemoveSoftwareAnswer",
+      "type": "object"
+    },
+    "ReplyAbout": {
+      "additionalProperties": false,
+      "description": "One watched software or workflow a free reply speaks of. Code keeps it only when the facts\nhold the name, spelled as they spell it, and the Portal draws its state line from its own data,\nso the reply never has to state a version, a state or a run (ADR 0049).",
+      "properties": {
+        "name": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "section": {
+          "$ref": "#/$defs/AboutSection"
+        }
+      },
+      "required": [
+        "section",
+        "name"
+      ],
+      "title": "ReplyAbout",
+      "type": "object"
+    },
+    "ReplyForm": {
+      "enum": [
+        "answer",
+        "clarify",
+        "cant"
+      ],
+      "type": "string"
+    },
+    "ReplyOffer": {
+      "additionalProperties": false,
+      "description": "The button on a free reply's can't. It sends the registry's example request for the\nclosest Ready capability as the person's next message, so the Planner reads it again and any\nwrite it sets up still waits for a yes (ADR 0047).",
+      "properties": {
+        "capability": {
+          "description": "The id of a Ready capability in the registry.",
+          "title": "Capability",
+          "type": "string"
+        },
+        "request": {
+          "description": "The registry's example request it sends.",
+          "maxLength": 2000,
+          "minLength": 1,
+          "title": "Request",
+          "type": "string"
+        }
+      },
+      "required": [
+        "capability",
+        "request"
+      ],
+      "title": "ReplyOffer",
       "type": "object"
     },
     "RepoName": {
@@ -3166,6 +3818,65 @@
         }
       },
       "title": "ScheduleChange",
+      "type": "object"
+    },
+    "SentBack": {
+      "additionalProperties": false,
+      "description": "One plan the catalogue check sent back to the drafter, and why.",
+      "properties": {
+        "problems": {
+          "items": {
+            "$ref": "#/$defs/PlanProblem"
+          },
+          "minItems": 1,
+          "title": "Problems",
+          "type": "array"
+        }
+      },
+      "required": [
+        "problems"
+      ],
+      "title": "SentBack",
+      "type": "object"
+    },
+    "SettingKind": {
+      "enum": [
+        "run_time",
+        "jira_project",
+        "channel",
+        "address",
+        "repository",
+        "confluence_page",
+        "text"
+      ],
+      "type": "string"
+    },
+    "SettingMark": {
+      "enum": [
+        "filled",
+        "guessed",
+        "needed"
+      ],
+      "type": "string"
+    },
+    "SettingPlace": {
+      "additionalProperties": false,
+      "properties": {
+        "block": {
+          "title": "Block",
+          "type": "string"
+        },
+        "parameter": {
+          "description": "The parameter's path in the block, as \"channelId\".",
+          "title": "Parameter",
+          "type": "string"
+        }
+      },
+      "required": [
+        "block",
+        "parameter"
+      ],
+      "title": "SettingPlace",
       "type": "object"
     },
     "SetupCardAnswer": {
@@ -3708,6 +4419,51 @@
       "title": "ToolSpec",
       "type": "object"
     },
+    "TurnTrace": {
+      "additionalProperties": false,
+      "description": "Where the turn is traced (ADR 0050). The platform makes it. The runtime traces only when\nits own tracing is on.",
+      "properties": {
+        "chat": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f-]{1,36}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The Portal's chat, which groups its turns into one session.",
+          "title": "Chat"
+        },
+        "id": {
+          "description": "The turn's trace id, 32 lowercase hex digits. The platform makes a new one for each typed message.",
+          "pattern": "^[0-9a-f]{32}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "person": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "A pseudonym for the person: an HMAC-SHA256 of their platform id. Never their email or name.",
+          "title": "Person"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "title": "TurnTrace",
+      "type": "object"
+    },
     "UnderstoodRow": {
       "additionalProperties": false,
       "properties": {
@@ -4150,6 +4906,109 @@
       "title": "WhyStoppedAnswer",
       "type": "object"
     },
+    "WorkflowDraftRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "current": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorkflowPlan"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "For an edit, the plan as it stands, with each setting's value. The drafter returns a whole new plan, and a setting with the same id and kind keeps its value unless the words change it."
+        },
+        "facts": {
+          "$ref": "#/$defs/DrafterFacts"
+        },
+        "model": {
+          "$ref": "#/$defs/ModelAccess"
+        },
+        "words": {
+          "description": "The person's words, unchanged. For an edit, the words that ask for it.",
+          "maxLength": 2000,
+          "minLength": 1,
+          "title": "Words",
+          "type": "string"
+        }
+      },
+      "required": [
+        "words",
+        "facts",
+        "model"
+      ],
+      "title": "WorkflowDraftRequest",
+      "type": "object"
+    },
+    "WorkflowDraftResult": {
+      "discriminator": {
+        "mapping": {
+          "drafted": "#/$defs/WorkflowDrafted",
+          "key_pasted": "#/$defs/KeyPasted",
+          "not_drafted": "#/$defs/WorkflowNotDrafted",
+          "problem": "#/$defs/ModelProblem"
+        },
+        "propertyName": "status"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/WorkflowDrafted"
+        },
+        {
+          "$ref": "#/$defs/WorkflowNotDrafted"
+        },
+        {
+          "$ref": "#/$defs/KeyPasted"
+        },
+        {
+          "$ref": "#/$defs/ModelProblem"
+        }
+      ]
+    },
+    "WorkflowDrafted": {
+      "additionalProperties": false,
+      "properties": {
+        "catalogue": {
+          "description": "The n8n image, with its digest, the plan was checked by.",
+          "title": "Catalogue",
+          "type": "string"
+        },
+        "plan": {
+          "$ref": "#/$defs/WorkflowPlan"
+        },
+        "sent_back": {
+          "description": "The plans the check sent back first.",
+          "items": {
+            "$ref": "#/$defs/SentBack"
+          },
+          "title": "Sent Back",
+          "type": "array"
+        },
+        "status": {
+          "const": "drafted",
+          "default": "drafted",
+          "title": "Status",
+          "type": "string"
+        },
+        "turns": {
+          "description": "The model's turns.",
+          "minimum": 1,
+          "title": "Turns",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "plan",
+        "catalogue",
+        "sent_back",
+        "turns"
+      ],
+      "title": "WorkflowDrafted",
+      "type": "object"
+    },
     "WorkflowFact": {
       "additionalProperties": false,
       "properties": {
@@ -4203,6 +5062,117 @@
     "WorkflowName": {
       "maxLength": 80,
       "type": "string"
+    },
+    "WorkflowNotDrafted": {
+      "additionalProperties": false,
+      "description": "Nothing is shown as working: the person sees \"I couldn't draft that\", with Ask the team.",
+      "properties": {
+        "catalogue": {
+          "title": "Catalogue",
+          "type": "string"
+        },
+        "message": {
+          "default": "I couldn't draft that.",
+          "title": "Message",
+          "type": "string"
+        },
+        "sent_back": {
+          "items": {
+            "$ref": "#/$defs/SentBack"
+          },
+          "title": "Sent Back",
+          "type": "array"
+        },
+        "status": {
+          "const": "not_drafted",
+          "default": "not_drafted",
+          "title": "Status",
+          "type": "string"
+        },
+        "turns": {
+          "minimum": 0,
+          "title": "Turns",
+          "type": "integer"
+        },
+        "why": {
+          "$ref": "#/$defs/NotDraftedWhy",
+          "description": "gave_up: no plan passed the check after it went back three times. no_tool_call: the model answered without a tool. too_long: it ran out of turns or time. failed: the platform's own code failed while it answered a tool, so it stopped."
+        }
+      },
+      "required": [
+        "why",
+        "catalogue",
+        "sent_back",
+        "turns"
+      ],
+      "title": "WorkflowNotDrafted",
+      "type": "object"
+    },
+    "WorkflowPlan": {
+      "additionalProperties": false,
+      "description": "A drafted workflow as the drafter planned it and code checked it against the catalogue.\nThe builder lays it out as an n8n workflow and adds what every layout adds.",
+      "properties": {
+        "blocks": {
+          "items": {
+            "$ref": "#/$defs/PlanBlock"
+          },
+          "minItems": 1,
+          "title": "Blocks",
+          "type": "array"
+        },
+        "name": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "settings": {
+          "items": {
+            "$ref": "#/$defs/PlanSetting"
+          },
+          "title": "Settings",
+          "type": "array"
+        },
+        "wires": {
+          "items": {
+            "$ref": "#/$defs/PlanWire"
+          },
+          "title": "Wires",
+          "type": "array"
+        }
+      },
+      "required": [
+        "name",
+        "blocks",
+        "wires",
+        "settings"
+      ],
+      "title": "WorkflowPlan",
+      "type": "object"
+    },
+    "WriteKeyFact": {
+      "additionalProperties": false,
+      "description": "A write key an Operator added in Settings: its name and the system it writes to. Never its\nsecret.",
+      "properties": {
+        "name": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "system": {
+          "maxLength": 40,
+          "minLength": 1,
+          "title": "System",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "system"
+      ],
+      "title": "WriteKeyFact",
+      "type": "object"
     }
   },
   "additionalProperties": false,
@@ -4275,6 +5245,18 @@
     },
     "tool_list": {
       "$ref": "#/$defs/ToolList"
+    },
+    "workflow_draft_request": {
+      "$ref": "#/$defs/WorkflowDraftRequest"
+    },
+    "workflow_draft_result": {
+      "$ref": "#/$defs/WorkflowDraftResult"
+    },
+    "workflow_explain_request": {
+      "$ref": "#/$defs/ExplainWordingRequest"
+    },
+    "workflow_explain_result": {
+      "$ref": "#/$defs/ExplainWordingResult"
     }
   },
   "required": [
@@ -4300,7 +5282,11 @@
     "planner_answer_request",
     "planner_answer_result",
     "planner_check_part_request",
-    "planner_check_part_result"
+    "planner_check_part_result",
+    "workflow_explain_request",
+    "workflow_explain_result",
+    "workflow_draft_request",
+    "workflow_draft_result"
   ],
   "title": "AgentApiSchema",
   "type": "object"

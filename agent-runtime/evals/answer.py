@@ -1,7 +1,9 @@
 import re
+from dataclasses import replace
 from typing import cast
 
 from langchain_core.language_models import BaseChatModel
+from langchain_core.messages import BaseMessage
 from pydantic import BaseModel
 
 from agent_runtime.answers import (
@@ -14,6 +16,7 @@ from agent_runtime.answers import (
 )
 from agent_runtime.contract import (
     AbilitiesAnswer,
+    Answered,
     AnswerRequest,
     CantAnswer,
     CantRow,
@@ -34,11 +37,14 @@ from agent_runtime.contract import (
 )
 from agent_runtime.parts import parts_of
 from agent_runtime.planner import said_in, visible_words
+from agent_runtime.planner_led import Led, led
 from agent_runtime.questions import QuestionReply, answer_of_reply, question_messages
-from agent_runtime.reading import polite
+from agent_runtime.reading import polite, weekdays_said
+from evals.anything import Replies, usage_of
 from evals.checks import (
     Check,
     check,
+    false_ticks,
     mentions,
     mentions_a_form,
     no_jargon,
@@ -252,11 +258,18 @@ def _cant_checks(case: AnswerCase, shown: PlannerAnswer) -> list[Check]:
 
 def _guessed_time(schedule: UnderstoodRow, task: str) -> list[str]:
     """The words of a schedule the request never said: a time of day on any accepted row, and a
-    day too on one the Planner called the person's own. A day shown as filled in is allowed."""
+    day too on one the Planner called the person's own. A day shown as filled in is allowed, and
+    so is every weekday for a request that names it another way, as "Mon-Fri"."""
     if schedule.state not in ACCEPTED:
         return []
     patterns = [_CLOCK_WORDS] + ([_DAY_WORDS] if schedule.state == "understood" else [])
-    return [w for p in patterns for w in p.findall(schedule.text) if not said_in(w, task)]
+    weekdays = weekdays_said(task)
+    return [
+        w
+        for p in patterns
+        for w in p.findall(schedule.text)
+        if not said_in(w, task) and not (weekdays and w.casefold().startswith("weekday"))
+    ]
 
 
 def _card_checks(case: AnswerCase, shown: PlannerAnswer) -> list[Check]:
@@ -353,8 +366,10 @@ def follow_up(model: BaseChatModel, case: AnswerCase, first: Answer, marker: str
     structured = model.with_structured_output(QuestionReply, include_raw=True)
     reply: dict[str, object] = structured.invoke(marked(f"{system}\n\n{user}", marker))  # type: ignore[assignment]
     parsed = reply.get("parsed")
+    raw = reply.get("raw")
+    calls = usage_of([first.raw, raw if isinstance(raw, BaseMessage) else None])
     return Answer(
-        first.value, first.text, first.raw, parsed if isinstance(parsed, QuestionReply) else "none"
+        first.value, first.text, calls, parsed if isinstance(parsed, QuestionReply) else "none"
     )
 
 
@@ -377,9 +392,14 @@ def score(case: AnswerCase, answer: Answer) -> list[Check]:
             shown = decided
     if shown is None:
         return [check("answered", []), check("right_kind", ["the reading does not hold together"])]
-    text = " ".join(_texts(shown))
     reading = value if isinstance(value, TaskRead) else None
-    parts = _part_checks(case, shown, parts_of(reading, case.task, shown, case.facts))
+    return checks_of(case, shown, parts_of(reading, case.task, shown, case.facts))
+
+
+def checks_of(case: AnswerCase, shown: PlannerAnswer, said: list[RequestPart]) -> list[Check]:
+    """The checks on the answer the person sees and the marks it carries, in either mode."""
+    text = " ".join(_texts(shown))
+    parts = _part_checks(case, shown, said)
     if isinstance(shown, QuestionAnswer):
         # Its words quote the person's own software names, such as n8n, so the jargon check
         # does not apply. The model's text is still held to the themed-name rule.
@@ -413,3 +433,25 @@ ANSWER = Job(
     follow_up=follow_up,
     most_calls=2,
 )
+
+
+def ask_led(model: BaseChatModel, case: AnswerCase) -> Answer:
+    replies = Replies()
+    watched = model.model_copy(update={"callbacks": [replies]})
+    outcome = led(_request(case), lambda _timeout: watched)
+    return Answer(outcome, outcome.result.model_dump_json(), usage_of(replies.messages))
+
+
+def score_led(case: AnswerCase, answer: Answer) -> list[Check]:
+    outcome = answer.value
+    result = outcome.result if isinstance(outcome, Led) else None
+    if not isinstance(outcome, Led) or not isinstance(result, Answered):
+        return [check("answered", ["the Portal shows its offline answer"])]
+    return [
+        *checks_of(case, result.answer, result.parts),
+        check("ticks_reached", false_ticks(outcome)),
+    ]
+
+
+ANSWER_LED = replace(ANSWER, product_call=ask_led, score=score_led, most_calls=6)
+"""The golden set on the AI-led Planner (ADR 0049), scored on the marks the answer carries."""

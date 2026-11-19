@@ -16,7 +16,7 @@ import psycopg
 import pytest
 
 from platform_api.bootstrap import LoadedWorkflow, record_status
-from platform_api.builder import Builder
+from platform_api.builder import Builder, Home, TeamRequests
 from platform_api.builder.n8n_holds import (
     MOVE_GRACE,
     NO_SPACE,
@@ -48,6 +48,8 @@ from tests.conftest import PostgresUrls
 from tests.fake_n8n import OWNER_ID, FakeN8n
 from tests.support import NOW
 from tests.test_builder_lifecycle import Lab, ModelConnected
+from tests.test_connections import Rig
+from tests.test_home import NoTeams
 from tests.test_n8n_api import api_for
 from tests.test_n8n_builder import ERROR_WORKFLOW, WRITES, N8nLab, lab
 from tests.test_n8n_lifecycle import Workflows, made, version_row
@@ -60,6 +62,7 @@ __all__ = ["lab"]
 PLATFORM_PROJECT = "proj-platform"
 EDITOR = "https://n8n.example"
 CAROL = UserId("carol")
+APPROVERS = "Approvers can't have n8n access. An Operator with n8n access can open it."
 
 
 @dataclass
@@ -242,7 +245,9 @@ async def test_approvers_get_403_on_open_in_n8n(s: Staffed):
     use_case_id, workflow_id = await held(s)
     assert (await s.open("bob", use_case_id)).status_code == 403
     refused = await s.open("alice", use_case_id)
-    assert (refused.status_code, refused.json()["detail"]) == (403, NO_ACCESS)
+    assert (refused.status_code, refused.json()["detail"]) == (403, APPROVERS)
+    mine = (await s.call("bob", "GET", "/api/v1/me/n8n")).json()
+    assert (mine["can_open"], mine["why_not"]) == (False, APPROVERS)
     assert s.n8n.home_of(workflow_id) == PLATFORM_PROJECT
 
 
@@ -766,7 +771,9 @@ async def test_the_planner_answers_who_may_open_n8n(s: Staffed):
 
     bob = Principal(UserId("bob"), frozenset({Role.APPROVER}), "Bob")
     no_access = await asked(bob, f"open {name} in n8n")
-    assert (no_access.answer, no_access.said, no_access.can_open) == ("n8n", NO_ACCESS, False)
+    assert (no_access.answer, no_access.said, no_access.can_open) == ("n8n", APPROVERS, False)
+    dana = Principal(UserId(await s.operator("dana")), frozenset({Role.OPERATOR}), "Dana")
+    assert (await asked(dana, f"open {name} in n8n")).said == NO_ACCESS
     carol = Principal(CAROL, frozenset({Role.OPERATOR}), "Carol", n8n_access=True)
     assert (await s.give("carol")).status_code == 200
     s.bootstrapped(ready=False)
@@ -778,3 +785,79 @@ async def test_the_planner_answers_who_may_open_n8n(s: Staffed):
     assert (here.said, here.can_open, here.use_case_id) == (HERE_IN_N8N, True, use_case_id)
     which = await asked(carol, "open n8n")
     assert (which.said, which.use_case_id) == (WHICH_IN_N8N, None)
+
+
+async def test_everyone_sees_who_has_a_workflow_open_in_n8n_by_their_name(s: Staffed):
+    dana = await s.operator("dana")
+    await s.member(dana)
+    use_case_id, _ = await held(s)
+    assert (await s.open(dana, use_case_id)).status_code == 200
+    for person in ("alice", "bob", "carol"):
+        shown = (await s.call(person, "GET", f"/api/v1/use-cases/{use_case_id}")).json()
+        listed = (await s.call(person, "GET", "/api/v1/use-cases")).json()["use_cases"]
+        [row] = [u for u in listed if u["use_case_id"] == use_case_id]
+        assert row["held_in_n8n"] == shown["held_in_n8n"], "the page and the list say one thing"
+        assert (shown["held_in_n8n"]["id"], shown["held_in_n8n"]["name"]) == (dana, "Dana")
+    assert (await s.take_back(dana, use_case_id)).status_code == 200
+    view = (await s.call("bob", "GET", f"/api/v1/use-cases/{use_case_id}")).json()
+    assert view["held_in_n8n"] is None
+
+
+async def held_by_nobody_listed(s: Staffed, use_case_id: str) -> str:
+    """A hold by someone whose row is no longer on the People list."""
+    gone = "per_01JB8GONE"
+    async with s.lab.h.db.transaction("builder") as uow:
+        await uow.conn.execute(
+            "UPDATE builder.use_cases SET held_by = %s, held_since = %s WHERE use_case_id = %s",
+            (gone, uow.now, use_case_id),
+        )
+    return gone
+
+
+async def test_a_holder_nobody_can_name_is_a_colleague_never_an_id(s: Staffed):
+    await s.member()
+    use_case_id, _ = await held(s)
+    gone = await held_by_nobody_listed(s, use_case_id)
+    shown = (await s.call("bob", "GET", f"/api/v1/use-cases/{use_case_id}")).json()
+    assert (shown["held_in_n8n"]["id"], shown["held_in_n8n"]["name"]) == (gone, "a colleague")
+    in_n8n = (await s.call("carol", "GET", f"/api/v1/use-cases/{use_case_id}/n8n")).json()
+    assert in_n8n["holder"]["name"] == "a colleague"
+    saved = await s.call(
+        "alice",
+        "PUT",
+        f"/api/v1/use-cases/{use_case_id}/schedule",
+        {"day": "monday", "at": "07:30", "via": "page", "expected_version": 1},
+    )
+    assert saved.status_code == 409
+    assert saved.json()["detail"].startswith("A colleague has it open in n8n since ")
+    assert saved.json()["detail"].endswith(
+        "Ask a colleague, or anyone with n8n access, to take it back."
+    )
+
+
+async def test_home_names_whoever_published_in_n8n_from_the_people_list(s: Staffed):
+    dana = await s.operator("dana")
+    dana_in_n8n = await s.member(dana)
+    use_case_id, workflow_id = await held(s)
+    assert (await s.open(dana, use_case_id)).status_code == 200
+
+    def renamed(workflow: dict[str, Any]) -> None:
+        workflow["nodes"][-1]["name"] = "Raise the ticket"
+
+    s.n8n.publish_as(workflow_id, dana_in_n8n, renamed)
+    assert s.lab.builder.sweep is not None
+    assert len(await s.lab.builder.sweep.sweep()) == 1
+    h = s.lab.h
+    requests = TeamRequests(h.db, NoTeams(), h.orchestrator, h.log, "http://localhost:8000")
+    state = s.lab.app.state
+    state.home = Home(
+        s.lab.builder,
+        h.orchestrator,
+        state.people,
+        requests,
+        Rig(h.db).connections,
+        state.watchlist,
+    )
+    home = (await s.call("alice", "GET", "/api/v1/home")).json()
+    [card] = [c for c in home["changed_in_n8n"] if c["use_case_id"] == use_case_id]
+    assert (card["by"], card["by_name"]) == (dana, "Dana")

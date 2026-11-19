@@ -11,14 +11,17 @@ Operator's pause or resume of the one workflow its words name.
 import asyncio
 import logging
 import re
+import secrets
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Annotated, Final, Literal, Protocol, Self
 
 from pydantic import AwareDatetime, ConfigDict, Field, StringConstraints, model_validator
 
 from platform_api.builder import asks
+from platform_api.builder.drafted_workflows import SAME_WORDS_WITHIN, DraftedWorkflows
+from platform_api.builder.drafted_workflows import Refused as DraftRefused
 from platform_api.builder.models import (
     CardList,
     ClockTime,
@@ -34,8 +37,14 @@ from platform_api.builder.n8n_draft import N8nNotReady, NotSafe
 from platform_api.builder.n8n_holds import HeldInN8n
 from platform_api.builder.planning import FALLBACK_WORDS, STARTERS, FallbackWhy
 from platform_api.builder.templates import SOFTWARE_WATCHLIST
+from platform_api.monitoring import (
+    NoTraceScores,
+    TraceIds,
+    TraceScores,
+    pseudonym,
+    typed_again,
+)
 from platform_api.orchestration import (
-    NO_ACCESS,
     OFF,
     AbilitiesAnswer,
     Answered,
@@ -50,10 +59,13 @@ from platform_api.orchestration import (
     ConnectionCheck,
     ConnectionId,
     Day,
+    DidntFollowAnswer,
     EditAnswer,
     EditCant,
     ExampleSpec,
+    ExplainAnswer,
     FactSection,
+    FreeReplyAnswer,
     Grade,
     ModelProblem,
     NeedsMeAnswer,
@@ -68,38 +80,47 @@ from platform_api.orchestration import (
     PreviousTurn,
     QuestionAnswer,
     RefusedAnswer,
+    RemoveSoftwareAnswer,
+    ReplyForm,
     RequestPart,
     ResumeAnswer,
     RowKind,
     RuntimeDown,
     SetupCardAnswer,
     StaffAccess,
+    TurnTrace,
     UnderstoodRow,
     WatchlistAnswer,
     WhichSoftwareAnswer,
     WhyStoppedAnswer,
+    no_access_words,
 )
 from platform_api.shared import Principal, Role, UserId
 from platform_api.wire import WireIn, WireModel
 
 log = logging.getLogger(__name__)
 
-ANSWER_LIMIT_SECONDS: Final = 20.0
-"""The model gets 8 seconds for each of its two calls in the runtime: the reading, and the
-answer to a question about the person's data (ADR 0042). This is the platform's own limit around
-the whole call, so a runtime that hangs still gives the person an answer."""
+ANSWER_LIMIT_SECONDS: Final = 35.0
+"""The model gets 8 seconds for each of its calls in the runtime: the reading, the answer to a
+question about the person's data (ADR 0042), and at a dead end the free reply and its verifier
+(ADR 0047). Four calls can take 32 seconds, so this is the platform's own limit around the whole
+call, past which a runtime that hangs still gives the person the offline answer."""
 
 type CapabilityState = Literal["ready", "needs_setup", "down", "planned", "unsupported"]
 type Intent = Literal[
     "check_workflows", "needs_me", "abilities", "setup_ideas", "why_stopped", "decided"
 ]
 type ReplyReason = PartReason | Literal["operators"]
+type TraceId = Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{32}$")]
 
 
 class PreviousIn(WireIn):
     request: Annotated[str, StringConstraints(max_length=2000)]
     software: Annotated[str, StringConstraints(max_length=80)] | None = Field(
-        default=None, description="The software the Planner named in its answer to it."
+        default=None,
+        description="The one software the Planner named in its answer to it, or a free reply's "
+        "software. A message that only asks to watch it, such as keep track of it, gets the "
+        "offer to watch this software.",
     )
     answer: Annotated[str, StringConstraints(max_length=600)] | None = Field(
         default=None, description="The text of the Planner's answer to it, when it had one."
@@ -108,6 +129,11 @@ class PreviousIn(WireIn):
         default=None,
         description="The kind of answer it was, such as question or watchlist. It only decides "
         "whether a short follow-up applies.",
+    )
+    trace_id: TraceId | None = Field(
+        default=None,
+        description="The trace_id of its answer. When this message came within 60 seconds of it, "
+        "the platform flags that trace as typed again (ADR 0050).",
     )
 
 
@@ -132,6 +158,19 @@ class AnswerIn(WireIn):
         default=None,
         description="With text: the turn before it. Context for the question lane only: the "
         "Planner never builds request text from it.",
+    )
+    chat: (
+        Annotated[
+            str,
+            StringConstraints(
+                pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            ),
+        ]
+        | None
+    ) = Field(
+        default=None,
+        description="The Portal's chat, a UUID it makes for each new chat. It groups the chat's "
+        "turns into one session in the traces (ADR 0050).",
     )
 
     @model_validator(mode="after")
@@ -214,6 +253,12 @@ class Reply(WireModel):
         "(spec 6.5). None is dropped. Empty for a chip they tapped, for an answer inside another "
         "answer, and when no model read the request.",
     )
+    trace_id: str | None = Field(
+        default=None,
+        description="The trace of this turn, when the runtime's answer is shown. The Portal sends "
+        "it back as previous.trace_id with the next message (ADR 0050). Null for a chip, an "
+        "answer the platform gives alone, the offline answer, and an answer inside another.",
+    )
 
 
 class SimilarWorkflow(WireModel):
@@ -226,6 +271,13 @@ class ListedSoftware(WireModel):
     name: str
 
 
+class RemovalMatch(ListedSoftware):
+    source: str = Field(
+        description="The GitHub repository it is read from, as owner/name, so two with the same "
+        "name can be told apart, even after one is removed."
+    )
+
+
 class SetupCardReply(Reply):
     answer: Literal["setup_card"] = "setup_card"
     name: str
@@ -236,12 +288,21 @@ class SetupCardReply(Reply):
     )
 
 
+DRAFT_WORDS_FIELD: Final = Field(
+    default=None,
+    description="The request's words, unchanged, when the Workflow drafter may draft it as an n8n "
+    "workflow: for an Operator, when a part it can't do is not one the platform refuses (ADR "
+    "0051). The card shows Draft it as an n8n workflow, which sends these words. Null otherwise.",
+)
+
+
 class PartReply(Reply):
     answer: Literal["part"] = "part"
     name: str
     rows: list[UnderstoodRowView]
     cant: list[CantRowView]
     similar: SimilarWorkflow | None
+    draft_words: str | None = DRAFT_WORDS_FIELD
 
 
 class WatchlistReply(Reply):
@@ -261,6 +322,7 @@ class CantReply(Reply):
     answer: Literal["cant"] = "cant"
     cant: list[CantRowView]
     alternative: Annotated[SetupCardReply | WatchlistReply, Field(discriminator="answer")] | None
+    draft_words: str | None = DRAFT_WORDS_FIELD
 
 
 class WhichSoftwareReply(Reply):
@@ -319,6 +381,58 @@ class QuestionReply(Reply):
         description="The watched software the answer is about, named as the Software page names "
         "them. The Portal offers its Software-page actions for these and no others.",
     )
+
+
+class ReplyOfferView(WireModel):
+    capability: str = Field(description="The Ready capability it stands for.")
+    request: str = Field(
+        description="The registry's example request. The Portal's button sends it as the "
+        "person's next message, so the Planner reads it again and any write still waits for a "
+        "yes."
+    )
+
+
+class ReplyAboutView(WireModel):
+    section: Literal["watchlist", "workflows"]
+    name: str
+
+
+class FreeReply(Reply):
+    """The Planner's own words for a message no other answer fits, checked before they are sent
+    (ADR 0047). It changes nothing: a choice and an offer are sent as the next message."""
+
+    answer: Literal["reply"] = "reply"
+    form: ReplyForm = Field(
+        description="answer: a direct answer. clarify: one short question, with choices to tap. "
+        "cant: an honest can't, with offer as its button, or Ask the team when offer is null."
+    )
+    text: str = Field(description="Plain words only, to draw as text.")
+    choices: list[str] = Field(
+        description="For clarify only, 2 to 4 replies to tap, each sent as the next message."
+    )
+    offer: ReplyOfferView | None = Field(
+        description="For cant only: the closest Ready capability. Null on a can't means the "
+        "button is Ask the team. Always null for someone who isn't an Operator."
+    )
+    looked_at: list[FactSection] = Field(
+        description="The sections of the facts the reply used, as a question answer's are."
+    )
+    about: list[ReplyAboutView] = Field(
+        description="The watched software and workflows the reply names, each held by the facts. "
+        "The Portal draws each one's state line from its own data, for every role."
+    )
+    software: str | None = Field(
+        description="The one software the request named, as it wrote it. The Portal sends it "
+        "back as previous.software, so a next message such as keep track of it means it. Null "
+        "when the request named none."
+    )
+
+
+class DidntFollowReply(Reply):
+    """The fixed fallback when the free reply failed or its checks refused it: the sketch's I
+    didn't follow that card, with Say it another way. The Portal words it for the person's role."""
+
+    answer: Literal["didnt_follow"] = "didnt_follow"
 
 
 class EditBefore(WireModel):
@@ -443,6 +557,70 @@ class ResumeReply(_SwitchReply):
     answer: Literal["resume"] = "resume"
 
 
+class RemoveSoftwareReply(Reply):
+    """Software to take off the Software watchlist, matched by name. An Operator removes each match
+    with DELETE /api/v1/watchlist/software/{software_id} and undoes it with POST
+    /api/v1/watchlist/software/{software_id}/restore, as the Software page does. It is a setting
+    of the platform: nothing outside it is written, so no Approver is asked. Someone who isn't an
+    Operator gets operators instead."""
+
+    answer: Literal["remove_software"] = "remove_software"
+    software: str = Field(description="The name as the request wrote it.")
+    matches: list[RemovalMatch] = Field(
+        description="The watched software with that name, case, spaces, dots and hyphens aside, "
+        "in the watchlist's order. Empty when the watchlist holds none, and more than one for the "
+        "person to choose."
+    )
+    watched: list[str] = Field(
+        description="The names the watchlist holds, in its order, so a name it doesn't hold is "
+        "answered with what it does hold. Empty when it holds nothing."
+    )
+
+
+class ExplainChoice(WireModel):
+    use_case_id: str
+    name: str
+
+
+class ExplainReply(Reply):
+    """A workflow to explain, matched by its words. The Portal shows it with GET
+    /api/v1/use-cases/{use_case_id}/explain?reworded=true. Explaining changes nothing, so
+    anyone signed in may ask."""
+
+    answer: Literal["explain"] = "explain"
+    use_case_id: str | None = Field(
+        description="The workflow to explain. Null when the words name none of the person's "
+        'workflows, name several, or are "it".'
+    )
+    name: str | None = Field(description="Its name. Null with use_case_id.")
+    missing: str | None = Field(
+        description="The words looked for, when they name no workflow the person has. Null "
+        "otherwise."
+    )
+    choices: list[ExplainChoice] = Field(
+        description="The workflows the request could mean, for the person to pick one: every "
+        'one its words match when they match several, or every workflow for "it", so the '
+        "Portal can explain the one in focus. Empty when one matched or the words name none."
+    )
+    in_focus: bool = Field(
+        description='True when the words name no workflow, as "explain it": the Portal explains '
+        "the workflow in focus when it is one of the choices, and otherwise asks which."
+    )
+
+
+class DraftStartedReply(Reply):
+    """An Operator asked for a draft in words, as "draft an n8n workflow that ...". Code read it,
+    never a model, and the Workflow drafter started on the words unchanged (ADR 0051). The Portal
+    shows the drafted workflow's card and follows GET /api/v1/drafted-workflows/{drafted_id}."""
+
+    answer: Literal["draft_started"] = "draft_started"
+    drafted_id: str | None = Field(description="Null when the words were refused.")
+    refused: str | None = Field(
+        description="Why nothing was drafted, in words to show, such as a pasted key. Null when "
+        "it started."
+    )
+
+
 class OperatorsReply(Reply):
     """A change asked by someone who isn't an Operator. Only Operators set up and change
     workflows, so nothing is offered that changes anything (ADR 0043)."""
@@ -515,7 +693,8 @@ class ChangedInN8nReply(Reply):
 
 class N8nReply(Reply):
     """Asked to open n8n (ENGINE-PLAN 2.9). Only an Operator with n8n access, while staff access
-    to n8n is on and the allow list proven, can: said tells everyone else why not."""
+    to n8n is on and bootstrap has proved n8n's blocks and guards, can: said tells everyone
+    else why not."""
 
     answer: Literal["n8n"] = "n8n"
     said: str
@@ -527,6 +706,20 @@ class N8nReply(Reply):
 
 
 N8N_WORD = re.compile(r"(?<!\w)n8n(?!\w)", re.IGNORECASE)
+DRAFT_WORDS: Final = re.compile(
+    r"^\W*(?:(?:please|pls|kindly|can|could|would|will|you|u|just)\s+)*draft\s+(?:me\s+|us\s+)?"
+    r"(?:an?\s+)?(?:new\s+)?(?:n8n\s+)?workflow\b\W*\w",
+    re.IGNORECASE,
+)
+"""A request for a draft in words, as "draft an n8n workflow that ...", with something to draft
+after it (ADR 0051, flow step 1)."""
+YES_WORDS: Final = re.compile(
+    r"\b(?:approv\w*|yes|sign[- ]?off|review\w*|ask\w*|any(?:one|body)|no(?:one|body)|bypass\w*|"
+    r"skip\w*|loop|permission|consent|ok(?:ay)?|go-?ahead|without|auto\w*|myself|own)\b",
+    re.IGNORECASE,
+)
+"""The words a request to skip a yes is made of. A message about n8n with one of them goes to the
+runtime, whose word rule refuses a skipped yes before anything else (ADR 0047)."""
 HERE_IN_N8N = "Here it is in n8n."
 WHICH_IN_N8N = "Say which workflow to open in n8n."
 
@@ -546,9 +739,14 @@ type PlannerReply = Annotated[
     | WhyStoppedReply
     | NeedsMeReply
     | QuestionReply
+    | FreeReply
+    | DidntFollowReply
     | EditReply
     | PauseReply
     | ResumeReply
+    | RemoveSoftwareReply
+    | ExplainReply
+    | DraftStartedReply
     | OperatorsReply
     | DecidedReply
     | DecideReply
@@ -625,6 +823,7 @@ class Answering(Protocol):
         facts: PlannerFacts | None = None,
         previous: PreviousTurn | None = None,
         changes_workflows: bool = True,
+        trace: TurnTrace | None = None,
     ) -> AnswerResult | NoModel | RuntimeDown: ...
 
     async def check_part(self, kind: RowKind, text: str) -> CheckPartResult | RuntimeDown: ...
@@ -761,9 +960,19 @@ def _rows(rows: Sequence[UnderstoodRow]) -> list[UnderstoodRowView]:
 
 
 QUESTIONS: Final = frozenset(
-    {"needs_me", "check_workflows", "why_stopped", "question", "abilities", "decided"}
+    {
+        "needs_me",
+        "check_workflows",
+        "why_stopped",
+        "question",
+        "abilities",
+        "decided",
+        "reply",
+        "didnt_follow",
+    }
 )
 """The answers that change nothing, for someone who isn't an Operator (plan 3.2)."""
+STAND_WHATEVER_THE_WORDS: Final = frozenset({"offline", "refused", "explain"})
 
 
 def _cross(text: str, reason: ReplyReason) -> PartView:
@@ -818,7 +1027,7 @@ def questions_only(reply: PlannerReply, text: str | None) -> PlannerReply:
     approve or decline. Beside a question, it is a cross that says the same. The runtime's
     refusal stands, whatever the words, and so does the offline answer. Questions about past
     decisions are answered before the runtime is asked (`past_decisions`)."""
-    if reply.answer in ("offline", "refused"):
+    if reply.answer in STAND_WHATEVER_THE_WORDS:
         return reply
     decided = past_decisions(text or "")
     if decided is not None:
@@ -844,7 +1053,18 @@ class PlannerFront:
         connections: ConnectionStates,
         facts: FactsReading,
         staff: N8nAccessPort | None = None,
+        scores: TraceScores | None = None,
+        pseudonym_key: str | None = None,
+        drafted: DraftedWorkflows | None = None,
     ) -> None:
+        self._drafted = drafted
+        self._scores = scores or NoTraceScores()
+        self._pseudonym_key = pseudonym_key
+        # Without the key, ids are signed with one this process makes, so a typed-again flag needs
+        # the same process to have made the earlier id. A missed flag is the worst that happens.
+        self._trace_ids = TraceIds(
+            pseudonym_key.encode() if pseudonym_key else secrets.token_bytes(32)
+        )
         self._facts = facts
         self._staff = staff
         self._answers = answers
@@ -854,20 +1074,59 @@ class PlannerFront:
         self._connections = connections
 
     async def answer(self, body: AnswerIn, viewer: Principal) -> PlannerReply | NoSuchWorkflow:
-        if body.text is not None and N8N_WORD.search(body.text):
+        if body.previous is not None and body.previous.trace_id is not None:
+            flag = typed_again(
+                body.previous.trace_id, datetime.now(UTC), self._trace_ids, viewer.user_id
+            )
+            if flag is not None:
+                self._scores.send(flag)
+        if (
+            body.text is not None
+            and DRAFT_WORDS.search(body.text)
+            and not YES_WORDS.search(body.text)
+            and self._drafted is not None
+        ):
+            return await self._draft(body.text, viewer, self._drafted)
+        if body.text is not None and N8N_WORD.search(body.text) and not YES_WORDS.search(body.text):
             return await self._n8n(body.text, viewer)
         operator = Role.OPERATOR in viewer.roles
         decided = None if operator or body.text is None else past_decisions(body.text)
         if decided is not None:
             return decided
         if body.text is not None:
-            reply = await self._typed(body.text, viewer, body.previous)
+            reply = await self._typed(body.text, viewer, body.previous, body.chat)
         else:
             assert body.intent is not None
             reply = await self._intent(body.intent, body.use_case_id)
-        if operator or isinstance(reply, NoSuchWorkflow):
+        if isinstance(reply, NoSuchWorkflow):
             return reply
-        return questions_only(reply, body.text)
+        if operator:
+            return self._offer_draft(reply, body.text)
+        return questions_only(reply, body.text).model_copy(update={"trace_id": reply.trace_id})
+
+    async def _draft(self, text: str, viewer: Principal, drafted: DraftedWorkflows) -> PlannerReply:
+        """Answered by the platform, never a model: only an Operator may draft, and the drafter
+        starts on the words unchanged (ADR 0051, flow step 1). A request that names a yes goes to
+        the runtime first, whose word rule refuses a skipped yes (ADR 0047)."""
+        if Role.OPERATOR not in viewer.roles:
+            return OperatorsReply(parts=[_cross(text, "operators")])
+        match await drafted.start(viewer, text, same_words_within=SAME_WORDS_WITHIN):
+            case DraftRefused(words=words):
+                return DraftStartedReply(drafted_id=None, refused=words)
+            case started:
+                return DraftStartedReply(drafted_id=started.drafted_id, refused=None)
+
+    def _offer_draft(self, reply: PlannerReply, text: str | None) -> PlannerReply:
+        """A can't, or a part card, gains Draft it as an n8n workflow when a part it can't do is
+        one the drafter might reach. A part the platform refuses outright offers nothing."""
+        if (
+            self._drafted is None
+            or text is None
+            or not isinstance(reply, CantReply | PartReply)
+            or all(row.unsupported for row in reply.cant)
+        ):
+            return reply
+        return reply.model_copy(update={"draft_words": text})
 
     async def _intent(
         self, intent: Intent, use_case_id: str | None
@@ -892,9 +1151,14 @@ class PlannerFront:
                 return WhyStoppedReply(use_case_id=use_case_id)
 
     async def _typed(
-        self, text: str, viewer: Principal, previous: PreviousIn | None = None
+        self, text: str, viewer: Principal, previous: PreviousIn | None, chat: str | None
     ) -> PlannerReply:
-        earlier = None if previous is None else PreviousTurn(**previous.model_dump())
+        earlier = (
+            None if previous is None else PreviousTurn(**previous.model_dump(exclude={"trace_id"}))
+        )
+        key = self._pseudonym_key
+        person = None if key is None else pseudonym(key, viewer.user_id)
+        trace = TurnTrace(id=self._trace_ids.new(viewer.user_id), chat=chat, person=person)
         try:
             async with asyncio.timeout(ANSWER_LIMIT_SECONDS):
                 result = await self._answers.answer(
@@ -902,6 +1166,7 @@ class PlannerFront:
                     await self._facts.read(viewer, text),
                     earlier,
                     changes_workflows=Role.OPERATOR in viewer.roles,
+                    trace=trace,
                 )
         except TimeoutError:
             log.warning("The Planner's answer took longer than %g seconds", ANSWER_LIMIT_SECONDS)
@@ -917,7 +1182,8 @@ class PlannerFront:
                 return offline("too_slow" if reason == "too_slow" else "trouble")
             case Answered(answer=answer, parts=parts):
                 reply = await self._finish(answer, viewer)
-                return reply.model_copy(update={"parts": [_part_view(p) for p in parts]})
+                parts_seen = [_part_view(p) for p in parts]
+                return reply.model_copy(update={"parts": parts_seen, "trace_id": trace.id})
 
     async def _finish(self, answer: PlannerAnswer, viewer: Principal) -> PlannerReply:
         match answer:
@@ -953,15 +1219,34 @@ class PlannerFront:
                 return AbilitiesReply(how_to_start=how_to_start)
             case QuestionAnswer(text=text, looked_at=looked_at, about_software=software):
                 return QuestionReply(text=text, looked_at=looked_at, about_software=software)
+            case FreeReplyAnswer(form=form, text=text, choices=choices, offer=offer):
+                operator = Role.OPERATOR in viewer.roles
+                return FreeReply(
+                    form=form,
+                    text=text,
+                    choices=list(choices),
+                    offer=ReplyOfferView(capability=offer.capability, request=offer.request)
+                    if offer is not None and operator
+                    else None,
+                    looked_at=list(answer.looked_at),
+                    about=[ReplyAboutView(section=a.section, name=a.name) for a in answer.about],
+                    software=answer.software,
+                )
+            case DidntFollowAnswer():
+                return DidntFollowReply()
             case EditAnswer() as edit:
                 return await self._edit(edit)
             case PauseAnswer() | ResumeAnswer():
                 return await self._switch(answer, viewer)
+            case RemoveSoftwareAnswer() as removal:
+                return await self._removal(removal)
+            case ExplainAnswer(workflow_words=words):
+                return await self._explain(words)
 
     async def _n8n(self, text: str, viewer: Principal) -> N8nReply:
         """Answered by the platform, never the model: who may open n8n is a rule, not a guess."""
         if self._staff is None:
-            said = OFF if viewer.n8n_access else NO_ACCESS
+            said = OFF if viewer.n8n_access else no_access_words(Role.APPROVER in viewer.roles)
             return N8nReply(said=said, can_open=False, use_case_id=None)
         access = await self._staff.access(viewer.user_id)
         if not isinstance(access, CanOpen):
@@ -1011,6 +1296,32 @@ class PlannerFront:
                 if _norm(s.name) == wanted
             ),
             None,
+        )
+
+    async def _removal(self, removal: RemoveSoftwareAnswer) -> RemoveSoftwareReply:
+        """The runtime names the matches as the watchlist spells them, so each is found by its exact
+        name."""
+        view = await self._watchlist.view()
+        held = view.software if view is not None else []
+        return RemoveSoftwareReply(
+            software=removal.software,
+            matches=[
+                RemovalMatch(software_id=s.id, name=s.name, source=s.source.ref)
+                for s in held
+                if s.name in removal.watched_as
+            ],
+            watched=[s.name for s in held],
+        )
+
+    async def _explain(self, words: str | None) -> ExplainReply:
+        named = await self._named(words, None)
+        one = named.one
+        return ExplainReply(
+            use_case_id=None if one is None else one.use_case_id,
+            name=None if one is None else one.name,
+            missing=named.missing,
+            choices=[ExplainChoice(use_case_id=u.use_case_id, name=u.name) for u in named.several],
+            in_focus=words is None or not _own_words(words, keep_check=True),
         )
 
     async def _use_cases(self) -> list[UseCaseView]:

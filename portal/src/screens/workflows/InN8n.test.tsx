@@ -11,7 +11,7 @@ import { ApiProvider } from '../../api/context'
 import { createDevSession } from '../../api/session'
 import type { Me, PersonOut, UseCaseN8nView, UseCaseView } from '../../api/types'
 import { TakeItBackHere } from './InN8n'
-import { DRAFT, SAFE_BLOCKS } from './n8nHold'
+import { DRAFT, NOT_LOADED, SAFE_BLOCKS } from './n8nHold'
 
 const ALICE: Me = { id: 'alice', display: 'Alice', roles: ['operator'], n8n_access: true }
 const CAROL: Me = { id: 'carol', display: 'Carol', roles: ['operator'], n8n_access: true }
@@ -25,7 +25,7 @@ const NOW = new Date('2026-11-10T09:00:00Z')
 
 interface Setup {
   readonly me?: Me
-  readonly view?: UseCaseN8nView | null
+  readonly view?: UseCaseN8nView | null | Error
   readonly useCase?: UseCaseView
   readonly path?: string
 }
@@ -38,8 +38,12 @@ function render({ me = ALICE, view = FREE, useCase = ON, path = `/workflows/${ON
   queryClient.setQueryData(['dev-users'], [ALICE, BOB, CAROL])
   queryClient.setQueryData(['people', scope], TEAM)
   queryClient.setQueryData(['runs', scope], [])
-  queryClient.setQueryData(['use-case', scope, useCase.use_case_id], useCase)
-  if (view) queryClient.setQueryData(['use-case', scope, useCase.use_case_id, 'n8n'], view)
+  // The platform says who holds it on the workflow and on its In n8n view alike.
+  const answered = view instanceof Error ? null : view
+  queryClient.setQueryData(['use-case', scope, useCase.use_case_id], { ...useCase, held_in_n8n: answered?.holder ?? useCase.held_in_n8n ?? null })
+  const viewKey = ['use-case', scope, useCase.use_case_id, 'n8n']
+  if (view instanceof Error) queryClient.getQueryCache().build(queryClient, { queryKey: viewKey }).setState({ status: 'error', error: view, fetchStatus: 'idle' })
+  else if (view) queryClient.setQueryData(viewKey, view)
   return renderToStaticMarkup(
     <QueryClientProvider client={queryClient}>
       <ApiProvider session={session} platformFetch={fetch} origin="http://portal.test">
@@ -72,6 +76,21 @@ describe('the workflow page’s Summary and In n8n tabs', () => {
     const html = render({ view: { ...HELD, editor_url: null }, path: `/workflows/${ON.use_case_id}` })
     expect(text(main(html))).toContain('Carol has it open in n8n since 13:40.')
     expect(buttons(html)).not.toContain(OPEN)
+  })
+
+  it('says on Summary who has it open, with Take it back only once the In n8n view says the platform would allow it', () => {
+    const summary = `/workflows/${ON.use_case_id}`
+    const loading = render({ view: null, useCase: { ...ON, held_in_n8n: HELD.holder }, path: summary })
+    expect(text(main(loading))).toContain('Carol has it open in n8n since 13:40.')
+    expect(text(main(loading))).not.toContain('can take it back')
+    expect(buttons(loading)).not.toContain('Take it back')
+    expect(buttons(render({ view: { ...HELD, editor_url: null }, path: summary }))).toContain('Take it back')
+    const refused = render({ view: { ...HELD, editor_url: null, can_open: false, why_not: 'Set your n8n password first.' }, path: summary })
+    expect(text(main(refused))).toContain('Set your n8n password first.')
+    expect(buttons(refused)).not.toContain('Take it back')
+    const failed = render({ view: new Error('offline'), useCase: { ...ON, held_in_n8n: HELD.holder }, path: summary })
+    expect(text(main(failed))).toContain(`Carol has it open in n8n since 13:40. ${NOT_LOADED}`)
+    expect(buttons(failed)).not.toContain('Take it back')
   })
 
   it('offers Open in n8n editor beside Pause on Summary too, as the sketch does', () => {
@@ -127,12 +146,15 @@ describe('the In n8n tab', () => {
 })
 
 describe('Take it back on a refused change', () => {
-  function drawTakeBack(me: Me, view: UseCaseN8nView, refused = true): string {
+  function drawTakeBack(me: Me, view: UseCaseN8nView, refused = true, answer: 'loaded' | 'loading' | Error = 'loaded'): string {
     const session = createDevSession(null)
     const scope = session.cacheScope()
     const queryClient = new QueryClient({ defaultOptions: { queries: { retryOnMount: false } } })
     queryClient.setQueryData(['me', scope], me)
-    queryClient.setQueryData(['use-case', scope, ON.use_case_id, 'n8n'], view)
+    queryClient.setQueryData(['use-case', scope, ON.use_case_id], { ...ON, held_in_n8n: view.holder })
+    const viewKey = ['use-case', scope, ON.use_case_id, 'n8n']
+    if (answer instanceof Error) queryClient.getQueryCache().build(queryClient, { queryKey: viewKey }).setState({ status: 'error', error: answer, fetchStatus: 'idle' })
+    else if (answer === 'loaded') queryClient.setQueryData(viewKey, view)
     return renderToStaticMarkup(
       <QueryClientProvider client={queryClient}>
         <ApiProvider session={session} platformFetch={fetch} origin="http://portal.test">
@@ -146,6 +168,16 @@ describe('Take it back on a refused change', () => {
   it('offers Take it back to someone who may take it back, once the platform refused the change', () => {
     expect(all(drawTakeBack(ALICE, { ...HELD, editor_url: null }))).toEqual(['Take it back'])
     expect(all(drawTakeBack(CAROL, HELD)), 'its holder too').toEqual(['Take it back'])
+  })
+
+  it('offers nothing while the In n8n view that says whether the platform would allow it is loading', () => {
+    expect(all(drawTakeBack(ALICE, { ...HELD, editor_url: null }, true, 'loading'))).toEqual([])
+  })
+
+  it('says why it offers nothing when the In n8n view could not be read', () => {
+    const html = drawTakeBack(ALICE, { ...HELD, editor_url: null }, true, new Error('offline'))
+    expect(all(html)).toEqual([])
+    expect(text(html)).toBe(NOT_LOADED)
   })
 
   it('offers nothing before a refusal, to someone without n8n access, or while nobody holds it', () => {

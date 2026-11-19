@@ -7,6 +7,8 @@ import httpx
 from fastapi import FastAPI
 
 from platform_api.app import create_app
+from platform_api.builder.drafted_workflows import NotFound as DraftNotFound
+from platform_api.builder.explain import NoSuchWorkflow
 from platform_api.builder.lifecycle import TooLate
 from platform_api.builder.models import ScheduleSaveIn
 from platform_api.builder.versions import ChangedSince
@@ -116,10 +118,10 @@ class FakeWatchlist:
     async def add(self, principal: object, body: object) -> object:
         raise AssertionError("not asked in these tests")
 
-    async def remove(self, software_id: str) -> object:
+    async def remove(self, principal: object, software_id: str) -> object:
         return NoSuchSoftware(SoftwareId(software_id))
 
-    async def restore(self, software_id: str) -> object:
+    async def restore(self, principal: object, software_id: str) -> object:
         if software_id == "sw_again":
             return RepoAddedAgainSinceRemoval("langchain-ai/langgraph")
         if software_id == "sw_full":
@@ -210,6 +212,45 @@ class FakePlannerFront:
         return self._view
 
 
+class FakeExplainer:
+    async def explain(self, *args: object) -> object:
+        return NoSuchWorkflow()
+
+
+class FakeDrafted:
+    """No drafted workflow and no set-up approval exists."""
+
+    async def start(self, *args: object) -> object:
+        return DraftNotFound()
+
+    async def view(self, *args: object) -> object:
+        return None
+
+    async def change(self, *args: object) -> object:
+        return DraftNotFound()
+
+    async def send(self, *args: object) -> object:
+        return DraftNotFound()
+
+    async def set_up_again(self, *args: object) -> object:
+        return DraftNotFound()
+
+    async def answer(self, *args: object) -> object:
+        return DraftNotFound()
+
+    async def open_in_n8n(self, *args: object) -> object:
+        return DraftNotFound()
+
+    async def done_in_n8n(self, *args: object) -> object:
+        return DraftNotFound()
+
+    async def approval(self, *args: object) -> object:
+        return None
+
+    async def decide(self, *args: object) -> object:
+        return DraftNotFound()
+
+
 def app_with(
     orchestrator: object = None,
     builder: object = None,
@@ -222,6 +263,8 @@ def app_with(
     app.state.orchestrator = orchestrator or FakeOrchestrator()
     app.state.builder = builder or FakeBuilder()
     app.state.planner_front = planner_front or FakePlannerFront()
+    app.state.explainer = FakeExplainer()
+    app.state.drafted = FakeDrafted()
     app.state.activity_log = log or FakeLog()
     app.state.practice_jira = FakeMockJira()
     app.state.watchlist = FakeWatchlist()

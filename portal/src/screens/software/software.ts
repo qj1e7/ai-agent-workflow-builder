@@ -272,6 +272,8 @@ const VERSION = /^[vV]?\d+\.\d+\.\d+$/
 const CLOCK = /^([01][0-9]|2[0-3]):[0-5][05]$/
 const NAME_LIMIT = 80
 
+export const NAME_HELP = 'I know common software, such as Kubernetes. If I don’t know yours, you can choose where it’s published.'
+
 export const REPO_HELP = 'Paste the project’s GitHub link, or type owner/name.'
 const REPO_BAD = 'That doesn’t look like a GitHub project. Paste its GitHub link, or type owner/name.'
 const REPO_EMPTY = `Type its GitHub repository. ${REPO_HELP}`

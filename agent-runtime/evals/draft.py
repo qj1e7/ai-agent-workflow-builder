@@ -19,6 +19,9 @@ class DraftCase(Case):
     can_do: bool | None
     forbid_tools: list[str] = []
     approvers: int | None = None
+    in_steps: list[str] = []
+    """Values the task states, such as "14 days", which belong in the steps, never in an
+    input: the Portal fills only a Jira project or a repository from the task's words."""
     reference: DraftAnswer
 
 
@@ -42,6 +45,31 @@ def _invented_keys(draft: DraftAnswer, task: str) -> list[str]:
     return sorted(key for key in found if key not in task)
 
 
+def _as_said(value: str) -> re.Pattern[str]:
+    """The value as whole words with its unit, written with a space or a hyphen and with or
+    without a plural: "14 days" is also "14-day", but "Friday" or "MOCK-14" is not it."""
+    words = [
+        re.escape(w) if w.isdigit() else re.escape(w.rstrip("s")) + "s?" for w in value.split()
+    ]
+    return re.compile(r"\b" + r"[\s-]+".join(words) + r"\b", re.IGNORECASE)
+
+
+def _stated_values_lost(case: DraftCase, draft: DraftAnswer) -> list[str]:
+    """Each value the task states that no step carries, or that an input asks for again."""
+    steps = " ".join(b.say for b in draft.blocks)
+    lost: list[str] = []
+    for value in case.in_steps:
+        said = _as_said(value)
+        if said.search(steps) is None:
+            lost.append(f'no step says "{value}"')
+        lost.extend(
+            f'the input "{i.name}" asks for "{value}" again'
+            for i in draft.inputs
+            if i.kind == "text" and said.search(f"{i.name} {i.what} {i.example}")
+        )
+    return lost
+
+
 def score(case: DraftCase, answer: Answer) -> list[Check]:
     draft = answer.value
     if not isinstance(draft, DraftAnswer):
@@ -63,6 +91,11 @@ def score(case: DraftCase, answer: Answer) -> list[Check]:
         for tool in writes
         if kinds.count(BY_ID[tool].target_kind or "") != 1
     ]
+    unscoped = [
+        f"{tool} needs exactly one jira_project input"
+        for tool in sorted({t for t in used if t.startswith("jira.")})
+        if kinds.count("jira_project") != 1
+    ]
     approvals = {a.tool: a.approvers for a in draft.approvals}
     wrong_approvers = [
         f"{tool} has {approvals.get(tool)} approvers, wanted {case.approvers}"
@@ -79,6 +112,8 @@ def score(case: DraftCase, answer: Answer) -> list[Check]:
         check("only_listed_tools", sorted({t for t in used if t not in TOOL_IDS})),
         check("avoids_forbidden_tools", sorted(set(used) & set(case.forbid_tools))),
         check("write_has_target_input", missing_target),
+        check("jira_tool_has_project_input", unscoped),
+        check("stated_values_in_steps", _stated_values_lost(case, draft)),
         check("input_kinds_valid", sorted({k for k in kinds if k not in INPUT_KINDS})),
         check("has_steps", [] if draft.blocks else ["no steps"]),
         check("approvals_asked_for", wrong_approvers),

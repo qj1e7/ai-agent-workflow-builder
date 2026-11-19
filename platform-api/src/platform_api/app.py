@@ -5,7 +5,7 @@ from collections.abc import AsyncGenerator, Mapping
 from contextlib import asynccontextmanager
 from typing import Literal
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import Field
@@ -13,7 +13,9 @@ from pydantic import Field
 from platform_api import auth, wiring
 from platform_api.body_guard import RefuseDeepJson, refuse_invalid_request
 from platform_api.builder import (
+    drafted_workflows_http,
     drafts_http,
+    explain_http,
     lifecycle_http,
     n8n_http,
     planner_http,
@@ -21,6 +23,7 @@ from platform_api.builder import (
     watchlist_http,
 )
 from platform_api.builder import http as builder_http
+from platform_api.builder.answer_limit import AnswerLimit
 from platform_api.db import Database
 from platform_api.monitoring import Copier
 from platform_api.monitoring import http as monitoring_http
@@ -35,6 +38,7 @@ from platform_api.orchestration import (
     settings_http,
 )
 from platform_api.orchestration import http as orchestration_http
+from platform_api.orchestration.n8n_credentials import key_test_line
 from platform_api.practice_jira import dev_router as practice_jira_dev_router
 from platform_api.practice_jira import router as practice_jira_router
 from platform_api.security_headers import SecurityHeaders
@@ -111,6 +115,7 @@ def create_app(env: Mapping[str, str] | None = None) -> FastAPI:
     )
     app.state.settings = settings
     app.state.step_key = settings.step_key
+    app.state.answer_limit = AnswerLimit(per_minute=settings.planner_answers_per_minute)
     app.state.authenticator = auth.authenticator_for(settings.auth)
     app.add_middleware(RefuseNul)
     app.add_middleware(RefuseDeepJson, max_bytes=settings.max_body_bytes)
@@ -119,6 +124,8 @@ def create_app(env: Mapping[str, str] | None = None) -> FastAPI:
     app.add_middleware(SecurityHeaders)
     app.include_router(builder_http.router)
     app.include_router(lifecycle_http.router)
+    app.include_router(explain_http.router)
+    app.include_router(drafted_workflows_http.router)
     app.include_router(n8n_http.router)
     app.include_router(drafts_http.router)
     app.include_router(planner_http.router)
@@ -146,11 +153,14 @@ def create_app(env: Mapping[str, str] | None = None) -> FastAPI:
         response_model=Readiness,
         responses={503: {"model": Readiness, "description": "Not ready to take traffic"}},
     )
-    async def ready() -> JSONResponse:
-        copier: Copier | None = app.state.copier
+    async def ready(request: Request) -> JSONResponse:
+        # From the request, not the enclosing app: FastAPI caches this function, and a closure
+        # over the app would keep every app made in one process alive.
+        state = request.app.state
+        copier: Copier | None = state.copier
         readiness = await readiness_of(
-            app.state.db,
-            app.state.activity_log.listening,
+            state.db,
+            state.activity_log.listening,
             None if copier is None else copier.listening,
             copy_behind=copier is not None and copier.behind,
         )
@@ -194,6 +204,12 @@ async def readiness_of(
             )
         ).fetchone()
         seen = await self_test.SelfTests().seen(uow)
+        planted = await (
+            await uow.conn.execute(
+                "SELECT planted_at, gone_at FROM orchestration.n8n_key_tests"
+                " ORDER BY planted_at DESC LIMIT 1"
+            )
+        ).fetchone()
         now = uow.now
     if row is None:
         checks.append(
@@ -209,6 +225,9 @@ async def readiness_of(
         checks.append(ReadinessCheck(name="workflows", ok=bool(row["ready"]), detail=detail))
     ok, detail = self_test.ready_line(seen, now)
     checks.append(ReadinessCheck(name="self_test", ok=ok, detail=detail, counts_for_ready=False))
+    last = None if planted is None else (planted["planted_at"], planted["gone_at"])
+    ok, detail = key_test_line(last, now)
+    checks.append(ReadinessCheck(name="key_sweep", ok=ok, detail=detail, counts_for_ready=False))
     return Readiness(ready=all(c.ok for c in checks if c.counts_for_ready), checks=checks)
 
 

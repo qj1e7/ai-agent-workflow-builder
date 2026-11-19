@@ -90,6 +90,68 @@ def _one_line(text: str) -> str:
     return " ".join(text.split())
 
 
+# The input a draft is given when a tool it uses needs one and the model left it out. Only
+# the Jira tools need one today; a kind not here is left for check_card to flag.
+NEEDED_INPUTS: Mapping[str, CardInput] = {
+    "jira_project": CardInput(
+        name="Jira project",
+        kind="jira_project",
+        what="The Jira project the agent works in.",
+        example="MOCK",
+    ),
+}
+
+
+# What a text input is called when it is really the input of a kind a tool needs.
+NAMES_OF_KIND: Mapping[str, frozenset[str]] = {
+    "jira_project": frozenset(
+        {"jira project", "jira project key", "jira key", "project", "project key"}
+    ),
+}
+
+
+def needed_kinds(blocks: Iterable[CardBlock]) -> list[str]:
+    """The kinds of input the blocks' tools need, each once, as the Jira project any Jira tool
+    reads or writes in."""
+    kinds: list[str] = []
+    for block in blocks:
+        rule = RULES.get((block.tool or "").strip())
+        kind = None if rule is None else rule.target_input or rule.scope_input
+        if kind is not None and kind in NEEDED_INPUTS and kind not in kinds:
+            kinds.append(kind)
+    return kinds
+
+
+def names_kind(item: CardInput, kind: str) -> bool:
+    """Whether the item is a text input named for the kind, as "Jira project"."""
+    return (
+        item.kind.strip() == "text"
+        and " ".join(item.name.casefold().split()) in NAMES_OF_KIND[kind]
+    )
+
+
+def with_needed_inputs(card: CardDefinition) -> CardDefinition:
+    """The card with the one input each of its tools needs, such as a Jira project for
+    jira.search. A text input the model already named for it, as "Jira project", becomes that
+    input, and is dropped beside a real one, so it is never asked twice. Otherwise the input is
+    added. Its value is never filled in here: the person gives it, from their words or when the
+    card asks."""
+    inputs = list(card.inputs)
+    for kind in needed_kinds(card.blocks):
+        named = [n for n, item in enumerate(inputs) if names_kind(item, kind)]
+        if any(item.kind.strip() == kind for item in inputs):
+            inputs = [item for n, item in enumerate(inputs) if n not in named]
+        elif named:
+            inputs = [
+                item.model_copy(update={"kind": kind}) if n == named[0] else item
+                for n, item in enumerate(inputs)
+                if n == named[0] or n not in named
+            ]
+        else:
+            inputs.append(NEEDED_INPUTS[kind])
+    return card.model_copy(update={"inputs": inputs})
+
+
 def check_card(card: CardDefinition) -> CardChecked:
     """Cleans a card up, works out its approvals and lists what stops it being saved.
 

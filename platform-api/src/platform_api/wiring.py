@@ -8,13 +8,24 @@ from fastapi import FastAPI
 
 from platform_api.auth import DEV_PEOPLE, DevAuth, OidcAuth
 from platform_api.builder import Builder, Home, PlannerFront, TeamRequests, Watchlist
+from platform_api.builder.drafted_workflows import DraftedWorkflows
+from platform_api.builder.explain import Explainer
+from platform_api.builder.key_sweep import KeySweep
 from platform_api.builder.made_in_n8n import MadeInN8n
 from platform_api.builder.n8n_holds import Holding
 from platform_api.builder.n8n_view import InN8nViews
 from platform_api.builder.planner_facts import PlannerFactsReader
 from platform_api.builder.watchlist import OnN8n
 from platform_api.db import Database
-from platform_api.monitoring import ActivityLog, Copier, CosmosEvents, callback_for
+from platform_api.monitoring import (
+    ActivityLog,
+    Copier,
+    CosmosEvents,
+    LangfuseScores,
+    NoTraceScores,
+    TraceScores,
+    callback_for,
+)
 from platform_api.orchestration import self_test
 from platform_api.orchestration.agents import HttpAgentRuntime
 from platform_api.orchestration.confluence_rest import (
@@ -68,6 +79,7 @@ from platform_api.orchestration.n8n_calls import (
     TryLater,
     WriteEntry,
 )
+from platform_api.orchestration.n8n_credentials import PlatformKeys
 from platform_api.orchestration.n8n_run_view import RunsInN8n
 from platform_api.orchestration.n8n_staff import StaffAccounts
 from platform_api.orchestration.n8n_starts import N8nStarts
@@ -75,20 +87,29 @@ from platform_api.orchestration.people_store import People
 from platform_api.orchestration.planning import (
     CapabilityRegistry,
     CardPlanning,
+    ExplainWordings,
     PlannerAnswers,
     ProjectFinding,
+    WorkflowDrafting,
 )
 from platform_api.orchestration.runs import Leg
 from platform_api.orchestration.schedule_store import ScheduleBook
 from platform_api.orchestration.service import Orchestrator
+from platform_api.orchestration.setup_approvals import SetUpApprovals
+from platform_api.orchestration.slack_channels import SlackChannels
 from platform_api.orchestration.team_request_card import TeamsRequestChannel
 from platform_api.orchestration.teams import TeamsStub, TeamsWorkflowsWebhook
 from platform_api.orchestration.tell import TellFlow, TellOutlet, TellPractice, TellSetup
 from platform_api.orchestration.watch_store import WatchFacts
 from platform_api.orchestration.workflows import load_all
 from platform_api.orchestration.write_actions import WriteGateway
-from platform_api.practice_jira import PRACTICE_EMAIL, PracticeJira, practice_token
-from platform_api.settings import Settings
+from platform_api.practice_jira import (
+    PRACTICE_EMAIL,
+    PracticeJira,
+    practice_reader_token,
+    practice_token,
+)
+from platform_api.settings import KeySystem, N8nKey, Settings
 from platform_api.shared import N8nExecutionId, RunId, TaskId
 
 log = logging.getLogger(__name__)
@@ -103,6 +124,9 @@ class Services:
     node_calls: NodeCalls
     builder: Builder
     planner_front: PlannerFront
+    explainer: Explainer
+    drafted: DraftedWorkflows
+    setup_approvals: SetUpApprovals
     home: Home
     watchlist: Watchlist
     team_requests: TeamRequests
@@ -115,6 +139,7 @@ class Services:
     people: People
     confluence: ConfluencePages
     staff: StaffAccounts
+    trace_scores: TraceScores
     copier: Copier | None = None
     cosmos: CosmosEvents | None = None
     teams_webhook: TeamsWorkflowsWebhook | None = None
@@ -125,6 +150,8 @@ class Services:
     tell_flow: TellFlow | None = None
     in_n8n: InN8nViews | None = None
     made_in_n8n: MadeInN8n | None = None
+    keys: PlatformKeys | None = None
+    key_sweep: KeySweep | None = None
 
 
 JIRA_TIMEOUT_SECONDS = 10.0
@@ -145,7 +172,8 @@ def jira_for(
     jira = settings.jira
     if jira.base_url is None:
         token = practice_token(settings.callback_signing_key)
-        practice = PracticeJira(db, token, settings.public_base_url)
+        reader = practice_reader_token(settings.callback_signing_key)
+        practice = PracticeJira(db, token, settings.public_base_url, reader)
         base_url = f"{settings.platform_internal_url}/practice-jira"
         auth = JiraAuth.of(jira.flavor, token, PRACTICE_EMAIL)
     else:
@@ -168,6 +196,8 @@ def install(app: FastAPI, services: Services) -> None:
     app.state.node_calls = services.node_calls
     app.state.builder = services.builder
     app.state.planner_front = services.planner_front
+    app.state.explainer = services.explainer
+    app.state.drafted = services.drafted
     app.state.home = services.home
     app.state.watchlist = services.watchlist
     app.state.team_requests = services.team_requests
@@ -267,6 +297,17 @@ def tell_outlet(settings: Settings, db: Database) -> tuple[TellOutlet, TellFlow 
         return TellPractice(db, setup), None
     flow = TellFlow(settings.teams_tell_webhook_url, setup)
     return flow, flow
+
+
+def trace_scores_for(settings: Settings) -> TraceScores:
+    """Where the platform writes code flags on the Planner's traces (ADR 0050). Off unless the
+    three Langfuse settings are set."""
+    langfuse = settings.langfuse
+    if langfuse is None:
+        return NoTraceScores()
+    return LangfuseScores(
+        langfuse.base_url, langfuse.public_key, langfuse.secret_key, langfuse.environment
+    )
 
 
 CONFLUENCE_UNSET = "Confluence is not connected."
@@ -378,7 +419,10 @@ async def build(settings: Settings) -> Services:
     box = KeyBox(secret) if secret else None
     model_settings = ModelSettings(db, agents, box, people=people)
     n8n_api = n8n_api_of(settings)
-    staff = StaffAccounts(db, n8n_api, box, settings.n8n_staff_access, settings.n8n_editor_url)
+    keys = None if n8n_api is None else PlatformKeys(db, n8n_api, n8n_keys(settings))
+    staff = StaffAccounts(
+        db, n8n_api, box, settings.n8n_staff_access, settings.n8n_editor_url, keys
+    )
     people.changed = staff.nudge
     waker = None
     if settings.node_key is not None and box is not None:
@@ -389,8 +433,13 @@ async def build(settings: Settings) -> Services:
     )
     gateway = WriteGateway(db, [JiraWriteConnector(jira, db, site)])
     n8n = n8n_parts(settings, db, n8n_api)
+    key_sweep = (
+        None if n8n.drafts is None or keys is None else KeySweep(db, keys, n8n.drafts, staff)
+    )
     holding = (
-        None if n8n.drafts is None else Holding(db, n8n.drafts, staff, settings.team_time_zone)
+        None
+        if n8n.drafts is None
+        else Holding(db, n8n.drafts, staff, settings.team_time_zone, key_sweep)
     )
     starts = (
         None
@@ -442,6 +491,7 @@ async def build(settings: Settings) -> Services:
         accounts=staff,
         holding=holding,
         time_zone=settings.team_time_zone,
+        keys=keys,
     )
     # Before any run can start: a run left on the shared run workflow, whose blocks are off, ends
     # first (E11), so the workflows it held back can move.
@@ -485,7 +535,26 @@ async def build(settings: Settings) -> Services:
     team_requests = TeamRequests(
         db, request_channel, orchestrator, activity, settings.public_base_url
     )
-    home = Home(builder, orchestrator, people, team_requests, connections, watchlist)
+    setup_approvals = SetUpApprovals(
+        db, webhook or teams, people, settings.public_base_url, settings.team_time_zone
+    )
+    home = Home(
+        builder, orchestrator, people, team_requests, connections, watchlist, setup_approvals
+    )
+    trace_scores = trace_scores_for(settings)
+    drafted = DraftedWorkflows(
+        db,
+        WorkflowDrafting(db, model_settings, agents),
+        setup_approvals,
+        facts,
+        n8n.drafts,
+        settings.public_base_url,
+        settings.team_time_zone.key,
+        SlackChannels(settings.n8n_keys.get("slack")),
+        staff,
+        settings.n8n_editor_url,
+    )
+    setup_approvals.serve(drafted)
     return Services(
         settings=settings,
         db=db,
@@ -501,7 +570,13 @@ async def build(settings: Settings) -> Services:
             connections,
             PlannerFactsReader(watchlist, builder, home),
             staff,
+            scores=trace_scores,
+            pseudonym_key=settings.trace_pseudonym_key,
+            drafted=drafted,
         ),
+        explainer=Explainer(db, builder, ExplainWordings(db, model_settings, agents)),
+        drafted=drafted,
+        setup_approvals=setup_approvals,
         home=home,
         watchlist=watchlist,
         team_requests=team_requests,
@@ -515,6 +590,7 @@ async def build(settings: Settings) -> Services:
         people=people,
         confluence=confluence,
         staff=staff,
+        trace_scores=trace_scores,
         copier=copier,
         cosmos=cosmos,
         teams_webhook=webhook,
@@ -538,7 +614,21 @@ async def build(settings: Settings) -> Services:
             if holding is None or n8n.drafts is None
             else MadeInN8n(db, n8n.drafts, staff, holding, facts, settings.team_time_zone)
         ),
+        keys=keys,
+        key_sweep=key_sweep,
     )
+
+
+def n8n_keys(settings: Settings) -> dict[KeySystem, N8nKey]:
+    """The keys Key Vault gives, and with none for Jira while the practice Jira serves, its
+    browse-only account, so n8n's Jira block reads the practice Jira as it would a real one."""
+    keys = dict(settings.n8n_keys)
+    if "jira" not in keys and settings.jira.practice:
+        url = f"{settings.platform_internal_url}/practice-jira"
+        token = practice_reader_token(settings.callback_signing_key)
+        data = {"domain": url, "personalAccessToken": token}
+        keys["jira"] = N8nKey("jiraSoftwareServerPatApi", data, url)
+    return keys
 
 
 class Runner:
@@ -557,17 +647,24 @@ class Runner:
             self._tasks.append(asyncio.create_task(sweep.sweep_forever(self._stop)))
         if (moves := self._services.builder.moves) is not None:
             self._tasks.append(asyncio.create_task(moves.move_forever(self._stop)))
+        if (key_sweep := self._services.key_sweep) is not None:
+            self._tasks.append(asyncio.create_task(key_sweep.sweep_forever(self._stop)))
         if (holding := self._services.builder.holding) is not None:
             settle = self._services.staff.settle_forever(self._stop, holding.release, holding.holds)
             self._tasks.append(asyncio.create_task(settle))
         self._tasks.append(
             asyncio.create_task(self._services.connections.check_forever(self._stop))
         )
+        self._tasks.append(
+            asyncio.create_task(self._services.setup_approvals.work_forever(self._stop))
+        )
 
     async def stop(self) -> None:
         self._stop.set()
         self._services.orchestrator.nudge()
         self._services.staff.nudge()
+        self._services.setup_approvals.nudge()
+        await self._services.drafted.settle()
         for task in self._tasks:
             await task
         if self._services.tell_flow is not None:
@@ -578,9 +675,12 @@ class Runner:
             await self._services.waker.close()
         if self._services.starts is not None:
             await self._services.starts.close()
+        if self._services.keys is not None:
+            await self._services.keys.close()
         if self._services.n8n is not None:
             await self._services.n8n.close()
         await self._services.request_channel.close()
+        await self._services.trace_scores.close()
         if self._services.copier is not None:
             await self._services.copier.stop()
         await self._services.activity_log.stop()

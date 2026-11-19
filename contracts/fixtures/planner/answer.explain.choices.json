@@ -1,0 +1,27 @@
+{
+  "parts": [
+    {
+      "text": "explain the release check",
+      "mark": "will_do",
+      "reason": null,
+      "note": null,
+      "choices": []
+    }
+  ],
+  "trace_id": null,
+  "answer": "explain",
+  "use_case_id": null,
+  "name": null,
+  "missing": null,
+  "choices": [
+    {
+      "use_case_id": "uc_01JFASTAPI",
+      "name": "FastAPI release check"
+    },
+    {
+      "use_case_id": "uc_01JB8",
+      "name": "React release check"
+    }
+  ],
+  "in_focus": false
+}

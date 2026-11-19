@@ -1,7 +1,9 @@
+import gc
 import os
 import re
 import subprocess
 import sys
+import weakref
 
 import pytest
 from fastapi.testclient import TestClient
@@ -37,6 +39,17 @@ ROUTES = {
     ("POST", "/api/v1/use-cases/{use_case_id}/versions/{version}/undo"),
     ("POST", "/api/v1/use-cases/{use_case_id}/versions/{version}/rollback"),
     ("POST", "/api/v1/use-cases/{use_case_id}/add-the-yes-back"),
+    ("GET", "/api/v1/use-cases/{use_case_id}/explain"),
+    ("POST", "/api/v1/drafted-workflows"),
+    ("GET", "/api/v1/drafted-workflows/{drafted_id}"),
+    ("POST", "/api/v1/drafted-workflows/{drafted_id}/changes"),
+    ("POST", "/api/v1/drafted-workflows/{drafted_id}/send"),
+    ("POST", "/api/v1/drafted-workflows/{drafted_id}/answers"),
+    ("POST", "/api/v1/drafted-workflows/{drafted_id}/n8n"),
+    ("POST", "/api/v1/drafted-workflows/{drafted_id}/n8n/done"),
+    ("POST", "/api/v1/drafted-workflows/{drafted_id}/set-up"),
+    ("GET", "/api/v1/setup-approvals/{approval_id}"),
+    ("POST", "/api/v1/setup-approvals/{approval_id}/decisions"),
     ("POST", "/api/v1/n8n/sweep"),
     ("POST", "/api/v1/use-cases/{use_case_id}/open-in-n8n"),
     ("POST", "/api/v1/use-cases/{use_case_id}/take-back"),
@@ -183,6 +196,19 @@ def test_healthz(client: TestClient):
     assert client.get("/healthz").json() == {"status": "ok"}
 
 
+def test_an_app_that_is_let_go_is_freed():
+    """FastAPI caches every endpoint function it has seen. An endpoint that held the app would
+    keep each test's app alive, and the full garbage collections, slower as the heap grows, came
+    to stall the event loop for more than five seconds mid-suite."""
+    client = TestClient(create_app(LOCAL))
+    assert client.get("/healthz").status_code == 200
+    app = weakref.ref(client.app)
+    client.close()
+    del client
+    gc.collect()
+    assert app() is None
+
+
 def test_events_route_documents_both_content_types(client: TestClient):
     op = client.get("/openapi.json").json()["paths"]["/api/v1/runs/{run_id}/events"]["get"]
     assert set(op["responses"]["200"]["content"]) == {"application/json", "text/event-stream"}
@@ -233,6 +259,7 @@ async def test_readiness_is_not_ready_before_bootstrap(db: Database):
         ("activity_log", True),
         ("workflows", False),
         ("self_test", False),
+        ("key_sweep", False),
     ]
 
 

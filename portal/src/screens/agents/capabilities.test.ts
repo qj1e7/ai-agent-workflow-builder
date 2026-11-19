@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import capabilitiesFixture from '../../../../contracts/fixtures/planner/capabilities.json'
 import connectionsFixture from '../../../../contracts/fixtures/settings/connections.json'
 import type { CapabilitiesView, CapabilityView, ConnectionOut } from '../../api/types'
-import { settingsPathFor } from './capabilities'
+import { capabilityNote, settingsPathFor } from './capabilities'
 
 const LINES = (capabilitiesFixture as unknown as CapabilitiesView).capabilities
 const line = (connection: CapabilityView['connection'], needsModel: boolean): CapabilityView => ({ ...LINES[0]!, connection, needs_model: needsModel })
@@ -19,5 +19,15 @@ describe('the Settings tab that holds a line’s fix', () => {
     expect(settingsPathFor(line('jira', true), connections({ jira: 'not_answering', model: 'not_set_up' }))).toBe('/settings?tab=connections')
     expect(settingsPathFor(line('jira', false), connections({ jira: 'not_answering' }))).toBe('/settings?tab=connections')
     expect(settingsPathFor(line('jira', true))).toBe('/settings?tab=connections')
+  })
+})
+
+describe('Explain any workflow in the guide', () => {
+  const explain = LINES.find((entry) => entry.id === 'workflows.explain')
+
+  it('is in the registry as ready, and the guide says the platform does it for every workflow', () => {
+    expect(explain?.plain).toBe('Explain any workflow')
+    expect(explain?.state).toBe('ready')
+    expect(capabilityNote(explain!, undefined, new Date('2026-11-16T09:00:00+08:00'))).toBe('The platform does this for every workflow.')
   })
 })

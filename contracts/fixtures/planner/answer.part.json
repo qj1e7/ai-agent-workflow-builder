@@ -22,6 +22,7 @@
       "choices": []
     }
   ],
+  "trace_id": null,
   "answer": "part",
   "name": "Weekly summary, to email",
   "rows": [
@@ -61,5 +62,6 @@
       "unsupported": false
     }
   ],
-  "similar": null
+  "similar": null,
+  "draft_words": null
 }

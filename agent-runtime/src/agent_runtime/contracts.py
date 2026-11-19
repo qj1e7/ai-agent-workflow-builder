@@ -41,18 +41,25 @@ from agent_runtime.contract import (
     ChosenAgent,
     Connected,
     ConnectRequest,
+    DidntFollowAnswer,
     DraftApproval,
     DraftBlock,
     Drafted,
     DraftInput,
     DraftRequest,
+    ExplainFact,
+    ExplainKept,
+    ExplainReworded,
+    ExplainWordingRequest,
     Finding,
     FindSoftwareRequest,
     FoundModel,
     FoundSoftware,
+    FreeReplyAnswer,
     GitHubProblem,
     GithubSource,
     GitHubWorking,
+    KeyShapes,
     LibraryCard,
     LibraryInput,
     MissingTool,
@@ -66,6 +73,8 @@ from agent_runtime.contract import (
     ReadReleasesRequest,
     ReleaseRead,
     ReleasesRead,
+    ReplyAbout,
+    ReplyEnvelope,
     RoomAddressee,
     SoftwareMatch,
     SoftwareToCheck,
@@ -74,14 +83,18 @@ from agent_runtime.contract import (
     TaskFinished,
     TaskOutput,
     TaskRequest,
+    TurnTrace,
     WatchedFact,
     WatchlistInputs,
     WatchlistScheduleFact,
     WireModel,
+    WorkflowFact,
     agent_event_adapter,
 )
+from agent_runtime.free_reply import answer_of_envelope
 from agent_runtime.github import TOKEN_REFUSED
 from agent_runtime.model_access import KEY_REFUSED
+from agent_runtime.monitoring.masking import KEY_SHAPE_SOURCES
 from agent_runtime.reading import DaysRead, PlaceRead, SearchRead, TicketRead
 from agent_runtime.tools import tool_list
 
@@ -837,6 +850,15 @@ def answer_request(task: str = FOLLOW_UP_TASK) -> AnswerRequest:
     return AnswerRequest(task=task, model=draft_request().model)
 
 
+def traced_answer_request() -> AnswerRequest:
+    trace = TurnTrace(
+        id="019a8c3e5b2f7c41a3d29e6f0b7d1c55",
+        chat="5f0c2a7e-3b1d-4e8f-9a6c-2d4b7e1f0a93",
+        person="9c4f1e2a7b3d5c6e8f0a1b2c3d4e5f60718293a4b5c6d7e8f9a0b1c2d3e4f5a6",
+    )
+    return answer_request().model_copy(update={"trace": trace})
+
+
 def _answered(read: TaskRead, task: str) -> Answered:
     answer = answer_of(read, task)
     return Answered(answer=answer, parts=parts_of(read, task, answer))
@@ -859,6 +881,29 @@ def answered_card() -> Answered:
         skips_the_yes=NO_SKIP,
     )
     return _answered(read, FOLLOW_UP_TASK)
+
+
+CAROL_TASK = (
+    "Every Friday at 16:00, find Jira tickets in project MOCK that nobody updated for 14 days, "
+    "and raise one Jira ticket in MOCK that lists them"
+)
+
+
+def answered_card_24_hour() -> Answered:
+    """A request with a 24-hour time, which the schedule row keeps, so the Portal reads it."""
+    read = TaskRead(
+        name="Stale MOCK ticket list",
+        schedule="Every Friday at 16:00",
+        search=SearchRead(
+            project="MOCK",
+            updated=DaysRead(how="before", days=14),
+            said="Jira tickets in project MOCK that nobody updated for 14 days",
+        ),
+        ticket=TicketRead(creates=True, says="list", said="lists them"),
+        place=PlaceRead(project="MOCK", said="raise one Jira ticket in MOCK"),
+        skips_the_yes=NO_SKIP,
+    )
+    return _answered(read, CAROL_TASK)
 
 
 def answered_cant() -> Answered:
@@ -906,6 +951,53 @@ def answered_pause() -> Answered:
     return _answered(read, "Pause the React check")
 
 
+def answered_removal() -> Answered:
+    read = TaskRead(
+        asks_about="change", workflow_words="watchlist", software="node js", skips_the_yes=NO_SKIP
+    )
+    task = "help me remove node js from watchlist"
+    watched = WatchedFact(
+        name="node js", repo="nodejs/node", our_version=None, newest_version=None, state="Watching"
+    )
+    facts = PlannerFacts(watchlist=[watched])
+    answer = answer_of(read, task, facts)
+    return Answered(answer=answer, parts=parts_of(read, task, answer, facts))
+
+
+def answered_explain() -> Answered:
+    read = TaskRead(
+        asks_about="my_workflows",
+        workflow_words="the FastAPI release check",
+        skips_the_yes=NO_SKIP,
+    )
+    task = "Please explain the FastAPI release check"
+    facts = PlannerFacts(
+        workflows=[
+            WorkflowFact(
+                name="FastAPI release check", state="on", last_run="Done", last_run_at=None
+            )
+        ]
+    )
+    answer = answer_of(read, task, facts)
+    return Answered(answer=answer, parts=parts_of(read, task, answer, facts))
+
+
+def explain_wording_request() -> ExplainWordingRequest:
+    facts = [
+        ExplainFact(kind="runs", together=["day", "8:00"], negated=False),
+        ExplainFact(kind="reads", together=["reads", "GitHub", "fastapi/fastapi"], negated=False),
+        ExplainFact(kind="reads", together=["reads", "Jira", "MOCK"], negated=False),
+        ExplainFact(kind="writes", together=["create", "Jira", "MOCK", "yes"], negated=False),
+        ExplainFact(kind="changes", together=["changes", "nothing", "else"], negated=True),
+    ]
+    return ExplainWordingRequest(
+        model=draft_request().model,
+        wording="Every day at 8:00, it reads GitHub “fastapi/fastapi” and Jira “MOCK”. It can "
+        "create Jira tickets in “MOCK”, each after a yes. It changes nothing else.",
+        facts=facts,
+    )
+
+
 def question_request() -> AnswerRequest:
     watched = [
         WatchedFact(name=n, repo=r, our_version=o, newest_version=v, state=t)
@@ -938,6 +1030,60 @@ def answered_question() -> Answered:
     text = "LangGraph is behind. You run 1.2.14 and the newest is 1.2.16."
     answer = QuestionAnswer(text=text, looked_at=["watchlist"], about_software=["LangGraph"])
     return Answered(answer=answer, parts=parts_of(None, question_request().task, answer))
+
+
+HOW_TO_START = "how can i start to use this ?"
+
+
+def _free_reply(task: str, envelope: ReplyEnvelope) -> Answered:
+    """A free reply as the guard lets it through, so the fixture is what the checks pass."""
+    request = AnswerRequest(task=task, model=draft_request().model)
+    shown = answer_of_envelope(envelope, request)
+    answer = shown if isinstance(shown, FreeReplyAnswer) else DidntFollowAnswer()
+    return Answered(answer=answer, parts=parts_of(None, task, answer))
+
+
+def answered_reply() -> Answered:
+    text = (
+        "To start, type what you want done in the box, in your own words, such as Check "
+        "LangGraph for new releases every Monday at 9am. The Planner shows a card with what it "
+        "understood. Change anything on it, then turn it on."
+    )
+    return _free_reply(HOW_TO_START, ReplyEnvelope(form="answer", text=text))
+
+
+def answered_reply_clarify() -> Answered:
+    envelope = ReplyEnvelope(
+        form="clarify",
+        text="Which would you like to keep an eye on?",
+        choices=["New releases of some software", "Jira tickets every week"],
+    )
+    return _free_reply("help me keep an eye on things", envelope)
+
+
+def answered_reply_cant() -> Answered:
+    text = (
+        "I can't send email yet. I can put the list in one new Jira ticket, after an Approver's "
+        "yes."
+    )
+    envelope = ReplyEnvelope(form="cant", text=text, offer="jira.create")
+    return _free_reply("email the bug list to my manager", envelope)
+
+
+def answered_reply_about() -> Answered:
+    """A reply that names watched software: the Portal draws LangGraph's state line under it
+    (ADR 0049). It carries the software the request named, as it wrote it, so "keep track of
+    it" next means LangGraph."""
+    text = "To see where LangGraph stands, open the Watchlist. Its line below shows the version."
+    answered = _free_reply("where is langgraph at?", ReplyEnvelope(form="answer", text=text))
+    about = [ReplyAbout(section="watchlist", name="LangGraph")]
+    answer = answered.answer.model_copy(update={"about": about, "software": "langgraph"})
+    return answered.model_copy(update={"answer": answer})
+
+
+def answered_didnt_follow() -> Answered:
+    answer = DidntFollowAnswer()
+    return Answered(answer=answer, parts=parts_of(None, "flibber the wotsit", answer))
 
 
 def fixtures() -> dict[str, WireModel]:
@@ -983,15 +1129,29 @@ def fixtures() -> dict[str, WireModel]:
         "software-found.json": found_software(),
         "releases-read-request.json": read_releases_request(),
         "releases-read.json": releases_read(),
-        "planner-answer-request.json": answer_request(),
+        "planner-answer-request.json": traced_answer_request(),
         "planner-answered-card.json": answered_card(),
+        "planner-answered-card-24-hour.json": answered_card_24_hour(),
         "planner-answered-cant.json": answered_cant(),
         "planner-answered-watchlist.json": answered_watchlist(),
         "planner-answered-refused.json": answered_refused(),
         "planner-answered-edit.json": answered_edit(),
         "planner-answered-pause.json": answered_pause(),
+        "planner-answered-remove.json": answered_removal(),
+        "planner-answered-explain.json": answered_explain(),
         "planner-question-request.json": question_request(),
         "planner-answered-question.json": answered_question(),
+        "planner-answered-reply.json": answered_reply(),
+        "planner-answered-reply-clarify.json": answered_reply_clarify(),
+        "planner-answered-reply-cant.json": answered_reply_cant(),
+        "planner-answered-reply-about.json": answered_reply_about(),
+        "planner-answered-didnt-follow.json": answered_didnt_follow(),
+        "explain-wording-request.json": explain_wording_request(),
+        "explain-wording-reworded.json": ExplainReworded(
+            text="Each day at 8:00 it reads GitHub “fastapi/fastapi” and Jira “MOCK”. It can "
+            "create Jira tickets in “MOCK”, each after a yes. Nothing else changes."
+        ),
+        "explain-wording-kept.json": ExplainKept(why="negation"),
         "planner-check-part-request.json": CheckPartRequest(kind="do", text="Email the list"),
         "planner-check-part-cant.json": check_one_part(
             CheckPartRequest(kind="do", text="Email the list")
@@ -999,6 +1159,7 @@ def fixtures() -> dict[str, WireModel]:
         "planner-check-part-fits.json": check_one_part(
             CheckPartRequest(kind="where", text="In the MOCK project")
         ),
+        "key-shapes.json": KeyShapes(shapes=list(KEY_SHAPE_SOURCES)),
     }
 
 

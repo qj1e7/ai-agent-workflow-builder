@@ -1,20 +1,27 @@
-import { useState } from 'react'
+import { useContext, useState } from 'react'
+import type { PlannerReply } from '../../api/types'
 import { PlannerBot, type BotState } from '../../ui/PlannerBot'
+import { OpensInPanel, type PanelItem } from '../../ui/sidePanel'
+import { workflowInFocus } from '../explain/explain'
+import { AboutRows } from './AboutRows'
 import { Answer, type Page } from './AnswerCards'
 import { EditCard } from './EditCard'
 import { CardMemoryContext, NO_MEMORY, type CardMemory } from './cardMemory'
 import { Leftovers } from './PartsList'
-import { CardLive, NewestAnswer } from './primary'
+import { AskPlanner, CardLive, NewestAnswer } from './primary'
 import { SetupCard } from './SetupCard'
 import { sayOf, whoOf, wordsOnly } from './answers'
 import { useAsker } from './asker'
+import { DraftedCard } from '../drafted/DraftedCard'
 import { RunCardMessage } from './RunCard'
 import { BehindAnswer, CheckWorkflowsAnswer, DecideAnswer, DecidedAnswer, IdeasSentence, NeedsMeAnswer, OperatorsAnswer, RequestsToOpen, useSaidOnce, type Say } from './StateAnswers'
 import { isAnswer, type Message, type Thread as ThreadState } from './threadState'
 import { Waiting } from './Waiting'
 import styles from './Planner.module.css'
 
-const SORRY = new Set(['cant', 'refused', 'offline', 'operators'])
+const SORRY = new Set(['cant', 'refused', 'offline', 'operators', 'didnt_follow'])
+
+const isSorry = (reply: PlannerReply): boolean => SORRY.has(reply.answer) || (reply.answer === 'reply' && reply.form === 'cant')
 const RESUMED = 'Here’s your draft. Pick up where you left off.'
 const FACE = 30
 
@@ -38,7 +45,13 @@ function aboutBefore(messages: readonly Message[], index: number, memory: Thread
   return reply.answer === 'why_stopped' || reply.answer === 'check_workflows' ? reply.use_case_id : null
 }
 
-function ReplyBody({ message, now, page, say, about }: { message: Extract<Message, { kind: 'reply' }>; now: Date; page: Page; say: Say; about: string | null }) {
+/** The workflow “explain it” means: the one open in the side panel, else the one the newest earlier answer named. */
+function focusBefore(messages: readonly Message[], index: number, panel: PanelItem | null): string | null {
+  const replies = messages.slice(0, index).flatMap((message) => (message.kind === 'reply' ? [message.reply] : []))
+  return workflowInFocus(panel, replies)
+}
+
+function ReplyBody({ message, now, page, say, about, focus }: { message: Extract<Message, { kind: 'reply' }>; now: Date; page: Page; say: Say; about: string | null; focus: string | null }) {
   const { reply } = message
   const asker = useAsker()
   const sentence = sayOf(reply, asker)
@@ -62,7 +75,8 @@ function ReplyBody({ message, now, page, say, about }: { message: Extract<Messag
       {reply.answer === 'operators' ? <OperatorsAnswer say={say} /> : null}
       {reply.answer === 'decided' ? <DecidedAnswer only={reply.only} now={now} say={say} /> : null}
       {reply.answer === 'decide' ? <DecideAnswer say={say} /> : null}
-      <Answer reply={reply} typed={message.typed} page={page} />
+      {reply.answer === 'reply' ? <AboutRows about={reply.about} now={now} /> : null}
+      <Answer reply={reply} typed={message.typed} page={page} focus={focus} />
       {reply.answer === 'refused' && asker === 'approver' ? <RequestsToOpen /> : null}
     </div>
   )
@@ -75,9 +89,10 @@ function ReplyBody({ message, now, page, say, about }: { message: Extract<Messag
 export function Thread({ thread, now, page, memory }: ThreadProps) {
   const [said, setSaid] = useState<{ id: number; text: string } | null>(null)
   const newest = thread.messages.at(-1)?.id ?? 0
+  const panel = useContext(OpensInPanel)?.shown ?? null
   const sayFor = (id: number): Say => (text) => setSaid((now) => (now?.id === id ? now : { id, text }))
   return (
-    <>
+    <AskPlanner.Provider value={page.ask}>
       <h2 className="visually-hidden" id="thread-h">
         Conversation with the Planner
       </h2>
@@ -104,7 +119,7 @@ export function Thread({ thread, now, page, memory }: ThreadProps) {
               </li>
             )
           }
-          const state: BotState = message.kind === 'thinking' ? 'thinking' : message.kind === 'reply' && SORRY.has(message.reply.answer) ? 'sorry' : 'idle'
+          const state: BotState = message.kind === 'thinking' ? 'thinking' : message.kind === 'reply' && isSorry(message.reply) ? 'sorry' : 'idle'
           return (
             <li key={message.id} className={styles['said']} tabIndex={-1} data-answer={isAnswer(message) || undefined}>
               <PlannerBot state={state} size={FACE} />
@@ -126,6 +141,13 @@ export function Thread({ thread, now, page, memory }: ThreadProps) {
                       <BehindAnswer now={now} say={message.id === newest ? sayFor(message.id) : () => undefined} />
                     </NewestAnswer.Provider>
                   </div>
+                ) : message.kind === 'drafted' ? (
+                  <div className={styles['cards']}>
+                    <span className="visually-hidden">Planner: </span>
+                    <NewestAnswer.Provider value={message.id === newest}>
+                      <DraftedCard draftedId={message.draftedId} revision={message.revision} />
+                    </NewestAnswer.Provider>
+                  </div>
                 ) : message.kind === 'thinking' ? (
                   <div className={styles['thinking']}>
                     <span className={styles['dots']} aria-hidden="true">
@@ -138,7 +160,7 @@ export function Thread({ thread, now, page, memory }: ThreadProps) {
                 ) : (
                   <NewestAnswer.Provider value={message.id === newest}>
                     <CardLive.Provider value={message.id === newest}>
-                      <ReplyBody message={message} now={now} page={page} say={message.id === newest ? sayFor(message.id) : () => undefined} about={aboutBefore(thread.messages, index, memory)} />
+                      <ReplyBody message={message} now={now} page={page} say={message.id === newest ? sayFor(message.id) : () => undefined} about={aboutBefore(thread.messages, index, memory)} focus={focusBefore(thread.messages, index, panel)} />
                     </CardLive.Provider>
                   </NewestAnswer.Provider>
                 )}
@@ -150,6 +172,6 @@ export function Thread({ thread, now, page, memory }: ThreadProps) {
       <div className="visually-hidden" role="status" aria-live="polite">
         {thread.messages.at(-1)?.kind === 'thinking' ? '' : said?.text ?? ''}
       </div>
-    </>
+    </AskPlanner.Provider>
   )
 }

@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter } from 'react-router'
 import { describe, expect, it } from 'vitest'
 import stopped from '../../../../contracts/fixtures/builder/use-case.stopped.json'
+import explainedFixture from '../../../../contracts/fixtures/builder/explain.older.json'
 import advice from '../../../../contracts/fixtures/troubleshooting/failure.json'
 import aliceHome from '../../../../contracts/fixtures/builder/home.alice.json'
 import bobHome from '../../../../contracts/fixtures/builder/home.bob.json'
@@ -10,7 +11,8 @@ import capabilities from '../../../../contracts/fixtures/planner/capabilities.js
 import statuses from '../../../../contracts/fixtures/watchlist/statuses.json'
 import { ApiProvider } from '../../api/context'
 import { createDevSession } from '../../api/session'
-import type { ApprovalItem, CapabilitiesView, HomeOut, Me, NeedsPage, UseCaseView, WatchlistView } from '../../api/types'
+import type { ApprovalItem, CapabilitiesView, HomeOut, Me, NeedsPage, UseCaseView, WatchlistView, WorkflowExplained } from '../../api/types'
+import { ApiError } from '../../api/client'
 import { InChat } from '../../ui/fromChat'
 import { escapeIsFree } from '../../ui/escape'
 import { focusAfterClose, wrapTab, type PanelItem } from '../../ui/sidePanel'
@@ -28,7 +30,7 @@ const REGISTRY = capabilities as CapabilitiesView
 
 const EMPTY_PAGE: NeedsPage = { approvals: [], approvals_total: 0, stopped: [], stopped_total: 0, declined: [], declined_total: 0, questions_for_me: [], questions_for_me_total: 0, next: null }
 const ALICE_HOME = aliceHome as HomeOut
-const BOB_HOME = bobHome as HomeOut
+const BOB_HOME: HomeOut = { ...(bobHome as HomeOut), setup_approvals: [] }
 const OPEN_BESIDE = () => undefined
 
 const text = (html: string) => html.replace(/<[^>]*>/g, ' ').replaceAll('&#x27;', "'").replace(/\s+/g, ' ').trim()
@@ -45,11 +47,12 @@ interface Options {
   onOpen?: (item: PanelItem) => void
   /** The pages of Needs you that Show more has read. */
   pages?: NeedsPage[]
+  explained?: { version: number | null; report: WorkflowExplained | ApiError }
 }
 
 function draw(
   item: PanelItem,
-  { me = ALICE, narrow = false, useCase = STOPPED, home = me.id === 'bob' ? BOB_HOME : ALICE_HOME, useCases = [STOPPED], back = null, onOpen, pages }: Options = {},
+  { me = ALICE, narrow = false, useCase = STOPPED, home = me.id === 'bob' ? BOB_HOME : ALICE_HOME, useCases = [STOPPED], back = null, onOpen, pages, explained }: Options = {},
 ): string {
   const session = createDevSession({ getItem: () => me.id, setItem: () => undefined })
   const scope = session.cacheScope()
@@ -62,6 +65,11 @@ function draw(
   queryClient.setQueryData(['use-cases', scope], useCases)
   queryClient.setQueryData(['use-case', scope, useCase.use_case_id], useCase)
   queryClient.setQueryData(['troubleshoot', scope, STOPPED.last_run?.run_id, 0], advice)
+  if (explained) {
+    const key = ['use-case', scope, STOPPED.use_case_id, 'explain', explained.version, false]
+    if (explained.report instanceof ApiError) queryClient.getQueryCache().build(queryClient, { queryKey: key }).setState({ status: 'error', error: explained.report, fetchStatus: 'idle' })
+    else queryClient.setQueryData(key, explained.report)
+  }
   if (pages) queryClient.setQueryData(['home', scope, 'needs'], { pages, pageParams: pages.map((_, n) => (n === 0 ? null : (pages[n - 1]?.next ?? null))) })
   return renderToStaticMarkup(
     <QueryClientProvider client={queryClient}>
@@ -101,6 +109,35 @@ describe('the side panel', () => {
     expect(shown).toContain('When Checked every Monday at 9:00, set by Alice. Next check')
   })
 
+  it('shows Explain over the workflow’s name, with the report and a More details to its page', () => {
+    const html = draw({ kind: 'explain', id: STOPPED.use_case_id }, { explained: { version: null, report: explainedFixture as WorkflowExplained } })
+    expect(html).toMatch(/<h2[^>]*>Explain<\/h2>/)
+    expect(html).toMatch(/<h3[^>]*>FastAPI release check<\/h3>/)
+    expect(text(html)).toContain('Step by step 8 blocks')
+    expect(links(html)).toEqual([['More details', `/workflows/${STOPPED.use_case_id}/explain`]])
+    expect(buttons(html)).toEqual(['Close'])
+  })
+
+  it('titles one version Explain, version N, and its More details keeps the version', () => {
+    const html = draw({ kind: 'explain', id: STOPPED.use_case_id, version: 2 }, { explained: { version: 2, report: explainedFixture as WorkflowExplained } })
+    expect(html).toMatch(/<h2[^>]*>Explain, version 2<\/h2>/)
+    expect(links(html)).toEqual([['More details', `/workflows/${STOPPED.use_case_id}/explain?version=2`]])
+  })
+
+  it('says it is reading while the report comes, and puts the server’s words in its place when there is nothing to explain', () => {
+    expect(text(draw({ kind: 'explain', id: STOPPED.use_case_id }))).toContain('Reading the workflow')
+    const words = 'Nothing to explain: this version ran on the shared n8n workflow, so the platform kept no copy of its blocks.'
+    const html = draw({ kind: 'explain', id: STOPPED.use_case_id }, { explained: { version: null, report: new ApiError(409, { detail: words }) } })
+    expect(text(html)).toContain(words)
+    expect(buttons(html)).toEqual(['Close'])
+  })
+
+  it('gives a failed load its reason and Try again', () => {
+    const html = draw({ kind: 'explain', id: STOPPED.use_case_id }, { explained: { version: null, report: new ApiError(500, {}) } })
+    expect(text(html)).toContain('The report could not be loaded.')
+    expect(buttons(html)).toEqual(['Close', 'Try again'])
+  })
+
   it('says an item that has gone is gone, with no More details', () => {
     const html = draw({ kind: 'software', id: 'sw_gone' })
     expect(text(html)).toContain('That software isn’t on the Software watchlist any more.')
@@ -115,6 +152,7 @@ describe('the side panel', () => {
     expect(links(html)).toEqual([
       ['More details', `/workflows/${STOPPED.use_case_id}`],
       ['Open the run', `/runs/${STOPPED.last_run?.run_id ?? ''}`],
+      [`Explain ${STOPPED.name}`, `/workflows/${STOPPED.use_case_id}/explain`],
     ])
   })
 
@@ -188,6 +226,7 @@ describe('the side panel’s views', () => {
     expect(text(html)).toContain(`${STOPPED.name} `)
     expect(text(html)).toContain('Stopped')
     expect(html).toMatch(new RegExp(`<button[^>]*data-opens="workflow:${STOPPED.use_case_id}"`))
+    expect(html, 'and an Explain beside each row, which opens the report in the panel too').toMatch(new RegExp(`<button[^>]*data-opens="explain:${STOPPED.use_case_id}"[^>]*>Explain`))
   })
 
   it('lists the watchlist with the Software page’s count line, each software’s versions and state', () => {

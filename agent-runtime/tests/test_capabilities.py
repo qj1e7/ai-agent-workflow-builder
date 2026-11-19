@@ -10,6 +10,7 @@ from agent_runtime.abilities import (
     ABILITY_OF,
     CAPABILITIES,
     EXAMPLES,
+    OFFER_REQUESTS,
     UNSUPPORTED_WORDS,
     VULNERABILITIES_PLANNED,
     why_not,
@@ -80,6 +81,9 @@ def test_only_the_platform_duty_is_ready_without_an_ability_line():
         "teams.ask",
         "runs.explain",
         "workflows.change",
+        "workflows.draft",
+        "workflows.explain",
+        "watchlist.remove",
     ]
 
 
@@ -139,6 +143,11 @@ def test_the_day_one_examples_are_about_software_versioning():
         ("Keep track of the LangGraph version", "monitor"),
         ("What can you do?", "learn"),
     ]
+
+
+def test_a_cant_offers_only_ready_capabilities_of_the_workflows_own():
+    for capability in OFFER_REQUESTS:
+        assert BY_ID[capability].state == "ready" and not BY_ID[capability].platform, capability
 
 
 def test_only_the_software_versioning_capabilities_are_marked_focus():

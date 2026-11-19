@@ -450,7 +450,10 @@ async def test_plan_picks_a_saved_agent_and_saves_nothing(
         "/api/v1/builder/plan", json={"task": "check langgraph"}, headers=AS_ALICE
     )
     assert r.status_code == 200
-    assert (r.json()["decision"], r.json()["agents"][0]["values"]) == ("use_one", RELEASES)
+    # The team has no list of Jira projects here, so the project is asked, never the model's.
+    planned = r.json()["agents"][0]
+    assert (r.json()["decision"], planned["values"]) == ("use_one", {REPO: RELEASES[REPO]})
+    assert planned["missing"] == [PROJECT]
     assert (await client.get("/api/v1/use-cases", headers=AS_ALICE)).json()["use_cases"] == []
 
 

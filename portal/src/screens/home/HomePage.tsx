@@ -78,6 +78,8 @@ const PHONE = '(max-width: 600px)'
 const DRAFT_GONE = 'That draft is gone. Ask for it again below.'
 /** Answers that are a card to work on. Focus goes to the card's heading; any other answer hands it back to the box. */
 const CARD_ANSWERS: ReadonlySet<PlannerReply['answer']> = new Set(['setup_card', 'part', 'watchlist', 'edit'])
+/** Answers that ask her to type one thing in a field of their own. Focus goes to the field. */
+const FIELD_ANSWERS: ReadonlySet<PlannerReply['answer']> = new Set(['which_software'])
 /** An Operator's question on Home, day one included (the sketch's heading). */
 export const OPERATOR_HEADING = 'What should run by itself?'
 const OFFLINE_HEADING = 'I can’t read new requests until an AI model is connected'
@@ -182,8 +184,8 @@ function PlannerHome({ greeting, home, now, operator }: { greeting: string; home
     wasEmpty.current = empty
   }, [empty])
 
-  // The box stays focused, read-only, while the Planner answers. A card then takes focus at its heading, and any other answer, or a
-  // send that failed, leaves it in the box.
+  // The box stays focused, read-only, while the Planner answers. A card then takes focus at its heading, an answer that asks for one
+  // thing in its own field takes it in the field, and any other answer, or a send that failed, leaves it in the box.
   useEffect(() => {
     if (newest === undefined) return
     if (newest.kind === 'thinking') {
@@ -194,17 +196,18 @@ function PlannerHome({ greeting, home, now, operator }: { greeting: string; home
     const arrived = newest.id === focusOn.current
     focusOn.current = null
     const card = arrived && (newest.kind === 'card' || (newest.kind === 'reply' && CARD_ANSWERS.has(newest.reply.answer)))
+    const asks = arrived && newest.kind === 'reply' && FIELD_ANSWERS.has(newest.reply.answer)
+    const field = asks ? document.querySelector<HTMLElement>(`${NEWEST} section input`) : null
     const heading = card ? document.querySelector<HTMLElement>(`${NEWEST} section h3`) : null
-    if (heading) {
+    if (field) field.focus({ preventScroll: true })
+    else if (heading) {
       heading.tabIndex = -1
       heading.focus({ preventScroll: true })
     } else boxRef.current?.focus()
   }, [newest])
 
   const page: Page = {
-    ask: (words) => {
-      if (!busy) chat.send({ text: words }, words, null)
-    },
+    ask: (words) => chat.sendWords(words),
     edit: (words) => {
       chat.type(words)
       setTimeout(() => boxRef.current?.focus(), 0)
@@ -264,6 +267,7 @@ function PlannerHome({ greeting, home, now, operator }: { greeting: string; home
         setKeys((count) => count + 1)
       }}
       onSend={() => send(chat.sendText)}
+      changing={chat.changing ? { name: chat.changing.name, revision: chat.changing.revision, onCancel: () => { chat.cancelChange(); boxRef.current?.focus() } } : null}
     />
   )
   const chips = (

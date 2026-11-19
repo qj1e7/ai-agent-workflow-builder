@@ -3,6 +3,7 @@ import type { Form } from './card'
 import type { Phase as EditPhase, Picks } from './edit'
 import type { Phase as ChangedPhase } from './changed'
 import type { Phase } from './SetupCard'
+import type { ChangeFeedback } from '../software/removal'
 
 /** Where a set-up card is when its page is left: what is on it, the draft it keeps, and whether it is still open. */
 export interface CardKept {
@@ -47,6 +48,12 @@ export interface CardMemory extends Slot<CardKept> {
   readonly approvals: Slot<readonly RequestRef[]>
   /** Where a Changed in n8n card is, so a card that settled still says so when Home comes back. */
   readonly changed: Slot<ChangedPhase>
+  /** What each row of a remove card last said, by software id, so its Undo is still there when Home comes back. */
+  readonly removals: Slot<Readonly<Record<string, ChangeFeedback['notice']>>>
+  /** True while an Explain card shows code's wording instead of the reworded one, so a swap stays when Home comes back. */
+  readonly wording: Slot<boolean>
+  /** The workflow “explain it” meant when the answer arrived, or null for none, so the card doesn't change as the side panel does. */
+  readonly focus: Slot<string | null>
 }
 
 /** One request a card follows: the run it opens as, and its approval, or null until the run names it. */
@@ -56,11 +63,11 @@ export interface RequestRef {
 }
 
 export function newCardMemory(): CardMemory {
-  return { ...slot<CardKept>(), edit: slot<EditKept>(), beside: slot<true>(), run: slot<string>(), approvals: slot<readonly RequestRef[]>(), changed: slot<ChangedPhase>() }
+  return { ...slot<CardKept>(), edit: slot<EditKept>(), beside: slot<true>(), run: slot<string>(), approvals: slot<readonly RequestRef[]>(), changed: slot<ChangedPhase>(), removals: slot<Readonly<Record<string, ChangeFeedback['notice']>>>(), wording: slot<boolean>(), focus: slot<string | null>() }
 }
 
 const forgets = <T,>(): Slot<T> => ({ kept: () => undefined, keep: () => undefined })
 
-export const NO_MEMORY: CardMemory = { ...forgets<CardKept>(), edit: forgets<EditKept>(), beside: forgets<true>(), run: forgets<string>(), approvals: forgets<readonly RequestRef[]>(), changed: forgets<ChangedPhase>() }
+export const NO_MEMORY: CardMemory = { ...forgets<CardKept>(), edit: forgets<EditKept>(), beside: forgets<true>(), run: forgets<string>(), approvals: forgets<readonly RequestRef[]>(), changed: forgets<ChangedPhase>(), removals: forgets<Readonly<Record<string, ChangeFeedback['notice']>>>(), wording: forgets<boolean>(), focus: forgets<string | null>() }
 
 export const CardMemoryContext = createContext<CardMemory>(NO_MEMORY)

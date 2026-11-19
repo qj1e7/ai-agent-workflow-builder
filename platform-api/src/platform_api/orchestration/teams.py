@@ -28,6 +28,7 @@ from platform_api.orchestration.dispatch import (
     DispatchFailure,
     Identity,
     MessageRef,
+    SetUpNotice,
     identity_of,
 )
 from platform_api.orchestration.runs import sentence
@@ -254,6 +255,10 @@ def _decided(outcome: ApprovalOutcome) -> str:
         return "Deleted before an answer"
     if outcome.verdict == "closed":
         return "Closed by an update before an answer"
+    if outcome.verdict == "replaced":
+        return "Changed before an answer"
+    if outcome.verdict == "expired":
+        return "Nobody answered in time"
     by = listed(outcome.by)
     if outcome.approved_first:
         return f"Approved by {', then '.join(outcome.approved_first)}, then declined by {by}"
@@ -263,7 +268,7 @@ def _decided(outcome: ApprovalOutcome) -> str:
 def _declined_note(outcome: ApprovalOutcome) -> str:
     """What the declined record says after who decided, the same words the Portal shows."""
     reason = f" Reason: {sentence(outcome.reason)}" if outcome.reason else ""
-    return f"Nothing was written.{reason}"
+    return f"{outcome.nothing}{reason}"
 
 
 def _outcome_blocks(outcome: ApprovalOutcome) -> list[CardElement]:
@@ -275,6 +280,46 @@ def _outcome_blocks(outcome: ApprovalOutcome) -> list[CardElement]:
     if outcome.verdict == "approved":
         return [decided]
     return [decided, RichTextBlock(id=OUTCOME_NOTE_ID, inlines=[_plain(_declined_note(outcome))])]
+
+
+def set_up_card(notice: SetUpNotice) -> AdaptiveCard:
+    """A set-up approval: code's own In short, then who can decide. Nothing is set up until an
+    Approver approves it on the page the button opens."""
+    not_deciding: list[CardElement] = (
+        [
+            _runs(
+                _plain(
+                    _first_upper(
+                        f"{listed(notice.not_deciding)} can’t decide, because it is their own work."
+                    )
+                )
+            )
+        ]
+        if notice.not_deciding
+        else []
+    )
+    return AdaptiveCard(
+        body=[
+            _runs(
+                _plain(notice.sent_by, weight="bolder"),
+                TextRun(text=" asks to set up "),
+                _plain(notice.name, weight="bolder"),
+                TextRun(text=". Nothing is set up until an Approver says yes."),
+            ),
+            _runs(_plain(notice.in_short, SUMMARY_LIMIT)),
+            TextBlock(text="Who can decide", weight="bolder"),
+            _runs(TextRun(text="Any Approver who is not part of this workflow")),
+            *not_deciding,
+        ],
+        actions=[OpenUrl(title=OPEN_IN, url=notice.open_url)],
+    )
+
+
+def practice_set_up_text(notice: SetUpNotice) -> str:
+    return (
+        f"{notice.sent_by} asks to set up {notice.name}. "
+        "Open the approval page to decide. Nothing is set up until an Approver says yes."
+    )
 
 
 def with_outcome(card: AdaptiveCard, outcome: ApprovalOutcome) -> AdaptiveCard:
@@ -370,7 +415,8 @@ class TeamsMessage:
     channel: str
     text: str
     link: str
-    run_id: RunId
+    run_id: RunId | None
+    """None for a set-up approval, which has no run."""
     approval_id: ApprovalId
     card: AdaptiveCard | None
     """None only for a message posted before cards (migration 0009)."""
@@ -406,6 +452,33 @@ class TeamsStub:
                     practice_text(notice),
                     notice.link,
                     notice.run_id,
+                    notice.approval_id,
+                    json(card),
+                ),
+            )
+            row = await (
+                await uow.conn.execute(
+                    "SELECT id, channel FROM orchestration.teams_stub_messages "
+                    "WHERE approval_id = %s",
+                    (notice.approval_id,),
+                )
+            ).fetchone()
+        assert row is not None
+        return MessageRef(channel=row["channel"], id=row["id"], identity=self.identity)
+
+    async def announce_set_up(self, notice: SetUpNotice) -> MessageRef:
+        card = set_up_card(notice).as_json()
+        async with self._db.transaction("orchestration") as uow:
+            await uow.conn.execute(
+                "INSERT INTO orchestration.teams_stub_messages "
+                "(id, ts, channel, text, link, run_id, approval_id, card) "
+                "VALUES (%s, %s, %s, %s, %s, NULL, %s, %s) ON CONFLICT (approval_id) DO NOTHING",
+                (
+                    new_id("tm"),
+                    uow.now,
+                    self._channel,
+                    practice_set_up_text(notice),
+                    notice.link,
                     notice.approval_id,
                     json(card),
                 ),
@@ -457,7 +530,7 @@ class TeamsStub:
                 channel=row["channel"],
                 text=row["text"],
                 link=row["link"],
-                run_id=RunId(row["run_id"]),
+                run_id=None if row["run_id"] is None else RunId(row["run_id"]),
                 approval_id=ApprovalId(row["approval_id"]),
                 card=None if row["card"] is None else AdaptiveCard.model_validate(row["card"]),
             )
@@ -495,6 +568,10 @@ class TeamsWorkflowsWebhook:
 
     async def announce(self, notice: ApprovalNotice) -> MessageRef:
         await self._post(approval_card(notice))
+        return MessageRef(channel=self._channel, id=notice.approval_id, identity=self._identity)
+
+    async def announce_set_up(self, notice: SetUpNotice) -> MessageRef:
+        await self._post(set_up_card(notice))
         return MessageRef(channel=self._channel, id=notice.approval_id, identity=self._identity)
 
     async def update(self, ref: MessageRef, outcome: ApprovalOutcome) -> None:

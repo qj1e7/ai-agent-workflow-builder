@@ -38,6 +38,12 @@ def practice_token(signing_key: str) -> str:
     return hmac.new(signing_key.encode(), b"practice-jira", hashlib.sha256).hexdigest()
 
 
+def practice_reader_token(signing_key: str) -> str:
+    """The token of the practice Jira's second account, which may only browse: the key the
+    platform makes in n8n for n8n's own Jira block (ADR 0045, ENGINE-PLAN E16)."""
+    return hmac.new(signing_key.encode(), b"practice-jira-reader", hashlib.sha256).hexdigest()
+
+
 @dataclass(frozen=True)
 class PracticeTicket:
     key: str
@@ -86,9 +92,13 @@ def _ticket(row: Mapping[str, Any]) -> PracticeTicket:
 class PracticeJira:
     """The practice Jira's state: its tickets, its token, and the failures a test asked for."""
 
-    def __init__(self, db: Database, token: str, portal_url: str) -> None:
+    def __init__(
+        self, db: Database, token: str, portal_url: str, reader_token: str | None = None
+    ) -> None:
         self._db = db
         self.token = token
+        self.reader_token = reader_token
+        """The account that may only browse. Every other call it makes is refused."""
         self.portal_url = portal_url.rstrip("/")
         self._failures: list[Failure] = []
         self.time_zone = PRACTICE_ZONE

@@ -12,9 +12,10 @@ export class ProposeChange implements INodeType {
   description: INodeTypeDescription = {
     displayName: 'Propose a change',
     name: 'wabProposeChange',
+    icon: 'file:propose.svg',
     group: ['transform'],
     version: 1,
-    subtitle: '={{ $parameter["action"] }}',
+    subtitle: 'Jira',
     description: 'Our block. Adds a change to the run’s proposal. Nothing changes until an Approver says yes.',
     defaults: { name: 'Propose a change' },
     inputs: ['main'],

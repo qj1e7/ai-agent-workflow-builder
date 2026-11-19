@@ -51,7 +51,14 @@ from platform_api.orchestration.spec import CardRun, CardsTask, N8nTarget, RunSp
 from platform_api.orchestration.store import RETRY, START, RunRecord, Store
 from platform_api.orchestration.write_actions import WriteGateway
 from platform_api.settings import N8nOwner
-from platform_api.shared import TEAM_TIME_ZONE, N8nExecutionId, Principal, RunId, UserId
+from platform_api.shared import (
+    NO_START_BLOCK,
+    TEAM_TIME_ZONE,
+    N8nExecutionId,
+    Principal,
+    RunId,
+    UserId,
+)
 from tests.conftest import PostgresUrls
 from tests.fake_n8n import OWNER_EMAIL, OWNER_PASSWORD
 from tests.fake_n8n import FakeN8n as N8nRecords
@@ -146,6 +153,7 @@ class Switch:
 class Engine(Writes):
     trigger: Trigger
     records: N8nRecords
+    api: N8nApi
     pinned: PinnedWorkflows
     sources: FakeSources
     switch: Switch
@@ -250,6 +258,7 @@ async def e(postgres: PostgresUrls) -> AsyncIterator[Engine]:
         )
         engine = Engine(h, reads, workflows, calls, waits, orchestrator, FakeLanding())
         engine.flaky, engine.trigger, engine.records = flaky, trigger, records
+        engine.api = api
         engine.pinned, engine.sources, engine.switch = workflows, sources, switch
         yield engine
         await starts.close()
@@ -282,6 +291,25 @@ async def test_run_now_goes_from_the_trigger_to_bob_s_yes_and_one_ticket(e: Engi
     assert await e.tickets() == ["MOCK-1"]
     done = await e.state(run_id)
     assert isinstance(done, Succeeded) and done.outcome is Outcome.WRITTEN
+
+
+async def test_safety_a_test_run_never_starts_while_a_notice_block_would_post(e: Engine):
+    """n8n runs a block whose output is pinned only in a run by hand, a test run, and uses the
+    pinned output there instead (ADR 0045, as amended). A notice with none would post."""
+    slack = {
+        "name": "Tell Slack",
+        "type": "n8n-nodes-base.slack",
+        "typeVersion": 2.7,
+        "parameters": {"channelId": {"__rl": True, "value": "C1", "mode": "id"}},
+    }
+    e.records.workflows[WORKFLOW]["nodes"] = [slack]
+    await e.start(replace(OWN, stops_at_gate=True))
+    await e.tick()
+    assert e.records.draft_runs == [], "not started, so nothing posted"
+    e.records.workflows[WORKFLOW]["pinData"] = {
+        "Tell Slack": [{"json": {"skipped": "Slack notice skipped in the test run."}}]
+    }
+    assert await e.api.unpinned(WORKFLOW) == []
 
 
 async def test_safety_a_test_run_runs_the_draft_by_hand_asks_nobody_and_writes_nothing(
@@ -349,6 +377,21 @@ async def test_a_start_n8n_does_not_take_fails_the_run_in_its_words_and_a_retry_
     [execution] = e.trigger.executions
     await e.call(execution, READ, "Read release")
     assert isinstance(await e.state(run_id), Working)
+
+
+async def test_a_workflow_with_no_start_from_the_portal_stops_at_once_and_says_so(e: Engine):
+    """Trying again could never start it, so the run stops on the first try, and a retry is
+    not offered until someone adds the block."""
+    run_id = await e.start(replace(SPEC, n8n=N8nTarget(WORKFLOW, None)))
+    await e.tick()
+    failed = await e.state(run_id)
+    assert isinstance(failed, Failed)
+    assert (failed.failure.reason, failed.failure.retryable) == (
+        FailureReason.DISPATCH_FAILED,
+        False,
+    )
+    assert failed.failure.message == f"n8n did not take the start: {NO_START_BLOCK}"
+    assert e.trigger.posts == []
 
 
 async def test_retry_is_n8n_s_own_retry_of_the_run_s_newest_execution_from_the_outbox(e: Engine):
@@ -496,3 +539,17 @@ def test_safety_a_schedule_never_starts_a_workflow_that_is_not_on():
     version = RanVersion("safe", Publisher(UserId("alice")))
     assert decide_link(facts, None, None, None, version, NOW, on=False) == NOT_ON
     assert decide_link(facts, None, None, None, version, NOW) == NewRun(UserId("alice"), "schedule")
+
+
+async def test_safety_a_test_run_runs_only_the_draft_the_platform_checked(e: Engine):
+    """The draft could change between the check and the run, so the run is held to the draft's
+    version id at the check, and one changed since does not start (ADR 0045, as amended)."""
+    target = OWN.n8n
+    assert target is not None
+    checked = replace(OWN, stops_at_gate=True, n8n=replace(target, draft_version="v0"))
+    await e.start(checked)
+    await e.tick()
+    assert e.records.draft_runs == [], "the draft is v1 now, not the v0 that was checked"
+    await e.start(replace(checked, n8n=replace(target, draft_version="v1")))
+    await e.tick()
+    assert len(e.records.draft_runs) == 1

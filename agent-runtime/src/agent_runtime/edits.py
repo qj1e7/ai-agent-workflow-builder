@@ -27,15 +27,20 @@ from agent_runtime.contract import (
 )
 from agent_runtime.planner import visible_words, whole_word_of
 from agent_runtime.reading import (
-    DAY_NAMES,
+    DAY_FORMS,
     FILLER,
     FREQUENCY,
+    LEFT_OUT,
     OFTEN,
     SCHEDULE_VOCAB,
+    SHORT_FORMS,
     Clash,
     TaskRead,
+    change_unheld,
     clashes_in,
     clauses_of,
+    inexact_times,
+    left_out,
     said_schedule,
 )
 
@@ -103,17 +108,6 @@ NOUN: Final = re.compile(
     re.IGNORECASE,
 )
 """A change verb after an article is a noun, as "the last run" or "an update"."""
-CANT_HOLD: Final = frozenset({"month", "quarter", "year", "fortnight", "hour"})
-SO_OFTEN: Final = re.compile(
-    rf"\bevery\s+(?:other|second|third|\d+|two|three|four|five|six)\s+"
-    rf"(?:days?|weeks?|months?|hours?|(?:{DAY_NAMES})s?)\b|"
-    r"\b(?:twice|(?:three|four|five|\d+)\s+times)\s+(?:a|an|per|each|every)\s+\w+|"
-    r"\b(?:on\s+)?(?:the\s+)?weekends?\b|"
-    r"\b(?:except|excluding|but\s+not|apart\s+from|other\s+than)\b[^,.;!?]*",
-    re.IGNORECASE,
-)
-"""A schedule it can't hold beyond the frequencies, as "every other day", "twice a week", "on
-weekends" or "every weekday except Friday"."""
 NEW_WORKFLOW: Final = re.compile(
     r"^(?:(?:and|then|also|please)\s+)*(?:(?:can|could|would|will)\s+you\s+)?"
     r"(?:set\s+up|make|build)\s+(?:a|an|another|one|some)\s+(?:new\s+)?"
@@ -139,15 +133,16 @@ PRONOUN: Final = re.compile(r"\b(?:it|them|this\s+one|that\s+one)\b", re.IGNOREC
 UNREAD_TIME: Final = re.compile(
     r"\b(?:in\s+the\s+)?(?:morning|afternoon|evening|night)\b|\btonight\b|"
     r"\b(?:(?:an?|one|two|three|\d+)\s+hours?\s+)?(?:later|earlier|sooner)\b|"
-    r"\bat\s+(?:\d{1,2}(?:\.\d{2})?|one|two|three|four|five|six|seven|eight|nine|ten|eleven|"
-    r"twelve)\b(?!\s*(?:am|pm|:))",
+    r"\bat\s+(?:\d{1,2}(?:[.:]\d{1,2})?|one|two|three|four|five|six|seven|eight|nine|ten|"
+    r"eleven|twelve)\b(?!\s*(?:am|pm|:))",
     re.IGNORECASE,
 )
-"""A time the schedule can't read, as "in the afternoon", "an hour later" or "at nine". The
-person picks one, and it is never guessed."""
+"""A time the schedule can't read, as "in the afternoon", "an hour later", "at nine" or "at
+24:00". The person picks one, and it is never guessed. A time the schedule reads, as "at 16:00",
+is never asked: this is only looked for when no time was read."""
 START: Final = re.compile(
     r"\b(?:from|starting|beginning|as\s+of)\s+(?:next\s+\w+|tomorrow)\b|"
-    rf"\b(?:starting|beginning|as\s+of)\s+(?:on\s+)?(?:{DAY_NAMES})s?\b",
+    rf"\b(?:starting|beginning|as\s+of)\s+(?:on\s+)?(?:{DAY_FORMS})s?\b",
     re.IGNORECASE,
 )
 """When the change should start, as "from next week", which the chat can't set: a change starts
@@ -158,7 +153,7 @@ TIME: Final = re.compile(
     re.IGNORECASE,
 )
 UNIT: Final = (
-    rf"(?:(?:every|each|on|the|at)\s+)?(?:(?:{DAY_NAMES})s?|weekdays?|weekends?|day|week|daily|"
+    rf"(?:(?:every|each|on|the|at)\s+)?(?:(?:{DAY_FORMS})s?|weekdays?|weekends?|day|week|daily|"
     r"weekly|\d{1,2}(?:[:.]\d{2})?\s*(?:am|pm)|\d{1,2}:\d{2}|noon|midnight|\d{1,2})"
 )
 INSTEAD: Final = re.compile(rf"\b(?:instead\s+of|rather\s+than)\s+{UNIT}\b", re.IGNORECASE)
@@ -166,7 +161,7 @@ INSTEAD: Final = re.compile(rf"\b(?:instead\s+of|rather\s+than)\s+{UNIT}\b", re.
 FROM: Final = re.compile(rf"\bfrom\s+{UNIT}\b", re.IGNORECASE)
 NOW: Final = re.compile(r"\b(?:now|currently|at\s+the\s+moment|these\s+days)\b", re.IGNORECASE)
 SCHEDULE_SAID: Final = re.compile(
-    rf"\b(?:{DAY_NAMES})s?\b|\bweekdays?\b|{TIME.pattern}|{FREQUENCY.pattern}", re.IGNORECASE
+    rf"\b(?:{DAY_FORMS})s?\b|\bweekdays?\b|{TIME.pattern}|{FREQUENCY.pattern}", re.IGNORECASE
 )
 EDIT_WORDS: Final = (
     FILLER | SCHEDULE_VOCAB | EDIT_VERBS | words("runs only instead rather than o clock")
@@ -228,7 +223,7 @@ def _names(read: TaskRead | None, text: str, facts: PlannerFacts | None) -> list
     said = _said(read.workflow_words if read is not None else None, text)
     found += [said] if said is not None else []
     for name in _workflow_names(facts):
-        found += _name_runs(text, name)
+        found += name_runs(text, name)
     for name in [w.name for w in (facts.watchlist if facts is not None else None) or []]:
         at = _whole(text, name)
         found += [at] if at is not None else []
@@ -267,7 +262,7 @@ def _said(words_: str | None, text: str) -> Span | None:
     return _whole(text, wanted)
 
 
-def _name_runs(text: str, name: str) -> list[Span]:
+def name_runs(text: str, name: str) -> list[Span]:
     """The stretches of the request that name a workflow: its whole name, or two or more of its
     words in a row after "the", "my" or "our", as "the weekly summary" for "Weekly closed-ticket
     summary". "a weekly summary" is a new one."""
@@ -389,7 +384,7 @@ def _deletes_tickets(text: str, facts: PlannerFacts | None) -> bool:
     """A delete of tickets, as "delete the MOCK ticket", changes Jira, never a workflow, whatever
     the reading named. A ticket inside one of the person's workflow names is that workflow's. A
     pause beside it is still a pause, with the delete crossed."""
-    names = [r for name in _workflow_names(facts) for r in _name_runs(text, name)]
+    names = [r for name in _workflow_names(facts) for r in name_runs(text, name)]
     unnamed = _blank(text, names)
     return _deletes_tickets_in(unnamed) and not _orders_switch(unnamed)
 
@@ -514,7 +509,7 @@ def _orders_one(read: TaskRead, text: str, facts: PlannerFacts | None) -> bool:
     clause that asks for a new workflow, or a question, orders nothing."""
     named = [s for s in [_said(read.workflow_words, text)] if s is not None]
     for name in _workflow_names(facts):
-        named += _name_runs(text, name)
+        named += name_runs(text, name)
     software = whole_word_of(text, read.software)
     named += [
         m.span()
@@ -545,7 +540,7 @@ def _target(read: TaskRead, text: str, facts: PlannerFacts | None) -> str | None
     "the morning check", else the software the reading named. None for "make it daily". The
     words widen to the longest name that holds them, so a whole name said wins over the words it
     shares with another workflow's name."""
-    runs = [r for name in _workflow_names(facts) for r in _name_runs(text, name)]
+    runs = [r for name in _workflow_names(facts) for r in name_runs(text, name)]
     said = _said(read.workflow_words, text) or (runs[0] if runs else None)
     if said is not None:
         known = [r for r in runs if r[0] <= said[0] and said[1] <= r[1]]
@@ -598,6 +593,7 @@ def change_clauses(text: str, names: _Names) -> list[Span]:
     A clause that names another workflow belongs to the change only when the target's own clause
     names no schedule, as "Make the morning check and the weekly summary run at 10am"."""
     unnamed = _blank(text, [*names.all, *(m.span() for m in TIME.finditer(text))])
+    leaves = left_out(text)
     found: list[Span] = []
     elsewhere: list[Span] = []
     for clause in _split(text, clauses_of(text), names):
@@ -607,7 +603,16 @@ def change_clauses(text: str, names: _Names) -> list[Span]:
         target = names.target is not None and _inside(names.target, clause)
         if names.others(clause) and not target:
             elsewhere.append(clause)
-        elif tokens & EDIT_VERBS or target or "it" in tokens or tokens <= EDIT_WORDS:
+        elif (
+            tokens & EDIT_VERBS
+            or target
+            or "it" in tokens
+            or tokens <= EDIT_WORDS
+            or LEFT_OUT.search(text, *clause) is not None
+            or any(a < clause[1] and clause[0] < b for a, b in leaves)
+        ):
+            # A day left out, as "except weekends", "but skip Fridays" or "Fridays off", is part
+            # of the change.
             found.append(clause)
     scheduled = any(SCHEDULE_SAID.search(text[a:b]) for a, b in found)
     return sorted(found + ([] if scheduled else elsewhere))
@@ -656,7 +661,7 @@ def _schedule_of(
     rest = _rest(text, names)
     if OTHER_CHANGES & {w for w, _, _ in _tokens(rest)}:
         return None, "only_schedule", []
-    if how_often(rest) is not None:
+    if change_unheld(rest) is not None:
         return None, "how_often", []
     clashes = clashes_in(rest)
     if clashes:
@@ -667,7 +672,10 @@ def _schedule_of(
     hour = None
     if at is not None and at.isdigit():
         hour, at = _hour(int(at))
-    unclear = at is None and hour is None and UNREAD_TIME.search(rest) is not None
+    # A time that only bounds the run or is not exact, as "before 5pm" or "9am or so", is asked,
+    # never taken as the time and never left as the time it ran at.
+    named = UNREAD_TIME.search(rest) is not None or bool(inexact_times(rest))
+    unclear = at is None and hour is None and named
     if day is None and at is None and hour is None and not weekly and not unclear:
         return None, "only_schedule", []
     change = ScheduleChange(day=_day(day), weekly=weekly, at=at, hour=hour, time_unclear=unclear)
@@ -698,16 +706,6 @@ def _day(day: str | None) -> WatchDay | None:
             return day
         case _:
             return None
-
-
-def how_often(rest: str) -> Span | None:
-    """Where the words ask for a schedule it can't hold, as "monthly" or "twice a week"."""
-    for match in FREQUENCY.finditer(rest):
-        word = (match.group(1) or match.group(2)).casefold()
-        if OFTEN.get(word, word) in CANT_HOLD:
-            return match.span()
-    found = SO_OFTEN.search(rest)
-    return None if found is None else found.span()
 
 
 @dataclass(frozen=True)
@@ -755,12 +753,19 @@ def edit_marks(
         unnamed=_blank(text, names.all),
         kept=kept,
         clashes=clashes_in(rest) if answer.holds_save else [],
-        often=how_often(rest) if answer.cant == "how_often" else None,
+        often=change_unheld(rest) if answer.cant == "how_often" else None,
         unread=[
             *(m.span() for m in START.finditer(text)),
             *(m.span() for m in UNREAD_TIME.finditer(rest) if _unclear(answer)),
+            *(inexact_times(rest) if _unclear(answer) else []),
         ],
-        read=[*names.all, *_now(text, kept), *(m.span() for m in TIME.finditer(text))],
+        read=[
+            *names.all,
+            *_now(text, kept),
+            *(m.span() for m in TIME.finditer(text)),
+            # The weekend left out beside every day is every weekday, which the change reads.
+            *([] if left_out(rest) else [m.span() for m in LEFT_OUT.finditer(text)]),
+        ],
     )
     return [
         mark
@@ -820,7 +825,9 @@ def unexplained(text: str, clause: Span, explained: list[Span]) -> list[Span]:
         if not any(a <= clause[0] + t[1] < b for a, b in explained)
     ]
     for word, start, end in [*tokens, ("", -1, -1)]:
-        if word and (word not in EDIT_WORDS or (run and word in FILLER)):
+        # A short day in capitals is a project key, as "MON", never a schedule word.
+        key = word in SHORT_FORMS and text[clause[0] + start : clause[0] + end].isupper()
+        if word and (key or word not in EDIT_WORDS or (run and word in FILLER)):
             run.append((word, start, end))
             continue
         while run and run[-1][0] in FILLER:

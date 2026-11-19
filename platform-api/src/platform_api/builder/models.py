@@ -103,14 +103,28 @@ class N8nExitView(WireModel):
     to: str = Field(description="The block it leads to, by name.")
 
 
+type N8nBadge = Literal["ours", "n8n"]
+
+
 class N8nBlockView(WireModel):
     name: str = Field(description="The block's name, as n8n, the canvas and the run line show it.")
     kind: N8nBlockKind = Field(
         description="What the block does: schedule, start (Start from the Portal), manual and "
         "error start a run; read, agent, propose, ask (Ask for a yes), write (Make the approved "
         "changes), tell and report are our blocks; branch (IF), merge and end (No Op) are n8n's; "
-        "other is one of n8n's data blocks; off is a block the class file turns off or does not "
-        "know, which never runs."
+        "other is one of n8n's own blocks that shapes the data, reads a system or posts a notice, "
+        "as its tag says; off is a block the class file turns off, or does not know, for what it "
+        "is or what it was asked to do."
+    )
+    badge: N8nBadge = Field(
+        default="ours",
+        description="ours for a block of our node pack, which the sketch badges Our block; n8n "
+        "for one of n8n's own, badged n8n block (ADR 0045, section 3).",
+    )
+    tag: str | None = Field(
+        default=None,
+        description="What one of n8n's own blocks does, by its class: Reads Jira, Posts in Slack, "
+        "Shapes the data. Null for our blocks and n8n's flow blocks, and for a block that is off.",
     )
     next: list[N8nExitView] = Field(description="Where each of its exits leads.")
 
@@ -169,8 +183,9 @@ class UseCaseSchedule(WireModel):
     day: Day
     at: ClockTime
     time_zone: str
-    owner_name: str = Field(
-        description="The name of the schedule owner. Its scheduled runs start as them."
+    owner_name: str | None = Field(
+        description="The name of the schedule owner. Its scheduled runs start as them. Null for a "
+        "schedule nobody saved in the Portal, such as one set in n8n's editor."
     )
     held: ScheduleHold | None = Field(
         default=None,
@@ -225,6 +240,12 @@ class LastRunView(WireModel):
         description="How a finished run ended: written, nothing_to_write, or test_passed for a "
         "test run that stopped before the yes and wrote nothing. Null until it succeeded.",
     )
+
+
+class N8nHolderView(WireModel):
+    id: UserId
+    name: str
+    since: datetime
 
 
 class UseCaseView(WireModel):
@@ -304,11 +325,22 @@ class UseCaseView(WireModel):
         "in plain words with what to do: a step the safety checker refused, or n8n not taking "
         "it yet. Null once it moved, and while it only waits for a run to end.",
     )
+    start_refused: str | None = Field(
+        default=None,
+        description="Why neither Run now nor a test run can start it, in words to show: the "
+        "version in use has no Start from the Portal block. Null when they can.",
+    )
     made_in_n8n_by: UserId | None = Field(
         default=None,
         description="Who made it in n8n, for a workflow made in n8n and then set up from "
         "Workflows (ENGINE-PLAN E15). Change it in n8n: its runs are their work, so they never "
         "approve them. Null for a workflow the Planner laid out.",
+    )
+    held_in_n8n: N8nHolderView | None = Field(
+        default=None,
+        description="Who has it open in n8n now, for everyone to see. While someone does, the "
+        "platform refuses every change that would publish over their work: a schedule change, "
+        "Undo, roll back, Add the yes back and Resume. Pause and Delete still work.",
     )
 
 
@@ -866,6 +898,12 @@ class NewAgent(WireModel):
     reason: str
     missing_tools: list[MissingTool]
     questions: list[str]
+    project: str | None = Field(
+        default=None,
+        description="The one Jira project the task's words name, read by code, which the "
+        "Portal fills the agent's Jira project input with. Null when the words name none, or "
+        "the agent uses no Jira tool.",
+    )
 
 
 class CannotDo(WireModel):

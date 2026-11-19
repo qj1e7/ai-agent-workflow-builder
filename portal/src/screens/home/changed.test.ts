@@ -125,17 +125,30 @@ describe('what arrives in the chat', () => {
   })
 
   it('lands before a request still waiting for its answer, so a failed send takes back only the request', () => {
-    const asking = threadReducer(EMPTY, { type: 'sent', text: 'Check my workflows' })
+    const asking = threadReducer(EMPTY, { type: 'sent', text: 'Check my workflows', chat: 'c1' })
     const arrived = threadReducer(asking, { type: 'arrived', reply: REFUSED })
     expect(arrived.messages.map((m) => m.kind)).toEqual(['reply', 'me', 'thinking'])
     expect(threadReducer(arrived, { type: 'failed' }).messages).toEqual([{ kind: 'reply', id: 3, reply: REFUSED, typed: '' }])
-    const answered = threadReducer(arrived, { type: 'answered', reply: { answer: 'abilities', how_to_start: false, parts: [] } as PlannerReply, typed: 'Check my workflows' })
+    const answered = threadReducer(arrived, { type: 'answered', reply: { trace_id: null, answer: 'abilities', how_to_start: false, parts: [] } as PlannerReply, typed: 'Check my workflows' })
     expect(answered.messages.map((m) => m.kind)).toEqual(['reply', 'me', 'reply'])
   })
 
   it('does not take the card for the answer a typed request follows on from', () => {
-    const asked = threadReducer(threadReducer(EMPTY, { type: 'sent', text: 'Check my workflows' }), { type: 'answered', reply: { answer: 'abilities', how_to_start: false, parts: [] } as PlannerReply, typed: 'Check my workflows' })
+    const asked = threadReducer(threadReducer(EMPTY, { type: 'sent', text: 'Check my workflows', chat: 'c1' }), { type: 'answered', reply: { trace_id: null, answer: 'abilities', how_to_start: false, parts: [] } as PlannerReply, typed: 'Check my workflows' })
     expect(previousOf(threadReducer(asked, { type: 'arrived', reply: REFUSED }))?.request).toBe('Check my workflows')
     expect(previousOf(threadReducer(EMPTY, { type: 'arrived', reply: REFUSED }))).toBeNull()
+  })
+
+  it('sends no software after a card that came since the answer that named it, so “keep track of it” never means the software before the card', () => {
+    const watch: PlannerReply = { trace_id: null, answer: 'watchlist', word: 'add', software: 'Node Js', already_listed: null, also: null, parts: [] }
+    const asked = threadReducer(threadReducer(EMPTY, { type: 'sent', text: 'add Node Js', chat: 'c1' }), { type: 'answered', reply: watch, typed: 'add Node Js' })
+    expect(previousOf(asked)?.software).toBe('Node Js')
+    const after = previousOf(threadReducer(asked, { type: 'arrived', reply: REFUSED }))
+    expect(after?.request).toBe('add Node Js')
+    expect(after?.software).toBeNull()
+    const reply: PlannerReply = { trace_id: null, answer: 'reply', form: 'answer', text: 'I can’t look that up yet.', choices: [], offer: null, looked_at: [], about: [], software: 'node js', parts: [] }
+    const replied = threadReducer(threadReducer(EMPTY, { type: 'sent', text: 'what is the latest node js?', chat: 'c1' }), { type: 'answered', reply, typed: 'what is the latest node js?' })
+    expect(previousOf(replied)?.software).toBe('node js')
+    expect(previousOf(threadReducer(replied, { type: 'arrived', reply: REFUSED }))?.software).toBeNull()
   })
 })

@@ -8,6 +8,7 @@ import partAnswer from '../../../../contracts/fixtures/planner/answer.part.json'
 import clashAnswer from '../../../../contracts/fixtures/planner/answer.setup_card.clash.json'
 import crossAnswer from '../../../../contracts/fixtures/planner/answer.setup_card.cross.json'
 import checkCant from '../../../../contracts/fixtures/planner/check-part.cant.json'
+import answered24Hour from '../../../../contracts/fixtures/agent/planner-answered-card-24-hour.json'
 import { ApiError } from '../../api/client'
 import type { CardToolId, CardView, DraftView, PartReply, PlanOut, RowKind, RowState, SetupCardReply } from '../../api/types'
 import {
@@ -261,14 +262,26 @@ describe('the plan in step 2', () => {
   it('stops at a drafted agent with problems, and at a task the Planner can’t do', () => {
     const form = read(ROWS)
     const drafted = planView(NEW_AGENT, form.rows)
-    expect(drafted.kind === 'agents' && drafted.problems).toEqual([
-      'Add a Jira project detail, so the agent knows which project it may read.',
-      'Forge is an old name that confused the sponsor. Use plain words.',
-    ])
+    expect(drafted.kind === 'agents' && drafted.problems).toEqual(['Forge is an old name that confused the sponsor. Use plain words.'])
     expect(nextBlockers(form, drafted).words).toBe('Next opens when you change your words so the new agent has no problems.')
     const cannot = planView(CANNOT, form.rows)
     expect(cannot).toMatchObject({ kind: 'cannot', reason: 'Booking a meeting room needs a calendar, and the platform has no calendar tool.' })
     expect(nextBlockers(form, cannot).words).toBe('Next opens when you change your words to something I can do.')
+  })
+
+  it('fills the Jira project from the one project the builder read in their words, never the first “in X” of the rows', () => {
+    const rows = [...ROWS.rows.slice(0, 3), { kind: 'where' as const, text: 'Jira project OPS', state: 'understood' as const, note: null }]
+    const form = cardFrom('x', rows, '')
+    const drafted = planView({ ...NEW_AGENT, project: 'OPS' } as PlanOut, form.rows)
+    expect(drafted.kind === 'agents' && drafted.agents[0]?.found).toEqual({ 'Jira project': 'OPS' })
+    const none = planView({ ...NEW_AGENT, project: null } as PlanOut, form.rows)
+    expect(none.kind === 'agents' && none.agents[0]?.found).toEqual({})
+  })
+
+  it('fills the Jira project the platform added to a draft from her words, so it is not asked', () => {
+    const { name, rows } = answered24Hour.answer
+    const drafted = planView(NEW_AGENT, cardFrom(name, rows as SetupCardReply['rows'], '').rows)
+    expect(drafted.kind === 'agents' && drafted.agents[0]?.found).toEqual({ 'Jira project': 'MOCK' })
   })
 
   it('keeps Next off while the plan leaves a part out, even once the Planner clears the changed part', () => {
@@ -340,6 +353,12 @@ describe('step 4, turn it on', () => {
       { ok: true, words: 'Where it goes: Jira project MOCK, as you asked.' },
     ])
     expect(checkedRows(ready())[0]).toEqual({ ok: true, words: 'When: Every weekday at 15:00, as you asked.' })
+  })
+
+  it('never says a schedule the Planner filled in from their words is as they asked', () => {
+    const note = 'I filled some of this in from your words “Every other Friday at 9am”. Please check it.'
+    const rows = [{ kind: 'schedule' as const, text: 'Every Friday at 9am', state: 'changed' as const, note }, ...ROWS.rows.slice(1)]
+    expect(checkedRows({ ...enterWhen(cardFrom('x', rows, '')), step: 4 })[0]).toEqual({ ok: false, words: `When: Every Friday at 9:00. ${note}` })
   })
 
   it('sends the name, the rows as the instruction, each agent’s values and the schedule, as a draft that is not on yet', () => {
@@ -803,5 +822,31 @@ describe('the card’s draft saves and deletes', () => {
       return Promise.resolve()
     })
     expect(handled.at(-1)).toBe('delete again')
+  })
+})
+
+describe('a 24-hour time from the Planner', () => {
+  const CAROL = 'Every Friday at 16:00, find Jira tickets in project MOCK that nobody updated for 14 days, and raise one Jira ticket in MOCK that lists them'
+  const timed = (schedule: string) => cardFrom('x', [{ kind: 'schedule', text: schedule, state: 'understood', note: null }], schedule)
+
+  it('reads her time from the schedule row the runtime sends, and never asks for it again', () => {
+    const { name, rows } = answered24Hour.answer
+    const form = cardFrom(name, rows as SetupCardReply['rows'], CAROL)
+    expect(form.when).toMatchObject({ often: 'week', day: 'friday', at: '16:00' })
+    expect(whenSaid(form.when)).toBe('Every Friday at 16:00')
+    expect(nextQuestion(form, null)?.kind).not.toBe('when')
+  })
+
+  it.each([
+    ['Every Friday at 00:00', '00:00'],
+    ['Every Friday at 23:55', '23:55'],
+    ['Every Friday at 4pm', '16:00'],
+  ])('reads “%s” as %s', (schedule, at) => {
+    expect(timed(schedule).when.at).toBe(at)
+    expect(nextQuestion(timed(schedule), null)).toBeNull()
+  })
+
+  it.each(['Every Friday at 24:00', 'Every Friday at 7:5', 'Every Friday at 1600', 'Every Friday at 23:59'])('asks the time for “%s”, never a guess', (schedule) => {
+    expect(nextQuestion(timed(schedule), null)).toMatchObject({ kind: 'when', field: 'at' })
   })
 })

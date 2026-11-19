@@ -10,6 +10,7 @@ TFLINT_IMAGE=ghcr.io/terraform-linters/tflint:v0.64.0@sha256:1c595f42d794c32c45a
 CHECKOV_IMAGE=bridgecrew/checkov:3.3.20@sha256:6d20ebbcde58b2dce6e3151a6771fefa4d468281fe442475455623f5799b9f53
 
 infra=$(cd "$(dirname "$0")/.." && pwd)
+repo=$(cd "$infra/.." && pwd)
 cache=${INFRA_CHECK_CACHE:-$infra/.cache}
 out=${1:-}
 mkdir -p "$cache/terraform" "$cache/tofu" "$cache/tflint"
@@ -42,6 +43,12 @@ for env_dir in "$infra"/envs/*/; do
     --workdir "/infra/envs/$env" --entrypoint /bin/sh "$TERRAFORM_IMAGE" -c \
     'terraform init -backend=false -input=false -lockfile=readonly -no-color >/dev/null && terraform validate -no-color'
 
+  # The tests apply against mocked providers, so they touch nothing and need no credentials. They
+  # reuse the init above.
+  run "terraform-test-$env" tool \
+    --volume "$infra:/infra" --volume "$cache/terraform:/cache" --env TF_PLUGIN_CACHE_DIR=/cache \
+    --workdir "/infra/envs/$env" "$TERRAFORM_IMAGE" test -no-color
+
   run "terraform-variables-$env" tool --volume "$infra:/infra:ro" --entrypoint /bin/sh "$TERRAFORM_IMAGE" \
     /infra/scripts/check-variables.sh "/infra/envs/$env/variables.tf"
 
@@ -56,9 +63,23 @@ done
 run n8n-editor-gate tool --volume "$infra:/infra:ro" --entrypoint /bin/sh "$TERRAFORM_IMAGE" \
   /infra/scripts/check-n8n-editor-gate.sh
 
+# The deploy's check that n8n's public paths refuse an address outside its list (ADR 0051),
+# against a fake curl.
+run n8n-paths-closed tool --volume "$infra:/infra:ro" --entrypoint /bin/sh "$TERRAFORM_IMAGE" \
+  /infra/scripts/check-n8n-paths-closed.sh
+
+# The deploy's plan guard, on made-up plans. It needs jq, which no pinned tool image here has, so it
+# runs on the host, as the deploy runs it.
+run plan-guard sh "$infra/scripts/check-plan-guard.sh"
+
 # The deploy's job runner, against a fake az, so a failed status check is retried.
 run run-job tool --volume "$infra:/infra:ro" --entrypoint /bin/sh "$TERRAFORM_IMAGE" \
   /infra/scripts/check-run-job.sh
+
+# The Langfuse VM runs the images that deploy/compose.yaml's langfuse profile runs (ADR 0050).
+run langfuse-images tool --volume "$repo:/repo:ro" --entrypoint /bin/sh "$TERRAFORM_IMAGE" \
+  /repo/infra/scripts/check-langfuse-images.sh /repo/infra/modules/langfuse_vm/compose.yaml.tftpl /repo/deploy/compose.yaml \
+  /repo/infra/modules/langfuse_vm/clickhouse.xml /repo/deploy/langfuse/clickhouse.xml
 
 run tflint tool \
   --volume "$infra:/infra" --volume "$cache/tflint:/plugins" --env TFLINT_PLUGIN_DIR=/plugins \
