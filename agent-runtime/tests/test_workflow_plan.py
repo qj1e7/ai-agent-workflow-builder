@@ -426,6 +426,57 @@ def test_wires_into_merge_fill_its_inputs_in_order(catalogue: Catalogue):
     assert "takes 2 wires in" in problems(catalogue, three)[0].text
 
 
+IF = block("Is it new", "n8n-nodes-base.if", 2.3)
+ROUTE = block("Route", "n8n-nodes-base.switch", 3.4, rules={"values": [{}, {}, {}]})
+MERGE = block("Merge", "n8n-nodes-base.merge", 3.2, mode="append", numberInputs=3)
+TELL = block("Tell", "CUSTOM.wabTell", 1)
+MODEL = block("Model", "@n8n/n8n-nodes-langchain.lmChatOpenAi", 1.3, model="gpt-5")
+
+
+def into(source: str, target: str, exit_name: str, input_index: int | None) -> Json:
+    return wire(source, target, exit_name) | {"input": input_index}
+
+
+def test_exits_and_inputs_are_n8n_s_own_from_the_catalogue(catalogue: Catalogue):
+    """If's false exit, Switch's third output and Merge's second input, by the outputs, output
+    names and inputs the pinned image serves, as the catalogue holds them."""
+    wires = [
+        wire("Is it new", "Route", "false"),
+        into("Route", "Merge", "2", 1),
+        into("Tell", "Merge", "main", 0),
+    ]
+
+    done = passed(catalogue, plan([IF, ROUTE, MERGE, TELL], wires))
+
+    assert [(w.exit, w.exit_index, w.input_index) for w in done.wires] == [
+        ("false", 1, 0),
+        ("2", 2, 1),
+        ("main", 0, 0),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("wires", "said"),
+    [
+        ([wire("Route", "Tell", "3")], "'Route' has the exits \"0\", \"1\", \"2\""),
+        ([wire("Route", "Tell", "rule 1")], "'Route' has the exits \"0\", \"1\", \"2\""),
+        ([wire("Is it new", "Tell", "main")], "'Is it new' has the exits \"true\", \"false\""),
+        ([into("Is it new", "Merge", "true", 3)], "joins input 3 of 'Merge', which takes 3"),
+        ([into("Is it new", "Tell", "true", 1)], "joins input 1 of 'Tell', which takes 1"),
+        ([into("Is it new", "Merge", "true", -1)], "joins input -1 of 'Merge'"),
+        ([wire("Is it new", "Model", "true")], "'Model', which takes no main wire in"),
+        ([wire("Model", "Tell", "ai_languageModel")], "'Tell', which takes no ai_languageModel"),
+    ],
+)
+def test_a_wire_to_an_exit_or_an_input_n8n_doesn_t_give_goes_back(
+    catalogue: Catalogue, wires: list[Json], said: str
+):
+    found = problems(catalogue, plan([IF, ROUTE, MERGE, TELL, MODEL], wires))
+
+    assert [p.code for p in found] == ["wire"]
+    assert said in found[0].text
+
+
 @pytest.mark.parametrize(
     ("blocks", "settings", "said"),
     [
@@ -914,15 +965,22 @@ def test_a_filter_s_time_beside_the_schedule_is_asked_and_the_schedule_s_day_kep
 
 
 def test_a_switch_s_exits_follow_its_rules_and_a_written_count_is_held(catalogue: Catalogue):
-    rules = {"values": [{"outputKey": "a"}, {"outputKey": "b"}]}
-    switch = block("Route", "n8n-nodes-base.switch", 3.4, rules=rules)
-    targets = [block(f"Tell {n}", "CUSTOM.wabTell", 1) for n in (1, 2)]
-    wires = [wire("Route", "Tell 1", "rule 1"), wire("Route", "Tell 2", "Rule 2")]
+    """n8n names each rule's exit by its output key, else its number from 0, then Fallback."""
+    rules = {"values": [{"outputKey": "a"}, {}]}
+    options = {"fallbackOutput": "extra"}
+    switch = block("Route", "n8n-nodes-base.switch", 3.4, rules=rules, options=options)
+    targets = [block(f"Tell {n}", "CUSTOM.wabTell", 1) for n in (1, 2, 3)]
+    wires = [
+        wire("Route", "Tell 1", "A"),
+        wire("Route", "Tell 2", "1"),
+        wire("Route", "Tell 3", "fallback"),
+    ]
 
     done = passed(catalogue, plan([switch, *targets], wires))
-    assert [w.exit_index for w in done.wires] == [0, 1]
+    assert [(w.exit, w.exit_index) for w in done.wires] == [("a", 0), ("1", 1), ("Fallback", 2)]
     huge = block("Route", "n8n-nodes-base.switch", 3.4, mode="expression", numberOutputs=10**9)
-    out_of_range = plan([huge, targets[0]], [wire("Route", "Tell 1", "output 81")])
+    assert passed(catalogue, plan([huge, targets[0]], [wire("Route", "Tell 1", "79")]))
+    out_of_range = plan([huge, targets[0]], [wire("Route", "Tell 1", "80")])
     assert any("has the exits" in p.text for p in problems(catalogue, out_of_range))
 
 
