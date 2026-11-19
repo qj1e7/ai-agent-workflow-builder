@@ -55,18 +55,19 @@ PROPOSES: Final = f"{OURS}wabProposeChange"
 all, when the words say to create one."""
 _TICKET: Final = r"(?:(?:jira\s+)?(?:ticket|issue|bug)s?|jira\s+tasks?)\b"
 _HOW_MANY: Final = r"(?:a\s+new|an|a|one|two|new)\s+"
+_ONE: Final = r"(?:a\s+new|an|a|one|two)\s+"
 CREATE: Final = re.compile(
-    r"\b(?:(?:creat(?:e|es|ing)|rais(?:e|es|ing)|mak(?:e|es|ing)|add(?:s|ing)?|"
+    r"\b(?:(?:creat(?:e|es|ing)|rais(?:e|es|ing)|mak(?:e|es|ing)|"
     rf"submit(?:s|ting)?|propos(?:e|es|ing))\s+(?:{_HOW_MANY})?|"
-    rf"(?:open(?:s|ing)?|log(?:s|ging)?|fil(?:e|es|ing))\s+{_HOW_MANY}){_TICKET}",
+    rf"(?:add(?:s|ing)?|open(?:s|ing)?|log(?:s|ging)?|fil(?:e|es|ing))\s+{_ONE}){_TICKET}",
     re.IGNORECASE,
 )
 """A create verb acting on a ticket, an allow-list: the verb, then a, an, one, two, a new or new,
-then jira, each if it is there, then ticket, issue or bug, or a Jira task. Open, log and file are
-nouns as often as verbs, so they need a, an, one, two or new: "open jira tickets" and "check log
-issues" read. A noun such as "the jira ticket log", a ticket that is new, a bare task, and a
-summary created from tickets aren't, and nor is any other word that leans toward a change, such
-as update or close, which Propose a change can't do."""
+then jira, each if it is there, then ticket, issue or bug, or a Jira task. Add, open, log and file
+mean other things as often, so they need a, an, one, two or a new: "open jira tickets", "check
+log issues" and "add new issues to the summary" read. A noun such as "the jira ticket log", a
+ticket that is new, a bare task, and a summary created from tickets aren't, and nor is any other
+word that leans toward a change, such as update or close, which Propose a change can't do."""
 _UNKNOWN: Final = object()
 
 
