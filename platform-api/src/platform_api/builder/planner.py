@@ -600,7 +600,7 @@ class ExplainReply(Reply):
     choices: list[ExplainChoice] = Field(
         description="The workflows the request could mean, for the person to pick one: every "
         'one its words match when they match several, or every workflow for "it", so the '
-        "Portal can explain the one in focus. Empty when one matched, when \"it\" can only "
+        'Portal can explain the one in focus. Empty when one matched, when "it" can only '
         "mean their one workflow, or when the words name none."
     )
     in_focus: bool = Field(
