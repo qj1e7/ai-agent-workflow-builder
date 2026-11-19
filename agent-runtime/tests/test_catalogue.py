@@ -327,6 +327,8 @@ def test_words_that_don_t_create_a_ticket_never_find_propose_a_change_first(
     [
         "check log issues on the server",
         "add a task to remind me every monday",
+        "add new issues to the weekly summary",
+        "open new tickets from the board",
         "file bugs from the log",
     ],
 )
@@ -334,8 +336,8 @@ def test_words_that_create_no_jira_ticket_find_none_of_our_write_blocks_first(
     catalogue: Catalogue, words: str
 ):
     """Before, "log issues" counted as creating one, and then Make the approved changes, matching
-    weakly, came first. "log" and "file" are nouns as often as verbs, so they count only before a,
-    an, one, two or new, and a task counts only as a Jira task."""
+    weakly, came first. "add", "open", "log" and "file" mean other things as often, so they count
+    only before a, an, one, two or a new, and a task counts only as a Jira task."""
     found = [b["type"] for b in catalogue.find_blocks(words)]
 
     assert not found or found[0] not in {PROPOSE, MAKE}, found
