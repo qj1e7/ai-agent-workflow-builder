@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 
 import httpx
@@ -67,6 +67,7 @@ from platform_api.orchestration.model_settings import KeyBox, ModelSettings
 from platform_api.orchestration.n8n import N8nApi, N8nExecutions, N8nWorkflows
 from platform_api.orchestration.n8n_call_service import NodeCalls
 from platform_api.orchestration.n8n_calls import (
+    NODE_WRITES,
     Ended,
     ExecutionFacts,
     FailedExecution,
@@ -257,19 +258,10 @@ def n8n_parts(settings: Settings, db: Database, api: N8nApi | None) -> N8nParts:
 
 
 def node_writes(settings: Settings) -> list[WriteEntry]:
-    """The writes a Propose a change block may name: the registry's one ready write, in the
-    Jira project the platform writes to."""
+    """The writes a Propose a change block may name (`NODE_WRITES`), each in the Jira project the
+    platform writes to, since each is a Jira write."""
     project = NodeOption(settings.watchlist_jira_project, settings.watchlist_jira_project)
-    return [
-        WriteEntry(
-            "jira.create_ticket",
-            "Create a Jira ticket",
-            "jira",
-            "create_ticket",
-            "project",
-            (project,),
-        )
-    ]
+    return [replace(write, places=(project,)) for write in NODE_WRITES]
 
 
 def request_channel_for(settings: Settings) -> TeamsRequestChannel:

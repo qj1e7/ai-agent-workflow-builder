@@ -110,7 +110,9 @@ class Catalogue:
     def find_blocks(self, words: str, limit: int = 8) -> list[Json]:
         """The blocks whose name, description or operations match the words at least half as well
         as the best match does: our own blocks and the ones the class file lets run first, then
-        the best matches. Each comes with its operations that match, so the drafter can describe
+        the best matches. Our own blocks have no operations in n8n's sense, so the choices they
+        list count as theirs: the sources Read reads and the changes Propose a change proposes.
+        Each block comes with its operations or choices that match, so the drafter can describe
         one next."""
         asked = _stems(words)
         scored = [(sum(e.words.get(stem, 0) for stem in asked), e) for e in self._index]
@@ -256,7 +258,7 @@ class Catalogue:
             "aliases": " ".join(cast(list[str], block.get("aliases") or [])),
             "operations": " ".join(
                 str(item.get(key) or "")
-                for item in (*_specific(operations), *_specific(resources))
+                for item in (*_specific(operations), *_specific(resources), *_choices(name, group))
                 for key in ("name", "action")
             ),
             "description": str(block.get("description") or ""),
@@ -297,6 +299,8 @@ class Catalogue:
                 {key: o[key] for key in ("resource", "value", "name", "class") if key in o}
                 for *_, o in sorted(ranked, key=lambda r: r[:3])[:6]
             ]
+        if chosen := [c for c in _choices(name, group) if set(_stems(c["name"])) & set(asked)]:
+            summary["choices"] = chosen[:6]
         return summary
 
 
@@ -307,6 +311,19 @@ def _offered_in(items: object, version: float) -> list[Json]:
         {key: value for key, value in item.items() if key != "versions"}
         for item in cast(list[Json], items or [])
         if version in item.get("versions", [version])
+    ]
+
+
+def _choices(name: str, group: Json) -> list[Json]:
+    """The choices one of our own blocks lists for its top-level parameters, each with the
+    parameter it is for. n8n's blocks are found by their operations instead."""
+    if not name.startswith(OURS):
+        return []
+    return [
+        {"parameter": parameter["name"], "value": choice["value"], "name": str(choice["name"])}
+        for parameter in cast(list[Json], group.get("parameters") or [])
+        if parameter.get("type") in ("options", "multiOptions")
+        for choice in cast(list[Json], parameter.get("options") or [])
     ]
 
 

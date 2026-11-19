@@ -61,7 +61,8 @@ help texts first."""
 
 class FindBlocks(BaseModel):
     """Search n8n's blocks by what they do. Our own blocks come first, then the ones the platform
-    has classed. Each comes with its operations that match the words."""
+    has classed. Each comes with its operations, or for our own blocks its choices, that match
+    the words."""
 
     model_config = ConfigDict(extra="ignore")
     words: str = Field(description="A few words of what the block does, as read jira issues.")

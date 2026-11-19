@@ -479,12 +479,13 @@ def _number(options: Json, value: object, path: str, walk: _Walk) -> None:
 
 def _choice(parameter: Json, value: object, path: str, walk: _Walk) -> None:
     options = cast(Json, parameter.get("typeOptions") or {})
-    if "loadOptionsMethod" in options:
-        # n8n lists these choices while it runs, so any written value may be one of them.
+    allowed = [o.get("value") for o in cast(list[Json], parameter.get("options") or [])]
+    if "loadOptionsMethod" in options and not allowed:
+        # n8n lists these choices while it runs, so any written value may be one of them. The
+        # catalogue lists the ones our API gives every team, such as Propose a change's changes.
         if isinstance(value, bool) or not isinstance(value, str | int | float):
             walk.bad("bad_value", f"{path} takes one choice, written out.")
         return
-    allowed = [o.get("value") for o in cast(list[Json], parameter.get("options") or [])]
     if not any(value == a and type(value) is type(a) for a in allowed):
         walk.bad("bad_value", f"{path} must be one of {_listed(allowed)}.")
 
