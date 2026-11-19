@@ -40,7 +40,7 @@ def no_access_words(approver: bool) -> str:
     return APPROVERS_NO_ACCESS if approver else NO_ACCESS
 
 
-OFF = "Opening n8n is coming once the block list is on."
+OFF = "Opening n8n from here isn't turned on. The person who runs the platform can turn it on."
 NOT_READY = (
     "n8n can't be opened from here until its block list is checked again. Your own n8n space "
     "stays, without any of the team's workflows."

@@ -19712,7 +19712,7 @@
                 }
               }
             },
-            "description": "Opening n8n is coming once the block list is on. Or: n8n can't be opened now, in words to show"
+            "description": "Opening n8n from here isn't turned on. The person who runs the platform can turn it on. Or: n8n can't be opened now, in words to show"
           },
           "503": {
             "content": {
@@ -22788,7 +22788,7 @@
                 }
               }
             },
-            "description": "This workflow is set up already. Or: Fix it in n8n first. It isn't published there, and only a workflow that passes the check can be turned on. Or: n8n is not ready yet: its error workflow is not loaded. Or: Opening n8n is coming once the block list is on. Or: n8n can't be opened now, in words to show"
+            "description": "This workflow is set up already. Or: Fix it in n8n first. It isn't published there, and only a workflow that passes the check can be turned on. Or: n8n is not ready yet: its error workflow is not loaded. Or: Opening n8n from here isn't turned on. The person who runs the platform can turn it on. Or: n8n can't be opened now, in words to show"
           },
           "422": {
             "content": {
@@ -23493,7 +23493,7 @@
                 }
               }
             },
-            "description": "Opening n8n is coming once the block list is on. Or: someone else has it open in n8n, in words to show"
+            "description": "Opening n8n from here isn't turned on. The person who runs the platform can turn it on. Or: someone else has it open in n8n, in words to show"
           },
           "422": {
             "content": {
@@ -24140,7 +24140,7 @@
                 }
               }
             },
-            "description": "Opening n8n is coming once the block list is on. Or: someone else has it open in n8n, in words to show"
+            "description": "Opening n8n from here isn't turned on. The person who runs the platform can turn it on. Or: someone else has it open in n8n, in words to show"
           },
           "422": {
             "content": {

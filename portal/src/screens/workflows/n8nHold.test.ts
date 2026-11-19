@@ -72,8 +72,8 @@ describe('what the In n8n tab offers', () => {
     if (failed?.kind !== 'theirs') throw new Error('held by Carol')
     expect(mayTakeBack(failed)).toBe(false)
     expect(heldWords(failed, SAME_DAY)).toBe(`Carol has it open in n8n since 13:40. ${NOT_LOADED}`)
-    const refused = openingOf({ data: undefined, isError: true, error: new ApiError(409, { detail: 'Opening n8n is coming once the block list is on.' }) })
-    expect(heldOf(BY_CAROL, ALICE, refused)).toMatchObject({ cant: 'Opening n8n is coming once the block list is on.' })
+    const refused = openingOf({ data: undefined, isError: true, error: new ApiError(409, { detail: "Opening n8n from here isn't turned on. The person who runs the platform can turn it on." }) })
+    expect(heldOf(BY_CAROL, ALICE, refused)).toMatchObject({ cant: "Opening n8n from here isn't turned on. The person who runs the platform can turn it on." })
     const mine = heldOf(BY_CAROL, CAROL, openingOf({ data: undefined, isError: true, error: new Error('offline') }))
     expect(mine && mayTakeBack(mine), 'its holder may always take it back').toBe(true)
   })
@@ -125,8 +125,8 @@ describe('the In n8n tab’s words', () => {
   })
 
   it('shows a refusal in the platform’s own words', () => {
-    const refused = new ApiError(409, { detail: 'Opening n8n is coming once the block list is on.' })
-    expect(n8nRefusalWords(refused, () => 'other')).toBe('Opening n8n is coming once the block list is on.')
+    const refused = new ApiError(409, { detail: "Opening n8n from here isn't turned on. The person who runs the platform can turn it on." })
+    expect(n8nRefusalWords(refused, () => 'other')).toBe("Opening n8n from here isn't turned on. The person who runs the platform can turn it on.")
     expect(n8nRefusalWords(new Error('offline'), () => 'other')).toBe('other')
   })
 })
