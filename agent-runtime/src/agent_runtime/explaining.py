@@ -5,7 +5,9 @@ Code reads it from the whole message: "explain" and the words that name the work
 else, so a request that asks for more keeps the lanes it had. The words are matched against the
 person's workflows as an edit matches them (`name_runs`), else they are the words after
 "explain" with the filler around them taken off. "explain why it stopped" and "explain what
-happened" stay the why-stopped answer. Explaining changes nothing, so both roles may ask."""
+happened" stay the why-stopped answer. "what does my workflow do?" asks for the same thing, and
+is read only when the words between "what does" and "do" name a workflow and nothing else.
+Explaining changes nothing, so both roles may ask."""
 
 import re
 from typing import Final
@@ -40,13 +42,20 @@ POINTING: Final = words("it them")
 JOINED: Final = re.compile(r"[,;:!?]|\.(?:\s|$)|\b(?:and|then|also|plus|but|or)\b", re.IGNORECASE)
 """A second request beside the explanation, as "and pause it"."""
 TOKEN: Final = re.compile(r"[^\W_]+(?:['’.-][^\W_]+)*")
+WHAT_IT_DOES: Final = re.compile(
+    r"^\W*(?:(?:hi|hello|hey|ok|okay|so)\b\W*)?what\s+(?:does|do)\s+(?P<ref>.+?)\s+"
+    r"(?:(?:actually|exactly|really)\s+)?do(?:\s+(?:actually|exactly|again))?\W*$",
+    re.IGNORECASE,
+)
+"""A question about what a workflow does, as "what does my workflow do?"."""
+WORKFLOW: Final = words("workflow workflows")
 
 
 def explain_of(text: str, facts: PlannerFacts | None) -> ExplainAnswer | None:
     """The explanation the whole request asks for, or None when it asks for anything else."""
     lead = LEAD.match(text)
     if lead is None:
-        return None
+        return _what_it_does(text, facts)
     start, end = trim(text, lead.end(), len(text))
     named = _named(text, (start, end), facts)
     unnamed = text[start:end] if named is None else text[start : named[0]] + text[named[1] : end]
@@ -60,6 +69,24 @@ def explain_of(text: str, facts: PlannerFacts | None) -> ExplainAnswer | None:
     if JOINED.search(said) or len(said) > WORDS_LIMIT:
         return None
     return ExplainAnswer(workflow_words=said)
+
+
+def _what_it_does(text: str, facts: PlannerFacts | None) -> ExplainAnswer | None:
+    """"what does my workflow do?" names no workflow, so the platform picks the one they mean.
+    With a workflow's name, as "what does the weekly summary do?", that name is kept. Any other
+    word in the middle, as "it", "this app" or a software's name, is no explanation."""
+    asked = WHAT_IT_DOES.match(text)
+    if asked is None:
+        return None
+    start, end = asked.span("ref")
+    named = _named(text, (start, end), facts)
+    rest = text[start:end] if named is None else text[start : named[0]] + text[named[1] : end]
+    if _content(rest):
+        return None
+    if named is not None:
+        return ExplainAnswer(workflow_words=text[named[0] : named[1]])
+    said = {t.casefold() for t in TOKEN.findall(rest)}
+    return ExplainAnswer(workflow_words=None) if said & WORKFLOW else None
 
 
 def _named(text: str, within: Span, facts: PlannerFacts | None) -> Span | None:
