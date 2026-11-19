@@ -443,7 +443,7 @@ async def opened(k: Keyed) -> tuple[str, str, str]:
 
 def her_editor_swaps_the_key(k: Keyed, workflow_id: str, space: str) -> str:
     """In their space they cannot use the platform's key, so they add their own and point the block
-    at it, and puts a platform key on a block that is not for a system."""
+    at it, and put a platform key on a block that is not for a system."""
     hers = k.n8n.add_credential(space, "slackApi")
     slack_in(k, workflow_id)["credentials"] = {"slackApi": {"id": hers, "name": "mine"}}
     first = k.n8n.workflows[workflow_id]["nodes"][0]

@@ -1328,7 +1328,7 @@ class PlannerFront:
         return (await self._workflows.list_use_cases()).use_cases
 
     async def _similar(self, name: str) -> SimilarWorkflow | None:
-        """The workflow they already has that is the one they ask for: the same name, and it
+        """The workflow they already have that is the one they ask for: the same name, and it
         watches a GitHub repository, as a release check does. A same-named workflow that watches
         none may do something else, so their request is set up as they asked."""
         wanted = _norm(name)

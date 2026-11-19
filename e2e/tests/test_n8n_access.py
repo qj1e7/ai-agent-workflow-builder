@@ -3,8 +3,7 @@ platform makes their n8n account and shows them alone the link to set its passwo
 moves the workflow to their own space with its settings intact; they change their n8n email and
 publish, and the sweep still names them, by the n8n user id the platform stored; once they are an
 Approver their access ends, the workflow comes back, and they can never approve a run of the
-version they
-published."""
+version they published."""
 
 import json
 import secrets

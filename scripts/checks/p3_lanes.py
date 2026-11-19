@@ -531,7 +531,7 @@ def lane4(api: Api, out: Path) -> bool:
     lines.append(
         (
             status == 403 and refused.get("refusal") == "you_asked",
-            f"alice confirming themselves: HTTP {status} {refused}",
+            f"alice confirming the request alice made: HTTP {status} {refused}",
         )
     )
     me = api.get({"X-Dev-User": dave["id"]}, "/api/v1/me")

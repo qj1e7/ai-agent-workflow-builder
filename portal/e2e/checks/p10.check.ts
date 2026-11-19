@@ -161,9 +161,9 @@ test('@lane1 alice connects the mock model, tests and saves it, and only the key
     expect(everything.includes(key.slice(0, -2)), 'more of the key than its last two characters is on the page').toBe(false)
     expect(text.includes(key.slice(-3)), 'more than the last two characters is in the page text').toBe(false)
     if (own) {
-      expect(own.confirmButtons, 'alice entered the address, so she gets no Confirm address').toBe(0)
-      expect(own.modelTab, 'the AI model tab does not say it needs alice while her own address waits').not.toContain('needs you')
-      expect(own.aliceDecides, 'the platform refuses alice confirming her own address').toBe(403)
+      expect(own.confirmButtons, 'alice entered the address, so alice gets no Confirm address').toBe(0)
+      expect(own.modelTab, 'the AI model tab does not say it needs alice while the address alice entered waits').not.toContain('needs you')
+      expect(own.aliceDecides, 'the platform refuses alice confirming the address alice entered').toBe(403)
     }
     assertClean(watch)
     await context.close()
