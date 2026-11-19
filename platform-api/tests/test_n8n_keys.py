@@ -431,7 +431,7 @@ def slack_in(k: Keyed, workflow_id: str) -> dict[str, Any]:
 
 
 async def opened(k: Keyed) -> tuple[str, str, str]:
-    """Carol holds a workflow that posts in Slack: the use case, the workflow and her space."""
+    """Carol holds a workflow that posts in Slack: the use case, the workflow and their space."""
     await settled(k)
     carol = await k.s.member()
     use_case_id, workflow_id = await held(k.s)
@@ -442,8 +442,8 @@ async def opened(k: Keyed) -> tuple[str, str, str]:
 
 
 def her_editor_swaps_the_key(k: Keyed, workflow_id: str, space: str) -> str:
-    """In her space she cannot use the platform's key, so she adds her own and points the block at
-    it, and puts a platform key on a block that is not for a system."""
+    """In their space they cannot use the platform's key, so they add their own and point the block
+    at it, and puts a platform key on a block that is not for a system."""
     hers = k.n8n.add_credential(space, "slackApi")
     slack_in(k, workflow_id)["credentials"] = {"slackApi": {"id": hers, "name": "mine"}}
     first = k.n8n.workflows[workflow_id]["nodes"][0]
@@ -454,7 +454,7 @@ def her_editor_swaps_the_key(k: Keyed, workflow_id: str, space: str) -> str:
 
 def put_back(k: Keyed, workflow_id: str, hers: str) -> None:
     """Back home, the draft's blocks name the platform's key for their system again, every other
-    key is off them, and her key is gone."""
+    key is off them, and their key is gone."""
     assert slack_in(k, workflow_id)["credentials"] == {
         "slackApi": {"id": SLACK, "name": KEYS["slack"].name}
     }
@@ -492,7 +492,7 @@ async def test_the_holder_s_take_back_puts_the_keys_back(k: Keyed):
 
 
 async def test_a_block_set_to_do_what_is_off_gets_no_key_back(k: Keyed):
-    """Her Slack block deletes with her key. Back home it gets no key, so a test run, which runs
+    """Their Slack block deletes with their key. Back home it gets no key, so a test run, which runs
     the draft in the platform's project, cannot delete with the platform's key."""
     use_case_id, workflow_id, space = await opened(k)
     hers = k.n8n.add_credential(space, "slackApi")

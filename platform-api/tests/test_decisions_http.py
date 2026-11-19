@@ -103,7 +103,7 @@ async def test_each_person_reads_only_their_own_decisions_newest_first_with_thei
         "reason": None,
         "run_state": "rejected",
         "declined_by": "alice",
-    }, "Bob said yes first, and Alice declined after him"
+    }, "Bob said yes first, and Alice declined after Bob"
     assert newest["approved_before"] == ["bob"]
     assert oldest["approved_before"] == []
     assert {k: oldest[k] for k in ("verdict", "reason", "run_state", "declined_by")} == {

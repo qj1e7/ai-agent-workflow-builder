@@ -134,12 +134,12 @@ describe('the set-up card before Set up', () => {
     expect(buttons(refused)).toContain('Set up')
   })
 
-  it('keeps her own words quoted for a clause it didn’t follow, as the sketch does', () => {
+  it('keeps their own words quoted for a clause it didn’t follow, as the sketch does', () => {
     const html = render(card(setupCross as SetupCardReply, 'Every Friday at 5pm, sum up the tickets we closed this week in MOCK and colour them by team'))
     expect(text(html)).toContain('Can’t do: “colour them by team” I didn’t follow this part.')
   })
 
-  it('leads with the workflow she already has when the name matches one', () => {
+  it('leads with the workflow they already have when the name matches one', () => {
     const html = render(card(setupCard as SetupCardReply), { useCase: { ...ON, use_case_id: 'uc_01JB8', name: 'Weekly summary of closed tickets', schedule: { ...DRAFT.schedule!, day: 'friday', at: '17:00' } } })
     expect(text(html)).toContain('It already watches langchain-ai/langgraph, every Friday at 17:00.')
     expect(buttons(html)).toEqual(['Set up another', 'Open it'])
@@ -151,7 +151,7 @@ describe('what the card knows about the software it watches', () => {
   const reply: SetupCardReply = { ...SETUP, rows: [{ kind: 'look_for', text: 'New releases of langchain-ai/langgraph', state: 'understood', note: null }, ...SETUP.rows.filter((row) => row.kind !== 'look_for')] }
   const form = cardFrom(reply.name, reply.rows, TYPED, reply.parts)
 
-  it('says the version she runs under Watch, from the watchlist, when the software is on it', () => {
+  it('says the version they run under Watch, from the watchlist, when the software is on it', () => {
     const html = render(<SetupCard start={{ form, plan: { ...plan, task: taskWithoutSchedule(form.rows) }, draftId: null, similar: null }} />, { watched: statuses as WatchlistView })
     expect(text(html)).toContain('You run 1.2.14')
   })

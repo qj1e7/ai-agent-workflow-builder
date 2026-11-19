@@ -233,7 +233,7 @@ async def test_gaining_the_approver_role_ends_n8n_access_takes_back_and_ends_the
         "Carol's n8n access ended, because Approvers can't have it."
     )
 
-    assert await s.staff.settle(s.holding.holds) == [], "never ended while she holds one"
+    assert await s.staff.settle(s.holding.holds) == [], "never ended while they hold one"
     assert await s.settle() == [Ended(CAROL)]
     assert await s.held_by(use_case_id) is None
     assert s.n8n.home_of(workflow_id) == PLATFORM_PROJECT, "taken back before the account ends"
@@ -457,7 +457,7 @@ async def test_the_sweep_names_a_publish_by_the_stored_user_id_after_an_email_ch
     assert (second["published_by"], second["published_in"]) == ("carol", "n8n")
     ran = await s.lab.builder.facts.version(workflow_id, second["n8n_version_id"])
     assert ran is not None and ran.publisher == Publisher(CAROL)
-    assert CAROL in ran.parties, "a run of her version is her work, which she can never approve"
+    assert CAROL in ran.parties, "a run of their version is their work, so never theirs to approve"
 
 
 async def test_a_publish_by_an_account_since_ended_is_kept_with_nobody_guessed(s: Staffed):
@@ -517,16 +517,16 @@ async def test_platform_writes_wait_while_someone_holds_the_workflow(s: Staffed)
     ):
         refused = await s.call("alice", "POST", path, {"via": "page", "in_use": 2})
         assert (refused.status_code, refused.json()["detail"]) == (409, ask_for_it), (
-            f"{path}: Alice has no n8n access, so she can't take it back herself"
+            f"{path}: Alice has no n8n access, so Alice can't take it back"
         )
         mine = await s.call("carol", "POST", path, {"via": "page", "in_use": 2})
         assert (mine.status_code, mine.json()["detail"]) == (409, take_it_back), (
-            f"{path}: Carol holds it, so she can"
+            f"{path}: Carol holds it, so they can"
         )
     assert (await s.lab.move("alice", "pause", use_case_id)).status_code == 200, "pause still"
     resumed = await s.lab.move("alice", "resume", use_case_id)
     assert (resumed.status_code, resumed.json()["detail"]) == (409, ask_for_it)
-    assert len(await version_rows(s, use_case_id)) == 2, "nothing was published over her work"
+    assert len(await version_rows(s, use_case_id)) == 2, "nothing was published over their work"
 
     assert (await s.take_back("carol", use_case_id)).status_code == 200
     assert (await s.lab.move("alice", "resume", use_case_id)).status_code == 200
@@ -559,7 +559,7 @@ async def test_a_schedule_edit_is_refused_while_someone_holds_the_workflow(s: St
         {"day": "monday", "at": "07:30", "via": "page", "expected_version": 1},
     )
     assert hers.status_code == 409
-    assert hers.json()["detail"].endswith("Take it back to change it here."), "she holds it"
+    assert hers.json()["detail"].endswith("Take it back to change it here."), "they hold it"
 
 
 async def test_my_n8n_shows_the_password_link_only_to_its_person_and_only_until_used(

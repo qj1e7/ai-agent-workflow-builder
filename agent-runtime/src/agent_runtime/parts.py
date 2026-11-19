@@ -242,7 +242,7 @@ def _about_the_app(clause: str) -> bool:
 
 def _writes(clause: str) -> bool:
     """Whether the clause holds a write, as "delete the old tickets". "what I set up" names a
-    workflow she has, and writes nothing."""
+    workflow they have, and writes nothing."""
     return bool(change_verbs_in(SET_UP_BY_THEM.sub(" ", clause)))
 
 

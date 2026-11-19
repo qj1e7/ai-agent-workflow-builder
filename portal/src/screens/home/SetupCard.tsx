@@ -525,7 +525,7 @@ function SettingUp({ start }: { start: CardStart }) {
     )
   }
 
-  // A question first, since the footer counts questions. Else the part she must change.
+  // A question first, since the footer counts questions. Else the part they must change.
   const pointAtWhatIsLeft = () => {
     setShown(true)
     const asked = document.querySelector<HTMLElement>(`[data-card="${id}"] [data-mark="ask"] :is(button, input)`)

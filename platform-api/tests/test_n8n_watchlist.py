@@ -250,7 +250,7 @@ async def test_a_schedule_whose_owner_left_the_list_starts_no_run_until_it_is_ta
     as the old tick skipped it: nothing fails in n8n, no run waits on anyone, and the log says
     why. Dave takes it over while that slot's execution is still going, and its later blocks
     still end quietly, so no run starts from the middle of it. The next slot is Dave's work,
-    which he can't approve."""
+    which they can't approve."""
     await schedule_owners_listed(wl.h.db, CAROL, DAVE)
     schedules = ScheduleBook(wl.h.db)
     await schedules.save(SPEC.use_case_id, Schedule("tuesday", "07:30", TEAM_ZONE), CAROL)

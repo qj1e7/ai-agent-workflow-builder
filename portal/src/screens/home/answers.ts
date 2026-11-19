@@ -141,7 +141,7 @@ export const watchlistSay = (software: string | null, listed: boolean): string =
 const VERSION_WORD = /\b(?:versions?|releas(?:e|es|ed|ing)|upgrad(?:e|es|ed|ing)|patch(?:es|ed|ing)?)\b/i
 
 /**
- * The software card's line for software the watchlist doesn't hold. Why the version she runs isn't known fits only a question about
+ * The software card's line for software the watchlist doesn't hold. Why the version they run isn't known fits only a question about
  * the version. Asked to add, watch or keep track of it, it isn't on the watchlist yet, and that is all.
  */
 export const unwatchedSay = (word: string): string => (VERSION_WORD.test(word) ? 'It isn’t on the watchlist, so I don’t know which version you run.' : 'It isn’t on the watchlist yet.')
@@ -224,7 +224,7 @@ export function sayOf(reply: PlannerReply, asker: Asker = 'operator'): string | 
   }
 }
 
-/** The button that sends a free reply’s offer. It says the request itself, so what she taps is exactly what is sent. */
+/** The button that sends a free reply’s offer. It says the request itself, so what they tap is exactly what is sent. */
 export const offerLabel = (request: string): string => `Try ${quote(request.trim())}`
 
 /** What a refusal can do next. The words after the unsafe part go back to the Planner, never straight to a set-up (they can ask for more). */
@@ -314,7 +314,7 @@ export function startingPoints(view: CapabilitiesView): readonly string[] {
   return view.examples.filter((example) => example.kind !== 'learn').map((example) => example.text)
 }
 
-/** How to start, step by step: the registry’s first example in her words, and Teams named only while the platform can ask for a yes there. */
+/** How to start, step by step: the registry’s first example in their words, and Teams named only while the platform can ask for a yes there. */
 export function startSteps(view: CapabilitiesView): readonly string[] {
   const example = startingPoints(view)[0]
   const teams = view.capabilities.some((entry) => entry.id === 'teams.ask' && entry.state === 'ready')

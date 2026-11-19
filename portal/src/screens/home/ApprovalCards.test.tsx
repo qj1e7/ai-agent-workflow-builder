@@ -29,7 +29,7 @@ function draw(kept: readonly RequestRef[], items: readonly RequestRef[], total: 
   )
 }
 
-describe('her own requests that wait for someone else’s yes', () => {
+describe('their own requests that wait for someone else’s yes', () => {
   it('keeps a decided card and counts it, so the count is the cards and Show more reaches the last one', () => {
     const html = draw([ref('A'), ref('B'), ref('C')], WAITING, 9, IDLE)
     expect([...html.matchAll(/data-run-card="([^"]+)"/g)].map((m) => m[1])).toEqual(['A', 'B', 'C'])
@@ -44,7 +44,7 @@ describe('her own requests that wait for someone else’s yes', () => {
   })
 })
 
-describe('requests waiting for her own yes', () => {
+describe('requests waiting for their own yes', () => {
   it('shows three, then N more, which leads to Needs you, where every one is listed', () => {
     const html = draw([], WAITING, 9)
     expect([...html.matchAll(/data-run-card="([^"]+)"/g)].map((m) => m[1])).toEqual(['B', 'C', 'D'])

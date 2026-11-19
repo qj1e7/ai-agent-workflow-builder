@@ -9,7 +9,7 @@ export interface Desk {
   readonly problem: string | null
   readonly note: Note | null
   readonly panel: PanelState | null
-  /** The drafted workflow the next message changes, once she pressed Ask for a change. The next message goes to it, never to the Planner. */
+  /** The drafted workflow the next message changes, once they pressed Ask for a change. The next message goes to it, never to the Planner. */
   readonly changing: Changing | null
 }
 

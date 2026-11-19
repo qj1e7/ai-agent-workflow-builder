@@ -80,7 +80,7 @@ def test_a_time_the_clock_cant_read_is_asked_for_and_her_day_stays(at: str):
     ["Every Friday 8.30am", "Every Friday 9.15am", "Every Friday at 8.30am", "Every Friday 8:30am"],
 )
 def test_a_dotted_time_they_never_said_is_never_shown_and_their_own_stays(model: str):
-    """The model's "8.30am" against her "9.30am" was checked only as "30am", so the card took
+    """The model's "8.30am" against their "9.30am" was checked only as "30am", so the card took
     08:30 as their time. Then the card asked for a time, with a note that said their words had
     none."""
     row = carols_row(model, "Every Friday 9.30am")

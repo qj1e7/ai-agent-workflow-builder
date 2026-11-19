@@ -75,7 +75,7 @@ describe('the thread', () => {
 })
 
 describe('“it” in a request', () => {
-  it('means the workflow she picked on the edit card before, when that card offered several', () => {
+  it('means the workflow they picked on the edit card before, when that card offered several', () => {
     const choices = editChoices as PlannerReply
     let thread = threadReducer(EMPTY, { type: 'sent', text: 'make the friday one daily', chat: 'c1' })
     thread = threadReducer(thread, { type: 'answered', reply: choices, typed: 'make the friday one daily' })
@@ -94,6 +94,6 @@ describe('“it” in a request', () => {
         </ApiProvider>
       </QueryClientProvider>,
     )
-    expect(html.match(/Change Weekly closed-ticket summary/g), 'both cards change the workflow she picked').toHaveLength(2)
+    expect(html.match(/Change Weekly closed-ticket summary/g), 'both cards change the workflow they picked').toHaveLength(2)
   })
 })

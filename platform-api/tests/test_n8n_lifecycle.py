@@ -289,7 +289,7 @@ async def test_the_card_a_use_case_pinned_runs_not_the_newest(own: N8nLab):
 
 async def test_safety_the_person_who_turned_it_on_owns_its_scheduled_runs(own: N8nLab):
     """D5: a Portal publish is the Portal person who acted, never n8n's owner account. Alice set
-    it up and Carol turned it on, so its scheduled runs are Carol's work, which she can never
+    it up and Carol turned it on, so its scheduled runs are Carol's work, which they can never
     approve."""
     use_case_id, workflow_id = await made(own)
     assert (await move(own, "turn-on", use_case_id, "carol")).status_code == 200

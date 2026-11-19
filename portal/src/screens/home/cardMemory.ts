@@ -12,7 +12,7 @@ export interface CardKept {
   readonly phase: Phase
 }
 
-/** Where an edit card is when its page is left: what she picked, and whether she saved, undid or backed out. */
+/** Where an edit card is when its page is left: what they picked, and whether they saved, undid or backed out. */
 export interface EditKept {
   readonly picks: Picks
   readonly phase: EditPhase

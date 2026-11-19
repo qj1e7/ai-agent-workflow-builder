@@ -11,7 +11,7 @@ export interface Schedule {
   readonly at: string
 }
 
-/** What she picked on the card: one of the workflows it offered, a day, a time. A pick only fills what the Planner left open. */
+/** What they picked on the card: one of the workflows it offered, a day, a time. A pick only fills what the Planner left open. */
 export interface Picks {
   readonly useCaseId: string | null
   readonly day: Day | null
@@ -33,7 +33,7 @@ export interface Question {
 }
 
 /**
- * What an edit answer is, from the reply and her picks. Each kind is one answer of spec 6.7, so the card draws one state and
+ * What an edit answer is, from the reply and their picks. Each kind is one answer of spec 6.7, so the card draws one state and
  * never two that disagree.
  */
 export type EditView =
@@ -47,7 +47,7 @@ export type EditView =
   | { readonly kind: 'ask'; readonly target: EditChoice; readonly question: Question }
   | { readonly kind: 'ready'; readonly target: EditChoice; readonly after: Schedule }
 
-/** What she has done with the card. Saved and undone keep the schedule as it was saved, so the card reads the same later. */
+/** What they have done with the card. Saved and undone keep the schedule as it was saved, so the card reads the same later. */
 export type Phase =
   | { readonly kind: 'open' }
   | { readonly kind: 'kept' }
@@ -66,7 +66,7 @@ export const scheduleText = (schedule: Schedule): string => upperFirst(repeatWor
 /** "Weekdays 8:00", as the card's one row says it, the old one struck and the new one after it. */
 export const scheduleOnCard = (schedule: Schedule | null): string => (schedule ? scheduleShort(schedule) : 'Not scheduled')
 
-/** The workflow the reply names, or the one she picked from its choices. */
+/** The workflow the reply names, or the one they picked from its choices. */
 export function targetOf(reply: EditReply, picks: Picks): EditChoice | null {
   if (reply.use_case_id !== null && reply.name !== null) {
     return { use_case_id: reply.use_case_id, name: reply.name, watchlist: reply.watchlist, before: reply.before, after: reply.after }
@@ -166,7 +166,7 @@ export function changedSince(live: Pick<UseCaseView, 'version'> | undefined, ver
   return `Changed again since${where}.`
 }
 
-/** For a save that kept no version: whether the schedule read now is still the one she saved. No version names where it changed. */
+/** For a save that kept no version: whether the schedule read now is still the one they saved. No version names where it changed. */
 export function sinceUnversioned(after: Schedule, read: Read): string | null {
   return read.kind === 'read' && !sameSchedule(read.schedule, after) ? 'Changed again since.' : null
 }
@@ -182,7 +182,7 @@ const PAUSED = 'is paused, so it won’t run until you resume it.'
 
 type Undone = Parameters<typeof undoneWords>[0]
 
-/** The sentence once she saved, undid or backed out. `since` is set once the workflow changed again after the card's version. */
+/** The sentence once they saved, undid or backed out. `since` is set once the workflow changed again after the card's version. */
 export function doneSay(phase: Exclude<Phase, { kind: 'open' }>, now: Now, since: string | null, live: Undone | undefined): string {
   switch (phase.kind) {
     case 'kept':
@@ -216,7 +216,7 @@ export const undoneNote = (undid: number, published: number): string => `Back to
 /**
  * The version a save published, or null when it published none. The schedule route publishes nothing when the schedule was
  * already so, and answers with the version running, which may be a teammate's. So a version counts as this save's only when it
- * is the newest, hers, from the chat, and newer than the one the card knew of. Undo then never undoes someone else's change.
+ * is the newest, theirs, from the chat, and newer than the one the card knew of. Undo then never undoes someone else's change.
  */
 export function publishedVersion(target: EditChoice, saved: Pick<UseCaseView, 'version'>, newest: VersionView | undefined, me: string | undefined, known: number | undefined): number | null {
   if (target.watchlist || newest === undefined || me === undefined) return null

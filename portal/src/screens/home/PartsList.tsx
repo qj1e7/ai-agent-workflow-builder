@@ -10,7 +10,7 @@ import { CrossNext } from './CrossNext'
 import { crossLabel, crossWords, leftoverParts, MARK_WORDS, watchlistRuns, type CrossContext, type Mark } from './parts'
 import styles from './PartsList.module.css'
 
-/** One row of a parts list: her words or the part’s name, its mark, and what happened to it. */
+/** One row of a parts list: their words or the part’s name, its mark, and what happened to it. */
 export interface Part {
   readonly key: string
   readonly mark: Mark
@@ -63,7 +63,7 @@ export function crossParts(parts: readonly PartView[], context: CrossContext = {
 
 /**
  * The clauses an answer didn’t read, above its card. A time one software can’t have of its own is offered to the whole Software
- * watchlist, as a request she sends: the Planner answers it with the edit card, so nothing changes until she saves it.
+ * watchlist, as a request they send: the Planner answers it with the edit card, so nothing changes until they save it.
  */
 export function Leftovers({ reply, ask }: { reply: PlannerReply; ask?: (text: string) => void }) {
   const parts = leftoverParts(reply)

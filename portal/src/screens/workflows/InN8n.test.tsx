@@ -68,7 +68,7 @@ describe('the workflow page’s Summary and In n8n tabs', () => {
     expect(tabs(render())).toEqual(['Summary', 'In n8n (shown)'])
     const bob = render({ me: BOB })
     expect(tabs(bob), 'an Approver never has n8n access').toEqual([])
-    expect(text(main(bob)), 'and the address can’t open the tab for him').not.toContain(SAFE_BLOCKS)
+    expect(text(main(bob)), 'and the address can’t open the tab for them').not.toContain(SAFE_BLOCKS)
     expect(tabs(render({ me: { ...ALICE, n8n_access: false } }))).toEqual([])
   })
 

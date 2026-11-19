@@ -279,7 +279,7 @@ describe('a workflow page', () => {
     }
   })
 
-  it('lets an Operator take a held schedule over from When: Change opens on it, the save carries the version read, and the saved view names her and its next run', async () => {
+  it('lets an Operator take a held schedule over from When: Change opens on it, the save carries the version read, and the saved view names them and its next run', async () => {
     const held: UseCaseView = { ...AGENTS, version: 3, next_run_at: null, schedule: { day: 'monday', at: '09:00', time_zone: 'Asia/Singapore', owner_name: 'Carol', held: 'owner_removed', held_words: CAROL_LEFT } }
     expect(buttons(render({ me: ALICE, useCase: held }))).toContain('Change when it runs')
     expect(buttons(render({ me: BOB, useCase: held })).filter((label) => /when it runs/i.test(label)), 'only an Operator can take it over').toEqual([])

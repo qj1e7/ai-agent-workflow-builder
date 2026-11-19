@@ -876,7 +876,7 @@ describe('the Versions words', () => {
 })
 
 describe('leftOutWords', () => {
-  it('quotes each part in her words, and says nothing when nothing was left out', () => {
+  it('quotes each part in their words, and says nothing when nothing was left out', () => {
     expect(leftOutWords([])).toBeNull()
     expect(leftOutWords(['Friday'])).toBe('Left out: “Friday”. It was set up without that part.')
     expect(leftOutWords(['from GitLab', 'colour them by team'])).toBe('Left out: “from GitLab” and “colour them by team”. It was set up without those parts.')

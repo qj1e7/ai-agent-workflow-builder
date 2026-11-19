@@ -208,7 +208,7 @@ function useWaitingFor(runId: string | null): readonly string[] | undefined {
 
 /**
  * An approve or decline asked in the chat: nobody decides there, so the answer is the requests waiting for this person’s yes, to
- * open. With none, their own requests that wait for another Approver's yes, as the sketch shows Alice hers, with who it waits for.
+ * open. With none, their own requests that wait for another Approver's yes, as the sketch shows for Alice, with who it waits for.
  */
 export function DecideAnswer({ say }: { say: Say }) {
   const home = useHome()

@@ -30,7 +30,7 @@ export function PlannerBox({ text, busy, empty, problem, boxRef, onChange, onSen
     box.style.height = `${grown.current}px`
   }, [text, boxRef])
   const ready = text.trim() !== '' && !busy
-  // Send stays black, as in the sketch. With nothing typed it takes her to the box, so it never does nothing.
+  // Send stays black, as in the sketch. With nothing typed it takes them to the box, so it never does nothing.
   const send = () => (ready ? onSend() : boxRef.current?.focus())
   function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
     if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return

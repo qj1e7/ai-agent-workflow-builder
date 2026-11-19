@@ -64,7 +64,7 @@ export const approvalGist = (approval: string): string => /^[^.]*/.exec(approval
 export const explainPath = (useCaseId: string, version: number | null): string =>
   `/workflows/${encodeURIComponent(useCaseId)}/explain${version === null ? '' : `?version=${String(version)}`}`
 
-/** What a choice on “Which workflow?” sends, so the Planner explains the one she picked. */
+/** What a choice on “Which workflow?” sends, so the Planner explains the one they picked. */
 export const explainAsk = (name: string): string => `Explain the ${name}`
 
 export const explainTitle = (version: number | null): string => (version === null ? 'Explain' : `Explain, version ${String(version)}`)

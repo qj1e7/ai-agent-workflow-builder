@@ -92,7 +92,7 @@ describe('a free reply, drawn as the Planner’s own message', () => {
     expect(ask).toHaveBeenCalledExactlyOnceWith('Every Monday at 9am, list new bugs in one Jira ticket')
   })
 
-  it('gives a can’t with no offer Ask the team, starting from what she asked', () => {
+  it('gives a can’t with no offer Ask the team, starting from what they asked', () => {
     const reply = free('cant', { text: 'I can’t do that yet.' })
     const button = ReplyCant({ reply, typed: 'email my manager', ask: () => undefined, variant: 'primary' }) as ReactElement<{ starter: string }>
     expect(button.type).toBe(AskTheTeam)
@@ -158,7 +158,7 @@ describe('the fallback card', () => {
     expect(text(approver)).toBe('I didn’t follow that I can show what waits for your yes, and your past decisions. Say it another way')
   })
 
-  it('puts her own words back in the box', () => {
+  it('puts their own words back in the box', () => {
     const edit = vi.fn()
     press(SayItAnotherWay({ typed: 'blorp', page: { ...NO_PAGE, edit }, variant: 'primary' }))
     expect(edit).toHaveBeenCalledExactlyOnceWith('blorp')
