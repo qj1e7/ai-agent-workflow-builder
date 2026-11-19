@@ -161,6 +161,13 @@ describe('Draft it as an n8n workflow', () => {
     expect(buttons(draw(partWith(WORDS)))).toContain('Draft it as an n8n workflow')
   })
 
+  it('says under the button what drafting does: a draft, checked, that waits for an Approver before anything is set up or written', () => {
+    const said = text(draw(cantWith(WORDS)))
+    expect(said).toContain('drafts it as its own n8n workflow, and the safety checker checks it.')
+    expect(said).toContain('Nothing is set up or written until an Approver says yes.')
+    expect(text(draw(cantWith(null)))).not.toContain('safety checker')
+  })
+
   it('never shows without words to draft, or for someone who is not an Operator', () => {
     expect(buttons(draw(cantWith(null)))).not.toContain('Draft it as an n8n workflow')
     expect(buttons(draw(partWith(null)))).not.toContain('Draft it as an n8n workflow')
