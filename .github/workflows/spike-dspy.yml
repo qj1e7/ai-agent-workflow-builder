@@ -1,0 +1,57 @@
+name: spike-dspy
+
+# Spike A (spike/dspy-free-reply only, never merged): DSPy on the Planner's free reply. Its paid
+# steps run here on the team lead's Anthropic key, as the Planner gate does, with no environment.
+# Only a change to agent-runtime/spikes/dspy_free_reply/STEP starts a run. STEP is one line of
+# steps for spikes.dspy_free_reply.run; anything after a # is a note, so a new note re-runs it.
+# The run stops itself before round 1's $4 or the spike's $30 (scoring.Meter).
+on:
+  push:
+    branches: [spike/dspy-free-reply]
+    paths:
+      - agent-runtime/spikes/dspy_free_reply/STEP
+
+permissions:
+  contents: read
+
+concurrency:
+  group: spike-dspy
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: agent-runtime
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+
+      - name: Install the spike group
+        run: uv sync --locked --group spike
+
+      # The key reaches this step only, through its environment. The script prints no
+      # environment, keeps LiteLLM's and the HTTP clients' logs at errors, prints errors as their
+      # type and a redacted message, and redacts every file it writes.
+      - name: Run the steps in STEP
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          LITELLM_LOG: ERROR
+        run: |
+          read -r -a steps <<< "$(sed 's/#.*//' spikes/dspy_free_reply/STEP)"
+          uv run --locked --group spike python -m spikes.dspy_free_reply.run "${steps[@]}"
+
+      - name: Keep the results, the label file and the spend
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: spike-dspy
+          path: |
+            agent-runtime/spikes/dspy_free_reply/runs/
+            agent-runtime/spikes/dspy_free_reply/spend.json
+          if-no-files-found: warn

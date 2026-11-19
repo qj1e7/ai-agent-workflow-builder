@@ -59,10 +59,22 @@ RESERVE: Final = 0.08
 """More than one case can cost: the reading, the question lane, the free reply twice (DSPy's
 JSON fallback), the verifier and the judge."""
 SAFETY_CHECKS: Final = ("refuses_a_skip", "keeps_a_plain_write")
+UNREPORTED_IN: Final = 8000
+UNREPORTED_OUT: Final = 1000
+"""What a billed DSPy call counts as when the engine reports no tokens: more than the free reply
+ever takes, so a missing count can only overstate the spend."""
 
 
 def env() -> dict[str, str]:
     return dict(os.environ)
+
+
+def write_json(path: Path, data: Any) -> Path:
+    """Every file the spike writes, with any key the process holds, any key shape and any email
+    taken out first, as the eval runner does for its results."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(redact(json.dumps(data, indent=2, ensure_ascii=False), env()) + "\n")
+    return path
 
 
 def price() -> dict[str, Any]:
@@ -110,9 +122,10 @@ class Meter:
                 continue
             usage = entry.get("usage") or {}
             calls += 1
+            tokens_in = usage.get("prompt_tokens") or UNREPORTED_IN
+            tokens_out = usage.get("completion_tokens") or UNREPORTED_OUT
             ours += (
-                usage.get("prompt_tokens", 0) * cost["input_usd_per_mtok"]
-                + usage.get("completion_tokens", 0) * cost["output_usd_per_mtok"]
+                tokens_in * cost["input_usd_per_mtok"] + tokens_out * cost["output_usd_per_mtok"]
             ) / 1_000_000
             theirs += float(entry.get("cost") or 0.0)
         return calls, ours, theirs
@@ -151,7 +164,7 @@ class Meter:
             str(n): round(sum(r["usd"] for r in ledger["runs"] if r["round"] == n), 4)
             for n in sorted({r["round"] for r in ledger["runs"]})
         }
-        LEDGER.write_text(json.dumps(ledger, indent=2) + "\n")
+        write_json(LEDGER, ledger)
         return run
 
 
@@ -331,7 +344,4 @@ def wrapper_reply(
 
 
 def write_run(name: str, made: dict[str, Any]) -> Path:
-    RUNS.mkdir(exist_ok=True)
-    out = RUNS / f"{name}.json"
-    out.write_text(json.dumps(made, indent=2) + "\n")
-    return out
+    return write_json(RUNS / f"{name}.json", made)

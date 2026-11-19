@@ -1,22 +1,26 @@
 """Steps 2 and 3: parity, the baseline and the 30 replies for the team lead to label.
 
-Run, with the Anthropic key in ANTHROPIC_API_KEY for that one command:
-    uv run --group spike python -m spikes.dspy_free_reply.run smoke|parity|baseline|labels
+Runs on GitHub Actions (`.github/workflows/spike-dspy.yml`) when `STEP` changes, with the
+Anthropic key in ANTHROPIC_API_KEY for that one step:
+    uv run --group spike python -m spikes.dspy_free_reply.run parity baseline labels
 
 Each run stops before a case would pass round 1's $4 or the spike's $30 (`scoring.Meter`), and
-writes its spend to `spend.json` after every case."""
+writes its spend to `spend.json` and its rows to `runs/` after every case."""
 
 import os
 from pathlib import Path
 
 HERE = Path(__file__).parent
 os.environ.setdefault("DSPY_CACHEDIR", str(HERE / ".cache"))
+os.environ.setdefault("LITELLM_LOG", "ERROR")
 
 import argparse  # noqa: E402
 import json  # noqa: E402
+import logging  # noqa: E402
 import random  # noqa: E402
 import re  # noqa: E402
 import statistics  # noqa: E402
+import sys  # noqa: E402
 from collections import Counter, defaultdict  # noqa: E402
 from typing import Any, Final  # noqa: E402
 
@@ -38,6 +42,7 @@ from spikes.dspy_free_reply.scoring import (  # noqa: E402
     planner,
     read_and_route,
     wrapper_reply,
+    write_json,
     write_run,
 )
 from spikes.dspy_free_reply.split import load, recorded  # noqa: E402
@@ -46,12 +51,19 @@ from spikes.dspy_free_reply.wrapper import FreeReply, fields_of  # noqa: E402
 FROZEN: Final = RUNS / "frozen.json"
 PARITY: Final = RUNS / "parity.json"
 BASELINE: Final = RUNS / "baseline.json"
-LABELS: Final = Path(
-    "/private/tmp/claude-501/-Users-qianjie-Documents-Courses-NUS-ISS-FYP-ai-agent-workflow-builder/"
-    "51c35c7a-004b-4a1a-8260-3d9a9136d3b5/scratchpad/spikes/label-input.json"
-)
+LABELS: Final = RUNS / "label-input.json"
 PARITY_CASES: Final = 10
 SEED: Final = 20261120
+PAID: Final = frozenset({"smoke", "parity", "baseline"})
+QUIET: Final = ("LiteLLM", "litellm", "httpx", "httpcore", "anthropic", "urllib3")
+
+
+def quiet() -> None:
+    """No library logs below an error, and none of LiteLLM's debug lines: a request log can
+    carry its headers."""
+    dspy.disable_litellm_logging()
+    for name in QUIET:
+        logging.getLogger(name).setLevel(logging.ERROR)
 
 
 def lm() -> dspy.LM:
@@ -71,8 +83,7 @@ def frozen_store() -> dict[str, Any]:
 def save_frozen(case_id: str, frozen: Frozen) -> None:
     store = frozen_store()
     store[case_id] = frozen.record()
-    RUNS.mkdir(exist_ok=True)
-    FROZEN.write_text(json.dumps(store, indent=2) + "\n")
+    write_json(FROZEN, store)
 
 
 def smoke() -> None:
@@ -189,6 +200,7 @@ def parity() -> None:
                 }
             )
             meter.save()
+            write_run("parity", {"summary": None, "rows": rows})
             print(_parity_line(rows[-1]), flush=True)
     both = [r for r in rows if r["reached"]]
     kinds = sum(r["eval"]["kind"] == r["wrapper"]["kind"] for r in both)
@@ -212,7 +224,7 @@ def parity() -> None:
         "spend": meter.save(),
     }
     write_run("parity", {"summary": summary, "rows": rows})
-    print(json.dumps(summary, indent=2))
+    report("Parity", summary)
 
 
 def _family(row: dict[str, Any]) -> str:
@@ -274,10 +286,21 @@ def baseline() -> None:
                 else {**done.record(), "reached": True}
             )
             meter.save()
+            write_run("baseline", {"summary": None, "rows": rows})
             print(_baseline_line(rows[-1]), flush=True)
     summary = _baseline_summary(rows, stopped, meter.save())
     write_run("baseline", {"summary": summary, "rows": rows})
-    print(json.dumps(summary, indent=2))
+    report("Baseline", summary)
+
+
+def report(title: str, summary: dict[str, Any]) -> None:
+    """The summary in the log and, on GitHub Actions, on the run's page."""
+    text = json.dumps(summary, indent=2)
+    print(text)
+    page = os.environ.get("GITHUB_STEP_SUMMARY")
+    if page:
+        with open(page, "a") as out:
+            out.write(f"### {title}\n\n```json\n{redact(text, env())}\n```\n\n")
 
 
 def _baseline_line(row: dict[str, Any]) -> str:
@@ -353,8 +376,7 @@ def labels() -> None:
         }
         for r in picked
     ]
-    LABELS.parent.mkdir(parents=True, exist_ok=True)
-    LABELS.write_text(json.dumps(out, indent=2, ensure_ascii=False) + "\n")
+    write_json(LABELS, out)
     print(
         f"Wrote {len(out)} to {LABELS}: {sum(o['judge'] <= 3 for o in out)} judged 2 or 3, "
         f"{sum(o['judge'] >= 4 for o in out)} judged 4 or 5, "
@@ -379,12 +401,28 @@ def _spread(rows: list[dict[str, Any]], n: int) -> list[dict[str, Any]]:
     return picked
 
 
-def main() -> None:
+STEPS: Final = {"smoke": smoke, "parity": parity, "baseline": baseline, "labels": labels}
+
+
+def main() -> int:
+    """Each step in turn. Any error is printed as its type and a redacted message only, never a
+    traceback, which could quote a request."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("step", choices=("smoke", "parity", "baseline", "labels"))
-    step = parser.parse_args().step
-    {"smoke": smoke, "parity": parity, "baseline": baseline, "labels": labels}[step]()
+    parser.add_argument("steps", nargs="+", choices=tuple(STEPS))
+    steps = parser.parse_args().steps
+    if PAID & set(steps) and not os.environ.get("ANTHROPIC_API_KEY"):
+        print("ANTHROPIC_API_KEY is not set, so no paid step can run.", file=sys.stderr)
+        return 1
+    quiet()
+    for step in steps:
+        print(f"== {step}", flush=True)
+        try:
+            STEPS[step]()
+        except Exception as error:
+            print(f"{step} failed: {failure(error)}", file=sys.stderr)
+            return 1
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
