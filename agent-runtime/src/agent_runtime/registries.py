@@ -15,6 +15,7 @@ from xml.etree import ElementTree
 
 import httpx
 
+from agent_runtime.capped import MEGABYTE, TooLarge, read_capped
 from agent_runtime.release_source import Release, SourceRejected, SourceUnavailable
 
 DEFAULT_MAVEN_BASE = "https://repo1.maven.org/maven2"
@@ -23,31 +24,37 @@ TIMEOUT_SECONDS = 10.0
 USER_AGENT = "ai-workflow-builder-version-checker"
 LIMITED_STATUS = 429
 # The npm document for a busy package runs to a few megabytes. Anything far past that is not
-# an answer we should parse.
-MAX_BODY_BYTES = 32 * 1024 * 1024
+# an answer we should parse, and reading stops there (capped.py).
+MAX_BODY_BYTES = 32 * MEGABYTE
 # The abbreviated document npm serves to installers: versions and dist-tags, without readmes.
 NPM_ABBREVIATED = "application/vnd.npm.install-v1+json"
 
 
 def _client(client: httpx.Client | None) -> httpx.Client:
-    return client or httpx.Client(timeout=TIMEOUT_SECONDS, follow_redirects=True)
+    return client or httpx.Client(timeout=TIMEOUT_SECONDS)
 
 
 def _get(client: httpx.Client, url: str, headers: Mapping[str, str]) -> bytes:
+    """One registry answer. A redirect is refused like any other 3xx: the address is fixed."""
     try:
-        response = client.get(url, headers={"User-Agent": USER_AGENT, **headers})
+        status, body = read_capped(
+            client,
+            "GET",
+            url,
+            limit=MAX_BODY_BYTES,
+            headers={"User-Agent": USER_AGENT, **headers},
+        )
     except httpx.TransportError as error:
         raise SourceUnavailable(None) from error
-    status = response.status_code
+    except TooLarge as error:
+        raise SourceUnavailable(None) from error
     if status >= 500:
         raise SourceUnavailable(status)
     if status == LIMITED_STATUS:
         raise SourceRejected(status, limited=True)
     if status >= 300:
         raise SourceRejected(status)
-    if len(response.content) > MAX_BODY_BYTES:
-        raise SourceUnavailable(None)
-    return response.content
+    return body
 
 
 PACKAGE_VERSION = re.compile(r"(\d+\.\d+\.\d+)(\.Final|\.RELEASE|\.GA|-jre|-android)?", re.ASCII)

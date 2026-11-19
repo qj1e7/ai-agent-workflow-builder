@@ -5,10 +5,15 @@ each CVE its official CVSS score. NVD alone would need a CPE name for every watc
 which nobody has confirmed, so it is never asked to find anything, only to score.
 
 NVD allows about 5 requests every 30 seconds without a key and 50 with one, so lookups are
-paced and capped per check. A CVE past the cap keeps the advisory's own severity, and the
-finding says NVD did not score it. Every source here only reads.
+paced across the whole runtime, and capped in number and in time per check, so the check ends
+well inside the 60 seconds n8n and platform-api give it. A CVE past the cap keeps the
+advisory's own severity, and the finding says NVD did not score it. Every answer is read with a
+size limit, and no redirect is followed (capped.py). Every source here only reads.
 """
 
+import json
+import threading
+import time
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from typing import Literal, cast
@@ -16,6 +21,7 @@ from typing import Literal, cast
 import httpx
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from agent_runtime.capped import MEGABYTE, TooLarge, read_capped
 from agent_runtime.contract import Severity, Vulnerability, VulnerabilitySource
 from agent_runtime.tags import parse_tag
 
@@ -24,6 +30,13 @@ DEFAULT_NVD_BASE = "https://services.nvd.nist.gov"
 TIMEOUT_SECONDS = 15.0
 USER_AGENT = "ai-workflow-builder-version-checker"
 OSV_PAGES = 5
+OSV_PAGE_BYTES = 8 * MEGABYTE
+"""One OSV page holds up to 1,000 records. Past this, the answer is not one we read."""
+NVD_ANSWER_BYTES = 2 * MEGABYTE
+"""NVD's record of one CVE, with all its references, is well under this."""
+NVD_BUDGET_SECONDS = 20.0
+"""How long one check may spend scoring CVEs on NVD, waits included. Without a key that is about
+four scores at NVD's pace; the rest keep the advisory's severity."""
 SUMMARY_LENGTH = 200
 
 # OSV names the ecosystems as below. A GitHub source names no package, so it has none.
@@ -110,6 +123,15 @@ class Advisory:
 
 
 @dataclass(frozen=True)
+class Found:
+    """What OSV listed for one package version."""
+
+    advisories: list[Advisory]
+    all_read: bool = True
+    """False when OSV had more pages than one check reads, so the list may not be complete."""
+
+
+@dataclass(frozen=True)
 class Score:
     score: float
     severity: Severity
@@ -120,7 +142,8 @@ class Osv:
         self._base_url = base_url.rstrip("/")
         self._client = client or httpx.Client(timeout=TIMEOUT_SECONDS)
 
-    def query(self, ecosystem: str, name: str, version: str) -> list[Advisory]:
+    def query(self, ecosystem: str, name: str, version: str) -> Found:
+        """The advisories on up to OSV_PAGES pages. Found.all_read is False when OSV had more."""
         found: list[Advisory] = []
         token: str | None = None
         for _ in range(OSV_PAGES):
@@ -135,19 +158,26 @@ class Osv:
             token = answer.next_page_token
             if not token:
                 break
-        return found
+        return Found(found, all_read=not token)
 
     def _post(self, body: Mapping[str, object]) -> _OsvAnswer:
         try:
-            response = self._client.post(
-                f"{self._base_url}/v1/query", json=body, headers={"User-Agent": USER_AGENT}
+            status, content = read_capped(
+                self._client,
+                "POST",
+                f"{self._base_url}/v1/query",
+                limit=OSV_PAGE_BYTES,
+                headers={"User-Agent": USER_AGENT},
+                json=body,
             )
         except httpx.TransportError as error:
             raise AdvisoriesUnavailable("OSV could not be reached") from error
-        if response.status_code >= 300:
-            raise AdvisoriesUnavailable(f"OSV answered {response.status_code}")
+        except TooLarge as error:
+            raise AdvisoriesUnavailable("OSV answered more than one page should hold") from error
+        if status >= 300:
+            raise AdvisoriesUnavailable(f"OSV answered {status}")
         try:
-            return _OsvAnswer.model_validate_json(response.content)
+            return _OsvAnswer.model_validate_json(content)
         except ValidationError as error:
             raise AdvisoriesUnavailable("OSV answered in a way we did not expect") from error
 
@@ -193,17 +223,20 @@ class Nvd:
     def score(self, cve: str) -> Score | None:
         """NVD's CVSS base score for one CVE, or None when NVD did not give one."""
         try:
-            response = self._client.get(
+            status, content = read_capped(
+                self._client,
+                "GET",
                 f"{self._base_url}/rest/json/cves/2.0",
+                limit=NVD_ANSWER_BYTES,
                 params={"cveId": cve},
                 headers=self._headers,
             )
-        except httpx.TransportError:
+        except httpx.TransportError, TooLarge:
             return None
-        if response.status_code >= 300:
+        if status >= 300:
             return None
         try:
-            document: object = response.json()
+            document: object = json.loads(content)
         except ValueError:
             return None
         return _nvd_score(document)
@@ -253,22 +286,67 @@ class Looked:
     state: CheckState
     vulnerabilities: list[Vulnerability] = field(default_factory=list[Vulnerability])
     unscored: int = 0
-    """How many CVEs NVD did not score, because the cap was reached or NVD did not answer."""
+    """How many CVEs NVD did not score: the check's cap or time ran out, or NVD did not answer."""
     problem: str | None = None
+    all_read: bool = True
+    """False when OSV listed more than one check reads, so there may be more than these."""
 
 
 class AdvisoryReader:
-    """Finds the known vulnerabilities of one package version and scores them."""
+    """Finds the known vulnerabilities of package versions and scores them. One reader serves the
+    whole runtime: NVD's pace is kept across every check, and each check has its own cap and
+    time budget (start_check)."""
 
-    def __init__(self, osv: Osv, nvd: Nvd | None, sleep: Callable[[float], None]) -> None:
+    def __init__(
+        self,
+        osv: Osv,
+        nvd: Nvd | None,
+        sleep: Callable[[float], None],
+        clock: Callable[[], float] = time.monotonic,
+        budget_seconds: float = NVD_BUDGET_SECONDS,
+    ) -> None:
         self._osv = osv
         self._nvd = nvd
         self._sleep = sleep
-        self._lookups = 0
+        self._clock = clock
+        self._budget = budget_seconds
+        self._pace = threading.Lock()
+        self._last_asked: float | None = None
 
-    def start_check(self) -> None:
-        """The NVD cap is per check, so a new check starts counting again."""
-        self._lookups = 0
+    def start_check(self) -> AdvisoryCheck:
+        """A new check's own count and clock, so checks that run at once don't share them."""
+        return AdvisoryCheck(self, self._clock())
+
+    def query(self, ecosystem: str, name: str, version: str) -> Found:
+        return self._osv.query(ecosystem, name, version)
+
+    def score(self, cve: str, check: AdvisoryCheck) -> Score | None:
+        """NVD's score, or None past the check's cap or time budget. Calls from every check wait
+        their turn, so the runtime never asks NVD faster than its pace."""
+        nvd = self._nvd
+        if nvd is None or check.lookups >= nvd.pace.max_lookups:
+            return None
+        with self._pace:
+            now = self._clock()
+            wait = 0.0
+            if self._last_asked is not None:
+                wait = max(0.0, self._last_asked + nvd.pace.wait_seconds - now)
+            if now + wait - check.started > self._budget:
+                return None
+            if wait:
+                self._sleep(wait)
+            check.lookups += 1
+            self._last_asked = self._clock()
+            return nvd.score(cve)
+
+
+class AdvisoryCheck:
+    """One check's vulnerability lookups, from AdvisoryReader.start_check."""
+
+    def __init__(self, reader: AdvisoryReader, started: float) -> None:
+        self._reader = reader
+        self.started = started
+        self.lookups = 0
 
     def look(self, kind: str, name: str, version: str) -> Looked | None:
         """None when the source kind names no package OSV knows."""
@@ -276,11 +354,11 @@ class AdvisoryReader:
         if ecosystem is None:
             return None
         try:
-            advisories = self._osv.query(ecosystem, name, version)
+            found = self._reader.query(ecosystem, name, version)
         except AdvisoriesUnavailable as error:
             return Looked("could_not_check", problem=str(error))
-        merged, unscored = self._merge(advisories, version)
-        return Looked("checked", merged, unscored)
+        merged, unscored = self._merge(found.advisories, version)
+        return Looked("checked", merged, unscored, all_read=found.all_read)
 
     def _merge(
         self, advisories: Iterable[Advisory], version: str
@@ -292,21 +370,12 @@ class AdvisoryReader:
         unscored = 0
         for key, group in by_key.items():
             cve = group[0].cve
-            score = self._score(cve) if cve else None
+            score = self._reader.score(cve, self) if cve else None
             if cve and score is None:
                 unscored += 1
             found.append(_vulnerability(key, cve, group, score, version))
         found.sort(key=lambda v: (_rank(v.severity), -(v.score or 0), v.id))
         return found, unscored
-
-    def _score(self, cve: str) -> Score | None:
-        nvd = self._nvd
-        if nvd is None or self._lookups >= nvd.pace.max_lookups:
-            return None
-        if self._lookups:
-            self._sleep(nvd.pace.wait_seconds)
-        self._lookups += 1
-        return nvd.score(cve)
 
 
 def _vulnerability(

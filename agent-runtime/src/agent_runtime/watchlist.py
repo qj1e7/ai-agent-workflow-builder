@@ -331,7 +331,7 @@ class WatchlistChecker:
         if advisories is None:
             return {}
         write = get_stream_writer()
-        advisories.start_check()
+        check = advisories.start_check()
         findings = list(state.findings)
         for index, item in enumerate(state.inputs.software):
             if item.our_version is None or item.from_first_check:
@@ -344,7 +344,7 @@ class WatchlistChecker:
                     f"looking up known vulnerabilities in {item.name} {item.our_version}.",
                 )
             )
-            looked = advisories.look(item.source.kind, item.source.ref, item.our_version)
+            looked = check.look(item.source.kind, item.source.ref, item.our_version)
             if looked is None:
                 continue
             findings[index] = findings[index].model_copy(
@@ -503,6 +503,8 @@ def _vulnerabilities_to_room(item: SoftwareToCheck, looked: Looked) -> Draft:
             f" NVD did not score {looked.unscored} of them, so those show the advisory's "
             "own severity."
         )
+    if not looked.all_read:
+        text += " OSV lists more than one check reads, so there may be more than these."
     return to_room(f"reported {vulnerability_count(len(found))} in {item.name}.", text)
 
 

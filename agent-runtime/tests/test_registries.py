@@ -2,6 +2,7 @@ import httpx
 import pytest
 
 from agent_runtime.registries import (
+    MAX_BODY_BYTES,
     MavenCentralSource,
     NpmRegistrySource,
     build_of,
@@ -154,3 +155,22 @@ def test_a_final_marker_compares_as_its_numbers():
     assert newer_than("5.3.39.RELEASE", counted, any_family=True) == ["6.2.0"]
     netty = ["4.1.114.Final", "4.1.115.Final", "4.2.0.Final"]
     assert newer_than("4.1.114.Final", netty, any_family=True) == ["4.2.0.Final", "4.1.115.Final"]
+
+
+def test_a_registry_answer_past_the_size_limit_is_not_read():
+    huge = b"{" + b" " * MAX_BODY_BYTES + b"}"
+    with pytest.raises(SourceUnavailable):
+        NpmRegistrySource(client=answering(200, huge)).fetch("express")
+
+
+def test_a_registry_redirect_is_refused_not_followed():
+    seen: list[httpx.Request] = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(301, headers={"location": "https://elsewhere.test/express"})
+
+    source = NpmRegistrySource(client=httpx.Client(transport=httpx.MockTransport(handle)))
+    with pytest.raises(SourceRejected):
+        source.fetch("express")
+    assert [r.url.host for r in seen] == ["registry.npmjs.org"]
