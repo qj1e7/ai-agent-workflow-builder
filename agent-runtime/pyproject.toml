@@ -31,6 +31,11 @@ evals = [
     "langchain-google-genai==4.4.0",
     "langchain-ollama==1.1.0",
 ]
+# Spike A (spike/dspy-free-reply): DSPy's GEPA searches for the free reply's instructions offline.
+# Never installed in an image: the Dockerfile syncs the dev group, the evals group or none.
+spike = [
+    "dspy==3.4.1",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -43,4 +48,52 @@ pythonVersion = "3.14"
 
 [tool.uv]
 conflicts = [[{ group = "dev" }, { group = "evals" }]]
-exclude-newer-package = { anthropic = "2026-10-08T00:00:00Z", google-auth = "2026-10-08T00:00:00Z", google-genai = "2026-10-08T00:00:00Z", openai = "2026-10-08T00:00:00Z", pycparser = "2026-10-08T00:00:00Z" }
+
+[tool.uv.exclude-newer-package]
+anthropic = "2026-10-08T00:00:00Z"
+google-auth = "2026-10-08T00:00:00Z"
+google-genai = "2026-10-08T00:00:00Z"
+openai = "2026-10-08T00:00:00Z"
+pycparser = "2026-10-08T00:00:00Z"
+# The spike group's packages, each only in that group, held to releases two weeks old or more.
+aiohappyeyeballs = "2026-11-06T00:00:00Z"
+aiohttp = "2026-11-06T00:00:00Z"
+aiosignal = "2026-11-06T00:00:00Z"
+attrs = "2026-11-06T00:00:00Z"
+boto3 = "2026-11-06T00:00:00Z"
+botocore = "2026-11-06T00:00:00Z"
+cachetools = "2026-11-06T00:00:00Z"
+cloudpickle = "2026-11-06T00:00:00Z"
+diskcache = "2026-11-06T00:00:00Z"
+dspy = "2026-11-06T00:00:00Z"
+fastuuid = "2026-11-06T00:00:00Z"
+filelock = "2026-11-06T00:00:00Z"
+frozenlist = "2026-11-06T00:00:00Z"
+fsspec = "2026-11-06T00:00:00Z"
+gepa = "2026-11-06T00:00:00Z"
+h2 = "2026-11-06T00:00:00Z"
+"hf-xet" = "2026-11-06T00:00:00Z"
+hpack = "2026-11-06T00:00:00Z"
+"huggingface-hub" = "2026-11-06T00:00:00Z"
+hyperframe = "2026-11-06T00:00:00Z"
+"importlib-metadata" = "2026-11-06T00:00:00Z"
+jinja2 = "2026-11-06T00:00:00Z"
+jmespath = "2026-11-06T00:00:00Z"
+"json-repair" = "2026-11-06T00:00:00Z"
+jsonschema = "2026-11-06T00:00:00Z"
+"jsonschema-specifications" = "2026-11-06T00:00:00Z"
+litellm = "2026-11-06T00:00:00Z"
+markupsafe = "2026-11-06T00:00:00Z"
+multidict = "2026-11-06T00:00:00Z"
+propcache = "2026-11-06T00:00:00Z"
+"pydantic-settings" = "2026-11-06T00:00:00Z"
+"python-dateutil" = "2026-11-06T00:00:00Z"
+"python-dotenv" = "2026-11-06T00:00:00Z"
+referencing = "2026-11-06T00:00:00Z"
+"rpds-py" = "2026-11-06T00:00:00Z"
+s3transfer = "2026-11-06T00:00:00Z"
+six = "2026-11-06T00:00:00Z"
+tokenizers = "2026-11-06T00:00:00Z"
+tqdm = "2026-11-06T00:00:00Z"
+yarl = "2026-11-06T00:00:00Z"
+zipp = "2026-11-06T00:00:00Z"

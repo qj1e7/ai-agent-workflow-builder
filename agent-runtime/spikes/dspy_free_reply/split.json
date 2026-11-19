@@ -1,0 +1,841 @@
+{
+  "made_by": "spikes/dspy_free_reply/split.py, offline, no model calls",
+  "evidence": "docs/evidence/evals/2026-11-16-spike-rules.json",
+  "seed": 20261120,
+  "counts": {
+    "cases": 401,
+    "refused_by_the_word_rule": 37,
+    "reach_the_free_reply": 145,
+    "score": 80,
+    "train": 65,
+    "score_by_why": {
+      "gate": 8,
+      "held_out": 37,
+      "same words as a gate case": 3,
+      "same words as a held_out case": 1,
+      "seeded third": 31
+    },
+    "score_by_source": {
+      "reply": 69,
+      "anything": 11
+    },
+    "train_by_source": {
+      "reply": 32,
+      "anything": 33
+    },
+    "by_evidence": {
+      "a how-do-I question, a dead end since 16 Nov": 5,
+      "added since the run, a free reply is acceptable": 3,
+      "asked in the 16 Nov run": 137
+    }
+  },
+  "score": [
+    {
+      "id": "anything:a-report",
+      "group": "anything/vague",
+      "evidence": "asked in the 16 Nov run",
+      "why": "same words as a gate case"
+    },
+    {
+      "id": "anything:book-room",
+      "group": "anything/cant_do",
+      "evidence": "asked in the 16 Nov run",
+      "why": "seeded third"
+    },
+    {
+      "id": "anything:check-things",
+      "group": "anything/vague",
+      "evidence": "asked in the 16 Nov run",
+      "why": "seeded third"
+    },
+    {
+      "id": "anything:hi",
+      "group": "anything/small_talk",
+      "evidence": "asked in the 16 Nov run",
+      "why": "same words as a gate case"
+    },
+    {
+      "id": "anything:insult",
+      "group": "anything/nonsense",
+      "evidence": "asked in the 16 Nov run",
+      "why": "seeded third"
+    },
+    {
+      "id": "anything:pls-watch",
+      "group": "anything/typos",
+      "evidence": "asked in the 16 Nov run",
+      "why": "seeded third"
+    },
+    {
+      "id": "anything:remove-gitlab-access",
+      "group": "anything/cant_do",
+      "evidence": "asked in the 16 Nov run",
+      "why": "seeded third"
+    },
+    {
+      "id": "anything:same-jira-stuff",
+      "group": "anything/vague",
+      "evidence": "asked in the 16 Nov run",
+      "why": "seeded third"
+    },
+    {
+      "id": "anything:track-a-tool",
+      "group": "anything/missing_detail",
+      "evidence": "added since the run, a free reply is acceptable",
+      "why": "seeded third"
+    },
+    {
+      "id": "anything:what-is-the-planner",
+      "group": "anything/help",
+      "evidence": "asked in the 16 Nov run",
+      "why": "seeded third"
+    },
+    {
+      "id": "anything:who-are-you",
+      "group": "anything/small_talk",
+      "evidence": "asked in the 16 Nov run",
+      "why": "seeded third"
+    },
+    {
+      "id": "reply:approver-02",
+      "group": "approver",
+      "evidence": "asked in the 16 Nov run",
+      "why": "seeded third"
+    },
+    {
+      "id": "reply:approver-10",
+      "group": "approver",
+      "evidence": "asked in the 16 Nov run",
+      "why": "seeded third"
+    },
+    {
+      "id": "reply:approver-13",
+      "group": "approver",
+      "evidence": "asked in the 16 Nov run",
+      "why": "same words as a gate case"
+    },
+    {
+      "id": "reply:cant-01",
+      "group": "cant",
+      "evidence": "asked in the 16 Nov run",
+      "why": "gate"
+    },
+    {
+      "id": "reply:cant-11",
+      "group": "cant",
+      "evidence": "asked in the 16 Nov run",
+      "why": "seeded third"
+    },
+    {
+      "id": "reply:cant-15",
+      "group": "cant",
+      "evidence": "asked in the 16 Nov run",
+      "why": "seeded third"
+    },
+    {
+      "id": "reply:cant-16",
+      "group": "cant",
+      "evidence": "asked in the 16 Nov run",
+      "why": "seeded third"
+    },
+    {
+      "id": "reply:cant-17",
+      "group": "cant",
+      "evidence": "asked in the 16 Nov run",
+      "why": "seeded third"
+    },
+    {
+      "id": "reply:chat-01",
+      "group": "chat",
+      "evidence": "asked in the 16 Nov run",
+      "why": "gate"
+    },
+    {
+      "id": "reply:chat-02",
+      "group": "chat",
+      "evidence": "asked in the 16 Nov run",
+      "why": "gate"
+    },
+    {
+      "id": "reply:chat-06",
+      "group": "chat",
+      "evidence": "asked in the 16 Nov run",
+      "why": "same words as a held_out case"
+    },
+    {
+      "id": "reply:chat-07",
+      "group": "chat",
+      "evidence": "asked in the 16 Nov run",
+      "why": "seeded third"
+    },
+    {
+      "id": "reply:chat-12",
+      "group": "chat",
+      "evidence": "asked in the 16 Nov run",
+      "why": "seeded third"
+    },
+    {
+      "id": "reply:chat-13",
+      "group": "chat",
+      "evidence": "asked in the 16 Nov run",
+      "why": "seeded third"
+    },
+    {
+      "id": "reply:held-approver-01",
+      "group": "approver",
+      "evidence": "asked in the 16 Nov run",
+      "why": "held_out"
+    },
+    {
+      "id": "reply:held-approver-02",
+      "group": "approver",
+      "evidence": "asked in the 16 Nov run",
+      "why": "held_out"
+    },
+    {
+      "id": "reply:held-cant-03",
+      "group": "cant",
+      "evidence": "asked in the 16 Nov run",
+      "why": "held_out"
+    },
+    {
+      "id": "reply:held-cant-04",
+      "group": "cant",
+      "evidence": "asked in the 16 Nov run",
+      "why": "held_out"
+    },
+    {
+      "id": "reply:held-cant-09",
+      "group": "cant",
+      "evidence": "asked in the 16 Nov run",
+      "why": "held_out"
+    },
+    {
+      "id": "reply:held-cant-10",
+      "group": "cant",
+      "evidence": "asked in the 16 Nov run",
+      "why": "held_out"
+    },
+    {
+      "id": "reply:held-cant-11",
+      "group": "cant",
+      "evidence": "asked in the 16 Nov run",
+      "why": "held_out"
+    },
+    {
+      "id": "reply:held-chat-01",
+      "group": "chat",
+      "evidence": "asked in the 16 Nov run",
+      "why": "held_out"
+    },
+    {
+      "id": "reply:held-chat-02",
+      "group": "chat",
+      "evidence": "asked in the 16 Nov run",
+      "why": "held_out"
+    },
+    {
+      "id": "reply:held-chat-03",
+      "group": "chat",
+      "evidence": "asked in the 16 Nov run",
+      "why": "held_out"
+    },
+    {
+      "id": "reply:held-chat-04",
+      "group": "chat",
+      "evidence": "asked in the 16 Nov run",
+      "why": "held_out"
+    },
+    {
+      "id": "reply:held-chat-05",
+      "group": "chat",
+      "evidence": "asked in the 16 Nov run",
+      "why": "held_out"
+    },
+    {
+      "id": "reply:held-chat-06",
+      "group": "chat",
+      "evidence": "asked in the 16 Nov run",
+      "why": "held_out"
+    },
+    {
+      "id": "reply:held-chat-07",
+      "group": "chat",
+      "evidence": "asked in the 16 Nov run",
+      "why": "held_out"
+    },
+    {
+      "id": "reply:held-chat-08",
+      "group": "chat",
+      "evidence": "asked in the 16 Nov run",
+      "why": "held_out"
+    },
+    {
+      "id": "reply:held-how_to-01",
+      "group": "how_to",
+      "evidence": "asked in the 16 Nov run",
+      "why": "held_out"
+    },
+    {
+      "id": "reply:held-how_to-02",
+      "group": "how_to",
+      "evidence": "asked in the 16 Nov run",
+      "why": "held_out"
+    },
+    {
+      "id": "reply:held-how_to-03",
+      "group": "how_to",
+      "evidence": "asked in the 16 Nov run",
+      "why": "held_out"
+    },
+    {
+      "id": "reply:held-how_to-04",
+      "group": "how_to",
+      "evidence": "a how-do-I question, a dead end since 16 Nov",
+      "why": "held_out"
+    },
+    {
+      "id": "reply:held-how_to-05",
+      "group": "how_to",
+      "evidence": "asked in the 16 Nov run",
+      "why": "held_out"
+    },
+    {
+      "id": "reply:held-how_to-06",
+      "group": "how_to",
+      "evidence": "asked in the 16 Nov run",
+      "why": "held_out"
+    },
+    {
+      "id": "reply:held-how_to-07",
+      "group": "how_to",
+      "evidence": "asked in the 16 Nov run",
+      "why": "held_out"
+    },
+    {
+      "id": "reply:held-how_to-08",
+      "group": "how_to",
+      "evidence": "asked in the 16 Nov run",
+      "why": "held_out"
+    },
+    {
+      "id": "reply:held-how_to-09",
+      "group": "how_to",
+      "evidence": "asked in the 16 Nov run",
+      "why": "held_out"
+    },
+    {
+      "id": "reply:held-how_to-10",
+      "group": "how_to",
+      "evidence": "asked in the 16 Nov run",
+      "why": "held_out"
+    },
+    {
+      "id": "reply:held-how_to-11",
+      "group": "how_to",
+      "evidence": "a how-do-I question, a dead end since 16 Nov",
+      "why": "held_out"
+    },
+    {
+      "id": "reply:held-how_to-12",
+      "group": "how_to",
+      "evidence": "asked in the 16 Nov run",
+      "why": "held_out"
+    },
+    {
+      "id": "reply:held-planted_message-01",
+      "group": "planted_message",
+      "evidence": "asked in the 16 Nov run",
+      "why": "held_out"
+    },
+    {
+      "id": "reply:held-planted_message-02",
+      "group": "planted_message",
+      "evidence": "asked in the 16 Nov run",
+      "why": "held_out"
+    },
+    {
+      "id": "reply:held-planted_message-04",
+      "group": "planted_message",
+      "evidence": "asked in the 16 Nov run",
+      "why": "held_out"
+    },
+    {
+      "id": "reply:held-planted_message-05",
+      "group": "planted_message",
+      "evidence": "asked in the 16 Nov run",
+      "why": "held_out"
+    },
+    {
+      "id": "reply:held-planted_turn-01",
+      "group": "planted_turn",
+      "evidence": "asked in the 16 Nov run",
+      "why": "held_out"
+    },
+    {
+      "id": "reply:held-planted_turn-02",
+      "group": "planted_turn",
+      "evidence": "asked in the 16 Nov run",
+      "why": "held_out"
+    },
+    {
+      "id": "reply:held-vague-02",
+      "group": "vague",
+      "evidence": "asked in the 16 Nov run",
+      "why": "held_out"
+    },
+    {
+      "id": "reply:held-vague-04",
+      "group": "vague",
+      "evidence": "asked in the 16 Nov run",
+      "why": "held_out"
+    },
+    {
+      "id": "reply:held-vague-07",
+      "group": "vague",
+      "evidence": "asked in the 16 Nov run",
+      "why": "held_out"
+    },
+    {
+      "id": "reply:held-vague-08",
+      "group": "vague",
+      "evidence": "asked in the 16 Nov run",
+      "why": "held_out"
+    },
+    {
+      "id": "reply:how_to-04",
+      "group": "how_to",
+      "evidence": "asked in the 16 Nov run",
+      "why": "seeded third"
+    },
+    {
+      "id": "reply:how_to-07",
+      "group": "how_to",
+      "evidence": "asked in the 16 Nov run",
+      "why": "seeded third"
+    },
+    {
+      "id": "reply:how_to-08",
+      "group": "how_to",
+      "evidence": "asked in the 16 Nov run",
+      "why": "seeded third"
+    },
+    {
+      "id": "reply:how_to-12",
+      "group": "how_to",
+      "evidence": "asked in the 16 Nov run",
+      "why": "seeded third"
+    },
+    {
+      "id": "reply:how_to-13",
+      "group": "how_to",
+      "evidence": "asked in the 16 Nov run",
+      "why": "seeded third"
+    },
+    {
+      "id": "reply:how_to-21",
+      "group": "how_to",
+      "evidence": "asked in the 16 Nov run",
+      "why": "seeded third"
+    },
+    {
+      "id": "reply:planted_message-01",
+      "group": "planted_message",
+      "evidence": "asked in the 16 Nov run",
+      "why": "gate"
+    },
+    {
+      "id": "reply:planted_message-05",
+      "group": "planted_message",
+      "evidence": "asked in the 16 Nov run",
+      "why": "seeded third"
+    },
+    {
+      "id": "reply:planted_message-06",
+      "group": "planted_message",
+      "evidence": "asked in the 16 Nov run",
+      "why": "seeded third"
+    },
+    {
+      "id": "reply:planted_turn-01",
+      "group": "planted_turn",
+      "evidence": "asked in the 16 Nov run",
+      "why": "gate"
+    },
+    {
+      "id": "reply:planted_turn-02",
+      "group": "planted_turn",
+      "evidence": "asked in the 16 Nov run",
+      "why": "gate"
+    },
+    {
+      "id": "reply:vague-01",
+      "group": "vague",
+      "evidence": "asked in the 16 Nov run",
+      "why": "gate"
+    },
+    {
+      "id": "reply:vague-02",
+      "group": "vague",
+      "evidence": "asked in the 16 Nov run",
+      "why": "gate"
+    },
+    {
+      "id": "reply:vague-06",
+      "group": "vague",
+      "evidence": "asked in the 16 Nov run",
+      "why": "seeded third"
+    },
+    {
+      "id": "reply:vague-07",
+      "group": "vague",
+      "evidence": "asked in the 16 Nov run",
+      "why": "seeded third"
+    },
+    {
+      "id": "reply:vague-09",
+      "group": "vague",
+      "evidence": "asked in the 16 Nov run",
+      "why": "seeded third"
+    },
+    {
+      "id": "reply:vague-14",
+      "group": "vague",
+      "evidence": "asked in the 16 Nov run",
+      "why": "seeded third"
+    },
+    {
+      "id": "reply:vague-15",
+      "group": "vague",
+      "evidence": "asked in the 16 Nov run",
+      "why": "seeded third"
+    }
+  ],
+  "train": [
+    {
+      "id": "anything:automate-my-work",
+      "group": "anything/vague",
+      "evidence": "asked in the 16 Nov run"
+    },
+    {
+      "id": "anything:capital-of-france",
+      "group": "anything/off_topic",
+      "evidence": "asked in the 16 Nov run"
+    },
+    {
+      "id": "anything:emoji",
+      "group": "anything/nonsense",
+      "evidence": "asked in the 16 Nov run"
+    },
+    {
+      "id": "anything:first-workflow",
+      "group": "anything/help",
+      "evidence": "asked in the 16 Nov run"
+    },
+    {
+      "id": "anything:good-morning",
+      "group": "anything/small_talk",
+      "evidence": "asked in the 16 Nov run"
+    },
+    {
+      "id": "anything:great-job",
+      "group": "anything/small_talk",
+      "evidence": "asked in the 16 Nov run"
+    },
+    {
+      "id": "anything:hello-there",
+      "group": "anything/small_talk",
+      "evidence": "asked in the 16 Nov run"
+    },
+    {
+      "id": "anything:help-with-tickets",
+      "group": "anything/vague",
+      "evidence": "asked in the 16 Nov run"
+    },
+    {
+      "id": "anything:how-are-you",
+      "group": "anything/small_talk",
+      "evidence": "asked in the 16 Nov run"
+    },
+    {
+      "id": "anything:jira",
+      "group": "anything/vague",
+      "evidence": "asked in the 16 Nov run"
+    },
+    {
+      "id": "anything:joke",
+      "group": "anything/off_topic",
+      "evidence": "asked in the 16 Nov run"
+    },
+    {
+      "id": "anything:keyboard-mash",
+      "group": "anything/nonsense",
+      "evidence": "asked in the 16 Nov run"
+    },
+    {
+      "id": "anything:lunch",
+      "group": "anything/off_topic",
+      "evidence": "asked in the 16 Nov run"
+    },
+    {
+      "id": "anything:ncs-meaning",
+      "group": "anything/off_topic",
+      "evidence": "asked in the 16 Nov run"
+    },
+    {
+      "id": "anything:not-a-name-after-which",
+      "group": "anything/missing_detail",
+      "evidence": "added since the run, a free reply is acceptable"
+    },
+    {
+      "id": "anything:numbers",
+      "group": "anything/nonsense",
+      "evidence": "asked in the 16 Nov run"
+    },
+    {
+      "id": "anything:ok-bye",
+      "group": "anything/small_talk",
+      "evidence": "asked in the 16 Nov run"
+    },
+    {
+      "id": "anything:poem",
+      "group": "anything/off_topic",
+      "evidence": "asked in the 16 Nov run"
+    },
+    {
+      "id": "anything:python-loop",
+      "group": "anything/off_topic",
+      "evidence": "asked in the 16 Nov run"
+    },
+    {
+      "id": "anything:question-marks",
+      "group": "anything/nonsense",
+      "evidence": "asked in the 16 Nov run"
+    },
+    {
+      "id": "anything:reset-password",
+      "group": "anything/cant_do",
+      "evidence": "asked in the 16 Nov run"
+    },
+    {
+      "id": "anything:sql",
+      "group": "anything/nonsense",
+      "evidence": "asked in the 16 Nov run"
+    },
+    {
+      "id": "anything:table-with-headings",
+      "group": "anything/style",
+      "evidence": "asked in the 16 Nov run"
+    },
+    {
+      "id": "anything:test-test",
+      "group": "anything/nonsense",
+      "evidence": "asked in the 16 Nov run"
+    },
+    {
+      "id": "anything:thanks",
+      "group": "anything/small_talk",
+      "evidence": "asked in the 16 Nov run"
+    },
+    {
+      "id": "anything:translate",
+      "group": "anything/off_topic",
+      "evidence": "asked in the 16 Nov run"
+    },
+    {
+      "id": "anything:useless",
+      "group": "anything/nonsense",
+      "evidence": "asked in the 16 Nov run"
+    },
+    {
+      "id": "anything:weather",
+      "group": "anything/off_topic",
+      "evidence": "asked in the 16 Nov run"
+    },
+    {
+      "id": "anything:what-to-type",
+      "group": "anything/help",
+      "evidence": "asked in the 16 Nov run"
+    },
+    {
+      "id": "anything:whats-new-with-the-team",
+      "group": "anything/off_topic",
+      "evidence": "added since the run, a free reply is acceptable"
+    },
+    {
+      "id": "anything:which-tools",
+      "group": "anything/abilities",
+      "evidence": "asked in the 16 Nov run"
+    },
+    {
+      "id": "anything:work-with-jira",
+      "group": "anything/abilities",
+      "evidence": "asked in the 16 Nov run"
+    },
+    {
+      "id": "anything:work-with-teams",
+      "group": "anything/abilities",
+      "evidence": "asked in the 16 Nov run"
+    },
+    {
+      "id": "reply:approver-12",
+      "group": "approver",
+      "evidence": "asked in the 16 Nov run"
+    },
+    {
+      "id": "reply:cant-18",
+      "group": "cant",
+      "evidence": "asked in the 16 Nov run"
+    },
+    {
+      "id": "reply:cant-20",
+      "group": "cant",
+      "evidence": "asked in the 16 Nov run"
+    },
+    {
+      "id": "reply:chat-03",
+      "group": "chat",
+      "evidence": "asked in the 16 Nov run"
+    },
+    {
+      "id": "reply:chat-04",
+      "group": "chat",
+      "evidence": "asked in the 16 Nov run"
+    },
+    {
+      "id": "reply:chat-05",
+      "group": "chat",
+      "evidence": "asked in the 16 Nov run"
+    },
+    {
+      "id": "reply:chat-08",
+      "group": "chat",
+      "evidence": "asked in the 16 Nov run"
+    },
+    {
+      "id": "reply:chat-09",
+      "group": "chat",
+      "evidence": "asked in the 16 Nov run"
+    },
+    {
+      "id": "reply:chat-10",
+      "group": "chat",
+      "evidence": "asked in the 16 Nov run"
+    },
+    {
+      "id": "reply:chat-11",
+      "group": "chat",
+      "evidence": "asked in the 16 Nov run"
+    },
+    {
+      "id": "reply:chat-14",
+      "group": "chat",
+      "evidence": "asked in the 16 Nov run"
+    },
+    {
+      "id": "reply:chat-15",
+      "group": "chat",
+      "evidence": "asked in the 16 Nov run"
+    },
+    {
+      "id": "reply:how_to-05",
+      "group": "how_to",
+      "evidence": "asked in the 16 Nov run"
+    },
+    {
+      "id": "reply:how_to-06",
+      "group": "how_to",
+      "evidence": "asked in the 16 Nov run"
+    },
+    {
+      "id": "reply:how_to-09",
+      "group": "how_to",
+      "evidence": "asked in the 16 Nov run"
+    },
+    {
+      "id": "reply:how_to-10",
+      "group": "how_to",
+      "evidence": "a how-do-I question, a dead end since 16 Nov"
+    },
+    {
+      "id": "reply:how_to-11",
+      "group": "how_to",
+      "evidence": "asked in the 16 Nov run"
+    },
+    {
+      "id": "reply:how_to-15",
+      "group": "how_to",
+      "evidence": "asked in the 16 Nov run"
+    },
+    {
+      "id": "reply:how_to-16",
+      "group": "how_to",
+      "evidence": "asked in the 16 Nov run"
+    },
+    {
+      "id": "reply:how_to-17",
+      "group": "how_to",
+      "evidence": "asked in the 16 Nov run"
+    },
+    {
+      "id": "reply:how_to-18",
+      "group": "how_to",
+      "evidence": "asked in the 16 Nov run"
+    },
+    {
+      "id": "reply:how_to-20",
+      "group": "how_to",
+      "evidence": "a how-do-I question, a dead end since 16 Nov"
+    },
+    {
+      "id": "reply:how_to-22",
+      "group": "how_to",
+      "evidence": "asked in the 16 Nov run"
+    },
+    {
+      "id": "reply:how_to-23",
+      "group": "how_to",
+      "evidence": "a how-do-I question, a dead end since 16 Nov"
+    },
+    {
+      "id": "reply:planted_turn-03",
+      "group": "planted_turn",
+      "evidence": "asked in the 16 Nov run"
+    },
+    {
+      "id": "reply:planted_turn-04",
+      "group": "planted_turn",
+      "evidence": "asked in the 16 Nov run"
+    },
+    {
+      "id": "reply:vague-03",
+      "group": "vague",
+      "evidence": "asked in the 16 Nov run"
+    },
+    {
+      "id": "reply:vague-04",
+      "group": "vague",
+      "evidence": "asked in the 16 Nov run"
+    },
+    {
+      "id": "reply:vague-05",
+      "group": "vague",
+      "evidence": "asked in the 16 Nov run"
+    },
+    {
+      "id": "reply:vague-08",
+      "group": "vague",
+      "evidence": "asked in the 16 Nov run"
+    },
+    {
+      "id": "reply:vague-11",
+      "group": "vague",
+      "evidence": "asked in the 16 Nov run"
+    },
+    {
+      "id": "reply:vague-12",
+      "group": "vague",
+      "evidence": "asked in the 16 Nov run"
+    }
+  ]
+}
