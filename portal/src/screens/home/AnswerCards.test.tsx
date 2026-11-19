@@ -81,7 +81,7 @@ describe('the Planner’s short answers, as the chat-first sketch draws them', (
   it('lists what I can do in the registry’s short words, with what isn’t built yet in one Not yet line', () => {
     const reply: PlannerReply = { trace_id: null, answer: 'abilities', how_to_start: false, parts: [asked('What can you do', 'will_do')] }
     expect(text(draw(reply, { registry: REGISTRY }))).toBe(
-      'What I can do Watch software for new releases Create Jira tickets, after a yes Explain a stopped run, and retry it Change or pause your workflows Draft an n8n workflow from your words, for an Approver to check Explain any workflow Not yet: Teams channels, email, Confluence.',
+      'What I can do Watch software for new releases Watch Maven and npm packages, and their known vulnerabilities Create Jira tickets, after a yes Explain a stopped run, and retry it Change or pause your workflows Draft an n8n workflow from your words, for an Approver to check Explain any workflow Not yet: Teams channels, email, Confluence.',
     )
     expect(sayOf(reply)).toBeNull()
   })
@@ -260,7 +260,7 @@ describe('which software', () => {
     const card = /<section[\s\S]*<\/section>/.exec(html)?.[0] ?? ''
     const input = /<input[^>]*>/.exec(card)?.[0] ?? ''
     const id = /id="([^"]+)"/.exec(input)?.[1] ?? 'none'
-    expect(text(card)).toContain('Software name Type the name, such as Kubernetes. I’ll find its GitHub project.')
+    expect(text(card)).toContain('Software name I know common software, such as Kubernetes. If I don’t know yours, you can choose where it’s published.')
     expect(card).toContain(`for="${id}"`)
     expect(input).toContain(`aria-describedby="${id}-help"`)
     expect(buttons(card)).toEqual(['Find it', 'Never mind'])

@@ -182,7 +182,9 @@
       "new_versions": [],
       "detail": "GitHub returned 503 Service Unavailable three times.",
       "full_name": null,
-      "not_found": false
+      "not_found": false,
+      "vulnerability_check": "not_checked",
+      "vulnerabilities": []
     }
   ]
 }

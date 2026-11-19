@@ -860,14 +860,18 @@ function timeOf(s) {
 const SOFT0 = {
   fastapi: { name: 'FastAPI', repo: 'fastapi/fastapi', run: '0.115.2', latest: '0.121.0', on: '5 Nov', notes: '3 bug fixes. No breaking changes listed.' },
   langgraph: { name: 'LangGraph', repo: 'langchain-ai/langgraph', run: '0.2.60', latest: '0.3.1', on: '4 Nov', notes: '2 new features and 4 fixes. One change may break older code.' },
-  log4j: { name: 'Log4j core', repo: 'apache/logging-log4j2', run: '2.24.1', latest: '2.24.3', on: '1 Nov', notes: '2 bug fixes.' },
+  log4j: { name: 'Log4j core', src: 'maven', repo: 'org.apache.logging.log4j:log4j-core', run: '2.24.1', latest: '2.24.3', on: '1 Nov', notes: '2 bug fixes.' },
   react: { name: 'React', repo: 'facebook/react', run: '19.1.0', latest: '19.1.0' },
   django: { name: 'Django', repo: 'django/django', run: '5.1.4', latest: '5.1.4' },
   langserve: { name: 'LangServe', repo: 'langchain-ai/langserve', run: '0.3.0', missing: true },
 };
-const EXTRA = { kubernetes: { name: 'Kubernetes', repo: 'kubernetes/kubernetes' }, grafana: { name: 'Grafana', repo: 'grafana/grafana' }, nginx: { name: 'NGINX', repo: 'nginx/nginx' }, node: { name: 'Node.js', repo: 'nodejs/node' }, python: { name: 'Python', repo: 'python/cpython' } };
+const EXTRA = { express: { name: 'Express', src: 'npm', repo: 'express' }, kubernetes: { name: 'Kubernetes', repo: 'kubernetes/kubernetes' }, grafana: { name: 'Grafana', repo: 'grafana/grafana' }, nginx: { name: 'NGINX', repo: 'nginx/nginx' }, node: { name: 'Node.js', repo: 'nodejs/node' }, python: { name: 'Python', repo: 'python/cpython' } };
 const ALIAS = { k8s: 'kubernetes', 'node.js': 'node', nodejs: 'node' };
-const SOFT_RE = /\b(fastapi|langgraph|react|log4j|django|langserve|kubernetes|k8s|grafana|nginx|node|python)\b/;
+const SOFT_RE = /\b(fastapi|langgraph|react|log4j|django|langserve|express|kubernetes|k8s|grafana|nginx|node|python)\b/;
+/* Where each software is published (ADR 0025): GitHub by default, or a Maven Central or npm package. */
+const SRC = { github: 'GitHub', maven: 'Maven Central', npm: 'npm' };
+const srcOf = (s) => SRC[s.src || 'github'];
+const srcAt = (s) => (s.src === 'maven' ? `central.sonatype.com/artifact/${s.repo.replace(':', '/')}` : s.src === 'npm' ? `npmjs.com/package/${s.repo}` : `github.com/${s.repo}`);
 const d8 = { day: null, time: '8:00' };
 const d9 = { day: null, time: '9:00' };
 const WORLD = {
@@ -1118,7 +1122,7 @@ function apprFoot() {
 }
 
 /* ---------- Workflow, software and key views ---------- */
-const sentFor = (id) => { const f = W.wf[id]; return `${long(f.sched)}, check ${(W.soft[f.soft] || EXTRA[f.soft]).name} on GitHub for a new release. ${f.then === 'jira' ? 'If there is one, create an upgrade ticket in Jira project MOCK, after a yes.' : 'If there is one, tell me here.'}`; };
+const sentFor = (id) => { const f = W.wf[id]; return `${long(f.sched)}, check ${(W.soft[f.soft] || EXTRA[f.soft]).name} on ${srcOf(W.soft[f.soft] || EXTRA[f.soft])} for a new release. ${f.then === 'jira' ? 'If there is one, create an upgrade ticket in Jira project MOCK, after a yes.' : 'If there is one, tell me here.'}`; };
 const TIMES = ['7:30', '8:00', '9:00', '13:00', '17:00'];
 const dayOpts = (v) => [['', 'Every day'], ...['mon', 'tue', 'wed', 'thu', 'fri'].map((d) => [d, `Every ${DAY[d]}`])].map(([k, l]) => `<option value="${k}"${(v || '') === k ? ' selected' : ''}>${l}</option>`).join('');
 const timeOpts = (v) => [...new Set([...TIMES, v])].map((t) => `<option${t === v ? ' selected' : ''}>${t}</option>`).join('');
@@ -1183,7 +1187,7 @@ function softView(k, full = false) {
     ${s.notes ? `<div><dt>What changed</dt><dd>${s.notes} <span class="muted small">From the release notes</span></dd></div>` : ''}
     <div><dt>Upgrade ticket</dt><dd data-live="soft-ticket" data-soft="${k}"></dd></div>
     <div><dt>Checked by</dt><dd>${by}${checkedFor(k) ? ` <span class="muted small">last checked ${lower(checkedFor(k))}</span>` : ''}</dd></div>
-    <div><dt>Source</dt><dd>github.com/${s.repo}</dd></div></dl>${act}</div>`;
+    <div><dt>Source</dt><dd>${srcAt(s)} <span class="muted small">${srcOf(s)}</span></dd></div></dl>${act}</div>`;
 }
 const keyView = () => `<div class="pv" data-live="key"><div class="pv-head"><div><p class="pv-kind">Connection</p><h3>Jira key</h3></div><span class="pill lg" data-s="wait">Expires Friday</span></div>
   <p class="pv-sent">After Friday 14 Nov, nothing can be written to Jira until the key is renewed. Only an admin can renew it.</p>
@@ -1566,7 +1570,7 @@ const watchRowsFull = () => [...softIds()].sort((a, b) => RANK[softState(a)[0]] 
   const s = W.soft[k];
   const [t, c] = softState(k);
   const ver = s.missing ? 'GitHub can’t find it' : !s.run ? 'Added today' : s.run === s.latest ? `${s.run}, the newest` : `${s.run} → ${s.latest}, out ${s.on}`;
-  return `<li><button class="wl-row" type="button" data-open="soft:${k}"><span><b>${s.name}</b><span class="s">${ver} · ${W.wf[k] ? `checked by ${W.wf[k].name}` : 'not checked automatically'}</span></span><span class="pill" data-s="${c}">${t}</span></button></li>`;
+  return `<li><button class="wl-row" type="button" data-open="soft:${k}"><span><b>${s.name}</b><span class="s">${ver} · ${W.wf[k] ? `checked by ${W.wf[k].name}` : isPkg(k) ? 'checked by the Software watchlist' : 'not checked automatically'}</span></span><span class="pill" data-s="${c}">${t}</span></button></li>`;
 }).join('');
 const watchSummary = () => [['Newer out', 'has a newer version', 'have a newer version'], ['Can’t find', 'can’t be found', 'can’t be found'], ['Up to date', 'is up to date', 'are up to date']]
   .map(([st, one, many]) => { const n = softIds().filter((k) => softState(k)[0] === st).length; return n ? `${n} ${n === 1 ? one : many}` : ''; }).filter(Boolean).join(' · ');
@@ -1732,7 +1736,7 @@ let EN = 0;
 const STOPW = new Set('a an the for me my our any and please can you could would also new one it its to of in on at with when there is if i want need just all that this be out comes us let know some'.split(' '));
 const KNOWN = [/\b(watch|track|monitor|keep an eye|check|follow)\b/, /\b(release|releases|version|versions|newer|update|updates)\b/, /\b(jira|ticket|tickets)\b/, SCHED_RE, SOFT_RE, /\b(tell me|let me know|notify|alert)\b/];
 const UNSUP = [
-  [/(secur|vulnerab|\bcve|advisor)/, 'Flag security issues', 'I can’t read security advisories yet.', true],
+  [/(secur|vulnerab|\bcve|advisor)/, 'Flag security issues', 'I look up known vulnerabilities only in the Maven Central and npm packages on the watchlist, at each check.', true],
   [/(teams|channel|slack)/, 'Post in Teams', 'Not yet. I’ll tell you here instead.', true],
   [/e-?mail/, 'Send an email', 'Not yet. I’ll tell you here instead.', true],
   [/(confluence|wiki)/, 'Update Confluence', 'Not yet.', true],
@@ -1758,7 +1762,7 @@ function parseReq(t) {
   else if (k) d.soft = k;
   else {
     const m = s.match(/\b(?:watch|track|monitor|check|follow|keep an eye on)\s+(?:the\s+|for\s+)?([a-z][\w.-]+)/);
-    if (m && !STOPW.has(m[1]) && !/^(release|version|new|update)/.test(m[1])) d.cant.push({ label: `Watch ${cap(m[1])}`, why: 'I don’t know it yet. Try its GitHub name, like owner/project.' });
+    if (m && !STOPW.has(m[1]) && !/^(release|version|new|update)/.test(m[1])) d.cant.push({ label: `Watch ${cap(m[1])}`, why: 'I don’t know it yet. Try its GitHub name, like owner/project, or add it on the watchlist and choose Maven Central or npm.' });
   }
   s.split(/,|;|\.(?!\d)|\bthen\b|\band\b/).map((c) => c.trim()).filter(Boolean).forEach((c) => {
     const u = UNSUP.find(([re]) => re.test(c));
@@ -1788,7 +1792,7 @@ function partsRows(d) {
   const when = d.sched.day !== undefined && d.sched.time;
   const S = d.soft && (W.soft[d.soft] || EXTRA[d.soft]);
   return [
-    d.soft ? okRow('Watch', `${S.name} on GitHub`, W.soft[d.soft] ? (W.soft[d.soft].run ? `You run ${W.soft[d.soft].run}` : '') : 'Not on the watchlist yet. I’ll add it.') : q && q.k === 'Watch' ? askRow(q) : '',
+    d.soft ? okRow('Watch', `${S.name} on ${srcOf(S)}`, W.soft[d.soft] ? (W.soft[d.soft].run ? `You run ${W.soft[d.soft].run}` : '') : 'Not on the watchlist yet. I’ll add it.') : q && q.k === 'Watch' ? askRow(q) : '',
     when ? okRow('When', long(d.sched)) : q && q.k === 'When' ? askRow(q) : '',
     okRow('Then', d.status === 'asking' ? thenSelect(d) : THEN[d.then]),
     ...d.cant.map(noRow),
@@ -1835,8 +1839,17 @@ function dropDraft(c) {
   $('[data-p-left]', c).textContent = 'Nothing was set up.';
   $('[data-p-act]', c).innerHTML = '';
 }
+/* A package is checked by the Software watchlist, never by a release check of its own, which reads GitHub only (ADR 0025). */
+function isPkg(k) { const S = W.soft[k] || EXTRA[k]; return Boolean(S && S.src && S.src !== 'github'); }
+function packageCard(k) {
+  const S = W.soft[k] || EXTRA[k];
+  const why = `${S.name} is a package on ${SRC[S.src]}. The Software watchlist checks it on its own schedule, with known vulnerabilities in the version you run. A release check of its own reads GitHub only.`;
+  if (W.soft[k]) return pushCard(`<div class="card"><div class="c-head"><b>${S.name}</b></div><p>It’s on the watchlist already. ${why}</p><div class="c-foot"><span class="c-act"><button class="btn ghost sm" type="button" data-open="soft:${k}">Open it</button></span></div></div>`, 'lead', 'The watchlist checks this one.');
+  return pushCard(`<div class="card"><div class="c-head"><b>${S.name}</b></div><p>${why}</p><div class="c-foot"><span class="c-act"><button class="btn sm" type="button" data-addsoft="${k}">Add to the watchlist</button></span></div></div>`, 'lead', 'The watchlist checks packages.');
+}
 function buildAsk(t) {
   const d = parseReq(t);
+  if (d.soft && isPkg(d.soft)) return packageCard(d.soft);
   if (d.soft && W.wf[d.soft]) {
     const f = W.wf[d.soft];
     const [st, ss] = wfState(d.soft);
@@ -1911,7 +1924,7 @@ function turnOn(c) {
   if (!d || d.status !== 'ready') return;
   d.status = 'on';
   const id = d.soft;
-  if (!W.soft[id]) W.soft[id] = { name: EXTRA[id].name, repo: EXTRA[id].repo, run: null };
+  if (!W.soft[id]) W.soft[id] = { name: EXTRA[id].name, src: EXTRA[id].src, repo: EXTRA[id].repo, run: null };
   W.wf[id] = { name: d.name, soft: id, sched: { ...d.sched }, then: d.then, ver: 1, yes: d.then === 'jira', by: 'Alice', on: 'just now' };
   W.hist[id] = [{ v: 1, what: 'Built by the Planner', by: 'Alice', on: 'just now', sched: { ...d.sched }, yes: d.then === 'jira' }];
   W.order.push(id);
@@ -2934,6 +2947,7 @@ app.addEventListener('click', (e) => {
   if (pick('[data-restore]')) { W.langserve = true; refresh(); return; }
   if (pick('[data-keyask]')) { W.key = false; refresh(); return; }
   if (pick('[data-pause]')) { const id = pick('[data-pause]').dataset.pause; W.paused[id] = !W.paused[id]; refresh(); toast(W.paused[id] ? 'Paused. It won’t run until you resume it.' : 'On again.'); return; }
+  if (pick('[data-addsoft]')) { const k = pick('[data-addsoft]').dataset.addsoft; if (!W.soft[k]) W.soft[k] = { name: EXTRA[k].name, src: EXTRA[k].src, repo: EXTRA[k].repo, run: null }; pick('[data-addsoft]').closest('.c-act').innerHTML = `<button class="btn ghost sm" type="button" data-open="soft:${k}">Open it</button>`; refresh(); toast(`${W.soft[k].name} is on the watchlist.`); return; }
   if (pick('[data-toast]')) toast(pick('[data-toast]').dataset.toast);
 });
 app.addEventListener('change', (e) => {

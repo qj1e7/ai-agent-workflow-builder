@@ -15,7 +15,7 @@ export const NOT_FOUND_WORDS = 'That agent is not in the library.'
 const LEADS: Record<HowShow, string> = {
   can: 'What the platform can do for software versioning. An agent can use only what is listed under I can.',
   agents: 'The agents behind software version checks. Anything that changes data waits for a yes.',
-  tools: 'Tools are how agents reach GitHub and Jira. A tool that changes data waits for a yes, every time.',
+  tools: 'Tools are how agents reach GitHub, Maven Central, npm, OSV, NVD and Jira. A tool that changes data waits for a yes, every time.',
 }
 
 function useFocusBackToTile(shownId: string | null, cardOpen: boolean): void {

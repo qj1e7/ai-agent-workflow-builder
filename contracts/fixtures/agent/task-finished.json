@@ -29,7 +29,9 @@
         ],
         "detail": "2 releases newer than 1.2.14.",
         "full_name": "langchain-ai/langgraph",
-        "not_found": false
+        "not_found": false,
+        "vulnerability_check": "not_checked",
+        "vulnerabilities": []
       }
     ]
   },

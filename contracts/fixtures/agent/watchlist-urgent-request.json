@@ -1,0 +1,32 @@
+{
+  "task_id": "run_01JC3/work/1/1",
+  "run_id": "run_01JC3",
+  "instruction": "Check the team's watched software for new releases and raise an upgrade ticket for each one that is behind.",
+  "inputs": {
+    "kind": "watchlist",
+    "tag_pattern": "^(?:[vV]|docker-v|n8n@|langchain==)?\\d+\\.\\d+\\.\\d+$",
+    "software": [
+      {
+        "id": "sw_01JC2A3B4C5D6E7F8G9H0J1K2L",
+        "name": "Log4j",
+        "source": {
+          "kind": "maven",
+          "ref": "org.apache.logging.log4j:log4j-core"
+        },
+        "our_version": "2.14.1",
+        "from_first_check": false,
+        "open_ticket": null,
+        "awaiting_approval": false
+      }
+    ]
+  },
+  "carry_forward": {
+    "last_run_on": null
+  },
+  "time_zone": "Asia/Singapore",
+  "callback": {
+    "url": "http://platform-api:8000/internal/v1/runs/run_01JC3/agent-events?task=run_01JC3/work/1/1",
+    "token": "example-callback-token-not-a-secret"
+  },
+  "model": null
+}

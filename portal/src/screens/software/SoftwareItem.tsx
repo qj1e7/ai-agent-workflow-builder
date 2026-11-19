@@ -7,7 +7,7 @@ import { TicketKeys } from '../jira/TicketKeys'
 import { MovedNote, NotFoundNote } from './NewAddress'
 import { removeButtonId } from './removal'
 import { SoftwareHistory } from './SoftwareHistory'
-import { askWhereWords, cantCheckWords, newestOf, oursOf, rowDomId, sentenceFor, stateOf, ticketFact, ticketsOf, NOT_AUTOMATIC, WATCHLIST_PATH } from './software'
+import { askWhereWords, cantCheckWords, newestOf, oursOf, rowDomId, sentenceFor, sourceAt, stateOf, ticketFact, ticketsOf, vulnerabilityFact, NOT_AUTOMATIC, SOURCE_NAMES, WATCHLIST_PATH } from './software'
 import { dateAndClock } from '../workflows/times'
 import workflowStyles from '../workflows/Workflows.module.css'
 import styles from './Software.module.css'
@@ -36,6 +36,8 @@ interface ItemProps {
   /** The latest check's declined record and what happens next, when an Approver declined it and this software has a newer version. */
   readonly declined: string | null
   readonly lastCheckStopped: boolean
+  /** The latest check's run, where a package's known vulnerabilities are listed, or null before the first check. */
+  readonly lastCheckRun: string | null
   readonly onToggleHistory: () => void
   readonly onRemove: () => void
   readonly onAskAddress: () => void
@@ -45,11 +47,12 @@ interface ItemProps {
 
 /**
  * One watched software, as the sketch's software page draws it: the kind line, its name and pill, a banner when GitHub can't find it, then
- * You run, Newest, Upgrade ticket, Checked by and Source. Software GitHub can't find offers Ask the team, as in the sketch. History and
+ * You run, Newest, Upgrade ticket, Known vulnerabilities for a package, which says where they are listed, Checked by and Source, which names GitHub, Maven Central or npm (ADR 0025). Software GitHub can't find offers Ask the team, as in the sketch. History and
  * Remove stay, because the platform can do both. Remove comes last.
  */
 export function SoftwareItem(props: ItemProps) {
-  const { row, operator, scheduled, paused, historyOpen, removing, confirming, switching, nameOf, checkedBy, declined, lastCheckStopped } = props
+  const { row, operator, scheduled, paused, historyOpen, removing, confirming, switching, nameOf, checkedBy, declined, lastCheckStopped, lastCheckRun } = props
+  const vulnerabilities = vulnerabilityFact(row)
   const state = stateOf(row)
   const ours = oursOf(row)
   const newest = newestOf(row)
@@ -99,6 +102,15 @@ export function SoftwareItem(props: ItemProps) {
             <TicketKeys text={ticketFact(row, row.status === 'behind' ? declined : null)} keys={ticketsOf(row)} />
           </dd>
         </div>
+        {vulnerabilities ? (
+          <div>
+            <dt>Known vulnerabilities</dt>
+            <dd>
+              {vulnerabilities.looked && lastCheckRun ? <Link to={`/runs/${lastCheckRun}`}>Open the last check</Link> : null}
+              <span className={styles['src']}>{vulnerabilities.words}</span>
+            </dd>
+          </div>
+        ) : null}
         <div>
           <dt>Checked by</dt>
           <dd>
@@ -116,10 +128,11 @@ export function SoftwareItem(props: ItemProps) {
           <dt>Source</dt>
           <dd>
             <a href={row.source.url} target="_blank" rel="noopener noreferrer" className={styles['source']}>
-              {`github.com/${row.source.ref}`}
+              {sourceAt(row.source.kind, row.source.ref)}
               <IconExternal size={12} />
-              <span className="visually-hidden"> (opens GitHub in a new tab)</span>
+              <span className="visually-hidden"> (opens {SOURCE_NAMES[row.source.kind]} in a new tab)</span>
             </a>
+            <span className={styles['src']}>{SOURCE_NAMES[row.source.kind]}</span>
           </dd>
         </div>
       </dl>

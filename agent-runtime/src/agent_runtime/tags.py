@@ -3,10 +3,11 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 
 # One v in front of the number, as in v2.14.2, is how many projects write a version, not a
-# family of its own, so v2.14.2 and 2.14.2 compare with each other.
+# family of its own, so v2.14.2 and 2.14.2 compare with each other. A package's .Final, .RELEASE
+# or .GA after the numbers only says the build is final (ADR 0025), so it compares as the numbers.
 _TAG = re.compile(
     r"^(?:[vV](?=\d)|(?P<family>.*?))(?P<major>\d+)\.(?P<minor>\d+)\.(?P<patch>\d+)"
-    r"(?:-(?P<pre>[0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$"
+    r"(?:\.(?:Final|RELEASE|GA))?(?:-(?P<pre>[0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$"
 )
 
 type PreIdentifier = tuple[int, int, str]

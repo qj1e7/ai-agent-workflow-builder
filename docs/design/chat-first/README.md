@@ -15,6 +15,11 @@
 - The list under the window, "What's new in version 3", says what each flow is meant to show. Its second part covers the workflow drafter screens from ADR 0051, added on 16 Nov 2026.
 - The sketch uses sample data only. The demo bar, Play, Speed and Tracing are for the sketch, not the app.
 
+## Since version 3
+
+- 15 Nov 2026, ADR 0025's first part: a software can be published on GitHub, Maven Central or npm. Log4j core is now its Maven Central package, and Express is a known npm package. The Watch answer, the Source fact and the check's sentence name the source. The security can't says known vulnerabilities are looked up only for the Maven Central and npm packages on the watchlist.
+- 19 Nov 2026: a release check of its own reads GitHub only, so asking to watch or check a Maven Central or npm package answers that the Software watchlist checks it, with Add to the watchlist or Open it, and builds no workflow. A package's watchlist row says it is checked by the Software watchlist.
+
 ## Where the sketch is silent
 
 Settings, the Teams drawer, the Jira page and sign-in keep what the app has today.

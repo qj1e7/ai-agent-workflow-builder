@@ -6,17 +6,18 @@ import { useAddSoftware, useFindSoftware } from '../../api/queries'
 import { Button } from '../../ui/Button'
 import { Card } from '../../ui/Card'
 import { IconCheck } from '../../ui/icons'
-import { alreadyWords, verdictOf } from '../software/addByName'
+import { alreadyWords, kindOf, verdictOf } from '../software/addByName'
 import { describedBy, Field } from '../software/Field'
-import { checkName, NAME_HELP } from '../software/software'
+import { addBody, checkName, isPackage, NAME_HELP, refOf, SOURCE_NAMES } from '../software/software'
 import { useMainButton } from './primary'
 import styles from './Planner.module.css'
 
 const WATCHLIST = '/software'
 
 /**
- * Adds one piece of software to the Software watchlist from Home. It finds the GitHub project first and shows it, so the
- * person sees where the releases come from before anything is saved. Several matches, or none, are chosen on the watchlist.
+ * Adds one piece of software to the Software watchlist from Home. It finds where it is published first, a GitHub project or
+ * a Maven Central or npm package, and shows it, so the person sees where the versions come from before anything is saved.
+ * Several matches, or none, are chosen on the watchlist.
  */
 export function AddToWatchlist({ name }: { name: string }) {
   const find = useFindSoftware()
@@ -36,11 +37,12 @@ export function AddToWatchlist({ name }: { name: string }) {
   if (kept) return <p className="muted">Not added. Nothing changed.</p>
   if (add.isSuccess) {
     const added = add.variables
+    const where = SOURCE_NAMES[added.package?.kind ?? 'github']
     return (
       <p className={styles['sent']} role="status">
         <IconCheck size={18} />
         <span>
-          <b>{name} is on the Software watchlist.</b> Its releases are read from GitHub, from {added.repo}.{' '}
+          <b>{name} is on the Software watchlist.</b> Its versions are read from {where}, from {refOf(added)}.{' '}
           <Link to={WATCHLIST}>Open the Software watchlist</Link>
         </span>
       </p>
@@ -49,7 +51,7 @@ export function AddToWatchlist({ name }: { name: string }) {
   if (find.isPending || find.isIdle) {
     return (
       <p className="muted" role="status">
-        Looking for {name}’s GitHub project.
+        Looking up where {name} is published.
       </p>
     )
   }
@@ -64,7 +66,7 @@ export function AddToWatchlist({ name }: { name: string }) {
   if (answer.status !== 'found') {
     return (
       <p>
-        I couldn’t find {name}’s GitHub project. <Link to={WATCHLIST}>Add it on the Software watchlist</Link> with its address.
+        I couldn’t find where {name} is published. <Link to={WATCHLIST}>Add it on the Software watchlist</Link> and choose GitHub, Maven Central or npm.
       </p>
     )
   }
@@ -91,11 +93,13 @@ export function AddToWatchlist({ name }: { name: string }) {
       </p>
     )
   }
-  const press = () => latch.run((settled) => add.mutate({ name, repo: only.repo }, { onSettled: settled }))
+  const kind = kindOf(only)
+  const press = () => latch.run((settled) => add.mutate(addBody(name, kind, only.repo, null), { onSettled: settled }))
   return (
     <>
       <p>
-        <b>{only.repo}</b> on GitHub. {only.what} {only.why}
+        <b>{only.repo}</b> on {SOURCE_NAMES[kind]}. {only.what} {only.why}
+        {isPackage(kind) ? ' Known vulnerabilities are looked up only in a version someone gives, so to have them looked up, add it on the Software watchlist with the version you run.' : ''}
       </p>
       <div className={styles['buttons']}>
         <Button variant={main} loading={add.isPending} onClick={press}>

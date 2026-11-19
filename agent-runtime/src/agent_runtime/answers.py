@@ -18,6 +18,7 @@ from agent_runtime.abilities import (
     TICKETS,
     VULNERABILITIES_PLANNED,
     Need,
+    a_read_source,
     cant_entry,
     change_verbs_in,
     changes_beyond_the_abilities,
@@ -544,8 +545,15 @@ def _only_fields(cant: list[CantRow]) -> bool:
     return all(c.needs == "new_tool" and names_a_ticket_field(f"{c.text} {c.note}") for c in cant)
 
 
+def _vulnerability_words(row: CantRow) -> str:
+    """The words of a row that can say it asks for vulnerabilities: the person's own, and our
+    note only when it is the vulnerability note. Other notes are ours too, and one that lists
+    what I can do names vulnerabilities without the person asking for them."""
+    return f"{row.text} {row.note}" if row.note == VULNERABILITIES_PLANNED else row.text
+
+
 def _asks_for_vulnerabilities(cant: list[CantRow]) -> bool:
-    return any(vulnerability_phrase(f"{c.text} {c.note}") is not None for c in cant)
+    return any(vulnerability_phrase(_vulnerability_words(c)) is not None for c in cant)
 
 
 def _software_of(read: TaskRead, request: str) -> str | None:
@@ -566,7 +574,7 @@ def _software_of(read: TaskRead, request: str) -> str | None:
 def _watch_instead(cant: list[CantRow], read: TaskRead, request: str) -> WatchlistAnswer | None:
     software = _software_of(read, request)
     if _asks_for_vulnerabilities(cant):
-        asked = " ".join(f"{c.text} {c.note}" for c in cant)
+        asked = " ".join(_vulnerability_words(c) for c in cant)
         word = vulnerability_phrase(request) or vulnerability_phrase(asked)
         if software is None or word is None:
             return None
@@ -687,6 +695,7 @@ _WATCHES_THEM: Final = _only_watching(_THEM, rf"{_VERB_PATTERN}|keep")
 _A_WATCH_OF_IT: Final = re.compile(
     rf"\b(?:{_VERB_PATTERN})\s+(?:{_IT})\b{_POLITE_TAIL}", re.IGNORECASE
 )
+"""Also with a source the Version checker reads, as in "add a software from maven instead"."""
 _TICKET_KEY: Final = re.compile(r"\b[A-Z][A-Z0-9]+-\d+\b")
 _NOT_A_WATCH: Final = re.compile(
     r"\b(?:tickets?|issues?|projects?|boards?|approvers?|approvals?|workflows?|comments?|"
@@ -701,7 +710,7 @@ ASKS_TO_WATCH: Final = (
     words(
         "add watch track monitor follow check tabs eye software tool tools app apps application "
         "applications package packages library libraries product products new another more "
-        "watchlist"
+        "watchlist from on in maven central npm instead"
     )
     | FILLER
     | ME_WORDS
@@ -853,7 +862,9 @@ QUESTIONS_OF_ANY_KIND: Final = ("none", "abilities")
 workflows or what waits for them, and keep those answers."""
 
 
-def _newest_of(read: TaskRead, request: str, facts: PlannerFacts | None) -> WatchlistAnswer | None:
+def _newest_of(
+    read: TaskRead, request: str, facts: PlannerFacts | None
+) -> WatchlistAnswer | WhichSoftwareAnswer | None:
     """The software card for a question that asks only for the newest version of the one software
     the reading names, as "what's new in node js?". Code checks the question's words itself
     (`asks_for_the_newest`); the model only names the software. A reading that skips anyone's yes
@@ -861,7 +872,8 @@ def _newest_of(read: TaskRead, request: str, facts: PlannerFacts | None) -> Watc
     that names one of their workflows, gets no card. The software is held as a free reply's is
     (`_reply_software`), so a second name is never watched with it. Software the watchlist holds
     under another spelling, as "Node.js" for "node js", is named as the watchlist names it, so
-    the answer is about the one it holds."""
+    the answer is about the one it holds. A source the Version checker reads names no software,
+    so "what's the latest in npm?" asks which package."""
     if read.skips_the_yes.whose != "nobody" or read.asks_about not in QUESTIONS_OF_ANY_KIND:
         return None
     if read.workflow_words or any((read.search, read.ticket, read.place)):
@@ -873,6 +885,8 @@ def _newest_of(read: TaskRead, request: str, facts: PlannerFacts | None) -> Watc
     word = None if software is None else asks_for_the_newest(request, software)
     if software is None or word is None:
         return None
+    if a_read_source(software):
+        return WhichSoftwareAnswer(word=word)
     held = facts.watchlist if facts is not None else None
     same = {w.name.strip() for w in held or [] if name_key(w.name) == name_key(software)}
     return WatchlistAnswer(word=word, software=same.pop() if len(same) == 1 else software)

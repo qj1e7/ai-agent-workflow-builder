@@ -62,6 +62,7 @@ from agent_runtime.contract import (
     KeyShapes,
     LibraryCard,
     LibraryInput,
+    MavenSource,
     MissingTool,
     ModelAccess,
     ModelProblem,
@@ -84,6 +85,7 @@ from agent_runtime.contract import (
     TaskOutput,
     TaskRequest,
     TurnTrace,
+    Vulnerability,
     WatchedFact,
     WatchlistInputs,
     WatchlistScheduleFact,
@@ -97,6 +99,7 @@ from agent_runtime.model_access import KEY_REFUSED
 from agent_runtime.monitoring.masking import KEY_SHAPE_SOURCES
 from agent_runtime.reading import DaysRead, PlaceRead, SearchRead, TicketRead
 from agent_runtime.tools import tool_list
+from agent_runtime.watchlist import ticket_for
 
 PLANNER = AgentRef(id="planner", display="Planner")
 CHECKER = AgentRef(id="version_checker", display="Version checker")
@@ -182,6 +185,55 @@ def watchlist_request(run_id: str) -> TaskRequest:
             url=f"http://platform-api:8000/internal/v1/runs/{run_id}/agent-events?task={task_id}",
             token="example-callback-token-not-a-secret",
         ),
+    )
+
+
+LOG4J_ID = "sw_01JC2A3B4C5D6E7F8G9H0J1K2L"
+LOG4J = SoftwareToCheck(
+    id=LOG4J_ID,
+    name="Log4j",
+    source=MavenSource(ref="org.apache.logging.log4j:log4j-core"),
+    our_version="2.14.1",
+)
+LOG4SHELL = Finding(
+    software_id=LOG4J_ID,
+    state="behind",
+    newest="2.24.3",
+    new_versions=["2.24.3", "2.17.1"],
+    detail="2 releases newer than 2.14.1.",
+    vulnerability_check="checked",
+    vulnerabilities=[
+        Vulnerability(
+            id="CVE-2021-44228",
+            severity="critical",
+            score=10.0,
+            summary="Log4Shell",
+            fixed_in="2.15.0",
+            reported_by=["OSV", "NVD"],
+            url="https://nvd.nist.gov/vuln/detail/CVE-2021-44228",
+        )
+    ],
+)
+
+
+def urgent_request(run_id: str) -> TaskRequest:
+    """A watchlist check of one Maven package, Log4j 2.14.1 (ADR 0025)."""
+    request = watchlist_request(run_id)
+    assert isinstance(request.inputs, WatchlistInputs)
+    inputs = request.inputs.model_copy(update={"software": [LOG4J]})
+    return request.model_copy(update={"inputs": inputs})
+
+
+def urgent_output() -> TaskOutput:
+    """What the Version checker answers for urgent_request when Log4Shell is found: the ticket
+    is the runtime's own, titled "Urgent: ...". platform-api's review() must keep it."""
+    return TaskOutput(
+        summary="Log4j has a new release: 2.24.3. Log4j 2.14.1 has 1 known vulnerability, "
+        "1 critical.",
+        new_tags=[],
+        proposed=[ticket_for(LOG4J, LOG4SHELL)],
+        carry_forward=CarryForward(),
+        findings=[LOG4SHELL],
     )
 
 
@@ -1094,6 +1146,8 @@ def fixtures() -> dict[str, WireModel]:
         "task-failed.json": failed_task(),
         "watchlist-task-request.json": watchlist_request("run_01JC2"),
         "watchlist-task-finished.json": watchlist_finished(),
+        "watchlist-urgent-request.json": urgent_request("run_01JC3"),
+        "watchlist-urgent-output.json": urgent_output(),
         "callback-event.json": AgentEventPost(task_id=finished.task_id, event=finished.events[0]),
         "agent-cards.json": AGENT_CARDS,
         "model-connect-request.json": ConnectRequest(base_url=GATEWAY, api_key=EXAMPLE_KEY),
