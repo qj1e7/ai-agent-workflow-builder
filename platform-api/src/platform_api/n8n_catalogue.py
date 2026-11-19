@@ -6,12 +6,12 @@ words n8n finds it by, its versions, its resources and operations, the parameter
 with n8n's `displayOptions`, so that a reader can return only what n8n shows for one resource and
 operation, and each version's inputs and outputs with the names n8n gives them. A block that
 computes its inputs or outputs from its parameters keeps n8n's expression word for word, which
-`agent_runtime.connections` resolves. Fields that only shape n8n's editor are left out. From our own files it
-adds each operation's class, tag and `says` from the class file, which key of the platform's the
-type runs with (`KEY_FOR_TYPE`), the blocks n8n loads that can't run on this platform
-(`n8n_blocks.HELD`, which the safety checker reads too), and the choices our own blocks load from
-our API that are the same for every team (`PLATFORM_CHOICES`). The workflow drafter reads it
-through `agent_runtime.catalogue`.
+`agent_runtime.connections` resolves. Fields that only shape n8n's editor are left out. From our
+own files it adds each operation's class, tag and `says` from the class file, which key of the
+platform's the type runs with (`KEY_FOR_TYPE`), the blocks n8n loads that can't run on this
+platform (`n8n_blocks.HELD`, which the safety checker reads too), and the choices our own blocks
+load from our API that are the same for every team (`PLATFORM_CHOICES`). The workflow drafter
+reads it through `agent_runtime.catalogue`.
 
     python -m platform_api.n8n_catalogue <served nodes.json> <image> <sources>
 
