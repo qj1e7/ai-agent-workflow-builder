@@ -1570,7 +1570,7 @@ const watchRowsFull = () => [...softIds()].sort((a, b) => RANK[softState(a)[0]] 
   const s = W.soft[k];
   const [t, c] = softState(k);
   const ver = s.missing ? 'GitHub can’t find it' : !s.run ? 'Added today' : s.run === s.latest ? `${s.run}, the newest` : `${s.run} → ${s.latest}, out ${s.on}`;
-  return `<li><button class="wl-row" type="button" data-open="soft:${k}"><span><b>${s.name}</b><span class="s">${ver} · ${W.wf[k] ? `checked by ${W.wf[k].name}` : 'not checked automatically'}</span></span><span class="pill" data-s="${c}">${t}</span></button></li>`;
+  return `<li><button class="wl-row" type="button" data-open="soft:${k}"><span><b>${s.name}</b><span class="s">${ver} · ${W.wf[k] ? `checked by ${W.wf[k].name}` : isPkg(k) ? 'checked by the Software watchlist' : 'not checked automatically'}</span></span><span class="pill" data-s="${c}">${t}</span></button></li>`;
 }).join('');
 const watchSummary = () => [['Newer out', 'has a newer version', 'have a newer version'], ['Can’t find', 'can’t be found', 'can’t be found'], ['Up to date', 'is up to date', 'are up to date']]
   .map(([st, one, many]) => { const n = softIds().filter((k) => softState(k)[0] === st).length; return n ? `${n} ${n === 1 ? one : many}` : ''; }).filter(Boolean).join(' · ');
@@ -1839,8 +1839,17 @@ function dropDraft(c) {
   $('[data-p-left]', c).textContent = 'Nothing was set up.';
   $('[data-p-act]', c).innerHTML = '';
 }
+/* A package is checked by the Software watchlist, never by a release check of its own, which reads GitHub only (ADR 0025). */
+function isPkg(k) { const S = W.soft[k] || EXTRA[k]; return Boolean(S && S.src && S.src !== 'github'); }
+function packageCard(k) {
+  const S = W.soft[k] || EXTRA[k];
+  const why = `${S.name} is a package on ${SRC[S.src]}. The Software watchlist checks it on its own schedule, with known vulnerabilities in the version you run. A release check of its own reads GitHub only.`;
+  if (W.soft[k]) return pushCard(`<div class="card"><div class="c-head"><b>${S.name}</b></div><p>It’s on the watchlist already. ${why}</p><div class="c-foot"><span class="c-act"><button class="btn ghost sm" type="button" data-open="soft:${k}">Open it</button></span></div></div>`, 'lead', 'The watchlist checks this one.');
+  return pushCard(`<div class="card"><div class="c-head"><b>${S.name}</b></div><p>${why}</p><div class="c-foot"><span class="c-act"><button class="btn sm" type="button" data-addsoft="${k}">Add to the watchlist</button></span></div></div>`, 'lead', 'The watchlist checks packages.');
+}
 function buildAsk(t) {
   const d = parseReq(t);
+  if (d.soft && isPkg(d.soft)) return packageCard(d.soft);
   if (d.soft && W.wf[d.soft]) {
     const f = W.wf[d.soft];
     const [st, ss] = wfState(d.soft);
@@ -2938,6 +2947,7 @@ app.addEventListener('click', (e) => {
   if (pick('[data-restore]')) { W.langserve = true; refresh(); return; }
   if (pick('[data-keyask]')) { W.key = false; refresh(); return; }
   if (pick('[data-pause]')) { const id = pick('[data-pause]').dataset.pause; W.paused[id] = !W.paused[id]; refresh(); toast(W.paused[id] ? 'Paused. It won’t run until you resume it.' : 'On again.'); return; }
+  if (pick('[data-addsoft]')) { const k = pick('[data-addsoft]').dataset.addsoft; if (!W.soft[k]) W.soft[k] = { name: EXTRA[k].name, src: EXTRA[k].src, repo: EXTRA[k].repo, run: null }; pick('[data-addsoft]').closest('.c-act').innerHTML = `<button class="btn ghost sm" type="button" data-open="soft:${k}">Open it</button>`; refresh(); toast(`${W.soft[k].name} is on the watchlist.`); return; }
   if (pick('[data-toast]')) toast(pick('[data-toast]').dataset.toast);
 });
 app.addEventListener('change', (e) => {

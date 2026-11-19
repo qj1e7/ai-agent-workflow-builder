@@ -13,7 +13,7 @@
     {
       "id": "version_checker",
       "display": "Version checker",
-      "description": "Reads the newest version of each watched software from GitHub releases, Maven Central or npm, compares it with the version the team runs, looks up known vulnerabilities in that version, and suggests an upgrade ticket for each one that is behind.",
+      "description": "Reads the newest version of each watched software from GitHub releases, Maven Central or npm, compares it with the version the team runs, and suggests an upgrade ticket for each one that is behind. For a Maven Central or npm package whose version someone gave, it also looks up known vulnerabilities in that version.",
       "capabilities": [
         "read GitHub releases",
         "read Maven Central and npm versions",
