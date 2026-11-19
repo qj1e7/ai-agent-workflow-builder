@@ -18,6 +18,7 @@ from agent_runtime.abilities import (
     TICKETS,
     VULNERABILITIES_PLANNED,
     Need,
+    a_read_source,
     cant_entry,
     change_verbs_in,
     changes_beyond_the_abilities,
@@ -861,7 +862,9 @@ QUESTIONS_OF_ANY_KIND: Final = ("none", "abilities")
 workflows or what waits for them, and keep those answers."""
 
 
-def _newest_of(read: TaskRead, request: str, facts: PlannerFacts | None) -> WatchlistAnswer | None:
+def _newest_of(
+    read: TaskRead, request: str, facts: PlannerFacts | None
+) -> WatchlistAnswer | WhichSoftwareAnswer | None:
     """The software card for a question that asks only for the newest version of the one software
     the reading names, as "what's new in node js?". Code checks the question's words itself
     (`asks_for_the_newest`); the model only names the software. A reading that skips anyone's yes
@@ -869,7 +872,8 @@ def _newest_of(read: TaskRead, request: str, facts: PlannerFacts | None) -> Watc
     that names one of their workflows, gets no card. The software is held as a free reply's is
     (`_reply_software`), so a second name is never watched with it. Software the watchlist holds
     under another spelling, as "Node.js" for "node js", is named as the watchlist names it, so
-    the answer is about the one it holds."""
+    the answer is about the one it holds. A source the Version checker reads names no software,
+    so "what's the latest in npm?" asks which package."""
     if read.skips_the_yes.whose != "nobody" or read.asks_about not in QUESTIONS_OF_ANY_KIND:
         return None
     if read.workflow_words or any((read.search, read.ticket, read.place)):
@@ -881,6 +885,8 @@ def _newest_of(read: TaskRead, request: str, facts: PlannerFacts | None) -> Watc
     word = None if software is None else asks_for_the_newest(request, software)
     if software is None or word is None:
         return None
+    if a_read_source(software):
+        return WhichSoftwareAnswer(word=word)
     held = facts.watchlist if facts is not None else None
     same = {w.name.strip() for w in held or [] if name_key(w.name) == name_key(software)}
     return WatchlistAnswer(word=word, software=same.pop() if len(same) == 1 else software)

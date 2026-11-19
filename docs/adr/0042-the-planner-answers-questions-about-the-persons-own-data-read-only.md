@@ -65,7 +65,8 @@ The Portal sends the kind of the previous answer with it (`previous.kind`). It i
 These get no offer, and keep the answer they had:
 
 - A request that orders a change or a use, as "update node", "can we upgrade redis?" or "use the latest node js".
-- A request that names a system the platform doesn't reach, such as Outlook, Entra or GitLab, or a release source it doesn't read, such as npm, PyPI or Docker Hub. Each keeps its can't, with or without a release word. Helm is software as well as a source, so it keeps the offer.
+- A request that names a system the platform doesn't reach, such as Outlook, Entra or GitLab, or a release source it doesn't read, such as PyPI, NuGet or Docker Hub. Each keeps its can't, with or without a release word. Helm is software as well as a source, so it keeps the offer.
+- A name that is only a source the platform reads, npm or Maven Central (ADR 0025). It is no software, so "what's the latest in npm?" asks which software, as "add a software" does. Maven is software as well, so it keeps the offer.
 - A request that holds a key, or names one of the person's workflows.
 - A name that is one of the platform's own, such as the Planner or the watchlist, "news", or a word that asks what is newest or a question word, as "current" read from "is the version current?".
 - A reading of a question about the person's workflows or what waits for them, a reading of a change to a workflow, a reading of a ticket search, and a reading that skips anyone's yes or attention.

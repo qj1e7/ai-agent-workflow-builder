@@ -2129,6 +2129,13 @@ def other_release_source(text: str) -> str | None:
     return None
 
 
+def a_read_source(name: str) -> bool:
+    """Whether the name is only a source the Version checker reads, as "npm" or "Maven Central",
+    so it names no software. "Maven" is software as well, so it is not one."""
+    source = " ".join(name.casefold().split())
+    return source in READ_SOURCES and source not in _ALSO_A_NAME
+
+
 def release_source_note(source: str) -> str:
     name = RELEASE_SOURCES.get(source.casefold(), source)
     return f"I read releases on GitHub, Maven Central and npm. {name} isn't a source I read yet."

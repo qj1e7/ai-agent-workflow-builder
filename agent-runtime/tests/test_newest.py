@@ -20,6 +20,7 @@ from agent_runtime.contract import (
     QuestionAnswer,
     WatchedFact,
     WatchlistAnswer,
+    WhichSoftwareAnswer,
     WorkflowFact,
 )
 from agent_runtime.contracts import answer_request
@@ -409,7 +410,7 @@ def test_a_longer_name_lends_only_its_leading_word_and_never_a_plain_one(
     ("task", "software", "source"),
     [
         ("what's new on pypi?", "pypi", "pypi"),
-        ("what's the latest in npm?", "npm", "npm"),
+        ("what's the latest in nuget?", "NuGet", "nuget"),
         ("what's new in docker hub?", "Docker Hub", "docker hub"),
     ],
 )
@@ -420,6 +421,23 @@ def test_a_release_source_the_platform_does_not_read_keeps_its_cant_without_a_re
         shown = answer_of(read, task, FACTS)
         assert isinstance(shown, CantAnswer), shown
         assert (shown.cant[0].system or "").casefold() == source
+
+
+@pytest.mark.parametrize(
+    ("task", "software", "word"),
+    [
+        ("what's the latest in npm?", "npm", "latest"),
+        ("latest npm release", "npm", "release"),
+        ("what's new on maven central?", "Maven Central", "new"),
+    ],
+)
+def test_a_source_the_platform_reads_names_no_software_so_it_asks_which_package(
+    task: str, software: str, word: str
+) -> None:
+    """npm and Maven Central are read (ADR 0025), so they keep no can't, but neither is a
+    software to watch."""
+    for read in (reading(software), reading(software, "none")):
+        assert answer_of(read, task, FACTS) == WhichSoftwareAnswer(word=word)
 
 
 def test_helm_is_software_as_well_as_a_source_so_it_keeps_its_card() -> None:
@@ -436,8 +454,8 @@ def test_a_question_about_a_workflow_with_no_facts_sent_keeps_its_answer() -> No
 def test_the_check_comes_after_the_branches_that_answer_first() -> None:
     """A release source the platform doesn't read keeps its can't, and an edit stays an edit, so
     the check can't move above them."""
-    npm = answer_of(reading("npm"), "latest npm release", FACTS)
-    assert isinstance(npm, CantAnswer) and npm.cant[0].system == "npm"
+    pypi = answer_of(reading("pypi"), "latest pypi release", FACTS)
+    assert isinstance(pypi, CantAnswer) and pypi.cant[0].system == "pypi"
     edit = answer_of(reading("Redis", "change"), "can we update redis?", FACTS)
     assert isinstance(edit, EditAnswer)
 
