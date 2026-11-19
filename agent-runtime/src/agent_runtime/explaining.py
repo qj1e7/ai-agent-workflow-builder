@@ -72,9 +72,10 @@ def explain_of(text: str, facts: PlannerFacts | None) -> ExplainAnswer | None:
 
 
 def _what_it_does(text: str, facts: PlannerFacts | None) -> ExplainAnswer | None:
-    """"what does my workflow do?" names no workflow, so the platform picks the one they mean.
-    With a workflow's name, as "what does the weekly summary do?", that name is kept. Any other
-    word in the middle, as "it", "this app" or a software's name, is no explanation."""
+    """A question as "what does my workflow do?" names no workflow, so the platform picks the
+    one they mean. With a workflow's name, as "what does the weekly summary do?", that name is
+    kept. Any other word in the middle, as "it", "this app" or a software's name, is no
+    explanation."""
     asked = WHAT_IT_DOES.match(text)
     if asked is None:
         return None
