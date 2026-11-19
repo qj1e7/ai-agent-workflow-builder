@@ -228,6 +228,7 @@ from platform_api.orchestration.setup_approvals import Decided as SetUpDecided
 from platform_api.orchestration.setup_approvals import DecisionRefused as SetUpRefused
 from platform_api.orchestration.slack_channels import ChannelList, SlackChannels
 from platform_api.orchestration.spec import (
+    PACKAGE_VERSION_PATTERN,
     CardRun,
     CardsTask,
     N8nTarget,
@@ -585,6 +586,7 @@ __all__ = [
     "ScheduleHold",
     "held_words",
     "SoftwareFacts",
+    "PACKAGE_VERSION_PATTERN",
     "SoftwareSource",
     "Standing",
     "Status",

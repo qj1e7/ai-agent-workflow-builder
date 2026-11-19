@@ -355,6 +355,16 @@ def test_an_npm_package_is_read_from_npm():
     assert [(m.kind, m.repo, m.newest) for m in result.matches] == [("npm", "express", "4.21.2")]
 
 
+def test_guava_is_offered_with_its_newest_server_build():
+    guava = "com.google.guava:guava"
+    maven = FakeRegistry({guava: ["33.2.0-jre", "33.3.1-android", "33.3.1-jre", "33.4.0-rc1"]})
+    result = found(
+        SoftwareFinder(FakeProjectSource({}), {"maven": maven}).find("guava", RELEASE_TAG_PATTERN)
+    )
+    [match] = result.matches
+    assert (match.repo, match.newest, match.releases) == (guava, "33.3.1-jre", "published")
+
+
 def test_a_package_whose_registry_is_not_set_up_is_never_offered_unchecked():
     result = SoftwareFinder(FakeProjectSource({})).find("Log4j", RELEASE_TAG_PATTERN)
     assert isinstance(result, SoftwareNotKnown)

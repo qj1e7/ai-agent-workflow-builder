@@ -12,6 +12,11 @@ from platform_api.orchestration.write_actions import Binding
 from platform_api.shared import Principal, RunId, SoftwareId, UseCaseId, UserId
 from platform_api.wire import SourceKind, Trigger
 
+PACKAGE_VERSION_PATTERN = r"^\d+\.\d+\.\d+(?:\.Final|\.RELEASE|\.GA|-jre|-android)?$"
+"""A version of a Maven Central or npm package (ADR 0025): three numbers and at most one
+qualifier that marks a final build, as Netty's 4.1.115.Final or Guava's 33.3.1-jre. The Version
+checker holds the same rule (agent_runtime.registries.PACKAGE_VERSION)."""
+
 
 @dataclass(frozen=True)
 class SoftwareSource:

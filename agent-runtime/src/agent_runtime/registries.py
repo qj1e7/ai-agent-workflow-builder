@@ -7,6 +7,7 @@ needs an approval.
 """
 
 import json
+import re
 from collections.abc import Mapping
 from typing import cast
 from urllib.parse import quote
@@ -49,8 +50,41 @@ def _get(client: httpx.Client, url: str, headers: Mapping[str, str]) -> bytes:
     return response.content
 
 
+PACKAGE_VERSION = re.compile(r"(\d+\.\d+\.\d+)(\.Final|\.RELEASE|\.GA|-jre|-android)?", re.ASCII)
+"""A package version a team can run: three numbers, and at most one qualifier that marks a
+final build, not a prerelease. .Final (Netty, Hibernate), .RELEASE (older Spring) and .GA only
+say it is final. -jre and -android are Guava's two builds of the same release. platform-api
+holds the same rule as PACKAGE_VERSION_PATTERN."""
+BUILDS: tuple[str, ...] = ("", "-jre", "-android")
+"""The builds a package version can be. The first that a package has is the one watched when no
+version was given, so Guava is watched as -jre, its build for servers."""
+
+
+def build_of(version: str) -> str | None:
+    """The build a package version is, or None when it is not a package version. .Final, .RELEASE
+    and .GA are the plain build, so 5.3.39.RELEASE and 6.2.0 compare with each other."""
+    found = PACKAGE_VERSION.fullmatch(version)
+    if found is None:
+        return None
+    qualifier = found[2] or ""
+    return qualifier if qualifier in BUILDS else ""
+
+
+def package_candidates(releases: list[Release], our_version: str | None) -> list[str]:
+    """The versions a package check compares: final versions of the build the team runs, or of
+    the first build in BUILDS the package has when no version was given."""
+    builds = {r.tag: build_of(r.tag) for r in releases if not r.prerelease}
+    ours = None if our_version is None else build_of(our_version)
+    present = set(builds.values())
+    wanted = ours if ours is not None else next((b for b in BUILDS if b in present), "")
+    return [tag for tag, build in builds.items() if build == wanted]
+
+
 def _prerelease(version: str) -> bool:
-    """A version with a qualifier, such as 2.0.0-beta1, 3.1.0-SNAPSHOT or 1.0.0-rc.1."""
+    """A version with a qualifier, such as 2.0.0-beta1, 3.1.0-SNAPSHOT or 1.0.0-rc.1. A qualifier
+    that marks a final build, as 33.3.1-jre or 4.1.115.Final, is not one."""
+    if build_of(version) is not None:
+        return False
     return "-" in version or version.upper().endswith("SNAPSHOT")
 
 

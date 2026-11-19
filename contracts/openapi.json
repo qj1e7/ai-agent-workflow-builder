@@ -458,7 +458,7 @@
                 "type": "null"
               }
             ],
-            "description": "The version the team runs now, such as 1.2.14. Leave it out when nobody knows it: the list then says Not known, and the check tells about releases newer than the newest one it first reads."
+            "description": "The version the team runs now, such as 1.2.14, or for a package also 4.1.115.Final or 33.3.1-jre. Leave it out when nobody knows it: the list then says Not known, and the check tells about releases newer than the newest one it first reads."
           },
           "package": {
             "anyOf": [
@@ -15176,7 +15176,8 @@
         "type": "string"
       },
       "Version": {
-        "pattern": "^[vV]?\\d+\\.\\d+\\.\\d+$",
+        "maxLength": 40,
+        "pattern": "^[vV]?\\d+\\.\\d+\\.\\d+$|^\\d+\\.\\d+\\.\\d+(?:\\.Final|\\.RELEASE|\\.GA|-jre|-android)?$",
         "type": "string"
       },
       "VersionChange": {

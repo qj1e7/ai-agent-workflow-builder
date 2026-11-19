@@ -15,6 +15,7 @@ from pydantic import (
 from platform_api.builder.templates import VERSION_PATTERN
 from platform_api.orchestration import (
     AT_PATTERN,
+    PACKAGE_VERSION_PATTERN,
     CardToolId,
     Day,
     Grade,
@@ -383,7 +384,11 @@ class RunStarted(WireModel):
 type SoftwareName = Annotated[
     str, StringConstraints(strip_whitespace=True, min_length=1, max_length=80)
 ]
-type Version = Annotated[str, Field(pattern=VERSION_PATTERN)]
+type Version = Annotated[
+    str, Field(pattern=f"{VERSION_PATTERN}|{PACKAGE_VERSION_PATTERN}", max_length=40)
+]
+"""A GitHub software's version as VERSION_PATTERN, or a package's as PACKAGE_VERSION_PATTERN.
+AddSoftware holds each to its own source."""
 
 
 class PackageIn(WireIn):
@@ -422,7 +427,8 @@ class AddSoftware(WireIn):
     )
     our_version: Version | None = Field(
         default=None,
-        description="The version the team runs now, such as 1.2.14. Leave it out when nobody "
+        description="The version the team runs now, such as 1.2.14, or for a package also "
+        "4.1.115.Final or 33.3.1-jre. Leave it out when nobody "
         "knows it: the list then says Not known, and the check tells about releases newer than "
         "the newest one it first reads.",
     )
@@ -431,6 +437,14 @@ class AddSoftware(WireIn):
     def _one_source(self) -> AddSoftware:
         if (self.repo is None) == (self.package is None):
             raise ValueError("give repo or package, not both and not neither")
+        pattern = VERSION_PATTERN if self.package is None else PACKAGE_VERSION_PATTERN
+        if self.our_version is not None and not re.fullmatch(pattern, self.our_version):
+            raise ValueError(
+                "our_version must be three numbers, such as 1.2.14"
+                if self.package is None
+                else "our_version must be three numbers, with at most .Final, .RELEASE, .GA, "
+                "-jre or -android after them, such as 33.3.1-jre"
+            )
         return self
 
     @property

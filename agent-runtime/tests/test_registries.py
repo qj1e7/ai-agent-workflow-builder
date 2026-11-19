@@ -1,8 +1,15 @@
 import httpx
 import pytest
 
-from agent_runtime.registries import MavenCentralSource, NpmRegistrySource, maven_path
-from agent_runtime.release_source import SourceRejected, SourceUnavailable
+from agent_runtime.registries import (
+    MavenCentralSource,
+    NpmRegistrySource,
+    build_of,
+    maven_path,
+    package_candidates,
+)
+from agent_runtime.release_source import Release, SourceRejected, SourceUnavailable
+from agent_runtime.tags import highest, newer_than
 
 LOG4J = "org.apache.logging.log4j:log4j-core"
 METADATA = b"""<?xml version="1.0" encoding="UTF-8"?>
@@ -89,3 +96,61 @@ def test_npm_saying_slow_down_is_marked_as_limited():
 def test_npm_answering_in_another_shape_is_not_trusted(body: bytes):
     with pytest.raises(SourceUnavailable):
         NpmRegistrySource(client=answering(200, body)).fetch("express")
+
+
+@pytest.mark.parametrize(
+    ("version", "build"),
+    [
+        ("2.24.3", ""),
+        ("4.1.115.Final", ""),
+        ("5.3.39.RELEASE", ""),
+        ("1.0.0.GA", ""),
+        ("33.3.1-jre", "-jre"),
+        ("33.3.1-android", "-android"),
+        ("2.25.0-beta1", None),
+        ("3.1.0-SNAPSHOT", None),
+        ("4.1.115.final", None),
+        ("2.24", None),
+    ],
+)
+def test_a_package_version_is_three_numbers_and_at_most_a_final_qualifier(
+    version: str, build: str | None
+):
+    assert build_of(version) == build
+
+
+def test_guava_and_netty_versions_are_final_releases_not_prereleases():
+    body = METADATA.replace(b"2.25.0-beta1", b"33.3.1-jre").replace(b"2.14.1", b"4.1.115.Final")
+    releases = MavenCentralSource(client=answering(200, body)).fetch(LOG4J)
+    assert {r.tag: r.prerelease for r in releases} == {
+        "4.1.115.Final": False,
+        "2.17.1": False,
+        "2.24.3": False,
+        "33.3.1-jre": False,
+    }
+
+
+GUAVA = [Release(tag=v) for v in ("33.2.0-jre", "33.2.0-android", "33.3.1-jre", "33.3.1-android")]
+
+
+@pytest.mark.parametrize(
+    ("ours", "counted"),
+    [
+        ("33.2.0-jre", ["33.2.0-jre", "33.3.1-jre"]),
+        ("33.2.0-android", ["33.2.0-android", "33.3.1-android"]),
+        (None, ["33.2.0-jre", "33.3.1-jre"]),
+    ],
+)
+def test_a_guava_check_compares_only_the_build_the_team_runs(ours: str | None, counted: list[str]):
+    assert package_candidates(GUAVA, ours) == counted
+
+
+def test_a_final_marker_compares_as_its_numbers():
+    """Spring went from 5.3.39.RELEASE to 6.2.0, so the plain numbers count for both."""
+    spring = [Release(tag=v) for v in ("5.3.39.RELEASE", "6.2.0", "6.2.1-RC1")]
+    counted = package_candidates(spring, "5.3.39.RELEASE")
+    assert counted == ["5.3.39.RELEASE", "6.2.0"]
+    assert highest(counted) == "6.2.0"
+    assert newer_than("5.3.39.RELEASE", counted, any_family=True) == ["6.2.0"]
+    netty = ["4.1.114.Final", "4.1.115.Final", "4.2.0.Final"]
+    assert newer_than("4.1.114.Final", netty, any_family=True) == ["4.2.0.Final", "4.1.115.Final"]

@@ -17,7 +17,7 @@ from platform_api.orchestration.agents import (
     WatchlistInputs,
     source_in,
 )
-from platform_api.orchestration.spec import WatchlistTask
+from platform_api.orchestration.spec import PACKAGE_VERSION_PATTERN, WatchlistTask
 from platform_api.shared import ApprovalId, ProposalId, RunId, SoftwareId
 
 
@@ -116,7 +116,13 @@ ATTENTION_ORDER: tuple[Status, ...] = (
 
 
 # The project prefix some tags carry, such as docker-v, n8n@ or langchain==, then an optional v.
-_PREFIX = re.compile(r"(?:[A-Za-z][A-Za-z0-9._-]*?[@=-]+)?[vV]?(\d+(?:\.\d+)*)", re.ASCII)
+# A package version may end in a qualifier that marks a final build (ADR 0025), as 4.1.115.Final
+# or 33.3.1-jre; it compares as its numbers.
+_PREFIX = re.compile(
+    r"(?:[A-Za-z][A-Za-z0-9._-]*?[@=-]+)?[vV]?(\d+(?:\.\d+)*)"
+    r"(?:\.Final|\.RELEASE|\.GA|-jre|-android)?",
+    re.ASCII,
+)
 
 
 def _numbers(version: str) -> tuple[int, ...] | None:
@@ -232,6 +238,7 @@ def review(
     listed = {software.id: software for software in task.software}
     # ASCII and fullmatch: "$" alone would allow a trailing newline, and "\d" other scripts.
     tag = re.compile(task.tag_pattern, re.ASCII)
+    package = re.compile(PACKAGE_VERSION_PATTERN, re.ASCII)
     learned: list[Learned] = []
     read: dict[SoftwareId, Finding] = {}
     for finding in findings:
@@ -241,7 +248,9 @@ def review(
             return Unusable(f"The agents reported on {software_id}, which is not on the list")
         if any(entry.software_id == software_id for entry in learned):
             return Unusable(f"The agents reported twice on {software.name}")
-        if any(tag.fullmatch(version) is None for version in finding.new_versions):
+        # A package's versions follow its registry's rule, not the GitHub tag pattern (ADR 0025).
+        counts = tag if software.source.kind == "github" else package
+        if any(counts.fullmatch(version) is None for version in finding.new_versions):
             return Unusable(f"The agents named a version for {software.name} that is not a tag")
         if finding.not_found and finding.full_name is not None:
             return Unusable(
@@ -256,7 +265,7 @@ def review(
             return Unusable(
                 f"The agents gave no newest version for {software.name} ({finding.state})"
             )
-        if tag.fullmatch(finding.newest) is None:
+        if counts.fullmatch(finding.newest) is None:
             return Unusable(f"The agents named a version for {software.name} that is not a tag")
         starting_point = finding.state == "starting_point"
         if starting_point != (software.our_version is None):

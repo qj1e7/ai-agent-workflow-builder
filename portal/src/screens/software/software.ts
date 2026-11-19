@@ -269,6 +269,8 @@ export const dayOption: Record<Day, string> = {
 const REPO = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})\/[A-Za-z0-9._-]{1,100}$/
 const DOT_SEGMENT = /\/\.\.?$/
 const VERSION = /^[vV]?\d+\.\d+\.\d+$/
+/** A Maven or npm package's version (ADR 0025): three numbers and at most one qualifier that marks a final build. platform-api holds the same rule. */
+const PACKAGE_VERSION = /^\d+\.\d+\.\d+(?:\.Final|\.RELEASE|\.GA|-jre|-android)?$/
 const CLOCK = /^([01][0-9]|2[0-3]):[0-5][05]$/
 const NAME_LIMIT = 80
 
@@ -376,11 +378,14 @@ export const VERSION_HELP = 'Leave it empty if you don’t know. It shows as Not
 export const PACKAGE_VERSION_HELP = `${VERSION_HELP} Give it, and each check also looks up known vulnerabilities in it.`
 
 const VERSION_BAD = 'Type the version as three numbers, such as 1.2.14.'
+const PACKAGE_VERSION_BAD = 'Type the version as three numbers, such as 1.2.14. A final build’s ending, such as .Final or -jre, can follow them.'
 
-export function checkVersion(text: string): Checked<string | null> {
+/** A package's version may end as its registry writes a final build, as 4.1.115.Final or 33.3.1-jre. A GitHub version may not. */
+export function checkVersion(text: string, kind: SourceKind = 'github'): Checked<string | null> {
   const version = text.trim()
   if (version === '') return { ok: true, value: null }
-  if (!VERSION.test(version)) return { ok: false, words: VERSION_BAD }
+  const pkg = isPackage(kind)
+  if (!(pkg ? PACKAGE_VERSION : VERSION).test(version)) return { ok: false, words: pkg ? PACKAGE_VERSION_BAD : VERSION_BAD }
   return { ok: true, value: version }
 }
 

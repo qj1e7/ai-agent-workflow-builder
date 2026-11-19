@@ -108,6 +108,18 @@ describe('the other field checks', () => {
     expect(checkVersion('1.2.14')).toEqual({ ok: true, value: '1.2.14' })
     expect(checkVersion('v2.0.0')).toEqual({ ok: true, value: 'v2.0.0' })
     for (const bad of ['1.2', 'v1.2', 'vv1.2.3', '1.2.x', '1.2.3-beta']) expect(checkVersion(bad).ok, bad).toBe(false)
+    for (const bad of ['33.3.1-jre', '4.1.115.Final']) expect(checkVersion(bad).ok, bad).toBe(false)
+  })
+
+  it('takes a package version that ends as its registry writes a final build', () => {
+    for (const good of ['33.3.1-jre', '33.3.1-android', '4.1.115.Final', '5.3.39.RELEASE', '2.24.3']) {
+      expect(checkVersion(good, 'maven'), good).toEqual({ ok: true, value: good })
+    }
+    for (const bad of ['2.25.0-beta1', '3.1.0-SNAPSHOT', 'v2.24.3', '4.1.115.final']) {
+      const checked = checkVersion(bad, 'npm')
+      expect(checked.ok, bad).toBe(false)
+      if (!checked.ok) expect(checked.words).toContain('.Final or -jre')
+    }
   })
 
   it('takes a time on a 5-minute step', () => {

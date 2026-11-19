@@ -21,6 +21,7 @@ from agent_runtime.contract import (
     WatchlistInputs,
 )
 from agent_runtime.events import Draft
+from agent_runtime.registries import package_candidates
 from agent_runtime.release_source import (
     DEFAULT_RETRY,
     MovableSource,
@@ -311,8 +312,10 @@ class WatchlistChecker:
             if isinstance(releases, TaskError):
                 read: Read = releases
                 read_errors.append(releases)
-            else:
+            elif item.source.kind == "github":
                 read = candidates(releases, inputs.tag_pattern)
+            else:
+                read = package_candidates(releases, item.our_version)
             finding = with_address(decide(item, read), address)
             findings.append(finding)
             write(_read_finished(item, finding))

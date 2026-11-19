@@ -81,6 +81,25 @@ def test_a_package_its_registry_would_not_name_is_refused(kind: str, ref: str):
         PackageIn.model_validate({"kind": kind, "ref": ref})
 
 
+@pytest.mark.parametrize(
+    "version", ["33.3.1-jre", "33.3.1-android", "4.1.115.Final", "5.3.39.RELEASE", "2.24.3"]
+)
+def test_a_package_version_may_carry_a_qualifier_that_marks_a_final_build(version: str):
+    assert package("Guava", "maven", "com.google.guava:guava", version).our_version == version
+
+
+@pytest.mark.parametrize("version", ["2.25.0-beta1", "3.1.0-SNAPSHOT", "4.1.115.final", "v2.24.3"])
+def test_a_package_version_with_any_other_qualifier_is_refused(version: str):
+    with pytest.raises(ValidationError):
+        package("Log4j", "maven", LOG4J, version)
+
+
+@pytest.mark.parametrize("version", ["33.3.1-jre", "4.1.115.Final"])
+def test_a_github_version_takes_no_package_qualifier(version: str):
+    with pytest.raises(ValidationError, match="three numbers, such as 1.2.14"):
+        AddSoftware(name="LangGraph", repo="langchain-ai/langgraph", our_version=version)
+
+
 def test_a_github_add_still_reads_as_before():
     body = AddSoftware(name="LangGraph", repo="langchain-ai/langgraph", our_version="1.2.14")
     assert (body.source_kind, body.source_ref) == ("github", "langchain-ai/langgraph")

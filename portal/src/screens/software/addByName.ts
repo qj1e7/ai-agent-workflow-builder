@@ -101,7 +101,7 @@ type Ready = { readonly ok: true; readonly body: AddSoftware } | { readonly ok: 
 /** What to send to add the software, or what is wrong. The source is the one the person confirmed or typed, never a guess she did not see. */
 export function readyToAdd(state: AddState, names: readonly string[], watched: readonly Watched[]): Ready {
   const name = checkName(state.name, names)
-  const version = checkVersion(state.version)
+  const version = checkVersion(state.version, chosenKind(state))
   const errors: { name?: string; repo?: string; version?: string; form?: string } = {}
   if (!name.ok) errors.name = name.words
   if (!version.ok) errors.version = version.words

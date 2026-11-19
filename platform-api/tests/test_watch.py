@@ -369,6 +369,28 @@ def test_a_critical_flaw_needs_the_urgent_title():
 
 
 @pytest.mark.parametrize(
+    ("our", "newest"), [("33.2.0-jre", "33.3.1-jre"), ("4.1.114.Final", "4.1.115.Final")]
+)
+def test_a_package_s_final_qualifier_is_kept_where_a_github_tag_would_be_refused(
+    our: str, newest: str
+):
+    task, output = urgent_pair()
+    package = replace(task.software[0], name="Guava", our_version=our)
+    task = replace(task, software=(package,))
+    found = output.findings[0].model_copy(
+        update={"newest": newest, "new_versions": [newest], "vulnerabilities": []}
+    )
+    title = f"Upgrade Guava from {our} to {newest}"
+    proposed = output.proposed[0].model_copy(update={"fields": {"title": title, "body": "..."}})
+    reviewed = review(task, [found], [proposed])
+    assert isinstance(reviewed, Reviewed), reviewed
+    assert reviewed.tickets == (TicketToPropose(0, package.id, newest),)
+    on_github = replace(package, source=SoftwareSource(package.source.ref, "github"))
+    refused = review(replace(task, software=(on_github,)), [found], [proposed])
+    assert isinstance(refused, Unusable) and "not a tag" in refused.detail
+
+
+@pytest.mark.parametrize(
     ("severity", "score", "check", "urgent"),
     [
         ("critical", None, "checked", True),

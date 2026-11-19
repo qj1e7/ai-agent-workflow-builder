@@ -257,3 +257,48 @@ def test_a_package_name_a_registry_would_not_hold_is_refused_at_the_door(
 ):
     with pytest.raises(ValidationError):
         source(ref=ref)
+
+
+GUAVA = "com.google.guava:guava"
+NETTY = "io.netty:netty-all"
+
+
+def on_maven(name: str, ref: str, our: str) -> SoftwareToCheck:
+    return SoftwareToCheck(id=LOG4J_ID, name=name, source=MavenSource(ref=ref), our_version=our)
+
+
+@pytest.mark.parametrize(
+    ("name", "ref", "versions", "our", "title"),
+    [
+        (
+            "Guava",
+            GUAVA,
+            ["33.2.0-jre", "33.2.0-android", "33.3.1-jre", "33.3.1-android", "33.4.0-rc1"],
+            "33.2.0-jre",
+            "Upgrade Guava from 33.2.0-jre to 33.3.1-jre",
+        ),
+        (
+            "Guava",
+            GUAVA,
+            ["33.2.0-jre", "33.2.0-android", "33.3.1-jre", "33.3.1-android"],
+            "33.2.0-android",
+            "Upgrade Guava from 33.2.0-android to 33.3.1-android",
+        ),
+        (
+            "Netty",
+            NETTY,
+            ["4.1.114.Final", "4.1.115.Final", "5.0.0.Alpha2"],
+            "4.1.114.Final",
+            "Upgrade Netty from 4.1.114.Final to 4.1.115.Final",
+        ),
+    ],
+)
+def test_guava_and_netty_are_checked_in_the_build_the_team_runs(
+    name: str, ref: str, versions: list[str], our: str, title: str
+):
+    check = Check(maven=Registry({ref: versions}), services=Services([]))
+    result = check.run(on_maven(name, ref, our))
+    assert isinstance(result, TaskFinished)
+    assert result.output.findings[0].state == "behind"
+    [ticket] = result.output.proposed
+    assert ticket.fields["title"] == title

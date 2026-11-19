@@ -12,6 +12,7 @@ from agent_runtime.contract import (
     SoftwareNotKnown,
     SourceKind,
 )
+from agent_runtime.registries import package_candidates
 from agent_runtime.release_source import (
     ReleaseSource,
     SourceRejected,
@@ -139,10 +140,9 @@ def known_for(name: str) -> list[KnownProject]:
     return [project for project in KNOWN_PROJECTS if wanted in project.names][:MAX_MATCHES]
 
 
-def check_package(
-    registry: ReleaseSource, project: KnownProject, tag_pattern: str
-) -> SoftwareMatch:
-    newest = highest(candidates(registry.fetch(project.repo), tag_pattern))
+def check_package(registry: ReleaseSource, project: KnownProject) -> SoftwareMatch:
+    """A package's versions follow its registry's rule, not the GitHub tag pattern (ADR 0025)."""
+    newest = highest(package_candidates(registry.fetch(project.repo), None))
     return SoftwareMatch(
         kind=project.kind,
         repo=project.repo,
@@ -186,7 +186,7 @@ class SoftwareFinder:
         if guess.kind == "github":
             return check_project(self._source, guess, tag_pattern)
         registry = self._registries.get(guess.kind)
-        return None if registry is None else check_package(registry, guess, tag_pattern)
+        return None if registry is None else check_package(registry, guess)
 
     def find(self, name: str, tag_pattern: str) -> FindSoftwareResult:
         name = name.strip()
