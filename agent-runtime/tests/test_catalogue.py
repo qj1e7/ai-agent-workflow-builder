@@ -254,9 +254,24 @@ APPROVALS = {"n8n-nodes-base.slack", "n8n-nodes-base.gmail", "n8n-nodes-base.mic
         ("read releases", READ, {GITHUB}),
         ("check for new releases", READ, {GITHUB}),
         ("propose a ticket", PROPOSE, {JIRA}),
-        ("create a jira ticket", PROPOSE, {JIRA}),
-        ("create a jira issue", PROPOSE, {JIRA}),
-        ("open a jira ticket", PROPOSE, {JIRA}),
+        ("create a jira ticket", PROPOSE, {JIRA, READ}),
+        ("create a jira issue", PROPOSE, {JIRA, READ}),
+        ("open a jira ticket", PROPOSE, {JIRA, READ}),
+        ("raise a jira ticket", PROPOSE, {JIRA, READ}),
+        ("file a jira ticket", PROPOSE, {JIRA, READ}),
+        ("log a jira ticket", PROPOSE, {JIRA, READ}),
+        ("new jira ticket", PROPOSE, {JIRA, READ}),
+        ("list jira tickets", READ, {PROPOSE, JIRA}),
+        ("find jira tickets", READ, {PROPOSE, JIRA}),
+        ("search jira tickets", READ, {PROPOSE, JIRA}),
+        ("check jira tickets", READ, {PROPOSE, JIRA}),
+        ("fetch jira tickets", READ, {PROPOSE, JIRA}),
+        ("count jira tickets", READ, {PROPOSE, JIRA}),
+        ("open jira tickets", READ, {PROPOSE, JIRA}),
+        ("jira tickets", READ, {PROPOSE, JIRA}),
+        ("update a jira ticket", READ, {PROPOSE}),
+        ("close a jira ticket", READ, {PROPOSE}),
+        ("comment on a jira ticket", READ, {PROPOSE}),
         ("ask for a yes", ASK, APPROVALS),
         ("ask for approval", ASK, APPROVALS),
         ("make the approved changes", MAKE, {JIRA}),
@@ -267,7 +282,8 @@ def test_find_puts_the_block_of_ours_for_the_job_above_n8n_s_own(
 ):
     """ADR 0051: a release check reads with our Read, and a Jira write and the yes before it go
     through our blocks, so the drafter must find ours by what they do and the sources they read
-    or write, not only by their names."""
+    or write, not only by their names. Propose a change only creates, so it ranks above Read only
+    for words that say to create: a read, an update, a close or a comment never finds it first."""
     found = [b["type"] for b in catalogue.find_blocks(words)]
 
     assert found[0] == ours, found

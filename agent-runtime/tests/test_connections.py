@@ -189,16 +189,38 @@ def test_an_ai_agent_s_inputs_are_kept_by_hand_one_main_input_and_any_ai_wire(
     assert found.any_ai
 
 
-def test_describe_gives_the_exits_and_inputs_a_wire_names(catalogue: Catalogue):
+def test_describe_gives_the_exits_a_wire_names_and_each_input_s_number_within_its_kind(
+    catalogue: Catalogue,
+):
+    """A wire's input counts among the target's inputs of the wire's kind, so describe_block
+    numbers each input that way, not by its place among inputs of every kind."""
     compare = catalogue.describe_block("n8n-nodes-base.compareDatasets", 2.3)
     assert compare["exits"] == ["In A only", "Same", "Different", "In B only"]
-    assert compare["inputs"] == ["Input A", "Input B"]
+    assert compare["inputs"] == [
+        {"kind": "main", "input": 0, "name": "Input A"},
+        {"kind": "main", "input": 1, "name": "Input B"},
+    ]
+    chain = catalogue.describe_block("@n8n/n8n-nodes-langchain.chainRetrievalQa", 1.7)
+    assert chain["inputs"] == [
+        {"kind": "main", "input": 0},
+        {"kind": "ai_languageModel", "input": 0, "name": "Model"},
+        {"kind": "ai_retriever", "input": 0, "name": "Retriever"},
+    ]
 
     check = catalogue.describe_block("n8n-nodes-base.if", 2.3)
-    assert (check["exits"], check["inputs"]) == (["true", "false"], ["main"])
+    assert (check["exits"], check["inputs"]) == (["true", "false"], [{"kind": "main", "input": 0}])
     model = catalogue.describe_block("@n8n/n8n-nodes-langchain.lmChatOpenAi", 1.3)
     assert (model["exits"], model["inputs"]) == (["ai_languageModel"], [])
     switch = catalogue.describe_block("n8n-nodes-base.switch", 3.4)
     assert "named by its outputKey" in switch["exits"]
     merge = catalogue.describe_block("n8n-nodes-base.merge", 3.2)
     assert "numberInputs" in merge["inputs"]
+    store = catalogue.describe_block("@n8n/n8n-nodes-langchain.vectorStoreInMemory", 1.3)
+    assert "each is input 0 of its kind" in store["inputs"]
+
+
+def test_a_wire_s_input_says_it_counts_within_the_wire_s_kind():
+    from agent_runtime.workflow_plan import ProposedWire
+
+    said = ProposedWire.model_fields["input"].description or ""
+    assert "among its inputs of the wire's kind" in said
