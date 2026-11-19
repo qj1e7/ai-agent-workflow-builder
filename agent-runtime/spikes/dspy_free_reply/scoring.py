@@ -17,7 +17,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Final
+from typing import Any, Final, cast
 
 from evals.budget import Spend
 from evals.jobs import Answer, _structured_answer, marked  # pyright: ignore[reportPrivateUsage]
@@ -195,7 +195,8 @@ def read_and_route(model: BaseChatModel, case: SpikeCase) -> Frozen:
     """The reading and, when code asks for it, the question lane: the first half of
     `evals.reply.follow_up`, with no marker, as Anthropic keeps no answer store."""
     structured = model.with_structured_output(TaskRead, include_raw=True)
-    first = _structured_answer(structured.invoke(marked(prompt(case), "")))
+    reply = cast(dict[str, Any], structured.invoke(marked(prompt(case), "")))
+    first = _structured_answer(reply)
     if not isinstance(first.value, TaskRead):
         return Frozen(None, None, False)
     read, request = first.value, request_of(case)
