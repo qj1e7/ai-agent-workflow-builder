@@ -22,8 +22,10 @@ type Values = Mapping[str, object]
 
 MAIN: Final = "main"
 MOST: Final = 80
-"""The most exits or inputs code makes for a block whose parameters set how many, as many as a
-plan's wires. A model writes the count, so it is held to what a plan could use."""
+"""The most exits or inputs code makes for a block whose parameters set how many by a number, as
+many as a plan's wires. A model writes the number, so it is held to what a plan could use. A list,
+such as a Switch's rules, gives as many as n8n makes, and a block's parameters are held to
+20,000 characters."""
 
 
 @dataclass(frozen=True)
@@ -100,29 +102,45 @@ def inputs(group: Json, version: float, values: Values) -> Inputs:
 
 
 def described(group: Json) -> Json:
-    """The exits and inputs as describe_block gives them: what a wire names each by, or, for a
-    block whose parameters set them, how."""
-    return {
-        "exits": _said(group.get("outputs"), group.get("outputNames"), single_by_kind=True),
-        "inputs": _said(group.get("inputs"), group.get("inputNames"), single_by_kind=False),
-    }
+    """The exits and inputs as describe_block gives them: the name a wire gives each exit, and
+    each input's kind and its number among the inputs of that kind, which is what a wire's input
+    counts. For a block whose parameters set them, the words say how."""
+    return {"exits": _exits_said(group), "inputs": _inputs_said(group)}
 
 
-def _said(served: object, names: object, single_by_kind: bool) -> str | list[str]:
+def _exits_said(group: Json) -> str | list[str]:
+    served = group.get("outputs")
     if isinstance(served, str):
-        key = digest(served)
-        if (rule := RULES.get(key)) is not None:
-            return rule.says
-        if (hand := BY_HAND.get(key)) is not None:
-            main = "One main input" if hand.main else "No main input"
-            return f"{main}, and any wire from a block made for an AI agent."
-        return "Code can't tell on this n8n, so no wire passes."
-    links = _listed(served, names)
-    if single_by_kind and len(links) == 1:
+        return _computed(served)
+    links = _addressable(_listed(served, group.get("outputNames")))
+    if len(links) == 1:
         return [links[0].kind]
-    if single_by_kind:
-        links = _addressable(links)
     return [link.name or link.kind for link in links]
+
+
+def _inputs_said(group: Json) -> str | list[Json]:
+    served = group.get("inputs")
+    if isinstance(served, str):
+        return _computed(served)
+    said: list[Json] = []
+    counted: dict[str, int] = {}
+    for link in _listed(served, group.get("inputNames")):
+        number = counted.get(link.kind, 0)
+        counted[link.kind] = number + 1
+        said.append(
+            {"kind": link.kind, "input": number} | ({"name": link.name} if link.name else {})
+        )
+    return said
+
+
+def _computed(served: str) -> str:
+    key = digest(served)
+    if (rule := RULES.get(key)) is not None:
+        return rule.says
+    if (hand := BY_HAND.get(key)) is not None:
+        main = "One main input, input 0" if hand.main else "No main input"
+        return f"{main}, and any wire from a block made for an AI agent, at input 0."
+    return "Code can't tell on this n8n, so no wire passes."
 
 
 def _listed(served: object, names: object) -> tuple[Link, ...]:
@@ -146,7 +164,7 @@ def _mapping(value: object) -> Values:
 
 def _items(value: object) -> list[Values]:
     listed = cast(list[object], value) if isinstance(value, list) else []
-    return [_mapping(item) for item in listed[:MOST]]
+    return [_mapping(item) for item in listed]
 
 
 def _text(value: object) -> str | None:
@@ -194,7 +212,7 @@ def _merge(values: Values, version: float) -> Sequence[Link]:
 def _webhook(values: Values, version: float) -> Sequence[Link]:
     method = values.get("httpMethod")
     if isinstance(method, list):
-        return [Link(MAIN, _text(m)) for m in cast(list[object], method)[:MOST]]
+        return [Link(MAIN, _text(m)) for m in cast(list[object], method)]
     return [Link(MAIN, _text(method))]
 
 
@@ -215,7 +233,7 @@ def _classes(values: Values, version: float) -> Sequence[Link]:
 def _sentiment(values: Values, version: float) -> Sequence[Link]:
     said = _mapping(values.get("options")).get("categories")
     categories = said if isinstance(said, str) else "Positive, Neutral, Negative"
-    return [Link(MAIN, _name(c.strip())) for c in categories.split(",")[:MOST]]
+    return [Link(MAIN, _name(c.strip())) for c in categories.split(",")]
 
 
 def _guardrails(values: Values, version: float) -> Sequence[Link]:
@@ -291,8 +309,8 @@ RULES: Final[Mapping[str, Rule]] = {
     ),
     "45be92cb24032b60": Rule(
         "Merge 3 to 3.2",
-        "numberInputs main inputs, 2 if it isn't set: Input 1, Input 2 and so on. A wire's input "
-        "counts from 0.",
+        "numberInputs main inputs, 2 if it isn't set: Input 1, Input 2 and so on, which are "
+        "inputs 0, 1 and so on.",
         _merge,
     ),
     "79260d56022774e8": Rule(
@@ -321,12 +339,14 @@ RULES: Final[Mapping[str, Rule]] = {
     ),
     "c4bf57067c1a171d": Rule(
         "Guardrails 2",
-        "One main input, and a Chat Model input when a check uses a model.",
+        "One main input, and a Chat Model input when a check uses a model: each is input 0 "
+        "of its kind.",
         _guardrails_takes,
     ),
     "b88ad595ab1d5197": Rule(
         "Guardrails 1",
-        "One main input, and a Chat Model input unless operation is sanitize.",
+        "One main input, and a Chat Model input unless operation is sanitize: each is input "
+        "0 of its kind.",
         _guardrails_1_takes,
     ),
     "c397b35d8c9c993f": Rule(
@@ -336,7 +356,8 @@ RULES: Final[Mapping[str, Rule]] = {
     ),
     "199a00bd5cca585c": Rule(
         "Evaluation",
-        "One main input, and a Model input for the correctness and helpfulness metrics.",
+        "One main input, and a Model input for the correctness and helpfulness metrics: each "
+        "is input 0 of its kind.",
         _evaluation_takes,
     ),
     "b2a7b0db1ea36814": Rule(
@@ -347,7 +368,7 @@ RULES: Final[Mapping[str, Rule]] = {
     "00d35c0066cacf74": Rule(
         "The vector stores",
         "An Embedding input, a main input for insert, load and update, and a Document input "
-        "for insert.",
+        "for insert: each is input 0 of its kind.",
         _vector_store_takes,
     ),
 }

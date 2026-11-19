@@ -83,9 +83,10 @@ class ProposedWire(_Shape):
     to_block: str = Field(description="The name of the block the items go to.")
     input: int | None = Field(
         default=None,
-        description="Which input of to_block, numbered from 0 in n8n's order, as 1 for Merge's "
-        "Input 2. null for a block with one input, or to fill a block's inputs in the order the "
-        "plan lists its wires.",
+        description="Which input of to_block, numbered from 0 among its inputs of the wire's "
+        "kind, as describe_block numbers them: 1 is Merge's Input 2. null for a block with one "
+        "input of that kind, or to take its next free input in the order the plan lists its "
+        "wires.",
     )
 
 
@@ -187,6 +188,24 @@ def refused_type(node_type: str) -> PlanProblem | None:
             text=f"Leave {node_type} out: the platform adds {PLATFORM_ADDS[node_type]} itself.",
         )
     return None
+
+
+STARTS: Final = frozenset(
+    {
+        "n8n-nodes-base.webhook",
+        "n8n-nodes-base.cron",
+        "n8n-nodes-base.interval",
+        "n8n-nodes-base.start",
+        "n8n-nodes-base.emailReadImap",
+    }
+)
+"""Blocks that start a workflow, besides every type whose name ends in Trigger."""
+
+
+def starts_a_run(node_type: str) -> bool:
+    """Whether a run starts at the block, so no wire of any kind may join it. A tool wired into
+    MCP Server Trigger would let any outside caller use it, with no yes."""
+    return node_type in STARTS or node_type.endswith("Trigger")
 
 
 # Parameters that hold a setting, never a value the drafter writes.
@@ -303,6 +322,13 @@ def _fit(parameter: Json, value: object, path: str, walk: _Walk) -> None:
         return
     said = placeholder_of(value)
     if said is not None:
+        listed = [o.get("value") for o in cast(list[Json], parameter.get("options") or [])]
+        if parameter.get("type") in ("options", "multiOptions") and listed:
+            # A setting's value isn't checked against the choices, so it can't stand in for one.
+            walk.bad(
+                "bad_value", f"{path} takes one of {_listed(listed)}, written out, never a setting."
+            )
+            return
         walk.placeholders.append((said, path, None))
         return
     if is_expression(value):
@@ -478,6 +504,8 @@ class CheckedBlock:
     block: PlanBlock
     exits: tuple[Link, ...]
     inputs: Inputs
+    starts: bool
+    """Whether a run starts at the block, so no wire joins it."""
     placeholders: list[tuple[str, str, SettingKind | None]]
     """Each placeholder's setting id, the parameter path, and the kind of setting the parameter
     must hold, if it must hold one kind."""
@@ -541,6 +569,7 @@ def check_block(proposed: ProposedBlock, catalogue: Catalogue) -> CheckedBlock |
         ),
         catalogue.exits(proposed.type, proposed.version, known),
         catalogue.inputs(proposed.type, proposed.version, known),
+        starts_a_run(proposed.type),
         walk.placeholders,
     )
 
@@ -770,8 +799,9 @@ def _wires(
     if len(proposed.wires) > MOST_WIRES:
         problems.append(PlanProblem(code="wire", text=f"A plan has at most {MOST_WIRES} wires."))
     wires: list[PlanWire] = []
-    # The next input in plan order, for each block and kind, of the wires that name none.
-    taken: dict[tuple[str, str], int] = {}
+    # The inputs wires joined so far, and the ones the plan's wires name, by block and kind.
+    joined: dict[tuple[str, str], set[int]] = {}
+    named = _named_inputs(proposed, checked)
     seen: set[tuple[str, int, str]] = set()
     for wire in proposed.wires[:MOST_WIRES]:
         said = f"The wire from {wire.from_block!r} to {wire.to_block!r}"
@@ -807,9 +837,9 @@ def _wires(
             problems.append(PlanProblem(code="wire", text=f"{said} is in the plan twice."))
             continue
         seen.add((wire.from_block, exit_index, wire.to_block))
-        joined = _input_of(wire, source.exits[exit_index].kind, target, taken)
-        if isinstance(joined, str):
-            problems.append(PlanProblem(code="wire", text=f"{said} {joined}"))
+        input_index = _input_of(wire, source.exits[exit_index].kind, target, joined, named)
+        if isinstance(input_index, str):
+            problems.append(PlanProblem(code="wire", text=f"{said} {input_index}"))
             continue
         wires.append(
             PlanWire(
@@ -817,10 +847,26 @@ def _wires(
                 exit=exit_name,
                 to_block=wire.to_block,
                 exit_index=exit_index,
-                input_index=joined,
+                input_index=input_index,
             )
         )
     return wires
+
+
+def _named_inputs(
+    proposed: ProposedPlan, checked: Mapping[str, CheckedBlock]
+) -> dict[tuple[str, str], set[int]]:
+    """The inputs the plan's wires name, by block and kind, so that a wire that names none takes
+    another."""
+    named: dict[tuple[str, str], set[int]] = {}
+    for wire in proposed.wires[:MOST_WIRES]:
+        source = checked.get(wire.from_block)
+        if source is None or wire.input is None:
+            continue
+        left = _exit_of(source.exits, wire.exit)
+        if left is not None:
+            named.setdefault((wire.to_block, source.exits[left[0]].kind), set()).add(wire.input)
+    return named
 
 
 def _exit_of(exits: Sequence[Link], said: str) -> tuple[int, str] | None:
@@ -845,10 +891,17 @@ def _exit_names(exits: Sequence[Link]) -> list[str]:
 
 
 def _input_of(
-    wire: ProposedWire, kind: str, target: CheckedBlock, taken: dict[tuple[str, str], int]
+    wire: ProposedWire,
+    kind: str,
+    target: CheckedBlock,
+    joined: dict[tuple[str, str], set[int]],
+    named: Mapping[tuple[str, str], set[int]],
 ) -> int | str:
-    """The input of the target block the wire joins, or why it can't join one."""
+    """The input of the target block the wire joins, counted among its inputs of the wire's kind,
+    or why it can't join one."""
     to = wire.to_block
+    if target.starts:
+        return f"goes into {to!r}, which starts the workflow and takes no wire in."
     count = sum(link.kind == kind for link in target.inputs.links)
     if count == 0 and kind != MAIN and target.inputs.any_ai:
         if wire.input not in (None, 0):
@@ -858,9 +911,8 @@ def _input_of(
             )
         return 0
     if count == 0:
-        if not target.inputs.links and not target.inputs.any_ai and _starts(target):
-            return f"goes into {to!r}, which starts the workflow and takes no wire in."
         return f"goes into {to!r}, which takes no {kind} wire in."
+    taken = joined.setdefault((to, kind), set())
     if wire.input is not None:
         if not 0 <= wire.input < count:
             wires_in = "wire" if count == 1 else "wires"
@@ -868,19 +920,20 @@ def _input_of(
                 f"joins input {wire.input} of {to!r}, which takes {count} {kind} {wires_in} in, "
                 "numbered from 0."
             )
+        if kind == MAIN and count > 1 and wire.input in taken:
+            return (
+                f"joins input {wire.input} of {to!r}, which another wire already joins. Give each "
+                "wire its own input."
+            )
+        taken.add(wire.input)
         return wire.input
     if count == 1:
         return 0
-    at = taken.get((to, kind), 0)
-    taken[(to, kind)] = at + 1
-    if at >= count:
+    free = [at for at in range(count) if at not in taken and at not in named.get((to, kind), ())]
+    if not free:
         return (
             f"goes into {to!r}, which takes {count} wires in, one to each input, in the order "
             "the plan lists them."
         )
-    return at
-
-
-def _starts(block: CheckedBlock) -> bool:
-    """Whether a run starts at the block: it takes no wire in, and sends items on."""
-    return any(link.kind == MAIN for link in block.exits)
+    taken.add(free[0])
+    return free[0]

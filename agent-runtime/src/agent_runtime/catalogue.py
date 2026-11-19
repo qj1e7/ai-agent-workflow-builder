@@ -47,6 +47,18 @@ _STOP_WORDS: Final = frozenset(
 )
 """Words too common in a request to tell one block from another."""
 _WEIGHTS: Final = {"name": 3, "type": 3, "aliases": 2, "operations": 2, "description": 1}
+LEANS_TO_WRITE: Final = frozenset({f"{OURS}wabProposeChange", f"{OURS}wabMakeApprovedChanges"})
+"""Our blocks that make a change after a yes. Their only change is to create a ticket, so where
+they match the words as well as another of our blocks, such as Read, they rank below it unless
+the words say to create (`CREATE`)."""
+CREATE: Final = re.compile(
+    r"\b(?:creat(?:e|es|ed|ing)|rais(?:e|es|ing)|fil(?:e|es|ing)|log(?:s|ging)?|"
+    r"open\s+(?:a|an|one)|new\s+(?:\w+\s+)?(?:ticket|issue))\b",
+    re.IGNORECASE,
+)
+"""Words that say to create something, an allow-list: "open jira tickets" reads, and "open a
+jira ticket" creates. Any other word that leans toward a change, such as update or close, finds
+Read first, as Propose a change can't do it."""
 _UNKNOWN: Final = object()
 
 
@@ -119,10 +131,11 @@ class Catalogue:
         Each block comes with its operations or choices that match, so the drafter can describe
         one next."""
         asked = _stems(words)
+        creates = CREATE.search(words) is not None
         scored = [(sum(e.words.get(stem, 0) for stem in asked), e) for e in self._index]
         best = max((score for score, _ in scored), default=0)
         found = sorted(
-            (entry.rank, -score, entry.type)
+            (entry.rank, -score, _leaning(entry.type, creates), entry.type)
             for score, entry in scored
             if score and score * 2 >= best
         )
@@ -330,6 +343,14 @@ def _offered_in(items: object, version: float) -> list[Json]:
         for item in cast(list[Json], items or [])
         if version in item.get("versions", [version])
     ]
+
+
+def _leaning(name: str, creates: bool) -> int:
+    """Of blocks that match the words equally: ours that create first when the words say to
+    create, then the rest, then ours that create."""
+    if name not in LEANS_TO_WRITE:
+        return 1
+    return 0 if creates else 2
 
 
 def _choices(name: str, group: Json) -> list[Json]:
