@@ -5,7 +5,8 @@ code, with no model.
 
 scripts/n8n-catalogue.sh writes the catalogue, contracts/n8n/catalogue.json, from the pinned n8n
 image. Each version of a block holds n8n's own parameters, each with the `displayOptions` that say
-when n8n's editor shows it, and what our class file says of each operation.
+when n8n's editor shows it, what our class file says of each operation, and n8n's inputs and
+outputs, which `connections` reads as the block's exits and inputs.
 
 The agent-runtime image carries the file at `IN_THE_IMAGE`.
 
@@ -21,6 +22,9 @@ from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Final, cast
+
+from agent_runtime import connections
+from agent_runtime.connections import Inputs, Link
 
 type Json = dict[str, Any]
 
@@ -135,12 +139,14 @@ class Catalogue:
         operation, by n8n's `displayOptions`. A condition on any other parameter stays on the
         parameter, so the drafter sees when it applies. Without a resource or operation that the
         block needs, it returns the choices instead, with no parameters. With no version, it is
-        the version n8n gives a new block."""
+        the version n8n gives a new block. Either way it gives the block's exits and inputs, as a
+        wire names them, or how its parameters set them."""
         block = self._block(node_type)
         chosen = block["default_version"] if version is None else version
         group = self._version(node_type, chosen)
         described: Json = {"type": node_type, "version": chosen, "name": block["name"]}
         described |= {mark: block[mark] for mark in _MARKS if mark in block}
+        described |= connections.described(group)
         operations = cast(list[Json], group.get("operations") or [])
         resources = [str(r["value"]) for r in cast(list[Json], group.get("resources") or [])]
         offered = [o for o in operations if o.get("resource") == resource]
@@ -206,6 +212,18 @@ class Catalogue:
             ):
                 known[name] = parameter["default"]
         return known
+
+    def exits(
+        self, node_type: str, version: float, values: Mapping[str, object]
+    ) -> tuple[Link, ...]:
+        """The block's exits, in n8n's order of its outputs, for these parameter values."""
+        settled = self.settled(node_type, version, values)
+        return connections.exits(self._version(node_type, version), version, settled)
+
+    def inputs(self, node_type: str, version: float, values: Mapping[str, object]) -> Inputs:
+        """The block's inputs, in n8n's order, for these parameter values."""
+        settled = self.settled(node_type, version, values)
+        return connections.inputs(self._version(node_type, version), version, settled)
 
     def shown(self, node_type: str, version: float, values: Mapping[str, object]) -> list[Json]:
         """Every parameter of the version that n8n shows when the block's parameters have these

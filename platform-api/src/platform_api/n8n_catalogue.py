@@ -2,9 +2,11 @@
 reaches (ADR 0051, section 2).
 
 The catalogue holds every type the pinned n8n image ships: its name, its description and the other
-words n8n finds it by, its versions, its resources and operations, and the parameters of each
-version with n8n's `displayOptions`, so that a reader can return only what n8n shows for one
-resource and operation. Fields that only shape n8n's editor are left out. From our own files it
+words n8n finds it by, its versions, its resources and operations, the parameters of each version
+with n8n's `displayOptions`, so that a reader can return only what n8n shows for one resource and
+operation, and each version's inputs and outputs with the names n8n gives them. A block that
+computes its inputs or outputs from its parameters keeps n8n's expression word for word, which
+`agent_runtime.connections` resolves. Fields that only shape n8n's editor are left out. From our own files it
 adds each operation's class, tag and `says` from the class file, which key of the platform's the
 type runs with (`KEY_FOR_TYPE`), the blocks n8n loads that can't run on this platform
 (`n8n_blocks.HELD`, which the safety checker reads too), and the choices our own blocks load from
@@ -100,6 +102,9 @@ _CHOICE_KEYS = ("name", "value", "description", "action")
 _CLASS_KEYS = frozenset({"class", "tag", "says"})
 """What the catalogue adds to an operation from the class file."""
 _MODE_KEYS = ("name", "displayName", "type", "placeholder")
+_LINK_KEYS = ("type", "displayName", "required", "maxConnections")
+"""What says how an input or output joins: its kind, its name, and how many wires it takes. n8n's
+`filter`, which limits the blocks the editor offers to join one, is left out."""
 
 
 def catalogue(
@@ -305,11 +310,28 @@ def _version(name: str, description: Mapping[str, Any], classes: NodeClasses) ->
     _class(name, versions, version, operations, classes)
     if operations:
         version["operations"] = operations
+    for key in ("inputs", "outputs"):
+        if key in description:
+            version[key] = _links(description[key])
+    for key in ("inputNames", "outputNames"):
+        if isinstance(names := description.get(key), list):
+            version[key] = [str(n) for n in cast(list[object], names)]
     parameters = [_parameter(p) for p in properties if p.get("type") not in NOT_PARAMETERS]
     version["parameters"] = (
         [_platform_choices(p) for p in parameters] if name.startswith(OURS) else parameters
     )
     return version
+
+
+def _links(served: object) -> str | list[object]:
+    """A version's inputs or outputs: each as n8n names its kind, or as an object with its name
+    and limits, or n8n's expression that computes them from the parameters, word for word."""
+    if isinstance(served, str):
+        return served
+    return [
+        _picked(cast(Mapping[str, Any], link), _LINK_KEYS) if isinstance(link, dict) else link
+        for link in cast(list[object], served if isinstance(served, list) else [])
+    ]
 
 
 def _platform_choices(parameter: Json) -> Json:

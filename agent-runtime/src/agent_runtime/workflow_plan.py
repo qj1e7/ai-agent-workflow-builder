@@ -5,8 +5,8 @@ every type, version, resource, operation, parameter, value and wire against the 
 pinned n8n image, and refuses what can't run on this platform. A plan that fails goes back to the
 drafter with every problem, in words it can act on. Plain code, with no model.
 
-n8n's outputs and inputs are not in the catalogue yet, so `exits_of` and `inputs_of` know the few
-blocks with more than one exit or input. Every other block has one exit, "main", and one input.
+A wire leaves by one of the block's exits and joins one of the next block's inputs, as n8n's
+outputs and inputs in the catalogue say (`connections`).
 """
 
 import json
@@ -25,6 +25,7 @@ from agent_runtime.catalogue import (
     NotInCatalogue,
     is_expression,
 )
+from agent_runtime.connections import MAIN, Inputs, Link
 from agent_runtime.contract import (
     BLOCK_NAME_LIMIT,
     PLAN_NAME_LIMIT,
@@ -77,9 +78,15 @@ class ProposedWire(_Shape):
     from_block: str = Field(description="The name of the block the items leave.")
     exit: str = Field(
         description='Which exit of from_block: "main" for a block with one exit, else the exit\'s '
-        "name."
+        "name, as describe_block lists them."
     )
     to_block: str = Field(description="The name of the block the items go to.")
+    input: int | None = Field(
+        default=None,
+        description="Which input of to_block, numbered from 0 in n8n's order, as 1 for Merge's "
+        "Input 2. null for a block with one input, or to fill a block's inputs in the order the "
+        "plan lists its wires.",
+    )
 
 
 class ProposedSetting(_Shape):
@@ -180,98 +187,6 @@ def refused_type(node_type: str) -> PlanProblem | None:
             text=f"Leave {node_type} out: the platform adds {PLATFORM_ADDS[node_type]} itself.",
         )
     return None
-
-
-# Exits and inputs, which the catalogue doesn't hold yet.
-
-ASK_EXITS: Final = ("No answer", "Yes", "No", "Nothing to change")
-FIXED_EXITS: Final[Mapping[str, tuple[str, ...]]] = {
-    "n8n-nodes-base.if": ("true", "false"),
-    "n8n-nodes-base.compareDatasets": ("in A only", "same", "different", "in B only"),
-    f"{OURS}wabAskForYes": ASK_EXITS,
-    f"{OURS}wabReportFailure": (),
-}
-AI_EXITS: Final = (
-    ("lmChat", "ai_languageModel"),
-    ("lm", "ai_languageModel"),
-    ("memory", "ai_memory"),
-    ("embeddings", "ai_embedding"),
-    ("outputParser", "ai_outputParser"),
-    ("retriever", "ai_retriever"),
-    ("textSplitter", "ai_textSplitter"),
-    ("document", "ai_document"),
-    ("tool", "ai_tool"),
-)
-"""The one exit of each kind of block n8n gives an AI agent, by the start of its type's name."""
-STARTS: Final = frozenset(
-    {
-        "n8n-nodes-base.webhook",
-        "n8n-nodes-base.cron",
-        "n8n-nodes-base.interval",
-        "n8n-nodes-base.start",
-        "n8n-nodes-base.emailReadImap",
-    }
-)
-"""Blocks that start a workflow, besides every type whose name ends in Trigger."""
-
-
-def exits_of(
-    node_type: str, version: float, values: Mapping[str, object], block: Json
-) -> tuple[str, ...]:
-    """The block's exits, in n8n's order of its outputs."""
-    if node_type in FIXED_EXITS:
-        return FIXED_EXITS[node_type]
-    short = node_type.rpartition(".")[2]
-    if "tool_of" in block:
-        return ("ai_tool",)
-    if node_type.startswith(LANGCHAIN):
-        for start, exit_name in AI_EXITS:
-            if short.startswith(start):
-                return (exit_name,)
-    options = values.get("options")
-    match node_type:
-        case "n8n-nodes-base.switch":
-            return _switch_exits(version, values)
-        case "n8n-nodes-base.filter" if version >= 2:
-            kept_apart = isinstance(options, dict) and cast(Json, options).get(
-                "allowDiscardedItemsOutput"
-            )
-            return ("kept", "discarded") if kept_apart is True else ("main",)
-        case "n8n-nodes-base.splitInBatches" if version >= 3:
-            return ("done", "loop")
-        case _:
-            return ("main",)
-
-
-def _switch_exits(version: float, values: Mapping[str, object]) -> tuple[str, ...]:
-    if version < 3:
-        return tuple(f"output {n}" for n in range(1, 5))
-    if values.get("mode") == "expression":
-        said = values.get("numberOutputs", 4)
-        # The model writes the number, so it is held to what a Switch could need.
-        count = min(said, MOST_WIRES) if isinstance(said, int) else 4
-        return tuple(f"output {n}" for n in range(1, count + 1))
-    rules = values.get("rules")
-    listed = cast(Json, rules).get("values") if isinstance(rules, dict) else None
-    count = len(cast(list[object], listed)) if isinstance(listed, list) else 1
-    options = values.get("options")
-    fallback = isinstance(options, dict) and cast(Json, options).get("fallbackOutput") == "extra"
-    return (*(f"rule {n}" for n in range(1, count + 1)), *(("fallback",) if fallback else ()))
-
-
-def starts_a_run(node_type: str) -> bool:
-    return node_type in STARTS or node_type.endswith("Trigger")
-
-
-def inputs_of(node_type: str, version: float, values: Mapping[str, object]) -> int:
-    if starts_a_run(node_type):
-        return 0
-    if node_type == "n8n-nodes-base.merge":
-        count = values.get("numberInputs") if version >= 3 else None
-        return count if isinstance(count, int) and count > 1 else 2
-    if node_type == "n8n-nodes-base.compareDatasets":
-        return 2
-    return 1
 
 
 # Parameters that hold a setting, never a value the drafter writes.
@@ -561,8 +476,8 @@ def _locator_fits(parameter: Json, locator: Json, path: str, walk: _Walk) -> boo
 @dataclass(frozen=True)
 class CheckedBlock:
     block: PlanBlock
-    exits: tuple[str, ...]
-    inputs: int
+    exits: tuple[Link, ...]
+    inputs: Inputs
     placeholders: list[tuple[str, str, SettingKind | None]]
     """Each placeholder's setting id, the parameter path, and the kind of setting the parameter
     must hold, if it must hold one kind."""
@@ -624,8 +539,8 @@ def check_block(proposed: ProposedBlock, catalogue: Catalogue) -> CheckedBlock |
         PlanBlock(
             name=proposed.name, type=proposed.type, version=proposed.version, parameters=values
         ),
-        exits_of(proposed.type, proposed.version, values, block),
-        inputs_of(proposed.type, proposed.version, values),
+        catalogue.exits(proposed.type, proposed.version, known),
+        catalogue.inputs(proposed.type, proposed.version, known),
         walk.placeholders,
     )
 
@@ -855,8 +770,9 @@ def _wires(
     if len(proposed.wires) > MOST_WIRES:
         problems.append(PlanProblem(code="wire", text=f"A plan has at most {MOST_WIRES} wires."))
     wires: list[PlanWire] = []
-    taken: dict[str, int] = {}
-    seen: set[tuple[str, str, str]] = set()
+    # The next input in plan order, for each block and kind, of the wires that name none.
+    taken: dict[tuple[str, str], int] = {}
+    seen: set[tuple[str, int, str]] = set()
     for wire in proposed.wires[:MOST_WIRES]:
         said = f"The wire from {wire.from_block!r} to {wire.to_block!r}"
         missing = [n for n in (wire.from_block, wire.to_block) if n not in names]
@@ -872,14 +788,12 @@ def _wires(
         source, target = checked.get(wire.from_block), checked.get(wire.to_block)
         if source is None or target is None:
             continue  # The block's own problems are already listed.
-        exit_index = next(
-            (i for i, e in enumerate(source.exits) if e.casefold() == wire.exit.casefold()), None
-        )
-        key = (wire.from_block, wire.exit.casefold(), wire.to_block)
+        left = _exit_of(source.exits, wire.exit)
         if wire.from_block == wire.to_block:
             problems.append(PlanProblem(code="wire", text=f"{said} joins a block to itself."))
-        elif exit_index is None:
-            exits = _listed(list(source.exits)) if source.exits else "none"
+            continue
+        if left is None:
+            exits = _listed(_exit_names(source.exits)) if source.exits else "none"
             problems.append(
                 PlanProblem(
                     code="wire",
@@ -887,39 +801,86 @@ def _wires(
                     f"{wire.from_block!r} has the exits {exits}.",
                 )
             )
-        elif target.inputs == 0:
-            problems.append(
-                PlanProblem(
-                    code="wire",
-                    text=f"{said} goes into {wire.to_block!r}, which starts "
-                    "the workflow and takes no wire in.",
-                )
-            )
-        elif key in seen:
+            continue
+        exit_index, exit_name = left
+        if (wire.from_block, exit_index, wire.to_block) in seen:
             problems.append(PlanProblem(code="wire", text=f"{said} is in the plan twice."))
-        else:
-            seen.add(key)
-            exit_name = source.exits[exit_index]
-            input_index = 0
-            if not exit_name.startswith("ai_") and target.inputs > 1:
-                input_index = taken.get(wire.to_block, 0)
-                taken[wire.to_block] = input_index + 1
-                if input_index >= target.inputs:
-                    problems.append(
-                        PlanProblem(
-                            code="wire",
-                            text=f"{wire.to_block!r} takes {target.inputs} "
-                            "wires in, one to each input, in the order the plan lists them.",
-                        )
-                    )
-                    continue
-            wires.append(
-                PlanWire(
-                    from_block=wire.from_block,
-                    exit=exit_name,
-                    to_block=wire.to_block,
-                    exit_index=exit_index,
-                    input_index=input_index,
-                )
+            continue
+        seen.add((wire.from_block, exit_index, wire.to_block))
+        joined = _input_of(wire, source.exits[exit_index].kind, target, taken)
+        if isinstance(joined, str):
+            problems.append(PlanProblem(code="wire", text=f"{said} {joined}"))
+            continue
+        wires.append(
+            PlanWire(
+                from_block=wire.from_block,
+                exit=exit_name,
+                to_block=wire.to_block,
+                exit_index=exit_index,
+                input_index=joined,
             )
+        )
     return wires
+
+
+def _exit_of(exits: Sequence[Link], said: str) -> tuple[int, str] | None:
+    """The exit a wire names, with the name it goes by: n8n's name for one exit, or the kind of
+    the block's only exit of that kind, as "main". A name two exits share names neither."""
+    folded = said.casefold()
+    named = [
+        (at, link.name)
+        for at, link in enumerate(exits)
+        if link.name is not None and link.name.casefold() == folded
+    ]
+    if named:
+        return named[0] if len(named) == 1 else None
+    of_kind = [at for at, link in enumerate(exits) if link.kind.casefold() == folded]
+    return (of_kind[0], exits[of_kind[0]].kind) if len(of_kind) == 1 else None
+
+
+def _exit_names(exits: Sequence[Link]) -> list[str]:
+    if len(exits) == 1:
+        return [exits[0].kind]
+    return [link.name or link.kind for link in exits]
+
+
+def _input_of(
+    wire: ProposedWire, kind: str, target: CheckedBlock, taken: dict[tuple[str, str], int]
+) -> int | str:
+    """The input of the target block the wire joins, or why it can't join one."""
+    to = wire.to_block
+    count = sum(link.kind == kind for link in target.inputs.links)
+    if count == 0 and kind != MAIN and target.inputs.any_ai:
+        if wire.input not in (None, 0):
+            return (
+                f"joins input {wire.input} of {to!r}, whose inputs code keeps by hand, so a "
+                f"{kind} wire joins its first: write 0 or null."
+            )
+        return 0
+    if count == 0:
+        if not target.inputs.links and not target.inputs.any_ai and _starts(target):
+            return f"goes into {to!r}, which starts the workflow and takes no wire in."
+        return f"goes into {to!r}, which takes no {kind} wire in."
+    if wire.input is not None:
+        if not 0 <= wire.input < count:
+            wires_in = "wire" if count == 1 else "wires"
+            return (
+                f"joins input {wire.input} of {to!r}, which takes {count} {kind} {wires_in} in, "
+                "numbered from 0."
+            )
+        return wire.input
+    if count == 1:
+        return 0
+    at = taken.get((to, kind), 0)
+    taken[(to, kind)] = at + 1
+    if at >= count:
+        return (
+            f"goes into {to!r}, which takes {count} wires in, one to each input, in the order "
+            "the plan lists them."
+        )
+    return at
+
+
+def _starts(block: CheckedBlock) -> bool:
+    """Whether a run starts at the block: it takes no wire in, and sends items on."""
+    return any(link.kind == MAIN for link in block.exits)

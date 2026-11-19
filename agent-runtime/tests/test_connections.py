@@ -199,6 +199,6 @@ def test_describe_gives_the_exits_and_inputs_a_wire_names(catalogue: Catalogue):
     model = catalogue.describe_block("@n8n/n8n-nodes-langchain.lmChatOpenAi", 1.3)
     assert (model["exits"], model["inputs"]) == (["ai_languageModel"], [])
     switch = catalogue.describe_block("n8n-nodes-base.switch", 3.4)
-    assert "output key" in switch["exits"]
+    assert "named by its outputKey" in switch["exits"]
     merge = catalogue.describe_block("n8n-nodes-base.merge", 3.2)
     assert "numberInputs" in merge["inputs"]

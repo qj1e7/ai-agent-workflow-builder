@@ -458,9 +458,9 @@ def test_exits_and_inputs_are_n8n_s_own_from_the_catalogue(catalogue: Catalogue)
 @pytest.mark.parametrize(
     ("wires", "said"),
     [
-        ([wire("Route", "Tell", "3")], "'Route' has the exits \"0\", \"1\", \"2\""),
-        ([wire("Route", "Tell", "rule 1")], "'Route' has the exits \"0\", \"1\", \"2\""),
-        ([wire("Is it new", "Tell", "main")], "'Is it new' has the exits \"true\", \"false\""),
+        ([wire("Route", "Tell", "3")], '\'Route\' has the exits "0", "1", "2"'),
+        ([wire("Route", "Tell", "rule 1")], '\'Route\' has the exits "0", "1", "2"'),
+        ([wire("Is it new", "Tell", "main")], '\'Is it new\' has the exits "true", "false"'),
         ([into("Is it new", "Merge", "true", 3)], "joins input 3 of 'Merge', which takes 3"),
         ([into("Is it new", "Tell", "true", 1)], "joins input 1 of 'Tell', which takes 1"),
         ([into("Is it new", "Merge", "true", -1)], "joins input -1 of 'Merge'"),
@@ -982,6 +982,9 @@ def test_a_switch_s_exits_follow_its_rules_and_a_written_count_is_held(catalogue
     assert passed(catalogue, plan([huge, targets[0]], [wire("Route", "Tell 1", "79")]))
     out_of_range = plan([huge, targets[0]], [wire("Route", "Tell 1", "80")])
     assert any("has the exits" in p.text for p in problems(catalogue, out_of_range))
+    same = block("Route", "n8n-nodes-base.switch", 3.4, rules={"values": [{"outputKey": "a"}] * 2})
+    either = plan([same, targets[0]], [wire("Route", "Tell 1", "a")])
+    assert any('has the exits "a", "a"' in p.text for p in problems(catalogue, either))
 
 
 # Found by the safety review of 7901cd7f. Each of these passed the check there.
