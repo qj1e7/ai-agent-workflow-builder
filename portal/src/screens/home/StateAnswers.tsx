@@ -11,7 +11,7 @@ import { OpenButton } from '../../ui/OpenItem'
 import { REFRESH_MS, rowsOf, viewerOf } from '../workflows/workflow'
 import { behindWords, hasNewer, REFRESH_MS as WATCH_REFRESH } from '../software/software'
 import { useCapabilities } from '../../api/plannerQueries'
-import { ideasSay, needsSay, startingPoints, workflowsSay } from './answers'
+import { ideasSay, needsSay, oneWorkflowSay, startingPoints, workflowsSay } from './answers'
 import { useAsker } from './asker'
 import { leadWords, waitingFor } from '../run/approvalWords'
 import { ApprovalCards } from './ApprovalCards'
@@ -48,7 +48,9 @@ export function CheckWorkflowsAnswer({ useCaseId, now, say }: { useCaseId: strin
     return useCaseId === null ? all : all.filter((row) => row.useCase.use_case_id === useCaseId)
   }, [me.data, useCases.data, useCaseId])
   const asker = useAsker()
-  const sentence = rows ? workflowsSay(rows, asker) : null
+  const nameOf = useDisplayName()
+  const [only] = rows?.length === 1 ? rows : []
+  const sentence = only ? oneWorkflowSay(only.useCase, now, nameOf) : rows ? workflowsSay(rows, asker) : null
   useSaidOnce(sentence, say)
   if (!rows) {
     return (

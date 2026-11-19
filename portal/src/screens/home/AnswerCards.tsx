@@ -13,7 +13,7 @@ import softwareStyles from '../software/Software.module.css'
 import { ChangedInN8nAnswer } from './ChangedCard'
 import { AskTheTeam } from './AskTheTeam'
 import { useAsker } from './asker'
-import { cantLines, capabilityCard, offerLabel, oneLine, questionActions, refusalNext, SAY_ANOTHER_WAY, startingPoints, startSteps, stateWords, switchedSay, unwatchedSay, watchlistSwitchNote, type Asker } from './answers'
+import { cantLines, capabilityCard, offerLabel, oneLine, questionActions, refusalNext, SAY_ANOTHER_WAY, START_LEAD, startingPoints, startSteps, stateWords, switchedSay, unwatchedSay, watchlistSwitchNote, type Asker } from './answers'
 import { cardFrom } from './card'
 import { asksOnCard, cantOnCard, crossesInstead, crossesOnCard, followedNothing } from './parts'
 import { SetupCard, type CardStart } from './SetupCard'
@@ -273,11 +273,12 @@ export function DidntFollowCard({ typed, page }: { typed: string; page: Page }) 
   )
 }
 
-/** How to start: the steps from their words to the yes, then the registry’s examples as chips that ask the Planner for them. */
+/** How to start: what the app is for, the steps from their words to the yes, then the registry’s examples as chips that ask the Planner for them. */
 function HowToStart({ view, page }: { view: CapabilitiesView; page: Page }) {
   const examples = startingPoints(view)
   return (
     <Card title="How to start">
+      <p>{START_LEAD}</p>
       <ol className={styles['steps']}>
         {startSteps(view).map((step) => (
           <li key={step}>{step}</li>

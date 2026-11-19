@@ -135,8 +135,12 @@ export function rowLine(useCase: Pick<UseCaseView, 'last_run' | 'schedule'> & Pa
   const schedule = useCase.schedule ? scheduleShort(useCase.schedule) : 'No schedule'
   const running = useCase.move_refused ? `${schedule}, not running` : schedule
   const when = useCase.held_in_n8n ? `${running} · ${useCase.held_in_n8n.name} has it open in n8n` : running
-  const last = useCase.last_run
-  return last ? `${when} · last run ${dayOf(last.at, now)}, ${lowerFirst(lastRunWhat(last, nameOf, 'line'))}` : `${when} · no runs yet`
+  return `${when} · ${lastRunLine(useCase, now, nameOf)}`
+}
+
+/** The row's words for the newest run, "last run today, done" or "no runs yet", which the chat's sentence about one workflow reads too. */
+export function lastRunLine({ last_run: last }: Pick<UseCaseView, 'last_run'>, now: Date, nameOf: NameOf): string {
+  return last ? `last run ${dayOf(last.at, now)}, ${lowerFirst(lastRunWhat(last, nameOf, 'line'))}` : 'no runs yet'
 }
 
 /** The line without its label, for the side panel's Last run, where a declined run gives its whole record. Null before the first run. */

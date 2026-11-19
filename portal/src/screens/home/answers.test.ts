@@ -7,6 +7,7 @@ import question from '../../../../contracts/fixtures/planner/answer.question.jso
 import refused from '../../../../contracts/fixtures/planner/answer.refused.json'
 import setupCard from '../../../../contracts/fixtures/planner/answer.setup_card.json'
 import watchlist from '../../../../contracts/fixtures/planner/answer.watchlist.json'
+import stoppedUseCase from '../../../../contracts/fixtures/builder/use-case.stopped.json'
 import type { Row } from '../workflows/workflow'
 import type { CantReply, CapabilitiesView, PartReply, PlannerReply, SetupCardReply, UseCaseView, WatchlistReply } from '../../api/types'
 import {
@@ -236,9 +237,15 @@ describe('Check my workflows about the one workflow they have', () => {
   })
 
   it('names no next run while it is paused, and says how its last run went', () => {
-    const last = { state: 'succeeded', at: '2026-11-20T00:30:00Z' } as unknown as UseCaseView['last_run']
+    const last: UseCaseView['last_run'] = {
+      ...(stoppedUseCase as UseCaseView).last_run!,
+      state: 'succeeded',
+      at: '2026-11-20T00:30:00Z',
+      reason: null,
+    }
     const said = oneWorkflowSay(one({ state: 'paused', last_run: last, next_run_at: '2026-11-21T01:00:00Z' }), NOW, nameOf)
     expect(said).toMatch(/^“.+” is paused\. Last run today, .+\.$/)
     expect(said).not.toContain('runs next')
+    expect(said).not.toContain('..')
   })
 })
