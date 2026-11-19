@@ -96,7 +96,7 @@ def offered(tool: Tool) -> dict[str, Any]:
     """The tool, strict. langchain passes a tool in OpenAI's shape through unchanged, so the
     strict schema is made here: every property required and no other property allowed, at every
     level. `bind_tools(strict=True)` then carries the mark to Anthropic too."""
-    schema = _untitled(tool.shape.model_json_schema())
+    schema = _bare(tool.shape.model_json_schema())
     description = " ".join((schema.pop("description", "") or "").split())
     function = convert_to_openai_function(
         {"name": tool.name, "description": description, "parameters": schema}, strict=True
@@ -104,20 +104,21 @@ def offered(tool: Tool) -> dict[str, Any]:
     return {"type": "function", "function": function}
 
 
-def _untitled(schema: Json) -> Json:
-    """The JSON schema without pydantic's titles, which no model reads."""
+def _bare(schema: Json) -> Json:
+    """The JSON schema without pydantic's titles, which no model reads, and its defaults, which a
+    strict tool can't have, since it requires every property."""
     kept: Json = {}
     for key, value in schema.items():
-        if key == "title":
+        if key in ("title", "default"):
             continue
         if key in ("properties", "$defs") and isinstance(value, dict):
             kept[key] = {
-                name: _untitled(cast(Json, inner)) for name, inner in cast(Json, value).items()
+                name: _bare(cast(Json, inner)) for name, inner in cast(Json, value).items()
             }
         elif key in ("items", "additionalProperties") and isinstance(value, dict):
-            kept[key] = _untitled(cast(Json, value))
+            kept[key] = _bare(cast(Json, value))
         elif key in ("anyOf", "allOf", "oneOf") and isinstance(value, list):
-            kept[key] = [_untitled(cast(Json, inner)) for inner in cast(list[object], value)]
+            kept[key] = [_bare(cast(Json, inner)) for inner in cast(list[object], value)]
         else:
             kept[key] = value
     return kept
