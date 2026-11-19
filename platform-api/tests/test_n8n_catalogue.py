@@ -305,6 +305,38 @@ def test_the_file_is_the_same_whatever_order_n8n_serves_in_with_one_block_a_line
     assert json.loads(forwards) == catalogue(served(), PIN, OWN)
 
 
+def test_propose_a_change_lists_the_writes_the_editor_would_load_and_other_choices_stay_open():
+    """n8n loads Propose a change's changes from our API while it runs (`getWriteActions`). They
+    are the same for every team, so the catalogue lists them for the drafter. Places are the
+    team's own and stay open."""
+    loaded = {"type": "options", "default": "", "options": []}
+    propose = {
+        "name": "CUSTOM.wabProposeChange",
+        "displayName": "Propose a change",
+        "version": 1,
+        "properties": [
+            {**loaded, "name": "action", "typeOptions": {"loadOptionsMethod": "getWriteActions"}},
+            {**loaded, "name": "place", "typeOptions": {"loadOptionsMethod": "getPlaces"}},
+        ],
+    }
+    theirs = {
+        "name": "n8n-nodes-base.jira",
+        "version": 1,
+        "properties": [
+            {**loaded, "name": "project", "typeOptions": {"loadOptionsMethod": "getWriteActions"}}
+        ],
+    }
+
+    made = catalogue([propose, theirs], PIN, {"n8n-nodes-base.jira"})
+    action, place = made["blocks"]["CUSTOM.wabProposeChange"]["versions"][0]["parameters"]
+
+    assert action["options"] == [{"name": "Create a Jira ticket", "value": "jira.create_ticket"}]
+    assert action["typeOptions"] == {"loadOptionsMethod": "getWriteActions"}
+    assert place["options"] == []
+    (project,) = made["blocks"]["n8n-nodes-base.jira"]["versions"][0]["parameters"]
+    assert project["options"] == []
+
+
 def test_an_operation_only_some_versions_offer_names_them():
     notion = {
         "name": "n8n-nodes-base.notion",

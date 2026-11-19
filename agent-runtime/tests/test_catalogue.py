@@ -236,3 +236,60 @@ def test_find_marks_a_held_block_and_not_one_spike_p9_let_load(catalogue: Catalo
 
 def test_find_with_no_telling_word_finds_nothing(catalogue: Catalogue):
     assert catalogue.find_blocks("the and of") == []
+
+
+READ = "CUSTOM.wabRead"
+PROPOSE = "CUSTOM.wabProposeChange"
+ASK = "CUSTOM.wabAskForYes"
+MAKE = "CUSTOM.wabMakeApprovedChanges"
+APPROVALS = {"n8n-nodes-base.slack", "n8n-nodes-base.gmail", "n8n-nodes-base.microsoftTeams"}
+"""n8n's blocks that send a message and wait for an approval."""
+
+
+@pytest.mark.parametrize(
+    ("words", "ours", "theirs"),
+    [
+        ("github releases", READ, {GITHUB}),
+        ("new release", READ, {GITHUB}),
+        ("read releases", READ, {GITHUB}),
+        ("check for new releases", READ, {GITHUB}),
+        ("propose a ticket", PROPOSE, {JIRA}),
+        ("create a jira ticket", PROPOSE, {JIRA}),
+        ("create a jira issue", PROPOSE, {JIRA}),
+        ("open a jira ticket", PROPOSE, {JIRA}),
+        ("ask for a yes", ASK, APPROVALS),
+        ("ask for approval", ASK, APPROVALS),
+        ("make the approved changes", MAKE, {JIRA}),
+    ],
+)
+def test_find_puts_the_block_of_ours_for_the_job_above_n8n_s_own(
+    catalogue: Catalogue, words: str, ours: str, theirs: set[str]
+):
+    """ADR 0051: a release check reads with our Read, and a Jira write and the yes before it go
+    through our blocks, so the drafter must find ours by what they do and the sources they read
+    or write, not only by their names."""
+    found = [b["type"] for b in catalogue.find_blocks(words)]
+
+    assert found[0] == ours, found
+    assert all(found.index(ours) < found.index(t) for t in theirs if t in found), found
+
+
+def test_find_shows_the_choice_of_ours_that_matches(catalogue: Catalogue):
+    read = catalogue.find_blocks("github releases")[0]
+
+    assert read["choices"] == [
+        {"parameter": "source", "value": "github_releases", "name": "GitHub Releases"}
+    ]
+    propose = catalogue.find_blocks("create a jira ticket")[0]
+    assert propose["choices"] == [
+        {"parameter": "action", "value": "jira.create_ticket", "name": "Create a Jira ticket"}
+    ]
+
+
+def test_propose_a_change_lists_the_changes_the_platform_offers(catalogue: Catalogue):
+    """n8n loads them from platform-api while it runs. The catalogue lists the same ones, so the
+    drafter sees that no Confluence change is offered yet."""
+    described = catalogue.describe_block(PROPOSE)
+    action = next(p for p in described["parameters"] if p["name"] == "action")
+
+    assert action["options"] == [{"name": "Create a Jira ticket", "value": "jira.create_ticket"}]

@@ -335,6 +335,23 @@ def test_n8n_s_own_jira_and_confluence_blocks_may_read(catalogue: Catalogue, rea
     assert not isinstance(found, list) or not [p for p in found if p.code == "native_write"]
 
 
+def test_propose_a_change_takes_only_a_change_the_platform_offers(catalogue: Catalogue):
+    """Before, any written action passed the check, so a Confluence change the platform doesn't
+    offer passed too, and the run refused it later."""
+    confluence = json.loads(PROPOSE["parameters"]) | {
+        "action": "confluence.update_page",
+        "place": "<<confluence_page>>",
+    }
+    proposed = plan(
+        [PROPOSE | {"parameters": json.dumps(confluence)}],
+        settings=[setting("confluence_page", "confluence_page", "Software inventory")],
+    )
+
+    found = problems(catalogue, proposed)
+    assert [p.code for p in found] == ["bad_value"]
+    assert 'action must be one of "jira.create_ticket"' in found[0].text
+
+
 @pytest.mark.parametrize(
     ("guess", "kind"),
     [
