@@ -70,7 +70,7 @@ from agent_runtime.reading import (
     without_runs_by_itself,
 )
 from agent_runtime.removals import another, points_back, removal_of
-from agent_runtime.watch_words import watches_them
+from agent_runtime.watch_words import surely_watches_them
 
 NOT_FOLLOWED: Final = "I didn't follow this part."
 SKIP_PART_NOTE: Final = "I can't skip the yes. Nothing is written without a yes."
@@ -155,19 +155,61 @@ def parts_of(
     if isinstance(answer, FreeReplyAnswer | DidntFollowAnswer):
         mark, reason = _whole_message(answer)
         return [_part(text, c, mark, reason) for c in clauses]
-    return [with_which_software(read, p) for p in _marked(read, text, clauses, answer, facts)]
+    return with_which_software(read, answer, _marked(read, text, clauses, answer, facts))
 
 
-def with_which_software(read: TaskRead | None, part: RequestPart) -> RequestPart:
-    """A cross of "I didn't follow this part" or "Ask this on its own" on words that only ask to
-    watch more than one thing, as "track them" or "keep an eye on all three", says which software
-    is unclear instead: on their own they ask "Which software should I watch?" (`watches_them`).
-    Beside a ticket search or a ticket, "them" can mean the tickets, so the cross stays."""
-    tickets = read is not None and (read.search is not None or read.ticket is not None)
-    general = part.reason in ("not_followed", "ask_on_its_own")
-    if tickets or not general or watches_them(part.text) is None:
-        return part
-    return part.model_copy(update={"reason": "which_software"})
+def with_which_software(
+    read: TaskRead | None, answer: PlannerAnswer, parts: list[RequestPart]
+) -> list[RequestPart]:
+    """The parts, with each cross of "I didn't follow this part" or "Ask this on its own" on words
+    that only ask to watch more than one thing, as "track them" or "keep an eye on all three",
+    saying which software is unclear instead. On their own the words ask "Which software should I
+    watch?". Only where "them" can mean nothing but software, by an allow-list: a verb that asks
+    for nothing but a watch (`surely_watches_them`), a reading of no ticket, place or workflow,
+    and each other part read by an answer about software alone, or words no rule read that name
+    no part of a task. Anywhere else the cross stays."""
+    them = [_crossed_watch_of_them(part) for part in parts]
+    if not any(them) or (
+        read is not None and any((read.search, read.ticket, read.place, read.workflow_words))
+    ):
+        return parts
+    software = _about_software_only(answer)
+    others = (part for part, plural in zip(parts, them, strict=True) if not plural)
+    if not all(_names_nothing_else(part, software) for part in others):
+        return parts
+    return [
+        part.model_copy(update={"reason": "which_software"}) if plural else part
+        for part, plural in zip(parts, them, strict=True)
+    ]
+
+
+def _crossed_watch_of_them(part: RequestPart) -> bool:
+    general = part.reason in ("not_followed", "ask_on_its_own", "which_software")
+    return part.mark == "cant" and general and surely_watches_them(part.text)
+
+
+def _about_software_only(answer: PlannerAnswer) -> bool:
+    """Whether the answer reads software and nothing else: a watch with no workflow beside it, a
+    can't whose only offer is that watch, the question which software to watch, or a question
+    about software or the watchlist alone."""
+    match answer:
+        case WatchlistAnswer(also=None) | WhichSoftwareAnswer():
+            return True
+        case CantAnswer(alternative=WatchlistAnswer(also=None)):
+            return True
+        case QuestionAnswer():
+            only_the_watchlist = set(answer.looked_at) <= {"watchlist"}
+            return only_the_watchlist and bool(answer.about_software or answer.looked_at)
+        case _:
+            return False
+
+
+def _names_nothing_else(part: RequestPart, about_software: bool) -> bool:
+    """Whether a part names nothing "them" could mean: one an answer about software alone reads,
+    or words no rule read that order nothing and name no part of a task (`_a_task`)."""
+    if part.mark != "cant":
+        return about_software
+    return part.reason == "not_followed" and not _a_task(part.text)
 
 
 def _marked(

@@ -397,9 +397,9 @@ describe('the clauses an answer didn’t read', () => {
   })
 
   it('ask for a watch of them again with the software’s name, with no button that sends the same words', () => {
+    const asked: PartView = { text: 'is LangGraph up to date', mark: 'will_do', reason: null, note: null, choices: [] }
     const them: PartView = { text: 'track them for me', mark: 'cant', reason: 'which_software', note: null, choices: [] }
-    const paused: PauseReply = { ...(pauseReply as PauseReply), parts: [...(pauseReply as PauseReply).parts, them] }
-    const html = draw(paused, { leftovers: true })
+    const html = draw({ ...(question as QuestionReply), parts: [asked, them] }, { leftovers: true })
     expect(text(html)).toBe('Can’t do: “track them for me” I can’t tell which software you mean. Ask again with its name.')
     expect(buttons(html)).toEqual([])
   })

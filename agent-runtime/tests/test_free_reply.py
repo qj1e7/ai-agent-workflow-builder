@@ -322,25 +322,33 @@ def test_a_message_naming_an_unbuilt_thing_carries_the_registrys_words_in_the_no
     ]
 
 
-def test_a_card_that_says_which_software_is_unclear_is_no_dead_end():
-    """Asking again with its name is a way on, and a free reply can't tell which software "them"
-    means either: it would answer the whole message and drop the cross."""
+def test_which_software_is_unclear_is_a_dead_end_only_beside_one():
+    """Alone, asking again with its name is a way on, and a free reply can't tell which software
+    "them" means either. Beside a part it didn't follow, the model gets its chance at that part."""
     unclear = RequestPart(text="track them", mark="cant", reason="which_software")
     lost = RequestPart(text="flibber the wotsit", mark="cant", reason="not_followed")
+    asked = RequestPart(text="how many are open?", mark="cant", reason="ask_on_its_own")
     cant = CantAnswer(cant=[CantRow(kind="look_for", text="flibber", note="x")])
-    assert dead_end(cant, [lost], "x") is not None
     assert dead_end(cant, [unclear], "x") is None
-    assert dead_end(cant, [lost, unclear], "x") is None
+    assert dead_end(cant, [unclear, unclear], "x") is None
+    assert dead_end(cant, [lost, unclear], "x") is not None
+    assert dead_end(cant, [asked, unclear], "x") is not None
 
 
-def test_track_them_beside_words_it_didnt_follow_keeps_its_cross_and_gets_no_free_reply():
-    result, chat = answered("flibber the wotsit, and track them", reading("none"))
+def test_a_message_of_nothing_but_watches_of_them_keeps_its_crosses_with_no_free_reply():
+    result, chat = answered("track them, and keep an eye on all three", reading("none"))
     assert asked_shapes(chat) == ["TaskRead"]
     assert isinstance(result.answer, CantAnswer)
-    assert [(p.text, p.reason) for p in result.parts] == [
-        ("flibber the wotsit", "not_followed"),
-        ("track them", "which_software"),
-    ]
+    assert {p.reason for p in result.parts} == {"which_software"}
+
+
+@pytest.mark.parametrize(
+    "task", ["flibber the wotsit, and track them", "retry the failed runs and monitor them"]
+)
+def test_a_watch_of_them_beside_words_it_didnt_follow_gets_the_free_reply(task: str):
+    result, chat = answered(task, reading("none"), HELPFUL, CLEAN)
+    assert asked_shapes(chat) == ["TaskRead", "ReplyEnvelope", "Verdict"]
+    assert result.answer == FreeReplyAnswer(form="answer", text=HELPFUL.text)
 
 
 def test_each_dead_end_says_which_rule_ended_there():

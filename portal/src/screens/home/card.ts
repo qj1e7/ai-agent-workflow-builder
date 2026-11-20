@@ -634,20 +634,24 @@ const STEPS: readonly unknown[] = [1, 2, 3, 4]
 const ROW_STATES: readonly unknown[] = ['understood', 'changed', 'missing', 'cant_do', 'edited']
 const OFTEN: readonly unknown[] = ['', 'every_day', 'weekdays', 'week']
 const MARKS: readonly unknown[] = ['will_do', 'cant', 'question']
-const REASONS: readonly unknown[] = [
-  'not_followed',
-  'cant_do',
-  'ask_on_its_own',
-  'one_day',
-  'one_time',
-  'one_frequency',
-  'own_time',
-  'skip_approval',
-  'with_a_yes',
-  'needs_the_rest',
-  'how_many_days',
-  'which_software',
-]
+/** Every reason a saved part may hold. The type keeps it complete, so a draft never drops a cross with a new reason. */
+const REASONS: readonly unknown[] = Object.keys({
+  not_followed: true,
+  cant_do: true,
+  ask_on_its_own: true,
+  one_day: true,
+  one_time: true,
+  one_frequency: true,
+  own_time: true,
+  skip_approval: true,
+  with_a_yes: true,
+  needs_the_rest: true,
+  how_many_days: true,
+  operators: true,
+  only_schedule: true,
+  how_often: true,
+  which_software: true,
+} satisfies Record<PartReason, true>)
 
 function isPart(value: unknown): value is PartView {
   return (

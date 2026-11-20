@@ -719,11 +719,16 @@ describe('the Planner’s set-up card', () => {
       expect(restoreDraft(old).form.marked).toEqual([])
     })
 
-    it('keeps a watch of them in a saved draft, with its own reason', () => {
-      const them: PartView = { text: 'track them', mark: 'cant', reason: 'which_software', note: null, choices: [] }
-      const form = cardFrom(CROSS.name, CROSS.rows, 'x', [...CROSS.parts, them])
+    it.each([
+      ['track them', 'which_software'],
+      ['monthly', 'how_often'],
+      ['rename it', 'only_schedule'],
+      ['pause the morning check', 'operators'],
+    ] as const)('keeps “%s” in a saved draft, with its reason %s', (text, reason) => {
+      const crossed: PartView = { text, mark: 'cant', reason, note: null, choices: [] }
+      const form = cardFrom(CROSS.name, CROSS.rows, 'x', [...CROSS.parts, crossed])
       const draft = saved(2, JSON.parse(JSON.stringify(draftContent(form, null))) as Record<string, unknown>)
-      expect(restoreDraft(draft).form.marked).toContainEqual(them)
+      expect(restoreDraft(draft).form.marked).toContainEqual(crossed)
     })
   })
 

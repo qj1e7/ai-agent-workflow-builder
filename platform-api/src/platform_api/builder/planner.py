@@ -1004,9 +1004,8 @@ def _parts(clauses: list[asks.Clause], answered: asks.Ask | None) -> list[PartVi
 
 def _remark(part: PartView) -> PartView:
     """A clause that asks for a change is never ticked, whatever the reading made of it, and
-    only a question is: anything else ticked gets its cross. A watch the runtime read, as "check
-    them all", is a change whatever its verb."""
-    ask = "change" if part.reason == "which_software" else asks.ask_of(part.text)
+    only a question is: anything else ticked gets its cross."""
+    ask = asks.ask_of(part.text)
     if ask == "change" or (part.mark == "will_do" and ask not in ("question", "decided")):
         return _cross(part.text, CROSS_FOR[ask])
     return part

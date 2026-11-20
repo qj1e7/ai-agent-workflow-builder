@@ -86,7 +86,7 @@ from agent_runtime.reading import SAID_LIMIT, clauses_of, how_often, polite, sai
 from agent_runtime.reply_guard import GuardCheck, about_of
 from agent_runtime.reply_verifier import VerifierFlag, verify
 from agent_runtime.summary import ChatFor
-from agent_runtime.watch_words import watches_it
+from agent_runtime.watch_words import watch_verb_in, watches_it
 
 log = logging.getLogger(__name__)
 
@@ -315,12 +315,11 @@ def _located(text: str, quote: str, start: int) -> Span | None:
 
 
 def held_to_reach(
-    text: str, parts: list[RequestPart], reached: frozenset[Span], read: TaskRead | None
+    text: str, parts: list[RequestPart], reached: frozenset[Span]
 ) -> list[RequestPart]:
     """The marks with every tick or question outside the reached clauses crossed with Ask this on
-    its own, which sends it as its own message (ADR 0049, decision 2), or with which software is
-    unclear for a watch of them, as the rules cross it (`with_which_software`). A cross stays as
-    it is. A part that can't be placed in one reached clause is in doubt, so it is crossed too."""
+    its own, which sends it as its own message (ADR 0049, decision 2). A cross stays as it is. A
+    part that can't be placed in one reached clause is in doubt, so it is crossed too."""
     clauses = clauses_in(text)
     held: list[RequestPart] = []
     at = 0
@@ -330,15 +329,16 @@ def held_to_reach(
         if part.mark == "cant" or clause_holding(clauses, span) in reached:
             held.append(part)
         else:
-            crossed = RequestPart(text=part.text, mark="cant", reason="ask_on_its_own")
-            held.append(with_which_software(read, crossed))
+            held.append(RequestPart(text=part.text, mark="cant", reason="ask_on_its_own"))
     return held
 
 
 def _shown(turn: Turn, answer: PlannerAnswer, reached: frozenset[Span]) -> Acted:
-    """A one-action tool's answer with the rules' marks held to what its arguments reach, unless
-    that leaves a dead end ADR 0047 names: then the model hears what the rules found."""
-    parts = held_to_reach(turn.text, turn.marks(answer), reached, turn.front.read)
+    """A one-action tool's answer with the rules' marks held to what its arguments reach, and a
+    watch of them it crosses held to the rules' allow-list (`with_which_software`), unless that
+    leaves a dead end ADR 0047 names: then the model hears what the rules found."""
+    held = held_to_reach(turn.text, turn.marks(answer), reached)
+    parts = with_which_software(turn.front.read, answer, held)
     gap = dead_end(answer, parts, turn.request.task)
     if gap is not None:
         found = " ".join(gap.notes)
@@ -566,14 +566,16 @@ def _change(raw: Mapping[str, Any], turn: Turn) -> Acted:
 
 def _unexplained(turn: Turn) -> frozenset[Span]:
     """The clauses the rules' reading leaves unexplained, which How to start and what the
-    Planner can do may answer: each the rules mark "I didn't follow this part", and each the
-    catch-all list of abilities ticks as a question about the app. A clause the reading puts on
-    any other lane is not one of them."""
+    Planner can do may answer: each the rules mark "I didn't follow this part" that asks to
+    watch nothing, and each the catch-all list of abilities ticks as a question about the app. A
+    clause the reading puts on any other lane is not one of them, nor is "keep track of it", which
+    no list of abilities does."""
     front = turn.front.answer
     clauses = turn.clauses
     found: set[Span] = set()
     for part in turn.marks(front):
-        unread = part.mark == "cant" and part.reason == "not_followed"
+        watch = watch_verb_in(part.text) is not None
+        unread = part.mark == "cant" and part.reason == "not_followed" and not watch
         about_the_app = isinstance(front, AbilitiesAnswer) and part.mark == "will_do"
         clause = clause_holding(clauses, locate(turn.text, part.text))
         if (unread or about_the_app) and clause is not None:
@@ -601,7 +603,7 @@ def _show(raw: Mapping[str, Any], turn: Turn) -> Acted:
                 )
             answer = AbilitiesAnswer(how_to_start=args.what == "how_to_start")
             whole = parts_of(None, turn.request.task, FreeReplyAnswer(form="answer", text="-"))
-            parts = held_to_reach(text, whole, reached, turn.front.read)
+            parts = held_to_reach(text, whole, reached)
             return Shown(Answered(answer=answer, parts=parts), text, reached)
         case "workflows":
             answer = CheckWorkflowsAnswer(workflow_words=words)
@@ -626,7 +628,7 @@ def _refuse(raw: Mapping[str, Any], turn: Turn) -> Acted:
     rest = without_the_phrase(turn.text, said) or ""
     answer = RefusedAnswer(said=plain(said, SAID_LIMIT), rest=plain(rest, TASK_LIMIT))
     reached = frozenset[Span]()
-    parts = held_to_reach(turn.text, turn.marks(answer), reached, turn.front.read)
+    parts = held_to_reach(turn.text, turn.marks(answer), reached)
     return Shown(Answered(answer=answer, parts=parts), turn.text, reached)
 
 
