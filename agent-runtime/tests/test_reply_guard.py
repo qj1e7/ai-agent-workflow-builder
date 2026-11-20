@@ -394,6 +394,136 @@ def test_the_yes_said_plainly_passes(text: str):
     assert keeps_every_yes(shown_of(said(text)), OPERATOR)
 
 
+# An honest can't (ADR 0047, amended 20 Nov 2026). A first-person negation that acts directly on
+# the words it denies clears them, through an allow-list of shapes. Anything else still fails.
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "I can't create a ticket without a yes.",
+        "I can't create a Jira ticket without an Approver's yes, because every new Jira ticket "
+        "waits for an Approver's yes in Teams.",
+        "I can't create a new Jira ticket without an Approver's yes, and the person who asked is "
+        "never the Approver of their own request.",
+        "I don't create tickets without an Approver's yes. Type what the ticket should say in the "
+        "box on Home, and it waits for an Approver's yes.",
+        "I never create a ticket without approval.",
+        "I can't book a meeting room. Nothing I can do comes close to that, so tap Ask the team.",
+        "Uploading to SharePoint isn't something I can do yet. Tap Ask the team.",
+        "Every change waits for an Approver's yes.",
+    ],
+)
+def test_an_honest_cant_in_an_allowed_shape_passes_for_both_roles(text: str):
+    assert failed_check(shown_of(said(text)), OPERATOR) is None
+    assert failed_check(shown_of(said(text)), APPROVER) is None
+
+
+@pytest.mark.parametrize(
+    ("text", "check"),
+    [
+        ("I can't believe the ticket was created.", "claims_done"),
+        ("I can't wait, the ticket is created.", "claims_done"),
+        ("I didn't need a yes, it's done.", "claims_done"),
+        ("I can't stop it, the workflow is now live.", "claims_done"),
+        ("I don't need approval for this.", "skips_a_yes"),
+        ("It isn't waiting for a yes.", "skips_a_yes"),
+        ("This change doesn't wait for an Approver.", "skips_a_yes"),
+        ("The ticket won't need to wait for approval.", "skips_a_yes"),
+    ],
+)
+def test_a_near_miss_of_an_honest_cant_still_fails(text: str, check: str):
+    assert failed_check(shown_of(said(text)), OPERATOR) == check
+    assert failed_check(shown_of(said(text)), APPROVER) == check
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "I can't create a ticket without a yes, but you can.",
+        "I can't create a ticket without a yes, but an Operator can create one.",
+        "I can't create a ticket without a yes, and an Operator can.",
+        "I can't create a ticket without a yes, and so can you.",
+        "I can't create a ticket without a yes yet.",
+        "I can't create a ticket without a yes until Friday.",
+        "I can't create a ticket without a yes, until Friday.",
+        "I can't create a ticket without a yes, so it goes straight through.",
+        "I can't create a ticket without a yes, and the next one goes out at once.",
+        "I can't create a ticket without a yes, and the rest go straight in.",
+        "I can't wait to create tickets without a yes.",
+        "I didn't create the ticket without a yes.",
+        "I can't delete a ticket without a yes.",
+        "I can't post it in Teams without a yes.",
+        "An Operator can, but I can't create a ticket without a yes.",
+        "Nothing I can do comes close, but I can post it in Slack.",
+        "There is nothing I can do in Slack.",
+    ],
+)
+def test_a_denial_that_also_claims_or_leaves_a_skip_open_still_fails(text: str):
+    assert failed_check(shown_of(said(text)), OPERATOR) is not None
+    assert failed_check(shown_of(said(text)), APPROVER) is not None
+
+
+DENIED = "I can't create a ticket without a yes"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        f"{DENIED}, and the yes is optional.",
+        f"{DENIED}, and I say yes.",
+        f"{DENIED}, and I give the yes.",
+        f"{DENIED}, and I count as the Approver.",
+        f"{DENIED}, and an Operator can create one.",
+        f"{DENIED}, and Operators create them in one tap.",
+        f"{DENIED}, and approval is skipped.",
+        f"{DENIED}, and the gate is off.",
+        f"{DENIED}, and it goes ahead anyway.",
+        f"{DENIED}, and you're allowed to create one.",
+        f"{DENIED}, and you may create one yourself.",
+        f"{DENIED}, and this one is exempt.",
+        f"{DENIED}, and you needn't wait.",
+        f"{DENIED}, because you already gave it.",
+        f"{DENIED}, and the Approver says yes.",
+        f"An Operator can create one, because {DENIED}.",
+        f"{DENIED}.\nBut you can.",
+        f"{DENIED}. The gate is off.",
+        f"{DENIED}. Every change waits for an Approver's yes. But you can.",
+        f"An Operator can create one. {DENIED}.",
+        "Nothing I can do but book a room.",
+        "Nothing I can do except book a room for you.",
+        "It isn't anything I can do, apart from book the room.",
+        "Nothing I can do is better than booking a room for you.",
+        "Nothing I can do waits for a yes.",
+        "Nothing I can do needs a yes.",
+        "Nothing that I can do is stopped by an Approver.",
+        "Nothing I can do is off limits.",
+        "Nothing I can do, and book the room for you.",
+        "It needn't wait.",
+        "It need not wait for a yes.",
+    ],
+)
+def test_what_the_safety_review_found_still_falls_back(text: str):
+    """Each passed the first allow-lists. A denial may stand only beside the prompt's own words
+    about a yes, and a negated "I can" covers only "do" up to the end of its clause."""
+    assert failed_check(shown_of(said(text)), OPERATOR) is not None
+    assert failed_check(shown_of(said(text)), APPROVER) is not None
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "You can't create a ticket without a yes.",
+        "Sorry, I can't create a ticket without a yes.",
+        "I can't read it without a yes.",
+        "Nothing the platform can do comes close, so tap Ask the team.",
+        "If you need SharePoint, tap Ask the team.",
+    ],
+)
+def test_a_denial_in_a_shape_off_the_allow_list_still_fails(text: str):
+    assert failed_check(shown_of(said(text)), OPERATOR) is not None
+
+
 # 7. Nothing made up.
 
 
