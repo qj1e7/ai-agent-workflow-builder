@@ -922,3 +922,21 @@ def test_a_write_that_leads_a_day_keeps_the_can_t_a_write_gets_on_the_card(
         f"{said}, list tickets in MOCK and raise one ticket that lists them", schedule
     )
     assert [(p.text, p.reason) for p in parts if p.mark == "cant"] == [(said, "cant_do")]
+
+
+@pytest.mark.parametrize(
+    "said",
+    [
+        "pls every Monday at 9am",
+        "plz every Monday at 9am",
+        "every Monday at 9am pls",
+        "every Monday at 9am plz",
+    ],
+)
+def test_pls_beside_the_day_shows_the_schedule_on_the_card(said: str):
+    """At 105bae9f, the card asked how often and quoted "pls every Monday at 9am"."""
+    row, parts = card_for(
+        f"{said}, list tickets in MOCK and raise one ticket that lists them", "Every Monday at 9am"
+    )
+    assert (row.text, row.state) == ("Every Monday at 9am", "understood")
+    assert not any(p.reason == "how_often" for p in parts)

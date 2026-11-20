@@ -1686,6 +1686,13 @@ def test_a_day_led_by_a_word_the_reader_doesn_t_know_is_asked(catalogue: Catalog
         "the check can nix Mondays",
         "drop the bug report every Monday",
         "Check langgraph and axe every Friday",
+        "have the release check axe every Friday",
+        "let the morning check nix Mondays",
+        "get the check to kill every Monday",
+        "have someone nix every Monday",
+        "have it nix every Monday",
+        "let it skip every Friday",
+        "get rid of every Friday",
     ],
 )
 def test_a_day_after_a_task_s_words_that_start_with_an_unknown_word_is_asked(
@@ -1748,5 +1755,57 @@ def test_a_day_after_a_task_s_words_that_start_with_an_unknown_word_is_asked(
 def test_a_day_led_by_the_task_s_words_or_by_running_it_keeps_the_day(
     words: str, read: tuple[str | None, bool], day: str
 ):
+    assert run_time_in(words) == read
+    assert day_in(words) == day
+
+
+MONDAY_AT_9 = ("monday 09:00", True)
+
+
+@pytest.mark.parametrize(
+    ("words", "read", "day"),
+    [
+        ("pls every Monday at 9am", MONDAY_AT_9, "monday"),
+        ("plz every Monday at 9am", MONDAY_AT_9, "monday"),
+        ("every Monday at 9am pls", MONDAY_AT_9, "monday"),
+        ("every Monday at 9am plz", MONDAY_AT_9, "monday"),
+        ("check langgraph every Monday pls", (None, True), "monday"),
+        ("check langgraph every Monday plz", (None, True), "monday"),
+    ],
+)
+def test_pls_or_plz_beside_the_day_keeps_it(words: str, read: tuple[str | None, bool], day: str):
+    """At 105bae9f, "pls" beside the day left the day out, as a day the words drop."""
+    assert run_time_in(words) == read
+    assert day_in(words) == day
+
+
+@pytest.mark.parametrize(
+    ("words", "read", "day"),
+    [
+        ("Let me know every Monday at 9am", MONDAY_AT_9, "monday"),
+        (
+            "Let the team know about new LangGraph releases every Monday at 9am",
+            MONDAY_AT_9,
+            "monday",
+        ),
+        ("Let us know about LangGraph releases every Monday at 9am", MONDAY_AT_9, "monday"),
+        ("Have a summary ready every Monday at 9am", MONDAY_AT_9, "monday"),
+        ("Have it ready every Monday at 9am", MONDAY_AT_9, "monday"),
+        ("Have the report sent every Monday at 9am", MONDAY_AT_9, "monday"),
+        ("Get alerts every Monday at 9am", MONDAY_AT_9, "monday"),
+        ("Get me the stale tickets every Monday at 9am", MONDAY_AT_9, "monday"),
+        ("Let #ops know about new releases every Friday at 4pm", ("friday 16:00", True), "friday"),
+        ("Have the list posted to #ops every Monday at 9am", MONDAY_AT_9, "monday"),
+        ("Have someone check langgraph every Monday", (None, True), "monday"),
+        ("Let the team review stale tickets every Monday at 9am", MONDAY_AT_9, "monday"),
+        ("Get a digest of new bugs every Monday at 9am", MONDAY_AT_9, "monday"),
+        ("Have it emailed to me every Friday at 4pm", ("friday 16:00", True), "friday"),
+    ],
+)
+def test_an_everyday_have_let_or_get_keeps_the_day(
+    words: str, read: tuple[str | None, bool], day: str
+):
+    """At 105bae9f, after "have", "let" or "get" the word right before the day had to be known,
+    so "Let me know every Monday at 9am" and "Have the report sent ..." asked the day."""
     assert run_time_in(words) == read
     assert day_in(words) == day
