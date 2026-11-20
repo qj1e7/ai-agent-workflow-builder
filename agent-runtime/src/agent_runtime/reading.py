@@ -2069,8 +2069,9 @@ def _runs_of(tokens: list[Token], clause_of: list[int]) -> dict[int, tuple[int, 
 def _task_starts(text: str, tokens: list[Token], clause_of: list[int]) -> list[int | None]:
     """For each token, the word that must be one the reader knows for a day right after it to
     be the run day: the first word of the task's words that end at it, back to the clause's
-    edge or a mark, passing over a word such as "automatically". A word such as "should", or
-    "to" right after a verb, starts the task's words again, as "nix" in "I want to nix Mondays".
+    edge or a mark, passing over a word such as "automatically", one of `DOERS` and a channel,
+    as "#ops" in "#ops nix every Monday". A word such as "should", or "to" right after a verb,
+    starts the task's words again, as "nix" in "I want to nix Mondays".
     After a verb that has something else act, as "make" in "make the release check nix every
     Monday", it is the word itself, unless one of `DOERS` or a name the edit flow turned to
     spaces follows the verb, as in "make it post deadlines every Friday". After any other verb
@@ -2096,6 +2097,7 @@ def _task_starts(text: str, tokens: list[Token], clause_of: list[int]) -> list[i
             start is None
             and _a_word(raw, scheduled)
             and low not in DOERS
+            and text[tokens[n][1] - 1 : tokens[n][1]] != "#"
             and not (low.endswith("ly") and low not in NOT_ADVERBS)
         ):
             start = n
