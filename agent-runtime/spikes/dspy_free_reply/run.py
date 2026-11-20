@@ -1,11 +1,12 @@
 """Steps 2 and 3: parity, the baseline and the 30 replies for the team lead to label (round 1),
 parity again, both paths twice on 20 cases (round 2, `parity2`), the judge's question today and
-a v2 on 50 replies already made (round 3, `rejudge`), and a v3 three times on the same 50
-(round 4, `rejudge3`).
+a v2 on 50 replies already made (round 3, `rejudge`), a v3 three times on the same 50 (round 4,
+`rejudge3`), and the judge question PR fix/gate-judge-role ships, three times on the same 50
+(round 5, `rejudge4`).
 
 Runs on GitHub Actions (`.github/workflows/spike-dspy.yml`) when `STEP` changes, with the
 Anthropic key in ANTHROPIC_API_KEY for that one step:
-    uv run --group spike python -m spikes.dspy_free_reply.run rejudge3
+    uv run --group spike python -m spikes.dspy_free_reply.run rejudge4
 
 Each run stops before a case would pass the round's cap or the spike's $30 (`scoring.Meter`),
 and writes its spend to `spend.json` and its rows to `runs/` after every case."""
@@ -24,11 +25,13 @@ import random  # noqa: E402
 import re  # noqa: E402
 import statistics  # noqa: E402
 import sys  # noqa: E402
+import uuid  # noqa: E402
 from collections import Counter, defaultdict  # noqa: E402
 from typing import Any, Final  # noqa: E402
 
 import dspy  # noqa: E402
 from evals.budget import metered  # noqa: E402
+from evals.jobs import marked  # noqa: E402
 from evals.reply import REPLY, Steps, judge_question, request_of  # noqa: E402
 from evals.runner import (  # noqa: E402
     _KEY_SHAPES,  # pyright: ignore[reportPrivateUsage]
@@ -64,12 +67,16 @@ BASELINE: Final = RUNS / "baseline.json"
 LABELS: Final = RUNS / "label-input.json"
 REJUDGE: Final = RUNS / "rejudge.json"
 REJUDGE3: Final = RUNS / "rejudge3.json"
+QUESTIONS_V4: Final = RUNS / "questions-v4.json"
+"""Each of the 50 rows' judge question, built offline by evals.reply.judge_question at
+e293d08f (PR fix/gate-judge-role) on the case and words v3 used."""
+REJUDGE4: Final = RUNS / "rejudge4.json"
 BATCH2: Final = RUNS / "labels-batch2.json"
 BATCH2_SIZE: Final = 20
-V3_RUNS: Final = 3
+JUDGE_RUNS: Final = 3
 PARITY_CASES: Final = 10
 SEED: Final = 20261120
-PAID: Final = frozenset({"parity", "baseline", "parity2", "rejudge", "rejudge3"})
+PAID: Final = frozenset({"parity", "baseline", "parity2", "rejudge", "rejudge3", "rejudge4"})
 PARITY2_CASES: Final = 20
 RUNS_EACH: Final = 2
 QUIET: Final = ("LiteLLM", "litellm", "httpx", "httpcore", "anthropic", "urllib3")
@@ -605,7 +612,9 @@ def rejudge3() -> None:
             if (stopped := meter.stop_reason()) is not None:
                 break
             case = cases[row["case"]]
-            scores = [judge(model, judge_question_v3(case, row["shown"])) for _ in range(V3_RUNS)]
+            scores = [
+                judge(model, judge_question_v3(case, row["shown"])) for _ in range(JUDGE_RUNS)
+            ]
             rows.append(
                 {"id": row["case"], "set": name, "v3": scores, "v3_median": median_of(scores)}
             )
@@ -624,6 +633,49 @@ def rejudge3() -> None:
     report("Rejudge, v3 three times", summary)
 
 
+def gate_score(runs: list[int | None]) -> int | None:
+    """The score PR fix/gate-judge-role gives three judge runs: any run's 1 is the score,
+    otherwise the lower middle of the runs that answered, None when none did."""
+    given = [s for s in runs if s is not None]
+    if not given:
+        return None
+    return 1 if 1 in given else statistics.median_low(given)
+
+
+def rejudge4() -> None:
+    """Round 5: each saved v4 question three times, each run with its own marker as the PR's
+    `evals.runner.judged` gives it. No Planner or free reply call."""
+    model = planner()
+    meter = Meter("rejudge4")
+    marker = os.environ.get("EVAL_MARKER") or uuid.uuid4().hex[:12]
+    rows: list[dict[str, Any]] = []
+    stopped = None
+    with metered(meter.spend):
+        for saved in json.loads(QUESTIONS_V4.read_text()):
+            if (stopped := meter.stop_reason()) is not None:
+                break
+            runs = [
+                judge(model, marked(saved["question"], f"{marker} judge {n}" if n > 1 else marker))
+                for n in range(1, JUDGE_RUNS + 1)
+            ]
+            rows.append(
+                {"id": saved["id"], "set": saved["set"], "runs": runs, "score": gate_score(runs)}
+            )
+            meter.save()
+            write_json(REJUDGE4, rows)
+            print(f"  {saved['set']} {saved['id']}: {runs} -> {rows[-1]['score']}", flush=True)
+    summary = {
+        "set_a": sum(r["set"] == "A" for r in rows),
+        "set_b": sum(r["set"] == "B" for r in rows),
+        "judge_failures": sum(s is None for r in rows for s in r["runs"]),
+        "scores": dict(sorted(Counter(r["score"] for r in rows).items(), key=str)),
+        "all_three_agree": sum(len(set(r["runs"])) == 1 for r in rows),
+        "stopped": stopped,
+        "spend": meter.save(),
+    }
+    report("Rejudge, the shipped question three times", summary)
+
+
 STEPS: Final = {
     "parity": parity,
     "baseline": baseline,
@@ -631,6 +683,7 @@ STEPS: Final = {
     "parity2": parity2,
     "rejudge": rejudge,
     "rejudge3": rejudge3,
+    "rejudge4": rejudge4,
 }
 
 

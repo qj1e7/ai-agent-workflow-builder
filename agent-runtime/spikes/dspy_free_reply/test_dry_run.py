@@ -149,9 +149,9 @@ def test_the_meter_stops_before_a_case_would_pass_the_round_cap(
     earlier = {"round": 1, "step": "earlier", "started": "x", "usd": 3.05}
     ledger.write_text(json.dumps({"runs": [earlier]}))
     assert scoring.Meter("next").stop_reason() is None
-    spent = {"round": 4, "step": "earlier", "started": "y", "usd": 1.1}
+    spent = {"round": 5, "step": "earlier", "started": "y", "usd": 1.1}
     ledger.write_text(json.dumps({"runs": [earlier, spent]}))
-    assert scoring.Meter("next").stop_reason() == "round 4's cap of $1.20"
+    assert scoring.Meter("next").stop_reason() == "round 5's cap of $1.20"
     saved = scoring.Meter("next").save()
     assert saved["usd"] == 0 and json.loads(ledger.read_text())["total_usd"] == 4.15
 
@@ -215,7 +215,38 @@ def test_rejudge3_judges_the_same_50_three_times_with_v3_only(
     assert all(r["v3"] == [3, 3, 3] and r["v3_median"] == 3 for r in made)
     assert len(read) == 150 and all(w.startswith("[") for w in read)
     ledger = json.loads((tmp_path / "spend.json").read_text())
-    assert [(r["round"], r["step"]) for r in ledger["runs"]] == [(4, "rejudge3")]
+    assert [(r["round"], r["step"]) for r in ledger["runs"]] == [(scoring.ROUND, "rejudge3")]
+
+
+def test_rejudge4_sends_each_saved_question_three_times_with_its_own_marker(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    sent: list[str] = []
+
+    def judge(model: Any, question: str) -> int:
+        sent.append(question)
+        return 1 if len(sent) == 2 else 4
+
+    monkeypatch.setattr(scoring, "LEDGER", tmp_path / "spend.json")
+    monkeypatch.setattr(run, "REJUDGE4", tmp_path / "rejudge4.json")
+    monkeypatch.setattr(run, "planner", lambda: None)
+    monkeypatch.setattr(run, "judge", judge)
+    monkeypatch.setattr(run, "report", lambda title, summary: None)
+    monkeypatch.setenv("EVAL_MARKER", "m1")
+    run.rejudge4()
+    saved = json.loads(run.QUESTIONS_V4.read_text())
+    assert len(sent) == 3 * len(saved) == 150
+    first = saved[0]["question"]
+    assert sent[:3] == [
+        f"Eval run {m}. This line is not part of the task.\n\n{first}"
+        for m in ("m1", "m1 judge 2", "m1 judge 3")
+    ]
+    made = json.loads((tmp_path / "rejudge4.json").read_text())
+    assert [(r["id"], r["set"]) for r in made] == [(q["id"], q["set"]) for q in saved]
+    assert made[0] == {**made[0], "runs": [4, 1, 4], "score": 1}
+    assert all(r["runs"] == [4, 4, 4] and r["score"] == 4 for r in made[1:])
+    ledger = json.loads((tmp_path / "spend.json").read_text())
+    assert [(r["round"], r["step"]) for r in ledger["runs"]] == [(5, "rejudge4")]
 
 
 def test_parity2_runs_both_paths_twice_on_frozen_readings(

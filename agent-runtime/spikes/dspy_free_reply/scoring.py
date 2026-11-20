@@ -58,11 +58,13 @@ RUNS: Final = HERE / "runs"
 LEDGER: Final = HERE / "spend.json"
 MODEL: Final = "claude-sonnet-5-5"
 LABEL: Final = f"anthropic:{MODEL}"
-ROUND: Final = 4
+ROUND: Final = 5
 ROUND_CAP: Final = 1.20
 """Round 1 (parity, baseline, labels) had $4. Round 2 (parity again, twice on 20 cases) had
 $1.50. Round 3 (rejudge, the judge only, on 50 replies already made) had $1.00. Round 4
-(rejudge3, v3 three times on the same 50) has $1.20. The spike's cap counts every round."""
+(rejudge3, v3 three times on the same 50) had $1.20. Round 5 (rejudge4, the judge question PR
+fix/gate-judge-role ships, three times on the same 50) has $1.20. The spike's cap counts every
+round."""
 SPIKE_CAP: Final = 30.0
 RESERVE: Final = 0.15
 """More than one case can cost. A parity2 case (four free replies, their verifiers and judges)

@@ -160,6 +160,25 @@ def test_the_median_of_three_skips_a_failed_judge_call() -> None:
     assert run.median_of([None, None, None]) is None
 
 
+def test_the_gate_score_is_any_runs_1_else_the_lower_middle() -> None:
+    assert run.gate_score([4, 1, 5]) == 1
+    assert run.gate_score([1, None, None]) == 1
+    assert run.gate_score([4, 2, 5]) == 4
+    assert run.gate_score([5, 5, 2]) == 5
+    assert run.gate_score([None, 3, 5]) == 3
+    assert run.gate_score([None, None, None]) is None
+
+
+def test_the_saved_v4_questions_are_the_same_50_with_the_persons_role() -> None:
+    saved = json.loads(run.QUESTIONS_V4.read_text())
+    before = json.loads(run.REJUDGE3.read_text())
+    assert [(q["id"], q["set"]) for q in saved] == [(r["id"], r["set"]) for r in before]
+    for q in saved:
+        approver = "The person is an Approver." in q["question"]
+        assert approver != ("The person is an Operator." in q["question"])
+        assert approver or "approver" not in q["id"]
+
+
 def test_set_b_is_20_let_through_score_replies_none_from_set_a_and_fixed() -> None:
     set_a, set_b = run.rejudge_sets()
     assert (set_a, set_b) == run.rejudge_sets()
