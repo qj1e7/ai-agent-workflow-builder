@@ -2011,6 +2011,8 @@ async function n8nAsk(s) {
   if (b) showTab(b);
   return null;
 }
+/* “what is this” is How to start only about the app, or alone, with nothing after it but marks: the same rule as HOW_TO_START in parts.py. */
+const WHAT_IS_THIS = /\bwhat(?:\s+is|'s|’s)\s+this\s+(?:(?:app|platform|tool)(?:\s+for)?|for)\W*$|^\W*what(?:\s+is|'s|’s)\s+this\W*$/i;
 const WATCH_RE = /\b(watch|track|monitor|keep an eye on|follow)\b|\bcheck\b.*\b(release|releases|version)\b|\b(tell|let) me (know )?when\b/;
 const EDIT_RE = /\b(make|change|switch|move|set|run|put|reschedule)\b/;
 async function respond(t) {
@@ -2019,7 +2021,7 @@ async function respond(t) {
   if (/^\s*(please\s+)?explain\b/.test(s)) return explainAsk(s);
   if (dChangeFor(s)) return dChange(t);
   if (/\bn8n\b/.test(s)) return n8nAsk(s);
-  if (/\b(help|how (do|can) i (start|use|begin)|steps|get started|how does (this|it) work|what is this (app|for))\b|^\s*what is this\s*\??\s*$/.test(s)) return pushCard(startCard());
+  if (/\b(help|how (do|can) i (start|use|begin)|steps|get started|how does (this|it) work)\b/.test(s) || WHAT_IS_THIS.test(s)) return pushCard(startCard());
   if (/\b(what can you|how do i)\b/.test(s)) return pushCard(capsCard());
   if (canEdit() && /\b(pause|turn off|stop running)\b/.test(s) && findWf(s)) return pauseIt(findWf(s), true);
   if (canEdit() && /\b(resume|unpause|turn (it )?back on)\b/.test(s) && findWf(s)) return pauseIt(findWf(s), false);
