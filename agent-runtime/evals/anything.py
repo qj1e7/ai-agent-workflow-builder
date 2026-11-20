@@ -506,17 +506,20 @@ def words_of(
         named += ("skip_approval",)
         crossed = [p for p in parts if p.mark != "will_do" and p.reason not in named]
         lines += [_cross(p, facts.watchlist_schedule) for p in crossed]
-        offered = operator and _leftovers_drawn(shown)
+        offered = operator and _offers_the_watchlist_time(shown)
         lines += [_watchlist_runs(p) for p in crossed if offered and p.reason == "own_time"]
     return "\n".join(lines + _buttons(shown) + (_draft_offer(shown) if operator else []))
 
 
-def _leftovers_drawn(shown: PlannerAnswer) -> bool:
-    """Whether the Portal draws the crosses above the answer, where it offers the watchlist's
-    time (leftoverParts in parts.ts). A set-up card or a part card holds its own crosses."""
+def _offers_the_watchlist_time(shown: PlannerAnswer) -> bool:
+    """Whether the Portal offers the watchlist's time under a time of its own: in the crosses it
+    draws above the answer (leftoverParts in parts.ts), with somewhere to send it. A set-up card
+    or a part card holds its own crosses, and the troubleshooter's run card draws them with
+    nowhere to send it (Thread.tsx)."""
     match shown:
         case (
             SetupCardAnswer()
+            | WhyStoppedAnswer()
             | PartAnswer()
             | EditAnswer()
             | WhichSoftwareAnswer()
@@ -574,7 +577,7 @@ def _software_card(shown: WatchlistAnswer, facts: PlannerFacts, operator: bool) 
     held = facts.watchlist or []
     listed = next((w for w in held if " ".join(w.name.casefold().split()) == wanted), None)
     if listed is not None:
-        return [f"{listed.name} ({listed.state}): {_where_it_stands(listed)} [Open it]"]
+        return [f"{listed.name} ({_pill(listed)}): {_where_it_stands(listed)} [Open it]"]
     said = (
         "It isn't on the watchlist, so I don't know which version you run."
         if VERSION_WORD.search(shown.word)
@@ -583,10 +586,30 @@ def _software_card(shown: WatchlistAnswer, facts: PlannerFacts, operator: bool) 
     return [f"{shown.software}: {said}{' [Watch it]' if operator else ''}"]
 
 
+PILL_OF_STATE: Final[dict[str, str]] = {
+    "Can’t check": "Can’t check",
+    "Can't check": "Can’t check",
+    "New version": "Newer out",
+    "Ticket waiting for a yes": "Newer out",
+    "Ticket open": "Newer out",
+    "Not checked yet": "Watching",
+    "Nothing newer yet": "Watching",
+}
+"""The SoftwareCard's pill (stateOf in software.ts) for each state word the facts carry
+(STATUS_WORDS in platform-api). The facts don't say whether GitHub can't find a software, so a
+software that can't be checked shows Can't check, never Can't find."""
+
+
+def _pill(row: WatchedFact) -> str:
+    if row.state == "Up to date":
+        return "Watching" if row.our_version is None else "Up to date"
+    return PILL_OF_STATE.get(row.state, row.state)
+
+
 def _where_it_stands(row: WatchedFact) -> str:
     """Where a watched software stands (sentenceFor in software.ts), from its facts."""
     newest, ours = row.newest_version, row.our_version
-    if row.problem is not None:
+    if _pill(row) == "Can’t check":
         return (
             f"The last check stopped. The newest version it read was {newest}."
             if newest is not None

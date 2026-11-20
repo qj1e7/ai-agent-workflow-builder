@@ -76,18 +76,22 @@ def explain_of(text: str, facts: PlannerFacts | None) -> ExplainAnswer | None:
 
 def _what_it_does(text: str, facts: PlannerFacts | None) -> ExplainAnswer | None:
     """A question as "what does my workflow do?" names no workflow, so the platform picks the
-    one they mean. A workflow's whole name, as "what does the FastAPI release check do?", is
-    kept. Anything else in the middle, as "it", "a workflow", part of a name or a software's
-    name, is no explanation, and nor is anything asked by someone with no workflow to explain."""
+    one they mean. A workflow's whole name, as "what does the FastAPI release check do?", gives
+    that workflow's name as stored, which always fits, and is tried before and after a leading
+    "the", "my" and the like, so a name that starts with one matches too. Anything else in the
+    middle, as "it", "a workflow", part of a name or a software's name, is no explanation, and
+    nor is anything asked by someone with no workflow to explain."""
     asked = WHAT_IT_DOES.match(text)
     if asked is None or facts is None or facts.workflows_in_all() == 0:
         return None
-    start, end = asked.span("ref")
-    if ONE_OF_THEIRS.fullmatch(" ".join(text[start:end].split())):
+    said = asked.group("ref")
+    if ONE_OF_THEIRS.fullmatch(" ".join(said.split())):
         return ExplainAnswer(workflow_words=None)
-    named = LEADING.sub("", text[start:end], count=1)
-    names = {_plain(name) for name in facts.workflow_names()}
-    return ExplainAnswer(workflow_words=named) if _plain(named) in names else None
+    stored = {_plain(name): name for name in facts.workflow_names()}
+    for name in (said, LEADING.sub("", said, count=1)):
+        if _plain(name) in stored:
+            return ExplainAnswer(workflow_words=stored[_plain(name)])
+    return None
 
 
 def _plain(name: str) -> str:
