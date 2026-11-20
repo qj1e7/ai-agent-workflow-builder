@@ -1,10 +1,11 @@
 """Steps 2 and 3: parity, the baseline and the 30 replies for the team lead to label (round 1),
-parity again, both paths twice on 20 cases (round 2, `parity2`), and the judge's question today
-and a v2 on 50 replies already made (round 3, `rejudge`).
+parity again, both paths twice on 20 cases (round 2, `parity2`), the judge's question today and
+a v2 on 50 replies already made (round 3, `rejudge`), and a v3 three times on the same 50
+(round 4, `rejudge3`).
 
 Runs on GitHub Actions (`.github/workflows/spike-dspy.yml`) when `STEP` changes, with the
 Anthropic key in ANTHROPIC_API_KEY for that one step:
-    uv run --group spike python -m spikes.dspy_free_reply.run rejudge
+    uv run --group spike python -m spikes.dspy_free_reply.run rejudge3
 
 Each run stops before a case would pass the round's cap or the spike's $30 (`scoring.Meter`),
 and writes its spend to `spend.json` and its rows to `runs/` after every case."""
@@ -47,6 +48,7 @@ from spikes.dspy_free_reply.scoring import (  # noqa: E402
     eval_reply,
     frozen_of,
     judge_question_v2,
+    judge_question_v3,
     planner,
     read_and_route,
     wrapper_reply,
@@ -61,11 +63,13 @@ PARITY: Final = RUNS / "parity.json"
 BASELINE: Final = RUNS / "baseline.json"
 LABELS: Final = RUNS / "label-input.json"
 REJUDGE: Final = RUNS / "rejudge.json"
+REJUDGE3: Final = RUNS / "rejudge3.json"
 BATCH2: Final = RUNS / "labels-batch2.json"
 BATCH2_SIZE: Final = 20
+V3_RUNS: Final = 3
 PARITY_CASES: Final = 10
 SEED: Final = 20261120
-PAID: Final = frozenset({"parity", "baseline", "parity2", "rejudge"})
+PAID: Final = frozenset({"parity", "baseline", "parity2", "rejudge", "rejudge3"})
 PARITY2_CASES: Final = 20
 RUNS_EACH: Final = 2
 QUIET: Final = ("LiteLLM", "litellm", "httpx", "httpcore", "anthropic", "urllib3")
@@ -567,12 +571,66 @@ def rejudge() -> None:
     report("Rejudge, v1 and v2", summary)
 
 
+def rejudge3_sets() -> list[tuple[str, dict[str, Any]]]:
+    """The 50 replies `rejudge` judged: set A in label-input.json's order, set B in
+    labels-batch2.json's. Each is the baseline row whose words, without their kind, are the
+    reply in rejudge.json, so v3 reads what v1 and v2 read."""
+    by_case = {r["case"]: r for r in reached()}
+    judged = {r["id"]: r for r in json.loads(REJUDGE.read_text())}
+    picked = [("A", x["id"]) for x in json.loads(LABELS.read_text())]
+    picked += [("B", x["id"]) for x in json.loads(BATCH2.read_text())]
+    for name, case_id in picked:
+        said = judged[case_id]
+        if said["set"] != name or said["reply"] != shown_words(by_case[case_id]):
+            raise ValueError(f"{case_id} is not the reply rejudge.json judged")
+    return [(name, by_case[case_id]) for name, case_id in picked]
+
+
+def median_of(scores: list[int | None]) -> float | None:
+    """The middle score of those the judge gave; a failed judge call counts for nothing."""
+    found = [s for s in scores if s is not None]
+    return statistics.median(found) if found else None
+
+
+def rejudge3() -> None:
+    """Round 4: v3 three times on each of the 50 replies `rejudge` judged, so chance shows. No
+    Planner or free reply call."""
+    model = planner()
+    meter = Meter("rejudge3")
+    cases = all_cases()
+    rows: list[dict[str, Any]] = []
+    stopped = None
+    with metered(meter.spend):
+        for name, row in rejudge3_sets():
+            if (stopped := meter.stop_reason()) is not None:
+                break
+            case = cases[row["case"]]
+            scores = [judge(model, judge_question_v3(case, row["shown"])) for _ in range(V3_RUNS)]
+            rows.append(
+                {"id": row["case"], "set": name, "v3": scores, "v3_median": median_of(scores)}
+            )
+            meter.save()
+            write_json(REJUDGE3, rows)
+            print(f"  {name} {row['case']}: v3 {scores}", flush=True)
+    summary = {
+        "set_a": sum(r["set"] == "A" for r in rows),
+        "set_b": sum(r["set"] == "B" for r in rows),
+        "judge_failures": sum(s is None for r in rows for s in r["v3"]),
+        "v3_medians": dict(sorted(Counter(r["v3_median"] for r in rows).items(), key=str)),
+        "all_three_agree": sum(len(set(r["v3"])) == 1 for r in rows),
+        "stopped": stopped,
+        "spend": meter.save(),
+    }
+    report("Rejudge, v3 three times", summary)
+
+
 STEPS: Final = {
     "parity": parity,
     "baseline": baseline,
     "labels": labels,
     "parity2": parity2,
     "rejudge": rejudge,
+    "rejudge3": rejudge3,
 }
 
 
