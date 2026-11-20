@@ -101,10 +101,10 @@ def test_a_reply_the_verifier_flags_counts_as_a_reject():
     assert failed["free_reply_shown"].startswith("verifier_says_it_happened | ")
 
 
-def test_a_reply_the_guard_rejects_counts_as_a_reject_and_the_wrong_kind():
+def test_a_reply_the_guard_rejects_counts_as_a_reject_and_shows_the_question_back():
     done = ReplyEnvelope(form="answer", text="Done, the ticket was created.")
     failed = scored(case("what's the weather today?"), reading(), done)
-    assert failed["right_kind"] == "didnt_follow"
+    assert "right_kind" not in failed
     assert failed["free_reply_shown"].startswith("claims_done | ")
     assert "the ticket was created" in failed["free_reply_shown"]
 

@@ -3,8 +3,8 @@ the model's own words, checked by code before the person sees it.
 
 Code finds the dead end (`dead_end`), the model fills one closed envelope from the capability
 registry, the how-to notes and the person's read-only facts, and `reply_guard` checks it. Any
-failed check, failed call or slow call gives the fixed fallback, `DidntFollowAnswer`. The reply
-has no tool and writes nothing."""
+failed check, failed call or slow call gives the fallback, `fallback_of`. The reply has no tool
+and writes nothing."""
 
 import logging
 import re
@@ -36,6 +36,7 @@ from agent_runtime.contract import (
     RequestPart,
 )
 from agent_runtime.drafting import ask_model
+from agent_runtime.fixed_replies import didnt_follow
 from agent_runtime.how_to import HOW_TO
 from agent_runtime.questions import is_fallback, sent_sections
 from agent_runtime.reply_guard import NOT_READY, Given, GuardCheck, guarded
@@ -189,8 +190,9 @@ SYSTEM: Final = (
     "that sends the person to Ask the team. Every sentence that mentions new Jira tickets says "
     "in it that they wait for an Approver's yes.\n"
     "- Mention Ask the team only as: tap Ask the team. Don't say what it is for.\n"
-    "- For a cant, say plainly what you can't do, then the nearest Ready capability as what they "
-    "can type instead, if one is close, then that they can tap Ask the team.\n"
+    "- For a cant, say plainly what you can't do. If a Ready capability is close, name it as what "
+    "they can type instead, then say they can tap Ask the team. If none is close, stop there: "
+    "the platform adds what it is for, what it can do and the Ask the team button.\n"
     "- When you say what you or the platform can do, name only Ready capabilities. When you "
     "name one that is Planned or Not on the plan, or a system the platform doesn't reach, say "
     "in the same part of the sentence \"I can't ... yet\". Name at most two things you can't do "
@@ -270,6 +272,15 @@ STILL_UNCLEAR: Final = FreeReplyAnswer(
     text="I still can't tell what you'd like. Tap Ask the team, or say it another way in the box.",
 )
 """What a second clarifying question in a row becomes, so choices can't lead to choices."""
+
+
+def fallback_of(gap: DeadEnd, request: AnswerRequest) -> PlannerAnswer:
+    """What a dead end shows when the free reply fails or is off: the honest answer it kept,
+    else a question back with next steps to tap (`didnt_follow`)."""
+    if gap.keep is not None:
+        return gap.keep
+    given = given_of(request)
+    return didnt_follow(given.sets_up, given.clarified_before)
 
 
 def answer_of_envelope(

@@ -22,6 +22,7 @@ from agent_runtime.contract import (
     RequestPart,
 )
 from agent_runtime.contracts import answered_cant, card_request, traced_answer_request
+from agent_runtime.fixed_replies import didnt_follow
 from agent_runtime.monitoring.langfuse_tracing import LangfuseSettings, LangfuseTracing
 from agent_runtime.monitoring.masking import Masker
 from agent_runtime.monitoring.tracing import CodeFlag, NoTracing, TurnOutcome, code_flags
@@ -160,7 +161,7 @@ def test_a_free_reply_the_guard_rejects_writes_its_flags_and_why(recorded: Recor
     trace_id = trace.id if trace else None
     assert sorted((s["name"], s["id"], s["value"], s["dataType"]) for s in recorded.scores()) == [
         (name, f"{trace_id}-{name}", 1.0, "BOOLEAN")
-        for name in ("flag_didnt_follow", "flag_fallback", "flag_parts_crossed")
+        for name in ("flag_didnt_follow", "flag_fallback")
     ]
     attributes = recorded.root("planner-turn").attributes or {}
     assert json.loads(str(attributes["langfuse.trace.metadata.fell_back"])) == "claims_done"
@@ -170,10 +171,7 @@ def test_a_free_reply_the_guard_rejects_writes_its_flags_and_why(recorded: Recor
 def test_a_free_reply_whose_call_failed_fell_back_but_was_not_rejected(recorded: Recorded):
     chat = ScriptedChat(structured=[reading(), RuntimeError("boom")])
     app_with(recorded, chat).post("/v1/planner/answer", json=turn())
-    assert sorted(s["name"] for s in recorded.scores()) == [
-        "flag_didnt_follow",
-        "flag_parts_crossed",
-    ]
+    assert sorted(s["name"] for s in recorded.scores()) == ["flag_didnt_follow"]
     attributes = recorded.root("planner-turn").attributes or {}
     assert json.loads(str(attributes["langfuse.trace.metadata.fell_back"])) == "call"
 
@@ -205,6 +203,7 @@ def test_turned_off_the_chat_models_are_the_same_and_nothing_is_recorded():
 
 
 CROSSED = [RequestPart(text="email me", mark="cant", reason="cant_do", note="No email.")]
+QUESTION_BACK = didnt_follow(sets_up=True, clarified_before=False)
 DONE = [RequestPart(text="check it", mark="will_do")]
 
 
@@ -212,6 +211,7 @@ DONE = [RequestPart(text="check it", mark="will_do")]
     ("outcome", "flags"),
     [
         (TurnOutcome(Answered(answer=DidntFollowAnswer(), parts=DONE), 2.0), ["flag_didnt_follow"]),
+        (TurnOutcome(Answered(answer=QUESTION_BACK, parts=[]), 2.0), ["flag_didnt_follow"]),
         (
             TurnOutcome(Answered(answer=DidntFollowAnswer(), parts=[]), 2.0, "claims_done"),
             ["flag_didnt_follow", "flag_fallback"],
@@ -340,7 +340,7 @@ def test_a_turn_still_answers_when_langfuse_does_not(fail: Exception):
     reply = app_with(recording, chat).post("/v1/planner/answer", json=turn())
     recording.tracing.flush()
     recording.tracing.shutdown()
-    assert reply.status_code == 200 and reply.json()["answer"]["kind"] == "didnt_follow"
+    assert reply.status_code == 200 and reply.json()["answer"]["kind"] == "reply"
 
 
 def test_a_turn_still_answers_when_recording_its_answer_raises(
@@ -353,7 +353,7 @@ def test_a_turn_still_answers_when_recording_its_answer_raises(
     chat = ScriptedChat(structured=[reading(), CLAIMS_DONE])
     with caplog.at_level(logging.WARNING):
         reply = app_with(recorded, chat).post("/v1/planner/answer", json=turn())
-    assert reply.status_code == 200 and reply.json()["answer"]["kind"] == "didnt_follow"
+    assert reply.status_code == 200 and reply.json()["answer"]["kind"] == "reply"
     assert "The turn's answer was not traced: RuntimeError" in [
         r.getMessage() for r in caplog.records
     ]

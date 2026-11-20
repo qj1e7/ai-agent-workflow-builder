@@ -32,7 +32,6 @@ from agent_runtime.contract import (
     AbilitiesAnswer,
     Answered,
     AnswerRequest,
-    DidntFollowAnswer,
     EditAnswer,
     FreeReplyAnswer,
     ModelAccess,
@@ -48,7 +47,13 @@ from agent_runtime.contract import (
     WhichSoftwareAnswer,
 )
 from agent_runtime.drafting import UNUSABLE
-from agent_runtime.free_reply import STILL_UNCLEAR, answer_of_envelope, dead_end, reply_messages
+from agent_runtime.free_reply import (
+    STILL_UNCLEAR,
+    answer_of_envelope,
+    dead_end,
+    fallback_of,
+    reply_messages,
+)
 from agent_runtime.parts import parts_of
 from agent_runtime.planner_led import FRONT_STANDS, Led, led
 from agent_runtime.questions import QuestionReply, answer_of_reply, question_messages
@@ -160,7 +165,7 @@ def _decided(read: TaskRead, case: ReplyCase, steps: Steps) -> Shown:
     gap = dead_end(first, parts_of(read, case.task, first, case.facts), case.task)
     if gap is None:
         return Shown(first)
-    fallback = gap.keep or DidntFollowAnswer()
+    fallback = fallback_of(gap, request_of(case))
     if steps.envelope is None:
         return Shown(fallback, "call")
     reply = answer_of_envelope(steps.envelope, request_of(case))

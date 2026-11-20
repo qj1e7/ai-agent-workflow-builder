@@ -11,7 +11,7 @@ needs a card and a yes."""
 import re
 import unicodedata
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Final, Literal
 
 from pydantic import BaseModel, ConfigDict, ValidationError
@@ -21,6 +21,7 @@ from agent_runtime.abilities import (
     OFFER_REQUESTS,
     PAST_THE_NEWEST,
     change_verbs_in,
+    nothing_close,
     other_systems,
     skip_of_a_yes,
     unread_field_in,
@@ -817,8 +818,13 @@ def offer_of(capability: str | None, given: Given) -> ReplyOffer | None:
 
 def guarded(reply: ReplyEnvelope, given: Given) -> FreeReplyAnswer | GuardCheck:
     """The reply the person sees, or the check it failed. The words are made into what is shown
-    once, checked, and shown as they were checked."""
+    once, checked, and shown as they were checked. A can't with nothing close, whose button is
+    Ask the team, also says what the app is for and what it can do, in the registry's words, and
+    those are checked with the rest."""
     shown = shown_of(reply)
+    offer = offer_of(shown.offer, given) if shown.form == "cant" else None
+    if shown.form == "cant" and offer is None:
+        shown = replace(shown, text=f"{shown.text} {nothing_close()}")
     failed = failed_check(shown, given)
     if failed is not None:
         return failed
@@ -826,6 +832,6 @@ def guarded(reply: ReplyEnvelope, given: Given) -> FreeReplyAnswer | GuardCheck:
         form=shown.form,
         text=shown.text,
         choices=list(shown.choices),
-        offer=offer_of(shown.offer, given) if shown.form == "cant" else None,
+        offer=offer,
         looked_at=[s for s in given.sent if s in shown.looked_at],
     )

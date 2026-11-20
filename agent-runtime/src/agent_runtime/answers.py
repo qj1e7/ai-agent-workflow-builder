@@ -87,6 +87,7 @@ from agent_runtime.edits import (
     left_over,
 )
 from agent_runtime.explaining import explain_of
+from agent_runtime.fixed_replies import fixed_reply
 from agent_runtime.follow_ups import (
     VERSION,
     follow_up_of,
@@ -95,7 +96,7 @@ from agent_runtime.follow_ups import (
     plain_software,
     watch_offer_of,
 )
-from agent_runtime.free_reply import dead_end, reply_to
+from agent_runtime.free_reply import dead_end, fallback_of, reply_to
 from agent_runtime.newest import NEWEST, asks_for_the_newest
 from agent_runtime.parts import (
     HOW_OFTEN,
@@ -1252,11 +1253,16 @@ def decide(read: TaskRead, request: AnswerRequest) -> PlannerAnswer | AskTheQues
     """The fixed answer for a reading, or the question lane when that answer is the catch-all, a
     watchlist offer for software the watchlist already holds, which software for a question
     while the watchlist holds some, or check workflows for a request that names the watchlist.
-    Every other answer stands. A plain name typed after "Which software should I watch?" is the
-    offer to watch it. Only code routes: the reading itself is never changed. The lane
+    Every other answer stands. Past a refusal or an explanation, a message that only tells the
+    Planner what to say or only asks what it is gets its fixed reply (`fixed_reply`). A plain name
+    typed after "Which software should I watch?" is the offer to watch it. Only code routes: the
+    reading itself is never changed. The lane
     fails closed: a change word left once the question's own words and the names are out keeps
     the first answer, whatever the shape of the sentence (spec 6.4)."""
     answer = answer_of(read, request.task, request.facts, request.changes_workflows)
+    fixed = None if isinstance(answer, RefusedAnswer | ExplainAnswer) else fixed_reply(request)
+    if fixed is not None:
+        return fixed
     named = _named_when_asked(read, request, answer)
     if named is not None:
         return named
@@ -1597,8 +1603,8 @@ def answer_task(
         answer = reply_to(request, gap, chat_for, verifier) if free_reply else DidntFollowAnswer()
         if isinstance(answer, FreeReplyAnswer):
             answer = with_software_named(answer, read, request.task)
-        if isinstance(answer, DidntFollowAnswer) and gap.keep is not None:
-            answer = gap.keep
+        if isinstance(answer, DidntFollowAnswer):
+            answer = fallback_of(gap, request)
         parts = parts_of(read, request.task, answer, request.facts)
     return Answered(answer=answer, parts=parts)
 
