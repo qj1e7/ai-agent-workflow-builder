@@ -36,7 +36,7 @@ from agent_runtime.contract import (
     RequestPart,
 )
 from agent_runtime.drafting import ask_model
-from agent_runtime.fixed_replies import didnt_follow
+from agent_runtime.fixed_replies import clarified_before, didnt_follow
 from agent_runtime.how_to import HOW_TO
 from agent_runtime.questions import is_fallback, sent_sections
 from agent_runtime.reply_guard import NOT_READY, Given, GuardCheck, guarded
@@ -47,8 +47,6 @@ log = logging.getLogger(__name__)
 
 FREE_REPLY_TIMEOUT_SECONDS: Final = 8.0
 DEAD_END_CROSSES: Final = frozenset({"not_followed", "ask_on_its_own"})
-CLARIFIED: Final = "reply_clarify"
-"""The kind the Portal sends for the turn before when it was a clarifying question."""
 
 
 @dataclass(frozen=True)
@@ -257,13 +255,12 @@ def reply_messages(request: AnswerRequest, gap: DeadEnd) -> tuple[str, str]:
 
 def given_of(request: AnswerRequest) -> Given:
     facts = request.facts
-    previous = request.previous
     return Given(
         message=request.task,
         facts=facts.model_dump_json(exclude_none=True) if facts is not None else "",
         sent=tuple(sent_sections(facts)) if facts is not None else (),
         sets_up=request.changes_workflows,
-        clarified_before=previous is not None and previous.kind == CLARIFIED,
+        clarified_before=clarified_before(request),
     )
 
 

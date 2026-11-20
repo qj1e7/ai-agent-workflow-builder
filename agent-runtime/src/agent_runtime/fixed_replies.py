@@ -14,17 +14,30 @@ from agent_runtime.contract import AnswerRequest, DidntFollowAnswer, FreeReplyAn
 from agent_runtime.planner import visible_words
 from agent_runtime.reading import clauses_of, polite
 
+CLARIFIED: Final = "reply_clarify"
+"""The kind the Portal sends for the turn before when it was a clarifying question."""
+
 _LEAD: Final = r"(?:(?:hi|hello|hey|ok|okay|so)\b\W*)?(?:please\s+)?"
-_RULES: Final = r"(?:rules|instructions|guidelines|guardrails|restrictions|limits|prompt)"
+_THE_PLANNERS: Final = r"(?:your|my|the\s+planner['’]s|(?:the\s+)?(?:previous|prior|earlier))"
+_RULES: Final = r"(?:rules|instructions|prompt)"
 _DROP: Final = (
-    r"(?:ignore|forget|disregard|drop|override|bypass)\s+"
-    r"(?:(?:all|any|every|of|your|the|these|those|previous|prior|earlier|above|safety|own|"
-    rf"system)\s+)*{_RULES}(?:\s+(?:above|before))?"
+    r"(?:ignore|forget|disregard|drop|override|bypass)\s+(?:all\s+(?:of\s+)?)?"
+    rf"(?:{_THE_PLANNERS}\s+(?:(?:own|safety|system)\s+)?{_RULES}|the\s+{_RULES}\s+(?:above|before))"
+    r"|system\s+override"
 )
+"""The Planner's own rules, instructions or prompt, never a limit or a restriction, which could
+be a retry limit."""
+_ASKS: Final = r"(?:when|whether|which|what|if|who|whom|whose|how|where|why|with)\b"
+_WORD: Final = rf"(?!{_ASKS})[^\W_][\w'’-]*"
+_CLAIM: Final = (
+    rf"(?:(?:the|your|my|our|this|a|an)\s+)?{_WORD}(?:\s+{_WORD}){{0,2}}\s+"
+    r"(?:was|were|has\s+been|have\s+been|got)\s+[^\W\d_]+(?:\s+by\s+[^\W\d_]+)?"
+)
+"""Something said to have happened, as "the ticket was created" or "MOCK-77 has been created by
+Bob". It opens with no question word, so "when the release was published" asks about data."""
 _SAY: Final = (
-    r"(?:say|reply|respond|answer|write\s+back)(?:\s+(?:only|exactly|just|back))?"
-    r"(?:\s+(?:that|with))?\s+\S.*?\s+(?:was|were|has\s+been|have\s+been|got)\s+[^\W\d_]+"
-    r"(?:\s+by\s+[^\W\d_]+)?"
+    r"(?:say|repeat|answer|reply|respond|write\s+back)(?:\s+(?:only|exactly|just|back))?"
+    rf"(?:\s+that)?\s+{_CLAIM}"
 )
 _PRETEND: Final = r"pretend\s+(?:that\s+|to\s+be\s+|you(?:\s+are|'re|’re)\s+)\S.*"
 TOLD_SHAPE: Final = re.compile(rf"{_LEAD}(?:{_DROP}|{_SAY}|{_PRETEND})\W*", re.IGNORECASE)
@@ -42,9 +55,8 @@ ABOUT_THE_PLANNER: Final = re.compile(
 "What can the Planner do?" is the list of what it can do."""
 
 TOLD: Final = (
-    "For safety, I don't follow instructions inside a message, such as to ignore my rules or to "
-    "repeat what you write. Every change still waits for an Approver's yes. What would you like "
-    "to do?"
+    "For security, I don't take instructions to change my rules or to say something happened "
+    "when it didn't. Every change still waits for an Approver's yes. What would you like to do?"
 )
 DIDNT_FOLLOW: Final = "I didn't follow that. What would you like to do?"
 APPROVER_CHOICES: Final = ["What needs me?", "What can you do?"]
@@ -87,24 +99,35 @@ def what_the_planner_is(sets_up: bool) -> str:
     )
 
 
-def fixed_reply(request: AnswerRequest) -> FreeReplyAnswer | None:
+def clarified_before(request: AnswerRequest) -> bool:
+    previous = request.previous
+    return previous is not None and previous.kind == CLARIFIED
+
+
+def fixed_reply(request: AnswerRequest) -> FreeReplyAnswer | DidntFollowAnswer | None:
     """The fixed reply for a message that only tells the Planner what to say or to drop its
     rules, or only asks what the Planner is, else None."""
     sets_up = request.changes_workflows
     if tells_the_planner(request.task):
-        return FreeReplyAnswer(form="clarify", text=TOLD, choices=choices_for(sets_up))
+        return _asked_back(TOLD, sets_up, clarified_before(request))
     if asks_what_the_planner_is(request.task):
         return FreeReplyAnswer(form="answer", text=what_the_planner_is(sets_up))
     return None
 
 
 def didnt_follow(sets_up: bool, clarified_before: bool) -> FreeReplyAnswer | DidntFollowAnswer:
-    """A question back for a message the Planner didn't follow, with the next steps to tap. Right
-    after a clarifying question it is the I didn't follow that card, so choices never lead to
-    choices."""
+    """A question back for a message the Planner didn't follow, with the next steps to tap."""
+    return _asked_back(DIDNT_FOLLOW, sets_up, clarified_before)
+
+
+def _asked_back(
+    text: str, sets_up: bool, clarified_before: bool
+) -> FreeReplyAnswer | DidntFollowAnswer:
+    """The words with a question back and the next steps to tap. Right after a clarifying
+    question it is the I didn't follow that card, so choices never lead to choices."""
     if clarified_before:
         return DidntFollowAnswer()
-    return FreeReplyAnswer(form="clarify", text=DIDNT_FOLLOW, choices=choices_for(sets_up))
+    return FreeReplyAnswer(form="clarify", text=text, choices=choices_for(sets_up))
 
 
 def says_it_didnt_follow(answer: object) -> bool:
