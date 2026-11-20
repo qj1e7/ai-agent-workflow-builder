@@ -306,6 +306,12 @@ CLAIM: Final = re.compile(
 )
 HYPOTHETICAL: Final = re.compile(r"\b(?:if|whether)\s+$", re.IGNORECASE)
 """"Ask the team whether it can be added" claims nothing."""
+NOTHING_I_CAN: Final = re.compile(
+    r"\b(?:nothing|(?:isn['’]?t|is\s+not|not)\s+(?:something|anything))\s+(?:that\s+)?$",
+    re.IGNORECASE,
+)
+"""A negated thing right before "I can", as "Nothing I can do comes close" or "isn't something
+I can do yet". The negation acts on what "I can" would claim, so it claims nothing."""
 ADVERBS: Final = words(
     "also still now only just then simply easily always even first next quickly anytime"
 )
@@ -469,9 +475,10 @@ def _claims_fit(sentence: str, yours: frozenset[str]) -> bool:
     opens with a verb, as "pick a time and turn it on". What "you" can do is held to the
     person's own role. What the Planner or the platform can do is any action in the app."""
     for claim in CLAIM.finditer(sentence):
-        if HYPOTHETICAL.search(sentence[: claim.start()]):
-            continue
+        before = sentence[: claim.start()]
         who = (claim.group("who") or claim.group("able") or claim.group("let") or "").casefold()
+        if HYPOTHETICAL.search(before) or (who == "i" and NOTHING_I_CAN.search(before)):
+            continue
         does = yours if who == "you" else OPERATORS_DO | APPROVERS_DO
         first, *later = FRAGMENTS.split(sentence[claim.end() :])
         if not _can_do(first, does):
@@ -537,21 +544,68 @@ SKIPS: Final = re.compile(
     r"another\s+|a\s+second\s+|the\s+)?(?:person|approver|yes|approval|sign-?off|review)\b"
     r"|\bno\s+(?:need\s+(?:for|of)\s+(?:a\s+|an\s+)?)?(?:yes|approval|approver|sign-?off|wait|"
     r"waiting)\b|\bnot\s+every\s+(?:change|write|ticket)\s+needs\b|\b(?:straight|right)\s+"
-    r"(?:away|out|through)\b|\bat\s+once\b|\bimmediately\b|\binstantly\b",
+    r"(?:away|out|through)\b|\bstraight\s+in\b|\bat\s+once\b|\bimmediately\b|\binstantly\b"
+    rf"|\b{NOT}\s+(?:(?:need|needs|have|has)\s+to\s+)?(?:wait(?:s|ing)?|be\s+waiting)\b",
     re.IGNORECASE,
 )
-"""Words that say or imply a change goes ahead with no yes, or with no wait for one. They count
-in a clause with a negation too: "no wait" is the claim."""
+"""Words that say or imply a change goes ahead with no yes, or with no wait for one, as "it isn't
+waiting for a yes". They count in a clause with a negation too: "no wait" is the claim."""
+
+DENIES_A_SKIP: Final = re.compile(
+    r"\bI\s+(?:can['’]?t|cannot|can\s+not|won['’]?t|don['’]?t|never)\s+"
+    r"(?P<action>(?P<verb>[a-z]+)(?:\s+(?:a|an|the|that|this|any|one|new|jira)){0,3}\s+"
+    r"(?:tickets?|changes?|it|that|this|one))\s+"
+    r"without\s+(?:an?\s+|any\s+|the\s+)?(?:approver['’]s\s+)?(?:yes|approval)(?:\s+in\s+teams)?"
+    r"(?=\s*(?:[,;:.!?]|$))",
+    re.IGNORECASE,
+)
+"""An honest can't of a skipped yes, as "I can't create a ticket without an Approver's yes": a
+first-person negation right before a change, then the yes it waits for, ending the clause."""
+DENIAL_BEFORE: Final = re.compile(r"(?:^|,\s+because\s+)\Z", re.IGNORECASE)
+DENIAL_AFTER: Final = re.compile(
+    r"\s*(?:[.!?]\s*)?\Z|,\s+(?:because|as|since|and)\s+", re.IGNORECASE
+)
+"""How a denial may join the rest of its sentence: it opens the sentence or follows ", because",
+and it ends the sentence or goes on with ", because", ", as", ", since" or ", and"."""
+LEFT_OPEN: Final = re.compile(
+    r"\b(?:but|though|although|however|whereas|while|except|unlike)\b"
+    r"|\b(?:can|could|will|would|may|might|shall|should|must|do|does|did|is|are|was|were|has|"
+    r"have|had)(?:\s+(?:too|also|instead|anyway))?\s*(?:[,;:.!?]|$)"
+    r"|\bso\s+(?:can|could|will|would|may|might|do|does|did|is|are|has|have)\b",
+    re.IGNORECASE,
+)
+"""Words in the rest of the sentence that could carry the denied change on without its yes: a
+contrast, as "but you can", or a verb left out, as "and an Operator can" or "and so can you"."""
+
+
+def _cut_a_denial(sentence: str) -> str:
+    """The sentence with its honest can't of a skipped yes cut out, so the skip words in it are
+    not read as a skip and the rest is read as usual. The can't must deny a change the platform
+    makes after a yes, as the can check reads it, so "I can't delete a ticket without a yes"
+    claims nothing unbuilt by the back door. Any other sentence is kept whole."""
+    found = DENIES_A_SKIP.search(sentence)
+    if found is None:
+        return sentence
+    before, after = sentence[: found.start()], sentence[found.end() :]
+    joined = DENIAL_BEFORE.search(before) and DENIAL_AFTER.match(after)
+    if not joined or LEFT_OPEN.search(f"{before} {after}"):
+        return sentence
+    planner_does = OPERATORS_DO | APPROVERS_DO
+    if not change_verbs_in(found["verb"]) or not _can_do(found["action"], planner_does):
+        return sentence
+    return f"{before} {after}"
 
 
 def keeps_every_yes(reply: Shown, given: Given) -> bool:
     """The text and every choice pass the word rule that refuses a skipped yes before any model
-    call, and say no change goes ahead without a yes or without waiting for one. No clause says
+    call, and say no change goes ahead without a yes or without waiting for one. An honest can't
+    of a skip in the text, as "I can't create a ticket without a yes", is no skip. No clause says
     someone approves their own work, and a sentence that says a ticket is made also says it waits
     for a yes."""
-    shown = (reply.text, *reply.choices)
-    if any(skip_of_a_yes(t) or SKIPS.search(t) for t in shown):
+    heard = (" ".join(_cut_a_denial(s) for s in sentences(reply.text)), *reply.choices)
+    if any(skip_of_a_yes(t) or SKIPS.search(t) for t in heard):
         return False
+    shown = (reply.text, *reply.choices)
     for t in shown:
         if any(not RIGHT_BEFORE.search(t[: m.start()]) for m in OWN_YES.finditer(t)):
             return False
