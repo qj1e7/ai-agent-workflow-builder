@@ -239,7 +239,7 @@ describe('Check my workflows about the one workflow they have', () => {
 
   it('says it is not running when its schedule is held or a move was refused, as the panel and the row do', () => {
     const schedule = { day: 'saturday', at: '09:00', time_zone: null, held: false } as unknown as UseCaseView['schedule']
-    for (const fields of [{ move_refused: true }, { schedule: { ...schedule!, held: true } }] as Partial<UseCaseView>[]) {
+    for (const fields of [{ move_refused: true }, { schedule: { ...schedule!, held: true } }] as unknown as Partial<UseCaseView>[]) {
       const said = oneWorkflowSay(one({ schedule, next_run_at: '2026-11-21T01:00:00Z', ...fields }), NOW, nameOf)
       expect(said).toMatch(/Next run: Not running\.$/)
       expect(said).not.toContain('Sat')
