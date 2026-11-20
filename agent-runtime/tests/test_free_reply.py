@@ -322,17 +322,13 @@ def test_a_message_naming_an_unbuilt_thing_carries_the_registrys_words_in_the_no
     ]
 
 
-def test_which_software_is_unclear_is_a_dead_end_only_beside_one():
-    """Alone, asking again with its name is a way on, and a free reply can't tell which software
-    "them" means either. Beside a part it didn't follow, the model gets its chance at that part."""
+def test_a_card_that_only_says_which_software_is_unclear_is_no_dead_end():
+    """Asking again with its name is a way on, and a free reply can't tell which software "them"
+    means either."""
     unclear = RequestPart(text="track them", mark="cant", reason="which_software")
-    lost = RequestPart(text="flibber the wotsit", mark="cant", reason="not_followed")
-    asked = RequestPart(text="how many are open?", mark="cant", reason="ask_on_its_own")
     cant = CantAnswer(cant=[CantRow(kind="look_for", text="flibber", note="x")])
     assert dead_end(cant, [unclear], "x") is None
     assert dead_end(cant, [unclear, unclear], "x") is None
-    assert dead_end(cant, [lost, unclear], "x") is not None
-    assert dead_end(cant, [asked, unclear], "x") is not None
 
 
 def test_a_message_of_nothing_but_watches_of_them_keeps_its_crosses_with_no_free_reply():

@@ -1772,10 +1772,10 @@ def test_a_clause_that_watches_it_is_the_same_watch_of_the_software_named(task: 
 def test_a_clause_that_watches_them_is_never_ticked_as_the_watch_of_one_software(
     task: str, named: str, plural: str
 ):
-    """A plural can't mean one name, so "them" beside a software comes back, never ticked, and
-    says it can't tell which software."""
+    """A plural can't mean one name, so "them" beside a software comes back, never ticked."""
     reading = read(belongs_on_watchlist=True, watchlist_word="add", software=named)
-    assert (plural, "cant", "which_software") in parts(reading, task)
+    marks = {text: mark for text, mark, _ in parts(reading, task)}
+    assert marks[plural] != "will_do"
 
 
 CHANGE = read(asks_about="change")
@@ -1787,23 +1787,23 @@ WATCH_LANGGRAPH = read(belongs_on_watchlist=True, watchlist_word="watch", softwa
 @pytest.mark.parametrize(
     ("fields", "task", "plural"),
     [
-        (WATCH_REDIS, "add redis and kafka, keep an eye on all three", "keep an eye on all three"),
         (WATCH_REDIS, "add redis, watch 'em too", "watch 'em too"),
+        (WATCH_REDIS, "add redis, and can you monitor these two?", "can you monitor these two"),
+        (WATCH_REDIS, "help me add redis, keep track of them", "keep track of them"),
         (
-            WATCH_REDIS,
-            "add redis and kafka, and can you monitor these two?",
-            "can you monitor these two",
+            read(belongs_on_watchlist=True, watchlist_word="add", software="Node Js"),
+            "add Node Js, track them for me",
+            "track them for me",
         ),
         (read(), "track them, and keep an eye on all three", "keep an eye on all three"),
-        (WATCH_REDIS, "add redis, kafka, track them", "track them"),
-        (WATCH_REDIS, "add redis, node.js, track them", "track them"),
     ],
 )
 def test_a_watch_of_them_beside_nothing_but_software_says_it_cant_tell_which(
     fields: TaskRead, task: str, plural: str
 ):
     """On its own the same words ask "Which software should I watch?", so beside a watch of
-    software, or beside nothing else, they never say "I didn't follow this part"."""
+    software the rules read, or beside nothing else, they never say "I didn't follow this
+    part"."""
     assert (plural, "cant", "which_software") in marks(fields, task)
 
 
@@ -1938,6 +1938,38 @@ BUGS_ON_FRIDAY = read(
             "keep an eye on both",
             "not_followed",
         ),
+        (WATCH_LANGGRAPH, "watch langgraph, jobs, monitor them", "monitor them", "not_followed"),
+        (WATCH_REDIS, "add redis, servers, monitor them all", "monitor them all", "not_followed"),
+        (WATCH_REDIS, "add redis, Alice, keep tabs on them", "keep tabs on them", "not_followed"),
+        (WATCH_LANGGRAPH, "watch langgraph, pipelines, watch them", "watch them", "not_followed"),
+        (
+            WATCH_LANGGRAPH,
+            "watch langgraph, flows, keep an eye on them",
+            "keep an eye on them",
+            "not_followed",
+        ),
+        (WATCH_REDIS, "add redis, reports, track them", "track them", "not_followed"),
+        (
+            WATCH_LANGGRAPH,
+            "watch langgraph and backlog, keep track of them",
+            "keep track of them",
+            "not_followed",
+        ),
+        (WATCH_LANGGRAPH, "watch langgraph, bugs, track them", "track them", "not_followed"),
+        (
+            WATCH_REDIS,
+            "add redis, interns, keep an eye on both",
+            "keep an eye on both",
+            "not_followed",
+        ),
+        (WATCH_REDIS, "add redis, kafka, track them", "track them", "not_followed"),
+        (WATCH_REDIS, "add redis, node.js, track them", "track them", "not_followed"),
+        (
+            WATCH_REDIS,
+            "add redis and kafka, keep an eye on all three",
+            "keep an eye on all three",
+            "not_followed",
+        ),
     ],
 )
 def test_where_them_can_mean_more_than_software_the_cross_stays_as_on_main(
@@ -1946,8 +1978,8 @@ def test_where_them_can_mean_more_than_software_the_cross_stays_as_on_main(
     """The cross only says which software is unclear where "them" can mean nothing but software.
     A verb that asks for more than a watch (check, add, follow, keep), workflows, approvals, a
     stopped run, a pause or resume, an edit, tickets, people, drafts, runs, a question about the
-    app, a watch of "it" or of no software, a reason of its own, and unread words beside a watch
-    that are more than one bare name keep main's cross."""
+    app, a watch of "it" or of no software, a reason of its own, and any words beside a watch that
+    no rule read, a name such as "kafka" included, keep main's cross."""
     assert (plural, "cant", reason) in marks(fields, task)
 
 

@@ -47,11 +47,6 @@ log = logging.getLogger(__name__)
 
 FREE_REPLY_TIMEOUT_SECONDS: Final = 8.0
 DEAD_END_CROSSES: Final = frozenset({"not_followed", "ask_on_its_own"})
-"""Crosses that leave the person nowhere to go."""
-BESIDE_A_DEAD_END: Final = DEAD_END_CROSSES | {"which_software"}
-"""A which_software cross goes to the free reply only beside a dead end cross, so the model can
-answer the other parts. Alone it says to ask again with the software's name, which a free reply
-can't supply either."""
 
 
 @dataclass(frozen=True)
@@ -83,8 +78,7 @@ ASKS_HOW: Final = (
 
 
 def _crosses_only(parts: list[RequestPart]) -> bool:
-    crossed = all(p.mark == "cant" and p.reason in BESIDE_A_DEAD_END for p in parts)
-    return crossed and any(p.reason in DEAD_END_CROSSES for p in parts)
+    return bool(parts) and all(p.mark == "cant" and p.reason in DEAD_END_CROSSES for p in parts)
 
 
 CATCH_ALL: Final = (
@@ -99,8 +93,7 @@ def dead_end(answer: PlannerAnswer, parts: list[RequestPart], message: str) -> D
     """The dead ends ADR 0047 names, or None when the answer stands: the catch-all list of
     abilities when no part of the message asked what the Planner can do, the question lane's
     fixed text, a can't or part card whose only crosses are "I didn't follow this part" or
-    "Ask this on its own", beside "I can't tell which software you mean" or not, with no part
-    ticked and nothing named it can't do, and a question
+    "Ask this on its own", with no part ticked and nothing named it can't do, and a question
     about how to do something answered with the person's workflows or Needs you. A question about
     how to start is the help lane's: its How to start card is registry-based and reviewed, so
     the free reply never takes it."""
