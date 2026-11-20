@@ -159,6 +159,31 @@ async def test_a_can_t_offers_draft_it_only_to_an_operator(chat: Chat, user: str
     assert chat.drafter.asked == [], "the offer starts nothing until it is tapped"
 
 
+async def test_a_time_the_watchlist_can_t_give_one_software_offers_a_draft(chat: Chat):
+    """The flagship sentence: a drafted n8n workflow has its own schedule, so the time the
+    Software watchlist can't give one software is offered to the drafter, words unchanged."""
+    words = "Check LangGraph for new releases every weekday at 9"
+    chat.answers.result = Answered(
+        answer=CantAnswer(
+            cant=[
+                CantRow(
+                    kind="schedule",
+                    text="every weekday at 9",
+                    note="The Software watchlist checks all your software together, on one "
+                    "schedule. I can't give one software its own time yet.",
+                    needs="new_tool",
+                )
+            ]
+        ),
+        parts=[RequestPart(text="every weekday at 9", mark="cant", reason="own_time")],
+    )
+
+    reply = await chat.say("carol", words)
+
+    assert reply["draft_words"] == words
+    assert chat.drafter.asked == [], "nothing is drafted until the button is tapped"
+
+
 async def test_a_can_t_the_platform_refuses_outright_offers_no_draft(chat: Chat):
     chat.answers.result = Answered(
         answer=CantAnswer(

@@ -109,12 +109,14 @@ HOW_TO_START: Final = re.compile(
     rf"\bhow\s+to\s+(?:start|begin|use|get\s+started|{A_WORKFLOW})\b|"
     r"\bhow\s+does\s+(?:this|it|the)(?:\s+(?:app|platform|tool|thing))?\s+work\b|"
     r"\bwhere\s+(?:(?:do|should|can)\s+(?:i|we)\s+|to\s+)(?:start|begin)\b|"
-    r"\bwhat(?:\s+is|'s|’s)\s+this\b|"
+    r"\bwhat(?:\s+is|'s|’s)\s+this\s+(?:(?:app|platform|tool)(?:\s+for)?|for)\W*$|"
+    r"^\W*what(?:\s+is|'s|’s)\s+this\W*$|"
     r"\b(?:get(?:ting)?\s+started|steps|guide|tutorial|walkthrough|first\s+time|new\s+here)\b",
     re.IGNORECASE,
 )
 """A question about how to start using the app, as "how do I start", "list the steps to use this
-app" or "help"."""
+app" or "help". "what is this" counts only about the app, or on its own, with nothing after it but
+marks, so "what is this error?" or "what is this app error?" is left to the other lanes."""
 SET_UP_BY_THEM: Final = re.compile(r"\b(?:i|we)\s+(?:have\s+|had\s+)?set\s+up\b", re.IGNORECASE)
 """A workflow already set up, as "what I set up"."""
 

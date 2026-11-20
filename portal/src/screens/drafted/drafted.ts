@@ -13,6 +13,9 @@ export const DRAFTING_TITLE = 'Drafting it as an n8n workflow'
 
 export const DRAFT_BUTTON = 'Draft it as an n8n workflow'
 
+/** Under the draft button: what drafting does. A draft is checked, and isn’t set up until an Approver says yes. It says nothing of writes, since the card above may be a part card whose own Set up needs no Approver. */
+export const DRAFT_NOTE = 'The Workflow drafter drafts it as its own n8n workflow, and the safety checker checks it. It isn’t set up until an Approver says yes.'
+
 const DRAFTING: PillWords = { label: 'Drafting', tone: 'new' }
 const DRAFT: PillWords = { label: 'Draft', tone: 'quiet' }
 const IN_N8N: PillWords = { label: 'In n8n', tone: 'quiet' }

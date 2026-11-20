@@ -226,7 +226,8 @@ def words_of(answer: PlannerAnswer, case: ReplyCase, parts: list[RequestPart] | 
     the words the `anything` job draws it with. The gate reads the kind. `parts` are the marks
     the answer carries, which the Portal draws (ADR 0049)."""
     marks = parts_of(None, case.task, answer, case.facts) if parts is None else parts
-    shown = shown_words(Answered(answer=answer, parts=marks), case.facts or HOME_FACTS)
+    result = Answered(answer=answer, parts=marks)
+    shown = shown_words(result, case.facts or HOME_FACTS, operator=case.changes_workflows)
     return f"[{_kind(answer)}] {shown}"
 
 

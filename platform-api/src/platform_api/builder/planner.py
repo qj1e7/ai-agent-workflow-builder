@@ -590,7 +590,7 @@ class ExplainReply(Reply):
     answer: Literal["explain"] = "explain"
     use_case_id: str | None = Field(
         description="The workflow to explain. Null when the words name none of the person's "
-        'workflows, name several, or are "it".'
+        'workflows, name several, or are "it" while they have more than one.'
     )
     name: str | None = Field(description="Its name. Null with use_case_id.")
     missing: str | None = Field(
@@ -600,7 +600,8 @@ class ExplainReply(Reply):
     choices: list[ExplainChoice] = Field(
         description="The workflows the request could mean, for the person to pick one: every "
         'one its words match when they match several, or every workflow for "it", so the '
-        "Portal can explain the one in focus. Empty when one matched or the words name none."
+        'Portal can explain the one in focus. Empty when one matched, when "it" can only '
+        "mean their one workflow, or when the words name none."
     )
     in_focus: bool = Field(
         description='True when the words name no workflow, as "explain it": the Portal explains '
@@ -1313,14 +1314,21 @@ class PlannerFront:
             watched=[s.name for s in held],
         )
 
-    async def _explain(self, words: str | None) -> ExplainReply:
+    async def _explain(self, words: str | None) -> ExplainReply | CheckWorkflowsReply:
+        """Words that name no workflow, as "what does my workflow do?", explain the only one
+        when there is one. Explaining changes nothing, so there is nothing to pick. With no
+        workflow at all, the answer is that they have none, never an empty choice."""
         named = await self._named(words, None)
-        one = named.one
+        if named.one is None and named.missing is None and not named.several:
+            return CheckWorkflowsReply(use_case_id=None)
+        only = named.several[0] if named.missing is None and len(named.several) == 1 else None
+        one = named.one or only
+        several = [] if one is not None else named.several
         return ExplainReply(
             use_case_id=None if one is None else one.use_case_id,
             name=None if one is None else one.name,
             missing=named.missing,
-            choices=[ExplainChoice(use_case_id=u.use_case_id, name=u.name) for u in named.several],
+            choices=[ExplainChoice(use_case_id=u.use_case_id, name=u.name) for u in several],
             in_focus=words is None or not _own_words(words, keep_check=True),
         )
 

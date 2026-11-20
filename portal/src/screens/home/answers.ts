@@ -1,6 +1,6 @@
-import type { CantRowView, CapabilitiesView, CapabilityView, OfflineReply, PauseReply, PlannerReply, QuestionReply, RemoveSoftwareReply, ResumeReply, RowKind, UnderstoodRowView } from '../../api/types'
-import { andList, count } from '../run/words'
-import { isRunning, type Row } from '../workflows/workflow'
+import type { CantRowView, CapabilitiesView, CapabilityView, OfflineReply, PauseReply, PlannerReply, QuestionReply, RemoveSoftwareReply, ResumeReply, RowKind, UnderstoodRowView, UseCaseView } from '../../api/types'
+import { andList, count, type NameOf } from '../run/words'
+import { isRunning, lastRunLine, lifeWords, nextRunWords, type Row } from '../workflows/workflow'
 import { sayChanged } from './changed'
 import { cantOnCard, quote } from './parts'
 
@@ -256,6 +256,19 @@ export function workflowsSay(rows: readonly Row[], asker: Asker = 'operator'): s
   return `${asker === 'operator' ? 'You have' : 'The team has'} ${count(rows.length, 'workflow')}. ${parts.length > 0 ? `${parts.join(', ')}.` : 'None needs you.'}`
 }
 
+/**
+ * Check my workflows when there is one workflow: whether it is on, how its last run went in its row’s own words, and its next run
+ * in the panel’s own Next run words, so a held schedule or a refused move says Not running there too. Paused says it once. Its name
+ * is quoted, so it reads as a name and never as the Planner’s words.
+ */
+export function oneWorkflowSay(useCase: UseCaseView, now: Date, nameOf: NameOf): string {
+  const life = useCase.state === 'draft' ? 'a draft' : lifeWords(useCase.state).toLowerCase()
+  const last = lastRunLine(useCase, now, nameOf)
+  const ran = useCase.last_run ? `${last.charAt(0).toUpperCase()}${last.slice(1).replace(/[.!?]+$/, '')}.` : 'It hasn’t run yet.'
+  const next = useCase.state === 'paused' ? '' : ` Next run: ${nextRunWords(useCase, now)}.`
+  return `${quote(useCase.name)} is ${life}. ${ran}${next}`
+}
+
 export interface CapabilityGroups {
   readonly can: readonly CapabilityView[]
   readonly setup: readonly CapabilityView[]
@@ -313,6 +326,9 @@ export function whyNot(entry: Pick<CapabilityView, 'cant' | 'why' | 'fix'>): str
 export function startingPoints(view: CapabilitiesView): readonly string[] {
   return view.examples.filter((example) => example.kind !== 'learn').map((example) => example.text)
 }
+
+/** What How to start says first, so a question about what the app is for gets that answer before the steps. */
+export const START_LEAD = 'This app runs repetitive work for you. Tell me the task and I’ll draft it. Nothing is written without an Approver’s yes.'
 
 /** How to start, step by step: the registry’s first example in their words, and Teams named only while the platform can ask for a yes there. */
 export function startSteps(view: CapabilitiesView): readonly string[] {

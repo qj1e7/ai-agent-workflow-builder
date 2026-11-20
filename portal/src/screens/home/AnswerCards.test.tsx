@@ -91,11 +91,11 @@ describe('the Planner’s short answers, as the chat-first sketch draws them', (
     expect(text(draw({ trace_id: null, answer: 'abilities', how_to_start: false, parts: [] }, { registry: jiraOff }))).toContain('Create Jira tickets, after a yes Needs setup')
   })
 
-  it('answers how to start with the steps, and the registry’s example as a chip, with no cross on their question', () => {
+  it('answers how to start with what the app is for, the steps, and the registry’s example as a chip, with no cross on their question', () => {
     const reply: PlannerReply = { trace_id: null, answer: 'abilities', how_to_start: true, parts: [asked('list me the steps to use this app', 'will_do')] }
     const html = draw(reply, { registry: REGISTRY })
     expect(text(html)).toBe(
-      'How to start Tell me what should run by itself, in your own words, like “Keep track of the LangGraph version”. Check the card I make, and change anything I guessed. Press Set up. I do a test run, which writes nothing. If the test passes, press Turn it on. Nothing is written until an Approver says yes in Teams. Keep track of the LangGraph version',
+      'How to start This app runs repetitive work for you. Tell me the task and I’ll draft it. Nothing is written without an Approver’s yes. Tell me what should run by itself, in your own words, like “Keep track of the LangGraph version”. Check the card I make, and change anything I guessed. Press Set up. I do a test run, which writes nothing. If the test passes, press Turn it on. Nothing is written until an Approver says yes in Teams. Keep track of the LangGraph version',
     )
     expect(buttons(html)).toEqual(['Keep track of the LangGraph version'])
     expect(html).toContain('aria-label="Try one"')
@@ -680,7 +680,13 @@ describe('an Approver’s answers in the chat (spec 5.3)', () => {
 
   it('speaks of the team’s workflows, and of why one stopped with who can retry, from their Workflows page’s rows', () => {
     const stopped = stoppedUseCase as UseCaseView
-    expect(answerOf(ask({ trace_id: null, answer: 'check_workflows', use_case_id: null, parts: [] }, { useCases: [stopped] }))).toMatch(/^The team has 1 workflow\. 1 stopped\./)
+    const other = { ...stopped, use_case_id: 'uc_other', name: 'FastAPI release check', last_run: null }
+    expect(answerOf(ask({ trace_id: null, answer: 'check_workflows', use_case_id: null, parts: [] }, { useCases: [stopped, other] }))).toMatch(/^The team has 2 workflows\. 1 stopped\./)
+  })
+
+  it('answers about the one workflow there is: on or off, and how its last run went, in its row’s words', () => {
+    const stopped = stoppedUseCase as UseCaseView
+    expect(answerOf(ask({ trace_id: null, answer: 'check_workflows', use_case_id: null, parts: [] }, { useCases: [stopped] }))).toMatch(/^“LangGraph release check” is on\. Last run .+\./)
   })
 })
 

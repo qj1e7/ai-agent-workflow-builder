@@ -548,6 +548,38 @@ def test_a_question_about_starting_shows_how_to_start(task: str):
 
 
 @pytest.mark.parametrize(
+    "task",
+    [
+        "what is this app for",
+        "what is this for?",
+        "What is this",
+        "what's this platform?",
+        "what is this app.",
+        "what’s this tool?",
+    ],
+)
+def test_asking_what_the_app_is_shows_how_to_start(task: str):
+    assert answer_of(read(asks_about="abilities"), task) == AbilitiesAnswer(how_to_start=True)
+
+
+@pytest.mark.parametrize(
+    "task",
+    [
+        "what is this error?",
+        "what's this ticket about",
+        "what is this run doing",
+        "what is this app error?",
+        "what is this tool doing to my ticket?",
+        "what is this for loop",
+    ],
+)
+def test_what_is_this_about_something_else_is_not_how_to_start(task: str):
+    """Only the app, or "what is this" on its own, is a question about starting, so the
+    troubleshooter or the free reply can take the rest."""
+    assert answer_of(read(asks_about="abilities"), task) != AbilitiesAnswer(how_to_start=True)
+
+
+@pytest.mark.parametrize(
     "task", ["how do I create a ticket in MOCK", "how do I delete all the done tickets"]
 )
 def test_a_write_asked_as_how_to_is_still_a_cant(task: str):
