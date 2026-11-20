@@ -80,7 +80,7 @@ from agent_runtime.free_reply import (
 )
 from agent_runtime.how_to import HOW_TO
 from agent_runtime.model_access import problem_for
-from agent_runtime.parts import locate, parts_of
+from agent_runtime.parts import locate, parts_of, with_which_software
 from agent_runtime.planner import plain, visible_words
 from agent_runtime.reading import SAID_LIMIT, clauses_of, how_often, polite, said_schedule
 from agent_runtime.reply_guard import GuardCheck, about_of
@@ -315,11 +315,12 @@ def _located(text: str, quote: str, start: int) -> Span | None:
 
 
 def held_to_reach(
-    text: str, parts: list[RequestPart], reached: frozenset[Span]
+    text: str, parts: list[RequestPart], reached: frozenset[Span], read: TaskRead | None
 ) -> list[RequestPart]:
     """The marks with every tick or question outside the reached clauses crossed with Ask this on
-    its own, which sends it as its own message (ADR 0049, decision 2). A cross stays as it is. A
-    part that can't be placed in one reached clause is in doubt, so it is crossed too."""
+    its own, which sends it as its own message (ADR 0049, decision 2), or with which software is
+    unclear for a watch of them, as the rules cross it (`with_which_software`). A cross stays as
+    it is. A part that can't be placed in one reached clause is in doubt, so it is crossed too."""
     clauses = clauses_in(text)
     held: list[RequestPart] = []
     at = 0
@@ -329,14 +330,15 @@ def held_to_reach(
         if part.mark == "cant" or clause_holding(clauses, span) in reached:
             held.append(part)
         else:
-            held.append(RequestPart(text=part.text, mark="cant", reason="ask_on_its_own"))
+            crossed = RequestPart(text=part.text, mark="cant", reason="ask_on_its_own")
+            held.append(with_which_software(read, crossed))
     return held
 
 
 def _shown(turn: Turn, answer: PlannerAnswer, reached: frozenset[Span]) -> Acted:
     """A one-action tool's answer with the rules' marks held to what its arguments reach, unless
     that leaves a dead end ADR 0047 names: then the model hears what the rules found."""
-    parts = held_to_reach(turn.text, turn.marks(answer), reached)
+    parts = held_to_reach(turn.text, turn.marks(answer), reached, turn.front.read)
     gap = dead_end(answer, parts, turn.request.task)
     if gap is not None:
         found = " ".join(gap.notes)
@@ -599,7 +601,7 @@ def _show(raw: Mapping[str, Any], turn: Turn) -> Acted:
                 )
             answer = AbilitiesAnswer(how_to_start=args.what == "how_to_start")
             whole = parts_of(None, turn.request.task, FreeReplyAnswer(form="answer", text="-"))
-            parts = held_to_reach(text, whole, reached)
+            parts = held_to_reach(text, whole, reached, turn.front.read)
             return Shown(Answered(answer=answer, parts=parts), text, reached)
         case "workflows":
             answer = CheckWorkflowsAnswer(workflow_words=words)
@@ -624,7 +626,7 @@ def _refuse(raw: Mapping[str, Any], turn: Turn) -> Acted:
     rest = without_the_phrase(turn.text, said) or ""
     answer = RefusedAnswer(said=plain(said, SAID_LIMIT), rest=plain(rest, TASK_LIMIT))
     reached = frozenset[Span]()
-    parts = held_to_reach(turn.text, turn.marks(answer), reached)
+    parts = held_to_reach(turn.text, turn.marks(answer), reached, turn.front.read)
     return Shown(Answered(answer=answer, parts=parts), turn.text, reached)
 
 

@@ -155,10 +155,10 @@ def parts_of(
     if isinstance(answer, FreeReplyAnswer | DidntFollowAnswer):
         mark, reason = _whole_message(answer)
         return [_part(text, c, mark, reason) for c in clauses]
-    return [_which_software(read, part) for part in _marked(read, text, clauses, answer, facts)]
+    return [with_which_software(read, p) for p in _marked(read, text, clauses, answer, facts)]
 
 
-def _which_software(read: TaskRead | None, part: RequestPart) -> RequestPart:
+def with_which_software(read: TaskRead | None, part: RequestPart) -> RequestPart:
     """A cross of "I didn't follow this part" or "Ask this on its own" on words that only ask to
     watch more than one thing, as "track them" or "keep an eye on all three", says which software
     is unclear instead: on their own they ask "Which software should I watch?" (`watches_them`).

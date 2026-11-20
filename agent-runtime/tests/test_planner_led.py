@@ -286,6 +286,21 @@ def test_how_to_start_reaches_only_what_the_reading_leaves_unexplained() -> None
     ]
 
 
+def test_how_to_start_beside_a_watch_of_them_says_which_software_is_unclear() -> None:
+    result, _ = run(
+        "how do I start, and track them",
+        tool("show", what="how_to_start"),
+        read=reading("abilities"),
+        facts=WORKFLOWS,
+    )
+
+    assert shown(result) == AbilitiesAnswer(how_to_start=True)
+    assert marks(result) == [
+        ("how do I start", "will_do", None),
+        ("track them", "cant", "which_software"),
+    ]
+
+
 def test_how_to_start_for_a_message_the_rules_read_whole_goes_back_to_the_model() -> None:
     result, _ = run(
         "pause the morning check",
@@ -476,7 +491,7 @@ def test_a_part_that_cant_be_placed_in_a_reached_clause_is_crossed() -> None:
     text = "pause the morning check"
     ticked = [RequestPart(text="words the message never had", mark="will_do")]
 
-    held = held_to_reach(text, ticked, frozenset(clauses_in(text)))
+    held = held_to_reach(text, ticked, frozenset(clauses_in(text)), None)
 
     assert [(p.mark, p.reason) for p in held] == [("cant", "ask_on_its_own")]
 
