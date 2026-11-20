@@ -1930,15 +1930,18 @@ CAUSING: Final = words("make makes made have has had let lets get gets got")
 """Verbs that can have the workflow do another verb, as "make" in "make the release check skip
 Fridays" or "have" in "have the check nix every Monday", so the word right before the day must
 be one the reader knows."""
+DOERS: Final = words("it them me us you someone somebody anyone anybody everyone")
+"""Words after "make", "have", "let" or "get" that name who does the next verb, as "someone" in
+"have someone check langgraph every Monday", so that verb starts the task's words."""
 MODALS: Final = words("can could should would will must may might shall")
 """Words a verb follows, as "should" in "the check should nix every Monday"."""
 BLANKED: Final = re.compile(r"\s{4,}")
 """Spaces where the edit flow took out the workflow's name, as in "make <the morning check>
 post deadlines every Friday"."""
 RUN_TALK: Final = words(
-    "it its this that them i i'd i'm we we'd us you can could would should will please just only "
-    "also too plus then again now instead actually rather sorry wait oops mean meant well so ok "
-    "okay yes yeah both is are be for as thanks"
+    "it its this that them i i'd i'm we we'd us you can could would should will please pls plz "
+    "just only also too plus then again now instead actually rather sorry wait oops mean meant "
+    "well so ok okay yes yeah both is are be for as thanks"
 )
 """The other words that may stand beside a day it runs on, as "instead", "only" or "please"."""
 RUN_WORDS: Final = RUN_VERBS | RUN_TALK
@@ -2069,9 +2072,9 @@ def _task_starts(text: str, tokens: list[Token], clause_of: list[int]) -> list[i
     edge or a mark, passing over a word such as "automatically". A word such as "should", or
     "to" right after a verb, starts the task's words again, as "nix" in "I want to nix Mondays".
     After a verb that has something else act, as "make" in "make the release check nix every
-    Monday", it is the word itself, unless "it", "them" or a name the edit flow turned to spaces
-    follows the verb, as in "make it post deadlines every Friday". After any other verb that
-    runs it, as "move" in "move the release check to Tuesdays", there is none."""
+    Monday", it is the word itself, unless one of `DOERS` or a name the edit flow turned to
+    spaces follows the verb, as in "make it post deadlines every Friday". After any other verb
+    that runs it, as "move" in "move the release check to Tuesdays", there is none."""
     found: list[int | None] = []
     start: int | None = None
     held = own = False
@@ -2084,7 +2087,7 @@ def _task_starts(text: str, tokens: list[Token], clause_of: list[int]) -> list[i
         verb = low in RUN_VERBS or low in CAUSING
         after = text[tokens[n][2] : tokens[n + 1][1]] if n + 1 < len(tokens) else ""
         follows = _low(tokens[n + 1][0]) if n + 1 < len(tokens) else ""
-        acted = low in CAUSING and (follows in ("it", "them") or BLANKED.fullmatch(after))
+        acted = low in CAUSING and (follows in DOERS or BLANKED.fullmatch(after))
         if low in MODALS or acted or (verb and follows == "to"):
             start, held, own = None, False, False
         elif verb:
@@ -2092,6 +2095,7 @@ def _task_starts(text: str, tokens: list[Token], clause_of: list[int]) -> list[i
         elif (
             start is None
             and _a_word(raw, scheduled)
+            and low not in DOERS
             and not (low.endswith("ly") and low not in NOT_ADVERBS)
         ):
             start = n
@@ -2181,9 +2185,11 @@ def _off_the_schedule(
         return (tokens[start][1], tokens[end][2]), True
     # After a task's words, "every", a plural or the time it runs at, as "every Friday at 9am",
     # says it is a schedule, and only when a word the reader knows starts those words, as
-    # "Check" in "Check langgraph Mondays". Code can't place any other, as "nix every Monday".
+    # "Check" in "Check langgraph Mondays", or a channel does, as "#ops". Code can't place any
+    # other, as "nix every Monday".
     start = None if before != "word" or head is None else starts[head]
-    unknown = start is not None and low(start) not in TASK_HEADS
+    channel = start is not None and text[tokens[start][1] - 1 : tokens[start][1]] == "#"
+    unknown = start is not None and low(start) not in TASK_HEADS and not channel
     if before == "word" and (unknown or not (every or day.timed or _marked(day.match.group(0)))):
         return (tokens[first][1], tokens[last][2]), False
     return None
@@ -2798,16 +2804,17 @@ TASK_HEADS: Final = (
         for word in said or ()
     )
     | words(
-        "post send share publish remind notify alert message email ping tell close archive sync "
-        "backup clean schedule follow flag escalate chase nudge grab happen occur trigger repeat "
-        "fire kick changelog changelogs"
+        "post posted send sent share publish remind notify alert alerts message email emailed "
+        "ping tell know ready close archive sync backup clean schedule follow flag escalate chase "
+        "nudge grab happen occur trigger repeat fire kick changelog changelogs"
     )
 )
 """Words that may start a task's words before the day it runs on, as "Check" in "Check langgraph
 Mondays". They are every word a structure could explain, what the capability registry says a
-task does, makes or is about, and verbs that send its result, name a task of their own or say
-that it runs. Any other word there may leave the day out, as "nix" in "nix every Monday", so
-the day is asked. "clear", "block", "free" and "end" stay off: each can leave a day out."""
+task does, makes or is about, and words that send its result, as "sent" in "have the report
+sent every Monday", name a task of their own or say that it runs. Any other word there may
+leave the day out, as "nix" in "nix every Monday", so the day is asked. "clear", "block",
+"free" and "end" stay off, because each can leave a day out."""
 
 
 def _region(
