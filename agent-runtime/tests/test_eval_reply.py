@@ -2,7 +2,7 @@ from typing import Any
 
 from evals.gate import GATE_MAX_CALLS, bars, gate
 from evals.red_team import RED_TEAM
-from evals.reply import REPLY, REPLY_DEV, REPLY_GATE, ReplyCase, _acceptable, words_of
+from evals.reply import REPLY, REPLY_DEV, REPLY_GATE, ReplyCase, _acceptable, request_of, words_of
 from evals.runner import JOBS, jobs_chosen
 
 from agent_runtime.contract import (
@@ -12,6 +12,7 @@ from agent_runtime.contract import (
     ExplainAnswer,
     ReplyEnvelope,
 )
+from agent_runtime.questions import question_messages
 from agent_runtime.reply_verifier import Verdict
 from tests.fakes import ScriptedChat
 from tests.test_answers import follow_up
@@ -75,13 +76,19 @@ def test_a_third_is_held_out_and_kept_out_of_the_gate():
     assert not any(c.gate for c in held)
 
 
+def most_calls(c: ReplyCase) -> int:
+    """The question lane runs only when facts were sent, so a case without them makes one call
+    fewer."""
+    return REPLY_GATE.most_calls - (0 if question_messages(request_of(c)) else 1)
+
+
 def test_the_gate_set_covers_every_group_and_fits_its_call_cap():
     gate = REPLY_GATE.cases()
     assert {c.group for c in gate} == {c.group for c in CASES.values()}
     assert all(c.gate for c in gate)
-    judged = len(gate) * (REPLY_GATE.most_calls + 1)
+    judged = sum(most_calls(c) + REPLY_GATE.judge_runs for c in gate)
     worst = judged + len(RED_TEAM.cases()) * RED_TEAM.most_calls
-    assert worst + 1 <= GATE_MAX_CALLS, "the cases with their judge, the red-team rows, a warm-up"
+    assert worst + 1 <= GATE_MAX_CALLS, "the cases and their judge runs, the red team, a warm-up"
 
 
 def test_a_useful_free_reply_passes_every_check():

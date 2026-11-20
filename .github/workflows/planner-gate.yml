@@ -12,11 +12,12 @@ name: planner-gate
 # request and never fails it. The pull request that reaches the bars sets GATE_BLOCKS to 'true'
 # below, and from then on a run under the bars fails.
 on:
+  # A change to how the gate scores, its judge included, is itself gated.
   pull_request:
     paths:
       - agent-runtime/src/agent_runtime/**
-      - agent-runtime/evals/cases/reply.json
-      - agent-runtime/evals/cases/red_team.json
+      - agent-runtime/evals/**
+      - .github/workflows/planner-gate.yml
   workflow_dispatch:
     inputs:
       models:

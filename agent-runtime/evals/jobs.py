@@ -46,6 +46,9 @@ class Job[C: Case]:
     """What the judge is asked about a case's answer, in place of accuracy and clarity."""
     most_calls: int = 1
     """The most model calls one case makes, so a run stops before it passes its call cap."""
+    judge_runs: int = 1
+    """How many times the judge scores each answer. The score is their median, so one noisy run
+    can't move it."""
 
     def cases(self) -> list[C]:
         rows = json.loads((CASES / f"{self.name}.json").read_text())
