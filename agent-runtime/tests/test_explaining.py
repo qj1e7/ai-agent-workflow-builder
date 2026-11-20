@@ -100,7 +100,7 @@ def test_asking_what_a_workflow_does_is_an_explanation_of_the_one_they_mean(
     [
         ("what does the FastAPI release check do?", "FastAPI release check"),
         ("What does my Morning new-ticket check do", "Morning new-ticket check"),
-        ("what does weekly closed bug summary do", "weekly closed bug summary"),
+        ("what does weekly closed bug summary do", "Weekly closed bug summary"),
     ],
 )
 def test_asking_what_a_named_workflow_does_names_it_in_their_own_words(task: str, words: str):
@@ -128,6 +128,24 @@ def test_asking_what_a_named_workflow_does_names_it_in_their_own_words(task: str
 )
 def test_only_a_question_that_names_a_workflow_and_nothing_else_is_read_as_explain(task: str):
     assert not isinstance(answer(task), ExplainAnswer)
+
+
+def test_a_whole_name_gives_the_stored_name_which_always_fits():
+    """Casefolding can make the typed words longer than the name: "Straße" is "strasse"."""
+    stored = "Straße " + "x" * 73
+    typed = "Strasse " + "x" * 73
+    assert (len(stored), len(typed)) == (80, 81)
+    assert answer(f"what does {typed} do?", facts=facts_of(stored)) == explained(stored)
+
+
+def test_a_name_that_starts_with_the_is_matched_whole():
+    weekly = facts_of("The weekly summary")
+    assert answer("what does the weekly summary do?", facts=weekly) == explained(
+        "The weekly summary"
+    )
+    assert answer("what does my The weekly summary do?", facts=weekly) == explained(
+        "The weekly summary"
+    )
 
 
 def test_part_of_a_name_is_no_workflow_so_a_name_must_be_whole():

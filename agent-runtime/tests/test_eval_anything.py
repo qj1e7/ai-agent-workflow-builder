@@ -38,6 +38,7 @@ from agent_runtime.contract import (
     UnderstoodRow,
     WatchlistAnswer,
     WatchlistScheduleFact,
+    WhyStoppedAnswer,
     WorkflowFact,
 )
 from agent_runtime.questions import COULD_NOT_ANSWER
@@ -227,7 +228,7 @@ def test_a_software_card_shows_only_the_actions_the_person_sees() -> None:
     listed = words_of(
         Answered(answer=WatchlistAnswer(word="releases", software="LangGraph"), parts=[])
     )
-    assert listed.endswith("LangGraph (New version): You run 1.2.14. Newest is 1.2.16. [Open it]")
+    assert listed.endswith("LangGraph (Newer out): You run 1.2.14. Newest is 1.2.16. [Open it]")
     unlisted = Answered(answer=WatchlistAnswer(word="track", software="Kubernetes"), parts=[])
     assert words_of(unlisted, operator=True).endswith(
         "Kubernetes: It isn't on the watchlist yet. [Watch it]"
@@ -348,11 +349,26 @@ def own_time() -> Answered:
 
 def test_an_operator_sees_the_draft_offer_and_the_watchlist_s_time_under_a_time_of_its_own():
     shown = words_of(own_time(), operator=True)
-    assert "LangGraph (New version): You run 1.2.14. Newest is 1.2.16. [Open it]" in shown
+    assert "LangGraph (Newer out): You run 1.2.14. Newest is 1.2.16. [Open it]" in shown
     assert "[Make the Software watchlist run every weekday at 9]" in shown
     assert "[Draft it as an n8n workflow] The Workflow drafter drafts it as its own n8n " in shown
     assert "It isn't set up until an Approver says yes." in shown
     assert "written" not in shown.split("[Draft it as an n8n workflow]")[1]
+
+
+@pytest.mark.parametrize(
+    ("name", "pill"),
+    [
+        ("Redis", "Up to date"),
+        ("FastAPI", "Newer out"),
+        ("n8n", "Watching"),
+    ],
+)
+def test_a_software_card_s_pill_is_the_portal_s_word_for_it(name: str, pill: str) -> None:
+    """The pill says what the Portal's SoftwareCard says (stateOf in software.ts), never the
+    platform's own state words such as Ticket waiting for a yes or Not checked yet."""
+    watch = Answered(answer=WatchlistAnswer(word="track", software=name), parts=[])
+    assert f"{name} ({pill}): " in words_of(watch)
 
 
 def test_the_watchlist_s_time_is_offered_only_where_the_portal_offers_it() -> None:
@@ -364,7 +380,8 @@ def test_the_watchlist_s_time_is_offered_only_where_the_portal_offers_it() -> No
         Answered(answer=card("Weekly bugs"), parts=[crossed]),
         Answered(answer=CantAnswer(cant=[row], alternative=card("Weekly bugs")), parts=[crossed]),
     ]
-    for shown in offers:
+    troubleshooter = Answered(answer=WhyStoppedAnswer(), parts=[crossed])
+    for shown in [*offers, troubleshooter]:
         assert "Make the Software watchlist run" not in words_of(shown, operator=True)
     assert "Make the Software watchlist run" not in words_of(own_time(), operator=False)
 
