@@ -1409,6 +1409,7 @@
       "abilities",
       "question",
       "check_workflows",
+      "explain",
       "needs_me",
       "why_stopped",
       "watchlist",
