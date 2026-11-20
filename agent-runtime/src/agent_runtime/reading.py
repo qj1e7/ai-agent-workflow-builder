@@ -19,6 +19,8 @@ from typing import Final, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from agent_runtime.abilities import (
+    ABILITIES,
+    NOT_ADVERBS,
     SYSTEMS,
     TICKETS,
     change_verbs_in,
@@ -1924,6 +1926,9 @@ RUN_VERBS: Final = words(
 )
 """Verbs whose day is the day it runs, as "make it Friday", "run it Fridays" or "I want it on
 Fridays"."""
+MAKING: Final = words("make makes made")
+"""Verbs that can put a verb of their own after the workflow's name, as "make" in "make the
+release check skip Fridays", so the word right before the day must be one the reader knows."""
 RUN_TALK: Final = words(
     "it its this that them i i'd i'm we we'd us you can could would should will please just only "
     "also too plus then again now instead actually rather sorry wait oops mean meant well so ok "
@@ -1939,8 +1944,11 @@ LEAVING: Final = words(
     "deletes scrap scraps ditch ditches omit omits exclude excludes excluding skip skips skipping "
     "pause pauses stop stops stopping lose take leave minus unless except besides without rid"
 )
-"""Words that leave out the day after them, as "drop" in "make the release check drop every
-Friday". It only ever makes the reader ask."""
+"""Words that leave out the day after them. `TASK_HEADS` asks for any word it doesn't know at
+the front of a task's words. This list still asks after a verb that runs it, where that one
+doesn't look, as "drop" in "keep the release check drop every Friday". It also has the card
+quote the whole of "take Fridays out" and read "unless it's a Friday" as a day left out, not
+just one it can't place. It only ever makes the reader ask."""
 LABELS: Final = words("the a an this that these those our their its my your his her")
 """Words before a day that make it a label of the word after it, as "the Mon-Fri rota"."""
 DAY_NAMED: Final = re.compile(
@@ -1972,9 +1980,9 @@ def _days_named(text: str, everywhere: bool = False) -> tuple[tuple[tuple[int, i
     phrase, and, beside one, a clause that is little more than a day, as "minus Friday"; with
     `everywhere`, as for words that only change a schedule, they are every clause. A day there
     counts only when the words around it say to run on it: "every Friday", "on Fridays", "make
-    it Friday", "Fridays instead", "weekdays only", or, after a task's words, "every Monday", a
-    day in the plural or a day with the time it runs at, as "Check every Monday", "Check
-    langgraph Mondays" or "Check releases Monday at 9am". A word
+    it Friday", "Fridays instead", "weekdays only", or, after a task's words that a word the
+    reader knows starts, "every Monday", a day in the plural or a day with the time it runs at,
+    as "Check every Monday", "Check langgraph Mondays" or "Check releases Monday at 9am". A word
     that leaves it out, as "drop Fridays", "Fridays excluded", "Friday is off" or "unless it's
     a Friday", or a day written "Friday's", leaves it out, with or without a time. A day that
     labels the word after it, as "Monday's tickets" or "the Mon-Fri rota", or that a filter or
@@ -1990,6 +1998,7 @@ def _days_named(text: str, everywhere: bool = False) -> tuple[tuple[tuple[int, i
     theirs = set(clause_of) if everywhere else owned | short
     token_at = {a: n for n, (_, a, _, _) in enumerate(tokens)}
     runs = _runs_of(tokens, clause_of)
+    starts: list[int | None] | None = None
     tied: dict[tuple[int, int], bool] = {}
     timed: dict[tuple[int, int], bool] = {}
     left = _left_out_spans(text)
@@ -2013,7 +2022,8 @@ def _days_named(text: str, everywhere: bool = False) -> tuple[tuple[tuple[int, i
         frame = runs.get(first, (first, first, None))[2]
         day = _Day(first, last, run, frame is not None and frame < first, timed[run], match)
         clause = clause_of[first]
-        off = _off_the_schedule(text, tokens, clause_of, day)
+        starts = starts or _task_starts(text, tokens, clause_of)
+        off = _off_the_schedule(text, tokens, clause_of, starts, day)
         if off is not None:
             # A clause beside the schedule's own is the schedule's words whole, as "or Monday if
             # Friday is a holiday".
@@ -2047,6 +2057,31 @@ def _runs_of(tokens: list[Token], clause_of: list[int]) -> dict[int, tuple[int, 
     return found
 
 
+def _task_starts(text: str, tokens: list[Token], clause_of: list[int]) -> list[int | None]:
+    """For each token, the word that must be one the reader knows for a day right after it to
+    be the run day: the first word of the task's words that end at it, back to the clause's
+    edge or a mark, passing over a word such as "automatically". After a verb that runs it, as
+    "move" in "move the release check to Tuesdays", there is none, unless it is "make", as in
+    "make the release check nix every Monday", where it is the word itself, or "to" follows it,
+    where it is the first word after, as "nix" in "I want to nix Mondays"."""
+    found: list[int | None] = []
+    start: int | None = None
+    held = own = False
+    for n, (raw, _, _, scheduled) in enumerate(tokens):
+        gap = text[tokens[n - 1][2] : tokens[n][1]] if n else ""
+        if n and (clause_of[n] != clause_of[n - 1] or CLAUSE_MARK.search(gap) is not None):
+            start, held, own = None, False, False
+        found.append(None if held else (n if own or start is None else start))
+        low = _low(raw)
+        adverb = low.endswith("ly") and low not in NOT_ADVERBS
+        if low in RUN_VERBS:
+            to = n + 1 < len(tokens) and _low(tokens[n + 1][0]) == "to"
+            start, held, own = None, not to and low not in MAKING, not to and low in MAKING
+        elif start is None and _a_word(raw, scheduled) and not adverb:
+            start = n
+    return found
+
+
 @dataclass(frozen=True)
 class _Day:
     """A day the words name: its first and last token, the run of schedule words it stands in,
@@ -2074,7 +2109,7 @@ def _a_word(raw: str, scheduled: bool) -> bool:
 
 
 def _off_the_schedule(
-    text: str, tokens: list[Token], clause_of: list[int], day: _Day
+    text: str, tokens: list[Token], clause_of: list[int], starts: list[int | None], day: _Day
 ) -> tuple[tuple[int, int], bool] | None:
     """The day's words with what leaves it out and True, when the words leave it out; the day's
     run of schedule words and False, when code can't place it; or None when the words say to run
@@ -2131,6 +2166,12 @@ def _off_the_schedule(
     # "every", a plural or the time it runs at, as "every Friday at 9am", says it is a schedule.
     if before == "word" and not (every or day.timed or _marked(day.match.group(0))):
         return (tokens[first][1], tokens[last][2]), False
+    # After a task's words, the day is the run day only when a word the reader knows starts
+    # them, as "Check" in "Check langgraph Mondays". Any other word right before the day, as
+    # "nix" in "nix every Monday", may leave it out. One further back leaves it unplaced.
+    start = None if before != "word" or head is None else starts[head]
+    if start is not None and low(start) not in TASK_HEADS:
+        return (tokens[start if start == head else first][1], tokens[last][2]), start == head
     return None
 
 
@@ -2734,6 +2775,23 @@ KNOWN_WORDS: Final = (
 )
 """Every word a structure could explain, so a capitalised one of them at a clause's front
 ("Create", "List", "Every") is never read as a name."""
+TASK_HEADS: Final = (
+    KNOWN_WORDS
+    | frozenset(
+        word
+        for ability in ABILITIES
+        for said in (ability.verbs, ability.makes, ability.about)
+        for word in said or ()
+    )
+    | words(
+        "post send share publish remind notify alert message email ping tell close archive sync "
+        "backup clean"
+    )
+)
+"""Words that may start a task's words before the day it runs on, as "Check" in "Check langgraph
+Mondays". They are every word a structure could explain, what the capability registry says a
+task does, makes or is about, and verbs that send its result or name a task of their own. Any
+other word there may leave the day out, as "nix" in "nix every Monday", so the day is asked."""
 
 
 def _region(
