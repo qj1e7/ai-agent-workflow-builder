@@ -1831,7 +1831,7 @@
             }
           ],
           "default": null,
-          "description": "The words of the request that name the workflow, as it wrote them, as \"the FastAPI release check\" names FastAPI release check. None for \"explain it\", so the Portal explains the workflow in focus.",
+          "description": "The workflow's name as stored when the request says all of it, which always fits, else the request's own words for part of it, as \"the weekly summary\". None for \"explain it\", so the Portal explains the workflow in focus.",
           "title": "Workflow Words"
         }
       },

@@ -61,12 +61,12 @@ def answer(task: str, fields: TaskRead | None = None, facts: PlannerFacts = FACT
         ("explain the FastAPI release check", "FastAPI release check"),
         ("Explain the FastAPI release check.", "FastAPI release check"),
         ("please explain the weekly summary", "weekly summary"),
-        ("can you explain the morning new-ticket check?", "morning new-ticket check"),
+        ("can you explain the morning new-ticket check?", "Morning new-ticket check"),
         ("explain to me the FastAPI release check please", "FastAPI release check"),
-        ("explain my weekly closed bug summary workflow", "weekly closed bug summary"),
+        ("explain my weekly closed bug summary workflow", "Weekly closed bug summary"),
     ],
 )
-def test_explain_names_the_workflow_in_the_requests_own_words(
+def test_explain_names_a_whole_name_as_stored_and_part_of_one_in_the_requests_words(
     task: str, words: str, fields: TaskRead
 ):
     assert answer(task, fields) == explained(words)

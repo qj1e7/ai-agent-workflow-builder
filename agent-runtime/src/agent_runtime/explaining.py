@@ -60,12 +60,16 @@ def explain_of(text: str, facts: PlannerFacts | None) -> ExplainAnswer | None:
     if lead is None:
         return _what_it_does(text, facts)
     start, end = trim(text, lead.end(), len(text))
-    named = _named(text, (start, end), facts)
+    found = _named(text, (start, end), facts)
+    named = None if found is None else found[0]
     unnamed = text[start:end] if named is None else text[start : named[0]] + text[named[1] : end]
     if ABOUT_A_RUN.search(unnamed):
         return None
-    if named is not None and not _content(unnamed):
-        return ExplainAnswer(workflow_words=text[named[0] : named[1]])
+    if found is not None and not _content(unnamed):
+        (a, b), stored = found
+        words = stored or text[a:b]
+        if len(words) <= WORDS_LIMIT:
+            return ExplainAnswer(workflow_words=words)
     said = _edges_off(text[start:end])
     if all(t.casefold() in POINTING for t in TOKEN.findall(said)):
         return ExplainAnswer(workflow_words=None)
@@ -98,16 +102,22 @@ def _plain(name: str) -> str:
     return " ".join(name.casefold().split())
 
 
-def _named(text: str, within: Span, facts: PlannerFacts | None) -> Span | None:
-    """The longest stretch of the request that names one of the person's workflows."""
+def _named(text: str, within: Span, facts: PlannerFacts | None) -> tuple[Span, str | None] | None:
+    """The longest stretch of the request that names one of the person's workflows, with that
+    workflow's name as stored when the stretch says all of it. Casefolding can make the typed
+    words longer than the name ("Strasse" for "Straße"), and the stored name always fits."""
     names = facts.workflow_names() if facts is not None else []
     runs = [
-        r
+        (r, name if _words(text[r[0] : r[1]]) == _words(name) else None)
         for name in names
         for r in name_runs(text, name)
         if within[0] <= r[0] and r[1] <= within[1]
     ]
-    return max(runs, key=lambda r: (r[1] - r[0], -r[0]), default=None)
+    return max(runs, key=lambda run: (run[0][1] - run[0][0], -run[0][0]), default=None)
+
+
+def _words(name: str) -> list[str]:
+    return [t.casefold() for t in TOKEN.findall(name)]
 
 
 def _content(said: str) -> list[str]:
