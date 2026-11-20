@@ -322,6 +322,27 @@ def test_a_message_naming_an_unbuilt_thing_carries_the_registrys_words_in_the_no
     ]
 
 
+def test_a_card_that_says_which_software_is_unclear_is_no_dead_end():
+    """Asking again with its name is a way on, and a free reply can't tell which software "them"
+    means either: it would answer the whole message and drop the cross."""
+    unclear = RequestPart(text="track them", mark="cant", reason="which_software")
+    lost = RequestPart(text="flibber the wotsit", mark="cant", reason="not_followed")
+    cant = CantAnswer(cant=[CantRow(kind="look_for", text="flibber", note="x")])
+    assert dead_end(cant, [lost], "x") is not None
+    assert dead_end(cant, [unclear], "x") is None
+    assert dead_end(cant, [lost, unclear], "x") is None
+
+
+def test_track_them_beside_words_it_didnt_follow_keeps_its_cross_and_gets_no_free_reply():
+    result, chat = answered("flibber the wotsit, and track them", reading("none"))
+    assert asked_shapes(chat) == ["TaskRead"]
+    assert isinstance(result.answer, CantAnswer)
+    assert [(p.text, p.reason) for p in result.parts] == [
+        ("flibber the wotsit", "not_followed"),
+        ("track them", "which_software"),
+    ]
+
+
 def test_each_dead_end_says_which_rule_ended_there():
     crossed = [RequestPart(text="flibber the wotsit", mark="cant", reason="not_followed")]
     found = dead_end(

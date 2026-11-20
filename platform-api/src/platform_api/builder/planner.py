@@ -221,7 +221,8 @@ class PartView(WireModel):
         "note), ask_on_its_own, one_day, one_time or one_frequency (a schedule with two, see "
         "choices), own_time (a time on a watch request), skip_approval, with_a_yes, "
         "needs_the_rest, how_many_days, only_schedule (a change to a workflow other than when it "
-        "runs), how_often (a schedule it can't hold, such as monthly), and operators (a change "
+        "runs), how_often (a schedule it can't hold, such as monthly), which_software (a watch of "
+        "more than one thing, as 'track them', that names no software), and operators (a change "
         "asked by someone who isn't an Operator). Null for will_do."
     )
     note: str | None = Field(description="For cant_do, why, in the registry's words.")
@@ -1003,8 +1004,9 @@ def _parts(clauses: list[asks.Clause], answered: asks.Ask | None) -> list[PartVi
 
 def _remark(part: PartView) -> PartView:
     """A clause that asks for a change is never ticked, whatever the reading made of it, and
-    only a question is: anything else ticked gets its cross."""
-    ask = asks.ask_of(part.text)
+    only a question is: anything else ticked gets its cross. A watch the runtime read, as "check
+    them all", is a change whatever its verb."""
+    ask = "change" if part.reason == "which_software" else asks.ask_of(part.text)
     if ask == "change" or (part.mark == "will_do" and ask not in ("question", "decided")):
         return _cross(part.text, CROSS_FOR[ask])
     return part

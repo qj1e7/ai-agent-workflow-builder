@@ -9,8 +9,6 @@ from agent_runtime.answers import (
     answer_task,
     decide,
     watch_of_it,
-    watches_it,
-    watches_them,
     with_software_named,
 )
 from agent_runtime.contract import (
@@ -31,6 +29,7 @@ from agent_runtime.fixed_replies import didnt_follow
 from agent_runtime.follow_ups import follow_up_of
 from agent_runtime.questions import QuestionReply
 from agent_runtime.reply_verifier import Verdict
+from agent_runtime.watch_words import watches_it, watches_them
 from tests.fakes import ScriptedChat
 from tests.test_questions import FACTS, reading, watch_reading
 

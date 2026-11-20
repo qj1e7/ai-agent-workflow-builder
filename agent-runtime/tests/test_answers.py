@@ -1772,10 +1772,65 @@ def test_a_clause_that_watches_it_is_the_same_watch_of_the_software_named(task: 
 def test_a_clause_that_watches_them_is_never_ticked_as_the_watch_of_one_software(
     task: str, named: str, plural: str
 ):
-    """A plural can't mean one name, so "them" beside a software comes back, never ticked."""
+    """A plural can't mean one name, so "them" beside a software comes back, never ticked, and
+    says it can't tell which software."""
     reading = read(belongs_on_watchlist=True, watchlist_word="add", software=named)
-    marks = {text: mark for text, mark, _ in parts(reading, task)}
-    assert marks[plural] != "will_do"
+    assert (plural, "cant", "which_software") in parts(reading, task)
+
+
+CHANGE = read(asks_about="change")
+APP_QUESTION = read(asks_about="abilities")
+WATCH_REDIS = read(belongs_on_watchlist=True, watchlist_word="add", software="redis")
+
+
+@pytest.mark.parametrize(
+    ("fields", "task", "plural"),
+    [
+        (CHANGE, "pause the morning check and track them for me", "track them for me"),
+        (CHANGE, "move the morning new-ticket check to 10am and track them", "track them"),
+        (WATCH_REDIS, "add redis and kafka, keep an eye on all three", "keep an eye on all three"),
+        (WATCH_REDIS, "add redis, watch 'em too", "watch 'em too"),
+        (APP_QUESTION, "what can you do, and keep an eye on all three", "keep an eye on all three"),
+        (APP_QUESTION, "what can you do, and can you track these two?", "can you track these two"),
+        (
+            read(asks_about="my_workflows", workflow_words="morning new-ticket check"),
+            "how is the morning new-ticket check doing, and track them",
+            "track them",
+        ),
+    ],
+)
+def test_a_crossed_watch_of_them_says_it_cant_tell_which_software(
+    fields: TaskRead, task: str, plural: str
+):
+    """On its own the same words ask "Which software should I watch?", so beside other parts
+    they are never "I didn't follow this part" or "Ask this on its own"."""
+    assert (plural, "cant", "which_software") in marks(fields, task)
+
+
+@pytest.mark.parametrize(
+    ("fields", "task", "kept"),
+    [
+        (APP_QUESTION, "what can you do, and track it", ("track it", "ask_on_its_own")),
+        (APP_QUESTION, "what can you do, and watch", ("watch", "ask_on_its_own")),
+        (WATCH_REDIS, "add redis, track software too", ("track software too", "not_followed")),
+        (read(), "add redis without a yes and track them", ("track them", "with_a_yes")),
+        (
+            read(
+                schedule="Every Friday at 9am",
+                search=search(project="MOCK", issue_types=["bug"], said="bugs in MOCK"),
+            ),
+            "Every Friday at 9am find bugs in MOCK, and track them",
+            ("track them", "not_followed"),
+        ),
+    ],
+)
+def test_a_cross_that_is_no_watch_of_them_keeps_its_reason(
+    fields: TaskRead, task: str, kept: tuple[str, str]
+):
+    """A watch of "it" with nothing named before, a watch that names no software, and a reason of
+    its own, as a skipped yes, keep their cross. Beside a ticket search, "them" can mean the
+    tickets."""
+    assert (kept[0], "cant", kept[1]) in marks(fields, task)
 
 
 def test_a_clause_that_does_more_to_it_than_watch_still_comes_back():

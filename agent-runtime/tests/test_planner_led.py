@@ -216,6 +216,21 @@ def test_a_pause_reaches_its_workflow_and_its_pause_word_and_no_other_clause() -
     assert reached(result) == ["pause the morning check"]
 
 
+def test_a_watch_of_them_beside_a_pause_says_which_software_is_unclear() -> None:
+    result, _ = run(
+        "pause the morning check and track them for me",
+        tool("change_workflow", action="pause", workflow_words="morning check"),
+        read=reading(),
+        facts=WORKFLOWS,
+    )
+
+    assert shown(result) == PauseAnswer(workflow_words="morning check")
+    assert marks(result) == [
+        ("pause the morning check", "will_do", None),
+        ("track them for me", "cant", "which_software"),
+    ]
+
+
 def test_a_schedule_change_reaches_the_clause_where_code_reads_the_time() -> None:
     result, _ = run(
         "move the morning check to 10am, and list new bugs",

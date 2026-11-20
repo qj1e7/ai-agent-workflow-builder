@@ -646,6 +646,7 @@ const REASONS: readonly unknown[] = [
   'with_a_yes',
   'needs_the_rest',
   'how_many_days',
+  'which_software',
 ]
 
 function isPart(value: unknown): value is PartView {

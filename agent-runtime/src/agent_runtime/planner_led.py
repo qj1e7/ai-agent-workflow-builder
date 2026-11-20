@@ -36,7 +36,6 @@ from agent_runtime.answers import (
     TaskRead,
     answer_of,
     watch_of_it,
-    watches_it,
     with_software_named,
     word_rule_refusal,
 )
@@ -87,6 +86,7 @@ from agent_runtime.reading import SAID_LIMIT, clauses_of, how_often, polite, sai
 from agent_runtime.reply_guard import GuardCheck, about_of
 from agent_runtime.reply_verifier import VerifierFlag, verify
 from agent_runtime.summary import ChatFor
+from agent_runtime.watch_words import watches_it
 
 log = logging.getLogger(__name__)
 

@@ -47,6 +47,8 @@ log = logging.getLogger(__name__)
 
 FREE_REPLY_TIMEOUT_SECONDS: Final = 8.0
 DEAD_END_CROSSES: Final = frozenset({"not_followed", "ask_on_its_own"})
+"""Crosses that leave the person nowhere to go. which_software is not one: it says to ask again
+with the software's name, which a free reply can't supply either."""
 
 
 @dataclass(frozen=True)

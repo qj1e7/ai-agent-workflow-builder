@@ -1094,6 +1094,19 @@ async def test_an_operators_question_beside_a_change_keeps_the_runtimes_marks(fr
     assert marks(reply)[1] == ("pause the morning new-ticket check", "cant", "ask_on_its_own")
 
 
+@pytest.mark.parametrize("plural", ["track them", "check them all"])
+async def test_a_watch_of_them_beside_a_question_is_an_operators_for_anyone_else(
+    front: Front, plural: str
+):
+    """Only an Operator can name the software and watch it, so an Approver's cross says who
+    makes the change, as for any other watch."""
+    parts = [done("What is waiting for my yes"), crossed(plural, "which_software")]
+    front.answers.result = Answered(answer=NeedsMeAnswer(), parts=parts)
+    text = f"What is waiting for my yes, and {plural}"
+    assert marks(await ask_as_bob(front, text))[1] == (plural, "cant", "operators")
+    assert marks(await say(front, text))[1] == (plural, "cant", "which_software")
+
+
 @pytest.mark.parametrize(
     ("text", "only"),
     [

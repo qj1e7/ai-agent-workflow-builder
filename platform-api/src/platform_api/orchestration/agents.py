@@ -800,6 +800,7 @@ type PartReason = Literal[
     "how_many_days",
     "only_schedule",
     "how_often",
+    "which_software",
 ]
 
 

@@ -9229,7 +9229,8 @@
           "needs_the_rest",
           "how_many_days",
           "only_schedule",
-          "how_often"
+          "how_often",
+          "which_software"
         ],
         "type": "string"
       },
@@ -9352,7 +9353,7 @@
                 "type": "null"
               }
             ],
-            "description": "Why, for a cant or a question: not_followed (no rule read it), cant_do (see note), ask_on_its_own, one_day, one_time or one_frequency (a schedule with two, see choices), own_time (a time on a watch request), skip_approval, with_a_yes, needs_the_rest, how_many_days, only_schedule (a change to a workflow other than when it runs), how_often (a schedule it can't hold, such as monthly), and operators (a change asked by someone who isn't an Operator). Null for will_do."
+            "description": "Why, for a cant or a question: not_followed (no rule read it), cant_do (see note), ask_on_its_own, one_day, one_time or one_frequency (a schedule with two, see choices), own_time (a time on a watch request), skip_approval, with_a_yes, needs_the_rest, how_many_days, only_schedule (a change to a workflow other than when it runs), how_often (a schedule it can't hold, such as monthly), which_software (a watch of more than one thing, as 'track them', that names no software), and operators (a change asked by someone who isn't an Operator). Null for will_do."
           },
           "text": {
             "description": "The request's own words: a whole clause, or, in a clause the Planner partly read, only the words it didn't read.",

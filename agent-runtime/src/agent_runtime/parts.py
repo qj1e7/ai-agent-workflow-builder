@@ -70,6 +70,7 @@ from agent_runtime.reading import (
     without_runs_by_itself,
 )
 from agent_runtime.removals import another, points_back, removal_of
+from agent_runtime.watch_words import watches_them
 
 NOT_FOLLOWED: Final = "I didn't follow this part."
 SKIP_PART_NOTE: Final = "I can't skip the yes. Nothing is written without a yes."
@@ -154,6 +155,28 @@ def parts_of(
     if isinstance(answer, FreeReplyAnswer | DidntFollowAnswer):
         mark, reason = _whole_message(answer)
         return [_part(text, c, mark, reason) for c in clauses]
+    return [_which_software(read, part) for part in _marked(read, text, clauses, answer, facts)]
+
+
+def _which_software(read: TaskRead | None, part: RequestPart) -> RequestPart:
+    """A cross of "I didn't follow this part" or "Ask this on its own" on words that only ask to
+    watch more than one thing, as "track them" or "keep an eye on all three", says which software
+    is unclear instead: on their own they ask "Which software should I watch?" (`watches_them`).
+    Beside a ticket search or a ticket, "them" can mean the tickets, so the cross stays."""
+    tickets = read is not None and (read.search is not None or read.ticket is not None)
+    general = part.reason in ("not_followed", "ask_on_its_own")
+    if tickets or not general or watches_them(part.text) is None:
+        return part
+    return part.model_copy(update={"reason": "which_software"})
+
+
+def _marked(
+    read: TaskRead | None,
+    text: str,
+    clauses: list[Span],
+    answer: PlannerAnswer,
+    facts: PlannerFacts | None,
+) -> list[RequestPart]:
     skips = [c for c in clauses if _skips_a_yes(read, text[c[0] : c[1]], facts)]
     if isinstance(answer, STATE_ANSWERS):
         asked = _about_state(text, clauses, _names_of(answer))
