@@ -228,12 +228,22 @@ describe('Check my workflows about the one workflow they have', () => {
     ({ name: PLANTED, state: 'on', last_run: null, next_run_at: null, schedule: null, ...fields }) as unknown as UseCaseView
 
   it('says plainly whether it is on and that it hasn’t run yet, with the name quoted as data', () => {
-    expect(oneWorkflowSay(one({}), NOW, nameOf)).toBe(`“${PLANTED}” is on. It hasn’t run yet.`)
+    expect(oneWorkflowSay(one({}), NOW, nameOf)).toBe(`“${PLANTED}” is on. It hasn’t run yet. Next run: Not scheduled.`)
   })
 
-  it('says when it runs next, when its schedule will start a run', () => {
+  it('says when it runs next, in the panel’s own Next run words', () => {
     const said = oneWorkflowSay(one({ next_run_at: '2026-11-21T01:00:00Z' }), NOW, nameOf)
-    expect(said).toMatch(/^“.+” is on\. It hasn’t run yet\. It runs next .+\.$/)
+    expect(said).toMatch(/^“.+” is on\. It hasn’t run yet\. Next run: .+\.$/)
+    expect(said).not.toContain('Not scheduled')
+  })
+
+  it('says it is not running when its schedule is held or a move was refused, as the panel and the row do', () => {
+    const schedule = { day: 'saturday', at: '09:00', time_zone: null, held: false } as unknown as UseCaseView['schedule']
+    for (const fields of [{ move_refused: true }, { schedule: { ...schedule!, held: true } }] as Partial<UseCaseView>[]) {
+      const said = oneWorkflowSay(one({ schedule, next_run_at: '2026-11-21T01:00:00Z', ...fields }), NOW, nameOf)
+      expect(said).toMatch(/Next run: Not running\.$/)
+      expect(said).not.toContain('Sat')
+    }
   })
 
   it('names no next run while it is paused, and says how its last run went', () => {
@@ -245,7 +255,7 @@ describe('Check my workflows about the one workflow they have', () => {
     }
     const said = oneWorkflowSay(one({ state: 'paused', last_run: last, next_run_at: '2026-11-21T01:00:00Z' }), NOW, nameOf)
     expect(said).toMatch(/^“.+” is paused\. Last run today, .+\.$/)
-    expect(said).not.toContain('runs next')
+    expect(said).not.toContain('Next run')
     expect(said).not.toContain('..')
   })
 })
