@@ -396,6 +396,14 @@ describe('the clauses an answer didn’t read', () => {
     expect(text(draw(checkLeftover as PlannerReply, { leftovers: true }))).toBe('Can’t do: “every Friday sum up the closed tickets” Ask this on its own, and I’ll answer it.')
   })
 
+  it('ask for a watch of them again with the software’s name, with no button that sends the same words', () => {
+    const asked: PartView = { text: 'is LangGraph up to date', mark: 'will_do', reason: null, note: null, choices: [] }
+    const them: PartView = { text: 'track them for me', mark: 'cant', reason: 'which_software', note: null, choices: [] }
+    const html = draw({ ...(question as QuestionReply), parts: [asked, them] }, { leftovers: true })
+    expect(text(html)).toBe('Can’t do: “track them for me” I can’t tell which software you mean. Ask again with its name.')
+    expect(buttons(html)).toEqual([])
+  })
+
   it('give a watch request’s own time its reason, and offer that time to the whole watchlist', () => {
     const html = draw(ownTime as WatchlistReply, { leftovers: true })
     expect(text(html)).toBe(

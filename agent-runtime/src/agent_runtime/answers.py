@@ -157,6 +157,13 @@ from agent_runtime.reading import (
 from agent_runtime.removals import name_key, removal_of
 from agent_runtime.summary import ChatFor
 from agent_runtime.tools import tools_text
+from agent_runtime.watch_words import (
+    A_WATCH_OF_IT,
+    WATCH_VERBS,
+    watch_verb_in,
+    watches_it,
+    watches_them,
+)
 
 __all__ = [
     "SkipRead",
@@ -649,45 +656,6 @@ def _also(
     return rest if isinstance(rest, SetupCardAnswer | PartAnswer | CantAnswer) else None
 
 
-WATCH_VERBS: Final = (
-    "add",
-    "watch",
-    "track",
-    "monitor",
-    "follow",
-    "check",
-    "keep an eye on",
-    "keep track of",
-    "keep tabs on",
-)
-"""Verbs that start a watch request. The model's reading of one is taken only when the request
-says it and names the software."""
-_VERB_PATTERN: Final = "|".join(r"\s+".join(v.split()) for v in WATCH_VERBS)
-_IT: Final = r"it|this(?:\s+one)?|that(?:\s+one)?"
-_FEW: Final = r"two|three|four|five"
-_THEM: Final = (
-    r"them(?:\s+(?:all|both))?|['’]?em|"
-    rf"(?:those|these)(?:\s+(?:ones|{_FEW}))?|both(?:\s+of\s+them)?|"
-    rf"all(?:\s+(?:of\s+)?(?:them|those|these|{_FEW}))?|each(?:\s+(?:one|of\s+them))?|"
-    rf"the\s+(?:{_FEW})(?:\s+of\s+them)?"
-)
-"""Words that point at more than one thing, so they can't mean one software."""
-_POLITE_TAIL: Final = r"(?:\s+(?:please|pls|for\s+me|for\s+us|too|as\s+well|also|now))*"
-
-
-def _only_watching(pronoun: str, verbs: str) -> re.Pattern[str]:
-    return re.compile(
-        r"^\W*(?:(?:and|then|also|so|please|pls|now|(?:can|could|would)\s+you|help\s+me)\s+)*"
-        rf"(?P<verb>{verbs})\s+(?:{pronoun}){_POLITE_TAIL}\W*$",
-        re.IGNORECASE,
-    )
-
-
-_WATCHES_IT: Final = _only_watching(_IT, _VERB_PATTERN)
-_WATCHES_THEM: Final = _only_watching(_THEM, rf"{_VERB_PATTERN}|keep")
-_A_WATCH_OF_IT: Final = re.compile(
-    rf"\b(?:{_VERB_PATTERN})\s+(?:{_IT})\b{_POLITE_TAIL}", re.IGNORECASE
-)
 _TICKET_KEY: Final = re.compile(r"\b[A-Z][A-Z0-9]+-\d+\b")
 _NOT_A_WATCH: Final = re.compile(
     r"\b(?:tickets?|issues?|projects?|boards?|approvers?|approvals?|workflows?|comments?|"
@@ -710,23 +678,6 @@ ASKS_TO_WATCH: Final = (
 """The words of a request that only asks to watch some software, as "help me add a software"."""
 
 
-def watches_it(words: str) -> str | None:
-    """The watch verb, as written, of words that ask only to watch "it", as "keep track of it" or
-    "please monitor this one": a watch of the one software named beside them, or in the turn
-    before. A word more, as a time or another verb, and they ask for more. "them" is not "it"
-    (`watches_them`)."""
-    found = _WATCHES_IT.match(visible_words(words))
-    return None if found is None else found.group("verb")
-
-
-def watches_them(words: str) -> str | None:
-    """The watch verb, as written, of words that ask only to watch more than one thing, as "track
-    them", "follow both" or "keep all of them". A plural can't mean one software, so they never
-    take the software named beside them or in the turn before."""
-    found = _WATCHES_THEM.match(visible_words(words))
-    return None if found is None else found.group("verb")
-
-
 def _which_software(read: TaskRead, request: str) -> WhichSoftwareAnswer | None:
     """The one question for the detail a watch needs: the reading put the request on the
     watchlist and the request names no software. Only when the request asks nothing else, so no
@@ -737,7 +688,7 @@ def _which_software(read: TaskRead, request: str) -> WhichSoftwareAnswer | None:
     asked = re.findall(r"[\w'’]+", request.casefold())
     if not asked or any(w not in ASKS_TO_WATCH for w in asked):
         return None
-    word = whole_word_of(request, read.watchlist_word) or _verb_in(request)
+    word = whole_word_of(request, read.watchlist_word) or watch_verb_in(request)
     return None if word is None else WhichSoftwareAnswer(word=word)
 
 
@@ -775,11 +726,6 @@ def _without(request: str, word: str) -> str:
     return re.sub(rf"(?<!\w){re.escape(word)}(?!\w)", " ", request, count=1, flags=re.IGNORECASE)
 
 
-def _verb_in(request: str) -> str | None:
-    found = re.search(rf"(?<!\w)(?:{_VERB_PATTERN})(?!\w)", request, re.IGNORECASE)
-    return None if found is None else found.group(0)
-
-
 def _other_source(read: TaskRead, request: str) -> CantAnswer | None:
     """A can't for a release source other than GitHub, with the watch offered when a software
     name was read. A word that asks what is newest asks about software too, as "what's new on
@@ -788,7 +734,7 @@ def _other_source(read: TaskRead, request: str) -> CantAnswer | None:
     newest = NEWEST.search(request)
     word = (
         _watch_verb(read, request)
-        or _verb_in(request)
+        or watch_verb_in(request)
         or release_word_in(request)
         or (None if newest is None else newest.group(0))
     )
@@ -1415,7 +1361,7 @@ def _reply_software(request: str, said: str | None) -> str | None:
     if name is None or len(name) > SOFTWARE_LIMIT or not _names_no_ticket_or_yes(name):
         return None
     # "keep track of it" beside the name is the same watch, so it joins no second name.
-    text = _single_spaced(_A_WATCH_OF_IT.sub(" ", request))
+    text = _single_spaced(A_WATCH_OF_IT.sub(" ", request))
     at = re.search(rf"(?<!\w){re.escape(name)}(?!\w)", text, re.IGNORECASE)
     return None if at is None or _names_another(text, at.span()) else name
 

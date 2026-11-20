@@ -32,6 +32,7 @@ const REASON_WORDS: Readonly<Record<PartReason, string>> = {
   operators: 'Operators set up workflows.',
   only_schedule: 'From the chat I can only change when it runs.',
   how_often: 'I can’t run things that often yet.',
+  which_software: 'I can’t tell which software you mean. Ask again with its name.',
 }
 
 /**
@@ -128,6 +129,7 @@ export function askOfCross(part: PartView): string | null {
     case 'operators':
     case 'only_schedule':
     case 'how_often':
+    case 'which_software':
       return null
   }
 }

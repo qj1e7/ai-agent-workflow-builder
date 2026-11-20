@@ -1466,6 +1466,7 @@ type PartReason = Literal[
     "how_many_days",
     "only_schedule",
     "how_often",
+    "which_software",
 ]
 
 
@@ -1492,7 +1493,8 @@ class RequestPart(WireModel):
         "can't be done), how_many_days (a question: the words name a span of days but no "
         "number), only_schedule (a change to a workflow other than when it runs, which the "
         "chat can't make yet), how_often (a frequency the schedule can't hold, such as "
-        "monthly). None for will_do.",
+        "monthly), which_software (a watch of more than one thing, as 'track them', that names "
+        "no software). None for will_do.",
     )
     note: str | None = Field(
         default=None, max_length=300, description="For cant_do, why, in the registry's words."

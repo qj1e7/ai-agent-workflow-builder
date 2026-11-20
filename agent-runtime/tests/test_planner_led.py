@@ -216,6 +216,22 @@ def test_a_pause_reaches_its_workflow_and_its_pause_word_and_no_other_clause() -
     assert reached(result) == ["pause the morning check"]
 
 
+def test_a_watch_of_them_beside_a_pause_keeps_ask_this_on_its_own() -> None:
+    """ "them" can mean the workflow, so the cross isn't which software is unclear."""
+    result, _ = run(
+        "pause the morning check and track them for me",
+        tool("change_workflow", action="pause", workflow_words="morning check"),
+        read=reading(),
+        facts=WORKFLOWS,
+    )
+
+    assert shown(result) == PauseAnswer(workflow_words="morning check")
+    assert marks(result) == [
+        ("pause the morning check", "will_do", None),
+        ("track them for me", "cant", "ask_on_its_own"),
+    ]
+
+
 def test_a_schedule_change_reaches_the_clause_where_code_reads_the_time() -> None:
     result, _ = run(
         "move the morning check to 10am, and list new bugs",
@@ -269,6 +285,50 @@ def test_how_to_start_reaches_only_what_the_reading_leaves_unexplained() -> None
         ("give me a quick tour", "will_do", None),
         ("pause the morning check", "cant", "ask_on_its_own"),
     ]
+
+
+def test_how_to_start_beside_a_watch_of_them_keeps_ask_this_on_its_own() -> None:
+    result, _ = run(
+        "how do I start, and track them",
+        tool("show", what="how_to_start"),
+        read=reading("abilities"),
+        facts=WORKFLOWS,
+    )
+
+    assert shown(result) == AbilitiesAnswer(how_to_start=True)
+    assert marks(result) == [
+        ("how do I start", "will_do", None),
+        ("track them", "cant", "ask_on_its_own"),
+    ]
+
+
+@pytest.mark.parametrize("watch", ["keep track of it", "keep an eye on all three"])
+def test_the_list_of_abilities_never_ticks_a_watch(watch: str) -> None:
+    """The rules don't follow a watch beside "what can you do", but no list of abilities does it."""
+    result, _ = run(
+        f"what can you do, and {watch}",
+        tool("show", what="abilities"),
+        read=reading("abilities"),
+        facts=WORKFLOWS,
+    )
+
+    assert marks(result) == [
+        ("what can you do", "will_do", None),
+        (watch, "cant", "ask_on_its_own"),
+    ]
+    assert reached(result) == ["what can you do"]
+
+
+def test_the_list_of_abilities_still_answers_words_with_add_check_or_follow_as_on_main() -> None:
+    """Only the verbs that ask for nothing but a watch keep a clause from the list."""
+    result, _ = run(
+        "what can you do, and the add-on",
+        tool("show", what="abilities"),
+        read=reading("abilities"),
+        facts=WORKFLOWS,
+    )
+
+    assert reached(result) == ["what can you do", "the add-on"]
 
 
 def test_how_to_start_for_a_message_the_rules_read_whole_goes_back_to_the_model() -> None:
@@ -359,7 +419,7 @@ def test_a_watch_offer_never_reaches_a_clause_that_watches_them() -> None:
         facts=FACTS,
     )
 
-    assert ("keep track of them", "will_do", None) not in marks(result)
+    assert ("keep track of them", "cant", "which_software") in marks(result)
     assert "keep track of them" not in reached(result)
 
 

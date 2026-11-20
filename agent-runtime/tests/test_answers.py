@@ -1778,6 +1778,211 @@ def test_a_clause_that_watches_them_is_never_ticked_as_the_watch_of_one_software
     assert marks[plural] != "will_do"
 
 
+CHANGE = read(asks_about="change")
+APP_QUESTION = read(asks_about="abilities")
+WATCH_REDIS = read(belongs_on_watchlist=True, watchlist_word="add", software="redis")
+WATCH_LANGGRAPH = read(belongs_on_watchlist=True, watchlist_word="watch", software="langgraph")
+
+
+@pytest.mark.parametrize(
+    ("fields", "task", "plural"),
+    [
+        (WATCH_REDIS, "add redis, watch 'em too", "watch 'em too"),
+        (WATCH_REDIS, "add redis, and can you monitor these two?", "can you monitor these two"),
+        (WATCH_REDIS, "help me add redis, keep track of them", "keep track of them"),
+        (
+            read(belongs_on_watchlist=True, watchlist_word="add", software="Node Js"),
+            "add Node Js, track them for me",
+            "track them for me",
+        ),
+        (read(), "track them, and keep an eye on all three", "keep an eye on all three"),
+    ],
+)
+def test_a_watch_of_them_beside_nothing_but_software_says_it_cant_tell_which(
+    fields: TaskRead, task: str, plural: str
+):
+    """On its own the same words ask "Which software should I watch?", so beside a watch of
+    software the rules read, or beside nothing else, they never say "I didn't follow this
+    part"."""
+    assert (plural, "cant", "which_software") in marks(fields, task)
+
+
+def test_beside_a_question_about_software_a_watch_of_them_says_it_cant_tell_which():
+    redis = QuestionAnswer(text="Up to date.", looked_at=["watchlist"], about_software=["redis"])
+    workflows = QuestionAnswer(text="Two are on.", looked_at=["workflows"])
+    asked = "is redis up to date, and track them"
+    beside_workflows = "how are my workflows doing, and track them"
+    assert parts_of(read(), asked, redis)[1].reason == "which_software"
+    assert parts_of(read(), beside_workflows, workflows)[1].reason == "ask_on_its_own"
+
+
+BUGS_ON_FRIDAY = read(
+    schedule="Every Friday at 9am",
+    search=search(project="MOCK", issue_types=["bug"], said="bugs in MOCK"),
+)
+
+
+@pytest.mark.parametrize(
+    ("fields", "task", "plural", "reason"),
+    [
+        (
+            read(asks_about="my_workflows"),
+            "how are my workflows doing, and check them all",
+            "check them all",
+            "ask_on_its_own",
+        ),
+        (
+            read(asks_about="needs_me"),
+            "what is waiting for my yes, and check them all",
+            "check them all",
+            "ask_on_its_own",
+        ),
+        (
+            read(asks_about="why_stopped"),
+            "why did my workflows stop? check them",
+            "check them",
+            "ask_on_its_own",
+        ),
+        (
+            CHANGE,
+            "pause the morning check and the weekly summary, then monitor them",
+            "monitor them",
+            "not_followed",
+        ),
+        (
+            CHANGE,
+            "resume the morning check and the weekly summary, and keep them both",
+            "keep them both",
+            "not_followed",
+        ),
+        (read(), "list open tickets in MOCK, and follow them", "follow them", "not_followed"),
+        (read(), "email Alice and Bob, and follow them", "follow them", "not_followed"),
+        (read(), "delete the old drafts, keep the two", "keep the two", "not_followed"),
+        (read(), "retry the failed runs and monitor them", "monitor them", "not_followed"),
+        (read(), "list open tickets in MOCK, and track them", "track them", "not_followed"),
+        (read(), "email Alice and Bob, and track them", "track them", "not_followed"),
+        (
+            CHANGE,
+            "pause the morning check and track them for me",
+            "track them for me",
+            "ask_on_its_own",
+        ),
+        (
+            CHANGE,
+            "move the morning new-ticket check to 10am and track them",
+            "track them",
+            "not_followed",
+        ),
+        (
+            read(asks_about="my_workflows"),
+            "how are my workflows doing, and keep an eye on them",
+            "keep an eye on them",
+            "not_followed",
+        ),
+        (
+            read(asks_about="my_workflows", workflow_words="morning new-ticket check"),
+            "how is the morning new-ticket check doing, and track them",
+            "track them",
+            "ask_on_its_own",
+        ),
+        (
+            APP_QUESTION,
+            "what can you do, and keep an eye on all three",
+            "keep an eye on all three",
+            "not_followed",
+        ),
+        (WATCH_REDIS, "add redis, check them all", "check them all", "not_followed"),
+        (
+            BUGS_ON_FRIDAY,
+            "Every Friday at 9am find bugs in MOCK, and track them",
+            "track them",
+            "not_followed",
+        ),
+        (APP_QUESTION, "what can you do, and track it", "track it", "ask_on_its_own"),
+        (APP_QUESTION, "what can you do, and watch", "watch", "ask_on_its_own"),
+        (WATCH_REDIS, "add redis, track software too", "track software too", "not_followed"),
+        (read(), "add redis without a yes and track them", "track them", "with_a_yes"),
+        (
+            WATCH_REDIS,
+            "add redis. Alice and Bob joined, keep tabs on them",
+            "keep tabs on them",
+            "not_followed",
+        ),
+        (
+            WATCH_LANGGRAPH,
+            "watch langgraph, the support cases pile up, track them",
+            "track them",
+            "not_followed",
+        ),
+        (
+            WATCH_LANGGRAPH,
+            "watch langgraph, the nightly jobs are late, monitor them",
+            "monitor them",
+            "not_followed",
+        ),
+        (
+            WATCH_LANGGRAPH,
+            "watch langgraph, the n8n flows, monitor them all",
+            "monitor them all",
+            "not_followed",
+        ),
+        (
+            WATCH_REDIS,
+            "add redis, the pipelines are flaky, watch them",
+            "watch them",
+            "not_followed",
+        ),
+        (
+            WATCH_REDIS,
+            "add redis and node js, keep an eye on both",
+            "keep an eye on both",
+            "not_followed",
+        ),
+        (WATCH_LANGGRAPH, "watch langgraph, jobs, monitor them", "monitor them", "not_followed"),
+        (WATCH_REDIS, "add redis, servers, monitor them all", "monitor them all", "not_followed"),
+        (WATCH_REDIS, "add redis, Alice, keep tabs on them", "keep tabs on them", "not_followed"),
+        (WATCH_LANGGRAPH, "watch langgraph, pipelines, watch them", "watch them", "not_followed"),
+        (
+            WATCH_LANGGRAPH,
+            "watch langgraph, flows, keep an eye on them",
+            "keep an eye on them",
+            "not_followed",
+        ),
+        (WATCH_REDIS, "add redis, reports, track them", "track them", "not_followed"),
+        (
+            WATCH_LANGGRAPH,
+            "watch langgraph and backlog, keep track of them",
+            "keep track of them",
+            "not_followed",
+        ),
+        (WATCH_LANGGRAPH, "watch langgraph, bugs, track them", "track them", "not_followed"),
+        (
+            WATCH_REDIS,
+            "add redis, interns, keep an eye on both",
+            "keep an eye on both",
+            "not_followed",
+        ),
+        (WATCH_REDIS, "add redis, kafka, track them", "track them", "not_followed"),
+        (WATCH_REDIS, "add redis, node.js, track them", "track them", "not_followed"),
+        (
+            WATCH_REDIS,
+            "add redis and kafka, keep an eye on all three",
+            "keep an eye on all three",
+            "not_followed",
+        ),
+    ],
+)
+def test_where_them_can_mean_more_than_software_the_cross_stays_as_on_main(
+    fields: TaskRead, task: str, plural: str, reason: str
+):
+    """The cross only says which software is unclear where "them" can mean nothing but software.
+    A verb that asks for more than a watch (check, add, follow, keep), workflows, approvals, a
+    stopped run, a pause or resume, an edit, tickets, people, drafts, runs, a question about the
+    app, a watch of "it" or of no software, a reason of its own, and any words beside a watch that
+    no rule read, a name such as "kafka" included, keep main's cross."""
+    assert (plural, "cant", reason) in marks(fields, task)
+
+
 def test_a_clause_that_does_more_to_it_than_watch_still_comes_back():
     reading = read(belongs_on_watchlist=True, watchlist_word="add", software="Node Js")
     answer = answer_of(reading, "add Node Js, and delete it")

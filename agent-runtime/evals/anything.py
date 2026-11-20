@@ -233,6 +233,7 @@ REASON_WORDS: Final[dict[str, str]] = {
     "how_many_days": "Your words don't say how many days.",
     "only_schedule": "From the chat I can only change when it runs.",
     "how_often": "I can't run things that often yet.",
+    "which_software": "I can't tell which software you mean. Ask again with its name.",
 }
 """The Portal's words for each reason a part has a cross (`portal/src/screens/home/parts.ts`)."""
 FOLLOWED_NOTHING: Final = (

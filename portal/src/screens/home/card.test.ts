@@ -10,7 +10,7 @@ import crossAnswer from '../../../../contracts/fixtures/planner/answer.setup_car
 import checkCant from '../../../../contracts/fixtures/planner/check-part.cant.json'
 import answered24Hour from '../../../../contracts/fixtures/agent/planner-answered-card-24-hour.json'
 import { ApiError } from '../../api/client'
-import type { CardView, DraftView, PartReply, PlanOut, RowKind, RowState, SetupCardReply, ToolId } from '../../api/types'
+import type { CardView, DraftView, PartReply, PartView, PlanOut, RowKind, RowState, SetupCardReply, ToolId } from '../../api/types'
 import {
   afterPartCheck,
   andList,
@@ -717,6 +717,18 @@ describe('the Planner’s set-up card', () => {
       expect(savedLeft(draft)?.leftOut).toEqual(['colour them by team'])
       const old = saved(2, JSON.parse(JSON.stringify({ ...draftContent(form, null), form: { ...form, marked: undefined } })) as Record<string, unknown>)
       expect(restoreDraft(old).form.marked).toEqual([])
+    })
+
+    it.each([
+      ['track them', 'which_software'],
+      ['monthly', 'how_often'],
+      ['rename it', 'only_schedule'],
+      ['pause the morning check', 'operators'],
+    ] as const)('keeps “%s” in a saved draft, with its reason %s', (text, reason) => {
+      const crossed: PartView = { text, mark: 'cant', reason, note: null, choices: [] }
+      const form = cardFrom(CROSS.name, CROSS.rows, 'x', [...CROSS.parts, crossed])
+      const draft = saved(2, JSON.parse(JSON.stringify(draftContent(form, null))) as Record<string, unknown>)
+      expect(restoreDraft(draft).form.marked).toContainEqual(crossed)
     })
   })
 

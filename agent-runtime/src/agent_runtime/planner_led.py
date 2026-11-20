@@ -36,7 +36,6 @@ from agent_runtime.answers import (
     TaskRead,
     answer_of,
     watch_of_it,
-    watches_it,
     with_software_named,
     word_rule_refusal,
 )
@@ -81,12 +80,13 @@ from agent_runtime.free_reply import (
 )
 from agent_runtime.how_to import HOW_TO
 from agent_runtime.model_access import problem_for
-from agent_runtime.parts import locate, parts_of
+from agent_runtime.parts import locate, parts_of, with_which_software
 from agent_runtime.planner import plain, visible_words
 from agent_runtime.reading import SAID_LIMIT, clauses_of, how_often, polite, said_schedule
 from agent_runtime.reply_guard import GuardCheck, about_of
 from agent_runtime.reply_verifier import VerifierFlag, verify
 from agent_runtime.summary import ChatFor
+from agent_runtime.watch_words import asks_to_watch, watches_it
 
 log = logging.getLogger(__name__)
 
@@ -334,9 +334,11 @@ def held_to_reach(
 
 
 def _shown(turn: Turn, answer: PlannerAnswer, reached: frozenset[Span]) -> Acted:
-    """A one-action tool's answer with the rules' marks held to what its arguments reach, unless
-    that leaves a dead end ADR 0047 names: then the model hears what the rules found."""
-    parts = held_to_reach(turn.text, turn.marks(answer), reached)
+    """A one-action tool's answer with the rules' marks held to what its arguments reach, and a
+    watch of them it crosses held to the rules' allow-list (`with_which_software`), unless that
+    leaves a dead end ADR 0047 names: then the model hears what the rules found."""
+    held = held_to_reach(turn.text, turn.marks(answer), reached)
+    parts = with_which_software(turn.front.read, answer, held)
     gap = dead_end(answer, parts, turn.request.task)
     if gap is not None:
         found = " ".join(gap.notes)
@@ -564,14 +566,16 @@ def _change(raw: Mapping[str, Any], turn: Turn) -> Acted:
 
 def _unexplained(turn: Turn) -> frozenset[Span]:
     """The clauses the rules' reading leaves unexplained, which How to start and what the
-    Planner can do may answer: each the rules mark "I didn't follow this part", and each the
-    catch-all list of abilities ticks as a question about the app. A clause the reading puts on
-    any other lane is not one of them."""
+    Planner can do may answer: each the rules mark "I didn't follow this part" that asks to
+    watch nothing, and each the catch-all list of abilities ticks as a question about the app. A
+    clause the reading puts on any other lane is not one of them, nor is "keep track of it", which
+    no list of abilities does."""
     front = turn.front.answer
     clauses = turn.clauses
     found: set[Span] = set()
     for part in turn.marks(front):
-        unread = part.mark == "cant" and part.reason == "not_followed"
+        watch = asks_to_watch(part.text)
+        unread = part.mark == "cant" and part.reason == "not_followed" and not watch
         about_the_app = isinstance(front, AbilitiesAnswer) and part.mark == "will_do"
         clause = clause_holding(clauses, locate(turn.text, part.text))
         if (unread or about_the_app) and clause is not None:

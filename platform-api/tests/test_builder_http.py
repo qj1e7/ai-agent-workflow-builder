@@ -1095,6 +1095,32 @@ async def test_an_operators_question_beside_a_change_keeps_the_runtimes_marks(fr
 
 
 @pytest.mark.parametrize(
+    "plural",
+    [
+        "watch them",
+        "track them",
+        "monitor them",
+        "keep an eye on them",
+        "keep track of them",
+        "keep tabs on them",
+    ],
+)
+async def test_a_watch_of_them_beside_a_software_question_is_an_operators_for_anyone_else(
+    front: Front, plural: str
+):
+    """The runtime says which software is unclear only for these verbs, and the word rules read
+    each as a change, so an Approver's cross says who makes it, as for any other watch."""
+    parts = [done("Is LangGraph up to date"), crossed(plural, "which_software")]
+    question = QuestionAnswer(
+        text="LangGraph is behind.", looked_at=["watchlist"], about_software=["LangGraph"]
+    )
+    front.answers.result = Answered(answer=question, parts=parts)
+    text = f"Is LangGraph up to date, and {plural}"
+    assert marks(await ask_as_bob(front, text))[1] == (plural, "cant", "operators")
+    assert marks(await say(front, text))[1] == (plural, "cant", "which_software")
+
+
+@pytest.mark.parametrize(
     ("text", "only"),
     [
         ("What did I decide before?", None),

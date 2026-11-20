@@ -221,7 +221,8 @@ class PartView(WireModel):
         "note), ask_on_its_own, one_day, one_time or one_frequency (a schedule with two, see "
         "choices), own_time (a time on a watch request), skip_approval, with_a_yes, "
         "needs_the_rest, how_many_days, only_schedule (a change to a workflow other than when it "
-        "runs), how_often (a schedule it can't hold, such as monthly), and operators (a change "
+        "runs), how_often (a schedule it can't hold, such as monthly), which_software (a watch of "
+        "more than one thing, as 'track them', that names no software), and operators (a change "
         "asked by someone who isn't an Operator). Null for will_do."
     )
     note: str | None = Field(description="For cant_do, why, in the registry's words.")

@@ -98,6 +98,12 @@ describe('the next step of a cross', () => {
     expect(askOfCross(crossed('send email', 'cant_do'))).toBeNull()
     expect(askOfCross(crossed('skip the yes', 'skip_approval'))).toBeNull()
   })
+
+  it('asks for a watch of them again with the software’s name, which sending the same words can’t give', () => {
+    const them = crossed('track them for me', 'which_software')
+    expect(crossWords(them)).toBe('I can’t tell which software you mean. Ask again with its name.')
+    expect(askOfCross(them)).toBeNull()
+  })
 })
 
 describe('a free reply and the fallback card draw no crosses', () => {
