@@ -1693,6 +1693,9 @@ def test_a_day_led_by_a_word_the_reader_doesn_t_know_is_asked(catalogue: Catalog
         "have it nix every Monday",
         "let it skip every Friday",
         "get rid of every Friday",
+        "#ops nix every Monday",
+        "#ops kill Mondays",
+        "#ops axe Fridays at 9am",
     ],
 )
 def test_a_day_after_a_task_s_words_that_start_with_an_unknown_word_is_asked(
@@ -1809,3 +1812,18 @@ def test_an_everyday_have_let_or_get_keeps_the_day(
     so "Let me know every Monday at 9am" and "Have the report sent ..." asked the day."""
     assert run_time_in(words) == read
     assert day_in(words) == day
+
+
+@pytest.mark.parametrize(
+    "words",
+    [
+        "#ops check langgraph every Monday at 9am",
+        "post to #ops every Monday at 9am",
+        "Have the list posted to #ops every Monday at 9am",
+    ],
+)
+def test_a_channel_beside_a_known_task_word_keeps_the_day(words: str):
+    """A channel never starts the task's words, so "#ops nix every Monday" asks, but one beside
+    a word the reader knows keeps the day."""
+    assert run_time_in(words) == MONDAY_AT_9
+    assert day_in(words) == "monday"
