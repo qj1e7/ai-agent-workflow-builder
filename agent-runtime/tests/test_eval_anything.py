@@ -216,6 +216,16 @@ def test_the_words_follow_the_portal() -> None:
     assert words_of(None) == "(no answer was recorded)"
 
 
+def test_a_free_reply_and_the_fallback_card_draw_no_crosses_as_the_portal_draws_none() -> None:
+    """leftoverParts in parts.ts: a free reply answers the whole message, and the card says it
+    didn't follow in place of the crosses."""
+    cant = FreeReplyAnswer(form="cant", text="I can't book meeting rooms.")
+    room = Answered(answer=cant, parts=[part("book me a room", "cant", "cant_do")])
+    lost = Answered(answer=DidntFollowAnswer(), parts=[part("and", "cant", "not_followed")])
+    assert words_of(room) == "I can't book meeting rooms.\n[Ask the team]"
+    assert words_of(lost) == "I didn't follow that. [Say it another way]"
+
+
 def test_a_card_shows_the_portals_buttons() -> None:
     assert words_of(Answered(answer=card("Weekly bugs"), parts=[])).endswith(
         "[Never mind] [Set up]"
