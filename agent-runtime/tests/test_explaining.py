@@ -7,6 +7,7 @@ from agent_runtime.answers import answer_of, answer_task, decide
 from agent_runtime.contract import (
     Answered,
     AnswerRequest,
+    CheckWorkflowsAnswer,
     ExplainAnswer,
     PlannerFacts,
     RefusedAnswer,
@@ -85,7 +86,7 @@ def test_explain_it_names_no_workflow_so_the_one_in_focus_is_explained(task: str
         "what does my workflow do?",
         "What does the workflow do",
         "so what does this workflow actually do?",
-        "what do my workflows do?",
+        "what does our workflow do",
     ],
 )
 def test_asking_what_a_workflow_does_is_an_explanation_of_the_one_they_mean(
@@ -98,7 +99,8 @@ def test_asking_what_a_workflow_does_is_an_explanation_of_the_one_they_mean(
     ("task", "words"),
     [
         ("what does the FastAPI release check do?", "FastAPI release check"),
-        ("What does my weekly summary do", "weekly summary"),
+        ("What does my Morning new-ticket check do", "Morning new-ticket check"),
+        ("what does weekly closed bug summary do", "weekly closed bug summary"),
     ],
 )
 def test_asking_what_a_named_workflow_does_names_it_in_their_own_words(task: str, words: str):
@@ -115,10 +117,36 @@ def test_asking_what_a_named_workflow_does_names_it_in_their_own_words(task: str
         "what does my workflow do and pause it",
         "what does my workflow do with Jira tickets?",
         "what does my workflow need from me?",
+        "what does a workflow do?",
+        "what does an workflow do?",
+        "what does your workflow do?",
+        "what do workflows do?",
+        "what do my workflows do?",
+        "What does my weekly summary do",
+        "what does the morning check do?",
     ],
 )
 def test_only_a_question_that_names_a_workflow_and_nothing_else_is_read_as_explain(task: str):
     assert not isinstance(answer(task), ExplainAnswer)
+
+
+def test_part_of_a_name_is_no_workflow_so_a_name_must_be_whole():
+    """"the safety checker" is part of "Safety checker report" and names the platform's own
+    checker, so it keeps the lane it had."""
+    report = facts_of("Safety checker report")
+    assert not isinstance(answer("what does the safety checker do?", facts=report), ExplainAnswer)
+    assert answer("what does the Safety checker report do?", facts=report) == explained(
+        "Safety checker report"
+    )
+
+
+@pytest.mark.parametrize("facts", [PlannerFacts(workflows=[]), None])
+def test_with_no_workflow_to_explain_the_question_keeps_its_answer(facts: PlannerFacts | None):
+    """Someone with no workflows gets "You have no workflows yet." with Open Workflows, as before,
+    never an empty Which workflow?."""
+    asked = read(asks_about="my_workflows")
+    got = answer_of(asked, "what does my workflow do?", facts)
+    assert isinstance(got, CheckWorkflowsAnswer)
 
 
 def test_a_planted_name_is_matched_as_data_and_never_followed():
