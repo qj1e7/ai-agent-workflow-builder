@@ -65,11 +65,17 @@ def watches_them(words: str) -> str | None:
     return None if found is None else found.group("verb")
 
 
-ONLY_WATCH_VERBS: Final = frozenset(
-    {"watch", "track", "monitor", "keep an eye on", "keep track of", "keep tabs on"}
+ONLY_WATCH_VERBS: Final = (
+    "watch",
+    "track",
+    "monitor",
+    "keep an eye on",
+    "keep track of",
+    "keep tabs on",
 )
 """The watch verbs that ask for nothing but a watch. "add", "check", "follow" and a bare "keep"
 ask for other things too, as "check them all" or "keep the two"."""
+_ONLY_WATCH_PATTERN: Final = "|".join(r"\s+".join(v.split()) for v in ONLY_WATCH_VERBS)
 
 
 def surely_watches_them(words: str) -> bool:
@@ -77,6 +83,11 @@ def surely_watches_them(words: str) -> bool:
     asks for nothing but a watch."""
     verb = watches_them(words)
     return verb is not None and " ".join(verb.casefold().split()) in ONLY_WATCH_VERBS
+
+
+def asks_to_watch(words: str) -> bool:
+    """Whether the words hold a verb that asks for nothing but a watch (`ONLY_WATCH_VERBS`)."""
+    return re.search(rf"(?<!\w)(?:{_ONLY_WATCH_PATTERN})(?!\w)", words, re.IGNORECASE) is not None
 
 
 def watch_verb_in(words: str) -> str | None:

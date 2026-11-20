@@ -1781,6 +1781,7 @@ def test_a_clause_that_watches_them_is_never_ticked_as_the_watch_of_one_software
 CHANGE = read(asks_about="change")
 APP_QUESTION = read(asks_about="abilities")
 WATCH_REDIS = read(belongs_on_watchlist=True, watchlist_word="add", software="redis")
+WATCH_LANGGRAPH = read(belongs_on_watchlist=True, watchlist_word="watch", software="langgraph")
 
 
 @pytest.mark.parametrize(
@@ -1794,6 +1795,8 @@ WATCH_REDIS = read(belongs_on_watchlist=True, watchlist_word="add", software="re
             "can you monitor these two",
         ),
         (read(), "track them, and keep an eye on all three", "keep an eye on all three"),
+        (WATCH_REDIS, "add redis, kafka, track them", "track them"),
+        (WATCH_REDIS, "add redis, node.js, track them", "track them"),
     ],
 )
 def test_a_watch_of_them_beside_nothing_but_software_says_it_cant_tell_which(
@@ -1899,6 +1902,42 @@ BUGS_ON_FRIDAY = read(
         (APP_QUESTION, "what can you do, and watch", "watch", "ask_on_its_own"),
         (WATCH_REDIS, "add redis, track software too", "track software too", "not_followed"),
         (read(), "add redis without a yes and track them", "track them", "with_a_yes"),
+        (
+            WATCH_REDIS,
+            "add redis. Alice and Bob joined, keep tabs on them",
+            "keep tabs on them",
+            "not_followed",
+        ),
+        (
+            WATCH_LANGGRAPH,
+            "watch langgraph, the support cases pile up, track them",
+            "track them",
+            "not_followed",
+        ),
+        (
+            WATCH_LANGGRAPH,
+            "watch langgraph, the nightly jobs are late, monitor them",
+            "monitor them",
+            "not_followed",
+        ),
+        (
+            WATCH_LANGGRAPH,
+            "watch langgraph, the n8n flows, monitor them all",
+            "monitor them all",
+            "not_followed",
+        ),
+        (
+            WATCH_REDIS,
+            "add redis, the pipelines are flaky, watch them",
+            "watch them",
+            "not_followed",
+        ),
+        (
+            WATCH_REDIS,
+            "add redis and node js, keep an eye on both",
+            "keep an eye on both",
+            "not_followed",
+        ),
     ],
 )
 def test_where_them_can_mean_more_than_software_the_cross_stays_as_on_main(
@@ -1907,7 +1946,8 @@ def test_where_them_can_mean_more_than_software_the_cross_stays_as_on_main(
     """The cross only says which software is unclear where "them" can mean nothing but software.
     A verb that asks for more than a watch (check, add, follow, keep), workflows, approvals, a
     stopped run, a pause or resume, an edit, tickets, people, drafts, runs, a question about the
-    app, a watch of "it" or of no software, and a reason of its own keep main's cross."""
+    app, a watch of "it" or of no software, a reason of its own, and unread words beside a watch
+    that are more than one bare name keep main's cross."""
     assert (plural, "cant", reason) in marks(fields, task)
 
 

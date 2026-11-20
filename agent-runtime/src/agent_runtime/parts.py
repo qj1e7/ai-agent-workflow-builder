@@ -52,6 +52,7 @@ from agent_runtime.edits import (
     edit_marks,
     switch_marks,
 )
+from agent_runtime.follow_ups import plain_software
 from agent_runtime.planner import NOTE_LIMIT, TEXT_LIMIT, plain, visible_words
 from agent_runtime.reading import (
     FILLER,
@@ -166,8 +167,8 @@ def with_which_software(
     saying which software is unclear instead. On their own the words ask "Which software should I
     watch?". Only where "them" can mean nothing but software, by an allow-list: a verb that asks
     for nothing but a watch (`surely_watches_them`), a reading of no ticket, place or workflow,
-    and each other part read by an answer about software alone, or words no rule read that name
-    no part of a task. Anywhere else the cross stays."""
+    and each other part read by an answer about software alone, or one bare name no rule read.
+    Anywhere else the cross stays."""
     them = [_crossed_watch_of_them(part) for part in parts]
     if not any(them) or (
         read is not None and any((read.search, read.ticket, read.place, read.workflow_words))
@@ -205,11 +206,14 @@ def _about_software_only(answer: PlannerAnswer) -> bool:
 
 
 def _names_nothing_else(part: RequestPart, about_software: bool) -> bool:
-    """Whether a part names nothing "them" could mean: one an answer about software alone reads,
-    or words no rule read that order nothing and name no part of a task (`_a_task`)."""
+    """Whether a part names nothing "them" could mean but software: one an answer about software
+    alone reads, or a bare name no rule read. A bare name is one word in the shape a software name
+    takes (`plain_software`), as "kafka" or "node.js". Words can't tell a name of two words, as
+    "node js", from a person and a verb, as "Bob joined", so more words don't count."""
     if part.mark != "cant":
         return about_software
-    return part.reason == "not_followed" and not _a_task(part.text)
+    bare_name = len(part.text.split()) == 1 and plain_software(part.text) is not None
+    return part.reason == "not_followed" and bare_name
 
 
 def _marked(

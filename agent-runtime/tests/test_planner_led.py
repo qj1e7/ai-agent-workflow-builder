@@ -319,6 +319,18 @@ def test_the_list_of_abilities_never_ticks_a_watch(watch: str) -> None:
     assert reached(result) == ["what can you do"]
 
 
+def test_the_list_of_abilities_still_answers_words_with_add_check_or_follow_as_on_main() -> None:
+    """Only the verbs that ask for nothing but a watch keep a clause from the list."""
+    result, _ = run(
+        "what can you do, and the add-on",
+        tool("show", what="abilities"),
+        read=reading("abilities"),
+        facts=WORKFLOWS,
+    )
+
+    assert reached(result) == ["what can you do", "the add-on"]
+
+
 def test_how_to_start_for_a_message_the_rules_read_whole_goes_back_to_the_model() -> None:
     result, _ = run(
         "pause the morning check",

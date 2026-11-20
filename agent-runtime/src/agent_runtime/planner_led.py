@@ -86,7 +86,7 @@ from agent_runtime.reading import SAID_LIMIT, clauses_of, how_often, polite, sai
 from agent_runtime.reply_guard import GuardCheck, about_of
 from agent_runtime.reply_verifier import VerifierFlag, verify
 from agent_runtime.summary import ChatFor
-from agent_runtime.watch_words import watch_verb_in, watches_it
+from agent_runtime.watch_words import asks_to_watch, watches_it
 
 log = logging.getLogger(__name__)
 
@@ -574,7 +574,7 @@ def _unexplained(turn: Turn) -> frozenset[Span]:
     clauses = turn.clauses
     found: set[Span] = set()
     for part in turn.marks(front):
-        watch = watch_verb_in(part.text) is not None
+        watch = asks_to_watch(part.text)
         unread = part.mark == "cant" and part.reason == "not_followed" and not watch
         about_the_app = isinstance(front, AbilitiesAnswer) and part.mark == "will_do"
         clause = clause_holding(clauses, locate(turn.text, part.text))
