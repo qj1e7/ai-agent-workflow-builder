@@ -228,10 +228,12 @@ def test_a_software_card_shows_only_the_actions_the_person_sees() -> None:
         Answered(answer=WatchlistAnswer(word="releases", software="LangGraph"), parts=[])
     )
     assert listed.endswith("LangGraph (New version): You run 1.2.14. Newest is 1.2.16. [Open it]")
-    unlisted = Answered(answer=WatchlistAnswer(word="releases", software="Kubernetes"), parts=[])
+    unlisted = Answered(answer=WatchlistAnswer(word="track", software="Kubernetes"), parts=[])
     assert words_of(unlisted, operator=True).endswith(
         "Kubernetes: It isn't on the watchlist yet. [Watch it]"
     )
+    asked = Answered(answer=WatchlistAnswer(word="releases", software="Kubernetes"), parts=[])
+    assert "so I don't know which version you run. [Watch it]" in words_of(asked, operator=True)
     assert "Watch it" not in words_of(unlisted, operator=False)
     for shown in (listed, words_of(unlisted, operator=True)):
         assert "[Add" not in shown and "Never mind" not in shown

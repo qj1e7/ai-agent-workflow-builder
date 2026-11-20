@@ -47,6 +47,7 @@ from agent_runtime.contract import (
     ResumeAnswer,
     SetupCardAnswer,
     UnderstoodRow,
+    WatchedFact,
     WatchlistAnswer,
     WatchlistScheduleFact,
     WhichSoftwareAnswer,
@@ -469,10 +470,13 @@ def _leading_word(text: str) -> str:
 DRAFT_BUTTON: Final = "Draft it as an n8n workflow"
 DRAFT_NOTE: Final = (
     "The Workflow drafter drafts it as its own n8n workflow, and the safety checker checks it. "
-    "Nothing is set up or written until an Approver says yes."
+    "It isn't set up until an Approver says yes."
 )
 """The Portal's button under a can't or a part card, and the words under it (drafted.ts)."""
-START_LEAD: Final = "This app is for repetitive work. I set it up so it runs by itself."
+START_LEAD: Final = (
+    "This app runs repetitive work for you. Tell me the task and I'll draft it. Nothing is "
+    "written without an Approver's yes."
+)
 """How to start's first sentence (answers.ts)."""
 
 
@@ -482,7 +486,7 @@ def words_of(
     """About what the Portal shows for the answer: its card or sentence, with a state answer
     filled from the facts as the Portal fills it from the platform, then each part it crossed,
     in the Portal's words. The Portal's own layout decides the rest. `operator` adds what only
-    an Operator sees under a can't: the watchlist's time and the draft offer."""
+    an Operator sees: Watch it, the watchlist's time and the draft offer."""
     if result is None:
         return "(no answer was recorded)"
     if isinstance(result, ModelProblem):
@@ -493,7 +497,7 @@ def words_of(
     followed_nothing = bool(parts) and all(p.reason == "not_followed" for p in parts)
     if isinstance(shown, AbilitiesAnswer) and followed_nothing:
         return FOLLOWED_NOTHING
-    lines = _said(shown, facts)
+    lines = _said(shown, facts, operator)
     if not isinstance(shown, RefusedAnswer | WhichSoftwareAnswer) or (
         isinstance(shown, RefusedAnswer) and not shown.rest
     ):
@@ -502,8 +506,29 @@ def words_of(
         named += ("skip_approval",)
         crossed = [p for p in parts if p.mark != "will_do" and p.reason not in named]
         lines += [_cross(p, facts.watchlist_schedule) for p in crossed]
-        lines += [_watchlist_runs(p) for p in crossed if operator and p.reason == "own_time"]
+        offered = operator and _leftovers_drawn(shown)
+        lines += [_watchlist_runs(p) for p in crossed if offered and p.reason == "own_time"]
     return "\n".join(lines + _buttons(shown) + (_draft_offer(shown) if operator else []))
+
+
+def _leftovers_drawn(shown: PlannerAnswer) -> bool:
+    """Whether the Portal draws the crosses above the answer, where it offers the watchlist's
+    time (leftoverParts in parts.ts). A set-up card or a part card holds its own crosses."""
+    match shown:
+        case (
+            SetupCardAnswer()
+            | PartAnswer()
+            | EditAnswer()
+            | WhichSoftwareAnswer()
+            | FreeReplyAnswer()
+            | DidntFollowAnswer()
+            | CantAnswer(alternative=SetupCardAnswer())
+        ):
+            return False
+        case RefusedAnswer():
+            return not shown.rest.strip()
+        case _:
+            return True
 
 
 def _watchlist_runs(part: RequestPart) -> str:
@@ -520,16 +545,60 @@ def _draft_offer(shown: PlannerAnswer) -> list[str]:
 
 
 def _buttons(shown: PlannerAnswer) -> list[str]:
-    """The card's own buttons, as the Portal draws them (SetupCard.tsx, WatchlistCard.tsx)."""
+    """The card's own buttons, as the Portal draws them (SetupCard.tsx). A software card draws
+    its own (`_software_card`)."""
     match shown:
         case SetupCardAnswer():
             return ["[Never mind] [Set up]"]
         case PartAnswer():
             return ["[Never mind] [Set up the part I can]"]
-        case WatchlistAnswer(software=str(name)):
-            return [f"[Add {name}] [Never mind]"]
         case _:
             return []
+
+
+VERSION_WORD: Final = re.compile(
+    r"\b(?:versions?|releas(?:e|es|ed|ing)|upgrad(?:e|es|ed|ing)|patch(?:es|ed|ing)?)\b",
+    re.IGNORECASE,
+)
+"""A word that asks about versions (VERSION_WORD in answers.ts)."""
+
+
+def _software_card(shown: WatchlistAnswer, facts: PlannerFacts, operator: bool) -> list[str]:
+    """The Portal's software card (SoftwareCard in AnswerCards.tsx). A software the watchlist
+    holds, by its name with case and spaces aside, shows its pill, where it stands and Open it.
+    One it doesn't hold says so, with Watch it for an Operator only. With no name, the card
+    opens the Software watchlist."""
+    if shown.software is None:
+        return ["The Software watchlist [Open the Software watchlist]"]
+    wanted = " ".join(shown.software.casefold().split())
+    held = facts.watchlist or []
+    listed = next((w for w in held if " ".join(w.name.casefold().split()) == wanted), None)
+    if listed is not None:
+        return [f"{listed.name} ({listed.state}): {_where_it_stands(listed)} [Open it]"]
+    said = (
+        "It isn't on the watchlist, so I don't know which version you run."
+        if VERSION_WORD.search(shown.word)
+        else "It isn't on the watchlist yet."
+    )
+    return [f"{shown.software}: {said}{' [Watch it]' if operator else ''}"]
+
+
+def _where_it_stands(row: WatchedFact) -> str:
+    """Where a watched software stands (sentenceFor in software.ts), from its facts."""
+    newest, ours = row.newest_version, row.our_version
+    if row.problem is not None:
+        return (
+            f"The last check stopped. The newest version it read was {newest}."
+            if newest is not None
+            else "The last check stopped before it read the newest version."
+        )
+    if newest is None:
+        return "Not checked yet. The first check reads the newest release."
+    if ours is None:
+        return f"Newest is {newest}. The version you run isn't known yet."
+    return (
+        f"You run {ours}, the newest." if ours == newest else f"You run {ours}. Newest is {newest}."
+    )
 
 
 DAY_WORDS: Final[dict[str, str]] = {
@@ -576,7 +645,7 @@ def _how_to_start() -> list[str]:
     return ["How to start:", START_LEAD, *numbered, " ".join(f"[{text}]" for text in examples)]
 
 
-def _said(shown: PlannerAnswer, facts: PlannerFacts) -> list[str]:
+def _said(shown: PlannerAnswer, facts: PlannerFacts, operator: bool = False) -> list[str]:
     match shown:
         case SetupCardAnswer() | PartAnswer():
             lines = [f"Here's what I understood. A workflow named “{shown.name}”:"]
@@ -586,23 +655,26 @@ def _said(shown: PlannerAnswer, facts: PlannerFacts) -> list[str]:
             )
         case CantAnswer():
             lines = [_cant_line(c) for c in shown.cant]
-            if shown.alternative is not None:
-                lines += ["What I can do instead:", *_said(shown.alternative, facts)]
-                lines += _buttons(shown.alternative)
-            else:
-                lines.append("[Ask the team]")
+            match shown.alternative:
+                case SetupCardAnswer() as card:
+                    lines += ["What I can do instead:", *_said(card, facts), *_buttons(card)]
+                case WatchlistAnswer() as watch:
+                    lines += _said(watch, facts, operator)
+                case None:
+                    lines.append("[Ask the team]")
             return lines
         case WatchlistAnswer():
-            name = shown.software or "it"
-            lines = [f"Watch {name} on the Software watchlist (from “{shown.word}”)."]
-            return lines + (_said(shown.also, facts) if shown.also is not None else [])
+            lines = _software_card(shown, facts, operator)
+            if shown.also is None:
+                return lines
+            return [*lines, "The rest of your request:", *_said(shown.also, facts, operator)]
         case WhichSoftwareAnswer():
             return [f"Which software should I watch? (from “{shown.word}”)"]
         case RefusedAnswer():
             lines = [f"{REFUSED} (“{shown.said}”)"]
             return lines + ([f"Set up the rest with a yes: “{shown.rest}”"] if shown.rest else [])
         case CheckWorkflowsAnswer():
-            return _workflows(facts, shown.workflow_words)
+            return _workflows(facts, shown.workflow_words, operator)
         case WhyStoppedAnswer():
             named = _named(facts, shown.workflow_words)
             which = f"“{named[0].name}”" if len(named) == 1 else "the run you pick"
@@ -630,7 +702,7 @@ def _said(shown: PlannerAnswer, facts: PlannerFacts) -> list[str]:
         case RemoveSoftwareAnswer():
             return _removal(shown, facts)
         case ExplainAnswer():
-            return _explained(shown, facts)
+            return _explained(shown, facts, operator)
         case FreeReplyAnswer():
             taps = [f"[{choice}]" for choice in shown.choices]
             if shown.form == "cant":
@@ -658,11 +730,13 @@ REPORT: Final = (
 """The Portal's explain card (ADR 0051, section 6), which the judge can't open."""
 
 
-def _explained(shown: ExplainAnswer, facts: PlannerFacts) -> list[str]:
+def _explained(shown: ExplainAnswer, facts: PlannerFacts, operator: bool) -> list[str]:
     """The Portal's explain card, for each workflow whose name holds every word the answer
     gives. Words that name none explain the only workflow, and ask which of several, as a new
-    chat with nothing in focus does."""
+    chat with nothing in focus does. With no workflow, the platform says they have none."""
     words = shown.workflow_words
+    if words is None and facts.workflows_in_all() == 0:
+        return _workflows(facts, None, operator)
     rows = list(facts.workflows or [])
     if words is not None:
         said = set(re.findall(r"\w+", words.casefold())) - {"the", "my", "our"}
@@ -684,8 +758,16 @@ def _named(facts: PlannerFacts, workflow_words: str | None) -> list[WorkflowFact
     return named or rows
 
 
-def _workflows(facts: PlannerFacts, workflow_words: str | None) -> list[str]:
+def _workflows(facts: PlannerFacts, workflow_words: str | None, operator: bool) -> list[str]:
     rows = _named(facts, workflow_words)
+    if not rows:
+        # workflowsSay in answers.ts, with the Open Workflows link under it.
+        none = (
+            "You have no workflows yet."
+            if operator
+            else ("There are no workflows yet. Operators set them up.")
+        )
+        return [f"{none} [Open Workflows]"]
     every = len(rows) == len(facts.workflows or [])
     if len(rows) == 1 and (not every or facts.workflows_in_all() == 1):
         return [_one_workflow(rows[0])]

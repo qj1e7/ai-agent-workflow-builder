@@ -131,8 +131,8 @@ def test_only_a_question_that_names_a_workflow_and_nothing_else_is_read_as_expla
 
 
 def test_part_of_a_name_is_no_workflow_so_a_name_must_be_whole():
-    """"the safety checker" is part of "Safety checker report" and names the platform's own
-    checker, so it keeps the lane it had."""
+    """The words "the safety checker" are part of "Safety checker report" and name the
+    platform's own checker, so the question keeps the lane it had."""
     report = facts_of("Safety checker report")
     assert not isinstance(answer("what does the safety checker do?", facts=report), ExplainAnswer)
     assert answer("what does the Safety checker report do?", facts=report) == explained(
