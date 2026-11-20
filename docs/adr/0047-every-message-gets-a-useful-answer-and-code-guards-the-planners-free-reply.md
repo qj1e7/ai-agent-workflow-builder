@@ -208,3 +208,15 @@ A second safety review found no must-fix left. It raised four points, and a run 
 **One more dead end.** A question about how to do something, which opens "how do I", "how can we" or "how will I", is a dead end when the answer is the person's workflow list or Needs you. An example is "how do I stop a workflow for a while", which got the list of workflows and nothing about how. The free reply answers it from the guide. If the reply falls back, the list stays, so the person never sees "I didn't follow that" for it.
 
 **A missing name is asked, from the reading.** A request the reading puts on the Software watchlist that names no software, and asks nothing else, gets "Which software should I watch?". A plain name typed next, after that question, is the offer to watch it. This runs after every refusal, so the model's answer to the skip question can only add one, never be removed. It also needs the reading to name the typed words as the software, with no time beside them, as ADR 0042 requires.
+
+## Amended, 20 Nov 2026
+
+**The judge reads the person's role, and scores each reply three times.** A spike checked the judge, Claude Sonnet 5.5, against the team lead's own labels on 50 replies. On the first 30, the rubric matched 21. Its question never said whether the person was an Operator or an Approver. So it scored 4 of 5 Approver replies 2 or 3, such as "As an Approver you can't set up workflows, because Operators do that. You can tap Ask the team." The team lead called all 5 useful. The judge is also noisy. On a plain re-run, 2 of 27 scores crossed the line between useful and not.
+
+- The judge's question names the person's role, in the words the free reply reads (`OPERATOR` and `APPROVER` in `free_reply.py`). A case that doesn't set `changes_workflows` is an Operator, as the Planner is told.
+- The question keeps its text through the "Score 1 if ..." sentence. The scale after it is the spike's v3. It says how to judge a can't, a greeting, "I didn't follow that", a refused rule change and a question about what something is.
+- The judge scores each reply three times, and the median is the score. `results.json` keeps all three as `judges`. If one run fails, the lower of the other two counts.
+
+With the median of three, v3 matched 27 of the 30 replies it was tuned on, and 15 of 20 fresh labels. The old rubric matched 12 of those 20 on one run. That is still under the bar of 27 of 30, so the judge's scores stay reported and don't gate. `--judge-agreed` and REPLY_JUDGE_AGREED are unchanged.
+
+Three runs add two judge calls for each case. On the paths of the last gate run, which used 148 calls and $1.23, a run now makes 200 calls for about $1.65. In the worst case, every gate case takes its longest path. That is 241 calls, since only the 4 gate cases that send facts can ask the question lane. At more tokens a call than the last run used, it costs about $3.40. Both stay under the caps of 250 calls and $5. Other judged jobs, such as `anything`, still score once. Their rubrics weren't measured for noise, and they gate nothing.

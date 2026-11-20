@@ -80,7 +80,7 @@ Every check is deterministic. A case passes only when all of its checks pass. Th
 
 The unit tests in `agent-runtime/tests/test_eval_scoring.py` prove the scoring is fair in both directions. The runtime's own template summary passes every `summarise` case. Each `explain`, `draft`, `choose` and `understand` case carries a reference answer that passes. Each kind of flawed answer fails the check that names its flaw.
 
-An LLM judge is optional and off by default. Set `EVAL_JUDGE=<provider>:<model>` to get a 1 to 5 score per `summarise`, `explain` and `anything` answer. For `anything`, the judge reads the sentence, what the platform can and can't do from the capability registry, and the answer in about the words the Portal shows, and scores how proper, logical and useful the reply is. The report counts a 4 or 5 as useful. The score appears as `judge_mean` in `results.json`. It never changes a pass or a fail.
+An LLM judge is optional and off by default. Set `EVAL_JUDGE=<provider>:<model>` to get a 1 to 5 score per `summarise`, `explain` and `anything` answer. For `anything`, the judge reads the sentence, what the platform can and can't do from the capability registry, and the answer in about the words the Portal shows, and scores how proper, logical and useful the reply is. The report counts a 4 or 5 as useful. The score appears as `judge_mean` in `results.json`. It never changes a pass or a fail. The `reply` jobs ask the judge three times for each answer, each time with its own marker, and keep the median as `judge` and all three as `judges` (ADR 0047).
 
 The tests in `agent-runtime/tests/test_eval_anything.py` prove each `anything` check fails on the flaw it names and passes a good answer, and that the job sends exactly the product's messages.
 
