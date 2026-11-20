@@ -34,11 +34,23 @@
       "dspy_usd_at_our_price": 0.0,
       "dspy_usd_litellm": 0.0,
       "usd": 1.5056
+    },
+    {
+      "round": 3,
+      "step": "rejudge",
+      "started": "2026-11-20T03:52:37+00:00",
+      "langchain_calls": 100,
+      "langchain_usd": 0.5648,
+      "dspy_calls": 0,
+      "dspy_usd_at_our_price": 0.0,
+      "dspy_usd_litellm": 0.0,
+      "usd": 0.5648
     }
   ],
-  "total_usd": 4.5566,
+  "total_usd": 5.1214,
   "round_usd": {
     "1": 3.051,
-    "2": 1.5056
+    "2": 1.5056,
+    "3": 0.5648
   }
 }
