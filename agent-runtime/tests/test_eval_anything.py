@@ -219,13 +219,30 @@ def test_a_card_shows_the_portals_buttons() -> None:
     assert words_of(Answered(answer=card("Weekly bugs"), parts=[])).endswith(
         "[Never mind] [Set up]"
     )
-    watch = WatchlistAnswer(word="releases", software="LangGraph")
-    assert words_of(Answered(answer=watch, parts=[])).endswith("[Add LangGraph] [Never mind]")
+
+
+def test_a_software_card_shows_only_the_actions_the_person_sees() -> None:
+    """The Portal's SoftwareCard: a watched software's pill and Open it, or Watch it for an
+    Operator only. The judge never sees an action the person doesn't."""
+    listed = words_of(
+        Answered(answer=WatchlistAnswer(word="releases", software="LangGraph"), parts=[])
+    )
+    assert listed.endswith("LangGraph (New version): You run 1.2.14. Newest is 1.2.16. [Open it]")
+    unlisted = Answered(answer=WatchlistAnswer(word="releases", software="Kubernetes"), parts=[])
+    assert words_of(unlisted, operator=True).endswith(
+        "Kubernetes: It isn't on the watchlist yet. [Watch it]"
+    )
+    assert "Watch it" not in words_of(unlisted, operator=False)
+    for shown in (listed, words_of(unlisted, operator=True)):
+        assert "[Add" not in shown and "Never mind" not in shown
 
 
 def test_how_to_start_shows_the_portals_steps_and_chips() -> None:
     shown = words_of(Answered(answer=AbilitiesAnswer(how_to_start=True), parts=[]))
-    assert shown.startswith("How to start:\nThis app is for repetitive work. I set it up so it ")
+    assert shown.startswith(
+        "How to start:\nThis app runs repetitive work for you. Tell me the task and I'll draft "
+        "it. Nothing is written without an Approver's yes.\n1. "
+    )
     assert "1. Tell me what should run by itself, in your own words, like “Keep track of" in shown
     assert "Nothing is written until an Approver says yes in Teams." in shown
     assert "[Keep track of the LangGraph version]" in shown
@@ -308,6 +325,8 @@ def test_explaining_the_only_workflow_shows_its_report_and_several_ask_which() -
     several = words_of(explain).splitlines()
     assert several[0] == "Which workflow?"
     assert "[Explain the Morning new-ticket check]" in several[1]
+    none = words_of(explain, PlannerFacts(workflows=[]), operator=True)
+    assert none == "You have no workflows yet. [Open Workflows]", "never an empty Which workflow?"
 
 
 OWN_TIME = (
@@ -327,10 +346,25 @@ def own_time() -> Answered:
 
 def test_an_operator_sees_the_draft_offer_and_the_watchlist_s_time_under_a_time_of_its_own():
     shown = words_of(own_time(), operator=True)
-    assert "[Add LangGraph] [Never mind]" in shown
+    assert "LangGraph (New version): You run 1.2.14. Newest is 1.2.16. [Open it]" in shown
     assert "[Make the Software watchlist run every weekday at 9]" in shown
     assert "[Draft it as an n8n workflow] The Workflow drafter drafts it as its own n8n " in shown
-    assert "Nothing is set up or written until an Approver says yes." in shown
+    assert "It isn't set up until an Approver says yes." in shown
+    assert "written" not in shown.split("[Draft it as an n8n workflow]")[1]
+
+
+def test_the_watchlist_s_time_is_offered_only_where_the_portal_offers_it() -> None:
+    """Leftovers draws it, and never under a set-up card or a part card, whose own crosses sit
+    on the card."""
+    crossed = part("every weekday at 9", "cant", "own_time")
+    row = CantRow(kind="schedule", text="every weekday at 9", note=OWN_TIME, needs="new_tool")
+    offers = [
+        Answered(answer=card("Weekly bugs"), parts=[crossed]),
+        Answered(answer=CantAnswer(cant=[row], alternative=card("Weekly bugs")), parts=[crossed]),
+    ]
+    for shown in offers:
+        assert "Make the Software watchlist run" not in words_of(shown, operator=True)
+    assert "Make the Software watchlist run" not in words_of(own_time(), operator=False)
 
 
 def test_a_time_of_its_own_names_when_the_watchlist_checks_as_the_portal_does() -> None:
