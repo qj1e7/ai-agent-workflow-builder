@@ -1,9 +1,10 @@
 """Steps 2 and 3: parity, the baseline and the 30 replies for the team lead to label (round 1),
-and parity again, both paths twice on 20 cases (round 2, `parity2`).
+parity again, both paths twice on 20 cases (round 2, `parity2`), and the judge's question today
+and a v2 on 50 replies already made (round 3, `rejudge`).
 
 Runs on GitHub Actions (`.github/workflows/spike-dspy.yml`) when `STEP` changes, with the
 Anthropic key in ANTHROPIC_API_KEY for that one step:
-    uv run --group spike python -m spikes.dspy_free_reply.run parity2
+    uv run --group spike python -m spikes.dspy_free_reply.run rejudge
 
 Each run stops before a case would pass the round's cap or the spike's $30 (`scoring.Meter`),
 and writes its spend to `spend.json` and its rows to `runs/` after every case."""
@@ -27,8 +28,12 @@ from typing import Any, Final  # noqa: E402
 
 import dspy  # noqa: E402
 from evals.budget import metered  # noqa: E402
-from evals.reply import REPLY, Steps, request_of  # noqa: E402
-from evals.runner import _KEY_SHAPES, redact  # noqa: E402  # pyright: ignore[reportPrivateUsage]
+from evals.reply import REPLY, Steps, judge_question, request_of  # noqa: E402
+from evals.runner import (  # noqa: E402
+    _KEY_SHAPES,  # pyright: ignore[reportPrivateUsage]
+    judge,
+    redact,
+)
 
 from spikes.dspy_free_reply.cases import SpikeCase, all_cases  # noqa: E402
 from spikes.dspy_free_reply.scoring import (  # noqa: E402
@@ -41,6 +46,7 @@ from spikes.dspy_free_reply.scoring import (  # noqa: E402
     env,
     eval_reply,
     frozen_of,
+    judge_question_v2,
     planner,
     read_and_route,
     wrapper_reply,
@@ -54,9 +60,12 @@ FROZEN: Final = RUNS / "frozen.json"
 PARITY: Final = RUNS / "parity.json"
 BASELINE: Final = RUNS / "baseline.json"
 LABELS: Final = RUNS / "label-input.json"
+REJUDGE: Final = RUNS / "rejudge.json"
+BATCH2: Final = RUNS / "labels-batch2.json"
+BATCH2_SIZE: Final = 20
 PARITY_CASES: Final = 10
 SEED: Final = 20261120
-PAID: Final = frozenset({"parity", "baseline", "parity2"})
+PAID: Final = frozenset({"parity", "baseline", "parity2", "rejudge"})
 PARITY2_CASES: Final = 20
 RUNS_EACH: Final = 2
 QUIET: Final = ("LiteLLM", "litellm", "httpx", "httpcore", "anthropic", "urllib3")
@@ -439,20 +448,26 @@ def shown_words(row: dict[str, Any]) -> str:
     return re.sub(r"^\[[^\]]+\]\s*", "", row["shown"], count=1)
 
 
+def shareable(row: dict[str, Any], cases: dict[str, SpikeCase]) -> bool:
+    """A reply the judge scored, with nothing that looks like a secret in the message or the
+    reply, so a person can label it."""
+    return row["judge"] is not None and not any(
+        _KEY_SHAPES.search(t) or SECRET_WORDS.search(t)
+        for t in (cases[row["case"]].task, shown_words(row))
+    )
+
+
+def reached() -> list[dict[str, Any]]:
+    """The baseline's rows that reached the free reply."""
+    return [r for r in json.loads(BASELINE.read_text())["rows"] if r["reached"]]
+
+
 def labels() -> None:
     """About 12 replies the judge scored 2 or 3 and 18 it scored 4 or 5, spread across groups,
     none with anything that looks like a secret."""
     cases = all_cases()
-    rows = [r for r in json.loads(BASELINE.read_text())["rows"] if r["reached"]]
-    clean = [
-        r
-        for r in rows
-        if r["judge"] is not None
-        and not any(
-            _KEY_SHAPES.search(t) or SECRET_WORDS.search(t)
-            for t in (cases[r["case"]].task, shown_words(r))
-        )
-    ]
+    rows = reached()
+    clean = [r for r in rows if shareable(r, cases)]
     low = [r for r in clean if r["judge"] in (2, 3)]
     high = [r for r in clean if r["judge"] in (4, 5)]
     want_low = min(12, len(low))
@@ -492,7 +507,73 @@ def _spread(rows: list[dict[str, Any]], n: int) -> list[dict[str, Any]]:
     return picked
 
 
-STEPS: Final = {"parity": parity, "baseline": baseline, "labels": labels, "parity2": parity2}
+def rejudge_sets() -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Set A, the baseline rows of the 30 the team lead labeled, and set B, 20 more SCORE
+    replies the guard and the verifier let through, spread across groups, none from set A and
+    none with anything that looks like a secret."""
+    cases, rows = all_cases(), reached()
+    by_case = {r["case"]: r for r in rows}
+    set_a = [by_case[x["id"]] for x in json.loads(LABELS.read_text())]
+    taken = {r["case"] for r in set_a}
+    pool = [
+        r for r in rows if r["fell_back"] is None and r["case"] not in taken and shareable(r, cases)
+    ]
+    return set_a, _spread(pool, BATCH2_SIZE)
+
+
+def rejudge() -> None:
+    """Round 3: the judge's question today (v1) and the spike's v2 on replies already made, the
+    30 the team lead labeled and 20 more for them to label blind. No Planner or free reply call.
+    Each reply is judged on the words the baseline's judge read, so v1 asks what the eval asked."""
+    model = planner()
+    meter = Meter("rejudge")
+    cases = all_cases()
+    set_a, set_b = rejudge_sets()
+    blind = [
+        {"id": r["case"], "message": cases[r["case"]].task, "reply": shown_words(r)} for r in set_b
+    ]
+    random.Random(SEED).shuffle(blind)
+    write_json(BATCH2, blind)
+    rows: list[dict[str, Any]] = []
+    stopped = None
+    with metered(meter.spend):
+        for name, row in [*(("A", r) for r in set_a), *(("B", r) for r in set_b)]:
+            if (stopped := meter.stop_reason()) is not None:
+                break
+            case = cases[row["case"]]
+            rows.append(
+                {
+                    "id": row["case"],
+                    "set": name,
+                    "message": case.task,
+                    "reply": shown_words(row),
+                    "v1": judge(model, judge_question(case, row["shown"])),
+                    "v2": judge(model, judge_question_v2(case, row["shown"])),
+                }
+            )
+            meter.save()
+            write_json(REJUDGE, rows)
+            print(f"  {name} {row['case']}: v1 {rows[-1]['v1']}  v2 {rows[-1]['v2']}", flush=True)
+    summary = {
+        "set_a": sum(r["set"] == "A" for r in rows),
+        "set_b": sum(r["set"] == "B" for r in rows),
+        "judge_failures": sum(r[v] is None for r in rows for v in ("v1", "v2")),
+        "v1_scores": dict(sorted(Counter(r["v1"] for r in rows).items(), key=str)),
+        "v2_scores": dict(sorted(Counter(r["v2"] for r in rows).items(), key=str)),
+        "v2_differs": sum(r["v1"] != r["v2"] for r in rows),
+        "stopped": stopped,
+        "spend": meter.save(),
+    }
+    report("Rejudge, v1 and v2", summary)
+
+
+STEPS: Final = {
+    "parity": parity,
+    "baseline": baseline,
+    "labels": labels,
+    "parity2": parity2,
+    "rejudge": rejudge,
+}
 
 
 def main() -> int:

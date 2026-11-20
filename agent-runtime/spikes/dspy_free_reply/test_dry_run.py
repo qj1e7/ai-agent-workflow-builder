@@ -149,11 +149,11 @@ def test_the_meter_stops_before_a_case_would_pass_the_round_cap(
     earlier = {"round": 1, "step": "earlier", "started": "x", "usd": 3.05}
     ledger.write_text(json.dumps({"runs": [earlier]}))
     assert scoring.Meter("next").stop_reason() is None
-    spent = {"round": 2, "step": "earlier", "started": "y", "usd": 1.45}
+    spent = {"round": 3, "step": "earlier", "started": "y", "usd": 0.9}
     ledger.write_text(json.dumps({"runs": [earlier, spent]}))
-    assert scoring.Meter("next").stop_reason() == "round 2's cap of $1.50"
+    assert scoring.Meter("next").stop_reason() == "round 3's cap of $1.00"
     saved = scoring.Meter("next").save()
-    assert saved["usd"] == 0 and json.loads(ledger.read_text())["total_usd"] == 4.5
+    assert saved["usd"] == 0 and json.loads(ledger.read_text())["total_usd"] == 3.95
 
 
 def test_labels_spread_across_groups_and_drop_the_kind() -> None:
@@ -165,6 +165,28 @@ def test_labels_spread_across_groups_and_drop_the_kind() -> None:
     picked = run._spread(rows, 6)  # pyright: ignore[reportPrivateUsage]
     assert sorted(r["group"] for r in picked) == ["a", "a", "b", "b", "c", "c"]
     assert run.shown_words(rows[0]) == "reply a 0"
+
+
+def test_rejudge_only_judges_and_writes_set_b_blind(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    model = fake(HELPFUL, judged=4)
+    monkeypatch.setattr(scoring, "LEDGER", tmp_path / "spend.json")
+    monkeypatch.setattr(run, "REJUDGE", tmp_path / "rejudge.json")
+    monkeypatch.setattr(run, "BATCH2", tmp_path / "labels-batch2.json")
+    monkeypatch.setattr(run, "planner", lambda: model)
+    monkeypatch.setattr(run, "report", lambda title, summary: None)
+    run.rejudge()
+    assert model.asked == ["runner.Verdict"] * 100
+    made = json.loads((tmp_path / "rejudge.json").read_text())
+    assert [r["set"] for r in made] == ["A"] * 30 + ["B"] * 20
+    assert all((r["v1"], r["v2"]) == (4, 4) for r in made)
+    blind = json.loads((tmp_path / "labels-batch2.json").read_text())
+    assert [set(r) for r in blind] == [{"id", "message", "reply"}] * 20
+    assert sorted(r["id"] for r in blind) == sorted(r["id"] for r in made if r["set"] == "B")
+    assert [r["id"] for r in blind] != [r["id"] for r in made if r["set"] == "B"]
+    ledger = json.loads((tmp_path / "spend.json").read_text())
+    assert [(r["round"], r["step"]) for r in ledger["runs"]] == [(3, "rejudge")]
 
 
 def test_parity2_runs_both_paths_twice_on_frozen_readings(
