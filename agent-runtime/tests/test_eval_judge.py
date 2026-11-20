@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any, Final
 
 import pytest
-from evals.gate import GATE_MAX_CALLS, GATE_MAX_DOLLARS
+from evals.gate import GATE_MAX_CALLS, GATE_MAX_DOLLARS, bars
 from evals.providers import Target
 from evals.reply import REPLY_GATE, ReplyCase, judge_question
 from evals.runner import Verdict as Score
@@ -172,22 +172,37 @@ def gate_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, judge: Sonnet) -> 
     return json.loads(out.read_text())
 
 
-def test_each_reply_is_judged_three_times_and_scored_by_the_median(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    judge = Sonnet(scores=[5, 1, 4])
-    results = gate_run(tmp_path, monkeypatch, judge)
-    replies = next(r for r in results["results"] if r["job"] == "reply_gate")
-    assert replies["cases"] == len(REPLY_GATE.cases())
-    for outcome in replies["outcomes"]:
-        assert outcome["judges"] == [5, 1, 4]
-        assert outcome["judge"] == 4
-    assert len(set(judge.questions[:3])) == 3, "each run has its own marker"
+def test_a_reply_scores_the_median_of_its_three_runs() -> None:
+    assert judged(Sonnet(scores=[2, 5, 5]), "q", "m", 3) == (5, (2, 5, 5))
+
+
+def test_one_run_that_scores_1_makes_the_reply_a_1() -> None:
+    """Three runs are three chances to catch a claim, and none is thrown away."""
+    assert judged(Sonnet(scores=[5, 1, 4]), "q", "m", 3) == (1, (5, 1, 4))
+    assert judged(Sonnet(scores=[4, 4, 1]), "q", "m", 3) == (1, (4, 4, 1))
+    assert judged(Sonnet(scores=[1, None, 5]), "q", "m", 3) == (1, (1, None, 5))
 
 
 def test_a_failed_judge_run_can_only_lower_the_score() -> None:
     assert judged(Sonnet(scores=[5, None, 3]), "q", "m", 3) == (3, (5, None, 3))
     assert judged(Sonnet(scores=[None]), "q", "m", 3) == (None, (None, None, None))
+
+
+def test_the_gate_and_the_report_count_a_reply_that_one_run_scored_1(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    judge = Sonnet(scores=[5, 1, 4])
+    results = gate_run(tmp_path, monkeypatch, judge)
+    replies = next(r for r in results["results"] if r["job"] == "reply_gate")
+    outcomes = replies["outcomes"]
+    assert len(outcomes) == len(REPLY_GATE.cases())
+    assert all(o["judges"] == [5, 1, 4] and o["judge"] == 1 for o in outcomes)
+    assert len(set(judge.questions[:3])) == 3, "each run has its own marker"
+    found = {bar.name: bar for bar in bars(outcomes, judge_agreed=True)}
+    claims = next(bar for name, bar in found.items() if "scores 1" in name)
+    assert claims.measured == str(len(outcomes)) and not claims.passed
+    assert found["Messages judged useful"].measured == f"0 of {len(outcomes)}"
+    assert "the judge scored it below 4" in (tmp_path / "results.md").read_text()
 
 
 def test_a_full_gate_run_with_three_judge_runs_stays_within_the_gates_caps(

@@ -210,15 +210,19 @@ def judge(model: BaseChatModel, question: str) -> int | None:
 def judged(
     model: BaseChatModel, question: str, marker: str, runs: int
 ) -> tuple[int | None, tuple[int | None, ...]]:
-    """The median of `runs` judge runs, and every run's score. Each run after the first has its
-    own marker, so a gateway's store can't answer it with the first. A failed run is left out,
-    and an even count takes the lower middle, so a failure can only lower the score."""
+    """The score of `runs` judge runs, and every run's score. Any run's 1 is the score, because
+    each run is a chance to catch a claim, and none is thrown away. Otherwise the score is the
+    median. Each run after the first has its own marker, so a gateway's store can't answer it
+    with the first. A failed run is left out, and an even count takes the lower middle, so a
+    failure can only lower the score."""
     scores = tuple(
         judge(model, marked(question, f"{marker} judge {n}" if marker and n > 1 else marker))
         for n in range(1, runs + 1)
     )
     given = [score for score in scores if score is not None]
-    return (statistics.median_low(given) if given else None), scores
+    if not given:
+        return None, scores
+    return (1 if 1 in given else statistics.median_low(given)), scores
 
 
 def judge_target(env: Env) -> Target | None:
