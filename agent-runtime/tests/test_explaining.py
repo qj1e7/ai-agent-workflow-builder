@@ -138,6 +138,18 @@ def test_a_whole_name_gives_the_stored_name_which_always_fits():
     assert answer(f"what does {typed} do?", facts=facts_of(stored)) == explained(stored)
 
 
+def test_explain_and_a_whole_name_gives_the_stored_name_which_always_fits():
+    stored = "Straße " + "x" * 73
+    typed = "Strasse " + "x" * 73
+    assert answer(f"explain the {typed}", facts=facts_of(stored)) == explained(stored)
+
+
+def test_part_of_a_name_too_long_to_carry_is_no_explanation():
+    """Words of a name said over and over can run past what an answer carries."""
+    task = "explain the weekly " + "summary " * 12
+    assert not isinstance(answer(task, facts=facts_of("Weekly summary desk")), ExplainAnswer)
+
+
 def test_a_name_that_starts_with_the_is_matched_whole():
     weekly = facts_of("The weekly summary")
     assert answer("what does the weekly summary do?", facts=weekly) == explained(
