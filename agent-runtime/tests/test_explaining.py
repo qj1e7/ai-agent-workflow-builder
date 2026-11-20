@@ -61,12 +61,12 @@ def answer(task: str, fields: TaskRead | None = None, facts: PlannerFacts = FACT
         ("explain the FastAPI release check", "FastAPI release check"),
         ("Explain the FastAPI release check.", "FastAPI release check"),
         ("please explain the weekly summary", "weekly summary"),
-        ("can you explain the morning new-ticket check?", "morning new-ticket check"),
+        ("can you explain the morning new-ticket check?", "Morning new-ticket check"),
         ("explain to me the FastAPI release check please", "FastAPI release check"),
-        ("explain my weekly closed bug summary workflow", "weekly closed bug summary"),
+        ("explain my weekly closed bug summary workflow", "Weekly closed bug summary"),
     ],
 )
-def test_explain_names_the_workflow_in_the_requests_own_words(
+def test_explain_names_a_whole_name_as_stored_and_part_of_one_in_the_requests_words(
     task: str, words: str, fields: TaskRead
 ):
     assert answer(task, fields) == explained(words)
@@ -136,6 +136,18 @@ def test_a_whole_name_gives_the_stored_name_which_always_fits():
     typed = "Strasse " + "x" * 73
     assert (len(stored), len(typed)) == (80, 81)
     assert answer(f"what does {typed} do?", facts=facts_of(stored)) == explained(stored)
+
+
+def test_explain_and_a_whole_name_gives_the_stored_name_which_always_fits():
+    stored = "Straße " + "x" * 73
+    typed = "Strasse " + "x" * 73
+    assert answer(f"explain the {typed}", facts=facts_of(stored)) == explained(stored)
+
+
+def test_part_of_a_name_too_long_to_carry_is_no_explanation():
+    """Words of a name said over and over can run past what an answer carries."""
+    task = "explain the weekly " + "summary " * 12
+    assert not isinstance(answer(task, facts=facts_of("Weekly summary desk")), ExplainAnswer)
 
 
 def test_a_name_that_starts_with_the_is_matched_whole():

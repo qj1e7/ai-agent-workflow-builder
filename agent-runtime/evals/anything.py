@@ -498,8 +498,12 @@ def words_of(
     if isinstance(shown, AbilitiesAnswer) and followed_nothing:
         return FOLLOWED_NOTHING
     lines = _said(shown, facts, operator)
-    if not isinstance(shown, RefusedAnswer | WhichSoftwareAnswer) or (
-        isinstance(shown, RefusedAnswer) and not shown.rest
+    # A free reply answers the whole message and the fallback card replaces the crosses, so the
+    # Portal draws neither's (leftoverParts in parts.ts).
+    whole = isinstance(shown, FreeReplyAnswer | DidntFollowAnswer)
+    if not whole and (
+        not isinstance(shown, RefusedAnswer | WhichSoftwareAnswer)
+        or (isinstance(shown, RefusedAnswer) and not shown.rest)
     ):
         # A refusal that offers no set-up draws the rest's crosses; the card names the skip.
         named = ("cant_do", "needs_the_rest") if isinstance(shown, CantAnswer) else ()

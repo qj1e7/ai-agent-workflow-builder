@@ -1508,6 +1508,13 @@ function pushText(t, who = 'lead') {
   const mb = `<div class="mb"><b>${AG[who].name}</b><p>${esc(t)}</p></div>`;
   return push(`<div class="m" style="--hue:${AG[who].hue}">${fw(who, 30)}${who === 'lead' ? `<div class="mcol">${mb}${fbHTML()}</div>` : mb}</div>`);
 }
+/* The Planner's words with a question back and its chips, as the Portal draws a reply that asks (ReplyChoices). */
+let askedBack = false;
+function pushAsk(t, chips) {
+  askedBack = true;
+  const mb = `<div class="mb"><b>${AG.lead.name}</b><p>${esc(t)}</p><div class="pick" role="group" aria-label="Try one">${chips.map((c) => `<button type="button" data-say="${c}">${c}</button>`).join('')}</div></div>`;
+  return push(`<div class="m" style="--hue:${AG.lead.hue}">${fw('lead', 30)}<div class="mcol">${mb}${fbHTML()}</div></div>`);
+}
 async function think(who = 'lead') { const t = push(`<div class="m">${fw(who, 30, 'thinking')}<span class="dots" aria-hidden="true"><i></i><i></i><i></i></span></div>`); await wait(650); t.remove(); }
 async function tap(el) { if (!el) return; el.classList.add('tap'); await wait(420); el.classList.remove('tap'); }
 let toastT;
@@ -2011,14 +2018,46 @@ async function n8nAsk(s) {
   if (b) showTab(b);
   return null;
 }
+/* What the person can tap next: the registry's examples, or what an Approver can ask (choices_for in fixed_replies.py). */
+const NEXT_CHIPS = () => (W.user === 'bob' ? ['What needs me?', 'What can you do?'] : [START_EXAMPLE, 'What can you do?']);
+/* allow-lists: the same shapes as fixed_replies.py. Every clause, past thanks and please, must tell the Planner what to say or to drop its rules. */
+const LEAD = String.raw`(?:(?:hi|hello|hey|ok|okay|so)\b\W*)?(?:please\s+)?`;
+const THE_PLANNERS = String.raw`(?:your|my|the\s+planner['’]s|(?:the\s+)?(?:previous|prior|earlier))`;
+const RULES = '(?:rules|instructions|prompt)';
+const DROP = String.raw`(?:ignore|forget|disregard|drop|override|bypass)\s+(?:all\s+(?:of\s+)?)?(?:${THE_PLANNERS}\s+(?:(?:own|safety|system)\s+)?${RULES}|the\s+${RULES}\s+(?:above|before))|system\s+override`;
+const ASKS = String.raw`(?:when|whether|which|what|if|who|whom|whose|how|where|why|with)\b`;
+const WORD = String.raw`(?!${ASKS})[^\W_][\w'’-]*`;
+const CLAIM = String.raw`(?:(?:the|your|my|our|this|a|an)\s+)?${WORD}(?:\s+${WORD}){0,2}\s+(?:was|were|has\s+been|have\s+been|got)\s+[^\W\d_]+(?:\s+by\s+[^\W\d_]+)?`;
+const SAY = String.raw`(?:say|repeat|answer|reply|respond|write\s+back)(?:\s+(?:only|exactly|just|back))?(?:\s+that)?\s+${CLAIM}`;
+const PRETEND = String.raw`pretend\s+(?:that\s+|to\s+be\s+|you(?:\s+are|'re|’re)\s+)\S.*`;
+const TOLD_SHAPE = new RegExp(String.raw`^${LEAD}(?:${DROP}|${SAY}|${PRETEND})\W*$`, 'i');
+const REPEAT_AFTER_ME = new RegExp(String.raw`^${LEAD}repeat\s+after\s+me\b[\s\S]*$`, 'i');
+const ABOUT_THE_PLANNER = new RegExp(String.raw`^${LEAD}(?:(?:what|who)(?:\s+is|'s|’s)\s+(?:the\s+|this\s+)?planner(?:\s+for)?|what\s+does\s+the\s+planner\s+do|(?:who|what)\s+are\s+you(?:\s+for)?)(?:\s+again)?\W*$`, 'i');
+const clausesOf = (t) => t.split(/\s*(?:[,;:.!?]+|\band\b|\bthen\b)\s*/i).filter((c) => c && !/^(?:thanks?|thank you|please|cheers)$/i.test(c));
+const tellsThePlanner = (t) => {
+  const said = clausesOf(t.trim());
+  return REPEAT_AFTER_ME.test(t.trim()) || (said.length > 0 && said.every((c) => TOLD_SHAPE.test(c)));
+};
+const asksWhatThePlannerIs = (t) => ABOUT_THE_PLANNER.test(t.trim());
+/* end allow-lists */
+const TOLD = 'For security, I don’t take instructions to change my rules or to say something happened when it didn’t. Every change still waits for an Approver’s yes. What would you like to do?';
+/* Right after a question back, the I didn't follow that card, so chips never lead to chips (_asked_back in fixed_replies.py). */
+const askBack = (t, after) => (after ? pushCard(cantCard('I didn’t follow that', W.user === 'bob' ? 'I can show what waits for your yes, and your past decisions.' : 'I can watch software releases, fix stopped runs and change your workflows.')) : pushAsk(t, NEXT_CHIPS()));
+const PLANNER_IS = () => (W.user === 'bob'
+  ? 'I’m the Planner. I answer questions about your team’s workflows, and show what waits for your yes. Operators use me to draft workflows that run on a schedule, and every change waits for an Approver’s yes. To start, ask me what needs you.'
+  : `I’m the Planner. You tell me a task your team does again and again, and I draft it as a workflow that runs on a schedule. I can check software for new releases on GitHub, create a Jira ticket after a yes, and ask Approvers for a yes in Teams. To start, type what you want done in the box, such as ${START_EXAMPLE}.`);
 /* “what is this” is How to start only about the app, or alone, with nothing after it but marks: the same rule as HOW_TO_START in parts.py. */
 const WHAT_IS_THIS = /\bwhat(?:\s+is|'s|’s)\s+this\s+(?:(?:app|platform|tool)(?:\s+for)?|for)\W*$|^\W*what(?:\s+is|'s|’s)\s+this\W*$/i;
 const WATCH_RE = /\b(watch|track|monitor|keep an eye on|follow)\b|\bcheck\b.*\b(release|releases|version)\b|\b(tell|let) me (know )?when\b/;
 const EDIT_RE = /\b(make|change|switch|move|set|run|put|reschedule)\b/;
 async function respond(t) {
   const s = t.toLowerCase();
+  const after = askedBack;
+  askedBack = false;
   if (/\bdraft\b/.test(s) && /\b(workflow|n8n)\b/.test(s)) return draftAsk(t);
   if (/^\s*(please\s+)?explain\b/.test(s)) return explainAsk(s);
+  if (tellsThePlanner(s)) return askBack(TOLD, after);
+  if (asksWhatThePlannerIs(s)) return pushText(PLANNER_IS());
   if (dChangeFor(s)) return dChange(t);
   if (/\bn8n\b/.test(s)) return n8nAsk(s);
   if (/\b(help|how (do|can) i (start|use|begin)|steps|get started|how does (this|it) work)\b/.test(s) || WHAT_IS_THIS.test(s)) return pushCard(startCard());
@@ -2039,7 +2078,7 @@ async function respond(t) {
   }
   const c = CANT.find(([re]) => re.test(s));
   if (c) return pushCard(cantCard(c[1], c[2], c[3]));
-  return pushCard(cantCard('I didn’t follow that', W.user === 'bob' ? 'I can show what waits for your yes, and your past decisions.' : 'I can watch software releases, fix stopped runs and change your workflows.'));
+  return askBack('I didn’t follow that. What would you like to do?', after);
 }
 async function send(t) {
   await fold();

@@ -17,7 +17,6 @@ from agent_runtime.contract import (
     AnswerRequest,
     CantAnswer,
     CheckWorkflowsAnswer,
-    DidntFollowAnswer,
     EditAnswer,
     FreeReplyAnswer,
     ModelProblem,
@@ -34,6 +33,7 @@ from agent_runtime.contract import (
     WorkflowFact,
 )
 from agent_runtime.contracts import answer_request
+from agent_runtime.fixed_replies import didnt_follow
 from agent_runtime.planner_led import (
     BRIEFING,
     SAID_BEFORE,
@@ -68,6 +68,10 @@ STALE_BUGS = (
     "Every weekday at 3pm, find bug tickets in MOCK with no update for 10 days and create "
     "one follow-up ticket that lists them in MOCK"
 )
+
+
+FELL_BACK = didnt_follow(sets_up=True, clarified_before=False)
+"""What a dead end shows when the free reply fails: a question back with next steps to tap."""
 
 
 def request(task: str, **fields: Any) -> AnswerRequest:
@@ -793,7 +797,7 @@ def test_a_list_said_to_hold_what_the_facts_dont_never_shows() -> None:
         facts=FACTS,
     )
 
-    assert shown(result) == DidntFollowAnswer()
+    assert shown(result) == FELL_BACK
     assert "made_up" in result.errors[0]
 
 
@@ -802,7 +806,7 @@ def test_a_reply_that_says_something_happened_never_shows() -> None:
 
     result, _ = run("thanks", tool("reply", **said_it), tool("reply", call_id="c2", **said_it))
 
-    assert shown(result) == DidntFollowAnswer()
+    assert shown(result) == FELL_BACK
     assert "claims_done" in result.errors[0]
 
 
@@ -817,7 +821,7 @@ def test_the_verifier_checks_every_reply_the_code_checks_let_through() -> None:
     )
     clean, _ = run("hi", tool("reply", **greeting), then=[CLEAN])
 
-    assert shown(flagged) == DidntFollowAnswer()
+    assert shown(flagged) == FELL_BACK
     assert isinstance(shown(clean), FreeReplyAnswer)
 
 
@@ -856,7 +860,7 @@ def test_a_second_miss_shows_the_rules_own_answer_when_it_is_no_dead_end() -> No
 def test_a_failed_model_turn_gives_the_rules_answer_or_the_fixed_card() -> None:
     result, _ = run("hi", TimeoutError("slow"))
 
-    assert shown(result) == DidntFollowAnswer()
+    assert shown(result) == FELL_BACK
     assert result.fell_back == "call"
 
 
@@ -903,7 +907,7 @@ def test_a_failed_turn_logs_the_status_and_the_error_type_never_the_providers_wo
     with caplog.at_level(logging.WARNING):
         result, _ = run("hi", ProviderRefused())
 
-    assert shown(result) == DidntFollowAnswer()
+    assert shown(result) == FELL_BACK
     assert "status 400, invalid_request_error" in caplog.text
     assert "FAKEKEY" not in caplog.text and "x-api-key" not in caplog.text
 

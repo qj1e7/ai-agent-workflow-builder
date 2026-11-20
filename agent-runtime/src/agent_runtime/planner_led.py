@@ -49,7 +49,6 @@ from agent_runtime.contract import (
     CantAnswer,
     CapabilitySpec,
     CheckWorkflowsAnswer,
-    DidntFollowAnswer,
     EditAnswer,
     ExplainAnswer,
     FreeReplyAnswer,
@@ -72,7 +71,14 @@ from agent_runtime.contract import (
 )
 from agent_runtime.drafting import UNUSABLE
 from agent_runtime.edits import PAUSES, RESUMES, TURNED
-from agent_runtime.free_reply import STILL_UNCLEAR, answer_of_envelope, dead_end, given_of
+from agent_runtime.fixed_replies import fixed_reply
+from agent_runtime.free_reply import (
+    STILL_UNCLEAR,
+    answer_of_envelope,
+    dead_end,
+    fallback_of,
+    given_of,
+)
 from agent_runtime.how_to import HOW_TO
 from agent_runtime.model_access import problem_for
 from agent_runtime.parts import locate, parts_of
@@ -957,6 +963,8 @@ FRONT_STANDS: Final[Mapping[type[BaseModel], str]] = {
 """The rules' answers that stand whatever the model leads with, with the name the eval reads:
 their refusal wins, and no tool draws the remove card or the explanation, as ADR 0049 has the
 rules build every card."""
+FIXED_REPLY: Final = "front_fixed_reply"
+"""The name the eval reads for a fixed reply (`fixed_reply`), which stands after them too."""
 
 
 def led(request: AnswerRequest, chat_for: ChatFor, verify_with: ChatFor | None = None) -> Led:
@@ -976,6 +984,10 @@ def led(request: AnswerRequest, chat_for: ChatFor, verify_with: ChatFor | None =
     if stands is not None:
         parts = parts_of(front.read, request.task, front.answer, request.facts)
         return Led(Answered(answer=front.answer, parts=parts), (stands,))
+    fixed = fixed_reply(request)
+    if fixed is not None:
+        parts = parts_of(front.read, request.task, fixed, request.facts)
+        return Led(Answered(answer=fixed, parts=parts), (FIXED_REPLY,))
     turn = Turn(request, front, chat_for, verify_with or chat_for)
     return _two_tries(asked, first, turn)
 
@@ -1002,7 +1014,7 @@ def _two_tries(asked: list[BaseMessage], first: AIMessage | ModelProblem, turn: 
 
 def _fallback(turn: Turn) -> Answered:
     """The rules' own answer when it is no dead end, as rules mode shows it before its free
-    reply, or the answer ADR 0047 keeps for its dead end. Otherwise the fixed card."""
+    reply, or the answer ADR 0047 keeps for its dead end. Otherwise a question back."""
     front, task = turn.front, turn.request.task
     parts = turn.marks(front.answer)
     gap = dead_end(front.answer, parts, task)
@@ -1010,7 +1022,7 @@ def _fallback(turn: Turn) -> Answered:
         return Answered(answer=front.answer, parts=parts)
     if gap.keep is not None:
         return Answered(answer=gap.keep, parts=turn.marks(gap.keep))
-    fallback = DidntFollowAnswer()
+    fallback = fallback_of(gap, turn.request)
     return Answered(answer=fallback, parts=parts_of(None, task, fallback))
 
 

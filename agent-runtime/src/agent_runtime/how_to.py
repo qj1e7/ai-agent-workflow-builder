@@ -10,7 +10,8 @@ HOW_TO: Final = (
     "To start, type what you want done in the box on Home, in your own words, such as Check "
     "LangGraph for new releases.",
     "A workflow is a task that runs again and again on a schedule, such as every Monday at 9am.",
-    "The Planner reads your words and shows a set-up card with what it understood, part by part.",
+    "The Planner is the assistant in the box on Home. You tell it a task your team does again "
+    "and again, and it turns it into a workflow on a set-up card for you to check.",
     "Each part of the card has a tick, a cross, or a question for you to answer.",
     "An Operator can change any part of the card, then press Set up for a test run that writes "
     "nothing.",
