@@ -946,7 +946,7 @@ const capsCard = () => (W.user === 'bob'
 const START_EXAMPLE = 'Keep track of the LangGraph version';
 const startCard = () => (W.user === 'bob'
   ? capsCard()
-  : `<div class="card"><div class="c-head"><b>How to start</b></div><p>This app is for repetitive work. I set it up so it runs by itself.</p><ol class="caps"><li>Tell me what should run by itself, in your own words, like “${START_EXAMPLE}”.</li><li>Check the card I make, and change anything I guessed.</li><li>Press Set up. I do a test run, which writes nothing.</li><li>If the test passes, press Turn it on.</li><li>Nothing is written until an Approver says yes in Teams.</li></ol><div class="pick" role="group" aria-label="Try one"><button type="button" data-say="${START_EXAMPLE}">${START_EXAMPLE}</button></div></div>`);
+  : `<div class="card"><div class="c-head"><b>How to start</b></div><p>This app runs repetitive work for you. Tell me the task and I’ll draft it. Nothing is written without an Approver’s yes.</p><ol class="caps"><li>Tell me what should run by itself, in your own words, like “${START_EXAMPLE}”.</li><li>Check the card I make, and change anything I guessed.</li><li>Press Set up. I do a test run, which writes nothing.</li><li>If the test passes, press Turn it on.</li><li>Nothing is written until an Approver says yes in Teams.</li></ol><div class="pick" role="group" aria-label="Try one"><button type="button" data-say="${START_EXAMPLE}">${START_EXAMPLE}</button></div></div>`);
 const cantCard = (head, alt, ask) => `<div class="card"><div class="c-head"><b>${head}</b></div>${alt ? `<p class="muted">${alt}</p>` : ''}${ask ? '<div class="c-foot"><span class="c-act"><button class="btn ghost sm" type="button" data-toast="Asked the team. Their answer will show here.">Ask the team</button></span></div>' : ''}</div>`;
 const CANT = [
   [/(teams|channel|slack)/, 'I can’t post in Teams channels yet', 'Run results show here, in the chat.', true],
@@ -2019,7 +2019,7 @@ async function respond(t) {
   if (/^\s*(please\s+)?explain\b/.test(s)) return explainAsk(s);
   if (dChangeFor(s)) return dChange(t);
   if (/\bn8n\b/.test(s)) return n8nAsk(s);
-  if (/\b(help|how (do|can) i (start|use|begin)|steps|get started|how does (this|it) work|what is this)\b/.test(s)) return pushCard(startCard());
+  if (/\b(help|how (do|can) i (start|use|begin)|steps|get started|how does (this|it) work|what is this (app|for))\b|^\s*what is this\s*\??\s*$/.test(s)) return pushCard(startCard());
   if (/\b(what can you|how do i)\b/.test(s)) return pushCard(capsCard());
   if (canEdit() && /\b(pause|turn off|stop running)\b/.test(s) && findWf(s)) return pauseIt(findWf(s), true);
   if (canEdit() && /\b(resume|unpause|turn (it )?back on)\b/.test(s) && findWf(s)) return pauseIt(findWf(s), false);
