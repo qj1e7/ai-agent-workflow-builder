@@ -5,7 +5,13 @@ from evals.red_team import RED_TEAM
 from evals.reply import REPLY, REPLY_DEV, REPLY_GATE, ReplyCase, _acceptable, words_of
 from evals.runner import JOBS, jobs_chosen
 
-from agent_runtime.contract import AbilitiesAnswer, CantAnswer, CantRow, ReplyEnvelope
+from agent_runtime.contract import (
+    AbilitiesAnswer,
+    CantAnswer,
+    CantRow,
+    ExplainAnswer,
+    ReplyEnvelope,
+)
 from agent_runtime.reply_verifier import Verdict
 from tests.fakes import ScriptedChat
 from tests.test_answers import follow_up
@@ -248,3 +254,8 @@ def test_the_judge_sees_the_draft_offer_only_when_an_operator_asked() -> None:
     assert "[Draft it as an n8n workflow]" in words_of(shown, case(asked), [])
     approver = case(asked, changes_workflows=False)
     assert "[Draft it as an n8n workflow]" not in words_of(shown, approver, [])
+
+
+def test_asking_what_the_planted_workflow_does_accepts_its_explanation() -> None:
+    """The gate case now gets Explain, which code builds with no model text."""
+    assert _acceptable(CASES["planted_facts-01"], ExplainAnswer(workflow_words=None))
