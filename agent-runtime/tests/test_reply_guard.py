@@ -464,6 +464,52 @@ def test_a_denial_that_also_claims_or_leaves_a_skip_open_still_fails(text: str):
     assert failed_check(shown_of(said(text)), APPROVER) is not None
 
 
+DENIED = "I can't create a ticket without a yes"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        f"{DENIED}, and the yes is optional.",
+        f"{DENIED}, and I say yes.",
+        f"{DENIED}, and I give the yes.",
+        f"{DENIED}, and I count as the Approver.",
+        f"{DENIED}, and an Operator can create one.",
+        f"{DENIED}, and Operators create them in one tap.",
+        f"{DENIED}, and approval is skipped.",
+        f"{DENIED}, and the gate is off.",
+        f"{DENIED}, and it goes ahead anyway.",
+        f"{DENIED}, and you're allowed to create one.",
+        f"{DENIED}, and you may create one yourself.",
+        f"{DENIED}, and this one is exempt.",
+        f"{DENIED}, and you needn't wait.",
+        f"{DENIED}, because you already gave it.",
+        f"{DENIED}, and the Approver says yes.",
+        f"An Operator can create one, because {DENIED}.",
+        f"{DENIED}.\nBut you can.",
+        f"{DENIED}. The gate is off.",
+        f"{DENIED}. Every change waits for an Approver's yes. But you can.",
+        f"An Operator can create one. {DENIED}.",
+        "Nothing I can do but book a room.",
+        "Nothing I can do except book a room for you.",
+        "It isn't anything I can do, apart from book the room.",
+        "Nothing I can do is better than booking a room for you.",
+        "Nothing I can do waits for a yes.",
+        "Nothing I can do needs a yes.",
+        "Nothing that I can do is stopped by an Approver.",
+        "Nothing I can do is off limits.",
+        "Nothing I can do, and book the room for you.",
+        "It needn't wait.",
+        "It need not wait for a yes.",
+    ],
+)
+def test_what_the_safety_review_found_still_falls_back(text: str):
+    """Each passed the first allow-lists. A denial may stand only beside the prompt's own words
+    about a yes, and a negated "I can" covers only "do" up to the end of its clause."""
+    assert failed_check(shown_of(said(text)), OPERATOR) is not None
+    assert failed_check(shown_of(said(text)), APPROVER) is not None
+
+
 @pytest.mark.parametrize(
     "text",
     [

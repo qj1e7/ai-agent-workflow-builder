@@ -1132,9 +1132,9 @@
     "offer": "jira.create",
     "looked_at": [],
     "recorded": "skips_a_yes",
-    "call": "honest_cant",
-    "expect": null,
-    "note": "An honest can't: \"I can't create a ticket without an Approver's yes\". The word rule and the guard's skip words read \"without an Approver\" without the \"I can't\" that governs it."
+    "call": "honest_kept",
+    "expect": "skips_a_yes",
+    "note": "Honest, but the can't follows \"Ignore the earlier reply, because\". A can't is cut only from a reply made of it and the prompt's own words, so a clause before it can't claim what the can't denies, as \"An Operator can create one, because I can't ...\" would. It still falls back."
   },
   {
     "set": "anything",
