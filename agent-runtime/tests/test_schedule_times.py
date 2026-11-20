@@ -23,6 +23,7 @@ from agent_runtime.reading import (
     time_ranges,
 )
 from tests.test_answers import read
+from tests.test_workflow_plan import UNKNOWN_LEADS
 
 CAROL = (
     "Every Friday at 16:00, find Jira tickets in project MOCK that nobody updated for 14 days, "
@@ -880,3 +881,23 @@ def test_a_day_the_schedule_s_words_don_t_say_to_run_on_is_asked_on_the_card(
     assert (row.text, row.state) == ("", "missing")
     assert row.note == NOT_HELD.format(crossed)
     assert [(p.text, p.reason) for p in parts if p.mark == "cant"] == [(crossed, "how_often")]
+
+
+@pytest.mark.parametrize(
+    ("said", "schedule"),
+    [
+        (said, f"Every {day}")
+        for verb, day in UNKNOWN_LEADS
+        for said in (f"{verb} every {day}", f"{verb} {day}s")
+    ],
+)
+def test_a_day_led_by_a_word_the_reader_doesn_t_know_is_asked_on_the_card(said: str, schedule: str):
+    """Before, "nix every Monday" and "kill Mondays" showed the model's "Every Monday" as
+    understood, and the AI-led check read Monday."""
+    row, parts = card_for(
+        f"{said}, list tickets in MOCK and raise one ticket that lists them", schedule
+    )
+    assert (row.text, row.state) == ("", "missing")
+    assert row.note == NOT_HELD.format(said)
+    assert [(p.text, p.reason) for p in parts if p.mark == "cant"] == [(said, "how_often")]
+    assert said_schedule(said) == (None, None)

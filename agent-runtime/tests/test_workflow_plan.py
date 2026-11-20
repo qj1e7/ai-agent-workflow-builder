@@ -1656,3 +1656,83 @@ def test_a_verb_that_drops_a_day_never_makes_it_the_run_day_or_keeps_the_old_one
     current = edited(EVERY_DAY_SET)
 
     assert marks(catalogue, RELEASE_SETTINGS, words, current)["run_time"] == (None, "needed")
+
+
+UNKNOWN_LEADS = [
+    ("nix", "Monday"),
+    ("axe", "Friday"),
+    ("kill", "Monday"),
+    ("scratch", "Monday"),
+    ("strike", "Friday"),
+    ("bin", "Monday"),
+    ("nuke", "Friday"),
+    ("shelve", "Monday"),
+    ("halt", "Friday"),
+    ("ignore", "Monday"),
+    ("suspend", "Friday"),
+]
+DAYS_LED_BY_AN_UNKNOWN_WORD = [
+    form for verb, day in UNKNOWN_LEADS for form in (f"{verb} every {day}", f"{verb} {day}s")
+]
+
+
+@pytest.mark.parametrize("words", DAYS_LED_BY_AN_UNKNOWN_WORD)
+def test_a_day_led_by_a_word_the_reader_doesn_t_know_is_asked(catalogue: Catalogue, words: str):
+    """Before, a verb that drops a day and was not on the list of such verbs, as "nix every
+    Monday" or "kill Mondays", made that day the run day, in a first draft and as a change."""
+    assert day_in(words) is None
+    assert run_time_in(words, "every_day 09:00") == (None, True)
+    current = edited(EVERY_DAY_SET)
+    assert marks(catalogue, RELEASE_SETTINGS, words, current)["run_time"] == (None, "needed")
+
+
+@pytest.mark.parametrize(
+    "words",
+    [
+        "nix every Monday at 9am",
+        "kill Fridays at 9am",
+        "please nix every Monday",
+        "I want to nix every Monday",
+        "make the release check nix every Monday",
+        "make the morning check axe Fridays",
+        "drop the bug report every Monday",
+        "Check langgraph and axe every Friday",
+    ],
+)
+def test_a_day_after_a_task_s_words_that_start_with_an_unknown_word_is_asked(
+    catalogue: Catalogue, words: str
+):
+    """Before, each made the day the run day: with its time, after talk or "want to", after
+    "make" and the workflow's name, and after a known word that an unknown one leads."""
+    current = edited(EVERY_DAY_SET)
+    assert marks(catalogue, RELEASE_SETTINGS, words, current)["run_time"] == (None, "needed")
+
+
+@pytest.mark.parametrize(
+    ("words", "read", "day"),
+    [
+        ("Check every Monday", (None, True), "monday"),
+        ("Check langgraph Mondays", (None, True), "monday"),
+        ("list new bugs every Monday", (None, True), "monday"),
+        ("Check every Friday at 9am", ("friday 09:00", True), "friday"),
+        (
+            "Every Monday at 9am, list last week's new bugs in one new Jira ticket",
+            ("monday 09:00", True),
+            "monday",
+        ),
+        ("run it every weekday at 9", (None, True), "weekdays"),
+        (
+            "Automatically check LangGraph for new releases every Monday at 9am",
+            ("monday 09:00", True),
+            "monday",
+        ),
+        ("I want it posted every Monday", (None, True), "monday"),
+        ("make the release check every Friday at 9am", ("friday 09:00", True), "friday"),
+        ("Patch Redis every Monday", (None, True), "monday"),
+    ],
+)
+def test_a_day_led_by_the_task_s_words_or_by_running_it_keeps_the_day(
+    words: str, read: tuple[str | None, bool], day: str
+):
+    assert run_time_in(words) == read
+    assert day_in(words) == day
