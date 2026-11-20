@@ -1314,10 +1314,13 @@ class PlannerFront:
             watched=[s.name for s in held],
         )
 
-    async def _explain(self, words: str | None) -> ExplainReply:
+    async def _explain(self, words: str | None) -> ExplainReply | CheckWorkflowsReply:
         """Words that name no workflow, as "what does my workflow do?", explain the only one
-        when there is one. Explaining changes nothing, so there is nothing to pick."""
+        when there is one. Explaining changes nothing, so there is nothing to pick. With no
+        workflow at all, the answer is that they have none, never an empty choice."""
         named = await self._named(words, None)
+        if named.one is None and named.missing is None and not named.several:
+            return CheckWorkflowsReply(use_case_id=None)
         only = named.several[0] if named.missing is None and len(named.several) == 1 else None
         one = named.one or only
         several = [] if one is not None else named.several
