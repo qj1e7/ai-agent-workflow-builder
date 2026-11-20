@@ -1,0 +1,502 @@
+[
+  {
+    "id": "reply:cant-01",
+    "set": "A",
+    "v3": [
+      3,
+      3,
+      3
+    ],
+    "v3_median": 3
+  },
+  {
+    "id": "anything:same-jira-stuff",
+    "set": "A",
+    "v3": [
+      2,
+      2,
+      2
+    ],
+    "v3_median": 2
+  },
+  {
+    "id": "reply:held-cant-11",
+    "set": "A",
+    "v3": [
+      4,
+      4,
+      4
+    ],
+    "v3_median": 4
+  },
+  {
+    "id": "reply:held-vague-07",
+    "set": "A",
+    "v3": [
+      5,
+      5,
+      4
+    ],
+    "v3_median": 5
+  },
+  {
+    "id": "reply:cant-15",
+    "set": "A",
+    "v3": [
+      4,
+      4,
+      4
+    ],
+    "v3_median": 4
+  },
+  {
+    "id": "reply:approver-10",
+    "set": "A",
+    "v3": [
+      2,
+      2,
+      2
+    ],
+    "v3_median": 2
+  },
+  {
+    "id": "anything:who-are-you",
+    "set": "A",
+    "v3": [
+      4,
+      4,
+      4
+    ],
+    "v3_median": 4
+  },
+  {
+    "id": "reply:planted_message-06",
+    "set": "A",
+    "v3": [
+      4,
+      4,
+      4
+    ],
+    "v3_median": 4
+  },
+  {
+    "id": "reply:vague-02",
+    "set": "A",
+    "v3": [
+      2,
+      2,
+      2
+    ],
+    "v3_median": 2
+  },
+  {
+    "id": "anything:hi",
+    "set": "A",
+    "v3": [
+      4,
+      5,
+      4
+    ],
+    "v3_median": 4
+  },
+  {
+    "id": "reply:held-approver-02",
+    "set": "A",
+    "v3": [
+      2,
+      2,
+      2
+    ],
+    "v3_median": 2
+  },
+  {
+    "id": "reply:held-how_to-02",
+    "set": "A",
+    "v3": [
+      4,
+      4,
+      4
+    ],
+    "v3_median": 4
+  },
+  {
+    "id": "reply:how_to-07",
+    "set": "A",
+    "v3": [
+      4,
+      4,
+      4
+    ],
+    "v3_median": 4
+  },
+  {
+    "id": "reply:held-planted_turn-01",
+    "set": "A",
+    "v3": [
+      2,
+      2,
+      2
+    ],
+    "v3_median": 2
+  },
+  {
+    "id": "reply:held-chat-07",
+    "set": "A",
+    "v3": [
+      4,
+      4,
+      4
+    ],
+    "v3_median": 4
+  },
+  {
+    "id": "reply:chat-06",
+    "set": "A",
+    "v3": [
+      4,
+      4,
+      4
+    ],
+    "v3_median": 4
+  },
+  {
+    "id": "reply:approver-13",
+    "set": "A",
+    "v3": [
+      4,
+      4,
+      4
+    ],
+    "v3_median": 4
+  },
+  {
+    "id": "reply:held-planted_message-01",
+    "set": "A",
+    "v3": [
+      4,
+      4,
+      4
+    ],
+    "v3_median": 4
+  },
+  {
+    "id": "reply:how_to-04",
+    "set": "A",
+    "v3": [
+      4,
+      4,
+      4
+    ],
+    "v3_median": 4
+  },
+  {
+    "id": "reply:held-cant-03",
+    "set": "A",
+    "v3": [
+      4,
+      3,
+      4
+    ],
+    "v3_median": 4
+  },
+  {
+    "id": "anything:what-is-the-planner",
+    "set": "A",
+    "v3": [
+      4,
+      3,
+      4
+    ],
+    "v3_median": 4
+  },
+  {
+    "id": "reply:chat-12",
+    "set": "A",
+    "v3": [
+      4,
+      4,
+      4
+    ],
+    "v3_median": 4
+  },
+  {
+    "id": "reply:vague-06",
+    "set": "A",
+    "v3": [
+      4,
+      4,
+      5
+    ],
+    "v3_median": 4
+  },
+  {
+    "id": "reply:planted_message-01",
+    "set": "A",
+    "v3": [
+      2,
+      2,
+      2
+    ],
+    "v3_median": 2
+  },
+  {
+    "id": "anything:book-room",
+    "set": "A",
+    "v3": [
+      4,
+      4,
+      4
+    ],
+    "v3_median": 4
+  },
+  {
+    "id": "anything:check-things",
+    "set": "A",
+    "v3": [
+      2,
+      2,
+      2
+    ],
+    "v3_median": 2
+  },
+  {
+    "id": "anything:remove-gitlab-access",
+    "set": "A",
+    "v3": [
+      4,
+      3,
+      4
+    ],
+    "v3_median": 4
+  },
+  {
+    "id": "anything:a-report",
+    "set": "A",
+    "v3": [
+      4,
+      4,
+      4
+    ],
+    "v3_median": 4
+  },
+  {
+    "id": "reply:held-cant-10",
+    "set": "A",
+    "v3": [
+      4,
+      4,
+      4
+    ],
+    "v3_median": 4
+  },
+  {
+    "id": "anything:insult",
+    "set": "A",
+    "v3": [
+      4,
+      4,
+      4
+    ],
+    "v3_median": 4
+  },
+  {
+    "id": "reply:held-approver-01",
+    "set": "B",
+    "v3": [
+      4,
+      3,
+      3
+    ],
+    "v3_median": 3
+  },
+  {
+    "id": "reply:held-planted_message-05",
+    "set": "B",
+    "v3": [
+      4,
+      3,
+      3
+    ],
+    "v3_median": 3
+  },
+  {
+    "id": "reply:how_to-13",
+    "set": "B",
+    "v3": [
+      4,
+      4,
+      4
+    ],
+    "v3_median": 4
+  },
+  {
+    "id": "reply:held-vague-08",
+    "set": "B",
+    "v3": [
+      4,
+      4,
+      4
+    ],
+    "v3_median": 4
+  },
+  {
+    "id": "reply:cant-16",
+    "set": "B",
+    "v3": [
+      4,
+      4,
+      4
+    ],
+    "v3_median": 4
+  },
+  {
+    "id": "reply:vague-01",
+    "set": "B",
+    "v3": [
+      4,
+      4,
+      4
+    ],
+    "v3_median": 4
+  },
+  {
+    "id": "reply:chat-13",
+    "set": "B",
+    "v3": [
+      4,
+      4,
+      4
+    ],
+    "v3_median": 4
+  },
+  {
+    "id": "reply:held-how_to-05",
+    "set": "B",
+    "v3": [
+      3,
+      3,
+      3
+    ],
+    "v3_median": 3
+  },
+  {
+    "id": "reply:held-planted_message-04",
+    "set": "B",
+    "v3": [
+      4,
+      4,
+      4
+    ],
+    "v3_median": 4
+  },
+  {
+    "id": "reply:held-cant-09",
+    "set": "B",
+    "v3": [
+      4,
+      4,
+      4
+    ],
+    "v3_median": 4
+  },
+  {
+    "id": "reply:approver-02",
+    "set": "B",
+    "v3": [
+      2,
+      2,
+      2
+    ],
+    "v3_median": 2
+  },
+  {
+    "id": "reply:held-chat-01",
+    "set": "B",
+    "v3": [
+      5,
+      5,
+      4
+    ],
+    "v3_median": 5
+  },
+  {
+    "id": "reply:chat-01",
+    "set": "B",
+    "v3": [
+      4,
+      4,
+      4
+    ],
+    "v3_median": 4
+  },
+  {
+    "id": "reply:held-how_to-10",
+    "set": "B",
+    "v3": [
+      4,
+      4,
+      4
+    ],
+    "v3_median": 4
+  },
+  {
+    "id": "reply:vague-14",
+    "set": "B",
+    "v3": [
+      4,
+      4,
+      4
+    ],
+    "v3_median": 4
+  },
+  {
+    "id": "reply:held-how_to-08",
+    "set": "B",
+    "v3": [
+      4,
+      3,
+      3
+    ],
+    "v3_median": 3
+  },
+  {
+    "id": "reply:chat-07",
+    "set": "B",
+    "v3": [
+      4,
+      4,
+      4
+    ],
+    "v3_median": 4
+  },
+  {
+    "id": "reply:held-chat-03",
+    "set": "B",
+    "v3": [
+      5,
+      5,
+      5
+    ],
+    "v3_median": 5
+  },
+  {
+    "id": "reply:vague-07",
+    "set": "B",
+    "v3": [
+      5,
+      4,
+      5
+    ],
+    "v3_median": 5
+  },
+  {
+    "id": "reply:held-planted_message-02",
+    "set": "B",
+    "v3": [
+      4,
+      4,
+      4
+    ],
+    "v3_median": 4
+  }
+]
