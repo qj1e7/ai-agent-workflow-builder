@@ -22,6 +22,7 @@ from agent_runtime.contract import (
 from agent_runtime.plan_settings import day_in, run_time_in
 from agent_runtime.workflow_drafter import check_plan
 from agent_runtime.workflow_plan import NEVER_GUESSED, USE_OURS, ProposedPlan
+from tests.day_leads import DAYS_LED_BY_AN_UNKNOWN_WORD
 
 CATALOGUE = Path(__file__).resolve().parents[2] / "contracts" / "n8n" / "catalogue.json"
 WORDS = (
@@ -1658,24 +1659,6 @@ def test_a_verb_that_drops_a_day_never_makes_it_the_run_day_or_keeps_the_old_one
     assert marks(catalogue, RELEASE_SETTINGS, words, current)["run_time"] == (None, "needed")
 
 
-UNKNOWN_LEADS = [
-    ("nix", "Monday"),
-    ("axe", "Friday"),
-    ("kill", "Monday"),
-    ("scratch", "Monday"),
-    ("strike", "Friday"),
-    ("bin", "Monday"),
-    ("nuke", "Friday"),
-    ("shelve", "Monday"),
-    ("halt", "Friday"),
-    ("ignore", "Monday"),
-    ("suspend", "Friday"),
-]
-DAYS_LED_BY_AN_UNKNOWN_WORD = [
-    form for verb, day in UNKNOWN_LEADS for form in (f"{verb} every {day}", f"{verb} {day}s")
-]
-
-
 @pytest.mark.parametrize("words", DAYS_LED_BY_AN_UNKNOWN_WORD)
 def test_a_day_led_by_a_word_the_reader_doesn_t_know_is_asked(catalogue: Catalogue, words: str):
     """Before, a verb that drops a day and was not on the list of such verbs, as "nix every
@@ -1695,6 +1678,12 @@ def test_a_day_led_by_a_word_the_reader_doesn_t_know_is_asked(catalogue: Catalog
         "I want to nix every Monday",
         "make the release check nix every Monday",
         "make the morning check axe Fridays",
+        "make it nix every Friday at 9am",
+        "have the check nix every Monday",
+        "let the check nix every Monday",
+        "get the check to nix every Monday",
+        "the check should nix every Monday",
+        "the check can nix Mondays",
         "drop the bug report every Monday",
         "Check langgraph and axe every Friday",
     ],
@@ -1703,7 +1692,8 @@ def test_a_day_after_a_task_s_words_that_start_with_an_unknown_word_is_asked(
     catalogue: Catalogue, words: str
 ):
     """Before, each made the day the run day: with its time, after talk or "want to", after
-    "make" and the workflow's name, and after a known word that an unknown one leads."""
+    "make", "have", "let" or "get" and the workflow's name, after "should" or "can", and after
+    a known word that an unknown one leads."""
     current = edited(EVERY_DAY_SET)
     assert marks(catalogue, RELEASE_SETTINGS, words, current)["run_time"] == (None, "needed")
 
@@ -1729,6 +1719,30 @@ def test_a_day_after_a_task_s_words_that_start_with_an_unknown_word_is_asked(
         ("I want it posted every Monday", (None, True), "monday"),
         ("make the release check every Friday at 9am", ("friday 09:00", True), "friday"),
         ("Patch Redis every Monday", (None, True), "monday"),
+        ("Schedule the release check every Monday at 9am", ("monday 09:00", True), "monday"),
+        (
+            "Pls check LangGraph for new releases every Monday at 9am",
+            ("monday 09:00", True),
+            "monday",
+        ),
+        ("Follow up on stale tickets every Monday at 9am", ("monday 09:00", True), "monday"),
+        ("Flag new LangGraph releases every Monday at 9am", ("monday 09:00", True), "monday"),
+        ("Escalate stale tickets every Monday at 9am", ("monday 09:00", True), "monday"),
+        ("Chase stale tickets every Monday at 9am", ("monday 09:00", True), "monday"),
+        (
+            "Nudge owners of stale tickets every Monday at 9am",
+            ("monday 09:00", True),
+            "monday",
+        ),
+        ("Grab stale tickets in MOCK every Monday at 9am", ("monday 09:00", True), "monday"),
+        ("Changelog every Monday at 9am", ("monday 09:00", True), "monday"),
+        ("Get me a list of stale tickets every Monday at 9am", ("monday 09:00", True), "monday"),
+        (
+            "Let me know about new langgraph releases every Monday at 9am",
+            ("monday 09:00", True),
+            "monday",
+        ),
+        ("Can you list stale tickets every Monday at 9am", ("monday 09:00", True), "monday"),
     ],
 )
 def test_a_day_led_by_the_task_s_words_or_by_running_it_keeps_the_day(

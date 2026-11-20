@@ -3058,6 +3058,43 @@ def test_an_edit_that_names_a_day_but_not_to_run_on_it_is_never_made(task: str, 
     assert (crossed, "cant", "how_often") in marks(fields, task)
 
 
+@pytest.mark.parametrize(
+    "task",
+    [
+        "make the morning check post deadlines every Friday at 9am",
+        "make the morning check post to #ops every Friday at 9am",
+        "make the morning check post results every Friday at 9am",
+        "make the morning check happen every Friday at 9am",
+        "make the morning check fire every Friday at 9am",
+        "make the morning check trigger every Friday at 9am",
+        "make the morning check repeat every Friday at 9am",
+        "make the morning check kick off every Friday at 9am",
+        "make it post deadlines every Friday at 9am",
+    ],
+)
+def test_an_edit_that_names_what_the_workflow_does_on_a_day_still_moves_it(task: str):
+    """At 9f021fd2, each said it can't run things that often, as "deadlines every Friday at
+    9am", and never moved the morning check."""
+    answer = edited(read(asks_about="change", workflow_words="morning check"), task)
+    assert answer.schedule is not None
+    assert (answer.schedule.day, answer.schedule.at, answer.cant) == ("friday", "09:00", None)
+
+
+@pytest.mark.parametrize(
+    "task",
+    [
+        "make the morning check nix every Monday",
+        "make the morning check axe Fridays",
+        "make it nix every Friday at 9am",
+    ],
+)
+def test_an_edit_whose_day_a_word_the_reader_doesn_t_know_leads_is_never_made(task: str):
+    """Before, each moved the morning check to the day the person asked to remove."""
+    answer = edited(read(asks_about="change", workflow_words="morning check"), task)
+    assert answer.schedule is None
+    assert answer.cant != "how_often"
+
+
 def test_an_edit_never_reads_a_ticket_s_due_date_as_its_schedule():
     """Before, it moved the morning check to Fridays at 17:00."""
     fields = read(asks_about="change", workflow_words="morning check")
