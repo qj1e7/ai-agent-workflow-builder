@@ -48,14 +48,7 @@ from agent_runtime.contract import (
     WhichSoftwareAnswer,
 )
 from agent_runtime.drafting import UNUSABLE
-from agent_runtime.free_reply import (
-    APPROVER,
-    OPERATOR,
-    STILL_UNCLEAR,
-    answer_of_envelope,
-    dead_end,
-    reply_messages,
-)
+from agent_runtime.free_reply import STILL_UNCLEAR, answer_of_envelope, dead_end, reply_messages
 from agent_runtime.parts import parts_of
 from agent_runtime.planner_led import FRONT_STANDS, Led, led
 from agent_runtime.questions import QuestionReply, answer_of_reply, question_messages
@@ -260,16 +253,28 @@ def _acceptable(case: ReplyCase, answer: PlannerAnswer) -> bool:
     return kind in case.kinds or (kind.startswith("reply:") and "reply" in case.kinds)
 
 
+JUDGE_OPERATOR: Final = (
+    "The person is an Operator. Operators set up and change workflows. Approvers say yes or no "
+    "to requests."
+)
+JUDGE_APPROVER: Final = (
+    "The person is an Approver. Approvers say yes or no to requests and can't set up or change "
+    "workflows. Operators do that."
+)
+"""The person's role as the judge reads it. Only facts about the person: the free reply's role
+lines also tell the Planner what not to say, which the judge could read as a rule for scoring."""
+
+
 def judge_question(case: ReplyCase, answer: str) -> str:
     """The rubric of ADR 0047, with a claim the platform can't back made the lowest score, so
     the gate counts a 1 as a claim the guard and the verifier let through. The judge reads the
-    person's role in the words the free reply reads it, and the spike's v3 scale, which agreed
-    best with the team lead's own labels (ADR 0047, amended 20 Nov 2026)."""
+    person's role, and the spike's v3 scale, which agreed best with the team lead's own labels
+    (ADR 0047, amended 20 Nov 2026)."""
     states = {
         s: [c.plain for c in CAPABILITY_LIST.capabilities if c.state == s]
         for s in ("ready", "planned", "unsupported")
     }
-    role = OPERATOR if case.changes_workflows else APPROVER
+    role = JUDGE_OPERATOR if case.changes_workflows else JUDGE_APPROVER
     return (
         "You check one reply of the Planner, the assistant in the box on the Home page of a work "
         "platform. Its users are support staff who are not technical.\n\n"

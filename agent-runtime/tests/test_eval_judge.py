@@ -19,7 +19,6 @@ from pydantic import BaseModel, Field
 
 from agent_runtime.answers import TaskRead
 from agent_runtime.contract import ReplyEnvelope
-from agent_runtime.free_reply import APPROVER, OPERATOR
 from agent_runtime.questions import QuestionReply
 from agent_runtime.reply_verifier import Verdict
 from tests.test_eval_reply import CLEAN, HELPFUL
@@ -39,10 +38,23 @@ def case(task: str, **fields: Any) -> ReplyCase:
     )
 
 
-def test_the_judge_reads_an_approvers_role_in_the_words_the_free_reply_reads_it() -> None:
+OPERATOR: Final = (
+    "The person is an Operator. Operators set up and change workflows. Approvers say yes or no "
+    "to requests."
+)
+APPROVER: Final = (
+    "The person is an Approver. Approvers say yes or no to requests and can't set up or change "
+    "workflows. Operators do that."
+)
+"""The role as the judge reads it: facts about the person, with none of the free reply's rules
+for the Planner, which the judge could read as a rule for scoring."""
+
+
+def test_the_judge_reads_an_approvers_role() -> None:
     question = judge_question(case("how do I use this?", changes_workflows=False), "[reply] Hi.")
     assert APPROVER in question
     assert OPERATOR not in question
+    assert "Never tell them" not in question
 
 
 def test_the_judge_reads_an_operators_role_when_the_case_sets_none() -> None:
