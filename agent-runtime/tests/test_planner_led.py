@@ -301,6 +301,21 @@ def test_how_to_start_beside_a_watch_of_them_says_which_software_is_unclear() ->
     ]
 
 
+def test_the_list_of_abilities_never_ticks_a_watch_of_them() -> None:
+    result, _ = run(
+        "what can you do, and keep an eye on all three",
+        tool("show", what="abilities"),
+        read=reading("abilities"),
+        facts=WORKFLOWS,
+    )
+
+    assert marks(result) == [
+        ("what can you do", "will_do", None),
+        ("keep an eye on all three", "cant", "which_software"),
+    ]
+    assert reached(result) == ["what can you do"]
+
+
 def test_how_to_start_for_a_message_the_rules_read_whole_goes_back_to_the_model() -> None:
     result, _ = run(
         "pause the morning check",
