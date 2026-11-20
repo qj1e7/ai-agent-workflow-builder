@@ -155,6 +155,8 @@ class Outcome:
     judge: int | None = None
     cache_read: int = 0
     cache_written: int = 0
+    judges: tuple[int | None, ...] = ()
+    """Every judge run's score, None for a run that failed, when the job asks for more than one."""
 
     @property
     def passed(self) -> bool:
@@ -203,6 +205,20 @@ def judge(model: BaseChatModel, question: str) -> int | None:
     except Exception:
         return None
     return verdict.score if isinstance(verdict, Verdict) else None
+
+
+def judged(
+    model: BaseChatModel, question: str, marker: str, runs: int
+) -> tuple[int | None, tuple[int | None, ...]]:
+    """The median of `runs` judge runs, and every run's score. Each run after the first has its
+    own marker, so a gateway's store can't answer it with the first. A failed run is left out,
+    and an even count takes the lower middle, so a failure can only lower the score."""
+    scores = tuple(
+        judge(model, marked(question, f"{marker} judge {n}" if marker and n > 1 else marker))
+        for n in range(1, runs + 1)
+    )
+    given = [score for score in scores if score is not None]
+    return (statistics.median_low(given) if given else None), scores
 
 
 def judge_target(env: Env) -> Target | None:
@@ -298,6 +314,7 @@ def summarise_job(
                 **({"within_product_limit": within[i]} if limit_ms else {}),
                 "answer": o.answer,
                 **({"judge": o.judge} if o.judge is not None else {}),
+                **({"judges": list(o.judges)} if len(o.judges) > 1 else {}),
             }
             for i, o in enumerate(outcomes)
         ],
@@ -370,7 +387,7 @@ def run_target(
     for job in jobs:
         outcomes: list[Outcome] = []
         cases = job.cases()
-        ahead = job.most_calls + (1 if judge_model is not None and job.judged else 0)
+        ahead = job.most_calls + (job.judge_runs if judge_model is not None and job.judged else 0)
         stopped: str | None = None
         for case in cases:
             stopped = spend.stop_reason(ahead)
@@ -383,7 +400,8 @@ def run_target(
                     if job.judge_question
                     else accuracy_question(job.prompt(case), outcome.answer)
                 )
-                outcome = replace(outcome, judge=judge(judge_model, marked(question, marker)))
+                score, scores = judged(judge_model, question, marker, job.judge_runs)
+                outcome = replace(outcome, judge=score, judges=scores)
             if spend.gateway_out:
                 # The case met the spent budget, so its score says nothing about the model.
                 stopped = BUDGET_USED_UP

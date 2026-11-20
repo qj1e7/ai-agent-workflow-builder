@@ -362,6 +362,7 @@ REPLY = Job(
     follow_up=follow_up,
     judge_question=judge_question,
     most_calls=4,
+    judge_runs=3,
 )
 
 
