@@ -21,6 +21,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from agent_runtime.abilities import (
     ABILITIES,
     NOT_ADVERBS,
+    RELEASE_ROOTS,
     SYSTEMS,
     TICKETS,
     change_verbs_in,
@@ -441,6 +442,8 @@ UNITS: Final = words("day days week weeks month months year years hour hours min
 """Units a number counts, as "days" in "14 days", which belong to the count, not the schedule."""
 COUNTED: Final = re.compile(_NOT_A_COUNT.replace("(?!", "(?=", 1))
 """A unit or a thing counted, after a number, as " days" in "14 days" or " tickets"."""
+COUNT: Final = re.compile(rf"\b\d+{_NOT_A_COUNT.replace('(?!', '(?:', 1)}")
+"""A number with what it counts, as "14 days" or "3 tickets"."""
 CLOCK: Final = re.compile(
     rf"{NOT_INSIDE_A_NUMBER}(?P<twelve>{TWELVE_HOUR})\b|"
     rf"{NOT_INSIDE_A_NUMBER}(?P<day>{TWENTY_FOUR_HOUR})\b(?![.:]\d)|"
@@ -2226,18 +2229,119 @@ def _days_in(text: str) -> tuple[tuple[_Day, bool], ...]:
     return tuple(found)
 
 
+LEAVE_OUT: Final = EXCLUSIONS | words("skip skips skipping skipped not no non without but never")
+"""Words that leave out what follows them, as "except", "skip", "not", "non-" or "but".
+"other than" and "apart from" are read as pairs."""
+LEAVE_OUT_PAIRS: Final = frozenset({("other", "than"), ("apart", "from")})
+NEARBY: Final = words("next this last")
+"""Words between a filter's word or a ticket's date and its day, as "next" in "due next
+Friday"."""
+FILTERED: Final = (
+    TICKETS
+    | frozenset(RELEASE_ROOTS)
+    | words("item items entry entries")
+    | frozenset(w for v in STATUS_VOCAB.values() for w in v)
+    | frozenset(w for v in WHEN_VOCAB.values() for w in v)
+    | ASSIGNEE_VOCAB
+    | ME_WORDS
+    | NOT_UPDATED
+    | TICKET_DATES
+)
+"""Words a filter's word may follow, as "tickets" in "tickets closed on Friday", "touched" in
+"nobody touched since Friday" or "me" in "waiting for me since Monday"."""
+
+
+def _left_out_before(tokens: list[Token], clause_of: list[int]) -> list[bool]:
+    """For each token, whether a word that leaves something out stands before it in its clause,
+    or joins the clause on, as "except" in "except Friday's check", "leave" in "leave out
+    Friday's check" or "but" in "but we are closed on Fridays"."""
+    found: list[bool] = []
+    seen = False
+    for n, (raw, _, _, _) in enumerate(tokens):
+        if n and clause_of[n - 1] not in (clause_of[n], -1):
+            seen = False
+        found.append(seen)
+        low = _low(raw)
+        pair = n > 0 and (_low(tokens[n - 1][0]), low) in LEAVE_OUT_PAIRS
+        prefix = "-" in low and low.partition("-")[0] in LEAVE_OUT
+        seen = seen or pair or prefix or low in LEAVE_OUT or low in LEAVING
+    return found
+
+
+def _holds_whole(text: str, tokens: list[Token], clause_of: list[int], day: _Day) -> bool:
+    """Whether a filter or a ticket's date holds the day as a whole phrase: a ticket's date
+    before or after it, as "due next Friday", "the deadline is Friday" or "a Friday deadline",
+    or a filter's word right after what it filters, as "tickets closed on Friday", "tickets from
+    last Monday" or "tickets in MOCK opened on Tuesday". A filter's word after anything else, as
+    "closed" in "the office is closed on Fridays", holds nothing."""
+    first, last = day.run
+    clause = clause_of[day.first]
+
+    def low(n: int) -> str:
+        return _low(tokens[n][0]) if 0 <= n < len(tokens) and clause_of[n] == clause else ""
+
+    def joined(a: int, b: int) -> bool:
+        return CLAUSE_MARK.search(text[tokens[a][2] : tokens[b][1]]) is None
+
+    lead = first if low(first) in FILTER_LEADS else first - 1
+    while low(lead) in NEARBY and joined(lead, lead + 1):
+        lead -= 1
+    n = lead
+    while low(n) in DATE_LINKS and joined(n, n + 1):
+        n -= 1
+    if low(n) in TICKET_DATES and joined(n, n + 1):
+        # A ticket's date right before a day in the plural and a time is what a reminder is about,
+        # as "the deadline at 9am on Fridays": the run is the schedule's own.
+        run = text[tokens[first][1] : tokens[last][2]]
+        return not (
+            n == first - 1
+            and low(first) in ("at", "on")
+            and _marked(run)
+            and CLOCK.search(run) is not None
+        )
+    if low(lead) in FILTER_LEADS:
+        n = lead - 1
+        while low(n) and (low(n) == "in" or PROJECT_KEY.fullmatch(tokens[n][0])):
+            if not joined(n, n + 1):
+                return False
+            n -= 1
+        return low(n) in FILTERED and joined(n, n + 1)
+    return (
+        low(last + 1) in TICKET_DATES
+        and joined(last, last + 1)
+        and (low(last + 1), low(last + 2)) != ("due", "to")
+    )
+
+
 @lru_cache(maxsize=64)
 def _days_held(text: str) -> tuple[tuple[tuple[int, int], bool], ...]:
     """Where every day the words name stands, with whether a filter, a ticket's date or a label
-    holds it, as "created on Monday", "the due date to Friday" or "Monday's tickets". Kept per
-    request."""
+    holds it whole, as "tickets created on Monday", "due next Friday" or "Monday's tickets". A
+    word that leaves something out before it in its clause undoes the hold, as "except" in
+    "except Friday's check", and a filter or a ticket's date never holds a run with "every",
+    "daily" or the like, which is the schedule's own, as in "post deadlines every Friday". Kept
+    per request."""
     days = _days_in(text)
     if not days:
         return ()
     tokens = _schedule_tokens(text)
     clause_of = _clause_of(text, [(raw, a, b) for raw, a, b, _ in tokens])
+    left_out = _left_out_before(tokens, clause_of)
+    own: dict[tuple[int, int], bool] = {}
+    for day, _ in days:
+        if day.run not in own:
+            first, last = day.run
+            own[day.run] = FREQUENT.search(text, tokens[first][1], tokens[last][2]) is not None
     return tuple(
-        (day.match.span(), tied or _a_label(text, tokens, clause_of, day)) for day, tied in days
+        (
+            day.match.span(),
+            not left_out[day.first]
+            and (
+                (not own[day.run] and _holds_whole(text, tokens, clause_of, day))
+                or _a_label(text, tokens, clause_of, day)
+            ),
+        )
+        for day, _ in days
     )
 
 
@@ -2360,6 +2464,7 @@ def when_said(words: str) -> WhenSaid:
     read = {
         phrases[n].start + d.start: phrases[n].start + d.end for n in chosen for d in named[n][0]
     }
+    said = [(phrases[n].start, phrases[n].end) for n in chosen]
     day_asked = (
         len(days) > 1
         or (unchosen and any(found for found, _ in named))
@@ -2369,6 +2474,7 @@ def when_said(words: str) -> WhenSaid:
         or UNREAD_DAY.search(words) is not None
         or bool(_unplaced(words))
         or _day_unread(words, days, read, bool(chosen))
+        or (bool(chosen) and _left_out_unread(words, days, read, said))
     )
     day = None if day_asked or not days else next(iter(days))
     times = {time.key for n in chosen for time in named[n][1]}
@@ -2910,6 +3016,142 @@ task does, makes or is about, and words that send its result, as "sent" in "have
 sent every Monday", name a task of their own or say that it runs. Any other word there may
 leave the day out, as "nix" in "nix every Monday", so the day is asked. "clear", "block",
 "free" and "end" stay off, because each can leave a day out."""
+LINKS: Final = words(
+    "the a an any all some this that these those our your their my its his her on in at during "
+    "over for of from until till through between before after since by to with when while if"
+)
+"""Words that link what a word leaves out to the rest, as "on" in "except on Fridays"."""
+LIST_JOINS: Final = words("and or nor")
+DAYISH: Final = (SCHEDULE_VOCAB - LINKS - LIST_JOINS) | words(
+    "today tonight tomorrow yesterday next holiday holidays"
+)
+"""Words that may name a day or a stretch of days, as "week", "first", "end" or "tomorrow"."""
+NOT_A_DAY: Final = (
+    KNOWN_WORDS
+    | TASK_HEADS
+    | NOT_WORDS
+    | NOT_A_TASK
+    | CAUSING
+    | DOERS
+    | MODALS
+    | LEAVE_OUT
+    | frozenset(SYSTEMS)
+    | words("longer anymore more")
+) - DAYISH
+"""Words the reader knows that name no day: what a structure could explain, what a task does,
+makes or is about, the systems it names, talk, and words that turn or leave out what follows
+them."""
+ASKED_OF: Final = re.compile(rf"(?i:{NAMED_BEFORE.format(name=CAPITALISED)})")
+"""A word that asks a person, as "asking" in "without asking me"."""
+ASSIGNED_TO: Final = re.compile(
+    rf"\b(?i:assigned|owned|held)\s+(?i:to|by)\s+{CAPITALISED}(?:\s+{CAPITALISED})?\b"
+)
+"""A person a ticket is assigned to, as "assigned to Priya"."""
+LEAVES: Final = re.compile(
+    rf"\b(?:{'|'.join(sorted(LEAVE_OUT | {'only'}))}|other\s+than|apart\s+from)\b",
+    re.IGNORECASE,
+)
+"""A word that leaves something out or keeps only it, anywhere in the words."""
+COVERED: Final = re.compile(r"[xo](?:[kyxos]|[,j]++(?!s*+k(?!w)))*+[uw]|[uw]o")
+"""What a word that leaves something out (x) or keeps only it (o) covers, over the request's
+words as `_left_out_unread` marks them, when it reaches a word the reader doesn't know (u) or one
+that may name a day it runs on (w). It covers the rest of its clause, with words such as "on"
+or "the" (s), and goes on past "and" or "or" (j) or a comma, unless a word it knows (k) and no
+day starts what follows, as "and post them". "only" also covers the word right before it, as
+"days" in "business days only". A day it never runs on (y) is kept."""
+
+
+def _pieces(text: str) -> list[tuple[str, int, int]]:
+    """The request's words, with a time whole, as "9:30", and a word with a hyphen that the reader
+    doesn't know split at it, as "non-Fridays" or "SAT-MON"."""
+    clocks = iter(m.span() for m in CLOCK.finditer(text))
+    clock = next(clocks, None)
+    found: list[tuple[str, int, int]] = []
+    for raw, start, end in _request_tokens(text):
+        while clock is not None and clock[1] <= start:
+            clock = next(clocks, None)
+        if clock is not None and clock[0] <= start:
+            if not found or found[-1][1:] != clock:
+                found.append((text[clock[0] : clock[1]], *clock))
+        elif "-" in raw and _low(raw) not in NOT_A_DAY and not DAY_NAMED.fullmatch(raw):
+            found.extend(
+                (m.group(0), start + m.start(), start + m.end()) for m in re.finditer(r"[^-]+", raw)
+            )
+        else:
+            found.append((raw, start, end))
+    return found
+
+
+def _left_out_unread(
+    text: str, days: set[str], read: dict[int, int], said: list[tuple[int, int]]
+) -> bool:
+    """Whether a word that leaves something out, as "except", "not", "skip", "non-" or "but", or
+    one that keeps only something, as "only", covers a word the reader doesn't know, or a day
+    the workflow may run on. Code can't know every way to write a day or a holiday, as "PH",
+    "Firday" or "SAT-MON", so what it covers must be words the reader knows name no day, as
+    "bugs" in "except bugs" or "done" in "not done", or a day the run day never falls on, as
+    "Fridays" beside every Monday. `read` holds where each day read as the day it runs starts and
+    ends, and `said` the schedule's own phrases, read whole. The word a day labels is kept too,
+    as "hotfixes" in "except Friday's hotfixes"."""
+    if LEAVES.search(text) is None:
+        return False
+    pieces = _pieces(text)
+    lows = [_low(raw) for raw, _, _ in pieces]
+    after = [*lows[1:], ""]
+    before = ["", *lows[:-1]]
+    leaves = [
+        low in LEAVE_OUT or (ahead, low) in LEAVE_OUT_PAIRS
+        for ahead, low in zip(before, lows, strict=True)
+    ]
+    runs_on = frozenset[str]().union(*(_runs_on(key) for key in days))
+    known = bytearray(len(text) + 1)
+    for a, b in [
+        *said,
+        *(
+            m.span()
+            for p in (CLOCK, POLITE_PHRASE, A_YES, SOMEONE, COUNT, ASSIGNED_TO)
+            for m in p.finditer(text)
+        ),
+    ]:
+        known[a:b] = b"\1" * (b - a)
+    marks: list[str] = []
+    labelled = False
+    for n, (raw, start, end) in enumerate(pieces):
+        if n:
+            gap = text[pieces[n - 1][2] : start]
+            ends = CLAUSE_END.search(gap)
+            marks.append(
+                "." if ends and ends.group(0).strip(",") else "," if ends or "&" in gap else ""
+            )
+        low = lows[n]
+        bare = re.sub(r"['’]s$", "", raw)
+        day = DAY_NAMED.fullmatch(bare) is not None
+        if day:
+            ran = read.get(start, -1) >= start + len(bare)
+            marks.append("k" if ran else "y" if days and not _may_fall_on(bare) & runs_on else "w")
+        elif leaves[n]:
+            marks.append("x")
+        elif low == "only":
+            marks.append("o")
+        elif low in LIST_JOINS:
+            marks.append("j")
+        elif low in LINKS:
+            marks.append("s")
+        elif (known[start] and known[end - 1]) or (low, after[n]) in LEAVE_OUT_PAIRS:
+            marks.append("k")
+        elif low in DAYISH:
+            marks.append("w")
+        elif (
+            labelled
+            or low in NOT_A_DAY
+            or text[start - 1 : start] == "#"
+            or ASKED_OF.fullmatch(low) is not None
+        ):
+            marks.append("k")
+        else:
+            marks.append("u")
+        labelled = day and (bare != raw or before[n] in LABELS)
+    return COVERED.search("".join(marks)) is not None
 
 
 def _region(
