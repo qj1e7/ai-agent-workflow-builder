@@ -92,6 +92,7 @@ def n8n_access_fixtures() -> dict[str, WireModel | list[WireModel]]:
             can_open=False,
             why_not=SET_PASSWORD,
             editor_url=None,
+            login=CAROL.email,
         ),
         "people/me-n8n.ready.json": MyN8nOut(
             access=True,
@@ -100,6 +101,7 @@ def n8n_access_fixtures() -> dict[str, WireModel | list[WireModel]]:
             can_open=True,
             why_not=None,
             editor_url=EDITOR,
+            login=CAROL.email,
         ),
         "builder/use-case.n8n.json": IN_N8N,
         "builder/use-case.n8n.held.json": HELD,

@@ -224,6 +224,8 @@ button, input { font: inherit; color: inherit; }
 .rows li + li { border-top: 1px solid var(--rule); }
 .rows b { display: block; font-size: 0.92rem; }
 .rows .s { display: block; font-size: 0.82rem; color: var(--muted); }
+.n8nopen { display: grid; justify-items: start; gap: 4px; min-width: 0; max-width: 100%; }
+.n8nopen p { margin: 0; max-width: 100%; overflow-wrap: anywhere; }
 .pv-actions { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 14px; border-top: 1px solid var(--rule); }
 .pv-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
 @media (max-width: 1080px) { .pv-grid { grid-template-columns: 1fr; } }
@@ -1161,10 +1163,13 @@ function wfView(id, full = false) {
     ${W.maint ? `<div class="pv-pane" data-pane="n8n" hidden>
       <div class="cv-meta"><b data-live="n8n-ver"></b><span class="small muted">Only our blocks are on, so every write waits for a yes.</span></div>
       <div data-live="n8n-canvas"></div>
-      <div class="pv-actions"><button class="btn" type="button" data-editor="${id}">Open in n8n editor</button></div>
+      <div class="pv-actions">${openInN8n(id)}</div>
     </div>` : ''}
   </div>`;
 }
+/* Under every Open in n8n editor button: the Portal and n8n sign in separately, so the line names the n8n account the workflow moves to. Nothing shows while the login is unknown. */
+const N8N_LOGIN = 'alice.n8ntest@example.test';
+const openInN8n = (id, ghost = false) => `<div class="n8nopen"><button class="btn${ghost ? ' ghost' : ''}" type="button" data-editor="${id}">Open in n8n editor</button>${N8N_LOGIN ? `<p class="small muted">Opens in n8n as ${N8N_LOGIN}.</p>` : ''}</div>`;
 const TICKET = { stopped: 'None yet. Today’s check stopped before it could tell.', retrying: 'None yet', waiting: '1 waiting for Bob’s yes', writing: 'Being created', done: 'MOCK-22, created today', declined: 'Declined by Bob. None created.' };
 const ticketFor = (k) => { const s = W.soft[k]; if (k === 'fastapi') return TICKET[W.stage]; if (s.run && s.run === s.latest) return 'Not needed'; return W.wf[k] ? 'None yet' : 'None. Nothing checks it, so no ticket is made.'; };
 const checkedFor = (k) => { if (!W.wf[k]) return ''; if (k === 'fastapi') return W.stage === 'stopped' ? 'Today 8:00, didn’t finish' : 'Today 9:01'; return lastRun(k) === 'No runs yet' ? 'Not yet' : 'Today 8:00'; };
@@ -1424,7 +1429,7 @@ function patchWf(el) {
   if (W.schedEdit !== id || !$('#sdDay', el)) $('[data-live="wf-when"]', el).innerHTML = whenHTML(id);
   $('[data-pane="sum"] .nd[data-id="when"] .nlbl', el).textContent = short(f.sched);
   $('[data-live="wf-vers"]', el).innerHTML = versRows(id);
-  $('[data-live="wf-acts"]', el).innerHTML = `<button class="btn ghost" type="button" data-open="explain:${id}">Explain</button>${canEdit() ? `<button class="btn ghost" type="button" data-pause="${id}">${W.paused[id] ? 'Resume' : 'Pause'}</button>${W.maint ? `<button class="btn ghost" type="button" data-editor="${id}">Open in n8n editor</button>` : ''}` : ''}`;
+  $('[data-live="wf-acts"]', el).innerHTML = `<button class="btn ghost" type="button" data-open="explain:${id}">Explain</button>${canEdit() ? `<button class="btn ghost" type="button" data-pause="${id}">${W.paused[id] ? 'Resume' : 'Pause'}</button>${W.maint ? openInN8n(id, true) : ''}` : ''}`;
   const ver = $('[data-live="n8n-ver"]', el);
   if (ver) { ver.textContent = `Version ${f.ver}, published by ${f.by}, ${f.on}`; $('[data-live="n8n-canvas"]', el).innerHTML = canvasSVG(id); }
 }

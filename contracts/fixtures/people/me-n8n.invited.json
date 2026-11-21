@@ -4,5 +4,6 @@
   "set_password_url": "https://n8n.example/signup?token=example-not-a-real-token",
   "can_open": false,
   "why_not": "Set your n8n password first. The link is on your Settings page.",
-  "editor_url": null
+  "editor_url": null,
+  "login": "carol@example.test"
 }

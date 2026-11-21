@@ -207,6 +207,39 @@ async def test_only_an_operator_who_is_no_approver_may_hold_n8n_access(s: Staffe
     assert me["n8n_access"] is True
 
 
+async def _login(s: Staffed, person: str = "carol") -> object:
+    return (await s.call(person, "GET", "/api/v1/me/n8n")).json()["login"]
+
+
+async def test_the_n8n_login_is_none_without_n8n_access(s: Staffed):
+    assert await _login(s) is None
+    assert await _login(s, "alice") is None
+
+
+async def test_the_n8n_login_is_none_before_the_n8n_account_exists(s: Staffed):
+    assert (await s.give("carol")).status_code == 200
+    assert await _login(s) is None, "access is given, the account is not made yet"
+
+
+async def test_the_n8n_login_is_the_email_n8n_holds_once_the_account_exists(s: Staffed):
+    n8n_user = await s.member()
+    assert await _login(s) == "carol@example.test"
+    s.n8n.change_email(n8n_user, "carol.new@example.test")
+    assert await _login(s) == "carol.new@example.test", "n8n's email, not people.email"
+
+
+async def test_the_n8n_login_is_there_while_the_invite_is_unused(s: Staffed):
+    assert (await s.give("carol")).status_code == 200
+    await s.settle()
+    assert await _login(s) == "carol@example.test"
+
+
+async def test_the_n8n_login_is_none_when_n8n_has_no_such_account(s: Staffed):
+    n8n_user = await s.member()
+    del s.n8n.users[n8n_user]
+    assert await _login(s) is None
+
+
 async def test_gaining_the_approver_role_ends_n8n_access_takes_back_and_ends_the_account(
     s: Staffed,
 ):
@@ -581,6 +614,7 @@ async def test_my_n8n_shows_the_password_link_only_to_its_person_and_only_until_
         "can_open": False,
         "why_not": SET_PASSWORD,
         "editor_url": None,
+        "login": "carol@example.test",
     }
     assert link not in stored["n8n_invite"], "kept sealed"
     theirs = (await s.call("alice", "GET", "/api/v1/me/n8n")).json()

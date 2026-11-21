@@ -8,6 +8,7 @@ import { Button, ButtonAnchor, type ButtonVariant } from '../../ui/Button'
 import { Canvas } from '../../ui/Canvas'
 import { IconExternal, IconLock } from '../../ui/icons'
 import { editorAddressOf, heldLine, heldOf, holdOf, inUseLine, mayOpen, mayTakeBack, n8nRefusalWords, NOT_LOADED, NOT_OWN, OPEN_IN_N8N, openEditorTab, openingOf, SAFE_BLOCKS, TAKE_IT_BACK, takenBackWords, theirsNote, type EditorTab, type Held, type Hold } from './n8nHold'
+import { WithN8nLogin } from './N8nLoginHint'
 import styles from './Workflows.module.css'
 
 interface OpenProps {
@@ -36,9 +37,11 @@ export function OpenInN8nEditor({ useCaseId, hold, variant }: OpenProps) {
   }, [])
   if (hold.kind === 'mine' && hold.editorUrl) {
     return (
-      <ButtonAnchor href={hold.editorUrl} variant={variant}>
-        {OPEN_IN_N8N}
-      </ButtonAnchor>
+      <WithN8nLogin>
+        <ButtonAnchor href={hold.editorUrl} variant={variant}>
+          {OPEN_IN_N8N}
+        </ButtonAnchor>
+      </WithN8nLogin>
     )
   }
   const press = () => {
@@ -62,11 +65,13 @@ export function OpenInN8nEditor({ useCaseId, hold, variant }: OpenProps) {
   }
   return (
     <>
-      <Button variant={variant} loading={open.isPending} onClick={press}>
-        {OPEN_IN_N8N}
-        <IconExternal size={16} />
-        <span className="visually-hidden"> (opens in a new tab)</span>
-      </Button>
+      <WithN8nLogin>
+        <Button variant={variant} loading={open.isPending} onClick={press}>
+          {OPEN_IN_N8N}
+          <IconExternal size={16} />
+          <span className="visually-hidden"> (opens in a new tab)</span>
+        </Button>
+      </WithN8nLogin>
       {open.isError || noEditor ? (
         <p className={styles['actionProblem']} role="alert">
           {open.isError ? n8nRefusalWords(open.error, words) : noEditor}

@@ -172,6 +172,11 @@ class MyN8nOut(WireModel):
     can_open: bool = Field(description="Whether you can open workflows in n8n now.")
     why_not: str | None = Field(description="Why not, in words to show. Null when you can.")
     editor_url: str | None = Field(description="n8n's editor, while you can open it.")
+    login: str | None = Field(
+        description="The email you sign in to n8n with, as n8n holds it now. Open in n8n moves "
+        "a workflow into this account's space, so only it sees the workflow. Null without n8n "
+        "access, before your n8n account is made, or when n8n can't say."
+    )
 
 
 def current_staff(request: Request) -> StaffAccounts:
@@ -299,6 +304,7 @@ async def my_n8n(
         can_open=mine.can_open,
         why_not=mine.why_not,
         editor_url=mine.editor_url,
+        login=await staff.login_of(principal.user_id),
     )
     return JSONResponse(body.model_dump(mode="json"), headers={"Cache-Control": "no-store"})
 

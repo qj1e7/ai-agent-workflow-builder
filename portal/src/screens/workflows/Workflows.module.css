@@ -736,6 +736,8 @@ details.rule > p {
 .actions {
   display: flex;
   flex-wrap: wrap;
+  /* Open in n8n editor has its login line under it, so the other buttons keep their own height. */
+  align-items: flex-start;
   gap: 8px;
   padding-top: 16px;
   border-top: 1px solid var(--rule);

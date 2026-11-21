@@ -44,6 +44,10 @@ The team lead reviewed the drafter screens (ADR 0051) and the thumbs (ADR 0050) 
 12. **"What I can do" lists drafting and Explain,** because the sketch shows them working. In the Portal they stay Planned until their pull requests land (ADR 0051).
 13. **The set-up approval in the side panel shows what the Approver decides on:** In short, the line about the steps that won't ask for a yes on each run, the flags to tick, and what it reads, writes and posts. More details adds the rest of the report.
 
+## The n8n login line
+
+Under every Open in n8n button the sketch says `Opens in n8n as {login}.`, with a made-up email. The Portal and n8n sign in separately, and Open in n8n moves the workflow into the n8n space of one account, so only that account can see it. The line names it. It shows nothing while the platform does not know the login. The sketch's Edit in n8n flow for a draft has no Open n8n button, and the Portal's has the same line under it.
+
 ## What it replaces
 
 Prototype version 4 in `docs/design/ai-native-redesign/`, with its spec and build plan, is kept only as a record. So is version 3 of the earlier prototype in `docs/design/portal-routines/`.
