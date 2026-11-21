@@ -2227,15 +2227,60 @@ def _days_in(text: str) -> tuple[tuple[_Day, bool], ...]:
 
 
 @lru_cache(maxsize=64)
-def _days_held(text: str) -> tuple[bool, ...]:
-    """For every day the words name, whether a filter, a ticket's date or a label holds it, as
-    "created on Monday", "the due date to Friday" or "Monday's tickets". Kept per request."""
+def _days_held(text: str) -> tuple[tuple[tuple[int, int], bool], ...]:
+    """Where every day the words name stands, with whether a filter, a ticket's date or a label
+    holds it, as "created on Monday", "the due date to Friday" or "Monday's tickets". Kept per
+    request."""
     days = _days_in(text)
     if not days:
         return ()
     tokens = _schedule_tokens(text)
     clause_of = _clause_of(text, [(raw, a, b) for raw, a, b, _ in tokens])
-    return tuple(tied or _a_label(text, tokens, clause_of, day) for day, tied in days)
+    return tuple(
+        (day.match.span(), tied or _a_label(text, tokens, clause_of, day)) for day, tied in days
+    )
+
+
+WEEK: Final = tuple(DAY_NAMES.split("|"))
+WEEKDAYS: Final = frozenset(WEEK[:5])
+
+
+def _runs_on(key: str) -> frozenset[str]:
+    """The days of the week a run day runs on: all seven for every day, Monday to Friday for
+    every weekday, and a day of the week itself."""
+    return {"every_day": frozenset(WEEK), "weekdays": WEEKDAYS}.get(key, frozenset({key}))
+
+
+def _may_fall_on(said: str) -> frozenset[str]:
+    """The days of the week a day the words name may fall on: a day itself, every day of a
+    range, Monday to Friday for a weekday, Saturday and Sunday for the weekend, and any day for
+    a holiday."""
+    if (span := DAY_RANGE.fullmatch(said)) is not None:
+        first, last = (WEEK.index(day_key(m.group(1))) for m in DAY.finditer(span.group(0)))
+        return frozenset(WEEK[(first + n) % 7] for n in range((last - first) % 7 + 1))
+    if (day := DAY.fullmatch(said)) is not None:
+        return frozenset({day_key(day.group(1))})
+    if re.fullmatch(r"week ?days?", said, re.IGNORECASE):
+        return WEEKDAYS
+    if re.fullmatch(r"weekends?", said, re.IGNORECASE):
+        return frozenset(WEEK[5:])
+    return frozenset(WEEK)
+
+
+def _day_unread(text: str, days: set[str], read: dict[int, int], timed: bool) -> bool:
+    """Whether the words name a day the reader didn't read as the day it runs, `read` by where
+    each read day starts and ends, so it is asked. With no run day of their own, any such day is
+    asked, but one a filter, a ticket's date or a label holds beside a time of their own. Beside
+    a run day, one that may fall on a day the workflow runs is asked, as "Fridays" in "every day
+    at 9am, check langgraph except Fridays", and one it never runs on is left to the filter it
+    may be, as "Mondays" in "Every Friday at 9am, list tickets we skip on Mondays"."""
+    runs_on = frozenset[str]().union(*(_runs_on(key) for key in days))
+    for (start, end), held in _days_held(text):
+        if (held and (timed or bool(days))) or read.get(start, -1) >= end:
+            continue
+        if not days or _may_fall_on(text[start:end]) & runs_on:
+            return True
+    return False
 
 
 type Stop = Literal["edge", "run", "verb", "word"]
@@ -2280,10 +2325,10 @@ def when_said(words: str) -> WhenSaid:
     only where no schedule stands, it is asked too, so a change never keeps the run time from
     before beside it. A day or a time tied to a filter or a ticket's date, as "set the due date
     to Friday at 5pm", is never the run time, and a day the schedule's words name without saying
-    to run on it, as "drop Fridays" or "Fridays off", is left out, so it is asked. When no phrase
-    of their own gives the day it runs, any day they name is asked, as "Mondays" in "check
-    langgraph except Mondays", unless a filter, a ticket's date or a label holds it beside a
-    time of their own."""
+    to run on it, as "drop Fridays" or "Fridays off", is left out, so it is asked. Any other day
+    they name that is not the day it runs is asked, as "Mondays" in "check langgraph except
+    Mondays", unless a filter, a ticket's date or a label holds it beside a time or a day of
+    their own, or the day it runs never falls on it, as "Mondays" beside "Every Friday at 9am"."""
     own = _own(words)
     unheld = [
         p
@@ -2312,6 +2357,9 @@ def when_said(words: str) -> WhenSaid:
         c.reason for n in chosen for c in _own_clashes(words, (phrases[n].start, phrases[n].end))
     }
     unchosen = not chosen and bool(phrases)
+    read = {
+        phrases[n].start + d.start: phrases[n].start + d.end for n in chosen for d in named[n][0]
+    }
     day_asked = (
         len(days) > 1
         or (unchosen and any(found for found, _ in named))
@@ -2320,7 +2368,7 @@ def when_said(words: str) -> WhenSaid:
         or bool(reasons & {"one_day", "one_frequency"})
         or UNREAD_DAY.search(words) is not None
         or bool(_unplaced(words))
-        or (not days and any(not (held and chosen) for held in _days_held(words)))
+        or _day_unread(words, days, read, bool(chosen))
     )
     day = None if day_asked or not days else next(iter(days))
     times = {time.key for n in chosen for time in named[n][1]}
