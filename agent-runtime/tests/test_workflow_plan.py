@@ -23,6 +23,12 @@ from agent_runtime.plan_settings import day_in, run_time_in
 from agent_runtime.workflow_drafter import check_plan
 from agent_runtime.workflow_plan import NEVER_GUESSED, USE_OURS, ProposedPlan
 from tests.day_leads import DAYS_LED_BY_AN_UNKNOWN_WORD
+from tests.exclusion_phrases import (
+    DAY_WORDS_KEPT,
+    FILTERS_LEFT_OUT,
+    HOLIDAYS_LEFT_OUT,
+    SUPPORT_SENTENCES,
+)
 
 CATALOGUE = Path(__file__).resolve().parents[2] / "contracts" / "n8n" / "catalogue.json"
 WORDS = (
@@ -1944,5 +1950,458 @@ def test_a_filter_s_day_the_run_day_may_fall_on_is_asked(words: str):
     ],
 )
 def test_a_day_the_run_day_never_falls_on_keeps_it(words: str, read: str):
+    assert run_time_in(words) == (read, True)
+    assert run_time_in(words, "every_day 09:00") == (read, True)
+
+
+@pytest.mark.parametrize(
+    "words",
+    [
+        "Every Friday at 9am, check langgraph except Friday's check",
+        "every weekday at 9am, check langgraph except your Friday check",
+        "Monday to Friday at 9am check langgraph, skip Wednesday's check",
+        "every day at 9am, check langgraph but no Friday's check please",
+        "run it at 10am, except Friday's check",
+        "make it weekdays, but skip Friday's check",
+    ],
+)
+def test_a_label_s_day_after_a_word_that_leaves_it_out_is_asked(words: str):
+    """Before, a label held the day, as "Friday's check", even after "except" or "skip", so the
+    run time filled and ran on the day left out."""
+    assert run_time_in(words)[0] is None
+    assert run_time_in(words, "every_day 09:00") == (None, True)
+
+
+@pytest.mark.parametrize(
+    "words",
+    [
+        "Every day at 9am, check langgraph, but we are closed on Fridays",
+        "Every day at 9am, check langgraph; the office is closed on Fridays",
+        "Every day at 9am, check langgraph, we're done on Fridays",
+        "Every day at 9am check langgraph, but only until Friday",
+    ],
+)
+def test_a_day_after_a_filter_s_word_that_filters_nothing_is_asked(words: str):
+    """Before, "closed", "done" or "until" held the day as a filter's, with no ticket or other
+    thing a filter holds before it."""
+    assert run_time_in(words) == (None, True)
+    assert run_time_in(words, "every_day 09:00") == (None, True)
+
+
+@pytest.mark.parametrize(
+    "words",
+    [
+        "every day at 9am check langgraph on non-Fridays",
+        "every day at 9am check langgraph, non-weekend only",
+        "every day at 9am check langgraph except-Fridays",
+    ],
+)
+def test_a_day_inside_a_word_that_leaves_it_out_is_asked(words: str):
+    assert run_time_in(words) == (None, True)
+    assert run_time_in(words, "every_day 09:00") == (None, True)
+
+
+EVERY_DAY_CHECK = "every day at 9am, check langgraph "
+
+
+@pytest.mark.parametrize(
+    "words",
+    [
+        *(
+            EVERY_DAY_CHECK + rest
+            for rest in (
+                "except FRI",
+                "except SAT and SUN",
+                "except sat and sun",
+                "except Thrusdays",
+                "except Firday",
+                "except wkends",
+                "except week-ends",
+                "except PH",
+                "excluding public hols",
+                "except during CNY",
+                "except on Christmas Day",
+                "on business days only",
+            )
+        ),
+        "Every Monday at 9am, check langgraph except SAT-MON",
+        "daily at 9am check langgraph except weekends and PH",
+        "daily at 9am check langgraph except weekends and Christmas",
+    ],
+)
+def test_a_word_the_reader_doesn_t_know_after_a_word_that_leaves_it_out_is_asked(words: str):
+    """Before, a day or a holiday the reader doesn't know, or one listed after the weekend left
+    out, was read as nothing, so the run day filled. Code can't know every way to write a day,
+    so any word it doesn't know after "except", "not", "skip" or "only" is asked."""
+    assert run_time_in(words) == (None, True)
+    assert run_time_in(words, "every_day 09:00") == (None, True)
+
+
+@pytest.mark.parametrize(
+    "words",
+    [
+        "every day at 9am, check langgraph, no checks on PH",
+        "every day at 9am, check langgraph, skip the check on Christmas",
+        "every day at 9am, check langgraph unless it's a PH",
+        "every weekday at 9am, check langgraph except PH and our Friday release",
+        "Every Friday at 9am, check langgraph but not in December",
+        "every day at 9am check langgraph, leave out Friday's check",
+    ],
+)
+def test_a_word_the_reader_doesn_t_know_further_into_what_is_left_out_is_asked(words: str):
+    """What a word such as "no" or "skip" leaves out runs to the end of its clause, so a day
+    past another word or "on" is asked too."""
+    assert run_time_in(words) == (None, True)
+    assert run_time_in(words, "every_day 09:00") == (None, True)
+
+
+def test_a_week_day_written_as_two_words_is_asked_in_a_change():
+    assert run_time_in("every week day at 9am, check langgraph", "every_day 09:00") == (None, True)
+
+
+@pytest.mark.parametrize(
+    ("words", "read"),
+    [
+        ("Every Monday at 9am, list open tickets in MOCK except bugs", "monday 09:00"),
+        ("every day at 9am, list tickets that are not done", "every_day 09:00"),
+        (
+            "Every Friday at 9am, list tickets in MOCK except epics and post them to #ops",
+            "friday 09:00",
+        ),
+        ("every day at 9am, find tickets in MOCK not assigned to me", "every_day 09:00"),
+        (
+            "Every weekday at 3pm, find bug tickets in MOCK with no update for 10 days and "
+            "create one follow-up ticket",
+            "weekdays 15:00",
+        ),
+        (
+            "Every Friday at 2pm, count the PAY bugs closed this week and file one ticket with "
+            "the count; I don't want a reminder each time",
+            "friday 14:00",
+        ),
+        ("Every Monday at 9am, list open bugs only", "monday 09:00"),
+        (
+            "Every Friday at 9am, list open bugs in MOCK unless they are assigned to Bob",
+            "friday 09:00",
+        ),
+        ("Every Monday at 9am, list open bugs, no need to ping me", "monday 09:00"),
+        ("Every Monday at 9am, list open bugs without asking me", "monday 09:00"),
+        (
+            "Every Monday at 9am, check langgraph releases and post to #ops, not Teams",
+            "monday 09:00",
+        ),
+    ],
+)
+def test_a_filter_left_out_beside_a_run_day_keeps_it(words: str, read: str):
+    assert run_time_in(words) == (read, True)
+    assert run_time_in(words, "every_day 09:00") == (read, True)
+
+
+def asked_both_ways(words: str) -> None:
+    assert run_time_in(words) == (None, True)
+    assert run_time_in(words, "every_day 09:00") == (None, True)
+
+
+@pytest.mark.parametrize(
+    "words",
+    [
+        "Every Friday at 9am, create a ticket due this Friday",
+        "Every weekday at 9am, list tickets due next Friday",
+        "Find tickets from last Monday and post them daily at 9am",
+        "Every Friday, list the open DESK tasks and create one ticket that lists them, due next "
+        "Friday",
+    ],
+)
+def test_a_filter_s_day_past_next_this_or_last_is_asked_as_on_main(words: str):
+    """A day is set aside only where main sets it aside. A due date or a filter past "next",
+    "this" or "last" can fill only once the rest of the words are read on an allow-list, as
+    "due next Friday, PH: skip" shows."""
+    assert run_time_in(words)[0] is None
+    assert run_time_in(words, "every_day 09:00") == (None, True)
+
+
+@pytest.mark.parametrize(
+    "words",
+    [
+        "Every day at 9am, remind me from Monday to Friday",
+        "Every weekday at 9am, remind me from Monday to Thursday",
+        "Every day at 9am, post open tickets from Monday onwards",
+        "Every day at 9am, remind me before Friday",
+        "Every day at 9am, remind me from the last Friday of the month",
+        "Every day at 9am, list tickets due next Friday; then stop",
+        "Every day at 9am, list tickets due next Friday (then stop)",
+        "Every Friday at 9am, create a ticket due this Friday. Then stop.",
+        "Find tickets from last Monday and post them daily at 9am. Then stop.",
+        "Every day at 9am, list tickets due next Friday, then quit",
+        "Every day at 9am this week, list tickets due next Friday",
+        "Every day at 9am, list tickets due next Friday, PH: skip",
+        "Every day at 9am, list tickets due next Friday, aside from PH",
+        "Every day at 9am, check langgraph releases until next Friday",
+        "Every day at 9am, remind #ops about open tickets until next Friday",
+        "Every day at 9am, post open bugs until this Friday",
+        "Every day at 9am, check langgraph till the release deadline next Friday",
+        "Every day at 9am check langgraph, ending at the deadline next Friday",
+        "Every day at 9am, check langgraph releases from next Monday",
+        "Every day at 9am check langgraph, the deadline next Friday is a day off",
+    ],
+)
+def test_a_day_main_asks_is_never_set_aside(words: str):
+    """Before, the branch set these days aside past "next" or after "me", where main asks."""
+    asked_both_ways(words)
+
+
+@pytest.mark.parametrize(
+    "words",
+    [
+        "Every day at 9am, post open bugs until Friday",
+        "Every day at 9am, list tickets due Friday, then stop",
+        "Every day at 9am, remind me of tickets due Friday and stop after that",
+        "Every day at 9am, check langgraph, tickets due Friday excluded",
+    ],
+)
+def test_until_a_stop_or_a_word_that_leaves_it_out_undoes_a_filter_s_hold(words: str):
+    """Main holds each day as a filter's and fills every day. "until" and "till" end the runs,
+    as does a stop in the day's sentence, and "excluded" leaves the day out."""
+    asked_both_ways(words)
+
+
+def test_a_due_date_without_a_stop_keeps_the_run_day_as_on_main():
+    assert run_time_in("Every day at 9am, list tickets due Friday") == ("every_day 09:00", True)
+    asked_both_ways("Every day at 9am, list tickets due Friday, then stop")
+
+
+@pytest.mark.parametrize(
+    "rest",
+    [
+        "except when I'm off",
+        "except when I'm away",
+        "unless I'm off",
+        "except when we are closed",
+        "except during releases",
+        "except during an incident",
+        "except while patching",
+        "except during my shift",
+        "not during releases",
+        "skip while I'm away",
+        "unless it's a PH",
+        "but not if it's a holiday",
+    ],
+)
+def test_a_stretch_of_time_left_out_is_asked(rest: str):
+    """ "when", "while" or "during" right after a word that leaves something out leave out a
+    stretch of time, and "unless" or "if" leave out days when a word after them looks like a
+    day or time off, as "I'm off" or "a PH"."""
+    asked_both_ways(EVERY_DAY_CHECK + rest)
+
+
+@pytest.mark.parametrize(
+    "words",
+    [
+        "Every day at 9am, post the summary unless it's empty",
+        "Every day at 9am, run the check, but not if the last run failed",
+        "Every day at 9am, check langgraph and don't ping me unless there's a release",
+        "Every day at 9am, check langgraph unless there is a release",
+        "Every Monday at 9am, check langgraph for new releases except patch releases",
+        "Every Monday at 9am, list open tickets except closed ones",
+        "Every Monday at 9am, list open tickets except incidents",
+    ],
+)
+def test_words_that_look_like_no_day_after_an_exclusion_read_as_a_filter(words: str):
+    """The team lead's choice: what is left out asks only when it looks like a day or time off.
+    A release, a status or a kind of ticket is a filter's, so the run day fills as on main."""
+    assert run_time_in(words)[0] is not None
+    assert run_time_in(words, "every_day 09:00")[0] is not None
+
+
+@pytest.mark.parametrize(
+    "rest",
+    [
+        "except payday",
+        "except Thrusdays",
+        "except weeknds",
+        "except PHs",
+        "except Xmas",
+        "except Easter",
+        "except New Year",
+        "except on leave",
+        "except OOO days",
+        "except Christmas Eve",
+        "except the festive break",
+        "except the long weekend",
+        "business days only",
+        "except the 25th",
+        "except 25th Dec",
+        "except the 1st and 15th",
+        "except the 2nd week",
+        "except the 1st of the month",
+        "with the 25th excluded",
+        "and the 25th off",
+        "but not in December",
+        "except Wedensday",
+        "except Sundy",
+        "except Satuday",
+        "except wkend",
+        "except Holdiays",
+        "except my birthday",
+        "except NYE",
+        "except OOO",
+        "except PH's",
+        "except ph",
+        "except P.H.",
+        "skip Ph",
+        "not on Ph",
+        "except Hari Raya",
+        "except Hari Raya Puasa",
+        "except Hari Raya Haji",
+        "except Deepavali",
+        "except Diwali",
+        "except Vesak",
+        "except Thaipusam",
+        "except Ramadan",
+        "except Lunar New Year",
+        "except Chinese New Year",
+        "except Good Friday",
+        "except National Day",
+    ],
+)
+def test_a_word_that_looks_like_a_day_after_an_exclusion_is_asked(rest: str):
+    """A day in any case, a word ending in "day", a near typo of a day, a holiday or leave code
+    ("PH", "CNY", "NYE", "OOO"), a holiday, time off, a month, or a day of the month where a day,
+    a month or "of" follows it or nothing does."""
+    asked_both_ways(EVERY_DAY_CHECK + rest)
+
+
+@pytest.mark.parametrize(("words", "draft", "change"), FILTERS_LEFT_OUT)
+def test_a_code_a_near_day_word_or_a_number_that_names_no_day_fills_as_on_main(
+    words: str, draft: str | None, change: str | None
+):
+    """Only "PH", "CNY", "NYE" and "OOO" are codes for days off, so "UAT", "PRs" or "VPN" are a
+    filter's. A typo is one letter from a day, or two in a long word, so "stays" or "sturdy" is
+    no day. "3rd party" or "everyday requests" name no day."""
+    assert run_time_in(words)[0] == draft
+    assert run_time_in(words, "every_day 09:00")[0] == change
+
+
+@pytest.mark.parametrize("words", DAY_WORDS_KEPT)
+def test_a_word_that_still_looks_like_a_day_beside_a_filter_is_asked(words: str):
+    asked_both_ways(words)
+
+
+@pytest.mark.parametrize("words", HOLIDAYS_LEFT_OUT)
+def test_a_holiday_left_out_in_any_way_is_asked(words: str):
+    asked_both_ways(words)
+
+
+@pytest.mark.parametrize(("words", "draft", "change"), SUPPORT_SENTENCES)
+def test_a_support_sentence_whose_left_out_words_look_like_no_day_fills_as_on_main(
+    words: str, draft: str | None, change: str | None
+):
+    assert run_time_in(words)[0] == draft
+    assert run_time_in(words, "every_day 09:00")[0] == change
+
+
+@pytest.mark.parametrize(
+    ("words", "read"),
+    [
+        ("Every day at 9am, list tickets not touched since Monday", "every_day 09:00"),
+        ("Every day at 9am, post tickets not updated from Monday to Friday", "every_day 09:00"),
+        ("Every Monday at 9am, find tickets in MOCK not closed by Friday", "monday 09:00"),
+        (
+            "Every Monday at 9am, find tickets in MOCK not updated during the weekend",
+            "monday 09:00",
+        ),
+        ("Every day at 9am, list tickets with no update for 7 days", "every_day 09:00"),
+        ("Every day at 9am, list tickets in SUP that are on hold", "every_day 09:00"),
+        ("Every Monday at 9am, check SLA breaches", "monday 09:00"),
+    ],
+)
+def test_a_negated_filter_a_filter_s_count_or_a_project_key_keeps_the_run_day(
+    words: str, read: str
+):
+    """A negation right before a filter's own word is the filter's, as "not touched since
+    Monday", a count a filter holds names no day, and "SUP" in "in SUP" is a project key."""
+    assert run_time_in(words) == (read, True)
+    assert run_time_in(words, "every_day 09:00") == (read, True)
+
+
+@pytest.mark.parametrize(
+    "rest", ["except for 2 days", "except for 1 week", "skip 2 days after a release"]
+)
+def test_a_count_of_days_left_out_is_asked(rest: str):
+    asked_both_ways(EVERY_DAY_CHECK + rest)
+
+
+@pytest.mark.parametrize(
+    "rest",
+    [
+        "except: PH",
+        "except (PH)",
+        "except... PH",
+        "except; PH",
+        "except, as always, Friday's check",
+        "except, well, the Friday check",
+    ],
+)
+def test_a_mark_right_after_a_word_that_leaves_something_out_never_ends_what_it_covers(
+    rest: str,
+):
+    asked_both_ways(EVERY_DAY_CHECK + rest)
+
+
+@pytest.mark.parametrize(
+    "rest", ["on business days", "on workdays", "on working days", "just on business days"]
+)
+def test_days_the_reader_doesn_t_know_after_on_are_asked(rest: str):
+    asked_both_ways(EVERY_DAY_CHECK + rest)
+
+
+@pytest.mark.parametrize(
+    "rest",
+    [
+        "don't run on PH",
+        "won't run on PH",
+        "pause on PH",
+        "drop PH",
+        "minus PH",
+        "leave out PH",
+        "omit PH",
+        "avoid PH",
+        "ignore PH",
+        "stop on PH",
+        "hold off on PH",
+        "with the exception of PH",
+        "excl. PH",
+        "w/o PH",
+        "PH excluded",
+        "PH off",
+        "PH skip",
+        "PH no need",
+        "PH don't run",
+    ],
+)
+def test_other_words_that_leave_something_out_before_or_after_it_are_asked(rest: str):
+    asked_both_ways(EVERY_DAY_CHECK + rest)
+
+
+@pytest.mark.parametrize(
+    ("words", "read"),
+    [
+        (
+            "Every Monday at 9am, find tickets in MOCK not updated during the weekend",
+            "monday 09:00",
+        ),
+        ("Every Monday at 9am, find tickets in MOCK not updated in 10 days", "monday 09:00"),
+        ("Every Monday at 9am, list bugs older than 30 days, not done", "monday 09:00"),
+        ("Every day at 9am, list tickets created on Monday", "every_day 09:00"),
+        ("Every Monday at 9am, post the summary on Teams", "monday 09:00"),
+        ("Every Monday at 9am, list open bugs and pause the React check", "monday 09:00"),
+        ("Every Monday at 9am, list open bugs, don't ask me", "monday 09:00"),
+        ("Every Monday at 9am, list open bugs and turn the alerts off", "monday 09:00"),
+    ],
+)
+def test_known_words_beside_these_exclusion_rules_keep_the_run_day(words: str, read: str):
+    """A day the run never falls on after "during", a count a filter holds, a day after "on",
+    a thing a verb such as "pause" acts on, a negated verb that is not "run", and "off" after
+    known words all keep the run day."""
     assert run_time_in(words) == (read, True)
     assert run_time_in(words, "every_day 09:00") == (read, True)
