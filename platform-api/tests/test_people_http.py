@@ -193,7 +193,6 @@ async def test_an_operator_adds_people_and_the_list_grows(client: httpx.AsyncCli
         "roles": ["operator"],
         "on_list": True,
         "n8n_access": False,
-        "n8n_login": None,
         "time_zone": "Asia/Singapore",
     }
     users = (await client.get("/api/v1/dev/users")).json()["users"]

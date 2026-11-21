@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { useMe } from '../../api/queries'
+import { useN8nLogin } from '../../api/settingsQueries'
 import { opensInN8nAs } from './n8nHold'
 import styles from './N8nLoginHint.module.css'
 
@@ -9,7 +9,7 @@ import styles from './N8nLoginHint.module.css'
  * platform does not know the login.
  */
 export function WithN8nLogin({ children }: { children: ReactNode }) {
-  const login = useMe().data?.n8n_login
+  const login = useN8nLogin()
   return (
     <div className={styles['wrap']}>
       {children}

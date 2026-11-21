@@ -7995,18 +7995,6 @@
             "title": "N8N Access",
             "type": "boolean"
           },
-          "n8n_login": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "The email this person signs in to n8n with, as n8n holds it. Null without n8n access, before the platform has made their n8n account, or when n8n can't say. Open in n8n moves a workflow into this account's space, so only it sees the workflow.",
-            "title": "N8N Login"
-          },
           "on_list": {
             "description": "False when the sign-in is good but no Operator has added this person yet.",
             "title": "On List",
@@ -8387,6 +8375,18 @@
             "description": "n8n's editor, while you can open it.",
             "title": "Editor Url"
           },
+          "login": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The email you sign in to n8n with, as n8n holds it now. Open in n8n moves a workflow into this account's space, so only it sees the workflow. Null without n8n access, before your n8n account is made, or when n8n can't say.",
+            "title": "Login"
+          },
           "set_password_url": {
             "anyOf": [
               {
@@ -8418,7 +8418,8 @@
           "set_password_url",
           "can_open",
           "why_not",
-          "editor_url"
+          "editor_url",
+          "login"
         ],
         "title": "MyN8nOut",
         "type": "object"

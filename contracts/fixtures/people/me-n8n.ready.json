@@ -4,5 +4,6 @@
   "set_password_url": null,
   "can_open": true,
   "why_not": null,
-  "editor_url": "https://n8n.example"
+  "editor_url": "https://n8n.example",
+  "login": "carol@example.test"
 }

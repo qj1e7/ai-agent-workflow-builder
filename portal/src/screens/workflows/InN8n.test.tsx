@@ -29,13 +29,16 @@ interface Setup {
   readonly view?: UseCaseN8nView | null | Error
   readonly useCase?: UseCaseView
   readonly path?: string
+  /** What `/me/n8n` says the n8n login is. Left out, the read has not come back. */
+  readonly login?: string | null
 }
 
-function render({ me = ALICE, view = FREE, useCase = ON, path = `/workflows/${ON.use_case_id}?view=n8n` }: Setup = {}): string {
+function render({ me = ALICE, view = FREE, useCase = ON, path = `/workflows/${ON.use_case_id}?view=n8n`, login }: Setup = {}): string {
   const session = createDevSession(null)
   const scope = session.cacheScope()
   const queryClient = new QueryClient({ defaultOptions: { queries: { retryOnMount: false } } })
   queryClient.setQueryData(['me', scope], me)
+  if (login !== undefined) queryClient.setQueryData(['n8n-login', scope], login)
   queryClient.setQueryData(['dev-users'], [ALICE, BOB, CAROL])
   queryClient.setQueryData(['people', scope], TEAM)
   queryClient.setQueryData(['runs', scope], [])
@@ -192,7 +195,6 @@ describe('Take it back on a refused change', () => {
 describe('the n8n login under Open in n8n editor', () => {
   const LOGIN = 'dana.n8ntest@example.test'
   const SENTENCE = `Opens in n8n as ${LOGIN}.`
-  const withLogin: Me = { ...ALICE, n8n_login: LOGIN }
   const hint = (html: string) => [...main(html).matchAll(/<p class="[^"]*_hint_[^"]*"[^>]*data-n8n-hint[^>]*>([\s\S]*?)<\/p>/g)].map((m) => text(m[1] ?? ''))
   const summary = `/workflows/${ON.use_case_id}`
 
@@ -201,19 +203,18 @@ describe('the n8n login under Open in n8n editor', () => {
   })
 
   it('shows the exact sentence under the press button on the In n8n tab and on Summary', () => {
-    expect(hint(render({ me: withLogin }))).toEqual([SENTENCE])
-    expect(hint(render({ me: withLogin, path: summary }))).toEqual([SENTENCE])
+    expect(hint(render({ login: LOGIN }))).toEqual([SENTENCE])
+    expect(hint(render({ login: LOGIN, path: summary }))).toEqual([SENTENCE])
   })
 
   it('shows it under the plain link too, when the person already holds the workflow', () => {
-    const html = render({ me: { ...CAROL, n8n_login: LOGIN }, view: HELD })
+    const html = render({ me: CAROL, view: HELD, login: LOGIN })
     expect(buttons(html)).toEqual(['Take it back', OPEN])
     expect(hint(html)).toEqual([SENTENCE])
   })
 
-  it('draws no line, and no half sentence, while the login is unknown', () => {
-    for (const me of [ALICE, { ...ALICE, n8n_login: null }, { ...ALICE, n8n_login: '' }]) {
-      const html = render({ me })
+  it('draws no line, and no half sentence, while the login is unknown, still loading or failed to load', () => {
+    for (const html of [render(), render({ login: null }), render({ login: '' })]) {
       expect(buttons(html)).toEqual([OPEN])
       expect(hint(html)).toEqual([])
       expect(text(main(html))).not.toMatch(/Opens in n8n as|as null/)
@@ -221,14 +222,14 @@ describe('the n8n login under Open in n8n editor', () => {
   })
 
   it('draws no line where there is no button', () => {
-    const html = render({ me: withLogin, useCase: { ...ON, state: 'draft' } })
+    const html = render({ login: LOGIN, useCase: { ...ON, state: 'draft' } })
     expect(buttons(html)).toEqual([])
     expect(hint(html)).toEqual([])
   })
 
   it('wraps a long email inside its box, in the quiet small text', () => {
     const long = `${'a-very-long-name-with-no-break.'.repeat(6)}n8ntest@example.test`
-    const html = render({ me: { ...ALICE, n8n_login: long } })
+    const html = render({ login: long })
     expect(hint(html)).toEqual([`Opens in n8n as ${long}.`])
     const css = readFileSync(new URL('./N8nLoginHint.module.css', import.meta.url), 'utf8')
     expect(css).toMatch(/\.hint\s*{[^}]*overflow-wrap:\s*anywhere/)

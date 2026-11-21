@@ -208,7 +208,7 @@ async def test_only_an_operator_who_is_no_approver_may_hold_n8n_access(s: Staffe
 
 
 async def _login(s: Staffed, person: str = "carol") -> object:
-    return (await s.call(person, "GET", "/api/v1/me")).json().get("n8n_login")
+    return (await s.call(person, "GET", "/api/v1/me/n8n")).json()["login"]
 
 
 async def test_the_n8n_login_is_none_without_n8n_access(s: Staffed):
