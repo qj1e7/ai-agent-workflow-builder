@@ -518,10 +518,37 @@ FILTERS_LEFT_OUT: list[tuple[str, str | None, str | None]] = [
         "every_day 09:00",
         "every_day 09:00",
     ),
+    ("Every day at 9am, check langgraph except 3.12", "every_day 09:00", "every_day 09:00"),
+    ("Every day at 9am, check langgraph except v2/1", "every_day 09:00", "every_day 09:00"),
+    (
+        "Every day at 9am, check langgraph except version 1/2",
+        "every_day 09:00",
+        "every_day 09:00",
+    ),
+    ("Every day at 9am, list tickets except 24/7 ones", "every_day 09:00", "every_day 09:00"),
+    (
+        "Every day at 9am, list tickets except ex-staff ones",
+        "every_day 09:00",
+        "every_day 09:00",
+    ),
+    ("Every day at 9am, list tickets except ex employees", "every_day 09:00", "every_day 09:00"),
+    (
+        "Every day at 9am, list open bugs except the end-user ones",
+        "every_day 09:00",
+        "every_day 09:00",
+    ),
+    (
+        "Every day at 9am, list tickets except the ones we/they closed",
+        "every_day 09:00",
+        "every_day 09:00",
+    ),
+    ("Every day at 9am, list tickets except Fr", "every_day 09:00", "every_day 09:00"),
 ]
 """Sentences main fills whose words after an exclusion or "on" are a code, a word one letter
 from a day, or a number such as "3rd" that names no day, as "UAT", "stays", "sturdy" or "3rd
-party". Each fills as on main."""
+party". So are a version such as "3.12" or "v2/1", "24/7", "ex" before a word that looks like no
+day, and a two-letter word such as "we" or "Fr" that no "/" or "-" joins to a day. Each fills as
+on main."""
 DAY_WORDS_KEPT: list[str] = [
     "Every day at 9am, list tickets except Friday's release notes",
     "Every day at 9am, list tickets created except Friday's release notes",
@@ -597,3 +624,107 @@ HOLIDAYS_LEFT_OUT: list[str] = [
 ]
 """A holiday left out in many ways, as "PH: skip", "aside from PH" or "Xmas excepted". Each is
 asked."""
+DATES_MONTH_ENDS_AND_FREEZES: list[str] = [
+    "except 25 Dec",
+    "except Dec 25",
+    "except 25 December",
+    "except 25th of Dec",
+    "except 25/12",
+    "except on 1/1",
+    "skip 31/12/2026",
+    "not on 1 May",
+    "except month end",
+    "except month-end",
+    "except at month end",
+    "except end of the month",
+    "except the end of month",
+    "except EOM",
+    "month end excluded",
+    "except the code freeze",
+    "except during code freeze",
+    "skip the change freeze",
+    "except the freeze",
+    "except the blackout period",
+    "skip the blackout window",
+    "except blackout dates",
+]
+"""A date, month end or a freeze left out, as "25 Dec", "25/12", "EOM" or "the code freeze",
+which main read as nothing. Each is asked."""
+SHORT_FORMS_LEFT_OUT: list[str] = [
+    "exc. PH",
+    "exc PH",
+    "ex PH",
+    "ex ph",
+    "exc. Hari Raya",
+    "ex Fridays",
+    "except Sa/Su",
+    "except Sa-Su",
+    "except Mo-Fr",
+    "skip Sat/Su",
+    "not on Th/Fr",
+    "except w/e",
+    "except Frid",
+    "except Wednes",
+]
+"""Short forms main read as nothing: "exc.", "exc" or "ex" before a word that looks like a day,
+two-letter days joined by "/" or "-", "w/e", and the start of a day's name, as "Frid". Each is
+asked."""
+CHANGES_LEFT_OUT: list[str] = [
+    "check langgraph except PH",
+    "except when I am on leave",
+    "except when I'm on leave",
+    "except when I'm away",
+    "skip PH",
+    "skip Hari Raya",
+    "not on Hari Raya Puasa",
+    "except Deepavali",
+    "check langgraph, skip Xmas",
+    "also skip CNY",
+    "but skip National Day",
+    "except Christmas Eve",
+    "list open bugs, skip OOO days",
+    "PH excluded",
+    "no runs on PH",
+    "don't run on PH",
+    "post the summary on business days",
+    "except 25 Dec",
+    "except 25/12",
+    "list open bugs except month end",
+    "skip month-end",
+    "except EOM",
+    "skip the code freeze",
+    "not during the freeze",
+    "except the blackout window",
+    "except Sa/Su",
+    "except Mo-Fr",
+    "not on w/e",
+    "except Frid",
+    "exc. PH",
+    "ex PH",
+]
+"""Changes with no schedule words of their own that leave out a day, a holiday, time off, a
+stretch of time, a date, month end or a freeze. Main kept the run time from before beside each,
+so the workflow still ran on the days left out. Each is asked."""
+CHANGES_KEPT: list[str] = [
+    "also include langchain",
+    "skip prereleases",
+    "post to #releases instead",
+    "except 3rd party ones",
+    "rename it to Weekly check",
+    "only critical bugs",
+    "exclude langchain-core",
+    "ignore patch releases",
+    "don't include release candidates",
+    "not the beta ones",
+    "drop the Jira step",
+    "without the summary",
+    "except closed ones",
+    "not assigned to me",
+    "exclude tickets in OPS",
+    "list open bugs except UI ones",
+    "check langgraph except v2/1",
+    "except 24/7 services",
+    "skip ex employees",
+]
+"""Changes with no schedule words that change only the task or a filter. What they leave out
+looks like no day, so each keeps the run time from before."""

@@ -24,9 +24,13 @@ from agent_runtime.workflow_drafter import check_plan
 from agent_runtime.workflow_plan import NEVER_GUESSED, USE_OURS, ProposedPlan
 from tests.day_leads import DAYS_LED_BY_AN_UNKNOWN_WORD
 from tests.exclusion_phrases import (
+    CHANGES_KEPT,
+    CHANGES_LEFT_OUT,
+    DATES_MONTH_ENDS_AND_FREEZES,
     DAY_WORDS_KEPT,
     FILTERS_LEFT_OUT,
     HOLIDAYS_LEFT_OUT,
+    SHORT_FORMS_LEFT_OUT,
     SUPPORT_SENTENCES,
 )
 
@@ -2405,3 +2409,37 @@ def test_known_words_beside_these_exclusion_rules_keep_the_run_day(words: str, r
     known words all keep the run day."""
     assert run_time_in(words) == (read, True)
     assert run_time_in(words, "every_day 09:00") == (read, True)
+
+
+@pytest.mark.parametrize("rest", DATES_MONTH_ENDS_AND_FREEZES)
+def test_a_date_month_end_or_freeze_left_out_is_asked(rest: str):
+    asked_both_ways(EVERY_DAY_CHECK + rest)
+
+
+@pytest.mark.parametrize("rest", SHORT_FORMS_LEFT_OUT)
+def test_a_short_exclusion_or_a_short_day_left_out_is_asked(rest: str):
+    asked_both_ways(EVERY_DAY_CHECK + rest)
+
+
+@pytest.mark.parametrize("words", CHANGES_LEFT_OUT)
+def test_a_change_with_no_schedule_words_that_leaves_out_a_day_never_keeps_the_run_time(
+    catalogue: Catalogue, words: str
+):
+    """Before, only words with a schedule of their own were read for a day left out, so a change
+    such as "check langgraph except PH" kept every day at 09:00 and still ran on PH. A first
+    draft with the same words still asks how often it runs."""
+    assert run_time_in(words, "every_day 09:00") == (None, True)
+    assert day_in(words, "every_day 09:00") is None
+    current = edited(EVERY_DAY_SET)
+    assert marks(catalogue, RELEASE_SETTINGS, words, current)["run_time"] == (None, "needed")
+    assert marks(catalogue, RELEASE_SETTINGS, words)["run_time"] == (None, "needed")
+
+
+@pytest.mark.parametrize("words", CHANGES_KEPT)
+def test_a_change_to_the_task_or_a_filter_keeps_the_run_time(catalogue: Catalogue, words: str):
+    assert run_time_in(words, "every_day 09:00") == ("every_day 09:00", False)
+    current = edited(EVERY_DAY_SET)
+    assert marks(catalogue, RELEASE_SETTINGS, words, current)["run_time"] == (
+        "every_day 09:00",
+        "filled",
+    )
