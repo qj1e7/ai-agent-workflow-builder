@@ -3107,22 +3107,33 @@ DAY_WORDS: Final = (
 )
 """Days and the reader's short days, read in any case, as "FRI" or "sat and sun"."""
 TIME_OFF: Final = words(
-    "holiday holidays hol hols vacation vacations ooo xmas christmas easter eve festive january "
-    "february march april june july august september october november december"
+    "holiday holidays hol hols vacation vacations ooo xmas christmas easter eve festive deepavali "
+    "diwali vesak thaipusam ramadan january february march april june july august september "
+    "october november december"
 )
-"""Holidays, time off and months, which may fall on any day, as "Xmas", "OOO" or "December"."""
+"""Holidays, time off and months, which may fall on any day, as "Xmas", "Deepavali" or
+"December". "Hari Raya" and "New Year" are read as pairs."""
+TIME_OFF_PAIRS: Final = frozenset({("hari", "raya"), ("new", "year")})
 TIME_OFF_NOUNS: Final = words("leave off break")
 """Time off that is also a verb or a word of a verb, as "leave", read as time off only as a
-noun, as "on leave", "I'm off" or "the break", never "leave out" or "turn off the alerts"."""
-NOT_DAYS: Final = words("today tonight tomorrow yesterday")
-SHORTENED: Final = DAY_WORDS - SHORT_FORMS
-"""The words a shortened spelling may be of, as "wkends" or "weds"."""
-TYPO_OF: Final = SHORTENED | words("holiday holidays")
-"""The words a near typo may be of, as "Firday", "Thrusdays" or "Holdiays"."""
-CODE: Final = re.compile(r"[A-Z]{2,3}s?")
-"""A short code in capitals, as "PH" or "CNY", which may name a holiday."""
+noun, as "on leave", "I'm off" or "the break", never "leave out", "turn off the alerts", "if it
+is off" or "break-fix"."""
+NOT_DAYS: Final = words("today tonight tomorrow yesterday everyday midday")
+"""Words ending in "day" that never name a day left out, as "everyday requests"."""
+TYPO_OF: Final = (DAY_WORDS - SHORT_FORMS) | words("holiday holidays")
+"""The words a typo may be of, as "Firday", "Thrusdays", "weeknds" or "Holdiays"."""
+HOLIDAY_CODE: Final = re.compile(r"(?:PH|CNY|NYE|OOO)(?:['’]?s)?")
+"""The codes in capitals for days off, as "PH", "PHs" or "CNY". Any other code, as "UAT" or
+"PRs", is a filter's. "ph" or "P.H." is the code only right after a word that leaves it out."""
 ORDINAL: Final = re.compile(r"\d{1,2}(?:st|nd|rd|th)")
 """A day of the month, as "the 25th"."""
+DATED: Final = DAY_WORDS | words(
+    "of week january february march april may june july august september october november "
+    "december jan feb mar apr jun jul aug sep sept oct nov dec"
+)
+"""Words after a day of the month that make it a date, as "Dec" in "25th Dec" or "of" in "the
+1st of the month", not "party" in "3rd party ones". A word that leaves it out does too, as
+"excluded" in "the 25th excluded"."""
 PLACES: Final = words("in into project projects")
 """Words before a project key, as "in SUP"."""
 KEYED: Final = TICKETS | words("item items board boards project projects backlog queue")
@@ -3288,58 +3299,69 @@ def _leaves_out(lows: list[str], marks: list[Mark], n: int) -> bool:
 
 @lru_cache(maxsize=4096)
 def _a_typo_of_a_day(low: str) -> bool:
-    """Whether a word the reader doesn't know is a near typo of a day, the weekend or a holiday:
-    one letter off or two swapped, as "Firday" or "Thrusdays", or a day with letters left out,
-    as "wkends" or "weds", starting with the same letter."""
-    if len(low) < 4 or low in NOT_A_DAY or low in DAYISH:
+    """Whether a word the reader doesn't know is a typo of a day, the weekend or a holiday,
+    starting with the same letter: one edit in a word of 5 to 7 letters, as "Firday" or
+    "weeknds", or two in a longer one, as "Thrusdays". "wk" is read as "week", as in "wkends"."""
+    if low in NOT_A_DAY or low in DAYISH:
         return False
-    for target in TYPO_OF:
-        if target[0] != low[0] or low == target:
-            continue
-        if len(low) >= 5 and abs(len(target) - len(low)) <= 1 and _one_edit(low, target):
-            return True
-        if target in SHORTENED and len(target) - len(low) <= 5 and _letters_left_out(low, target):
-            return True
-    return False
+    if low.startswith("wk"):
+        low = "week" + low[2:]
+    if len(low) < 5:
+        return False
+    most = 1 if len(low) < 8 else 2
+    return any(
+        target[0] == low[0] and abs(len(target) - len(low)) <= most and _edits(low, target) <= most
+        for target in TYPO_OF
+    )
 
 
-def _one_edit(a: str, b: str) -> bool:
-    """Whether one letter added, left out, changed, or two side by side swapped, makes `a` into
-    `b`."""
-    if len(a) == len(b):
-        diff = [n for n in range(len(a)) if a[n] != b[n]]
-        swapped = len(diff) == 2 and diff[1] == diff[0] + 1 and a[diff[0]] == b[diff[1]]
-        return len(diff) == 1 or (swapped and a[diff[1]] == b[diff[0]])
-    short, long = sorted((a, b), key=len)
-    return any(long[:n] + long[n + 1 :] == short for n in range(len(long)))
-
-
-def _letters_left_out(short: str, long: str) -> bool:
-    """Whether `short` is `long` with letters left out, as "wkends" from "weekends"."""
-    letters = iter(long)
-    return all(letter in letters for letter in short)
+def _edits(a: str, b: str) -> int:
+    """The fewest letters added, left out or changed, or pairs side by side swapped, that make
+    `a` into `b`, as 1 from "Firday" to "friday"."""
+    two_up: list[int] = []
+    up = list(range(len(b) + 1))
+    for i in range(1, len(a) + 1):
+        row = [i]
+        for j in range(1, len(b) + 1):
+            cost = min(up[j] + 1, row[j - 1] + 1, up[j - 1] + (a[i - 1] != b[j - 1]))
+            if i > 1 and j > 1 and a[i - 1] == b[j - 2] and a[i - 2] == b[j - 1]:
+                cost = min(cost, two_up[j - 2] + 1)
+            row.append(cost)
+        two_up, up = up, row
+    return up[-1]
 
 
 def _day_like(
-    pieces: list[tuple[str, int, int]], lows: list[str], marks: list[Mark], n: int
+    text: str,
+    pieces: list[tuple[str, int, int]],
+    lows: list[str],
+    marks: list[Mark],
+    n: int,
+    fresh: bool,
 ) -> bool:
     """Whether word `n` looks like a day or time off: a day or a short day in any case, as "FRI"
-    or "sat", a word ending in "day" or "days", as "payday" or "workdays", a near typo of a day,
-    as "Firday", a short code in capitals, as "PH" or "CNY", or a holiday or time off, as "Xmas",
-    "New Year" or "on leave". A short code where a project key stands, as "in SUP" or "the SAT
-    tickets", is the key."""
+    or "sat", a word ending in "day" or "days", as "payday" or "workdays", a typo of a day, as
+    "Firday", a code for days off, as "PH" or "CNY", or "ph" right after a word that leaves it
+    out (`fresh`), a holiday or time off, as "Xmas", "Hari Raya" or "on leave", or a day of the
+    month, as "the 25th" or "25th Dec". A word in capitals where a project key stands, as "in
+    SAT" or "the SAT tickets", is the key."""
     raw, low = pieces[n][0], lows[n]
     before = lows[n - 1] if n else ""
     after = lows[n + 1] if n + 1 < len(lows) and not marks[n + 1] else ""
-    if CODE.fullmatch(raw):
-        known = (NOT_A_DAY | TICKET_DATES) - DAY_WORDS
-        return before not in PLACES and after not in KEYED and low not in known
-    if low.replace("-", "") in DAY_WORDS or low in TIME_OFF or ORDINAL.fullmatch(low):
+    gap = text[pieces[n][2] : pieces[n + 1][1]] if n + 1 < len(pieces) else ""
+    if PROJECT_KEY.fullmatch(raw) and (before in PLACES or after in KEYED):
+        return False
+    if HOLIDAY_CODE.fullmatch(raw):
         return True
-    if low == "year" and before == "new":
+    if fresh and (low == "ph" or (low == "p" and gap == "." and lows[n + 1] == "h")):
         return True
+    if low.replace("-", "") in DAY_WORDS or low in TIME_OFF or (before, low) in TIME_OFF_PAIRS:
+        return True
+    if ORDINAL.fullmatch(low):
+        return not after or after in DATED or after in LEAVING_OUT or after in LEAVES_BEFORE
     if low in TIME_OFF_NOUNS:
-        return before in LINKS or before in OBJECTS or before in ("i'm", "we're") or not after
+        noun = before in LINKS or before in OBJECTS or before in ("i'm", "we're")
+        return gap != "-" and (noun or (not after and low != "off"))
     if low.endswith(("day", "days")) and low not in NOT_DAYS:
         return True
     return _a_typo_of_a_day(low)
@@ -3380,7 +3402,7 @@ def _covered(
     for m in (*POLITE_PHRASE.finditer(text), *A_YES.finditer(text)):
         asks_nothing[m.start() : m.end()] = b"\1" * (m.end() - m.start())
     found: list[_Covered] = []
-    labelled = False
+    labelled = fresh = False
     for n, (raw, start, end) in enumerate(pieces):
         low = lows[n]
         bare = re.sub(r"['’]s$", "", raw)
@@ -3409,12 +3431,13 @@ def _covered(
             or (low, after[n]) in LEAVE_OUT_PAIRS
         ):
             kind = "known"
-        elif _day_like(pieces, lows, marks, n):
+        elif _day_like(text, pieces, lows, marks, n, fresh):
             kind = "day"
         else:
             kind = "known"
         found.append(_Covered(kind, marks[n], low, day, bool(schedule[start])))
         labelled = day and (bare != raw or (n > 0 and lows[n - 1] in LABELS))
+        fresh = kind == "leaves" or (fresh and kind == "link")
     return found
 
 
