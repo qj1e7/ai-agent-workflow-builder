@@ -804,14 +804,13 @@ TIME_OFF_STRETCHES: list[str] = [
     "except when I'm out",
     "not while we are out",
     "except when they're out",
-    "except when Priya is out",
     "not during the freeze",
     "except during the freeze",
     "skip runs while the freeze is on",
 ]
 """Time off after "when", "while" or "during", as "I'm away", "on leave", "Hari Raya", "the
-code freeze" or "the freeze", and "out" after a person and "am", "are" or "is", as "I'm out" or
-"Priya is out". Each is asked."""
+code freeze" or "the freeze", and "out" after "I'm", "we are" or the like, as "I'm out". Each
+is asked."""
 CONDITIONS_KEPT: list[str] = [
     "post only when there is a new release",
     "notify me only when there is a new version",
@@ -828,7 +827,11 @@ CONDITIONS_KEPT: list[str] = [
     "not during releases",
     "only when a new version is out",
     "only when the ticket is out of date",
+    "only when LangGraph is out",
+    "only when Python is out",
+    "except when Priya is out",
 ]
 """A condition after "when", "while" or "during", with no word that looks like a day or time
-off, as "only when there is a new release". #342 asked each beside a schedule. Each fills as
-before #342, and a change keeps the run time from before."""
+off, as "only when there is a new release". A name before "is out" is no time off, as
+"only when LangGraph is out" or "except when Priya is out". #342 asked each beside a schedule.
+Each fills as before #342, and a change keeps the run time from before."""
