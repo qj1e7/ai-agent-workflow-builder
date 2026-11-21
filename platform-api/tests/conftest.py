@@ -1,6 +1,8 @@
+import asyncio
 import os
 import shutil
 import subprocess
+import sys
 import time
 from collections import Counter
 from collections.abc import AsyncIterator, Iterator
@@ -41,7 +43,9 @@ class PostgresUrls:
 
 
 @pytest.fixture(scope="session")
-def anyio_backend() -> str:
+def anyio_backend() -> str | tuple[str, dict[str, object]]:
+    if sys.platform == "win32":
+        return ("asyncio", {"loop_factory": asyncio.SelectorEventLoop})
     return "asyncio"
 
 

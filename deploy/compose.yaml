@@ -177,7 +177,11 @@ services:
     # BusyBox wget ignores NO_PROXY and asks a proxy even for localhost, so the check never uses one.
     # That keeps it working wherever n8n is given a proxy, as in compose.lockdown.yaml.
     healthcheck:
-      test: ["CMD-SHELL", "wget -Y off -qO- http://localhost:5678/healthz/readiness || exit 1"]
+      test:
+        [
+          "CMD-SHELL",
+          "wget -Y off -qO- http://localhost:5678/healthz/readiness || exit 1",
+        ]
       interval: 3s
       timeout: 3s
       retries: 40
@@ -230,7 +234,13 @@ services:
       LANGFUSE_TRACING_ENVIRONMENT: local
       LANGFUSE_RELEASE: ${WAB_IMAGE_TAG:-dev}
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8100/healthz', timeout=2)"]
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8100/healthz', timeout=2)",
+        ]
       interval: 3s
       timeout: 3s
       retries: 20
@@ -346,7 +356,13 @@ services:
     ports:
       - "${PLATFORM_API_HOST_PORT:-8000}:8000"
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz', timeout=2)"]
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz', timeout=2)",
+        ]
       interval: 3s
       timeout: 3s
       retries: 20
