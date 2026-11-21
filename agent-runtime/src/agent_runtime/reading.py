@@ -3199,7 +3199,7 @@ class _Covered:
     before: "," for a comma or "&", "." for any other mark that ends a clause, or "". `low` is
     the word as code reads it, `day` whether `DAY_NAMED` reads it, `own` whether it stands in
     the schedule's own phrase, and `off` whether it is time off in a stretch after "when",
-    "while" or "during", as "away", "out of office", "out" in "I'm out" or "Priya is out", or
+    "while" or "during", as "away", "out of office", "out" in "I'm out" or "we are out", or
     "freeze" in "the freeze"."""
 
     kind: CoverKind
@@ -3309,26 +3309,15 @@ def _time_off_after(words: list[_Covered]) -> list[bool]:
     return after
 
 
-def _out(pieces: list[tuple[str, int, int]], lows: list[str], marks: list[Mark], n: int) -> bool:
-    """Whether "out" at `n` is time off: "out of office", or "out" after a person and "am",
-    "are" or "is", as "I'm out", "we are out" or "when Priya is out", never "a new version is
-    out" or "the Release is out". A name counts only right after "when", "while", "during",
-    "and" or "or"."""
+def _out(lows: list[str], marks: list[Mark], n: int) -> bool:
+    """Whether "out" at `n` is time off: "out of office", or "out" after "I'm", "I am", "we're",
+    "we are", "they're" or "they are", never "a new version is out" or "LangGraph is out"."""
     if lows[n + 1 : n + 3] == ["of", "office"] and not any(marks[n + 1 : n + 3]):
         return True
     if n == 0 or marks[n]:
         return False
     two = (lows[n - 2], lows[n - 1]) if n > 1 and not marks[n - 1] else None
-    if (lows[n - 1],) in OUT_AFTER or two in OUT_AFTER:
-        return True
-    name = pieces[n - 2][0] if two is not None and n > 2 and not marks[n - 2] else ""
-    return (
-        lows[n - 1] == "is"
-        and NAME.fullmatch(name) is not None
-        and name.casefold() not in KNOWN_WORDS
-        and name.casefold() not in SYSTEMS
-        and (lows[n - 3] in WHILE or lows[n - 3] in LIST_JOINS)
-    )
+    return (lows[n - 1],) in OUT_AFTER or two in OUT_AFTER
 
 
 def _trails(words: list[_Covered], n: int) -> bool:
@@ -3562,7 +3551,7 @@ def _covered(
             kind = "known"
         off = (
             low in AWAY
-            or (low == "out" and _out(pieces, lows, marks, n))
+            or (low == "out" and _out(lows, marks, n))
             or (
                 low == "freeze"
                 and n > 0
