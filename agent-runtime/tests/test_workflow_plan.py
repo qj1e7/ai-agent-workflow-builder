@@ -1827,3 +1827,82 @@ def test_a_channel_beside_a_known_task_word_keeps_the_day(words: str):
     a word the reader knows keeps the day."""
     assert run_time_in(words) == MONDAY_AT_9
     assert day_in(words) == "monday"
+
+
+@pytest.mark.parametrize(
+    "words",
+    [
+        "Check langgraph except every Monday",
+        "check langgraph except Mondays",
+        "check langgraph except on Mondays",
+        "check it except every Monday",
+        "check redis except every Monday",
+        "check the repo except every Monday",
+        "post it except every Monday",
+        "check releases except every Monday",
+        "check langgraph excluding Fridays",
+        "check langgraph skipping Fridays",
+        "check langgraph except weekends",
+        "check langgraph not on Fridays",
+    ],
+)
+def test_a_day_left_out_right_after_the_task_s_words_is_asked_in_a_change(
+    catalogue: Catalogue, words: str
+):
+    """Before, with no comma after the task's words, no reader counted the day left out, so a
+    change kept the run time from before and dropped the day without a word."""
+    assert run_time_in(words, "every_day 09:00") == (None, True)
+    assert day_in(words, "every_day 09:00") is None
+    current = edited(EVERY_DAY_SET)
+    assert marks(catalogue, RELEASE_SETTINGS, words, current)["run_time"] == (None, "needed")
+
+
+@pytest.mark.parametrize(
+    "words",
+    [
+        "check langgraph, except every Monday",
+        "check langgraph but not on Mondays",
+        "check langgraph unless it is Friday",
+        "check langgraph except the first Monday",
+        "check langgraph except every Monday at 10am",
+        "check langgraph every day except every Monday",
+        "except every Monday",
+        "skip every Monday",
+    ],
+)
+def test_a_day_left_out_after_a_mark_or_beside_the_schedule_is_still_asked(words: str):
+    assert run_time_in(words, "every_day 09:00") == (None, True)
+
+
+@pytest.mark.parametrize(
+    "words",
+    [
+        "check langgraph without Fridays",
+        "check langgraph never on Fridays",
+        "check langgraph not Fridays",
+        "check langgraph except Fri",
+        "check langgraph except public holidays",
+        "run it at 10am, check langgraph except Mondays",
+        "run it at 10am, check langgraph Friday",
+        "post the weekend summary",
+        "list holiday tickets",
+    ],
+)
+def test_a_day_when_the_words_give_no_run_day_is_asked_in_a_change(words: str):
+    """Before, each kept the day from before in a change, as every_day at 09:00 or at 10:00,
+    and dropped the day the words name."""
+    assert run_time_in(words, "every_day 09:00") == (None, True)
+    assert day_in(words, "every_day 09:00") is None
+
+
+@pytest.mark.parametrize(
+    "words",
+    [
+        "run it at 10am, summarise Monday's tickets",
+        "run it at 10am, list tickets created on Friday",
+        "run it at 10am, check the Friday report",
+        "make it 10am, deadline Friday",
+    ],
+)
+def test_a_filter_s_or_a_label_s_day_beside_a_new_time_keeps_the_day(words: str):
+    assert run_time_in(words, "every_day 09:00") == ("every_day 10:00", True)
