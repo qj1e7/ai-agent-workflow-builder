@@ -2292,7 +2292,8 @@ def _sentences_stopped(text: str, tokens: list[Token]) -> list[bool]:
 def _tied_whole(text: str, tokens: list[Token], clause_of: list[int], day: _Day) -> bool:
     """Whether the day's run, which `_tied` holds, is held as a whole phrase: by a ticket's
     date, as "due Friday" or "the deadline is Friday", or by a filter's word right after what
-    it filters, as "tickets closed on Friday" or "tickets in MOCK opened on Tuesday". A filter's
+    it filters, as "tickets closed on Friday", "tickets in MOCK opened on Tuesday" or "tickets
+    not updated from Monday to Friday". A filter's
     word after anything else, as "closed" in "the office is closed on Fridays", holds nothing,
     and "until" or "till" never does."""
     first = day.run[0]
@@ -2310,7 +2311,7 @@ def _tied_whole(text: str, tokens: list[Token], clause_of: list[int], day: _Day)
     if low(lead) in STOPS:
         return False
     n = lead - 1
-    while low(n) and (low(n) == "in" or PROJECT_KEY.fullmatch(tokens[n][0])):
+    while low(n) and (low(n) in ("in", *NEGATIONS) or PROJECT_KEY.fullmatch(tokens[n][0])):
         if not joined(n, n + 1):
             return False
         n -= 1
