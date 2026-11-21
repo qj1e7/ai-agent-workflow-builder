@@ -63,12 +63,12 @@
   flex: 1 1 100%;
 }
 
-/* Buttons that gave way to the side panel leave no foot behind them. */
 /* An Open in n8n button with its login line under it makes a taller item, so the buttons beside it line up at the top. */
 .actions:has([data-n8n-hint]) {
   align-items: flex-start;
 }
 
+/* Buttons that gave way to the side panel leave no foot behind them. */
 .actions:empty,
 .foot:has(> .actions:empty:only-child) {
   display: none;
