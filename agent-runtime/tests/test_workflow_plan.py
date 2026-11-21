@@ -2091,32 +2091,6 @@ def test_a_filter_left_out_beside_a_run_day_keeps_it(words: str, read: str):
     assert run_time_in(words, "every_day 09:00") == (read, True)
 
 
-@pytest.mark.parametrize(
-    ("words", "read"),
-    [
-        ("Every Friday at 9am, create a ticket due this Friday", "friday 09:00"),
-        ("Every weekday at 9am, list tickets due next Friday", "weekdays 09:00"),
-        ("Find tickets from last Monday and post them daily at 9am", "every_day 09:00"),
-    ],
-)
-def test_a_ticket_s_date_or_a_filter_past_next_this_or_last_keeps_the_run_day(
-    words: str, read: str
-):
-    """#339 asked these, because "next", "this" or "last" stood between the day and what
-    holds it."""
-    assert run_time_in(words) == (read, True)
-    assert run_time_in(words, "every_day 09:00") == (read, True)
-
-
-def test_a_due_date_next_friday_keeps_the_run_day_of_the_desk_eval_case():
-    words = (
-        "Every Friday, list the open DESK tasks and create one ticket that lists them, due next "
-        "Friday"
-    )
-    assert run_time_in(words, "every_day 09:00") == ("friday 09:00", True)
-    assert day_in(words) == "friday"
-
-
 def asked_both_ways(words: str) -> None:
     assert run_time_in(words) == (None, True)
     assert run_time_in(words, "every_day 09:00") == (None, True)
@@ -2125,41 +2099,69 @@ def asked_both_ways(words: str) -> None:
 @pytest.mark.parametrize(
     "words",
     [
+        "Every Friday at 9am, create a ticket due this Friday",
+        "Every weekday at 9am, list tickets due next Friday",
+        "Find tickets from last Monday and post them daily at 9am",
+        "Every Friday, list the open DESK tasks and create one ticket that lists them, due next "
+        "Friday",
+    ],
+)
+def test_a_filter_s_day_past_next_this_or_last_is_asked_as_on_main(words: str):
+    """A day is set aside only where main sets it aside. A due date or a filter past "next",
+    "this" or "last" can fill only once the rest of the words are read on an allow-list, as
+    "due next Friday, PH: skip" shows."""
+    assert run_time_in(words)[0] is None
+    assert run_time_in(words, "every_day 09:00") == (None, True)
+
+
+@pytest.mark.parametrize(
+    "words",
+    [
+        "Every day at 9am, remind me from Monday to Friday",
+        "Every weekday at 9am, remind me from Monday to Thursday",
+        "Every day at 9am, post open tickets from Monday onwards",
+        "Every day at 9am, remind me before Friday",
+        "Every day at 9am, remind me from the last Friday of the month",
+        "Every day at 9am, list tickets due next Friday; then stop",
+        "Every day at 9am, list tickets due next Friday (then stop)",
+        "Every Friday at 9am, create a ticket due this Friday. Then stop.",
+        "Find tickets from last Monday and post them daily at 9am. Then stop.",
+        "Every day at 9am, list tickets due next Friday, then quit",
+        "Every day at 9am this week, list tickets due next Friday",
+        "Every day at 9am, list tickets due next Friday, PH: skip",
+        "Every day at 9am, list tickets due next Friday, aside from PH",
         "Every day at 9am, check langgraph releases until next Friday",
         "Every day at 9am, remind #ops about open tickets until next Friday",
         "Every day at 9am, post open bugs until this Friday",
         "Every day at 9am, check langgraph till the release deadline next Friday",
         "Every day at 9am check langgraph, ending at the deadline next Friday",
         "Every day at 9am, check langgraph releases from next Monday",
-        "Every day at 9am, post open bugs until Friday",
         "Every day at 9am check langgraph, the deadline next Friday is a day off",
     ],
 )
-def test_a_day_past_next_this_or_last_is_held_only_by_a_due_date_that_ends_its_words(words: str):
-    """A filter's word as "until" or "from" holds no day past "next" or "this", and "until" or
-    "till" hold none at all, since they end the runs. A due date past "next" holds the day only
-    when nothing follows it, as "tickets due next Friday"."""
+def test_a_day_main_asks_is_never_set_aside(words: str):
+    """Before, the branch set these days aside past "next" or after "me", where main asks."""
     asked_both_ways(words)
 
 
 @pytest.mark.parametrize(
     "words",
     [
-        "Every day at 9am, list tickets due next Friday, then stop",
-        "Every day at 9am, remind me of tickets due next Friday and stop after that",
-        "Every day at 9am, check langgraph, tickets due next Friday excluded",
+        "Every day at 9am, post open bugs until Friday",
+        "Every day at 9am, list tickets due Friday, then stop",
+        "Every day at 9am, remind me of tickets due Friday and stop after that",
+        "Every day at 9am, check langgraph, tickets due Friday excluded",
     ],
 )
-def test_a_stop_or_a_word_that_leaves_it_out_after_a_due_date_undoes_its_hold(words: str):
+def test_until_a_stop_or_a_word_that_leaves_it_out_undoes_a_filter_s_hold(words: str):
+    """Main holds each day as a filter's and fills every day. "until" and "till" end the runs,
+    as does a stop in the day's sentence, and "excluded" leaves the day out."""
     asked_both_ways(words)
 
 
-def test_a_due_date_alone_keeps_the_run_day_beside_the_same_words_with_a_stop():
-    assert run_time_in("Every day at 9am, list tickets due next Friday") == (
-        "every_day 09:00",
-        True,
-    )
-    asked_both_ways("Every day at 9am, list tickets due next Friday, then stop")
+def test_a_due_date_without_a_stop_keeps_the_run_day_as_on_main():
+    assert run_time_in("Every day at 9am, list tickets due Friday") == ("every_day 09:00", True)
+    asked_both_ways("Every day at 9am, list tickets due Friday, then stop")
 
 
 @pytest.mark.parametrize(
