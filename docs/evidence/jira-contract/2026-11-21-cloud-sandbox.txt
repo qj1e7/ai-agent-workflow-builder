@@ -1,0 +1,119 @@
+============================= test session starts =============================
+platform win32 -- Python 3.14.10, pytest-9.1.1, pluggy-1.7.0
+rootdir: D:\NUS ISS\NUS_ISS_AiAgentWorkflow\platform-api
+configfile: pyproject.toml
+plugins: anyio-4.15.1
+collected 80 items / 54 deselected / 26 selected
+
+tests\test_jira_contract.py ..FF...FFssssssssssssssssF                   [100%]
+
+================================== FAILURES ===================================
+____ test_a_search_matches_any_word_in_the_projects_newest_first[sandbox] _____
+
+target = Target(name='sandbox', flavor='cloud', project='SCRUM', jira=<platform_api.orchestration.jira_rest.JiraRestAdapter obj...), client=<httpx.AsyncClient object at 0x000002A327FCDF90>, base_url='https://lustrouscx.atlassian.net', practice=None)
+
+    async def test_a_search_matches_any_word_in_the_projects_newest_first(target: Target):
+        first, second = marker(), marker()
+        older = await made(target, f"Older {first}")
+        newer = await made(target, "Newer", f"The body names {second}.")
+        found = await target.jira.search(IssueSearch((target.project,), (first, second)))
+>       assert [issue.key for issue in found] == [newer, older]
+E       AssertionError: assert [] == ['SCRUM-72', 'SCRUM-71']
+E         
+E         Right contains 2 more items, first extra item: 'SCRUM-72'
+E         Use -v to get more diff
+
+tests\test_jira_contract.py:185: AssertionError
+__ test_moving_a_ticket_to_done_sets_its_status_and_resolution_day[sandbox] ___
+
+target = Target(name='sandbox', flavor='cloud', project='SCRUM', jira=<platform_api.orchestration.jira_rest.JiraRestAdapter obj...), client=<httpx.AsyncClient object at 0x000002A327FB56E0>, base_url='https://lustrouscx.atlassian.net', practice=None)
+
+    async def test_moving_a_ticket_to_done_sets_its_status_and_resolution_day(target: Target):
+        word = marker()
+        open_key = await made(target, f"Stays open {word}")
+        done_key = await made(target, f"Gets done {word}")
+        await target.jira.move_to_done(done_key)
+        issue = await target.jira.get_issue(done_key)
+        assert issue is not None and issue.status == "Done" and issue.done_at is not None
+        done = await target.jira.search(IssueSearch((target.project,), (word,), status="Done"))
+>       assert [i.key for i in done] == [done_key]
+E       AssertionError: assert [] == ['SCRUM-74']
+E         
+E         Right contains one more item: 'SCRUM-74'
+E         Use -v to get more diff
+
+tests\test_jira_contract.py:198: AssertionError
+________ test_a_wrong_token_is_a_failure_that_may_be_retried[sandbox] _________
+
+target = Target(name='sandbox', flavor='cloud', project='SCRUM', jira=<platform_api.orchestration.jira_rest.JiraRestAdapter obj...), client=<httpx.AsyncClient object at 0x000002A3280E8D10>, base_url='https://lustrouscx.atlassian.net', practice=None)
+
+    async def test_a_wrong_token_is_a_failure_that_may_be_retried(target: Target):
+        wrong = target.adapter(JiraAuth.bearer("not-the-token"))
+        with pytest.raises(JiraUnavailable) as failed:
+>           await wrong.get_issue(f"{target.project}-1")
+
+tests\test_jira_contract.py:230: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <platform_api.orchestration.jira_rest.JiraRestAdapter object at 0x000002A327F83850>
+key = 'SCRUM-1'
+
+    async def get_issue(self, key: str) -> JiraIssue | None:
+        response = await self._call(
+            "GET", f"/issue/{quote(key, safe='')}", params={"fields": FIELDS}
+        )
+        if response.status_code == 404:
+            return None
+        if response.status_code != 200:
+>           raise self._failure(response, "read the ticket")
+E           platform_api.orchestration.jira.JiraRefused: Jira refused to read the ticket (403).
+
+src\platform_api\orchestration\jira_rest.py:312: JiraRefused
+________________ test_errors_come_in_jiras_own_shape[sandbox] _________________
+
+target = Target(name='sandbox', flavor='cloud', project='SCRUM', jira=<platform_api.orchestration.jira_rest.JiraRestAdapter obj...), client=<httpx.AsyncClient object at 0x000002A327F82F50>, base_url='https://lustrouscx.atlassian.net', practice=None)
+
+    async def test_errors_come_in_jiras_own_shape(target: Target):
+        version = "3" if target.flavor == "cloud" else "2"
+        response = await target.client.post(
+            f"{target.base_url}/rest/api/{version}/issue",
+            json={"fields": {"project": {"key": target.project}, "issuetype": {"name": "Task"}}},
+            headers={"Authorization": target.jira.auth_header},
+        )
+        assert response.status_code == 400
+        body = response.json()
+        assert isinstance(body["errorMessages"], list) and isinstance(body["errors"], dict)
+>       assert "summary" in body["errors"]
+E       AssertionError: assert 'summary' in {}
+
+tests\test_jira_contract.py:245: AssertionError
+____ test_done_since_means_the_same_moment_in_jiras_own_time_zone[sandbox] ____
+
+target = Target(name='sandbox', flavor='cloud', project='SCRUM', jira=<platform_api.orchestration.jira_rest.JiraRestAdapter obj...), client=<httpx.AsyncClient object at 0x000002A327E8FC50>, base_url='https://lustrouscx.atlassian.net', practice=None)
+
+    async def test_done_since_means_the_same_moment_in_jiras_own_time_zone(target: Target):
+        word = marker()
+        key = await made(target, f"Done just now {word}")
+        await target.jira.move_to_done(key)
+        issue = await target.jira.get_issue(key)
+        assert issue is not None and issue.done_at is not None
+        later = issue.done_at + timedelta(minutes=2)
+        earlier = issue.done_at - timedelta(minutes=2)
+        project = (target.project,)
+        assert await target.jira.search(IssueSearch(project, (word,), done_since=later)) == []
+        found = await target.jira.search(IssueSearch(project, (word,), done_since=earlier))
+>       assert [i.key for i in found] == [key]
+E       AssertionError: assert [] == ['SCRUM-77']
+E         
+E         Right contains one more item: 'SCRUM-77'
+E         Use -v to get more diff
+
+tests\test_jira_contract.py:492: AssertionError
+Cosmos DB tests: 0 passed, 0 failed, 0 skipped
+=========================== short test summary info ===========================
+FAILED tests/test_jira_contract.py::test_a_search_matches_any_word_in_the_projects_newest_first[sandbox]
+FAILED tests/test_jira_contract.py::test_moving_a_ticket_to_done_sets_its_status_and_resolution_day[sandbox]
+FAILED tests/test_jira_contract.py::test_a_wrong_token_is_a_failure_that_may_be_retried[sandbox]
+FAILED tests/test_jira_contract.py::test_errors_come_in_jiras_own_shape[sandbox]
+FAILED tests/test_jira_contract.py::test_done_since_means_the_same_moment_in_jiras_own_time_zone[sandbox]
+=========== 5 failed, 5 passed, 16 skipped, 54 deselected in 16.59s ===========

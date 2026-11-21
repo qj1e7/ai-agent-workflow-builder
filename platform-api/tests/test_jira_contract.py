@@ -5,7 +5,7 @@ set, the same tests run against a real sandbox too:
 
     JIRA_CONTRACT_URL      the sandbox, such as https://example.atlassian.net
     JIRA_CONTRACT_FLAVOR   datacenter or cloud (default datacenter)
-    JIRA_CONTRACT_TOKEN    the token (a personal access token, or an API token for Cloud)
+    JIRA_CONTRACT_TOKEN    the token
     JIRA_CONTRACT_EMAIL    the account's email, for Cloud
     JIRA_CONTRACT_PROJECT  a project the account may write to
 
@@ -108,10 +108,25 @@ async def target(request: pytest.FixtureRequest, db: Database) -> AsyncIterator[
     if name == "sandbox":
         if not SANDBOX:
             pytest.skip("JIRA_CONTRACT_URL is not set")
-        flavor: JiraFlavor = (
-            "cloud" if os.environ.get("JIRA_CONTRACT_FLAVOR") == "cloud" else "datacenter"
-        )
-        token = os.environ["JIRA_CONTRACT_TOKEN"]
+        token = os.environ.get("JIRA_CONTRACT_TOKEN")
+        project = os.environ.get("JIRA_CONTRACT_PROJECT")
+        flavor_name = os.environ.get("JIRA_CONTRACT_FLAVOR", "datacenter").lower()
+        missing = []
+        if not token:
+            missing.append("JIRA_CONTRACT_TOKEN")
+        if not project:
+            missing.append("JIRA_CONTRACT_PROJECT")
+        if flavor_name == "cloud" and not os.environ.get("JIRA_CONTRACT_EMAIL"):
+            missing.append("JIRA_CONTRACT_EMAIL (required for Cloud)")
+        if flavor_name not in {"cloud", "datacenter"}:
+            pytest.fail("JIRA_CONTRACT_FLAVOR must be 'cloud' or 'datacenter'.")
+        if missing:
+            pytest.fail(
+                "Sandbox Jira tests need these settings: " + "; ".join(missing) + ". "
+                "Export the five JIRA_CONTRACT_* values in your shell before running pytest."
+            )
+        flavor: JiraFlavor = "cloud" if flavor_name == "cloud" else "datacenter"
+        assert token is not None and project is not None
         auth = (
             JiraAuth.basic(os.environ["JIRA_CONTRACT_EMAIL"], token)
             if flavor == "cloud"
@@ -119,9 +134,7 @@ async def target(request: pytest.FixtureRequest, db: Database) -> AsyncIterator[
         )
         async with httpx.AsyncClient(timeout=20) as client:
             jira = JiraRestAdapter(SANDBOX, flavor, auth, client, sleep=waits)
-            yield Target(
-                name, flavor, os.environ["JIRA_CONTRACT_PROJECT"], jira, waits, client, SANDBOX
-            )
+            yield Target(name, flavor, project, jira, waits, client, SANDBOX)
         return
     flavor = "cloud" if name == "practice-cloud" else "datacenter"
     practice = PracticeJira(db, practice_token(SIGNING_KEY), PORTAL)

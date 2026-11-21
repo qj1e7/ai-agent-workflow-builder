@@ -1,0 +1,74 @@
+============================= test session starts =============================
+platform win32 -- Python 3.14.10, pytest-9.1.1, pluggy-1.7.0 -- D:\NUS ISS\NUS_ISS_AiAgentWorkflow\platform-api\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: D:\NUS ISS\NUS_ISS_AiAgentWorkflow\platform-api
+configfile: pyproject.toml
+plugins: anyio-4.15.1
+collecting ... collected 80 items / 27 deselected / 53 selected
+
+tests/test_jira_contract.py::test_a_new_ticket_reads_back_as_written[practice-datacenter] PASSED [  1%]
+tests/test_jira_contract.py::test_a_new_ticket_reads_back_as_written[practice-cloud] PASSED [  3%]
+tests/test_jira_contract.py::test_our_write_label_finds_the_ticket_and_who_made_it[practice-datacenter] PASSED [  5%]
+tests/test_jira_contract.py::test_our_write_label_finds_the_ticket_and_who_made_it[practice-cloud] PASSED [  7%]
+tests/test_jira_contract.py::test_a_search_matches_any_word_in_the_projects_newest_first[practice-datacenter] PASSED [  9%]
+tests/test_jira_contract.py::test_a_search_matches_any_word_in_the_projects_newest_first[practice-cloud] PASSED [ 11%]
+tests/test_jira_contract.py::test_moving_a_ticket_to_done_sets_its_status_and_resolution_day[practice-datacenter] PASSED [ 13%]
+tests/test_jira_contract.py::test_moving_a_ticket_to_done_sets_its_status_and_resolution_day[practice-cloud] PASSED [ 15%]
+tests/test_jira_contract.py::test_done_tickets_answers_the_done_ones_and_skips_a_key_that_is_gone[practice-datacenter] PASSED [ 16%]
+tests/test_jira_contract.py::test_done_tickets_answers_the_done_ones_and_skips_a_key_that_is_gone[practice-cloud] PASSED [ 18%]
+tests/test_jira_contract.py::test_a_ticket_that_is_not_there_is_none[practice-datacenter] PASSED [ 20%]
+tests/test_jira_contract.py::test_a_ticket_that_is_not_there_is_none[practice-cloud] PASSED [ 22%]
+tests/test_jira_contract.py::test_a_ticket_with_no_title_is_refused_for_good[practice-datacenter] PASSED [ 24%]
+tests/test_jira_contract.py::test_a_ticket_with_no_title_is_refused_for_good[practice-cloud] PASSED [ 26%]
+tests/test_jira_contract.py::test_a_wrong_token_is_a_failure_that_may_be_retried[practice-datacenter] PASSED [ 28%]
+tests/test_jira_contract.py::test_a_wrong_token_is_a_failure_that_may_be_retried[practice-cloud] PASSED [ 30%]
+tests/test_jira_contract.py::test_errors_come_in_jiras_own_shape[practice-datacenter] PASSED [ 32%]
+tests/test_jira_contract.py::test_errors_come_in_jiras_own_shape[practice-cloud] PASSED [ 33%]
+tests/test_jira_contract.py::test_a_busy_jira_is_waited_for_by_its_retry_after[practice-datacenter] PASSED [ 35%]
+tests/test_jira_contract.py::test_a_busy_jira_is_waited_for_by_its_retry_after[practice-cloud] PASSED [ 37%]
+tests/test_jira_contract.py::test_a_long_retry_after_is_cut_short[practice-datacenter] PASSED [ 39%]
+tests/test_jira_contract.py::test_a_long_retry_after_is_cut_short[practice-cloud] PASSED [ 41%]
+tests/test_jira_contract.py::test_jira_down_three_times_fails_in_a_way_that_may_be_retried[practice-datacenter] PASSED [ 43%]
+tests/test_jira_contract.py::test_jira_down_three_times_fails_in_a_way_that_may_be_retried[practice-cloud] PASSED [ 45%]
+tests/test_jira_contract.py::test_a_rate_limited_create_is_tried_again_and_makes_one_ticket[practice-datacenter] PASSED [ 47%]
+tests/test_jira_contract.py::test_a_rate_limited_create_is_tried_again_and_makes_one_ticket[practice-cloud] PASSED [ 49%]
+tests/test_jira_contract.py::test_a_retry_after_a_made_ticket_uses_our_record_and_never_searches[practice-datacenter] PASSED [ 50%]
+tests/test_jira_contract.py::test_a_retry_after_a_made_ticket_uses_our_record_and_never_searches[practice-cloud] PASSED [ 52%]
+tests/test_jira_contract.py::test_a_crash_after_jiras_201_finds_our_own_ticket_and_makes_no_second[practice-datacenter] PASSED [ 54%]
+tests/test_jira_contract.py::test_a_crash_after_jiras_201_finds_our_own_ticket_and_makes_no_second[practice-cloud] PASSED [ 56%]
+tests/test_jira_contract.py::test_a_ticket_someone_else_planted_with_our_label_is_never_taken_as_ours[practice-datacenter] PASSED [ 58%]
+tests/test_jira_contract.py::test_a_ticket_someone_else_planted_with_our_label_is_never_taken_as_ours[practice-cloud] PASSED [ 60%]
+tests/test_jira_contract.py::test_a_create_jira_refused_or_was_too_busy_for_is_tried_fresh_next_time[practice-datacenter] PASSED [ 62%]
+tests/test_jira_contract.py::test_a_create_jira_refused_or_was_too_busy_for_is_tried_fresh_next_time[practice-cloud] PASSED [ 64%]
+tests/test_jira_contract.py::test_the_connector_turns_a_refusal_into_a_write_that_is_not_retried[practice-datacenter] PASSED [ 66%]
+tests/test_jira_contract.py::test_the_connector_turns_a_refusal_into_a_write_that_is_not_retried[practice-cloud] PASSED [ 67%]
+tests/test_jira_contract.py::test_a_found_ticket_with_no_creator_is_refused[practice-datacenter] PASSED [ 69%]
+tests/test_jira_contract.py::test_a_found_ticket_with_no_creator_is_refused[practice-cloud] PASSED [ 71%]
+tests/test_jira_contract.py::test_a_found_ticket_already_recorded_for_another_write_is_refused[practice-datacenter] PASSED [ 73%]
+tests/test_jira_contract.py::test_a_found_ticket_already_recorded_for_another_write_is_refused[practice-cloud] PASSED [ 75%]
+tests/test_jira_contract.py::test_a_found_ticket_with_another_writes_label_is_refused[practice-datacenter] PASSED [ 77%]
+tests/test_jira_contract.py::test_a_found_ticket_with_another_writes_label_is_refused[practice-cloud] PASSED [ 79%]
+tests/test_jira_contract.py::test_a_found_ticket_with_another_title_is_refused[practice-datacenter] PASSED [ 81%]
+tests/test_jira_contract.py::test_a_found_ticket_with_another_title_is_refused[practice-cloud] PASSED [ 83%]
+tests/test_jira_contract.py::test_two_tries_of_one_write_at_once_make_one_ticket[practice-datacenter] PASSED [ 84%]
+tests/test_jira_contract.py::test_two_tries_of_one_write_at_once_make_one_ticket[practice-cloud] PASSED [ 86%]
+tests/test_jira_contract.py::test_a_found_ticket_made_before_the_write_began_is_refused[practice-datacenter] PASSED [ 88%]
+tests/test_jira_contract.py::test_a_found_ticket_made_before_the_write_began_is_refused[practice-cloud] PASSED [ 90%]
+tests/test_jira_contract.py::test_the_practice_jira_notes_only_signed_in_calls_and_only_the_latest[practice-datacenter] PASSED [ 92%]
+tests/test_jira_contract.py::test_the_practice_jira_notes_only_signed_in_calls_and_only_the_latest[practice-cloud] PASSED [ 94%]
+tests/test_jira_contract.py::test_the_practice_jira_notes_only_signed_in_calls_and_only_the_latest[sandbox] SKIPPED [ 96%]
+tests/test_jira_contract.py::test_done_since_means_the_same_moment_in_jiras_own_time_zone[practice-datacenter] PASSED [ 98%]
+tests/test_jira_contract.py::test_done_since_means_the_same_moment_in_jiras_own_time_zone[practice-cloud] PASSED [100%]
+
+============================== warnings summary ===============================
+tests\conftest.py:13
+  D:\NUS ISS\NUS_ISS_AiAgentWorkflow\platform-api\tests\conftest.py:13: DeprecationWarning: 'asyncio.WindowsSelectorEventLoopPolicy' is deprecated and slated for removal in Python 3.16
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
+tests\conftest.py:13
+  D:\NUS ISS\NUS_ISS_AiAgentWorkflow\platform-api\tests\conftest.py:13: DeprecationWarning: 'asyncio.set_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+Cosmos DB tests: 0 passed, 0 failed, 0 skipped
+========== 52 passed, 1 skipped, 27 deselected, 2 warnings in 8.84s ===========
