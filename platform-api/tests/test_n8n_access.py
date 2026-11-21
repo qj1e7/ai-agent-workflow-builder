@@ -614,6 +614,7 @@ async def test_my_n8n_shows_the_password_link_only_to_its_person_and_only_until_
         "can_open": False,
         "why_not": SET_PASSWORD,
         "editor_url": None,
+        "login": "carol@example.test",
     }
     assert link not in stored["n8n_invite"], "kept sealed"
     theirs = (await s.call("alice", "GET", "/api/v1/me/n8n")).json()
