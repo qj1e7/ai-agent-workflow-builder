@@ -2005,32 +2005,15 @@ def _days_named(text: str, everywhere: bool = False) -> tuple[tuple[tuple[int, i
     owned = {p.clause for p in _own(text)}
     short = {c for c in clause_of if words_in[c] <= 1} if owned else set[int]()
     theirs = set(clause_of) if everywhere else owned | short
-    token_at = {a: n for n, (_, a, _, _) in enumerate(tokens)}
-    runs = _runs_of(tokens, clause_of)
     starts: list[int | None] | None = None
-    tied: dict[tuple[int, int], bool] = {}
-    timed: dict[tuple[int, int], bool] = {}
     left = _left_out_spans(text)
     found: list[tuple[tuple[int, int], bool]] = []
-    for match in DAY_NAMED.finditer(text):
-        # A day inside a word, as "Mon-Fri" in "2026-Mon-Fri", names none.
-        first = token_at.get(match.start())
-        if first is None or clause_of[first] == -1 or clause_of[first] not in theirs:
+    for day, tied in _days_in(text):
+        clause = clause_of[day.first]
+        if clause == -1 or clause not in theirs or tied:
             continue
-        if any(a <= match.start() and match.end() <= b for a, b in left):
+        if any(a <= day.match.start() and day.match.end() <= b for a, b in left):
             continue
-        last = first
-        while last + 1 < len(tokens) and tokens[last + 1][1] < match.end():
-            last += 1
-        run = (runs.get(first, (first, first, None))[0], runs.get(last, (last, last, None))[1])
-        if run not in tied:
-            tied[run] = _tied(text, tokens, *run)
-            timed[run] = CLOCK.search(text, tokens[run[0]][1], tokens[run[1]][2]) is not None
-        if tied[run]:
-            continue
-        frame = runs.get(first, (first, first, None))[2]
-        day = _Day(first, last, run, frame is not None and frame < first, timed[run], match)
-        clause = clause_of[first]
         starts = starts or _task_starts(text, tokens, clause_of)
         off = _off_the_schedule(text, tokens, clause_of, starts, day)
         if off is not None:
@@ -2150,8 +2133,7 @@ def _off_the_schedule(
     first, last = day.run
     every = day.every
     possessive = text[day.match.end() : day.match.end() + 1] in ("'", "’")
-    label = possessive or (inside(day.first - 1) and low(day.first - 1) in LABELS)
-    if label and any(inside(n) and word(n) for n in (day.last + 1, last + 1)):
+    if _a_label(text, tokens, clause_of, day):
         return None
     lead, before, head = _talk_beside(text, tokens, clause_of, first - 1, -1)
     trail, after, tail = _talk_beside(text, tokens, clause_of, last + 1, 1)
@@ -2197,6 +2179,65 @@ def _off_the_schedule(
     return None
 
 
+def _a_label(text: str, tokens: list[Token], clause_of: list[int], day: _Day) -> bool:
+    """Whether a day labels the word after it, as "Monday's tickets" or "the Mon-Fri rota"."""
+    clause = clause_of[day.first]
+
+    def inside(n: int) -> bool:
+        return 0 <= n < len(tokens) and clause_of[n] == clause
+
+    possessive = text[day.match.end() : day.match.end() + 1] in ("'", "’")
+    label = possessive or (inside(day.first - 1) and _low(tokens[day.first - 1][0]) in LABELS)
+    return label and any(
+        inside(n) and _a_word(tokens[n][0], tokens[n][3]) for n in (day.last + 1, day.run[1] + 1)
+    )
+
+
+@lru_cache(maxsize=64)
+def _days_in(text: str) -> tuple[tuple[_Day, bool], ...]:
+    """Every day the words name, as `DAY_NAMED` reads one, with whether a filter or a ticket's
+    date holds its run of schedule words, as "created on Monday" or "the due date to Friday". A
+    day inside a word, as "Mon-Fri" in "2026-Mon-Fri", names none. Kept per request, since its
+    readers ask more than once."""
+    matches = list(DAY_NAMED.finditer(text))
+    if not matches:
+        return ()
+    tokens = _schedule_tokens(text)
+    clause_of = _clause_of(text, [(raw, a, b) for raw, a, b, _ in tokens])
+    token_at = {a: n for n, (_, a, _, _) in enumerate(tokens)}
+    runs = _runs_of(tokens, clause_of)
+    of_run: dict[tuple[int, int], tuple[bool, bool]] = {}
+    found: list[tuple[_Day, bool]] = []
+    for match in matches:
+        first = token_at.get(match.start())
+        if first is None:
+            continue
+        last = first
+        while last + 1 < len(tokens) and tokens[last + 1][1] < match.end():
+            last += 1
+        run = (runs.get(first, (first, first, None))[0], runs.get(last, (last, last, None))[1])
+        if run not in of_run:
+            timed = CLOCK.search(text, tokens[run[0]][1], tokens[run[1]][2]) is not None
+            of_run[run] = (_tied(text, tokens, *run), timed)
+        tied, timed = of_run[run]
+        frame = runs.get(first, (first, first, None))[2]
+        day = _Day(first, last, run, frame is not None and frame < first, timed, match)
+        found.append((day, tied))
+    return tuple(found)
+
+
+@lru_cache(maxsize=64)
+def _days_held(text: str) -> tuple[bool, ...]:
+    """For every day the words name, whether a filter, a ticket's date or a label holds it, as
+    "created on Monday", "the due date to Friday" or "Monday's tickets". Kept per request."""
+    days = _days_in(text)
+    if not days:
+        return ()
+    tokens = _schedule_tokens(text)
+    clause_of = _clause_of(text, [(raw, a, b) for raw, a, b, _ in tokens])
+    return tuple(tied or _a_label(text, tokens, clause_of, day) for day, tied in days)
+
+
 type Stop = Literal["edge", "run", "verb", "word"]
 
 
@@ -2239,7 +2280,10 @@ def when_said(words: str) -> WhenSaid:
     only where no schedule stands, it is asked too, so a change never keeps the run time from
     before beside it. A day or a time tied to a filter or a ticket's date, as "set the due date
     to Friday at 5pm", is never the run time, and a day the schedule's words name without saying
-    to run on it, as "drop Fridays" or "Fridays off", is left out, so it is asked."""
+    to run on it, as "drop Fridays" or "Fridays off", is left out, so it is asked. When no phrase
+    of their own gives the day it runs, any day they name is asked, as "Mondays" in "check
+    langgraph except Mondays", unless a filter, a ticket's date or a label holds it beside a
+    time of their own."""
     own = _own(words)
     unheld = [
         p
@@ -2276,6 +2320,7 @@ def when_said(words: str) -> WhenSaid:
         or bool(reasons & {"one_day", "one_frequency"})
         or UNREAD_DAY.search(words) is not None
         or bool(_unplaced(words))
+        or (not days and any(not (held and chosen) for held in _days_held(words)))
     )
     day = None if day_asked or not days else next(iter(days))
     times = {time.key for n in chosen for time in named[n][1]}
