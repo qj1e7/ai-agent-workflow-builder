@@ -3041,7 +3041,12 @@ I'm off" or "not during Hari Raya", and a condition otherwise, as "only when the
 release"."""
 AWAY: Final = words("off away leave sick mc")
 """Time off in a stretch after "when", "while" or "during", as "away" in "skip it while I'm
-away" or "MC" in "except when I'm on MC". So is "out of office"."""
+away" or "MC" in "except when I'm on MC"."""
+OUT_AFTER: Final = frozenset(
+    {("i'm",), ("we're",), ("they're",), ("i", "am"), ("we", "are"), ("they", "are")}
+)
+"""A person and "am" or "are" before "out" that make it time off, as "I'm out" or "we are out",
+never "a new version is out"."""
 DAYISH: Final = (SCHEDULE_VOCAB - LINKS - LIST_JOINS) | words(
     "today tonight tomorrow yesterday next holiday holidays"
 )
@@ -3086,12 +3091,13 @@ CALENDAR_DAYS: Final = re.compile(
     rf"(?:{_MONTHS})\.?\s+{_DATE}(?:st|nd|rd|th)?(?![\w:/]|\.\d)|"
     rf"(?<![.:/])(?<!version\s)(?!24/7\b){_SLASHED}(?![\w/]|\.\d)|"
     r"month[\s-]*end\b|end[\s-]+of[\s-]+(?:the[\s-]+)?month\b|eom\b|"
-    r"(?:code|change|release|deploy(?:ment)?)[\s-]+freezes?\b|"
+    r"(?:code|change|release|deploy(?:ment)?)[\s-]+freezes?\b|the\s+freeze(?=\s*(?:[,.;:!?)]|$))|"
     r"freeze\s+(?:period|window)s?\b|blackout\s+(?:period|window|date|day)s?\b)",
     re.IGNORECASE,
 )
 """A date, month end or a freeze, which may leave days out, as "25 Dec", "Dec 25", "25/12",
-"EOM", "the end of the month", "the code freeze" or "the blackout window". "May" and "Mar"
+"EOM", "the end of the month", "the code freeze" or "the blackout window", and "the freeze"
+where it ends its clause, never "the freeze step". "May" and "Mar"
 count only with a capital, never "items 2 may need". A day and a month with a "/" count only
 with a day of 13 or more, a year, or "on", "from", "till" or "until" before them, as "25/12",
 "1/5/2027" or "on 1/5", so a fraction or a score, as "3/4" or "2/2 approvals", is no date. Nor
@@ -3191,14 +3197,17 @@ class _Covered:
     starts a stretch of time ("when"), a word that names no day, a day the workflow never runs
     on, or a word that may name a day it runs on. `mark` is what stands between it and the word
     before: "," for a comma or "&", "." for any other mark that ends a clause, or "". `low` is
-    the word as code reads it, `day` whether `DAY_NAMED` reads it, and `own` whether it stands
-    in the schedule's own phrase."""
+    the word as code reads it, `day` whether `DAY_NAMED` reads it, `own` whether it stands in
+    the schedule's own phrase, and `off` whether it is time off in a stretch after "when",
+    "while" or "during", as "away", "out of office", "out" in "I'm out" or "Priya is out", or
+    "freeze" in "the freeze"."""
 
     kind: CoverKind
     mark: Mark
     low: str
     day: bool
     own: bool
+    off: bool
 
     @property
     def talk(self) -> bool:
@@ -3291,23 +3300,35 @@ def _left_out_day_like(
 
 def _time_off_after(words: list[_Covered]) -> list[bool]:
     """For each word, whether the words after it, to the next mark, look like a day or time off,
-    as "I'm off", "I'm away", "on leave", "out of office", "Hari Raya" or "the code freeze"."""
+    as "I'm off", "I'm out", "on leave", "Hari Raya", "the code freeze" or "the freeze"."""
     after = [False] * len(words)
     for n in range(len(words) - 2, -1, -1):
         word = words[n + 1]
-        if word.mark:
-            continue
-        after[n] = (
-            after[n + 1]
-            or word.day
-            or word.kind == "day"
-            or word.low in AWAY
-            or (
-                word.low == "out"
-                and [(w.low, w.mark) for w in words[n + 2 : n + 4]] == [("of", ""), ("office", "")]
-            )
-        )
+        if not word.mark:
+            after[n] = after[n + 1] or word.day or word.kind == "day" or word.off
     return after
+
+
+def _out(pieces: list[tuple[str, int, int]], lows: list[str], marks: list[Mark], n: int) -> bool:
+    """Whether "out" at `n` is time off: "out of office", or "out" after a person and "am",
+    "are" or "is", as "I'm out", "we are out" or "when Priya is out", never "a new version is
+    out" or "the Release is out". A name counts only right after "when", "while", "during",
+    "and" or "or"."""
+    if lows[n + 1 : n + 3] == ["of", "office"] and not any(marks[n + 1 : n + 3]):
+        return True
+    if n == 0 or marks[n]:
+        return False
+    two = (lows[n - 2], lows[n - 1]) if n > 1 and not marks[n - 1] else None
+    if (lows[n - 1],) in OUT_AFTER or two in OUT_AFTER:
+        return True
+    name = pieces[n - 2][0] if two is not None and n > 2 and not marks[n - 2] else ""
+    return (
+        lows[n - 1] == "is"
+        and NAME.fullmatch(name) is not None
+        and name.casefold() not in KNOWN_WORDS
+        and name.casefold() not in SYSTEMS
+        and (lows[n - 3] in WHILE or lows[n - 3] in LIST_JOINS)
+    )
 
 
 def _trails(words: list[_Covered], n: int) -> bool:
@@ -3539,7 +3560,17 @@ def _covered(
             kind = "day"
         else:
             kind = "known"
-        found.append(_Covered(kind, marks[n], low, day, bool(schedule[start])))
+        off = (
+            low in AWAY
+            or (low == "out" and _out(pieces, lows, marks, n))
+            or (
+                low == "freeze"
+                and n > 0
+                and lows[n - 1] == "the"
+                and not (n + 1 < len(pieces) and text[end : pieces[n + 1][1]] == "-")
+            )
+        )
+        found.append(_Covered(kind, marks[n], low, day, bool(schedule[start]), off))
         labelled = day and (bare != raw or (n > 0 and lows[n - 1] in LABELS))
         fresh = kind == "leaves" or (fresh and kind == "link")
     return found
