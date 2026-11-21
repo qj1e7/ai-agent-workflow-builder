@@ -2437,12 +2437,14 @@ def when_said(words: str) -> WhenSaid:
     their own, or the day it runs never falls on it, as "Mondays" beside "Every Friday at 9am".
     A filter or a label holds a day only as a whole phrase, with no word that leaves something
     out before it in its clause, so "except Friday's check" is asked, and so is a filter's day
-    in a sentence that ends the runs, as "until Friday" or "then stop". Beside a schedule
-    of their own, a word that looks like a day or time off after "except", "not", "drop",
-    "only" or the like is asked too, as "except PH", "except Firday" or "PH excluded", and so is
-    a stretch of time or a count of days they leave out, as "except when I'm off" or "except for
-    2 days", and days after "on" that look like days, as "on business days". Any other word they
-    leave out is a filter's, as "except langchain"."""
+    in a sentence that ends the runs, as "until Friday" or "then stop". A word that looks like
+    a day or time off after "except", "not", "drop", "only" or the like is asked too, as "except
+    PH", "except Firday", "except 25 Dec", "except EOM" or "PH excluded", and so is a stretch of
+    time or a count of days they leave out, as "except when I'm off", "skip the code freeze" or
+    "except for 2 days", and days after "on" that look like days, as "on business days". This
+    holds with no schedule of their own too, so a change such as "check langgraph except PH"
+    never keeps the run time from before. Any other word they leave out is a filter's, as
+    "except langchain"."""
     own = _own(words)
     unheld = [
         p
@@ -2484,7 +2486,7 @@ def when_said(words: str) -> WhenSaid:
         or UNREAD_DAY.search(words) is not None
         or bool(_unplaced(words))
         or _day_unread(words, days, read, bool(chosen))
-        or (bool(chosen) and _left_out_day_like(words, days, read, said))
+        or _left_out_day_like(words, days, read, said)
     )
     day = None if day_asked or not days else next(iter(days))
     times = {time.key for n in chosen for time in named[n][1]}
@@ -3064,9 +3066,27 @@ FILTER_COUNT: Final = re.compile(
     re.IGNORECASE,
 )
 """A count of days a filter holds, as "no update for 10 days" or "older than 30 days"."""
+_MONTHS: Final = (
+    r"jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|"
+    r"sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?"
+)
+_DATE: Final = r"(?:0?[1-9]|[12]\d|3[01])"
+CALENDAR_DAYS: Final = re.compile(
+    rf"\b(?:(?<![.:/]){_DATE}(?:st|nd|rd|th)?\s+(?:of\s+)?(?:{_MONTHS})\b|"
+    rf"(?:{_MONTHS})\.?\s+{_DATE}(?:st|nd|rd|th)?(?![\w:/]|\.\d)|"
+    rf"(?<![.:/])(?<!version\s)(?!24/7\b){_DATE}/(?:0?[1-9]|1[0-2])(?:/\d{{2,4}})?(?![\w/]|\.\d)|"
+    r"month[\s-]*end\b|end[\s-]+of[\s-]+(?:the[\s-]+)?month\b|eom\b|"
+    r"(?:code|change|release|deploy(?:ment)?)[\s-]+freezes?\b|the\s+freeze\b|"
+    r"freeze\s+(?:period|window)s?\b|blackout\s+(?:period|window|date|day)s?\b)",
+    re.IGNORECASE,
+)
+"""A date, month end or a freeze, which may leave days out, as "25 Dec", "Dec 25", "25/12",
+"EOM", "the end of the month", "the code freeze" or "the blackout window". A version is no
+date, as "3.12", "v2/1" or "version 1/2", and nor is "24/7"."""
 COUNTS_DAYS: Final = 1
 COUNTS_FOR_A_FILTER: Final = 2
-"""What a count marks where it stands: days that may be left out, or a filter's count."""
+"""What a count, a date, month end or a freeze marks where it stands: days that may be left
+out, or a filter's count."""
 SHORT_LEAVE_OUT: Final = words(
     "exception excl excluded excepted w/o n/a x sans barring outside aside"
 )
@@ -3092,9 +3112,12 @@ that leave out what follows them, as "PH don't run", "PH off" or "give PH a miss
 NEEDED: Final = words("required necessary")
 """Words after a trailing word that leaves something out, as "PH not required"."""
 LEAVING_OUT: Final = LEAVE_OUT | SHORT_LEAVE_OUT | ACTS_ON | NOT_RUN
+SHORT_EXCEPT: Final = words("ex exc")
+"""Short forms of "except" that leave out only a word that looks like a day right after them,
+as "ex PH" or "exc. PH", never "ex employees"."""
+_LEAVES_WORDS: Final = LEAVING_OUT | LEAVES_BEFORE | SHORT_EXCEPT | {"only", "on"}
 LEAVES: Final = re.compile(
-    rf"\b(?:{'|'.join(map(re.escape, sorted(LEAVING_OUT | LEAVES_BEFORE | {'only', 'on'})))}|"
-    r"other\s+than|apart\s+from)\b",
+    rf"\b(?:{'|'.join(map(re.escape, sorted(_LEAVES_WORDS)))}|other\s+than|apart\s+from)\b",
     re.IGNORECASE,
 )
 """A word that leaves something out, keeps only something, or limits the days, as "on" in "on
@@ -3106,6 +3129,11 @@ DAY_WORDS: Final = (
     | words("weekday weekdays weekend weekends")
 )
 """Days and the reader's short days, read in any case, as "FRI" or "sat and sun"."""
+TWO_LETTER_DAYS: Final = words("mo tu we th fr sa su")
+"""Days in two letters, read as days only where "/" or "-" joins them to another day, as
+"Sa/Su" or "Mo-Fr", never "we" or "Fr" alone."""
+DAY_STARTS: Final = frozenset(day[:end] for day in WEEK for end in range(4, len(day)))
+"""The start of a day's name, four letters or more, as "Frid" or "Wednes"."""
 TIME_OFF: Final = words(
     "holiday holidays hol hols vacation vacations ooo xmas christmas easter eve festive deepavali "
     "diwali vesak thaipusam ramadan january february march april june july august september "
@@ -3167,16 +3195,16 @@ class _Covered:
 
 
 def _pieces(text: str) -> list[tuple[str, int, int]]:
-    """The request's words, with a time whole, as "9:30", "w/o" whole, and a word with a hyphen
-    that the reader doesn't know split at it, as "non-Fridays" or "SAT-MON"."""
+    """The request's words, with a time whole, as "9:30", "w/o", "n/a" and "w/e" whole, and a
+    word with a hyphen that the reader doesn't know split at it, as "non-Fridays" or
+    "SAT-MON"."""
     clocks = iter(m.span() for m in CLOCK.finditer(text))
     clock = next(clocks, None)
     found: list[tuple[str, int, int]] = []
     for raw, start, end in _request_tokens(text):
         while clock is not None and clock[1] <= start:
             clock = next(clocks, None)
-        joined = found and text[found[-1][1] : start].casefold() in ("w/", "n/")
-        if raw.casefold() in ("o", "a") and joined:
+        if found and text[found[-1][1] : end].casefold() in ("w/o", "n/a", "w/e"):
             found[-1] = (text[found[-1][1] : end], found[-1][1], end)
         elif clock is not None and clock[0] <= start:
             if not found or found[-1][1:] != clock:
@@ -3200,8 +3228,9 @@ def _left_out_day_like(
 ) -> bool:
     """Whether a word that leaves something out, as "except", "not", "skip", "non-" or "but", or
     one that keeps only something, as "only", covers a word that looks like a day or time off,
-    as "PH", "Firday", "payday" or "Xmas", or a day the workflow may run on. Any other word it
-    covers is a filter's, as "bugs" in "except bugs" or "langchain" in "except langchain". It
+    as "PH", "Firday", "payday" or "Xmas", a date, month end or a freeze, as "25 Dec", "EOM" or
+    "the code freeze", or a day the workflow may run on. Any other word it covers is a
+    filter's, as "bugs" in "except bugs" or "langchain" in "except langchain". It
     covers the rest of its clause, and goes on past "and", "or" or a comma, unless a word that
     names no day starts what follows, as "and post them". "when", "while" or "during" right
     after it leave out a stretch of time, as "except when I'm off". "on" or "only" beside a word
@@ -3342,8 +3371,9 @@ def _day_like(
     """Whether word `n` looks like a day or time off: a day or a short day in any case, as "FRI"
     or "sat", a word ending in "day" or "days", as "payday" or "workdays", a typo of a day, as
     "Firday", a code for days off, as "PH" or "CNY", or "ph" right after a word that leaves it
-    out (`fresh`), a holiday or time off, as "Xmas", "Hari Raya" or "on leave", or a day of the
-    month, as "the 25th" or "25th Dec". A word in capitals where a project key stands, as "in
+    out (`fresh`), a holiday or time off, as "Xmas", "Hari Raya" or "on leave", a day of the
+    month, as "the 25th" or "25th Dec", two-letter days joined by "/" or "-", as "Sa/Su", "w/e",
+    or the start of a day's name, as "Frid". A word in capitals where a project key stands, as "in
     SAT" or "the SAT tickets", is the key."""
     raw, low = pieces[n][0], lows[n]
     before = lows[n - 1] if n else ""
@@ -3356,6 +3386,15 @@ def _day_like(
     if fresh and (low == "ph" or (low == "p" and gap == "." and lows[n + 1] == "h")):
         return True
     if low.replace("-", "") in DAY_WORDS or low in TIME_OFF or (before, low) in TIME_OFF_PAIRS:
+        return True
+    if low in TWO_LETTER_DAYS:
+        return any(
+            text[pieces[min(m, n)][2] : pieces[max(m, n)][1]] in ("/", "-")
+            and (lows[m] in TWO_LETTER_DAYS or lows[m] in DAY_WORDS)
+            for m in (n - 1, n + 1)
+            if 0 <= m < len(pieces)
+        )
+    if low == "w/e" or low in DAY_STARTS:
         return True
     if ORDINAL.fullmatch(low):
         return not after or after in DATED or after in LEAVING_OUT or after in LEAVES_BEFORE
@@ -3391,7 +3430,11 @@ def _covered(
     ]:
         known[a:b] = b"\1" * (b - a)
     counts = bytearray(len(text) + 1)
-    for p, value in ((TIME_COUNT, COUNTS_DAYS), (FILTER_COUNT, COUNTS_FOR_A_FILTER)):
+    for p, value in (
+        (TIME_COUNT, COUNTS_DAYS),
+        (CALENDAR_DAYS, COUNTS_DAYS),
+        (FILTER_COUNT, COUNTS_FOR_A_FILTER),
+    ):
         for m in p.finditer(text):
             counts[m.start() : m.end()] = bytes([value]) * (m.end() - m.start())
     schedule = bytearray(len(text) + 1)
@@ -3407,12 +3450,22 @@ def _covered(
         low = lows[n]
         bare = re.sub(r"['’]s$", "", raw)
         day = DAY_NAMED.fullmatch(bare) is not None
+        ex = (
+            low in SHORT_EXCEPT
+            and n + 1 < len(pieces)
+            and (
+                counts[pieces[n + 1][1]] == COUNTS_DAYS
+                or DAY_NAMED.fullmatch(pieces[n + 1][0]) is not None
+                or tuple(lows[n + 1 : n + 3]) in TIME_OFF_PAIRS
+                or _day_like(text, pieces, lows, marks, n + 1, True)
+            )
+        )
         kind: CoverKind
         if day:
             ran = read.get(start, -1) >= start + len(bare)
             never = bool(days) and not _may_fall_on(bare) & runs_on
             kind = "known" if ran else "kept" if never else "day"
-        elif _leaves_out(lows, marks, n) and not asks_nothing[start]:
+        elif (ex or _leaves_out(lows, marks, n)) and not asks_nothing[start]:
             kind = "leaves"
         elif low == "only":
             kind = "only"
