@@ -2251,6 +2251,7 @@ def test_a_support_sentence_whose_left_out_words_look_like_no_day_fills_as_on_ma
     ("words", "read"),
     [
         ("Every day at 9am, list tickets not touched since Monday", "every_day 09:00"),
+        ("Every day at 9am, post tickets not updated from Monday to Friday", "every_day 09:00"),
         ("Every Monday at 9am, find tickets in MOCK not closed by Friday", "monday 09:00"),
         (
             "Every Monday at 9am, find tickets in MOCK not updated during the weekend",
