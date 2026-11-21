@@ -856,7 +856,6 @@ def test_a_change_the_run_time_can_t_take_never_keeps_the_old_one_without_a_word
         ("Post Monday's standup notes to #ops every day at 9am", "every_day 09:00"),
         ("Check for tickets due by Friday and remind #ops every weekday at 9am", "weekdays 09:00"),
         ("Find the Mon-Fri on-call tickets and post them every Friday at 9am", "friday 09:00"),
-        ("Find tickets labelled mon-fri and post them every Friday at 9am", "friday 09:00"),
         ("Post the Mon-Fri rota every Sunday at 6pm", "sunday 18:00"),
         ("Every day at 9am, post tickets created on Monday", "every_day 09:00"),
     ],
@@ -977,9 +976,7 @@ def test_a_project_key_that_looks_like_a_short_day_is_never_the_run_day(
         ("Every Friday at 9am, find tickets in MOCK titled Pause on Monday", "friday 09:00"),
         ("Every Friday at 9am, list tickets in MOCK besides Monday's", "friday 09:00"),
         ("Every Friday at 9am, list tickets in MOCK we skip on Mondays", "friday 09:00"),
-        ("Every Friday at 9am, find tickets in MOCK for staff not on holiday", "friday 09:00"),
         ("Every Monday at 9am, find tickets in MOCK, except Friday's hotfixes", "monday 09:00"),
-        ("Every day at 9am, find tickets in MOCK that are not weekend work", "every_day 09:00"),
         ("Every Monday at 9am, find tickets in MOCK not done over the weekend", "monday 09:00"),
         ("Every Monday at 9am, find tickets not updated during the weekend", "monday 09:00"),
     ],
@@ -1906,3 +1903,46 @@ def test_a_day_when_the_words_give_no_run_day_is_asked_in_a_change(words: str):
 )
 def test_a_filter_s_or_a_label_s_day_beside_a_new_time_keeps_the_day(words: str):
     assert run_time_in(words, "every_day 09:00") == ("every_day 10:00", True)
+
+
+@pytest.mark.parametrize(
+    "words",
+    [
+        "every day at 9am, check langgraph except Fridays",
+        "every weekday at 9am check langgraph except Fridays",
+        "Every Friday at 9am, check langgraph except Fridays",
+    ],
+)
+def test_a_day_left_out_that_the_run_day_covers_is_asked(words: str):
+    """Before, each filled the run day it names, in a first draft and as a change, so the
+    workflow ran on the very day the person left out."""
+    assert run_time_in(words) == (None, True)
+    assert run_time_in(words, "every_day 09:00") == (None, True)
+
+
+@pytest.mark.parametrize(
+    "words",
+    [
+        "Every day at 9am, find tickets in MOCK that are not weekend work",
+        "Every Friday at 9am, find tickets in MOCK for staff not on holiday",
+        "Find tickets labelled mon-fri and post them every Friday at 9am",
+    ],
+)
+def test_a_filter_s_day_the_run_day_may_fall_on_is_asked(words: str):
+    """Before, each filled its run day. Code can't tell "not weekend work" from "except
+    weekends", and the weekend, a holiday or Monday to Friday may fall on a day it runs, so
+    it asks."""
+    assert run_time_in(words) == (None, True)
+
+
+@pytest.mark.parametrize(
+    ("words", "read"),
+    [
+        ("Every Friday at 9am, list tickets in MOCK we skip on Mondays", "friday 09:00"),
+        ("Every Monday at 9am, check langgraph except Fridays", "monday 09:00"),
+        ("daily at 9am check langgraph except weekends", "weekdays 09:00"),
+    ],
+)
+def test_a_day_the_run_day_never_falls_on_keeps_it(words: str, read: str):
+    assert run_time_in(words) == (read, True)
+    assert run_time_in(words, "every_day 09:00") == (read, True)
