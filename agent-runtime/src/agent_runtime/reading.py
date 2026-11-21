@@ -2233,13 +2233,9 @@ LEAVE_OUT: Final = EXCLUSIONS | words("skip skips skipping skipped not no non wi
 """Words that leave out what follows them, as "except", "skip", "not", "non-" or "but".
 "other than" and "apart from" are read as pairs."""
 LEAVE_OUT_PAIRS: Final = frozenset({("other", "than"), ("apart", "from")})
-NEARBY: Final = words("next this last")
-"""Words between a due date and its day, as "next" in "due next Friday"."""
-DUE: Final = words("due deadline deadlines")
-"""A ticket's date that may stand before "next", "this" or "last" and its day."""
 STOPS: Final = words("until till stop stops stopping stopped end ends ending ended")
 """Words that end the runs, as "until" in "check langgraph until Friday" or "stop" in "list
-tickets due next Friday, then stop". A day in their sentence is never a filter's."""
+tickets due Friday, then stop". A day in their sentence is never a filter's."""
 FILTERED: Final = (
     TICKETS
     | frozenset(RELEASE_ROOTS)
@@ -2282,15 +2278,13 @@ def _sentences_stopped(text: str, tokens: list[Token]) -> list[bool]:
     return [at in stopped for at in sentence]
 
 
-def _holds_whole(text: str, tokens: list[Token], clause_of: list[int], day: _Day) -> bool:
-    """Whether a filter or a ticket's date holds the day as a whole phrase: a ticket's date
-    before or after it, as "the deadline is Friday" or "a Friday deadline", or a filter's word
-    right after what it filters, as "tickets closed on Friday", "tickets from last Monday" or
-    "tickets in MOCK opened on Tuesday". "next", "this" or "last" may stand only between a due
-    date and a day that ends its words, as "tickets due next Friday". A filter's word after
-    anything else, as "closed" in "the office is closed on Fridays", holds nothing, and
-    "until" or "till" never does."""
-    first, last = day.run
+def _tied_whole(text: str, tokens: list[Token], clause_of: list[int], day: _Day) -> bool:
+    """Whether the day's run, which `_tied` holds, is held as a whole phrase: by a ticket's
+    date, as "due Friday" or "the deadline is Friday", or by a filter's word right after what
+    it filters, as "tickets closed on Friday" or "tickets in MOCK opened on Tuesday". A filter's
+    word after anything else, as "closed" in "the office is closed on Fridays", holds nothing,
+    and "until" or "till" never does."""
+    first = day.run[0]
     clause = clause_of[day.first]
 
     def low(n: int) -> str:
@@ -2299,49 +2293,27 @@ def _holds_whole(text: str, tokens: list[Token], clause_of: list[int], day: _Day
     def joined(a: int, b: int) -> bool:
         return CLAUSE_MARK.search(text[tokens[a][2] : tokens[b][1]]) is None
 
-    lead = first if low(first) in FILTER_LEADS else first - 1
-    walked = False
-    while low(lead) in NEARBY and joined(lead, lead + 1):
-        lead, walked = lead - 1, True
-    if walked and (low(lead) not in DUE or (low(day.last + 1) and joined(day.last, day.last + 1))):
-        return False
-    n = lead
-    while low(n) in DATE_LINKS and joined(n, n + 1):
-        n -= 1
+    lead = first if low(first) == "by" else first - 1
+    if low(lead) not in FILTER_LEADS or low(lead) in TICKET_DATES:
+        return True
     if low(lead) in STOPS:
         return False
-    if low(n) in TICKET_DATES and joined(n, n + 1):
-        # A ticket's date right before a day in the plural and a time is what a reminder is about,
-        # as "the deadline at 9am on Fridays": the run is the schedule's own.
-        run = text[tokens[first][1] : tokens[last][2]]
-        return not (
-            n == first - 1
-            and low(first) in ("at", "on")
-            and _marked(run)
-            and CLOCK.search(run) is not None
-        )
-    if low(lead) in FILTER_LEADS:
-        n = lead - 1
-        while low(n) and (low(n) == "in" or PROJECT_KEY.fullmatch(tokens[n][0])):
-            if not joined(n, n + 1):
-                return False
-            n -= 1
-        return low(n) in FILTERED and joined(n, n + 1)
-    return (
-        low(last + 1) in TICKET_DATES
-        and joined(last, last + 1)
-        and (low(last + 1), low(last + 2)) != ("due", "to")
-    )
+    n = lead - 1
+    while low(n) and (low(n) == "in" or PROJECT_KEY.fullmatch(tokens[n][0])):
+        if not joined(n, n + 1):
+            return False
+        n -= 1
+    return low(n) in FILTERED and joined(n, n + 1)
 
 
 @lru_cache(maxsize=64)
 def _days_held(text: str) -> tuple[tuple[tuple[int, int], bool], ...]:
     """Where every day the words name stands, with whether a filter, a ticket's date or a label
-    holds it whole, as "tickets created on Monday", "due next Friday" or "Monday's tickets". A
-    word that leaves something out before it in its clause undoes the hold, as "except" in
-    "except Friday's check", and so does a word that ends the runs in its sentence, as "then
-    stop". A filter or a ticket's date never holds a run with "every", "daily" or the like,
-    which is the schedule's own, as in "post deadlines every Friday". Kept per request."""
+    holds it, as "tickets created on Monday", "the due date to Friday" or "Monday's tickets". A
+    day is held only where `_tied` or a label holds it, and only as a whole phrase
+    (`_tied_whole`). A word that leaves something out before it in its clause undoes the hold,
+    as "except" in "except Friday's check", and so does a word that ends the runs in its
+    sentence, as "then stop". Kept per request."""
     days = _days_in(text)
     if not days:
         return ()
@@ -2349,22 +2321,17 @@ def _days_held(text: str) -> tuple[tuple[tuple[int, int], bool], ...]:
     clause_of = _clause_of(text, [(raw, a, b) for raw, a, b, _ in tokens])
     left_out = _left_out_before(tokens, clause_of)
     stopped = _sentences_stopped(text, tokens)
-    own: dict[tuple[int, int], bool] = {}
-    for day, _ in days:
-        if day.run not in own:
-            first, last = day.run
-            own[day.run] = FREQUENT.search(text, tokens[first][1], tokens[last][2]) is not None
     return tuple(
         (
             day.match.span(),
             not left_out[day.first]
             and not stopped[day.first]
             and (
-                (not own[day.run] and _holds_whole(text, tokens, clause_of, day))
+                (tied and _tied_whole(text, tokens, clause_of, day))
                 or _a_label(text, tokens, clause_of, day)
             ),
         )
-        for day, _ in days
+        for day, tied in days
     )
 
 
@@ -2458,7 +2425,7 @@ def when_said(words: str) -> WhenSaid:
     their own, or the day it runs never falls on it, as "Mondays" beside "Every Friday at 9am".
     A filter or a label holds a day only as a whole phrase, with no word that leaves something
     out before it in its clause, so "except Friday's check" is asked, and so is a filter's day
-    in a sentence that ends the runs, as "until next Friday" or "then stop". Beside a schedule
+    in a sentence that ends the runs, as "until Friday" or "then stop". Beside a schedule
     of their own, a word the reader doesn't know after "except", "not", "drop", "only" or the
     like is asked too, as "except PH" or "PH excluded", since code can't know every way to write
     a day, and so is a stretch of time or a count of days they leave out, as "except when I'm
