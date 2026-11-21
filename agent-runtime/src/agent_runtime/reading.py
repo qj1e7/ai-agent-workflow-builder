@@ -2432,7 +2432,11 @@ def when_said(words: str) -> WhenSaid:
     to run on it, as "drop Fridays" or "Fridays off", is left out, so it is asked. Any other day
     they name that is not the day it runs is asked, as "Mondays" in "check langgraph except
     Mondays", unless a filter, a ticket's date or a label holds it beside a time or a day of
-    their own, or the day it runs never falls on it, as "Mondays" beside "Every Friday at 9am"."""
+    their own, or the day it runs never falls on it, as "Mondays" beside "Every Friday at 9am".
+    A filter or a label holds a day only as a whole phrase, with no word that leaves something
+    out before it in its clause, so "except Friday's check" is asked. Beside a schedule of their
+    own, a word the reader doesn't know after "except", "not", "only" or the like is asked too,
+    as "except PH", since code can't know every way to write a day."""
     own = _own(words)
     unheld = [
         p
