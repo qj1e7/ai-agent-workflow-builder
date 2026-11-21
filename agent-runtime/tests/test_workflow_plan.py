@@ -23,7 +23,12 @@ from agent_runtime.plan_settings import day_in, run_time_in
 from agent_runtime.workflow_drafter import check_plan
 from agent_runtime.workflow_plan import NEVER_GUESSED, USE_OURS, ProposedPlan
 from tests.day_leads import DAYS_LED_BY_AN_UNKNOWN_WORD
-from tests.exclusion_phrases import HOLIDAYS_LEFT_OUT, SUPPORT_SENTENCES
+from tests.exclusion_phrases import (
+    DAY_WORDS_KEPT,
+    FILTERS_LEFT_OUT,
+    HOLIDAYS_LEFT_OUT,
+    SUPPORT_SENTENCES,
+)
 
 CATALOGUE = Path(__file__).resolve().parents[2] / "contracts" / "n8n" / "catalogue.json"
 WORDS = (
@@ -2225,13 +2230,61 @@ def test_words_that_look_like_no_day_after_an_exclusion_read_as_a_filter(words: 
         "except the long weekend",
         "business days only",
         "except the 25th",
+        "except 25th Dec",
+        "except the 1st and 15th",
+        "except the 2nd week",
+        "except the 1st of the month",
+        "with the 25th excluded",
+        "and the 25th off",
         "but not in December",
+        "except Wedensday",
+        "except Sundy",
+        "except Satuday",
+        "except wkend",
+        "except Holdiays",
+        "except my birthday",
+        "except NYE",
+        "except OOO",
+        "except PH's",
+        "except ph",
+        "except P.H.",
+        "skip Ph",
+        "not on Ph",
+        "except Hari Raya",
+        "except Hari Raya Puasa",
+        "except Hari Raya Haji",
+        "except Deepavali",
+        "except Diwali",
+        "except Vesak",
+        "except Thaipusam",
+        "except Ramadan",
+        "except Lunar New Year",
+        "except Chinese New Year",
+        "except Good Friday",
+        "except National Day",
     ],
 )
 def test_a_word_that_looks_like_a_day_after_an_exclusion_is_asked(rest: str):
-    """A day in any case, a word ending in "day", a near typo of a day, a short code in
-    capitals, a holiday, time off, a month or a day of the month."""
+    """A day in any case, a word ending in "day", a near typo of a day, a holiday or leave code
+    ("PH", "CNY", "NYE", "OOO"), a holiday, time off, a month, or a day of the month where a day,
+    a month or "of" follows it or nothing does."""
     asked_both_ways(EVERY_DAY_CHECK + rest)
+
+
+@pytest.mark.parametrize(("words", "draft", "change"), FILTERS_LEFT_OUT)
+def test_a_code_a_near_day_word_or_a_number_that_names_no_day_fills_as_on_main(
+    words: str, draft: str | None, change: str | None
+):
+    """Only "PH", "CNY", "NYE" and "OOO" are codes for days off, so "UAT", "PRs" or "VPN" are a
+    filter's. A typo is one letter from a day, or two in a long word, so "stays" or "sturdy" is
+    no day. "3rd party" or "everyday requests" name no day."""
+    assert run_time_in(words)[0] == draft
+    assert run_time_in(words, "every_day 09:00")[0] == change
+
+
+@pytest.mark.parametrize("words", DAY_WORDS_KEPT)
+def test_a_word_that_still_looks_like_a_day_beside_a_filter_is_asked(words: str):
+    asked_both_ways(words)
 
 
 @pytest.mark.parametrize("words", HOLIDAYS_LEFT_OUT)
