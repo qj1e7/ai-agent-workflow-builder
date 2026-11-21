@@ -26,12 +26,15 @@ from tests.day_leads import DAYS_LED_BY_AN_UNKNOWN_WORD
 from tests.exclusion_phrases import (
     CHANGES_KEPT,
     CHANGES_LEFT_OUT,
+    CONDITIONS_KEPT,
     DATES_MONTH_ENDS_AND_FREEZES,
     DAY_WORDS_KEPT,
     FILTERS_LEFT_OUT,
     HOLIDAYS_LEFT_OUT,
+    PIECES_JOINED,
     SHORT_FORMS_LEFT_OUT,
     SUPPORT_SENTENCES,
+    TIME_OFF_STRETCHES,
 )
 
 CATALOGUE = Path(__file__).resolve().parents[2] / "contracts" / "n8n" / "catalogue.json"
@@ -2176,26 +2179,25 @@ def test_a_due_date_without_a_stop_keeps_the_run_day_as_on_main():
 
 @pytest.mark.parametrize(
     "rest",
-    [
-        "except when I'm off",
-        "except when I'm away",
-        "unless I'm off",
-        "except when we are closed",
-        "except during releases",
-        "except during an incident",
-        "except while patching",
-        "except during my shift",
-        "not during releases",
-        "skip while I'm away",
-        "unless it's a PH",
-        "but not if it's a holiday",
-    ],
+    [*TIME_OFF_STRETCHES, "unless I'm off", "unless it's a PH", "but not if it's a holiday"],
 )
-def test_a_stretch_of_time_left_out_is_asked(rest: str):
-    """ "when", "while" or "during" right after a word that leaves something out leave out a
-    stretch of time, and "unless" or "if" leave out days when a word after them looks like a
-    day or time off, as "I'm off" or "a PH"."""
+def test_a_stretch_of_time_off_left_out_is_asked(rest: str):
+    """ "when", "while" or "during" after a word that leaves something out leave out time off
+    when the words after them look like a day or time off, as "I'm away" or "Hari Raya", and
+    "unless" or "if" leave out days when a word after them does, as "I'm off" or "a PH"."""
     asked_both_ways(EVERY_DAY_CHECK + rest)
+    assert run_time_in(rest, "every_day 09:00") == (None, True)
+
+
+@pytest.mark.parametrize("rest", CONDITIONS_KEPT)
+def test_a_condition_after_when_while_or_during_keeps_the_run_time(rest: str):
+    """#342 asked for any words after "when", "while" or "during", so "every day at 9am, check
+    langgraph and post only when there is a new release" lost its run time. A condition with no
+    word that looks like a day or time off fills as before #342."""
+    for words in (EVERY_DAY_CHECK + rest, EVERY_DAY_CHECK + "and " + rest):
+        assert run_time_in(words) == ("every_day 09:00", True)
+        assert run_time_in(words, "every_day 09:00") == ("every_day 09:00", True)
+    assert run_time_in(rest, "every_day 09:00") == ("every_day 09:00", False)
 
 
 @pytest.mark.parametrize(
@@ -2443,3 +2445,19 @@ def test_a_change_to_the_task_or_a_filter_keeps_the_run_time(catalogue: Catalogu
         "every_day 09:00",
         "filled",
     )
+
+
+@pytest.mark.parametrize("words", PIECES_JOINED)
+def test_a_holiday_before_w_a_or_n_o_and_a_word_that_leaves_it_out_is_asked(words: str):
+    asked_both_ways(words)
+
+
+@pytest.mark.parametrize(
+    "words",
+    [
+        "every day at 9am, check langgraph, skip zero-day patches",
+        "every day at 9am, check langgraph, only same-day fixes",
+    ],
+)
+def test_a_day_joined_to_a_word_by_a_hyphen_beside_a_schedule_is_asked_as_on_main(words: str):
+    asked_both_ways(words)

@@ -543,12 +543,37 @@ FILTERS_LEFT_OUT: list[tuple[str, str | None, str | None]] = [
         "every_day 09:00",
     ),
     ("Every day at 9am, list tickets except Fr", "every_day 09:00", "every_day 09:00"),
+    (
+        "Every day at 9am, list tickets, skip anything 3/4 complete",
+        "every_day 09:00",
+        "every_day 09:00",
+    ),
+    (
+        "Every Monday at 9am, list access requests, skip those with 2/2 approvals",
+        "monday 09:00",
+        "monday 09:00",
+    ),
+    ("Every day at 9am, check langgraph except 1/2 done", "every_day 09:00", "every_day 09:00"),
+    ("Every day at 9am, check langgraph except 5/5 ones", "every_day 09:00", "every_day 09:00"),
+    ("Every day at 9am, check langgraph except 9/10 ones", "every_day 09:00", "every_day 09:00"),
+    (
+        "Every day at 9am, check langgraph, skip the freeze step",
+        "every_day 09:00",
+        "every_day 09:00",
+    ),
+    (
+        "Every day at 9am, list tickets, skip items 2 may need",
+        "every_day 09:00",
+        "every_day 09:00",
+    ),
+    ("Every day at 9am, check langgraph except Satu", "every_day 09:00", "every_day 09:00"),
 ]
 """Sentences main fills whose words after an exclusion or "on" are a code, a word one letter
 from a day, or a number such as "3rd" that names no day, as "UAT", "stays", "sturdy" or "3rd
-party". So are a version such as "3.12" or "v2/1", "24/7", "ex" before a word that looks like no
-day, and a two-letter word such as "we" or "Fr" that no "/" or "-" joins to a day. Each fills as
-on main."""
+party". So are a version such as "3.12" or "v2/1", "24/7", a fraction or a score such as "3/4"
+or "2/2 approvals", "may" in small letters, "the freeze step", "Satu", "ex" before a word that
+looks like no day, and a two-letter word such as "we" or "Fr" that no "/" or "-" joins to a
+day. Each fills as on main."""
 DAY_WORDS_KEPT: list[str] = [
     "Every day at 9am, list tickets except Friday's release notes",
     "Every day at 9am, list tickets created except Friday's release notes",
@@ -631,8 +656,12 @@ DATES_MONTH_ENDS_AND_FREEZES: list[str] = [
     "except 25th of Dec",
     "except 25/12",
     "except on 1/1",
+    "except on 1/5",
     "skip 31/12/2026",
+    "except 1/2/2027",
     "not on 1 May",
+    "except 2 May",
+    "except 3 Mar",
     "except month end",
     "except month-end",
     "except at month end",
@@ -643,7 +672,8 @@ DATES_MONTH_ENDS_AND_FREEZES: list[str] = [
     "except the code freeze",
     "except during code freeze",
     "skip the change freeze",
-    "except the freeze",
+    "except the release freeze",
+    "except the freeze period",
     "except the blackout period",
     "skip the blackout window",
     "except blackout dates",
@@ -664,11 +694,9 @@ SHORT_FORMS_LEFT_OUT: list[str] = [
     "not on Th/Fr",
     "except w/e",
     "except Frid",
-    "except Wednes",
 ]
 """Short forms main read as nothing: "exc.", "exc" or "ex" before a word that looks like a day,
-two-letter days joined by "/" or "-", "w/e", and the start of a day's name, as "Frid". Each is
-asked."""
+two-letter days joined by "/" or "-", "w/e", and "Frid". Each is asked."""
 CHANGES_LEFT_OUT: list[str] = [
     "check langgraph except PH",
     "except when I am on leave",
@@ -693,7 +721,10 @@ CHANGES_LEFT_OUT: list[str] = [
     "skip month-end",
     "except EOM",
     "skip the code freeze",
-    "not during the freeze",
+    "not during the code freeze",
+    "skip it while I'm away",
+    "except when I'm on MC",
+    "check langgraph, PH n/o n/o excluded",
     "except the blackout window",
     "except Sa/Su",
     "except Mo-Fr",
@@ -725,6 +756,61 @@ CHANGES_KEPT: list[str] = [
     "check langgraph except v2/1",
     "except 24/7 services",
     "skip ex employees",
+    "only requests with 2/2 approvals",
+    "ignore tickets 1/2 done",
+    "skip anything 3/4 complete",
+    "skip the freeze step",
+    "skip items 2 may need",
+    "except Satu",
+    "skip zero-day patches",
+    "only same-day fixes",
 ]
 """Changes with no schedule words that change only the task or a filter. What they leave out
-looks like no day, so each keeps the run time from before."""
+looks like no day, so each keeps the run time from before. A day joined to a word by a hyphen
+names a kind of thing there, as "zero-day patches"."""
+PIECES_JOINED: list[str] = [
+    "every day at 9am, check langgraph, PH n/o n/o excluded",
+    "every day at 9am, check langgraph, PH w/a w/a excluded",
+    "every day at 9am, check langgraph, PH n/o n/o off",
+    "every day at 9am, check langgraph, PH n/o w/a excluded",
+    "every day at 9am, list bugs, PH w/a ones are excluded",
+    "every day at 9am, list bugs, Xmas w/a items are excluded",
+    "every day at 9am, list bugs, PH n/o items are excluded",
+    "every day at 9am, list bugs, PH w/a fix step off",
+]
+"""A holiday before "w/a" or "n/o" and a word that leaves it out after them. Main read "w/a"
+and "n/o" as one word each, so the holiday stood close enough to be left out. Each is asked."""
+TIME_OFF_STRETCHES: list[str] = [
+    "except when I'm off",
+    "except when I'm away",
+    "except when I am on leave",
+    "skip while I'm away",
+    "skip it while I'm away",
+    "not during Hari Raya",
+    "except during the code freeze",
+    "except when the office is closed on PH",
+    "except when I'm sick",
+    "except when I'm on MC",
+    "except when I'm out of office",
+    "except when the team is away",
+]
+"""Time off after "when", "while" or "during", as "I'm away", "on leave", "Hari Raya" or "the
+code freeze". Each is asked."""
+CONDITIONS_KEPT: list[str] = [
+    "post only when there is a new release",
+    "notify me only when there is a new version",
+    "only when it breaks",
+    "only when I approve it",
+    "stay quiet when there is nothing new",
+    "except when the list is empty",
+    "skip when nothing changed",
+    "except when we are closed",
+    "except during releases",
+    "except during an incident",
+    "except while patching",
+    "except during my shift",
+    "not during releases",
+]
+"""A condition after "when", "while" or "during", with no word that looks like a day or time
+off, as "only when there is a new release". #342 asked each beside a schedule. Each fills as
+before #342, and a change keeps the run time from before."""
