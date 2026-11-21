@@ -142,6 +142,12 @@ class PeopleDirectory(Protocol):
     async def listed(self) -> list[Principal]: ...
 
 
+class N8nLogins(Protocol):
+    """Which email each person signs in to n8n with."""
+
+    async def login_of(self, person: UserId) -> str | None: ...
+
+
 class DevUser(WireModel):
     id: UserId
     display: str
@@ -329,6 +335,13 @@ class Me(WireModel):
         description="Whether an Operator gave this person n8n access. GET /api/v1/me/n8n says "
         "whether n8n can be opened now.",
     )
+    n8n_login: str | None = Field(
+        default=None,
+        json_schema_extra=_without_default,
+        description="The email this person signs in to n8n with, as n8n holds it. Null without "
+        "n8n access, before the platform has made their n8n account, or when n8n can't say. "
+        "Open in n8n moves a workflow into this account's space, so only it sees the workflow.",
+    )
     time_zone: str = Field(
         default=TEAM_TIME_ZONE.key,
         json_schema_extra=_without_default,
@@ -340,6 +353,14 @@ class Me(WireModel):
 me_router = APIRouter(tags=["sign-in"])
 
 
+async def _n8n_login(request: Request, principal: Principal) -> str | None:
+    # Only someone with n8n access has a login to name, and only then is the n8n side asked.
+    if not principal.n8n_access:
+        return None
+    logins: N8nLogins = request.app.state.staff
+    return await logins.login_of(principal.user_id)
+
+
 @me_router.get(
     "/api/v1/me",
     responses={status: body for status, body in SIGNED_IN.items() if status != 403},
@@ -348,7 +369,7 @@ me_router = APIRouter(tags=["sign-in"])
         "`on_list: false` and no roles; every other route answers them 403."
     ),
 )
-def who_am_i(signed_in: CurrentSignIn, request: Request) -> Me:
+async def who_am_i(signed_in: CurrentSignIn, request: Request) -> Me:
     zone: str = request.app.state.settings.team_time_zone.key
     if signed_in.person is None:
         identity = signed_in.identity
@@ -366,6 +387,7 @@ def who_am_i(signed_in: CurrentSignIn, request: Request) -> Me:
         display=principal.display,
         roles=[role for role in Role if role in principal.roles],
         n8n_access=principal.n8n_access,
+        n8n_login=await _n8n_login(request, principal),
         time_zone=zone,
     )
 

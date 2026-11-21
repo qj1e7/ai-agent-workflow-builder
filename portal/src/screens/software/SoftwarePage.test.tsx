@@ -600,6 +600,14 @@ describe('the Software watchlist in n8n', () => {
     expect(text(inN8n), 'the list stays on its own tab').not.toContain('Find software')
   })
 
+  it('says which n8n login Open in n8n editor uses on the Watchlist, and nothing when it is unknown', () => {
+    const path = '/software?view=n8n'
+    const named = render(statuses, { ...CAROL_N8N, n8n_login: 'dana.n8ntest@example.test' }, [], <SoftwareRoute now={NOW} />, capabilitiesFixture, path)
+    expect(text(named)).toContain('Open in n8n editor')
+    expect(text(named)).toContain('Opens in n8n as dana.n8ntest@example.test.')
+    expect(text(render(statuses, CAROL_N8N, [], <SoftwareRoute now={NOW} />, capabilitiesFixture, path))).not.toContain('Opens in n8n as')
+  })
+
   it('says who has the watchlist open in n8n where its schedule is changed, with no change the platform would refuse', () => {
     const held = { ...WATCHLIST_WORKFLOW, held_in_n8n: { id: 'carol', name: 'Carol', since: '2026-11-16T02:02:00Z' } }
     const html = render(statuses, ALICE, [], <SoftwareRoute now={NOW} />, capabilitiesFixture, '/software', held)

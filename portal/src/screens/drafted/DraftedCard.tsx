@@ -11,6 +11,7 @@ import { useAskForChange, useShowRevision } from '../home/ChatProvider'
 import { useMainButton } from '../home/primary'
 import { Report, Words } from '../explain/Report'
 import { RunLine } from '../run/RunLine'
+import { WithN8nLogin } from '../workflows/N8nLoginHint'
 import { workingWords } from '../run/words'
 import { addedWords, approvedWords, CANCELLED_WAITING_WORDS, declinedWords, draftedPill, draftedTitle, flagsWords, inN8nWords, revisionWords, setUpLine, settledWords, stationsOf, WAITING_WORDS } from './drafted'
 import { DraftedSettings } from './DraftedSettings'
@@ -81,9 +82,9 @@ function InN8nActions({ view, onProblem }: { view: DraftedWorkflowView; onProble
   if (editor === null) return null
   return (
     <>
-      <ButtonAnchor key="open-n8n" href={editor}>
-        Open n8n
-      </ButtonAnchor>
+      <WithN8nLogin key="open-n8n">
+        <ButtonAnchor href={editor}>Open n8n</ButtonAnchor>
+      </WithN8nLogin>
       <Button
         key="done"
         variant={main}

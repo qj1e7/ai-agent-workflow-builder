@@ -1,4 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { readFileSync } from 'node:fs'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter } from 'react-router'
 import { describe, expect, it } from 'vitest'
@@ -11,7 +12,7 @@ import { ApiProvider } from '../../api/context'
 import { createDevSession } from '../../api/session'
 import type { Me, PersonOut, UseCaseN8nView, UseCaseView } from '../../api/types'
 import { TakeItBackHere } from './InN8n'
-import { DRAFT, NOT_LOADED, SAFE_BLOCKS } from './n8nHold'
+import { DRAFT, NOT_LOADED, opensInN8nAs, SAFE_BLOCKS } from './n8nHold'
 
 const ALICE: Me = { id: 'alice', display: 'Alice', roles: ['operator'], n8n_access: true }
 const CAROL: Me = { id: 'carol', display: 'Carol', roles: ['operator'], n8n_access: true }
@@ -185,5 +186,52 @@ describe('Take it back on a refused change', () => {
     expect(all(drawTakeBack({ ...ALICE, n8n_access: false }, { ...HELD, editor_url: null }))).toEqual([])
     expect(all(drawTakeBack(ALICE, FREE))).toEqual([])
     expect(all(drawTakeBack(ALICE, { ...HELD, editor_url: null, can_open: false, why_not: 'Set your n8n password first.' }))).toEqual([])
+  })
+})
+
+describe('the n8n login under Open in n8n editor', () => {
+  const LOGIN = 'dana.n8ntest@example.test'
+  const SENTENCE = `Opens in n8n as ${LOGIN}.`
+  const withLogin: Me = { ...ALICE, n8n_login: LOGIN }
+  const hint = (html: string) => [...main(html).matchAll(/<p class="[^"]*_hint_[^"]*"[^>]*data-n8n-hint[^>]*>([\s\S]*?)<\/p>/g)].map((m) => text(m[1] ?? ''))
+  const summary = `/workflows/${ON.use_case_id}`
+
+  it('is one sentence, kept beside the button’s own words', () => {
+    expect(opensInN8nAs(LOGIN)).toBe(SENTENCE)
+  })
+
+  it('shows the exact sentence under the press button on the In n8n tab and on Summary', () => {
+    expect(hint(render({ me: withLogin }))).toEqual([SENTENCE])
+    expect(hint(render({ me: withLogin, path: summary }))).toEqual([SENTENCE])
+  })
+
+  it('shows it under the plain link too, when the person already holds the workflow', () => {
+    const html = render({ me: { ...CAROL, n8n_login: LOGIN }, view: HELD })
+    expect(buttons(html)).toEqual(['Take it back', OPEN])
+    expect(hint(html)).toEqual([SENTENCE])
+  })
+
+  it('draws no line, and no half sentence, while the login is unknown', () => {
+    for (const me of [ALICE, { ...ALICE, n8n_login: null }, { ...ALICE, n8n_login: '' }]) {
+      const html = render({ me })
+      expect(buttons(html)).toEqual([OPEN])
+      expect(hint(html)).toEqual([])
+      expect(text(main(html))).not.toMatch(/Opens in n8n as|as null/)
+    }
+  })
+
+  it('draws no line where there is no button', () => {
+    const html = render({ me: withLogin, useCase: { ...ON, state: 'draft' } })
+    expect(buttons(html)).toEqual([])
+    expect(hint(html)).toEqual([])
+  })
+
+  it('wraps a long email inside its box, in the quiet small text', () => {
+    const long = `${'a-very-long-name-with-no-break.'.repeat(6)}n8ntest@example.test`
+    const html = render({ me: { ...ALICE, n8n_login: long } })
+    expect(hint(html)).toEqual([`Opens in n8n as ${long}.`])
+    const css = readFileSync(new URL('./N8nLoginHint.module.css', import.meta.url), 'utf8')
+    expect(css).toMatch(/\.hint\s*{[^}]*overflow-wrap:\s*anywhere/)
+    expect(css).toMatch(/\.wrap\s*{[^}]*min-width:\s*0/)
   })
 })
