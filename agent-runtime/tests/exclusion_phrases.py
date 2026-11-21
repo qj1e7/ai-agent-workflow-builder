@@ -562,6 +562,11 @@ FILTERS_LEFT_OUT: list[tuple[str, str | None, str | None]] = [
         "every_day 09:00",
     ),
     (
+        "Every day at 9am, list tickets, skip the freeze-dried items",
+        "every_day 09:00",
+        "every_day 09:00",
+    ),
+    (
         "Every day at 9am, list tickets, skip items 2 may need",
         "every_day 09:00",
         "every_day 09:00",
@@ -672,6 +677,7 @@ DATES_MONTH_ENDS_AND_FREEZES: list[str] = [
     "except the code freeze",
     "except during code freeze",
     "skip the change freeze",
+    "except the freeze",
     "except the release freeze",
     "except the freeze period",
     "except the blackout period",
@@ -722,6 +728,7 @@ CHANGES_LEFT_OUT: list[str] = [
     "except EOM",
     "skip the code freeze",
     "not during the code freeze",
+    "not during the freeze",
     "skip it while I'm away",
     "except when I'm on MC",
     "check langgraph, PH n/o n/o excluded",
@@ -760,6 +767,7 @@ CHANGES_KEPT: list[str] = [
     "ignore tickets 1/2 done",
     "skip anything 3/4 complete",
     "skip the freeze step",
+    "skip the freeze-dried items",
     "skip items 2 may need",
     "except Satu",
     "skip zero-day patches",
@@ -793,9 +801,17 @@ TIME_OFF_STRETCHES: list[str] = [
     "except when I'm on MC",
     "except when I'm out of office",
     "except when the team is away",
+    "except when I'm out",
+    "not while we are out",
+    "except when they're out",
+    "except when Priya is out",
+    "not during the freeze",
+    "except during the freeze",
+    "skip runs while the freeze is on",
 ]
-"""Time off after "when", "while" or "during", as "I'm away", "on leave", "Hari Raya" or "the
-code freeze". Each is asked."""
+"""Time off after "when", "while" or "during", as "I'm away", "on leave", "Hari Raya", "the
+code freeze" or "the freeze", and "out" after a person and "am", "are" or "is", as "I'm out" or
+"Priya is out". Each is asked."""
 CONDITIONS_KEPT: list[str] = [
     "post only when there is a new release",
     "notify me only when there is a new version",
@@ -810,6 +826,8 @@ CONDITIONS_KEPT: list[str] = [
     "except while patching",
     "except during my shift",
     "not during releases",
+    "only when a new version is out",
+    "only when the ticket is out of date",
 ]
 """A condition after "when", "while" or "during", with no word that looks like a day or time
 off, as "only when there is a new release". #342 asked each beside a schedule. Each fills as
