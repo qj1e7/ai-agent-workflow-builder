@@ -75,7 +75,6 @@ const card = (reply: SetupCardReply, typed = TYPED) => <SetupCard start={{ form:
 const text = (html: string) => html.replace(/<[^>]*>/g, ' ').replaceAll('&#x27;', "'").replaceAll('&amp;', '&').replace(/\s+/g, ' ').trim()
 const buttons = (html: string) => [...html.matchAll(/<(?:button|a)\b[^>]*>([\s\S]*?)<\/(?:button|a)>/g)].map((m) => text(m[1] ?? ''))
 const pill = (html: string) => text(/<span[^>]*data-draft-pill[^>]*>([\s\S]*?)<\/span>/.exec(html)?.[1] ?? '')
-const primaries = (html: string) => (html.match(/class="[^"]*_primary_[^"]*"/g) ?? []).length
 
 const passed = foldWire(foldWire(emptyModel, success.slice(0, 8), 'run_01JB8'), [{ run_id: 'run_01JB8', seq: 9, ts: '2026-11-14T03:00:09Z', actor: { kind: 'platform', id: 'platform', display: 'Platform' }, summary: '', kind: 'run_succeeded', data: { outcome: 'test_passed' } }], 'run_01JB8')
 const working = foldWire(emptyModel, success.slice(0, 5), 'run_01JB8')
@@ -124,7 +123,7 @@ describe('the set-up card before Set up', () => {
     const keys = [...html.matchAll(/data-part="([^"]+)"/g)].map((m) => m[1])
     expect(keys).toEqual(['Watch', 'When', 'Then', 'cross-0'])
     expect(text(html)).toContain('Can’t do: “colour them by team” I didn’t follow this part.')
-    expect(buttons(html)).toContain('Set up the part I can')
+    expect(buttons(html)).toContain('Turn on')
   })
 
   it('is Dropped after Never mind, saying nothing was set up, with no button', () => {
@@ -142,7 +141,7 @@ describe('the set-up card before Set up', () => {
     const refused = render(card(SETUP), { kept: { form, draft: null, phase: { kind: 'creating', key: 'press_2' } }, made: { key: 'press_2', made: { kind: 'refused', said: ['Give the workflow a name.'] } } })
     expect(pill(refused)).toBe('Draft')
     expect(text(refused)).toContain('Give the workflow a name.')
-    expect(buttons(refused)).toContain('Set up')
+    expect(text(refused)).toMatch(/Answer \d questions? first/)
   })
 
   it('keeps their own words quoted for a clause it didn’t follow, as the sketch does', () => {

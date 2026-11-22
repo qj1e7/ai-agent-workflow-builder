@@ -190,7 +190,7 @@ test.describe('with the AI model on', () => {
 
   const card = (page: Page) => thread(page).locator('[data-card]')
   const left = (page: Page) => card(page).locator('[id$="-left"]')
-  const setUp = (page: Page) => card(page).getByRole('button', { name: 'Set up', exact: true })
+  const setUp = (page: Page) => card(page).getByRole('button', { name: 'Turn on', exact: true })
   const pillOf = (page: Page) => card(page).last().locator('[data-draft-pill]')
 
   /** The card asks for what it lacks, and the plan may ask for the Jira project. Everything is filled from the keyboard, and a project the Planner already filled in is left as it is. */
@@ -322,9 +322,8 @@ test.describe('with the AI model on', () => {
       const draftsAfter = (await backend.get<{ drafts: { draft_id: string }[] }>('alice', '/api/v1/drafts')).drafts.map((one) => one.draft_id)
       expect(draftsAfter, 'Set up leaves no draft of the card behind: the workflow holds it').toEqual(draftsBefore)
       expect((await made())[0]?.last_run?.test, 'the card’s test run is a test run').toBe(true)
-      expect((await made())[0]?.state, 'a test run turns nothing on').toBe('draft')
 
-      await card(page).getByRole('button', { name: 'Turn it on', exact: true }).click()
+      // Turn on runs the test and turns the workflow on by itself once it passes.
       await expect(card(page)).toContainText(/On\. First run /, { timeout: 30_000 })
       await expect(pillOf(page)).toHaveText('On')
       expect((await made())[0]?.state, 'On only once the platform says it is on').toBe('on')
@@ -423,7 +422,7 @@ test.describe('with the AI model on', () => {
   const partsOf = (page: Page) => newestCard(page).getByRole('list', { name: 'Each part of your request' })
   const whenPart = (page: Page) => partsOf(page).locator('[data-part="When"]')
   const crosses = (page: Page) => partsOf(page).locator('[data-mark="no"]')
-  const partCan = (page: Page) => newestCard(page).getByRole('button', { name: 'Set up the part I can', exact: true })
+  const partCan = (page: Page) => newestCard(page).getByRole('button', { name: 'Turn on', exact: true })
 
   /** The workflow Set up just made: alice's newest. */
   async function leftOutOf(backend: Backend): Promise<{ use_case_id: string; left_out: string[]; schedule: { day: string; at: string } | null }> {
@@ -1537,7 +1536,7 @@ test.describe('bob asks the Planner questions only', () => {
   const said = (page: Page) => newest(page).locator('p').first()
   const panel = (page: Page) => page.locator('#side-panel')
   const OPS = /^Operators set up workflows\. Ask .+\.$/
-  const CHANGES = [/^Turn it on$/, /^Set up/, /^Watch it$/, /^Save/, /^Pause/, /^Resume/, /^Retry/, /^Run now$/, /^Check now$/, /^Add .*watchlist/i, /^Set it up with a yes$/, /^Approve/, /^Decline/]
+  const CHANGES = [/^Turn it on$/, /^Turn on$/, /^Set up/, /^Watch it$/, /^Save/, /^Pause/, /^Resume/, /^Retry/, /^Run now$/, /^Check now$/, /^Add .*watchlist/i, /^Set it up with a yes$/, /^Approve/, /^Decline/]
 
   async function bobAsks(page: Page, text: string): Promise<void> {
     const before = await thread(page).locator(':scope > li[data-answer]').count()

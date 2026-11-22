@@ -433,3 +433,11 @@ button.chip:hover {
   color: var(--muted);
   font-size: 0.875rem;
 }
+
+.guess {
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 0.8125rem;
+  background: var(--sunk);
+  color: var(--muted);
+}
