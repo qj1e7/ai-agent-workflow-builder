@@ -252,6 +252,7 @@ describe('Check my workflows about the one workflow they have', () => {
       state: 'succeeded',
       at: '2026-11-20T00:30:00Z',
       reason: null,
+      stop: null,
     }
     const said = oneWorkflowSay(one({ state: 'paused', last_run: last, next_run_at: '2026-11-21T01:00:00Z' }), NOW, nameOf)
     expect(said).toMatch(/^“.+” is paused\. Last run today, .+\.$/)

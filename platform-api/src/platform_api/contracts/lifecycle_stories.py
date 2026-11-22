@@ -15,6 +15,7 @@ from platform_api.builder.models import (
     DraftView,
     LastRunView,
     N8nHolderView,
+    RunStopView,
     ScheduleChangeView,
     ScheduleIn,
     UndoIn,
@@ -38,6 +39,7 @@ from platform_api.contracts.stories import (
     USE_CASE_SCHEDULE,
 )
 from platform_api.contracts.watchlist_stories import SCHEDULE, STATUSES
+from platform_api.monitoring.troubleshooter import explain
 from platform_api.orchestration import Schedule, held_words
 from platform_api.shared import TEAM_TIME_ZONE, UserId
 from platform_api.wire import WireModel
@@ -57,6 +59,7 @@ LAST_RUN = LastRunView(
     you_can_decide=False,
     retryable=False,
     reason=None,
+    stop=None,
 )
 # Bob declined the last check, giving a reason. Nothing was written.
 DECLINED = USE_CASE.model_copy(update={"last_run": LAST_RUN})
@@ -86,6 +89,10 @@ STOPPED = AGENT_USE_CASE.model_copy(
                 "tickets": False,
                 "retryable": True,
                 "reason": "AgentError",
+                "stop": RunStopView(
+                    at=REJECTED.t0 + timedelta(minutes=1),
+                    what_happened=explain("AgentError").explanation,
+                ),
             }
         )
     }

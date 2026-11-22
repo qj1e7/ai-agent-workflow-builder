@@ -38,7 +38,7 @@ const EVERY_SOFTWARE: WatchlistView = {
 }
 const NOT_CHECKED_ON_ITS_OWN: WatchlistView = { ...EVERY_SOFTWARE, schedule: null }
 
-const lr = (change: Partial<LastRun>): LastRun => ({ run_id: 'run_x', state: 'succeeded', at: '2026-11-05T01:00:00Z', test: false, declined_by: null, decline_reason: null, approved_by: [], proposed: 0, written: 0, tickets: false, you_can_decide: false, retryable: false, reason: null, ...change })
+const lr = (change: Partial<LastRun>): LastRun => ({ run_id: 'run_x', state: 'succeeded', at: '2026-11-05T01:00:00Z', test: false, declined_by: null, decline_reason: null, approved_by: [], proposed: 0, written: 0, tickets: false, you_can_decide: false, retryable: false, reason: null, stop: null, ...change })
 const AGENT = agentUseCase as UseCaseView
 const SCHEDULE = (watchlistUseCase as UseCaseView).schedule
 const flow = (id: string, change: Partial<UseCaseView>): UseCaseView => ({ ...AGENT, use_case_id: id, name: `Workflow ${id}`, ...change })

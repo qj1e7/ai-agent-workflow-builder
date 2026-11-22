@@ -55,6 +55,14 @@ describe('the full page of a report', () => {
     }
   })
 
+  it('opens on its flags when the address asks for them, as the workflow page’s Needs a fix does, and keeps them closed otherwise', () => {
+    const flags = (html: string) => /<details[^>]*>(?=<summary><span[^>]*>Flags<\/span>)/.exec(mainOf(html))?.[0] ?? ''
+    const asked = flags(render(`/workflows/${ID}/explain#flags`, { version: null, report: REPORT }))
+    expect(asked).toMatch(/ open=""/)
+    expect(asked).toMatch(/ id="flags"/)
+    expect(flags(render(`/workflows/${ID}/explain`, { version: null, report: REPORT }))).not.toMatch(/ open=""/)
+  })
+
   it('titles one version Explain, version N, and asks for it', () => {
     const html = render(`/workflows/${ID}/explain?version=1`, { version: 1, report: REPORT })
     expect(text(mainOf(html))).toContain('Explain, version 1 FastAPI release check')

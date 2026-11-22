@@ -201,6 +201,16 @@ class UseCaseSchedule(WireModel):
     )
 
 
+class RunStopView(WireModel):
+    at: AwareDatetime = Field(
+        description="When it last stopped: after a retry, the second stop. Needs you gives the "
+        "same time."
+    )
+    what_happened: str = Field(
+        description="Why it stopped, in the AI troubleshooter's one sentence, without the time."
+    )
+
+
 class LastRunView(WireModel):
     run_id: RunId
     state: RunStateName
@@ -240,6 +250,10 @@ class LastRunView(WireModel):
         default=None,
         description="How a finished run ended: written, nothing_to_write, or test_passed for a "
         "test run that stopped before the yes and wrote nothing. Null until it succeeded.",
+    )
+    stop: RunStopView | None = Field(
+        description="When and why a stopped run stopped, the words every place that names the "
+        "stop says. Null for any other run."
     )
 
 

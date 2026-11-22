@@ -113,7 +113,8 @@ describe('the build panel’s status line and checks', () => {
       { ok: true, text: 'Every write waits for a yes.' },
       { ok: true, text: 'Test run passed up to the yes. Nothing was written.' },
     ])
-    expect(testStatus(STOPPED)).toEqual({ ok: false, text: 'The test run stopped. An agent could not finish its work.' })
+    expect(testStatus(STOPPED, "GitHub didn't answer.")).toEqual({ ok: false, text: "The test run stopped. GitHub didn't answer." })
+    expect(testStatus(STOPPED), 'until the platform says why, it says only that it stopped, never a guess from the reason code').toEqual({ ok: false, text: 'The test run stopped.' })
     expect(testStatus(DECLINED)?.text, 'words that end a sentence get no second full stop').toMatch(/[^.]\.$/)
     expect(testStatus(WORKING), 'nothing is said while it runs').toBeNull()
   })

@@ -244,18 +244,23 @@ def cannot_retry(stage: Stage, failure: Failure) -> str:
     )
 
 
+def failed_data(stage: Stage, failure: Failure) -> RunFailedData:
+    """A stop as its run_failed event records it, which the AI troubleshooter reads."""
+    return RunFailedData(
+        stage=stage.value,
+        reason=failure.reason.value,
+        retryable=failure.retryable,
+        message=failure.message,
+    )
+
+
 def run_failed(stage: Stage, failure: Failure) -> PendingEvent:
     tail = _what_next(stage, failure)
     return PendingEvent(
         PLATFORM,
         "run_failed",
         f"The run failed ({failure.reason.value}): {sentence(failure.message)}{tail}",
-        RunFailedData(
-            stage=stage.value,
-            reason=failure.reason.value,
-            retryable=failure.retryable,
-            message=failure.message,
-        ),
+        failed_data(stage, failure),
     )
 
 

@@ -64,6 +64,10 @@ export const approvalGist = (approval: string): string => /^[^.]*/.exec(approval
 export const explainPath = (useCaseId: string, version: number | null): string =>
   `/workflows/${encodeURIComponent(useCaseId)}/explain${version === null ? '' : `?version=${String(version)}`}`
 
+/** The report's flags, which say what to fix and where. Needs a fix on the workflow's page opens the report on them. */
+export const FLAGS_ANCHOR = 'flags'
+export const explainFlagsPath = (useCaseId: string): string => `${explainPath(useCaseId, null)}#${FLAGS_ANCHOR}`
+
 /** What a choice on “Which workflow?” sends, so the Planner explains the one they picked. */
 export const explainAsk = (name: string): string => `Explain the ${name}`
 

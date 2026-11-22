@@ -1,7 +1,7 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import type { ExplainFlag, ExplainSetting, ExplainTouch, Segment, WorkflowExplained } from '../../api/types'
 import { gradePill } from '../workflows/n8nChange'
-import { approvalGist, approvesGist, flagsGist, segmentsOfText, settingsGist, stepsGist, touchesGist } from './explain'
+import { approvalGist, approvesGist, FLAGS_ANCHOR, flagsGist, segmentsOfText, settingsGist, stepsGist, touchesGist } from './explain'
 import styles from './Report.module.css'
 
 /** A string from the plan or the document shows in curly quotes, apart from code's own words, so a block named “Security approved” can't read as a verdict. */
@@ -23,14 +23,15 @@ interface SectionProps {
   readonly title: string
   readonly gist: string
   readonly startOpen: boolean
+  readonly id?: string | undefined
   readonly children: ReactNode
 }
 
 /** A row with its gist, closed until a click or Enter opens it. The browser's own disclosure keeps the keyboard and the screen reader's state. */
-function Section({ title, gist, startOpen, children }: SectionProps) {
+function Section({ title, gist, startOpen, id, children }: SectionProps) {
   const [open, setOpen] = useState(startOpen)
   return (
-    <details className={styles['section']} open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>
+    <details id={id} className={styles['section']} open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>
       <summary>
         <span className={styles['title']}>{title}</span>
         <span className={styles['gist']}>{gist}</span>
@@ -110,13 +111,18 @@ interface ReportProps {
   readonly onWording?: () => void
   /** Leaves out In short and the row of what it reads, writes and posts, for a page that already says them above. */
   readonly rest?: boolean
+  /** Opens on the flags, for a page reached from Needs a fix. */
+  readonly flagsOpen?: boolean
 }
 
 /**
  * The workflow report (layout B): In short first, then one row per section with its gist. The chat card, the side panel and the
  * full page draw this one component. Everything under In short is code's own words. Settings opens by itself while an answer is needed.
  */
-export function Report({ report, code = false, onWording, rest = false }: ReportProps) {
+export function Report({ report, code = false, onWording, rest = false, flagsOpen = false }: ReportProps) {
+  useEffect(() => {
+    if (flagsOpen) document.getElementById(FLAGS_ANCHOR)?.scrollIntoView({ block: 'start' })
+  }, [flagsOpen])
   const rewordedShown = report.reworded !== null && !code
   const thenGrade = report.then === null ? null : gradePill(report.then.grade).label
   return (
@@ -160,7 +166,7 @@ export function Report({ report, code = false, onWording, rest = false }: Report
             <Touches touches={report.touches} />
           </Section>
         )}
-        <Section title="Flags" gist={flagsGist(report)} startOpen={false}>
+        <Section title="Flags" gist={flagsGist(report)} startOpen={flagsOpen} id={flagsOpen ? FLAGS_ANCHOR : undefined}>
           {report.flags.length === 0 ? <p>No flags.</p> : <ul className={styles['rows']}>{report.flags.map((flag, index) => <Flag key={index} flag={flag} />)}</ul>}
           {report.fixed.length > 0 ? (
             <>

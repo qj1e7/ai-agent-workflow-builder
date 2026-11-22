@@ -14,7 +14,7 @@ from platform_api.builder.team_requests import (
     FollowingUpPage,
     TeamRequests,
 )
-from platform_api.monitoring import Advice, RunFailedData, explain_failure
+from platform_api.monitoring import Advice, RunFailedData, explain_failure, what_happened
 from platform_api.orchestration import (
     Ask,
     Because,
@@ -87,6 +87,10 @@ class StoppedItem(WireModel):
     stopped_at: datetime
     reason: FailureReason
     retryable: bool
+    what_happened: str = Field(
+        description="Why it stopped, in the AI troubleshooter's one sentence, the words the "
+        "workflow's row and its run say."
+    )
     advice: Advice = Field(description="The AI troubleshooter's reason and what to do.")
 
 
@@ -391,6 +395,7 @@ def _stopped(stop: Stopped) -> StoppedItem:
         stopped_at=stop.stopped_at,
         reason=stop.reason,
         retryable=stop.retryable,
+        what_happened=what_happened(failure),
         advice=explain_failure(failure),
     )
 

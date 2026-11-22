@@ -34,7 +34,7 @@ from platform_api.contracts.stories import (
     Timeline,
     failure_events,
 )
-from platform_api.monitoring.troubleshooter import explain
+from platform_api.monitoring.troubleshooter import explain, what_happened
 from platform_api.orchestration import ConfirmationKind, set_up_link
 from platform_api.shared import ApprovalId, RunId, UserId
 from platform_api.wire import WireModel
@@ -156,6 +156,7 @@ def home_for_alice(failure: Timeline) -> HomeOut:
                 stopped_at=failed.ts,
                 reason=failed.data.reason,
                 retryable=failed.data.retryable,
+                what_happened=what_happened(failed.data),
                 advice=explain(failed.data.reason),
             )
         ],
