@@ -281,15 +281,11 @@ test.describe('with the AI model on', () => {
       await expect(pillOf(page)).toHaveText('Draft')
       await expect(parts.locator('[data-mark="ask"]'), 'one question at a time').toHaveCount(1)
       await expect(parts.locator('[data-part="When"]'), 'a time is never guessed: it asks how often first').toContainText('How often?')
-      await expect(setUp(page), 'Set up is never shown dead').not.toHaveAttribute('aria-disabled', 'true')
-      await expect(left(page)).toContainText(/questions? to answer/)
+      await expect(setUp(page), 'no dead Turn on while a question is open').toHaveCount(0)
+      await expect(left(page)).toContainText(/Answer \d questions? first/)
       await shot(page, info, `n11-card-${phone ? '390' : '1440'}`)
 
-      await setUp(page).focus()
-      await page.keyboard.press('Enter')
-      const weekly = card(page).getByRole('button', { name: 'Every week', exact: true })
-      await expect(card(page).getByRole('button', { name: 'Every day', exact: true }), 'pressing Set up while the time is missing goes to the question').toBeFocused()
-      await weekly.click()
+      await card(page).getByRole('button', { name: 'Every week', exact: true }).click()
       await expect(parts.locator('[data-part="When"]')).toContainText('Which day?')
       await card(page).getByRole('button', { name: 'Friday', exact: true }).click()
       await expect(parts.locator('[data-part="When"]')).toContainText('Fridays, at what time?')
@@ -303,29 +299,15 @@ test.describe('with the AI model on', () => {
 
       await setUp(page).focus()
       await page.keyboard.press('Enter')
-      await expect(pillOf(page), 'Set up makes a draft, and the card builds it').toHaveText(/Building|Ready/, { timeout: 30_000 })
+      await expect(pillOf(page), 'Turn on makes a draft, tests it and turns it on').toHaveText(/Building|Ready|On/, { timeout: 30_000 })
       const made = async () => (await backend.get<{ use_cases: { use_case_id: string; name: string; state: string; last_run: { test: boolean } | null }[] }>('alice', '/api/v1/use-cases')).use_cases
       await expect.poll(async () => (await made()).length, { message: 'one workflow was set up' }).toBe(before + 1)
-      const draft = (await made())[0]
-      expect(draft?.state, 'Set up makes a draft that is not on').toBe('draft')
-      await expect(card(page), 'the line and the Tester’s test run follow the run’s own events').toContainText(/Test run passed/, { timeout: 90_000 })
-      await expect(pillOf(page)).toHaveText('Ready')
-      await expect(card(page)).toContainText(/Nothing was written|nothing new to write/)
-      const panel = page.locator('#side-panel')
-      if (!phone) {
-        await expect(panel, 'on a wide screen Set up shows the build beside the chat').toContainText(/Building( in n8n)?/)
-        await expect(panel.getByRole('list', { name: 'Checks' })).toContainText(/Test run passed/)
-        await expect(panel).toContainText('The builder saves a draft. It can’t publish by itself.')
-        await expect(panel, 'nothing unbuilt is claimed').not.toContainText('Only our blocks')
-      }
-      await shot(page, info, `n11-ready-${phone ? '390' : '1440'}`)
-      const draftsAfter = (await backend.get<{ drafts: { draft_id: string }[] }>('alice', '/api/v1/drafts')).drafts.map((one) => one.draft_id)
-      expect(draftsAfter, 'Set up leaves no draft of the card behind: the workflow holds it').toEqual(draftsBefore)
-      expect((await made())[0]?.last_run?.test, 'the card’s test run is a test run').toBe(true)
-
-      // Turn on runs the test and turns the workflow on by itself once it passes.
-      await expect(card(page)).toContainText(/On\. First run /, { timeout: 30_000 })
+      await expect(card(page), 'the test run passes, and it turns itself on').toContainText(/On\. First run /, { timeout: 120_000 })
       await expect(pillOf(page)).toHaveText('On')
+      const panel = page.locator('#side-panel')
+      const draftsAfter = (await backend.get<{ drafts: { draft_id: string }[] }>('alice', '/api/v1/drafts')).drafts.map((one) => one.draft_id)
+      expect(draftsAfter, 'Turn on leaves no draft of the card behind: the workflow holds it').toEqual(draftsBefore)
+      expect((await made())[0]?.last_run?.test, 'the card’s test run is a test run').toBe(true)
       expect((await made())[0]?.state, 'On only once the platform says it is on').toBe('on')
       if (!phone) await expect(panel).toContainText(/On\. Version 1/)
       await shot(page, info, `n11-on-${phone ? '390' : '1440'}`)
@@ -506,7 +488,7 @@ test.describe('with the AI model on', () => {
 
     await ask(page, `Every Friday at 9, ${STALE}`)
     await expect(whenPart(page), 'a bare hour asks morning or evening').toContainText('At 9:00 or 21:00?')
-    await expect(left(page).last()).toContainText(/questions? to answer/)
+    await expect(left(page).last()).toContainText(/Answer \d questions? first/)
     assertClean(watch)
     await context.close()
     await forgetNewDrafts(backend, before)
@@ -538,7 +520,7 @@ test.describe('with the AI model on', () => {
       await ask(page, words)
       await expect(messages().last().getByRole('heading', { name: 'How to start', exact: true })).toBeVisible()
       await expect(messages().last().getByRole('list', { name: 'Each part of your request' }), 'the question is answered, never crossed').toHaveCount(0)
-      await expect(messages().last().locator('ol > li')).toHaveCount(5)
+      await expect(messages().last().locator('ol > li')).toHaveCount(4)
     }
     await shot(page, info, 'help-how-to-start')
     const before = await messages().count()
