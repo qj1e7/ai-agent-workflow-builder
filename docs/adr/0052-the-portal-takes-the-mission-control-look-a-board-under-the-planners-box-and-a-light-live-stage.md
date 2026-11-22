@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 ---
 
 # The Portal takes the Mission control look: a board under the Planner's box, and a light live stage
