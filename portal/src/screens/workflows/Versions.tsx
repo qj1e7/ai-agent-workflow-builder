@@ -47,8 +47,8 @@ export function Versions({ useCase, now, nameOf, operator, say }: VersionsProps)
     )
   }
   return (
-    <details className={styles['more']} aria-labelledby={headingId}>
-      <summary id={headingId}>Versions</summary>
+    <section className={styles['section']} aria-labelledby={headingId}>
+      <h3 id={headingId}>Versions</h3>
       {versions.data ? (
         <ol className={styles['rows']} aria-label="Versions, newest first">
           {versions.data.map((version) => (
@@ -85,6 +85,6 @@ export function Versions({ useCase, now, nameOf, operator, say }: VersionsProps)
           {problem}
         </p>
       ) : null}
-    </details>
+    </section>
   )
 }

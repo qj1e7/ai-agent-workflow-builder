@@ -313,7 +313,7 @@ describe('a workflow page', () => {
 
   it('gives an Approver who may approve and the recent runs, but no manage buttons', () => {
     const html = render({ me: BOB, runs: [{ ...(done as RunView), use_case_id: 'uc_01JD0' }] })
-    expect(sectionText(html, 'Who says yes')).toMatch(/^Any Approver but Alice, in Teams\. Who can’t say yes /)
+    expect(sectionText(html, 'Who says yes')).toMatch(/^Any Approver but Alice, in Teams\. Nothing is written until an Approver says yes\. Who can’t say yes /)
     expect(text(mainOf(html))).toContain('Recent runs')
     expect(mainOf(html)).toContain('href="/runs/run_01JB8"')
     expect(buttons(html).filter((label) => /Run now|Pause|Resume|Delete|More actions/.test(label))).toEqual([])
@@ -366,7 +366,7 @@ describe('a workflow page', () => {
 
   it('for a run n8n lost, says Lost in the pill and in the banner, never On', () => {
     const html = render({ last: { state: 'lost', reason: null } })
-    expect(mainOf(html)).toMatch(/data-tone="bad"[^>]*>.*Lost<\/span>/)
+    expect(mainOf(html)).toMatch(/data-tone="bad"[^>]*>.*Needs you<\/span>/)
     expect(text(bannerOfHtml(html))).toBe('Lost today at 10:14. Approved, but the run stopped before it could make the change. Nothing was written. Open the run')
     expect(text(mainOf(html))).not.toContain('On. Next run')
   })
@@ -491,7 +491,7 @@ describe('Details on the workflow page', () => {
   })
 
   it('leaves out an empty Details: a first version has Explain only, and the banner’s Explain is the one on the page', () => {
-    expect(text(detailsOf(render()))).toBe('Details Explain Agents release check')
+    expect(text(detailsOf(render()))).toBe(`Details Explain ${AGENTS.name}`)
   })
 
   it('says the one approval rule where the page names who says yes', () => {
@@ -513,9 +513,9 @@ describe('Explain on the workflow page', () => {
       const id = CHANGED.useCase.use_case_id
       const name = CHANGED.useCase.name
       expect(explainLinks(render({ ...CHANGED, me })), me.id).toEqual([
+        [`Explain ${name}`, `/workflows/${id}/explain`],
         [`Explain ${name}, version 2`, `/workflows/${id}/explain?version=2`],
         [`Explain ${name}, version 1`, `/workflows/${id}/explain?version=1`],
-        [`Explain ${name}`, `/workflows/${id}/explain`],
       ])
     }
   })

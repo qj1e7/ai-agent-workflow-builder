@@ -39,26 +39,38 @@ export type LastRun = NonNullable<UseCaseView['last_run']>
 /** The runs a row calls Running. Anything counting running workflows asks this, so a count never outruns the rows. */
 export const isRunning = (run: { readonly state: RunState } | null): boolean => run !== null && IN_PROGRESS.has(run.state)
 
-export interface Pill {
-  readonly tone: 'ok' | 'wait' | 'bad' | 'new'
-  readonly pill: string | null
+/** The one approval rule, in the words the team lead approved on 23 Nov (ADR 0053). */
+export const APPROVAL_RULE = 'Nothing is written until an Approver says yes.'
+
+export type Four = 'needs' | 'on' | 'paused' | 'draft'
+
+export interface Status {
+  readonly four: Four
+  readonly label: string
+  readonly tone: 'ok' | 'wait' | 'bad' | 'new' | undefined
 }
 
+export const WAITING_ON_AN_APPROVER = 'On · waiting for an Approver’s yes'
+export const LAST_RUN_STOPPED = 'On · last run stopped'
+
 /**
- * The workflow's own pill, read from its newest run's pill, so the two can't disagree: a run's Stopped, Lost or Waiting for a yes stays,
- * and any other run reads On, as in the sketch. Running is the run's own pill in Recent runs. The tone stays, because the banner says it.
+ * The workflow's one state, in the four words ADR 0053 allows: Paused, Draft, Needs you or On. Needs you holds a version that needs a fix,
+ * a stopped run for an Operator (who opens it) and a run waiting for a yes the person may give. Everyone else reads On, with who it waits
+ * for. A run's own result (Done, Nothing new, Declined, Skipped) stays in Recent runs, so the workflow reads On.
  */
-export function pillOf(last: LastRun): Pill {
-  const { label, tone } = runPill(stageOfLast(last))
-  switch (tone) {
+export function statusOf(useCase: Pick<UseCaseView, 'state' | 'last_run'> & Partial<Pick<UseCaseView, 'grade' | 'move_refused'>>, operator: boolean): Status {
+  if (useCase.state === 'paused') return { four: 'paused', label: 'Paused', tone: undefined }
+  if (useCase.state === 'draft') return { four: 'draft', label: 'Draft', tone: undefined }
+  if (needsFix(useCase)) return { four: 'needs', label: 'Needs you', tone: 'bad' }
+  const { last_run: last } = useCase
+  if (!last) return { four: 'on', label: 'On', tone: undefined }
+  switch (runPill(stageOfLast(last)).tone) {
     case 'bad':
+      return operator ? { four: 'needs', label: 'Needs you', tone: 'bad' } : { four: 'on', label: LAST_RUN_STOPPED, tone: 'ok' }
     case 'wait':
-      return { tone, pill: label }
-    case 'new':
-      return { tone: 'new', pill: null }
-    case 'ok':
-    case 'quiet':
-      return { tone: 'ok', pill: null }
+      return last.you_can_decide ? { four: 'needs', label: 'Needs you', tone: 'wait' } : { four: 'on', label: WAITING_ON_AN_APPROVER, tone: 'wait' }
+    default:
+      return { four: 'on', label: 'On', tone: undefined }
   }
 }
 
@@ -402,12 +414,14 @@ export function rowAction(last: LastRun | null, viewer: Viewer): RowAction | nul
   return null
 }
 
-export type Filter = 'all' | 'stopped' | 'paused'
+export type Filter = 'all' | 'needs' | 'on' | 'paused' | 'draft'
 
 export const FILTERS: readonly (readonly [Filter, string])[] = [
   ['all', 'All'],
-  ['stopped', 'Stopped'],
+  ['needs', 'Needs you'],
+  ['on', 'On'],
   ['paused', 'Paused'],
+  ['draft', 'Draft'],
 ]
 
 export interface Row {
@@ -415,15 +429,13 @@ export interface Row {
   readonly action: RowAction | null
 }
 
-function kept(row: Row, filter: Filter, words: string): boolean {
+function kept(row: Row, filter: Filter, words: string, operator: boolean): boolean {
   if (words && !`${row.useCase.name} ${row.useCase.instruction}`.toLowerCase().includes(words)) return false
   switch (filter) {
     case 'all':
       return true
-    case 'stopped':
-      return row.useCase.last_run?.state === 'failed'
-    case 'paused':
-      return row.useCase.state === 'paused'
+    default:
+      return statusOf(row.useCase, operator).four === filter
   }
 }
 
@@ -443,7 +455,7 @@ export function rowsOf(
     return { useCase, action: action && runsInNeeds.has(action.runId) ? null : action }
   })
   const needsYou = (row: Row) => (row.action ? 0 : 1)
-  return rows.filter((row) => kept(row, filter, words)).sort((a, b) => needsYou(a) - needsYou(b))
+  return rows.filter((row) => kept(row, filter, words, viewer.operator)).sort((a, b) => needsYou(a) - needsYou(b))
 }
 
 export type RunNowOutcome = Outcome<{ readonly run_id: string }>

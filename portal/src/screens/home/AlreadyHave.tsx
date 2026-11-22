@@ -1,13 +1,13 @@
 import { useState, type ReactNode } from 'react'
-import { useUseCase } from '../../api/queries'
+import { isOperator } from '../../api/me'
+import { useMe, useUseCase } from '../../api/queries'
 import { Button } from '../../ui/Button'
 import type { SimilarWorkflow } from '../../api/types'
 import { Card } from '../../ui/Card'
 import { OpenButton } from '../../ui/OpenItem'
 import { repeatWords } from '../software/software'
-import { needsFix } from '../workflows/n8nChange'
 import { StatusPills } from '../workflows/Status'
-import { pillOf, workflowPath } from '../workflows/workflow'
+import { workflowPath } from '../workflows/workflow'
 import { useMainButton } from './primary'
 
 /**
@@ -20,6 +20,7 @@ export function AlreadyHave({ similar, card }: { similar: SimilarWorkflow; card:
   const [another, setAnother] = useState(false)
   const main = useMainButton()
   const useCase = useUseCase(similar.use_case_id).data
+  const me = useMe().data
   if (another) return card
   const repo = useCase?.agents.flatMap((agent) => Object.entries(agent.values)).find(([input]) => /github/i.test(input))?.[1]
   const when = useCase?.schedule ? repeatWords(useCase.schedule) : 'when an Operator starts it'
@@ -27,7 +28,7 @@ export function AlreadyHave({ similar, card }: { similar: SimilarWorkflow; card:
   return (
     <Card
       title={useCase?.name ?? similar.name}
-      pill={useCase ? <StatusPills state={useCase.state} fact={useCase.last_run ? pillOf(useCase.last_run) : null} fix={needsFix(useCase)} /> : undefined}
+      pill={useCase ? <StatusPills useCase={useCase} operator={me !== undefined && isOperator(me)} /> : undefined}
       actions={
         <>
           <Button onClick={() => setAnother(true)}>Set up another</Button>

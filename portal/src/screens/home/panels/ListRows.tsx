@@ -1,13 +1,14 @@
 import { useId, type ReactNode } from 'react'
 import { useDisplayName } from '../../../api/people'
+import { isOperator } from '../../../api/me'
+import { useMe } from '../../../api/queries'
 import type { PastDecisionView, UseCaseView, WatchedSoftwareView, WatchlistView } from '../../../api/types'
 import { OpenLink } from '../../../ui/OpenItem'
 import type { PanelItem } from '../../../ui/sidePanel'
 import { CHECKER, checksOnItsOwn, softwareLine, softwarePath, stateOf, watchRank } from '../../software/software'
 import { ExplainButton } from '../../explain/ExplainButton'
-import { needsFix } from '../../workflows/n8nChange'
 import { StatusPills } from '../../workflows/Status'
-import { pillOf, rowLine, SOFTWARE_PAGE, workflowPath } from '../../workflows/workflow'
+import { rowLine, SOFTWARE_PAGE, workflowPath } from '../../workflows/workflow'
 import type { NameOf } from '../../run/words'
 import { decisionSub } from '../decided'
 import styles from './Lists.module.css'
@@ -34,6 +35,8 @@ function Row({ item, to, name, line, state, data, beside }: { item: PanelItem; t
 /** Workflow rows in the words of the Workflows page's rows: the name, "Mon 9:00 · last run …", and the same pill. Each opens the workflow, beside the chat when the chat drew it. */
 export function WorkflowRows({ useCases, label, now }: { useCases: readonly UseCaseView[]; label: string; now: Date }): ReactNode {
   const nameOf = useDisplayName()
+  const me = useMe().data
+  const operator = me !== undefined && isOperator(me)
   return (
     <ul className={styles['wl']} aria-label={label}>
       {useCases.map((useCase) => (
@@ -43,7 +46,7 @@ export function WorkflowRows({ useCases, label, now }: { useCases: readonly UseC
           to={workflowPath(useCase)}
           name={useCase.name}
           line={rowLine(useCase, now, nameOf)}
-          state={<StatusPills state={useCase.state} fact={useCase.last_run ? pillOf(useCase.last_run) : null} fix={needsFix(useCase)} test={useCase.last_run?.test === true} />}
+          state={<StatusPills useCase={useCase} operator={operator} test={useCase.last_run?.test === true} />}
           data={{ 'data-workflow-id': useCase.use_case_id }}
           beside={<ExplainButton useCaseId={useCase.use_case_id} name={useCase.name} />}
         />

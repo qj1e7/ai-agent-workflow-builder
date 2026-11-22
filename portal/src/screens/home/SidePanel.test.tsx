@@ -224,7 +224,7 @@ describe('the side panel’s views', () => {
     expect(links(html)).toEqual([['More details', '/workflows']])
     expect(text(html)).toContain('1 workflow')
     expect(text(html)).toContain(`${STOPPED.name} `)
-    expect(text(html)).toContain('Stopped')
+    expect(text(html)).toContain('Needs you')
     expect(html).toMatch(new RegExp(`<button[^>]*data-opens="workflow:${STOPPED.use_case_id}"`))
     expect(html, 'and an Explain beside each row, which opens the report in the panel too').toMatch(new RegExp(`<button[^>]*data-opens="explain:${STOPPED.use_case_id}"[^>]*>Explain`))
   })

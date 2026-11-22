@@ -46,7 +46,7 @@ test('bob sees the run alice started at the top of Home, and its row opens the r
   await context.close()
 })
 
-test('alice sees no Waiting on others on Home or Workflows, and the run she started reads Waiting for a yes on its workflow’s row', async ({ browser, backend }, info) => {
+test('alice sees no Waiting on others on Home or Workflows, and the run she started reads On, waiting for an Approver’s yes, on its workflow’s row', async ({ browser, backend }, info) => {
   const { runId, approvalId } = await backend.waitingRun('alice')
   const context = await devContext(browser, 'alice')
   const page = await context.newPage()
@@ -57,7 +57,7 @@ test('alice sees no Waiting on others on Home or Workflows, and the run she star
   await expect(page.getByRole('button', { name: /^Approve/ })).toHaveCount(0)
   await shot(page, info, 'p11-06-alice-home')
   await page.goto('/workflows')
-  await expect(page.locator('li[data-workflow-id]').filter({ hasText: 'Software watchlist' })).toContainText('Waiting for a yes')
+  await expect(page.locator('li[data-workflow-id]').filter({ hasText: 'Software watchlist' })).toContainText('On · waiting for an Approver’s yes')
   await expect(waitingOnOthers(page)).toHaveCount(0)
   await expect(page.locator(`a[href="/runs/${runId}"]`), 'Needs you offers alice no run she can’t decide').toHaveCount(0)
   await context.close()

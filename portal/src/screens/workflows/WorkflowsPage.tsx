@@ -26,12 +26,11 @@ import { usePagedNeeds } from '../home/usePagedNeeds'
 import { ExplainButton } from '../explain/ExplainButton'
 import { useArrivalScroll } from './arrival'
 import { MadeInN8nSection } from './MadeInN8n'
-import { needsFix } from './n8nChange'
 import { StatusPills } from './Status'
 import { RequestView } from './RequestView'
 import { REQUEST_PARAM } from './requests'
 import { draftItem, FollowingSection } from './Sections'
-import { changeProblem, changeWords, FILTERS, meansOutOfDate, pillOf, pressChange, REFRESH_MS, rowLine, rowsOf, SOFTWARE_PAGE, viewerOf, workflowPath, type Filter, type Row } from './workflow'
+import { changeProblem, changeWords, FILTERS, meansOutOfDate, pressChange, REFRESH_MS, rowLine, rowsOf, SOFTWARE_PAGE, viewerOf, workflowPath, type Filter, type Row } from './workflow'
 import styles from './Workflows.module.css'
 
 export const rowLinkId = (useCaseId: string) => `workflow-${useCaseId}`
@@ -60,6 +59,7 @@ interface RowProps {
   readonly arrive: boolean
   readonly now: Date
   readonly nameOf: (id: string) => string
+  readonly operator: boolean
 }
 
 /** The list's class. */
@@ -69,7 +69,7 @@ export const listClass = (_rows: readonly Row[], extra = ''): string => [styles[
  * One workflow, as the sketch draws it: its name, "Daily 8:00 · last run today, {where it stands}", and one pill. The whole row is one link of 44 px or more.
  * In the chat it opens the workflow in the side panel. The Software watchlist always opens its page.
  */
-export function WorkflowRow({ row, index, arrive, now, nameOf }: RowProps) {
+export function WorkflowRow({ row, index, arrive, now, nameOf, operator }: RowProps) {
   const { useCase } = row
   const path = workflowPath(useCase)
   const item = { kind: 'workflow', id: useCase.use_case_id } as const
@@ -84,7 +84,7 @@ export function WorkflowRow({ row, index, arrive, now, nameOf }: RowProps) {
         </span>
       </span>
       <span id={`${ids}-pill`}>
-        <StatusPills state={useCase.state} fact={useCase.last_run ? pillOf(useCase.last_run) : null} fix={needsFix(useCase)} test={useCase.last_run?.test === true} />
+        <StatusPills useCase={useCase} operator={operator} test={useCase.last_run?.test === true} />
       </span>
     </>
   )
@@ -287,7 +287,7 @@ function Loaded({ handedOver, now, me, useCases }: LoadedProps) {
         {rows.length + draftRows.length > 0 ? (
           <ul className={listClass(rows)} aria-label="Workflows">
             {rows.map((row, index) => (
-              <WorkflowRow key={row.useCase.use_case_id} row={row} index={index} arrive={!back} now={now} nameOf={nameOf} />
+              <WorkflowRow key={row.useCase.use_case_id} row={row} index={index} arrive={!back} now={now} nameOf={nameOf} operator={viewer.operator} />
             ))}
             {draftRows.map((draft, index) => (
               <DraftRow key={draft.draft_id} draft={draft} index={rows.length + index} arrive={!back} now={now} />

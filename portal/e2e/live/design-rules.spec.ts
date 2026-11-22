@@ -294,7 +294,7 @@ test('Workflows, a workflow, the Watchlist and a software page keep the design r
 
   await page.goto('/workflows')
   const row = main(page).locator('li[data-workflow-id]').filter({ hasText: 'Software watchlist' })
-  await expect(row).toContainText('Waiting for a yes')
+  await expect(row).toContainText('On · waiting for an Approver’s yes')
   await rules('Workflows')
   const onList = (await row.locator('span[data-life]').innerText()).trim()
   await row.getByRole('link', { name: /^(?!Explain )/ }).click()
@@ -321,6 +321,6 @@ test('Workflows, a workflow, the Watchlist and a software page keep the design r
     await rules('a workflow page')
     expect((await main(page).locator('div[class*="head"] span[data-life]').innerText()).trim(), 'Principle 7: a workflow reads the same on Workflows and on its page').toBe(rowPill)
   }
-  expect(onList, 'the waiting check reads Waiting for a yes').toBe('Waiting for a yes')
+  expect(onList, 'the waiting check reads On, with who it waits for').toBe('On · waiting for an Approver’s yes')
   await context.close()
 })

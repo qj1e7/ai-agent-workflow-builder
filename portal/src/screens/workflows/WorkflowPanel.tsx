@@ -14,9 +14,8 @@ import { ExplainButton } from '../explain/ExplainButton'
 import { Troubleshooting } from '../run/Outcome'
 import { StatusBanner } from './Banner'
 import { heldOf, heldWords } from './n8nHold'
-import { needsFix } from './n8nChange'
 import { StatusPills } from './Status'
-import { bannerOf, changeProblem, changeWords, controlsOf, lastRunWords, leftOutWords, NO_RUNS, nextRunWords, pillOf, pressChange, REFRESH_MS, rereadWhenOutOfDate, sentenceOf, viewerOf, type Banner, type LastRun } from './workflow'
+import { bannerOf, changeProblem, changeWords, controlsOf, lastRunWords, leftOutWords, NO_RUNS, nextRunWords, pressChange, REFRESH_MS, rereadWhenOutOfDate, sentenceOf, viewerOf, type Banner, type LastRun } from './workflow'
 import styles from './Workflows.module.css'
 import { DraftActions } from './DraftActions'
 
@@ -64,7 +63,7 @@ function Summary({ useCase, me, now }: { useCase: UseCaseView; me: Me; now: Date
   return (
     <>
       <div>
-        <StatusPills state={useCase.state} fact={last ? pillOf(last) : null} test={last?.test === true} fix={needsFix(useCase)} />
+        <StatusPills useCase={useCase} operator={viewerOf(me).operator} test={last?.test === true} />
       </div>
       <p>{sentenceOf(useCase)}</p>
       {leftOutWords(useCase.left_out) ? <p className="muted">{leftOutWords(useCase.left_out)}</p> : null}

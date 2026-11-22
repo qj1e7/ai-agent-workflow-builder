@@ -517,8 +517,10 @@ describe('the rows of the list', () => {
     expect(rowsOf(useCasesFor(CAROL), CAROL, 'all', '', new Set(['run_bugs'])).map((row) => row.action)).toEqual([null, null, null])
   })
 
-  it('filter to what stopped and what is paused', () => {
-    expect(ids(rowsOf(useCasesFor(BOB), BOB, 'stopped', ''))).toEqual(['uc_bugs'])
+  it('filter to what needs the person and what is paused', () => {
+    expect(ids(rowsOf(useCasesFor(CAROL), CAROL, 'needs', ''))).toEqual(['uc_bugs'])
+    expect(ids(rowsOf(useCasesFor(BOB), BOB, 'needs', '')), 'an Approver cannot open a stopped run').not.toContain('uc_bugs')
+    expect(ids(rowsOf(useCasesFor(BOB), BOB, 'on', ''))).toContain('uc_bugs')
     expect(ids(rowsOf(useCasesFor(BOB), BOB, 'paused', ''))).toEqual(['uc_nudge'])
   })
 
@@ -851,7 +853,6 @@ describe('the status banner', () => {
   it.each(Object.entries(EVERY_STATE))('gives a %s run the pill and the banner that say the same state', (state, want) => {
     const stopped = state === 'failed'
     const useCase = withLast({ state: state as LastRun['state'], at: '2026-11-04T00:00:00Z', reason: stopped ? 'AgentError' : null, stop: stopped ? { at: '2026-11-04T00:00:00Z', what_happened: AGENT_STOPPED } : null })
-    const run = useCase.last_run as LastRun
     const pill = statusOf(useCase, true).label
     const banner = bannerOf(facts({ useCase }))
     expect({ pill, banner: banner.text, tone: banner.tone, opens: banner.action?.kind === 'open' }).toEqual(want)
