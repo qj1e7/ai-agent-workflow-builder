@@ -395,6 +395,23 @@ describe('a clash inside a watch answer', () => {
   })
 })
 
+describe('a release check with the rest of the request', () => {
+  it('draws its own card, then the rest of the request as a card of its own', () => {
+    const release: SetupCardReply = {
+      ...(setupCard as SetupCardReply),
+      name: 'React release check',
+      similar: null,
+      parts: [],
+      also: { ...(setupCard as SetupCardReply), similar: null, parts: [] },
+    }
+    const shown = text(draw(release))
+    expect(shown).toContain('React release check')
+    expect(shown).toContain('The rest of your request:')
+    expect(shown.indexOf('React release check')).toBeLessThan(shown.indexOf('The rest of your request:'))
+    expect(shown.indexOf('The rest of your request:')).toBeLessThan(shown.lastIndexOf('Weekly summary of closed tickets'))
+  })
+})
+
 describe('the clauses an answer didn’t read', () => {
   it('are drawn above a state answer, to ask on their own', () => {
     expect(text(draw(checkLeftover as PlannerReply, { leftovers: true }))).toBe('Can’t do: “every Friday sum up the closed tickets” Ask this on its own, and I’ll answer it.')

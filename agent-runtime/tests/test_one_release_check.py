@@ -111,13 +111,6 @@ def test_a_release_check_with_no_ticket_shows_the_ticket_it_fills_in():
     assert card["do"] == ("Create 1 Jira ticket", "changed", FILLED_IN)
 
 
-def test_a_change_beside_a_release_word_keeps_the_watchlists_answer():
-    task = "Watch Redis releases, and update Redis to 9.0.0"
-    answer = answer_of(read(software="Redis"), task, facts("Redis"))
-    assert isinstance(answer, CantAnswer) and isinstance(answer.alternative, WatchlistAnswer)
-    assert [row.text for row in answer.cant] == ["update Redis to 9.0.0"], "never dropped"
-
-
 @pytest.mark.parametrize(
     ("task", "more"),
     [
@@ -139,7 +132,7 @@ def test_words_beside_the_release_check_come_back_crossed_never_dropped():
     assert [(row.text, row.system) for row in answer.cant] == [("Slack", "Slack")]
 
 
-@pytest.mark.parametrize("task", ["Check n8n for new releases", "latest version of n8n"])
+@pytest.mark.parametrize("task", ["Check n8n for new releases?", "latest version of n8n"])
 def test_a_question_about_the_newest_version_keeps_its_answer(task: str):
     answer = answer_of(read(software="n8n"), task, facts("n8n"))
     assert isinstance(answer, WatchlistAnswer), "a question, not a workflow"
