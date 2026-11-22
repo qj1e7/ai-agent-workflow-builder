@@ -101,6 +101,18 @@
   padding: 0;
 }
 
+@media (max-height: 34rem) {
+  :global(#root):has([data-chat]) {
+    height: auto;
+    min-height: 100dvh;
+    overflow: visible;
+  }
+
+  :global(#root):has([data-chat]) .sheet {
+    overflow: visible;
+  }
+}
+
 @media (max-width: 900px) {
   :global(#root):has([data-chat]) .shell {
     display: flex;

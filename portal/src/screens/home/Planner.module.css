@@ -681,6 +681,18 @@
   background: var(--surface);
 }
 
+@media (max-height: 34rem) {
+  .chatScroll {
+    flex: 1 0 auto;
+    overflow: visible;
+  }
+
+  .chatDock {
+    position: sticky;
+    bottom: 0;
+  }
+}
+
 .chatDock .dock {
   padding: 10px 24px 14px;
 }
