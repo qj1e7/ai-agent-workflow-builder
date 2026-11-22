@@ -8,6 +8,7 @@ from agent_runtime.vulnerabilities import (
     NVD_BUDGET_SECONDS,
     OSV_PAGE_BYTES,
     OSV_PAGES,
+    RECORD_NOT_READ,
     AdvisoryReader,
     Nvd,
     NvdPace,
@@ -259,3 +260,20 @@ def test_the_fix_named_is_the_lowest_newer_than_our_version():
     looked = services.reader(FakeClock()).start_check().look("maven", LOG4J, "2.12.1")
     assert looked is not None
     assert looked.vulnerabilities[0].fixed_in == "2.12.4"
+
+
+def test_an_advisory_id_too_long_to_keep_makes_only_that_package_could_not_check():
+    services = Services([osv_record("GHSA-" + "x" * 70, [], "HIGH")])
+    looked = services.reader(FakeClock()).start_check().look("maven", LOG4J, "2.14.1")
+    assert looked is not None
+    assert (looked.state, looked.problem) == ("could_not_check", RECORD_NOT_READ)
+
+
+def test_an_nvd_score_over_ten_makes_only_that_package_could_not_check():
+    services = Services(
+        [osv_record("GHSA-1", ["CVE-2024-0001"], "HIGH")],
+        {"CVE-2024-0001": nvd_answer(11.0, "CRITICAL")},
+    )
+    looked = services.reader(FakeClock()).start_check().look("maven", LOG4J, "2.14.1")
+    assert looked is not None
+    assert (looked.state, looked.problem) == ("could_not_check", RECORD_NOT_READ)

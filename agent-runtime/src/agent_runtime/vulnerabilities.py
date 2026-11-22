@@ -30,6 +30,7 @@ DEFAULT_NVD_BASE = "https://services.nvd.nist.gov"
 TIMEOUT_SECONDS = 15.0
 USER_AGENT = "ai-workflow-builder-version-checker"
 OSV_PAGES = 5
+RECORD_NOT_READ = "OSV or NVD sent a vulnerability record in a shape we don't read"
 OSV_PAGE_BYTES = 8 * MEGABYTE
 """One OSV page holds up to 1,000 records. Past this, the answer is not one we read."""
 NVD_ANSWER_BYTES = 2 * MEGABYTE
@@ -362,7 +363,12 @@ class AdvisoryCheck:
             found = self._reader.query(ecosystem, name, version)
         except AdvisoriesUnavailable as error:
             return Looked("could_not_check", problem=str(error))
-        merged, unscored = self._merge(found.advisories, version)
+        try:
+            merged, unscored = self._merge(found.advisories, version)
+        except ValidationError:
+            # One record outside the contract, as an id over 60 letters or a score over 10, makes
+            # only this package "could not check". The check goes on for the rest.
+            return Looked("could_not_check", problem=RECORD_NOT_READ)
         return Looked("checked", merged, unscored, all_read=found.all_read)
 
     def _merge(

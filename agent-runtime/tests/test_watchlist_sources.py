@@ -345,3 +345,14 @@ def test_a_registry_outage_stops_trying_when_the_next_try_would_not_fit():
     assert len(slow.calls) == 2
     assert isinstance(result, TaskFailed)
     assert "Maven Central returned 503 Service Unavailable two times" in result.error.message
+
+
+def test_one_bad_record_for_a_package_leaves_the_other_software_checked():
+    services = Services([osv_record("GHSA-" + "x" * 70, [], "HIGH")])
+    result = Check(maven=Registry({LOG4J: LOG4J_VERSIONS}), services=services).run(
+        log4j(), on_github()
+    )
+    assert isinstance(result, TaskFinished)
+    package, github = result.output.findings
+    assert (package.state, package.vulnerability_check) == ("behind", "could_not_check")
+    assert github.state == "behind"
