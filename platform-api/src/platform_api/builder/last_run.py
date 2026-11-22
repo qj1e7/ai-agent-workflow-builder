@@ -5,7 +5,7 @@ All three read `UseCaseView.last_run`, so one run is never described two ways.""
 from collections.abc import Sequence
 from typing import Protocol
 
-from platform_api.builder.models import LastRunView
+from platform_api.builder.models import LastRunView, RunStopView
 from platform_api.orchestration import RunGist
 from platform_api.shared import Principal, UseCaseId
 
@@ -32,4 +32,7 @@ def last_run_view(gist: RunGist) -> LastRunView:
         retryable=gist.retryable,
         reason=gist.reason,
         outcome=gist.outcome,
+        stop=None
+        if gist.stop is None
+        else RunStopView(at=gist.stop.at, what_happened=gist.stop.what_happened),
     )

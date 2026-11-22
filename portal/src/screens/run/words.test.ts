@@ -141,7 +141,7 @@ describe('a run followed from its own events, in the same stage words', () => {
   const words = (model: RunModel) => stageWords(stageFactsOf(model), named)
 
   it('reads where a run stands from its events, and calls a run retried after a stop Retrying', () => {
-    expect(words(replay(failure))).toBe('An agent could not finish its work')
+    expect(words(replay(failure)), 'the events carry no troubleshooter sentence, so a stop reads Stopped').toBe('Stopped')
     expect(words(replay(success, 6))).toBe('Running')
     expect(words(replay(success, 15))).toBe('Waiting for a yes')
     expect(words(replay(success, 18))).toBe('Creating the ticket')
@@ -217,12 +217,18 @@ describe('the Step by step log', () => {
 })
 
 describe('the stage words, one function for the row, the banner, the strip and Recent runs', () => {
-  const base: StageFacts = { state: 'succeeded', count: 0, tickets: true, approvedBy: [], declinedBy: null, reason: null }
+  const base: StageFacts = { state: 'succeeded', count: 0, tickets: true, approvedBy: [], declinedBy: null, whyStopped: null }
   const nameOf = (id: string) => ({ bob: 'Bob', alice: 'Alice' })[id] ?? id
   const stage = (change: Partial<StageFacts>) => stageWords({ ...base, ...change }, nameOf)
 
-  it('says why a run stopped, in the failure’s own plain words', () => {
-    expect(stage({ state: 'failed', reason: 'AgentError' })).toBe('An agent could not finish its work')
+  it('says why a run stopped in the troubleshooter’s sentence from the platform, as a phrase', () => {
+    expect(stage({ state: 'failed', whyStopped: 'An agent could not finish its work.' })).toBe('An agent could not finish its work')
+    expect(stage({ state: 'failed', whyStopped: "The workflow has no Start from the Portal block, so the Portal couldn't start it." })).toBe(
+      "The workflow has no Start from the Portal block, so the Portal couldn't start it",
+    )
+  })
+
+  it('says only Stopped when the platform has not said why, and never guesses from the reason code', () => {
     expect(stage({ state: 'failed' })).toBe('Stopped')
   })
 

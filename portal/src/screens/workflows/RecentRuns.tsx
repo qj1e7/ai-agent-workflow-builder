@@ -4,7 +4,7 @@ import type { RunView } from '../../api/types'
 import { Button } from '../../ui/Button'
 import { stageWords } from '../run/words'
 import { RunPill } from './Status'
-import { runWhen, stageOfRun } from './workflow'
+import { runAt, runWhen, stageOfRun } from './workflow'
 import styles from './Workflows.module.css'
 
 export const RECENT_LIMIT = 10
@@ -41,7 +41,7 @@ export function RecentRuns({ runs, now, nameOf, firstRun }: RecentRunsProps) {
               <li key={run.run_id} data-run-id={run.run_id} data-state={run.state}>
                 <Link to={`/runs/${run.run_id}`} className={styles['runLink']}>
                   <span className={styles['main']}>
-                    <b>{runWhen(run.started_at, now)}</b>
+                    <b>{runWhen(runAt(run), now)}</b>
                     <span className={styles['sub']}>{stageWords(stage, nameOf)}</span>
                   </span>
                   <RunPill facts={stage} />

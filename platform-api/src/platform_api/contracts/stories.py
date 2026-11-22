@@ -55,7 +55,7 @@ from platform_api.monitoring.events import (
     activity_event_adapter,
 )
 from platform_api.monitoring.http import TroubleshootingOut
-from platform_api.monitoring.troubleshooter import answers, explain
+from platform_api.monitoring.troubleshooter import answers, explain, what_happened
 from platform_api.orchestration.approvals import Refusal, Verdict
 from platform_api.orchestration.dispatch import ApprovalNotice, ApprovalOutcome, AskedStep
 from platform_api.orchestration.http import (
@@ -643,6 +643,7 @@ def failure_final_view(tl: Timeline) -> RunView:
         reason=failed.data.reason,
         retryable=failed.data.retryable,
         message=failed.data.message,
+        what_happened=what_happened(failed.data),
     )
 
 

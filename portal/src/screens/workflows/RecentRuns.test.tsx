@@ -27,8 +27,28 @@ describe('the recent runs of a workflow', () => {
     const html = render([failed as RunView, done as RunView])
     expect(links(html)).toEqual(['/runs/run_01JB9', '/runs/run_01JB8'])
     const said = text(html)
-    expect(said).toContain('Today, 10:14 An agent could not finish its work Stopped Open')
+    expect(said, 'the run says what the troubleshooter says of it, and its GitHub failure is GitHub not answering').toContain("Today, 10:14 GitHub didn't answer Stopped Open")
     expect(said).toContain('Tue 3 Nov, 10:14 1 ticket created, approved by Bob Done Open')
+  })
+
+  it('says why a run stopped in the troubleshooter’s sentence from the platform, never a guess from the reason code', () => {
+    const noStart = {
+      ...(failed as RunView),
+      stage: 'pending',
+      reason: 'DispatchFailed',
+      retryable: false,
+      message: 'n8n did not take the start: the workflow has no Start from the Portal block to start it',
+      what_happened: "The workflow has no Start from the Portal block, so the Portal couldn't start it.",
+    } as RunView
+    const said = text(render([noStart]))
+    expect(said).toContain("Today, 10:14 The workflow has no Start from the Portal block, so the Portal couldn't start it Stopped Open")
+    expect(said).not.toContain('could not be reached')
+  })
+
+  it('dates a stopped run by when it last stopped, the time the Workflows row and Needs you give', () => {
+    const retried = { ...(failed as RunView), started_at: '2026-11-02T06:53:05Z', updated_at: '2026-11-04T04:06:57Z' }
+    expect(text(render([retried]))).toContain('Today, 12:06 ')
+    expect(text(render([retried]))).not.toContain('Mon 2 Nov')
   })
 
   it('has one heading, Recent runs', () => {

@@ -122,9 +122,11 @@ describe('the Software watchlist page', () => {
   it('says the last check stopped, why, and when, and links to its run', () => {
     const stopped = { ...statuses, last_check: { run_id: failedRun.run_id, state: 'failed', started_at: failedRun.started_at } }
     const html = render(stopped, BOB, [failedRun])
-    expect(text(html)).toContain('The last check stopped: an agent could not finish its work. Started Wed 4 Nov, 10:14, Singapore time.')
+    expect(text(html)).toContain("The last check stopped: GitHub didn't answer. Started Wed 4 Nov, 10:14, Singapore time.")
     expect(html).toContain(`href="/runs/${failedRun.run_id}"`)
     expect(text(render(stopped, BOB))).toContain('The last check stopped. Started Wed 4 Nov, 10:14')
+    const older = { ...failedRun, what_happened: undefined }
+    expect(text(render(stopped, BOB, [older])), 'a platform that does not send the sentence yet reads Stopped').toContain('The last check stopped. Started Wed 4 Nov, 10:14')
   })
 
   it('says the watchlist is paused, with no next check time, while it is paused', () => {

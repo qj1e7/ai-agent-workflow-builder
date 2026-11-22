@@ -103,6 +103,7 @@ from platform_api.orchestration.store import RunRecord
 from platform_api.orchestration.write_actions import Proposal, WriteAction
 from platform_api.settings import answers_per_minute_from_env
 from platform_api.shared import (
+    NO_START_BLOCK,
     ApprovalId,
     Digest,
     Principal,
@@ -389,6 +390,7 @@ class RunBook:
         task: Task = SPEC.task,
         test: bool = False,
         decisions: tuple[Decision, ...] = (),
+        updated: datetime | None = None,
     ) -> RunId:
         run_id = RunId(f"run_{len(self.runs) + 1}")
         record = RunRecord(
@@ -398,7 +400,7 @@ class RunBook:
             ),
             UserId("alice"),
             at,
-            at,
+            updated or at,
             1,
             state,
             (),
@@ -1501,6 +1503,7 @@ async def test_a_declined_run_names_who_declined_and_why_and_writes_nothing(fron
         "retryable": False,
         "reason": None,
         "outcome": None,
+        "stop": None,
     }
 
 
@@ -1539,6 +1542,31 @@ async def test_a_stopped_run_is_the_last_run_with_no_one_declining(front: Front)
         False,
     )
     assert (last["retryable"], last["reason"]) == (True, "AgentError")
+
+
+async def test_a_run_n8n_could_not_start_says_why_and_when_it_last_stopped(front: Front):
+    """The reason code alone reads as an engine that could not be reached. The row says what the
+    troubleshooter says, and gives the time it stopped, as Needs you does."""
+    use_case_id = await make_workflow(front, "No start")
+    failure = Failure(
+        RunFailure.DISPATCH_FAILED,
+        f"n8n did not take the start: {NO_START_BLOCK}",
+        retryable=False,
+    )
+    front.book.add(
+        use_case_id,
+        Failed(RunId("run_1"), Stage.PENDING, failure, ResumeWork(1)),
+        LONG_AGO,
+        updated=LONG_AGO + timedelta(days=2),
+    )
+    last = await last_run_of(front, "No start")
+    assert last is not None
+    assert last["at"] == "2026-10-26T01:41:00Z"
+    assert last["stop"] == {
+        "at": "2026-10-28T01:41:00Z",
+        "what_happened": "The workflow has no Start from the Portal block, so the Portal "
+        "couldn't start it.",
+    }
 
 
 async def test_a_test_run_is_the_run_the_platform_recorded_as_one(front: Front):

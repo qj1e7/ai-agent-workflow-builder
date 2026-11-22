@@ -3,10 +3,12 @@ from typing import Any
 
 import pytest
 
+from platform_api.builder import Builder
 from platform_api.shared import RunId
 from tests import test_home
 from tests.declared import declared_status
-from tests.test_home import Lab, stopped_run, waiting_run, work, workflow
+from tests.test_builder_lifecycle import ModelConnected
+from tests.test_home import Lab, start, stopped_run, waiting_run, work, workflow
 
 pytestmark = pytest.mark.anyio
 
@@ -75,3 +77,35 @@ async def test_one_run_says_it_too_and_a_run_that_waits_for_no_one_does_not(lab:
     assert (one["state"], one["you_can_decide"]) == ("awaiting_approval", True)
     assert failed["state"] == "failed"
     assert "you_can_decide" not in failed
+
+
+async def test_a_stop_reads_the_same_from_the_run_the_list_the_workflow_and_needs_you(lab: Lab):
+    """One stop, one sentence: the troubleshooter's. The workflow's row gives the time it stopped,
+    the time Needs you gives, not the time it started."""
+    lab.app.state.builder = Builder(
+        lab.h.db,
+        lab.h.orchestrator,
+        lab.app.state.watchlist,
+        "http://localhost:8000",
+        ModelConnected(),
+        history=lab.h.orchestrator,
+    )
+    use_case_id = await workflow(lab, owner="carol")
+    run_id = await start(lab, use_case_id, "carol")
+    lab.h.advance(timedelta(minutes=3))
+    await work(lab, run_id, fail=True)
+
+    one = (await lab.call("carol", "GET", f"/api/v1/runs/{run_id}")).json()
+    (listed,) = [r for r in await runs_as(lab, "carol") if r["run_id"] == run_id]
+    rows = (await lab.call("carol", "GET", "/api/v1/use-cases")).json()["use_cases"]
+    (last,) = [row["last_run"] for row in rows if row["use_case_id"] == use_case_id]
+    (needs,) = (await lab.home("carol"))["stopped"]
+
+    said = "GitHub didn't answer."
+    assert (one["what_happened"], listed["what_happened"], needs["what_happened"]) == (
+        said,
+        said,
+        said,
+    )
+    assert last["stop"] == {"at": needs["stopped_at"], "what_happened": said}
+    assert last["stop"]["at"] != last["at"], "it stopped three minutes after it started"

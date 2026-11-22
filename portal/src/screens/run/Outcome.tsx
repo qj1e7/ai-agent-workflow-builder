@@ -1,5 +1,4 @@
 import { useId, type ReactNode } from 'react'
-import { failureReasonLabel } from '../../api/labels'
 import type { TroubleshootingOut } from '../../api/types'
 import { useShownInPanel } from '../../ui/sidePanel'
 import { RetryButton, TestAgainButton } from '../home/HomeItem'
@@ -88,28 +87,25 @@ export function AnswerList({ answers, children }: { answers: readonly Answer[]; 
 
 /**
  * The AI troubleshooter's three answers: What happened, Affected and Safe to retry. What happened is its one sentence; the likely
- * cause and the platform's failure text wait behind Details. Someone who isn't an Operator reads the answers, and a note where the buttons are.
+ * cause and the platform's failure text wait behind Details. Until it answers, there is no answer to give, only the note and the failure
+ * text. Someone who isn't an Operator reads the answers, and a note where the buttons are.
  */
 export function StopAnswers({ failure, advice, loading, modelOff = false, safeId }: Pick<TroubleshootingProps, 'failure' | 'advice' | 'loading' | 'modelOff'> & { safeId: string }) {
   const note = failureText(failure.message)
-  const happened = advice ? withCurrentNames(advice.answers.what_happened) : `${failureReasonLabel[failure.reason] ?? failure.reason}.`
   const cause = advice ? withCurrentNames(advice.advice.likely_cause) : ''
   const waitsForModel = failure.retryable && modelOff
   const details = [cause, note ? `The failure text: ${note}` : ''].filter((part) => part !== '')
   return (
     <>
-      <dl className={styles['answers']}>
-        <Qa name="What happened">{happened}</Qa>
-        {advice ? (
-          <>
-            <Qa name="Affected">{advice.answers.what_affected}</Qa>
-            <Qa name="Safe to retry" id={safeId}>
-              {waitsForModel ? NOT_YET_NO_MODEL : withCurrentNames(advice.answers.safe_to_retry)}
-            </Qa>
-          </>
-        ) : null}
-      </dl>
-      {advice ? null : (
+      {advice ? (
+        <dl className={styles['answers']}>
+          <Qa name="What happened">{withCurrentNames(advice.answers.what_happened)}</Qa>
+          <Qa name="Affected">{advice.answers.what_affected}</Qa>
+          <Qa name="Safe to retry" id={safeId}>
+            {waitsForModel ? NOT_YET_NO_MODEL : withCurrentNames(advice.answers.safe_to_retry)}
+          </Qa>
+        </dl>
+      ) : (
         <p className={styles['note']} role="status">
           {loading ? 'The AI troubleshooter is looking at what happened.' : 'The AI troubleshooter could not explain this one.'}
         </p>
@@ -136,7 +132,7 @@ export function StopNext({ runId, failure, advice, me, reports, nameOf, modelOff
   const [first] = stoppedActions(runId, failure.retryable, modelOff)
   const retry = first?.kind === 'retry'
   const waitsForModel = failure.retryable && modelOff
-  const found = [advice ? withCurrentNames(advice.answers.what_happened) : `${failureReasonLabel[failure.reason] ?? failure.reason}.`, failureText(failure.message)].filter((part) => part !== '').join(' ')
+  const found = [advice ? withCurrentNames(advice.answers.what_happened) : '', failureText(failure.message)].filter((part) => part !== '').join(' ')
   if (waitsForModel || beside) return null
   if (retry) {
     return me?.operator ? <RetryButton runId={runId} label="Retry" primary={!quiet} describedBy={safeId} /> : <p className={styles['note']}>{OPERATORS_RETRY}</p>

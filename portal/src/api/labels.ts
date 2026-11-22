@@ -2,7 +2,6 @@ import type {
   ActivityKind,
   ApprovalStepStatus,
   BlockKind,
-  FailureReason,
   FailureStage,
   Refusal,
   Role,
@@ -36,18 +35,6 @@ export const failureStageLabel: Record<FailureStage, string> = {
   working: 'While the agents were working',
   proposed: 'While the request was prepared',
   acting: 'While writing',
-}
-
-export const failureReasonLabel: Record<FailureReason, string> = {
-  AgentError: 'An agent could not finish its work',
-  WorkflowNodeError: 'A workflow step failed',
-  TimedOut: 'A step took too long',
-  DispatchFailed: 'The workflow engine could not be reached',
-  WriteFailed: 'The write did not go through',
-  SafetyDenied: 'The safety checker blocked the write',
-  UnboundIntent: 'The request did not match an allowed action',
-  OutOfOrderStep: 'A step ran out of order',
-  StoppedByUpdate: 'The platform was updated while it ran',
 }
 
 export const refusalLabel: Record<Refusal, string> = {
@@ -113,6 +100,12 @@ function humanise(raw: string): string {
 
 export function connectorLabel(connector: string): string {
   return connectorNames[connector] ?? humanise(connector)
+}
+
+/** Words that go on after a comma, as "last run today, an agent could not finish its work". A name or a code at the start keeps its capitals. */
+export function lowerStart(words: string): string {
+  const named = /^[A-Z]{2}/.test(words) || Object.values(connectorNames).some((name) => new RegExp(`^${name}\\b`).test(words))
+  return named ? words : `${words.charAt(0).toLowerCase()}${words.slice(1)}`
 }
 
 /** The connector whose label appears as a whole word, case-insensitive. */

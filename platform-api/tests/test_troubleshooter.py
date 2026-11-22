@@ -4,7 +4,13 @@ from typing import get_args
 import pytest
 
 from platform_api.monitoring.events import RunFailedData
-from platform_api.monitoring.troubleshooter import ADVICE, answers, explain, explain_failure
+from platform_api.monitoring.troubleshooter import (
+    ADVICE,
+    answers,
+    explain,
+    explain_failure,
+    what_happened,
+)
 from platform_api.shared import NO_START_BLOCK, TEAM_TIME_ZONE, WRITE_STOP_ADVICE
 from platform_api.wire import FailureReason, FailureStage
 
@@ -136,7 +142,7 @@ STOPS: list[tuple[FailureStage, FailureReason, bool, str, str]] = [
         "UnboundIntent",
         False,
         "No connector is bound for create_ticket",
-        "The agents proposed an action this use case cannot carry out.",
+        "The agents proposed an action this workflow cannot carry out.",
     ),
     (
         "pending",
@@ -242,6 +248,23 @@ def test_what_happened_says_only_what_the_stop_carries(
     row: tuple[FailureStage, FailureReason, bool, str, str],
 ):
     assert answers(stopped(row)).what_happened == row[4]
+
+
+RETIRED_NAMES = ("use case", "template", "room lead", "release checker")
+
+
+def test_no_stop_sentence_uses_a_retired_name():
+    """The row, the banner, Recent runs and the Software page show this sentence as the server
+    writes it, so it uses the names in GLOSSARY.md itself."""
+    said = [what_happened(stopped(row)) for row in STOPS] + [
+        what_happened(failure(reason, retryable, stage))
+        for reason in get_args(FailureReason.__value__)
+        for retryable in (True, False)
+        for stage in get_args(FailureStage.__value__)
+    ]
+    for sentence in said:
+        for name in RETIRED_NAMES:
+            assert name not in sentence.lower(), sentence
 
 
 def test_what_happened_is_the_advice_explanation_unless_github_didnt_answer():

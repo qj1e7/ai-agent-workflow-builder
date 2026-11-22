@@ -2,12 +2,14 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING
 
+from platform_api.monitoring import what_happened
 from platform_api.orchestration.approvals import Verdict, why_not
 from platform_api.orchestration.runs import (
     AwaitingApproval,
     Failed,
     Rejected,
     Succeeded,
+    failed_data,
     state_name,
 )
 from platform_api.shared import Principal, RunId, UseCaseId, UserId
@@ -17,6 +19,15 @@ if TYPE_CHECKING:
     from platform_api.orchestration.service import RunDetail
 
 CREATE_TICKET = "create_ticket"
+
+
+@dataclass(frozen=True)
+class Stop:
+    """When a stopped run last stopped, the time Needs you gives, and why, in the AI
+    troubleshooter's one sentence."""
+
+    at: datetime
+    what_happened: str
 
 
 @dataclass(frozen=True)
@@ -47,6 +58,8 @@ class RunGist:
     """Why it stopped, for a stopped run."""
     outcome: RunOutcome | None = None
     """How a finished run ended: written, nothing_to_write or test_passed. None until then."""
+    stop: Stop | None = None
+    """When and why it stopped, for a stopped run."""
 
 
 def gist_of(detail: RunDetail, viewer: Principal | None) -> RunGist:
@@ -80,4 +93,7 @@ def gist_of(detail: RunDetail, viewer: Principal | None) -> RunGist:
         retryable=failed is not None and failed.failure.retryable,
         reason=None if failed is None else failed.failure.reason.value,
         outcome=state.outcome.value if isinstance(state, Succeeded) else None,
+        stop=None
+        if failed is None
+        else Stop(record.updated_at, what_happened(failed_data(failed.stage, failed.failure))),
     )
