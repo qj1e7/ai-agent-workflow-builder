@@ -27,12 +27,11 @@ import { RunPill } from './RunPill'
 import { RunPlaceContext, type RunPlace } from './place'
 import { isFinished, type RunModel } from './runModel'
 import { TROUBLE_FACE } from './troubleFace'
+import { landingOf, scrollsToDecision } from './landing'
 import { useRunStory } from './useRunStory'
 import { testAgainOf } from './testAgain'
 import { declinedNext, declinedNowWords, declinedRecord, feedTroubleOf, lineOf, logRowsOf, RUN_MISSING, RUN_PROBLEM, speakerName, stageWords, type NameOf, type RunState } from './words'
 import styles from './RunPage.module.css'
-
-const LANDS_ON_DECISION = new Set(['awaiting_approval', 'failed', 'rejected'])
 
 function notFound(error: unknown): boolean {
   return error instanceof ApiError && error.status === 404
@@ -182,7 +181,7 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
   const story = useRunStory(run, live)
   const { me, nameOf, approval, facts, stations, settled, arrivedLive } = story
   const fromChat = useFromChat()
-  const [lands] = useState(() => fromApproval || LANDS_ON_DECISION.has(shown.phase.state))
+  const [lands] = useState(() => landingOf(shown.phase.state, fromApproval))
   const logList = useRef<HTMLOListElement>(null)
   const heading = useRef<HTMLHeadingElement>(null)
   const n8nAccess = me?.n8n_access === true
@@ -222,16 +221,14 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
   }, [title])
 
   useEffect(() => {
-    if (!lands) return
+    if (lands === null) return
     const decisionArea = document.getElementById(DECISION_ID)
     if (!decisionArea) {
       document.querySelector<HTMLElement>('main h1')?.focus({ preventScroll: true })
       return
     }
     decisionArea.focus({ preventScroll: true })
-    const { top, bottom } = decisionArea.getBoundingClientRect()
-    const offScreen = top >= window.innerHeight || bottom <= 0
-    if (offScreen) decisionArea.scrollIntoView({ block: 'start' })
+    if (scrollsToDecision(lands, decisionArea.getBoundingClientRect(), window.innerHeight)) decisionArea.scrollIntoView({ block: 'start' })
   }, [lands])
 
   useFollowUntilScrolled(newest?.seq ?? 0, loadedUpTo, logList)
@@ -306,7 +303,7 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
       <div className={styles['head']}>
         <div>
           <p className={styles['kind']}>{story.kind}</p>
-          <h1 ref={heading} tabIndex={-1} data-page-moves-focus={lands || undefined}>
+          <h1 ref={heading} tabIndex={-1} data-page-moves-focus={lands !== null || undefined}>
             {run.use_case_name}
           </h1>
         </div>
