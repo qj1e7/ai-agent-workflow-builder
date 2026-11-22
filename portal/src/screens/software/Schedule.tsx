@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type FormEvent, type Ref } from 'react'
+import { useEffect, useRef, useState, type FormEvent, type Ref, type RefObject } from 'react'
+import { flushSync } from 'react-dom'
 import { useErrorWords } from '../../api/context'
 import { pressOnce, useLatch } from '../../api/latch'
 import { useSaveSchedule, useTurnOffSchedule } from '../../api/queries'
@@ -214,8 +215,16 @@ export function Schedule({ schedule, version, operator, paused, useCaseId, answe
     close()
   }
   const off = useTurnOffSchedule()
-  const offQuestion = useEditorThatRefocusesItsOpener()
   const latch = useLatch()
+  const offButton = useRef<HTMLButtonElement>(null)
+  // The watchlist version the question was asked on, so any change to the watchlist closes it for good.
+  const [askedOn, setAskedOn] = useState<number | null>(null)
+  if (held && askedOn !== null) setAskedOn(null)
+  const confirming = askedOn === version
+  const closeQuestion = (focusOn: RefObject<HTMLButtonElement | null>) => {
+    flushSync(() => setAskedOn(null))
+    focusOn.current?.focus()
+  }
   const resume = useResume(useCaseId, schedulePlaces({ paused, scheduled: schedule !== null }), answeredAt, onResumed)
   const words = useErrorWords()
   return (
@@ -235,24 +244,26 @@ export function Schedule({ schedule, version, operator, paused, useCaseId, answe
               Resume
             </Button>
           ) : null}
-          <Button
-            ref={opener}
-            data-place="schedule"
-            onClick={() => {
-              setRefused(null)
-              open()
-            }}
-          >
-            {schedule ? 'Change schedule' : 'Set a schedule'}
-          </Button>
+          {confirming ? null : (
+            <Button
+              ref={opener}
+              data-place="schedule"
+              onClick={() => {
+                setRefused(null)
+                open()
+              }}
+            >
+              {schedule ? 'Change schedule' : 'Set a schedule'}
+            </Button>
+          )}
           {schedule ? (
             <TurnOffSchedule
-              confirming={offQuestion.editing}
+              confirming={confirming}
               busy={off.isPending}
-              offButton={offQuestion.opener}
-              onAsk={offQuestion.open}
-              onKeep={offQuestion.close}
-              onYes={() => pressOnce(latch, (outcome) => off.mutate(version, outcome), { onSuccess: () => opener.current?.focus(), onSettled: offQuestion.close })}
+              offButton={offButton}
+              onAsk={() => setAskedOn(version)}
+              onKeep={() => closeQuestion(offButton)}
+              onYes={() => pressOnce(latch, (outcome) => off.mutate(version, outcome), { onSuccess: () => closeQuestion(opener), onError: () => closeQuestion(offButton) })}
             />
           ) : null}
         </div>

@@ -90,7 +90,7 @@ interface PanelProps {
   me: Me | undefined
 }
 
-function PeoplePanel({ people, confirmations, me }: PanelProps) {
+export function PeoplePanel({ people, confirmations, me }: PanelProps) {
   const words = useSettingsWords()
   const operator = canChangeSettings(me)
   const setOperator = useSetOperator()
@@ -107,6 +107,7 @@ function PeoplePanel({ people, confirmations, me }: PanelProps) {
   if (listed !== people) {
     setListed(people)
     setSaid(saidAfterListChange(listed, people, said))
+    if (approverRemoval !== null && !people.some((person) => person.id === approverRemoval && person.approver)) setApproverRemoval(null)
   }
   const { notice, problem, left } = said
   const tell = (next: PeopleNotice) => setSaid((now) => ({ notice: next, problem: null, left: now.left }))
@@ -167,8 +168,15 @@ function PeoplePanel({ people, confirmations, me }: PanelProps) {
   }
 
   function onApprover(person: PersonOut, to: boolean) {
-    if (!to) closeApproverRemoval(person)
-    change(person, 'approver', to, (done) => (to ? askApprover.mutate(person.id, done) : removeApprover.mutate(person.id, done)), () => {
+    const send = (done: Settled) => {
+      if (to) {
+        askApprover.mutate(person.id, done)
+        return
+      }
+      closeApproverRemoval(person)
+      removeApprover.mutate(person.id, done)
+    }
+    change(person, 'approver', to, send, () => {
       tell({ personId: person.id, words: to ? askedApproverWords(person.display) : approverRemovedWords(person.display), undo: null })
       // The box is disabled while the request waits, so focus would otherwise fall to the page.
       focus(NOTICE_ID)
@@ -234,6 +242,7 @@ function PeoplePanel({ people, confirmations, me }: PanelProps) {
             confirmation={waiting.get(person.id)}
             askedByName={names.get(person.pending_approver?.asked_by ?? '') ?? 'an Operator'}
             busy={busy?.personId === person.id ? busy : null}
+            changeInFlight={busy !== null}
             problem={problem?.personId === person.id ? problem.words : null}
             notice={notice?.personId === person.id ? noticeFor(person) : null}
             confirmingRemoval={approverRemoval === person.id}
@@ -267,6 +276,7 @@ export interface RowProps {
   confirmation: ConfirmationOut | undefined
   askedByName: string
   busy: Busy | null
+  changeInFlight: boolean
   problem: string | null
   notice: ReactNode
   confirmingRemoval: boolean
@@ -278,7 +288,7 @@ export interface RowProps {
   onKeepApprover: () => void
 }
 
-export function PersonRow({ person, me, operator, confirmation, askedByName, busy, problem, notice, confirmingRemoval, onOperator, onApprover, onN8nAccess, onDecide, onAskRemoval, onKeepApprover }: RowProps) {
+export function PersonRow({ person, me, operator, confirmation, askedByName, busy, changeInFlight, problem, notice, confirmingRemoval, onOperator, onApprover, onN8nAccess, onDecide, onAskRemoval, onKeepApprover }: RowProps) {
   const tone = personTone(person.display)
   const status = personStatusWords(person)
   const pending = person.pending_approver !== null
@@ -349,6 +359,7 @@ export function PersonRow({ person, me, operator, confirmation, askedByName, bus
             question={`Remove ${person.display} as an Approver? Another Approver has to confirm before they can approve again.`}
             keep="Keep it"
             yes="Yes, remove Approver"
+            busy={changeInFlight}
             onKeep={onKeepApprover}
             onYes={() => onApprover(false)}
           />
