@@ -60,7 +60,8 @@ export function buildStage(replayed: boolean, started: boolean, test: Phase | nu
   return test.state === 'succeeded' ? { kind: 'passed' } : { kind: 'stopped' }
 }
 
-export type PillTone = 'new' | 'ok' | 'quiet'
+/** A draft's pill: Building is at work, Ready is fine, On is a workflow that is on, and Draft is grey. */
+export type PillTone = 'new' | 'ok' | 'quiet' | 'on'
 
 const PILLS: Readonly<Record<BuildStage['kind'], { readonly label: string; readonly tone: PillTone }>> = {
   laying_out: { label: 'Building', tone: 'new' },
@@ -68,7 +69,7 @@ const PILLS: Readonly<Record<BuildStage['kind'], { readonly label: string; reado
   testing: { label: 'Building', tone: 'new' },
   passed: { label: 'Ready', tone: 'ok' },
   stopped: { label: 'Draft', tone: 'quiet' },
-  on: { label: 'On', tone: 'new' },
+  on: { label: 'On', tone: 'on' },
 }
 
 export const draftPill = (stage: BuildStage): { readonly label: string; readonly tone: PillTone } => PILLS[stage.kind]

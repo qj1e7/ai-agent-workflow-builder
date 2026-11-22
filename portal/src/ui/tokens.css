@@ -179,9 +179,9 @@
   --hair: var(--line);
   --rule: var(--line);
   --link: var(--ink);
-  --accent: var(--run);
-  --accent-soft: var(--run-bg);
-  --accent-ink: var(--run-text);
+  --accent: var(--off);
+  --accent-soft: var(--off-bg);
+  --accent-ink: var(--off-text);
   --info-bg: var(--off-bg);
   --info-ink: var(--off-text);
   --float: var(--shadow-3);

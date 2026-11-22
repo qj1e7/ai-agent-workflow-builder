@@ -103,7 +103,7 @@
 .link[data-link='wait']::before,
 .link[data-replay]::before {
   left: -14px;
-  background: repeating-linear-gradient(90deg, var(--accent) 0 8px, transparent 8px 14px);
+  background: repeating-linear-gradient(90deg, var(--run) 0 8px, transparent 8px 14px);
 }
 
 .link[data-link='wait']::before {
@@ -190,10 +190,10 @@
 
 .now .dot,
 .step[data-replay] .dot {
-  border-color: var(--accent);
+  border-color: var(--run);
   background: var(--surface);
   color: var(--ink);
-  box-shadow: 0 0 0 4px var(--accent-soft);
+  box-shadow: 0 0 0 4px var(--run-bg);
 }
 
 .wait .dot {

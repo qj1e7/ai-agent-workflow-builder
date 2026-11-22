@@ -36,6 +36,17 @@
   transition: scale var(--dur-press) var(--ease-out);
 }
 
+/* The toggle sits on the navy rail when wide and its panel is dark, so their rings are light. Narrow, it sits on the page. */
+.panel :focus-visible {
+  outline-color: var(--mock-ink);
+}
+
+@media (min-width: 861px) {
+  .toggle:focus-visible {
+    outline-color: var(--mock-ink);
+  }
+}
+
 .toggle:active {
   scale: var(--press-scale);
 }

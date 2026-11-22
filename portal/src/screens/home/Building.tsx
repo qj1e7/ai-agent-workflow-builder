@@ -25,7 +25,7 @@ import styles from './SetupCard.module.css'
 /** A draft's one pill: Draft, Building, Ready, On or Dropped. */
 export function DraftPill({ label, tone }: { label: string; tone: PillTone | StageTone }) {
   return (
-    <StatePill tone={STATE_TONE[tone]} data-draft-pill="">
+    <StatePill tone={tone === 'on' ? 'on' : STATE_TONE[tone]} data-draft-pill="">
       {label}
     </StatePill>
   )

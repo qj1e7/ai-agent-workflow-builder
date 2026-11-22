@@ -4,6 +4,7 @@
   gap: var(--space-3);
   min-width: 0;
   padding: 18px 20px;
+  border: 1px solid transparent;
   border-radius: var(--r-lg);
   background: var(--surface);
   box-shadow: var(--shadow-2);

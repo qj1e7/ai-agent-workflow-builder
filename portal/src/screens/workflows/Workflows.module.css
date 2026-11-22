@@ -489,7 +489,7 @@
 }
 
 .row[data-paused] {
-  background: var(--sunk);
+  background: var(--subtle);
 }
 
 /* A row with its own Explain beside it: the link takes the room, the button keeps its size. */

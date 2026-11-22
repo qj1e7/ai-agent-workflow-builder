@@ -98,6 +98,7 @@ function SignOutChip({ person, session }: { person: Me; session: OidcSession }) 
       </button>
       {open ? (
         <div id={panelId} className={styles['panel']}>
+          <p className={styles['signedIn']}>{titleOf(person)}</p>
           <Button onClick={signOut}>Sign out</Button>
           {failed ? (
             <p className={styles['failed']} role="alert">

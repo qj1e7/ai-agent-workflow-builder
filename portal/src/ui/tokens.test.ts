@@ -127,6 +127,9 @@ const MARK_ON: readonly (readonly [mark: string, background: string])[] = [
   ...['surface', 'bg-app', 'sunk'].map((ground) => ['focus', ground] as const),
   ['focus-on-rail', 'rail'],
   ['focus-on-rail', 'rail-active'],
+  // The test controls' ring, on the rail and on their own dark panel.
+  ['mock-ink', 'rail'],
+  ['mock-ink', 'mock-bg'],
   ['edge', 'surface'],
   ['edge', 'bg-app'],
   ...['ok', 'wait-line', 'stop', 'run', 'off'].flatMap((mark) => [
