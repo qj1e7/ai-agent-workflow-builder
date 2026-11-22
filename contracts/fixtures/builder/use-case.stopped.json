@@ -53,6 +53,7 @@
     "written": 0,
     "tickets": false,
     "you_can_decide": false,
+    "you_can_open": true,
     "retryable": true,
     "reason": "AgentError",
     "outcome": null,

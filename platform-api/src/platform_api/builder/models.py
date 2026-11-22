@@ -224,6 +224,10 @@ class LastRunView(WireModel):
         description="True when the person asking may decide the yes this run waits for. False "
         "for any other run, and in an answer that is not for a person."
     )
+    you_can_open: bool = Field(
+        description="True when the run stopped and is in the Needs you of the person asking: an "
+        "Operator whose work it is. False for any other run."
+    )
     retryable: bool = Field(description="True when the run stopped and a retry may start it again.")
     reason: FailureReasonName | None = Field(
         description="Why a stopped run stopped. Null for any other run."

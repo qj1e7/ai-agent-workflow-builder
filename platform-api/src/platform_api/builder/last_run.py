@@ -29,6 +29,7 @@ def last_run_view(gist: RunGist) -> LastRunView:
         written=gist.written,
         tickets=gist.tickets,
         you_can_decide=gist.you_can_decide,
+        you_can_open=gist.you_can_open,
         retryable=gist.retryable,
         reason=gist.reason,
         outcome=gist.outcome,

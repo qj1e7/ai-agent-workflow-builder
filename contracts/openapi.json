@@ -7716,6 +7716,11 @@
             "description": "True when the person asking may decide the yes this run waits for. False for any other run, and in an answer that is not for a person.",
             "title": "You Can Decide",
             "type": "boolean"
+          },
+          "you_can_open": {
+            "description": "True when the run stopped and is in the Needs you of the person asking: an Operator whose work it is. False for any other run.",
+            "title": "You Can Open",
+            "type": "boolean"
           }
         },
         "required": [
@@ -7730,6 +7735,7 @@
           "written",
           "tickets",
           "you_can_decide",
+          "you_can_open",
           "retryable",
           "reason",
           "stop"

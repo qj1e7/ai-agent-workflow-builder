@@ -52,6 +52,7 @@
     "written": 0,
     "tickets": true,
     "you_can_decide": true,
+    "you_can_open": false,
     "retryable": false,
     "reason": null,
     "outcome": null,
