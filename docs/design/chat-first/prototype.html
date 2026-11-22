@@ -5,7 +5,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@400;600;700&display=swap">
 <style>
-/* Mission control, light (ADR 0052): a dark rail, Home as a board under the Planner's box, a chat thread with the board docked beside it, and a light stage for a run. */
+/* Mission control, light (ADR 0052): a dark rail, Home as a board under the Planner’s box, a chat thread with a slim list docked beside it, and a light stage for a run. */
 :root {
   color-scheme: light;
   --font: "Atkinson Hyperlegible Next", "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -203,14 +203,13 @@ button, input, select { font: inherit; color: inherit; }
 .need-title b { font-weight: 700; }
 .need-sub { font-size: var(--fs-small); margin-top: 2px; }
 .need .btn { border-color: transparent; box-shadow: var(--shadow-1); background: var(--surface); color: var(--ink); }
-.needs.compact .ng-l, .mcard .ng-l, .panel .ng-l { grid-template-columns: minmax(0, 1fr); }
-.needs.compact .need, .mcard .need, .panel .need { grid-template-columns: 32px minmax(0, 1fr); padding: 12px 14px 12px 20px; gap: 8px 12px; }
-.needs.compact .need-mark, .mcard .need-mark, .panel .need-mark { width: 32px; height: 32px; }
-.needs.compact .need .btn, .mcard .need .btn, .panel .need .btn { grid-column: 2; justify-self: start; }
-.needs.compact .need-sub { display: none; }
+.mcard .ng-l, .panel .ng-l { grid-template-columns: minmax(0, 1fr); }
+.mcard .need, .panel .need { grid-template-columns: 32px minmax(0, 1fr); padding: 12px 14px 12px 20px; gap: 8px 12px; }
+.mcard .need-mark, .panel .need-mark { width: 32px; height: 32px; }
+.mcard .need .btn, .panel .need .btn { grid-column: 2; justify-self: start; }
 .calm-line { color: var(--text-2); }
 
-/* Home, after a question: a thread with the box at its foot, and the board docked on the right */
+/* Home, after a question: a thread with the box at its foot, and a slim list docked on the right */
 .chatcol { display: flex; flex-direction: column; min-height: 0; min-width: 0; view-transition-name: chatcol; }
 .chat-top { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 10px 28px 6px; }
 .chat-top .strip { flex: 1; }
@@ -248,19 +247,22 @@ button, input, select { font: inherit; color: inherit; }
 .dots i:nth-child(2) { animation-delay: 0.15s; }
 .dots i:nth-child(3) { animation-delay: 0.3s; }
 
-/* The docked board */
-.dockcol { display: none; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 18px 24px 18px 4px; flex-direction: column; gap: 14px; }
-.dockcol .sec-head { margin: 4px 0 0; }
-.dockcol .sec-title { font-size: var(--fs-body); }
-.dockcol .pulse { padding: 14px 16px; }
-.dockcol .pulse-mark { width: 34px; height: 34px; }
-.dockcol .pulse-title { font-size: var(--fs-body); }
-.pulse-sub { font-size: var(--fs-small); color: var(--text-2); font-variant-numeric: tabular-nums; }
-.drows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-.drow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 12px; align-items: center; width: 100%; padding: 12px 14px; border: 0; border-radius: var(--r-md); background: var(--surface); box-shadow: var(--shadow-1); text-align: start; cursor: pointer; }
+/* The slim list docked beside the chat */
+.dockcol { display: none; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 18px 24px 18px 4px; flex-direction: column; gap: 10px; }
+.dneeds { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; min-height: 44px; padding: 8px 14px; border: 0; border-radius: var(--r-md); background: var(--surface); box-shadow: var(--shadow-1); font-weight: 600; text-align: start; }
+button.dneeds { cursor: pointer; transition: box-shadow var(--t-press) ease, scale var(--t-press) var(--ease-out); }
+button.dneeds:active { scale: .98; }
+.dcount { min-width: 24px; height: 24px; padding: 0 7px; border-radius: 12px; background: var(--sunk); color: var(--ink); font-size: var(--fs-small); line-height: 24px; text-align: center; font-variant-numeric: tabular-nums; }
+button.dneeds .dcount { background: #ffd7d2; color: #7d1209; }
+.drows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.drow { display: flex; gap: 10px; align-items: center; width: 100%; padding: 10px 14px; border: 0; border-radius: var(--r-md); background: var(--surface); box-shadow: var(--shadow-1); text-align: start; cursor: pointer; }
 .drow-name { font-weight: 600; line-height: 1.3; }
-.drow .pill { justify-self: end; }
-.drow-next { font-size: var(--fs-small); color: var(--text-2); text-align: end; font-variant-numeric: tabular-nums; }
+.dstate { width: 14px; height: 14px; flex: none; background: var(--off); -webkit-mask: var(--pi) center / contain no-repeat; mask: var(--pi) center / contain no-repeat; --pi: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Ccircle cx='6' cy='6' r='4' fill='none' stroke='black' stroke-width='2'/%3E%3C/svg%3E"); }
+.dstate[data-s="on"], .dstate[data-s="ok"], .dstate[data-s="ready"] { background: var(--ok); --pi: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Ccircle cx='6' cy='6' r='5'/%3E%3C/svg%3E"); }
+.dstate[data-s="run"] { background: var(--run); --pi: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Ccircle cx='6' cy='6' r='5'/%3E%3C/svg%3E"); }
+.dstate[data-s="wait"] { background: var(--wait-line); --pi: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Ccircle cx='6' cy='6' r='4.8' fill='none' stroke='black' stroke-width='1.8'/%3E%3Cpath d='M6 3.4v2.8l1.8 1.1' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round'/%3E%3C/svg%3E"); }
+.dstate[data-s="err"] { background: var(--stop); --pi: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 2.5l7 7M9.5 2.5l-7 7' stroke='black' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E"); }
+.dsee { align-self: flex-start; margin: 2px 0 0 8px; }
 @container app (min-width: 1080px) {
   .app:not(.fresh):not(.paging) .main:not(.split) { grid-template-columns: minmax(0, 1fr) 360px; }
   .app:not(.fresh):not(.paging) .main:not(.split) .dockcol { display: flex; }
@@ -666,7 +668,7 @@ button, input, select { font: inherit; color: inherit; }
   .btn.ghost:hover, .chips button:hover, .pick button:not([aria-pressed="true"]):hover, .filters button:not([aria-pressed="true"]):hover { background: var(--sunk); }
   .need .btn:hover { background: var(--subtle); }
   .wl-row:hover, .sw-row:hover, .rp-d summary:hover, .crumb:hover { background: var(--sunk); }
-  .tile:hover, .drow:hover { box-shadow: var(--shadow-3); }
+  .tile:hover, .drow:hover, button.dneeds:hover { box-shadow: var(--shadow-3); }
   .tile.slot:hover { background: var(--surface); color: var(--ink); }
   .rail button:not([aria-pressed="true"]):hover { background: #151f33; color: #fff; }
   .wf-name:hover { text-decoration-color: currentColor; }
@@ -881,7 +883,7 @@ p.rw { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
 <div class="wrap">
   <header class="top">
     <h1>Chat first, on the desktop</h1>
-    <p class="lead">Version 3, drawn in the Mission control look, light (ADR 0052, 22 Nov 2026). Home is the Planner’s box, Needs you and a board of workflows. After a question it becomes a chat, with the board docked beside it. A run opens on a light stage. Sample data only.</p>
+    <p class="lead">Version 3, drawn in the Mission control look, light (ADR 0052, 22 Nov 2026). Home is the Planner’s box, Needs you and a board of workflows. After a question it becomes a chat, with a slim list of workflows docked beside it. A run opens on a light stage. Sample data only.</p>
   </header>
   <div class="demo">
     <div class="ctl"><span class="lbl" id="who-l">View as</span><div class="seg" id="whoSeg" role="group" aria-labelledby="who-l"><button type="button" data-u="alice">Alice</button><button type="button" data-u="maint">Alice, with n8n access</button><button type="button" data-u="bob">Bob, Approver</button></div></div>
@@ -942,7 +944,7 @@ p.rw { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
     <ul>
       <li>A dark rail holds Home, Workflows and the Watchlist, with Settings and the person at its foot. The top bar is gone. Home’s count is the Needs you count.</li>
       <li>Home is the Planner’s box, then Needs you, then a board of workflow tiles. Each tile shows its state, its next run, and its last run as a line of steps.</li>
-      <li>After a question, Home becomes a chat with the box at the bottom and the board docked on the right. “‹ Home” or Home in the rail goes back to the board, and the chat is kept. In a narrower window the board gives way to the pinned line. Something opened from a card still shows beside the chat, in the board’s place.</li>
+      <li>After a question, Home becomes a chat with the box at the bottom and a slim list docked on the right: the Needs you count, then each workflow’s name with its state mark. “‹ Home” or Home in the rail goes back to the board, and the chat is kept. In a narrower window the board gives way to the pinned line. Something opened from a card still shows beside the chat, in the board’s place.</li>
       <li>Workflows is filter chips, Needs you, then one table with each last run as steps. A workflow page draws its steps as a light diagram with today’s run on it.</li>
       <li>A run’s page is a light stage: the agents’ faces on the steps, hand-offs as glowing dots, a pulsing amber gate with a timer, and a red stop with the AI troubleshooter’s card. It plays once on open, and Replay plays it again. With reduced motion, nothing moves.</li>
       <li>Switch “New words” to Show to see every label or sentence that is new against the sketch of 13 Nov.</li>
@@ -1224,26 +1226,26 @@ function tileHTML(id) {
   const [t, s] = wfState(id);
   return `<li><button class="tile" type="button" data-open="wf:${id}"><span class="tile-top"><span class="tile-name">${W.wf[id].name}</span><span class="pill" data-s="${s}">${t}</span></span>${wfMini(id)}<span class="tile-meta"><b>Next run</b><span>${nextRun(id)}</span><b>Last run</b><span>${lastRun(id)}</span></span></button></li>`;
 }
+/* Beside the chat the board is a slim list: the Needs you count, then each workflow's name with its state mark. The full tiles stay on Home. */
 function drowHTML(id) {
   const d = W.dw[id];
   const [t, s] = d ? dwState(id) : wfState(id);
-  return `<li><button class="drow" type="button" data-open="${d ? 'dw' : 'wf'}:${id}"><span class="drow-name">${d ? dT(d).name : W.wf[id].name}</span><span class="pill" data-s="${s}">${t}</span>${d ? dwMini(id, true) : wfMini(id, true)}<span class="drow-next">${d ? '' : `<span class="vh">Next run: </span>${nextRun(id)}`}</span></button></li>`;
+  return `<li><button class="drow" type="button" data-open="${d ? 'dw' : 'wf'}:${id}" title="${t}"><span class="dstate" data-s="${s}" role="img" aria-label="${t}"></span><span class="drow-name">${d ? dT(d).name : W.wf[id].name}</span></button></li>`;
 }
-function pulseHTML(compact) {
+function pulseHTML() {
   const bob = W.user === 'bob';
   const next = W.order.find((id) => !W.paused[id]);
   const line = bob || !next ? '' : `${W.wf[next].name}, ${lower(nextRun(next))}`;
-  const title = bob ? 'Nothing waits for your yes' : 'Nothing needs you.';
-  if (compact) return `<div class="pulse"><span class="pulse-mark" aria-hidden="true">${ICON.check}</span><div><p class="pulse-title">${title}</p>${line ? `<p class="pulse-sub">${nw(`Next run: ${line}`)}</p>` : ''}</div></div>`;
-  return `<div class="pulse"><span class="pulse-mark" aria-hidden="true">${ICON.check}</span><p class="pulse-title">${title}</p>${line ? `<p class="pulse-next">Next run<b>${nw(line)}</b></p>` : ''}</div>`;
+  return `<div class="pulse"><span class="pulse-mark" aria-hidden="true">${ICON.check}</span><p class="pulse-title">${bob ? 'Nothing waits for your yes' : 'Nothing needs you.'}</p>${line ? `<p class="pulse-next">Next run<b>${nw(line)}</b></p>` : ''}</div>`;
 }
 function renderBoard() {
   const l = needs();
   const ids = boardIds();
-  const needsSec = (compact) => (l.length ? `<section><div class="sec-head"><h3 class="sec-title">Needs you <span class="n">${l.length}</span></h3></div><div class="needs${compact ? ' compact' : ''}">${needsHTML(l)}</div></section>` : pulseHTML(compact));
+  const needsSec = l.length ? `<section><div class="sec-head"><h3 class="sec-title">Needs you <span class="n">${l.length}</span></h3></div><div class="needs">${needsHTML(l)}</div></section>` : pulseHTML();
   const slot = canEdit() ? `<li><button class="tile slot" type="button" data-focus-box>${ICON.plus}${nw('Describe a new task in the box above')}</button></li>` : '';
-  $('#board').innerHTML = `${needsSec(false)}<section><div class="sec-head"><h3 class="sec-title">${boardTitle(ids.length)}</h3><button class="linkbtn" type="button" data-rail="wf">${nw('See all on Workflows')}</button></div><ul class="tiles">${ids.map(tileHTML).join('')}${slot}</ul></section>`;
-  $('#dockcol').innerHTML = `${needsSec(true)}<section><div class="sec-head"><h3 class="sec-title">${boardTitle(ids.length)}</h3><button class="linkbtn" type="button" data-rail="wf">${nw('See all')}</button></div><ul class="drows">${ids.map(drowHTML).join('')}</ul></section>`;
+  $('#board').innerHTML = `${needsSec}<section><div class="sec-head"><h3 class="sec-title">${boardTitle(ids.length)}</h3><button class="linkbtn" type="button" data-rail="wf">${nw('See all on Workflows')}</button></div><ul class="tiles">${ids.map(tileHTML).join('')}${slot}</ul></section>`;
+  const count = `Needs you <span class="dcount">${l.length}</span>`;
+  $('#dockcol').innerHTML = `${l.length ? `<button class="dneeds" type="button" data-open="needs">${count}</button>` : `<p class="dneeds">${count}</p>`}<ul class="drows" aria-label="${W.user === 'bob' ? 'Workflows' : 'Your workflows'}">${ids.map(drowHTML).join('')}</ul><button class="linkbtn dsee" type="button" data-rail="wf">${nw('See all')}</button>`;
 }
 
 /* ---------- Lists ---------- */

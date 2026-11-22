@@ -24,9 +24,9 @@ The team lead chose this look on 22 Nov 2026 (ADR 0052). These are the Portal's 
 
 - **The rail** is dark navy and 92 px wide. It holds Home, Workflows and Watchlist, then Settings and the person at its foot. The top bar is gone. Home's count is the Needs you count, red while anything needs the person. Workflows and Watchlist show quiet totals. In a window 860 px wide or narrower the rail is a bar across the top.
 - **Home, before a question**, is a board. It has a centred greeting and heading, the Planner's box with the Visor bot in it, three chips, then Needs you, then the person's workflows as tiles. Needs you shows as bright tiles in Do now and Set up, each with one button. When nothing needs the person, one line says so, with the next run. Each workflow tile shows its state, its next run and its last run as a small line of steps. The last tile points back to the box.
-- **Home, after a question**, is a chat. The thread fills the left column, with "‹ Home" at its top and the box docked at its foot with the chips under it. The board docks on the right: Needs you first, then a row per workflow. "‹ Home", or Home in the rail, goes back to the board. The chat is kept, and typing in the box carries it on.
-- **Narrower windows.** When the app is under 1080 px wide, the docked board gives way to the pinned line at the top of the chat.
-- **The side panel** still shows what is opened from a card in the chat, beside the chat, in the docked board's place. Close brings the board back. More details opens the full page.
+- **Home, after a question**, is a chat. The thread fills the left column, with "‹ Home" at its top and the box docked at its foot with the chips under it. A slim list docks on the right: the Needs you count, which opens Needs you beside the chat, then each workflow's name with its state mark, and See all. The full tiles stay on Home's board. "‹ Home", or Home in the rail, goes back to the board. The chat is kept, and typing in the box carries it on.
+- **Narrower windows.** When the app is under 1080 px wide, the slim list gives way to the pinned line at the top of the chat.
+- **The side panel** still shows what is opened from a card in the chat, beside the chat, in the slim list's place. Close brings the list back. More details opens the full page.
 - **Full pages** open from the rail, a tile, or the side panel, with a back link at the top that names where it goes.
 - **Workflows** is a title with filter chips, then Needs you, then one table: state, workflow, last run as steps, when, next run, and Explain.
 - **A workflow page** has its title, state and actions on top, then When, Who says yes and Next run, then its steps as a light diagram with today's run on it, then Recent runs and Versions side by side.
@@ -48,7 +48,7 @@ The team lead chose this look on 22 Nov 2026 (ADR 0052). These are the Portal's 
 - **One pill** shows every state, as an icon and a word on a tint.
 - **The small step line** draws a workflow's steps as circles, coloured by the last run. A step that was not reached is dashed.
 - **The Needs you tile** has a coloured edge, a mark, what waits, and one button such as "Open the run" or "Review and decide".
-- **The workflow tile** on the board, and the docked row beside the chat.
+- **The workflow tile** is on the board only. Beside the chat a workflow is one row, a state mark and its name. The mark's shape says the state as well as its colour: a filled dot for On, a clock for a wait, a cross for a stop, and a ring for paused or draft. Its word shows on hover and is read out.
 - **The flow diagram** on a workflow page draws a box per step, with a short note under a stop or a wait.
 - **The light stage** has the tries, the Planner at the top, the agents' talk as bubbles, the steps with the agents' faces on them, the gate with Bob's initial and a timer while it waits, a red line to the system that failed, and the AI troubleshooter's card under a stop.
 - **Faces** are today's Visor bot for the Planner and today's Orbs for the other agents. The Version checker is teal with a magnifier, the AI troubleshooter violet with a wrench. On the stage a face keeps its state: the Planner looks up with an amber clock while it waits, a done step smiles with a tick, and a stopped one frowns with a red mark.
@@ -66,11 +66,13 @@ The team lead chose this look on 22 Nov 2026 (ADR 0052). These are the Portal's 
 
 Text is 4.5:1 or more, every focus stop shows a ring, nothing moves with reduced motion, the chat and its box work at 200% zoom, and nothing scrolls sideways from 800 px to 1920 px wide.
 
-### New words, for the team lead's OK
+### New words
+
+Approved by the team lead, 22 Nov 2026.
 
 Switch "New words" to Show to see each one in place. Each is listed once, under the first screen that shows it.
 
-- **The rail and Home.** "Home" (the rail's Chat, and the back link "‹ Home"), "Your workflows", "See all on Workflows", "See all", "Describe a new task in the box above", and "Next run: FastAPI release check, tomorrow, 8:00" when nothing needs the person.
+- **The rail and Home.** "Home" (the rail's Chat, and the back link "‹ Home"), "Your workflows", "See all on Workflows", "See all", "Describe a new task in the box above", and the next run under "Next run" when nothing needs the person, such as "FastAPI release check, tomorrow, 8:00".
 - **Workflows.** "All" on the filter chips, and the column "State".
 - **A workflow page.** "with today’s 8:00 run" after Steps, and the key's "Stopped here" and "Not reached".
 - **A run's page.** "Replay", "Tries", "Try 1 · 8:00", "Try 2 · 9:01", "GitHub, no answer", the steps' "Started 8:00", "Retried 9:01" and "Found 0.121.0", the key's "At work", "Waits for a person" and "Not reached yet", the bubble heads such as "Planner → Version checker" and "Bob → Planner", and two bubble lines: "Check FastAPI on GitHub for a new release." and "Asked for a yes to 1 Jira ticket."
