@@ -1,4 +1,5 @@
 import path from 'node:path'
+import type { Page } from '@playwright/test'
 import { expectAccessible } from '../support/axe'
 import { expect, test } from './support/test'
 import { connectAndSave, everythingOnThePage, MOCK_MODEL, openSettings, personRow, roleBox, settingsTab, SettingsApi, signedInAs } from './support/settings'
@@ -115,19 +116,51 @@ test('an Approver who is not an Operator sees every tab read-only', async ({ bro
   await bob.close()
 })
 
-test('unticking an Approver when only two are left explains the rule and changes nothing', async ({ page }) => {
-  const approvers = (await api.people()).filter((person) => person.approver).map((person) => person.id)
-  test.skip(approvers.length !== 2, `needs exactly two Approvers, found ${approvers.join(', ')}`)
-  await openSettings(page, 'people')
+const REMOVE_BOB = 'Remove Bob as an Approver? Another Approver has to confirm before they can approve again.'
+
+/** Records each request that would change Bob's Approver role, by method. */
+function bobApproverRequests(page: Page): string[] {
   const sent: string[] = []
   page.on('request', (request) => {
     if (request.url().includes('/api/v1/people/bob/approver')) sent.push(request.method())
   })
+  return sent
+}
+
+test('unticking an Approver asks first, and Keep it or Escape sends nothing and gives focus back to the box', async ({ page }) => {
+  await openSettings(page, 'people')
+  const sent = bobApproverRequests(page)
+  const row = personRow(page, 'bob@example.test')
+  const box = roleBox(page, 'Approver', 'Bob')
+  const keep = row.getByRole('button', { name: 'Keep it' })
+  await expect(box).toBeChecked()
+
+  await box.click()
+  await expect(row.getByRole('group', { name: 'Remove Bob as an Approver' })).toContainText(REMOVE_BOB)
+  await expect(keep, 'focus lands on the safe choice').toBeFocused()
+  await expect(box, 'nothing changed yet').toBeChecked()
+  await keep.click()
+  await expect(row).not.toContainText(REMOVE_BOB)
+  await expect(box, 'Keep it gives focus back to the box').toBeFocused()
+  await expect(box).toBeChecked()
+
+  await box.press('Space')
+  await expect(keep).toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(row).not.toContainText(REMOVE_BOB)
+  await expect(box, 'Escape gives focus back to the box').toBeFocused()
+  await expect(box).toBeChecked()
+  expect(sent, 'asking and keeping send nothing').toEqual([])
+})
+
+test('removing an Approver when only two are left explains the rule and changes nothing', async ({ page }) => {
+  const approvers = (await api.people()).filter((person) => person.approver).map((person) => person.id)
+  test.skip(approvers.length !== 2, `needs exactly two Approvers, found ${approvers.join(', ')}`)
+  await openSettings(page, 'people')
+  const sent = bobApproverRequests(page)
   const row = personRow(page, 'bob@example.test')
   await roleBox(page, 'Approver', 'Bob').click()
-  await expect(row).toContainText('Remove Bob as an Approver? Another Approver has to confirm before they can approve again.')
-  await expect(row.getByRole('button', { name: 'Keep it' })).toBeFocused()
-  await expect(roleBox(page, 'Approver', 'Bob')).toBeChecked()
+  await expect(row).toContainText(REMOVE_BOB)
   expect(sent, 'the untick alone sends nothing').toEqual([])
   await row.getByRole('button', { name: 'Yes, remove Approver' }).click()
   await expect(row).toContainText('At least 2 people must be Approvers, so nobody has to approve their own work.')
