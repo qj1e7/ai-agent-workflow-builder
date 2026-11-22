@@ -3039,14 +3039,40 @@ WHILE: Final = words("when whenever while during")
 they leave out time off when the words after them look like a day or time off, as "except when
 I'm off" or "not during Hari Raya", and a condition otherwise, as "only when there is a new
 release"."""
-AWAY: Final = words("off away leave sick mc")
+AWAY: Final = words(
+    "away leave sick mc pto al reservist overseas abroad travelling traveling unwell sabbatical "
+    "maternity paternity ph"
+)
 """Time off in a stretch after "when", "while" or "during", as "away" in "skip it while I'm
-away" or "MC" in "except when I'm on MC"."""
-OUT_AFTER: Final = frozenset(
+away", "MC" in "except when I'm on MC" or "PTO", and "ph" in any case."""
+AWAY_PHRASES: Final = frozenset(
+    {
+        ("in", "camp"),
+        ("on", "course"),
+        ("on", "training"),
+        ("out", "of", "office"),
+        ("day", "off"),
+        ("days", "off"),
+        ("time", "off"),
+        ("business", "hours"),
+        ("office", "hours"),
+        ("working", "hours"),
+    }
+)
+"""Time off in a stretch said in more than one word, as "in camp", "out of office", "time
+off" or "business hours"."""
+AWAY_PHRASE_ENDS: Final = frozenset(phrase[-1] for phrase in AWAY_PHRASES)
+STRETCH_ENDS: Final = words("week weeks window windows")
+"""Words that make a stretch they end time off, as "release week" or "the maintenance
+window"."""
+A_PERSON_IS: Final = frozenset(
     {("i'm",), ("we're",), ("they're",), ("i", "am"), ("we", "are"), ("they", "are")}
 )
-"""A person and "am" or "are" before "out" that make it time off, as "I'm out" or "we are out",
-never "a new version is out"."""
+PEOPLE: Final = words(
+    "boss bosses manager managers lead leads team teams approver approvers supervisor supervisors"
+)
+"""A person before "out" or "off" that makes it time off, as "I'm out", "we are off" or "the
+boss is out", never "a new version is out", "LangGraph is out" or "the alerts are off"."""
 DAYISH: Final = (SCHEDULE_VOCAB - LINKS - LIST_JOINS) | words(
     "today tonight tomorrow yesterday next holiday holidays"
 )
@@ -3084,24 +3110,26 @@ _DATE: Final = r"(?:0?[1-9]|[12]\d|3[01])"
 _MONTH: Final = r"(?:0?[1-9]|1[0-2])"
 _SLASHED: Final = (
     rf"(?:(?:1[3-9]|2\d|3[01])/{_MONTH}(?:/\d{{2,4}})?|{_DATE}/{_MONTH}/\d{{2,4}}|"
-    rf"(?:(?<=\bon\s)|(?<=\bfrom\s)|(?<=\btill\s)|(?<=\buntil\s)){_DATE}/{_MONTH})"
+    rf"(?:(?<=\bon\s)|(?<=\bfrom\s)|(?<=\btill\s)|(?<=\buntil\s)){_DATE}/{_MONTH}(?!\s+of\b))"
 )
 CALENDAR_DAYS: Final = re.compile(
     rf"\b(?:(?<![.:/]){_DATE}(?:st|nd|rd|th)?\s+(?:of\s+)?(?:{_MONTHS})\b|"
     rf"(?:{_MONTHS})\.?\s+{_DATE}(?:st|nd|rd|th)?(?![\w:/]|\.\d)|"
     rf"(?<![.:/])(?<!version\s)(?!24/7\b){_SLASHED}(?![\w/]|\.\d)|"
-    r"month[\s-]*end\b|end[\s-]+of[\s-]+(?:the[\s-]+)?month\b|eom\b|"
+    r"(?:month|quarter|year)[\s-]*end\b|end[\s-]+of[\s-]+(?:the[\s-]+)?(?:month|quarter|year)\b|"
+    r"eom\b|"
     r"(?:code|change|release|deploy(?:ment)?)[\s-]+freezes?\b|the\s+freeze(?=\s*(?:[,.;:!?)]|$))|"
     r"freeze\s+(?:period|window)s?\b|blackout\s+(?:period|window|date|day)s?\b)",
     re.IGNORECASE,
 )
-"""A date, month end or a freeze, which may leave days out, as "25 Dec", "Dec 25", "25/12",
-"EOM", "the end of the month", "the code freeze" or "the blackout window", and "the freeze"
-where it ends its clause, never "the freeze step". "May" and "Mar"
-count only with a capital, never "items 2 may need". A day and a month with a "/" count only
-with a day of 13 or more, a year, or "on", "from", "till" or "until" before them, as "25/12",
-"1/5/2027" or "on 1/5", so a fraction or a score, as "3/4" or "2/2 approvals", is no date. Nor
-is a version, as "3.12", "v2/1" or "version 1/2", or "24/7"."""
+"""A date, the end of a month, a quarter or a year, or a freeze, which may leave days out, as
+"25 Dec", "Dec 25", "25/12", "EOM", "quarter end", "the end of the year", "the code freeze" or
+"the blackout window", and "the freeze" where it ends its clause, never "the freeze step".
+"May" and "Mar" count only with a capital, never "items 2 may need". A day and a month with a
+"/" count only with a day of 13 or more, a year, or "on", "from", "till" or "until" before them
+and no "of" after, as "25/12", "1/5/2027" or "on 1/5", so a fraction or a score, as "3/4", "2/2
+approvals" or "on 3/4 of the boards", is no date. Nor is a version, as "3.12", "v2/1" or
+"version 1/2", or "24/7"."""
 COUNTS_DAYS: Final = 1
 COUNTS_FOR_A_FILTER: Final = 2
 """What a count, a date, month end or a freeze marks where it stands: days that may be left
@@ -3199,8 +3227,8 @@ class _Covered:
     before: "," for a comma or "&", "." for any other mark that ends a clause, or "". `low` is
     the word as code reads it, `day` whether `DAY_NAMED` reads it, `own` whether it stands in
     the schedule's own phrase, and `off` whether it is time off in a stretch after "when",
-    "while" or "during", as "away", "out of office", "out" in "I'm out" or "we are out", or
-    "freeze" in "the freeze"."""
+    "while" or "during", as "away", "PTO", "out of office", "out" in "I'm out" or "the boss is
+    out", "window" in "the maintenance window", "p" in "p.h." or "freeze" in "the freeze"."""
 
     kind: CoverKind
     mark: Mark
@@ -3309,15 +3337,29 @@ def _time_off_after(words: list[_Covered]) -> list[bool]:
     return after
 
 
-def _out(lows: list[str], marks: list[Mark], n: int) -> bool:
-    """Whether "out" at `n` is time off: "out of office", or "out" after "I'm", "I am", "we're",
-    "we are", "they're" or "they are", never "a new version is out" or "LangGraph is out"."""
-    if lows[n + 1 : n + 3] == ["of", "office"] and not any(marks[n + 1 : n + 3]):
+def _time_off(lows: list[str], marks: list[Mark], n: int) -> bool:
+    """Whether word `n` is time off in a stretch after "when", "while" or "during": a word of
+    `AWAY`, the last word of one of `AWAY_PHRASES`, "out" or "off" after a person, as "I'm out"
+    or "the boss is out", or "week" or "window" at the end of the stretch, as "release week"."""
+    low = lows[n]
+    if low in AWAY:
         return True
-    if n == 0 or marks[n]:
+    if low in AWAY_PHRASE_ENDS and any(
+        tuple(lows[max(0, n + 1 - len(phrase)) : n + 1]) == phrase
+        and not any(marks[n + 2 - len(phrase) : n + 1])
+        for phrase in AWAY_PHRASES
+    ):
+        return True
+    if low in STRETCH_ENDS:
+        return n + 1 == len(lows) or marks[n + 1] != ""
+    if low not in ("out", "off") or n == 0 or marks[n]:
         return False
     two = (lows[n - 2], lows[n - 1]) if n > 1 and not marks[n - 1] else None
-    return (lows[n - 1],) in OUT_AFTER or two in OUT_AFTER
+    return (
+        (lows[n - 1],) in A_PERSON_IS
+        or two in A_PERSON_IS
+        or (two is not None and two[1] in ("is", "are") and two[0] in PEOPLE)
+    )
 
 
 def _trails(words: list[_Covered], n: int) -> bool:
@@ -3549,15 +3591,11 @@ def _covered(
             kind = "day"
         else:
             kind = "known"
+        gap = text[end : pieces[n + 1][1]] if n + 1 < len(pieces) else ""
         off = (
-            low in AWAY
-            or (low == "out" and _out(lows, marks, n))
-            or (
-                low == "freeze"
-                and n > 0
-                and lows[n - 1] == "the"
-                and not (n + 1 < len(pieces) and text[end : pieces[n + 1][1]] == "-")
-            )
+            _time_off(lows, marks, n)
+            or (low == "freeze" and n > 0 and lows[n - 1] == "the" and gap != "-")
+            or (low == "p" and gap == "." and lows[n + 1] == "h")
         )
         found.append(_Covered(kind, marks[n], low, day, bool(schedule[start]), off))
         labelled = day and (bare != raw or (n > 0 and lows[n - 1] in LABELS))
