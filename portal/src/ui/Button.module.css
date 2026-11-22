@@ -1,10 +1,11 @@
-/* The sketch's .btn: 38 px high, or 32 px small. Only primary is filled, so each view has one filled button. */
+/* The sketch's .btn, kept a 44 px target, which the e2e checks hold every button to (principle 11). The sketch draws 38 px.
+   Only primary is filled, so each view has one filled button. */
 .button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
-  min-height: 38px;
+  min-height: 44px;
   padding: 0 var(--space-4);
   border: 1px solid transparent;
   border-radius: var(--r-sm);
@@ -19,11 +20,6 @@
     background-color var(--dur-press) ease,
     border-color var(--dur-press) ease,
     scale var(--dur-press) var(--ease-out);
-}
-
-.small {
-  min-height: 32px;
-  padding: 0 var(--space-3);
 }
 
 .button:active:not([aria-disabled='true']) {
@@ -73,13 +69,6 @@
   .dangerOutline:hover:not([aria-disabled='true']) {
     border-color: var(--stop);
     background: var(--stop-bg);
-  }
-}
-
-/* A finger needs more room than a pointer. */
-@media (pointer: coarse) {
-  .button {
-    min-height: 44px;
   }
 }
 

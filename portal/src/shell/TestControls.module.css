@@ -11,6 +11,14 @@
 
 /* The test controls never cover the product. Wide, the toggle is a small button centred in the rail's column, under its
    foot. At 860 px and narrower it sits in the flow at the page's end (the prototype's ANS-testctl). */
+@media (min-width: 861px) {
+  .panel {
+    position: absolute;
+    bottom: 0;
+    left: calc(92px + var(--space-3) - 28px);
+  }
+}
+
 @media (max-width: 860px) {
   .root {
     position: static;
@@ -135,10 +143,13 @@
   white-space: nowrap;
 }
 
-.open .label {
-  position: static;
-  width: auto;
-  height: auto;
-  overflow: visible;
-  clip: auto;
+/* Narrow, the open toggle says Hide test controls. Wide, it stays an icon in the rail's column, beside the panel it opened. */
+@media (max-width: 860px) {
+  .open .label {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip: auto;
+  }
 }
