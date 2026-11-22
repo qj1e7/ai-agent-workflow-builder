@@ -1,0 +1,1292 @@
+<title>Simple Flow Prototype</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@200..800&display=swap');
+/* Light only, as the Portal is: every colour is set here from the Portal's tokens.css. */
+:root{
+  color-scheme:light;
+  --frame:#eef1f4;--surface:#ffffff;--sunk:#f3f5f7;--active:#e7ebef;--chat:#f7f8fa;
+  --ink:#121417;--on-ink:#ffffff;--primary:#121417;--primary-hover:#2e3238;--muted:#4d535b;--edge:#7d858e;--hair:#e1e5e9;--rule:#eaedf0;
+  --accent:#1b6c80;--accent-soft:#e2f0f3;--accent-ink:#0f4a59;--focus:#2f6bff;
+  --amber-ink:#7e4a00;--amber-soft:#fff6e0;--amber-line:#efd08c;
+  --red:#c4242a;--red-ink:#a51f1f;--red-soft:#fdeeed;--red-line:#f2c4c1;
+  --green:#1d7a42;--green-ink:#1b6b3b;--green-soft:#e6f4eb;--green-line:#b2dbbf;
+  --lead:#3e5bd8;--trouble:#7a4bd6;--trouble-tint:#ece3ff;--teams:#5b5fc7;--on-dark-link:#9fd8e6;
+  --float:0 1px 2px rgba(18,20,23,.06),0 12px 32px rgba(18,20,23,.14);--scrim:rgba(15,20,28,.4);
+  --r-card:8px;--r-ctl:6px;--r-sheet:16px;
+  --font:'Atkinson Hyperlegible Next',ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  --ease-out:cubic-bezier(.23,1,.32,1);--ease-in-out:cubic-bezier(.77,0,.175,1);--ease-drawer:cubic-bezier(.32,.72,0,1);
+  --dur-press:120ms;--dur-small:200ms;--dur-panel:260ms;
+}
+*,*::before,*::after{box-sizing:border-box}
+html{background:var(--frame);color:var(--ink)}
+body{margin:0;min-height:100dvh;background:var(--frame);color:var(--ink);font:16px/1.5 var(--font);font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+h1,h2,h3,p,ul,ol,dl,dd{margin:0}
+h1,h2,h3{font-weight:640;line-height:1.2;text-wrap:balance}
+h1{font-size:1.75rem;letter-spacing:-.01em}h2{font-size:1.125rem}h3{font-size:1.0625rem}
+ul,ol{padding:0;list-style:none}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer;touch-action:manipulation}
+::placeholder{color:#5c636b;opacity:1}
+:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+[tabindex="-1"]:focus{outline:none}
+.sr-only{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
+.small{font-size:.875rem;color:var(--muted)}
+.blk{display:block}
+b,strong{font-weight:700}
+
+/* Top bar and prototype controls */
+.top{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px 16px;padding:10px 0}
+.brand{display:flex;align-items:center;gap:8px;font-weight:700;font-size:1.0625rem}
+.proto{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:5px 6px 5px 10px;border:1px dashed var(--edge);border-radius:10px;background:var(--surface)}
+.proto-l{font-size:.75rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.seg{display:inline-flex;align-items:center;gap:2px;padding:2px;border-radius:8px;background:var(--sunk)}
+.seg-l{font-size:.8125rem;font-weight:700;color:var(--muted);padding:0 6px}
+.seg button{border:0;background:none;border-radius:6px;padding:6px 10px;font-size:.875rem;font-weight:700;color:var(--muted);transition:background-color var(--dur-press) ease}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(18,20,23,.14)}
+.scen-wrap{position:relative}
+.scen{position:absolute;right:0;top:calc(100% + 8px);width:400px;max-width:calc(100vw - 32px);background:var(--surface);border:1px solid var(--hair);border-radius:12px;box-shadow:var(--float);padding:8px;z-index:30;max-height:72vh;overflow:auto;animation:rise var(--dur-small) var(--ease-out)}
+.scen-h{font-size:.8125rem;color:var(--muted);padding:4px 8px 8px}
+.scen button{display:grid;grid-template-columns:28px minmax(0,1fr);gap:0 10px;width:100%;text-align:left;border:0;background:none;border-radius:8px;padding:7px 8px}
+.scen button:hover{background:var(--sunk)}
+.scen .n{grid-row:span 2;width:26px;height:26px;border-radius:50%;background:var(--ink);color:var(--on-ink);display:grid;place-items:center;font-weight:700;font-size:.8rem}
+.scen .t{font-weight:700}
+.scen .d{font-size:.8125rem;color:var(--muted)}
+.hint{display:flex;gap:12px;align-items:center;justify-content:space-between;background:var(--accent-soft);color:var(--accent-ink);border-radius:10px;padding:8px 8px 8px 14px;margin-bottom:10px;font-size:.9375rem}
+.hint[hidden]{display:none}
+.hint .btn.quiet{color:var(--accent-ink)}
+
+/* Shell: rail and the white sheet */
+.shell{display:grid;grid-template-columns:84px minmax(0,1fr);gap:12px;align-items:start;padding-bottom:24px}
+.rail{position:sticky;top:12px;display:grid;gap:4px}
+.nav{position:relative;display:grid;justify-items:center;align-content:center;gap:4px;min-height:62px;padding:10px 4px 8px;border-radius:10px;color:var(--muted);font-size:.78rem;font-weight:700;text-decoration:none;transition:background-color var(--dur-press) ease,color var(--dur-press) ease,transform var(--dur-press) var(--ease-out)}
+.nav:hover{background:var(--active);color:var(--ink)}
+.nav:active{transform:scale(.97)}
+.nav[aria-current="page"]{background:var(--active);color:var(--ink)}
+.nav .count{position:absolute;top:4px;right:8px;min-width:20px;height:20px;padding:0 6px;border-radius:999px;background:var(--red);color:var(--on-ink);font-size:.72rem;line-height:20px;text-align:center}
+main{background:var(--surface);border:1px solid var(--hair);border-radius:var(--r-sheet);min-height:calc(100dvh - 96px);padding:28px clamp(20px,4vw,48px) 48px;min-width:0}
+.page{max-width:820px;margin:0 auto;display:grid;gap:24px;min-width:0}
+.sec{display:grid;gap:12px;min-width:0}
+.sec>h2{display:flex;align-items:center;gap:10px}
+.count{display:inline-grid;place-items:center;min-width:24px;height:24px;padding:0 7px;border-radius:999px;background:var(--red);color:var(--on-ink);font-size:.8125rem;font-weight:700}
+
+/* Buttons and chips */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:40px;padding:8px 16px;border-radius:var(--r-ctl);border:1px solid var(--primary);background:var(--primary);color:var(--on-ink);font-weight:700;font-size:.9375rem;line-height:1.2;text-align:center;transition:background-color var(--dur-press) ease,transform var(--dur-press) var(--ease-out)}
+.btn:hover{background:var(--primary-hover)}
+.btn:active{transform:scale(.97)}
+.btn.sec{background:var(--surface);color:var(--ink);border-color:var(--edge)}
+.btn.sec:hover{background:var(--sunk)}
+.btn.quiet{background:none;border-color:transparent;color:var(--accent);text-decoration:underline;text-underline-offset:3px;padding-inline:6px;font-weight:700}
+.btn.quiet:hover{color:var(--accent-ink);background:none}
+.btn.danger{background:var(--surface);color:var(--red-ink);border-color:var(--red-ink)}
+.btn.danger:hover{background:var(--red-soft)}
+.btn.danger.solid{background:var(--red-ink);color:var(--on-ink)}
+.btn.teams{background:var(--teams);border-color:var(--teams)}
+.btn.sm{min-height:34px;padding:5px 12px;font-size:.875rem}
+.btn.quiet.sm{padding-inline:6px}
+.link{background:none;border:0;padding:0;font:inherit;font-weight:700;color:var(--ink);text-align:left;text-decoration:underline;text-decoration-color:var(--edge);text-underline-offset:4px;cursor:pointer}
+.link:hover{text-decoration-color:currentColor}
+.btnrow{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.btnrow>.btn.quiet:first-child,p>.btn.quiet:only-child{margin-left:-6px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--edge);background:var(--surface);border-radius:999px;padding:5px 12px;font-size:.9rem;font-weight:700;min-height:34px;color:var(--ink);transition:background-color var(--dur-press) ease,transform var(--dur-press) var(--ease-out)}
+.chip:hover{background:var(--sunk)}
+.chip:active{transform:scale(.97)}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--on-ink);border-color:var(--ink)}
+.chip .n{font-weight:400;margin-left:2px}
+
+/* States: a word and a shape, never colour alone */
+.st{display:inline-flex;align-items:center;gap:7px;font-weight:700;font-size:.9375rem;white-space:normal}
+.st i{width:10px;height:10px;border-radius:50%;flex:none;display:inline-block}
+.st.on{color:var(--green-ink)}.st.on i{background:var(--green)}
+.st.needs{color:var(--red-ink)}.st.needs i{background:var(--red)}
+.st.paused,.st.draft,.st.plain{color:var(--muted)}
+.st.paused i{border-radius:0;width:9px;border-left:3px solid var(--muted);border-right:3px solid var(--muted)}
+.st.draft i{border:2px solid var(--muted)}
+.st.plain i{background:var(--edge)}
+.st.wait{color:var(--amber-ink)}.st.wait i{background:var(--amber-ink)}
+.st.run{color:var(--accent)}.st.run i{background:var(--accent)}
+.st .sub{font-weight:700}
+
+/* Cards and rows */
+.card{border:1px solid var(--hair);border-radius:var(--r-card);background:var(--surface);padding:18px 20px;display:grid;gap:14px;box-shadow:0 1px 2px rgba(18,20,23,.05);min-width:0}
+.card>.card-h{font-size:1.125rem}
+.card.gone{padding:12px 16px}
+.rows{display:grid;min-width:0}
+.row{display:grid;grid-template-columns:104px minmax(0,1fr);gap:12px;padding:10px 0;border-top:1px solid var(--rule);font-size:.9375rem}
+.row:first-child{border-top:0;padding-top:0}
+.row .k{font-weight:700;color:var(--muted)}
+.row .v{min-width:0;overflow-wrap:anywhere;display:grid;gap:6px;justify-items:start}
+.row.x .k,.row.x .v>.what{color:var(--red-ink)}
+.row.x .k{font-size:1.05rem}
+.row.chk{background:var(--amber-soft);border-radius:var(--r-ctl);padding:10px;border-top-color:transparent}
+.row.chk .k{color:var(--amber-ink)}
+.guess{display:inline-block;font-size:.75rem;font-weight:700;padding:1px 8px;border-radius:999px;background:var(--amber-soft);color:var(--amber-ink);border:1px solid var(--amber-line);white-space:nowrap}
+.ask{color:var(--amber-ink);font-weight:700}
+.sub-line{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:.875rem;color:var(--muted)}
+.sub-line select{border:1px solid var(--edge);border-radius:var(--r-ctl);padding:3px 6px;background:var(--surface);color:var(--ink);font-size:.875rem}
+.diff s{color:var(--muted)}
+.diff ins{text-decoration:none;font-weight:700;color:var(--green-ink)}
+.need{font-size:.9375rem;font-weight:700;color:var(--muted);padding:7px 12px;border-radius:var(--r-ctl);background:var(--sunk)}
+.rule-line{font-size:.875rem;color:var(--muted);border-top:1px solid var(--rule);padding-top:10px}
+.lines{display:grid;gap:6px}
+.line{display:flex;gap:10px;align-items:flex-start;font-size:.9375rem}
+.line i{width:9px;height:9px;border-radius:50%;margin-top:7px;flex:none;background:var(--edge)}
+.line.ok i{background:var(--green)}
+.line.hollow i{background:none;border:2px solid var(--muted)}
+.reason{border-radius:var(--r-ctl);padding:10px 12px;background:var(--red-soft);border:1px solid var(--red-line);font-size:.9375rem}
+.reason.wait{background:var(--amber-soft);border-color:var(--amber-line)}
+.reason.ok{background:var(--green-soft);border-color:var(--green-line)}
+.reason.info{background:var(--sunk);border-color:var(--hair)}
+.ok-note{color:var(--green-ink);font-weight:700}
+.note{display:flex;gap:8px;align-items:flex-start;font-size:.9375rem;color:var(--muted)}
+.note svg{flex:none;margin-top:3px}
+.inline-in{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.inline-in input{border:1px solid var(--edge);border-radius:var(--r-ctl);padding:5px 8px;width:9em;text-transform:uppercase}
+
+/* Home and the chat */
+.hero{display:grid;justify-items:center;text-align:center;gap:12px;padding:16px 0 4px}
+.hero h1{font-size:2rem}
+.hero .box{width:100%;max-width:680px;text-align:left}
+.hero .chips{justify-content:center}
+.greet{color:var(--muted);font-weight:700}
+.box{display:flex;gap:10px;align-items:flex-end;border:1.5px solid var(--edge);border-radius:12px;background:var(--surface);padding:10px 10px 10px 14px;transition:border-color var(--dur-press) ease}
+.box:focus-within{border-color:var(--ink);outline:3px solid var(--focus);outline-offset:2px}
+.box textarea{flex:1;min-width:0;border:0;outline:0;resize:none;min-height:48px;background:none;line-height:1.45;padding:2px 0}
+.send{width:38px;height:38px;border-radius:8px;background:var(--ink);color:var(--on-ink);border:0;display:grid;place-items:center;flex:none}
+.send:hover{background:var(--primary-hover)}
+.chat-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.chat-head h1{font-size:1.375rem}
+.thread{display:grid;gap:18px;min-width:0}
+.you{display:flex;justify-content:flex-end}
+.bubble{background:var(--active);border-radius:14px 14px 4px 14px;padding:9px 14px;max-width:80%;overflow-wrap:anywhere}
+.pm{display:grid;grid-template-columns:34px minmax(0,1fr);gap:10px;align-items:start}
+.pm-body{display:grid;gap:10px;min-width:0;justify-items:stretch}
+.pm-text{padding-top:5px;display:grid;gap:6px}
+.pm-text ul{display:grid;gap:4px;padding-left:18px;list-style:disc}
+.chat-box{position:sticky;bottom:12px;background:var(--surface);border-radius:14px;box-shadow:0 -8px 16px var(--surface)}
+.pinned{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:10px 12px;border:1px solid var(--red-line);background:var(--red-soft);border-radius:var(--r-card);font-size:.9375rem}
+.pinned .pin-t{flex:1 1 220px;min-width:0}
+
+/* Lists and tables */
+.list{display:grid;border:1px solid var(--hair);border-radius:var(--r-card);min-width:0}
+.li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 16px;align-items:center;padding:12px 16px;border-top:1px solid var(--rule)}
+.li:first-child{border-top:0}
+.li-main{display:grid;gap:2px;min-width:0;justify-items:start}
+.li-main .small{overflow-wrap:anywhere}
+.li.needs-row{grid-template-columns:minmax(0,1fr) auto}
+table{border-collapse:collapse;width:100%;font-size:.9375rem}
+th,td{text-align:left;padding:12px 10px;border-bottom:1px solid var(--rule);vertical-align:top}
+th{font-size:.8125rem;color:var(--muted);font-weight:700}
+td:first-child,th:first-child{padding-left:0}
+.filters{display:flex;flex-wrap:wrap;gap:6px}
+
+/* Workflow and run pages */
+.back{justify-self:start;padding-inline:0}
+.wf-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-start;gap:12px}
+.wf-head h1{flex:1 1 280px;min-width:0;overflow-wrap:anywhere}
+.statebox{display:grid;gap:12px;justify-items:start;padding:16px 18px;border-radius:var(--r-card);border:1px solid var(--hair);background:var(--chat)}
+.statebox.needs{border-color:var(--red-line)}
+.statebox>*{max-width:100%}
+.statebox .st{font-size:1.0625rem}
+.facts .rows{border:1px solid var(--hair);border-radius:var(--r-card);padding:14px 16px}
+.facts .row:first-child{padding-top:0}
+.runs{display:grid}
+.runs li{display:grid;grid-template-columns:150px minmax(0,1fr);gap:4px 12px;padding:10px 0;border-top:1px solid var(--rule);font-size:.9375rem}
+.runs li:first-child{border-top:0}
+.runs .small{grid-column:2}
+.runs li.empty{display:block;color:var(--muted)}
+details.more{border:1px solid var(--hair);border-radius:var(--r-card)}
+details.more>summary{cursor:pointer;padding:12px 16px;font-weight:700;list-style:none;display:flex;justify-content:space-between;gap:12px;border-radius:var(--r-card)}
+details.more>summary::-webkit-details-marker{display:none}
+details.more>summary::after{content:"Show";font-weight:700;color:var(--accent);text-decoration:underline;text-underline-offset:3px}
+details.more[open]>summary::after{content:"Hide"}
+.more-body{padding:4px 16px 16px;display:grid;gap:18px}
+.more-body hr{border:0;border-top:1px solid var(--rule);margin:0;width:100%}
+.report{display:grid;gap:6px;padding-left:18px;list-style:disc;font-size:.9375rem}
+.vers{display:grid;gap:6px;font-size:.9375rem}
+.confirm{display:grid;gap:10px;padding:12px 14px;border:1px solid var(--red-line);background:var(--red-soft);border-radius:var(--r-ctl)}
+.ts{display:grid;grid-template-columns:34px minmax(0,1fr);gap:12px;border:1px solid var(--hair);border-radius:var(--r-card);padding:14px 16px}
+.tsface{width:30px;height:30px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#ffffff,var(--trouble-tint) 50%,var(--trouble))}
+.ts dl{display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px 14px;font-size:.9375rem}
+.ts dt{font-weight:700;color:var(--muted)}
+.steps{display:grid;gap:10px}
+.step{display:grid;grid-template-columns:22px minmax(0,1fr);gap:10px;align-items:start;font-size:.9375rem}
+.step .ic{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;font-size:.75rem;font-weight:800;margin-top:1px}
+.step.done .ic{background:var(--green-soft);color:var(--green-ink);border:1px solid var(--green-line)}
+.step.doing .ic{border:2px solid var(--accent);border-top-color:transparent;animation:spin .9s linear infinite}
+.step.wait .ic{background:var(--amber-soft);color:var(--amber-ink);border:1px solid var(--amber-line)}
+.step.todo .ic,.step.skip .ic{border:2px dashed var(--edge)}
+.step.bad .ic{background:var(--red-soft);color:var(--red-ink);border:1px solid var(--red-line)}
+.step .small{display:block}
+.timer{font-variant-numeric:tabular-nums;font-weight:700}
+table.mini{max-width:420px}
+
+/* Drawer (Teams mock, n8n stub) */
+.scrim{position:fixed;inset:0;background:var(--scrim);z-index:40;animation:fade var(--dur-panel) ease}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(460px,calc(100vw - 32px));background:var(--surface);box-shadow:var(--float);z-index:41;display:flex;flex-direction:column;animation:slide var(--dur-panel) var(--ease-drawer)}
+.scrim[hidden],.drawer[hidden]{display:none}
+.dhead{display:flex;align-items:center;gap:10px;padding:14px 16px 14px 20px;border-bottom:1px solid var(--hair)}
+.dhead h2{font-size:1.125rem}
+.dhead .x{margin-left:auto}
+.mock{font-size:.75rem;font-weight:700;padding:2px 8px;border-radius:999px;background:var(--sunk);color:var(--muted);border:1px solid var(--hair)}
+.dbody{padding:20px;overflow:auto;display:grid;gap:14px;align-content:start}
+.teams-card{border:1px solid var(--hair);border-left:4px solid var(--teams);border-radius:10px;padding:14px 16px;display:grid;gap:8px}
+.teams-card .tc-label{font-weight:700;margin-top:4px}
+.teams-card ul{list-style:disc;padding-left:20px}
+.kind{font-size:.875rem;font-weight:700;color:var(--muted);margin-bottom:4px}
+.appr-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-start;gap:12px}
+.pill{display:inline-block;font-size:.8125rem;font-weight:700;padding:3px 10px;border-radius:999px;border:1px solid}
+.pill.wait{background:var(--amber-soft);color:var(--amber-ink);border-color:var(--amber-line)}
+.pill.ok{background:var(--green-soft);color:var(--green-ink);border-color:var(--green-line)}
+.pill.quiet{background:var(--sunk);color:var(--muted);border-color:var(--hair)}
+.chg{display:grid;grid-template-columns:110px minmax(0,1fr);gap:8px 14px;border:1px solid var(--hair);border-radius:var(--r-card);padding:14px 16px;font-size:.9375rem}
+.chg dt{font-weight:700;color:var(--muted)}
+.chg dd{min-width:0;overflow-wrap:anywhere}
+.chg .body{white-space:pre-line}
+.ai-sum{font-size:.9375rem;color:var(--muted);padding:10px 12px;background:var(--sunk);border-radius:var(--r-ctl)}
+.wait-line{display:flex;gap:8px;align-items:center;color:var(--muted);font-weight:700}
+.nodes{display:grid}
+.node{position:relative;display:flex;gap:10px;align-items:center;border:1px solid var(--edge);border-radius:8px;padding:10px 12px;background:var(--surface);font-weight:700;font-size:.9375rem}
+.node+.node{margin-top:22px}
+.node+.node::before{content:"";position:absolute;left:24px;top:-23px;height:22px;border-left:2px solid var(--edge)}
+.node .ni{width:26px;height:26px;border-radius:6px;background:var(--sunk);display:grid;place-items:center;font-size:.75rem;flex:none}
+.node.flag{border-color:var(--amber-ink);background:var(--amber-soft)}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:var(--on-ink);border-radius:10px;padding:8px 8px 8px 16px;display:flex;gap:8px;align-items:center;z-index:45;box-shadow:var(--float);max-width:calc(100vw - 32px);animation:rise var(--dur-small) var(--ease-out)}
+.toast:empty{display:none}
+.toast .btn.quiet{color:var(--on-dark-link)}
+
+/* The Visor bot, from PlannerBot.module.css */
+.bot{flex:none;overflow:visible;display:block}
+.bot .eyes,.bot .wave rect,.bot .think circle{transform-box:fill-box;transform-origin:center}
+.bot .bb{transform-box:view-box;transform-origin:24px 26px;transition:transform var(--dur-small) var(--ease-out)}
+.bot.breathe[data-state="idle"] .bb{animation:breathe 2.1s var(--ease-in-out) 2 alternate}
+.bot[data-state="sorry"] .bb{transform:rotate(-6deg) translateY(1px)}
+.bot[data-state="thinking"] .eyes{animation:look 2.4s var(--ease-in-out) infinite}
+.bot .think circle{animation:think 1.5s ease-in-out infinite}
+.bot .think circle:nth-child(2){animation-delay:.2s}
+.bot .think circle:nth-child(3){animation-delay:.4s}
+@keyframes breathe{to{transform:scale(1.03)}}
+@keyframes look{0%,100%{transform:translate(-1.2px,-.6px)}50%{transform:translate(1.2px,-.6px)}}
+@keyframes think{0%,100%{opacity:.25}40%{opacity:1}}
+@keyframes rise{from{opacity:0;transform:translateY(6px)}}
+@keyframes fade{from{opacity:0}}
+@keyframes slide{from{transform:translateX(100%)}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes flash{from{box-shadow:0 0 0 3px var(--accent-soft)}}
+.enter{animation:rise var(--dur-small) var(--ease-out) both}
+.changed{animation:flash 900ms var(--ease-out)}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+@media (max-width:900px){.runs li{grid-template-columns:minmax(0,1fr)}.runs .small{grid-column:1}.row{grid-template-columns:88px minmax(0,1fr)}}
+</style>
+
+<div class="app" id="app">
+  <header class="top">
+    <div class="brand"><span id="brand-bot"></span><span>AI Workflow Builder</span></div>
+    <div class="proto" role="group" aria-label="Prototype controls">
+      <span class="proto-l" aria-hidden="true">Prototype</span>
+      <div class="seg" role="group" aria-labelledby="va"><span id="va" class="seg-l">Viewing as</span>
+        <button type="button" data-act="viewer" data-arg="alice" data-fk="viewer:alice" aria-pressed="true">Alice (Operator)</button>
+        <button type="button" data-act="viewer" data-arg="bob" data-fk="viewer:bob" aria-pressed="false">Bob (Approver)</button>
+      </div>
+      <div class="scen-wrap">
+        <button type="button" class="btn sec sm" id="scen-btn" data-act="toggle-scen" data-fk="toggle-scen:" aria-expanded="false" aria-controls="scen">Try a scenario</button>
+        <div class="scen" id="scen" hidden></div>
+      </div>
+      <button type="button" class="btn sec sm" data-act="reset" data-fk="reset:">Reset</button>
+    </div>
+  </header>
+  <div class="hint" id="hint" role="region" aria-label="Scenario guide" hidden></div>
+  <div class="shell">
+    <nav class="rail" id="rail" aria-label="Main"></nav>
+    <main id="main"></main>
+  </div>
+</div>
+<div class="scrim" id="scrim" hidden data-act="close-drawer"></div>
+<div class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-h" hidden></div>
+<div class="toast" id="toast" role="status"></div>
+<div class="sr-only" id="say" aria-live="polite"></div>
+
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+/* ---------- Fixed facts: people, the clock, releases ---------- */
+const NOW = new Date(2026, 10, 22, 9, 1);
+const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const DS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const PEOPLE = {
+  alice: { name: 'Alice', role: 'Operator and Approver', op: true, ap: true },
+  bob: { name: 'Bob', role: 'Approver', op: false, ap: true },
+  carol: { name: 'Carol', role: 'Operator', op: true, ap: false },
+};
+const RULE = 'Nothing is written until an Approver says yes.';
+const REL = { LangGraph: '1.2.24', React: '19.1.0', FastAPI: '0.115.2', Kubernetes: '1.34.2', Terraform: '1.13.4', 'Node.js': '24.11.1', n8n: '2.42.6', PostgreSQL: '17.2', Redis: '8.2.0' };
+const REPO = { LangGraph: 'langchain-ai/langgraph', React: 'facebook/react', FastAPI: 'fastapi/fastapi', Kubernetes: 'kubernetes/kubernetes' };
+const SWK = [['langgraph', 'LangGraph'], ['react', 'React'], ['fastapi', 'FastAPI'], ['kubernetes', 'Kubernetes'], ['terraform', 'Terraform'], ['node', 'Node.js'], ['n8n', 'n8n'], ['postgres', 'PostgreSQL'], ['redis', 'Redis']];
+const AT = 'Today 9:01';
+const nm = k => (PEOPLE[k] ? PEOPLE[k].name : k);
+const hm = (h, m) => h + ':' + String(m || 0).padStart(2, '0');
+const orList = a => (a.length < 2 ? a[0] || '' : a.slice(0, -1).join(', ') + ' or ' + a[a.length - 1]);
+const approversFor = k => Object.keys(PEOPLE).filter(p => PEOPLE[p].ap && p !== k);
+const yesNames = k => orList(approversFor(k).map(nm));
+function schedText(s) {
+  if (!s) return 'When someone presses Run now';
+  if (s.h == null) return `Every ${s.day === 'day' ? 'day' : DAYS[s.day]}, at a time you choose`;
+  const t = hm(s.h, s.m);
+  return s.day === 'day' ? `Every day at ${t}` : `Every ${DAYS[s.day]} at ${t}`;
+}
+const lowSched = s => schedText(s).replace(/^Every/, 'every').replace(/^When/, 'when');
+function nextRun(s) {
+  for (let i = 0; i < 8; i++) {
+    const c = new Date(2026, 10, 22 + i, s.h, s.m || 0);
+    if (c > NOW && (s.day === 'day' || c.getDay() === s.day)) {
+      const t = hm(s.h, s.m);
+      return i === 0 ? `today at ${t}` : i === 1 ? `tomorrow at ${t}` : `${DS[c.getDay()]} ${c.getDate()} ${MON[c.getMonth()]} at ${t}`;
+    }
+  }
+  return '';
+}
+const nextLine = s => (s && s.h != null ? `Next run ${nextRun(s)}.` : 'It runs when someone presses Run now.');
+
+const ICON = {
+  home: '<svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20h14V9.5"/></svg>',
+  list: '<svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1.2"/><circle cx="4.5" cy="12" r="1.2"/><circle cx="4.5" cy="18" r="1.2"/></svg>',
+  gear: '<svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="3.4"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></svg>',
+  send: '<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>',
+  lock: '<svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>',
+  ext: '<svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>',
+};
+
+/* The Visor bot, ported from portal/src/ui/PlannerBot.tsx. Its face is decoration; the words beside it say the same thing. */
+let botN = 0;
+function bot(state = 'idle', size = 32, still = true) {
+  const i = 'bt' + ++botN, G = 'color-mix(in srgb, var(--lead) 45%, #ffffff)';
+  const eye = (x, y, h) => `<rect x="${x - 2.1}" y="${y - h / 2}" width="4.2" height="${h}" rx="${Math.min(2.1, h / 2)}" fill="${G}"/>`;
+  const eyes = state === 'sorry' ? `<path d="M17 24.5L22 22.9M31 22.9L26 24.5" stroke="${G}" stroke-width="2.9" stroke-linecap="round" fill="none"/>`
+    : state === 'waiting' ? eye(17, 20.5, 5.6) + eye(31, 20.5, 5.6) : eye(17, 22.5, 6.6) + eye(31, 22.5, 6.6);
+  const happy = state === 'success' ? `<path d="M14.9 23.5q2.1-3.4 4.2 0M28.9 23.5q2.1-3.4 4.2 0" stroke="${G}" stroke-width="2.2" stroke-linecap="round" fill="none"/>` : '';
+  const mouth = state === 'thinking' ? `<g class="think">${[-3.5, 0, 3.5].map(d => `<circle cx="${24 + d}" cy="28.8" r="1.2" fill="${G}"/>`).join('')}</g>`
+    : state === 'sorry' ? `<path d="M21.4 29.6q2.6-1.8 5.2 0" stroke="${G}" stroke-width="1.7" stroke-linecap="round" fill="none"/>` : '';
+  return `<svg class="bot${still ? '' : ' breathe'}" data-state="${state}" viewBox="0 0 48 48" width="${size}" height="${size}" aria-hidden="true" focusable="false"><defs>`
+    + `<radialGradient id="${i}b" cx="40%" cy="30%" r="75%"><stop offset="0" stop-color="#ffffff"/><stop offset=".65" stop-color="color-mix(in srgb, var(--lead) 8%, #ffffff)"/><stop offset="1" stop-color="color-mix(in srgb, var(--lead) 28%, #ffffff)"/></radialGradient>`
+    + `<linearGradient id="${i}v" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1d2a44"/><stop offset="1" stop-color="#070c16"/></linearGradient>`
+    + `<radialGradient id="${i}e" cx="40%" cy="35%" r="70%"><stop offset="0" stop-color="color-mix(in srgb, var(--lead) 40%, #ffffff)"/><stop offset="1" stop-color="color-mix(in srgb, var(--lead) 85%, #0b1020)"/></radialGradient></defs>`
+    + `<ellipse cx="24" cy="45" rx="12" ry="2.2" fill="#0f1420" opacity=".14"/><g class="bb">`
+    + `<circle cx="8.6" cy="25" r="3.6" fill="url(#${i}e)"/><circle cx="39.4" cy="25" r="3.6" fill="url(#${i}e)"/>`
+    + `<path d="M24 5C33 5 39.5 13 39.5 23.5C39.5 34.5 33 42 24 42C15 42 8.5 34.5 8.5 23.5C8.5 13 15 5 24 5Z" fill="url(#${i}b)"/>`
+    + `<path d="M12.5 19C12.5 15 17.5 13 24 13C30.5 13 35.5 15 35.5 19V25.5C35.5 30 30.5 32.5 24 32.5C17.5 32.5 12.5 30 12.5 25.5Z" fill="url(#${i}v)"/>`
+    + `<path d="M15 17C17 15.2 20.5 14.6 23.5 14.6" stroke="#ffffff" stroke-opacity=".35" stroke-width="1.4" fill="none" stroke-linecap="round"/>`
+    + `<g class="eyes">${eyes}</g>${happy}${mouth}`
+    + `<path d="M18 37.5c3.5 1.6 8.5 1.6 12 0" stroke="color-mix(in srgb, var(--lead) 35%, #ffffff)" stroke-width="1.2" fill="none" stroke-linecap="round" opacity=".7"/></g></svg>`;
+}
+
+/* ---------- State: one object in memory ---------- */
+let S, gen = 0, uid = 0;
+const nid = p => p + ++uid;
+const W = id => S.wfs.find(w => w.id === id);
+const R = id => S.runs[id];
+function addWf(o) {
+  const w = Object.assign({ runs: [], versions: [], leftOut: [], check: null, test: null, flagged: false, holder: null }, o);
+  if (w.kind === 'release') { w.reads = w.reads || `${w.sw} releases on GitHub`; w.writes = w.writes || `1 Jira ticket in ${w.project}`; }
+  S.wfs.push(w);
+  return w;
+}
+function addRun(wid, o, front) {
+  const r = Object.assign({ id: nid('r'), wf: wid, at: AT, time: '9:01', steps: [] }, o);
+  S.runs[r.id] = r;
+  front ? W(wid).runs.unshift(r.id) : W(wid).runs.push(r.id);
+  return r;
+}
+const V = (n, what, by, at) => [n, what, by, at];
+const readsOf = w => (w.kind === 'watch' ? `${w.list.length} software on its list, from their GitHub releases` : w.reads);
+
+function seed() {
+  gen++;
+  S = { viewer: 'alice', route: { p: 'home' }, threads: { alice: [], bob: [] }, cards: {}, wchat: {}, keep: {}, wfs: [], runs: {}, filter: 'all',
+    drawer: null, drawerFrom: null, toast: null, hint: null, fresh: new Set(), failOnce: { OPS: true }, open: {}, del: null, focus: null, focusMain: false, heroFresh: true, scroll: null, flash: null };
+  addWf({ id: 'wl', name: 'Software watchlist', owner: 'alice', status: 'on', kind: 'watch', sched: { day: 1, h: 9, m: 0 }, project: 'MOCK',
+    writes: "1 Jira ticket in MOCK for each one that's behind",
+    list: [['n8n', '2.42.6'], ['PostgreSQL', '17.2'], ['Redis', '8.2.0'], ['Terraform', '1.13.4'], ['Node.js', '24.11.1']],
+    versions: [V(6, 'Added Node.js to the list', 'alice', 'Thu 12 Nov'), V(5, 'Changed the time to 9:00', 'alice', 'Mon 9 Nov')] });
+  addRun('wl', { at: 'Mon 16 Nov 9:00', by: 'schedule', status: 'done', result: '1 ticket created', approvedBy: 'bob' });
+  addRun('wl', { at: 'Mon 9 Nov 9:00', by: 'schedule', status: 'nothing' });
+  addWf({ id: 'fa', name: 'FastAPI release check', owner: 'alice', status: 'on', kind: 'release', sw: 'FastAPI', sched: { day: 'day', h: 8, m: 0 }, project: 'MOCK',
+    versions: [V(1, 'Turned on', 'alice', 'Mon 2 Nov')] });
+  addRun('fa', { at: 'Today 8:00', time: '8:00', by: 'schedule', status: 'stopped', reason: "GitHub didn't answer.",
+    trouble: ["GitHub didn't answer at 8:00.", 'Nothing. No ticket was written.', 'Yes. Nothing was written, so a retry is safe.'],
+    steps: [['Read FastAPI releases on GitHub', 'bad', "GitHub didn't answer."], ['Ask for a yes', 'todo', 'Not reached.'], ['Create 1 Jira ticket in MOCK', 'todo', 'Not reached. Nothing was written.']] });
+  addRun('fa', { at: 'Sat 21 Nov 8:00', by: 'schedule', status: 'nothing' });
+  addRun('fa', { at: 'Fri 20 Nov 8:00', by: 'schedule', status: 'done', result: '1 ticket created', approvedBy: 'bob' });
+  addWf({ id: 're', name: 'React release check', owner: 'alice', status: 'on', kind: 'release', sw: 'React', ours: '18.2.0', sched: null, project: 'MOCK',
+    versions: [V(1, 'Turned on', 'alice', 'Tue 3 Nov')] });
+  addRun('re', { at: 'Thu 19 Nov 14:10', by: 'alice', status: 'declined', decidedBy: 'bob' });
+  addRun('re', { at: 'Tue 17 Nov 10:30', by: 'alice', status: 'nothing' });
+  addWf({ id: 'gl', name: 'Close stale GitLab issues', owner: 'carol', status: 'on', kind: 'gitlab', sched: { day: 5, h: 17, m: 0 }, holder: 'carol',
+    reads: 'GitLab issues with no activity for 30 days', writes: 'Closes those issues',
+    versions: [V(3, 'Changed in n8n by Carol', 'carol', 'Fri 20 Nov'), V(2, 'Changed the time to 17:00', 'carol', 'Wed 11 Nov'), V(1, 'Turned on', 'carol', 'Thu 5 Nov')] });
+  addRun('gl', { at: 'Fri 20 Nov 17:00', by: 'schedule', status: 'done', result: '4 issues closed', approvedBy: 'alice' });
+  addWf({ id: 'ws', name: 'Weekly summary of closed tickets', owner: 'alice', status: 'paused', pausedNote: 'Paused by Alice on Fri 20 Nov.', kind: 'post',
+    sched: { day: 5, h: 16, m: 0 }, reads: 'Jira tickets closed in MOCK this week', writes: '1 Teams post in CODESparks Ops', versions: [V(1, 'Turned on', 'alice', 'Fri 6 Nov')] });
+  addRun('ws', { at: 'Fri 13 Nov 16:00', by: 'schedule', status: 'done', result: '1 post written', approvedBy: 'bob' });
+  addWf({ id: 'wb', name: 'Weekly list of new bugs', owner: 'alice', status: 'draft', kind: 'post', sched: { day: 1, h: 9, m: 0 },
+    reads: 'New bugs in MOCK this week', writes: '1 Teams post in CODESparks Ops',
+    found: 'It found 2 new bugs. It would write 1 Teams post in CODESparks Ops, after a yes.' });
+}
+function ensureLangGraph() {
+  if (W('lg')) return;
+  addWf({ id: 'lg', name: 'LangGraph release check', owner: 'alice', status: 'on', kind: 'release', sw: 'LangGraph', sched: { day: 'day', h: 9, m: 0 }, project: 'MOCK',
+    versions: [V(1, 'Turned on', 'alice', 'Sat 21 Nov')] });
+  addRun('lg', { at: 'Today 9:00', by: 'schedule', status: 'nothing' });
+}
+
+/* ---------- Derived state: the four states, seen by one person ---------- */
+const latest = w => (w.runs.length ? R(w.runs[0]) : null);
+function stateOf(w, v = S.viewer) {
+  const me = PEOPLE[v], r = latest(w);
+  if (w.status === 'paused') return { k: 'paused', label: 'Paused', line: w.pausedNote, btn: me.op ? { t: 'Resume', act: 'resume' } : null, why: 'Only an Operator can resume it.' };
+  if (w.status === 'draft') {
+    if (w.check === 'pending') {
+      if (me.ap && v !== w.owner) return { k: 'needs', label: 'Needs you', reason: `${nm(w.owner)} asks for a one-time check. It uses n8n's ${w.flagBlock} block, which the safety checker flags.`, btn: { t: 'Check it', act: 'open-wf' }, check: true };
+      return { k: 'draft', label: 'Draft', sub: 'waiting for an Approver to check it', line: 'It turns on by itself after their yes.' };
+    }
+    if (w.test && w.test.status === 'running') return { k: 'draft', label: 'Draft', sub: 'testing', testing: true };
+    if (w.test && w.test.status === 'fail') return { k: 'draft', label: 'Draft', reason: w.test.reason, btn: me.op ? { t: 'Try again', act: 'turn-on' } : null, why: 'Only an Operator can try again.' };
+    if (w.check === 'declined') return { k: 'draft', label: 'Draft', reason: `${nm(w.checkNo)} said no to the one-time check. Nothing runs until an Approver says yes.`, btn: me.op ? { t: 'Ask again', act: 'turn-on' } : null, why: 'Only an Operator can ask again.' };
+    return { k: 'draft', label: 'Draft', line: 'Not running yet.', btn: me.op ? { t: 'Turn on', act: 'turn-on' } : null, why: 'Only an Operator can turn it on.' };
+  }
+  if (r && r.status === 'stopped') {
+    if (me.op) return { k: 'needs', label: 'Needs you', reason: `Stopped at ${r.time}. ${r.reason} Nothing was written.`, btn: { t: 'Open the run', act: 'open-run', arg: r.id } };
+    return { k: 'on', label: 'On', sub: 'last run stopped', line: nextLine(w.sched) };
+  }
+  if (r && r.status === 'waiting') {
+    if (me.ap && v !== r.asker) return { k: 'needs', label: 'Needs you', reason: `1 Jira ticket waits for your yes. Asked by ${nm(r.asker)} at ${r.time}.`, btn: { t: 'Open', act: 'approval', arg: r.id }, wait: true };
+    return { k: 'on', label: 'On', sub: `waiting for ${yesNames(r.asker)}'s yes`, line: `1 Jira ticket waits for ${yesNames(r.asker)}'s yes. Asked by ${v === r.asker ? 'you' : nm(r.asker)} at ${r.time}.`, btn: { t: 'Open the run', act: 'open-run', arg: r.id } };
+  }
+  if (r && r.status === 'running') return { k: 'on', label: 'On', sub: 'running now', run: r };
+  return { k: 'on', label: 'On', line: w.sched ? `${schedText(w.sched)}. ${nextLine(w.sched)}` : nextLine(null), btn: !w.sched && me.op ? { t: 'Run now', act: 'run-now' } : null };
+}
+const live = () => S.wfs.filter(w => w.status !== 'deleted');
+const needsList = () => live().map(w => [w, stateOf(w)]).filter(x => x[1].k === 'needs');
+const ORDER = { needs: 0, on: 1, paused: 2, draft: 3 };
+
+/* ---------- Small view helpers ---------- */
+function B(t, act, arg = '', cls = '', extra = '') {
+  const c = cls === 'link' ? 'link' : 'btn ' + cls;
+  return `<button type="button" class="${c}" data-act="${act}" data-arg="${esc(arg)}" data-fk="${act}:${esc(arg)}" ${extra}>${t}</button>`;
+}
+const badge = st => `<span class="st ${st.k}"><i aria-hidden="true"></i>${esc(st.label)}${st.sub ? `<span class="sub"> · ${esc(st.sub)}</span>` : ''}</span>`;
+const row = (k, v, cls) => `<div class="row${cls ? ' ' + cls : ''}"><div class="k">${k}</div><div class="v">${v}</div></div>`;
+const fresh = id => (S.fresh.has(id) ? ' enter' : '');
+const hx = () => (S.route.p === 'wf' ? 'h3' : 'h2');
+const cardHead = (c, title) => `<${hx()} class="card-h" id="ch-${c.id}" tabindex="-1">${esc(title)}</${hx()}>`;
+function box(key, ph, label) {
+  return `<form class="box" data-form="${key}"><label class="sr-only" for="in-${key}">${esc(label)}</label><textarea id="in-${key}" rows="2" data-keep="${key}" data-fk="in:${key}" placeholder="${esc(ph)}">${esc(S.keep[key] || '')}</textarea><button type="submit" class="send" aria-label="Send" data-fk="send:${key}">${ICON.send}</button></form>`;
+}
+function wfList(ws) {
+  const rows = ws.map(w => [w, stateOf(w)]).sort((a, b) => ORDER[a[1].k] - ORDER[b[1].k]);
+  return `<ul class="list">${rows.map(([w, st]) => `<li class="li"><div class="li-main">${B(esc(w.name), 'open-wf', w.id, 'link')}<span class="small">${esc(st.reason || st.line || (st.run ? 'Running now.' : schedText(w.sched)))}</span></div>${badge(st)}</li>`).join('')}</ul>`;
+}
+function needsRows(n) {
+  return `<ul class="list">${n.map(([w, st]) => `<li class="li needs-row"><div class="li-main">${B(esc(w.name), 'open-wf', w.id, 'link')}<span class="small">${esc(st.reason)}</span></div>${B(esc(st.btn.t), st.btn.act, st.btn.arg || w.id, 'sec sm')}</li>`).join('')}</ul>`;
+}
+
+/* ---------- Home and the chat ---------- */
+function vHome() {
+  const me = PEOPLE[S.viewer];
+  if (S.threads[S.viewer].length) return vThread();
+  const needs = needsList(), mine = live().filter(w => w.owner === S.viewer);
+  const head = me.op ? 'What should run by itself?' : needs.length ? `${needs.length} ${needs.length === 1 ? 'thing needs' : 'things need'} you` : 'Nothing needs you right now';
+  const chips = me.op
+    ? [['Check for new releases', 'Every day at 9am, check LangGraph for new releases and create a Jira ticket'], ['Add to the watchlist', 'Add LangGraph to the watchlist and check it every day'], ['What needs me?', 'What needs me?']]
+    : [['What needs me?', 'What needs me?'], ['What did I say yes to?', 'What did I say yes to?'], ['Who are the Approvers?', 'Who are the Approvers?']];
+  return `<div class="page">
+    <div class="hero">${bot('idle', 88, !S.heroFresh)}<p class="greet">Good morning, ${me.name}</p><h1 tabindex="-1">${head}</h1>
+      ${box('home', me.op ? 'Describe a task in plain words' : 'Ask about your approvals', 'Tell the Planner what you need')}
+      <div class="chips" role="group" aria-label="Starting points">${chips.map(([l, t]) => `<button type="button" class="chip" data-act="fill" data-arg="${esc(t)}" data-fk="fill:${esc(t)}">${esc(l)}</button>`).join('')}</div>
+    </div>
+    ${needs.length ? `<section class="sec" aria-labelledby="h-needs"><h2 id="h-needs">Needs you <span class="count">${needs.length}</span></h2>${needsRows(needs)}</section>` : ''}
+    <section class="sec" aria-labelledby="h-mine"><h2 id="h-mine">Your workflows</h2>
+      ${mine.length ? wfList(mine) : `<p class="small">${me.op ? 'None yet. Describe one above.' : "You don't own any workflows. Approvers say yes to other people's work."}</p>`}
+      <p>${B('See all workflows', 'go', 'workflows', 'quiet')}</p></section>
+  </div>`;
+}
+function vThread() {
+  const th = S.threads[S.viewer], n = needsList(), me = PEOPLE[S.viewer];
+  let pin = '';
+  if (n.length) {
+    const [w, st] = n[0];
+    pin = `<div class="pinned"><span class="st needs"><i aria-hidden="true"></i>Needs you</span><span class="pin-t"><b>${esc(w.name)}.</b> ${esc(st.reason)}</span>${B(esc(st.btn.t), st.btn.act, st.btn.arg || w.id, 'sec sm')}${n.length > 1 ? `<span class="small">${n.length - 1} more on Home</span>` : ''}</div>`;
+  }
+  return `<div class="page">
+    <div class="chat-head"><h1 tabindex="-1">Chat with the Planner</h1>${B('New chat', 'new-chat', '', 'sec sm')}</div>
+    ${pin}
+    <div class="thread" id="thread">${th.map(msgHTML).join('')}</div>
+    <div class="chat-box">${box('home', me.op ? 'Reply, or describe another task' : 'Ask about your approvals', 'Tell the Planner what you need')}</div>
+  </div>`;
+}
+function msgHTML(m) {
+  if (m.from === 'you') return `<div class="you${fresh(m.id)}"><p class="bubble"><span class="sr-only">You said: </span>${esc(m.text)}</p></div>`;
+  if (m.thinking) return `<div class="pm">${bot('thinking', 32)}<p class="small pm-text">Thinking…</p></div>`;
+  let h = `<div class="pm${fresh(m.id)}" id="${m.id}">${bot(m.face || 'idle', 32)}<div class="pm-body"><div class="pm-text"><span class="sr-only">The Planner said: </span>${m.html || ''}</div>`;
+  if (m.chips && !m.chosen) h += `<div class="chips" role="group" aria-label="Choices">${m.chips.map(([l, a, arg]) => `<button type="button" class="chip" data-act="${a}" data-arg="${esc(arg)}" data-msg="${m.id}" data-fk="${a}:${esc(arg)}">${esc(l)}</button>`).join('')}</div>`;
+  if (m.btns) h += `<div class="btnrow">${m.btns.map(([l, a, arg, c]) => B(esc(l), a, arg, c || 'sec sm')).join('')}</div>`;
+  if (m.card) h += cardHTML(S.cards[m.card]);
+  return h + '</div></div>';
+}
+
+/* ---------- The Check card ---------- */
+const projQ = c => ({ key: 'project', row: c.wk === 'tickets' ? 'Reads' : 'Writes', text: 'Which Jira project?', opts: ['MOCK', 'OPS'] });
+const timeQ = () => ({ key: 'time', row: 'When', text: 'What time should it run?', opts: ['9:00', '12:00', '17:00'] });
+const readsText = c => (c.wk === 'tickets' ? `Open Jira tickets${c.project ? ' in ' + c.project : ''} with no update for ${c.days}` : c.reads);
+const writesText = c => (c.wk === 'release' ? `1 Jira ticket${c.project ? ' in ' + c.project : ''}` : c.writes);
+function newCard(o) {
+  const c = Object.assign({ id: nid('c'), qs: [], crossed: [], flagged: false, status: 'open', wf: null }, o);
+  S.cards[c.id] = c;
+  return c;
+}
+function qHTML(c, rowName) {
+  const q = c.qs[0];
+  if (!q || q.row !== rowName) return '';
+  let h = `<span class="ask" id="q-${c.id}">${esc(q.text)}</span><span class="chips" role="group" aria-labelledby="q-${c.id}" data-q="${c.id}">`
+    + q.opts.map(o => `<button type="button" class="chip" data-act="q" data-arg="${c.id}|${esc(o)}" data-fk="q:${c.id}|${esc(o)}">${esc(o)}</button>`).join('');
+  if (q.key === 'project') h += `<button type="button" class="chip" data-act="q-other" data-arg="${c.id}" data-fk="q-other:${c.id}" aria-expanded="${!!c.otherOpen}">Another project</button>`;
+  h += '</span>';
+  if (q.key === 'project' && c.otherOpen) h += `<span class="inline-in"><label for="op-${c.id}">Jira project key</label><input id="op-${c.id}" data-keep="op-${c.id}" data-fk="in:op-${c.id}" value="${esc(S.keep['op-' + c.id] || '')}" autocomplete="off">${B('Use it', 'q-use', c.id, 'sec sm')}</span>`;
+  return h;
+}
+function guessSel(c, key, label, opts, val, guessed, locked) {
+  if (locked) return `<span class="sub-line">${esc(label)}: ${esc(val)}</span>`;
+  return `<span class="sub-line"><label for="${key}-${c.id}">${esc(label)}</label><select id="${key}-${c.id}" data-change="${key}" data-arg="${c.id}" data-fk="sel:${key}:${c.id}">${opts.map(o => `<option${o === val ? ' selected' : ''}>${esc(o)}</option>`).join('')}</select>${guessed ? '<span class="guess">I guessed</span>' : ''}</span>`;
+}
+function cardHTML(c) {
+  if (c.status === 'gone') return `<div class="card gone"><p class="small">Set aside. Nothing was saved.</p></div>`;
+  if (c.kind === 'edit') return editCardHTML(c);
+  if (c.kind === 'watch') return watchCardHTML(c);
+  const w = c.wf && W(c.wf), locked = !!w;
+  let when = esc(schedText(c.sched));
+  if (c.dayGuess) when += ' <span class="guess">I guessed the day</span>';
+  if (!c.sched) when += `<span class="small">${c.wk === 'tickets' ? "You didn't say a time, so it waits for Run now." : "You didn't say when, so it waits for Run now."}</span>`;
+  const rows = [row('When', when + qHTML(c, 'When'))];
+  let reads = esc(c.wk === 'tickets' ? `Open Jira tickets${c.project ? ' in ' + c.project : ''} with no update` : readsText(c));
+  if (c.wk === 'tickets') reads += guessSel(c, 'days', 'No update for', ['3 days', '7 days', '14 days'], c.days, c.daysGuess, locked);
+  rows.push(row('Reads', reads + qHTML(c, 'Reads')));
+  const wt = writesText(c);
+  let writes = wt ? `${esc(wt)}, after an Approver's yes` : 'Nothing. It lists what it finds in Recent runs.';
+  if (c.wk === 'release') writes += guessSel(c, 'issue', 'Issue type', ['Task', 'Bug', 'Story'], c.issue, c.issueGuess, locked);
+  rows.push(row('Writes', writes + qHTML(c, 'Writes')));
+  if (c.flagged) rows.push(row('Check', `An Approver checks it once before it first runs. It uses n8n's ${esc(c.flagBlock)} block, which the safety checker flags.`, 'chk' + fresh('chk-' + c.id)));
+  c.crossed.forEach((x, i) => rows.push(row('<span aria-hidden="true">✕</span><span class="sr-only">Left out</span>',
+    `<span class="what">${esc(x.text)} ${esc(x.why)}</span>${x.asked ? '<span class="ok-note">Saved as a request for the team.</span>' : B('Ask the team', 'ask-team', c.id + ':' + i, 'quiet sm')}`, 'x')));
+  let foot;
+  if (c.qs.length) foot = `<div class="btnrow"><p class="need">Answer ${c.qs.length} question${c.qs.length > 1 ? 's' : ''} first</p>${locked ? '' : B('Never mind', 'dismiss', c.id, 'quiet')}</div>`;
+  else if (!w) foot = `<div class="btnrow">${B('Turn on', 'card-on', c.id)}${B('Never mind', 'dismiss', c.id, 'quiet')}</div>`;
+  else foot = cardStatus(c, w);
+  const alt = w ? '' : `<p>${B(c.flagged ? 'Use our blocks again' : 'Build it with any n8n block', 'blocks', c.id, 'quiet sm')}</p>`;
+  return `<section class="card${fresh('card-' + c.id)}" aria-labelledby="ch-${c.id}">${cardHead(c, c.title)}<div class="rows">${rows.join('')}</div>${foot}${alt}<p class="rule-line">${RULE}</p></section>`;
+}
+function testLines(w) {
+  if (!w.test) return '';
+  return `<div class="lines" aria-live="off">${w.test.lines.map(l => `<p class="line ${l.cls}${fresh(l.id)}"><i aria-hidden="true"></i><span>${l.html}</span></p>`).join('')}</div>`;
+}
+function cardStatus(c, w) {
+  const st = stateOf(w);
+  let h = testLines(w);
+  if (w.status === 'draft' && w.check === 'pending') h += `<p class="line hollow"><i aria-hidden="true"></i><span><b>Draft.</b> Waiting for an Approver to check it. It turns on by itself after their yes.</span></p>`;
+  else if (w.status === 'on' && !(w.test && w.test.status === 'pass')) h += `<p class="line ok"><i aria-hidden="true"></i><span><b>On.</b> ${w.checkedBy ? `${nm(w.checkedBy)} checked it. ` : ''}${esc(nextLine(w.sched))}</span></p>`;
+  else if (w.status === 'draft' && !st.testing && st.btn) {
+    if (st.reason) h += `<p class="reason">${esc(st.reason)}</p>`;
+    h += `<div class="btnrow">${B(esc(st.btn.t), st.btn.act, w.id)}${w.test && w.test.status === 'fail' && w.project ? B('Change the project', 'change-project', c.id, 'quiet') : ''}</div>`;
+  }
+  if (w.status !== 'deleted') h += `<p>${B('Open the workflow', 'open-wf', w.id, 'quiet sm')}</p>`;
+  return h;
+}
+function editCardHTML(c) {
+  const w = W(c.wf);
+  const rows = [row('When', `<span><s>${esc(schedText(c.from))}</s> <span aria-hidden="true">→</span><span class="sr-only"> changes to </span> <ins>${esc(schedText(c.to))}</ins></span>`), row('Reads', 'No change'), row('Writes', 'No change')];
+  let foot;
+  if (c.status === 'saved') foot = `<p class="reason ok">Saved as version ${c.v}. ${esc(nextLine(c.to))}</p><div class="btnrow">${B('Undo', 'undo-edit', c.id, 'quiet')}</div>`;
+  else if (c.status === 'undone') foot = `<p class="reason info">Undone. It's back to ${esc(lowSched(c.from))}.</p>`;
+  else foot = `<div class="btnrow">${B('Save change', 'save-edit', c.id)}${B('Never mind', 'dismiss', c.id, 'quiet')}</div>`;
+  return `<section class="card diff${fresh('card-' + c.id)}" aria-labelledby="ch-${c.id}">${cardHead(c, w.name)}<div class="rows">${rows.join('')}</div>${foot}</section>`;
+}
+function watchCardHTML(c) {
+  const w = W(c.wf), n = c.before;
+  let ask = '';
+  if (c.every && c.status === 'open') {
+    const opts = [['every', `Add it, and check all ${n + 1} every day`], ['keep', `Add it, keep ${DAYS[c.from.day] || 'the same days'}s`]];
+    ask = `<p class="ask" id="wq-${c.id}">How should I add ${esc(c.sw)}?</p><div class="chips" role="group" aria-labelledby="wq-${c.id}">${opts.map(([k, l]) => `<button type="button" class="chip" aria-pressed="${c.choice === k}" data-act="watch-pick" data-arg="${c.id}:${k}" data-fk="watch-pick:${c.id}:${k}">${esc(l)}</button>`).join('')}</div>`;
+  }
+  const to = c.choice === 'every' ? { day: 'day', h: c.from.h, m: c.from.m } : null;
+  const rows = [
+    row('When', !c.choice ? esc(schedText(c.from)) : to ? `<span><s>${esc(schedText(c.from))}</s> <span aria-hidden="true">→</span><span class="sr-only"> changes to </span> <ins>${esc(schedText(to))}</ins></span><span class="small">It keeps its time, ${hm(c.from.h, c.from.m)}.</span>` : 'No change'),
+    row('Reads', c.choice ? `<span><s>${n} software</s> <span aria-hidden="true">→</span><span class="sr-only"> changes to </span> <ins>${n + 1} software, adding ${esc(c.sw)}</ins></span>` : `${n} software on its list`),
+    row('Writes', c.choice ? 'No change' : `${esc(w.writes)}, after an Approver's yes`),
+  ];
+  let foot;
+  if (c.status === 'saved') foot = `<p class="reason ok">Saved as version ${c.v}. The Software watchlist checks ${n + 1} software, ${esc(lowSched(w.sched))}.</p><p>${B('Open the workflow', 'open-wf', w.id, 'quiet sm')}</p>`;
+  else if (!c.choice) foot = `<div class="btnrow"><p class="need">Answer 1 question first</p>${B('Never mind', 'dismiss', c.id, 'quiet')}</div>`;
+  else foot = `<div class="btnrow">${B('Save change', 'save-watch', c.id)}${B('Never mind', 'dismiss', c.id, 'quiet')}</div>`;
+  return `<section class="card diff${fresh('card-' + c.id)}" aria-labelledby="ch-${c.id}">${cardHead(c, w.name)}${ask}<div class="rows">${rows.join('')}</div>${foot}</section>`;
+}
+
+/* ---------- Workflows ---------- */
+function vWorkflows() {
+  const all = live().map(w => [w, stateOf(w)]).sort((a, b) => ORDER[a[1].k] - ORDER[b[1].k]);
+  const counts = { all: all.length };
+  ['needs', 'on', 'paused', 'draft'].forEach(k => (counts[k] = all.filter(x => x[1].k === k).length));
+  const F = [['all', 'All'], ['needs', 'Needs you'], ['on', 'On'], ['paused', 'Paused'], ['draft', 'Draft']];
+  const shown = all.filter(x => S.filter === 'all' || x[1].k === S.filter);
+  return `<div class="page"><h1 tabindex="-1">Workflows</h1>
+    <div class="filters" role="group" aria-label="Show">${F.map(([k, l]) => `<button type="button" class="chip" aria-pressed="${S.filter === k}" data-act="filter" data-arg="${k}" data-fk="filter:${k}">${l} <span class="n">${counts[k]}</span></button>`).join('')}</div>
+    <table><caption class="sr-only">Workflows, showing ${S.filter === 'all' ? 'all' : F.find(f => f[0] === S.filter)[1]}</caption>
+      <thead><tr><th scope="col">Workflow</th><th scope="col">State</th><th scope="col">When</th><th scope="col">Owner</th></tr></thead>
+      <tbody>${shown.map(([w, st]) => `<tr data-wf="${w.id}"><td>${B(esc(w.name), 'open-wf', w.id, 'link')}</td><td>${badge(st)}</td><td>${esc(schedText(w.sched))}</td><td>${nm(w.owner)}</td></tr>`).join('') || '<tr><td colspan="4" class="small">No workflows in this view.</td></tr>'}</tbody>
+    </table></div>`;
+}
+
+/* ---------- A workflow page ---------- */
+function runText(r, v = S.viewer) {
+  switch (r.status) {
+    case 'done': return `Done. ${r.result}${r.approvedBy ? `, approved by ${nm(r.approvedBy)}` : ''}.`;
+    case 'nothing': return 'Nothing new.';
+    case 'declined': return `Declined by ${nm(r.decidedBy)}. Nothing was written.`;
+    case 'stopped': return `Stopped. ${r.reason} Nothing was written.`;
+    case 'waiting': return PEOPLE[v].ap && v !== r.asker ? 'Waiting for your yes.' : `Waiting for ${yesNames(r.asker)}'s yes.`;
+    default: return 'Running now.';
+  }
+}
+const byText = r => (r.by === 'schedule' ? 'On schedule' : r.retry ? `Retry by ${nm(r.by)}` : `Run now by ${nm(r.by)}`);
+function stepsHTML(steps) {
+  const IC = { done: '✓', bad: '!', wait: '…', todo: '', doing: '', skip: '' };
+  return `<ol class="steps">${steps.map(([t, s, note]) => `<li class="step ${s}"><span class="ic" aria-hidden="true">${IC[s]}</span><span><span class="sr-only">${{ done: 'Done: ', bad: 'Stopped: ', wait: 'Waiting: ', todo: 'Not yet: ', doing: 'Now: ', skip: 'Skipped: ' }[s]}</span>${esc(t)}${note ? `<span class="small">${esc(note)}</span>` : ''}</span></li>`).join('')}</ol>`;
+}
+function explain(w) {
+  const items = [`<li><b>When it runs:</b> ${esc(schedText(w.sched))}.</li>`, `<li><b>Step 1, reads:</b> ${esc(readsOf(w))}.</li>`];
+  if (w.writes) items.push('<li><b>Step 2, asks:</b> an Approver for a yes, sent to them in Teams, never the person who asked.</li>', `<li><b>Step 3, writes after the yes:</b> ${esc(w.writes)}.</li>`);
+  else items.push('<li><b>Step 2:</b> lists what it found in Recent runs. It writes nothing.</li>');
+  if (w.leftOut.length) items.push(`<li><b>Left out:</b> ${esc(w.leftOut.join(' '))}</li>`);
+  items.push(`<li><b>Safety checker:</b> ${w.flagged ? `flags n8n's ${esc(w.flagBlock)} block. ${w.check === 'done' ? `${nm(w.checkedBy)} checked it once.` : 'An Approver checks it once before it first runs.'}` : 'passed.'}</li>`);
+  return `<ul class="report">${items.join('')}</ul><p class="small">Code writes this from the workflow itself, not the AI.</p>`;
+}
+function vWf(id) {
+  const w = W(id);
+  if (!w || w.status === 'deleted') return `<div class="page"><h1 tabindex="-1">This workflow was deleted</h1><p>${B('Go to Workflows', 'go', 'workflows', 'sec')}</p></div>`;
+  const me = PEOPLE[S.viewer], st = stateOf(w);
+  let sb = `<div class="statebox ${st.k}${S.flash === w.id ? ' changed' : ''}" id="statebox" tabindex="-1"><p>${badge(st)}</p>`;
+  if (st.reason) sb += `<p class="reason${st.wait ? ' wait' : ''}">${esc(st.reason)}</p>`;
+  if (st.line) sb += `<p>${esc(st.line)}</p>`;
+  if (st.testing) sb += testLines(w);
+  if (st.run) sb += stepsHTML(st.run.steps);
+  const acts = [];
+  if (st.check) acts.push(B('Yes, it can run', 'check-yes', w.id), B('No', 'check-no', w.id, 'quiet'));
+  else if (st.btn) acts.push(B(esc(st.btn.t), st.btn.act, st.btn.arg || w.id));
+  if (me.op && w.status === 'on' && !st.run && !w.holder) acts.push(B('Pause', 'pause', w.id, 'quiet'));
+  if (acts.length) sb += `<div class="btnrow">${acts.join('')}</div>`;
+  else if (!me.op && (w.status === 'draft' || w.status === 'paused') && !st.check && st.why) sb += `<p class="small">${esc(st.why)}</p>`;
+  sb += '</div>';
+  const notes = [];
+  if (w.holder) notes.push(`<p class="note" id="holder-note">${ICON.lock}<span>${nm(w.holder)} is editing it in n8n. Changes here wait until ${nm(w.holder)} is done.</span></p>`);
+  if (w.leftOut.length) notes.push(`<p class="note"><span><b>Left out:</b> ${esc(w.leftOut.join(' '))}</span></p>`);
+  const rows = [row('When', esc(schedText(w.sched))), row('Reads', esc(readsOf(w))),
+    row('Writes', w.writes ? `${esc(w.writes)}, after an Approver's yes` : 'Nothing. It lists what it finds in Recent runs.'),
+    row('Who says yes', w.writes ? 'Any Approver except the person who asked' : 'No one needs to. It writes nothing.')];
+  if (w.flagged) rows.push(row('Check', w.check === 'done' ? `${nm(w.checkedBy)} checked it once. It uses n8n's ${esc(w.flagBlock)} block.` : `An Approver checks it once before it first runs. It uses n8n's ${esc(w.flagBlock)} block, which the safety checker flags.`, w.check === 'done' ? '' : 'chk'));
+  const list = w.kind === 'watch' ? `<section class="sec" aria-labelledby="h-list"><h2 id="h-list">The list</h2><table class="mini"><caption class="sr-only">Software on the watchlist</caption><thead><tr><th scope="col">Software</th><th scope="col">Our version</th></tr></thead><tbody>${w.list.map(([n, v]) => `<tr><td>${esc(n)}</td><td>${v ? esc(v) : '<span class="small">Not set yet</span>'}</td></tr>`).join('')}</tbody></table></section>` : '';
+  let change;
+  if (!me.op) change = '<p class="small">Operators can change it.</p>';
+  else if (w.holder) change = `<p class="reason info">Changes here wait until ${nm(w.holder)} is done in n8n. You can still open it in n8n.</p>`;
+  else change = `<div class="thread">${(S.wchat[w.id] || []).map(msgHTML).join('')}</div>${box('wf-' + w.id, 'For example: make it run at 10am', 'Ask the Planner to change it')}`;
+  const runs = w.runs.map(rid => { const r = R(rid); return `<li>${B(esc(r.at), 'open-run', rid, 'link')}<span>${esc(runText(r))}</span><span class="small">${esc(byText(r))}</span></li>`; }).join('') || '<li class="empty">No runs yet.</li>';
+  const del = S.del === w.id
+    ? `<div class="confirm" role="group" aria-labelledby="del-q"><p id="del-q"><b>Delete ${esc(w.name)}?</b> It stops running. Its past runs stay readable, and you can undo for a day.</p><div class="btnrow">${B('Keep it', 'del-no', w.id, 'sec')}${B('Delete it', 'del-yes', w.id, 'danger solid')}</div></div>`
+    : B('Delete this workflow', 'del-ask', w.id, 'danger sm');
+  return `<div class="page">
+    ${B('← Workflows', 'go', 'workflows', 'quiet back')}
+    <div class="wf-head"><h1 tabindex="-1">${esc(w.name)}</h1>${B(ICON.ext + 'Open in n8n', 'n8n', w.id, 'sec sm')}</div>
+    ${sb}${notes.join('')}
+    <section class="sec facts" aria-labelledby="h-facts"><h2 id="h-facts" class="sr-only">What it does</h2><div class="rows">${rows.join('')}</div><p class="small">${RULE}</p></section>
+    ${list}
+    <section class="sec" aria-labelledby="h-change"><h2 id="h-change">Change it</h2>${change}</section>
+    <section class="sec" aria-labelledby="h-runs"><h2 id="h-runs">Recent runs</h2><ul class="runs">${runs}</ul></section>
+    <details class="more" data-det="${w.id}"${S.open[w.id] ? ' open' : ''}><summary>Details</summary><div class="more-body">
+      <section class="sec" aria-labelledby="h-ex"><h3 id="h-ex">Explain</h3>${explain(w)}</section>
+      <section class="sec" aria-labelledby="h-ver"><h3 id="h-ver">Versions</h3><ol class="vers">${w.versions.map(v => `<li>Version ${v[0]}: ${esc(v[1])}. <span class="small">${nm(v[2])}, ${esc(v[3])}</span></li>`).join('') || '<li class="small">No versions yet. Turning it on makes version 1.</li>'}</ol></section>
+      ${me.op ? `<hr><section aria-label="Delete">${del}</section>` : ''}
+    </div></details>
+  </div>`;
+}
+
+/* ---------- A run page ---------- */
+const RUNST = { stopped: ['needs', 'Stopped'], waiting: ['wait', 'Waiting for a yes'], done: ['on', 'Done'], nothing: ['plain', 'Nothing new'], declined: ['plain', 'Declined'], running: ['run', 'Running'] };
+function vRun(id) {
+  if (R(id).write) return vApproval(id);
+  const r = R(id), w = W(r.wf), me = PEOPLE[S.viewer];
+  const [k, label] = RUNST[r.status];
+  let sb = `<div class="statebox" id="statebox" tabindex="-1"><p><span class="st ${k}"><i aria-hidden="true"></i>${label}</span></p>`;
+  if (r.status === 'stopped') {
+    sb += `<p class="reason">Stopped at ${r.time}. ${esc(r.reason)} Nothing was written.</p>`;
+    sb += r.retriedBy ? `<p>${B('See the retry', 'open-run', r.retriedBy, 'sec')}</p>` : me.op ? `<div class="btnrow">${B('Retry', 'retry', r.id)}</div>` : '<p class="small">An Operator can retry it.</p>';
+  }
+  if (r.status === 'done') sb += `<p class="reason ok">${esc(runText(r))}${r.ticket ? ` Ticket ${r.ticket}.` : ''}</p>`;
+  if (r.status === 'declined') sb += `<p class="reason info">${esc(runText(r))}</p>`;
+  if (r.status === 'nothing') sb += `<p>Nothing new. Nothing was written.</p>${r.retry ? `<p class="reason ok">${esc(w.name)} is On. ${esc(nextLine(w.sched))}</p>` : ''}`;
+  sb += '</div>';
+  const ts = r.status === 'stopped' && r.trouble ? `<section class="ts" aria-labelledby="h-ts"><span class="tsface" aria-hidden="true"></span><div class="sec"><h2 id="h-ts">The AI troubleshooter</h2><dl><dt>What happened</dt><dd>${esc(r.trouble[0])}</dd><dt>What it affected</dt><dd>${esc(r.trouble[1])}</dd><dt>Safe to retry?</dt><dd>${esc(r.trouble[2])}</dd></dl></div></section>` : '';
+  const wr = r.write ? `<section class="sec" aria-labelledby="h-wr"><h2 id="h-wr">What it writes</h2><p>1 Jira ticket in ${esc(w.project)}: "${esc(r.write.title)}"</p><p class="small">${RULE}</p></section>` : '';
+  const steps = r.steps.length ? `<section class="sec" aria-labelledby="h-steps"><h2 id="h-steps">Steps</h2>${stepsHTML(r.steps)}</section>` : '';
+  return `<div class="page">
+    ${B('← ' + esc(w.name), 'open-wf', w.id, 'quiet back')}
+    <div><h1 tabindex="-1">Run of ${esc(w.name)}</h1><p class="small">${esc(r.at)} · ${esc(byText(r))}</p></div>
+    ${sb}${ts}${wr}${steps}
+  </div>`;
+}
+
+/* ---------- The approval page: the run's page with the request on top, as /approvals/:id is in the Portal ---------- */
+const andList = a => (a.length < 2 ? a[0] || '' : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1]);
+function vApproval(id) {
+  const r = R(id), w = W(r.wf), me = PEOPLE[S.viewer];
+  const open = r.status === 'waiting', can = open && me.ap && S.viewer !== r.asker;
+  const [tone, label] = open ? ['wait', can ? 'Needs your yes' : 'Waiting for a yes'] : r.status === 'done' ? ['ok', 'Approved'] : ['quiet', 'Declined'];
+  const whyNot = S.viewer === r.asker
+    ? `You ${andList([r.asker === w.owner ? 'set this workflow up' : '', 'started this run'].filter(Boolean))}, so another Approver must decide. Nobody approves their own work.`
+    : 'Only an Approver can decide.';
+  let h = `<div class="page">
+    ${B('← ' + esc(w.name), 'open-wf', w.id, 'quiet back')}
+    <section class="sec" aria-labelledby="appr-h">
+      <div class="appr-head"><div><p class="kind">Approval, from ${nm(w.owner)}'s ${esc(w.name)}</p><h1 id="appr-h" tabindex="-1">Create 1 Jira ticket</h1></div><span class="pill ${tone}">${label}</span></div>
+      ${open ? `<p>${can ? 'This needs your yes.' : `This waits for ${yesNames(r.asker)}'s yes.`}</p>` : ''}
+      <section class="sec" aria-labelledby="h-written"><h2 id="h-written">What will be written</h2>
+        <dl class="chg"><dt>Where</dt><dd>Jira project ${esc(w.project)} on the practice Jira</dd><dt>Summary</dt><dd>${esc(r.write.title)}</dd><dt>Details</dt><dd class="body">${esc(r.write.body)}</dd></dl></section>
+      <p class="ai-sum"><b>Summary by AI.</b> ${esc(r.write.found)} Decide on the change above, not this.</p>`;
+  if (open) h += `<dl class="chg"><dt>Asked by</dt><dd>${S.viewer === r.asker ? 'You' : nm(r.asker)}, today at ${r.time}</dd><dt>Sent</dt><dd>Today, ${r.time}, in Teams</dd>
+      <dt>Waiting for</dt><dd><span class="timer" data-timer="${r.waitStart}">0:00</span></dd><dt>${can ? 'Why you' : 'Why not you'}</dt><dd>${can ? 'No one can approve their own work.' : esc(whyNot)}</dd></dl>`;
+  if (can) h += `<div class="btnrow">${B('Approve', 'decide-yes', r.id)}${B('Decline', 'decide-no', r.id, 'sec')}</div>`;
+  else if (open) h += `<p class="wait-line">${ICON.lock}<span>Waiting for an Approver.</span></p>`;
+  else if (r.status === 'done') h += `<p class="reason ok" id="appr-record" tabindex="-1">Approved by ${nm(r.decidedBy)} at ${r.time}. ${r.ticket} created.</p>`;
+  else h += `<p class="reason info" id="appr-record" tabindex="-1">Declined by ${nm(r.decidedBy)} at ${r.time}. Nothing was written.</p>`;
+  h += `<p class="small">${RULE} ${B('See the Teams card', 'teams', r.id, 'quiet sm')}</p></section>
+    <section class="sec" aria-labelledby="h-run"><h2 id="h-run">The run</h2><p class="small">${esc(r.at)} · ${esc(byText(r))}</p>
+      ${open ? '' : `<p class="reason ${r.status === 'done' ? 'ok' : 'info'}">${esc(runText(r))}${r.ticket ? ` Ticket ${r.ticket}.` : ''}</p>`}
+      ${stepsHTML(r.steps)}</section>
+  </div>`;
+  return h;
+}
+
+/* ---------- Settings ---------- */
+function vSettings() {
+  const conn = [['GitHub', 'Reads public releases', 'Ready'], ['Jira (practice)', 'Projects MOCK and OPS', 'Ready'], ['Teams', 'CODESparks Ops channel', 'Ready'], ['n8n', 'Runs every workflow', 'Ready']];
+  return `<div class="page"><h1 tabindex="-1">Settings</h1>
+    <section class="sec" aria-labelledby="h-people"><h2 id="h-people">People</h2><ul class="list">${Object.values(PEOPLE).map(p => `<li class="li"><b>${p.name}</b><span class="small">${p.role}</span></li>`).join('')}</ul>
+    <p class="small">A person never approves their own request. Changing who is an Approver is admin work, so it stays here and is not part of making a workflow. This prototype doesn't change it.</p></section>
+    <section class="sec" aria-labelledby="h-conn"><h2 id="h-conn">Connections</h2><ul class="list">${conn.map(([n, d, s]) => `<li class="li"><span class="li-main"><b>${n}</b><span class="small">${d}</span></span><span class="st on"><i aria-hidden="true"></i>${s}</span></li>`).join('')}</ul></section></div>`;
+}
+
+/* ---------- Drawer: Teams mock and n8n stub ---------- */
+function vTeams(r) {
+  const w = W(r.wf);
+  const rec = r.status === 'done' ? `Approved by ${nm(r.decidedBy)}` : r.status === 'declined' ? `Declined by ${nm(r.decidedBy)}` : '';
+  return `<div class="dhead"><h2 id="drawer-h" tabindex="-1">Microsoft Teams</h2><span class="mock">Mock</span>${B('Close', 'close-drawer', '', 'sec sm x')}</div><div class="dbody">
+    <p class="small">CODESparks Ops · to Approvers except ${nm(r.asker)}</p>
+    <article class="teams-card" aria-labelledby="tc-h"><p class="small">AI Workflow Builder · ${r.time}</p>
+      ${rec ? `<p><b>${rec}</b></p>` : ''}
+      <p id="tc-h"><b>${esc(w.name)}</b> wants to make 1 change. Nothing is written until an Approver says yes.</p>
+      <p>Set up by ${nm(w.owner)}</p>
+      <ul><li>Create Jira ticket in ${esc(w.project)} on the practice Jira: ${esc(r.write.title)}</li></ul>
+      <p class="tc-label">What the agents found</p><p>${esc(r.write.found)}</p>
+      <p class="tc-label">Who can decide</p><p>Any Approver</p><p>${nm(r.asker)} can't decide, because this run is their own work.</p>
+      <div class="btnrow">${B('Open in AI Workflow Builder', 'approval', r.id, 'teams')}</div>
+    </article>
+    <p class="small">A mock of the Teams card. Its one button opens the approval page in the AI Workflow Builder. No one decides in Teams.</p></div>`;
+}
+function nodesOf(w) {
+  const start = w.sched ? `Schedule: ${lowSched(w.sched)}` : 'Start from the Portal';
+  if (w.flagged) return [[start], [`${w.flagBlock} (n8n block)`, true], ['Ask for a yes'], ['Make the approved changes']];
+  if (w.kind === 'watch') return [[start], ['Read: the software list'], ['Read: releases on GitHub'], ['Propose a change: Jira tickets'], ['Ask for a yes'], ['Make the approved changes']];
+  if (!w.writes) return [[start], ['Read: Jira tickets'], ['Report']];
+  return [[start], [`Read: ${readsOf(w)}`], [`Propose a change: ${w.writes}`], ['Ask for a yes'], ['Make the approved changes']];
+}
+function vN8n(w) {
+  return `<div class="dhead"><h2 id="drawer-h" tabindex="-1">n8n</h2><span class="mock">Stub</span>${B('Close', 'close-drawer', '', 'sec sm x')}</div><div class="dbody">
+    <p><b>${esc(w.name)}</b></p>${w.holder ? `<p class="note">${ICON.lock}<span>${nm(w.holder)} has it open in n8n.</span></p>` : ''}
+    <ol class="nodes" aria-label="Blocks in this n8n workflow">${nodesOf(w).map(([t, flag]) => `<li class="node${flag ? ' flag' : ''}"><span class="ni" aria-hidden="true">${esc(t[0])}</span><span>${esc(t)}${flag ? ' <span class="guess">Flagged</span>' : ''}</span></li>`).join('')}</ol>
+    <p class="small">A stub for this prototype. In the app, this opens the workflow in n8n. Edits made there are still checked at the write.</p></div>`;
+}
+
+/* ---------- Render ---------- */
+const main = $('#main'), rail = $('#rail'), drawer = $('#drawer'), scrim = $('#scrim'), hint = $('#hint'), toastEl = $('#toast'), say = $('#say');
+function vRail() {
+  const n = needsList().length, p = S.route.p, cur = x => (x === p || (x === 'workflows' && (p === 'wf' || p === 'run' || p === 'approval')));
+  return [['home', 'Home', ICON.home], ['workflows', 'Workflows', ICON.list], ['settings', 'Settings', ICON.gear]].map(([k, l, ic]) =>
+    `<a href="#${k}" class="nav" data-act="go" data-arg="${k}" data-fk="go:${k}"${cur(k) ? ' aria-current="page"' : ''}>${ic}<span>${l}</span>${k === 'home' && n ? `<span class="count"><span class="sr-only">, Needs you: </span>${n}</span>` : ''}</a>`).join('');
+}
+function vMain() {
+  const r = S.route;
+  if (r.p === 'workflows') return vWorkflows();
+  if (r.p === 'settings') return vSettings();
+  if (r.p === 'wf') return vWf(r.id);
+  if (r.p === 'run') return vRun(r.id);
+  if (r.p === 'approval') return vApproval(r.id);
+  return vHome();
+}
+function render() {
+  const ae = document.activeElement, fk = ae && ae.dataset ? ae.dataset.fk : null;
+  const fid = !fk && ae && ae.id && ae !== document.body ? ae.id : null;
+  const sel = ae && 'selectionStart' in ae && ae.dataset && ae.dataset.keep ? [ae.selectionStart, ae.selectionEnd] : null;
+  rail.innerHTML = vRail();
+  main.innerHTML = vMain();
+  if (S.drawer) { drawer.innerHTML = S.drawer.kind === 'teams' ? vTeams(R(S.drawer.run)) : vN8n(W(S.drawer.wf)); drawer.hidden = false; scrim.hidden = false; }
+  else { drawer.hidden = true; scrim.hidden = true; drawer.innerHTML = ''; }
+  $('#app').inert = !!S.drawer;
+  hint.hidden = !S.hint;
+  hint.innerHTML = S.hint ? `<p><b>Scenario ${S.hint.n} of 10: ${esc(S.hint.t)}.</b> ${esc(S.hint.h)}</p>${B('Hide', 'hide-hint', '', 'quiet sm')}` : '';
+  toastEl.innerHTML = S.toast ? `<span>${esc(S.toast.text)}</span>${S.toast.act ? B('Undo', S.toast.act, S.toast.arg, 'quiet sm') : ''}${B('Close', 'close-toast', '', 'quiet sm')}` : '';
+  $$('.seg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.arg === S.viewer)));
+  S.fresh.clear(); S.heroFresh = false; S.flash = null;
+  tick();
+  let t = null;
+  if (S.focus) { t = $(S.focus); S.focus = null; }
+  else if (S.focusMain) t = $('main h1');
+  else if (fk) t = document.querySelector(`[data-fk="${CSS.escape(fk)}"]`);
+  else if (fid) t = document.getElementById(fid);
+  if (S.focusMain) window.scrollTo(0, 0);
+  S.focusMain = false;
+  if (t) { t.focus({ preventScroll: true }); if (sel && t.setSelectionRange && t.dataset.fk === fk) t.setSelectionRange(sel[0], sel[1]); }
+  if (S.scroll) { const el = $(S.scroll); S.scroll = null; if (el) el.scrollIntoView({ block: 'nearest', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }); }
+}
+function tick() {
+  $$('[data-timer]').forEach(e => {
+    const s = Math.max(0, Math.floor((Date.now() - Number(e.dataset.timer)) / 1000)), t = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+    if (e.textContent !== t) e.textContent = t;
+  });
+}
+setInterval(tick, 250);
+function announce(t) { say.textContent = ''; setTimeout(() => (say.textContent = t), 60); }
+function later(ms, fn) { const g = gen; setTimeout(() => { if (g === gen) fn(); }, ms); }
+function go(route) { S.route = route; S.focusMain = true; S.del = null; render(); }
+const textOf = html => html.replace(/<[^>]+>/g, '').replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&amp;/g, '&');
+
+/* ---------- The Planner (no model: fixed answers for this prototype) ---------- */
+const P = (html, face, more) => Object.assign({ html, face }, more || {});
+function parseWhen(t) {
+  let day = null, h = null, m = 0;
+  if (/every ?day|daily|each day/.test(t)) day = 'day';
+  const dm = t.match(/(?:every|each|on) (sunday|monday|tuesday|wednesday|thursday|friday|saturday)/);
+  if (dm) day = DAYS.map(d => d.toLowerCase()).indexOf(dm[1]);
+  const tm = t.match(/\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/) || t.match(/\bat (\d{1,2}):(\d{2})\b/);
+  if (tm) { h = Number(tm[1]); if (tm[3]) h = (h % 12) + (tm[3] === 'pm' ? 12 : 0); m = tm[2] ? Number(tm[2]) : 0; }
+  return { day, h, m };
+}
+const findSw = t => (SWK.find(([k]) => t.includes(k)) || [])[1];
+function findWf(t) {
+  let best = null, score = 0;
+  live().forEach(w => {
+    const words = w.name.toLowerCase().split(/\s+/).filter(x => x.length > 3);
+    const s = words.filter(x => t.includes(x)).length + (w.sw && t.includes(w.sw.toLowerCase()) ? 2 : 0);
+    if (s > score) { score = s; best = w; }
+  });
+  return score >= 2 ? best : null;
+}
+function cardReply(c, lead) {
+  const msg = P(lead, 'idle', { card: c.id });
+  S.focus = `#ch-${c.id}`;
+  S.fresh.add('card-' + c.id);
+  return msg;
+}
+function releaseAnswer(sw, t) {
+  const when = parseWhen(t), pj = (t.match(/\b(?:in|to|into) (mock|ops)\b/) || [])[1];
+  let sched = null, dayGuess = false;
+  const qs = [];
+  if (when.h != null) { sched = { day: when.day ?? 'day', h: when.h, m: when.m }; dayGuess = when.day == null; }
+  else if (when.day != null) { sched = { day: when.day, h: null, m: 0 }; qs.push(timeQ()); }
+  const c = newCard({ kind: 'new', wk: 'release', sw, title: `${sw} release check`, reads: `${sw} releases on GitHub`, sched, dayGuess, project: pj ? pj.toUpperCase() : null,
+    issue: 'Task', issueGuess: true, flagBlock: 'HTTP Request' });
+  if (!c.project) qs.push(projQ(c));
+  c.qs = qs;
+  if (/security/.test(t)) c.crossed.push({ text: 'Flag security issues.', why: "I can't read security advisories yet." });
+  let lead = c.qs.length ? `Here it is. ${c.qs.length === 1 ? 'One question' : 'Two questions'} first.` : 'Here it is. Check it, then turn it on.';
+  if (c.crossed.length) lead += " I can't do one part, so I crossed it out.";
+  return cardReply(c, lead);
+}
+function ticketsAnswer() {
+  const c = newCard({ kind: 'new', wk: 'tickets', title: 'Tickets with no update', sched: null, days: '7 days', daysGuess: true, project: null, writes: null, flagBlock: 'Jira' });
+  c.qs = [projQ(c)];
+  return cardReply(c, 'Here is a start. One question first.');
+}
+function triageAnswer(t) {
+  const when = parseWhen(t);
+  const c = newCard({ kind: 'new', wk: 'triage', title: 'GitLab issue triage', sched: when.h != null ? { day: when.day ?? 'day', h: when.h, m: when.m } : null, dayGuess: when.h != null && when.day == null,
+    reads: 'New GitLab issues since the last run', writes: 'Adds the label "needs-triage" to each one', flagBlock: 'GitLab' });
+  if (when.day != null && when.h == null) { c.sched = { day: when.day, h: null, m: 0 }; c.qs = [timeQ()]; }
+  return cardReply(c, c.qs.length ? 'Here it is. One question first.' : 'Here it is. Check it, then turn it on.');
+}
+function watchAnswer(sw, t) {
+  const wl = W('wl');
+  if (!wl || wl.status === 'deleted') return P("You don't have a Software watchlist right now.", 'sorry');
+  if (wl.list.some(([n]) => n === sw)) return P(`${esc(sw)} is already on your Software watchlist. It checks ${wl.list.length} software, ${esc(lowSched(wl.sched))}.`, 'idle', { btns: [['Open the Software watchlist', 'open-wf', 'wl']] });
+  const every = /every ?day|daily/.test(t) && !(wl.sched && wl.sched.day === 'day');
+  const c = newCard({ kind: 'watch', wf: 'wl', sw, every, choice: every ? null : 'keep', before: wl.list.length, from: wl.sched });
+  return cardReply(c, `${esc(sw)} isn't on your Software watchlist yet. The watchlist is a workflow that checks ${wl.list.length} software, ${esc(lowSched(wl.sched))}${every ? ', and you asked for every day' : ''}.`);
+}
+function needsAnswer() {
+  const n = needsList();
+  if (!n.length) return P('Nothing needs you right now.', 'success');
+  return P(`${n.length === 1 ? 'One thing needs' : `${n.length} things need`} you:<ul>${n.map(([w, st]) => `<li><b>${esc(w.name)}.</b> ${esc(st.reason)}</li>`).join('')}</ul>`, 'idle',
+    { btns: n.map(([w, st]) => [`${st.btn.t}: ${w.name}`, st.btn.act, st.btn.arg || w.id]) });
+}
+function interpret(raw) {
+  const t = raw.toLowerCase().trim(), me = PEOPLE[S.viewer];
+  if (/what needs me|needs me\b|need me\b/.test(t)) return needsAnswer();
+  if (/who are the approvers|who can approve|who says yes/.test(t)) return P('Alice and Bob are Approvers. A person never approves their own request.');
+  if (/what did i say yes|did i approve/.test(t)) {
+    const mine = Object.values(S.runs).filter(r => r.approvedBy === S.viewer);
+    return mine.length ? P(`You said yes to:<ul>${mine.map(r => `<li><b>${esc(W(r.wf).name)}</b>, ${esc(r.at)}: ${esc(r.result)}.</li>`).join('')}</ul>`) : P("You haven't said yes to anything yet.");
+  }
+  if (!me.op) return P("Setting up or changing a workflow needs an Operator, such as Alice. You can say yes to other people's work.", 'sorry');
+  if (/keep an eye on (things|stuff|everything)|^help\b/.test(t)) return P('What should I keep an eye on?', 'idle', { chips: [['Software releases', 'unclear', 'sw'], ['Jira tickets', 'unclear', 'jira'], ['Something else', 'unclear', 'else']] });
+  const w = findWf(t);
+  if (/\b(why|what happened)\b/.test(t) && /stop|fail|happen/.test(t)) {
+    const n = needsList().filter(([x, st]) => /^Stopped/.test(st.reason || ''));
+    if (!n.length) return P('None of your workflows has stopped.', 'success');
+    const [x, st] = n[0];
+    return P(`${esc(x.name)}: ${esc(st.reason)}`, 'idle', { btns: [['Open the run', 'open-run', st.btn.arg]] });
+  }
+  if (w && /^(run|start)\b/.test(t)) {
+    if (w.status !== 'on') return P(`${esc(w.name)} isn't on. Open it to turn it on.`, 'sorry', { btns: [['Open it', 'open-wf', w.id]] });
+    if (w.sched) return P(`${esc(w.name)} runs by itself, ${esc(lowSched(w.sched))}. ${esc(nextLine(w.sched))}`, 'idle', { btns: [['Open it', 'open-wf', w.id]] });
+    later(10, () => runNow(w.id));
+    return P(`Starting ${esc(w.name)} now.`, 'idle', { btns: [['Open the workflow', 'open-wf', w.id]] });
+  }
+  if (w && /^(open|show|go to)\b/.test(t)) { later(10, () => go({ p: 'wf', id: w.id })); return P(`Opening ${esc(w.name)}.`); }
+  const sw = findSw(t);
+  if (/watchlist/.test(t)) return watchAnswer(sw || 'LangGraph', t);
+  if (sw && /release|version/.test(t)) return releaseAnswer(sw, t);
+  if (/gitlab/.test(t) && /label|triage/.test(t)) return triageAnswer(t);
+  if (/ticket/.test(t) && /no update|stale|keep an eye/.test(t)) return ticketsAnswer();
+  return P("I didn't follow that. Say what should run, when, and what it should write. For example:", 'sorry', { chips: [
+    ['Every day at 9am, check LangGraph for new releases and create a Jira ticket', 'fill', 'Every day at 9am, check LangGraph for new releases and create a Jira ticket'],
+    ['Add LangGraph to the watchlist and check it every day', 'fill', 'Add LangGraph to the watchlist and check it every day']] });
+}
+function pushMsg(list, m) { m.id = m.id || nid('m'); S.fresh.add(m.id); list.push(m); return m; }
+function send(text) {
+  const th = S.threads[S.viewer];
+  if (S.route.p !== 'home') S.route = { p: 'home' };
+  pushMsg(th, { from: 'you', text });
+  const think = { id: nid('m'), thinking: true };
+  th.push(think);
+  S.focus = '#in-home';
+  S.scroll = '#thread > :last-child';
+  render();
+  later(450, () => {
+    th.splice(th.indexOf(think), 1);
+    const m = pushMsg(th, interpret(text));
+    announce(textOf(m.html || ''));
+    S.scroll = '#' + m.id;
+    render();
+  });
+}
+function sendChange(wid, text) {
+  const w = W(wid), th = (S.wchat[wid] = S.wchat[wid] || []);
+  pushMsg(th, { from: 'you', text });
+  const think = { id: nid('m'), thinking: true };
+  th.push(think);
+  S.focus = '#in-wf-' + wid;
+  render();
+  later(450, () => {
+    th.splice(th.indexOf(think), 1);
+    const p = parseWhen(text.toLowerCase());
+    let m;
+    if (p.h == null && p.day == null) m = P('I can change when it runs here. For example: make it run at 10am.', 'sorry');
+    else {
+      const from = w.sched || { day: 'day', h: 9, m: 0 };
+      const to = { day: p.day ?? from.day, h: p.h ?? from.h, m: p.h != null ? p.m : from.m };
+      if (w.sched && to.day === from.day && to.h === from.h && to.m === from.m) m = P(`It already runs ${esc(lowSched(from))}.`);
+      else { const c = newCard({ kind: 'edit', wf: wid, from: w.sched, to }); m = cardReply(c, 'Here is the change. Nothing changes until you save it.'); }
+    }
+    pushMsg(th, m);
+    announce(textOf(m.html));
+    S.scroll = '#' + m.id;
+    render();
+  });
+}
+
+/* ---------- Actions ---------- */
+const Lid = () => nid('l');
+function foundText(w) {
+  if (w.found) return w.found;
+  if (w.kind === 'release') return `It found ${w.sw} ${REL[w.sw] || 'a new release'}. It would write 1 ticket in ${w.project}, after a yes.`;
+  if (w.kind === 'tickets') return `It found 3 tickets with no update for ${w.days}. It writes nothing.`;
+  if (w.kind === 'triage') return 'It found 2 new issues. It would add the label to both, after a yes.';
+  return 'It found something to write. It would write it after a yes.';
+}
+function keepFocus(w) {
+  const c = Object.values(S.cards).find(x => x.wf === w.id);
+  S.focus = S.route.p === 'wf' ? '#statebox' : c ? `#ch-${c.id}` : null;
+}
+function turnOn(wid) {
+  const w = W(wid);
+  keepFocus(w);
+  if (w.flagged && w.check !== 'done') { w.check = 'pending'; w.test = null; announce('Draft. Waiting for an Approver to check it.'); S.flash = w.id; render(); return; }
+  const l = { id: Lid(), cls: '', html: 'Testing it now. This writes nothing.' };
+  S.fresh.add(l.id);
+  w.test = { status: 'running', lines: [l] };
+  render();
+  later(700, () => {
+    if (w.project && S.failOnce[w.project]) {
+      S.failOnce[w.project] = false;
+      w.test = { status: 'fail', lines: w.test.lines, reason: `The test couldn't reach Jira project ${w.project}. Nothing was written. It stays a Draft.` };
+      announce(w.test.reason); S.flash = w.id; render(); return;
+    }
+    const f = { id: Lid(), cls: 'ok', html: esc(foundText(w)) };
+    S.fresh.add(f.id); w.test.lines.push(f); render();
+    later(600, () => {
+      w.status = 'on'; w.test.status = 'pass';
+      const o = { id: Lid(), cls: 'ok', html: `<b>On.</b> ${esc(nextLine(w.sched))}` };
+      S.fresh.add(o.id); w.test.lines.push(o);
+      w.versions.unshift(V((w.versions[0] ? w.versions[0][0] : 0) + 1, 'Turned on', S.viewer, AT));
+      announce('On. ' + nextLine(w.sched)); S.flash = w.id; render();
+    });
+  });
+}
+function cardTurnOn(cid) {
+  const c = S.cards[cid];
+  let name = c.title, i = 2;
+  while (live().some(w => w.name === name)) name = `${c.title} ${i++}`;
+  const w = addWf({ id: nid('w'), name, owner: S.viewer, status: 'draft', kind: c.wk, sw: c.sw, sched: c.sched, project: c.project, days: c.days,
+    reads: readsText(c), writes: writesText(c), flagged: c.flagged, flagBlock: c.flagBlock, leftOut: c.crossed.map(x => x.text) });
+  c.wf = w.id;
+  turnOn(w.id);
+}
+function runNow(wid) {
+  const w = W(wid), asker = S.viewer;
+  if (!PEOPLE[asker].op) return;
+  const r = addRun(wid, { by: asker, status: 'running', steps: [[w.kind === 'tickets' ? 'Reading open Jira tickets' : `Reading ${w.sw} releases on GitHub`, 'doing']] }, true);
+  announce(`Running ${w.name} now.`);
+  keepFocus(w);
+  render();
+  later(700, () => {
+    if (w.kind === 'tickets') { r.steps = [['Read open Jira tickets', 'done', `Found 3 with no update for ${w.days}.`], ['Listed them here', 'done', 'It writes nothing.']]; r.status = 'done'; r.result = 'Listed 3 tickets'; render(); return; }
+    const v = REL[w.sw];
+    r.steps = [[`Read ${w.sw} releases on GitHub`, 'done', `Found ${v}.`], ['Asking for a yes', 'doing']];
+    render();
+    later(600, () => {
+      r.status = 'waiting'; r.asker = asker; r.waitStart = Date.now();
+      r.write = {
+        title: w.ours ? `Upgrade ${w.sw} from ${w.ours} to ${v}` : `New ${w.sw} release: ${v}`,
+        body: w.ours ? `${w.sw} has 1 new release on GitHub (${REPO[w.sw]}) newer than our version ${w.ours}:\n- ${v}\n\nProposed by the AI workflow builder.` : `${w.sw} has a new release on GitHub (${REPO[w.sw] || w.sw}): ${v}.\n\nProposed by the AI workflow builder.`,
+        found: `${w.sw} has a new release: ${v}.`,
+      };
+      r.steps = [r.steps[0], ['Asked for a yes', 'wait', `Sent to ${yesNames(asker)} in Teams.`], [`Create 1 Jira ticket in ${w.project}`, 'todo', 'Waits for the yes.']];
+      announce(`Found ${w.sw} ${v}. Waiting for ${yesNames(asker)}'s yes.`);
+      S.flash = w.id; render();
+    });
+  });
+}
+function retry(rid) {
+  const old = R(rid), w = W(old.wf);
+  const r = addRun(w.id, { by: S.viewer, retry: true, status: 'running', steps: [['Waiting a moment before trying again', 'doing']] }, true);
+  old.retriedBy = r.id;
+  go({ p: 'run', id: r.id });
+  announce('Retrying. Waiting a moment first.');
+  later(800, () => {
+    r.steps = [['Waited a moment before trying again', 'done'], [`Reading ${w.sw} releases on GitHub`, 'doing']];
+    render();
+    later(700, () => {
+      r.steps[1] = [`Read ${w.sw} releases on GitHub`, 'done', 'GitHub answered. Nothing new since the last check.'];
+      r.status = 'nothing';
+      announce(`Nothing new. ${w.name} is On.`);
+      render();
+    });
+  });
+}
+function decide(rid, yes) {
+  const r = R(rid), w = W(r.wf);
+  if (!(r.status === 'waiting' && PEOPLE[S.viewer].ap && S.viewer !== r.asker)) return;
+  r.decidedBy = S.viewer;
+  if (yes) {
+    r.status = 'done'; r.result = '1 ticket created'; r.approvedBy = S.viewer; r.ticket = `${w.project}-143`;
+    r.steps = [r.steps[0], ['Asked for a yes', 'done', `${nm(S.viewer)} said yes.`], [`Created 1 Jira ticket in ${w.project}`, 'done', r.ticket]];
+    announce(`You said yes. 1 ticket created: ${r.ticket}.`);
+  } else {
+    r.status = 'declined';
+    r.steps = [r.steps[0], ['Asked for a yes', 'done', `${nm(S.viewer)} said no.`], [`Create 1 Jira ticket in ${w.project}`, 'skip', 'Not written.']];
+    announce('You said no. Nothing was written.');
+  }
+  S.focus = '#appr-record';
+  render();
+}
+function openDrawer(d) { S.drawerFrom = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.fk : null; S.drawer = d; S.focus = '#drawer-h'; render(); }
+function closeDrawer(back) { if (!S.drawer) return; S.drawer = null; if (back && S.drawerFrom) S.focus = `[data-fk="${CSS.escape(S.drawerFrom)}"]`; render(); }
+function toast(text, act, arg) { S.toast = { text, act, arg }; }
+
+const ACT = {
+  go: p => go({ p }),
+  viewer: k => { S.viewer = k; S.del = null; announce(`Now viewing as ${nm(k)} (${k === 'alice' ? 'Operator' : 'Approver'}).`); render(); },
+  reset: () => { seed(); hideScen(); S.focusMain = true; render(); announce('Reset. Everything is back to the start.'); },
+  'toggle-scen': () => ($('#scen').hidden ? showScen() : hideScen()),
+  scen: n => playScenario(Number(n)),
+  'hide-hint': () => { S.hint = null; S.focusMain = true; render(); },
+  fill: t => { S.keep.home = t; S.focus = '#in-home'; if (S.route.p !== 'home') S.route = { p: 'home' }; render(); const el = $('#in-home'); if (el) el.setSelectionRange(t.length, t.length); },
+  'new-chat': () => { S.threads[S.viewer] = []; S.heroFresh = true; S.focusMain = true; render(); },
+  unclear: (k, el) => {
+    const th = S.threads[S.viewer], m = th.find(x => x.id === el.dataset.msg);
+    if (m) m.chosen = k;
+    const label = { sw: 'Software releases', jira: 'Jira tickets', else: 'Something else' }[k];
+    pushMsg(th, { from: 'you', text: label });
+    let r;
+    const wl = W('wl');
+    if (k === 'jira') r = ticketsAnswer();
+    else if (k === 'sw') r = P(`Your Software watchlist already keeps an eye on ${wl.list.length} software, ${esc(lowSched(wl.sched))}. You can open it, or add one.`, 'idle',
+      { btns: [['Open the Software watchlist', 'open-wf', 'wl'], ['Add LangGraph to it', 'fill', 'Add LangGraph to the watchlist and check it every day']] });
+    else { r = P('Tell me in your own words: what should run, when, and what it should write.'); S.focus = '#in-home'; }
+    pushMsg(th, r); announce(textOf(r.html)); S.scroll = '#' + r.id; render();
+  },
+  q: arg => {
+    const [cid, v] = arg.split('|'), c = S.cards[cid], q = c.qs.shift();
+    if (q.key === 'project') { c.project = v; c.otherOpen = false; }
+    if (q.key === 'time') { const [h, m] = v.split(':').map(Number); c.sched = Object.assign({}, c.sched, { h, m }); }
+    if (c.wf) { const w = W(c.wf); w.project = c.project; w.reads = readsText(c); w.writes = writesText(c); w.sched = c.sched; w.test = null; }
+    S.focus = c.qs.length ? `[data-q="${cid}"] button` : c.wf ? `[data-fk="turn-on:${c.wf}"]` : `[data-fk="card-on:${cid}"]`;
+    render();
+  },
+  'q-other': cid => { const c = S.cards[cid]; c.otherOpen = !c.otherOpen; S.focus = c.otherOpen ? `#op-${cid}` : null; render(); },
+  'q-use': cid => { const v = (S.keep['op-' + cid] || '').trim().toUpperCase(); if (!v) { S.focus = `#op-${cid}`; render(); return; } ACT.q(`${cid}|${v}`); },
+  'card-on': cid => cardTurnOn(cid),
+  dismiss: cid => { S.cards[cid].status = 'gone'; announce('Set aside. Nothing was saved.'); S.focus = '#in-home'; render(); },
+  blocks: cid => {
+    const c = S.cards[cid]; c.flagged = !c.flagged;
+    if (c.flagged) S.fresh.add('chk-' + cid);
+    announce(c.flagged ? `Built with n8n blocks. An Approver checks it once before it first runs.` : 'Built with our blocks again. No one-time check needed.');
+    render();
+  },
+  'ask-team': arg => { const [cid, i] = arg.split(':'); S.cards[cid].crossed[Number(i)].asked = true; announce('Saved as a request for the team.'); render(); },
+  'turn-on': wid => turnOn(wid),
+  'change-project': cid => { const c = S.cards[cid]; c.qs = [projQ(c)]; W(c.wf).test = null; S.focus = `[data-q="${cid}"] button`; render(); },
+  'open-wf': wid => go({ p: 'wf', id: wid }),
+  'open-run': rid => { S.drawer = null; go({ p: 'run', id: rid }); },
+  retry: rid => retry(rid),
+  'run-now': wid => runNow(wid),
+  teams: rid => openDrawer({ kind: 'teams', run: rid }),
+  approval: rid => { S.drawer = null; go({ p: 'approval', id: rid }); },
+  n8n: wid => openDrawer({ kind: 'n8n', wf: wid }),
+  'close-drawer': () => closeDrawer(true),
+  'decide-yes': rid => decide(rid, true),
+  'decide-no': rid => decide(rid, false),
+  'check-yes': wid => {
+    const w = W(wid); w.check = 'done'; w.checkedBy = S.viewer; w.status = 'on';
+    w.versions.unshift(V((w.versions[0] ? w.versions[0][0] : 0) + 1, `Checked once by ${nm(S.viewer)}, then turned on`, S.viewer, AT));
+    announce(`${w.name} is On. ${nextLine(w.sched)}`); S.flash = w.id; S.focus = 'main h1'; render();
+  },
+  'check-no': wid => { const w = W(wid); w.check = 'declined'; w.checkNo = S.viewer; announce('You said no. It stays a Draft.'); S.flash = w.id; S.focus = 'main h1'; render(); },
+  pause: wid => { const w = W(wid); w.status = 'paused'; w.pausedNote = `Paused by ${nm(S.viewer)} today at 9:01.`; announce('Paused.'); S.flash = wid; S.focus = `[data-fk="resume:${wid}"]`; render(); },
+  resume: wid => { const w = W(wid); w.status = 'on'; announce('On. ' + nextLine(w.sched)); S.flash = wid; S.focus = `[data-fk="pause:${wid}"]`; render(); },
+  'save-edit': cid => {
+    const c = S.cards[cid], w = W(c.wf);
+    w.sched = c.to; c.v = (w.versions[0] ? w.versions[0][0] : 0) + 1;
+    const what = c.from && c.to.day === c.from.day ? `Changed the time to ${hm(c.to.h, c.to.m)}` : `Changed when it runs to ${lowSched(c.to)}`;
+    w.versions.unshift(V(c.v, what, S.viewer, AT)); c.status = 'saved';
+    announce(`Saved as version ${c.v}. ${nextLine(c.to)}`); S.flash = w.id; S.focus = `[data-fk="undo-edit:${cid}"]`; render();
+  },
+  'undo-edit': cid => {
+    const c = S.cards[cid], w = W(c.wf);
+    w.sched = c.from; w.versions.unshift(V(w.versions[0][0] + 1, `Undid version ${c.v}`, S.viewer, AT)); c.status = 'undone';
+    announce('Undone.'); S.flash = w.id; render();
+  },
+  'watch-pick': arg => { const [cid, k] = arg.split(':'); S.cards[cid].choice = k; render(); },
+  'save-watch': cid => {
+    const c = S.cards[cid], w = W(c.wf);
+    w.list.push([c.sw, null]);
+    if (c.choice === 'every') w.sched = { day: 'day', h: w.sched.h, m: w.sched.m };
+    c.v = w.versions[0][0] + 1;
+    w.versions.unshift(V(c.v, `Added ${c.sw} to the list${c.choice === 'every' ? ' and made it run every day' : ''}`, S.viewer, AT));
+    c.status = 'saved'; announce(`Saved. The Software watchlist checks ${w.list.length} software.`); S.focus = `[data-fk="open-wf:wl"]`; render();
+  },
+  filter: k => { S.filter = k; render(); },
+  'del-ask': wid => { S.del = wid; S.open[wid] = true; S.focus = `[data-fk="del-no:${wid}"]`; render(); },
+  'del-no': wid => { S.del = null; S.focus = `[data-fk="del-ask:${wid}"]`; render(); },
+  'del-yes': wid => { const w = W(wid); w.prev = w.status; w.status = 'deleted'; toast(`Deleted ${w.name}.`, 'undo-del', wid); announce(`Deleted ${w.name}. Undo is in the message at the bottom.`); go({ p: 'workflows' }); },
+  'undo-del': wid => { const w = W(wid); w.status = w.prev; S.toast = null; announce(`${w.name} is back.`); S.focusMain = true; render(); },
+  'close-toast': () => { S.toast = null; S.focusMain = true; render(); },
+};
+
+/* ---------- Scenarios ---------- */
+const SCEN = [
+  { t: 'New release check', d: 'Describe, check, turn on', h: 'Pick MOCK on the card, then press Turn on.', go: () => send('Every day at 9am, check LangGraph for new releases and create a Jira ticket') },
+  { t: 'Unclear request', d: 'One question with chips, then a card', h: 'Pick Jira tickets to answer the Planner. A card follows.', go: () => send('help me keep an eye on things') },
+  { t: "Part can't be done", d: 'A crossed row on the same card', h: 'See the crossed row, then press Ask the team.', go: () => send('Every day at 9am, check LangGraph for new releases and create a Jira ticket, and flag any security issues') },
+  { t: 'A change', d: 'Change a workflow from its page', h: 'See the change card (9:00 to 10:00), then press Save change.', go: () => { ensureLangGraph(); go({ p: 'wf', id: 'lg' }); sendChange('lg', 'make it run at 10am'); } },
+  { t: 'The test fails', d: 'It stays a Draft, with Try again', h: 'Press Turn on. When the test fails, press Try again.', go: () => send('Every Monday at 10am, check Kubernetes for new releases and create a Jira ticket in OPS') },
+  { t: 'Flagged', d: 'Any n8n block, and a one-time check', h: 'Press Build it with any n8n block, then Turn on. Switch to Bob, press Check it, then Yes, it can run. Switch back to Alice.', go: () => send('Every Monday at 8am, add the label needs-triage to new GitLab issues') },
+  { t: 'Stopped run', d: 'Needs you, the troubleshooter, Retry', h: 'Under Needs you, press Open the run, then Retry.', go: () => go({ p: 'home' }) },
+  { t: 'Waiting for a yes', d: 'Decided on the approval page, never your own', h: 'Press Run now. Switch to Bob, press Open under Needs you, then Approve. See the Teams card shows what Teams sends.', go: () => go({ p: 'wf', id: 're' }) },
+  { t: 'Editing in n8n', d: 'A note, not a state', h: 'See the note under the state, then press Open in n8n.', go: () => go({ p: 'wf', id: 'gl' }) },
+  { t: 'The watchlist as a workflow', d: 'One noun: add to it, no "I can\'t"', h: 'Pick a choice on the card, then press Save change.', go: () => send('Add LangGraph to the watchlist and check it every day') },
+];
+$('#scen').innerHTML = `<p class="scen-h" id="scen-h">Each scenario starts from a fresh copy of the data, viewed as Alice.</p><ol aria-labelledby="scen-h">${SCEN.map((s, i) =>
+  `<li><button type="button" data-act="scen" data-arg="${i + 1}" data-fk="scen:${i + 1}"><span class="n" aria-hidden="true">${i + 1}</span><span class="t">${i + 1}. ${esc(s.t)}</span><span class="d">${esc(s.d)}</span></button></li>`).join('')}</ol>`;
+function showScen() { $('#scen').hidden = false; $('#scen-btn').setAttribute('aria-expanded', 'true'); $('#scen button').focus(); }
+function hideScen(back) { $('#scen').hidden = true; $('#scen-btn').setAttribute('aria-expanded', 'false'); if (back) $('#scen-btn').focus(); }
+function playScenario(n) {
+  const s = SCEN[n - 1];
+  seed();
+  hideScen();
+  S.hint = { n, t: s.t, h: s.h };
+  S.route = { p: 'home' };
+  S.focusMain = true;
+  render();
+  s.go();
+}
+
+/* ---------- Events ---------- */
+document.addEventListener('click', e => {
+  const t = e.target.closest('[data-act]');
+  if (!$('#scen').hidden && !e.target.closest('.scen-wrap')) hideScen();
+  if (!t) return;
+  if (t.tagName === 'A') e.preventDefault();
+  const f = ACT[t.dataset.act];
+  if (f) f(t.dataset.arg, t);
+});
+document.addEventListener('submit', e => {
+  const f = e.target.closest('[data-form]');
+  if (!f) return;
+  e.preventDefault();
+  const key = f.dataset.form, v = (S.keep[key] || '').trim();
+  if (!v) return;
+  S.keep[key] = '';
+  if (key === 'home') send(v); else sendChange(key.slice(3), v);
+});
+document.addEventListener('input', e => { const k = e.target.dataset && e.target.dataset.keep; if (k) S.keep[k] = e.target.value; });
+document.addEventListener('change', e => {
+  const k = e.target.dataset && e.target.dataset.change;
+  if (!k) return;
+  const c = S.cards[e.target.dataset.arg];
+  if (k === 'issue') { c.issue = e.target.value; c.issueGuess = false; }
+  if (k === 'days') { c.days = e.target.value; c.daysGuess = false; }
+  render();
+});
+document.addEventListener('toggle', e => { if (e.target.dataset && e.target.dataset.det) S.open[e.target.dataset.det] = e.target.open; }, true);
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey && e.target.matches('textarea[data-keep]')) { e.preventDefault(); e.target.form.requestSubmit(); return; }
+  if (e.key === 'Enter' && e.target.matches('input[data-keep^="op-"]')) { e.preventDefault(); ACT['q-use'](e.target.dataset.keep.slice(3)); return; }
+  if (e.key === 'Escape') {
+    if (S.drawer) { e.preventDefault(); closeDrawer(true); }
+    else if (!$('#scen').hidden) { e.preventDefault(); hideScen(true); }
+  }
+  if (e.key === 'Tab' && S.drawer) {
+    const f = $$('button, [href], select, textarea, input, [tabindex]:not([tabindex="-1"])', drawer);
+    if (!f.length) return;
+    if (e.shiftKey && document.activeElement === f[0]) { e.preventDefault(); f[f.length - 1].focus(); }
+    else if (!e.shiftKey && document.activeElement === f[f.length - 1]) { e.preventDefault(); f[0].focus(); }
+  }
+});
+
+$('#brand-bot').innerHTML = bot('idle', 28);
+seed();
+render();
+window.__proto = { get state() { return S; } };
+})();
+</script>
