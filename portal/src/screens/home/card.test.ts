@@ -696,8 +696,8 @@ describe('the Planner’s set-up card', () => {
       const left = setupLeft(form, plan)
       expect(left).toEqual({ choices: [], leftOut: ['colour them by team'] })
       expect(leftWords(left), 'the cross is on the card, so the foot needn’t say it again').toBe('')
-      expect(setUpWords(left)).toBe('Set up the part I can')
-      expect(setUpWords(setupLeft(fresh(), plan))).toBe('Set up')
+      expect(setUpWords(left)).toBe('Turn on')
+      expect(setUpWords(setupLeft(fresh(), plan))).toBe('Turn on')
     })
 
     it('never says nothing is unclear while a part has a cross, and a choice still left comes first', () => {

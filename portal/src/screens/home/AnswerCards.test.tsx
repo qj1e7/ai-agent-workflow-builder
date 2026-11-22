@@ -177,8 +177,9 @@ describe('the Planner’s short answers, as the chat-first sketch draws them', (
 describe('a set-up card', () => {
   it('is the card itself, a Draft with Never mind and Set up, and no hand-off to another screen', () => {
     const html = draw(SETUP)
-    expect(buttons(html)).toEqual(expect.arrayContaining(['Never mind', 'Set up']))
+    expect(buttons(html)).toEqual(expect.arrayContaining(['Never mind', 'Turn on']))
     expect(buttons(html)).not.toContain('Turn it on')
+    expect(buttons(html)).not.toContain('Set up')
     expect(text(cardOf(html))).toContain('Weekly summary of closed tickets Draft')
     expect(html).not.toContain('href="/new"')
     expect(text(html)).not.toContain('isn’t built yet')
@@ -285,7 +286,7 @@ describe('PartsList on a set-up card', () => {
     const html = draw(setupCross as SetupCardReply)
     expect(text(html)).toContain('Can’t do: “colour them by team” I didn’t follow this part.')
     expect(text(html)).toContain('Will do: When Every Friday at 17:00, Singapore time')
-    expect(buttons(html)).toContain('Set up the part I can')
+    expect(buttons(html)).toContain('Turn on')
     expect(buttons(html)).not.toContain('Turn it on')
     expect(text(html)).not.toContain('Nothing is unclear')
   })
@@ -321,7 +322,7 @@ describe('a clause the Planner didn’t follow, sent as a can’t with the rest 
     expect(text(html)).not.toContain('What I can’t do yet')
     expect(text(html)).not.toContain('What I can do instead')
     expect(text(cardOf(html))).toContain('Can’t do: “Colour them by team” I didn’t follow this part.')
-    expect(buttons(html)).toContain('Set up the part I can')
+    expect(buttons(html)).toContain('Turn on')
     expect(sayOf(reply)).toBe('Here’s what I understood.')
     expect(draw(reply, { leftovers: true })).toBe('')
   })
@@ -336,7 +337,7 @@ describe('a clause the Planner didn’t follow, sent as a can’t with the rest 
     const html = draw(filter)
     expect(text(html)).not.toContain('What I can’t do yet')
     expect(text(cardOf(html))).toContain('Can’t do: Mention VPN. I can’t search by this yet. Ask the team')
-    expect(buttons(html)).toEqual(expect.arrayContaining(['Set up the part I can', 'Ask the team']))
+    expect(buttons(html)).toEqual(expect.arrayContaining(['Turn on', 'Ask the team']))
   })
 
   it('keeps the question of how many days on the card a can’t sets up, so it is asked and never “Nothing is unclear”', () => {
@@ -438,7 +439,7 @@ describe('an answer that is partly a can’t', () => {
   it('crosses what it can’t do on the card, with the registry’s reason and Ask the team, and sets up the part it can', () => {
     const html = draw(part as PartReply)
     expect(text(cardOf(html))).toContain('Can’t do: Email it to the team. I can\'t send email yet.')
-    expect(buttons(html)).toEqual(expect.arrayContaining(['Set up the part I can', 'Ask the team']))
+    expect(buttons(html)).toEqual(expect.arrayContaining(['Turn on', 'Ask the team']))
     const rows = text(cardOf(html)).split('Can’t do:')[0]?.split(' Draft ')[1] ?? ''
     expect(rows, 'the ticked rows hold only the part it can do').toContain('Sum them up')
     expect(rows).not.toMatch(/email/i)
@@ -452,7 +453,7 @@ describe('an answer that is partly a can’t', () => {
   it('shows the alternative under its own heading, with Ask the team first when there is no alternative', () => {
     const html = draw(cant as CantReply)
     expect(text(html)).toContain('What I can do instead')
-    expect(buttons(html)).toContain('Set up')
+    expect(buttons(html)).toContain('Turn on')
     const bare = draw({ ...(cant as CantReply), alternative: null })
     expect(bare).not.toContain('What I can do instead')
     expect(buttons(bare)).toEqual(['Ask the team'])
