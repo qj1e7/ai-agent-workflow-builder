@@ -718,6 +718,15 @@ async def test_a_watchlist_row_says_when_the_software_is_already_listed(front: F
     assert (await say(front, "Watch Kubernetes"))["already_listed"] is None
 
 
+async def test_a_watchlist_row_names_the_parts_the_watchlist_does_itself(front: Front):
+    watch = WatchlistAnswer(word="release", software="LangGraph", covers=["schedule", "ticket"])
+    front.answers.result = answered(watch)
+    asked = "Every Monday, check LangGraph for a new release and create a Jira ticket"
+    assert (await say(front, asked))["covers"] == ["schedule", "ticket"]
+    front.answers.result = answered(WatchlistAnswer(word="releases", software="Kubernetes"))
+    assert (await say(front, "Watch Kubernetes"))["covers"] == []
+
+
 async def test_a_question_answer_comes_back_with_the_sections_it_looked_at(front: Front):
     front.answers.result = answered(
         QuestionAnswer(text="Nothing is on the watchlist yet.", looked_at=["watchlist"])

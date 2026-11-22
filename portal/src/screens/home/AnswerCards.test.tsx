@@ -223,7 +223,7 @@ describe('a set-up card', () => {
 
 describe('the software card', () => {
   const WATCHED = statuses as WatchlistView
-  const ask = (software: string, listed: { name: string; software_id: string } | null): WatchlistReply => ({ trace_id: null, answer: 'watchlist', software, word: 'version', already_listed: listed, also: null, parts: [] })
+  const ask = (software: string, listed: { name: string; software_id: string } | null): WatchlistReply => ({ trace_id: null, answer: 'watchlist', software, word: 'version', already_listed: listed, also: null, covers: [], parts: [] })
 
   it('names a watched software with its pill and where it stands, in the watchlist’s own words', () => {
     const html = draw(ask('LangGraph', { name: 'LangGraph', software_id: 'sw_01JBW00000000000000000002' }), { watched: WATCHED })
@@ -896,5 +896,101 @@ describe('the Planner’s n8n answer', () => {
     const held = await sendOpenInN8n(client, 'uc_01JD0')
     expect(sent).toEqual([['/api/v1/use-cases/{use_case_id}/open-in-n8n', { params: { path: { use_case_id: 'uc_01JD0' } } }]])
     expect(held.editor_url).toBe(openedInN8n.editor_url)
+  })
+})
+
+describe('the core release check, already on the watchlist', () => {
+  const WATCHED = statuses as WatchlistView
+  const LANGGRAPH = { name: 'LangGraph', software_id: 'sw_01JBW00000000000000000002' }
+  const asked = (words: string, mark: PartView['mark'], reason: PartView['reason'] = null): PartView => ({ text: words, mark, reason, note: null, choices: [] })
+  const watch = (more: Partial<WatchlistReply> = {}): WatchlistReply => ({ trace_id: null, answer: 'watchlist', word: 'releases', software: 'LangGraph', already_listed: LANGGRAPH, also: null, covers: [], parts: [], ...more })
+  const OWN_TIME: CantRowView = { kind: 'schedule', text: 'Every day at 9am', note: 'The Software watchlist checks all your software together, on one schedule. I can\'t give one software its own time yet.', needs: 'new_tool', system: null, instead: null, unsupported: false }
+  const EVERY_DAY = 'Every day at 9am, check LangGraph for new releases'
+  const everyDay: CantReply = { trace_id: null, answer: 'cant', cant: [OWN_TIME], alternative: watch(), draft_words: EVERY_DAY, parts: [asked('Every day at 9am', 'cant', 'own_time'), asked('check LangGraph for new releases', 'will_do')] }
+  const CORE = 'Every Monday, check LangGraph for a new release and create a Jira ticket'
+  const core = watch({ word: 'release', covers: ['schedule', 'ticket'], parts: [asked('Every Monday', 'will_do'), asked('check LangGraph for a new release', 'will_do'), asked('create a Jira ticket', 'will_do')] })
+
+  function chat(reply: PlannerReply, typed: string, watched: WatchlistView | null = WATCHED): string {
+    const session = createDevSession(null)
+    const client = new QueryClient({ defaultOptions: { queries: { retryOnMount: false } } })
+    if (watched) client.setQueryData(['watchlist', session.cacheScope()], watched)
+    const thread = threadReducer(threadReducer(EMPTY, { type: 'sent', text: typed, chat: 'c1' }), { type: 'answered', reply, typed })
+    return renderToStaticMarkup(
+      <QueryClientProvider client={client}>
+        <ApiProvider session={session} platformFetch={fetch} origin="http://portal.test">
+          <MemoryRouter>
+            <Thread thread={thread} now={new Date('2026-11-22T10:00:00+08:00')} page={PAGE} />
+          </MemoryRouter>
+        </ApiProvider>
+      </QueryClientProvider>,
+    )
+  }
+  const answerOf = (html: string) => text(/<li[^>]*data-answer="true"[^>]*>([\s\S]*)<\/li>/.exec(html)?.[1] ?? '').replace(/^Planner ?:? /, '')
+  const primaries = (html: string) => [...html.matchAll(/<(button|a)\b[^>]*class="[^"]*_primary_[^"]*"[^>]*>([\s\S]*?)<\/\1>/g)].map((m) => text(m[2] ?? ''))
+
+  it('answers a time of its own with one card: where LangGraph stands, the one schedule, and the move of the whole watchlist as the main button', () => {
+    const html = chat(everyDay, EVERY_DAY)
+    expect(sayOf(everyDay)).toBe('LangGraph is already on the Software watchlist.')
+    expect(answerOf(html)).toBe(
+      'LangGraph is already on the Software watchlist. LangGraph Newer out You run 1.2.14. Newest is 1.2.16. The watchlist checks all 6 software every Monday at 9:00, not each one on its own. Check all 6 every day at 9:00 Open it',
+    )
+    expect(primaries(html), 'one main button, the move they asked for').toEqual(['Check all 6 every day at 9:00'])
+  })
+
+  it('never says it sets up something close when the alternative sets nothing up, nor says the can’t twice', () => {
+    const html = answerOf(chat(everyDay, EVERY_DAY))
+    expect(html).not.toContain('something close')
+    expect(html).not.toContain('What I can’t do yet')
+    expect(html).not.toContain('Can’t do')
+    expect(html.match(/not each one on its own|its own time/g)).toHaveLength(1)
+  })
+
+  it('takes the schedule words and the count from the watchlist itself', () => {
+    const fewer: WatchlistView = { ...WATCHED, software: WATCHED.software.slice(0, 3), schedule: { ...WATCHED.schedule!, day: 'weekdays', at: '08:30' } }
+    const html = answerOf(chat(everyDay, EVERY_DAY, fewer))
+    expect(html).toContain('The watchlist checks all 3 software every weekday at 8:30, not each one on its own.')
+    expect(html).toContain('Check all 3 every day at 9:00')
+  })
+
+  it('still says the can’t once, in its own words with the old offer, before the watchlist has loaded', () => {
+    const html = answerOf(chat(everyDay, EVERY_DAY, null))
+    expect(html.match(/its own time/g)).toHaveLength(1)
+    expect(html).toContain('Make the Software watchlist run Every day at 9am')
+    expect(html).not.toContain('What I can’t do yet')
+  })
+
+  it('lists every part of the core request on the one card as ticked rows, the ticket and its yes included', () => {
+    const html = chat(core, CORE)
+    expect(answerOf(html)).toBe(
+      'LangGraph is already on the Software watchlist. LangGraph Newer out You run 1.2.14. Newest is 1.2.16. Will do: When Every Monday at 9:00 Will do: Then An upgrade ticket in Jira, after a yes Open it',
+    )
+    expect(primaries(html)).toEqual(['Open it'])
+  })
+
+  it('ticks only the parts the request named', () => {
+    const plain = answerOf(chat(watch({ covers: ['schedule'] }), 'Every Monday at 9am, check LangGraph for new releases'))
+    expect(plain).toContain('When Every Monday at 9:00')
+    expect(plain).not.toContain('upgrade ticket')
+    expect(answerOf(chat(watch(), 'is LangGraph on the watchlist?'))).not.toContain('Will do')
+  })
+})
+
+describe('a can’t a card already names', () => {
+  const LANGGRAPH = { name: 'LangGraph', software_id: 'sw_01JBW00000000000000000002' }
+  const row = (words: string, note: string): CantRowView => ({ kind: 'schedule', text: words, note, needs: 'new_tool', system: null, instead: null, unsupported: false })
+  const crossed = (words: string, reason: PartView['reason']): PartView => ({ text: words, mark: 'cant', reason, note: null, choices: [] })
+  const alternative = (listed: boolean): WatchlistReply => ({ trace_id: null, answer: 'watchlist', word: 'watch', software: listed ? 'LangGraph' : 'Grafana', already_listed: listed ? LANGGRAPH : null, also: null, covers: [], parts: [] })
+
+  it('is never drawn above the card too, whatever its reason', () => {
+    const tooOften: CantReply = { trace_id: null, answer: 'cant', cant: [row('every 2 hours', 'I can’t run things that often yet.')], alternative: alternative(true), draft_words: null, parts: [crossed('every 2 hours', 'how_often')] }
+    expect(draw(tooOften, { leftovers: true })).toBe('')
+    expect(text(draw(tooOften, { watched: statuses as WatchlistView })).match(/every 2 hours/g)).toHaveLength(1)
+  })
+
+  it('keeps a time of its own above a software that isn’t watched yet, with its offer, and off the What I can’t do yet card', () => {
+    const own: CantReply = { trace_id: null, answer: 'cant', cant: [row('every day at 8am', 'The Software watchlist checks all your software together, on one schedule. I can\'t give one software its own time yet.')], alternative: alternative(false), draft_words: null, parts: [crossed('every day at 8am', 'own_time')] }
+    expect(buttons(draw(own, { leftovers: true }))).toEqual(['Make the Software watchlist run every day at 8am'])
+    expect(text(draw(own))).not.toContain('What I can’t do yet')
+    expect(sayOf(own)).toBe('Grafana is software, so it belongs on the Software watchlist, which checks the software on it for new releases.')
   })
 })

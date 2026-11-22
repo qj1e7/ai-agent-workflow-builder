@@ -2764,6 +2764,87 @@ def test_the_portals_offer_to_move_the_whole_watchlist_is_an_edit_of_it():
     assert [p.mark for p in parts_of(fields, task, answer)] == ["will_do"]
 
 
+THE_CORE_REQUEST = "Every Monday, check LangGraph for a new release and create a Jira ticket"
+CORE_WATCH: dict[str, Any] = {
+    "belongs_on_watchlist": True,
+    "watchlist_word": "release",
+    "software": "LangGraph",
+    "schedule": "Every Monday",
+}
+THE_UPGRADE_TICKET = TicketRead(creates=True, says="list", said="create a Jira ticket")
+
+
+@pytest.mark.parametrize("ticket", [None, THE_UPGRADE_TICKET])
+def test_the_watchlists_own_ticket_is_one_watch_answer_however_the_model_reads_it(
+    ticket: TicketRead | None,
+):
+    fields = read(**CORE_WATCH, ticket=ticket)
+    answer = answer_of(fields, THE_CORE_REQUEST, PlannerFacts(watchlist_schedule=MONDAY_9))
+    assert answer == WatchlistAnswer(
+        word="release", software="LangGraph", covers=["schedule", "ticket"]
+    )
+    assert [p.mark for p in parts_of(fields, THE_CORE_REQUEST, answer)] == ["will_do"] * 3
+
+
+@pytest.mark.parametrize(
+    ("task", "schedule", "covers"),
+    [
+        (
+            "Every Monday at 9am, check LangGraph for new releases",
+            "Every Monday at 9am",
+            ["schedule"],
+        ),
+        (
+            "Check LangGraph for new releases and raise a ticket if there's a new one",
+            None,
+            ["ticket"],
+        ),
+        ("Check LangGraph for new releases", None, []),
+    ],
+)
+def test_a_watch_answer_names_each_part_of_the_request_the_watchlist_does_itself(
+    task: str, schedule: str | None, covers: list[str]
+):
+    fields = read(**{**CORE_WATCH, "watchlist_word": "releases", "schedule": schedule})
+    answer = answer_of(fields, task, PlannerFacts(watchlist_schedule=MONDAY_9))
+    assert isinstance(answer, WatchlistAnswer) and answer.covers == covers
+
+
+def test_a_time_of_its_own_is_no_part_the_watchlist_does():
+    task = "Every day at 9am, check LangGraph for new releases"
+    fields = read(**{**CORE_WATCH, "watchlist_word": "releases", "schedule": "Every day at 9am"})
+    answer = answer_of(fields, task, PlannerFacts(watchlist_schedule=MONDAY_9))
+    assert isinstance(answer, CantAnswer) and isinstance(answer.alternative, WatchlistAnswer)
+    assert answer.alternative.covers == []
+
+
+@pytest.mark.parametrize("ticket", [None, THE_UPGRADE_TICKET])
+def test_words_a_ticket_adds_come_back_crossed_beside_the_watch(ticket: TicketRead | None):
+    task = (
+        "Every Monday, check LangGraph for a new release and raise a ticket for major releases only"
+    )
+    fields = read(**CORE_WATCH, ticket=ticket)
+    answer = answer_of(fields, task, PlannerFacts(watchlist_schedule=MONDAY_9))
+    assert isinstance(answer, CantAnswer) and isinstance(answer.alternative, WatchlistAnswer)
+    assert answer.alternative.also is None
+    assert [(r.text, r.needs) for r in answer.cant] == [("major releases", None)]
+
+
+def test_a_second_card_beside_a_watch_watches_the_software_they_named():
+    task = "Every Monday, check LangGraph for a new release and create a Jira ticket in OPS"
+    place = PlaceRead(project="OPS", said="in OPS")
+    fields = read(**CORE_WATCH, ticket=THE_UPGRADE_TICKET, place=place)
+    answer = answer_of(fields, task, PlannerFacts(watchlist_schedule=MONDAY_9))
+    assert isinstance(answer, WatchlistAnswer) and isinstance(answer.also, SetupCardAnswer)
+    [watch] = [row for row in answer.also.rows if row.kind == "look_for"]
+    assert (watch.text, watch.state, watch.note) == (
+        "LangGraph",
+        "understood",
+        'Read from your words "LangGraph".',
+    )
+    assert answer.covers == []
+
+
 WORKFLOWS = PlannerFacts(
     workflows=[
         WorkflowFact(name=name, state="on", last_run=None, last_run_at=None)
