@@ -395,6 +395,33 @@ describe('a clash inside a watch answer', () => {
   })
 })
 
+describe('the prototype’s watch card', () => {
+  const WATCHED = statuses as WatchlistView
+  const own = 'The Software watchlist checks all your software together, on one schedule. I can’t give one software its own time yet.'
+  const ownTime = (text: string): CantReply => ({
+    trace_id: null,
+    answer: 'cant',
+    cant: [{ kind: 'schedule', text, note: own, needs: 'new_tool', system: null, instead: null, unsupported: false }],
+    alternative: { trace_id: null, answer: 'watchlist', word: 'Add', software: 'Grafana', already_listed: null, also: null, covers: [], parts: [] },
+    draft_words: null,
+    parts: [
+      { text: 'Add Grafana to the watchlist', mark: 'will_do', reason: null, note: null, choices: [] },
+      { text, mark: 'cant', reason: 'own_time', note: null, choices: [] },
+    ],
+  })
+
+  it('asks how to add software not watched yet, in the prototype’s words, with the time on the card only', () => {
+    const typed = 'Add Grafana to the watchlist and check it every day'
+    const html = draw(ownTime('every day'), { watched: WATCHED, typed })
+    const shown = text(html)
+    expect(shown).toContain('Grafana isn’t on your Software watchlist yet. The watchlist is a workflow that checks 6 software, every Monday at 9:00, and you asked for every day.')
+    expect(shown).toContain('How should I add Grafana?')
+    expect(buttons(html)).toEqual(expect.arrayContaining(['Add it, and check all 7 every day', 'Add it, keep Mondays']))
+    expect(shown).not.toContain('Make the Software watchlist run')
+    expect(text(draw(ownTime('every day'), { watched: WATCHED, typed, leftovers: true })), 'the card holds the time').toBe('')
+  })
+})
+
 describe('a release check with the rest of the request', () => {
   it('draws its own card, then the rest of the request as a card of its own', () => {
     const release: SetupCardReply = {
