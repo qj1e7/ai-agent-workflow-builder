@@ -2,8 +2,12 @@ type Update<T> = T | ((now: T) => T)
 
 /**
  * React's state hooks kept outside React, so a test can call a component as a function, press what it drew, and call it again
- * with its state kept. The Portal has no DOM in its tests. Effects never run. A test file installs it with
+ * with its state kept. The Portal has no DOM in its tests. A test file installs it with
  * `vi.mock('react', async (real) => (await import('…/ui/testHooks')).withTestHooks(await real()))`.
+ *
+ * It proves what a component draws and what it sends. It cannot see anything that needs React to mount the page: refs are
+ * never attached, effects never run, and a mocked flushSync is a plain call. So a focus move is checked in the browser, not
+ * here. State is kept by the order of hook calls in one draw, so a component drawn out after it must hold no state of its own.
  */
 function createTestHooks() {
   const slots: unknown[] = []

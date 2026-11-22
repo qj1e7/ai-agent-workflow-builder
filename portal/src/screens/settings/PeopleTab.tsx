@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { useCacheScope } from '../../api/context'
 import { useLatch } from '../../api/latch'
 import { useAddPerson, useAskApprover, useConfirmations, useDecideConfirmation, useMyN8n, usePeopleList, useRemoveApprover, useSetN8nAccess, useSetOperator } from '../../api/settingsQueries'
@@ -124,6 +124,12 @@ export function PeoplePanel({ people, confirmations, me }: PanelProps) {
   useEffect(() => {
     if (left) focusIfFocusFell(LEFT_ID)
   }, [left])
+  // A read can close the question while focus is in it, so focus goes back to the box it came from.
+  const asked = useRef<string | null>(null)
+  useEffect(() => {
+    if (asked.current !== null && approverRemoval === null) focusIfFocusFell(approverBoxId(asked.current))
+    asked.current = approverRemoval
+  }, [approverRemoval])
 
   function change(person: PersonOut, act: Busy['act'], to: boolean | undefined, send: (done: Settled) => void, after: () => void) {
     latch.run((settled) => {

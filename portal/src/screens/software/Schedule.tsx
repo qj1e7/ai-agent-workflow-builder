@@ -225,6 +225,13 @@ export function Schedule({ schedule, version, operator, paused, useCaseId, answe
     flushSync(() => setAskedOn(null))
     focusOn.current?.focus()
   }
+  // A read can close the question while focus is in it, so focus goes back to Turn off schedule, or Set a schedule once it is gone.
+  const wasConfirming = useRef(false)
+  useEffect(() => {
+    const fell = document.activeElement === null || document.activeElement === document.body
+    if (wasConfirming.current && !confirming && fell) (offButton.current ?? opener.current)?.focus()
+    wasConfirming.current = confirming
+  }, [confirming, opener])
   const resume = useResume(useCaseId, schedulePlaces({ paused, scheduled: schedule !== null }), answeredAt, onResumed)
   const words = useErrorWords()
   return (
