@@ -410,6 +410,44 @@ describe('a release check with the rest of the request', () => {
     expect(shown.indexOf('React release check')).toBeLessThan(shown.indexOf('The rest of your request:'))
     expect(shown.indexOf('The rest of your request:')).toBeLessThan(shown.lastIndexOf('Weekly summary of closed tickets'))
   })
+
+  it('asks the rest’s question on the rest’s card only, never on the release check’s', () => {
+    // The runtime's own answer to "Watch React releases and list stale bug tickets every Friday".
+    const days: PartView = { text: 'stale', mark: 'question', reason: 'how_many_days', note: null, choices: [] }
+    const watched: PartView = { text: 'Watch React releases', mark: 'will_do', reason: null, note: null, choices: [] }
+    const notSaid = 'I couldn’t tell from your words.'
+    const release: SetupCardReply = {
+      trace_id: null,
+      answer: 'setup_card',
+      name: 'React release check',
+      similar: null,
+      parts: [watched, days],
+      rows: [
+        { kind: 'schedule', text: '', state: 'missing', note: notSaid },
+        { kind: 'look_for', text: 'New releases of React', state: 'understood', note: 'Read from your words "React".' },
+        { kind: 'do', text: 'Create 1 Jira ticket', state: 'changed', note: 'I filled this in. Your words didn’t say it, so please check it.' },
+        { kind: 'where', text: '', state: 'missing', note: notSaid },
+      ],
+      also: {
+        trace_id: null,
+        answer: 'setup_card',
+        name: 'Stale bug list',
+        similar: null,
+        parts: [],
+        also: null,
+        rows: [
+          { kind: 'schedule', text: 'Every Friday', state: 'understood', note: null },
+          { kind: 'look_for', text: 'Bug tickets', state: 'missing', note: 'Your words said "stale" but not how many days. Please say how many.' },
+          { kind: 'do', text: 'List them', state: 'understood', note: 'Read from your words "list stale bug tickets".' },
+          { kind: 'where', text: '', state: 'missing', note: notSaid },
+        ],
+      },
+    }
+    const shown = text(draw(release))
+    const rest = shown.indexOf('The rest of your request:')
+    expect(shown.slice(0, rest), 'the release check never asks about the list’s tickets').not.toContain('“stale”')
+    expect(shown.slice(rest)).toContain('“stale”')
+  })
 })
 
 describe('the clauses an answer didn’t read', () => {

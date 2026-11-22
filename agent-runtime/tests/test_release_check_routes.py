@@ -41,11 +41,23 @@ def rows(card: SetupCardAnswer) -> dict[str, tuple[str, str]]:
 @pytest.mark.parametrize("watched", [(), ("n8n",)], ids=["not watched", "watched"])
 @pytest.mark.parametrize(
     "task",
-    ["Check n8n for new releases", "please check n8n for new versions", "Track n8n releases"],
+    [
+        "Check n8n for new releases",
+        "please check n8n for new versions",
+        "Kindly check n8n for new releases",
+        "Pls check n8n for new releases",
+        "Track n8n releases",
+        "Can you check n8n for new releases?",
+        "Could you check n8n for new releases?",
+        "Would you check n8n for new releases?",
+        "Will you check n8n for new releases?",
+    ],
 )
 def test_a_bare_order_to_check_one_software_is_its_own_card(task: str, watched: tuple[str, ...]):
-    answer = answer_of(read(), task, facts(*watched))
+    fields = read()
+    answer = answer_of(fields, task, facts(*watched))
     assert isinstance(answer, SetupCardAnswer), answer
+    assert all(p.mark != "cant" for p in parts_of(fields, task, answer)), "nothing is crossed"
     assert answer.name == "n8n release check"
     assert rows(answer)["look_for"] == ("New releases of n8n", "understood")
     assert rows(answer)["schedule"][1] == "missing", "a time is never guessed"
@@ -56,6 +68,10 @@ def test_a_bare_order_to_check_one_software_is_its_own_card(task: str, watched: 
     [
         "latest version of n8n",
         "Can you check the latest version of n8n?",
+        "Check the latest version of n8n",
+        "Check for the newest n8n release",
+        "Check the most recent n8n release",
+        "Check the current version of n8n",
         "Is there a newer version of n8n?",
         "any updates for n8n",
     ],
@@ -127,3 +143,15 @@ def test_the_ai_led_watch_tool_shows_the_release_check_card(watched: tuple[str, 
     answer = shown(result)
     assert isinstance(answer, SetupCardAnswer), answer
     assert answer.name == "LangGraph release check"
+
+
+def test_a_ticket_search_whose_rest_makes_no_card_is_crossed_never_dropped(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr("agent_runtime.answers._also", lambda *_: None)
+    fields = read(**MIXED_READ)
+    answer = answer_of(fields, MIXED, facts("React"))
+    assert isinstance(answer, CantAnswer), answer
+    assert isinstance(answer.alternative, SetupCardAnswer), "never the watchlist instead"
+    assert answer.alternative.name == "React release check"
+    assert any("bug tickets" in row.text for row in answer.cant), answer.cant
