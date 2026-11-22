@@ -188,6 +188,46 @@ export function ownTimeOffer(ownTime: PartView, view: WatchlistView | null | und
   return { says: stopped === null ? [line] : [line, stopped], label: request, request, main: stopped === null }
 }
 
+/** The sketch's watch card, for software not watched yet beside a time of its own (ADR 0053): how to add it, in the sketch's words. */
+export interface WatchChoice {
+  readonly lead: string
+  readonly question: string
+  /** Add it and move the whole watchlist to the time asked, keeping its time when the words name none. Null when the words aren't a schedule. */
+  readonly move: { readonly label: string; readonly schedule: { readonly day: ScheduleView['day']; readonly at: string } } | null
+  readonly keep: string
+}
+
+const WEEKDAY_NAMES: Partial<Record<ScheduleView['day'], string>> = {
+  monday: 'Monday',
+  tuesday: 'Tuesday',
+  wednesday: 'Wednesday',
+  thursday: 'Thursday',
+  friday: 'Friday',
+  saturday: 'Saturday',
+  sunday: 'Sunday',
+}
+
+/** The watch card's words and choices while the watchlist checks on its own. Null otherwise, and the card stays as it was. */
+export function watchChoice(name: string, said: string, view: WatchlistView | null | undefined): WatchChoice | null {
+  const runs = checksOnItsOwn(view) ? (view?.schedule ?? null) : null
+  if (!view || !runs) return null
+  const total = view.software.length
+  const asked = askedRunsWords(said)
+  const when = readWhen(said)
+  const planned = scheduleOf(when)
+  const move = when.often === '' ? null : { label: `Add it, and check all ${String(total + 1)} ${asked}`, schedule: { day: planned.day, at: planned.at === '' ? runs.at : planned.at } }
+  const weekly = WEEKDAY_NAMES[runs.day]
+  return {
+    lead: `${name} isn’t on your Software watchlist yet. The watchlist is a workflow that checks ${String(total)} software, ${watchlistRunsWords(runs)}, and you asked for ${asked}.`,
+    question: `How should I add ${name}?`,
+    move,
+    keep: weekly ? `Add it, keep ${weekly}s` : 'Add it, keep the same days',
+  }
+}
+
+/** The sketch's line once the watch card's change is saved. */
+export const watchSavedWords = (version: number, total: number, runs: string): string => `Saved as version ${String(version)}. The Software watchlist checks ${String(total)} software, ${runs}.`
+
 /** The Planner's release words, as its `RELEASE_ROOTS`: a request with one asks about the version or the releases. */
 const VERSION_WORD = /\b(?:versions?|releas(?:e|es|ed|ing)|upgrad(?:e|es|ed|ing)|patch(?:es|ed|ing)?)\b/i
 

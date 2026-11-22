@@ -828,9 +828,12 @@ _ORDERS_A_CHECK: Final = re.compile(
 )
 """A request that opens by ordering a check, as "Check n8n for new releases" or "can you check
 n8n for new releases?". Any other "?" asks a question."""
-_ASKS_THE_NEWEST: Final = re.compile(r"\b(?:latest|newest|most\s+recent|current)\b", re.IGNORECASE)
-"""Words that ask what the newest version is, as "check the latest version of n8n", which the
-newest-version answer gives."""
+_ASKS_THE_NEWEST: Final = re.compile(
+    r"\b(?:latest|newest|most\s+recent|current)\b|\bcheck\s+(?:if|whether)\b", re.IGNORECASE
+)
+"""Words that ask what the newest version is, or once whether there is one, as "check the latest
+version of n8n" or "can you check if n8n has a new release?", which the newest-version answer
+gives."""
 
 
 def _finds_beside(read: TaskRead, request: str) -> bool:
@@ -1200,7 +1203,10 @@ def _belongs_to_the_watch(
     if any(a <= stretch[0] and stretch[1] <= b for a, b in watched):
         return True
     clause = next(((a, b) for a, b in clauses_of(request) if a <= stretch[0] < b), None)
-    return clause is not None and only_schedule_words(request[clause[0] : clause[1]])
+    if clause is None:
+        return False
+    rest = f"{request[clause[0] : stretch[0]]} {request[stretch[1] : clause[1]]}"
+    return only_schedule_words(request[clause[0] : clause[1]]) or watches_it(rest) is not None
 
 
 # Words that are write verbs for a ticket but read plainly beside software: "which version do we

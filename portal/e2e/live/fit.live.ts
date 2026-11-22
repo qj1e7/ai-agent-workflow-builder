@@ -452,6 +452,8 @@ const CARD_SHOTS: ReadonlySet<number> = new Set([1920, 1280, 900, 390])
 for (const width of WIDTHS) {
   test(`the parts list fits with ticks, a long cross, a question, a clash and the part I can do, and so does Left out, as an Operator at ${String(width)} px`, async ({ browser, backend }) => {
     test.slow()
+    // LangGraph is watched, so the own-time state is its card with the offer to move the whole watchlist.
+    await backend.freshWatchlist('alice')
     const drafts = async () => (await backend.get<{ drafts: { draft_id: string }[] }>('alice', '/api/v1/drafts')).drafts.map((draft) => draft.draft_id)
     const before = await drafts()
     const context = await devContext(browser, 'alice', { reducedMotion: true })

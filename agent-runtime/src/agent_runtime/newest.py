@@ -27,7 +27,8 @@ ASKS_ONLY: Final = words(
     "what what's whats which is isn't are aren't was has hasn't have had does do did any "
     "anything there there's theres been out available yet now lately recently currently most "
     "the a an of in on for with to at about from s we we're our us i my me you your can could "
-    "would will please pls kindly just tell show know check find see run running use using"
+    "would will please pls kindly just tell show know check find see run running use using if "
+    "whether"
 )
 """The other words such a question may hold beside the software's name: question words, small
 words, pronouns, polite asks, and the verbs of a question, as "can you tell me" or "which version

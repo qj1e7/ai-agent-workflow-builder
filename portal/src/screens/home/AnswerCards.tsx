@@ -15,7 +15,7 @@ import softwareStyles from '../software/Software.module.css'
 import { ChangedInN8nAnswer } from './ChangedCard'
 import { AskTheTeam } from './AskTheTeam'
 import { useAsker } from './asker'
-import { cantLines, capabilityCard, notCheckingWords, offerLabel, oneLine, ownTimeOffer, questionActions, refusalNext, SAY_ANOTHER_WAY, START_LEAD, startingPoints, startSteps, stateWords, switchedSay, unwatchedSay, watchlistRunsWords, watchlistSwitchNote, type Asker } from './answers'
+import { cantLines, capabilityCard, notCheckingWords, offerLabel, oneLine, ownTimeOffer, questionActions, refusalNext, SAY_ANOTHER_WAY, START_LEAD, startingPoints, startSteps, stateWords, switchedSay, unwatchedSay, watchChoice, watchlistRunsWords, watchlistSwitchNote, type Asker, type WatchChoice } from './answers'
 import { cardFrom, upperFirst } from './card'
 import { asksOnCard, cantOnCard, crossesInstead, crossesOnCard, followedNothing, isOwnTime, onlyOwnTime, ownTimeOnCard } from './parts'
 import { PartsList, type Part } from './PartsList'
@@ -178,20 +178,67 @@ function SoftwareCard({ name, listed, word, covers, ownTime }: { name: string; l
       </Card>
     )
   }
+  const choice = ownTime ? watchChoice(name, ownTime.text, view) : null
+  if (choice) return <WatchCard name={name} choice={choice} parts={parts} operator={operator} />
+  // While the watchlist doesn't check on its own, a time of its own keeps its cross's words and the offer to move the whole watchlist.
+  const offer = ownTime ? ownTimeOffer(ownTime, view) : null
+  const move = offer && operator && ask ? { ...offer, send: () => ask(offer.request) } : null
   return (
     <Card
       title={name}
       actions={
-        operator && !watching ? (
-          <Button variant={main} onClick={() => setWatching(true)}>
-            Watch it
-          </Button>
+        operator && (move || !watching) ? (
+          <>
+            {move ? (
+              <button type="button" className={cx(buttonClassName('secondary'), partsStyles['offer'])} onClick={move.send}>
+                {move.label}
+              </button>
+            ) : null}
+            {watching ? null : (
+              <Button variant={main} onClick={() => setWatching(true)}>
+                Watch it
+              </Button>
+            )}
+          </>
         ) : undefined
       }
     >
       <p className="muted">{unwatchedSay(word)}</p>
       {parts}
+      {offer?.says.map((said) => <p key={said}>{said}</p>)}
       {watching ? <AddToWatchlist name={name} /> : null}
+    </Card>
+  )
+}
+
+/**
+ * The sketch's watch card (ADR 0053): software not watched yet, beside a time of its own. It asks how to add it: move the whole
+ * watchlist to the time asked, or keep its schedule. Either way Add finds its GitHub project first, and nothing changes until Add.
+ */
+function WatchCard({ name, choice, parts, operator }: { name: string; choice: WatchChoice; parts: ReactNode; operator: boolean }) {
+  const main = useMainButton()
+  const [picked, setPicked] = useState<'move' | 'keep' | null>(null)
+  const questionId = `watch-${name.replace(/\W+/g, '-')}`
+  return (
+    <Card title={name}>
+      <p>{choice.lead}</p>
+      {parts}
+      {operator && picked === null ? (
+        <>
+          <p id={questionId}>{choice.question}</p>
+          <div className={styles['buttons']} role="group" aria-labelledby={questionId}>
+            {choice.move ? (
+              <Button variant={main} onClick={() => setPicked('move')}>
+                {choice.move.label}
+              </Button>
+            ) : null}
+            <Button variant={choice.move ? 'secondary' : main} onClick={() => setPicked('keep')}>
+              {choice.keep}
+            </Button>
+          </div>
+        </>
+      ) : null}
+      {picked ? <AddToWatchlist name={name} then={picked === 'move' ? (choice.move?.schedule ?? null) : null} /> : null}
     </Card>
   )
 }

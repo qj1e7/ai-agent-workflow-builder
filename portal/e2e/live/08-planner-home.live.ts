@@ -531,7 +531,9 @@ test.describe('with the AI model on', () => {
     await context.close()
   })
 
-  test('OWN-time: a watch request’s own time is offered to the whole watchlist, and the offer gets the edit card', async ({ browser }) => {
+  test('OWN-time: a watch request’s own time is offered to the whole watchlist, and the offer gets the edit card', async ({ browser, backend }) => {
+    // LangGraph is watched, so its card offers to move the whole watchlist. One not watched yet gets the watch card instead.
+    await backend.freshWatchlist('alice')
     const context = await devContext(browser, 'alice')
     const page = await context.newPage()
     const watch = watchPage(page)

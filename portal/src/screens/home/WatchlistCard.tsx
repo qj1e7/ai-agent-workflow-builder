@@ -2,7 +2,9 @@ import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { Link } from '../../ui/Link'
 import { useErrorWords } from '../../api/context'
 import { useLatch } from '../../api/latch'
-import { useAddSoftware, useFindSoftware } from '../../api/queries'
+import { useAddSoftware, useFindSoftware, useSaveSchedule } from '../../api/queries'
+import type { ScheduleView } from '../../api/types'
+import { watchlistRunsWords, watchSavedWords } from './answers'
 import { Button } from '../../ui/Button'
 import { Card } from '../../ui/Card'
 import { IconCheck } from '../../ui/icons'
@@ -18,9 +20,10 @@ const WATCHLIST = '/software'
  * Adds one piece of software to the Software watchlist from Home. It finds the GitHub project first and shows it, so the
  * person sees where the releases come from before anything is saved. Several matches, or none, are chosen on the watchlist.
  */
-export function AddToWatchlist({ name }: { name: string }) {
+export function AddToWatchlist({ name, then = null }: { name: string; then?: { readonly day: ScheduleView['day']; readonly at: string } | null }) {
   const find = useFindSoftware()
   const add = useAddSoftware()
+  const move = useSaveSchedule()
   const latch = useLatch()
   const words = useErrorWords()
   const main = useMainButton()
@@ -36,14 +39,19 @@ export function AddToWatchlist({ name }: { name: string }) {
   if (kept) return <p className="muted">Not added. Nothing changed.</p>
   if (add.isSuccess) {
     const added = add.variables
+    const moved = move.data?.schedule
     return (
-      <p className={styles['sent']} role="status">
-        <IconCheck size={18} />
-        <span>
-          <b>{name} is on the Software watchlist.</b> Its releases are read from GitHub, from {added.repo}.{' '}
-          <Link to={WATCHLIST}>Open the Software watchlist</Link>
-        </span>
-      </p>
+      <>
+        <p className={styles['sent']} role="status">
+          <IconCheck size={18} />
+          <span>
+            <b>{name} is on the Software watchlist.</b> Its releases are read from GitHub, from {added.repo}.{' '}
+            <Link to={WATCHLIST}>Open the Software watchlist</Link>
+          </span>
+        </p>
+        {move.isSuccess && moved ? <p role="status">{watchSavedWords(move.data.version, move.data.software.length, watchlistRunsWords(moved))}</p> : null}
+        {move.isError ? <p role="alert">{words(move.error)}</p> : null}
+      </>
     )
   }
   if (find.isPending || find.isIdle) {
@@ -91,7 +99,9 @@ export function AddToWatchlist({ name }: { name: string }) {
       </p>
     )
   }
-  const press = () => latch.run((settled) => add.mutate({ name, repo: only.repo }, { onSettled: settled }))
+  // With the watch card's move, the whole watchlist moves to the time asked once it holds the software, from the version Add made.
+  const moveTo = (version: number) => (then ? move.mutate({ ...then, expected_version: version }) : undefined)
+  const press = () => latch.run((settled) => add.mutate({ name, repo: only.repo }, { onSettled: settled, onSuccess: (view) => moveTo(view.version) }))
   return (
     <>
       <p>

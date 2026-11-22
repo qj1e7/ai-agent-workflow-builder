@@ -1102,7 +1102,7 @@ describe('the core release check, already on the watchlist', () => {
     expect(inChat(everyDay)).not.toContain('Draft it as an n8n workflow')
     const email: CantRowView = { kind: 'where', text: 'email me', note: 'I can\'t send email yet.', needs: 'new_system', system: 'email', instead: null, unsupported: false }
     expect(inChat({ ...everyDay, cant: [OWN_TIME, email], parts: [...everyDay.parts, asked('email me', 'cant', 'cant_do')] })).toContain('Draft it as an n8n workflow')
-    expect(inChat({ ...everyDay, alternative: watch({ already_listed: null }) })).toContain('Draft it as an n8n workflow')
+    expect(inChat({ ...everyDay, alternative: watch({ already_listed: null }) }), 'the watch card says it too').not.toContain('Draft it as an n8n workflow')
   })
 
   it('names the watchlist’s schedule in its own zone', () => {
@@ -1150,9 +1150,10 @@ describe('a can’t a card already names', () => {
     expect(text(draw(tooOften, { watched: statuses as WatchlistView })).match(/every 2 hours/g)).toHaveLength(1)
   })
 
-  it('keeps a time of its own above a software that isn’t watched yet, with its offer, and off the What I can’t do yet card', () => {
+  it('keeps a time of its own on the card of a software that isn’t watched yet, and off the What I can’t do yet card', () => {
     const own: CantReply = { trace_id: null, answer: 'cant', cant: [row('every day at 8am', 'The Software watchlist checks all your software together, on one schedule. I can\'t give one software its own time yet.')], alternative: alternative(false), draft_words: null, parts: [crossed('every day at 8am', 'own_time')] }
-    expect(buttons(draw(own, { leftovers: true }))).toEqual(['Make the Software watchlist run every day at 8am'])
+    expect(buttons(draw(own, { leftovers: true })), 'the card holds the time, never a line above it').toEqual([])
+    expect(text(draw(own)), 'while the watchlist isn’t read, the card keeps the cross’s words').toContain('I can’t give one software its own time yet.')
     expect(text(draw(own))).not.toContain('What I can’t do yet')
     expect(sayOf(own)).toBe('Grafana is software, so it belongs on the Software watchlist, which checks the software on it for new releases.')
   })
