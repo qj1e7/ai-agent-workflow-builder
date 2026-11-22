@@ -811,8 +811,14 @@ export function leftWords({ choices }: Left): string {
   return other === undefined ? '' : (NOT_QUESTIONS[other] ?? '')
 }
 
-/** “Set up the part I can” while any part has a cross, so the button never claims the whole request. */
-export const setUpWords = (left: Left): string => (left.leftOut.length > 0 ? 'Set up the part I can' : 'Set up')
+/** The one main button: Turn on. A part it can't do is crossed on the card, so the button needn't change its name. */
+export const setUpWords = (): string => 'Turn on'
+
+/** “Answer 1 question first”, shown in place of the main button while a question is open. Null when none is. */
+export function answerFirst({ choices }: Left): string | null {
+  const asks = choices.filter(isQuestion).length
+  return asks === 0 ? null : `Answer ${String(asks)} question${asks === 1 ? '' : 's'} first`
+}
 
 /** Resume reopens the card on Home, where the draft's id sits in the address. */
 export const draftPath = (draftId: string) => `/?draft=${encodeURIComponent(draftId)}`

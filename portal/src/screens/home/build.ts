@@ -113,6 +113,11 @@ export function testStatus(model: RunModel, whyStopped: string | null = null): C
   return model.phase.state === 'succeeded' ? { ok: true, text: words } : { ok: false, text: `The test run stopped. ${sentence(words)}` }
 }
 
+/** After the test run, Turn on turns the workflow on by itself: once, only when the test passed and the platform says it is still a draft. */
+export function turnOnStep(stage: BuildStage, life: UseCaseState | undefined, askedHere: boolean): 'turn_on' | 'none' {
+  return stage.kind === 'passed' && life === 'draft' && !askedHere ? 'turn_on' : 'none'
+}
+
 /** What the card does about the test run now: start it, wait for the log or the workflow's read, or nothing, because it was asked for or runs. */
 export type TestStep = 'start' | 'wait' | 'none'
 

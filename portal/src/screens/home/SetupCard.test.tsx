@@ -75,7 +75,6 @@ const card = (reply: SetupCardReply, typed = TYPED) => <SetupCard start={{ form:
 const text = (html: string) => html.replace(/<[^>]*>/g, ' ').replaceAll('&#x27;', "'").replaceAll('&amp;', '&').replace(/\s+/g, ' ').trim()
 const buttons = (html: string) => [...html.matchAll(/<(?:button|a)\b[^>]*>([\s\S]*?)<\/(?:button|a)>/g)].map((m) => text(m[1] ?? ''))
 const pill = (html: string) => text(/<span[^>]*data-draft-pill[^>]*>([\s\S]*?)<\/span>/.exec(html)?.[1] ?? '')
-const primaries = (html: string) => (html.match(/class="[^"]*_primary_[^"]*"/g) ?? []).length
 
 const passed = foldWire(foldWire(emptyModel, success.slice(0, 8), 'run_01JB8'), [{ run_id: 'run_01JB8', seq: 9, ts: '2026-11-14T03:00:09Z', actor: { kind: 'platform', id: 'platform', display: 'Platform' }, summary: '', kind: 'run_succeeded', data: { outcome: 'test_passed' } }], 'run_01JB8')
 const working = foldWire(emptyModel, success.slice(0, 5), 'run_01JB8')
@@ -102,14 +101,21 @@ function building(test: RunModel | null, world: World = {}, more: Partial<CardPr
 }
 
 describe('the set-up card before Set up', () => {
-  it('is a Draft that asks one question at a time, with Never mind and Set up as its one primary', () => {
+  it('is a Draft that asks one question at a time and says Answer 1 question first in place of the main button', () => {
     const html = render(card(SETUP))
     expect(pill(html)).toBe('Draft')
     expect(html.match(/data-mark="ask"/g)).toHaveLength(1)
-    expect(text(html)).toContain('1 question to answer')
-    expect(buttons(html).slice(-2)).toEqual(['Never mind', 'Set up'])
-    expect(primaries(html)).toBe(1)
-    expect(html, 'Set up is never shown dead: pressed early it points at the question').not.toMatch(/<button[^>]*disabled[^>]*>Set up/)
+    expect(text(html)).toContain('Answer 1 question first')
+    expect(buttons(html)).not.toContain('Turn on')
+    expect(buttons(html).slice(-1)).toEqual(['Never mind'])
+    expect(html, 'no button is shown dead').not.toMatch(/<button[^>]*disabled/)
+  })
+
+  it('marks a part the Planner filled in as I guessed, next to its Change', () => {
+    const form = cardFrom(SETUP.name, SETUP.rows, TYPED, SETUP.parts)
+    const guessed = { ...form, rows: form.rows.map((row) => (row.kind === 'look_for' ? { ...row, state: 'changed' as const, note: 'I picked the closed ones.' } : row)) }
+    const html = render(<SetupCard start={{ form: guessed, plan: null, draftId: null, similar: null }} />)
+    expect(text(html)).toContain('I guessed')
   })
 
   it('names the parts Watch, When and Then, in that order, and crosses each part it can’t do', () => {
@@ -117,7 +123,7 @@ describe('the set-up card before Set up', () => {
     const keys = [...html.matchAll(/data-part="([^"]+)"/g)].map((m) => m[1])
     expect(keys).toEqual(['Watch', 'When', 'Then', 'cross-0'])
     expect(text(html)).toContain('Can’t do: “colour them by team” I didn’t follow this part.')
-    expect(buttons(html)).toContain('Set up the part I can')
+    expect(buttons(html)).toContain('Turn on')
   })
 
   it('is Dropped after Never mind, saying nothing was set up, with no button', () => {
@@ -135,7 +141,7 @@ describe('the set-up card before Set up', () => {
     const refused = render(card(SETUP), { kept: { form, draft: null, phase: { kind: 'creating', key: 'press_2' } }, made: { key: 'press_2', made: { kind: 'refused', said: ['Give the workflow a name.'] } } })
     expect(pill(refused)).toBe('Draft')
     expect(text(refused)).toContain('Give the workflow a name.')
-    expect(buttons(refused)).toContain('Set up')
+    expect(text(refused)).toMatch(/Answer \d questions? first/)
   })
 
   it('keeps their own words quoted for a clause it didn’t follow, as the sketch does', () => {
@@ -199,20 +205,25 @@ describe('the set-up card after Set up', () => {
     expect(buttons(html)).toEqual([])
   })
 
-  it('is Ready once the test run passed up to the yes, says nothing was written, and offers Turn it on', () => {
+  it('is Ready once the test run passed up to the yes, says nothing was written, and turns itself on', () => {
     const html = building(passed)
     expect(pill(html)).toBe('Ready')
     expect(text(html)).toContain('Test run passed up to the yes. Nothing was written.')
-    expect(buttons(html)).toEqual(['Turn it on'])
-    expect(primaries(html)).toBe(1)
+    expect(buttons(html), 'it turns itself on, so there is no Turn it on to press').toEqual([])
     expect(text(html), 'the write was never made').toContain('Nothing written')
   })
 
-  it('goes back to a Draft when the test run stopped, with why, Open and Test again', () => {
+  it('says why it could not turn on, with Try again, when the test passed but turning on failed', () => {
+    const html = building(passed, {}, { problem: 'Could not turn it on. The platform is busy.' })
+    expect(text(html)).toContain('Could not turn it on. The platform is busy.')
+    expect(buttons(html)).toEqual(['Try again'])
+  })
+
+  it('stays a Draft when the test run stopped, with one reason and one button', () => {
     const html = building(stopped, { run: { ...(failedView as RunView), run_id: 'run_01JB8' } })
     expect(pill(html)).toBe('Draft')
-    expect(text(html)).toContain("The test run stopped. GitHub didn't answer.")
-    expect(buttons(html)).toEqual(['Open the test run', 'Test again'])
+    expect(text(html)).toContain("The test run stopped. GitHub didn't answer. Nothing was written. It stays a Draft.")
+    expect(buttons(html), 'a failure Try again cannot fix is never a dead end').toEqual(['Try again', 'Open the workflow'])
   })
 
   it('says why its own test run stopped, never the reason of another run the workflow had', () => {
@@ -226,10 +237,10 @@ describe('the set-up card after Set up', () => {
     expect(text(unread)).not.toContain('Jira is not connected')
   })
 
-  it('says Test again when the platform would not start the test run', () => {
+  it('says Try again when the platform would not start the test run', () => {
     const html = building(null, {}, { problem: 'Could not start the test run. The platform is busy.' })
     expect(text(html)).toContain('Could not start the test run.')
-    expect(buttons(html)).toEqual(['Test again'])
+    expect(buttons(html)).toEqual(['Try again'])
   })
 
   it('never waits on a test run it can’t start: with the set-up gone from this visit, it says the draft is saved and opens it', () => {

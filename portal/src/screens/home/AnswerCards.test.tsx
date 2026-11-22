@@ -97,7 +97,7 @@ describe('the Planner’s short answers, as the chat-first sketch draws them', (
     const reply: PlannerReply = { trace_id: null, answer: 'abilities', how_to_start: true, parts: [asked('list me the steps to use this app', 'will_do')] }
     const html = draw(reply, { registry: REGISTRY })
     expect(text(html)).toBe(
-      'How to start This app runs repetitive work for you. Tell me the task and I’ll draft it. Nothing is written without an Approver’s yes. Tell me what should run by itself, in your own words, like “Keep track of the LangGraph version”. Check the card I make, and change anything I guessed. Press Set up. I do a test run, which writes nothing. If the test passes, press Turn it on. Nothing is written until an Approver says yes in Teams. Keep track of the LangGraph version',
+      'How to start This app runs repetitive work for you. Tell me the task and I’ll draft it. Nothing is written without an Approver’s yes. Tell me what should run by itself, in your own words, like “Keep track of the LangGraph version”. Check the card I make, and change anything I guessed. Press Turn on. I do a test run, which writes nothing, and turn it on if the test passes. Nothing is written until an Approver says yes in Teams. Keep track of the LangGraph version',
     )
     expect(buttons(html)).toEqual(['Keep track of the LangGraph version'])
     expect(html).toContain('aria-label="Try one"')
@@ -177,8 +177,10 @@ describe('the Planner’s short answers, as the chat-first sketch draws them', (
 describe('a set-up card', () => {
   it('is the card itself, a Draft with Never mind and Set up, and no hand-off to another screen', () => {
     const html = draw(SETUP)
-    expect(buttons(html)).toEqual(expect.arrayContaining(['Never mind', 'Set up']))
+    expect(buttons(html)).toContain('Never mind')
+    expect(text(html), 'the main button waits for the answer').toMatch(/Answer \d questions? first/)
     expect(buttons(html)).not.toContain('Turn it on')
+    expect(buttons(html)).not.toContain('Set up')
     expect(text(cardOf(html))).toContain('Weekly summary of closed tickets Draft')
     expect(html).not.toContain('href="/new"')
     expect(text(html)).not.toContain('isn’t built yet')
@@ -199,7 +201,7 @@ describe('a set-up card', () => {
     expect(html.match(/data-mark="ask"/g)).toHaveLength(1)
     expect(text(html)).toContain('Question: When Fridays, at what time?')
     expect(buttons(html)).toEqual(expect.arrayContaining(['8:00', '9:00', '13:00', '17:00', 'Another time']))
-    expect(text(html)).toMatch(/\d questions? to answer/)
+    expect(text(html)).toMatch(/Answer \d questions? first/)
   })
 
   it('is the already-have card when they have a workflow of that name, with Open it and a way to set up another', () => {
@@ -285,7 +287,7 @@ describe('PartsList on a set-up card', () => {
     const html = draw(setupCross as SetupCardReply)
     expect(text(html)).toContain('Can’t do: “colour them by team” I didn’t follow this part.')
     expect(text(html)).toContain('Will do: When Every Friday at 17:00, Singapore time')
-    expect(buttons(html)).toContain('Set up the part I can')
+    expect(buttons(html)).toContain('Turn on')
     expect(buttons(html)).not.toContain('Turn it on')
     expect(text(html)).not.toContain('Nothing is unclear')
   })
@@ -321,7 +323,7 @@ describe('a clause the Planner didn’t follow, sent as a can’t with the rest 
     expect(text(html)).not.toContain('What I can’t do yet')
     expect(text(html)).not.toContain('What I can do instead')
     expect(text(cardOf(html))).toContain('Can’t do: “Colour them by team” I didn’t follow this part.')
-    expect(buttons(html)).toContain('Set up the part I can')
+    expect(text(html)).toMatch(/Answer \d questions? first/)
     expect(sayOf(reply)).toBe('Here’s what I understood.')
     expect(draw(reply, { leftovers: true })).toBe('')
   })
@@ -336,7 +338,7 @@ describe('a clause the Planner didn’t follow, sent as a can’t with the rest 
     const html = draw(filter)
     expect(text(html)).not.toContain('What I can’t do yet')
     expect(text(cardOf(html))).toContain('Can’t do: Mention VPN. I can’t search by this yet. Ask the team')
-    expect(buttons(html)).toEqual(expect.arrayContaining(['Set up the part I can', 'Ask the team']))
+    expect(buttons(html)).toContain('Ask the team')
   })
 
   it('keeps the question of how many days on the card a can’t sets up, so it is asked and never “Nothing is unclear”', () => {
@@ -356,10 +358,10 @@ describe('a clause the Planner didn’t follow, sent as a can’t with the rest 
     }
     const card = text(cardOf(draw(stale)))
     expect(card).toContain('“list the stale tickets in MOCK”')
-    expect(card).toMatch(/\d questions? to answer/)
+    expect(card).toMatch(/Answer \d questions? first/)
     expect(card, 'the can’t stays on its own card').not.toContain('“email me”')
     const onCard: CantReply = { ...stale, cant: [{ ...emailRow, needs: 'new_tool' }] }
-    expect(text(cardOf(draw(onCard)))).toMatch(/\d questions? to answer/)
+    expect(text(cardOf(draw(onCard)))).toMatch(/Answer \d questions? first/)
   })
 
   it('still names a real can’t on its own card, with the clause crossed on the card it sets up instead', () => {
@@ -438,7 +440,7 @@ describe('an answer that is partly a can’t', () => {
   it('crosses what it can’t do on the card, with the registry’s reason and Ask the team, and sets up the part it can', () => {
     const html = draw(part as PartReply)
     expect(text(cardOf(html))).toContain('Can’t do: Email it to the team. I can\'t send email yet.')
-    expect(buttons(html)).toEqual(expect.arrayContaining(['Set up the part I can', 'Ask the team']))
+    expect(buttons(html)).toContain('Ask the team')
     const rows = text(cardOf(html)).split('Can’t do:')[0]?.split(' Draft ')[1] ?? ''
     expect(rows, 'the ticked rows hold only the part it can do').toContain('Sum them up')
     expect(rows).not.toMatch(/email/i)
@@ -452,7 +454,7 @@ describe('an answer that is partly a can’t', () => {
   it('shows the alternative under its own heading, with Ask the team first when there is no alternative', () => {
     const html = draw(cant as CantReply)
     expect(text(html)).toContain('What I can do instead')
-    expect(buttons(html)).toContain('Set up')
+    expect(text(html)).toMatch(/Answer \d questions? first/)
     const bare = draw({ ...(cant as CantReply), alternative: null })
     expect(bare).not.toContain('What I can do instead')
     expect(buttons(bare)).toEqual(['Ask the team'])
