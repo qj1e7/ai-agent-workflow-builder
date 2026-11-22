@@ -48,7 +48,12 @@ from agent_runtime.planner_led import (
     person_part,
 )
 from agent_runtime.reply_verifier import Verdict
-from tests.exclusion_phrases import EDITS_KEPT, EDITS_LEFT_OUT
+from tests.exclusion_phrases import (
+    DAYS_AFTER_A_LEAVE_WORD,
+    EDITS_KEPT,
+    EDITS_LEFT_OUT,
+    LEFT_OUT_AFTER_ANOTHER,
+)
 from tests.fakes import ScriptedChat, asks, call
 from tests.test_answers import follow_up
 from tests.test_api import KEY as API_KEY
@@ -695,6 +700,65 @@ def test_a_time_change_beside_a_filter_or_a_condition_is_still_made(said: str) -
     answer = shown(result)
     assert isinstance(answer, EditAnswer)
     assert (answer.schedule, result.errors) == (ScheduleChange(at="10:00"), ())
+
+
+@pytest.mark.parametrize("message", [*DAYS_AFTER_A_LEAVE_WORD, *LEFT_OUT_AFTER_ANOTHER])
+def test_a_time_change_beside_a_day_it_leaves_out_is_never_made_as_that_day(message: str) -> None:
+    """Before, "make it run at 10am barring Fridays" passed as Friday at 10:00, the opposite of
+    the request, and "Except PH" after "does it skip PH?" passed as every day at 10:00."""
+    result, _ = run(
+        message,
+        tool("change_workflow", action="schedule", day="friday", at="10:00"),
+        tool("change_workflow", action="schedule", at="10:00", call_id="c2"),
+        AIMessage(content="stop"),
+        facts=WORKFLOWS,
+    )
+
+    assert len(result.errors) == 2
+    assert all("can't hold" in error for error in result.errors)
+
+
+@pytest.mark.parametrize(
+    ("name", "message"),
+    [
+        ("No-PH digest", "make the no-PH digest run at 10am"),
+        ("Skip PH digest", "make the skip PH digest run at 10am"),
+        ("Non-holiday report", "make the non-holiday report run at 10am"),
+        ("Holiday tracker", "make the holiday tracker run at 10am"),
+    ],
+)
+def test_a_workflow_whose_name_looks_like_a_day_left_out_still_moves(
+    name: str, message: str
+) -> None:
+    """Before, the gate read the workflow's own name, as "No-PH", as a day left out and refused
+    every change to it, while the edit chat made it."""
+    words = name.casefold()
+    facts = PlannerFacts(
+        workflows=[WorkflowFact(name=name, state="on", last_run=None, last_run_at=None)]
+    )
+    result, _ = run(
+        message,
+        tool("change_workflow", action="schedule", workflow_words=words, at="10:00"),
+        facts=facts,
+    )
+
+    answer = shown(result)
+    assert isinstance(answer, EditAnswer)
+    assert (answer.schedule, result.errors) == (ScheduleChange(at="10:00"), ())
+
+
+def test_a_workflow_whose_name_looks_like_a_day_left_out_still_asks_for_one_it_leaves_out():
+    facts = PlannerFacts(
+        workflows=[WorkflowFact(name="No-PH digest", state="on", last_run=None, last_run_at=None)]
+    )
+    result, _ = run(
+        "make the no-PH digest run at 10am except CNY",
+        tool("change_workflow", action="schedule", workflow_words="no-PH digest", at="10:00"),
+        AIMessage(content="stop"),
+        facts=facts,
+    )
+
+    assert "can't hold" in result.errors[0]
 
 
 def test_an_approver_cannot_change_a_workflow() -> None:

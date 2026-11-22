@@ -29,6 +29,7 @@ from tests.exclusion_phrases import (
     CONDITIONS_KEPT,
     DATES_MONTH_ENDS_AND_FREEZES,
     DAY_WORDS_KEPT,
+    DAYS_AFTER_A_LEAVE_WORD,
     FILTERS_LEFT_OUT,
     HOLIDAYS_LEFT_OUT,
     PIECES_JOINED,
@@ -2421,6 +2422,15 @@ def test_a_date_month_end_or_freeze_left_out_is_asked(rest: str):
 @pytest.mark.parametrize("rest", SHORT_FORMS_LEFT_OUT)
 def test_a_short_exclusion_or_a_short_day_left_out_is_asked(rest: str):
     asked_both_ways(EVERY_DAY_CHECK + rest)
+
+
+@pytest.mark.parametrize("words", DAYS_AFTER_A_LEAVE_WORD)
+def test_a_weekday_right_after_a_word_that_leaves_it_out_is_never_the_day_it_runs(words: str):
+    """Before, "make it run at 10am barring Fridays" read Friday as the day it runs, in a first
+    draft and in a change, the opposite of the request."""
+    assert run_time_in(words, "every_day 09:00") == (None, True)
+    assert day_in(words, "every_day 09:00") is None
+    assert day_in(words) is None
 
 
 @pytest.mark.parametrize("words", CHANGES_LEFT_OUT)

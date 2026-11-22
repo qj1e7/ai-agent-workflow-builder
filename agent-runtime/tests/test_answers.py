@@ -58,7 +58,12 @@ from agent_runtime.reading import (
     SearchRead,
     TicketRead,
 )
-from tests.exclusion_phrases import EDITS_KEPT, EDITS_LEFT_OUT
+from tests.exclusion_phrases import (
+    DAYS_AFTER_A_LEAVE_WORD,
+    EDITS_KEPT,
+    EDITS_LEFT_OUT,
+    LEFT_OUT_AFTER_ANOTHER,
+)
 from tests.fakes import ScriptedChat
 from tests.test_cards_api import make_app
 
@@ -3286,6 +3291,8 @@ def test_an_edit_beside_a_day_like_word_it_leaves_out_is_never_made(said: str):
         ("make it run at 10am except PH", True),
         ("make it run at 10am, no PH", True),
         ("make the morning check run at 10am, skip the EOM close tickets", True),
+        ("make it run at 10am other than PH", True),
+        ("make it run every weekday at 10am no month end", True),
     ],
 )
 def test_an_edit_it_cant_make_says_whether_it_leaves_out_days(task: str, leaves_out_days: bool):
@@ -3298,6 +3305,40 @@ def test_an_edit_it_cant_make_says_whether_it_leaves_out_days(task: str, leaves_
     )
     answer = edited(fields, task)
     assert (answer.cant, answer.leaves_out_days) == ("how_often", leaves_out_days)
+
+
+@pytest.mark.parametrize("task", LEFT_OUT_AFTER_ANOTHER)
+def test_an_edit_asks_for_a_day_left_out_after_another_in_a_question_or_another_workflow(
+    task: str,
+):
+    """Before, "Except PH" after "does it skip PH?" was crossed and the change saved every day at
+    10:00, because only the first stretch left out kept its clause in the change."""
+    fields = read(
+        asks_about="change", workflow_words="morning check" if "morning" in task else None
+    )
+    answer = edited(fields, task)
+    assert (answer.schedule, answer.cant, answer.leaves_out_days) == (None, "how_often", True)
+
+
+@pytest.mark.parametrize(
+    "task",
+    [
+        *DAYS_AFTER_A_LEAVE_WORD,
+        "move it to 10am aside from Fridays",
+        "move it to 10am apart from weekends",
+        "shift it to 10am apart from weekends and PH",
+        "make the morning check run at 10am, ex public holidays",
+    ],
+)
+def test_an_edit_never_runs_on_or_keeps_a_day_it_is_told_to_leave_out(task: str):
+    """Before, "make it run at 10am barring Fridays" moved it to Friday at 10:00, the opposite of
+    the request, and "move it to 10am apart from weekends" read "from weekends" as when it runs
+    now and kept every day."""
+    fields = read(
+        asks_about="change", workflow_words="morning check" if "morning" in task else None
+    )
+    answer = edited(fields, task)
+    assert (answer.schedule, answer.cant, answer.leaves_out_days) == (None, "how_often", True)
 
 
 def test_only_a_schedule_it_cant_hold_leaves_out_days():

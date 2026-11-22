@@ -909,3 +909,33 @@ at 10am, skip prereleases". Each moves it to 10:00 and keeps the day, as on main
 step dropped and an approval are other changes, which the chat answers another way, and the
 Planner's change call reads "3rd" as a schedule it can't hold, as on main. Beside a schedule, a
 day joined to a word by a hyphen still looks like a day, as "zero-day", so those two ask."""
+DAYS_AFTER_A_LEAVE_WORD: list[str] = [
+    f"make it run at 10am{mark} {leave} Fridays"
+    for leave in (
+        "barring",
+        "excl",
+        "bar",
+        "aside from",
+        "save for",
+        "sans",
+        "w/o",
+        "outside",
+        "outside of",
+        "ex",
+        "hold off on",
+        "avoid",
+    )
+    for mark in ("", ",")
+]
+"""A weekday right after a word that leaves it out. Main ran it only on that day, as "make it
+run at 10am barring Fridays" moved it to Friday at 10:00, the opposite of the request. Each is
+asked, and never filled as the day it runs."""
+LEFT_OUT_AFTER_ANOTHER: list[str] = [
+    "does it skip PH? make it run at 10am. Except PH.",
+    "does it run on PH? make it run at 10am. Except CNY.",
+    "the weekly summary already skips PH. make the morning check run at 10am. Except CNY.",
+    "can the weekly summary skip PH too? Also make the morning check run at 10am, not on CNY",
+    "does the weekly summary skip PH? make the morning check run at 10am. not on CNY.",
+]
+"""A day left out after another one in a question or another workflow's clause. Only the first
+stretch left out counted, so the change saved every day at 10:00. Each is asked."""
