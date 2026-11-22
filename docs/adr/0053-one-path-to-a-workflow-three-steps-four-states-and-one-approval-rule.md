@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 ---
 
 # One path to a workflow: three steps, four states and one approval rule
