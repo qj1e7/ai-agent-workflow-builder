@@ -3284,24 +3284,27 @@ def test_an_edit_beside_a_day_like_word_it_leaves_out_is_never_made(said: str):
         ("make the morning check run at 10am, skip the code freeze", "skip the code freeze"),
         ("make the morning check run at 10am, PH excluded", "PH excluded"),
         ("make the morning check skip PH", "skip PH"),
+        ("make the morning check run at 10am, don't run on PH", "don't run on PH"),
+        ("make the morning check run at 10am, apart from PH", "apart from PH"),
+        ("make the morning check run at 10am, other than PH", "other than PH"),
+        ("make the morning check run at 10am, exc. PH", "exc. PH"),
+        (
+            "make it every day at 9am, check langgraph except weekends and PH",
+            "except weekends and PH",
+        ),
     ],
 )
 def test_an_edit_crosses_the_day_like_words_it_leaves_out_as_a_schedule_it_cant_hold(
     task: str, crossed: str
 ):
-    """The cross holds the words left out, so the Portal says it can't leave days out of a
-    schedule yet. Before, "except PH" was a part it didn't follow, beside a change it made."""
+    """One cross holds all the words left out, from the word that leaves them out, so the Portal
+    says it can't leave days out of a schedule yet. Before, "except PH" was a part it didn't
+    follow beside a change it made, and "except weekends and PH" was crossed twice."""
     fields = read(
         asks_about="change", workflow_words="morning check" if "morning" in task else None
     )
-    assert (crossed, "cant", "how_often") in marks(fields, task)
-
-
-def test_a_day_like_word_listed_after_a_day_left_out_is_crossed_once_in_its_own_clause():
-    """Before, "PH" was a part it didn't follow beside "except weekends"."""
-    task = "make it every day at 9am, check langgraph except weekends and PH"
-    marked = marks(read(asks_about="change"), task)
-    assert [text for text, _, why in marked if why == "how_often"] == ["except weekends", "PH"]
+    marked = marks(fields, task)
+    assert [text for text, _, why in marked if why == "how_often"] == [crossed]
 
 
 @pytest.mark.parametrize("said", EDITS_KEPT)
