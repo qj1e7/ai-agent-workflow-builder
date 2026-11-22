@@ -617,13 +617,6 @@
   gap: 8px 12px;
 }
 
-.confirm {
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 12px;
-}
-
 /* Once the conversation starts, Home is the chat (the sketch's chat column): the needs strip across the top, the conversation
    scrolling on the chat grey, and the box with its chips docked at the bottom. The chat and its side panel share the page. */
 .chatLayout {
