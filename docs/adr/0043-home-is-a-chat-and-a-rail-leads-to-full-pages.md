@@ -1,5 +1,5 @@
 ---
-status: accepted
+status: accepted, amended by ADR 0052
 ---
 
 # Home is a chat, and a rail leads to full pages
