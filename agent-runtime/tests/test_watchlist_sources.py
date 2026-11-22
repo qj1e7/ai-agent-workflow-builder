@@ -1,10 +1,13 @@
 """The watchlist check with the sources ADR 0025 adds: package registries and vulnerabilities."""
 
 from collections.abc import Sequence
+from datetime import timedelta
+from typing import Any
 
 import pytest
 from pydantic import ValidationError
 
+from agent_runtime.capped import CHECK_SECONDS
 from agent_runtime.contract import (
     AgentMessageEvent,
     GithubSource,
@@ -111,6 +114,7 @@ class Check:
             sleep=self.clock.sleep,
             registries=registries,
             advisories=advisories,
+            clock=lambda: self.clock.now.timestamp(),
         )
 
     def run(self, *software: SoftwareToCheck) -> TaskFinished | TaskFailed:
@@ -302,3 +306,42 @@ def test_guava_and_netty_are_checked_in_the_build_the_team_runs(
     assert result.output.findings[0].state == "behind"
     [ticket] = result.output.proposed
     assert ticket.fields["title"] == title
+
+
+class SlowRegistry(Registry):
+    """A registry each read of which takes `seconds` of the check's time."""
+
+    def __init__(self, seconds: float, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self.clock: FakeClock | None = None
+        self.seconds = seconds
+
+    def fetch(self, repo: str) -> list[Release]:
+        assert self.clock is not None, "give it the check's clock"
+        self.clock.now += timedelta(seconds=self.seconds)
+        return super().fetch(repo)
+
+
+def test_a_slow_registry_leaves_osv_no_time_so_only_the_lookup_is_given_up():
+    services = Services(LOG4SHELL, {"CVE-2021-44228": nvd_answer(10.0, "CRITICAL")})
+    slow = SlowRegistry(CHECK_SECONDS + 1, versions={LOG4J: LOG4J_VERSIONS})
+    check = Check(maven=slow, services=services)
+    slow.clock = check.clock
+    result = check.run(log4j())
+    assert isinstance(result, TaskFinished)
+    [found] = result.output.findings
+    assert (found.state, found.newest) == ("behind", "2.24.3")
+    assert found.vulnerability_check == "could_not_check"
+    assert services.osv_bodies == [] and services.nvd_asked == []
+    texts = room_texts(result.events)
+    assert any("the check ran out of time before OSV answered" in t for t in texts)
+
+
+def test_a_registry_outage_stops_trying_when_the_next_try_would_not_fit():
+    slow = SlowRegistry(CHECK_SECONDS / 2, versions={}, down=503)
+    check = Check(maven=slow)
+    slow.clock = check.clock
+    result = check.run(log4j())
+    assert len(slow.calls) == 2
+    assert isinstance(result, TaskFailed)
+    assert "Maven Central returned 503 Service Unavailable two times" in result.error.message

@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from http import HTTPStatus
 from typing import Protocol
 
+from agent_runtime.capped import OutOfTime, time_left
 from agent_runtime.contract import (
     AgentFailedData,
     AgentMessageData,
@@ -90,10 +91,17 @@ def read_releases(
     agent: AgentRef = CHECKER,
     source_name: str = SOURCE_NAME,
 ) -> list[Release] | TaskError:
-    """Reads one source. A 5xx or no answer is tried again, a 4xx stops at once."""
+    """Reads one source. A 5xx or no answer is tried again, a 4xx stops at once. Inside a
+    check's deadline (capped.py), a try that would not fit is not made."""
     for attempt in range(1, retry.tries + 1):
         try:
             return source.fetch(repo)
+        except OutOfTime:
+            return TaskError(
+                type="UpstreamUnavailable",
+                message=f"The check ran out of time before {source_name} answered",
+                retryable=True,
+            )
         except SourceRejected as refused:
             if refused.limited:
                 return TaskError(
@@ -107,7 +115,8 @@ def read_releases(
                 retryable=False,
             )
         except SourceUnavailable as unavailable:
-            gave_up = attempt == retry.tries
+            left = time_left()
+            gave_up = attempt == retry.tries or (left is not None and left <= retry.wait_seconds)
             wait = f"Waiting {retry.wait_seconds:g} s before trying again."
             ending = "I am giving up." if gave_up else wait
             write(try_failed(unavailable, attempt, retry.tries, ending, agent, source_name))
@@ -115,7 +124,7 @@ def read_releases(
                 return TaskError(
                     type="UpstreamUnavailable",
                     message=f"{gave_up_message(unavailable, source_name)} "
-                    f"{word(retry.tries)} times",
+                    f"{word(attempt)} {'time' if attempt == 1 else 'times'}",
                     retryable=True,
                 )
             sleep(retry.wait_seconds)

@@ -1,5 +1,6 @@
 # pyright: reportMissingTypeStubs=false, reportUnknownMemberType=false
 import re
+import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import cast
@@ -7,6 +8,7 @@ from typing import cast
 from langgraph.config import get_stream_writer
 from langgraph.graph import END, START, StateGraph
 
+from agent_runtime.capped import CHECK_SECONDS, deadline
 from agent_runtime.contract import (
     REPO_PATTERN,
     SOURCE_NAMES,
@@ -238,29 +240,35 @@ class WatchlistChecker:
         retry: RetryPolicy = DEFAULT_RETRY,
         registries: Mapping[str, ReleaseSource] | None = None,
         advisories: AdvisoryReader | None = None,
+        check_seconds: float = CHECK_SECONDS,
+        clock: Callable[[], float] = time.monotonic,
     ) -> None:
         """source reads GitHub. registries reads every other source kind, by kind, and a kind
         with no reader here cannot be checked. Without advisories, no vulnerability is looked
-        up and every finding says not_checked."""
+        up and every finding says not_checked. Each check's outside calls share one deadline,
+        check_seconds from its start (capped.py)."""
         self._source = source
         self._summarizer = summarizer
         self._sleep = sleep
         self._retry = retry
         self._registries = dict(registries or {})
         self._advisories = advisories
+        self._check_seconds = check_seconds
+        self._clock = clock
         self._graph = self._build()
 
     def check(
         self, inputs: WatchlistInputs, emit: Callable[[Draft], None]
     ) -> TaskOutput | NothingChecked:
         final: dict[str, object] = {}
-        for mode, chunk in self._graph.stream(
-            WatchlistState(inputs=inputs), stream_mode=["custom", "values"]
-        ):
-            if mode == "custom" and isinstance(chunk, Draft):
-                emit(chunk)
-            elif mode == "values" and isinstance(chunk, dict):
-                final = cast(dict[str, object], chunk)
+        with deadline(self._check_seconds, self._clock):
+            for mode, chunk in self._graph.stream(
+                WatchlistState(inputs=inputs), stream_mode=["custom", "values"]
+            ):
+                if mode == "custom" and isinstance(chunk, Draft):
+                    emit(chunk)
+                elif mode == "values" and isinstance(chunk, dict):
+                    final = cast(dict[str, object], chunk)
         outcome = final.get("error") or final.get("output")
         if isinstance(outcome, TaskError):
             return NothingChecked(outcome, cast(list[Finding], final.get("findings", [])))

@@ -1,3 +1,4 @@
+import time
 from collections.abc import Callable, Mapping
 
 from agent_runtime.contract import TaskOutput, WatchlistInputs
@@ -25,6 +26,7 @@ class VersionChecker:
         retry: RetryPolicy = DEFAULT_RETRY,
         registries: Mapping[str, ReleaseSource] | None = None,
         advisories: AdvisoryReader | None = None,
+        clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self._source = source
         self._summarizer = summarizer
@@ -32,8 +34,15 @@ class VersionChecker:
         self._retry = retry
         self._registries = registries
         self._advisories = advisories
+        self._clock = clock
         self._watchlist = WatchlistChecker(
-            source, summarizer, sleep, retry, registries=registries, advisories=advisories
+            source,
+            summarizer,
+            sleep,
+            retry,
+            registries=registries,
+            advisories=advisories,
+            clock=clock,
         )
 
     def with_summarizer(self, summarizer: Summarizer) -> VersionChecker:
@@ -44,6 +53,7 @@ class VersionChecker:
             self._retry,
             registries=self._registries,
             advisories=self._advisories,
+            clock=self._clock,
         )
 
     def check_watchlist(

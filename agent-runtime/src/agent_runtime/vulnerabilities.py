@@ -21,7 +21,7 @@ from typing import Literal, cast
 import httpx
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from agent_runtime.capped import MEGABYTE, TooLarge, read_capped
+from agent_runtime.capped import MEGABYTE, OutOfTime, TooLarge, read_capped, time_left
 from agent_runtime.contract import Severity, Vulnerability, VulnerabilitySource
 from agent_runtime.tags import parse_tag
 
@@ -174,6 +174,8 @@ class Osv:
             raise AdvisoriesUnavailable("OSV could not be reached") from error
         except TooLarge as error:
             raise AdvisoriesUnavailable("OSV answered more than one page should hold") from error
+        except OutOfTime as error:
+            raise AdvisoriesUnavailable("the check ran out of time before OSV answered") from error
         if status >= 300:
             raise AdvisoriesUnavailable(f"OSV answered {status}")
         try:
@@ -231,7 +233,7 @@ class Nvd:
                 params={"cveId": cve},
                 headers=self._headers,
             )
-        except httpx.TransportError, TooLarge:
+        except httpx.TransportError, TooLarge, OutOfTime:
             return None
         if status >= 300:
             return None
@@ -332,6 +334,9 @@ class AdvisoryReader:
             if self._last_asked is not None:
                 wait = max(0.0, self._last_asked + nvd.pace.wait_seconds - now)
             if now + wait - check.started > self._budget:
+                return None
+            left = time_left()
+            if left is not None and left <= wait:
                 return None
             if wait:
                 self._sleep(wait)
