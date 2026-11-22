@@ -48,6 +48,7 @@ from agent_runtime.planner_led import (
     person_part,
 )
 from agent_runtime.reply_verifier import Verdict
+from tests.exclusion_phrases import EDITS_KEPT, EDITS_LEFT_OUT
 from tests.fakes import ScriptedChat, asks, call
 from tests.test_answers import follow_up
 from tests.test_api import KEY as API_KEY
@@ -660,6 +661,40 @@ def test_a_change_to_a_day_it_isn_t_told_to_run_on_or_a_ticket_s_deadline_is_nev
     )
 
     assert result.errors
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        *(f"make the morning check run at 10am, {said}" for said in EDITS_LEFT_OUT),
+        "make it run at 10am except PH",
+        "make it run at 10am except when I'm on leave",
+    ],
+)
+def test_a_time_change_beside_a_day_like_word_it_leaves_out_is_never_made(message: str) -> None:
+    """Before, "make it run at 10am except PH" moved it to 10:00 and kept every day, so it still
+    ran on PH. A day-like word left out is a schedule it can't hold, as "skip Fridays" is."""
+    result, _ = run(
+        message,
+        tool("change_workflow", action="schedule", at="10:00"),
+        AIMessage(content="stop"),
+        facts=WORKFLOWS,
+    )
+
+    assert "can't hold" in result.errors[0]
+
+
+@pytest.mark.parametrize("said", EDITS_KEPT)
+def test_a_time_change_beside_a_filter_or_a_condition_is_still_made(said: str) -> None:
+    result, _ = run(
+        f"make the morning check run at 10am, {said}",
+        tool("change_workflow", action="schedule", workflow_words="morning check", at="10:00"),
+        facts=WORKFLOWS,
+    )
+
+    answer = shown(result)
+    assert isinstance(answer, EditAnswer)
+    assert (answer.schedule, result.errors) == (ScheduleChange(at="10:00"), ())
 
 
 def test_an_approver_cannot_change_a_workflow() -> None:

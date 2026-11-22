@@ -57,6 +57,7 @@ from agent_runtime.reading import (
     SearchRead,
     TicketRead,
 )
+from tests.exclusion_phrases import EDITS_KEPT, EDITS_LEFT_OUT
 from tests.fakes import ScriptedChat
 from tests.test_cards_api import make_app
 
@@ -3261,6 +3262,74 @@ def test_an_edit_that_names_a_day_but_not_to_run_on_it_is_never_made(task: str, 
     answer = edited(fields, task)
     assert (answer.schedule, answer.cant) == (None, "how_often")
     assert (crossed, "cant", "how_often") in marks(fields, task)
+
+
+@pytest.mark.parametrize("said", EDITS_LEFT_OUT)
+def test_an_edit_beside_a_day_like_word_it_leaves_out_is_never_made(said: str):
+    """Before, "make the morning check run at 10am, except PH" moved it to 10:00 and kept every
+    day, so it still ran on PH. A day-like word left out is a schedule it can't hold, as "skip
+    Fridays" is."""
+    fields = read(asks_about="change", workflow_words="morning check")
+    answer = edited(fields, f"make the morning check run at 10am, {said}")
+    assert (answer.schedule, answer.cant) == (None, "how_often")
+
+
+@pytest.mark.parametrize(
+    ("task", "crossed"),
+    [
+        ("make it run at 10am except PH", "except PH"),
+        ("make it run at 10am except when I'm on leave", "except when I'm on leave"),
+        ("make it run at 10am except during business hours", "except during business hours"),
+        ("make it run at 10am except 25 Dec", "except 25 Dec"),
+        ("make the morning check run at 10am, skip the code freeze", "skip the code freeze"),
+        ("make the morning check run at 10am, PH excluded", "PH excluded"),
+        ("make the morning check skip PH", "skip PH"),
+    ],
+)
+def test_an_edit_crosses_the_day_like_words_it_leaves_out_as_a_schedule_it_cant_hold(
+    task: str, crossed: str
+):
+    """The cross holds the words left out, so the Portal says it can't leave days out of a
+    schedule yet. Before, "except PH" was a part it didn't follow, beside a change it made."""
+    fields = read(
+        asks_about="change", workflow_words="morning check" if "morning" in task else None
+    )
+    assert (crossed, "cant", "how_often") in marks(fields, task)
+
+
+def test_a_day_like_word_listed_after_a_day_left_out_is_crossed_once_in_its_own_clause():
+    """Before, "PH" was a part it didn't follow beside "except weekends"."""
+    task = "make it every day at 9am, check langgraph except weekends and PH"
+    marked = marks(read(asks_about="change"), task)
+    assert [text for text, _, why in marked if why == "how_often"] == ["except weekends", "PH"]
+
+
+@pytest.mark.parametrize("said", EDITS_KEPT)
+def test_an_edit_beside_a_filter_or_a_condition_still_moves_the_time(said: str):
+    fields = read(asks_about="change", workflow_words="morning check")
+    answer = edited(fields, f"make the morning check run at 10am, {said}")
+    assert (answer.schedule, answer.cant) == (ScheduleChange(at="10:00"), None)
+
+
+@pytest.mark.parametrize(
+    ("task", "schedule", "cant"),
+    [
+        ("make it run at 10am", ScheduleChange(at="10:00"), None),
+        ("run it on Mondays instead", ScheduleChange(day="monday"), None),
+        (
+            "make it every day at 9am, check langgraph and post only when there is a new release",
+            ScheduleChange(day="every_day", at="09:00"),
+            None,
+        ),
+        ("make it skip prereleases", None, "only_schedule"),
+        ("make it post to #releases instead", None, "only_schedule"),
+    ],
+)
+def test_a_plain_edit_is_read_as_before(
+    task: str, schedule: ScheduleChange | None, cant: str | None
+):
+    answer = edited(read(asks_about="change"), task)
+    assert (answer.schedule, answer.cant) == (schedule, cant)
 
 
 @pytest.mark.parametrize(
