@@ -198,7 +198,7 @@ interface WaitingProps {
   onDecide: (pending: PendingModelOut, verdict: Verdict) => void
 }
 
-function WaitingAddress({ pending, active, pressed, problem, onDecide }: WaitingProps) {
+export function WaitingAddress({ pending, active, pressed, problem, onDecide }: WaitingProps) {
   return (
     <div id={MODEL_IDS.waiting} tabIndex={-1} className={styles['waiting']}>
       <ShieldMark size={20} />
@@ -213,7 +213,7 @@ function WaitingAddress({ pending, active, pressed, problem, onDecide }: Waiting
       </div>
       {pending.you_can_decide ? (
         <div className={styles['buttons']}>
-          <Button variant="danger-outline" loading={pressed === 'decline'} onClick={() => onDecide(pending, 'decline')}>
+          <Button loading={pressed === 'decline'} onClick={() => onDecide(pending, 'decline')}>
             Not now
           </Button>
           <Button variant="approve" loading={pressed === 'confirm'} onClick={() => onDecide(pending, 'confirm')}>

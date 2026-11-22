@@ -297,6 +297,34 @@ function HowToStart({ view, page }: { view: CapabilitiesView; page: Page }) {
   )
 }
 
+interface NotLoadedProps {
+  readonly list: { readonly isError: boolean; readonly isFetching: boolean; readonly refetch: () => Promise<unknown> }
+  readonly failed: string
+  readonly loading: string
+}
+
+function NotLoaded({ list, failed, loading }: NotLoadedProps) {
+  if (!list.isError) {
+    return (
+      <p className="muted" role="status">
+        {loading}
+      </p>
+    )
+  }
+  return (
+    <>
+      <p className="muted" role="status">
+        {failed}
+      </p>
+      <div className={styles['buttons']}>
+        <Button loading={list.isFetching} onClick={() => void list.refetch()}>
+          Try again
+        </Button>
+      </div>
+    </>
+  )
+}
+
 /** What I can do, in the registry’s short words with the platform’s state of each, or how to start when that was asked, or that it followed none of the request. */
 function AbilitiesAnswer({ reply, typed, page }: { reply: AbilitiesReply; typed: string; page: Page }) {
   const asker = useAsker()
@@ -304,13 +332,7 @@ function AbilitiesAnswer({ reply, typed, page }: { reply: AbilitiesReply; typed:
   const capabilities = useCapabilities({ enabled: asker === 'operator' && !nothing })
   if (nothing) return <DidntFollowCard typed={typed} page={page} />
   if (asker === 'approver') return <WhatICanDo lines={APPROVER_CAN.map((text) => ({ key: text, text, state: null }))} />
-  if (!capabilities.data) {
-    return (
-      <p className="muted" role="status">
-        {capabilities.isError ? 'I couldn’t load what I can do just now.' : 'Loading what I can do'}
-      </p>
-    )
-  }
+  if (!capabilities.data) return <NotLoaded list={capabilities} failed="I couldn’t load what I can do just now." loading="Loading what I can do" />
   if (reply.how_to_start) return <HowToStart view={capabilities.data} page={page} />
   const { can, notYet } = capabilityCard(capabilities.data)
   return <WhatICanDo lines={can.map((entry) => ({ key: entry.id, text: entry.short, state: stateWords(entry) }))} notYet={notYet} />
@@ -369,13 +391,7 @@ function SwitchChoices({ reply }: { reply: PauseReply | ResumeReply }) {
 
 function IdeasAnswer({ page }: { page: Page }) {
   const capabilities = useCapabilities()
-  if (!capabilities.data) {
-    return (
-      <p className="muted" role="status">
-        {capabilities.isError ? 'I couldn’t load the ideas just now.' : 'Loading ideas'}
-      </p>
-    )
-  }
+  if (!capabilities.data) return <NotLoaded list={capabilities} failed="I couldn’t load the ideas just now." loading="Loading ideas" />
   return (
     <ul className={styles['starters']}>
       {startingPoints(capabilities.data).map((text) => (

@@ -227,11 +227,13 @@
   color: var(--muted);
 }
 
-/* A skipped step fades, but what it says under it keeps full contrast. */
 .skip .who,
-.skip .dot,
-.skip .label {
+.skip .dot {
   opacity: 0.4;
+}
+
+.skip .label {
+  color: var(--muted);
 }
 
 /* The gate opens once the yes is given. */

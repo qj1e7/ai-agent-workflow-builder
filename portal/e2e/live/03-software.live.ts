@@ -256,6 +256,41 @@ test('the count line and what checks each row hold through a decline, and the de
   }
 })
 
+test('Turn off schedule asks first, and Keep it or Escape sends nothing and gives focus back to Turn off schedule', async ({ browser, backend }) => {
+  await backend.freshWatchlist('alice', [{ name: 'LangGraph', repo: 'langchain-ai/langgraph', our_version: '1.2.14' }])
+  const saved = await backend.saveWatchlistSchedule('alice', { day: 'monday', at: '09:00' })
+  expect(saved.status, `alice sets the watchlist schedule: ${JSON.stringify(saved.body)}`).toBe(200)
+  const context = await devContext(browser, 'alice')
+  const page = await context.newPage()
+  const watch = watchPage(page)
+  const sent: string[] = []
+  page.on('request', (request) => {
+    if (request.url().includes('/api/v1/watchlist/schedule')) sent.push(request.method())
+  })
+  await page.goto('/software')
+  const turnOff = page.getByRole('button', { name: 'Turn off schedule' })
+  const question = page.getByRole('group', { name: 'Turn off the schedule' })
+  const keep = question.getByRole('button', { name: 'Keep it' })
+
+  await turnOff.click()
+  await expect(question).toContainText('Turn off the schedule? The watchlist won’t be checked until someone sets one again.')
+  await expect(keep, 'focus lands on the safe choice').toBeFocused()
+  await expect(page.getByRole('button', { name: 'Change schedule' }), 'one choice at a time while it asks').toHaveCount(0)
+  await keep.click()
+  await expect(question).toHaveCount(0)
+  await expect(turnOff, 'Keep it gives focus back to Turn off schedule').toBeFocused()
+
+  await turnOff.press('Enter')
+  await expect(keep).toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(question).toHaveCount(0)
+  await expect(turnOff, 'Escape gives focus back to Turn off schedule').toBeFocused()
+  await expect(page.getByRole('main')).toContainText('Checked every Monday at 9:00')
+  expect(sent, 'asking and keeping send nothing').toEqual([])
+  assertClean(watch)
+  await context.close()
+})
+
 test('an Approver who is not an Operator sees the list but no way to add', async ({ browser, backend }) => {
   await backend.freshWatchlist('alice', [{ name: 'LangGraph', repo: 'langchain-ai/langgraph', our_version: '1.2.14' }])
   const context = await devContext(browser, 'bob')
