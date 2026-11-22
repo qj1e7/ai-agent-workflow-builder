@@ -215,6 +215,7 @@ def test_describing_how_things_work_is_no_claim(text: str):
         "I can check who has access in Entra.",
         "You can check for CVEs.",
         "I can watch PyPI packages too.",
+        "I can check any package registry for you.",
         "I can tell you when Java reaches end of life.",
         "I can list the exploited flaws.",
         "I can read GitHub issues.",
@@ -751,3 +752,15 @@ def test_about_keeps_nothing_without_facts_and_never_more_than_the_limit():
     many = '{"watchlist":[' + ",".join(f'{{"name":"S{n}"}}' for n in range(9)) + "]}"
     text = " ".join(f"S{n}" for n in range(9))
     assert len(about_of([f"S{n}" for n in range(9)], text, many)) == ABOUT_LIMIT
+
+
+def test_npm_s_own_registry_is_built_but_any_other_registry_is_not():
+    """Item 4 of the 18 Nov review dropped "registry" from the unbuilt words, which let "any
+    package registry" claims through. Only npm's registry is read (ADR 0025)."""
+    assert claims_only_what_is_built(
+        shown_of(said("I read versions from the npm registry.")), OPERATOR
+    )
+    assert not claims_only_what_is_built(
+        shown_of(said("I can read the PyPI and Docker registries.")), OPERATOR
+    )
+    assert not claims_only_what_is_built(shown_of(said("Any registry works.")), OPERATOR)
