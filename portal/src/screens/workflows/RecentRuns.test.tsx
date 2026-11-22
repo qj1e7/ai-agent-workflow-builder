@@ -45,6 +45,12 @@ describe('the recent runs of a workflow', () => {
     expect(said).not.toContain('could not be reached')
   })
 
+  it('dates a stopped run by when it last stopped, the time the Workflows row and Needs you give', () => {
+    const retried = { ...(failed as RunView), started_at: '2026-11-02T06:53:05Z', updated_at: '2026-11-04T04:06:57Z' }
+    expect(text(render([retried]))).toContain('Today, 12:06 ')
+    expect(text(render([retried]))).not.toContain('Mon 2 Nov')
+  })
+
   it('has one heading, Recent runs', () => {
     expect(render([done as RunView])).toContain('>Recent runs</h2>')
   })

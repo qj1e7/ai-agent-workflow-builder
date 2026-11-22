@@ -738,6 +738,17 @@ describe('the More actions menu', () => {
     expect(mainActionOf(AGENTS, BOB)).toBeNull()
   })
 
+  it.each([
+    ['needs a fix, so every run stops at its first block', { grade: 'needs_a_fix' }],
+    ['has its writes refused', { grade: 'writes_refused' }],
+    ['was deleted in n8n, so it won’t run again', { deleted_in_n8n_at: '2026-11-09T01:00:00Z' }],
+    ['could not move to its own n8n workflow, so the platform refuses the start', { move_refused: 'Not running. n8n did not take it yet.' }],
+  ] as const)('never leads with Run now on a workflow that %s, and keeps it where it was', (_, state) => {
+    const useCase = { ...AGENTS, ...state } as UseCaseView
+    expect(mainActionOf(useCase, ALICE)).toBeNull()
+    expect(menuActionsOf(useCase, ALICE)).toContain('run')
+  })
+
   it('is empty for an Approver who is not an Operator, and for the Software watchlist', () => {
     expect(menuActionsOf(AGENTS, BOB)).toEqual([])
     expect(menuActionsOf(WATCHLIST, ALICE)).toEqual([])

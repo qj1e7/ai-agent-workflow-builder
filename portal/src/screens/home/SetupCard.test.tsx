@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest'
 import created from '../../../../contracts/fixtures/builder/agent-use-case.off.created.json'
 import draftUseCase from '../../../../contracts/fixtures/builder/use-case.draft.json'
 import failure from '../../../../contracts/fixtures/runs/failure.json'
+import failedView from '../../../../contracts/fixtures/views/failure.final.json'
 import success from '../../../../contracts/fixtures/runs/success.json'
 import setupCard from '../../../../contracts/fixtures/planner/answer.setup_card.json'
 import setupCross from '../../../../contracts/fixtures/planner/answer.setup_card.cross.json'
@@ -14,7 +15,7 @@ import { keys } from '../../api/queries'
 import { createDevSession } from '../../api/session'
 import planUseOne from '../../../../contracts/fixtures/cards/plan.use-one.json'
 import statuses from '../../../../contracts/fixtures/watchlist/statuses.json'
-import type { Me, PlanOut, SetupCardReply, UseCaseCreated, UseCaseView, WatchlistView } from '../../api/types'
+import type { Me, PlanOut, RunView, SetupCardReply, UseCaseCreated, UseCaseView, WatchlistView } from '../../api/types'
 import type { Made, SetUp } from '../../api/workflowQueries'
 import { emptyModel, foldWire, type RunModel } from '../run/runModel'
 import { BuildingCard, type CardProps } from './Building'
@@ -36,6 +37,8 @@ const scope = session.cacheScope()
 
 interface World {
   readonly useCase?: UseCaseView
+  /** The test run as GET /api/v1/runs/{id} answers it. */
+  readonly run?: RunView
   /** The workflow's read failed. */
   readonly unread?: boolean
   readonly watched?: WatchlistView
@@ -46,9 +49,10 @@ interface World {
 
 const HELD: SetUp = { created: CREATED, at: Date.now() - 60_000, testRunId: null, testKey: 'k1', testAsked: null }
 
-function render(node: ReactNode, { useCase = DRAFT, setUp = HELD, kept, unread = false, watched, made }: World = {}): string {
+function render(node: ReactNode, { useCase = DRAFT, setUp = HELD, kept, unread = false, watched, made, run }: World = {}): string {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retryOnMount: false } } })
   queryClient.setQueryData(['me', scope], ALICE)
+  if (run) queryClient.setQueryData(keys.run(scope, run.run_id), run)
   if (unread) queryClient.getQueryCache().build(queryClient, { queryKey: keys.useCase(scope, useCase.use_case_id) }).setState({ status: 'error', error: new Error('no answer'), fetchStatus: 'idle' })
   else queryClient.setQueryData(keys.useCase(scope, useCase.use_case_id), useCase)
   if (setUp) queryClient.setQueryData(keys.setUp(scope, CREATED.use_case_id), setUp)
@@ -205,12 +209,21 @@ describe('the set-up card after Set up', () => {
   })
 
   it('goes back to a Draft when the test run stopped, with why, Open and Test again', () => {
-    const stop = { at: '2026-11-04T02:14:13Z', what_happened: "GitHub didn't answer." }
-    const lastRun: UseCaseView['last_run'] = { run_id: 'run_01JB8', state: 'failed', at: '2026-11-04T02:13:00Z', test: true, declined_by: null, decline_reason: null, approved_by: [], proposed: 0, written: 0, tickets: false, you_can_decide: false, retryable: true, reason: 'AgentError', stop }
-    const html = building(stopped, { useCase: { ...DRAFT, last_run: lastRun } })
+    const html = building(stopped, { run: { ...(failedView as RunView), run_id: 'run_01JB8' } })
     expect(pill(html)).toBe('Draft')
     expect(text(html)).toContain("The test run stopped. GitHub didn't answer.")
     expect(buttons(html)).toEqual(['Open the test run', 'Test again'])
+  })
+
+  it('says why its own test run stopped, never the reason of another run the workflow had', () => {
+    const older = { at: '2026-11-03T02:14:13Z', what_happened: "Jira is not connected, so an agent couldn't read it." }
+    const lastRun: UseCaseView['last_run'] = { run_id: 'run_older', state: 'failed', at: '2026-11-03T02:13:00Z', test: true, declined_by: null, decline_reason: null, approved_by: [], proposed: 0, written: 0, tickets: false, you_can_decide: false, retryable: false, reason: 'AgentError', stop: older }
+    const own = building(stopped, { useCase: { ...DRAFT, last_run: lastRun }, run: { ...(failedView as RunView), run_id: 'run_01JB8' } })
+    expect(text(own)).toContain("The test run stopped. GitHub didn't answer.")
+    expect(text(own)).not.toContain('Jira is not connected')
+    const unread = building(stopped, { useCase: { ...DRAFT, last_run: lastRun } })
+    expect(text(unread), 'until its own run is read, only that it stopped').toContain('The test run stopped.')
+    expect(text(unread)).not.toContain('Jira is not connected')
   })
 
   it('says Test again when the platform would not start the test run', () => {

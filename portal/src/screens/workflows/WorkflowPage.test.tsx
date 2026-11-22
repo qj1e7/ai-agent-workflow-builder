@@ -413,7 +413,15 @@ describe('a workflow page', () => {
       expect(text(banner)).toBe('Needs a fix. Explain')
       expect(banner).toMatch(new RegExp(`href="/workflows/${held.use_case_id}/explain#flags"`))
       for (const finding of findings) expect(text(banner)).not.toContain(finding)
+      const explains = [...mainOf(render({ me, useCase: held })).matchAll(/<a\b[^>]*>([\s\S]*?)<\/a>/g)].filter((m) => text(m[1] ?? '').startsWith('Explain'))
+      expect(explains, 'one Explain on the page: the banner’s').toHaveLength(1)
     }
+  })
+
+  it('keeps Run now in More actions, never the main button, on a workflow with no schedule that needs a fix', () => {
+    const fix = { ...AGENTS, version: 2, grade: 'needs_a_fix', findings: ['n8n does not keep its test runs.'] } as UseCaseView
+    expect(buttons(render({ useCase: fix }))).not.toContain('Run now')
+    expect(mainOf(render({ useCase: fix }))).not.toMatch(/_primary_[^>]*>(<svg[\s\S]*?<\/svg>)?Run now/)
   })
 
   it('goes back to the list', () => {

@@ -239,6 +239,12 @@ describe('each item in words', () => {
     })
   })
 
+  it('falls back to the troubleshooter’s explanation against a platform that does not send the sentence yet, never “undefined”', () => {
+    const older = { ...STOP, what_happened: undefined }
+    const why = wordsOf({ ...stopped, item: older } as unknown as Need, NOW).why
+    expect(why).toBe('An agent could not finish its work. Retry the run. If it fails again, check whether that service is up.')
+  })
+
   it('never uses the retired names in the troubleshooter’s words', () => {
     const unbound = { ...stopped, item: { ...STOP, what_happened: 'The agents proposed an action this use case cannot carry out.' } } as Need
     expect(wordsOf(unbound, NOW).why).toMatch(/^The agents proposed an action this workflow cannot carry out\./)

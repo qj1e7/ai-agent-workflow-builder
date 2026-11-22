@@ -73,6 +73,13 @@ describe('the workflow page’s banner for a graded version', () => {
       expect(bannerOf(facts({ ...offZone, schedule: { ...singapore, time_zone: 'Europe/London' } })).action, 'on the team’s zone, the fix is elsewhere').toEqual({ kind: 'undo', to: 3, inUse: 4 })
     })
 
+    it('never offers Save the schedule again on a workflow made in n8n, whose schedule the platform won’t save, and falls back to Undo or Explain', () => {
+      setTeamZone('Europe/London')
+      const made = { ...offZone, made_in_n8n_by: 'per_dana' } as UseCaseView
+      expect(bannerOf(facts(made))).toEqual({ tone: 'bad', text: 'Needs a fix.', action: { kind: 'undo', to: 3, inUse: 4 } })
+      expect(bannerOf(facts({ ...made, version: 1 })).action).toEqual({ kind: 'explain', useCaseId: on.use_case_id })
+    })
+
     it('draws Save the schedule again as the main button', () => {
       const html = renderToStaticMarkup(<StatusBanner banner={{ tone: 'bad', text: 'x', action: { kind: 'resave', day: 'monday', at: '09:00' } }} resuming={false} onResume={() => undefined} />)
       expect(html).toMatch(/_primary_[^>]*>Save the schedule again/)

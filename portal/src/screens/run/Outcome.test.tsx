@@ -6,7 +6,7 @@ import { NOT_YET_NO_MODEL, OPERATORS_REPORT, OPERATORS_RETRY, Troubleshooting } 
 import type { Phase } from './runModel'
 
 vi.mock('../home/HomeItem', () => ({ RetryButton: ({ label }: { label: string }) => <button type="button">{label}</button> }))
-vi.mock('./Report', () => ({ ReportToSupport: () => <div data-report="form">Report to support form</div> }))
+vi.mock('./Report', () => ({ ReportToSupport: ({ found }: { found: string }) => <div data-report="form" data-found={found}>Report to support form</div> }))
 
 const ADVICE = troubleshooting as TroubleshootingOut
 const nameOf = (id: string) => id
@@ -116,6 +116,15 @@ describe('the next step', () => {
       expect(html, 'no answer is given until the troubleshooter gives one').not.toContain('<dt>What happened</dt>')
       expect(text(html), 'the failure text stays behind Details').toContain('the workflow has no Start from the Portal block to start it')
     }
+  })
+
+  it('sends support what the troubleshooter found and the failure text, and never a guess from the reason code', () => {
+    const noStart = failed({ stage: 'pending', reason: 'DispatchFailed', retryable: false, message: 'n8n did not take the start: the workflow has no Start from the Portal block to start it' })
+    const sent = (advice: TroubleshootingOut | undefined) => (/data-found="([^"]*)"/.exec(draw(noStart, advice, OPERATOR, advice === undefined))?.[1] ?? '').replaceAll('&#x27;', "'")
+    const said = "The workflow has no Start from the Portal block, so the Portal couldn't start it."
+    const failureText = 'n8n did not take the start: the workflow has no Start from the Portal block to start it.'
+    expect(sent(withAnswers({ what_happened: said }, { possible: false, asks_again: false }))).toBe(`${said} ${failureText}`)
+    expect(sent(undefined), 'before the troubleshooter answers, only the failure text').toBe(failureText)
   })
 
   it('decides the same way when the troubleshooter has not answered yet', () => {
