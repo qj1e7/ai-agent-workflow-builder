@@ -33,5 +33,6 @@
   "after": null,
   "hour": null,
   "cant": null,
-  "holds_save": true
+  "holds_save": true,
+  "leaves_out_days": false
 }

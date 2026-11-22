@@ -136,7 +136,7 @@ export function openSay(reply: EditReply, view: EditView, every: Day | null): st
     case 'which':
       return view.choices.length > 0 ? 'Which workflow should I change?' : 'You have no workflows to change yet.'
     case 'cant':
-      if (view.cant === 'how_often') return howOftenWords(reply.parts.find((part) => part.reason === 'how_often')?.text ?? '')
+      if (view.cant === 'how_often') return howOftenWords(reply.parts.find((part) => part.reason === 'how_often')?.text ?? '', reply.leaves_out_days)
       if (view.target?.watchlist === true) return WATCHLIST_CANT
       return `From the chat I can only change when ${view.target?.name ?? 'a workflow'} runs.`
     case 'same': {

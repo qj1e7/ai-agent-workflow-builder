@@ -1383,11 +1383,20 @@ class EditAnswer(WireModel):
         description="True when the new schedule names two days, two times or two frequencies. "
         "Nothing can be saved until the person asks again without the part with a cross.",
     )
+    leaves_out_days: bool = Field(
+        default=False,
+        description="With how_often: True when the request leaves out a day, or words that look "
+        "like a day or time off, as 'skip Fridays', 'except PH' or 'except when I'm on leave', "
+        "which no schedule can hold. The Portal then says it can't leave days out, whatever words "
+        "the cross holds. False for a frequency it can't hold, as monthly.",
+    )
 
     @model_validator(mode="after")
     def _a_cant_proposes_nothing(self) -> EditAnswer:
         if self.cant is not None and (self.schedule is not None or self.holds_save):
             raise ValueError("An edit the chat can't make proposes no schedule")
+        if self.leaves_out_days and self.cant != "how_often":
+            raise ValueError("Only a schedule it can't hold leaves out days")
         return self
 
 

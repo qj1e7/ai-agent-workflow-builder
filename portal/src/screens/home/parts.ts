@@ -63,11 +63,14 @@ const NAMES_A_DAY = /\b(?:mon|tue|tues|wed|thu|thur|thurs|fri|sat|sun)(?:day)?s?
 const SAYS_HOW_OFTEN =
   /\b(?:every|each|other|once|twice|thrice|times|alternate|alternating|bi-?weekly|fortnightly|weekly|monthly|quarterly|yearly|annually|hourly|daily|month|week|weekends?|first|second|third|fourth|fifth|last|\d+(?:st|nd|rd|th)|to|through|thru|till|until)\b|[-\u2013\u2014]/i
 const STARTS_WITH_A_DAY = /^(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)s?\b/i
+const LEAVE_DAYS_OUT = 'I can’t leave days out of a schedule yet.'
 
-export function howOftenWords(text: string): string {
+/** `leavesOutDays` is the runtime saying the request leaves out a day or words that look like one, as “no PH”, which these words can’t all tell. */
+export function howOftenWords(text: string, leavesOutDays = false): string {
   const said = text.trim()
+  if (leavesOutDays) return LEAVE_DAYS_OUT
   if (said === '') return REASON_WORDS.how_often
-  if (LEAVES_OUT.test(said) || (NAMES_A_DAY.test(said) && !SAYS_HOW_OFTEN.test(said))) return 'I can’t leave days out of a schedule yet.'
+  if (LEAVES_OUT.test(said) || (NAMES_A_DAY.test(said) && !SAYS_HOW_OFTEN.test(said))) return LEAVE_DAYS_OUT
   // The whole phrase is their words, as a sentence: “Every other Friday” reads “every other Friday”, and a day stays a name.
   const inSentence = STARTS_WITH_A_DAY.test(said) ? said : `${said.charAt(0).toLowerCase()}${said.slice(1)}`
   return `I can’t run things ${inSentence} yet.`

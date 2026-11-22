@@ -366,13 +366,14 @@ def edit_of(read: TaskRead, text: str, facts: PlannerFacts | None) -> EditAnswer
     switch = _switch_of(text, names)
     if switch is not None:
         return switch(workflow_words=target, software=_software(read, text, target))
-    schedule, cant, clashes = _schedule_of(text, names)
+    schedule, cant, clashes, leaves_out_days = _schedule_of(text, names)
     return EditAnswer(
         workflow_words=target,
         software=_software(read, text, target),
         schedule=schedule,
         cant=cant,
         holds_save=bool(clashes) and cant is None,
+        leaves_out_days=leaves_out_days,
     )
 
 
@@ -655,19 +656,19 @@ def _unclear(answer: EditAnswer) -> bool:
 
 def _schedule_of(
     text: str, names: _Names
-) -> tuple[ScheduleChange | None, EditCant | None, list[Clash]]:
-    """The new schedule in the request's own words, in the schedule's terms. Any other change,
-    as "pause it" or "rename it", and no schedule at all, are a change the chat can't make yet. A
-    schedule it can't hold is a can't. Two days, two times or two frequencies are a clash, never
-    the first."""
+) -> tuple[ScheduleChange | None, EditCant | None, list[Clash], bool]:
+    """The new schedule in the request's own words, in the schedule's terms, and whether what it
+    can't hold leaves out days. Any other change, as "pause it" or "rename it", and no schedule
+    at all, are a change the chat can't make yet. A schedule it can't hold is a can't. Two days,
+    two times or two frequencies are a clash, never the first."""
     rest = _rest(text, names)
     if OTHER_CHANGES & {w for w, _, _ in _tokens(rest)}:
-        return None, "only_schedule", []
+        return None, "only_schedule", [], False
     if change_unheld(rest) is not None:
-        return None, "how_often", []
+        return None, "how_often", [], when_said(rest).left_out is not None
     clashes = clashes_in(rest)
     if clashes:
-        return None, None, clashes
+        return None, None, clashes, False
     day, at = said_schedule(rest)
     often = {OFTEN.get(w, w) for m in FREQUENCY.finditer(rest) for w in m.groups() if w}
     weekly = day is None and "week" in often
@@ -679,9 +680,9 @@ def _schedule_of(
     named = UNREAD_TIME.search(rest) is not None or bool(inexact_times(rest))
     unclear = at is None and hour is None and named
     if day is None and at is None and hour is None and not weekly and not unclear:
-        return None, "only_schedule", []
+        return None, "only_schedule", [], False
     change = ScheduleChange(day=_day(day), weekly=weekly, at=at, hour=hour, time_unclear=unclear)
-    return change, None, []
+    return change, None, [], False
 
 
 def _hour(hour: int) -> tuple[int | None, str | None]:
