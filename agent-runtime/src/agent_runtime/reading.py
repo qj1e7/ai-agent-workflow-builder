@@ -3325,11 +3325,12 @@ def _left_out_day_like(
         if word.kind == "while" and (fresh or covering) and time_off[n]:
             return words[cover].start, _last_time_off(words, n).end
         fresh = False
+        lead = words[cover] if covering else None
         if word.kind == "only" and word.mark == "" and n and words[n - 1].kind == "day":
-            return _from(words, n - 1).start, word.end
+            return (lead or _from(words, n - 1)).start, word.end
         named = _names_days(words, n) if word.low == "on" and not word.own else None
         if named is not None:
-            return word.start, _through(words, named).end
+            return (lead or word).start, _through(words, named).end
         trailed = _trails(words, n) if word.kind == "leaves" or word.low in LEAVES_BEFORE else None
         if trailed is not None:
             return trailed
@@ -3346,7 +3347,8 @@ def _left_out_day_like(
             return words[cover].start, _through(words, n).end
         if word.kind in ("leaves", "only"):
             covering = fresh = True
-            cover = n
+            paired = n > 0 and not word.mark and (words[n - 1].low, word.low) in LEAVE_OUT_PAIRS
+            cover = n - 1 if paired else n
     return None
 
 

@@ -769,11 +769,14 @@ def edit_marks(
             *([] if left_out(rest) else [m.span() for m in LEFT_OUT.finditer(text)]),
         ],
     )
-    return [
-        mark
-        for clause in _split(text, clauses, names)
-        for mark in _clause_marks(text, clause, edit)
-    ]
+    # What it can't hold may run on past a clause, as "except weekends and PH", and is one cross.
+    return list(
+        dict.fromkeys(
+            mark
+            for clause in _split(text, clauses, names)
+            for mark in _clause_marks(text, clause, edit)
+        )
+    )
 
 
 def _clause_marks(text: str, clause: Span, edit: _Edit) -> list[EditMark]:
@@ -803,9 +806,7 @@ def _clause_marks(text: str, clause: Span, edit: _Edit) -> list[EditMark]:
         if c.start < end and c.end > start
     ]
     if edit.often is not None and edit.often[0] < end and edit.often[1] > start:
-        marks.append(
-            EditMark(max(edit.often[0], start), min(edit.often[1], end), "cant", "how_often")
-        )
+        marks.append(EditMark(*edit.often, "cant", "how_often"))
     for other in edit.names.others(clause):
         bare = ARTICLE.match(text[other[0] : other[1]])
         at = other[0] + (bare.end() if bare else 0)
