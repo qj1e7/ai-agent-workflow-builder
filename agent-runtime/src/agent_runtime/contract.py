@@ -916,6 +916,12 @@ class PlannerFacts(WireModel):
         description="When the Software watchlist checks all its software. None when it is off "
         "or was not read, so a time asked for one software is a cross.",
     )
+    watchlist_project: str | None = Field(
+        default=None,
+        max_length=40,
+        description="The Jira project the Software watchlist raises its upgrade tickets in. None "
+        "when it was not read, so a ticket asked for in any named project is not its own.",
+    )
 
     def workflow_names(self) -> list[str]:
         """Every workflow's name the platform sent, those with a last run and the others."""

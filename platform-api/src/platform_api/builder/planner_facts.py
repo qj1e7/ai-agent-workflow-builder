@@ -200,6 +200,7 @@ class PlannerFactsReader:
             left_out_workflows=None if workflows is None else workflows.left_out_workflows,
             needs_you=await self._section("needs_you", self._read_needs_you(viewer)),
             watchlist_schedule=await self._section("schedule", self._read_schedule()),
+            watchlist_project=await self._section("project", self._read_project()),
         )
 
     async def _section[T](self, name: str, reading: Awaitable[T]) -> T | None:
@@ -224,6 +225,12 @@ class PlannerFactsReader:
         if view is None or view.schedule is None or view.state != "on":
             return None
         return WatchlistScheduleFact(day=view.schedule.day, at=view.schedule.at)
+
+    async def _read_project(self) -> str | None:
+        """The Jira project the Software watchlist raises its upgrade tickets in, paused or
+        not, so a ticket asked for in another project is never shown as its own."""
+        view = await self._watchlist.view()
+        return None if view is None else view.ticket_project
 
     async def _read_workflows(self, request: str) -> PlannerFacts:
         return workflows_facts((await self._workflows.list_use_cases()).use_cases, request)

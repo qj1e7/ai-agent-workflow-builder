@@ -530,6 +530,9 @@ class PlannerFacts(WireModel):
     )
     needs_you: NeedsYouFact | None = None
     watchlist_schedule: WatchlistScheduleFact | None = None
+    watchlist_project: str | None = Field(
+        default=None, max_length=40, exclude_if=lambda project: project is None
+    )
 
 
 class PreviousTurn(WireModel):

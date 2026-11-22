@@ -3105,6 +3105,20 @@
           "default": null,
           "title": "Watchlist"
         },
+        "watchlist_project": {
+          "anyOf": [
+            {
+              "maxLength": 40,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The Jira project the Software watchlist raises its upgrade tickets in. None when it was not read, so a ticket asked for in any named project is not its own.",
+          "title": "Watchlist Project"
+        },
         "watchlist_schedule": {
           "anyOf": [
             {
