@@ -16,7 +16,7 @@ import statuses from '../../../../contracts/fixtures/watchlist/statuses.json'
 import { ApiProvider } from '../../api/context'
 import { keys } from '../../api/queries'
 import { createDevSession } from '../../api/session'
-import type { EditReply, Me, UseCaseView, VersionView, WatchlistView } from '../../api/types'
+import type { EditReply, Me, PartView, UseCaseView, VersionView, WatchlistView } from '../../api/types'
 import { ApiError, type ApiClient } from '../../api/client'
 import { chatScheduleOptions, chatWatchlistOptions, undoOptions } from '../../api/workflowQueries'
 import { CHANGED_SINCE_OPENED } from '../workflows/workflow'
@@ -184,6 +184,16 @@ describe('the edit card while it proposes a change', () => {
 
   it('says a day left out of a schedule plainly', () => {
     expect(sentence(draw(editHowOften as EditReply))).toBe('I can’t leave days out of a schedule yet.')
+  })
+
+  it('says a day left out plainly when the runtime says the change leaves out days, whatever its cross holds', () => {
+    const cross = (text: string, reason: PartView['reason']): PartView => ({ text, mark: 'cant', reason, note: null, choices: [] })
+    const leaves = (parts: PartView[]) => ({ ...(editHowOften as EditReply), leaves_out_days: true, parts }) as EditReply
+    expect(sentence(draw(leaves([cross('no PH', 'how_often')])))).toBe('I can’t leave days out of a schedule yet.')
+    expect(sentence(draw(leaves([cross('w/o PH', 'how_often')])))).toBe('I can’t leave days out of a schedule yet.')
+    expect(sentence(draw(leaves([cross('skip the EOM close tickets', 'only_schedule')])))).toBe('I can’t leave days out of a schedule yet.')
+    const monthly = { ...(editHowOften as EditReply), leaves_out_days: false, parts: [cross('monthly', 'how_often')] } as EditReply
+    expect(sentence(draw(monthly))).toBe('I can’t run things monthly yet.')
   })
 
   it('says a workflow already runs so, with nothing to save', () => {

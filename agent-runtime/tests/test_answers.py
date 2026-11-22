@@ -4,6 +4,7 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
 from agent_runtime.abilities import VULNERABILITIES_PLANNED
 from agent_runtime.answers import (
@@ -3268,10 +3269,40 @@ def test_an_edit_that_names_a_day_but_not_to_run_on_it_is_never_made(task: str, 
 def test_an_edit_beside_a_day_like_word_it_leaves_out_is_never_made(said: str):
     """Before, "make the morning check run at 10am, except PH" moved it to 10:00 and kept every
     day, so it still ran on PH. A day-like word left out is a schedule it can't hold, as "skip
-    Fridays" is."""
+    Fridays" is, and the answer says it leaves out days, so the Portal says so whatever the words
+    are."""
     fields = read(asks_about="change", workflow_words="morning check")
     answer = edited(fields, f"make the morning check run at 10am, {said}")
-    assert (answer.schedule, answer.cant) == (None, "how_often")
+    assert (answer.schedule, answer.cant, answer.leaves_out_days) == (None, "how_often", True)
+
+
+@pytest.mark.parametrize(
+    ("task", "leaves_out_days"),
+    [
+        ("make the morning check run every other Friday", False),
+        ("make the morning check run monthly", False),
+        ("make the morning check skip Fridays", True),
+        ("make the morning check run every weekday except Friday", True),
+        ("make it run at 10am except PH", True),
+        ("make it run at 10am, no PH", True),
+        ("make the morning check run at 10am, skip the EOM close tickets", True),
+    ],
+)
+def test_an_edit_it_cant_make_says_whether_it_leaves_out_days(task: str, leaves_out_days: bool):
+    """The Portal says "I can't leave days out of a schedule yet." when the answer says so, and
+    words a frequency in the person's own words otherwise. Before, it guessed from the cross's
+    words, so "no PH" read "I can't run things no PH yet.", and a cross another reason held, as
+    "skip the EOM close tickets", left "I can't run things that often yet."."""
+    fields = read(
+        asks_about="change", workflow_words="morning check" if "morning" in task else None
+    )
+    answer = edited(fields, task)
+    assert (answer.cant, answer.leaves_out_days) == ("how_often", leaves_out_days)
+
+
+def test_only_a_schedule_it_cant_hold_leaves_out_days():
+    with pytest.raises(ValidationError):
+        EditAnswer(leaves_out_days=True)
 
 
 @pytest.mark.parametrize(

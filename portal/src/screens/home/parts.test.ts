@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import editCant from '../../../../contracts/fixtures/planner/answer.edit.cant.json'
 import editUnclear from '../../../../contracts/fixtures/planner/answer.edit.unclear.json'
 import type { PartView, PlannerReply } from '../../api/types'
-import { askOfCross, crossWords, leftoverParts, partMark } from './parts'
+import { askOfCross, crossWords, howOftenWords, leftoverParts, partMark } from './parts'
 
 const crossed = (text: string, reason: PartView['reason']): PartView => ({ text, mark: 'cant', reason, note: null, choices: [] })
 
@@ -62,6 +62,14 @@ describe('the edit answer’s parts', () => {
     expect(crossWords(crossed('Every other Friday at 9am', 'how_often'))).toBe('I can’t run things every other Friday at 9am yet.')
     expect(crossWords(crossed('Fridays every other week', 'how_often'))).toBe('I can’t run things Fridays every other week yet.')
     expect(crossWords(crossed('Every weekday except Friday at 9am', 'how_often'))).toBe('I can’t leave days out of a schedule yet.')
+  })
+
+  it('says a day left out plainly whatever words hold it, once the runtime says the change leaves out days', () => {
+    for (const words of ['no PH', 'sans PH', 'w/o PH', 'ex PH', 'exc. PH', 'won’t run on PH', 'on leave', '']) {
+      expect(howOftenWords(words, true)).toBe('I can’t leave days out of a schedule yet.')
+    }
+    expect(howOftenWords('every other Friday', false)).toBe('I can’t run things every other Friday yet.')
+    expect(howOftenWords('', false)).toBe('I can’t run things that often yet.')
   })
 
   it('leaves an edit’s parts to the edit card, which marks every one of them itself', () => {
