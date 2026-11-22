@@ -2,7 +2,7 @@ import { Canvas } from '../../ui/Canvas'
 import { IconCheck, IconX } from '../../ui/icons'
 import { useSetUp } from '../../api/workflowQueries'
 import { canvasOf, checksOf, shownOf, statusOf, testStatus } from './build'
-import { DraftPill, TestRun, useBuilt } from './Building'
+import { DraftPill, TestRun, useBuilt, useWhyTestStopped } from './Building'
 import runStyles from '../run/RunPage.module.css'
 import styles from './SetupCard.module.css'
 
@@ -20,6 +20,7 @@ export function BuildPanel({ id }: { id: string }) {
 
 function BuildView({ id, test }: { id: string; test: Parameters<typeof useBuilt>[1] }) {
   const { setUp, useCase, replay, stage } = useBuilt(id, test)
+  const whyStopped = useWhyTestStopped(setUp?.testRunId ?? null, test)
   if (!setUp) return <p className="muted">This set-up was made in an earlier visit. Open the workflow from Workflows to see it.</p>
   const { created } = setUp
   const inN8n = (created.n8n_workflow_id ?? null) !== null
@@ -29,7 +30,7 @@ function BuildView({ id, test }: { id: string; test: Parameters<typeof useBuilt>
   const on = stage.kind === 'on'
   const canvas = canvasOf(blocks, log, shown, test, on)
   const told = test ? test.chat.flatMap((item) => (item.kind === 'told' ? [item.line] : [])) : []
-  const checks = checksOf(replay.lines, test ? testStatus(test, useCase?.last_run?.stop?.what_happened ?? null) : null, told)
+  const checks = checksOf(replay.lines, test ? testStatus(test, whyStopped) : null, told)
   return (
     <div className={runStyles['panelView']}>
       <div className={runStyles['head']}>

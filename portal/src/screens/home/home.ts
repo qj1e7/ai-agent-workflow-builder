@@ -260,7 +260,7 @@ function stoppedWords(item: StoppedItem, now: Date, modelOff: boolean): ItemWord
     meta: runWhen(item.stopped_at, now),
     lines: [],
     note: item.retryable && modelOff ? CAN_RUN_AGAIN : null,
-    why: withCurrentNames(`${item.what_happened} ${item.advice.suggestion}`),
+    why: withCurrentNames(`${item.what_happened ?? item.advice.explanation} ${item.advice.suggestion}`),
   }
 }
 

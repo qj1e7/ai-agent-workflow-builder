@@ -130,7 +130,7 @@ function useLastCheckDeclined(view: WatchlistView | null, nameOf: (id: string) =
 
 function LastCheckStopped({ last }: { last: LastCheckView }) {
   const run = useRun(last.run_id)
-  const whyStopped = run.data?.state === 'failed' ? run.data.what_happened : null
+  const whyStopped = run.data?.state === 'failed' ? (run.data.what_happened ?? null) : null
   return (
     <div className={styles['stopped']}>
       <p>

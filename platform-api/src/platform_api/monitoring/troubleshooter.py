@@ -63,7 +63,7 @@ ADVICE: Mapping[FailureReason, Advice] = {
         "the approval records.",
     ),
     "UnboundIntent": Advice(
-        explanation="The agents proposed an action this use case cannot carry out.",
+        explanation="The agents proposed an action this workflow cannot carry out.",
         likely_cause="The template has no connector binding for that kind of action.",
         suggested_action="ask_maintainer",
         suggestion="Ask a maintainer to add the binding to the template, then start a new run.",

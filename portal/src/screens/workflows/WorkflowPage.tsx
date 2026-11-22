@@ -351,14 +351,14 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
                 Run now
               </Button>
             ) : null}
-            <ExplainButton useCaseId={id} name={useCase.name} />
+            {banner.action?.kind === 'explain' ? null : <ExplainButton useCaseId={id} name={useCase.name} />}
             {mayPause ? (
               <Button icon={IconPause} data-place={placeOf('pause')} loading={move.isPending} onClick={() => pauseOrResume('pause')}>
                 Pause
               </Button>
             ) : null}
             {openable ? <OpenInN8nEditor useCaseId={id} hold={openable} variant="secondary" /> : null}
-            {items.length > 0 ? <ActionMenu items={items} buttonRef={moreButton} busy={runNow.pending} place={placeOf('run')} /> : null}
+            {items.length > 0 ? <ActionMenu items={items} buttonRef={moreButton} busy={!runNowLeads && runNow.pending} place={placeOf('delete')} /> : null}
           </div>
         </>
       )}

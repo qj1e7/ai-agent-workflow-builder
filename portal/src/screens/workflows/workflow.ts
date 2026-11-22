@@ -6,7 +6,7 @@ import { agentIdentity } from '../../ui/agents'
 import { andList, declinedOfSteps, declinedRecord, runPill, scheduleShort, stageWords, type NameOf, type NextRun, type StageFacts } from '../run/words'
 import { faceId } from '../agents/agents'
 import { heldWords, repeatWords } from '../software/software'
-import { DELETED_IN_N8N, gradePill, madeWords, refusedBanner, UNKNOWN_PUBLISHER } from './n8nChange'
+import { DELETED_IN_N8N, gradePill, madeWords, needsFix, refusedBanner, UNKNOWN_PUBLISHER } from './n8nChange'
 import { lineWhen, nextRunAt, runWhen, scheduleZoneName, teamZone, zoneWords } from './times'
 
 export type Tone = 'ok' | 'wait' | 'bad' | 'new'
@@ -95,7 +95,7 @@ export function stageOfRun(run: RunView): StageFacts {
     case 'rejected':
       return { ...none, state: run.state, declinedBy: declinedOfSteps(run.approval.steps)?.by ?? run.rejected_by }
     case 'failed':
-      return { ...none, state: run.state, whyStopped: run.what_happened }
+      return { ...none, state: run.state, whyStopped: run.what_happened ?? null }
     case 'skipped':
       return { ...none, state: run.state }
     case 'expired':
@@ -120,8 +120,12 @@ function lastRunWhat(last: LastRun, nameOf: NameOf, room: Room): string {
 
 export const NO_RUNS = 'No runs yet'
 
-/** When the newest run last moved: the time it stopped, which Needs you gives too, or the time it started. */
+/**
+ * The one rule for a run's time in a list or a line: a stopped run shows when it last stopped, the time Needs you gives, and any other run
+ * when it started. The Workflows row, the banner, the side panel and Recent runs all read it. The run page keeps its start in its title.
+ */
 const lastRunAt = (last: LastRun): string => last.stop?.at ?? last.at
+export const runAt = (run: RunView): string => (run.state === 'failed' ? run.updated_at : run.started_at)
 
 /** "today", or the day's date such as "Mon 26 Oct". */
 const dayOf = (iso: string, now: Date): string => {
@@ -335,11 +339,16 @@ export function undoProblem(version: number, name: string, error: unknown, words
   return `${start} ${words(error)}`
 }
 
-type ActionFacts = Pick<UseCaseView, 'template' | 'state' | 'schedule'> & Partial<Pick<UseCaseView, 'start_refused' | 'made_in_n8n_by'>>
+type ActionFacts = Pick<UseCaseView, 'template' | 'state' | 'schedule'> &
+  Partial<Pick<UseCaseView, 'start_refused' | 'made_in_n8n_by' | 'grade' | 'deleted_in_n8n_at' | 'move_refused'>>
 
-/** The page's own main button: Run now for a workflow with no schedule, since pressing it is the only way that workflow runs. */
+/**
+ * The page's own main button: Run now for a workflow with no schedule, since pressing it is the only way that workflow runs. Never for one
+ * whose run can't go as asked: a version that needs a fix or has its writes refused, one deleted in n8n, or one that couldn't move to n8n.
+ */
 export function mainActionOf(useCase: ActionFacts, viewer: Viewer): 'run' | null {
-  return !useCase.schedule && controlsOf(useCase, viewer).includes('run') ? 'run' : null
+  const runs = !useCase.schedule && !needsFix(useCase) && !useCase.deleted_in_n8n_at
+  return runs && controlsOf(useCase, viewer).includes('run') ? 'run' : null
 }
 
 /** What the More actions menu holds, in order. Delete is last. A workflow with none shows no menu. */
@@ -520,8 +529,8 @@ export interface Banner {
 }
 
 interface BannerFacts {
-  readonly useCase: Pick<UseCaseView, 'use_case_id' | 'state' | 'next_run_at' | 'schedule' | 'last_run'> &
-    Partial<Pick<UseCaseView, 'grade' | 'blocks' | 'deleted_in_n8n_at' | 'version' | 'move_refused' | 'held_in_n8n'>>
+  readonly useCase: Pick<UseCaseView, 'use_case_id' | 'template' | 'state' | 'next_run_at' | 'schedule' | 'last_run'> &
+    Partial<Pick<UseCaseView, 'grade' | 'blocks' | 'deleted_in_n8n_at' | 'version' | 'move_refused' | 'held_in_n8n' | 'made_in_n8n_by'>>
   readonly viewer: Viewer
   readonly now: Date
   readonly nameOf: NameOf
@@ -543,7 +552,7 @@ const NEEDS_A_FIX = `${gradePill('needs_a_fix').label}.`
 function needsFixOf(useCase: BannerFacts['useCase'], viewer: Viewer, version: number): Banner {
   const schedule = useCase.schedule
   const mayPublish = viewer.operator && !useCase.held_in_n8n
-  if (mayPublish && schedule && schedule.time_zone !== teamZone()) return { tone: 'bad', text: `${NEEDS_A_FIX} ${OWNER_WARNING}`, action: { kind: 'resave', day: schedule.day, at: schedule.at } }
+  if (mayPublish && mayChangeSchedule(useCase, viewer) && schedule && schedule.time_zone !== teamZone()) return { tone: 'bad', text: `${NEEDS_A_FIX} ${OWNER_WARNING}`, action: { kind: 'resave', day: schedule.day, at: schedule.at } }
   if (mayPublish && version > 1) return { tone: 'bad', text: NEEDS_A_FIX, action: { kind: 'undo', to: version - 1, inUse: version } }
   return { tone: 'bad', text: NEEDS_A_FIX, action: { kind: 'explain', useCaseId: useCase.use_case_id } }
 }

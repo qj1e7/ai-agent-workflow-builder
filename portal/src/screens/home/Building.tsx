@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useErrorWords } from '../../api/context'
-import { useUseCase } from '../../api/queries'
+import { useRun, useUseCase } from '../../api/queries'
 import { useSetUp, useStartTest, useTestRunMarks, useTurnOn, type SetUp } from '../../api/workflowQueries'
 import type { UseCaseView } from '../../api/types'
 import { AgentFace } from '../../ui/AgentFace'
@@ -42,6 +42,23 @@ export function useReplay(setUp: SetUp | undefined): Replay {
     return () => clearTimeout(timer)
   }, [replay.next])
   return replay
+}
+
+/**
+ * Why the test run stopped, in the AI troubleshooter's sentence the platform gives with that run, so the card never says another run's
+ * reason. It is read once the run's events say it stopped, and read again until the run's view has caught up with those events.
+ */
+export function useWhyTestStopped(runId: string | null, test: RunModel | null): string | null {
+  const stopped = runId !== null && test !== null && test.phase.state === 'failed'
+  const read = useRun(stopped ? runId : '')
+  const view = read.data
+  const seen = test?.seq ?? 0
+  const behind = stopped && view !== undefined && view.last_seq < seen
+  const { refetch } = read
+  useEffect(() => {
+    if (behind) void refetch()
+  }, [behind, seen, refetch])
+  return stopped && view?.state === 'failed' && !behind ? (view.what_happened ?? null) : null
 }
 
 function Followed({ runId, children }: { runId: string; children: (test: RunModel | null) => ReactNode }) {
@@ -166,7 +183,8 @@ export function BuildingCard({ useCaseId, title, parts, newAgents, draftKept, te
   const stations = stationsOf(test ?? emptyModel, planOf(useCase), useCase?.schedule ? scheduleShort(useCase.schedule) : 'Start')
   const line = buildLine(stations, log, shown, test !== null && test.seq > 0, stage.kind === 'on')
   const notes = notesOf(replay.lines)
-  const result = test ? testStatus(test, useCase?.last_run?.stop?.what_happened ?? null) : null
+  const whyStopped = useWhyTestStopped(runId, test)
+  const result = test ? testStatus(test, whyStopped) : null
 
   let status: ReactNode
   let actions: ReactNode

@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import type { ExplainFlag, ExplainSetting, ExplainTouch, Segment, WorkflowExplained } from '../../api/types'
 import { gradePill } from '../workflows/n8nChange'
 import { approvalGist, approvesGist, FLAGS_ANCHOR, flagsGist, segmentsOfText, settingsGist, stepsGist, touchesGist } from './explain'
@@ -120,6 +120,9 @@ interface ReportProps {
  * full page draw this one component. Everything under In short is code's own words. Settings opens by itself while an answer is needed.
  */
 export function Report({ report, code = false, onWording, rest = false, flagsOpen = false }: ReportProps) {
+  useEffect(() => {
+    if (flagsOpen) document.getElementById(FLAGS_ANCHOR)?.scrollIntoView({ block: 'start' })
+  }, [flagsOpen])
   const rewordedShown = report.reworded !== null && !code
   const thenGrade = report.then === null ? null : gradePill(report.then.grade).label
   return (
