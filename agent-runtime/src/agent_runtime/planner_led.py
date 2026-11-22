@@ -82,7 +82,7 @@ from agent_runtime.how_to import HOW_TO
 from agent_runtime.model_access import problem_for
 from agent_runtime.parts import locate, parts_of, with_which_software
 from agent_runtime.planner import plain, visible_words
-from agent_runtime.reading import SAID_LIMIT, clauses_of, how_often, polite, said_schedule
+from agent_runtime.reading import SAID_LIMIT, change_unheld, clauses_of, polite, said_schedule
 from agent_runtime.reply_guard import GuardCheck, about_of
 from agent_runtime.reply_verifier import VerifierFlag, verify
 from agent_runtime.summary import ChatFor
@@ -477,8 +477,9 @@ WEEKLY: Final = re.compile(r"\b(?:weekly|once\s+a\s+week|every\s+week|each\s+wee
 
 def _schedule_of(args: ChangeWorkflow, text: str) -> ScheduleChange | Invalid:
     """The schedule the call asks for, held to what `said_schedule` reads in the message alone,
-    and never one the workflow can't hold, as "every other Friday", made as a weekly one."""
-    if how_often(text) is not None:
+    and never one the workflow can't hold, as "every other Friday" made as a weekly one, or "make
+    it run at 10am except PH" made as every day at 10:00, as the edit chat holds it."""
+    if change_unheld(text) is not None:
         return Invalid(
             "The message asks for a schedule a workflow can't hold, such as every other week or "
             "monthly. Use reply, form answer, to say it can run every day, every weekday or once "

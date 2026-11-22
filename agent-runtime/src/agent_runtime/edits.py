@@ -42,6 +42,7 @@ from agent_runtime.reading import (
     inexact_times,
     left_out,
     said_schedule,
+    when_said,
 )
 
 type Span = tuple[int, int]
@@ -593,7 +594,8 @@ def change_clauses(text: str, names: _Names) -> list[Span]:
     A clause that names another workflow belongs to the change only when the target's own clause
     names no schedule, as "Make the morning check and the weekly summary run at 10am"."""
     unnamed = _blank(text, [*names.all, *(m.span() for m in TIME.finditer(text))])
-    leaves = left_out(text)
+    day_like = when_said(_blank(text, names.all)).left_out
+    leaves = [*left_out(text), *([day_like] if day_like else [])]
     found: list[Span] = []
     elsewhere: list[Span] = []
     for clause in _split(text, clauses_of(text), names):
@@ -612,7 +614,7 @@ def change_clauses(text: str, names: _Names) -> list[Span]:
             or any(a < clause[1] and clause[0] < b for a, b in leaves)
         ):
             # A day left out, as "except weekends", "but skip Fridays" or "Fridays off", is part
-            # of the change.
+            # of the change, and so is a word that looks like a day or time off, as "skip PH".
             found.append(clause)
     scheduled = any(SCHEDULE_SAID.search(text[a:b]) for a, b in found)
     return sorted(found + ([] if scheduled else elsewhere))
@@ -801,7 +803,9 @@ def _clause_marks(text: str, clause: Span, edit: _Edit) -> list[EditMark]:
         if c.start < end and c.end > start
     ]
     if edit.often is not None and edit.often[0] < end and edit.often[1] > start:
-        marks.append(EditMark(*edit.often, "cant", "how_often"))
+        marks.append(
+            EditMark(max(edit.often[0], start), min(edit.often[1], end), "cant", "how_often")
+        )
     for other in edit.names.others(clause):
         bare = ARTICLE.match(text[other[0] : other[1]])
         at = other[0] + (bare.end() if bare else 0)
