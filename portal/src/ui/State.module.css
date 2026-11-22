@@ -1,0 +1,64 @@
+/* The sketch's .pill: a shape and a word on a tint. */
+.pill {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  min-height: 26px;
+  padding: 0 10px 0 8px;
+  border-radius: 999px;
+  background: var(--off-bg);
+  color: var(--off-text);
+  font-size: var(--fs-small);
+  font-weight: var(--fw-semi);
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.pill > svg {
+  flex: none;
+}
+
+.pill[data-tone='ok'],
+.pill[data-tone='on'] {
+  background: var(--ok-bg);
+  color: var(--ok-text);
+}
+
+.pill[data-tone='run'] {
+  background: var(--run-bg);
+  color: var(--run-text);
+}
+
+.pill[data-tone='wait'] {
+  background: var(--wait-bg);
+  color: var(--wait-text);
+}
+
+.pill[data-tone='stop'] {
+  background: var(--stop-bg);
+  color: var(--stop-text);
+}
+
+/* The sketch's .dstate: the shape alone, in the status colour, 3:1 or more on white and on the page. */
+.mark {
+  flex: none;
+  color: var(--off);
+}
+
+.mark[data-tone='ok'],
+.mark[data-tone='on'] {
+  color: var(--ok);
+}
+
+.mark[data-tone='run'] {
+  color: var(--run);
+}
+
+.mark[data-tone='wait'] {
+  color: var(--wait-line);
+}
+
+.mark[data-tone='stop'] {
+  color: var(--stop);
+}

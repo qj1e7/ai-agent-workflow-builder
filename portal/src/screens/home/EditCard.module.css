@@ -13,7 +13,7 @@
 .was {
   color: var(--muted);
   font-weight: 400;
-  text-decoration-color: var(--rail);
+  text-decoration-color: var(--line-strong);
 }
 
 .arrow::before {

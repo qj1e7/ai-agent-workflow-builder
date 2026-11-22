@@ -13,13 +13,13 @@
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-3) var(--gutter);
-  border-bottom: 1px solid var(--line);
-  background: var(--mist);
+  border-bottom: 1px solid var(--line-strong);
+  background: var(--sunk);
 }
 
 .banner > p {
   flex: 1;
   min-width: 240px;
   margin: 0;
-  font-weight: 560;
+  font-weight: var(--fw-semi);
 }

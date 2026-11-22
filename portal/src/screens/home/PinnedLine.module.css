@@ -55,7 +55,7 @@
   font-weight: 600;
   white-space: nowrap;
   text-decoration: underline;
-  text-decoration-color: var(--rail);
+  text-decoration-color: var(--line-strong);
   text-underline-offset: 3px;
 }
 

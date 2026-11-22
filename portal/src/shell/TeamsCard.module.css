@@ -4,16 +4,16 @@
 
 .heading {
   margin-top: 4px;
-  font-size: 0.875rem;
-  font-weight: 700;
+  font-size: var(--fs-small);
+  font-weight: var(--fw-bold);
 }
 
 .block [data-color='good'] {
-  color: var(--green-ink);
+  color: var(--ok-text);
 }
 
 .block [data-color='attention'] {
-  color: var(--red-ink);
+  color: var(--stop-text);
 }
 
 .actions {

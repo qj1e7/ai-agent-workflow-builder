@@ -11,10 +11,10 @@
   display: grid;
   min-width: 220px;
   padding: 6px;
-  border: 1px solid var(--hair);
-  border-radius: var(--r-card);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
   background: var(--surface);
-  box-shadow: var(--float);
+  box-shadow: var(--shadow-3);
   animation: menu-in var(--dur-small) var(--ease-out);
 }
 
@@ -26,11 +26,11 @@
   min-height: 44px;
   padding: 0 12px;
   border: 0;
-  border-radius: var(--r-ctl);
+  border-radius: var(--r-sm);
   background: none;
   color: var(--ink);
   font: inherit;
-  font-weight: 600;
+  font-weight: var(--fw-semi);
   text-align: left;
   cursor: pointer;
 }
@@ -41,13 +41,13 @@
 }
 
 .danger {
-  color: var(--red-ink);
+  color: var(--stop-text);
 }
 
 .rule {
   margin: 6px 0;
   border: 0;
-  border-top: 1px solid var(--rule);
+  border-top: 1px solid var(--line);
 }
 
 @media (max-width: 600px) {

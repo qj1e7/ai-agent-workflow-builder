@@ -737,7 +737,7 @@ describe('the run card: the AI troubleshooter’s answer that moves with the run
       </QueryClientProvider>,
     )
   }
-  const pill = (html: string) => /<span class="[^"]*pill[^"]*"[^>]*>([^<]*)<\/span>/.exec(html)?.[1]
+  const pill = (html: string) => /<span class="[^"]*pill[^"]*"[^>]*>(?:<svg[\s\S]*?<\/svg>)?([^<]*)<\/span>/.exec(html)?.[1]
   const labels = (html: string) => [...html.matchAll(/<dt>([^<]*)<\/dt>/g)].map((match) => match[1])
 
   it('stopped: the head and its pill, the line, the three answers, and Open and Retry', () => {

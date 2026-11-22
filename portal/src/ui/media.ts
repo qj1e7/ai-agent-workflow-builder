@@ -14,5 +14,5 @@ export function useMediaQuery(query: string): boolean {
   )
 }
 
-/** The one breakpoint (spec 3.4): at 900 px and narrower the rail is a bar across the top and the side panel covers the window. */
+/** At 900 px and narrower the side panel covers the window (ADR 0043). The rail turns into a bar at 860 px, in its own stylesheet (ADR 0052). */
 export const NARROW = '(max-width: 900px)'

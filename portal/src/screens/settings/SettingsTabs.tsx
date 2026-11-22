@@ -3,6 +3,7 @@ import { isOperator } from '../../api/me'
 import { useMe, useModelSettings } from '../../api/queries'
 import { useConnections } from '../../api/capabilityQueries'
 import { useConfirmations } from '../../api/settingsQueries'
+import { Tabs } from '../../ui/Tabs'
 import { HowItWorksTab } from '../agents/HowItWorksTab'
 import { ConnectionsTab } from './ConnectionsTab'
 import { connectionNeedsYou } from './connections'
@@ -32,18 +33,26 @@ export function SettingsTabs({ now = new Date() }: { now?: Date }) {
   const attention = useNeedsAttention()
   return (
     <>
-      <div className={styles['tabs']} role="group" aria-label="Settings sections">
-        {settingsTabsFor(operator).map(({ id, label }) => (
-          <button key={id} type="button" aria-pressed={tab === id} onClick={() => setParams(id === 'connections' ? {} : { tab: id }, { replace: true })}>
-            {label}
-            {attention[id] ? (
+      <div className={styles['tabs']}>
+        <Tabs
+          label="Settings sections"
+          tabs={settingsTabsFor(operator).map(({ id, label }) => ({
+            id,
+            label: (
               <>
-                <span className={styles['dot']} aria-hidden="true" />
-                <span className="visually-hidden"> (needs you)</span>
+                {label}
+                {attention[id] ? (
+                  <>
+                    <span className={styles['dot']} aria-hidden="true" />
+                    <span className="visually-hidden"> (needs you)</span>
+                  </>
+                ) : null}
               </>
-            ) : null}
-          </button>
-        ))}
+            ),
+          }))}
+          current={tab}
+          onPick={(id) => setParams(id === 'connections' ? {} : { tab: id }, { replace: true })}
+        />
       </div>
       {tab === 'connections' ? <ConnectionsTab now={now} /> : tab === 'model' ? <ModelTab /> : tab === 'how' ? <HowItWorksTab now={now} /> : <PeopleTab me={me} />}
     </>

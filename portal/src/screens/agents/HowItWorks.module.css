@@ -1,31 +1,6 @@
+/* Space under the tab bar, before the section it shows. */
 .tabs {
-  display: inline-flex;
-  flex-wrap: wrap;
-  max-width: 100%;
   margin-bottom: var(--space-5);
-  padding: 3px;
-  gap: 2px;
-  border: 1px solid var(--hair);
-  border-radius: var(--r-ctl);
-  background: var(--sunk);
-}
-
-.tabs button {
-  min-height: 44px;
-  padding: 0 var(--space-4);
-  border: 0;
-  border-radius: var(--r-ctl);
-  background: none;
-  color: var(--muted);
-  font: inherit;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.tabs button[aria-pressed='true'] {
-  background: var(--surface);
-  color: var(--ink);
-  box-shadow: 0 0 0 1px var(--hair);
 }
 
 .count {
@@ -100,7 +75,7 @@
 
 @media (hover: hover) and (pointer: fine) {
   .tile:hover {
-    border-color: var(--rail);
+    border-color: var(--line-strong);
   }
 }
 

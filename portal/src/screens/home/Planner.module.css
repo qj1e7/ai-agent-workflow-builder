@@ -105,7 +105,7 @@
   align-items: center;
   gap: 8px;
   padding: 6px 6px 6px 14px;
-  border: 1.5px solid var(--rail);
+  border: 1.5px solid var(--line-strong);
   border-radius: 12px;
   background: var(--surface);
   transition: border-color var(--dur-small) ease;
@@ -116,8 +116,10 @@
   border-radius: 14px;
 }
 
+/* The sketch's focus on the box: its edge turns ink inside a 3 px halo. */
 .composer:focus-within {
   border-color: var(--ink);
+  box-shadow: 0 0 0 3px var(--focus-halo);
 }
 
 .composer textarea {
@@ -160,7 +162,7 @@
   cursor: pointer;
   transition:
     background-color var(--dur-press) ease,
-    transform var(--dur-press) var(--ease-out);
+    scale var(--dur-press) var(--ease-out);
 }
 
 .composer.fresh .send {
@@ -168,7 +170,7 @@
 }
 
 .send:active:not([aria-disabled='true']) {
-  transform: scale(0.95);
+  scale: var(--press-scale);
 }
 
 .send[aria-disabled='true'] {
@@ -184,7 +186,7 @@
 }
 
 .problem {
-  color: var(--red);
+  color: var(--stop-text);
   font-size: 0.9375rem;
   text-align: left;
 }
@@ -198,7 +200,7 @@
 .chip {
   min-height: 36px;
   padding: 5px 13px;
-  border: 1px solid var(--rail);
+  border: 1px solid var(--line-strong);
   border-radius: 999px;
   background: var(--surface);
   color: var(--ink);
@@ -210,11 +212,11 @@
   cursor: pointer;
   transition:
     border-color var(--dur-press) ease,
-    transform var(--dur-press) var(--ease-out);
+    scale var(--dur-press) var(--ease-out);
 }
 
 .chip:active {
-  transform: scale(0.97);
+  scale: var(--press-scale);
 }
 
 .chip[aria-disabled='true'] {

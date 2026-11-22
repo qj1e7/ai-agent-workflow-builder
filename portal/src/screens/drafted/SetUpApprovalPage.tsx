@@ -100,7 +100,7 @@ function Decide({ view }: { view: SetUpApprovalView }) {
         </div>
       ) : (
         <div className={styles['foot']}>
-          <Button variant="approve" loading={decide.isPending} onClick={() => send({ verdict: 'approve', digest: view.digest })}>
+          <Button variant="primary" loading={decide.isPending} onClick={() => send({ verdict: 'approve', digest: view.digest })}>
             Approve
           </Button>
           <Button onClick={() => setDeclining(true)}>Decline</Button>

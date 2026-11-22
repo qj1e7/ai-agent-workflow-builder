@@ -76,7 +76,7 @@
 }
 
 .bad {
-  color: var(--red);
+  color: var(--stop-text);
 }
 
 .tool,
@@ -343,7 +343,7 @@
   font-size: 0.9rem;
   font-weight: 600;
   text-decoration: underline;
-  text-decoration-color: var(--rail);
+  text-decoration-color: var(--line-strong);
   text-underline-offset: 3px;
   cursor: pointer;
   transition:

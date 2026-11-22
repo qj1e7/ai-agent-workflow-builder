@@ -99,18 +99,18 @@ describe('the Settings tabs', () => {
     const html = render({ tab: 'connections' })
     expect(html).toMatch(/role="group" aria-label="Settings sections"/)
     expect(html).toMatch(
-      /<button type="button" aria-pressed="true">Connections.*<button type="button" aria-pressed="false">People and permissions.*<button type="button" aria-pressed="false">AI model.*<button type="button" aria-pressed="false">How it works/s,
+      /<button type="button"[^>]*aria-pressed="true">Connections.*<button type="button"[^>]*aria-pressed="false">People and permissions.*<button type="button"[^>]*aria-pressed="false">AI model.*<button type="button"[^>]*aria-pressed="false">How it works/s,
     )
-    expect(render({ tab: 'people' })).toMatch(/<button type="button" aria-pressed="true">People and permissions/)
-    expect(render({ tab: 'model' })).toMatch(/<button type="button" aria-pressed="true">AI model/)
-    expect(render({ tab: 'how' })).toMatch(/<button type="button" aria-pressed="true">How it works/)
+    expect(render({ tab: 'people' })).toMatch(/<button type="button"[^>]*aria-pressed="true">People and permissions/)
+    expect(render({ tab: 'model' })).toMatch(/<button type="button"[^>]*aria-pressed="true">AI model/)
+    expect(render({ tab: 'how' })).toMatch(/<button type="button"[^>]*aria-pressed="true">How it works/)
   })
 
   it('leave How it works out for an Approver who is not an Operator, and open Connections if the address asks for it', () => {
     const html = render({ me: BOB, tab: 'how' })
     expect(buttonsIn(html).slice(0, 3)).toEqual(['Connections', 'People and permissions', 'AI model'])
     expect(html).not.toContain('How it works')
-    expect(html).toMatch(/<button type="button" aria-pressed="true">Connections/)
+    expect(html).toMatch(/<button type="button"[^>]*aria-pressed="true">Connections/)
   })
 
   it('put the Agent library’s tabs inside How it works', () => {

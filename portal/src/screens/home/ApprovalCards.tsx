@@ -7,15 +7,15 @@ import { cx } from '../../ui/cx'
 import { IconCheck } from '../../ui/icons'
 import { OpenButton } from '../../ui/OpenItem'
 import { ShowMore } from '../../ui/ShowMore'
+import { StatePill } from '../../ui/State'
 import { approvalPill, approvalTitle, cardStatusWords, turnWords } from '../run/approvalWords'
 import { standingOf } from '../run/decision'
-import { count, titleOf, type NameOf, type StageFacts } from '../run/words'
+import { count, STATE_TONE, titleOf, type NameOf, type StageFacts } from '../run/words'
 import { stageOfRun } from '../workflows/workflow'
 import { useShowBesideOnWide } from './autoOpen'
 import { CardMemoryContext, type RequestRef } from './cardMemory'
 import { approvalItem } from './home'
 import { useMainButton } from './primary'
-import pills from '../run/RunPage.module.css'
 import styles from './Planner.module.css'
 
 /** The chat shows this many requests at a time, newest first. */
@@ -71,9 +71,9 @@ function RequestCard({ request, main, nameOf }: { request: RequestRef & { readon
     <Card
       title={approvalTitle(shown.actions)}
       pill={
-        <span className={cx(pills['pill'], pills[pill.tone])} data-approval-pill>
+        <StatePill tone={STATE_TONE[pill.tone]} data-approval-pill="">
           {pill.label}
-        </span>
+        </StatePill>
       }
       status={
         done === null ? undefined : (

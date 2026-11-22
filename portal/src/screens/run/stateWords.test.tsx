@@ -40,7 +40,7 @@ const view = (base: unknown, change: Record<string, unknown> = {}): RunView => (
 const DECISION = decisions.decisions[1] as PastDecisionView
 
 const text = (html: string) => html.replace(/<[^>]*>/g, ' ').replaceAll('&#x27;', "'").replace(/\s+/g, ' ').trim()
-const pills = (html: string) => [...html.matchAll(/<span class="[^"]*pill[^"]*"[^>]*>([^<]*)<\/span>/g)].map((match) => match[1])
+const pills = (html: string) => [...html.matchAll(/<span class="[^"]*pill[^"]*"[^>]*>(?:<svg[\s\S]*?<\/svg>)?([^<]*)<\/span>/g)].map((match) => match[1])
 
 function wrap(node: React.ReactNode): string {
   return renderToStaticMarkup(

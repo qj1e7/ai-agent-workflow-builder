@@ -26,10 +26,10 @@
   gap: var(--space-3);
   padding: 8px 8px 8px 18px;
   border-radius: 10px;
-  background: var(--primary);
-  box-shadow: var(--float);
+  background: var(--action);
+  box-shadow: var(--shadow-3);
   color: var(--on-ink);
-  font-weight: 600;
+  font-weight: var(--fw-semi);
   pointer-events: auto;
   animation: toast-in var(--dur-small) var(--ease-out);
 }
@@ -49,12 +49,12 @@
   place-items: center;
   min-width: 44px;
   min-height: 44px;
-  border-radius: var(--r-ctl);
+  border-radius: var(--r-sm);
   color: var(--on-ink);
   font: inherit;
-  font-weight: 700;
+  font-weight: var(--fw-bold);
   cursor: pointer;
-  transition: background-color var(--dur-press) ease, transform var(--dur-press) var(--ease-out);
+  transition: background-color var(--dur-press) ease, scale var(--dur-press) var(--ease-out);
 }
 
 .action {
@@ -70,7 +70,7 @@
 
 .action:active,
 .close:active {
-  transform: scale(0.97);
+  scale: var(--press-scale);
 }
 
 .action[aria-busy='true'] {

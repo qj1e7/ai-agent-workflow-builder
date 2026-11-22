@@ -76,7 +76,7 @@
   height: 3px;
   overflow: hidden;
   border-radius: 2px;
-  background: var(--rail);
+  background: var(--line-strong);
   transform-origin: left center;
 }
 
@@ -115,7 +115,7 @@
 }
 
 .link[data-link='dead']::before {
-  background: repeating-linear-gradient(90deg, var(--rail) 0 4px, transparent 4px 8px);
+  background: repeating-linear-gradient(90deg, var(--line-strong) 0 4px, transparent 4px 8px);
 }
 
 .link[data-march]::before,
@@ -143,7 +143,7 @@
 .nobody {
   width: 30px;
   height: 30px;
-  border: 2px dashed var(--rail);
+  border: 2px dashed var(--line-strong);
   border-radius: 50%;
 }
 

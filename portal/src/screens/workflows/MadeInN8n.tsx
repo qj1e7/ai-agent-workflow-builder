@@ -5,6 +5,8 @@ import { useMadeInN8n, useSetUpFromN8n, type MadeInN8nView } from '../../api/mad
 import { useDisplayName } from '../../api/people'
 import type { Me } from '../../api/types'
 import { Button } from '../../ui/Button'
+import { StatePill } from '../../ui/State'
+import { STATE_TONE } from '../run/words'
 import { madeInN8nWords } from './n8nMade'
 import local from './MadeInN8n.module.css'
 import styles from './Workflows.module.css'
@@ -31,9 +33,7 @@ function MadeRow({ workflow, makerName, busy, onSetUp }: RowProps) {
           </span>
         </span>
         <span className={local['end']}>
-          <span className={styles['pill']} data-tone={words.pill.tone}>
-            {words.pill.label}
-          </span>
+          <StatePill tone={STATE_TONE[words.pill.tone]}>{words.pill.label}</StatePill>
           {workflow.can_set_up ? (
             <Button loading={busy} onClick={onSetUp} aria-describedby={`${ids}-name ${ids}-sub`}>
               Set up

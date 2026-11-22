@@ -17,7 +17,7 @@
 }
 
 .think circle {
-  fill: var(--muted);
+  fill: var(--text-2);
   animation: think 1.5s ease-in-out infinite;
 }
 

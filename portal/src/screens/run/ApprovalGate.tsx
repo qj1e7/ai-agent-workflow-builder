@@ -3,12 +3,13 @@ import type { ApprovalActionView, ApprovalView } from '../../api/types'
 import { Button } from '../../ui/Button'
 import { cx } from '../../ui/cx'
 import { IconCheck, IconLock } from '../../ui/icons'
+import { StatePill } from '../../ui/State'
 import { TicketKeys } from '../jira/TicketKeys'
 import { approvalPill, approvalTitle, fieldRows, kindWords, recordWords, sentRowWords, turnWords, waitingWords, whereWords, whyYouWords } from './approvalWords'
 import { APPROVE, canDecideNow, standingOf, type Decision, type Standing } from './decision'
 import { AskBox, QuestionThread } from './QuestionThread'
 import { useFocusAfter, type Questions } from './questions'
-import { lockWords, ticketKeysIn, type NameOf, type Party, type StageFacts } from './words'
+import { lockWords, STATE_TONE, ticketKeysIn, type NameOf, type Party, type StageFacts } from './words'
 import styles from './panels.module.css'
 import pills from './RunPage.module.css'
 
@@ -191,9 +192,9 @@ export function ApprovalGate({ approval, page, decision, facts, notChecked, reas
           <Title id={titleId}>{approvalTitle(approval.actions)}</Title>
         </div>
         {page ? null : (
-          <span className={cx(pills['pill'], pills[pill.tone])} data-approval-pill>
+          <StatePill tone={STATE_TONE[pill.tone]} data-approval-pill="">
             {pill.label}
-          </span>
+          </StatePill>
         )}
       </div>
       {turn ? <p className={styles['turn']}>{turn}</p> : null}

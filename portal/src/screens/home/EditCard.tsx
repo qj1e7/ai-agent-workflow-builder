@@ -8,6 +8,8 @@ import { Card } from '../../ui/Card'
 import { cx } from '../../ui/cx'
 import { IconCheck } from '../../ui/icons'
 import { OpenButton } from '../../ui/OpenItem'
+import { StatePill } from '../../ui/State'
+import { STATE_TONE } from '../run/words'
 import { WATCHLIST_PATH } from '../software/software'
 import { nextRunAt, undoProblem } from '../workflows/workflow'
 import type { Page } from './AnswerCards'
@@ -38,7 +40,6 @@ import {
 import { crossParts, PartsList, type Part } from './PartsList'
 import { useMainButton } from './primary'
 import { useSaidOnce, type Say } from './StateAnswers'
-import runStyles from '../run/RunPage.module.css'
 import styles from './EditCard.module.css'
 import partsStyles from './PartsList.module.css'
 import setup from './SetupCard.module.css'
@@ -356,9 +357,9 @@ export function EditCard({ reply, typed, page, say, now, about }: EditCardProps)
         headingId={`${id}-heading`}
         title={`Change ${chosen.name}`}
         pill={
-          <span className={cx(runStyles['pill'], runStyles[tone])} data-edit-pill>
+          <StatePill tone={STATE_TONE[tone]} data-edit-pill="">
             {label}
-          </span>
+          </StatePill>
         }
         status={
           left === null ? undefined : (

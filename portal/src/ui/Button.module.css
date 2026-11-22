@@ -1,25 +1,33 @@
+/* The sketch's .btn: 38 px high, or 32 px small. Only primary is filled, so each view has one filled button. */
 .button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
-  min-width: 44px;
-  min-height: 44px;
+  min-height: 38px;
   padding: 0 var(--space-4);
   border: 1px solid transparent;
-  border-radius: var(--radius-button);
-  font-size: var(--text-16);
-  font-weight: 600;
+  border-radius: var(--r-sm);
+  font-size: var(--fs-small);
+  font-weight: var(--fw-semi);
   line-height: 1.2;
   text-align: center;
   text-decoration: none;
   white-space: nowrap;
   user-select: none;
-  transition: transform 80ms var(--ease-out);
+  transition:
+    background-color var(--dur-press) ease,
+    border-color var(--dur-press) ease,
+    scale var(--dur-press) var(--ease-out);
+}
+
+.small {
+  min-height: 32px;
+  padding: 0 var(--space-3);
 }
 
 .button:active:not([aria-disabled='true']) {
-  transform: translateY(1px);
+  scale: var(--press-scale);
 }
 
 .button[aria-disabled='true'] {
@@ -35,43 +43,44 @@
 }
 
 .primary {
-  background: var(--ink);
+  border-color: var(--action);
+  background: var(--action);
   color: var(--on-ink);
 }
 
-.primary:hover:not([aria-disabled='true']) {
-  filter: brightness(1.15);
-}
-
 .secondary {
+  border-color: var(--line-strong);
   background: var(--surface);
-  border-color: var(--line);
   color: var(--ink);
 }
 
-.secondary:hover:not([aria-disabled='true']) {
-  background: var(--mist);
-  border-color: var(--muted);
-}
-
 .dangerOutline {
+  border-color: var(--stop-edge);
   background: var(--surface);
-  border-color: var(--fail-line);
-  color: var(--fail);
+  color: var(--stop-text);
 }
 
-.dangerOutline:hover:not([aria-disabled='true']) {
-  background: var(--fail-tint);
-  border-color: var(--fail);
+@media (hover: hover) and (pointer: fine) {
+  .primary:hover:not([aria-disabled='true']) {
+    border-color: var(--action-hover);
+    background: var(--action-hover);
+  }
+
+  .secondary:hover:not([aria-disabled='true']) {
+    background: var(--sunk);
+  }
+
+  .dangerOutline:hover:not([aria-disabled='true']) {
+    border-color: var(--stop);
+    background: var(--stop-bg);
+  }
 }
 
-.approve {
-  background: var(--green);
-  color: var(--on-status);
-}
-
-.approve:hover:not([aria-disabled='true']) {
-  background: var(--green-ink);
+/* A finger needs more room than a pointer. */
+@media (pointer: coarse) {
+  .button {
+    min-height: 44px;
+  }
 }
 
 .spinner {

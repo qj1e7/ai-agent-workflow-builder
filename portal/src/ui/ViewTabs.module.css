@@ -5,25 +5,25 @@
   justify-self: start;
   gap: 2px;
   padding: 3px;
-  border-radius: 8px;
-  background: var(--active);
+  border-radius: var(--r-sm);
+  background: var(--line);
 }
 
 .tabs button {
   min-height: 32px;
   padding: 5px 11px;
   border: 0;
-  border-radius: var(--r-ctl);
+  border-radius: 6px;
   background: none;
-  color: var(--muted);
+  color: var(--text-2);
   font: inherit;
-  font-size: 0.86rem;
-  font-weight: 600;
+  font-size: var(--fs-small);
+  font-weight: var(--fw-semi);
   cursor: pointer;
   transition:
     background-color var(--dur-press) ease,
     color var(--dur-press) ease,
-    transform var(--dur-press) var(--ease-out);
+    scale var(--dur-press) var(--ease-out);
 }
 
 .tabs button[aria-pressed='true'] {
@@ -33,5 +33,5 @@
 }
 
 .tabs button:active {
-  transform: scale(0.97);
+  scale: var(--press-scale);
 }

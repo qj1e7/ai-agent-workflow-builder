@@ -94,7 +94,7 @@ describe('the Workflows list', () => {
   it('shows each workflow as its name, one line and one pill: Stopped, Waiting for a yes, On or Paused', () => {
     const html = render()
     const bugs = rowOf(html, 'uc_bugs')
-    expect(bugs).toMatch(/data-life="on"[^>]*data-tone="bad"[^>]*>.*Stopped<\/span>/)
+    expect(bugs).toMatch(/data-life="on"[^>]*data-tone="stop"[^>]*>.*Stopped<\/span>/)
     expect(bugs).not.toMatch(/>On<\/span>/)
     expect(text(bugs)).toContain('Morning bug report check')
     const watchlist = rowOf(html, 'uc_01JB7')
@@ -532,7 +532,7 @@ describe('workflows made in n8n, for someone with n8n access', () => {
     const row = madeRow(html, 'wf7')
     expect(text(row)).toContain('Morning check is in n8n but not registered')
     expect(text(row)).toContain('Made in n8n by Carol. Safe: every change waits for a yes. Published in n8n, so it runs once set up.')
-    expect(row).toMatch(/data-tone="ok"[^>]*>Safe<\/span>/)
+    expect(row).toMatch(/data-tone="ok"[^>]*>(?:<svg[\s\S]*?<\/svg>)?Safe<\/span>/)
     expect(labelsOf(row, 'Set up')).toHaveLength(1)
     expect(mainOf(html)).toMatch(/<h2[^>]*>Made in n8n<\/h2>/)
   })
@@ -540,7 +540,7 @@ describe('workflows made in n8n, for someone with n8n access', () => {
   it('names what to fix, and offers no Set up for a draft that fails the check', () => {
     const row = madeRow(render({ me: MAINTAINER, made: [NO_YES] }), 'wf8')
     expect(text(row).replaceAll('&quot;', '"')).toContain('Writes refused: "Create ticket" can run without a yes. Fix it in n8n first.')
-    expect(row).toMatch(/data-tone="bad"[^>]*>Writes refused<\/span>/)
+    expect(row).toMatch(/data-tone="stop"[^>]*>(?:<svg[\s\S]*?<\/svg>)?Writes refused<\/span>/)
     expect(labelsOf(row, 'Set up')).toHaveLength(0)
   })
 

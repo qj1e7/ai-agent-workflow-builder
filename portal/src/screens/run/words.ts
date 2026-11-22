@@ -4,6 +4,7 @@ import { inTeamZone, nextRunAt, teamZone } from '../workflows/times'
 import type { SessionKind } from '../../api/session'
 import type { ApprovalStepView, Day, FailureReason, Refusal, RunOutcome, RunView, UseCaseView, WriteActionView } from '../../api/types'
 import { PRODUCT } from '../../shell/product'
+import type { StateTone } from '../../ui/State'
 import type { LiveRun } from './liveRun'
 import type { AgentRef, ChatItem, Declined, PlanBlock, RunModel } from './runModel'
 
@@ -642,6 +643,9 @@ export function stageWords(run: StageFacts, nameOf: NameOf): string {
 }
 
 export type StageTone = 'ok' | 'wait' | 'bad' | 'new' | 'quiet'
+
+/** A run's tone as the one state pill draws it: bad is stopped, new is at work, and quiet is declined, skipped or nothing new. */
+export const STATE_TONE: Record<StageTone, StateTone> = { ok: 'ok', wait: 'wait', bad: 'stop', new: 'run', quiet: 'off' }
 
 /** The one pill a run has: Stopped, Running, Waiting for a yes, Done, Nothing new or Declined. */
 export function runPill(run: StageFacts): { readonly label: string; readonly tone: StageTone } {

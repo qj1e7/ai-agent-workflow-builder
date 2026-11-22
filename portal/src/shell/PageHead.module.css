@@ -5,11 +5,11 @@
 .head p {
   max-width: 65ch;
   margin-top: 6px;
-  color: var(--muted);
-  font-size: 1.05rem;
+  color: var(--text-2);
+  font-size: var(--fs-body);
 }
 
 .head p.note {
   margin-top: 8px;
-  font-size: var(--text-14);
+  font-size: var(--fs-small);
 }

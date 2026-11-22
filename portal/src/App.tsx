@@ -1,13 +1,12 @@
 import { useEffect, useRef } from 'react'
 import { useLocation } from 'react-router'
-import { isOperator, notOnTheList } from './api/me'
+import { isOperator } from './api/me'
 import { useMe } from './api/queries'
 import { useNow } from './api/ticking'
 import { ChatProvider } from './screens/home/ChatProvider'
 import { setTeamZone } from './screens/workflows/times'
 import { AskToBeAdded } from './shell/AskToBeAdded'
 import { BackToChat } from './shell/BackToChat'
-import { Header } from './shell/Header'
 import { PlatformDown, platformIsDown } from './shell/PlatformDown'
 import { PRODUCT } from './shell/product'
 import { Rail } from './shell/Rail'
@@ -74,9 +73,8 @@ export function App({ now = WALL_CLOCK }: { now?: () => Date }) {
       <button type="button" className={styles['skip']} onClick={skipToMain}>
         Skip to main content
       </button>
-      <Header person={me.data ?? null} />
       <div className={styles['shell']}>
-        <Rail onList={me.data !== undefined && !notOnTheList(me.data)} />
+        <Rail person={me.data ?? null} />
         <main id="main" tabIndex={-1} className={styles['sheet']}>
           <div className={styles['wrap']}>
             {fromChat ? <BackToChat /> : null}

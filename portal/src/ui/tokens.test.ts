@@ -74,51 +74,69 @@ function contrast(tokens: Tokens, foreground: string, background: string): numbe
 }
 
 const TEXT_ON: readonly (readonly [text: string, background: string])[] = [
-  ['ink', 'bg'],
-  ['ink', 'frame'],
-  ['muted', 'frame'],
-  ['link', 'surface'],
-  ['link', 'frame'],
-  ['accent-ink', 'accent-soft'],
-  ['info-ink', 'info-bg'],
+  ...['bg-app', 'surface', 'subtle', 'sunk'].flatMap((ground) => [
+    ['ink', ground],
+    ['text-2', ground],
+  ] as const),
+  ['on-ink', 'action'],
+  ['on-ink', 'action-hover'],
+  ['on-ink', 'brand-ink'],
+  ['on-wait', 'wait'],
+  ...(['ok', 'wait', 'stop', 'run', 'off', 'ai'] as const).flatMap((tone) => [
+    [`${tone}-text`, `${tone}-bg`],
+    [`${tone}-text`, 'surface'],
+    [`${tone}-text`, 'bg-app'],
+  ] as const),
+  ['rail-text', 'rail'],
+  ['rail-text', 'rail-hover'],
+  ['on-ink', 'rail-active'],
+  ['rail-count-text', 'rail-count'],
+  ['alert-text', 'alert-bg'],
   ['mock-ink', 'mock-bg'],
   ['mock-dim', 'mock-bg'],
   ['mock-on-ink', 'mock-on'],
-  ['on-ink', 'primary'],
-  ['on-amber', 'amber'],
-  ['ink', 'surface'],
-  ['ink', 'hair'],
-  ['muted', 'bg'],
-  ['muted', 'surface'],
-  ['muted', 'hair'],
-  ['on-ink', 'ink'],
+  ['on-ink', 'teams'],
   ['on-ink', 'lead'],
-  ['on-status', 'green'],
-  ['on-status', 'red'],
-  ['amber-ink', 'amber-soft'],
-  ['amber-ink', 'surface'],
-  ['amber-ink', 'bg'],
-  ['red-ink', 'red-soft'],
-  ['red-ink', 'surface'],
-  ['red-ink', 'bg'],
-  ['green-ink', 'green-soft'],
-  ['green-ink', 'surface'],
-  ['green-ink', 'bg'],
-  ['lead', 'surface'],
-  ['lead', 'bg'],
-  ['checker', 'surface'],
-  ['checker', 'bg'],
-  ['trouble', 'surface'],
-  ['trouble', 'bg'],
+  ...['surface', 'bg-app'].flatMap((ground) => [
+    ['lead', ground],
+    ['checker', ground],
+    ['trouble', ground],
+    ...[1, 2, 3, 4].map((n) => [`agent-${n}`, ground] as const),
+  ] as const),
   ...[1, 2, 3, 4].flatMap((n) => [
-    [`agent-${n}`, 'surface'],
-    [`agent-${n}`, 'bg'],
     [`person-${n}-ink`, `person-${n}-bg`],
     ['face-ink', `agent-${n}-tint`],
   ] as const),
   ['face-ink', 'lead-tint'],
   ['face-ink', 'checker-tint'],
   ['face-ink', 'trouble-tint'],
+  // The older names the screens still use, until each screen is redrawn.
+  ['muted', 'bg'],
+  ['muted', 'hair'],
+  ['link', 'surface'],
+  ['accent-ink', 'accent-soft'],
+  ['info-ink', 'info-bg'],
+  ['amber-ink', 'amber-soft'],
+  ['red-ink', 'red-soft'],
+  ['green-ink', 'green-soft'],
+  ['on-amber', 'amber'],
+]
+
+/** Marks, rings and edges a person must see: 3:1 or more (WCAG 1.4.11). */
+const MARK_ON: readonly (readonly [mark: string, background: string])[] = [
+  ...['surface', 'bg-app', 'sunk'].map((ground) => ['focus', ground] as const),
+  ['focus-on-rail', 'rail'],
+  ['focus-on-rail', 'rail-active'],
+  ['edge', 'surface'],
+  ['edge', 'bg-app'],
+  ...['ok', 'wait-line', 'stop', 'run', 'off'].flatMap((mark) => [
+    [mark, 'surface'],
+    [mark, 'bg-app'],
+  ] as const),
+  ['on-status', 'ok'],
+  ['on-status', 'stop'],
+  ['on-status', 'off'],
+  ['on-wait', 'wait'],
 ]
 
 const TEXT_RATIO = 4.5
@@ -129,8 +147,8 @@ describe('the tokens', () => {
     expect(contrast(light, text, background)).toBeGreaterThanOrEqual(TEXT_RATIO)
   })
 
-  it.each([['bg'], ['surface'], ['frame']])('the focus ring is at least 3:1 against --%s', (background) => {
-    expect(contrast(light, 'focus', background)).toBeGreaterThanOrEqual(RING_RATIO)
+  it.each(MARK_ON)('--%s on --%s is at least 3:1', (mark, background) => {
+    expect(contrast(light, mark, background)).toBeGreaterThanOrEqual(RING_RATIO)
   })
 })
 
@@ -142,7 +160,7 @@ describe('tokens.css', () => {
   })
 
   it('matches the single theme-color meta in index.html to the page background', () => {
-    expect(/<meta name="theme-color" content="(#[0-9a-fA-F]{6})"/.exec(indexHtml)?.[1]?.toLowerCase()).toBe(value(light, 'frame'))
+    expect(/<meta name="theme-color" content="(#[0-9a-fA-F]{6})"/.exec(indexHtml)?.[1]?.toLowerCase()).toBe(value(light, 'bg-app'))
     expect(indexHtml.match(/name="theme-color"/g)).toHaveLength(1)
     expect(indexHtml).toContain('<meta name="color-scheme" content="light" />')
     expect(indexHtml).not.toContain('theme-boot')
@@ -226,5 +244,59 @@ describe('base.css', () => {
     const stopped = innermostRules(reduced).find((rule) => /animation:\s*none !important/.test(rule.body) && /transition:\s*none !important/.test(rule.body))
     expect(stopped?.selectors).toContain('*')
     expect([...moved].filter((pseudo) => !stopped?.selectors.includes(`*::${pseudo}`))).toEqual([])
+  })
+})
+
+const SHARED = /^(ui|shell)\//
+const sharedSheets = readdirSync(srcDir, { recursive: true, encoding: 'utf8' })
+  .filter((file) => SHARED.test(file.replaceAll(path.sep, '/')) && file.endsWith('.css') && !file.endsWith('tokens.css'))
+  .map((file) => ({
+    file,
+    // The font's own weight range is how the browser loads it, not a weight the text is set in.
+    css: readFileSync(path.join(srcDir, file), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/@font-face\s*\{[^}]*\}/g, ''),
+  }))
+const olderAt = tokensCss.indexOf('Older names')
+const olderNames = new Set(declarations(tokensCss.slice(olderAt, tokensCss.indexOf('}', olderAt))).map(([name]) => name))
+
+function offending(pattern: RegExp, allowed: RegExp): string[] {
+  return sharedSheets.flatMap(({ file, css }) =>
+    [...css.matchAll(pattern)]
+      .map((match) => (match[1] ?? '').trim())
+      .filter((found) => !allowed.test(found))
+      .map((found) => `${found} in ${file}`),
+  )
+}
+
+describe('the shared pieces in ui/ and shell/', () => {
+  it('use the sketch’s token names, never the older names kept for the screens', () => {
+    expect(olderNames.size).toBeGreaterThan(10)
+    const found = sharedSheets.flatMap(({ file, css }) =>
+      [...css.matchAll(/var\(--([a-z0-9-]+)/g)]
+        .map((match) => match[1] ?? '')
+        .filter((name) => olderNames.has(name))
+        .map((name) => `--${name} in ${file}`),
+    )
+    expect(found).toEqual([])
+  })
+
+  it('set text in the six sizes and the three weights', () => {
+    expect(offending(/font-size:\s*([^;]+);/g, /^(var\(--fs-(display|title|head|body|small|tiny)\)|inherit)$/)).toEqual([])
+    expect(offending(/font-weight:\s*([^;]+);/g, /^(var\(--fw-(regular|semi|bold)\)|inherit)$/)).toEqual([])
+  })
+
+  it('take every colour from a token', () => {
+    expect(offending(/(#[0-9a-fA-F]{3,8})\b/g, /^$/)).toEqual([])
+  })
+
+  it('press with the one press effect, a scale to --press-scale', () => {
+    const presses = sharedSheets.flatMap(({ file, css }) =>
+      innermostRules(css)
+        .filter((rule) => rule.selectors.some((selector) => selector.includes(':active')))
+        .map((rule) => ({ file, body: rule.body.trim() })),
+    )
+    expect(presses.length).toBeGreaterThan(3)
+    expect(presses.filter(({ body }) => !/^scale:\s*var\(--press-scale\);?$/.test(body)).map(({ file, body }) => `${body} in ${file}`)).toEqual([])
   })
 })

@@ -1,11 +1,11 @@
 /* The sketch's n8n canvas: a dotted ground, blocks with a hairline, and the run's dashes in the accent colour. */
 .canvas {
   overflow-x: auto;
-  border: 1px solid var(--hair);
-  border-radius: var(--r-card);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
   background:
-    radial-gradient(circle, #d3d8de 1px, transparent 1.3px) 0 0 / 18px 18px,
-    #fafbfc;
+    radial-gradient(circle, var(--stage-grid) 1px, transparent 1.3px) 0 0 / 18px 18px,
+    var(--stage);
 }
 
 .canvas:focus-visible {
@@ -28,7 +28,7 @@
 
 .box {
   fill: var(--surface);
-  stroke: var(--rail);
+  stroke: var(--line-strong);
   stroke-width: 2;
   transition:
     stroke var(--dur-small) ease,
@@ -42,7 +42,7 @@
 
 .sub {
   font: 600 11px var(--font);
-  fill: var(--muted);
+  fill: var(--text-2);
 }
 
 .ours {
@@ -56,7 +56,7 @@
 
 .port {
   fill: var(--surface);
-  stroke: var(--rail);
+  stroke: var(--line-strong);
   stroke-width: 1.5;
 }
 
@@ -66,12 +66,12 @@
 }
 
 .tick circle {
-  fill: var(--green);
+  fill: var(--ok);
 }
 
 .tick path {
   fill: none;
-  stroke: #fff;
+  stroke: var(--surface);
   stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
@@ -83,12 +83,12 @@
 }
 
 .alert circle {
-  fill: var(--red);
+  fill: var(--stop);
 }
 
 .alert path {
   fill: none;
-  stroke: #fff;
+  stroke: var(--surface);
   stroke-width: 2.2;
   stroke-linecap: round;
 }
@@ -99,12 +99,12 @@
 }
 
 .waiting circle {
-  fill: var(--amber-ink);
+  fill: var(--wait-text);
 }
 
 .waiting path {
   fill: none;
-  stroke: #fff;
+  stroke: var(--surface);
   stroke-width: 2.6;
   stroke-linecap: round;
 }
@@ -119,7 +119,7 @@
 }
 
 .node[data-state='ok'] .box {
-  stroke: var(--green);
+  stroke: var(--ok);
 }
 
 .node[data-state='ok'] .tick {
@@ -127,18 +127,18 @@
 }
 
 .node[data-state='now'] .box {
-  stroke: var(--accent);
+  stroke: var(--run);
   stroke-width: 3.5;
 }
 
 .node[data-state='wait'] .box {
-  stroke: var(--amber);
-  fill: var(--amber-soft);
+  stroke: var(--wait);
+  fill: var(--wait-bg);
 }
 
 .node[data-state='err'] .box {
-  stroke: var(--red);
-  fill: var(--red-soft);
+  stroke: var(--stop);
+  fill: var(--stop-bg);
 }
 
 .node[data-state='err'] .alert {
@@ -152,7 +152,7 @@
 
 .edge path {
   fill: none;
-  stroke: #b4bcc6;
+  stroke: var(--stage-dim);
   stroke-width: 2.5;
   transition:
     opacity var(--dur-panel) ease,
@@ -161,7 +161,7 @@
 
 .edge text {
   font: 600 11px var(--font);
-  fill: var(--muted);
+  fill: var(--text-2);
 }
 
 .edge[data-state='off'] {
@@ -169,11 +169,11 @@
 }
 
 .edge[data-state='ok'] path {
-  stroke: var(--green);
+  stroke: var(--ok);
 }
 
 .edge[data-state='flow'] path {
-  stroke: var(--accent);
+  stroke: var(--run);
   stroke-dasharray: 8 6;
   animation: march 0.6s linear infinite;
 }

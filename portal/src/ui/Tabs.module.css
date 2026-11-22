@@ -1,0 +1,40 @@
+/* The sketch's .tabs: the sections on one line, the one showing underlined in ink. */
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  border-bottom: 1px solid var(--line-strong);
+}
+
+.tab {
+  position: relative;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--r-sm) var(--r-sm) 0 0;
+  background: none;
+  color: var(--text-2);
+  font-weight: var(--fw-semi);
+  white-space: nowrap;
+  transition: color var(--dur-press) ease;
+}
+
+.tab[aria-pressed='true'] {
+  color: var(--ink);
+}
+
+.tab[aria-pressed='true']::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  inset-inline: 10px;
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+  background: var(--ink);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .tab:hover {
+    color: var(--ink);
+  }
+}

@@ -230,7 +230,7 @@ describe('a workflow page', () => {
   it('orders the page as the sketch does: the sentence, the banner, the line, When, Who says yes, Recent runs, Versions, then the buttons, with no Agents section', () => {
     const html = mainOf(render({ runs: [{ ...(done as RunView), use_case_id: 'uc_01JD0' }] }))
     const at = (needle: string) => html.indexOf(needle)
-    const order = [at('<h1'), at('sentence'), at('data-tone='), at('Check release'), at('>When</h2>'), at('>Who says yes</h2>'), at('>Recent runs</h2>'), at('>Pause<')]
+    const order = [at('<h1'), at('sentence'), html.search(/<div[^>]*data-tone=/), at('Check release'), at('>When</h2>'), at('>Who says yes</h2>'), at('>Recent runs</h2>'), at('>Pause<')]
     expect(order.every((place) => place >= 0)).toBe(true)
     expect(order).toEqual([...order].sort((a, b) => a - b))
     expect(html).not.toContain('Agents')
@@ -332,7 +332,7 @@ describe('a workflow page', () => {
 
   it('shows a stopped last run, linking to it', () => {
     const html = render({ last: {}, runs: [{ ...(failed as RunView), use_case_id: 'uc_01JD0' }, { ...(done as RunView), use_case_id: 'uc_01JD0' }] })
-    expect(mainOf(html)).toMatch(/data-tone="bad"[^>]*>.*Stopped<\/span>/)
+    expect(mainOf(html)).toMatch(/data-tone="stop"[^>]*>.*Stopped<\/span>/)
     const first = /<li[^>]*data-run-id="([^"]+)"[^>]*data-state="([^"]+)"/.exec(html)
     expect([first?.[1], first?.[2]]).toEqual(['run_01JB9', 'failed'])
   })
@@ -350,7 +350,7 @@ describe('a workflow page', () => {
 
   it('for a run n8n lost, says Lost in the pill and in the banner, never On', () => {
     const html = render({ last: { state: 'lost', reason: null } })
-    expect(mainOf(html)).toMatch(/data-tone="bad"[^>]*>.*Lost<\/span>/)
+    expect(mainOf(html)).toMatch(/data-tone="stop"[^>]*>.*Lost<\/span>/)
     expect(text(bannerOfHtml(html))).toBe('Lost today at 10:14. Approved, but the run stopped before it could make the change. Nothing was written. Open the run')
     expect(text(mainOf(html))).not.toContain('On. Next run')
   })

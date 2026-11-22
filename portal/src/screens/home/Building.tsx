@@ -6,7 +6,6 @@ import type { UseCaseView } from '../../api/types'
 import { AgentFace } from '../../ui/AgentFace'
 import { Button } from '../../ui/Button'
 import { Card } from '../../ui/Card'
-import { cx } from '../../ui/cx'
 import { IconCheck } from '../../ui/icons'
 import { motionAllowed } from '../../ui/motion'
 import { OpenButton } from '../../ui/OpenItem'
@@ -15,20 +14,20 @@ import { useLiveRun } from '../run/liveRun'
 import { RunLine } from '../run/RunLine'
 import { emptyModel, stationsOf, type RunModel } from '../run/runModel'
 import { planOf } from '../run/useRunStory'
-import { scheduleShort, type StageTone } from '../run/words'
+import { StatePill } from '../../ui/State'
+import { scheduleShort, STATE_TONE, type StageTone } from '../run/words'
 import { firstRunWhen } from '../workflows/times'
 import { buildLine, buildStage, draftPill, LINE_STEP_MS, notesOf, replayAt, shownOf, testStatus, testStep, type BuildStage, type PillTone, type Replay } from './build'
 import { useShowBesideOnWide } from './autoOpen'
 import { PartsList, type Part } from './PartsList'
-import runStyles from '../run/RunPage.module.css'
 import styles from './SetupCard.module.css'
 
 /** A draft's one pill: Draft, Building, Ready, On or Dropped. */
 export function DraftPill({ label, tone }: { label: string; tone: PillTone | StageTone }) {
   return (
-    <span className={cx(runStyles['pill'], runStyles[tone])} data-draft-pill>
+    <StatePill tone={STATE_TONE[tone]} data-draft-pill="">
       {label}
-    </span>
+    </StatePill>
   )
 }
 

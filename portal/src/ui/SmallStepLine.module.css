@@ -1,0 +1,108 @@
+/* The sketch's .mini: one circle per step, joined by a short line in the colour of the step it leads into. */
+.line {
+  --dot: 28px;
+  --gap: 16px;
+
+  display: inline-flex;
+  align-items: center;
+}
+
+.small {
+  --dot: 22px;
+  --gap: 10px;
+}
+
+.step {
+  position: relative;
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: var(--dot);
+  height: var(--dot);
+  border: 2px solid var(--line-strong);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--text-2);
+}
+
+.step + .step {
+  margin-inline-start: var(--gap);
+}
+
+.step + .step::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  inset-inline-end: calc(100% + 2px);
+  width: var(--gap);
+  height: 2px;
+  margin-top: -1px;
+  background: var(--line-strong);
+}
+
+.step[data-state='done'] {
+  border-color: var(--ok);
+  background: var(--ok-bg);
+  color: var(--ok-text);
+}
+
+.step[data-state='done']::before {
+  background: var(--ok);
+}
+
+.step[data-state='now'] {
+  border-color: var(--run);
+  background: var(--run-bg);
+  color: var(--run-text);
+}
+
+.step[data-state='wait'] {
+  border-color: var(--wait-line);
+  background: var(--wait-bg);
+  color: var(--wait-text);
+}
+
+.step[data-state='wait']::before {
+  background: var(--wait-line);
+}
+
+/* Only a waiting step moves: its ring pulses until a person acts. */
+.step[data-state='wait']::after {
+  content: '';
+  position: absolute;
+  inset: -5px;
+  border: 2px solid var(--wait);
+  border-radius: 50%;
+  opacity: 0;
+  animation: ring var(--dur-pulse) ease-out infinite;
+}
+
+.step[data-state='stop'] {
+  border-color: var(--stop);
+  background: var(--stop);
+  color: var(--on-status);
+}
+
+.step[data-state='stop']::before {
+  background: var(--stop);
+}
+
+.step[data-state='unreached'] {
+  border-style: dashed;
+}
+
+.step[data-state='unreached']::before {
+  background: repeating-linear-gradient(90deg, var(--line-strong) 0 4px, transparent 4px 7px);
+}
+
+@keyframes ring {
+  0% {
+    opacity: 0.7;
+    scale: 0.9;
+  }
+
+  100% {
+    opacity: 0;
+    scale: 1.4;
+  }
+}

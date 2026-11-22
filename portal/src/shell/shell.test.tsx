@@ -72,7 +72,9 @@ function render({ path = '/', me = ALICE, meError, oidc = false, browseUrl = nul
 const text = (html: string) => html.replace(/<[^>]*>/g, ' ').replaceAll('&#x27;', "'").replace(/\s+/g, ' ').trim()
 const headings = (html: string) => [...html.matchAll(/<h1\b[^>]*>(.*?)<\/h1>/g)].map((match) => text(match[1] ?? ''))
 const mainOf = (html: string) => /<main\b[\s\S]*<\/main>/.exec(html)?.[0] ?? ''
-const headerOf = (html: string) => /<header\b[\s\S]*<\/header>/.exec(html)?.[0] ?? ''
+const railOf = (html: string) => /<nav\b[^>]*aria-label="Browse"[^>]*>[\s\S]*?<\/nav>/.exec(html)?.[0] ?? ''
+/** What sits at the rail's foot, after its three items: Teams, the practice Jira, Settings and the person. */
+const footOf = (html: string) => railOf(html).split('</ul>')[1] ?? ''
 
 function currentLinks(html: string): string[] {
   return [...html.matchAll(/<a\b[^>]*>/g)]
@@ -81,31 +83,32 @@ function currentLinks(html: string): string[] {
     .map((tag) => /href="([^"]*)"/.exec(tag)?.[1] ?? '')
 }
 
+/** The rail's three items, read as their visible labels. */
 function railLabels(html: string): string[] {
-  const nav = /<nav\b[^>]*aria-label="Browse"[^>]*>([\s\S]*?)<\/nav>/.exec(html)?.[1] ?? ''
-  return [...nav.matchAll(/<a\b[^>]*>([\s\S]*?)<\/a>/g)].map((match) => text(match[1] ?? ''))
+  const items = /<ul\b[\s\S]*?<\/ul>/.exec(railOf(html))?.[0] ?? ''
+  return [...items.matchAll(/<a\b[^>]*>([\s\S]*?)<\/a>/g)].map((match) => plain(match[1] ?? '').replace(/\d+$/, '').trim())
 }
 
 const DRAWN_AT_ONCE = RAIL_PAGE_IDS
 
 describe('the rail', () => {
-  it('reads Chat, Workflows and Watchlist for an Operator, with no menu in the header and no Agent library', () => {
+  it('reads Home, Workflows and Watchlist for an Operator, with no Agent library', () => {
     const html = render()
-    expect(railLabels(html)).toEqual(['Chat', 'Workflows', 'Watchlist'])
+    expect(railLabels(html)).toEqual(['Home', 'Workflows', 'Watchlist'])
     expect(html).not.toContain('href="/agents"')
-    expect(headerOf(html)).not.toMatch(/aria-label="Browse"/)
   })
 
   it('has the same three items for an Approver who is not an Operator', () => {
     const html = render({ me: BOB })
-    expect(railLabels(html)).toEqual(['Chat', 'Workflows', 'Watchlist'])
+    expect(railLabels(html)).toEqual(['Home', 'Workflows', 'Watchlist'])
     expect(html).not.toContain('href="/new"')
     expect(html).not.toContain('href="/agents"')
   })
 
-  it('is one nav, with no second tab bar', () => {
-    const navs = [...render().matchAll(/<nav\b[^>]*aria-label="Browse"/g)]
-    expect(navs).toHaveLength(1)
+  it('is one nav, and the top bar is gone', () => {
+    const html = render()
+    expect([...html.matchAll(/<nav\b[^>]*aria-label="Browse"/g)]).toHaveLength(1)
+    expect(html).not.toContain('<header')
   })
 
   it('sends an old /new address, a saved draft’s old link and the old done page to Home, never to a blank page', () => {
@@ -159,54 +162,93 @@ describe('the rail', () => {
 const ALICE_HOME = aliceHome as HomeOut
 const BOB_HOME: HomeOut = { ...(bobHome as HomeOut), setup_approvals: [] }
 const plain = (html: string) => html.replace(/<[^>]*>/g, '')
+/** The names the rail's three items are read out by. */
 const linkNames = (html: string) =>
-  [...html.matchAll(/<nav\b[^>]*aria-label="Browse"[^>]*>([\s\S]*?)<\/nav>/g)].flatMap((nav) =>
-    [...(nav[1] ?? '').matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/g)].map((match) => /aria-label="([^"]*)"/.exec(match[1] ?? '')?.[1] ?? plain(match[2] ?? '')),
+  [...(/<ul\b[\s\S]*?<\/ul>/.exec(railOf(html))?.[0] ?? '').matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/g)].map(
+    (match) => /aria-label="([^"]*)"/.exec(match[1] ?? '')?.[1] ?? plain(match[2] ?? ''),
   )
 
 const SOFTWARE_WITH_DECISION = statusesWatchlist as WatchlistView
 const SOFTWARE_WITH_ADDRESSES = movedWatchlist as WatchlistView
 
+const NOTHING_NEEDS_YOU: HomeOut = {
+  ...ALICE_HOME,
+  approvals: [],
+  approvals_total: 0,
+  confirmations: [],
+  setup_approvals: [],
+  stopped: [],
+  stopped_total: 0,
+  declined: [],
+  declined_total: 0,
+  questions_for_me: [],
+  questions_for_me_total: 0,
+  connections: [],
+  addresses: [],
+  replied: [],
+}
+
 describe('the rail’s counts', () => {
-  it('are totals, as in the sketch: how many workflows the team has, and how much software is watched, in each link’s name', () => {
+  it('give Home the Needs you count, from the same function as Home’s Needs you, and Workflows and Watchlist their totals', () => {
     const html = render({ home: ALICE_HOME, watchlist: SOFTWARE_WITH_DECISION })
-    expect(linkNames(html)).toEqual(['Chat', `Workflows, ${String(ALICE_HOME.workflows)} in all`, `Watchlist, ${String(SOFTWARE_WITH_DECISION.software.length)} in all`])
+    expect(needsTotal(ALICE_HOME)).toBeGreaterThan(1)
+    expect(linkNames(html)).toEqual([
+      `Home, ${String(needsTotal(ALICE_HOME))} things need you`,
+      `Workflows, ${String(ALICE_HOME.workflows)} in all`,
+      `Watchlist, ${String(SOFTWARE_WITH_DECISION.software.length)} in all`,
+    ])
   })
 
-  it('are the same for an Approver who is not an Operator, because they count what is there, not what needs them', () => {
+  it('count what needs an Approver who is not an Operator on Home too, beside the same totals', () => {
     const html = render({ me: BOB, home: BOB_HOME, watchlist: SOFTWARE_WITH_ADDRESSES })
-    expect(linkNames(html)).toEqual(['Chat', `Workflows, ${String(BOB_HOME.workflows)} in all`, `Watchlist, ${String(SOFTWARE_WITH_ADDRESSES.software.length)} in all`])
+    expect(linkNames(html)).toEqual([
+      `Home, ${String(needsTotal(BOB_HOME))} things need you`,
+      `Workflows, ${String(BOB_HOME.workflows)} in all`,
+      `Watchlist, ${String(SOFTWARE_WITH_ADDRESSES.software.length)} in all`,
+    ])
   })
 
-  it('never count what needs the person, which the needs strip and Workflows show instead', () => {
-    expect(needsTotal(ALICE_HOME)).toBeGreaterThan(ALICE_HOME.workflows)
-    expect(linkNames(render({ home: ALICE_HOME })).some((name) => name.includes('need'))).toBe(false)
+  it('say one thing in the singular', () => {
+    const one: HomeOut = { ...NOTHING_NEEDS_YOU, stopped: ALICE_HOME.stopped.slice(0, 1), stopped_total: 1 }
+    expect(linkNames(render({ home: one }))[0]).toBe('Home, 1 thing needs you')
   })
 
   it('start the link’s name with its visible label, and show the number once', () => {
     const html = render({ home: ALICE_HOME })
     expect(html.match(/<a\b[^>]*aria-label="Workflows, 1 in all"/g)).toHaveLength(1)
-    expect(plain(html.match(/<nav\b[^>]*aria-label="Browse"[\s\S]*?<\/nav>/)?.[0] ?? '')).toContain('Workflows1')
+    expect(plain(railOf(html))).toContain('Workflows1')
+    expect(plain(railOf(html))).toContain(`Home${String(needsTotal(ALICE_HOME))}`)
   })
 
   it('show nothing for none, or before the numbers have loaded', () => {
-    expect(linkNames(render({ home: { ...ALICE_HOME, workflows: 0 }, watchlist: { ...SOFTWARE_WITH_DECISION, software: [] } }))).toEqual(['Chat', 'Workflows', 'Watchlist'])
-    expect(linkNames(render())).toEqual(['Chat', 'Workflows', 'Watchlist'])
+    expect(linkNames(render({ home: { ...NOTHING_NEEDS_YOU, workflows: 0 }, watchlist: { ...SOFTWARE_WITH_DECISION, software: [] } }))).toEqual(['Home', 'Workflows', 'Watchlist'])
+    expect(linkNames(render())).toEqual(['Home', 'Workflows', 'Watchlist'])
   })
 
   it('follow one rule for every item', () => {
-    expect(railCountFor('home', 5, 2)).toBeNull()
-    expect(railCountFor('workflows', 5, 2)).toBe(5)
-    expect(railCountFor('software', 5, 2)).toBe(2)
-    expect(railCountFor('workflows', 0, 2)).toBeNull()
-    expect(railCountFor('software', 5, undefined)).toBeNull()
+    const counts = { needs: 3, workflows: 5, software: 2 }
+    expect(railCountFor('home', counts)).toBe(3)
+    expect(railCountFor('workflows', counts)).toBe(5)
+    expect(railCountFor('software', counts)).toBe(2)
+    expect(railCountFor('settings', counts)).toBeNull()
+    expect(railCountFor('workflows', { ...counts, workflows: 0 })).toBeNull()
+    expect(railCountFor('software', { needs: 3, workflows: 5 })).toBeNull()
   })
 })
 
-describe('Settings in the top bar', () => {
-  it('is a text link to /settings and, there, shows the Settings heading with the link marked current', () => {
+describe('the rail’s foot', () => {
+  it('holds Teams, the practice Jira, Settings and the person, in that order, after the three items', () => {
+    const foot = footOf(render())
+    const order = [`aria-label="${TEAMS_TITLE}"`, 'aria-label="Jira, practice copy"', 'href="/settings"', 'Alice, Operator and Approver'].map((mark) => foot.indexOf(mark))
+    expect(order.every((at) => at >= 0), String(order)).toBe(true)
+    expect([...order].sort((a, b) => a - b)).toEqual(order)
+  })
+})
+
+describe('Settings at the rail’s foot', () => {
+  it('is a link to /settings and, there, shows the Settings heading with the link marked current', () => {
     const html = render()
-    expect(headerOf(html)).toMatch(/<a\b[^>]*href="\/settings"[^>]*>Settings<\/a>/)
+    expect(text(/<a\b[^>]*href="\/settings"[^>]*>[\s\S]*?<\/a>/.exec(footOf(html))?.[0] ?? '')).toBe('Settings')
     const settings = render({ path: '/settings' })
     expect(headings(settings)).toEqual(['Settings'])
     expect(currentLinks(settings)).toEqual(['/settings'])
@@ -266,30 +308,30 @@ describe('the pages', () => {
 })
 
 describe('the person', () => {
-  it('shows the signed-in person as “Name, Role” beside their initial, as the sketch does', () => {
-    const header = headerOf(render())
-    expect(text(header)).toContain('A Alice, Operator and Approver')
-    expect(header).toMatch(/aria-hidden="true"[^>]*>A<\/span>/)
+  it('shows the signed-in person as their initial, and reads out “Name, Role”, as the sketch does', () => {
+    const foot = footOf(render())
+    expect(text(foot)).toContain('A Alice, Operator and Approver')
+    expect(foot).toMatch(/aria-hidden="true"[^>]*>A<\/span>/)
   })
 
   it('adds n8n access for someone who has it, as the sketch’s “Alice, Operator, n8n access”', () => {
-    expect(text(headerOf(render({ me: { id: 'alice', display: 'Alice', roles: ['operator'], n8n_access: true } })))).toContain('Alice, Operator, n8n access')
-    expect(text(headerOf(render()))).not.toContain('n8n access')
+    expect(text(footOf(render({ me: { id: 'alice', display: 'Alice', roles: ['operator'], n8n_access: true } })))).toContain('Alice, Operator, n8n access')
+    expect(text(footOf(render()))).not.toContain('n8n access')
   })
 
   it('shows Bob as an Approver', () => {
-    expect(text(headerOf(render({ me: BOB })))).toContain('Bob, Approver')
-    expect(text(headerOf(render({ me: BOB })))).not.toContain('Operator')
+    expect(text(footOf(render({ me: BOB })))).toContain('Bob, Approver')
+    expect(text(footOf(render({ me: BOB })))).not.toContain('Operator')
   })
 
   it('is not a control with the dev sign-in', () => {
-    expect(headerOf(render())).not.toContain('aria-expanded')
+    expect(footOf(render())).not.toContain('aria-expanded')
   })
 
   it('is a collapsed button with real sign-in, and Sign out is not shown yet', () => {
-    const header = headerOf(render({ oidc: true }))
-    expect(header).toMatch(/<button\b[^>]*aria-expanded="false"[^>]*>/)
-    expect(header).not.toContain('Sign out')
+    const foot = footOf(render({ oidc: true }))
+    expect(foot).toMatch(/<button\b[^>]*aria-expanded="false"[^>]*>/)
+    expect(foot).not.toContain('Sign out')
   })
 })
 
@@ -331,14 +373,14 @@ describe('the Teams button', () => {
 })
 
 describe('the frame', () => {
-  it('puts the skip link before the header', () => {
+  it('puts the skip link before the rail', () => {
     const html = render()
     expect(html.indexOf('Skip to main content')).toBeGreaterThanOrEqual(0)
-    expect(html.indexOf('Skip to main content')).toBeLessThan(html.indexOf('<header'))
+    expect(html.indexOf('Skip to main content')).toBeLessThan(html.indexOf('<nav'))
   })
 
-  it('names the product in the header, after its AI mark', () => {
-    expect(text(headerOf(render()))).toContain('AI AI Workflow Builder')
+  it('names the product on the rail’s AI mark', () => {
+    expect(railOf(render())).toMatch(/role="img"[^>]*aria-label="AI Workflow Builder"[^>]*>AI</)
   })
 })
 
@@ -347,14 +389,14 @@ describe('when the platform is down', () => {
     ['a network failure', new TypeError('Failed to fetch')],
     ['a 502', new ApiError(502, null)],
     ['a 500', new ApiError(500, null)],
-  ])('after %s, still shows the header and says it cannot reach the platform', (_name, meError) => {
+  ])('after %s, still shows the rail and says it cannot reach the platform', (_name, meError) => {
     const html = render({ meError })
     expect(headings(html)).toEqual(["We can't reach the platform"])
     expect(text(mainOf(html))).toContain('Check your connection, or try again in a moment.')
     expect(mainOf(html)).toMatch(/<button\b[^>]*>Try again<\/button>/)
-    expect(text(headerOf(html))).toContain('Workflow Builder')
-    expect(railLabels(html)).toEqual(['Chat', 'Workflows', 'Watchlist'])
-    expect(headerOf(html)).not.toContain('Operator')
+    expect(railOf(html)).toContain('aria-label="AI Workflow Builder"')
+    expect(railLabels(html)).toEqual(['Home', 'Workflows', 'Watchlist'])
+    expect(railOf(html)).not.toContain('Operator')
   })
 
   it('does not say so for a refusal below 500', () => {
@@ -371,20 +413,22 @@ describe('when the platform is down', () => {
 describe('the way in to the practice Jira', () => {
   const jiraLink = /<a\b[^>]*aria-label="Jira, practice copy"[^>]*href="\/jira"[^>]*>[\s\S]*?<\/a>/
 
-  it('is a header link next to Teams and Settings, with a visible Jira label, and not in the rail', () => {
+  it('is a link at the rail’s foot beside Teams and Settings, with a visible Jira label, and not one of the three items', () => {
     const html = render()
-    const link = jiraLink.exec(headerOf(html))?.[0] ?? ''
+    const link = jiraLink.exec(footOf(html))?.[0] ?? ''
     expect(text(link)).toBe('Jira')
-    expect(railLabels(html)).not.toContain('Practice Jira')
+    expect(railLabels(html)).not.toContain('Jira')
   })
 
   it('is left out for someone who is not on the People list, as Teams is', () => {
     const mallory: Me = { id: 'mallory', display: 'Mallory', roles: [], on_list: false }
-    expect(headerOf(render({ me: mallory }))).not.toContain('href="/jira"')
+    const html = render({ me: mallory })
+    expect(html).not.toContain('href="/jira"')
+    expect(html).not.toContain(`aria-label="${TEAMS_TITLE}"`)
   })
 
   it('is left out when a real Jira address is configured, because the page has nothing to show then', () => {
-    expect(headerOf(render({ browseUrl: 'https://jira.example.test/browse/{key}' }))).not.toContain('href="/jira"')
+    expect(render({ browseUrl: 'https://jira.example.test/browse/{key}' })).not.toContain('href="/jira"')
   })
 
   it('shows the practice Jira page at /jira/KEY with its own heading, loaded on demand', () => {

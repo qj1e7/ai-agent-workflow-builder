@@ -216,7 +216,7 @@ export function WaitingAddress({ pending, active, pressed, problem, onDecide }: 
           <Button loading={pressed === 'decline'} onClick={() => onDecide(pending, 'decline')}>
             Not now
           </Button>
-          <Button variant="approve" loading={pressed === 'confirm'} onClick={() => onDecide(pending, 'confirm')}>
+          <Button variant="primary" loading={pressed === 'confirm'} onClick={() => onDecide(pending, 'confirm')}>
             Confirm address
           </Button>
         </div>

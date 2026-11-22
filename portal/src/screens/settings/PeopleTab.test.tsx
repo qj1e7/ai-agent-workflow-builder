@@ -181,7 +181,7 @@ describe('Not now', () => {
     return button.props['variant'] ?? 'secondary'
   }
 
-  it('is the plain secondary button beside the green Confirm on a waiting Approver', () => {
+  it('is the plain secondary button beside the one filled Confirm on a waiting Approver', () => {
     const props: RowProps = {
       person: DAVE,
       me: BOB_ME,
@@ -202,12 +202,12 @@ describe('Not now', () => {
     }
     const drawn = elementsOf(PersonRow(props), [])
     expect(variantOf(drawn, 'Not now for Dave')).toBe('secondary')
-    expect(variantOf(drawn, 'Confirm Dave as an Approver')).toBe('approve')
+    expect(variantOf(drawn, 'Confirm Dave as an Approver')).toBe('primary')
   })
 
   it('is the plain secondary button beside Confirm address on a waiting model address', () => {
     const drawn = elementsOf(WaitingAddress({ pending: pendingBob.pending as PendingModelOut, active: null, pressed: null, problem: null, onDecide: vi.fn() }), [])
     expect(variantOf(drawn, 'Not now')).toBe('secondary')
-    expect(variantOf(drawn, 'Confirm address')).toBe('approve')
+    expect(variantOf(drawn, 'Confirm address')).toBe('primary')
   })
 })

@@ -384,7 +384,7 @@ export function PersonRow({ person, me, operator, confirmation, askedByName, bus
                 Not now<span className="visually-hidden"> for {person.display}</span>
               </Button>
               {can.can === 'decide' ? (
-                <Button variant="approve" loading={busy?.act === 'confirm'} onClick={() => onDecide(confirmation, 'confirm')}>
+                <Button variant="primary" loading={busy?.act === 'confirm'} onClick={() => onDecide(confirmation, 'confirm')}>
                   Confirm<span className="visually-hidden"> {person.display} as an Approver</span>
                 </Button>
               ) : null}

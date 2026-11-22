@@ -21,24 +21,6 @@
   white-space: nowrap;
 }
 
-.pill[data-tone='wait'] {
-  border-color: var(--amber-line);
-  background: var(--amber-soft);
-  color: var(--amber-ink);
-}
-
-.pill[data-tone='bad'] {
-  border-color: var(--red-line);
-  background: var(--red-soft);
-  color: var(--red-ink);
-}
-
-.pill[data-tone='new'] {
-  border-color: transparent;
-  background: var(--accent-soft);
-  color: var(--accent-ink);
-}
-
 .changed {
   border-radius: 4px;
   animation: changed 980ms ease-out both;
@@ -111,7 +93,7 @@
 .filters button {
   min-height: 44px;
   padding: 6px 14px;
-  border: 1px solid var(--rail);
+  border: 1px solid var(--line-strong);
   border-radius: 999px;
   background: var(--surface);
   color: var(--ink);
@@ -138,7 +120,7 @@
 
 .quiet {
   padding: 28px;
-  border: 1px dashed var(--rail);
+  border: 1px dashed var(--line-strong);
   border-radius: var(--r-card);
   color: var(--muted);
   text-align: center;
@@ -476,15 +458,9 @@
   color: var(--muted);
 }
 
-.pill[data-tone='ok'] {
-  border-color: var(--green-line);
-  background: var(--green-soft);
-  color: var(--green-ink);
-}
-
-.largePills .pill {
-  padding: 3px 12px;
-  font-size: 0.9rem;
+/* On a workflow's own page the state pill is the sketch's large one. */
+.largePills > [data-life] {
+  min-height: 28px;
 }
 
 /* The Workflows page: a block is Needs you, All workflows or Following up. */
@@ -682,7 +658,7 @@
   align-items: center;
   min-height: 44px;
   padding: 0 14px;
-  border: 1px solid var(--rail);
+  border: 1px solid var(--line-strong);
   border-radius: var(--r-ctl);
   font-weight: 700;
 }

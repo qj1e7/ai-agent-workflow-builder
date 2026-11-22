@@ -9,7 +9,6 @@ import { motionAllowed } from '../ui/motion'
 import { ChatIcon, Mark } from './icons'
 import { PRODUCT } from './product'
 import { AdaptiveCardView } from './TeamsCard'
-import iconButton from './IconButton.module.css'
 import styles from './TeamsPanel.module.css'
 
 export const TEAMS_TITLE = 'Teams, practice copy'
@@ -176,7 +175,15 @@ function useWaitingForYou(person: Me | null): WaitingCount {
   return withSetUps({ count, atLeast: asks.more && count === asks.ids.length }, home.data?.setup_approvals.length ?? 0)
 }
 
-export function TeamsButton({ person }: { person: Me | null }) {
+interface TeamsButtonProps {
+  readonly person: Me | null
+  /** The rail draws the button as one of its items. */
+  readonly className: string | undefined
+  readonly labelClassName: string | undefined
+  readonly countClassName: string | undefined
+}
+
+export function TeamsButton({ person, className, labelClassName, countClassName }: TeamsButtonProps) {
   const [open, setOpen] = useState(false)
   const dialog = useRef<HTMLDialogElement>(null)
   const button = useRef<HTMLButtonElement>(null)
@@ -223,11 +230,11 @@ export function TeamsButton({ person }: { person: Me | null }) {
 
   return (
     <>
-      <button ref={button} type="button" className={iconButton['button']} aria-label={label} title={label} onClick={() => setOpen(true)}>
-        <ChatIcon />
-        <span className={iconButton['label']}>Teams</span>
+      <button ref={button} type="button" className={className} aria-label={label} title={label} onClick={() => setOpen(true)}>
+        <ChatIcon size={22} />
+        <span className={labelClassName}>Teams</span>
         {badge ? (
-          <span className={styles['badge']} aria-hidden="true">
+          <span className={countClassName} data-tone="wait" aria-hidden="true">
             {badge}
           </span>
         ) : null}

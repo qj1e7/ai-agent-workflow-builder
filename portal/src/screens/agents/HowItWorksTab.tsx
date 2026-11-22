@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router'
 import { useCapabilities } from '../../api/capabilityQueries'
 import { useAgentCards, useTools } from '../../api/queries'
 import { Button } from '../../ui/Button'
+import { Tabs } from '../../ui/Tabs'
 import { CardDialog, CardTile, PlatformDialog, PlatformTile, tileId, useCloseWithoutHistoryEntry, type ToolIndex } from './AgentCard'
 import { faceId, howShowOf, PLATFORM_AGENTS, toolsUnavailableWords, type HowShow } from './agents'
 import { CapabilitiesTab } from './CapabilitiesTab'
@@ -47,16 +48,24 @@ export function HowItWorksTab({ now }: { now: Date }) {
   return (
     <>
       <p className={styles['lead']}>{LEADS[tab]}</p>
-      <div className={styles['tabs']} role="group" aria-label="Show">
-        <button type="button" aria-pressed={tab === 'can'} onClick={() => show('can')}>
-          What it can do
-        </button>
-        <button type="button" aria-pressed={tab === 'agents'} onClick={() => show('agents')}>
-          Agents <span className={styles['count']}>{PLATFORM_AGENTS.length + specialists.length}</span>
-        </button>
-        <button type="button" aria-pressed={tab === 'tools'} onClick={() => show('tools')}>
-          Tools {tools.data ? <span className={styles['count']}>{tools.data.length}</span> : null}
-        </button>
+      <div className={styles['tabs']}>
+        <Tabs
+          label="Show"
+          tabs={[
+            { id: 'can', label: 'What it can do' },
+            {
+              id: 'agents',
+              label: (
+                <>
+                  Agents <span className={styles['count']}>{PLATFORM_AGENTS.length + specialists.length}</span>
+                </>
+              ),
+            },
+            { id: 'tools', label: <>Tools {tools.data ? <span className={styles['count']}>{tools.data.length}</span> : null}</> },
+          ]}
+          current={tab}
+          onPick={show}
+        />
       </div>
       {agentId !== null && !platform && !card && cards.isSuccess ? (
         <p className={styles['notice']} role="status">

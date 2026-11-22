@@ -14,25 +14,31 @@
 
 html {
   color-scheme: light;
-  scroll-padding-top: 84px;
+  scroll-padding-top: var(--space-4);
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
 }
 
 @media (max-width: 900px) {
   html {
-    scroll-padding-top: 76px;
     scroll-padding-bottom: 84px;
+  }
+}
+
+/* At 860 px and narrower the rail is a bar stuck across the top, so a scrolled-to heading lands under it. */
+@media (max-width: 860px) {
+  html {
+    scroll-padding-top: 72px;
   }
 }
 
 body {
   margin: 0;
   min-height: 100dvh;
-  background: var(--frame);
+  background: var(--bg-app);
   color: var(--ink);
   font-family: var(--font);
-  font-size: var(--text-16);
+  font-size: var(--fs-body);
   line-height: 1.5;
   font-variant-numeric: tabular-nums;
   -webkit-font-smoothing: antialiased;
@@ -56,23 +62,29 @@ h1,
 h2,
 h3,
 h4 {
-  font-weight: 640;
-  line-height: 1.2;
+  font-weight: var(--fw-semi);
+  line-height: 1.3;
   text-wrap: balance;
 }
 
 h1 {
-  font-size: var(--text-28);
-  letter-spacing: -0.01em;
+  font-size: var(--fs-title);
+  font-weight: var(--fw-bold);
+  letter-spacing: -0.015em;
+  line-height: 1.2;
 }
 
 h2 {
-  font-size: var(--text-22);
-  letter-spacing: -0.01em;
+  font-size: var(--fs-head);
+  font-weight: var(--fw-bold);
 }
 
 h3 {
-  font-size: var(--text-18);
+  font-size: var(--fs-head);
+}
+
+h4 {
+  font-size: var(--fs-body);
 }
 
 ul,
@@ -139,7 +151,7 @@ main[tabindex='-1']:focus {
 }
 
 .muted {
-  color: var(--muted);
+  color: var(--text-2);
 }
 
 @media (prefers-reduced-motion: reduce) {
