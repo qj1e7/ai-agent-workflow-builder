@@ -119,10 +119,21 @@ test('unticking an Approver when only two are left explains the rule and changes
   const approvers = (await api.people()).filter((person) => person.approver).map((person) => person.id)
   test.skip(approvers.length !== 2, `needs exactly two Approvers, found ${approvers.join(', ')}`)
   await openSettings(page, 'people')
+  const sent: string[] = []
+  page.on('request', (request) => {
+    if (request.url().includes('/api/v1/people/bob/approver')) sent.push(request.method())
+  })
+  const row = personRow(page, 'bob@example.test')
   await roleBox(page, 'Approver', 'Bob').click()
-  await expect(personRow(page, 'bob@example.test')).toContainText('At least 2 people must be Approvers, so nobody has to approve their own work.')
+  await expect(row).toContainText('Remove Bob as an Approver? Another Approver has to confirm before they can approve again.')
+  await expect(row.getByRole('button', { name: 'Keep it' })).toBeFocused()
+  await expect(roleBox(page, 'Approver', 'Bob')).toBeChecked()
+  expect(sent, 'the untick alone sends nothing').toEqual([])
+  await row.getByRole('button', { name: 'Yes, remove Approver' }).click()
+  await expect(row).toContainText('At least 2 people must be Approvers, so nobody has to approve their own work.')
   await expect(roleBox(page, 'Approver', 'Bob')).toBeChecked()
   await expect(roleBox(page, 'Approver', 'Bob')).toBeFocused()
+  expect(sent).toEqual(['DELETE'])
 })
 
 test('an Operator connects the mock model, and only the key’s last two characters ever show', async ({ page }, info) => {
