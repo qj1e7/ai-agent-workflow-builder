@@ -229,7 +229,9 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
       return
     }
     decisionArea.focus({ preventScroll: true })
-    decisionArea.scrollIntoView({ block: 'start' })
+    const { top, bottom } = decisionArea.getBoundingClientRect()
+    const offScreen = top >= window.innerHeight || bottom <= 0
+    if (offScreen) decisionArea.scrollIntoView({ block: 'start' })
   }, [lands])
 
   useFollowUntilScrolled(newest?.seq ?? 0, loadedUpTo, logList)

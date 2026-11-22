@@ -698,18 +698,17 @@
   }
 }
 
-/* A details such as Versions: a summary that is a 44 px target, and what it opens. */
 details.more {
   display: grid;
   gap: 8px;
   margin-bottom: 24px;
 }
 
+/* A summary draws its open or closed triangle only while its display stays list-item. */
 details.more > summary {
-  display: flex;
-  align-items: center;
   width: fit-content;
   min-height: 44px;
+  padding-block: 10px;
   font-size: 0.95rem;
   font-weight: 800;
   cursor: pointer;
