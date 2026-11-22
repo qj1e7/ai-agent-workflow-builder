@@ -15728,8 +15728,7 @@
           "word",
           "software",
           "already_listed",
-          "also",
-          "covers"
+          "also"
         ],
         "title": "WatchlistReply",
         "type": "object"

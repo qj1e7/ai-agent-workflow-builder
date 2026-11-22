@@ -131,6 +131,8 @@ from agent_runtime.reading import (
     SAID_LIMIT,
     SCHEDULE_WORDS,
     AsksAbout,
+    PlaceRead,
+    SearchRead,
     SkipRead,
     Span,
     TaskRead,
@@ -653,30 +655,58 @@ def _also(
 ) -> SetupCardAnswer | PartAnswer | CantAnswer | None:
     """The workflow a mixed request also asks for. A ticket beside the watch with nothing to find
     and no other project is the upgrade ticket the Software watchlist raises itself, so it asks
-    for no workflow, whether or not the model read it as a ticket."""
-    own_ticket = read.search is None and read.place is None and WATCHLISTS_OWN_TICKET.search(text)
-    ticket = None if own_ticket else read.ticket
-    if task is None or not any((read.search, ticket, read.place)):
+    for no workflow, whether or not the model read it as a ticket. A search or a place the model
+    read with nothing in it, or only the ticket's own words, as "Jira", is no part of its own."""
+    own = _stretches(WATCHLISTS_OWN_TICKET, text)
+    finds = _finds(read.search, text, own)
+    elsewhere = _goes_elsewhere(read.place, text, own)
+    ticket = None if own and not finds and not elsewhere else read.ticket
+    if task is None or not (finds or ticket or elsewhere):
         return None
     rest = _from_task(read, task, text)
     if not isinstance(rest, SetupCardAnswer | PartAnswer | CantAnswer):
         return None
     software = _software_of(read, text)
-    return rest if software is None or read.search is not None else _watches(rest, software)
+    return rest if software is None or finds else _watches(rest, software)
+
+
+def _past_the_ticket(said: str, text: str, ticket: list[tuple[int, int]]) -> bool:
+    """Whether words the model read are the request's own and reach past the watchlist's ticket."""
+    at = locate(text, said) if said.strip() else None
+    return at is not None and not any(a <= at[0] and at[1] <= b for a, b in ticket)
+
+
+def _finds(search: SearchRead | None, text: str, ticket: list[tuple[int, int]]) -> bool:
+    if search is None:
+        return False
+    filters = (search.project, search.issue_types, search.status, search.assignee)
+    days = (search.created, search.updated, search.done, search.words)
+    return any(filters) or any(days) or _past_the_ticket(search.said, text, ticket)
+
+
+def _goes_elsewhere(place: PlaceRead | None, text: str, ticket: list[tuple[int, int]]) -> bool:
+    return place is not None and (bool(place.project) or _past_the_ticket(place.said, text, ticket))
 
 
 def _watches[A: SetupCardAnswer | PartAnswer | CantAnswer](rest: A, software: str) -> A:
-    """The card beside a watch with nothing to find, watching the software the request names."""
+    """The card beside a watch with nothing to find, watching the software the request names, in
+    the words the card's own check of a part accepts."""
     if isinstance(rest, CantAnswer):
         card = rest.alternative
         if not isinstance(card, SetupCardAnswer):
             return rest
         return rest.model_copy(update={"alternative": _watches(card, software)})
     watch = UnderstoodRow(
-        kind="look_for", text=software, state="understood", note=READ_FROM.format(software)
+        kind="look_for",
+        text=WATCH_ROW.format(software),
+        state="understood",
+        note=READ_FROM.format(software),
     )
     rows = [watch if r.kind == "look_for" and r.state == "missing" else r for r in rest.rows]
     return rest.model_copy(update={"rows": rows})
+
+
+WATCH_ROW: Final = "New releases of {}"
 
 
 _TICKET_KEY: Final = re.compile(r"\b[A-Z][A-Z0-9]+-\d+\b")

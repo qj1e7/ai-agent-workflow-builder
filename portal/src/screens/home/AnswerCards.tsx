@@ -1,6 +1,6 @@
 import { useContext, useEffect, useState, type ReactNode } from 'react'
 import { Link } from '../../ui/Link'
-import type { AbilitiesReply, N8nReply, CantReply, CantRowView, CapabilitiesView, FreeReply, OfflineReply, PartReply, PartView, PauseReply, PlannerReply, QuestionReply, ResumeReply, SetupCardReply, SwitchChoice, WatchlistReply, WatchPart } from '../../api/types'
+import type { AbilitiesReply, N8nReply, CantReply, CantRowView, CapabilitiesView, FreeReply, OfflineReply, PartReply, PartView, PauseReply, PlannerReply, QuestionReply, ResumeReply, SetupCardReply, SwitchChoice, WatchlistReply, WatchlistView, WatchPart } from '../../api/types'
 import { useErrorWords } from '../../api/context'
 import { useCapabilities } from '../../api/plannerQueries'
 import { useMoveWorkflow } from '../../api/workflowQueries'
@@ -10,13 +10,14 @@ import { Card } from '../../ui/Card'
 import { OpenButton } from '../../ui/OpenItem'
 import { useWatchlist } from '../../api/queries'
 import { sentenceFor, softwarePath, stateOf } from '../software/software'
+import { upgradeTicketWords } from '../workflows/workflow'
 import softwareStyles from '../software/Software.module.css'
 import { ChangedInN8nAnswer } from './ChangedCard'
 import { AskTheTeam } from './AskTheTeam'
 import { useAsker } from './asker'
-import { askedRunsWords, cantLines, capabilityCard, moveAllLabel, offerLabel, oneLine, ownTimeSay, questionActions, refusalNext, SAY_ANOTHER_WAY, START_LEAD, startingPoints, startSteps, stateWords, switchedSay, unwatchedSay, UPGRADE_TICKET, watchlistRunsWords, watchlistSwitchNote, type Asker } from './answers'
+import { cantLines, capabilityCard, notCheckingWords, offerLabel, oneLine, ownTimeOffer, questionActions, refusalNext, SAY_ANOTHER_WAY, START_LEAD, startingPoints, startSteps, stateWords, switchedSay, unwatchedSay, watchlistRunsWords, watchlistSwitchNote, type Asker } from './answers'
 import { cardFrom, upperFirst } from './card'
-import { asksOnCard, cantOnCard, crossesInstead, crossesOnCard, crossWords, followedNothing, isOwnTime, onlyOwnTime, ownTimeOnCard, watchlistRuns } from './parts'
+import { asksOnCard, cantOnCard, crossesInstead, crossesOnCard, followedNothing, isOwnTime, onlyOwnTime, ownTimeOnCard } from './parts'
 import { PartsList, type Part } from './PartsList'
 import { SetupCard, type CardStart } from './SetupCard'
 import { AskPlanner, CardLive, NewestAnswer, useMainButton } from './primary'
@@ -131,24 +132,23 @@ export function CantAnswer({ reply, typed }: { reply: CantReply; typed: string }
  * isn't on the watchlist yet, with Watch it. Asked about its version, it also says the version they run isn't known. Watch it adds
  * it to the Software watchlist, which is where watched software lives here, after finding its GitHub project.
  *
- * A watched software's card ticks each part of the request the watchlist does itself. Beside a time of its own, it says the
- * watchlist's one schedule, and its main button asks the Planner to move the whole watchlist: the Planner answers with the edit
- * card, so nothing changes until they save it.
+ * The card ticks each part of the request the watchlist does itself, for software not watched yet too, where Watch it brings
+ * them. Beside a time of its own, a watched software's card says the watchlist's one schedule, and its button asks the Planner to
+ * move the whole watchlist: the Planner answers with the edit card, so nothing changes until they save it.
  */
 function SoftwareCard({ name, listed, word, covers, ownTime }: { name: string; listed: WatchlistReply['already_listed']; word: string; covers: readonly WatchPart[]; ownTime: PartView | null }) {
   const main = useMainButton()
   const operator = useAsker() === 'operator'
   const ask = useContext(AskPlanner)
-  const watchlist = useWatchlist({ enabled: listed !== null })
+  const watchlist = useWatchlist({ enabled: listed !== null || covers.length > 0 })
   const [watching, setWatching] = useState(false)
   const view = watchlist.data
   const row = listed ? view?.software.find((software) => software.id === listed.software_id) : undefined
   const state = row ? stateOf(row) : null
+  const parts = <PartsList parts={coveredParts(covers, view)} short />
   if (listed) {
-    const runs = view?.schedule ? watchlistRunsWords(view.schedule) : null
-    // "All 1 software" says nothing, so a watchlist of one keeps the cross's own words and offer.
-    const total = view && runs && view.software.length > 1 ? view.software.length : null
-    const move = ownTime && operator && ask ? { label: total === null ? watchlistRuns(ownTime.text) : moveAllLabel(total, askedRunsWords(ownTime.text)), send: () => ask(watchlistRuns(ownTime.text)) } : null
+    const offer = ownTime ? ownTimeOffer(ownTime, view) : null
+    const move = offer && operator && ask ? { ...offer, send: () => ask(offer.request) } : null
     return (
       <Card
         title={row?.name ?? listed.name}
@@ -162,19 +162,19 @@ function SoftwareCard({ name, listed, word, covers, ownTime }: { name: string; l
         actions={
           <>
             {move ? (
-              <button type="button" className={cx(buttonClassName(main), partsStyles['offer'])} onClick={move.send}>
+              <button type="button" className={cx(buttonClassName(move.main ? main : 'secondary'), partsStyles['offer'])} onClick={move.send}>
                 {move.label}
               </button>
             ) : null}
-            <OpenButton variant={move ? 'secondary' : main} item={{ kind: 'software', id: listed.software_id }} to={softwarePath(listed.software_id)}>
+            <OpenButton variant={move?.main ? 'secondary' : main} item={{ kind: 'software', id: listed.software_id }} to={softwarePath(listed.software_id)}>
               Open it
             </OpenButton>
           </>
         }
       >
         <p>{row ? sentenceFor(row) : `${listed.name} is on the Software watchlist.`}</p>
-        <PartsList parts={coveredParts(covers, runs)} short />
-        {ownTime ? <p>{total !== null && runs ? ownTimeSay(total, runs) : crossWords(ownTime)}</p> : null}
+        {parts}
+        {offer?.says.map((said) => <p key={said}>{said}</p>)}
       </Card>
     )
   }
@@ -190,16 +190,23 @@ function SoftwareCard({ name, listed, word, covers, ownTime }: { name: string; l
       }
     >
       <p className="muted">{unwatchedSay(word)}</p>
+      {parts}
       {watching ? <AddToWatchlist name={name} /> : null}
     </Card>
   )
 }
 
-/** The ticked rows for the parts of a request the Software watchlist does itself, in the set-up card's words. When waits for its schedule. */
-function coveredParts(covers: readonly WatchPart[], runs: string | null): Part[] {
+/**
+ * The rows for the parts of a request the Software watchlist does itself, in the set-up card's words, once the watchlist is read:
+ * Then names its project, and When is ticked only while it checks on its own. Paused or held, When says why it starts nothing.
+ */
+function coveredParts(covers: readonly WatchPart[], view: WatchlistView | null | undefined): Part[] {
+  if (!view) return []
   return covers.flatMap((covered): Part[] => {
-    if (covered === 'ticket') return [{ key: 'Then', mark: 'ok', label: 'Then', body: UPGRADE_TICKET }]
-    return runs === null ? [] : [{ key: 'When', mark: 'ok', label: 'When', body: upperFirst(runs) }]
+    if (covered === 'ticket') return [{ key: 'Then', mark: 'ok', label: 'Then', body: upperFirst(upgradeTicketWords(view.ticket_project)) }]
+    if (!view.schedule) return []
+    const stopped = notCheckingWords(view)
+    return [{ key: 'When', mark: stopped === null ? 'ok' : 'no', label: 'When', body: stopped ?? upperFirst(watchlistRunsWords(view.schedule)) }]
   })
 }
 
@@ -209,7 +216,7 @@ export function WatchlistAnswer({ reply, typed, ownTime = null }: { reply: Watch
   return (
     <>
       {listed || reply.software ? (
-        <SoftwareCard name={listed?.name ?? reply.software ?? ''} listed={listed} word={reply.word} covers={reply.covers} ownTime={ownTime} />
+        <SoftwareCard name={listed?.name ?? reply.software ?? ''} listed={listed} word={reply.word} covers={reply.covers ?? []} ownTime={ownTime} />
       ) : (
         <Card title="The Software watchlist" actions={<ButtonLink variant={main} to="/software">Open the Software watchlist</ButtonLink>} />
       )}

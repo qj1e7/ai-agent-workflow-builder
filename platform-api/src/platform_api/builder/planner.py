@@ -18,6 +18,7 @@ from datetime import UTC, datetime
 from typing import Annotated, Final, Literal, Protocol, Self
 
 from pydantic import AwareDatetime, ConfigDict, Field, StringConstraints, model_validator
+from pydantic.config import JsonDict
 
 from platform_api.builder import asks
 from platform_api.builder.drafted_workflows import SAME_WORDS_WITHIN, DraftedWorkflows
@@ -307,7 +308,17 @@ class PartReply(Reply):
     draft_words: str | None = DRAFT_WORDS_FIELD
 
 
+def _covers_may_be_absent(schema: JsonDict) -> None:
+    """A Portal built before `covers` reads a reply without it, so the contract lists it as
+    optional."""
+    required = schema.get("required")
+    if isinstance(required, list) and "covers" in required:
+        required.remove("covers")
+
+
 class WatchlistReply(Reply):
+    model_config = ConfigDict(json_schema_extra=_covers_may_be_absent)
+
     answer: Literal["watchlist"] = "watchlist"
     word: str
     software: str | None
