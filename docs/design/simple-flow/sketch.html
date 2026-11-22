@@ -1,0 +1,468 @@
+<title>Simpler Core Flow</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@400;600;700&display=swap">
+<style>
+/* Layout: one reading column; flows run as rows of steps that wrap; mock cards sit under the step they show. */
+:root {
+  --bg: #f4f6f8; --paper: #ffffff; --ink: #14181c; --muted: #535b64; --line: #dbe1e6; --sunk: #eef1f4;
+  --accent: #1b6c80; --accent-soft: #e1eff2;
+  --bad: #b3261e; --bad-soft: #fbeceb; --wait: #8a5300; --wait-soft: #fff3dc; --ok: #1d6b3d; --ok-soft: #e5f3ea;
+  --font: "Atkinson Hyperlegible Next", system-ui, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --bg: #0f1316; --paper: #171c20; --ink: #e7ecef; --muted: #a2acb5; --line: #2b333a; --sunk: #1d2328;
+    --accent: #6cc3d6; --accent-soft: #15323a; --bad: #ff8a80; --bad-soft: #3a1d1b; --wait: #f2b55a; --wait-soft: #3a2a10; --ok: #7fd39c; --ok-soft: #14301f; color-scheme: dark; }
+}
+:root[data-theme="dark"] { --bg: #0f1316; --paper: #171c20; --ink: #e7ecef; --muted: #a2acb5; --line: #2b333a; --sunk: #1d2328;
+  --accent: #6cc3d6; --accent-soft: #15323a; --bad: #ff8a80; --bad-soft: #3a1d1b; --wait: #f2b55a; --wait-soft: #3a2a10; --ok: #7fd39c; --ok-soft: #14301f; color-scheme: dark; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.55 var(--font);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 36px 80px; }
+.wrap { max-width: 1080px; margin: 0 auto; display: grid; gap: 52px; }
+h1, h2, h3 { margin: 0; line-height: 1.2; text-wrap: balance; }
+h1 { font-size: 2.125rem; font-weight: 700; }
+h2 { font-size: 1.5rem; font-weight: 700; }
+h3 { font-size: 1.0625rem; font-weight: 600; }
+p { margin: 0; }
+section { display: grid; gap: 18px; }
+.eyebrow { font-size: .8125rem; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.lede { color: var(--muted); font-size: 1.0625rem; max-width: 66ch; }
+.small { color: var(--muted); font-size: .875rem; }
+
+/* Counters that compare today with the simpler flow */
+.counts { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+.count { background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: grid; gap: 2px; }
+.count .now { font-size: 1.75rem; font-weight: 700; color: var(--bad); }
+.count .then { font-size: 1.75rem; font-weight: 700; color: var(--ok); }
+.count .arrow { color: var(--muted); font-weight: 400; padding: 0 6px; }
+
+/* Flow lanes */
+.lane { display: grid; gap: 8px; background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+.lane-head { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.tag { font-size: .75rem; font-weight: 700; letter-spacing: .04em; padding: 2px 9px; border-radius: 999px; }
+.tag.bad { background: var(--bad-soft); color: var(--bad); }
+.tag.ok { background: var(--ok-soft); color: var(--ok); }
+.steps { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.steps li { display: flex; align-items: center; gap: 6px; }
+.steps li + li::before { content: "→"; color: var(--muted); }
+.step { background: var(--sunk); border-radius: 8px; padding: 6px 10px; font-size: .9375rem; }
+.step.yes { background: var(--wait-soft); color: var(--wait); font-weight: 600; }
+.step.dead { background: var(--bad-soft); color: var(--bad); font-weight: 600; }
+.step.big { background: var(--accent-soft); color: var(--ink); font-weight: 700; font-size: 1.0625rem; padding: 10px 16px; }
+
+/* The simpler flow as three columns with a mock under each */
+.three { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; align-items: start; }
+@media (max-width: 860px) { .three { grid-template-columns: minmax(0, 1fr); } }
+.col { display: grid; gap: 10px; min-width: 0; }
+.col-head { display: flex; gap: 10px; align-items: center; }
+.num { width: 30px; height: 30px; border-radius: 50%; background: var(--ink); color: var(--paper); display: grid; place-items: center; font-weight: 700; flex: none; }
+.mock { background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: grid; gap: 10px; }
+.box { border: 1.5px solid var(--muted); border-radius: 10px; padding: 10px 12px; font-size: .9375rem; display: flex; justify-content: space-between; gap: 10px; align-items: end; }
+.send { width: 30px; height: 30px; border-radius: 8px; background: var(--ink); color: var(--paper); display: grid; place-items: center; flex: none; font-size: .875rem; }
+.rows { display: grid; gap: 0; }
+.row { display: grid; grid-template-columns: 70px minmax(0, 1fr); gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); font-size: .9375rem; }
+.row:first-child { border-top: 0; }
+.row b { font-weight: 600; color: var(--muted); }
+.ask { color: var(--wait); font-weight: 600; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; font-size: .875rem; }
+.btn { width: fit-content; border-radius: 8px; padding: 7px 14px; font-weight: 600; font-size: .9375rem; background: var(--ink); color: var(--paper); }
+.btn.quiet { background: none; color: var(--ink); text-decoration: underline; text-underline-offset: 3px; padding-inline: 4px; }
+.btn.off { background: var(--sunk); color: var(--muted); }
+.line { display: flex; gap: 8px; align-items: center; font-size: .9375rem; }
+.dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+.rule { background: var(--accent-soft); border-radius: 12px; padding: 16px 18px; font-size: 1.125rem; font-weight: 600; text-align: center; }
+
+/* Four states */
+.states { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 860px) { .states { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 480px) { .states { grid-template-columns: minmax(0, 1fr); } }
+.state { background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; display: grid; gap: 6px; align-content: start; }
+.state .name { display: flex; gap: 8px; align-items: center; font-weight: 700; }
+.needs { border-color: var(--bad); box-shadow: 0 0 0 1px var(--bad); grid-column: span 1; }
+.needs ul { margin: 4px 0 0; padding-left: 18px; display: grid; gap: 4px; font-size: .9375rem; }
+
+/* Changes table */
+.table-wrap { overflow-x: auto; background: var(--paper); border: 1px solid var(--line); border-radius: 12px; }
+table { border-collapse: collapse; width: 100%; font-size: .9375rem; }
+th, td { text-align: left; padding: 11px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: .8125rem; color: var(--muted); font-weight: 600; }
+tr:last-child td { border-bottom: 0; }
+.pill { font-size: .75rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.pill.fe { background: var(--ok-soft); color: var(--ok); }
+.pill.be { background: var(--wait-soft); color: var(--wait); }
+.note { background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; display: grid; gap: 8px; max-width: 80ch; }
+.note ol { margin: 0; padding-left: 20px; display: grid; gap: 4px; }
+
+/* Detail sections */
+.pairs { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; align-items: start; }
+.case { display: grid; gap: 8px; min-width: 0; }
+.case-label { font-size: .8125rem; font-weight: 600; color: var(--muted); letter-spacing: .03em; text-transform: uppercase; }
+.bubble { justify-self: end; background: var(--sunk); border-radius: 12px; padding: 8px 12px; font-size: .9375rem; max-width: 90%; }
+.planner { display: flex; gap: 8px; align-items: flex-start; font-size: .9375rem; }
+.face { width: 22px; height: 22px; border-radius: 50%; background: var(--ink); flex: none; position: relative; }
+.face::after { content: ""; position: absolute; left: 5px; right: 5px; top: 8px; height: 5px; border-radius: 3px; background: var(--accent-soft); }
+.cross { color: var(--bad); font-weight: 700; }
+.guess { font-size: .75rem; font-weight: 700; padding: 1px 7px; border-radius: 999px; background: var(--wait-soft); color: var(--wait); margin-left: 6px; white-space: nowrap; }
+.diff s { color: var(--muted); }
+.diff b { color: var(--ok); }
+.btnrow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.btn.line { background: none; color: var(--ink); border: 1px solid var(--line); }
+.wf { background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: grid; gap: 8px; }
+.wf-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.wf-name { font-weight: 700; }
+.st { display: inline-flex; align-items: center; gap: 6px; font-size: .875rem; font-weight: 600; }
+.st.on { color: var(--ok); } .st.paused, .st.draft { color: var(--muted); } .st.needs { color: var(--bad); }
+.reason { background: var(--bad-soft); border-radius: 8px; padding: 8px 10px; font-size: .9375rem; }
+.reason.wait { background: var(--wait-soft); }
+.lock { font-size: .875rem; color: var(--muted); }
+.teams { background: var(--paper); border: 1px solid var(--line); border-left: 4px solid #5b5fc7; border-radius: 10px; padding: 12px 14px; display: grid; gap: 8px; }
+.teams .who { font-size: .8125rem; color: var(--muted); }
+.home { background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: grid; gap: 10px; }
+.home-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; align-items: center; padding: 8px 0; border-top: 1px solid var(--line); font-size: .9375rem; }
+.home-row:first-of-type { border-top: 0; }
+.badge { min-width: 20px; height: 20px; border-radius: 999px; background: var(--bad); color: var(--paper); font-size: .75rem; font-weight: 700; display: inline-grid; place-items: center; padding: 0 6px; }
+</style>
+
+<div class="wrap">
+  <header style="display:grid;gap:12px">
+    <p class="eyebrow">AI Workflow Builder · core flow · sketch for a decision, 22 Nov 2026</p>
+    <h1>Simpler Core Flow</h1>
+    <p class="lede">Today a support person has to learn four overlapping ideas to do one job. This sketch shows the same job as one path with three steps, four states and one rule about approval. It is a proposal: any new wording on this page still needs your OK, and nothing is built yet.</p>
+  </header>
+
+  <section aria-labelledby="h-counts">
+    <h2 id="h-counts">What a person has to learn</h2>
+    <div class="counts">
+      <div class="count"><span class="small">Ways a request can go</span><span><span class="now">3</span><span class="arrow">→</span><span class="then">1</span></span></div>
+      <div class="count"><span class="small">Steps to get a workflow running</span><span><span class="now">5 to 7</span><span class="arrow">→</span><span class="then">3</span></span></div>
+      <div class="count"><span class="small">Kinds of "yes"</span><span><span class="now">3</span><span class="arrow">→</span><span class="then">1 rule</span></span></div>
+      <div class="count"><span class="small">Workflow states shown</span><span><span class="now">7</span><span class="arrow">→</span><span class="then">4</span></span></div>
+    </div>
+    <p class="small">Today's 7 workflow states: Draft, On, Paused, Stopped, Needs a fix, Waiting for a yes, Held. Run results (Done, Nothing new, Declined, Skipped) stay as plain lines in a run's history.</p>
+  </section>
+
+  <section aria-labelledby="h-today">
+    <h2 id="h-today">Today: the same request can go three ways</h2>
+    <p class="lede">The person typed "Every day at 9am, check LangGraph for new releases". Which path they land on depends on things they can't see.</p>
+
+    <div class="lane">
+      <div class="lane-head"><span class="tag bad">Path A</span><h3>A setup card from our blocks</h3></div>
+      <ol class="steps">
+        <li><span class="step">Type the task</span></li>
+        <li><span class="step">Check the card</span></li>
+        <li><span class="step">Answer its questions</span></li>
+        <li><span class="step">Press Set up</span></li>
+        <li><span class="step">Test run, writes nothing</span></li>
+        <li><span class="step">Press Turn it on</span></li>
+        <li><span class="step yes">Each write: an Approver's yes</span></li>
+      </ol>
+    </div>
+
+    <div class="lane">
+      <div class="lane-head"><span class="tag bad">Path B</span><h3>"Draft it as an n8n workflow"</h3></div>
+      <ol class="steps">
+        <li><span class="step">Type the task</span></li>
+        <li><span class="step">Press Draft it as an n8n workflow</span></li>
+        <li><span class="step">The drafter drafts it</span></li>
+        <li><span class="step">The safety checker flags it</span></li>
+        <li><span class="step yes">A set-up yes from an Approver</span></li>
+        <li><span class="step">Turn it on</span></li>
+        <li><span class="step yes">Each write: an Approver's yes</span></li>
+      </ol>
+    </div>
+
+    <div class="lane">
+      <div class="lane-head"><span class="tag bad">Path C</span><h3>The Software watchlist</h3></div>
+      <ol class="steps">
+        <li><span class="step">Type the task</span></li>
+        <li><span class="step dead">"I can't do all of that"</span></li>
+        <li><span class="step dead">"I can't give one software its own time"</span></li>
+        <li><span class="step">Make the watchlist run every day</span></li>
+        <li><span class="step">Change, then Save</span></li>
+      </ol>
+      <p class="small">LangGraph already lives on the watchlist, which runs all software on one shared schedule. The person asked for a workflow and met a second idea instead.</p>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-simple">
+    <h2 id="h-simple">Simpler: one path, three steps</h2>
+    <p class="lede">Every request ends up as a workflow. The Planner decides how to build it, so the person never picks a path. The words in these mock-ups are drafts.</p>
+
+    <div class="three">
+      <div class="col">
+        <div class="col-head"><span class="num">1</span><h3>Describe</h3></div>
+        <p class="small">Type it in plain words, as today.</p>
+        <div class="mock" aria-label="Mock of the Planner's box">
+          <div class="box"><span>Every day at 9am, check LangGraph for new releases and create a Jira ticket</span><span class="send">↑</span></div>
+        </div>
+      </div>
+
+      <div class="col">
+        <div class="col-head"><span class="num">2</span><h3>Check</h3></div>
+        <p class="small">One card, always the same shape. It says when it runs, what it reads, and what it writes after a yes. It asks at most one question.</p>
+        <div class="mock" aria-label="Mock of the check card">
+          <h3>LangGraph release check</h3>
+          <div class="rows">
+            <div class="row"><b>When</b><span>Every day at 9:00</span></div>
+            <div class="row"><b>Reads</b><span>LangGraph releases on GitHub</span></div>
+            <div class="row"><b>Writes</b><span>1 Jira ticket, after an Approver's yes<br><span class="ask">Which Jira project?</span></span></div>
+          </div>
+          <div class="chips"><span class="chip">MOCK</span><span class="chip">OPS</span><span class="chip">Another project</span></div>
+          <span class="btn off">Answer 1 question first</span>
+          <span class="btn quiet">Build it with any n8n block</span>
+        </div>
+      </div>
+
+      <div class="col">
+        <div class="col-head"><span class="num">3</span><h3>Turn on</h3></div>
+        <p class="small">One button. It runs the test itself, which writes nothing, then turns the workflow on if the test passes.</p>
+        <div class="mock" aria-label="Mock of turning it on">
+          <span class="btn">Turn on</span>
+          <div class="line"><span class="dot" style="background:var(--muted)"></span><span>Testing it now. This writes nothing.</span></div>
+          <div class="line"><span class="dot" style="background:var(--ok)"></span><span><b>On.</b> Next run tomorrow at 9:00.</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="note" style="max-width:none;border-color:var(--ok);box-shadow:0 0 0 1px var(--ok)">
+      <h3>Nothing you can do today goes away</h3>
+      <ol>
+        <li><b>Any n8n block.</b> The Planner uses our blocks when they cover the task and any n8n block when they don't, as the drafter can today (ADR 0051). The quiet "Build it with any n8n block" link on the card lets the person choose it themselves. A flagged workflow still needs an Approver's one-time yes, shown as one line on the card.</li>
+        <li><b>Edit in n8n.</b> "Open in n8n" stays on every workflow page, in view. Staff can still change, build and fix workflows in n8n without a technical person, as the sponsor asked. Edits made there are still checked at the write.</li>
+        <li><b>What changes</b> is only that the person no longer has to pick a path before they start.</li>
+      </ol>
+    </div>
+
+    <div class="rule">Nothing is written until an Approver says yes.</div>
+    <p class="small" style="text-align:center">Said once, in the same words everywhere. When a workflow needs a one-time check by an Approver before it can run, the card shows it as one extra line, not a separate path.</p>
+  </section>
+
+  <section aria-labelledby="h-states">
+    <h2 id="h-states">Four states, and everything that needs you in one place</h2>
+    <div class="states">
+      <div class="state"><span class="name"><span class="dot" style="background:var(--ok)"></span>On</span><span class="small">Runs on its own. Next run shown.</span></div>
+      <div class="state"><span class="name"><span class="dot" style="background:var(--muted)"></span>Paused</span><span class="small">Kept, but not running. One button: Resume.</span></div>
+      <div class="state"><span class="name"><span class="dot" style="border:2px solid var(--muted)"></span>Draft</span><span class="small">Not turned on yet. One button: Turn on.</span></div>
+      <div class="state needs"><span class="name"><span class="dot" style="background:var(--bad)"></span>Needs you</span><span class="small">One reason and one button inside:</span>
+        <ul><li>Stopped: <b>Open the run</b></li><li>Waiting for a yes: <b>Open</b> (the approval page)</li><li>Needs a fix: <b>See what to fix</b></li></ul>
+      </div>
+    </div>
+    <p class="small">Home and the Workflows list show the same four states, with Needs you first. On a workflow page, "Open in n8n" stays in view. Only Explain and Versions move behind "Details".</p>
+  </section>
+
+  <section aria-labelledby="h-d-steps">
+    <p class="eyebrow">In detail</p>
+    <h2 id="h-d-steps">The three steps, case by case</h2>
+
+    <h3>1. Describe</h3>
+    <div class="pairs">
+      <div class="case"><span class="case-label">Clear request</span>
+        <div class="mock"><div class="bubble">Every day at 9am, check LangGraph for new releases and create a Jira ticket</div><p class="small">Goes straight to the Check card.</p></div>
+      </div>
+      <div class="case"><span class="case-label">Unclear request</span>
+        <div class="mock"><div class="bubble">help me keep an eye on things</div>
+          <div class="planner"><span class="face"></span><span>What should I keep an eye on?</span></div>
+          <div class="chips"><span class="chip">Software releases</span><span class="chip">Jira tickets</span><span class="chip">Something else</span></div>
+          <p class="small">One short question with chips. No card yet.</p></div>
+      </div>
+      <div class="case"><span class="case-label">Part of it can't be done</span>
+        <div class="mock"><div class="bubble">...and flag any security issues</div>
+          <div class="rows"><div class="row"><b><span class="cross">✕</span></b><span>Flag security issues. I can't read security advisories yet. <u>Ask the team</u></span></div></div>
+          <p class="small">One crossed row on the same card, never a separate box.</p></div>
+      </div>
+    </div>
+
+    <h3>2. Check</h3>
+    <div class="pairs">
+      <div class="case"><span class="case-label">A question is open</span>
+        <div class="mock">
+          <h3>LangGraph release check</h3>
+          <div class="rows">
+            <div class="row"><b>When</b><span>Every day at 9:00</span></div>
+            <div class="row"><b>Reads</b><span>LangGraph releases on GitHub</span></div>
+            <div class="row"><b>Writes</b><span>1 Jira ticket, issue type Task<span class="guess">I guessed</span><br><span class="ask">Which Jira project?</span></span></div>
+          </div>
+          <div class="chips"><span class="chip">MOCK</span><span class="chip">OPS</span><span class="chip">Another project</span></div>
+          <div class="btnrow"><span class="btn off">Answer 1 question first</span><span class="btn quiet">Never mind</span></div>
+          <span class="btn quiet">Build it with any n8n block</span>
+        </div>
+      </div>
+      <div class="case"><span class="case-label">Ready</span>
+        <div class="mock">
+          <h3>LangGraph release check</h3>
+          <div class="rows">
+            <div class="row"><b>When</b><span>Every day at 9:00</span></div>
+            <div class="row"><b>Reads</b><span>LangGraph releases on GitHub</span></div>
+            <div class="row"><b>Writes</b><span>1 Jira ticket in MOCK, after an Approver's yes</span></div>
+          </div>
+          <div class="btnrow"><span class="btn">Turn on</span><span class="btn quiet">Never mind</span></div>
+          <p class="small">"I guessed" values stay marked and can be changed in place.</p>
+        </div>
+      </div>
+      <div class="case"><span class="case-label">A change to a workflow</span>
+        <div class="mock">
+          <div class="bubble">make it run at 10am</div>
+          <h3>LangGraph release check</h3>
+          <div class="rows diff">
+            <div class="row"><b>When</b><span><s>Every day at 9:00</s> → <b>Every day at 10:00</b></span></div>
+            <div class="row"><b>Reads</b><span>No change</span></div>
+            <div class="row"><b>Writes</b><span>No change</span></div>
+          </div>
+          <div class="btnrow"><span class="btn">Save change</span><span class="btn quiet">Never mind</span></div>
+        </div>
+      </div>
+    </div>
+
+    <h3>3. Turn on</h3>
+    <div class="pairs">
+      <div class="case"><span class="case-label">Test passes</span>
+        <div class="mock">
+          <div class="line"><span class="dot" style="background:var(--muted)"></span><span>Testing it now. This writes nothing.</span></div>
+          <div class="line"><span class="dot" style="background:var(--ok)"></span><span>It found 1.2.24. It would write 1 ticket in MOCK, after a yes.</span></div>
+          <div class="line"><span class="dot" style="background:var(--ok)"></span><span><b>On.</b> Next run tomorrow at 9:00.</span></div>
+        </div>
+      </div>
+      <div class="case"><span class="case-label">Test fails</span>
+        <div class="mock">
+          <div class="line"><span class="dot" style="background:var(--muted)"></span><span>Testing it now. This writes nothing.</span></div>
+          <div class="reason">The test couldn't reach Jira project MOCK. Nothing was written. It stays a Draft.</div>
+          <div class="btnrow"><span class="btn">Try again</span><span class="btn quiet">Change the project</span></div>
+        </div>
+      </div>
+      <div class="case"><span class="case-label">Flagged, needs a one-time check</span>
+        <div class="mock">
+          <p>This one uses an n8n block the safety checker flags, so an Approver checks it once before it first runs.</p>
+          <div class="line"><span class="dot" style="border:2px solid var(--muted)"></span><span><b>Draft.</b> Waiting for an Approver to check it.</span></div>
+          <p class="small">It turns on by itself after their yes.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-d-states">
+    <p class="eyebrow">In detail</p>
+    <h2 id="h-d-states">The four states, each with one main button</h2>
+    <div class="pairs">
+      <div class="case"><span class="case-label">Draft</span>
+        <div class="wf"><div class="wf-top"><span class="wf-name">Weekly list of new bugs</span><span class="st draft"><span class="dot" style="border:2px solid var(--muted)"></span>Draft</span></div>
+          <p class="small">Not running yet.</p><span class="btn">Turn on</span></div>
+      </div>
+      <div class="case"><span class="case-label">On</span>
+        <div class="wf"><div class="wf-top"><span class="wf-name">LangGraph release check</span><span class="st on"><span class="dot" style="background:var(--ok)"></span>On</span></div>
+          <p class="small">Every day at 9:00. Next run tomorrow at 9:00.</p><p class="small">No main button: it runs by itself. A workflow with no schedule shows <b>Run now</b> here.</p></div>
+      </div>
+      <div class="case"><span class="case-label">Paused</span>
+        <div class="wf"><div class="wf-top"><span class="wf-name">Weekly summary of closed tickets</span><span class="st paused"><span class="dot" style="background:var(--muted)"></span>Paused</span></div>
+          <p class="small">Paused by Alice on Fri 20 Nov.</p><span class="btn">Resume</span></div>
+      </div>
+    </div>
+
+    <h3>Needs you: one reason, one button</h3>
+    <div class="pairs">
+      <div class="case"><span class="case-label">Stopped</span>
+        <div class="wf"><div class="wf-top"><span class="wf-name">FastAPI release check</span><span class="st needs"><span class="dot" style="background:var(--bad)"></span>Needs you</span></div>
+          <div class="reason">Stopped at 8:00. GitHub didn't answer. Nothing was written.</div><span class="btn">Open the run</span>
+          <p class="small">The run shows the troubleshooter's answer and Retry.</p></div>
+      </div>
+      <div class="case"><span class="case-label">Needs a fix</span>
+        <div class="wf"><div class="wf-top"><span class="wf-name">Close stale GitLab issues</span><span class="st needs"><span class="dot" style="background:var(--bad)"></span>Needs you</span></div>
+          <div class="reason">A change in n8n removed its Ask for a yes step, so it can't run.</div><span class="btn">See what to fix</span></div>
+      </div>
+      <div class="case"><span class="case-label">Waiting for a yes (seen by Bob, an Approver)</span>
+        <div class="wf"><div class="wf-top"><span class="wf-name">React release check</span><span class="st needs"><span class="dot" style="background:var(--bad)"></span>Needs you</span></div>
+          <div class="reason wait">1 Jira ticket waits for your yes. Asked by Alice at 9:01.</div><span class="btn">Open</span></div>
+      </div>
+    </div>
+
+    <div class="pairs">
+      <div class="case"><span class="case-label">The same wait, seen by Alice, who asked</span>
+        <div class="wf"><div class="wf-top"><span class="wf-name">React release check</span><span class="st on"><span class="dot" style="background:var(--ok)"></span>On · waiting for Bob's yes</span></div>
+          <p class="small">Not Needs you for Alice: a person never approves their own request.</p></div>
+      </div>
+      <div class="case"><span class="case-label">Someone is editing it in n8n</span>
+        <div class="wf"><div class="wf-top"><span class="wf-name">Close stale GitLab issues</span><span class="st on"><span class="dot" style="background:var(--ok)"></span>On</span></div>
+          <p class="lock">🔒 Carol is editing it in n8n. Changes here wait until she's done.</p>
+          <p class="small">A note, not a state.</p></div>
+      </div>
+      <div class="case"><span class="case-label">Where they show: Home</span>
+        <div class="home">
+          <div class="wf-top"><b>Needs you</b><span class="badge">2</span></div>
+          <div class="home-row"><span>FastAPI release check</span><span class="st needs">Stopped</span><span class="btn line">Open the run</span></div>
+          <div class="home-row"><span>Close stale GitLab issues</span><span class="st needs">Needs a fix</span><span class="btn line">See what to fix</span></div>
+          <p class="small">The same number shows on the rail. Below it come your workflows with their states.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Today</th><th>Becomes</th></tr></thead>
+        <tbody>
+          <tr><td>Draft</td><td>Draft (also covers "waiting for an Approver's one-time check")</td></tr>
+          <tr><td>On</td><td>On</td></tr>
+          <tr><td>Paused</td><td>Paused</td></tr>
+          <tr><td>Stopped</td><td>Needs you: Stopped, with Open the run</td></tr>
+          <tr><td>Needs a fix</td><td>Needs you: Needs a fix, with See what to fix</td></tr>
+          <tr><td>Waiting for a yes</td><td>Needs you for the Approvers who can say yes; "On · waiting for Bob's yes" for everyone else</td></tr>
+          <tr><td>Held</td><td>A note on the workflow, such as "Carol is editing it in n8n"</td></tr>
+          <tr><td>Done, Nothing new, Declined, Skipped</td><td>Run results: plain lines in Recent runs, not states</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-d-rule">
+    <p class="eyebrow">In detail</p>
+    <h2 id="h-d-rule">The one approval rule, and how today's three kinds of yes fit under it</h2>
+    <div class="rule">Nothing is written until an Approver says yes.</div>
+    <div class="pairs">
+      <div class="case"><span class="case-label">A yes for each write</span>
+        <div class="teams"><span class="who">Teams · CODESparks Ops · to Approvers except Alice</span>
+          <b>React release check wants to create 1 Jira ticket in MOCK</b>
+          <span class="small">Upgrade React from 18.2.0 to 19.1.0. Asked by Alice at 9:01.</span>
+          <div class="btnrow"><span class="btn">Open in AI Workflow Builder</span></div></div>
+        <p class="small">As today (principle 6), nobody decides inside Teams. The card opens the approval page, where the Approver sees exactly what will be written and says yes or no. The run waits with a timer. A no ends the run with nothing written. Alice can never answer her own.</p>
+      </div>
+      <div class="case"><span class="case-label">A one-time check for flagged workflows</span>
+        <div class="mock"><div class="rows">
+          <div class="row"><b>Writes</b><span>Closes GitLab issues, after an Approver's yes</span></div>
+          <div class="row"><b>Check</b><span>An Approver checks it once before it first runs</span></div></div>
+          <p class="small">One line on the same card, and a Needs you for Approvers. Not a separate path.</p></div>
+      </div>
+      <div class="case"><span class="case-label">Two Approvers (the access review, Phase 2)</span>
+        <div class="mock"><div class="rows">
+          <div class="row"><b>Writes</b><span>Removes access for 3 people, after two Approvers say yes, one after the other</span></div></div>
+          <p class="small">The same rule, with "two Approvers" written into it.</p></div>
+      </div>
+    </div>
+    <p class="small">Changing who is an Approver stays in Settings, as admin work. It isn't part of making a workflow, so the core flow never mentions it.</p>
+  </section>
+
+  <section aria-labelledby="h-changes">
+    <h2 id="h-changes">What changes, and what it costs</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Change</th><th>What the person notices</th><th>Where the work is</th><th>Size</th></tr></thead>
+        <tbody>
+          <tr><td><b>3 steps:</b> Describe, Check, Turn on</td><td>One card shape; Set up and Turn it on become one Turn on</td><td><span class="pill fe">Portal</span></td><td>2 PRs</td></tr>
+          <tr><td><b>4 states</b> and one Needs you</td><td>Every stop has a reason and one button</td><td><span class="pill fe">Portal</span></td><td>1 to 2 PRs</td></tr>
+          <tr><td><b>One rule</b> about approval</td><td>The same sentence everywhere; details behind Details</td><td><span class="pill fe">Portal</span></td><td>1 PR</td></tr>
+          <tr><td><b>One noun:</b> the watchlist becomes a workflow</td><td>No more "I can't give one software its own time"</td><td><span class="pill be">Backend, ADR first</span></td><td>3 to 4 PRs</td></tr>
+          <tr><td><b>One path:</b> the Planner picks how to build</td><td>No separate "Draft it as an n8n workflow" path; a quiet "Build it with any n8n block" link instead. Open in n8n stays.</td><td><span class="pill be">Planner and Portal</span></td><td>2 PRs</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note">
+      <h3>Suggested order</h3>
+      <ol>
+        <li>The first three rows. They're mostly Portal work, cheap, and remove most of the confusion. About 4 to 5 PRs.</li>
+        <li>One noun. This fixes the root of the core-request mess, but changes the watchlist backend, so an ADR comes first.</li>
+        <li>One path, together with or after one noun.</li>
+      </ol>
+      <p class="small">The core-answer fix already in flight makes today's watchlist answer honest. If you choose "one noun", that card becomes temporary.</p>
+    </div>
+  </section>
+</div>
