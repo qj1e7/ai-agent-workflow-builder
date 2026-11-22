@@ -91,7 +91,7 @@ const CAROL: Viewer = { id: 'carol', operator: true, approver: false }
 
 const NOW = new Date('2026-11-04T15:00:00+08:00')
 
-const LAST: LastRun = { run_id: 'run_07', state: 'rejected', at: '2026-10-26T01:41:00Z', test: false, declined_by: 'bob', decline_reason: null, approved_by: [], proposed: 3, written: 0, tickets: true, you_can_decide: false, retryable: false, reason: null, outcome: null, stop: null }
+const LAST: LastRun = { run_id: 'run_07', state: 'rejected', at: '2026-10-26T01:41:00Z', test: false, declined_by: 'bob', decline_reason: null, approved_by: [], proposed: 3, written: 0, tickets: true, you_can_decide: false, you_can_open: false, retryable: false, reason: null, outcome: null, stop: null }
 const lastOf = (change: Partial<LastRun>): Pick<UseCaseView, 'last_run'> => ({ last_run: { ...LAST, ...change } })
 
 describe('the status words', () => {
@@ -212,20 +212,23 @@ describe('a workflow row’s line', () => {
   it('shows four states only: On, Paused, Draft and Needs you, and the run results stay in Recent runs', () => {
     const UC = { state: 'on', last_run: null } as Pick<UseCaseView, 'state' | 'last_run'>
     const say = (state: LastRun['state'], operator: boolean, change: Partial<LastRun> = {}) => statusOf({ ...UC, last_run: { ...LAST, state, ...change } }, operator)
-    expect(say('failed', true)).toEqual({ four: 'needs', label: 'Needs you', tone: 'bad' })
-    expect(say('lost', true).label).toBe('Needs you')
-    expect(say('failed', false)).toEqual({ four: 'on', label: 'On · last run stopped', tone: 'ok' })
+    expect(say('failed', true, { you_can_open: true })).toEqual({ four: 'needs', label: 'Needs you', tone: 'bad' })
+    expect(say('failed', true, { you_can_open: false }), 'Carol is an Operator but the run is not hers').toEqual({ four: 'on', label: 'On · last run stopped', tone: 'ok' })
+    expect(say('failed', false, { you_can_open: false })).toEqual({ four: 'on', label: 'On · last run stopped', tone: 'ok' })
+    expect(say('lost', true, { you_can_open: false }), 'a lost run is not in Needs you').toEqual({ four: 'on', label: 'On', tone: undefined })
     expect(say('awaiting_approval', true, { you_can_decide: true })).toEqual({ four: 'needs', label: 'Needs you', tone: 'wait' })
     expect(say('awaiting_approval', true, { you_can_decide: false })).toEqual({ four: 'on', label: 'On · waiting for an Approver’s yes', tone: 'wait' })
     expect(say('awaiting_approval', false, { you_can_decide: false }).four, 'an Approver never decides their own').toBe('on')
     expect(say('working', true)).toEqual({ four: 'on', label: 'On', tone: undefined })
     for (const state of ['rejected', 'succeeded', 'skipped', 'expired'] as const) expect(say(state, true), state).toEqual({ four: 'on', label: 'On', tone: undefined })
-    expect(statusOf({ ...UC, grade: 'needs_a_fix' }, false)).toEqual({ four: 'needs', label: 'Needs you', tone: 'bad' })
-    expect(statusOf({ ...UC, move_refused: 'It could not move.' }, false).four).toBe('needs')
+    for (const operator of [true, false]) expect(statusOf({ ...UC, grade: 'needs_a_fix' }, operator), 'Explain is open to both roles').toEqual({ four: 'needs', label: 'Needs you', tone: 'bad' })
+    expect(statusOf({ ...UC, grade: 'writes_refused' }, true).four, 'an Operator can add the yes back').toBe('needs')
+    expect(statusOf({ ...UC, grade: 'writes_refused' }, false).four, 'an Approver has nothing to do').toBe('on')
+    expect(statusOf({ ...UC, grade: 'needs_a_fix', move_refused: 'It could not move.' }, true).four, 'no action, so not Needs you').toBe('on')
     expect(statusOf({ ...UC, state: 'paused', grade: 'needs_a_fix' }, true)).toEqual({ four: 'paused', label: 'Paused', tone: undefined })
     expect(statusOf({ ...UC, state: 'draft' }, true)).toEqual({ four: 'draft', label: 'Draft', tone: undefined })
     const words = ['Done', 'Nothing new', 'Declined', 'Skipped', 'Stopped', 'Needs a fix', 'Waiting for a yes', 'Held']
-    for (const state of ['rejected', 'succeeded', 'skipped', 'expired', 'failed', 'awaiting_approval', 'working'] as const) {
+    for (const state of ['rejected', 'succeeded', 'skipped', 'expired', 'failed', 'lost', 'awaiting_approval', 'working'] as const) {
       for (const operator of [true, false]) expect(words, `${state} ${operator}`).not.toContain(say(state, operator).label)
     }
   })
@@ -504,21 +507,23 @@ describe('the rows of the list', () => {
   const nudge: UseCaseView = { ...AGENTS, use_case_id: 'uc_nudge', name: 'Stale ticket nudge', instruction: 'Ask owners about old tickets.', state: 'paused', last_run: null }
   const bugs: UseCaseView = { ...AGENTS, use_case_id: 'uc_bugs', name: 'Morning bug report check', instruction: 'Raise a ticket for each new bug report.', last_run: last({ run_id: 'run_bugs', state: 'failed', retryable: true, reason: 'AgentError' }) }
   const watchlist = (viewer: Viewer): UseCaseView => ({ ...WATCHLIST, last_run: last({ run_id: 'run_01JB8', state: 'awaiting_approval', you_can_decide: viewer === BOB }) })
-  const useCasesFor = (viewer: Viewer) => [nudge, watchlist(viewer), bugs]
+  /** Only Alice started the stopped run, so only she has it in Needs you. Carol is an Operator, but it is not her work. */
+  const useCasesFor = (viewer: Viewer) => [nudge, watchlist(viewer), { ...bugs, last_run: last({ ...bugs.last_run, you_can_open: viewer.id === 'alice' }) }]
   const ids = (rows: { useCase: UseCaseView }[]) => rows.map((row) => row.useCase.use_case_id)
 
   it('put the rows that need you first and keep the platform’s order for the rest', () => {
     expect(ids(rowsOf(useCasesFor(BOB), BOB, 'all', ''))).toEqual(['uc_01JB7', 'uc_nudge', 'uc_bugs'])
-    expect(ids(rowsOf(useCasesFor(CAROL), CAROL, 'all', ''))).toEqual(['uc_bugs', 'uc_nudge', 'uc_01JB7'])
+    expect(ids(rowsOf(useCasesFor(CAROL), CAROL, 'all', '')), 'Carol has no action on the stopped run').toEqual(['uc_nudge', 'uc_01JB7', 'uc_bugs'])
   })
 
   it('take each row’s action from its last run, and none when Needs you already offers that run', () => {
     expect(rowsOf(useCasesFor(ALICE), ALICE, 'all', '').map((row) => row.action?.runId ?? null)).toEqual(['run_bugs', null, null])
-    expect(rowsOf(useCasesFor(CAROL), CAROL, 'all', '', new Set(['run_bugs'])).map((row) => row.action)).toEqual([null, null, null])
+    expect(rowsOf(useCasesFor(ALICE), ALICE, 'all', '', new Set(['run_bugs'])).map((row) => row.action)).toEqual([null, null, null])
   })
 
   it('filter to what needs the person and what is paused', () => {
-    expect(ids(rowsOf(useCasesFor(CAROL), CAROL, 'needs', ''))).toEqual(['uc_bugs'])
+    expect(ids(rowsOf(useCasesFor(ALICE), ALICE, 'needs', ''))).toEqual(['uc_bugs'])
+    expect(ids(rowsOf(useCasesFor(CAROL), CAROL, 'needs', '')), 'Carol is an Operator but the run is not hers').toEqual([])
     expect(ids(rowsOf(useCasesFor(BOB), BOB, 'needs', '')), 'an Approver cannot open a stopped run').not.toContain('uc_bugs')
     expect(ids(rowsOf(useCasesFor(BOB), BOB, 'on', ''))).toContain('uc_bugs')
     expect(ids(rowsOf(useCasesFor(BOB), BOB, 'paused', ''))).toEqual(['uc_nudge'])
@@ -839,7 +844,7 @@ describe('the status banner', () => {
   const EVERY_STATE: Record<LastRun['state'], { readonly pill: string; readonly banner: string; readonly tone: string; readonly opens: boolean }> = {
     awaiting_approval: { pill: 'On · waiting for an Approver’s yes', banner: 'Waiting for a yes.', tone: 'wait', opens: true },
     failed: { pill: 'Needs you', banner: 'Stopped today at 8:00. An agent could not finish its work.', tone: 'bad', opens: true },
-    lost: { pill: 'Needs you', banner: 'Lost today at 8:00. Approved, but the run stopped before it could make the change. Nothing was written.', tone: 'bad', opens: true },
+    lost: { pill: 'On', banner: 'Lost today at 8:00. Approved, but the run stopped before it could make the change. Nothing was written.', tone: 'bad', opens: true },
     expired: { pill: 'On', banner: 'On. Next run Mon 9 Nov, 9:00.', tone: 'ok', opens: false },
     skipped: { pill: 'On', banner: 'On. Next run Mon 9 Nov, 9:00.', tone: 'ok', opens: false },
     rejected: { pill: 'On', banner: 'On. Next run Mon 9 Nov, 9:00.', tone: 'ok', opens: false },
@@ -857,7 +862,6 @@ describe('the status banner', () => {
     const banner = bannerOf(facts({ useCase }))
     expect({ pill, banner: banner.text, tone: banner.tone, opens: banner.action?.kind === 'open' }).toEqual(want)
     expect(['On', 'Needs you'].includes(pill) || pill.startsWith('On · '), 'the pill is one of the four').toBe(true)
-    if (pill === 'Needs you') expect(banner.text, 'the banner says what the run did, in the run’s own words').toMatch(/^(Stopped|Lost)/)
   })
 })
 

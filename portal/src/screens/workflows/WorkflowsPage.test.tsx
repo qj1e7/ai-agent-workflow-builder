@@ -31,7 +31,7 @@ const TEAM = (peopleList.people as PersonOut[]).filter((person) => ['alice', 'bo
 const WATCHLIST = watchlistUseCase as UseCaseView
 const LANGGRAPH: UseCaseView = { ...(agentUseCase as UseCaseView), use_case_id: 'uc_lang', state: 'paused' }
 const BUGS: UseCaseView = { ...(agentUseCase as UseCaseView), use_case_id: 'uc_bugs', name: 'Morning bug report check', instruction: 'Raise a ticket for each new bug report.' }
-const lr = (change: Partial<LastRun>): LastRun => ({ run_id: 'run_x', state: 'succeeded', at: '2026-11-04T02:14:00Z', test: false, declined_by: null, decline_reason: null, approved_by: [], proposed: 0, written: 0, tickets: false, you_can_decide: false, retryable: false, reason: null, stop: null, ...change })
+const lr = (change: Partial<LastRun>): LastRun => ({ run_id: 'run_x', state: 'succeeded', at: '2026-11-04T02:14:00Z', test: false, declined_by: null, decline_reason: null, approved_by: [], proposed: 0, written: 0, tickets: false, you_can_decide: false, you_can_open: false, retryable: false, reason: null, stop: null, ...change })
 const AGENT_STOPPED = { at: '2026-11-04T02:14:00Z', what_happened: 'An agent could not finish its work.' }
 const STOPPED_BUGS: UseCaseView = { ...BUGS, last_run: lr({ run_id: 'run_bugs', state: 'failed', retryable: true, reason: 'AgentError', stop: AGENT_STOPPED }) }
 const WAITING_WATCHLIST: UseCaseView = { ...WATCHLIST, last_run: lr({ run_id: 'run_01JB8', state: 'awaiting_approval', proposed: 1, tickets: true }) }
@@ -54,7 +54,11 @@ interface Setup {
 
 /** The platform answers for the person asking. In these tests only Bob may decide the waiting run. */
 const asSeenBy = (me: Me, useCase: UseCaseView): UseCaseView =>
-  useCase.last_run?.state === 'awaiting_approval' ? { ...useCase, last_run: { ...useCase.last_run, you_can_decide: me.id === 'bob' } } : useCase
+  useCase.last_run?.state === 'awaiting_approval'
+    ? { ...useCase, last_run: { ...useCase.last_run, you_can_decide: me.id === 'bob' } }
+    : useCase.last_run?.state === 'failed'
+      ? { ...useCase, last_run: { ...useCase.last_run, you_can_open: me.id === 'alice' } } // Only Alice started the stopped run.
+      : useCase
 
 function render({ me = ALICE, useCases = [STOPPED_BUGS, WAITING_WATCHLIST, LANGGRAPH], state, home, drafts, request, path = '/workflows', made }: Setup = {}): string {
   const session = createDevSession(null)
@@ -108,6 +112,12 @@ describe('the Workflows list', () => {
   it('reads Needs you for the Approver who can decide a waiting run, and On for an Operator who is not allowed to', () => {
     expect(rowOf(render({ me: BOB }), 'uc_01JB7')).toMatch(/data-tone="wait"[^>]*>.*Needs you<\/span>/)
     expect(text(rowOf(render({ me: CAROL }), 'uc_01JB7'))).toContain('On · waiting for an Approver’s yes')
+  })
+
+  it('shows Carol, an Operator whose work the stopped run is not, On, and Alice, whose it is, Needs you', () => {
+    expect(text(rowOf(render({ me: CAROL }), 'uc_bugs'))).toContain('On · last run stopped')
+    expect(rowOf(render({ me: CAROL }), 'uc_bugs')).not.toMatch(/Needs you<\/span>/)
+    expect(rowOf(render({ me: ALICE }), 'uc_bugs')).toMatch(/Needs you<\/span>/)
   })
 
   it('shows an Approver a stopped workflow as On, because only an Operator opens the run', () => {

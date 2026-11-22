@@ -35,7 +35,7 @@ const CAROL_LEFT = 'Not running: Carol is no longer on the People list. An Opera
 const WATCHLIST = watchlistUseCase as UseCaseView
 const NOW = new Date('2026-11-04T15:00:00+08:00')
 
-const STOPPED: LastRun = { run_id: 'run_01JB9', state: 'failed', at: '2026-11-04T02:14:00Z', test: false, declined_by: null, decline_reason: null, approved_by: [], proposed: 0, written: 0, tickets: false, you_can_decide: false, retryable: false, reason: 'AgentError', stop: { at: '2026-11-04T02:14:00Z', what_happened: 'An agent could not finish its work.' } }
+const STOPPED: LastRun = { run_id: 'run_01JB9', state: 'failed', at: '2026-11-04T02:14:00Z', test: false, declined_by: null, decline_reason: null, approved_by: [], proposed: 0, written: 0, tickets: false, you_can_decide: false, you_can_open: true, retryable: false, reason: 'AgentError', stop: { at: '2026-11-04T02:14:00Z', what_happened: 'An agent could not finish its work.' } }
 
 interface Setup {
   /** The workflow's last run as the platform answers it, changed from a stopped run. */
@@ -364,9 +364,10 @@ describe('a workflow page', () => {
     }
   })
 
-  it('for a run n8n lost, says Lost in the pill and in the banner, never On', () => {
+  it('for a run n8n lost, says Lost in the banner and keeps the pill On, as a lost run is not in Needs you', () => {
     const html = render({ last: { state: 'lost', reason: null } })
-    expect(mainOf(html)).toMatch(/data-tone="bad"[^>]*>.*Needs you<\/span>/)
+    expect(mainOf(html)).toMatch(/data-life="on"[^>]*>On<\/span>/)
+    expect(mainOf(html)).not.toMatch(/Needs you<\/span>/)
     expect(text(bannerOfHtml(html))).toBe('Lost today at 10:14. Approved, but the run stopped before it could make the change. Nothing was written. Open the run')
     expect(text(mainOf(html))).not.toContain('On. Next run')
   })
@@ -492,6 +493,10 @@ describe('Details on the workflow page', () => {
 
   it('leaves out an empty Details: a first version has Explain only, and the banner’s Explain is the one on the page', () => {
     expect(text(detailsOf(render()))).toBe(`Details Explain ${AGENTS.name}`)
+  })
+
+  it('reads On · last run stopped on the page of an Operator whose work the run is not, as in the list', () => {
+    expect(text(mainOf(render({ last: { you_can_open: false } })))).toContain('On · last run stopped')
   })
 
   it('says the one approval rule where the page names who says yes', () => {

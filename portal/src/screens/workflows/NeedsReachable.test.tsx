@@ -111,7 +111,7 @@ function platformHome(situation: Situation, runs: readonly Run[]): HomeOut {
 }
 
 /** What GET /api/v1/use-cases says a workflow's last run was, to the person asking. */
-function lastRunOf(run: Run | undefined): UseCaseView['last_run'] {
+function lastRunOf(run: Run | undefined, me: Me): UseCaseView['last_run'] {
   if (!run) return null
   const { view } = run
   return {
@@ -126,6 +126,7 @@ function lastRunOf(run: Run | undefined): UseCaseView['last_run'] {
     written: 0,
     tickets: true,
     you_can_decide: youDecide(run),
+    you_can_open: run.view.state === 'failed' && operator(me) && run.made.party !== false,
     retryable: view.state === 'failed' && view.retryable,
     reason: view.state === 'failed' ? view.reason : null,
     stop: view.state === 'failed' ? { at: view.updated_at, what_happened: view.what_happened } : null,
@@ -136,7 +137,7 @@ function render(situation: Situation, runs: readonly Run[], home: HomeOut): stri
   const session = createDevSession(null)
   const scope = session.cacheScope()
   const queryClient = new QueryClient({ defaultOptions: { queries: { retryOnMount: false } } })
-  const useCases: UseCaseView[] = Array.from({ length: situation.workflows }, (_, n) => ({ ...(agentUseCase as UseCaseView), use_case_id: workflowId(n), name: `Workflow ${n}`, last_run: lastRunOf(latestOf(runs).get(workflowId(n))) }))
+  const useCases: UseCaseView[] = Array.from({ length: situation.workflows }, (_, n) => ({ ...(agentUseCase as UseCaseView), use_case_id: workflowId(n), name: `Workflow ${n}`, last_run: lastRunOf(latestOf(runs).get(workflowId(n)), situation.me) }))
   queryClient.setQueryData(['me', scope], situation.me)
   queryClient.setQueryData(['dev-users'], Object.values(PEOPLE))
   queryClient.setQueryData(['runs', scope], runs.map((run) => run.view))
