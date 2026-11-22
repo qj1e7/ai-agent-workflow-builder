@@ -800,7 +800,7 @@ FOLLOW_UP_TASK = (
     "Every weekday at 3pm, find bug tickets in MOCK with no update for 10 days and create one "
     "follow-up ticket that lists them"
 )
-RELEASE_TASK = "Tell me when LangGraph has a new release"
+RELEASE_TASK = "Tell me when LangGraph on the watchlist has a new release"
 
 
 def find_software_request() -> FindSoftwareRequest:

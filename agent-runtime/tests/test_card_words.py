@@ -251,7 +251,7 @@ def test_runs_by_itself_never_hides_a_skipped_yes(task: str):
     assert isinstance(answer_of(WEEKLY_STALE, task), RefusedAnswer)
 
 
-def test_a_watch_keeps_a_time_said_in_its_own_clause():
+def test_a_release_check_keeps_a_time_said_in_its_own_clause():
     task = (
         "Every weekday at 9, check LangGraph for new releases and raise a Jira ticket if "
         "there's a new one."
@@ -264,7 +264,13 @@ def test_a_watch_keeps_a_time_said_in_its_own_clause():
     )
     answer = answer_of(reading_, task)
     parts = parts_of(reading_, task, answer)
-    assert ("Every weekday at 9", "own_time") in [(p.text, p.reason) for p in parts]
+    assert ("Every weekday at 9", "will_do") in [(p.text, p.mark) for p in parts]
+    assert isinstance(answer, SetupCardAnswer)
+    [ticket] = [row for row in answer.rows if row.kind == "do"]
+    assert (ticket.text, ticket.note) == (
+        "Create 1 Jira ticket",
+        'Read from your words "raise a Jira ticket if there\'s a new one".',
+    )
 
 
 # 5. The guide says what the Portal does.
