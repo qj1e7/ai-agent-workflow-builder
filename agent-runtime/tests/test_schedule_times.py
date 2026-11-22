@@ -7,6 +7,7 @@ import pytest
 
 from agent_runtime.answers import answer_of, parts_of
 from agent_runtime.contract import CantAnswer, RequestPart, SetupCardAnswer, UnderstoodRow
+from agent_runtime.planner import NOT_SAID
 from agent_runtime.reading import (
     NO_TIME_READ,
     NOT_A_RUN_TIME,
@@ -22,6 +23,7 @@ from agent_runtime.reading import (
     said_schedule,
     time_ranges,
 )
+from tests.day_leads import UNKNOWN_LEADS
 from tests.test_answers import read
 
 CAROL = (
@@ -80,7 +82,7 @@ def test_a_time_the_clock_cant_read_is_asked_for_and_her_day_stays(at: str):
     ["Every Friday 8.30am", "Every Friday 9.15am", "Every Friday at 8.30am", "Every Friday 8:30am"],
 )
 def test_a_dotted_time_they_never_said_is_never_shown_and_their_own_stays(model: str):
-    """The model's "8.30am" against her "9.30am" was checked only as "30am", so the card took
+    """The model's "8.30am" against their "9.30am" was checked only as "30am", so the card took
     08:30 as their time. Then the card asked for a time, with a note that said their words had
     none."""
     row = carols_row(model, "Every Friday 9.30am")
@@ -880,3 +882,61 @@ def test_a_day_the_schedule_s_words_don_t_say_to_run_on_is_asked_on_the_card(
     assert (row.text, row.state) == ("", "missing")
     assert row.note == NOT_HELD.format(crossed)
     assert [(p.text, p.reason) for p in parts if p.mark == "cant"] == [(crossed, "how_often")]
+
+
+@pytest.mark.parametrize(
+    ("said", "schedule"),
+    [
+        (said, f"Every {day}")
+        for verb, day in UNKNOWN_LEADS
+        for said in (f"{verb} every {day}", f"{verb} {day}s")
+    ],
+)
+def test_a_day_led_by_a_word_the_reader_doesn_t_know_is_asked_on_the_card(said: str, schedule: str):
+    """Before, "nix every Monday" and "kill Mondays" showed the model's "Every Monday" as
+    understood, and the AI-led check read Monday. The card asks the day without saying it can't
+    run things that often, and crosses the words with the reason the rest of the card gives."""
+    row, parts = card_for(
+        f"{said}, list tickets in MOCK and raise one ticket that lists them", schedule
+    )
+    assert (row.text, row.state, row.note) == ("", "missing", NOT_SAID)
+    assert [p.text for p in parts if p.mark == "cant"] == [said]
+    assert not any(p.reason == "how_often" for p in parts)
+    assert said_schedule(said) == (None, None)
+
+
+@pytest.mark.parametrize(
+    ("said", "schedule"),
+    [
+        ("disable every Monday", "Every Monday"),
+        ("kill Mondays", "Every Monday"),
+        ("suspend every Friday", "Every Friday"),
+    ],
+)
+def test_a_write_that_leads_a_day_keeps_the_can_t_a_write_gets_on_the_card(
+    said: str, schedule: str
+):
+    """At 9f021fd2, "disable every Monday" was crossed as how often, not as a write the
+    platform can't make."""
+    _, parts = card_for(
+        f"{said}, list tickets in MOCK and raise one ticket that lists them", schedule
+    )
+    assert [(p.text, p.reason) for p in parts if p.mark == "cant"] == [(said, "cant_do")]
+
+
+@pytest.mark.parametrize(
+    "said",
+    [
+        "pls every Monday at 9am",
+        "plz every Monday at 9am",
+        "every Monday at 9am pls",
+        "every Monday at 9am plz",
+    ],
+)
+def test_pls_beside_the_day_shows_the_schedule_on_the_card(said: str):
+    """At 105bae9f, the card asked how often and quoted "pls every Monday at 9am"."""
+    row, parts = card_for(
+        f"{said}, list tickets in MOCK and raise one ticket that lists them", "Every Monday at 9am"
+    )
+    assert (row.text, row.state) == ("Every Monday at 9am", "understood")
+    assert not any(p.reason == "how_often" for p in parts)

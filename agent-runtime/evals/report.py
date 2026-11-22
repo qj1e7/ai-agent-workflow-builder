@@ -154,7 +154,8 @@ def _failure(job: str, outcome: dict[str, Any], case: Case | None) -> list[str]:
         kind = getattr(getattr(result, "answer", None), "kind", "offline")
         judge = f" Judge: {outcome['judge']}." if "judge" in outcome else ""
         lines.append(f"  - Kind `{kind}`.{judge}" + (f" Failed: {failed}." if failed else ""))
-        lines += _quoted(words_of(result, getattr(case, "facts", HOME_FACTS)))
+        facts = getattr(case, "facts", HOME_FACTS)
+        lines += _quoted(words_of(result, facts, getattr(case, "changes_workflows", False)))
     else:
         lines += [f"  - Failed: {failed}."] if failed else []
         lines += _quoted(outcome["answer"][:400])

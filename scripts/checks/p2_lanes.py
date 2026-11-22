@@ -6,7 +6,7 @@ usage: python3 -I scripts/checks/p2_lanes.py <command> <api-base-url> <out-dir> 
   check <api> <out> <file> <name> <repo> <ours>   alice watches one software and presses Check now
   lane2 <api> <out>                                LangGraph check; the events name the Planner and the Version checker
   lane4 <api> <out> <run_id>                       bob approves; one new practice Jira ticket, the run ends succeeded
-  lane5 <api> <out> <run_id>                       alice approves her own run; 403, nothing written
+  lane5 <api> <out> <run_id>                       alice approves their own run; 403, nothing written
   lane6 <api> <out> <run_id>                       bob replays a decision with a changed digest; refused, nothing written
   lane7 <api> <out>                                POST /api/v1/use-cases with template release_check; 422 naming it
   release-check <api> <out>                        (trunk only) create and run an old release-check use case

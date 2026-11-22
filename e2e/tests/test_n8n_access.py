@@ -1,9 +1,9 @@
 """n8n access per person on the real n8n (ENGINE-PLAN E7): an Operator gives Dana n8n access, the
-platform makes her n8n account and shows her alone the link to set its password; Open in n8n moves
-the workflow to her own space with its settings intact; she changes her n8n email and publishes,
-and the sweep still names her, by the n8n user id the platform stored; once she is an Approver her
-access ends, the workflow comes back, and she can never approve a run of the version she
-published."""
+platform makes their n8n account and shows them alone the link to set its password; Open in n8n
+moves the workflow to their own space with its settings intact; they change their n8n email and
+publish, and the sweep still names them, by the n8n user id the platform stored; once they are an
+Approver their access ends, the workflow comes back, and they can never approve a run of the
+version they published."""
 
 import json
 import secrets
@@ -75,7 +75,7 @@ def test_n8n_access(api: Api, mock_model: None):
     assert api.get("alice", "/api/v1/me/n8n")["set_password_url"] is None, "shown to Dana alone"
     member = Member("Dana", (email, mine["set_password_url"]))
     api.poll(
-        "n8n to know Dana set her password", lambda: api.get(dana, "/api/v1/me/n8n")["can_open"]
+        "n8n to know Dana set their password", lambda: api.get(dana, "/api/v1/me/n8n")["can_open"]
     )
     ready = api.get(dana, "/api/v1/me/n8n")
     assert ready["set_password_url"] is None, "used, so forgotten"
@@ -89,7 +89,7 @@ def test_n8n_access(api: Api, mock_model: None):
     assert sits_in(platform, workflow_id)
     opened = api.post(dana, f"/api/v1/use-cases/{use_case_id}/open-in-n8n", expect=(200,)).json()
     assert opened["held_by"] == dana
-    assert member.can_open(workflow_id), "Dana sees it, so it sits in her own n8n space"
+    assert member.can_open(workflow_id), "Dana sees it, so it sits in their own n8n space"
     assert sits_in(member.project, workflow_id) and not sits_in(platform, workflow_id)
     assert settings_in_n8n(workflow_id, "once Dana holds it") == laid_out
     view = api.get(dana, f"/api/v1/use-cases/{use_case_id}/n8n")
@@ -114,7 +114,7 @@ def test_n8n_access(api: Api, mock_model: None):
         "published_in_n8n",
         dana,
         False,
-    ), "matched by the n8n user id the platform stored, not by the email she changed"
+    ), "matched by the n8n user id the platform stored, not by the email they changed"
 
     becomes_approver(api, dana)
     assert api.get(dana, "/api/v1/me")["n8n_access"] is False

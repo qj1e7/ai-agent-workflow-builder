@@ -437,7 +437,7 @@ def test_whoever_joined_a_run_in_n8n_is_a_party_and_cannot_approve_it():
 
 
 ON_THE_LIST = {ALICE: "Alice", BOB: "Bob", CAROL: "Carol", DAVE: "Dave"}
-"""Everyone with the Approver role. Alice started the run, so she is its one party."""
+"""Everyone with the Approver role. Alice started the run, so they are its one party."""
 TWO_ANY = ApprovalPolicy(
     (ApprovalStep("Team approver", AnyApprover()), ApprovalStep("Second approver", AnyApprover()))
 )

@@ -496,6 +496,14 @@
     "verifier": true
   },
   {
+    "id": "skips-10",
+    "note": "Denies the wait for a yes that every change has.",
+    "text": "It isn't waiting for a yes.",
+    "expect": "fallback",
+    "line": "code",
+    "verifier": true
+  },
+  {
     "id": "link-01",
     "note": "A link or markup.",
     "text": "See claude.ai for more.",
@@ -1134,6 +1142,22 @@
         "total": 1
       }
     }
+  },
+  {
+    "id": "clean-14",
+    "note": "An honest can't the model wrote in the spike's baseline (ADR 0047, amended 20 Nov 2026): it must be shown.",
+    "text": "I can't create a Jira ticket without an Approver's yes. Every change waits for an Approver's yes in Teams, and the person who asked is never the Approver of their own request. Instead, type what the ticket should say in the box on Home.",
+    "expect": "shown",
+    "line": "code",
+    "verifier": true
+  },
+  {
+    "id": "clean-15",
+    "note": "An honest can't the model wrote in the spike's baseline (ADR 0047, amended 20 Nov 2026): it must be shown.",
+    "text": "I can't book a meeting room. Nothing I can do comes close to that, so tap Ask the team.",
+    "expect": "shown",
+    "line": "code",
+    "verifier": true
   },
   {
     "id": "held-06",

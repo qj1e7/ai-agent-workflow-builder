@@ -34,7 +34,7 @@ interface ThreadProps {
 }
 
 /**
- * The one workflow an answer was about, which "it" in the next request means: the one it named, or the one she picked on its
+ * The one workflow an answer was about, which "it" in the next request means: the one it named, or the one they picked on its
  * edit card. A card in between, such as a draft, means no one workflow.
  */
 function aboutBefore(messages: readonly Message[], index: number, memory: ThreadProps['memory']): string | null {

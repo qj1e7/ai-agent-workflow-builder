@@ -342,6 +342,9 @@ def test_anthropic_gets_strict_tools_and_the_prompt_cache():
     plan = payload["tools"][2]["input_schema"]
     assert plan["additionalProperties"] is False
     assert set(plan["required"]) == {"name", "blocks", "wires", "settings"}
+    wire = plan["$defs"]["ProposedWire"]
+    assert set(wire["required"]) == {"from_block", "exit", "to_block", "input"}
+    assert "default" not in json.dumps(payload["tools"]), "a strict tool requires every property"
     assert payload["system"][0]["cache_control"] == {"type": "ephemeral"}
     assert payload["cache_control"] == {"type": "ephemeral"}
     assert "tool_choice" not in payload

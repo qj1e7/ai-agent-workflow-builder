@@ -5,7 +5,10 @@ Code reads it from the whole message: "explain" and the words that name the work
 else, so a request that asks for more keeps the lanes it had. The words are matched against the
 person's workflows as an edit matches them (`name_runs`), else they are the words after
 "explain" with the filler around them taken off. "explain why it stopped" and "explain what
-happened" stay the why-stopped answer. Explaining changes nothing, so both roles may ask."""
+happened" stay the why-stopped answer. "what does my workflow do?" asks for the same thing, and
+is read only when the words between "what does" and "do" are my, our, this, that or the workflow,
+or a workflow's whole name, and the person has a workflow. Explaining changes nothing, so both
+roles may ask."""
 
 import re
 from typing import Final
@@ -40,20 +43,33 @@ POINTING: Final = words("it them")
 JOINED: Final = re.compile(r"[,;:!?]|\.(?:\s|$)|\b(?:and|then|also|plus|but|or)\b", re.IGNORECASE)
 """A second request beside the explanation, as "and pause it"."""
 TOKEN: Final = re.compile(r"[^\W_]+(?:['’.-][^\W_]+)*")
+WHAT_IT_DOES: Final = re.compile(
+    r"^\W*(?:(?:hi|hello|hey|ok|okay|so)\b\W*)?what\s+(?:does|do)\s+(?P<ref>.+?)\s+"
+    r"(?:(?:actually|exactly|really)\s+)?do(?:\s+(?:actually|exactly|again))?\W*$",
+    re.IGNORECASE,
+)
+"""A question about what a workflow does, as "what does my workflow do?"."""
+ONE_OF_THEIRS: Final = re.compile(r"(?:my|our|this|that|the)\s+workflow", re.IGNORECASE)
+"""The words that point at one of the person's workflows, never "a workflow" or "workflows"."""
+LEADING: Final = re.compile(r"^(?:my|our|this|that|the)\s+", re.IGNORECASE)
 
 
 def explain_of(text: str, facts: PlannerFacts | None) -> ExplainAnswer | None:
     """The explanation the whole request asks for, or None when it asks for anything else."""
     lead = LEAD.match(text)
     if lead is None:
-        return None
+        return _what_it_does(text, facts)
     start, end = trim(text, lead.end(), len(text))
-    named = _named(text, (start, end), facts)
+    found = _named(text, (start, end), facts)
+    named = None if found is None else found[0]
     unnamed = text[start:end] if named is None else text[start : named[0]] + text[named[1] : end]
     if ABOUT_A_RUN.search(unnamed):
         return None
-    if named is not None and not _content(unnamed):
-        return ExplainAnswer(workflow_words=text[named[0] : named[1]])
+    if found is not None and not _content(unnamed):
+        (a, b), stored = found
+        words = stored or text[a:b]
+        if len(words) <= WORDS_LIMIT:
+            return ExplainAnswer(workflow_words=words)
     said = _edges_off(text[start:end])
     if all(t.casefold() in POINTING for t in TOKEN.findall(said)):
         return ExplainAnswer(workflow_words=None)
@@ -62,16 +78,46 @@ def explain_of(text: str, facts: PlannerFacts | None) -> ExplainAnswer | None:
     return ExplainAnswer(workflow_words=said)
 
 
-def _named(text: str, within: Span, facts: PlannerFacts | None) -> Span | None:
-    """The longest stretch of the request that names one of the person's workflows."""
+def _what_it_does(text: str, facts: PlannerFacts | None) -> ExplainAnswer | None:
+    """A question as "what does my workflow do?" names no workflow, so the platform picks the
+    one they mean. A workflow's whole name, as "what does the FastAPI release check do?", gives
+    that workflow's name as stored, which always fits, and is tried before and after a leading
+    "the", "my" and the like, so a name that starts with one matches too. Anything else in the
+    middle, as "it", "a workflow", part of a name or a software's name, is no explanation, and
+    nor is anything asked by someone with no workflow to explain."""
+    asked = WHAT_IT_DOES.match(text)
+    if asked is None or facts is None or facts.workflows_in_all() == 0:
+        return None
+    said = asked.group("ref")
+    if ONE_OF_THEIRS.fullmatch(" ".join(said.split())):
+        return ExplainAnswer(workflow_words=None)
+    stored = {_plain(name): name for name in facts.workflow_names()}
+    for name in (said, LEADING.sub("", said, count=1)):
+        if _plain(name) in stored:
+            return ExplainAnswer(workflow_words=stored[_plain(name)])
+    return None
+
+
+def _plain(name: str) -> str:
+    return " ".join(name.casefold().split())
+
+
+def _named(text: str, within: Span, facts: PlannerFacts | None) -> tuple[Span, str | None] | None:
+    """The longest stretch of the request that names one of the person's workflows, with that
+    workflow's name as stored when the stretch says all of it. Casefolding can make the typed
+    words longer than the name ("Strasse" for "Straße"), and the stored name always fits."""
     names = facts.workflow_names() if facts is not None else []
     runs = [
-        r
+        (r, name if _words(text[r[0] : r[1]]) == _words(name) else None)
         for name in names
         for r in name_runs(text, name)
         if within[0] <= r[0] and r[1] <= within[1]
     ]
-    return max(runs, key=lambda r: (r[1] - r[0], -r[0]), default=None)
+    return max(runs, key=lambda run: (run[0][1] - run[0][0], -run[0][0]), default=None)
+
+
+def _words(name: str) -> list[str]:
+    return [t.casefold() for t in TOKEN.findall(name)]
 
 
 def _content(said: str) -> list[str]:

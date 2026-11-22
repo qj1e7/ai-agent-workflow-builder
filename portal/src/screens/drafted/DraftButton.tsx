@@ -7,7 +7,7 @@ import { pressOnce, useLatch } from '../../api/latch'
 import { Button } from '../../ui/Button'
 import { useAsker } from '../home/asker'
 import { useShowDraft } from '../home/ChatProvider'
-import { DRAFT_BUTTON } from './drafted'
+import { DRAFT_BUTTON, DRAFT_NOTE } from './drafted'
 import styles from './Drafted.module.css'
 
 /**
@@ -39,6 +39,7 @@ export function DraftButton({ words }: { words: string | null }) {
       >
         {DRAFT_BUTTON}
       </Button>
+      <p className="muted">{DRAFT_NOTE}</p>
       {problem ? (
         <p className={styles['problem']} role="alert">
           {problem}

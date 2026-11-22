@@ -14,9 +14,9 @@ from agent_runtime.contract import (
     Answered,
     AnswerRequest,
     AnswerResult,
-    DidntFollowAnswer,
     TaskRequest,
 )
+from agent_runtime.fixed_replies import says_it_didnt_follow
 from agent_runtime.summary import ChatFor
 
 type CodeFlag = Literal["flag_didnt_follow", "flag_fallback", "flag_parts_crossed", "flag_slow"]
@@ -42,7 +42,7 @@ class TurnOutcome:
 
 CODE_FLAGS: Final[Mapping[CodeFlag, Callable[[TurnOutcome], bool]]] = {
     "flag_didnt_follow": lambda o: (
-        o.answered is not None and isinstance(o.answered.answer, DidntFollowAnswer)
+        o.answered is not None and says_it_didnt_follow(o.answered.answer)
     ),
     "flag_fallback": lambda o: o.fell_back is not None and o.fell_back != CALL_FAILED,
     "flag_parts_crossed": lambda o: (

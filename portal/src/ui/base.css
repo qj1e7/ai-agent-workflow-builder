@@ -116,6 +116,7 @@ textarea {
 }
 
 h1[tabindex='-1']:focus,
+h3[tabindex='-1']:focus,
 main[tabindex='-1']:focus {
   outline: none;
 }

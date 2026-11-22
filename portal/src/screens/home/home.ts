@@ -107,7 +107,7 @@ export function approvalsOf(home: HomeOut): Needs {
   return { shown: needsOf(home).shown.filter((need) => need.kind === 'approval'), total: home.approvals_total }
 }
 
-/** What waits for the yes of someone who isn’t an Operator, in the sketch’s words, for the chat’s answer and, with no full stop, his Home’s heading. */
+/** What waits for the yes of someone who isn’t an Operator, in the sketch’s words, for the chat’s answer and, with no full stop, their Home’s heading. */
 export function approverLine(home: HomeOut): string {
   const total = needsTotal(home)
   if (total === 0) return 'Nothing waits for your yes.'
@@ -115,7 +115,7 @@ export function approverLine(home: HomeOut): string {
   return total === 1 ? '1 thing needs you.' : `${total} things need you.`
 }
 
-/** His Home’s heading: the same words as his answer, as a heading. */
+/** Their Home’s heading: the same words as their answer, as a heading. */
 export const approverHeading = (home: HomeOut): string => approverLine(home).replace(/\.$/, '')
 
 export interface Suggestion {

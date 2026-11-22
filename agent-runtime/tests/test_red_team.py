@@ -19,7 +19,8 @@ from agent_runtime.contract import (
     ReplyEnvelope,
 )
 from agent_runtime.contracts import answer_request
-from agent_runtime.free_reply import DeadEnd, given_of, reply_to
+from agent_runtime.fixed_replies import didnt_follow
+from agent_runtime.free_reply import DeadEnd, fallback_of, given_of, reply_to
 from agent_runtime.reply_guard import Given, guarded
 from agent_runtime.reply_verifier import Verdict, flag_of, verify_messages
 from tests.fakes import ScriptedChat
@@ -36,6 +37,10 @@ YES = Verdict(
 )
 OPERATOR = Given(message="how do i start", facts="")
 APPROVER = Given(message="how do i start", facts="", sets_up=False)
+
+
+FELL_BACK = didnt_follow(sets_up=True, clarified_before=False)
+"""What a dead end shows when the free reply fails: a question back with next steps to tap."""
 
 
 def envelope_of(row: dict[str, Any]) -> ReplyEnvelope:
@@ -63,7 +68,9 @@ def shown_with(row: dict[str, Any], verdict: object) -> object:
         # With facts sent, the question lane reads the message first. The free reply's own step
         # is what the row tests: its code checks, then the verifier.
         chat = ScriptedChat(structured=[envelope_of(row), verdict])
-        return reply_to(request_of(row), DeadEnd(), lambda timeout: chat)
+        shown = reply_to(request_of(row), DeadEnd(), lambda timeout: chat)
+        fell_back = isinstance(shown, DidntFollowAnswer)
+        return fallback_of(DeadEnd(), request_of(row)) if fell_back else shown
     chat = ScriptedChat(structured=[reading(), envelope_of(row), verdict])
     request = request_of(row)
     result = answer_task(request, lambda timeout: chat)
@@ -86,12 +93,12 @@ def test_the_code_checks_alone_stop_it_for_an_operator_and_an_approver(row: dict
 
 @pytest.mark.parametrize("row", CODE, ids=lambda r: r["id"])
 def test_it_falls_back_even_when_the_verifier_misses_it(row: dict[str, Any]):
-    assert shown_with(row, NO) == DidntFollowAnswer()
+    assert shown_with(row, NO) == FELL_BACK
 
 
 @pytest.mark.parametrize("row", FALLBACK, ids=lambda r: r["id"])
 def test_it_falls_back_when_the_verifier_flags_it(row: dict[str, Any]):
-    assert shown_with(row, YES) == DidntFollowAnswer()
+    assert shown_with(row, YES) == FELL_BACK
 
 
 @pytest.mark.parametrize("row", VERIFIER_ONLY, ids=lambda r: r["id"])
@@ -99,12 +106,14 @@ def test_a_phrase_only_the_verifier_can_tell_relies_on_it(row: dict[str, Any]):
     """Recorded so the reliance is visible: these pass the code checks, and only the verifier's
     yes stops them. The eval's `verify` job measures whether a model says yes."""
     assert not isinstance(guarded(envelope_of(row), given(row, True)), str)
-    assert isinstance(shown_with(row, NO), FreeReplyAnswer)
+    shown = shown_with(row, NO)
+    assert isinstance(shown, FreeReplyAnswer) and shown != FELL_BACK
 
 
 @pytest.mark.parametrize("row", CLEAN_ROWS, ids=lambda r: r["id"])
 def test_an_honest_reply_is_shown(row: dict[str, Any]):
-    assert isinstance(shown_with(row, NO), FreeReplyAnswer), row["text"]
+    shown = shown_with(row, NO)
+    assert isinstance(shown, FreeReplyAnswer) and shown != FELL_BACK, row["text"]
 
 
 @pytest.mark.parametrize(
@@ -119,7 +128,7 @@ def test_an_honest_reply_is_shown(row: dict[str, Any]):
     ids=["skips", "unbuilt", "error", "timeout", "unparseable"],
 )
 def test_any_yes_or_a_failed_verifier_gives_the_fallback(verdict: object):
-    assert shown_with(CLEAN_ROWS[0], verdict) == DidntFollowAnswer()
+    assert shown_with(CLEAN_ROWS[0], verdict) == FELL_BACK
 
 
 def test_the_verifier_reads_only_the_reply_and_the_built_abilities():

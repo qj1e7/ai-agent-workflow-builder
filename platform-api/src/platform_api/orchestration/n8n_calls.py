@@ -251,7 +251,15 @@ class WriteEntry:
     connector: str
     operation: str
     target_key: str
-    places: tuple[NodeOption, ...]
+    places: tuple[NodeOption, ...] = ()
+
+
+NODE_WRITES = (
+    WriteEntry("jira.create_ticket", "Create a Jira ticket", "jira", "create_ticket", "project"),
+)
+"""The writes a Propose a change block may name, before the places the Portal allows: the
+registry's one ready write. n8n's editor lists them (`getWriteActions`), and so does the block
+catalogue the workflow drafter reads (`platform_api.n8n_catalogue`)."""
 
 
 @dataclass(frozen=True)

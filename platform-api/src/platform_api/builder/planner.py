@@ -221,7 +221,8 @@ class PartView(WireModel):
         "note), ask_on_its_own, one_day, one_time or one_frequency (a schedule with two, see "
         "choices), own_time (a time on a watch request), skip_approval, with_a_yes, "
         "needs_the_rest, how_many_days, only_schedule (a change to a workflow other than when it "
-        "runs), how_often (a schedule it can't hold, such as monthly), and operators (a change "
+        "runs), how_often (a schedule it can't hold, such as monthly), which_software (a watch of "
+        "more than one thing, as 'track them', that names no software), and operators (a change "
         "asked by someone who isn't an Operator). Null for will_do."
     )
     note: str | None = Field(description="For cant_do, why, in the registry's words.")
@@ -512,6 +513,12 @@ class EditReply(Reply):
         description="True when the request named two days, two times or two frequencies. "
         "Nothing can be saved until the person asks again."
     )
+    leaves_out_days: bool = Field(
+        default=False,
+        description="With how_often: True when the request leaves out a day, or words that look "
+        "like a day or time off, as 'skip Fridays' or 'except PH'. The Portal then says it can't "
+        "leave days out, whatever words the cross holds.",
+    )
 
 
 class SwitchChoice(WireModel):
@@ -590,7 +597,7 @@ class ExplainReply(Reply):
     answer: Literal["explain"] = "explain"
     use_case_id: str | None = Field(
         description="The workflow to explain. Null when the words name none of the person's "
-        'workflows, name several, or are "it".'
+        'workflows, name several, or are "it" while they have more than one.'
     )
     name: str | None = Field(description="Its name. Null with use_case_id.")
     missing: str | None = Field(
@@ -600,7 +607,8 @@ class ExplainReply(Reply):
     choices: list[ExplainChoice] = Field(
         description="The workflows the request could mean, for the person to pick one: every "
         'one its words match when they match several, or every workflow for "it", so the '
-        "Portal can explain the one in focus. Empty when one matched or the words name none."
+        'Portal can explain the one in focus. Empty when one matched, when "it" can only '
+        "mean their one workflow, or when the words name none."
     )
     in_focus: bool = Field(
         description='True when the words name no workflow, as "explain it": the Portal explains '
@@ -1313,14 +1321,21 @@ class PlannerFront:
             watched=[s.name for s in held],
         )
 
-    async def _explain(self, words: str | None) -> ExplainReply:
+    async def _explain(self, words: str | None) -> ExplainReply | CheckWorkflowsReply:
+        """Words that name no workflow, as "what does my workflow do?", explain the only one
+        when there is one. Explaining changes nothing, so there is nothing to pick. With no
+        workflow at all, the answer is that they have none, never an empty choice."""
         named = await self._named(words, None)
-        one = named.one
+        if named.one is None and named.missing is None and not named.several:
+            return CheckWorkflowsReply(use_case_id=None)
+        only = named.several[0] if named.missing is None and len(named.several) == 1 else None
+        one = named.one or only
+        several = [] if one is not None else named.several
         return ExplainReply(
             use_case_id=None if one is None else one.use_case_id,
             name=None if one is None else one.name,
             missing=named.missing,
-            choices=[ExplainChoice(use_case_id=u.use_case_id, name=u.name) for u in named.several],
+            choices=[ExplainChoice(use_case_id=u.use_case_id, name=u.name) for u in several],
             in_focus=words is None or not _own_words(words, keep_check=True),
         )
 
@@ -1328,9 +1343,9 @@ class PlannerFront:
         return (await self._workflows.list_use_cases()).use_cases
 
     async def _similar(self, name: str) -> SimilarWorkflow | None:
-        """The workflow she already has that is the one she asks for: the same name, and it
+        """The workflow they already have that is the one they ask for: the same name, and it
         watches a GitHub repository, as a release check does. A same-named workflow that watches
-        none may do something else, so her request is set up as she asked."""
+        none may do something else, so their request is set up as they asked."""
         wanted = _norm(name)
         named = [
             u
@@ -1391,7 +1406,7 @@ class PlannerFront:
         named = words if words is not None and _own_words(words, keep_check=True) else None
         matched = [] if named is None else await self._matching(named, software)
         missing = named if named is not None and not matched and _own_words(named) else None
-        # "it", or "the check" that fits none, names no workflow: she picks from every one.
+        # "it", or "the check" that fits none, names no workflow: they pick from every one.
         several = matched if matched else [] if missing is not None else await self._use_cases()
         one = matched[0] if len(matched) == 1 else None
         return _Named(one=one, missing=missing, several=[] if one is not None else several)
@@ -1413,6 +1428,7 @@ class PlannerFront:
             hour=None if edit.schedule is None else edit.schedule.hour,
             cant=edit.cant,
             holds_save=edit.holds_save,
+            leaves_out_days=edit.leaves_out_days,
         )
 
     async def _switch(
@@ -1421,7 +1437,7 @@ class PlannerFront:
         """Pauses or resumes the one workflow the words name, for an Operator. The words are
         matched to workflow names first. A watched software's check is also the Software
         watchlist's, which checks every software on it, so when it fits it is offered beside the
-        workflow, never paused for her. Several matches, or "it", change nothing either: she
+        workflow, never paused for them. Several matches, or "it", change nothing either: they
         picks one."""
         pausing = isinstance(answer, PauseAnswer)
         reply = PauseReply if pausing else ResumeReply
@@ -1431,7 +1447,7 @@ class PlannerFront:
         if one is not None and listed is None and _operates(viewer):
             move = self._workflows.pause_use_case if pausing else self._workflows.resume_use_case
             moved = await move(one.use_case_id, viewer, "chat")
-            # When n8n could not take the change, nothing changed, and she is offered the
+            # When n8n could not take the change, nothing changed, and they are offered the
             # workflow again to try once more.
             if isinstance(moved, UseCaseView):
                 return reply(

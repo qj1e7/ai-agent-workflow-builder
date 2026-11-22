@@ -38,12 +38,13 @@ const CAROL_N8N: Me = { id: 'carol', display: 'Carol', roles: ['operator'], n8n_
 const WATCHLIST_ID = (statuses as WatchlistView).use_case_id
 const WATCHLIST_WORKFLOW = { ...(watchlistUseCase as UseCaseView), use_case_id: WATCHLIST_ID }
 
-function render(view: unknown, me: Me, runs: readonly { run_id: string }[] = [], page: ReactNode = <SoftwareRoute now={NOW} />, capabilities: unknown = capabilitiesFixture, path = '/software', workflow: UseCaseView = WATCHLIST_WORKFLOW): string {
+function render(view: unknown, me: Me, runs: readonly { run_id: string }[] = [], page: ReactNode = <SoftwareRoute now={NOW} />, capabilities: unknown = capabilitiesFixture, path = '/software', workflow: UseCaseView = WATCHLIST_WORKFLOW, n8nLogin?: string): string {
   const session = createDevSession(null)
   const queryClient = new QueryClient({ defaultOptions: { queries: { retryOnMount: false } } })
   queryClient.setQueryData(['use-case', session.cacheScope(), WATCHLIST_ID], workflow)
   queryClient.setQueryData(['use-case', session.cacheScope(), WATCHLIST_ID, 'n8n'], { ...(inN8nView as UseCaseN8nView), use_case_id: WATCHLIST_ID })
   queryClient.setQueryData(['me', session.cacheScope()], me)
+  if (n8nLogin !== undefined) queryClient.setQueryData(['n8n-login', session.cacheScope()], n8nLogin)
   queryClient.setQueryData(['watchlist', session.cacheScope()], view)
   for (const run of runs) queryClient.setQueryData(['run', session.cacheScope(), run.run_id], run)
   queryClient.setQueryData(['dev-users'], [ALICE, BOB])
@@ -625,6 +626,14 @@ describe('the Software watchlist in n8n', () => {
     expect(text(inN8n)).toContain('Only our blocks and n8n’s safe ones are on, so every write waits for a yes.')
     expect(text(inN8n)).toContain('Open in n8n editor')
     expect(text(inN8n), 'the list stays on its own tab').not.toContain('Find software')
+  })
+
+  it('says which n8n login Open in n8n editor uses on the Watchlist, and nothing when it is unknown', () => {
+    const path = '/software?view=n8n'
+    const named = render(statuses, CAROL_N8N, [], <SoftwareRoute now={NOW} />, capabilitiesFixture, path, WATCHLIST_WORKFLOW, 'dana.n8ntest@example.test')
+    expect(text(named)).toContain('Open in n8n editor')
+    expect(text(named)).toContain('Opens in n8n as dana.n8ntest@example.test.')
+    expect(text(render(statuses, CAROL_N8N, [], <SoftwareRoute now={NOW} />, capabilitiesFixture, path))).not.toContain('Opens in n8n as')
   })
 
   it('says who has the watchlist open in n8n where its schedule is changed, with no change the platform would refuse', () => {

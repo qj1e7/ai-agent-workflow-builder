@@ -235,16 +235,17 @@ CAPABILITIES: Final = (
         needs_model=True,
     ),
     # ADR 0025, first part. The Version checker reads these on the watchlist only, so no agent
-    # card or model can use its two tools.
+    # card or model can use its two tools. The words leave out known vulnerabilities: the reply
+    # guard counts every vulnerability phrase as unbuilt, and it checks these lines too (#335).
     _ready(
         "packages.versions",
-        "Check Maven Central and npm packages for new versions and known vulnerabilities",
+        "Check Maven Central and npm packages for new versions",
         "read",
         "Maven Central and npm",
         None,
         ["packages.read_versions", "packages.find_vulnerabilities"],
         focus=True,
-        short="Watch Maven and npm packages, and their known vulnerabilities",
+        short="Watch Maven and npm packages",
     ),
     _ready(
         "jira.create",
@@ -787,11 +788,27 @@ class _Reader:
 
     def can(self) -> str:
         if self.abilities is ABILITIES:
-            plain = [_lower_first(c.plain) for c in CAPABILITIES if c.state == "ready" and c.focus]
-        else:
-            plain = list(dict.fromkeys(ability.plain for ability in self.abilities))
-        listed = plain[0] if len(plain) == 1 else f"{', '.join(plain[:-1])}, and {plain[-1]}"
-        return f"I can only {listed}."
+            return f"I can only {ready_list()}."
+        return f"I can only {_listed(list(dict.fromkeys(a.plain for a in self.abilities)))}."
+
+
+def _listed(plain: list[str]) -> str:
+    return plain[0] if len(plain) == 1 else f"{', '.join(plain[:-1])}, and {plain[-1]}"
+
+
+def ready_list() -> str:
+    """What the platform can do, in the registry's words: each Ready capability Home shows (its
+    `focus` mark), as "a, b, and c"."""
+    return _listed([_lower_first(c.plain) for c in CAPABILITIES if c.state == "ready" and c.focus])
+
+
+APP_FOR: Final = "This app runs repetitive work for you."
+"""What the app is for, as How to start says it (START_LEAD in the Portal's answers.ts)."""
+
+
+def nothing_close() -> str:
+    """What a can't with nothing close to it adds: what the app is for, and what it can do."""
+    return f"{APP_FOR} {_reader(ABILITIES).can()}"
 
 
 @cache

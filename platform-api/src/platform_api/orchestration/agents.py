@@ -801,11 +801,14 @@ class EditAnswer(WireModel):
     schedule: ScheduleChange | None = None
     cant: EditCant | None = None
     holds_save: bool = False
+    leaves_out_days: bool = False
 
     @model_validator(mode="after")
     def _a_cant_proposes_nothing(self) -> Self:
         if self.cant is not None and (self.schedule is not None or self.holds_save):
             raise ValueError("An edit the chat can't make proposes no schedule")
+        if self.leaves_out_days and self.cant != "how_often":
+            raise ValueError("Only a schedule it can't hold leaves out days")
         return self
 
 
@@ -863,6 +866,7 @@ type PartReason = Literal[
     "how_many_days",
     "only_schedule",
     "how_often",
+    "which_software",
 ]
 
 

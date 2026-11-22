@@ -28,6 +28,7 @@ const PERF_PEOPLE = 30
 const ONLY_OPERATORS = 'Only Operators change settings.'
 const NOT_SIGNED_IN = 'Hasn’t signed in yet'
 const TWO_APPROVERS = 'At least 2 people must be Approvers, so nobody has to approve their own work.'
+const REMOVE_BOB = 'Remove Bob as an Approver? Another Approver has to confirm before they can approve again.'
 const SUMMARY_TASK = 'Every Friday summarise the tickets we finished in MOCK.'
 const WIDE_PENDING = 'wide-pending@example.test'
 // The same mock model under a second name (deploy/compose.e2e.yaml), so lane 2 can enter an address the platform has
@@ -161,9 +162,9 @@ test('@lane1 alice connects the mock model, tests and saves it, and only the key
     expect(everything.includes(key.slice(0, -2)), 'more of the key than its last two characters is on the page').toBe(false)
     expect(text.includes(key.slice(-3)), 'more than the last two characters is in the page text').toBe(false)
     if (own) {
-      expect(own.confirmButtons, 'alice entered the address, so she gets no Confirm address').toBe(0)
-      expect(own.modelTab, 'the AI model tab does not say it needs alice while her own address waits').not.toContain('needs you')
-      expect(own.aliceDecides, 'the platform refuses alice confirming her own address').toBe(403)
+      expect(own.confirmButtons, 'alice entered the address, so alice gets no Confirm address').toBe(0)
+      expect(own.modelTab, 'the AI model tab does not say it needs alice while the address alice entered waits').not.toContain('needs you')
+      expect(own.aliceDecides, 'the platform refuses alice confirming the address alice entered').toBe(403)
     }
     assertClean(watch)
     await context.close()
@@ -348,6 +349,10 @@ test('@lane7 unticking bob’s Approver role while only alice and bob are Approv
     const box = roleBox(page, 'Approver', 'Bob')
     await box.click()
     const row = personRow(page, 'bob@example.test')
+    await expect(row).toContainText(REMOVE_BOB)
+    await expect(box).toBeChecked()
+    expect(refusals, 'the untick alone sends nothing').toEqual([])
+    await row.getByRole('button', { name: 'Yes, remove Approver' }).click()
     await expect(row).toContainText(TWO_APPROVERS)
     await expect(box).toBeChecked()
     await expect(box).toBeFocused()
@@ -514,6 +519,7 @@ test('@lane11 who left the People list is said on its own line, beside a notice 
     // f. bob's Approver box is refused (two Approvers at least), then carol removes Pat.
     const bobBox = roleBox(page, 'Approver', 'Bob')
     await bobBox.click()
+    await personRow(page, 'bob@example.test').getByRole('button', { name: 'Yes, remove Approver' }).click()
     await expect(personRow(page, 'bob@example.test')).toContainText(TWO_APPROVERS)
     const fRemoved = await remove(pat)
     await returnToTab(page)
@@ -671,7 +677,11 @@ test('@lane9 axe finds no WCAG 2.2 AA problems on either tab, the model list, th
     await expect(page.locator('#add-email-error')).toBeVisible()
     runs.push(await axeRun(page, 'alice', 'add-person-errors', phone))
     await roleBox(page, 'Approver', 'Bob').click()
-    await expect(personRow(page, 'bob@example.test')).toContainText(TWO_APPROVERS)
+    const bob = personRow(page, 'bob@example.test')
+    await expect(bob).toContainText(REMOVE_BOB)
+    runs.push(await axeRun(page, 'alice', 'remove-approver-question', phone))
+    await bob.getByRole('button', { name: 'Yes, remove Approver' }).click()
+    await expect(bob).toContainText(TWO_APPROVERS)
     runs.push(await axeRun(page, 'alice', 'two-approver-refusal', phone))
     await context.close()
   }

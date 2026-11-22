@@ -12,5 +12,6 @@
   "after": null,
   "hour": null,
   "cant": null,
-  "holds_save": false
+  "holds_save": false,
+  "leaves_out_days": false
 }

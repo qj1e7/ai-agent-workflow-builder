@@ -11,7 +11,7 @@ import { displayName } from '../../api/people'
 import type { CapabilitiesView } from '../../api/types'
 import { actionsOf, approverHeading, approverLine, drawnKeys, draftWords, groupOf, HOME_NEEDS_SHOWN, lineOf, needsOf, needsTotal, openPathOf, panelItemOf, pinnedOf, retriedFirstWords, retryProblem, suggestionsOf, waitingWords, wordsOf, type Need } from './home'
 
-/** Bob's Home without his set-up approval, which the tests of the set-up row bring in themselves. */
+/** Bob's Home without their set-up approval, which the tests of the set-up row bring in themselves. */
 const BOB: HomeOut = { ...(bobHome as HomeOut), setup_approvals: [] }
 const ALICE = aliceHome as HomeOut
 const DAY_ONE = dayOne as HomeOut
@@ -314,7 +314,7 @@ describe('a retry the platform refused', () => {
   it('says who retried it first when another press beat this one, by the name the run’s log gives them', () => {
     const nameOf = (id: string) => displayName([{ id: 'carol', display: 'Carol' }], id)
     expect(retriedFirstWords('carol', 'alice', nameOf)).toBe('Carol already retried this run.')
-    expect(retriedFirstWords('alice', 'alice', nameOf), 'her own press in another tab').toBe('You already retried this run.')
+    expect(retriedFirstWords('alice', 'alice', nameOf), 'their own press in another tab').toBe('You already retried this run.')
     expect(retriedFirstWords('0f8fad5b-d9cb-469f-a165-70867728950e', 'alice', nameOf), 'someone the Portal can’t name').toBe('A colleague already retried this run.')
     expect(retriedFirstWords(null, 'alice', nameOf), 'the run names nobody').toBe('This run isn’t stopped any more. Someone may have retried it already.')
   })
@@ -344,7 +344,7 @@ describe('what you wait on, and your drafts', () => {
 })
 
 describe('the Approver’s heading', () => {
-  it('tells an Approver how many changes wait for his yes, in the sketch’s words, and his heading says the same with no full stop', () => {
+  it('tells an Approver how many changes wait for their yes, in the sketch’s words, and their heading says the same with no full stop', () => {
     expect(approverLine({ ...BOB, confirmations: [], approvals_total: 1 })).toBe('1 change waits for your yes.')
     expect(approverLine({ ...BOB, confirmations: [], approvals_total: 5 })).toBe('5 changes wait for your yes.')
     expect(approverLine({ ...BOB, approvals: [], approvals_total: 0, confirmations: [] })).toBe('Nothing waits for your yes.')

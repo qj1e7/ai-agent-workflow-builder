@@ -27,7 +27,7 @@ def test_the_capabilities_card_lists_the_ready_entries_by_their_short_words():
     lines = [c.short for c in CAPABILITIES if c.state == "ready" and c.short]
     assert lines == [
         "Watch software for new releases",
-        "Watch Maven and npm packages, and their known vulnerabilities",
+        "Watch Maven and npm packages",
         "Create Jira tickets, after a yes",
         "Explain a stopped run, and retry it",
         "Change or pause your workflows",

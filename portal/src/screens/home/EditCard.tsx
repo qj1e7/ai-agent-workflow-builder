@@ -57,7 +57,7 @@ const PILL: Readonly<Record<Phase['kind'], readonly [string, 'wait' | 'ok' | 'qu
 
 interface EditCardProps {
   readonly reply: EditReply
-  /** What she typed, which says whether she meant "it". */
+  /** What they typed, which says whether they meant "it". */
   readonly typed: string
   readonly page: Page
   readonly say: Say
@@ -68,7 +68,7 @@ interface EditCardProps {
 
 const software = (count: number | undefined): string => (count === undefined ? 'the software' : count === 1 ? 'the one software' : `all ${String(count)} software`)
 
-/** The watchlist's schedule is everyone's: saving it makes her its owner, so she can't approve its checks (spec 6.7). */
+/** The watchlist's schedule is everyone's: saving it makes them its owner, so they can't approve its checks (spec 6.7). */
 function watchlistNote(saved: boolean, count: number | undefined): string {
   return saved
     ? `This changed when ${software(count)} on the watchlist are checked, and made you the owner of this schedule. Its checks count as your work now, so you can’t approve them.`
@@ -76,7 +76,7 @@ function watchlistNote(saved: boolean, count: number | undefined): string {
 }
 
 /**
- * The edit card (spec 6.7): a change to when a workflow runs, before and after, that saves only when she presses Save change.
+ * The edit card (spec 6.7): a change to when a workflow runs, before and after, that saves only when they press Save change.
  * Saving publishes a new version through the schedule route the workflow's page uses, with Undo. The Software watchlist's
  * schedule keeps no versions, so its card offers no Undo. The sentence and the card are worked out on every draw from the
  * workflow as the platform holds it now, so a later change anywhere shows here.
@@ -131,7 +131,7 @@ export function EditCard({ reply, typed, page, say, now, about }: EditCardProps)
     focusSoon(then)
   }
 
-  // Kept in the chat's memory at once, so a save that lands after she left Home still shows, with its Undo, when she comes back.
+  // Kept in the chat's memory at once, so a save that lands after they left Home still shows, with its Undo, when they come back.
   const settle = (next: Phase, then: Focus) => {
     memory.keep({ picks, phase: next })
     setProblem(null)

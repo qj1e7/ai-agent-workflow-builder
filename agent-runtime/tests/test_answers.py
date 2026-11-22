@@ -4,6 +4,7 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
 from agent_runtime.abilities import VULNERABILITIES_PLANNED
 from agent_runtime.answers import (
@@ -56,6 +57,12 @@ from agent_runtime.reading import (
     PlaceRead,
     SearchRead,
     TicketRead,
+)
+from tests.exclusion_phrases import (
+    DAYS_AFTER_A_LEAVE_WORD,
+    EDITS_KEPT,
+    EDITS_LEFT_OUT,
+    LEFT_OUT_AFTER_ANOTHER,
 )
 from tests.fakes import ScriptedChat
 from tests.test_cards_api import make_app
@@ -545,6 +552,38 @@ def test_a_request_with_no_structure_and_no_change_is_the_abilities_answer():
 )
 def test_a_question_about_starting_shows_how_to_start(task: str):
     assert answer_of(read(asks_about="abilities"), task) == AbilitiesAnswer(how_to_start=True)
+
+
+@pytest.mark.parametrize(
+    "task",
+    [
+        "what is this app for",
+        "what is this for?",
+        "What is this",
+        "what's this platform?",
+        "what is this app.",
+        "what’s this tool?",
+    ],
+)
+def test_asking_what_the_app_is_shows_how_to_start(task: str):
+    assert answer_of(read(asks_about="abilities"), task) == AbilitiesAnswer(how_to_start=True)
+
+
+@pytest.mark.parametrize(
+    "task",
+    [
+        "what is this error?",
+        "what's this ticket about",
+        "what is this run doing",
+        "what is this app error?",
+        "what is this tool doing to my ticket?",
+        "what is this for loop",
+    ],
+)
+def test_what_is_this_about_something_else_is_not_how_to_start(task: str):
+    """Only the app, or "what is this" on its own, is a question about starting, so the
+    troubleshooter or the free reply can take the rest."""
+    assert answer_of(read(asks_about="abilities"), task) != AbilitiesAnswer(how_to_start=True)
 
 
 @pytest.mark.parametrize(
@@ -1744,6 +1783,211 @@ def test_a_clause_that_watches_them_is_never_ticked_as_the_watch_of_one_software
     reading = read(belongs_on_watchlist=True, watchlist_word="add", software=named)
     marks = {text: mark for text, mark, _ in parts(reading, task)}
     assert marks[plural] != "will_do"
+
+
+CHANGE = read(asks_about="change")
+APP_QUESTION = read(asks_about="abilities")
+WATCH_REDIS = read(belongs_on_watchlist=True, watchlist_word="add", software="redis")
+WATCH_LANGGRAPH = read(belongs_on_watchlist=True, watchlist_word="watch", software="langgraph")
+
+
+@pytest.mark.parametrize(
+    ("fields", "task", "plural"),
+    [
+        (WATCH_REDIS, "add redis, watch 'em too", "watch 'em too"),
+        (WATCH_REDIS, "add redis, and can you monitor these two?", "can you monitor these two"),
+        (WATCH_REDIS, "help me add redis, keep track of them", "keep track of them"),
+        (
+            read(belongs_on_watchlist=True, watchlist_word="add", software="Node Js"),
+            "add Node Js, track them for me",
+            "track them for me",
+        ),
+        (read(), "track them, and keep an eye on all three", "keep an eye on all three"),
+    ],
+)
+def test_a_watch_of_them_beside_nothing_but_software_says_it_cant_tell_which(
+    fields: TaskRead, task: str, plural: str
+):
+    """On its own the same words ask "Which software should I watch?", so beside a watch of
+    software the rules read, or beside nothing else, they never say "I didn't follow this
+    part"."""
+    assert (plural, "cant", "which_software") in marks(fields, task)
+
+
+def test_beside_a_question_about_software_a_watch_of_them_says_it_cant_tell_which():
+    redis = QuestionAnswer(text="Up to date.", looked_at=["watchlist"], about_software=["redis"])
+    workflows = QuestionAnswer(text="Two are on.", looked_at=["workflows"])
+    asked = "is redis up to date, and track them"
+    beside_workflows = "how are my workflows doing, and track them"
+    assert parts_of(read(), asked, redis)[1].reason == "which_software"
+    assert parts_of(read(), beside_workflows, workflows)[1].reason == "ask_on_its_own"
+
+
+BUGS_ON_FRIDAY = read(
+    schedule="Every Friday at 9am",
+    search=search(project="MOCK", issue_types=["bug"], said="bugs in MOCK"),
+)
+
+
+@pytest.mark.parametrize(
+    ("fields", "task", "plural", "reason"),
+    [
+        (
+            read(asks_about="my_workflows"),
+            "how are my workflows doing, and check them all",
+            "check them all",
+            "ask_on_its_own",
+        ),
+        (
+            read(asks_about="needs_me"),
+            "what is waiting for my yes, and check them all",
+            "check them all",
+            "ask_on_its_own",
+        ),
+        (
+            read(asks_about="why_stopped"),
+            "why did my workflows stop? check them",
+            "check them",
+            "ask_on_its_own",
+        ),
+        (
+            CHANGE,
+            "pause the morning check and the weekly summary, then monitor them",
+            "monitor them",
+            "not_followed",
+        ),
+        (
+            CHANGE,
+            "resume the morning check and the weekly summary, and keep them both",
+            "keep them both",
+            "not_followed",
+        ),
+        (read(), "list open tickets in MOCK, and follow them", "follow them", "not_followed"),
+        (read(), "email Alice and Bob, and follow them", "follow them", "not_followed"),
+        (read(), "delete the old drafts, keep the two", "keep the two", "not_followed"),
+        (read(), "retry the failed runs and monitor them", "monitor them", "not_followed"),
+        (read(), "list open tickets in MOCK, and track them", "track them", "not_followed"),
+        (read(), "email Alice and Bob, and track them", "track them", "not_followed"),
+        (
+            CHANGE,
+            "pause the morning check and track them for me",
+            "track them for me",
+            "ask_on_its_own",
+        ),
+        (
+            CHANGE,
+            "move the morning new-ticket check to 10am and track them",
+            "track them",
+            "not_followed",
+        ),
+        (
+            read(asks_about="my_workflows"),
+            "how are my workflows doing, and keep an eye on them",
+            "keep an eye on them",
+            "not_followed",
+        ),
+        (
+            read(asks_about="my_workflows", workflow_words="morning new-ticket check"),
+            "how is the morning new-ticket check doing, and track them",
+            "track them",
+            "ask_on_its_own",
+        ),
+        (
+            APP_QUESTION,
+            "what can you do, and keep an eye on all three",
+            "keep an eye on all three",
+            "not_followed",
+        ),
+        (WATCH_REDIS, "add redis, check them all", "check them all", "not_followed"),
+        (
+            BUGS_ON_FRIDAY,
+            "Every Friday at 9am find bugs in MOCK, and track them",
+            "track them",
+            "not_followed",
+        ),
+        (APP_QUESTION, "what can you do, and track it", "track it", "ask_on_its_own"),
+        (APP_QUESTION, "what can you do, and watch", "watch", "ask_on_its_own"),
+        (WATCH_REDIS, "add redis, track software too", "track software too", "not_followed"),
+        (read(), "add redis without a yes and track them", "track them", "with_a_yes"),
+        (
+            WATCH_REDIS,
+            "add redis. Alice and Bob joined, keep tabs on them",
+            "keep tabs on them",
+            "not_followed",
+        ),
+        (
+            WATCH_LANGGRAPH,
+            "watch langgraph, the support cases pile up, track them",
+            "track them",
+            "not_followed",
+        ),
+        (
+            WATCH_LANGGRAPH,
+            "watch langgraph, the nightly jobs are late, monitor them",
+            "monitor them",
+            "not_followed",
+        ),
+        (
+            WATCH_LANGGRAPH,
+            "watch langgraph, the n8n flows, monitor them all",
+            "monitor them all",
+            "not_followed",
+        ),
+        (
+            WATCH_REDIS,
+            "add redis, the pipelines are flaky, watch them",
+            "watch them",
+            "not_followed",
+        ),
+        (
+            WATCH_REDIS,
+            "add redis and node js, keep an eye on both",
+            "keep an eye on both",
+            "not_followed",
+        ),
+        (WATCH_LANGGRAPH, "watch langgraph, jobs, monitor them", "monitor them", "not_followed"),
+        (WATCH_REDIS, "add redis, servers, monitor them all", "monitor them all", "not_followed"),
+        (WATCH_REDIS, "add redis, Alice, keep tabs on them", "keep tabs on them", "not_followed"),
+        (WATCH_LANGGRAPH, "watch langgraph, pipelines, watch them", "watch them", "not_followed"),
+        (
+            WATCH_LANGGRAPH,
+            "watch langgraph, flows, keep an eye on them",
+            "keep an eye on them",
+            "not_followed",
+        ),
+        (WATCH_REDIS, "add redis, reports, track them", "track them", "not_followed"),
+        (
+            WATCH_LANGGRAPH,
+            "watch langgraph and backlog, keep track of them",
+            "keep track of them",
+            "not_followed",
+        ),
+        (WATCH_LANGGRAPH, "watch langgraph, bugs, track them", "track them", "not_followed"),
+        (
+            WATCH_REDIS,
+            "add redis, interns, keep an eye on both",
+            "keep an eye on both",
+            "not_followed",
+        ),
+        (WATCH_REDIS, "add redis, kafka, track them", "track them", "not_followed"),
+        (WATCH_REDIS, "add redis, node.js, track them", "track them", "not_followed"),
+        (
+            WATCH_REDIS,
+            "add redis and kafka, keep an eye on all three",
+            "keep an eye on all three",
+            "not_followed",
+        ),
+    ],
+)
+def test_where_them_can_mean_more_than_software_the_cross_stays_as_on_main(
+    fields: TaskRead, task: str, plural: str, reason: str
+):
+    """The cross only says which software is unclear where "them" can mean nothing but software.
+    A verb that asks for more than a watch (check, add, follow, keep), workflows, approvals, a
+    stopped run, a pause or resume, an edit, tickets, people, drafts, runs, a question about the
+    app, a watch of "it" or of no software, a reason of its own, and any words beside a watch that
+    no rule read, a name such as "kafka" included, keep main's cross."""
+    assert (plural, "cant", reason) in marks(fields, task)
 
 
 def test_a_clause_that_does_more_to_it_than_watch_still_comes_back():
@@ -3036,6 +3280,180 @@ def test_an_edit_that_names_a_day_but_not_to_run_on_it_is_never_made(task: str, 
     answer = edited(fields, task)
     assert (answer.schedule, answer.cant) == (None, "how_often")
     assert (crossed, "cant", "how_often") in marks(fields, task)
+
+
+@pytest.mark.parametrize("said", EDITS_LEFT_OUT)
+def test_an_edit_beside_a_day_like_word_it_leaves_out_is_never_made(said: str):
+    """Before, "make the morning check run at 10am, except PH" moved it to 10:00 and kept every
+    day, so it still ran on PH. A day-like word left out is a schedule it can't hold, as "skip
+    Fridays" is, and the answer says it leaves out days, so the Portal says so whatever the words
+    are."""
+    fields = read(asks_about="change", workflow_words="morning check")
+    answer = edited(fields, f"make the morning check run at 10am, {said}")
+    assert (answer.schedule, answer.cant, answer.leaves_out_days) == (None, "how_often", True)
+
+
+@pytest.mark.parametrize(
+    ("task", "leaves_out_days"),
+    [
+        ("make the morning check run every other Friday", False),
+        ("make the morning check run monthly", False),
+        ("make the morning check skip Fridays", True),
+        ("make the morning check run every weekday except Friday", True),
+        ("make it run at 10am except PH", True),
+        ("make it run at 10am, no PH", True),
+        ("make the morning check run at 10am, skip the EOM close tickets", True),
+        ("make it run at 10am other than PH", True),
+        ("make it run every weekday at 10am no month end", True),
+    ],
+)
+def test_an_edit_it_cant_make_says_whether_it_leaves_out_days(task: str, leaves_out_days: bool):
+    """The Portal says "I can't leave days out of a schedule yet." when the answer says so, and
+    words a frequency in the person's own words otherwise. Before, it guessed from the cross's
+    words, so "no PH" read "I can't run things no PH yet.", and a cross another reason held, as
+    "skip the EOM close tickets", left "I can't run things that often yet."."""
+    fields = read(
+        asks_about="change", workflow_words="morning check" if "morning" in task else None
+    )
+    answer = edited(fields, task)
+    assert (answer.cant, answer.leaves_out_days) == ("how_often", leaves_out_days)
+
+
+@pytest.mark.parametrize("task", LEFT_OUT_AFTER_ANOTHER)
+def test_an_edit_asks_for_a_day_left_out_after_another_in_a_question_or_another_workflow(
+    task: str,
+):
+    """Before, "Except PH" after "does it skip PH?" was crossed and the change saved every day at
+    10:00, because only the first stretch left out kept its clause in the change."""
+    fields = read(
+        asks_about="change", workflow_words="morning check" if "morning" in task else None
+    )
+    answer = edited(fields, task)
+    assert (answer.schedule, answer.cant, answer.leaves_out_days) == (None, "how_often", True)
+
+
+@pytest.mark.parametrize(
+    "task",
+    [
+        *DAYS_AFTER_A_LEAVE_WORD,
+        "move it to 10am aside from Fridays",
+        "move it to 10am apart from weekends",
+        "shift it to 10am apart from weekends and PH",
+        "make the morning check run at 10am, ex public holidays",
+    ],
+)
+def test_an_edit_never_runs_on_or_keeps_a_day_it_is_told_to_leave_out(task: str):
+    """Before, "make it run at 10am barring Fridays" moved it to Friday at 10:00, the opposite of
+    the request, and "move it to 10am apart from weekends" read "from weekends" as when it runs
+    now and kept every day."""
+    fields = read(
+        asks_about="change", workflow_words="morning check" if "morning" in task else None
+    )
+    answer = edited(fields, task)
+    assert (answer.schedule, answer.cant, answer.leaves_out_days) == (None, "how_often", True)
+
+
+def test_only_a_schedule_it_cant_hold_leaves_out_days():
+    with pytest.raises(ValidationError):
+        EditAnswer(leaves_out_days=True)
+
+
+@pytest.mark.parametrize(
+    ("task", "crossed"),
+    [
+        ("make it run at 10am except PH", "except PH"),
+        ("make it run at 10am except when I'm on leave", "except when I'm on leave"),
+        ("make it run at 10am except during business hours", "except during business hours"),
+        ("make it run at 10am except 25 Dec", "except 25 Dec"),
+        ("make the morning check run at 10am, skip the code freeze", "skip the code freeze"),
+        ("make the morning check run at 10am, PH excluded", "PH excluded"),
+        ("make the morning check skip PH", "skip PH"),
+        ("make the morning check run at 10am, don't run on PH", "don't run on PH"),
+        ("make the morning check run at 10am, apart from PH", "apart from PH"),
+        ("make the morning check run at 10am, other than PH", "other than PH"),
+        ("make the morning check run at 10am, exc. PH", "exc. PH"),
+        (
+            "make it every day at 9am, check langgraph except weekends and PH",
+            "except weekends and PH",
+        ),
+    ],
+)
+def test_an_edit_crosses_the_day_like_words_it_leaves_out_as_a_schedule_it_cant_hold(
+    task: str, crossed: str
+):
+    """One cross holds all the words left out, from the word that leaves them out, so the Portal
+    says it can't leave days out of a schedule yet. Before, "except PH" was a part it didn't
+    follow beside a change it made, and "except weekends and PH" was crossed twice."""
+    fields = read(
+        asks_about="change", workflow_words="morning check" if "morning" in task else None
+    )
+    marked = marks(fields, task)
+    assert [text for text, _, why in marked if why == "how_often"] == [crossed]
+
+
+@pytest.mark.parametrize("said", EDITS_KEPT)
+def test_an_edit_beside_a_filter_or_a_condition_still_moves_the_time(said: str):
+    fields = read(asks_about="change", workflow_words="morning check")
+    answer = edited(fields, f"make the morning check run at 10am, {said}")
+    assert (answer.schedule, answer.cant) == (ScheduleChange(at="10:00"), None)
+
+
+@pytest.mark.parametrize(
+    ("task", "schedule", "cant"),
+    [
+        ("make it run at 10am", ScheduleChange(at="10:00"), None),
+        ("run it on Mondays instead", ScheduleChange(day="monday"), None),
+        (
+            "make it every day at 9am, check langgraph and post only when there is a new release",
+            ScheduleChange(day="every_day", at="09:00"),
+            None,
+        ),
+        ("make it skip prereleases", None, "only_schedule"),
+        ("make it post to #releases instead", None, "only_schedule"),
+    ],
+)
+def test_a_plain_edit_is_read_as_before(
+    task: str, schedule: ScheduleChange | None, cant: str | None
+):
+    answer = edited(read(asks_about="change"), task)
+    assert (answer.schedule, answer.cant) == (schedule, cant)
+
+
+@pytest.mark.parametrize(
+    "task",
+    [
+        "make the morning check post deadlines every Friday at 9am",
+        "make the morning check post to #ops every Friday at 9am",
+        "make the morning check post results every Friday at 9am",
+        "make the morning check happen every Friday at 9am",
+        "make the morning check fire every Friday at 9am",
+        "make the morning check trigger every Friday at 9am",
+        "make the morning check repeat every Friday at 9am",
+        "make the morning check kick off every Friday at 9am",
+        "make it post deadlines every Friday at 9am",
+    ],
+)
+def test_an_edit_that_names_what_the_workflow_does_on_a_day_still_moves_it(task: str):
+    """At 9f021fd2, each said it can't run things that often, as "deadlines every Friday at
+    9am", and never moved the morning check."""
+    answer = edited(read(asks_about="change", workflow_words="morning check"), task)
+    assert answer.schedule is not None
+    assert (answer.schedule.day, answer.schedule.at, answer.cant) == ("friday", "09:00", None)
+
+
+@pytest.mark.parametrize(
+    "task",
+    [
+        "make the morning check nix every Monday",
+        "make the morning check axe Fridays",
+        "make it nix every Friday at 9am",
+    ],
+)
+def test_an_edit_whose_day_a_word_the_reader_doesn_t_know_leads_is_never_made(task: str):
+    """Before, each moved the morning check to the day the person asked to remove."""
+    answer = edited(read(asks_about="change", workflow_words="morning check"), task)
+    assert answer.schedule is None
+    assert answer.cant != "how_often"
 
 
 def test_an_edit_never_reads_a_ticket_s_due_date_as_its_schedule():

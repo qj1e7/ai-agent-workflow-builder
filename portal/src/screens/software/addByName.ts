@@ -98,7 +98,7 @@ export function canAdd(state: AddState): boolean {
 
 type Ready = { readonly ok: true; readonly body: AddSoftware } | { readonly ok: false; readonly errors: FormErrors }
 
-/** What to send to add the software, or what is wrong. The source is the one the person confirmed or typed, never a guess she did not see. */
+/** What to send to add the software, or what is wrong. The source is the one the person confirmed or typed, never a guess they did not see. */
 export function readyToAdd(state: AddState, names: readonly string[], watched: readonly Watched[]): Ready {
   const name = checkName(state.name, names)
   const version = checkVersion(state.version, chosenKind(state))

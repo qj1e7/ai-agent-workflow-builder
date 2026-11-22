@@ -468,7 +468,7 @@ describe('a request opened by its link', () => {
     expect(text(html)).toContain('Done, nothing more will happen')
   })
 
-  it('speaks to the asker as you, and offers her only Add and Mark done', () => {
+  it('speaks to the asker as you, and offers them only Add and Mark done', () => {
     const html = open({ me: ALICE, request: { id: 'trq_01JD5RP', data: REQUEST } })
     expect(text(html)).toContain('You reported a platform problem')
     expect(text(html)).not.toContain('Alice reported')

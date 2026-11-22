@@ -138,7 +138,7 @@ describe('where a lost race is said, and where focus goes', () => {
     expect(place.say).toHaveBeenCalledWith('Carol already retried this run.')
     expect(place.focus).toHaveBeenCalledOnce()
     after.retried()
-    expect(place.focus, 'a retry it took keeps her on the run, with focus on its heading').toHaveBeenCalledTimes(2)
+    expect(place.focus, 'a retry it took keeps them on the run, with focus on its heading').toHaveBeenCalledTimes(2)
   })
 
   it('in the side panel: the panel goes back to its top and its heading takes focus', () => {

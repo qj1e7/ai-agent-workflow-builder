@@ -7,6 +7,7 @@ const settingsKeys = {
   people: (user: string) => ['people', user] as const,
   confirmations: (user: string) => ['confirmations', user] as const,
   myN8n: (user: string) => ['my-n8n', user] as const,
+  n8nLogin: (user: string) => ['n8n-login', user] as const,
   history: (user: string) => ['settings-history', user] as const,
 }
 
@@ -103,6 +104,25 @@ export function useMyN8n(enabled: boolean) {
     staleTime: 0,
     gcTime: 0,
   })
+}
+
+const N8N_LOGIN_FRESH_MS = 60_000
+
+/**
+ * The n8n login under an Open in n8n button, from the n8n-only `/me/n8n`, so no other page waits on n8n. It has its own short
+ * freshness, unlike `useMyN8n`, which Settings reads again each time. Many buttons on a page share one request, and a read that
+ * fails or is still on its way gives no login, so the line is simply not drawn.
+ */
+export function useN8nLogin() {
+  const client = useApiClient()
+  const user = useCacheScope()
+  return useQuery({
+    queryKey: settingsKeys.n8nLogin(user),
+    queryFn: async () => unwrap(await client.GET('/api/v1/me/n8n')).login,
+    staleTime: N8N_LOGIN_FRESH_MS,
+    retry: false,
+    refetchOnWindowFocus: false,
+  }).data
 }
 
 export function useAskApprover() {

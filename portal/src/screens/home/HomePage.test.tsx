@@ -78,7 +78,7 @@ const groupsOf = (html: string) =>
 describe('Home for an Operator in a normal week (A1 to A7)', () => {
   const html = mainOf(render(ALICE, ALICE_HOME, { watching: 2 }))
 
-  it('greets her in a small line, then asks the one question as the heading', () => {
+  it('greets them in a small line, then asks the one question as the heading', () => {
     expect(html).toMatch(/<p[^>]*>Good afternoon, Alice<\/p>/)
     expect(headingsOf(html)).toEqual(['What should run by itself?'])
     expect(html.indexOf('Good afternoon, Alice')).toBeLessThan(html.indexOf('What should run by itself?'))
@@ -103,7 +103,7 @@ describe('Home for an Operator in a normal week (A1 to A7)', () => {
     expect(html).not.toMatch(/I can Check software/)
   })
 
-  it('lists what needs her as plain rows under Do now and Set up, the most urgent five, each one link with the subject in bold, and no buttons', () => {
+  it('lists what needs them as plain rows under Do now and Set up, the most urgent five, each one link with the subject in bold, and no buttons', () => {
     const [doNow, setUp] = groupsOf(html)
     expect(doNow).toEqual(['Do now', ['stopped:run_01JB9', 'connection:jira', 'reply:trq_01JD5RP']])
     expect(setUp?.[0]).toBe('Set up')
@@ -126,7 +126,7 @@ describe('Home for an Operator in a normal week (A1 to A7)', () => {
     expect(text(html)).not.toContain('AI troubleshooter')
   })
 
-  it('has no main button of its own: the box is where she starts', () => {
+  it('has no main button of its own: the box is where they start', () => {
     expect(primaries(html)).toBe(0)
   })
 
@@ -141,17 +141,17 @@ describe('Home for an Operator in a normal week (A1 to A7)', () => {
   })
 })
 
-describe('Home for an Approver with a run waiting for his yes', () => {
+describe('Home for an Approver with a run waiting for their yes', () => {
   const html = mainOf(render(BOB, BOB_HOME))
 
-  it('greets him, then says how many things need him as the heading', () => {
+  it('greets them, then says how many things need them as the heading', () => {
     expect(html).toMatch(/<p[^>]*>Good afternoon, Bob<\/p>/)
     expect(headingsOf(html)).toEqual(['3 things need you'])
     const one = mainOf(render(BOB, { ...BOB_HOME, confirmations: [] }))
-    expect(headingsOf(one), 'the sketch’s words when only his yes is wanted').toEqual(['1 change waits for your yes'])
+    expect(headingsOf(one), 'the sketch’s words when only their yes is wanted').toEqual(['1 change waits for your yes'])
   })
 
-  it('has the same box, the sketch’s three chips, then every row that needs him (ROLE-home)', () => {
+  it('has the same box, the sketch’s three chips, then every row that needs them (ROLE-home)', () => {
     expect(html).toContain('placeholder="Ask, or describe a task"')
     expect(chipsOf(html)).toEqual(['What waits for me?', 'What did I decide?', 'What can you do?'])
     const at = ['<textarea', 'What waits for me?', 'Do now'].map((mark) => html.indexOf(mark))
@@ -189,13 +189,13 @@ describe('Home for the Operator who started that run', () => {
     expect(html).not.toContain('data-waiting')
   })
 
-  it('counts the team’s unread reply in her rows', () => {
+  it('counts the team’s unread reply in their rows', () => {
     const quiet: HomeOut = { ...ALICE_HOME, stopped: [], stopped_total: 0, approvals: [], approvals_total: 0, confirmations: [], connections: [], addresses: [] }
     const reply = mainOf(render(ALICE, quiet))
     expect(keysOf(reply)).toEqual(['reply:trq_01JD5RP'])
   })
 
-  it('no longer lists her drafts, because Your drafts is on Workflows', () => {
+  it('no longer lists their drafts, because Your drafts is on Workflows', () => {
     expect(ALICE_HOME.drafts).toHaveLength(1)
     expect(html).not.toContain('Your drafts')
     expect(html).not.toContain('data-draft')
@@ -222,7 +222,7 @@ describe('Home on day one', () => {
     expect(text(html)).not.toMatch(/running out|needs attention|isn’t answering/i)
   })
 
-  it('gives an Approver his box for questions and no first workflow', () => {
+  it('gives an Approver their box for questions and no first workflow', () => {
     const approver = mainOf(render(BOB, DAY_ONE))
     expect(headingsOf(approver)).toEqual(['Nothing waits for your yes'])
     expect(approver).toContain('<textarea')
@@ -241,7 +241,7 @@ describe('Home with no working AI model', () => {
   })
 
   it('still shows the lists and Needs you, and no Ask the team', () => {
-    expect(text(html)).toContain('I can Check software for new releases on GitHub Check Maven Central and npm packages for new versions and known vulnerabilities Create a Jira ticket after a yes')
+    expect(text(html)).toContain('I can Check software for new releases on GitHub Check Maven Central and npm packages for new versions Create a Jira ticket after a yes')
     expect(buttonsIn(html)).not.toContain('Ask the team for something new')
     expect(html).toContain('data-home-item="stopped:run_01JB9"')
   })
@@ -269,7 +269,7 @@ describe('An Approver’s Home with no AI model (ROLE-offline)', () => {
     expect(linksIn(html).map(([name]) => name)).not.toContain('Connect a model')
   })
 
-  it('keeps his request first, with Review and decide as the one main button', () => {
+  it('keeps their request first, with Review and decide as the one main button', () => {
     expect(/data-home-item="([^"]+)"/.exec(html)?.[1]).toBe('approval:apr_01JB8')
     expect(linksIn(itemOf(html, 'approval:apr_01JB8'))).toEqual([['Review and decide', '/runs/run_01JB8']])
     expect(primaries(html)).toBe(1)

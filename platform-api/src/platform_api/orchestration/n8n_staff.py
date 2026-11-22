@@ -40,7 +40,7 @@ def no_access_words(approver: bool) -> str:
     return APPROVERS_NO_ACCESS if approver else NO_ACCESS
 
 
-OFF = "Opening n8n is coming once the block list is on."
+OFF = "Opening n8n from here isn't turned on. The person who runs the platform can turn it on."
 NOT_READY = (
     "n8n can't be opened from here until its block list is checked again. Your own n8n space "
     "stays, without any of the team's workflows."
@@ -292,6 +292,20 @@ class StaffAccounts:
         if (closed := (await self.gate()).closed) is not None:
             return StaffClosed(closed)
         return _ready_or_not(row, await self._account(row), self.editor_url is not None)
+
+    async def login_of(self, person: UserId) -> str | None:
+        """The email the person signs in to n8n with, read from n8n by the account's id, since
+        its member can change it in their profile and `people.email` then no longer says. None
+        without n8n access or an account, and when n8n can't say: never a guess."""
+        row = await self._person(person)
+        if row is None or not row.may_hold or row.n8n_user_id is None or self._api is None:
+            return None
+        try:
+            user = await self._api.user(row.n8n_user_id)
+        except (N8nError, httpx.HTTPError) as error:
+            log.warning("could not read the n8n login of %s: %s", person, type(error).__name__)
+            return None
+        return None if user is None or not user.email else user.email
 
     async def mine(self, person: UserId) -> MyN8n:
         row = await self._person(person)

@@ -2,10 +2,17 @@ from typing import Any
 
 from evals.gate import GATE_MAX_CALLS, bars, gate
 from evals.red_team import RED_TEAM
-from evals.reply import REPLY, REPLY_DEV, REPLY_GATE, ReplyCase, _acceptable
+from evals.reply import REPLY, REPLY_DEV, REPLY_GATE, ReplyCase, _acceptable, request_of, words_of
 from evals.runner import JOBS, jobs_chosen
 
-from agent_runtime.contract import AbilitiesAnswer, ReplyEnvelope
+from agent_runtime.contract import (
+    AbilitiesAnswer,
+    CantAnswer,
+    CantRow,
+    ExplainAnswer,
+    ReplyEnvelope,
+)
+from agent_runtime.questions import question_messages
 from agent_runtime.reply_verifier import Verdict
 from tests.fakes import ScriptedChat
 from tests.test_answers import follow_up
@@ -69,13 +76,19 @@ def test_a_third_is_held_out_and_kept_out_of_the_gate():
     assert not any(c.gate for c in held)
 
 
+def most_calls(c: ReplyCase) -> int:
+    """The question lane runs only when facts were sent, so a case without them makes one call
+    fewer."""
+    return REPLY_GATE.most_calls - (0 if question_messages(request_of(c)) else 1)
+
+
 def test_the_gate_set_covers_every_group_and_fits_its_call_cap():
     gate = REPLY_GATE.cases()
     assert {c.group for c in gate} == {c.group for c in CASES.values()}
     assert all(c.gate for c in gate)
-    judged = len(gate) * (REPLY_GATE.most_calls + 1)
+    judged = sum(most_calls(c) + REPLY_GATE.judge_runs for c in gate)
     worst = judged + len(RED_TEAM.cases()) * RED_TEAM.most_calls
-    assert worst + 1 <= GATE_MAX_CALLS, "the cases with their judge, the red-team rows, a warm-up"
+    assert worst + 1 <= GATE_MAX_CALLS, "the cases and their judge runs, the red team, a warm-up"
 
 
 def test_a_useful_free_reply_passes_every_check():
@@ -88,10 +101,10 @@ def test_a_reply_the_verifier_flags_counts_as_a_reject():
     assert failed["free_reply_shown"].startswith("verifier_says_it_happened | ")
 
 
-def test_a_reply_the_guard_rejects_counts_as_a_reject_and_the_wrong_kind():
+def test_a_reply_the_guard_rejects_counts_as_a_reject_and_shows_the_question_back():
     done = ReplyEnvelope(form="answer", text="Done, the ticket was created.")
     failed = scored(case("what's the weather today?"), reading(), done)
-    assert failed["right_kind"] == "didnt_follow"
+    assert "right_kind" not in failed
     assert failed["free_reply_shown"].startswith("claims_done | ")
     assert "the ticket was created" in failed["free_reply_shown"]
 
@@ -239,3 +252,17 @@ def test_a_how_to_question_accepts_the_help_lanes_how_to_start_but_not_the_bare_
 def test_the_gate_reports_a_tuning_run() -> None:
     report, _ = gate(run(row("reply_dev", [outcome("a")])), judge_agreed=False)
     assert "gateway:sonnet, reply_dev" in report
+
+
+def test_the_judge_sees_the_draft_offer_only_when_an_operator_asked() -> None:
+    row = CantRow(kind="schedule", text="every weekday at 9", note="x", needs="new_tool")
+    shown = CantAnswer(cant=[row])
+    asked = "Check LangGraph for new releases every weekday at 9"
+    assert "[Draft it as an n8n workflow]" in words_of(shown, case(asked), [])
+    approver = case(asked, changes_workflows=False)
+    assert "[Draft it as an n8n workflow]" not in words_of(shown, approver, [])
+
+
+def test_asking_what_the_planted_workflow_does_accepts_its_explanation() -> None:
+    """The gate case now gets Explain, which code builds with no model text."""
+    assert _acceptable(CASES["planted_facts-01"], ExplainAnswer(workflow_words=None))

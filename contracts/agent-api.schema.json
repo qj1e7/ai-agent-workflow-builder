@@ -1734,6 +1734,12 @@
           "title": "Kind",
           "type": "string"
         },
+        "leaves_out_days": {
+          "default": false,
+          "description": "With how_often: True when the request leaves out a day, or words that look like a day or time off, as 'skip Fridays', 'except PH' or 'except when I'm on leave', which no schedule can hold. The Portal then says it can't leave days out, whatever words the cross holds. False for a frequency it can't hold, as monthly.",
+          "title": "Leaves Out Days",
+          "type": "boolean"
+        },
         "schedule": {
           "anyOf": [
             {
@@ -1841,7 +1847,7 @@
             }
           ],
           "default": null,
-          "description": "The words of the request that name the workflow, as it wrote them, as \"the FastAPI release check\" names FastAPI release check. None for \"explain it\", so the Portal explains the workflow in focus.",
+          "description": "The workflow's name as stored when the request says all of it, which always fits, else the request's own words for part of it, as \"the weekly summary\". None for \"explain it\", so the Portal explains the workflow in focus.",
           "title": "Workflow Words"
         }
       },
@@ -2818,7 +2824,8 @@
         "needs_the_rest",
         "how_many_days",
         "only_schedule",
-        "how_often"
+        "how_often",
+        "which_software"
       ],
       "type": "string"
     },
@@ -3670,7 +3677,7 @@
             }
           ],
           "default": null,
-          "description": "Why, for a cant: not_followed (no rule read it), cant_do (see note), ask_on_its_own (a question asked beside a request, or a request beside a question), one_day, one_time or one_frequency (a schedule with two, see choices), own_time (a time on a watch request), skip_approval (it asks to skip a yes), with_a_yes (it waits until the request is set up with a yes), needs_the_rest (it can't run without a part that can't be done), how_many_days (a question: the words name a span of days but no number), only_schedule (a change to a workflow other than when it runs, which the chat can't make yet), how_often (a frequency the schedule can't hold, such as monthly). None for will_do."
+          "description": "Why, for a cant: not_followed (no rule read it), cant_do (see note), ask_on_its_own (a question asked beside a request, or a request beside a question), one_day, one_time or one_frequency (a schedule with two, see choices), own_time (a time on a watch request), skip_approval (it asks to skip a yes), with_a_yes (it waits until the request is set up with a yes), needs_the_rest (it can't run without a part that can't be done), how_many_days (a question: the words name a span of days but no number), only_schedule (a change to a workflow other than when it runs, which the chat can't make yet), how_often (a frequency the schedule can't hold, such as monthly), which_software (a watch of more than one thing, as 'track them', that names no software). None for will_do."
         },
         "text": {
           "description": "The request's own words: the whole clause, or, in a clause the Planner partly read, only the words it didn't read.",

@@ -9,15 +9,12 @@ from agent_runtime.answers import (
     answer_task,
     decide,
     watch_of_it,
-    watches_it,
-    watches_them,
     with_software_named,
 )
 from agent_runtime.contract import (
     Answered,
     AnswerRequest,
     CantAnswer,
-    DidntFollowAnswer,
     ExplainAnswer,
     FreeReplyAnswer,
     PlannerFacts,
@@ -28,9 +25,11 @@ from agent_runtime.contract import (
     WhichSoftwareAnswer,
 )
 from agent_runtime.contracts import answer_request
+from agent_runtime.fixed_replies import didnt_follow
 from agent_runtime.follow_ups import follow_up_of
 from agent_runtime.questions import QuestionReply
 from agent_runtime.reply_verifier import Verdict
+from agent_runtime.watch_words import watches_it, watches_them
 from tests.fakes import ScriptedChat
 from tests.test_questions import FACTS, reading, watch_reading
 
@@ -40,6 +39,10 @@ AFTER_A_QUESTION = PreviousTurn(
     kind="question",
 )
 AFTER_A_WATCH = PreviousTurn(request="Watch LangGraph", software="LangGraph", kind="watchlist")
+
+
+FELL_BACK = didnt_follow(sets_up=True, clarified_before=False)
+"""What a dead end shows when the free reply fails: a question back with next steps to tap."""
 
 
 def request(
@@ -145,7 +148,7 @@ def test_a_watchlist_answer_for_the_unwatched_name_gives_the_watch_offer():
 )
 def test_a_follow_up_never_preempts_the_first_reading(task: str, previous: PreviousTurn):
     out, chat = run(task, reading("abilities"), previous)
-    assert isinstance(out, Answered) and out.answer == DidntFollowAnswer()
+    assert isinstance(out, Answered) and out.answer == FELL_BACK
     assert [c.__name__ for c in chat.asked] == ["TaskRead"]
     cant, _ = run(task, reading("none"), previous)
     assert cant.answer.kind != "watchlist"
@@ -184,10 +187,10 @@ def test_the_first_reading_sees_only_the_typed_words():
 
 def test_a_lane_that_says_no_or_fails_keeps_the_first_answer_which_is_a_dead_end_here():
     out, _ = run("and Redis?", reading("abilities"), lane=QuestionReply(about_their_data=False))
-    assert isinstance(out, Answered) and out.answer == DidntFollowAnswer()
+    assert isinstance(out, Answered) and out.answer == FELL_BACK
     slow = type("ReadTimeout", (Exception,), {})("took too long")
     out, _ = run("and Redis?", reading("abilities"), lane=slow)
-    assert isinstance(out, Answered) and out.answer == DidntFollowAnswer()
+    assert isinstance(out, Answered) and out.answer == FELL_BACK
 
 
 def test_a_reply_the_guards_reject_gives_the_first_answer_when_it_is_not_the_catch_all():
@@ -195,7 +198,7 @@ def test_a_reply_the_guards_reject_gives_the_first_answer_when_it_is_not_the_cat
     out, _ = run("and Redis?", reading("my_workflows"), lane=offer)
     assert out.answer.kind == "check_workflows"
     out, _ = run("and Redis?", reading("abilities"), lane=offer)
-    assert out.answer == DidntFollowAnswer()
+    assert out.answer == FELL_BACK
 
 
 def test_a_forged_previous_changes_nothing_outside_the_lanes_prompt():
@@ -245,7 +248,7 @@ def test_a_bare_cant_for_the_words_of_a_follow_up_goes_to_the_lane_and_stands_if
     assert out.answer.kind == "question" and out.answer.text == "Redis is up to date."
     no = QuestionReply(about_their_data=False)
     out, _ = run("and LangGraph?", cant, lane=no)
-    assert out.answer == DidntFollowAnswer()
+    assert out.answer == FELL_BACK
 
 
 NODE_JS_TURN = "help me add Node Js , keep track of it"
@@ -606,7 +609,7 @@ def test_a_request_that_names_two_software_carries_neither(task: str, said: str)
         ("what's new in node js then?", "node js", "node js"),
         ("node js: what's new, briefly?", "node js", "node js"),
         ("redis, not kafka", "redis", "redis"),
-        # Left as a guess on a card she taps: "to", "over" and two names side by side join
+        # Left as a guess on a card they tap: "to", "over" and two names side by side join
         # nothing, as too many one-name requests use them.
         ("compare redis to kafka", "redis", "redis"),
         ("compare redis to kafka", "kafka", "kafka"),

@@ -32,6 +32,7 @@ const REASON_WORDS: Readonly<Record<PartReason, string>> = {
   operators: 'Operators set up workflows.',
   only_schedule: 'From the chat I can only change when it runs.',
   how_often: 'I can’t run things that often yet.',
+  which_software: 'I can’t tell which software you mean. Ask again with its name.',
 }
 
 /**
@@ -45,13 +46,13 @@ export interface CrossContext {
   readonly workflow?: string
   /** The edit changes the Software watchlist, so a change it can't make names what the chat can do to the watchlist. */
   readonly editsWatchlist?: boolean
-  /** The set-up card names each cross in the sketch's short form, her words as a sentence, rather than quoted. */
+  /** The set-up card names each cross in the sketch's short form, their words as a sentence, rather than quoted. */
   readonly short?: boolean
 }
 
 export const WATCHLIST_CANT = 'From the chat I can add software to the Software watchlist, remove it, or change when the watchlist runs.'
 
-/** The request that moves the whole Software watchlist to the time she asked of one software. */
+/** The request that moves the whole Software watchlist to the time they asked of one software. */
 export const watchlistRuns = (time: string): string => `Make the Software watchlist run ${time.trim()}`
 
 /** “every weekday except Friday”, “skip Fridays” or “drop every Friday” leaves a day out, which no schedule here can hold. */
@@ -62,11 +63,14 @@ const NAMES_A_DAY = /\b(?:mon|tue|tues|wed|thu|thur|thurs|fri|sat|sun)(?:day)?s?
 const SAYS_HOW_OFTEN =
   /\b(?:every|each|other|once|twice|thrice|times|alternate|alternating|bi-?weekly|fortnightly|weekly|monthly|quarterly|yearly|annually|hourly|daily|month|week|weekends?|first|second|third|fourth|fifth|last|\d+(?:st|nd|rd|th)|to|through|thru|till|until)\b|[-\u2013\u2014]/i
 const STARTS_WITH_A_DAY = /^(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)s?\b/i
+const LEAVE_DAYS_OUT = 'I can’t leave days out of a schedule yet.'
 
-export function howOftenWords(text: string): string {
+/** `leavesOutDays` is the runtime saying the request leaves out a day or words that look like one, as “no PH”, which these words can’t all tell. */
+export function howOftenWords(text: string, leavesOutDays = false): string {
   const said = text.trim()
+  if (leavesOutDays) return LEAVE_DAYS_OUT
   if (said === '') return REASON_WORDS.how_often
-  if (LEAVES_OUT.test(said) || (NAMES_A_DAY.test(said) && !SAYS_HOW_OFTEN.test(said))) return 'I can’t leave days out of a schedule yet.'
+  if (LEAVES_OUT.test(said) || (NAMES_A_DAY.test(said) && !SAYS_HOW_OFTEN.test(said))) return LEAVE_DAYS_OUT
   // The whole phrase is their words, as a sentence: “Every other Friday” reads “every other Friday”, and a day stays a name.
   const inSentence = STARTS_WITH_A_DAY.test(said) ? said : `${said.charAt(0).toLowerCase()}${said.slice(1)}`
   return `I can’t run things ${inSentence} yet.`
@@ -95,17 +99,17 @@ const asSentence = (text: string): string => {
   return `${said.charAt(0).toUpperCase()}${said.slice(1)}.`
 }
 
-/** Her words for a cross, quoted, or as a sentence in the short form. Once she picks one of a clash’s choices, only the others are named. */
+/** Their words for a cross, quoted, or as a sentence in the short form. Once they pick one of a clash’s choices, only the others are named. */
 export function crossLabel(part: PartView, when?: When, short = false): string {
   const chosen = when && isClash(part) ? clashChosen(when, part) : null
   const others = chosen === null ? [] : part.choices.filter((choice) => choice !== chosen)
-  // A clause it didn't follow stays in her own words, quoted, as the sketch keeps it.
+  // A clause it didn't follow stays in their own words, quoted, as the sketch keeps it.
   if (short && part.reason !== 'not_followed' && part.reason !== null) return asSentence(others.length > 0 ? andList(others) : part.text)
   return others.length > 0 ? andList(others.map(quote)) : quote(part.text)
 }
 
 /**
- * What a cross sends as its own message when she taps Ask about this (ADR 0047): a clause the Planner didn’t follow, or a
+ * What a cross sends as its own message when they tap Ask about this (ADR 0047): a clause the Planner didn’t follow, or a
  * question it answers on its own. A time on a watch request has the Software watchlist’s offer instead, and the rest already sit
  * on a card with its own button. Null when the cross has no such step.
  */
@@ -128,6 +132,7 @@ export function askOfCross(part: PartView): string | null {
     case 'operators':
     case 'only_schedule':
     case 'how_often':
+    case 'which_software':
       return null
   }
 }

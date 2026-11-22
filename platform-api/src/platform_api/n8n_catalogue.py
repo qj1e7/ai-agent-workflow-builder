@@ -2,13 +2,16 @@
 reaches (ADR 0051, section 2).
 
 The catalogue holds every type the pinned n8n image ships: its name, its description and the other
-words n8n finds it by, its versions, its resources and operations, and the parameters of each
-version with n8n's `displayOptions`, so that a reader can return only what n8n shows for one
-resource and operation. Fields that only shape n8n's editor are left out. From our own files it
-adds each operation's class, tag and `says` from the class file, which key of the platform's the
-type runs with (`KEY_FOR_TYPE`), and the blocks n8n loads that can't run on this platform
-(`n8n_blocks.HELD`, which the safety checker reads too). The workflow drafter reads it through
-`agent_runtime.catalogue`.
+words n8n finds it by, its versions, its resources and operations, the parameters of each version
+with n8n's `displayOptions`, so that a reader can return only what n8n shows for one resource and
+operation, and each version's inputs and outputs with the names n8n gives them. A block that
+computes its inputs or outputs from its parameters keeps n8n's expression word for word, which
+`agent_runtime.connections` resolves. Fields that only shape n8n's editor are left out. From our
+own files it adds each operation's class, tag and `says` from the class file, which key of the
+platform's the type runs with (`KEY_FOR_TYPE`), the blocks n8n loads that can't run on this
+platform (`n8n_blocks.HELD`, which the safety checker reads too), and the choices our own blocks
+load from our API that are the same for every team (`PLATFORM_CHOICES`). The workflow drafter
+reads it through `agent_runtime.catalogue`.
 
     python -m platform_api.n8n_catalogue <served nodes.json> <image> <sources>
 
@@ -36,6 +39,7 @@ from platform_api.n8n_defaults_check import (
     version_problems,
 )
 from platform_api.orchestration.n8n_blocks import HELD, LEFT_OUT, SHIPPED, package
+from platform_api.orchestration.n8n_calls import NODE_WRITES
 from platform_api.orchestration.node_classes import (
     NODE_CLASSES,
     OURS,
@@ -62,6 +66,13 @@ PINS = "public-images.json"
 """infra/public-images.json, under the sources folder."""
 NOT_PARAMETERS = frozenset({"notice", "callout"})
 """Property types that only show words in n8n's editor and hold no value."""
+PLATFORM_CHOICES: Mapping[str, list[Json]] = {
+    "getWriteActions": [{"name": w.name, "value": w.id} for w in NODE_WRITES],
+}
+"""The choices our own blocks load from our API while n8n runs that are the same for every team,
+by the method that loads them: the writes a Propose a change block may name. The catalogue lists
+them, so the drafter finds Propose a change by them and the plan check holds a block to them.
+The places, agent cards and their inputs are each team's own, and stay open."""
 
 
 _PARAMETER_KEYS = (
@@ -91,6 +102,9 @@ _CHOICE_KEYS = ("name", "value", "description", "action")
 _CLASS_KEYS = frozenset({"class", "tag", "says"})
 """What the catalogue adds to an operation from the class file."""
 _MODE_KEYS = ("name", "displayName", "type", "placeholder")
+_LINK_KEYS = ("type", "displayName", "required", "maxConnections")
+"""What says how an input or output joins: its kind, its name, and how many wires it takes. n8n's
+`filter`, which limits the blocks the editor offers to join one, is left out."""
 
 
 def catalogue(
@@ -296,10 +310,35 @@ def _version(name: str, description: Mapping[str, Any], classes: NodeClasses) ->
     _class(name, versions, version, operations, classes)
     if operations:
         version["operations"] = operations
-    version["parameters"] = [
-        _parameter(p) for p in properties if p.get("type") not in NOT_PARAMETERS
-    ]
+    for key in ("inputs", "outputs"):
+        if key in description:
+            version[key] = _links(description[key])
+    for key in ("inputNames", "outputNames"):
+        if isinstance(names := description.get(key), list):
+            version[key] = [str(n) for n in cast(list[object], names)]
+    parameters = [_parameter(p) for p in properties if p.get("type") not in NOT_PARAMETERS]
+    version["parameters"] = (
+        [_platform_choices(p) for p in parameters] if name.startswith(OURS) else parameters
+    )
     return version
+
+
+def _links(served: object) -> str | list[object]:
+    """A version's inputs or outputs: each as n8n names its kind, or as an object with its name
+    and limits, or n8n's expression that computes them from the parameters, word for word."""
+    if isinstance(served, str):
+        return served
+    return [
+        _picked(cast(Mapping[str, Any], link), _LINK_KEYS) if isinstance(link, dict) else link
+        for link in cast(list[object], served if isinstance(served, list) else [])
+    ]
+
+
+def _platform_choices(parameter: Json) -> Json:
+    """One of our block's parameters, with the choices our API gives every team for it."""
+    method = cast(Mapping[str, Any], parameter.get("typeOptions") or {}).get("loadOptionsMethod")
+    listed = PLATFORM_CHOICES.get(str(method))
+    return parameter if listed is None else parameter | {"options": listed}
 
 
 def _resources(

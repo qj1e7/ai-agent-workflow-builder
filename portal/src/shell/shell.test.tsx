@@ -173,7 +173,7 @@ describe('the rail’s counts', () => {
     expect(linkNames(html)).toEqual(['Chat', `Workflows, ${String(ALICE_HOME.workflows)} in all`, `Watchlist, ${String(SOFTWARE_WITH_DECISION.software.length)} in all`])
   })
 
-  it('are the same for an Approver who is not an Operator, because they count what is there, not what needs him', () => {
+  it('are the same for an Approver who is not an Operator, because they count what is there, not what needs them', () => {
     const html = render({ me: BOB, home: BOB_HOME, watchlist: SOFTWARE_WITH_ADDRESSES })
     expect(linkNames(html)).toEqual(['Chat', `Workflows, ${String(BOB_HOME.workflows)} in all`, `Watchlist, ${String(SOFTWARE_WITH_ADDRESSES.software.length)} in all`])
   })

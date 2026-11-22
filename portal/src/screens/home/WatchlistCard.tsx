@@ -129,7 +129,7 @@ export function WhichSoftware({ onNever }: { onNever: () => void }) {
   const [typed, setTyped] = useState('')
   const [error, setError] = useState<string | undefined>(undefined)
   const [name, setName] = useState<string | null>(null)
-  // The form goes once she names it, so focus moves to the card for that name rather than dropping to the page.
+  // The form goes once they name it, so focus moves to the card for that name rather than dropping to the page.
   useEffect(() => {
     if (name !== null) document.getElementById(titleId)?.focus()
   }, [name, titleId])

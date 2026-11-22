@@ -10,7 +10,7 @@ import { lineWhen, nextRunAt, runWhen, scheduleZoneName, teamZone, zoneWords } f
 
 export type Tone = 'ok' | 'wait' | 'bad' | 'new'
 
-/** What a workflow was set up without, in her words (plan 4.6). Text for people to read: nothing runs from it. Null when nothing was left out. */
+/** What a workflow was set up without, in their words (plan 4.6). Text for people to read: nothing runs from it. Null when nothing was left out. */
 export function leftOutWords(leftOut: readonly string[]): string | null {
   if (leftOut.length === 0) return null
   return `Left out: ${andList(leftOut.map((words) => `“${words}”`))}. It was set up without ${leftOut.length === 1 ? 'that part' : 'those parts'}.`
@@ -135,8 +135,12 @@ export function rowLine(useCase: Pick<UseCaseView, 'last_run' | 'schedule'> & Pa
   const schedule = useCase.schedule ? scheduleShort(useCase.schedule) : 'No schedule'
   const running = useCase.move_refused ? `${schedule}, not running` : schedule
   const when = useCase.held_in_n8n ? `${running} · ${useCase.held_in_n8n.name} has it open in n8n` : running
-  const last = useCase.last_run
-  return last ? `${when} · last run ${dayOf(last.at, now)}, ${lowerFirst(lastRunWhat(last, nameOf, 'line'))}` : `${when} · no runs yet`
+  return `${when} · ${lastRunLine(useCase, now, nameOf)}`
+}
+
+/** The row's words for the newest run, "last run today, done" or "no runs yet", which the chat's sentence about one workflow reads too. */
+export function lastRunLine({ last_run: last }: Pick<UseCaseView, 'last_run'>, now: Date, nameOf: NameOf): string {
+  return last ? `last run ${dayOf(last.at, now)}, ${lowerFirst(lastRunWhat(last, nameOf, 'line'))}` : 'no runs yet'
 }
 
 /** The line without its label, for the side panel's Last run, where a declined run gives its whole record. Null before the first run. */

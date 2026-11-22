@@ -4,6 +4,8 @@ import { UNKNOWN_PUBLISHER } from './n8nChange'
 import { publishedWhen, sinceWhen } from './times'
 
 export const OPEN_IN_N8N = 'Open in n8n editor'
+/** Under every Open in n8n button: the Portal and n8n sign in separately, and the workflow moves into this n8n account's space. */
+export const opensInN8nAs = (login: string): string => `Opens in n8n as ${login}.`
 export const TAKE_IT_BACK = 'Take it back'
 /**
  * The sketch's line beside the version says "Only our blocks are on". n8n's IF, Merge, schedule and data blocks are on too, so the

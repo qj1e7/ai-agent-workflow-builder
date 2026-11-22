@@ -9,7 +9,7 @@ export type Message =
   | { readonly kind: 'card'; readonly id: number; readonly start: CardStart }
   /** The watchlist’s newer versions, drawn from the watchlist itself with no model, so it needs no Planner reply. */
   | { readonly kind: 'behind'; readonly id: number }
-  /** A new revision of a drafted workflow, made by a change she asked for in the box. Its card is drawn from the drafted workflow itself. */
+  /** A new revision of a drafted workflow, made by a change they asked for in the box. Its card is drawn from the drafted workflow itself. */
   | { readonly kind: 'drafted'; readonly id: number; readonly draftedId: string; readonly revision: number }
 
 export interface Thread {
@@ -29,9 +29,9 @@ export type ThreadAction =
   | { readonly type: 'arrived'; readonly reply: PlannerReply }
   | { readonly type: 'resumed'; readonly start: CardStart }
   | { readonly type: 'asked_behind'; readonly text: string }
-  /** A change she asked for was taken: her words, then the new revision's card. */
+  /** A change they asked for was taken: their words, then the new revision's card. */
   | { readonly type: 'changed'; readonly text: string; readonly draftedId: string; readonly revision: number }
-  /** A new card for a drafted workflow's newest revision, with no message of hers before it, such as the one read back from n8n. */
+  /** A new card for a drafted workflow's newest revision, with no message of theirs before it, such as the one read back from n8n. */
   | { readonly type: 'draft_card'; readonly draftedId: string; readonly revision: number }
   | { readonly type: 'new_chat' }
 
@@ -79,7 +79,7 @@ export const isThinking = (thread: Thread): boolean => thread.messages.some((m) 
 export type PreviousTurn = NonNullable<PlannerAnswerIn['previous']>
 
 /**
- * What goes to the Planner for words she typed or tapped: the words, with the turn before when there is one. A tapped choice
+ * What goes to the Planner for words they typed or tapped: the words, with the turn before when there is one. A tapped choice
  * carries it too, so the Planner knows it follows a clarifying question and never asks a second one in a row.
  */
 export function askOf(text: string, thread: Thread): PlannerAnswerIn {

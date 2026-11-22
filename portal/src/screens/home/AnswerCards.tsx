@@ -13,7 +13,7 @@ import softwareStyles from '../software/Software.module.css'
 import { ChangedInN8nAnswer } from './ChangedCard'
 import { AskTheTeam } from './AskTheTeam'
 import { useAsker } from './asker'
-import { cantLines, capabilityCard, offerLabel, oneLine, questionActions, refusalNext, SAY_ANOTHER_WAY, startingPoints, startSteps, stateWords, switchedSay, unwatchedSay, watchlistSwitchNote, type Asker } from './answers'
+import { cantLines, capabilityCard, offerLabel, oneLine, questionActions, refusalNext, SAY_ANOTHER_WAY, START_LEAD, startingPoints, startSteps, stateWords, switchedSay, unwatchedSay, watchlistSwitchNote, type Asker } from './answers'
 import { cardFrom } from './card'
 import { asksOnCard, cantOnCard, crossesInstead, crossesOnCard, followedNothing } from './parts'
 import { SetupCard, type CardStart } from './SetupCard'
@@ -34,7 +34,7 @@ export interface Page {
   readonly ask: (text: string) => void
   /** Puts words back in the box for the person to change. */
   readonly edit: (text: string) => void
-  /** Puts focus back in the box, as when she backs out of a card. */
+  /** Puts focus back in the box, as when they back out of a card. */
   readonly box: () => void
 }
 
@@ -60,7 +60,7 @@ export function SetupCardAnswer({ reply, typed }: { reply: SetupCardReply | Part
 }
 
 /**
- * A can’t the registry says in one line: the line as the head, what she has instead under it, and Ask the team. Even what the
+ * A can’t the registry says in one line: the line as the head, what they have instead under it, and Ask the team. Even what the
  * platform won’t do gets Ask the team, so no can’t is ever bare (ADR 0047): the team can still hear that someone needs it.
  */
 function OneLineCant({ row, typed }: { row: CantRowView; typed: string }) {
@@ -124,7 +124,7 @@ export function CantAnswer({ reply, typed }: { reply: CantReply; typed: string }
 
 /**
  * The sketch's software card: a watched software's name, its pill and where it stands, in the watchlist's own words, or that it
- * isn't on the watchlist yet, with Watch it. Asked about its version, it also says the version she runs isn't known. Watch it adds
+ * isn't on the watchlist yet, with Watch it. Asked about its version, it also says the version they run isn't known. Watch it adds
  * it to the Software watchlist, which is where watched software lives here, after finding its GitHub project.
  */
 function SoftwareCard({ name, listed, word }: { name: string; listed: WatchlistReply['already_listed']; word: string }) {
@@ -273,11 +273,12 @@ export function DidntFollowCard({ typed, page }: { typed: string; page: Page }) 
   )
 }
 
-/** How to start: the steps from her words to the yes, then the registry’s examples as chips that ask the Planner for them. */
+/** How to start: what the app is for, the steps from their words to the yes, then the registry’s examples as chips that ask the Planner for them. */
 function HowToStart({ view, page }: { view: CapabilitiesView; page: Page }) {
   const examples = startingPoints(view)
   return (
     <Card title="How to start">
+      <p>{START_LEAD}</p>
       <ol className={styles['steps']}>
         {startSteps(view).map((step) => (
           <li key={step}>{step}</li>
@@ -296,6 +297,34 @@ function HowToStart({ view, page }: { view: CapabilitiesView; page: Page }) {
   )
 }
 
+interface NotLoadedProps {
+  readonly list: { readonly isError: boolean; readonly isFetching: boolean; readonly refetch: () => Promise<unknown> }
+  readonly failed: string
+  readonly loading: string
+}
+
+function NotLoaded({ list, failed, loading }: NotLoadedProps) {
+  if (!list.isError) {
+    return (
+      <p className="muted" role="status">
+        {loading}
+      </p>
+    )
+  }
+  return (
+    <>
+      <p className="muted" role="status">
+        {failed}
+      </p>
+      <div className={styles['buttons']}>
+        <Button loading={list.isFetching} onClick={() => void list.refetch()}>
+          Try again
+        </Button>
+      </div>
+    </>
+  )
+}
+
 /** What I can do, in the registry’s short words with the platform’s state of each, or how to start when that was asked, or that it followed none of the request. */
 function AbilitiesAnswer({ reply, typed, page }: { reply: AbilitiesReply; typed: string; page: Page }) {
   const asker = useAsker()
@@ -303,13 +332,7 @@ function AbilitiesAnswer({ reply, typed, page }: { reply: AbilitiesReply; typed:
   const capabilities = useCapabilities({ enabled: asker === 'operator' && !nothing })
   if (nothing) return <DidntFollowCard typed={typed} page={page} />
   if (asker === 'approver') return <WhatICanDo lines={APPROVER_CAN.map((text) => ({ key: text, text, state: null }))} />
-  if (!capabilities.data) {
-    return (
-      <p className="muted" role="status">
-        {capabilities.isError ? 'I couldn’t load what I can do just now.' : 'Loading what I can do'}
-      </p>
-    )
-  }
+  if (!capabilities.data) return <NotLoaded list={capabilities} failed="I couldn’t load what I can do just now." loading="Loading what I can do" />
   if (reply.how_to_start) return <HowToStart view={capabilities.data} page={page} />
   const { can, notYet } = capabilityCard(capabilities.data)
   return <WhatICanDo lines={can.map((entry) => ({ key: entry.id, text: entry.short, state: stateWords(entry) }))} notYet={notYet} />
@@ -319,7 +342,7 @@ const MOST_CHOICES = 5
 
 /**
  * Which workflow a pause or a resume means, when the words fit several, none, or a watched software’s check, which is the whole
- * Software watchlist. Nothing changed yet: the one she picks is paused or resumed through its own route, and the line says so.
+ * Software watchlist. Nothing changed yet: the one they pick is paused or resumed through its own route, and the line says so.
  */
 function SwitchChoices({ reply }: { reply: PauseReply | ResumeReply }) {
   const move = useMoveWorkflow()
@@ -368,13 +391,7 @@ function SwitchChoices({ reply }: { reply: PauseReply | ResumeReply }) {
 
 function IdeasAnswer({ page }: { page: Page }) {
   const capabilities = useCapabilities()
-  if (!capabilities.data) {
-    return (
-      <p className="muted" role="status">
-        {capabilities.isError ? 'I couldn’t load the ideas just now.' : 'Loading ideas'}
-      </p>
-    )
-  }
+  if (!capabilities.data) return <NotLoaded list={capabilities} failed="I couldn’t load the ideas just now." loading="Loading ideas" />
   return (
     <ul className={styles['starters']}>
       {startingPoints(capabilities.data).map((text) => (

@@ -61,8 +61,8 @@ def test_the_draft_prompt_lists_the_four_tools_and_the_rules():
 
 
 def test_the_draft_prompt_keeps_a_value_the_task_states_in_its_step():
-    """Carol's 14 days became an input the Portal asked for again, and her MOCK was no input
-    at all, which no change of her words could fix."""
+    """Carol's 14 days became an input the Portal asked for again, and their MOCK was no input
+    at all, which no change of their words could fix."""
     assert "goes into the step that uses it" in DRAFT_SYSTEM
     assert "Never make it an input" in DRAFT_SYSTEM
     assert "even when the task names the project" in DRAFT_SYSTEM

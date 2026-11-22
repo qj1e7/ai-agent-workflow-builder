@@ -144,6 +144,18 @@ describe('Edit in n8n', () => {
     expect(text(html)).not.toContain('Answer')
   })
 
+  it('says which n8n login Open n8n uses, and nothing when the login is unknown', () => {
+    const queryClient = new QueryClient()
+    queryClient.setQueryData(draftedKey(scope, IN_N8N.drafted_id), IN_N8N)
+    queryClient.setQueryData(['n8n-login', scope], 'dana.n8ntest@example.test')
+    const html = within(<DraftedCard draftedId={IN_N8N.drafted_id} revision={IN_N8N.card_revision} />, queryClient)
+    expect(text(html)).toContain('Opens in n8n as dana.n8ntest@example.test.')
+    queryClient.setQueryData(['n8n-login', scope], null)
+    const unknown = within(<DraftedCard draftedId={IN_N8N.drafted_id} revision={IN_N8N.card_revision} />, queryClient)
+    expect(unknown).toContain('Open n8n')
+    expect(text(unknown)).not.toMatch(/Opens in n8n as/)
+  })
+
   it('tells anyone else who has it open, with no buttons for it', () => {
     const html = card({ ...IN_N8N, in_n8n: { ...IN_N8N.in_n8n!, editor_url: null } })
     expect(text(html)).toContain('Carol has it open in n8n.')
@@ -170,7 +182,7 @@ describe('which card shows the newest view', () => {
     expect(buttons(html)).toEqual([])
   })
 
-  it('puts a new card in the thread, with no message of hers before it', () => {
+  it('puts a new card in the thread, with no message of theirs before it', () => {
     const next = threadReducer(EMPTY, { type: 'draft_card', draftedId: 'dw_1', revision: 3 })
     expect(next.messages).toEqual([{ kind: 'drafted', id: 1, draftedId: 'dw_1', revision: 3 }])
   })

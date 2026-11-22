@@ -1095,6 +1095,32 @@ async def test_an_operators_question_beside_a_change_keeps_the_runtimes_marks(fr
 
 
 @pytest.mark.parametrize(
+    "plural",
+    [
+        "watch them",
+        "track them",
+        "monitor them",
+        "keep an eye on them",
+        "keep track of them",
+        "keep tabs on them",
+    ],
+)
+async def test_a_watch_of_them_beside_a_software_question_is_an_operators_for_anyone_else(
+    front: Front, plural: str
+):
+    """The runtime says which software is unclear only for these verbs, and the word rules read
+    each as a change, so an Approver's cross says who makes it, as for any other watch."""
+    parts = [done("Is LangGraph up to date"), crossed(plural, "which_software")]
+    question = QuestionAnswer(
+        text="LangGraph is behind.", looked_at=["watchlist"], about_software=["LangGraph"]
+    )
+    front.answers.result = Answered(answer=question, parts=parts)
+    text = f"Is LangGraph up to date, and {plural}"
+    assert marks(await ask_as_bob(front, text))[1] == (plural, "cant", "operators")
+    assert marks(await say(front, text))[1] == (plural, "cant", "which_software")
+
+
+@pytest.mark.parametrize(
     ("text", "only"),
     [
         ("What did I decide before?", None),
@@ -1711,6 +1737,7 @@ async def test_an_edit_names_the_workflow_by_whole_words_with_before_and_after(f
         "hour": None,
         "cant": None,
         "holds_save": False,
+        "leaves_out_days": False,
         "parts": [],
     }
 
@@ -1824,6 +1851,19 @@ async def test_a_change_the_chat_cant_make_names_the_workflow_and_proposes_nothi
         reply = await edit_reply(front, edit)
         assert (reply["use_case_id"], reply["cant"], reply["after"]) == (morning, cant, None)
         assert reply["before"] == WEEKDAYS_8
+
+
+async def test_a_schedule_that_leaves_out_days_says_so_for_the_portals_sentence(front: Front):
+    """The Portal says "I can't leave days out of a schedule yet." from this, never from the
+    cross's own words, as "no PH"."""
+    morning = await make_workflow(front, "Morning new-ticket check", WEEKDAYS_8)
+    edit = EditAnswer(workflow_words="morning check", cant="how_often", leaves_out_days=True)
+    reply = await edit_reply(front, edit)
+    assert (reply["use_case_id"], reply["cant"], reply["leaves_out_days"]) == (
+        morning,
+        "how_often",
+        True,
+    )
 
 
 async def test_a_clash_holds_save_with_no_after(front: Front):
@@ -1973,7 +2013,7 @@ async def test_a_watched_softwares_check_is_offered_as_the_watchlist_and_nothing
     front: Front,
 ):
     """The Software watchlist checks every software on it, so pausing it for "the LangGraph
-    check" would stop more than she asked. She picks it herself."""
+    check" would stop more than they asked. They pick it themselves."""
     alice = Principal(UserId("alice"), frozenset({Role.OPERATOR}), "Alice")
     await front.watchlist.add(alice, AddSoftware.model_validate(LANGGRAPH))
     pause = PauseAnswer(workflow_words="LangGraph check", software="LangGraph")

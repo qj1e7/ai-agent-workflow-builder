@@ -599,6 +599,8 @@ class N8nUser:
     id: str
     pending: bool
     """Invited, with no password set yet."""
+    email: str | None = None
+    """The email n8n holds for the account now, which its member can change in their profile."""
 
 
 @dataclass(frozen=True)
@@ -752,6 +754,7 @@ class _Invitation(_Data):
 class _UserOut(_Data):
     id: str
     is_pending: bool = Field(alias="isPending")
+    email: str | None = None
 
 
 class _ExecutionOut(_Data):
@@ -1313,7 +1316,7 @@ class N8nApi:
         if response.status_code == 404:
             return None
         out = _parse(_UserOut, _expect(response))
-        return N8nUser(out.id, out.is_pending)
+        return N8nUser(out.id, out.is_pending, out.email)
 
     async def delete_user(self, user_id: str, transfer_to: str) -> None:
         """Ends the account. What its own space still holds moves to `transfer_to`, so nothing

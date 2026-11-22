@@ -17,7 +17,6 @@ from agent_runtime.contract import (
     AnswerRequest,
     CantAnswer,
     CheckWorkflowsAnswer,
-    DidntFollowAnswer,
     EditAnswer,
     FreeReplyAnswer,
     ModelProblem,
@@ -34,6 +33,7 @@ from agent_runtime.contract import (
     WorkflowFact,
 )
 from agent_runtime.contracts import answer_request
+from agent_runtime.fixed_replies import didnt_follow
 from agent_runtime.planner_led import (
     BRIEFING,
     SAID_BEFORE,
@@ -48,6 +48,13 @@ from agent_runtime.planner_led import (
     person_part,
 )
 from agent_runtime.reply_verifier import Verdict
+from tests.exclusion_phrases import (
+    DAYS_AFTER_A_LEAVE_WORD,
+    DAYS_AFTER_AN_INTERJECTION,
+    EDITS_KEPT,
+    EDITS_LEFT_OUT,
+    LEFT_OUT_AFTER_ANOTHER,
+)
 from tests.fakes import ScriptedChat, asks, call
 from tests.test_answers import follow_up
 from tests.test_api import KEY as API_KEY
@@ -68,6 +75,10 @@ STALE_BUGS = (
     "Every weekday at 3pm, find bug tickets in MOCK with no update for 10 days and create "
     "one follow-up ticket that lists them in MOCK"
 )
+
+
+FELL_BACK = didnt_follow(sets_up=True, clarified_before=False)
+"""What a dead end shows when the free reply fails: a question back with next steps to tap."""
 
 
 def request(task: str, **fields: Any) -> AnswerRequest:
@@ -212,6 +223,22 @@ def test_a_pause_reaches_its_workflow_and_its_pause_word_and_no_other_clause() -
     assert reached(result) == ["pause the morning check"]
 
 
+def test_a_watch_of_them_beside_a_pause_keeps_ask_this_on_its_own() -> None:
+    """ "them" can mean the workflow, so the cross isn't which software is unclear."""
+    result, _ = run(
+        "pause the morning check and track them for me",
+        tool("change_workflow", action="pause", workflow_words="morning check"),
+        read=reading(),
+        facts=WORKFLOWS,
+    )
+
+    assert shown(result) == PauseAnswer(workflow_words="morning check")
+    assert marks(result) == [
+        ("pause the morning check", "will_do", None),
+        ("track them for me", "cant", "ask_on_its_own"),
+    ]
+
+
 def test_a_schedule_change_reaches_the_clause_where_code_reads_the_time() -> None:
     result, _ = run(
         "move the morning check to 10am, and list new bugs",
@@ -265,6 +292,50 @@ def test_how_to_start_reaches_only_what_the_reading_leaves_unexplained() -> None
         ("give me a quick tour", "will_do", None),
         ("pause the morning check", "cant", "ask_on_its_own"),
     ]
+
+
+def test_how_to_start_beside_a_watch_of_them_keeps_ask_this_on_its_own() -> None:
+    result, _ = run(
+        "how do I start, and track them",
+        tool("show", what="how_to_start"),
+        read=reading("abilities"),
+        facts=WORKFLOWS,
+    )
+
+    assert shown(result) == AbilitiesAnswer(how_to_start=True)
+    assert marks(result) == [
+        ("how do I start", "will_do", None),
+        ("track them", "cant", "ask_on_its_own"),
+    ]
+
+
+@pytest.mark.parametrize("watch", ["keep track of it", "keep an eye on all three"])
+def test_the_list_of_abilities_never_ticks_a_watch(watch: str) -> None:
+    """The rules don't follow a watch beside "what can you do", but no list of abilities does it."""
+    result, _ = run(
+        f"what can you do, and {watch}",
+        tool("show", what="abilities"),
+        read=reading("abilities"),
+        facts=WORKFLOWS,
+    )
+
+    assert marks(result) == [
+        ("what can you do", "will_do", None),
+        (watch, "cant", "ask_on_its_own"),
+    ]
+    assert reached(result) == ["what can you do"]
+
+
+def test_the_list_of_abilities_still_answers_words_with_add_check_or_follow_as_on_main() -> None:
+    """Only the verbs that ask for nothing but a watch keep a clause from the list."""
+    result, _ = run(
+        "what can you do, and the add-on",
+        tool("show", what="abilities"),
+        read=reading("abilities"),
+        facts=WORKFLOWS,
+    )
+
+    assert reached(result) == ["what can you do", "the add-on"]
 
 
 def test_how_to_start_for_a_message_the_rules_read_whole_goes_back_to_the_model() -> None:
@@ -355,7 +426,7 @@ def test_a_watch_offer_never_reaches_a_clause_that_watches_them() -> None:
         facts=FACTS,
     )
 
-    assert ("keep track of them", "will_do", None) not in marks(result)
+    assert ("keep track of them", "cant", "which_software") in marks(result)
     assert "keep track of them" not in reached(result)
 
 
@@ -598,6 +669,115 @@ def test_a_change_to_a_day_it_isn_t_told_to_run_on_or_a_ticket_s_deadline_is_nev
     assert result.errors
 
 
+@pytest.mark.parametrize(
+    "message",
+    [
+        *(f"make the morning check run at 10am, {said}" for said in EDITS_LEFT_OUT),
+        "make it run at 10am except PH",
+        "make it run at 10am except when I'm on leave",
+    ],
+)
+def test_a_time_change_beside_a_day_like_word_it_leaves_out_is_never_made(message: str) -> None:
+    """Before, "make it run at 10am except PH" moved it to 10:00 and kept every day, so it still
+    ran on PH. A day-like word left out is a schedule it can't hold, as "skip Fridays" is."""
+    result, _ = run(
+        message,
+        tool("change_workflow", action="schedule", at="10:00"),
+        AIMessage(content="stop"),
+        facts=WORKFLOWS,
+    )
+
+    assert "can't hold" in result.errors[0]
+
+
+@pytest.mark.parametrize("said", EDITS_KEPT)
+def test_a_time_change_beside_a_filter_or_a_condition_is_still_made(said: str) -> None:
+    result, _ = run(
+        f"make the morning check run at 10am, {said}",
+        tool("change_workflow", action="schedule", workflow_words="morning check", at="10:00"),
+        facts=WORKFLOWS,
+    )
+
+    answer = shown(result)
+    assert isinstance(answer, EditAnswer)
+    assert (answer.schedule, result.errors) == (ScheduleChange(at="10:00"), ())
+
+
+@pytest.mark.parametrize("message", [*DAYS_AFTER_A_LEAVE_WORD, *LEFT_OUT_AFTER_ANOTHER])
+def test_a_time_change_beside_a_day_it_leaves_out_is_never_made_as_that_day(message: str) -> None:
+    """Before, "make it run at 10am barring Fridays" passed as Friday at 10:00, the opposite of
+    the request, and "Except PH" after "does it skip PH?" passed as every day at 10:00."""
+    result, _ = run(
+        message,
+        tool("change_workflow", action="schedule", day="friday", at="10:00"),
+        tool("change_workflow", action="schedule", at="10:00", call_id="c2"),
+        AIMessage(content="stop"),
+        facts=WORKFLOWS,
+    )
+
+    assert len(result.errors) == 2
+    assert all("can't hold" in error for error in result.errors)
+
+
+@pytest.mark.parametrize(
+    ("name", "message"),
+    [
+        ("No-PH digest", "make the no-PH digest run at 10am"),
+        ("Skip PH digest", "make the skip PH digest run at 10am"),
+        ("Non-holiday report", "make the non-holiday report run at 10am"),
+        ("Holiday tracker", "make the holiday tracker run at 10am"),
+    ],
+)
+def test_a_workflow_whose_name_looks_like_a_day_left_out_still_moves(
+    name: str, message: str
+) -> None:
+    """Before, the gate read the workflow's own name, as "No-PH", as a day left out and refused
+    every change to it, while the edit chat made it."""
+    words = name.casefold()
+    facts = PlannerFacts(
+        workflows=[WorkflowFact(name=name, state="on", last_run=None, last_run_at=None)]
+    )
+    result, _ = run(
+        message,
+        tool("change_workflow", action="schedule", workflow_words=words, at="10:00"),
+        facts=facts,
+    )
+
+    answer = shown(result)
+    assert isinstance(answer, EditAnswer)
+    assert (answer.schedule, result.errors) == (ScheduleChange(at="10:00"), ())
+
+
+@pytest.mark.parametrize(("message", "run_time"), DAYS_AFTER_AN_INTERJECTION)
+def test_a_time_change_after_a_correction_and_a_mark_is_made(message: str, run_time: str) -> None:
+    """At c6d82764, the gate read "no" in "no, Friday at 9am" as leaving out Friday and refused."""
+    day, at = run_time.split(" ")
+    result, _ = run(
+        message,
+        tool("change_workflow", action="schedule", day=day, at=at),
+        facts=WORKFLOWS,
+    )
+
+    answer = shown(result)
+    assert isinstance(answer, EditAnswer)
+    change = ScheduleChange.model_validate({"day": day, "at": at})
+    assert (answer.schedule, result.errors) == (change, ())
+
+
+def test_a_workflow_whose_name_looks_like_a_day_left_out_still_asks_for_one_it_leaves_out():
+    facts = PlannerFacts(
+        workflows=[WorkflowFact(name="No-PH digest", state="on", last_run=None, last_run_at=None)]
+    )
+    result, _ = run(
+        "make the no-PH digest run at 10am except CNY",
+        tool("change_workflow", action="schedule", workflow_words="no-PH digest", at="10:00"),
+        AIMessage(content="stop"),
+        facts=facts,
+    )
+
+    assert "can't hold" in result.errors[0]
+
+
 def test_an_approver_cannot_change_a_workflow() -> None:
     result, _ = run(
         "pause the morning check",
@@ -793,7 +973,7 @@ def test_a_list_said_to_hold_what_the_facts_dont_never_shows() -> None:
         facts=FACTS,
     )
 
-    assert shown(result) == DidntFollowAnswer()
+    assert shown(result) == FELL_BACK
     assert "made_up" in result.errors[0]
 
 
@@ -802,7 +982,7 @@ def test_a_reply_that_says_something_happened_never_shows() -> None:
 
     result, _ = run("thanks", tool("reply", **said_it), tool("reply", call_id="c2", **said_it))
 
-    assert shown(result) == DidntFollowAnswer()
+    assert shown(result) == FELL_BACK
     assert "claims_done" in result.errors[0]
 
 
@@ -817,7 +997,7 @@ def test_the_verifier_checks_every_reply_the_code_checks_let_through() -> None:
     )
     clean, _ = run("hi", tool("reply", **greeting), then=[CLEAN])
 
-    assert shown(flagged) == DidntFollowAnswer()
+    assert shown(flagged) == FELL_BACK
     assert isinstance(shown(clean), FreeReplyAnswer)
 
 
@@ -856,7 +1036,7 @@ def test_a_second_miss_shows_the_rules_own_answer_when_it_is_no_dead_end() -> No
 def test_a_failed_model_turn_gives_the_rules_answer_or_the_fixed_card() -> None:
     result, _ = run("hi", TimeoutError("slow"))
 
-    assert shown(result) == DidntFollowAnswer()
+    assert shown(result) == FELL_BACK
     assert result.fell_back == "call"
 
 
@@ -903,7 +1083,7 @@ def test_a_failed_turn_logs_the_status_and_the_error_type_never_the_providers_wo
     with caplog.at_level(logging.WARNING):
         result, _ = run("hi", ProviderRefused())
 
-    assert shown(result) == DidntFollowAnswer()
+    assert shown(result) == FELL_BACK
     assert "status 400, invalid_request_error" in caplog.text
     assert "FAKEKEY" not in caplog.text and "x-api-key" not in caplog.text
 

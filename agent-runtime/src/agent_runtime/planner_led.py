@@ -36,7 +36,6 @@ from agent_runtime.answers import (
     TaskRead,
     answer_of,
     watch_of_it,
-    watches_it,
     with_software_named,
     word_rule_refusal,
 )
@@ -49,7 +48,6 @@ from agent_runtime.contract import (
     CantAnswer,
     CapabilitySpec,
     CheckWorkflowsAnswer,
-    DidntFollowAnswer,
     EditAnswer,
     ExplainAnswer,
     FreeReplyAnswer,
@@ -71,16 +69,24 @@ from agent_runtime.contract import (
     WhyStoppedAnswer,
 )
 from agent_runtime.drafting import UNUSABLE
-from agent_runtime.edits import PAUSES, RESUMES, TURNED
-from agent_runtime.free_reply import STILL_UNCLEAR, answer_of_envelope, dead_end, given_of
+from agent_runtime.edits import PAUSES, RESUMES, TURNED, without_workflows
+from agent_runtime.fixed_replies import fixed_reply
+from agent_runtime.free_reply import (
+    STILL_UNCLEAR,
+    answer_of_envelope,
+    dead_end,
+    fallback_of,
+    given_of,
+)
 from agent_runtime.how_to import HOW_TO
 from agent_runtime.model_access import problem_for
-from agent_runtime.parts import locate, parts_of
+from agent_runtime.parts import locate, parts_of, with_which_software
 from agent_runtime.planner import plain, visible_words
-from agent_runtime.reading import SAID_LIMIT, clauses_of, how_often, polite, said_schedule
+from agent_runtime.reading import SAID_LIMIT, change_unheld, clauses_of, polite, said_schedule
 from agent_runtime.reply_guard import GuardCheck, about_of
 from agent_runtime.reply_verifier import VerifierFlag, verify
 from agent_runtime.summary import ChatFor
+from agent_runtime.watch_words import asks_to_watch, watches_it
 
 log = logging.getLogger(__name__)
 
@@ -329,9 +335,11 @@ def held_to_reach(
 
 
 def _shown(turn: Turn, answer: PlannerAnswer, reached: frozenset[Span]) -> Acted:
-    """A one-action tool's answer with the rules' marks held to what its arguments reach, unless
-    that leaves a dead end ADR 0047 names: then the model hears what the rules found."""
-    parts = held_to_reach(turn.text, turn.marks(answer), reached)
+    """A one-action tool's answer with the rules' marks held to what its arguments reach, and a
+    watch of them it crosses held to the rules' allow-list (`with_which_software`), unless that
+    leaves a dead end ADR 0047 names: then the model hears what the rules found."""
+    held = held_to_reach(turn.text, turn.marks(answer), reached)
+    parts = with_which_software(turn.front.read, answer, held)
     gap = dead_end(answer, parts, turn.request.task)
     if gap is not None:
         found = " ".join(gap.notes)
@@ -468,10 +476,13 @@ def _which_software(raw: Mapping[str, Any], turn: Turn) -> Acted:
 WEEKLY: Final = re.compile(r"\b(?:weekly|once\s+a\s+week|every\s+week|each\s+week)\b", re.I)
 
 
-def _schedule_of(args: ChangeWorkflow, text: str) -> ScheduleChange | Invalid:
+def _schedule_of(args: ChangeWorkflow, text: str, unnamed: str) -> ScheduleChange | Invalid:
     """The schedule the call asks for, held to what `said_schedule` reads in the message alone,
-    and never one the workflow can't hold, as "every other Friday", made as a weekly one."""
-    if how_often(text) is not None:
+    and never one the workflow can't hold, as "every other Friday" made as a weekly one, or "make
+    it run at 10am except PH" made as every day at 10:00, as the edit chat holds it. `unnamed` is
+    the message with the workflows it names turned to spaces, so "the No-PH digest" leaves out
+    no day."""
+    if change_unheld(unnamed) is not None:
         return Invalid(
             "The message asks for a schedule a workflow can't hold, such as every other week or "
             "monthly. Use reply, form answer, to say it can run every day, every weekday or once "
@@ -541,7 +552,8 @@ def _change(raw: Mapping[str, Any], turn: Turn) -> Acted:
         if at is None or clause is None:
             return _not_found("workflow_words", args.workflow_words)
         words, reached = plain(text[at[0] : at[1]], NAME_LIMIT), reached | {clause}
-    schedule = _schedule_of(args, text) if args.action == "schedule" else None
+    unnamed = without_workflows(text, turn.request.facts, args.workflow_words)
+    schedule = _schedule_of(args, text, unnamed) if args.action == "schedule" else None
     if isinstance(schedule, Invalid):
         return schedule
     rules = turn.front.answer
@@ -559,14 +571,16 @@ def _change(raw: Mapping[str, Any], turn: Turn) -> Acted:
 
 def _unexplained(turn: Turn) -> frozenset[Span]:
     """The clauses the rules' reading leaves unexplained, which How to start and what the
-    Planner can do may answer: each the rules mark "I didn't follow this part", and each the
-    catch-all list of abilities ticks as a question about the app. A clause the reading puts on
-    any other lane is not one of them."""
+    Planner can do may answer: each the rules mark "I didn't follow this part" that asks to
+    watch nothing, and each the catch-all list of abilities ticks as a question about the app. A
+    clause the reading puts on any other lane is not one of them, nor is "keep track of it", which
+    no list of abilities does."""
     front = turn.front.answer
     clauses = turn.clauses
     found: set[Span] = set()
     for part in turn.marks(front):
-        unread = part.mark == "cant" and part.reason == "not_followed"
+        watch = asks_to_watch(part.text)
+        unread = part.mark == "cant" and part.reason == "not_followed" and not watch
         about_the_app = isinstance(front, AbilitiesAnswer) and part.mark == "will_do"
         clause = clause_holding(clauses, locate(turn.text, part.text))
         if (unread or about_the_app) and clause is not None:
@@ -959,6 +973,8 @@ FRONT_STANDS: Final[Mapping[type[BaseModel], str]] = {
 """The rules' answers that stand whatever the model leads with, with the name the eval reads:
 their refusal wins, and no tool draws the remove card or the explanation, as ADR 0049 has the
 rules build every card."""
+FIXED_REPLY: Final = "front_fixed_reply"
+"""The name the eval reads for a fixed reply (`fixed_reply`), which stands after them too."""
 
 
 def led(request: AnswerRequest, chat_for: ChatFor, verify_with: ChatFor | None = None) -> Led:
@@ -978,6 +994,10 @@ def led(request: AnswerRequest, chat_for: ChatFor, verify_with: ChatFor | None =
     if stands is not None:
         parts = parts_of(front.read, request.task, front.answer, request.facts)
         return Led(Answered(answer=front.answer, parts=parts), (stands,))
+    fixed = fixed_reply(request)
+    if fixed is not None:
+        parts = parts_of(front.read, request.task, fixed, request.facts)
+        return Led(Answered(answer=fixed, parts=parts), (FIXED_REPLY,))
     turn = Turn(request, front, chat_for, verify_with or chat_for)
     return _two_tries(asked, first, turn)
 
@@ -1004,7 +1024,7 @@ def _two_tries(asked: list[BaseMessage], first: AIMessage | ModelProblem, turn: 
 
 def _fallback(turn: Turn) -> Answered:
     """The rules' own answer when it is no dead end, as rules mode shows it before its free
-    reply, or the answer ADR 0047 keeps for its dead end. Otherwise the fixed card."""
+    reply, or the answer ADR 0047 keeps for its dead end. Otherwise a question back."""
     front, task = turn.front, turn.request.task
     parts = turn.marks(front.answer)
     gap = dead_end(front.answer, parts, task)
@@ -1012,7 +1032,7 @@ def _fallback(turn: Turn) -> Answered:
         return Answered(answer=front.answer, parts=parts)
     if gap.keep is not None:
         return Answered(answer=gap.keep, parts=turn.marks(gap.keep))
-    fallback = DidntFollowAnswer()
+    fallback = fallback_of(gap, turn.request)
     return Answered(answer=fallback, parts=parts_of(None, task, fallback))
 
 

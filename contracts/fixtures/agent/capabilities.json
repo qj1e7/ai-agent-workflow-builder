@@ -123,7 +123,7 @@
     },
     {
       "id": "packages.versions",
-      "plain": "Check Maven Central and npm packages for new versions and known vulnerabilities",
+      "plain": "Check Maven Central and npm packages for new versions",
       "kind": "read",
       "system": "Maven Central and npm",
       "state": "ready",
@@ -137,7 +137,7 @@
         "packages.read_versions",
         "packages.find_vulnerabilities"
       ],
-      "short": "Watch Maven and npm packages, and their known vulnerabilities",
+      "short": "Watch Maven and npm packages",
       "instead": null
     },
     {

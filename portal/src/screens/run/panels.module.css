@@ -340,10 +340,11 @@
   font-size: 0.875rem;
 }
 
+/* A summary draws its open or closed triangle only while its display stays list-item. */
 .details summary {
-  display: inline-flex;
-  align-items: center;
+  width: fit-content;
   min-height: 44px;
+  padding-block: 11px;
   font-weight: 600;
   cursor: pointer;
 }

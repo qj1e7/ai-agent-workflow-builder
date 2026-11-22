@@ -12,7 +12,6 @@ from agent_runtime.contract import (
     AbilitiesAnswer,
     Answered,
     AnswerRequest,
-    DidntFollowAnswer,
     EditAnswer,
     NeedsYouFact,
     PauseAnswer,
@@ -26,6 +25,7 @@ from agent_runtime.contract import (
     WorkflowFact,
 )
 from agent_runtime.contracts import answer_request
+from agent_runtime.fixed_replies import didnt_follow
 from agent_runtime.parts import parts_of
 from agent_runtime.questions import (
     COULD_NOT_ANSWER,
@@ -49,6 +49,10 @@ WATCHED = [
     )
 ]
 FACTS = PlannerFacts(watchlist=WATCHED)
+
+
+FELL_BACK = didnt_follow(sets_up=True, clarified_before=False)
+"""What a dead end shows when the free reply fails: a question back with next steps to tap."""
 
 
 def reading(about: str = "abilities", **fields: Any) -> TaskRead:
@@ -118,7 +122,7 @@ def test_no_facts_means_no_lane_so_the_catch_all_is_a_dead_end_and_the_lane_is_n
     reply = QuestionReply(about_their_data=True, text="Three.")
     for facts in (None, PlannerFacts()):
         result, chat = ask(reply, facts=facts)
-        assert isinstance(result, Answered) and result.answer == DidntFollowAnswer()
+        assert isinstance(result, Answered) and result.answer == FELL_BACK
         assert len(chat.calls) == 1
 
 
@@ -138,7 +142,7 @@ def test_a_reply_that_offers_to_act_or_runs_long_gets_the_fixed_text(text: str):
     reply = QuestionReply(about_their_data=True, text=text)
     assert answer_of_reply(reply, FACTS) == could_not_answer()
     result, _ = ask(reply)
-    assert result.answer == DidntFollowAnswer()
+    assert result.answer == FELL_BACK
 
 
 def test_a_plain_cant_is_not_an_offer():
@@ -150,7 +154,7 @@ def test_a_plain_cant_is_not_an_offer():
 def test_a_second_call_that_fails_gives_the_first_answer_which_for_the_catch_all_is_a_dead_end():
     slow = type("ReadTimeout", (Exception,), {})("took too long")
     result, _ = ask(slow)
-    assert isinstance(result, Answered) and result.answer == DidntFollowAnswer()
+    assert isinstance(result, Answered) and result.answer == FELL_BACK
 
 
 def test_the_catch_all_is_sent_to_the_lane_and_a_no_keeps_the_abilities_answer():
@@ -162,7 +166,7 @@ def test_the_catch_all_is_sent_to_the_lane_and_a_no_keeps_the_abilities_answer()
 
 def test_without_facts_the_catch_all_is_a_dead_end_and_the_lane_is_not_asked():
     result, chat = ask(QuestionReply(about_their_data=True, text="Three."), facts=None)
-    assert isinstance(result, Answered) and result.answer == DidntFollowAnswer()
+    assert isinstance(result, Answered) and result.answer == FELL_BACK
     assert len(chat.calls) == 1
 
 
@@ -311,7 +315,7 @@ def test_a_second_call_that_fails_on_the_watched_watchlist_route_gives_the_first
 def test_the_catch_all_with_the_fixed_text_is_a_dead_end_when_the_guards_reject():
     reply = QuestionReply(about_their_data=True, text="Three. I can set up a check for you.")
     out, _ = ask(reply)
-    assert out.answer == DidntFollowAnswer()
+    assert out.answer == FELL_BACK
 
 
 PREVIOUS = PreviousTurn(request="What is the newest version of LangGraph?", software=None)

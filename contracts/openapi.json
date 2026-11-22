@@ -5938,6 +5938,12 @@
             "description": "An hour the request named with no am or pm, as 9: the person picks 9:00 or 21:00.",
             "title": "Hour"
           },
+          "leaves_out_days": {
+            "default": false,
+            "description": "With how_often: True when the request leaves out a day, or words that look like a day or time off, as 'skip Fridays' or 'except PH'. The Portal then says it can't leave days out, whatever words the cross holds.",
+            "title": "Leaves Out Days",
+            "type": "boolean"
+          },
           "missing": {
             "anyOf": [
               {
@@ -6026,7 +6032,8 @@
           "after",
           "hour",
           "cant",
-          "holds_save"
+          "holds_save",
+          "leaves_out_days"
         ],
         "title": "EditReply",
         "type": "object"
@@ -6396,7 +6403,7 @@
             "type": "string"
           },
           "choices": {
-            "description": "The workflows the request could mean, for the person to pick one: every one its words match when they match several, or every workflow for \"it\", so the Portal can explain the one in focus. Empty when one matched or the words name none.",
+            "description": "The workflows the request could mean, for the person to pick one: every one its words match when they match several, or every workflow for \"it\", so the Portal can explain the one in focus. Empty when one matched, when \"it\" can only mean their one workflow, or when the words name none.",
             "items": {
               "$ref": "#/components/schemas/ExplainChoice"
             },
@@ -6461,7 +6468,7 @@
                 "type": "null"
               }
             ],
-            "description": "The workflow to explain. Null when the words name none of the person's workflows, name several, or are \"it\".",
+            "description": "The workflow to explain. Null when the words name none of the person's workflows, name several, or are \"it\" while they have more than one.",
             "title": "Use Case Id"
           }
         },
@@ -8403,6 +8410,18 @@
             "description": "n8n's editor, while you can open it.",
             "title": "Editor Url"
           },
+          "login": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The email you sign in to n8n with, as n8n holds it now. Open in n8n moves a workflow into this account's space, so only it sees the workflow. Null without n8n access, before your n8n account is made, or when n8n can't say.",
+            "title": "Login"
+          },
           "set_password_url": {
             "anyOf": [
               {
@@ -8434,7 +8453,8 @@
           "set_password_url",
           "can_open",
           "why_not",
-          "editor_url"
+          "editor_url",
+          "login"
         ],
         "title": "MyN8nOut",
         "type": "object"
@@ -9285,7 +9305,8 @@
           "needs_the_rest",
           "how_many_days",
           "only_schedule",
-          "how_often"
+          "how_often",
+          "which_software"
         ],
         "type": "string"
       },
@@ -9408,7 +9429,7 @@
                 "type": "null"
               }
             ],
-            "description": "Why, for a cant or a question: not_followed (no rule read it), cant_do (see note), ask_on_its_own, one_day, one_time or one_frequency (a schedule with two, see choices), own_time (a time on a watch request), skip_approval, with_a_yes, needs_the_rest, how_many_days, only_schedule (a change to a workflow other than when it runs), how_often (a schedule it can't hold, such as monthly), and operators (a change asked by someone who isn't an Operator). Null for will_do."
+            "description": "Why, for a cant or a question: not_followed (no rule read it), cant_do (see note), ask_on_its_own, one_day, one_time or one_frequency (a schedule with two, see choices), own_time (a time on a watch request), skip_approval, with_a_yes, needs_the_rest, how_many_days, only_schedule (a change to a workflow other than when it runs), how_often (a schedule it can't hold, such as monthly), which_software (a watch of more than one thing, as 'track them', that names no software), and operators (a change asked by someone who isn't an Operator). Null for will_do."
           },
           "text": {
             "description": "The request's own words: a whole clause, or, in a clause the Planner partly read, only the words it didn't read.",
@@ -19797,7 +19818,7 @@
                 }
               }
             },
-            "description": "Opening n8n is coming once the block list is on. Or: n8n can't be opened now, in words to show"
+            "description": "Opening n8n from here isn't turned on. The person who runs the platform can turn it on. Or: n8n can't be opened now, in words to show"
           },
           "503": {
             "content": {
@@ -22873,7 +22894,7 @@
                 }
               }
             },
-            "description": "This workflow is set up already. Or: Fix it in n8n first. It isn't published there, and only a workflow that passes the check can be turned on. Or: n8n is not ready yet: its error workflow is not loaded. Or: Opening n8n is coming once the block list is on. Or: n8n can't be opened now, in words to show"
+            "description": "This workflow is set up already. Or: Fix it in n8n first. It isn't published there, and only a workflow that passes the check can be turned on. Or: n8n is not ready yet: its error workflow is not loaded. Or: Opening n8n from here isn't turned on. The person who runs the platform can turn it on. Or: n8n can't be opened now, in words to show"
           },
           "422": {
             "content": {
@@ -23578,7 +23599,7 @@
                 }
               }
             },
-            "description": "Opening n8n is coming once the block list is on. Or: someone else has it open in n8n, in words to show"
+            "description": "Opening n8n from here isn't turned on. The person who runs the platform can turn it on. Or: someone else has it open in n8n, in words to show"
           },
           "422": {
             "content": {
@@ -24225,7 +24246,7 @@
                 }
               }
             },
-            "description": "Opening n8n is coming once the block list is on. Or: someone else has it open in n8n, in words to show"
+            "description": "Opening n8n from here isn't turned on. The person who runs the platform can turn it on. Or: someone else has it open in n8n, in words to show"
           },
           "422": {
             "content": {

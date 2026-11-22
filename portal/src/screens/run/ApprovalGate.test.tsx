@@ -78,7 +78,7 @@ function draw(approval: ApprovalView, { page = false, me = 'bob', decision = idl
 }
 
 describe('the approval, waiting for Bob’s yes', () => {
-  it('heads it with whose workflow asks, what it will write and a pill that says it needs his yes', () => {
+  it('heads it with whose workflow asks, what it will write and a pill that says it needs their yes', () => {
     const html = draw(BOB)
     expect(text(html)).toMatch(/^Approval, from Alice’s Software watchlist Create 1 Jira ticket Needs your yes/)
     expect(pill(html)).toBe('Needs your yes')
@@ -152,7 +152,7 @@ describe('the approval, waiting for Bob’s yes', () => {
     expect(html).not.toMatch(/<button[^>]*\sdisabled=""/)
   })
 
-  it('on the page says when the request went to Teams, in the sketch’s words, before why him', () => {
+  it('on the page says when the request went to Teams, in the sketch’s words, before why them', () => {
     expect(text(draw(BOB, { page: true }))).toContain('Sent Today, 10:14, in Teams Why you No one can approve their own work.')
   })
 
@@ -162,7 +162,7 @@ describe('the approval, waiting for Bob’s yes', () => {
     expect(text(draw(BOB))).not.toMatch(/\bSent\b/)
   })
 
-  it('says on the page when the request couldn’t be sent to Teams, and still lets him decide', () => {
+  it('says on the page when the request couldn’t be sent to Teams, and still lets them decide', () => {
     const failed: ApprovalView = { ...BOB, steps: BOB.steps.map((step) => ({ ...step, post: 'failed', sent_to: [], sent_at: null })) }
     const html = draw(failed, { page: true })
     expect(text(html)).toContain('Sent Couldn’t send to Teams Why you')
@@ -196,7 +196,7 @@ describe('the approval, for someone who can’t say yes', () => {
 })
 
 describe('two Approvers, one after the other', () => {
-  it('tells Bob and Alice it is step 1 of 2, and Bob that his yes is the first', () => {
+  it('tells Bob and Alice it is step 1 of 2, and Bob that their yes is the first', () => {
     expect(text(draw(TWO))).toContain('Step 1 of 2. It needs two Approvers, one after the other.')
     expect(text(draw({ ...TWO, you_can_decide: false, why_not: 'own_work' }, { me: 'alice' }))).toContain('Step 1 of 2. It needs two Approvers, one after the other.')
     expect(text(draw(TWO, { page: true }))).toContain('Why you No one can approve their own work. Your yes is the first of two.')
@@ -436,7 +436,7 @@ describe('questions on a request', () => {
     expect(buttons(html)).toEqual(['Back', 'Send'])
   })
 
-  it('shows Bob his question and that the request stays open, and leaves him Ask, Approve and Decline', () => {
+  it('shows Bob their question and that the request stays open, and leaves them Ask, Approve and Decline', () => {
     const html = draw({ ...BOB, questions: ASKED.questions })
     expect(text(html)).toContain(`You asked Alice: ${QUESTION.text} ${STILL_WAITING}`)
     expect(STILL_WAITING).toBe('No reply yet. The request stays open.')

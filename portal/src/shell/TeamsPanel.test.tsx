@@ -113,7 +113,7 @@ describe('what the badge asks the platform', () => {
   })
 
   it('still asks about an older run this person can decide when nine of their own come first', () => {
-    // Carol started all ten. Alice retried the nine newest, so they are her own work, though she did not start them.
+    // Carol started all ten. Alice retried the nine newest, so they are Alice's own work, though Alice did not start them.
     const { runs, messages } = manyWaiting(10, 'carol')
     const retried = runs.map((run, i) => (i === 0 ? run : { ...run, you_can_decide: false }))
     expect(badgeAsks(retried, messages)).toEqual({ ids: ['apr_0'], more: false })

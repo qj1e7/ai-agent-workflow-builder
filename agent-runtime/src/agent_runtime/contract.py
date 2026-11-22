@@ -1494,11 +1494,20 @@ class EditAnswer(WireModel):
         description="True when the new schedule names two days, two times or two frequencies. "
         "Nothing can be saved until the person asks again without the part with a cross.",
     )
+    leaves_out_days: bool = Field(
+        default=False,
+        description="With how_often: True when the request leaves out a day, or words that look "
+        "like a day or time off, as 'skip Fridays', 'except PH' or 'except when I'm on leave', "
+        "which no schedule can hold. The Portal then says it can't leave days out, whatever words "
+        "the cross holds. False for a frequency it can't hold, as monthly.",
+    )
 
     @model_validator(mode="after")
     def _a_cant_proposes_nothing(self) -> EditAnswer:
         if self.cant is not None and (self.schedule is not None or self.holds_save):
             raise ValueError("An edit the chat can't make proposes no schedule")
+        if self.leaves_out_days and self.cant != "how_often":
+            raise ValueError("Only a schedule it can't hold leaves out days")
         return self
 
 
@@ -1533,9 +1542,9 @@ class ExplainAnswer(WireModel):
     workflow_words: str | None = Field(
         default=None,
         max_length=80,
-        description='The words of the request that name the workflow, as it wrote them, as "the '
-        'FastAPI release check" names FastAPI release check. None for "explain it", so the '
-        "Portal explains the workflow in focus.",
+        description="The workflow's name as stored when the request says all of it, which "
+        'always fits, else the request\'s own words for part of it, as "the weekly summary". '
+        'None for "explain it", so the Portal explains the workflow in focus.',
     )
 
 
@@ -1577,6 +1586,7 @@ type PartReason = Literal[
     "how_many_days",
     "only_schedule",
     "how_often",
+    "which_software",
 ]
 
 
@@ -1603,7 +1613,8 @@ class RequestPart(WireModel):
         "can't be done), how_many_days (a question: the words name a span of days but no "
         "number), only_schedule (a change to a workflow other than when it runs, which the "
         "chat can't make yet), how_often (a frequency the schedule can't hold, such as "
-        "monthly). None for will_do.",
+        "monthly), which_software (a watch of more than one thing, as 'track them', that names "
+        "no software). None for will_do.",
     )
     note: str | None = Field(
         default=None, max_length=300, description="For cant_do, why, in the registry's words."

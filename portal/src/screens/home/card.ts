@@ -57,7 +57,7 @@ export interface Form {
   readonly name: string
   /** The Operator chose a new workflow over the Software watchlist, so each part is checked as a part, never sent to the watchlist. */
   readonly carriedOn: boolean
-  /** Each part of her request the Planner marked with a cross or a question (spec 6.5). A tick needs no keeping, since the rows hold what it will do. */
+  /** Each part of their request the Planner marked with a cross or a question (spec 6.5). A tick needs no keeping, since the rows hold what it will do. */
   readonly marked: readonly PartView[]
 }
 
@@ -352,7 +352,7 @@ function clashSet(reason: PartView['reason'], choice: string): Partial<When> | n
   return null
 }
 
-/** The choice of a clash the schedule holds now, in her words, or null while it holds none of them. */
+/** The choice of a clash the schedule holds now, in their words, or null while it holds none of them. */
 export function clashChosen(when: When, part: PartView): string | null {
   return part.choices.find((choice) => {
     const set = clashSet(part.reason, choice)
@@ -360,7 +360,7 @@ export function clashChosen(when: When, part: PartView): string | null {
   }) ?? null
 }
 
-/** Her words for each part with a cross. After she picks one of a clash’s choices, only the others are left out. */
+/** Their words for each part with a cross. After they pick one of a clash’s choices, only the others are left out. */
 export function leftOutOf(form: Form): string[] {
   return form.marked.flatMap((part) => {
     if (part.mark !== 'cant') return []
@@ -417,7 +417,7 @@ function timeQuestion(form: Form): Question {
   return { kind: 'when', field: 'at', words: hour === null ? timeWords(form.when) : `At ${orList(choices.map((choice) => choice.label))}?`, choices }
 }
 
-/** The name of another workflow like one she has: the next number after it, so no two share a name. */
+/** The name of another workflow like one they have: the next number after it, so no two share a name. */
 export function secondName(name: string): string {
   const numbered = /^(.*\S) (\d+)$/.exec(name.trim())
   return numbered ? `${numbered[1] ?? ''} ${String(Number(numbered[2]) + 1)}` : `${name.trim()} 2`
@@ -634,19 +634,24 @@ const STEPS: readonly unknown[] = [1, 2, 3, 4]
 const ROW_STATES: readonly unknown[] = ['understood', 'changed', 'missing', 'cant_do', 'edited']
 const OFTEN: readonly unknown[] = ['', 'every_day', 'weekdays', 'week']
 const MARKS: readonly unknown[] = ['will_do', 'cant', 'question']
-const REASONS: readonly unknown[] = [
-  'not_followed',
-  'cant_do',
-  'ask_on_its_own',
-  'one_day',
-  'one_time',
-  'one_frequency',
-  'own_time',
-  'skip_approval',
-  'with_a_yes',
-  'needs_the_rest',
-  'how_many_days',
-]
+/** Every reason a saved part may hold. The type keeps it complete, so a draft never drops a cross with a new reason. */
+const REASONS: readonly unknown[] = Object.keys({
+  not_followed: true,
+  cant_do: true,
+  ask_on_its_own: true,
+  one_day: true,
+  one_time: true,
+  one_frequency: true,
+  own_time: true,
+  skip_approval: true,
+  with_a_yes: true,
+  needs_the_rest: true,
+  how_many_days: true,
+  operators: true,
+  only_schedule: true,
+  how_often: true,
+  which_software: true,
+} satisfies Record<PartReason, true>)
 
 function isPart(value: unknown): value is PartView {
   return (
@@ -792,11 +797,11 @@ const NOT_QUESTIONS: Readonly<Record<string, string>> = {
   [LEFT_TOOL]: 'Part of it needs a tool I don’t have. Change your words to leave it out.',
 }
 
-/** What the card asks her as a question, one at a time: a part not said, when it runs, how many days, or a value an agent needs ("the Jira project"). */
+/** What the card asks them as a question, one at a time: a part not said, when it runs, how many days, or a value an agent needs ("the Jira project"). */
 export const isQuestion = (choice: string): boolean => QUESTIONS.has(choice) || (/^the /.test(choice) && NOT_QUESTIONS[choice] === undefined)
 
 /**
- * The footer’s line, in the sketch’s words: how many questions are left for her, else what else holds Set up. The rows show which,
+ * The footer’s line, in the sketch’s words: how many questions are left for them, else what else holds Set up. The rows show which,
  * one question at a time, and a cross is on the card, so nothing left says nothing: the button says what it sets up.
  */
 export function leftWords({ choices }: Left): string {
@@ -826,8 +831,8 @@ function clauseOf(text: string, words: string): string {
 const UNSET: Readonly<Partial<Record<PartReason, Partial<When>>>> = { one_frequency: { often: '', day: '' }, one_day: { often: 'week', day: '' }, one_time: { at: '' } }
 
 /**
- * The schedule from her words. A clash leaves its schedule row empty, so the rest of that clause is read instead, with the
- * clashing day, time or frequency left for her to choose. Nothing is ever picked for her.
+ * The schedule from their words. A clash leaves its schedule row empty, so the rest of that clause is read instead, with the
+ * clashing day, time or frequency left for them to choose. Nothing is ever picked for them.
  */
 function whenFrom(said: string, typed: string, marked: readonly PartView[]): When {
   const clashes = marked.filter(isClash)
@@ -837,7 +842,7 @@ function whenFrom(said: string, typed: string, marked: readonly PartView[]): Whe
   return clashes.reduce<When>((when, part) => ({ ...when, ...(part.reason ? UNSET[part.reason] : {}) }), { ...read, filledFrom: said })
 }
 
-/** A set-up card’s starting state from the Planner’s rows and parts. The schedule is read from her words only, so a time is never guessed. */
+/** A set-up card’s starting state from the Planner’s rows and parts. The schedule is read from their words only, so a time is never guessed. */
 export function cardFrom(
   name: string,
   rows: readonly { readonly kind: RowKind; readonly text: string; readonly state: RowState; readonly note: string | null }[],

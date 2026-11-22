@@ -1,9 +1,10 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { useCacheScope } from '../../api/context'
 import { useLatch } from '../../api/latch'
 import { useAddPerson, useAskApprover, useConfirmations, useDecideConfirmation, useMyN8n, usePeopleList, useRemoveApprover, useSetN8nAccess, useSetOperator } from '../../api/settingsQueries'
 import type { ConfirmationOut, Me, PersonOut } from '../../api/types'
 import { Button } from '../../ui/Button'
+import { ConfirmLine } from '../../ui/ConfirmLine'
 import { focusIfFocusFell } from '../../ui/focus'
 import { personTone } from '../../ui/personTone'
 import { ClockMark, ShieldMark } from './marks'
@@ -89,7 +90,7 @@ interface PanelProps {
   me: Me | undefined
 }
 
-function PeoplePanel({ people, confirmations, me }: PanelProps) {
+export function PeoplePanel({ people, confirmations, me }: PanelProps) {
   const words = useSettingsWords()
   const operator = canChangeSettings(me)
   const setOperator = useSetOperator()
@@ -102,9 +103,11 @@ function PeoplePanel({ people, confirmations, me }: PanelProps) {
   const [said, setSaid] = useState<PeopleSaid>(NOTHING_SAID)
   const [listed, setListed] = useState(people)
   const [busy, setBusy] = useState<Busy | null>(null)
+  const [approverRemoval, setApproverRemoval] = useState<string | null>(null)
   if (listed !== people) {
     setListed(people)
     setSaid(saidAfterListChange(listed, people, said))
+    if (approverRemoval !== null && !people.some((person) => person.id === approverRemoval && person.approver)) setApproverRemoval(null)
   }
   const { notice, problem, left } = said
   const tell = (next: PeopleNotice) => setSaid((now) => ({ notice: next, problem: null, left: now.left }))
@@ -121,6 +124,12 @@ function PeoplePanel({ people, confirmations, me }: PanelProps) {
   useEffect(() => {
     if (left) focusIfFocusFell(LEFT_ID)
   }, [left])
+  // A read can close the question while focus is in it, so focus goes back to the box it came from.
+  const asked = useRef<string | null>(null)
+  useEffect(() => {
+    if (asked.current !== null && approverRemoval === null) focusIfFocusFell(approverBoxId(asked.current))
+    asked.current = approverRemoval
+  }, [approverRemoval])
 
   function change(person: PersonOut, act: Busy['act'], to: boolean | undefined, send: (done: Settled) => void, after: () => void) {
     latch.run((settled) => {
@@ -159,8 +168,21 @@ function PeoplePanel({ people, confirmations, me }: PanelProps) {
     })
   }
 
+  function closeApproverRemoval(person: PersonOut) {
+    setApproverRemoval(null)
+    focus(approverBoxId(person.id))
+  }
+
   function onApprover(person: PersonOut, to: boolean) {
-    change(person, 'approver', to, (done) => (to ? askApprover.mutate(person.id, done) : removeApprover.mutate(person.id, done)), () => {
+    const send = (done: Settled) => {
+      if (to) {
+        askApprover.mutate(person.id, done)
+        return
+      }
+      closeApproverRemoval(person)
+      removeApprover.mutate(person.id, done)
+    }
+    change(person, 'approver', to, send, () => {
       tell({ personId: person.id, words: to ? askedApproverWords(person.display) : approverRemovedWords(person.display), undo: null })
       // The box is disabled while the request waits, so focus would otherwise fall to the page.
       focus(NOTICE_ID)
@@ -226,10 +248,14 @@ function PeoplePanel({ people, confirmations, me }: PanelProps) {
             confirmation={waiting.get(person.id)}
             askedByName={names.get(person.pending_approver?.asked_by ?? '') ?? 'an Operator'}
             busy={busy?.personId === person.id ? busy : null}
+            changeInFlight={busy !== null}
             problem={problem?.personId === person.id ? problem.words : null}
             notice={notice?.personId === person.id ? noticeFor(person) : null}
+            confirmingRemoval={approverRemoval === person.id}
             onOperator={(to) => onOperator(person, to)}
             onApprover={(to) => onApprover(person, to)}
+            onAskRemoval={() => setApproverRemoval(person.id)}
+            onKeepApprover={() => closeApproverRemoval(person)}
             onN8nAccess={(to) => onN8nAccess(person, to)}
             onDecide={(confirmation, verdict) => onDecide(person, confirmation, verdict)}
           />
@@ -249,22 +275,26 @@ function PeoplePanel({ people, confirmations, me }: PanelProps) {
   )
 }
 
-interface RowProps {
+export interface RowProps {
   person: PersonOut
   me: Me | undefined
   operator: boolean
   confirmation: ConfirmationOut | undefined
   askedByName: string
   busy: Busy | null
+  changeInFlight: boolean
   problem: string | null
   notice: ReactNode
+  confirmingRemoval: boolean
   onOperator: (to: boolean) => void
   onApprover: (to: boolean) => void
   onN8nAccess: (to: boolean) => void
   onDecide: (confirmation: ConfirmationOut, verdict: 'confirm' | 'not_now') => void
+  onAskRemoval: () => void
+  onKeepApprover: () => void
 }
 
-function PersonRow({ person, me, operator, confirmation, askedByName, busy, problem, notice, onOperator, onApprover, onN8nAccess, onDecide }: RowProps) {
+export function PersonRow({ person, me, operator, confirmation, askedByName, busy, changeInFlight, problem, notice, confirmingRemoval, onOperator, onApprover, onN8nAccess, onDecide, onAskRemoval, onKeepApprover }: RowProps) {
   const tone = personTone(person.display)
   const status = personStatusWords(person)
   const pending = person.pending_approver !== null
@@ -307,7 +337,7 @@ function PersonRow({ person, me, operator, confirmation, askedByName, busy, prob
               checked={approverTicked}
               disabled={pending}
               aria-describedby={describedBy}
-              onChange={(event) => onApprover(event.target.checked)}
+              onChange={(event) => (event.target.checked ? onApprover(true) : onAskRemoval())}
             />
             Approver<span className="visually-hidden"> for {person.display}</span>
           </label>
@@ -328,6 +358,19 @@ function PersonRow({ person, me, operator, confirmation, askedByName, busy, prob
         <p className={styles['rolesText']}>{rolesWords(person)}</p>
       )}
       {me?.id === person.id && person.n8n_access ? <MyN8nLine /> : null}
+      {confirmingRemoval ? (
+        <div className={styles['rowNote']}>
+          <ConfirmLine
+            groupName={`Remove ${person.display} as an Approver`}
+            question={`Remove ${person.display} as an Approver? Another Approver has to confirm before they can approve again.`}
+            keep="Keep it"
+            yes="Yes, remove Approver"
+            busy={changeInFlight}
+            onKeep={onKeepApprover}
+            onYes={() => onApprover(false)}
+          />
+        </div>
+      ) : null}
       {pending ? (
         <div className={styles['rowNote']}>
           <span className={styles['pill']} data-tone="wait">
@@ -337,7 +380,7 @@ function PersonRow({ person, me, operator, confirmation, askedByName, busy, prob
           {can && can.can !== 'decide' ? <span className={styles['small']}>{can.words}</span> : null}
           {confirmation && (can?.can === 'decide' || can?.can === 'not_now_only') ? (
             <span className={styles['buttons']}>
-              <Button variant="danger-outline" loading={busy?.act === 'not_now'} onClick={() => onDecide(confirmation, 'not_now')}>
+              <Button loading={busy?.act === 'not_now'} onClick={() => onDecide(confirmation, 'not_now')}>
                 Not now<span className="visually-hidden"> for {person.display}</span>
               </Button>
               {can.can === 'decide' ? (

@@ -1,6 +1,6 @@
-import type { CantRowView, CapabilitiesView, CapabilityView, OfflineReply, PauseReply, PlannerReply, QuestionReply, RemoveSoftwareReply, ResumeReply, RowKind, UnderstoodRowView } from '../../api/types'
-import { andList, count } from '../run/words'
-import { isRunning, type Row } from '../workflows/workflow'
+import type { CantRowView, CapabilitiesView, CapabilityView, OfflineReply, PauseReply, PlannerReply, QuestionReply, RemoveSoftwareReply, ResumeReply, RowKind, UnderstoodRowView, UseCaseView } from '../../api/types'
+import { andList, count, type NameOf } from '../run/words'
+import { isRunning, lastRunLine, lifeWords, nextRunWords, type Row } from '../workflows/workflow'
 import { sayChanged } from './changed'
 import { cantOnCard, quote } from './parts'
 
@@ -141,7 +141,7 @@ export const watchlistSay = (software: string | null, listed: boolean): string =
 const VERSION_WORD = /\b(?:versions?|releas(?:e|es|ed|ing)|upgrad(?:e|es|ed|ing)|patch(?:es|ed|ing)?)\b/i
 
 /**
- * The software card's line for software the watchlist doesn't hold. Why the version she runs isn't known fits only a question about
+ * The software card's line for software the watchlist doesn't hold. Why the version they run isn't known fits only a question about
  * the version. Asked to add, watch or keep track of it, it isn't on the watchlist yet, and that is all.
  */
 export const unwatchedSay = (word: string): string => (VERSION_WORD.test(word) ? 'It isn’t on the watchlist, so I don’t know which version you run.' : 'It isn’t on the watchlist yet.')
@@ -224,7 +224,7 @@ export function sayOf(reply: PlannerReply, asker: Asker = 'operator'): string | 
   }
 }
 
-/** The button that sends a free reply’s offer. It says the request itself, so what she taps is exactly what is sent. */
+/** The button that sends a free reply’s offer. It says the request itself, so what they tap is exactly what is sent. */
 export const offerLabel = (request: string): string => `Try ${quote(request.trim())}`
 
 /** What a refusal can do next. The words after the unsafe part go back to the Planner, never straight to a set-up (they can ask for more). */
@@ -254,6 +254,19 @@ export function workflowsSay(rows: readonly Row[], asker: Asker = 'operator'): s
     running > 0 ? `${running} ${running === 1 ? 'is' : 'are'} running` : null,
   ].filter((part) => part !== null)
   return `${asker === 'operator' ? 'You have' : 'The team has'} ${count(rows.length, 'workflow')}. ${parts.length > 0 ? `${parts.join(', ')}.` : 'None needs you.'}`
+}
+
+/**
+ * Check my workflows when there is one workflow: whether it is on, how its last run went in its row’s own words, and its next run
+ * in the panel’s own Next run words, so a held schedule or a refused move says Not running there too. Paused says it once. Its name
+ * is quoted, so it reads as a name and never as the Planner’s words.
+ */
+export function oneWorkflowSay(useCase: UseCaseView, now: Date, nameOf: NameOf): string {
+  const life = useCase.state === 'draft' ? 'a draft' : lifeWords(useCase.state).toLowerCase()
+  const last = lastRunLine(useCase, now, nameOf)
+  const ran = useCase.last_run ? `${last.charAt(0).toUpperCase()}${last.slice(1).replace(/[.!?]+$/, '')}.` : 'It hasn’t run yet.'
+  const next = useCase.state === 'paused' ? '' : ` Next run: ${nextRunWords(useCase, now)}.`
+  return `${quote(useCase.name)} is ${life}. ${ran}${next}`
 }
 
 export interface CapabilityGroups {
@@ -314,7 +327,10 @@ export function startingPoints(view: CapabilitiesView): readonly string[] {
   return view.examples.filter((example) => example.kind !== 'learn').map((example) => example.text)
 }
 
-/** How to start, step by step: the registry’s first example in her words, and Teams named only while the platform can ask for a yes there. */
+/** What How to start says first, so a question about what the app is for gets that answer before the steps. */
+export const START_LEAD = 'This app runs repetitive work for you. Tell me the task and I’ll draft it. Nothing is written without an Approver’s yes.'
+
+/** How to start, step by step: the registry’s first example in their words, and Teams named only while the platform can ask for a yes there. */
 export function startSteps(view: CapabilitiesView): readonly string[] {
   const example = startingPoints(view)[0]
   const teams = view.capabilities.some((entry) => entry.id === 'teams.ask' && entry.state === 'ready')

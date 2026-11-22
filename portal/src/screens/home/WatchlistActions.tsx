@@ -1,9 +1,10 @@
-import { useEffect, useReducer, useRef, useState } from 'react'
+import { useReducer, useState } from 'react'
 import { useErrorWords } from '../../api/context'
 import { useLatch } from '../../api/latch'
 import { useMe, useRemoveSoftware, useRestoreSoftware, useStartRun, useWatchlist } from '../../api/queries'
 import type { WatchedSoftwareView } from '../../api/types'
 import { Button } from '../../ui/Button'
+import { ConfirmLine } from '../../ui/ConfirmLine'
 import { useChatNavigate } from '../../ui/fromChat'
 import { OpenButton } from '../../ui/OpenItem'
 import { pressCheckNow } from '../software/checkNow'
@@ -22,10 +23,6 @@ interface StopProps {
 
 /** Stop watching sits last and asks first. The Software page’s own remove runs after the yes, and its Undo comes back. */
 function StopWatching({ row, confirming, busy, ask, keep, stop }: StopProps) {
-  const keepButton = useRef<HTMLButtonElement>(null)
-  useEffect(() => {
-    if (confirming) keepButton.current?.focus()
-  }, [confirming])
   if (!confirming) {
     return (
       <Button loading={busy} onClick={ask}>
@@ -34,15 +31,23 @@ function StopWatching({ row, confirming, busy, ask, keep, stop }: StopProps) {
     )
   }
   return (
-    <span className={styles['confirm']} role="group" aria-label={`Stop watching ${row.name}`}>
-      <span>Stop watching {row.name}? It won’t be checked any more.</span>
-      <Button ref={keepButton} onClick={keep}>
-        Keep it<span className="visually-hidden"> on the watchlist</span>
-      </Button>
-      <Button variant="danger-outline" loading={busy} onClick={stop}>
-        Yes, stop watching<span className="visually-hidden"> {row.name}</span>
-      </Button>
-    </span>
+    <ConfirmLine
+      groupName={`Stop watching ${row.name}`}
+      question={`Stop watching ${row.name}? It won’t be checked any more.`}
+      keep={
+        <>
+          Keep it<span className="visually-hidden"> on the watchlist</span>
+        </>
+      }
+      yes={
+        <>
+          Yes, stop watching<span className="visually-hidden"> {row.name}</span>
+        </>
+      }
+      busy={busy}
+      onKeep={keep}
+      onYes={stop}
+    />
   )
 }
 

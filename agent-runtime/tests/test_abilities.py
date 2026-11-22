@@ -30,8 +30,7 @@ from agent_runtime.planner import why_no_tool
 
 CAN = (
     "I can only check software for new releases on GitHub, check Maven Central and npm packages "
-    "for new versions and known vulnerabilities, create a Jira ticket after a yes, and ask "
-    "Approvers for a yes in Teams."
+    "for new versions, create a Jira ticket after a yes, and ask Approvers for a yes in Teams."
 )
 WONT = ("close", "delete", "edit", "move", "update", "change", "reassign", "assign")
 
