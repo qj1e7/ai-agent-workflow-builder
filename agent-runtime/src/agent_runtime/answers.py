@@ -779,7 +779,11 @@ def _watchlist(
             note=VULNERABILITIES_PLANNED,
             needs="new_system",
         )
-        instead = None if software is None else WatchlistAnswer(word=word, software=software)
+        instead = (
+            WatchlistAnswer(word=word, software=software)
+            if software is not None and not a_read_source(software)
+            else None
+        )
         return CantAnswer(cant=[cant], alternative=instead)
     elsewhere = [
         s for s in other_systems(request) if software is None or s.casefold() != software.casefold()
@@ -793,7 +797,8 @@ def _watchlist(
         )
         if software is None:
             return CantAnswer(cant=[system_row])
-    if software is None:
+    # npm or Maven Central alone is where software is published, not a software (ADR 0025).
+    if software is None or a_read_source(software):
         return WhichSoftwareAnswer(word=word)
     watching = WatchlistAnswer(word=word, software=software, also=_also(read, task, request))
     if watching.also is not None:

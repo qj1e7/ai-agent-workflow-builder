@@ -3711,3 +3711,28 @@ def test_a_watch_time_too_often_for_the_watchlist_still_says_so():
     task = "Check LangGraph for new releases every hour"
     answer = answer_of(_watch("releases"), task)
     assert [row.note for row in getattr(answer, "cant", [])] == [HOW_OFTEN]
+
+
+@pytest.mark.parametrize(
+    ("task", "software", "verb"),
+    [
+        ("add Maven Central to the watchlist", "Maven Central", "add"),
+        ("watch npm", "npm", "watch"),
+        ("track npm releases", "npm", "track"),
+    ],
+)
+def test_a_watch_of_only_a_source_the_platform_reads_asks_which_software(
+    task: str, software: str, verb: str
+):
+    """npm and Maven Central are where software is published, not a software to watch."""
+    reading = read(belongs_on_watchlist=True, watchlist_word=verb, software=software)
+    assert isinstance(answer_of(reading, task), WhichSoftwareAnswer)
+
+
+def test_maven_alone_and_a_package_on_npm_are_still_offered():
+    maven = read(belongs_on_watchlist=True, watchlist_word="watch", software="maven")
+    assert answer_of(maven, "watch maven") == WatchlistAnswer(word="watch", software="maven")
+    express = read(belongs_on_watchlist=True, watchlist_word="watch", software="express")
+    assert answer_of(express, "watch express on npm") == WatchlistAnswer(
+        word="watch", software="express"
+    )
