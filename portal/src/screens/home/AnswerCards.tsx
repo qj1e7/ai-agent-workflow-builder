@@ -4,7 +4,8 @@ import type { AbilitiesReply, N8nReply, CantReply, CantRowView, CapabilitiesView
 import { useErrorWords } from '../../api/context'
 import { useCapabilities } from '../../api/plannerQueries'
 import { useMoveWorkflow } from '../../api/workflowQueries'
-import { Button, ButtonLink } from '../../ui/Button'
+import { Button, ButtonLink, buttonClassName } from '../../ui/Button'
+import { cx } from '../../ui/cx'
 import { Card } from '../../ui/Card'
 import { OpenButton } from '../../ui/OpenItem'
 import { useWatchlist } from '../../api/queries'
@@ -27,6 +28,7 @@ import { ExplainAnswer } from '../explain/ExplainAnswer'
 import { RemoveSoftwareAnswer } from './RemoveSoftware'
 import { DraftButton } from '../drafted/DraftButton'
 import { DraftedCard } from '../drafted/DraftedCard'
+import partsStyles from './PartsList.module.css'
 import styles from './Planner.module.css'
 
 /** What a card can ask the page to do. Both go through the Planner or the box, so nothing here reaches a set-up on its own. */
@@ -160,9 +162,9 @@ function SoftwareCard({ name, listed, word, covers, ownTime }: { name: string; l
         actions={
           <>
             {move ? (
-              <Button variant={main} onClick={move.send}>
+              <button type="button" className={cx(buttonClassName(main), partsStyles['offer'])} onClick={move.send}>
                 {move.label}
-              </Button>
+              </button>
             ) : null}
             <OpenButton variant={move ? 'secondary' : main} item={{ kind: 'software', id: listed.software_id }} to={softwarePath(listed.software_id)}>
               Open it
