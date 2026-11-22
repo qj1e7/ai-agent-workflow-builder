@@ -54,20 +54,21 @@ export const WAITING_ON_AN_APPROVER = 'On · waiting for an Approver’s yes'
 export const LAST_RUN_STOPPED = 'On · last run stopped'
 
 /**
- * The workflow's one state, in the four words ADR 0053 allows: Paused, Draft, Needs you or On. Needs you holds a version that needs a fix,
- * a stopped run for an Operator (who opens it) and a run waiting for a yes the person may give. Everyone else reads On, with who it waits
- * for. A run's own result (Done, Nothing new, Declined, Skipped) stays in Recent runs, so the workflow reads On.
+ * The workflow's one state, in the four words ADR 0053 allows: Paused, Draft, Needs you or On. Needs you holds only what the person has an
+ * action on, so it agrees with the Needs you list: a version that needs a fix (an Operator also when the safety checker refused its
+ * writes), a stopped run the platform puts in this person's Needs you (`you_can_open`), and a run waiting for a yes they may give.
+ * Everyone else reads On, with who it waits for. A lost run and a run's own result (Done, Nothing new, Declined, Skipped) stay in Recent runs.
  */
 export function statusOf(useCase: Pick<UseCaseView, 'state' | 'last_run'> & Partial<Pick<UseCaseView, 'grade' | 'move_refused'>>, operator: boolean): Status {
   if (useCase.state === 'paused') return { four: 'paused', label: 'Paused', tone: undefined }
   if (useCase.state === 'draft') return { four: 'draft', label: 'Draft', tone: undefined }
-  if (needsFix(useCase)) return { four: 'needs', label: 'Needs you', tone: 'bad' }
+  if (!useCase.move_refused && (useCase.grade === 'needs_a_fix' || (useCase.grade === 'writes_refused' && operator))) return { four: 'needs', label: 'Needs you', tone: 'bad' }
   const { last_run: last } = useCase
   if (!last) return { four: 'on', label: 'On', tone: undefined }
-  switch (runPill(stageOfLast(last)).tone) {
-    case 'bad':
-      return operator ? { four: 'needs', label: 'Needs you', tone: 'bad' } : { four: 'on', label: LAST_RUN_STOPPED, tone: 'ok' }
-    case 'wait':
+  switch (last.state) {
+    case 'failed':
+      return last.you_can_open ? { four: 'needs', label: 'Needs you', tone: 'bad' } : { four: 'on', label: LAST_RUN_STOPPED, tone: 'ok' }
+    case 'awaiting_approval':
       return last.you_can_decide ? { four: 'needs', label: 'Needs you', tone: 'wait' } : { four: 'on', label: WAITING_ON_AN_APPROVER, tone: 'wait' }
     default:
       return { four: 'on', label: 'On', tone: undefined }
@@ -405,12 +406,12 @@ export function cardsOf(useCase: Pick<UseCaseView, 'template' | 'agents'>): read
 export type RowAction = { readonly kind: 'decide' | 'why'; readonly runId: string }
 
 /** The platform says whether the person can decide a waiting run. Only it knows who retried a run or is named on a step. */
-export function rowAction(last: LastRun | null, viewer: Viewer): RowAction | null {
+export function rowAction(last: LastRun | null): RowAction | null {
   if (!last) return null
   if (last.state === 'awaiting_approval') {
     return last.you_can_decide ? { kind: 'decide', runId: last.run_id } : null
   }
-  if (last.state === 'failed' && viewer.operator) return { kind: 'why', runId: last.run_id }
+  if (last.state === 'failed' && last.you_can_open) return { kind: 'why', runId: last.run_id }
   return null
 }
 
@@ -451,7 +452,7 @@ export function rowsOf(
 ): Row[] {
   const words = query.trim().toLowerCase()
   const rows = useCases.map((useCase) => {
-    const action = rowAction(useCase.last_run, viewer)
+    const action = rowAction(useCase.last_run)
     return { useCase, action: action && runsInNeeds.has(action.runId) ? null : action }
   })
   const needsYou = (row: Row) => (row.action ? 0 : 1)

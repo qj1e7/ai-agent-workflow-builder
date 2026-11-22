@@ -28,7 +28,7 @@ export function AlreadyHave({ similar, card }: { similar: SimilarWorkflow; card:
   return (
     <Card
       title={useCase?.name ?? similar.name}
-      pill={useCase ? <StatusPills useCase={useCase} operator={me !== undefined && isOperator(me)} /> : undefined}
+      pill={useCase && me ? <StatusPills useCase={useCase} operator={isOperator(me)} /> : undefined}
       actions={
         <>
           <Button onClick={() => setAnother(true)}>Set up another</Button>

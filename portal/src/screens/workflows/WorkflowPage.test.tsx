@@ -366,7 +366,7 @@ describe('a workflow page', () => {
 
   it('for a run n8n lost, says Lost in the banner and keeps the pill On, as a lost run is not in Needs you', () => {
     const html = render({ last: { state: 'lost', reason: null } })
-    expect(mainOf(html)).toMatch(/data-life="on"[^>]*>On<\/span>/)
+    expect(mainOf(html)).toMatch(/data-life="on"[^>]*>.*On<\/span>/)
     expect(mainOf(html)).not.toMatch(/Needs you<\/span>/)
     expect(text(bannerOfHtml(html))).toBe('Lost today at 10:14. Approved, but the run stopped before it could make the change. Nothing was written. Open the run')
     expect(text(mainOf(html))).not.toContain('On. Next run')

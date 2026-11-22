@@ -36,7 +36,7 @@ function Row({ item, to, name, line, state, data, beside }: { item: PanelItem; t
 export function WorkflowRows({ useCases, label, now }: { useCases: readonly UseCaseView[]; label: string; now: Date }): ReactNode {
   const nameOf = useDisplayName()
   const me = useMe().data
-  const operator = me !== undefined && isOperator(me)
+  const operator = me === undefined ? null : isOperator(me)
   return (
     <ul className={styles['wl']} aria-label={label}>
       {useCases.map((useCase) => (
@@ -46,7 +46,7 @@ export function WorkflowRows({ useCases, label, now }: { useCases: readonly UseC
           to={workflowPath(useCase)}
           name={useCase.name}
           line={rowLine(useCase, now, nameOf)}
-          state={<StatusPills useCase={useCase} operator={operator} test={useCase.last_run?.test === true} />}
+          state={operator === null ? null : <StatusPills useCase={useCase} operator={operator} test={useCase.last_run?.test === true} />}
           data={{ 'data-workflow-id': useCase.use_case_id }}
           beside={<ExplainButton useCaseId={useCase.use_case_id} name={useCase.name} />}
         />

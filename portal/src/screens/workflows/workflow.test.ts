@@ -413,24 +413,24 @@ describe('the button at the end of a row', () => {
   const stopped = last({ state: 'failed', retryable: true, reason: 'AgentError' })
 
   it('offers to decide exactly when the platform says the person can decide', () => {
-    expect(rowAction(yes(true), BOB)).toEqual({ kind: 'decide', runId: 'run_07' })
-    expect(rowAction(yes(false), BOB)).toBeNull()
+    expect(rowAction(yes(true))).toEqual({ kind: 'decide', runId: 'run_07' })
+    expect(rowAction(yes(false))).toBeNull()
   })
 
   it('offers nothing on a run the person may not decide, whoever they are', () => {
-    expect(rowAction(yes(false), ALICE)).toBeNull()
-    expect(rowAction(yes(true), CAROL)).toEqual({ kind: 'decide', runId: 'run_07' })
+    expect(rowAction(yes(false))).toBeNull()
+    expect(rowAction(yes(true))).toEqual({ kind: 'decide', runId: 'run_07' })
   })
 
-  it('shows Operators why a run stopped, and Approvers nothing', () => {
-    expect(rowAction(stopped, CAROL)).toEqual({ kind: 'why', runId: 'run_07' })
-    expect(rowAction(stopped, BOB)).toBeNull()
+  it('shows why a run stopped only to the person whose Needs you holds it', () => {
+    expect(rowAction({ ...stopped, you_can_open: true })).toEqual({ kind: 'why', runId: 'run_07' })
+    expect(rowAction({ ...stopped, you_can_open: false })).toBeNull()
   })
 
   it('is empty when the last run needs nobody', () => {
-    expect(rowAction(last({ state: 'succeeded' }), ALICE)).toBeNull()
-    expect(rowAction(last({}), ALICE)).toBeNull()
-    expect(rowAction(null, ALICE)).toBeNull()
+    expect(rowAction(last({ state: 'succeeded' }))).toBeNull()
+    expect(rowAction(last({}))).toBeNull()
+    expect(rowAction(null)).toBeNull()
   })
 })
 
@@ -857,7 +857,7 @@ describe('the status banner', () => {
 
   it.each(Object.entries(EVERY_STATE))('gives a %s run the pill and the banner that say the same state', (state, want) => {
     const stopped = state === 'failed'
-    const useCase = withLast({ state: state as LastRun['state'], at: '2026-11-04T00:00:00Z', reason: stopped ? 'AgentError' : null, stop: stopped ? { at: '2026-11-04T00:00:00Z', what_happened: AGENT_STOPPED } : null })
+    const useCase = withLast({ state: state as LastRun['state'], you_can_open: stopped, at: '2026-11-04T00:00:00Z', reason: stopped ? 'AgentError' : null, stop: stopped ? { at: '2026-11-04T00:00:00Z', what_happened: AGENT_STOPPED } : null })
     const pill = statusOf(useCase, true).label
     const banner = bannerOf(facts({ useCase }))
     expect({ pill, banner: banner.text, tone: banner.tone, opens: banner.action?.kind === 'open' }).toEqual(want)
