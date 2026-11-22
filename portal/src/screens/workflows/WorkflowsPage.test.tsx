@@ -92,16 +92,32 @@ function rowOf(html: string, id: string): string {
 describe('the Workflows list', () => {
   const subOf = (html: string, id: string) => text(/<span[^>]*class="[^"]*sub[^"]*"[^>]*>[\s\S]*?<\/span>/.exec(rowOf(html, id))?.[0] ?? '')
 
-  it('shows each workflow as its name, one line and one pill: Stopped, Waiting for a yes, On or Paused', () => {
+  it('shows each workflow as its name, one line and one of four pills: Needs you, On, Paused or Draft', () => {
     const html = render()
     const bugs = rowOf(html, 'uc_bugs')
-    expect(bugs).toMatch(/data-life="on"[^>]*data-tone="bad"[^>]*>.*Stopped<\/span>/)
-    expect(bugs).not.toMatch(/>On<\/span>/)
+    expect(bugs).toMatch(/data-life="on"[^>]*data-tone="bad"[^>]*>.*Needs you<\/span>/)
+    expect(bugs).not.toMatch(/Stopped<\/span>/)
     expect(text(bugs)).toContain('Morning bug report check')
     const watchlist = rowOf(html, 'uc_01JB7')
-    expect(watchlist).toMatch(/data-tone="wait"[^>]*>.*Waiting for a yes<\/span>/)
+    expect(text(watchlist), 'Alice may not decide, so the row stays On').toContain('On · waiting for an Approver’s yes')
+    expect(watchlist).not.toMatch(/Waiting for a yes<\/span>/)
     const paused = rowOf(html, 'uc_lang')
     expect(paused).toMatch(/data-life="paused"[^>]*>.*Paused<\/span>/)
+  })
+
+  it('reads Needs you for the Approver who can decide a waiting run, and On for an Operator who is not allowed to', () => {
+    expect(rowOf(render({ me: BOB }), 'uc_01JB7')).toMatch(/data-tone="wait"[^>]*>.*Needs you<\/span>/)
+    expect(text(rowOf(render({ me: CAROL }), 'uc_01JB7'))).toContain('On · waiting for an Approver’s yes')
+  })
+
+  it('shows an Approver a stopped workflow as On, because only an Operator opens the run', () => {
+    expect(text(rowOf(render({ me: BOB }), 'uc_bugs'))).toContain('On · last run stopped')
+  })
+
+  it('filters by the four states, with Needs you first', () => {
+    const many = Array.from({ length: 11 }, (_, n) => ({ ...BUGS, use_case_id: `uc_n${String(n)}`, name: `Workflow ${String(n)}` }))
+    const filters = [...(/<div[^>]*aria-label="Show"[\s\S]*?<\/div>/.exec(mainOf(render({ useCases: many })))?.[0] ?? '').matchAll(/<button[^>]*>([^<]*)<\/button>/g)].map((m) => m[1])
+    expect(filters).toEqual(['All', 'Needs you', 'On', 'Paused', 'Draft'])
   })
 
   it('says each row’s schedule and its last run, as the sketch does', () => {
@@ -138,7 +154,7 @@ describe('the Workflows list', () => {
   it('shows Paused alone for a paused workflow, whatever its last run, and keeps that run in the line', () => {
     const html = render({ useCases: [{ ...STOPPED_BUGS, state: 'paused' }] })
     expect(rowOf(html, 'uc_bugs')).toMatch(/data-life="paused"[^>]*>.*Paused<\/span>/)
-    expect(rowOf(html, 'uc_bugs')).not.toContain('Stopped</span>')
+    expect(rowOf(html, 'uc_bugs')).not.toContain('Needs you</span>')
     expect(subOf(html, 'uc_bugs')).toMatch(/last run .*, an agent could not finish its work$/)
   })
 
@@ -393,7 +409,7 @@ describe('the rest of the page under Needs you', () => {
     expect(at).toEqual([...at].sort((a, b) => a - b))
   })
 
-  it('has no Waiting on others, because a waiting workflow reads Waiting for a yes in its row', () => {
+  it('has no Waiting on others, because a waiting workflow reads Needs you, or On with who it waits for, in its row', () => {
     expect(mainOf(render({ home: HOME }))).not.toContain('Waiting on others')
   })
 

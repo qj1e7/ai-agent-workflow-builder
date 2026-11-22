@@ -150,7 +150,7 @@ describe('a workflow page', () => {
     const html = render()
     expect(whenOf(html)).toBe('No schedule An Operator starts it with Run now.')
     expect(nextOf(html)).toBe('Not scheduled')
-    expect(sectionText(html, 'Who says yes')).toBe('Any Approver but you, in Teams. Who can’t say yes Nobody says yes to their own work. The workflow’s owner, whoever starts a run and whoever retries it can’t say yes to that run.')
+    expect(sectionText(html, 'Who says yes')).toBe('Any Approver but you, in Teams. Nothing is written until an Approver says yes. Who can’t say yes Nobody says yes to their own work. The workflow’s owner, whoever starts a run and whoever retries it can’t say yes to that run.')
   })
 
   it('keeps the sketch’s short Who says yes line, with the whole own-work rule folded one tap away', () => {
@@ -243,7 +243,7 @@ describe('a workflow page', () => {
     expect(mainOf(html)).toMatch(/_primary_[^>]*>Review and decide/)
   })
 
-  it('orders the page as the sketch does: the sentence, the banner, the line, When, Who says yes, Recent runs, Versions, then the buttons, with no Agents section', () => {
+  it('orders the page as the sketch does: the sentence, the banner, the line, When, Who says yes, Recent runs, then the buttons, with no Agents section', () => {
     const html = mainOf(render({ runs: [{ ...(done as RunView), use_case_id: 'uc_01JD0' }] }))
     const at = (needle: string) => html.indexOf(needle)
     const order = [at('<h1'), at('sentence'), at('data-tone='), at('Check release'), at('>When</h2>'), at('>Who says yes</h2>'), at('>Recent runs</h2>'), at('>Pause<')]
@@ -436,7 +436,7 @@ describe('a workflow page', () => {
 
 const CHANGED = { useCase: versionedUseCase as UseCaseView, versions: changed.versions as VersionView[] }
 const UNDONE = { useCase: undoneUseCase as UseCaseView, versions: undone.versions as VersionView[] }
-const versionsOf = (html: string) => text(/<summary[^>]*>Versions<\/summary>([\s\S]*?)<\/details>/.exec(mainOf(html))?.[1] ?? '')
+const versionsOf = (html: string) => text(/<h3[^>]*>Versions<\/h3>([\s\S]*?)<\/section>/.exec(mainOf(html))?.[1] ?? '')
 
 describe('the Versions list', () => {
   it('is not shown while the workflow has one version', () => {
@@ -458,20 +458,44 @@ describe('the Versions list', () => {
     for (const me of [ALICE, BOB]) {
       const html = render({ ...UNDONE, me })
       expect(versionsOf(html)).toContain('Alice changed when it runs from every weekday at 8:00 to every Monday at 8:00.')
-      expect(/<summary[^>]*>Versions<\/summary>[\s\S]*?<\/details>/.exec(mainOf(html))?.[0]).not.toMatch(/<button/)
+      expect(/<h3[^>]*>Versions<\/h3>[\s\S]*?<\/section>/.exec(mainOf(html))?.[0]).not.toMatch(/<button/)
       expect(buttons(html).filter((label) => label.startsWith('Undo'))).toEqual([])
     }
   })
 
-  it('sits after Recent runs and before the buttons, as the sketch orders the page', () => {
+  it('sits after Recent runs and the buttons, inside Details, as the prototype orders the page', () => {
     const html = mainOf(render(CHANGED))
-    const order = ['Recent runs', '>Versions<', '>Pause<'].map((needle) => html.indexOf(needle))
+    const order = ['Recent runs', '>Pause<', '>Details<', '>Versions<'].map((needle) => html.indexOf(needle))
     expect(order.every((place) => place >= 0)).toBe(true)
     expect(order).toEqual([...order].sort((a, b) => a - b))
   })
 
   it('shows the schedule the newest version runs on under When', () => {
     expect(whenOf(render(UNDONE))).toBe('Every weekday at 8:00 Singapore time (SGT).')
+  })
+})
+
+describe('Details on the workflow page', () => {
+  const detailsOf = (html: string) => /<details[^>]*>\s*<summary[^>]*>Details<\/summary>[\s\S]*?<\/details>/.exec(mainOf(html))?.[0] ?? ''
+
+  it('holds Explain and Versions, and nothing the person needs in view', () => {
+    const html = render(CHANGED)
+    const details = detailsOf(html)
+    expect(text(details)).toMatch(/^Details Explain LangGraph release check .*Versions Version 2/)
+    expect(details).not.toMatch(/Pause|Run now|Open in n8n|Delete/)
+    expect(mainOf(html).replace(details, '')).not.toMatch(/\/explain|>Versions</)
+  })
+
+  it('is closed until opened, and is there for an Approver too', () => {
+    for (const me of [ALICE, BOB]) expect(detailsOf(render({ me, ...CHANGED })), me.id).not.toMatch(/<details[^>]*\bopen/)
+  })
+
+  it('leaves out an empty Details: a first version has Explain only, and the banner’s Explain is the one on the page', () => {
+    expect(text(detailsOf(render()))).toBe('Details Explain Agents release check')
+  })
+
+  it('says the one approval rule where the page names who says yes', () => {
+    expect(text(mainOf(render()))).toContain('Who says yes Any Approver but you, in Teams. Nothing is written until an Approver says yes.')
   })
 })
 

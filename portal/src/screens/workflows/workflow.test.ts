@@ -39,7 +39,7 @@ import {
   ownWorkRule,
   placeOf,
   PLACES_IN_PAGE_ORDER,
-  pillOf,
+  statusOf,
   pressChange,
   pressRunNow,
   rereadWhenOutOfDate,
@@ -209,13 +209,25 @@ describe('a workflow row’s line', () => {
     expect(words({ state: 'failed', declined_by: null, at: '2026-10-26T01:41:00Z', reason: 'AgentError', stop: { at: '2026-11-04T00:00:00Z', what_happened: AGENT_STOPPED } })).toBe('Today 8:00: An agent could not finish its work')
   })
 
-  it('gives a workflow’s own pill only to a run that needs a yes, stopped or was lost, and a running one reads On', () => {
-    const pill = (state: LastRun['state']) => pillOf({ ...LAST, state })
-    expect(pill('awaiting_approval')).toEqual({ tone: 'wait', pill: 'Waiting for a yes' })
-    expect(pill('failed')).toEqual({ tone: 'bad', pill: 'Stopped' })
-    expect(pill('lost')).toEqual({ tone: 'bad', pill: 'Lost' })
-    expect(pill('working')).toEqual({ tone: 'new', pill: null })
-    for (const state of ['rejected', 'succeeded', 'skipped', 'expired'] as const) expect(pill(state)).toEqual({ tone: 'ok', pill: null })
+  it('shows four states only: On, Paused, Draft and Needs you, and the run results stay in Recent runs', () => {
+    const UC = { state: 'on', last_run: null } as Pick<UseCaseView, 'state' | 'last_run'>
+    const say = (state: LastRun['state'], operator: boolean, change: Partial<LastRun> = {}) => statusOf({ ...UC, last_run: { ...LAST, state, ...change } }, operator)
+    expect(say('failed', true)).toEqual({ four: 'needs', label: 'Needs you', tone: 'bad' })
+    expect(say('lost', true).label).toBe('Needs you')
+    expect(say('failed', false)).toEqual({ four: 'on', label: 'On · last run stopped', tone: 'ok' })
+    expect(say('awaiting_approval', true, { you_can_decide: true })).toEqual({ four: 'needs', label: 'Needs you', tone: 'wait' })
+    expect(say('awaiting_approval', true, { you_can_decide: false })).toEqual({ four: 'on', label: 'On · waiting for an Approver’s yes', tone: 'wait' })
+    expect(say('awaiting_approval', false, { you_can_decide: false }).four, 'an Approver never decides their own').toBe('on')
+    expect(say('working', true)).toEqual({ four: 'on', label: 'On', tone: undefined })
+    for (const state of ['rejected', 'succeeded', 'skipped', 'expired'] as const) expect(say(state, true), state).toEqual({ four: 'on', label: 'On', tone: undefined })
+    expect(statusOf({ ...UC, grade: 'needs_a_fix' }, false)).toEqual({ four: 'needs', label: 'Needs you', tone: 'bad' })
+    expect(statusOf({ ...UC, move_refused: 'It could not move.' }, false).four).toBe('needs')
+    expect(statusOf({ ...UC, state: 'paused', grade: 'needs_a_fix' }, true)).toEqual({ four: 'paused', label: 'Paused', tone: undefined })
+    expect(statusOf({ ...UC, state: 'draft' }, true)).toEqual({ four: 'draft', label: 'Draft', tone: undefined })
+    const words = ['Done', 'Nothing new', 'Declined', 'Skipped', 'Stopped', 'Needs a fix', 'Waiting for a yes', 'Held']
+    for (const state of ['rejected', 'succeeded', 'skipped', 'expired', 'failed', 'awaiting_approval', 'working'] as const) {
+      for (const operator of [true, false]) expect(words, `${state} ${operator}`).not.toContain(say(state, operator).label)
+    }
   })
 })
 
@@ -823,9 +835,9 @@ describe('the status banner', () => {
 
   /** Every state a run can end its stage in, with the workflow's pill and banner the page draws for it. They must say the same state. */
   const EVERY_STATE: Record<LastRun['state'], { readonly pill: string; readonly banner: string; readonly tone: string; readonly opens: boolean }> = {
-    awaiting_approval: { pill: 'Waiting for a yes', banner: 'Waiting for a yes.', tone: 'wait', opens: true },
-    failed: { pill: 'Stopped', banner: 'Stopped today at 8:00. An agent could not finish its work.', tone: 'bad', opens: true },
-    lost: { pill: 'Lost', banner: 'Lost today at 8:00. Approved, but the run stopped before it could make the change. Nothing was written.', tone: 'bad', opens: true },
+    awaiting_approval: { pill: 'On · waiting for an Approver’s yes', banner: 'Waiting for a yes.', tone: 'wait', opens: true },
+    failed: { pill: 'Needs you', banner: 'Stopped today at 8:00. An agent could not finish its work.', tone: 'bad', opens: true },
+    lost: { pill: 'Needs you', banner: 'Lost today at 8:00. Approved, but the run stopped before it could make the change. Nothing was written.', tone: 'bad', opens: true },
     expired: { pill: 'On', banner: 'On. Next run Mon 9 Nov, 9:00.', tone: 'ok', opens: false },
     skipped: { pill: 'On', banner: 'On. Next run Mon 9 Nov, 9:00.', tone: 'ok', opens: false },
     rejected: { pill: 'On', banner: 'On. Next run Mon 9 Nov, 9:00.', tone: 'ok', opens: false },
@@ -840,11 +852,11 @@ describe('the status banner', () => {
     const stopped = state === 'failed'
     const useCase = withLast({ state: state as LastRun['state'], at: '2026-11-04T00:00:00Z', reason: stopped ? 'AgentError' : null, stop: stopped ? { at: '2026-11-04T00:00:00Z', what_happened: AGENT_STOPPED } : null })
     const run = useCase.last_run as LastRun
-    const pill = pillOf(run).pill ?? lifeWords(useCase.state)
+    const pill = statusOf(useCase, true).label
     const banner = bannerOf(facts({ useCase }))
     expect({ pill, banner: banner.text, tone: banner.tone, opens: banner.action?.kind === 'open' }).toEqual(want)
-    expect(banner.text.startsWith(pill) || (pill === 'On' && banner.tone === 'new'), 'the banner leads with the pill’s words, or says what the run does while the workflow is On').toBe(true)
-    if (pill !== 'On') expect(runPill({ state: run.state, count: 3, tickets: true, approvedBy: [], declinedBy: null, whyStopped: null }).label, 'the workflow’s pill is its run’s pill').toBe(pill)
+    expect(['On', 'Needs you'].includes(pill) || pill.startsWith('On · '), 'the pill is one of the four').toBe(true)
+    if (pill === 'Needs you') expect(banner.text, 'the banner says what the run did, in the run’s own words').toMatch(/^(Stopped|Lost)/)
   })
 })
 

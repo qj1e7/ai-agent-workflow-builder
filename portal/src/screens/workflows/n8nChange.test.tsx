@@ -124,9 +124,10 @@ describe('the workflow page’s banner for a graded version', () => {
 })
 
 describe('the state pill', () => {
-  const pill = (props: { state: UseCaseView['state']; fix: boolean }) => text(renderToStaticMarkup(<StatusPills state={props.state} fact={null} fix={props.fix} />))
-  it('reads Needs a fix while the version in use is not safe', () => {
-    expect(pill({ state: 'on', fix: true })).toBe('Needs a fix')
+  const pill = (props: { state: UseCaseView['state']; fix: boolean }) =>
+    text(renderToStaticMarkup(<StatusPills useCase={{ state: props.state, last_run: null, grade: props.fix ? 'needs_a_fix' : 'safe' }} operator />))
+  it('reads Needs you while the version in use is not safe', () => {
+    expect(pill({ state: 'on', fix: true })).toBe('Needs you')
     expect(pill({ state: 'on', fix: false })).toBe('On')
   })
   it('lets Paused win, as the sketch does', () => {
