@@ -727,6 +727,14 @@ async def test_a_watchlist_row_names_the_parts_the_watchlist_does_itself(front: 
     assert (await say(front, "Watch Kubernetes"))["covers"] == []
 
 
+def test_a_portal_older_than_the_platform_may_find_no_covers_on_a_watchlist_row():
+    schema = planner_module.WatchlistReply.model_json_schema(mode="serialization")
+    sent = schema["$defs"]["WatchlistReply"] if "$ref" in schema else schema
+    assert "covers" in sent["properties"]
+    assert "covers" not in sent["required"]
+    assert {"word", "software", "already_listed", "also"} <= set(sent["required"])
+
+
 async def test_a_question_answer_comes_back_with_the_sections_it_looked_at(front: Front):
     front.answers.result = answered(
         QuestionAnswer(text="Nothing is on the watchlist yet.", looked_at=["watchlist"])

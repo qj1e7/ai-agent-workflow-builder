@@ -6,7 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-from agent_runtime.abilities import VULNERABILITIES_PLANNED
+from agent_runtime.abilities import VULNERABILITIES_PLANNED, why_not
 from agent_runtime.answers import (
     ANSWER_SYSTEM,
     LEFT_OUT_DO,
@@ -2776,16 +2776,29 @@ CORE_WATCH: dict[str, Any] = {
 THE_UPGRADE_TICKET = TicketRead(creates=True, says="list", said="create a Jira ticket")
 
 
-@pytest.mark.parametrize("ticket", [None, THE_UPGRADE_TICKET])
+@pytest.mark.parametrize(
+    "more",
+    [
+        {},
+        {"ticket": THE_UPGRADE_TICKET},
+        {"ticket": THE_UPGRADE_TICKET, "place": PlaceRead()},
+        {"ticket": THE_UPGRADE_TICKET, "place": PlaceRead(said="Jira")},
+        {"ticket": THE_UPGRADE_TICKET, "search": SearchRead()},
+        {"place": PlaceRead(said="a Jira ticket"), "search": SearchRead(said="")},
+    ],
+    ids=["no ticket", "ticket", "empty place", "place with no project", "empty search", "both"],
+)
+@pytest.mark.parametrize("software", ["LangGraph", "Kubernetes"])
 def test_the_watchlists_own_ticket_is_one_watch_answer_however_the_model_reads_it(
-    ticket: TicketRead | None,
+    more: dict[str, Any], software: str
 ):
-    fields = read(**CORE_WATCH, ticket=ticket)
-    answer = answer_of(fields, THE_CORE_REQUEST, PlannerFacts(watchlist_schedule=MONDAY_9))
+    task = THE_CORE_REQUEST.replace("LangGraph", software)
+    fields = read(**{**CORE_WATCH, "software": software}, **more)
+    answer = answer_of(fields, task, PlannerFacts(watchlist_schedule=MONDAY_9))
     assert answer == WatchlistAnswer(
-        word="release", software="LangGraph", covers=["schedule", "ticket"]
+        word="release", software=software, covers=["schedule", "ticket"]
     )
-    assert [p.mark for p in parts_of(fields, THE_CORE_REQUEST, answer)] == ["will_do"] * 3
+    assert [p.mark for p in parts_of(fields, task, answer)] == ["will_do"] * 3
 
 
 @pytest.mark.parametrize(
@@ -2840,10 +2853,11 @@ def test_a_second_card_beside_a_watch_watches_the_software_they_named():
     assert isinstance(answer, WatchlistAnswer) and isinstance(answer.also, SetupCardAnswer)
     [watch] = [row for row in answer.also.rows if row.kind == "look_for"]
     assert (watch.text, watch.state, watch.note) == (
-        "LangGraph",
+        "New releases of LangGraph",
         "understood",
         'Read from your words "LangGraph".',
     )
+    assert why_not("look_for", watch.text) is None, "the card's own check accepts the row"
     assert answer.covers == []
 
 

@@ -6,6 +6,7 @@ import cant from '../../../../contracts/fixtures/planner/answer.cant.json'
 import checkLeftover from '../../../../contracts/fixtures/planner/answer.check_workflows.leftover.json'
 import ownTime from '../../../../contracts/fixtures/planner/answer.watchlist.own_time.json'
 import statuses from '../../../../contracts/fixtures/watchlist/statuses.json'
+import heldSchedule from '../../../../contracts/fixtures/watchlist/schedule.held.json'
 import offline from '../../../../contracts/fixtures/planner/answer.offline.json'
 import part from '../../../../contracts/fixtures/planner/answer.part.json'
 import question from '../../../../contracts/fixtures/planner/answer.question.json'
@@ -44,8 +45,9 @@ import { sendOpenInN8n } from '../../api/workflowQueries'
 import openedInN8n from '../../../../contracts/fixtures/builder/opened-in-n8n.json'
 import type { ApiClient } from '../../api/client'
 import { Answer, n8nTabOf, type Page } from './AnswerCards'
+import { ChatProvider } from './ChatProvider'
 import { newCardMemory, type CardMemory } from './cardMemory'
-import { sayOf, switchedSay, whoOf, wordsOnly } from './answers'
+import { ownTimeOffer, sayOf, switchedSay, watchlistRunsWords, whoOf, wordsOnly } from './answers'
 import { Leftovers } from './PartsList'
 import { RunCardView } from './RunCard'
 import { Thread } from './Thread'
@@ -959,20 +961,89 @@ describe('the core release check, already on the watchlist', () => {
     expect(html).not.toContain('What I can’t do yet')
   })
 
-  it('keeps those words for a watchlist of one, and never says “all 1”', () => {
+  it('keeps the old words, its schedule included, for a watchlist of one, and never says “all 1”', () => {
     const one: WatchlistView = { ...WATCHED, software: WATCHED.software.filter((row) => row.name === 'LangGraph') }
     const html = answerOf(chat(everyDay, EVERY_DAY, one))
     expect(html).not.toContain('all 1')
-    expect(html.match(/its own time/g)).toHaveLength(1)
+    expect(html).toContain('The Software watchlist checks all your software together, every Monday at 9:00. I can’t give one software its own time yet.')
     expect(html).toContain('Make the Software watchlist run Every day at 9am')
+  })
+
+  it('never says the watchlist checks while it is paused, and its move is no longer the main button', () => {
+    const paused: WatchlistView = { ...WATCHED, state: 'paused', schedule: { ...WATCHED.schedule!, next_at: null } }
+    const html = chat(everyDay, EVERY_DAY, paused)
+    expect(answerOf(html)).not.toMatch(/checks all 6|every Monday at 9:00/)
+    expect(answerOf(html)).toContain('The Software watchlist checks all your software together, on one schedule. I can’t give one software its own time yet. Paused. No check runs until an Operator resumes it.')
+    expect(buttons(html)).toContain('Make the Software watchlist run Every day at 9am')
+    expect(primaries(html)).toEqual(['Open it'])
+  })
+
+  it('never ticks a schedule that is held, and says why it starts nothing', () => {
+    const held: WatchlistView = { ...WATCHED, schedule: (heldSchedule as WatchlistView).schedule }
+    const why = 'Not running: Alice is no longer on the People list. An Operator can take it over by saving the schedule.'
+    const card = answerOf(chat(core, CORE, held))
+    expect(card).not.toContain('Will do: When')
+    expect(card).toContain(`Can’t do: When ${why}`)
+    const own = chat(everyDay, EVERY_DAY, held)
+    expect(answerOf(own)).not.toMatch(/checks all 6|every Monday at 9:00/)
+    expect(answerOf(own)).toContain(why)
+    expect(primaries(own)).toEqual(['Open it'])
+  })
+
+  it('sends the same request the old offer sent, whatever the watchlist is doing', () => {
+    const one: WatchlistView = { ...WATCHED, software: WATCHED.software.slice(0, 1) }
+    const paused: WatchlistView = { ...WATCHED, state: 'paused' }
+    for (const view of [WATCHED, one, paused, undefined]) expect(ownTimeOffer(asked('Every day at 9am', 'cant', 'own_time'), view).request).toBe('Make the Software watchlist run Every day at 9am')
+  })
+
+  it('hides Draft it as an n8n workflow only when the software card says the whole can’t', () => {
+    const inChat = (reply: CantReply) => {
+      const session = createDevSession(null)
+      const client = new QueryClient()
+      client.setQueryData(['watchlist', session.cacheScope()], WATCHED)
+      return text(
+        renderToStaticMarkup(
+          <QueryClientProvider client={client}>
+            <ApiProvider session={session} platformFetch={fetch} origin="http://portal.test">
+              <MemoryRouter>
+                <ChatProvider>
+                  <Answer reply={reply} typed={EVERY_DAY} page={PAGE} />
+                </ChatProvider>
+              </MemoryRouter>
+            </ApiProvider>
+          </QueryClientProvider>,
+        ),
+      )
+    }
+    expect(inChat(everyDay)).not.toContain('Draft it as an n8n workflow')
+    const email: CantRowView = { kind: 'where', text: 'email me', note: 'I can\'t send email yet.', needs: 'new_system', system: 'email', instead: null, unsupported: false }
+    expect(inChat({ ...everyDay, cant: [OWN_TIME, email], parts: [...everyDay.parts, asked('email me', 'cant', 'cant_do')] })).toContain('Draft it as an n8n workflow')
+    expect(inChat({ ...everyDay, alternative: watch({ already_listed: null }) })).toContain('Draft it as an n8n workflow')
+  })
+
+  it('names the watchlist’s schedule in its own zone', () => {
+    expect(watchlistRunsWords({ ...WATCHED.schedule!, time_zone: 'Europe/London' })).toBe('every Monday at 9:00 London time')
+    expect(watchlistRunsWords(WATCHED.schedule!)).toBe('every Monday at 9:00')
   })
 
   it('lists every part of the core request on the one card as ticked rows, the ticket and its yes included', () => {
     const html = chat(core, CORE)
     expect(answerOf(html)).toBe(
-      'LangGraph is already on the Software watchlist. LangGraph Newer out You run 1.2.14. Newest is 1.2.16. Will do: When Every Monday at 9:00 Will do: Then An upgrade ticket in Jira, after a yes Open it',
+      'LangGraph is already on the Software watchlist. LangGraph Newer out You run 1.2.14. Newest is 1.2.16. Will do: When Every Monday at 9:00 Will do: Then An upgrade ticket in Jira project MOCK, after a yes Open it',
     )
     expect(primaries(html)).toEqual(['Open it'])
+  })
+
+  it('lists the same parts for software not watched yet, under Watch it, so the ticket is never dropped', () => {
+    const k8s = watch({ software: 'Kubernetes', already_listed: null, word: 'release', covers: ['schedule', 'ticket'] })
+    expect(answerOf(chat(k8s, CORE.replace('LangGraph', 'Kubernetes')))).toContain(
+      'Kubernetes It isn’t on the watchlist, so I don’t know which version you run. Will do: When Every Monday at 9:00 Will do: Then An upgrade ticket in Jira project MOCK, after a yes Watch it',
+    )
+  })
+
+  it('reads a watchlist row from a platform that sends no covers', () => {
+    const older = Object.fromEntries(Object.entries(core).filter(([key]) => key !== 'covers')) as unknown as WatchlistReply
+    expect(answerOf(chat(older, CORE))).toBe('LangGraph is already on the Software watchlist. LangGraph Newer out You run 1.2.14. Newest is 1.2.16. Open it')
   })
 
   it('ticks only the parts the request named', () => {

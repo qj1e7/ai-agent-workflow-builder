@@ -225,6 +225,19 @@ describe('step 2, check what I understood', () => {
   it('asks the Planner for a plan with the rows, not the schedule', () => {
     expect(taskWithoutSchedule(read(ROWS).rows)).toBe('Find bug tickets in MOCK with no update for 10 days. Create one follow-up ticket that lists them. Where it goes: Jira project MOCK.')
   })
+
+  it('plans the card beside a watch with the software’s name as they wrote it', () => {
+    const beside: Answered = {
+      ...ROWS,
+      rows: [
+        { kind: 'schedule', text: 'Every Monday', state: 'understood', note: null },
+        { kind: 'look_for', text: 'New releases of LangGraph', state: 'understood', note: 'Read from your words "LangGraph".' },
+        { kind: 'do', text: 'Create one ticket that lists them', state: 'understood', note: null },
+        { kind: 'where', text: 'Jira project OPS', state: 'understood', note: null },
+      ],
+    }
+    expect(taskWithoutSchedule(read(beside).rows)).toBe('Find new releases of LangGraph. Create one ticket that lists them. Where it goes: Jira project OPS.')
+  })
 })
 
 describe('the plan in step 2', () => {
