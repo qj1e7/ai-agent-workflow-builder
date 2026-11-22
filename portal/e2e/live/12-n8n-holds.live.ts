@@ -72,7 +72,7 @@ test.describe('who has a workflow open in n8n, and the watchlist in n8n', () => 
     const page = await context.newPage()
     const watch = watchPage(page)
     await page.goto('/software')
-    await expect(page.getByRole('banner')).toContainText('Dana')
+    await expect(page.getByRole('navigation', { name: 'Browse' })).toContainText('Dana')
     await expect(views(page).getByRole('button')).toHaveText(['Software', 'In n8n'])
     await views(page).getByRole('button', { name: 'In n8n' }).click()
     await expect(page).toHaveURL(/\/software\?view=n8n$/)

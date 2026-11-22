@@ -13,7 +13,7 @@ test('the Portal opens from a plain HTTP origin that is not localhost, and names
   expect(await page.evaluate(() => typeof crypto.randomUUID), 'the browser has no crypto.randomUUID here').toBe('undefined')
 
   const me = await backend.get<{ display: string }>('alice', '/api/v1/me')
-  await expect(page.getByRole('banner'), 'the header names the person the platform knows').toContainText(me.display)
+  await expect(page.getByRole('navigation', { name: 'Browse' }), 'the rail names the person the platform knows').toContainText(me.display)
   await expect(page.getByRole('main').getByText(`, ${me.display}`), 'Home greets the person the platform knows').toBeVisible()
   await shot(page, info, 'plain-http-04-home')
 })

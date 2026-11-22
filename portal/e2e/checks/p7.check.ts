@@ -187,11 +187,11 @@ test('@lane5 bob sees the same cards with no change controls', async ({ browser 
       const buttons = await dialogOf(page)
         .getByRole('button')
         .evaluateAll((all) => all.map((button) => (button.getAttribute('aria-label') ?? button.textContent ?? '').trim()))
-      save(5, 'p7-approver.json', { tiles: seen, controls, dialogButtons: buttons, me: await page.getByRole('banner').innerText() })
+      save(5, 'p7-approver.json', { tiles: seen, controls, dialogButtons: buttons, me: await page.getByRole('navigation', { name: 'Browse' }).innerText() })
       expect(controls, 'no field to type a change in').toBe(0)
       expect(buttons.length, 'the dialog has a Close button').toBeGreaterThan(0)
       expect(new Set(buttons), 'the dialog offers only Close').toEqual(new Set(['Close']))
-      await expect(page.getByRole('banner')).toContainText('Bob')
+      await expect(page.getByRole('navigation', { name: 'Browse' })).toContainText('Bob')
     }
     await context.close()
   }

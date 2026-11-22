@@ -16,10 +16,10 @@ const SAMPLE = Number(process.env['SAMPLE'] ?? '0')
 const DESKTOP = { width: 1440, height: 900 }
 const PHONE = { width: 390, height: 844 }
 const GREETING = (name: string) => new RegExp(`^Good (morning|afternoon|evening)! ${name}$`)
-const MENU = ['Chat', 'Workflows', 'Watchlist'] as const
+const MENU = ['Home', 'Workflows', 'Watchlist'] as const
 const OPERATOR_MENU = MENU
 const PAGES = [
-  { label: 'Chat', path: '/', heading: GREETING('Alice') },
+  { label: 'Home', path: '/', heading: GREETING('Alice') },
   { label: 'Workflows', path: '/workflows', heading: /^Workflows$/ },
   { label: 'Watchlist', path: '/software', heading: /^Software watchlist$/ },
 ] as const
@@ -111,14 +111,14 @@ test('@lane1-capture sign in as alice and read the menu', async ({ browser }) =>
   save(1, `p1-home-${TARGET}.json`, record)
   expect(apiCalls.length, 'the page called the API').toBeGreaterThan(0)
   expect(apiCalls.filter((c) => c.status !== 200 || c.devUser !== 'alice').map((c) => `${c.path} ${c.status} as ${String(c.devUser)}`), 'every API call goes as alice and succeeds').toEqual([])
-  await expect(page.getByRole('banner'), 'the header names alice').toContainText('Alice')
+  await expect(page.getByRole('navigation', { name: 'Browse' }), 'the header names alice').toContainText('Alice')
   if (TARGET === 'head') {
     expect(me.status(), 'GET /api/v1/me signs alice in').toBe(200)
     expect(meBody).toMatchObject({ id: 'alice', display: 'Alice' })
     expect(menu, 'head rail: Chat, Workflows and Watchlist').toEqual(OPERATOR_MENU)
     expect(heading).toMatch(GREETING('Alice'))
-    await expect(page.getByRole('banner')).toContainText('Alice')
-    await expect(mainMenu(page).first().getByRole('link', { name: 'Chat' })).toHaveAttribute('aria-current', 'page')
+    await expect(page.getByRole('navigation', { name: 'Browse' })).toContainText('Alice')
+    await expect(mainMenu(page).first().getByRole('link', { name: /^Home/ })).toHaveAttribute('aria-current', 'page')
   } else {
     expect(menu, 'trunk shows the old menu').toEqual(expect.arrayContaining(['Runs', 'Builder', 'Approvals']))
   }
@@ -231,7 +231,7 @@ for (const mobile of [true, false]) {
     await expect(bar).toHaveCount(1)
     const labels = (await bar.getByRole('link').allInnerTexts()).map((t) => t.trim())
     const results: Record<string, unknown>[] = []
-    const header = await page.getByRole('banner').evaluate((el) => {
+    const header = await page.getByRole('navigation', { name: 'Browse' }).evaluate((el) => {
       const out: { name: string; left: number; right: number; top: number; bottom: number }[] = []
       for (const node of el.querySelectorAll<HTMLElement>('a, button, [title]')) {
         const r = node.getBoundingClientRect()
@@ -271,7 +271,7 @@ for (const mobile of [true, false]) {
     expect(labels.length, 'three rail items').toBe(3)
     expect(results.map((r) => r['url']), 'every item opens its own page').toEqual(['/', '/workflows', '/software'])
     // Settings and Teams in the header are reachable too.
-    await page.getByRole('banner').getByRole('link', { name: 'Settings' }).click()
+    await page.getByRole('navigation', { name: 'Browse' }).getByRole('link', { name: 'Settings' }).click()
     await expect(h1(page)).toHaveText('Settings')
     await context.close()
   })
@@ -305,7 +305,7 @@ test('@lane6 keyboard: focus rings in the header and the skip link', async ({ br
       return {
         label: el.getAttribute('aria-label') ?? el.textContent.trim().replace(/\s+/g, ' ').slice(0, 40),
         tag: el.tagName.toLowerCase(),
-        inHeader: el.closest('header') !== null,
+        inHeader: el.closest('nav') !== null,
         isSkip: el.textContent.trim() === 'Skip to main content',
         inMain: el.closest('main') !== null,
         outline: cs.outlineStyle === 'none' ? 'none' : `${cs.outlineStyle} ${cs.outlineWidth} ${cs.outlineColor} offset ${cs.outlineOffset}`,
@@ -359,7 +359,7 @@ test('@lane6 keyboard: focus rings in the header and the skip link', async ({ br
   await page.keyboard.press('Enter')
   await expect(h1(page), 'Enter on the skip link moves focus to the page heading').toBeFocused()
   await page.keyboard.press('Tab')
-  const after = await page.evaluate(() => ({ inHeader: document.activeElement?.closest('header') !== null, label: document.activeElement?.textContent.trim().slice(0, 40) }))
+  const after = await page.evaluate(() => ({ inHeader: document.activeElement?.closest('nav') !== null, label: document.activeElement?.textContent.trim().slice(0, 40) }))
   save(6, 'p1-skip-link.json', { skipBox, afterSkipThenTab: after })
   expect(after.inHeader, 'Tab after the skip link goes on into the page, not back to the header').toBe(false)
   // The same on a second page, from a fresh load: the skip link goes to that page's heading.
@@ -419,7 +419,7 @@ test('@lane8 bob opens Settings from the gear', async ({ browser }) => {
   const me = await meResponse
   save(8, 'bob-me-from-page.json', { status: me.status(), body: (await me.json()) as unknown, sentDevUser: (await me.request().allHeaders())['x-dev-user'] })
   await expect(h1(page)).toHaveText(GREETING('Bob'))
-  const banner = page.getByRole('banner')
+  const banner = page.getByRole('navigation', { name: 'Browse' })
   await expect(banner).toContainText('Bob')
   await expect(banner).toContainText('Approver')
   await expect(banner).not.toContainText('Operator')
@@ -437,7 +437,7 @@ test('@lane8 bob opens Settings from the gear', async ({ browser }) => {
   await alice.getByRole('button', { name: 'Test controls' }).click()
   await alice.getByRole('region', { name: 'Test controls' }).getByRole('button', { name: 'Bob' }).click()
   await expect(h1(alice)).toHaveText(GREETING('Bob'))
-  await alice.getByRole('banner').getByRole('link', { name: 'Settings' }).click()
+  await alice.getByRole('navigation', { name: 'Browse' }).getByRole('link', { name: 'Settings' }).click()
   await expect(h1(alice)).toHaveText('Settings')
   await expect(alice.getByRole('main')).toContainText('Only Operators change settings.')
   await shotTo(alice, path.join(laneDir(8), 'p1-settings-approver-via-test-controls.png'))
@@ -495,7 +495,7 @@ test('@lane9 the Portal says it cannot reach the platform, offers to try again, 
   const retry = page.getByRole('button', { name: 'Try again' })
   await expect(retry).toBeVisible()
   await expect(page.getByRole('main')).toContainText('Check your connection, or try again in a moment.')
-  await expect(page.getByRole('banner')).toContainText('Workflow Builder')
+  await expect(page.getByRole('navigation', { name: 'Browse' })).toContainText('Workflow Builder')
   await expect(mainMenu(page).getByRole('link')).toHaveCount(3)
   const bodyText = await page.evaluate(() => document.body.innerText)
   await shotTo(page, path.join(dir, 'p1-api-down.png'))
@@ -666,19 +666,19 @@ test('@lane2 alice signs in through the mock identity provider and no X-Dev-User
   await page.locator('input[type="submit"]').click()
   await expect(page).toHaveURL(/:\/\/localhost:8080\/$/, { timeout: 30_000 })
   await expect(h1(page)).toHaveText(GREETING('Alice'))
-  await expect(page.getByRole('banner')).toContainText('Alice')
-  await expect(page.getByRole('banner')).toContainText('Operator and Approver')
+  await expect(page.getByRole('navigation', { name: 'Browse' })).toContainText('Alice')
+  await expect(page.getByRole('navigation', { name: 'Browse' })).toContainText('Operator and Approver')
   await expect(mainMenu(page).getByRole('link')).toHaveText(OPERATOR_MENU)
   await expect(page.getByRole('button', { name: /Test controls/ }), 'real sign-in hides the test controls').toHaveCount(0)
   await shotTo(page, path.join(dir, 'p1-oidc-sign-in.png'))
-  for (const label of ['Workflows', 'Watchlist', 'Chat']) {
+  for (const label of ['Workflows', 'Watchlist', 'Home']) {
     await mainMenu(page).getByRole('link', { name: label, exact: true }).click()
     await expect(h1(page)).toBeVisible()
   }
-  await page.getByRole('banner').getByRole('link', { name: 'Settings' }).click()
+  await page.getByRole('navigation', { name: 'Browse' }).getByRole('link', { name: 'Settings' }).click()
   await expect(h1(page)).toHaveText('Settings')
   await page.reload()
-  await expect(page.getByRole('banner')).toContainText('Alice')
+  await expect(page.getByRole('navigation', { name: 'Browse' })).toContainText('Alice')
   const requests = (await Promise.all(pending)).filter((r) => r !== null)
   const api = requests.filter((r) => new URL(r.url).pathname.startsWith('/api/'))
   save(2, 'p1-oidc-requests.json', { total: requests.length, api, withDevUser: requests.filter((r) => r.devUser !== null), me: meBodies })
@@ -748,10 +748,10 @@ test('@review-video alice walks the menu, Teams, Test controls and Settings, the
     await expect(mainMenu(page).first().getByRole('link', { name: label, exact: true })).toHaveAttribute('aria-current', 'page')
     await pause(page)
   }
-  await mainMenu(page).first().getByRole('link', { name: 'Chat', exact: true }).click()
+  await mainMenu(page).first().getByRole('link', { name: /^Home/ }).click()
   await pause(page)
 
-  await page.getByRole('banner').getByRole('button', { name: /Teams/ }).click()
+  await page.getByRole('navigation', { name: 'Browse' }).getByRole('button', { name: /Teams/ }).click()
   await expect(page.getByRole('dialog')).toBeVisible()
   await pause(page, 2500)
   await page.getByRole('dialog').getByRole('button', { name: 'Close' }).click()
@@ -763,11 +763,11 @@ test('@review-video alice walks the menu, Teams, Test controls and Settings, the
   await expect(h1(page)).toHaveText(GREETING('Bob'))
   await pause(page, 2500)
 
-  await page.getByRole('banner').getByRole('link', { name: 'Settings' }).click()
+  await page.getByRole('navigation', { name: 'Browse' }).getByRole('link', { name: 'Settings' }).click()
   await expect(h1(page)).toHaveText('Settings')
   await pause(page, 2500)
 
-  await mainMenu(page).first().getByRole('link', { name: 'Chat', exact: true }).click()
+  await mainMenu(page).first().getByRole('link', { name: /^Home/ }).click()
   await pause(page, 1000)
   await page.setViewportSize(PHONE)
   await expect(h1(page)).toHaveText(GREETING('Bob'))

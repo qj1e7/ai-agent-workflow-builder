@@ -395,7 +395,7 @@ test('lane 2: the first Operator signs in with Entra ID, Home names them and Set
   expect(person, 'the People list holds the signed-in person').toBeDefined()
   await expect(h1(operator.page)).toHaveText(/^Good (morning|afternoon|evening)! /)
   await expect(h1(operator.page), 'Home names the person').toContainText(me.display.split(' ')[0] ?? me.display)
-  await expect(operator.page.getByRole('banner')).toContainText('Operator')
+  await expect(operator.page.getByRole('navigation', { name: 'Browse' })).toContainText('Operator')
   await shot(operator.page, 'lane-2', 'p14-sign-in.png')
   await openSettings(operator.page, 'people')
   const row = personRow(operator.page, person?.email ?? '')

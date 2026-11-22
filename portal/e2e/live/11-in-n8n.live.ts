@@ -49,7 +49,7 @@ test.describe('the In n8n tabs', () => {
     const page = await context.newPage()
     const watch = watchPage(page)
     await page.goto(`/workflows/${useCaseId}`)
-    await expect(page.getByRole('banner')).toContainText('Carol, Operator, n8n access')
+    await expect(page.getByRole('navigation', { name: 'Browse' })).toContainText('Carol, Operator, n8n access')
     await expect(views(page).getByRole('button')).toHaveText(['Summary', 'In n8n'])
     await expect(views(page).getByRole('button', { name: 'Summary' })).toHaveAttribute('aria-pressed', 'true')
 

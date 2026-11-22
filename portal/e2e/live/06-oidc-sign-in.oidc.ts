@@ -63,9 +63,9 @@ test('alice signs in and sees her name, bob signs in at a deep link, and signing
   await provider.dispose()
 
   const alice = await signIn(browser, backend, 'alice', '/', info, 'oidc-01-sign-in-form')
-  const header = alice.page.getByRole('banner')
-  await expect(header, 'the header names the person the token belongs to').toContainText('Alice')
-  await expect(header, 'the header shows her roles from the People list').toContainText('Operator and Approver')
+  const rail = alice.page.getByRole('navigation', { name: 'Browse' })
+  await expect(rail, 'the rail names the person the token belongs to').toContainText('Alice')
+  await expect(rail, 'the rail reads out her roles from the People list').toContainText('Operator and Approver')
   await expect(alice.page.getByRole('main').getByText(/^Good (morning|afternoon|evening), Alice$/)).toBeVisible()
   await expect(alice.page.getByRole('button', { name: /Test controls/ }), 'real sign-in has no test controls').toHaveCount(0)
   await expect(alice.page.getByText('Act as'), 'real sign-in has no way to act as someone else').toHaveCount(0)
@@ -81,12 +81,12 @@ test('alice signs in and sees her name, bob signs in at a deep link, and signing
     ['bob@example.test', false, true, false],
   ])
 
-  for (const label of ['Workflows', 'Watchlist', 'Chat']) {
-    await alice.page.getByRole('navigation', { name: 'Browse' }).getByRole('link', { name: new RegExp(`^${label}(\\s*, \\d+ need (you|action))?$`) }).click()
+  for (const label of ['Workflows', 'Watchlist', 'Home']) {
+    await rail.getByRole('link', { name: new RegExp(`^${label}(, \\d+ (in all|things? needs? you))?$`) }).click()
     await expect(alice.page.getByRole('heading', { level: 1 })).toBeVisible()
   }
   await alice.page.reload()
-  await expect(header, 'a reload keeps alice signed in').toContainText('Alice')
+  await expect(rail, 'a reload keeps alice signed in').toContainText('Alice')
   expect(alice.devHeaders, 'no request from the page carries X-Dev-User').toEqual([])
 
   const devHeader = await alice.page.request.get('/api/v1/runs', { headers: { 'X-Dev-User': 'bob' } })
@@ -102,18 +102,19 @@ test('alice signs in and sees her name, bob signs in at a deep link, and signing
   expect(new Set(alice.tokens).size, 'the renewal brought a new access token').toBeGreaterThan(1)
   expect((await backend.get<{ id: string }>('alice', '/api/v1/me')).id, 'the renewed token still signs alice in').toBe(me.id)
   await alice.page.reload()
-  await expect(header, 'a reload after the renewal keeps alice signed in').toContainText('Alice')
+  await expect(rail, 'a reload after the renewal keeps alice signed in').toContainText('Alice')
   expect(alice.devHeaders, 'still no request carries X-Dev-User').toEqual([])
 
   const bob = await signIn(browser, backend, 'bob', '/software', info)
   await expect(bob.page, 'bob lands on the deep link he asked for').toHaveURL(/\/software$/)
   await expect(bob.page.getByRole('heading', { level: 1 })).toHaveText('Software watchlist')
-  await expect(bob.page.getByRole('banner')).toContainText('Bob')
-  await expect(bob.page.getByRole('banner')).toContainText('Approver')
-  await expect(bob.page.getByRole('banner')).not.toContainText('Operator')
+  const bobRail = bob.page.getByRole('navigation', { name: 'Browse' })
+  await expect(bobRail).toContainText('Bob')
+  await expect(bobRail).toContainText('Approver')
+  await expect(bobRail).not.toContainText('Operator')
   await shot(bob.page, info, 'oidc-03-bob-deep-link')
 
-  const chip = bob.page.getByRole('banner').getByRole('button', { name: /Bob/ })
+  const chip = bobRail.getByRole('button', { name: /Bob/ })
   await chip.focus()
   await bob.page.keyboard.press('Enter')
   await expect(chip, 'Enter on the chip opens the panel').toHaveAttribute('aria-expanded', 'true')

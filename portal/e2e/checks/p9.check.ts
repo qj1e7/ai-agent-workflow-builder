@@ -654,7 +654,7 @@ async function focusOrigins(): Promise<{ label: string; path: string }[]> {
     const workflow = await agentWorkflow(api, 'focus origin')
     const runId = await backend.checkNow('alice', workflow.id)
     return [
-      { label: 'Chat', path: '/' },
+      { label: 'Home', path: '/' },
       { label: 'Watchlist', path: '/software' },
       { label: 'Settings', path: '/settings' },
       { label: 'a workflow page', path: `/workflows/${workflow.id}` },
@@ -681,7 +681,7 @@ test('@focus opening Workflows from every page, at 1440 and 390 px, puts focus o
         await expect(page.locator('li[data-workflow-id]').first()).toBeVisible()
         await page.waitForTimeout(1_200)
         rows.push({ width, from: origin.label, to: '/workflows', attempt, ...(await focusNow(page)) })
-        if (origin.label === 'Chat') {
+        if (origin.label === 'Home') {
           await page.locator('li[data-workflow-id] h2 a[href^="/workflows/"]').first().click()
           await expect(page.getByRole('main').getByRole('link', { name: 'Workflows', exact: true })).toBeVisible()
           await page.waitForTimeout(1_200)

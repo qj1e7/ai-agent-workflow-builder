@@ -73,7 +73,7 @@ test('bob approves on the run page, and the item has left Home when he comes bac
   await itemOf(page, approvalId).getByRole('link').click()
   await page.getByRole('button', { name: 'Approve', exact: true }).click()
   await expect(page.getByText('Approved. The platform is writing now.').or(page.locator('[data-run-pill]', { hasText: /^Done$/ }))).toBeVisible()
-  await page.getByRole('navigation', { name: 'Browse' }).filter({ visible: true }).getByRole('link', { name: 'Chat' }).click()
+  await page.getByRole('navigation', { name: 'Browse' }).filter({ visible: true }).getByRole('link', { name: /^Home/ }).click()
   await expect(page.locator('#planner-box')).toBeVisible()
   await expect(itemOf(page, approvalId)).toHaveCount(0)
   expect(await notReloaded(page), 'Home updated without a reload').toBe(true)
@@ -93,7 +93,7 @@ test('a yes from the Teams card’s link takes the item off Home at once, withou
   // Like real Teams, the card has no Approve button: its link opens the approval page, and Bob decides there.
   await message.getByRole('link', { name: 'Open in AI Workflow Builder' }).click()
   await page.getByRole('button', { name: 'Approve', exact: true }).click()
-  await page.getByRole('navigation', { name: 'Browse' }).getByRole('link', { name: 'Chat' }).click()
+  await page.getByRole('navigation', { name: 'Browse' }).getByRole('link', { name: /^Home/ }).click()
   await expect(itemOf(page, approvalId)).toHaveCount(0, { timeout: 15_000 })
   await page.getByRole('button', { name: /^Teams, practice copy/ }).click()
   await expect(message).toContainText('Approved by Bob', { timeout: 30_000 })
@@ -103,7 +103,7 @@ test('a yes from the Teams card’s link takes the item off Home at once, withou
   await context.close()
 })
 
-test('what needs an Approver is one number on Home and on Workflows, and the rail shows totals instead (principle 7)', async ({ browser, backend }) => {
+test('what needs an Approver is one number on Home, on Home in the rail and on Workflows, and the rail shows totals beside it (principle 7)', async ({ browser, backend }) => {
   const { approvalId } = await backend.waitingRun('alice')
   const context = await devContext(browser, 'bob')
   const page = await context.newPage()
@@ -112,7 +112,7 @@ test('what needs an Approver is one number on Home and on Workflows, and the rai
   await expect(itemOf(page, approvalId)).toBeVisible()
   const onHome = Number((await page.getByRole('heading', { level: 1 }).innerText()).replace(/\D/g, ''))
   expect(onHome, 'his Home’s heading counts what needs him').toBeGreaterThan(0)
-  await expect(menu.getByRole('link', { name: 'Chat', exact: true }), 'Chat carries no count').toBeVisible()
+  await expect(menu.getByRole('link', { name: `Home, ${onHome === 1 ? '1 thing needs' : `${String(onHome)} things need`} you` }), 'Home in the rail carries the same count').toBeVisible()
   await expect(menu.getByRole('link', { name: /^Workflows, \d+ in all$/ }), 'Workflows counts the team’s workflows').toBeVisible()
 
   await menu.getByRole('link', { name: /^Workflows/ }).click()

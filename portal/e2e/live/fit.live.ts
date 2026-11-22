@@ -43,7 +43,7 @@ interface Screen {
 
 const ANY_HEADING = /\S/
 const SCREENS: readonly Screen[] = [
-  { name: 'Chat', path: '/', heading: ANY_HEADING },
+  { name: 'Home', path: '/', heading: ANY_HEADING },
   { name: 'Workflows', path: '/workflows', heading: 'Workflows' },
   { name: 'Watchlist', path: '/software', heading: 'Watchlist', lead: /^(?:(?:\d+ (?:has|have) a newer version|\d+ can’t be found|\d+ can’t be checked|\d+ (?:is|are) up to date|\d+ watching)(?: · (?:\d+ (?:has|have) a newer version|\d+ can’t be found|\d+ can’t be checked|\d+ (?:is|are) up to date|\d+ watching))*|Everything your team runs, in one list\.)$/ },
   { name: 'Settings, Connections', path: '/settings', heading: 'Settings' },
