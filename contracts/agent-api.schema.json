@@ -3836,6 +3836,37 @@
     "SetupCardAnswer": {
       "additionalProperties": false,
       "properties": {
+        "also": {
+          "anyOf": [
+            {
+              "discriminator": {
+                "mapping": {
+                  "cant": "#/$defs/CantAnswer",
+                  "part": "#/$defs/PartAnswer",
+                  "setup_card": "#/$defs/SetupCardAnswer"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/SetupCardAnswer"
+                },
+                {
+                  "$ref": "#/$defs/PartAnswer"
+                },
+                {
+                  "$ref": "#/$defs/CantAnswer"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The rest of a request that also asks for another workflow, as a ticket list beside one software's release check, offered after this card. None when the card holds the whole request.",
+          "title": "Also"
+        },
         "kind": {
           "const": "setup_card",
           "default": "setup_card",

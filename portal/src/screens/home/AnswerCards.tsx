@@ -220,14 +220,20 @@ export function WatchlistAnswer({ reply, typed, ownTime = null }: { reply: Watch
       ) : (
         <Card title="The Software watchlist" actions={<ButtonLink variant={main} to="/software">Open the Software watchlist</ButtonLink>} />
       )}
-      {reply.also ? (
-        <>
-          <p>The rest of your request:</p>
-          <NewestAnswer.Provider value={false}>
-            <Answer reply={withCrosses(reply.also, reply, asksOnCard)} typed={typed} page={NO_PAGE} />
-          </NewestAnswer.Provider>
-        </>
-      ) : null}
+      <RestOfRequest reply={reply} typed={typed} />
+    </>
+  )
+}
+
+/** The rest of a request that also asks for another workflow, drawn after the answer's own card as a card of its own. */
+function RestOfRequest({ reply, typed }: { reply: WatchlistReply | SetupCardReply; typed: string }) {
+  if (!reply.also) return null
+  return (
+    <>
+      <p>The rest of your request:</p>
+      <NewestAnswer.Provider value={false}>
+        <Answer reply={withCrosses(reply.also, reply, asksOnCard)} typed={typed} page={NO_PAGE} />
+      </NewestAnswer.Provider>
     </>
   )
 }
@@ -577,7 +583,12 @@ export function Answer({ reply, typed, page, focus = null }: AnswerProps) {
   const asker = useAsker()
   switch (reply.answer) {
     case 'setup_card':
-      return <SetupCardAnswer reply={reply} typed={typed} />
+      return (
+        <>
+          <SetupCardAnswer reply={reply} typed={typed} />
+          <RestOfRequest reply={reply} typed={typed} />
+        </>
+      )
     case 'part':
       return (
         <>

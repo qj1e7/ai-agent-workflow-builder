@@ -289,6 +289,11 @@ class SetupCardReply(Reply):
         description="A workflow of the team's with the same name that watches a GitHub "
         "repository, so it is the one asked for. Null when there is none."
     )
+    also: SetupCardReply | PartReply | CantReply | None = Field(
+        default=None,
+        description="The rest of a request that also asks for another workflow, as a ticket "
+        "list beside one software's release check, offered after this card.",
+    )
 
 
 DRAFT_WORDS_FIELD: Final = Field(
@@ -752,6 +757,7 @@ WHICH_IN_N8N = "Say which workflow to open in n8n."
 
 
 WatchlistReply.model_rebuild()
+SetupCardReply.model_rebuild()
 
 type PlannerReply = Annotated[
     SetupCardReply
@@ -1214,9 +1220,12 @@ class PlannerFront:
 
     async def _finish(self, answer: PlannerAnswer, viewer: Principal) -> PlannerReply:
         match answer:
-            case SetupCardAnswer(name=name, rows=rows):
+            case SetupCardAnswer(name=name, rows=rows, also=also):
                 return SetupCardReply(
-                    name=name, rows=_rows(rows), similar=await self._similar(name)
+                    name=name,
+                    rows=_rows(rows),
+                    similar=await self._similar(name),
+                    also=await self._rest(also, viewer),
                 )
             case PartAnswer(name=name, rows=rows, cant=cant):
                 return PartReply(
@@ -1297,18 +1306,22 @@ class PlannerFront:
                 return await self._watch(watch, viewer)
 
     async def _watch(self, watch: WatchlistAnswer, viewer: Principal) -> WatchlistReply:
-        also = None
-        if watch.also is not None:
-            rest = await self._finish(watch.also, viewer)
-            if isinstance(rest, SetupCardReply | PartReply | CantReply):
-                also = rest
         return WatchlistReply(
             word=watch.word,
             software=watch.software,
             already_listed=await self._listed(watch.software),
-            also=also,
+            also=await self._rest(watch.also, viewer),
             covers=watch.covers,
         )
+
+    async def _rest(
+        self, also: SetupCardAnswer | PartAnswer | CantAnswer | None, viewer: Principal
+    ) -> SetupCardReply | PartReply | CantReply | None:
+        """The card for the rest of a request, offered after the answer's own."""
+        if also is None:
+            return None
+        rest = await self._finish(also, viewer)
+        return rest if isinstance(rest, SetupCardReply | PartReply | CantReply) else None
 
     async def _listed(self, software: str | None) -> ListedSoftware | None:
         if software is None:

@@ -675,6 +675,18 @@ async def test_parts_belong_to_the_whole_answer_never_to_the_rest_inside_it(fron
     assert cast(dict[str, object], reply["also"])["parts"] == []
 
 
+async def test_a_release_check_offers_the_rest_of_the_request_after_its_own_card(front: Front):
+    rest = SetupCardAnswer(name="Friday summary", rows=FOUR_ROWS)
+    check = SetupCardAnswer(name="React release check", rows=FOUR_ROWS, also=rest)
+    front.answers.result = Answered(
+        answer=check, parts=[RequestPart(text="Watch React releases", mark="will_do")]
+    )
+    reply = await say(front, "Watch React releases and every Friday sum up")
+    assert reply["answer"] == "setup_card" and reply["name"] == "React release check"
+    also = cast(dict[str, object], reply["also"])
+    assert (also["answer"], also["name"], also["parts"]) == ("setup_card", "Friday summary", [])
+
+
 async def test_a_tapped_chip_and_the_offline_answer_mark_no_parts(front: Front):
     r = await front.client.post(ANSWER, json={"intent": "needs_me"}, headers=ALICE)
     assert r.json() == {"parts": [], "answer": "needs_me", "trace_id": None}

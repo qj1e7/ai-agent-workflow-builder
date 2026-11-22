@@ -1394,18 +1394,21 @@ def test_a_search_with_no_quote_stands_on_the_longest_run_of_its_own_words():
 
 
 @pytest.mark.parametrize(
-    ("task", "said"),
+    ("task", "said", "offered"),
     [
         (
             "Can you change the version of Redis to 9.0.0?",
             "change the version of Redis to 9.0.0",
+            WatchlistAnswer,
         ),
-        ("Watch Redis releases, and update Redis to 9.0.0", "update Redis to 9.0.0"),
+        (
+            "Watch Redis releases, and update Redis to 9.0.0",
+            "update Redis to 9.0.0",
+            SetupCardAnswer,
+        ),
     ],
 )
-def test_a_change_request_answered_with_the_watchlist_shows_a_cant_for_the_change(
-    task: str, said: str
-):
+def test_a_change_request_shows_a_cant_for_the_change(task: str, said: str, offered: type):
     answer = answer_of(
         read(belongs_on_watchlist=True, watchlist_word="version", software="Redis"), task
     )
@@ -1413,8 +1416,7 @@ def test_a_change_request_answered_with_the_watchlist_shows_a_cant_for_the_chang
     [row] = answer.cant
     assert (row.kind, row.text) == ("do", said)
     assert row.note.startswith("I can't")
-    assert isinstance(answer.alternative, WatchlistAnswer)
-    assert answer.alternative.software == "Redis"
+    assert isinstance(answer.alternative, offered), "a check beside it is Redis's own card"
 
 
 @pytest.mark.parametrize(
@@ -1478,7 +1480,7 @@ def test_a_release_request_is_its_own_check_and_a_mixed_one_carries_the_rest():
         ),
         "Watch React releases and list stale bug tickets every Friday",
     )
-    assert isinstance(mixed, WatchlistAnswer) and mixed.software == "React"
+    assert isinstance(mixed, SetupCardAnswer) and mixed.name == "React release check"
     assert isinstance(mixed.also, SetupCardAnswer)
     assert rows_of(mixed.also)[1] == (
         "look_for",
@@ -2691,7 +2693,7 @@ def test_a_span_of_days_with_no_number_is_asked_never_crossed():
         ticket=TicketRead(creates=False, says="list", said="list stale bug tickets"),
     )
     answer = answer_of(fields, task)
-    assert isinstance(answer, WatchlistAnswer) and isinstance(answer.also, SetupCardAnswer)
+    assert isinstance(answer, SetupCardAnswer) and isinstance(answer.also, SetupCardAnswer)
     look = answer.also.rows[1]
     assert (look.kind, look.state) == ("look_for", "missing") and "how many days" in (
         look.note or ""
