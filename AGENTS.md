@@ -88,6 +88,7 @@ Every new or changed screen, component or flow follows `docs/design/ai-native-pr
 - Walk the checklist there before you build. If you break a principle on purpose, say why in the design note or an ADR.
 - In the pull request, say under Verification which principles applied and how you checked each one.
 - Never ship anything on that page's "Never" list. It includes an unbuilt feature shown as working, part of a request dropped silently, and the AI's summary used as the check.
+- Review a screen or flow with the `better-interface` skill, and a branch or pull request with `interface-review`. Both are in `.claude/skills/`, with the `better-*` skills they load. Where a skill disagrees with this file, the principles or the sketch, those win.
 
 ## How we work with AI: pstack
 
