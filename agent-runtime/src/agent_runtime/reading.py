@@ -3627,8 +3627,9 @@ def _covered(
         kind: CoverKind
         if day:
             # A day right after a word that leaves it out is left out, even where the
-            # schedule's own phrase read it as the day it runs, as "barring Fridays".
-            ran = read.get(start, -1) >= start + len(bare) and not fresh
+            # schedule's own phrase read it as the day it runs, as "barring Fridays". A mark
+            # between them ends what the word covers, as "no, Friday at 9am".
+            ran = read.get(start, -1) >= start + len(bare) and not (fresh and marks[n] == "")
             never = bool(days) and not _may_fall_on(bare) & runs_on
             kind = "known" if ran else "kept" if never else "day"
         elif (ex or _leaves_out(lows, marks, n)) and not asks_nothing[start]:
