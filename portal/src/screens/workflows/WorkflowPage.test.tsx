@@ -35,7 +35,7 @@ const CAROL_LEFT = 'Not running: Carol is no longer on the People list. An Opera
 const WATCHLIST = watchlistUseCase as UseCaseView
 const NOW = new Date('2026-11-04T15:00:00+08:00')
 
-const STOPPED: LastRun = { run_id: 'run_01JB9', state: 'failed', at: '2026-11-04T02:14:00Z', test: false, declined_by: null, decline_reason: null, approved_by: [], proposed: 0, written: 0, tickets: false, you_can_decide: false, retryable: false, reason: 'AgentError' }
+const STOPPED: LastRun = { run_id: 'run_01JB9', state: 'failed', at: '2026-11-04T02:14:00Z', test: false, declined_by: null, decline_reason: null, approved_by: [], proposed: 0, written: 0, tickets: false, you_can_decide: false, retryable: false, reason: 'AgentError', stop: { at: '2026-11-04T02:14:00Z', what_happened: 'An agent could not finish its work.' } }
 
 interface Setup {
   /** The workflow's last run as the platform answers it, changed from a stopped run. */
@@ -220,11 +220,27 @@ describe('a workflow page', () => {
   })
 
   it('gives an Operator Pause and a More actions button, last on the page, and keeps Run now and Delete inside the closed menu', () => {
-    const html = render()
+    const html = render({ useCase: SCHEDULED })
     expect(buttons(html)).toEqual(expect.arrayContaining(['Pause', 'More actions']))
     expect(buttons(html)).not.toContain('Run now')
     expect(buttons(html)).not.toContain('Delete')
     expect(mainOf(html)).toMatch(/<button[^>]*aria-haspopup="menu"[^>]*aria-expanded="false"[^>]*>More actions/)
+  })
+
+  it('makes Run now the one main button of a workflow with no schedule, first in the row, with Delete still last in the closed menu', () => {
+    const html = render()
+    const row = buttons(html).filter((label) => ['Run now', 'Pause', 'More actions'].includes(label))
+    expect(row, 'Run now leads, More actions is last').toEqual(['Run now', 'Pause', 'More actions'])
+    expect(buttons(html)).not.toContain('Delete')
+    expect(mainOf(html)).toMatch(/<button[^>]*class="[^"]*_primary_[^"]*"[^>]*>(<svg[\s\S]*?<\/svg>)?Run now<\/button>/)
+    expect(mainOf(html).match(/_primary_/g), 'one primary action for the state').toHaveLength(1)
+  })
+
+  it('keeps Run now quiet when the banner already holds the state’s main action', () => {
+    const html = render({ last: { state: 'awaiting_approval', reason: null, stop: null, you_can_decide: true } })
+    expect(buttons(html)).toContain('Run now')
+    expect(mainOf(html).match(/_primary_/g), 'Review and decide is the one primary action').toHaveLength(1)
+    expect(mainOf(html)).toMatch(/_primary_[^>]*>Review and decide/)
   })
 
   it('orders the page as the sketch does: the sentence, the banner, the line, When, Who says yes, Recent runs, Versions, then the buttons, with no Agents section', () => {
@@ -357,8 +373,9 @@ describe('a workflow page', () => {
 
   it('says the same words as the Workflows list, whatever the AI troubleshooter says', () => {
     const advice = { ...(troubleshooting as TroubleshootingOut), answers: { ...(troubleshooting as TroubleshootingOut).answers, what_happened: 'GitHub did not answer three times.' } }
-    const html = render({ last: { reason: 'TimedOut' }, runs: [{ ...(failed as RunView), use_case_id: 'uc_01JD0' }], advice })
-    expect(text(bannerOfHtml(html))).toContain('A step took too long.')
+    const waited = 'The run waited too long for the workflow engine and gave up.'
+    const html = render({ last: { reason: 'TimedOut', stop: { at: '2026-11-04T02:14:00Z', what_happened: waited } }, runs: [{ ...(failed as RunView), use_case_id: 'uc_01JD0' }], advice })
+    expect(text(bannerOfHtml(html))).toContain(waited)
     expect(text(mainOf(html))).not.toContain('GitHub did not answer')
     expect(text(mainOf(html))).not.toMatch(/write key/i)
   })
@@ -386,6 +403,17 @@ describe('a workflow page', () => {
     for (const refused of ['Undo', 'Add the yes back', 'Change when it runs', 'Set when it runs', 'Resume']) expect(pressable, `${refused} would be refused`).not.toContain(refused)
     expect(pressable, 'Pause still works, so the safety lever never waits').toContain('Pause')
     expect(text(render({ me: BOB, useCase: held }))).toMatch(/Carol has it open in n8n since/)
+  })
+
+  it('says a version that needs a fix in one sentence, with one way forward to Explain’s flags, even while someone has it open in n8n', () => {
+    const findings = ['Its failures do not go to the platform’s error workflow.', 'n8n does not keep its test runs.']
+    const held = { ...(openInN8n as UseCaseView), version: 1, grade: 'needs_a_fix', findings } as UseCaseView
+    for (const me of [ALICE, BOB]) {
+      const banner = /<div[^>]*data-tone="bad"[\s\S]*?<\/a><\/div>/.exec(mainOf(render({ me, useCase: held })))?.[0] ?? ''
+      expect(text(banner)).toBe('Needs a fix. Explain')
+      expect(banner).toMatch(new RegExp(`href="/workflows/${held.use_case_id}/explain#flags"`))
+      for (const finding of findings) expect(text(banner)).not.toContain(finding)
+    }
   })
 
   it('goes back to the list', () => {

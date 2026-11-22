@@ -228,19 +228,19 @@ describe('each item in words', () => {
     expect(wordsOf(address, NOW).note).toContain('Until you confirm it, runs keep using the current model.')
   })
 
-  it('says a run stopped, when, and the AI troubleshooter’s reason and what to do', () => {
+  it('says a run stopped, when, and the AI troubleshooter’s one sentence, the words its row and run say, and what to do', () => {
     expect(wordsOf(stopped, new Date('2026-11-04T15:00:00+08:00'))).toEqual({
       tone: 'bad',
       title: 'Software watchlist stopped',
       meta: 'Today, 10:14',
       lines: [],
       note: null,
-      why: 'An agent could not finish its work. Retry the run. If it fails again, check whether that service is up.',
+      why: "GitHub didn't answer. Retry the run. If it fails again, check whether that service is up.",
     })
   })
 
   it('never uses the retired names in the troubleshooter’s words', () => {
-    const unbound = { ...stopped, item: { ...STOP, advice: { ...STOP.advice, explanation: 'The agents proposed an action this use case cannot carry out.' } } } as Need
+    const unbound = { ...stopped, item: { ...STOP, what_happened: 'The agents proposed an action this use case cannot carry out.' } } as Need
     expect(wordsOf(unbound, NOW).why).toMatch(/^The agents proposed an action this workflow cannot carry out\./)
   })
 })

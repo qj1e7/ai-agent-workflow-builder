@@ -32,6 +32,7 @@ import {
   nextRunOf,
   lineWhen,
   meansOutOfDate,
+  mainActionOf,
   menuActionsOf,
   nextRunAt,
   nextRunWords,
@@ -76,6 +77,8 @@ const WATCHLIST = watchlistUseCase as UseCaseView
 const PAUSED = pausedWatchlist as UseCaseView
 const AGENTS = agentUseCase as UseCaseView
 const NO_START = "It has no Start from the Portal block, so the Portal can't start it. Add the block in n8n."
+const NO_START_WORDS = "The workflow has no Start from the Portal block, so the Portal couldn't start it."
+const AGENT_STOPPED = 'An agent could not finish its work.'
 const HELD = heldWatchlist as UseCaseView
 const run = (view: unknown, change: Partial<RunView> = {}) => ({ ...(view as RunView), ...change }) as RunView
 const NAMES: Record<string, string> = { alice: 'Alice', bob: 'Bob', carol: 'Carol' }
@@ -88,7 +91,7 @@ const CAROL: Viewer = { id: 'carol', operator: true, approver: false }
 
 const NOW = new Date('2026-11-04T15:00:00+08:00')
 
-const LAST: LastRun = { run_id: 'run_07', state: 'rejected', at: '2026-10-26T01:41:00Z', test: false, declined_by: 'bob', decline_reason: null, approved_by: [], proposed: 3, written: 0, tickets: true, you_can_decide: false, retryable: false, reason: null, outcome: null }
+const LAST: LastRun = { run_id: 'run_07', state: 'rejected', at: '2026-10-26T01:41:00Z', test: false, declined_by: 'bob', decline_reason: null, approved_by: [], proposed: 3, written: 0, tickets: true, you_can_decide: false, retryable: false, reason: null, outcome: null, stop: null }
 const lastOf = (change: Partial<LastRun>): Pick<UseCaseView, 'last_run'> => ({ last_run: { ...LAST, ...change } })
 
 describe('the status words', () => {
@@ -101,7 +104,7 @@ describe('the status words', () => {
   it('read a run as the same stage words the row and the banner use', () => {
     expect(stageOfRun(run(waiting))).toMatchObject({ state: 'awaiting_approval', count: 1, tickets: true })
     expect(stageWords(stageOfRun(run(threeWaiting)), nameOf)).toBe('Waiting for a yes')
-    expect(stageWords(stageOfRun(run(failed)), nameOf)).toBe('An agent could not finish its work')
+    expect(stageWords(stageOfRun(run(failed)), nameOf)).toBe("GitHub didn't answer")
   })
 
   it('say what a finished run wrote and who said yes, and that nothing was new', () => {
@@ -122,7 +125,7 @@ describe('the status words', () => {
   it('say a run nobody answered, and a run n8n lost after the yes, wrote nothing', () => {
     expect(stageWords(stageOfRun(run(failed, { state: 'expired' })), nameOf)).toBe('No answer. Nothing was written.')
     expect(stageWords(stageOfRun(run(failed, { state: 'lost' })), nameOf)).toBe('Approved, but the run stopped before it could make the change. Nothing was written.')
-    expect(runPill({ state: 'lost', count: 0, tickets: true, approvedBy: [], declinedBy: null, reason: null })).toEqual({ label: 'Lost', tone: 'bad' })
+    expect(runPill({ state: 'lost', count: 0, tickets: true, approvedBy: [], declinedBy: null, whyStopped: null })).toEqual({ label: 'Lost', tone: 'bad' })
     expect(rowLine({ schedule: null, ...lastOf({ state: 'expired' }) }, NOW, nameOf)).toBe('No schedule · last run Mon 26 Oct, no answer. Nothing was written.')
   })
 
@@ -161,8 +164,24 @@ describe('a workflow row’s line', () => {
   })
 
   it('gives its schedule, then the day of the last run and where it stands', () => {
-    expect(line({ state: 'failed', declined_by: null, reason: 'AgentError', at: '2026-11-04T00:00:00Z' })).toBe('Daily 8:00 · last run today, an agent could not finish its work')
+    expect(line({ state: 'failed', declined_by: null, reason: 'AgentError', at: '2026-11-04T00:00:00Z', stop: { at: '2026-11-04T00:00:00Z', what_happened: AGENT_STOPPED } })).toBe('Daily 8:00 · last run today, an agent could not finish its work')
     expect(line({ state: 'awaiting_approval', declined_by: null })).toBe('Daily 8:00 · last run Mon 26 Oct, waiting for a yes')
+  })
+
+  it('says why a run stopped in the troubleshooter’s words from the platform, never a guess from the reason code', () => {
+    const noStart = { state: 'failed', declined_by: null, reason: 'DispatchFailed', at: '2026-11-02T06:53:05Z', stop: { at: '2026-11-04T04:06:57Z', what_happened: NO_START_WORDS } } as const
+    expect(line(noStart)).toBe("Daily 8:00 · last run today, the workflow has no Start from the Portal block, so the Portal couldn't start it")
+    expect(line(noStart)).not.toMatch(/could not be reached/)
+  })
+
+  it('dates a stopped run by when it last stopped, as Needs you does, not by when it started', () => {
+    expect(line({ state: 'failed', declined_by: null, reason: 'DispatchFailed', at: '2026-10-26T01:41:00Z', stop: { at: '2026-11-02T04:06:57Z', what_happened: NO_START_WORDS } })).toMatch(/^Daily 8:00 · last run Mon 2 Nov, /)
+  })
+
+  it('keeps a name the stop starts with as it is', () => {
+    const said = (what_happened: string) => line({ state: 'failed', declined_by: null, reason: 'AgentError', at: '2026-11-04T00:00:00Z', stop: { at: '2026-11-04T00:00:00Z', what_happened } })
+    expect(said('GitHub didn’t answer.')).toBe('Daily 8:00 · last run today, GitHub didn’t answer')
+    expect(said('Jira is not connected, so an agent couldn’t read it.')).toBe('Daily 8:00 · last run today, Jira is not connected, so an agent couldn’t read it')
   })
 
   it('names who declined, and never says a ticket was created', () => {
@@ -187,7 +206,7 @@ describe('a workflow row’s line', () => {
     expect(words({ decline_reason: 'Wrong version' })).toBe('Mon 26 Oct: Declined by Bob. Nothing was written. Reason: Wrong version.')
     expect(words({ declined_by: 'alice', approved_by: ['bob'] })).toBe('Mon 26 Oct: Approved by Bob, then declined by Alice. Nothing was written.')
     expect(words({ state: 'failed', declined_by: null, reason: null })).toBe('Mon 26 Oct: Stopped')
-    expect(words({ state: 'failed', declined_by: null, at: '2026-11-04T00:00:00Z', reason: 'AgentError' })).toBe('Today 8:00: An agent could not finish its work')
+    expect(words({ state: 'failed', declined_by: null, at: '2026-10-26T01:41:00Z', reason: 'AgentError', stop: { at: '2026-11-04T00:00:00Z', what_happened: AGENT_STOPPED } })).toBe('Today 8:00: An agent could not finish its work')
   })
 
   it('gives a workflow’s own pill only to a run that needs a yes, stopped or was lost, and a running one reads On', () => {
@@ -698,12 +717,25 @@ describe('what happens when a schedule is saved', () => {
 })
 
 describe('the More actions menu', () => {
+  const SCHEDULED = { ...AGENTS, schedule: { day: 'monday', at: '09:00', time_zone: 'Asia/Singapore', owner_name: 'Alice', held: null } } as UseCaseView
+
   it('holds Run now, Change schedule and Delete in that order, with Delete last', () => {
-    expect(menuActionsOf(AGENTS, ALICE)).toEqual(['run', 'schedule', 'delete'])
+    expect(menuActionsOf(SCHEDULED, ALICE)).toEqual(['run', 'schedule', 'delete'])
+  })
+
+  it('leaves out Run now when it is the page’s main button, for a workflow with no schedule', () => {
+    expect(mainActionOf(AGENTS, ALICE)).toBe('run')
+    expect(menuActionsOf(AGENTS, ALICE)).toEqual(['schedule', 'delete'])
+    expect(mainActionOf(SCHEDULED, ALICE), 'a workflow on a schedule runs by itself, so Run now stays in the menu').toBeNull()
   })
 
   it('drops Run now while paused, because a paused workflow starts nothing', () => {
-    expect(menuActionsOf({ ...AGENTS, state: 'paused' }, ALICE)).toEqual(['schedule', 'delete'])
+    expect(menuActionsOf({ ...SCHEDULED, state: 'paused' }, ALICE)).toEqual(['schedule', 'delete'])
+    expect(mainActionOf({ ...AGENTS, state: 'paused' }, ALICE)).toBeNull()
+  })
+
+  it('gives an Approver who is not an Operator no Run now at all', () => {
+    expect(mainActionOf(AGENTS, BOB)).toBeNull()
   })
 
   it('is empty for an Approver who is not an Operator, and for the Software watchlist', () => {
@@ -718,7 +750,7 @@ describe('the status banner', () => {
   const last = (change: Partial<LastRun>): LastRun => ({ ...LAST, declined_by: null, ...change })
   const facts = (change: object) => ({ useCase: on, viewer: ALICE, now: NOW, nameOf, ...change })
   const withLast = (change: Partial<LastRun>) => ({ ...on, last_run: last(change) }) as UseCaseView
-  const stoppedAt = (change: Partial<LastRun> = {}) => withLast({ run_id: 'run_stop', state: 'failed', at: '2026-11-04T00:00:00Z', reason: 'AgentError', ...change })
+  const stoppedAt = (change: Partial<LastRun> = {}) => withLast({ run_id: 'run_stop', state: 'failed', at: '2026-11-04T00:00:00Z', reason: 'AgentError', stop: { at: '2026-11-04T00:00:00Z', what_happened: AGENT_STOPPED }, ...change })
 
   it('says a workflow that is on has its next run, and offers no button', () => {
     expect(bannerOf(facts({}))).toEqual({ tone: 'ok', text: 'On. Next run Mon 9 Nov, 9:00.', action: null })
@@ -750,12 +782,18 @@ describe('the status banner', () => {
   it('for a stopped run, says when it stopped and why, as one sentence, and opens the run, as the sketch does', () => {
     expect(bannerOf(facts({ useCase: stoppedAt() }))).toEqual({ tone: 'bad', text: 'Stopped today at 8:00. An agent could not finish its work.', action: { kind: 'open', runId: 'run_stop' } })
     expect(bannerOf(facts({ useCase: stoppedAt({ retryable: true }) })).action, 'Retry is on the run, never in the banner').toEqual({ kind: 'open', runId: 'run_stop' })
-    expect(bannerOf(facts({ useCase: stoppedAt({ reason: null }) })).text).toBe('Stopped today at 8:00.')
+    expect(bannerOf(facts({ useCase: stoppedAt({ reason: null, stop: null }) })).text).toBe('Stopped today at 8:00.')
   })
 
-  it('names the stop from the run’s reason, as the Workflows list does, and an Approver reads it and opens the run too', () => {
-    const useCase = stoppedAt({ reason: 'TimedOut' })
-    expect(bannerOf(facts({ useCase })).text).toMatch(/^Stopped .+\. A step took too long\.$/)
+  it('says when it last stopped, the time Needs you gives, not when it started', () => {
+    const retried = stoppedAt({ at: '2026-11-02T06:53:05Z', stop: { at: '2026-11-04T00:00:00Z', what_happened: NO_START_WORDS } })
+    expect(bannerOf(facts({ useCase: retried })).text).toBe(`Stopped today at 8:00. ${NO_START_WORDS}`)
+  })
+
+  it('names the stop in the platform’s words, as the Workflows list does, and an Approver reads it and opens the run too', () => {
+    const useCase = stoppedAt({ reason: 'DispatchFailed', stop: { at: '2026-11-04T00:00:00Z', what_happened: NO_START_WORDS } })
+    expect(bannerOf(facts({ useCase })).text).toBe(`Stopped today at 8:00. ${NO_START_WORDS}`)
+    expect(bannerOf(facts({ useCase })).text).not.toMatch(/could not be reached/)
     expect(bannerOf(facts({ useCase, viewer: BOB }))).toEqual(bannerOf(facts({ useCase })))
   })
 
@@ -788,13 +826,14 @@ describe('the status banner', () => {
   }
 
   it.each(Object.entries(EVERY_STATE))('gives a %s run the pill and the banner that say the same state', (state, want) => {
-    const useCase = withLast({ state: state as LastRun['state'], at: '2026-11-04T00:00:00Z', reason: state === 'failed' ? 'AgentError' : null })
+    const stopped = state === 'failed'
+    const useCase = withLast({ state: state as LastRun['state'], at: '2026-11-04T00:00:00Z', reason: stopped ? 'AgentError' : null, stop: stopped ? { at: '2026-11-04T00:00:00Z', what_happened: AGENT_STOPPED } : null })
     const run = useCase.last_run as LastRun
     const pill = pillOf(run).pill ?? lifeWords(useCase.state)
     const banner = bannerOf(facts({ useCase }))
     expect({ pill, banner: banner.text, tone: banner.tone, opens: banner.action?.kind === 'open' }).toEqual(want)
     expect(banner.text.startsWith(pill) || (pill === 'On' && banner.tone === 'new'), 'the banner leads with the pill’s words, or says what the run does while the workflow is On').toBe(true)
-    if (pill !== 'On') expect(runPill({ state: run.state, count: 3, tickets: true, approvedBy: [], declinedBy: null, reason: run.reason }).label, 'the workflow’s pill is its run’s pill').toBe(pill)
+    if (pill !== 'On') expect(runPill({ state: run.state, count: 3, tickets: true, approvedBy: [], declinedBy: null, whyStopped: null }).label, 'the workflow’s pill is its run’s pill').toBe(pill)
   })
 })
 

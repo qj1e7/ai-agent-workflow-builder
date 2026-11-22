@@ -37,11 +37,26 @@ describe('the workflow page’s banner for a graded version', () => {
     expect(writeWords(undefined)).toBe('the write')
   })
 
-  it('names every finding of a version that needs a fix, and offers Undo to the version before', () => {
+  it('says a version needs a fix in one sentence, leaves its findings to Explain, and offers Undo to the version before', () => {
     const fix = { ...on, grade: 'needs_a_fix', findings: ['“Send email” is not a block we run.', 'Another.'] } as UseCaseView
-    expect(bannerOf(facts(fix))).toEqual({ tone: 'bad', text: 'Needs a fix: “Send email” is not a block we run. Another.', action: { kind: 'undo', to: 3, inUse: 4 } })
-    expect(bannerOf(facts({ ...fix, version: 1 })).action, 'there is no version before the first').toBeNull()
-    expect(bannerOf(facts(fix, BOB)).action).toBeNull()
+    expect(bannerOf(facts(fix))).toEqual({ tone: 'bad', text: 'Needs a fix.', action: { kind: 'undo', to: 3, inUse: 4 } })
+  })
+
+  it('opens Explain at its flags when the page has no fix of its own to offer, so every stop has a way forward', () => {
+    const fix = { ...on, grade: 'needs_a_fix', findings: ['“Send email” is not a block we run.'] } as UseCaseView
+    const explain = { kind: 'explain', useCaseId: on.use_case_id }
+    expect(bannerOf(facts({ ...fix, version: 1 })), 'there is no version before the first').toEqual({ tone: 'bad', text: 'Needs a fix.', action: explain })
+    expect(bannerOf(facts(fix, BOB)), 'an Approver reads Explain too').toEqual({ tone: 'bad', text: 'Needs a fix.', action: explain })
+  })
+
+  it('draws Explain as a link to the flags of the workflow’s report', () => {
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <StatusBanner banner={{ tone: 'bad', text: 'Needs a fix.', action: { kind: 'explain', useCaseId: 'uc_01JD0' } }} resuming={false} onResume={() => undefined} />
+      </MemoryRouter>,
+    )
+    expect(html).toMatch(/<a[^>]*href="\/workflows\/uc_01JD0\/explain#flags"[^>]*>Explain/)
+    expect(text(html)).toBe('Needs a fix. Explain')
   })
 
   describe('after the team time zone changed', () => {
@@ -53,8 +68,8 @@ describe('the workflow page’s banner for a graded version', () => {
     it('offers to save the schedule again, which lays it out on the team’s zone, never Undo to a version on the old one', () => {
       setTeamZone('Europe/London')
       const owner = 'Saving makes you the owner of this schedule. Its runs then count as your work, so you won’t be able to approve them.'
-      expect(bannerOf(facts(offZone))).toEqual({ tone: 'bad', text: `Needs a fix: ${findings[0]} ${owner}`, action: { kind: 'resave', day: 'monday', at: '09:00' } })
-      expect(bannerOf(facts(offZone, BOB)).action).toBeNull()
+      expect(bannerOf(facts(offZone))).toEqual({ tone: 'bad', text: `Needs a fix. ${owner}`, action: { kind: 'resave', day: 'monday', at: '09:00' } })
+      expect(bannerOf(facts(offZone, BOB)).action).toEqual({ kind: 'explain', useCaseId: on.use_case_id })
       expect(bannerOf(facts({ ...offZone, schedule: { ...singapore, time_zone: 'Europe/London' } })).action, 'on the team’s zone, the fix is elsewhere').toEqual({ kind: 'undo', to: 3, inUse: 4 })
     })
 
@@ -72,7 +87,10 @@ describe('the workflow page’s banner for a graded version', () => {
   it('offers nothing the platform would refuse while someone has it open in n8n, so the hold line can say why', () => {
     const held = { id: 'carol', name: 'Carol', since: '2026-11-09T02:02:00Z' }
     const fix = { ...on, grade: 'needs_a_fix', findings: ['“Send email” is not a block we run.'], held_in_n8n: held } as UseCaseView
-    expect(bannerOf(facts(fix))).toEqual({ tone: 'bad', text: 'Needs a fix: “Send email” is not a block we run.', action: null })
+    expect(bannerOf(facts(fix)), 'Undo would publish, so the way forward is Explain').toEqual({ tone: 'bad', text: 'Needs a fix.', action: { kind: 'explain', useCaseId: on.use_case_id } })
+    setTeamZone('Europe/London')
+    expect(bannerOf(facts({ ...fix, schedule: { day: 'monday', at: '09:00', time_zone: 'Asia/Singapore', owner_name: 'Alice', held: null } })).action, 'so would Save the schedule again').toEqual({ kind: 'explain', useCaseId: on.use_case_id })
+    setTeamZone(undefined)
     expect(bannerOf(facts({ ...fix, grade: 'writes_refused' })).action).toBeNull()
     expect(bannerOf(facts({ ...on, state: 'paused', held_in_n8n: held })).action, 'Resume would publish').toBeNull()
   })

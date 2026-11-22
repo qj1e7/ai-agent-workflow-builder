@@ -29,7 +29,7 @@ function render(node: ReactNode): string {
   )
 }
 
-const text = (html: string) => html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+const text = (html: string) => html.replace(/<[^>]*>/g, ' ').replaceAll('&#x27;', "'").replace(/\s+/g, ' ').trim()
 const controls = (html: string) => [...html.matchAll(/<(a|button)\b([^>]*)>([\s\S]*?)<\/\1>/g)].map((m) => ({ tag: m[1], attrs: m[2] ?? '', name: text(m[3] ?? '') }))
 
 describe('a row after the card', () => {
@@ -45,7 +45,7 @@ describe('a row after the card', () => {
 
   it('carries the AI troubleshooter’s reason on the row itself', () => {
     expect(text(render(<NeedItem need={STOPPED} card={false} now={NOW} motion={STILL} />))).toContain(
-      'AI troubleshooter: An agent could not finish its work. Retry the run.',
+      "AI troubleshooter: GitHub didn't answer. Retry the run.",
     )
   })
 })

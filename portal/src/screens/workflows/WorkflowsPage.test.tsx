@@ -31,8 +31,9 @@ const TEAM = (peopleList.people as PersonOut[]).filter((person) => ['alice', 'bo
 const WATCHLIST = watchlistUseCase as UseCaseView
 const LANGGRAPH: UseCaseView = { ...(agentUseCase as UseCaseView), use_case_id: 'uc_lang', state: 'paused' }
 const BUGS: UseCaseView = { ...(agentUseCase as UseCaseView), use_case_id: 'uc_bugs', name: 'Morning bug report check', instruction: 'Raise a ticket for each new bug report.' }
-const lr = (change: Partial<LastRun>): LastRun => ({ run_id: 'run_x', state: 'succeeded', at: '2026-11-04T02:14:00Z', test: false, declined_by: null, decline_reason: null, approved_by: [], proposed: 0, written: 0, tickets: false, you_can_decide: false, retryable: false, reason: null, ...change })
-const STOPPED_BUGS: UseCaseView = { ...BUGS, last_run: lr({ run_id: 'run_bugs', state: 'failed', retryable: true, reason: 'AgentError' }) }
+const lr = (change: Partial<LastRun>): LastRun => ({ run_id: 'run_x', state: 'succeeded', at: '2026-11-04T02:14:00Z', test: false, declined_by: null, decline_reason: null, approved_by: [], proposed: 0, written: 0, tickets: false, you_can_decide: false, retryable: false, reason: null, stop: null, ...change })
+const AGENT_STOPPED = { at: '2026-11-04T02:14:00Z', what_happened: 'An agent could not finish its work.' }
+const STOPPED_BUGS: UseCaseView = { ...BUGS, last_run: lr({ run_id: 'run_bugs', state: 'failed', retryable: true, reason: 'AgentError', stop: AGENT_STOPPED }) }
 const WAITING_WATCHLIST: UseCaseView = { ...WATCHLIST, last_run: lr({ run_id: 'run_01JB8', state: 'awaiting_approval', proposed: 1, tickets: true }) }
 const DECLINED_WATCHLIST = declinedWatchlist as UseCaseView
 
@@ -104,8 +105,14 @@ describe('the Workflows list', () => {
   })
 
   it('says each row’s schedule and its last run, as the sketch does', () => {
-    const html = render({ useCases: [{ ...BUGS, schedule: { day: 'every_day', at: '08:00', time_zone: 'Asia/Singapore', owner_name: 'Alice', held: null }, last_run: lr({ state: 'failed', at: '2026-11-04T00:00:00Z', reason: 'AgentError' }) }] })
+    const html = render({ useCases: [{ ...BUGS, schedule: { day: 'every_day', at: '08:00', time_zone: 'Asia/Singapore', owner_name: 'Alice', held: null }, last_run: lr({ state: 'failed', at: '2026-11-04T00:00:00Z', reason: 'AgentError', stop: AGENT_STOPPED }) }] })
     expect(subOf(html, 'uc_bugs')).toBe('Daily 8:00 · last run today, an agent could not finish its work')
+  })
+
+  it('says why a run n8n would not start stopped, and when it last stopped, as the run and Needs you do', () => {
+    const noStart = { at: '2026-11-04T04:06:57Z', what_happened: "The workflow has no Start from the Portal block, so the Portal couldn't start it." }
+    const html = render({ useCases: [{ ...BUGS, schedule: { day: 'every_day', at: '03:05', time_zone: 'Asia/Singapore', owner_name: null, held: null }, last_run: lr({ state: 'failed', at: '2026-11-02T06:53:05Z', reason: 'DispatchFailed', stop: noStart }) }] })
+    expect(subOf(html, 'uc_bugs')).toBe("Daily 3:05 · last run today, the workflow has no Start from the Portal block, so the Portal couldn't start it")
   })
 
   it('says no schedule and no runs yet for a workflow that never ran, with only the On or Paused pill', () => {

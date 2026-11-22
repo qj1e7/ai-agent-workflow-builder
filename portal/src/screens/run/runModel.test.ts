@@ -227,14 +227,23 @@ describe('a run that failed', () => {
     expect(model.chat.at(-1)).toMatchObject({ kind: 'stopped', stage: 'working' })
   })
 
-  it('marks the first step, under the Planner, when a run fails before any agent starts', () => {
+  it('marks the start step, not the step after it, when the run stopped before it got past its start', () => {
     const early = foldAll(emptyModel, [
       ...parsed(failure.slice(0, 2)),
-      event(3, 'run_failed', { stage: 'pending', reason: 'DispatchFailed', retryable: true, message: 'n8n is down' }),
+      event(3, 'run_failed', { stage: 'pending', reason: 'DispatchFailed', retryable: false, message: 'n8n did not take the start: the workflow has no Start from the Portal block to start it' }),
     ])
-    expect(shape(line(early))).toEqual(['trigger:done:idle', 'agent:0:err:error', 'gate:todo:idle', 'write:todo:idle'])
-    expect(line(early)[1]?.agent).toEqual({ id: 'planner', display: 'Planner' })
-    expect(shape(line(early, null)), 'and without a plan, never the gate').toEqual(['trigger:done:idle', 'agent:0:err:error', 'gate:todo:idle', 'write:todo:idle'])
+    expect(shape(line(early))).toEqual(['trigger:err:idle', 'agent:0:todo:idle', 'gate:todo:idle', 'write:todo:idle'])
+    expect(line(early)[1]?.agent, 'no agent was asked, so no face waits over the first agent step').toBeNull()
+    expect(shape(line(early, null)), 'and without a plan, never the gate').toEqual(['trigger:err:idle', 'agent:0:todo:idle', 'gate:todo:idle', 'write:todo:idle'])
+  })
+
+  it('moves the stop off the start step once a retry starts again', () => {
+    const early = foldAll(emptyModel, [
+      ...parsed(failure.slice(0, 2)),
+      event(3, 'run_failed', { stage: 'pending', reason: 'DispatchFailed', retryable: true, message: 'n8n did not take the start: n8n answered the start with 502' }),
+      event(4, 'run_retried', { leg: 'work', attempt: 2 }, { kind: 'user', id: 'alice', display: 'Alice' }),
+    ])
+    expect(shape(line(early))[0]).toBe('trigger:done:idle')
   })
 })
 

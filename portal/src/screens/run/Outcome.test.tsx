@@ -108,6 +108,16 @@ describe('the next step', () => {
     expect(html).not.toContain('<button')
   })
 
+  it('never guesses What happened from the reason code while the troubleshooter has not answered', () => {
+    const noStart = failed({ stage: 'pending', reason: 'DispatchFailed', retryable: false, message: 'n8n did not take the start: the workflow has no Start from the Portal block to start it' })
+    for (const loading of [true, false]) {
+      const html = draw(noStart, undefined, OPERATOR, loading)
+      expect(text(html)).not.toMatch(/could not be reached/)
+      expect(html, 'no answer is given until the troubleshooter gives one').not.toContain('<dt>What happened</dt>')
+      expect(text(html), 'the failure text stays behind Details').toContain('the workflow has no Start from the Portal block to start it')
+    }
+  })
+
   it('decides the same way when the troubleshooter has not answered yet', () => {
     expect(draw(failed({ retryable: true }), undefined, OPERATOR, true)).toContain('>Retry<')
     expect(draw(failed({ retryable: false }), undefined, OPERATOR, true)).toContain('data-report')

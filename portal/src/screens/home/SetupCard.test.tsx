@@ -205,9 +205,11 @@ describe('the set-up card after Set up', () => {
   })
 
   it('goes back to a Draft when the test run stopped, with why, Open and Test again', () => {
-    const html = building(stopped)
+    const stop = { at: '2026-11-04T02:14:13Z', what_happened: "GitHub didn't answer." }
+    const lastRun: UseCaseView['last_run'] = { run_id: 'run_01JB8', state: 'failed', at: '2026-11-04T02:13:00Z', test: true, declined_by: null, decline_reason: null, approved_by: [], proposed: 0, written: 0, tickets: false, you_can_decide: false, retryable: true, reason: 'AgentError', stop }
+    const html = building(stopped, { useCase: { ...DRAFT, last_run: lastRun } })
     expect(pill(html)).toBe('Draft')
-    expect(text(html)).toContain('The test run stopped. An agent could not finish its work.')
+    expect(text(html)).toContain("The test run stopped. GitHub didn't answer.")
     expect(buttons(html)).toEqual(['Open the test run', 'Test again'])
   })
 

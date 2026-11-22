@@ -128,6 +128,7 @@ function lastRunOf(run: Run | undefined): UseCaseView['last_run'] {
     you_can_decide: youDecide(run),
     retryable: view.state === 'failed' && view.retryable,
     reason: view.state === 'failed' ? view.reason : null,
+    stop: view.state === 'failed' ? { at: view.updated_at, what_happened: view.what_happened } : null,
   }
 }
 

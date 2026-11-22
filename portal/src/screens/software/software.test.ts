@@ -28,6 +28,7 @@ import {
   sentenceFor,
   softwareLine,
   stateOf,
+  stoppedWords,
   ticketFact,
   watchRank,
   versionSourceWords,
@@ -249,6 +250,17 @@ describe('words that depend on the schedule and on pausing', () => {
     expect(emptyWords({ operator: true, scheduled: false, paused: false })).toBe('Add the tools your team runs, then press Check now to check them.')
     expect(emptyWords({ operator: true, scheduled: false, paused: true })).toBe('Add the tools your team runs. They can be checked once an Operator resumes the watchlist.')
     expect(emptyWords({ operator: false, scheduled: true, paused: false })).toBe('An Operator can add the tools your team runs.')
+  })
+})
+
+describe('a check that stopped', () => {
+  it('says why in the troubleshooter’s sentence from the platform, keeping a name it starts with', () => {
+    expect(stoppedWords('An agent could not finish its work.')).toBe('The last check stopped: an agent could not finish its work.')
+    expect(stoppedWords("GitHub didn't answer.")).toBe("The last check stopped: GitHub didn't answer.")
+  })
+
+  it('says only that it stopped until the platform says why', () => {
+    expect(stoppedWords(null)).toBe('The last check stopped.')
   })
 })
 
