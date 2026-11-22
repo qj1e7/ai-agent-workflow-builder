@@ -243,9 +243,14 @@ export function BuildingCard({ useCaseId, title, parts, newAgents, draftKept, te
     case 'stopped':
       status = <span className={styles['bad']}>{result?.text} Nothing was written. It stays a Draft.</span>
       actions = (
-        <Button variant="primary" loading={starting} onClick={onTestAgain}>
-          Try again
-        </Button>
+        <>
+          <Button variant="primary" loading={starting} onClick={onTestAgain}>
+            Try again
+          </Button>
+          <OpenButton item={{ kind: 'workflow', id: useCaseId }} to={`/workflows/${encodeURIComponent(useCaseId)}`}>
+            Open the workflow
+          </OpenButton>
+        </>
       )
       break
     case 'on':

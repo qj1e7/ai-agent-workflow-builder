@@ -223,7 +223,7 @@ describe('the set-up card after Set up', () => {
     const html = building(stopped, { run: { ...(failedView as RunView), run_id: 'run_01JB8' } })
     expect(pill(html)).toBe('Draft')
     expect(text(html)).toContain("The test run stopped. GitHub didn't answer. Nothing was written. It stays a Draft.")
-    expect(buttons(html)).toEqual(['Try again'])
+    expect(buttons(html), 'a failure Try again cannot fix is never a dead end').toEqual(['Try again', 'Open the workflow'])
   })
 
   it('says why its own test run stopped, never the reason of another run the workflow had', () => {
