@@ -123,6 +123,7 @@ from agent_runtime.planner import (
 )
 from agent_runtime.questions import answer_question, is_fallback, question_messages
 from agent_runtime.reading import (
+    FILLED_IN,
     FILLER,
     ME_WORDS,
     POLITE,
@@ -735,7 +736,68 @@ def _watches[A: SetupCardAnswer | PartAnswer | CantAnswer](rest: A, software: st
     return rest.model_copy(update={"rows": rows})
 
 
-WATCH_ROW: Final = "New releases of {}"
+WATCH_ROW: Final = "{} releases on GitHub"
+RELEASE_CHECK: Final = "{} release check"
+_NAMES_THE_WATCHLIST: Final = re.compile(r"\bwatch\s*list\b", re.IGNORECASE)
+_ASKS: Final = re.compile(r"^\s*(?:which|what|how|is|are|do|does|did)\b|\?\s*$", re.IGNORECASE)
+"""A question, as "which version do we run?". "When" starts a task too: "when it has a new
+release, create a ticket"."""
+
+
+def _release_check_of(read: TaskRead, request: str) -> str | None:
+    """The software a task asks to check for new releases, when it names one and is no request
+    about the Software watchlist itself: it names no watchlist, finds no tickets, changes
+    nothing, as "update Redis to 9.0.0", and asks no question and nothing about
+    vulnerabilities. It gets a release check workflow of its own, watched or not (ADR 0053)."""
+    if not read.belongs_on_watchlist or read.asks_about != "none":
+        return None
+    if release_word_in(request) is None or vulnerability_phrase(request) is not None:
+        return None
+    if _NAMES_THE_WATCHLIST.search(request) or _ASKS.search(request):
+        return None
+    ticket = _stretches(WATCHLISTS_OWN_TICKET, request)
+    if _finds(read.search, request, ticket):
+        return None
+    if _change_clauses(_without_stretches(request, ticket + _stretches(AFFIRMS_A_YES, request))):
+        return None
+    return _software_of(read, request)
+
+
+def _as_a_release_check(read: TaskRead, request: str) -> TaskRead:
+    """The reading of a release check: no ticket search, as it finds releases, and the schedule
+    and ticket its own words ask for, whether or not the model read them."""
+    own = WATCHLISTS_OWN_TICKET.search(request)
+    ticket = read.ticket
+    if ticket is None and own is not None:
+        said = re.sub(r"^and\s+", "", own.group(0), flags=re.IGNORECASE)
+        ticket = TicketRead(creates=True, says="list", said=said)
+    stretch = None if read.schedule else schedule_stretch(None, request)
+    schedule = read.schedule if stretch is None else request[stretch[0] : stretch[1]]
+    return read.model_copy(update={"search": None, "ticket": ticket, "schedule": schedule})
+
+
+def _release_check(
+    read: TaskRead, task: _Task, request: str, software: str
+) -> SetupCardAnswer | PartAnswer | CantAnswer:
+    """The card for one software's own release check. It reads the software's releases, and
+    its ticket is filled in, in view, when the request didn't say one: a release check always
+    writes one. Every part it can't do comes back beside it, as beside a watch, never the
+    watchlist instead."""
+    name = plain(RELEASE_CHECK.format(software), NAME_LIMIT)
+    ticket = UnderstoodRow(
+        kind="do", text="Create one ticket that lists them", state="changed", note=FILLED_IN
+    )
+    rows = [
+        ticket if r.kind == "do" and r.state == "missing" and not r.text else r for r in task.rows
+    ]
+    card = _watches(SetupCardAnswer(name=name, rows=rows), software)
+    system = _system_row(request, software)
+    cant = _watch_rows(read, task, request, system, request, None, card=True)
+    if not cant:
+        return card
+    if _only_fields(cant):
+        return PartAnswer(name=name, rows=card.rows, cant=cant)
+    return CantAnswer(cant=cant, alternative=card)
 
 
 _TICKET_KEY: Final = re.compile(r"\b[A-Z][A-Z0-9]+-\d+\b")
@@ -859,18 +921,9 @@ def _watchlist(
         )
         instead = None if software is None else WatchlistAnswer(word=word, software=software)
         return CantAnswer(cant=[cant], alternative=instead)
-    elsewhere = [
-        s for s in other_systems(request) if software is None or s.casefold() != software.casefold()
-    ]
-    system_row = None
-    if elsewhere:
-        system = elsewhere[0]
-        note = why_not("where", system) or CANT_YET
-        system_row = CantRow(
-            kind="where", text=system, note=note, needs="new_system", system=system
-        )
-        if software is None:
-            return CantAnswer(cant=[system_row])
+    system_row = _system_row(request, software)
+    if system_row is not None and software is None:
+        return CantAnswer(cant=[system_row])
     if software is None:
         return WhichSoftwareAnswer(word=word)
     also = _also(read, task, request, project)
@@ -881,6 +934,18 @@ def _watchlist(
     rows = _watch_rows(read, task, request, system_row, changes, schedule)
     watching = watching.model_copy(update={"covers": _covers(read, request, schedule, project)})
     return CantAnswer(cant=rows, alternative=watching) if rows else watching
+
+
+def _system_row(request: str, software: str | None) -> CantRow | None:
+    """The can't for the first system a watch request names that the platform doesn't reach."""
+    elsewhere = [
+        s for s in other_systems(request) if software is None or s.casefold() != software.casefold()
+    ]
+    if not elsewhere:
+        return None
+    system = elsewhere[0]
+    note = why_not("where", system) or CANT_YET
+    return CantRow(kind="where", text=system, note=note, needs="new_system", system=system)
 
 
 def _covers(
@@ -979,10 +1044,13 @@ def _watch_rows(
     system: CantRow | None,
     changes: str,
     schedule: WatchlistScheduleFact | None,
+    card: bool = False,
 ) -> list[CantRow]:
     """A can't row for each part of a watch request the watchlist doesn't do, in this order:
     another destination, a time of its own, a change, then any other words nothing read. A
-    stretch of the request gets one row, the first that reaches it."""
+    stretch of the request gets one row, the first that reaches it. With `card`, the rows beside
+    a release check's own card, whose time is its own and whose parts the other words stand
+    beside."""
     found: list[tuple[tuple[int, int], CantRow]] = []
     if system is not None:
         at = _stretch(request, system.text)
@@ -990,7 +1058,7 @@ def _watch_rows(
     stretch = schedule_stretch(read.schedule, request)
     watched = _watch_clauses(read, request)
     own = stretch is not None and not _its_schedule(request[stretch[0] : stretch[1]], schedule)
-    if own and stretch and _belongs_to_the_watch(request, stretch, watched):
+    if not card and own and stretch and _belongs_to_the_watch(request, stretch, watched):
         # A time the watchlist's one schedule could hold is offered to the whole watchlist.
         # A schedule the reading missed is read from the request's own words.
         holds = _watchlist_holds(read.schedule or request[stretch[0] : stretch[1]])
@@ -1004,7 +1072,12 @@ def _watch_rows(
     # Words beside the watch stand beside no part of a task, so a part is never named for them.
     if task is not None:
         found += [
-            ((s.start, s.end), _left_out(replace(s, kind=None), False, task.unquoted_skip))
+            (
+                (s.start, s.end),
+                _left_out(s, task.searching, task.unquoted_skip)
+                if card
+                else _left_out(replace(s, kind=None), False, task.unquoted_skip),
+            )
             for s in task.spans
         ]
     kept: list[tuple[tuple[int, int], CantRow]] = []
@@ -1222,9 +1295,14 @@ def _answer_of(
     task = None
     covered = [skip.covered] if skip.covered is not None else []
     covered += _stretches(RUNS_BY_ITSELF, text)
+    release_check = _release_check_of(read, text)
     if read.belongs_on_watchlist:
         covered += _stretches(WATCHLISTS_OWN_TICKET, text)
-        read = _ticket_in_another_project(read, text, watch_project)
+        read = (
+            _ticket_in_another_project(read, text, watch_project)
+            if release_check is None
+            else _as_a_release_check(read, text)
+        )
     watched = _watch_clauses(read, text) if read.belongs_on_watchlist else []
     writes = _writes(read, text)
     # A question about the app is no task, but beside a skip the model flagged and couldn't
@@ -1251,6 +1329,8 @@ def _answer_of(
     newest = _newest_of(read, text, facts)
     if newest is not None:
         return newest
+    if release_check is not None and task is not None:
+        return _release_check(read, task, text, release_check)
     if read.belongs_on_watchlist:
         answer = _watchlist(read, task, text, watch_schedule, watch_project)
         if answer is not None:

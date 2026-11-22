@@ -798,6 +798,8 @@ def test_a_mixed_request_is_scored_on_the_watchlist_and_the_rest():
     alone = read_answer(belongs_on_watchlist=True, watchlist_word="releases", software="React")
     assert failed(ANSWER.score(answer_case("mixed-watch-and-list"), alone)) == {
         "carries_the_rest",
+        "names_the_software",
+        "names_the_word",
         "reads_the_parts",
         "right_kind",
     }

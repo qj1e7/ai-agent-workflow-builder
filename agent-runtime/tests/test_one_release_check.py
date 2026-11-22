@@ -100,14 +100,48 @@ def test_an_empty_search_or_place_the_model_read_changes_nothing(more: dict[str,
 
 
 def test_a_release_check_with_no_ticket_shows_the_ticket_it_fills_in():
-    task = "Check n8n for new releases"
-    fields = read(software="n8n")
+    task = "Every Monday, check n8n for new releases"
+    fields = read(software="n8n", schedule="Every Monday")
     answer = answer_of(fields, task, facts("n8n"))
     assert isinstance(answer, SetupCardAnswer)
     assert answer.name == "n8n release check"
     card = rows(answer)
-    assert card["schedule"][1] == "missing", "a time is never guessed"
+    assert card["schedule"][0] == "Every Monday"
     assert card["do"] == ("Create one ticket that lists them", "changed", FILLED_IN)
+
+
+def test_a_change_beside_a_release_word_keeps_the_watchlists_answer():
+    task = "Watch Redis releases, and update Redis to 9.0.0"
+    answer = answer_of(read(software="Redis"), task, facts("Redis"))
+    assert isinstance(answer, CantAnswer) and isinstance(answer.alternative, WatchlistAnswer)
+    assert [row.text for row in answer.cant] == ["update Redis to 9.0.0"], "never dropped"
+
+
+@pytest.mark.parametrize(
+    ("task", "more"),
+    [
+        ("track the n8n releases", {"software": "n8n"}),
+        ("Monitor Kubernetes releases", {"software": "Kubernetes"}),
+        ("Check LangGraph for new releases every weekday at 9", {}),
+    ],
+)
+def test_other_ways_to_ask_for_a_release_check_get_its_card(task: str, more: dict[str, Any]):
+    answer = answer_of(read(**more), task, facts())
+    assert isinstance(answer, SetupCardAnswer)
+    assert answer.name == f"{more.get('software', 'LangGraph')} release check"
+
+
+def test_words_beside_the_release_check_come_back_crossed_never_dropped():
+    task = "Check LangGraph for new releases and post it in Slack"
+    answer = answer_of(read(), task, facts())
+    assert isinstance(answer, CantAnswer) and isinstance(answer.alternative, SetupCardAnswer)
+    assert [(row.text, row.system) for row in answer.cant] == [("Slack", "Slack")]
+
+
+@pytest.mark.parametrize("task", ["Check n8n for new releases", "latest version of n8n"])
+def test_a_question_about_the_newest_version_keeps_its_answer(task: str):
+    answer = answer_of(read(software="n8n"), task, facts("n8n"))
+    assert isinstance(answer, WatchlistAnswer), "a question, not a workflow"
 
 
 def test_a_part_it_cant_do_comes_back_beside_its_own_card():
