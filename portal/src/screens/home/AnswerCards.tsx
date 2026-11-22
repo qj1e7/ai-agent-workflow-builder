@@ -585,7 +585,8 @@ export function Answer({ reply, typed, page, focus = null }: AnswerProps) {
     case 'setup_card':
       return (
         <>
-          <SetupCardAnswer reply={reply} typed={typed} />
+          {/* A question the rest's card asks, as how many days, is never asked on this card too. */}
+          <SetupCardAnswer reply={reply.also ? withCrosses(reply, reply, (part) => !asksOnCard(part)) : reply} typed={typed} />
           <RestOfRequest reply={reply} typed={typed} />
         </>
       )

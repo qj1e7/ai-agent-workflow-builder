@@ -755,7 +755,7 @@ _ASKS: Final = re.compile(
 """A question, as "which version do we run?". "When" and "do a" start a task too, and a "?"
 after "can you" closes a request: "can you check LangGraph every day at 9am?"."""
 _RELEASE_CHECK_WORDS: Final = (
-    (WATCH_WORDS - {"newer"}) | frozenset(RELEASE_ROOTS) | words("github check eye")
+    (WATCH_WORDS - {"newer"}) | frozenset(RELEASE_ROOTS) | POLITE | words("github check eye")
 )
 """The words a release check holds beside the software's own name. "newer than our version"
 compares with a version the card doesn't hold, so it comes back."""
@@ -819,13 +819,18 @@ def release_check_of(read: TaskRead, request: str) -> str | None:
     return software if checks else None
 
 
+_CHECK_VERBS: Final = r"(?:check|watch|monitor|track|follow|keep|add)\b"
 _ORDERS_A_CHECK: Final = re.compile(
-    r"^\s*(?:(?:please|pls|kindly|just|now|so|and|can|could|would|will|you)\s+)*"
-    r"(?:check|watch|monitor|track|follow|keep|add)\b(?!.*\?\s*$)",
+    r"^\s*(?:(?:please|pls|kindly|just|now|so|and)\s+)*"
+    rf"(?:(?:can|could|would|will)\s+you\s+(?:please\s+)?{_CHECK_VERBS}"
+    rf"|{_CHECK_VERBS}(?!.*\?\s*$))",
     re.IGNORECASE | re.DOTALL,
 )
-"""A request that opens by ordering a check, as "Check n8n for new releases", and asks no
-question with a "?", as "can you check the latest version of n8n?" does."""
+"""A request that opens by ordering a check, as "Check n8n for new releases" or "can you check
+n8n for new releases?". Any other "?" asks a question."""
+_ASKS_THE_NEWEST: Final = re.compile(r"\b(?:latest|newest|most\s+recent|current)\b", re.IGNORECASE)
+"""Words that ask what the newest version is, as "check the latest version of n8n", which the
+newest-version answer gives."""
 
 
 def _finds_beside(read: TaskRead, request: str) -> bool:
@@ -1433,7 +1438,11 @@ def _answer_of(
             return refused
     if skip.unverified is not None:
         return _refused(text, skip.unverified)
-    ordered = release_check is not None and _ORDERS_A_CHECK.search(text) is not None
+    ordered = (
+        release_check is not None
+        and _ORDERS_A_CHECK.search(text) is not None
+        and _ASKS_THE_NEWEST.search(text) is None
+    )
     newest = None if ordered else _newest_of(read, text, facts)
     if newest is not None:
         return newest
@@ -1443,6 +1452,12 @@ def _answer_of(
         rest = _also(read, task, text, watch_project)
         if rest is not None:
             return _release_check_beside(read, text, release_check, rest)
+        # A rest that makes no card is never dropped: its words come back beside the check.
+        read = _as_a_release_check(read, text)
+        holds = covered + _release_words(release_check, text)
+        task = _read_task(read, text, holds, writes, skip.unquoted)
+        refused = _refused_span(task, text) if writes else None
+        return refused or _release_check(read, task, text, release_check)
     if read.belongs_on_watchlist:
         answer = _watchlist(read, task, text, watch_schedule, watch_project)
         if answer is not None:
