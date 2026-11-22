@@ -15,6 +15,19 @@
 - The list under the window, "What's new in version 3", says what each flow is meant to show. Its second part covers the workflow drafter screens from ADR 0051, added on 16 Nov 2026.
 - The sketch uses sample data only. The demo bar, Play, Speed and Tracing are for the sketch, not the app.
 
+## Calm look, 22 Nov 2026
+
+The team lead found most screens heavy and wordy, with box drawn on box. Three reviews with the better-interface skills found the same causes on every screen. The team lead chose the "Calm look" and kept the typeface, Atkinson Hyperlegible Next, with its slashed zero. The sketch follows the six rules below. They are the Portal's style rules from now on, so the Portal pull requests that follow use them too.
+
+1. **One type scale.** Use five sizes only, as tokens: `--text-14`, `--text-16`, `--text-18`, `--text-22` and `--text-28`. Body text is weight 400. Row labels, card titles, buttons and status words are 600. Page and panel titles are 700. Nothing is 800, and a small heading is never heavier than the page title.
+2. **Controls.** Main buttons are 38 px tall and small ones are 32 px, both with 14 px text. A view or a card has one filled button at most. Other actions are outline buttons or quiet text buttons. A form field has an edge a person can see (`--edge`, 3:1 or more on white).
+3. **Flat surfaces.** Group with space, not lines. An answer is one card, with no box inside it and no rule above its foot. Every card uses one radius (`--r-card`) and one border colour (`--hair`).
+4. **Quiet status.** A status is a small dot and a word, such as On, Paused or Newer out. Only a real problem, such as Stopped or Can't find, gets a fill. The set-up approval's warning that some writes won't ask for a yes on each run also keeps its amber fill, because the Approver must not miss it. The pinned strip keeps a plain surface, and its dot and bold name carry the state. Each colour has one meaning. Green means done or on, so the chip that marks a person's own words is grey.
+5. **One of each piece.** Use one status style at one size, one tab bar style, and one press effect. A press scales to 0.97 over `--t-press` with the ease-out curve. A disabled button never moves, and nothing moves under reduced motion.
+6. **Readable for everyone.** A skipped step fades only its dot and face. Its label keeps a contrast of 4.5:1 or more. On a window 34rem tall or less, such as a laptop at 200% zoom, the chat page scrolls as a whole and the chat box stays at the bottom.
+
+These rules change how the screens look, not what they say or do. Every screen in the sketch has the same words as before.
+
 ## Where the sketch is silent
 
 Settings, the Teams drawer, the Jira page and sign-in keep what the app has today.
