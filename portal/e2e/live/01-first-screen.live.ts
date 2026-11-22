@@ -267,12 +267,15 @@ test('wider than 860 px the rail is a column on the left, and at 860 px it becom
   ] as const) {
     const context = await browser.newContext({ viewport: { width, height: 900 }, locale: 'en-SG', timezoneId: 'Asia/Singapore' })
     const page = await context.newPage()
-    await page.goto('/workflows')
+    await page.goto('/')
     await expect(heading(page)).toBeVisible()
     const links = await railItems(page).evaluateAll((all) => all.map((a) => a.getBoundingClientRect()).map((r) => ({ x: r.x, y: r.y })))
     const sameColumn = new Set(links.map((l) => Math.round(l.x))).size === 1
     const sameRow = new Set(links.map((l) => Math.round(l.y))).size === 1
     expect({ width, column: sameColumn && !sameRow, bar: sameRow && !sameColumn }).toEqual({ width, column, bar: !column })
+    const room = await page.evaluate(() => document.documentElement.clientWidth)
+    const filled = (await page.getByRole('main').boundingBox())?.width ?? 0
+    expect(filled, `at ${String(width)} px the page fills the window beside the rail, or under the bar`).toBeGreaterThanOrEqual(room - (column ? 92 : 0) - 1)
     await context.close()
   }
 })
