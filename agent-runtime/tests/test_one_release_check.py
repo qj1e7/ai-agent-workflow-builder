@@ -53,18 +53,19 @@ def test_a_release_check_of_one_software_is_a_card_of_its_own(
     card = rows(answer)
     assert card["schedule"][:2] == ("Every day at 9am", "understood"), "its own time, no can't"
     assert card["look_for"] == (
-        "LangGraph releases on GitHub",
+        "New releases of LangGraph",
         "understood",
         'Read from your words "LangGraph".',
     )
     assert card["do"] == (
-        "Create one ticket that lists them",
+        "Create 1 Jira ticket",
         "understood",
         'Read from your words "create a Jira ticket".',
     )
     assert card["where"][1] == "missing", "it asks for a Jira project of its own"
     assert "MOCK" not in answer.model_dump_json(), "never the watchlist's project"
     assert why_not("look_for", card["look_for"][0]) is None, "the card's own check accepts it"
+    assert why_not("do", card["do"][0]) is None
     assert all(p.mark != "cant" for p in parts_of(fields, THE_REQUEST, answer))
 
 
@@ -96,7 +97,7 @@ def test_an_empty_search_or_place_the_model_read_changes_nothing(more: dict[str,
     fields = read(schedule="Every day at 9am", ticket=TICKET, **more)
     answer = answer_of(fields, THE_REQUEST, facts("LangGraph"))
     assert isinstance(answer, SetupCardAnswer)
-    assert rows(answer)["look_for"][0] == "LangGraph releases on GitHub"
+    assert rows(answer)["look_for"][0] == "New releases of LangGraph"
 
 
 def test_a_release_check_with_no_ticket_shows_the_ticket_it_fills_in():
@@ -107,7 +108,7 @@ def test_a_release_check_with_no_ticket_shows_the_ticket_it_fills_in():
     assert answer.name == "n8n release check"
     card = rows(answer)
     assert card["schedule"][0] == "Every Monday"
-    assert card["do"] == ("Create one ticket that lists them", "changed", FILLED_IN)
+    assert card["do"] == ("Create 1 Jira ticket", "changed", FILLED_IN)
 
 
 def test_a_change_beside_a_release_word_keeps_the_watchlists_answer():
@@ -175,3 +176,50 @@ def test_the_card_for_watched_software_stands_and_never_goes_to_the_question_lan
     answer = decide(read(schedule="Every day at 9am", ticket=TICKET), request)
     assert isinstance(answer, SetupCardAnswer)
     assert answer.name == "LangGraph release check"
+
+
+def test_the_ticket_for_a_new_release_quotes_all_its_words():
+    task = THE_REQUEST + " if there's a new one"
+    answer = answer_of(read(schedule="Every day at 9am", ticket=TICKET), task, facts())
+    assert isinstance(answer, SetupCardAnswer)
+    assert rows(answer)["do"] == (
+        "Create 1 Jira ticket",
+        "understood",
+        'Read from your words "create a Jira ticket if there\'s a new one".',
+    )
+
+
+@pytest.mark.parametrize(
+    "task",
+    [
+        "Can you check LangGraph for new releases every day at 9am?",
+        "Could you please check LangGraph for new releases every day at 9am?",
+        "Do a release check of LangGraph every Monday at 9am",
+    ],
+)
+def test_a_request_said_as_a_question_is_still_a_request(task: str):
+    answer = answer_of(read(), task, facts("LangGraph"))
+    assert isinstance(answer, SetupCardAnswer), answer
+    assert answer.name == "LangGraph release check"
+
+
+@pytest.mark.parametrize(
+    ("words", "crossed"),
+    [
+        ("for new major releases", "major"),
+        ("for new releases since 1.2.14", "1.2.14"),
+        ("for new releases newer than our version", "newer"),
+        ("for new pre-releases", "pre-releases"),
+        ("for new releases from langchain-ai/langgraph", "langchain-ai/langgraph"),
+        ("and n8n for new releases", "n8n"),
+    ],
+)
+def test_words_beside_the_software_the_card_doesnt_hold_come_back_crossed(words: str, crossed: str):
+    task = f"Every day at 9am, check LangGraph {words}"
+    fields = read(schedule="Every day at 9am")
+    answer = answer_of(fields, task, facts("LangGraph"))
+    assert isinstance(answer, CantAnswer), answer
+    assert isinstance(answer.alternative, SetupCardAnswer)
+    assert [row.text for row in answer.cant] == [crossed]
+    held = [p.text for p in parts_of(fields, task, answer) if p.mark == "will_do"]
+    assert not any(crossed in text for text in held), held

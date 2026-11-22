@@ -265,6 +265,12 @@ def test_a_release_check_keeps_a_time_said_in_its_own_clause():
     answer = answer_of(reading_, task)
     parts = parts_of(reading_, task, answer)
     assert ("Every weekday at 9", "will_do") in [(p.text, p.mark) for p in parts]
+    assert isinstance(answer, SetupCardAnswer)
+    [ticket] = [row for row in answer.rows if row.kind == "do"]
+    assert (ticket.text, ticket.note) == (
+        "Create 1 Jira ticket",
+        'Read from your words "raise a Jira ticket if there\'s a new one".',
+    )
 
 
 # 5. The guide says what the Portal does.

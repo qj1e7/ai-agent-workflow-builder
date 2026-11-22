@@ -2803,8 +2803,8 @@ def test_the_ticket_is_the_release_checks_own_however_the_model_reads_it(
     assert isinstance(answer, SetupCardAnswer) and answer.name == f"{software} release check"
     assert rows_of(answer) == [
         ("schedule", "Every Monday", "understood"),
-        ("look_for", f"{software} releases on GitHub", "understood"),
-        ("do", "Create one ticket that lists them", "understood"),
+        ("look_for", f"New releases of {software}", "understood"),
+        ("do", "Create 1 Jira ticket", "understood"),
         ("where", "", "missing"),
     ]
     assert [p.mark for p in parts_of(fields, task, answer)] == ["will_do"] * 3
@@ -2868,8 +2868,8 @@ def test_the_project_a_release_check_names_is_its_own(
     assert isinstance(answer, SetupCardAnswer)
     rows = {row.kind: row.text for row in answer.rows}
     assert rows["where"] == f"Jira project {named}"
-    assert rows["look_for"] == f"{software} releases on GitHub"
-    assert rows["do"] == "Create one ticket that lists them"
+    assert rows["look_for"] == f"New releases of {software}"
+    assert rows["do"] == "Create 1 Jira ticket"
     notes = {row.kind: row.note for row in answer.rows}
     assert notes["do"] == 'Read from your words "create a Jira ticket".', "the same either way"
     assert notes["look_for"] == f'Read from your words "{software}".'
