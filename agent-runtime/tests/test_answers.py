@@ -2861,6 +2861,46 @@ def test_a_second_card_beside_a_watch_watches_the_software_they_named():
     assert answer.covers == []
 
 
+IN_A_PROJECT = "Every Monday, check LangGraph for a new release and create a Jira ticket in {}"
+
+
+@pytest.mark.parametrize("project", ["MOCK", None], ids=["project known", "project not read"])
+@pytest.mark.parametrize("ticket", [None, THE_UPGRADE_TICKET], ids=["no ticket", "ticket"])
+@pytest.mark.parametrize("software", ["LangGraph", "Kubernetes"])
+def test_a_ticket_in_another_project_is_a_card_of_its_own_never_the_watchlists_tick(
+    project: str | None, ticket: TicketRead | None, software: str
+):
+    task = IN_A_PROJECT.format("OPS").replace("LangGraph", software)
+    ops = PlaceRead(project="OPS", said="in OPS")
+    fields = read(**{**CORE_WATCH, "software": software}, ticket=ticket, place=ops)
+    facts = PlannerFacts(watchlist_schedule=MONDAY_9, watchlist_project=project)
+    answer = answer_of(fields, task, facts)
+    assert isinstance(answer, WatchlistAnswer) and answer.covers == []
+    assert isinstance(answer.also, SetupCardAnswer), "the ticket in OPS is named on its own card"
+    rows = {row.kind: row.text for row in answer.also.rows}
+    assert rows["where"] == "Jira project OPS"
+    assert rows["look_for"] == f"New releases of {software}"
+    assert rows["do"] == "Create one ticket that lists them"
+    notes = {row.kind: row.note for row in answer.also.rows}
+    assert notes["do"] == 'Read from your words "create a Jira ticket".', "the same either way"
+    assert "MOCK" not in answer.model_dump_json()
+
+
+@pytest.mark.parametrize("ticket", [None, THE_UPGRADE_TICKET], ids=["no ticket", "ticket"])
+@pytest.mark.parametrize("software", ["LangGraph", "Kubernetes"])
+def test_a_ticket_in_the_watchlists_own_project_stays_its_tick(
+    ticket: TicketRead | None, software: str
+):
+    task = IN_A_PROJECT.format("MOCK").replace("LangGraph", software)
+    mock = PlaceRead(project="MOCK", said="in MOCK")
+    fields = read(**{**CORE_WATCH, "software": software}, ticket=ticket, place=mock)
+    facts = PlannerFacts(watchlist_schedule=MONDAY_9, watchlist_project="MOCK")
+    answer = answer_of(fields, task, facts)
+    assert answer == WatchlistAnswer(
+        word="release", software=software, covers=["schedule", "ticket"]
+    )
+
+
 WORKFLOWS = PlannerFacts(
     workflows=[
         WorkflowFact(name=name, state="on", last_run=None, last_run_at=None)

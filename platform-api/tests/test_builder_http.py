@@ -806,6 +806,7 @@ async def test_the_facts_carry_the_watchlists_schedule_as_its_page_shows_it(fron
     assert facts is not None and facts.watchlist_schedule is not None
     shown = facts.watchlist_schedule
     assert (shown.day, shown.at) == (page["schedule"]["day"], page["schedule"]["at"])
+    assert facts.watchlist_project == page["ticket_project"], "where its upgrade tickets go"
 
 
 async def test_a_follow_up_passes_the_previous_turn_on_and_changes_nothing_else(front: Front):
