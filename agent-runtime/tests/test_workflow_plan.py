@@ -30,6 +30,7 @@ from tests.exclusion_phrases import (
     DATES_MONTH_ENDS_AND_FREEZES,
     DAY_WORDS_KEPT,
     DAYS_AFTER_A_LEAVE_WORD,
+    DAYS_AFTER_AN_INTERJECTION,
     FILTERS_LEFT_OUT,
     HOLIDAYS_LEFT_OUT,
     PIECES_JOINED,
@@ -2431,6 +2432,13 @@ def test_a_weekday_right_after_a_word_that_leaves_it_out_is_never_the_day_it_run
     assert run_time_in(words, "every_day 09:00") == (None, True)
     assert day_in(words, "every_day 09:00") is None
     assert day_in(words) is None
+
+
+@pytest.mark.parametrize(("words", "run_time"), DAYS_AFTER_AN_INTERJECTION)
+def test_a_day_after_a_correction_and_a_mark_is_the_day_it_runs(words: str, run_time: str):
+    """At c6d82764, "no, Friday at 9am" read "no" as leaving out Friday, so it asked the day."""
+    assert run_time_in(words, "every_day 09:00") == (run_time, True)
+    assert run_time_in(words) == (run_time, True)
 
 
 @pytest.mark.parametrize("words", CHANGES_LEFT_OUT)

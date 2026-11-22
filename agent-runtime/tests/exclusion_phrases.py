@@ -939,3 +939,17 @@ LEFT_OUT_AFTER_ANOTHER: list[str] = [
 ]
 """A day left out after another one in a question or another workflow's clause. Only the first
 stretch left out counted, so the change saved every day at 10:00. Each is asked."""
+DAYS_AFTER_AN_INTERJECTION: list[tuple[str, str]] = [
+    ("no, Friday at 9am", "friday 09:00"),
+    ("No. Friday at 9am", "friday 09:00"),
+    ("no! Friday at 9am", "friday 09:00"),
+    ("no: Friday at 9am", "friday 09:00"),
+    ("no, Fridays at 9am please", "friday 09:00"),
+    ("no, Monday at 9am works better", "monday 09:00"),
+    ("no, weekdays at 9am", "weekdays 09:00"),
+    ("skip that, Friday at 9am", "friday 09:00"),
+    ("check langgraph. No, Friday at 9am", "friday 09:00"),
+    ("except, Friday at 9am", "friday 09:00"),
+]
+"""A correction in a chat: a word that can leave a day out, then a mark, then the day it runs.
+The mark ends what the word covers, so each reads the day and the time, as on main."""

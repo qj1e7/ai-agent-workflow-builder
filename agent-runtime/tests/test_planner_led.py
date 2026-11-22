@@ -50,6 +50,7 @@ from agent_runtime.planner_led import (
 from agent_runtime.reply_verifier import Verdict
 from tests.exclusion_phrases import (
     DAYS_AFTER_A_LEAVE_WORD,
+    DAYS_AFTER_AN_INTERJECTION,
     EDITS_KEPT,
     EDITS_LEFT_OUT,
     LEFT_OUT_AFTER_ANOTHER,
@@ -745,6 +746,22 @@ def test_a_workflow_whose_name_looks_like_a_day_left_out_still_moves(
     answer = shown(result)
     assert isinstance(answer, EditAnswer)
     assert (answer.schedule, result.errors) == (ScheduleChange(at="10:00"), ())
+
+
+@pytest.mark.parametrize(("message", "run_time"), DAYS_AFTER_AN_INTERJECTION)
+def test_a_time_change_after_a_correction_and_a_mark_is_made(message: str, run_time: str) -> None:
+    """At c6d82764, the gate read "no" in "no, Friday at 9am" as leaving out Friday and refused."""
+    day, at = run_time.split(" ")
+    result, _ = run(
+        message,
+        tool("change_workflow", action="schedule", day=day, at=at),
+        facts=WORKFLOWS,
+    )
+
+    answer = shown(result)
+    assert isinstance(answer, EditAnswer)
+    change = ScheduleChange.model_validate({"day": day, "at": at})
+    assert (answer.schedule, result.errors) == (change, ())
 
 
 def test_a_workflow_whose_name_looks_like_a_day_left_out_still_asks_for_one_it_leaves_out():
