@@ -346,6 +346,22 @@ export function addBody(name: string, kind: SourceKind, ref: string, version: st
   return { name, ...where, ...(version === null ? {} : { our_version: version }) }
 }
 
+/**
+ * What Home's card sends to add a match: a package with the version typed on the card, if any, which is the one its known
+ * vulnerabilities are looked up in. A GitHub project sends no version, as before.
+ */
+export function homeAdd(name: string, kind: SourceKind, ref: string, typed: string): Checked<AddSoftware> {
+  if (!isPackage(kind)) return { ok: true, value: addBody(name, kind, ref, null) }
+  const version = checkVersion(typed, kind)
+  return version.ok ? { ok: true, value: addBody(name, kind, ref, version.value) } : version
+}
+
+/** What Home's card says about known vulnerabilities once a package is on the watchlist. Nothing for a GitHub project. */
+export function addedVulnerabilityWords(body: AddSoftware): string {
+  if (!body.package) return ''
+  return body.our_version ? `Each check also looks up known vulnerabilities in ${body.our_version}.` : 'Without your version, known vulnerabilities aren’t looked up.'
+}
+
 /** The ref an add body names, for messages. */
 export const refOf = (body: AddSoftware): string => body.package?.ref ?? body.repo ?? ''
 
@@ -376,8 +392,10 @@ export function checkName(text: string, watched: readonly string[] = []): Checke
 
 export const VERSION_HELP = 'Leave it empty if you don’t know. It shows as Not known, and the check tells you about releases newer than the newest one it first reads.'
 /** Where a package's known vulnerabilities show. The Software page keeps no copy of them (ADR 0025). */
-export const VULNERABILITIES_WHERE = 'Each check lists them in its run, and an upgrade ticket names them, with links to NVD or OSV.'
+export const VULNERABILITIES_WHERE = 'The last check’s run says how many there are and names the worst. An upgrade ticket lists each one, linked to NVD or OSV.'
 export const PACKAGE_VERSION_HELP = `${VERSION_HELP} Give it, and each check also looks up known vulnerabilities in it. ${VULNERABILITIES_WHERE}`
+/** The version help on Home's card for a package: the only place it can be given there (ADR 0025). */
+export const HOME_PACKAGE_VERSION_HELP = 'Give it, and each check also looks up known vulnerabilities in it. Without it, they aren’t looked up.'
 
 /**
  * What the Software page says about a package's known vulnerabilities, or null for a GitHub project, which names no package. They are

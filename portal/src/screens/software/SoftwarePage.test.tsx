@@ -89,7 +89,7 @@ describe('a package’s known vulnerabilities on its page (ADR 0025)', () => {
     const html = renderItem(asPackage({}), ALICE, base.id)
     const words = text(html)
     expect(words).toContain('Known vulnerabilities')
-    expect(words).toContain('Each check lists them in its run, and an upgrade ticket names them, with links to NVD or OSV.')
+    expect(words).toContain('The last check’s run says how many there are and names the worst. An upgrade ticket lists each one, linked to NVD or OSV.')
     expect(html).toContain('href="/runs/run_01JBB"')
   })
 
@@ -861,7 +861,7 @@ describe('add a Maven Central or npm package (ADR 0025)', () => {
     expect(html).toContain('href="https://central.sonatype.com/artifact/org.apache.logging.log4j/log4j-core/versions"')
     expect(words).toContain('(opens Maven Central in a new tab)')
     expect(words).toContain('Give the version you run, and each check also looks up known vulnerabilities in it.')
-    expect(words).toContain('Give it, and each check also looks up known vulnerabilities in it. Each check lists them in its run, and an upgrade ticket names them, with links to NVD or OSV.')
+    expect(words).toContain('Give it, and each check also looks up known vulnerabilities in it. The last check’s run says how many there are and names the worst. An upgrade ticket lists each one, linked to NVD or OSV.')
   })
 
   it('sends a confirmed package as package, never as repo', () => {

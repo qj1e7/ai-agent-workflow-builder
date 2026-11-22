@@ -108,7 +108,8 @@ class NoFinder:
 
 NOT_ASKED = (
     "I couldn't ask the agent runtime just now, so I can't check {name} yet. Try again, or "
-    "type the GitHub address instead, as owner/name."
+    "choose where it's published and type its address: owner/name on GitHub, "
+    "groupId:artifactId on Maven Central, or its package name on npm."
 )
 
 

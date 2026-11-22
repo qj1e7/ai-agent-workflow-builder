@@ -8,7 +8,7 @@ import { Card } from '../../ui/Card'
 import { IconCheck } from '../../ui/icons'
 import { alreadyWords, kindOf, verdictOf } from '../software/addByName'
 import { describedBy, Field } from '../software/Field'
-import { addBody, checkName, isPackage, NAME_HELP, refOf, SOURCE_NAMES } from '../software/software'
+import { addedVulnerabilityWords, checkName, homeAdd, isPackage, HOME_PACKAGE_VERSION_HELP, NAME_HELP, refOf, SOURCE_NAMES } from '../software/software'
 import { useMainButton } from './primary'
 import styles from './Planner.module.css'
 
@@ -26,7 +26,12 @@ export function AddToWatchlist({ name }: { name: string }) {
   const words = useErrorWords()
   const main = useMainButton()
   const asked = useRef<string | null>(null)
+  const versionId = useId()
+  const versionBox = useRef<HTMLInputElement>(null)
   const [kept, setKept] = useState(false)
+  // A package's version, the only one its known vulnerabilities are looked up in (ADR 0025).
+  const [version, setVersion] = useState('')
+  const [versionError, setVersionError] = useState<string | undefined>(undefined)
   const { mutate } = find
   useEffect(() => {
     if (asked.current === name) return
@@ -42,7 +47,8 @@ export function AddToWatchlist({ name }: { name: string }) {
       <p className={styles['sent']} role="status">
         <IconCheck size={18} />
         <span>
-          <b>{name} is on the Software watchlist.</b> Its versions are read from {where}, from {refOf(added)}.{' '}
+          <b>{name} is on the Software watchlist.</b> Its versions are read from {where}, from {refOf(added)}.
+          {added.package ? ` ${addedVulnerabilityWords(added)}` : ''}{' '}
           <Link to={WATCHLIST}>Open the Software watchlist</Link>
         </span>
       </p>
@@ -94,13 +100,41 @@ export function AddToWatchlist({ name }: { name: string }) {
     )
   }
   const kind = kindOf(only)
-  const press = () => latch.run((settled) => add.mutate(addBody(name, kind, only.repo, null), { onSettled: settled }))
+  const pkg = isPackage(kind)
+  const press = () => {
+    const body = homeAdd(name, kind, only.repo, version)
+    if (!body.ok) {
+      setVersionError(body.words)
+      versionBox.current?.focus()
+      return
+    }
+    latch.run((settled) => add.mutate(body.value, { onSettled: settled }))
+  }
   return (
     <>
       <p>
         <b>{only.repo}</b> on {SOURCE_NAMES[kind]}. {only.what} {only.why}
-        {isPackage(kind) ? ' Known vulnerabilities are looked up only in a version someone gives, so to have them looked up, add it on the Software watchlist with the version you run.' : ''}
       </p>
+      {pkg ? (
+        <Field id={versionId} label="Version we run" optional help={HOME_PACKAGE_VERSION_HELP} error={versionError}>
+          <input
+            id={versionId}
+            ref={versionBox}
+            type="text"
+            value={version}
+            placeholder="1.2.14"
+            autoComplete="off"
+            inputMode="decimal"
+            spellCheck={false}
+            aria-invalid={versionError ? true : undefined}
+            aria-describedby={describedBy(versionId, versionError)}
+            onChange={(event) => {
+              setVersion(event.target.value)
+              setVersionError(undefined)
+            }}
+          />
+        </Field>
+      ) : null}
       <div className={styles['buttons']}>
         <Button variant={main} loading={add.isPending} onClick={press}>
           Add {name}
