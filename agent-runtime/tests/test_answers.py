@@ -3759,7 +3759,9 @@ def _watch(word: str, schedule: str | None = None) -> TaskRead:
     ],
 )
 def test_a_write_that_names_the_yes_it_waits_for_is_not_refused(task: str):
-    assert not isinstance(answer_of(_watch("release"), task), RefusedAnswer)
+    place = PlaceRead(project="MOCK", said="in MOCK") if "in MOCK" in task else None
+    fields = _watch("release").model_copy(update={"place": place})
+    assert not isinstance(answer_of(fields, task), RefusedAnswer)
 
 
 @pytest.mark.parametrize(

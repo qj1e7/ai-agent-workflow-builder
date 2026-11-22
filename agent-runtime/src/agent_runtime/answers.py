@@ -15,6 +15,7 @@ from typing import Final
 from agent_runtime.abilities import (
     NOTIFIES,
     READ_ONLY,
+    RELEASE_ROOTS,
     TICKETS,
     VULNERABILITIES_PLANNED,
     Need,
@@ -131,6 +132,7 @@ from agent_runtime.reading import (
     RUNS_BY_ITSELF,
     SAID_LIMIT,
     SCHEDULE_WORDS,
+    TOKEN,
     AsksAbout,
     PlaceRead,
     SearchRead,
@@ -736,12 +738,50 @@ def _watches[A: SetupCardAnswer | PartAnswer | CantAnswer](rest: A, software: st
     return rest.model_copy(update={"rows": rows})
 
 
-WATCH_ROW: Final = "{} releases on GitHub"
+WATCH_ROW: Final = "New releases of {}"
 RELEASE_CHECK: Final = "{} release check"
+ITS_TICKET: Final = "Create 1 Jira ticket"
+"""The sketch's words for a release check's write."""
+_PLAIN_TICKETS: Final = frozenset(
+    f"Create one ticket that {what}" for what in ("lists them", "counts them", "sums them up")
+)
 _NAMES_THE_WATCHLIST: Final = re.compile(r"\bwatch\s*list\b", re.IGNORECASE)
-_ASKS: Final = re.compile(r"^\s*(?:which|what|how|is|are|do|does|did)\b|\?\s*$", re.IGNORECASE)
-"""A question, as "which version do we run?". "When" starts a task too: "when it has a new
-release, create a ticket"."""
+_ASKS: Final = re.compile(
+    r"^\s*(?:which|what|how|is|are|does|did|do\s+(?:we|you|i|they))\b"
+    r"|^(?!\s*(?:please\s+)?(?:can|could|would|will)\s+you\b).*\?\s*$",
+    re.IGNORECASE | re.DOTALL,
+)
+"""A question, as "which version do we run?". "When" and "do a" start a task too, and a "?"
+after "can you" closes a request: "can you check LangGraph every day at 9am?"."""
+_RELEASE_CHECK_WORDS: Final = (
+    (WATCH_WORDS - {"newer"}) | frozenset(RELEASE_ROOTS) | words("github check eye")
+)
+"""The words a release check holds beside the software's own name. "newer than our version"
+compares with a version the card doesn't hold, so it comes back."""
+
+
+def _release_words(software: str, request: str) -> list[tuple[int, int]]:
+    """What a release check holds of the request: a clause that only asks about the releases or
+    to watch it again, as `_watch_clauses` holds, and in a clause that names the software, its
+    name and the release check's words, each where it stands. Every other word comes back, as
+    "major" or "since 1.2.14", unless a row holds it. A name inside a repository, as
+    "langchain-ai/langgraph", is that repository's."""
+    name = re.compile(rf"(?<![\w./-]){re.escape(software)}(?:['’]s)?(?![\w/-])", re.IGNORECASE)
+    found: list[tuple[int, int]] = []
+    for start, end in clauses_of(request):
+        clause = request[start:end]
+        if _about_releases_only(clause) or watches_it(clause) is not None:
+            found.append((start, end))
+            continue
+        named = [(start + a, start + b) for a, b in (m.span() for m in name.finditer(clause))]
+        if not named:
+            continue
+        found += named
+        for token in TOKEN.finditer(clause):
+            low = token.group(0).casefold().replace("’", "'").removesuffix("'s")
+            if low in _RELEASE_CHECK_WORDS:
+                found.append((start + token.start(), start + token.end()))
+    return found
 
 
 def _release_check_of(read: TaskRead, request: str) -> str | None:
@@ -765,12 +805,17 @@ def _release_check_of(read: TaskRead, request: str) -> str | None:
 
 def _as_a_release_check(read: TaskRead, request: str) -> TaskRead:
     """The reading of a release check: no ticket search, as it finds releases, and the schedule
-    and ticket its own words ask for, whether or not the model read them."""
+    and ticket its own words ask for, whether or not the model read them. The ticket stands on
+    all its words, "if there's a new one" too, so its row quotes them."""
     own = WATCHLISTS_OWN_TICKET.search(request)
     ticket = read.ticket
-    if ticket is None and own is not None:
+    if own is not None:
         said = re.sub(r"^and\s+", "", own.group(0), flags=re.IGNORECASE)
-        ticket = TicketRead(creates=True, says="list", said=said)
+        ticket = (
+            TicketRead(creates=True, says="list", said=said)
+            if ticket is None
+            else ticket.model_copy(update={"creates": True, "said": said})
+        )
     stretch = None if read.schedule else schedule_stretch(None, request)
     schedule = read.schedule if stretch is None else request[stretch[0] : stretch[1]]
     return read.model_copy(update={"search": None, "ticket": ticket, "schedule": schedule})
@@ -784,11 +829,14 @@ def _release_check(
     writes one. Every part it can't do comes back beside it, as beside a watch, never the
     watchlist instead."""
     name = plain(RELEASE_CHECK.format(software), NAME_LIMIT)
-    ticket = UnderstoodRow(
-        kind="do", text="Create one ticket that lists them", state="changed", note=FILLED_IN
-    )
+    filled = UnderstoodRow(kind="do", text=ITS_TICKET, state="changed", note=FILLED_IN)
     rows = [
-        ticket if r.kind == "do" and r.state == "missing" and not r.text else r for r in task.rows
+        filled
+        if r.kind == "do" and r.state == "missing" and not r.text
+        else r.model_copy(update={"text": ITS_TICKET})
+        if r.kind == "do" and r.text in _PLAIN_TICKETS
+        else r
+        for r in task.rows
     ]
     card = _watches(SetupCardAnswer(name=name, rows=rows), software)
     system = _system_row(request, software)
@@ -1303,7 +1351,13 @@ def _answer_of(
             if release_check is None
             else _as_a_release_check(read, text)
         )
-    watched = _watch_clauses(read, text) if read.belongs_on_watchlist else []
+    watched = (
+        _release_words(release_check, text)
+        if release_check is not None
+        else _watch_clauses(read, text)
+        if read.belongs_on_watchlist
+        else []
+    )
     writes = _writes(read, text)
     # A question about the app is no task, but beside a skip the model flagged and couldn't
     # quote it is read as one, so its words come back crossed, never ticked.

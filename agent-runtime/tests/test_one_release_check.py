@@ -190,15 +190,18 @@ def test_the_ticket_for_a_new_release_quotes_all_its_words():
 
 
 @pytest.mark.parametrize(
-    "task",
+    ("task", "schedule"),
     [
-        "Can you check LangGraph for new releases every day at 9am?",
-        "Could you please check LangGraph for new releases every day at 9am?",
-        "Do a release check of LangGraph every Monday at 9am",
+        ("Can you check LangGraph for new releases every day at 9am?", "every day at 9am"),
+        (
+            "Could you please check LangGraph for new releases every day at 9am?",
+            "every day at 9am",
+        ),
+        ("Do a release check of LangGraph every Monday at 9am", "every Monday at 9am"),
     ],
 )
-def test_a_request_said_as_a_question_is_still_a_request(task: str):
-    answer = answer_of(read(), task, facts("LangGraph"))
+def test_a_request_said_as_a_question_is_still_a_request(task: str, schedule: str):
+    answer = answer_of(read(schedule=schedule), task, facts("LangGraph"))
     assert isinstance(answer, SetupCardAnswer), answer
     assert answer.name == "LangGraph release check"
 
@@ -211,7 +214,7 @@ def test_a_request_said_as_a_question_is_still_a_request(task: str):
         ("for new releases newer than our version", "newer"),
         ("for new pre-releases", "pre-releases"),
         ("for new releases from langchain-ai/langgraph", "langchain-ai/langgraph"),
-        ("and n8n for new releases", "n8n"),
+        ("and n8n for new releases", "n8n for new releases"),
     ],
 )
 def test_words_beside_the_software_the_card_doesnt_hold_come_back_crossed(words: str, crossed: str):
