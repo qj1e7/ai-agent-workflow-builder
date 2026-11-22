@@ -567,6 +567,11 @@ FILTERS_LEFT_OUT: list[tuple[str, str | None, str | None]] = [
         "every_day 09:00",
     ),
     (
+        "Every day at 9am, list tickets on 3/4 of the boards",
+        "every_day 09:00",
+        "every_day 09:00",
+    ),
+    (
         "Every day at 9am, list tickets, skip items 2 may need",
         "every_day 09:00",
         "every_day 09:00",
@@ -673,6 +678,10 @@ DATES_MONTH_ENDS_AND_FREEZES: list[str] = [
     "except end of the month",
     "except the end of month",
     "except EOM",
+    "except quarter end",
+    "except year end",
+    "except the year-end close",
+    "except the end of the quarter",
     "month end excluded",
     "except the code freeze",
     "except during code freeze",
@@ -768,6 +777,7 @@ CHANGES_KEPT: list[str] = [
     "skip anything 3/4 complete",
     "skip the freeze step",
     "skip the freeze-dried items",
+    "skip on 3/4 of the boards",
     "skip items 2 may need",
     "except Satu",
     "skip zero-day patches",
@@ -807,10 +817,36 @@ TIME_OFF_STRETCHES: list[str] = [
     "not during the freeze",
     "except during the freeze",
     "skip runs while the freeze is on",
+    "except when I'm on PTO",
+    "except when I am on AL",
+    "except when I'm in reservist",
+    "except when I'm in camp",
+    "except when I'm overseas",
+    "except when I'm travelling",
+    "except when I'm traveling",
+    "except when I'm unwell",
+    "except when I'm on course",
+    "except when I'm on training",
+    "except when the boss is out",
+    "except when the manager is out",
+    "except when ph",
+    "except during p.h.",
+    "except during quarter end",
+    "except during the year end",
+    "except during release week",
+    "except during Golden Week",
+    "except during the maintenance window",
+    "except during change windows",
+    "except during business hours",
+    "not during office hours",
+    "except during working hours",
+    "except when I'm off sick",
+    "except when I have time off",
 ]
-"""Time off after "when", "while" or "during", as "I'm away", "on leave", "Hari Raya", "the
-code freeze" or "the freeze", and "out" after "I'm", "we are" or the like, as "I'm out". Each
-is asked."""
+"""Time off after "when", "while" or "during", as "I'm away", "on leave", "on PTO", "in camp",
+"Hari Raya", "ph", "the code freeze", "the freeze" or "quarter end", "out" or "off" after a
+person, as "I'm out" or "the boss is out", a week or a window, as "release week" or "the
+maintenance window", and business, office or working hours. Each is asked."""
 CONDITIONS_KEPT: list[str] = [
     "post only when there is a new release",
     "notify me only when there is a new version",
@@ -830,6 +866,10 @@ CONDITIONS_KEPT: list[str] = [
     "only when LangGraph is out",
     "only when Python is out",
     "except when Priya is out",
+    "except when alerts are off",
+    "only when the feature flag is off",
+    "skip when the toggle is off",
+    "except when notifications are off",
 ]
 """A condition after "when", "while" or "during", with no word that looks like a day or time
 off, as "only when there is a new release". A name before "is out" is no time off, as
