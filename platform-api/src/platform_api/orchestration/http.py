@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 from pydantic import Field, TypeAdapter, model_validator
 
 from platform_api.auth import OPERATORS_ONLY, SIGNED_IN, CurrentPrincipal
+from platform_api.monitoring import what_happened
 from platform_api.orchestration.approvals import (
     ApprovalRequest,
     Approved,
@@ -31,6 +32,7 @@ from platform_api.orchestration.runs import (
     Skipped,
     Succeeded,
     Working,
+    failed_data,
 )
 from platform_api.orchestration.runs import StepName as DomainStep
 from platform_api.orchestration.service import (
@@ -179,6 +181,10 @@ class FailedView(_RunBase):
     reason: FailureReason
     retryable: bool
     message: str
+    what_happened: str = Field(
+        description="Why it stopped, in the AI troubleshooter's one sentence, without the time. "
+        "Every place that names this stop says it, so none guesses from the reason."
+    )
 
 
 class SkippedView(_RunBase):
@@ -513,6 +519,7 @@ def run_view(detail: RunDetail, viewer: Principal) -> RunView:
                 reason=state.failure.reason.value,
                 retryable=state.failure.retryable,
                 message=state.failure.message,
+                what_happened=what_happened(failed_data(state.stage, state.failure)),
             )
         case Skipped():
             return SkippedView(**base, waiting_run_id=state.waiting)

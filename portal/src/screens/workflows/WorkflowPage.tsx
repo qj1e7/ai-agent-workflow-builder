@@ -20,7 +20,7 @@ import { Toast, type ToastMessage } from '../../ui/Toast'
 import { useView, ViewTabs } from '../../ui/ViewTabs'
 import { ExplainButton } from '../explain/ExplainButton'
 import { RunLine } from '../run/RunLine'
-import { StatusBanner } from './Banner'
+import { leadsThePage, StatusBanner } from './Banner'
 import { useArrivalScroll } from './arrival'
 import { templateLine } from './line'
 import { RecentRuns } from './RecentRuns'
@@ -38,6 +38,7 @@ import {
   controlsOf,
   deleteWords,
   leftOutWords,
+  mainActionOf,
   mayChangeSchedule,
   menuActionsOf,
   nextRunWords,
@@ -195,6 +196,7 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
   const paused = useCase.state === 'paused'
   const controls = controlsOf(useCase, viewer)
   const menuActions = menuActionsOf(useCase, viewer)
+  const runNowLeads = mainActionOf(useCase, viewer) === 'run'
   const mayPause = controls.includes('pause')
   const banner = bannerOf({ useCase, viewer, now, nameOf })
   const gate = useCase.plan.some((block) => block.kind === 'approval')
@@ -344,6 +346,11 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
           <Versions useCase={useCase} now={now} nameOf={nameOf} operator={viewer.operator} say={say} />
           <DraftActions useCase={useCase} viewer={viewer} />
           <div className={styles['actions']}>
+            {runNowLeads ? (
+              <Button variant={leadsThePage(banner.action) ? 'secondary' : 'primary'} icon={IconPlay} data-place={placeOf('run')} loading={runNow.pending} onClick={runNow.press}>
+                Run now
+              </Button>
+            ) : null}
             <ExplainButton useCaseId={id} name={useCase.name} />
             {mayPause ? (
               <Button icon={IconPause} data-place={placeOf('pause')} loading={move.isPending} onClick={() => pauseOrResume('pause')}>

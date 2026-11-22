@@ -57,7 +57,7 @@ from platform_api.monitoring.traces import (
     pseudonym,
     typed_again,
 )
-from platform_api.monitoring.troubleshooter import Advice, explain_failure
+from platform_api.monitoring.troubleshooter import Advice, explain_failure, what_happened
 
 __all__ = [
     "PLATFORM",
@@ -117,4 +117,5 @@ __all__ = [
     "typed_again",
     "user_actor",
     "verify_callback",
+    "what_happened",
 ]

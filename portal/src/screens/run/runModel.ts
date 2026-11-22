@@ -214,11 +214,12 @@ function learnPeople(model: RunModel, event: RunEvent): RunModel {
   return { ...model, people: { ...model.people, [id]: display } }
 }
 
+/** Where a stop sits. One while the run was still starting, such as n8n not taking the start, sits on the start, not after it. */
 function failedSpot(model: RunModel, stage: FailureStage): Spot {
   if (model.failedAt) return model.failedAt
   switch (stage) {
     case 'pending':
-      return { at: 'planner' }
+      return { at: 'started' }
     case 'working':
       return model.spot.at === 'started' ? { at: 'planner' } : model.spot
     case 'proposed':
@@ -481,11 +482,14 @@ function stationOf(stations: readonly Skeleton[], spot: Spot | null): number {
   return stationAtOrAfter(stations, spot?.at === 'started' ? { at: 'planner' } : spot)
 }
 
+/** The step a stop is drawn at. A stop at the start stays on the start step. */
+const stopStationOf = (stations: readonly Skeleton[], spot: Spot | null): number => (spot?.at === 'started' ? 0 : stationOf(stations, spot))
+
 function stateOf(model: RunModel, station: Skeleton, index: number, current: number, failed: number): StationState {
   const { phase } = model
   const at = station.spot.at
   const unfilled = at === 'agent' && station.agent === null
-  if (at === 'started') return 'done'
+  if (at === 'started') return phase.state === 'failed' && index === failed ? 'err' : 'done'
   switch (phase.state) {
     case 'failed':
       if (index === failed) return 'err'
@@ -563,7 +567,7 @@ function underOf(model: RunModel, stations: readonly Skeleton[], index: number, 
 export function stationsOf(model: RunModel, plan: readonly PlanBlock[] | null, trigger: string): Station[] {
   const stations = skeleton(model, plan, trigger)
   const current = stationOf(stations, model.spot)
-  const failed = model.phase.state === 'failed' ? stationOf(stations, model.failedAt) : -1
+  const failed = model.phase.state === 'failed' ? stopStationOf(stations, model.failedAt) : -1
   return stations.map((station, index) => {
     const state = stateOf(model, station, index, current, failed)
     const agent = faceAgent(model, station, state)

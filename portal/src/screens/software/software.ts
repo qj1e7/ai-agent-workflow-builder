@@ -1,7 +1,7 @@
 import { ApiError } from '../../api/client'
-import { failureReasonLabel } from '../../api/labels'
-import type { Day, FailureReason, ScheduleHold, ScheduleView, VersionSourceView, WatchedSoftwareView, WatchlistView } from '../../api/types'
-import type { NextRun } from '../run/words'
+import { lowerStart } from '../../api/labels'
+import type { Day, ScheduleHold, ScheduleView, VersionSourceView, WatchedSoftwareView, WatchlistView } from '../../api/types'
+import { sentence, type NextRun } from '../run/words'
 import { dateAndClock, lineWhen, scheduleZoneName, timesZone } from '../workflows/times'
 
 export const WATCHLIST_PATH = '/software'
@@ -420,10 +420,9 @@ export function scheduleWords(schedule: ScheduleView): string {
   return `Checked ${repeatWords(schedule)}${zone ? ` ${zone}` : ''}, set by ${schedule.owner_name}.`
 }
 
-export function stoppedWords(reason: FailureReason | null): string {
-  if (reason === null) return 'The last check stopped.'
-  const label = failureReasonLabel[reason]
-  return `The last check stopped: ${label.charAt(0).toLowerCase()}${label.slice(1)}.`
+/** Why the last check stopped, in the AI troubleshooter's sentence from the platform, as the run says it. */
+export function stoppedWords(whyStopped: string | null): string {
+  return whyStopped === null ? 'The last check stopped.' : `The last check stopped: ${sentence(lowerStart(whyStopped))}`
 }
 
 export function scheduleOwnerWords(schedule: ScheduleView): string {

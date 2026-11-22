@@ -11,6 +11,7 @@
       "stopped_at": "2026-11-04T02:14:13.031000Z",
       "reason": "AgentError",
       "retryable": true,
+      "what_happened": "GitHub didn't answer.",
       "advice": {
         "explanation": "An agent could not finish its work.",
         "likely_cause": "A service the agent reads from was unavailable or answered with an error.",

@@ -55,7 +55,11 @@
     "you_can_decide": false,
     "retryable": true,
     "reason": "AgentError",
-    "outcome": null
+    "outcome": null,
+    "stop": {
+      "at": "2026-11-05T02:15:00Z",
+      "what_happened": "An agent could not finish its work."
+    }
   },
   "left_out": [],
   "blocks": [],

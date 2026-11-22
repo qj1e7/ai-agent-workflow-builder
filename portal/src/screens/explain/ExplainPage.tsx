@@ -1,10 +1,10 @@
-import { Link, useParams, useSearchParams } from 'react-router'
+import { Link, useLocation, useParams, useSearchParams } from 'react-router'
 import { useExplain } from '../../api/workflowQueries'
 import { useFromChat } from '../../ui/fromChat'
 import { IconChevronLeft } from '../../ui/icons'
 import workflows from '../workflows/Workflows.module.css'
 import { Explained } from './Explained'
-import { explainStateOf, explainTitle } from './explain'
+import { explainStateOf, explainTitle, FLAGS_ANCHOR } from './explain'
 import { Report } from './Report'
 
 /** `?version=3` names a version. Anything that isn't a whole number from 1 explains the version in use. */
@@ -16,6 +16,7 @@ export function versionOf(search: string | null): number | null {
 export function ExplainRoute() {
   const { useCaseId = '' } = useParams()
   const version = versionOf(useSearchParams()[0].get('version'))
+  const flagsOpen = useLocation().hash === `#${FLAGS_ANCHOR}`
   const fromChat = useFromChat()
   const query = useExplain(useCaseId, { version })
   const state = explainStateOf(query)
@@ -34,7 +35,7 @@ export function ExplainRoute() {
         </div>
       </div>
       <Explained state={state} retry={() => void query.refetch()}>
-        {(report) => <Report report={report} />}
+        {(report) => <Report report={report} flagsOpen={flagsOpen} />}
       </Explained>
     </>
   )

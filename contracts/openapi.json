@@ -6758,6 +6758,11 @@
           "use_case_version": {
             "title": "Use Case Version",
             "type": "integer"
+          },
+          "what_happened": {
+            "description": "Why it stopped, in the AI troubleshooter's one sentence, without the time. Every place that names this stop says it, so none guesses from the reason.",
+            "title": "What Happened",
+            "type": "string"
           }
         },
         "required": [
@@ -6775,7 +6780,8 @@
           "stage",
           "reason",
           "retryable",
-          "message"
+          "message",
+          "what_happened"
         ],
         "title": "FailedView",
         "type": "object"
@@ -7680,6 +7686,17 @@
           "state": {
             "$ref": "#/components/schemas/RunState"
           },
+          "stop": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RunStopView"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When and why a stopped run stopped, the words every place that names the stop says. Null for any other run."
+          },
           "test": {
             "description": "True when a person started it with Do a test run. False for Run now, a check of the watchlist and a run its schedule started.",
             "title": "Test",
@@ -7714,7 +7731,8 @@
           "tickets",
           "you_can_decide",
           "retryable",
-          "reason"
+          "reason",
+          "stop"
         ],
         "title": "LastRunView",
         "type": "object"
@@ -12207,6 +12225,28 @@
         ],
         "type": "string"
       },
+      "RunStopView": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "description": "When it last stopped: after a retry, the second stop. Needs you gives the same time.",
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "what_happened": {
+            "description": "Why it stopped, in the AI troubleshooter's one sentence, without the time.",
+            "title": "What Happened",
+            "type": "string"
+          }
+        },
+        "required": [
+          "at",
+          "what_happened"
+        ],
+        "title": "RunStopView",
+        "type": "object"
+      },
       "RunSucceeded": {
         "additionalProperties": false,
         "properties": {
@@ -13439,6 +13479,11 @@
           "use_case_name": {
             "title": "Use Case Name",
             "type": "string"
+          },
+          "what_happened": {
+            "description": "Why it stopped, in the AI troubleshooter's one sentence, the words the workflow's row and its run say.",
+            "title": "What Happened",
+            "type": "string"
           }
         },
         "required": [
@@ -13449,6 +13494,7 @@
           "stopped_at",
           "reason",
           "retryable",
+          "what_happened",
           "advice"
         ],
         "title": "StoppedItem",

@@ -102,10 +102,14 @@ export interface Check {
   readonly text: string
 }
 
-/** How the test run went, in the run's own stage words, once it ended. A test run never writes, and its words say so. */
-export function testStatus(model: RunModel): Check | null {
+/**
+ * How the test run went, in the run's own stage words, once it ended. A test run never writes, and its words say so. Why it stopped is the
+ * AI troubleshooter's sentence from the workflow's last run, and until the platform says it, only that it stopped.
+ */
+export function testStatus(model: RunModel, whyStopped: string | null = null): Check | null {
   if (RUNNING.has(model.phase.state)) return null
-  const words = stageWords({ ...stageFactsOf(model), test: true }, (id) => model.people[id] ?? id)
+  if (model.phase.state === 'failed' && whyStopped === null) return { ok: false, text: 'The test run stopped.' }
+  const words = stageWords({ ...stageFactsOf(model), whyStopped, test: true }, (id) => model.people[id] ?? id)
   return model.phase.state === 'succeeded' ? { ok: true, text: words } : { ok: false, text: `The test run stopped. ${sentence(words)}` }
 }
 

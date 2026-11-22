@@ -166,7 +166,7 @@ export function BuildingCard({ useCaseId, title, parts, newAgents, draftKept, te
   const stations = stationsOf(test ?? emptyModel, planOf(useCase), useCase?.schedule ? scheduleShort(useCase.schedule) : 'Start')
   const line = buildLine(stations, log, shown, test !== null && test.seq > 0, stage.kind === 'on')
   const notes = notesOf(replay.lines)
-  const result = test ? testStatus(test) : null
+  const result = test ? testStatus(test, useCase?.last_run?.stop?.what_happened ?? null) : null
 
   let status: ReactNode
   let actions: ReactNode

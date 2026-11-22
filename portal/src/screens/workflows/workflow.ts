@@ -1,11 +1,12 @@
 import { ApiError } from '../../api/client'
+import { lowerStart } from '../../api/labels'
 import { pressOnce, type Latch, type Outcome } from '../../api/latch'
 import type { BlockKind, Day, Me, RunView, ScheduleSaveIn, UseCaseView, VersionSchedule, VersionView } from '../../api/types'
 import { agentIdentity } from '../../ui/agents'
 import { andList, declinedOfSteps, declinedRecord, runPill, scheduleShort, stageWords, type NameOf, type NextRun, type StageFacts } from '../run/words'
 import { faceId } from '../agents/agents'
 import { heldWords, repeatWords } from '../software/software'
-import { DELETED_IN_N8N, madeWords, needsFixBanner, refusedBanner, UNKNOWN_PUBLISHER } from './n8nChange'
+import { DELETED_IN_N8N, gradePill, madeWords, refusedBanner, UNKNOWN_PUBLISHER } from './n8nChange'
 import { lineWhen, nextRunAt, runWhen, scheduleZoneName, teamZone, zoneWords } from './times'
 
 export type Tone = 'ok' | 'wait' | 'bad' | 'new'
@@ -69,7 +70,7 @@ export function stageOfLast(last: LastRun): StageFacts {
     tickets: last.tickets,
     approvedBy: last.approved_by,
     declinedBy: last.declined_by ?? null,
-    reason: last.reason ?? null,
+    whyStopped: last.stop?.what_happened ?? null,
     outcome: last.outcome ?? null,
     test: last.test,
   }
@@ -80,7 +81,7 @@ export const testPassed = (last: LastRun | null): boolean => last !== null && la
 
 /** A full run, in the same facts, so Recent runs and the list say the same words. */
 export function stageOfRun(run: RunView): StageFacts {
-  const none = { count: 0, tickets: true, approvedBy: [], declinedBy: null, reason: null, test: run.test } as const
+  const none = { count: 0, tickets: true, approvedBy: [], declinedBy: null, whyStopped: null, test: run.test } as const
   switch (run.state) {
     case 'awaiting_approval':
     case 'acting': {
@@ -94,7 +95,7 @@ export function stageOfRun(run: RunView): StageFacts {
     case 'rejected':
       return { ...none, state: run.state, declinedBy: declinedOfSteps(run.approval.steps)?.by ?? run.rejected_by }
     case 'failed':
-      return { ...none, state: run.state, reason: run.reason }
+      return { ...none, state: run.state, whyStopped: run.what_happened }
     case 'skipped':
       return { ...none, state: run.state }
     case 'expired':
@@ -119,13 +120,14 @@ function lastRunWhat(last: LastRun, nameOf: NameOf, room: Room): string {
 
 export const NO_RUNS = 'No runs yet'
 
+/** When the newest run last moved: the time it stopped, which Needs you gives too, or the time it started. */
+const lastRunAt = (last: LastRun): string => last.stop?.at ?? last.at
+
 /** "today", or the day's date such as "Mon 26 Oct". */
 const dayOf = (iso: string, now: Date): string => {
   const when = lineWhen(iso, now)
   return when.startsWith('Today') ? 'today' : when
 }
-
-const lowerFirst = (words: string): string => `${words.charAt(0).toLowerCase()}${words.slice(1)}`
 
 /**
  * A workflow row's second line, as the sketch has it: "Daily 8:00 · last run today, an agent could not finish its work", or "Daily 8:00 · no runs yet".
@@ -140,13 +142,13 @@ export function rowLine(useCase: Pick<UseCaseView, 'last_run' | 'schedule'> & Pa
 
 /** The row's words for the newest run, "last run today, done" or "no runs yet", which the chat's sentence about one workflow reads too. */
 export function lastRunLine({ last_run: last }: Pick<UseCaseView, 'last_run'>, now: Date, nameOf: NameOf): string {
-  return last ? `last run ${dayOf(last.at, now)}, ${lowerFirst(lastRunWhat(last, nameOf, 'line'))}` : 'no runs yet'
+  return last ? `last run ${dayOf(lastRunAt(last), now)}, ${lowerStart(lastRunWhat(last, nameOf, 'line'))}` : 'no runs yet'
 }
 
 /** The line without its label, for the side panel's Last run, where a declined run gives its whole record. Null before the first run. */
 export function lastRunWords({ last_run: last }: Pick<UseCaseView, 'last_run'>, now: Date, nameOf: NameOf, room: Room = 'record'): string | null {
   if (!last) return null
-  return `${lineWhen(last.at, now)}: ${lastRunWhat(last, nameOf, room)}`
+  return `${lineWhen(lastRunAt(last), now)}: ${lastRunWhat(last, nameOf, room)}`
 }
 
 export { firstRunWhen, formatterFactory, lineWhen, nextRunAt, runWhen, timesZone } from './times'
@@ -333,13 +335,20 @@ export function undoProblem(version: number, name: string, error: unknown, words
   return `${start} ${words(error)}`
 }
 
+type ActionFacts = Pick<UseCaseView, 'template' | 'state' | 'schedule'> & Partial<Pick<UseCaseView, 'start_refused' | 'made_in_n8n_by'>>
+
+/** The page's own main button: Run now for a workflow with no schedule, since pressing it is the only way that workflow runs. */
+export function mainActionOf(useCase: ActionFacts, viewer: Viewer): 'run' | null {
+  return !useCase.schedule && controlsOf(useCase, viewer).includes('run') ? 'run' : null
+}
+
 /** What the More actions menu holds, in order. Delete is last. A workflow with none shows no menu. */
 export type MenuAction = 'run' | 'schedule' | 'delete'
 
-export function menuActionsOf(useCase: Pick<UseCaseView, 'template' | 'state'> & Partial<Pick<UseCaseView, 'start_refused' | 'made_in_n8n_by'>>, viewer: Viewer): readonly MenuAction[] {
+export function menuActionsOf(useCase: ActionFacts, viewer: Viewer): readonly MenuAction[] {
   const controls = controlsOf(useCase, viewer)
   const actions: MenuAction[] = []
-  if (controls.includes('run')) actions.push('run')
+  if (controls.includes('run') && mainActionOf(useCase, viewer) === null) actions.push('run')
   if (mayChangeSchedule(useCase, viewer)) actions.push('schedule')
   if (controls.includes('delete')) actions.push('delete')
   return actions
@@ -501,6 +510,8 @@ export type BannerAction =
   | { readonly kind: 'undo'; readonly to: number; readonly inUse: number }
   /** Save the same schedule again: the platform lays the workflow out on the team time zone, which every earlier version misses. */
   | { readonly kind: 'resave'; readonly day: Day; readonly at: string }
+  /** Open the workflow's Explain at its flags, which say what to fix and where, when the page has no fix of its own to offer. */
+  | { readonly kind: 'explain'; readonly useCaseId: string }
 
 export interface Banner {
   readonly tone: BannerTone
@@ -509,7 +520,8 @@ export interface Banner {
 }
 
 interface BannerFacts {
-  readonly useCase: Pick<UseCaseView, 'state' | 'next_run_at' | 'schedule' | 'last_run'> & Partial<Pick<UseCaseView, 'grade' | 'findings' | 'blocks' | 'deleted_in_n8n_at' | 'version' | 'move_refused' | 'held_in_n8n'>>
+  readonly useCase: Pick<UseCaseView, 'use_case_id' | 'state' | 'next_run_at' | 'schedule' | 'last_run'> &
+    Partial<Pick<UseCaseView, 'grade' | 'blocks' | 'deleted_in_n8n_at' | 'version' | 'move_refused' | 'held_in_n8n'>>
   readonly viewer: Viewer
   readonly now: Date
   readonly nameOf: NameOf
@@ -521,16 +533,19 @@ const sentence = (words: string): string => (/[.!?]$/.test(words) ? words : `${w
 
 export const OWNER_WARNING = 'Saving makes you the owner of this schedule. Its runs then count as your work, so you won’t be able to approve them.'
 
+const NEEDS_A_FIX = `${gradePill('needs_a_fix').label}.`
+
 /**
- * A version that needs a fix. A schedule on another zone than the team's is saved again, and saving it makes the presser its owner, so
- * the banner says so, as the schedule editor does. Any other fix is Undo, which has a version to go back to from version 2.
+ * A version that needs a fix, in one sentence. Its findings are on Explain's flags, which say what to fix and where. A schedule on another
+ * zone than the team's is saved again (ADR 0046), and saving makes the presser its owner, so the banner says so, as the schedule editor
+ * does. Else Undo goes back to the version before. While neither can be pressed, Explain is the way forward.
  */
 function needsFixOf(useCase: BannerFacts['useCase'], viewer: Viewer, version: number): Banner {
-  const text = needsFixBanner(useCase.findings ?? [])
   const schedule = useCase.schedule
-  if (!viewer.operator) return { tone: 'bad', text, action: null }
-  if (schedule && schedule.time_zone !== teamZone()) return { tone: 'bad', text: `${text} ${OWNER_WARNING}`, action: { kind: 'resave', day: schedule.day, at: schedule.at } }
-  return { tone: 'bad', text, action: version > 1 ? { kind: 'undo', to: version - 1, inUse: version } : null }
+  const mayPublish = viewer.operator && !useCase.held_in_n8n
+  if (mayPublish && schedule && schedule.time_zone !== teamZone()) return { tone: 'bad', text: `${NEEDS_A_FIX} ${OWNER_WARNING}`, action: { kind: 'resave', day: schedule.day, at: schedule.at } }
+  if (mayPublish && version > 1) return { tone: 'bad', text: NEEDS_A_FIX, action: { kind: 'undo', to: version - 1, inUse: version } }
+  return { tone: 'bad', text: NEEDS_A_FIX, action: { kind: 'explain', useCaseId: useCase.use_case_id } }
 }
 
 /** Every change that publishes again, which the platform refuses while anyone has the workflow open in n8n (ENGINE-PLAN 11). */
@@ -569,7 +584,7 @@ function bannerOfState({ useCase, viewer, now, nameOf }: BannerFacts): Banner {
     const open: BannerAction = { kind: 'open', runId: last.run_id }
     switch (pill.tone) {
       case 'bad':
-        return { tone: 'bad', text: `${pill.label} ${atWords(runWhen(last.at, now))}.${words === pill.label ? '' : ` ${sentence(words)}`}`, action: open }
+        return { tone: 'bad', text: `${pill.label} ${atWords(runWhen(lastRunAt(last), now))}.${words === pill.label ? '' : ` ${sentence(words)}`}`, action: open }
       case 'wait':
         return { tone: 'wait', text: sentence(words), action: last.you_can_decide ? { kind: 'decide', runId: last.run_id } : open }
       case 'new':

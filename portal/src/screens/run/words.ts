@@ -1,8 +1,8 @@
 import { OPEN_RUN_AGAIN_WORDS } from '../../api/errors'
-import { connectorLabel, failureReasonLabel, refusalLabel, starterName } from '../../api/labels'
+import { connectorLabel, refusalLabel, starterName } from '../../api/labels'
 import { inTeamZone, nextRunAt, teamZone } from '../workflows/times'
 import type { SessionKind } from '../../api/session'
-import type { ApprovalStepView, Day, FailureReason, Refusal, RunOutcome, RunView, UseCaseView, WriteActionView } from '../../api/types'
+import type { ApprovalStepView, Day, Refusal, RunOutcome, RunView, UseCaseView, WriteActionView } from '../../api/types'
 import { PRODUCT } from '../../shell/product'
 import type { LiveRun } from './liveRun'
 import type { AgentRef, ChatItem, Declined, PlanBlock, RunModel } from './runModel'
@@ -568,7 +568,8 @@ export interface StageFacts {
   readonly tickets: boolean
   readonly approvedBy: readonly string[]
   readonly declinedBy: string | null
-  readonly reason: FailureReason | null
+  /** Why a stopped run stopped, in the AI troubleshooter's sentence from the platform. Null when the platform has not said. */
+  readonly whyStopped: string | null
   /** A run retried after a stop says Retrying until it reaches the yes. Only the run's own events know it. */
   readonly retried?: boolean
   /** What it wrote, by the names its own events give, so a run followed live says "MOCK-22 created". */
@@ -581,10 +582,10 @@ export interface StageFacts {
 
 /** A run's facts when only its state and a few facts are known, as the strip and the chat's decided card know it. */
 export function factsOf(state: RunState, known: Partial<StageFacts> = {}): StageFacts {
-  return { state, count: 0, tickets: true, approvedBy: [], declinedBy: null, reason: null, ...known }
+  return { state, count: 0, tickets: true, approvedBy: [], declinedBy: null, whyStopped: null, ...known }
 }
 
-/** A run's facts from its own events, for the card, the panel and the page. */
+/** A run's facts from its own events, for the card, the panel and the page. The events don't carry the troubleshooter's sentence, so a stop reads Stopped, with the troubleshooter's answers beside it. */
 export function stageFactsOf(model: RunModel): StageFacts {
   const { phase } = model
   const operations = model.written.length > 0 ? model.written.map((item) => item.operation) : model.operations
@@ -594,7 +595,7 @@ export function stageFactsOf(model: RunModel): StageFacts {
     tickets: operations.every((operation) => operation === 'create_ticket'),
     approvedBy: model.approvedBy,
     declinedBy: phase.state === 'rejected' ? phase.by : null,
-    reason: phase.state === 'failed' ? phase.reason : null,
+    whyStopped: null,
     retried: model.chat.some((item) => item.kind === 'retried'),
     refs: model.written.map((item) => item.ref).filter((ref) => ref !== ''),
     outcome: phase.state === 'succeeded' ? phase.outcome : null,
@@ -614,7 +615,7 @@ export function stageWords(run: StageFacts, nameOf: NameOf): string {
   const noun = (n: number) => count(n, run.tickets ? 'ticket' : 'change')
   switch (run.state) {
     case 'failed':
-      return run.reason ? failureReasonLabel[run.reason] : 'Stopped'
+      return run.whyStopped ? run.whyStopped.replace(/\.$/, '') : 'Stopped'
     case 'awaiting_approval':
       return 'Waiting for a yes'
     case 'skipped':

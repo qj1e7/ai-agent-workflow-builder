@@ -29,7 +29,7 @@ function BuildView({ id, test }: { id: string; test: Parameters<typeof useBuilt>
   const on = stage.kind === 'on'
   const canvas = canvasOf(blocks, log, shown, test, on)
   const told = test ? test.chat.flatMap((item) => (item.kind === 'told' ? [item.line] : [])) : []
-  const checks = checksOf(replay.lines, test ? testStatus(test) : null, told)
+  const checks = checksOf(replay.lines, test ? testStatus(test, useCase?.last_run?.stop?.what_happened ?? null) : null, told)
   return (
     <div className={runStyles['panelView']}>
       <div className={runStyles['head']}>

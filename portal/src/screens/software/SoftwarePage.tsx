@@ -130,11 +130,11 @@ function useLastCheckDeclined(view: WatchlistView | null, nameOf: (id: string) =
 
 function LastCheckStopped({ last }: { last: LastCheckView }) {
   const run = useRun(last.run_id)
-  const reason = run.data?.state === 'failed' ? run.data.reason : null
+  const whyStopped = run.data?.state === 'failed' ? run.data.what_happened : null
   return (
     <div className={styles['stopped']}>
       <p>
-        <b>{stoppedWords(reason)}</b> Started {dateAndClock(last.started_at)}, {teamTime()}.
+        <b>{stoppedWords(whyStopped)}</b> Started {dateAndClock(last.started_at)}, {teamTime()}.
       </p>
       <Link to={`/runs/${last.run_id}`}>Open the run</Link>
     </div>

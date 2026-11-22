@@ -257,9 +257,10 @@ DIDNT_ANSWER: Final = re.compile(r"\bGitHub (?:returned 5\d\d|could not be reach
 """The runtime's words when GitHub gave no usable answer, every try."""
 
 
-def _what_happened(failure: RunFailedData, at: datetime | None) -> str:
+def what_happened(failure: RunFailedData, at: datetime | None = None) -> str:
     """One sentence: GitHub didn't answer, with the time it stopped when that is known, or the
-    advice's explanation."""
+    advice's explanation. Every place that names a stop says this sentence. A place that shows
+    the time beside it leaves `at` out."""
     if (
         failure.reason == "AgentError"
         and failure.retryable
@@ -277,7 +278,7 @@ def answers(failure: RunFailedData, at: datetime | None = None) -> Answers:
         possible=failure.retryable, asks_again=failure.retryable and not at_the_write
     )
     return Answers(
-        what_happened=_what_happened(failure, at),
+        what_happened=what_happened(failure, at),
         what_affected=MAYBE_WRITTEN if at_the_write else NOTHING_WRITTEN,
         safe_to_retry=_safe_to_retry(failure, retry),
         retry=retry,
