@@ -127,6 +127,8 @@ def schema() -> type[BaseModel]:
 
 def card_of(shown: PlannerAnswer) -> list[UnderstoodRow] | None:
     match shown:
+        case SetupCardAnswer(also=also) if also is not None:
+            return shown.rows + (card_of(also) or [])
         case SetupCardAnswer() | PartAnswer():
             return shown.rows
         case CantAnswer():

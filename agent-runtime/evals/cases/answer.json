@@ -569,14 +569,10 @@
   },
   {
     "id": "mixed-watch-and-list",
-    "note": "A watchlist item and a workflow. The watchlist leads, the list is carried as the rest. \"stale\" with no number of days is asked, never guessed, so only Friday must be read.",
+    "note": "A watchlist item and a workflow. The watchlist leads, the list is carried as the rest. \"stale\" with no number of days is asked, never guessed, so only Friday must be read. React's own release check card leads, and the list is the rest after it (ADR 0053).",
     "task": "Watch React releases and list stale bug tickets every Friday",
     "kind": [
-      "watchlist"
-    ],
-    "software": "React",
-    "word": [
-      "release*"
+      "setup_card"
     ],
     "also": "setup_card",
     "understood": [

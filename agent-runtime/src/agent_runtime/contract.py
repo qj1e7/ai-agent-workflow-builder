@@ -1052,6 +1052,14 @@ class SetupCardAnswer(WireModel):
         "and where, in that order. None is cant_do. A time the task doesn't say is missing, "
         "never guessed.",
     )
+    also: (
+        Annotated[SetupCardAnswer | PartAnswer | CantAnswer, Field(discriminator="kind")] | None
+    ) = Field(
+        default=None,
+        description="The rest of a request that also asks for another workflow, as a ticket "
+        "list beside one software's release check, offered after this card. None when the "
+        "card holds the whole request.",
+    )
 
 
 class PartAnswer(WireModel):
@@ -1108,6 +1116,7 @@ class WatchlistAnswer(WireModel):
 
 
 CantAnswer.model_rebuild()
+SetupCardAnswer.model_rebuild()
 
 
 class WhichSoftwareAnswer(WireModel):
