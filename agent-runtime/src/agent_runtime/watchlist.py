@@ -166,6 +166,12 @@ def vulnerability_lines(finding: Finding) -> str:
         about = f" {v.summary}" if v.summary else ""
         sources = " and ".join(v.reported_by)
         lines.append(f"- {v.id} ({_severity_words(v)}, reported by {sources}).{about}{fix} {v.url}")
+    if not finding.vulnerabilities_complete:
+        # OSV had more pages than one check reads, so these are only the first (ADR 0025).
+        return (
+            f"\n\nOur version has at least {vulnerability_count(len(lines))}. OSV lists more "
+            "than one check reads, so these are only the first:\n" + "\n".join(lines)
+        )
     return f"\n\nOur version has {vulnerability_count(len(lines))}:\n" + "\n".join(lines)
 
 
@@ -359,6 +365,7 @@ class WatchlistChecker:
                 update={
                     "vulnerability_check": looked.state,
                     "vulnerabilities": looked.vulnerabilities,
+                    "vulnerabilities_complete": looked.all_read,
                 }
             )
             write(_vulnerabilities_finished(item, looked))
@@ -528,7 +535,8 @@ def vulnerability_sentence(pairs: list[tuple[SoftwareToCheck, Finding]]) -> str:
             critical = sum(1 for v in finding.vulnerabilities if v.urgent)
             extra = f", {critical} critical" if critical else ""
             count = vulnerability_count(len(finding.vulnerabilities))
-            parts.append(f"{item.name} {item.our_version} has {count}{extra}")
+            least = "" if finding.vulnerabilities_complete else "at least "
+            parts.append(f"{item.name} {item.our_version} has {least}{count}{extra}")
     sentences: list[str] = []
     if parts:
         sentences.append(f"{'; '.join(parts)}.")

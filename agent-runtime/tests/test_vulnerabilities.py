@@ -54,7 +54,9 @@ class Services:
         records: list[dict[str, Any]],
         scores: dict[str, dict[str, Any]] | None = None,
         osv_status: int = 200,
+        more_pages: bool = False,
     ) -> None:
+        self.more_pages = more_pages
         self.records = records
         self.scores = scores or {}
         self.osv_status = osv_status
@@ -65,7 +67,10 @@ class Services:
     def handle(self, request: httpx.Request) -> httpx.Response:
         if request.url.host == "osv.test":
             self.osv_bodies.append(json.loads(request.content))
-            return httpx.Response(self.osv_status, json={"vulns": self.records})
+            answer: dict[str, Any] = {"vulns": self.records}
+            if self.more_pages:
+                answer["next_page_token"] = "more"
+            return httpx.Response(self.osv_status, json=answer)
         cve = request.url.params["cveId"]
         self.nvd_asked.append(cve)
         if cve not in self.scores:

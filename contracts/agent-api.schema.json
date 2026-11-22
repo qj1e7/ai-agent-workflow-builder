@@ -2094,6 +2094,12 @@
           "title": "Vulnerabilities",
           "type": "array"
         },
+        "vulnerabilities_complete": {
+          "default": true,
+          "description": "False when OSV listed more than one check reads, so vulnerabilities holds only the first of them and there are more. True when the list is all OSV has, or when nothing was checked.",
+          "title": "Vulnerabilities Complete",
+          "type": "boolean"
+        },
         "vulnerability_check": {
           "$ref": "#/$defs/VulnerabilityCheck",
           "default": "not_checked",

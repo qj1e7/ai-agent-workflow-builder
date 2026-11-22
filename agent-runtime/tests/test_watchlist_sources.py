@@ -356,3 +356,27 @@ def test_one_bad_record_for_a_package_leaves_the_other_software_checked():
     package, github = result.output.findings
     assert (package.state, package.vulnerability_check) == ("behind", "could_not_check")
     assert github.state == "behind"
+
+
+def test_a_list_osv_cut_off_says_at_least_in_the_finding_the_ticket_and_the_summary():
+    services = Services(
+        LOG4SHELL, {"CVE-2021-44228": nvd_answer(10.0, "CRITICAL")}, more_pages=True
+    )
+    result = Check(maven=Registry({LOG4J: LOG4J_VERSIONS}), services=services).run(log4j())
+    assert isinstance(result, TaskFinished)
+    [found] = result.output.findings
+    assert found.vulnerability_check == "checked" and not found.vulnerabilities_complete
+    [ticket] = result.output.proposed
+    assert (
+        "Our version has at least 1 known vulnerability. OSV lists more than one check reads"
+        in (ticket.fields["body"])
+    )
+    assert "Log4j 2.14.1 has at least 1 known vulnerability, 1 critical." in result.output.summary
+
+
+def test_a_full_list_says_no_at_least():
+    services = Services(LOG4SHELL, {"CVE-2021-44228": nvd_answer(10.0, "CRITICAL")})
+    result = Check(maven=Registry({LOG4J: LOG4J_VERSIONS}), services=services).run(log4j())
+    assert isinstance(result, TaskFinished)
+    assert result.output.findings[0].vulnerabilities_complete
+    assert "at least" not in result.output.proposed[0].fields["body"]

@@ -475,6 +475,12 @@ class Finding(WireModel):
         default_factory=list[Vulnerability],
         description="Known vulnerabilities in our version, worst first. Empty unless checked.",
     )
+    vulnerabilities_complete: bool = Field(
+        default=True,
+        description="False when OSV listed more than one check reads, so vulnerabilities holds "
+        "only the first of them and there are more. True when the list is all OSV has, or when "
+        "nothing was checked.",
+    )
 
 
 class TaskOutput(WireModel):

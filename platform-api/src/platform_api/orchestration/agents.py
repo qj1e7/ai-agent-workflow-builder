@@ -188,6 +188,8 @@ class Finding(WireModel):
     not_found: bool = False
     vulnerability_check: VulnerabilityCheck = "not_checked"
     vulnerabilities: list[Vulnerability] = Field(default_factory=list[Vulnerability])
+    vulnerabilities_complete: bool = True
+    """False when OSV listed more than the check read, so there are more than these."""
 
 
 class TaskOutput(WireModel):

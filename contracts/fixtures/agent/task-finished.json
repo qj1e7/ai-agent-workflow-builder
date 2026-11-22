@@ -31,7 +31,8 @@
         "full_name": "langchain-ai/langgraph",
         "not_found": false,
         "vulnerability_check": "not_checked",
-        "vulnerabilities": []
+        "vulnerabilities": [],
+        "vulnerabilities_complete": true
       }
     ]
   },
