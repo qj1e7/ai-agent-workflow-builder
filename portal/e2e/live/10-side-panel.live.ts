@@ -356,7 +356,7 @@ test('FIX-open-software: a software already on the watchlist opens in the side p
   const page = await context.newPage()
   await page.setViewportSize({ width: 1280, height: 900 })
   await page.goto('/')
-  await ask(page, 'Monitor LangGraph releases')
+  await ask(page, 'Monitor LangGraph releases on the watchlist')
   await newest(page).getByRole('button', { name: 'Open it' }).click()
   await expect(heading(page)).toHaveText('LangGraph')
   await expect(panel(page), 'with no schedule, nothing checks it on its own').toContainText(/Watching[\s\S]*Checked by\s*Not checked automatically/)
