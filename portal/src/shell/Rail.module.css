@@ -175,8 +175,12 @@
     height: 18px;
   }
 
+  /* The sketch drops the marker in the bar. It moves under the item instead, so the current page is never shown by colour alone. */
   .item[aria-current='page']::before {
-    display: none;
+    inset: auto 10px 0;
+    width: auto;
+    height: 3px;
+    border-radius: 3px 3px 0 0;
   }
 
   .count {
