@@ -242,6 +242,14 @@ def _merged(spans: list[Span]) -> list[Span]:
     return found
 
 
+def without_workflows(text: str, facts: PlannerFacts | None, words: str | None) -> str:
+    """The request with each of the person's workflows it names, and `words` for one, turned to
+    spaces, so a name such as "No-PH digest" is never read as a schedule it can't hold."""
+    runs = [r for name in _workflow_names(facts) for r in name_runs(text, name)]
+    said = _said(words, text)
+    return _blank(text, [*runs, *([said] if said is not None else [])])
+
+
 def _workflow_names(facts: PlannerFacts | None) -> list[str]:
     return [] if facts is None else facts.workflow_names()
 
@@ -595,8 +603,7 @@ def change_clauses(text: str, names: _Names) -> list[Span]:
     A clause that names another workflow belongs to the change only when the target's own clause
     names no schedule, as "Make the morning check and the weekly summary run at 10am"."""
     unnamed = _blank(text, [*names.all, *(m.span() for m in TIME.finditer(text))])
-    day_like = when_said(_blank(text, names.all)).left_out
-    leaves = [*left_out(text), *([day_like] if day_like else [])]
+    leaves = [*left_out(text), *when_said(_blank(text, names.all)).left_out]
     found: list[Span] = []
     elsewhere: list[Span] = []
     for clause in _split(text, clauses_of(text), names):
@@ -626,10 +633,16 @@ def _now(text: str, clauses: list[Span]) -> list[Span]:
     Mondays" after a verb that moves it, as "move it from Mondays to Tuesdays", and a clause that
     says when it runs now, as "it runs on Friday now". "run from Monday to Friday" is a range."""
     found = [m.span() for m in INSTEAD.finditer(text)]
+    left = when_said(text).left_out
     for clause in clauses:
         words_ = {w for w, _, _ in _tokens(text[clause[0] : clause[1]])}
         if words_ & FROM_TO_VERBS:
-            found += [m.span() for m in FROM.finditer(text, clause[0], clause[1])]
+            # "from" in what the words leave out, as "apart from weekends", is no schedule now.
+            found += [
+                m.span()
+                for m in FROM.finditer(text, clause[0], clause[1])
+                if not any(a <= m.start() < b for a, b in left)
+            ]
         elif NOW.search(text, clause[0], clause[1]) and not words_ & EDIT_VERBS:
             found.append(clause)
     return found
@@ -665,7 +678,7 @@ def _schedule_of(
     if OTHER_CHANGES & {w for w, _, _ in _tokens(rest)}:
         return None, "only_schedule", [], False
     if change_unheld(rest) is not None:
-        return None, "how_often", [], when_said(rest).left_out is not None
+        return None, "how_often", [], bool(when_said(rest).left_out)
     clashes = clashes_in(rest)
     if clashes:
         return None, None, clashes, False

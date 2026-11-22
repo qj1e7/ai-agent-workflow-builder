@@ -69,7 +69,7 @@ from agent_runtime.contract import (
     WhyStoppedAnswer,
 )
 from agent_runtime.drafting import UNUSABLE
-from agent_runtime.edits import PAUSES, RESUMES, TURNED
+from agent_runtime.edits import PAUSES, RESUMES, TURNED, without_workflows
 from agent_runtime.fixed_replies import fixed_reply
 from agent_runtime.free_reply import (
     STILL_UNCLEAR,
@@ -475,11 +475,13 @@ def _which_software(raw: Mapping[str, Any], turn: Turn) -> Acted:
 WEEKLY: Final = re.compile(r"\b(?:weekly|once\s+a\s+week|every\s+week|each\s+week)\b", re.I)
 
 
-def _schedule_of(args: ChangeWorkflow, text: str) -> ScheduleChange | Invalid:
+def _schedule_of(args: ChangeWorkflow, text: str, unnamed: str) -> ScheduleChange | Invalid:
     """The schedule the call asks for, held to what `said_schedule` reads in the message alone,
     and never one the workflow can't hold, as "every other Friday" made as a weekly one, or "make
-    it run at 10am except PH" made as every day at 10:00, as the edit chat holds it."""
-    if change_unheld(text) is not None:
+    it run at 10am except PH" made as every day at 10:00, as the edit chat holds it. `unnamed` is
+    the message with the workflows it names turned to spaces, so "the No-PH digest" leaves out
+    no day."""
+    if change_unheld(unnamed) is not None:
         return Invalid(
             "The message asks for a schedule a workflow can't hold, such as every other week or "
             "monthly. Use reply, form answer, to say it can run every day, every weekday or once "
@@ -549,7 +551,8 @@ def _change(raw: Mapping[str, Any], turn: Turn) -> Acted:
         if at is None or clause is None:
             return _not_found("workflow_words", args.workflow_words)
         words, reached = plain(text[at[0] : at[1]], NAME_LIMIT), reached | {clause}
-    schedule = _schedule_of(args, text) if args.action == "schedule" else None
+    unnamed = without_workflows(text, turn.request.facts, args.workflow_words)
+    schedule = _schedule_of(args, text, unnamed) if args.action == "schedule" else None
     if isinstance(schedule, Invalid):
         return schedule
     rules = turn.front.answer
