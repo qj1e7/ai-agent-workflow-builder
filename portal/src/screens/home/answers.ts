@@ -1,6 +1,9 @@
-import type { CantRowView, CapabilitiesView, CapabilityView, OfflineReply, PauseReply, PlannerReply, QuestionReply, RemoveSoftwareReply, ResumeReply, RowKind, UnderstoodRowView, UseCaseView } from '../../api/types'
+import type { CantRowView, CapabilitiesView, CapabilityView, OfflineReply, PauseReply, PlannerReply, QuestionReply, RemoveSoftwareReply, ResumeReply, RowKind, ScheduleView, UnderstoodRowView, UseCaseView } from '../../api/types'
 import { andList, count, type NameOf } from '../run/words'
+import { repeatWords } from '../software/software'
+import { scheduleZoneName } from '../workflows/times'
 import { isRunning, lastRunLine, lifeWords, nextRunWords, type Row } from '../workflows/workflow'
+import { lowerFirst, readWhen, scheduleOf } from './card'
 import { sayChanged } from './changed'
 import { cantOnCard, quote } from './parts'
 
@@ -137,6 +140,27 @@ export const watchlistSay = (software: string | null, listed: boolean): string =
     : `${software} is software, so it belongs on the Software watchlist, which checks the software on it for new releases.`
 }
 
+/** When the Software watchlist checks, as its page says it: "every Monday at 9:00", with the zone when it is not the team's. */
+export const watchlistRunsWords = (schedule: ScheduleView): string => {
+  const zone = scheduleZoneName(schedule.time_zone)
+  return `${repeatWords(schedule)}${zone ? ` ${zone}` : ''}`
+}
+
+/** A time of their own in the schedule words ("every day at 9:00"), or in their own words when they don't name both how often and when. */
+export function askedRunsWords(said: string): string {
+  const when = readWhen(said)
+  return when.often !== '' && when.at !== '' ? repeatWords(scheduleOf(when)) : lowerFirst(said.trim())
+}
+
+/** A watched software's card beside a time of its own: the Software watchlist checks every software it holds on its one schedule. */
+export const ownTimeSay = (count: number, runs: string): string => `The watchlist checks all ${count} software ${runs}, not each one on its own.`
+
+/** The main button beside it, which asks the Planner to move the whole watchlist to the time they asked. */
+export const moveAllLabel = (count: number, asked: string): string => `Check all ${count} ${asked}`
+
+/** A watched software card's Then row, for the upgrade ticket the Software watchlist raises itself. */
+export const UPGRADE_TICKET = 'An upgrade ticket in Jira, after a yes'
+
 /** The Planner's release words, as its `RELEASE_ROOTS`: a request with one asks about the version or the releases. */
 const VERSION_WORD = /\b(?:versions?|releas(?:e|es|ed|ing)|upgrad(?:e|es|ed|ing)|patch(?:es|ed|ing)?)\b/i
 
@@ -183,7 +207,8 @@ export function sayOf(reply: PlannerReply, asker: Asker = 'operator'): string | 
       return SAY.part
     case 'cant':
       if (cantOnCard(reply)) return SAY.setupCrossed
-      if (reply.alternative && reply.cant.every((row) => row.needs === null)) return sayOf(reply.alternative)
+      // “Something close” only leads a card that sets something up. A watch offer leads with its own sentence.
+      if (reply.alternative && (reply.alternative.answer === 'watchlist' || reply.cant.every((row) => row.needs === null))) return sayOf(reply.alternative)
       if (reply.alternative) return SAY.cantWithAlternative
       return reply.cant.filter((row) => row.needs !== null).every(oneLine) ? null : SAY.cant
     case 'watchlist':

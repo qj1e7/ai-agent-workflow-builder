@@ -15435,6 +15435,13 @@
         "title": "WaitingPage",
         "type": "object"
       },
+      "WatchPart": {
+        "enum": [
+          "schedule",
+          "ticket"
+        ],
+        "type": "string"
+      },
       "WatchedSoftwareView": {
         "additionalProperties": false,
         "properties": {
@@ -15670,6 +15677,14 @@
             "title": "Answer",
             "type": "string"
           },
+          "covers": {
+            "description": "The parts of the request past the software that the Software watchlist does itself, each a ticked row on the software card: schedule when the request names the day or time it already runs on, ticket when it asks for the upgrade ticket the watchlist raises after a yes. Empty beside also, whose card holds the rest of the request.",
+            "items": {
+              "$ref": "#/components/schemas/WatchPart"
+            },
+            "title": "Covers",
+            "type": "array"
+          },
           "parts": {
             "description": "Every clause of what the person typed, in order, with what happened to it (spec 6.5). None is dropped. Empty for a chip they tapped, for an answer inside another answer, and when no model read the request.",
             "items": {
@@ -15713,7 +15728,8 @@
           "word",
           "software",
           "already_listed",
-          "also"
+          "also",
+          "covers"
         ],
         "title": "WatchlistReply",
         "type": "object"

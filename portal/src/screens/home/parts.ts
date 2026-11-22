@@ -1,4 +1,4 @@
-import type { CantReply, PartReason, PartView, PlannerReply, ScheduleView } from '../../api/types'
+import type { CantReply, CantRowView, PartReason, PartView, PlannerReply, ScheduleView } from '../../api/types'
 import { clockWords, repeatWords } from '../software/software'
 import { andList, clashChosen, isClash, type When } from './card'
 
@@ -150,6 +150,26 @@ export const crossesInstead = (part: PartView): boolean => crossesOnCard(part) &
  */
 export const cantOnCard = (reply: CantReply): boolean => reply.alternative?.answer === 'setup_card' && reply.cant.every((row) => row.needs !== 'new_system')
 
+const sameWords = (a: string, b: string): boolean => a.trim().toLowerCase() === b.trim().toLowerCase()
+
+/** Whether a can’t answer’s card names a part: a can’t row with something to build, in the part’s own words. */
+const namedOnCard = (reply: CantReply, part: PartView): boolean => reply.cant.some((row) => row.needs !== null && sameWords(row.text, part.text))
+
+/** A can’t row that is a watch request’s time of its own, which the Software watchlist can’t give one software. */
+export const isOwnTime = (reply: CantReply, row: CantRowView): boolean => reply.parts.some((part) => part.reason === 'own_time' && sameWords(part.text, row.text))
+
+/**
+ * A watch request’s time of its own, when the software is already watched: its card says the watchlist’s one schedule and offers
+ * to move the whole watchlist, so the time is drawn nowhere else. Null for software not watched yet, whose time stays above it.
+ */
+export function ownTimeOnCard(reply: CantReply): PartView | null {
+  if (reply.alternative?.answer !== 'watchlist' || reply.alternative.already_listed === null) return null
+  return reply.parts.find((part) => part.reason === 'own_time' && namedOnCard(reply, part)) ?? null
+}
+
+/** Whether a watched software’s card says all a can’t answer can’t do, so nothing else is drawn beside it. */
+export const onlyOwnTime = (reply: CantReply): boolean => ownTimeOnCard(reply) !== null && reply.cant.every((row) => row.needs === null || isOwnTime(reply, row))
+
 /** What a set-up card inside another answer asks itself, since it runs on that schedule and search: a clash and how many days. */
 export const asksOnCard = (part: PartView): boolean => isClash(part) || part.reason === 'how_many_days'
 
@@ -185,9 +205,10 @@ export function leftoverParts(reply: PlannerReply): PartView[] {
     case 'draft_started':
       return []
     case 'cant': {
-      // The card names only the can'ts with something to build. One with nothing to build, as a yes that can't be skipped, is drawn here.
-      const named = (part: PartView) => reply.cant.some((row) => row.needs !== null && row.text.trim().toLowerCase() === part.text.trim().toLowerCase())
-      return reply.alternative?.answer === 'setup_card' ? [] : above(reply.parts.filter((part) => !(part.reason === 'cant_do' && named(part)) && part.reason !== 'needs_the_rest'))
+      // A card names each can't with something to build, once. One with nothing to build, as a yes that can't be skipped, is drawn
+      // here, and so is a time of its own beside software not watched yet, with the offer to move the whole watchlist.
+      const here = (part: PartView) => !namedOnCard(reply, part) || (part.reason === 'own_time' && ownTimeOnCard(reply) === null)
+      return reply.alternative?.answer === 'setup_card' ? [] : above(reply.parts.filter((part) => here(part) && part.reason !== 'needs_the_rest'))
     }
     case 'refused':
       return reply.rest.trim() === '' ? above(reply.parts.filter((part) => part.reason !== 'skip_approval')) : []

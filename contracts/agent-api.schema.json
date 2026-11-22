@@ -4408,6 +4408,13 @@
       ],
       "type": "string"
     },
+    "WatchPart": {
+      "enum": [
+        "schedule",
+        "ticket"
+      ],
+      "type": "string"
+    },
     "WatchedFact": {
       "additionalProperties": false,
       "properties": {
@@ -4577,6 +4584,14 @@
           "default": null,
           "description": "The rest of a request that also asks for a workflow, such as a weekly ticket list, offered next. None when the request is only about the software.",
           "title": "Also"
+        },
+        "covers": {
+          "description": "The parts of the request past the software that the Software watchlist does itself: schedule when it names the day or time the watchlist already runs on, ticket when it asks for the upgrade ticket the watchlist raises after a yes. Empty beside `also`, whose card holds the rest of the request.",
+          "items": {
+            "$ref": "#/$defs/WatchPart"
+          },
+          "title": "Covers",
+          "type": "array"
         },
         "kind": {
           "const": "watchlist",

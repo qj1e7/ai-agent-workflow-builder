@@ -91,6 +91,7 @@ from platform_api.orchestration import (
     TurnTrace,
     UnderstoodRow,
     WatchlistAnswer,
+    WatchPart,
     WhichSoftwareAnswer,
     WhyStoppedAnswer,
     no_access_words,
@@ -316,6 +317,13 @@ class WatchlistReply(Reply):
     )
     also: SetupCardReply | PartReply | CantReply | None = Field(
         description="The rest of a request that also asks for a workflow."
+    )
+    covers: list[WatchPart] = Field(
+        default_factory=list[WatchPart],
+        description="The parts of the request past the software that the Software watchlist does "
+        "itself, each a ticked row on the software card: schedule when the request names the day "
+        "or time it already runs on, ticket when it asks for the upgrade ticket the watchlist "
+        "raises after a yes. Empty beside also, whose card holds the rest of the request.",
     )
 
 
@@ -1288,6 +1296,7 @@ class PlannerFront:
             software=watch.software,
             already_listed=await self._listed(watch.software),
             also=also,
+            covers=watch.covers,
         )
 
     async def _listed(self, software: str | None) -> ListedSoftware | None:

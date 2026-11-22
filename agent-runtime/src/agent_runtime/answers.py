@@ -73,6 +73,7 @@ from agent_runtime.contract import (
     UnderstoodRow,
     WatchlistAnswer,
     WatchlistScheduleFact,
+    WatchPart,
     WhichSoftwareAnswer,
     WhyStoppedAnswer,
 )
@@ -125,6 +126,7 @@ from agent_runtime.reading import (
     FILLER,
     ME_WORDS,
     POLITE,
+    READ_FROM,
     RUNS_BY_ITSELF,
     SAID_LIMIT,
     SCHEDULE_WORDS,
@@ -649,11 +651,32 @@ def _from_task(read: TaskRead, task: _Task, text: str) -> PlannerAnswer:
 def _also(
     read: TaskRead, task: _Task | None, text: str
 ) -> SetupCardAnswer | PartAnswer | CantAnswer | None:
-    """The workflow a mixed request also asks for."""
-    if task is None or not any((read.search, read.ticket, read.place)):
+    """The workflow a mixed request also asks for. A ticket beside the watch with nothing to find
+    and no other project is the upgrade ticket the Software watchlist raises itself, so it asks
+    for no workflow, whether or not the model read it as a ticket."""
+    own_ticket = read.search is None and read.place is None and WATCHLISTS_OWN_TICKET.search(text)
+    ticket = None if own_ticket else read.ticket
+    if task is None or not any((read.search, ticket, read.place)):
         return None
     rest = _from_task(read, task, text)
-    return rest if isinstance(rest, SetupCardAnswer | PartAnswer | CantAnswer) else None
+    if not isinstance(rest, SetupCardAnswer | PartAnswer | CantAnswer):
+        return None
+    software = _software_of(read, text)
+    return rest if software is None or read.search is not None else _watches(rest, software)
+
+
+def _watches[A: SetupCardAnswer | PartAnswer | CantAnswer](rest: A, software: str) -> A:
+    """The card beside a watch with nothing to find, watching the software the request names."""
+    if isinstance(rest, CantAnswer):
+        card = rest.alternative
+        if not isinstance(card, SetupCardAnswer):
+            return rest
+        return rest.model_copy(update={"alternative": _watches(card, software)})
+    watch = UnderstoodRow(
+        kind="look_for", text=software, state="understood", note=READ_FROM.format(software)
+    )
+    rows = [watch if r.kind == "look_for" and r.state == "missing" else r for r in rest.rows]
+    return rest.model_copy(update={"rows": rows})
 
 
 _TICKET_KEY: Final = re.compile(r"\b[A-Z][A-Z0-9]+-\d+\b")
@@ -792,7 +815,22 @@ def _watchlist(
         return watching
     changes = request if verb is None else _without(request, f"{verb} {software}")
     rows = _watch_rows(read, task, request, system_row, changes, schedule)
+    watching = watching.model_copy(update={"covers": _covers(read, request, schedule)})
     return CantAnswer(cant=rows, alternative=watching) if rows else watching
+
+
+def _covers(
+    read: TaskRead, request: str, schedule: WatchlistScheduleFact | None
+) -> list[WatchPart]:
+    """The parts of a watch request the Software watchlist does itself: the day or time it
+    already runs on, and the upgrade ticket it raises after a yes."""
+    covers: list[WatchPart] = []
+    stretch = schedule_stretch(read.schedule, request)
+    if stretch is not None and _its_schedule(request[stretch[0] : stretch[1]], schedule):
+        covers.append("schedule")
+    if WATCHLISTS_OWN_TICKET.search(request):
+        covers.append("ticket")
+    return covers
 
 
 QUESTIONS_OF_ANY_KIND: Final = ("none", "abilities")

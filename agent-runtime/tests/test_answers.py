@@ -991,13 +991,15 @@ def test_an_approver_skip_with_no_words_of_the_request_quoted_is_not_refused_on_
 ):
     """A ticket raised when a release is found waits for a yes like any other. A model said
     it skipped an Approver's yes and quoted no words of the request, and the person was told
-    they asked for something they never wrote. The request goes to the watchlist, and the
-    overruled answer is logged without the request's words."""
+    they asked for something they never wrote. The request goes to the watchlist, whose own
+    ticket it is, with its weekday time crossed as one of its own, and the overruled answer is
+    logged without the request's words."""
     skip = SkipRead(whose="an_approver_or_anyone_else", said=said)
     with caplog.at_level(logging.INFO, logger="agent_runtime.answers"):
         answer = answer_of(release_check(skip), RELEASE_CHECK)
-    assert isinstance(answer, WatchlistAnswer)
-    assert (answer.software, answer.word) == ("LangGraph", "releases")
+    assert isinstance(answer, CantAnswer) and isinstance(answer.alternative, WatchlistAnswer)
+    assert (answer.alternative.software, answer.alternative.word) == ("LangGraph", "releases")
+    assert answer.alternative.covers == ["ticket"]
     assert SKIP_PART_NOTE not in answer.model_dump_json()
     parts = parts_of(release_check(skip), RELEASE_CHECK, answer)
     assert all(p.note != SKIP_PART_NOTE and p.reason != "skip_approval" for p in parts)

@@ -959,6 +959,14 @@ describe('the core release check, already on the watchlist', () => {
     expect(html).not.toContain('What I can’t do yet')
   })
 
+  it('keeps those words for a watchlist of one, and never says “all 1”', () => {
+    const one: WatchlistView = { ...WATCHED, software: WATCHED.software.filter((row) => row.name === 'LangGraph') }
+    const html = answerOf(chat(everyDay, EVERY_DAY, one))
+    expect(html).not.toContain('all 1')
+    expect(html.match(/its own time/g)).toHaveLength(1)
+    expect(html).toContain('Make the Software watchlist run Every day at 9am')
+  })
+
   it('lists every part of the core request on the one card as ticked rows, the ticket and its yes included', () => {
     const html = chat(core, CORE)
     expect(answerOf(html)).toBe(

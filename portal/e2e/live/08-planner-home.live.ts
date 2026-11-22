@@ -557,7 +557,7 @@ test.describe('with the AI model on', () => {
     const messages = () => thread(page).locator(':scope > li')
     await page.goto('/')
     await ask(page, 'Watch LangGraph releases every Thursday at 7am')
-    const offer = messages().last().getByRole('button', { name: 'Make the Software watchlist run every Thursday at 7am' })
+    const offer = messages().last().getByRole('button', { name: /^(?:Check all \d+ every Thursday at 7:00|Make the Software watchlist run every Thursday at 7am)$/ })
     await expect(offer).toBeVisible()
     await offer.click()
     await expect(editCard(messages().last()), 'the Planner answers the offer with the edit card').toBeVisible({ timeout: 30_000 })

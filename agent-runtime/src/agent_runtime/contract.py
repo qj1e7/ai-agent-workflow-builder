@@ -687,6 +687,7 @@ type ChooseResult = Annotated[Chosen | ModelProblem, Field(discriminator="status
 
 type RowKind = Literal["schedule", "look_for", "do", "where"]
 type RowState = Literal["understood", "changed", "missing", "cant_do"]
+type WatchPart = Literal["schedule", "ticket"]
 
 
 class UnderstoodRow(WireModel):
@@ -1090,6 +1091,13 @@ class WatchlistAnswer(WireModel):
         default=None,
         description="The rest of a request that also asks for a workflow, such as a weekly "
         "ticket list, offered next. None when the request is only about the software.",
+    )
+    covers: list[WatchPart] = Field(
+        default_factory=list[WatchPart],
+        description="The parts of the request past the software that the Software watchlist "
+        "does itself: schedule when it names the day or time the watchlist already runs on, "
+        "ticket when it asks for the upgrade ticket the watchlist raises after a yes. Empty "
+        "beside `also`, whose card holds the rest of the request.",
     )
 
 

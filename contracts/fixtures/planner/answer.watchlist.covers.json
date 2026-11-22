@@ -1,0 +1,38 @@
+{
+  "parts": [
+    {
+      "text": "Every Monday",
+      "mark": "will_do",
+      "reason": null,
+      "note": null,
+      "choices": []
+    },
+    {
+      "text": "check LangGraph for a new release",
+      "mark": "will_do",
+      "reason": null,
+      "note": null,
+      "choices": []
+    },
+    {
+      "text": "create a Jira ticket",
+      "mark": "will_do",
+      "reason": null,
+      "note": null,
+      "choices": []
+    }
+  ],
+  "trace_id": null,
+  "answer": "watchlist",
+  "word": "release",
+  "software": "LangGraph",
+  "already_listed": {
+    "software_id": "sw_01JB8",
+    "name": "LangGraph"
+  },
+  "also": null,
+  "covers": [
+    "schedule",
+    "ticket"
+  ]
+}
