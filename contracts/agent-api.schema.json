@@ -1724,6 +1724,12 @@
           "title": "Kind",
           "type": "string"
         },
+        "leaves_out_days": {
+          "default": false,
+          "description": "With how_often: True when the request leaves out a day, or words that look like a day or time off, as 'skip Fridays', 'except PH' or 'except when I'm on leave', which no schedule can hold. The Portal then says it can't leave days out, whatever words the cross holds. False for a frequency it can't hold, as monthly.",
+          "title": "Leaves Out Days",
+          "type": "boolean"
+        },
         "schedule": {
           "anyOf": [
             {

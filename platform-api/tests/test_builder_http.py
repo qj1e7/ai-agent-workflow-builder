@@ -1737,6 +1737,7 @@ async def test_an_edit_names_the_workflow_by_whole_words_with_before_and_after(f
         "hour": None,
         "cant": None,
         "holds_save": False,
+        "leaves_out_days": False,
         "parts": [],
     }
 
@@ -1850,6 +1851,19 @@ async def test_a_change_the_chat_cant_make_names_the_workflow_and_proposes_nothi
         reply = await edit_reply(front, edit)
         assert (reply["use_case_id"], reply["cant"], reply["after"]) == (morning, cant, None)
         assert reply["before"] == WEEKDAYS_8
+
+
+async def test_a_schedule_that_leaves_out_days_says_so_for_the_portals_sentence(front: Front):
+    """The Portal says "I can't leave days out of a schedule yet." from this, never from the
+    cross's own words, as "no PH"."""
+    morning = await make_workflow(front, "Morning new-ticket check", WEEKDAYS_8)
+    edit = EditAnswer(workflow_words="morning check", cant="how_often", leaves_out_days=True)
+    reply = await edit_reply(front, edit)
+    assert (reply["use_case_id"], reply["cant"], reply["leaves_out_days"]) == (
+        morning,
+        "how_often",
+        True,
+    )
 
 
 async def test_a_clash_holds_save_with_no_after(front: Front):

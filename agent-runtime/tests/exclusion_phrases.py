@@ -875,3 +875,81 @@ CONDITIONS_KEPT: list[str] = [
 off, as "only when there is a new release". A name before "is out" is no time off, as
 "only when LangGraph is out" or "except when Priya is out". #342 asked each beside a schedule.
 Each fills as before #342, and a change keeps the run time from before."""
+EDITS_LEFT_OUT: list[str] = [
+    p
+    for p in dict.fromkeys(
+        [
+            *CHANGES_LEFT_OUT,
+            *TIME_OFF_STRETCHES,
+            *DATES_MONTH_ENDS_AND_FREEZES,
+            *SHORT_FORMS_LEFT_OUT,
+        ]
+    )
+    if p != "ex Fridays"
+]
+"""What a change leaves out, to stand beside a new time in the edit chat or the Planner's change
+call, as "make the morning check run at 10am, except PH". Main moved it to 10:00 and kept every
+day beside nearly all of them, so it still ran on the days left out. Each is asked. "ex Fridays"
+is not here: the drafter's own reader doesn't read "ex" before a day it names."""
+EDITS_KEPT: list[str] = [
+    p
+    for p in [*CHANGES_KEPT, *CONDITIONS_KEPT]
+    if p
+    not in (
+        "rename it to Weekly check",
+        "drop the Jira step",
+        "only when I approve it",
+        "except 3rd party ones",
+        "skip zero-day patches",
+        "only same-day fixes",
+    )
+]
+"""Filters and conditions to stand beside a new time in an edit, as "make the morning check run
+at 10am, skip prereleases". Each moves it to 10:00 and keeps the day, as on main. A rename, a
+step dropped and an approval are other changes, which the chat answers another way, and the
+Planner's change call reads "3rd" as a schedule it can't hold, as on main. Beside a schedule, a
+day joined to a word by a hyphen still looks like a day, as "zero-day", so those two ask."""
+DAYS_AFTER_A_LEAVE_WORD: list[str] = [
+    f"make it run at 10am{mark} {leave} Fridays"
+    for leave in (
+        "barring",
+        "excl",
+        "bar",
+        "aside from",
+        "save for",
+        "sans",
+        "w/o",
+        "outside",
+        "outside of",
+        "ex",
+        "hold off on",
+        "avoid",
+    )
+    for mark in ("", ",")
+]
+"""A weekday right after a word that leaves it out. Main ran it only on that day, as "make it
+run at 10am barring Fridays" moved it to Friday at 10:00, the opposite of the request. Each is
+asked, and never filled as the day it runs."""
+LEFT_OUT_AFTER_ANOTHER: list[str] = [
+    "does it skip PH? make it run at 10am. Except PH.",
+    "does it run on PH? make it run at 10am. Except CNY.",
+    "the weekly summary already skips PH. make the morning check run at 10am. Except CNY.",
+    "can the weekly summary skip PH too? Also make the morning check run at 10am, not on CNY",
+    "does the weekly summary skip PH? make the morning check run at 10am. not on CNY.",
+]
+"""A day left out after another one in a question or another workflow's clause. Only the first
+stretch left out counted, so the change saved every day at 10:00. Each is asked."""
+DAYS_AFTER_AN_INTERJECTION: list[tuple[str, str]] = [
+    ("no, Friday at 9am", "friday 09:00"),
+    ("No. Friday at 9am", "friday 09:00"),
+    ("no! Friday at 9am", "friday 09:00"),
+    ("no: Friday at 9am", "friday 09:00"),
+    ("no, Fridays at 9am please", "friday 09:00"),
+    ("no, Monday at 9am works better", "monday 09:00"),
+    ("no, weekdays at 9am", "weekdays 09:00"),
+    ("skip that, Friday at 9am", "friday 09:00"),
+    ("check langgraph. No, Friday at 9am", "friday 09:00"),
+    ("except, Friday at 9am", "friday 09:00"),
+]
+"""A correction in a chat: a word that can leave a day out, then a mark, then the day it runs.
+The mark ends what the word covers, so each reads the day and the time, as on main."""

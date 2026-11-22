@@ -5910,6 +5910,12 @@
             "description": "An hour the request named with no am or pm, as 9: the person picks 9:00 or 21:00.",
             "title": "Hour"
           },
+          "leaves_out_days": {
+            "default": false,
+            "description": "With how_often: True when the request leaves out a day, or words that look like a day or time off, as 'skip Fridays' or 'except PH'. The Portal then says it can't leave days out, whatever words the cross holds.",
+            "title": "Leaves Out Days",
+            "type": "boolean"
+          },
           "missing": {
             "anyOf": [
               {
@@ -5998,7 +6004,8 @@
           "after",
           "hour",
           "cant",
-          "holds_save"
+          "holds_save",
+          "leaves_out_days"
         ],
         "title": "EditReply",
         "type": "object"

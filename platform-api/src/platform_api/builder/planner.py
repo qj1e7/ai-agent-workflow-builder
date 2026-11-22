@@ -513,6 +513,12 @@ class EditReply(Reply):
         description="True when the request named two days, two times or two frequencies. "
         "Nothing can be saved until the person asks again."
     )
+    leaves_out_days: bool = Field(
+        default=False,
+        description="With how_often: True when the request leaves out a day, or words that look "
+        "like a day or time off, as 'skip Fridays' or 'except PH'. The Portal then says it can't "
+        "leave days out, whatever words the cross holds.",
+    )
 
 
 class SwitchChoice(WireModel):
@@ -1422,6 +1428,7 @@ class PlannerFront:
             hour=None if edit.schedule is None else edit.schedule.hour,
             cant=edit.cant,
             holds_save=edit.holds_save,
+            leaves_out_days=edit.leaves_out_days,
         )
 
     async def _switch(

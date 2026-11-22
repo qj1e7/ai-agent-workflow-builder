@@ -555,6 +555,7 @@ def planner_fixtures(root: Path) -> dict[str, WireModel]:
             update={
                 "after": None,
                 "cant": "how_often",
+                "leaves_out_days": True,
                 "parts": [
                     does("make the morning check run every weekday"),
                     crossed("except Friday", "how_often"),

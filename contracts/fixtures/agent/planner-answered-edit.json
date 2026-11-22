@@ -12,7 +12,8 @@
       "time_unclear": false
     },
     "cant": null,
-    "holds_save": false
+    "holds_save": false,
+    "leaves_out_days": false
   },
   "parts": [
     {

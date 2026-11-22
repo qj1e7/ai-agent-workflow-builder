@@ -42,6 +42,7 @@ from agent_runtime.reading import (
     inexact_times,
     left_out,
     said_schedule,
+    when_said,
 )
 
 type Span = tuple[int, int]
@@ -241,6 +242,14 @@ def _merged(spans: list[Span]) -> list[Span]:
     return found
 
 
+def without_workflows(text: str, facts: PlannerFacts | None, words: str | None) -> str:
+    """The request with each of the person's workflows it names, and `words` for one, turned to
+    spaces, so a name such as "No-PH digest" is never read as a schedule it can't hold."""
+    runs = [r for name in _workflow_names(facts) for r in name_runs(text, name)]
+    said = _said(words, text)
+    return _blank(text, [*runs, *([said] if said is not None else [])])
+
+
 def _workflow_names(facts: PlannerFacts | None) -> list[str]:
     return [] if facts is None else facts.workflow_names()
 
@@ -365,13 +374,14 @@ def edit_of(read: TaskRead, text: str, facts: PlannerFacts | None) -> EditAnswer
     switch = _switch_of(text, names)
     if switch is not None:
         return switch(workflow_words=target, software=_software(read, text, target))
-    schedule, cant, clashes = _schedule_of(text, names)
+    schedule, cant, clashes, leaves_out_days = _schedule_of(text, names)
     return EditAnswer(
         workflow_words=target,
         software=_software(read, text, target),
         schedule=schedule,
         cant=cant,
         holds_save=bool(clashes) and cant is None,
+        leaves_out_days=leaves_out_days,
     )
 
 
@@ -593,7 +603,7 @@ def change_clauses(text: str, names: _Names) -> list[Span]:
     A clause that names another workflow belongs to the change only when the target's own clause
     names no schedule, as "Make the morning check and the weekly summary run at 10am"."""
     unnamed = _blank(text, [*names.all, *(m.span() for m in TIME.finditer(text))])
-    leaves = left_out(text)
+    leaves = [*left_out(text), *when_said(_blank(text, names.all)).left_out]
     found: list[Span] = []
     elsewhere: list[Span] = []
     for clause in _split(text, clauses_of(text), names):
@@ -612,7 +622,7 @@ def change_clauses(text: str, names: _Names) -> list[Span]:
             or any(a < clause[1] and clause[0] < b for a, b in leaves)
         ):
             # A day left out, as "except weekends", "but skip Fridays" or "Fridays off", is part
-            # of the change.
+            # of the change, and so is a word that looks like a day or time off, as "skip PH".
             found.append(clause)
     scheduled = any(SCHEDULE_SAID.search(text[a:b]) for a, b in found)
     return sorted(found + ([] if scheduled else elsewhere))
@@ -623,10 +633,16 @@ def _now(text: str, clauses: list[Span]) -> list[Span]:
     Mondays" after a verb that moves it, as "move it from Mondays to Tuesdays", and a clause that
     says when it runs now, as "it runs on Friday now". "run from Monday to Friday" is a range."""
     found = [m.span() for m in INSTEAD.finditer(text)]
+    left = when_said(text).left_out
     for clause in clauses:
         words_ = {w for w, _, _ in _tokens(text[clause[0] : clause[1]])}
         if words_ & FROM_TO_VERBS:
-            found += [m.span() for m in FROM.finditer(text, clause[0], clause[1])]
+            # "from" in what the words leave out, as "apart from weekends", is no schedule now.
+            found += [
+                m.span()
+                for m in FROM.finditer(text, clause[0], clause[1])
+                if not any(a <= m.start() < b for a, b in left)
+            ]
         elif NOW.search(text, clause[0], clause[1]) and not words_ & EDIT_VERBS:
             found.append(clause)
     return found
@@ -653,19 +669,19 @@ def _unclear(answer: EditAnswer) -> bool:
 
 def _schedule_of(
     text: str, names: _Names
-) -> tuple[ScheduleChange | None, EditCant | None, list[Clash]]:
-    """The new schedule in the request's own words, in the schedule's terms. Any other change,
-    as "pause it" or "rename it", and no schedule at all, are a change the chat can't make yet. A
-    schedule it can't hold is a can't. Two days, two times or two frequencies are a clash, never
-    the first."""
+) -> tuple[ScheduleChange | None, EditCant | None, list[Clash], bool]:
+    """The new schedule in the request's own words, in the schedule's terms, and whether what it
+    can't hold leaves out days. Any other change, as "pause it" or "rename it", and no schedule
+    at all, are a change the chat can't make yet. A schedule it can't hold is a can't. Two days,
+    two times or two frequencies are a clash, never the first."""
     rest = _rest(text, names)
     if OTHER_CHANGES & {w for w, _, _ in _tokens(rest)}:
-        return None, "only_schedule", []
+        return None, "only_schedule", [], False
     if change_unheld(rest) is not None:
-        return None, "how_often", []
+        return None, "how_often", [], bool(when_said(rest).left_out)
     clashes = clashes_in(rest)
     if clashes:
-        return None, None, clashes
+        return None, None, clashes, False
     day, at = said_schedule(rest)
     often = {OFTEN.get(w, w) for m in FREQUENCY.finditer(rest) for w in m.groups() if w}
     weekly = day is None and "week" in often
@@ -677,9 +693,9 @@ def _schedule_of(
     named = UNREAD_TIME.search(rest) is not None or bool(inexact_times(rest))
     unclear = at is None and hour is None and named
     if day is None and at is None and hour is None and not weekly and not unclear:
-        return None, "only_schedule", []
+        return None, "only_schedule", [], False
     change = ScheduleChange(day=_day(day), weekly=weekly, at=at, hour=hour, time_unclear=unclear)
-    return change, None, []
+    return change, None, [], False
 
 
 def _hour(hour: int) -> tuple[int | None, str | None]:
@@ -767,11 +783,14 @@ def edit_marks(
             *([] if left_out(rest) else [m.span() for m in LEFT_OUT.finditer(text)]),
         ],
     )
-    return [
-        mark
-        for clause in _split(text, clauses, names)
-        for mark in _clause_marks(text, clause, edit)
-    ]
+    # What it can't hold may run on past a clause, as "except weekends and PH", and is one cross.
+    return list(
+        dict.fromkeys(
+            mark
+            for clause in _split(text, clauses, names)
+            for mark in _clause_marks(text, clause, edit)
+        )
+    )
 
 
 def _clause_marks(text: str, clause: Span, edit: _Edit) -> list[EditMark]:
