@@ -687,6 +687,7 @@ type ChooseResult = Annotated[Chosen | ModelProblem, Field(discriminator="status
 
 type RowKind = Literal["schedule", "look_for", "do", "where"]
 type RowState = Literal["understood", "changed", "missing", "cant_do"]
+type WatchPart = Literal["schedule", "ticket"]
 
 
 class UnderstoodRow(WireModel):
@@ -915,6 +916,12 @@ class PlannerFacts(WireModel):
         description="When the Software watchlist checks all its software. None when it is off "
         "or was not read, so a time asked for one software is a cross.",
     )
+    watchlist_project: str | None = Field(
+        default=None,
+        max_length=40,
+        description="The Jira project the Software watchlist raises its upgrade tickets in. None "
+        "when it was not read, so a ticket asked for in any named project is not its own.",
+    )
 
     def workflow_names(self) -> list[str]:
         """Every workflow's name the platform sent, those with a last run and the others."""
@@ -1090,6 +1097,13 @@ class WatchlistAnswer(WireModel):
         default=None,
         description="The rest of a request that also asks for a workflow, such as a weekly "
         "ticket list, offered next. None when the request is only about the software.",
+    )
+    covers: list[WatchPart] = Field(
+        default_factory=list[WatchPart],
+        description="The parts of the request past the software that the Software watchlist "
+        "does itself: schedule when it names the day or time the watchlist already runs on, "
+        "ticket when it asks for the upgrade ticket the watchlist raises after a yes. Empty "
+        "beside `also`, whose card holds the rest of the request.",
     )
 
 

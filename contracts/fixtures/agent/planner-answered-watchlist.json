@@ -4,7 +4,8 @@
     "kind": "watchlist",
     "word": "release",
     "software": "LangGraph",
-    "also": null
+    "also": null,
+    "covers": []
   },
   "parts": [
     {

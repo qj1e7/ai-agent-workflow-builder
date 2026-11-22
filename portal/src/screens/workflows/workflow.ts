@@ -278,6 +278,9 @@ function runsAt(schedule: VersionSchedule): string {
 
 const RELEASE_CHECK_CARD = 'crd_version_checker'
 
+/** The upgrade ticket a release check writes, and where: "an upgrade ticket in Jira project MOCK, after a yes". */
+export const upgradeTicketWords = (project: unknown): string => `an upgrade ticket in Jira${typeof project === 'string' && project.trim() !== '' ? ` project ${project}` : ''}, after a yes`
+
 /**
  * The workflow in one sentence, built from its schedule, the repository its Version checker reads and its write step, as the sketch says it.
  * It is built only from what the platform stored. A workflow that isn't a release check, or lacks its repository, keeps the Operator's own words.
@@ -290,7 +293,7 @@ export function sentenceOf(useCase: Pick<UseCaseView, 'schedule' | 'agents' | 'p
   const start = when ? `${when.charAt(0).toUpperCase()}${when.slice(1)}, check` : 'Check'
   const project = checker.values['Jira project']
   const writes = useCase.plan.some((block) => block.kind === 'write_action')
-  const then = !writes ? 'tell me here' : `create an upgrade ticket in Jira${typeof project === 'string' && project.trim() !== '' ? ` project ${project}` : ''}, after a yes`
+  const then = !writes ? 'tell me here' : `create ${upgradeTicketWords(project)}`
   return `${start} ${repo} on GitHub for a new release${when ? '' : ' when an Operator presses Run now'}. If there is one, ${then}.`
 }
 

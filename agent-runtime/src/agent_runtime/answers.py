@@ -73,6 +73,7 @@ from agent_runtime.contract import (
     UnderstoodRow,
     WatchlistAnswer,
     WatchlistScheduleFact,
+    WatchPart,
     WhichSoftwareAnswer,
     WhyStoppedAnswer,
 )
@@ -125,13 +126,17 @@ from agent_runtime.reading import (
     FILLER,
     ME_WORDS,
     POLITE,
+    READ_FROM,
     RUNS_BY_ITSELF,
     SAID_LIMIT,
     SCHEDULE_WORDS,
     AsksAbout,
+    PlaceRead,
+    SearchRead,
     SkipRead,
     Span,
     TaskRead,
+    TicketRead,
     a_statement,
     clashes_in,
     clauses_of,
@@ -647,13 +652,90 @@ def _from_task(read: TaskRead, task: _Task, text: str) -> PlannerAnswer:
 
 
 def _also(
-    read: TaskRead, task: _Task | None, text: str
+    read: TaskRead, task: _Task | None, text: str, project: str | None
 ) -> SetupCardAnswer | PartAnswer | CantAnswer | None:
-    """The workflow a mixed request also asks for."""
-    if task is None or not any((read.search, read.ticket, read.place)):
+    """The workflow a mixed request also asks for. A ticket beside the watch with nothing to find
+    and no other project is the upgrade ticket the Software watchlist raises itself, so it asks
+    for no workflow, whether or not the model read it as a ticket. A search or a place the model
+    read with nothing in it, or only the ticket's own words, as "Jira", is no part of its own."""
+    own = _stretches(WATCHLISTS_OWN_TICKET, text)
+    finds = _finds(read.search, text, own)
+    elsewhere = _goes_elsewhere(read.place, text, own, project)
+    ticket = None if own and not finds and not elsewhere else read.ticket
+    if task is None or not (finds or ticket or elsewhere):
         return None
     rest = _from_task(read, task, text)
-    return rest if isinstance(rest, SetupCardAnswer | PartAnswer | CantAnswer) else None
+    if not isinstance(rest, SetupCardAnswer | PartAnswer | CantAnswer):
+        return None
+    software = _software_of(read, text)
+    return rest if software is None or finds else _watches(rest, software)
+
+
+def _past_the_ticket(said: str, text: str, ticket: list[tuple[int, int]]) -> bool:
+    """Whether words the model read are the request's own and reach past the watchlist's ticket."""
+    at = locate(text, said) if said.strip() else None
+    return at is not None and not any(a <= at[0] and at[1] <= b for a, b in ticket)
+
+
+def _finds(search: SearchRead | None, text: str, ticket: list[tuple[int, int]]) -> bool:
+    if search is None:
+        return False
+    filters = (search.project, search.issue_types, search.status, search.assignee)
+    days = (search.created, search.updated, search.done, search.words)
+    return any(filters) or any(days) or _past_the_ticket(search.said, text, ticket)
+
+
+def _goes_elsewhere(
+    place: PlaceRead | None, text: str, ticket: list[tuple[int, int]], project: str | None
+) -> bool:
+    """Whether the ticket goes somewhere the Software watchlist doesn't raise its own: a Jira
+    project other than the one it uses, or words past the ticket's own."""
+    if place is None:
+        return False
+    if place.project:
+        return _another_project(place.project, project)
+    return _past_the_ticket(place.said, text, ticket)
+
+
+def _another_project(named: str, project: str | None) -> bool:
+    """A project the request names that isn't the watchlist's, or any, when its own wasn't read."""
+    return project is None or named.strip().casefold() != project.strip().casefold()
+
+
+def _ticket_in_another_project(read: TaskRead, text: str, project: str | None) -> TaskRead:
+    """A request that asks for the watchlist's ticket words in another project, as "create a Jira
+    ticket in OPS", read with its ticket whether or not the model read one, so both readings get
+    the card that names that project."""
+    place = read.place
+    own = WATCHLISTS_OWN_TICKET.search(text)
+    if read.ticket is not None or own is None or place is None or not place.project:
+        return read
+    if not _another_project(place.project, project):
+        return read
+    said = re.sub(r"^and\s+", "", own.group(0), flags=re.IGNORECASE)
+    ticket = TicketRead(creates=True, says="list", said=said)
+    return read.model_copy(update={"ticket": ticket})
+
+
+def _watches[A: SetupCardAnswer | PartAnswer | CantAnswer](rest: A, software: str) -> A:
+    """The card beside a watch with nothing to find, watching the software the request names, in
+    the words the card's own check of a part accepts."""
+    if isinstance(rest, CantAnswer):
+        card = rest.alternative
+        if not isinstance(card, SetupCardAnswer):
+            return rest
+        return rest.model_copy(update={"alternative": _watches(card, software)})
+    watch = UnderstoodRow(
+        kind="look_for",
+        text=WATCH_ROW.format(software),
+        state="understood",
+        note=READ_FROM.format(software),
+    )
+    rows = [watch if r.kind == "look_for" and r.state == "missing" else r for r in rest.rows]
+    return rest.model_copy(update={"rows": rows})
+
+
+WATCH_ROW: Final = "New releases of {}"
 
 
 _TICKET_KEY: Final = re.compile(r"\b[A-Z][A-Z0-9]+-\d+\b")
@@ -750,7 +832,11 @@ def _other_source(read: TaskRead, request: str) -> CantAnswer | None:
 
 
 def _watchlist(
-    read: TaskRead, task: _Task | None, request: str, schedule: WatchlistScheduleFact | None
+    read: TaskRead,
+    task: _Task | None,
+    request: str,
+    schedule: WatchlistScheduleFact | None,
+    project: str | None,
 ) -> PlannerAnswer | None:
     verb = None
     word = (
@@ -787,12 +873,32 @@ def _watchlist(
             return CantAnswer(cant=[system_row])
     if software is None:
         return WhichSoftwareAnswer(word=word)
-    watching = WatchlistAnswer(word=word, software=software, also=_also(read, task, request))
+    also = _also(read, task, request, project)
+    watching = WatchlistAnswer(word=word, software=software, also=also)
     if watching.also is not None:
         return watching
     changes = request if verb is None else _without(request, f"{verb} {software}")
     rows = _watch_rows(read, task, request, system_row, changes, schedule)
+    watching = watching.model_copy(update={"covers": _covers(read, request, schedule, project)})
     return CantAnswer(cant=rows, alternative=watching) if rows else watching
+
+
+def _covers(
+    read: TaskRead, request: str, schedule: WatchlistScheduleFact | None, project: str | None
+) -> list[WatchPart]:
+    """The parts of a watch request the Software watchlist does itself: the day or time it
+    already runs on, and the upgrade ticket it raises after a yes, unless the request puts the
+    ticket in another Jira project."""
+    covers: list[WatchPart] = []
+    stretch = schedule_stretch(read.schedule, request)
+    if stretch is not None and _its_schedule(request[stretch[0] : stretch[1]], schedule):
+        covers.append("schedule")
+    place = read.place
+    if place is not None and place.project and _another_project(place.project, project):
+        return covers
+    if WATCHLISTS_OWN_TICKET.search(request):
+        covers.append("ticket")
+    return covers
 
 
 QUESTIONS_OF_ANY_KIND: Final = ("none", "abilities")
@@ -1083,6 +1189,7 @@ def _answer_of(
     `facts` name the person's workflows, so a word in a name is never a command, and say when the
     Software watchlist checks, so a time a watch request names that matches it is no cross."""
     watch_schedule = facts.watchlist_schedule if facts is not None else None
+    watch_project = facts.watchlist_project if facts is not None else None
     text = visible_words(request)
     refused = _refusal(text)
     if refused is not None:
@@ -1117,6 +1224,7 @@ def _answer_of(
     covered += _stretches(RUNS_BY_ITSELF, text)
     if read.belongs_on_watchlist:
         covered += _stretches(WATCHLISTS_OWN_TICKET, text)
+        read = _ticket_in_another_project(read, text, watch_project)
     watched = _watch_clauses(read, text) if read.belongs_on_watchlist else []
     writes = _writes(read, text)
     # A question about the app is no task, but beside a skip the model flagged and couldn't
@@ -1144,7 +1252,7 @@ def _answer_of(
     if newest is not None:
         return newest
     if read.belongs_on_watchlist:
-        answer = _watchlist(read, task, text, watch_schedule)
+        answer = _watchlist(read, task, text, watch_schedule, watch_project)
         if answer is not None:
             return answer
     unwatched = (

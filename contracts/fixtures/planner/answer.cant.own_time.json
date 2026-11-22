@@ -1,0 +1,45 @@
+{
+  "parts": [
+    {
+      "text": "Every day at 9am",
+      "mark": "cant",
+      "reason": "own_time",
+      "note": null,
+      "choices": []
+    },
+    {
+      "text": "check LangGraph for new releases",
+      "mark": "will_do",
+      "reason": null,
+      "note": null,
+      "choices": []
+    }
+  ],
+  "trace_id": null,
+  "answer": "cant",
+  "cant": [
+    {
+      "kind": "schedule",
+      "text": "Every day at 9am",
+      "note": "The Software watchlist checks all your software together, on one schedule. I can't give one software its own time yet.",
+      "needs": "new_tool",
+      "system": null,
+      "instead": null,
+      "unsupported": false
+    }
+  ],
+  "alternative": {
+    "parts": [],
+    "trace_id": null,
+    "answer": "watchlist",
+    "word": "releases",
+    "software": "LangGraph",
+    "already_listed": {
+      "software_id": "sw_01JB8",
+      "name": "LangGraph"
+    },
+    "also": null,
+    "covers": []
+  },
+  "draft_words": "Every day at 9am, check LangGraph for new releases"
+}

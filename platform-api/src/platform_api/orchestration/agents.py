@@ -378,6 +378,7 @@ choose_result_adapter: TypeAdapter[ChooseResult] = TypeAdapter(ChooseResult)
 
 type RowKind = Literal["schedule", "look_for", "do", "where"]
 type RowState = Literal["understood", "changed", "missing", "cant_do"]
+type WatchPart = Literal["schedule", "ticket"]
 
 
 class UnderstoodRow(WireModel):
@@ -529,6 +530,9 @@ class PlannerFacts(WireModel):
     )
     needs_you: NeedsYouFact | None = None
     watchlist_schedule: WatchlistScheduleFact | None = None
+    watchlist_project: str | None = Field(
+        default=None, max_length=40, exclude_if=lambda project: project is None
+    )
 
 
 class PreviousTurn(WireModel):
@@ -597,6 +601,7 @@ class WatchlistAnswer(WireModel):
     also: (
         Annotated[SetupCardAnswer | PartAnswer | CantAnswer, Field(discriminator="kind")] | None
     ) = None
+    covers: list[WatchPart] = Field(default_factory=list[WatchPart])
 
 
 CantAnswer.model_rebuild()
