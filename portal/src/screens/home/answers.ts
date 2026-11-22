@@ -389,8 +389,7 @@ export function startSteps(view: CapabilitiesView): readonly string[] {
   return [
     example === undefined ? 'Tell me what should run by itself, in your own words.' : `Tell me what should run by itself, in your own words, like “${example}”.`,
     'Check the card I make, and change anything I guessed.',
-    'Press Set up. I do a test run, which writes nothing.',
-    'If the test passes, press Turn it on.',
+    'Press Turn on. I do a test run, which writes nothing, and turn it on if the test passes.',
     teams ? 'Nothing is written until an Approver says yes in Teams.' : 'Nothing is written until an Approver says yes.',
   ]
 }

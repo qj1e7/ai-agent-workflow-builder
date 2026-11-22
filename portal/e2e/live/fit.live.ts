@@ -208,7 +208,7 @@ for (const width of [1920, 1440, 1280, 1050, 901, 900, 390] as const) {
         () => [panel.getByRole('button', { name: 'Decline' }), panel.getByText('The platform can’t yet check registries or security advisories.')],
       ],
       ['run', `Why did ${facts.stopped.name} stop?`, () => newest.locator(`[data-opens="run:${facts.stopped.runId}"]`), () => [panel.getByText('Safe to retry')]],
-      ['software', 'Monitor LangGraph releases', () => newest.getByRole('button', { name: 'Open it' }), () => [panel.getByText('Checked by')]],
+      ['software', 'Monitor LangGraph releases on the watchlist', () => newest.getByRole('button', { name: 'Open it' }), () => [panel.getByText('Checked by')]],
     ]
     const found: string[] = []
     try {
@@ -474,7 +474,7 @@ for (const width of WIDTHS) {
     const states = [
       ['a set-up card with ticks, a long cross and a question', 'card', `Find bug tickets in MOCK with no update for 10 days and create one ticket that lists them. ${LONG_CROSS}.`, 'How often?'],
       ['the part I can do', 'part', 'Every Friday at 5pm, find tickets in MOCK with no update for 10 days that mention VPN and create one ticket that lists them', 'Ask the team'],
-      ['a watch request’s own time, offered to the whole watchlist', 'own-time', 'Watch LangGraph releases every Thursday at 7am', 'every Thursday at 7'],
+      ['a watch request’s own time, offered to the whole watchlist', 'own-time', 'Watch LangGraph releases on the watchlist every Thursday at 7am', 'every Thursday at 7'],
       ['a clash between two days', 'clash', 'Every Monday and Friday at 9am, find bug tickets in MOCK with no update for 10 days and create one ticket that lists them', 'Monday or Friday?'],
     ] as const
     try {

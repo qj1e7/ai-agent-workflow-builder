@@ -6,7 +6,7 @@ import rejected from '@contracts/fixtures/runs/rejected.json'
 import { describe, expect, it } from 'vitest'
 import type { BuildLineView, N8nBlockView, UseCaseView } from '../../api/types'
 import { emptyModel, foldWire, stationsOf, type PlanBlock, type RunModel } from '../run/runModel'
-import { buildLine, buildStage, canvasOf, checksOf, draftPill, lineTimes, notesOf, replayAt, statusOf, testStatus, testStep } from './build'
+import { buildLine, buildStage, canvasOf, checksOf, draftPill, lineTimes, turnOnStep, notesOf, replayAt, statusOf, testStatus, testStep } from './build'
 
 const LOG = created.build_log as BuildLineView[]
 const BLOCKS = created.blocks as N8nBlockView[]
@@ -85,6 +85,17 @@ describe('starting the test run, once', () => {
     expect(testStep({ ...held, testAsked: 'k1' }, true, 'draft', false), 'a card drawn again before the run was named asks again with the same key').toBe('start')
     expect(testStep({ ...held, testKey: 'k2', testAsked: 'k1' }, true, 'draft', true)).toBe('start')
     expect(testStep({ ...held, testRunId: 'run_1' }, true, 'draft'), 'a run the platform named is followed, not started').toBe('none')
+  })
+})
+
+describe('Turn on after the test run', () => {
+  it('turns the workflow on once, only when the test run passed and the workflow is still a draft', () => {
+    expect(turnOnStep({ kind: 'passed' }, 'draft', false)).toBe('turn_on')
+    expect(turnOnStep({ kind: 'passed' }, 'draft', true), 'once asked, the answer is waited for').toBe('none')
+    expect(turnOnStep({ kind: 'passed' }, 'on', false)).toBe('none')
+    expect(turnOnStep({ kind: 'passed' }, undefined, false), 'not before the workflow is read').toBe('none')
+    expect(turnOnStep({ kind: 'stopped' }, 'draft', false), 'a failed test leaves a Draft').toBe('none')
+    expect(turnOnStep({ kind: 'testing' }, 'draft', false)).toBe('none')
   })
 })
 

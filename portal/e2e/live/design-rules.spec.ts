@@ -54,7 +54,7 @@ async function noPartDropped(page: Page, state: string): Promise<void> {
   const card = main(page).locator('[data-card]').last()
   await expect(card.locator('[data-mark="no"]'), `Principle 4 (no part dropped): ${state} shows no cross`).not.toHaveCount(0)
   await expect(card, `Principle 4: ${state} says nothing is unclear while a part has a cross`).not.toContainText('Nothing is unclear')
-  await expect(card.getByRole('button', { name: 'Set up the part I can' }), `Principle 4: ${state} offers to set up the whole request`).toBeVisible()
+  await expect(card.getByRole('button', { name: 'Turn on' }), `Principle 4: ${state} offers to set up the whole request`).toBeVisible()
 }
 
 /** Principle 5: the "I can" lists name only what the platform's registry says is ready. */

@@ -330,15 +330,13 @@
   },
   {
     "id": "release-check-raises-a-ticket",
-    "note": "A ticket raised when a release is found waits for a yes like any other, so it skips nobody. Never refused. A model refused it, quoting none of the request.",
+    "note": "A ticket raised when a release is found waits for a yes like any other, so it skips nobody. Never refused. A model refused it, quoting none of the request. One software gets its own release check card, watched or not (ADR 0053).",
     "task": "Every weekday at 9, check LangGraph for new releases and raise a Jira ticket if there's a new one.",
     "kind": [
-      "watchlist",
-      "cant"
+      "setup_card"
     ],
-    "software": "LangGraph",
-    "word": [
-      "release*"
+    "understood": [
+      "LangGraph"
     ]
   },
   {
@@ -431,38 +429,35 @@
   },
   {
     "id": "react-version",
-    "note": "The day-one example: a version request with the software named.",
+    "note": "The day-one example: a version request with the software named. One software gets its own release check card, watched or not (ADR 0053).",
     "task": "Keep track of the React version",
     "kind": [
-      "watchlist"
+      "setup_card"
     ],
-    "software": "React",
-    "word": [
-      "version"
+    "understood": [
+      "React"
     ]
   },
   {
     "id": "kubernetes-releases",
-    "note": "Scenario G.",
+    "note": "Scenario G. One software gets its own release check card, watched or not (ADR 0053).",
     "task": "Monitor Kubernetes releases",
     "kind": [
-      "watchlist"
+      "setup_card"
     ],
-    "software": "Kubernetes",
-    "word": [
-      "release*"
+    "understood": [
+      "Kubernetes"
     ]
   },
   {
     "id": "langgraph-release",
-    "note": "Lane 2's task.",
+    "note": "Lane 2's task. One software gets its own release check card, watched or not (ADR 0053).",
     "task": "Tell me when LangGraph has a new release",
     "kind": [
-      "watchlist"
+      "setup_card"
     ],
-    "software": "LangGraph",
-    "word": [
-      "release"
+    "understood": [
+      "LangGraph"
     ]
   },
   {
@@ -3720,12 +3715,11 @@
   },
   {
     "id": "sw-watch-keep-track",
-    "note": "Software versioning set, 8 Nov.",
+    "note": "Software versioning set, 8 Nov. One software gets its own release check card, watched or not (ADR 0053).",
     "task": "Keep track of Grafana releases",
     "kind": [
-      "watchlist"
+      "setup_card"
     ],
-    "software": "Grafana",
     "facts": {
       "watchlist": [
         {
@@ -3767,16 +3761,18 @@
           "last_run_at": "2026-11-08T02:00:00Z"
         }
       ]
-    }
+    },
+    "understood": [
+      "Grafana"
+    ]
   },
   {
     "id": "sw-watch-new-versions",
-    "note": "Software versioning set, 8 Nov.",
+    "note": "Software versioning set, 8 Nov. One software gets its own release check card, watched or not (ADR 0053).",
     "task": "Watch Kubernetes for new versions",
     "kind": [
-      "watchlist"
+      "setup_card"
     ],
-    "software": "Kubernetes",
     "facts": {
       "watchlist": [
         {
@@ -3818,16 +3814,18 @@
           "last_run_at": "2026-11-08T02:00:00Z"
         }
       ]
-    }
+    },
+    "understood": [
+      "Kubernetes"
+    ]
   },
   {
     "id": "sw-watch-release",
-    "note": "Software versioning set, 8 Nov.",
+    "note": "Software versioning set, 8 Nov. One software gets its own release check card, watched or not (ADR 0053).",
     "task": "Tell me when Terraform has a new release",
     "kind": [
-      "watchlist"
+      "setup_card"
     ],
-    "software": "Terraform",
     "facts": {
       "watchlist": [
         {
@@ -3869,7 +3867,10 @@
           "last_run_at": "2026-11-08T02:00:00Z"
         }
       ]
-    }
+    },
+    "understood": [
+      "Terraform"
+    ]
   },
   {
     "id": "sw-statement",
@@ -4952,14 +4953,13 @@
   },
   {
     "id": "wv-track-grafana-releases",
-    "note": "Watch verbs, 9 Nov.",
+    "note": "Watch verbs, 9 Nov. One software gets its own release check card, watched or not (ADR 0053).",
     "task": "track the Grafana releases",
     "kind": [
-      "watchlist"
+      "setup_card"
     ],
-    "software": "Grafana",
-    "word": [
-      "release*"
+    "understood": [
+      "Grafana"
     ]
   },
   {

@@ -35,6 +35,7 @@ import {
   secondName,
   setUp,
   setUpWords,
+  answerFirst,
   setupLeft,
   taskWithoutSchedule,
   valueKey,
@@ -639,6 +640,7 @@ function SettingUp({ start }: { start: CardStart }) {
       body: (
         <>
           {chipOf(row, index)}
+          {row.state === 'changed' ? <span className={styles['guess']}>I guessed</span> : null}
           {note ? <span className={styles['pnote']}>{note}</span> : null}
           {row.state === 'cant_do' && canDrop(form.rows, index) ? (
             <button type="button" className={styles['link']} onClick={() => leaveOut(index)}>
@@ -726,16 +728,18 @@ function SettingUp({ start }: { start: CardStart }) {
         pill={<DraftPill label={creating ? 'Building' : 'Draft'} tone={creating ? 'new' : 'quiet'} />}
         status={
           <span id={`${id}-left`} role="status">
-            {creating ? 'Starting…' : leftWords(left)}
+            {creating ? 'Starting…' : (answerFirst(left) ?? leftWords(left))}
           </span>
         }
         actions={
           creating ? undefined : (
             <>
               <Button onClick={neverMind}>Never mind</Button>
-              <button type="button" id={`${id}-set-up`} className={buttonClassName(main)} aria-describedby={`${id}-left`} onClick={asks ? pointAtWhatIsLeft : pressSetUp}>
-                {setUpWords(left)}
-              </button>
+              {answerFirst(left) === null ? (
+                <button type="button" id={`${id}-set-up`} className={buttonClassName(main)} aria-describedby={`${id}-left`} onClick={asks ? pointAtWhatIsLeft : pressSetUp}>
+                  {setUpWords()}
+                </button>
+              ) : null}
             </>
           )
         }
