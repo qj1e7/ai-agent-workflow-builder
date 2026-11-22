@@ -464,9 +464,9 @@ describe('the Versions list', () => {
     }
   })
 
-  it('sits after Recent runs and the buttons, inside Details, as the prototype orders the page', () => {
+  it('sits after Recent runs and before the buttons, inside Details', () => {
     const html = mainOf(render(CHANGED))
-    const order = ['Recent runs', '>Pause<', '>Details<', '>Versions<'].map((needle) => html.indexOf(needle))
+    const order = ['Recent runs', '>Details<', '>Versions<', '>Pause<'].map((needle) => html.indexOf(needle))
     expect(order.every((place) => place >= 0)).toBe(true)
     expect(order).toEqual([...order].sort((a, b) => a - b))
   })

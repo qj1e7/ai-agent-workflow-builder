@@ -347,6 +347,17 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
             </section>
           )}
           <DraftActions useCase={useCase} viewer={viewer} />
+          {explainHere || useCase.version >= 2 ? (
+            <details className={styles['more']}>
+              <summary>Details</summary>
+              {explainHere ? (
+                <p>
+                  <ExplainButton useCaseId={id} name={useCase.name} />
+                </p>
+              ) : null}
+              <Versions useCase={useCase} now={now} nameOf={nameOf} operator={viewer.operator} say={say} />
+            </details>
+          ) : null}
           <div className={styles['actions']}>
             {runNowLeads ? (
               <Button variant={leadsThePage(banner.action) ? 'secondary' : 'primary'} icon={IconPlay} data-place={placeOf('run')} loading={runNow.pending} onClick={runNow.press}>
@@ -361,17 +372,6 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
             {openable ? <OpenInN8nEditor useCaseId={id} hold={openable} variant="secondary" /> : null}
             {items.length > 0 ? <ActionMenu items={items} buttonRef={moreButton} busy={!runNowLeads && runNow.pending} place={placeOf('delete')} /> : null}
           </div>
-          {explainHere || useCase.version >= 2 ? (
-            <details className={styles['more']}>
-              <summary>Details</summary>
-              {explainHere ? (
-                <p>
-                  <ExplainButton useCaseId={id} name={useCase.name} />
-                </p>
-              ) : null}
-              <Versions useCase={useCase} now={now} nameOf={nameOf} operator={viewer.operator} say={say} />
-            </details>
-          ) : null}
         </>
       )}
       {asking ? (

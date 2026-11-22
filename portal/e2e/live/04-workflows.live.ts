@@ -288,7 +288,7 @@ test('alice’s schedule changes publish versions the page lists read only, an U
   const page = await context.newPage()
   await page.goto(`/workflows/${workflow.id}`)
   await expect(heading(page)).toHaveText(workflow.name)
-  await expect(page.getByRole('heading', { name: 'Versions' }), 'one version shows no list').toHaveCount(0)
+  await expect(versionsList(page), 'one version shows no list').toHaveCount(0)
 
   await changeWhen(page).click()
   await page.getByLabel('Day').selectOption('weekdays')
