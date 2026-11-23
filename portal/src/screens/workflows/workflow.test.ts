@@ -504,8 +504,8 @@ describe('the manage controls of a workflow page', () => {
     expect(placeAfterRedraw(PLACES_IN_PAGE_ORDER, placeOf('pause'), shown({ ...AGENTS, state: 'paused' }))).toBe('switch')
   })
 
-  it('give the Software watchlist the same Run now, Pause and Resume as any workflow, and no Delete', () => {
-    expect(controlsOf(WATCHLIST, ALICE)).toEqual(['run', 'pause'])
+  it('give the Software watchlist the same Pause and Resume as any workflow, and no Delete, with Check now beside its list', () => {
+    expect(controlsOf(WATCHLIST, ALICE)).toEqual(['pause'])
     expect(controlsOf(PAUSED, ALICE)).toEqual(['resume'])
     expect(controlsOf({ ...WATCHLIST, state: 'paused' }, ALICE)).toEqual(['resume'])
     expect(controlsOf(WATCHLIST, BOB)).toEqual([])

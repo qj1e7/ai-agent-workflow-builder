@@ -403,8 +403,8 @@ export function controlsOf(useCase: Pick<UseCaseView, 'template' | 'state'> & Pa
         ? ['resume', 'delete']
         : ['run', 'pause', 'delete']
   const allowed = useCase.start_refused ? offered.filter((control) => control !== 'run' && control !== 'test') : offered
-  // Deleting the workflow would delete the list it checks, so the watchlist keeps no Delete.
-  return isWatchlist(useCase) ? allowed.filter((control) => control !== 'delete') : allowed
+  // Deleting the workflow would delete the list it checks, so the watchlist keeps no Delete. Its Check now sits with its list, so it has no Run now.
+  return isWatchlist(useCase) ? allowed.filter((control) => control !== 'delete' && control !== 'run') : allowed
 }
 
 /** The agent cards a workflow runs. The Software watchlist's is the Version checker. */

@@ -6,12 +6,16 @@ import { expect, test } from './support/test'
 import { decline, devContext, expectReadOnly, OUT, shot } from './support/ui'
 import path from 'node:path'
 
-const countLine = (page: Page) => page.locator('main h1 + p')
+const countLine = (page: Page) => page.locator('[data-count-line]')
 
-/** A software's own page is at /software/{id}. */
+/** A software's own page is its watchlist's workflow page, with ?software={id}. */
 async function softwareId(backend: Backend, name: string): Promise<string> {
   const { watchlist } = await backend.get<{ watchlist: { software: { id: string; name: string }[] } }>('alice', '/api/v1/watchlist')
   return watchlist.software.find((item) => item.name === name)?.id ?? ''
+}
+async function watchlistId(backend: Backend): Promise<string> {
+  const { watchlist } = await backend.get<{ watchlist: { use_case_id: string } }>('alice', '/api/v1/watchlist')
+  return watchlist.use_case_id
 }
 const listRow = (page: Page, name: string) => page.locator('li[data-status]').filter({ hasText: name })
 
@@ -26,8 +30,8 @@ test('alice adds software by its name: Find it, a checked guess with where it ca
   const page = await context.newPage()
   const watch = watchPage(page)
   await page.goto('/software')
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Watchlist')
-  await expect(page.getByRole('heading', { level: 2 }), 'the list and its schedule, with no Needs attention or How it’s checked').toHaveText(['Schedule'])
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Software watchlist')
+  await expect(page.getByRole('main'), 'the list and its schedule, with no Needs attention or How it’s checked').not.toContainText('Needs attention')
   await shot(page, info, 'n21-03-name')
 
   await page.getByLabel('Software name').fill('  LangGraph ')
@@ -143,7 +147,7 @@ test('a project the watchlist already holds is named, and a prefixed tag such as
   await expect(page.getByRole('button', { name: 'Looks right, add it' })).toHaveCount(0)
   await expect(page.getByRole('button', { name: /^Add / })).toHaveCount(0)
   await page.getByRole('link', { name: 'Show it on the list' }).click()
-  await expect(page).toHaveURL(/\/software\/[^/]+$/)
+  await expect(page).toHaveURL(/\?software=[^&]+$/)
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Our agents')
   await page.goto('/software')
 
@@ -300,7 +304,7 @@ test('an Approver who is not an Operator sees the list but no way to add', async
   await expect(page.getByLabel('Software name')).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Find it' })).toHaveCount(0)
   for (const name of ['Check now', 'Remove', 'Change schedule', 'Set a schedule', 'Turn off schedule']) await expect(page.getByRole('button', { name })).toHaveCount(0)
-  await expectReadOnly(page, 'the watchlist')
+  await expectReadOnly(page, 'this workflow')
   await context.close()
 })
 
@@ -320,7 +324,7 @@ for (const phone of [false, true]) {
     await expect(row).not.toContainText('GitHub now calls')
     await expect(page.getByRole('button', { name: /^Use the new address/ })).toHaveCount(0)
     const fastapi = await softwareId(backend, 'FastAPI')
-    const itemPage = `/software/${fastapi}`
+    const itemPage = `/workflows/${await watchlistId(backend)}?software=${fastapi}`
 
     await page.getByRole('button', { name: 'Check now' }).click()
     await expect(page).toHaveURL(/\/runs\/[^/]+$/)
@@ -332,7 +336,7 @@ for (const phone of [false, true]) {
     await expect(page.getByRole('main')).not.toContainText('Needs attention')
     await expect(page.getByRole('button', { name: /^Use the new address/ }), 'the list offers no new address').toHaveCount(0)
     await listRow(page, 'FastAPI').getByRole('link').click()
-    await expect(page).toHaveURL(new RegExp(`/software/${fastapi}$`))
+    await expect(page).toHaveURL(new RegExp(`\\?software=${fastapi}$`))
     const item = page.getByRole('main')
     await expect(item).toContainText(MOVED_WORDS)
     await expect(item).toContainText('tiangolo/fastapi')
@@ -347,10 +351,10 @@ for (const phone of [false, true]) {
     await expect(page.locator(`[data-home-item="address:${fastapiId}"]`), 'the row says what Home says, in its tone').toHaveText(/FastAPI\s+moved to fastapi\/fastapi on GitHub/)
     await expect(page.locator(`[data-home-item="address:${fastapiId}"]`)).toHaveAttribute('data-tone', 'wait')
     await page.locator(`[data-home-item="address:${fastapiId}"] a`).click()
-    await expect(page).toHaveURL(new RegExp(`/software/${fastapiId}$`))
+    await expect(page).toHaveURL(new RegExp(`\\?software=${fastapiId}$`))
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('FastAPI')
     await page.goto('/software?row=' + fastapiId)
-    await expect(page).toHaveURL(new RegExp(`/software/${fastapiId}$`))
+    await expect(page).toHaveURL(new RegExp(`\\?software=${fastapiId}$`))
 
     const forBob = await backend.get<{ actions: { fields: { title: string; body: string } }[] }>('bob', `/api/v1/approvals/${approvalId}`)
     const ticketBody = forBob.actions[0]?.fields.body ?? ''
@@ -480,7 +484,7 @@ test('an Approver sees that GitHub renamed a repository and that an Operator can
   await backend.checkNow('alice', (await backend.get<{ watchlist: { use_case_id: string } }>('alice', '/api/v1/watchlist')).watchlist.use_case_id).then((runId) => backend.waitForState(runId, ['awaiting_approval']))
   const bob = await devContext(browser, 'bob')
   const page = await bob.newPage()
-  await page.goto(`/software/${await softwareId(backend, 'FastAPI')}`)
+  await page.goto(`/workflows/${await watchlistId(backend)}?software=${await softwareId(backend, 'FastAPI')}`)
   const row = page.getByRole('main')
   await expect(row).toContainText(MOVED_WORDS)
   await expect(row).toContainText('An Operator can switch it to the new address.')

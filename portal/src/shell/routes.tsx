@@ -115,16 +115,24 @@ export function wordsOf(words: Words, context: PageContext): string {
 }
 
 /** Where an old /software address leads: the watchlist's workflow page, with the software it named, or Workflows when there is no watchlist. */
-export function softwareDestination(pathname: string, watchlistId: string | null): string {
+export function softwareDestination(pathname: string, watchlistId: string | null, search = ''): string {
   if (watchlistId === null) return PAGES.workflows.path
   const page = `${PAGES.workflows.path}/${watchlistId}`
+  const asked = new URLSearchParams(search)
   const rest = pathname.slice(WATCHLIST_PATH.length).replace(/^\/+|\/+$/g, '')
-  return rest === '' ? page : `${page}?software=${rest}`
+  const kept = new URLSearchParams()
+  // An old ?row= address names a software too, and the tab the address asks for stays.
+  const software = rest === '' ? asked.get('row') : decodeURIComponent(rest)
+  if (software) kept.set('software', software)
+  const view = asked.get('view')
+  if (view) kept.set('view', view)
+  const query = kept.toString()
+  return query === '' ? page : `${page}?${query}`
 }
 
 /** The Software page is the watchlist's workflow page now. It takes every address under /software there, once the watchlist is known. */
 function OldSoftwareAddress() {
-  const { pathname } = useLocation()
+  const { pathname, search } = useLocation()
   const watchlist = useWatchlist()
   if (watchlist.isPending) {
     return (
@@ -133,7 +141,7 @@ function OldSoftwareAddress() {
       </p>
     )
   }
-  return <Navigate to={softwareDestination(pathname, watchlist.data?.use_case_id ?? null)} replace />
+  return <Navigate to={softwareDestination(pathname, watchlist.data?.use_case_id ?? null, search)} replace />
 }
 
 const OLD_NEW_PATH = '/new'

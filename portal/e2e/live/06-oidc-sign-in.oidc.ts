@@ -81,7 +81,7 @@ test('alice signs in and sees her name, bob signs in at a deep link, and signing
     ['bob@example.test', false, true, false],
   ])
 
-  for (const label of ['Workflows', 'Watchlist', 'Chat']) {
+  for (const label of ['Workflows', 'Chat']) {
     await alice.page.getByRole('navigation', { name: 'Browse' }).getByRole('link', { name: new RegExp(`^${label}(\\s*, \\d+ need (you|action))?$`) }).click()
     await expect(alice.page.getByRole('heading', { level: 1 })).toBeVisible()
   }
@@ -106,7 +106,7 @@ test('alice signs in and sees her name, bob signs in at a deep link, and signing
   expect(alice.devHeaders, 'still no request carries X-Dev-User').toEqual([])
 
   const bob = await signIn(browser, backend, 'bob', '/software', info)
-  await expect(bob.page, 'bob lands on the deep link he asked for').toHaveURL(/\/software$/)
+  await expect(bob.page, 'bob lands on the deep link he asked for').toHaveURL(/\/workflows\/[^/]+$/)
   await expect(bob.page.getByRole('heading', { level: 1 })).toHaveText('Software watchlist')
   await expect(bob.page.getByRole('banner')).toContainText('Bob')
   await expect(bob.page.getByRole('banner')).toContainText('Approver')

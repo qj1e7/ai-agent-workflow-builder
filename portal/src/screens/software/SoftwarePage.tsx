@@ -38,6 +38,7 @@ import { BackToWatchlist, SoftwareItem } from './SoftwareItem'
 import {
   CHECKER,
   checksOnItsOwn,
+  countLine,
   emptyWords,
   nextCheckOf,
   REFRESH_MS,
@@ -193,7 +194,7 @@ interface LoadedProps {
   readonly now: Date
   /** Set on a software's own page. The Watchlist itself has none. */
   readonly rowId: string | null
-  /** Drawn inside the watchlist's workflow page, which already has Run now and Resume. */
+  /** Drawn inside the watchlist's workflow page, which already has Resume. */
   readonly embedded: boolean
 }
 
@@ -301,9 +302,15 @@ function Loaded({ view, operator, held, answeredAt, now, rowId, embedded }: Load
     )
   }
 
+  const counted = countLine(software)
   return (
     <>
-      {operator && view && !paused && !embedded && software.length > 0 ? <CheckNow useCaseId={view.use_case_id} /> : null}
+      {embedded && counted ? (
+        <p className="muted" data-count-line>
+          {counted}
+        </p>
+      ) : null}
+      {operator && view && !paused && software.length > 0 ? <CheckNow useCaseId={view.use_case_id} /> : null}
       {view?.last_check?.state === 'failed' ? <LastCheckStopped last={view.last_check} /> : null}
       {notice}
       <section className={styles['section']} aria-label="Software we watch">

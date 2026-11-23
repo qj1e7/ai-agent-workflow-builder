@@ -45,7 +45,7 @@ const ANY_HEADING = /\S/
 const SCREENS: readonly Screen[] = [
   { name: 'Chat', path: '/', heading: ANY_HEADING },
   { name: 'Workflows', path: '/workflows', heading: 'Workflows' },
-  { name: 'Watchlist', path: '/software', heading: 'Watchlist', lead: /^(?:(?:\d+ (?:has|have) a newer version|\d+ can’t be found|\d+ can’t be checked|\d+ (?:is|are) up to date|\d+ watching)(?: · (?:\d+ (?:has|have) a newer version|\d+ can’t be found|\d+ can’t be checked|\d+ (?:is|are) up to date|\d+ watching))*|Everything your team runs, in one list\.)$/ },
+  { name: 'Watchlist', path: '/software', heading: 'Software watchlist', lead: /^(?:(?:\d+ (?:has|have) a newer version|\d+ can’t be found|\d+ can’t be checked|\d+ (?:is|are) up to date|\d+ watching)(?: · (?:\d+ (?:has|have) a newer version|\d+ can’t be found|\d+ can’t be checked|\d+ (?:is|are) up to date|\d+ watching))*|Everything your team runs, in one list\.)$/ },
   { name: 'Settings, Connections', path: '/settings', heading: 'Settings' },
   { name: 'Settings, People and permissions', path: '/settings?tab=people', heading: 'Settings' },
   { name: 'Settings, AI model', path: '/settings?tab=model', heading: 'Settings' },
@@ -64,7 +64,7 @@ async function settled(page: Page, screen: Screen): Promise<void> {
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
   if (typeof screen.heading === 'string') await expect(page.getByRole('heading', { level: 1 })).toHaveText(screen.heading)
   await expect(page.getByRole('main').getByRole('status').filter({ hasText: /^Loading/ })).toHaveCount(0)
-  if (screen.lead) await expect(page.locator('main h1 + p'), `${screen.name}'s count line`).toHaveText(screen.lead)
+  if (screen.lead) await expect(page.locator('[data-count-line]'), `${screen.name}'s count line`).toHaveText(screen.lead)
   if (screen.path === '/') {
     const main = page.getByRole('main')
     await expect(main.locator('[data-home-item]').or(main.getByText('All quiet', { exact: true })).or(main.locator('#planner-box')).first()).toBeVisible()

@@ -546,6 +546,7 @@ describe('the Software watchlist', () => {
   it('gives an Operator the same Pause as any workflow, and no Delete', () => {
     const main = mainOf(own())
     expect(buttons(main)).toContain('Pause')
+    expect(buttons(main)).toContain('Check now')
     expect(buttons(main)).not.toContain('Delete')
     expect(main).not.toContain('Delete workflow')
   })
