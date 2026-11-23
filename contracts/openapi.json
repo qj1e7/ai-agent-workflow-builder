@@ -6959,11 +6959,10 @@
             "type": "string"
           },
           "why": {
-            "description": "Why it can't run: its version needs a fix, the safety checker refused its writes, or it could not move to n8n.",
+            "description": "Why it can't run: its version needs a fix, or the safety checker refused its writes.",
             "enum": [
               "needs_a_fix",
-              "writes_refused",
-              "not_moved"
+              "writes_refused"
             ],
             "title": "Why",
             "type": "string"
@@ -7388,7 +7387,7 @@
             "type": "array"
           },
           "fixes": {
-            "description": "Workflows that are on and can't run: a version that needs a fix, writes the safety checker refused, or one that could not move to n8n. They are part of Needs you for everyone.",
+            "description": "Workflows that are on and can't run, which this person has a button for: a version that needs a fix, or writes the safety checker refused (for an Operator). They are part of Needs you.",
             "items": {
               "$ref": "#/components/schemas/FixItem"
             },

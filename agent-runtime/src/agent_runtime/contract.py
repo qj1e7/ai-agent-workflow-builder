@@ -864,6 +864,9 @@ class NeedsYouFact(WireModel):
     questions: int = Field(
         ge=0, description="Questions Approvers asked the person on requests waiting for a yes."
     )
+    fixes: int = Field(
+        default=0, ge=0, description="Workflows that are on and can't run, which they can fix."
+    )
     total: int = Field(
         ge=0, description="The count Home shows under Needs you, the sum of the counts above."
     )

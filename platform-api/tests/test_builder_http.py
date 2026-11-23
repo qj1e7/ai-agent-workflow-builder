@@ -429,6 +429,7 @@ class FakeHome:
             stopped_total=0,
             connections=[],
             addresses=[],
+            fixes=[],
             replied=[1],
             declined_total=1,
             questions_for_me_total=1,

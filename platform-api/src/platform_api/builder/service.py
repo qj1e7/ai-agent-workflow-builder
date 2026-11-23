@@ -160,7 +160,7 @@ from platform_api.orchestration import (
     unchecked,
     write_tools_used,
 )
-from platform_api.shared import TEAM_TIME_ZONE, Principal, UseCaseId, UserId, new_id
+from platform_api.shared import TEAM_TIME_ZONE, Principal, Role, UseCaseId, UserId, new_id
 
 log = logging.getLogger(__name__)
 
@@ -623,9 +623,10 @@ class Builder:
             )
             for row in rows
         ]
+        operator = viewer is not None and Role.OPERATOR in viewer.roles
         return [
             view.model_copy(
-                update={"needs_you": view.needs_you or ("fix" if fix_of(view) else None)}
+                update={"needs_you": view.needs_you or ("fix" if fix_of(view, operator) else None)}
             )
             for view in views
         ]

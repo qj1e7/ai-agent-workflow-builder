@@ -160,6 +160,7 @@ def needs_you_fact(home: HomeOut) -> NeedsYouFact:
     replies = len(home.replied)
     declined = home.declined_total
     questions = home.questions_for_me_total
+    fixes = len(home.fixes)
     return NeedsYouFact(
         approvals=approvals,
         confirmations=confirmations,
@@ -169,6 +170,7 @@ def needs_you_fact(home: HomeOut) -> NeedsYouFact:
         replies=replies,
         declined=declined,
         questions=questions,
+        fixes=fixes,
         total=approvals
         + confirmations
         + stopped
@@ -176,7 +178,8 @@ def needs_you_fact(home: HomeOut) -> NeedsYouFact:
         + addresses
         + replies
         + declined
-        + questions,
+        + questions
+        + fixes,
     )
 
 

@@ -10,7 +10,9 @@ from platform_api.contracts.stories import USE_CASE
 
 
 def case(**change: Any) -> UseCaseView:
-    return USE_CASE.model_copy(update={"state": "on", "grade": None, "move_refused": None, **change})
+    return USE_CASE.model_copy(
+        update={"state": "on", "grade": None, "move_refused": None, **change}
+    )
 
 
 def test_a_version_that_needs_a_fix_is_for_everyone_because_explain_opens_for_all():

@@ -194,17 +194,17 @@ class FixItem(WireModel):
     use_case_id: str
     use_case_name: str
     why: FixReason = Field(
-        description="Why it can't run: its version needs a fix, the safety checker refused its "
-        "writes, or it could not move to n8n."
+        description="Why it can't run: its version needs a fix, or the safety checker refused "
+        "its writes."
     )
 
 
-def fix_items(use_cases: Sequence[UseCaseView]) -> list[FixItem]:
-    """The workflows that are on and can't run, which every person's Needs you lists."""
+def fix_items(use_cases: Sequence[UseCaseView], operator: bool) -> list[FixItem]:
+    """The workflows that are on and can't run, which this person has a button for."""
     return [
         FixItem(use_case_id=u.use_case_id, use_case_name=u.name, why=why)
         for u in use_cases
-        if (why := fix_of(u)) is not None
+        if (why := fix_of(u, operator)) is not None
     ]
 
 
@@ -322,9 +322,9 @@ class HomeOut(WireModel):
     coming_up: ComingUp | None = Field(description="The workflow that runs next, if any.")
     workflows: int = Field(description="How many workflows the team has.")
     fixes: list[FixItem] = Field(
-        description="Workflows that are on and can't run: a version that needs a fix, writes "
-        "the safety checker refused, or one that could not move to n8n. They are part of Needs "
-        "you for everyone."
+        description="Workflows that are on and can't run, which this person has a button for: a "
+        "version that needs a fix, or writes the safety checker refused (for an Operator). They "
+        "are part of Needs you."
     )
     addresses: list[AddressItem] = Field(
         description="For an Operator, the watched software whose repository GitHub moved or "
@@ -674,7 +674,7 @@ class Home:
             replied=replied,
             coming_up=_coming_up(use_cases),
             workflows=len(use_cases),
-            fixes=fix_items(use_cases),
+            fixes=fix_items(use_cases, operator),
             addresses=[_address(a) for a in addresses],
             connections=[_connection(c) for c in connections],
             changed_in_n8n=changed,

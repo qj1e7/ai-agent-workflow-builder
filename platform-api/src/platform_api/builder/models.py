@@ -982,17 +982,18 @@ class DraftList(WireModel):
     )
 
 
-FixReason = Literal["needs_a_fix", "writes_refused", "not_moved"]
+FixReason = Literal["needs_a_fix", "writes_refused"]
 
 
-def fix_of(view: UseCaseView) -> FixReason | None:
-    """Why a workflow that is on can't run as the platform expects, for everyone who reads it: its
-    version needs a fix, the safety checker refused its writes, or it could not move to n8n. One
-    rule for the pill and for Home's Needs you row, so the two never disagree."""
+def fix_of(view: UseCaseView, operator: bool) -> FixReason | None:
+    """Why a workflow that is on can't run, for a person who has a button for it. A version that
+    needs a fix is for everyone, because Explain opens for both roles. Refused writes are for an
+    Operator, who can add the yes back. A workflow that could not move to n8n has no button, so
+    it is not here. One rule for the pill and for Home's Needs you row."""
     if view.state != "on":
         return None
-    if view.move_refused:
-        return "not_moved"
-    if view.grade in ("needs_a_fix", "writes_refused"):
+    if view.grade == "needs_a_fix":
+        return view.grade
+    if view.grade == "writes_refused" and operator:
         return view.grade
     return None
