@@ -18,7 +18,6 @@ test.beforeAll(async ({ baseURL }) => {
 const RAIL = [
   { label: 'Chat', path: '/', heading: HOME_ALICE },
   { label: 'Workflows', path: '/workflows', heading: 'Workflows' },
-  { label: 'Watchlist', path: '/software', heading: 'Watchlist' },
 ] as const
 
 const PAGES = [...RAIL.map(({ path: to, label }) => ({ label, path: to })), { label: 'Settings', path: '/settings' }]
@@ -53,7 +52,7 @@ const linkText = (label: string) => new RegExp(`^${label}\\d*$`)
 /** A rail link's name, which carries ", N in all" once its total is known (the sketch's counts). */
 const linkName = (label: string) => new RegExp(`^${label}(, \\d+ in all)?$`)
 
-test('Home greets the signed-in person and the rail reads Chat, Workflows, Watchlist', async ({ page }, info) => {
+test('Home greets the signed-in person and the rail reads Chat, Workflows', async ({ page }, info) => {
   await page.goto('/')
   await expect(heading(page)).toHaveText(HOME_ALICE)
   await expect(page.getByRole('main').getByText(GREETING('Alice'))).toBeVisible()
@@ -82,8 +81,8 @@ test('each rail item changes the URL and opens a page with its own heading', asy
 test('Back and Forward walk across three pages', async ({ page }) => {
   await page.goto('/')
   await mainMenu(page).getByRole('link', { name: linkName('Workflows') }).click()
-  await mainMenu(page).getByRole('link', { name: linkName('Watchlist') }).click()
-  await expect(heading(page)).toHaveText('Watchlist')
+  await page.getByRole('link', { name: 'Settings', exact: true }).click()
+  await expect(heading(page)).toHaveText('Settings')
   await page.goBack()
   await expect(page).toHaveURL(/\/workflows$/)
   await expect(heading(page)).toHaveText('Workflows')
@@ -93,8 +92,8 @@ test('Back and Forward walk across three pages', async ({ page }) => {
   await page.goForward()
   await expect(heading(page)).toHaveText('Workflows')
   await page.goForward()
-  await expect(page).toHaveURL(/\/software$/)
-  await expect(heading(page)).toHaveText('Watchlist')
+  await expect(page).toHaveURL(/\/settings$/)
+  await expect(heading(page)).toHaveText('Settings')
 })
 
 test('the Settings gear opens Settings, and a path that does not exist says so', async ({ page }, info) => {
@@ -166,7 +165,7 @@ test('Tab reaches every header control with a visible focus ring, and the skip l
   const walk = await walkTabs(page)
   const labels = walk.stops.map((stop) => stop.label)
   expect(labels[0], `the skip link is the first stop; stops: ${labels.join(', ')}`).toBe('Skip to main content')
-  for (const name of ['AI Workflow Builder', 'Chat', 'Workflows', 'Watchlist', 'Teams, practice copy', 'Settings', 'Test controls']) {
+  for (const name of ['AI Workflow Builder', 'Chat', 'Workflows', 'Teams, practice copy', 'Settings', 'Test controls']) {
     expect(labels.filter((label) => label.includes(name)).length, `Tab reaches ${name}; stops: ${labels.join(', ')}`).toBeGreaterThan(0)
   }
   expect(walk.unreached, 'controls Tab never reached').toEqual([])
@@ -217,14 +216,13 @@ test('at 390 px wide the page does not scroll sideways, and every rail item can 
   await page.goto('/')
   await expect(heading(page)).toBeVisible()
   const bar = mainMenu(page)
-  await expect(bar.getByRole('link')).toHaveText([linkText('Chat'), linkText('Workflows'), linkText('Watchlist')])
+  await expect(bar.getByRole('link')).toHaveText([linkText('Chat'), linkText('Workflows')])
   const bannerBottom = (await page.getByRole('banner').boundingBox())?.height ?? 0
   expect(bannerBottom, 'at 390 px the header stays on one row').toBeLessThanOrEqual(70)
   const barTop = (await bar.boundingBox())?.y ?? -1
   expect(barTop, 'at 390 px the rail is a bar across the top, under the header').toBeGreaterThanOrEqual(bannerBottom - 1)
   for (const [label, to, words] of [
     ['Workflows', /\/workflows$/, 'Workflows'],
-    ['Watchlist', /\/software$/, 'Watchlist'],
     ['Chat', /\/$/, HOME_ALICE],
   ] as const) {
     const tab = bar.getByRole('link', { name: linkName(label) })
