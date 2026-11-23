@@ -48,6 +48,9 @@ resource "azurerm_container_app" "this" {
   ingress {
     external_enabled = var.ingress.external
     target_port      = var.ingress.target_port
+    # Unset for HTTP apps, so Azure keeps its own default.
+    transport    = var.ingress.transport
+    exposed_port = var.ingress.exposed_port
 
     # Container Apps cannot mix Allow and Deny rules. With Allow rules, it refuses every address
     # outside them with "RBAC: access denied". No ingress field forces a replace in azurerm 5.7.0,
