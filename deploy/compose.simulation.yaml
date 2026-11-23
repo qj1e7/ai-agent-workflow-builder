@@ -1,0 +1,188 @@
+# The simulation n8n (ADR 0054): a second n8n where a workflow version is tried against mock
+# systems before its real test run. It is a stack of its own, never part of the platform's:
+# - its own PostgreSQL, in memory, so it keeps nothing after it stops;
+# - our n8n image with the platform n8n's guards and bootstrap, its own encryption key, node key
+#   and start secret, and only mock keys;
+# - mock GitHub, and mock Slack under the name slack.com, as in deploy/compose.e2e.yaml.
+# Both networks are internal, and nothing publishes a port, so nothing here reaches the internet,
+# the host or the platform's stack. Every setting it reads starts SIM_, and scripts/simulation.sh
+# makes each up at every start, so no key from deploy/.env can reach it.
+# scripts/simulation_isolation.py checks all of this. Start it with scripts/simulation.sh up.
+name: wab-sim
+
+# The same as deploy/compose.yaml's x-n8n-guards, which the check compares.
+x-n8n-guards: &n8n-guards
+  NODES_EXCLUDE: '["n8n-nodes-base.executeCommand","n8n-nodes-base.localFileTrigger","n8n-nodes-base.function","n8n-nodes-base.functionItem","@n8n/n8n-nodes-langchain.code","n8n-nodes-base.git","n8n-nodes-base.gitTool"]'
+  N8N_COMMUNITY_PACKAGES_ENABLED: "false"
+  N8N_BLOCK_ENV_ACCESS_IN_NODE: "true"
+  N8N_RUNNERS_MODE: external
+  N8N_DEPRECATED_NODES_BLOCK: "true"
+  N8N_RESTRICT_FILE_ACCESS_TO: /home/node/.n8n-files
+  N8N_BLOCK_FILE_ACCESS_TO_N8N_FILES: "true"
+
+services:
+  postgres:
+    image: postgres:17@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3
+    environment:
+      POSTGRES_PASSWORD: ${SIM_POSTGRES_PASSWORD:?run scripts/simulation.sh}
+      N8N_DB_PASSWORD: ${SIM_N8N_DB_PASSWORD:?run scripts/simulation.sh}
+      WAB_OWNER_PASSWORD: ${SIM_OWNER_PASSWORD:?run scripts/simulation.sh}
+      WAB_BUILDER_PASSWORD: ${SIM_BUILDER_PASSWORD:?run scripts/simulation.sh}
+      WAB_ORCHESTRATION_PASSWORD: ${SIM_ORCHESTRATION_PASSWORD:?run scripts/simulation.sh}
+      WAB_MONITORING_PASSWORD: ${SIM_MONITORING_PASSWORD:?run scripts/simulation.sh}
+    # In memory, so the stack leaves no volume behind.
+    tmpfs:
+      - /var/lib/postgresql/data
+    volumes:
+      - ./postgres/init.sh:/docker-entrypoint-initdb.d/init.sh:ro
+    networks: [sim]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d platform"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  n8n:
+    build:
+      context: ..
+      dockerfile: deploy/n8n/Dockerfile
+    image: wab/n8n:${WAB_IMAGE_TAG:-dev}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mock-slack:
+        condition: service_healthy
+    environment:
+      <<: *n8n-guards
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: postgres
+      DB_POSTGRESDB_PORT: "5432"
+      DB_POSTGRESDB_DATABASE: n8n
+      DB_POSTGRESDB_USER: n8n
+      DB_POSTGRESDB_PASSWORD: ${SIM_N8N_DB_PASSWORD:?run scripts/simulation.sh}
+      WEBHOOK_URL: http://n8n:5678/
+      GENERIC_TIMEZONE: Asia/Singapore
+      N8N_ENCRYPTION_KEY: ${SIM_N8N_ENCRYPTION_KEY:?run scripts/simulation.sh}
+      N8N_DIAGNOSTICS_ENABLED: "false"
+      N8N_VERSION_NOTIFICATIONS_ENABLED: "false"
+      N8N_PERSONALIZATION_ENABLED: "false"
+      N8N_HIRING_BANNER_ENABLED: "false"
+      N8N_SECURE_COOKIE: "false"
+      N8N_DISABLED_MODULES: mcp-registry
+      N8N_RUNNERS_AUTH_TOKEN: ${SIM_RUNNERS_TOKEN:?run scripts/simulation.sh}
+      EXECUTIONS_DATA_SAVE_ON_SUCCESS: all
+      # Our blocks call the simulation gateway, never the platform's API. ADR 0054's PR 3 adds it
+      # as the service gateway on the sim network. Until then nothing answers there.
+      WAB_API_URL: http://gateway:8600
+      WAB_NODE_KEY: ${SIM_NODE_KEY:?run scripts/simulation.sh}
+      WAB_START_SECRET: ${SIM_START_SECRET:?run scripts/simulation.sh}
+      # Trusts mock Slack's certificate authority, as in deploy/compose.e2e.yaml.
+      NODE_EXTRA_CA_CERTS: /wab-test-ca/ca.pem
+    # The task runner's broker listens only on n8n's address on the runners network, as in
+    # deploy/compose.yaml.
+    entrypoint:
+      - tini
+      - --
+      - /bin/sh
+      - -c
+      - >-
+        N8N_RUNNERS_BROKER_LISTEN_ADDRESS="$$(node -e "require('dns').lookup('n8n-broker', {family: 4},
+        (e, a) => { if (e) process.exit(1); console.log(a); })")"
+        && export N8N_RUNNERS_BROKER_LISTEN_ADDRESS && exec /docker-entrypoint.sh
+    networks:
+      sim: {}
+      runners:
+        aliases: [n8n-broker]
+    volumes:
+      - slack-ca:/wab-test-ca:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -Y off -qO- http://localhost:5678/healthz/readiness || exit 1"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+
+  n8n-runners:
+    image: n8nio/runners:2.42.6@sha256:b78816286beb0a14e874abfda31eb4621d47f5ebb38f194271df7e39b7bd63a7
+    depends_on:
+      n8n:
+        condition: service_healthy
+    environment:
+      N8N_RUNNERS_TASK_BROKER_URI: http://n8n-broker:5679
+      N8N_RUNNERS_AUTH_TOKEN: ${SIM_RUNNERS_TOKEN:?run scripts/simulation.sh}
+      N8N_RUNNERS_AUTO_SHUTDOWN_TIMEOUT: "15"
+      GENERIC_TIMEZONE: Asia/Singapore
+    networks: [runners]
+
+  # platform-api's own bootstrap, on the simulation's PostgreSQL. It sets up the simulation n8n's
+  # owner, checks its blocks and guards, and loads the error workflow and the self-test.
+  bootstrap:
+    build:
+      context: ../platform-api
+      target: runtime
+    image: wab/platform-api:${WAB_IMAGE_TAG:-dev}
+    command: ["python", "-m", "platform_api.bootstrap"]
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      n8n:
+        condition: service_healthy
+      n8n-runners:
+        condition: service_started
+    environment:
+      <<: *n8n-guards
+      DATABASE_URL_OWNER: postgresql://wab_owner:${SIM_OWNER_PASSWORD:?run scripts/simulation.sh}@postgres:5432/platform
+      N8N_BASE_URL: http://n8n:5678
+      N8N_OWNER_EMAIL: owner@simulation.example
+      N8N_OWNER_PASSWORD: ${SIM_N8N_OWNER_PASSWORD:?run scripts/simulation.sh}
+      STEP_KEY: ${SIM_STEP_KEY:?run scripts/simulation.sh}
+      PLATFORM_INTERNAL_URL: http://gateway:8600
+      TEAM_TIME_ZONE: Asia/Singapore
+    networks: [sim]
+
+  mock-github:
+    build:
+      context: ../e2e/mock_github
+      target: runtime
+    image: wab/mock-github:${WAB_IMAGE_TAG:-dev}
+    networks: [sim]
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8200/healthz', timeout=2)
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+  # n8n's Slack block always calls https://slack.com, so mock Slack answers to that name here, with
+  # a certificate authority it makes at each start and writes to the slack-ca volume.
+  mock-slack:
+    build:
+      context: ../e2e/mock_slack
+      target: runtime
+    image: wab/mock-slack:${WAB_IMAGE_TAG:-dev}
+    volumes:
+      - slack-ca:/ca
+    networks:
+      sim:
+        aliases: [slack.com]
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8500/healthz', timeout=2)
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+networks:
+  sim:
+    internal: true
+  runners:
+    internal: true
+
+volumes:
+  slack-ca: {}

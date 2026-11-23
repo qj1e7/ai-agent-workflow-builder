@@ -281,6 +281,24 @@ jobs:
         working-directory: .
         run: scripts/pack-smoke.sh
 
+  # The simulation n8n (ADR 0054) on its own network, with keys made up at the start. deploy/.env
+  # holds the platform's keys, made up too, so the check can show none of them reaches it.
+  simulation:
+    concurrency:
+      group: ci-simulation-${{ github.ref }}
+      cancel-in-progress: true
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+
+      - name: The simulation n8n bootstraps, holds no real key and reaches only the mocks
+        run: |
+          deploy/make-env.sh
+          scripts/simulation.sh test
+
   scans:
     runs-on: ubuntu-latest
     timeout-minutes: 10
