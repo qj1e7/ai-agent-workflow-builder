@@ -208,7 +208,7 @@ test('scenario H: alice changes the schedule, pauses and deletes through the pag
 
   const order = await page.evaluate(() => {
     const at = (needle: string) => document.body.innerText.indexOf(needle)
-    return ['On. It has no schedule', 'Who says yes', 'Recent runs', 'Pause'].map(at)
+    return ['On. Runs only when you press Run now.', 'Who says yes', 'Recent runs', 'Pause'].map(at)
   })
   expect(order.every((place) => place >= 0), 'every section is on the page').toBe(true)
   expect(order, 'banner, who says yes, recent runs, then the buttons, as the sketch orders them').toEqual([...order].sort((a, b) => a - b))
