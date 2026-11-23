@@ -191,7 +191,7 @@ test('while a yes waits, every row stays in the list, and the decision is in Nee
   await expect(page.getByRole('region', { name: 'Software we watch' }).locator('li')).toHaveCount(2)
   await expect(page.getByRole('main')).not.toContainText('Needs attention')
   await expect(page.locator('li[data-status="awaiting_approval"]')).toHaveCount(2)
-  await expect(page.getByRole('link', { name: 'Review and decide' }), 'the decision shows once, on the page’s banner').toHaveCount(1)
+  await expect(page.getByRole('link', { name: 'Review and decide' }), 'Alice started it, so the decision is not hers to make').toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Run now' })).not.toHaveClass(/primary/)
   await shot(page, info, 'n21-03-waiting-alice')
   assertClean(watch)
