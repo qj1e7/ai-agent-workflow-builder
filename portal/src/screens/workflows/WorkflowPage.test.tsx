@@ -543,12 +543,43 @@ describe('the Software watchlist', () => {
     for (const row of watched.software) expect(text(mainOf(html))).toContain(row.name)
   })
 
-  it('gives an Operator the same Pause as any workflow, and no Delete', () => {
+  it('gives an Operator Run now and Pause as any workflow has them, and no Check now and no Delete', () => {
     const main = mainOf(own())
     expect(buttons(main)).toContain('Pause')
-    expect(buttons(main)).toContain('Check now')
+    expect(buttons(main)).toContain('Run now')
+    expect(buttons(main)).not.toContain('Check now')
     expect(buttons(main)).not.toContain('Delete')
     expect(main).not.toContain('Delete workflow')
+  })
+
+  it('shows no Run now while the list is empty, and none for a paused watchlist or an Approver', () => {
+    const empty = { ...watched, software: [] }
+    expect(buttons(mainOf(render({ useCase: WATCHLIST, watchlist: empty })))).not.toContain('Run now')
+    expect(buttons(mainOf(own({ state: 'paused' })))).not.toContain('Run now')
+    expect(buttons(mainOf(own({}, BOB)))).not.toContain('Run now')
+  })
+
+  it('says a stopped check once: one Open the run, not a second from the list', () => {
+    const stopped = { ...watched, last_check: { ...statuses.last_check, state: 'failed' as const, run_id: STOPPED.run_id } } as WatchlistView
+    const html = render({ useCase: WATCHLIST, last: {}, watchlist: stopped })
+    expect(text(mainOf(html)).match(/Open the run/g)).toHaveLength(1)
+  })
+
+  it('says the n8n hold once, in the page’s own banner, and not again under the schedule', () => {
+    const held = { ...WATCHLIST, held_in_n8n: { id: 'carol', name: 'Carol', since: '2026-11-04T05:40:00Z' } } as UseCaseView
+    const html = render({ useCase: held, watchlist: watched })
+    expect(html.match(/data-held/g)).toHaveLength(1)
+    expect(text(mainOf(html))).not.toContain('Can’t change it while Carol has it open in n8n.')
+    expect(buttons(mainOf(html))).not.toContain('Change schedule')
+  })
+
+  it('says it is moving to n8n once', () => {
+    const html = render({ useCase: { ...WATCHLIST, moving_to_n8n: true } as UseCaseView, watchlist: { ...watched, moving_to_n8n: true } as WatchlistView })
+    expect(text(mainOf(html)).match(/Moving to n8n after this run\./g)).toHaveLength(1)
+  })
+
+  it('keeps the list in one column, with no empty half beside it', () => {
+    expect(own()).not.toMatch(/class="[^"]*pair/)
   })
 
   it('gives an Operator Resume while it is paused, once', () => {

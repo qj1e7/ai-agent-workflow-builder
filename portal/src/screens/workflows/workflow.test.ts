@@ -504,8 +504,8 @@ describe('the manage controls of a workflow page', () => {
     expect(placeAfterRedraw(PLACES_IN_PAGE_ORDER, placeOf('pause'), shown({ ...AGENTS, state: 'paused' }))).toBe('switch')
   })
 
-  it('give the Software watchlist the same Pause and Resume as any workflow, and no Delete, with Check now beside its list', () => {
-    expect(controlsOf(WATCHLIST, ALICE)).toEqual(['pause'])
+  it('give the Software watchlist the same Pause and Resume as any workflow, and no Delete, and Run now like any workflow', () => {
+    expect(controlsOf(WATCHLIST, ALICE)).toEqual(['run', 'pause'])
     expect(controlsOf(PAUSED, ALICE)).toEqual(['resume'])
     expect(controlsOf({ ...WATCHLIST, state: 'paused' }, ALICE)).toEqual(['resume'])
     expect(controlsOf(WATCHLIST, BOB)).toEqual([])
@@ -781,6 +781,14 @@ describe('the More actions menu', () => {
   it('is empty for an Approver who is not an Operator, and never holds Delete for the Software watchlist', () => {
     expect(menuActionsOf(AGENTS, BOB)).toEqual([])
     expect(menuActionsOf(WATCHLIST, ALICE)).not.toContain('delete')
+  })
+
+  it('leads the Software watchlist’s page with Run now, scheduled or not, so it is never inside the menu', () => {
+    expect(mainActionOf(WATCHLIST, ALICE)).toBe('run')
+    expect(mainActionOf({ ...WATCHLIST, schedule: null }, ALICE)).toBe('run')
+    expect(menuActionsOf(WATCHLIST, ALICE)).toEqual([])
+    expect(mainActionOf(WATCHLIST, BOB)).toBeNull()
+    expect(mainActionOf({ ...WATCHLIST, state: 'paused' }, ALICE)).toBeNull()
   })
 })
 

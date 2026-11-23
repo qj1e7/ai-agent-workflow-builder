@@ -617,6 +617,22 @@ describe('the Software watchlist in n8n', () => {
   })
 })
 
+describe('the count line above the list', () => {
+  const line = (html: string) => /<p[^>]*data-count-line[^>]*>([\s\S]*?)<\/p>/.exec(html)?.[1]
+
+  it('says what has a newer version, what can’t be checked, what is up to date and what is only watched, to Operators and Approvers', () => {
+    for (const me of [ALICE, BOB]) expect(text(line(render(statuses, me)) ?? '')).toBe('3 have a newer version · 1 can’t be checked · 1 is up to date · 1 watching')
+  })
+
+  it('is not drawn while the list is empty', () => {
+    expect(render(empty, ALICE)).not.toContain('data-count-line')
+  })
+
+  it('is not drawn on a software’s own page', () => {
+    expect(renderItem(statuses, ALICE, idOf('behind'))).not.toContain('data-count-line')
+  })
+})
+
 describe('what checks each row', () => {
   it('says each software is checked by the Software watchlist while its schedule runs', () => {
     const words = text(render(statuses, ALICE))
