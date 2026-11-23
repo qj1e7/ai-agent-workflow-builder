@@ -364,6 +364,11 @@ class RunBook:
         self.runs: list[RunDetail] = []
         self.asked: list[list[UseCaseId]] = []
         self.viewers: list[Principal | None] = []
+        self.needing: dict[UseCaseId, str] = {}
+        """What this person's Needs you holds, by workflow, as the platform says it."""
+
+    async def needing_you(self, viewer: Principal) -> dict[UseCaseId, str]:
+        return dict(self.needing)
 
     async def newest_runs(
         self, use_case_ids: Sequence[UseCaseId], viewer: Principal | None = None
@@ -1539,6 +1544,15 @@ async def test_a_stopped_run_is_in_needs_you_only_for_an_operator_whose_work_it_
         (row,) = [u for u in r.json()["use_cases"] if u["name"] == "Stopped for some"]
         seen[who] = row["last_run"]["you_can_open"]
     assert seen == {"alice": True, "carol": False, "bob": False}
+
+
+async def test_a_workflow_says_why_it_needs_the_person_whatever_its_state(front: Front):
+    stopped_id = await make_workflow(front, "Needs a look")
+    await make_workflow(front, "Quiet")
+    front.book.needing = {UseCaseId(stopped_id): "stopped"}
+    r = await front.client.get(USE_CASES, headers=ALICE)
+    seen = {u["name"]: u["needs_you"] for u in r.json()["use_cases"]}
+    assert seen == {"Needs a look": "stopped", "Quiet": None}
 
 
 async def test_a_run_declined_at_the_second_step_names_who_said_yes_first(front: Front):
