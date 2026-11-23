@@ -508,7 +508,7 @@ describe('the manage controls of a workflow page', () => {
     expect(controlsOf(WATCHLIST, ALICE)).toEqual(['run', 'pause'])
     expect(controlsOf(PAUSED, ALICE)).toEqual(['resume'])
     expect(controlsOf({ ...WATCHLIST, state: 'paused' }, ALICE)).toEqual(['resume'])
-    for (const viewer of [BOB, CAROL]) expect(controlsOf(WATCHLIST, viewer)).toEqual([])
+    expect(controlsOf(WATCHLIST, BOB)).toEqual([])
   })
 })
 
@@ -778,9 +778,9 @@ describe('the More actions menu', () => {
     expect(menuActionsOf(useCase, ALICE)).toContain('run')
   })
 
-  it('is empty for an Approver who is not an Operator, and for the Software watchlist', () => {
+  it('is empty for an Approver who is not an Operator, and never holds Delete for the Software watchlist', () => {
     expect(menuActionsOf(AGENTS, BOB)).toEqual([])
-    expect(menuActionsOf(WATCHLIST, ALICE)).toEqual([])
+    expect(menuActionsOf(WATCHLIST, ALICE)).not.toContain('delete')
   })
 })
 

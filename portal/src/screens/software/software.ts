@@ -9,6 +9,9 @@ export const WATCHLIST_PATH = '/software'
 /** A watched software's own page. Every link to one comes here, never through the old `?row=` address. */
 export const softwarePath = (id: string): string => `${WATCHLIST_PATH}/${encodeURIComponent(id)}`
 
+/** A watched software's page inside the watchlist's workflow page, which is where /software/{id} leads. */
+export const softwareInWorkflow = (useCaseId: string, id: string): string => `/workflows/${useCaseId}?software=${encodeURIComponent(id)}`
+
 /** The Software page and the side panel both refresh the watchlist this often. */
 export const REFRESH_MS = 15_000
 

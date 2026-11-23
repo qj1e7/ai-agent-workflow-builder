@@ -205,9 +205,11 @@ interface ScheduleProps {
   readonly onResumed: () => void
   /** Why nothing here can change now: someone has the watchlist open in n8n, so the platform would refuse it. */
   readonly held: string | null
+  /** False on the workflow page, where its banner already holds Resume. */
+  readonly resumeHere?: boolean
 }
 
-export function Schedule({ schedule, version, operator, paused, useCaseId, answeredAt, onResumed, held }: ScheduleProps) {
+export function Schedule({ schedule, version, operator, paused, useCaseId, answeredAt, onResumed, held, resumeHere = true }: ScheduleProps) {
   const { editing, opener, open, close } = useEditorThatRefocusesItsOpener()
   const [refused, setRefused] = useState<string | null>(null)
   const stale = () => {
@@ -246,7 +248,7 @@ export function Schedule({ schedule, version, operator, paused, useCaseId, answe
         <p className="muted">{held}</p>
       ) : operator && !editing ? (
         <div className={styles['actions']}>
-          {paused ? (
+          {paused && resumeHere ? (
             <Button data-place="resume" icon={IconPlay} loading={resume.pending} onClick={resume.press}>
               Resume
             </Button>

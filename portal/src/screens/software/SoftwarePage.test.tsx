@@ -18,7 +18,6 @@ import { ApiProvider } from '../../api/context'
 import { TicketLinksProvider } from '../../api/ticketLinks'
 import { createDevSession } from '../../api/session'
 import type { FindOut, Me, PersonOut, ProjectGuess, ScheduleHold, UseCaseN8nView, UseCaseView, WatchedSoftwareView, WatchlistView } from '../../api/types'
-import { AppRoutes } from '../../shell/routes'
 import { AddSoftwareForm } from './AddSoftware'
 import { addReducer, readyToAdd, START, type AddAction, type AddState } from './addByName'
 import { FindSoftware } from './FindSoftware'
@@ -212,13 +211,7 @@ describe('the Software watchlist page', () => {
     expect(labels.some((label) => label.startsWith('History'))).toBe(true)
   })
 
-  it('is read only for an Approver: one note under the heading names the Operators, and nothing is dead', () => {
-    const page = (me: Me) => render(statuses, me, [], <AppRoutes context={{ name: me.display, now: new Date(), operator: me.roles.includes('operator') }} />)
-    const head = text(page(BOB))
-    expect(head.match(/Only Operators change/g)).toHaveLength(1)
-    expect(head).toContain('Watchlist')
-    expect(head).toContain('Only Operators change the watchlist. Ask Alice or Carol.')
-    expect(text(page(ALICE))).not.toContain('Only Operators change')
+  it('is read only for an Approver, and nothing is dead', () => {
     for (const view of [statuses, paused, moved, held, null]) expect(render(view, BOB)).not.toMatch(/disabled=""|aria-disabled="true"/)
     expect(renderItem(statuses, BOB, idOf('behind'))).not.toMatch(/disabled=""|aria-disabled="true"/)
   })
@@ -621,18 +614,6 @@ describe('the Software watchlist in n8n', () => {
 
   it('gives no tab to anyone without n8n access', () => {
     for (const me of [ALICE, BOB]) expect(views(render(statuses, me, [], <SoftwareRoute now={NOW} />, capabilitiesFixture, '/software?view=n8n'))).toEqual([])
-  })
-})
-
-describe('the count line under the title', () => {
-  const page = (view: unknown, me: Me) => text(render(view, me, [], <AppRoutes context={{ name: me.display, now: new Date(), operator: me.roles.includes('operator') }} />))
-
-  it('says what has a newer version, what can’t be checked, what is up to date and what is only watched, right under the title, to Operators and Approvers', () => {
-    for (const me of [ALICE, BOB]) expect(page(statuses, me)).toContain('Watchlist 3 have a newer version · 1 can’t be checked · 1 is up to date · 1 watching')
-  })
-
-  it('keeps the plain lead while the list is empty', () => {
-    expect(page(empty, ALICE)).toContain('Watchlist Everything your team runs, in one list.')
   })
 })
 

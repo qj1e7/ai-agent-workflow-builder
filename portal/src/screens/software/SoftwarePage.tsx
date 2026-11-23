@@ -44,6 +44,7 @@ import {
   rowsMatching,
   scheduleRuns,
   softwareLine,
+  softwareInWorkflow,
   softwarePath,
   stateOf,
   stoppedWords,
@@ -67,10 +68,11 @@ interface RowsProps {
   readonly rows: readonly WatchedSoftwareView[]
   readonly checkedBy: string | null
   readonly now: Date
+  readonly pathOf: (id: string) => string
 }
 
 /** One link of 44 px or more for each software: its name, "1.2.14 → 1.2.16 · checked by Software watchlist", and its pill. Urgent first. */
-function Rows({ rows, checkedBy, now }: RowsProps) {
+function Rows({ rows, checkedBy, now, pathOf }: RowsProps) {
   if (rows.length === 0) return null
   const sorted = [...rows].sort((a, b) => watchRank(a) - watchRank(b))
   return (
@@ -79,7 +81,7 @@ function Rows({ rows, checkedBy, now }: RowsProps) {
         const state = stateOf(row)
         return (
           <li key={row.id} data-status={row.status} data-software-id={row.id}>
-            <Link to={softwarePath(row.id)} className={styles['rowLink']}>
+            <Link to={pathOf(row.id)} className={styles['rowLink']}>
               <span className={styles['who']}>
                 <b>{row.name}</b>
                 <span className={styles['src']}>{softwareLine(row, now, checkedBy)}</span>
@@ -191,9 +193,11 @@ interface LoadedProps {
   readonly now: Date
   /** Set on a software's own page. The Watchlist itself has none. */
   readonly rowId: string | null
+  /** Drawn inside the watchlist's workflow page, which already has Run now and Resume. */
+  readonly embedded: boolean
 }
 
-function Loaded({ view, operator, held, answeredAt, now, rowId }: LoadedProps) {
+function Loaded({ view, operator, held, answeredAt, now, rowId, embedded }: LoadedProps) {
   const [query, setQuery] = useState('')
   const [historyOpen, setHistoryOpen] = useState(false)
   const [feedback, dispatch] = useReducer(changeFeedback, NO_FEEDBACK)
@@ -236,9 +240,11 @@ function Loaded({ view, operator, held, answeredAt, now, rowId }: LoadedProps) {
   const declined = useLastCheckDeclined(view, nameOf)
   const checkedBy = checksOnItsOwn(view) ? CHECKER : null
 
+  const pathOf = (id: string) => (embedded && view ? softwareInWorkflow(view.use_case_id, id) : softwarePath(id))
   const landOn = useSearchParams()[0].get('row')
-  if (rowId === null && landOn !== null && software.some((row) => row.id === landOn)) return <Navigate to={softwarePath(landOn)} replace state={arrivedWith} />
+  if (rowId === null && landOn !== null && software.some((row) => row.id === landOn)) return <Navigate to={pathOf(landOn)} replace state={arrivedWith} />
 
+  const back = embedded && view ? `/workflows/${view.use_case_id}` : undefined
   const notice = (
     <Notice
       box={noticeBox}
@@ -255,7 +261,7 @@ function Loaded({ view, operator, held, answeredAt, now, rowId }: LoadedProps) {
     if (!row) {
       return (
         <>
-          <BackToWatchlist />
+          <BackToWatchlist to={back} />
           {notice}
           {feedback.notice?.kind === 'removed' ? null : <p className="muted">That software isn’t on the Watchlist any more.</p>}
         </>
@@ -266,6 +272,7 @@ function Loaded({ view, operator, held, answeredAt, now, rowId }: LoadedProps) {
         {notice}
         <SoftwareItem
           row={row}
+          back={back}
           operator={operator}
           scheduled={scheduled}
           paused={paused}
@@ -296,7 +303,7 @@ function Loaded({ view, operator, held, answeredAt, now, rowId }: LoadedProps) {
 
   return (
     <>
-      {operator && view && !paused && software.length > 0 ? <CheckNow useCaseId={view.use_case_id} /> : null}
+      {operator && view && !paused && !embedded && software.length > 0 ? <CheckNow useCaseId={view.use_case_id} /> : null}
       {view?.last_check?.state === 'failed' ? <LastCheckStopped last={view.last_check} /> : null}
       {notice}
       <section className={styles['section']} aria-label="Software we watch">
@@ -316,9 +323,9 @@ function Loaded({ view, operator, held, answeredAt, now, rowId }: LoadedProps) {
             </div>
           </div>
         ) : null}
-        <Rows rows={rows} checkedBy={checkedBy} now={now} />
+        <Rows rows={rows} checkedBy={checkedBy} now={now} pathOf={pathOf} />
         {operator ? (
-          <AddSoftware software={software} onShowRow={(id) => void navigate(softwarePath(id))} onAdded={(name) => dispatch({ type: 'added', name })} />
+          <AddSoftware software={software} onShowRow={(id) => void navigate(pathOf(id))} onAdded={(name) => dispatch({ type: 'added', name })} />
         ) : null}
       </section>
       {view?.moving_to_n8n ? (
@@ -327,7 +334,7 @@ function Loaded({ view, operator, held, answeredAt, now, rowId }: LoadedProps) {
         </p>
       ) : null}
       {view ? (
-        <Schedule schedule={view.schedule} version={view.version} operator={operator} useCaseId={view.use_case_id} paused={paused} answeredAt={answeredAt} onResumed={() => dispatch({ type: 'resumed' })} held={held} />
+        <Schedule schedule={view.schedule} version={view.version} operator={operator} useCaseId={view.use_case_id} paused={paused} answeredAt={answeredAt} onResumed={() => dispatch({ type: 'resumed' })} held={held} resumeHere={!embedded} />
       ) : null}
     </>
   )
@@ -367,10 +374,19 @@ function WatchlistInN8n({ useCaseId, me, now }: { useCaseId: string; me: Me; now
   )
 }
 
-export function SoftwareRoute({ now }: { now: Date }) {
+interface RouteProps {
+  readonly now: Date
+  /** The watchlist's workflow page draws the list itself, with its own tabs, Run now and Resume. */
+  readonly embedded?: boolean
+  /** The software whose page it is, when the address does not carry it. */
+  readonly rowId?: string | null
+}
+
+export function SoftwareRoute({ now, embedded = false, rowId }: RouteProps) {
   const me = useMe()
   const watchlist = useWatchlist({ poll: REFRESH_MS })
-  const { softwareId = null } = useParams()
+  const { softwareId: fromAddress = null } = useParams()
+  const softwareId = rowId === undefined ? fromAddress : rowId
   const [view, showView] = useView()
   const operator = me.data?.roles.includes('operator') === true
   const workflowId = watchlist.data?.use_case_id ?? ''
@@ -392,8 +408,8 @@ export function SoftwareRoute({ now }: { now: Date }) {
   }
   const held = useCase.data ? heldOf(useCase.data, me.data) : null
   const heldWords = held ? `${cantChangeWords(held)} ${held.kind === 'theirs' ? theirsNote(held) : TAKE_BACK_ON_TAB}` : null
-  const loaded = <Loaded view={watchlist.data} operator={operator} held={heldWords} answeredAt={Math.max(watchlist.dataUpdatedAt, watchlist.errorUpdatedAt)} now={now} rowId={softwareId} />
-  const workflow = me.data.n8n_access === true && softwareId === null ? watchlist.data?.use_case_id : undefined
+  const loaded = <Loaded view={watchlist.data} operator={operator} held={heldWords} answeredAt={Math.max(watchlist.dataUpdatedAt, watchlist.errorUpdatedAt)} now={now} rowId={softwareId} embedded={embedded} />
+  const workflow = !embedded && me.data.n8n_access === true && softwareId === null ? watchlist.data?.use_case_id : undefined
   if (workflow === undefined) return loaded
   return (
     <>

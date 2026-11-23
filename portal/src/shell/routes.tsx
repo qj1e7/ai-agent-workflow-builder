@@ -1,18 +1,18 @@
 import { lazy, Suspense, type ReactNode } from 'react'
-import { Navigate, Route, Routes, useParams, useSearchParams } from 'react-router'
+import { Navigate, Route, Routes, useLocation, useParams, useSearchParams } from 'react-router'
 import { HomePage } from '../screens/home/HomePage'
 import { SettingsPage } from '../screens/settings/SettingsPage'
 import type { Icon } from '../ui/icons'
 import { ExplainRoute } from '../screens/explain/ExplainPage'
 import { WorkflowRoute } from '../screens/workflows/WorkflowPage'
 import { WorkflowsPage } from '../screens/workflows/WorkflowsPage'
-import { WatchLine } from '../screens/software/WatchLine'
+import { useWatchlist } from '../api/queries'
+import { WATCHLIST_PATH } from '../screens/software/software'
 import { howItWorksPath } from '../screens/agents/agents'
 import { JIRA_PATH } from '../screens/jira/tickets'
-import { ChatIcon, NodesIcon, SettingsIcon, StackIcon, TicketIcon } from './icons'
+import { ChatIcon, NodesIcon, SettingsIcon, TicketIcon } from './icons'
 import { NotFoundPage } from './NotFoundPage'
-import { OperatorsNote } from './OperatorsNote'
-import { PageHead, PageNote } from './PageHead'
+import { PageHead } from './PageHead'
 import { greeting, today } from './today'
 
 export interface PageContext {
@@ -32,7 +32,7 @@ export interface PageEntry {
   readonly inRail: boolean
 }
 
-export const PAGE_IDS = ['home', 'workflows', 'software', 'jira', 'settings'] as const
+export const PAGE_IDS = ['home', 'workflows', 'jira', 'settings'] as const
 export type PageId = (typeof PAGE_IDS)[number]
 
 export const PAGES: Readonly<Record<PageId, PageEntry>> = {
@@ -50,14 +50,6 @@ export const PAGES: Readonly<Record<PageId, PageEntry>> = {
     icon: NodesIcon,
     heading: 'Workflows',
     lead: '',
-    inRail: true,
-  },
-  software: {
-    path: '/software',
-    railLabel: 'Watchlist',
-    icon: StackIcon,
-    heading: 'Watchlist',
-    lead: 'Everything your team runs, in one list.',
     inRail: true,
   },
   jira: {
@@ -80,7 +72,6 @@ export const PAGES: Readonly<Record<PageId, PageEntry>> = {
 
 const RunRoute = lazy(() => import('../screens/run/RunPage').then((module) => ({ default: module.RunRoute })))
 const JiraRoute = lazy(() => import('../screens/jira/JiraPage').then((module) => ({ default: module.JiraRoute })))
-const SoftwareRoute = lazy(() => import('../screens/software/SoftwarePage').then((module) => ({ default: module.SoftwareRoute })))
 const SetUpApprovalRoute = lazy(() => import('../screens/drafted/SetUpApprovalPage').then((module) => ({ default: module.SetUpApprovalRoute })))
 const ApprovalRoute = lazy(() => import('../screens/run/RunPage').then((module) => ({ default: module.ApprovalRoute })))
 
@@ -102,26 +93,47 @@ export const RAIL_PAGE_IDS: readonly PageId[] = PAGE_IDS.filter((id) => PAGES[id
 
 const under = (pathname: string, base: string) => pathname === base || pathname.startsWith(`${base}/`)
 
-/** The rail item marked current: Chat only at Home, an item on the addresses under it, and a run or approval page under `ofRun`. */
-export function railCurrent(pathname: string, ofRun: PageId): PageId | null {
+/** The rail item marked current: Chat only at Home, Workflows on the addresses under it, and on a run or approval page, whichever workflow it is. */
+export function railCurrent(pathname: string): PageId | null {
   if (pathname === PAGES.home.path) return 'home'
   if (under(pathname, PAGES.workflows.path)) return 'workflows'
-  if (under(pathname, PAGES.software.path)) return 'software'
-  if (under(pathname, '/runs') || under(pathname, '/approvals') || under(pathname, '/setup-approvals')) return ofRun
+  if (under(pathname, '/runs') || under(pathname, '/approvals') || under(pathname, '/setup-approvals')) return 'workflows'
   return null
 }
 
 /**
- * Each rail item's count, the same for everyone: the totals the sketch shows, how many workflows the team has and how much
- * software is watched. What needs the person is the needs strip's and Workflows' number, so the rail never says it too.
+ * Each rail item's count, the same for everyone: the total the sketch shows, how many workflows the team has. What needs
+ * the person is the needs strip's and Workflows' number, so the rail never says it too.
  */
-export function railCountFor(id: PageId, workflows: number | undefined, software: number | undefined): number | null {
-  const total = id === 'workflows' ? workflows : id === 'software' ? software : undefined
+export function railCountFor(id: PageId, workflows: number | undefined): number | null {
+  const total = id === 'workflows' ? workflows : undefined
   return total !== undefined && total > 0 ? total : null
 }
 
 export function wordsOf(words: Words, context: PageContext): string {
   return typeof words === 'function' ? words(context) : words
+}
+
+/** Where an old /software address leads: the watchlist's workflow page, with the software it named, or Workflows when there is no watchlist. */
+export function softwareDestination(pathname: string, watchlistId: string | null): string {
+  if (watchlistId === null) return PAGES.workflows.path
+  const page = `${PAGES.workflows.path}/${watchlistId}`
+  const rest = pathname.slice(WATCHLIST_PATH.length).replace(/^\/+|\/+$/g, '')
+  return rest === '' ? page : `${page}?software=${rest}`
+}
+
+/** The Software page is the watchlist's workflow page now. It takes every address under /software there, once the watchlist is known. */
+function OldSoftwareAddress() {
+  const { pathname } = useLocation()
+  const watchlist = useWatchlist()
+  if (watchlist.isPending) {
+    return (
+      <p className="muted" role="status">
+        Loading
+      </p>
+    )
+  }
+  return <Navigate to={softwareDestination(pathname, watchlist.data?.use_case_id ?? null)} replace />
 }
 
 const OLD_NEW_PATH = '/new'
@@ -156,31 +168,7 @@ export function AppRoutes({ context }: { context: PageContext }) {
       <Route path={`${PAGES.workflows.path}/:useCaseId`} element={<WorkflowRoute now={context.now} />} />
       <Route path={`${PAGES.workflows.path}/:useCaseId/explain`} element={<ExplainRoute />} />
       <Route path={PAGES.home.path} element={<HomePage greeting={wordsOf(PAGES.home.heading, context)} today={wordsOf(PAGES.home.lead, context)} now={context.now} />} />
-      <Route
-        path={PAGES.software.path}
-        element={
-          <>
-            <PageHead heading={wordsOf(PAGES.software.heading, context)} lead={<WatchLine lead={wordsOf(PAGES.software.lead, context)} />}>
-              {context.operator ? null : (
-                <PageNote>
-                  <OperatorsNote what="the watchlist" />
-                </PageNote>
-              )}
-            </PageHead>
-            <Lazy>
-              <SoftwareRoute now={context.now} />
-            </Lazy>
-          </>
-        }
-      />
-      <Route
-        path={`${PAGES.software.path}/:softwareId`}
-        element={
-          <Lazy>
-            <SoftwareRoute now={context.now} />
-          </Lazy>
-        }
-      />
+      <Route path={`${WATCHLIST_PATH}/*`} element={<OldSoftwareAddress />} />
       <Route
         path={`${PAGES.jira.path}/:key?`}
         element={

@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, type MouseEvent } from 'react'
-import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router'
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router'
 import { ApiError } from '../../api/client'
 import { useErrorWords } from '../../api/context'
 import { newIdempotencyKey } from '../../api/idempotency'
@@ -20,6 +20,7 @@ import { Toast, type ToastMessage } from '../../ui/Toast'
 import { useView, ViewTabs } from '../../ui/ViewTabs'
 import { ExplainButton } from '../explain/ExplainButton'
 import { RunLine } from '../run/RunLine'
+import { SoftwareRoute } from '../software/SoftwarePage'
 import { leadsThePage, StatusBanner } from './Banner'
 import { useArrivalScroll } from './arrival'
 import { templateLine } from './line'
@@ -37,6 +38,7 @@ import {
   changeProblem,
   changeWords,
   controlsOf,
+  isWatchlist,
   deleteWords,
   leftOutWords,
   mainActionOf,
@@ -53,10 +55,8 @@ import {
   runsOf,
   scheduleSavedWords,
   sentenceOf,
-  SOFTWARE_PAGE,
   viewerOf,
   whoSaysYes,
-  workflowPath,
   type Place,
 } from './workflow'
 import styles from './Workflows.module.css'
@@ -275,6 +275,10 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
   // The banner's Explain is the one on the page while a version needs a fix.
   const explainHere = banner.action?.kind !== 'explain'
   const say = (text: string) => setSaid((before) => ({ id: (before?.id ?? 0) + 1, text }))
+  // The Software watchlist is a workflow like the rest. Its list, and each software's page, are drawn inside it.
+  const listed = isWatchlist(useCase)
+  const software = useSearchParams()[0].get('software')
+  if (listed && software !== null && shownView === 'main') return <SoftwareRoute now={now} embedded rowId={software} />
   const message: ToastMessage | null = said ? { id: said.id, text: said.text } : null
   return (
     <>
@@ -317,7 +321,7 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
           ) : null}
           <RunLine stations={templateLine(useCase)} arrivedLive={null} settled={null} />
           <div className={styles['pair']}>
-            <When useCase={useCase} now={now} mayChange={mayChangeSchedule(useCase, viewer)} held={held ? cantChangeWords(held) : null} onSaved={say} />
+            {listed ? null : <When useCase={useCase} now={now} mayChange={mayChangeSchedule(useCase, viewer)} held={held ? cantChangeWords(held) : null} onSaved={say} />}
             {gate ? (
               <section className={styles['section']} aria-labelledby="who-says-yes">
                 <h2 id="who-says-yes">Who says yes</h2>
@@ -330,6 +334,7 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
               </section>
             ) : null}
           </div>
+          {listed ? <SoftwareRoute now={now} embedded rowId={null} /> : null}
           {runs.data ? (
             <RecentRuns runs={recent} now={now} nameOf={nameOf} firstRun={useCase.next_run_at && !paused ? nextRunWords(useCase, now) : null} />
           ) : (
@@ -397,7 +402,6 @@ function notFound(error: unknown): boolean {
 }
 
 function WorkflowLoader({ useCaseId, now }: { useCaseId: string; now: Date }) {
-  const { search } = useLocation()
   const useCase = useUseCase(useCaseId, true, { poll: REFRESH_MS })
   const me = useMe()
   const shown = useCase.data && me.data && !useCase.isError ? controlsOf(useCase.data, viewerOf(me.data)).map(placeOf) : []
@@ -427,8 +431,6 @@ function WorkflowLoader({ useCaseId, now }: { useCaseId: string; now: Date }) {
       </p>
     )
   }
-  // The watchlist's page is its Summary, and keeps the tab the address asks for, so the Planner's In n8n link lands on it.
-  if (workflowPath(useCase.data) === SOFTWARE_PAGE) return <Navigate to={{ pathname: SOFTWARE_PAGE, search }} replace />
   return <WorkflowView useCase={useCase.data} me={me.data} now={now} onReread={refocus} />
 }
 

@@ -50,7 +50,7 @@ interface Setup {
   readonly versions?: VersionView[]
   /** The watchlist as the platform answers it, for the watchlist's own page. */
   readonly watchlist?: WatchlistView
-  readonly path?: string
+  readonly path?: string | undefined
 }
 
 function render({ me = ALICE, useCase: given = AGENTS, runs = [], id, advice, last, versions, watchlist, path }: Setup = {}): string {
@@ -558,7 +558,7 @@ describe('the Software watchlist', () => {
   it('keeps adding and removing software on its page', () => {
     expect(text(mainOf(own()))).toContain('Add software')
     const row = watched.software[0]!
-    expect(buttons(mainOf(own({}, ALICE, `/workflows/${WATCHLIST.use_case_id}?software=${row.id}`)))).toContain('Remove from watchlist')
+    expect(buttons(mainOf(own({}, ALICE, `/workflows/${WATCHLIST.use_case_id}?software=${row.id}`))).some((label) => label.startsWith('Remove from watchlist'))).toBe(true)
   })
 
   it('gives an Approver the list and no button', () => {
