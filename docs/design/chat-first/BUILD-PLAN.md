@@ -17,7 +17,7 @@ The team lead's pitch (23 Nov 2026), for the plan and the audit, not for the app
 - **Keeps working after day 1.** The AI troubleshooter; a change guard for n8n edits, which today is the versions sweep, Open in n8n and Take back, and the approval digest; the daily self-test; and later, bring your own workflow.
 - **The demo layer.** The live activity view.
 
-Proposed next: "Fix it for me" in the AI troubleshooter (ADR 0055) and Simulation mode for the Check step (ADR 0054). Both are proposed, and nothing is built until the team lead accepts them.
+Proposed next: "Fix it for me" in the AI troubleshooter (ADR 0055) and Simulation mode for the Check step (ADR 0054). The team lead accepted both on 24 Nov 2026, after the Simulation mode spike (docs/evidence/2026-11-24-simulation-spike/).
 
 ## 1. The inventory
 

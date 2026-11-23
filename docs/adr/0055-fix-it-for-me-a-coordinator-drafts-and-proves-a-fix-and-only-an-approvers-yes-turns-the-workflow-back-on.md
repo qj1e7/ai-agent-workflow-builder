@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 ---
 
 # Fix it for me: a coordinator drafts and proves a fix, and only an Approver's yes turns the workflow back on

@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 ---
 
 # Simulation mode tries each workflow on mock systems in a separate n8n, before the real test run
