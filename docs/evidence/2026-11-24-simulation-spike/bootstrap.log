@@ -1,0 +1,11 @@
+bootstrap exited with 0
+bootstrap: database migrations are at head
+bootstrap: n8n is healthy
+bootstrap: owner owner@sim.example: created
+bootstrap: n8n loads 846 node types
+bootstrap: n8n runs version 2.42.6
+bootstrap: api key 'platform-bootstrap': created, 0 older removed
+bootstrap: api key 'platform-api': 0 removed, platform-api makes its own
+bootstrap: workflow run_failure_reporter (LGnB1IHWU09Vj160): created
+bootstrap: workflow self_test_failure (aDonOdBxrpsbVRRF): created
+bootstrap: ready: all workflows loaded, active and linted

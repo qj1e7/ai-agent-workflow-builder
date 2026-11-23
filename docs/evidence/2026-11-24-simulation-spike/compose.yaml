@@ -1,0 +1,185 @@
+# The simulation spike's stack (ADR 0054, spike items S1 to S5 and S7). run.sh starts it as the
+# compose project simspike, with made-up keys it makes at run time. Nothing here is the platform's
+# stack: its own Postgres, its own n8n with its own encryption key, node key and start secret, the
+# e2e mocks, and stub.py as the simulation gateway and an outside system that can hold or drop.
+# Both networks are internal, so nothing in the stack can reach the internet or the host, and
+# nothing publishes a port. Every image is one already on the laptop, so nothing is pulled or built.
+name: simspike
+
+x-n8n-guards: &n8n-guards
+  NODES_EXCLUDE: '["n8n-nodes-base.executeCommand","n8n-nodes-base.localFileTrigger","n8n-nodes-base.function","n8n-nodes-base.functionItem","@n8n/n8n-nodes-langchain.code","n8n-nodes-base.git","n8n-nodes-base.gitTool"]'
+  N8N_COMMUNITY_PACKAGES_ENABLED: "false"
+  N8N_BLOCK_ENV_ACCESS_IN_NODE: "true"
+  N8N_RUNNERS_MODE: external
+  N8N_DEPRECATED_NODES_BLOCK: "true"
+  N8N_RESTRICT_FILE_ACCESS_TO: /home/node/.n8n-files
+  N8N_BLOCK_FILE_ACCESS_TO_N8N_FILES: "true"
+
+services:
+  postgres:
+    image: postgres:17@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3
+    pull_policy: never
+    environment:
+      POSTGRES_PASSWORD: ${SIM_POSTGRES_PASSWORD:?run run.sh}
+      N8N_DB_PASSWORD: ${SIM_N8N_DB_PASSWORD:?run run.sh}
+      WAB_OWNER_PASSWORD: ${SIM_OWNER_PASSWORD:?run run.sh}
+      WAB_BUILDER_PASSWORD: ${SIM_OTHER_PASSWORD:?run run.sh}
+      WAB_ORCHESTRATION_PASSWORD: ${SIM_OTHER_PASSWORD:?run run.sh}
+      WAB_MONITORING_PASSWORD: ${SIM_OTHER_PASSWORD:?run run.sh}
+    # In memory, so the stack leaves no volume behind.
+    tmpfs:
+      - /var/lib/postgresql/data
+    volumes:
+      - ../../../deploy/postgres/init.sh:/docker-entrypoint-initdb.d/init.sh:ro
+    networks: [sim]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d platform"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  # The simulation n8n: our image, with the platform n8n's guards, and our blocks pointed at the
+  # simulation gateway with the simulation's own node key and start secret.
+  n8n:
+    image: wab/n8n:${SIM_N8N_TAG:-dev}
+    pull_policy: never
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mock-slack:
+        condition: service_healthy
+    environment:
+      <<: *n8n-guards
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: postgres
+      DB_POSTGRESDB_PORT: "5432"
+      DB_POSTGRESDB_DATABASE: n8n
+      DB_POSTGRESDB_USER: n8n
+      DB_POSTGRESDB_PASSWORD: ${SIM_N8N_DB_PASSWORD:?run run.sh}
+      WEBHOOK_URL: http://n8n:5678/
+      GENERIC_TIMEZONE: Asia/Singapore
+      N8N_ENCRYPTION_KEY: ${SIM_N8N_ENCRYPTION_KEY:?run run.sh}
+      N8N_DIAGNOSTICS_ENABLED: "false"
+      N8N_VERSION_NOTIFICATIONS_ENABLED: "false"
+      N8N_PERSONALIZATION_ENABLED: "false"
+      N8N_HIRING_BANNER_ENABLED: "false"
+      N8N_SECURE_COOKIE: "false"
+      N8N_DISABLED_MODULES: mcp-registry
+      N8N_RUNNERS_AUTH_TOKEN: ${SIM_RUNNERS_TOKEN:?run run.sh}
+      EXECUTIONS_DATA_SAVE_ON_SUCCESS: all
+      WAB_API_URL: http://gateway:8600
+      WAB_NODE_KEY: ${SIM_NODE_KEY:?run run.sh}
+      WAB_START_SECRET: ${SIM_START_SECRET:?run run.sh}
+      # Trusts mock Slack's certificate authority, as deploy/compose.e2e.yaml has n8n do.
+      NODE_EXTRA_CA_CERTS: /wab-test-ca/ca.pem
+    entrypoint:
+      - tini
+      - --
+      - /bin/sh
+      - -c
+      - >-
+        N8N_RUNNERS_BROKER_LISTEN_ADDRESS="$$(node -e "require('dns').lookup('n8n-broker', {family: 4},
+        (e, a) => { if (e) process.exit(1); console.log(a); })")"
+        && export N8N_RUNNERS_BROKER_LISTEN_ADDRESS && exec /docker-entrypoint.sh
+    networks:
+      sim: {}
+      sim-runners:
+        aliases: [n8n-broker]
+    volumes:
+      - slack-ca:/wab-test-ca:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -Y off -qO- http://localhost:5678/healthz/readiness || exit 1"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+
+  n8n-runners:
+    image: n8nio/runners:2.42.6@sha256:b78816286beb0a14e874abfda31eb4621d47f5ebb38f194271df7e39b7bd63a7
+    pull_policy: never
+    depends_on:
+      n8n:
+        condition: service_healthy
+    environment:
+      N8N_RUNNERS_TASK_BROKER_URI: http://n8n-broker:5679
+      N8N_RUNNERS_AUTH_TOKEN: ${SIM_RUNNERS_TOKEN:?run run.sh}
+      N8N_RUNNERS_AUTO_SHUTDOWN_TIMEOUT: "15"
+      GENERIC_TIMEZONE: Asia/Singapore
+    networks: [sim-runners]
+
+  # platform-api's own bootstrap, on its own Postgres: it sets up n8n's owner, checks n8n's blocks
+  # and guards, and loads the error workflow and the self-test.
+  bootstrap:
+    image: wab/platform-api:${SIM_API_TAG:-dev}
+    pull_policy: never
+    command: ["python", "-m", "platform_api.bootstrap"]
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      n8n:
+        condition: service_healthy
+      n8n-runners:
+        condition: service_started
+    environment:
+      <<: *n8n-guards
+      DATABASE_URL_OWNER: postgresql://wab_owner:${SIM_OWNER_PASSWORD:?run run.sh}@postgres:5432/platform
+      N8N_BASE_URL: http://n8n:5678
+      N8N_OWNER_EMAIL: owner@sim.example
+      N8N_OWNER_PASSWORD: ${SIM_OWNER_LOGIN:?run run.sh}
+      STEP_KEY: ${SIM_STEP_KEY:?run run.sh}
+      PLATFORM_INTERNAL_URL: http://gateway:8600
+      TEAM_TIME_ZONE: Asia/Singapore
+    networks: [sim]
+
+  gateway:
+    image: python:3.12-slim@sha256:a6e34c598f2467ed0e9a8d349809fcd8b5c603269512df273a0bb1784edc11b1
+    pull_policy: never
+    command: ["python", "-I", "/spike/stub.py"]
+    environment:
+      SIM_NODE_KEY: ${SIM_NODE_KEY:?run run.sh}
+      N8N_URL: http://n8n:5678
+    volumes:
+      - ./stub.py:/spike/stub.py:ro
+    networks: [sim]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8600/healthz', timeout=2)"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+  mock-github:
+    image: wab/mock-github:dev
+    pull_policy: never
+    networks: [sim]
+
+  mock-slack:
+    image: wab/mock-slack:dev
+    pull_policy: never
+    volumes:
+      - slack-ca:/ca
+    networks:
+      sim:
+        aliases: [slack.com]
+
+  driver:
+    image: python:3.12-slim@sha256:a6e34c598f2467ed0e9a8d349809fcd8b5c603269512df273a0bb1784edc11b1
+    pull_policy: never
+    profiles: [driver]
+    command: ["python", "-I", "/spike/drive.py"]
+    environment:
+      SIM_START_SECRET: ${SIM_START_SECRET:?run run.sh}
+      SIM_OWNER_LOGIN: ${SIM_OWNER_LOGIN:?run run.sh}
+      SIM_ONLY: ${SIM_ONLY:-}
+    volumes:
+      - ./drive.py:/spike/drive.py:ro
+      - ${SIM_OUT:?run run.sh}:/out
+    networks: [sim]
+
+networks:
+  sim:
+    internal: true
+  sim-runners:
+    internal: true
+
+volumes:
+  slack-ca: {}

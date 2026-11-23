@@ -1,0 +1,13 @@
+## scripts/pack-smoke.sh on the same image
+PASS: n8n loads all 8 of our blocks (846 types in all).
+PASS: n8n does not load ["@n8n/n8n-nodes-langchain.code","n8n-nodes-base.executeCommand","n8n-nodes-base.function","n8n-nodes-base.functionItem","n8n-nodes-base.git","n8n-nodes-base.gitTool","n8n-nodes-base.localFileTrigger"].
+PASS: n8n loads n8n-nodes-base.httpRequest, as it loads every built-in block.
+PASS: n8n loads n8n-nodes-base.code, as it loads every built-in block.
+PASS: n8n loads @n8n/n8n-nodes-langchain.agent, as it loads every built-in block.
+PASS: n8n refuses to run a workflow with any of ["n8n-nodes-base.function","n8n-nodes-base.functionItem","@n8n/n8n-nodes-langchain.code"].
+PASS: with its defaults, n8n keeps the file blocks out of its own folders and lets code load no module it picks.
+PASS: the image has no Python, so only an external task runner runs a Python Code block.
+pin check: each of the 56 types the class file names still matches the image.
+PASS: each row of node_classes.json still matches what n8n serves.
+contracts/n8n/catalogue.json holds the 845 blocks n8nio/n8n:2.42.6@sha256:526daa38b68e923cc00c5280d18b4da5d489f115a73bdbf3b8e452b184197a9a serves.
+PASS: the catalogue is what n8n serves, and the pin checks of its code, defaults and runner hold.
