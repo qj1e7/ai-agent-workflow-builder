@@ -6,6 +6,19 @@ How to read the inventory. Each item says what the sketch shows (its words kept)
 
 Three rules the sketch must not be allowed to break, and how each item keeps them: no write without an Approver's yes in the Portal (the sketch's test run and n8n publish are the two places this needs care); an Approver never approves their own work (the backend refuses `OWN_WORK`, keep its words); a rule may need two Approvers in turn (the sketch shows one; the app's "Step 1 of 2" stays whenever a rule asks for two). Where the sketch would break one, the item says so and gives the fix.
 
+## Product pitch
+
+The team lead's pitch (23 Nov 2026), for the plan and the audit, not for the app's own screens. In one line:
+
+> Anyone can build an n8n workflow in an afternoon. We make it safe to run and easy to fix on day 100, with no coder needed.
+
+- **Plain words in, working workflow out.** Three steps: Describe, Check, Turn on (ADR 0053).
+- **Safe by default.** "Nothing is written until an Approver says yes." Approvals come through Teams, nobody approves their own work, writes go through our gateway, and everything is logged. (One exception: a write by one of n8n's own blocks runs on the Approver's yes to that exact version, given at set-up, not through the gateway on each run. See ADR 0051, section 3.)
+- **Keeps working after day 1.** The AI troubleshooter; a change guard for n8n edits, which today is the versions sweep, Open in n8n and Take back, and the approval digest; the daily self-test; and later, bring your own workflow.
+- **The demo layer.** The live activity view.
+
+Proposed next: "Fix it for me" in the AI troubleshooter (ADR 0055) and Simulation mode for the Check step (ADR 0054). Both are proposed, and nothing is built until the team lead accepts them.
+
 ## 1. The inventory
 
 ### A. Home, empty (Alice, Operator)
