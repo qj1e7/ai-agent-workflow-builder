@@ -449,6 +449,7 @@ describe('a release check with the rest of the request', () => {
       name: 'React release check',
       similar: null,
       parts: [watched, days],
+      draft_words: null,
       rows: [
         { kind: 'schedule', text: '', state: 'missing', note: notSaid },
         { kind: 'look_for', text: 'New releases of React', state: 'understood', note: 'Read from your words "React".' },
@@ -462,6 +463,7 @@ describe('a release check with the rest of the request', () => {
         similar: null,
         parts: [],
         also: null,
+        draft_words: null,
         rows: [
           { kind: 'schedule', text: 'Every Friday', state: 'understood', note: null },
           { kind: 'look_for', text: 'Bug tickets', state: 'missing', note: 'Your words said "stale" but not how many days. Please say how many.' },
@@ -1080,7 +1082,7 @@ describe('the core release check, already on the watchlist', () => {
     for (const view of [WATCHED, one, paused, undefined]) expect(ownTimeOffer(asked('Every day at 9am', 'cant', 'own_time'), view).request).toBe('Make the Software watchlist run Every day at 9am')
   })
 
-  it('hides Draft it as an n8n workflow only when the software card says the whole can’t', () => {
+  it('hides Build it with any n8n block only when the software card says the whole can’t', () => {
     const inChat = (reply: CantReply) => {
       const session = createDevSession(null)
       const client = new QueryClient()
@@ -1099,10 +1101,10 @@ describe('the core release check, already on the watchlist', () => {
         ),
       )
     }
-    expect(inChat(everyDay)).not.toContain('Draft it as an n8n workflow')
+    expect(inChat(everyDay)).not.toContain('Build it with any n8n block')
     const email: CantRowView = { kind: 'where', text: 'email me', note: 'I can\'t send email yet.', needs: 'new_system', system: 'email', instead: null, unsupported: false }
-    expect(inChat({ ...everyDay, cant: [OWN_TIME, email], parts: [...everyDay.parts, asked('email me', 'cant', 'cant_do')] })).toContain('Draft it as an n8n workflow')
-    expect(inChat({ ...everyDay, alternative: watch({ already_listed: null }) }), 'the watch card says it too').not.toContain('Draft it as an n8n workflow')
+    expect(inChat({ ...everyDay, cant: [OWN_TIME, email], parts: [...everyDay.parts, asked('email me', 'cant', 'cant_do')] })).toContain('Build it with any n8n block')
+    expect(inChat({ ...everyDay, alternative: watch({ already_listed: null }) }), 'the watch card says it too').not.toContain('Build it with any n8n block')
   })
 
   it('names the watchlist’s schedule in its own zone', () => {

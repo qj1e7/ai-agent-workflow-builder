@@ -27,7 +27,7 @@ import { AddToWatchlist, WhichSoftware } from './WatchlistCard'
 import { SoftwareActions } from './WatchlistActions'
 import { ExplainAnswer } from '../explain/ExplainAnswer'
 import { RemoveSoftwareAnswer } from './RemoveSoftware'
-import { DraftButton } from '../drafted/DraftButton'
+import { AnyBlockLink } from '../drafted/AnyBlockLink'
 import { DraftedCard } from '../drafted/DraftedCard'
 import partsStyles from './PartsList.module.css'
 import styles from './Planner.module.css'
@@ -633,20 +633,21 @@ export function Answer({ reply, typed, page, focus = null }: AnswerProps) {
           {/* A question the rest's card asks, as how many days, is never asked on this card too. */}
           <SetupCardAnswer reply={reply.also ? withCrosses(reply, reply, (part) => !asksOnCard(part)) : reply} typed={typed} />
           <RestOfRequest reply={reply} typed={typed} />
+          <AnyBlockLink words={reply.draft_words} />
         </>
       )
     case 'part':
       return (
         <>
           <SetupCardAnswer reply={reply} typed={typed} />
-          <DraftButton words={reply.draft_words} />
+          <AnyBlockLink words={reply.draft_words} />
         </>
       )
     case 'cant':
       return (
         <>
           <CantAnswer reply={reply} typed={typed} />
-          {onlyOwnTime(reply) ? null : <DraftButton words={reply.draft_words} />}
+          {onlyOwnTime(reply) ? null : <AnyBlockLink words={reply.draft_words} />}
         </>
       )
     case 'watchlist':
