@@ -225,12 +225,13 @@ describe('a workflow row’s line', () => {
 
   it('reads Needs you exactly when the platform lists the workflow in this person’s Needs you, whatever its state or grade', () => {
     const base = { state: 'on', last_run: null } as Pick<UseCaseView, 'state' | 'last_run'>
-    for (const reason of ['approval', 'stopped', 'declined', 'question'] as const) {
+    for (const reason of ['approval', 'stopped', 'declined', 'question', 'fix'] as const) {
       for (const state of ['on', 'paused', 'draft'] as const) expect(statusOf({ ...base, state, needs_you: reason }).four, `${reason} ${state}`).toBe('needs')
     }
     expect(statusOf({ ...base, needs_you: 'approval' }).tone).toBe('wait')
     expect(statusOf({ ...base, needs_you: 'stopped' }).tone).toBe('bad')
-    for (const grade of ['needs_a_fix', 'writes_refused'] as const) expect(statusOf({ ...base, ...{ grade }, needs_you: null }).four, `${grade} has no Home row, so it is not Needs you`).toBe('on')
+    expect(statusOf({ ...base, needs_you: 'fix' }), 'a workflow that can’t run: Home has a row for it').toEqual({ four: 'needs', label: 'Needs you', tone: 'bad' })
+    expect(statusOf({ ...base, needs_you: null }).four, 'no row in Home, so On').toBe('on')
     expect(statusOf({ ...base, last_run: { ...LAST, state: 'failed' }, needs_you: null }).four, 'Carol’s workflow: a stopped run that is not hers').toBe('on')
     expect(statusOf({ ...base, last_run: { ...LAST, state: 'failed' } }).four, 'no Needs you from the platform').toBe('on')
   })
