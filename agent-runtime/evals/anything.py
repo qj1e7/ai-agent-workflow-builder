@@ -551,7 +551,9 @@ def _to_the_drafter(shown: PlannerAnswer) -> bool:
     return (
         isinstance(shown, CantAnswer)
         and shown.alternative is None
-        and all(r.needs is not None and not r.unsupported for r in shown.cant)
+        and all(
+            r.needs is not None and r.instead is not None and not r.unsupported for r in shown.cant
+        )
     )
 
 

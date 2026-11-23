@@ -1047,14 +1047,19 @@ def _remark(part: PartView) -> PartView:
 
 def to_the_drafter(reply: PlannerReply) -> bool:
     """The Planner picks how to build it (ADR 0053, item 5): a can't with nothing of ours close
-    to it goes to the Workflow drafter, which may use any n8n block, when every part names
-    something to build and none is one the platform refuses. A clause the Planner didn't follow
-    names nothing to build, so that can't stays."""
+    to it goes to the Workflow drafter, which may use any n8n block, when every part is one the
+    registry names (`instead` marks it) and none is one the platform refuses. Anything else keeps
+    the can't and its link: a clause the Planner didn't follow, or an order no ability is close
+    to, which the runtime keeps as "I can't do this yet. I can only ..." when its free reply
+    fails or is off. Vague or off-topic words never start a draft on their own."""
     return (
         isinstance(reply, CantReply)
         and reply.alternative is None
         and bool(reply.cant)
-        and all(row.needs is not None and not row.unsupported for row in reply.cant)
+        and all(
+            row.needs is not None and row.instead is not None and not row.unsupported
+            for row in reply.cant
+        )
     )
 
 
@@ -1152,7 +1157,7 @@ class PlannerFront:
         if operator:
             if self._drafted is not None and body.text is not None and to_the_drafter(reply):
                 started = await self._draft(body.text, viewer, self._drafted)
-                return started.model_copy(update={"trace_id": reply.trace_id})
+                return started.model_copy(update={"trace_id": reply.trace_id, "parts": reply.parts})
             return self._offer_draft(reply, body.text)
         return questions_only(reply, body.text).model_copy(update={"trace_id": reply.trace_id})
 

@@ -10,7 +10,7 @@ import { ANY_BLOCK } from './drafted'
 vi.mock('react', async (importOriginal) => (await import('../../ui/testHooks')).withTestHooks(await importOriginal<object>()))
 
 const world = vi.hoisted(() => ({
-  asker: 'operator' as 'operator' | 'approver',
+  asker: 'operator',
   sent: [] as { vars: StartDrafting; outcome: Outcome<DraftedWorkflowView> }[],
   shown: [] as string[],
 }))
