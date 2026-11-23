@@ -211,7 +211,7 @@ def test_a_watchlist_offer_for_watched_software_goes_to_the_lane_whatever_the_ca
 
 
 def test_a_lane_no_on_a_watched_software_keeps_the_watchlist_offer():
-    task = "Keep track of the LangGraph version"
+    task = "Keep track of the LangGraph version on the watchlist"
     out, _ = ask(QuestionReply(about_their_data=False), task=task, first=watch_reading("LangGraph"))
     assert isinstance(out.answer, WatchlistAnswer) and out.answer.software == "LangGraph"
 

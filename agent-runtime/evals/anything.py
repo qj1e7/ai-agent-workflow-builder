@@ -468,12 +468,10 @@ def _leading_word(text: str) -> str:
     return first.group(1).lower() if first else ""
 
 
-DRAFT_BUTTON: Final = "Draft it as an n8n workflow"
-DRAFT_NOTE: Final = (
-    "The Workflow drafter drafts it as its own n8n workflow, and the safety checker checks it. "
-    "It isn't set up until an Approver says yes."
-)
-"""The Portal's button under a can't or a part card, and the words under it (drafted.ts)."""
+ANY_BLOCK: Final = "Build it with any n8n block"
+"""The Portal's quiet link on a card, which sends the words to the drafter (drafted.ts)."""
+DRAFTING: Final = "Drafting it as an n8n workflow"
+"""The drafted workflow's card while the drafter works (DRAFTING_TITLE in drafted.ts)."""
 START_LEAD: Final = (
     "This app runs repetitive work for you. Tell me the task and I'll draft it. Nothing is "
     "written without an Approver's yes."
@@ -487,7 +485,8 @@ def words_of(
     """About what the Portal shows for the answer: its card or sentence, with a state answer
     filled from the facts as the Portal fills it from the platform, then each part it crossed,
     in the Portal's words. The Portal's own layout decides the rest. `operator` adds what only
-    an Operator sees: Watch it, the watchlist's time and the draft offer."""
+    an Operator sees: Watch it, the watchlist's time, the quiet link to the drafter and the
+    drafter's card for a can't it takes."""
     if result is None:
         return "(no answer was recorded)"
     if isinstance(result, ModelProblem):
@@ -495,6 +494,8 @@ def words_of(
             f"(The Planner had no answer, so the Portal shows its offline answer: {result.message})"
         )
     shown, parts = result.answer, result.parts
+    if operator and _to_the_drafter(shown):
+        return DRAFTING
     followed_nothing = bool(parts) and all(p.reason == "not_followed" for p in parts)
     if isinstance(shown, AbilitiesAnswer) and followed_nothing:
         return FOLLOWED_NOTHING
@@ -544,12 +545,27 @@ def _watchlist_runs(part: RequestPart) -> str:
     return f"[Make the Software watchlist run {part.text.strip()}]"
 
 
+def _to_the_drafter(shown: PlannerAnswer) -> bool:
+    """Whether the platform hands an Operator's can't to the drafter, so the Portal shows the
+    drafted workflow's card in its place (ADR 0053, item 5, `to_the_drafter` in platform-api)."""
+    return (
+        isinstance(shown, CantAnswer)
+        and shown.alternative is None
+        and all(
+            r.needs is not None and r.instead is not None and not r.unsupported for r in shown.cant
+        )
+    )
+
+
 def _draft_offer(shown: PlannerAnswer) -> list[str]:
-    """The draft offer the platform adds to a can't or a part card for an Operator, unless every
-    part is one it refuses outright (ADR 0051, `_offer_draft` in platform-api)."""
-    if not isinstance(shown, CantAnswer | PartAnswer) or all(r.unsupported for r in shown.cant):
-        return []
-    return [f"[{DRAFT_BUTTON}] {DRAFT_NOTE}"]
+    """The quiet link the platform adds for an Operator to a card from our blocks, and to a can't
+    or a part card unless every part is one it refuses outright (`_offer_draft` in
+    platform-api)."""
+    if isinstance(shown, SetupCardAnswer) or (
+        isinstance(shown, CantAnswer | PartAnswer) and not all(r.unsupported for r in shown.cant)
+    ):
+        return [f"[{ANY_BLOCK}]"]
+    return []
 
 
 def _buttons(shown: PlannerAnswer) -> list[str]:

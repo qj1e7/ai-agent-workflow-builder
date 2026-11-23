@@ -7,7 +7,7 @@ import inN8n from '../../../../contracts/fixtures/builder/drafted.in-n8n.json'
 import question from '../../../../contracts/fixtures/builder/drafted.question.json'
 import ready from '../../../../contracts/fixtures/builder/drafted.ready.json'
 import { ApiProvider } from '../../api/context'
-import { draftedKey, useAnswerDrafted, useDoneInN8n, useEditInN8n } from '../../api/draftedQueries'
+import { draftedKey, useAnswerDrafted, useDoneInN8n, useEditInN8n, useStartDrafting } from '../../api/draftedQueries'
 import { createDevSession } from '../../api/session'
 import type { DraftedWorkflowView, DraftSettingView } from '../../api/types'
 import { ChatProvider } from '../home/ChatProvider'
@@ -219,6 +219,22 @@ describe('the answers it sends', () => {
     expect(seen[0]?.path).toBe('/api/v1/drafted-workflows/dw_01JDRAFTRELEASE/answers')
     await expect(seen[0]?.body).resolves.toEqual({ revision: 2, setting: 'run_time', choice: '09:00' })
     expect(queryClient.getQueryData(draftedKey(scope, 'dw_01JDRAFTRELEASE'))).toEqual(taken)
+  })
+
+  it('starts the drafter with the words unchanged, under the press’s own key', async () => {
+    const words = 'Every Monday,  email the release notes to the team '
+    const seen: { path: string; key: string | null; body: Promise<unknown> }[] = []
+    const { result } = await run(
+      () => useStartDrafting(),
+      (probe) => probe.mutateAsync({ words, idempotencyKey: 'press-1' }),
+      (request) => {
+        seen.push({ path: `${request.method} ${new URL(request.url).pathname}`, key: request.headers.get('Idempotency-Key'), body: request.clone().json() })
+        return json(READY)
+      },
+    )
+    expect(result.error).toBeNull()
+    expect(seen.map((one) => [one.path, one.key])).toEqual([['POST /api/v1/drafted-workflows', 'press-1']])
+    await expect(seen[0]?.body).resolves.toEqual({ words })
   })
 
   it('opens it in n8n with the revision, and reads it back with no body', async () => {

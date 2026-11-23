@@ -317,6 +317,43 @@ def planner_fixtures(root: Path) -> dict[str, WireModel]:
             already_listed=None,
             also=SETUP_CARD.model_copy(update={"parts": []}),
         ),
+        "planner/answer.watchlist.covers.json": WatchlistReply(
+            word="release",
+            software="LangGraph",
+            already_listed=ListedSoftware(software_id="sw_01JB8", name="LangGraph"),
+            also=None,
+            covers=["schedule", "ticket"],
+            parts=[
+                does("Every Monday"),
+                does("check LangGraph for a new release"),
+                does("create a Jira ticket"),
+            ],
+        ),
+        "planner/answer.cant.own_time.json": CantReply(
+            cant=[
+                CantRowView(
+                    kind="schedule",
+                    text="Every day at 9am",
+                    note="The Software watchlist checks all your software together, on one "
+                    "schedule. I can't give one software its own time yet.",
+                    needs="new_tool",
+                    system=None,
+                    instead=None,
+                    unsupported=False,
+                )
+            ],
+            alternative=WatchlistReply(
+                word="releases",
+                software="LangGraph",
+                already_listed=ListedSoftware(software_id="sw_01JB8", name="LangGraph"),
+                also=None,
+            ),
+            draft_words="Every day at 9am, check LangGraph for new releases",
+            parts=[
+                crossed("Every day at 9am", "own_time"),
+                does("check LangGraph for new releases"),
+            ],
+        ),
         "planner/answer.watchlist.own_time.json": WatchlistReply(
             word="watch",
             software="Grafana",

@@ -2689,6 +2689,43 @@ def _time_asked(shown: str, text: str, note: str) -> UnderstoodRow:
     return _time_not_read(shown, text).model_copy(update={"note": note})
 
 
+BY_HAND: Final = re.compile(
+    r"\bonly\s+when\s+I\s+ask\b|\b(?:only\s+)?when\s+I\s+run\s+it\b|\bon\s+demand\b"
+    r"|\b(?:only\s+)?run(?:\s+it)?\s+manually\b|\bonly\s+manually\b",
+    re.IGNORECASE,
+)
+"""Words that ask for no schedule, so it runs only when someone presses Run now. An allow-list,
+which the Portal reads the schedule row with too: any other words for when it runs are asked,
+never guessed. "manually" counts only for running it, so "tickets we triaged manually" is not
+one."""
+NOT_BY_HAND: Final = re.compile(
+    r"\b(?:not|never|nobody|no\s+one|without)\b|n['’]t\b", re.IGNORECASE
+)
+"""A no in the clause turns the words round, as "so I don't have to run it manually"."""
+
+
+def _by_hand(schedule: str | None, text: str) -> Rendered | None:
+    """The schedule row of a request that asks to run only by hand, in its own words, whatever
+    the model read. None while the request names a schedule besides, which stays the schedule or
+    is asked: Run now starts any workflow. Words beside a no in their clause are not a choice."""
+    names_one = any(own and _a_schedule_word(raw) for raw, _, _, own in _schedule_tokens(text))
+    if names_one or schedule_stretch(schedule, text) is not None or how_often(text) is not None:
+        return None
+    clauses = clauses_of(text)
+    for found in BY_HAND.finditer(text):
+        a, b = next(((a, b) for a, b in clauses if a <= found.start() < b), found.span())
+        if NOT_BY_HAND.search(text[a:b]):
+            continue
+        said = found.group(0)
+        row = UnderstoodRow(
+            kind="schedule",
+            text=plain(said[:1].upper() + said[1:], TEXT_LIMIT),
+            state="understood",
+        )
+        return Rendered(row, frozenset(_low(t) for t, _, _ in _request_tokens(said)), found.span())
+    return None
+
+
 def render_schedule(schedule: str | None, text: str) -> Rendered:
     """The schedule row: the model's words kept to schedule words only, with a time the request
     never said asked for, not filled in, and a day it never said shown as a guess. Two days or
@@ -2697,6 +2734,8 @@ def render_schedule(schedule: str | None, text: str) -> Rendered:
     time or day the person wrote, the row is the person's own words, never the model's day with
     their time. With no schedule read, the row is missing and asks for one, and the request's
     own schedule words stand under it, so they are never a can't of another kind."""
+    if (by_hand := _by_hand(schedule, text)) is not None:
+        return by_hand
     kept = _kept(schedule)
     shown = re.sub(r"(?:\s+(?:and|or))+$", "", " ".join(kept).strip(" ,"), flags=re.IGNORECASE)
     said = _schedule_span(text, shown)

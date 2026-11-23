@@ -200,7 +200,7 @@ for (const width of [1920, 1440, 1280, 1050, 901, 900, 390] as const) {
     const newest = page.getByRole('list', { name: 'Conversation with the Planner' }).locator(':scope > li').last()
     const panel = page.locator('#side-panel')
     const views: readonly (readonly [string, string, () => Locator, () => readonly Locator[]])[] = [
-      ['workflow', `Is ${facts.workflow} running?`, () => newest.getByRole('button', { name: facts.workflow, exact: true }), () => [panel.getByText('Next run')]],
+      ['workflow', `Is ${facts.workflow} running?`, () => newest.getByRole('button', { name: facts.workflow, exact: true }), () => [panel.getByText('Last run', { exact: true })]],
       [
         'approval',
         'What needs me?',
@@ -208,7 +208,7 @@ for (const width of [1920, 1440, 1280, 1050, 901, 900, 390] as const) {
         () => [panel.getByRole('button', { name: 'Decline' }), panel.getByText('The platform can’t yet check registries or security advisories.')],
       ],
       ['run', `Why did ${facts.stopped.name} stop?`, () => newest.locator(`[data-opens="run:${facts.stopped.runId}"]`), () => [panel.getByText('Safe to retry')]],
-      ['software', 'Monitor LangGraph releases', () => newest.getByRole('button', { name: 'Open it' }), () => [panel.getByText('Checked by')]],
+      ['software', 'Monitor LangGraph releases on the watchlist', () => newest.getByRole('button', { name: 'Open it' }), () => [panel.getByText('Checked by')]],
     ]
     const found: string[] = []
     try {
@@ -452,6 +452,8 @@ const CARD_SHOTS: ReadonlySet<number> = new Set([1920, 1280, 900, 390])
 for (const width of WIDTHS) {
   test(`the parts list fits with ticks, a long cross, a question, a clash and the part I can do, and so does Left out, as an Operator at ${String(width)} px`, async ({ browser, backend }) => {
     test.slow()
+    // LangGraph is watched, so the own-time state is its own release check card (ADR 0053).
+    await backend.freshWatchlist('alice')
     const drafts = async () => (await backend.get<{ drafts: { draft_id: string }[] }>('alice', '/api/v1/drafts')).drafts.map((draft) => draft.draft_id)
     const before = await drafts()
     const context = await devContext(browser, 'alice', { reducedMotion: true })
@@ -474,7 +476,7 @@ for (const width of WIDTHS) {
     const states = [
       ['a set-up card with ticks, a long cross and a question', 'card', `Find bug tickets in MOCK with no update for 10 days and create one ticket that lists them. ${LONG_CROSS}.`, 'How often?'],
       ['the part I can do', 'part', 'Every Friday at 5pm, find tickets in MOCK with no update for 10 days that mention VPN and create one ticket that lists them', 'Ask the team'],
-      ['a watch request’s own time, offered to the whole watchlist', 'own-time', 'Watch LangGraph releases every Thursday at 7am', 'Make the Software watchlist run every Thursday at 7am'],
+      ['a watched software’s own time, its own release check', 'own-time', 'Watch LangGraph releases on the watchlist every Thursday at 7am', 'Thursday at 7:00'],
       ['a clash between two days', 'clash', 'Every Monday and Friday at 9am, find bug tickets in MOCK with no update for 10 days and create one ticket that lists them', 'Monday or Friday?'],
     ] as const
     try {

@@ -2660,7 +2660,7 @@
                 "type": "null"
               }
             ],
-            "description": "The request's words, unchanged, when the Workflow drafter may draft it as an n8n workflow: for an Operator, when a part it can't do is not one the platform refuses (ADR 0051). The card shows Draft it as an n8n workflow, which sends these words. Null otherwise.",
+            "description": "The request's words, unchanged, when the Workflow drafter may build it with any n8n block: for an Operator, on a card from our blocks, or on a can't when a part it can't do is not one the platform refuses (ADR 0051, ADR 0053). The card shows Build it with any n8n block, which sends these words. Null otherwise, and on an answer inside another answer.",
             "title": "Draft Words"
           },
           "parts": {
@@ -5200,7 +5200,7 @@
       },
       "DraftStartedReply": {
         "additionalProperties": false,
-        "description": "An Operator asked for a draft in words, as \"draft an n8n workflow that ...\". Code read it,\nnever a model, and the Workflow drafter started on the words unchanged (ADR 0051). The Portal\nshows the drafted workflow's card and follows GET /api/v1/drafted-workflows/{drafted_id}.",
+        "description": "The Workflow drafter started on an Operator's words, unchanged (ADR 0051): they asked for\na draft in words, as \"draft an n8n workflow that ...\", which code read before any model, or\nthe Planner found nothing of ours that covers the request (ADR 0053, item 5). The Portal\nshows the drafted workflow's card and follows GET /api/v1/drafted-workflows/{drafted_id}.",
         "properties": {
           "answer": {
             "const": "draft_started",
@@ -9353,7 +9353,7 @@
                 "type": "null"
               }
             ],
-            "description": "The request's words, unchanged, when the Workflow drafter may draft it as an n8n workflow: for an Operator, when a part it can't do is not one the platform refuses (ADR 0051). The card shows Draft it as an n8n workflow, which sends these words. Null otherwise.",
+            "description": "The request's words, unchanged, when the Workflow drafter may build it with any n8n block: for an Operator, on a card from our blocks, or on a can't when a part it can't do is not one the platform refuses (ADR 0051, ADR 0053). The card shows Build it with any n8n block, which sends these words. Null otherwise, and on an answer inside another answer.",
             "title": "Draft Words"
           },
           "name": {
@@ -12991,11 +12991,41 @@
       "SetupCardReply": {
         "additionalProperties": false,
         "properties": {
+          "also": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SetupCardReply"
+              },
+              {
+                "$ref": "#/components/schemas/PartReply"
+              },
+              {
+                "$ref": "#/components/schemas/CantReply"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The rest of a request that also asks for another workflow, as a ticket list beside one software's release check, offered after this card.",
+            "title": "Also"
+          },
           "answer": {
             "const": "setup_card",
             "default": "setup_card",
             "title": "Answer",
             "type": "string"
+          },
+          "draft_words": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The request's words, unchanged, when the Workflow drafter may build it with any n8n block: for an Operator, on a card from our blocks, or on a can't when a part it can't do is not one the platform refuses (ADR 0051, ADR 0053). The card shows Build it with any n8n block, which sends these words. Null otherwise, and on an answer inside another answer.",
+            "title": "Draft Words"
           },
           "name": {
             "title": "Name",
@@ -13046,7 +13076,9 @@
           "answer",
           "name",
           "rows",
-          "similar"
+          "similar",
+          "also",
+          "draft_words"
         ],
         "title": "SetupCardReply",
         "type": "object"
@@ -15566,6 +15598,13 @@
         "title": "WaitingPage",
         "type": "object"
       },
+      "WatchPart": {
+        "enum": [
+          "schedule",
+          "ticket"
+        ],
+        "type": "string"
+      },
       "WatchedSoftwareView": {
         "additionalProperties": false,
         "properties": {
@@ -15800,6 +15839,14 @@
             "default": "watchlist",
             "title": "Answer",
             "type": "string"
+          },
+          "covers": {
+            "description": "The parts of the request past the software that the Software watchlist does itself, each a ticked row on the software card: schedule when the request names the day or time it already runs on, ticket when it asks for the upgrade ticket the watchlist raises after a yes. Empty beside also, whose card holds the rest of the request.",
+            "items": {
+              "$ref": "#/components/schemas/WatchPart"
+            },
+            "title": "Covers",
+            "type": "array"
           },
           "parts": {
             "description": "Every clause of what the person typed, in order, with what happened to it (spec 6.5). None is dropped. Empty for a chip they tapped, for an answer inside another answer, and when no model read the request.",

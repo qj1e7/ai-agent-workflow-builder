@@ -35,7 +35,7 @@ describe('the thread', () => {
   it('hands the next typed request the turn before it: the words, the software it named, the text it answered with, and the kind of answer it was', () => {
     const ask = (reply: PlannerReply, typed: string) => threadReducer(threadReducer(EMPTY, { type: 'sent', text: typed, chat: 'c1' }), { type: 'answered', reply, typed })
     expect(previousOf(EMPTY)).toBeNull()
-    const watch = ask({ trace_id: null, answer: 'watchlist', word: 'version', software: 'FastAPI', already_listed: null, also: null, parts: [] }, 'Is there a newer FastAPI?')
+    const watch = ask({ trace_id: null, answer: 'watchlist', word: 'version', software: 'FastAPI', already_listed: null, also: null, covers: [], parts: [] }, 'Is there a newer FastAPI?')
     expect(previousOf(watch)).toEqual({ request: 'Is there a newer FastAPI?', software: 'FastAPI', answer: null, kind: 'watchlist', trace_id: null })
     const said = ask({ trace_id: null, answer: 'question', text: 'LangGraph is at 1.2.14.', looked_at: ['watchlist'], about_software: [], parts: [] }, 'What is the newest version of LangGraph?')
     expect(previousOf(said)).toEqual({ request: 'What is the newest version of LangGraph?', software: null, answer: 'LangGraph is at 1.2.14.', kind: 'question', trace_id: null })
@@ -44,7 +44,7 @@ describe('the thread', () => {
 
   it('hands over the one software any answer named, so “keep track of it” after it means that software', () => {
     const softwareAfter = (reply: PlannerReply) => previousOf(threadReducer(threadReducer(EMPTY, { type: 'sent', text: 'x', chat: 'c1' }), { type: 'answered', reply, typed: 'x' }))?.software
-    const watch: WatchlistReply = { trace_id: null, answer: 'watchlist', word: 'add', software: 'Node Js', already_listed: null, also: null, parts: [] }
+    const watch: WatchlistReply = { trace_id: null, answer: 'watchlist', word: 'add', software: 'Node Js', already_listed: null, also: null, covers: [], parts: [] }
     const crossed: CantRowView = { kind: 'look_for', text: 'keep track of it', note: 'I didn’t follow this part.', needs: null, system: null, instead: null, unsupported: false }
     expect(softwareAfter({ trace_id: null, answer: 'cant', cant: [crossed], alternative: watch, draft_words: null, parts: [] })).toBe('Node Js')
     expect(softwareAfter({ trace_id: null, answer: 'cant', cant: [crossed], alternative: null, draft_words: null, parts: [] })).toBeNull()

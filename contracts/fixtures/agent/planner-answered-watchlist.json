@@ -4,11 +4,12 @@
     "kind": "watchlist",
     "word": "release",
     "software": "LangGraph",
-    "also": null
+    "also": null,
+    "covers": []
   },
   "parts": [
     {
-      "text": "Tell me when LangGraph has a new release",
+      "text": "Tell me when LangGraph on the watchlist has a new release",
       "mark": "will_do",
       "reason": null,
       "note": null,

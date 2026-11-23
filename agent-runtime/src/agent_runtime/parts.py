@@ -434,7 +434,7 @@ def _rows(answer: PlannerAnswer | None) -> list[CantRow]:
         case PartAnswer() | CantAnswer():
             alternative = answer.alternative if isinstance(answer, CantAnswer) else None
             return answer.cant + _rows(alternative)
-        case WatchlistAnswer():
+        case WatchlistAnswer() | SetupCardAnswer():
             return _rows(answer.also)
         case _:
             return []

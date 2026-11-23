@@ -33,6 +33,7 @@ ASKS_ONLY: Final = words(
 words, pronouns, polite asks, and the verbs of a question, as "can you tell me" or "which version
 do we run". Any other word, as "news", "email", a number or a second name, asks for more, and
 the request is answered the usual way."""
+CHECKS_ONCE: Final = re.compile(r"\b(check)\s+(?:if|whether)\b", re.IGNORECASE)
 LEADS: Final = words("please pls kindly just now so and can could would will you")
 ORDERS: Final = words("update upgrade patch release run use")
 """Words that order a change or a use when they come first, after any of `LEADS`, as "update
@@ -74,6 +75,8 @@ def asks_for_the_newest(request: str, software: str) -> str | None:
     "NET" in ".NET", which makes it part of a longer name."""
     if name_key(software) in NOT_NAMES or other_systems(request) or KEY_SHAPES.search(request):
         return None
+    # "check if" and "check whether" ask once, as "can you check if n8n has a new release?".
+    request = CHECKS_ONCE.sub(r"\1", request)
     if NEWEST.fullmatch(software) or software.casefold() in ASKS_ONLY:
         return None
     if other_release_source(request):

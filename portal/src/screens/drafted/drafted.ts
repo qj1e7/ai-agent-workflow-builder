@@ -11,10 +11,8 @@ export interface PillWords {
 /** The title while the drafter has no name for the workflow yet. */
 export const DRAFTING_TITLE = 'Drafting it as an n8n workflow'
 
-export const DRAFT_BUTTON = 'Draft it as an n8n workflow'
-
-/** Under the draft button: what drafting does. A draft is checked, and isn’t set up until an Approver says yes. It says nothing of writes, since the card above may be a part card whose own Set up needs no Approver. */
-export const DRAFT_NOTE = 'The Workflow drafter drafts it as its own n8n workflow, and the safety checker checks it. It isn’t set up until an Approver says yes.'
+/** The quiet link on a card that sends its words to the drafter (ADR 0053, item 5). */
+export const ANY_BLOCK = 'Build it with any n8n block'
 
 const DRAFTING: PillWords = { label: 'Drafting', tone: 'new' }
 const DRAFT: PillWords = { label: 'Draft', tone: 'quiet' }

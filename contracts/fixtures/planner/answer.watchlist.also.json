@@ -36,6 +36,9 @@
         "note": null
       }
     ],
-    "similar": null
-  }
+    "similar": null,
+    "also": null,
+    "draft_words": null
+  },
+  "covers": []
 }

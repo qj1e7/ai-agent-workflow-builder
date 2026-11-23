@@ -17,7 +17,8 @@ import { emptyModel, stationsOf, type RunModel } from '../run/runModel'
 import { planOf } from '../run/useRunStory'
 import { scheduleShort, type StageTone } from '../run/words'
 import { firstRunWhen } from '../workflows/times'
-import { buildLine, buildStage, draftPill, LINE_STEP_MS, notesOf, replayAt, shownOf, testStatus, testStep, type BuildStage, type PillTone, type Replay } from './build'
+import { RUN_NOW_ONLY, runsOnlyByHand } from '../workflows/workflow'
+import { buildLine, buildStage, draftPill, LINE_STEP_MS, notesOf, replayAt, shownOf, testStatus, testStep, turnOnStep, type BuildStage, type PillTone, type Replay } from './build'
 import { useShowBesideOnWide } from './autoOpen'
 import { PartsList, type Part } from './PartsList'
 import runStyles from '../run/RunPage.module.css'
@@ -92,7 +93,8 @@ export function useBuilt(useCaseId: string, test: RunModel | null): Built {
 
 function firstRunWords(useCase: UseCaseView | undefined, now: Date): string {
   const next = useCase?.next_run_at
-  return next ? `On. First run ${firstRunWhen(next, now, useCase.schedule?.time_zone)}.` : 'On.'
+  if (next) return `On. First run ${firstRunWhen(next, now, useCase.schedule?.time_zone)}.`
+  return useCase && runsOnlyByHand(useCase) ? `On. ${RUN_NOW_ONLY}` : 'On.'
 }
 
 interface BuildingProps {
@@ -129,7 +131,11 @@ export function Building(props: BuildingProps) {
     setProblem(null)
     start.mutate({ useCaseId: props.useCaseId, key }, { onError: (error) => setProblem(`Could not start the test run. ${words(error)}`) })
   }
-  const pressTurnOn = () => {
+  const turnAsked = useRef(false)
+  // After a passing test it turns itself on, once. Try again asks again.
+  const pressTurnOn = (again = false) => {
+    if (!again && turnAsked.current) return
+    turnAsked.current = true
     setProblem(null)
     turnOn.mutate(props.useCaseId, { onError: (error) => setProblem(`Could not turn it on. ${words(error)}`) })
   }
@@ -166,7 +172,8 @@ export interface CardProps extends BuildingProps {
   /** On every draw: the test run starts here, once, after the log has replayed, while the workflow is a draft. */
   readonly onReplayed: (life: UseCaseView['state'] | undefined, replayed: boolean) => void
   readonly onTestAgain: () => void
-  readonly onTurnOn: () => void
+  /** Turn on's last step: asked by the card once the test passed, and again by Try again. */
+  readonly onTurnOn: (again?: boolean) => void
 }
 
 export function BuildingCard({ useCaseId, title, parts, newAgents, draftKept, test, runId, problem, starting, turning, onReplayed, onTestAgain, onTurnOn }: CardProps) {
@@ -176,6 +183,7 @@ export function BuildingCard({ useCaseId, title, parts, newAgents, draftKept, te
   const life = useCase?.state
   useEffect(() => {
     onReplayed(life, replay.done)
+    if (turnOnStep(stage, life, turning || problem !== null) === 'turn_on') onTurnOn()
   })
 
   const log = setUp?.created.build_log ?? []
@@ -209,7 +217,7 @@ export function BuildingCard({ useCaseId, title, parts, newAgents, draftKept, te
       status = problem ? <span className={styles['bad']}>{problem}</span> : (replay.lines.findLast((one) => one.kind === 'status')?.text ?? (stage.kind === 'saved' ? 'Saved as a draft.' : 'Starting…'))
       actions = problem ? (
         <Button variant="primary" loading={starting} onClick={onTestAgain}>
-          Test again
+          Try again
         </Button>
       ) : undefined
       break
@@ -228,24 +236,22 @@ export function BuildingCard({ useCaseId, title, parts, newAgents, draftKept, te
           {result?.text}
         </span>
       )
-      actions = (
-        <Button variant="primary" loading={turning} onClick={onTurnOn}>
-          Turn it on
+      actions = problem ? (
+        <Button variant="primary" loading={turning} onClick={() => onTurnOn(true)}>
+          Try again
         </Button>
-      )
+      ) : undefined
       break
     case 'stopped':
-      status = <span className={styles['bad']}>{result?.text}</span>
+      status = <span className={styles['bad']}>{result?.text} Nothing was written. It stays a Draft.</span>
       actions = (
         <>
-          {runId ? (
-            <OpenButton item={{ kind: 'run', id: runId }} to={`/runs/${runId}`}>
-              Open<span className="visually-hidden"> the test run</span>
-            </OpenButton>
-          ) : null}
           <Button variant="primary" loading={starting} onClick={onTestAgain}>
-            Test again
+            Try again
           </Button>
+          <OpenButton item={{ kind: 'workflow', id: useCaseId }} to={`/workflows/${encodeURIComponent(useCaseId)}`}>
+            Open the workflow
+          </OpenButton>
         </>
       )
       break

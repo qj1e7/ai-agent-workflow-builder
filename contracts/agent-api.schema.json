@@ -3178,6 +3178,20 @@
           "default": null,
           "title": "Watchlist"
         },
+        "watchlist_project": {
+          "anyOf": [
+            {
+              "maxLength": 40,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The Jira project the Software watchlist raises its upgrade tickets in. None when it was not read, so a ticket asked for in any named project is not its own.",
+          "title": "Watchlist Project"
+        },
         "watchlist_schedule": {
           "anyOf": [
             {
@@ -3895,6 +3909,37 @@
     "SetupCardAnswer": {
       "additionalProperties": false,
       "properties": {
+        "also": {
+          "anyOf": [
+            {
+              "discriminator": {
+                "mapping": {
+                  "cant": "#/$defs/CantAnswer",
+                  "part": "#/$defs/PartAnswer",
+                  "setup_card": "#/$defs/SetupCardAnswer"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/SetupCardAnswer"
+                },
+                {
+                  "$ref": "#/$defs/PartAnswer"
+                },
+                {
+                  "$ref": "#/$defs/CantAnswer"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The rest of a request that also asks for another workflow, as a ticket list beside one software's release check, offered after this card. None when the card holds the whole request.",
+          "title": "Also"
+        },
         "kind": {
           "const": "setup_card",
           "default": "setup_card",
@@ -4618,6 +4663,13 @@
       ],
       "type": "string"
     },
+    "WatchPart": {
+      "enum": [
+        "schedule",
+        "ticket"
+      ],
+      "type": "string"
+    },
     "WatchedFact": {
       "additionalProperties": false,
       "properties": {
@@ -4787,6 +4839,14 @@
           "default": null,
           "description": "The rest of a request that also asks for a workflow, such as a weekly ticket list, offered next. None when the request is only about the software.",
           "title": "Also"
+        },
+        "covers": {
+          "description": "The parts of the request past the software that the Software watchlist does itself: schedule when it names the day or time the watchlist already runs on, ticket when it asks for the upgrade ticket the watchlist raises after a yes. Empty beside `also`, whose card holds the rest of the request.",
+          "items": {
+            "$ref": "#/$defs/WatchPart"
+          },
+          "title": "Covers",
+          "type": "array"
         },
         "kind": {
           "const": "watchlist",

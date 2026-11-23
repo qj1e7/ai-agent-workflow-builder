@@ -16,7 +16,7 @@ import { StatusBanner } from './Banner'
 import { heldOf, heldWords } from './n8nHold'
 import { needsFix } from './n8nChange'
 import { StatusPills } from './Status'
-import { bannerOf, changeProblem, changeWords, controlsOf, lastRunWords, leftOutWords, NO_RUNS, nextRunWords, pillOf, pressChange, REFRESH_MS, rereadWhenOutOfDate, sentenceOf, viewerOf, type Banner, type LastRun } from './workflow'
+import { bannerOf, changeProblem, changeWords, controlsOf, lastRunWords, leftOutWords, NO_RUNS, nextRunWords, pillOf, pressChange, REFRESH_MS, rereadWhenOutOfDate, runsOnlyByHand, sentenceOf, viewerOf, type Banner, type LastRun } from './workflow'
 import styles from './Workflows.module.css'
 import { DraftActions } from './DraftActions'
 
@@ -87,10 +87,13 @@ function Summary({ useCase, me, now }: { useCase: UseCaseView; me: Me; now: Date
           <dt>Last run</dt>
           <dd>{lastRunWords(useCase, now, nameOf) ?? NO_RUNS}</dd>
         </div>
-        <div>
-          <dt>Next run</dt>
-          <dd>{nextRunWords(useCase, now)}</dd>
-        </div>
+        {/* A workflow that runs only on Run now has no next run, as its page's When says. */}
+        {runsOnlyByHand(useCase) ? null : (
+          <div>
+            <dt>Next run</dt>
+            <dd>{nextRunWords(useCase, now)}</dd>
+          </div>
+        )}
       </dl>
       <div className={styles['panelBtns']}>
         <ExplainButton useCaseId={useCase.use_case_id} name={useCase.name} />

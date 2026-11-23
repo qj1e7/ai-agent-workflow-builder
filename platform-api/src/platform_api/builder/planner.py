@@ -18,6 +18,7 @@ from datetime import UTC, datetime
 from typing import Annotated, Final, Literal, Protocol, Self
 
 from pydantic import AwareDatetime, ConfigDict, Field, StringConstraints, model_validator
+from pydantic.config import JsonDict
 
 from platform_api.builder import asks
 from platform_api.builder.drafted_workflows import SAME_WORDS_WITHIN, DraftedWorkflows
@@ -91,6 +92,7 @@ from platform_api.orchestration import (
     TurnTrace,
     UnderstoodRow,
     WatchlistAnswer,
+    WatchPart,
     WhichSoftwareAnswer,
     WhyStoppedAnswer,
     no_access_words,
@@ -279,6 +281,15 @@ class RemovalMatch(ListedSoftware):
     )
 
 
+DRAFT_WORDS_FIELD: Final = Field(
+    default=None,
+    description="The request's words, unchanged, when the Workflow drafter may build it with any "
+    "n8n block: for an Operator, on a card from our blocks, or on a can't when a part it can't do "
+    "is not one the platform refuses (ADR 0051, ADR 0053). The card shows Build it with any n8n "
+    "block, which sends these words. Null otherwise, and on an answer inside another answer.",
+)
+
+
 class SetupCardReply(Reply):
     answer: Literal["setup_card"] = "setup_card"
     name: str
@@ -287,14 +298,12 @@ class SetupCardReply(Reply):
         description="A workflow of the team's with the same name that watches a GitHub "
         "repository, so it is the one asked for. Null when there is none."
     )
-
-
-DRAFT_WORDS_FIELD: Final = Field(
-    default=None,
-    description="The request's words, unchanged, when the Workflow drafter may draft it as an n8n "
-    "workflow: for an Operator, when a part it can't do is not one the platform refuses (ADR "
-    "0051). The card shows Draft it as an n8n workflow, which sends these words. Null otherwise.",
-)
+    also: SetupCardReply | PartReply | CantReply | None = Field(
+        default=None,
+        description="The rest of a request that also asks for another workflow, as a ticket "
+        "list beside one software's release check, offered after this card.",
+    )
+    draft_words: str | None = DRAFT_WORDS_FIELD
 
 
 class PartReply(Reply):
@@ -306,7 +315,17 @@ class PartReply(Reply):
     draft_words: str | None = DRAFT_WORDS_FIELD
 
 
+def _covers_may_be_absent(schema: JsonDict) -> None:
+    """A Portal built before `covers` reads a reply without it, so the contract lists it as
+    optional."""
+    required = schema.get("required")
+    if isinstance(required, list) and "covers" in required:
+        required.remove("covers")
+
+
 class WatchlistReply(Reply):
+    model_config = ConfigDict(json_schema_extra=_covers_may_be_absent)
+
     answer: Literal["watchlist"] = "watchlist"
     word: str
     software: str | None
@@ -316,6 +335,13 @@ class WatchlistReply(Reply):
     )
     also: SetupCardReply | PartReply | CantReply | None = Field(
         description="The rest of a request that also asks for a workflow."
+    )
+    covers: list[WatchPart] = Field(
+        default_factory=list[WatchPart],
+        description="The parts of the request past the software that the Software watchlist does "
+        "itself, each a ticked row on the software card: schedule when the request names the day "
+        "or time it already runs on, ticket when it asks for the upgrade ticket the watchlist "
+        "raises after a yes. Empty beside also, whose card holds the rest of the request.",
     )
 
 
@@ -617,8 +643,9 @@ class ExplainReply(Reply):
 
 
 class DraftStartedReply(Reply):
-    """An Operator asked for a draft in words, as "draft an n8n workflow that ...". Code read it,
-    never a model, and the Workflow drafter started on the words unchanged (ADR 0051). The Portal
+    """The Workflow drafter started on an Operator's words, unchanged (ADR 0051): they asked for
+    a draft in words, as "draft an n8n workflow that ...", which code read before any model, or
+    the Planner found nothing of ours that covers the request (ADR 0053, item 5). The Portal
     shows the drafted workflow's card and follows GET /api/v1/drafted-workflows/{drafted_id}."""
 
     answer: Literal["draft_started"] = "draft_started"
@@ -733,6 +760,7 @@ WHICH_IN_N8N = "Say which workflow to open in n8n."
 
 
 WatchlistReply.model_rebuild()
+SetupCardReply.model_rebuild()
 
 type PlannerReply = Annotated[
     SetupCardReply
@@ -1017,6 +1045,24 @@ def _remark(part: PartView) -> PartView:
     return part
 
 
+def to_the_drafter(reply: PlannerReply) -> bool:
+    """The Planner picks how to build it (ADR 0053, item 5): a can't with nothing of ours close
+    to it goes to the Workflow drafter, which may use any n8n block, when every part is one the
+    registry names (`instead` marks it) and none is one the platform refuses. Anything else keeps
+    the can't and its link: a clause the Planner didn't follow, or an order no ability is close
+    to, which the runtime keeps as "I can't do this yet. I can only ..." when its free reply
+    fails or is off. Vague or off-topic words never start a draft on their own."""
+    return (
+        isinstance(reply, CantReply)
+        and reply.alternative is None
+        and bool(reply.cant)
+        and all(
+            row.needs is not None and row.instead is not None and not row.unsupported
+            for row in reply.cant
+        )
+    )
+
+
 def past_decisions(text: str) -> DecidedReply | None:
     """A question about the person's own decisions, answered from platform state with no model:
     there is nothing in it for the runtime to refuse. None when the request holds an approve or
@@ -1109,6 +1155,9 @@ class PlannerFront:
         if isinstance(reply, NoSuchWorkflow):
             return reply
         if operator:
+            if self._drafted is not None and body.text is not None and to_the_drafter(reply):
+                started = await self._draft(body.text, viewer, self._drafted)
+                return started.model_copy(update={"trace_id": reply.trace_id, "parts": reply.parts})
             return self._offer_draft(reply, body.text)
         return questions_only(reply, body.text).model_copy(update={"trace_id": reply.trace_id})
 
@@ -1125,16 +1174,17 @@ class PlannerFront:
                 return DraftStartedReply(drafted_id=started.drafted_id, refused=None)
 
     def _offer_draft(self, reply: PlannerReply, text: str | None) -> PlannerReply:
-        """A can't, or a part card, gains Draft it as an n8n workflow when a part it can't do is
-        one the drafter might reach. A part the platform refuses outright offers nothing."""
-        if (
-            self._drafted is None
-            or text is None
-            or not isinstance(reply, CantReply | PartReply)
-            or all(row.unsupported for row in reply.cant)
-        ):
+        """A card from our blocks gains Build it with any n8n block, and so does a can't when a
+        part it can't do is one the drafter might reach. A part the platform refuses outright
+        offers nothing."""
+        if self._drafted is None or text is None:
             return reply
-        return reply.model_copy(update={"draft_words": text})
+        if isinstance(reply, SetupCardReply) or (
+            isinstance(reply, CantReply | PartReply)
+            and not all(row.unsupported for row in reply.cant)
+        ):
+            return reply.model_copy(update={"draft_words": text})
+        return reply
 
     async def _intent(
         self, intent: Intent, use_case_id: str | None
@@ -1195,9 +1245,12 @@ class PlannerFront:
 
     async def _finish(self, answer: PlannerAnswer, viewer: Principal) -> PlannerReply:
         match answer:
-            case SetupCardAnswer(name=name, rows=rows):
+            case SetupCardAnswer(name=name, rows=rows, also=also):
                 return SetupCardReply(
-                    name=name, rows=_rows(rows), similar=await self._similar(name)
+                    name=name,
+                    rows=_rows(rows),
+                    similar=await self._similar(name),
+                    also=await self._rest(also, viewer),
                 )
             case PartAnswer(name=name, rows=rows, cant=cant):
                 return PartReply(
@@ -1278,17 +1331,22 @@ class PlannerFront:
                 return await self._watch(watch, viewer)
 
     async def _watch(self, watch: WatchlistAnswer, viewer: Principal) -> WatchlistReply:
-        also = None
-        if watch.also is not None:
-            rest = await self._finish(watch.also, viewer)
-            if isinstance(rest, SetupCardReply | PartReply | CantReply):
-                also = rest
         return WatchlistReply(
             word=watch.word,
             software=watch.software,
             already_listed=await self._listed(watch.software),
-            also=also,
+            also=await self._rest(watch.also, viewer),
+            covers=watch.covers,
         )
+
+    async def _rest(
+        self, also: SetupCardAnswer | PartAnswer | CantAnswer | None, viewer: Principal
+    ) -> SetupCardReply | PartReply | CantReply | None:
+        """The card for the rest of a request, offered after the answer's own."""
+        if also is None:
+            return None
+        rest = await self._finish(also, viewer)
+        return rest if isinstance(rest, SetupCardReply | PartReply | CantReply) else None
 
     async def _listed(self, software: str | None) -> ListedSoftware | None:
         if software is None:

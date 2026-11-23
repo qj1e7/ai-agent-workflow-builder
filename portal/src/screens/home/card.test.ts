@@ -225,6 +225,19 @@ describe('step 2, check what I understood', () => {
   it('asks the Planner for a plan with the rows, not the schedule', () => {
     expect(taskWithoutSchedule(read(ROWS).rows)).toBe('Find bug tickets in MOCK with no update for 10 days. Create one follow-up ticket that lists them. Where it goes: Jira project MOCK.')
   })
+
+  it('plans the card beside a watch with the software’s name as they wrote it', () => {
+    const beside: Answered = {
+      ...ROWS,
+      rows: [
+        { kind: 'schedule', text: 'Every Monday', state: 'understood', note: null },
+        { kind: 'look_for', text: 'New releases of LangGraph', state: 'understood', note: 'Read from your words "LangGraph".' },
+        { kind: 'do', text: 'Create one ticket that lists them', state: 'understood', note: null },
+        { kind: 'where', text: 'Jira project OPS', state: 'understood', note: null },
+      ],
+    }
+    expect(taskWithoutSchedule(read(beside).rows)).toBe('Find new releases of LangGraph. Create one ticket that lists them. Where it goes: Jira project OPS.')
+  })
 })
 
 describe('the plan in step 2', () => {
@@ -624,7 +637,7 @@ describe('the Planner’s set-up card', () => {
     it('asks how often, then the day of a weekly run, then the time, one at a time, and nothing once the schedule is whole', () => {
       const start = said('')
       expect(words(start)).toBe('How often?')
-      expect(nextQuestion(start, null)).toMatchObject({ kind: 'when', choices: [{ label: 'Every day' }, { label: 'Every weekday' }, { label: 'Every week' }] })
+      expect(nextQuestion(start, null)).toMatchObject({ kind: 'when', choices: [{ label: 'Every day' }, { label: 'Every weekday' }, { label: 'Every week' }, { label: 'Only when I run it' }] })
       const weekly = pick(start, 'Every week')
       expect(words(weekly)).toBe('Which day?')
       const friday = pick(weekly, 'Friday')
@@ -683,8 +696,7 @@ describe('the Planner’s set-up card', () => {
       const left = setupLeft(form, plan)
       expect(left).toEqual({ choices: [], leftOut: ['colour them by team'] })
       expect(leftWords(left), 'the cross is on the card, so the foot needn’t say it again').toBe('')
-      expect(setUpWords(left)).toBe('Set up the part I can')
-      expect(setUpWords(setupLeft(fresh(), plan))).toBe('Set up')
+      expect(setUpWords(), 'a cross is on the card, so the button keeps its name').toBe('Turn on')
     })
 
     it('never says nothing is unclear while a part has a cross, and a choice still left comes first', () => {
@@ -860,5 +872,74 @@ describe('a 24-hour time from the Planner', () => {
 
   it.each(['Every Friday at 24:00', 'Every Friday at 7:5', 'Every Friday at 1600', 'Every Friday at 23:59'])('asks the time for “%s”, never a guess', (schedule) => {
     expect(nextQuestion(timed(schedule), null)).toMatchObject({ kind: 'when', field: 'at' })
+  })
+})
+
+describe('a workflow that runs only when someone presses Run now', () => {
+  const said = (schedule: string): Form =>
+    cardFrom('x', [{ kind: 'schedule', text: schedule, state: schedule ? 'understood' : 'missing', note: null }, ...ROWS.rows.slice(1)], schedule ? `${schedule}, ${FOLLOW_UP}` : FOLLOW_UP)
+  const choose = (form: Form, label: string): Form => {
+    const asked = nextQuestion(form, null)
+    const choice = asked?.kind === 'when' ? asked.choices.find((one) => one.label === label) : undefined
+    if (!choice) throw new Error(`No choice ${label} in ${JSON.stringify(asked)}`)
+    return answerWhen(form, choice.set)
+  }
+  const saved = (content: Record<string, unknown>): DraftView => ({ draft_id: 'd1', step: 2, content, created_at: '2026-11-23T07:00:00Z', saved_at: '2026-11-23T07:00:00Z' })
+
+  it('offers Only when I run it as the fourth answer to How often?, and asks no time after it', () => {
+    const start = said('')
+    expect(nextQuestion(start, null)).toMatchObject({
+      kind: 'when',
+      field: 'often',
+      words: 'How often?',
+      choices: [{ label: 'Every day' }, { label: 'Every weekday' }, { label: 'Every week' }, { label: 'Only when I run it' }],
+    })
+    const manual = choose(start, 'Only when I run it')
+    expect(nextQuestion(manual, null)).toBeNull()
+    expect(whenProblems(manual.when)).toEqual({})
+    expect(whenSaid(manual.when)).toBe('Only when I run it')
+    expect(setupLeft(manual, null).choices).not.toContain('when it runs')
+  })
+
+  it.each(['Only when I ask', 'When I run it', 'Only when I run it', 'On demand', 'Run it manually', 'Only run manually', 'Only manually'])('reads “%s” as no schedule, with no time to ask', (words) => {
+    expect(readWhen(words)).toMatchObject({ often: 'manual', day: '', at: '' })
+    expect(nextQuestion(said(words), null)).toBeNull()
+  })
+
+  it.each([
+    'Whenever',
+    'As needed',
+    'Now and then',
+    'When it suits me',
+    'Manually',
+    'Check n8n releases so I don’t have to check manually',
+    "I don't want to run it manually",
+    'Nobody should run it manually',
+    'Tickets we triaged manually',
+    'On demand or weekly',
+    'On demand, or once a month',
+  ])('asks How often? for “%s”, never a guess', (words) => {
+    expect(readWhen(words).often).toBe('')
+    expect(nextQuestion(said(words), null)?.words).toBe('How often?')
+  })
+
+  it('keeps a schedule written beside the words, since Run now starts any workflow', () => {
+    expect(readWhen('On demand, and also weekly on Monday at 9am')).toMatchObject({ often: 'week', day: 'monday', at: '09:00' })
+  })
+
+  it('sends no schedule, even after a time was picked first', () => {
+    const timed = choose(choose(said(''), 'Every day'), '9:00')
+    const manual = answerWhen(timed, { often: 'manual' })
+    expect(whenSaid(manual.when)).toBe('Only when I run it')
+    expect(scheduleOf(manual.when)).toBeNull()
+    const body = createBody({ ...manual, step: 4 }, planView(CLEAN_DRAFT, manual.rows), { 0: 'crd_new' })
+    expect(body.schedule).toBeNull()
+  })
+
+  it('says it was as they asked, and a saved draft reopens with it', () => {
+    const form = said('On demand')
+    expect(checkedRows(form)[0]).toEqual({ ok: true, words: 'When: Only when I run it, as you asked.' })
+    const content = JSON.parse(JSON.stringify(draftContent(form, null))) as Record<string, unknown>
+    expect(restoreDraft(saved(content)).form.when).toMatchObject({ often: 'manual' })
   })
 })

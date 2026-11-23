@@ -62,7 +62,8 @@
     "watchlist_schedule": {
       "day": "monday",
       "at": "09:00"
-    }
+    },
+    "watchlist_project": null
   },
   "changes_workflows": true
 }

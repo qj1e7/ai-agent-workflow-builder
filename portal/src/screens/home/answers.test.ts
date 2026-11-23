@@ -8,8 +8,9 @@ import refused from '../../../../contracts/fixtures/planner/answer.refused.json'
 import setupCard from '../../../../contracts/fixtures/planner/answer.setup_card.json'
 import watchlist from '../../../../contracts/fixtures/planner/answer.watchlist.json'
 import stoppedUseCase from '../../../../contracts/fixtures/builder/use-case.stopped.json'
+import statusesFixture from '../../../../contracts/fixtures/watchlist/statuses.json'
 import type { Row } from '../workflows/workflow'
-import type { CantReply, CapabilitiesView, PartReply, PlannerReply, SetupCardReply, UseCaseView, WatchlistReply } from '../../api/types'
+import type { CantReply, CapabilitiesView, PartReply, PlannerReply, SetupCardReply, UseCaseView, WatchlistReply, WatchlistView } from '../../api/types'
 import {
   capabilityGroups,
   oneWorkflowSay,
@@ -27,9 +28,48 @@ import {
   TAG_CANT,
   TAG_CHOICE,
   TAG_FILLED,
+  stillChecksWords,
+  watchChoice,
   watchlistSay,
   whyNot,
 } from './answers'
+
+describe('the watch card’s choice', () => {
+  const STATUSES = statusesFixture as WatchlistView
+  const on = (day: 'monday' | 'friday', at: string): WatchlistView => ({ ...STATUSES, schedule: STATUSES.schedule ? { ...STATUSES.schedule, day, at } : null })
+  const MONDAY_10 = on('monday', '10:00')
+
+  it('never guesses a time: a bare hour is asked on the edit card, so there is no choice', () => {
+    expect(watchChoice('Grafana', 'every day at 9', MONDAY_10)).toBeNull()
+  })
+
+  it('moves to the time asked, keeping the watchlist’s time only when the words name none', () => {
+    expect(watchChoice('Grafana', 'every day', MONDAY_10)?.move).toEqual({ label: 'Add it, and check all 7 every day', schedule: { day: 'every_day', at: '10:00' } })
+    expect(watchChoice('Grafana', 'daily at 5pm', MONDAY_10)?.move).toEqual({ label: 'Add it, and check all 7 every day at 17:00', schedule: { day: 'every_day', at: '17:00' } })
+  })
+
+  it('moves a time-only request to the same day, and leaves words it can’t read to the old offer', () => {
+    expect(watchChoice('Grafana', 'at 5pm', MONDAY_10)?.move).toEqual({ label: 'Add it, and check all 7 every Monday at 17:00', schedule: { day: 'monday', at: '17:00' } })
+    expect(watchChoice('Grafana', 'soon', MONDAY_10)).toBeNull()
+  })
+
+  it('says the time asked in schedule words, never the raw words', () => {
+    expect(watchChoice('Grafana', 'mondays at 5pm', on('friday', '10:00'))?.lead).toContain('and you asked for every Monday at 17:00.')
+  })
+
+  it('leaves time words it can’t read, as evening or morning, to the edit card', () => {
+    expect(watchChoice('Grafana', 'every evening', MONDAY_10)).toBeNull()
+    expect(watchChoice('Grafana', 'every day in the morning', MONDAY_10)).toBeNull()
+  })
+
+  it('says only what they asked: a time alone is a time, never a day they didn’t name', () => {
+    expect(watchChoice('Grafana', 'at 5pm', MONDAY_10)?.lead).toContain('and you asked for 17:00.')
+  })
+
+  it('says the watchlist still checks on its own schedule when the move can’t be made', () => {
+    expect(stillChecksWords(MONDAY_10)).toBe('The watchlist still checks every Monday at 10:00.')
+  })
+})
 
 const CARD = setupCard as SetupCardReply
 const PART = part as PartReply
@@ -176,8 +216,7 @@ describe('How to start, from the registry', () => {
     expect(startSteps(CAPS)).toEqual([
       'Tell me what should run by itself, in your own words, like “Keep track of the LangGraph version”.',
       'Check the card I make, and change anything I guessed.',
-      'Press Set up. I do a test run, which writes nothing.',
-      'If the test passes, press Turn it on.',
+      'Press Turn on. I do a test run, which writes nothing, and turn it on if the test passes.',
       'Nothing is written until an Approver says yes in Teams.',
     ])
   })
@@ -228,11 +267,16 @@ describe('Check my workflows about the one workflow they have', () => {
     ({ name: PLANTED, state: 'on', last_run: null, next_run_at: null, schedule: null, ...fields }) as unknown as UseCaseView
 
   it('says plainly whether it is on and that it hasn’t run yet, with the name quoted as data', () => {
-    expect(oneWorkflowSay(one({}), NOW, nameOf)).toBe(`“${PLANTED}” is on. It hasn’t run yet. Next run: Not scheduled.`)
+    expect(oneWorkflowSay(one({}), NOW, nameOf)).toBe(`“${PLANTED}” is on. It hasn’t run yet. Runs only when you press Run now.`)
+  })
+
+  it('gives a draft with no schedule no next run, and no Run now it can’t have', () => {
+    expect(oneWorkflowSay(one({ state: 'draft' }), NOW, nameOf)).toBe(`“${PLANTED}” is a draft. It hasn’t run yet. Next run: Not scheduled.`)
   })
 
   it('says when it runs next, in the panel’s own Next run words', () => {
-    const said = oneWorkflowSay(one({ next_run_at: '2026-11-21T01:00:00Z' }), NOW, nameOf)
+    const schedule = { day: 'saturday', at: '09:00', time_zone: null, held: false } as unknown as UseCaseView['schedule']
+    const said = oneWorkflowSay(one({ schedule, next_run_at: '2026-11-21T01:00:00Z' }), NOW, nameOf)
     expect(said).toMatch(/^“.+” is on\. It hasn’t run yet\. Next run: .+\.$/)
     expect(said).not.toContain('Not scheduled')
   })
@@ -244,6 +288,8 @@ describe('Check my workflows about the one workflow they have', () => {
       expect(said).toMatch(/Next run: Not running\.$/)
       expect(said).not.toContain('Sat')
     }
+    const unmoved = oneWorkflowSay(one({ move_refused: 'Not running. n8n did not take it yet.' }), NOW, nameOf)
+    expect(unmoved, 'a workflow with no schedule that could not move says Not running as a next run too').toMatch(/ Next run: Not running\.$/)
   })
 
   it('names no next run while it is paused, and says how its last run went', () => {

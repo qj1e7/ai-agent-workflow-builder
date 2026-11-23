@@ -91,10 +91,11 @@ The Teams drawer, the Jira page, sign-in, and the Settings tabs other than Conne
 
 The workflow drafter screens don't yet show these parts of ADR 0051's first build step:
 
-- the "Draft it as an n8n workflow" button on a can't answer;
 - the sender's note on each flag;
 - the Teams card for a set-up approval;
 - adding a write key in Settings.
+
+The "Draft it as an n8n workflow" button is gone. The Planner now picks how to build a workflow, and the quiet "Build it with any n8n block" link on the card is drawn in `docs/design/simple-flow/prototype.html` (ADR 0053, item 5).
 
 ## Decisions for the workflow drafter screens
 

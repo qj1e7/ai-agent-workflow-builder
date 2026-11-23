@@ -675,6 +675,18 @@ async def test_parts_belong_to_the_whole_answer_never_to_the_rest_inside_it(fron
     assert cast(dict[str, object], reply["also"])["parts"] == []
 
 
+async def test_a_release_check_offers_the_rest_of_the_request_after_its_own_card(front: Front):
+    rest = SetupCardAnswer(name="Friday summary", rows=FOUR_ROWS)
+    check = SetupCardAnswer(name="React release check", rows=FOUR_ROWS, also=rest)
+    front.answers.result = Answered(
+        answer=check, parts=[RequestPart(text="Watch React releases", mark="will_do")]
+    )
+    reply = await say(front, "Watch React releases and every Friday sum up")
+    assert reply["answer"] == "setup_card" and reply["name"] == "React release check"
+    also = cast(dict[str, object], reply["also"])
+    assert (also["answer"], also["name"], also["parts"]) == ("setup_card", "Friday summary", [])
+
+
 async def test_a_tapped_chip_and_the_offline_answer_mark_no_parts(front: Front):
     r = await front.client.post(ANSWER, json={"intent": "needs_me"}, headers=ALICE)
     assert r.json() == {"parts": [], "answer": "needs_me", "trace_id": None}
@@ -718,6 +730,23 @@ async def test_a_watchlist_row_says_when_the_software_is_already_listed(front: F
     assert listed["name"] == "LangGraph"
     front.answers.result = answered(WatchlistAnswer(word="releases", software="Kubernetes"))
     assert (await say(front, "Watch Kubernetes"))["already_listed"] is None
+
+
+async def test_a_watchlist_row_names_the_parts_the_watchlist_does_itself(front: Front):
+    watch = WatchlistAnswer(word="release", software="LangGraph", covers=["schedule", "ticket"])
+    front.answers.result = answered(watch)
+    asked = "Every Monday, check LangGraph for a new release and create a Jira ticket"
+    assert (await say(front, asked))["covers"] == ["schedule", "ticket"]
+    front.answers.result = answered(WatchlistAnswer(word="releases", software="Kubernetes"))
+    assert (await say(front, "Watch Kubernetes"))["covers"] == []
+
+
+def test_a_portal_older_than_the_platform_may_find_no_covers_on_a_watchlist_row():
+    schema = planner_module.WatchlistReply.model_json_schema(mode="serialization")
+    sent = schema["$defs"]["WatchlistReply"] if "$ref" in schema else schema
+    assert "covers" in sent["properties"]
+    assert "covers" not in sent["required"]
+    assert {"word", "software", "already_listed", "also"} <= set(sent["required"])
 
 
 async def test_a_question_answer_comes_back_with_the_sections_it_looked_at(front: Front):
@@ -791,6 +820,7 @@ async def test_the_facts_carry_the_watchlists_schedule_as_its_page_shows_it(fron
     assert facts is not None and facts.watchlist_schedule is not None
     shown = facts.watchlist_schedule
     assert (shown.day, shown.at) == (page["schedule"]["day"], page["schedule"]["at"])
+    assert facts.watchlist_project == page["ticket_project"], "where its upgrade tickets go"
 
 
 async def test_a_follow_up_passes_the_previous_turn_on_and_changes_nothing_else(front: Front):

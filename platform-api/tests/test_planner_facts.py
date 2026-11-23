@@ -156,3 +156,22 @@ async def test_past_50_the_names_and_the_count_are_sent():
 
     assert len(sent["other_workflows"]) == OTHER_WORKFLOWS
     assert sent["left_out_workflows"] == 1
+
+
+class Watched:
+    def __init__(self, view: WatchlistView) -> None:
+        self._view = view
+
+    async def view(self) -> WatchlistView | None:
+        return self._view
+
+
+@pytest.mark.parametrize("state", ["on", "paused"])
+async def test_the_facts_name_the_project_the_watchlist_raises_its_tickets_in(state: str):
+    view = WatchlistView.model_validate(
+        json.loads((FIXTURES / "watchlist" / "statuses.json").read_text())
+    ).model_copy(update={"state": state})
+
+    facts = await PlannerFactsReader(Watched(view), Listed([]), UnreadHome()).read(ALICE, "hi")
+
+    assert facts.watchlist_project == "MOCK"

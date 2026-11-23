@@ -6,6 +6,7 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
+from agent_runtime.abilities import names_no_ability
 from agent_runtime.answers import TaskRead, answer_task
 from agent_runtime.api import HttpCallbacks, Runtime, Settings, create_app
 from agent_runtime.contract import (
@@ -543,6 +544,18 @@ def test_with_the_free_reply_off_a_cant_that_names_no_ability_is_kept():
     chat = ScriptedChat(structured=[reading("none")])
     result = answer_task(request(ROOM), lambda timeout: chat, free_reply=False)
     assert isinstance(result, Answered) and isinstance(result.answer, CantAnswer)
+
+
+@pytest.mark.parametrize("task", [ROOM, "Write me a poem every Monday"])
+def test_a_kept_cant_that_names_no_ability_names_no_registry_entry(task: str):
+    """platform-api hands a can't to the workflow drafter on its own only when every row names a
+    registry entry, which `instead` marks (ADR 0053, item 5). A can't kept when the free reply is
+    off or fails names none, so vague or off-topic words never start a draft."""
+    chat = ScriptedChat(structured=[reading("none")])
+    result = answer_task(request(task), lambda timeout: chat, free_reply=False)
+    assert isinstance(result, Answered) and isinstance(result.answer, CantAnswer)
+    assert all(names_no_ability(row.note) for row in result.answer.cant)
+    assert [row.instead for row in result.answer.cant] == [None] * len(result.answer.cant)
 
 
 @pytest.mark.parametrize(

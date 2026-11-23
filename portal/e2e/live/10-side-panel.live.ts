@@ -95,7 +95,8 @@ for (const width of [1280, 900]) {
 
     await expect(heading(page)).toHaveText(name)
     await expect(heading(page), 'focus goes to the panel’s heading').toBeFocused()
-    await expect(panel(page)).toContainText(/Last run[\s\S]*Next run/)
+    await expect(panel(page)).toContainText('Last run')
+    await expect(panel(page), 'a workflow that runs only on Run now has no Next run row').not.toContainText('Next run')
     await expect(panel(page).getByRole('link', { name: 'More details' })).toHaveAttribute('href', /^\/workflows\/uc_/)
     await expectBesideOrCovering(page, width)
     await expectAccessible(page, path.join(OUT, 'axe'), `side-panel-workflow-${String(width)}`)
@@ -356,7 +357,7 @@ test('FIX-open-software: a software already on the watchlist opens in the side p
   const page = await context.newPage()
   await page.setViewportSize({ width: 1280, height: 900 })
   await page.goto('/')
-  await ask(page, 'Monitor LangGraph releases')
+  await ask(page, 'Monitor LangGraph releases on the watchlist')
   await newest(page).getByRole('button', { name: 'Open it' }).click()
   await expect(heading(page)).toHaveText('LangGraph')
   await expect(panel(page), 'with no schedule, nothing checks it on its own').toContainText(/Watching[\s\S]*Checked by\s*Not checked automatically/)

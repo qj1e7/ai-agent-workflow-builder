@@ -28,6 +28,7 @@ import {
   nameProblem,
   nameOf,
   nextQuestion,
+  OFTEN_NAMES,
   planView,
   reusedAgents,
   cardBlockers,
@@ -35,6 +36,7 @@ import {
   secondName,
   setUp,
   setUpWords,
+  answerFirst,
   setupLeft,
   taskWithoutSchedule,
   valueKey,
@@ -74,11 +76,7 @@ export interface CardStart {
 
 const SAVE_PAUSE_MS = 800
 
-const OFTEN: readonly (readonly [Exclude<Often, ''>, string])[] = [
-  ['every_day', 'Every day'],
-  ['weekdays', 'Every weekday'],
-  ['week', 'Every week'],
-]
+const OFTEN = Object.entries(OFTEN_NAMES) as [Exclude<Often, ''>, string][]
 const DAYS: readonly (readonly [Weekday, string])[] = [
   ['monday', 'Monday'],
   ['tuesday', 'Tuesday'],
@@ -205,10 +203,12 @@ function WhenPicker({ when, problems, focus, onWhen, onDone }: { when: When; pro
             </select>
           </div>
         ) : null}
-        <div className={styles['field']}>
-          <label htmlFor={`${id}-at`}>Time, {teamPlace()}</label>
-          <input id={`${id}-at`} type="time" step={300} value={when.at} aria-invalid={problems.at ? true : undefined} onKeyDown={leave} onChange={(event) => onWhen({ ...when, at: event.target.value })} />
-        </div>
+        {when.often === 'manual' ? null : (
+          <div className={styles['field']}>
+            <label htmlFor={`${id}-at`}>Time, {teamPlace()}</label>
+            <input id={`${id}-at`} type="time" step={300} value={when.at} aria-invalid={problems.at ? true : undefined} onKeyDown={leave} onChange={(event) => onWhen({ ...when, at: event.target.value })} />
+          </div>
+        )}
       </div>
       {Object.values(problems)[0] ? <p className={styles['problem']}>{Object.values(problems)[0]}</p> : null}
       <div className={styles['btns']}>
@@ -252,12 +252,13 @@ export type Phase = CardPhase
  * question at a time. Every change is saved as a draft after a short pause, so Resume on Workflows reopens it. Set up makes the
  * workflow as a draft, and the card goes on to build, test and turn it on.
  */
-export function SetupCard({ start }: { start: CardStart }) {
-  if (start.similar) return <AlreadyHave similar={start.similar} card={<SettingUp start={{ ...start, form: { ...start.form, name: secondName(start.form.name || start.similar.name) } }} />} />
-  return <SettingUp start={start} />
+/** `anyBlock` sits under the card while it is open, and goes with it once it is set up, dropped or no longer the live card. */
+export function SetupCard({ start, anyBlock = null }: { start: CardStart; anyBlock?: ReactNode }) {
+  if (start.similar) return <AlreadyHave similar={start.similar} card={<SettingUp start={{ ...start, form: { ...start.form, name: secondName(start.form.name || start.similar.name) } }} anyBlock={anyBlock} />} />
+  return <SettingUp start={start} anyBlock={anyBlock} />
 }
 
-function SettingUp({ start }: { start: CardStart }) {
+function SettingUp({ start, anyBlock }: { start: CardStart; anyBlock: ReactNode }) {
   const main = useMainButton()
   const live = useContext(CardLive)
   const memory = useContext(CardMemoryContext)
@@ -619,9 +620,7 @@ function SettingUp({ start }: { start: CardStart }) {
           mark: 'ok' as const,
           body: (
             <>
-              <span>
-                {timeText ?? ''}, {teamTime()}
-              </span>
+              <span>{form.when.often === 'manual' ? timeText : `${timeText ?? ''}, ${teamTime()}`}</span>
               <button type="button" className={styles['link']} aria-expanded={editing === 'when'} onClick={() => open('when')}>
                 Change<span className="visually-hidden"> when it runs</span>
               </button>
@@ -639,6 +638,7 @@ function SettingUp({ start }: { start: CardStart }) {
       body: (
         <>
           {chipOf(row, index)}
+          {row.state === 'changed' ? <span className={styles['guess']}>I guessed</span> : null}
           {note ? <span className={styles['pnote']}>{note}</span> : null}
           {row.state === 'cant_do' && canDrop(form.rows, index) ? (
             <button type="button" className={styles['link']} onClick={() => leaveOut(index)}>
@@ -726,16 +726,18 @@ function SettingUp({ start }: { start: CardStart }) {
         pill={<DraftPill label={creating ? 'Building' : 'Draft'} tone={creating ? 'new' : 'quiet'} />}
         status={
           <span id={`${id}-left`} role="status">
-            {creating ? 'Starting…' : leftWords(left)}
+            {creating ? 'Starting…' : (answerFirst(left) ?? leftWords(left))}
           </span>
         }
         actions={
           creating ? undefined : (
             <>
               <Button onClick={neverMind}>Never mind</Button>
-              <button type="button" id={`${id}-set-up`} className={buttonClassName(main)} aria-describedby={`${id}-left`} onClick={asks ? pointAtWhatIsLeft : pressSetUp}>
-                {setUpWords(left)}
-              </button>
+              {answerFirst(left) === null ? (
+                <button type="button" id={`${id}-set-up`} className={buttonClassName(main)} aria-describedby={`${id}-left`} onClick={asks ? pointAtWhatIsLeft : pressSetUp}>
+                  {setUpWords()}
+                </button>
+              ) : null}
             </>
           )
         }
@@ -775,6 +777,7 @@ function SettingUp({ start }: { start: CardStart }) {
           </p>
         ) : null}
       </Card>
+      {creating ? null : anyBlock}
       {asking ? <DiscardDialog name={title} busy={deleteDraft.isPending} problem={discardProblem} onClose={() => setAsking(false)} onConfirm={confirmDiscard} /> : null}
     </div>
   )

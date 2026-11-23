@@ -38,7 +38,8 @@ export interface Row {
   readonly planner: PlannerRow | null
 }
 
-export type Often = '' | 'every_day' | 'weekdays' | 'week'
+/** How often it runs. `manual` is no schedule: it runs only when someone presses Run now. */
+export type Often = '' | 'every_day' | 'weekdays' | 'week' | 'manual'
 export type Weekday = Exclude<Day, 'every_day' | 'weekdays'>
 
 export interface When {
@@ -298,9 +299,26 @@ export function bareHour(said: string): number | null {
   return hour >= 1 && hour <= 12 ? hour : null
 }
 
+/**
+ * Their words for no schedule, as the Planner reads them too. An allow-list, so any other words for when it runs are asked, and a
+ * schedule is never guessed. "manually" counts only for running it, so "tickets we triaged manually" is not one.
+ */
+const BY_HAND = /\bonly\s+when\s+i\s+ask\b|\bwhen\s+i\s+run\s+it\b|\bon\s+demand\b|\b(?:only\s+)?run(?:\s+it)?\s+manually\b|\bonly\s+manually\b/
+/** A no in the same clause turns the words round, as "so I don't have to run it manually". */
+const NOT_BY_HAND = /\b(?:not|never|nobody|no\s+one|without)\b|n['’]t\b/
+/** Another word for how often beside them, as "on demand or weekly": the card asks How often?, never picks one. */
+const OTHER_OFTEN = /\b(?:every|each|daily|weekly|fortnightly|monthly|quarterly|yearly|annually|hourly|week|month|year|hour)\b/
+
+/** Whether the words ask to run it only by hand, in a clause with no no, and with no other word for how often. */
+function byHand(text: string): boolean {
+  if (OTHER_OFTEN.test(text)) return false
+  return text.split(/[,.;:!?]/).some((clause) => BY_HAND.test(clause) && !NOT_BY_HAND.test(clause))
+}
+
 export function readWhen(said: string): When {
   const text = ` ${said.toLowerCase()} `
   const named = DAY_NAMES.find((day) => new RegExp(`\\b${day}s?\\b`).test(text))
+  const at = clockIn(text)
   let often: Often = ''
   let day: Weekday | '' = ''
   if (/\b(?:every|each) ?week ?days?\b|\bweekdays\b|\bmonday to friday\b/.test(text)) often = 'weekdays'
@@ -308,7 +326,8 @@ export function readWhen(said: string): When {
     often = 'week'
     day = named
   } else if (/\b(?:every|each) (?:day|morning|evening)\b|\bdaily\b/.test(text)) often = 'every_day'
-  return { often, day, at: clockIn(text), filledFrom: said }
+  else if (at === '' && byHand(text)) often = 'manual'
+  return { often, day, at, filledFrom: said }
 }
 
 export function enterWhen(form: Form): Form {
@@ -319,7 +338,8 @@ export function enterWhen(form: Form): Form {
 
 export type WhenField = 'often' | 'day' | 'at'
 
-const OFTEN_NAMES: Readonly<Record<Exclude<Often, ''>, string>> = { every_day: 'Every day', weekdays: 'Every weekday', week: 'Every week' }
+/** The answers to How often?, in the order the card offers them. */
+export const OFTEN_NAMES: Readonly<Record<Exclude<Often, ''>, string>> = { every_day: 'Every day', weekdays: 'Every weekday', week: 'Every week', manual: 'Only when I run it' }
 const DAY_WORD = (day: Weekday) => day.charAt(0).toUpperCase() + day.slice(1)
 const CLASHES: readonly PartReason[] = ['one_frequency', 'one_day', 'one_time']
 
@@ -463,6 +483,8 @@ export const answerWhen = (form: Form, set: Partial<When>): Form => ({ ...form, 
 
 export function whenProblems(when: When): Partial<Record<WhenField, string>> {
   const out: Partial<Record<WhenField, string>> = {}
+  // No schedule has no day and no time to ask.
+  if (when.often === 'manual') return out
   if (when.often === '') out.often = 'Choose how often it runs.'
   if (when.often === 'week' && when.day === '') out.day = 'Choose a day.'
   if (when.at === '') out.at = 'Choose a time.'
@@ -473,13 +495,16 @@ export function whenProblems(when: When): Partial<Record<WhenField, string>> {
   return out
 }
 
-export function scheduleOf(when: When): ScheduleIn {
+/** The schedule Turn on sends. Null for Only when I run it, which the platform sets up to run only when someone presses Run now. */
+export function scheduleOf(when: When): ScheduleIn | null {
+  if (when.often === 'manual') return null
   const day: Day = when.often === 'week' ? (when.day === '' ? 'monday' : when.day) : when.often === '' ? 'every_day' : when.often
   return { day, at: when.at }
 }
 
 export function whenWords(when: When): string {
-  return upperFirst(repeatWords(scheduleOf(when)))
+  const schedule = scheduleOf(when)
+  return schedule ? upperFirst(repeatWords(schedule)) : OFTEN_NAMES.manual
 }
 
 export function defaultName(plan: PlanView | null): string {
@@ -502,7 +527,7 @@ export interface Checked {
 }
 
 function sameWhen(a: When, b: When): boolean {
-  return a.often === b.often && (a.often !== 'week' || a.day === b.day) && a.at === b.at
+  return a.often === b.often && (a.often === 'manual' || ((a.often !== 'week' || a.day === b.day) && a.at === b.at))
 }
 
 export function checkedRows(form: Form): Checked[] {
@@ -632,7 +657,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> => typeof va
 const isString = (value: unknown): value is string => typeof value === 'string'
 const STEPS: readonly unknown[] = [1, 2, 3, 4]
 const ROW_STATES: readonly unknown[] = ['understood', 'changed', 'missing', 'cant_do', 'edited']
-const OFTEN: readonly unknown[] = ['', 'every_day', 'weekdays', 'week']
+const OFTEN: readonly unknown[] = ['', ...Object.keys(OFTEN_NAMES)]
 const MARKS: readonly unknown[] = ['will_do', 'cant', 'question']
 /** Every reason a saved part may hold. The type keeps it complete, so a draft never drops a cross with a new reason. */
 const REASONS: readonly unknown[] = Object.keys({
@@ -811,8 +836,14 @@ export function leftWords({ choices }: Left): string {
   return other === undefined ? '' : (NOT_QUESTIONS[other] ?? '')
 }
 
-/** “Set up the part I can” while any part has a cross, so the button never claims the whole request. */
-export const setUpWords = (left: Left): string => (left.leftOut.length > 0 ? 'Set up the part I can' : 'Set up')
+/** The one main button: Turn on. A part it can't do is crossed on the card, so the button needn't change its name. */
+export const setUpWords = (): string => 'Turn on'
+
+/** “Answer 1 question first”, shown in place of the main button while a question is open. Null when none is. */
+export function answerFirst({ choices }: Left): string | null {
+  const asks = choices.filter(isQuestion).length
+  return asks === 0 ? null : `Answer ${String(asks)} question${asks === 1 ? '' : 's'} first`
+}
 
 /** Resume reopens the card on Home, where the draft's id sits in the address. */
 export const draftPath = (draftId: string) => `/?draft=${encodeURIComponent(draftId)}`
