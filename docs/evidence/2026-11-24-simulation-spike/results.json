@@ -1,0 +1,1307 @@
+{
+  "ran_at": "2026-11-23T19:50:34.741877+00:00",
+  "S1": {
+    "our_blocks_loaded": [
+      "CUSTOM.wabAgent",
+      "CUSTOM.wabAskForYes",
+      "CUSTOM.wabMakeApprovedChanges",
+      "CUSTOM.wabProposeChange",
+      "CUSTOM.wabRead",
+      "CUSTOM.wabReportFailure",
+      "CUSTOM.wabStartFromPortal",
+      "CUSTOM.wabTell"
+    ],
+    "types_served": 846,
+    "left_out_still_loaded": [],
+    "workflows_bootstrap_loaded": [
+      [
+        "run_failure_reporter",
+        true
+      ],
+      [
+        "self_test_failure",
+        true
+      ]
+    ],
+    "n8n_version": "2.42.6",
+    "outside_reach_from_driver": {
+      "https://api.github.com/": "URLError: <urlopen error [Errno -3] Temporary failure in name resolution>",
+      "https://slack.com/api/api.test": "URLError: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unabl",
+      "http://platform-api:8000/healthz": "URLError: <urlopen error [Errno -3] Temporary failure in name resolution>",
+      "http://wab-platform-api-1:8000/healthz": "URLError: <urlopen error [Errno -3] Temporary failure in name resolution>"
+    }
+  },
+  "S2": {
+    "run": {
+      "execution": "4",
+      "status": "success",
+      "mode": "manual",
+      "seconds": 0.09,
+      "error": null,
+      "last_block": "Slack post",
+      "ran": {
+        "Start from the Portal": {
+          "status": "success",
+          "runs": 1,
+          "items_per_exit": [
+            1
+          ],
+          "error": null
+        },
+        "GitHub releases": {
+          "status": "success",
+          "runs": 1,
+          "items_per_exit": [
+            3
+          ],
+          "error": null
+        },
+        "Jira (server)": {
+          "status": "success",
+          "runs": 1,
+          "items_per_exit": [
+            1
+          ],
+          "error": null
+        },
+        "Jira (cloud)": {
+          "status": "success",
+          "runs": 1,
+          "items_per_exit": [
+            1
+          ],
+          "error": null
+        },
+        "Slack post": {
+          "status": "success",
+          "runs": 1,
+          "items_per_exit": [
+            1
+          ],
+          "error": null
+        }
+      },
+      "not_ran": [],
+      "pinned_in_execution": []
+    },
+    "github_tags_from_mock": [
+      "1.2.16",
+      "1.2.15",
+      "1.2.14"
+    ],
+    "jira_requests_at_stand_in": [
+      {
+        "path": "/rest/api/2/issue/MOCK-1",
+        "auth": "Bearer"
+      },
+      {
+        "path": "/rest/api/2/issue/MOCK-1",
+        "auth": "Basic"
+      }
+    ],
+    "slack_posts_at_mock": [
+      {
+        "method": "chat.postMessage",
+        "channel": "C0SUPPORT",
+        "text": "simspike S2"
+      }
+    ],
+    "credentials_in_sim_n8n": [
+      [
+        "sim GitHub (mock)",
+        "githubApi"
+      ],
+      [
+        "sim Jira Cloud (stand-in)",
+        "jiraSoftwareCloudApi"
+      ],
+      [
+        "sim Jira PAT (stand-in)",
+        "jiraSoftwareServerPatApi"
+      ],
+      [
+        "sim Slack (mock)",
+        "slackApi"
+      ]
+    ]
+  },
+  "S3": {
+    "activated": {
+      "activate_answered": 200,
+      "publication": {
+        "status": "published",
+        "liveVersionId": "025bc6b1-29dd-4533-86cb-efbe4c91da33",
+        "pendingVersionId": null,
+        "triggers": [
+          {
+            "nodeId": "61d5d9a4-8c6a-4c0c-95c2-26aa6f988abc",
+            "status": "activated",
+            "errorMessage": null
+          },
+          {
+            "nodeId": "7489b7c2-8511-466b-8eca-a8b9db76e206",
+            "status": "activated",
+            "errorMessage": null
+          }
+        ]
+      },
+      "seconds_to_publish": 0.5
+    },
+    "a_signed_with_sim_secret": {
+      "start_answered": 200,
+      "answer": "firstEntryJson",
+      "nonce_sent": "simnonce-fba4dfe3c53a",
+      "run": {
+        "execution": "5",
+        "status": "success",
+        "mode": "webhook",
+        "seconds": 1.13,
+        "error": null,
+        "last_block": "Declined",
+        "ran": {
+          "Start from the Portal": {
+            "status": "success",
+            "runs": 1,
+            "items_per_exit": [
+              1
+            ],
+            "error": null
+          },
+          "Read": {
+            "status": "success",
+            "runs": 1,
+            "items_per_exit": [
+              1
+            ],
+            "error": null
+          },
+          "Agent": {
+            "status": "success",
+            "runs": 1,
+            "items_per_exit": [
+              1
+            ],
+            "error": null
+          },
+          "Propose a change": {
+            "status": "success",
+            "runs": 1,
+            "items_per_exit": [
+              1
+            ],
+            "error": null
+          },
+          "Ask for a yes": {
+            "status": "success",
+            "runs": 1,
+            "items_per_exit": [
+              0,
+              0,
+              1,
+              0
+            ],
+            "error": null
+          },
+          "Declined": {
+            "status": "success",
+            "runs": 1,
+            "items_per_exit": [
+              1
+            ],
+            "error": null
+          }
+        },
+        "not_ran": [
+          "Make the approved changes",
+          "Tell",
+          "No answer",
+          "Nothing to change"
+        ],
+        "pinned_in_execution": []
+      },
+      "gateway_calls": [
+        {
+          "kind": "calls/read",
+          "node": "Read",
+          "mode": "webhook",
+          "link": {
+            "linked": true,
+            "status": "running",
+            "mode": "webhook",
+            "nonce": "simnonce-fba4dfe3c53a",
+            "version_id": "025bc6b1-29dd-4533-86cb-efbe4c91da33"
+          }
+        },
+        {
+          "kind": "calls/agent",
+          "node": "Agent",
+          "mode": "webhook",
+          "link": {
+            "linked": true,
+            "status": "running",
+            "mode": "webhook",
+            "nonce": "simnonce-fba4dfe3c53a",
+            "version_id": "025bc6b1-29dd-4533-86cb-efbe4c91da33"
+          }
+        },
+        {
+          "kind": "calls/propose",
+          "node": "Propose a change",
+          "mode": "webhook",
+          "link": {
+            "linked": true,
+            "status": "running",
+            "mode": "webhook",
+            "nonce": "simnonce-fba4dfe3c53a",
+            "version_id": "025bc6b1-29dd-4533-86cb-efbe4c91da33"
+          }
+        },
+        {
+          "kind": "calls/ask",
+          "node": "Ask for a yes",
+          "mode": "webhook",
+          "link": {
+            "linked": true,
+            "status": "running",
+            "mode": "webhook",
+            "nonce": "simnonce-fba4dfe3c53a",
+            "version_id": "025bc6b1-29dd-4533-86cb-efbe4c91da33"
+          }
+        }
+      ],
+      "wakes": [
+        {
+          "execution_id": "5",
+          "decision": "no",
+          "tries": 1,
+          "status": 200
+        }
+      ]
+    },
+    "b_signed_with_other_secret": {
+      "start_answered": 401,
+      "answer": {
+        "detail": "The signature does not match."
+      },
+      "new_executions": []
+    },
+    "c_by_hand_yes_then_write": {
+      "nonce_sent": "simnonce-06cfc960b239",
+      "run": {
+        "execution": "6",
+        "status": "error",
+        "mode": "manual",
+        "seconds": 5.14,
+        "error": "A simulation never writes.",
+        "last_block": "Make the approved changes",
+        "ran": {
+          "Start from the Portal": {
+            "status": "success",
+            "runs": 1,
+            "items_per_exit": [
+              1
+            ],
+            "error": null
+          },
+          "Read": {
+            "status": "success",
+            "runs": 1,
+            "items_per_exit": [
+              1
+            ],
+            "error": null
+          },
+          "Agent": {
+            "status": "success",
+            "runs": 1,
+            "items_per_exit": [
+              1
+            ],
+            "error": null
+          },
+          "Propose a change": {
+            "status": "success",
+            "runs": 1,
+            "items_per_exit": [
+              1
+            ],
+            "error": null
+          },
+          "Ask for a yes": {
+            "status": "success",
+            "runs": 1,
+            "items_per_exit": [
+              0,
+              1,
+              0,
+              0
+            ],
+            "error": null
+          },
+          "Make the approved changes": {
+            "status": "error",
+            "runs": 1,
+            "items_per_exit": [],
+            "error": "A simulation never writes."
+          }
+        },
+        "not_ran": [
+          "Tell",
+          "Declined",
+          "No answer",
+          "Nothing to change"
+        ],
+        "pinned_in_execution": []
+      },
+      "gateway_calls": [
+        {
+          "kind": "calls/read",
+          "node": "Read",
+          "mode": "manual",
+          "link": {
+            "linked": true,
+            "status": "running",
+            "mode": "manual",
+            "nonce": "simnonce-06cfc960b239",
+            "version_id": "025bc6b1-29dd-4533-86cb-efbe4c91da33"
+          }
+        },
+        {
+          "kind": "calls/agent",
+          "node": "Agent",
+          "mode": "manual",
+          "link": {
+            "linked": true,
+            "status": "running",
+            "mode": "manual",
+            "nonce": "simnonce-06cfc960b239",
+            "version_id": "025bc6b1-29dd-4533-86cb-efbe4c91da33"
+          }
+        },
+        {
+          "kind": "calls/propose",
+          "node": "Propose a change",
+          "mode": "manual",
+          "link": {
+            "linked": true,
+            "status": "running",
+            "mode": "manual",
+            "nonce": "simnonce-06cfc960b239",
+            "version_id": "025bc6b1-29dd-4533-86cb-efbe4c91da33"
+          }
+        },
+        {
+          "kind": "calls/ask",
+          "node": "Ask for a yes",
+          "mode": "manual",
+          "link": {
+            "linked": true,
+            "status": "running",
+            "mode": "manual",
+            "nonce": "simnonce-06cfc960b239",
+            "version_id": "025bc6b1-29dd-4533-86cb-efbe4c91da33"
+          }
+        },
+        {
+          "kind": "calls/write",
+          "node": "Make the approved changes",
+          "mode": "manual",
+          "link": {
+            "linked": true,
+            "status": "running",
+            "mode": "manual",
+            "nonce": "simnonce-06cfc960b239",
+            "version_id": "025bc6b1-29dd-4533-86cb-efbe4c91da33"
+          }
+        },
+        {
+          "kind": "calls/write",
+          "node": "Make the approved changes",
+          "mode": "manual",
+          "link": {
+            "linked": true,
+            "status": "running",
+            "mode": "manual",
+            "nonce": "simnonce-06cfc960b239",
+            "version_id": "025bc6b1-29dd-4533-86cb-efbe4c91da33"
+          }
+        },
+        {
+          "kind": "calls/write",
+          "node": "Make the approved changes",
+          "mode": "manual",
+          "link": {
+            "linked": true,
+            "status": "running",
+            "mode": "manual",
+            "nonce": "simnonce-06cfc960b239",
+            "version_id": "025bc6b1-29dd-4533-86cb-efbe4c91da33"
+          }
+        }
+      ]
+    },
+    "d_signed_yes_then_write": {
+      "start_answered": 200,
+      "answer": "firstEntryJson",
+      "nonce_sent": "simnonce-b942af36892e",
+      "run": {
+        "execution": "7",
+        "status": "error",
+        "mode": "webhook",
+        "seconds": 5.16,
+        "error": "A simulation never writes.",
+        "last_block": "Make the approved changes",
+        "ran": {
+          "Start from the Portal": {
+            "status": "success",
+            "runs": 1,
+            "items_per_exit": [
+              1
+            ],
+            "error": null
+          },
+          "Read": {
+            "status": "success",
+            "runs": 1,
+            "items_per_exit": [
+              1
+            ],
+            "error": null
+          },
+          "Agent": {
+            "status": "success",
+            "runs": 1,
+            "items_per_exit": [
+              1
+            ],
+            "error": null
+          },
+          "Propose a change": {
+            "status": "success",
+            "runs": 1,
+            "items_per_exit": [
+              1
+            ],
+            "error": null
+          },
+          "Ask for a yes": {
+            "status": "success",
+            "runs": 1,
+            "items_per_exit": [
+              0,
+              1,
+              0,
+              0
+            ],
+            "error": null
+          },
+          "Make the approved changes": {
+            "status": "error",
+            "runs": 1,
+            "items_per_exit": [],
+            "error": "A simulation never writes."
+          }
+        },
+        "not_ran": [
+          "Tell",
+          "Declined",
+          "No answer",
+          "Nothing to change"
+        ],
+        "pinned_in_execution": []
+      },
+      "gateway_calls": [
+        {
+          "kind": "calls/read",
+          "node": "Read",
+          "mode": "webhook",
+          "link": {
+            "linked": true,
+            "status": "running",
+            "mode": "webhook",
+            "nonce": "simnonce-b942af36892e",
+            "version_id": "025bc6b1-29dd-4533-86cb-efbe4c91da33"
+          }
+        },
+        {
+          "kind": "calls/agent",
+          "node": "Agent",
+          "mode": "webhook",
+          "link": {
+            "linked": true,
+            "status": "running",
+            "mode": "webhook",
+            "nonce": "simnonce-b942af36892e",
+            "version_id": "025bc6b1-29dd-4533-86cb-efbe4c91da33"
+          }
+        },
+        {
+          "kind": "calls/propose",
+          "node": "Propose a change",
+          "mode": "webhook",
+          "link": {
+            "linked": true,
+            "status": "running",
+            "mode": "webhook",
+            "nonce": "simnonce-b942af36892e",
+            "version_id": "025bc6b1-29dd-4533-86cb-efbe4c91da33"
+          }
+        },
+        {
+          "kind": "calls/ask",
+          "node": "Ask for a yes",
+          "mode": "webhook",
+          "link": {
+            "linked": true,
+            "status": "running",
+            "mode": "webhook",
+            "nonce": "simnonce-b942af36892e",
+            "version_id": "025bc6b1-29dd-4533-86cb-efbe4c91da33"
+          }
+        },
+        {
+          "kind": "calls/write",
+          "node": "Make the approved changes",
+          "mode": "webhook",
+          "link": {
+            "linked": true,
+            "status": "running",
+            "mode": "webhook",
+            "nonce": "simnonce-b942af36892e",
+            "version_id": "025bc6b1-29dd-4533-86cb-efbe4c91da33"
+          }
+        },
+        {
+          "kind": "calls/write",
+          "node": "Make the approved changes",
+          "mode": "webhook",
+          "link": {
+            "linked": true,
+            "status": "running",
+            "mode": "webhook",
+            "nonce": "simnonce-b942af36892e",
+            "version_id": "025bc6b1-29dd-4533-86cb-efbe4c91da33"
+          }
+        },
+        {
+          "kind": "calls/write",
+          "node": "Make the approved changes",
+          "mode": "webhook",
+          "link": {
+            "linked": true,
+            "status": "running",
+            "mode": "webhook",
+            "nonce": "simnonce-b942af36892e",
+            "version_id": "025bc6b1-29dd-4533-86cb-efbe4c91da33"
+          }
+        }
+      ],
+      "failure_reports_at_gateway": [
+        {
+          "node": "Report a failure",
+          "mode": "error",
+          "failed": {
+            "failed_execution_id": "7",
+            "failed_mode": "webhook",
+            "last_node_executed": "Make the approved changes"
+          }
+        }
+      ],
+      "by_hand_execution_c": "6"
+    },
+    "e_read_not_found": {
+      "run": {
+        "execution": "9",
+        "status": "error",
+        "mode": "manual",
+        "seconds": 4.07,
+        "error": "The source was not found (simulated).",
+        "last_block": "Read",
+        "ran": {
+          "Start from the Portal": {
+            "status": "success",
+            "runs": 1,
+            "items_per_exit": [
+              1
+            ],
+            "error": null
+          },
+          "Read": {
+            "status": "error",
+            "runs": 1,
+            "items_per_exit": [],
+            "error": "The source was not found (simulated)."
+          }
+        },
+        "not_ran": [
+          "Agent",
+          "Propose a change",
+          "Ask for a yes",
+          "Make the approved changes",
+          "Tell",
+          "Declined",
+          "No answer",
+          "Nothing to change"
+        ],
+        "pinned_in_execution": []
+      },
+      "gateway_calls": [
+        "calls/read",
+        "calls/read",
+        "calls/read"
+      ]
+    },
+    "e_read_timeout": {
+      "run": {
+        "execution": "10",
+        "status": "error",
+        "mode": "manual",
+        "seconds": 4.07,
+        "error": "Our platform could not do this step (HTTP 504). n8n tries again if this block has retries on.",
+        "last_block": "Read",
+        "ran": {
+          "Start from the Portal": {
+            "status": "success",
+            "runs": 1,
+            "items_per_exit": [
+              1
+            ],
+            "error": null
+          },
+          "Read": {
+            "status": "error",
+            "runs": 1,
+            "items_per_exit": [],
+            "error": "Our platform could not do this step (HTTP 504). n8n tries again if this block has retries on."
+          }
+        },
+        "not_ran": [
+          "Agent",
+          "Propose a change",
+          "Ask for a yes",
+          "Make the approved changes",
+          "Tell",
+          "Declined",
+          "No answer",
+          "Nothing to change"
+        ],
+        "pinned_in_execution": []
+      },
+      "gateway_calls": [
+        "calls/read",
+        "calls/read",
+        "calls/read"
+      ]
+    },
+    "e_read_empty": {
+      "run": {
+        "execution": "11",
+        "status": "success",
+        "mode": "manual",
+        "seconds": 0.04,
+        "error": null,
+        "last_block": "Read",
+        "ran": {
+          "Start from the Portal": {
+            "status": "success",
+            "runs": 1,
+            "items_per_exit": [
+              1
+            ],
+            "error": null
+          },
+          "Read": {
+            "status": "success",
+            "runs": 1,
+            "items_per_exit": [
+              0
+            ],
+            "error": null
+          }
+        },
+        "not_ran": [
+          "Agent",
+          "Propose a change",
+          "Ask for a yes",
+          "Make the approved changes",
+          "Tell",
+          "Declined",
+          "No answer",
+          "Nothing to change"
+        ],
+        "pinned_in_execution": []
+      },
+      "gateway_calls": [
+        "calls/read"
+      ]
+    }
+  },
+  "S4": {
+    "by_hand": {
+      "nonce_sent": "simnonce-b643653a2830",
+      "run": {
+        "execution": "12",
+        "status": "success",
+        "mode": "manual",
+        "seconds": 1.11,
+        "error": null,
+        "last_block": "Declined",
+        "ran": {
+          "Start from the Portal": {
+            "status": "success",
+            "runs": 1,
+            "items_per_exit": [
+              1
+            ],
+            "error": null
+          },
+          "GitHub releases": {
+            "status": "success",
+            "runs": 1,
+            "items_per_exit": [
+              1
+            ],
+            "error": null
+          },
+          "Read": {
+            "status": "success",
+            "runs": 1,
+            "items_per_exit": [
+              1
+            ],
+            "error": null
+          },
+          "Agent": {
+            "status": "success",
+            "runs": 1,
+            "items_per_exit": [
+              1
+            ],
+            "error": null
+          },
+          "Propose a change": {
+            "status": "success",
+            "runs": 1,
+            "items_per_exit": [
+              1
+            ],
+            "error": null
+          },
+          "Ask for a yes": {
+            "status": "success",
+            "runs": 1,
+            "items_per_exit": [
+              0,
+              0,
+              1,
+              0
+            ],
+            "error": null
+          },
+          "Declined": {
+            "status": "success",
+            "runs": 1,
+            "items_per_exit": [
+              1
+            ],
+            "error": null
+          }
+        },
+        "not_ran": [
+          "Make the approved changes",
+          "Tell",
+          "No answer",
+          "Nothing to change"
+        ],
+        "pinned_in_execution": []
+      },
+      "requests_at_github_stand_in": [],
+      "gateway_calls": [
+        {
+          "kind": "calls/agent",
+          "node": "Agent",
+          "mode": "manual",
+          "link": {
+            "linked": true,
+            "status": "running",
+            "mode": "manual",
+            "nonce": "simnonce-b643653a2830",
+            "version_id": "bcda3788-f743-47ec-b661-2f42a496da9d"
+          }
+        },
+        {
+          "kind": "calls/propose",
+          "node": "Propose a change",
+          "mode": "manual",
+          "link": {
+            "linked": true,
+            "status": "running",
+            "mode": "manual",
+            "nonce": "simnonce-b643653a2830",
+            "version_id": "bcda3788-f743-47ec-b661-2f42a496da9d"
+          }
+        },
+        {
+          "kind": "calls/ask",
+          "node": "Ask for a yes",
+          "mode": "manual",
+          "link": {
+            "linked": true,
+            "status": "running",
+            "mode": "manual",
+            "nonce": "simnonce-b643653a2830",
+            "version_id": "bcda3788-f743-47ec-b661-2f42a496da9d"
+          }
+        }
+      ],
+      "first_call_linked_by_nonce": true
+    },
+    "activated": {
+      "activate_answered": 200,
+      "publication": {
+        "status": "published",
+        "liveVersionId": "bcda3788-f743-47ec-b661-2f42a496da9d",
+        "pendingVersionId": null,
+        "triggers": [
+          {
+            "nodeId": "092d9fed-8120-4734-b288-f2c7c7b95406",
+            "status": "activated",
+            "errorMessage": null
+          },
+          {
+            "nodeId": "68259872-5c8f-4043-bbb1-e8fcbb0d3910",
+            "status": "activated",
+            "errorMessage": null
+          },
+          {
+            "nodeId": "f0055286-fe86-4676-a3fb-16e7e2f2c60d",
+            "status": "activated",
+            "errorMessage": null
+          }
+        ]
+      },
+      "seconds_to_publish": 0.5
+    },
+    "from_signed_start": {
+      "start_answered": 200,
+      "answer": "firstEntryJson",
+      "run": {
+        "execution": "13",
+        "status": "success",
+        "mode": "webhook",
+        "seconds": 1.13,
+        "error": null,
+        "last_block": "Declined",
+        "ran": {
+          "Start from the Portal": {
+            "status": "success",
+            "runs": 1,
+            "items_per_exit": [
+              1
+            ],
+            "error": null
+          },
+          "GitHub releases": {
+            "status": "success",
+            "runs": 1,
+            "items_per_exit": [
+              2
+            ],
+            "error": null
+          },
+          "Read": {
+            "status": "success",
+            "runs": 1,
+            "items_per_exit": [
+              1
+            ],
+            "error": null
+          },
+          "Agent": {
+            "status": "success",
+            "runs": 1,
+            "items_per_exit": [
+              1
+            ],
+            "error": null
+          },
+          "Propose a change": {
+            "status": "success",
+            "runs": 1,
+            "items_per_exit": [
+              1
+            ],
+            "error": null
+          },
+          "Ask for a yes": {
+            "status": "success",
+            "runs": 1,
+            "items_per_exit": [
+              0,
+              0,
+              1,
+              0
+            ],
+            "error": null
+          },
+          "Declined": {
+            "status": "success",
+            "runs": 1,
+            "items_per_exit": [
+              1
+            ],
+            "error": null
+          }
+        },
+        "not_ran": [
+          "Make the approved changes",
+          "Tell",
+          "No answer",
+          "Nothing to change"
+        ],
+        "pinned_in_execution": []
+      },
+      "requests_at_github_stand_in": [
+        {
+          "path": "/repos/langchain-ai/langgraph/releases?per_page=3",
+          "auth": "token"
+        }
+      ],
+      "gateway_calls": [
+        "calls/read",
+        "calls/agent",
+        "calls/propose",
+        "calls/ask"
+      ]
+    }
+  },
+  "S5": {
+    "github_drop": {
+      "execution": "4",
+      "hold_seconds": null,
+      "run": {
+        "execution": "4",
+        "status": "error",
+        "mode": "manual",
+        "seconds": 1.07,
+        "error": "The connection to the server was closed unexpectedly, perhaps it is offline. You can retry the request immediately or wait and retry later.",
+        "last_block": "GitHub releases",
+        "ran": {
+          "Start from the Portal": {
+            "status": "success",
+            "runs": 1,
+            "items_per_exit": [
+              1
+            ],
+            "error": null
+          },
+          "GitHub releases": {
+            "status": "error",
+            "runs": 1,
+            "items_per_exit": [],
+            "error": "The connection to the server was closed unexpectedly, perhaps it is offline. You can retry the request immediately or wait and retry later."
+          }
+        },
+        "not_ran": [
+          "Done"
+        ],
+        "pinned_in_execution": []
+      },
+      "wall_seconds": 2.0,
+      "requests_at_stand_in_after_s": [
+        0.1,
+        1.1
+      ]
+    },
+    "jira_drop": {
+      "execution": "5",
+      "hold_seconds": null,
+      "run": {
+        "execution": "5",
+        "status": "error",
+        "mode": "manual",
+        "seconds": 1.07,
+        "error": "The connection to the server was closed unexpectedly, perhaps it is offline. You can retry the request immediately or wait and retry later.",
+        "last_block": "Jira",
+        "ran": {
+          "Start from the Portal": {
+            "status": "success",
+            "runs": 1,
+            "items_per_exit": [
+              1
+            ],
+            "error": null
+          },
+          "Jira": {
+            "status": "error",
+            "runs": 1,
+            "items_per_exit": [],
+            "error": "The connection to the server was closed unexpectedly, perhaps it is offline. You can retry the request immediately or wait and retry later."
+          }
+        },
+        "not_ran": [
+          "Done"
+        ],
+        "pinned_in_execution": []
+      },
+      "wall_seconds": 2.0,
+      "requests_at_stand_in_after_s": [
+        0.1,
+        1.1
+      ]
+    },
+    "github_not_found": {
+      "execution": "6",
+      "hold_seconds": null,
+      "run": {
+        "execution": "6",
+        "status": "error",
+        "mode": "manual",
+        "seconds": 1.05,
+        "error": "The resource you are requesting could not be found",
+        "last_block": "GitHub releases",
+        "ran": {
+          "Start from the Portal": {
+            "status": "success",
+            "runs": 1,
+            "items_per_exit": [
+              1
+            ],
+            "error": null
+          },
+          "GitHub releases": {
+            "status": "error",
+            "runs": 1,
+            "items_per_exit": [],
+            "error": "The resource you are requesting could not be found"
+          }
+        },
+        "not_ran": [
+          "Done"
+        ],
+        "pinned_in_execution": []
+      },
+      "wall_seconds": 2.0,
+      "requests_at_stand_in_after_s": [
+        0.0,
+        1.1
+      ]
+    },
+    "github_hold_120s_cap_10s": {
+      "execution": "7",
+      "hold_seconds": 120,
+      "run": {
+        "execution": "7",
+        "status": "canceled",
+        "mode": "manual",
+        "seconds": 10.01,
+        "error": null,
+        "last_block": "Start from the Portal",
+        "ran": {
+          "Start from the Portal": {
+            "status": "success",
+            "runs": 1,
+            "items_per_exit": [
+              1
+            ],
+            "error": null
+          }
+        },
+        "not_ran": [
+          "GitHub releases",
+          "Done"
+        ],
+        "pinned_in_execution": []
+      },
+      "wall_seconds": 10.1,
+      "requests_at_stand_in_after_s": [
+        0.0
+      ]
+    },
+    "github_hold_90s": {
+      "execution": "8",
+      "hold_seconds": 90,
+      "run": {
+        "execution": "8",
+        "status": "success",
+        "mode": "manual",
+        "seconds": 90.04,
+        "error": null,
+        "last_block": "Done",
+        "ran": {
+          "Start from the Portal": {
+            "status": "success",
+            "runs": 1,
+            "items_per_exit": [
+              1
+            ],
+            "error": null
+          },
+          "GitHub releases": {
+            "status": "success",
+            "runs": 1,
+            "items_per_exit": [
+              2
+            ],
+            "error": null
+          },
+          "Done": {
+            "status": "success",
+            "runs": 1,
+            "items_per_exit": [
+              2
+            ],
+            "error": null
+          }
+        },
+        "not_ran": [],
+        "pinned_in_execution": []
+      },
+      "wall_seconds": 91.0,
+      "requests_at_stand_in_after_s": [
+        0.0
+      ]
+    },
+    "github_hold_400s_one_try": {
+      "execution": "9",
+      "hold_seconds": 400,
+      "run": {
+        "execution": "9",
+        "status": "error",
+        "mode": "manual",
+        "seconds": 300.05,
+        "error": "The connection was aborted, perhaps the server is offline",
+        "last_block": "GitHub releases",
+        "ran": {
+          "Start from the Portal": {
+            "status": "success",
+            "runs": 1,
+            "items_per_exit": [
+              1
+            ],
+            "error": null
+          },
+          "GitHub releases": {
+            "status": "error",
+            "runs": 1,
+            "items_per_exit": [],
+            "error": "The connection was aborted, perhaps the server is offline"
+          }
+        },
+        "not_ran": [
+          "Done"
+        ],
+        "pinned_in_execution": []
+      },
+      "wall_seconds": 300.9,
+      "requests_at_stand_in_after_s": [
+        0.0
+      ]
+    }
+  },
+  "S7": {
+    "S3 a_signed_with_sim_secret": {
+      "status": "success",
+      "not_ran": [
+        "Make the approved changes",
+        "Tell",
+        "No answer",
+        "Nothing to change"
+      ],
+      "ask_exit_items": [
+        0,
+        0,
+        1,
+        0
+      ]
+    },
+    "S3 c_by_hand_yes_then_write": {
+      "status": "error",
+      "not_ran": [
+        "Tell",
+        "Declined",
+        "No answer",
+        "Nothing to change"
+      ],
+      "ask_exit_items": [
+        0,
+        1,
+        0,
+        0
+      ]
+    },
+    "S3 e_read_not_found": {
+      "status": "error",
+      "not_ran": [
+        "Agent",
+        "Propose a change",
+        "Ask for a yes",
+        "Make the approved changes",
+        "Tell",
+        "Declined",
+        "No answer",
+        "Nothing to change"
+      ],
+      "ask_exit_items": null
+    },
+    "S3 e_read_timeout": {
+      "status": "error",
+      "not_ran": [
+        "Agent",
+        "Propose a change",
+        "Ask for a yes",
+        "Make the approved changes",
+        "Tell",
+        "Declined",
+        "No answer",
+        "Nothing to change"
+      ],
+      "ask_exit_items": null
+    },
+    "S3 e_read_empty": {
+      "status": "success",
+      "not_ran": [
+        "Agent",
+        "Propose a change",
+        "Ask for a yes",
+        "Make the approved changes",
+        "Tell",
+        "Declined",
+        "No answer",
+        "Nothing to change"
+      ],
+      "ask_exit_items": null
+    },
+    "S3 blocks no scenario reached": [
+      "No answer",
+      "Nothing to change",
+      "Tell"
+    ],
+    "S4 by_hand": {
+      "ran": [
+        "Agent",
+        "Ask for a yes",
+        "Declined",
+        "GitHub releases",
+        "Propose a change",
+        "Read",
+        "Start from the Portal"
+      ],
+      "pinned_in_execution_record": []
+    },
+    "S5 cut by the time limit": {
+      "status": "canceled",
+      "error": null,
+      "last_block": "Start from the Portal",
+      "not_ran": [
+        "GitHub releases",
+        "Done"
+      ]
+    }
+  },
+  "S5_first_run_stopped": {
+    "error": "TimeoutError: waited 600 s for execution 17 to end",
+    "note": "The 330 s hold with 2 tries did not end within the driver's 600 s wait. S5 is the rerun, with a 400 s hold and one try."
+  },
+  "S5_ran_at": "2026-11-23T20:03:07.422899+00:00"
+}

@@ -89,6 +89,30 @@ These are unknown on `origin/main` and need a live spike, with no paid model cal
 - **S6.** On Azure, a Container App can be kept from reaching anything but the mocks and the gateway. If it can't, isolation rests on holding no real key, and this ADR says so.
 - **S7.** n8n's execution data shows which blocks ran in each scenario, so code can find coverage gaps.
 
+#### Spike results, 24 Nov 2026
+
+The spike ran S1 to S5 and S7 on a laptop, with no paid model call, and S6 from Azure's docs, with no cloud change. Its compose file, scripts and results are in `docs/evidence/2026-11-24-simulation-spike/`. The simulation gateway was a small stub (`stub.py`), not platform-api. **No result changes the recommended option, C.** Some change details below, for the team lead to take into the sections they name before acceptance.
+
+| Item | Result | What we saw |
+|---|---|---|
+| S1 | Pass | A second n8n from `wab/n8n:dev` ran on its own internal network, with its own Postgres, keys and secrets. Bootstrap ended "ready: all workflows loaded, active and linted". `scripts/pack-smoke.sh` passed on the same image, and the pin check passed on what it served. It held only mock keys, and could not reach the internet or the platform's stack. |
+| S2 | Pass for read systems, partial for notice-only ones | GitHub (`server`) and both Jira keys (`domain`) point at a mock by their own field, tried live. Slack needs the DNS alias and CA, tried live. Teams, Outlook and Gmail have fixed hosts and OAuth keys, so they would need an alias, a CA and a mock sign-in service. They were read in code only. |
+| S3 | Pass | Start from the Portal took a start signed with the simulation's own secret and refused one signed with another (401). Every call linked by the start's nonce. Ask for a yes, woken with a signed no, left by its No exit. The write got 403 "A simulation never writes." and the run ended with those words. |
+| S4 | Pass | In a run by hand with `triggerToStartFrom`, pins held on n8n's GitHub block and on our Read block: neither the GitHub stand-in nor the gateway got a call. The first call, from Agent, linked by the nonce. From a signed start, n8n ignored both pins. |
+| S5 | Partial | A mock that drops the connection fails n8n's GitHub or Jira block in about 1 s for each try, with a reason. A real timeout takes 300 s for each try: against a mock that held, the GitHub block gave up at 300 s with "The connection was aborted", and it has no setting to shorten that. With `executionTimeout: 10` on the workflow, n8n ended the run at 10 s as `canceled`, with no error, and its record left out the block that was waiting. |
+| S6 | Not possible in full | Today's environment is on Azure's default network, which can't change, so the simulation n8n needs a new environment on its own subnet. A network security group can keep it off the internet and away from the platform's environment, but must allow Azure-wide service tags for system images, our registry (Basic, no private endpoint) and storage. So isolation rests on holding no real key, with the network rules as a second layer. Only Azure Firewall, a paid service, could narrow it to named hosts. |
+| S7 | Pass, with limits | `runData` names each block that ran, its status, its error words and the items on each exit, so code finds blocks no scenario reached. Pinned blocks look as if they ran, and a run cut by its time limit leaves out the waiting block. |
+
+What the results change in this ADR:
+
+1. **Section 4.** Confluence needs no mock key: n8n's own Confluence block is not on the allow list, so a Confluence read comes only through our Read block, which the gateway answers. Teams, Outlook and Gmail need no mock while they are notice-only, because a run by hand pins every notice block.
+2. **Sections 4 and 5, "source not found" and "timeout".** A faithful timeout of n8n's own block takes 300 s for each try, which would use up most of ADR 0055's 20 minutes. So a mock plays a timeout by dropping the connection, or by holding while the simulation's copy carries a short time limit. In the second case code grades a `canceled` run, and names the held block from the mock's own record. For our blocks, the gateway answers "not found" or "timed out" at once.
+3. **Section 5, grading.** n8n runs the error workflow only for runs it did not start by hand. A simulation runs by hand, so code reads every failure from n8n's execution data, never from Report a failure.
+4. **Sections 5 and 7, coverage gaps.** The refused write ends the run, so a block after Make the approved changes, such as Tell, never runs in a simulation. Code reports it as not tried for that reason, or the gateway answers a write with "would have made", as Tell answers "would have sent" (PR 3 chooses). Code also keeps its own list of the blocks it pinned.
+5. **Section 2, Azure.** The simulation n8n, the mocks and the gateway's address need their own Container Apps environment and subnet. Isolation rests on holding no real key. PR 2 and PR 3 choose whether the gateway runs in that environment or stays in platform-api, where the simulation's node key would be the only guard on the real API.
+
+Outside this ADR: no real workflow has a time limit of its own (no `EXECUTIONS_TIMEOUT` and no `executionTimeout`), so a hung source holds a real run for 300 s for each try of the block. Whether real workflows get a shorter one is for the team lead.
+
 ### Pull requests, in order
 
 1. The spike, with its results in `docs/evidence/` and an amendment to this ADR (`orchestration`).

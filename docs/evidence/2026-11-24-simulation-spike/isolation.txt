@@ -1,0 +1,23 @@
+## n8n's environment: names only, and the addresses
+ DB_POSTGRESDB_DATABASE DB_POSTGRESDB_HOST DB_POSTGRESDB_PASSWORD DB_POSTGRESDB_PORT DB_POSTGRESDB_USER DB_TYPE EXECUTIONS_DATA_SAVE_ON_SUCCESS GENERIC_TIMEZONE N8N_BLOCK_ENV_ACCESS_IN_NODE N8N_BLOCK_FILE_ACCESS_TO_N8N_FILES N8N_COMMUNITY_PACKAGES_ENABLED N8N_CUSTOM_EXTENSIONS N8N_DEPRECATED_NODES_BLOCK N8N_DIAGNOSTICS_ENABLED N8N_DISABLED_MODULES N8N_ENCRYPTION_KEY N8N_HIRING_BANNER_ENABLED N8N_PERSONALIZATION_ENABLED N8N_RELEASE_TYPE N8N_RESTRICT_FILE_ACCESS_TO N8N_RUNNERS_AUTH_TOKEN N8N_RUNNERS_MODE N8N_SECURE_COOKIE N8N_VERSION_NOTIFICATIONS_ENABLED NODE_ENV NODE_EXTRA_CA_CERTS NODE_PATH NODE_VERSION NODES_EXCLUDE NPM_CONFIG_UPDATE_NOTIFIER PATH SHELL WAB_API_URL WAB_NODE_KEY WAB_START_SECRET WEBHOOK_URL 
+WEBHOOK_URL=http://n8n:5678/
+NODE_EXTRA_CA_CERTS=/wab-test-ca/ca.pem
+WAB_API_URL=http://gateway:8600
+## networks of each container
+/simspike-bootstrap-1 simspike_sim 
+/simspike-gateway-1 simspike_sim 
+/simspike-mock-github-1 simspike_sim 
+/simspike-mock-slack-1 simspike_sim 
+/simspike-n8n-1 simspike_sim simspike_sim-runners 
+/simspike-n8n-runners-1 simspike_sim-runners 
+/simspike-postgres-1 simspike_sim 
+## the networks are internal
+simspike_sim internal=true
+simspike_sim-runners internal=true
+## what n8n itself reaches
+https://api.github.com/: not reached (wget: bad address 'api.github.com' )
+https://slack.com/api/api.test: not reached (289DD1AEFFFF0000:error:0A000086:SSL routines:tls_post_process_server_certificate)
+http://mock-github:8200/healthz: reached
+http://gateway:8600/healthz: reached
+http://wab-platform-api-1:8000/healthz: not reached (wget: bad address 'wab-platform-api-1:8000' )
+http://platform-api:8000/healthz: not reached (wget: bad address 'platform-api:8000' )
