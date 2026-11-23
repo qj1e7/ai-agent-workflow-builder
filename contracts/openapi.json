@@ -7064,6 +7064,32 @@
         "title": "FollowingUpPage",
         "type": "object"
       },
+      "FoundCause": {
+        "additionalProperties": false,
+        "description": "The AI model's cause and failed part (ADR 0055, section 10). Code checked them before\nanyone sees them: the cause passed the free reply's checks and the verifier, and each block\nis in the version that ran and is where the run stopped. The rule table's answer stays beside\nit, unchanged.",
+        "properties": {
+          "cause": {
+            "description": "Why the run stopped, in one short sentence the model wrote.",
+            "title": "Cause",
+            "type": "string"
+          },
+          "failed_part": {
+            "description": "The blocks the cause is in, each one where the run stopped.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Failed Part",
+            "type": "array"
+          }
+        },
+        "required": [
+          "cause",
+          "failed_part"
+        ],
+        "title": "FoundCause",
+        "type": "object"
+      },
       "FoundModel": {
         "additionalProperties": false,
         "properties": {
@@ -14487,6 +14513,17 @@
           "failure": {
             "$ref": "#/components/schemas/RunFailedData"
           },
+          "found": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FoundCause"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The AI model's cause and failed part, only when find_cause=true asked for them, the rule table knows no cause for this stop, and code checked the answer. Null otherwise, and the rest of the answer is the rule table's either way."
+          },
           "run_id": {
             "title": "Run Id",
             "type": "string"
@@ -21221,6 +21258,7 @@
     },
     "/api/v1/runs/{run_id}/troubleshoot": {
       "get": {
+        "description": "Why the run stopped and what to do, from the rule table. With find_cause=true, a stop the rule table knows no cause for also asks the AI model for the cause and the failed part (ADR 0055, section 10), and found holds them only when code checked them. Any doubt, a failed or slow call, or no model connected leaves found null. It only explains: it writes nothing and never changes a run.",
         "operationId": "troubleshoot_api_v1_runs__run_id__troubleshoot_get",
         "parameters": [
           {
@@ -21230,6 +21268,18 @@
             "schema": {
               "title": "Run Id",
               "type": "string"
+            }
+          },
+          {
+            "description": "Ask the AI model for the cause and the failed part.",
+            "in": "query",
+            "name": "find_cause",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Ask the AI model for the cause and the failed part.",
+              "title": "Find Cause",
+              "type": "boolean"
             }
           }
         ],

@@ -57,7 +57,13 @@ from platform_api.monitoring.traces import (
     pseudonym,
     typed_again,
 )
-from platform_api.monitoring.troubleshooter import Advice, explain_failure, what_happened
+from platform_api.monitoring.troubleshooter import (
+    Advice,
+    CauseFinder,
+    FoundCause,
+    explain_failure,
+    what_happened,
+)
 
 __all__ = [
     "PLATFORM",
@@ -72,6 +78,7 @@ __all__ = [
     "AgentEventPost",
     "AgentRef",
     "Callback",
+    "CauseFinder",
     "Copier",
     "CosmosEvents",
     "ApprovalAnnounceFailedData",
@@ -82,6 +89,7 @@ __all__ = [
     "DeniedReason",
     "ExecutionLinkedData",
     "ExecutionResumedData",
+    "FoundCause",
     "LangfuseScores",
     "LegDispatchedData",
     "NoTraceScores",

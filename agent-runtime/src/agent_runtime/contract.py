@@ -1634,6 +1634,84 @@ explain_wording_result_adapter: TypeAdapter[ExplainWordingResult] = TypeAdapter(
 )
 
 
+# The AI troubleshooter's model version (ADR 0032, ADR 0055 section 10): a stopped run's facts in,
+# the cause and the failed part out, which code checks before anyone sees them.
+
+CAUSE_LIMIT: Final = 200
+STOP_MESSAGE_LIMIT: Final = 2000
+EVENT_SUMMARY_LIMIT: Final = 400
+MOST_EVENTS: Final = 80
+RUN_BLOCK_NAME_LIMIT: Final = 200
+MOST_RUN_BLOCKS: Final = 100
+
+type RunBlockName = Annotated[str, Field(min_length=1, max_length=RUN_BLOCK_NAME_LIMIT)]
+
+
+class StoppedRun(WireModel):
+    """A stop as the run's run_failed event records it."""
+
+    stage: str = Field(max_length=40)
+    reason: str = Field(max_length=40)
+    retryable: bool
+    message: str = Field(max_length=STOP_MESSAGE_LIMIT)
+
+
+class CauseRequest(WireModel):
+    """One stopped run, for the model to name its cause and the failed part."""
+
+    model: ModelAccess
+    stop: StoppedRun
+    events: list[Annotated[str, Field(max_length=EVENT_SUMMARY_LIMIT)]] = Field(
+        max_length=MOST_EVENTS,
+        description="The run's activity, each event's plain summary, oldest first.",
+    )
+    blocks: list[RunBlockName] = Field(
+        min_length=1,
+        max_length=MOST_RUN_BLOCKS,
+        description="The blocks of the version that ran, by name, as the run's record holds them.",
+    )
+    stopped_at: list[RunBlockName] = Field(
+        min_length=1,
+        max_length=MOST_RUN_BLOCKS,
+        description="The blocks where the run stopped, as code read them. Each is one of blocks.",
+    )
+
+    @model_validator(mode="after")
+    def _stopped_in_the_version(self) -> CauseRequest:
+        if not set(self.stopped_at) <= set(self.blocks):
+            raise ValueError("Every block in stopped_at must be one of blocks")
+        return self
+
+
+class CauseFound(WireModel):
+    kind: Literal["found"] = "found"
+    cause: str = Field(
+        min_length=1,
+        max_length=CAUSE_LIMIT,
+        description="Why the run stopped, in one short sentence as the person sees it. It passed "
+        "every check and the verifier.",
+    )
+    failed_part: list[RunBlockName] = Field(
+        min_length=1,
+        max_length=MOST_RUN_BLOCKS,
+        description="The blocks the cause is in. Code checked each is a block of the version and "
+        "one where the run stopped.",
+    )
+
+
+class CauseKept(WireModel):
+    kind: Literal["kept"] = "kept"
+    why: str = Field(
+        description="Why the rule table answers instead: the id of the check that failed, the "
+        "verifier's flag, or call when the model's call failed.",
+    )
+
+
+type CauseResult = CauseFound | CauseKept | ModelProblem
+
+cause_result_adapter: TypeAdapter[CauseResult] = TypeAdapter(CauseResult)
+
+
 # The workflow drafter (ADR 0051): a person's words in, a plan of n8n blocks out.
 
 PLAN_NAME_LIMIT: Final = 80
@@ -1872,5 +1950,7 @@ class AgentApiSchema(WireModel):
     planner_check_part_result: CheckPartResult
     workflow_explain_request: ExplainWordingRequest
     workflow_explain_result: ExplainWordingResult
+    troubleshooter_cause_request: CauseRequest
+    troubleshooter_cause_result: CauseResult
     workflow_draft_request: WorkflowDraftRequest
     workflow_draft_result: WorkflowDraftResult

@@ -1,0 +1,31 @@
+{
+  "model": {
+    "style": "anthropic",
+    "base_url": "https://llm-gateway.example",
+    "model": "claude-sonnet-5-5",
+    "api_key": "example-key-not-a-secret"
+  },
+  "stop": {
+    "stage": "working",
+    "reason": "WorkflowNodeError",
+    "retryable": true,
+    "message": "The n8n workflow 'FastAPI release check' failed at its step 'Read releases': GitHub answered 404 Not Found for fastapi/fastapy"
+  },
+  "events": [
+    "Alice started a run of FastAPI release check.",
+    "Read releases asked GitHub for the releases of fastapi/fastapy.",
+    "The run failed."
+  ],
+  "blocks": [
+    "Every day at 8:00",
+    "Start from the Portal",
+    "Read releases",
+    "Newer?",
+    "Propose a change",
+    "Ask for a yes",
+    "Make the approved changes"
+  ],
+  "stopped_at": [
+    "Read releases"
+  ]
+}

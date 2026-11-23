@@ -357,6 +357,9 @@ _Avoid_: Log line, n8n event
 **AI troubleshooter**:
 The agent that explains why a run failed and helps the Operator fix it. It answers three questions: what happened, what was affected, and whether a retry is safe.
 
+**Failed part**:
+The blocks the AI troubleshooter names as the cause of a stop, once code confirms that they exist in the version that ran and that the run stopped there (ADR 0055).
+
 **Copier**:
 The part of run monitoring that copies each new activity event from PostgreSQL to Cosmos DB. It copies a run's events in order, and only one copier works on a run at a time. PostgreSQL keeps every event, so a copy that stops halfway goes on from the copied mark.
 _Avoid_: Sync, mirror
