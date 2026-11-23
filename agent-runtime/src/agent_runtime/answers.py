@@ -1207,12 +1207,19 @@ def _watch_rows(
     own = _stretches(WATCHLISTS_OWN_TICKET, changes) + _stretches(AFFIRMS_A_YES, changes)
     for clause in _change_clauses(_without_stretches(changes, own)):
         found.append((_stretch(request, clause), _change_row(clause)))
+    # Beside a release check, a version number is one release, and the check reads every new one,
+    # even where the schedule's words reach it, as "every day for 1.2.14".
+    if card:
+        found += [
+            (m.span(), CantRow(kind="look_for", text=m.group(0), note=ONE_VERSION))
+            for m in _VERSION.finditer(request)
+        ]
     # Words beside the watch stand beside no part of a task, so a part is never named for them.
     if task is not None:
         found += [
             (
                 (s.start, s.end),
-                _beside_the_card(s, task)
+                _left_out(s, task.searching, task.unquoted_skip)
                 if card
                 else _left_out(replace(s, kind=None), False, task.unquoted_skip),
             )
@@ -1226,15 +1233,10 @@ def _watch_rows(
 
 
 ONE_VERSION: Final = "I check for any new release, not one version."
-_VERSION: Final = re.compile(r"v?\d+(?:\.\d+)+", re.IGNORECASE)
-
-
-def _beside_the_card(span: Span, task: _Task) -> CantRow:
-    """Words beside a release check's card keep the part they stand beside. A version number, as
-    "1.2.14", is one release, and the check reads every new one."""
-    if _VERSION.fullmatch(span.text.strip()):
-        return CantRow(kind="look_for", text=plain(span.text, TEXT_LIMIT), note=ONE_VERSION)
-    return _left_out(span, task.searching, task.unquoted_skip)
+_VERSION: Final = re.compile(
+    r"(?<![\w.])(?:v\d+(?:\.\d+)+|\d+\.\d+\.\d+(?:\.\d+)*)(?![\w.])", re.IGNORECASE
+)
+"""A version number, as "1.2.14" or "v2.1", never a time, as "9.30"."""
 
 
 def _belongs_to_the_watch(

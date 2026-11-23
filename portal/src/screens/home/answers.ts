@@ -1,4 +1,4 @@
-import type { CantRowView, CapabilitiesView, CapabilityView, OfflineReply, PartView, PauseReply, PlannerReply, QuestionReply, RemoveSoftwareReply, ResumeReply, RowKind, ScheduleView, UnderstoodRowView, UseCaseView, WatchlistView } from '../../api/types'
+import type { CantRowView, CapabilitiesView, CapabilityView, Day, OfflineReply, PartView, PauseReply, PlannerReply, QuestionReply, RemoveSoftwareReply, ResumeReply, RowKind, ScheduleView, UnderstoodRowView, UseCaseView, WatchlistView } from '../../api/types'
 import { andList, count, type NameOf } from '../run/words'
 import { checksOnItsOwn, clockWords, everyWords, heldWords as heldScheduleWords, PAUSED_WORDS, repeatWords } from '../software/software'
 import { scheduleZoneName } from '../workflows/times'
@@ -207,22 +207,28 @@ const WEEKDAY_NAMES: Partial<Record<ScheduleView['day'], string>> = {
   sunday: 'Sunday',
 }
 
+/** Times of day the schedule can't hold as one time, which `readWhen` doesn't read. */
+const UNREAD_TIMES = /\b(?:morning|evening|afternoon|night|tonight)s?\b/i
+
 /** The watch card's words and choices while the watchlist checks on its own. Null otherwise, and the card stays as it was. */
 export function watchChoice(name: string, said: string, view: WatchlistView | null | undefined): WatchChoice | null {
   const runs = checksOnItsOwn(view) ? (view?.schedule ?? null) : null
   if (!view || !runs) return null
-  // A bare hour, as "at 9", could be morning or evening: the old offer's edit card asks, never a guess here.
-  if (bareHour(said) !== null) return null
+  // A bare hour, as "at 9", or a time of day it can't read, as "every evening", could be any time: the old offer's edit card
+  // asks, never a guess here.
+  if (bareHour(said) !== null || UNREAD_TIMES.test(said)) return null
   const when = readWhen(said)
   if (when.often === '' && when.at === '') return null
   // The day read, or the watchlist's own for a time alone, as "at 5pm". Its time stays only when the words name none.
-  const day = when.often === '' ? runs.day : scheduleOf(when).day
-  const asked = `${everyWords(day)}${when.at === '' ? '' : ` at ${clockWords(when.at)}`}`
+  const read = when.often === '' ? null : scheduleOf(when).day
+  const day = read ?? runs.day
+  const clock = when.at === '' ? null : clockWords(when.at)
+  const slot = (named: Day | null) => [named === null ? null : everyWords(named), clock].filter((part) => part !== null).join(' at ')
   const total = view.software.length
-  const move = { label: `Add it, and check all ${String(total + 1)} ${asked}`, schedule: { day, at: when.at === '' ? runs.at : when.at } }
+  const move = { label: `Add it, and check all ${String(total + 1)} ${slot(day)}`, schedule: { day, at: when.at === '' ? runs.at : when.at } }
   const weekly = WEEKDAY_NAMES[runs.day]
   return {
-    lead: `${name} isn’t on your Software watchlist yet. The watchlist is a workflow that checks ${String(total)} software, ${watchlistRunsWords(runs)}, and you asked for ${asked}.`,
+    lead: `${name} isn’t on your Software watchlist yet. The watchlist is a workflow that checks ${String(total)} software, ${watchlistRunsWords(runs)}, and you asked for ${slot(read)}.`,
     question: `How should I add ${name}?`,
     move,
     keep: weekly ? `Add it, keep ${weekly}s` : 'Add it, keep the same days',
