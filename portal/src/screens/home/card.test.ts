@@ -874,3 +874,56 @@ describe('a 24-hour time from the Planner', () => {
     expect(nextQuestion(timed(schedule), null)).toMatchObject({ kind: 'when', field: 'at' })
   })
 })
+
+describe('a workflow that runs only when someone presses Run now', () => {
+  const said = (schedule: string): Form =>
+    cardFrom('x', [{ kind: 'schedule', text: schedule, state: schedule ? 'understood' : 'missing', note: null }, ...ROWS.rows.slice(1)], schedule ? `${schedule}, ${FOLLOW_UP}` : FOLLOW_UP)
+  const choose = (form: Form, label: string): Form => {
+    const asked = nextQuestion(form, null)
+    const choice = asked?.kind === 'when' ? asked.choices.find((one) => one.label === label) : undefined
+    if (!choice) throw new Error(`No choice ${label} in ${JSON.stringify(asked)}`)
+    return answerWhen(form, choice.set)
+  }
+  const saved = (content: Record<string, unknown>): DraftView => ({ draft_id: 'd1', step: 2, content, created_at: '2026-11-23T07:00:00Z', saved_at: '2026-11-23T07:00:00Z' })
+
+  it('offers Only when I run it as the fourth answer to How often?, and asks no time after it', () => {
+    const start = said('')
+    expect(nextQuestion(start, null)).toMatchObject({
+      kind: 'when',
+      field: 'often',
+      words: 'How often?',
+      choices: [{ label: 'Every day' }, { label: 'Every weekday' }, { label: 'Every week' }, { label: 'Only when I run it' }],
+    })
+    const manual = choose(start, 'Only when I run it')
+    expect(nextQuestion(manual, null)).toBeNull()
+    expect(whenProblems(manual.when)).toEqual({})
+    expect(whenSaid(manual.when)).toBe('Only when I run it')
+    expect(setupLeft(manual, null).choices).not.toContain('when it runs')
+  })
+
+  it.each(['Only when I ask', 'When I run it', 'Only when I run it', 'On demand', 'Manually', 'run it manually'])('reads “%s” as no schedule, with no time to ask', (words) => {
+    expect(readWhen(words)).toMatchObject({ often: 'manual', day: '', at: '' })
+    expect(nextQuestion(said(words), null)).toBeNull()
+  })
+
+  it.each(['Whenever', 'As needed', 'Now and then', 'When it suits me'])('asks How often? for “%s”, never a guess', (words) => {
+    expect(readWhen(words).often).toBe('')
+    expect(nextQuestion(said(words), null)?.words).toBe('How often?')
+  })
+
+  it('sends no schedule, even after a time was picked first', () => {
+    const timed = choose(choose(said(''), 'Every day'), '9:00')
+    const manual = answerWhen(timed, { often: 'manual' })
+    expect(whenSaid(manual.when)).toBe('Only when I run it')
+    expect(scheduleOf(manual.when)).toBeNull()
+    const body = createBody({ ...manual, step: 4 }, planView(CLEAN_DRAFT, manual.rows), { 0: 'crd_new' })
+    expect(body.schedule).toBeNull()
+  })
+
+  it('says it was as they asked, and a saved draft reopens with it', () => {
+    const form = said('On demand')
+    expect(checkedRows(form)[0]).toEqual({ ok: true, words: 'When: Only when I run it, as you asked.' })
+    const content = JSON.parse(JSON.stringify(draftContent(form, null))) as Record<string, unknown>
+    expect(restoreDraft(saved(content)).form.when).toMatchObject({ often: 'manual' })
+  })
+})

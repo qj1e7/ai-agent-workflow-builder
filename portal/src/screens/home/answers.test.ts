@@ -267,7 +267,11 @@ describe('Check my workflows about the one workflow they have', () => {
     ({ name: PLANTED, state: 'on', last_run: null, next_run_at: null, schedule: null, ...fields }) as unknown as UseCaseView
 
   it('says plainly whether it is on and that it hasn’t run yet, with the name quoted as data', () => {
-    expect(oneWorkflowSay(one({}), NOW, nameOf)).toBe(`“${PLANTED}” is on. It hasn’t run yet. Next run: Not scheduled.`)
+    expect(oneWorkflowSay(one({}), NOW, nameOf)).toBe(`“${PLANTED}” is on. It hasn’t run yet. Runs only when you press Run now.`)
+  })
+
+  it('gives a draft with no schedule no next run, and no Run now it can’t have', () => {
+    expect(oneWorkflowSay(one({ state: 'draft' }), NOW, nameOf)).toBe(`“${PLANTED}” is a draft. It hasn’t run yet. Next run: Not scheduled.`)
   })
 
   it('says when it runs next, in the panel’s own Next run words', () => {

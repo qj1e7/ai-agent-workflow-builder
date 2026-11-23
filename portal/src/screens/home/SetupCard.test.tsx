@@ -156,6 +156,36 @@ describe('the set-up card before Set up', () => {
   })
 })
 
+describe('a workflow that runs only when someone presses Run now', () => {
+  const TYPED_BY_HAND = 'On demand, sum up the tickets we closed this week'
+  const BY_HAND: SetupCardReply = { ...SETUP, rows: SETUP.rows.map((row) => (row.kind === 'schedule' ? { ...row, text: 'On demand' } : row)) }
+  const partText = (html: string, key: string) =>
+    text(
+      (html.split(`data-part="${key}"`)[1] ?? '')
+        .split('data-part=')[0]
+        ?.replace(/^[^>]*>/, '')
+        .replace(/<[^>]*$/, '') ?? '',
+    )
+
+  it('says Only when I run it under When, with no time zone and no time to ask', () => {
+    const html = render(card(BY_HAND, TYPED_BY_HAND))
+    expect(partText(html, 'When')).toContain('Only when I run it')
+    expect(partText(html, 'When')).not.toMatch(/Singapore|SGT|at what time/)
+  })
+
+  it('keeps Only when I run it under When once Turn on is pressed', () => {
+    const form = cardFrom(BY_HAND.name, BY_HAND.rows, TYPED_BY_HAND, BY_HAND.parts)
+    const html = render(<PartsList parts={frozenParts(form, null, null, null)} />)
+    expect(partText(html, 'When')).toBe('Will do: When Only when I run it')
+  })
+
+  it('says On, and that it runs only when you press Run now, once it is on', () => {
+    const html = building(passed, { useCase: { ...ON, schedule: null, next_run_at: null } })
+    expect(pill(html)).toBe('On')
+    expect(text(html)).toContain('On. Runs only when you press Run now.')
+  })
+})
+
 describe('what the card knows about the software it watches', () => {
   const plan = { task: 'Check it', answer: planUseOne as PlanOut }
   const reply: SetupCardReply = { ...SETUP, rows: [{ kind: 'look_for', text: 'New releases of langchain-ai/langgraph', state: 'understood', note: null }, ...SETUP.rows.filter((row) => row.kind !== 'look_for')] }
