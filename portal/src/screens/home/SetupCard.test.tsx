@@ -258,7 +258,7 @@ describe('the set-up card after Set up', () => {
 
   it('says why its own test run stopped, never the reason of another run the workflow had', () => {
     const older = { at: '2026-11-03T02:14:13Z', what_happened: "Jira is not connected, so an agent couldn't read it." }
-    const lastRun: UseCaseView['last_run'] = { run_id: 'run_older', state: 'failed', at: '2026-11-03T02:13:00Z', test: true, declined_by: null, decline_reason: null, approved_by: [], proposed: 0, written: 0, tickets: false, you_can_decide: false, retryable: false, reason: 'AgentError', stop: older }
+    const lastRun: UseCaseView['last_run'] = { run_id: 'run_older', state: 'failed', at: '2026-11-03T02:13:00Z', test: true, declined_by: null, decline_reason: null, approved_by: [], proposed: 0, written: 0, tickets: false, you_can_decide: false, you_can_open: false, retryable: false, reason: 'AgentError', stop: older }
     const own = building(stopped, { useCase: { ...DRAFT, last_run: lastRun }, run: { ...(failedView as RunView), run_id: 'run_01JB8' } })
     expect(text(own)).toContain("The test run stopped. GitHub didn't answer.")
     expect(text(own)).not.toContain('Jira is not connected')

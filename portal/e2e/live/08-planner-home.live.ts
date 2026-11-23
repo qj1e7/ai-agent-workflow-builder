@@ -1330,7 +1330,7 @@ test.describe('the edit card (spec 6.7)', () => {
     await rail.getByRole('link', { name: /^Workflows/ }).click()
     await main(page).getByRole('link', { name: morning.name, exact: true }).click()
     await expect(page).toHaveURL(new RegExp(`/workflows/${morning.id}$`))
-    await page.locator('summary', { hasText: 'Versions' }).click()
+    await page.locator('summary', { hasText: 'Details' }).click()
     await expect(page.getByRole('list', { name: 'Versions, newest first' }).getByRole('listitem').first()).toContainText(/Version 3, in use\s*Today, \d{1,2}:\d\d\. Alice changed when it runs from every weekday at 8:00 to every Monday at 8:00\./)
     await rail.getByRole('link', { name: /^Chat/ }).click()
     const kept = newestAnswer(page)

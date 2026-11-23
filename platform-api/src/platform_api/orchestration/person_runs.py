@@ -239,3 +239,19 @@ def runs_of(
     return PersonRuns(
         tuple(asks), tuple(waiting), tuple(stopped), tuple(declined), tuple(questions)
     )
+
+
+NeedsYouReason = Literal["approval", "stopped", "declined", "question"]
+
+
+def workflows_needing_you(runs: PersonRuns) -> dict[UseCaseId, NeedsYouReason]:
+    """The workflows this person's Needs you has a row for, each with one reason, the yes first.
+
+    A workflow reads Needs you for the person exactly when Home lists one of these rows, whatever
+    state the workflow is in."""
+    found: dict[UseCaseId, NeedsYouReason] = {}
+    found.update({q.run.use_case_id: "question" for q in runs.questions})
+    found.update({d.run.use_case_id: "declined" for d in runs.declined})
+    found.update({s.run.use_case_id: "stopped" for s in runs.stopped})
+    found.update({a.run.use_case_id: "approval" for a in runs.asks})
+    return found

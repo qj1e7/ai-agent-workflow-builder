@@ -12,7 +12,7 @@ import type { LastRun, Viewer } from './workflow'
 const ALICE: Viewer = { id: 'alice', operator: true, approver: false }
 const BOB: Viewer = { id: 'bob', operator: false, approver: true }
 const DRAFT = draft as UseCaseView
-const PASSED: LastRun = { run_id: 'run_1', state: 'succeeded', at: '2026-11-14T03:00:00Z', test: true, declined_by: null, decline_reason: null, approved_by: [], proposed: 1, written: 0, tickets: true, you_can_decide: false, retryable: false, reason: null, outcome: 'test_passed', stop: null }
+const PASSED: LastRun = { run_id: 'run_1', state: 'succeeded', at: '2026-11-14T03:00:00Z', test: true, declined_by: null, decline_reason: null, approved_by: [], proposed: 1, written: 0, tickets: true, you_can_decide: false, you_can_open: false, retryable: false, reason: null, outcome: 'test_passed', stop: null }
 
 const draw = (useCase: UseCaseView, viewer: Viewer = ALICE) =>
   renderToStaticMarkup(

@@ -26,12 +26,11 @@ import { usePagedNeeds } from '../home/usePagedNeeds'
 import { ExplainButton } from '../explain/ExplainButton'
 import { useArrivalScroll } from './arrival'
 import { MadeInN8nSection } from './MadeInN8n'
-import { needsFix } from './n8nChange'
 import { StatusPills } from './Status'
 import { RequestView } from './RequestView'
 import { REQUEST_PARAM } from './requests'
 import { draftItem, FollowingSection } from './Sections'
-import { changeProblem, changeWords, FILTERS, meansOutOfDate, pillOf, pressChange, REFRESH_MS, rowLine, rowsOf, SOFTWARE_PAGE, viewerOf, workflowPath, type Filter, type Row } from './workflow'
+import { changeProblem, changeWords, FILTERS, meansOutOfDate, pressChange, REFRESH_MS, rowLine, rowsOf, SOFTWARE_PAGE, viewerOf, workflowPath, type Filter, type Row } from './workflow'
 import styles from './Workflows.module.css'
 
 export const rowLinkId = (useCaseId: string) => `workflow-${useCaseId}`
@@ -84,7 +83,7 @@ export function WorkflowRow({ row, index, arrive, now, nameOf }: RowProps) {
         </span>
       </span>
       <span id={`${ids}-pill`}>
-        <StatusPills state={useCase.state} fact={useCase.last_run ? pillOf(useCase.last_run) : null} fix={needsFix(useCase)} test={useCase.last_run?.test === true} />
+        <StatusPills useCase={useCase} test={useCase.last_run?.test === true} />
       </span>
     </>
   )

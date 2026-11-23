@@ -2,7 +2,7 @@ import { useState } from 'react'
 import type { UseCaseView } from '../../api/types'
 import { IconCheck, IconLock, IconPause, IconX } from '../../ui/icons'
 import { runPill, type StageFacts } from '../run/words'
-import { lifeWords, type Pill } from './workflow'
+import { statusOf } from './workflow'
 import styles from './Workflows.module.css'
 
 export function useChanges(value: string): number {
@@ -15,21 +15,18 @@ export function useChanges(value: string): number {
   return times
 }
 
-const RUN_ICON = { wait: IconLock, bad: IconX, new: null, ok: null } as const
+const ICON = { wait: IconLock, bad: IconX, new: null, ok: null } as const
 
-/** One status, in the spec's words: Paused, else what the newest run needs, else On. A test run is marked beside it. */
-export function StatusPills({ state, fact, test = false, large = false, fix = false }: { state: UseCaseView['state']; fact: Pill | null; test?: boolean; large?: boolean; fix?: boolean }) {
-  // The sketch's wfState: Paused first, then Needs a fix whenever the version in use is not safe, then what the newest run needs.
-  const unsafe = state === 'on' && fix
-  const run = unsafe ? { tone: 'bad' as const, pill: 'Needs a fix' } : state === 'on' && fact?.pill ? fact : null
-  const words = run?.pill ?? lifeWords(state)
-  const changes = useChanges(words)
-  const Icon = run ? RUN_ICON[run.tone] : state === 'paused' ? IconPause : state === 'draft' ? null : IconCheck
+/** One status, in the four words ADR 0053 allows: On, Paused, Draft or Needs you. A test run is marked beside it. */
+export function StatusPills({ useCase, test = false, large = false }: { useCase: Pick<UseCaseView, 'state' | 'last_run'> & Partial<Pick<UseCaseView, 'needs_you'>>; test?: boolean; large?: boolean }) {
+  const { four, label, tone } = statusOf(useCase)
+  const changes = useChanges(label)
+  const Icon = four === 'needs' || tone === 'wait' ? ICON[tone ?? 'bad'] : four === 'paused' ? IconPause : four === 'draft' ? null : IconCheck
   return (
     <span className={large ? `${styles['pills']} ${styles['largePills']}` : styles['pills']}>
-      <span key={changes} className={changes > 0 ? `${styles['pill']} ${styles['changed']}` : styles['pill']} data-life={state} data-tone={run?.tone}>
+      <span key={changes} className={changes > 0 ? `${styles['pill']} ${styles['changed']}` : styles['pill']} data-life={useCase.state} data-tone={four === 'needs' || tone === 'wait' ? tone : undefined}>
         {Icon ? <Icon size={12} /> : null}
-        {words}
+        {label}
       </span>
       {test ? <span className={styles['pill']}>Test run</span> : null}
     </span>

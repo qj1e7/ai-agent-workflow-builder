@@ -35,7 +35,7 @@ const CAROL_LEFT = 'Not running: Carol is no longer on the People list. An Opera
 const WATCHLIST = watchlistUseCase as UseCaseView
 const NOW = new Date('2026-11-04T15:00:00+08:00')
 
-const STOPPED: LastRun = { run_id: 'run_01JB9', state: 'failed', at: '2026-11-04T02:14:00Z', test: false, declined_by: null, decline_reason: null, approved_by: [], proposed: 0, written: 0, tickets: false, you_can_decide: false, retryable: false, reason: 'AgentError', stop: { at: '2026-11-04T02:14:00Z', what_happened: 'An agent could not finish its work.' } }
+const STOPPED: LastRun = { run_id: 'run_01JB9', state: 'failed', at: '2026-11-04T02:14:00Z', test: false, declined_by: null, decline_reason: null, approved_by: [], proposed: 0, written: 0, tickets: false, you_can_decide: false, you_can_open: true, retryable: false, reason: 'AgentError', stop: { at: '2026-11-04T02:14:00Z', what_happened: 'An agent could not finish its work.' } }
 
 interface Setup {
   /** The workflow's last run as the platform answers it, changed from a stopped run. */
@@ -151,7 +151,7 @@ describe('a workflow page', () => {
     expect(whenOf(html)).toBe('Runs only when you press Run now.')
     expect(sectionText(html, 'When'), 'a workflow with no schedule has no next run to give').not.toContain('Next run')
     expect(text(mainOf(html))).toContain('On. Runs only when you press Run now.')
-    expect(sectionText(html, 'Who says yes')).toBe('Any Approver but you, in Teams. Who can’t say yes Nobody says yes to their own work. The workflow’s owner, whoever starts a run and whoever retries it can’t say yes to that run.')
+    expect(sectionText(html, 'Who says yes')).toBe('Any Approver but you, in Teams. Nothing is written until an Approver says yes. Who can’t say yes Nobody says yes to their own work. The workflow’s owner, whoever starts a run and whoever retries it can’t say yes to that run.')
   })
 
   it('keeps the sketch’s short Who says yes line, with the whole own-work rule folded one tap away', () => {
@@ -244,7 +244,7 @@ describe('a workflow page', () => {
     expect(mainOf(html)).toMatch(/_primary_[^>]*>Review and decide/)
   })
 
-  it('orders the page as the sketch does: the sentence, the banner, the line, When, Who says yes, Recent runs, Versions, then the buttons, with no Agents section', () => {
+  it('orders the page as the sketch does: the sentence, the banner, the line, When, Who says yes, Recent runs, then the buttons, with no Agents section', () => {
     const html = mainOf(render({ runs: [{ ...(done as RunView), use_case_id: 'uc_01JD0' }] }))
     const at = (needle: string) => html.indexOf(needle)
     const order = [at('<h1'), at('sentence'), at('data-tone='), at('Check release'), at('>When</h2>'), at('>Who says yes</h2>'), at('>Recent runs</h2>'), at('>Pause<')]
@@ -314,7 +314,7 @@ describe('a workflow page', () => {
 
   it('gives an Approver who may approve and the recent runs, but no manage buttons', () => {
     const html = render({ me: BOB, runs: [{ ...(done as RunView), use_case_id: 'uc_01JD0' }] })
-    expect(sectionText(html, 'Who says yes')).toMatch(/^Any Approver but Alice, in Teams\. Who can’t say yes /)
+    expect(sectionText(html, 'Who says yes')).toMatch(/^Any Approver but Alice, in Teams\. Nothing is written until an Approver says yes\. Who can’t say yes /)
     expect(text(mainOf(html))).toContain('Recent runs')
     expect(mainOf(html)).toContain('href="/runs/run_01JB8"')
     expect(buttons(html).filter((label) => /Run now|Pause|Resume|Delete|More actions/.test(label))).toEqual([])
@@ -365,9 +365,10 @@ describe('a workflow page', () => {
     }
   })
 
-  it('for a run n8n lost, says Lost in the pill and in the banner, never On', () => {
+  it('for a run n8n lost, says Lost in the banner and keeps the pill On, as a lost run is not in Needs you', () => {
     const html = render({ last: { state: 'lost', reason: null } })
-    expect(mainOf(html)).toMatch(/data-tone="bad"[^>]*>.*Lost<\/span>/)
+    expect(mainOf(html)).toMatch(/data-life="on"[^>]*>.*On<\/span>/)
+    expect(mainOf(html)).not.toMatch(/Needs you<\/span>/)
     expect(text(bannerOfHtml(html))).toBe('Lost today at 10:14. Approved, but the run stopped before it could make the change. Nothing was written. Open the run')
     expect(text(mainOf(html))).not.toContain('On. Next run')
   })
@@ -437,7 +438,7 @@ describe('a workflow page', () => {
 
 const CHANGED = { useCase: versionedUseCase as UseCaseView, versions: changed.versions as VersionView[] }
 const UNDONE = { useCase: undoneUseCase as UseCaseView, versions: undone.versions as VersionView[] }
-const versionsOf = (html: string) => text(/<summary[^>]*>Versions<\/summary>([\s\S]*?)<\/details>/.exec(mainOf(html))?.[1] ?? '')
+const versionsOf = (html: string) => text(/<h3[^>]*>Versions<\/h3>([\s\S]*?)<\/section>/.exec(mainOf(html))?.[1] ?? '')
 
 describe('the Versions list', () => {
   it('is not shown while the workflow has one version', () => {
@@ -459,20 +460,48 @@ describe('the Versions list', () => {
     for (const me of [ALICE, BOB]) {
       const html = render({ ...UNDONE, me })
       expect(versionsOf(html)).toContain('Alice changed when it runs from every weekday at 8:00 to every Monday at 8:00.')
-      expect(/<summary[^>]*>Versions<\/summary>[\s\S]*?<\/details>/.exec(mainOf(html))?.[0]).not.toMatch(/<button/)
+      expect(/<h3[^>]*>Versions<\/h3>[\s\S]*?<\/section>/.exec(mainOf(html))?.[0]).not.toMatch(/<button/)
       expect(buttons(html).filter((label) => label.startsWith('Undo'))).toEqual([])
     }
   })
 
-  it('sits after Recent runs and before the buttons, as the sketch orders the page', () => {
+  it('sits after Recent runs and before the buttons, inside Details', () => {
     const html = mainOf(render(CHANGED))
-    const order = ['Recent runs', '>Versions<', '>Pause<'].map((needle) => html.indexOf(needle))
+    const order = ['Recent runs', '>Details<', '>Versions<', '>Pause<'].map((needle) => html.indexOf(needle))
     expect(order.every((place) => place >= 0)).toBe(true)
     expect(order).toEqual([...order].sort((a, b) => a - b))
   })
 
   it('shows the schedule the newest version runs on under When', () => {
     expect(whenOf(render(UNDONE))).toBe('Every weekday at 8:00 Singapore time (SGT).')
+  })
+})
+
+describe('Details on the workflow page', () => {
+  const detailsOf = (html: string) => /<details[^>]*>\s*<summary[^>]*>Details<\/summary>[\s\S]*?<\/details>/.exec(mainOf(html))?.[0] ?? ''
+
+  it('holds Explain and Versions, and nothing the person needs in view', () => {
+    const html = render(CHANGED)
+    const details = detailsOf(html)
+    expect(text(details)).toMatch(/^Details Explain LangGraph release check .*Versions Version 2/)
+    expect(details).not.toMatch(/Pause|Run now|Open in n8n|Delete/)
+    expect(mainOf(html).replace(details, '')).not.toMatch(/\/explain|>Versions</)
+  })
+
+  it('is closed until opened, and is there for an Approver too', () => {
+    for (const me of [ALICE, BOB]) expect(detailsOf(render({ me, ...CHANGED })), me.id).not.toMatch(/<details[^>]*\bopen/)
+  })
+
+  it('leaves out an empty Details: a first version has Explain only, and the banner’s Explain is the one on the page', () => {
+    expect(text(detailsOf(render()))).toBe(`Details Explain ${AGENTS.name}`)
+  })
+
+  it('reads On · last run stopped on the page of an Operator whose work the run is not, as in the list', () => {
+    expect(text(mainOf(render({ last: { you_can_open: false } })))).toContain('On · last run stopped')
+  })
+
+  it('says the one approval rule where the page names who says yes', () => {
+    expect(text(mainOf(render()))).toContain('Who says yes Any Approver but you, in Teams. Nothing is written until an Approver says yes.')
   })
 })
 
@@ -490,9 +519,9 @@ describe('Explain on the workflow page', () => {
       const id = CHANGED.useCase.use_case_id
       const name = CHANGED.useCase.name
       expect(explainLinks(render({ ...CHANGED, me })), me.id).toEqual([
+        [`Explain ${name}`, `/workflows/${id}/explain`],
         [`Explain ${name}, version 2`, `/workflows/${id}/explain?version=2`],
         [`Explain ${name}, version 1`, `/workflows/${id}/explain?version=1`],
-        [`Explain ${name}`, `/workflows/${id}/explain`],
       ])
     }
   })

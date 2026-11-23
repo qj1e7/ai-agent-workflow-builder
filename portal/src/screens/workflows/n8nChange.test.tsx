@@ -124,13 +124,15 @@ describe('the workflow page’s banner for a graded version', () => {
 })
 
 describe('the state pill', () => {
-  const pill = (props: { state: UseCaseView['state']; fix: boolean }) => text(renderToStaticMarkup(<StatusPills state={props.state} fact={null} fix={props.fix} />))
-  it('reads Needs a fix while the version in use is not safe', () => {
-    expect(pill({ state: 'on', fix: true })).toBe('Needs a fix')
-    expect(pill({ state: 'on', fix: false })).toBe('On')
+  const pill = (props: { state: UseCaseView['state']; needsYou: NonNullable<UseCaseView['needs_you']> | null }) =>
+    text(renderToStaticMarkup(<StatusPills useCase={{ state: props.state, last_run: null, needs_you: props.needsYou }} />))
+  it('reads Needs you while the platform lists the workflow in the person’s Needs you', () => {
+    expect(pill({ state: 'on', needsYou: 'stopped' })).toBe('Needs you')
+    expect(pill({ state: 'on', needsYou: null })).toBe('On')
   })
-  it('lets Paused win, as the sketch does', () => {
-    expect(pill({ state: 'paused', fix: true })).toBe('Paused')
+  it('puts Needs you before Paused, as Home has a row for it', () => {
+    expect(pill({ state: 'paused', needsYou: 'stopped' })).toBe('Needs you')
+    expect(pill({ state: 'paused', needsYou: null })).toBe('Paused')
   })
 })
 

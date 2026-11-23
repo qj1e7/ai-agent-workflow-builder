@@ -39,26 +39,38 @@ export type LastRun = NonNullable<UseCaseView['last_run']>
 /** The runs a row calls Running. Anything counting running workflows asks this, so a count never outruns the rows. */
 export const isRunning = (run: { readonly state: RunState } | null): boolean => run !== null && IN_PROGRESS.has(run.state)
 
-export interface Pill {
-  readonly tone: 'ok' | 'wait' | 'bad' | 'new'
-  readonly pill: string | null
+/** The one approval rule, in the words the team lead approved on 23 Nov (ADR 0053). */
+export const APPROVAL_RULE = 'Nothing is written until an Approver says yes.'
+
+export type Four = 'needs' | 'on' | 'paused' | 'draft'
+
+export interface Status {
+  readonly four: Four
+  readonly label: string
+  readonly tone: 'ok' | 'wait' | 'bad' | 'new' | undefined
 }
 
+export const WAITING_ON_AN_APPROVER = 'On · waiting for an Approver’s yes'
+export const LAST_RUN_STOPPED = 'On · last run stopped'
+
 /**
- * The workflow's own pill, read from its newest run's pill, so the two can't disagree: a run's Stopped, Lost or Waiting for a yes stays,
- * and any other run reads On, as in the sketch. Running is the run's own pill in Recent runs. The tone stays, because the banner says it.
+ * The workflow's one state, in the four words ADR 0053 allows: Needs you, Paused, Draft or On. The platform decides Needs you for the person
+ * (`needs_you`), from the same lists Home draws its rows from, so the pill, the filter and Home cannot disagree, whatever the workflow's state.
+ * Otherwise a workflow waiting on someone else's yes reads On, with that said, and a stopped run that is not this person's reads On with a note.
+ * A lost run and a run's own result (Done, Nothing new, Declined, Skipped) stay in Recent runs.
  */
-export function pillOf(last: LastRun): Pill {
-  const { label, tone } = runPill(stageOfLast(last))
-  switch (tone) {
-    case 'bad':
-    case 'wait':
-      return { tone, pill: label }
-    case 'new':
-      return { tone: 'new', pill: null }
-    case 'ok':
-    case 'quiet':
-      return { tone: 'ok', pill: null }
+export function statusOf(useCase: Pick<UseCaseView, 'state' | 'last_run'> & Partial<Pick<UseCaseView, 'needs_you'>>): Status {
+  if (useCase.needs_you) return { four: 'needs', label: 'Needs you', tone: useCase.needs_you === 'approval' ? 'wait' : 'bad' }
+  if (useCase.state === 'paused') return { four: 'paused', label: 'Paused', tone: undefined }
+  if (useCase.state === 'draft') return { four: 'draft', label: 'Draft', tone: undefined }
+  const { last_run: last } = useCase
+  switch (last?.state) {
+    case 'failed':
+      return { four: 'on', label: LAST_RUN_STOPPED, tone: 'ok' }
+    case 'awaiting_approval':
+      return { four: 'on', label: WAITING_ON_AN_APPROVER, tone: 'wait' }
+    default:
+      return { four: 'on', label: 'On', tone: undefined }
   }
 }
 
@@ -403,21 +415,23 @@ export function cardsOf(useCase: Pick<UseCaseView, 'template' | 'agents'>): read
 export type RowAction = { readonly kind: 'decide' | 'why'; readonly runId: string }
 
 /** The platform says whether the person can decide a waiting run. Only it knows who retried a run or is named on a step. */
-export function rowAction(last: LastRun | null, viewer: Viewer): RowAction | null {
+export function rowAction(last: LastRun | null): RowAction | null {
   if (!last) return null
   if (last.state === 'awaiting_approval') {
     return last.you_can_decide ? { kind: 'decide', runId: last.run_id } : null
   }
-  if (last.state === 'failed' && viewer.operator) return { kind: 'why', runId: last.run_id }
+  if (last.state === 'failed' && last.you_can_open) return { kind: 'why', runId: last.run_id }
   return null
 }
 
-export type Filter = 'all' | 'stopped' | 'paused'
+export type Filter = 'all' | 'needs' | 'on' | 'paused' | 'draft'
 
 export const FILTERS: readonly (readonly [Filter, string])[] = [
   ['all', 'All'],
-  ['stopped', 'Stopped'],
+  ['needs', 'Needs you'],
+  ['on', 'On'],
   ['paused', 'Paused'],
+  ['draft', 'Draft'],
 ]
 
 export interface Row {
@@ -430,10 +444,8 @@ function kept(row: Row, filter: Filter, words: string): boolean {
   switch (filter) {
     case 'all':
       return true
-    case 'stopped':
-      return row.useCase.last_run?.state === 'failed'
-    case 'paused':
-      return row.useCase.state === 'paused'
+    default:
+      return statusOf(row.useCase).four === filter
   }
 }
 
@@ -442,14 +454,14 @@ const NOTHING: ReadonlySet<string> = new Set()
 /** A row's pill, line and action all read its workflow's last run. When Needs you already offers that run, the row keeps only its status, so no run is offered twice. */
 export function rowsOf(
   useCases: readonly UseCaseView[],
-  viewer: Viewer,
+  _viewer: Viewer,
   filter: Filter,
   query: string,
   runsInNeeds: ReadonlySet<string> = NOTHING,
 ): Row[] {
   const words = query.trim().toLowerCase()
   const rows = useCases.map((useCase) => {
-    const action = rowAction(useCase.last_run, viewer)
+    const action = rowAction(useCase.last_run)
     return { useCase, action: action && runsInNeeds.has(action.runId) ? null : action }
   })
   const needsYou = (row: Row) => (row.action ? 0 : 1)

@@ -224,6 +224,10 @@ class LastRunView(WireModel):
         description="True when the person asking may decide the yes this run waits for. False "
         "for any other run, and in an answer that is not for a person."
     )
+    you_can_open: bool = Field(
+        description="True when the run stopped and is in the Needs you of the person asking: an "
+        "Operator whose work it is. False for any other run."
+    )
     retryable: bool = Field(description="True when the run stopped and a retry may start it again.")
     reason: FailureReasonName | None = Field(
         description="Why a stopped run stopped. Null for any other run."
@@ -281,6 +285,13 @@ class UseCaseView(WireModel):
     last_run: LastRunView | None = Field(
         description="The newest run of this workflow, whatever its state. Null when it has "
         "never run."
+    )
+    needs_you: Literal["approval", "stopped", "declined", "question", "fix"] | None = Field(
+        default=None,
+        description="Why this workflow is in the Needs you of the person asking, or null when it "
+        "is not: a yes they may give, a run of theirs that stopped, a test run an Approver "
+        "declined, a question to answer, or a workflow that can't run and needs a fix. It holds "
+        "exactly when their Home has a row for the workflow.",
     )
     left_out: list[str] = Field(
         description="The parts of the request it was set up without, in the person's own words "
@@ -969,3 +980,20 @@ class DraftList(WireModel):
     drafts: list[DraftView] = Field(
         description="The signed-in person's own drafts, the last saved first."
     )
+
+
+FixReason = Literal["needs_a_fix", "writes_refused"]
+
+
+def fix_of(view: UseCaseView, operator: bool) -> FixReason | None:
+    """Why a workflow that is on can't run, for a person who has a button for it. A version that
+    needs a fix is for everyone, because Explain opens for both roles. Refused writes are for an
+    Operator, who can add the yes back. A workflow that could not move to n8n has no button, so
+    it is not here. One rule for the pill and for Home's Needs you row."""
+    if view.state != "on":
+        return None
+    if view.grade == "needs_a_fix":
+        return view.grade
+    if view.grade == "writes_refused" and operator:
+        return view.grade
+    return None

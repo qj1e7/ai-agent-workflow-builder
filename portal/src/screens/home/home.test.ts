@@ -76,6 +76,19 @@ describe('the order of what needs you', () => {
     expect(wordsOf(second, NOW).title).toBe('GitHub can’t find langchain-ai/langserve, the address saved for LangServe.')
   })
 
+  it('lists a workflow that can’t run in Needs you, counts it, and opens what to fix', () => {
+    const fix = { use_case_id: 'uc_fix', use_case_name: 'LangGraph release check', why: 'needs_a_fix' } as const
+    const home = { ...BOB, fixes: [fix], stopped: [STOP], stopped_total: 1 } as HomeOut
+    const needs = needsOf(home)
+    expect(needs.shown.map((need) => need.kind)).toEqual(['stopped', 'approval', 'fix', 'confirmation', 'confirmation'])
+    expect(needs.total).toBe(needsTotal(home))
+    expect(needsTotal(home)).toBe(needsTotal({ ...home, fixes: [] }) + 1)
+    const [row] = needs.shown.filter((need) => need.kind === 'fix') as [Need]
+    expect(groupOf(row)).toBe('now')
+    expect(actionsOf(row)).toEqual([{ kind: 'open', label: 'See what to fix', to: '/workflows/uc_fix/explain' }])
+    expect(wordsOf(row, NOW).title).toBe('LangGraph release check needs a fix')
+  })
+
   it('puts a reply from the team last of Do now, before the Set up group, and counts it', () => {
     const reply = (ALICE.replied as [FollowingUpItem])[0]
     const home: HomeOut = { ...BOB, replied: [reply], stopped: [STOP], stopped_total: 1 }

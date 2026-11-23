@@ -117,6 +117,7 @@ def home_for_bob() -> HomeOut:
         replied=[],
         coming_up=COMING_UP,
         workflows=1,
+        fixes=[],
         addresses=[],
         connections=[],
         changed_in_n8n=[],
@@ -195,6 +196,7 @@ def home_for_alice(failure: Timeline) -> HomeOut:
         replied=[SUPPORT_REPORT],
         coming_up=COMING_UP,
         workflows=1,
+        fixes=[],
         addresses=[
             AddressItem(
                 software_id="sw_01JC2A3B4C5D6E7F8G9H0J1K2M",
@@ -275,6 +277,7 @@ DAY_ONE = HomeOut(
     replied=[],
     coming_up=None,
     workflows=0,
+    fixes=[],
     addresses=[],
     connections=[],
     changed_in_n8n=[],

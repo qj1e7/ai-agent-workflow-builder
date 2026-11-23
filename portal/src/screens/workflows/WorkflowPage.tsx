@@ -24,7 +24,7 @@ import { leadsThePage, StatusBanner } from './Banner'
 import { useArrivalScroll } from './arrival'
 import { templateLine } from './line'
 import { RecentRuns } from './RecentRuns'
-import { backToVersionToast, needsFix, yesBackToast } from './n8nChange'
+import { backToVersionToast, yesBackToast } from './n8nChange'
 import { StatusPills } from './Status'
 import { Versions } from './Versions'
 import { DraftActions } from './DraftActions'
@@ -32,6 +32,7 @@ import { HeldInN8n, OpenInN8nEditor, WorkflowInN8n } from './InN8n'
 import { cantChangeWords, heldOf, holdOf, mayOpen, openingOf } from './n8nHold'
 import { When } from './When'
 import {
+  APPROVAL_RULE,
   bannerOf,
   changeProblem,
   changeWords,
@@ -49,7 +50,6 @@ import {
   pressRunNow,
   REFRESH_MS,
   rereadWhenOutOfDate,
-  pillOf,
   runsOf,
   scheduleSavedWords,
   sentenceOf,
@@ -272,6 +272,8 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
     }
   })
 
+  // The banner's Explain is the one on the page while a version needs a fix.
+  const explainHere = banner.action?.kind !== 'explain'
   const say = (text: string) => setSaid((before) => ({ id: (before?.id ?? 0) + 1, text }))
   const message: ToastMessage | null = said ? { id: said.id, text: said.text } : null
   return (
@@ -282,7 +284,7 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
           <p className={styles['kind']}>Workflow</p>
           <h1 tabIndex={-1}>{useCase.name}</h1>
         </div>
-        <StatusPills state={useCase.state} fact={useCase.last_run ? pillOf(useCase.last_run) : null} test={useCase.last_run?.test === true} large fix={needsFix(useCase)} />
+        <StatusPills useCase={useCase} test={useCase.last_run?.test === true} large />
       </div>
       {n8nAccess ? <ViewTabs main="Summary" shown={shownView} onShow={showView} className={styles['views']} /> : null}
       {shownView === 'n8n' ? (
@@ -320,6 +322,7 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
               <section className={styles['section']} aria-labelledby="who-says-yes">
                 <h2 id="who-says-yes">Who says yes</h2>
                 <p>{whoSaysYes(useCase.owner, viewer, nameOf)}</p>
+                <p>{APPROVAL_RULE}</p>
                 <details className={styles['rule']}>
                   <summary>Who can’t say yes</summary>
                   <p>{ownWorkRule(useCase.schedule)}</p>
@@ -343,15 +346,24 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
               )}
             </section>
           )}
-          <Versions useCase={useCase} now={now} nameOf={nameOf} operator={viewer.operator} say={say} />
           <DraftActions useCase={useCase} viewer={viewer} />
+          {explainHere || useCase.version >= 2 ? (
+            <details className={styles['more']}>
+              <summary>Details</summary>
+              {explainHere ? (
+                <p>
+                  <ExplainButton useCaseId={id} name={useCase.name} />
+                </p>
+              ) : null}
+              <Versions useCase={useCase} now={now} nameOf={nameOf} operator={viewer.operator} say={say} />
+            </details>
+          ) : null}
           <div className={styles['actions']}>
             {runNowLeads ? (
               <Button variant={leadsThePage(banner.action) ? 'secondary' : 'primary'} icon={IconPlay} data-place={placeOf('run')} loading={runNow.pending} onClick={runNow.press}>
                 Run now
               </Button>
             ) : null}
-            {banner.action?.kind === 'explain' ? null : <ExplainButton useCaseId={id} name={useCase.name} />}
             {mayPause ? (
               <Button icon={IconPause} data-place={placeOf('pause')} loading={move.isPending} onClick={() => pauseOrResume('pause')}>
                 Pause

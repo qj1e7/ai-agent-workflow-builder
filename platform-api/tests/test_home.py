@@ -93,6 +93,7 @@ EMPTY = {
     "replied": [],
     "coming_up": None,
     "workflows": 0,
+    "fixes": [],
     "addresses": [],
     "connections": [],
     "changed_in_n8n": [],

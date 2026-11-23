@@ -2594,6 +2594,13 @@
           "title": "Declined",
           "type": "integer"
         },
+        "fixes": {
+          "default": 0,
+          "description": "Workflows that are on and can't run, which they can fix.",
+          "minimum": 0,
+          "title": "Fixes",
+          "type": "integer"
+        },
         "questions": {
           "description": "Questions Approvers asked the person on requests waiting for a yes.",
           "minimum": 0,

@@ -298,6 +298,7 @@ async def test_every_builder_route_needs_a_signed_in_user(client: httpx.AsyncCli
 
 
 BOB = {"X-Dev-User": "bob"}
+CAROL = {"X-Dev-User": "carol"}
 FRIDAY = "Every Friday, sum up the tickets we closed this week"
 ANSWER = "/api/v1/planner/answer"
 
@@ -363,6 +364,11 @@ class RunBook:
         self.runs: list[RunDetail] = []
         self.asked: list[list[UseCaseId]] = []
         self.viewers: list[Principal | None] = []
+        self.needing: dict[UseCaseId, str] = {}
+        """What this person's Needs you holds, by workflow, as the platform says it."""
+
+    async def needing_you(self, viewer: Principal) -> dict[UseCaseId, str]:
+        return dict(self.needing)
 
     async def newest_runs(
         self, use_case_ids: Sequence[UseCaseId], viewer: Principal | None = None
@@ -423,6 +429,7 @@ class FakeHome:
             stopped_total=0,
             connections=[],
             addresses=[],
+            fixes=[],
             replied=[1],
             declined_total=1,
             questions_for_me_total=1,
@@ -1530,11 +1537,35 @@ async def test_a_declined_run_names_who_declined_and_why_and_writes_nothing(fron
         "written": 0,
         "tickets": True,
         "you_can_decide": False,
+        "you_can_open": False,
         "retryable": False,
         "reason": None,
         "outcome": None,
         "stop": None,
     }
+
+
+async def test_a_stopped_run_is_in_needs_you_only_for_an_operator_whose_work_it_is(front: Front):
+    use_case_id = await make_workflow(front, "Stopped for some")
+    failure = Failure(RunFailure.AGENT_ERROR, "Jira did not answer", retryable=True)
+    front.book.add(
+        use_case_id, Failed(RunId("run_1"), Stage.WORKING, failure, ResumeWork(2)), LONG_AGO
+    )
+    seen: dict[str, object] = {}
+    for who, headers in (("alice", ALICE), ("carol", CAROL), ("bob", BOB)):
+        r = await front.client.get(USE_CASES, headers=headers)
+        (row,) = [u for u in r.json()["use_cases"] if u["name"] == "Stopped for some"]
+        seen[who] = row["last_run"]["you_can_open"]
+    assert seen == {"alice": True, "carol": False, "bob": False}
+
+
+async def test_a_workflow_says_why_it_needs_the_person_whatever_its_state(front: Front):
+    stopped_id = await make_workflow(front, "Needs a look")
+    await make_workflow(front, "Quiet")
+    front.book.needing = {UseCaseId(stopped_id): "stopped"}
+    r = await front.client.get(USE_CASES, headers=ALICE)
+    seen = {u["name"]: u["needs_you"] for u in r.json()["use_cases"]}
+    assert seen == {"Needs a look": "stopped", "Quiet": None}
 
 
 async def test_a_run_declined_at_the_second_step_names_who_said_yes_first(front: Front):
@@ -1572,6 +1603,7 @@ async def test_a_stopped_run_is_the_last_run_with_no_one_declining(front: Front)
         False,
     )
     assert (last["retryable"], last["reason"]) == (True, "AgentError")
+    assert last["you_can_open"] is True, "an Operator whose work it is has it in Needs you"
 
 
 async def test_a_run_n8n_could_not_start_says_why_and_when_it_last_stopped(front: Front):

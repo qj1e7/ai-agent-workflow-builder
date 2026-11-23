@@ -38,7 +38,7 @@ const EVERY_SOFTWARE: WatchlistView = {
 }
 const NOT_CHECKED_ON_ITS_OWN: WatchlistView = { ...EVERY_SOFTWARE, schedule: null }
 
-const lr = (change: Partial<LastRun>): LastRun => ({ run_id: 'run_x', state: 'succeeded', at: '2026-11-05T01:00:00Z', test: false, declined_by: null, decline_reason: null, approved_by: [], proposed: 0, written: 0, tickets: false, you_can_decide: false, retryable: false, reason: null, stop: null, ...change })
+const lr = (change: Partial<LastRun>): LastRun => ({ run_id: 'run_x', state: 'succeeded', at: '2026-11-05T01:00:00Z', test: false, declined_by: null, decline_reason: null, approved_by: [], proposed: 0, written: 0, tickets: false, you_can_decide: false, you_can_open: false, retryable: false, reason: null, stop: null, ...change })
 const AGENT = agentUseCase as UseCaseView
 const SCHEDULE = (watchlistUseCase as UseCaseView).schedule
 const flow = (id: string, change: Partial<UseCaseView>): UseCaseView => ({ ...AGENT, use_case_id: id, name: `Workflow ${id}`, ...change })
@@ -46,8 +46,8 @@ const flow = (id: string, change: Partial<UseCaseView>): UseCaseView => ({ ...AG
 const EVERY_WORKFLOW: UseCaseView[] = [
   flow('uc_new', { schedule: null }),
   flow('uc_paused', { state: 'paused', schedule: SCHEDULE, last_run: lr({}) }),
-  flow('uc_stopped', { schedule: SCHEDULE, last_run: lr({ state: 'failed', retryable: true, reason: 'AgentError' }) }),
-  flow('uc_test', { last_run: lr({ state: 'failed', test: true, reason: 'AgentError' }) }),
+  flow('uc_stopped', { needs_you: 'stopped', schedule: SCHEDULE, last_run: lr({ state: 'failed', you_can_open: true, retryable: true, reason: 'AgentError' }) }),
+  flow('uc_test', { needs_you: 'stopped', last_run: lr({ state: 'failed', you_can_open: true, test: true, reason: 'AgentError' }) }),
   flow('uc_waiting', { schedule: SCHEDULE, last_run: lr({ state: 'awaiting_approval', proposed: 2, tickets: true }) }),
   flow('uc_declined', { last_run: lr({ state: 'rejected', declined_by: 'bob', decline_reason: 'Not this week' }) }),
   flow('uc_written', { last_run: lr({ written: 1, tickets: true, approved_by: ['bob'] }) }),
@@ -108,7 +108,7 @@ describe('a list in the chat says what its page says', () => {
     const page = rowsIn(render(<WorkflowsPage heading="Workflows" now={NOW} />, { path: '/workflows' }), 'data-workflow-id')
     expect(page).toHaveLength(EVERY_WORKFLOW.length)
     const said = page.map(([, row]) => row).join(' | ')
-    for (const state of ['no runs yet On', 'Paused', 'Stopped', 'Stopped Test run', 'waiting for a yes Waiting for a yes', 'declined by Bob', 'approved by Bob On']) expect(said).toContain(state)
+    for (const state of ['no runs yet On', 'Paused', 'stopped Needs you', 'stopped Needs you Test run', 'waiting for a yes On · waiting for an Approver’s yes', 'declined by Bob', 'approved by Bob On']) expect(said).toContain(state)
     expect(rowsIn(panel({ kind: 'workflows' }), 'data-workflow-id')).toEqual(page)
   })
 

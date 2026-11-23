@@ -6947,6 +6947,35 @@
           }
         ]
       },
+      "FixItem": {
+        "additionalProperties": false,
+        "properties": {
+          "use_case_id": {
+            "title": "Use Case Id",
+            "type": "string"
+          },
+          "use_case_name": {
+            "title": "Use Case Name",
+            "type": "string"
+          },
+          "why": {
+            "description": "Why it can't run: its version needs a fix, or the safety checker refused its writes.",
+            "enum": [
+              "needs_a_fix",
+              "writes_refused"
+            ],
+            "title": "Why",
+            "type": "string"
+          }
+        },
+        "required": [
+          "use_case_id",
+          "use_case_name",
+          "why"
+        ],
+        "title": "FixItem",
+        "type": "object"
+      },
       "FollowingUpItem": {
         "additionalProperties": false,
         "properties": {
@@ -7357,6 +7386,14 @@
             "title": "Drafts",
             "type": "array"
           },
+          "fixes": {
+            "description": "Workflows that are on and can't run, which this person has a button for: a version that needs a fix, or writes the safety checker refused (for an Operator). They are part of Needs you.",
+            "items": {
+              "$ref": "#/components/schemas/FixItem"
+            },
+            "title": "Fixes",
+            "type": "array"
+          },
           "following_up": {
             "description": "This person's own requests to the team, Ask the team and Report to support, the newest first, with the status and the latest reply. The first 50. A request marked Done leaves after 30 days.",
             "items": {
@@ -7485,6 +7522,7 @@
           "replied",
           "coming_up",
           "workflows",
+          "fixes",
           "addresses",
           "connections",
           "changed_in_n8n"
@@ -7716,6 +7754,11 @@
             "description": "True when the person asking may decide the yes this run waits for. False for any other run, and in an answer that is not for a person.",
             "title": "You Can Decide",
             "type": "boolean"
+          },
+          "you_can_open": {
+            "description": "True when the run stopped and is in the Needs you of the person asking: an Operator whose work it is. False for any other run.",
+            "title": "You Can Open",
+            "type": "boolean"
           }
         },
         "required": [
@@ -7730,6 +7773,7 @@
           "written",
           "tickets",
           "you_can_decide",
+          "you_can_open",
           "retryable",
           "reason",
           "stop"
@@ -15010,6 +15054,25 @@
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "needs_you": {
+            "anyOf": [
+              {
+                "enum": [
+                  "approval",
+                  "stopped",
+                  "declined",
+                  "question",
+                  "fix"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why this workflow is in the Needs you of the person asking, or null when it is not: a yes they may give, a run of theirs that stopped, a test run an Approver declined, a question to answer, or a workflow that can't run and needs a fix. It holds exactly when their Home has a row for the workflow.",
+            "title": "Needs You"
           },
           "next_run_at": {
             "anyOf": [
