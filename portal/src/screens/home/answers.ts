@@ -1,9 +1,9 @@
-import type { CantRowView, CapabilitiesView, CapabilityView, OfflineReply, PartView, PauseReply, PlannerReply, QuestionReply, RemoveSoftwareReply, ResumeReply, RowKind, ScheduleView, UnderstoodRowView, UseCaseView, WatchlistView } from '../../api/types'
+import type { CantRowView, CapabilitiesView, CapabilityView, Day, OfflineReply, PartView, PauseReply, PlannerReply, QuestionReply, RemoveSoftwareReply, ResumeReply, RowKind, ScheduleView, UnderstoodRowView, UseCaseView, WatchlistView } from '../../api/types'
 import { andList, count, type NameOf } from '../run/words'
-import { checksOnItsOwn, heldWords as heldScheduleWords, PAUSED_WORDS, repeatWords } from '../software/software'
+import { checksOnItsOwn, clockWords, everyWords, heldWords as heldScheduleWords, PAUSED_WORDS, repeatWords } from '../software/software'
 import { scheduleZoneName } from '../workflows/times'
 import { isRunning, lastRunLine, lifeWords, nextRunWords, type Row } from '../workflows/workflow'
-import { lowerFirst, readWhen, scheduleOf } from './card'
+import { bareHour, lowerFirst, readWhen, scheduleOf } from './card'
 import { sayChanged } from './changed'
 import { cantOnCard, crossWords, quote, watchlistRuns } from './parts'
 
@@ -187,6 +187,60 @@ export function ownTimeOffer(ownTime: PartView, view: WatchlistView | null | und
   const line = crossWords(ownTime, { watchlist: runs })
   return { says: stopped === null ? [line] : [line, stopped], label: request, request, main: stopped === null }
 }
+
+/** The sketch's watch card, for software not watched yet beside a time of its own (ADR 0053): how to add it, in the sketch's words. */
+export interface WatchChoice {
+  readonly lead: string
+  readonly question: string
+  /** Add it and move the whole watchlist to the time asked, keeping its time when the words name none. */
+  readonly move: { readonly label: string; readonly schedule: { readonly day: ScheduleView['day']; readonly at: string } }
+  readonly keep: string
+}
+
+const WEEKDAY_NAMES: Partial<Record<ScheduleView['day'], string>> = {
+  monday: 'Monday',
+  tuesday: 'Tuesday',
+  wednesday: 'Wednesday',
+  thursday: 'Thursday',
+  friday: 'Friday',
+  saturday: 'Saturday',
+  sunday: 'Sunday',
+}
+
+/** Times of day the schedule can't hold as one time, which `readWhen` doesn't read. */
+const UNREAD_TIMES = /\b(?:morning|evening|afternoon|night|tonight)s?\b/i
+
+/** The watch card's words and choices while the watchlist checks on its own. Null otherwise, and the card stays as it was. */
+export function watchChoice(name: string, said: string, view: WatchlistView | null | undefined): WatchChoice | null {
+  const runs = checksOnItsOwn(view) ? (view?.schedule ?? null) : null
+  if (!view || !runs) return null
+  // A bare hour, as "at 9", or a time of day it can't read, as "every evening", could be any time: the old offer's edit card
+  // asks, never a guess here.
+  if (bareHour(said) !== null || UNREAD_TIMES.test(said)) return null
+  const when = readWhen(said)
+  if (when.often === '' && when.at === '') return null
+  // The day read, or the watchlist's own for a time alone, as "at 5pm". Its time stays only when the words name none.
+  const read = when.often === '' ? null : scheduleOf(when).day
+  const day = read ?? runs.day
+  const clock = when.at === '' ? null : clockWords(when.at)
+  const slot = (named: Day | null) => [named === null ? null : everyWords(named), clock].filter((part) => part !== null).join(' at ')
+  const total = view.software.length
+  const move = { label: `Add it, and check all ${String(total + 1)} ${slot(day)}`, schedule: { day, at: when.at === '' ? runs.at : when.at } }
+  const weekly = WEEKDAY_NAMES[runs.day]
+  return {
+    lead: `${name} isn’t on your Software watchlist yet. The watchlist is a workflow that checks ${String(total)} software, ${watchlistRunsWords(runs)}, and you asked for ${slot(read)}.`,
+    question: `How should I add ${name}?`,
+    move,
+    keep: weekly ? `Add it, keep ${weekly}s` : 'Add it, keep the same days',
+  }
+}
+
+/** The line when the watch card's move can't be made, because Add didn't finish: the watchlist keeps its own schedule. */
+export const stillChecksWords = (view: Pick<WatchlistView, 'schedule'>): string | null =>
+  view.schedule ? `The watchlist still checks ${watchlistRunsWords(view.schedule)}.` : null
+
+/** The sketch's line once the watch card's change is saved. */
+export const watchSavedWords = (version: number, total: number, runs: string): string => `Saved as version ${String(version)}. The Software watchlist checks ${String(total)} software, ${runs}.`
 
 /** The Planner's release words, as its `RELEASE_ROOTS`: a request with one asks about the version or the releases. */
 const VERSION_WORD = /\b(?:versions?|releas(?:e|es|ed|ing)|upgrad(?:e|es|ed|ing)|patch(?:es|ed|ing)?)\b/i

@@ -159,11 +159,11 @@ const namedOnCard = (reply: CantReply, part: PartView): boolean => reply.cant.so
 export const isOwnTime = (reply: CantReply, row: CantRowView): boolean => reply.parts.some((part) => part.reason === 'own_time' && sameWords(part.text, row.text))
 
 /**
- * A watch request’s time of its own, when the software is already watched: its card says the watchlist’s one schedule and offers
- * to move the whole watchlist, so the time is drawn nowhere else. Null for software not watched yet, whose time stays above it.
+ * A watch request’s time of its own, which the software card holds, so the time is drawn nowhere else. A watched software’s card
+ * says the watchlist’s one schedule and offers to move the whole watchlist; one not watched yet asks how to add it (the watch card).
  */
 export function ownTimeOnCard(reply: CantReply): PartView | null {
-  if (reply.alternative?.answer !== 'watchlist' || reply.alternative.already_listed === null) return null
+  if (reply.alternative?.answer !== 'watchlist') return null
   return reply.parts.find((part) => part.reason === 'own_time' && namedOnCard(reply, part)) ?? null
 }
 
@@ -206,7 +206,7 @@ export function leftoverParts(reply: PlannerReply): PartView[] {
       return []
     case 'cant': {
       // A card names each can't with something to build, once. One with nothing to build, as a yes that can't be skipped, is drawn
-      // here, and so is a time of its own beside software not watched yet, with the offer to move the whole watchlist.
+      // here. A time of its own beside a software card is the card's.
       const here = (part: PartView) => !namedOnCard(reply, part) || (part.reason === 'own_time' && ownTimeOnCard(reply) === null)
       return reply.alternative?.answer === 'setup_card' ? [] : above(reply.parts.filter((part) => here(part) && part.reason !== 'needs_the_rest'))
     }

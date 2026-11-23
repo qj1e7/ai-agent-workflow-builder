@@ -395,6 +395,33 @@ describe('a clash inside a watch answer', () => {
   })
 })
 
+describe('the prototype’s watch card', () => {
+  const WATCHED = statuses as WatchlistView
+  const own = 'The Software watchlist checks all your software together, on one schedule. I can’t give one software its own time yet.'
+  const ownTime = (text: string): CantReply => ({
+    trace_id: null,
+    answer: 'cant',
+    cant: [{ kind: 'schedule', text, note: own, needs: 'new_tool', system: null, instead: null, unsupported: false }],
+    alternative: { trace_id: null, answer: 'watchlist', word: 'Add', software: 'Grafana', already_listed: null, also: null, covers: [], parts: [] },
+    draft_words: null,
+    parts: [
+      { text: 'Add Grafana to the watchlist', mark: 'will_do', reason: null, note: null, choices: [] },
+      { text, mark: 'cant', reason: 'own_time', note: null, choices: [] },
+    ],
+  })
+
+  it('asks how to add software not watched yet, in the prototype’s words, with the time on the card only', () => {
+    const typed = 'Add Grafana to the watchlist and check it every day'
+    const html = draw(ownTime('every day'), { watched: WATCHED, typed })
+    const shown = text(html)
+    expect(shown).toContain('Grafana isn’t on your Software watchlist yet. The watchlist is a workflow that checks 6 software, every Monday at 9:00, and you asked for every day.')
+    expect(shown).toContain('How should I add Grafana?')
+    expect(buttons(html)).toEqual(expect.arrayContaining(['Add it, and check all 7 every day', 'Add it, keep Mondays']))
+    expect(shown).not.toContain('Make the Software watchlist run')
+    expect(text(draw(ownTime('every day'), { watched: WATCHED, typed, leftovers: true })), 'the card holds the time').toBe('')
+  })
+})
+
 describe('a release check with the rest of the request', () => {
   it('draws its own card, then the rest of the request as a card of its own', () => {
     const release: SetupCardReply = {
@@ -1075,7 +1102,7 @@ describe('the core release check, already on the watchlist', () => {
     expect(inChat(everyDay)).not.toContain('Draft it as an n8n workflow')
     const email: CantRowView = { kind: 'where', text: 'email me', note: 'I can\'t send email yet.', needs: 'new_system', system: 'email', instead: null, unsupported: false }
     expect(inChat({ ...everyDay, cant: [OWN_TIME, email], parts: [...everyDay.parts, asked('email me', 'cant', 'cant_do')] })).toContain('Draft it as an n8n workflow')
-    expect(inChat({ ...everyDay, alternative: watch({ already_listed: null }) })).toContain('Draft it as an n8n workflow')
+    expect(inChat({ ...everyDay, alternative: watch({ already_listed: null }) }), 'the watch card says it too').not.toContain('Draft it as an n8n workflow')
   })
 
   it('names the watchlist’s schedule in its own zone', () => {
@@ -1123,9 +1150,10 @@ describe('a can’t a card already names', () => {
     expect(text(draw(tooOften, { watched: statuses as WatchlistView })).match(/every 2 hours/g)).toHaveLength(1)
   })
 
-  it('keeps a time of its own above a software that isn’t watched yet, with its offer, and off the What I can’t do yet card', () => {
+  it('keeps a time of its own on the card of a software that isn’t watched yet, and off the What I can’t do yet card', () => {
     const own: CantReply = { trace_id: null, answer: 'cant', cant: [row('every day at 8am', 'The Software watchlist checks all your software together, on one schedule. I can\'t give one software its own time yet.')], alternative: alternative(false), draft_words: null, parts: [crossed('every day at 8am', 'own_time')] }
-    expect(buttons(draw(own, { leftovers: true }))).toEqual(['Make the Software watchlist run every day at 8am'])
+    expect(buttons(draw(own, { leftovers: true })), 'the card holds the time, never a line above it').toEqual([])
+    expect(text(draw(own)), 'while the watchlist isn’t read, the card keeps the cross’s words').toContain('I can’t give one software its own time yet.')
     expect(text(draw(own))).not.toContain('What I can’t do yet')
     expect(sayOf(own)).toBe('Grafana is software, so it belongs on the Software watchlist, which checks the software on it for new releases.')
   })
