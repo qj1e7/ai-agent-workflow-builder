@@ -157,7 +157,7 @@ describe('Build it with any n8n block', () => {
   const ANY_BLOCK = 'Build it with any n8n block'
   const cantWith = (words: string | null): CantReply => ({ ...(cant as CantReply), draft_words: words })
   const partWith = (words: string | null): PartReply => ({ ...(part as PartReply), draft_words: words })
-  const cardWith = (words: string | null): SetupCardReply => ({ ...(setupCard as SetupCardReply), draft_words: words })
+  const cardWith = (words: string | null): SetupCardReply => ({ ...(setupCard as SetupCardReply), similar: null, draft_words: words })
   const draw = (reply: PlannerReply, me?: Me) => render(<Answer reply={reply} typed="x" page={PAGE} />, me ? { me } : {})
   const link = (html: string) => [...html.matchAll(/<button\b([^>]*)>([^<]*)<\/button>/g)].find((m) => m[2] === ANY_BLOCK)?.[1] ?? null
 
