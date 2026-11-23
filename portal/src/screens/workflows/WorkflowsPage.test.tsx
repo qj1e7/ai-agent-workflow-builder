@@ -55,9 +55,9 @@ interface Setup {
 /** The platform answers for the person asking. In these tests only Bob may decide the waiting run. */
 const asSeenBy = (me: Me, useCase: UseCaseView): UseCaseView =>
   useCase.last_run?.state === 'awaiting_approval'
-    ? { ...useCase, last_run: { ...useCase.last_run, you_can_decide: me.id === 'bob' } }
+    ? { ...useCase, needs_you: me.id === 'bob' ? 'approval' : null, last_run: { ...useCase.last_run, you_can_decide: me.id === 'bob' } }
     : useCase.last_run?.state === 'failed'
-      ? { ...useCase, last_run: { ...useCase.last_run, you_can_open: me.id === 'alice' } } // Only Alice started the stopped run.
+      ? { ...useCase, needs_you: me.id === 'alice' ? 'stopped' : null, last_run: { ...useCase.last_run, you_can_open: me.id === 'alice' } } // Only Alice started the stopped run.
       : useCase
 
 function render({ me = ALICE, useCases = [STOPPED_BUGS, WAITING_WATCHLIST, LANGGRAPH], state, home, drafts, request, path = '/workflows', made }: Setup = {}): string {
@@ -161,11 +161,13 @@ describe('the Workflows list', () => {
     expect(text(rowOf(html, 'uc_bugs'))).toContain('Test run')
   })
 
-  it('shows Paused alone for a paused workflow, whatever its last run, and keeps that run in the line', () => {
-    const html = render({ useCases: [{ ...STOPPED_BUGS, state: 'paused' }] })
+  it('shows Paused for a paused workflow, whatever its last run, unless Home has a row for it, and keeps that run in the line', () => {
+    const paused = { ...STOPPED_BUGS, state: 'paused' } as UseCaseView
+    const html = render({ me: CAROL, useCases: [paused] })
     expect(rowOf(html, 'uc_bugs')).toMatch(/data-life="paused"[^>]*>.*Paused<\/span>/)
     expect(rowOf(html, 'uc_bugs')).not.toContain('Needs you</span>')
     expect(subOf(html, 'uc_bugs')).toMatch(/last run .*, an agent could not finish its work$/)
+    expect(rowOf(render({ useCases: [paused] }), 'uc_bugs'), 'Alice’s Home lists the stopped run, so the pill says so').toMatch(/Needs you<\/span>/)
   })
 
   it('reads the same for an Approver as for an Operator', () => {

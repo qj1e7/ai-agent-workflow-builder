@@ -23,7 +23,7 @@ import { SidePanel } from './SidePanel'
 const ALICE: Me = { id: 'alice', display: 'Alice', roles: ['operator', 'approver'] }
 const BOB: Me = { id: 'bob', display: 'Bob', roles: ['approver'] }
 const NOW = new Date('2026-11-05T15:00:00+08:00')
-const STOPPED = stopped as UseCaseView
+const STOPPED = { ...(stopped as UseCaseView), needs_you: 'stopped' } as UseCaseView
 const WATCHLIST = statuses as WatchlistView
 const REDIS = 'sw_01JBW00000000000000000003'
 const REGISTRY = capabilities as CapabilitiesView

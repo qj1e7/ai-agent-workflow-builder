@@ -54,22 +54,21 @@ export const WAITING_ON_AN_APPROVER = 'On · waiting for an Approver’s yes'
 export const LAST_RUN_STOPPED = 'On · last run stopped'
 
 /**
- * The workflow's one state, in the four words ADR 0053 allows: Paused, Draft, Needs you or On. Needs you holds only what the person has an
- * action on, so it agrees with the Needs you list: a version that needs a fix (an Operator also when the safety checker refused its
- * writes), a stopped run the platform puts in this person's Needs you (`you_can_open`), and a run waiting for a yes they may give.
- * Everyone else reads On, with who it waits for. A lost run and a run's own result (Done, Nothing new, Declined, Skipped) stay in Recent runs.
+ * The workflow's one state, in the four words ADR 0053 allows: Needs you, Paused, Draft or On. The platform decides Needs you for the person
+ * (`needs_you`), from the same lists Home draws its rows from, so the pill, the filter and Home cannot disagree, whatever the workflow's state.
+ * Otherwise a workflow waiting on someone else's yes reads On, with that said, and a stopped run that is not this person's reads On with a note.
+ * A lost run and a run's own result (Done, Nothing new, Declined, Skipped) stay in Recent runs.
  */
-export function statusOf(useCase: Pick<UseCaseView, 'state' | 'last_run'> & Partial<Pick<UseCaseView, 'grade' | 'move_refused'>>, operator: boolean): Status {
+export function statusOf(useCase: Pick<UseCaseView, 'state' | 'last_run'> & Partial<Pick<UseCaseView, 'needs_you'>>): Status {
+  if (useCase.needs_you) return { four: 'needs', label: 'Needs you', tone: useCase.needs_you === 'approval' ? 'wait' : 'bad' }
   if (useCase.state === 'paused') return { four: 'paused', label: 'Paused', tone: undefined }
   if (useCase.state === 'draft') return { four: 'draft', label: 'Draft', tone: undefined }
-  if (!useCase.move_refused && (useCase.grade === 'needs_a_fix' || (useCase.grade === 'writes_refused' && operator))) return { four: 'needs', label: 'Needs you', tone: 'bad' }
   const { last_run: last } = useCase
-  if (!last) return { four: 'on', label: 'On', tone: undefined }
-  switch (last.state) {
+  switch (last?.state) {
     case 'failed':
-      return last.you_can_open ? { four: 'needs', label: 'Needs you', tone: 'bad' } : { four: 'on', label: LAST_RUN_STOPPED, tone: 'ok' }
+      return { four: 'on', label: LAST_RUN_STOPPED, tone: 'ok' }
     case 'awaiting_approval':
-      return last.you_can_decide ? { four: 'needs', label: 'Needs you', tone: 'wait' } : { four: 'on', label: WAITING_ON_AN_APPROVER, tone: 'wait' }
+      return { four: 'on', label: WAITING_ON_AN_APPROVER, tone: 'wait' }
     default:
       return { four: 'on', label: 'On', tone: undefined }
   }
@@ -430,13 +429,13 @@ export interface Row {
   readonly action: RowAction | null
 }
 
-function kept(row: Row, filter: Filter, words: string, operator: boolean): boolean {
+function kept(row: Row, filter: Filter, words: string): boolean {
   if (words && !`${row.useCase.name} ${row.useCase.instruction}`.toLowerCase().includes(words)) return false
   switch (filter) {
     case 'all':
       return true
     default:
-      return statusOf(row.useCase, operator).four === filter
+      return statusOf(row.useCase).four === filter
   }
 }
 
@@ -445,7 +444,7 @@ const NOTHING: ReadonlySet<string> = new Set()
 /** A row's pill, line and action all read its workflow's last run. When Needs you already offers that run, the row keeps only its status, so no run is offered twice. */
 export function rowsOf(
   useCases: readonly UseCaseView[],
-  viewer: Viewer,
+  _viewer: Viewer,
   filter: Filter,
   query: string,
   runsInNeeds: ReadonlySet<string> = NOTHING,
@@ -456,7 +455,7 @@ export function rowsOf(
     return { useCase, action: action && runsInNeeds.has(action.runId) ? null : action }
   })
   const needsYou = (row: Row) => (row.action ? 0 : 1)
-  return rows.filter((row) => kept(row, filter, words, viewer.operator)).sort((a, b) => needsYou(a) - needsYou(b))
+  return rows.filter((row) => kept(row, filter, words)).sort((a, b) => needsYou(a) - needsYou(b))
 }
 
 export type RunNowOutcome = Outcome<{ readonly run_id: string }>

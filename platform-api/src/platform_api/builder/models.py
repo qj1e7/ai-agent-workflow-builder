@@ -286,6 +286,13 @@ class UseCaseView(WireModel):
         description="The newest run of this workflow, whatever its state. Null when it has "
         "never run."
     )
+    needs_you: Literal["approval", "stopped", "declined", "question"] | None = Field(
+        default=None,
+        description="Why this workflow is in the Needs you of the person asking, or null when it "
+        "is not: a yes they may give, a run of theirs that stopped, a test run an Approver "
+        "declined, or a question to answer. It holds exactly when their Home has a row for the "
+        "workflow, whatever state the workflow is in.",
+    )
     left_out: list[str] = Field(
         description="The parts of the request it was set up without, in the person's own words "
         "(plan 4.6). Text for people to read: nothing runs from it."

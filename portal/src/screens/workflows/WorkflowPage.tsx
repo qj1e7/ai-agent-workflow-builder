@@ -284,7 +284,7 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
           <p className={styles['kind']}>Workflow</p>
           <h1 tabIndex={-1}>{useCase.name}</h1>
         </div>
-        <StatusPills useCase={useCase} operator={viewer.operator} test={useCase.last_run?.test === true} large />
+        <StatusPills useCase={useCase} test={useCase.last_run?.test === true} large />
       </div>
       {n8nAccess ? <ViewTabs main="Summary" shown={shownView} onShow={showView} className={styles['views']} /> : null}
       {shownView === 'n8n' ? (

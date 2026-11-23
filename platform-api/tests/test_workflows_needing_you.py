@@ -51,6 +51,7 @@ def test_the_set_equals_the_use_cases_in_home_lists():
         asks=("a",), stopped=("s", "p"), declined=("d",), questions=("q",), waiting=("w",)
     )
     home = {
-        r.run.use_case_id for r in (*person.asks, *person.stopped, *person.declined, *person.questions)
+        r.run.use_case_id
+        for r in (*person.asks, *person.stopped, *person.declined, *person.questions)
     }
     assert set(cast(dict[str, str], workflows_needing_you(person))) == home

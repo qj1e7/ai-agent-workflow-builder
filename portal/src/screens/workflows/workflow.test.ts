@@ -230,7 +230,7 @@ describe('a workflow row’s line', () => {
     }
     expect(statusOf({ ...base, needs_you: 'approval' }).tone).toBe('wait')
     expect(statusOf({ ...base, needs_you: 'stopped' }).tone).toBe('bad')
-    for (const grade of ['needs_a_fix', 'writes_refused'] as const) expect(statusOf({ ...base, grade, needs_you: null }).four, `${grade} has no Home row, so it is not Needs you`).toBe('on')
+    for (const grade of ['needs_a_fix', 'writes_refused'] as const) expect(statusOf({ ...base, ...{ grade }, needs_you: null }).four, `${grade} has no Home row, so it is not Needs you`).toBe('on')
     expect(statusOf({ ...base, last_run: { ...LAST, state: 'failed' }, needs_you: null }).four, 'Carol’s workflow: a stopped run that is not hers').toBe('on')
     expect(statusOf({ ...base, last_run: { ...LAST, state: 'failed' } }).four, 'no Needs you from the platform').toBe('on')
   })
@@ -508,9 +508,9 @@ describe('the rows of the list', () => {
   const last = (change: Partial<LastRun>): LastRun => ({ ...LAST, declined_by: null, ...change })
   const nudge: UseCaseView = { ...AGENTS, use_case_id: 'uc_nudge', name: 'Stale ticket nudge', instruction: 'Ask owners about old tickets.', state: 'paused', last_run: null }
   const bugs: UseCaseView = { ...AGENTS, use_case_id: 'uc_bugs', name: 'Morning bug report check', instruction: 'Raise a ticket for each new bug report.', last_run: last({ run_id: 'run_bugs', state: 'failed', retryable: true, reason: 'AgentError' }) }
-  const watchlist = (viewer: Viewer): UseCaseView => ({ ...WATCHLIST, needs_you: viewer === BOB ? 'approval' : null, last_run: last({ run_id: 'run_01JB8', state: 'awaiting_approval', you_can_decide: viewer === BOB }) })
+  const watchlist = (viewer: Viewer): UseCaseView => ({ ...WATCHLIST, needs_you: viewer === BOB ? ('approval' as const) : null, last_run: last({ run_id: 'run_01JB8', state: 'awaiting_approval', you_can_decide: viewer === BOB }) })
   /** Only Alice started the stopped run, so only she has it in Needs you. Carol is an Operator, but it is not her work. */
-  const useCasesFor = (viewer: Viewer) => [nudge, watchlist(viewer), { ...bugs, needs_you: viewer.id === 'alice' ? 'stopped' : null, last_run: last({ ...bugs.last_run, you_can_open: viewer.id === 'alice' }) }]
+  const useCasesFor = (viewer: Viewer) => [nudge, watchlist(viewer), { ...bugs, needs_you: viewer.id === 'alice' ? ('stopped' as const) : null, last_run: last({ ...bugs.last_run, you_can_open: viewer.id === 'alice' }) }]
   const ids = (rows: { useCase: UseCaseView }[]) => rows.map((row) => row.useCase.use_case_id)
 
   it('put the rows that need you first and keep the platform’s order for the rest', () => {

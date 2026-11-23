@@ -63,7 +63,7 @@ function Summary({ useCase, me, now }: { useCase: UseCaseView; me: Me; now: Date
   return (
     <>
       <div>
-        <StatusPills useCase={useCase} operator={viewerOf(me).operator} test={last?.test === true} />
+        <StatusPills useCase={useCase} test={last?.test === true} />
       </div>
       <p>{sentenceOf(useCase)}</p>
       {leftOutWords(useCase.left_out) ? <p className="muted">{leftOutWords(useCase.left_out)}</p> : null}

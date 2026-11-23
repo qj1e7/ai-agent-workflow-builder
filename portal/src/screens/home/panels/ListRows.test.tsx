@@ -46,8 +46,8 @@ const flow = (id: string, change: Partial<UseCaseView>): UseCaseView => ({ ...AG
 const EVERY_WORKFLOW: UseCaseView[] = [
   flow('uc_new', { schedule: null }),
   flow('uc_paused', { state: 'paused', schedule: SCHEDULE, last_run: lr({}) }),
-  flow('uc_stopped', { schedule: SCHEDULE, last_run: lr({ state: 'failed', you_can_open: true, retryable: true, reason: 'AgentError' }) }),
-  flow('uc_test', { last_run: lr({ state: 'failed', you_can_open: true, test: true, reason: 'AgentError' }) }),
+  flow('uc_stopped', { needs_you: 'stopped', schedule: SCHEDULE, last_run: lr({ state: 'failed', you_can_open: true, retryable: true, reason: 'AgentError' }) }),
+  flow('uc_test', { needs_you: 'stopped', last_run: lr({ state: 'failed', you_can_open: true, test: true, reason: 'AgentError' }) }),
   flow('uc_waiting', { schedule: SCHEDULE, last_run: lr({ state: 'awaiting_approval', proposed: 2, tickets: true }) }),
   flow('uc_declined', { last_run: lr({ state: 'rejected', declined_by: 'bob', decline_reason: 'Not this week' }) }),
   flow('uc_written', { last_run: lr({ written: 1, tickets: true, approved_by: ['bob'] }) }),

@@ -278,6 +278,7 @@ def _view(
     team_zone: str,
     moving: bool = False,
     holder: N8nHolderView | None = None,
+    needs_you: str | None = None,
 ) -> UseCaseView:
     template = TEMPLATES[row["template"]]
     state = _state(lifecycle_of(row))
@@ -310,6 +311,7 @@ def _view(
             for a in agents
         ],
         last_run=last_run,
+        needs_you=cast(Any, needs_you),
         left_out=list(row["left_out"]),
         blocks=[] if row["document"] is None else blocks_of(row["document"]),
         grade=_grade(row),
@@ -601,6 +603,11 @@ class Builder:
         now = self._db.clock()
         moving = await self._moving(rows)
         holders = {row["use_case_id"]: await self._holder(row) for row in rows if row["held_by"]}
+        needing: Mapping[UseCaseId, str] = (
+            {}
+            if self._history is None or viewer is None
+            else await self._history.needing_you(viewer)
+        )
         return [
             _view(
                 row,
@@ -611,6 +618,7 @@ class Builder:
                 self._zone,
                 row["use_case_id"] in moving,
                 holders.get(row["use_case_id"]),
+                needing.get(row["use_case_id"]),
             )
             for row in rows
         ]

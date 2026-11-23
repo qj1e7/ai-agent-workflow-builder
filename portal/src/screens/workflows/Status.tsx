@@ -18,8 +18,8 @@ export function useChanges(value: string): number {
 const ICON = { wait: IconLock, bad: IconX, new: null, ok: null } as const
 
 /** One status, in the four words ADR 0053 allows: On, Paused, Draft or Needs you. A test run is marked beside it. */
-export function StatusPills({ useCase, operator, test = false, large = false }: { useCase: Pick<UseCaseView, 'state' | 'last_run'> & Partial<Pick<UseCaseView, 'grade' | 'move_refused'>>; operator: boolean; test?: boolean; large?: boolean }) {
-  const { four, label, tone } = statusOf(useCase, operator)
+export function StatusPills({ useCase, test = false, large = false }: { useCase: Pick<UseCaseView, 'state' | 'last_run'> & Partial<Pick<UseCaseView, 'needs_you'>>; test?: boolean; large?: boolean }) {
+  const { four, label, tone } = statusOf(useCase)
   const changes = useChanges(label)
   const Icon = four === 'needs' || tone === 'wait' ? ICON[tone ?? 'bad'] : four === 'paused' ? IconPause : four === 'draft' ? null : IconCheck
   return (

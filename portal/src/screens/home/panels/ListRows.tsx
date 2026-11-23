@@ -1,7 +1,5 @@
 import { useId, type ReactNode } from 'react'
 import { useDisplayName } from '../../../api/people'
-import { isOperator } from '../../../api/me'
-import { useMe } from '../../../api/queries'
 import type { PastDecisionView, UseCaseView, WatchedSoftwareView, WatchlistView } from '../../../api/types'
 import { OpenLink } from '../../../ui/OpenItem'
 import type { PanelItem } from '../../../ui/sidePanel'
@@ -35,8 +33,6 @@ function Row({ item, to, name, line, state, data, beside }: { item: PanelItem; t
 /** Workflow rows in the words of the Workflows page's rows: the name, "Mon 9:00 · last run …", and the same pill. Each opens the workflow, beside the chat when the chat drew it. */
 export function WorkflowRows({ useCases, label, now }: { useCases: readonly UseCaseView[]; label: string; now: Date }): ReactNode {
   const nameOf = useDisplayName()
-  const me = useMe().data
-  const operator = me === undefined ? null : isOperator(me)
   return (
     <ul className={styles['wl']} aria-label={label}>
       {useCases.map((useCase) => (
@@ -46,7 +42,7 @@ export function WorkflowRows({ useCases, label, now }: { useCases: readonly UseC
           to={workflowPath(useCase)}
           name={useCase.name}
           line={rowLine(useCase, now, nameOf)}
-          state={operator === null ? null : <StatusPills useCase={useCase} operator={operator} test={useCase.last_run?.test === true} />}
+          state={<StatusPills useCase={useCase} test={useCase.last_run?.test === true} />}
           data={{ 'data-workflow-id': useCase.use_case_id }}
           beside={<ExplainButton useCaseId={useCase.use_case_id} name={useCase.name} />}
         />

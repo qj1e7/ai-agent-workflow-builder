@@ -2,7 +2,7 @@
 
 All three read `UseCaseView.last_run`, so one run is never described two ways."""
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import Protocol
 
 from platform_api.builder.models import LastRunView, RunStopView
@@ -14,6 +14,10 @@ class RunHistory(Protocol):
     async def newest_runs(
         self, use_case_ids: Sequence[UseCaseId], viewer: Principal | None = None
     ) -> dict[UseCaseId, RunGist]: ...
+
+    async def needing_you(self, viewer: Principal) -> Mapping[UseCaseId, str]:
+        """The workflows in this person's Needs you, each with why."""
+        ...
 
 
 def last_run_view(gist: RunGist) -> LastRunView:

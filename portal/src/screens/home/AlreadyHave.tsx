@@ -1,6 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { isOperator } from '../../api/me'
-import { useMe, useUseCase } from '../../api/queries'
+import { useUseCase } from '../../api/queries'
 import { Button } from '../../ui/Button'
 import type { SimilarWorkflow } from '../../api/types'
 import { Card } from '../../ui/Card'
@@ -20,7 +19,6 @@ export function AlreadyHave({ similar, card }: { similar: SimilarWorkflow; card:
   const [another, setAnother] = useState(false)
   const main = useMainButton()
   const useCase = useUseCase(similar.use_case_id).data
-  const me = useMe().data
   if (another) return card
   const repo = useCase?.agents.flatMap((agent) => Object.entries(agent.values)).find(([input]) => /github/i.test(input))?.[1]
   const when = useCase?.schedule ? repeatWords(useCase.schedule) : 'when an Operator starts it'
@@ -28,7 +26,7 @@ export function AlreadyHave({ similar, card }: { similar: SimilarWorkflow; card:
   return (
     <Card
       title={useCase?.name ?? similar.name}
-      pill={useCase && me ? <StatusPills useCase={useCase} operator={isOperator(me)} /> : undefined}
+      pill={useCase ? <StatusPills useCase={useCase} /> : undefined}
       actions={
         <>
           <Button onClick={() => setAnother(true)}>Set up another</Button>

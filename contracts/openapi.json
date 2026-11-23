@@ -14985,6 +14985,24 @@
             "title": "Name",
             "type": "string"
           },
+          "needs_you": {
+            "anyOf": [
+              {
+                "enum": [
+                  "approval",
+                  "stopped",
+                  "declined",
+                  "question"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why this workflow is in the Needs you of the person asking, or null when it is not: a yes they may give, a run of theirs that stopped, a test run an Approver declined, or a question to answer. It holds exactly when their Home has a row for the workflow, whatever state the workflow is in.",
+            "title": "Needs You"
+          },
           "next_run_at": {
             "anyOf": [
               {
