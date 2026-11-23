@@ -574,7 +574,7 @@ describe('the Software watchlist', () => {
   })
 
   it('says it is moving to n8n once', () => {
-    const html = render({ useCase: { ...WATCHLIST, moving_to_n8n: true } as UseCaseView, watchlist: { ...watched, moving_to_n8n: true } as WatchlistView })
+    const html = render({ useCase: { ...WATCHLIST, moving_to_n8n: true } as UseCaseView, watchlist: { ...watched, moving_to_n8n: true } })
     expect(text(mainOf(html)).match(/Moving to n8n after this run\./g)).toHaveLength(1)
   })
 

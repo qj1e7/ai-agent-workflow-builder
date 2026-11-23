@@ -5,7 +5,7 @@ import { useErrorWords } from '../../api/context'
 import { newIdempotencyKey } from '../../api/idempotency'
 import { useLatch } from '../../api/latch'
 import { useDisplayName } from '../../api/people'
-import { useMe, useRuns, useStartRun, useUseCase } from '../../api/queries'
+import { useMe, useRuns, useStartRun, useUseCase, useWatchlist } from '../../api/queries'
 import type { Me, UseCaseView } from '../../api/types'
 import { useAddTheYesBack, useDeleteWorkflow, useMoveWorkflow, useRereadWorkflow, useRollback, useSaveWorkflowSchedule, useSweepOnFocus, useUseCaseInN8n } from '../../api/workflowQueries'
 import { OperatorsNote } from '../../shell/OperatorsNote'
@@ -196,7 +196,10 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
   const paused = useCase.state === 'paused'
   const controls = controlsOf(useCase, viewer)
   const menuActions = menuActionsOf(useCase, viewer)
-  const runNowLeads = mainActionOf(useCase, viewer) === 'run'
+  // The watchlist's Run now checks its list, so it waits for software to check, and is never drawn dead.
+  const watching = useWatchlist({ enabled: isWatchlist(useCase) })
+  const nothingToCheck = isWatchlist(useCase) && (watching.data?.software.length ?? 0) === 0
+  const runNowLeads = mainActionOf(useCase, viewer) === 'run' && !nothingToCheck
   const mayPause = controls.includes('pause')
   const banner = bannerOf({ useCase, viewer, now, nameOf })
   const gate = useCase.plan.some((block) => block.kind === 'approval')
@@ -278,7 +281,7 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
   // The Software watchlist is a workflow like the rest. Its list, and each software's page, are drawn inside it.
   const listed = isWatchlist(useCase)
   const software = useSearchParams()[0].get('software')
-  if (listed && software !== null && shownView === 'main') return <SoftwareRoute now={now} embedded rowId={software} />
+  if (listed && software !== null && shownView === 'main') return <SoftwareRoute now={now} rowId={software} held={held !== null} />
   const message: ToastMessage | null = said ? { id: said.id, text: said.text } : null
   return (
     <>
@@ -320,7 +323,7 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
             </p>
           ) : null}
           <RunLine stations={templateLine(useCase)} arrivedLive={null} settled={null} />
-          <div className={styles['pair']}>
+          <div className={listed ? undefined : styles['pair']}>
             {listed ? null : <When useCase={useCase} now={now} mayChange={mayChangeSchedule(useCase, viewer)} held={held ? cantChangeWords(held) : null} onSaved={say} />}
             {gate ? (
               <section className={styles['section']} aria-labelledby="who-says-yes">
@@ -334,7 +337,7 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
               </section>
             ) : null}
           </div>
-          {listed ? <SoftwareRoute now={now} embedded rowId={null} /> : null}
+          {listed ? <SoftwareRoute now={now} rowId={null} held={held !== null} /> : null}
           {runs.data ? (
             <RecentRuns runs={recent} now={now} nameOf={nameOf} firstRun={useCase.next_run_at && !paused ? nextRunWords(useCase, now) : null} />
           ) : (

@@ -3,17 +3,11 @@ import { Link, Navigate, useLocation, useNavigate, useParams, useSearchParams } 
 import { useErrorWords } from '../../api/context'
 import { useLatch } from '../../api/latch'
 import { useDisplayName } from '../../api/people'
-import { useMe, usePutAddressBack, useRemoveSoftware, useRestoreSoftware, useRun, useStartRun, useUseCase, useUseNewAddress, useWatchlist } from '../../api/queries'
-import type { LastCheckView, Me, WatchedSoftwareView, WatchlistView } from '../../api/types'
-import { useUseCaseInN8n } from '../../api/workflowQueries'
+import { useMe, usePutAddressBack, useRemoveSoftware, useRestoreSoftware, useRun, useUseNewAddress, useWatchlist } from '../../api/queries'
+import type { WatchedSoftwareView, WatchlistView } from '../../api/types'
 import { Button } from '../../ui/Button'
 import { IconChevronRight } from '../../ui/icons'
-import { Toast } from '../../ui/Toast'
-import { useView, ViewTabs } from '../../ui/ViewTabs'
-import { WorkflowInN8n } from '../workflows/InN8n'
-import { cantChangeWords, heldOf, theirsNote } from '../workflows/n8nHold'
 import { AddSoftware } from './AddSoftware'
-import { pressCheckNow } from './checkNow'
 import { FindSoftware } from './FindSoftware'
 import { askButtonId } from './NewAddress'
 import { Schedule } from './Schedule'
@@ -48,11 +42,9 @@ import {
   softwareInWorkflow,
   softwarePath,
   stateOf,
-  stoppedWords,
   watchRank,
 } from './software'
 import styles from './Software.module.css'
-import { dateAndClock, teamTime } from '../workflows/times'
 
 function useFocusOnceRendered(feedback: ChangeFeedback) {
   const focusedFor = useRef<ChangeFeedback | null>(null)
@@ -99,25 +91,6 @@ function Rows({ rows, checkedBy, now, pathOf }: RowsProps) {
   )
 }
 
-function CheckNow({ useCaseId }: { useCaseId: string }) {
-  const start = useStartRun()
-  const latch = useLatch()
-  const navigate = useNavigate()
-  const words = useErrorWords()
-  return (
-    <div className={styles['checkNow']}>
-      <Button loading={start.isPending} onClick={() => pressCheckNow(latch, start.mutate, useCaseId, (runId) => void navigate(`/runs/${runId}`))}>
-        Check now
-      </Button>
-      {start.isError ? (
-        <p className={styles['error']} role="alert">
-          {words(start.error)}
-        </p>
-      ) : null}
-    </div>
-  )
-}
-
 /**
  * The latest check's declined record, read from its run so the rows say it in the run's own words, and what happens next: the tickets
  * are proposed again at the next check, when one is due.
@@ -129,19 +102,6 @@ function useLastCheckDeclined(view: WatchlistView | null, nameOf: (id: string) =
   const declined = declinedOfSteps(run.data.approval.steps)
   if (!declined) return null
   return declinedWithNext(declined, declinedNext({ test: run.data.test, watchlist: true }, nextCheckOf(view), new Date()), nameOf)
-}
-
-function LastCheckStopped({ last }: { last: LastCheckView }) {
-  const run = useRun(last.run_id)
-  const whyStopped = run.data?.state === 'failed' ? (run.data.what_happened ?? null) : null
-  return (
-    <div className={styles['stopped']}>
-      <p>
-        <b>{stoppedWords(whyStopped)}</b> Started {dateAndClock(last.started_at)}, {teamTime()}.
-      </p>
-      <Link to={`/runs/${last.run_id}`}>Open the run</Link>
-    </div>
-  )
 }
 
 interface NoticeProps {
@@ -188,17 +148,14 @@ function Notice({ box, feedback, scheduled, paused, onUndo, onDismiss }: NoticeP
 interface LoadedProps {
   readonly view: WatchlistView | null
   readonly operator: boolean
-  /** Who has the watchlist open in n8n, if anyone, said in place of the schedule changes the platform would refuse. */
-  readonly held: string | null
-  readonly answeredAt: number
+  /** Someone has the watchlist open in n8n, so the platform would refuse a schedule change. The page says who, once. */
+  readonly held: boolean
   readonly now: Date
   /** Set on a software's own page. The Watchlist itself has none. */
   readonly rowId: string | null
-  /** Drawn inside the watchlist's workflow page, which already has Resume. */
-  readonly embedded: boolean
 }
 
-function Loaded({ view, operator, held, answeredAt, now, rowId, embedded }: LoadedProps) {
+function Loaded({ view, operator, held, now, rowId }: LoadedProps) {
   const [query, setQuery] = useState('')
   const [historyOpen, setHistoryOpen] = useState(false)
   const [feedback, dispatch] = useReducer(changeFeedback, NO_FEEDBACK)
@@ -241,11 +198,11 @@ function Loaded({ view, operator, held, answeredAt, now, rowId, embedded }: Load
   const declined = useLastCheckDeclined(view, nameOf)
   const checkedBy = checksOnItsOwn(view) ? CHECKER : null
 
-  const pathOf = (id: string) => (embedded && view ? softwareInWorkflow(view.use_case_id, id) : softwarePath(id))
+  const pathOf = (id: string) => (view ? softwareInWorkflow(view.use_case_id, id) : softwarePath(id))
   const landOn = useSearchParams()[0].get('row')
   if (rowId === null && landOn !== null && software.some((row) => row.id === landOn)) return <Navigate to={pathOf(landOn)} replace state={arrivedWith} />
 
-  const back = embedded && view ? `/workflows/${view.use_case_id}` : undefined
+  const back = view ? `/workflows/${view.use_case_id}` : undefined
   const notice = (
     <Notice
       box={noticeBox}
@@ -305,13 +262,11 @@ function Loaded({ view, operator, held, answeredAt, now, rowId, embedded }: Load
   const counted = countLine(software)
   return (
     <>
-      {embedded && counted ? (
+      {counted ? (
         <p className="muted" data-count-line>
           {counted}
         </p>
       ) : null}
-      {operator && view && !paused && software.length > 0 ? <CheckNow useCaseId={view.use_case_id} /> : null}
-      {view?.last_check?.state === 'failed' ? <LastCheckStopped last={view.last_check} /> : null}
       {notice}
       <section className={styles['section']} aria-label="Software we watch">
         {software.length > 0 || searching ? <FindSoftware query={query} shown={shown} onChange={setQuery} /> : null}
@@ -335,69 +290,28 @@ function Loaded({ view, operator, held, answeredAt, now, rowId, embedded }: Load
           <AddSoftware software={software} onShowRow={(id) => void navigate(pathOf(id))} onAdded={(name) => dispatch({ type: 'added', name })} />
         ) : null}
       </section>
-      {view?.moving_to_n8n ? (
-        <p className="muted" role="status">
-          Moving to n8n after this run.
-        </p>
-      ) : null}
       {view ? (
-        <Schedule schedule={view.schedule} version={view.version} operator={operator} useCaseId={view.use_case_id} paused={paused} answeredAt={answeredAt} onResumed={() => dispatch({ type: 'resumed' })} held={held} resumeHere={!embedded} />
+        <Schedule schedule={view.schedule} version={view.version} operator={operator} paused={paused} held={held} />
       ) : null}
-    </>
-  )
-}
-
-const TAKE_BACK_ON_TAB = 'Take it back on the In n8n tab to change it here.'
-
-interface Said {
-  readonly id: number
-  readonly text: string
-}
-
-/**
- * The Software watchlist is a workflow too, so people with n8n access get the In n8n tab every workflow has: its version, who holds
- * it, its canvas and Open in n8n editor. Its Summary is the watchlist itself.
- */
-function WatchlistInN8n({ useCaseId, me, now }: { useCaseId: string; me: Me; now: Date }) {
-  const useCase = useUseCase(useCaseId, true, { poll: REFRESH_MS })
-  const inN8n = useUseCaseInN8n(useCaseId, { enabled: true, poll: REFRESH_MS })
-  const [said, setSaid] = useState<Said | null>(null)
-  if (!useCase.data) {
-    return useCase.isError ? (
-      <p>
-        The workflow in n8n could not be loaded. <Button onClick={() => void useCase.refetch()}>Try again</Button>
-      </p>
-    ) : (
-      <p className="muted" role="status">
-        Loading the workflow in n8n
-      </p>
-    )
-  }
-  return (
-    <>
-      <WorkflowInN8n useCase={useCase.data} inN8n={inN8n} me={me} now={now} say={(text) => setSaid((before) => ({ id: (before?.id ?? 0) + 1, text }))} />
-      <Toast message={said} onDismiss={() => setSaid(null)} focusAfter={() => document.querySelector<HTMLElement>('main h1')} />
     </>
   )
 }
 
 interface RouteProps {
   readonly now: Date
-  /** The watchlist's workflow page draws the list itself, with its own tabs, Run now and Resume. */
-  readonly embedded?: boolean
   /** The software whose page it is, when the address does not carry it. */
   readonly rowId?: string | null
+  /** Someone has the watchlist open in n8n. The workflow page says so once, so here the schedule only holds still. */
+  readonly held?: boolean
 }
 
-export function SoftwareRoute({ now, embedded = false, rowId }: RouteProps) {
+/** The watchlist's list, its add form and its schedule. The workflow page around it holds the name, status, Run now, Pause and Resume. */
+export function SoftwareRoute({ now, rowId, held = false }: RouteProps) {
   const me = useMe()
   const watchlist = useWatchlist({ poll: REFRESH_MS })
   const { softwareId: fromAddress = null } = useParams()
   const softwareId = rowId === undefined ? fromAddress : rowId
-  const [view, showView] = useView()
   const operator = me.data?.roles.includes('operator') === true
-  const workflowId = watchlist.data?.use_case_id ?? ''
-  const useCase = useUseCase(workflowId, operator, { poll: REFRESH_MS })
   if ((watchlist.isError && !watchlist.data) || me.isError) {
     return (
       <>
@@ -413,15 +327,5 @@ export function SoftwareRoute({ now, embedded = false, rowId }: RouteProps) {
       </p>
     )
   }
-  const held = useCase.data ? heldOf(useCase.data, me.data) : null
-  const heldWords = held ? `${cantChangeWords(held)} ${held.kind === 'theirs' ? theirsNote(held) : TAKE_BACK_ON_TAB}` : null
-  const loaded = <Loaded view={watchlist.data} operator={operator} held={heldWords} answeredAt={Math.max(watchlist.dataUpdatedAt, watchlist.errorUpdatedAt)} now={now} rowId={softwareId} embedded={embedded} />
-  const workflow = !embedded && me.data.n8n_access === true && softwareId === null ? watchlist.data?.use_case_id : undefined
-  if (workflow === undefined) return loaded
-  return (
-    <>
-      <ViewTabs main="Software" shown={view} onShow={showView} className={styles['views']} />
-      {view === 'n8n' ? <WatchlistInN8n useCaseId={workflow} me={me.data} now={now} /> : loaded}
-    </>
-  )
+  return <Loaded view={watchlist.data} operator={operator} held={held} now={now} rowId={softwareId} />
 }

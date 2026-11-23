@@ -372,7 +372,8 @@ type ActionFacts = Pick<UseCaseView, 'template' | 'state' | 'schedule'> &
  * whose run can't go as asked: a version that needs a fix or has its writes refused, one deleted in n8n, or one that couldn't move to n8n.
  */
 export function mainActionOf(useCase: ActionFacts, viewer: Viewer): 'run' | null {
-  const runs = !useCase.schedule && !needsFix(useCase) && !useCase.deleted_in_n8n_at
+  // The watchlist has one list on one schedule, and Run now is how it is checked by hand, so it leads the page scheduled or not.
+  const runs = (isWatchlist(useCase) || !useCase.schedule) && !needsFix(useCase) && !useCase.deleted_in_n8n_at
   return runs && controlsOf(useCase, viewer).includes('run') ? 'run' : null
 }
 
@@ -403,8 +404,8 @@ export function controlsOf(useCase: Pick<UseCaseView, 'template' | 'state'> & Pa
         ? ['resume', 'delete']
         : ['run', 'pause', 'delete']
   const allowed = useCase.start_refused ? offered.filter((control) => control !== 'run' && control !== 'test') : offered
-  // Deleting the workflow would delete the list it checks, so the watchlist keeps no Delete. Its Check now sits with its list, so it has no Run now.
-  return isWatchlist(useCase) ? allowed.filter((control) => control !== 'delete' && control !== 'run') : allowed
+  // Deleting the workflow would delete the list it checks, so the watchlist keeps no Delete.
+  return isWatchlist(useCase) ? allowed.filter((control) => control !== 'delete') : allowed
 }
 
 /** The agent cards a workflow runs. The Software watchlist's is the Version checker. */

@@ -591,7 +591,7 @@ test(`PANEL-lists at ${String(width)} px: See all workflows and See the watchlis
   await expect(newest(page), 'it answers at once from the watchlist').toContainText(/\d+ (has|have) a newer version/)
   await newest(page).getByRole('button', { name: 'See the watchlist' }).click()
   await expect(heading(page)).toHaveText('Watchlist')
-  await expect(panel(page).getByRole('link', { name: 'More details' })).toHaveAttribute('href', '/software')
+  await expect(panel(page).getByRole('link', { name: 'More details' })).toHaveAttribute('href', /^\/workflows\/[^/?]+$/)
   expect(await rowWords(panel(page).locator('li[data-software-id]')), 'each row says what its row on the Watchlist says, urgent first').toEqual(watchlistPage)
   await shot(page, info, `c4-watchlist-${String(width)}`)
   const first = panel(page).locator('li[data-software-id]').first()

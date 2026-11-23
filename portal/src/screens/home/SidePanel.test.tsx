@@ -90,8 +90,8 @@ describe('the side panel', () => {
     expect(html.match(/id="side-panel"/g)).toHaveLength(1)
     expect(html).toMatch(/<h2[^>]*id="side-panel-h"[^>]*tabindex="-1"[^>]*>Redis<\/h2>/)
     expect(links(html)).toEqual([
-      ['More details', `/software/${REDIS}`],
-      ['Software watchlist', '/software'],
+      ['More details', `/workflows/${WATCHLIST.use_case_id}?software=${REDIS}`],
+      ['Software watchlist', `/workflows/${WATCHLIST.use_case_id}`],
     ])
     expect(buttons(html)).toEqual(['Close'])
   })
@@ -235,7 +235,7 @@ describe('the side panel’s views', () => {
   it('lists the watchlist with the Software page’s count line, each software’s versions and state', () => {
     const html = draw({ kind: 'watchlist' }, { onOpen: OPEN_BESIDE })
     const shown = text(html)
-    expect(links(html)).toEqual([['More details', '/software']])
+    expect(links(html)).toEqual([['More details', `/workflows/${WATCHLIST.use_case_id}`]])
     expect(shown).toContain(countLine(WATCHLIST.software) ?? 'a count line')
     expect(shown).toContain('LangGraph 1.2.14 → 1.2.16 · checked by Software watchlist Newer out')
     expect(shown).toContain('n8n 2.42.6, the newest · checked by Software watchlist Up to date')

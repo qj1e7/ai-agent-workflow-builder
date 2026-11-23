@@ -31,7 +31,8 @@ test('alice adds software by its name: Find it, a checked guess with where it ca
   const watch = watchPage(page)
   await page.goto('/software')
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Software watchlist')
-  await expect(page.getByRole('main'), 'the list and its schedule, with no Needs attention or How it’s checked').not.toContainText('Needs attention')
+  await expect(page.getByRole('main'), 'the list and its schedule, with no Needs attention or How it’s checked').not.toContainText(/Needs attention|How it.s checked/)
+  await expect(page.getByRole('heading', { level: 2 }).filter({ hasText: /Needs attention|How it.s checked/ })).toHaveCount(0)
   await shot(page, info, 'n21-03-name')
 
   await page.getByLabel('Software name').fill('  LangGraph ')
@@ -53,7 +54,7 @@ test('alice adds software by its name: Find it, a checked guess with where it ca
   await expect(page.getByRole('status').filter({ hasText: 'Added LangGraph' })).toBeVisible()
   await shot(page, info, 'n21-03-added')
 
-  await page.getByRole('button', { name: 'Check now' }).click()
+  await page.getByRole('button', { name: 'Run now' }).click()
   await expect(page).toHaveURL(/\/runs\/[^/]+$/)
   const runId = page.url().split('/').at(-1) ?? ''
   await backend.waitForState(runId, ['succeeded'])
@@ -190,7 +191,8 @@ test('while a yes waits, every row stays in the list, and the decision is in Nee
   await expect(page.getByRole('region', { name: 'Software we watch' }).locator('li')).toHaveCount(2)
   await expect(page.getByRole('main')).not.toContainText('Needs attention')
   await expect(page.locator('li[data-status="awaiting_approval"]')).toHaveCount(2)
-  await expect(page.getByRole('button', { name: 'Check now' })).not.toHaveClass(/primary/)
+  await expect(page.getByRole('link', { name: 'Review and decide' }), 'the decision shows once, on the page’s banner').toHaveCount(1)
+  await expect(page.getByRole('button', { name: 'Run now' })).not.toHaveClass(/primary/)
   await shot(page, info, 'n21-03-waiting-alice')
   assertClean(watch)
   await alice.close()
@@ -199,6 +201,7 @@ test('while a yes waits, every row stays in the list, and the decision is in Nee
   const bobPage = await bob.newPage()
   await bobPage.goto('/software')
   await expect(bobPage.getByRole('region', { name: 'Software we watch' }).locator('li')).toHaveCount(2)
+  await expect(bobPage.getByRole('link', { name: 'Review and decide' }), 'the decision shows once, on the page’s banner').toHaveCount(1)
   await shot(bobPage, info, 'n21-03-waiting-bob')
   await bobPage.goto('/workflows')
   const waiting = bobPage.getByRole('main').locator(`li[data-home-item="approval:${approvalId}"]`)
@@ -301,7 +304,7 @@ test('an Approver who is not an Operator sees the list but no way to add', async
   await expect(page.getByText('LangGraph').first()).toBeVisible()
   await expect(page.getByLabel('Software name')).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Find it' })).toHaveCount(0)
-  for (const name of ['Check now', 'Remove', 'Change schedule', 'Set a schedule', 'Turn off schedule']) await expect(page.getByRole('button', { name })).toHaveCount(0)
+  for (const name of ['Run now', 'Remove', 'Change schedule', 'Set a schedule', 'Turn off schedule']) await expect(page.getByRole('button', { name })).toHaveCount(0)
   await expectReadOnly(page, 'this workflow')
   await context.close()
 })
@@ -324,7 +327,7 @@ for (const phone of [false, true]) {
     const fastapi = await softwareId(backend, 'FastAPI')
     const itemPage = `/workflows/${await watchlistId(backend)}?software=${fastapi}`
 
-    await page.getByRole('button', { name: 'Check now' }).click()
+    await page.getByRole('button', { name: 'Run now' }).click()
     await expect(page).toHaveURL(/\/runs\/[^/]+$/)
     const runId = page.url().split('/').at(-1) ?? ''
     await backend.waitForState(runId, ['awaiting_approval'])
@@ -378,7 +381,7 @@ for (const phone of [false, true]) {
     await page.keyboard.press('Enter')
 
     const notice = page.locator('#change-notice')
-    await expect(notice).toContainText('FastAPI is now read from fastapi/fastapi. Press Check now to check it.')
+    await expect(notice).toContainText('FastAPI is now read from fastapi/fastapi. Press Run now to check it.')
     await expect(page.getByRole('button', { name: 'Undo' })).toBeFocused()
     await expect(item).toContainText('github.com/fastapi/fastapi')
     await expect(item).not.toContainText('GitHub now calls')
@@ -415,7 +418,7 @@ for (const phone of [false, true]) {
     await bob.close()
 
     await page.goto('/software')
-    await page.getByRole('button', { name: 'Check now' }).click()
+    await page.getByRole('button', { name: 'Run now' }).click()
     await expect(page).toHaveURL(/\/runs\/[^/]+$/)
     const next = page.url().split('/').at(-1) ?? ''
     expect(next).not.toBe(runId)
@@ -443,7 +446,7 @@ for (const phone of [false, true]) {
     const page = await alice.newPage()
     const watch = watchPage(page)
     await page.goto('/software')
-    await page.getByRole('button', { name: 'Check now' }).click()
+    await page.getByRole('button', { name: 'Run now' }).click()
     await expect(page).toHaveURL(/\/runs\/[^/]+$/)
     const runId = page.url().split('/').at(-1) ?? ''
     await backend.waitForState(runId, ['succeeded'])
@@ -490,4 +493,32 @@ test('an Approver sees that GitHub renamed a repository and that an Operator can
   const answer = await backend.send('POST', 'bob', `/api/v1/watchlist/software/${(await backend.get<{ watchlist: { software: { id: string }[] } }>('alice', '/api/v1/watchlist')).watchlist.software[0]?.id}/address`, { repo: 'fastapi/fastapi' })
   expect(answer.status, 'an Approver who is not an Operator is refused by the platform too').toBe(403)
   await bob.close()
+})
+
+test('the Software watchlist page has Run now, Pause and Resume like any workflow, and each one works', async ({ browser, backend }) => {
+  await backend.freshWatchlist('alice', [{ name: 'LangGraph', repo: 'langchain-ai/langgraph', our_version: '1.2.16' }])
+  const state = async () => (await backend.get<{ watchlist: { state: string } }>('alice', '/api/v1/watchlist')).watchlist.state
+  const context = await devContext(browser, 'alice')
+  const page = await context.newPage()
+  const watch = watchPage(page)
+  await page.goto('/software')
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Software watchlist')
+  await expect(page.getByRole('button', { name: 'Run now' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Check now' })).toHaveCount(0)
+
+  await page.getByRole('button', { name: 'Pause' }).click()
+  await expect(page.getByRole('button', { name: 'Resume' }).first()).toBeVisible()
+  expect(await state(), 'Pause paused the watchlist').toBe('paused')
+  await expect(page.getByRole('button', { name: 'Run now' }), 'no Run now while it is paused').toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Resume' }), 'Resume once, not in the list as well').toHaveCount(1)
+
+  await page.getByRole('button', { name: 'Resume' }).click()
+  await expect(page.getByRole('button', { name: 'Pause' })).toBeVisible()
+  expect(await state(), 'Resume put it back on').toBe('on')
+
+  await page.getByRole('button', { name: 'Run now' }).click()
+  await expect(page).toHaveURL(/\/runs\/[^/]+$/)
+  await backend.waitForState(page.url().split('/').at(-1) ?? '', ['succeeded'])
+  assertClean(watch)
+  await context.close()
 })

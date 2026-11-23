@@ -22,7 +22,7 @@ interface Checking {
 
 function checkedAgain({ scheduled, paused }: Checking): string {
   if (paused) return 'It is checked again once the watchlist is resumed.'
-  return scheduled ? 'It will try again at the next check.' : 'It is checked again when an Operator presses Check now.'
+  return scheduled ? 'It will try again at the next check.' : 'It is checked again when an Operator presses Run now.'
 }
 
 export function cantCheckWords(problem: string | null, checking: Checking): string {
@@ -234,13 +234,13 @@ export const ONE_APPROVAL = 'One approval covers all the upgrade tickets.'
 
 export function noScheduleWords({ operator, paused }: { readonly operator: boolean; readonly paused: boolean }): string {
   if (paused) return `No schedule. ${PAUSED_WORDS}`
-  return operator ? 'No schedule. Press Check now to check by hand.' : 'No schedule. An Operator can press Check now to check by hand.'
+  return operator ? 'No schedule. Press Run now to check by hand.' : 'No schedule. An Operator can press Run now to check by hand.'
 }
 
 export function emptyWords({ operator, scheduled, paused }: { readonly operator: boolean } & Checking): string {
   if (!operator) return 'An Operator can add the tools your team runs.'
   if (paused) return 'Add the tools your team runs. They can be checked once an Operator resumes the watchlist.'
-  return scheduled ? 'Add the tools your team runs. Each one is checked at the next check.' : 'Add the tools your team runs, then press Check now to check them.'
+  return scheduled ? 'Add the tools your team runs. Each one is checked at the next check.' : 'Add the tools your team runs, then press Run now to check them.'
 }
 
 const dayLabel: Record<Day, string> = {

@@ -105,7 +105,7 @@ export function SoftwareItem(props: ItemProps) {
           <dt>Checked by</dt>
           <dd>
             {checkedBy ? (
-              <Link to={WATCHLIST_PATH} className={styles['checker']}>
+              <Link to={props.back ?? WATCHLIST_PATH} className={styles['checker']}>
                 {checkedBy}
               </Link>
             ) : (
