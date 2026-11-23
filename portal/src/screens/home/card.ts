@@ -301,9 +301,19 @@ export function bareHour(said: string): number | null {
 
 /**
  * Their words for no schedule, as the Planner reads them too. An allow-list, so any other words for when it runs are asked, and a
- * schedule is never guessed.
+ * schedule is never guessed. "manually" counts only for running it, so "tickets we triaged manually" is not one.
  */
-const BY_HAND = /\bonly when i ask\b|\bwhen i run it\b|\bon demand\b|\bmanually\b/
+const BY_HAND = /\bonly\s+when\s+i\s+ask\b|\bwhen\s+i\s+run\s+it\b|\bon\s+demand\b|\b(?:only\s+)?run(?:\s+it)?\s+manually\b|\bonly\s+manually\b/
+/** A no in the same clause turns the words round, as "so I don't have to run it manually". */
+const NOT_BY_HAND = /\b(?:not|never|nobody|no\s+one|without)\b|n['’]t\b/
+/** Another word for how often beside them, as "on demand or weekly": the card asks How often?, never picks one. */
+const OTHER_OFTEN = /\b(?:every|each|daily|weekly|fortnightly|monthly|quarterly|yearly|annually|hourly|week|month|year|hour)\b/
+
+/** Whether the words ask to run it only by hand, in a clause with no no, and with no other word for how often. */
+function byHand(text: string): boolean {
+  if (OTHER_OFTEN.test(text)) return false
+  return text.split(/[,.;:!?]/).some((clause) => BY_HAND.test(clause) && !NOT_BY_HAND.test(clause))
+}
 
 export function readWhen(said: string): When {
   const text = ` ${said.toLowerCase()} `
@@ -316,7 +326,7 @@ export function readWhen(said: string): When {
     often = 'week'
     day = named
   } else if (/\b(?:every|each) (?:day|morning|evening)\b|\bdaily\b/.test(text)) often = 'every_day'
-  else if (at === '' && BY_HAND.test(text)) often = 'manual'
+  else if (at === '' && byHand(text)) often = 'manual'
   return { often, day, at, filledFrom: said }
 }
 

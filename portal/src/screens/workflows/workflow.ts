@@ -166,9 +166,9 @@ export function nextRunOf(useCase: Pick<UseCaseView, 'state' | 'next_run_at' | '
 /** How a workflow with no schedule runs, in the words the team lead approved. */
 export const RUN_NOW_ONLY = 'Runs only when you press Run now.'
 
-type ByHandFacts = Pick<UseCaseView, 'state' | 'schedule'> & Partial<Pick<UseCaseView, 'start_refused'>>
+type ByHandFacts = Pick<UseCaseView, 'schedule'> & Partial<Pick<UseCaseView, 'state' | 'start_refused'>>
 
-/** On with no schedule, while Run now can start it: pressing Run now is the only way it runs. */
+/** On with no schedule, while Run now can start it: pressing Run now is the only way it runs. Run now refuses a draft or a paused one. */
 export const runsOnlyByHand = ({ state, schedule, start_refused: refused }: ByHandFacts): boolean => state === 'on' && !schedule && !refused
 
 export function nextRunWords(useCase: Pick<UseCaseView, 'state' | 'next_run_at' | 'schedule'> & Partial<Pick<UseCaseView, 'move_refused' | 'start_refused'>>, now: Date): string {
@@ -188,8 +188,9 @@ export interface When {
   readonly small: string
 }
 
-export function whenWords({ schedule, start_refused: refused }: Pick<UseCaseView, 'schedule'> & Partial<Pick<UseCaseView, 'start_refused'>>): When {
-  if (!schedule) return refused ? { words: 'No schedule', small: refused } : { words: RUN_NOW_ONLY, small: '' }
+export function whenWords(useCase: ByHandFacts): When {
+  const { schedule, start_refused: refused } = useCase
+  if (!schedule) return runsOnlyByHand(useCase) ? { words: RUN_NOW_ONLY, small: '' } : { words: 'No schedule', small: refused ?? '' }
   const words = repeatWords(schedule)
   return { words: words.charAt(0).toUpperCase() + words.slice(1), small: refused ? `${zoneWords(schedule.time_zone)} ${refused}` : zoneWords(schedule.time_zone) }
 }

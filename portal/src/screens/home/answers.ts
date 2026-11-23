@@ -2,7 +2,7 @@ import type { CantRowView, CapabilitiesView, CapabilityView, Day, OfflineReply, 
 import { andList, count, type NameOf } from '../run/words'
 import { checksOnItsOwn, clockWords, everyWords, heldWords as heldScheduleWords, PAUSED_WORDS, repeatWords } from '../software/software'
 import { scheduleZoneName } from '../workflows/times'
-import { isRunning, lastRunLine, lifeWords, nextRunWords, runsOnlyByHand, type Row } from '../workflows/workflow'
+import { isRunning, lastRunLine, lifeWords, nextRunWords, RUN_NOW_ONLY, type Row } from '../workflows/workflow'
 import { bareHour, lowerFirst, readWhen, scheduleOf } from './card'
 import { sayChanged } from './changed'
 import { cantOnCard, crossWords, quote, watchlistRuns } from './parts'
@@ -374,7 +374,7 @@ export function oneWorkflowSay(useCase: UseCaseView, now: Date, nameOf: NameOf):
   const last = lastRunLine(useCase, now, nameOf)
   const ran = useCase.last_run ? `${last.charAt(0).toUpperCase()}${last.slice(1).replace(/[.!?]+$/, '')}.` : 'It hasn’t run yet.'
   const said = nextRunWords(useCase, now)
-  const next = useCase.state === 'paused' ? '' : runsOnlyByHand(useCase) ? ` ${said}` : ` Next run: ${said}.`
+  const next = useCase.state === 'paused' ? '' : said === RUN_NOW_ONLY ? ` ${said}` : ` Next run: ${said}.`
   return `${quote(useCase.name)} is ${life}. ${ran}${next}`
 }
 

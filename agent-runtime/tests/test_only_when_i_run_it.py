@@ -102,21 +102,35 @@ def test_manually_counts_only_for_running_it_and_never_beside_a_no(text: str):
 
 
 @pytest.mark.parametrize(
-    ("words", "schedule"),
+    ("words", "schedule", "row"),
     [
-        ("On demand, and also weekly on Monday at 9am", "weekly on Monday at 9am"),
-        ("On demand, and also weekly on Monday at 9am", None),
-        ("On demand or weekly", "weekly"),
-        ("On demand or weekly", None),
-        ("On demand, or once a month", None),
+        (
+            "On demand, and also weekly on Monday at 9am",
+            "weekly on Monday at 9am",
+            "Weekly on Monday at 9am",
+        ),
+        ("On demand or weekly", "weekly", "Weekly"),
     ],
 )
-def test_a_schedule_beside_the_words_wins_or_how_often_is_asked(words: str, schedule: str | None):
+def test_a_schedule_beside_the_words_wins(words: str, schedule: str, row: str):
     card, parts = answered(f"{words}, {REST}", schedule)
 
-    assert "demand" not in card.rows[0].text.casefold()
-    crossed = [p.text for p in parts if p.mark == "cant" and p.reason == "not_followed"]
-    assert not any("week" in text for text in crossed), "the schedule they wrote is never crossed"
+    assert (card.rows[0].text, card.rows[0].state) == (row, "understood")
+    assert not any(p.mark == "cant" and "Monday" in p.text for p in parts), "it is never crossed"
+
+
+@pytest.mark.parametrize(
+    "words",
+    [
+        "On demand, and also weekly on Monday at 9am",
+        "On demand or weekly",
+        "On demand, or once a month",
+    ],
+)
+def test_a_schedule_beside_the_words_the_model_missed_is_asked(words: str):
+    card, _ = answered(f"{words}, {REST}", None)
+
+    assert (card.rows[0].text, card.rows[0].state) == ("", "missing")
 
 
 @pytest.mark.parametrize(
