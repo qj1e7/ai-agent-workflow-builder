@@ -5,11 +5,12 @@
 #                                 mocks (scripts/simulation_isolation.py)
 #   scripts/simulation.sh down    removes the stack's containers, networks and volumes
 #   scripts/simulation.sh test    up, check and down, as CI runs it
-# SIM_PROJECT names the compose project, wab-sim unless set. SIM_BUILD=0 starts from images
-# already built, and pulls nothing.
+# SIM_PROJECT names the compose project, wab-sim unless set. SIM_BUILD=0 starts from the sim
+# images an earlier start built, and builds nothing.
 # Each key is made up here with openssl and lives only in the containers' settings, never in a
 # file. The database is in memory, so a new start is a new simulation n8n with new keys.
-# It never reads deploy/.env, and it touches no other compose project.
+# It never reads deploy/.env, and it touches no other compose project. It builds the platform's
+# images under their own tag, sim, so it never replaces an image the platform's stack runs.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 

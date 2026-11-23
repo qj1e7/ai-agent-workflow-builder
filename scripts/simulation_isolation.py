@@ -2,7 +2,7 @@
 
 With no argument it checks deploy/compose.simulation.yaml, as compose renders it:
 - the file reads only its own SIM_ settings, which scripts/simulation.sh makes up at each start,
-  and the image tag, so no key from deploy/.env or the shell can reach the simulation;
+  so no key from deploy/.env or the shell can reach the simulation;
 - it runs only the services listed below, and each holds only the settings listed for it. It is an
   allow list, so a key added later fails the check;
 - every key, password and secret comes from its own SIM_ setting, never from a value in the file;
@@ -11,7 +11,8 @@ With no argument it checks deploy/compose.simulation.yaml, as compose renders it
 - every network is internal, nothing publishes a port, no service joins another network or the
   host's, and no volume belongs to another stack;
 - it runs the platform n8n's image, task runner, PostgreSQL and bootstrap, with the same guards
-  (deploy/compose.yaml).
+  (deploy/compose.yaml). It builds each image from the platform's sources under its own tag, sim,
+  so it never replaces an image the platform's stack runs.
 
 With --project NAME, the compose project scripts/simulation.sh started, it also checks that stack:
 - bootstrap ended ready;
@@ -141,10 +142,10 @@ SERVICES = {
 GATEWAY = "gateway"
 """Where the simulation n8n's blocks and bootstrap send the platform's calls. ADR 0054's PR 3 adds
 the simulation gateway there."""
-PLAIN_SETTINGS = frozenset({"WAB_IMAGE_TAG"})
-"""What the file may read besides its own SIM_ settings. It is not secret."""
 SAME_AS_PLATFORM = ("postgres", "n8n", "n8n-runners", "bootstrap")
-"""Services that run the platform's own image."""
+"""Services that run the platform's own image, or build it from the same sources."""
+SIM_TAG = "sim"
+"""The tag of every image the simulation builds, so it never replaces one the platform runs."""
 MOUNTS = {
     "postgres": {("bind", "deploy/postgres/init.sh")},
     "n8n": {("volume", "slack-ca")},
@@ -191,11 +192,7 @@ def settings_read(text: str) -> set[str]:
 
 
 def file_findings(text: str) -> list[str]:
-    other = sorted(
-        name
-        for name in settings_read(text)
-        if not name.startswith("SIM_") and name not in PLAIN_SETTINGS
-    )
+    other = sorted(name for name in settings_read(text) if not name.startswith("SIM_"))
     if not other:
         return []
     return [f"the file reads {', '.join(other)}, not only its own SIM_ settings"]
@@ -279,15 +276,37 @@ def network_findings(config: Mapping[str, Any]) -> list[str]:
     return findings
 
 
+def repository(image: object) -> str:
+    """An image's name without its tag or digest, such as wab/n8n."""
+    name = str(image or "").split("@", 1)[0]
+    head, sep, tag = name.rpartition(":")
+    return head if sep and "/" not in tag else name
+
+
 def platform_findings(sim: Mapping[str, Any], platform: Mapping[str, Any]) -> list[str]:
     sim_services = sim.get("services", {})
     platform_services = platform.get("services", {})
     findings: list[str] = []
     for name in SAME_AS_PLATFORM:
-        ours = sim_services.get(name, {}).get("image")
-        theirs = platform_services.get(name, {}).get("image")
-        if ours != theirs:
-            findings.append(f"{name} runs {ours}, not the platform's {theirs}")
+        ours, theirs = sim_services.get(name, {}), platform_services.get(name, {})
+        if "build" not in theirs and ours.get("image") != theirs.get("image"):
+            findings.append(
+                f"{name} runs {ours.get('image')}, not the platform's {theirs.get('image')}"
+            )
+        if "build" in theirs and (
+            ours.get("build") != theirs["build"]
+            or repository(ours.get("image")) != repository(theirs.get("image"))
+        ):
+            findings.append(
+                f"{name} doesn't build the platform's {repository(theirs.get('image'))}"
+            )
+    for name, service in sorted(sim_services.items()):
+        image = str(service.get("image"))
+        if "build" in service and image != f"{repository(image)}:{SIM_TAG}":
+            findings.append(
+                f"{name} builds {image}, not a {SIM_TAG} image, so it can replace one the "
+                "platform runs"
+            )
     sim_n8n = sim_services.get("n8n", {}).get("environment") or {}
     platform_n8n = platform_services.get("n8n", {}).get("environment") or {}
     bootstrap = sim_services.get("bootstrap", {}).get("environment") or {}

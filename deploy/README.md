@@ -53,7 +53,7 @@ scripts/simulation.sh check   # checks it holds no real key and reaches only the
 scripts/simulation.sh down    # removes its containers, networks and volumes
 ```
 
-`scripts/simulation.sh` makes up each key with `openssl` at every start and never writes one to a file. It never reads `deploy/.env`. The compose project is `wab-sim` unless `SIM_PROJECT` names another, and `SIM_BUILD=0` starts from images already built. It uses the platform's own images, so it needs no new image once the platform's are built.
+`scripts/simulation.sh` makes up each key with `openssl` at every start and never writes one to a file. It never reads `deploy/.env`. The compose project is `wab-sim` unless `SIM_PROJECT` names another, and `SIM_BUILD=0` starts from the images an earlier start built. It builds the platform's images from the same sources under their own tag, `sim`, so starting it never replaces an image the platform's stack runs. Docker shares the layers that match, so the extra disk is mostly what differs between the two builds.
 
 `scripts/simulation_isolation.py` is the check. It reads this file as compose renders it, and, with `--project`, the running stack: each service's settings against an allow list, the keys n8n holds, n8n's routes out, and who sits on its networks. It compares every value with the platform's keys in `deploy/.env`. CI runs it in the `checks` job, and starts the stack and runs it there in the `simulation` job.
 

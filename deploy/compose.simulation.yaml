@@ -6,7 +6,9 @@
 # - mock GitHub, and mock Slack under the name slack.com, as in deploy/compose.e2e.yaml.
 # Both networks are internal, and nothing publishes a port, so nothing here reaches the internet,
 # the host or the platform's stack. Every setting it reads starts SIM_, and scripts/simulation.sh
-# makes each up at every start, so no key from deploy/.env can reach it.
+# makes each up at every start, so no key from deploy/.env can reach it. It builds the platform's
+# images from the same sources under its own tag, sim, so a start never replaces the images the
+# platform's stack runs.
 # scripts/simulation_isolation.py checks all of this. Start it with scripts/simulation.sh up.
 name: wab-sim
 
@@ -46,7 +48,7 @@ services:
     build:
       context: ..
       dockerfile: deploy/n8n/Dockerfile
-    image: wab/n8n:${WAB_IMAGE_TAG:-dev}
+    image: wab/n8n:sim
     depends_on:
       postgres:
         condition: service_healthy
@@ -119,7 +121,7 @@ services:
     build:
       context: ../platform-api
       target: runtime
-    image: wab/platform-api:${WAB_IMAGE_TAG:-dev}
+    image: wab/platform-api:sim
     command: ["python", "-m", "platform_api.bootstrap"]
     restart: "no"
     depends_on:
@@ -144,7 +146,7 @@ services:
     build:
       context: ../e2e/mock_github
       target: runtime
-    image: wab/mock-github:${WAB_IMAGE_TAG:-dev}
+    image: wab/mock-github:sim
     networks: [sim]
     healthcheck:
       test:
@@ -162,7 +164,7 @@ services:
     build:
       context: ../e2e/mock_slack
       target: runtime
-    image: wab/mock-slack:${WAB_IMAGE_TAG:-dev}
+    image: wab/mock-slack:sim
     volumes:
       - slack-ca:/ca
     networks:

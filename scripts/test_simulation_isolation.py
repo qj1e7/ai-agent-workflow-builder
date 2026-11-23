@@ -46,7 +46,8 @@ def good_sim() -> dict[str, Any]:
                 ],
             },
             "n8n": {
-                "image": "wab/n8n:dev",
+                "image": "wab/n8n:sim",
+                "build": {"context": str(check.ROOT), "dockerfile": "deploy/n8n/Dockerfile"},
                 "environment": {
                     **guards,
                     "DB_TYPE": "postgresdb",
@@ -78,7 +79,8 @@ def good_sim() -> dict[str, Any]:
                 "networks": {"runners": None},
             },
             "bootstrap": {
-                "image": "wab/platform-api:dev",
+                "image": "wab/platform-api:sim",
+                "build": {"context": str(check.ROOT / "platform-api"), "target": "runtime"},
                 "environment": {
                     **guards,
                     "DATABASE_URL_OWNER": "postgresql://wab_owner:"
@@ -92,9 +94,14 @@ def good_sim() -> dict[str, Any]:
                 },
                 "networks": {"sim": None},
             },
-            "mock-github": {"image": "wab/mock-github:dev", "networks": {"sim": None}},
+            "mock-github": {
+                "image": "wab/mock-github:sim",
+                "build": {"context": str(check.ROOT / "e2e/mock_github"), "target": "runtime"},
+                "networks": {"sim": None},
+            },
             "mock-slack": {
-                "image": "wab/mock-slack:dev",
+                "image": "wab/mock-slack:sim",
+                "build": {"context": str(check.ROOT / "e2e/mock_slack"), "target": "runtime"},
                 "networks": {"sim": {"aliases": ["slack.com"]}},
                 "volumes": [{"type": "volume", "source": "slack-ca", "target": "/ca"}],
             },
@@ -108,17 +115,19 @@ def good_sim() -> dict[str, Any]:
 
 
 def platform_of(sim: dict[str, Any]) -> dict[str, Any]:
-    """deploy/compose.yaml as far as the check reads it: the same images and guards."""
+    """deploy/compose.yaml as far as the check reads it: the same pins, sources and guards, and
+    the platform's own tag on what it builds."""
     services = sim["services"]
-    return {
-        "services": {
-            name: {
-                "image": services[name]["image"],
-                "environment": {g: services["n8n"]["environment"][g] for g in check.GUARDS},
-            }
-            for name in check.SAME_AS_PLATFORM
+    platform: dict[str, Any] = {"services": {}}
+    for name in check.SAME_AS_PLATFORM:
+        service = {
+            "image": services[name]["image"].replace(":sim", ":dev"),
+            "environment": {g: services["n8n"]["environment"][g] for g in check.GUARDS},
         }
-    }
+        if "build" in services[name]:
+            service["build"] = dict(services[name]["build"])
+        platform["services"][name] = service
+    return platform
 
 
 def findings(sim: dict[str, Any]) -> list[str]:
@@ -130,9 +139,14 @@ class ComposeTest(unittest.TestCase):
         self.assertEqual(findings(good_sim()), [])
 
     def test_the_file_reads_only_its_own_settings(self) -> None:
-        text = 'a: ${SIM_NODE_KEY:?run} b: "$$(node -e x)" c: ${WAB_IMAGE_TAG:-dev}'
+        text = 'a: ${SIM_NODE_KEY:?run} b: "$$(node -e x)" c: wab/n8n:sim'
         self.assertEqual(check.file_findings(text), [])
-        for other in ("${N8N_ENCRYPTION_KEY:?x}", "$GITHUB_TOKEN", "${N8N_KEY_JIRA_TOKEN:-}"):
+        for other in (
+            "${N8N_ENCRYPTION_KEY:?x}",
+            "$GITHUB_TOKEN",
+            "${N8N_KEY_JIRA_TOKEN:-}",
+            "${WAB_IMAGE_TAG:-dev}",
+        ):
             with self.subTest(other=other):
                 self.assertTrue(check.file_findings(text + " " + other))
 
@@ -216,8 +230,16 @@ class ComposeTest(unittest.TestCase):
 
     def test_n8n_runs_the_platform_image_and_guards(self) -> None:
         sim = good_sim()
-        sim["services"]["n8n"]["image"] = "n8nio/n8n:latest"
-        self.assertIn("n8n runs n8nio/n8n:latest", " ".join(findings(sim)))
+        sim["services"]["n8n-runners"]["image"] = "n8nio/runners:latest"
+        self.assertIn("n8n-runners runs n8nio/runners:latest", " ".join(findings(sim)))
+        for change in (
+            lambda s: s["services"]["n8n"].update(image="n8nio/n8n:sim"),
+            lambda s: s["services"]["n8n"]["build"].update(dockerfile="other/Dockerfile"),
+            lambda s: s["services"]["bootstrap"].pop("build"),
+        ):
+            sim = good_sim()
+            change(sim)
+            self.assertIn("doesn't build the platform's", " ".join(findings(sim)))
         sim = good_sim()
         sim["services"]["n8n"]["environment"]["N8N_RUNNERS_MODE"] = "internal"
         sim["services"]["bootstrap"]["environment"]["N8N_RUNNERS_MODE"] = "internal"
@@ -225,6 +247,17 @@ class ComposeTest(unittest.TestCase):
         sim = good_sim()
         sim["services"]["bootstrap"]["environment"]["NODES_EXCLUDE"] = "[]"
         self.assertIn("checks another n8n", " ".join(findings(sim)))
+
+    def test_an_image_built_under_the_platforms_tag_fails(self) -> None:
+        for name, image in (
+            ("n8n", "wab/n8n:dev"),
+            ("bootstrap", "wab/platform-api:dev"),
+            ("mock-slack", "wab/mock-slack:dev"),
+        ):
+            with self.subTest(name=name):
+                sim = good_sim()
+                sim["services"][name]["image"] = image
+                self.assertIn(f"{name} builds {image}, not a sim image", " ".join(findings(sim)))
 
 
 class RunningTest(unittest.TestCase):
