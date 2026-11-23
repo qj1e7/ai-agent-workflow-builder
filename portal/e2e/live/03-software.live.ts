@@ -178,7 +178,7 @@ test('a project that publishes no releases is not added: it says why and offers 
   await context.close()
 })
 
-test('while a yes waits, every row stays in the list, and the decision is in Needs you on Workflows, not on the Watchlist', async ({ browser, backend }, info) => {
+test('while a yes waits, every row stays in the list, and the decision is in Needs you on Workflows', async ({ browser, backend }, info) => {
   const { approvalId } = await backend.waitingRun('alice', [
     { name: 'LangGraph', repo: 'langchain-ai/langgraph', our_version: '1.2.14' },
     { name: 'Redis', repo: 'redis/redis', our_version: '8.0.0' },
@@ -189,7 +189,6 @@ test('while a yes waits, every row stays in the list, and the decision is in Nee
   await page.goto('/software')
   await expect(page.getByRole('region', { name: 'Software we watch' }).locator('li')).toHaveCount(2)
   await expect(page.getByRole('main')).not.toContainText('Needs attention')
-  await expect(page.getByRole('link', { name: 'Review and decide' })).toHaveCount(0)
   await expect(page.locator('li[data-status="awaiting_approval"]')).toHaveCount(2)
   await expect(page.getByRole('button', { name: 'Check now' })).not.toHaveClass(/primary/)
   await shot(page, info, 'n21-03-waiting-alice')
@@ -200,7 +199,6 @@ test('while a yes waits, every row stays in the list, and the decision is in Nee
   const bobPage = await bob.newPage()
   await bobPage.goto('/software')
   await expect(bobPage.getByRole('region', { name: 'Software we watch' }).locator('li')).toHaveCount(2)
-  await expect(bobPage.getByRole('link', { name: 'Review and decide' })).toHaveCount(0)
   await shot(bobPage, info, 'n21-03-waiting-bob')
   await bobPage.goto('/workflows')
   const waiting = bobPage.getByRole('main').locator(`li[data-home-item="approval:${approvalId}"]`)

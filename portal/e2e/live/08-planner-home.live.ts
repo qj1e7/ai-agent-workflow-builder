@@ -833,7 +833,8 @@ test.describe('with the AI model on', () => {
     expect(await names()).toEqual(['Redis'])
 
     const rail = page.getByRole('navigation', { name: 'Browse' }).filter({ visible: true })
-    await rail.getByRole('link', { name: /^Watchlist/ }).click()
+    await rail.getByRole('link', { name: /^Workflows/ }).click()
+    await page.locator('li[data-workflow-id]').filter({ hasText: 'Software watchlist' }).getByRole('link', { name: /^(?!Explain )/ }).click()
     await expect(page.locator('li[data-status]').filter({ hasText: 'node js' }), 'the Watchlist no longer holds it').toHaveCount(0)
     await rail.getByRole('link', { name: /^Chat/ }).click()
     await expect(answer, 'coming back to the chat keeps the removal and its Undo').toContainText('Removed from the watchlist.')

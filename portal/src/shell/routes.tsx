@@ -133,6 +133,7 @@ export function softwareDestination(pathname: string, watchlistId: string | null
 /** The Software page is the watchlist's workflow page now. It takes every address under /software there, once the watchlist is known. */
 function OldSoftwareAddress() {
   const { pathname, search } = useLocation()
+  const arrivedWith: unknown = useLocation().state
   const watchlist = useWatchlist()
   if (watchlist.isPending) {
     return (
@@ -141,7 +142,7 @@ function OldSoftwareAddress() {
       </p>
     )
   }
-  return <Navigate to={softwareDestination(pathname, watchlist.data?.use_case_id ?? null, search)} replace />
+  return <Navigate to={softwareDestination(pathname, watchlist.data?.use_case_id ?? null, search)} replace state={arrivedWith} />
 }
 
 const OLD_NEW_PATH = '/new'
