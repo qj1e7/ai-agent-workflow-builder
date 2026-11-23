@@ -820,7 +820,8 @@ def release_check_of(read: TaskRead, request: str) -> str | None:
     if _NAMES_THE_WATCHLIST.search(request) or _ASKS.search(request):
         return None
     software = _software_of(read, request)
-    if software is None:
+    # npm or Maven Central alone is where software is published, not a software (ADR 0025).
+    if software is None or a_read_source(software):
         return None
     own = _stretches(WATCHLISTS_OWN_TICKET, request) + _stretches(AFFIRMS_A_YES, request)
     words = _without_stretches(request, own)
