@@ -64,3 +64,44 @@ def test_a_one_off_question_about_a_new_release_keeps_the_newest_answer(task: st
     answer = answer_of(fields, task, facts("n8n"))
     assert not isinstance(answer, SetupCardAnswer), answer
     assert isinstance(answer, WatchlistAnswer), answer
+
+
+@pytest.mark.parametrize(
+    ("task", "more"),
+    [
+        (
+            "Watch LangGraph releases on the watchlist every Thursday at 7am",
+            {"watchlist_word": "releases", "schedule": "every Thursday at 7am"},
+        ),
+        (
+            "Watch LangGraph every day at 9am",
+            {"watchlist_word": "Watch", "schedule": "every day at 9am"},
+        ),
+    ],
+)
+def test_watched_software_with_a_time_of_its_own_gets_its_own_release_check(
+    task: str, more: dict[str, Any]
+):
+    fields = read(**more)
+    answer = answer_of(fields, task, facts("LangGraph", "n8n"))
+    assert isinstance(answer, SetupCardAnswer), answer
+    assert answer.name == "LangGraph release check"
+    [when] = [row for row in answer.rows if row.kind == "schedule"]
+    assert when.state == "understood", when
+    assert all(p.reason != "own_time" for p in parts_of(fields, task, answer))
+
+
+def test_a_version_beside_a_release_check_is_crossed_as_one_version():
+    task = "Every day at 9am, check LangGraph for new releases since 1.2.14"
+    fields = read(watchlist_word="releases", schedule="Every day at 9am")
+    answer = answer_of(fields, task, facts())
+    assert isinstance(answer, CantAnswer) and isinstance(answer.alternative, SetupCardAnswer)
+    assert [(row.text, row.note) for row in answer.cant] == [
+        ("1.2.14", "I check for any new release, not one version.")
+    ]
+
+
+def test_tell_me_if_keeps_its_answer_from_before():
+    task = "Tell me if n8n has a new release"
+    answer = answer_of(read(watchlist_word="release", software="n8n"), task, facts("n8n"))
+    assert isinstance(answer, SetupCardAnswer), answer
