@@ -104,6 +104,16 @@ jobs:
         working-directory: .
         run: scripts/n8n-guards.sh
 
+      # ADR 0054. The unit tests show the check fails on a real key or a way out. The check then
+      # reads deploy/compose.simulation.yaml as compose renders it. The simulation job checks the
+      # running stack.
+      - name: The simulation n8n holds no real key and reaches only the mocks, as compose renders it
+        if: matrix.project == 'e2e'
+        working-directory: .
+        run: |
+          python3 -I -B -m unittest discover -s scripts -p test_simulation_isolation.py
+          python3 -I -B scripts/simulation_isolation.py
+
       - name: Check import rules
         if: matrix.project == 'platform-api'
         working-directory: ${{ matrix.project }}
