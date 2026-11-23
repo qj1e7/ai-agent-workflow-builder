@@ -637,7 +637,7 @@ describe('the Planner’s set-up card', () => {
     it('asks how often, then the day of a weekly run, then the time, one at a time, and nothing once the schedule is whole', () => {
       const start = said('')
       expect(words(start)).toBe('How often?')
-      expect(nextQuestion(start, null)).toMatchObject({ kind: 'when', choices: [{ label: 'Every day' }, { label: 'Every weekday' }, { label: 'Every week' }] })
+      expect(nextQuestion(start, null)).toMatchObject({ kind: 'when', choices: [{ label: 'Every day' }, { label: 'Every weekday' }, { label: 'Every week' }, { label: 'Only when I run it' }] })
       const weekly = pick(start, 'Every week')
       expect(words(weekly)).toBe('Which day?')
       const friday = pick(weekly, 'Friday')

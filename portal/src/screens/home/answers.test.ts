@@ -275,7 +275,8 @@ describe('Check my workflows about the one workflow they have', () => {
   })
 
   it('says when it runs next, in the panel’s own Next run words', () => {
-    const said = oneWorkflowSay(one({ next_run_at: '2026-11-21T01:00:00Z' }), NOW, nameOf)
+    const schedule = { day: 'saturday', at: '09:00', time_zone: null, held: false } as unknown as UseCaseView['schedule']
+    const said = oneWorkflowSay(one({ schedule, next_run_at: '2026-11-21T01:00:00Z' }), NOW, nameOf)
     expect(said).toMatch(/^“.+” is on\. It hasn’t run yet\. Next run: .+\.$/)
     expect(said).not.toContain('Not scheduled')
   })

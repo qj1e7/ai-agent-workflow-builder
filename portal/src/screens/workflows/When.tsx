@@ -6,7 +6,7 @@ import { Button } from '../../ui/Button'
 import { checkClock, DAYS, everyWords } from '../software/software'
 import { useEditorThatRefocusesItsOpener } from '../software/Schedule'
 import { useChanges } from './Status'
-import { CHANGED_SINCE_OPENED, heldNote, nextRunWords, OWNER_WARNING, scheduleSaver, whenWords } from './workflow'
+import { CHANGED_SINCE_OPENED, heldNote, nextRunWords, OWNER_WARNING, runsOnlyByHand, scheduleSaver, whenWords } from './workflow'
 import styles from './Workflows.module.css'
 import { teamPlace, teamTime } from './times'
 
@@ -100,7 +100,8 @@ export function When({ useCase, now, mayChange, held, onSaved }: WhenProps) {
   const { editing, opener, open, close } = useEditorThatRefocusesItsOpener()
   const [refused, setRefused] = useState<string | null>(null)
   const { words, small } = whenWords(useCase)
-  const next = heldNote(useCase) ?? `Next run: ${nextRunWords(useCase, now)}`
+  // A workflow that runs only on Run now has no next run, and its words above already say so.
+  const next = heldNote(useCase) ?? (runsOnlyByHand(useCase) ? '' : `Next run: ${nextRunWords(useCase, now)}`)
   const changes = useChanges(next)
   const stale = () => {
     setRefused(CHANGED_SINCE_OPENED)
@@ -132,13 +133,15 @@ export function When({ useCase, now, mayChange, held, onSaved }: WhenProps) {
           ) : null}
         </div>
       )}
-      <p className={styles['small']}>
-        {small}
-        {useCase.schedule ? (useCase.schedule.owner_name ? ` Set by ${useCase.schedule.owner_name}.` : ' Set in n8n.') : ''}{' '}
-        <span key={changes} className={changes > 0 ? styles['changed'] : undefined}>
-          {next}
-        </span>
-      </p>
+      {small || useCase.schedule || next ? (
+        <p className={styles['small']}>
+          {small}
+          {useCase.schedule ? (useCase.schedule.owner_name ? ` Set by ${useCase.schedule.owner_name}.` : ' Set in n8n.') : ''}{' '}
+          <span key={changes} className={changes > 0 ? styles['changed'] : undefined}>
+            {next}
+          </span>
+        </p>
+      ) : null}
       {refused ? (
         <p className={styles['problem']} role="alert">
           {refused}

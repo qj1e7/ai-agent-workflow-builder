@@ -38,7 +38,8 @@ export interface Row {
   readonly planner: PlannerRow | null
 }
 
-export type Often = '' | 'every_day' | 'weekdays' | 'week'
+/** How often it runs. `manual` is no schedule: it runs only when someone presses Run now. */
+export type Often = '' | 'every_day' | 'weekdays' | 'week' | 'manual'
 export type Weekday = Exclude<Day, 'every_day' | 'weekdays'>
 
 export interface When {
@@ -298,9 +299,16 @@ export function bareHour(said: string): number | null {
   return hour >= 1 && hour <= 12 ? hour : null
 }
 
+/**
+ * Their words for no schedule, as the Planner reads them too. An allow-list, so any other words for when it runs are asked, and a
+ * schedule is never guessed.
+ */
+const BY_HAND = /\bonly when i ask\b|\bwhen i run it\b|\bon demand\b|\bmanually\b/
+
 export function readWhen(said: string): When {
   const text = ` ${said.toLowerCase()} `
   const named = DAY_NAMES.find((day) => new RegExp(`\\b${day}s?\\b`).test(text))
+  const at = clockIn(text)
   let often: Often = ''
   let day: Weekday | '' = ''
   if (/\b(?:every|each) ?week ?days?\b|\bweekdays\b|\bmonday to friday\b/.test(text)) often = 'weekdays'
@@ -308,7 +316,8 @@ export function readWhen(said: string): When {
     often = 'week'
     day = named
   } else if (/\b(?:every|each) (?:day|morning|evening)\b|\bdaily\b/.test(text)) often = 'every_day'
-  return { often, day, at: clockIn(text), filledFrom: said }
+  else if (at === '' && BY_HAND.test(text)) often = 'manual'
+  return { often, day, at, filledFrom: said }
 }
 
 export function enterWhen(form: Form): Form {
@@ -319,7 +328,8 @@ export function enterWhen(form: Form): Form {
 
 export type WhenField = 'often' | 'day' | 'at'
 
-const OFTEN_NAMES: Readonly<Record<Exclude<Often, ''>, string>> = { every_day: 'Every day', weekdays: 'Every weekday', week: 'Every week' }
+/** The answers to How often?, in the order the card offers them. */
+export const OFTEN_NAMES: Readonly<Record<Exclude<Often, ''>, string>> = { every_day: 'Every day', weekdays: 'Every weekday', week: 'Every week', manual: 'Only when I run it' }
 const DAY_WORD = (day: Weekday) => day.charAt(0).toUpperCase() + day.slice(1)
 const CLASHES: readonly PartReason[] = ['one_frequency', 'one_day', 'one_time']
 
@@ -463,6 +473,8 @@ export const answerWhen = (form: Form, set: Partial<When>): Form => ({ ...form, 
 
 export function whenProblems(when: When): Partial<Record<WhenField, string>> {
   const out: Partial<Record<WhenField, string>> = {}
+  // No schedule has no day and no time to ask.
+  if (when.often === 'manual') return out
   if (when.often === '') out.often = 'Choose how often it runs.'
   if (when.often === 'week' && when.day === '') out.day = 'Choose a day.'
   if (when.at === '') out.at = 'Choose a time.'
@@ -473,13 +485,16 @@ export function whenProblems(when: When): Partial<Record<WhenField, string>> {
   return out
 }
 
-export function scheduleOf(when: When): ScheduleIn {
+/** The schedule Turn on sends. Null for Only when I run it, which the platform sets up to run only when someone presses Run now. */
+export function scheduleOf(when: When): ScheduleIn | null {
+  if (when.often === 'manual') return null
   const day: Day = when.often === 'week' ? (when.day === '' ? 'monday' : when.day) : when.often === '' ? 'every_day' : when.often
   return { day, at: when.at }
 }
 
 export function whenWords(when: When): string {
-  return upperFirst(repeatWords(scheduleOf(when)))
+  const schedule = scheduleOf(when)
+  return schedule ? upperFirst(repeatWords(schedule)) : OFTEN_NAMES.manual
 }
 
 export function defaultName(plan: PlanView | null): string {
@@ -502,7 +517,7 @@ export interface Checked {
 }
 
 function sameWhen(a: When, b: When): boolean {
-  return a.often === b.often && (a.often !== 'week' || a.day === b.day) && a.at === b.at
+  return a.often === b.often && (a.often === 'manual' || ((a.often !== 'week' || a.day === b.day) && a.at === b.at))
 }
 
 export function checkedRows(form: Form): Checked[] {
@@ -632,7 +647,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> => typeof va
 const isString = (value: unknown): value is string => typeof value === 'string'
 const STEPS: readonly unknown[] = [1, 2, 3, 4]
 const ROW_STATES: readonly unknown[] = ['understood', 'changed', 'missing', 'cant_do', 'edited']
-const OFTEN: readonly unknown[] = ['', 'every_day', 'weekdays', 'week']
+const OFTEN: readonly unknown[] = ['', ...Object.keys(OFTEN_NAMES)]
 const MARKS: readonly unknown[] = ['will_do', 'cant', 'question']
 /** Every reason a saved part may hold. The type keeps it complete, so a draft never drops a cross with a new reason. */
 const REASONS: readonly unknown[] = Object.keys({

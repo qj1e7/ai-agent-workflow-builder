@@ -163,9 +163,18 @@ export function nextRunOf(useCase: Pick<UseCaseView, 'state' | 'next_run_at' | '
   return { at: useCase.next_run_at, zone: useCase.schedule?.time_zone }
 }
 
-export function nextRunWords(useCase: Pick<UseCaseView, 'state' | 'next_run_at' | 'schedule'> & Partial<Pick<UseCaseView, 'move_refused'>>, now: Date): string {
+/** How a workflow with no schedule runs, in the words the team lead approved. */
+export const RUN_NOW_ONLY = 'Runs only when you press Run now.'
+
+type ByHandFacts = Pick<UseCaseView, 'state' | 'schedule'> & Partial<Pick<UseCaseView, 'start_refused'>>
+
+/** On with no schedule, while Run now can start it: pressing Run now is the only way it runs. */
+export const runsOnlyByHand = ({ state, schedule, start_refused: refused }: ByHandFacts): boolean => state === 'on' && !schedule && !refused
+
+export function nextRunWords(useCase: Pick<UseCaseView, 'state' | 'next_run_at' | 'schedule'> & Partial<Pick<UseCaseView, 'move_refused' | 'start_refused'>>, now: Date): string {
   if (useCase.state === 'paused') return 'Paused'
   if (useCase.schedule?.held || useCase.move_refused) return 'Not running'
+  if (runsOnlyByHand(useCase)) return RUN_NOW_ONLY
   return useCase.next_run_at ? nextRunAt(useCase.next_run_at, now, useCase.schedule?.time_zone) : 'Not scheduled'
 }
 
@@ -180,7 +189,7 @@ export interface When {
 }
 
 export function whenWords({ schedule, start_refused: refused }: Pick<UseCaseView, 'schedule'> & Partial<Pick<UseCaseView, 'start_refused'>>): When {
-  if (!schedule) return { words: 'No schedule', small: refused ?? 'An Operator starts it with Run now.' }
+  if (!schedule) return refused ? { words: 'No schedule', small: refused } : { words: RUN_NOW_ONLY, small: '' }
   const words = repeatWords(schedule)
   return { words: words.charAt(0).toUpperCase() + words.slice(1), small: refused ? `${zoneWords(schedule.time_zone)} ${refused}` : zoneWords(schedule.time_zone) }
 }
@@ -533,7 +542,7 @@ export interface Banner {
 
 interface BannerFacts {
   readonly useCase: Pick<UseCaseView, 'use_case_id' | 'template' | 'state' | 'next_run_at' | 'schedule' | 'last_run'> &
-    Partial<Pick<UseCaseView, 'grade' | 'blocks' | 'deleted_in_n8n_at' | 'version' | 'move_refused' | 'held_in_n8n' | 'made_in_n8n_by'>>
+    Partial<Pick<UseCaseView, 'grade' | 'blocks' | 'deleted_in_n8n_at' | 'version' | 'move_refused' | 'held_in_n8n' | 'made_in_n8n_by' | 'start_refused'>>
   readonly viewer: Viewer
   readonly now: Date
   readonly nameOf: NameOf
@@ -608,7 +617,8 @@ function bannerOfState({ useCase, viewer, now, nameOf }: BannerFacts): Banner {
   }
   const held = heldNote(useCase)
   if (held) return { tone: 'ok', text: held, action: null }
-  if (!useCase.schedule) return { tone: 'ok', text: 'On. It has no schedule, so it runs when an Operator presses Run now.', action: null }
+  // With no Start from the Portal block, Run now can't start it either, so the banner claims no way it runs.
+  if (!useCase.schedule) return { tone: 'ok', text: runsOnlyByHand(useCase) ? `On. ${RUN_NOW_ONLY}` : 'On.', action: null }
   return { tone: 'ok', text: `On. Next run ${nextRunWords(useCase, now)}.`, action: null }
 }
 

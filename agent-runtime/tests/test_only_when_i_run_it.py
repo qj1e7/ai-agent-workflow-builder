@@ -9,6 +9,8 @@ from agent_runtime.answers import answer_of, parts_of
 from agent_runtime.contract import CantAnswer, RequestPart, SetupCardAnswer, UnderstoodRow
 from agent_runtime.reading import DaysRead, PlaceRead, SearchRead, TicketRead
 from tests.test_answers import read
+from tests.test_release_check_routes import facts
+from tests.test_release_check_routes import read as release_read
 
 REST = (
     "find Jira tickets in project MOCK that nobody updated for 14 days, and raise one Jira "
@@ -64,6 +66,26 @@ def test_any_other_words_for_when_it_runs_are_asked_never_guessed(said: str):
     card, _ = answered(f"{said}, {REST}", None)
 
     assert (card.rows[0].kind, card.rows[0].text, card.rows[0].state) == ("schedule", "", "missing")
+
+
+@pytest.mark.parametrize(
+    ("task", "said"),
+    [
+        ("Check n8n for new releases on demand", "On demand"),
+        ("Check n8n for new releases only when I run it", "Only when I run it"),
+        ("Manually check n8n for new releases", "Manually"),
+    ],
+)
+@pytest.mark.parametrize("watched", [(), ("n8n",)], ids=["not watched", "watched"])
+def test_one_softwares_release_check_run_by_hand_is_its_own_card(
+    task: str, said: str, watched: tuple[str, ...]
+):
+    fields = release_read()
+    answer = answer_of(fields, task, facts(*watched))
+
+    assert isinstance(answer, SetupCardAnswer), answer
+    assert answer.rows[0] == UnderstoodRow(kind="schedule", text=said, state="understood")
+    assert all(p.mark != "cant" for p in parts_of(fields, task, answer)), "nothing is crossed"
 
 
 def test_a_schedule_beside_the_words_stays_the_schedule():
