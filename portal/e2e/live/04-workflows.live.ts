@@ -9,7 +9,8 @@ import { devContext, expectReadOnly, OUT, shot } from './support/ui'
 const heading = (page: Page) => page.getByRole('heading', { level: 1 })
 const rowOf = (page: Page, useCaseId: string) => page.locator(`li[data-workflow-id="${useCaseId}"]`)
 const ownLink = (row: Locator) => row.getByRole('link', { name: /^(?!Explain )/ })
-const nextRun = (page: Page) => page.locator('section', { has: page.getByRole('heading', { name: 'When', exact: true }) }).locator('p')
+const whenSection = (page: Page) => page.locator('section', { has: page.getByRole('heading', { name: 'When', exact: true }) })
+const nextRun = (page: Page) => whenSection(page).locator('p')
 const changeWhen = (page: Page) => page.getByRole('button', { name: /^(Change|Set) when it runs$/ })
 const versionsList = (page: Page) => page.getByRole('list', { name: 'Versions, newest first' })
 
@@ -87,7 +88,8 @@ test('alice pauses a workflow, its next run reads Paused and Run now goes, and r
   const page = await context.newPage()
   await page.goto(`/workflows/${workflow.id}`)
   await expect(heading(page)).toHaveText(workflow.name)
-  await expect(nextRun(page)).toContainText('Next run: Not scheduled')
+  await expect(whenSection(page)).toContainText('Runs only when you press Run now.')
+  await expect(whenSection(page)).not.toContainText('Next run')
 
   await page.getByRole('button', { name: 'Pause' }).click()
   await expect(nextRun(page)).toContainText('Next run: Paused')
@@ -96,7 +98,7 @@ test('alice pauses a workflow, its next run reads Paused and Run now goes, and r
   await expect(page.getByRole('button', { name: 'Pause' })).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Run now' })).toHaveCount(0)
   await page.getByRole('button', { name: 'Resume' }).click()
-  await expect(nextRun(page)).toContainText('Next run: Not scheduled')
+  await expect(whenSection(page)).not.toContainText('Next run')
   await expect(page.getByRole('button', { name: 'Pause' })).toBeFocused()
   await expect(page.getByRole('button', { name: 'Run now' })).toBeVisible()
   await context.close()
@@ -206,7 +208,7 @@ test('scenario H: alice changes the schedule, pauses and deletes through the pag
 
   const order = await page.evaluate(() => {
     const at = (needle: string) => document.body.innerText.indexOf(needle)
-    return ['On. It has no schedule', 'Who says yes', 'Recent runs', 'Pause'].map(at)
+    return ['On. Runs only when you press Run now.', 'Who says yes', 'Recent runs', 'Pause'].map(at)
   })
   expect(order.every((place) => place >= 0), 'every section is on the page').toBe(true)
   expect(order, 'banner, who says yes, recent runs, then the buttons, as the sketch orders them').toEqual([...order].sort((a, b) => a - b))

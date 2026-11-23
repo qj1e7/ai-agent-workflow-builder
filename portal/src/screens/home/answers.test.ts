@@ -267,11 +267,16 @@ describe('Check my workflows about the one workflow they have', () => {
     ({ name: PLANTED, state: 'on', last_run: null, next_run_at: null, schedule: null, ...fields }) as unknown as UseCaseView
 
   it('says plainly whether it is on and that it hasn’t run yet, with the name quoted as data', () => {
-    expect(oneWorkflowSay(one({}), NOW, nameOf)).toBe(`“${PLANTED}” is on. It hasn’t run yet. Next run: Not scheduled.`)
+    expect(oneWorkflowSay(one({}), NOW, nameOf)).toBe(`“${PLANTED}” is on. It hasn’t run yet. Runs only when you press Run now.`)
+  })
+
+  it('gives a draft with no schedule no next run, and no Run now it can’t have', () => {
+    expect(oneWorkflowSay(one({ state: 'draft' }), NOW, nameOf)).toBe(`“${PLANTED}” is a draft. It hasn’t run yet. Next run: Not scheduled.`)
   })
 
   it('says when it runs next, in the panel’s own Next run words', () => {
-    const said = oneWorkflowSay(one({ next_run_at: '2026-11-21T01:00:00Z' }), NOW, nameOf)
+    const schedule = { day: 'saturday', at: '09:00', time_zone: null, held: false } as unknown as UseCaseView['schedule']
+    const said = oneWorkflowSay(one({ schedule, next_run_at: '2026-11-21T01:00:00Z' }), NOW, nameOf)
     expect(said).toMatch(/^“.+” is on\. It hasn’t run yet\. Next run: .+\.$/)
     expect(said).not.toContain('Not scheduled')
   })
@@ -283,6 +288,8 @@ describe('Check my workflows about the one workflow they have', () => {
       expect(said).toMatch(/Next run: Not running\.$/)
       expect(said).not.toContain('Sat')
     }
+    const unmoved = oneWorkflowSay(one({ move_refused: 'Not running. n8n did not take it yet.' }), NOW, nameOf)
+    expect(unmoved, 'a workflow with no schedule that could not move says Not running as a next run too').toMatch(/ Next run: Not running\.$/)
   })
 
   it('names no next run while it is paused, and says how its last run went', () => {

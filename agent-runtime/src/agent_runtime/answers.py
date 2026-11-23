@@ -125,6 +125,7 @@ from agent_runtime.planner import (
 )
 from agent_runtime.questions import answer_question, is_fallback, question_messages
 from agent_runtime.reading import (
+    BY_HAND,
     FILLED_IN,
     FILLER,
     ME_WORDS,
@@ -1259,6 +1260,8 @@ PLAIN_BESIDE_SOFTWARE: Final = frozenset({"run", "log", "make"}) | NOTIFIES
 
 
 def _asks_for_a_change(clause: str) -> bool:
+    # "run it manually" asks for no schedule, which the schedule row holds, not for a change.
+    clause = BY_HAND.sub(" ", clause)
     verbs = set(change_verbs_in(clause)) - PLAIN_BESIDE_SOFTWARE
     return bool(verbs) or commands_a_change(clause)
 

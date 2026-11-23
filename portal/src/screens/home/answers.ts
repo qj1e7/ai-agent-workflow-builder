@@ -2,7 +2,7 @@ import type { CantRowView, CapabilitiesView, CapabilityView, Day, OfflineReply, 
 import { andList, count, type NameOf } from '../run/words'
 import { checksOnItsOwn, clockWords, everyWords, heldWords as heldScheduleWords, PAUSED_WORDS, repeatWords } from '../software/software'
 import { scheduleZoneName } from '../workflows/times'
-import { isRunning, lastRunLine, lifeWords, nextRunWords, type Row } from '../workflows/workflow'
+import { isRunning, lastRunLine, lifeWords, nextRunWords, RUN_NOW_ONLY, type Row } from '../workflows/workflow'
 import { bareHour, lowerFirst, readWhen, scheduleOf } from './card'
 import { sayChanged } from './changed'
 import { cantOnCard, crossWords, quote, watchlistRuns } from './parts'
@@ -149,7 +149,8 @@ export const watchlistRunsWords = (schedule: ScheduleView): string => {
 /** A time of their own in the schedule words ("every day at 9:00"), or in their own words when they don't name both how often and when. */
 export function askedRunsWords(said: string): string {
   const when = readWhen(said)
-  return when.often !== '' && when.at !== '' ? repeatWords(scheduleOf(when)) : lowerFirst(said.trim())
+  const schedule = when.often !== '' && when.at !== '' ? scheduleOf(when) : null
+  return schedule ? repeatWords(schedule) : lowerFirst(said.trim())
 }
 
 /** A watched software's card beside a time of its own: the Software watchlist checks every software it holds on its one schedule. */
@@ -218,9 +219,10 @@ export function watchChoice(name: string, said: string, view: WatchlistView | nu
   // asks, never a guess here.
   if (bareHour(said) !== null || UNREAD_TIMES.test(said)) return null
   const when = readWhen(said)
-  if (when.often === '' && when.at === '') return null
+  // The watchlist checks on its one schedule, so words for no schedule leave the card as it was.
+  if (when.often === 'manual' || (when.often === '' && when.at === '')) return null
   // The day read, or the watchlist's own for a time alone, as "at 5pm". Its time stays only when the words name none.
-  const read = when.often === '' ? null : scheduleOf(when).day
+  const read = when.often === '' ? null : (scheduleOf(when)?.day ?? null)
   const day = read ?? runs.day
   const clock = when.at === '' ? null : clockWords(when.at)
   const slot = (named: Day | null) => [named === null ? null : everyWords(named), clock].filter((part) => part !== null).join(' at ')
@@ -364,14 +366,15 @@ export function workflowsSay(rows: readonly Row[], asker: Asker = 'operator'): s
 
 /**
  * Check my workflows when there is one workflow: whether it is on, how its last run went in its row’s own words, and its next run
- * in the panel’s own Next run words, so a held schedule or a refused move says Not running there too. Paused says it once. Its name
- * is quoted, so it reads as a name and never as the Planner’s words.
+ * in the panel’s own Next run words, so a held schedule or a refused move says Not running there too. Paused says it once. One with
+ * no schedule says it runs only on Run now, a whole sentence. Its name is quoted, so it reads as a name and never as the Planner’s words.
  */
 export function oneWorkflowSay(useCase: UseCaseView, now: Date, nameOf: NameOf): string {
   const life = useCase.state === 'draft' ? 'a draft' : lifeWords(useCase.state).toLowerCase()
   const last = lastRunLine(useCase, now, nameOf)
   const ran = useCase.last_run ? `${last.charAt(0).toUpperCase()}${last.slice(1).replace(/[.!?]+$/, '')}.` : 'It hasn’t run yet.'
-  const next = useCase.state === 'paused' ? '' : ` Next run: ${nextRunWords(useCase, now)}.`
+  const said = nextRunWords(useCase, now)
+  const next = useCase.state === 'paused' ? '' : said === RUN_NOW_ONLY ? ` ${said}` : ` Next run: ${said}.`
   return `${quote(useCase.name)} is ${life}. ${ran}${next}`
 }
 
