@@ -373,10 +373,11 @@ describe('when it runs', () => {
     expect(nextRunWords(PAUSED, NOW)).toBe('Paused')
   })
 
-  it('says only Run now starts a workflow with no schedule, on or paused', () => {
+  it('says only Run now starts a workflow with no schedule while it is on, and no more while Run now refuses it', () => {
     expect(whenWords(AGENTS)).toEqual({ words: 'Runs only when you press Run now.', small: '' })
     const paused: UseCaseView = { ...AGENTS, state: 'paused' }
-    expect(whenWords(paused)).toEqual({ words: 'Runs only when you press Run now.', small: '' })
+    expect(whenWords(paused)).toEqual({ words: 'No schedule', small: '' })
+    expect(whenWords({ ...AGENTS, state: 'draft' })).toEqual({ words: 'No schedule', small: '' })
   })
 })
 

@@ -288,6 +288,8 @@ describe('Check my workflows about the one workflow they have', () => {
       expect(said).toMatch(/Next run: Not running\.$/)
       expect(said).not.toContain('Sat')
     }
+    const unmoved = oneWorkflowSay(one({ move_refused: 'Not running. n8n did not take it yet.' }), NOW, nameOf)
+    expect(unmoved, 'a workflow with no schedule that could not move says Not running as a next run too').toMatch(/ Next run: Not running\.$/)
   })
 
   it('names no next run while it is paused, and says how its last run went', () => {

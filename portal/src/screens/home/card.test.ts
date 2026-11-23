@@ -901,14 +901,30 @@ describe('a workflow that runs only when someone presses Run now', () => {
     expect(setupLeft(manual, null).choices).not.toContain('when it runs')
   })
 
-  it.each(['Only when I ask', 'When I run it', 'Only when I run it', 'On demand', 'Manually', 'run it manually'])('reads “%s” as no schedule, with no time to ask', (words) => {
+  it.each(['Only when I ask', 'When I run it', 'Only when I run it', 'On demand', 'Run it manually', 'Only run manually', 'Only manually'])('reads “%s” as no schedule, with no time to ask', (words) => {
     expect(readWhen(words)).toMatchObject({ often: 'manual', day: '', at: '' })
     expect(nextQuestion(said(words), null)).toBeNull()
   })
 
-  it.each(['Whenever', 'As needed', 'Now and then', 'When it suits me'])('asks How often? for “%s”, never a guess', (words) => {
+  it.each([
+    'Whenever',
+    'As needed',
+    'Now and then',
+    'When it suits me',
+    'Manually',
+    'Check n8n releases so I don’t have to check manually',
+    "I don't want to run it manually",
+    'Nobody should run it manually',
+    'Tickets we triaged manually',
+    'On demand or weekly',
+    'On demand, or once a month',
+  ])('asks How often? for “%s”, never a guess', (words) => {
     expect(readWhen(words).often).toBe('')
     expect(nextQuestion(said(words), null)?.words).toBe('How often?')
+  })
+
+  it('keeps a schedule written beside the words, since Run now starts any workflow', () => {
+    expect(readWhen('On demand, and also weekly on Monday at 9am')).toMatchObject({ often: 'week', day: 'monday', at: '09:00' })
   })
 
   it('sends no schedule, even after a time was picked first', () => {

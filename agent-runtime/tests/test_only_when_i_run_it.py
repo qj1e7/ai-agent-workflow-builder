@@ -7,7 +7,14 @@ import pytest
 
 from agent_runtime.answers import answer_of, parts_of
 from agent_runtime.contract import CantAnswer, RequestPart, SetupCardAnswer, UnderstoodRow
-from agent_runtime.reading import DaysRead, PlaceRead, SearchRead, TicketRead
+from agent_runtime.planner import NOT_SAID
+from agent_runtime.reading import (
+    DaysRead,
+    PlaceRead,
+    SearchRead,
+    TicketRead,
+    render_schedule,
+)
 from tests.test_answers import read
 from tests.test_release_check_routes import facts
 from tests.test_release_check_routes import read as release_read
@@ -16,7 +23,15 @@ REST = (
     "find Jira tickets in project MOCK that nobody updated for 14 days, and raise one Jira "
     "ticket in MOCK that lists them"
 )
-BY_HAND = ["Only when I ask", "When I run it", "Only when I run it", "On demand", "Manually"]
+BY_HAND = [
+    "Only when I ask",
+    "When I run it",
+    "Only when I run it",
+    "On demand",
+    "Run it manually",
+    "Only run manually",
+    "Only manually",
+]
 
 
 def answered(text: str, schedule: str | None) -> tuple[SetupCardAnswer, list[RequestPart]]:
@@ -51,7 +66,7 @@ def test_words_on_the_allow_list_are_the_schedule_row_whatever_the_model_read(
     assert [p.mark for p in parts] == ["will_do"] * len(parts)
 
 
-@pytest.mark.parametrize("said", ["only when I run it", "on demand", "manually"])
+@pytest.mark.parametrize("said", ["only when I run it", "on demand", "run it manually"])
 def test_the_words_after_the_task_are_its_schedule_too(said: str):
     card, parts = answered(f"{REST[:1].upper()}{REST[1:]}, {said}", None)
 
@@ -69,11 +84,47 @@ def test_any_other_words_for_when_it_runs_are_asked_never_guessed(said: str):
 
 
 @pytest.mark.parametrize(
+    "text",
+    [
+        "Check n8n releases so I don't have to check manually",
+        "Check n8n for new releases, I don't want to run it manually",
+        "Check n8n for new releases, nobody should run it manually",
+        "Check n8n for new releases so I don't have to run it manually",
+        "Check n8n for new releases when I'm not on demand",
+        "Find the tickets we triaged manually",
+        "Manually",
+    ],
+)
+def test_manually_counts_only_for_running_it_and_never_beside_a_no(text: str):
+    assert render_schedule(None, text).row == UnderstoodRow(
+        kind="schedule", text="", state="missing", note=NOT_SAID
+    )
+
+
+@pytest.mark.parametrize(
+    ("words", "schedule"),
+    [
+        ("On demand, and also weekly on Monday at 9am", "weekly on Monday at 9am"),
+        ("On demand, and also weekly on Monday at 9am", None),
+        ("On demand or weekly", "weekly"),
+        ("On demand or weekly", None),
+        ("On demand, or once a month", None),
+    ],
+)
+def test_a_schedule_beside_the_words_wins_or_how_often_is_asked(words: str, schedule: str | None):
+    card, parts = answered(f"{words}, {REST}", schedule)
+
+    assert "demand" not in card.rows[0].text.casefold()
+    crossed = [p.text for p in parts if p.mark == "cant" and p.reason == "not_followed"]
+    assert not any("week" in text for text in crossed), "the schedule they wrote is never crossed"
+
+
+@pytest.mark.parametrize(
     ("task", "said"),
     [
         ("Check n8n for new releases on demand", "On demand"),
         ("Check n8n for new releases only when I run it", "Only when I run it"),
-        ("Manually check n8n for new releases", "Manually"),
+        ("Check n8n for new releases, run it manually", "Run it manually"),
     ],
 )
 @pytest.mark.parametrize("watched", [(), ("n8n",)], ids=["not watched", "watched"])
