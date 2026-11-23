@@ -357,13 +357,37 @@ def own_time() -> Answered:
     )
 
 
-def test_an_operator_sees_the_draft_offer_and_the_watchlist_s_time_under_a_time_of_its_own():
+def test_an_operator_sees_the_quiet_link_and_the_watchlist_s_time_under_a_time_of_its_own():
     shown = words_of(own_time(), operator=True)
     assert "LangGraph (Newer out): You run 1.2.14. Newest is 1.2.16. [Open it]" in shown
     assert "[Make the Software watchlist run every weekday at 9]" in shown
-    assert "[Draft it as an n8n workflow] The Workflow drafter drafts it as its own n8n " in shown
-    assert "It isn't set up until an Approver says yes." in shown
-    assert "written" not in shown.split("[Draft it as an n8n workflow]")[1]
+    assert shown.endswith("[Build it with any n8n block]")
+    assert "Draft it as an n8n workflow" not in shown
+
+
+def test_a_card_from_our_blocks_offers_the_quiet_link_to_an_operator_only():
+    shown = Answered(answer=card("Friday bugs"), parts=[])
+    assert words_of(shown, operator=True).endswith("[Set up]\n[Build it with any n8n block]")
+    assert "[Build it with any n8n block]" not in words_of(shown)
+
+
+def test_a_can_t_our_blocks_don_t_cover_shows_the_drafter_s_card_to_an_operator():
+    """The Planner hands a can't the registry names to the drafter (ADR 0053, item 5), so an
+    Operator sees the drafted workflow's card where the can't would be, and an Approver still
+    sees the can't. One that names no ability keeps the can't, with the link."""
+    row = CantRow(
+        kind="do",
+        text="email it",
+        note="I can't send email yet.",
+        needs="new_system",
+        instead="Run results show here, in the chat.",
+    )
+    cant = Answered(answer=CantAnswer(cant=[row]), parts=[part("email it", "cant", "cant_do")])
+    assert words_of(cant, operator=True) == "Drafting it as an n8n workflow"
+    assert "email it" in words_of(cant) and "n8n" not in words_of(cant)
+    vague = row.model_copy(update={"instead": None, "note": "I can't do this yet. I can only x."})
+    kept = Answered(answer=CantAnswer(cant=[vague]), parts=cant.parts)
+    assert words_of(kept, operator=True).endswith("[Build it with any n8n block]")
 
 
 @pytest.mark.parametrize(

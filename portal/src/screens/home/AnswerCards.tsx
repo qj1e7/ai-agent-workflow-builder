@@ -27,7 +27,7 @@ import { AddToWatchlist, WhichSoftware } from './WatchlistCard'
 import { SoftwareActions } from './WatchlistActions'
 import { ExplainAnswer } from '../explain/ExplainAnswer'
 import { RemoveSoftwareAnswer } from './RemoveSoftware'
-import { DraftButton } from '../drafted/DraftButton'
+import { AnyBlockLink } from '../drafted/AnyBlockLink'
 import { DraftedCard } from '../drafted/DraftedCard'
 import partsStyles from './PartsList.module.css'
 import styles from './Planner.module.css'
@@ -59,8 +59,8 @@ function startOf(reply: SetupCardReply | PartReply, typed: string): CardStart {
 }
 
 /** A set-up card, and a part answer as one: what it can’t do is a cross on the card itself, with Ask the team. */
-export function SetupCardAnswer({ reply, typed }: { reply: SetupCardReply | PartReply; typed: string }) {
-  return <SetupCard start={startOf(reply, typed)} />
+export function SetupCardAnswer({ reply, typed, anyBlock }: { reply: SetupCardReply | PartReply; typed: string; anyBlock?: ReactNode }) {
+  return <SetupCard start={startOf(reply, typed)} anyBlock={anyBlock} />
 }
 
 /**
@@ -631,22 +631,17 @@ export function Answer({ reply, typed, page, focus = null }: AnswerProps) {
       return (
         <>
           {/* A question the rest's card asks, as how many days, is never asked on this card too. */}
-          <SetupCardAnswer reply={reply.also ? withCrosses(reply, reply, (part) => !asksOnCard(part)) : reply} typed={typed} />
+          <SetupCardAnswer reply={reply.also ? withCrosses(reply, reply, (part) => !asksOnCard(part)) : reply} typed={typed} anyBlock={<AnyBlockLink words={reply.draft_words} />} />
           <RestOfRequest reply={reply} typed={typed} />
         </>
       )
     case 'part':
-      return (
-        <>
-          <SetupCardAnswer reply={reply} typed={typed} />
-          <DraftButton words={reply.draft_words} />
-        </>
-      )
+      return <SetupCardAnswer reply={reply} typed={typed} anyBlock={<AnyBlockLink words={reply.draft_words} />} />
     case 'cant':
       return (
         <>
           <CantAnswer reply={reply} typed={typed} />
-          {onlyOwnTime(reply) ? null : <DraftButton words={reply.draft_words} />}
+          {onlyOwnTime(reply) ? null : <AnyBlockLink words={reply.draft_words} />}
         </>
       )
     case 'watchlist':

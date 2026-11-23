@@ -252,12 +252,13 @@ export type Phase = CardPhase
  * question at a time. Every change is saved as a draft after a short pause, so Resume on Workflows reopens it. Set up makes the
  * workflow as a draft, and the card goes on to build, test and turn it on.
  */
-export function SetupCard({ start }: { start: CardStart }) {
-  if (start.similar) return <AlreadyHave similar={start.similar} card={<SettingUp start={{ ...start, form: { ...start.form, name: secondName(start.form.name || start.similar.name) } }} />} />
-  return <SettingUp start={start} />
+/** `anyBlock` sits under the card while it is open, and goes with it once it is set up, dropped or no longer the live card. */
+export function SetupCard({ start, anyBlock = null }: { start: CardStart; anyBlock?: ReactNode }) {
+  if (start.similar) return <AlreadyHave similar={start.similar} card={<SettingUp start={{ ...start, form: { ...start.form, name: secondName(start.form.name || start.similar.name) } }} anyBlock={anyBlock} />} />
+  return <SettingUp start={start} anyBlock={anyBlock} />
 }
 
-function SettingUp({ start }: { start: CardStart }) {
+function SettingUp({ start, anyBlock }: { start: CardStart; anyBlock: ReactNode }) {
   const main = useMainButton()
   const live = useContext(CardLive)
   const memory = useContext(CardMemoryContext)
@@ -776,6 +777,7 @@ function SettingUp({ start }: { start: CardStart }) {
           </p>
         ) : null}
       </Card>
+      {creating ? null : anyBlock}
       {asking ? <DiscardDialog name={title} busy={deleteDraft.isPending} problem={discardProblem} onClose={() => setAsking(false)} onConfirm={confirmDiscard} /> : null}
     </div>
   )

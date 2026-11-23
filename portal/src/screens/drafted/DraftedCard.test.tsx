@@ -12,12 +12,14 @@ import bobSetUp from '../../../../contracts/fixtures/builder/setup-approval.bob.
 import carolSetUp from '../../../../contracts/fixtures/builder/setup-approval.carol.json'
 import cant from '../../../../contracts/fixtures/planner/answer.cant.json'
 import part from '../../../../contracts/fixtures/planner/answer.part.json'
+import setupCard from '../../../../contracts/fixtures/planner/answer.setup_card.json'
 import { ApiProvider } from '../../api/context'
 import { draftedKey } from '../../api/draftedQueries'
 import { createDevSession } from '../../api/session'
-import type { CantReply, DraftedWorkflowView, Me, PartReply, PlannerReply, SetUpApprovalView } from '../../api/types'
+import type { CantReply, DraftedWorkflowView, Me, PartReply, PlannerReply, SetupCardReply, SetUpApprovalView } from '../../api/types'
 import { Answer, type Page } from '../home/AnswerCards'
 import { ChatProvider } from '../home/ChatProvider'
+import { CardLive } from '../home/primary'
 import { DraftedCard } from './DraftedCard'
 import { SetUpApproval } from './SetUpApprovalPage'
 
@@ -151,28 +153,47 @@ describe('the drafted workflow card', () => {
   })
 })
 
-describe('Draft it as an n8n workflow', () => {
+describe('Build it with any n8n block', () => {
+  const ANY_BLOCK = 'Build it with any n8n block'
   const cantWith = (words: string | null): CantReply => ({ ...(cant as CantReply), draft_words: words })
   const partWith = (words: string | null): PartReply => ({ ...(part as PartReply), draft_words: words })
+  const cardWith = (words: string | null): SetupCardReply => ({ ...(setupCard as SetupCardReply), similar: null, draft_words: words })
   const draw = (reply: PlannerReply, me?: Me) => render(<Answer reply={reply} typed="x" page={PAGE} />, me ? { me } : {})
+  const link = (html: string) => [...html.matchAll(/<button\b([^>]*)>([^<]*)<\/button>/g)].find((m) => m[2] === ANY_BLOCK)?.[1] ?? null
 
-  it('shows for an Operator on a can’t answer and on a part card that carry words to draft', () => {
-    expect(buttons(draw(cantWith(WORDS)))).toContain('Draft it as an n8n workflow')
-    expect(buttons(draw(partWith(WORDS)))).toContain('Draft it as an n8n workflow')
+  it('shows for an Operator as a quiet link on a set-up card, a part card and a can’t answer that carry words to draft', () => {
+    for (const reply of [cardWith(WORDS), partWith(WORDS), cantWith(WORDS)]) {
+      const html = draw(reply)
+      expect(buttons(html)).toContain(ANY_BLOCK)
+      expect(link(html)).toMatch(/class="[^"]*linkButton/)
+    }
   })
 
-  it('says under the button what drafting does: a draft, checked, that isn’t set up until an Approver says yes', () => {
-    const said = text(draw(cantWith(WORDS)))
-    expect(said).toContain('drafts it as its own n8n workflow, and the safety checker checks it.')
-    expect(said).toContain('It isn’t set up until an Approver says yes.')
-    expect(said).not.toContain('written')
-    expect(text(draw(cantWith(null)))).not.toContain('safety checker')
+  it('replaces Draft it as an n8n workflow and its note, so the person never picks a path', () => {
+    for (const reply of [cardWith(WORDS), partWith(WORDS), cantWith(WORDS)]) {
+      const html = draw(reply)
+      expect(buttons(html)).not.toContain('Draft it as an n8n workflow')
+      expect(text(html)).not.toContain('safety checker')
+    }
+  })
+
+  it('sits on the card, so it goes when the card does, as once it is no longer the live one', () => {
+    for (const reply of [cardWith(WORDS), partWith(WORDS)]) {
+      expect(buttons(draw(reply))).toContain(ANY_BLOCK)
+      const gone = render(
+        <CardLive.Provider value={false}>
+          <Answer reply={reply} typed="x" page={PAGE} />
+        </CardLive.Provider>,
+      )
+      expect(buttons(gone)).not.toContain(ANY_BLOCK)
+    }
   })
 
   it('never shows without words to draft, or for someone who is not an Operator', () => {
-    expect(buttons(draw(cantWith(null)))).not.toContain('Draft it as an n8n workflow')
-    expect(buttons(draw(partWith(null)))).not.toContain('Draft it as an n8n workflow')
-    expect(buttons(draw(cantWith(WORDS), BOB))).not.toContain('Draft it as an n8n workflow')
+    expect(buttons(draw(cantWith(null)))).not.toContain(ANY_BLOCK)
+    expect(buttons(draw(partWith(null)))).not.toContain(ANY_BLOCK)
+    expect(buttons(draw(cardWith(null)))).not.toContain(ANY_BLOCK)
+    expect(buttons(draw(cantWith(WORDS), BOB))).not.toContain(ANY_BLOCK)
   })
 
   it('shows the drafted workflow card for a draft the Planner started, and the refusal words when it did not', () => {
