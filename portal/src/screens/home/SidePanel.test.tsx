@@ -147,7 +147,10 @@ describe('the side panel', () => {
   it('shows a stopped workflow’s three answers with Retry, its last and next run, Open the run, and Pause, to an Operator', () => {
     const html = draw({ kind: 'workflow', id: STOPPED.use_case_id })
     const shown = text(html)
-    expect(shown).toMatch(/What happened[\s\S]*Affected[\s\S]*Safe to retry[\s\S]*Last run[\s\S]*Next run/)
+    expect(shown).toMatch(/What happened[\s\S]*Affected[\s\S]*Safe to retry[\s\S]*Last run/)
+    expect(shown, 'it has no schedule and runs only on Run now, so it has no Next run row').not.toContain('Next run')
+    const scheduled: UseCaseView = { ...STOPPED, schedule: { day: 'monday', at: '09:00', time_zone: 'Asia/Singapore', owner_name: 'Alice', held: null, held_words: null }, next_run_at: '2026-11-09T01:00:00Z' }
+    expect(text(draw({ kind: 'workflow', id: scheduled.use_case_id }, { useCase: scheduled }))).toMatch(/Last run[\s\S]*Next run/)
     expect(buttons(html)).toEqual(['Close', 'Retry', 'Pause'])
     expect(links(html)).toEqual([
       ['More details', `/workflows/${STOPPED.use_case_id}`],

@@ -17,6 +17,7 @@ import { emptyModel, stationsOf, type RunModel } from '../run/runModel'
 import { planOf } from '../run/useRunStory'
 import { scheduleShort, type StageTone } from '../run/words'
 import { firstRunWhen } from '../workflows/times'
+import { RUN_NOW_ONLY, runsOnlyByHand } from '../workflows/workflow'
 import { buildLine, buildStage, draftPill, LINE_STEP_MS, notesOf, replayAt, shownOf, testStatus, testStep, turnOnStep, type BuildStage, type PillTone, type Replay } from './build'
 import { useShowBesideOnWide } from './autoOpen'
 import { PartsList, type Part } from './PartsList'
@@ -92,7 +93,8 @@ export function useBuilt(useCaseId: string, test: RunModel | null): Built {
 
 function firstRunWords(useCase: UseCaseView | undefined, now: Date): string {
   const next = useCase?.next_run_at
-  return next ? `On. First run ${firstRunWhen(next, now, useCase.schedule?.time_zone)}.` : 'On.'
+  if (next) return `On. First run ${firstRunWhen(next, now, useCase.schedule?.time_zone)}.`
+  return useCase && runsOnlyByHand(useCase) ? `On. ${RUN_NOW_ONLY}` : 'On.'
 }
 
 interface BuildingProps {

@@ -316,6 +316,36 @@ test.describe('with the AI model on', () => {
     })
   }
 
+  test('Only when I run it: no time is asked, Turn on tests it and turns it on with no schedule, and its page says it runs only when you press Run now', async ({ browser, backend }, info) => {
+    const workflows = async () => (await backend.get<{ use_cases: { use_case_id: string; state: string; schedule: unknown; next_run_at: string | null }[] }>('alice', '/api/v1/use-cases')).use_cases
+    const before = new Set((await workflows()).map((one) => one.use_case_id))
+    const made = async () => (await workflows()).filter((one) => !before.has(one.use_case_id))
+    const context = await devContext(browser, 'alice')
+    const page = await context.newPage()
+    const watch = watchPage(page)
+    await page.goto('/')
+    await ask(page, SUMMARY)
+    const when = card(page).getByRole('list', { name: 'Each part of your request' }).locator('[data-part="When"]')
+    await expect(when).toContainText('How often?')
+    await card(page).getByRole('button', { name: 'Only when I run it', exact: true }).click()
+    await expect(when).toHaveAttribute('data-mark', 'ok')
+    await expect(when).toContainText('Only when I run it')
+    await expect(when, 'no time is asked, and no time zone is said').not.toContainText(/at what time|Singapore/)
+    await fillTheRest(page, 'MOCK')
+    await expect(left(page)).toHaveText('', { timeout: 30_000 })
+    await setUp(page).click()
+    await expect(card(page), 'the test run passes, and it turns itself on').toContainText('On. Runs only when you press Run now.', { timeout: 120_000 })
+    await expect.poll(async () => (await made()).length, { message: 'one workflow was set up' }).toBe(1)
+    const [workflow] = await made()
+    expect([workflow?.state, workflow?.schedule, workflow?.next_run_at]).toEqual(['on', null, null])
+    await page.goto(`/workflows/${workflow?.use_case_id ?? ''}`)
+    await expect(main(page)).toContainText('On. Runs only when you press Run now.')
+    await expect(page.getByRole('button', { name: 'Run now' })).toBeVisible()
+    await shot(page, info, 'only-when-i-run-it')
+    assertClean(watch)
+    await context.close()
+  })
+
   test('a draft’s own page: no Run now and no Pause, a test run that writes nothing, then Turn it on and On only once the platform says so', async ({ browser, backend }) => {
     const name = `Draft page ${randomUUID().slice(0, 6)}`
     const made = await backend.post<{ use_case_id: string }>('alice', '/api/v1/agent-use-cases', { name, instruction: 'Check LangGraph for a new release and raise a ticket in MOCK.', agents: [{ card_id: 'crd_version_checker', values: { 'GitHub repository': 'langchain-ai/langgraph', 'Jira project': 'MOCK' } }], schedule: { day: 'monday', at: '09:00' }, on: false }, undefined, [201])

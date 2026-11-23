@@ -28,6 +28,7 @@ import {
   nameProblem,
   nameOf,
   nextQuestion,
+  OFTEN_NAMES,
   planView,
   reusedAgents,
   cardBlockers,
@@ -75,11 +76,7 @@ export interface CardStart {
 
 const SAVE_PAUSE_MS = 800
 
-const OFTEN: readonly (readonly [Exclude<Often, ''>, string])[] = [
-  ['every_day', 'Every day'],
-  ['weekdays', 'Every weekday'],
-  ['week', 'Every week'],
-]
+const OFTEN = Object.entries(OFTEN_NAMES) as [Exclude<Often, ''>, string][]
 const DAYS: readonly (readonly [Weekday, string])[] = [
   ['monday', 'Monday'],
   ['tuesday', 'Tuesday'],
@@ -206,10 +203,12 @@ function WhenPicker({ when, problems, focus, onWhen, onDone }: { when: When; pro
             </select>
           </div>
         ) : null}
-        <div className={styles['field']}>
-          <label htmlFor={`${id}-at`}>Time, {teamPlace()}</label>
-          <input id={`${id}-at`} type="time" step={300} value={when.at} aria-invalid={problems.at ? true : undefined} onKeyDown={leave} onChange={(event) => onWhen({ ...when, at: event.target.value })} />
-        </div>
+        {when.often === 'manual' ? null : (
+          <div className={styles['field']}>
+            <label htmlFor={`${id}-at`}>Time, {teamPlace()}</label>
+            <input id={`${id}-at`} type="time" step={300} value={when.at} aria-invalid={problems.at ? true : undefined} onKeyDown={leave} onChange={(event) => onWhen({ ...when, at: event.target.value })} />
+          </div>
+        )}
       </div>
       {Object.values(problems)[0] ? <p className={styles['problem']}>{Object.values(problems)[0]}</p> : null}
       <div className={styles['btns']}>
@@ -620,9 +619,7 @@ function SettingUp({ start }: { start: CardStart }) {
           mark: 'ok' as const,
           body: (
             <>
-              <span>
-                {timeText ?? ''}, {teamTime()}
-              </span>
+              <span>{form.when.often === 'manual' ? timeText : `${timeText ?? ''}, ${teamTime()}`}</span>
               <button type="button" className={styles['link']} aria-expanded={editing === 'when'} onClick={() => open('when')}>
                 Change<span className="visually-hidden"> when it runs</span>
               </button>

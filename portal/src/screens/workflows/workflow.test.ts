@@ -267,7 +267,13 @@ describe('the next run', () => {
   it('reads Paused while the workflow is paused, the date when it has a schedule, and Not scheduled otherwise', () => {
     expect(nextRunWords(PAUSED, NOW)).toBe('Paused')
     expect(nextRunWords(WATCHLIST, NOW)).toBe('Mon 9 Nov, 9:00')
-    expect(nextRunWords(AGENTS, NOW)).toBe('Not scheduled')
+    expect(nextRunWords({ ...AGENTS, state: 'draft' }, NOW)).toBe('Not scheduled')
+  })
+
+  it('says a workflow that is on with no schedule runs only when you press Run now, unless Run now can’t start it', () => {
+    expect(nextRunWords(AGENTS, NOW)).toBe('Runs only when you press Run now.')
+    expect(nextRunWords({ ...AGENTS, start_refused: NO_START }, NOW)).toBe('Not scheduled')
+    expect(nextRunWords({ ...AGENTS, state: 'paused' }, NOW)).toBe('Paused')
   })
 })
 
@@ -385,10 +391,11 @@ describe('when it runs', () => {
     expect(nextRunWords(PAUSED, NOW)).toBe('Paused')
   })
 
-  it('says only Run now starts a workflow with no schedule, on or paused', () => {
-    expect(whenWords(AGENTS)).toEqual({ words: 'No schedule', small: 'An Operator starts it with Run now.' })
+  it('says only Run now starts a workflow with no schedule while it is on, and no more while Run now refuses it', () => {
+    expect(whenWords(AGENTS)).toEqual({ words: 'Runs only when you press Run now.', small: '' })
     const paused: UseCaseView = { ...AGENTS, state: 'paused' }
-    expect(whenWords(paused)).toEqual({ words: 'No schedule', small: 'An Operator starts it with Run now.' })
+    expect(whenWords(paused)).toEqual({ words: 'No schedule', small: '' })
+    expect(whenWords({ ...AGENTS, state: 'draft' })).toEqual({ words: 'No schedule', small: '' })
   })
 })
 
@@ -798,8 +805,9 @@ describe('the status banner', () => {
     expect(needsFix(stuck)).toBe(true)
   })
 
-  it('says a workflow with no schedule runs when an Operator presses Run now', () => {
-    expect(bannerOf(facts({ useCase: AGENTS })).text).toBe('On. It has no schedule, so it runs when an Operator presses Run now.')
+  it('says a workflow with no schedule runs only when you press Run now, and never while Run now can’t start it', () => {
+    expect(bannerOf(facts({ useCase: AGENTS })).text).toBe('On. Runs only when you press Run now.')
+    expect(bannerOf(facts({ useCase: { ...AGENTS, start_refused: NO_START } })).text).toBe('On.')
   })
 
   it('holds Resume for an Operator while paused, and tells an Approver an Operator resumes it, with no action', () => {

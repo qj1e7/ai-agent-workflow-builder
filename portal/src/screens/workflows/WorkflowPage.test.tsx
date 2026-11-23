@@ -148,8 +148,9 @@ describe('a workflow page', () => {
 
   it('says when it runs, when it runs next, and who says yes', () => {
     const html = render()
-    expect(whenOf(html)).toBe('No schedule An Operator starts it with Run now.')
-    expect(nextOf(html)).toBe('Not scheduled')
+    expect(whenOf(html)).toBe('Runs only when you press Run now.')
+    expect(sectionText(html, 'When'), 'a workflow with no schedule has no next run to give').not.toContain('Next run')
+    expect(text(mainOf(html))).toContain('On. Runs only when you press Run now.')
     expect(sectionText(html, 'Who says yes')).toBe('Any Approver but you, in Teams. Nothing is written until an Approver says yes. Who can’t say yes Nobody says yes to their own work. The workflow’s owner, whoever starts a run and whoever retries it can’t say yes to that run.')
   })
 
