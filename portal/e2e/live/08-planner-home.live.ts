@@ -531,22 +531,18 @@ test.describe('with the AI model on', () => {
     await context.close()
   })
 
-  test('OWN-time: a watch request’s own time is offered to the whole watchlist, and the offer gets the edit card', async ({ browser, backend }) => {
-    // LangGraph is watched, so its card offers to move the whole watchlist. One not watched yet gets the watch card instead.
+  test('OWN-time: a watched software asked at a time of its own gets its own release check card', async ({ browser, backend }) => {
+    // LangGraph is watched, so a time of its own is its own release check (ADR 0053). One not watched yet gets the watch card.
     await backend.freshWatchlist('alice')
     const context = await devContext(browser, 'alice')
     const page = await context.newPage()
     const watch = watchPage(page)
-    const messages = () => thread(page).locator(':scope > li')
     await page.goto('/')
     await ask(page, 'Watch LangGraph releases on the watchlist every Thursday at 7am')
-    const offer = messages().last().getByRole('button', { name: /^(?:Check all \d+ every Thursday at 7:00|Make the Software watchlist run every Thursday at 7am)$/ })
-    await expect(offer).toBeVisible()
-    const before = await messages().count()
-    await offer.click()
-    await expect(messages().nth(before), 'the button sends the request the old offer sent').toHaveText(/Make the Software watchlist run every Thursday at 7am/)
-    await expect(editCard(messages().last()), 'the Planner answers the offer with the edit card').toBeVisible({ timeout: 30_000 })
-    await expect(editCard(messages().last()).getByRole('button', { name: 'Save change' }), 'nothing changes until she saves it').toBeVisible()
+    const answer = thread(page).locator(':scope > li').last()
+    await expect(answer).toContainText('LangGraph release check', { timeout: 30_000 })
+    await expect(answer).toContainText('Thursday at 7:00')
+    await expect(answer, 'no cross on its time').not.toContainText('I can’t give one software its own time yet')
     assertClean(watch)
     await context.close()
   })

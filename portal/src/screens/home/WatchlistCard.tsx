@@ -1,10 +1,10 @@
-import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { Link } from '../../ui/Link'
 import { useErrorWords } from '../../api/context'
 import { useLatch } from '../../api/latch'
-import { useAddSoftware, useFindSoftware, useSaveSchedule } from '../../api/queries'
+import { useAddSoftware, useFindSoftware, useSaveSchedule, useWatchlist } from '../../api/queries'
 import type { ScheduleView } from '../../api/types'
-import { watchlistRunsWords, watchSavedWords } from './answers'
+import { stillChecksWords, watchlistRunsWords, watchSavedWords } from './answers'
 import { Button } from '../../ui/Button'
 import { Card } from '../../ui/Card'
 import { IconCheck } from '../../ui/icons'
@@ -24,6 +24,7 @@ export function AddToWatchlist({ name, then = null }: { name: string; then?: { r
   const find = useFindSoftware()
   const add = useAddSoftware()
   const move = useSaveSchedule()
+  const watchlist = useWatchlist({ enabled: then !== null })
   const latch = useLatch()
   const words = useErrorWords()
   const main = useMainButton()
@@ -36,6 +37,14 @@ export function AddToWatchlist({ name, then = null }: { name: string; then?: { r
     mutate(name)
   }, [name, mutate])
 
+  // With the watch card's move, an Add that can't finish says the watchlist keeps its own schedule.
+  const still = then && watchlist.data ? stillChecksWords(watchlist.data) : null
+  const unmoved = (line: ReactNode) => (
+    <>
+      {line}
+      {still ? <p>{still}</p> : null}
+    </>
+  )
   if (kept) return <p className="muted">Not added. Nothing changed.</p>
   if (add.isSuccess) {
     const added = add.variables
@@ -63,45 +72,52 @@ export function AddToWatchlist({ name, then = null }: { name: string; then?: { r
   }
   const answer = find.data
   if (find.isError || answer === undefined) {
-    return (
+    return unmoved(
       <p role="alert">
         I couldn’t look that up just now. {find.isError ? words(find.error) : ''} <Link to={WATCHLIST}>Add it on the Software watchlist</Link>
-      </p>
+      </p>,
     )
   }
   if (answer.status !== 'found') {
-    return (
+    return unmoved(
       <p>
         I couldn’t find {name}’s GitHub project. <Link to={WATCHLIST}>Add it on the Software watchlist</Link> with its address.
-      </p>
+      </p>,
     )
   }
   const [only, ...others] = answer.matches
   if (only === undefined || others.length > 0) {
-    return (
+    return unmoved(
       <p>
         More than one project could be {name}. <Link to={WATCHLIST}>Choose on the Software watchlist</Link>.
-      </p>
+      </p>,
     )
   }
   const verdict = verdictOf(only)
   if (verdict.kind === 'listed') {
-    return (
+    return unmoved(
       <p>
         {alreadyWords(only.repo, verdict.name)} <Link to={WATCHLIST}>Open the Software watchlist</Link>
-      </p>
+      </p>,
     )
   }
   if (verdict.kind === 'none') {
-    return (
+    return unmoved(
       <p>
         {only.repo} has no releases the check can count, so there is nothing to compare. <Link to={WATCHLIST}>Open the Software watchlist</Link>
-      </p>
+      </p>,
     )
   }
   // With the watch card's move, the whole watchlist moves to the time asked once it holds the software, from the version Add made.
+  // The promise carries the move on even when the card leaves the screen before Add answers.
   const moveTo = (version: number) => (then ? move.mutate({ ...then, expected_version: version }) : undefined)
-  const press = () => latch.run((settled) => add.mutate({ name, repo: only.repo }, { onSettled: settled, onSuccess: (view) => moveTo(view.version) }))
+  const press = () =>
+    latch.run((settled) => {
+      void add
+        .mutateAsync({ name, repo: only.repo })
+        .then((view) => moveTo(view.version), () => undefined)
+        .finally(settled)
+    })
   return (
     <>
       <p>
@@ -118,6 +134,7 @@ export function AddToWatchlist({ name, then = null }: { name: string; then?: { r
           Could not add it. {words(add.error)}
         </p>
       ) : null}
+      {add.isError && still ? <p>{still}</p> : null}
     </>
   )
 }

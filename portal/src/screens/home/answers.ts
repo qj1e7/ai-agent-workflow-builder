@@ -1,9 +1,9 @@
 import type { CantRowView, CapabilitiesView, CapabilityView, OfflineReply, PartView, PauseReply, PlannerReply, QuestionReply, RemoveSoftwareReply, ResumeReply, RowKind, ScheduleView, UnderstoodRowView, UseCaseView, WatchlistView } from '../../api/types'
 import { andList, count, type NameOf } from '../run/words'
-import { checksOnItsOwn, heldWords as heldScheduleWords, PAUSED_WORDS, repeatWords } from '../software/software'
+import { checksOnItsOwn, clockWords, everyWords, heldWords as heldScheduleWords, PAUSED_WORDS, repeatWords } from '../software/software'
 import { scheduleZoneName } from '../workflows/times'
 import { isRunning, lastRunLine, lifeWords, nextRunWords, type Row } from '../workflows/workflow'
-import { lowerFirst, readWhen, scheduleOf } from './card'
+import { bareHour, lowerFirst, readWhen, scheduleOf } from './card'
 import { sayChanged } from './changed'
 import { cantOnCard, crossWords, quote, watchlistRuns } from './parts'
 
@@ -192,8 +192,8 @@ export function ownTimeOffer(ownTime: PartView, view: WatchlistView | null | und
 export interface WatchChoice {
   readonly lead: string
   readonly question: string
-  /** Add it and move the whole watchlist to the time asked, keeping its time when the words name none. Null when the words aren't a schedule. */
-  readonly move: { readonly label: string; readonly schedule: { readonly day: ScheduleView['day']; readonly at: string } } | null
+  /** Add it and move the whole watchlist to the time asked, keeping its time when the words name none. */
+  readonly move: { readonly label: string; readonly schedule: { readonly day: ScheduleView['day']; readonly at: string } }
   readonly keep: string
 }
 
@@ -211,11 +211,15 @@ const WEEKDAY_NAMES: Partial<Record<ScheduleView['day'], string>> = {
 export function watchChoice(name: string, said: string, view: WatchlistView | null | undefined): WatchChoice | null {
   const runs = checksOnItsOwn(view) ? (view?.schedule ?? null) : null
   if (!view || !runs) return null
-  const total = view.software.length
-  const asked = askedRunsWords(said)
+  // A bare hour, as "at 9", could be morning or evening: the old offer's edit card asks, never a guess here.
+  if (bareHour(said) !== null) return null
   const when = readWhen(said)
-  const planned = scheduleOf(when)
-  const move = when.often === '' ? null : { label: `Add it, and check all ${String(total + 1)} ${asked}`, schedule: { day: planned.day, at: planned.at === '' ? runs.at : planned.at } }
+  if (when.often === '' && when.at === '') return null
+  // The day read, or the watchlist's own for a time alone, as "at 5pm". Its time stays only when the words name none.
+  const day = when.often === '' ? runs.day : scheduleOf(when).day
+  const asked = `${everyWords(day)}${when.at === '' ? '' : ` at ${clockWords(when.at)}`}`
+  const total = view.software.length
+  const move = { label: `Add it, and check all ${String(total + 1)} ${asked}`, schedule: { day, at: when.at === '' ? runs.at : when.at } }
   const weekly = WEEKDAY_NAMES[runs.day]
   return {
     lead: `${name} isn’t on your Software watchlist yet. The watchlist is a workflow that checks ${String(total)} software, ${watchlistRunsWords(runs)}, and you asked for ${asked}.`,
@@ -224,6 +228,10 @@ export function watchChoice(name: string, said: string, view: WatchlistView | nu
     keep: weekly ? `Add it, keep ${weekly}s` : 'Add it, keep the same days',
   }
 }
+
+/** The line when the watch card's move can't be made, because Add didn't finish: the watchlist keeps its own schedule. */
+export const stillChecksWords = (view: Pick<WatchlistView, 'schedule'>): string | null =>
+  view.schedule ? `The watchlist still checks ${watchlistRunsWords(view.schedule)}.` : null
 
 /** The sketch's line once the watch card's change is saved. */
 export const watchSavedWords = (version: number, total: number, runs: string): string => `Saved as version ${String(version)}. The Software watchlist checks ${String(total)} software, ${runs}.`

@@ -755,7 +755,10 @@ _ASKS: Final = re.compile(
 """A question, as "which version do we run?". "When" and "do a" start a task too, and a "?"
 after "can you" closes a request: "can you check LangGraph every day at 9am?"."""
 _RELEASE_CHECK_WORDS: Final = (
-    (WATCH_WORDS - {"newer"}) | frozenset(RELEASE_ROOTS) | POLITE | words("github check eye")
+    (WATCH_WORDS - {"newer"})
+    | frozenset(RELEASE_ROOTS)
+    | POLITE
+    | words("github check eye watchlist")
 )
 """The words a release check holds beside the software's own name. "newer than our version"
 compares with a version the card doesn't hold, so it comes back."""
@@ -820,6 +823,33 @@ def release_check_of(read: TaskRead, request: str) -> str | None:
 
 
 _CHECK_VERBS: Final = r"(?:check|watch|monitor|track|follow|keep|add)\b"
+
+
+def one_software_check(read: TaskRead, request: str, facts: PlannerFacts | None) -> str | None:
+    """The software a request asks to check on its own: a release check of one software, or
+    watched software asked at a time of its own (ADR 0053)."""
+    return release_check_of(read, request) or _watched_with_a_time(read, request, facts)
+
+
+def _watched_with_a_time(read: TaskRead, request: str, facts: PlannerFacts | None) -> str | None:
+    """Software the watchlist holds, asked to be checked at a time of its own that its one
+    schedule doesn't run on: a release check of its own (ADR 0053), never a cross."""
+    if not read.belongs_on_watchlist or read.asks_about != "none" or facts is None:
+        return None
+    if vulnerability_phrase(request) is not None or _ASKS.search(request):
+        return None
+    software = _software_of(read, request)
+    held = {name_key(w.name) for w in facts.watchlist or []}
+    stretch = schedule_stretch(read.schedule, request)
+    if software is None or name_key(software) not in held or stretch is None:
+        return None
+    said = request[stretch[0] : stretch[1]]
+    if _its_schedule(said, facts.watchlist_schedule) or not _watchlist_holds(read.schedule or said):
+        return None
+    watched = _watch_clauses(read, request)
+    return software if _belongs_to_the_watch(request, stretch, watched) else None
+
+
 _ORDERS_A_CHECK: Final = re.compile(
     r"^\s*(?:(?:please|pls|kindly|just|now|so|and)\s+)*"
     rf"(?:(?:can|could|would|will)\s+you\s+(?:please\s+)?{_CHECK_VERBS}"
@@ -1182,7 +1212,7 @@ def _watch_rows(
         found += [
             (
                 (s.start, s.end),
-                _left_out(s, task.searching, task.unquoted_skip)
+                _beside_the_card(s, task)
                 if card
                 else _left_out(replace(s, kind=None), False, task.unquoted_skip),
             )
@@ -1193,6 +1223,18 @@ def _watch_rows(
         if not any(at[0] < b and a < at[1] for (a, b), _ in kept):
             kept.append((at, row))
     return [row for _, row in kept]
+
+
+ONE_VERSION: Final = "I check for any new release, not one version."
+_VERSION: Final = re.compile(r"v?\d+(?:\.\d+)+", re.IGNORECASE)
+
+
+def _beside_the_card(span: Span, task: _Task) -> CantRow:
+    """Words beside a release check's card keep the part they stand beside. A version number, as
+    "1.2.14", is one release, and the check reads every new one."""
+    if _VERSION.fullmatch(span.text.strip()):
+        return CantRow(kind="look_for", text=plain(span.text, TEXT_LIMIT), note=ONE_VERSION)
+    return _left_out(span, task.searching, task.unquoted_skip)
 
 
 def _belongs_to_the_watch(
@@ -1406,7 +1448,7 @@ def _answer_of(
     task = None
     covered = [skip.covered] if skip.covered is not None else []
     covered += _stretches(RUNS_BY_ITSELF, text)
-    release_check = release_check_of(read, text)
+    release_check = one_software_check(read, text, facts)
     beside = release_check is not None and _finds_beside(read, text)
     if read.belongs_on_watchlist:
         covered += _stretches(WATCHLISTS_OWN_TICKET, text)

@@ -227,18 +227,16 @@ function WatchCard({ name, choice, parts, operator }: { name: string; choice: Wa
         <>
           <p id={questionId}>{choice.question}</p>
           <div className={styles['buttons']} role="group" aria-labelledby={questionId}>
-            {choice.move ? (
-              <Button variant={main} onClick={() => setPicked('move')}>
-                {choice.move.label}
-              </Button>
-            ) : null}
-            <Button variant={choice.move ? 'secondary' : main} onClick={() => setPicked('keep')}>
+            <Button variant={main} onClick={() => setPicked('move')}>
+              {choice.move.label}
+            </Button>
+            <Button variant="secondary" onClick={() => setPicked('keep')}>
               {choice.keep}
             </Button>
           </div>
         </>
       ) : null}
-      {picked ? <AddToWatchlist name={name} then={picked === 'move' ? (choice.move?.schedule ?? null) : null} /> : null}
+      {picked ? <AddToWatchlist name={name} then={picked === 'move' ? choice.move.schedule : null} /> : null}
     </Card>
   )
 }
