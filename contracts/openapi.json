@@ -12935,6 +12935,24 @@
       "SetupCardReply": {
         "additionalProperties": false,
         "properties": {
+          "also": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SetupCardReply"
+              },
+              {
+                "$ref": "#/components/schemas/PartReply"
+              },
+              {
+                "$ref": "#/components/schemas/CantReply"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The rest of a request that also asks for another workflow, as a ticket list beside one software's release check, offered after this card.",
+            "title": "Also"
+          },
           "answer": {
             "const": "setup_card",
             "default": "setup_card",
@@ -12990,7 +13008,8 @@
           "answer",
           "name",
           "rows",
-          "similar"
+          "similar",
+          "also"
         ],
         "title": "SetupCardReply",
         "type": "object"

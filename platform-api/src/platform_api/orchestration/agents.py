@@ -576,6 +576,9 @@ class SetupCardAnswer(WireModel):
     kind: Literal["setup_card"] = "setup_card"
     name: str = Field(min_length=1, max_length=60)
     rows: list[UnderstoodRow] = Field(min_length=4, max_length=8)
+    also: (
+        Annotated[SetupCardAnswer | PartAnswer | CantAnswer, Field(discriminator="kind")] | None
+    ) = None
 
 
 class PartAnswer(WireModel):
@@ -605,6 +608,7 @@ class WatchlistAnswer(WireModel):
 
 
 CantAnswer.model_rebuild()
+SetupCardAnswer.model_rebuild()
 
 
 class WhichSoftwareAnswer(WireModel):

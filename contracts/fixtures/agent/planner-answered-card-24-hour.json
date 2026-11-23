@@ -28,7 +28,8 @@
         "state": "understood",
         "note": "Read from your words \"raise one Jira ticket in MOCK\"."
       }
-    ]
+    ],
+    "also": null
   },
   "parts": [
     {

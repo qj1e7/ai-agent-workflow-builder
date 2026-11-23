@@ -35,6 +35,7 @@ from agent_runtime.answers import (
     ANSWER_SYSTEM,
     TaskRead,
     answer_of,
+    release_check_of,
     watch_of_it,
     with_software_named,
     word_rule_refusal,
@@ -357,6 +358,7 @@ def _not_found(field: str, said: str) -> Invalid:
 
 
 CARD_KINDS: Final = (SetupCardAnswer, PartAnswer, CantAnswer, WatchlistAnswer, RefusedAnswer)
+RELEASE_CHECKS: Final = (SetupCardAnswer, PartAnswer, CantAnswer)
 
 
 def joined_request(request: AnswerRequest) -> str | Invalid:
@@ -446,12 +448,16 @@ def _watch(raw: Mapping[str, Any], turn: Turn) -> Acted:
     if at is None or clause is None:
         return _watch_of_it(turn) or _not_found("software", args.software)
     name = turn.text[at[0] : at[1]]
+    rules = turn.front.answer
+    checked = release_check_of(turn.front.read, turn.text)
+    if checked is not None and _same_name(checked, name) and isinstance(rules, RELEASE_CHECKS):
+        # One software's release check is a workflow of its own, watched or not (ADR 0053).
+        return _shown(turn, rules, frozenset(turn.clauses))
     if _watched(turn, name):
         return _already_held(name)
     # A clause that only asks to watch it again, as "keep track of it", is the same watch.
     again = (c for c in turn.clauses if watches_it(turn.text[c[0] : c[1]]) is not None)
     reach = frozenset({clause, *again})
-    rules = turn.front.answer
     if isinstance(rules, WatchlistAnswer) and _same_name(rules.software or "", name):
         return _shown(turn, rules, reach)
     word = release_word_in(turn.text) or name
