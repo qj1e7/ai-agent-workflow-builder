@@ -368,7 +368,7 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
           ) : null}
           <div className={styles['actions']}>
             {runNowLeads ? (
-              <Button variant={leadsThePage(banner.action) ? 'secondary' : 'primary'} icon={IconPlay} data-place={placeOf('run')} loading={runNow.pending} onClick={runNow.press}>
+              <Button variant={listed || leadsThePage(banner.action) ? 'secondary' : 'primary'} icon={IconPlay} data-place={placeOf('run')} loading={runNow.pending} onClick={runNow.press}>
                 Run now
               </Button>
             ) : null}

@@ -552,6 +552,10 @@ describe('the Software watchlist', () => {
     expect(main).not.toContain('Delete workflow')
   })
 
+  it('gives Run now the quiet look, since the list is the page and a waiting yes leads it', () => {
+    expect(mainOf(own())).not.toMatch(/<button[^>]*primary[^>]*>(?:<svg[\s\S]*?<\/svg>)?\s*Run now/)
+  })
+
   it('shows no Run now while the list is empty, and none for a paused watchlist or an Approver', () => {
     const empty = { ...watched, software: [] }
     expect(buttons(mainOf(render({ useCase: WATCHLIST, watchlist: empty })))).not.toContain('Run now')
