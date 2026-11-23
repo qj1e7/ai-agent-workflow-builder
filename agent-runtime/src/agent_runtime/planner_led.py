@@ -35,7 +35,7 @@ from agent_runtime.answers import (
     ANSWER_SYSTEM,
     TaskRead,
     answer_of,
-    release_check_of,
+    one_software_check,
     watch_of_it,
     with_software_named,
     word_rule_refusal,
@@ -449,7 +449,7 @@ def _watch(raw: Mapping[str, Any], turn: Turn) -> Acted:
         return _watch_of_it(turn) or _not_found("software", args.software)
     name = turn.text[at[0] : at[1]]
     rules = turn.front.answer
-    checked = release_check_of(turn.front.read, turn.text)
+    checked = one_software_check(turn.front.read, turn.text, turn.request.facts)
     if checked is not None and _same_name(checked, name) and isinstance(rules, RELEASE_CHECKS):
         # One software's release check is a workflow of its own, watched or not (ADR 0053).
         return _shown(turn, rules, frozenset(turn.clauses))

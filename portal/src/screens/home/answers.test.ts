@@ -8,8 +8,9 @@ import refused from '../../../../contracts/fixtures/planner/answer.refused.json'
 import setupCard from '../../../../contracts/fixtures/planner/answer.setup_card.json'
 import watchlist from '../../../../contracts/fixtures/planner/answer.watchlist.json'
 import stoppedUseCase from '../../../../contracts/fixtures/builder/use-case.stopped.json'
+import statusesFixture from '../../../../contracts/fixtures/watchlist/statuses.json'
 import type { Row } from '../workflows/workflow'
-import type { CantReply, CapabilitiesView, PartReply, PlannerReply, SetupCardReply, UseCaseView, WatchlistReply } from '../../api/types'
+import type { CantReply, CapabilitiesView, PartReply, PlannerReply, SetupCardReply, UseCaseView, WatchlistReply, WatchlistView } from '../../api/types'
 import {
   capabilityGroups,
   oneWorkflowSay,
@@ -27,9 +28,48 @@ import {
   TAG_CANT,
   TAG_CHOICE,
   TAG_FILLED,
+  stillChecksWords,
+  watchChoice,
   watchlistSay,
   whyNot,
 } from './answers'
+
+describe('the watch card’s choice', () => {
+  const STATUSES = statusesFixture as WatchlistView
+  const on = (day: 'monday' | 'friday', at: string): WatchlistView => ({ ...STATUSES, schedule: STATUSES.schedule ? { ...STATUSES.schedule, day, at } : null })
+  const MONDAY_10 = on('monday', '10:00')
+
+  it('never guesses a time: a bare hour is asked on the edit card, so there is no choice', () => {
+    expect(watchChoice('Grafana', 'every day at 9', MONDAY_10)).toBeNull()
+  })
+
+  it('moves to the time asked, keeping the watchlist’s time only when the words name none', () => {
+    expect(watchChoice('Grafana', 'every day', MONDAY_10)?.move).toEqual({ label: 'Add it, and check all 7 every day', schedule: { day: 'every_day', at: '10:00' } })
+    expect(watchChoice('Grafana', 'daily at 5pm', MONDAY_10)?.move).toEqual({ label: 'Add it, and check all 7 every day at 17:00', schedule: { day: 'every_day', at: '17:00' } })
+  })
+
+  it('moves a time-only request to the same day, and leaves words it can’t read to the old offer', () => {
+    expect(watchChoice('Grafana', 'at 5pm', MONDAY_10)?.move).toEqual({ label: 'Add it, and check all 7 every Monday at 17:00', schedule: { day: 'monday', at: '17:00' } })
+    expect(watchChoice('Grafana', 'soon', MONDAY_10)).toBeNull()
+  })
+
+  it('says the time asked in schedule words, never the raw words', () => {
+    expect(watchChoice('Grafana', 'mondays at 5pm', on('friday', '10:00'))?.lead).toContain('and you asked for every Monday at 17:00.')
+  })
+
+  it('leaves time words it can’t read, as evening or morning, to the edit card', () => {
+    expect(watchChoice('Grafana', 'every evening', MONDAY_10)).toBeNull()
+    expect(watchChoice('Grafana', 'every day in the morning', MONDAY_10)).toBeNull()
+  })
+
+  it('says only what they asked: a time alone is a time, never a day they didn’t name', () => {
+    expect(watchChoice('Grafana', 'at 5pm', MONDAY_10)?.lead).toContain('and you asked for 17:00.')
+  })
+
+  it('says the watchlist still checks on its own schedule when the move can’t be made', () => {
+    expect(stillChecksWords(MONDAY_10)).toBe('The watchlist still checks every Monday at 10:00.')
+  })
+})
 
 const CARD = setupCard as SetupCardReply
 const PART = part as PartReply
