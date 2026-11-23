@@ -146,6 +146,20 @@ EMAIL_ROW = CantRow(
     note="I can't send email yet.",
     needs="new_system",
     system="email",
+    instead="Run results show here, in the chat.",
+)
+"""A can't the registry names: with `instead`, the note is that entry's one-line can't."""
+NO_ABILITY_ROW = CantRow(
+    kind="do",
+    text="Write me a poem every Monday",
+    note="I can't do this yet. I can only check software for new releases and list Jira tickets.",
+    needs="new_tool",
+    system="Jira",
+)
+"""The runtime's can't for an order no ability is close to, as it keeps it when the free reply
+fails or is off: `need_of` still names a need, but no registry entry fits, so no `instead`."""
+NOT_FOLLOWED_ROW = CantRow(
+    kind="look_for", text="only the major releases", note="I didn't follow this part."
 )
 
 
@@ -161,6 +175,9 @@ async def test_a_can_t_our_blocks_don_t_cover_goes_to_the_drafter_for_an_operato
     await chat.drafted.settle()
 
     assert reply["answer"] == "draft_started" and reply["refused"] is None
+    assert [(p["text"], p["mark"], p["reason"]) for p in reply["parts"]] == [  # type: ignore[index, union-attr]
+        (EMAIL, "cant", "cant_do")
+    ], "the request's parts stay with the drafted card"
     [(words, _, _)] = chat.drafter.asked
     assert words == EMAIL
     view = await chat.drafted.view(str(reply["drafted_id"]))
@@ -205,21 +222,27 @@ async def test_a_can_t_with_something_close_keeps_it_and_offers_the_drafter(chat
     assert chat.drafter.asked == [], "nothing is drafted until the link is pressed"
 
 
-async def test_a_part_the_planner_didn_t_follow_starts_nothing(chat: Chat):
-    """A clause the Planner didn't follow names nothing to build, so it is never sent on its own
-    to the drafter. The link still offers it."""
+@pytest.mark.parametrize(
+    "cant",
+    [
+        [NOT_FOLLOWED_ROW],
+        [EMAIL_ROW, NOT_FOLLOWED_ROW],
+        [NO_ABILITY_ROW],
+        [EMAIL_ROW, NO_ABILITY_ROW],
+    ],
+    ids=["not_followed", "email_and_not_followed", "no_ability", "email_and_no_ability"],
+)
+async def test_a_can_t_that_names_nothing_the_registry_knows_starts_nothing(
+    chat: Chat, cant: list[CantRow]
+):
+    """Only a can't the registry names goes to the drafter on its own. A clause the Planner didn't
+    follow, or an order no ability is close to ("Write me a poem every Monday", kept when the
+    free reply fails or is off), never starts it, even beside one it names. The link still
+    offers it."""
     words = "Check LangGraph, but only the major releases"
     chat.answers.result = Answered(
-        answer=CantAnswer(
-            cant=[
-                CantRow(
-                    kind="look_for",
-                    text="only the major releases",
-                    note="I didn't follow this part.",
-                )
-            ]
-        ),
-        parts=[RequestPart(text="only the major releases", mark="cant", reason="not_followed")],
+        answer=CantAnswer(cant=cant),
+        parts=[RequestPart(text=row.text, mark="cant", reason="cant_do") for row in cant],
     )
 
     reply = await chat.say("carol", words)
@@ -251,16 +274,26 @@ async def test_a_card_from_our_blocks_offers_build_it_with_any_n8n_block(
 
 
 async def test_a_can_t_the_platform_refuses_outright_offers_no_draft(chat: Chat):
+    """A part the platform won't do at all, even one the registry names with a need and a way
+    instead, starts nothing and offers nothing."""
+    refused = CantRow(
+        kind="do",
+        text="delete the old tickets",
+        note="Only people do that here.",
+        needs="new_tool",
+        system="Jira",
+        instead="A Jira admin can do that.",
+        unsupported=True,
+    )
     chat.answers.result = Answered(
-        answer=CantAnswer(
-            cant=[CantRow(kind="do", text="text me", note="Not on the plan.", unsupported=True)]
-        ),
-        parts=[RequestPart(text="text me", mark="cant", reason="cant_do")],
+        answer=CantAnswer(cant=[refused]),
+        parts=[RequestPart(text="delete the old tickets", mark="cant", reason="cant_do")],
     )
 
-    reply = await chat.say("carol", "text me the results")
+    reply = await chat.say("carol", "delete the old tickets")
 
-    assert reply["draft_words"] is None
+    assert reply["answer"] == "cant" and reply["draft_words"] is None
+    assert chat.drafter.asked == []
 
 
 async def test_the_same_words_sent_twice_in_a_row_start_one_draft(chat: Chat):

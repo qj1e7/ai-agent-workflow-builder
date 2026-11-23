@@ -372,12 +372,22 @@ def test_a_card_from_our_blocks_offers_the_quiet_link_to_an_operator_only():
 
 
 def test_a_can_t_our_blocks_don_t_cover_shows_the_drafter_s_card_to_an_operator():
-    """The Planner hands it to the drafter (ADR 0053, item 5), so an Operator sees the drafted
-    workflow's card where the can't would be, and an Approver still sees the can't."""
-    row = CantRow(kind="do", text="email it", note="I can't send email yet.", needs="new_system")
+    """The Planner hands a can't the registry names to the drafter (ADR 0053, item 5), so an
+    Operator sees the drafted workflow's card where the can't would be, and an Approver still
+    sees the can't. One that names no ability keeps the can't, with the link."""
+    row = CantRow(
+        kind="do",
+        text="email it",
+        note="I can't send email yet.",
+        needs="new_system",
+        instead="Run results show here, in the chat.",
+    )
     cant = Answered(answer=CantAnswer(cant=[row]), parts=[part("email it", "cant", "cant_do")])
     assert words_of(cant, operator=True) == "Drafting it as an n8n workflow"
     assert "email it" in words_of(cant) and "n8n" not in words_of(cant)
+    vague = row.model_copy(update={"instead": None, "note": "I can't do this yet. I can only x."})
+    kept = Answered(answer=CantAnswer(cant=[vague]), parts=cant.parts)
+    assert words_of(kept, operator=True).endswith("[Build it with any n8n block]")
 
 
 @pytest.mark.parametrize(

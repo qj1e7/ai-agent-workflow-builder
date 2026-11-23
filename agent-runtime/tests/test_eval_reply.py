@@ -255,12 +255,19 @@ def test_the_gate_reports_a_tuning_run() -> None:
 
 
 def test_the_judge_sees_the_drafter_s_card_only_when_an_operator_asked() -> None:
-    row = CantRow(kind="schedule", text="every weekday at 9", note="x", needs="new_tool")
+    row = CantRow(kind="do", text="post it in Teams", note="x", needs="new_system", instead="y")
     shown = CantAnswer(cant=[row])
-    asked = "Check LangGraph for new releases every weekday at 9"
+    asked = "Post the open bugs in our Teams channel every Monday"
     assert words_of(shown, case(asked), []) == "[cant] Drafting it as an n8n workflow"
     approver = case(asked, changes_workflows=False)
     assert "n8n" not in words_of(shown, approver, [])
+
+
+def test_the_judge_sees_a_can_t_that_names_no_registry_entry_kept_with_the_link() -> None:
+    row = CantRow(kind="schedule", text="every weekday at 9", note="x", needs="new_tool")
+    asked = "Check LangGraph for new releases every weekday at 9"
+    shown = words_of(CantAnswer(cant=[row]), case(asked), [])
+    assert "Drafting" not in shown and shown.endswith("[Build it with any n8n block]")
 
 
 def test_asking_what_the_planted_workflow_does_accepts_its_explanation() -> None:
