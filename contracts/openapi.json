@@ -6947,6 +6947,36 @@
           }
         ]
       },
+      "FixItem": {
+        "additionalProperties": false,
+        "properties": {
+          "use_case_id": {
+            "title": "Use Case Id",
+            "type": "string"
+          },
+          "use_case_name": {
+            "title": "Use Case Name",
+            "type": "string"
+          },
+          "why": {
+            "description": "Why it can't run: its version needs a fix, the safety checker refused its writes, or it could not move to n8n.",
+            "enum": [
+              "needs_a_fix",
+              "writes_refused",
+              "not_moved"
+            ],
+            "title": "Why",
+            "type": "string"
+          }
+        },
+        "required": [
+          "use_case_id",
+          "use_case_name",
+          "why"
+        ],
+        "title": "FixItem",
+        "type": "object"
+      },
       "FollowingUpItem": {
         "additionalProperties": false,
         "properties": {
@@ -7357,6 +7387,14 @@
             "title": "Drafts",
             "type": "array"
           },
+          "fixes": {
+            "description": "Workflows that are on and can't run: a version that needs a fix, writes the safety checker refused, or one that could not move to n8n. They are part of Needs you for everyone.",
+            "items": {
+              "$ref": "#/components/schemas/FixItem"
+            },
+            "title": "Fixes",
+            "type": "array"
+          },
           "following_up": {
             "description": "This person's own requests to the team, Ask the team and Report to support, the newest first, with the status and the latest reply. The first 50. A request marked Done leaves after 30 days.",
             "items": {
@@ -7485,6 +7523,7 @@
           "replied",
           "coming_up",
           "workflows",
+          "fixes",
           "addresses",
           "connections",
           "changed_in_n8n"
@@ -15011,7 +15050,8 @@
                   "approval",
                   "stopped",
                   "declined",
-                  "question"
+                  "question",
+                  "fix"
                 ],
                 "type": "string"
               },
@@ -15019,7 +15059,7 @@
                 "type": "null"
               }
             ],
-            "description": "Why this workflow is in the Needs you of the person asking, or null when it is not: a yes they may give, a run of theirs that stopped, a test run an Approver declined, or a question to answer. It holds exactly when their Home has a row for the workflow, whatever state the workflow is in.",
+            "description": "Why this workflow is in the Needs you of the person asking, or null when it is not: a yes they may give, a run of theirs that stopped, a test run an Approver declined, a question to answer, or a workflow that can't run and needs a fix. It holds exactly when their Home has a row for the workflow.",
             "title": "Needs You"
           },
           "next_run_at": {

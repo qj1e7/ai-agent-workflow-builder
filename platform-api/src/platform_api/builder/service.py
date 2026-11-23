@@ -66,6 +66,7 @@ from platform_api.builder.models import (
     UseCaseView,
     VersionList,
     Via,
+    fix_of,
 )
 from platform_api.builder.moves import NOT_MOVED_YET, Moves
 from platform_api.builder.n8n_draft import (
@@ -608,7 +609,7 @@ class Builder:
             if self._history is None or viewer is None
             else await self._history.needing_you(viewer)
         )
-        return [
+        views = [
             _view(
                 row,
                 agents.get((row["use_case_id"], row["version"]), []),
@@ -621,6 +622,12 @@ class Builder:
                 needing.get(row["use_case_id"]),
             )
             for row in rows
+        ]
+        return [
+            view.model_copy(
+                update={"needs_you": view.needs_you or ("fix" if fix_of(view) else None)}
+            )
+            for view in views
         ]
 
     async def _holder(self, row: Mapping[str, Any]) -> N8nHolderView:

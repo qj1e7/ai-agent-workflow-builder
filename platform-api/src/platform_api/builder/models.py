@@ -286,12 +286,12 @@ class UseCaseView(WireModel):
         description="The newest run of this workflow, whatever its state. Null when it has "
         "never run."
     )
-    needs_you: Literal["approval", "stopped", "declined", "question"] | None = Field(
+    needs_you: Literal["approval", "stopped", "declined", "question", "fix"] | None = Field(
         default=None,
         description="Why this workflow is in the Needs you of the person asking, or null when it "
         "is not: a yes they may give, a run of theirs that stopped, a test run an Approver "
-        "declined, or a question to answer. It holds exactly when their Home has a row for the "
-        "workflow, whatever state the workflow is in.",
+        "declined, a question to answer, or a workflow that can't run and needs a fix. It holds "
+        "exactly when their Home has a row for the workflow.",
     )
     left_out: list[str] = Field(
         description="The parts of the request it was set up without, in the person's own words "
@@ -980,3 +980,19 @@ class DraftList(WireModel):
     drafts: list[DraftView] = Field(
         description="The signed-in person's own drafts, the last saved first."
     )
+
+
+FixReason = Literal["needs_a_fix", "writes_refused", "not_moved"]
+
+
+def fix_of(view: UseCaseView) -> FixReason | None:
+    """Why a workflow that is on can't run as the platform expects, for everyone who reads it: its
+    version needs a fix, the safety checker refused its writes, or it could not move to n8n. One
+    rule for the pill and for Home's Needs you row, so the two never disagree."""
+    if view.state != "on":
+        return None
+    if view.move_refused:
+        return "not_moved"
+    if view.grade in ("needs_a_fix", "writes_refused"):
+        return view.grade
+    return None

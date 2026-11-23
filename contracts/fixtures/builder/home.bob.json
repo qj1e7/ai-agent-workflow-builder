@@ -75,6 +75,7 @@
     "more": 0
   },
   "workflows": 1,
+  "fixes": [],
   "addresses": [],
   "connections": [],
   "changed_in_n8n": []

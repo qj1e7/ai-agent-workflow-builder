@@ -20,6 +20,7 @@
   "replied": [],
   "coming_up": null,
   "workflows": 0,
+  "fixes": [],
   "addresses": [],
   "connections": [],
   "changed_in_n8n": []
