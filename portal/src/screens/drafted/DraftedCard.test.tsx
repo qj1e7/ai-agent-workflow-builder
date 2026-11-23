@@ -19,6 +19,7 @@ import { createDevSession } from '../../api/session'
 import type { CantReply, DraftedWorkflowView, Me, PartReply, PlannerReply, SetupCardReply, SetUpApprovalView } from '../../api/types'
 import { Answer, type Page } from '../home/AnswerCards'
 import { ChatProvider } from '../home/ChatProvider'
+import { CardLive } from '../home/primary'
 import { DraftedCard } from './DraftedCard'
 import { SetUpApproval } from './SetUpApprovalPage'
 
@@ -173,6 +174,18 @@ describe('Build it with any n8n block', () => {
       const html = draw(reply)
       expect(buttons(html)).not.toContain('Draft it as an n8n workflow')
       expect(text(html)).not.toContain('safety checker')
+    }
+  })
+
+  it('sits on the card, so it goes when the card does, as once it is no longer the live one', () => {
+    for (const reply of [cardWith(WORDS), partWith(WORDS)]) {
+      expect(buttons(draw(reply))).toContain(ANY_BLOCK)
+      const gone = render(
+        <CardLive.Provider value={false}>
+          <Answer reply={reply} typed="x" page={PAGE} />
+        </CardLive.Provider>,
+      )
+      expect(buttons(gone)).not.toContain(ANY_BLOCK)
     }
   })
 
