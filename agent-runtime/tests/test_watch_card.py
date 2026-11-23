@@ -101,6 +101,24 @@ def test_a_version_beside_a_release_check_is_crossed_as_one_version():
     ]
 
 
+def test_a_version_inside_a_watched_softwares_own_time_is_crossed_never_dropped():
+    task = "Check n8n every day for 1.2.14"
+    fields = read(watchlist_word="Check", software="n8n", schedule="every day")
+    answer = answer_of(fields, task, facts("n8n"))
+    assert isinstance(answer, CantAnswer), answer
+    assert isinstance(answer.alternative, SetupCardAnswer)
+    assert [(row.text, row.note) for row in answer.cant] == [
+        ("1.2.14", "I check for any new release, not one version.")
+    ]
+
+
+def test_a_time_as_9_30_is_never_crossed_as_a_version():
+    task = "Check n8n every day since 9.30"
+    fields = read(watchlist_word="Check", software="n8n", schedule="every day")
+    answer = answer_of(fields, task, facts("n8n"))
+    assert "not one version" not in answer.model_dump_json()
+
+
 def test_tell_me_if_keeps_its_answer_from_before():
     task = "Tell me if n8n has a new release"
     answer = answer_of(read(watchlist_word="release", software="n8n"), task, facts("n8n"))

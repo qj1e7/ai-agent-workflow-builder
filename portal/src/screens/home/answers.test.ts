@@ -57,6 +57,15 @@ describe('the watch card’s choice', () => {
     expect(watchChoice('Grafana', 'mondays at 5pm', on('friday', '10:00'))?.lead).toContain('and you asked for every Monday at 17:00.')
   })
 
+  it('leaves time words it can’t read, as evening or morning, to the edit card', () => {
+    expect(watchChoice('Grafana', 'every evening', MONDAY_10)).toBeNull()
+    expect(watchChoice('Grafana', 'every day in the morning', MONDAY_10)).toBeNull()
+  })
+
+  it('says only what they asked: a time alone is a time, never a day they didn’t name', () => {
+    expect(watchChoice('Grafana', 'at 5pm', MONDAY_10)?.lead).toContain('and you asked for 17:00.')
+  })
+
   it('says the watchlist still checks on its own schedule when the move can’t be made', () => {
     expect(stillChecksWords(MONDAY_10)).toBe('The watchlist still checks every Monday at 10:00.')
   })
