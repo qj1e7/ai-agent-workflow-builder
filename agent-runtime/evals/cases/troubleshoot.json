@@ -120,7 +120,6 @@
       "Pick the newest version"
     ],
     "systems": [
-      "github",
       null
     ],
     "failure_kinds": [
@@ -133,7 +132,7 @@
       "failed_part": [
         "Pick the newest version"
       ],
-      "system": "github",
+      "system": null,
       "failure_kind": "changed_field",
       "detail": "tag_name"
     }
@@ -175,7 +174,7 @@
       "not_found"
     ],
     "details": [
-      "LangGraph"
+      null
     ],
     "reference": {
       "failed_part": [
@@ -183,7 +182,7 @@
       ],
       "system": "github",
       "failure_kind": "not_found",
-      "detail": "LangGraph"
+      "detail": null
     }
   },
   {
@@ -217,8 +216,7 @@
       null
     ],
     "failure_kinds": [
-      "refused",
-      "no_answer"
+      "refused"
     ],
     "details": [
       null
@@ -268,7 +266,6 @@
       "not_found"
     ],
     "details": [
-      "fastapi/fastapy",
       null
     ],
     "reference": {
@@ -277,7 +274,7 @@
       ],
       "system": "github",
       "failure_kind": "not_found",
-      "detail": "fastapi/fastapy"
+      "detail": null
     }
   },
   {
@@ -316,7 +313,6 @@
       "wrong_value"
     ],
     "details": [
-      "LangGraph",
       null
     ],
     "reference": {
@@ -325,7 +321,7 @@
       ],
       "system": null,
       "failure_kind": "wrong_value",
-      "detail": "LangGraph"
+      "detail": null
     }
   },
   {
