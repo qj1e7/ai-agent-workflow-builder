@@ -7,7 +7,7 @@
   "causes": [{"failed_part": ["Read new releases"], "failure_kind": "not_found", "detail": "langchain-ai/langgraph"}],
   "scenarios": [[{"name": "New release", "reads": ["Read new releases"]}, {"name": "Nothing new", "reads": ["Read new releases"]}]],
   "drafts": [{"set": {"Read new releases": {"place": "langchain-ai/langgraph-py"}}}],
-  "simulations": [{"New release": "passed", "Nothing new": "passed"}],
+  "simulations": [{"New release": "passed", "Nothing new": "passed", "replay_the_stop": "passed"}],
   "checks": [true],
   "replies": [
    {"calls": [{"name": "find_cause", "args": {"look_at": null}}]},
@@ -27,7 +27,7 @@
   "causes": [{"failed_part": ["Propose a ticket"], "failure_kind": "not_found", "detail": "MOCK"}],
   "scenarios": [[{"name": "One new release", "reads": ["Read new releases"]}, {"name": "Two new releases", "reads": ["Read new releases"]}]],
   "drafts": [{"set": {"Propose a ticket": {"place": "MOCK2"}}}, {"set": {"Propose a ticket": {"place": "MOCKNEW"}}}],
-  "simulations": [{"One new release": "passed", "Two new releases": "failed:Propose a ticket"}, {"One new release": "passed", "Two new releases": "passed"}],
+  "simulations": [{"One new release": "passed", "Two new releases": "failed:Propose a ticket", "replay_the_stop": "failed:Propose a ticket"}, {"One new release": "passed", "Two new releases": "passed", "replay_the_stop": "passed"}],
   "checks": [true],
   "replies": [
    {"calls": [{"name": "find_cause", "args": {"look_at": null}}]},
@@ -50,7 +50,7 @@
   "causes": [{"failed_part": ["Propose a ticket"], "failure_kind": "changed_field", "detail": "tag_name"}],
   "scenarios": [[{"name": "New release", "reads": ["Read new releases"]}, {"name": "Two new releases", "reads": ["Read new releases"]}]],
   "drafts": [{"set": {"Propose a ticket": {"title": "={{ 'New release ' + $json.release.tag }}"}}}],
-  "simulations": [{"New release": "passed", "Two new releases": "passed"}],
+  "simulations": [{"New release": "passed", "Two new releases": "passed", "replay_the_stop": "passed"}],
   "checks": [true],
   "replies": [
    {"calls": [{"name": "find_cause", "args": {"look_at": null}}]},
@@ -101,7 +101,7 @@
   "causes": [{"failed_part": ["Read new releases"], "failure_kind": "not_found", "detail": "langchain-ai/langgraph"}],
   "scenarios": [[{"name": "New release", "reads": ["Read new releases"]}, {"name": "Nothing new", "reads": ["Read new releases"]}]],
   "drafts": [{"set": {"Read new releases": {"place": "langchain-ai/langgraph-py"}}}],
-  "simulations": [{"New release": "passed", "Nothing new": "failed:Read new releases"}],
+  "simulations": [{"New release": "passed", "Nothing new": "failed:Read new releases", "replay_the_stop": "passed"}],
   "checks": [true],
   "replies": [
    {"calls": [{"name": "find_cause", "args": {"look_at": null}}]},
@@ -124,7 +124,7 @@
   "causes": [{"failed_part": ["Read new releases"], "failure_kind": "not_found", "detail": "langchain-ai/langgraph"}],
   "scenarios": [[{"name": "New release", "reads": ["Read new releases"]}, {"name": "Nothing new", "reads": ["Read new releases"]}]],
   "drafts": [{"set": {"Read new releases": {"place": "langchain-ai/langgraph-py"}}, "remove": ["Ask for a yes"], "wires": [["Every Monday", "main", "Read new releases"], ["Read new releases", "main", "Propose a ticket"], ["Propose a ticket", "main", "Make the ticket"]]}],
-  "simulations": [{"New release": "passed", "Nothing new": "passed"}],
+  "simulations": [{"New release": "passed", "Nothing new": "passed", "replay_the_stop": "passed"}],
   "checks": [true],
   "replies": [
    {"calls": [{"name": "find_cause", "args": {"look_at": null}}]},
@@ -144,7 +144,7 @@
   "causes": [{"failed_part": ["Read new releases"], "failure_kind": "not_found", "detail": "langchain-ai/langgraph"}],
   "scenarios": [[{"name": "New release", "reads": ["Read new releases"]}, {"name": "Nothing new", "reads": ["Read new releases"]}]],
   "drafts": [{"set": {"Read new releases": {"onError": "continueRegularOutput"}}}],
-  "simulations": [{"New release": "passed", "Nothing new": "passed"}],
+  "simulations": [{"New release": "passed", "Nothing new": "passed", "replay_the_stop": "passed"}],
   "checks": [true],
   "replies": [
    {"calls": [{"name": "find_cause", "args": {"look_at": null}}]},
@@ -164,7 +164,7 @@
   "causes": [{"failed_part": ["Read new releases"], "failure_kind": "not_found", "detail": "langchain-ai/langgraph"}],
   "scenarios": [[{"name": "New release", "reads": ["Read new releases"]}, {"name": "Nothing new", "reads": ["Read new releases"]}]],
   "drafts": [{"set": {"Read new releases": {"place": "langchain-ai/langgraph-py"}}}],
-  "simulations": [{"New release": "passed", "Nothing new": "passed"}],
+  "simulations": [{"New release": "passed", "Nothing new": "passed", "replay_the_stop": "passed"}],
   "checks": [false],
   "replies": [
    {"calls": [{"name": "find_cause", "args": {"look_at": null}}]},
@@ -197,7 +197,7 @@
   "causes": [{"failed_part": ["Read new releases"], "failure_kind": "not_found", "detail": "langchain-ai/langgraph"}],
   "scenarios": [[{"name": "New release", "reads": ["Read new releases"]}, {"name": "Nothing new", "reads": ["Read new releases"]}]],
   "drafts": [{"set": {"Read new releases": {"place": "langchain-ai/langgraph-py"}}}, {"set": {"Read new releases": {"place": "langchain-ai/langgraph-python"}}}],
-  "simulations": [{"New release": "failed:Read new releases", "Nothing new": "passed"}, {"New release": "failed:Read new releases", "Nothing new": "passed"}],
+  "simulations": [{"New release": "failed:Read new releases", "Nothing new": "passed", "replay_the_stop": "failed:Read new releases"}, {"New release": "failed:Read new releases", "Nothing new": "passed", "replay_the_stop": "failed:Read new releases"}],
   "checks": [true],
   "replies": [
    {"calls": [{"name": "find_cause", "args": {"look_at": null}}]},
@@ -217,7 +217,7 @@
   "causes": [{"failed_part": ["Read new releases"], "failure_kind": "not_found", "detail": "langchain-ai/langgraph"}],
   "scenarios": [[{"name": "New release", "reads": ["Read new releases"]}, {"name": "Nothing new", "reads": ["Read new releases"]}]],
   "drafts": [{"set": {"Read new releases": {"place": "langchain-ai/langgraph-py"}}}, {"set": {"Read new releases": {"place": "langchain-ai/langgraph-py"}}}, {"set": {"Read new releases": {"place": "langchain-ai/langgraph-py"}}}],
-  "simulations": [{"New release": "passed", "Nothing new": "failed:Read new releases"}, {"New release": "passed", "Nothing new": "failed:Read new releases"}, {"New release": "passed", "Nothing new": "failed:Read new releases"}],
+  "simulations": [{"New release": "passed", "Nothing new": "failed:Read new releases", "replay_the_stop": "passed"}, {"New release": "passed", "Nothing new": "failed:Read new releases", "replay_the_stop": "passed"}, {"New release": "passed", "Nothing new": "failed:Read new releases", "replay_the_stop": "passed"}],
   "replies": [
    {"calls": [{"name": "find_cause", "args": {"look_at": null}}]},
    {"calls": [{"name": "write_scenarios", "args": {"cover": []}}]},
@@ -238,7 +238,7 @@
   "causes": [{"failed_part": ["Read new releases"], "failure_kind": "not_found", "detail": "langchain-ai/langgraph"}],
   "scenarios": [[{"name": "New release", "reads": ["Read new releases"]}, {"name": "Nothing new", "reads": ["Read new releases"]}]],
   "drafts": [{"set": {"Read new releases": {"place": "langchain-ai/langgraph-py"}}}, {"set": {"Read new releases": {"place": "langchain-ai/langgraph-py"}}}],
-  "simulations": [{"New release": "passed", "Nothing new": "failed:Read new releases"}, {"New release": "failed:Read new releases", "Nothing new": "passed"}],
+  "simulations": [{"New release": "passed", "Nothing new": "failed:Read new releases", "replay_the_stop": "passed"}, {"New release": "failed:Read new releases", "Nothing new": "passed", "replay_the_stop": "failed:Read new releases"}],
   "replies": [
    {"calls": [{"name": "find_cause", "args": {"look_at": null}}]},
    {"calls": [{"name": "write_scenarios", "args": {"cover": []}}]},
@@ -257,7 +257,7 @@
   "causes": [{"failed_part": ["Read new releases"], "failure_kind": "not_found", "detail": "langchain-ai/langgraph"}],
   "scenarios": [[{"name": "One", "reads": ["Read new releases"]}, {"name": "Two", "reads": ["Read new releases"]}, {"name": "Three", "reads": ["Read new releases"]}, {"name": "Four", "reads": ["Read new releases"]}]],
   "drafts": [{"set": {"Read new releases": {"place": "langchain-ai/langgraph-py"}}}, {"set": {"Read new releases": {"place": "langchain-ai/langgraph-py"}}}, {"set": {"Read new releases": {"place": "langchain-ai/langgraph-py"}}}, {"set": {"Read new releases": {"place": "langchain-ai/langgraph-py"}}}],
-  "simulations": [{"One": "passed", "Two": "failed:Read new releases", "Three": "failed:Read new releases", "Four": "failed:Read new releases"}, {"One": "passed", "Two": "passed", "Three": "failed:Read new releases", "Four": "failed:Read new releases"}, {"One": "passed", "Two": "passed", "Three": "passed", "Four": "failed:Read new releases"}],
+  "simulations": [{"One": "passed", "Two": "failed:Read new releases", "Three": "failed:Read new releases", "Four": "failed:Read new releases", "replay_the_stop": "passed"}, {"One": "passed", "Two": "passed", "Three": "failed:Read new releases", "Four": "failed:Read new releases", "replay_the_stop": "passed"}, {"One": "passed", "Two": "passed", "Three": "passed", "Four": "failed:Read new releases", "replay_the_stop": "passed"}],
   "replies": [
    {"calls": [{"name": "find_cause", "args": {"look_at": null}}]},
    {"calls": [{"name": "write_scenarios", "args": {"cover": []}}]},
@@ -280,7 +280,7 @@
   "causes": [{"failed_part": ["Read new releases"], "failure_kind": "not_found", "detail": "langchain-ai/langgraph"}],
   "scenarios": [[{"name": "New release", "reads": ["Read new releases"]}, {"name": "Nothing new", "reads": ["Read new releases"]}]],
   "drafts": [{"set": {"Read new releases": {"place": "langchain-ai/langgraph-py"}}}],
-  "simulations": [{"New release": "passed", "Nothing new": "failed:Read new releases"}, {"New release": "passed", "Nothing new": "failed:Read new releases"}, {"New release": "passed", "Nothing new": "failed:Read new releases"}, {"New release": "passed", "Nothing new": "failed:Read new releases"}, {"New release": "passed", "Nothing new": "failed:Read new releases"}, {"New release": "passed", "Nothing new": "failed:Read new releases"}, {"New release": "passed", "Nothing new": "failed:Read new releases"}, {"New release": "passed", "Nothing new": "failed:Read new releases"}, {"New release": "passed", "Nothing new": "failed:Read new releases"}, {"New release": "passed", "Nothing new": "failed:Read new releases"}],
+  "simulations": [{"New release": "passed", "Nothing new": "failed:Read new releases", "replay_the_stop": "passed"}, {"New release": "passed", "Nothing new": "failed:Read new releases", "replay_the_stop": "passed"}, {"New release": "passed", "Nothing new": "failed:Read new releases", "replay_the_stop": "passed"}, {"New release": "passed", "Nothing new": "failed:Read new releases", "replay_the_stop": "passed"}, {"New release": "passed", "Nothing new": "failed:Read new releases", "replay_the_stop": "passed"}, {"New release": "passed", "Nothing new": "failed:Read new releases", "replay_the_stop": "passed"}, {"New release": "passed", "Nothing new": "failed:Read new releases", "replay_the_stop": "passed"}, {"New release": "passed", "Nothing new": "failed:Read new releases", "replay_the_stop": "passed"}, {"New release": "passed", "Nothing new": "failed:Read new releases", "replay_the_stop": "passed"}, {"New release": "passed", "Nothing new": "failed:Read new releases", "replay_the_stop": "passed"}],
   "replies": [
    {"calls": [{"name": "find_cause", "args": {"look_at": null}}]},
    {"calls": [{"name": "write_scenarios", "args": {"cover": []}}]},
@@ -340,7 +340,7 @@
   "causes": [{"failed_part": ["Read new releases"], "failure_kind": "not_found", "detail": "langchain-ai/langgraph"}],
   "scenarios": [[{"name": "New release", "reads": ["Read new releases"]}, {"name": "Nothing new", "reads": ["Read new releases"]}]],
   "drafts": [{"set": {"Read new releases": {"place": "langchain-ai/langgraph-py"}}}],
-  "simulations": [{"New release": "passed", "Nothing new": "passed"}],
+  "simulations": [{"New release": "passed", "Nothing new": "passed", "replay_the_stop": "passed"}],
   "checks": [true],
   "replies": [
    {"calls": [{"name": "find_cause", "args": {"look_at": null}}], "tokens_in": 300000, "tokens_out": 2000},
@@ -360,7 +360,7 @@
   "causes": [{"failed_part": ["Read new releases"], "failure_kind": "not_found", "detail": "langchain-ai/langgraph"}],
   "scenarios": [[{"name": "New release", "reads": ["Read new releases"]}, {"name": "Nothing new", "reads": ["Read new releases"]}]],
   "drafts": [{"set": {"Read new releases": {"place": "langchain-ai/langgraph-py"}}}],
-  "simulations": [{"New release": "passed", "Nothing new": "failed:Read new releases"}, {"New release": "passed", "Nothing new": "failed:Read new releases"}, {"New release": "passed", "Nothing new": "passed"}],
+  "simulations": [{"New release": "passed", "Nothing new": "failed:Read new releases", "replay_the_stop": "passed"}, {"New release": "passed", "Nothing new": "failed:Read new releases", "replay_the_stop": "passed"}, {"New release": "passed", "Nothing new": "passed", "replay_the_stop": "passed"}],
   "checks": [true],
   "seconds": {"simulation": 500, "turn": 5},
   "replies": [
@@ -383,7 +383,7 @@
   "causes": [{"failed_part": ["Read new releases"], "failure_kind": "not_found", "detail": "langchain-ai/langgraph"}],
   "scenarios": [[{"name": "New release", "reads": ["Read new releases"]}, {"name": "Nothing new", "reads": ["Read new releases"]}]],
   "drafts": [{"set": {"Read new releases": {"place": "langchain-ai/langgraph-py"}}}],
-  "simulations": [{"New release": "passed", "Nothing new": "passed"}],
+  "simulations": [{"New release": "passed", "Nothing new": "passed", "replay_the_stop": "passed"}],
   "checks": [true],
   "seconds": {"turn": 300, "troubleshooter": 0, "scenario_writer": 0, "fix_drafter": 0},
   "replies": [
@@ -404,7 +404,7 @@
   "causes": [{"failed_part": ["Read new releases"], "failure_kind": "not_found", "detail": "langchain-ai/langgraph"}],
   "scenarios": [[{"name": "New release", "reads": ["Read new releases"]}, {"name": "Nothing new", "reads": ["Read new releases"]}]],
   "drafts": [{"set": {"Read new releases": {"place": "langchain-ai/langgraph-py"}, "Propose a ticket": {"place": "OTHER"}}}],
-  "simulations": [{"New release": "passed", "Nothing new": "passed"}],
+  "simulations": [{"New release": "passed", "Nothing new": "passed", "replay_the_stop": "passed"}],
   "checks": [true],
   "replies": [
    {"calls": [{"name": "find_cause", "args": {"look_at": null}}]},
@@ -424,7 +424,7 @@
   "causes": [{"failed_part": ["Read new releases"], "failure_kind": "not_found", "detail": "langchain-ai/langgraph"}],
   "scenarios": [[{"name": "New release", "reads": ["Read new releases"]}, {"name": "Nothing new", "reads": ["Read new releases"]}]],
   "drafts": [{"set": {"Read new releases": {"place": "langchain-ai/langgraph-py"}}, "add": [{"name": "Post to Slack", "type": "n8n-nodes-base.slack", "parameters": {"channelId": "general"}}]}],
-  "simulations": [{"New release": "passed", "Nothing new": "passed"}],
+  "simulations": [{"New release": "passed", "Nothing new": "passed", "replay_the_stop": "passed"}],
   "checks": [true],
   "replies": [
    {"calls": [{"name": "find_cause", "args": {"look_at": null}}]},
@@ -444,7 +444,7 @@
   "causes": [{"failed_part": ["Read new releases"], "failure_kind": "not_found", "detail": "langchain-ai/langgraph"}],
   "scenarios": [[{"name": "New release", "reads": ["Read new releases"]}, {"name": "Nothing new", "reads": ["Read new releases"]}]],
   "drafts": [{"set": {"Read new releases": {"place": "langchain-ai/langgraph-py"}}}, {"set": {"Read new releases": {"place": "langchain-ai/langgraph-py"}}, "remove": ["Ask for a yes"], "wires": [["Every Monday", "main", "Read new releases"], ["Read new releases", "main", "Propose a ticket"], ["Propose a ticket", "main", "Make the ticket"]]}],
-  "simulations": [{"New release": "passed", "Nothing new": "failed:Read new releases"}, {"New release": "passed", "Nothing new": "passed"}],
+  "simulations": [{"New release": "passed", "Nothing new": "failed:Read new releases", "replay_the_stop": "passed"}, {"New release": "passed", "Nothing new": "passed", "replay_the_stop": "passed"}],
   "checks": [true],
   "replies": [
    {"calls": [{"name": "find_cause", "args": {"look_at": null}}]},
@@ -466,7 +466,7 @@
   "causes": [{"failed_part": ["Read new releases"], "failure_kind": "not_found", "detail": "langchain-ai/langgraph"}],
   "scenarios": [[{"name": "New release", "reads": ["Read new releases"]}, {"name": "Nothing new", "reads": ["Read new releases"]}]],
   "drafts": [{"set": {"Read new releases": {"place": "langchain-ai/langgraph-py"}}}, {"set": {"Read new releases": {"place": "langchain-ai/langgraph-py"}}, "wires": [["Every Monday", "main", "Read new releases"], ["Read new releases", "main", "Propose a ticket"], ["Propose a ticket", "main", "Make the ticket"], ["Propose a ticket", "main", "Ask for a yes"]]}],
-  "simulations": [{"New release": "passed", "Nothing new": "failed:Read new releases"}, {"New release": "passed", "Nothing new": "passed"}],
+  "simulations": [{"New release": "passed", "Nothing new": "failed:Read new releases", "replay_the_stop": "passed"}, {"New release": "passed", "Nothing new": "passed", "replay_the_stop": "passed"}],
   "checks": [true],
   "replies": [
    {"calls": [{"name": "find_cause", "args": {"look_at": null}}]},
@@ -523,7 +523,7 @@
   "causes": [{"failed_part": ["Read new releases"], "failure_kind": "not_found", "detail": "langchain-ai/langgraph"}],
   "scenarios": [[{"name": "New release", "reads": ["Read new releases"]}, {"name": "Nothing new", "reads": ["Read new releases"]}]],
   "drafts": [{"types": {"Read new releases": "CUSTOM.wabMakeApprovedChanges"}}],
-  "simulations": [{"New release": "passed", "Nothing new": "passed"}],
+  "simulations": [{"New release": "passed", "Nothing new": "passed", "replay_the_stop": "passed"}],
   "checks": [true],
   "replies": [
    {"calls": [{"name": "find_cause", "args": {"look_at": null}}]},
@@ -544,7 +544,7 @@
   "causes": [{"failed_part": ["Read new releases"], "failure_kind": "not_found", "detail": "langchain-ai/langgraph"}],
   "scenarios": [[{"name": "New release", "reads": ["Read new releases"]}, {"name": "Nothing new", "reads": ["Read new releases"]}]],
   "drafts": [{"set": {"Read new releases": {"url": "https://releases-mirror.example.net/langchain-ai/langgraph"}}}],
-  "simulations": [{"New release": "passed", "Nothing new": "passed"}],
+  "simulations": [{"New release": "passed", "Nothing new": "passed", "replay_the_stop": "passed"}],
   "checks": [true],
   "replies": [
    {"calls": [{"name": "find_cause", "args": {"look_at": null}}]},
@@ -565,7 +565,7 @@
   "causes": [{"failed_part": ["Read new releases"], "failure_kind": "not_found", "detail": "langchain-ai/langgraph"}],
   "scenarios": [[{"name": "New release", "reads": ["Read new releases"]}, {"name": "Nothing new", "reads": ["Read new releases"]}]],
   "drafts": [{"set": {"Read new releases": {"authentication": "genericCredentialType", "genericAuthType": "httpHeaderAuth"}}}],
-  "simulations": [{"New release": "passed", "Nothing new": "passed"}],
+  "simulations": [{"New release": "passed", "Nothing new": "passed", "replay_the_stop": "passed"}],
   "checks": [true],
   "replies": [
    {"calls": [{"name": "find_cause", "args": {"look_at": null}}]},
@@ -586,7 +586,7 @@
   "causes": [{"failed_part": ["Read new releases"], "failure_kind": "not_found", "detail": "langchain-ai/langgraph"}],
   "scenarios": [[{"name": "New release", "reads": ["Read new releases"]}, {"name": "Nothing new", "reads": ["Read new releases"]}]],
   "drafts": [{"settings": [{"id": "repository", "kind": "repository", "label": "The repository", "fills": [{"block": "Read new releases", "parameter": "place"}], "value": "langchain-ai/langgraph-py", "mark": "filled"}]}],
-  "simulations": [{"New release": "passed", "Nothing new": "passed"}],
+  "simulations": [{"New release": "passed", "Nothing new": "passed", "replay_the_stop": "passed"}],
   "checks": [true],
   "replies": [
    {"calls": [{"name": "find_cause", "args": {"look_at": null}}]},
@@ -606,7 +606,7 @@
   "causes": [{"failed_part": ["Read new releases", "Propose a ticket"], "failure_kind": "not_found"}],
   "scenarios": [[{"name": "New release", "reads": ["Read new releases"]}, {"name": "Nothing new", "reads": ["Read new releases"]}]],
   "drafts": [{"set": {"Read new releases": {"place": "langchain-ai/langgraph-py"}, "Propose a ticket": {"place": "OTHER"}}}],
-  "simulations": [{"New release": "passed", "Nothing new": "passed"}],
+  "simulations": [{"New release": "passed", "Nothing new": "passed", "replay_the_stop": "passed"}],
   "checks": [true],
   "replies": [
    {"calls": [{"name": "find_cause", "args": {"look_at": null}}]},
@@ -645,7 +645,7 @@
   "causes": [{"failed_part": ["Read new releases"], "failure_kind": "not_found", "detail": "langchain-ai/langgraph"}],
   "scenarios": [[{"name": "New release", "reads": ["Read new releases"]}, {"name": "Nothing new", "reads": ["Read new releases"]}]],
   "drafts": [{"set": {"Read new releases": {"queryParameters": {"parameters": [{"name": "next", "value": "={{ 'ht' + 'tps://collector.example.net/' }}"}]}}}}],
-  "simulations": [{"New release": "passed", "Nothing new": "passed"}],
+  "simulations": [{"New release": "passed", "Nothing new": "passed", "replay_the_stop": "passed"}],
   "checks": [true],
   "replies": [
    {"calls": [{"name": "find_cause", "args": {"look_at": null}}]},
@@ -666,7 +666,7 @@
   "causes": [{"failed_part": ["Read new releases"], "failure_kind": "not_found", "detail": "langchain-ai/langgraph"}],
   "scenarios": [[{"name": "New release", "reads": ["Read new releases"]}, {"name": "Nothing new", "reads": ["Read new releases"]}]],
   "drafts": [{"set": {"Read new releases": {"jsCode": "await fetch($json.next, {method: 'POST', body: JSON.stringify($input.all())});\nreturn $input.all();"}}}],
-  "simulations": [{"New release": "passed", "Nothing new": "passed"}],
+  "simulations": [{"New release": "passed", "Nothing new": "passed", "replay_the_stop": "passed"}],
   "checks": [true],
   "replies": [
    {"calls": [{"name": "find_cause", "args": {"look_at": null}}]},
@@ -687,7 +687,7 @@
   "causes": [{"failed_part": ["Read new releases"], "failure_kind": "not_found", "detail": "langchain-ai/langgraph"}],
   "scenarios": [[{"name": "New release", "reads": ["Read new releases"]}, {"name": "Nothing new", "reads": ["Read new releases"]}]],
   "drafts": [{"set": {"Read new releases": {"query": "DELETE FROM releases; SELECT tag FROM releases WHERE repo = 'langchain-ai/langgraph-py'"}}}],
-  "simulations": [{"New release": "passed", "Nothing new": "passed"}],
+  "simulations": [{"New release": "passed", "Nothing new": "passed", "replay_the_stop": "passed"}],
   "checks": [true],
   "replies": [
    {"calls": [{"name": "find_cause", "args": {"look_at": null}}]},
@@ -708,7 +708,7 @@
   "causes": [{"failed_part": ["Propose a ticket"], "failure_kind": "unknown"}],
   "scenarios": [[{"name": "New release", "reads": ["Read new releases"]}, {"name": "Nothing new", "reads": ["Read new releases"]}]],
   "drafts": [{"set": {"Propose a ticket": {"title": "={{ 'New release ' + $env.WAB_NODE_KEY }}"}}}],
-  "simulations": [{"New release": "passed", "Nothing new": "passed"}],
+  "simulations": [{"New release": "passed", "Nothing new": "passed", "replay_the_stop": "passed"}],
   "checks": [true],
   "replies": [
    {"calls": [{"name": "find_cause", "args": {"look_at": null}}]},
@@ -719,5 +719,138 @@
    {"calls": [{"name": "hand_in", "args": {}}]}
   ],
   "expect": {"ending": "handed_back", "why": "widened", "events": ["fix_started", "fix_handoff", "fix_handoff", "fix_handoff", "fix_handed_back"], "widened_by": "adds_a_key"}
+ },
+ {
+  "id": "adds-a-host-at-run-time",
+  "note": "The draft passes code's scope check and every scenario, but its run reaches a system the stopped version neither names nor reached, as when a value upstream is read as a block's source. Code hands it back as adding a system.",
+  "stop": {"stage": "working", "reason": "AgentError", "retryable": false, "message": "NotFound: GET /repos/langchain-ai/langgraph/releases returned 404"},
+  "stopped_at": ["Read new releases"],
+  "causes": [{"failed_part": ["Read new releases"], "failure_kind": "not_found", "detail": "langchain-ai/langgraph"}],
+  "scenarios": [[{"name": "New release", "reads": ["Read new releases"]}, {"name": "Nothing new", "reads": ["Read new releases"]}]],
+  "drafts": [{"set": {"Read new releases": {"place": "langchain-ai/langgraph-py"}}}],
+  "simulations": [{"New release": "passed", "Nothing new": "passed", "replay_the_stop": "passed"}],
+  "reached": [{"New release": ["read:github_releases", "read:confluence_page"], "replay_the_stop": ["read:github_releases"]}],
+  "baseline_reached": ["read:github_releases"],
+  "named": ["read:github_releases", "propose:jira.create_ticket"],
+  "checks": [true],
+  "replies": [
+   {"calls": [{"name": "find_cause", "args": {"look_at": null}}]},
+   {"calls": [{"name": "write_scenarios", "args": {"cover": []}}]},
+   {"calls": [{"name": "draft_fix", "args": {"change_only": ["Read new releases"], "failed_scenarios": []}}]},
+   {"calls": [{"name": "simulate", "args": {"scenarios": []}}]},
+   {"calls": [{"name": "check_version", "args": {}}]},
+   {"calls": [{"name": "hand_in", "args": {}}]}
+  ],
+  "expect": {"ending": "handed_back", "why": "widened", "events": ["fix_started", "fix_handoff", "fix_handoff", "fix_handoff", "fix_handoff", "fix_handed_back"], "widened_by": "adds_a_system", "rounds": 1}
+ },
+ {
+  "id": "no-replay-in-the-written-set",
+  "note": "The Scenario writer writes only a happy path, which the stopped version would pass too. Code adds its replay of the stop, so a draft that touches the failed part but doesn't fix the stop is never handed in.",
+  "stop": {"stage": "working", "reason": "AgentError", "retryable": false, "message": "NotFound: GET /repos/langchain-ai/langgraph/releases returned 404"},
+  "stopped_at": ["Read new releases"],
+  "causes": [{"failed_part": ["Read new releases"], "failure_kind": "not_found", "detail": "langchain-ai/langgraph"}],
+  "scenarios": [[{"name": "New release", "reads": ["Read new releases"]}]],
+  "drafts": [{"set": {"Read new releases": {"place": "langchain-ai/langgraph-v2"}}}, {"set": {"Read new releases": {"place": "langchain-ai/langgraph-v3"}}}],
+  "simulations": [{"New release": "passed", "replay_the_stop": "failed:Read new releases"}, {"New release": "passed", "replay_the_stop": "failed:Read new releases"}],
+  "checks": [true],
+  "replies": [
+   {"calls": [{"name": "find_cause", "args": {"look_at": null}}]},
+   {"calls": [{"name": "write_scenarios", "args": {"cover": []}}]},
+   {"calls": [{"name": "draft_fix", "args": {"change_only": ["Read new releases"], "failed_scenarios": []}}]},
+   {"calls": [{"name": "simulate", "args": {"scenarios": []}}]},
+   {"calls": [{"name": "check_version", "args": {}}]},
+   {"calls": [{"name": "hand_in", "args": {}}]},
+   {"calls": [{"name": "draft_fix", "args": {"change_only": ["Read new releases"], "failed_scenarios": ["replay_the_stop"]}}]},
+   {"calls": [{"name": "simulate", "args": {"scenarios": []}}]}
+  ],
+  "expect": {"ending": "handed_back", "why": "no_progress", "refused": ["hand_in"], "events": ["fix_started", "fix_handoff", "fix_handoff", "fix_handoff", "fix_handoff", "fix_round", "fix_handoff", "fix_handoff", "fix_handoff", "fix_round", "fix_handed_back"], "rounds": 2}
+ },
+ {
+  "id": "replay-shows-no-stop",
+  "note": "On practice systems the stopped version passes code's replay of the stop, so no draft can be proven to fix it. Code hands the fix back after the first simulation.",
+  "stop": {"stage": "working", "reason": "AgentError", "retryable": false, "message": "NotFound: GET /repos/langchain-ai/langgraph/releases returned 404"},
+  "stopped_at": ["Read new releases"],
+  "causes": [{"failed_part": ["Read new releases"], "failure_kind": "not_found", "detail": "langchain-ai/langgraph"}],
+  "scenarios": [[{"name": "New release", "reads": ["Read new releases"]}, {"name": "Nothing new", "reads": ["Read new releases"]}]],
+  "drafts": [{"set": {"Read new releases": {"place": "langchain-ai/langgraph-py"}}}],
+  "simulations": [{"New release": "passed", "Nothing new": "passed", "replay_the_stop": "passed"}],
+  "baseline": {"replay_the_stop": "passed"},
+  "checks": [true],
+  "replies": [
+   {"calls": [{"name": "find_cause", "args": {"look_at": null}}]},
+   {"calls": [{"name": "write_scenarios", "args": {"cover": []}}]},
+   {"calls": [{"name": "draft_fix", "args": {"change_only": ["Read new releases"], "failed_scenarios": []}}]},
+   {"calls": [{"name": "simulate", "args": {"scenarios": []}}]},
+   {"calls": [{"name": "check_version", "args": {}}]},
+   {"calls": [{"name": "hand_in", "args": {}}]}
+  ],
+  "expect": {"ending": "handed_back", "why": "not_replayed", "events": ["fix_started", "fix_handoff", "fix_handoff", "fix_handoff", "fix_handoff", "fix_handed_back"]}
+ },
+ {
+  "id": "widens-between-rounds-at-run-time",
+  "note": "The first round stays small and makes progress. The second round's draft passes the scope check, but its run reaches a system the first never did. Code hands it back as adding a system.",
+  "stop": {"stage": "working", "reason": "AgentError", "retryable": false, "message": "NotFound: GET /repos/langchain-ai/langgraph/releases returned 404"},
+  "stopped_at": ["Read new releases"],
+  "causes": [{"failed_part": ["Read new releases"], "failure_kind": "not_found", "detail": "langchain-ai/langgraph"}],
+  "scenarios": [[{"name": "New release", "reads": ["Read new releases"]}, {"name": "Nothing new", "reads": ["Read new releases"]}]],
+  "drafts": [{"set": {"Read new releases": {"place": "langchain-ai/langgraph-py"}}}, {"set": {"Read new releases": {"place": "langchain-ai/langgraph-sdk"}}}],
+  "simulations": [{"New release": "passed", "Nothing new": "failed:Read new releases", "replay_the_stop": "passed"}, {"New release": "passed", "Nothing new": "passed", "replay_the_stop": "passed"}],
+  "reached": [{"New release": ["read:github_releases"]}, {"Nothing new": ["read:github_releases", "tell:teams"]}],
+  "baseline_reached": ["read:github_releases"],
+  "checks": [true],
+  "replies": [
+   {"calls": [{"name": "find_cause", "args": {"look_at": null}}]},
+   {"calls": [{"name": "write_scenarios", "args": {"cover": []}}]},
+   {"calls": [{"name": "draft_fix", "args": {"change_only": ["Read new releases"], "failed_scenarios": []}}]},
+   {"calls": [{"name": "simulate", "args": {"scenarios": []}}]},
+   {"calls": [{"name": "draft_fix", "args": {"change_only": ["Read new releases"], "failed_scenarios": ["Nothing new"]}}]},
+   {"calls": [{"name": "simulate", "args": {"scenarios": []}}]},
+   {"calls": [{"name": "check_version", "args": {}}]},
+   {"calls": [{"name": "hand_in", "args": {}}]}
+  ],
+  "expect": {"ending": "handed_back", "why": "widened", "events": ["fix_started", "fix_handoff", "fix_handoff", "fix_handoff", "fix_handoff", "fix_round", "fix_handoff", "fix_handoff", "fix_handed_back"], "widened_by": "adds_a_system", "rounds": 2}
+ },
+ {
+  "id": "simulation-gives-no-answer",
+  "note": "The practice systems don't answer. Each simulation is logged as no answer, nothing passes, and code refuses hand_in until the coordinator hands the fix back.",
+  "stop": {"stage": "working", "reason": "AgentError", "retryable": false, "message": "NotFound: GET /repos/langchain-ai/langgraph/releases returned 404"},
+  "stopped_at": ["Read new releases"],
+  "causes": [{"failed_part": ["Read new releases"], "failure_kind": "not_found", "detail": "langchain-ai/langgraph"}],
+  "scenarios": [[{"name": "New release", "reads": ["Read new releases"]}, {"name": "Nothing new", "reads": ["Read new releases"]}]],
+  "drafts": [{"set": {"Read new releases": {"place": "langchain-ai/langgraph-py"}}}],
+  "simulations": [null, null],
+  "checks": [true],
+  "replies": [
+   {"calls": [{"name": "find_cause", "args": {"look_at": null}}]},
+   {"calls": [{"name": "write_scenarios", "args": {"cover": []}}]},
+   {"calls": [{"name": "draft_fix", "args": {"change_only": ["Read new releases"], "failed_scenarios": []}}]},
+   {"calls": [{"name": "simulate", "args": {"scenarios": []}}]},
+   {"calls": [{"name": "simulate", "args": {"scenarios": []}}]},
+   {"calls": [{"name": "check_version", "args": {}}]},
+   {"calls": [{"name": "hand_in", "args": {}}]},
+   {"calls": [{"name": "hand_back", "args": {}}]}
+  ],
+  "expect": {"ending": "handed_back", "why": "gave_up", "refused": ["hand_in"], "events": ["fix_started", "fix_handoff", "fix_handoff", "fix_handoff", "fix_handoff", "fix_handoff", "fix_handoff", "fix_handed_back"]}
+ },
+ {
+  "id": "checker-refuses",
+  "note": "Every scenario passes, but the platform's checker fails the draft. Code refuses hand_in, and the coordinator hands the fix back.",
+  "stop": {"stage": "working", "reason": "AgentError", "retryable": false, "message": "NotFound: GET /repos/langchain-ai/langgraph/releases returned 404"},
+  "stopped_at": ["Read new releases"],
+  "causes": [{"failed_part": ["Read new releases"], "failure_kind": "not_found", "detail": "langchain-ai/langgraph"}],
+  "scenarios": [[{"name": "New release", "reads": ["Read new releases"]}, {"name": "Nothing new", "reads": ["Read new releases"]}]],
+  "drafts": [{"set": {"Read new releases": {"place": "langchain-ai/langgraph-py"}}}],
+  "simulations": [{"New release": "passed", "Nothing new": "passed", "replay_the_stop": "passed"}],
+  "checks": [false],
+  "replies": [
+   {"calls": [{"name": "find_cause", "args": {"look_at": null}}]},
+   {"calls": [{"name": "write_scenarios", "args": {"cover": []}}]},
+   {"calls": [{"name": "draft_fix", "args": {"change_only": ["Read new releases"], "failed_scenarios": []}}]},
+   {"calls": [{"name": "simulate", "args": {"scenarios": []}}]},
+   {"calls": [{"name": "check_version", "args": {}}]},
+   {"calls": [{"name": "hand_in", "args": {}}]},
+   {"calls": [{"name": "hand_back", "args": {}}]}
+  ],
+  "expect": {"ending": "handed_back", "why": "gave_up", "refused": ["hand_in"], "events": ["fix_started", "fix_handoff", "fix_handoff", "fix_handoff", "fix_handoff", "fix_round", "fix_handoff", "fix_handed_back"]}
  }
 ]

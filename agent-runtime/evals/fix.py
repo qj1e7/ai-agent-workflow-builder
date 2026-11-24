@@ -15,17 +15,20 @@ there. The fixable cases are the baseline: code accepts their fix within the lim
 The Fix drafter here is a fake that answers each round with a change to the stopped version
 (`CaseDraft`). The scope check is code's own (`PlanScope`), so each widening case shows it finds
 that widening. Each fake is told the seconds left, as every port is, and stops at the deadline as
-a port must. The Job isn't in the runner's list yet: PR 8 adds it, with a real coordinator, once
-the team lead sets a budget."""
+a port must. The simulation, the checker and the Scenario writer are also told the dollars left.
+
+The fake simulation tries the stopped version as code asks before a draft's first simulation:
+each scenario fails where the run stopped, unless the case says otherwise (`baseline`), so code's
+replay of the stop shows the stop. What each run reached comes from the case too (`reached`,
+`baseline_reached` and `named`). The Job isn't in the runner's list yet: PR 8 adds it, with a real
+coordinator, once the team lead sets a budget."""
 
 import hashlib
-import json
 from collections import Counter
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from functools import cache
-from pathlib import Path
 from typing import Any, Final, Literal
 
 from langchain_core.language_models import BaseChatModel
@@ -40,6 +43,7 @@ from agent_runtime.contract import (
     PlanBlock,
     PlanSetting,
     PlanWire,
+    ScenarioKind,
     StoppedRun,
     WorkflowPlan,
 )
@@ -78,10 +82,10 @@ from agent_runtime.fixing.ports import (
     StoredRevision,
 )
 from agent_runtime.fixing.scope import ASK_FOR_A_YES, PlanScope
+from agent_runtime.model_cost import packaged_prices
 from evals.checks import Check, check
 from evals.jobs import Answer, Case, Job
 
-PRICING = Path(__file__).parent / "pricing.json"
 STARTED = datetime(2026, 11, 24, 6, 0, tzinfo=UTC)
 FIX_ID = "fix_01EVAL"
 
@@ -90,7 +94,7 @@ type Ending = Literal["handed_in", "handed_back", "stopped"]
 
 @cache
 def prices() -> dict[str, Price]:
-    return prices_by_model(json.loads(PRICING.read_text()))
+    return prices_by_model(packaged_prices())
 
 
 class _Data(BaseModel):
@@ -213,10 +217,12 @@ class CaseDraft(_Data):
 
 class CaseScenario(_Data):
     name: str
+    kind: ScenarioKind = "happy_path"
     reads: list[str] = []
 
     def scenario(self) -> Scenario:
-        return Scenario(name=self.name, reads={block: "recorded" for block in self.reads})
+        reads: dict[str, JsonValue] = {block: {"serve": "recorded"} for block in self.reads}
+        return Scenario(name=self.name, kind=self.kind, reads=reads)
 
 
 class RecordedCall(_Data):
@@ -255,6 +261,14 @@ class FixCase(Case):
     drafts: list[CaseDraft | NotDrafted] = []
     simulations: list[dict[str, str] | None] = []
     """Each run's grade by scenario: passed, not_tried, or failed:<the block where it failed>."""
+    reached: list[dict[str, list[str]] | None] = []
+    """What each of those runs reached, by scenario, as the gateway's and n8n's records say."""
+    baseline: dict[str, str] = {}
+    """How the stopped version fares in each scenario, when not failed where the run stopped."""
+    baseline_reached: list[str] = []
+    """What the stopped version reached in every scenario."""
+    named: list[str] = []
+    """The systems the stopped version names."""
     checks: list[bool] = []
     replies: list[RecordedTurn]
     seconds: dict[str, float] = {}
@@ -386,46 +400,85 @@ class FakeDrafter:
 class FakeScenarioWriter:
     def __init__(self, script: Script[list[CaseScenario] | None], played: Played) -> None:
         self.script, self.played = script, played
+        self.dollars: list[float] = []
 
     def write(
-        self, version: WorkflowPlan, cover: Sequence[str], seconds: float
+        self,
+        version: WorkflowPlan,
+        cover: Sequence[str],
+        seconds: float,
+        dollars_left: Callable[[], float],
     ) -> list[Scenario] | None:
+        self.dollars.append(dollars_left())
         written = self.script.next(self.played, seconds)
         return [s.scenario() for s in written] if written is not None else None
 
 
+def _graded(name: str, said: str, reached: Sequence[str]) -> ScenarioResult:
+    verdict, _, step = said.partition(":")
+    match verdict:
+        case "failed":
+            return ScenarioResult(
+                name=name, verdict="failed", step=step, why="stopped", reached=list(reached)
+            )
+        case "not_tried":
+            return ScenarioResult(name=name, verdict="not_tried")
+        case _:
+            return ScenarioResult(name=name, verdict="passed", reached=list(reached))
+
+
 class FakeSimulation:
-    def __init__(self, script: Script[dict[str, str] | None], played: Played) -> None:
-        self.script, self.played = script, played
+    """Grades each draft's run from the case's script. The stopped version, which code tries
+    before a draft's first simulation, fails each scenario where the run stopped, unless the case
+    says otherwise, and takes no time on the clock."""
+
+    def __init__(
+        self, script: Script[dict[str, str] | None], played: Played, case: FixCase
+    ) -> None:
+        self.script, self.played, self.case = script, played, case
+        self.stopped = case.version.plan()
+        self.versions: list[WorkflowPlan] = []
+        self.dollars: list[float] = []
+        self._runs = 0
 
     def run(
-        self, version: WorkflowPlan, scenarios: Sequence[Scenario], seconds: float
+        self,
+        version: WorkflowPlan,
+        scenarios: Sequence[Scenario],
+        seconds: float,
+        dollars_left: Callable[[], float],
     ) -> Simulated | None:
+        self.versions.append(version)
+        self.dollars.append(dollars_left())
+        asked = [s.name for s in scenarios]
+        if version == self.stopped:
+            self.played.calls.append(("simulation_baseline", self.script.clock()))
+            stopped_at = f"failed:{self.case.stopped_at[0]}"
+            reached = self.case.baseline_reached
+            results = [_graded(n, self.case.baseline.get(n, stopped_at), reached) for n in asked]
+            return Simulated(results=results, named=list(self.case.named))
         graded = self.script.next(self.played, seconds)
+        reached_by = self.case.reached[self._runs] if self._runs < len(self.case.reached) else None
+        self._runs += 1
         if graded is None:
             return None
-        asked = {s.name for s in scenarios}
-        results: list[ScenarioResult] = []
-        for name, said in graded.items():
-            if name not in asked:
-                continue
-            verdict, _, step = said.partition(":")
-            match verdict:
-                case "failed":
-                    result = ScenarioResult(name=name, verdict="failed", step=step, why="stopped")
-                case "not_tried":
-                    result = ScenarioResult(name=name, verdict="not_tried")
-                case _:
-                    result = ScenarioResult(name=name, verdict="passed")
-            results.append(result)
-        return Simulated(results=results)
+        results = [
+            _graded(name, said, (reached_by or {}).get(name, ()))
+            for name, said in graded.items()
+            if name in asked
+        ]
+        return Simulated(results=results, named=list(self.case.named))
 
 
 class FakeChecker:
     def __init__(self, script: Script[bool], played: Played) -> None:
         self.script, self.played = script, played
+        self.dollars: list[float] = []
 
-    def passes(self, version: WorkflowPlan, seconds: float) -> bool:
+    def passes(
+        self, version: WorkflowPlan, seconds: float, dollars_left: Callable[[], float]
+    ) -> bool:
+        self.dollars.append(dollars_left())
         return self.script.next(self.played, seconds) is True
 
 
@@ -514,7 +567,9 @@ class Fakes:
         self.scenario_writer = FakeScenarioWriter(
             script("scenario_writer", self.case.scenarios), played
         )
-        self.simulation = FakeSimulation(script("simulation", self.case.simulations), played)
+        self.simulation = FakeSimulation(
+            script("simulation", self.case.simulations), played, self.case
+        )
         self.checker = FakeChecker(script("checker", self.case.checks), played)
         self.revisions = FakeRevisions(played, clock)
         self.log = FakeLog(clock)

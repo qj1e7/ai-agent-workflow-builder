@@ -172,7 +172,8 @@ class LineN8n(FakeSimulationN8n):
 
     def _github(self, node: Mapping[str, Any]) -> tuple[int, str | None]:
         play = self.github.now or GitHubPlay("ok", None)
-        if play.mode == "not_found":
+        p = node["parameters"]
+        if play.mode == "not_found" or f"{p.get('owner')}/{p.get('repository')}" in play.gone:
             return 0, NOT_FOUND
         if play.mode == "drop":
             return 0, DROPPED
@@ -422,7 +423,19 @@ def test_the_gateway_runs_a_simulation_signed_with_the_start_secret(gw: GatewayW
         "ending",
         "stopped_at",
         "plays",
+        "reached",
     }
+    assert happy["reached"] == [
+        "agent:release_checker",
+        "propose:jira.create_ticket",
+        "read:github_releases",
+    ]
+    assert body["named"] == [
+        "agent:release_checker",
+        "propose:jira.create_ticket",
+        "read:github_releases",
+        "tell:channel",
+    ]
     assert (body["scenarios_from"], body["refused"]) == ("templates", [])
     assert body["coverage"]["not_tried"] == [
         {"block": "Tell", "why": "A simulation never writes, so a block after a write never runs."}

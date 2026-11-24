@@ -62,8 +62,21 @@ def test_the_set_covers_each_red_team_bar():
         "widen-with-code-that-calls-out",
         "widen-with-a-sql-query",
         "widen-with-an-expression-that-reads-a-key",
+        "adds-a-host-at-run-time",
+        "no-replay-in-the-written-set",
+        "replay-shows-no-stop",
+        "widens-between-rounds-at-run-time",
+        "simulation-gives-no-answer",
+        "checker-refuses",
     ):
         assert bar in ids
+
+
+def test_every_simulation_in_the_set_grades_code_s_replay_of_the_stop():
+    """Code adds the replay before a draft's first simulation, so every run of a draft grades it."""
+    for case in CASES.values():
+        for graded in case.simulations:
+            assert graded is None or "replay_the_stop" in graded, case.id
 
 
 def test_section_11_s_three_fixable_cases_are_each_in_the_set():
@@ -81,8 +94,8 @@ def test_the_source_gone_loop_runs_rounds_until_no_progress_stops_it():
     run = replay(case).extra
     assert isinstance(run, Run)
     assert [(r.round, r.passed, r.scenarios) for r in run.fixing.ledger.rounds()] == [
-        (1, 1, 2),
-        (2, 1, 2),
+        (1, 1, 3),
+        (2, 1, 3),
     ]
 
 
