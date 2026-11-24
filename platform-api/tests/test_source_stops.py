@@ -78,7 +78,7 @@ def test_the_per_try_limit_is_thirty_seconds():
 
 def test_github_that_does_not_answer_is_named_with_its_block_the_limit_and_the_tries():
     assert stopped(GITHUB, ABORTED) == (
-        "GitHub didn't answer within 30 seconds, so \"Get releases\" stopped after 3 tries. "
+        'GitHub didn\'t answer within 30 seconds, so "Get releases" stopped after 3 tries. '
         f"{NO_ANSWER_CAUSE}"
     )
 
@@ -161,8 +161,7 @@ def test_a_block_the_registry_does_not_name_is_the_source():
 
 def test_a_failure_with_no_record_of_its_block_still_names_the_block():
     assert stopped(None, ABORTED) == (
-        'The source didn\'t answer within 30 seconds, so "Get releases" stopped. '
-        f"{NO_ANSWER_CAUSE}"
+        f'The source didn\'t answer within 30 seconds, so "Get releases" stopped. {NO_ANSWER_CAUSE}'
     )
 
 
@@ -214,7 +213,7 @@ def run_failed(message: str) -> RunFailedData:
 
 def test_the_troubleshooter_explains_a_source_stop_from_its_facts():
     failure = run_failed(stopped(GITHUB, ABORTED))
-    headline = "GitHub didn't answer within 30 seconds, so \"Get releases\" stopped after 3 tries."
+    headline = 'GitHub didn\'t answer within 30 seconds, so "Get releases" stopped after 3 tries.'
     assert what_happened(failure) == headline
     advice = explain_failure(failure)
     assert advice.explanation == headline
@@ -272,7 +271,10 @@ def test_words_that_are_no_source_stop_give_no_facts():
     [
         ("UpstreamUnavailable: Confluence could not be reached.", "Confluence"),
         ("UpstreamUnavailable: Jira could not be reached.", "Jira"),
-        ("UpstreamUnavailable: Could not check LangGraph: GitHub returned 503 three times", "GitHub"),
+        (
+            "UpstreamUnavailable: Could not check LangGraph: GitHub returned 503 three times",
+            "GitHub",
+        ),
     ],
 )
 def test_an_agent_whose_source_did_not_answer_names_that_source(said: str, source: str):

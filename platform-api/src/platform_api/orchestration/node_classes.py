@@ -194,6 +194,11 @@ class Use:
     """Switches a notice leaves off, such as Slack's link_names, which turns a written @channel
     into a call to everyone in it."""
 
+    @property
+    def system(self) -> str:
+        """The outside system, as the tag's last word names it: Jira in Reads Jira."""
+        return self.tag.split()[-1]
+
 
 @dataclass(frozen=True)
 class OnType:
@@ -202,6 +207,13 @@ class OnType:
     """By version, written as `version_key` writes it."""
     uses: Mapping[str, Use]
     """By version, for one of n8n's own nodes for an outside system."""
+
+    @property
+    def system(self) -> str | None:
+        """The outside system one of n8n's own nodes reaches, whichever version, as its rows that
+        say what it does name it. None for any other type."""
+        named = {use.system for use in self.uses.values()}
+        return named.pop() if len(named) == 1 else None
 
 
 @dataclass(frozen=True)

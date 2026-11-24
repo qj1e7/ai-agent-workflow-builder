@@ -561,7 +561,10 @@ locals {
           EXECUTIONS_DATA_PRUNE           = "true"
           EXECUTIONS_DATA_MAX_AGE         = "720"
           EXECUTIONS_DATA_SAVE_ON_SUCCESS = "all"
-          WAB_API_URL                     = local.url["platform-api"]
+          # n8n's own blocks give up on a source after 30 seconds a try, not 300 (ADR 0056). Our
+          # image makes n8n read it, and platform-api's stop words say it.
+          WAB_REQUEST_TIMEOUT_SECONDS = "30"
+          WAB_API_URL                 = local.url["platform-api"]
         },
         var.n8n_editor_external ? {
           N8N_PROTOCOL                      = "https"
