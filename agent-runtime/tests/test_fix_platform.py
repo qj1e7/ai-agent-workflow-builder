@@ -7,26 +7,27 @@ event again when the log can't be reached, so a lost end never leaves the fix op
 
 import json
 import secrets
+from pathlib import Path
 from typing import Any
 
 import httpx
 import pytest
-from agent_runtime.fixing.platform import (
+
+from agent_runtime.contract import WorkflowPlan
+from agent_runtime.fixing.cost import FixCost, counted, prices_by_model
+from agent_runtime.fixing.events import (
+    FixHandedBackData,
+    FixHandoffData,
+    FixProposedData,
+)
+from agent_runtime.fixing.platform_parts import (
     END_TRIES,
     EXPLAIN_CHARGE,
     FIX_TOKEN_HEADER,
     WRITE_CHARGE,
     PlatformParts,
 )
-
-from agent_runtime.contract import WorkflowPlan
-from agent_runtime.fixing.cost import FixCost, counted
-from agent_runtime.fixing.events import (
-    FixHandedBackData,
-    FixHandoffData,
-    FixProposedData,
-)
-from agent_runtime.fixing.ports import Scenario, ScenarioResult, Simulated
+from agent_runtime.fixing.ports import Scenario, ScenarioNote, ScenarioResult, Simulated
 from agent_runtime.model_cost import packaged_prices
 
 BASE = "http://platform-api:8000"
@@ -167,7 +168,7 @@ def test_a_call_that_asked_the_model_counts_at_its_most_toward_the_fix_s_cost():
             }
         ),
     )
-    cost = FixCost(packaged_prices())
+    cost = FixCost(prices_by_model(packaged_prices()))
     with counted(cost):
         parts(platform).write(VERSION, [], 30.0, plenty)
         parts(platform).run(VERSION, [HAPPY], 60.0, plenty)
@@ -221,7 +222,7 @@ def test_a_simulation_gives_each_grade_where_it_stopped_why_and_what_it_reached(
                 step="Read new releases",
                 why="stopped",
                 reached=["read:github_releases"],
-                note={"block": "Read new releases", "kind": "stopped", "source": None},
+                note=ScenarioNote(block="Read new releases", kind="stopped"),
             )
         ],
         not_reached=["Tell"],
@@ -309,3 +310,43 @@ def test_a_refusal_is_never_tried_again():
     platform.answer("events", ok({"refused": "not_stopped"}))
     assert parts(platform).note(PROPOSED) == "not_stopped"
     assert len(platform.asked) == 1
+
+
+# platform-api's contract
+
+OPENAPI = Path(__file__).resolve().parents[2] / "contracts" / "openapi.json"
+ROUTES = {
+    "events": ("FixEventIn", "FixEventOut"),
+    "scenarios": ("FixScenariosIn", "FixScenariosOut"),
+    "simulations": ("FixSimulationIn", "FixSimulationOut"),
+    "checks": ("FixCheckIn", "FixCheckOut"),
+}
+
+
+@pytest.mark.skipif(not OPENAPI.exists(), reason="contracts/ is not in the test image")
+def test_each_call_sends_what_platform_api_publishes_and_reads_what_it_answers():
+    published = json.loads(OPENAPI.read_text())
+    schemas = published["components"]["schemas"]
+    platform = Platform()
+    platform.answer("events", ok({"refused": None}))
+    platform.answer("scenarios", ok({"scenarios": [], "asked_model": False}))
+    platform.answer(
+        "simulations", ok({"results": [], "not_reached": [], "named": [], "asked_model": False})
+    )
+    platform.answer("checks", ok({"passes": True, "findings": []}))
+    recorder = parts(platform)
+    recorder.note(HANDOFF)
+    recorder.write(VERSION, [], 30.0, plenty)
+    recorder.run(VERSION, [HAPPY], 60.0, plenty)
+    recorder.passes(VERSION, 10.0, plenty)
+    assert [route for route, _, _ in platform.asked] == list(ROUTES)
+    for route, body, request in platform.asked:
+        sent, answered = ROUTES[route]
+        path = request.url.path.replace(RUN, "{run_id}").replace(FIX, "{fix_id}")
+        assert "post" in published["paths"][path], path
+        schema = schemas[sent]
+        assert set(schema["required"]) <= set(body) <= set(schema["properties"]), route
+        assert set(schemas[answered]["required"]) == set(schemas[answered]["properties"])
+    assert set(schemas["FixResultOut"]["properties"]) == set(ScenarioResult.model_fields)
+    assert set(schemas["FixNoteOut"]["properties"]) == {"block", "kind", "source"}
+    assert set(schemas["ScenarioSpec"]["properties"]) == set(Scenario.model_fields)

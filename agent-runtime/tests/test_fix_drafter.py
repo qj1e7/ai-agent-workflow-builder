@@ -248,6 +248,7 @@ def plugged(catalogue: Catalogue, stopped: WorkflowPlan, *turns: RecordedTurn):
     eval's fakes, on the case where a field the workflow reads moved."""
     clock = Clock(STARTED)
     fakes = Fakes(CASE, clock)
+    fakes.simulation.stopped = stopped
     drafted = RecordedChat(turns=list(turns))
     parts = fakes.parts()
     parts = type(parts)(**{**parts.__dict__, "drafter": drafter(catalogue, drafted)})

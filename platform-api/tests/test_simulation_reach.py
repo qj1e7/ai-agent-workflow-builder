@@ -12,11 +12,11 @@ from typing import Any
 
 import httpx
 import pytest
-from platform_api.orchestration.reach import named, reached
 
 from platform_api.orchestration.n8n import ExecutionRecord
+from platform_api.orchestration.reach import named, reached
 from platform_api.orchestration.recorded_samples import MADE_UP, RecordedSamples
-from platform_api.orchestration.scenarios import GitHubPlay, check, stage
+from platform_api.orchestration.scenarios import GitHubPlay, ScenarioSpec, check, stage
 from platform_api.orchestration.simulated_calls import CallRecord, MockGitHub, SimulatedRun
 from platform_api.orchestration.simulations import Simulation
 from tests.test_scenarios import (
@@ -86,11 +86,11 @@ def test_only_a_read_served_as_recorded_or_varied_names_gone_places() -> None:
 def test_gone_places_are_staged_for_our_read_and_for_mock_github() -> None:
     samples = RecordedSamples()
     plan = planned(release_check())
-    staged = stage(spec("happy_path", **replay("Read releases")), plan, samples)
+    staged = stage(ScenarioSpec.model_validate(replay("Read releases")), plan, samples)
     assert staged.gateway.blocks["Read releases"].gone == [GONE]
     assert staged.runs
     github = planned(release_check([github_read()]))
-    staged = stage(spec("happy_path", **replay("GitHub releases")), github, samples)
+    staged = stage(ScenarioSpec.model_validate(replay("GitHub releases")), github, samples)
     releases = MADE_UP["github.release"].items
     assert staged.github == GitHubPlay("ok", releases, (GONE,))
 
@@ -217,4 +217,4 @@ def test_a_pinned_block_reaches_nothing_and_a_block_that_never_ran_reaches_nothi
     plan = planned(release_check([github_read(), jira_read()]))
     assert reached(plan, None, _ended(ran={"Read the issue": "success"})) == ()
     assert reached(plan, None, _ended(ran={"GitHub releases": "success"})) == ("mock:github",)
-    assert "jira" not in " ".join(named(plan)), "a pinned block never runs"
+    assert "mock:jira" not in named(plan), "a pinned block never runs"

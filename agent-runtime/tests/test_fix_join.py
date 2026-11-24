@@ -13,7 +13,6 @@ from collections.abc import Callable, Sequence
 from typing import Any
 
 import httpx
-from agent_runtime.fixing.replay import REPLAY, replay_of
 from evals.fix import (
     FIX,
     FIX_ID,
@@ -24,6 +23,7 @@ from evals.fix import (
     FakeScenarioWriter,
     FixCase,
     RecordedChat,
+    prices,
     request_of,
     run_case,
 )
@@ -40,6 +40,7 @@ from agent_runtime.fixing.coordinator import (
 from agent_runtime.fixing.cost import charge
 from agent_runtime.fixing.events import FixData, FixHandoffData, FixProposedData, FixRefusal
 from agent_runtime.fixing.ports import Scenario, StoredRevision
+from agent_runtime.fixing.replay import REPLAY, replay_of
 from agent_runtime.model_cost import PRICES, packaged_prices
 
 CASES = {case.id: case for case in FIX.cases()}
@@ -53,7 +54,7 @@ def case(id_: str, **changes: Any) -> FixCase:
 
 def fixed(base: FixCase, fakes: Fakes, clock: Clock) -> Any:
     chat = RecordedChat(turns=list(base.replies), clock=clock)
-    return coordinating(request_of(base), lambda _t: chat, fakes.parts(), packaged_prices(), clock)
+    return coordinating(request_of(base), lambda _t: chat, fakes.parts(), prices(), clock)
 
 
 def cause(kind: str = "not_found", detail: str | None = "langchain-ai/langgraph") -> CauseFound:
@@ -260,7 +261,7 @@ def test_the_price_table_ships_in_the_runtime_package_and_the_evals_read_it_too(
     packaged = importlib.resources.files("agent_runtime").joinpath("pricing.json")
     assert packaged.is_file()
     assert PRICING == PRICES
-    assert "claude-sonnet-5-5" in packaged_prices()
+    assert "anthropic:claude-sonnet-5-5" in packaged_prices()
 
 
 def test_the_coordinator_counts_cost_at_the_packaged_prices_when_given_none():
