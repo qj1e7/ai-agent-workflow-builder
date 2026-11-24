@@ -26,6 +26,7 @@ from platform_api.builder.moves import (
     ScheduleHeld,
 )
 from platform_api.builder.n8n_draft import DraftRefused, N8nNotReady, NotSafe
+from platform_api.builder.use_case_simulations import UseCaseSimulations
 from platform_api.builder.watchlist import AlreadyOnN8n, MovedToN8n, WaitsForRun
 from platform_api.db import json
 from platform_api.orchestration import Day, Publisher, RanVersion, Schedule
@@ -149,8 +150,7 @@ class Moving:
         return run_id
 
 
-@pytest.fixture
-async def m(lab: Lab, postgres: PostgresUrls) -> AsyncIterator[Moving]:
+def moving(lab: Lab, owner_url: str, simulations: UseCaseSimulations | None = None) -> Moving:
     n8n = FakeN8n()
     store = Errors(n8n, lab.h.db)
     cancels = Cancels()
@@ -164,8 +164,14 @@ async def m(lab: Lab, postgres: PostgresUrls) -> AsyncIterator[Moving]:
         writes=WRITES,
         open_runs=WatchFacts(lab.h.db, lab.h.jira, lab.h.jira.site.identity),
         requests=cancels,
+        simulations=simulations,
     )
-    yield Moving(lab, n8n, store, builder, postgres.owner, cancels)
+    return Moving(lab, n8n, store, builder, owner_url, cancels)
+
+
+@pytest.fixture
+async def m(lab: Lab, postgres: PostgresUrls) -> AsyncIterator[Moving]:
+    yield moving(lab, postgres.owner)
 
 
 def before(nodes: list[dict[str, Any]], connections: dict[str, Any], name: str) -> set[str]:

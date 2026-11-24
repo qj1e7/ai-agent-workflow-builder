@@ -1,10 +1,11 @@
-"""A drafted revision tried on practice systems (ADR 0054, PR 7). Once the safety checker has
-graded a revision with nothing still needed, code runs it through its scenarios in the simulation
-n8n, in the background, and keeps code's grades by the revision's digest. The card reads them
-back for the newest revision's digest only, so a changed version never shows an older result.
+"""A workflow version tried on practice systems (ADR 0054). Once the safety checker has graded a
+version, code runs it through its scenarios in the simulation n8n, in the background, and keeps
+code's grades by the version's digest. A Check card reads them back for the digest of the version
+it shows, so a changed version never shows an older result. A digest is tried once, whichever
+workflow holds it: a drafted revision and the workflow it is set up as share one try.
 
-The running row is written in the revision's own transaction (`claim`), and the simulation starts
-once it commits (`start`), so a poll never reads a new revision as untried.
+A version's running row is written in the transaction that keeps it (`claim`), and the
+simulation starts once it commits (`start`), so a poll never reads a new version as untried.
 
 A simulation is not a run. It never writes a run or an activity event, and never stands in for
 the test run that Turn on starts. A failed case blocks nothing: the card leads with it, and the
@@ -15,13 +16,14 @@ running for good."""
 import asyncio
 import logging
 from collections.abc import Mapping
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, Final, Protocol, cast
 
-from platform_api.builder.drafted_views import (
-    DraftedSimulationView,
+from platform_api.builder.simulation_views import (
     SimulatedBlockView,
     SimulatedCaseView,
+    SimulationView,
 )
 from platform_api.db import Connection, Database, json
 from platform_api.orchestration import (
@@ -31,6 +33,7 @@ from platform_api.orchestration import (
     NotSimulated,
     Simulated,
     SimulationOut,
+    workflow_digest,
 )
 
 log = logging.getLogger(__name__)
@@ -38,13 +41,28 @@ log = logging.getLogger(__name__)
 NO_SIMULATION: Final = "Simulation on practice systems isn't available here."
 SIMULATING: Final = "Trying it on practice systems."
 """The running state's one wording, which the card shows too."""
+NOTHING_TO_TRY: Final = "There's nothing to try again on practice systems."
+
+
+@dataclass(frozen=True)
+class Claimed:
+    """A version's try, claimed in the transaction that keeps the version and started after."""
+
+    digest: str
+    document: Mapping[str, Any]
+    started_at: datetime
 
 
 class Simulating(Protocol):
     async def run(self, version: Mapping[str, Any]) -> Simulated | NotSimulated: ...
 
 
-class DraftedSimulations:
+def _short(digest: str) -> str:
+    """Enough of a digest to name its try in a log line."""
+    return digest[:12]
+
+
+class Simulations:
     def __init__(
         self,
         db: Database,
@@ -56,77 +74,79 @@ class DraftedSimulations:
         self._driver = driver
         self._limit = limit
         self._closed = False
-        self._running: dict[tuple[str, str], tuple[asyncio.Task[None], datetime]] = {}
+        self._running: dict[str, tuple[asyncio.Task[None], datetime]] = {}
 
     @property
     def available(self) -> bool:
         """Whether there is a simulation n8n here."""
         return self._driver is not None
 
-    def _going(self, drafted_id: str, digest: str) -> bool:
+    def _going(self, digest: str) -> bool:
         """A try still under way. Past its limit it counts as ended, whatever its task does."""
-        going = self._running.get((drafted_id, digest))
+        going = self._running.get(digest)
         if going is None:
             return False
         task, started_at = going
         return not task.done() and self._db.clock() - started_at <= self._limit
 
     async def claim(
-        self, conn: Connection, drafted_id: str, revision: int, digest: str, now: datetime
-    ) -> datetime | None:
-        """The running row for a revision's first try, in the transaction that keeps the
-        revision. None where there is no simulation n8n, once shutdown began, or when the digest
-        has a try already. The caller starts it once the transaction commits."""
+        self, conn: Connection, document: Mapping[str, Any], now: datetime
+    ) -> Claimed | None:
+        """The one claim for every version, a drafted revision's and a workflow's: the running
+        row for its digest's first try, in the transaction that keeps the version. None where
+        there is no simulation n8n, once shutdown began, or when the digest has a try already.
+        The caller starts it once the transaction commits."""
         if self._driver is None or self._closed:
             return None
-        return await _insert(conn, drafted_id, revision, digest, now)
+        digest = workflow_digest(document)
+        started_at = await _insert(conn, digest, now)
+        return None if started_at is None else Claimed(digest, dict(document), started_at)
 
-    async def start(
-        self, drafted_id: str, digest: str, document: Mapping[str, Any], started_at: datetime
-    ) -> None:
-        """Runs the try its claim began, in the background."""
+    async def start(self, claimed: Claimed | None) -> None:
+        """Runs the try a claim began, in the background. Should that fail, its row reads as not
+        finished once past the limit, with Try again."""
         driver = self._driver
-        if driver is None or self._closed:
+        if claimed is None or driver is None or self._closed:
             return
-        key = (drafted_id, digest)
-        if (older := self._running.get(key)) is not None:
-            older[0].cancel()
-        task = asyncio.create_task(
-            self._run(driver, drafted_id, digest, dict(document), started_at)
-        )
-        self._running[key] = (task, started_at)
-        task.add_done_callback(lambda _: self._forget(key, task))
+        digest = claimed.digest
+        try:
+            if (older := self._running.get(digest)) is not None:
+                older[0].cancel()
+            run = self._run(driver, digest, dict(claimed.document), claimed.started_at)
+            task = asyncio.create_task(run)
+            self._running[digest] = (task, claimed.started_at)
+            task.add_done_callback(lambda _: self._forget(digest, task))
+        except Exception as error:
+            log.error("could not start simulating %s: %s", _short(digest), type(error).__name__)
 
-    async def again(
-        self, drafted_id: str, revision: int, digest: str, document: Mapping[str, Any]
-    ) -> bool:
+    async def again(self, digest: str, document: Mapping[str, Any]) -> bool:
         """Tries the version again when it was never tried, wasn't run or ran past its limit.
         False when nothing was started."""
-        if self._driver is None or self._closed or self._going(drafted_id, digest):
+        if self._driver is None or self._closed or self._going(digest):
             return False
         async with self._db.transaction("builder") as uow:
-            started_at = await _insert(uow.conn, drafted_id, revision, digest, uow.now)
+            started_at = await _insert(uow.conn, digest, uow.now)
             if started_at is None:
                 row = await (
                     await uow.conn.execute(
-                        "UPDATE builder.drafted_simulations SET state = 'running',"
-                        " started_at = %s, finished_at = NULL, result = NULL, said = NULL,"
-                        " again = false WHERE drafted_id = %s AND digest = %s"
+                        "UPDATE builder.simulations SET state = 'running', started_at = %s,"
+                        " finished_at = NULL, result = NULL, said = NULL, again = false"
+                        " WHERE digest = %s"
                         " AND (state = 'not_run' OR (state = 'running' AND started_at < %s))"
                         " RETURNING started_at",
-                        (uow.now, drafted_id, digest, uow.now - self._limit),
+                        (uow.now, digest, uow.now - self._limit),
                     )
                 ).fetchone()
                 started_at = None if row is None else cast(datetime, row["started_at"])
         if started_at is None:
             return False
-        await self.start(drafted_id, digest, document, started_at)
+        await self.start(Claimed(digest, dict(document), started_at))
         return True
 
-    def _forget(self, key: tuple[str, str], task: asyncio.Task[None]) -> None:
-        going = self._running.get(key)
+    def _forget(self, digest: str, task: asyncio.Task[None]) -> None:
+        going = self._running.get(digest)
         if going is not None and going[0] is task:
-            del self._running[key]
+            del self._running[digest]
 
     def cancel(self) -> None:
         """Stops every simulation this process started and refuses new ones, as a shutdown does.
@@ -141,30 +161,27 @@ class DraftedSimulations:
             await asyncio.gather(*going, return_exceptions=True)
 
     async def _run(
-        self,
-        driver: Simulating,
-        drafted_id: str,
-        digest: str,
-        version: dict[str, Any],
-        started_at: datetime,
+        self, driver: Simulating, digest: str, version: dict[str, Any], started_at: datetime
     ) -> None:
         try:
             done = await asyncio.wait_for(driver.run(version), self._limit.total_seconds())
         except TimeoutError:
             # Kept as it is: past its limit the card shows it as not finished.
-            log.warning("the simulation of %s ran past its limit", drafted_id)
+            log.warning("the simulation of %s ran past its limit", _short(digest))
             return
         except Exception as error:
             # Only the error's type: its words could hold the version's.
-            log.error("the simulation of %s failed: %s", drafted_id, type(error).__name__)
+            log.error("the simulation of %s failed: %s", _short(digest), type(error).__name__)
             done = NotSimulated(DIDNT_ANSWER, again=True)
         try:
-            await self._keep(drafted_id, digest, started_at, done)
+            await self._keep(digest, started_at, done)
         except Exception as error:
-            log.error("could not keep the simulation of %s: %s", drafted_id, type(error).__name__)
+            log.error(
+                "could not keep the simulation of %s: %s", _short(digest), type(error).__name__
+            )
 
     async def _keep(
-        self, drafted_id: str, digest: str, started_at: datetime, done: Simulated | NotSimulated
+        self, digest: str, started_at: datetime, done: Simulated | NotSimulated
     ) -> None:
         """Kept only for the try it began, so an older try never overwrites a newer one."""
         match done:
@@ -174,24 +191,22 @@ class DraftedSimulations:
                 state, result, said = "not_run", None, words
         async with self._db.transaction("builder") as uow:
             await uow.conn.execute(
-                "UPDATE builder.drafted_simulations SET state = %s, finished_at = %s,"
-                " result = %s, said = %s, again = %s WHERE drafted_id = %s AND digest = %s"
-                " AND state = 'running' AND started_at = %s",
+                "UPDATE builder.simulations SET state = %s, finished_at = %s, result = %s,"
+                " said = %s, again = %s WHERE digest = %s AND state = 'running'"
+                " AND started_at = %s",
                 (
                     state,
                     uow.now,
                     None if result is None else json(result),
                     said,
                     again,
-                    drafted_id,
                     digest,
                     started_at,
                 ),
             )
 
-    async def view(self, drafted_id: str, digest: str, operator: bool) -> DraftedSimulationView:
-        """The newest revision's simulation, by its digest, as this person may act on it."""
-        empty = DraftedSimulationView(
+    def _empty(self) -> SimulationView:
+        return SimulationView(
             state="unavailable",
             started_at=None,
             case_seconds=WAIT_LIMIT_SECONDS,
@@ -202,14 +217,24 @@ class DraftedSimulations:
             said=None,
             can_try_again=False,
         )
+
+    def waiting(self) -> SimulationView:
+        """A version that still needs a setting, tried once every setting is filled. Where there
+        is no simulation n8n it is never tried, and the card says so instead."""
+        empty = self._empty()
+        return empty.model_copy(update={"state": "waiting"}) if self.available else empty
+
+    async def view(self, digest: str, operator: bool) -> SimulationView:
+        """A version's simulation, by its digest, as this person may act on it."""
+        empty = self._empty()
         if not self.available:
             return empty
         async with self._db.connection("builder") as conn:
             row = await (
                 await conn.execute(
-                    "SELECT state, started_at, result, said, again"
-                    " FROM builder.drafted_simulations WHERE drafted_id = %s AND digest = %s",
-                    (drafted_id, digest),
+                    "SELECT state, started_at, result, said, again FROM builder.simulations"
+                    " WHERE digest = %s",
+                    (digest,),
                 )
             ).fetchone()
         can_start = operator and not self._closed
@@ -237,16 +262,13 @@ class DraftedSimulations:
                 return _done(empty.model_copy(update=at), row["result"])
 
 
-async def _insert(
-    conn: Connection, drafted_id: str, revision: int, digest: str, now: datetime
-) -> datetime | None:
+async def _insert(conn: Connection, digest: str, now: datetime) -> datetime | None:
     """A first try for the digest, or None when it has one already."""
     row = await (
         await conn.execute(
-            "INSERT INTO builder.drafted_simulations (drafted_id, digest, revision, state,"
-            " started_at) VALUES (%s, %s, %s, 'running', %s)"
-            " ON CONFLICT (drafted_id, digest) DO NOTHING RETURNING started_at",
-            (drafted_id, digest, revision, now),
+            "INSERT INTO builder.simulations (digest, state, started_at)"
+            " VALUES (%s, 'running', %s) ON CONFLICT (digest) DO NOTHING RETURNING started_at",
+            (digest, now),
         )
     ).fetchone()
     return None if row is None else cast(datetime, row["started_at"])
@@ -271,7 +293,7 @@ def _result(out: SimulationOut, notes: Mapping[str, str]) -> dict[str, Any]:
     }
 
 
-def _done(view: DraftedSimulationView, result: Mapping[str, Any]) -> DraftedSimulationView:
+def _done(view: SimulationView, result: Mapping[str, Any]) -> SimulationView:
     return view.model_copy(
         update={
             "state": "done",

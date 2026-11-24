@@ -27,6 +27,7 @@ from typing import Any, Protocol
 import httpx
 
 from platform_api.builder.moves import RESTORE_ASK_LIVES
+from platform_api.builder.use_case_simulations import UseCaseSimulations
 from platform_api.builder.versions import (
     Held,
     Made,
@@ -162,8 +163,11 @@ class VersionsSweep:
         requests: OpenRequests | None,
         team_zone: str,
         look_seconds: float = LOOK_SECONDS,
+        *,
+        simulations: UseCaseSimulations,
     ) -> None:
         self._db = db
+        self._simulations = simulations
         self._zone = team_zone
         self._n8n = n8n
         self._graders = graders
@@ -229,39 +233,56 @@ class VersionsSweep:
     async def _look(
         self, use_case_id: str, known: KnownOptions, error_workflow: str | None, mark: str
     ) -> Seen | None:
+        """A version the sweep grades, new or graded again, is tried on practice systems: its
+        row is kept in the same transaction, and its try starts once it commits (ADR 0054)."""
+        claimed = None
         async with self._db.transaction("builder") as uow:
-            mine = _OWN + " AND u.use_case_id = %s FOR UPDATE OF u"
-            row = await (await uow.conn.execute(mine, (use_case_id,))).fetchone()
-            if row is None:
-                return None
-            workflow_id = row["n8n_workflow_id"]
-            workflow = await self._n8n.look(workflow_id)
-            if workflow is None and await _restore_asked(uow, workflow_id):
-                log.info("n8n lost %s, which the restore asked for saves again", workflow_id)
-                return None
-            if workflow is None:
-                await uow.conn.execute(
-                    "UPDATE builder.use_cases SET deleted_in_n8n_at = %s WHERE use_case_id = %s",
-                    (uow.now, use_case_id),
-                )
-                log.warning("n8n no longer has %s, the workflow of %s", workflow_id, use_case_id)
-                return Gone(use_case_id)
-            live = workflow.active_version_id
-            if live is not None and live != row["n8n_version_id"]:
-                return await self._keep(uow, row, live, workflow.version_id, known, error_workflow)
-            if row["document"] is None:
-                return None
-            kept: dict[str, Any] = row["document"]
-            settings: dict[str, Any] = workflow.document.get("settings") or {}
-            changed = settings_changed(kept.get("settings"), settings)
-            drifted = live is not None and changed is not None
-            if not drifted and row["graded_by"] == mark:
-                return None
-            document = kept if live is None else {**kept, "settings": settings}
-            graded = grade(document, error_workflow, self._zone, known)
-            if drifted:
-                return await self._settings(uow, row, workflow, document, graded)
-            return await _regraded(uow, row, graded, mark)
+            seen = await self._seen(uow, use_case_id, known, error_workflow, mark)
+            if isinstance(seen, Found | Regraded):
+                claimed = await self._simulations.claim(uow.conn, use_case_id, uow.now)
+        await self._simulations.start(claimed)
+        return seen
+
+    async def _seen(
+        self,
+        uow: UnitOfWork,
+        use_case_id: str,
+        known: KnownOptions,
+        error_workflow: str | None,
+        mark: str,
+    ) -> Seen | None:
+        mine = _OWN + " AND u.use_case_id = %s FOR UPDATE OF u"
+        row = await (await uow.conn.execute(mine, (use_case_id,))).fetchone()
+        if row is None:
+            return None
+        workflow_id = row["n8n_workflow_id"]
+        workflow = await self._n8n.look(workflow_id)
+        if workflow is None and await _restore_asked(uow, workflow_id):
+            log.info("n8n lost %s, which the restore asked for saves again", workflow_id)
+            return None
+        if workflow is None:
+            await uow.conn.execute(
+                "UPDATE builder.use_cases SET deleted_in_n8n_at = %s WHERE use_case_id = %s",
+                (uow.now, use_case_id),
+            )
+            log.warning("n8n no longer has %s, the workflow of %s", workflow_id, use_case_id)
+            return Gone(use_case_id)
+        live = workflow.active_version_id
+        if live is not None and live != row["n8n_version_id"]:
+            return await self._keep(uow, row, live, workflow.version_id, known, error_workflow)
+        if row["document"] is None:
+            return None
+        kept: dict[str, Any] = row["document"]
+        settings: dict[str, Any] = workflow.document.get("settings") or {}
+        changed = settings_changed(kept.get("settings"), settings)
+        drifted = live is not None and changed is not None
+        if not drifted and row["graded_by"] == mark:
+            return None
+        document = kept if live is None else {**kept, "settings": settings}
+        graded = grade(document, error_workflow, self._zone, known)
+        if drifted:
+            return await self._settings(uow, row, workflow, document, graded)
+        return await _regraded(uow, row, graded, mark)
 
     async def _settings(
         self,

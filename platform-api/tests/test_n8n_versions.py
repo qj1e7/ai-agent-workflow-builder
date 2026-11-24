@@ -19,6 +19,7 @@ from platform_api.builder.layout import LayoutPlan, release_check, schedule_rule
 from platform_api.builder.models import RepublishIn, ScheduleSaveIn, WatchlistView
 from platform_api.builder.service import NO_START
 from platform_api.builder.sweep import ASKED_GAP, Found, Regraded, VersionsSweep
+from platform_api.builder.use_case_simulations import UseCaseSimulations
 from platform_api.builder.versions import changes_between, schedule_of
 from platform_api.builder.watchlist import MovedToN8n
 from platform_api.orchestration import (
@@ -114,7 +115,12 @@ class Versions:
 
 
 def on_n8n(
-    lab: Lab, n8n: FakeN8n, accounts: Accounts, requests: Requests, zone: str = TEAM_ZONE
+    lab: Lab,
+    n8n: FakeN8n,
+    accounts: Accounts,
+    requests: Requests,
+    zone: str = TEAM_ZONE,
+    simulations: UseCaseSimulations | None = None,
 ) -> None:
     lab.builder = Builder(
         lab.h.db,
@@ -127,6 +133,7 @@ def on_n8n(
         requests=requests,
         accounts=accounts,
         time_zone=ZoneInfo(zone),
+        simulations=simulations,
     )
     lab.app.state.builder = lab.builder
 
@@ -615,6 +622,7 @@ async def test_safety_a_slow_n8n_never_holds_a_workflow_from_undo_for_long(v: Ve
         None,
         TEAM_ZONE,
         0.2,
+        simulations=v.builder.simulations,
     )
     looking = asyncio.create_task(stuck.sweep())
     await asyncio.sleep(0.05)

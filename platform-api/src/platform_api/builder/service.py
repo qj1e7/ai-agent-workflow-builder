@@ -90,6 +90,7 @@ from platform_api.builder.planning import (
     RuntimeNotAnswering,
     plan,
 )
+from platform_api.builder.simulations import Claimed, Simulations
 from platform_api.builder.sweep import N8nAccounts, NoN8nAccounts, OpenRequests, VersionsSweep
 from platform_api.builder.templates import (
     AGENT_CARDS,
@@ -97,6 +98,7 @@ from platform_api.builder.templates import (
     TEMPLATES,
     suggest_template,
 )
+from platform_api.builder.use_case_simulations import UseCaseSimulations
 from platform_api.builder.versions import (
     AlreadyUndone,
     ChangedSince,
@@ -507,8 +509,11 @@ class Builder:
         holding: Holding | None = None,
         time_zone: ZoneInfo = TEAM_TIME_ZONE,
         keys: MadeKeys | None = None,
+        simulations: UseCaseSimulations | None = None,
     ) -> None:
         self._db = db
+        self.simulations = simulations or UseCaseSimulations(db, Simulations(db, None))
+        """Each version the safety checker grades is tried on practice systems (ADR 0054)."""
         self._zone = time_zone.key
         """The team time zone: a new schedule's, and the one every workflow runs on."""
         self._runs = runs
@@ -533,7 +538,13 @@ class Builder:
             None
             if n8n is None
             else VersionsSweep(
-                db, n8n, self.facts, accounts or NoN8nAccounts(), requests, self._zone
+                db,
+                n8n,
+                self.facts,
+                accounts or NoN8nAccounts(),
+                requests,
+                self._zone,
+                simulations=self.simulations,
             )
         )
         """The versions sweep, for a platform that lays workflows out in n8n."""
@@ -550,6 +561,7 @@ class Builder:
                 lambda: self.facts.known({}),
                 self._zone,
                 watchlist,
+                simulations=self.simulations,
             )
         )
         """The moves off the shared run workflow, and Restore to n8n (ENGINE-PLAN 2.6, E10)."""
@@ -880,6 +892,13 @@ class Builder:
                 await self._schedules.delete(UseCaseId(use_case_id))
             else:
                 await self._schedules.save(UseCaseId(use_case_id), decided.after, principal)
+            # Laid out again and graded, so its new version is tried (ADR 0054).
+            claimed = (
+                None
+                if in_n8n is None
+                else await self.simulations.claim(uow.conn, use_case_id, uow.now)
+            )
+        await self.simulations.start(claimed)
         return decided
 
     async def rollback_version(
@@ -941,6 +960,7 @@ class Builder:
         only when it grades safe against what the editor's lists hold now. Its source's
         publisher is kept with it, because its runs are their work too (ADR 0026). Asked again
         once done, it answers the same."""
+        claimed: Claimed | None = None
         async with self._db.transaction("builder") as uow:
             await hold_workflow(uow.conn, use_case_id, alone=True)
             row = await (
@@ -984,6 +1004,8 @@ class Builder:
                     authors_of(source),
                     put.draft,
                 )
+                claimed = await self.simulations.claim(uow.conn, use_case_id, uow.now)
+        await self.simulations.start(claimed)
         return await self.get_use_case(use_case_id, principal)
 
     async def _put_in_use(
@@ -1340,11 +1362,14 @@ class Builder:
             if isinstance(drafted, DraftRefused | N8nNotReady):
                 return drafted
         try:
-            await self._insert_agent_use_case(use_case_id, principal, body, chosen, drafted)
+            claimed = await self._insert_agent_use_case(
+                use_case_id, principal, body, chosen, drafted
+            )
         except Exception:
             if self._n8n is not None and drafted is not None:
                 await self._n8n.remove(drafted.saved.workflow_id)
             raise
+        await self.simulations.start(claimed)
         if body.schedule is not None:
             try:
                 await self._schedules.save(
@@ -1432,7 +1457,9 @@ class Builder:
         body: CreateAgentUseCase,
         chosen: Sequence[tuple[CardView, Mapping[str, str]]],
         drafted: InN8n | None,
-    ) -> None:
+    ) -> Claimed | None:
+        """With its version laid out in n8n and graded, its try on practice systems is claimed
+        in the same transaction."""
         engine = "shared_run" if drafted is None else "own"
         workflow_id = None if drafted is None else drafted.saved.workflow_id
         async with self._db.transaction("builder") as uow:
@@ -1471,6 +1498,7 @@ class Builder:
                     ' card_id, card_version, "values") VALUES (%s, 1, %s, %s, %s, %s)',
                     (use_case_id, position, card.card_id, card.version, json(dict(values))),
                 )
+            return await self.simulations.claim(uow.conn, use_case_id, uow.now)
 
     @staticmethod
     def suggest(text: str) -> SuggestOut:

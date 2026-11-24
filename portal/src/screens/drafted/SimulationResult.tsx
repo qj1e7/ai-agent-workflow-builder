@@ -1,11 +1,10 @@
 import { useState } from 'react'
 import { useErrorWords } from '../../api/context'
-import { useSimulateAgain } from '../../api/draftedQueries'
-import { pressOnce, useLatch } from '../../api/latch'
-import type { DraftedSimulationView, SimulatedCaseView } from '../../api/types'
+import { pressOnce, useLatch, type Outcome } from '../../api/latch'
+import type { SimulatedCaseView, SimulationView } from '../../api/types'
 import { Button } from '../../ui/Button'
 import { IconCheck, IconX } from '../../ui/icons'
-import { AI_NOTE, caseLimitWords, casesInOrder, EXPECTED, HAPPENED, KIND_WORDS, NOT_AVAILABLE, NOT_FINISHED, NOT_STARTED, NOT_TRIED_ANYWHERE, SIMULATING, simulationLead, STILL_TESTS, VERDICT_WORDS, YOU_DECIDE } from './simulation'
+import { AI_NOTE, caseLimitWords, casesInOrder, EXPECTED, HAPPENED, KIND_WORDS, NOT_AVAILABLE, NOT_FINISHED, NOT_STARTED, NOT_TRIED_ANYWHERE, SIMULATING, simulationLead, STILL_TESTS, VERDICT_WORDS, WAITING, YOU_DECIDE } from './simulation'
 import styles from './Drafted.module.css'
 
 function Mark({ verdict }: { verdict: SimulatedCaseView['verdict'] }) {
@@ -46,15 +45,20 @@ function Case({ found }: { found: SimulatedCaseView }) {
   )
 }
 
-function TryAgain({ draftedId, revision, label }: { draftedId: string; revision: number; label: string }) {
+/** Starts the version's try again, wherever its Check is: a drafted revision's, or a workflow's current version. */
+export interface TryAgain {
+  readonly pending: boolean
+  readonly press: (outcome: Outcome<unknown>) => void
+}
+
+function TryAgainButton({ tryAgain, label }: { tryAgain: TryAgain; label: string }) {
   const words = useErrorWords()
-  const again = useSimulateAgain(draftedId)
   const latch = useLatch()
   const [problem, setProblem] = useState<string | null>(null)
   return (
     <>
       <p>
-        <Button loading={again.isPending} onClick={() => pressOnce(latch, (outcome) => again.mutate(revision, outcome), { onSuccess: () => setProblem(null), onError: (error) => setProblem(words(error)) })}>
+        <Button loading={tryAgain.pending} onClick={() => pressOnce(latch, tryAgain.press, { onSuccess: () => setProblem(null), onError: (error) => setProblem(words(error)) })}>
           {label}
         </Button>
       </p>
@@ -68,16 +72,23 @@ function TryAgain({ draftedId, revision, label }: { draftedId: string; revision:
 }
 
 /**
- * The revision tried on practice systems (ADR 0054, PR 7). The result leads, then what failed and why. A failed case never
- * blocks Turn on, and a pass never stands in for the real test run Turn on starts. It never claims a result it doesn't have.
+ * A version tried on practice systems (ADR 0054): a drafted revision, or a workflow the Planner built from our blocks. The result
+ * leads, then what failed and why. A failed case never blocks Turn on, and a pass never stands in for the real test run Turn on
+ * starts. It never claims a result it doesn't have.
  */
-export function SimulationResult({ simulation, draftedId, revision }: { simulation: DraftedSimulationView; draftedId: string; revision: number }) {
-  const again = (label: string) => (simulation.can_try_again ? <TryAgain draftedId={draftedId} revision={revision} label={label} /> : null)
+export function SimulationResult({ simulation, tryAgain }: { simulation: SimulationView; tryAgain: TryAgain }) {
+  const again = (label: string) => (simulation.can_try_again ? <TryAgainButton tryAgain={tryAgain} label={label} /> : null)
   switch (simulation.state) {
     case 'unavailable':
       return (
         <p className={styles['note']} data-simulation>
           {NOT_AVAILABLE} {STILL_TESTS}
+        </p>
+      )
+    case 'waiting':
+      return (
+        <p className={styles['note']} data-simulation>
+          {WAITING}
         </p>
       )
     case 'not_started':

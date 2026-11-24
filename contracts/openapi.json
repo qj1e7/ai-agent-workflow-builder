@@ -5599,89 +5599,6 @@
         "title": "DraftedSetUpView",
         "type": "object"
       },
-      "DraftedSimulationView": {
-        "additionalProperties": false,
-        "description": "The newest revision tried on practice systems, by its digest (ADR 0054, PR 7). A result\nbelongs to one digest, so a changed version never shows an older one. A simulation is not a\nrun, and never stands in for the test run Turn on starts.",
-        "properties": {
-          "can_try_again": {
-            "description": "Whether this person can start it now: an Operator, once it was never tried, was not run or didn't finish, and only where there is a simulation n8n.",
-            "title": "Can Try Again",
-            "type": "boolean"
-          },
-          "case_seconds": {
-            "description": "The most each case may take to end.",
-            "title": "Case Seconds",
-            "type": "integer"
-          },
-          "cases": {
-            "description": "Each case, once done.",
-            "items": {
-              "$ref": "#/components/schemas/SimulatedCaseView"
-            },
-            "title": "Cases",
-            "type": "array"
-          },
-          "not_tried": {
-            "description": "Blocks no case could try, such as a pinned one or one after a write.",
-            "items": {
-              "$ref": "#/components/schemas/SimulatedBlockView"
-            },
-            "title": "Not Tried",
-            "type": "array"
-          },
-          "passed": {
-            "title": "Passed",
-            "type": "integer"
-          },
-          "said": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Why nothing was tried, in words to show.",
-            "title": "Said"
-          },
-          "started_at": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "When this try began. Null when unavailable.",
-            "title": "Started At"
-          },
-          "state": {
-            "$ref": "#/components/schemas/SimulationState",
-            "description": "unavailable: there is no simulation n8n here. not_started: it was never tried. running: it is being tried now. done: code graded each case. not_run: nothing was tried, with said. not_finished: it ran past its limit, so there is no result."
-          },
-          "tried": {
-            "description": "The cases that ran, leaving out those not tried.",
-            "title": "Tried",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "state",
-          "started_at",
-          "case_seconds",
-          "tried",
-          "passed",
-          "cases",
-          "not_tried",
-          "said",
-          "can_try_again"
-        ],
-        "title": "DraftedSimulationView",
-        "type": "object"
-      },
       "DraftedState": {
         "enum": [
           "drafting",
@@ -5851,13 +5768,13 @@
           "simulation": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/DraftedSimulationView"
+                "$ref": "#/components/schemas/SimulationView"
               },
               {
                 "type": "null"
               }
             ],
-            "description": "The newest revision tried on practice systems. Null while drafting, when not drafted, or while a setting is still needed."
+            "description": "The newest revision tried on practice systems. Null while drafting or when not drafted. Waiting while a setting is still needed."
           },
           "started_at": {
             "format": "date-time",
@@ -14477,6 +14394,7 @@
       "SimulationState": {
         "enum": [
           "unavailable",
+          "waiting",
           "not_started",
           "running",
           "done",
@@ -14484,6 +14402,89 @@
           "not_finished"
         ],
         "type": "string"
+      },
+      "SimulationView": {
+        "additionalProperties": false,
+        "description": "A version tried on practice systems, by its digest (ADR 0054). A result belongs to one\ndigest, so a changed version never shows an older one, and a digest is tried once. A\nsimulation is not a run, and never stands in for the test run Turn on starts.",
+        "properties": {
+          "can_try_again": {
+            "description": "Whether this person can start it now: an Operator, once it was never tried, was not run or didn't finish, and only where there is a simulation n8n.",
+            "title": "Can Try Again",
+            "type": "boolean"
+          },
+          "case_seconds": {
+            "description": "The most each case may take to end.",
+            "title": "Case Seconds",
+            "type": "integer"
+          },
+          "cases": {
+            "description": "Each case, once done.",
+            "items": {
+              "$ref": "#/components/schemas/SimulatedCaseView"
+            },
+            "title": "Cases",
+            "type": "array"
+          },
+          "not_tried": {
+            "description": "Blocks no case could try, such as a pinned one or one after a write.",
+            "items": {
+              "$ref": "#/components/schemas/SimulatedBlockView"
+            },
+            "title": "Not Tried",
+            "type": "array"
+          },
+          "passed": {
+            "title": "Passed",
+            "type": "integer"
+          },
+          "said": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why nothing was tried, in words to show.",
+            "title": "Said"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When this try began. Null when unavailable, waiting or never tried.",
+            "title": "Started At"
+          },
+          "state": {
+            "$ref": "#/components/schemas/SimulationState",
+            "description": "unavailable: there is no simulation n8n here. waiting: a setting is still needed, so it is tried once every setting is filled. not_started: it was never tried. running: it is being tried now. done: code graded each case. not_run: nothing was tried, with said. not_finished: it ran past its limit, so there is no result."
+          },
+          "tried": {
+            "description": "The cases that ran, leaving out those not tried.",
+            "title": "Tried",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "state",
+          "started_at",
+          "case_seconds",
+          "tried",
+          "passed",
+          "cases",
+          "not_tried",
+          "said",
+          "can_try_again"
+        ],
+        "title": "SimulationView",
+        "type": "object"
       },
       "SkippedView": {
         "additionalProperties": false,
@@ -16333,6 +16334,55 @@
           "expected_version"
         ],
         "title": "UseCaseScheduleIn",
+        "type": "object"
+      },
+      "UseCaseSimulationIn": {
+        "additionalProperties": false,
+        "properties": {
+          "version": {
+            "description": "The current version, to try on practice systems.",
+            "minimum": 1.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version"
+        ],
+        "title": "UseCaseSimulationIn",
+        "type": "object"
+      },
+      "UseCaseSimulationView": {
+        "additionalProperties": false,
+        "description": "The Check of a workflow the Planner built from our blocks: its current version tried on\npractice systems (ADR 0054, section 1).",
+        "properties": {
+          "simulation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimulationView"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null when the version has nothing to try: it isn't laid out as a workflow of its own in n8n, or it wasn't built by the Planner from our blocks."
+          },
+          "use_case_id": {
+            "title": "Use Case Id",
+            "type": "string"
+          },
+          "version": {
+            "description": "The version tried, the workflow's current one.",
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "use_case_id",
+          "version",
+          "simulation"
+        ],
+        "title": "UseCaseSimulationView",
         "type": "object"
       },
       "UseCaseState": {
@@ -25821,6 +25871,206 @@
           }
         ],
         "summary": "Save Schedule",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/use-cases/{use_case_id}/simulation": {
+      "get": {
+        "description": "The current version tried on practice systems, by its digest (ADR 0054), for a workflow the Planner built from our blocks. Its try starts where the safety checker grades the version, never here: this only reads. simulation is null when the version has nothing to try. A simulation is not a run: it is never in Recent runs or the activity log, a pass turns nothing on, and Turn on still runs the real test run.",
+        "operationId": "get_use_case_simulation_api_v1_use_cases__use_case_id__simulation_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "use_case_id",
+            "required": true,
+            "schema": {
+              "title": "Use Case Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UseCaseSimulationView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Signed in, but not on the People list. Ask an Operator to add you"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "No such workflow, or it is deleted"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Get Use Case Simulation",
+        "tags": [
+          "builder"
+        ]
+      },
+      "post": {
+        "description": "Tries the current version on practice systems again, once it was never tried, its last try wasn't run or it didn't finish. It answers at once with the simulation running. 409, with words to show, where there is no simulation n8n, while it is being tried, when it has nothing to try, or when the version named is not the current one.",
+        "operationId": "simulate_use_case_again_api_v1_use_cases__use_case_id__simulation_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "use_case_id",
+            "required": true,
+            "schema": {
+              "title": "Use Case Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UseCaseSimulationIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UseCaseSimulationView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Only an Operator can do this, or the person is not on the People list"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "No such workflow, or it is deleted"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Trying it on practice systems."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Simulate Use Case Again",
         "tags": [
           "builder"
         ]

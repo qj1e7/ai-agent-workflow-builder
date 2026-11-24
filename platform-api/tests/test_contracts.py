@@ -41,6 +41,7 @@ from platform_api.builder.planner import (
     PartChecked,
     PlannerReply,
 )
+from platform_api.builder.simulation_views import UseCaseSimulationView
 from platform_api.monitoring.agent_events import AgentEventPost
 from platform_api.monitoring.events import DeniedReason, WireVerdict, activity_events_adapter
 from platform_api.monitoring.http import TroubleshootingOut
@@ -351,6 +352,7 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "people/me-n8n.ready.json": TypeAdapter(MyN8nOut),
     "builder/use-case.n8n.json": TypeAdapter(UseCaseN8nView),
     "builder/use-case.n8n.held.json": TypeAdapter(UseCaseN8nView),
+    "builder/use-case.simulation.json": TypeAdapter(UseCaseSimulationView),
     "builder/opened-in-n8n.json": TypeAdapter(HoldOut),
     "builder/run.n8n.waiting.json": TypeAdapter(RunN8nView),
     "builder/run.n8n.ended.json": TypeAdapter(RunN8nView),
