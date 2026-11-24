@@ -43,19 +43,35 @@ The simulation n8n (ADR 0054) is a second n8n where a workflow version will be t
 
 - its own PostgreSQL, in memory, so it keeps nothing after it stops;
 - our n8n image and its task runner, with the platform n8n's guards and bootstrap, its own encryption key, node key and start secret, and only mock keys;
+- the simulation gateway, which our blocks there call in place of platform-api;
 - mock GitHub, and mock Slack under the name `slack.com`, as in `compose.e2e.yaml`.
 
-Both of its networks are internal and nothing publishes a port, so nothing in it reaches the internet, the host or the platform's stack. Our blocks in it call `http://gateway:8600`, where the simulation gateway goes in ADR 0054's PR 3. Until then nothing answers there.
+Both of its networks are internal and nothing publishes a port, so nothing in it reaches the internet, the host or the platform's stack, and the platform's n8n can't reach the gateway.
 
 ```sh
 scripts/simulation.sh up      # makes up every key, starts it and waits for bootstrap
 scripts/simulation.sh check   # checks it holds no real key and reaches only the mocks
+scripts/simulation.sh drive   # runs our blocks through the gateway, one scenario at a time
 scripts/simulation.sh down    # removes its containers, networks and volumes
 ```
 
+### The simulation gateway
+
+Our blocks in the simulation n8n call `http://gateway:8600` (ADR 0054, section 3). The gateway is its own service. It runs platform-api's image, but only its own app (`platform_api.orchestration.simulation_gateway`), and mounts platform-api's own router for our blocks, so each block gets the same answers, refusals and checks as from platform-api. It answers them from the simulated run's scenario:
+
+- Read gets recorded items, mock GitHub's releases, or a source that is not found or does not answer in time.
+- Agent gets a recorded reply. The gateway calls no model.
+- Ask for a yes gets the scenario's yes, no or no answer, and asks nobody. Only the simulation n8n is woken.
+- Every write is refused with 403 "A simulation never writes.", as the write gateway refuses a test run's write. The gateway keeps what it would have written.
+- Tell answers `would_have_sent` and sends nothing.
+
+It holds only the simulation's node key and start secret and the simulation n8n's owner. It has no database and no Jira, Teams, Slack or model key. It keeps its simulated runs in memory, at most 200, so a restart forgets them, as the simulation's in-memory PostgreSQL forgets its n8n.
+
+The simulation's driver uses two more routes, each signed with the simulation's start secret, which our blocks never hold. `POST /simulation/v1/starts` takes a workflow id and a scenario and answers the start item for n8n's run by hand. `GET /simulation/v1/runs/{nonce}` answers that run's record for the grader: each call in order, what was proposed, what Ask for a yes got, and what the write would have made. The signature is in the module's docstring. `scripts/simulation_drive.py` uses both, from inside the gateway's container.
+
 `scripts/simulation.sh` makes up each key with `openssl` at every start and never writes one to a file. It never reads `deploy/.env`. The compose project is `wab-sim` unless `SIM_PROJECT` names another, and `SIM_BUILD=0` starts from the images an earlier start built. It builds the platform's images from the same sources under their own tag, `sim`, so starting it never replaces an image the platform's stack runs. Docker shares the layers that match, so the extra disk is mostly what differs between the two builds.
 
-`scripts/simulation_isolation.py` is the check. It reads this file as compose renders it, and, with `--project`, the running stack: each service's settings against an allow list, the keys n8n holds, n8n's routes out, and who sits on its networks. It compares every value with the platform's keys in `deploy/.env`. CI runs it in the `checks` job, and starts the stack and runs it there in the `simulation` job.
+`scripts/simulation_isolation.py` is the check. It reads this file as compose renders it, and, with `--project`, the running stack: each service's settings against an allow list, the keys n8n holds, the routes out of n8n and the gateway, and who sits on its networks. It compares every value with the platform's keys in `deploy/.env`. CI runs it in the `checks` job, and starts the stack, runs it and drives the gateway in the `simulation` job.
 
 ## Langfuse
 

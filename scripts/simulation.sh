@@ -3,8 +3,10 @@
 #   scripts/simulation.sh up      makes up every key, starts the stack and waits for bootstrap
 #   scripts/simulation.sh check   checks the running stack holds no real key and reaches only the
 #                                 mocks (scripts/simulation_isolation.py)
+#   scripts/simulation.sh drive   runs our blocks through the simulation gateway, one scenario at
+#                                 a time (scripts/simulation_drive.py)
 #   scripts/simulation.sh down    removes the stack's containers, networks and volumes
-#   scripts/simulation.sh test    up, check and down, as CI runs it
+#   scripts/simulation.sh test    up, check, drive and down, as CI runs it
 # SIM_PROJECT names the compose project, wab-sim unless set. SIM_BUILD=0 starts from the sim
 # images an earlier start built, and builds nothing.
 # Each key is made up here with openssl and lives only in the containers' settings, never in a
@@ -43,7 +45,7 @@ up() {
     "${compose[@]}" build --quiet
   fi
   "${compose[@]}" up --detach --wait --wait-timeout "${WAIT_TIMEOUT:-300}" --no-build \
-    postgres n8n n8n-runners mock-github mock-slack
+    postgres n8n n8n-runners gateway mock-github mock-slack
   "${compose[@]}" up --detach --no-build bootstrap
   local id status
   id=$("${compose[@]}" ps --all --quiet bootstrap)
@@ -59,6 +61,14 @@ check() {
   python3 -I -B scripts/simulation_isolation.py --project "$project"
 }
 
+# Inside the gateway's own container, which holds the simulation's made-up keys, so none leaves it.
+drive() {
+  placeholders
+  local id
+  id=$("${compose[@]}" ps --quiet gateway)
+  docker exec -i "$id" python -I - <scripts/simulation_drive.py
+}
+
 down() {
   placeholders
   "${compose[@]}" down --volumes --remove-orphans
@@ -72,14 +82,16 @@ show_logs() {
 case "${1:-}" in
   up) up ;;
   check) check ;;
+  drive) drive ;;
   down) down ;;
   test)
     trap 'status=$?; [ "$status" = 0 ] || show_logs; down >/dev/null 2>&1 || true; exit "$status"' EXIT
     up
     check
+    drive
     ;;
   *)
-    echo "usage: scripts/simulation.sh up|check|down|test" >&2
+    echo "usage: scripts/simulation.sh up|check|drive|down|test" >&2
     exit 2
     ;;
 esac

@@ -64,7 +64,14 @@ from platform_api.monitoring.traces import (
     pseudonym,
     typed_again,
 )
-from platform_api.monitoring.troubleshooter import Advice, explain_failure, what_happened
+from platform_api.monitoring.troubleshooter import (
+    Advice,
+    AskedCause,
+    CauseFinder,
+    FoundCause,
+    explain_failure,
+    what_happened,
+)
 
 __all__ = [
     "NOTHING_READ_YET",
@@ -76,11 +83,13 @@ __all__ = [
     "ActivityEvent",
     "ActivityLog",
     "Advice",
+    "AskedCause",
     "Actor",
     "AgentEvent",
     "AgentEventPost",
     "AgentRef",
     "Callback",
+    "CauseFinder",
     "Copier",
     "CosmosEvents",
     "ApprovalAnnounceFailedData",
@@ -91,6 +100,7 @@ __all__ = [
     "DeniedReason",
     "ExecutionLinkedData",
     "ExecutionResumedData",
+    "FoundCause",
     "LangfuseScores",
     "LegDispatchedData",
     "NoTraceScores",

@@ -1194,6 +1194,133 @@
       "title": "CarryForward",
       "type": "object"
     },
+    "CauseFound": {
+      "additionalProperties": false,
+      "properties": {
+        "cause": {
+          "description": "Why the run stopped, in one short sentence as the person sees it. It passed every check and the verifier.",
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Cause",
+          "type": "string"
+        },
+        "failed_part": {
+          "description": "The blocks the cause is in. Code checked each is a block of the version and one where the run stopped.",
+          "items": {
+            "$ref": "#/$defs/RunBlockName"
+          },
+          "maxItems": 100,
+          "minItems": 1,
+          "title": "Failed Part",
+          "type": "array"
+        },
+        "kind": {
+          "const": "found",
+          "default": "found",
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "cause",
+        "failed_part"
+      ],
+      "title": "CauseFound",
+      "type": "object"
+    },
+    "CauseKept": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "kept",
+          "default": "kept",
+          "title": "Kind",
+          "type": "string"
+        },
+        "why": {
+          "description": "Why the rule table answers instead: the id of the check that failed, the verifier's flag, or call when the model's call failed.",
+          "title": "Why",
+          "type": "string"
+        }
+      },
+      "required": [
+        "why"
+      ],
+      "title": "CauseKept",
+      "type": "object"
+    },
+    "CauseRequest": {
+      "additionalProperties": false,
+      "description": "One stopped run, for the model to name its cause and the failed part.",
+      "properties": {
+        "blocks": {
+          "description": "The blocks of the version that ran, by name, as the run's record holds them.",
+          "items": {
+            "$ref": "#/$defs/RunBlockName"
+          },
+          "maxItems": 100,
+          "minItems": 1,
+          "title": "Blocks",
+          "type": "array"
+        },
+        "events": {
+          "description": "The run's activity, each event's plain summary, oldest first.",
+          "items": {
+            "maxLength": 400,
+            "type": "string"
+          },
+          "maxItems": 80,
+          "title": "Events",
+          "type": "array"
+        },
+        "model": {
+          "$ref": "#/$defs/ModelAccess"
+        },
+        "stop": {
+          "$ref": "#/$defs/StoppedRun"
+        },
+        "stopped_at": {
+          "description": "The blocks where the run stopped, as code read them. Each is one of blocks.",
+          "items": {
+            "$ref": "#/$defs/RunBlockName"
+          },
+          "maxItems": 100,
+          "minItems": 1,
+          "title": "Stopped At",
+          "type": "array"
+        },
+        "within_seconds": {
+          "description": "How long the runtime has, counted from when it gets the request. Both model calls end by then, as after it the platform's rule table answers alone (ADR 0032).",
+          "exclusiveMinimum": 0,
+          "maximum": 10,
+          "title": "Within Seconds",
+          "type": "number"
+        }
+      },
+      "required": [
+        "model",
+        "stop",
+        "events",
+        "blocks",
+        "stopped_at",
+        "within_seconds"
+      ],
+      "title": "CauseRequest",
+      "type": "object"
+    },
+    "CauseResult": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CauseFound"
+        },
+        {
+          "$ref": "#/$defs/CauseKept"
+        },
+        {
+          "$ref": "#/$defs/ModelProblem"
+        }
+      ]
+    },
     "CheckPartRequest": {
       "additionalProperties": false,
       "properties": {
@@ -3720,6 +3847,11 @@
       ],
       "type": "string"
     },
+    "RunBlockName": {
+      "maxLength": 200,
+      "minLength": 1,
+      "type": "string"
+    },
     "ScheduleChange": {
       "additionalProperties": false,
       "description": "When a request asks a workflow it names to run, in the schedule's own terms. A part it\ndoesn't name is None, so the saved one stays.",
@@ -4063,6 +4195,39 @@
         "our_version"
       ],
       "title": "SoftwareToCheck",
+      "type": "object"
+    },
+    "StoppedRun": {
+      "additionalProperties": false,
+      "description": "A stop as the run's run_failed event records it.",
+      "properties": {
+        "message": {
+          "maxLength": 2000,
+          "title": "Message",
+          "type": "string"
+        },
+        "reason": {
+          "maxLength": 40,
+          "title": "Reason",
+          "type": "string"
+        },
+        "retryable": {
+          "title": "Retryable",
+          "type": "boolean"
+        },
+        "stage": {
+          "maxLength": 40,
+          "title": "Stage",
+          "type": "string"
+        }
+      },
+      "required": [
+        "stage",
+        "reason",
+        "retryable",
+        "message"
+      ],
+      "title": "StoppedRun",
       "type": "object"
     },
     "TagPattern": {
@@ -5116,6 +5281,12 @@
     "tool_list": {
       "$ref": "#/$defs/ToolList"
     },
+    "troubleshooter_cause_request": {
+      "$ref": "#/$defs/CauseRequest"
+    },
+    "troubleshooter_cause_result": {
+      "$ref": "#/$defs/CauseResult"
+    },
     "workflow_draft_request": {
       "$ref": "#/$defs/WorkflowDraftRequest"
     },
@@ -5155,6 +5326,8 @@
     "planner_check_part_result",
     "workflow_explain_request",
     "workflow_explain_result",
+    "troubleshooter_cause_request",
+    "troubleshooter_cause_result",
     "workflow_draft_request",
     "workflow_draft_result"
   ],
