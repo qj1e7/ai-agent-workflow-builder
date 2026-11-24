@@ -16,7 +16,7 @@ describe('the agents that fix a stopped run', () => {
   it('says each new agent never writes to a real system', () => {
     for (const id of ['fix_drafter', 'scenario_writer']) {
       const agent = PLATFORM_AGENTS.find((one) => one.id === id)
-      expect(agent?.rules.join(' ')).toContain('never')
+      expect(agent?.rules.join(' ')).toMatch(/never/i)
       expect(agent?.reach).toMatch(/practice/i)
     }
   })

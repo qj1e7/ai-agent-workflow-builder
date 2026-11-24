@@ -16,7 +16,7 @@ import { motionAllowed } from '../../ui/motion'
 import { nextRunOf } from '../workflows/workflow'
 import { ApprovalGate, NotChecked } from './ApprovalGate'
 import { DECISION_ID, DecisionArea, LONG_LOG, StepLog } from './Chat'
-import { FixCrew } from './FixCrew'
+import { FixSection } from './FixPanel'
 import { RunInN8n } from './InN8n'
 import { canDecideNow, foundOf, partyOf, useDecision, useNotChecked, type Decision } from './decision'
 import { POLL_FAILED_MS, useReconnectWhenBehind } from './follow'
@@ -272,7 +272,7 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
       <DecisionArea label="Why it stopped">
         <TroubleshooterBlock face={troubleFace}>
           <StopAnswers failure={failure} {...story.stopped} safeId={safeId} />
-          {shown.fix ? <FixCrew fix={shown.fix} now={now} loadedUpTo={loadedUpTo} /> : null}
+          <FixSection runId={run.run_id} fix={shown.fix} operator={story.stopped.me?.operator === true} next={story.stopped.advice?.answers.next} modelOff={story.stopped.modelOff ?? false} now={now} loadedUpTo={loadedUpTo} />
         </TroubleshooterBlock>
       </DecisionArea>
     ) : story.answers.length > 0 && !waiting ? (

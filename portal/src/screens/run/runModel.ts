@@ -75,6 +75,10 @@ export interface FixState {
   readonly agents: readonly BroughtIn[]
   readonly ended: 'proposed' | 'handed_back' | null
   readonly endsBy: RunTime
+  /** Each round's sentence, as the platform wrote it, for the hand-back card. */
+  readonly rounds: readonly string[]
+  /** The hand-back's own sentence, once an event gave it. */
+  readonly back: string | null
 }
 
 /** How a fix ended by now: as an event said, or handed back once its deadline passed with no event, as the platform counts it. */
@@ -337,10 +341,10 @@ const SUB_AGENTS: Readonly<Partial<Record<DataOf<'fix_handoff'>['to'], AgentRef>
 /** What the platform found that the fix can't use. */
 const REFUSED: ReadonlySet<DataOf<'fix_handoff'>['found']> = new Set(['not_in_version', 'not_where_it_stopped', 'too_wide', 'widened', 'not_in_catalogue', 'refused', 'failed', 'no_answer'])
 
-type FixEvent = EventOf<'fix_started' | 'fix_handoff' | 'fix_round' | 'fix_proposed' | 'fix_handed_back'>
+type FixEvent = EventOf<'fix_started' | 'fix_handoff' | 'fix_round' | 'fix_proposed' | 'fix_handed_back' | 'fix_decided' | 'fix_tried'>
 
 function fixOf(fix: FixState | null, event: FixEvent): FixState | null {
-  if (event.kind === 'fix_started') return { id: event.data.fix_id, agents: [], ended: null, endsBy: Date.parse(event.data.ends_by) as RunTime }
+  if (event.kind === 'fix_started') return { id: event.data.fix_id, agents: [], ended: null, endsBy: Date.parse(event.data.ends_by) as RunTime, rounds: [], back: null }
   if (fix === null || fix.id !== event.data.fix_id) return fix
   switch (event.kind) {
     case 'fix_handoff': {
@@ -351,8 +355,11 @@ function fixOf(fix: FixState | null, event: FixEvent): FixState | null {
     case 'fix_proposed':
       return { ...fix, ended: 'proposed' }
     case 'fix_handed_back':
-      return { ...fix, ended: 'handed_back' }
+      return { ...fix, ended: 'handed_back', back: event.summary }
     case 'fix_round':
+      return { ...fix, rounds: [...fix.rounds, event.summary] }
+    case 'fix_decided':
+    case 'fix_tried':
       return fix
   }
 }
@@ -367,6 +374,10 @@ function fixTone(event: FixEvent): 'plain' | 'bad' | 'wait' {
       return 'wait'
     case 'fix_handed_back':
       return 'bad'
+    case 'fix_decided':
+      return event.data.verdict === 'declined' ? 'bad' : 'plain'
+    case 'fix_tried':
+      return event.data.result === 'test_failed' || event.data.result === 'not_put_live' ? 'bad' : 'plain'
     case 'fix_started':
       return 'plain'
   }
@@ -374,7 +385,7 @@ function fixTone(event: FixEvent): 'plain' | 'bad' | 'wait' {
 
 /** A step of a fix. It adds to the log and the fix, and never moves the run: it stays stopped where it stopped. */
 function fixed(model: RunModel, event: FixEvent): RunModel {
-  const speaker = event.kind === 'fix_started' || event.actor.kind !== 'agent' ? null : actorRef(event)
+  const speaker = event.kind === 'fix_started' || event.kind === 'fix_decided' || event.kind === 'fix_tried' || event.actor.kind !== 'agent' ? null : actorRef(event)
   return say({ ...model, fix: fixOf(model.fix, event) }, { kind: 'fix', seq: event.seq, at: event.at, speaker, text: event.summary, tone: fixTone(event) })
 }
 
@@ -464,6 +475,8 @@ function apply(model: RunModel, event: RunEvent): RunModel {
     case 'fix_round':
     case 'fix_proposed':
     case 'fix_handed_back':
+    case 'fix_decided':
+    case 'fix_tried':
       return fixed(model, event)
     case 'run_skipped':
       return advanceTo({ ...model, phase: { state: 'skipped' } }, { at: 'done' }, event)
@@ -477,8 +490,6 @@ function apply(model: RunModel, event: RunEvent): RunModel {
     case 'step_started':
     case 'step_retried':
     case 'approval_outcome_not_posted':
-    case 'fix_decided':
-    case 'fix_tried':
     case 'opaque':
       return model
   }

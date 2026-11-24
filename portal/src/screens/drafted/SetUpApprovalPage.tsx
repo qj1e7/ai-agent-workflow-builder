@@ -11,6 +11,7 @@ import { approvalPill, YOUR_YES } from '../run/approvalWords'
 import { DraftPill } from '../home/Building'
 import { NotFoundPage } from '../../shell/NotFoundPage'
 import { approvedWords, declinedWords, setUpLine, type PillWords } from './drafted'
+import { FixEvidence } from './FixEvidence'
 import styles from './Drafted.module.css'
 
 const notFound = (error: unknown): boolean => error instanceof ApiError && error.status === 404
@@ -127,7 +128,7 @@ export function SetUpApproval({ view }: { view: SetUpApprovalView }) {
     <div className={styles['page']}>
       <div className={styles['pageHead']}>
         <div>
-          <p className={styles['kind']}>Set-up approval, from {view.approval.sent_by}’s draft</p>
+          <p className={styles['kind']}>{view.fix ? `Set-up approval, from ${view.fix.asked_by}’s request for a fix` : `Set-up approval, from ${view.approval.sent_by}’s draft`}</p>
           <h1 tabIndex={-1}>{view.name}</h1>
         </div>
         <DraftPill label={pill.label} tone={pill.tone} />
@@ -135,6 +136,7 @@ export function SetUpApproval({ view }: { view: SetUpApprovalView }) {
       <p className={styles['said']} data-in-short>
         <Words segments={report.in_short} />
       </p>
+      {view.fix ? <FixEvidence fix={view.fix} /> : null}
       {report.flags.length > 0 ? (
         <section className={styles['more']} aria-label="Flags">
           <h2 className={styles['kind']}>Flags</h2>

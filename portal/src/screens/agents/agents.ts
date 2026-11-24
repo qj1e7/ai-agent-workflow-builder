@@ -27,7 +27,21 @@ export const PLATFORM_AGENTS: readonly PlatformAgent[] = [
     what: 'When a run stops, it explains why in plain words, and says whether you can fix it or support should.',
     reach: 'It reads the run’s own record.',
     steps: ['Read the stopped run’s record', 'Explain what went wrong in plain words', 'Say whether you can fix it, or support should'],
-    rules: ['Only explains. It never changes a run'],
+    rules: ['Only explains. It never changes a run', 'Fix it for me drafts a change. Nothing changes until an Approver says yes.'],
+  },
+  {
+    id: 'fix_drafter',
+    what: 'When you ask for a fix, it drafts the smallest change to the block where a run stopped.',
+    reach: 'It changes a copy on practice systems, never a real system.',
+    steps: ['Read the cause and the failed block', 'Draft the smallest change to that block', 'Try again with what the practice systems showed'],
+    rules: ['Never changes a block outside the failed part', 'Never removes or moves an Ask for a yes', 'Never changes a setting a person filled in'],
+  },
+  {
+    id: 'scenario_writer',
+    what: 'When you ask for a fix, it writes the scenarios the fix is tried in.',
+    reach: 'It writes scenarios for practice systems, never for a real system.',
+    steps: ['Read the workflow and where the run stopped', 'Write scenarios that fit this workflow', 'Add a scenario when something is not covered'],
+    rules: ['Never runs a scenario itself', 'Never uses a system the workflow does not use'],
   },
 ]
 

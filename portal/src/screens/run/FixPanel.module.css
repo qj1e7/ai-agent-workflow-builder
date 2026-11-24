@@ -1,0 +1,101 @@
+/* The fix under the stop: the button, where it stands, the hand-back, and the one question it may ask. */
+.fix {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.fix p {
+  margin: 0;
+}
+
+.hint {
+  max-width: 75ch;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.head {
+  font-weight: 700;
+}
+
+.buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.said {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.said div {
+  display: grid;
+  grid-template-columns: minmax(0, 8rem) minmax(0, 1fr);
+  gap: 4px 12px;
+}
+
+.said dt {
+  color: var(--muted);
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.said dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.rounds {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ask {
+  display: grid;
+  gap: 8px;
+}
+
+.picks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.typeForm {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.input {
+  flex: 1 1 14rem;
+  min-width: 0;
+  min-height: 2.5rem;
+  padding: 0 12px;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+
+.problem {
+  color: var(--red-ink);
+  font-weight: 600;
+}
+
+@media (max-width: 30rem) {
+  .said div {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

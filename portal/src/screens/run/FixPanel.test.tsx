@@ -7,14 +7,14 @@ import { fixKey } from '../../api/fixQueries'
 import { createDevSession } from '../../api/session'
 import type { FixView } from '../../api/types'
 import { FixSection } from './FixPanel'
-import type { FixState, RunTime } from './runModel'
+import type { FixState } from './runModel'
 
 const scope = createDevSession(null).cacheScope()
 const ASKED = Date.parse('2026-11-04T02:20:00Z')
 const ENDS = ASKED + 20 * 60_000
 const BEFORE = ENDS - 1
 
-const fix = (over: Partial<FixState> = {}): FixState => ({ id: 'fix_01FIRST', agents: [], ended: null, endsBy: ENDS as RunTime, rounds: [], back: null, ...over })
+const fix = (over: Partial<FixState> = {}): FixState => ({ id: 'fix_01FIRST', agents: [], ended: null, endsBy: ENDS as FixState['endsBy'], rounds: [], back: null, ...over })
 const view = (over: Partial<FixView> = {}): FixView => ({
   fix_id: 'fix_01FIRST',
   run_id: 'run_01JB9',
