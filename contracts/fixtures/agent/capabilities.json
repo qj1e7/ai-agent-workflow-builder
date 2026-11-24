@@ -220,6 +220,22 @@
       "instead": null
     },
     {
+      "id": "workflows.simulate",
+      "plain": "Try each new workflow on practice systems before its test run",
+      "kind": "none",
+      "system": null,
+      "state": "ready",
+      "cant": null,
+      "why": null,
+      "connection": null,
+      "needs_model": false,
+      "platform": true,
+      "focus": false,
+      "tools": [],
+      "short": null,
+      "instead": null
+    },
+    {
       "id": "watchlist.remove",
       "plain": "Take software off the Watchlist, with Undo",
       "kind": "none",

@@ -44,6 +44,11 @@ from platform_api.builder.drafted_settings import (
     strays,
     with_answer,
 )
+from platform_api.builder.drafted_simulations import (
+    NO_SIMULATION,
+    TRYING_NOW,
+    DraftedSimulations,
+)
 from platform_api.builder.drafted_views import (
     DraftAnswerIn,
     DraftedApprovalView,
@@ -159,6 +164,7 @@ SAME_WORDS_WITHIN: Final = timedelta(minutes=2)
 """The same words from the same Operator within this long are one request asked twice, as a
 retried send of the chat would ask it, so they answer the drafted workflow already started."""
 STILL_DRAFTING: Final = "It's still drafting."
+NOTHING_TO_TRY: Final = "There's nothing to try again on practice systems."
 IN_N8N_NOW: Final = "It's open in n8n. Press Done in n8n first."
 NOT_IN_N8N: Final = "It isn't open in n8n."
 NO_SUCH_SETTING: Final = "It has no such setting."
@@ -385,6 +391,8 @@ class DraftedWorkflows:
         channels: Channels | None = None,
         staff: Staff | None = None,
         editor_url: str | None = None,
+        *,
+        simulations: DraftedSimulations | None = None,
     ) -> None:
         self._db = db
         self._drafting = drafting
@@ -398,6 +406,7 @@ class DraftedWorkflows:
         self._editor_url = None if editor_url is None else editor_url.rstrip("/")
         self._cards = CardLibrary(db)
         self._running: set[asyncio.Task[None]] = set()
+        self._simulations = simulations or DraftedSimulations(db, None)
 
     async def start(
         self,
@@ -576,6 +585,7 @@ class DraftedWorkflows:
                 await self._laid(kept, plan, error_workflow),
                 uow.now,
             )
+        await self._simulate_newest(drafted_id)
         return await self._viewed(drafted_id, person)
 
     async def open_in_n8n(
@@ -697,6 +707,7 @@ class DraftedWorkflows:
             # The revision is kept. A copy n8n kept is the person's own, and holds no key.
             log.warning("n8n kept %s after Done in n8n: %s", held.workflow_id, type(error).__name__)
         log.info("%s read %s back from n8n", person.user_id, drafted_id)
+        await self._simulate_newest(drafted_id)
         return await self._viewed(drafted_id, person)
 
     async def _not_a_draft(self, kept: Kept, person: Principal, revision: int) -> Refused | None:
@@ -904,6 +915,7 @@ class DraftedWorkflows:
         loop, and gather() on ended drafts gives it none."""
         while going := [task for task in self._running if not task.done()]:
             await asyncio.gather(*going, return_exceptions=True)
+        await self._simulations.settle()
 
     async def draft(self, drafted_id: str, number: int) -> None:
         """Drafts one revision: the drafter plans, and code lays it out and checks it."""
@@ -976,6 +988,53 @@ class DraftedWorkflows:
                 kept.revision(number).asked_by,
             ),
         )
+        await self._simulate_newest(kept.drafted_id)
+
+    async def _simulate_newest(self, drafted_id: str) -> None:
+        """Once the checker graded the newest revision and nothing is still needed, code tries it
+        on practice systems in the background (ADR 0054, PR 7), once for its digest."""
+        if not self._simulations.available:
+            return
+        try:
+            async with self._db.connection("builder") as conn:
+                kept = await _kept(conn, drafted_id)
+            if kept is None:
+                return
+            newest = kept.newest
+            if newest.document is None or newest.digest is None:
+                return
+            view = await self._view(kept)
+            if view.state == "draft" and view.needed == 0:
+                await self._simulations.begin(
+                    drafted_id, newest.number, newest.digest, newest.document
+                )
+        except Exception as error:
+            # The revision is kept. With no try begun, the card offers Try again.
+            log.error("could not start simulating %s: %s", drafted_id, type(error).__name__)
+
+    async def simulate_again(
+        self, drafted_id: str, person: Principal, revision: int
+    ) -> DraftedWorkflowView | Refused | NotFound:
+        """Tries the newest revision on practice systems again, once its last try wasn't run or
+        didn't finish."""
+        async with self._db.connection("builder") as conn:
+            kept = await _kept(conn, drafted_id)
+        if kept is None:
+            return NotFound()
+        newest = kept.newest
+        if revision != newest.number:
+            return Refused(NEWER_BELOW)
+        if not self._simulations.available:
+            return Refused(NO_SIMULATION)
+        simulation = (await self._view(kept, person)).simulation
+        if simulation is None or not simulation.can_try_again:
+            running = simulation is not None and simulation.state == "running"
+            return Refused(TRYING_NOW if running else NOTHING_TO_TRY)
+        assert newest.document is not None and newest.digest is not None
+        await self._simulations.begin(
+            drafted_id, newest.number, newest.digest, newest.document, again=True
+        )
+        return await self._viewed(drafted_id, person)
 
     async def _laid(self, kept: Kept, plan: WorkflowPlan, error_workflow: str) -> Laid:
         document = await self._check(kept, plan, error_workflow)
@@ -1099,6 +1158,7 @@ class DraftedWorkflows:
             replaced_waiting=replaced,
             approval=None if mine is None else _approval_view(mine),
             set_up=None if mine is None else _set_up_view(kept, mine),
+            simulation=None,
         )
         if newest.state == "drafting":
             if self._drafting_now(newest):
@@ -1149,6 +1209,15 @@ class DraftedWorkflows:
         question = next_question(checked.settings, options) if editing else None
         if kept.in_n8n is not None:
             why = IN_N8N_NOW
+        simulation = (
+            None
+            if needed or newest.digest is None
+            else await self._simulations.view(
+                kept.drafted_id,
+                newest.digest,
+                viewer is not None and Role.OPERATOR in viewer.roles,
+            )
+        )
         return base.model_copy(
             update={
                 "state": lived,
@@ -1164,6 +1233,7 @@ class DraftedWorkflows:
                 "can_edit_in_n8n": editing and await self._may_edit_in_n8n(viewer),
                 "can_send": editing and why is None,
                 "why_not_send": why if lived == "draft" else _not_now(lived),
+                "simulation": simulation,
             }
         )
 

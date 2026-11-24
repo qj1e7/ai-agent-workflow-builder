@@ -193,3 +193,47 @@
   border-radius: 999px;
   font-weight: 600;
 }
+
+/* The revision tried on practice systems (ADR 0054): the result, then each case with a mark and a word. */
+.simulation {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+
+.cases {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.case {
+  display: grid;
+  gap: 2px;
+}
+
+.caseHead {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.passed {
+  flex: none;
+  color: var(--green-ink);
+}
+
+.failed {
+  flex: none;
+  color: var(--red-ink);
+}
+
+.untried {
+  flex: none;
+  width: 16px;
+  color: var(--muted);
+  text-align: center;
+  font-weight: 700;
+}

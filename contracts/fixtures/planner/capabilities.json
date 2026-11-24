@@ -267,6 +267,25 @@
       "agents": []
     },
     {
+      "id": "workflows.simulate",
+      "plain": "Try each new workflow on practice systems before its test run",
+      "kind": "none",
+      "system": null,
+      "state": "needs_setup",
+      "cant": null,
+      "short": null,
+      "instead": null,
+      "why": "There is no simulation n8n here.",
+      "fix": "Ask whoever set up the platform to turn on simulation.",
+      "connection": null,
+      "last_ok_at": null,
+      "needs_model": false,
+      "platform": true,
+      "focus": false,
+      "tools": [],
+      "agents": []
+    },
+    {
       "id": "watchlist.remove",
       "plain": "Take software off the Watchlist, with Undo",
       "kind": "none",

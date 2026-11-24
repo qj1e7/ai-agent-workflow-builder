@@ -288,6 +288,17 @@ CAPABILITIES: Final = (
         platform=True,
         short="Explain any workflow",
     ),
+    # Simulation mode (ADR 0054). No short words, so the chat's What I can do card is unchanged.
+    # platform-api shows it as needing setup where there is no simulation n8n.
+    _ready(
+        "workflows.simulate",
+        "Try each new workflow on practice systems before its test run",
+        "none",
+        None,
+        None,
+        [],
+        platform=True,
+    ),
     _ready(
         "watchlist.remove",
         "Take software off the Watchlist, with Undo",

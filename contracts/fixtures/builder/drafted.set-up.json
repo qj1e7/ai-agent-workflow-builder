@@ -553,5 +553,16 @@
     "state": "set_up",
     "use_case_id": "uc_01JDRAFTRELEASE",
     "words": null
+  },
+  "simulation": {
+    "state": "unavailable",
+    "started_at": null,
+    "case_seconds": 120,
+    "tried": 0,
+    "passed": 0,
+    "cases": [],
+    "not_tried": [],
+    "said": null,
+    "can_try_again": false
   }
 }

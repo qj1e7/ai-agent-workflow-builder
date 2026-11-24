@@ -120,6 +120,18 @@ class N8nOwner:
 
 
 @dataclass(frozen=True)
+class SimulationSettings:
+    """The simulation gateway (ADR 0054), which runs each drafted version through its scenarios
+    in the simulation n8n. platform-api signs each call with the simulation's own start secret."""
+
+    url: str
+    start_secret: str = field(repr=False)
+    uses_model: bool = False
+    """SIMULATION_MODEL. Off, code's six templates run and no model is asked. On, the scenario
+    writer writes the scenarios and the explainer explains each failure, both paid calls."""
+
+
+@dataclass(frozen=True)
 class LangfuseSettings:
     """The Langfuse project that platform-api writes code flags to (ADR 0050)."""
 
@@ -185,6 +197,9 @@ class Settings:
     trace_pseudonym_key: str | None = field(default=None, repr=False)
     """TRACE_PSEUDONYM_KEY, which keys the pseudonym a trace names the person by. Without it a
     trace names nobody."""
+    simulation: SimulationSettings | None = None
+    """SIMULATION_URL and SIMULATION_START_SECRET. Without them there is no simulation n8n here,
+    and the drafted card says so."""
 
 
 def _required(env: Mapping[str, str], name: str) -> str:
@@ -586,7 +601,28 @@ def settings_from_env(env: Mapping[str, str]) -> Settings:
         n8n_keys=n8n_keys_from_env(env, jira),
         langfuse=langfuse_from_env(env),
         trace_pseudonym_key=_secret(env, "TRACE_PSEUDONYM_KEY"),
+        simulation=simulation_from_env(env),
     )
+
+
+def simulation_from_env(env: Mapping[str, str]) -> SimulationSettings | None:
+    raw_url = env.get("SIMULATION_URL", "").strip()
+    secret = _secret(env, "SIMULATION_START_SECRET")
+    match env.get("SIMULATION_MODEL", "").strip().lower() or "off":
+        case "on":
+            uses_model = True
+        case "off":
+            uses_model = False
+        case other:
+            raise ConfigError(f"SIMULATION_MODEL takes on or off, not {other!r}.")
+    if not raw_url and secret is None:
+        if uses_model:
+            raise ConfigError("SIMULATION_MODEL=on needs SIMULATION_URL and its start secret.")
+        return None
+    if not raw_url or secret is None:
+        raise ConfigError("SIMULATION_URL and SIMULATION_START_SECRET go together.")
+    url = _stack_or_https("SIMULATION_URL", raw_url)
+    return SimulationSettings(url, secret, uses_model)
 
 
 def answers_per_minute_from_env(env: Mapping[str, str]) -> int:

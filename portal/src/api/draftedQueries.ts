@@ -8,10 +8,11 @@ export const DRAFTED_POLL_MS = 2000
 export const draftedKey = (user: string, draftedId: string) => ['drafted', user, draftedId] as const
 export const setUpApprovalKey = (user: string, approvalId: string) => ['setup-approval', user, approvalId] as const
 
-/** True while the platform moves a drafted workflow on its own: the drafter works, a yes is awaited, or n8n is taking it. */
-export function stillMoving(view: Pick<DraftedWorkflowView, 'state' | 'set_up'> | undefined): boolean {
+/** True while the platform moves a drafted workflow on its own: the drafter works, it is tried on practice systems, a yes is awaited, or n8n is taking it. */
+export function stillMoving(view: (Pick<DraftedWorkflowView, 'state' | 'set_up'> & Partial<Pick<DraftedWorkflowView, 'simulation'>>) | undefined): boolean {
   if (view === undefined) return false
   if (view.state === 'drafting' || view.state === 'waiting') return true
+  if (view.simulation?.state === 'running') return true
   return view.state === 'approved' && (view.set_up === null || view.set_up.state === 'setting_up')
 }
 
@@ -116,6 +117,18 @@ export function useDoneInN8n(draftedId: string) {
   const keep = useKeepDrafted()
   return useMutation({
     mutationFn: async () => unwrap(await client.POST('/api/v1/drafted-workflows/{drafted_id}/n8n/done', { params: { path: { drafted_id: draftedId } } })),
+    onSuccess: keep,
+    onSettled: reread,
+  })
+}
+
+/** Tries the newest revision on practice systems again, once its last try wasn't run or didn't finish (ADR 0054). */
+export function useSimulateAgain(draftedId: string) {
+  const client = useApiClient()
+  const reread = useRereadDrafted()
+  const keep = useKeepDrafted()
+  return useMutation({
+    mutationFn: async (revision: number) => unwrap(await client.POST('/api/v1/drafted-workflows/{drafted_id}/simulation', { params: { path: { drafted_id: draftedId } }, body: { revision } })),
     onSuccess: keep,
     onSettled: reread,
   })
