@@ -23,6 +23,13 @@ mock keys, the GitHub block must read mock GitHub's releases, the Slack block mu
 Slack with the key its stack made up, and the Jira and Teams blocks, which have no mock here, must
 run from their pins. A version with HTTP Request must be refused, with nothing made.
 
+Last it has the gateway run whole simulations (ADR 0054, PR 5), with code's six templates and no
+model: a release check of our blocks, and one that reads with n8n's own GitHub block, against mock
+GitHub, and n8n's own Jira block, which is pinned. Each scenario must pass, the timeout must be
+played by mock GitHub dropping the connection, the pinned Jira block must be named as not tried,
+every copy must be deleted and mock GitHub set back. A scenario naming a block the version doesn't
+have must be refused, with nothing made.
+
 usage: docker exec -i <gateway container> python -I - < scripts/simulation_drive.py
 Exits 0 when every check passes, and 1 when one fails.
 """
@@ -59,7 +66,11 @@ def check(ok: bool, what: str) -> None:
 
 
 def http(
-    method: str, url: str, body: bytes | None = None, headers: dict[str, str] | None = None
+    method: str,
+    url: str,
+    body: bytes | None = None,
+    headers: dict[str, str] | None = None,
+    timeout: float = 60,
 ) -> tuple[int, Any, Any]:
     request = urllib.request.Request(
         url,
@@ -68,7 +79,7 @@ def http(
         headers={"Content-Type": "application/json", **(headers or {})},
     )
     try:
-        with urllib.request.urlopen(request, timeout=60) as answer:
+        with urllib.request.urlopen(request, timeout=timeout) as answer:
             raw, status, got = answer.read(), answer.status, answer.headers
     except urllib.error.HTTPError as error:
         raw, status, got = error.read(), error.code, error.headers
@@ -91,12 +102,12 @@ def signed(method: str, path: str, body: bytes, secret: str) -> dict[str, str]:
 
 
 def gateway(
-    method: str, path: str, value: Any = None, secret: str | None = None
+    method: str, path: str, value: Any = None, secret: str | None = None, timeout: float = 60
 ) -> tuple[int, Any]:
     body = b"" if value is None else as_json(value)
     key = os.environ["WAB_START_SECRET"] if secret is None else secret
     status, answer, _ = http(
-        method, f"{GATEWAY}{path}", body or None, signed(method, path, body, key)
+        method, f"{GATEWAY}{path}", body or None, signed(method, path, body, key), timeout
     )
     return status, answer
 
@@ -147,8 +158,16 @@ def to(target: str) -> dict[str, Any]:
 
 
 def lay_out() -> str:
+    status, made = public("POST", "/workflows", release_check())
+    if status != 200:
+        raise SystemExit(f"FAIL: the simulation n8n did not take the workflow ({status}): {made}")
+    return str(made["id"])
+
+
+def release_check(first: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     """A release check as the Planner lays one out: Read, Agent, Propose a change, Ask for a yes,
-    then Make the approved changes and Tell on Yes, and an end on each other exit."""
+    then Make the approved changes and Tell on Yes, and an end on each other exit. `first` stands
+    in for Read."""
     read = {"source": "github_releases", "place": "langchain-ai/langgraph"}
     inputs = {"input": [{"name": "release", "value": "={{ $json.id }}"}]}
     propose = {
@@ -158,9 +177,10 @@ def lay_out() -> str:
         "body": "A new release is out.",
         "subject": "langgraph",
     }
+    reads = first or [node("Read releases", "CUSTOM.wabRead", 1, read, **RETRY)]
     nodes = [
         node(START, "CUSTOM.wabStartFromPortal", 0, webhookId=str(uuid.uuid4())),
-        node("Read releases", "CUSTOM.wabRead", 1, read, **RETRY),
+        *reads,
         node(
             "Compare", "CUSTOM.wabAgent", 2, {"agent": "release_checker", "inputs": inputs}, **RETRY
         ),
@@ -173,25 +193,21 @@ def lay_out() -> str:
         node("Nothing to change", "n8n-nodes-base.noOp", 5),
     ]
     exits = ["No answer", "Make the approved changes", "Declined", "Nothing to change"]
+    line = [START, *[n["name"] for n in reads], "Compare"]
     edges = {
-        START: to("Read releases"),
-        "Read releases": to("Compare"),
+        **{a: to(b) for a, b in zip(line, line[1:], strict=False)},
         "Compare": to("Propose a change"),
         "Propose a change": to("Ask for a yes"),
         "Ask for a yes": {"main": [[{"node": e, "type": "main", "index": 0}] for e in exits]},
         "Make the approved changes": to("Tell"),
     }
     settings = {"saveManualExecutions": True, "saveExecutionProgress": True, "executionOrder": "v1"}
-    document = {
+    return {
         "name": "Simulation gateway check",
         "nodes": nodes,
         "connections": edges,
         "settings": settings,
     }
-    status, made = public("POST", "/workflows", document)
-    if status != 200:
-        raise SystemExit(f"FAIL: the simulation n8n did not take the workflow ({status}): {made}")
-    return str(made["id"])
 
 
 def simulate(workflow: str, scenario: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -423,6 +439,106 @@ def check_mock_setup() -> None:
     public("DELETE", f"/workflows/{workflow}")
 
 
+KINDS = ["happy_path", "nothing_new", "source_not_found", "timeout", "approver_says_no", "odd_data"]
+AFTER_WRITE = "A simulation never writes, so a block after a write never runs."
+
+
+def simulation(value: dict[str, Any]) -> tuple[int, Any]:
+    return gateway("POST", "/simulation/v1/simulations", value, timeout=600)
+
+
+def with_github() -> dict[str, Any]:
+    """The release check, reading with n8n's own GitHub block, against mock GitHub, then n8n's
+    own Jira block, which has no mock here, so it is pinned."""
+    github = {
+        "resource": "release",
+        "operation": "getAll",
+        "owner": "langchain-ai",
+        "repository": "langgraph",
+        "returnAll": False,
+        "limit": 3,
+    }
+    jira = {"jiraVersion": "server", "resource": "issue", "operation": "get", "issueKey": "MOCK-1"}
+    reads = [
+        node(
+            "GitHub releases",
+            "n8n-nodes-base.github",
+            1,
+            github,
+            credentials=platform_key("githubApi", "wab-github-read"),
+        ),
+        node(
+            "Read the issue",
+            "n8n-nodes-base.jira",
+            1,
+            jira,
+            executeOnce=True,
+            credentials=platform_key("jiraSoftwareServerApi", "wab-jira-read"),
+        ),
+    ]
+    return release_check(reads)
+
+
+def results_of(done: Any) -> dict[str, dict[str, Any]]:
+    found = {r["kind"]: r for r in (done or {}).get("results", [])}
+    for result in found.values():
+        print(f"  {result['kind']}: {result['verdict']}. {result['happened']}", flush=True)
+    return found
+
+
+def check_simulations() -> None:
+    _, before = public("GET", "/workflows")
+
+    status, done = simulation({"version": release_check()})
+    found = results_of(done)
+    check(
+        status == 200
+        and {k: r["verdict"] for k, r in found.items()} == dict.fromkeys(KINDS, "passed"),
+        f"our blocks: each of code's six scenarios passed ({status})",
+    )
+    check(
+        (done or {}).get("coverage", {}).get("not_tried")
+        == [{"block": "Tell", "why": AFTER_WRITE}],
+        "our blocks: Tell, after the refused write, is named as not tried",
+    )
+
+    status, done = simulation({"version": with_github()})
+    found = results_of(done)
+    check(
+        status == 200
+        and {k: r["verdict"] for k, r in found.items()} == dict.fromkeys(KINDS, "passed"),
+        f"n8n's GitHub block: each of code's six scenarios passed ({status})",
+    )
+    timeout = found.get("timeout", {}).get("happened", "")
+    check(
+        "GitHub closed the connection" in timeout,
+        f"the timeout was played by mock GitHub dropping the connection ({timeout})",
+    )
+    pinned = [n["block"] for n in found.get("source_not_found", {}).get("not_tried", [])]
+    check(
+        pinned == ["Read the issue"], f"the pinned Jira block is not tried as not found ({pinned})"
+    )
+
+    scenario = {"kind": "happy_path", "reads": {"Nowhere": {"serve": "recorded"}}}
+    status, refused = simulation({"version": release_check(), "scenarios": [scenario]})
+    check(
+        status == 422 and "Nowhere" in json.dumps(refused),
+        f"a scenario naming a block the version doesn't have is refused ({status})",
+    )
+
+    _, after = public("GET", "/workflows")
+    check(
+        len(after["data"]) == len(before["data"]),
+        f"every copy was deleted after grading ({len(before['data'])}, {len(after['data'])})",
+    )
+    _, mode, _ = http("GET", "http://mock-github:8200/_admin/mode")
+    _, served, _ = http("GET", "http://mock-github:8200/repos/langchain-ai/langgraph/releases")
+    check(
+        mode == {"mode": "ok"} and served[0]["tag_name"] == "1.2.16",
+        f"mock GitHub was set back to its own answers ({mode})",
+    )
+
+
 def main() -> int:
     other = secrets.token_hex(24)
     status, _ = gateway(
@@ -465,7 +581,7 @@ def main() -> int:
         kept["approver"] == "yes" and kept["woke"] == "delivered",
         f"yes: Ask for a yes got yes and n8n woke ({kept['approver']}, {kept['woke']})",
     )
-    written = [c["title"] for c in kept["would_have_written"] or []]
+    written = [c["title"] for c in kept["proposed"][: kept["would_have_written"] or 0]]
     check(
         written == ["Upgrade LangGraph"],
         f"yes: the gateway kept what it would have written ({written})",
@@ -520,6 +636,7 @@ def main() -> int:
     public("DELETE", f"/workflows/{workflow}")
 
     check_mock_setup()
+    check_simulations()
     if failures:
         print(f"FAIL: {len(failures)} check(s) of the simulation gateway failed.")
         return 1

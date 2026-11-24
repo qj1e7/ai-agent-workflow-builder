@@ -21,7 +21,7 @@ from platform_api.orchestration.mock_setup import (
     mock_keys,
     plan_copy,
 )
-from platform_api.orchestration.n8n import N8nCredential, N8nWorkflow
+from platform_api.orchestration.n8n import ExecutionRecord, N8nCredential, N8nWorkflow
 from platform_api.orchestration.node_classes import NODE_CLASSES, Mocked, OnType, Pinned
 from platform_api.orchestration.platform_keys import KEYS
 
@@ -302,19 +302,24 @@ def test_mock_keys_point_at_the_mocks_with_made_up_values() -> None:
 # Pins for blocks with no mock
 
 
-def test_only_blocks_with_no_mock_are_pinned() -> None:
+def test_only_blocks_with_no_mock_are_pinned_and_never_with_the_versions_own_pins() -> None:
+    """A version's own pinned output may be what a real run read, so the copy never takes it. A
+    block with no mock is pinned from the scenario, or with an item that says it was pinned."""
     given = version()
     given["pinData"] = {
         "Post in Teams": [{"json": {"skipped": "Teams notice skipped in the test run."}}],
         "Post in Slack": [{"json": {"skipped": "Slack notice skipped in the test run."}}],
+        "Read issues": [{"json": {"key": "SUP-1", "assignee": "someone@example.com"}}],
         "Read releases": [{"json": {"tag_name": "1.2.16"}}],
         "Ask for a yes": [{"json": {}}],
     }
     setup = planned(given)
     pins = setup.document["pinData"]
     assert set(pins) == {"Read issues", "Post in Teams"}
-    assert pins["Post in Teams"] == given["pinData"]["Post in Teams"]
+    assert pins["Post in Teams"] == [{"json": {"pinned": setup.blocks[6].why}}]
     assert pins["Read issues"] == [{"json": {"pinned": setup.blocks[2].why}}]
+    assert "skipped" not in json.dumps(setup.document)
+    assert "someone@example.com" not in json.dumps(setup.document)
 
 
 def test_a_scenario_pins_a_block_with_no_mock() -> None:
@@ -378,6 +383,15 @@ class FakeSimulationN8n:
         self.done.append(("workflow", document))
         return N8nWorkflow(f"copy-{len(self.done)}", "v1", None, dict(document))
 
+    async def delete(self, workflow_id: str) -> None:
+        self.done.append(("deleted", workflow_id))
+
+    async def run_draft(self, workflow_id: str, item: Mapping[str, Any]) -> str:
+        raise AssertionError("This stand-in runs nothing.")
+
+    async def execution(self, execution_id: str, data: bool = True) -> ExecutionRecord | None:
+        return None
+
 
 @pytest.mark.anyio
 async def test_the_copy_goes_to_the_simulation_n8n_with_its_mock_keys_made_once() -> None:
@@ -396,6 +410,15 @@ async def test_the_copy_goes_to_the_simulation_n8n_with_its_mock_keys_made_once(
     again = await setups.copy(version(), {})
     assert isinstance(again, Copied)
     assert [what for what, _ in n8n.done[len(made) :]] == ["workflow"]
+
+
+@pytest.mark.anyio
+async def test_the_modes_of_a_version_are_read_without_making_anything() -> None:
+    n8n = FakeSimulationN8n()
+    setups = MockSetups(n8n, keys())
+    assert setups.modes(version()) == planned().blocks
+    assert isinstance(setups.modes(version(http_request())), SetupRefused)
+    assert n8n.done == []
 
 
 @pytest.mark.anyio

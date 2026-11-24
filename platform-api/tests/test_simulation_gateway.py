@@ -36,6 +36,7 @@ from platform_api.orchestration.n8n_calls import (
     ProposeCall,
     ReadFailed,
     ReadItems,
+    TellCall,
     Waiting,
     WriteCall,
 )
@@ -51,6 +52,7 @@ from platform_api.orchestration.simulation_gateway import (
     gateway_app,
     gateway_settings_from_env,
 )
+from platform_api.orchestration.simulations import Simulations
 from platform_api.settings import N8nOwner
 from platform_api.shared import ApprovalId, N8nExecutionId
 from tests.declared import FakeNodeCalls
@@ -175,7 +177,8 @@ class Gateway:
         self.simulation_n8n = FakeSimulationN8n()
         keys = mock_keys(SETTINGS.mock_github_url, None, SETTINGS.mock_slack_token)
         self.setups = MockSetups(self.simulation_n8n, keys)
-        self.client = TestClient(gateway_app(SETTINGS, self.calls, self.setups))
+        simulations = Simulations(self.setups, self.calls, self.simulation_n8n, None)
+        self.client = TestClient(gateway_app(SETTINGS, self.calls, self.setups, simulations))
 
     def start(self, given: dict[str, Any] | None = None, workflow: str = WORKFLOW) -> str:
         body = json.dumps({"workflow_id": workflow, "scenario": given or scenario()}).encode()
@@ -500,9 +503,9 @@ def test_every_write_is_refused_as_the_real_gateway_refuses_and_kept(gw: Gateway
         assert answer.json()["detail"] == "A simulation never writes."
     record = gw.record(nonce)
     assert record["approver"] == "yes"
-    assert [(c["title"], c["place"]) for c in record["would_have_written"]] == [
-        ("Upgrade LangGraph", "MOCK")
-    ]
+    assert record["would_have_written"] == 1
+    written = record["proposed"][: record["would_have_written"]]
+    assert [(c["title"], c["place"]) for c in written] == [("Upgrade LangGraph", "MOCK")]
     assert [c["replayed"] for c in record["calls"] if c["kind"] == "write"] == [False, True]
 
 
@@ -512,7 +515,7 @@ def test_a_write_with_no_yes_is_kept_too(gw: Gateway) -> None:
     assert gw.call("calls/write", WRITE).status_code == 403
     record = gw.record(nonce)
     assert record["approver"] is None
-    assert len(record["would_have_written"]) == 1
+    assert record["would_have_written"] == 1
 
 
 def test_a_run_that_never_writes_keeps_nothing_written(gw: Gateway) -> None:
@@ -592,6 +595,28 @@ async def test_a_run_that_sends_too_much_is_stopped() -> None:
     assert record is not None
     assert len(record.calls) == 2
     assert len(record.model_dump_json()) < 2 * 3000, "past the limit by one call at most"
+
+
+@pytest.mark.anyio
+async def test_a_refused_write_counts_only_its_own_call_toward_the_size_limit() -> None:
+    """What the write would have made is the changes already proposed. The record holds them
+    once, as proposed, and counts them once, so a write after a large change is not taken for
+    a run that sent too much."""
+    n8n = FakeN8n()
+    calls = SimulatedCalls(n8n, FakeWaker(), None, sleep=no_wait, byte_limit=4000)
+    run = calls.start(WORKFLOW, Scenario.model_validate(scenario()))
+    n8n.started("41", run.nonce)
+    large = ProposeCall("jira.create_ticket", "MOCK", "Upgrade", "x" * 1200, None)
+    execution = N8nExecutionId("41")
+    await calls.call(NodeCall(execution, "Propose a change", large))
+    refused = await calls.call(NodeCall(execution, "Write", WriteCall()))
+    assert getattr(refused, "status", None) == 403
+    told = await calls.call(NodeCall(execution, "Tell", TellCall("channel", "result")))
+    assert getattr(told, "status", None) != 409, "counted once, the record is under its limit"
+    record = calls.run(run.nonce)
+    assert record is not None
+    assert record.would_have_written == 1
+    assert len(record.model_dump_json()) < 4000
 
 
 @pytest.mark.anyio
@@ -739,6 +764,7 @@ def test_the_gateway_has_only_its_own_routes(gw: Gateway) -> None:
         "/simulation/v1/starts",
         "/simulation/v1/runs/{nonce}",
         "/simulation/v1/copies",
+        "/simulation/v1/simulations",
         *real,
     }
 
