@@ -17,6 +17,8 @@ from typing import Any
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+
+from platform_api.builder import fix_http
 from platform_api.builder.fix_parts import (
     FIX_TOKEN_GRACE,
     FIX_TOKEN_HEADER,
@@ -27,8 +29,6 @@ from platform_api.builder.fix_parts import (
     fix_token,
     fix_token_ok,
 )
-
-from platform_api.builder import fix_http
 from platform_api.monitoring import FixData, FixHandedBackData, FixRefused
 from platform_api.orchestration import (
     DIDNT_ANSWER,

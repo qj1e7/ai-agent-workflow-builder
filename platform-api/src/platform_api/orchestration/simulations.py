@@ -39,6 +39,7 @@ from platform_api.orchestration.scenario_grades import (
     not_tried,
 )
 from platform_api.orchestration.scenarios import (
+    FAILURES,
     ScenarioSpec,
     SimulationPlan,
     Staged,
@@ -177,7 +178,8 @@ class Simulations:
             ended = await self._ended(execution)
             record = self._calls.run(run.nonce)
             graded = grade(plan, staged, record, ended)
-            return replace(graded, reached=reached(plan, record, ended))
+            failing = frozenset(p.block for p in staged.plays if p.serve in FAILURES)
+            return replace(graded, reached=reached(plan, record, ended, failing))
         finally:
             try:
                 await self._remove(copied.workflow_id)

@@ -3,8 +3,8 @@
 The AI troubleshooter, the Fix drafter and the Scenario writer are sub-agents. The simulation, the
 scope check, the checker and the store of revisions are code. The Fix drafter
 (`fixing/drafter.py`) and the scope check (`fixing/scope.py`) are built. The Scenario writer, the
-simulation, the checker and the recorder are platform-api's (`fixing/platform_parts.py`). None of them
-writes to a real system or a live workflow. Each takes data and gives data back, and the
+simulation, the checker and the recorder are platform-api's (`fixing/platform_parts.py`). None
+of them writes to a real system or a live workflow. Each takes data and gives data back, and the
 coordinator's code checks what comes back before the model reads it.
 
 Every port but the scope check, which is pure code, gets `seconds`: what is left before the fix's

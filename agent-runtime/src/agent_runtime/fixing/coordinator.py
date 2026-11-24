@@ -97,6 +97,8 @@ MOST_DOLLARS: Final = 2.0
 MOST_TURNS: Final = 20
 TURN_TIMEOUT_SECONDS: Final = 60.0
 RESULT_LIMIT: Final = 20_000
+UNKNOWN: Final = "unknown:"
+"""How platform-api marks a reach it couldn't read, as `unknown:<block>`."""
 HAND_BACK: Final = "I couldn't fix this. Here's the cause and what I tried."
 """The team lead's own words for a hand-back (ADR 0055, section 5)."""
 
@@ -688,9 +690,10 @@ class _Fix:
 
     def _reaches_more(self, results: Mapping[str, ScenarioResult], named: Sequence[str]) -> bool:
         """Whether the draft's runs reached, or its plan names, anything the stopped version
-        neither names nor reached in the same scenarios."""
-        reached = {x for result in results.values() for x in result.reached}
-        more = (reached | set(named)) - self.ledger.allowed
+        neither names nor reached in the same scenarios. A reach the platform couldn't read
+        always counts, even when the stopped version had one: it fails closed."""
+        words = {x for result in results.values() for x in result.reached} | set(named)
+        more = {w for w in words if w.startswith(UNKNOWN) or w not in self.ledger.allowed}
         if more:
             log.warning("fix %s: a draft reached %d more", self._fix_id, len(more))
         return bool(more)

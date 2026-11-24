@@ -622,6 +622,46 @@ class ExecutionRecord:
     failed_block: Mapping[str, Any] | None = None
     """The block whose error ended the execution, as the execution ran it: its type, parameters
     and retry settings. Read only with the execution's data."""
+    nodes: Mapping[str, NodeRun] = field(default_factory=dict[str, "NodeRun"])
+    """Each block's tries, from the run data, also those of a block that went on past its
+    failure. Read only with the execution's data."""
+
+
+@dataclass(frozen=True)
+class NodeRun:
+    """One block's tries, as n8n's run data holds them."""
+
+    status: str | None
+    """The status of its last try, such as success or error."""
+    errors: tuple[str, ...] = ()
+    """Every error its tries hold: their own, and each one an item it passed on carries, as a
+    block with continueOnFail or onError passes its error on."""
+    answered: bool = False
+    """Whether a try's own error came with an answer from where it called: an HTTP status."""
+
+
+def node_runs(run_data: object) -> dict[str, NodeRun]:
+    """Each block's tries from n8n's `resultData.runData`."""
+    runs: dict[str, NodeRun] = {}
+    for name, tries in _fields(run_data).items():
+        listed = [_fields(t) for t in cast(list[object], tries)] if isinstance(tries, list) else []
+        status = listed[-1].get("executionStatus") if listed else None
+        errors: list[str] = []
+        answered = False
+        for given in listed:
+            failed = _fields(given.get("error"))
+            errors += [w for k in ("message", "description") if isinstance(w := failed.get(k), str)]
+            answered = answered or failed.get("httpCode") not in (None, "")
+            for output in cast(list[object], _at(given, "data", "main") or []):
+                for item in cast(list[object], output) if isinstance(output, list) else []:
+                    said = _at(item, "json", "error")
+                    if not isinstance(said, str):
+                        said = _fields(said).get("message")
+                    if isinstance(said, str):
+                        errors.append(said)
+        kept = tuple(dict.fromkeys(e for e in errors if e.strip()))
+        runs[name] = NodeRun(status if isinstance(status, str) else None, kept, answered)
+    return runs
 
 
 @dataclass(frozen=True)
@@ -929,6 +969,7 @@ def _record_of(execution: _ExecutionOut) -> ExecutionRecord:
         error if isinstance(error, str) else None,
         _ran(execution),
         _failed_block(execution),
+        node_runs(_at(execution.data, *result, "runData")),
     )
 
 
