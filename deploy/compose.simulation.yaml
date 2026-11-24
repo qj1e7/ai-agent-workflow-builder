@@ -145,11 +145,9 @@ services:
   # The simulation gateway (ADR 0054, PR 3): our blocks here call it in place of platform-api. It
   # runs platform-api's image, but only its own app, and holds only the simulation's node key and
   # start secret and the simulation n8n's owner. It has no database and no Jira, Teams, Slack or
-  # model key. It sits on the sim network alone, so the platform's n8n can never reach it.
+  # model key. It sits on the sim network alone, so the platform's n8n can never reach it. It runs
+  # the image bootstrap builds, so the image is built once.
   gateway:
-    build:
-      context: ../platform-api
-      target: runtime
     image: wab/platform-api:sim
     command:
       - uvicorn

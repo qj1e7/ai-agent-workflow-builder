@@ -343,14 +343,17 @@ def platform_findings(sim: Mapping[str, Any], platform: Mapping[str, Any]) -> li
     sim_services = sim.get("services", {})
     platform_services = platform.get("services", {})
     findings: list[str] = []
+    # A service may run the image another service here builds, as the gateway runs bootstrap's.
+    builders = {str(s.get("image")): s for s in sim_services.values() if "build" in s}
     for name, platform_name in SAME_AS_PLATFORM.items():
         ours, theirs = sim_services.get(name, {}), platform_services.get(platform_name, {})
+        built = ours if "build" in ours else builders.get(str(ours.get("image")), ours)
         if "build" not in theirs and ours.get("image") != theirs.get("image"):
             findings.append(
                 f"{name} runs {ours.get('image')}, not the platform's {theirs.get('image')}"
             )
         if "build" in theirs and (
-            ours.get("build") != theirs["build"]
+            built.get("build") != theirs["build"]
             or repository(ours.get("image")) != repository(theirs.get("image"))
         ):
             findings.append(

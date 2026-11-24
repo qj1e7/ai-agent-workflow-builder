@@ -96,7 +96,6 @@ def good_sim() -> dict[str, Any]:
             },
             "gateway": {
                 "image": "wab/platform-api:sim",
-                "build": {"context": str(check.ROOT / "platform-api"), "target": "runtime"},
                 "command": check.GATEWAY_COMMAND,
                 "environment": {
                     "WAB_NODE_KEY": made_up("SIM_NODE_KEY"),
@@ -132,14 +131,16 @@ def platform_of(sim: dict[str, Any]) -> dict[str, Any]:
     """deploy/compose.yaml as far as the check reads it: the same pins, sources and guards, and
     the platform's own tag on what it builds."""
     services = sim["services"]
+    builders = {s["image"]: s for s in services.values() if "build" in s}
     platform: dict[str, Any] = {"services": {}}
     for name, theirs in check.SAME_AS_PLATFORM.items():
         service = {
             "image": services[name]["image"].replace(":sim", ":dev"),
             "environment": {g: services["n8n"]["environment"][g] for g in check.GUARDS},
         }
-        if "build" in services[name]:
-            service["build"] = dict(services[name]["build"])
+        built = builders.get(services[name]["image"], services[name])
+        if "build" in built:
+            service["build"] = dict(built["build"])
         platform["services"][theirs] = service
     return platform
 
@@ -268,8 +269,10 @@ class ComposeTest(unittest.TestCase):
             lambda s: s["services"]["n8n"].update(image="n8nio/n8n:sim"),
             lambda s: s["services"]["n8n"]["build"].update(dockerfile="other/Dockerfile"),
             lambda s: s["services"]["bootstrap"].pop("build"),
-            lambda s: s["services"]["gateway"]["build"].update(context="e2e/mock_github"),
+            lambda s: s["services"]["gateway"].update(build={"context": "e2e/mock_github"}),
             lambda s: s["services"]["gateway"].update(image="wab/other:sim"),
+            lambda s: s["services"]["gateway"].update(image="wab/platform-api:dev"),
+            lambda s: s["services"]["bootstrap"]["build"].update(target="test"),
         ):
             sim = good_sim()
             change(sim)
@@ -287,7 +290,6 @@ class ComposeTest(unittest.TestCase):
             ("n8n", "wab/n8n:dev"),
             ("bootstrap", "wab/platform-api:dev"),
             ("mock-slack", "wab/mock-slack:dev"),
-            ("gateway", "wab/platform-api:dev"),
         ):
             with self.subTest(name=name):
                 sim = good_sim()
