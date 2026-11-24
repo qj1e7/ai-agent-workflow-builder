@@ -6,7 +6,7 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 from langchain_core.runnables import Runnable, RunnableLambda
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from agent_runtime.jira import REFUSED, JiraFound, JiraRefused, JiraTicket, JiraUnavailable
 from agent_runtime.release_source import Fetched, Release, SourceRejected, SourceUnavailable
@@ -139,6 +139,12 @@ class ScriptedChat(BaseChatModel):
             step = self.structured.pop(0)
             if isinstance(step, Exception):
                 raise step
+            if isinstance(step, dict):
+                # A recorded reply as the tool's arguments, parsed as LangChain parses one.
+                try:
+                    return {"raw": AIMessage(""), "parsed": schema.model_validate(step)}
+                except ValidationError as error:
+                    return {"raw": AIMessage(""), "parsed": None, "parsing_error": error}
             return {"raw": AIMessage(""), "parsed": step, "parsing_error": None}
 
         return RunnableLambda(answer)
