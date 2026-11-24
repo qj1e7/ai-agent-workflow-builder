@@ -11,6 +11,8 @@ from typing import Any
 
 import httpx
 import pytest
+
+from platform_api.orchestration.scenarios import ScenarioSpec
 from platform_api.orchestration.simulation_driver import (
     CANT_RUN,
     DIDNT_ANSWER,
@@ -21,8 +23,6 @@ from platform_api.orchestration.simulation_driver import (
     SimulationDriver,
     version_of,
 )
-
-from platform_api.orchestration.scenarios import ScenarioSpec
 from platform_api.orchestration.simulation_gateway import (
     PAST,
     CoverageOut,
