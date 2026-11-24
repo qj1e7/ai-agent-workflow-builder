@@ -294,7 +294,9 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: The simulation n8n bootstraps, holds no real key and reaches only the mocks
+      # ADR 0054. Bootstrap, the isolation check on the running stack, then four scenarios run by
+      # hand through the simulation gateway (scripts/simulation_drive.py).
+      - name: The simulation n8n and its gateway hold no real key, reach only the mocks and play each scenario
         run: |
           deploy/make-env.sh
           scripts/simulation.sh test
