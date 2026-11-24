@@ -10,8 +10,8 @@ import pytest
 from agent_runtime.contract import PlanBlock, PlanSetting, PlanWire, WorkflowPlan
 from agent_runtime.fixing.events import FixWidening
 from agent_runtime.fixing.ports import Inside, Widened
-from agent_runtime.fixing.scope import PlanScope, scope_of
-from agent_runtime.monitoring.masking import KEPT_KEY
+from agent_runtime.fixing.scope import CODE, PlanScope, scope_of
+from agent_runtime.monitoring.masking import CODE_PARAMETERS, KEPT_KEY, names_a_secret
 
 READ = "Read new releases"
 PROPOSE = "Propose a ticket"
@@ -340,3 +340,51 @@ def test_a_new_block_widens():
         update={"blocks": [*STOPPED.blocks, _block("Tell the team", "CUSTOM.wabTell")]}
     )
     assert widened(more) == "adds_a_block"
+
+
+@pytest.mark.parametrize(
+    ("node_type", "before", "after"),
+    [
+        (
+            "n8n-nodes-base.httpRequest",
+            {"options": {"redirect": {"followRedirects": False}}},
+            {"options.redirect": {"followRedirects": False}},
+        ),
+        (
+            "n8n-nodes-base.set",
+            {"assignments": {"assignments": [{"value": "a"}]}},
+            {"assignments": {"assignments[0]": {"value": "b"}}},
+        ),
+        (
+            "CUSTOM.wabProposeChange",
+            {"title": "New release"},
+            {"title": "New release", "title.x": "x"},
+        ),
+    ],
+    ids=["a key with a dot", "a key with an index", "a key beside the one it looks like"],
+)
+def test_a_key_that_looks_like_a_path_is_never_read_as_one(
+    node_type: str, before: dict[str, Any], after: dict[str, Any]
+):
+    assert one_block(node_type, before, after) == "cant_check"
+
+
+def test_a_new_port_is_a_new_host():
+    other_port = fixed(url=RELEASES.replace("api.github.com", "api.github.com:8443"))
+    assert widened(other_port) == "adds_a_system"
+
+
+@pytest.mark.parametrize("name", ["secretKey", "signingKey", "encryptionKey", "masterKey"])
+def test_a_key_named_for_what_it_signs_or_opens_is_a_key(name: str):
+    assert names_a_secret(name)
+    assert widened(fixed(**{name: "plain"})) == "adds_a_key"
+
+
+@pytest.mark.parametrize("name", ["link", "href", "replyAddress", "path", "webhook"])
+def test_an_address_code_can_t_read_under_any_address_name_adds_a_system(name: str):
+    assert widened(fixed(PROPOSE, **{name: "={{ $json.where }}"}), (PROPOSE,)) == "adds_a_system"
+
+
+def test_code_is_one_list_the_scope_check_and_the_key_keeper_share():
+    assert frozenset(CODE_PARAMETERS) == CODE
+    assert {"jsCode", "pythonCode", "functionCode", "code", "query", "sqlQuery", "command"} <= CODE

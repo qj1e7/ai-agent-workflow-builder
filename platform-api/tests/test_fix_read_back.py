@@ -11,6 +11,8 @@ import pytest
 
 from platform_api.builder.drafted_in_n8n import NotReadBack, ReadBack, read_back_any
 from platform_api.builder.kept_keys import (
+    CARRIES_KEYS,
+    CODE_PARAMETERS,
     KEPT,
     SECRET_NAME_ENDS,
     KeptPlace,
@@ -256,6 +258,14 @@ def test_a_setting_that_fills_a_parameter_named_as_a_key_keeps_its_value_out():
         ({"jsCode": "return $input.all();"}, "jsCode"),
         ({"pythonCode": "return _input.all()"}, "pythonCode"),
         ({"functionCode": "return items;"}, "functionCode"),
+        ({"command": "curl -u admin:" + "pw https://host.example.net"}, "command"),
+        ({"query": "SELECT * FROM users"}, "query"),
+        ({"sqlQuery": "SELECT 1"}, "sqlQuery"),
+        ({"code": "return 1"}, "code"),
+        ({"secretKey": PASSWORD}, "secretKey"),
+        ({"signingKey": PASSWORD}, "signingKey"),
+        ({"encryptionKey": PASSWORD}, "encryptionKey"),
+        ({"masterKey": PASSWORD}, "masterKey"),
         ({"body": "Any words at all"}, "body"),
         ({"jsonBody": '{"a": 1}'}, "jsonBody"),
     ],
@@ -270,6 +280,14 @@ def test_a_setting_that_fills_a_parameter_named_as_a_key_keeps_its_value_out():
         "JavaScript code",
         "Python code",
         "Function code",
+        "a command",
+        "a query",
+        "a SQL query",
+        "code",
+        "a secret key",
+        "a signing key",
+        "an encryption key",
+        "a master key",
         "a free-text body",
         "a JSON body",
     ],
@@ -324,6 +342,8 @@ def test_the_stand_in_and_the_names_are_the_runtime_s_own():
     shapes = json.loads((FIXTURES / "agent" / "key-shapes.json").read_text())
     assert shapes["kept"] == KEPT
     assert tuple(shapes["secret_name_ends"]) == SECRET_NAME_ENDS
+    assert tuple(shapes["code_parameters"]) == CODE_PARAMETERS
+    assert set(CODE_PARAMETERS) <= CARRIES_KEYS
 
 
 def test_the_plan_read_back_is_one_the_runtime_takes():

@@ -145,6 +145,11 @@ describe('how a fix ends', () => {
     expect(logRowsOf(model.chat, nameOf, []).slice(-2).map((row) => row.tone)).toEqual(['bad', 'bad'])
   })
 
+  it('marks a cause too wide for one fix as refused', () => {
+    const model = withFix(started(), handoff('troubleshooter', 'too_wide', "I named more than 10 blocks, too many for one fix, so the platform didn't use them."))
+    expect(logRowsOf(model.chat, nameOf, []).at(-1)?.tone).toBe('bad')
+  })
+
   it('marks a hand-off the platform refused', () => {
     const model = withFix(started(), handoff('fix_drafter', 'widened', 'I asked the Fix drafter to change only the “Read releases” block, but its change removes an Ask for a yes, so the platform refused it.', { blocks: ['Read releases'], widened_by: 'removes_a_yes' }))
     expect(logRowsOf(model.chat, nameOf, []).at(-1)?.tone).toBe('bad')
