@@ -109,7 +109,7 @@ test.describe('Drafted workflow', () => {
     await shot(alice, info, 'drafted-on')
 
     await alice.goto('/workflows')
-    const listed = alice.locator('li[data-workflow-id]', { hasText: name }).first()
+    const listed = alice.locator(`li[data-workflow-id="${useCaseId ?? ''}"]`)
     await expect(listed.getByText('On', { exact: true }), 'Workflows lists it as On, as the card says').toBeVisible()
     await shot(alice, info, 'drafted-on-workflows')
 
