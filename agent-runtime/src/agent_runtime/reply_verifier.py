@@ -108,6 +108,8 @@ def flag_of(verdict: Verdict | ModelProblem) -> VerifierFlag | None:
             return None
 
 
-def verify(answer: FreeReplyAnswer, chat_for: ChatFor) -> VerifierFlag | None:
-    verdict = ask_model(chat_for, *verify_messages(answer), Verdict, timeout=VERIFY_TIMEOUT_SECONDS)
+def verify(
+    answer: FreeReplyAnswer, chat_for: ChatFor, timeout: float = VERIFY_TIMEOUT_SECONDS
+) -> VerifierFlag | None:
+    verdict = ask_model(chat_for, *verify_messages(answer), Verdict, timeout=timeout)
     return flag_of(verdict)

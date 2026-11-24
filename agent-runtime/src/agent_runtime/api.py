@@ -31,6 +31,8 @@ from agent_runtime.contract import (
     AnswerResult,
     CapabilityList,
     CardsInputs,
+    CauseRequest,
+    CauseResult,
     CheckPartRequest,
     CheckPartResult,
     ChooseRequest,
@@ -82,6 +84,7 @@ from agent_runtime.summary import (
     model_factory,
 )
 from agent_runtime.tools import tool_list, value_problem
+from agent_runtime.troubleshooting import find_cause
 from agent_runtime.version_checker import VersionChecker
 from agent_runtime.workflow_drafter import DEFAULT_DRAFTER_MODEL, draft_workflow
 
@@ -563,6 +566,13 @@ def create_app(
         if chat is None:
             return NO_MODEL
         return reword(body, chat, verify_with=verifier_for(body.model) or chat)
+
+    @app.post("/v1/troubleshooter/cause", dependencies=[Depends(require_key)])
+    def troubleshooter_cause(body: CauseRequest) -> CauseResult:
+        chat = active.chat_source(body.model)
+        if chat is None:
+            return NO_MODEL
+        return find_cause(body, chat, verify_with=verifier_for(body.model) or chat)
 
     @app.post("/v1/workflows/draft", dependencies=[Depends(require_key)])
     def draft_a_workflow(body: WorkflowDraftRequest) -> WorkflowDraftResult:

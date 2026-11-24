@@ -34,6 +34,9 @@ from agent_runtime.contract import (
     CardSpec,
     CardToRun,
     CarryForward,
+    CauseFound,
+    CauseKept,
+    CauseRequest,
     CheckPartRequest,
     Choice,
     ChooseRequest,
@@ -78,6 +81,7 @@ from agent_runtime.contract import (
     RoomAddressee,
     SoftwareMatch,
     SoftwareToCheck,
+    StoppedRun,
     TaskError,
     TaskFailed,
     TaskFinished,
@@ -982,6 +986,35 @@ def answered_explain() -> Answered:
     return Answered(answer=answer, parts=parts_of(read, task, answer, facts))
 
 
+def cause_request() -> CauseRequest:
+    return CauseRequest(
+        model=draft_request().model,
+        stop=StoppedRun(
+            stage="working",
+            reason="WorkflowNodeError",
+            retryable=True,
+            message="The n8n workflow 'FastAPI release check' failed at its step 'Read releases': "
+            "GitHub answered 404 Not Found for fastapi/fastapy",
+        ),
+        events=[
+            "Alice started a run of FastAPI release check.",
+            "Read releases asked GitHub for the releases of fastapi/fastapy.",
+            "The run failed.",
+        ],
+        blocks=[
+            "Every day at 8:00",
+            "Start from the Portal",
+            "Read releases",
+            "Newer?",
+            "Propose a change",
+            "Ask for a yes",
+            "Make the approved changes",
+        ],
+        stopped_at=["Read releases"],
+        within_seconds=9.0,
+    )
+
+
 def explain_wording_request() -> ExplainWordingRequest:
     facts = [
         ExplainFact(kind="runs", together=["day", "8:00"], negated=False),
@@ -1152,6 +1185,13 @@ def fixtures() -> dict[str, WireModel]:
             "create Jira tickets in “MOCK”, each after a yes. Nothing else changes."
         ),
         "explain-wording-kept.json": ExplainKept(why="negation"),
+        "troubleshooter-cause-request.json": cause_request(),
+        "troubleshooter-cause-found.json": CauseFound(
+            cause="GitHub can't find the repository fastapi/fastapy that the Read releases block "
+            "reads.",
+            failed_part=["Read releases"],
+        ),
+        "troubleshooter-cause-kept.json": CauseKept(why="not_where_it_stopped"),
         "planner-check-part-request.json": CheckPartRequest(kind="do", text="Email the list"),
         "planner-check-part-cant.json": check_one_part(
             CheckPartRequest(kind="do", text="Email the list")

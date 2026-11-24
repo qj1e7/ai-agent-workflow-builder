@@ -1,10 +1,13 @@
 import re
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from datetime import datetime
-from typing import Final, Literal
+from typing import Final, Literal, Protocol
+
+from pydantic import Field
 
 from platform_api.monitoring.events import RunFailedData
-from platform_api.shared import JIRA_SITE_CHANGED, NO_START_BLOCK, WRITE_STOP_ADVICE
+from platform_api.shared import JIRA_SITE_CHANGED, NO_START_BLOCK, WRITE_STOP_ADVICE, RunId
 from platform_api.wire import FailureReason, WireModel
 
 type SuggestedAction = Literal[
@@ -207,6 +210,47 @@ def explain_failure(failure: RunFailedData) -> Advice:
     ):
         return MISSING_START
     return ADVICE[failure.reason]
+
+
+class FoundCause(WireModel):
+    """The AI model's cause and failed part (ADR 0055, section 10). Code checked them before
+    anyone sees them: the cause passed the free reply's checks and the verifier, and each block
+    is in the version that ran and is where the run stopped. The rule table's answer stays beside
+    it, unchanged."""
+
+    cause: str = Field(description="Why the run stopped, in one short sentence the model wrote.")
+    failed_part: list[str] = Field(
+        min_length=1, description="The blocks the cause is in, each one where the run stopped."
+    )
+
+
+@dataclass(frozen=True)
+class AskedCause:
+    """One stop, for the model to name its cause."""
+
+    run_id: RunId
+    seq: int
+    """The run_failed event's sequence number, so a later stop of the same run is a new one."""
+    failure: RunFailedData
+    events: Sequence[str]
+    """The run's activity, each event's plain summary, oldest first."""
+    seconds: float
+    """How long the finder has before the rule table answers alone."""
+
+
+class CauseFinder(Protocol):
+    """The troubleshooter's model version. None whenever it has no checked answer, and the rule
+    table answers alone."""
+
+    async def find(self, asked: AskedCause) -> FoundCause | None: ...
+
+
+def asks_the_model(failure: RunFailedData) -> bool:
+    """Whether the rule table knows no cause for this stop, so the model may name one: an agent's
+    stop of a kind the table doesn't know, or a block that failed in n8n. Every other stop keeps
+    the cause the table knows."""
+    advice = explain_failure(failure)
+    return advice is AGENTS_STOPPED or advice is ADVICE["WorkflowNodeError"]
 
 
 class RetryAnswer(WireModel):

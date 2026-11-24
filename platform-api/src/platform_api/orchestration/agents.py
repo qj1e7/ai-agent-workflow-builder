@@ -892,6 +892,59 @@ explain_wording_result_adapter: TypeAdapter[ExplainWordingResult] = TypeAdapter(
 )
 
 
+# The AI troubleshooter's model version (ADR 0032, ADR 0055 section 10): the runtime's
+# POST /v1/troubleshooter/cause, as this side reads it.
+
+CAUSE_LIMIT: Final = 200
+STOP_MESSAGE_LIMIT: Final = 2000
+EVENT_SUMMARY_LIMIT: Final = 400
+MOST_EVENTS: Final = 80
+RUN_BLOCK_NAME_LIMIT: Final = 200
+MOST_RUN_BLOCKS: Final = 100
+
+type RunBlockName = Annotated[str, Field(min_length=1, max_length=RUN_BLOCK_NAME_LIMIT)]
+
+
+class StoppedRun(WireModel):
+    stage: str = Field(max_length=40)
+    reason: str = Field(max_length=40)
+    retryable: bool
+    message: str = Field(max_length=STOP_MESSAGE_LIMIT)
+
+
+class CauseRequest(WireModel):
+    model: ModelAccess
+    stop: StoppedRun
+    events: list[Annotated[str, Field(max_length=EVENT_SUMMARY_LIMIT)]] = Field(
+        max_length=MOST_EVENTS
+    )
+    blocks: list[RunBlockName] = Field(min_length=1, max_length=MOST_RUN_BLOCKS)
+    stopped_at: list[RunBlockName] = Field(min_length=1, max_length=MOST_RUN_BLOCKS)
+    within_seconds: float = Field(gt=0, le=10)
+
+    @model_validator(mode="after")
+    def _stopped_in_the_version(self) -> Self:
+        if not set(self.stopped_at) <= set(self.blocks):
+            raise ValueError("Every block in stopped_at must be one of blocks")
+        return self
+
+
+class CauseFound(WireModel):
+    kind: Literal["found"] = "found"
+    cause: str = Field(min_length=1, max_length=CAUSE_LIMIT)
+    failed_part: list[RunBlockName] = Field(min_length=1, max_length=MOST_RUN_BLOCKS)
+
+
+class CauseKept(WireModel):
+    kind: Literal["kept"] = "kept"
+    why: str
+
+
+type CauseResult = CauseFound | CauseKept | ModelProblem
+
+cause_result_adapter: TypeAdapter[CauseResult] = TypeAdapter(CauseResult)
+
+
 # The workflow drafter (ADR 0051): the runtime's POST /v1/workflows/draft, as this side reads it.
 
 type SettingKind = Literal[
@@ -1032,6 +1085,8 @@ AGENT_TIMEOUT_SECONDS = 60.0
 RUNTIME_SMOOTHS_IN_SECONDS = 8.0
 RUNTIME_VERIFIES_IN_SECONDS = 8.0
 EXPLAIN_WAIT_SECONDS = RUNTIME_SMOOTHS_IN_SECONDS + RUNTIME_VERIFIES_IN_SECONDS + 4.0
+RUNTIME_ANSWERS_IN_SECONDS = 1.0
+"""Past the time a cause request gives the runtime, for its answer to come back."""
 DRAFT_WAIT_SECONDS = 200.0
 """The drafter stops itself at 170 seconds (ADR 0051, amended for step 5), with room to answer."""
 
@@ -1110,6 +1165,16 @@ class HttpAgentRuntime:
             request,
             explain_wording_result_adapter,
             EXPLAIN_WAIT_SECONDS,
+        )
+
+    async def find_cause(
+        self, request: CauseRequest
+    ) -> CauseResult | AgentUnavailable | AgentRejected:
+        return await self._model_call(
+            "/v1/troubleshooter/cause",
+            request,
+            cause_result_adapter,
+            request.within_seconds + RUNTIME_ANSWERS_IN_SECONDS,
         )
 
     async def draft_workflow(

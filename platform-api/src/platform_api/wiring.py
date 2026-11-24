@@ -93,6 +93,7 @@ from platform_api.orchestration.planning import (
     ProjectFinding,
     WorkflowDrafting,
 )
+from platform_api.orchestration.run_causes import RunCauses
 from platform_api.orchestration.runs import Leg
 from platform_api.orchestration.schedule_store import ScheduleBook
 from platform_api.orchestration.service import Orchestrator
@@ -126,6 +127,7 @@ class Services:
     builder: Builder
     planner_front: PlannerFront
     explainer: Explainer
+    cause_finder: RunCauses
     drafted: DraftedWorkflows
     setup_approvals: SetUpApprovals
     home: Home
@@ -198,6 +200,7 @@ def install(app: FastAPI, services: Services) -> None:
     app.state.builder = services.builder
     app.state.planner_front = services.planner_front
     app.state.explainer = services.explainer
+    app.state.cause_finder = services.cause_finder
     app.state.drafted = services.drafted
     app.state.home = services.home
     app.state.watchlist = services.watchlist
@@ -567,6 +570,7 @@ async def build(settings: Settings) -> Services:
             drafted=drafted,
         ),
         explainer=Explainer(db, builder, ExplainWordings(db, model_settings, agents)),
+        cause_finder=RunCauses(db, model_settings, agents, RunsInN8n(db, n8n.landing)),
         drafted=drafted,
         setup_approvals=setup_approvals,
         home=home,
