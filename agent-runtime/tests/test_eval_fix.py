@@ -3,7 +3,7 @@ ends as its row says, within the limits, with every event one the activity log t
 red-team case ends in a hand-back or a refusal by code. The scorer catches a run that doesn't."""
 
 from datetime import timedelta
-from typing import Any
+from typing import Any, get_args
 
 import pytest
 from evals.checks import Check
@@ -12,9 +12,14 @@ from evals.jobs import Answer
 from evals.runner import JOBS
 
 from agent_runtime.contract import WorkflowPlan
+from agent_runtime.fixing.events import FixWidening
 
 CASES = {case.id: case for case in FIX.cases()}
-FIXABLE = ("fixable-renamed-repository", "fixable-jira-key-in-a-second-round")
+FIXABLE = (
+    "fixable-renamed-repository",
+    "fixable-jira-key-in-a-second-round",
+    "fixable-a-field-that-moved",
+)
 
 
 def failed(checks: list[Check]) -> dict[str, str]:
@@ -47,8 +52,34 @@ def test_the_set_covers_each_red_team_bar():
         "refinement-drops-the-yes",
         "made-up-block-names",
         "made-up-scenarios",
+        "widen-by-adding-a-write",
+        "widen-by-adding-a-system",
+        "widen-by-adding-a-key",
+        "widen-by-changing-a-persons-setting",
+        "widen-outside-what-was-asked",
+        "drafter-gives-no-answer",
     ):
         assert bar in ids
+
+
+def test_section_11_s_three_fixable_cases_are_each_in_the_set():
+    assert set(FIXABLE) <= set(CASES)
+    assert all(CASES[id_].expect.ending == "handed_in" for id_ in FIXABLE)
+
+
+def test_each_widening_code_s_scope_check_finds_has_a_case_that_shows_it():
+    shown = {case.expect.widened_by for case in CASES.values()}
+    assert set(get_args(FixWidening.__value__)) <= shown
+
+
+def test_the_source_gone_loop_runs_rounds_until_no_progress_stops_it():
+    case = CASES["endless-rounds-source-gone"]
+    run = replay(case).extra
+    assert isinstance(run, Run)
+    assert [(r.round, r.passed, r.scenarios) for r in run.fixing.ledger.rounds()] == [
+        (1, 1, 2),
+        (2, 1, 2),
+    ]
 
 
 def test_every_red_team_case_ends_without_a_fix():
@@ -108,6 +139,17 @@ def test_the_scorer_fails_a_run_that_stores_a_fix_it_didn_t_hand_in():
     assert isinstance(run, Run)
     run.fakes.revisions.stored.append(WorkflowPlan.model_validate(case.version.plan().model_dump()))
     assert "only_a_hand_in_stores_a_fix" in failed(score(case, answer))
+
+
+def test_the_scorer_fails_a_run_with_other_rounds_or_another_widening():
+    gone = CASES["endless-rounds-source-gone"]
+    one_round = gone.model_copy(update={"expect": gone.expect.model_copy(update={"rounds": 1})})
+    assert "rounds" in failed(score(one_round, replay(one_round)))
+    key = CASES["widen-by-adding-a-key"]
+    other = key.model_copy(
+        update={"expect": key.expect.model_copy(update={"widened_by": "adds_a_system"})}
+    )
+    assert "widened_by" in failed(score(other, replay(other)))
 
 
 def test_the_scorer_fails_a_run_code_didn_t_refuse_as_the_row_says():
