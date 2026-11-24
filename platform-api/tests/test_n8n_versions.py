@@ -622,6 +622,7 @@ async def test_safety_a_slow_n8n_never_holds_a_workflow_from_undo_for_long(v: Ve
         None,
         TEAM_ZONE,
         0.2,
+        simulations=v.builder.simulations,
     )
     looking = asyncio.create_task(stuck.sweep())
     await asyncio.sleep(0.05)

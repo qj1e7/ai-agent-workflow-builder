@@ -263,10 +263,10 @@ async def get_use_case(
     "/use-cases/{use_case_id}/simulation",
     responses={**SIGNED_IN, 404: NOT_FOUND},
     description="The current version tried on practice systems, by its digest (ADR 0054), for "
-    "a workflow the Planner built from our blocks. The first read of a version never tried "
-    "starts its one try in the background, and answers with it running. simulation is null when "
-    "the version has nothing to try. A simulation is not a run: it is never in Recent runs or "
-    "the activity log, a pass turns nothing on, and Turn on still runs the real test run.",
+    "a workflow the Planner built from our blocks. Its try starts where the safety checker "
+    "grades the version, never here: this only reads. simulation is null when the version has "
+    "nothing to try. A simulation is not a run: it is never in Recent runs or the activity log, "
+    "a pass turns nothing on, and Turn on still runs the real test run.",
 )
 async def get_use_case_simulation(
     use_case_id: str, principal: CurrentPrincipal, simulations: CurrentUseCaseSimulations

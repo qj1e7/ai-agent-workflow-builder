@@ -492,6 +492,9 @@ async def build(settings: Settings) -> Services:
         time_zone=settings.team_time_zone,
     )
     await watchlist.adopt_ticket_project()
+    simulation_model = SimulationModel(agents, connected_model(db, model_settings))
+    simulation_client, simulations = simulations_for(settings, db, simulation_model)
+    use_case_simulations = UseCaseSimulations(db, simulations)
     builder = Builder(
         db,
         orchestrator,
@@ -509,6 +512,7 @@ async def build(settings: Settings) -> Services:
         holding=holding,
         time_zone=settings.team_time_zone,
         keys=keys,
+        simulations=use_case_simulations,
     )
     # Before any run can start: a run left on the shared run workflow, whose blocks are off, ends
     # first (E11), so the workflows it held back can move.
@@ -559,8 +563,6 @@ async def build(settings: Settings) -> Services:
         builder, orchestrator, people, team_requests, connections, watchlist, setup_approvals
     )
     trace_scores = trace_scores_for(settings)
-    simulation_model = SimulationModel(agents, connected_model(db, model_settings))
-    simulation_client, simulations = simulations_for(settings, db, simulation_model)
     # One fact for the card, the capabilities and the Planner's prompts (ADR 0054, PR 7).
     ready_here: tuple[PlatformReady, ...] = ("workflows.simulate",) if simulations.available else ()
     drafted = DraftedWorkflows(
@@ -602,7 +604,7 @@ async def build(settings: Settings) -> Services:
         simulation_model=simulation_model,
         drafted=drafted,
         simulations=simulations,
-        use_case_simulations=UseCaseSimulations(db, simulations),
+        use_case_simulations=use_case_simulations,
         simulation_client=simulation_client,
         setup_approvals=setup_approvals,
         home=home,

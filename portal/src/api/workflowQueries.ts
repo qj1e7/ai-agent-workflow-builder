@@ -507,8 +507,8 @@ export function useSweepOnOpen(useCaseId: string): void {
 const SIMULATION_POLL_MS = 2000
 
 /**
- * The Check of a workflow the Planner built from our blocks: its current version tried on practice systems (ADR 0054). The first
- * read of a version starts its one try, and it is read again every couple of seconds while it runs.
+ * The Check of a workflow the Planner built from our blocks: its current version tried on practice systems (ADR 0054). The try
+ * starts where the safety checker grades the version, never on this read, and it is read again every couple of seconds while it runs.
  */
 export function useUseCaseSimulation(useCaseId: string) {
   const client = useApiClient()

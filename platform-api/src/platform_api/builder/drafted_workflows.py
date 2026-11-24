@@ -67,6 +67,7 @@ from platform_api.builder.simulations import (
 )
 from platform_api.builder.sweep import grading_mark
 from platform_api.builder.templates import AGENT_CARDS
+from platform_api.builder.use_case_simulations import ClaimedVersion, UseCaseSimulations
 from platform_api.builder.versions import Publication, authors_json
 from platform_api.builder.workflow_report import (
     KEY_SHAPE,
@@ -407,6 +408,7 @@ class DraftedWorkflows:
         self._cards = CardLibrary(db)
         self._running: set[asyncio.Task[None]] = set()
         self._simulations = simulations or Simulations(db, None)
+        self._versions = UseCaseSimulations(db, self._simulations)
 
     async def start(
         self,
@@ -834,6 +836,7 @@ class DraftedWorkflows:
         """The approved revision as a Draft in the platform's n8n project (flow step 9): created
         through n8n's API, read back, and kept only when its digest equals the approved one. It
         is the builder's half of the set-up approval, asked once for each approval."""
+        claimed: ClaimedVersion | None = None
         async with self._db.transaction("builder") as uow:
             await hold_workflow(uow.conn, f"drafted:{approved.drafted_id}", alone=True)
             kept = await _kept(uow.conn, approved.drafted_id)
@@ -889,6 +892,10 @@ class DraftedWorkflows:
             except Exception:
                 await n8n.remove(held.workflow_id)
                 raise
+            # Graded just now. Its digest is the approved revision's, so it is tried only when
+            # that revision never was, such as one that waited for a write key (ADR 0054).
+            claimed = await self._versions.claim(uow.conn, kept.use_case_id, uow.now)
+        await self._versions.start(claimed)
         log.info(
             "set up %s revision %d as %s, a draft, on %s's approval %s",
             approved.drafted_id,

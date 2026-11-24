@@ -4,9 +4,8 @@ code's grades by the version's digest. A Check card reads them back for the dige
 it shows, so a changed version never shows an older result. A digest is tried once, whichever
 workflow holds it: a drafted revision and the workflow it is set up as share one try.
 
-A drafted revision's running row is written in the revision's own transaction (`claim`), and the
-simulation starts once it commits (`start`), so a poll never reads a new revision as untried. A
-version with no transaction of its own to join is claimed and started at once (`begin`).
+A version's running row is written in the transaction that keeps it (`claim`), and the
+simulation starts once it commits (`start`), so a poll never reads a new version as untried.
 
 A simulation is not a run. It never writes a run or an activity event, and never stands in for
 the test run that Turn on starts. A failed case blocks nothing: the card leads with it, and the
@@ -97,16 +96,6 @@ class Simulations:
         task = asyncio.create_task(self._run(driver, digest, dict(document), started_at))
         self._running[digest] = (task, started_at)
         task.add_done_callback(lambda _: self._forget(digest, task))
-
-    async def begin(self, digest: str, document: Mapping[str, Any]) -> None:
-        """Claims and starts a digest's first try, for a version kept with no transaction of its
-        own here. Nothing when it has a try already."""
-        if self._driver is None or self._closed:
-            return
-        async with self._db.transaction("builder") as uow:
-            started_at = await _insert(uow.conn, digest, uow.now)
-        if started_at is not None:
-            await self.start(digest, document, started_at)
 
     async def again(self, digest: str, document: Mapping[str, Any]) -> bool:
         """Tries the version again when it was never tried, wasn't run or ran past its limit.
