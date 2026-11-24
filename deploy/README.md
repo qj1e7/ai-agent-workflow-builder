@@ -83,7 +83,7 @@ platform-api drives the gateway only when `SIMULATION_URL` and `SIMULATION_START
 On a laptop and in CI, platform-api can drive the gateway, so the Check card shows a real result, such as "Tried 6 cases on practice systems: 6 passed." (ADR 0054, "What the link chose"). Azure stays unlinked.
 
 - The simulation makes `link`, its network for the gateway alone. `compose.simulation-link.yaml` joins platform-api to it, gives platform-api `SIMULATION_URL=http://simulation-gateway:8600`, and changes nothing else. The platform's n8n, PostgreSQL and agent runtime never join it, and the simulation n8n never leaves its own networks.
-- The start secret is the one value both stacks hold. `deploy/make-env.sh` adds `SIMULATION_START_SECRET` to `deploy/.env`. The link file gives it to platform-api, and `SIM_LINK=<platform's project> scripts/simulation.sh up` gives the same value to the simulation n8n and the gateway. Nothing prints it.
+- The start secret is the one value both stacks hold. `deploy/make-env.sh` adds `SIMULATION_START_SECRET` to `deploy/.env`, 64 characters long. The link file gives it to platform-api, and `SIM_LINK=<platform's project> scripts/simulation.sh up` gives the same value to the simulation n8n and the gateway. Nothing prints it. platform-api and the gateway refuse to start with a start secret shorter than 32 characters.
 - `SIMULATION_MODEL` stays off, so code's six templates run and no model is asked.
 
 To link the team lead's `wab` stack, run these from the checkout it runs from, once this change is in that checkout:
@@ -96,7 +96,7 @@ docker compose -p wab -f deploy/compose.yaml -f deploy/compose.simulation-link.y
 SIM_LINK=wab scripts/simulation.sh check   # proves the link from inside both stacks
 ```
 
-The third command builds platform-api from the checkout and starts it again on the link. The rest of `wab` keeps running. To unlink, start platform-api again without the link file first, because the simulation can't remove its link while platform-api sits on it:
+The third command builds platform-api from the checkout and starts it again on the link. The rest of `wab` keeps running. To unlink, start platform-api again without the link file first, because the simulation can't remove its link while platform-api sits on it. `scripts/simulation.sh down` stops and names this command when it finds platform-api still on the link:
 
 ```sh
 docker compose -p wab -f deploy/compose.yaml up --detach --no-deps platform-api
@@ -105,7 +105,7 @@ scripts/simulation.sh down
 
 `scripts/up.sh` also starts platform-api without the link, so run the third command again after it. To start the simulation again, unlink, then run the link commands again from the second. A simulation project other than `wab-sim` has the link `<project>_link`, which the link file reads from `SIMULATION_LINK_NETWORK`.
 
-With `SIM_LINK` set, `check` adds `--platform`. From inside the simulation n8n it tries every address of the platform's platform-api, PostgreSQL, n8n and agent runtime, and from inside the gateway every address but platform-api's. Each must fail. platform-api must reach the gateway by its name on the link, and the platform's n8n and agent runtime must reach none of the gateway's addresses. Each container that probes must reach a service of its own stack, so a blind probe can't pass. It allows the start secret only as the start secret of the simulation n8n and the gateway, and only the named platform's platform-api on the link.
+With `SIM_LINK` set, `check` adds `--platform`. From inside the simulation n8n it tries every address of the platform's platform-api, PostgreSQL, n8n and agent runtime, and from inside the gateway every address but platform-api's. Each must fail. platform-api must reach the gateway by its name on the link, and the platform's n8n and agent runtime must reach none of the gateway's addresses. Each container that probes must reach a service of its own stack, so a blind probe can't pass. It allows the start secret only as the start secret of the simulation n8n and the gateway, and only the named platform's platform-api on the link. Linked or not, `check` also tries the host from inside the simulation n8n and the gateway, at the address each simulation network gives it, on ports 8000, 5678 and 5432 and each port a linked platform publishes. Each must fail. The name `host.docker.internal` never resolves on an internal network, so that name alone proves nothing.
 
 `E2E_SIMULATION=on scripts/e2e.sh` does all of this on stacks of its own, as the `simulation-link` CI job runs it: it starts the simulation, then the platform with the link file, drafts the release check with the mock model, waits for the card's result, runs the check on both stacks, and removes both, the platform first.
 

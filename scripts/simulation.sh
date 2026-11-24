@@ -93,8 +93,18 @@ drive() {
   docker exec -i "$id" python -I - <scripts/simulation_drive.py
 }
 
+# The simulation can't remove its link while a platform's platform-api sits on it, so it stops
+# first and names the command that unlinks it (deploy/README.md).
 down() {
   placeholders
+  local link="${project}_link" id platform
+  for id in $(docker network inspect "$link" --format '{{range $id, $c := .Containers}}{{$id}} {{end}}' 2>/dev/null); do
+    platform=$(docker inspect "$id" --format '{{index .Config.Labels "com.docker.compose.project"}}' 2>/dev/null || true)
+    [ "$platform" != "$project" ] || continue
+    echo "FAIL: ${platform:-a container}'s platform-api still sits on $link. Unlink it first:" >&2
+    echo "  docker compose -p ${platform:-<platform project>} -f deploy/compose.yaml up --detach --no-deps platform-api" >&2
+    return 1
+  done
   "${compose[@]}" down --volumes --remove-orphans
 }
 

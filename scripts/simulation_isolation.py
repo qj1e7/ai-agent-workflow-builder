@@ -28,6 +28,9 @@ With --project NAME, the compose project scripts/simulation.sh started, it also 
   names a service on the simulation's network;
 - from inside n8n and the gateway the internet, the host and the platform's stack are out of
   reach, and the simulation's own services are in reach, which shows the check can see a route;
+- from inside n8n and the gateway the host is out of reach at the address each of the project's
+  networks gives it, on the platform's ports and on each port a linked platform publishes, since
+  the name host.docker.internal never resolves on an internal network;
 - the project's networks are internal, and only the project's own containers sit on them, but for
   a platform's platform-api on the link.
 
@@ -41,8 +44,9 @@ from inside the running containers of both stacks:
   runtime reach the gateway at none of its addresses;
 - each container that probes reaches a service of its own stack by address, which shows its probe
   can see a route.
-The start secret is the one value the two stacks share: deploy/.env's SIMULATION_START_SECRET may
-be the start secret of the simulation n8n and of the gateway, and nothing else.
+The start secret is the one value the two stacks share: deploy/.env's SIMULATION_START_SECRET, of
+at least 32 characters, may be the start secret of the simulation n8n and of the gateway, and
+nothing else.
 
 It prints names and addresses, never a key's value, as the CI log is public.
 
@@ -57,7 +61,7 @@ import re
 import subprocess
 import sys
 import tempfile
-from collections.abc import Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -223,6 +227,9 @@ MADE_UP = "made-up-"
 KEYED = re.compile(r"(?:_KEY|_TOKEN|_SECRET|_PASSWORD)$")
 SECRET_NAME = re.compile(r"KEY|TOKEN|SECRET|PASSWORD|WEBHOOK|DATABASE_URL")
 SHORTEST_SECRET = 8
+SHORTEST_START_SECRET = 32
+"""The fewest characters the shared start secret may have, as platform-api and the gateway
+insist (platform_api.settings.SHORTEST_START_SECRET)."""
 URL = re.compile(r"[a-z][a-z0-9+.-]*://[^\s\"'<>]+", re.IGNORECASE)
 ADDRESS_FIELD = re.compile(r"host|domain|server|url", re.IGNORECASE)
 READY = "bootstrap: ready: all workflows loaded, active and linted"
@@ -681,57 +688,84 @@ class Probe:
     reach: bool
 
 
+def probe_from(
+    stack: Mapping[str, Mapping[str, Any]], service: str, label: str = ""
+) -> Callable[[str, int, str, bool], Probe]:
+    """Probes from one service's container, by node in n8n's image and python in the others."""
+    container, command = stack[service]["Id"], CONNECTS.get(service, PYTHON_CONNECTS)
+    return lambda host, port, target, reach: Probe(
+        label or service, container, command, host, port, target, reach
+    )
+
+
+def own_database(stack: Mapping[str, Mapping[str, Any]]) -> str:
+    return (addresses_of(stack["postgres"]) or [""])[0] if "postgres" in stack else ""
+
+
+def host_probes(
+    sim: Mapping[str, Mapping[str, Any]], hosts: Sequence[str], ports: Sequence[int]
+) -> list[Probe]:
+    """From the simulation's n8n and gateway to the host, at the address each simulation network
+    gives it, on each port, with the simulation's own PostgreSQL as the route each must see."""
+    probes: list[Probe] = []
+    for service in sorted(set(KEPT_FROM) & set(sim)):
+        probe = probe_from(sim, service)
+        probes.append(probe(own_database(sim), PORTS["postgres"], "its own postgres", True))
+        probes += [probe(host, port, "the host", False) for host in hosts for port in ports]
+    return probes
+
+
 def platform_probes(
     sim: Mapping[str, Mapping[str, Any]], platform: Mapping[str, Mapping[str, Any]]
 ) -> list[Probe]:
     """From the simulation's n8n and gateway into a linked platform, and back from its
-    platform-api, n8n and agent runtime, each with a route of its own stack it must see."""
-
-    def probe(
-        origin: str, label: str, service: str, host: str, port: int, target: str, reach: bool
-    ) -> Probe:
-        command = CONNECTS.get(service, PYTHON_CONNECTS)
-        return Probe(label, origin, command, host, port, target, reach)
-
+    platform-api, n8n and agent runtime, each of those with a route of its own it must see."""
     probes: list[Probe] = []
-    own_db = (addresses_of(sim["postgres"]) or [""])[0] if "postgres" in sim else ""
-    for service, kept in KEPT_FROM.items():
-        if service not in sim:
-            continue
-        cid = sim[service]["Id"]
-        probes.append(
-            probe(cid, service, service, own_db, PORTS["postgres"], "its own postgres", True)
-        )
-        for target in kept:
+    for service in sorted(set(KEPT_FROM) & set(sim)):
+        probe = probe_from(sim, service)
+        for target in KEPT_FROM[service]:
             for host in addresses_of(platform.get(target, {"NetworkSettings": {}})):
-                probes.append(
-                    probe(
-                        cid,
-                        service,
-                        service,
-                        host,
-                        PORTS[target],
-                        f"the platform's {target}",
-                        False,
-                    )
-                )
+                probes.append(probe(host, PORTS[target], f"the platform's {target}", False))
     if LINKED in platform:
-        cid = platform[LINKED]["Id"]
-        label = f"the platform's {LINKED}"
-        probes.append(
-            probe(cid, label, LINKED, LINK_ALIAS, PORTS[GATEWAY], "the gateway on the link", True)
-        )
-    platform_db = (addresses_of(platform["postgres"]) or [""])[0] if "postgres" in platform else ""
-    for service in KEPT_OUT:
-        if service not in platform:
-            continue
-        cid, label = platform[service]["Id"], f"the platform's {service}"
-        probes.append(
-            probe(cid, label, service, platform_db, PORTS["postgres"], "its own postgres", True)
-        )
+        probe = probe_from(platform, LINKED, f"the platform's {LINKED}")
+        probes.append(probe(LINK_ALIAS, PORTS[GATEWAY], "the gateway on the link", True))
+    for service in sorted(set(KEPT_OUT) & set(platform)):
+        probe = probe_from(platform, service, f"the platform's {service}")
+        probes.append(probe(own_database(platform), PORTS["postgres"], "its own postgres", True))
         for host in addresses_of(sim.get(GATEWAY, {"NetworkSettings": {}})):
-            probes.append(probe(cid, label, service, host, PORTS[GATEWAY], "the gateway", False))
+            probes.append(probe(host, PORTS[GATEWAY], "the gateway", False))
     return probes
+
+
+def network_gateways(networks: list[Mapping[str, Any]]) -> list[str]:
+    """The host's address on each network, which Docker gives as the network's gateway."""
+    return sorted(
+        {
+            config["Gateway"]
+            for network in networks
+            for config in ((network.get("IPAM") or {}).get("Config") or [])
+            if config.get("Gateway")
+        }
+    )
+
+
+def host_ports(platform: Mapping[str, Mapping[str, Any]]) -> list[int]:
+    """The ports the platform's services listen on, and each a linked platform publishes."""
+    ports = {PORTS["platform-api"], PORTS["n8n"], PORTS["postgres"]}
+    for container in platform.values():
+        for bindings in ((container.get("HostConfig") or {}).get("PortBindings") or {}).values():
+            ports.update(int(b["HostPort"]) for b in bindings or [] if b.get("HostPort"))
+    return sorted(ports)
+
+
+def shared_secret_findings(secrets: Mapping[str, str]) -> list[str]:
+    """A linked platform's start secret, from deploy/.env, as long as both sides insist."""
+    secret = secrets.get(SHARED)
+    if secret is None:
+        return [f"deploy/.env has no {SHARED}. Run deploy/make-env.sh."]
+    if len(secret) < SHORTEST_START_SECRET:
+        return [f"deploy/.env's {SHARED} is shorter than {SHORTEST_START_SECRET} characters"]
+    return []
 
 
 def probe_findings(results: list[tuple[Probe, bool, str]]) -> list[str]:
@@ -851,22 +885,12 @@ def project_containers(project: str) -> list[dict[str, Any]]:
     return inspect("container", ids)
 
 
-def linked_findings(
-    platform: str, sim: Mapping[str, Mapping[str, Any]], link: Mapping[str, Any] | None
-) -> list[str]:
-    """The linked platform, from inside the running containers of both stacks."""
-    if link is None:
-        return ["the simulation has no link"]
-    by_service = {
-        labels(c)[1]: c for c in project_containers(platform) if c["State"].get("Running")
-    }
-    findings = linked_platform_findings(platform, by_service, link["Name"])
-    results = [(probe, *connect(probe)) for probe in platform_probes(sim, by_service)]
+def probed_findings(probes: list[Probe]) -> list[str]:
+    results = [(probe, *connect(probe)) for probe in probes]
     for probe, ok, how in results:
         where = f"{probe.target} at {probe.host}:{probe.port}"
         print(f"  from {probe.origin}, {where}: {'reached' if ok else 'not reached'} ({how})")
-    print(f"probed {len(results)} addresses between the simulation and the platform {platform}")
-    return findings + probe_findings(results)
+    return probe_findings(results)
 
 
 def live_findings(project: str, platform: str | None = None) -> list[str]:
@@ -941,9 +965,25 @@ def live_findings(project: str, platform: str | None = None) -> list[str]:
         f"in n8n, and {routes} routes from n8n and the gateway, against {len(secrets)} of the "
         "platform's keys"
     )
+    sim = {**running, **{s: c for s, c in by_service.items() if s == "postgres"}}
+    linked: dict[str, Any] = {}
     if platform:
-        sim = {**running, **{s: c for s, c in by_service.items() if s == "postgres"}}
-        findings += linked_findings(platform, sim, link)
+        findings += shared_secret_findings(secrets)
+        linked = {
+            labels(c)[1]: c for c in project_containers(platform) if c["State"].get("Running")
+        }
+        if link is None:
+            findings.append("the simulation has no link")
+        else:
+            findings += linked_platform_findings(platform, linked, link["Name"])
+    probes = host_probes(sim, network_gateways(networks), host_ports(linked))
+    if platform:
+        probes += platform_probes(sim, linked)
+    findings += probed_findings(probes)
+    print(
+        f"probed {len(probes)} addresses: the host's on each network"
+        + (f", and those between the simulation and the platform {platform}" if platform else "")
+    )
     return findings
 
 

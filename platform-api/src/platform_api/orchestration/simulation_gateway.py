@@ -93,7 +93,7 @@ from platform_api.orchestration.simulated_calls import (
     Unsealed,
 )
 from platform_api.orchestration.simulations import Simulation, SimulationRefused, Simulations
-from platform_api.settings import MAX_BODY_BYTES_DEFAULT, N8nOwner
+from platform_api.settings import MAX_BODY_BYTES_DEFAULT, SHORTEST_START_SECRET, N8nOwner
 from platform_api.wire import WireIn, WireModel, error_response
 
 SIGNATURE_HEADER = "X-Wab-Signature"
@@ -129,15 +129,17 @@ class GatewaySettings:
 def gateway_settings_from_env(env: Mapping[str, str]) -> GatewaySettings:
     """Only these settings are read. Anything else the environment holds is left alone."""
 
-    def required(name: str) -> str:
+    def required(name: str, shortest: int = 1) -> str:
         value = env.get(name, "").strip()
         if not value:
             raise ConfigError(f"{name} is not set.")
+        if len(value) < shortest:
+            raise ConfigError(f"{name} needs at least {shortest} characters.")
         return value
 
     return GatewaySettings(
         node_key=required("WAB_NODE_KEY"),
-        start_secret=required("WAB_START_SECRET"),
+        start_secret=required("WAB_START_SECRET", SHORTEST_START_SECRET),
         n8n_base_url=required("N8N_BASE_URL").rstrip("/"),
         n8n_owner=N8nOwner(required("N8N_OWNER_EMAIL"), required("N8N_OWNER_PASSWORD")),
         mock_github_url=env.get("MOCK_GITHUB_URL", "").strip().rstrip("/") or None,
