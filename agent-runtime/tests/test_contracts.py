@@ -12,6 +12,7 @@ from agent_runtime.contract import (
     AgentEventPost,
     AnswerRequest,
     CapabilityList,
+    CauseRequest,
     CheckPartRequest,
     ChooseRequest,
     ChooseResult,
@@ -29,16 +30,22 @@ from agent_runtime.contract import (
     ModelTestResult,
     ReadReleasesRequest,
     ReadReleasesResult,
+    ScenarioExplainRequest,
+    ScenarioWriteRequest,
     TaskOutput,
     TaskRequest,
     ToolList,
     answer_result_adapter,
+    cause_result_adapter,
     check_part_result_adapter,
     explain_wording_result_adapter,
+    scenario_explain_result_adapter,
+    scenario_write_result_adapter,
     task_result_adapter,
 )
 from agent_runtime.contracts import answer_request
 from agent_runtime.explain_wording import explain_guard, fact_check
+from agent_runtime.fixing.starter import FixAccepted, FixStart
 from agent_runtime.monitoring.masking import KEY_SHAPE_SOURCES, KEY_SHAPES
 
 FIXTURES = Path(__file__).resolve().parents[2] / "contracts" / "fixtures" / "agent"
@@ -99,10 +106,20 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "explain-wording-request.json": TypeAdapter(ExplainWordingRequest),
     "explain-wording-reworded.json": explain_wording_result_adapter,
     "explain-wording-kept.json": explain_wording_result_adapter,
+    "troubleshooter-cause-request.json": TypeAdapter(CauseRequest),
+    "troubleshooter-cause-found.json": cause_result_adapter,
+    "troubleshooter-cause-kept.json": cause_result_adapter,
+    "scenario-write-request.json": TypeAdapter(ScenarioWriteRequest),
+    "scenario-write-written.json": scenario_write_result_adapter,
+    "scenario-write-kept.json": scenario_write_result_adapter,
+    "scenario-explain-request.json": TypeAdapter(ScenarioExplainRequest),
+    "scenario-explain-explained.json": scenario_explain_result_adapter,
     "planner-check-part-request.json": TypeAdapter(CheckPartRequest),
     "planner-check-part-cant.json": check_part_result_adapter,
     "planner-check-part-fits.json": check_part_result_adapter,
     "key-shapes.json": TypeAdapter(KeyShapes),
+    "fix-start-request.json": TypeAdapter(FixStart),
+    "fix-accepted.json": TypeAdapter(FixAccepted),
 }
 
 

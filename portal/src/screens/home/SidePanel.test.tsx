@@ -23,7 +23,7 @@ import { SidePanel } from './SidePanel'
 const ALICE: Me = { id: 'alice', display: 'Alice', roles: ['operator', 'approver'] }
 const BOB: Me = { id: 'bob', display: 'Bob', roles: ['approver'] }
 const NOW = new Date('2026-11-05T15:00:00+08:00')
-const STOPPED = stopped as UseCaseView
+const STOPPED = { ...(stopped as UseCaseView), needs_you: 'stopped' } as UseCaseView
 const WATCHLIST = statuses as WatchlistView
 const REDIS = 'sw_01JBW00000000000000000003'
 const REGISTRY = capabilities as CapabilitiesView
@@ -90,8 +90,8 @@ describe('the side panel', () => {
     expect(html.match(/id="side-panel"/g)).toHaveLength(1)
     expect(html).toMatch(/<h2[^>]*id="side-panel-h"[^>]*tabindex="-1"[^>]*>Redis<\/h2>/)
     expect(links(html)).toEqual([
-      ['More details', `/software/${REDIS}`],
-      ['Software watchlist', '/software'],
+      ['More details', `/workflows/${WATCHLIST.use_case_id}?software=${REDIS}`],
+      ['Software watchlist', `/workflows/${WATCHLIST.use_case_id}`],
     ])
     expect(buttons(html)).toEqual(['Close'])
   })
@@ -227,7 +227,7 @@ describe('the side panel’s views', () => {
     expect(links(html)).toEqual([['More details', '/workflows']])
     expect(text(html)).toContain('1 workflow')
     expect(text(html)).toContain(`${STOPPED.name} `)
-    expect(text(html)).toContain('Stopped')
+    expect(text(html)).toContain('Needs you')
     expect(html).toMatch(new RegExp(`<button[^>]*data-opens="workflow:${STOPPED.use_case_id}"`))
     expect(html, 'and an Explain beside each row, which opens the report in the panel too').toMatch(new RegExp(`<button[^>]*data-opens="explain:${STOPPED.use_case_id}"[^>]*>Explain`))
   })
@@ -235,7 +235,7 @@ describe('the side panel’s views', () => {
   it('lists the watchlist with the Software page’s count line, each software’s versions and state', () => {
     const html = draw({ kind: 'watchlist' }, { onOpen: OPEN_BESIDE })
     const shown = text(html)
-    expect(links(html)).toEqual([['More details', '/software']])
+    expect(links(html)).toEqual([['More details', `/workflows/${WATCHLIST.use_case_id}`]])
     expect(shown).toContain(countLine(WATCHLIST.software) ?? 'a count line')
     expect(shown).toContain('LangGraph 1.2.14 → 1.2.16 · checked by Software watchlist Newer out')
     expect(shown).toContain('n8n 2.42.6, the newest · checked by Software watchlist Up to date')

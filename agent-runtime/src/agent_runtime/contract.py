@@ -7,6 +7,7 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    JsonValue,
     StringConstraints,
     TypeAdapter,
     model_validator,
@@ -672,9 +673,14 @@ class ExampleSpec(WireModel):
 
 class KeyShapes(WireModel):
     """The shapes of keys the masker knows, as regular expressions. platform-api refuses each
-    of them in a person's words, answers and what comes back from n8n (ADR 0051)."""
+    of them in a person's words, answers and what comes back from n8n (ADR 0051). For a fix, it
+    puts `kept` where a key stood in the plan it sends, by its shape or by a name that ends as
+    one of `secret_name_ends`, and keeps each of `code_parameters` out whole (ADR 0055)."""
 
     shapes: list[str]
+    kept: str
+    secret_name_ends: list[str]
+    code_parameters: list[str]
 
 
 class CapabilityList(WireModel):
@@ -981,6 +987,14 @@ class NeedsYouFact(WireModel):
     questions: int = Field(
         ge=0, description="Questions Approvers asked the person on requests waiting for a yes."
     )
+    fixes: int = Field(
+        default=0, ge=0, description="Workflows that are on and can't run, which they can fix."
+    )
+    setups: int = Field(
+        default=0,
+        ge=0,
+        description="Drafted workflows' one-time checks waiting for this Approver's yes.",
+    )
     total: int = Field(
         ge=0, description="The count Home shows under Needs you, the sum of the counts above."
     )
@@ -1096,6 +1110,11 @@ class TurnTrace(WireModel):
     )
 
 
+type PlatformReady = Literal["workflows.simulate"]
+"""A planned capability the platform turns on where it has what it needs, as Simulation mode
+where there is a simulation n8n (ADR 0054)."""
+
+
 class AnswerRequest(WireModel):
     task: str = Field(min_length=1, max_length=2000)
     model: ModelAccess
@@ -1117,6 +1136,12 @@ class AnswerRequest(WireModel):
         description="False when the person asking can't change workflows, as an Approver who "
         "isn't an Operator: a change beside a question is crossed, and the question still gets "
         "its answer (plan 3.2).",
+    )
+    ready_here: list[PlatformReady] = Field(
+        default_factory=list[PlatformReady],
+        max_length=4,
+        description="The planned capabilities the platform has turned on where it runs. Only "
+        "these are Ready in the Planner's prompts beside the registry's own.",
     )
 
 
@@ -1748,6 +1773,362 @@ explain_wording_result_adapter: TypeAdapter[ExplainWordingResult] = TypeAdapter(
 )
 
 
+# The AI troubleshooter's model version (ADR 0032, ADR 0055 section 10): a stopped run's facts in,
+# the cause out as fields picked from those facts, which code checks. No words of the model's
+# cross: platform-api writes the sentence from the fields.
+
+STOP_MESSAGE_LIMIT: Final = 2000
+EVENT_SUMMARY_LIMIT: Final = 400
+MOST_EVENTS: Final = 80
+RUN_BLOCK_NAME_LIMIT: Final = 200
+MOST_RUN_BLOCKS: Final = 100
+
+type RunBlockName = Annotated[str, Field(min_length=1, max_length=RUN_BLOCK_NAME_LIMIT)]
+type CauseSystem = Literal[
+    "github",
+    "gitlab",
+    "bitbucket",
+    "jira",
+    "confluence",
+    "teams",
+    "slack",
+    "entra",
+    "azure",
+    "aws",
+    "docker",
+    "pypi",
+    "npm",
+    "servicenow",
+    "outlook",
+    "zendesk",
+    "gmail",
+]
+"""The systems a cause may name, each only when the run's facts name it."""
+type FailureKind = Literal[
+    "not_found",
+    "refused",
+    "no_answer",
+    "wrong_value",
+    "changed_field",
+    "permission",
+    "limit",
+    "unknown",
+]
+DETAIL_LIMIT: Final = 64
+DETAIL_NAME: Final = r"[A-Za-z0-9][A-Za-z0-9_./-]*"
+type CauseDetail = Annotated[
+    str, Field(min_length=1, max_length=DETAIL_LIMIT, pattern=f"^{DETAIL_NAME}$")
+]
+"""One name with no spaces, as a repository, a project's key or a field's name."""
+type CauseCheck = Literal[
+    "call", "not_a_block", "not_where_it_stopped", "not_a_system", "not_a_detail"
+]
+
+
+class StoppedRun(WireModel):
+    """A stop as the run's run_failed event records it."""
+
+    stage: str = Field(max_length=40)
+    reason: str = Field(max_length=40)
+    retryable: bool
+    message: str = Field(max_length=STOP_MESSAGE_LIMIT)
+
+
+class CauseRequest(WireModel):
+    """One stopped run, for the model to name its cause and the failed part."""
+
+    model: ModelAccess
+    stop: StoppedRun
+    events: list[Annotated[str, Field(max_length=EVENT_SUMMARY_LIMIT)]] = Field(
+        max_length=MOST_EVENTS,
+        description="The run's activity, each event's plain summary, oldest first.",
+    )
+    blocks: list[RunBlockName] = Field(
+        min_length=1,
+        max_length=MOST_RUN_BLOCKS,
+        description="The blocks of the version that ran, by name, as the run's record holds them.",
+    )
+    stopped_at: list[RunBlockName] = Field(
+        min_length=1,
+        max_length=MOST_RUN_BLOCKS,
+        description="The blocks where the run stopped, as code read them. Each is one of blocks.",
+    )
+    within_seconds: float = Field(
+        gt=0,
+        le=10,
+        description="How long the runtime has, counted from when it gets the request. The model "
+        "call ends by then, as after it the platform's rule table answers alone (ADR 0032).",
+    )
+
+    @model_validator(mode="after")
+    def _stopped_in_the_version(self) -> CauseRequest:
+        if not set(self.stopped_at) <= set(self.blocks):
+            raise ValueError("Every block in stopped_at must be one of blocks")
+        return self
+
+
+class CauseFound(WireModel):
+    kind: Literal["found"] = "found"
+    failed_part: list[RunBlockName] = Field(
+        min_length=1,
+        max_length=MOST_RUN_BLOCKS,
+        description="The blocks the cause is in. Code checked each is a block of the version and "
+        "one where the run stopped.",
+    )
+    system: CauseSystem | None = Field(
+        description="The system the error came from, one the stop or a block where the run "
+        "stopped names, or null for none."
+    )
+    failure_kind: FailureKind = Field(
+        description="What kind of failure stopped the run. Code checked the stop shows it, and "
+        "sends unknown when it doesn't."
+    )
+    detail: CauseDetail | None = Field(
+        description="The one name the cause is about, copied from the stop in the shape its kind "
+        "takes: a repository, a project's key, a field's name or a version. Or null."
+    )
+
+
+class CauseKept(WireModel):
+    kind: Literal["kept"] = "kept"
+    why: CauseCheck = Field(
+        description="Why the rule table answers instead: call when the model's call failed or "
+        "its answer didn't parse, which is worth asking again, or the id of the check a field "
+        "failed, which is final for that stop.",
+    )
+
+
+type CauseResult = CauseFound | CauseKept | ModelProblem
+
+cause_result_adapter: TypeAdapter[CauseResult] = TypeAdapter(CauseResult)
+
+
+# Simulation mode (ADR 0054, section 5): the scenario writer and the explainer. Both answer in
+# picks from what the request offers, never in words. platform-api checks each play against its
+# kind (PR 5's check), runs code's templates on any refusal, and writes each sentence people see.
+
+type ScenarioKind = Literal[
+    "happy_path", "nothing_new", "source_not_found", "timeout", "approver_says_no", "odd_data"
+]
+type ScenarioServe = Literal["recorded", "varied", "empty", "not_found", "too_slow"]
+type ScenarioVariation = Literal["suffix", "empty_field", "long_text"]
+type ScenarioRole = Literal[
+    "start", "read", "agent", "propose", "ask", "write", "tell", "notice", "idle", "other"
+]
+type SampleAnswer = Literal["github.release", "read.release", "read.page", "jira.issue"]
+type ScenarioEnding = Literal[
+    "reached_yes",
+    "finished",
+    "nothing_new",
+    "declined",
+    "no_answer",
+    "stopped",
+    "failed",
+    "wrong_write",
+    "did_not_end",
+]
+MOST_KINDS: Final = 6
+MOST_SAMPLES: Final = 20
+MOST_SAMPLE_ITEMS: Final = 3
+MOST_FAILED: Final = 20
+SCENARIO_NAME_LIMIT: Final = 80
+type SampleId = Annotated[
+    str, Field(min_length=1, max_length=60, pattern=r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
+]
+type ScenarioCheck = Literal[
+    "call", "too_big", "key_shape", "not_the_kinds", "not_a_read", "not_a_sample", "not_an_agent"
+]
+type NoteKind = Literal["stopped", "went_on", "ended_early", "changes", "no_end", "unknown"]
+type NoteCheck = Literal[
+    "call",
+    "too_big",
+    "key_shape",
+    "not_a_scenario",
+    "twice",
+    "not_a_block",
+    "not_a_play",
+    "not_a_detail",
+]
+
+
+class ScenarioBlock(WireModel):
+    """One block of the version, as a simulation sees it. Code works out each field."""
+
+    name: RunBlockName
+    role: ScenarioRole
+    answer: SampleAnswer | None = Field(
+        default=None, description="For a read, what it gives, when an allow list covers it."
+    )
+    plays: list[ScenarioServe] = Field(
+        default_factory=list[ScenarioServe],
+        max_length=5,
+        description="How a simulation can play the block. A read can be served each of these "
+        "ways, and an Agent block can be recorded or too slow.",
+    )
+    varies: list[ScenarioVariation] = Field(
+        default_factory=list[ScenarioVariation],
+        max_length=3,
+        description="For a read an allow list covers, the variations its answer takes.",
+    )
+
+
+class ScenarioSample(WireModel):
+    """A recorded sample, scrubbed by its allow list before it left the simulation gateway."""
+
+    id: SampleId
+    answer: SampleAnswer
+    block: RunBlockName | None = Field(default=None, description="The block it was recorded from.")
+    items: list[dict[str, JsonValue]] = Field(max_length=MOST_SAMPLE_ITEMS)
+
+
+class ScenarioWriteRequest(WireModel):
+    """A version's plan, for the model to write one scenario for each kind that applies."""
+
+    model: ModelAccess
+    blocks: list[ScenarioBlock] = Field(min_length=1, max_length=MOST_RUN_BLOCKS)
+    kinds: list[ScenarioKind] = Field(
+        min_length=1, max_length=MOST_KINDS, description="The kinds that apply, as code picks."
+    )
+    samples: list[ScenarioSample] = Field(
+        default_factory=list[ScenarioSample], max_length=MOST_SAMPLES
+    )
+    within_seconds: float = Field(
+        gt=0, le=30, description="How long the runtime has, counted from when it gets the request."
+    )
+
+
+class WrittenRead(WireModel):
+    block: RunBlockName = Field(
+        description="A block that reads a source, named exactly as the list of blocks names it."
+    )
+    serve: ScenarioServe = Field(description="How the scenario serves it.")
+    sample: SampleId | None = Field(
+        default=None,
+        description="For recorded or varied, the id of a sample of what the block reads, or null "
+        "for its newest.",
+    )
+    vary: list[ScenarioVariation] = Field(
+        default_factory=list[ScenarioVariation],
+        max_length=3,
+        description="For varied only, one to three variations the block's answer takes. Else "
+        "empty.",
+    )
+
+
+class WrittenScenario(WireModel):
+    kind: ScenarioKind = Field(description="One kind from the list of kinds.")
+    reads: list[WrittenRead] = Field(
+        default_factory=list[WrittenRead],
+        max_length=MOST_RUN_BLOCKS,
+        description="How each read is served. A read left out is served as code's own scenario of "
+        "this kind serves it.",
+    )
+    slow_agents: list[RunBlockName] = Field(
+        default_factory=list[str],
+        max_length=MOST_RUN_BLOCKS,
+        description="In timeout only, the Agent blocks that answer too slowly. Else empty.",
+    )
+
+
+class ScenariosWritten(WireModel):
+    kind: Literal["written"] = "written"
+    scenarios: list[WrittenScenario] = Field(
+        min_length=1,
+        max_length=MOST_KINDS,
+        description="One for each kind that applies. Code checked every name is one the request "
+        "offers. platform-api checks each play against its kind.",
+    )
+
+
+class ScenariosKept(WireModel):
+    kind: Literal["kept"] = "kept"
+    why: ScenarioCheck = Field(
+        description="Why code's templates run instead: call when the call failed or the answer "
+        "didn't parse, too_big or key_shape when nothing was sent, or the check a pick failed."
+    )
+
+
+type ScenarioWriteResult = ScenariosWritten | ScenariosKept | ModelProblem
+
+scenario_write_result_adapter: TypeAdapter[ScenarioWriteResult] = TypeAdapter(ScenarioWriteResult)
+
+
+class ScenarioPlay(WireModel):
+    """How a scenario played one block, when not as recorded."""
+
+    block: RunBlockName
+    serve: ScenarioServe
+    vary: list[ScenarioVariation] = Field(default_factory=list[ScenarioVariation], max_length=3)
+
+
+class FailedScenario(WireModel):
+    """One scenario that failed, as code graded it."""
+
+    name: str = Field(min_length=1, max_length=SCENARIO_NAME_LIMIT)
+    kind: ScenarioKind
+    ending: ScenarioEnding | None = Field(description="How code read the run's end.")
+    stopped_at: RunBlockName | None = Field(description="The block that stopped the run, if any.")
+    expected: str = Field(max_length=300, description="What code expects of the kind.")
+    happened: str = Field(
+        max_length=STOP_MESSAGE_LIMIT,
+        description="What code read in the records, which can quote a system's error.",
+    )
+    ran: list[RunBlockName] = Field(max_length=MOST_RUN_BLOCKS)
+    plays: list[ScenarioPlay] = Field(max_length=MOST_RUN_BLOCKS)
+
+
+class ScenarioExplainRequest(WireModel):
+    """A simulation's failed scenarios, for the model to pick why each one failed."""
+
+    model: ModelAccess
+    failed: list[FailedScenario] = Field(min_length=1, max_length=MOST_FAILED)
+    within_seconds: float = Field(gt=0, le=15)
+
+    @model_validator(mode="after")
+    def _each_once(self) -> ScenarioExplainRequest:
+        names = [f.name for f in self.failed]
+        if len(set(names)) != len(names):
+            raise ValueError("Each failed scenario is named once")
+        return self
+
+
+class FailureNote(WireModel):
+    """The picks for one failed scenario. platform-api writes the sentence from them."""
+
+    scenario: str = Field(min_length=1, max_length=SCENARIO_NAME_LIMIT)
+    block: RunBlockName = Field(
+        description="The block the failure is in: one that ran, or where the run stopped."
+    )
+    kind: NoteKind = Field(
+        description="What went wrong there. Code checked the run's facts show it, and sends "
+        "unknown when they don't."
+    )
+    source: RunBlockName | None = Field(
+        description="The block whose play led to it: one the scenario played other than as "
+        "recorded. Or null."
+    )
+    detail: CauseDetail | None = Field(
+        description="One name copied from what happened, in the troubleshooter's shapes. Or null."
+    )
+
+
+class ScenariosExplained(WireModel):
+    kind: Literal["explained"] = "explained"
+    notes: list[FailureNote] = Field(max_length=MOST_FAILED)
+    kept: list[NoteCheck] = Field(
+        max_length=MOST_FAILED,
+        description="Why each note left out was left out. A failure with no note keeps code's "
+        "own words only.",
+    )
+
+
+type ScenarioExplainResult = ScenariosExplained | ModelProblem
+
+scenario_explain_result_adapter: TypeAdapter[ScenarioExplainResult] = TypeAdapter(
+    ScenarioExplainResult
+)
+
+
 # The workflow drafter (ADR 0051): a person's words in, a plan of n8n blocks out.
 
 PLAN_NAME_LIMIT: Final = 80
@@ -1986,5 +2367,11 @@ class AgentApiSchema(WireModel):
     planner_check_part_result: CheckPartResult
     workflow_explain_request: ExplainWordingRequest
     workflow_explain_result: ExplainWordingResult
+    troubleshooter_cause_request: CauseRequest
+    troubleshooter_cause_result: CauseResult
+    scenario_write_request: ScenarioWriteRequest
+    scenario_write_result: ScenarioWriteResult
+    scenario_explain_request: ScenarioExplainRequest
+    scenario_explain_result: ScenarioExplainResult
     workflow_draft_request: WorkflowDraftRequest
     workflow_draft_result: WorkflowDraftResult

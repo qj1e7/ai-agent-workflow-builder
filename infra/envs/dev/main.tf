@@ -394,6 +394,11 @@ locals {
     N8N_BLOCK_FILE_ACCESS_TO_N8N_FILES = "true"
   }
 
+  # How long a read by n8n's own blocks waits on a source for each try, not n8n's 300 s (ADR
+  # 0056). Our image makes n8n read it, for a GET, HEAD or OPTIONS only. The platform's n8n and
+  # the simulation n8n both get it, and platform-api's stop words say it.
+  n8n_request_timeout_seconds = "30"
+
   # More ports each app listens on, reachable only from inside the environment.
   internal_ports = {
     n8n = [5679]
@@ -561,6 +566,7 @@ locals {
           EXECUTIONS_DATA_PRUNE           = "true"
           EXECUTIONS_DATA_MAX_AGE         = "720"
           EXECUTIONS_DATA_SAVE_ON_SUCCESS = "all"
+          WAB_REQUEST_TIMEOUT_SECONDS     = local.n8n_request_timeout_seconds
           WAB_API_URL                     = local.url["platform-api"]
         },
         var.n8n_editor_external ? {

@@ -26,12 +26,11 @@ import { usePagedNeeds } from '../home/usePagedNeeds'
 import { ExplainButton } from '../explain/ExplainButton'
 import { useArrivalScroll } from './arrival'
 import { MadeInN8nSection } from './MadeInN8n'
-import { needsFix } from './n8nChange'
 import { StatusPills } from './Status'
 import { RequestView } from './RequestView'
 import { REQUEST_PARAM } from './requests'
 import { draftItem, FollowingSection } from './Sections'
-import { changeProblem, changeWords, FILTERS, meansOutOfDate, pillOf, pressChange, REFRESH_MS, rowLine, rowsOf, SOFTWARE_PAGE, viewerOf, workflowPath, type Filter, type Row } from './workflow'
+import { changeProblem, changeWords, FILTERS, meansOutOfDate, pressChange, REFRESH_MS, rowLine, rowsOf, viewerOf, workflowPath, type Filter, type Row } from './workflow'
 import styles from './Workflows.module.css'
 
 export const rowLinkId = (useCaseId: string) => `workflow-${useCaseId}`
@@ -67,7 +66,7 @@ export const listClass = (_rows: readonly Row[], extra = ''): string => [styles[
 
 /**
  * One workflow, as the sketch draws it: its name, "Daily 8:00 · last run today, {where it stands}", and one pill. The whole row is one link of 44 px or more.
- * In the chat it opens the workflow in the side panel. The Software watchlist always opens its page.
+ * In the chat it opens the workflow in the side panel.
  */
 export function WorkflowRow({ row, index, arrive, now, nameOf }: RowProps) {
   const { useCase } = row
@@ -84,26 +83,20 @@ export function WorkflowRow({ row, index, arrive, now, nameOf }: RowProps) {
         </span>
       </span>
       <span id={`${ids}-pill`}>
-        <StatusPills state={useCase.state} fact={useCase.last_run ? pillOf(useCase.last_run) : null} fix={needsFix(useCase)} test={useCase.last_run?.test === true} />
+        <StatusPills useCase={useCase} test={useCase.last_run?.test === true} />
       </span>
     </>
   )
   return (
     <li
-      className={[styles['row'], path === SOFTWARE_PAGE ? '' : styles['withExplain'], arrive ? styles['arrive'] : ''].filter(Boolean).join(' ')}
+      className={[styles['row'], styles['withExplain'], arrive ? styles['arrive'] : ''].filter(Boolean).join(' ')}
       style={{ '--i': index } as CSSProperties}
       data-workflow-id={useCase.use_case_id}
       data-paused={useCase.state === 'paused' || undefined}
     >
-      {path === SOFTWARE_PAGE ? (
-        <Link id={rowLinkId(useCase.use_case_id)} to={path} state={FROM_LIST} className={styles['rowLink']} {...link}>
-          {inside}
-        </Link>
-      ) : (
-        <OpenLink item={item} id={rowLinkId(useCase.use_case_id)} to={path} state={FROM_LIST} className={styles['rowLink']} {...link}>
-          {inside}
-        </OpenLink>
-      )}
+      <OpenLink item={item} id={rowLinkId(useCase.use_case_id)} to={path} state={FROM_LIST} className={styles['rowLink']} {...link}>
+        {inside}
+      </OpenLink>
       <ExplainButton useCaseId={useCase.use_case_id} name={useCase.name} />
     </li>
   )

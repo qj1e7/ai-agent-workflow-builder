@@ -524,5 +524,16 @@
   "why_not_send": "Answer 2 questions first",
   "replaced_waiting": false,
   "approval": null,
-  "set_up": null
+  "set_up": null,
+  "simulation": {
+    "state": "waiting",
+    "started_at": null,
+    "case_seconds": 120,
+    "tried": 0,
+    "passed": 0,
+    "cases": [],
+    "not_tried": [],
+    "said": null,
+    "can_try_again": false
+  }
 }

@@ -391,6 +391,28 @@ def picked_by_three(raw: Raw) -> None:
     raw["n8n-nodes-base.jira"]["rows"][0]["by"] = ["resource", "mode"]
 
 
+def a_system_block_no_simulation_stands_in_for(raw: Raw) -> None:
+    """A simulation must know whether a mock stands in for it or its output is pinned (ADR
+    0054)."""
+    del raw["n8n-nodes-base.jira"]["simulated"]
+
+
+def a_shape_with_a_mock(raw: Raw) -> None:
+    raw["n8n-nodes-base.limit"]["simulated"] = {"mock": "github"}
+
+
+def a_mock_nobody_built(raw: Raw) -> None:
+    raw["n8n-nodes-base.microsoftTeams"]["simulated"] = {"mock": "teams"}
+
+
+def a_mock_and_a_pin(raw: Raw) -> None:
+    raw["n8n-nodes-base.github"]["simulated"] = {"mock": "github", "pinned": "Both."}
+
+
+def a_pin_without_why(raw: Raw) -> None:
+    raw["n8n-nodes-base.gmail"]["simulated"] = {"pinned": ""}
+
+
 @pytest.mark.parametrize(
     "change",
     [
@@ -414,6 +436,11 @@ def picked_by_three(raw: Raw) -> None:
         three_approvers,
         a_resource_default_unclassed,
         picked_by_three,
+        a_system_block_no_simulation_stands_in_for,
+        a_shape_with_a_mock,
+        a_mock_nobody_built,
+        a_mock_and_a_pin,
+        a_pin_without_why,
     ],
 )
 def test_the_file_may_not_break_a_safety_rule(change: Callable[[Raw], None], tmp_path: Path):

@@ -1,0 +1,9 @@
+{
+  "kind": "found",
+  "failed_part": [
+    "Read releases"
+  ],
+  "system": "github",
+  "failure_kind": "not_found",
+  "detail": "fastapi/fastapy"
+}

@@ -111,6 +111,7 @@ from platform_api.orchestration.n8n_calls import (
     failure_words,
     refuses_writes,
     rejoin,
+    release_compared,
     run_stopped,
     unknown,
     write_answer,
@@ -905,7 +906,7 @@ class NodeCalls:
                 subject = None if release is None else f"{release_of}@{release}"
                 actions = _recorded(at_sites(bound, self._sites), subject)
                 if release_of is not None:
-                    found |= {"newer": bool(actions), "version": release}
+                    found = release_compared(found, newer=bool(actions), version=release)
                 return Done(Answer((found,)), actions, tuple(events))
 
     async def _request(

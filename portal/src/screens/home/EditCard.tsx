@@ -8,7 +8,6 @@ import { Card } from '../../ui/Card'
 import { cx } from '../../ui/cx'
 import { IconCheck } from '../../ui/icons'
 import { OpenButton } from '../../ui/OpenItem'
-import { WATCHLIST_PATH } from '../software/software'
 import { nextRunAt, undoProblem } from '../workflows/workflow'
 import type { Page } from './AnswerCards'
 import { CardMemoryContext } from './cardMemory'
@@ -229,7 +228,7 @@ export function EditCard({ reply, typed, page, say, now, about }: EditCardProps)
           Watch {view.software}
         </Button>
       ) : view.kind === 'cant' && view.target?.watchlist === true ? (
-        <OpenButton variant={main} item={{ kind: 'watchlist' }} to={WATCHLIST_PATH}>
+        <OpenButton variant={main} item={{ kind: 'watchlist' }} to={`/workflows/${encodeURIComponent(view.target.use_case_id)}`}>
           Open the Watchlist
         </OpenButton>
       ) : view.kind === 'cant' && view.target !== null ? (
@@ -337,7 +336,7 @@ export function EditCard({ reply, typed, page, say, now, about }: EditCardProps)
     ) : phase.kind === 'saved' ? (
       <>
         {chosen.watchlist ? (
-          <ButtonLink to="/software">Change it on the Software page</ButtonLink>
+          <ButtonLink to={`/workflows/${encodeURIComponent(chosen.use_case_id)}`}>Change it on the Software page</ButtonLink>
         ) : (
           <OpenButton item={{ kind: 'workflow', id: chosen.use_case_id }} to={`/workflows/${encodeURIComponent(chosen.use_case_id)}`}>
             Open<span className="visually-hidden"> {chosen.name}</span>

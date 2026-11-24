@@ -6,6 +6,10 @@ resource "azurerm_container_app_environment" "this" {
   logs_destination           = "log-analytics"
   tags                       = var.tags
 
+  # Both stay unset for the platform's environment, which is on Azure's default network.
+  infrastructure_subnet_id       = var.infrastructure_subnet_id
+  internal_load_balancer_enabled = var.internal_load_balancer_enabled
+
   # Every app and job runs on this profile.
   workload_profile {
     name                  = "Consumption"

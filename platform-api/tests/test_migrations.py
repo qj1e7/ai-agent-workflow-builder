@@ -1,4 +1,5 @@
 import json
+from datetime import timedelta
 
 import psycopg
 import pytest
@@ -1403,3 +1404,47 @@ def test_migration_0029_keeps_set_up_approvals_apart_and_a_decline_says_why(
             ).fetchone() == (0,)
         finally:
             upgrade("orchestration", postgres.owner)
+
+
+def test_builder_migration_0025_copies_one_try_for_each_digest_and_keeps_the_drafted_table(
+    postgres: PostgresUrls,
+):
+    """The newest try of each digest is copied. builder.drafted_simulations stays in place,
+    unused, because deleting it waits for the team lead's OK."""
+    drafted = (
+        "INSERT INTO builder.drafted_workflows (drafted_id, owner, created_at, use_case_id)"
+        " VALUES (%s, 'alice', %s, %s)"
+    )
+    tried = (
+        "INSERT INTO builder.drafted_simulations (drafted_id, digest, revision, state,"
+        " started_at, finished_at, said, again) VALUES (%s, %s, 1, 'not_run', %s, %s, %s, true)"
+    )
+    later = NOW + timedelta(minutes=1)
+    with psycopg.connect(postgres.owner, autocommit=True) as conn:
+        try:
+            downgrade("builder", postgres.owner, "0024")
+            conn.execute(drafted, ("dw_copy_a", NOW, "uc_copy_a"))
+            conn.execute(drafted, ("dw_copy_b", NOW, "uc_copy_b"))
+            conn.execute(tried, ("dw_copy_a", "d_shared", NOW, NOW, "older"))
+            conn.execute(tried, ("dw_copy_b", "d_shared", later, later, "newer"))
+            conn.execute(tried, ("dw_copy_a", "d_alone", NOW, NOW, "only"))
+            upgrade("builder", postgres.owner)
+            assert conn.execute(
+                "SELECT digest, said FROM builder.simulations WHERE digest LIKE 'd\\_%'"
+                " ORDER BY digest"
+            ).fetchall() == [("d_alone", "only"), ("d_shared", "newer")]
+            assert conn.execute(
+                "SELECT count(*) FROM builder.drafted_simulations WHERE drafted_id LIKE 'dw_copy_%'"
+            ).fetchone() == (3,), "kept until the team lead says to drop it"
+            downgrade("builder", postgres.owner, "0024")
+            assert conn.execute("SELECT to_regclass('builder.simulations')").fetchone() == (None,)
+            assert conn.execute(
+                "SELECT count(*) FROM builder.drafted_simulations WHERE drafted_id LIKE 'dw_copy_%'"
+            ).fetchone() == (3,)
+        finally:
+            upgrade("builder", postgres.owner)
+            conn.execute("DELETE FROM builder.simulations WHERE digest LIKE 'd\\_%'")
+            conn.execute(
+                "DELETE FROM builder.drafted_simulations WHERE drafted_id LIKE 'dw_copy_%'"
+            )
+            conn.execute("DELETE FROM builder.drafted_workflows WHERE drafted_id LIKE 'dw_copy_%'")

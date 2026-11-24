@@ -740,7 +740,7 @@ def _n8n_touches(flow: Flow, name: str, told: bool, held: bool) -> list[Touch]:
     on, use = row
     quoted = _quote(name)
     spec = KEY_FOR_TYPE.get(block.type)
-    system = spec.said if spec is not None else use.tag.split()[-1]
+    system = spec.said if spec is not None else use.system
     key = None if spec is None else spec.name
     at = _n8n_place(block, use)
     if on == "read":

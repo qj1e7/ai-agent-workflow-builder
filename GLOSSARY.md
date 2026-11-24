@@ -62,7 +62,7 @@ Opening a drafted workflow in your own n8n space, without its keys, to change it
 _Avoid_: Open in n8n (that is a set-up workflow's)
 
 **Set-up approval**:
-An Approver's yes to set up one revision of a drafted workflow, bound to its digest. Any Approver who is not a party decides it: not the person who described it, changed it, answered its questions or sent it. It comes to Teams with a link to its own page, and is in Needs you for each Approver who may decide it (ADR 0051).
+An Approver's yes to set up one revision of a drafted workflow, bound to its digest. Any Approver who is not a party decides it: not the person who described it, changed it, answered its questions or sent it. It comes to Teams with a link to its own page, and is in Needs you for each Approver who may decide it (ADR 0051). The app calls it the one-time check: one line on the drafted workflow's card, which Turn on asks for (ADR 0053). A fix needs one too, whatever its flags, and the person who asked for the fix is a party to it (ADR 0055).
 _Avoid_: Approval (that is a run's yes to a write)
 
 **Workflow report**:
@@ -227,6 +227,42 @@ _Avoid_: Job, execution (n8n uses "execution" for its own internal runs)
 A run an Operator starts by hand to try a workflow. On a workflow that is on, it asks for a yes and writes like any other run. On a draft, it stops at the approval gate: it asks nobody for a yes and writes nothing (ADR 0044).
 _Avoid_: Dry run
 
+**Simulation n8n**:
+A second n8n, on the same pinned image, node pack and guards as the platform's n8n, where a workflow version is tried against mock systems before its test run. It holds only mock keys, has its own database and encryption key, and reaches only the mocks and the simulation gateway (ADR 0054).
+_Avoid_: Test n8n, sandbox
+
+**Simulation gateway**:
+The service our blocks in the simulation n8n call in place of platform-api. It answers them from a scenario: recorded or mock reads, a recorded agent reply, and the scenario's yes or no for Ask for a yes, which asks nobody. It refuses every write and keeps what it would have written, and Tell sends nothing. It holds no real key and no database (ADR 0054).
+_Avoid_: Mock API, fake platform
+
+**Simulated run**:
+One run of one scenario through the simulation gateway. It is kept apart from runs: it is never in Recent runs or the activity log, and never counts as a test run (ADR 0054).
+_Avoid_: Test run, dry run
+
+**Mock setup**:
+The copy of one workflow version in the simulation n8n, which code builds from the node allow list. n8n's own blocks for a system with a mock get a mock key, those with no mock get pinned output and show as not tried, and any block the list doesn't turn on is refused. The copy names no real key (ADR 0054).
+_Avoid_: Test copy, sandbox workflow
+
+**Scenario**:
+One situation a workflow version is tried in during a simulation, as data in a schema code owns: how each block that reads a source is served (recorded, varied, empty, not found or too slow) and what each Agent block answers. There are six kinds: Happy path, Nothing new, Source not found, Timeout, Approver says no, and Odd data. Code picks the kinds that apply, builds one from a template for each, and grades each from the records. The model never grades (ADR 0054).
+_Avoid_: Test case, test
+
+**Scenario writer**:
+The model in the agent runtime that picks how each scenario of a simulation serves a version's blocks, one scenario for each kind that applies. It writes no words and can name only blocks, samples and plays it was offered. Code checks every scenario it writes, and runs its own templates on any refusal or with no model (ADR 0054).
+_Avoid_: Test generator
+
+**Failure note**:
+The explainer's picks for one failed scenario: the block, a kind of failure, the play that led to it and at most one name from what happened. Code checks each pick and writes the one plain sentence people see from it. It helps the reader, and code's grade stays the verdict (ADR 0054).
+_Avoid_: AI verdict, diagnosis
+
+**Recorded sample**:
+An answer from a system, kept only as its allow list says, that a scenario serves or varies. Names, emails, account ids and text people wrote are never kept, and key shapes are masked (ADR 0054).
+_Avoid_: Fixture, test data
+
+**Coverage gap**:
+A block that no scenario of a simulation reached, or a kind of scenario that applies to the version but has none. A pinned block, or one after a write, is not tried, never reached (ADR 0054).
+_Avoid_: Untested block
+
 **Skipped**:
 A run that n8n started while an earlier run of the same workflow was still waiting for a yes. It stops at its first step and does nothing, so Approvers never see two requests for one change. The Portal says "An earlier run is still waiting for a yes."
 
@@ -356,6 +392,46 @@ _Avoid_: Log line, n8n event
 
 **AI troubleshooter**:
 The agent that explains why a run failed and helps the Operator fix it. It answers three questions: what happened, what was affected, and whether a retry is safe.
+
+**Failed part**:
+The blocks the AI troubleshooter names as the cause of a stop, once code confirms that they exist in the version that ran and that the run stopped there (ADR 0055).
+
+**Kind of failure**:
+What stopped a run, as the AI troubleshooter picks it from a fixed list: not found, refused, no answer, wrong value, changed field, permission, limit, or unknown. Code checks the stop shows it, or shows unknown, and writes the cause people see from it, the failed part, the system and one name from the stop (ADR 0055).
+
+**Fix**:
+A new version of a workflow that changes only the failed part, drafted by the Fix drafter and proven by simulation. A person asks for one on a stopped run, and nothing changes until an Approver says yes (ADR 0055).
+
+**Coordinator**:
+The agent that runs one fix, behind the AI troubleshooter's face. It hands work to sub-agents, and its "done" counts for nothing until code agrees. It never writes (ADR 0055).
+
+**Sub-agent**:
+An agent the coordinator hands work to: the AI troubleshooter, the Fix drafter and the Scenario writer. The live activity view shows the Fix drafter and the Scenario writer as Orbs once they are brought in (ADR 0055).
+
+**Hand-off**:
+One piece of work the coordinator gives to one sub-agent, or to the simulation or the platform's check, and what code found of the result. Each one is an activity event on the stopped run (ADR 0055).
+
+**Round**:
+One pass of draft, check and simulate in a fix. A round makes progress only when more scenarios pass than in the round before, and none that passed now fails (ADR 0055).
+
+**Hand back**:
+How a fix ends without a fix: the person gets the cause and what was tried, and the workflow is as it was (ADR 0055).
+
+**Turn back on**:
+What an Operator presses once an Approver said yes to a fix. Code tries the fixed version with the one real test run, which writes nothing, and only then puts it live (ADR 0055).
+_Avoid_: Resume (that is a paused workflow's)
+
+**Scope check**:
+Code's check that a fix's draft changes only the blocks the coordinator asked for, and there only the parameters each block's type lists. It refuses anything else, code, a query, an expression it can't read, and a change that adds a write, a system or a key, moves an Ask for a yes, lets a block go past a failure or changes a person's setting (ADR 0055).
+
+**Kept key**:
+What platform-api puts in a plan where a key stood, before it sends the plan for a fix, so no key's value leaves it. A value counts as a key by its name as well as by its shape (ADR 0055).
+
+**Replay of the stop**:
+The scenario code adds to a fix before its first simulation, built from the stopped run's own facts. For a source that was not found, the place the run read is gone and every other place answers. The stopped version must fail it and the fix must pass it, so a set of happy paths can't prove a fix that fixes nothing (ADR 0055).
+
+**Reached**:
+What a simulated run tried to reach, read from the simulation gateway's record and n8n's run data: a source, an agent card, a change or a place to tell, a mock, or an address. A fix whose run reaches anything the stopped version neither names nor reached widens the change, and so does anything code can't read (ADR 0055).
 
 **Copier**:
 The part of run monitoring that copies each new activity event from PostgreSQL to Cosmos DB. It copies a run's events in order, and only one copier works on a run at a time. PostgreSQL keeps every event, so a copy that stops halfway goes on from the copied mark.

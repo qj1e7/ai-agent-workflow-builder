@@ -14,11 +14,14 @@ import openInN8n from '../../../../contracts/fixtures/builder/use-case.open-in-n
 import undoneUseCase from '../../../../contracts/fixtures/builder/use-case.undone.json'
 import changed from '../../../../contracts/fixtures/builder/versions.json'
 import undone from '../../../../contracts/fixtures/builder/versions.undone.json'
+import simulated from '../../../../contracts/fixtures/builder/drafted.simulated.json'
 import { App } from '../../App'
 import { ApiError, type ApiClient } from '../../api/client'
 import { ApiProvider } from '../../api/context'
 import { createDevSession } from '../../api/session'
-import type { Me, PersonOut, RunView, TroubleshootingOut, UseCaseView, VersionView } from '../../api/types'
+import type { DraftedWorkflowView, Me, PersonOut, RunView, SimulationView, TroubleshootingOut, UseCaseSimulationView, UseCaseView, VersionView, WatchlistView } from '../../api/types'
+import { keys } from '../../api/queries'
+import statuses from '../../../../contracts/fixtures/watchlist/statuses.json'
 import type { LastRun } from './workflow'
 import { formatterFactory } from './workflow'
 import { saveScheduleOptions } from '../../api/workflowQueries'
@@ -35,7 +38,7 @@ const CAROL_LEFT = 'Not running: Carol is no longer on the People list. An Opera
 const WATCHLIST = watchlistUseCase as UseCaseView
 const NOW = new Date('2026-11-04T15:00:00+08:00')
 
-const STOPPED: LastRun = { run_id: 'run_01JB9', state: 'failed', at: '2026-11-04T02:14:00Z', test: false, declined_by: null, decline_reason: null, approved_by: [], proposed: 0, written: 0, tickets: false, you_can_decide: false, retryable: false, reason: 'AgentError', stop: { at: '2026-11-04T02:14:00Z', what_happened: 'An agent could not finish its work.' } }
+const STOPPED: LastRun = { run_id: 'run_01JB9', state: 'failed', at: '2026-11-04T02:14:00Z', test: false, declined_by: null, decline_reason: null, approved_by: [], proposed: 0, written: 0, tickets: false, you_can_decide: false, you_can_open: true, retryable: false, reason: 'AgentError', stop: { at: '2026-11-04T02:14:00Z', what_happened: 'An agent could not finish its work.' } }
 
 interface Setup {
   /** The workflow's last run as the platform answers it, changed from a stopped run. */
@@ -47,9 +50,14 @@ interface Setup {
   readonly advice?: TroubleshootingOut
   /** The versions the platform lists for the workflow at its version. */
   readonly versions?: VersionView[]
+  /** The watchlist as the platform answers it, for the watchlist's own page. */
+  readonly watchlist?: WatchlistView
+  readonly path?: string | undefined
+  /** Its version tried on practice systems, as GET /api/v1/use-cases/{id}/simulation answers it. */
+  readonly simulation?: SimulationView | null
 }
 
-function render({ me = ALICE, useCase: given = AGENTS, runs = [], id, advice, last, versions }: Setup = {}): string {
+function render({ me = ALICE, useCase: given = AGENTS, runs = [], id, advice, last, versions, watchlist, path, simulation }: Setup = {}): string {
   const useCase = last && !(given instanceof Error) ? { ...given, last_run: { ...STOPPED, ...last } } : given
   const session = createDevSession(null)
   const scope = session.cacheScope()
@@ -59,16 +67,21 @@ function render({ me = ALICE, useCase: given = AGENTS, runs = [], id, advice, la
   queryClient.setQueryData(['dev-users'], [ALICE, BOB])
   queryClient.setQueryData(['people', scope], TEAM)
   queryClient.setQueryData(['runs', scope], runs)
+  if (watchlist) queryClient.setQueryData(['watchlist', scope], watchlist)
   const stopped = runs.find((run) => run.use_case_id === useCaseId && run.state === 'failed')
   if (advice && stopped?.state === 'failed') queryClient.setQueryData(['troubleshoot', scope, stopped.run_id, stopped.last_seq], advice)
   const key = ['use-case', scope, useCaseId]
   if (useCase instanceof Error) queryClient.getQueryCache().build(queryClient, { queryKey: key }).setState({ status: 'error', error: useCase, fetchStatus: 'idle' })
   else queryClient.setQueryData(key, useCase)
   if (versions && !(useCase instanceof Error)) queryClient.setQueryData(['versions', scope, useCaseId, useCase.version], versions)
+  if (simulation !== undefined && !(useCase instanceof Error)) {
+    const tried: UseCaseSimulationView = { use_case_id: useCaseId, version: useCase.version, simulation }
+    queryClient.setQueryData(keys.useCaseSimulation(scope, useCaseId), tried)
+  }
   return renderToStaticMarkup(
     <QueryClientProvider client={queryClient}>
       <ApiProvider session={session} platformFetch={fetch} origin="http://portal.test">
-        <MemoryRouter initialEntries={[`/workflows/${useCaseId}`]}>
+        <MemoryRouter initialEntries={[path ?? `/workflows/${useCaseId}`]}>
           <App now={() => NOW} />
         </MemoryRouter>
       </ApiProvider>
@@ -151,7 +164,7 @@ describe('a workflow page', () => {
     expect(whenOf(html)).toBe('Runs only when you press Run now.')
     expect(sectionText(html, 'When'), 'a workflow with no schedule has no next run to give').not.toContain('Next run')
     expect(text(mainOf(html))).toContain('On. Runs only when you press Run now.')
-    expect(sectionText(html, 'Who says yes')).toBe('Any Approver but you, in Teams. Who can’t say yes Nobody says yes to their own work. The workflow’s owner, whoever starts a run and whoever retries it can’t say yes to that run.')
+    expect(sectionText(html, 'Who says yes')).toBe('Any Approver but you, in Teams. Nothing is written until an Approver says yes. Who can’t say yes Nobody says yes to their own work. The workflow’s owner, whoever starts a run and whoever retries it can’t say yes to that run.')
   })
 
   it('keeps the sketch’s short Who says yes line, with the whole own-work rule folded one tap away', () => {
@@ -244,7 +257,7 @@ describe('a workflow page', () => {
     expect(mainOf(html)).toMatch(/_primary_[^>]*>Review and decide/)
   })
 
-  it('orders the page as the sketch does: the sentence, the banner, the line, When, Who says yes, Recent runs, Versions, then the buttons, with no Agents section', () => {
+  it('orders the page as the sketch does: the sentence, the banner, the line, When, Who says yes, Recent runs, then the buttons, with no Agents section', () => {
     const html = mainOf(render({ runs: [{ ...(done as RunView), use_case_id: 'uc_01JD0' }] }))
     const at = (needle: string) => html.indexOf(needle)
     const order = [at('<h1'), at('sentence'), at('data-tone='), at('Check release'), at('>When</h2>'), at('>Who says yes</h2>'), at('>Recent runs</h2>'), at('>Pause<')]
@@ -314,7 +327,7 @@ describe('a workflow page', () => {
 
   it('gives an Approver who may approve and the recent runs, but no manage buttons', () => {
     const html = render({ me: BOB, runs: [{ ...(done as RunView), use_case_id: 'uc_01JD0' }] })
-    expect(sectionText(html, 'Who says yes')).toMatch(/^Any Approver but Alice, in Teams\. Who can’t say yes /)
+    expect(sectionText(html, 'Who says yes')).toMatch(/^Any Approver but Alice, in Teams\. Nothing is written until an Approver says yes\. Who can’t say yes /)
     expect(text(mainOf(html))).toContain('Recent runs')
     expect(mainOf(html)).toContain('href="/runs/run_01JB8"')
     expect(buttons(html).filter((label) => /Run now|Pause|Resume|Delete|More actions/.test(label))).toEqual([])
@@ -365,9 +378,10 @@ describe('a workflow page', () => {
     }
   })
 
-  it('for a run n8n lost, says Lost in the pill and in the banner, never On', () => {
+  it('for a run n8n lost, says Lost in the banner and keeps the pill On, as a lost run is not in Needs you', () => {
     const html = render({ last: { state: 'lost', reason: null } })
-    expect(mainOf(html)).toMatch(/data-tone="bad"[^>]*>.*Lost<\/span>/)
+    expect(mainOf(html)).toMatch(/data-life="on"[^>]*>.*On<\/span>/)
+    expect(mainOf(html)).not.toMatch(/Needs you<\/span>/)
     expect(text(bannerOfHtml(html))).toBe('Lost today at 10:14. Approved, but the run stopped before it could make the change. Nothing was written. Open the run')
     expect(text(mainOf(html))).not.toContain('On. Next run')
   })
@@ -437,7 +451,7 @@ describe('a workflow page', () => {
 
 const CHANGED = { useCase: versionedUseCase as UseCaseView, versions: changed.versions as VersionView[] }
 const UNDONE = { useCase: undoneUseCase as UseCaseView, versions: undone.versions as VersionView[] }
-const versionsOf = (html: string) => text(/<summary[^>]*>Versions<\/summary>([\s\S]*?)<\/details>/.exec(mainOf(html))?.[1] ?? '')
+const versionsOf = (html: string) => text(/<h3[^>]*>Versions<\/h3>([\s\S]*?)<\/section>/.exec(mainOf(html))?.[1] ?? '')
 
 describe('the Versions list', () => {
   it('is not shown while the workflow has one version', () => {
@@ -459,20 +473,48 @@ describe('the Versions list', () => {
     for (const me of [ALICE, BOB]) {
       const html = render({ ...UNDONE, me })
       expect(versionsOf(html)).toContain('Alice changed when it runs from every weekday at 8:00 to every Monday at 8:00.')
-      expect(/<summary[^>]*>Versions<\/summary>[\s\S]*?<\/details>/.exec(mainOf(html))?.[0]).not.toMatch(/<button/)
+      expect(/<h3[^>]*>Versions<\/h3>[\s\S]*?<\/section>/.exec(mainOf(html))?.[0]).not.toMatch(/<button/)
       expect(buttons(html).filter((label) => label.startsWith('Undo'))).toEqual([])
     }
   })
 
-  it('sits after Recent runs and before the buttons, as the sketch orders the page', () => {
+  it('sits after Recent runs and before the buttons, inside Details', () => {
     const html = mainOf(render(CHANGED))
-    const order = ['Recent runs', '>Versions<', '>Pause<'].map((needle) => html.indexOf(needle))
+    const order = ['Recent runs', '>Details<', '>Versions<', '>Pause<'].map((needle) => html.indexOf(needle))
     expect(order.every((place) => place >= 0)).toBe(true)
     expect(order).toEqual([...order].sort((a, b) => a - b))
   })
 
   it('shows the schedule the newest version runs on under When', () => {
     expect(whenOf(render(UNDONE))).toBe('Every weekday at 8:00 Singapore time (SGT).')
+  })
+})
+
+describe('Details on the workflow page', () => {
+  const detailsOf = (html: string) => /<details[^>]*>\s*<summary[^>]*>Details<\/summary>[\s\S]*?<\/details>/.exec(mainOf(html))?.[0] ?? ''
+
+  it('holds Explain and Versions, and nothing the person needs in view', () => {
+    const html = render(CHANGED)
+    const details = detailsOf(html)
+    expect(text(details)).toMatch(/^Details Explain LangGraph release check .*Versions Version 2/)
+    expect(details).not.toMatch(/Pause|Run now|Open in n8n|Delete/)
+    expect(mainOf(html).replace(details, '')).not.toMatch(/\/explain|>Versions</)
+  })
+
+  it('is closed until opened, and is there for an Approver too', () => {
+    for (const me of [ALICE, BOB]) expect(detailsOf(render({ me, ...CHANGED })), me.id).not.toMatch(/<details[^>]*\bopen/)
+  })
+
+  it('leaves out an empty Details: a first version has Explain only, and the banner’s Explain is the one on the page', () => {
+    expect(text(detailsOf(render()))).toBe(`Details Explain ${AGENTS.name}`)
+  })
+
+  it('reads On · last run stopped on the page of an Operator whose work the run is not, as in the list', () => {
+    expect(text(mainOf(render({ last: { you_can_open: false } })))).toContain('On · last run stopped')
+  })
+
+  it('says the one approval rule where the page names who says yes', () => {
+    expect(text(mainOf(render()))).toContain('Who says yes Any Approver but you, in Teams. Nothing is written until an Approver says yes.')
   })
 })
 
@@ -490,21 +532,84 @@ describe('Explain on the workflow page', () => {
       const id = CHANGED.useCase.use_case_id
       const name = CHANGED.useCase.name
       expect(explainLinks(render({ ...CHANGED, me })), me.id).toEqual([
+        [`Explain ${name}`, `/workflows/${id}/explain`],
         [`Explain ${name}, version 2`, `/workflows/${id}/explain?version=2`],
         [`Explain ${name}, version 1`, `/workflows/${id}/explain?version=1`],
-        [`Explain ${name}`, `/workflows/${id}/explain`],
       ])
     }
   })
 })
 
 describe('the Software watchlist', () => {
-  it('has no workflow page of its own, so its address sends the person to the Software page', () => {
-    for (const me of [ALICE, BOB]) {
-      const main = mainOf(render({ me, useCase: WATCHLIST }))
-      expect(main).not.toMatch(/<h1\b/)
-      expect(buttons(main)).toEqual([])
-    }
+  const watched = { ...(statuses as WatchlistView), use_case_id: WATCHLIST.use_case_id }
+  const own = (extra: Partial<UseCaseView> = {}, me: Me = ALICE, path?: string) => render({ me, useCase: { ...WATCHLIST, ...extra }, watchlist: watched, path })
+
+  it('has a workflow page like any other, with its name, one of the four states and the list of its software', () => {
+    const html = own()
+    expect(text(/<h1\b[^>]*>([\s\S]*?)<\/h1>/.exec(html)?.[1] ?? '')).toBe(WATCHLIST.name)
+    expect(text(mainOf(html))).toContain('On')
+    for (const row of watched.software) expect(text(mainOf(html))).toContain(row.name)
+  })
+
+  it('gives an Operator Run now and Pause as any workflow has them, and no Check now and no Delete', () => {
+    const main = mainOf(own())
+    expect(buttons(main)).toContain('Pause')
+    expect(buttons(main)).toContain('Run now')
+    expect(buttons(main)).not.toContain('Check now')
+    expect(buttons(main)).not.toContain('Delete')
+    expect(main).not.toContain('Delete workflow')
+  })
+
+  it('gives Run now the quiet look, since the list is the page and a waiting yes leads it', () => {
+    expect(mainOf(own())).not.toMatch(/<button[^>]*primary[^>]*>(?:<svg[\s\S]*?<\/svg>)?\s*Run now/)
+  })
+
+  it('shows no Run now while the list is empty, and none for a paused watchlist or an Approver', () => {
+    const empty = { ...watched, software: [] }
+    expect(buttons(mainOf(render({ useCase: WATCHLIST, watchlist: empty })))).not.toContain('Run now')
+    expect(buttons(mainOf(own({ state: 'paused' })))).not.toContain('Run now')
+    expect(buttons(mainOf(own({}, BOB)))).not.toContain('Run now')
+  })
+
+  it('says a stopped check once: one Open the run, not a second from the list', () => {
+    const stopped = { ...watched, last_check: { ...statuses.last_check, state: 'failed' as const, run_id: STOPPED.run_id } } as WatchlistView
+    const html = render({ useCase: WATCHLIST, last: {}, watchlist: stopped })
+    expect(text(mainOf(html)).match(/Open the run/g)).toHaveLength(1)
+  })
+
+  it('says the n8n hold once, in the page’s own banner, and not again under the schedule', () => {
+    const held = { ...WATCHLIST, held_in_n8n: { id: 'carol', name: 'Carol', since: '2026-11-04T05:40:00Z' } } as UseCaseView
+    const html = render({ useCase: held, watchlist: watched })
+    expect(html.match(/data-held/g)).toHaveLength(1)
+    expect(text(mainOf(html))).not.toContain('Can’t change it while Carol has it open in n8n.')
+    expect(buttons(mainOf(html))).not.toContain('Change schedule')
+  })
+
+  it('says it is moving to n8n once', () => {
+    const html = render({ useCase: { ...WATCHLIST, moving_to_n8n: true } as UseCaseView, watchlist: { ...watched, moving_to_n8n: true } })
+    expect(text(mainOf(html)).match(/Moving to n8n after this run\./g)).toHaveLength(1)
+  })
+
+  it('keeps the list in one column, with no empty half beside it', () => {
+    expect(own()).not.toMatch(/class="[^"]*pair/)
+  })
+
+  it('gives an Operator Resume while it is paused, once', () => {
+    const resumes = buttons(mainOf(own({ state: 'paused' }, ALICE))).filter((label) => label === 'Resume')
+    expect(resumes).toHaveLength(1)
+  })
+
+  it('keeps adding and removing software on its page', () => {
+    expect(text(mainOf(own()))).toContain('Add software')
+    const row = watched.software[0]!
+    expect(buttons(mainOf(own({}, ALICE, `/workflows/${WATCHLIST.use_case_id}?software=${row.id}`))).some((label) => label.startsWith('Remove from watchlist'))).toBe(true)
+  })
+
+  it('gives an Approver the list and no button', () => {
+    const main = mainOf(own({}, BOB))
+    expect(buttons(main)).not.toContain('Pause')
+    expect(buttons(main)).not.toContain('Add software')
+    expect(text(main)).toContain(watched.software[0]!.name)
   })
 })
 
@@ -517,5 +622,23 @@ describe('a workflow that is not there', () => {
 
   it('offers Try again when the platform had a problem', () => {
     expect(text(mainOf(render({ useCase: new ApiError(503, null) })))).toContain('Try again')
+  })
+})
+
+describe('a draft tried on practice systems (ADR 0054)', () => {
+  const DONE = (simulated as DraftedWorkflowView).simulation as SimulationView
+  const DRAFT: UseCaseView = { ...AGENTS, state: 'draft' }
+
+  it('shows its Check’s result on its page, beside Test run, for whoever reads it', () => {
+    for (const me of [ALICE, BOB]) {
+      const words = text(mainOf(render({ me, useCase: DRAFT, simulation: DONE })))
+      expect(words).toContain('Tried 5 cases on practice systems: 4 passed.')
+      expect(words).toContain('Turn on still runs the real test, which writes nothing.')
+    }
+  })
+
+  it('shows nothing of practice systems once the workflow is on, or when there is nothing to try', () => {
+    expect(text(mainOf(render({ useCase: { ...AGENTS, state: 'on' }, simulation: DONE })))).not.toContain('practice systems')
+    expect(text(mainOf(render({ useCase: DRAFT, simulation: null })))).not.toContain('practice systems')
   })
 })

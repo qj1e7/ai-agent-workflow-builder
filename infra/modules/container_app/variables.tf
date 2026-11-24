@@ -65,7 +65,7 @@ variable "max_replicas" {
 }
 
 variable "ingress" {
-  description = "Whether the app is reachable from the internet, the port it listens on, and which addresses may reach it. Empty allowed_cidrs lets every address in. Otherwise each entry is an Allow rule, and Container Apps refuses every other address."
+  description = "Whether the app is reachable from the internet, the port it listens on, and which addresses may reach it. Empty allowed_cidrs lets every address in. Otherwise each entry is an Allow rule, and Container Apps refuses every other address. transport tcp, with exposed_port, takes plain TCP, such as PostgreSQL's. Unset keeps HTTP."
   type = object({
     external    = bool
     target_port = number
@@ -73,7 +73,14 @@ variable "ingress" {
       name = string
       cidr = string
     })), [])
+    transport    = optional(string)
+    exposed_port = optional(number)
   })
+
+  validation {
+    condition     = var.ingress.transport == null || (var.ingress.transport == "tcp" && var.ingress.exposed_port != null)
+    error_message = "transport is either unset or tcp, and tcp needs exposed_port."
+  }
 
   validation {
     condition     = length(distinct([for rule in var.ingress.allowed_cidrs : rule.name])) == length(var.ingress.allowed_cidrs)

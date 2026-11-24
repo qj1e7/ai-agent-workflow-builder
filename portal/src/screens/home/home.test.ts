@@ -76,6 +76,19 @@ describe('the order of what needs you', () => {
     expect(wordsOf(second, NOW).title).toBe('GitHub can’t find langchain-ai/langserve, the address saved for LangServe.')
   })
 
+  it('lists a workflow that can’t run in Needs you, counts it, and opens what to fix', () => {
+    const fix = { use_case_id: 'uc_fix', use_case_name: 'LangGraph release check', why: 'needs_a_fix' } as const
+    const home = { ...BOB, fixes: [fix], stopped: [STOP], stopped_total: 1 } as HomeOut
+    const needs = needsOf(home)
+    expect(needs.shown.map((need) => need.kind)).toEqual(['stopped', 'approval', 'fix', 'confirmation', 'confirmation'])
+    expect(needs.total).toBe(needsTotal(home))
+    expect(needsTotal(home)).toBe(needsTotal({ ...home, fixes: [] }) + 1)
+    const [row] = needs.shown.filter((need) => need.kind === 'fix') as [Need]
+    expect(groupOf(row)).toBe('now')
+    expect(actionsOf(row)).toEqual([{ kind: 'open', label: 'See what to fix', to: '/workflows/uc_fix/explain' }])
+    expect(wordsOf(row, NOW).title).toBe('LangGraph release check needs a fix')
+  })
+
   it('puts a reply from the team last of Do now, before the Set up group, and counts it', () => {
     const reply = (ALICE.replied as [FollowingUpItem])[0]
     const home: HomeOut = { ...BOB, replied: [reply], stopped: [STOP], stopped_total: 1 }
@@ -557,11 +570,11 @@ describe('a set-up approval waiting for this person’s yes', () => {
     expect(needs.shown).toHaveLength(needs.total)
   })
 
-  it('says <name> needs your yes to set up, and opens its approval page', () => {
+  it('says who asks for a one-time check, in the prototype’s words, and its one button, Check it, opens the approval page', () => {
     const setup = needsOf(WITH_SETUP).shown.find((need) => need.kind === 'setup') as Need
-    expect(wordsOf(setup, NOW).title).toBe('Release check needs your yes to set up')
-    expect(lineOf(setup, NOW)).toEqual({ tone: 'wait', subject: 'Release check', rest: 'needs your yes to set up', short: 'needs your yes' })
-    expect(actionsOf(setup)).toEqual([{ kind: 'open', label: 'Review and decide', to: row?.link }])
+    expect(wordsOf(setup, NOW)).toMatchObject({ tone: 'wait', title: 'Release check', meta: 'Carol asks for a one-time check.' })
+    expect(lineOf(setup, NOW)).toEqual({ tone: 'wait', subject: 'Carol', rest: 'asks for a one-time check of Release check', short: 'asks for a one-time check' })
+    expect(actionsOf(setup)).toEqual([{ kind: 'open', label: 'Check it', to: row?.link }])
     expect(openPathOf(setup)).toBe('/setup-approvals/apr_01JDRAFTRELEASE')
     expect(panelItemOf(setup)).toBeNull()
   })

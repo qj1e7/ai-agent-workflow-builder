@@ -179,7 +179,7 @@ describe('the edit card while it proposes a change', () => {
     const html = draw(watchlist)
     expect(sentence(html)).toBe('From the chat I can add software to the Software watchlist, remove it, or change when the watchlist runs.')
     expect(buttons(html)).toEqual(['Open the Watchlist'])
-    expect(html).toContain('href="/software"')
+    expect(html).toContain('href="/workflows/uc_01JC2"')
   })
 
   it('says a day left out of a schedule plainly', () => {

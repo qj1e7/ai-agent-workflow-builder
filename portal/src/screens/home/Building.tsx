@@ -18,6 +18,7 @@ import { planOf } from '../run/useRunStory'
 import { scheduleShort, type StageTone } from '../run/words'
 import { firstRunWhen } from '../workflows/times'
 import { RUN_NOW_ONLY, runsOnlyByHand } from '../workflows/workflow'
+import { UseCaseSimulation } from '../workflows/UseCaseSimulation'
 import { buildLine, buildStage, draftPill, LINE_STEP_MS, notesOf, replayAt, shownOf, testStatus, testStep, turnOnStep, type BuildStage, type PillTone, type Replay } from './build'
 import { useShowBesideOnWide } from './autoOpen'
 import { PartsList, type Part } from './PartsList'
@@ -109,7 +110,8 @@ interface BuildingProps {
 /**
  * The set-up card once Set up made the workflow as a draft. Its line appears as the build log says the blocks were added, the
  * safety checker's note when it added the yes, then the Tester's test run moves it from its own events. A test asks nobody and
- * writes nothing. Turn it on shows On only once the platform answers that the workflow is on.
+ * writes nothing. Turn it on shows On only once the platform answers that the workflow is on. The version's try on practice
+ * systems shows beside it, and never holds up the test run or Turn on.
  */
 export function Building(props: BuildingProps) {
   const setUp = useSetUp(props.useCaseId)
@@ -275,6 +277,7 @@ export function BuildingCard({ useCaseId, title, parts, newAgents, draftKept, te
           {note}
         </p>
       ))}
+      <UseCaseSimulation useCaseId={useCaseId} />
       {newAgents.length > 0 ? <p className="muted">{newAgents.length === 1 ? `The ${newAgents[0] ?? ''} is saved under How it works, in Settings.` : `${newAgents.join(' and ')} are saved under How it works, in Settings.`}</p> : null}
       {draftKept ? <p className="muted">Your saved draft of this card is still on Workflows. Discard it there.</p> : null}
       {problem && stage.kind !== 'saved' && stage.kind !== 'laying_out' ? (

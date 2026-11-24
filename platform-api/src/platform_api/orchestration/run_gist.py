@@ -12,7 +12,7 @@ from platform_api.orchestration.runs import (
     failed_data,
     state_name,
 )
-from platform_api.shared import Principal, RunId, UseCaseId, UserId
+from platform_api.shared import Principal, Role, RunId, UseCaseId, UserId
 from platform_api.wire import FailureReason, RunOutcome, RunState
 
 if TYPE_CHECKING:
@@ -52,6 +52,8 @@ class RunGist:
     """True when every write counted in `written` or `proposed` is a ticket, and there is one."""
     you_can_decide: bool
     """The asking person may decide the yes this run waits for. False without a person."""
+    you_can_open: bool
+    """The run stopped and is in the asking person's Needs you: an Operator whose work it is."""
     retryable: bool
     """The run stopped and a retry may start it again."""
     reason: FailureReason | None
@@ -75,6 +77,12 @@ def gist_of(detail: RunDetail, viewer: Principal | None) -> RunGist:
         and why_not(detail.approval, detail.decisions, viewer) is None
     )
     failed = state if isinstance(state, Failed) else None
+    can_open = (
+        failed is not None
+        and viewer is not None
+        and Role.OPERATOR in viewer.roles
+        and viewer.user_id in record.parties
+    )
     decisions = sorted(detail.decisions, key=lambda d: d.step_index)
     reasons = (d.reason for d in decisions if d.reason)
     return RunGist(
@@ -90,6 +98,7 @@ def gist_of(detail: RunDetail, viewer: Principal | None) -> RunGist:
         proposed=len(proposed),
         tickets=len(counted) > 0 and all(w.operation == CREATE_TICKET for w in counted),
         you_can_decide=can_decide,
+        you_can_open=can_open,
         retryable=failed is not None and failed.failure.retryable,
         reason=None if failed is None else failed.failure.reason.value,
         outcome=state.outcome.value if isinstance(state, Succeeded) else None,

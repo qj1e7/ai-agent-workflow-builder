@@ -1,20 +1,40 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useErrorWords } from '../../api/context'
-import { useDoneInN8n, useDrafted, useEditInN8n, useSendDrafted, useSetUpAgain } from '../../api/draftedQueries'
+import { useDoneInN8n, useDrafted, useEditInN8n, useSendDrafted, useSetUpAgain, useSimulateAgain } from '../../api/draftedQueries'
 import { pressOnce, useLatch } from '../../api/latch'
-import type { DraftedWorkflowView } from '../../api/types'
+import { useUseCase } from '../../api/queries'
+import type { DraftedWorkflowView, SimulationView, UseCaseState } from '../../api/types'
+import { useHoldTurnOn, useSetUp } from '../../api/workflowQueries'
 import { Button, ButtonAnchor, ButtonLink } from '../../ui/Button'
 import { Card } from '../../ui/Card'
 import { AskTheTeam } from '../home/AskTheTeam'
-import { DraftPill } from '../home/Building'
+import { Building, DraftPill } from '../home/Building'
 import { useAskForChange, useShowRevision } from '../home/ChatProvider'
 import { useMainButton } from '../home/primary'
 import { Report, Words } from '../explain/Report'
 import { RunLine } from '../run/RunLine'
 import { WithN8nLogin } from '../workflows/N8nLoginHint'
 import { workingWords } from '../run/words'
-import { addedWords, approvedWords, CANCELLED_WAITING_WORDS, declinedWords, draftedPill, draftedTitle, flagsWords, inN8nWords, revisionWords, setUpLine, settledWords, stationsOf, WAITING_WORDS } from './drafted'
+import {
+  addedWords,
+  approvedWords,
+  CANCELLED_WAITING_WORDS,
+  checkedOnceWords,
+  declinedWords,
+  draftedPill,
+  draftedTitle,
+  flagsWords,
+  inN8nWords,
+  ONE_TIME_CHECK,
+  revisionWords,
+  setUpLine,
+  settledWords,
+  stationsOf,
+  TURN_ON_NOW,
+  WAITING_FOR_CHECK,
+} from './drafted'
 import { DraftedSettings } from './DraftedSettings'
+import { SimulationResult } from './SimulationResult'
 import styles from './Drafted.module.css'
 
 const TICK_MS = 1000
@@ -34,8 +54,8 @@ function Elapsed({ since }: { since: string | null }) {
   )
 }
 
-function Head({ view, revision }: { view: Pick<DraftedWorkflowView, 'state'> & { in_n8n?: DraftedWorkflowView['in_n8n'] }; revision: number }) {
-  const pill = draftedPill(view.state, view.in_n8n != null)
+function Head({ view, revision, life }: { view: Pick<DraftedWorkflowView, 'state'> & { in_n8n?: DraftedWorkflowView['in_n8n'] }; revision: number; life?: UseCaseState | undefined }) {
+  const pill = draftedPill(view.state, view.in_n8n != null, life)
   return (
     <>
       <span className={styles['revision']}>{revisionWords(revision)}</span>
@@ -44,17 +64,40 @@ function Head({ view, revision }: { view: Pick<DraftedWorkflowView, 'state'> & {
   )
 }
 
-/** Where an approved set-up stands. A set-up refused or given up leaves a draft, which says why, without the approval line. */
-function SetUpLines({ view, approved }: { view: DraftedWorkflowView; approved: boolean }) {
+/** The workflow an approved revision was set up as, once n8n holds it, or null. */
+const setUpAs = (view: DraftedWorkflowView): string | null => (view.state === 'approved' && view.set_up?.state === 'set_up' ? view.set_up.use_case_id : null)
+
+/** Turn on works as on any set-up card once the platform says the workflow it was set up as is a Draft: never while unread or gone. */
+const turnsOnNow = (view: DraftedWorkflowView, life: UseCaseState | undefined): boolean => setUpAs(view) !== null && life === 'draft'
+
+/** The one-time check, one line on the card (ADR 0053, item 3): that it comes before the first run, then who gave it. */
+function CheckLine({ view }: { view: DraftedWorkflowView }) {
+  if (view.state !== 'approved') {
+    return (
+      <p className={styles['said']} data-check>
+        {ONE_TIME_CHECK}
+      </p>
+    )
+  }
+  const by = view.approval?.decided_by ?? null
+  return (
+    <p className={styles['ok']} data-check>
+      {by === null ? approvedWords(view.approval) : checkedOnceWords(by)}
+    </p>
+  )
+}
+
+/** Where an approved set-up stands. A set-up refused or given up leaves a draft, which says why. Once set up, Turn on is next. */
+function SetUpLines({ view, life }: { view: DraftedWorkflowView; life?: UseCaseState | undefined }) {
   const words = useErrorWords()
   const again = useSetUpAgain(view.drafted_id)
   const latch = useLatch()
   const [problem, setProblem] = useState<string | null>(null)
   const line = setUpLine(view.set_up)
+  if (line.kind === 'set_up') return turnsOnNow(view, life) ? <p className={styles['said']}>{TURN_ON_NOW}</p> : null
   return (
     <>
-      {approved ? <p className={styles['ok']}>{approvedWords(view.approval)}</p> : null}
-      <p className={line.kind === 'set_up' ? styles['ok'] : styles['said']}>{line.words}</p>
+      <p className={styles['said']}>{line.words}</p>
       {line.kind === 'failed' ? (
         <p>
           <Button loading={again.isPending} onClick={() => pressOnce(latch, (outcome) => again.mutate(undefined, outcome), { onError: (error) => setProblem(words(error)) })}>
@@ -120,10 +163,11 @@ function EditInN8n({ view, onProblem }: { view: DraftedWorkflowView; onProblem: 
   )
 }
 
-function Foot({ view, onReport, onProblem }: { view: DraftedWorkflowView; onReport: () => void; onProblem: (words: string | null) => void }) {
+function Foot({ view, life, onReport, onProblem }: { view: DraftedWorkflowView; life: UseCaseState | undefined; onReport: () => void; onProblem: (words: string | null) => void }) {
   const main = useMainButton()
   const words = useErrorWords()
   const send = useSendDrafted(view.drafted_id)
+  const holdTurnOn = useHoldTurnOn()
   const latch = useLatch()
   const askForChange = useAskForChange()
   const line = setUpLine(view.set_up)
@@ -152,6 +196,7 @@ function Foot({ view, onReport, onProblem }: { view: DraftedWorkflowView; onRepo
       )
     }
     if (view.can_edit_in_n8n) actions.push(<EditInN8n key="edit" view={view} onProblem={onProblem} />)
+    // Before the one-time check, Turn on sends the revision for its set-up approval (ADR 0051).
     actions.push(
       view.can_send ? (
         <Button
@@ -160,13 +205,21 @@ function Foot({ view, onReport, onProblem }: { view: DraftedWorkflowView; onRepo
           loading={send.isPending}
           onClick={() => pressOnce(latch, (outcome) => send.mutate(view.revision, outcome), { onSuccess: () => onProblem(null), onError: (error) => onProblem(words(error)) })}
         >
-          Send for approval
+          Turn on
         </Button>
       ) : view.why_not_send ? (
         <span key="why" className={styles['stand']}>
           {view.why_not_send}
         </span>
       ) : null,
+    )
+  }
+  const setUpId = setUpAs(view)
+  if (setUpId !== null && turnsOnNow(view, life)) {
+    actions.push(
+      <Button key="turn-on" variant={main} onClick={() => holdTurnOn(setUpId)}>
+        Turn on
+      </Button>,
     )
   }
   if (open !== null) {
@@ -179,21 +232,37 @@ function Foot({ view, onReport, onProblem }: { view: DraftedWorkflowView; onRepo
   return <>{actions}</>
 }
 
+/** The newest revision tried on practice systems. Try again asks for this revision, so a newer one is never tried by it. */
+function DraftedSimulation({ view, simulation }: { view: DraftedWorkflowView; simulation: SimulationView }) {
+  const again = useSimulateAgain(view.drafted_id)
+  return <SimulationResult simulation={simulation} tryAgain={{ pending: again.isPending, press: (outcome) => again.mutate(view.revision, outcome) }} />
+}
+
 /** A revision that has been read: the step line, In short, what was added, the flags, and where it stands. */
 function Revision({ view }: { view: DraftedWorkflowView }) {
   const [shown, setShown] = useState(false)
   const [problem, setProblem] = useState<string | null>(null)
+  const setUpId = setUpAs(view)
+  const life = useUseCase(setUpId ?? '', setUpId !== null).data?.state
+  const pressed = useSetUp(setUpId ?? '') !== undefined
+  if (setUpId !== null && pressed) return <Building useCaseId={setUpId} title={draftedTitle(view)} parts={[]} newAgents={[]} draftKept={false} />
   const report = view.report
   const stations = stationsOf(view.blocks)
   const added = report ? addedWords(report.fixed.length) : null
   return (
-    <Card title={draftedTitle(view)} pill={<Head view={view} revision={view.revision} />} status={inN8nWords(view) ?? undefined} actions={<Foot view={view} onReport={() => setShown((was) => !was)} onProblem={setProblem} />}>
+    <Card
+      title={draftedTitle(view)}
+      pill={<Head view={view} revision={view.revision} life={life} />}
+      status={inN8nWords(view) ?? undefined}
+      actions={<Foot view={view} life={life} onReport={() => setShown((was) => !was)} onProblem={setProblem} />}
+    >
       {stations.length > 0 ? <RunLine stations={stations} arrivedLive={null} settled={null} small /> : null}
       {report ? (
         <p className={styles['said']} data-in-short>
           <Words segments={report.in_short} />
         </p>
       ) : null}
+      {view.simulation ? <DraftedSimulation view={view} simulation={view.simulation} /> : null}
       {added ? <p className={styles['note']}>{added}</p> : null}
       {view.flags > 0 ? (
         <p className={styles['said']}>
@@ -203,10 +272,11 @@ function Revision({ view }: { view: DraftedWorkflowView }) {
           </button>
         </p>
       ) : null}
+      <CheckLine view={view} />
       {view.replaced_waiting ? <p className={styles['note']}>{CANCELLED_WAITING_WORDS}</p> : null}
-      {view.state === 'waiting' ? <p className={styles['note']}>{WAITING_WORDS}</p> : null}
-      {view.state === 'approved' ? <SetUpLines view={view} approved /> : null}
-      {view.state === 'draft' && view.set_up !== null ? <SetUpLines view={view} approved={false} /> : null}
+      {view.state === 'waiting' ? <p className={styles['note']}>{WAITING_FOR_CHECK}</p> : null}
+      {view.state === 'approved' ? <SetUpLines view={view} life={life} /> : null}
+      {view.state === 'draft' && view.set_up !== null ? <SetUpLines view={view} /> : null}
       {view.state === 'draft' && view.notes.length > 0 ? (
         <ul className={styles['notes']} data-n8n-notes>
           {view.notes.map((note) => (

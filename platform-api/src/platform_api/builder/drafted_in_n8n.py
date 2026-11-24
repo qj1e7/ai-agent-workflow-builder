@@ -17,6 +17,9 @@ count comes back as words for the card, never dropped silently.
 What a plan can't hold, such as a block set to go on past a failure or a link other than n8n's
 main one, comes back as words, so nothing done in n8n is dropped.
 
+`read_back_any` reads any workflow in n8n the same way, with no plan of it before, for the Fix
+drafter (ADR 0055), and keeps every key out of the plan.
+
 Pure."""
 
 from collections.abc import Mapping, Sequence
@@ -36,8 +39,10 @@ from platform_api.builder.drafted_settings import (
     placeholders,
     put_at,
 )
+from platform_api.builder.kept_keys import KeptPlace, keys_kept_out
 from platform_api.builder.n8n_draft import BRANCH_EXITS
 from platform_api.builder.versions import schedule_of
+from platform_api.builder.workflow_report import KEY_SHAPE
 from platform_api.orchestration import (
     ASK_EXITS,
     TYPE_OF,
@@ -70,11 +75,69 @@ class ReadBack:
     """The settings the person filled by typing in n8n."""
     notes: tuple[str, ...] = ()
     """What came back from n8n that didn't count, in words for the card."""
+    kept: tuple[KeptPlace, ...] = ()
+    """Where a key stood, for `read_back_any`: the plan holds `KEPT` there."""
 
 
 @dataclass(frozen=True)
 class NotReadBack:
     words: str
+
+
+def read_back_any(
+    document: Mapping[str, Any], facts: DrafterFacts, time_zone: str
+) -> ReadBack | NotReadBack:
+    """Any workflow in n8n as a plan the Fix drafter takes as its current one (ADR 0055): one
+    from our blocks, one made in n8n, or a drafted one as it was laid out. Nothing says how it
+    was planned, so each place and each schedule becomes a setting, filled when what is written
+    there passes the same check as in the chat, and needed when it doesn't. What the platform
+    adds to every layout is left out, as for Edit in n8n, and so is every key: `keys_kept_out`
+    puts the platform's stand-in where one stood. A drafted workflow's own revision is the better
+    plan, as it keeps its settings' marks, so it goes through `keys_kept_out` alone. What a plan
+    can't hold comes back as words, as for Edit in n8n."""
+    nodes = document.get("nodes")
+    connections = document.get("connections")
+    if not isinstance(nodes, list) or not isinstance(connections, dict):
+        return NotReadBack(NOT_A_WORKFLOW)
+    kept = [
+        cast(dict[str, Any], n)
+        for n in cast(list[object], nodes)
+        if isinstance(n, dict) and cast(dict[str, Any], n).get("type") not in LAID_OUT
+    ]
+    if (problem := _unheld(kept, cast(dict[str, Any], connections))) is not None:
+        return NotReadBack(problem)
+    if not kept:
+        return NotReadBack(NO_BLOCKS)
+    if any(KEY_SHAPE.search(str(n["name"])) for n in kept):
+        return NotReadBack("A block's name holds a key, so nothing was read. Rename it in n8n.")
+    names = [str(n["name"]) for n in kept]
+    if twice := next((name for name in names if names.count(name) > 1), None):
+        return NotReadBack(f"Two blocks in n8n are named “{twice}”, so nothing was read.")
+    blocks = {
+        str(n["name"]): PlanBlock(
+            name=str(n["name"]),
+            type=str(n["type"]),
+            version=float(n.get("typeVersion") or 1),
+            parameters=deepcopy(cast(dict[str, Any], n.get("parameters") or {})),
+        )
+        for n in kept
+    }
+    if held := placeholders(blocks.values()):
+        block, _path, setting_id = held[0]
+        return NotReadBack(f"“{block}” holds <<{setting_id}>>, which nothing fills.")
+    schedule = schedule_of(document, time_zone)
+    run_time = None if schedule is None else f"{schedule.day} {schedule.at}"
+    name = str(document.get("name") or "Workflow")
+    notes = [NAME_CUT] if len(name) > NAME_LIMIT else []
+    plan = WorkflowPlan(
+        name=name[:NAME_LIMIT],
+        blocks=list(blocks.values()),
+        wires=_wires(cast(dict[str, Any], connections), blocks),
+        settings=[],
+    )
+    read = _with_places_typed(plan, {}, facts, None, run_time, notes)
+    out = keys_kept_out(read.plan)
+    return ReadBack(out.plan, read.sources, read.notes, out.kept)
 
 
 def read_back(
@@ -367,7 +430,7 @@ def _with_places_typed(
     plan: WorkflowPlan,
     sources: dict[str, Source],
     facts: DrafterFacts,
-    by: UserId,
+    by: UserId | None,
     run_time: str | None,
     notes: list[str],
 ) -> ReadBack:

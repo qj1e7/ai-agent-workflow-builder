@@ -619,6 +619,67 @@ class ExecutionRecord:
     ran: Mapping[str, str] = field(default_factory=dict[str, str])
     """Each block n8n ran, with the status of its last try, such as success or error. Read
     only with the execution's data."""
+    failed_block: Mapping[str, Any] | None = None
+    """The block whose error ended the execution, as the execution ran it: its type, parameters
+    and retry settings. Read only with the execution's data."""
+    nodes: Mapping[str, NodeRun] = field(default_factory=dict[str, "NodeRun"])
+    """Each block's tries, from the run data, also those of a block that went on past its
+    failure. Read only with the execution's data."""
+
+
+@dataclass(frozen=True)
+class NodeError:
+    """One error a block's try holds, and the HTTP status it came with, if any: then an answer
+    came from where the block called."""
+
+    text: str
+    answer: str | None = None
+
+
+@dataclass(frozen=True)
+class NodeRun:
+    """One block's tries, as n8n's run data holds them."""
+
+    status: str | None
+    """The status of its last try, such as success or error."""
+    errors: tuple[NodeError, ...] = ()
+    """Every error its tries hold: their own, and each one an item it passed on carries, as a
+    block with continueOnFail or onError passes its error on. An item's error came with no
+    answer the record keeps."""
+
+
+def _http_status(code: object) -> str | None:
+    """An HTTP status, only when n8n's httpCode is a three-digit number. n8n puts a Node error
+    code there too, such as ECONNREFUSED, when nothing answered, and that is no answer."""
+    if isinstance(code, bool) or not isinstance(code, str | int):
+        return None
+    text = str(code)
+    return text if len(text) == 3 and text.isascii() and text.isdigit() else None
+
+
+def node_runs(run_data: object) -> dict[str, NodeRun]:
+    """Each block's tries from n8n's `resultData.runData`."""
+    runs: dict[str, NodeRun] = {}
+    for name, tries in _fields(run_data).items():
+        listed = [_fields(t) for t in cast(list[object], tries)] if isinstance(tries, list) else []
+        status = listed[-1].get("executionStatus") if listed else None
+        errors: list[NodeError] = []
+        for given in listed:
+            failed = _fields(given.get("error"))
+            answer = _http_status(failed.get("httpCode"))
+            for key in ("message", "description"):
+                if isinstance(said := failed.get(key), str) and said.strip():
+                    errors.append(NodeError(said, answer))
+            for output in cast(list[object], _at(given, "data", "main") or []):
+                for item in cast(list[object], output) if isinstance(output, list) else []:
+                    said = _at(item, "json", "error")
+                    if not isinstance(said, str):
+                        said = _fields(said).get("message")
+                    if isinstance(said, str) and said.strip():
+                        errors.append(NodeError(said))
+        kept = tuple(dict.fromkeys(errors))
+        runs[name] = NodeRun(status if isinstance(status, str) else None, kept)
+    return runs
 
 
 @dataclass(frozen=True)
@@ -925,7 +986,20 @@ def _record_of(execution: _ExecutionOut) -> ExecutionRecord:
         node if isinstance(node, str) else None,
         error if isinstance(error, str) else None,
         _ran(execution),
+        _failed_block(execution),
+        node_runs(_at(execution.data, *result, "runData")),
     )
+
+
+def _failed_block(execution: _ExecutionOut) -> dict[str, Any] | None:
+    """The block n8n's error names, from the workflow the execution ran, or as the error itself
+    holds it when the record has no workflow."""
+    failed = _fields(_at(execution.data, "resultData", "error", "node"))
+    name = failed.get("name")
+    if not isinstance(name, str):
+        return None
+    ran = [n for n in _nodes(execution.workflow_data or {}) if n.get("name") == name]
+    return dict(ran[0]) if ran else dict(failed)
 
 
 def _ran(execution: _ExecutionOut) -> dict[str, str]:
@@ -1299,6 +1373,11 @@ class N8nApi:
             for p in _parse(_Rest[list[_ProjectOut]], response).data
         ]
 
+    async def personal_project(self) -> str:
+        """/rest: the signed-in owner's own project, where its API key makes keys and workflows."""
+        response = _expect(await self._rest("GET", "/projects/personal"))
+        return _parse(_Rest[_ProjectOut], response).data.id
+
     async def invite(self, email: str) -> Invited | None:
         """A member account with this email, through the public API, which answers its invite
         link on the free edition (P7 Q9). None when n8n made none, as when it already has an
@@ -1398,6 +1477,12 @@ def _facts(record: ExecutionRecord) -> ExecutionFacts:
     retry_of = None if record.retry_of is None else N8nExecutionId(record.retry_of)
     return ExecutionFacts(
         record.workflow_id, record.mode, retry_of, record.start_nonce, record.version_id
+    )
+
+
+def _failed(execution_id: N8nExecutionId, record: ExecutionRecord) -> FailedExecution:
+    return FailedExecution(
+        execution_id, _facts(record), record.failed_node, record.error, record.failed_block
     )
 
 
@@ -1759,7 +1844,7 @@ class N8nWorkflows:
             return None
         if record.status == "success":
             return Finished(execution_id)
-        return FailedExecution(execution_id, _facts(record), record.failed_node, record.error)
+        return _failed(execution_id, record)
 
     async def failure(self, execution_id: N8nExecutionId) -> FailedExecution | TryLater | None:
         """The block that failed and n8n's words for it, from n8n's own record. None unless n8n
@@ -1771,4 +1856,4 @@ class N8nWorkflows:
             return N8N_UNREADABLE
         if record is None or record.status != "error":
             return None
-        return FailedExecution(execution_id, _facts(record), record.failed_node, record.error)
+        return _failed(execution_id, record)

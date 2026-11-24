@@ -3,9 +3,17 @@ from datetime import date, datetime
 from typing import Annotated, Any, Final, Literal, Protocol, Self
 
 import httpx
-from pydantic import Field, StringConstraints, TypeAdapter, field_validator, model_validator
+from pydantic import (
+    AwareDatetime,
+    Field,
+    JsonValue,
+    StringConstraints,
+    TypeAdapter,
+    field_validator,
+    model_validator,
+)
 
-from platform_api.monitoring import AgentEvent
+from platform_api.monitoring import AgentEvent, CauseSystem, FailureKind
 from platform_api.orchestration.schedule import AT_PATTERN, Day
 from platform_api.wire import MavenCoordinate, NpmPackage, RepoName, SourceKind, WireModel
 
@@ -574,6 +582,8 @@ class NeedsYouFact(WireModel):
     replies: int = Field(ge=0)
     declined: int = Field(ge=0)
     questions: int = Field(ge=0)
+    fixes: int = Field(default=0, ge=0)
+    setups: int = Field(default=0, ge=0)
     total: int = Field(ge=0)
 
 
@@ -615,6 +625,11 @@ class TurnTrace(WireModel):
     person: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
 
 
+type PlatformReady = Literal["workflows.simulate"]
+"""A planned capability the platform turns on where it has what it needs, as Simulation mode
+where there is a simulation n8n (ADR 0054)."""
+
+
 class AnswerRequest(WireModel):
     task: str
     model: ModelAccess
@@ -622,6 +637,7 @@ class AnswerRequest(WireModel):
     facts: PlannerFacts | None = None
     previous: PreviousTurn | None = None
     changes_workflows: bool = True
+    ready_here: list[PlatformReady] = Field(default_factory=list[PlatformReady])
 
 
 type CantNeed = Literal["new_tool", "new_system"]
@@ -956,6 +972,216 @@ explain_wording_result_adapter: TypeAdapter[ExplainWordingResult] = TypeAdapter(
 )
 
 
+# The AI troubleshooter's model version (ADR 0032, ADR 0055 section 10): the runtime's
+# POST /v1/troubleshooter/cause, as this side reads it. The runtime answers in fields, never words.
+
+STOP_MESSAGE_LIMIT: Final = 2000
+EVENT_SUMMARY_LIMIT: Final = 400
+MOST_EVENTS: Final = 80
+RUN_BLOCK_NAME_LIMIT: Final = 200
+MOST_RUN_BLOCKS: Final = 100
+
+type RunBlockName = Annotated[str, Field(min_length=1, max_length=RUN_BLOCK_NAME_LIMIT)]
+type CauseDetail = Annotated[
+    str, StringConstraints(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9][A-Za-z0-9_./-]*$")
+]
+type CauseCheck = Literal[
+    "call", "not_a_block", "not_where_it_stopped", "not_a_system", "not_a_detail"
+]
+
+
+class StoppedRun(WireModel):
+    stage: str = Field(max_length=40)
+    reason: str = Field(max_length=40)
+    retryable: bool
+    message: str = Field(max_length=STOP_MESSAGE_LIMIT)
+
+
+class CauseRequest(WireModel):
+    model: ModelAccess
+    stop: StoppedRun
+    events: list[Annotated[str, Field(max_length=EVENT_SUMMARY_LIMIT)]] = Field(
+        max_length=MOST_EVENTS
+    )
+    blocks: list[RunBlockName] = Field(min_length=1, max_length=MOST_RUN_BLOCKS)
+    stopped_at: list[RunBlockName] = Field(min_length=1, max_length=MOST_RUN_BLOCKS)
+    within_seconds: float = Field(gt=0, le=10)
+
+    @model_validator(mode="after")
+    def _stopped_in_the_version(self) -> Self:
+        if not set(self.stopped_at) <= set(self.blocks):
+            raise ValueError("Every block in stopped_at must be one of blocks")
+        return self
+
+
+class CauseFound(WireModel):
+    kind: Literal["found"] = "found"
+    failed_part: list[RunBlockName] = Field(min_length=1, max_length=MOST_RUN_BLOCKS)
+    system: CauseSystem | None
+    failure_kind: FailureKind
+    detail: CauseDetail | None
+
+
+class CauseKept(WireModel):
+    kind: Literal["kept"] = "kept"
+    why: CauseCheck
+
+
+type CauseResult = CauseFound | CauseKept | ModelProblem
+
+cause_result_adapter: TypeAdapter[CauseResult] = TypeAdapter(CauseResult)
+
+
+# Simulation mode (ADR 0054, section 5): the runtime's POST /v1/simulation/scenarios and
+# POST /v1/simulation/explain, as this side reads them. Both answer in picks, never words.
+
+type ScenarioKind = Literal[
+    "happy_path", "nothing_new", "source_not_found", "timeout", "approver_says_no", "odd_data"
+]
+type ScenarioServe = Literal["recorded", "varied", "empty", "not_found", "too_slow"]
+type ScenarioVariation = Literal["suffix", "empty_field", "long_text"]
+type ScenarioRole = Literal[
+    "start", "read", "agent", "propose", "ask", "write", "tell", "notice", "idle", "other"
+]
+type SampleAnswer = Literal["github.release", "read.release", "read.page", "jira.issue"]
+type ScenarioEnding = Literal[
+    "reached_yes",
+    "finished",
+    "nothing_new",
+    "declined",
+    "no_answer",
+    "stopped",
+    "failed",
+    "wrong_write",
+    "did_not_end",
+]
+type SampleId = Annotated[
+    str, StringConstraints(min_length=1, max_length=60, pattern=r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
+]
+type ScenarioCheck = Literal[
+    "call", "too_big", "key_shape", "not_the_kinds", "not_a_read", "not_a_sample", "not_an_agent"
+]
+type NoteKind = Literal["stopped", "went_on", "ended_early", "changes", "no_end", "unknown"]
+type NoteCheck = Literal[
+    "call",
+    "too_big",
+    "key_shape",
+    "not_a_scenario",
+    "twice",
+    "not_a_block",
+    "not_a_play",
+    "not_a_detail",
+]
+MOST_SAMPLES: Final = 20
+MOST_SAMPLE_ITEMS: Final = 3
+MOST_FAILED: Final = 20
+SCENARIO_NAME_LIMIT: Final = 80
+
+
+class ScenarioBlock(WireModel):
+    name: RunBlockName
+    role: ScenarioRole
+    answer: SampleAnswer | None = None
+    plays: list[ScenarioServe] = Field(default_factory=list[ScenarioServe], max_length=5)
+    varies: list[ScenarioVariation] = Field(default_factory=list[ScenarioVariation], max_length=3)
+
+
+class ScenarioSample(WireModel):
+    id: SampleId
+    answer: SampleAnswer
+    block: RunBlockName | None = None
+    items: list[dict[str, JsonValue]] = Field(max_length=MOST_SAMPLE_ITEMS)
+
+
+class ScenarioWriteRequest(WireModel):
+    model: ModelAccess
+    blocks: list[ScenarioBlock] = Field(min_length=1, max_length=MOST_RUN_BLOCKS)
+    kinds: list[ScenarioKind] = Field(min_length=1, max_length=6)
+    samples: list[ScenarioSample] = Field(
+        default_factory=list[ScenarioSample], max_length=MOST_SAMPLES
+    )
+    within_seconds: float = Field(gt=0, le=30)
+
+
+class WrittenRead(WireModel):
+    block: RunBlockName
+    serve: ScenarioServe
+    sample: SampleId | None = None
+    vary: list[ScenarioVariation] = Field(default_factory=list[ScenarioVariation], max_length=3)
+
+
+class WrittenScenario(WireModel):
+    kind: ScenarioKind
+    reads: list[WrittenRead] = Field(default_factory=list[WrittenRead], max_length=MOST_RUN_BLOCKS)
+    slow_agents: list[RunBlockName] = Field(default_factory=list[str], max_length=MOST_RUN_BLOCKS)
+
+
+class ScenariosWritten(WireModel):
+    kind: Literal["written"] = "written"
+    scenarios: list[WrittenScenario] = Field(min_length=1, max_length=6)
+
+
+class ScenariosKept(WireModel):
+    kind: Literal["kept"] = "kept"
+    why: ScenarioCheck
+
+
+type ScenarioWriteResult = ScenariosWritten | ScenariosKept | ModelProblem
+
+scenario_write_result_adapter: TypeAdapter[ScenarioWriteResult] = TypeAdapter(ScenarioWriteResult)
+
+
+class ScenarioPlay(WireModel):
+    block: RunBlockName
+    serve: ScenarioServe
+    vary: list[ScenarioVariation] = Field(default_factory=list[ScenarioVariation], max_length=3)
+
+
+class FailedScenario(WireModel):
+    name: str = Field(min_length=1, max_length=SCENARIO_NAME_LIMIT)
+    kind: ScenarioKind
+    ending: ScenarioEnding | None
+    stopped_at: RunBlockName | None
+    expected: str = Field(max_length=300)
+    happened: str = Field(max_length=STOP_MESSAGE_LIMIT)
+    ran: list[RunBlockName] = Field(max_length=MOST_RUN_BLOCKS)
+    plays: list[ScenarioPlay] = Field(max_length=MOST_RUN_BLOCKS)
+
+
+class ScenarioExplainRequest(WireModel):
+    model: ModelAccess
+    failed: list[FailedScenario] = Field(min_length=1, max_length=MOST_FAILED)
+    within_seconds: float = Field(gt=0, le=15)
+
+    @model_validator(mode="after")
+    def _each_once(self) -> Self:
+        names = [f.name for f in self.failed]
+        if len(set(names)) != len(names):
+            raise ValueError("Each failed scenario is named once")
+        return self
+
+
+class FailureNote(WireModel):
+    scenario: str = Field(min_length=1, max_length=SCENARIO_NAME_LIMIT)
+    block: RunBlockName
+    kind: NoteKind
+    source: RunBlockName | None
+    detail: CauseDetail | None
+
+
+class ScenariosExplained(WireModel):
+    kind: Literal["explained"] = "explained"
+    notes: list[FailureNote] = Field(max_length=MOST_FAILED)
+    kept: list[NoteCheck] = Field(max_length=MOST_FAILED)
+
+
+type ScenarioExplainResult = ScenariosExplained | ModelProblem
+
+scenario_explain_result_adapter: TypeAdapter[ScenarioExplainResult] = TypeAdapter(
+    ScenarioExplainResult
+)
+
+
 # The workflow drafter (ADR 0051): the runtime's POST /v1/workflows/draft, as this side reads it.
 
 type SettingKind = Literal[
@@ -1063,6 +1289,45 @@ type WorkflowDraftResult = Annotated[
 workflow_draft_result_adapter: TypeAdapter[WorkflowDraftResult] = TypeAdapter(WorkflowDraftResult)
 
 
+# Fix it for me (ADR 0055, PR 6): the runtime's POST /v1/fixes, as this side sends it.
+# platform-api wrote the fix's start and minted its token first. The runtime answers at once.
+
+type FixIdText = Annotated[str, StringConstraints(pattern=r"^fix_[0-9A-Za-z]{1,40}$")]
+
+
+class FixAsked(WireModel):
+    """One press of Fix it for me, as the coordinator takes it."""
+
+    fix_id: FixIdText
+    asked_by: str = Field(min_length=1)
+    asked_by_name: str = Field(min_length=1, max_length=80)
+    ends_by: AwareDatetime
+    stop: StoppedRun
+    version: WorkflowPlan = Field(description="The stopped version, with each key kept out.")
+    stopped_at: list[RunBlockName] = Field(min_length=1)
+
+
+class FixStartRequest(WireModel):
+    run_id: str
+    request: FixAsked
+    events: list[Annotated[str, Field(max_length=EVENT_SUMMARY_LIMIT)]] = Field(
+        max_length=MOST_EVENTS
+    )
+    facts: DrafterFacts
+    model: ModelAccess
+    platform_url: str
+    token: str
+
+
+class FixAccepted(WireModel):
+    fix_id: FixIdText
+    started: bool
+
+
+fix_accepted_adapter: TypeAdapter[FixAccepted] = TypeAdapter(FixAccepted)
+FIX_START_WAIT_SECONDS: Final = 10.0
+
+
 class AgentCard(WireModel):
     id: str
     display: str
@@ -1096,6 +1361,8 @@ AGENT_TIMEOUT_SECONDS = 60.0
 RUNTIME_SMOOTHS_IN_SECONDS = 8.0
 RUNTIME_VERIFIES_IN_SECONDS = 8.0
 EXPLAIN_WAIT_SECONDS = RUNTIME_SMOOTHS_IN_SECONDS + RUNTIME_VERIFIES_IN_SECONDS + 4.0
+RUNTIME_ANSWERS_IN_SECONDS = 1.0
+"""Past the time a cause request gives the runtime, for its answer to come back."""
 DRAFT_WAIT_SECONDS = 200.0
 """The drafter stops itself at 170 seconds (ADR 0051, amended for step 5), with room to answer."""
 
@@ -1176,11 +1443,48 @@ class HttpAgentRuntime:
             EXPLAIN_WAIT_SECONDS,
         )
 
+    async def find_cause(
+        self, request: CauseRequest
+    ) -> CauseResult | AgentUnavailable | AgentRejected:
+        return await self._model_call(
+            "/v1/troubleshooter/cause",
+            request,
+            cause_result_adapter,
+            request.within_seconds + RUNTIME_ANSWERS_IN_SECONDS,
+        )
+
+    async def write_scenarios(
+        self, request: ScenarioWriteRequest
+    ) -> ScenarioWriteResult | AgentUnavailable | AgentRejected:
+        return await self._model_call(
+            "/v1/simulation/scenarios",
+            request,
+            scenario_write_result_adapter,
+            request.within_seconds + RUNTIME_ANSWERS_IN_SECONDS,
+        )
+
+    async def explain_scenarios(
+        self, request: ScenarioExplainRequest
+    ) -> ScenarioExplainResult | AgentUnavailable | AgentRejected:
+        return await self._model_call(
+            "/v1/simulation/explain",
+            request,
+            scenario_explain_result_adapter,
+            request.within_seconds + RUNTIME_ANSWERS_IN_SECONDS,
+        )
+
     async def draft_workflow(
         self, request: WorkflowDraftRequest
     ) -> WorkflowDraftResult | AgentUnavailable | AgentRejected:
         return await self._model_call(
             "/v1/workflows/draft", request, workflow_draft_result_adapter, DRAFT_WAIT_SECONDS
+        )
+
+    async def start_fix(
+        self, request: FixStartRequest
+    ) -> FixAccepted | AgentUnavailable | AgentRejected:
+        return await self._model_call(
+            "/v1/fixes", request, fix_accepted_adapter, FIX_START_WAIT_SECONDS
         )
 
     async def capabilities(self) -> CapabilityList | AgentUnavailable | AgentRejected:

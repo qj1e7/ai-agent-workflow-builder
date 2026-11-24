@@ -83,7 +83,12 @@ from platform_api.orchestration.dispatch import (
 )
 from platform_api.orchestration.n8n_calls import StartKind
 from platform_api.orchestration.n8n_starts import RunStarts
-from platform_api.orchestration.person_runs import PersonRuns, runs_of
+from platform_api.orchestration.person_runs import (
+    NeedsYouReason,
+    PersonRuns,
+    runs_of,
+    workflows_needing_you,
+)
 from platform_api.orchestration.questions import (
     Answer,
     AnswerRefusal,
@@ -1321,6 +1326,9 @@ class Orchestrator:
             ),
             page.total,
         )
+
+    async def needing_you(self, viewer: Principal) -> dict[UseCaseId, NeedsYouReason]:
+        return workflows_needing_you(await self.runs_for(viewer))
 
     async def runs_for(self, viewer: Principal) -> PersonRuns:
         async with self._db.transaction("orchestration") as uow:

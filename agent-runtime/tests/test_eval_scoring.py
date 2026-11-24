@@ -293,6 +293,9 @@ def test_every_job_is_registered_once() -> None:
         "spike_dev",
         "explain_wording",
         "workflow_draft",
+        "troubleshoot",
+        "scenario_writer",
+        "scenario_explainer",
     ]
 
 

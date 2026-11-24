@@ -242,6 +242,10 @@ class LastRunView(WireModel):
         description="True when the person asking may decide the yes this run waits for. False "
         "for any other run, and in an answer that is not for a person."
     )
+    you_can_open: bool = Field(
+        description="True when the run stopped and is in the Needs you of the person asking: an "
+        "Operator whose work it is. False for any other run."
+    )
     retryable: bool = Field(description="True when the run stopped and a retry may start it again.")
     reason: FailureReasonName | None = Field(
         description="Why a stopped run stopped. Null for any other run."
@@ -299,6 +303,13 @@ class UseCaseView(WireModel):
     last_run: LastRunView | None = Field(
         description="The newest run of this workflow, whatever its state. Null when it has "
         "never run."
+    )
+    needs_you: Literal["approval", "stopped", "declined", "question", "fix"] | None = Field(
+        default=None,
+        description="Why this workflow is in the Needs you of the person asking, or null when it "
+        "is not: a yes they may give, a run of theirs that stopped, a test run an Approver "
+        "declined, a question to answer, or a workflow that can't run and needs a fix. It holds "
+        "exactly when their Home has a row for the workflow.",
     )
     left_out: list[str] = Field(
         description="The parts of the request it was set up without, in the person's own words "
@@ -678,7 +689,12 @@ class VersionChange(WireModel):
 
 
 type VersionMade = Literal[
-    "published_in_n8n", "settings_changed_in_n8n", "rolled_back", "yes_put_back", "moved_to_n8n"
+    "published_in_n8n",
+    "settings_changed_in_n8n",
+    "rolled_back",
+    "yes_put_back",
+    "moved_to_n8n",
+    "fixed",
 ]
 
 
@@ -711,8 +727,9 @@ class VersionView(WireModel):
         "published_in_n8n by a person in n8n's editor; settings_changed_in_n8n, the same version "
         "in n8n with its settings saved there and nothing published, which n8n runs with the new "
         "settings at once; rolled_back to an earlier version; yes_put_back, which put Ask for "
-        "a yes back before each write; or moved_to_n8n, the version that moved it from the shared "
-        "n8n workflow to its own. Null otherwise.",
+        "a yes back before each write; moved_to_n8n, the version that moved it from the shared "
+        "n8n workflow to its own; or fixed, a fix an Approver said yes to that passed its test "
+        "run (ADR 0055). Null otherwise.",
     )
     grade: Grade | None = Field(
         default=None,
@@ -1062,3 +1079,20 @@ class DraftList(WireModel):
     drafts: list[DraftView] = Field(
         description="The signed-in person's own drafts, the last saved first."
     )
+
+
+FixReason = Literal["needs_a_fix", "writes_refused"]
+
+
+def fix_of(view: UseCaseView, operator: bool) -> FixReason | None:
+    """Why a workflow that is on can't run, for a person who has a button for it. A version that
+    needs a fix is for everyone, because Explain opens for both roles. Refused writes are for an
+    Operator, who can add the yes back. A workflow that could not move to n8n has no button, so
+    it is not here. One rule for the pill and for Home's Needs you row."""
+    if view.state != "on":
+        return None
+    if view.grade == "needs_a_fix":
+        return view.grade
+    if view.grade == "writes_refused" and operator:
+        return view.grade
+    return None

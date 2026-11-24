@@ -17,8 +17,9 @@ import json
 from collections.abc import Awaitable, Mapping, Sequence
 from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timedelta
-from typing import Literal, Protocol
+from typing import Any, Literal, Protocol
 
+from platform_api.monitoring import NOTHING_READ_YET, stop_words
 from platform_api.orchestration.agents import CardInput, CardSpec, InputKind
 from platform_api.orchestration.approvals import (
     ApprovalRequest,
@@ -26,6 +27,7 @@ from platform_api.orchestration.approvals import (
     Decision,
     approval_status,
 )
+from platform_api.orchestration.block_sources import source_stop
 from platform_api.orchestration.cards import TOOL_RULES
 from platform_api.orchestration.runs import (
     NO_ANSWER,
@@ -96,6 +98,23 @@ software the run checks."""
 WATCHLIST_CHECKER = NodeOption("watchlist_checker", "Watchlist checker")
 """The platform's own agent that checks every watched software at once and proposes the upgrade
 tickets, with the same review as before the move (D11)."""
+VERSION_CHECKER_ID = "crd_version_checker"
+REPO_INPUT = "GitHub repository"
+
+
+def release_of(agent: str, inputs: Mapping[str, str]) -> str | None:
+    """The repository whose newest release each change the agent proposes is about: the Version
+    checker's own. None for any other agent."""
+    return inputs.get(REPO_INPUT) if agent == VERSION_CHECKER_ID else None
+
+
+def release_compared(
+    found: Mapping[str, Json], *, newer: bool, version: str | None
+) -> dict[str, Json]:
+    """The Version checker's answer, as the release check's Newer? block reads it: newer when the
+    agent proposed a change, with the newest release our API read, never one from its words. The
+    simulation gateway answers the same, so a simulation plays the release check's branch."""
+    return {**found, "newer": newer, "version": version}
 
 
 @dataclass(frozen=True)
@@ -639,6 +658,8 @@ class FailedExecution:
     """What it ran, from the same record: n8n no longer reads a failed execution as running."""
     node: str | None
     message: str | None
+    block: Mapping[str, Any] | None = None
+    """The failed block as the execution ran it, when n8n's record holds it."""
 
 
 @dataclass(frozen=True)
@@ -696,10 +717,16 @@ class N8nFailures(Protocol):
 
 
 def failure_words(failed: FailedExecution, read_anything: bool) -> str:
-    node = f'"{failed.node}"' if failed.node else "A block"
-    said = one_line(failed.message or "n8n gave no reason", MESSAGE_LIMIT)
-    words = f"{node} failed in n8n: {sentence(said)}"
-    return words if read_anything else f"Stopped before it read anything. {words}"
+    """A source that gave no usable answer is named with the block and the likely cause (ADR
+    0056). Any other failure is the block and n8n's own words."""
+    stop = source_stop(failed.node, failed.block, failed.message)
+    if stop is not None:
+        words = stop_words(stop)
+    else:
+        node = f'"{failed.node}"' if failed.node else "A block"
+        said = one_line(failed.message or "n8n gave no reason", MESSAGE_LIMIT)
+        words = f"{node} failed in n8n: {sentence(said)}"
+    return words if read_anything else f"{NOTHING_READ_YET} {words}"
 
 
 def fail_by_report(

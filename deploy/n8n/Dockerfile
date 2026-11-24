@@ -14,3 +14,10 @@ FROM n8nio/n8n:2.42.6@sha256:526daa38b68e923cc00c5280d18b4da5d489f115a73bdbf3b8e
 # Outside /home/node/.n8n, which is a volume, so a new image always brings its own pack.
 COPY --from=build /pack/dist /opt/wab/n8n-nodes-wab
 ENV N8N_CUSTOM_EXTENSIONS=/opt/wab/n8n-nodes-wab
+# A read by n8n's own blocks (GET, HEAD or OPTIONS) waits on a source for
+# WAB_REQUEST_TIMEOUT_SECONDS a try, not n8n's fixed 300 s (ADR 0056). The build fails unless the
+# script finds where n8n sets that limit.
+USER root
+COPY deploy/n8n/request-limit.mjs /tmp/request-limit.mjs
+RUN node /tmp/request-limit.mjs /usr/local/lib/node_modules/n8n && rm /tmp/request-limit.mjs
+USER node

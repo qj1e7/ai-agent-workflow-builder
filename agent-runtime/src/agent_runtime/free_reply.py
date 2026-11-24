@@ -15,6 +15,7 @@ from typing import Final
 from agent_runtime.abilities import (
     CAPABILITIES,
     OFFER_REQUESTS,
+    capabilities_here,
     names_no_ability,
     other_systems,
     vulnerability_phrase,
@@ -237,7 +238,8 @@ def reply_messages(request: AnswerRequest, gap: DeadEnd) -> tuple[str, str]:
     facts = request.facts.model_dump_json(exclude_none=True) if request.facts else NO_FACTS
     sections = [
         "The guide:\n" + "\n".join(f"- {line}" for line in HOW_TO),
-        "The capabilities:\n" + "\n".join(_capability(c) for c in CAPABILITIES),
+        "The capabilities:\n"
+        + "\n".join(_capability(c) for c in capabilities_here(request.ready_here)),
         f"The facts:\n{facts}",
     ]
     if gap.notes:
@@ -313,7 +315,7 @@ def reply_to(
     elif shown is STILL_UNCLEAR:
         return shown
     else:
-        failed = verify(shown, verify_with or chat_for)
+        failed = verify(shown, verify_with or chat_for, request.ready_here)
         if failed is None:
             return shown
     log.warning("Free reply %s fell back: %s", reply_id, failed, extra={"fell_back": failed})

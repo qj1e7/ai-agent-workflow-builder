@@ -1,11 +1,11 @@
 import { useEffect, useId, useRef, useState, type MouseEvent } from 'react'
-import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router'
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router'
 import { ApiError } from '../../api/client'
 import { useErrorWords } from '../../api/context'
 import { newIdempotencyKey } from '../../api/idempotency'
 import { useLatch } from '../../api/latch'
 import { useDisplayName } from '../../api/people'
-import { useMe, useRuns, useStartRun, useUseCase } from '../../api/queries'
+import { useMe, useRuns, useStartRun, useUseCase, useWatchlist } from '../../api/queries'
 import type { Me, UseCaseView } from '../../api/types'
 import { useAddTheYesBack, useDeleteWorkflow, useMoveWorkflow, useRereadWorkflow, useRollback, useSaveWorkflowSchedule, useSweepOnFocus, useUseCaseInN8n } from '../../api/workflowQueries'
 import { OperatorsNote } from '../../shell/OperatorsNote'
@@ -20,22 +20,26 @@ import { Toast, type ToastMessage } from '../../ui/Toast'
 import { useView, ViewTabs } from '../../ui/ViewTabs'
 import { ExplainButton } from '../explain/ExplainButton'
 import { RunLine } from '../run/RunLine'
+import { SoftwareRoute } from '../software/SoftwarePage'
 import { leadsThePage, StatusBanner } from './Banner'
 import { useArrivalScroll } from './arrival'
 import { templateLine } from './line'
 import { RecentRuns } from './RecentRuns'
-import { backToVersionToast, needsFix, yesBackToast } from './n8nChange'
+import { backToVersionToast, yesBackToast } from './n8nChange'
 import { StatusPills } from './Status'
 import { Versions } from './Versions'
 import { DraftActions } from './DraftActions'
+import { UseCaseSimulation } from './UseCaseSimulation'
 import { HeldInN8n, OpenInN8nEditor, WorkflowInN8n } from './InN8n'
 import { cantChangeWords, heldOf, holdOf, mayOpen, openingOf } from './n8nHold'
 import { When } from './When'
 import {
+  APPROVAL_RULE,
   bannerOf,
   changeProblem,
   changeWords,
   controlsOf,
+  isWatchlist,
   deleteWords,
   leftOutWords,
   mainActionOf,
@@ -49,14 +53,11 @@ import {
   pressRunNow,
   REFRESH_MS,
   rereadWhenOutOfDate,
-  pillOf,
   runsOf,
   scheduleSavedWords,
   sentenceOf,
-  SOFTWARE_PAGE,
   viewerOf,
   whoSaysYes,
-  workflowPath,
   type Place,
 } from './workflow'
 import styles from './Workflows.module.css'
@@ -196,7 +197,10 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
   const paused = useCase.state === 'paused'
   const controls = controlsOf(useCase, viewer)
   const menuActions = menuActionsOf(useCase, viewer)
-  const runNowLeads = mainActionOf(useCase, viewer) === 'run'
+  // The watchlist's Run now checks its list, so it waits for software to check, and is never drawn dead.
+  const watching = useWatchlist({ enabled: isWatchlist(useCase) })
+  const nothingToCheck = isWatchlist(useCase) && (watching.data?.software.length ?? 0) === 0
+  const runNowLeads = mainActionOf(useCase, viewer) === 'run' && !nothingToCheck
   const mayPause = controls.includes('pause')
   const banner = bannerOf({ useCase, viewer, now, nameOf })
   const gate = useCase.plan.some((block) => block.kind === 'approval')
@@ -272,7 +276,13 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
     }
   })
 
+  // The banner's Explain is the one on the page while a version needs a fix.
+  const explainHere = banner.action?.kind !== 'explain'
   const say = (text: string) => setSaid((before) => ({ id: (before?.id ?? 0) + 1, text }))
+  // The Software watchlist is a workflow like the rest. Its list, and each software's page, are drawn inside it.
+  const listed = isWatchlist(useCase)
+  const software = useSearchParams()[0].get('software')
+  if (listed && software !== null && shownView === 'main') return <SoftwareRoute now={now} rowId={software} held={held !== null} />
   const message: ToastMessage | null = said ? { id: said.id, text: said.text } : null
   return (
     <>
@@ -282,7 +292,7 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
           <p className={styles['kind']}>Workflow</p>
           <h1 tabIndex={-1}>{useCase.name}</h1>
         </div>
-        <StatusPills state={useCase.state} fact={useCase.last_run ? pillOf(useCase.last_run) : null} test={useCase.last_run?.test === true} large fix={needsFix(useCase)} />
+        <StatusPills useCase={useCase} test={useCase.last_run?.test === true} large />
       </div>
       {n8nAccess ? <ViewTabs main="Summary" shown={shownView} onShow={showView} className={styles['views']} /> : null}
       {shownView === 'n8n' ? (
@@ -314,12 +324,13 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
             </p>
           ) : null}
           <RunLine stations={templateLine(useCase)} arrivedLive={null} settled={null} />
-          <div className={styles['pair']}>
-            <When useCase={useCase} now={now} mayChange={mayChangeSchedule(useCase, viewer)} held={held ? cantChangeWords(held) : null} onSaved={say} />
+          <div className={listed ? undefined : styles['pair']}>
+            {listed ? null : <When useCase={useCase} now={now} mayChange={mayChangeSchedule(useCase, viewer)} held={held ? cantChangeWords(held) : null} onSaved={say} />}
             {gate ? (
               <section className={styles['section']} aria-labelledby="who-says-yes">
                 <h2 id="who-says-yes">Who says yes</h2>
                 <p>{whoSaysYes(useCase.owner, viewer, nameOf)}</p>
+                <p>{APPROVAL_RULE}</p>
                 <details className={styles['rule']}>
                   <summary>Who can’t say yes</summary>
                   <p>{ownWorkRule(useCase.schedule)}</p>
@@ -327,6 +338,7 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
               </section>
             ) : null}
           </div>
+          {listed ? <SoftwareRoute now={now} rowId={null} held={held !== null} /> : null}
           {runs.data ? (
             <RecentRuns runs={recent} now={now} nameOf={nameOf} firstRun={useCase.next_run_at && !paused ? nextRunWords(useCase, now) : null} />
           ) : (
@@ -343,15 +355,25 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
               )}
             </section>
           )}
-          <Versions useCase={useCase} now={now} nameOf={nameOf} operator={viewer.operator} say={say} />
+          {useCase.state === 'draft' ? <UseCaseSimulation useCaseId={id} /> : null}
           <DraftActions useCase={useCase} viewer={viewer} />
+          {explainHere || useCase.version >= 2 ? (
+            <details className={styles['more']}>
+              <summary>Details</summary>
+              {explainHere ? (
+                <p>
+                  <ExplainButton useCaseId={id} name={useCase.name} />
+                </p>
+              ) : null}
+              <Versions useCase={useCase} now={now} nameOf={nameOf} operator={viewer.operator} say={say} />
+            </details>
+          ) : null}
           <div className={styles['actions']}>
             {runNowLeads ? (
-              <Button variant={leadsThePage(banner.action) ? 'secondary' : 'primary'} icon={IconPlay} data-place={placeOf('run')} loading={runNow.pending} onClick={runNow.press}>
+              <Button variant={listed || leadsThePage(banner.action) ? 'secondary' : 'primary'} icon={IconPlay} data-place={placeOf('run')} loading={runNow.pending} onClick={runNow.press}>
                 Run now
               </Button>
             ) : null}
-            {banner.action?.kind === 'explain' ? null : <ExplainButton useCaseId={id} name={useCase.name} />}
             {mayPause ? (
               <Button icon={IconPause} data-place={placeOf('pause')} loading={move.isPending} onClick={() => pauseOrResume('pause')}>
                 Pause
@@ -385,7 +407,6 @@ function notFound(error: unknown): boolean {
 }
 
 function WorkflowLoader({ useCaseId, now }: { useCaseId: string; now: Date }) {
-  const { search } = useLocation()
   const useCase = useUseCase(useCaseId, true, { poll: REFRESH_MS })
   const me = useMe()
   const shown = useCase.data && me.data && !useCase.isError ? controlsOf(useCase.data, viewerOf(me.data)).map(placeOf) : []
@@ -415,8 +436,6 @@ function WorkflowLoader({ useCaseId, now }: { useCaseId: string; now: Date }) {
       </p>
     )
   }
-  // The watchlist's page is its Summary, and keeps the tab the address asks for, so the Planner's In n8n link lands on it.
-  if (workflowPath(useCase.data) === SOFTWARE_PAGE) return <Navigate to={{ pathname: SOFTWARE_PAGE, search }} replace />
   return <WorkflowView useCase={useCase.data} me={me.data} now={now} onReread={refocus} />
 }
 

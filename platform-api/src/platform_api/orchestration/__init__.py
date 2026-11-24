@@ -1,5 +1,8 @@
 from platform_api.orchestration.agents import (
+    EVENT_SUMMARY_LIMIT,
+    MOST_EVENTS,
     OTHER_WORKFLOWS,
+    STOP_MESSAGE_LIMIT,
     WORKFLOW_FACTS,
     AbilitiesAnswer,
     AgentRejected,
@@ -15,6 +18,7 @@ from platform_api.orchestration.agents import (
     CardInput,
     CardSpec,
     CardToolId,
+    CauseFound,
     CheckPartResult,
     CheckWorkflowsAnswer,
     Choice,
@@ -35,13 +39,18 @@ from platform_api.orchestration.agents import (
     ExplainReworded,
     ExplainWordingResult,
     FactSection,
+    FailureNote,
     FindSoftwareResult,
+    FixAccepted,
+    FixAsked,
+    FixStartRequest,
     FoundSoftware,
     FreeReplyAnswer,
     InputKind,
     KeyPasted,
     LibraryCard,
     LibraryInput,
+    ModelAccess,
     ModelProblem,
     NeedsMeAnswer,
     NeedsYouFact,
@@ -78,6 +87,7 @@ from platform_api.orchestration.agents import (
     SetupCardAnswer,
     SoftwareNotChecked,
     SoftwareNotKnown,
+    StoppedRun,
     ToolId,
     ToolKind,
     TurnTrace,
@@ -143,6 +153,8 @@ from platform_api.orchestration.n8n import (
 )
 from platform_api.orchestration.n8n_calls import (
     GITHUB_RELEASES,
+    REPO_INPUT,
+    VERSION_CHECKER_ID,
     WATCHLIST_CHECKER,
     WATCHLIST_PLACE,
     AgentToRun,
@@ -156,6 +168,7 @@ from platform_api.orchestration.n8n_calls import (
     ReadFailed,
     ReadItems,
     WriteEntry,
+    release_of,
 )
 from platform_api.orchestration.n8n_credentials import (
     KeyRemoved,
@@ -199,6 +212,8 @@ from platform_api.orchestration.planning import (
 from platform_api.orchestration.platform_keys import KEY_FOR_TYPE, KEYS, KeySpec, attach_keys
 from platform_api.orchestration.run_gist import RunGist
 from platform_api.orchestration.runs import state_name
+from platform_api.orchestration.scenario_grades import WAIT_LIMIT_SECONDS
+from platform_api.orchestration.scenarios import ScenarioKind, ScenarioSpec
 from platform_api.orchestration.schedule import (
     AT_PATTERN,
     Day,
@@ -227,6 +242,17 @@ from platform_api.orchestration.setup_approvals import (
 )
 from platform_api.orchestration.setup_approvals import Decided as SetUpDecided
 from platform_api.orchestration.setup_approvals import DecisionRefused as SetUpRefused
+from platform_api.orchestration.simulation_driver import (
+    DIDNT_ANSWER,
+    DONT_FIT,
+    SIMULATION_SECONDS,
+    NotSimulated,
+    Simulated,
+    SimulationClient,
+    SimulationDriver,
+    version_of,
+)
+from platform_api.orchestration.simulation_gateway import PlanOut, ResultOut, SimulationOut
 from platform_api.orchestration.slack_channels import ChannelList, SlackChannels
 from platform_api.orchestration.spec import (
     PACKAGE_VERSION_PATTERN,
@@ -313,6 +339,21 @@ from platform_api.orchestration.workflow_check import (
 from platform_api.orchestration.write_actions import Binding
 
 __all__ = [
+    "DIDNT_ANSWER",
+    "SIMULATION_SECONDS",
+    "WAIT_LIMIT_SECONDS",
+    "ScenarioKind",
+    "ScenarioSpec",
+    "NotSimulated",
+    "Simulated",
+    "SimulationClient",
+    "SimulationDriver",
+    "SimulationOut",
+    "PlanOut",
+    "ResultOut",
+    "DONT_FIT",
+    "FailureNote",
+    "version_of",
     "NotKeptAsSent",
     "Approved",
     "Closed",
@@ -411,8 +452,19 @@ __all__ = [
     "zone_name",
     "read_flow",
     "GITHUB_RELEASES",
+    "REPO_INPUT",
+    "VERSION_CHECKER_ID",
     "WATCHLIST_CHECKER",
     "WATCHLIST_PLACE",
+    "EVENT_SUMMARY_LIMIT",
+    "MOST_EVENTS",
+    "STOP_MESSAGE_LIMIT",
+    "CauseFound",
+    "FixAccepted",
+    "FixAsked",
+    "FixStartRequest",
+    "ModelAccess",
+    "StoppedRun",
     "AgentRejected",
     "AgentUnavailable",
     "ReadReleasesRequest",
@@ -428,6 +480,7 @@ __all__ = [
     "RanVersion",
     "ReadFailed",
     "ReadItems",
+    "release_of",
     "Grade",
     "ASK_EXITS",
     "writes",

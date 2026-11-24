@@ -37,6 +37,8 @@ function rereadWorkflowsAndWatchlist(queryClient: QueryClient): void {
 /** The view the platform answered a change with: held for the page, put in the list, and the lists read again. */
 export function applySavedView(queryClient: QueryClient, user: string, view: UseCaseView): void {
   queryClient.setQueryData(keys.useCase(user, view.use_case_id), view)
+  // A new schedule lays the workflow out again, so its Check reads the new version's try.
+  void queryClient.invalidateQueries({ queryKey: keys.useCaseSimulation(user, view.use_case_id) })
   changeList(queryClient, user, (list) => withView(list, view))
   rereadWorkflowsAndWatchlist(queryClient)
 }
@@ -314,6 +316,20 @@ export function holdSetUp(queryClient: QueryClient, user: string, created: UseCa
   queryClient.setQueryData<SetUp>(keys.setUp(user, created.use_case_id), { created, at, testRunId: null, testKey, testAsked: null })
 }
 
+/**
+ * Turn on for a draft the platform set up elsewhere, as a drafted workflow once an Approver checked it: held as a set-up with no build
+ * log, so the set-up card's test run, and then on, follow as for any new workflow (ADR 0053, item 3).
+ */
+export function holdTurnOn(queryClient: QueryClient, user: string, useCaseId: string, at: number, testKey: string): void {
+  holdSetUp(queryClient, user, { use_case_id: useCaseId, version: 1, build_log: [] }, at, testKey)
+}
+
+export function useHoldTurnOn(): (useCaseId: string) => void {
+  const queryClient = useQueryClient()
+  const user = useCacheScope()
+  return (useCaseId) => holdTurnOn(queryClient, user, useCaseId, Date.now(), newIdempotencyKey())
+}
+
 const changeSetUp = (queryClient: QueryClient, user: string, useCaseId: string, change: Partial<SetUp>): void => {
   queryClient.setQueryData<SetUp>(keys.setUp(user, useCaseId), (held) => (held ? { ...held, ...change } : held))
 }
@@ -486,4 +502,33 @@ export function useSweepOnOpen(useCaseId: string): void {
   useEffect(() => {
     void sweepNow(client, queryClient, useCaseId)
   }, [client, queryClient, useCaseId])
+}
+
+const SIMULATION_POLL_MS = 2000
+
+/**
+ * The Check of a workflow the Planner built from our blocks: its current version tried on practice systems (ADR 0054). The try
+ * starts where the safety checker grades the version, never on this read, and it is read again every couple of seconds while it runs.
+ */
+export function useUseCaseSimulation(useCaseId: string) {
+  const client = useApiClient()
+  const user = useCacheScope()
+  return useQuery({
+    queryKey: keys.useCaseSimulation(user, useCaseId),
+    queryFn: async () => unwrap(await client.GET('/api/v1/use-cases/{use_case_id}/simulation', { params: { path: { use_case_id: useCaseId } } })),
+    refetchInterval: (query) => (query.state.data?.simulation?.state === 'running' ? SIMULATION_POLL_MS : false),
+    enabled: useCaseId !== '',
+  })
+}
+
+/** Tries the current version on practice systems again, once it was never tried, its last try wasn't run or it didn't finish. */
+export function useUseCaseSimulateAgain(useCaseId: string) {
+  const client = useApiClient()
+  const queryClient = useQueryClient()
+  const user = useCacheScope()
+  return useMutation({
+    mutationFn: async (version: number) =>
+      unwrap(await client.POST('/api/v1/use-cases/{use_case_id}/simulation', { params: { path: { use_case_id: useCaseId } }, body: { version } })),
+    onSuccess: (view) => queryClient.setQueryData(keys.useCaseSimulation(user, useCaseId), view),
+  })
 }

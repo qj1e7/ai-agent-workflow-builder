@@ -17,7 +17,7 @@ import { needsTotal } from '../screens/home/home'
 import { focusMovedOutside } from './PersonChip'
 import { TEAMS_TITLE } from './TeamsPanel'
 import { TEST_NOTE } from './TestControls'
-import { oldAgentsDestination, PAGES, railCountFor, railCurrent, RAIL_PAGE_IDS } from './routes'
+import { oldAgentsDestination, PAGES, railCountFor, railCurrent, RAIL_PAGE_IDS, softwareDestination } from './routes'
 
 const ORIGIN = 'http://portal.test'
 const MORNING = new Date('2026-10-29T03:00:00Z')
@@ -89,16 +89,16 @@ function railLabels(html: string): string[] {
 const DRAWN_AT_ONCE = RAIL_PAGE_IDS
 
 describe('the rail', () => {
-  it('reads Chat, Workflows and Watchlist for an Operator, with no menu in the header and no Agent library', () => {
+  it('reads Chat and Workflows for an Operator, with no Watchlist of its own, with no menu in the header and no Agent library', () => {
     const html = render()
-    expect(railLabels(html)).toEqual(['Chat', 'Workflows', 'Watchlist'])
+    expect(railLabels(html)).toEqual(['Chat', 'Workflows'])
     expect(html).not.toContain('href="/agents"')
     expect(headerOf(html)).not.toMatch(/aria-label="Browse"/)
   })
 
-  it('has the same three items for an Approver who is not an Operator', () => {
+  it('has the same two items for an Approver who is not an Operator', () => {
     const html = render({ me: BOB })
-    expect(railLabels(html)).toEqual(['Chat', 'Workflows', 'Watchlist'])
+    expect(railLabels(html)).toEqual(['Chat', 'Workflows'])
     expect(html).not.toContain('href="/new"')
     expect(html).not.toContain('href="/agents"')
   })
@@ -138,17 +138,25 @@ describe('the rail', () => {
   it('keeps Home current only at Home, and an item current on the addresses under it', () => {
     expect(currentLinks(render({ path: '/' }))).toEqual(['/'])
     expect(currentLinks(render({ path: '/workflows/uc_01JB7' }))).toEqual(['/workflows'])
-    expect(currentLinks(render({ path: '/software/anything' }))).toEqual(['/software'])
   })
 
-  it('marks Workflows current on a run page and an approval page, and Watchlist when the run is the watchlist’s', () => {
+  it('marks Workflows current on a run page and an approval page, whichever workflow the run is', () => {
     expect(currentLinks(render({ path: '/runs/run_01JB8' }))).toEqual(['/workflows'])
     expect(currentLinks(render({ path: '/approvals/apr_01JB8' }))).toEqual(['/workflows'])
-    expect(railCurrent('/runs/run_01JB8', 'software')).toBe('software')
-    expect(railCurrent('/approvals/apr_01JB8', 'software')).toBe('software')
-    expect(railCurrent('/runs/run_01JB8', 'workflows')).toBe('workflows')
-    expect(railCurrent('/workflows', 'software')).toBe('workflows')
-    expect(railCurrent('/settings', 'workflows')).toBeNull()
+    expect(railCurrent('/runs/run_01JB8')).toBe('workflows')
+    expect(railCurrent('/workflows')).toBe('workflows')
+    expect(railCurrent('/settings')).toBeNull()
+  })
+
+  it('sends /software and any address under it to the watchlist’s workflow page, or to Workflows when there is none', () => {
+    expect(softwareDestination('/software', 'uc_wl')).toBe('/workflows/uc_wl')
+    expect(softwareDestination('/software/', 'uc_wl')).toBe('/workflows/uc_wl')
+    expect(softwareDestination('/software/sw_1', 'uc_wl')).toBe('/workflows/uc_wl?software=sw_1')
+    expect(softwareDestination('/software/a%20b', 'uc_wl')).toBe('/workflows/uc_wl?software=a+b')
+    expect(softwareDestination('/software', 'uc_wl', '?row=sw_2')).toBe('/workflows/uc_wl?software=sw_2')
+    expect(softwareDestination('/software', 'uc_wl', '?view=n8n')).toBe('/workflows/uc_wl?view=n8n')
+    expect(softwareDestination('/software', null)).toBe('/workflows')
+    expect(softwareDestination('/software/sw_1', null)).toBe('/workflows')
   })
 
   it('marks nothing current for a path the rail does not name', () => {
@@ -170,12 +178,12 @@ const SOFTWARE_WITH_ADDRESSES = movedWatchlist as WatchlistView
 describe('the rail’s counts', () => {
   it('are totals, as in the sketch: how many workflows the team has, and how much software is watched, in each link’s name', () => {
     const html = render({ home: ALICE_HOME, watchlist: SOFTWARE_WITH_DECISION })
-    expect(linkNames(html)).toEqual(['Chat', `Workflows, ${String(ALICE_HOME.workflows)} in all`, `Watchlist, ${String(SOFTWARE_WITH_DECISION.software.length)} in all`])
+    expect(linkNames(html)).toEqual(['Chat', `Workflows, ${String(ALICE_HOME.workflows)} in all`])
   })
 
   it('are the same for an Approver who is not an Operator, because they count what is there, not what needs them', () => {
     const html = render({ me: BOB, home: BOB_HOME, watchlist: SOFTWARE_WITH_ADDRESSES })
-    expect(linkNames(html)).toEqual(['Chat', `Workflows, ${String(BOB_HOME.workflows)} in all`, `Watchlist, ${String(SOFTWARE_WITH_ADDRESSES.software.length)} in all`])
+    expect(linkNames(html)).toEqual(['Chat', `Workflows, ${String(BOB_HOME.workflows)} in all`])
   })
 
   it('never count what needs the person, which the needs strip and Workflows show instead', () => {
@@ -190,16 +198,15 @@ describe('the rail’s counts', () => {
   })
 
   it('show nothing for none, or before the numbers have loaded', () => {
-    expect(linkNames(render({ home: { ...ALICE_HOME, workflows: 0 }, watchlist: { ...SOFTWARE_WITH_DECISION, software: [] } }))).toEqual(['Chat', 'Workflows', 'Watchlist'])
-    expect(linkNames(render())).toEqual(['Chat', 'Workflows', 'Watchlist'])
+    expect(linkNames(render({ home: { ...ALICE_HOME, workflows: 0 }, watchlist: { ...SOFTWARE_WITH_DECISION, software: [] } }))).toEqual(['Chat', 'Workflows'])
+    expect(linkNames(render())).toEqual(['Chat', 'Workflows'])
   })
 
   it('follow one rule for every item', () => {
-    expect(railCountFor('home', 5, 2)).toBeNull()
-    expect(railCountFor('workflows', 5, 2)).toBe(5)
-    expect(railCountFor('software', 5, 2)).toBe(2)
-    expect(railCountFor('workflows', 0, 2)).toBeNull()
-    expect(railCountFor('software', 5, undefined)).toBeNull()
+    expect(railCountFor('home', 5)).toBeNull()
+    expect(railCountFor('workflows', 5)).toBe(5)
+    expect(railCountFor('workflows', 0)).toBeNull()
+    expect(railCountFor('workflows', undefined)).toBeNull()
   })
 })
 
@@ -353,7 +360,7 @@ describe('when the platform is down', () => {
     expect(text(mainOf(html))).toContain('Check your connection, or try again in a moment.')
     expect(mainOf(html)).toMatch(/<button\b[^>]*>Try again<\/button>/)
     expect(text(headerOf(html))).toContain('Workflow Builder')
-    expect(railLabels(html)).toEqual(['Chat', 'Workflows', 'Watchlist'])
+    expect(railLabels(html)).toEqual(['Chat', 'Workflows'])
     expect(headerOf(html)).not.toContain('Operator')
   })
 

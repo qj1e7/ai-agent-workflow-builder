@@ -57,6 +57,7 @@ LAST_RUN = LastRunView(
     written=0,
     tickets=True,
     you_can_decide=False,
+    you_can_open=False,
     retryable=False,
     reason=None,
     stop=None,
@@ -87,6 +88,7 @@ STOPPED = AGENT_USE_CASE.model_copy(
                 "decline_reason": None,
                 "proposed": 0,
                 "tickets": False,
+                "you_can_open": True,
                 "retryable": True,
                 "reason": "AgentError",
                 "stop": RunStopView(

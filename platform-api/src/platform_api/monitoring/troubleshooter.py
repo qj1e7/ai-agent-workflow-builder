@@ -1,10 +1,14 @@
 import re
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from datetime import datetime
-from typing import Final, Literal
+from typing import Final, Literal, Protocol
+
+from pydantic import Field
 
 from platform_api.monitoring.events import RunFailedData
-from platform_api.shared import JIRA_SITE_CHANGED, NO_START_BLOCK, WRITE_STOP_ADVICE
+from platform_api.monitoring.source_stops import CAUSES, Delay, SourceStop, headline, read_stop
+from platform_api.shared import JIRA_SITE_CHANGED, NO_START_BLOCK, WRITE_STOP_ADVICE, RunId
 from platform_api.wire import FailureReason, WireModel
 
 type SuggestedAction = Literal[
@@ -188,7 +192,28 @@ def explain(reason: FailureReason) -> Advice:
     return ADVICE[reason]
 
 
+def _source_stop(failure: RunFailedData) -> SourceStop | None:
+    if failure.reason != "WorkflowNodeError" or not failure.retryable:
+        return None
+    return read_stop(failure.message)
+
+
+def source_advice(stop: SourceStop) -> Advice:
+    """What a block that got no usable answer from its source tells, from the stop's own facts."""
+    source = stop.source or "the source"
+    return Advice(
+        explanation=headline(stop),
+        likely_cause=CAUSES[stop.delay],
+        suggested_action="retry",
+        suggestion="Retry the run in a few minutes. If it stops here again, check that "
+        f"{source} is up and that n8n can reach it.",
+    )
+
+
 def explain_failure(failure: RunFailedData) -> Advice:
+    stop = _source_stop(failure)
+    if stop is not None:
+        return source_advice(stop)
     if failure.reason == "AgentError" and not failure.retryable:
         # The work leg's failure message starts with the agent's error type, as "ModelNeeded: ...".
         return KNOWN_AGENT_STOPS.get(failure.message.partition(": ")[0], AGENTS_STOPPED)
@@ -207,6 +232,165 @@ def explain_failure(failure: RunFailedData) -> Advice:
     ):
         return MISSING_START
     return ADVICE[failure.reason]
+
+
+type CauseSystem = Literal[
+    "github",
+    "gitlab",
+    "bitbucket",
+    "jira",
+    "confluence",
+    "teams",
+    "slack",
+    "entra",
+    "azure",
+    "aws",
+    "docker",
+    "pypi",
+    "npm",
+    "servicenow",
+    "outlook",
+    "zendesk",
+    "gmail",
+]
+type FailureKind = Literal[
+    "not_found",
+    "refused",
+    "no_answer",
+    "wrong_value",
+    "changed_field",
+    "permission",
+    "limit",
+    "unknown",
+]
+
+SYSTEM_NAMES: Final[Mapping[CauseSystem, str]] = {
+    "github": "GitHub",
+    "gitlab": "GitLab",
+    "bitbucket": "Bitbucket",
+    "jira": "Jira",
+    "confluence": "Confluence",
+    "teams": "Teams",
+    "slack": "Slack",
+    "entra": "Entra",
+    "azure": "Azure",
+    "aws": "AWS",
+    "docker": "Docker",
+    "pypi": "PyPI",
+    "npm": "npm",
+    "servicenow": "ServiceNow",
+    "outlook": "Outlook",
+    "zendesk": "Zendesk",
+    "gmail": "Gmail",
+}
+CAUSE_WORDS: Final[Mapping[FailureKind, tuple[str, str]]] = {
+    "not_found": ("{who} can't find {detail}", "{who} can't find what was asked for"),
+    "refused": ("{who} refuses the request for {detail}", "{who} refuses the request"),
+    "no_answer": ("{who} doesn't answer the request for {detail}", "{who} doesn't answer"),
+    "wrong_value": (
+        "{who} sends a value for {detail} that {block} can't use",
+        "{who} sends a value {block} can't use",
+    ),
+    "changed_field": (
+        "the answer from {who} is missing the field {detail}",
+        "the answer from {who} is missing a field",
+    ),
+    "permission": (
+        "{who} doesn't give {block} access to {detail}",
+        "{who} doesn't give {block} access",
+    ),
+    "limit": (
+        "{who} is limiting requests for {detail}",
+        "{who} is limiting how often it can be asked",
+    ),
+}
+"""Why the failed part stopped, for each kind of failure but unknown, with a detail and without.
+The cause only says what the run met, and the rule table beside it says what to do."""
+
+SOURCE_KINDS: Final[Mapping[Delay, FailureKind]] = {
+    "no_answer": "no_answer",
+    "cut_off": "no_answer",
+    "unreachable": "no_answer",
+    "refused": "refused",
+}
+"""The one kind each of ADR 0056's source stops shows."""
+
+
+def stop_kind(kind: FailureKind, message: str) -> FailureKind:
+    """The model's kind, held to a source stop's own facts (ADR 0056). When the stop's words say
+    how the source failed, a kind they don't show is shown as unknown."""
+    stop = read_stop(message)
+    if stop is None or kind == SOURCE_KINDS[stop.delay]:
+        return kind
+    return "unknown"
+
+
+def cause_words(
+    failed_part: Sequence[str],
+    system: CauseSystem | None,
+    kind: FailureKind,
+    detail: str | None,
+) -> str:
+    """The cause people see, in one sentence code writes from the model's checked fields. No
+    words of the model's are in it: a block's name and the detail are copied from the run."""
+    *before, last = failed_part
+    names = f"{', '.join(before)} and {last}" if before else last
+    blocks = f"The {names} block{'s' if before else ''} stopped"
+    if kind == "unknown":
+        source = f" from {SYSTEM_NAMES[system]}" if system else ""
+        about = f" about {detail}" if detail else ""
+        return f"{blocks} on an error{source}{about}."
+    with_detail, without = CAUSE_WORDS[kind]
+    why = (with_detail if detail else without).format(
+        who=SYSTEM_NAMES[system] if system else "a service",
+        detail=detail,
+        block="the blocks" if before else "the block",
+    )
+    return f"{blocks} because {why}."
+
+
+class FoundCause(WireModel):
+    """The AI model's cause and failed part (ADR 0055, section 10). The model only picked fields
+    from the run's facts, code checked each one, and code wrote the cause from them, so no words
+    of the model's are shown. Each block is in the version that ran and is where the run stopped.
+    The rule table's answer stays beside it, unchanged."""
+
+    cause: str = Field(
+        description="Why the run stopped, in one sentence code wrote from the model's checked "
+        "picks: the failed part, the system, the kind of failure and one name from the run."
+    )
+    failed_part: list[str] = Field(
+        min_length=1, description="The blocks the cause is in, each one where the run stopped."
+    )
+
+
+@dataclass(frozen=True)
+class AskedCause:
+    """One stop, for the model to name its cause."""
+
+    run_id: RunId
+    seq: int
+    """The run_failed event's sequence number, so a later stop of the same run is a new one."""
+    failure: RunFailedData
+    events: Sequence[str]
+    """The run's activity, each event's plain summary, oldest first."""
+    seconds: float
+    """How long the finder has before the rule table answers alone."""
+
+
+class CauseFinder(Protocol):
+    """The troubleshooter's model version. None whenever it has no checked answer, and the rule
+    table answers alone."""
+
+    async def find(self, asked: AskedCause) -> FoundCause | None: ...
+
+
+def asks_the_model(failure: RunFailedData) -> bool:
+    """Whether the rule table knows no cause for this stop, so the model may name one: an agent's
+    stop of a kind the table doesn't know, or a block that failed in n8n. Every other stop keeps
+    the cause the table knows."""
+    advice = explain_failure(failure)
+    return advice is AGENTS_STOPPED or advice is ADVICE["WorkflowNodeError"]
 
 
 class RetryAnswer(WireModel):
@@ -253,21 +437,25 @@ def _safe_to_retry(failure: RunFailedData, retry: RetryAnswer) -> str:
     return f"Yes. {wait}Nothing was written, so a retry is safe."
 
 
-DIDNT_ANSWER: Final = re.compile(r"\bGitHub (?:returned 5\d\d|could not be reached)\b")
-"""The runtime's words when GitHub gave no usable answer, every try."""
+RUNTIME_SOURCES: Final = ("GitHub", "Jira", "Confluence")
+"""The sources the agent runtime reads for an agent, as its fixed sentences name them
+(agent_runtime's github.py, jira.py, confluence.py and release_source.py)."""
+DIDNT_ANSWER: Final = re.compile(
+    rf"(?:^|: |\. )(?P<source>{'|'.join(RUNTIME_SOURCES)}) "
+    r"(?:returned 5\d\d|could not be reached)\b"
+)
+"""The runtime's sentence when one of those sources gave no usable answer, every try, at the
+start of the message or of one of its sentences."""
 
 
 def what_happened(failure: RunFailedData, at: datetime | None = None) -> str:
-    """One sentence: GitHub didn't answer, with the time it stopped when that is known, or the
-    advice's explanation. Every place that names a stop says this sentence. A place that shows
-    the time beside it leaves `at` out."""
-    if (
-        failure.reason == "AgentError"
-        and failure.retryable
-        and DIDNT_ANSWER.search(failure.message)
-    ):
+    """One sentence: the source that didn't answer, with the time it stopped when that is known,
+    or the advice's explanation. Every place that names a stop says this sentence. A place that
+    shows the time beside it leaves `at` out."""
+    found = DIDNT_ANSWER.search(failure.message)
+    if failure.reason == "AgentError" and failure.retryable and found is not None:
         when = "" if at is None else f" at {at.hour}:{at.minute:02d}"
-        return f"GitHub didn't answer{when}."
+        return f"{found.group('source')} didn't answer{when}."
     return explain_failure(failure).explanation
 
 

@@ -10,6 +10,7 @@ from pydantic import Field
 from platform_api.builder.drafted_settings import Asking, How, SettingNow, asking, shown
 from platform_api.builder.explain import Segment, WorkflowExplained, segments
 from platform_api.builder.models import N8nBlockView
+from platform_api.builder.simulation_views import SimulationView
 from platform_api.builder.workflow_report import (
     HIDDEN,
     KEY_SHAPE,
@@ -157,7 +158,7 @@ class DraftedWorkflowView(WireModel):
     )
     can_send: bool
     why_not_send: str | None = Field(
-        description="Why Send for approval can't work now, in words shown in its place."
+        description="Why Turn on can't ask for the one-time check now, in words shown in its place."
     )
     replaced_waiting: bool = Field(
         description="This revision replaced a set-up approval that was still waiting."
@@ -166,6 +167,65 @@ class DraftedWorkflowView(WireModel):
         description="This revision's set-up approval, once sent."
     )
     set_up: DraftedSetUpView | None = Field(description="Its set-up, once approved.")
+    simulation: SimulationView | None = Field(
+        description="The newest revision tried on practice systems. Null while drafting or when "
+        "not drafted. Waiting while a setting is still needed."
+    )
+
+
+class FixChangeView(WireModel):
+    """One value the fix changed, from the stopped version to the fixed one, as data."""
+
+    block: str
+    parameter: str = Field(description="The parameter's path in the block, as a.b.")
+    before: str | None
+    after: str | None
+
+
+class FixScenarioView(WireModel):
+    """One scenario's grade on practice systems, as platform-api's own simulation gave it."""
+
+    name: str
+    kind: str | None
+    verdict: Literal["passed", "failed", "not_tried"]
+    step: str | None = Field(description="The block where it stopped, if one did.")
+    why: str | None = Field(description="How a failed run ended, as code read it.")
+
+
+type FixCheck = Literal[
+    "inside_the_failed_part", "every_scenario_passed", "safety_check", "settings_unchanged"
+]
+
+
+class FixCheckView(WireModel):
+    check: FixCheck
+    passed: bool
+    words: str = Field(description="What code checked, in code's own words.")
+
+
+class FixEvidenceView(WireModel):
+    """What the approval page shows of a fix (ADR 0055, section 7), all of it code's: the cause
+    as code confirmed it, the change, each scenario's grade and code's checks. The report's
+    reworded text is the AI's help for the reader, never the check."""
+
+    fix_id: str
+    run_id: str
+    use_case_id: str
+    asked_by: str = Field(description="The name of the person who asked for the fix.")
+    made_by: Literal["fix_drafter", "person"] = Field(
+        description="Who made the change: the Fix drafter, or a person who answered the question "
+        "a hand-back asked."
+    )
+    answered_by: str | None = Field(description="The person who answered, by name.")
+    cause: str | None = Field(description="The cause, in code's own words.")
+    failed_part: list[str]
+    changes: list[FixChangeView]
+    read_list: str | None = Field(
+        description="The repositories the fixed version reads that join the team's read list "
+        "once it is turned back on, in code's words. Null when it adds none."
+    )
+    scenarios: list[FixScenarioView]
+    checks: list[FixCheckView]
 
 
 class SetUpApprovalView(WireModel):
@@ -183,6 +243,11 @@ class SetUpApprovalView(WireModel):
     why_not: str | None = Field(description="Why this person can't decide it now.")
     decline_reasons: list[str]
     set_up: DraftedSetUpView | None
+    fix: FixEvidenceView | None = Field(
+        default=None,
+        description="For a fix to a workflow (ADR 0055): its cause, change, scenarios and code's "
+        "checks. Null for a drafted workflow's set-up.",
+    )
 
 
 class DraftWorkflowIn(WireIn):
@@ -211,6 +276,10 @@ class DraftAnswerIn(WireIn):
 
 class DraftInN8nIn(WireIn):
     revision: int = Field(ge=1)
+
+
+class DraftSimulationIn(WireIn):
+    revision: int = Field(ge=1, description="The newest revision, to try on practice systems.")
 
 
 class SetUpDecisionIn(WireIn):

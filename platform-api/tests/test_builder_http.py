@@ -25,6 +25,7 @@ from platform_api.builder.models import (
     CreateAgentUseCase,
     UseCaseCreated,
 )
+from platform_api.builder.planner import RegistryUnavailable
 from platform_api.builder.planner_facts import STATUS_WORDS, PlannerFactsReader
 from platform_api.db import Database
 from platform_api.orchestration import (
@@ -298,6 +299,7 @@ async def test_every_builder_route_needs_a_signed_in_user(client: httpx.AsyncCli
 
 
 BOB = {"X-Dev-User": "bob"}
+CAROL = {"X-Dev-User": "carol"}
 FRIDAY = "Every Friday, sum up the tickets we closed this week"
 ANSWER = "/api/v1/planner/answer"
 
@@ -363,6 +365,11 @@ class RunBook:
         self.runs: list[RunDetail] = []
         self.asked: list[list[UseCaseId]] = []
         self.viewers: list[Principal | None] = []
+        self.needing: dict[UseCaseId, str] = {}
+        """What this person's Needs you holds, by workflow, as the platform says it."""
+
+    async def needing_you(self, viewer: Principal) -> dict[UseCaseId, str]:
+        return dict(self.needing)
 
     async def newest_runs(
         self, use_case_ids: Sequence[UseCaseId], viewer: Principal | None = None
@@ -423,6 +430,8 @@ class FakeHome:
             stopped_total=0,
             connections=[],
             addresses=[],
+            fixes=[],
+            setup_approvals=[1],
             replied=[1],
             declined_total=1,
             questions_for_me_total=1,
@@ -800,7 +809,8 @@ async def test_the_runtime_gets_the_facts_the_screens_show_for_the_signed_in_per
     assert fact.our_version_ticket == (None if source is None else source["ticket"])
     needs = facts.needs_you
     assert needs is not None
-    assert (needs.declined, needs.questions, needs.total) == (1, 1, 6), "Home's whole count"
+    assert (needs.declined, needs.questions, needs.setups) == (1, 1, 1)
+    assert needs.total == 7, "Home's whole count, a one-time check to give included"
     parts = needs.model_dump(exclude={"total"})
     assert sum(parts.values()) == needs.total, f"every part of the total is named: {parts}"
     assert [u.name for u in (await front.builder.list_use_cases()).use_cases] == [
@@ -1530,11 +1540,35 @@ async def test_a_declined_run_names_who_declined_and_why_and_writes_nothing(fron
         "written": 0,
         "tickets": True,
         "you_can_decide": False,
+        "you_can_open": False,
         "retryable": False,
         "reason": None,
         "outcome": None,
         "stop": None,
     }
+
+
+async def test_a_stopped_run_is_in_needs_you_only_for_an_operator_whose_work_it_is(front: Front):
+    use_case_id = await make_workflow(front, "Stopped for some")
+    failure = Failure(RunFailure.AGENT_ERROR, "Jira did not answer", retryable=True)
+    front.book.add(
+        use_case_id, Failed(RunId("run_1"), Stage.WORKING, failure, ResumeWork(2)), LONG_AGO
+    )
+    seen: dict[str, object] = {}
+    for who, headers in (("alice", ALICE), ("carol", CAROL), ("bob", BOB)):
+        r = await front.client.get(USE_CASES, headers=headers)
+        (row,) = [u for u in r.json()["use_cases"] if u["name"] == "Stopped for some"]
+        seen[who] = row["last_run"]["you_can_open"]
+    assert seen == {"alice": True, "carol": False, "bob": False}
+
+
+async def test_a_workflow_says_why_it_needs_the_person_whatever_its_state(front: Front):
+    stopped_id = await make_workflow(front, "Needs a look")
+    await make_workflow(front, "Quiet")
+    front.book.needing = {UseCaseId(stopped_id): "stopped"}
+    r = await front.client.get(USE_CASES, headers=ALICE)
+    seen = {u["name"]: u["needs_you"] for u in r.json()["use_cases"]}
+    assert seen == {"Needs a look": "stopped", "Quiet": None}
 
 
 async def test_a_run_declined_at_the_second_step_names_who_said_yes_first(front: Front):
@@ -1572,6 +1606,7 @@ async def test_a_stopped_run_is_the_last_run_with_no_one_declining(front: Front)
         False,
     )
     assert (last["retryable"], last["reason"]) == (True, "AgentError")
+    assert last["you_can_open"] is True, "an Operator whose work it is has it in Needs you"
 
 
 async def test_a_run_n8n_could_not_start_says_why_and_when_it_last_stopped(front: Front):
@@ -2294,3 +2329,49 @@ def test_the_limit_is_a_setting():
     for bad in ("0", "-3", "lots"):
         with pytest.raises(ConfigError):
             answers_per_minute_from_env({"PLANNER_ANSWERS_PER_MINUTE": bad})
+
+
+NOT_HERE = "Practice systems aren't set up here."
+SIMULATE = spec(
+    "workflows.simulate",
+    kind="none",
+    system=None,
+    connection=None,
+    tools=[],
+    state="planned",
+    cant="try a workflow on practice systems before its test run",
+    why=NOT_HERE,
+    plain="Try each new workflow on practice systems before its test run",
+)
+
+
+@pytest.mark.parametrize(
+    "ready_here", [(), ("workflows.simulate",)], ids=["no simulation n8n", "simulation n8n"]
+)
+async def test_simulation_mode_is_ready_only_where_the_platform_turned_it_on(
+    db: Database, ready_here: tuple[str, ...]
+):
+    """The registry says Simulation mode is planned (ADR 0054). Where platform-api has a
+    simulation gateway, it says Ready, by the same rule the runtime's prompts follow."""
+    watchlist = Watchlist(db, NothingLearned(), ScheduleBook(db))
+    builder = Builder(
+        db, SecondCallRepeats(), watchlist, "http://localhost:8000", history=RunBook()
+    )
+    front = PlannerFront(
+        FakeAnswers(),
+        builder,
+        watchlist,
+        FakeRegistry(CapabilityList(capabilities=[SIMULATE], examples=[])),
+        FakeStates(a_check("model")),
+        PlannerFactsReader(watchlist, builder, FakeHome()),
+        ready_here=ready_here,
+    )
+
+    listed = await front.capabilities()
+
+    assert not isinstance(listed, RegistryUnavailable)
+    [entry] = listed.capabilities
+    if ready_here:
+        assert (entry.state, entry.cant, entry.why, entry.fix) == ("ready", None, None, None)
+    else:
+        assert (entry.state, entry.why, entry.fix) == ("planned", NOT_HERE, None)

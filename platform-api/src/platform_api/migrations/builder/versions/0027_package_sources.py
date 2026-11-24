@@ -1,7 +1,7 @@
 from alembic import op
 
-revision = "0024"
-down_revision = "0023"
+revision = "0027"
+down_revision = "0026"
 
 # ADR 0025: a watched software can be read from Maven Central or npm, not only GitHub.
 

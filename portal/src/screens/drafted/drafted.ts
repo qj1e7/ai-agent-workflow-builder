@@ -1,5 +1,4 @@
-import type { DraftedApprovalView, DraftedSetUpView, DraftedWorkflowView, DraftSettingView, N8nBlockView } from '../../api/types'
-import { approvalPill } from '../run/approvalWords'
+import type { DraftedApprovalView, DraftedSetUpView, DraftedWorkflowView, DraftSettingView, N8nBlockView, UseCaseState } from '../../api/types'
 import type { Station, StepIcon } from '../run/runModel'
 import type { StageTone } from '../run/words'
 
@@ -17,24 +16,37 @@ export const ANY_BLOCK = 'Build it with any n8n block'
 const DRAFTING: PillWords = { label: 'Drafting', tone: 'new' }
 const DRAFT: PillWords = { label: 'Draft', tone: 'quiet' }
 const IN_N8N: PillWords = { label: 'In n8n', tone: 'quiet' }
+const ON: PillWords = { label: 'On', tone: 'new' }
+const PAUSED: PillWords = { label: 'Paused', tone: 'quiet' }
 
-/** The one pill, in the words the same states have everywhere: the approval's own for a yes awaited, given or refused. A draft that could not be made has none. */
-export function draftedPill(state: DraftedWorkflowView['state'], inN8n = false): PillWords | null {
+/**
+ * The one pill, in ADR 0053's four states: a drafted workflow is a Draft while its one-time check is asked for, given or refused, and
+ * reads as the workflow it was set up as (`life`) once that is on or paused. A draft that could not be made has none.
+ */
+export function draftedPill(state: DraftedWorkflowView['state'], inN8n = false, life?: UseCaseState): PillWords | null {
   switch (state) {
     case 'drafting':
       return DRAFTING
     case 'draft':
       return inN8n ? IN_N8N : DRAFT
-    case 'waiting':
-      return approvalPill({ is: 'open', step: 0, steps: 1, approvedBy: [] }, false)
     case 'approved':
-      return approvalPill({ is: 'approved', by: [], at: null }, false)
+      return life === 'on' ? ON : life === 'paused' ? PAUSED : DRAFT
+    case 'waiting':
     case 'declined':
-      return approvalPill({ is: 'declined', record: { by: '', approvedBy: [], reason: null }, at: null }, false)
+      return DRAFT
     case 'not_drafted':
       return null
   }
 }
+
+/** The one-time check, one line on the card (ADR 0053, item 3): an Approver's yes to this exact version before it first runs. */
+export const ONE_TIME_CHECK = 'An Approver checks it once before it first runs.'
+export const checkedOnceWords = (by: string): string => `${by} checked it once.`
+export const WAITING_FOR_CHECK = 'Waiting for an Approver to check it.'
+/** A version changed after its check, in the platform's own words (`CHANGED`), which name the button beside them. */
+export const CHANGED_SINCE_CHECK = 'Changed since it was approved. Press Turn on to ask for the check again.'
+/** After the check, Turn on works as on any set-up card. */
+export const TURN_ON_NOW = 'Press Turn on. I do a test run, which writes nothing, and turn it on if the test passes.'
 
 export const draftedTitle = (view: Pick<DraftedWorkflowView, 'name' | 'state'>): string => view.name ?? (view.state === 'drafting' ? DRAFTING_TITLE : 'The n8n workflow')
 
@@ -106,7 +118,6 @@ export function addedWords(added: number): string | null {
 
 export const flagsWords = (flags: number): string => `${String(flags)} ${flags === 1 ? 'flag' : 'flags'}.`
 
-export const WAITING_WORDS = 'Waiting for an Approver. You can’t approve your own draft.'
 export const CANCELLED_WAITING_WORDS = 'This revision cancelled the waiting approval.'
 
 export const lowerFirst = (words: string): string => words.charAt(0).toLowerCase() + words.slice(1)
@@ -130,7 +141,7 @@ export type SetUpLine =
 export function setUpLine(setUp: DraftedSetUpView | null): SetUpLine {
   if (setUp === null || setUp.state === 'setting_up') return { kind: 'setting_up', words: 'Setting it up in n8n.' }
   if (setUp.state === 'set_up') return { kind: 'set_up', words: 'Set up as a draft.', useCaseId: setUp.use_case_id }
-  return { kind: setUp.state, words: setUp.words ?? (setUp.state === 'failed' ? 'n8n didn’t take it.' : 'It changed since it was approved. It needs a new approval.') }
+  return { kind: setUp.state, words: setUp.words ?? (setUp.state === 'failed' ? 'n8n didn’t take it.' : CHANGED_SINCE_CHECK) }
 }
 
 /** The words above the box while a change is being asked for. */

@@ -267,6 +267,52 @@ class MockGithubTest(unittest.TestCase):
             self.assertEqual(call(base, REDIS_URL)[0], 200)
 
 
+class PlaysForASimulation(unittest.TestCase):
+    """A simulation (ADR 0054) steers the mock for each scenario: what it serves, or a source
+    that is not found, or one that drops the connection, which plays a timeout (spike S5)."""
+
+    def test_drop_mode_takes_the_request_and_closes_the_connection_without_a_word(self) -> None:
+        with running() as base:
+            self.assertEqual(call(base, "/_admin/mode", {"mode": "drop"}), (200, {"mode": "drop"}))
+            for path in (RELEASES_URL, "/repos/langchain-ai/langgraph"):
+                with self.assertRaises((http.client.HTTPException, ConnectionError)):
+                    call(base, path)
+            self.assertEqual(call(base, "/healthz")[0], 200)
+            call(base, "/_admin/mode", {"mode": "ok"})
+            self.assertEqual(call(base, RELEASES_URL)[0], 200)
+
+    def test_served_releases_answer_for_every_repository_until_cleared(self) -> None:
+        served = [{"tag_name": "9.9.9", "name": "9.9.9"}, {"tag_name": "9.9.8", "name": ""}]
+        with running() as base:
+            answer = call(base, "/_admin/releases", {"releases": served})
+            self.assertEqual(answer, (200, {"served": 2}))
+            self.assertEqual(call(base, RELEASES_URL), (200, served))
+            self.assertEqual(call(base, "/repos/anyone/anything/releases"), (200, served))
+            self.assertEqual(call(base, RELEASES_URL + "?per_page=1"), (200, served[:1]))
+            self.assertEqual(
+                call(base, "/_admin/releases", {"releases": None}), (200, {"served": None})
+            )
+            self.assertEqual(call(base, RELEASES_URL)[1][0]["tag_name"], "1.2.16")
+            self.assertEqual(call(base, "/repos/anyone/anything/releases")[0], 404)
+
+    def test_no_releases_served_is_an_empty_answer(self) -> None:
+        with running() as base:
+            call(base, "/_admin/releases", {"releases": []})
+            self.assertEqual(call(base, RELEASES_URL), (200, []))
+
+    def test_served_releases_still_follow_the_mode(self) -> None:
+        with running() as base:
+            call(base, "/_admin/releases", {"releases": [{"tag_name": "9.9.9"}]})
+            call(base, "/_admin/mode", {"mode": "not_found"})
+            self.assertEqual(call(base, RELEASES_URL)[0], 404)
+
+    def test_served_releases_are_a_list_of_objects(self) -> None:
+        with running() as base:
+            for given in ({"releases": "9.9.9"}, {"releases": [1]}, {}):
+                self.assertEqual(call(base, "/_admin/releases", given)[0], 400)
+            self.assertEqual(call(base, RELEASES_URL)[1][0]["tag_name"], "1.2.16")
+
+
 if __name__ == "__main__":
     unittest.main()
 

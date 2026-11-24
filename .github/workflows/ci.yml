@@ -104,6 +104,16 @@ jobs:
         working-directory: .
         run: scripts/n8n-guards.sh
 
+      # ADR 0054. The unit tests show the check fails on a real key or a way out. The check then
+      # reads deploy/compose.simulation.yaml and the platform's link file as compose renders them.
+      # The simulation and simulation-link jobs check the running stacks.
+      - name: The simulation n8n holds no real key and reaches only the mocks, as compose renders it
+        if: matrix.project == 'e2e'
+        working-directory: .
+        run: |
+          python3 -I -B -m unittest discover -s scripts -p test_simulation_isolation.py
+          python3 -I -B scripts/simulation_isolation.py
+
       - name: Check import rules
         if: matrix.project == 'platform-api'
         working-directory: ${{ matrix.project }}
@@ -270,6 +280,55 @@ jobs:
       - name: Pack smoke, n8n loads every built-in block but seven, the pin checks hold, and the catalogue is current
         working-directory: .
         run: scripts/pack-smoke.sh
+
+  # The simulation n8n (ADR 0054) on its own network, with keys made up at the start. deploy/.env
+  # holds the platform's keys, made up too, so the check can show none of them reaches it.
+  simulation:
+    concurrency:
+      group: ci-simulation-${{ github.ref }}
+      cancel-in-progress: true
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+
+      # ADR 0054. Bootstrap, four scenarios run by hand through the simulation gateway and a
+      # version's copy with only mock keys (scripts/simulation_drive.py), then the isolation check
+      # on the running stack, which also sees the mock keys the copy made.
+      - name: The simulation n8n and its gateway hold no real key, reach only the mocks and play each scenario
+        run: |
+          deploy/make-env.sh
+          scripts/simulation.sh test
+
+  # The simulation linked to a whole platform stack (ADR 0054, "What the link chose"): platform-api
+  # shares a network with the gateway alone, and deploy/make-env.sh makes this run's start secret.
+  # A drafted release check is tried on practice systems through the link, with code's templates
+  # and no model, then the isolation check probes both stacks from inside their containers.
+  simulation-link:
+    concurrency:
+      group: ci-simulation-link-${{ github.ref }}
+      cancel-in-progress: true
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+
+      - name: A drafted workflow is tried on practice systems through the link, which only platform-api shares
+        env:
+          E2E_SIMULATION: "on"
+        run: scripts/e2e.sh
+
+      - name: Keep the logs of both stacks
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: simulation-link-logs
+          path: e2e/out/
+          if-no-files-found: ignore
 
   scans:
     runs-on: ubuntu-latest

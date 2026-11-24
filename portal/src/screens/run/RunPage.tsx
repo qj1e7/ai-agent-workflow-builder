@@ -3,10 +3,11 @@ import { Link, useParams } from 'react-router'
 import { ApiError } from '../../api/client'
 import { useSession } from '../../api/context'
 import { useApproval, useRun, useUseCase } from '../../api/queries'
+import { useNow } from '../../api/ticking'
 import type { RunView, UseCaseView } from '../../api/types'
 import { PageHead } from '../../shell/PageHead'
 import { PRODUCT } from '../../shell/product'
-import { AgentFace } from '../../ui/AgentFace'
+import { AgentFace, type FaceState } from '../../ui/AgentFace'
 import { Button } from '../../ui/Button'
 import { Toast, type ToastMessage } from '../../ui/Toast'
 import { useFromChat } from '../../ui/fromChat'
@@ -15,6 +16,7 @@ import { motionAllowed } from '../../ui/motion'
 import { nextRunOf } from '../workflows/workflow'
 import { ApprovalGate, NotChecked } from './ApprovalGate'
 import { DECISION_ID, DecisionArea, LONG_LOG, StepLog } from './Chat'
+import { FixCrew } from './FixCrew'
 import { RunInN8n } from './InN8n'
 import { canDecideNow, foundOf, partyOf, useDecision, useNotChecked, type Decision } from './decision'
 import { POLL_FAILED_MS, useReconnectWhenBehind } from './follow'
@@ -26,11 +28,11 @@ import { RunLine } from './RunLine'
 import { RunPill } from './RunPill'
 import { RunPlaceContext, type RunPlace } from './place'
 import { isFinished, type RunModel } from './runModel'
-import { TROUBLE_FACE } from './troubleFace'
+import { troubleFaceOf } from './troubleFace'
 import { landingOf, scrollsToDecision } from './landing'
 import { useRunStory } from './useRunStory'
 import { testAgainOf } from './testAgain'
-import { declinedNext, declinedNowWords, declinedRecord, feedTroubleOf, lineOf, logRowsOf, RUN_MISSING, RUN_PROBLEM, speakerName, stageWords, type NameOf, type RunState } from './words'
+import { declinedNext, declinedNowWords, declinedRecord, feedTroubleOf, lineOf, logRowsOf, RUN_MISSING, RUN_PROBLEM, speakerName, stageWords, type NameOf } from './words'
 import styles from './RunPage.module.css'
 
 function notFound(error: unknown): boolean {
@@ -123,7 +125,7 @@ function LiveRunPage({ run, fromApproval }: { run: RunView; fromApproval: boolea
 }
 
 function backTo(useCase: UseCaseView | undefined): string {
-  return useCase?.template === 'software_watchlist' ? '/software' : '/workflows'
+  return useCase?.template === 'software_watchlist' ? `/workflows/${useCase.use_case_id}` : '/workflows'
 }
 
 function useFollowUntilScrolled(newest: number, loadedUpTo: number, list: RefObject<HTMLOListElement | null>): void {
@@ -166,11 +168,11 @@ function logOpen(choice: boolean | null, model: RunModel): boolean {
   return choice ?? WORKING.has(model.phase.state)
 }
 
-/** The troubleshooter's face beside its words, as the sketch's `tr big`. Its mood follows the run. */
-function TroubleshooterBlock({ state, children }: { state: RunState; children: ReactNode }) {
+/** The troubleshooter's face beside its words, as the sketch's `tr big`. Its mood follows the run, and a fix while one runs. */
+function TroubleshooterBlock({ face, children }: { face: FaceState; children: ReactNode }) {
   return (
     <div className={styles['trouble']}>
-      <AgentFace id="troubleshooter" size={34} state={TROUBLE_FACE[state]} />
+      <AgentFace id="troubleshooter" size={34} state={face} />
       <div className={styles['troubleBody']}>{children}</div>
     </div>
   )
@@ -186,6 +188,8 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
   const heading = useRef<HTMLHeadingElement>(null)
   const n8nAccess = me?.n8n_access === true
   const [view, showView] = useView()
+  /** Redrawn each minute, so a fix whose twenty minutes run out stops showing as at work. */
+  const now = useNow(() => new Date()).getTime()
   const shownView = n8nAccess ? view : 'main'
 
   const waiting = shown.phase.state === 'awaiting_approval'
@@ -262,15 +266,17 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
     ) : null
   const failure = shown.phase.state === 'failed' ? shown.phase : null
   const safeId = `${run.run_id}-safe`
+  const troubleFace = troubleFaceOf(facts.state, shown.fix, now)
   const trouble =
     failure ? (
       <DecisionArea label="Why it stopped">
-        <TroubleshooterBlock state={facts.state}>
+        <TroubleshooterBlock face={troubleFace}>
           <StopAnswers failure={failure} {...story.stopped} safeId={safeId} />
+          {shown.fix ? <FixCrew fix={shown.fix} now={now} loadedUpTo={loadedUpTo} /> : null}
         </TroubleshooterBlock>
       </DecisionArea>
     ) : story.answers.length > 0 && !waiting ? (
-      <TroubleshooterBlock state={facts.state}>
+      <TroubleshooterBlock face={troubleFace}>
         <AnswerList answers={story.answers} />
       </TroubleshooterBlock>
     ) : null

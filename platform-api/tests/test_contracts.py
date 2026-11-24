@@ -41,12 +41,14 @@ from platform_api.builder.planner import (
     PartChecked,
     PlannerReply,
 )
+from platform_api.builder.simulation_views import UseCaseSimulationView
 from platform_api.monitoring.agent_events import AgentEventPost
 from platform_api.monitoring.events import DeniedReason, WireVerdict, activity_events_adapter
 from platform_api.monitoring.http import TroubleshootingOut
 from platform_api.orchestration.agents import (
     AgentCards,
     AnswerRequest,
+    CauseRequest,
     CheckPartRequest,
     ChooseRequest,
     CodeWording,
@@ -54,13 +56,18 @@ from platform_api.orchestration.agents import (
     DraftRequest,
     ExplainWordingRequest,
     FindSoftwareRequest,
+    FixAccepted,
+    FixStartRequest,
     ModelAccess,
     ReadReleasesRequest,
+    ScenarioExplainRequest,
+    ScenarioWriteRequest,
     TaskFinished,
     TaskOutput,
     TaskRequest,
     WatchlistInputs,
     answer_result_adapter,
+    cause_result_adapter,
     check_part_result_adapter,
     choose_result_adapter,
     connect_result_adapter,
@@ -70,6 +77,8 @@ from platform_api.orchestration.agents import (
     github_check_result_adapter,
     model_test_result_adapter,
     read_releases_result_adapter,
+    scenario_explain_result_adapter,
+    scenario_write_result_adapter,
     task_result_adapter,
 )
 from platform_api.orchestration.agents import CapabilityList as AgentCapabilityList
@@ -142,7 +151,9 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "agent/card-task-finished.json": task_result_adapter,
     "agent/card-draft-request.json": TypeAdapter(DraftRequest),
     "agent/card-drafted.json": draft_result_adapter,
-    "agent/key-shapes.json": TypeAdapter(dict[Literal["shapes"], list[str]]),
+    "agent/key-shapes.json": TypeAdapter(
+        dict[Literal["shapes", "kept", "secret_name_ends", "code_parameters"], list[str] | str]
+    ),
     "agent/planner-choose-request.json": TypeAdapter(ChooseRequest),
     "agent/planner-chosen.json": choose_result_adapter,
     "agent/software-find-request.json": TypeAdapter(FindSoftwareRequest),
@@ -169,6 +180,16 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "agent/explain-wording-request.json": TypeAdapter(ExplainWordingRequest),
     "agent/explain-wording-reworded.json": explain_wording_result_adapter,
     "agent/explain-wording-kept.json": explain_wording_result_adapter,
+    "agent/troubleshooter-cause-request.json": TypeAdapter(CauseRequest),
+    "agent/troubleshooter-cause-found.json": cause_result_adapter,
+    "agent/troubleshooter-cause-kept.json": cause_result_adapter,
+    "agent/scenario-write-request.json": TypeAdapter(ScenarioWriteRequest),
+    "agent/scenario-write-written.json": scenario_write_result_adapter,
+    "agent/scenario-write-kept.json": scenario_write_result_adapter,
+    "agent/scenario-explain-request.json": TypeAdapter(ScenarioExplainRequest),
+    "agent/scenario-explain-explained.json": scenario_explain_result_adapter,
+    "agent/fix-start-request.json": TypeAdapter(FixStartRequest),
+    "agent/fix-accepted.json": TypeAdapter(FixAccepted),
     "agent/planner-check-part-request.json": TypeAdapter(CheckPartRequest),
     "agent/planner-check-part-cant.json": check_part_result_adapter,
     "agent/planner-check-part-fits.json": check_part_result_adapter,
@@ -338,6 +359,7 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "people/me-n8n.ready.json": TypeAdapter(MyN8nOut),
     "builder/use-case.n8n.json": TypeAdapter(UseCaseN8nView),
     "builder/use-case.n8n.held.json": TypeAdapter(UseCaseN8nView),
+    "builder/use-case.simulation.json": TypeAdapter(UseCaseSimulationView),
     "builder/opened-in-n8n.json": TypeAdapter(HoldOut),
     "builder/run.n8n.waiting.json": TypeAdapter(RunN8nView),
     "builder/run.n8n.ended.json": TypeAdapter(RunN8nView),
@@ -346,7 +368,17 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "builder/explain.reworded.json": TypeAdapter(WorkflowExplained),
     **{
         f"builder/drafted.{state}.json": TypeAdapter(DraftedWorkflowView)
-        for state in ("drafting", "ready", "question", "in-n8n", "not-drafted", "waiting", "set-up")
+        for state in (
+            "drafting",
+            "ready",
+            "simulating",
+            "simulated",
+            "question",
+            "in-n8n",
+            "not-drafted",
+            "waiting",
+            "set-up",
+        )
     },
     "builder/setup-approval.bob.json": TypeAdapter(SetUpApprovalView),
     "builder/setup-approval.carol.json": TypeAdapter(SetUpApprovalView),

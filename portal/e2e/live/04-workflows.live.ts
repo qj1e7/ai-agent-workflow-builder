@@ -14,9 +14,9 @@ const nextRun = (page: Page) => whenSection(page).locator('p')
 const changeWhen = (page: Page) => page.getByRole('button', { name: /^(Change|Set) when it runs$/ })
 const versionsList = (page: Page) => page.getByRole('list', { name: 'Versions, newest first' })
 
-/** Versions is a details, closed until opened. */
+/** Versions sit inside Details, closed until opened. */
 async function openVersions(page: Page): Promise<void> {
-  const summary = page.locator('summary', { hasText: 'Versions' })
+  const summary = page.locator('summary', { hasText: 'Details' })
   if ((await versionsList(page).count()) === 0 || !(await versionsList(page).isVisible())) await summary.click()
 }
 const moreActions = (page: Page) => page.getByRole('button', { name: 'More actions' })
@@ -182,20 +182,20 @@ test('bob sees who may approve and the recent runs, with no Run now, Pause or De
   await context.close()
 })
 
-test('the Software watchlist opens on the Software page, from its row and from its old address', async ({ browser, backend }) => {
+test('the Software watchlist opens on its workflow page, from its row and from its old address', async ({ browser, backend }) => {
   const watchlist = await backend.freshWatchlist('alice')
   const context = await devContext(browser, 'alice')
   const page = await context.newPage()
   await page.goto('/workflows')
   const link = ownLink(rowOf(page, watchlist))
   await expect(link).toContainText('Software watchlist')
-  await expect(link).toHaveAttribute('href', '/software')
+  await expect(link).toHaveAttribute('href', `/workflows/${watchlist}`)
   await link.click()
-  await expect(page).toHaveURL(/\/software$/)
-  await expect(heading(page)).toHaveText('Watchlist')
-  await page.goto(`/workflows/${watchlist}`)
-  await expect(page).toHaveURL(/\/software$/)
-  await expect(heading(page)).toHaveText('Watchlist')
+  await expect(page).toHaveURL(new RegExp(`/workflows/${watchlist}$`))
+  await expect(heading(page)).toHaveText('Software watchlist')
+  await page.goto('/software')
+  await expect(page).toHaveURL(new RegExp(`/workflows/${watchlist}$`))
+  await expect(heading(page)).toHaveText('Software watchlist')
   await context.close()
 })
 
@@ -290,7 +290,7 @@ test('alice’s schedule changes publish versions the page lists read only, an U
   const page = await context.newPage()
   await page.goto(`/workflows/${workflow.id}`)
   await expect(heading(page)).toHaveText(workflow.name)
-  await expect(page.locator('summary', { hasText: 'Versions' }), 'one version shows no list').toHaveCount(0)
+  await expect(versionsList(page), 'one version shows no list').toHaveCount(0)
 
   await changeWhen(page).click()
   await page.getByLabel('Day').selectOption('weekdays')
@@ -336,7 +336,7 @@ test('alice’s schedule changes publish versions the page lists read only, an U
   for (const [who, reader] of [['alice', page], ['bob', bob]] as const) {
     for (const width of [1920, 1280, 900, 390]) {
       await reader.setViewportSize({ width, height: 900 })
-      await reader.locator('summary', { hasText: 'Versions' }).scrollIntoViewIfNeeded()
+      await reader.locator('summary', { hasText: 'Details' }).scrollIntoViewIfNeeded()
       const widths = await reader.evaluate(() => [document.documentElement.scrollWidth, document.documentElement.clientWidth])
       expect(widths[0], `${who}’s page does not scroll sideways at ${width} px`).toBeLessThanOrEqual(widths[1] ?? 0)
       await shot(reader, info, `r6-versions-${who}-${width}`)

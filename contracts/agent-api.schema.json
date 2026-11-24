@@ -546,6 +546,15 @@
           "default": null,
           "description": "The turn before this one. Context for the question lane only: the Planner never builds request text from it."
         },
+        "ready_here": {
+          "description": "The planned capabilities the platform has turned on where it runs. Only these are Ready in the Planner's prompts beside the registry's own.",
+          "items": {
+            "$ref": "#/$defs/PlatformReady"
+          },
+          "maxItems": 4,
+          "title": "Ready Here",
+          "type": "array"
+        },
         "task": {
           "maxLength": 2000,
           "minLength": 1,
@@ -1203,6 +1212,191 @@
       },
       "title": "CarryForward",
       "type": "object"
+    },
+    "CauseCheck": {
+      "enum": [
+        "call",
+        "not_a_block",
+        "not_where_it_stopped",
+        "not_a_system",
+        "not_a_detail"
+      ],
+      "type": "string"
+    },
+    "CauseDetail": {
+      "maxLength": 64,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_./-]*$",
+      "type": "string"
+    },
+    "CauseFound": {
+      "additionalProperties": false,
+      "properties": {
+        "detail": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CauseDetail"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The one name the cause is about, copied from the stop in the shape its kind takes: a repository, a project's key, a field's name or a version. Or null."
+        },
+        "failed_part": {
+          "description": "The blocks the cause is in. Code checked each is a block of the version and one where the run stopped.",
+          "items": {
+            "$ref": "#/$defs/RunBlockName"
+          },
+          "maxItems": 100,
+          "minItems": 1,
+          "title": "Failed Part",
+          "type": "array"
+        },
+        "failure_kind": {
+          "$ref": "#/$defs/FailureKind",
+          "description": "What kind of failure stopped the run. Code checked the stop shows it, and sends unknown when it doesn't."
+        },
+        "kind": {
+          "const": "found",
+          "default": "found",
+          "title": "Kind",
+          "type": "string"
+        },
+        "system": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CauseSystem"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The system the error came from, one the stop or a block where the run stopped names, or null for none."
+        }
+      },
+      "required": [
+        "failed_part",
+        "system",
+        "failure_kind",
+        "detail"
+      ],
+      "title": "CauseFound",
+      "type": "object"
+    },
+    "CauseKept": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "kept",
+          "default": "kept",
+          "title": "Kind",
+          "type": "string"
+        },
+        "why": {
+          "$ref": "#/$defs/CauseCheck",
+          "description": "Why the rule table answers instead: call when the model's call failed or its answer didn't parse, which is worth asking again, or the id of the check a field failed, which is final for that stop."
+        }
+      },
+      "required": [
+        "why"
+      ],
+      "title": "CauseKept",
+      "type": "object"
+    },
+    "CauseRequest": {
+      "additionalProperties": false,
+      "description": "One stopped run, for the model to name its cause and the failed part.",
+      "properties": {
+        "blocks": {
+          "description": "The blocks of the version that ran, by name, as the run's record holds them.",
+          "items": {
+            "$ref": "#/$defs/RunBlockName"
+          },
+          "maxItems": 100,
+          "minItems": 1,
+          "title": "Blocks",
+          "type": "array"
+        },
+        "events": {
+          "description": "The run's activity, each event's plain summary, oldest first.",
+          "items": {
+            "maxLength": 400,
+            "type": "string"
+          },
+          "maxItems": 80,
+          "title": "Events",
+          "type": "array"
+        },
+        "model": {
+          "$ref": "#/$defs/ModelAccess"
+        },
+        "stop": {
+          "$ref": "#/$defs/StoppedRun"
+        },
+        "stopped_at": {
+          "description": "The blocks where the run stopped, as code read them. Each is one of blocks.",
+          "items": {
+            "$ref": "#/$defs/RunBlockName"
+          },
+          "maxItems": 100,
+          "minItems": 1,
+          "title": "Stopped At",
+          "type": "array"
+        },
+        "within_seconds": {
+          "description": "How long the runtime has, counted from when it gets the request. The model call ends by then, as after it the platform's rule table answers alone (ADR 0032).",
+          "exclusiveMinimum": 0,
+          "maximum": 10,
+          "title": "Within Seconds",
+          "type": "number"
+        }
+      },
+      "required": [
+        "model",
+        "stop",
+        "events",
+        "blocks",
+        "stopped_at",
+        "within_seconds"
+      ],
+      "title": "CauseRequest",
+      "type": "object"
+    },
+    "CauseResult": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CauseFound"
+        },
+        {
+          "$ref": "#/$defs/CauseKept"
+        },
+        {
+          "$ref": "#/$defs/ModelProblem"
+        }
+      ]
+    },
+    "CauseSystem": {
+      "enum": [
+        "github",
+        "gitlab",
+        "bitbucket",
+        "jira",
+        "confluence",
+        "teams",
+        "slack",
+        "entra",
+        "azure",
+        "aws",
+        "docker",
+        "pypi",
+        "npm",
+        "servicenow",
+        "outlook",
+        "zendesk",
+        "gmail"
+      ],
+      "type": "string"
     },
     "CheckPartRequest": {
       "additionalProperties": false,
@@ -1991,6 +2185,147 @@
       ],
       "type": "string"
     },
+    "FailedScenario": {
+      "additionalProperties": false,
+      "description": "One scenario that failed, as code graded it.",
+      "properties": {
+        "ending": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ScenarioEnding"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "How code read the run's end."
+        },
+        "expected": {
+          "description": "What code expects of the kind.",
+          "maxLength": 300,
+          "title": "Expected",
+          "type": "string"
+        },
+        "happened": {
+          "description": "What code read in the records, which can quote a system's error.",
+          "maxLength": 2000,
+          "title": "Happened",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/ScenarioKind"
+        },
+        "name": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "plays": {
+          "items": {
+            "$ref": "#/$defs/ScenarioPlay"
+          },
+          "maxItems": 100,
+          "title": "Plays",
+          "type": "array"
+        },
+        "ran": {
+          "items": {
+            "$ref": "#/$defs/RunBlockName"
+          },
+          "maxItems": 100,
+          "title": "Ran",
+          "type": "array"
+        },
+        "stopped_at": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunBlockName"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The block that stopped the run, if any."
+        }
+      },
+      "required": [
+        "name",
+        "kind",
+        "ending",
+        "stopped_at",
+        "expected",
+        "happened",
+        "ran",
+        "plays"
+      ],
+      "title": "FailedScenario",
+      "type": "object"
+    },
+    "FailureKind": {
+      "enum": [
+        "not_found",
+        "refused",
+        "no_answer",
+        "wrong_value",
+        "changed_field",
+        "permission",
+        "limit",
+        "unknown"
+      ],
+      "type": "string"
+    },
+    "FailureNote": {
+      "additionalProperties": false,
+      "description": "The picks for one failed scenario. platform-api writes the sentence from them.",
+      "properties": {
+        "block": {
+          "$ref": "#/$defs/RunBlockName",
+          "description": "The block the failure is in: one that ran, or where the run stopped."
+        },
+        "detail": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CauseDetail"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "One name copied from what happened, in the troubleshooter's shapes. Or null."
+        },
+        "kind": {
+          "$ref": "#/$defs/NoteKind",
+          "description": "What went wrong there. Code checked the run's facts show it, and sends unknown when they don't."
+        },
+        "scenario": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Scenario",
+          "type": "string"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunBlockName"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The block whose play led to it: one the scenario played other than as recorded. Or null."
+        }
+      },
+      "required": [
+        "scenario",
+        "block",
+        "kind",
+        "source",
+        "detail"
+      ],
+      "title": "FailureNote",
+      "type": "object"
+    },
     "FindSoftwareRequest": {
       "additionalProperties": false,
       "properties": {
@@ -2374,6 +2709,7 @@
       ],
       "type": "string"
     },
+    "JsonValue": {},
     "KeyPasted": {
       "additionalProperties": false,
       "description": "Something the drafter would read holds the shape of a key: the words, the team's facts or\nthe current plan. So no model read any of it (ADR 0051, section 5).",
@@ -2645,6 +2981,13 @@
           "title": "Declined",
           "type": "integer"
         },
+        "fixes": {
+          "default": 0,
+          "description": "Workflows that are on and can't run, which they can fix.",
+          "minimum": 0,
+          "title": "Fixes",
+          "type": "integer"
+        },
         "questions": {
           "description": "Questions Approvers asked the person on requests waiting for a yes.",
           "minimum": 0,
@@ -2654,6 +2997,13 @@
         "replies": {
           "minimum": 0,
           "title": "Replies",
+          "type": "integer"
+        },
+        "setups": {
+          "default": 0,
+          "description": "Drafted workflows' one-time checks waiting for this Approver's yes.",
+          "minimum": 0,
+          "title": "Setups",
           "type": "integer"
         },
         "stopped": {
@@ -2688,6 +3038,30 @@
         "no_tool_call",
         "too_long",
         "failed"
+      ],
+      "type": "string"
+    },
+    "NoteCheck": {
+      "enum": [
+        "call",
+        "too_big",
+        "key_shape",
+        "not_a_scenario",
+        "twice",
+        "not_a_block",
+        "not_a_play",
+        "not_a_detail"
+      ],
+      "type": "string"
+    },
+    "NoteKind": {
+      "enum": [
+        "stopped",
+        "went_on",
+        "ended_early",
+        "changes",
+        "no_end",
+        "unknown"
       ],
       "type": "string"
     },
@@ -3223,6 +3597,10 @@
       },
       "title": "PlannerFacts",
       "type": "object"
+    },
+    "PlatformReady": {
+      "const": "workflows.simulate",
+      "type": "string"
     },
     "PreviousTurn": {
       "additionalProperties": false,
@@ -3786,6 +4164,397 @@
       ],
       "type": "string"
     },
+    "RunBlockName": {
+      "maxLength": 200,
+      "minLength": 1,
+      "type": "string"
+    },
+    "SampleAnswer": {
+      "enum": [
+        "github.release",
+        "read.release",
+        "read.page",
+        "jira.issue"
+      ],
+      "type": "string"
+    },
+    "SampleId": {
+      "maxLength": 60,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$",
+      "type": "string"
+    },
+    "ScenarioBlock": {
+      "additionalProperties": false,
+      "description": "One block of the version, as a simulation sees it. Code works out each field.",
+      "properties": {
+        "answer": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SampleAnswer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "For a read, what it gives, when an allow list covers it."
+        },
+        "name": {
+          "$ref": "#/$defs/RunBlockName"
+        },
+        "plays": {
+          "description": "How a simulation can play the block. A read can be served each of these ways, and an Agent block can be recorded or too slow.",
+          "items": {
+            "$ref": "#/$defs/ScenarioServe"
+          },
+          "maxItems": 5,
+          "title": "Plays",
+          "type": "array"
+        },
+        "role": {
+          "$ref": "#/$defs/ScenarioRole"
+        },
+        "varies": {
+          "description": "For a read an allow list covers, the variations its answer takes.",
+          "items": {
+            "$ref": "#/$defs/ScenarioVariation"
+          },
+          "maxItems": 3,
+          "title": "Varies",
+          "type": "array"
+        }
+      },
+      "required": [
+        "name",
+        "role"
+      ],
+      "title": "ScenarioBlock",
+      "type": "object"
+    },
+    "ScenarioCheck": {
+      "enum": [
+        "call",
+        "too_big",
+        "key_shape",
+        "not_the_kinds",
+        "not_a_read",
+        "not_a_sample",
+        "not_an_agent"
+      ],
+      "type": "string"
+    },
+    "ScenarioEnding": {
+      "enum": [
+        "reached_yes",
+        "finished",
+        "nothing_new",
+        "declined",
+        "no_answer",
+        "stopped",
+        "failed",
+        "wrong_write",
+        "did_not_end"
+      ],
+      "type": "string"
+    },
+    "ScenarioExplainRequest": {
+      "additionalProperties": false,
+      "description": "A simulation's failed scenarios, for the model to pick why each one failed.",
+      "properties": {
+        "failed": {
+          "items": {
+            "$ref": "#/$defs/FailedScenario"
+          },
+          "maxItems": 20,
+          "minItems": 1,
+          "title": "Failed",
+          "type": "array"
+        },
+        "model": {
+          "$ref": "#/$defs/ModelAccess"
+        },
+        "within_seconds": {
+          "exclusiveMinimum": 0,
+          "maximum": 15,
+          "title": "Within Seconds",
+          "type": "number"
+        }
+      },
+      "required": [
+        "model",
+        "failed",
+        "within_seconds"
+      ],
+      "title": "ScenarioExplainRequest",
+      "type": "object"
+    },
+    "ScenarioExplainResult": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ScenariosExplained"
+        },
+        {
+          "$ref": "#/$defs/ModelProblem"
+        }
+      ]
+    },
+    "ScenarioKind": {
+      "enum": [
+        "happy_path",
+        "nothing_new",
+        "source_not_found",
+        "timeout",
+        "approver_says_no",
+        "odd_data"
+      ],
+      "type": "string"
+    },
+    "ScenarioPlay": {
+      "additionalProperties": false,
+      "description": "How a scenario played one block, when not as recorded.",
+      "properties": {
+        "block": {
+          "$ref": "#/$defs/RunBlockName"
+        },
+        "serve": {
+          "$ref": "#/$defs/ScenarioServe"
+        },
+        "vary": {
+          "items": {
+            "$ref": "#/$defs/ScenarioVariation"
+          },
+          "maxItems": 3,
+          "title": "Vary",
+          "type": "array"
+        }
+      },
+      "required": [
+        "block",
+        "serve"
+      ],
+      "title": "ScenarioPlay",
+      "type": "object"
+    },
+    "ScenarioRole": {
+      "enum": [
+        "start",
+        "read",
+        "agent",
+        "propose",
+        "ask",
+        "write",
+        "tell",
+        "notice",
+        "idle",
+        "other"
+      ],
+      "type": "string"
+    },
+    "ScenarioSample": {
+      "additionalProperties": false,
+      "description": "A recorded sample, scrubbed by its allow list before it left the simulation gateway.",
+      "properties": {
+        "answer": {
+          "$ref": "#/$defs/SampleAnswer"
+        },
+        "block": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunBlockName"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The block it was recorded from."
+        },
+        "id": {
+          "$ref": "#/$defs/SampleId"
+        },
+        "items": {
+          "items": {
+            "additionalProperties": {
+              "$ref": "#/$defs/JsonValue"
+            },
+            "type": "object"
+          },
+          "maxItems": 3,
+          "title": "Items",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "answer",
+        "items"
+      ],
+      "title": "ScenarioSample",
+      "type": "object"
+    },
+    "ScenarioServe": {
+      "enum": [
+        "recorded",
+        "varied",
+        "empty",
+        "not_found",
+        "too_slow"
+      ],
+      "type": "string"
+    },
+    "ScenarioVariation": {
+      "enum": [
+        "suffix",
+        "empty_field",
+        "long_text"
+      ],
+      "type": "string"
+    },
+    "ScenarioWriteRequest": {
+      "additionalProperties": false,
+      "description": "A version's plan, for the model to write one scenario for each kind that applies.",
+      "properties": {
+        "blocks": {
+          "items": {
+            "$ref": "#/$defs/ScenarioBlock"
+          },
+          "maxItems": 100,
+          "minItems": 1,
+          "title": "Blocks",
+          "type": "array"
+        },
+        "kinds": {
+          "description": "The kinds that apply, as code picks.",
+          "items": {
+            "$ref": "#/$defs/ScenarioKind"
+          },
+          "maxItems": 6,
+          "minItems": 1,
+          "title": "Kinds",
+          "type": "array"
+        },
+        "model": {
+          "$ref": "#/$defs/ModelAccess"
+        },
+        "samples": {
+          "items": {
+            "$ref": "#/$defs/ScenarioSample"
+          },
+          "maxItems": 20,
+          "title": "Samples",
+          "type": "array"
+        },
+        "within_seconds": {
+          "description": "How long the runtime has, counted from when it gets the request.",
+          "exclusiveMinimum": 0,
+          "maximum": 30,
+          "title": "Within Seconds",
+          "type": "number"
+        }
+      },
+      "required": [
+        "model",
+        "blocks",
+        "kinds",
+        "within_seconds"
+      ],
+      "title": "ScenarioWriteRequest",
+      "type": "object"
+    },
+    "ScenarioWriteResult": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ScenariosWritten"
+        },
+        {
+          "$ref": "#/$defs/ScenariosKept"
+        },
+        {
+          "$ref": "#/$defs/ModelProblem"
+        }
+      ]
+    },
+    "ScenariosExplained": {
+      "additionalProperties": false,
+      "properties": {
+        "kept": {
+          "description": "Why each note left out was left out. A failure with no note keeps code's own words only.",
+          "items": {
+            "$ref": "#/$defs/NoteCheck"
+          },
+          "maxItems": 20,
+          "title": "Kept",
+          "type": "array"
+        },
+        "kind": {
+          "const": "explained",
+          "default": "explained",
+          "title": "Kind",
+          "type": "string"
+        },
+        "notes": {
+          "items": {
+            "$ref": "#/$defs/FailureNote"
+          },
+          "maxItems": 20,
+          "title": "Notes",
+          "type": "array"
+        }
+      },
+      "required": [
+        "notes",
+        "kept"
+      ],
+      "title": "ScenariosExplained",
+      "type": "object"
+    },
+    "ScenariosKept": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "kept",
+          "default": "kept",
+          "title": "Kind",
+          "type": "string"
+        },
+        "why": {
+          "$ref": "#/$defs/ScenarioCheck",
+          "description": "Why code's templates run instead: call when the call failed or the answer didn't parse, too_big or key_shape when nothing was sent, or the check a pick failed."
+        }
+      },
+      "required": [
+        "why"
+      ],
+      "title": "ScenariosKept",
+      "type": "object"
+    },
+    "ScenariosWritten": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "written",
+          "default": "written",
+          "title": "Kind",
+          "type": "string"
+        },
+        "scenarios": {
+          "description": "One for each kind that applies. Code checked every name is one the request offers. platform-api checks each play against its kind.",
+          "items": {
+            "$ref": "#/$defs/WrittenScenario"
+          },
+          "maxItems": 6,
+          "minItems": 1,
+          "title": "Scenarios",
+          "type": "array"
+        }
+      },
+      "required": [
+        "scenarios"
+      ],
+      "title": "ScenariosWritten",
+      "type": "object"
+    },
     "ScheduleChange": {
       "additionalProperties": false,
       "description": "When a request asks a workflow it names to run, in the schedule's own terms. A part it\ndoesn't name is None, so the saved one stays.",
@@ -4176,6 +4945,39 @@
         "npm"
       ],
       "type": "string"
+    },
+    "StoppedRun": {
+      "additionalProperties": false,
+      "description": "A stop as the run's run_failed event records it.",
+      "properties": {
+        "message": {
+          "maxLength": 2000,
+          "title": "Message",
+          "type": "string"
+        },
+        "reason": {
+          "maxLength": 40,
+          "title": "Reason",
+          "type": "string"
+        },
+        "retryable": {
+          "title": "Retryable",
+          "type": "boolean"
+        },
+        "stage": {
+          "maxLength": 40,
+          "title": "Stage",
+          "type": "string"
+        }
+      },
+      "required": [
+        "stage",
+        "reason",
+        "retryable",
+        "message"
+      ],
+      "title": "StoppedRun",
+      "type": "object"
     },
     "TagPattern": {
       "description": "Which release tags count. Only a pattern from a fixed list is accepted, never one the caller writes. Allowed values: `^(?:[vV]|docker-v|n8n@|langchain==)?\\d+\\.\\d+\\.\\d+$`, `^[vV]?\\d+\\.\\d+\\.\\d+$`, `^\\d+\\.\\d+\\.\\d+$`.",
@@ -5246,6 +6048,78 @@
       ],
       "title": "WriteKeyFact",
       "type": "object"
+    },
+    "WrittenRead": {
+      "additionalProperties": false,
+      "properties": {
+        "block": {
+          "$ref": "#/$defs/RunBlockName",
+          "description": "A block that reads a source, named exactly as the list of blocks names it."
+        },
+        "sample": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SampleId"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "For recorded or varied, the id of a sample of what the block reads, or null for its newest."
+        },
+        "serve": {
+          "$ref": "#/$defs/ScenarioServe",
+          "description": "How the scenario serves it."
+        },
+        "vary": {
+          "description": "For varied only, one to three variations the block's answer takes. Else empty.",
+          "items": {
+            "$ref": "#/$defs/ScenarioVariation"
+          },
+          "maxItems": 3,
+          "title": "Vary",
+          "type": "array"
+        }
+      },
+      "required": [
+        "block",
+        "serve"
+      ],
+      "title": "WrittenRead",
+      "type": "object"
+    },
+    "WrittenScenario": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/ScenarioKind",
+          "description": "One kind from the list of kinds."
+        },
+        "reads": {
+          "description": "How each read is served. A read left out is served as code's own scenario of this kind serves it.",
+          "items": {
+            "$ref": "#/$defs/WrittenRead"
+          },
+          "maxItems": 100,
+          "title": "Reads",
+          "type": "array"
+        },
+        "slow_agents": {
+          "description": "In timeout only, the Agent blocks that answer too slowly. Else empty.",
+          "items": {
+            "$ref": "#/$defs/RunBlockName"
+          },
+          "maxItems": 100,
+          "title": "Slow Agents",
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "WrittenScenario",
+      "type": "object"
     }
   },
   "additionalProperties": false,
@@ -5304,6 +6178,18 @@
     "releases_read_result": {
       "$ref": "#/$defs/ReadReleasesResult"
     },
+    "scenario_explain_request": {
+      "$ref": "#/$defs/ScenarioExplainRequest"
+    },
+    "scenario_explain_result": {
+      "$ref": "#/$defs/ScenarioExplainResult"
+    },
+    "scenario_write_request": {
+      "$ref": "#/$defs/ScenarioWriteRequest"
+    },
+    "scenario_write_result": {
+      "$ref": "#/$defs/ScenarioWriteResult"
+    },
     "software_find_request": {
       "$ref": "#/$defs/FindSoftwareRequest"
     },
@@ -5318,6 +6204,12 @@
     },
     "tool_list": {
       "$ref": "#/$defs/ToolList"
+    },
+    "troubleshooter_cause_request": {
+      "$ref": "#/$defs/CauseRequest"
+    },
+    "troubleshooter_cause_result": {
+      "$ref": "#/$defs/CauseResult"
     },
     "workflow_draft_request": {
       "$ref": "#/$defs/WorkflowDraftRequest"
@@ -5358,6 +6250,12 @@
     "planner_check_part_result",
     "workflow_explain_request",
     "workflow_explain_result",
+    "troubleshooter_cause_request",
+    "troubleshooter_cause_result",
+    "scenario_write_request",
+    "scenario_write_result",
+    "scenario_explain_request",
+    "scenario_explain_result",
     "workflow_draft_request",
     "workflow_draft_result"
   ],

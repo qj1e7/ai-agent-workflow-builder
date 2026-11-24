@@ -1,7 +1,9 @@
 import asyncio
 import logging
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, replace
 from datetime import datetime
+from typing import Any, Literal
 
 import httpx
 from fastapi import FastAPI
@@ -10,11 +12,15 @@ from platform_api.auth import DEV_PEOPLE, DevAuth, OidcAuth
 from platform_api.builder import Builder, Home, PlannerFront, TeamRequests, Watchlist
 from platform_api.builder.drafted_workflows import DraftedWorkflows
 from platform_api.builder.explain import Explainer
+from platform_api.builder.fix_parts import FixLayouts, FixParts
+from platform_api.builder.fixes import Fixes, FixLive, FixSettings, FixTrying
 from platform_api.builder.key_sweep import KeySweep
 from platform_api.builder.made_in_n8n import MadeInN8n
 from platform_api.builder.n8n_holds import Holding
 from platform_api.builder.n8n_view import InN8nViews
 from platform_api.builder.planner_facts import PlannerFactsReader
+from platform_api.builder.simulations import Simulations
+from platform_api.builder.use_case_simulations import UseCaseSimulations
 from platform_api.builder.watchlist import OnN8n
 from platform_api.db import Database
 from platform_api.monitoring import (
@@ -27,7 +33,7 @@ from platform_api.monitoring import (
     callback_for,
 )
 from platform_api.orchestration import self_test
-from platform_api.orchestration.agents import HttpAgentRuntime
+from platform_api.orchestration.agents import HttpAgentRuntime, ModelAccess, PlatformReady
 from platform_api.orchestration.confluence_rest import (
     CONFLUENCE_PAGE,
     ConfluencePages,
@@ -93,10 +99,22 @@ from platform_api.orchestration.planning import (
     ProjectFinding,
     WorkflowDrafting,
 )
-from platform_api.orchestration.runs import Leg
+from platform_api.orchestration.run_causes import RunCauses
+from platform_api.orchestration.runs import (
+    Expired,
+    Failed,
+    Leg,
+    Lost,
+    Outcome,
+    Rejected,
+    Skipped,
+    Succeeded,
+)
 from platform_api.orchestration.schedule_store import ScheduleBook
 from platform_api.orchestration.service import Orchestrator
 from platform_api.orchestration.setup_approvals import SetUpApprovals
+from platform_api.orchestration.simulation_driver import SimulationClient, SimulationDriver
+from platform_api.orchestration.simulation_model import SimulationModel, connected_model
 from platform_api.orchestration.slack_channels import SlackChannels
 from platform_api.orchestration.team_request_card import TeamsRequestChannel
 from platform_api.orchestration.teams import TeamsStub, TeamsWorkflowsWebhook
@@ -111,7 +129,7 @@ from platform_api.practice_jira import (
     practice_token,
 )
 from platform_api.settings import KeySystem, N8nKey, Settings
-from platform_api.shared import N8nExecutionId, RunId, TaskId
+from platform_api.shared import N8nExecutionId, Principal, RunId, TaskId, UserId
 
 log = logging.getLogger(__name__)
 
@@ -126,7 +144,11 @@ class Services:
     builder: Builder
     planner_front: PlannerFront
     explainer: Explainer
+    cause_finder: RunCauses
+    simulation_model: SimulationModel
     drafted: DraftedWorkflows
+    simulations: Simulations
+    use_case_simulations: UseCaseSimulations
     setup_approvals: SetUpApprovals
     home: Home
     watchlist: Watchlist
@@ -153,6 +175,21 @@ class Services:
     made_in_n8n: MadeInN8n | None = None
     keys: PlatformKeys | None = None
     key_sweep: KeySweep | None = None
+    simulation_client: SimulationClient | None = None
+    fix_parts: FixParts | None = None
+    fixes: Fixes | None = None
+
+
+def simulations_for(
+    settings: Settings, db: Database, model: SimulationModel
+) -> tuple[SimulationClient | None, Simulations]:
+    """The simulation gateway, where there is one (ADR 0054, PR 7). The model writes and explains
+    cases only with SIMULATION_MODEL on, since each is a paid call."""
+    if settings.simulation is None:
+        return None, Simulations(db, None)
+    client = SimulationClient(settings.simulation.url, settings.simulation.start_secret)
+    driver = SimulationDriver(client, model if settings.simulation.uses_model else None)
+    return client, Simulations(db, driver)
 
 
 JIRA_TIMEOUT_SECONDS = 10.0
@@ -198,7 +235,10 @@ def install(app: FastAPI, services: Services) -> None:
     app.state.builder = services.builder
     app.state.planner_front = services.planner_front
     app.state.explainer = services.explainer
+    app.state.cause_finder = services.cause_finder
+    app.state.simulation_model = services.simulation_model
     app.state.drafted = services.drafted
+    app.state.use_case_simulations = services.use_case_simulations
     app.state.home = services.home
     app.state.watchlist = services.watchlist
     app.state.team_requests = services.team_requests
@@ -213,6 +253,59 @@ def install(app: FastAPI, services: Services) -> None:
     app.state.staff = services.staff
     app.state.in_n8n = services.in_n8n
     app.state.made_in_n8n = services.made_in_n8n
+    app.state.fix_parts = services.fix_parts
+    app.state.fixes = services.fixes
+
+
+class ConnectedModel:
+    """The model connected in Settings, read afresh for each fix."""
+
+    def __init__(self, access: Callable[[], Awaitable[ModelAccess | None]]) -> None:
+        self._access = access
+
+    async def access(self) -> ModelAccess | None:
+        return await self._access()
+
+
+class BuilderTries:
+    """Turn back on (ADR 0055, section 7): the builder tries a fix with the one real test run
+    and puts it live, and the orchestrator says how that test run ended."""
+
+    def __init__(self, builder: Builder, runs: Orchestrator) -> None:
+        self._builder = builder
+        self._runs = runs
+
+    async def try_fixed(
+        self, use_case_id: str, document: dict[str, Any], by: Principal, stopped_version: int
+    ) -> FixTrying | str:
+        return await self._builder.try_fixed(use_case_id, document, by, stopped_version)
+
+    async def tried_outcome(self, run_id: str) -> Literal["passed", "failed"] | None:
+        """passed once the test run reached the yes, or found nothing to write. Every other end
+        is failed, and a run still going is None."""
+        detail = await self._runs.get_run(RunId(run_id))
+        if detail is None:
+            return "failed"
+        match detail.record.state:
+            case Succeeded(outcome=Outcome.TEST_PASSED | Outcome.NOTHING_TO_WRITE):
+                return "passed"
+            case Succeeded() | Failed() | Rejected() | Skipped() | Expired() | Lost():
+                return "failed"
+            case _:
+                return None
+
+    async def put_live(
+        self,
+        use_case_id: str,
+        trying: FixTrying,
+        document: dict[str, Any],
+        by: UserId,
+        authors: frozenset[UserId],
+        stopped_version: int,
+    ) -> FixLive | str:
+        return await self._builder.put_fixed_live(
+            use_case_id, trying, document, by, authors, stopped_version
+        )
 
 
 class NoN8nReads:
@@ -467,6 +560,9 @@ async def build(settings: Settings) -> Services:
         time_zone=settings.team_time_zone,
     )
     await watchlist.adopt_ticket_project()
+    simulation_model = SimulationModel(agents, connected_model(db, model_settings))
+    simulation_client, simulations = simulations_for(settings, db, simulation_model)
+    use_case_simulations = UseCaseSimulations(db, simulations)
     builder = Builder(
         db,
         orchestrator,
@@ -484,6 +580,7 @@ async def build(settings: Settings) -> Services:
         holding=holding,
         time_zone=settings.team_time_zone,
         keys=keys,
+        simulations=use_case_simulations,
     )
     # Before any run can start: a run left on the shared run workflow, whose blocks are off, ends
     # first (E11), so the workflows it held back can move.
@@ -534,6 +631,8 @@ async def build(settings: Settings) -> Services:
         builder, orchestrator, people, team_requests, connections, watchlist, setup_approvals
     )
     trace_scores = trace_scores_for(settings)
+    # One fact for the card, the capabilities and the Planner's prompts (ADR 0054, PR 7).
+    ready_here: tuple[PlatformReady, ...] = ("workflows.simulate",) if simulations.available else ()
     drafted = DraftedWorkflows(
         db,
         WorkflowDrafting(db, model_settings, agents),
@@ -545,8 +644,26 @@ async def build(settings: Settings) -> Services:
         SlackChannels(settings.n8n_keys.get("slack")),
         staff,
         settings.n8n_editor_url,
+        simulations=simulations,
     )
     setup_approvals.serve(drafted)
+    fixes = Fixes(
+        db,
+        activity,
+        RunsInN8n(db, n8n.landing),
+        drafted,
+        setup_approvals,
+        agents,
+        ConnectedModel(connected_model(db, model_settings)),
+        BuilderTries(builder, orchestrator),
+        FixSettings(
+            on=settings.fix_model,
+            signing_key=settings.callback_signing_key,
+            platform_url=settings.platform_internal_url,
+        ),
+        ExplainWordings(db, model_settings, agents),
+    )
+    drafted.serve_fixes(fixes)
     return Services(
         settings=settings,
         db=db,
@@ -555,7 +672,7 @@ async def build(settings: Settings) -> Services:
         node_calls=node_calls,
         builder=builder,
         planner_front=PlannerFront(
-            PlannerAnswers(db, model_settings, agents),
+            PlannerAnswers(db, model_settings, agents, ready_here),
             builder,
             watchlist,
             CapabilityRegistry(agents),
@@ -565,9 +682,23 @@ async def build(settings: Settings) -> Services:
             scores=trace_scores,
             pseudonym_key=settings.trace_pseudonym_key,
             drafted=drafted,
+            ready_here=ready_here,
         ),
         explainer=Explainer(db, builder, ExplainWordings(db, model_settings, agents)),
+        cause_finder=RunCauses(db, model_settings, agents, RunsInN8n(db, n8n.landing)),
+        simulation_model=simulation_model,
         drafted=drafted,
+        simulations=simulations,
+        use_case_simulations=use_case_simulations,
+        simulation_client=simulation_client,
+        fix_parts=FixParts(
+            FixLayouts(facts, n8n.drafts, settings.public_base_url, settings.team_time_zone.key),
+            simulation_client,
+            simulation_model if settings.simulation and settings.simulation.uses_model else None,
+            fixes,
+            fixes,
+        ),
+        fixes=fixes,
         setup_approvals=setup_approvals,
         home=home,
         watchlist=watchlist,
@@ -650,12 +781,16 @@ class Runner:
         self._tasks.append(
             asyncio.create_task(self._services.setup_approvals.work_forever(self._stop))
         )
+        if (fixes := self._services.fixes) is not None:
+            self._tasks.append(asyncio.create_task(fixes.work_forever(self._stop)))
 
     async def stop(self) -> None:
         self._stop.set()
         self._services.orchestrator.nudge()
         self._services.staff.nudge()
         self._services.setup_approvals.nudge()
+        # A simulation takes minutes. Past its limit an unfinished one shows as not finished.
+        self._services.simulations.cancel()
         await self._services.drafted.settle()
         for task in self._tasks:
             await task
@@ -671,6 +806,8 @@ class Runner:
             await self._services.keys.close()
         if self._services.n8n is not None:
             await self._services.n8n.close()
+        if self._services.simulation_client is not None:
+            await self._services.simulation_client.close()
         await self._services.request_channel.close()
         await self._services.trace_scores.close()
         if self._services.copier is not None:

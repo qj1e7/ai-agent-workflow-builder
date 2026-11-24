@@ -7,11 +7,12 @@ answer that doesn't parse, a failed call or a slow one gives the fixed fallback.
 the reply and the list of built abilities, never the person's message or facts, so text planted
 there has less room to steer it."""
 
+from collections.abc import Collection
 from typing import Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from agent_runtime.abilities import CAPABILITIES
+from agent_runtime.abilities import capabilities_here
 from agent_runtime.contract import FreeReplyAnswer, ModelProblem
 from agent_runtime.drafting import ask_model
 from agent_runtime.how_to import HOW_TO
@@ -77,11 +78,11 @@ VERIFY_SYSTEM: Final = (
 )
 
 
-def verify_messages(answer: FreeReplyAnswer) -> tuple[str, str]:
+def verify_messages(answer: FreeReplyAnswer, ready_here: Collection[str] = ()) -> tuple[str, str]:
     """The system and user text: the built abilities, the how-to guide the reply was given, and
     the reply exactly as the person would see it, with its choices and its button. Nothing from
     the person's message or facts."""
-    built = [f"- {c.plain}" for c in CAPABILITIES if c.state == "ready"]
+    built = [f"- {c.plain}" for c in capabilities_here(ready_here) if c.state == "ready"]
     built += [f"- {line}" for line in BUILT_IN_THE_APP]
     guide = [f"- {line}" for line in HOW_TO]
     shown = [f"The reply:\n{answer.text}"]
@@ -108,6 +109,10 @@ def flag_of(verdict: Verdict | ModelProblem) -> VerifierFlag | None:
             return None
 
 
-def verify(answer: FreeReplyAnswer, chat_for: ChatFor) -> VerifierFlag | None:
-    verdict = ask_model(chat_for, *verify_messages(answer), Verdict, timeout=VERIFY_TIMEOUT_SECONDS)
+def verify(
+    answer: FreeReplyAnswer, chat_for: ChatFor, ready_here: Collection[str] = ()
+) -> VerifierFlag | None:
+    verdict = ask_model(
+        chat_for, *verify_messages(answer, ready_here), Verdict, timeout=VERIFY_TIMEOUT_SECONDS
+    )
     return flag_of(verdict)

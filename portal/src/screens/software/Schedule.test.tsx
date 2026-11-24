@@ -47,7 +47,7 @@ const DRAWN_OUT = [TurnOffSchedule, ConfirmLine, Button]
 
 function schedule(version = LIST.version, shown = LIST.schedule): Drawn[] {
   return elementsOf(
-    testHooks.draw(() => Schedule({ schedule: shown, version, operator: true, paused: false, useCaseId: LIST.use_case_id, answeredAt: 0, onResumed: () => undefined, held: null })),
+    testHooks.draw(() => Schedule({ schedule: shown, version, operator: true, paused: false, held: false })),
     DRAWN_OUT,
   )
 }

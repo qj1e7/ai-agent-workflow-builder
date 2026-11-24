@@ -22,6 +22,7 @@ from platform_api.builder.in_n8n import discard
 from platform_api.builder.lifecycle import is_on, lifecycle_of
 from platform_api.builder.n8n_draft import Checked, DraftRefused, N8nNotReady, NotSafe
 from platform_api.builder.templates import AGENT_CARDS
+from platform_api.builder.use_case_simulations import UseCaseSimulations
 from platform_api.builder.versions import Held, Made, Publication, add_version
 from platform_api.builder.watchlist import AlreadyOnN8n, MovedToN8n, WaitsForRun, Watchlist
 from platform_api.builder.watchlist import Move as WatchlistMove
@@ -188,8 +189,11 @@ class Moves:
         known: Known,
         team_zone: str,
         watchlist: Watchlist | None = None,
+        *,
+        simulations: UseCaseSimulations,
     ) -> None:
         self._db = db
+        self._simulations = simulations
         self._zone = team_zone
         self._n8n = n8n
         self._runs = runs
@@ -283,6 +287,9 @@ class Moves:
                 await _says(uow, row, NOT_TAKEN_WORDS)
                 return N8nNotReady(NOT_LIVE)
             version = await _record(uow, row, draft, laid, live, saved)
+            # Laid out in n8n and graded, so it is tried on practice systems (ADR 0054).
+            claimed = await self._simulations.claim(uow.conn, use_case_id, uow.now)
+        await self._simulations.start(claimed)
         log.info(
             "%s runs as n8n workflow %s from version %d", use_case_id, draft.workflow_id, version
         )
@@ -356,6 +363,9 @@ class Moves:
                 await _restoring(uow, use_case_id, None)
                 return N8nNotReady(NOT_BACK)
             await _keep_restored(uow, use_case_id, row["current_version"], draft)
+            # Graded again before it went back, so it is tried if its digest never was.
+            claimed = await self._simulations.claim(uow.conn, use_case_id, uow.now)
+        await self._simulations.start(claimed)
         log.info("%s is back in n8n as workflow %s", use_case_id, draft.workflow_id)
         return Restored(draft.workflow_id)
 

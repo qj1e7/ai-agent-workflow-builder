@@ -5,9 +5,8 @@ import type { SimilarWorkflow } from '../../api/types'
 import { Card } from '../../ui/Card'
 import { OpenButton } from '../../ui/OpenItem'
 import { repeatWords } from '../software/software'
-import { needsFix } from '../workflows/n8nChange'
 import { StatusPills } from '../workflows/Status'
-import { pillOf, workflowPath } from '../workflows/workflow'
+import { workflowPath } from '../workflows/workflow'
 import { useMainButton } from './primary'
 
 /**
@@ -27,7 +26,7 @@ export function AlreadyHave({ similar, card }: { similar: SimilarWorkflow; card:
   return (
     <Card
       title={useCase?.name ?? similar.name}
-      pill={useCase ? <StatusPills state={useCase.state} fact={useCase.last_run ? pillOf(useCase.last_run) : null} fix={needsFix(useCase)} /> : undefined}
+      pill={useCase ? <StatusPills useCase={useCase} /> : undefined}
       actions={
         <>
           <Button onClick={() => setAnother(true)}>Set up another</Button>

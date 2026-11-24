@@ -13,6 +13,7 @@ from agent_runtime.abilities import (
     OFFER_REQUESTS,
     UNSUPPORTED_WORDS,
     VULNERABILITIES_PLANNED,
+    capabilities_here,
     why_not,
 )
 from agent_runtime.api import Settings, create_app
@@ -250,3 +251,29 @@ def test_reading_confluence_is_ready_only_through_the_confluence_connection():
     assert entry.tools == ["confluence.read_page"]
     assert (entry.focus, entry.short) == (False, None)
     assert BY_ID["confluence.change"].state == "planned"
+
+
+def test_simulation_mode_is_planned_until_the_platform_says_it_is_set_up_here():
+    """ADR 0054, PR 7. Simulation mode needs a simulation n8n, which most places don't have, so
+    the registry says it is planned there. Only where platform-api says it is set up is it Ready.
+    It has no short words, so the chat's What I can do card stays as the sketch draws it."""
+    entry = BY_ID["workflows.simulate"]
+    assert (entry.state, entry.platform, entry.needs_model, entry.short) == (
+        "planned",
+        False,
+        False,
+        None,
+    )
+    assert entry.plain == "Try each new workflow on practice systems before its test run"
+    assert entry.cant == "try a workflow on practice systems before its test run"
+    assert entry.why == "Practice systems aren't set up here."
+    assert capabilities_here(()) == CAPABILITIES
+    here = {c.id: c for c in capabilities_here(["workflows.simulate"])}
+    assert (here["workflows.simulate"].state, here["workflows.simulate"].platform) == (
+        "ready",
+        True,
+    )
+    assert (here["workflows.simulate"].cant, here["workflows.simulate"].why) == (None, None)
+    assert [
+        c for c in capabilities_here(["workflows.simulate"]) if c.id != "workflows.simulate"
+    ] == [c for c in CAPABILITIES if c.id != "workflows.simulate"]

@@ -51,16 +51,25 @@ from platform_api.builder.drafted_views import (
     DraftedSetUpView,
     DraftedState,
     DraftedWorkflowView,
+    FixEvidenceView,
     SetUpApprovalView,
     SetUpDecisionIn,
     report_settings,
     setting_views,
 )
-from platform_api.builder.explain import view_of
+from platform_api.builder.explain import WorkflowExplained, view_of
 from platform_api.builder.layout import DraftedLayout, lay_out_drafted
 from platform_api.builder.n8n_draft import blocks_of
+from platform_api.builder.simulations import (
+    NO_SIMULATION,
+    NOTHING_TO_TRY,
+    SIMULATING,
+    Claimed,
+    Simulations,
+)
 from platform_api.builder.sweep import grading_mark
 from platform_api.builder.templates import AGENT_CARDS
+from platform_api.builder.use_case_simulations import UseCaseSimulations
 from platform_api.builder.versions import Publication, authors_json
 from platform_api.builder.workflow_report import (
     KEY_SHAPE,
@@ -137,7 +146,7 @@ N8N_NOT_READY: Final = "I couldn't draft that. n8n is not ready yet."
 PAUSED: Final = "Drafting is paused while the platform updates."
 N8N_IMAGE: Final = "n8nio/n8n"
 """The repository of the n8n image the drafter's catalogue names (contracts/n8n/catalogue.json)."""
-CHANGED: Final = "Changed since it was approved. Send it for approval again."
+CHANGED: Final = "Changed since it was approved. Press Turn on to ask for the check again."
 NO_LONGER_PASSES: Final = (
     "It no longer passes the safety check, so it isn't set up. Ask for a change to draft it again."
 )
@@ -372,6 +381,55 @@ class Checked:
     names: Mapping[UserId, str] = field(default_factory=dict[UserId, str])
 
 
+@dataclass(frozen=True)
+class SetUpPlan:
+    """The drafted revision a workflow was set up from, as a fix starts from it (ADR 0055)."""
+
+    drafted_id: str
+    use_case_id: str
+    revision: int
+    plan: WorkflowPlan
+    digest: str
+    sources: Sources
+
+
+@dataclass(frozen=True)
+class FixLaid:
+    """A fixed plan laid out as the drafted workflow's next version, and checked today."""
+
+    document: dict[str, Any]
+    grade: str
+    report: WorkflowReport
+    changes_access: bool
+
+
+@dataclass(frozen=True)
+class FixApproval:
+    """What the approval page shows of a fix, which the fix's side works out."""
+
+    name: str
+    use_case_id: str
+    report: WorkflowExplained
+    held: str | None
+    """Why a yes can't be taken on it today, or None."""
+    fix: FixEvidenceView
+
+
+class FixSide(Protocol):
+    """Fix it for me's side of set-up approvals (ADR 0055, section 7): a fix's approval is keyed
+    by its fix id where a drafted workflow's is keyed by its drafted id."""
+
+    def owns(self, drafted_id: str) -> bool: ...
+
+    async def approval(
+        self, state: SetUpState, viewer: Principal, reworded: bool
+    ) -> FixApproval | None: ...
+
+    async def held_now(self, state: SetUpState) -> str | None: ...
+
+    async def approved(self, approved: ApprovedSetUp) -> None: ...
+
+
 class DraftedWorkflows:
     def __init__(
         self,
@@ -385,6 +443,8 @@ class DraftedWorkflows:
         channels: Channels | None = None,
         staff: Staff | None = None,
         editor_url: str | None = None,
+        *,
+        simulations: Simulations | None = None,
     ) -> None:
         self._db = db
         self._drafting = drafting
@@ -398,6 +458,64 @@ class DraftedWorkflows:
         self._editor_url = None if editor_url is None else editor_url.rstrip("/")
         self._cards = CardLibrary(db)
         self._running: set[asyncio.Task[None]] = set()
+        self._simulations = simulations or Simulations(db, None)
+        self._versions = UseCaseSimulations(db, self._simulations)
+        self._fixes: FixSide | None = None
+
+    def serve_fixes(self, fixes: FixSide) -> None:
+        """Fix it for me's side, bound once both are built."""
+        self._fixes = fixes
+
+    async def set_up_plan(self, use_case_id: str) -> SetUpPlan | None:
+        """The drafted revision the workflow was set up from, or None for a workflow no drafted
+        workflow set up."""
+        async with self._db.connection("builder") as conn:
+            row = await (
+                await conn.execute(
+                    "SELECT drafted_id, set_up_revision FROM builder.drafted_workflows"
+                    " WHERE use_case_id = %s AND set_up_at IS NOT NULL",
+                    (use_case_id,),
+                )
+            ).fetchone()
+            kept = None if row is None else await _kept(conn, str(row["drafted_id"]))
+        if row is None or kept is None or row["set_up_revision"] is None:
+            return None
+        revision = kept.revision(int(row["set_up_revision"]))
+        if revision.plan is None or revision.digest is None:
+            return None
+        return SetUpPlan(
+            kept.drafted_id,
+            kept.use_case_id,
+            revision.number,
+            revision.plan,
+            revision.digest,
+            revision.sources,
+        )
+
+    async def drafter_facts(self) -> DrafterFacts:
+        """The team's facts, as the drafter gets them."""
+        return await self._facts_for()
+
+    async def fix_laid(
+        self,
+        drafted_id: str,
+        plan: WorkflowPlan,
+        sources: Sources,
+        document: Mapping[str, Any] | None = None,
+    ) -> FixLaid | None:
+        """A fixed plan laid out as the drafted workflow's next version, with the yes before
+        each write and the platform's keys, or the `document` stored for it, graded and reported
+        under today's rules. None while n8n's error workflow isn't loaded."""
+        async with self._db.connection("builder") as conn:
+            kept = await _kept(conn, drafted_id)
+        error_workflow = None if self._n8n is None else await self._n8n.error_workflow_id()
+        if kept is None or error_workflow is None:
+            return None
+        if document is None:
+            document = await self._check(kept, plan, error_workflow)
+        graded = grade(dict(document), error_workflow, self._zone, await self._known(plan))
+        report, access, _, _ = await self._report(document, plan, sources, None)
+        return FixLaid(dict(document), graded.grade, report, access)
 
     async def start(
         self,
@@ -562,7 +680,7 @@ class DraftedWorkflows:
             how: How = "chose" if answer.choice is not None else "typed"
             given = {setting.id: Source(read.value, how, person.user_id)} if read.filled else {}
             before = {k: v for k, v in newest.sources.items() if k != setting.id}
-            await self._keep(
+            claimed = await self._keep(
                 uow.conn,
                 kept,
                 Made(
@@ -576,6 +694,7 @@ class DraftedWorkflows:
                 await self._laid(kept, plan, error_workflow),
                 uow.now,
             )
+        await self._simulations.start(claimed)
         return await self._viewed(drafted_id, person)
 
     async def open_in_n8n(
@@ -675,7 +794,7 @@ class DraftedWorkflows:
             if isinstance(read, NotReadBack):
                 return Refused(read.words)
             plan = never_guessed(read.plan)
-            await self._keep(
+            claimed = await self._keep(
                 uow.conn,
                 kept,
                 Made(
@@ -697,6 +816,7 @@ class DraftedWorkflows:
             # The revision is kept. A copy n8n kept is the person's own, and holds no key.
             log.warning("n8n kept %s after Done in n8n: %s", held.workflow_id, type(error).__name__)
         log.info("%s read %s back from n8n", person.user_id, drafted_id)
+        await self._simulations.start(claimed)
         return await self._viewed(drafted_id, person)
 
     async def _not_a_draft(self, kept: Kept, person: Principal, revision: int) -> Refused | None:
@@ -715,8 +835,11 @@ class DraftedWorkflows:
 
     async def _keep(
         self, conn: Connection, kept: Kept, made: Made, laid: Laid, now: datetime
-    ) -> None:
-        """A revision code made, with no model: from an answer or read back from n8n."""
+    ) -> Claimed | None:
+        """A revision code made, with no model: from an answer or read back from n8n. With
+        nothing still needed, its simulation's running row goes in the same transaction."""
+        number = kept.newest.number + 1
+        digest = workflow_digest(laid.document)
         await conn.execute(
             "INSERT INTO builder.drafted_revisions (drafted_id, revision, asked_by, words,"
             " started_at, state, finished_at, plan, catalogue, document, digest, grade,"
@@ -724,7 +847,7 @@ class DraftedWorkflows:
             " VALUES (%s, %s, %s, %s, %s, 'drafted', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
             (
                 kept.drafted_id,
-                kept.newest.number + 1,
+                number,
                 made.by,
                 made.words,
                 now,
@@ -732,7 +855,7 @@ class DraftedWorkflows:
                 json(made.plan.model_dump(mode="json")),
                 made.catalogue,
                 json(laid.document),
-                workflow_digest(laid.document),
+                digest,
                 laid.grade,
                 json(laid.findings),
                 made.how,
@@ -740,6 +863,9 @@ class DraftedWorkflows:
                 json(list(made.notes)),
             ),
         )
+        if not needs_nothing(made.plan, made.sources):
+            return None
+        return await self._simulations.claim(conn, laid.document, now)
 
     async def set_up_again(
         self, drafted_id: str, asker: Principal
@@ -758,10 +884,14 @@ class DraftedWorkflows:
         log.info("%s asked to set %s up again", asker.user_id, drafted_id)
         return await self._viewed(drafted_id, asker)
 
-    async def approval(self, approval_id: str, viewer: Principal) -> SetUpApprovalView | None:
+    async def approval(
+        self, approval_id: str, viewer: Principal, reworded: bool = False
+    ) -> SetUpApprovalView | None:
         state = await self._approvals.get(ApprovalId(approval_id))
         if state is None:
             return None
+        if self._fixes is not None and self._fixes.owns(state.request.drafted_id):
+            return await self._fix_approval(state, viewer, reworded)
         async with self._db.connection("builder") as conn:
             kept = await _kept(conn, state.request.drafted_id)
         assert kept is not None
@@ -782,6 +912,32 @@ class DraftedWorkflows:
             why_not=why_not,
             decline_reasons=list(DECLINE_REASONS),
             set_up=_set_up_view(kept, state),
+        )
+
+    async def _fix_approval(
+        self, state: SetUpState, viewer: Principal, reworded: bool
+    ) -> SetUpApprovalView | None:
+        """A fix's set-up approval (ADR 0055, section 7): the fixed version's report and the
+        fix's evidence, which the fix's side works out, under the gate's own rule."""
+        assert self._fixes is not None
+        shown = await self._fixes.approval(state, viewer, reworded)
+        if shown is None:
+            return None
+        refusal = await self._approvals.why_not(state, viewer)
+        why_not = WHY_NOT[refusal] if refusal is not None else shown.held
+        return SetUpApprovalView(
+            approval_id=state.request.id,
+            drafted_id=state.request.drafted_id,
+            revision=state.request.revision,
+            name=shown.name,
+            digest=state.request.digest,
+            approval=_approval_view(state),
+            report=shown.report,
+            you_can_decide=why_not is None,
+            why_not=why_not,
+            decline_reasons=list(DECLINE_REASONS),
+            set_up=None,
+            fix=shown.fix,
         )
 
     async def decide(
@@ -811,7 +967,12 @@ class DraftedWorkflows:
     async def set_up(self, approved: ApprovedSetUp) -> SetUpFinished | TryAgain:
         """The approved revision as a Draft in the platform's n8n project (flow step 9): created
         through n8n's API, read back, and kept only when its digest equals the approved one. It
-        is the builder's half of the set-up approval, asked once for each approval."""
+        is the builder's half of the set-up approval, asked once for each approval. A fix's yes
+        sets nothing up: Turn back on tries it with the test run first (ADR 0055, section 7)."""
+        if self._fixes is not None and self._fixes.owns(approved.drafted_id):
+            await self._fixes.approved(approved)
+            return SetUpFinished()
+        claimed: Claimed | None = None
         async with self._db.transaction("builder") as uow:
             await hold_workflow(uow.conn, f"drafted:{approved.drafted_id}", alone=True)
             kept = await _kept(uow.conn, approved.drafted_id)
@@ -867,6 +1028,10 @@ class DraftedWorkflows:
             except Exception:
                 await n8n.remove(held.workflow_id)
                 raise
+            # Graded just now. Its digest is the approved revision's, so it is tried only when
+            # that revision never was, such as one that waited for a write key (ADR 0054).
+            claimed = await self._versions.claim(uow.conn, kept.use_case_id, uow.now)
+        await self._simulations.start(claimed)
         log.info(
             "set up %s revision %d as %s, a draft, on %s's approval %s",
             approved.drafted_id,
@@ -904,6 +1069,7 @@ class DraftedWorkflows:
         loop, and gather() on ended drafts gives it none."""
         while going := [task for task in self._running if not task.done()]:
             await asyncio.gather(*going, return_exceptions=True)
+        await self._simulations.settle()
 
     async def draft(self, drafted_id: str, number: int) -> None:
         """Drafts one revision: the drafter plans, and code lays it out and checks it."""
@@ -960,7 +1126,10 @@ class DraftedWorkflows:
         plan = never_guessed(plan)
         laid = await self._laid(kept, plan, error_workflow)
         before = _drafted_before(kept, number)
-        await _finish(
+        sources = carried(
+            {} if before is None else before.sources, plan, {}, kept.revision(number).asked_by
+        )
+        claimed = await _finish(
             self._db,
             kept.drafted_id,
             number,
@@ -969,13 +1138,33 @@ class DraftedWorkflows:
             document=laid.document,
             grade=laid.grade,
             findings=laid.findings,
-            sources=carried(
-                {} if before is None else before.sources,
-                plan,
-                {},
-                kept.revision(number).asked_by,
-            ),
+            sources=sources,
+            simulations=self._simulations if needs_nothing(plan, sources) else None,
         )
+        await self._simulations.start(claimed)
+
+    async def simulate_again(
+        self, drafted_id: str, person: Principal, revision: int
+    ) -> DraftedWorkflowView | Refused | NotFound:
+        """Tries the newest revision on practice systems, once it was never tried, its last try
+        wasn't run or it didn't finish."""
+        async with self._db.connection("builder") as conn:
+            kept = await _kept(conn, drafted_id)
+        if kept is None:
+            return NotFound()
+        newest = kept.newest
+        if revision != newest.number:
+            return Refused(NEWER_BELOW)
+        if not self._simulations.available:
+            return Refused(NO_SIMULATION)
+        simulation = (await self._view(kept, person)).simulation
+        if simulation is None or not simulation.can_try_again:
+            running = simulation is not None and simulation.state == "running"
+            return Refused(SIMULATING if running else NOTHING_TO_TRY)
+        assert newest.document is not None and newest.digest is not None
+        if not await self._simulations.again(newest.digest, newest.document):
+            return Refused(SIMULATING)
+        return await self._viewed(drafted_id, person)
 
     async def _laid(self, kept: Kept, plan: WorkflowPlan, error_workflow: str) -> Laid:
         document = await self._check(kept, plan, error_workflow)
@@ -1010,15 +1199,29 @@ class DraftedWorkflows:
         the builder sees it and where each value came from, in words for this viewer."""
         plan, document = revision.plan, revision.document
         assert plan is not None and document is not None
+        report, access, settings, names = await self._report(
+            document, plan, revision.sources, viewer
+        )
+        return Checked(dict(document), report, access, settings, names)
+
+    async def _report(
+        self,
+        document: Mapping[str, Any],
+        plan: WorkflowPlan,
+        sources: Sources,
+        viewer: UserId | None,
+    ) -> tuple[WorkflowReport, bool, tuple[SettingNow, ...], Mapping[UserId, str]]:
+        """Code's report of a laid-out plan under today's rules, and whether it changes someone's
+        access: a write whose yes needs two Approvers on each run."""
         error_workflow = None if self._n8n is None else await self._n8n.error_workflow_id()
         known = await self._known(plan)
         cards = {c.card_id: c for c in await self._cards.list()}
-        settings = settings_of(plan, revision.sources)
+        settings = settings_of(plan, sources)
         givers = [s.source.by for s in settings if s.source is not None and s.source.by]
         names = await self._approvals.names(givers) if givers else {}
         report = workflow_report(
             Drafted(
-                document,
+                dict(document),
                 cards,
                 report_settings(settings, viewer, names),
             ),
@@ -1028,7 +1231,7 @@ class DraftedWorkflows:
             isinstance(write.decides, EachRun) and write.decides.approvers >= 2
             for write in report.approves
         )
-        return Checked(dict(document), report, access, settings, names)
+        return report, access, settings, names
 
     async def _known(self, plan: WorkflowPlan) -> KnownOptions:
         """The team's options, with each repository the plan reads, as a Planner's layout adds
@@ -1048,6 +1251,8 @@ class DraftedWorkflows:
         state = await self._approvals.get(ApprovalId(approval_id))
         if state is None:
             return NotFound()
+        if self._fixes is not None and self._fixes.owns(state.request.drafted_id):
+            return await self._fixes.held_now(state)
         async with self._db.connection("builder") as conn:
             kept = await _kept(conn, state.request.drafted_id)
         assert kept is not None
@@ -1099,6 +1304,7 @@ class DraftedWorkflows:
             replaced_waiting=replaced,
             approval=None if mine is None else _approval_view(mine),
             set_up=None if mine is None else _set_up_view(kept, mine),
+            simulation=None,
         )
         if newest.state == "drafting":
             if self._drafting_now(newest):
@@ -1149,6 +1355,17 @@ class DraftedWorkflows:
         question = next_question(checked.settings, options) if editing else None
         if kept.in_n8n is not None:
             why = IN_N8N_NOW
+        # A blank would fail every case, so a revision that still needs a setting waits, and the
+        # one that fills it is tried (ADR 0054, "What every version chose").
+        simulation = (
+            None
+            if newest.digest is None
+            else self._simulations.waiting()
+            if needed
+            else await self._simulations.view(
+                newest.digest, viewer is not None and Role.OPERATOR in viewer.roles
+            )
+        )
         return base.model_copy(
             update={
                 "state": lived,
@@ -1164,6 +1381,7 @@ class DraftedWorkflows:
                 "can_edit_in_n8n": editing and await self._may_edit_in_n8n(viewer),
                 "can_send": editing and why is None,
                 "why_not_send": why if lived == "draft" else _not_now(lived),
+                "simulation": simulation,
             }
         )
 
@@ -1415,10 +1633,13 @@ async def _finish(
     grade: str | None = None,
     findings: list[dict[str, Any]] | None = None,
     sources: Sources | None = None,
-) -> None:
+    simulations: Simulations | None = None,
+) -> Claimed | None:
+    """Ends a drafting revision. With simulations, a drafted one's try is claimed in the same
+    transaction, and comes back for the caller to start."""
     drafted = document is not None
     async with db.transaction("builder") as uow:
-        await uow.conn.execute(
+        finished = await uow.conn.execute(
             "UPDATE builder.drafted_revisions SET state = %s, finished_at = %s, plan = %s,"
             " catalogue = %s, document = %s, digest = %s, grade = %s, findings = %s, said = %s,"
             " sources = %s WHERE drafted_id = %s AND revision = %s AND state = 'drafting'",
@@ -1437,6 +1658,16 @@ async def _finish(
                 number,
             ),
         )
+        if simulations is None or document is None or finished.rowcount != 1:
+            return None
+        return await simulations.claim(uow.conn, document, uow.now)
+
+
+def needs_nothing(plan: WorkflowPlan, sources: Sources) -> bool:
+    """No setting is still needed, by the count the card shows. Only then is it simulated,
+    since a blank would fail every case."""
+    needed = sum(s.mark == "needed" for s in settings_of(plan, sources))
+    return needed + len(strays(plan)) == 0
 
 
 @dataclass(frozen=True)

@@ -3,6 +3,9 @@ import shutil
 import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Final
+
+from pydantic import JsonValue
 
 from agent_runtime.abilities import CAPABILITY_LIST
 from agent_runtime.answers import SkipRead, TaskRead, answer_of, check_one_part, parts_of
@@ -34,6 +37,9 @@ from agent_runtime.contract import (
     CardSpec,
     CardToRun,
     CarryForward,
+    CauseFound,
+    CauseKept,
+    CauseRequest,
     CheckPartRequest,
     Choice,
     ChooseRequest,
@@ -45,12 +51,15 @@ from agent_runtime.contract import (
     DraftApproval,
     DraftBlock,
     Drafted,
+    DrafterFacts,
     DraftInput,
     DraftRequest,
     ExplainFact,
     ExplainKept,
     ExplainReworded,
     ExplainWordingRequest,
+    FailedScenario,
+    FailureNote,
     Finding,
     FindSoftwareRequest,
     FoundModel,
@@ -77,8 +86,18 @@ from agent_runtime.contract import (
     ReplyAbout,
     ReplyEnvelope,
     RoomAddressee,
+    ScenarioBlock,
+    ScenarioExplainRequest,
+    ScenarioPlay,
+    ScenarioSample,
+    ScenarioServe,
+    ScenariosExplained,
+    ScenariosKept,
+    ScenariosWritten,
+    ScenarioWriteRequest,
     SoftwareMatch,
     SoftwareToCheck,
+    StoppedRun,
     TaskError,
     TaskFailed,
     TaskFinished,
@@ -91,12 +110,22 @@ from agent_runtime.contract import (
     WatchlistScheduleFact,
     WireModel,
     WorkflowFact,
+    WorkflowPlan,
+    WrittenRead,
+    WrittenScenario,
     agent_event_adapter,
 )
+from agent_runtime.fixing.coordinator import FixRequest
+from agent_runtime.fixing.starter import FixAccepted, FixStart
 from agent_runtime.free_reply import answer_of_envelope
 from agent_runtime.github import TOKEN_REFUSED
 from agent_runtime.model_access import KEY_REFUSED
-from agent_runtime.monitoring.masking import KEY_SHAPE_SOURCES
+from agent_runtime.monitoring.masking import (
+    CODE_PARAMETERS,
+    KEPT_KEY,
+    KEY_SHAPE_SOURCES,
+    SECRET_NAME_ENDS,
+)
 from agent_runtime.reading import DaysRead, PlaceRead, SearchRead, TicketRead
 from agent_runtime.tools import tool_list
 from agent_runtime.watchlist import ticket_for
@@ -1034,6 +1063,171 @@ def answered_explain() -> Answered:
     return Answered(answer=answer, parts=parts_of(read, task, answer, facts))
 
 
+RELEASES_READ: Final[list[dict[str, JsonValue]]] = [
+    {"kind": "release", "id": "1.2.16", "name": "1.2.16", "published_at": "2026-10-28"},
+    {"kind": "release", "id": "1.2.15", "name": "1.2.15", "published_at": "2026-10-27"},
+]
+
+
+def scenario_write_request() -> ScenarioWriteRequest:
+    every: list[ScenarioServe] = ["recorded", "varied", "empty", "not_found", "too_slow"]
+    return ScenarioWriteRequest(
+        model=draft_request().model,
+        blocks=[
+            ScenarioBlock(name="Start from the Portal", role="start"),
+            ScenarioBlock(
+                name="Read releases",
+                role="read",
+                answer="read.release",
+                plays=every,
+                varies=["suffix", "empty_field", "long_text"],
+            ),
+            ScenarioBlock(name="Compare", role="agent", plays=["recorded", "too_slow"]),
+            ScenarioBlock(name="Propose a change", role="propose"),
+            ScenarioBlock(name="Ask for a yes", role="ask"),
+            ScenarioBlock(name="Make the approved changes", role="write"),
+        ],
+        kinds=[
+            "happy_path",
+            "nothing_new",
+            "source_not_found",
+            "timeout",
+            "approver_says_no",
+            "odd_data",
+        ],
+        samples=[
+            ScenarioSample(id="made_up.read.release", answer="read.release", items=RELEASES_READ)
+        ],
+        within_seconds=30,
+    )
+
+
+def scenarios_written() -> ScenariosWritten:
+    read = "Read releases"
+    return ScenariosWritten(
+        scenarios=[
+            WrittenScenario(kind="happy_path"),
+            WrittenScenario(kind="nothing_new", reads=[WrittenRead(block=read, serve="empty")]),
+            WrittenScenario(
+                kind="source_not_found", reads=[WrittenRead(block=read, serve="not_found")]
+            ),
+            WrittenScenario(
+                kind="timeout",
+                reads=[WrittenRead(block=read, serve="too_slow")],
+                slow_agents=["Compare"],
+            ),
+            WrittenScenario(kind="approver_says_no"),
+            WrittenScenario(
+                kind="odd_data",
+                reads=[
+                    WrittenRead(
+                        block=read,
+                        serve="varied",
+                        sample="made_up.read.release",
+                        vary=["suffix"],
+                    )
+                ],
+            ),
+        ]
+    )
+
+
+def scenario_explain_request() -> ScenarioExplainRequest:
+    return ScenarioExplainRequest(
+        model=draft_request().model,
+        failed=[
+            FailedScenario(
+                name="odd_data",
+                kind="odd_data",
+                ending="failed",
+                stopped_at="Compare",
+                expected="It ends in one of the cases above, never in a failure with no reason.",
+                happened='It failed at "Compare", which is not a stop with a reason: Cannot read '
+                "properties of undefined (reading 'tag_name')",
+                ran=["Start from the Portal", "Read releases", "Compare"],
+                plays=[ScenarioPlay(block="Read releases", serve="varied", vary=["suffix"])],
+            )
+        ],
+        within_seconds=15,
+    )
+
+
+def cause_request() -> CauseRequest:
+    return CauseRequest(
+        model=draft_request().model,
+        stop=StoppedRun(
+            stage="working",
+            reason="WorkflowNodeError",
+            retryable=True,
+            message="The n8n workflow 'FastAPI release check' failed at its step 'Read releases': "
+            "GitHub answered 404 Not Found for fastapi/fastapy",
+        ),
+        events=[
+            "Alice started a run of FastAPI release check.",
+            "Read releases asked GitHub for the releases of fastapi/fastapy.",
+            "The run failed.",
+        ],
+        blocks=[
+            "Every day at 8:00",
+            "Start from the Portal",
+            "Read releases",
+            "Newer?",
+            "Propose a change",
+            "Ask for a yes",
+            "Make the approved changes",
+        ],
+        stopped_at=["Read releases"],
+        within_seconds=9.0,
+    )
+
+
+def fix_start_request() -> FixStart:
+    """platform-api's ask to run a fix it started: the log took the start, and the token is for
+    the same deadline (ADR 0055, PR 6)."""
+    asked = cause_request()
+    version = WorkflowPlan.model_validate(
+        {
+            "name": "FastAPI release check",
+            "blocks": [
+                {
+                    "name": "Read releases",
+                    "type": "CUSTOM.wabRead",
+                    "version": 1,
+                    "parameters": {"source": "github_releases", "place": "<<repository>>"},
+                }
+            ],
+            "wires": [],
+            "settings": [
+                {
+                    "id": "repository",
+                    "kind": "repository",
+                    "label": "repository",
+                    "fills": [{"block": "Read releases", "parameter": "place"}],
+                    "value": "fastapi/fastapy",
+                    "mark": "filled",
+                }
+            ],
+        }
+    )
+    return FixStart(
+        run_id="run_01JB8FIXSTOP",
+        request=FixRequest(
+            fix_id="fix_01JB8EXAMPLE",
+            asked_by="alice",
+            asked_by_name="Alice",
+            ends_by=datetime(2026, 11, 25, 6, 20, tzinfo=UTC),
+            stop=asked.stop,
+            version=version,
+            stopped_at=["Read releases"],
+        ),
+        events=asked.events,
+        facts=DrafterFacts(repositories=["fastapi/fastapi"], jira_projects=["MOCK"]),
+        model=asked.model,
+        platform_url="http://platform-api:8000",
+        token="1999999999." + "0" * 64,
+    )
+
+
 def explain_wording_request() -> ExplainWordingRequest:
     facts = [
         ExplainFact(kind="runs", together=["day", "8:00"], negated=False),
@@ -1206,6 +1400,32 @@ def fixtures() -> dict[str, WireModel]:
             "create Jira tickets in “MOCK”, each after a yes. Nothing else changes."
         ),
         "explain-wording-kept.json": ExplainKept(why="negation"),
+        "troubleshooter-cause-request.json": cause_request(),
+        "troubleshooter-cause-found.json": CauseFound(
+            failed_part=["Read releases"],
+            system="github",
+            failure_kind="not_found",
+            detail="fastapi/fastapy",
+        ),
+        "troubleshooter-cause-kept.json": CauseKept(why="not_where_it_stopped"),
+        "scenario-write-request.json": scenario_write_request(),
+        "scenario-write-written.json": scenarios_written(),
+        "scenario-write-kept.json": ScenariosKept(why="not_a_read"),
+        "scenario-explain-request.json": scenario_explain_request(),
+        "scenario-explain-explained.json": ScenariosExplained(
+            notes=[
+                FailureNote(
+                    scenario="odd_data",
+                    block="Compare",
+                    kind="stopped",
+                    source="Read releases",
+                    detail="tag_name",
+                )
+            ],
+            kept=[],
+        ),
+        "fix-start-request.json": fix_start_request(),
+        "fix-accepted.json": FixAccepted(fix_id="fix_01JB8EXAMPLE", started=True),
         "planner-check-part-request.json": CheckPartRequest(kind="do", text="Email the list"),
         "planner-check-part-cant.json": check_one_part(
             CheckPartRequest(kind="do", text="Email the list")
@@ -1213,7 +1433,12 @@ def fixtures() -> dict[str, WireModel]:
         "planner-check-part-fits.json": check_one_part(
             CheckPartRequest(kind="where", text="In the MOCK project")
         ),
-        "key-shapes.json": KeyShapes(shapes=list(KEY_SHAPE_SOURCES)),
+        "key-shapes.json": KeyShapes(
+            shapes=list(KEY_SHAPE_SOURCES),
+            kept=KEPT_KEY,
+            secret_name_ends=list(SECRET_NAME_ENDS),
+            code_parameters=list(CODE_PARAMETERS),
+        ),
     }
 
 

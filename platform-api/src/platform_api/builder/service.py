@@ -17,6 +17,7 @@ from platform_api.builder.cards import (
     tool_list,
 )
 from platform_api.builder.drafts import Drafts, TooManyDrafts
+from platform_api.builder.fixes import STALE, FixLive, FixTrying
 from platform_api.builder.in_n8n import put_back, write_in_n8n
 from platform_api.builder.last_run import RunHistory, last_run_view
 from platform_api.builder.layout import REPO_INPUT, LayoutPlan, PlannedAgent, lay_out
@@ -66,6 +67,7 @@ from platform_api.builder.models import (
     UseCaseView,
     VersionList,
     Via,
+    fix_of,
 )
 from platform_api.builder.moves import NOT_MOVED_YET, Moves
 from platform_api.builder.n8n_draft import (
@@ -89,6 +91,7 @@ from platform_api.builder.planning import (
     RuntimeNotAnswering,
     plan,
 )
+from platform_api.builder.simulations import Claimed, Simulations
 from platform_api.builder.sweep import N8nAccounts, NoN8nAccounts, OpenRequests, VersionsSweep
 from platform_api.builder.templates import (
     AGENT_CARDS,
@@ -96,6 +99,7 @@ from platform_api.builder.templates import (
     TEMPLATES,
     suggest_template,
 )
+from platform_api.builder.use_case_simulations import UseCaseSimulations
 from platform_api.builder.versions import (
     AlreadyUndone,
     ChangedSince,
@@ -159,7 +163,7 @@ from platform_api.orchestration import (
     unchecked,
     write_tools_used,
 )
-from platform_api.shared import TEAM_TIME_ZONE, Principal, UseCaseId, UserId, new_id
+from platform_api.shared import TEAM_TIME_ZONE, Principal, Role, UseCaseId, UserId, new_id
 
 log = logging.getLogger(__name__)
 
@@ -278,6 +282,7 @@ def _view(
     team_zone: str,
     moving: bool = False,
     holder: N8nHolderView | None = None,
+    needs_you: str | None = None,
 ) -> UseCaseView:
     template = TEMPLATES[row["template"]]
     state = _state(lifecycle_of(row))
@@ -310,6 +315,7 @@ def _view(
             for a in agents
         ],
         last_run=last_run,
+        needs_you=cast(Any, needs_you),
         left_out=list(row["left_out"]),
         blocks=[] if row["document"] is None else blocks_of(row["document"]),
         grade=_grade(row),
@@ -471,6 +477,8 @@ def _planned(card: CardView, values: Mapping[str, str]) -> PlannedAgent:
 
 
 NOT_TAKEN = "n8n did not take the change. Nothing changed. Try again."
+NOT_SAFE_TO_TRY = "It no longer passes the safety check, so it was not tried. Ask for a fix again."
+CHANGED_IN_N8N = "Changed again since, in n8n, so nothing changed."
 DELETED_IN_N8N = (
     "This workflow was deleted in n8n, so it can't run again. Its runs and versions are kept."
 )
@@ -504,8 +512,11 @@ class Builder:
         holding: Holding | None = None,
         time_zone: ZoneInfo = TEAM_TIME_ZONE,
         keys: MadeKeys | None = None,
+        simulations: UseCaseSimulations | None = None,
     ) -> None:
         self._db = db
+        self.simulations = simulations or UseCaseSimulations(db, Simulations(db, None))
+        """Each version the safety checker grades is tried on practice systems (ADR 0054)."""
         self._zone = time_zone.key
         """The team time zone: a new schedule's, and the one every workflow runs on."""
         self._runs = runs
@@ -530,7 +541,13 @@ class Builder:
             None
             if n8n is None
             else VersionsSweep(
-                db, n8n, self.facts, accounts or NoN8nAccounts(), requests, self._zone
+                db,
+                n8n,
+                self.facts,
+                accounts or NoN8nAccounts(),
+                requests,
+                self._zone,
+                simulations=self.simulations,
             )
         )
         """The versions sweep, for a platform that lays workflows out in n8n."""
@@ -547,6 +564,7 @@ class Builder:
                 lambda: self.facts.known({}),
                 self._zone,
                 watchlist,
+                simulations=self.simulations,
             )
         )
         """The moves off the shared run workflow, and Restore to n8n (ENGINE-PLAN 2.6, E10)."""
@@ -601,7 +619,12 @@ class Builder:
         now = self._db.clock()
         moving = await self._moving(rows)
         holders = {row["use_case_id"]: await self._holder(row) for row in rows if row["held_by"]}
-        return [
+        needing: Mapping[UseCaseId, str] = (
+            {}
+            if self._history is None or viewer is None
+            else await self._history.needing_you(viewer)
+        )
+        views = [
             _view(
                 row,
                 agents.get((row["use_case_id"], row["version"]), []),
@@ -611,8 +634,16 @@ class Builder:
                 self._zone,
                 row["use_case_id"] in moving,
                 holders.get(row["use_case_id"]),
+                needing.get(row["use_case_id"]),
             )
             for row in rows
+        ]
+        operator = viewer is not None and Role.OPERATOR in viewer.roles
+        return [
+            view.model_copy(
+                update={"needs_you": view.needs_you or ("fix" if fix_of(view, operator) else None)}
+            )
+            for view in views
         ]
 
     async def _holder(self, row: Mapping[str, Any]) -> N8nHolderView:
@@ -864,6 +895,13 @@ class Builder:
                 await self._schedules.delete(UseCaseId(use_case_id))
             else:
                 await self._schedules.save(UseCaseId(use_case_id), decided.after, principal)
+            # Laid out again and graded, so its new version is tried (ADR 0054).
+            claimed = (
+                None
+                if in_n8n is None
+                else await self.simulations.claim(uow.conn, use_case_id, uow.now)
+            )
+        await self.simulations.start(claimed)
         return decided
 
     async def rollback_version(
@@ -925,6 +963,7 @@ class Builder:
         only when it grades safe against what the editor's lists hold now. Its source's
         publisher is kept with it, because its runs are their work too (ADR 0026). Asked again
         once done, it answers the same."""
+        claimed: Claimed | None = None
         async with self._db.transaction("builder") as uow:
             await hold_workflow(uow.conn, use_case_id, alone=True)
             row = await (
@@ -968,6 +1007,8 @@ class Builder:
                     authors_of(source),
                     put.draft,
                 )
+                claimed = await self.simulations.claim(uow.conn, use_case_id, uow.now)
+        await self.simulations.start(claimed)
         return await self.get_use_case(use_case_id, principal)
 
     async def _put_in_use(
@@ -1324,11 +1365,14 @@ class Builder:
             if isinstance(drafted, DraftRefused | N8nNotReady):
                 return drafted
         try:
-            await self._insert_agent_use_case(use_case_id, principal, body, chosen, drafted)
+            claimed = await self._insert_agent_use_case(
+                use_case_id, principal, body, chosen, drafted
+            )
         except Exception:
             if self._n8n is not None and drafted is not None:
                 await self._n8n.remove(drafted.saved.workflow_id)
             raise
+        await self.simulations.start(claimed)
         if body.schedule is not None:
             try:
                 await self._schedules.save(
@@ -1416,7 +1460,9 @@ class Builder:
         body: CreateAgentUseCase,
         chosen: Sequence[tuple[CardView, Mapping[str, str]]],
         drafted: InN8n | None,
-    ) -> None:
+    ) -> Claimed | None:
+        """With its version laid out in n8n and graded, its try on practice systems is claimed
+        in the same transaction."""
         engine = "shared_run" if drafted is None else "own"
         workflow_id = None if drafted is None else drafted.saved.workflow_id
         async with self._db.transaction("builder") as uow:
@@ -1455,6 +1501,7 @@ class Builder:
                     ' card_id, card_version, "values") VALUES (%s, 1, %s, %s, %s, %s)',
                     (use_case_id, position, card.card_id, card.version, json(dict(values))),
                 )
+            return await self.simulations.claim(uow.conn, use_case_id, uow.now)
 
     @staticmethod
     def suggest(text: str) -> SuggestOut:
@@ -1608,6 +1655,124 @@ class Builder:
                     return await self._runs.start_run(trial, principal, idempotency_key)
                 case On():
                     return await self._runs.start_run(spec, principal, idempotency_key)
+
+    async def try_fixed(
+        self, use_case_id: str, document: dict[str, Any], by: Principal, stopped_version: int
+    ) -> FixTrying | str:
+        """A fix an Approver said yes to, tried with the one real test run (ADR 0055, section 7):
+        written over n8n's draft under the version compare, beside the version in use, which
+        stays live, then run by hand once as a test run that stops at the yes and writes nothing
+        (ADR 0044), whether the workflow is on or paused. Only while the version the fix was made
+        for is still in use, checked under the workflow's lock: else STALE. Answers why not in
+        words."""
+        if self._n8n is None:
+            return NOT_TAKEN
+        rules = await self.todays_rules()
+        if grade(document, rules.error_workflow, rules.time_zone, rules.known).grade != "safe":
+            return NOT_SAFE_TO_TRY
+        async with self._db.transaction("builder") as uow:
+            await hold_workflow(uow.conn, use_case_id, alone=True)
+            row = await (
+                await uow.conn.execute(_USE_CASE_ROW + " FOR UPDATE", (use_case_id,))
+            ).fetchone()
+            if row is None or not _own(row) or not isinstance(lifecycle_of(row), On | Paused):
+                return NOT_TAKEN
+            if row["current_version"] != stopped_version:
+                return STALE
+            if self.holding is not None:
+                held = await self.holding.refused_while_held(uow.conn, use_case_id, by.user_id)
+                if held is not None:
+                    return held.words
+            current = (await versions_of(uow.conn, use_case_id))[0].held
+            if current is None:
+                return NOT_TAKEN
+            live = current.version_id if is_on(lifecycle_of(row)) else None
+            expected = Expected(row["n8n_draft_id"] or current.version_id, live)
+            try:
+                put = await self._n8n.put_back(row["n8n_workflow_id"], expected, document, False)
+            except (N8nError, httpx.HTTPError) as error:
+                log.warning("n8n did not take the fix of %s: %s", use_case_id, type(error).__name__)
+                return NOT_TAKEN
+            if isinstance(put, ChangedInN8n):
+                return CHANGED_IN_N8N
+            await uow.conn.execute(
+                "UPDATE builder.use_cases SET n8n_draft_id = %s WHERE use_case_id = %s",
+                (put.draft, use_case_id),
+            )
+        view = await self.get_use_case(use_case_id)
+        if view is None:
+            return NOT_TAKEN
+        spec = await self._spec_of(view)
+        if isinstance(spec, NothingToCheck) or spec.n8n is None:
+            return NOT_TAKEN
+        tried = await self._checked_draft(use_case_id, spec.n8n)
+        if isinstance(tried, NoTestRun):
+            return tried.words
+        trial = replace(
+            spec, test=True, stops_at_gate=True, n8n=replace(spec.n8n, draft_version=tried)
+        )
+        started = await self._runs.start_run(trial, by, f"fix-test:{tried}")
+        return FixTrying(started.run_id, tried)
+
+    async def put_fixed_live(
+        self,
+        use_case_id: str,
+        trying: FixTrying,
+        document: dict[str, Any],
+        by: UserId,
+        authors: frozenset[UserId],
+        stopped_version: int,
+    ) -> FixLive | str:
+        """Once its test run passed, the fix becomes the version in use: n8n publishes the draft
+        the test run tried, under the version compare. Its authors are the fix's parties and the
+        authors of the version it replaces, so none of them approves its runs. A workflow an
+        Operator paused stays paused, with the fix ready for when someone resumes it. Only while
+        nobody holds it in n8n and the version the fix was made for is still in use, checked
+        under the workflow's lock in the transaction that adds the version: else STALE, or the
+        hold's words, and nothing changes. Answers why not in words."""
+        assert self._n8n is not None
+        async with self._db.transaction("builder") as uow:
+            await hold_workflow(uow.conn, use_case_id, alone=True)
+            row = await (
+                await uow.conn.execute(_USE_CASE_ROW + " FOR UPDATE", (use_case_id,))
+            ).fetchone()
+            state = None if row is None else lifecycle_of(row)
+            if row is None or not isinstance(state, On | Paused):
+                return NOT_TAKEN
+            if row["current_version"] != stopped_version:
+                return STALE
+            if self.holding is not None:
+                held = await self.holding.refused_while_held(uow.conn, use_case_id, by)
+                if held is not None:
+                    return held.words
+            current = (await versions_of(uow.conn, use_case_id))[0]
+            assert current.held is not None
+            live = is_on(state)
+            expected = Expected(trying.draft, current.held.version_id if live else None)
+            try:
+                put = await self._n8n.put_back(
+                    row["n8n_workflow_id"], expected, document, live, held=trying.draft
+                )
+            except (N8nError, httpx.HTTPError) as error:
+                log.warning("n8n did not publish the fix of %s: %s", use_case_id, error)
+                return NOT_TAKEN
+            if isinstance(put, ChangedInN8n):
+                return CHANGED_IN_N8N
+            fixed = Held(put.version_id, put.document, "safe")
+            also = [*(Publication(a, "portal") for a in sorted(authors)), *authors_of(current)]
+            await add_version(
+                uow,
+                use_case_id,
+                current.number,
+                current.number,
+                fixed,
+                Made("fixed", by, "page"),
+                Publication(by, "portal") if live else None,
+                list(dict.fromkeys(also)),
+                put.draft,
+            )
+        log.info("put the fix of %s in use, on %s's press, paused: %s", use_case_id, by, not live)
+        return FixLive(paused=not live)
 
     async def _checked_draft(self, use_case_id: str, target: N8nTarget) -> NoTestRun | str:
         """The version id of the draft a test run would run, once n8n would run nothing in it

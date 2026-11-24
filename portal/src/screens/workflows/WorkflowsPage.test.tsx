@@ -31,7 +31,7 @@ const TEAM = (peopleList.people as PersonOut[]).filter((person) => ['alice', 'bo
 const WATCHLIST = watchlistUseCase as UseCaseView
 const LANGGRAPH: UseCaseView = { ...(agentUseCase as UseCaseView), use_case_id: 'uc_lang', state: 'paused' }
 const BUGS: UseCaseView = { ...(agentUseCase as UseCaseView), use_case_id: 'uc_bugs', name: 'Morning bug report check', instruction: 'Raise a ticket for each new bug report.' }
-const lr = (change: Partial<LastRun>): LastRun => ({ run_id: 'run_x', state: 'succeeded', at: '2026-11-04T02:14:00Z', test: false, declined_by: null, decline_reason: null, approved_by: [], proposed: 0, written: 0, tickets: false, you_can_decide: false, retryable: false, reason: null, stop: null, ...change })
+const lr = (change: Partial<LastRun>): LastRun => ({ run_id: 'run_x', state: 'succeeded', at: '2026-11-04T02:14:00Z', test: false, declined_by: null, decline_reason: null, approved_by: [], proposed: 0, written: 0, tickets: false, you_can_decide: false, you_can_open: false, retryable: false, reason: null, stop: null, ...change })
 const AGENT_STOPPED = { at: '2026-11-04T02:14:00Z', what_happened: 'An agent could not finish its work.' }
 const STOPPED_BUGS: UseCaseView = { ...BUGS, last_run: lr({ run_id: 'run_bugs', state: 'failed', retryable: true, reason: 'AgentError', stop: AGENT_STOPPED }) }
 const WAITING_WATCHLIST: UseCaseView = { ...WATCHLIST, last_run: lr({ run_id: 'run_01JB8', state: 'awaiting_approval', proposed: 1, tickets: true }) }
@@ -54,7 +54,11 @@ interface Setup {
 
 /** The platform answers for the person asking. In these tests only Bob may decide the waiting run. */
 const asSeenBy = (me: Me, useCase: UseCaseView): UseCaseView =>
-  useCase.last_run?.state === 'awaiting_approval' ? { ...useCase, last_run: { ...useCase.last_run, you_can_decide: me.id === 'bob' } } : useCase
+  useCase.last_run?.state === 'awaiting_approval'
+    ? { ...useCase, needs_you: me.id === 'bob' ? 'approval' : null, last_run: { ...useCase.last_run, you_can_decide: me.id === 'bob' } }
+    : useCase.last_run?.state === 'failed'
+      ? { ...useCase, needs_you: me.id === 'alice' ? 'stopped' : null, last_run: { ...useCase.last_run, you_can_open: me.id === 'alice' } } // Only Alice started the stopped run.
+      : useCase
 
 function render({ me = ALICE, useCases = [STOPPED_BUGS, WAITING_WATCHLIST, LANGGRAPH], state, home, drafts, request, path = '/workflows', made }: Setup = {}): string {
   const session = createDevSession(null)
@@ -92,16 +96,38 @@ function rowOf(html: string, id: string): string {
 describe('the Workflows list', () => {
   const subOf = (html: string, id: string) => text(/<span[^>]*class="[^"]*sub[^"]*"[^>]*>[\s\S]*?<\/span>/.exec(rowOf(html, id))?.[0] ?? '')
 
-  it('shows each workflow as its name, one line and one pill: Stopped, Waiting for a yes, On or Paused', () => {
+  it('shows each workflow as its name, one line and one of four pills: Needs you, On, Paused or Draft', () => {
     const html = render()
     const bugs = rowOf(html, 'uc_bugs')
-    expect(bugs).toMatch(/data-life="on"[^>]*data-tone="bad"[^>]*>.*Stopped<\/span>/)
-    expect(bugs).not.toMatch(/>On<\/span>/)
+    expect(bugs).toMatch(/data-life="on"[^>]*data-tone="bad"[^>]*>.*Needs you<\/span>/)
+    expect(bugs).not.toMatch(/Stopped<\/span>/)
     expect(text(bugs)).toContain('Morning bug report check')
     const watchlist = rowOf(html, 'uc_01JB7')
-    expect(watchlist).toMatch(/data-tone="wait"[^>]*>.*Waiting for a yes<\/span>/)
+    expect(text(watchlist), 'Alice may not decide, so the row stays On').toContain('On · waiting for an Approver’s yes')
+    expect(watchlist).not.toMatch(/Waiting for a yes<\/span>/)
     const paused = rowOf(html, 'uc_lang')
     expect(paused).toMatch(/data-life="paused"[^>]*>.*Paused<\/span>/)
+  })
+
+  it('reads Needs you for the Approver who can decide a waiting run, and On for an Operator who is not allowed to', () => {
+    expect(rowOf(render({ me: BOB }), 'uc_01JB7')).toMatch(/data-tone="wait"[^>]*>.*Needs you<\/span>/)
+    expect(text(rowOf(render({ me: CAROL }), 'uc_01JB7'))).toContain('On · waiting for an Approver’s yes')
+  })
+
+  it('shows Carol, an Operator whose work the stopped run is not, On, and Alice, whose it is, Needs you', () => {
+    expect(text(rowOf(render({ me: CAROL }), 'uc_bugs'))).toContain('On · last run stopped')
+    expect(rowOf(render({ me: CAROL }), 'uc_bugs')).not.toMatch(/Needs you<\/span>/)
+    expect(rowOf(render({ me: ALICE }), 'uc_bugs')).toMatch(/Needs you<\/span>/)
+  })
+
+  it('shows an Approver a stopped workflow as On, because only an Operator opens the run', () => {
+    expect(text(rowOf(render({ me: BOB }), 'uc_bugs'))).toContain('On · last run stopped')
+  })
+
+  it('filters by the four states, with Needs you first', () => {
+    const many = Array.from({ length: 11 }, (_, n) => ({ ...BUGS, use_case_id: `uc_n${String(n)}`, name: `Workflow ${String(n)}` }))
+    const filters = [...(/<div[^>]*aria-label="Show"[\s\S]*?<\/div>/.exec(mainOf(render({ useCases: many })))?.[0] ?? '').matchAll(/<button[^>]*>([^<]*)<\/button>/g)].map((m) => m[1])
+    expect(filters).toEqual(['All', 'Needs you', 'On', 'Paused', 'Draft'])
   })
 
   it('says each row’s schedule and its last run, as the sketch does', () => {
@@ -135,21 +161,23 @@ describe('the Workflows list', () => {
     expect(text(rowOf(html, 'uc_bugs'))).toContain('Test run')
   })
 
-  it('shows Paused alone for a paused workflow, whatever its last run, and keeps that run in the line', () => {
-    const html = render({ useCases: [{ ...STOPPED_BUGS, state: 'paused' }] })
+  it('shows Paused for a paused workflow, whatever its last run, unless Home has a row for it, and keeps that run in the line', () => {
+    const paused = { ...STOPPED_BUGS, state: 'paused' } as UseCaseView
+    const html = render({ me: CAROL, useCases: [paused] })
     expect(rowOf(html, 'uc_bugs')).toMatch(/data-life="paused"[^>]*>.*Paused<\/span>/)
-    expect(rowOf(html, 'uc_bugs')).not.toContain('Stopped</span>')
+    expect(rowOf(html, 'uc_bugs')).not.toContain('Needs you</span>')
     expect(subOf(html, 'uc_bugs')).toMatch(/last run .*, an agent could not finish its work$/)
+    expect(rowOf(render({ useCases: [paused] }), 'uc_bugs'), 'Alice’s Home lists the stopped run, so the pill says so').toMatch(/Needs you<\/span>/)
   })
 
   it('reads the same for an Approver as for an Operator', () => {
     expect(subOf(render({ me: BOB, useCases: [DECLINED_WATCHLIST] }), 'uc_01JB7')).toBe(subOf(render({ me: ALICE, useCases: [DECLINED_WATCHLIST] }), 'uc_01JB7'))
   })
 
-  it('is one link for the whole row: the workflow’s page, and the Software page for the watchlist', () => {
+  it('is one link for the whole row: the workflow’s page, the watchlist’s too', () => {
     const html = render()
     expect(rowOf(html, 'uc_bugs')).toMatch(/<a[^>]*href="\/workflows\/uc_bugs"[^>]*>/)
-    expect(rowOf(html, 'uc_01JB7')).toMatch(/<a[^>]*href="\/software"[^>]*>/)
+    expect(rowOf(html, 'uc_01JB7')).toMatch(/<a[^>]*href="\/workflows\/uc_01JB7"[^>]*>/)
     expect(rowOf(html, 'uc_bugs')).not.toContain('<button')
   })
 
@@ -265,7 +293,7 @@ describe('Explain beside each row', () => {
     expect(row).toMatch(/<a\b[^>]*href="\/workflows\/uc_bugs"/)
   })
 
-  it('gives the Software watchlist its Explain too, while its row still opens the Software page', () => {
+  it('gives the Software watchlist its Explain too, and its row opens its workflow page', () => {
     const html = render({ useCases: [WAITING_WATCHLIST] })
     expect(explains(html, 'uc_01JB7')).toEqual([[`Explain ${WAITING_WATCHLIST.name}`, '/workflows/uc_01JB7/explain']])
   })
@@ -393,7 +421,7 @@ describe('the rest of the page under Needs you', () => {
     expect(at).toEqual([...at].sort((a, b) => a - b))
   })
 
-  it('has no Waiting on others, because a waiting workflow reads Waiting for a yes in its row', () => {
+  it('has no Waiting on others, because a waiting workflow reads Needs you, or On with who it waits for, in its row', () => {
     expect(mainOf(render({ home: HOME }))).not.toContain('Waiting on others')
   })
 

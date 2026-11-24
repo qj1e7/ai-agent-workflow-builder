@@ -29,6 +29,7 @@ from platform_api.orchestration import (
     MAX_APPROVERS,
     RULES,
     TOOL_RULES,
+    VERSION_CHECKER_ID,
     CardSpec,
     CardToolId,
     LibraryCard,
@@ -381,8 +382,6 @@ def card_view(
     )
     return view.model_copy(update={"tools": tools_of(view)})
 
-
-VERSION_CHECKER_ID = "crd_version_checker"
 
 VERSION_CHECKER = card_view(
     card_id=VERSION_CHECKER_ID,

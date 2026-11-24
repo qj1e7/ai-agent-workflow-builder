@@ -198,12 +198,12 @@ test('the Needs you rows on Workflows are the number the Planner’s answer and 
   const more = (await strip.getByRole('button', { name: /more that need you/ }).count()) === 0 ? 0 : Number((await strip.getByRole('button', { name: /more that need you/ }).innerText()).replace(/\D/g, ''))
   expect(more + 1, 'Principle 7: the strip’s N more plus the one it names is the count everywhere').toBe(total)
 
-  await rail(page).getByRole('link', { name: /^Watchlist/ }).click()
-  await expect(page.getByRole('heading', { level: 1, name: 'Watchlist' })).toBeVisible()
+  await page.goto('/software')
+  await expect(page.getByRole('heading', { level: 1, name: 'Software watchlist' })).toBeVisible()
   await expect(main(page).getByRole('status').filter({ hasText: /^Loading/ })).toHaveCount(0)
   const watched = await main(page).locator('li[data-status]').count()
-  expect(await railCount(page, 'Watchlist'), 'Principle 7: the rail’s Watchlist count is the page’s rows').toBe(watched)
-  const line = await main(page).locator('h1 + p').innerText()
+  expect(watched, 'Principle 7: the page lists the rows').toBeGreaterThan(0)
+  const line = await main(page).locator('[data-count-line]').innerText()
   const said = (part: RegExp) => Number(part.exec(line)?.[1] ?? 0)
   const withPill = (...words: readonly string[]) => main(page).locator('li[data-status]').filter({ has: page.locator('span[class*="pill"]').filter({ hasText: new RegExp(`^(${words.join('|')})$`) }) }).count()
   expect(said(/(\d+) ha(?:s|ve) a newer version/), `Principle 7: the count line "${line}" counts every row whose pill says Newer out`).toBe(await withPill('Newer out'))
@@ -294,11 +294,11 @@ test('Workflows, a workflow, the Watchlist and a software page keep the design r
 
   await page.goto('/workflows')
   const row = main(page).locator('li[data-workflow-id]').filter({ hasText: 'Software watchlist' })
-  await expect(row).toContainText('Waiting for a yes')
+  await expect(row).toContainText('On · waiting for an Approver’s yes')
   await rules('Workflows')
   const onList = (await row.locator('span[data-life]').innerText()).trim()
   await row.getByRole('link', { name: /^(?!Explain )/ }).click()
-  await expect(page).toHaveURL(/\/software$/)
+  await expect(page).toHaveURL(/\/workflows\/[^/?]+$/)
   await expect(main(page).locator('li[data-status]').first()).toBeVisible()
   await rules('the Watchlist')
 
@@ -321,6 +321,6 @@ test('Workflows, a workflow, the Watchlist and a software page keep the design r
     await rules('a workflow page')
     expect((await main(page).locator('div[class*="head"] span[data-life]').innerText()).trim(), 'Principle 7: a workflow reads the same on Workflows and on its page').toBe(rowPill)
   }
-  expect(onList, 'the waiting check reads Waiting for a yes').toBe('Waiting for a yes')
+  expect(onList, 'the waiting check reads On, with who it waits for').toBe('On · waiting for an Approver’s yes')
   await context.close()
 })

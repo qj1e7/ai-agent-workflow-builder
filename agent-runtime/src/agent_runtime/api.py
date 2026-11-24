@@ -31,6 +31,8 @@ from agent_runtime.contract import (
     AnswerResult,
     CapabilityList,
     CardsInputs,
+    CauseRequest,
+    CauseResult,
     CheckPartRequest,
     CheckPartResult,
     ChooseRequest,
@@ -51,6 +53,10 @@ from agent_runtime.contract import (
     ModelTestResult,
     ReadReleasesRequest,
     ReadReleasesResult,
+    ScenarioExplainRequest,
+    ScenarioExplainResult,
+    ScenarioWriteRequest,
+    ScenarioWriteResult,
     TaskError,
     TaskFailed,
     TaskRequest,
@@ -63,6 +69,7 @@ from agent_runtime.drafting import choose_agents, draft_card
 from agent_runtime.events import Clock, EventLog, EventSink
 from agent_runtime.explain_wording import reword
 from agent_runtime.find_software import SoftwareFinder
+from agent_runtime.fixing.starter import FixAccepted, FixStart, Starter, run_fix
 from agent_runtime.github import GitHubConnection, GitHubReleaseSource
 from agent_runtime.guarded import GuardedModels
 from agent_runtime.jira import JiraReaderFor, PlatformJiraFor, no_jira
@@ -80,6 +87,8 @@ from agent_runtime.registries import (
     NpmRegistrySource,
 )
 from agent_runtime.release_source import ReleaseSource, releases_of
+from agent_runtime.scenario_explaining import explain_failures
+from agent_runtime.scenario_writing import write_scenarios
 from agent_runtime.summary import (
     ChatFor,
     ModelSummarizer,
@@ -88,6 +97,7 @@ from agent_runtime.summary import (
     model_factory,
 )
 from agent_runtime.tools import tool_list, value_problem
+from agent_runtime.troubleshooting import find_cause
 from agent_runtime.version_checker import VersionChecker
 from agent_runtime.vulnerabilities import (
     DEFAULT_NVD_BASE,
@@ -512,6 +522,7 @@ def create_app(
     runtime: Runtime | None = None,
     models: ModelChecks | None = None,
     tracing: Tracing | None = None,
+    fixes: Starter | None = None,
 ) -> FastAPI:
     config = settings or Settings.from_env(os.environ)
     active = runtime or build_runtime(config)
@@ -519,6 +530,9 @@ def create_app(
     probe = models or ModelProbe(config.address_policy)
     store = TaskStore()
     catalogues = CatalogueSource(config.n8n_catalogue)
+    starter = fixes or Starter(
+        lambda body: run_fix(body, active.chat_source, config.drafter_model, catalogues.get)
+    )
     app = FastAPI(title="Agent API", version="0.1.0")
     expected_key = config.agent_api_key.encode()
     key_header = APIKeyHeader(name=KEY_HEADER, auto_error=False)
@@ -629,6 +643,27 @@ def create_app(
             return NO_MODEL
         return reword(body, chat, verify_with=verifier_for(body.model) or chat)
 
+    @app.post("/v1/troubleshooter/cause", dependencies=[Depends(require_key)])
+    def troubleshooter_cause(body: CauseRequest) -> CauseResult:
+        chat = active.chat_source(body.model)
+        if chat is None:
+            return NO_MODEL
+        return find_cause(body, chat)
+
+    @app.post("/v1/simulation/scenarios", dependencies=[Depends(require_key)])
+    def simulation_scenarios(body: ScenarioWriteRequest) -> ScenarioWriteResult:
+        chat = active.chat_source(body.model)
+        if chat is None:
+            return NO_MODEL
+        return write_scenarios(body, chat)
+
+    @app.post("/v1/simulation/explain", dependencies=[Depends(require_key)])
+    def simulation_explain(body: ScenarioExplainRequest) -> ScenarioExplainResult:
+        chat = active.chat_source(body.model)
+        if chat is None:
+            return NO_MODEL
+        return explain_failures(body, chat)
+
     @app.post("/v1/workflows/draft", dependencies=[Depends(require_key)])
     def draft_a_workflow(body: WorkflowDraftRequest) -> WorkflowDraftResult:
         try:
@@ -639,6 +674,14 @@ def create_app(
         drafter = body.model.model_copy(update={"model": config.drafter_model})
         chat = active.chat_source(drafter)
         return draft_workflow(body, chat, catalogue) if chat else NO_MODEL
+
+    @app.post("/v1/fixes", status_code=202, dependencies=[Depends(require_key)])
+    def start_a_fix(body: FixStart) -> FixAccepted:
+        """Runs a fix platform-api started (ADR 0055, PR 6), once for its fix id, and answers at
+        once. The fix's token goes only to an allowed origin."""
+        if origin_of(body.platform_url) not in config.callback_allowed_origins:
+            raise HTTPException(status_code=422, detail="platform_url is not at an allowed origin")
+        return starter.start(body)
 
     @app.post("/v1/planner/check-part", dependencies=[Depends(require_key)])
     def check_part(body: CheckPartRequest) -> CheckPartResult:

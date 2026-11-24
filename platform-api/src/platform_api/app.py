@@ -16,6 +16,8 @@ from platform_api.builder import (
     drafted_workflows_http,
     drafts_http,
     explain_http,
+    fix_http,
+    fixes_http,
     lifecycle_http,
     n8n_http,
     planner_http,
@@ -126,6 +128,8 @@ def create_app(env: Mapping[str, str] | None = None) -> FastAPI:
     app.include_router(lifecycle_http.router)
     app.include_router(explain_http.router)
     app.include_router(drafted_workflows_http.router)
+    app.include_router(fix_http.router)
+    app.include_router(fixes_http.router)
     app.include_router(n8n_http.router)
     app.include_router(drafts_http.router)
     app.include_router(planner_http.router)

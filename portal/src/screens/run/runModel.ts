@@ -1,6 +1,6 @@
 import type { ApprovalStepStatus, ApproverRef, BlockKind, FailureReason, FailureStage, RunOutcome, Trigger, Verdict } from '../../api/types'
 import { runId as asRunId, type RunTime } from '../../stream/brand'
-import { parseEvent, type EventOf, type RunEvent } from '../../stream/parse'
+import { parseEvent, type DataOf, type EventOf, type RunEvent } from '../../stream/parse'
 import { GATE_STEP, stepWords, writeLabel } from './words'
 
 export const PLANNER_ID = 'planner'
@@ -60,6 +60,29 @@ export interface Written {
   readonly url?: string | null
 }
 
+/** A sub-agent a fix brought in, and the event that brought it, so one that arrives live can rise in. */
+export interface BroughtIn {
+  readonly agent: AgentRef
+  readonly seq: number
+}
+
+/**
+ * A fix on the stopped run (ADR 0055): the sub-agents it brought in, in order, how an event ended it, or null, and when it runs
+ * out of time. Read where it stands with fixEnd, which counts the deadline.
+ */
+export interface FixState {
+  readonly id: string
+  readonly agents: readonly BroughtIn[]
+  readonly ended: 'proposed' | 'handed_back' | null
+  readonly endsBy: RunTime
+}
+
+/** How a fix ended by now: as an event said, or handed back once its deadline passed with no event, as the platform counts it. */
+export function fixEnd(fix: FixState, now: number): 'proposed' | 'handed_back' | null {
+  if (fix.ended !== null) return fix.ended
+  return now >= fix.endsBy ? 'handed_back' : null
+}
+
 /** One entry in the run's log, placed and timed by the event that made it. */
 export type ChatItem = { readonly seq: number; readonly at: RunTime } & (
   | { readonly kind: 'started'; readonly by: string; readonly trigger: Trigger }
@@ -84,6 +107,8 @@ export type ChatItem = { readonly seq: number; readonly at: RunTime } & (
   | { readonly kind: 'found'; readonly text: string }
   /** What a Tell block did, in the platform's own words: sent, not confirmed, what a test run would have sent, or nothing to report. */
   | { readonly kind: 'told'; readonly line: string; readonly bad: boolean }
+  /** A step of a fix, in the sentence the platform wrote from its fields. The speaker is the agent, or nobody for who asked. */
+  | { readonly kind: 'fix'; readonly speaker: AgentRef | null; readonly text: string; readonly tone: 'plain' | 'bad' | 'wait' }
 )
 
 /** A spot the run reached, and when. */
@@ -120,6 +145,8 @@ export interface RunModel {
   readonly found: string
   /** The reports to support about this stop, one for each request. A retry starts the list again. */
   readonly reports: readonly { readonly requestId: string; readonly by: string }[]
+  /** The fix on this stop, once someone asked for one. A retry forgets it. It never moves the run. */
+  readonly fix: FixState | null
   readonly people: Readonly<Record<string, string>>
   readonly chat: readonly ChatItem[]
 }
@@ -146,6 +173,7 @@ export const emptyModel: RunModel = {
   retriedBy: [],
   found: '',
   reports: [],
+  fix: null,
   people: {},
   chat: [],
 }
@@ -279,6 +307,7 @@ function retried(model: RunModel, event: EventOf<'run_retried'>): RunModel {
     spotSeq: event.seq,
     reached: [{ spot, at: event.at }],
     reports: [],
+    fix: null,
   }
   const next: RunModel =
     event.data.leg === 'work'
@@ -294,6 +323,59 @@ function reported(model: RunModel, event: EventOf<'support_reported'>): RunModel
   const { request_id: requestId, reported_by: by } = event.data
   if (model.reports.some((report) => report.requestId === requestId)) return model
   return say({ ...model, reports: [...model.reports, { requestId, by }] }, { kind: 'reported', seq: event.seq, at: event.at, by, requestId })
+}
+
+/**
+ * The sub-agents a fix brings in, as Orbs. The AI troubleshooter is the fix's own face, and the simulation and the platform's
+ * check are code, so they are not brought in.
+ */
+const SUB_AGENTS: Readonly<Partial<Record<DataOf<'fix_handoff'>['to'], AgentRef>>> = {
+  fix_drafter: { id: 'fix_drafter', display: 'Fix drafter' },
+  scenario_writer: { id: 'scenario_writer', display: 'Scenario writer' },
+}
+
+/** What the platform found that the fix can't use. */
+const REFUSED: ReadonlySet<DataOf<'fix_handoff'>['found']> = new Set(['not_in_version', 'not_where_it_stopped', 'too_wide', 'widened', 'not_in_catalogue', 'refused', 'failed', 'no_answer'])
+
+type FixEvent = EventOf<'fix_started' | 'fix_handoff' | 'fix_round' | 'fix_proposed' | 'fix_handed_back'>
+
+function fixOf(fix: FixState | null, event: FixEvent): FixState | null {
+  if (event.kind === 'fix_started') return { id: event.data.fix_id, agents: [], ended: null, endsBy: Date.parse(event.data.ends_by) as RunTime }
+  if (fix === null || fix.id !== event.data.fix_id) return fix
+  switch (event.kind) {
+    case 'fix_handoff': {
+      const agent = SUB_AGENTS[event.data.to]
+      if (agent === undefined || fix.agents.some((brought) => brought.agent.id === agent.id)) return fix
+      return { ...fix, agents: [...fix.agents, { agent, seq: event.seq }] }
+    }
+    case 'fix_proposed':
+      return { ...fix, ended: 'proposed' }
+    case 'fix_handed_back':
+      return { ...fix, ended: 'handed_back' }
+    case 'fix_round':
+      return fix
+  }
+}
+
+function fixTone(event: FixEvent): 'plain' | 'bad' | 'wait' {
+  switch (event.kind) {
+    case 'fix_handoff':
+      return REFUSED.has(event.data.found) ? 'bad' : 'plain'
+    case 'fix_round':
+      return event.data.round > 1 && !event.data.progress ? 'bad' : 'plain'
+    case 'fix_proposed':
+      return 'wait'
+    case 'fix_handed_back':
+      return 'bad'
+    case 'fix_started':
+      return 'plain'
+  }
+}
+
+/** A step of a fix. It adds to the log and the fix, and never moves the run: it stays stopped where it stopped. */
+function fixed(model: RunModel, event: FixEvent): RunModel {
+  const speaker = event.kind === 'fix_started' || event.actor.kind !== 'agent' ? null : actorRef(event)
+  return say({ ...model, fix: fixOf(model.fix, event) }, { kind: 'fix', seq: event.seq, at: event.at, speaker, text: event.summary, tone: fixTone(event) })
 }
 
 function apply(model: RunModel, event: RunEvent): RunModel {
@@ -377,6 +459,12 @@ function apply(model: RunModel, event: RunEvent): RunModel {
       return reported(model, event)
     case 'told':
       return say(model, { kind: 'told', seq: event.seq, at: event.at, line: event.data.line, bad: event.data.status === 'not_confirmed' })
+    case 'fix_started':
+    case 'fix_handoff':
+    case 'fix_round':
+    case 'fix_proposed':
+    case 'fix_handed_back':
+      return fixed(model, event)
     case 'run_skipped':
       return advanceTo({ ...model, phase: { state: 'skipped' } }, { at: 'done' }, event)
     case 'run_expired':
@@ -389,6 +477,8 @@ function apply(model: RunModel, event: RunEvent): RunModel {
     case 'step_started':
     case 'step_retried':
     case 'approval_outcome_not_posted':
+    case 'fix_decided':
+    case 'fix_tried':
     case 'opaque':
       return model
   }

@@ -184,13 +184,13 @@ test('a link to a request that does not exist says so plainly', async ({ browser
   await context.close()
 })
 
-test('alice sees the run she started as Waiting for a yes on its workflow’s row, whose banner opens the run, and Workflows has no Waiting on others', async ({ browser, backend }) => {
+test('alice sees the run she started as On, waiting for an Approver’s yes, on its workflow’s row, whose banner opens the run, and Workflows has no Waiting on others', async ({ browser, backend }) => {
   const { runId } = await backend.waitingRun('alice')
   const context = await devContext(browser, 'alice')
   const page = await context.newPage()
   await page.goto('/workflows')
   const row = page.locator('li[data-workflow-id]').filter({ hasText: 'Software watchlist' })
-  await expect(row).toContainText('Waiting for a yes')
+  await expect(row).toContainText('On · waiting for an Approver’s yes')
   await expect(page.getByRole('region', { name: 'Waiting on others' })).toHaveCount(0)
   await page.goto('/')
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
@@ -261,7 +261,7 @@ test('the search and the filters show once there are more than ten workflows, an
   await page.goto('/workflows')
   const search = page.getByRole('searchbox', { name: 'Find a workflow' })
   await expect(search).toBeVisible()
-  await expect(page.getByRole('group', { name: 'Show' }).getByRole('button', { name: 'Stopped', exact: true })).toBeVisible()
+  await expect(page.getByRole('group', { name: 'Show' }).getByRole('button', { name: 'Needs you', exact: true })).toBeVisible()
   await expect(page.getByRole('main').locator('li[data-workflow-id] [data-state]')).toHaveCount(0)
   await shot(page, info, 'n9b-search-open')
   await search.fill('Software watchlist')
@@ -349,7 +349,7 @@ for (const user of ['alice', 'bob']) {
       await page.goto('/workflows')
       await expect(watchlist).toBeVisible()
       await expect(lastLine(watchlist), 'a waiting check says it waits for a yes, and is not a test run').toHaveText(/^(?:No schedule|Mon \d+:\d\d|Daily \d+:\d\d|Weekdays \d+:\d\d) · last run today, waiting for a yes$/)
-      await expect(watchlist.getByText('Waiting for a yes', { exact: true })).toBeVisible()
+      await expect(watchlist.getByText(user === 'alice' ? 'On · waiting for an Approver’s yes' : 'Needs you', { exact: true })).toBeVisible()
       await expect(watchlist.getByText('Test run', { exact: true }), 'Check now is not a test run').toHaveCount(0)
       const fit = await lineFits(lastLine(rows))
       expect(fit.rows, 'every row has a last-run line').toBe(await rows.count())

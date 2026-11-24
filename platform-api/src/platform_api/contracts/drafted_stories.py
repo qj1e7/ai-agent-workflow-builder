@@ -27,6 +27,12 @@ from platform_api.builder.drafted_workflows import (
 from platform_api.builder.explain import view_of
 from platform_api.builder.layout import DraftedLayout, lay_out_drafted
 from platform_api.builder.n8n_draft import blocks_of
+from platform_api.builder.simulation_views import (
+    SimulatedCaseView,
+    SimulationState,
+    SimulationView,
+    UseCaseSimulationView,
+)
 from platform_api.builder.workflow_report import Drafted, Team, workflow_report
 from platform_api.orchestration import (
     DECLINE_REASONS,
@@ -38,6 +44,10 @@ from platform_api.orchestration import (
     set_up_link,
     workflow_digest,
 )
+from platform_api.orchestration.agents import FailureNote
+from platform_api.orchestration.scenario_grades import EXPECTED, NOT_PLAYED, WAIT_LIMIT_SECONDS
+from platform_api.orchestration.simulation_gateway import PlayOut
+from platform_api.orchestration.simulation_model import note_words
 from platform_api.shared import TEAM_TIME_ZONE, ApprovalId, UserId
 from platform_api.wire import WireModel
 
@@ -163,6 +173,56 @@ def _drafted(run_time: str | None) -> tuple[WorkflowPlan, dict[str, object]]:
     return plan, attach_keys(add_yes(laid, USE_CASE_ID).document, KNOWN.keys)
 
 
+def _simulation(state: SimulationState, **changes: object) -> SimulationView:
+    """The newest revision tried on practice systems. Unavailable is where there is no
+    simulation n8n, as on Azure today."""
+    view = SimulationView(
+        state=state,
+        started_at=None if state in ("unavailable", "waiting") else SENT,
+        case_seconds=WAIT_LIMIT_SECONDS,
+        tried=0,
+        passed=0,
+        cases=[],
+        not_tried=[],
+        said=None,
+        can_try_again=False,
+    )
+    return view.model_copy(update=changes)
+
+
+def _case(kind: str, verdict: str, happened: str, note: str | None = None) -> SimulatedCaseView:
+    return SimulatedCaseView.model_validate(
+        {
+            "kind": kind,
+            "verdict": verdict,
+            "expected": EXPECTED[kind],  # type: ignore[index]
+            "happened": happened,
+            "note": note,
+        }
+    )
+
+
+READ = "Read new releases"
+REACHED_YES = "It reached the yes and would have made 1 change, which the simulation refused."
+NOT_FOUND_NOTE = note_words(
+    FailureNote(scenario="source_not_found", block=READ, kind="stopped", source=READ, detail=None),
+    [PlayOut(block=READ, serve="not_found")],
+)
+SIMULATED = _simulation(
+    "done",
+    tried=5,
+    passed=4,
+    cases=[
+        _case("happy_path", "passed", REACHED_YES),
+        _case("nothing_new", "passed", "It ended with nothing new and proposed nothing."),
+        _case("source_not_found", "failed", "It failed, and n8n names no block.", NOT_FOUND_NOTE),
+        _case("timeout", "not_tried", NOT_PLAYED),
+        _case("approver_says_no", "passed", "It ended as Declined, with nothing written."),
+        _case("odd_data", "passed", REACHED_YES),
+    ],
+)
+
+
 def _view(run_time: str | None, answered: bool = True, **changes: object) -> DraftedWorkflowView:
     """Carol's drafted release check. Her words named the run time, or only its day, and she
     chose who says yes on each run, or hasn't yet."""
@@ -203,6 +263,7 @@ def _view(run_time: str | None, answered: bool = True, **changes: object) -> Dra
         replaced_waiting=False,
         approval=None,
         set_up=None,
+        simulation=_simulation("waiting") if needed else _simulation("unavailable"),
     )
     return view.model_copy(update=changes)
 
@@ -277,9 +338,17 @@ def drafted_fixtures() -> dict[str, WireModel]:
                 "why_not_send": STILL_DRAFTING,
                 "revision": 1,
                 "made_by": "drafter",
+                "simulation": None,
             }
         ),
         "builder/drafted.ready.json": ready,
+        "builder/drafted.simulating.json": ready.model_copy(
+            update={"simulation": _simulation("running")}
+        ),
+        "builder/drafted.simulated.json": ready.model_copy(update={"simulation": SIMULATED}),
+        "builder/use-case.simulation.json": UseCaseSimulationView(
+            use_case_id=USE_CASE_ID, version=1, simulation=SIMULATED
+        ),
         "builder/drafted.question.json": _view("monday", answered=False),
         "builder/drafted.in-n8n.json": ready.model_copy(
             update={
@@ -309,6 +378,7 @@ def drafted_fixtures() -> dict[str, WireModel]:
                 "why_not_send": None,
                 "revision": 1,
                 "made_by": "drafter",
+                "simulation": None,
             }
         ),
         "builder/drafted.waiting.json": waiting,
