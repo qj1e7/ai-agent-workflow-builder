@@ -11,12 +11,13 @@ from datetime import timedelta
 from typing import Any
 
 import httpx
+import psycopg
 import pytest
 
 from platform_api.app import create_app
 from platform_api.auth import DEV_PEOPLE
 from platform_api.builder.drafted_settings import ANY_APPROVER, APPROVERS
-from platform_api.builder.drafted_simulations import DraftedSimulations
+from platform_api.builder.drafted_simulations import SIMULATING, DraftedSimulations
 from platform_api.builder.drafted_workflows import DraftedWorkflows
 from platform_api.db import Database
 from platform_api.orchestration.people_store import People
@@ -97,11 +98,17 @@ class Driver:
     )
     versions: list[Mapping[str, Any]] = field(default_factory=list[Mapping[str, Any]])
     hold: asyncio.Event | None = None
+    stubborn: bool = False
+    """Ignores being stopped at its limit, as a call stuck past its timeout would."""
 
     async def run(self, version: Mapping[str, Any]) -> Simulated | NotSimulated:
         self.versions.append(version)
-        if self.hold is not None:
-            await self.hold.wait()
+        while self.hold is not None and not self.hold.is_set():
+            try:
+                await self.hold.wait()
+            except asyncio.CancelledError:
+                if not self.stubborn:
+                    raise
         return self.answers.pop(0) if self.answers else SIX_FIVE
 
 
@@ -376,8 +383,88 @@ async def test_a_simulation_already_running_is_not_started_twice(
 
         r = await bench.again(view["drafted_id"], view["revision"])
 
-        assert r.status_code == 409
+        assert (r.status_code, r.json()["detail"]) == (409, SIMULATING)
         assert len(driver.versions) == 1
+
+
+async def test_the_running_row_is_kept_with_the_revision_so_a_poll_never_sees_it_untried(
+    postgres: PostgresUrls, db: Database, monkeypatch: pytest.MonkeyPatch
+):
+    """The row is written in the revision's own transaction. Here the process stops right after,
+    before any simulation starts: a poll still reads running, never untried."""
+
+    async def stopped(*_: object, **__: object) -> None:
+        return None
+
+    monkeypatch.setattr(DraftedSimulations, "start", stopped)
+    driver = Driver()
+    async for bench in bench_of(db, driver):
+        view = await bench.start()
+
+        assert view["simulation"]["state"] == "running"
+        assert (await bench.read(view["drafted_id"]))["simulation"]["state"] == "running"
+        assert driver.versions == []
+
+
+async def test_a_revision_never_tried_says_so_and_an_operator_can_try_it_now(
+    postgres: PostgresUrls, db: Database
+):
+    async for bench in bench_of(db, Driver()):
+        view = await bench.start()
+        await bench.drafted.settle()
+        drafted_id = view["drafted_id"]
+        with psycopg.connect(postgres.owner, autocommit=True) as conn:
+            conn.execute(
+                "DELETE FROM builder.drafted_simulations WHERE drafted_id = %s", (drafted_id,)
+            )
+
+        alice = (await bench.read(drafted_id, "alice"))["simulation"]
+        bob = (await bench.read(drafted_id, "bob"))["simulation"]
+
+        assert (alice["state"], alice["said"], alice["can_try_again"]) == (
+            "not_started",
+            None,
+            True,
+        )
+        assert (bob["state"], bob["can_try_again"]) == ("not_started", False)
+        r = await bench.again(drafted_id, view["revision"])
+        assert r.status_code == 200, r.text
+        await bench.drafted.settle()
+        assert (await bench.read(drafted_id))["simulation"]["state"] == "done"
+
+
+async def test_once_shutdown_begins_no_new_simulation_starts(postgres: PostgresUrls, db: Database):
+    driver = Driver()
+    async for bench in bench_of(db, driver):
+        bench.simulations.cancel()
+
+        view = await bench.start()
+        async with asyncio.timeout(5):
+            await bench.drafted.settle()
+
+        assert driver.versions == []
+        assert (view["simulation"]["state"], view["simulation"]["can_try_again"]) == (
+            "not_started",
+            False,
+        )
+        assert (await bench.again(view["drafted_id"], view["revision"])).status_code == 409
+
+
+async def test_a_try_past_its_limit_counts_as_ended_so_try_again_starts_anew(
+    postgres: PostgresUrls, db: Database
+):
+    driver = Driver(hold=asyncio.Event(), stubborn=True)
+    async for bench in bench_of(db, driver, limit=timedelta(seconds=0.2)):
+        view = await bench.start()
+        drafted_id = view["drafted_id"]
+        await asyncio.sleep(0.3)
+        assert (await bench.read(drafted_id, "alice"))["simulation"]["state"] == "not_finished"
+
+        r = await bench.again(drafted_id, view["revision"])
+
+        assert r.status_code == 200, r.text
+        assert r.json()["simulation"]["state"] == "running"
+        assert len(driver.versions) == 2
 
 
 async def test_simulated_runs_never_show_as_runs_or_in_the_activity_log(bench: Bench):

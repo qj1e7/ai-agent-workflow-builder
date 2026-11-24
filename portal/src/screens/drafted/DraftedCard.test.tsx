@@ -269,6 +269,16 @@ describe('the drafted card’s simulation (ADR 0054, PR 7)', () => {
     expect(buttons(html)).toContain('Try again')
   })
 
+  it('says a revision was never tried, and offers Try it now, not Try again, to whoever can start it', () => {
+    const view = simulating as DraftedWorkflowView
+    const never = { ...view.simulation!, state: 'not_started' as const, started_at: null, can_try_again: true }
+    const html = card({ ...view, simulation: never })
+    expect(text(html)).toContain('It hasn’t been tried on practice systems yet.')
+    expect(buttons(html)).toContain('Try it now')
+    expect(buttons(html)).not.toContain('Try again')
+    expect(buttons(card({ ...view, simulation: { ...never, can_try_again: false } }))).not.toContain('Try it now')
+  })
+
   it('shows nothing about practice systems while a setting is still needed', () => {
     expect(text(card(question as DraftedWorkflowView))).not.toContain('practice systems')
   })

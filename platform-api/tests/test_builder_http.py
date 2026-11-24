@@ -2331,23 +2331,28 @@ def test_the_limit_is_a_setting():
             answers_per_minute_from_env({"PLANNER_ANSWERS_PER_MINUTE": bad})
 
 
+NOT_HERE = "Practice systems aren't set up here."
 SIMULATE = spec(
     "workflows.simulate",
     kind="none",
     system=None,
     connection=None,
     tools=[],
-    platform=True,
+    state="planned",
+    cant="try a workflow on practice systems before its test run",
+    why=NOT_HERE,
     plain="Try each new workflow on practice systems before its test run",
 )
 
 
-@pytest.mark.parametrize("simulation", [False, True], ids=["no simulation n8n", "simulation n8n"])
-async def test_trying_a_workflow_on_practice_systems_needs_the_simulation_n8n(
-    db: Database, simulation: bool
+@pytest.mark.parametrize(
+    "ready_here", [(), ("workflows.simulate",)], ids=["no simulation n8n", "simulation n8n"]
+)
+async def test_simulation_mode_is_ready_only_where_the_platform_turned_it_on(
+    db: Database, ready_here: tuple[str, ...]
 ):
-    """The registry declares Simulation mode built (ADR 0054). Where there is no simulation n8n,
-    the platform says it needs setup, as the drafted card says it isn't available here."""
+    """The registry says Simulation mode is planned (ADR 0054). Where platform-api has a
+    simulation gateway, it says Ready, by the same rule the runtime's prompts follow."""
     watchlist = Watchlist(db, NothingLearned(), ScheduleBook(db))
     builder = Builder(
         db, SecondCallRepeats(), watchlist, "http://localhost:8000", history=RunBook()
@@ -2359,18 +2364,14 @@ async def test_trying_a_workflow_on_practice_systems_needs_the_simulation_n8n(
         FakeRegistry(CapabilityList(capabilities=[SIMULATE], examples=[])),
         FakeStates(a_check("model")),
         PlannerFactsReader(watchlist, builder, FakeHome()),
-        simulation=simulation,
+        ready_here=ready_here,
     )
 
     listed = await front.capabilities()
 
     assert not isinstance(listed, RegistryUnavailable)
     [entry] = listed.capabilities
-    if simulation:
-        assert (entry.state, entry.why, entry.fix) == ("ready", None, None)
+    if ready_here:
+        assert (entry.state, entry.cant, entry.why, entry.fix) == ("ready", None, None, None)
     else:
-        assert (entry.state, entry.why, entry.fix) == (
-            "needs_setup",
-            planner_module.NO_SIMULATION,
-            planner_module.SET_UP_SIMULATION,
-        )
+        assert (entry.state, entry.why, entry.fix) == ("planned", NOT_HERE, None)
