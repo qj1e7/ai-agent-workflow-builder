@@ -83,7 +83,7 @@ SHOWN_BY: Final[Mapping[FailureKind, re.Pattern[str]]] = {
     "refused": re.compile(r"refus|reject", re.IGNORECASE),
     "no_answer": re.compile(
         r"time[ds]?\s?out|timeout|did(?:n't| not) answer|no answer|no response|\b50[234]\b"
-        r"|unavailable|unreachable",
+        r"|unavailable|unreachable|could not be reached|closed the connection",
         re.IGNORECASE,
     ),
     "changed_field": re.compile(
@@ -91,7 +91,9 @@ SHOWN_BY: Final[Mapping[FailureKind, re.Pattern[str]]] = {
     ),
 }
 """What the stop must say for the words to state each kind as a fact. A kind with no entry, as
-wrong_value, says nothing the stop must show."""
+wrong_value, says nothing the stop must show. platform-api's words for a source that gave no
+usable answer (ADR 0056) count: didn't answer, could not be reached and closed the connection for
+no_answer, and refused the connection for refused."""
 
 
 class ModelCause(BaseModel):

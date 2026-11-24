@@ -20,7 +20,7 @@ from typing import Final, Protocol
 from pydantic import ValidationError
 
 from platform_api.db import Database
-from platform_api.monitoring import AskedCause, FoundCause, cause_words
+from platform_api.monitoring import AskedCause, FoundCause, cause_words, stop_kind
 from platform_api.orchestration.agents import (
     EVENT_SUMMARY_LIMIT,
     MOST_EVENTS,
@@ -139,17 +139,18 @@ class RunCauses:
         except ValidationError:
             log.warning("The run's blocks don't fit a cause request, so no model is asked")
             return None, False
-        return _checked(await self._agents.find_cause(request), stopped)
+        return _checked(await self._agents.find_cause(request), stopped, failure.message)
 
 
 def _checked(
-    reply: CauseResult | AgentUnavailable | AgentRejected, stopped: Sequence[str]
+    reply: CauseResult | AgentUnavailable | AgentRejected, stopped: Sequence[str], message: str
 ) -> tuple[FoundCause | None, bool]:
     """The cause to show, and whether the answer is final for this stop: anything the model
-    answered is, and a call that failed isn't."""
+    answered is, and a call that failed isn't. A source stop's own facts hold the kind."""
     match reply:
         case CauseFound(failed_part=part) if set(part) <= set(stopped):
-            words = cause_words(part, reply.system, reply.failure_kind, reply.detail)
+            kind = stop_kind(reply.failure_kind, message)
+            words = cause_words(part, reply.system, kind, reply.detail)
             return FoundCause(cause=words, failed_part=part), True
         case CauseFound():
             log.warning("The troubleshooter's model named a block the run didn't stop at")

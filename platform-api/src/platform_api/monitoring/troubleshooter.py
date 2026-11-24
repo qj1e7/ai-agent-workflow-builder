@@ -7,7 +7,7 @@ from typing import Final, Literal, Protocol
 from pydantic import Field
 
 from platform_api.monitoring.events import RunFailedData
-from platform_api.monitoring.source_stops import CAUSES, SourceStop, headline, read_stop
+from platform_api.monitoring.source_stops import CAUSES, Delay, SourceStop, headline, read_stop
 from platform_api.shared import JIRA_SITE_CHANGED, NO_START_BLOCK, WRITE_STOP_ADVICE, RunId
 from platform_api.wire import FailureReason, WireModel
 
@@ -306,6 +306,23 @@ CAUSE_WORDS: Final[Mapping[FailureKind, tuple[str, str]]] = {
 }
 """Why the failed part stopped, for each kind of failure but unknown, with a detail and without.
 The cause only says what the run met, and the rule table beside it says what to do."""
+
+SOURCE_KINDS: Final[Mapping[Delay, FailureKind]] = {
+    "no_answer": "no_answer",
+    "cut_off": "no_answer",
+    "unreachable": "no_answer",
+    "refused": "refused",
+}
+"""The one kind each of ADR 0056's source stops shows."""
+
+
+def stop_kind(kind: FailureKind, message: str) -> FailureKind:
+    """The model's kind, held to a source stop's own facts (ADR 0056). When the stop's words say
+    how the source failed, a kind they don't show is shown as unknown."""
+    stop = read_stop(message)
+    if stop is None or kind == SOURCE_KINDS[stop.delay]:
+        return kind
+    return "unknown"
 
 
 def cause_words(

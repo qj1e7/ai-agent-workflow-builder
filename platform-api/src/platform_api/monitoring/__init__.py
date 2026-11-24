@@ -73,6 +73,7 @@ from platform_api.monitoring.troubleshooter import (
     FoundCause,
     cause_words,
     explain_failure,
+    stop_kind,
     what_happened,
 )
 
@@ -141,6 +142,7 @@ __all__ = [
     "delay_in",
     "explain_failure",
     "pseudonym",
+    "stop_kind",
     "stop_words",
     "typed_again",
     "user_actor",
