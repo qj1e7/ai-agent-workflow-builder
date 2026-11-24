@@ -289,6 +289,23 @@ class NodeClasses:
             return Off("operation", what)
         return Runs(chosen, entry.uses.get(str(key)))
 
+    def doing(
+        self, node_type: str, version: object, parameters: Mapping[str, object]
+    ) -> tuple[str, On] | None:
+        """What a block runs to do, as `verdict` reads it, such as ("issue getAll", "read") for a
+        Jira search. None when the file turns it off or doesn't class it."""
+        entry = self._types.get(node_type)
+        key = version_key(version)
+        classed = None if not isinstance(entry, OnType) or key is None else entry.versions.get(key)
+        if classed is None:
+            return None
+        picked = _what(classed, parameters)
+        if isinstance(picked, Off) or picked[1] == "off":
+            return None
+        what, on = picked
+        assert on != "off"
+        return what, on
+
     def unclassed(self, served: Iterable[Mapping[str, Any]]) -> list[str]:
         """Every way the node types n8n serves, as its `/types/nodes.json` lists them, and the
         file's rows disagree: a version or a choice of a type the file turns on that the file does

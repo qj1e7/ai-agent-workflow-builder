@@ -78,6 +78,7 @@ locals {
           N8N_DISABLED_MODULES              = "mcp-registry"
           N8N_RUNNERS_BROKER_LISTEN_ADDRESS = "0.0.0.0"
           EXECUTIONS_DATA_SAVE_ON_SUCCESS   = "all"
+          WAB_REQUEST_TIMEOUT_SECONDS       = local.n8n_request_timeout_seconds
           WAB_API_URL                       = local.simulation_url["sim-gateway"]
         })
         secrets = {

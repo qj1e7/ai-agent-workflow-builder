@@ -73,6 +73,8 @@ services:
       N8N_DISABLED_MODULES: mcp-registry
       N8N_RUNNERS_AUTH_TOKEN: ${SIM_RUNNERS_TOKEN:?run scripts/simulation.sh}
       EXECUTIONS_DATA_SAVE_ON_SUCCESS: all
+      # The platform n8n's limit for each try of a read (ADR 0056), as deploy/compose.yaml sets it.
+      WAB_REQUEST_TIMEOUT_SECONDS: "30"
       # Our blocks call the simulation gateway, never the platform's API. ADR 0054's PR 3 adds it
       # as the service gateway on the sim network. Until then nothing answers there.
       WAB_API_URL: http://gateway:8600

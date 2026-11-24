@@ -12,8 +12,9 @@ from dataclasses import dataclass
 from typing import Final, Literal
 
 REQUEST_LIMIT_SECONDS: Final = 30
-"""How long n8n's own blocks wait on a source for each try, as WAB_REQUEST_TIMEOUT_SECONDS sets
-it for n8n in deploy/compose.yaml and Terraform. A block may set a limit of its own."""
+"""How long a read by n8n's own blocks (GET, HEAD or OPTIONS) waits on a source for each try, as
+WAB_REQUEST_TIMEOUT_SECONDS sets it for n8n in deploy/compose.yaml and Terraform. Any other
+method keeps n8n's own 300 s, and a block may set a limit of its own."""
 
 NOTHING_READ_YET: Final = "Stopped before it read anything."
 
@@ -40,7 +41,7 @@ starts the block's error message."""
 SOURCE_UNKNOWN: Final = "The source"
 
 _HAPPENED: Final[Mapping[Delay, str]] = {
-    "no_answer": "didn't answer within {limit}",
+    "no_answer": "didn't answer {limit}",
     "refused": "refused the connection",
     "cut_off": "closed the connection",
     "unreachable": "could not be reached",
@@ -64,8 +65,9 @@ class SourceStop:
     source: str | None
     """The system or host the block called, or None when nothing names it."""
     delay: Delay
-    limit_ms: int
-    """How long each try waited, which the words say only when nothing came back."""
+    limit_ms: int | None
+    """How long each try waited, which the words say only when nothing came back. None when
+    nothing shows it, such as a limit an expression sets."""
     block: str
     tries: int
     """The tries n8n made of the block. Each one failed, and n8n keeps only the last one's
@@ -79,15 +81,25 @@ def delay_in(message: str | None) -> Delay | None:
     return next((d for words, d in N8N_DELAYS.items() if message.startswith(words)), None)
 
 
-def _seconds(limit_ms: int) -> str:
+_UNITS: Final = (("hour", 3_600_000), ("minute", 60_000))
+
+
+def _within(limit_ms: int | None) -> str:
+    """Whole hours or minutes as such, any other limit in seconds."""
+    if limit_ms is None:
+        return "in time"
+    for unit, ms in _UNITS:
+        if limit_ms % ms == 0:
+            count = limit_ms // ms
+            return f"within {count} {unit}" + ("" if count == 1 else "s")
     seconds = limit_ms / 1000
-    return f"{seconds:g} second" + ("" if seconds == 1 else "s")
+    return f"within {seconds:g} second" + ("" if seconds == 1 else "s")
 
 
 def headline(stop: SourceStop) -> str:
     """One sentence: the source, what went wrong, the block and the tries."""
     source = stop.source or SOURCE_UNKNOWN
-    happened = _HAPPENED[stop.delay].format(limit=_seconds(stop.limit_ms))
+    happened = _HAPPENED[stop.delay].format(limit=_within(stop.limit_ms))
     tries = f" after {stop.tries} tries" if stop.tries > 1 else ""
     return f'{source} {happened}, so "{stop.block}" stopped{tries}.'
 
@@ -98,7 +110,8 @@ def stop_words(stop: SourceStop) -> str:
 
 _READ: Final = re.compile(
     rf"^(?:{re.escape(NOTHING_READ_YET)} )?(?P<source>.+?) "
-    r"(?:(?P<no_answer>didn't answer within (?P<limit>[0-9.]+) seconds?)"
+    r"(?:(?P<no_answer>didn't answer "
+    r"(?:in time|within (?P<count>[0-9.]+) (?P<unit>second|minute|hour)s?))"
     r"|(?P<refused>refused the connection)"
     r"|(?P<cut_off>closed the connection)"
     r"|(?P<unreachable>could not be reached))"
@@ -115,11 +128,15 @@ def read_stop(message: str) -> SourceStop | None:
     if not message.endswith(CAUSES[delay]):
         return None
     source = found.group("source")
-    limit = found.group("limit")
+    count, unit = found.group("count"), found.group("unit")
+    per = {"second": 1000, **dict(_UNITS)}
+    limit = None if count is None else round(float(count) * per[unit])
+    if delay != "no_answer":
+        limit = REQUEST_LIMIT_SECONDS * 1000
     return SourceStop(
         None if source == SOURCE_UNKNOWN else source,
         delay,
-        REQUEST_LIMIT_SECONDS * 1000 if limit is None else round(float(limit) * 1000),
+        limit,
         found.group("block"),
         int(found.group("tries") or 1),
     )

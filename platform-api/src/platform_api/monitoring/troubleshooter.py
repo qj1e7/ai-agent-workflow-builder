@@ -275,11 +275,15 @@ def _safe_to_retry(failure: RunFailedData, retry: RetryAnswer) -> str:
     return f"Yes. {wait}Nothing was written, so a retry is safe."
 
 
+RUNTIME_SOURCES: Final = ("GitHub", "Jira", "Confluence")
+"""The sources the agent runtime reads for an agent, as its fixed sentences name them
+(agent_runtime's github.py, jira.py, confluence.py and release_source.py)."""
 DIDNT_ANSWER: Final = re.compile(
-    r"\b(?P<source>[A-Z][A-Za-z0-9.-]*) (?:returned 5\d\d|could not be reached)\b"
+    rf"(?:^|: |\. )(?P<source>{'|'.join(RUNTIME_SOURCES)}) "
+    r"(?:returned 5\d\d|could not be reached)\b"
 )
-"""The runtime's words when the source an agent reads, such as GitHub, Jira or Confluence, gave
-no usable answer, every try. They name the source."""
+"""The runtime's sentence when one of those sources gave no usable answer, every try, at the
+start of the message or of one of its sentences."""
 
 
 def what_happened(failure: RunFailedData, at: datetime | None = None) -> str:
