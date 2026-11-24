@@ -34,6 +34,7 @@ import {
   WAITING_FOR_CHECK,
 } from './drafted'
 import { DraftedSettings } from './DraftedSettings'
+import { SimulationResult } from './SimulationResult'
 import styles from './Drafted.module.css'
 
 const TICK_MS = 1000
@@ -255,6 +256,7 @@ function Revision({ view }: { view: DraftedWorkflowView }) {
           <Words segments={report.in_short} />
         </p>
       ) : null}
+      {view.simulation ? <SimulationResult simulation={view.simulation} draftedId={view.drafted_id} revision={view.revision} /> : null}
       {added ? <p className={styles['note']}>{added}</p> : null}
       {view.flags > 0 ? (
         <p className={styles['said']}>

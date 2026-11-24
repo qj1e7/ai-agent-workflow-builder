@@ -18,7 +18,7 @@ from platform_api.builder.models import CardList, UseCaseList, Via
 from platform_api.db import Database
 from platform_api.monitoring import LangfuseScores, TraceFlag, TraceIds, pseudonym
 from platform_api.orchestration import CapabilityList, ConnectionCheck, PlannerFacts
-from platform_api.orchestration.agents import HttpAgentRuntime, ModelAccess
+from platform_api.orchestration.agents import HttpAgentRuntime, ModelAccess, PlatformReady
 from platform_api.orchestration.planning import PlannerAnswers
 from platform_api.shared import Principal, UserId
 from tests.declared import ALICE, BOB, app_with
@@ -279,3 +279,25 @@ async def test_the_answers_own_trace_id_sent_back_at_once_flags_that_turn(
         await ask(h, {"text": "and on Monday?", "chat": CHAT, "previous": previous})
         await ask(h, {"text": "and Tuesday?", "chat": CHAT, "previous": previous}, who=BOB)
     assert [f.trace_id for f in flags.sent] == [first["trace_id"]]
+
+
+@pytest.mark.parametrize("ready_here", [(), ("workflows.simulate",)])
+async def test_the_runtime_is_told_what_the_platform_turned_on_here(
+    ready_here: tuple[PlatformReady, ...],
+):
+    """So the Planner's prompts call Simulation mode Ready only where there is a simulation n8n
+    (ADR 0054, PR 7)."""
+    runtime = Runtime()
+    agents = HttpAgentRuntime(
+        "http://agent-runtime:8100",
+        "agent-key-not-real",
+        client=httpx.AsyncClient(transport=httpx.MockTransport(runtime.handle)),
+    )
+    answers = PlannerAnswers(
+        cast(Database, NoDatabase()), OneModel(), agents, ready_here=ready_here
+    )
+
+    await answers.answer("how many software are on our watchlist")
+
+    (sent,) = runtime.seen
+    assert sent["ready_here"] == list(ready_here)

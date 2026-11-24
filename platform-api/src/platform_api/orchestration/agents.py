@@ -559,6 +559,11 @@ class TurnTrace(WireModel):
     person: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
 
 
+type PlatformReady = Literal["workflows.simulate"]
+"""A planned capability the platform turns on where it has what it needs, as Simulation mode
+where there is a simulation n8n (ADR 0054)."""
+
+
 class AnswerRequest(WireModel):
     task: str
     model: ModelAccess
@@ -566,6 +571,7 @@ class AnswerRequest(WireModel):
     facts: PlannerFacts | None = None
     previous: PreviousTurn | None = None
     changes_workflows: bool = True
+    ready_here: list[PlatformReady] = Field(default_factory=list[PlatformReady])
 
 
 type CantNeed = Literal["new_tool", "new_system"]

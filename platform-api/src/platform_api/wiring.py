@@ -8,6 +8,7 @@ from fastapi import FastAPI
 
 from platform_api.auth import DEV_PEOPLE, DevAuth, OidcAuth
 from platform_api.builder import Builder, Home, PlannerFront, TeamRequests, Watchlist
+from platform_api.builder.drafted_simulations import DraftedSimulations
 from platform_api.builder.drafted_workflows import DraftedWorkflows
 from platform_api.builder.explain import Explainer
 from platform_api.builder.key_sweep import KeySweep
@@ -27,7 +28,7 @@ from platform_api.monitoring import (
     callback_for,
 )
 from platform_api.orchestration import self_test
-from platform_api.orchestration.agents import HttpAgentRuntime
+from platform_api.orchestration.agents import HttpAgentRuntime, PlatformReady
 from platform_api.orchestration.confluence_rest import (
     CONFLUENCE_PAGE,
     ConfluencePages,
@@ -98,6 +99,7 @@ from platform_api.orchestration.runs import Leg
 from platform_api.orchestration.schedule_store import ScheduleBook
 from platform_api.orchestration.service import Orchestrator
 from platform_api.orchestration.setup_approvals import SetUpApprovals
+from platform_api.orchestration.simulation_driver import SimulationClient, SimulationDriver
 from platform_api.orchestration.simulation_model import SimulationModel, connected_model
 from platform_api.orchestration.slack_channels import SlackChannels
 from platform_api.orchestration.team_request_card import TeamsRequestChannel
@@ -131,6 +133,7 @@ class Services:
     cause_finder: RunCauses
     simulation_model: SimulationModel
     drafted: DraftedWorkflows
+    simulations: DraftedSimulations
     setup_approvals: SetUpApprovals
     home: Home
     watchlist: Watchlist
@@ -157,6 +160,19 @@ class Services:
     made_in_n8n: MadeInN8n | None = None
     keys: PlatformKeys | None = None
     key_sweep: KeySweep | None = None
+    simulation_client: SimulationClient | None = None
+
+
+def simulations_for(
+    settings: Settings, db: Database, model: SimulationModel
+) -> tuple[SimulationClient | None, DraftedSimulations]:
+    """The simulation gateway, where there is one (ADR 0054, PR 7). The model writes and explains
+    cases only with SIMULATION_MODEL on, since each is a paid call."""
+    if settings.simulation is None:
+        return None, DraftedSimulations(db, None)
+    client = SimulationClient(settings.simulation.url, settings.simulation.start_secret)
+    driver = SimulationDriver(client, model if settings.simulation.uses_model else None)
+    return client, DraftedSimulations(db, driver)
 
 
 JIRA_TIMEOUT_SECONDS = 10.0
@@ -540,6 +556,10 @@ async def build(settings: Settings) -> Services:
         builder, orchestrator, people, team_requests, connections, watchlist, setup_approvals
     )
     trace_scores = trace_scores_for(settings)
+    simulation_model = SimulationModel(agents, connected_model(db, model_settings))
+    simulation_client, simulations = simulations_for(settings, db, simulation_model)
+    # One fact for the card, the capabilities and the Planner's prompts (ADR 0054, PR 7).
+    ready_here: tuple[PlatformReady, ...] = ("workflows.simulate",) if simulations.available else ()
     drafted = DraftedWorkflows(
         db,
         WorkflowDrafting(db, model_settings, agents),
@@ -551,6 +571,7 @@ async def build(settings: Settings) -> Services:
         SlackChannels(settings.n8n_keys.get("slack")),
         staff,
         settings.n8n_editor_url,
+        simulations=simulations,
     )
     setup_approvals.serve(drafted)
     return Services(
@@ -561,7 +582,7 @@ async def build(settings: Settings) -> Services:
         node_calls=node_calls,
         builder=builder,
         planner_front=PlannerFront(
-            PlannerAnswers(db, model_settings, agents),
+            PlannerAnswers(db, model_settings, agents, ready_here),
             builder,
             watchlist,
             CapabilityRegistry(agents),
@@ -571,11 +592,14 @@ async def build(settings: Settings) -> Services:
             scores=trace_scores,
             pseudonym_key=settings.trace_pseudonym_key,
             drafted=drafted,
+            ready_here=ready_here,
         ),
         explainer=Explainer(db, builder, ExplainWordings(db, model_settings, agents)),
         cause_finder=RunCauses(db, model_settings, agents, RunsInN8n(db, n8n.landing)),
-        simulation_model=SimulationModel(agents, connected_model(db, model_settings)),
+        simulation_model=simulation_model,
         drafted=drafted,
+        simulations=simulations,
+        simulation_client=simulation_client,
         setup_approvals=setup_approvals,
         home=home,
         watchlist=watchlist,
@@ -664,6 +688,8 @@ class Runner:
         self._services.orchestrator.nudge()
         self._services.staff.nudge()
         self._services.setup_approvals.nudge()
+        # A simulation takes minutes. Past its limit an unfinished one shows as not finished.
+        self._services.simulations.cancel()
         await self._services.drafted.settle()
         for task in self._tasks:
             await task
@@ -679,6 +705,8 @@ class Runner:
             await self._services.keys.close()
         if self._services.n8n is not None:
             await self._services.n8n.close()
+        if self._services.simulation_client is not None:
+            await self._services.simulation_client.close()
         await self._services.request_channel.close()
         await self._services.trace_scores.close()
         if self._services.copier is not None:

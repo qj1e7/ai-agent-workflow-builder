@@ -549,5 +549,16 @@
     "reason": null,
     "posted": "sent"
   },
-  "set_up": null
+  "set_up": null,
+  "simulation": {
+    "state": "unavailable",
+    "started_at": null,
+    "case_seconds": 120,
+    "tried": 0,
+    "passed": 0,
+    "cases": [],
+    "not_tried": [],
+    "said": null,
+    "can_try_again": false
+  }
 }

@@ -25,6 +25,7 @@ from platform_api.builder.models import (
     CreateAgentUseCase,
     UseCaseCreated,
 )
+from platform_api.builder.planner import RegistryUnavailable
 from platform_api.builder.planner_facts import STATUS_WORDS, PlannerFactsReader
 from platform_api.db import Database
 from platform_api.orchestration import (
@@ -2328,3 +2329,49 @@ def test_the_limit_is_a_setting():
     for bad in ("0", "-3", "lots"):
         with pytest.raises(ConfigError):
             answers_per_minute_from_env({"PLANNER_ANSWERS_PER_MINUTE": bad})
+
+
+NOT_HERE = "Practice systems aren't set up here."
+SIMULATE = spec(
+    "workflows.simulate",
+    kind="none",
+    system=None,
+    connection=None,
+    tools=[],
+    state="planned",
+    cant="try a workflow on practice systems before its test run",
+    why=NOT_HERE,
+    plain="Try each new workflow on practice systems before its test run",
+)
+
+
+@pytest.mark.parametrize(
+    "ready_here", [(), ("workflows.simulate",)], ids=["no simulation n8n", "simulation n8n"]
+)
+async def test_simulation_mode_is_ready_only_where_the_platform_turned_it_on(
+    db: Database, ready_here: tuple[str, ...]
+):
+    """The registry says Simulation mode is planned (ADR 0054). Where platform-api has a
+    simulation gateway, it says Ready, by the same rule the runtime's prompts follow."""
+    watchlist = Watchlist(db, NothingLearned(), ScheduleBook(db))
+    builder = Builder(
+        db, SecondCallRepeats(), watchlist, "http://localhost:8000", history=RunBook()
+    )
+    front = PlannerFront(
+        FakeAnswers(),
+        builder,
+        watchlist,
+        FakeRegistry(CapabilityList(capabilities=[SIMULATE], examples=[])),
+        FakeStates(a_check("model")),
+        PlannerFactsReader(watchlist, builder, FakeHome()),
+        ready_here=ready_here,
+    )
+
+    listed = await front.capabilities()
+
+    assert not isinstance(listed, RegistryUnavailable)
+    [entry] = listed.capabilities
+    if ready_here:
+        assert (entry.state, entry.cant, entry.why, entry.fix) == ("ready", None, None, None)
+    else:
+        assert (entry.state, entry.why, entry.fix) == ("planned", NOT_HERE, None)

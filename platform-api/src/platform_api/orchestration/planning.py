@@ -29,6 +29,7 @@ from platform_api.orchestration.agents import (
     HttpAgentRuntime,
     LibraryCard,
     PlannerFacts,
+    PlatformReady,
     PreviousTurn,
     RowKind,
     TurnTrace,
@@ -89,10 +90,18 @@ class CardPlanning:
 class PlannerAnswers:
     """The Planner's answer to a request typed on Home, and its by-code check of one part."""
 
-    def __init__(self, db: Database, models: ActiveModel, agents: HttpAgentRuntime) -> None:
+    def __init__(
+        self,
+        db: Database,
+        models: ActiveModel,
+        agents: HttpAgentRuntime,
+        ready_here: Sequence[PlatformReady] = (),
+    ) -> None:
         self._db = db
         self._models = models
         self._agents = agents
+        self._ready_here = list(ready_here)
+        """What the platform turned on here, so the Planner's prompts call only those Ready."""
 
     async def answer(
         self,
@@ -114,6 +123,7 @@ class PlannerAnswers:
                 facts=facts,
                 previous=previous,
                 changes_workflows=changes_workflows,
+                ready_here=self._ready_here,
             )
         )
         if isinstance(reply, AgentUnavailable | AgentRejected):

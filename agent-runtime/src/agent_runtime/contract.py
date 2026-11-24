@@ -988,6 +988,11 @@ class TurnTrace(WireModel):
     )
 
 
+type PlatformReady = Literal["workflows.simulate"]
+"""A planned capability the platform turns on where it has what it needs, as Simulation mode
+where there is a simulation n8n (ADR 0054)."""
+
+
 class AnswerRequest(WireModel):
     task: str = Field(min_length=1, max_length=2000)
     model: ModelAccess
@@ -1009,6 +1014,12 @@ class AnswerRequest(WireModel):
         description="False when the person asking can't change workflows, as an Approver who "
         "isn't an Operator: a change beside a question is crossed, and the question still gets "
         "its answer (plan 3.2).",
+    )
+    ready_here: list[PlatformReady] = Field(
+        default_factory=list[PlatformReady],
+        max_length=4,
+        description="The planned capabilities the platform has turned on where it runs. Only "
+        "these are Ready in the Planner's prompts beside the registry's own.",
     )
 
 

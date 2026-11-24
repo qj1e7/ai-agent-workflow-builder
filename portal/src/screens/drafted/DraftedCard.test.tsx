@@ -7,6 +7,8 @@ import notDrafted from '../../../../contracts/fixtures/builder/drafted.not-draft
 import question from '../../../../contracts/fixtures/builder/drafted.question.json'
 import ready from '../../../../contracts/fixtures/builder/drafted.ready.json'
 import setUp from '../../../../contracts/fixtures/builder/drafted.set-up.json'
+import simulated from '../../../../contracts/fixtures/builder/drafted.simulated.json'
+import simulating from '../../../../contracts/fixtures/builder/drafted.simulating.json'
 import waiting from '../../../../contracts/fixtures/builder/drafted.waiting.json'
 import draftUseCase from '../../../../contracts/fixtures/builder/use-case.draft.json'
 import bobSetUp from '../../../../contracts/fixtures/builder/setup-approval.bob.json'
@@ -49,7 +51,7 @@ function render(node: React.ReactNode, { me, view, useCase, pressed = false }: {
   )
 }
 
-const text = (html: string) => html.replace(/<[^>]*>/g, ' ').replaceAll('&#x27;', "'").replace(/\s+/g, ' ').trim()
+const text = (html: string) => html.replace(/<[^>]*>/g, ' ').replaceAll('&#x27;', "'").replaceAll('&quot;', '"').replace(/\s+/g, ' ').trim()
 const buttons = (html: string) => [...html.matchAll(/<(?:button|a)\b[^>]*>([\s\S]*?)<\/(?:button|a)>/g)].map((m) => text(m[1] ?? ''))
 const card = (view: DraftedWorkflowView, revision = view.card_revision) => render(<DraftedCard draftedId={view.drafted_id} revision={revision} />, { view })
 const SET_UP = setUp as DraftedWorkflowView
@@ -194,6 +196,91 @@ describe('the drafted workflow card', () => {
     const html = card(notDrafted as DraftedWorkflowView)
     expect(text(html)).toContain('I couldn\'t draft that.')
     expect(buttons(html)).toEqual(['Ask the team'])
+  })
+})
+
+describe('the drafted card’s simulation (ADR 0054, PR 7)', () => {
+  const STILL_TESTS = 'Turn on still runs the real test, which writes nothing.'
+
+  it('leads with the result, then what failed: code’s grade first and the AI’s note after it, as help', () => {
+    const view = simulated as DraftedWorkflowView
+    const words = text(card(view))
+    const lead = 'Tried 5 cases on practice systems: 4 passed.'
+    expect(words).toContain(lead)
+    const failed = view.simulation!.cases.find((c) => c.verdict === 'failed')!
+    const at = (s: string) => words.indexOf(s)
+    expect(at(lead)).toBeLessThan(at('Failed Source not found'))
+    expect(at('Failed Source not found')).toBeLessThan(at(`Expected: ${failed.expected}`))
+    expect(at(`Expected: ${failed.expected}`)).toBeLessThan(at(`What happened: ${failed.happened}`))
+    expect(at(`What happened: ${failed.happened}`)).toBeLessThan(at(`The AI’s note: ${failed.note!}`))
+    expect(words).toContain('A failed case doesn’t stop Turn on. You decide.')
+    expect(words).toContain(STILL_TESTS)
+  })
+
+  it('shows a case no block could play as Not tried, never as passed', () => {
+    const words = text(card(simulated as DraftedWorkflowView))
+    expect(words).toContain('Not tried Timeout')
+    expect(words).not.toContain('Passed Timeout')
+    expect(words).toContain('Passed Happy path')
+  })
+
+  it('never blocks Turn on: a failed case leaves the same buttons as no simulation at all', () => {
+    expect(buttons(card(simulated as DraftedWorkflowView))).toEqual(buttons(card(ready as DraftedWorkflowView)))
+    expect(buttons(card(simulated as DraftedWorkflowView)).at(-1)).toBe('Turn on')
+  })
+
+  it('names the blocks no case could try', () => {
+    const view = simulated as DraftedWorkflowView
+    const sim = { ...view.simulation!, not_tried: [{ block: 'Post the notice', why: 'No mock runs for it, so its output is pinned.' }] }
+    expect(text(card({ ...view, simulation: sim }))).toContain('Not tried in any case: “Post the notice”. No mock runs for it, so its output is pinned.')
+  })
+
+  it('says so while it runs, with each case’s time limit, and claims no result', () => {
+    const words = text(card(simulating as DraftedWorkflowView))
+    expect(words).toContain('Trying it on practice systems. Each case can take up to 2 minutes.')
+    expect(words).not.toContain('passed')
+    expect(words).not.toContain(STILL_TESTS)
+  })
+
+  it('says simulation isn’t available here where there is no simulation n8n, and claims no result', () => {
+    const words = text(card(ready as DraftedWorkflowView))
+    expect(words).toContain('Simulation on practice systems isn’t available here.')
+    expect(words).toContain(STILL_TESTS)
+    expect(words).not.toContain('Tried')
+    expect(words).not.toContain('Trying it')
+  })
+
+  it('says why nothing was tried, and offers Try again only to whoever can start it, never a dead button', () => {
+    const view = simulated as DraftedWorkflowView
+    const notRun = { ...view.simulation!, state: 'not_run' as const, tried: 0, passed: 0, cases: [], said: 'The practice systems didn\'t answer, so nothing was tried.', can_try_again: true }
+    const html = card({ ...view, simulation: notRun })
+    expect(text(html)).toContain('The practice systems didn\'t answer, so nothing was tried.')
+    expect(buttons(html)).toContain('Try again')
+    const bob = card({ ...view, simulation: { ...notRun, can_try_again: false } })
+    expect(buttons(bob)).not.toContain('Try again')
+    expect(bob).not.toContain('disabled')
+  })
+
+  it('never shows running past the limit: it says it didn’t finish, with Try again', () => {
+    const view = simulating as DraftedWorkflowView
+    const html = card({ ...view, simulation: { ...view.simulation!, state: 'not_finished', can_try_again: true } })
+    expect(text(html)).toContain('It didn’t finish on practice systems in time, so there is no result.')
+    expect(text(html)).not.toContain('Trying it')
+    expect(buttons(html)).toContain('Try again')
+  })
+
+  it('says a revision was never tried, and offers Try it now, not Try again, to whoever can start it', () => {
+    const view = simulating as DraftedWorkflowView
+    const never = { ...view.simulation!, state: 'not_started' as const, started_at: null, can_try_again: true }
+    const html = card({ ...view, simulation: never })
+    expect(text(html)).toContain('It hasn’t been tried on practice systems yet.')
+    expect(buttons(html)).toContain('Try it now')
+    expect(buttons(html)).not.toContain('Try again')
+    expect(buttons(card({ ...view, simulation: { ...never, can_try_again: false } }))).not.toContain('Try it now')
+  })
+
+  it('shows nothing about practice systems while a setting is still needed', () => {
+    expect(text(card(question as DraftedWorkflowView))).not.toContain('practice systems')
   })
 })
 

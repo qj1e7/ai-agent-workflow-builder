@@ -546,6 +546,15 @@
           "default": null,
           "description": "The turn before this one. Context for the question lane only: the Planner never builds request text from it."
         },
+        "ready_here": {
+          "description": "The planned capabilities the platform has turned on where it runs. Only these are Ready in the Planner's prompts beside the registry's own.",
+          "items": {
+            "$ref": "#/$defs/PlatformReady"
+          },
+          "maxItems": 4,
+          "title": "Ready Here",
+          "type": "array"
+        },
         "task": {
           "maxLength": 2000,
           "minLength": 1,
@@ -3515,6 +3524,10 @@
       },
       "title": "PlannerFacts",
       "type": "object"
+    },
+    "PlatformReady": {
+      "const": "workflows.simulate",
+      "type": "string"
     },
     "PreviousTurn": {
       "additionalProperties": false,

@@ -5190,6 +5190,22 @@
         "title": "DraftSettingView",
         "type": "object"
       },
+      "DraftSimulationIn": {
+        "additionalProperties": false,
+        "properties": {
+          "revision": {
+            "description": "The newest revision, to try on practice systems.",
+            "minimum": 1.0,
+            "title": "Revision",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "revision"
+        ],
+        "title": "DraftSimulationIn",
+        "type": "object"
+      },
       "DraftStartedReply": {
         "additionalProperties": false,
         "description": "The Workflow drafter started on an Operator's words, unchanged (ADR 0051): they asked for\na draft in words, as \"draft an n8n workflow that ...\", which code read before any model, or\nthe Planner found nothing of ours that covers the request (ADR 0053, item 5). The Portal\nshows the drafted workflow's card and follows GET /api/v1/drafted-workflows/{drafted_id}.",
@@ -5534,6 +5550,89 @@
         "title": "DraftedSetUpView",
         "type": "object"
       },
+      "DraftedSimulationView": {
+        "additionalProperties": false,
+        "description": "The newest revision tried on practice systems, by its digest (ADR 0054, PR 7). A result\nbelongs to one digest, so a changed version never shows an older one. A simulation is not a\nrun, and never stands in for the test run Turn on starts.",
+        "properties": {
+          "can_try_again": {
+            "description": "Whether this person can start it now: an Operator, once it was never tried, was not run or didn't finish, and only where there is a simulation n8n.",
+            "title": "Can Try Again",
+            "type": "boolean"
+          },
+          "case_seconds": {
+            "description": "The most each case may take to end.",
+            "title": "Case Seconds",
+            "type": "integer"
+          },
+          "cases": {
+            "description": "Each case, once done.",
+            "items": {
+              "$ref": "#/components/schemas/SimulatedCaseView"
+            },
+            "title": "Cases",
+            "type": "array"
+          },
+          "not_tried": {
+            "description": "Blocks no case could try, such as a pinned one or one after a write.",
+            "items": {
+              "$ref": "#/components/schemas/SimulatedBlockView"
+            },
+            "title": "Not Tried",
+            "type": "array"
+          },
+          "passed": {
+            "title": "Passed",
+            "type": "integer"
+          },
+          "said": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why nothing was tried, in words to show.",
+            "title": "Said"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When this try began. Null when unavailable.",
+            "title": "Started At"
+          },
+          "state": {
+            "$ref": "#/components/schemas/SimulationState",
+            "description": "unavailable: there is no simulation n8n here. not_started: it was never tried. running: it is being tried now. done: code graded each case. not_run: nothing was tried, with said. not_finished: it ran past its limit, so there is no result."
+          },
+          "tried": {
+            "description": "The cases that ran, leaving out those not tried.",
+            "title": "Tried",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "state",
+          "started_at",
+          "case_seconds",
+          "tried",
+          "passed",
+          "cases",
+          "not_tried",
+          "said",
+          "can_try_again"
+        ],
+        "title": "DraftedSimulationView",
+        "type": "object"
+      },
       "DraftedState": {
         "enum": [
           "drafting",
@@ -5700,6 +5799,17 @@
             "title": "Settings",
             "type": "array"
           },
+          "simulation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DraftedSimulationView"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The newest revision tried on practice systems. Null while drafting, when not drafted, or while a setting is still needed."
+          },
           "started_at": {
             "format": "date-time",
             "title": "Started At",
@@ -5750,7 +5860,8 @@
           "why_not_send",
           "replaced_waiting",
           "approval",
-          "set_up"
+          "set_up",
+          "simulation"
         ],
         "title": "DraftedWorkflowView",
         "type": "object"
@@ -13010,6 +13121,17 @@
         "title": "SavedOut",
         "type": "object"
       },
+      "ScenarioKind": {
+        "enum": [
+          "happy_path",
+          "nothing_new",
+          "source_not_found",
+          "timeout",
+          "approver_says_no",
+          "odd_data"
+        ],
+        "type": "string"
+      },
       "ScheduleChangeView": {
         "additionalProperties": false,
         "properties": {
@@ -13606,6 +13728,87 @@
         ],
         "title": "SimilarWorkflow",
         "type": "object"
+      },
+      "SimulatedBlockView": {
+        "additionalProperties": false,
+        "properties": {
+          "block": {
+            "title": "Block",
+            "type": "string"
+          },
+          "why": {
+            "description": "Why no case could try it, in code's words.",
+            "title": "Why",
+            "type": "string"
+          }
+        },
+        "required": [
+          "block",
+          "why"
+        ],
+        "title": "SimulatedBlockView",
+        "type": "object"
+      },
+      "SimulatedCaseView": {
+        "additionalProperties": false,
+        "description": "One scenario of a simulation, as code graded it (ADR 0054, section 5).",
+        "properties": {
+          "expected": {
+            "description": "What code expects of this kind, in plain words.",
+            "title": "Expected",
+            "type": "string"
+          },
+          "happened": {
+            "description": "What code read in the records, in plain words.",
+            "title": "Happened",
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ScenarioKind"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "For a failure, the explainer's one sentence, which code writes from its picks. It helps the reader and is never the verdict. Null with no model.",
+            "title": "Note"
+          },
+          "verdict": {
+            "description": "Code's grade, the verdict. not_tried: no block could play it, so it never ran and never counts as passed.",
+            "enum": [
+              "passed",
+              "failed",
+              "not_tried"
+            ],
+            "title": "Verdict",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "verdict",
+          "expected",
+          "happened",
+          "note"
+        ],
+        "title": "SimulatedCaseView",
+        "type": "object"
+      },
+      "SimulationState": {
+        "enum": [
+          "unavailable",
+          "not_started",
+          "running",
+          "done",
+          "not_run",
+          "not_finished"
+        ],
+        "type": "string"
       },
       "SkippedView": {
         "additionalProperties": false,
@@ -19449,6 +19652,107 @@
           }
         ],
         "summary": "Set Up Drafted Again",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/drafted-workflows/{drafted_id}/simulation": {
+      "post": {
+        "description": "Tries the newest revision on practice systems again (ADR 0054, PR 7), once its last try wasn't run or didn't finish. It answers at once with the simulation running. A simulation is not a run: it is never in Recent runs or the activity log, and never stands in for the test run Turn on starts. 409, with words to show, where there is no simulation n8n, while it is being tried, or when the revision named is not the newest.",
+        "operationId": "simulate_drafted_again_api_v1_drafted_workflows__drafted_id__simulation_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "drafted_id",
+            "required": true,
+            "schema": {
+              "title": "Drafted Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DraftSimulationIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftedWorkflowView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Only an Operator can do this, or the person is not on the People list"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "No such drafted workflow"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Sign-in could not be checked because the identity provider's keys are unavailable"
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Simulate Drafted Again",
         "tags": [
           "builder"
         ]

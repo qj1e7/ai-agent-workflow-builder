@@ -9,6 +9,7 @@ from platform_api.builder.drafted_views import (
     DraftedWorkflowView,
     DraftInN8nIn,
     DraftSendIn,
+    DraftSimulationIn,
     DraftWorkflowIn,
     SetUpApprovalView,
     SetUpDecisionIn,
@@ -199,6 +200,24 @@ async def done_drafted_in_n8n(
     drafted_id: str, principal: Drafter, drafted: CurrentDrafted
 ) -> DraftedWorkflowView:
     answer = await drafted.done_in_n8n(drafted_id, principal)
+    _refused(answer)
+    assert isinstance(answer, DraftedWorkflowView)
+    return answer
+
+
+@router.post(
+    "/drafted-workflows/{drafted_id}/simulation",
+    description="Tries the newest revision on practice systems again (ADR 0054, PR 7), once its "
+    "last try wasn't run or didn't finish. It answers at once with the simulation running. A "
+    "simulation is not a run: it is never in Recent runs or the activity log, and never stands "
+    "in for the test run Turn on starts. 409, with words to show, where there is no simulation "
+    "n8n, while it is being tried, or when the revision named is not the newest.",
+    responses={**OPERATORS_ONLY, 404: error_response(NO_SUCH_DRAFT)},
+)
+async def simulate_drafted_again(
+    drafted_id: str, body: DraftSimulationIn, principal: Drafter, drafted: CurrentDrafted
+) -> DraftedWorkflowView:
+    answer = await drafted.simulate_again(drafted_id, principal, body.revision)
     _refused(answer)
     assert isinstance(answer, DraftedWorkflowView)
     return answer
