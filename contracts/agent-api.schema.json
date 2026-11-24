@@ -1222,7 +1222,7 @@
               "type": "null"
             }
           ],
-          "description": "The one name the cause is about, copied from the stop or the activity, as a repository, a project's key or a field's name, or null."
+          "description": "The one name the cause is about, copied from the stop in the shape its kind takes: a repository, a project's key, a field's name or a version. Or null."
         },
         "failed_part": {
           "description": "The blocks the cause is in. Code checked each is a block of the version and one where the run stopped.",
@@ -1236,7 +1236,7 @@
         },
         "failure_kind": {
           "$ref": "#/$defs/FailureKind",
-          "description": "What kind of failure stopped the run."
+          "description": "What kind of failure stopped the run. Code checked the stop shows it, and sends unknown when it doesn't."
         },
         "kind": {
           "const": "found",
@@ -1253,7 +1253,7 @@
               "type": "null"
             }
           ],
-          "description": "The system the error came from, one the run's facts name, or null for none."
+          "description": "The system the error came from, one the stop or a block where the run stopped names, or null for none."
         }
       },
       "required": [

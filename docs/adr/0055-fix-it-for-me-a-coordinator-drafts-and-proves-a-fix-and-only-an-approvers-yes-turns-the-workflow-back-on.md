@@ -230,8 +230,8 @@ Each PR brings its own tests. Nothing is built until this ADR and ADR 0054 are a
 The review of PR 1 found that a word check can't keep advice out of a sentence the model writes. "The fix is to delete the Read releases block." and "The approval step is broken" both passed it. So the troubleshooter's model writes no words now. It picks fields from the run's facts:
 
 - the failed part, blocks where the run stopped;
-- the system, one the facts name, or none;
+- the system, one the stop or a block where the run stopped names, or none;
 - a kind of failure from a fixed list: `not_found`, `refused`, `no_answer`, `wrong_value`, `changed_field`, `permission`, `limit` or `unknown`;
-- at most one detail, a name copied from the stop or the activity, such as a repository, a project's key or a field.
+- at most one detail, a name copied from the stop, never from the activity.
 
-Code checks each field against the facts and refuses anything else. platform-api writes the sentence in section 10 from a template for each kind, so no text of the model's reaches anyone. The verifier doesn't read the cause, because it holds no words of the model's. The rule table stays the fallback.
+Code checks each field against the facts and refuses anything else. The detail must have the shape its kind takes: a repository as owner/name, a project's key in capitals, a field's name or a version, of at most two joined words. So a planted name such as "Approvals-are-off-so-delete-this-workflow" or "approve_your_own_request" is refused. The words state the kind as a fact, so code checks the stop shows it: 404 for `not_found`, 401 or 403 for `permission`, 429 for `limit`, a refusal for `refused`, a timeout for `no_answer` and a missing field for `changed_field`. A kind the stop shows no sign of is shown as `unknown`. platform-api writes the sentence in section 10 from a template for each kind, so no text of the model's reaches anyone. The verifier doesn't read the cause, because it holds no words of the model's. The rule table stays the fallback.

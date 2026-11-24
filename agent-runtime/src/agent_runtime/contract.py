@@ -1737,12 +1737,16 @@ class CauseFound(WireModel):
         "one where the run stopped.",
     )
     system: CauseSystem | None = Field(
-        description="The system the error came from, one the run's facts name, or null for none."
+        description="The system the error came from, one the stop or a block where the run "
+        "stopped names, or null for none."
     )
-    failure_kind: FailureKind = Field(description="What kind of failure stopped the run.")
+    failure_kind: FailureKind = Field(
+        description="What kind of failure stopped the run. Code checked the stop shows it, and "
+        "sends unknown when it doesn't."
+    )
     detail: CauseDetail | None = Field(
-        description="The one name the cause is about, copied from the stop or the activity, as a "
-        "repository, a project's key or a field's name, or null."
+        description="The one name the cause is about, copied from the stop in the shape its kind "
+        "takes: a repository, a project's key, a field's name or a version. Or null."
     )
 
 
