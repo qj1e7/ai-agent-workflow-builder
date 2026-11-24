@@ -7066,10 +7066,10 @@
       },
       "FoundCause": {
         "additionalProperties": false,
-        "description": "The AI model's cause and failed part (ADR 0055, section 10). Code checked them before\nanyone sees them: the cause passed the free reply's checks and the verifier, and each block\nis in the version that ran and is where the run stopped. The rule table's answer stays beside\nit, unchanged.",
+        "description": "The AI model's cause and failed part (ADR 0055, section 10). The model only picked fields\nfrom the run's facts, code checked each one, and code wrote the cause from them, so no words\nof the model's are shown. Each block is in the version that ran and is where the run stopped.\nThe rule table's answer stays beside it, unchanged.",
         "properties": {
           "cause": {
-            "description": "Why the run stopped, in one short sentence the model wrote.",
+            "description": "Why the run stopped, in one sentence code wrote from the model's checked picks: the failed part, the system, the kind of failure and one name from the run.",
             "title": "Cause",
             "type": "string"
           },

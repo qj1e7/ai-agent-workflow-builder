@@ -5,7 +5,7 @@ from typing import Annotated, Any, Final, Literal, Protocol, Self
 import httpx
 from pydantic import Field, StringConstraints, TypeAdapter, field_validator, model_validator
 
-from platform_api.monitoring import AgentEvent
+from platform_api.monitoring import AgentEvent, CauseSystem, FailureKind
 from platform_api.orchestration.schedule import AT_PATTERN, Day
 from platform_api.wire import RepoName, WireModel
 
@@ -893,9 +893,8 @@ explain_wording_result_adapter: TypeAdapter[ExplainWordingResult] = TypeAdapter(
 
 
 # The AI troubleshooter's model version (ADR 0032, ADR 0055 section 10): the runtime's
-# POST /v1/troubleshooter/cause, as this side reads it.
+# POST /v1/troubleshooter/cause, as this side reads it. The runtime answers in fields, never words.
 
-CAUSE_LIMIT: Final = 200
 STOP_MESSAGE_LIMIT: Final = 2000
 EVENT_SUMMARY_LIMIT: Final = 400
 MOST_EVENTS: Final = 80
@@ -903,6 +902,12 @@ RUN_BLOCK_NAME_LIMIT: Final = 200
 MOST_RUN_BLOCKS: Final = 100
 
 type RunBlockName = Annotated[str, Field(min_length=1, max_length=RUN_BLOCK_NAME_LIMIT)]
+type CauseDetail = Annotated[
+    str, StringConstraints(min_length=1, max_length=100, pattern=r"^[A-Za-z0-9][A-Za-z0-9_./-]*$")
+]
+type CauseCheck = Literal[
+    "call", "not_a_block", "not_where_it_stopped", "not_a_system", "not_a_detail"
+]
 
 
 class StoppedRun(WireModel):
@@ -931,13 +936,15 @@ class CauseRequest(WireModel):
 
 class CauseFound(WireModel):
     kind: Literal["found"] = "found"
-    cause: str = Field(min_length=1, max_length=CAUSE_LIMIT)
     failed_part: list[RunBlockName] = Field(min_length=1, max_length=MOST_RUN_BLOCKS)
+    system: CauseSystem | None
+    failure_kind: FailureKind
+    detail: CauseDetail | None
 
 
 class CauseKept(WireModel):
     kind: Literal["kept"] = "kept"
-    why: str
+    why: CauseCheck
 
 
 type CauseResult = CauseFound | CauseKept | ModelProblem

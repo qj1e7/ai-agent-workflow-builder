@@ -2,12 +2,13 @@
 CauseFinder. It only reads: the run's record in n8n says which blocks the version that ran has and
 where the run stopped, the model key goes from the settings store into the request to the runtime
 and nowhere else, and the runtime's answer is kept only when every block it names is one the run
-stopped at.
+stopped at. The runtime answers in checked fields, and run monitoring's words make the sentence.
 
-The model is asked once for each stop. An answer the model gave, shown or kept back, is remembered
-for that stop, so asking again costs nothing. A call that failed or ran out of time is asked again
-next time. The runtime gets what is left of the platform's wait, so its calls end before the
-platform stops waiting."""
+The model is asked once for each stop. Asks for a stop that come while one is under way share its
+answer, whatever it is. An answer the model gave, shown or kept back by a check, is remembered for
+that stop, so asking again costs nothing. A call that failed or ran out of time is asked again by
+the next ask that comes after it. The runtime gets what is left of the platform's wait, so its call
+ends before the platform stops waiting."""
 
 import asyncio
 import logging
@@ -19,7 +20,7 @@ from typing import Final, Protocol
 from pydantic import ValidationError
 
 from platform_api.db import Database
-from platform_api.monitoring import AskedCause, FoundCause
+from platform_api.monitoring import AskedCause, FoundCause, cause_words
 from platform_api.orchestration.agents import (
     EVENT_SUMMARY_LIMIT,
     MOST_EVENTS,
@@ -73,26 +74,36 @@ class RunCauses:
         self._runs = runs
         self._clock = clock
         self._answered: OrderedDict[StopKey, FoundCause | None] = OrderedDict()
-        self._asking: dict[StopKey, asyncio.Lock] = {}
+        self._asking: dict[StopKey, asyncio.Task[FoundCause | None]] = {}
 
     async def find(self, asked: AskedCause) -> FoundCause | None:
-        """One question to the model for each stop: a second ask for the same stop waits for the
-        first, then reads what it found."""
-        deadline = self._clock() + asked.seconds
+        """One question to the model for each stop: an ask while one is under way waits for that
+        one and gets its answer. A waiter that gives up stops only its own wait."""
         key = (asked.run_id, asked.seq)
-        lock = self._asking.setdefault(key, asyncio.Lock())
+        if key in self._answered:
+            self._answered.move_to_end(key)
+            return self._answered[key]
+        asking = self._asking.get(key)
+        if asking is None:
+            asking = asyncio.create_task(self._ask_once(key, asked, self._clock() + asked.seconds))
+            self._asking[key] = asking
+        return await asyncio.shield(asking)
+
+    async def _ask_once(
+        self, key: StopKey, asked: AskedCause, deadline: float
+    ) -> FoundCause | None:
+        """The one call for this stop. A final answer is remembered before the call leaves the
+        asks under way, so a later ask always finds one or the other."""
+        found, final = None, False
         try:
-            async with lock:
-                if key in self._answered:
-                    self._answered.move_to_end(key)
-                    return self._answered[key]
-                found, final = await self._ask(asked, deadline)
-                if final:
-                    self._remember(key, found)
-                return found
+            found, final = await self._ask(asked, deadline)
+        except Exception as error:
+            log.warning("The troubleshooter's cause wasn't asked: %s", type(error).__name__)
         finally:
-            if not lock.locked() and self._asking.get(key) is lock:
-                del self._asking[key]
+            if final:
+                self._remember(key, found)
+            del self._asking[key]
+        return found
 
     def _remember(self, key: StopKey, found: FoundCause | None) -> None:
         self._answered[key] = found
@@ -134,12 +145,17 @@ class RunCauses:
 def _checked(
     reply: CauseResult | AgentUnavailable | AgentRejected, stopped: Sequence[str]
 ) -> tuple[FoundCause | None, bool]:
+    """The cause to show, and whether the answer is final for this stop: anything the model
+    answered is, and a call that failed isn't."""
     match reply:
-        case CauseFound(cause=cause, failed_part=part) if set(part) <= set(stopped):
-            return FoundCause(cause=cause, failed_part=part), True
+        case CauseFound(failed_part=part) if set(part) <= set(stopped):
+            words = cause_words(part, reply.system, reply.failure_kind, reply.detail)
+            return FoundCause(cause=words, failed_part=part), True
         case CauseFound():
             log.warning("The troubleshooter's model named a block the run didn't stop at")
             return None, True
+        case CauseKept(why="call"):
+            log.warning("The troubleshooter's model call failed")
         case CauseKept(why=why):
             log.info("The troubleshooter's model fell back: %s", why)
             return None, True

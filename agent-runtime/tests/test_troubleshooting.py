@@ -9,6 +9,7 @@ from pydantic import ValidationError
 
 from agent_runtime.api import create_app
 from agent_runtime.contract import (
+    CauseCheck,
     CauseFound,
     CauseKept,
     CauseRequest,
@@ -150,7 +151,7 @@ def test_a_block_named_twice_is_one_block():
     ],
     ids=["none", "not-in-the-version", "case-differs", "not-stopped-there", "one-not-stopped"],
 )
-def test_code_checks_every_block_the_model_names(part: list[str], why: str):
+def test_code_checks_every_block_the_model_names(part: list[str], why: CauseCheck):
     assert part_check(part, REQUEST) == why
     shown, chat = asked_with(picked(failed_part=part))
     assert shown == CauseKept(why=why)
@@ -224,7 +225,7 @@ def test_a_link_in_the_facts_is_never_a_detail(link: str):
     ("field", "why"),
     [("failed_part", "not_a_block"), ("system", "not_a_system"), ("detail", "not_a_detail")],
 )
-def test_a_sentence_in_any_field_is_refused(sentence: str, field: str, why: str):
+def test_a_sentence_in_any_field_is_refused(sentence: str, field: str, why: CauseCheck):
     value: object = [sentence] if field == "failed_part" else sentence
     shown, _ = asked_with(picked(**{field: value}))
     assert shown == CauseKept(why=why)

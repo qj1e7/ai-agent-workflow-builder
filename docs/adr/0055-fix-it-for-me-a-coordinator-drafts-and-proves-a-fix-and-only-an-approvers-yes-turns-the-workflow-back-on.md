@@ -224,3 +224,14 @@ Each PR brings its own tests. Nothing is built until this ADR and ADR 0054 are a
 6. The fix's approval: set-up approvals for a fix to any workflow, the parties, the approval page, and Turn back on with the real test run (`orchestration`, `builder`).
 7. The Portal: the button, progress, the hand-back card and the agents page, with the words OK'd and the AI-native principles walked (`monitoring`, Portal).
 8. The paid model eval for the coordinator, joined to the gate once the team lead sets a budget (`runtime`).
+
+## Amended, 24 Nov 2026
+
+The review of PR 1 found that a word check can't keep advice out of a sentence the model writes. "The fix is to delete the Read releases block." and "The approval step is broken" both passed it. So the troubleshooter's model writes no words now. It picks fields from the run's facts:
+
+- the failed part, blocks where the run stopped;
+- the system, one the facts name, or none;
+- a kind of failure from a fixed list: `not_found`, `refused`, `no_answer`, `wrong_value`, `changed_field`, `permission`, `limit` or `unknown`;
+- at most one detail, a name copied from the stop or the activity, such as a repository, a project's key or a field.
+
+Code checks each field against the facts and refuses anything else. platform-api writes the sentence in section 10 from a template for each kind, so no text of the model's reaches anyone. The verifier doesn't read the cause, because it holds no words of the model's. The rule table stays the fallback.

@@ -364,6 +364,9 @@ The agent that explains why a run failed and helps the Operator fix it. It answe
 **Failed part**:
 The blocks the AI troubleshooter names as the cause of a stop, once code confirms that they exist in the version that ran and that the run stopped there (ADR 0055).
 
+**Kind of failure**:
+What stopped a run, as the AI troubleshooter picks it from a fixed list: not found, refused, no answer, wrong value, changed field, permission, limit, or unknown. Code writes the cause people see from it, the failed part, the system and one name from the run (ADR 0055).
+
 **Copier**:
 The part of run monitoring that copies each new activity event from PostgreSQL to Cosmos DB. It copies a run's events in order, and only one copier works on a run at a time. PostgreSQL keeps every event, so a copy that stops halfway goes on from the copied mark.
 _Avoid_: Sync, mirror

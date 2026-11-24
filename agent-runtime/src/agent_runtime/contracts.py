@@ -1187,9 +1187,10 @@ def fixtures() -> dict[str, WireModel]:
         "explain-wording-kept.json": ExplainKept(why="negation"),
         "troubleshooter-cause-request.json": cause_request(),
         "troubleshooter-cause-found.json": CauseFound(
-            cause="GitHub can't find the repository fastapi/fastapy that the Read releases block "
-            "reads.",
             failed_part=["Read releases"],
+            system="github",
+            failure_kind="not_found",
+            detail="fastapi/fastapy",
         ),
         "troubleshooter-cause-kept.json": CauseKept(why="not_where_it_stopped"),
         "planner-check-part-request.json": CheckPartRequest(kind="do", text="Email the list"),
