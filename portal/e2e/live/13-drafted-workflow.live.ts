@@ -7,10 +7,13 @@ import { expect, test } from './support/test'
 import { devContext, OUT, shot } from './support/ui'
 
 /**
- * A workflow drafted from words (ADR 0051, build steps 6 and 7): an Operator asks in the chat, the drafter lays it out, the card asks
- * the settings it still needs one at a time, she sends it, a different Approver decides on its own page, and it becomes a Draft on
- * Workflows. The person who asked, changed it or answered its questions can never decide it.
+ * A workflow drafted from words (ADR 0051, build steps 6 and 7): an Operator asks in the chat, the drafter lays it out, and the card
+ * asks the settings it still needs one at a time. Its one-time check is one line on the card (ADR 0053, item 3): Turn on asks for it,
+ * a different Approver finds it in Needs you and decides on its own page, and Turn on then tests it and turns it on. The person who
+ * asked, changed it or answered its questions can never decide it.
  */
+
+const CHECK = 'An Approver checks it once before it first runs.'
 
 const WORDS = 'Draft an n8n workflow that every Monday at 09:00 checks langchain-ai/langgraph for a new release and raises a ticket in MOCK'
 /** Names no time, so the card asks for one. */
@@ -27,7 +30,7 @@ test.describe('Drafted workflow', () => {
     if (useCaseId !== null) await backend.delete('alice', `/api/v1/use-cases/${useCaseId}`, [200, 404])
   })
 
-  test('DRAFTED-flow: Alice drafts it in the chat and sends it, Bob approves it on its page, and it is a Draft on Workflows', async ({ browser, backend }, info) => {
+  test('DRAFTED-flow: Alice presses Turn on, Bob checks it once from Needs you, and her Turn on then tests it and turns it on', async ({ browser, backend }, info) => {
     const aliceContext = await devContext(browser, 'alice', { reducedMotion: true })
     const alice = await aliceContext.newPage()
     const watchAlice = watchPage(alice)
@@ -41,17 +44,20 @@ test.describe('Drafted workflow', () => {
     await expect(card.getByText('Start from the Portal'), 'the step line leaves the Portal start out').toHaveCount(0)
     const name = (await card.getByRole('heading', { level: 3 }).innerText()).trim()
     await expect(card.getByText('Who says yes to “Make the ticket” on each run?'), 'the card asks what it still needs').toBeVisible()
-    await expect(card.getByRole('button', { name: 'Send for approval' }), 'Send for approval stays off until nothing is needed').toHaveCount(0)
+    await expect(card.getByText(CHECK), 'the one-time check is one line on the card').toBeVisible()
+    await expect(card.getByRole('button', { name: 'Turn on' }), 'Turn on stays off until nothing is needed').toHaveCount(0)
     await card.getByRole('button', { name: 'Any Approver on the team' }).click()
     await expect(card.getByText('Who says yes to “Make the ticket” on each run?')).toHaveCount(0)
-    await expect(card.getByRole('button', { name: 'Send for approval' })).toBeVisible()
+    await expect(card.getByRole('button', { name: 'Turn on' })).toBeVisible()
+    await expect(card.getByRole('button', { name: 'Send for approval' }), 'no separate path to send it').toHaveCount(0)
     await expect(card.getByRole('button', { name: 'Ask for a change' })).toBeVisible()
     await expectAccessible(alice, path.join(OUT, 'axe'), 'drafted-card')
     await shot(alice, info, 'drafted-card')
 
-    await card.getByRole('button', { name: 'Send for approval' }).click()
-    await expect(card.locator('[data-draft-pill]')).toHaveText('Waiting for a yes', { timeout: 20_000 })
-    await expect(card).toContainText('Waiting for an Approver. You can’t approve your own draft.')
+    await card.getByRole('button', { name: 'Turn on' }).click()
+    await expect(card.getByText('Waiting for an Approver to check it.'), 'Turn on asks for the check instead of turning it on').toBeVisible({ timeout: 20_000 })
+    await expect(card.locator('[data-draft-pill]'), 'it stays a Draft').toHaveText('Draft')
+    await expect(card.getByRole('button', { name: 'Turn on' })).toHaveCount(0)
     await shot(alice, info, 'drafted-waiting')
 
     const messages = await backend.teamsMessages()
@@ -59,17 +65,28 @@ test.describe('Drafted workflow', () => {
     expect(posted, 'the set-up approval is posted in Teams with a link to its page').toBeDefined()
     const link = posted?.link ?? ''
 
-    await alice.goto(link)
-    await expect(alice.getByRole('heading', { level: 1 })).toHaveText(name)
-    await expect(alice.getByText("You can't approve it. You asked for it, changed it, answered its questions or sent it."), 'the person who asked for it reads why, not a button, though she is an Approver').toBeVisible()
-    await expect(alice.getByRole('button', { name: 'Approve' })).toHaveCount(0)
-    await expect(alice.getByRole('button', { name: 'Decline' })).toHaveCount(0)
-    await shot(alice, info, 'setup-approval-alice')
+    // A second tab, so the chat that holds her card stays as it is.
+    const aliceTab = await aliceContext.newPage()
+    const watchAliceTab = watchPage(aliceTab)
+    await aliceTab.goto(link)
+    await expect(aliceTab.getByRole('heading', { level: 1 })).toHaveText(name)
+    await expect(aliceTab.getByText("You can't approve it. You asked for it, changed it, answered its questions or sent it."), 'the person who asked for it reads why, not a button, though she is an Approver').toBeVisible()
+    await expect(aliceTab.getByRole('button', { name: 'Approve' })).toHaveCount(0)
+    await expect(aliceTab.getByRole('button', { name: 'Decline' })).toHaveCount(0)
+    await shot(aliceTab, info, 'setup-approval-alice')
+    await aliceTab.goto('/')
+    await expect(aliceTab.locator(`a[href="${link}"]`), 'it is not in the Needs you of the person who made it').toHaveCount(0)
 
     const bobContext = await devContext(browser, 'bob', { reducedMotion: true })
     const bob = await bobContext.newPage()
     const watchBob = watchPage(bob)
-    await bob.goto(link)
+    await bob.goto('/')
+    const row = bob.locator(`a[href="${link}"]`)
+    await expect(row, 'one Needs you row for an Approver who can say yes').toHaveCount(1)
+    await expect(row).toContainText(`Alice asks for a one-time check of ${name}`)
+    await shot(bob, info, 'setup-needs-you-bob')
+    await row.click()
+    await expect(bob).toHaveURL(new RegExp(`${link}$`))
     await expect(bob.getByRole('heading', { level: 1 })).toHaveText(name)
     await expect(bob.getByText('Set-up approval, from Alice’s draft')).toBeVisible()
     await expect(bob.locator('[data-draft-pill]')).toHaveText('Needs your yes')
@@ -84,13 +101,20 @@ test.describe('Drafted workflow', () => {
     useCaseId = href?.split('/').at(-1) ?? null
     await shot(bob, info, 'setup-approval-approved')
 
-    await alice.goto('/')
+    await expect(card.getByText('Bob checked it once.'), 'the same card says who checked it').toBeVisible({ timeout: 30_000 })
+    await expect(card.getByText('Press Turn on. I do a test run, which writes nothing, and turn it on if the test passes.')).toBeVisible()
+    await shot(alice, info, 'drafted-checked')
+    await card.getByRole('button', { name: 'Turn on' }).click()
+    await expect(answer.locator('[data-draft-pill]').last(), 'Turn on now tests it, which writes nothing, and turns it on').toHaveText('On', { timeout: 90_000 })
+    await shot(alice, info, 'drafted-on')
+
     await alice.goto('/workflows')
-    const row = alice.locator('li[data-workflow-id]', { hasText: name }).first()
-    await expect(row.getByText('Draft', { exact: true }), 'Workflows lists it as a Draft').toBeVisible()
+    const listed = alice.locator('li[data-workflow-id]', { hasText: name }).first()
+    await expect(listed.getByText('On', { exact: true }), 'Workflows lists it as On, as the card says').toBeVisible()
     await shot(alice, info, 'drafted-on-workflows')
 
     assertClean(watchAlice)
+    assertClean(watchAliceTab)
     assertClean(watchBob)
     await aliceContext.close()
     await bobContext.close()
@@ -106,7 +130,7 @@ test.describe('Drafted workflow', () => {
     const card = answer.locator('section', { has: alice.locator('[data-draft-pill]') })
     await expect(card.locator('[data-draft-pill]')).toHaveText('Draft', { timeout: 90_000 })
     await expect(card.getByText('Mondays, at what time?'), 'the words name no time, so it asks for one first').toBeVisible()
-    await expect(card.getByRole('button', { name: 'Send for approval' })).toHaveCount(0)
+    await expect(card.getByRole('button', { name: 'Turn on' })).toHaveCount(0)
     await shot(alice, info, 'drafted-question-time')
 
     await card.getByRole('button', { name: 'Type a time' }).click()
@@ -120,7 +144,7 @@ test.describe('Drafted workflow', () => {
     await expect(card.getByText('Mondays, at what time?')).toHaveCount(0)
     await expect(card.getByText('Who says yes to “Make the ticket” on each run?'), 'the next question comes up').toBeVisible()
     await card.getByRole('button', { name: 'Any Approver on the team' }).click()
-    await expect(card.getByRole('button', { name: 'Send for approval' })).toBeVisible()
+    await expect(card.getByRole('button', { name: 'Turn on' })).toBeVisible()
     await expectAccessible(alice, path.join(OUT, 'axe'), 'drafted-card-answered')
     await shot(alice, info, 'drafted-question-answered')
 

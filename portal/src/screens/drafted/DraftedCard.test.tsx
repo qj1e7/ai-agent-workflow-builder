@@ -8,6 +8,7 @@ import question from '../../../../contracts/fixtures/builder/drafted.question.js
 import ready from '../../../../contracts/fixtures/builder/drafted.ready.json'
 import setUp from '../../../../contracts/fixtures/builder/drafted.set-up.json'
 import waiting from '../../../../contracts/fixtures/builder/drafted.waiting.json'
+import draftUseCase from '../../../../contracts/fixtures/builder/use-case.draft.json'
 import bobSetUp from '../../../../contracts/fixtures/builder/setup-approval.bob.json'
 import carolSetUp from '../../../../contracts/fixtures/builder/setup-approval.carol.json'
 import cant from '../../../../contracts/fixtures/planner/answer.cant.json'
@@ -15,8 +16,10 @@ import part from '../../../../contracts/fixtures/planner/answer.part.json'
 import setupCard from '../../../../contracts/fixtures/planner/answer.setup_card.json'
 import { ApiProvider } from '../../api/context'
 import { draftedKey } from '../../api/draftedQueries'
+import { keys } from '../../api/queries'
 import { createDevSession } from '../../api/session'
-import type { CantReply, DraftedWorkflowView, Me, PartReply, PlannerReply, SetupCardReply, SetUpApprovalView } from '../../api/types'
+import type { CantReply, DraftedWorkflowView, Me, PartReply, PlannerReply, SetupCardReply, SetUpApprovalView, UseCaseView } from '../../api/types'
+import { holdTurnOn } from '../../api/workflowQueries'
 import { Answer, type Page } from '../home/AnswerCards'
 import { ChatProvider } from '../home/ChatProvider'
 import { CardLive } from '../home/primary'
@@ -28,10 +31,12 @@ const WORDS = 'Draft an n8n workflow that every Monday at 9:00 checks langchain-
 const scope = createDevSession(null).cacheScope()
 const BOB: Me = { id: 'u_bob', display: 'Bob', roles: ['approver'] }
 
-function render(node: React.ReactNode, { me, view }: { me?: Me; view?: DraftedWorkflowView } = {}): string {
+function render(node: React.ReactNode, { me, view, useCase, pressed = false }: { me?: Me; view?: DraftedWorkflowView; useCase?: UseCaseView; pressed?: boolean } = {}): string {
   const queryClient = new QueryClient()
   if (me) queryClient.setQueryData(['me', scope], me)
   if (view) queryClient.setQueryData(draftedKey(scope, view.drafted_id), view)
+  if (useCase) queryClient.setQueryData(keys.useCase(scope, useCase.use_case_id), useCase)
+  if (useCase && pressed) holdTurnOn(queryClient, scope, useCase.use_case_id, Date.now(), 'k1')
   return renderToStaticMarkup(
     <QueryClientProvider client={queryClient}>
       <ApiProvider session={createDevSession(null)} platformFetch={fetch} origin="http://portal.test">
@@ -46,6 +51,12 @@ function render(node: React.ReactNode, { me, view }: { me?: Me; view?: DraftedWo
 const text = (html: string) => html.replace(/<[^>]*>/g, ' ').replaceAll('&#x27;', "'").replace(/\s+/g, ' ').trim()
 const buttons = (html: string) => [...html.matchAll(/<(?:button|a)\b[^>]*>([\s\S]*?)<\/(?:button|a)>/g)].map((m) => text(m[1] ?? ''))
 const card = (view: DraftedWorkflowView, revision = view.card_revision) => render(<DraftedCard draftedId={view.drafted_id} revision={revision} />, { view })
+const SET_UP = setUp as DraftedWorkflowView
+/** The workflow the approved revision was set up as, still a Draft. */
+const SET_UP_DRAFT: UseCaseView = { ...(draftUseCase as UseCaseView), use_case_id: 'uc_01JDRAFTRELEASE', name: 'Release check' }
+const setUpCard = (useCase: UseCaseView, pressed = false) => render(<DraftedCard draftedId={SET_UP.drafted_id} revision={SET_UP.card_revision} />, { view: SET_UP, useCase, pressed })
+const CHECK = 'An Approver checks it once before it first runs.'
+const TURN_ON_NOW = 'Press Turn on. I do a test run, which writes nothing, and turn it on if the test passes.'
 
 describe('the drafted workflow card', () => {
   it('shows Drafting with time going while the drafter works, and no steps the platform did not report', () => {
@@ -56,7 +67,7 @@ describe('the drafted workflow card', () => {
     expect(buttons(html)).toEqual([])
   })
 
-  it('shows a draft with its steps, In short, what was added, and Send for approval, leaving Start from the Portal out', () => {
+  it('reads like any set-up card: its steps, In short, what was added, one line for the one-time check, and Turn on, leaving Start from the Portal out', () => {
     const html = card(ready as DraftedWorkflowView)
     const words = text(html)
     expect(words).toContain('Release check')
@@ -65,18 +76,22 @@ describe('the drafted workflow card', () => {
     expect(words).not.toContain('Start from the Portal')
     expect(html).toContain('data-in-short')
     expect(words).toMatch(/Added \d+ things? every workflow needs\./)
-    expect(buttons(html)).toEqual(['See the report', 'Ask for a change', 'Edit in n8n', 'Send for approval'])
+    expect(html).toContain('data-check')
+    expect(words.split(CHECK)).toHaveLength(2)
+    expect(buttons(html)).toEqual(['See the report', 'Ask for a change', 'Edit in n8n', 'Turn on'])
+    expect(words).not.toContain('Send for approval')
   })
 
-  it('puts the reason where Send for approval would be when it cannot be sent, never a dead button', () => {
+  it('puts the reason where Turn on would be when the check cannot be asked for, never a dead button', () => {
     const html = card(question as DraftedWorkflowView)
     expect(text(html)).toContain('Answer 2 questions first')
-    expect(buttons(html)).toEqual(expect.not.arrayContaining(['Send for approval']))
+    expect(text(html)).toContain(CHECK)
+    expect(buttons(html)).toEqual(expect.not.arrayContaining(['Turn on', 'Send for approval']))
     expect(buttons(html).at(-1)).toBe('Edit in n8n')
     expect(html).not.toContain('disabled')
   })
 
-  it('after a refused set-up, it is a draft again: it says why, and offers Send for approval and Ask for a change', () => {
+  it('after a refused set-up, it is a draft again: it says why, and offers Turn on and Ask for a change', () => {
     const refused = {
       ...(setUp as DraftedWorkflowView),
       state: 'draft',
@@ -87,10 +102,10 @@ describe('the drafted workflow card', () => {
     const html = card(refused)
     expect(text(html)).toContain('Revision 2 Draft')
     expect(text(html)).toContain('Changed since it was approved. Send it for approval again.')
-    expect(buttons(html)).toEqual(['See the report', 'Ask for a change', 'Send for approval'])
+    expect(buttons(html)).toEqual(['See the report', 'Ask for a change', 'Turn on'])
   })
 
-  it('after n8n did not take it, it says so and offers Try again beside Send and Ask for a change', () => {
+  it('after n8n did not take it, it says so and offers Try again beside Turn on and Ask for a change', () => {
     const failed = {
       ...(setUp as DraftedWorkflowView),
       state: 'draft',
@@ -100,22 +115,43 @@ describe('the drafted workflow card', () => {
     } as DraftedWorkflowView
     const html = card(failed)
     expect(text(html)).toContain('n8n didn’t take it, so it isn’t set up yet. Try again.')
-    expect(buttons(html)).toEqual(['Try again', 'See the report', 'Ask for a change', 'Send for approval'])
+    expect(buttons(html)).toEqual(['Try again', 'See the report', 'Ask for a change', 'Turn on'])
   })
 
-  it('says it is waiting for an Approver, and cannot be approved by its author', () => {
+  it('once Turn on asked for the check, it stays a Draft that waits for an Approver to check it, with no button its author could press', () => {
     const html = card(waiting as DraftedWorkflowView)
-    expect(text(html)).toContain('Revision 2 Waiting for a yes')
-    expect(text(html)).toContain('Waiting for an Approver. You can’t approve your own draft.')
+    expect(text(html)).toContain('Revision 2 Draft')
+    expect(text(html)).not.toContain('Waiting for a yes')
+    expect(text(html)).toContain('Waiting for an Approver to check it.')
+    expect(text(html)).toContain(CHECK)
     expect(buttons(html)).toEqual(['See the report'])
   })
 
-  it('says who approved it and that it is set up as a draft, with Open it', () => {
-    const html = card(setUp as DraftedWorkflowView)
-    expect(text(html)).toContain('Approved by Bob.')
-    expect(text(html)).toContain('Set up as a draft.')
-    expect(buttons(html)).toEqual(['See the report', 'Open it'])
+  it('after the yes, it says who checked it and offers Turn on again, beside Open it', () => {
+    const html = setUpCard(SET_UP_DRAFT)
+    const words = text(html)
+    expect(words).toContain('Revision 2 Draft')
+    expect(words).toContain('Bob checked it once.')
+    expect(words).not.toContain(CHECK)
+    expect(words).toContain(TURN_ON_NOW)
+    expect(buttons(html)).toEqual(['See the report', 'Turn on', 'Open it'])
     expect(html).toContain('href="/workflows/uc_01JDRAFTRELEASE"')
+  })
+
+  it('once Turn on is pressed after the yes, the card is the set-up card: the test run, then on', () => {
+    const html = setUpCard(SET_UP_DRAFT, true)
+    expect(text(html)).toContain('Release check')
+    expect(text(html)).toContain('Building')
+    expect(text(html)).not.toContain('Revision 2')
+    expect(buttons(html)).not.toContain('Turn on')
+  })
+
+  it('reads On once the workflow is on, with nothing left to press but Open it', () => {
+    const html = setUpCard({ ...SET_UP_DRAFT, state: 'on' })
+    expect(text(html)).toContain('Revision 2 On')
+    expect(text(html)).toContain('Bob checked it once.')
+    expect(text(html)).not.toContain(TURN_ON_NOW)
+    expect(buttons(html)).toEqual(['See the report', 'Open it'])
   })
 
   it('says it is setting it up while n8n has not taken it, and shows the failure with Try again', () => {
@@ -132,7 +168,7 @@ describe('the drafted workflow card', () => {
   it('says it was declined, by whom and why, and that nothing was set up', () => {
     const base = waiting as DraftedWorkflowView
     const html = card({ ...base, state: 'declined', approval: { ...base.approval!, status: 'declined', decided_by: 'Bob', reason: 'Wrong project or channel' } })
-    expect(text(html)).toContain('Revision 2 Declined')
+    expect(text(html)).toContain('Revision 2 Draft')
     expect(text(html)).toContain('Declined by Bob: wrong project or channel. Nothing was set up.')
   })
 
