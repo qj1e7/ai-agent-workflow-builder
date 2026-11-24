@@ -279,8 +279,14 @@ describe('the drafted card’s simulation (ADR 0054, PR 7)', () => {
     expect(buttons(card({ ...view, simulation: { ...never, can_try_again: false } }))).not.toContain('Try it now')
   })
 
-  it('shows nothing about practice systems while a setting is still needed', () => {
-    expect(text(card(question as DraftedWorkflowView))).not.toContain('practice systems')
+  it('says a revision still needing a setting will be tried once every setting is filled, never not available and never running', () => {
+    const html = card(question as DraftedWorkflowView)
+    const words = text(html)
+    expect(words).toContain('It will be tried on practice systems once every setting is filled.')
+    expect(words).not.toContain('isn’t available')
+    expect(words).not.toContain('Trying it')
+    expect(html).not.toContain('role="status" data-simulation')
+    expect(buttons(html)).not.toContain('Try it now')
   })
 })
 

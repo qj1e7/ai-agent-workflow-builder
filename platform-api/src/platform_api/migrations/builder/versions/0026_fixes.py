@@ -1,7 +1,7 @@
 from alembic import op
 
-revision = "0025"
-down_revision = "0024"
+revision = "0026"
+down_revision = "0025"
 
 MADE = (
     "made IN ('published_in_n8n', 'settings_changed_in_n8n', 'rolled_back', 'yes_put_back',"

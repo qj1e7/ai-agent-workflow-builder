@@ -10,12 +10,13 @@ import failedView from '../../../../contracts/fixtures/views/failure.final.json'
 import success from '../../../../contracts/fixtures/runs/success.json'
 import setupCard from '../../../../contracts/fixtures/planner/answer.setup_card.json'
 import setupCross from '../../../../contracts/fixtures/planner/answer.setup_card.cross.json'
+import simulated from '../../../../contracts/fixtures/builder/drafted.simulated.json'
 import { ApiProvider } from '../../api/context'
 import { keys } from '../../api/queries'
 import { createDevSession } from '../../api/session'
 import planUseOne from '../../../../contracts/fixtures/cards/plan.use-one.json'
 import statuses from '../../../../contracts/fixtures/watchlist/statuses.json'
-import type { Me, PlanOut, RunView, SetupCardReply, UseCaseCreated, UseCaseView, WatchlistView } from '../../api/types'
+import type { DraftedWorkflowView, Me, PlanOut, RunView, SetupCardReply, SimulationView, UseCaseCreated, UseCaseSimulationView, UseCaseView, WatchlistView } from '../../api/types'
 import type { Made, SetUp } from '../../api/workflowQueries'
 import { emptyModel, foldWire, type RunModel } from '../run/runModel'
 import { BuildingCard, type CardProps } from './Building'
@@ -45,11 +46,13 @@ interface World {
   readonly made?: { readonly key: string; readonly made: Made }
   readonly setUp?: SetUp | null
   readonly kept?: CardKept
+  /** The workflow's version tried on practice systems, as GET /api/v1/use-cases/{id}/simulation answers it. */
+  readonly simulation?: UseCaseSimulationView
 }
 
 const HELD: SetUp = { created: CREATED, at: Date.now() - 60_000, testRunId: null, testKey: 'k1', testAsked: null }
 
-function render(node: ReactNode, { useCase = DRAFT, setUp = HELD, kept, unread = false, watched, made, run }: World = {}): string {
+function render(node: ReactNode, { useCase = DRAFT, setUp = HELD, kept, unread = false, watched, made, run, simulation }: World = {}): string {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retryOnMount: false } } })
   queryClient.setQueryData(['me', scope], ALICE)
   if (run) queryClient.setQueryData(keys.run(scope, run.run_id), run)
@@ -58,6 +61,7 @@ function render(node: ReactNode, { useCase = DRAFT, setUp = HELD, kept, unread =
   if (setUp) queryClient.setQueryData(keys.setUp(scope, CREATED.use_case_id), setUp)
   if (watched) queryClient.setQueryData(keys.watchlist(scope), watched)
   if (made) queryClient.setQueryData(keys.made(scope, made.key), made.made)
+  if (simulation) queryClient.setQueryData(keys.useCaseSimulation(scope, simulation.use_case_id), simulation)
   const memory = newCardMemory()
   if (kept) memory.keep(kept)
   return renderToStaticMarkup(
@@ -288,6 +292,39 @@ describe('the set-up card after Set up', () => {
     expect(pill(html)).toBe('On')
     expect(text(html)).toMatch(/On\. First run (today|tomorrow|[A-Z][a-z]+day|[A-Z][a-z]{2} \d+ [A-Z][a-z]{2}), 8:00\./)
     expect(buttons(html)).toEqual([])
+  })
+})
+
+describe('the set-up card tried on practice systems (ADR 0054)', () => {
+  const DONE = (simulated as DraftedWorkflowView).simulation as SimulationView
+  const tried = (simulation: SimulationView | null): UseCaseSimulationView => ({ use_case_id: CREATED.use_case_id, version: 1, simulation })
+  const STILL_TESTS = 'Turn on still runs the real test, which writes nothing.'
+
+  it('leads with the result as the drafted card does, code’s grade first, and never stands in for the test run', () => {
+    const words = text(building(null, { simulation: tried(DONE) }))
+    expect(words).toContain('Tried 5 cases on practice systems: 4 passed.')
+    expect(words.indexOf('Failed Source not found')).toBeLessThan(words.indexOf('Passed Happy path'))
+    expect(words).toContain('A failed case doesn’t stop Turn on. You decide.')
+    expect(words).toContain(STILL_TESTS)
+  })
+
+  it('says so while it is being tried, with each case’s limit, and claims no result', () => {
+    const running: SimulationView = { ...DONE, state: 'running', tried: 0, passed: 0, cases: [] }
+    const words = text(building(null, { simulation: tried(running) }))
+    expect(words).toContain('Trying it on practice systems. Each case can take up to 2 minutes.')
+    expect(words).not.toContain('passed')
+  })
+
+  it('offers Try again only to whoever can start it, never a dead button', () => {
+    const notRun: SimulationView = { ...DONE, state: 'not_run', tried: 0, passed: 0, cases: [], said: 'The practice systems didn’t answer, so nothing was tried.', can_try_again: true }
+    expect(buttons(building(null, { simulation: tried(notRun) }))).toContain('Try again')
+    const bob = building(null, { simulation: tried({ ...notRun, can_try_again: false }) })
+    expect(text(bob)).toContain('The practice systems didn’t answer, so nothing was tried.')
+    expect(buttons(bob)).not.toContain('Try again')
+  })
+
+  it('says nothing of practice systems for a workflow with nothing to try', () => {
+    expect(text(building(null, { simulation: tried(null) }))).not.toContain('practice systems')
   })
 })
 

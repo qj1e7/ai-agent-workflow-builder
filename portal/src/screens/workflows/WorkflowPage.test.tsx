@@ -14,11 +14,13 @@ import openInN8n from '../../../../contracts/fixtures/builder/use-case.open-in-n
 import undoneUseCase from '../../../../contracts/fixtures/builder/use-case.undone.json'
 import changed from '../../../../contracts/fixtures/builder/versions.json'
 import undone from '../../../../contracts/fixtures/builder/versions.undone.json'
+import simulated from '../../../../contracts/fixtures/builder/drafted.simulated.json'
 import { App } from '../../App'
 import { ApiError, type ApiClient } from '../../api/client'
 import { ApiProvider } from '../../api/context'
 import { createDevSession } from '../../api/session'
-import type { Me, PersonOut, RunView, TroubleshootingOut, UseCaseView, VersionView, WatchlistView } from '../../api/types'
+import type { DraftedWorkflowView, Me, PersonOut, RunView, SimulationView, TroubleshootingOut, UseCaseSimulationView, UseCaseView, VersionView, WatchlistView } from '../../api/types'
+import { keys } from '../../api/queries'
 import statuses from '../../../../contracts/fixtures/watchlist/statuses.json'
 import type { LastRun } from './workflow'
 import { formatterFactory } from './workflow'
@@ -51,9 +53,11 @@ interface Setup {
   /** The watchlist as the platform answers it, for the watchlist's own page. */
   readonly watchlist?: WatchlistView
   readonly path?: string | undefined
+  /** Its version tried on practice systems, as GET /api/v1/use-cases/{id}/simulation answers it. */
+  readonly simulation?: SimulationView | null
 }
 
-function render({ me = ALICE, useCase: given = AGENTS, runs = [], id, advice, last, versions, watchlist, path }: Setup = {}): string {
+function render({ me = ALICE, useCase: given = AGENTS, runs = [], id, advice, last, versions, watchlist, path, simulation }: Setup = {}): string {
   const useCase = last && !(given instanceof Error) ? { ...given, last_run: { ...STOPPED, ...last } } : given
   const session = createDevSession(null)
   const scope = session.cacheScope()
@@ -70,6 +74,10 @@ function render({ me = ALICE, useCase: given = AGENTS, runs = [], id, advice, la
   if (useCase instanceof Error) queryClient.getQueryCache().build(queryClient, { queryKey: key }).setState({ status: 'error', error: useCase, fetchStatus: 'idle' })
   else queryClient.setQueryData(key, useCase)
   if (versions && !(useCase instanceof Error)) queryClient.setQueryData(['versions', scope, useCaseId, useCase.version], versions)
+  if (simulation !== undefined && !(useCase instanceof Error)) {
+    const tried: UseCaseSimulationView = { use_case_id: useCaseId, version: useCase.version, simulation }
+    queryClient.setQueryData(keys.useCaseSimulation(scope, useCaseId), tried)
+  }
   return renderToStaticMarkup(
     <QueryClientProvider client={queryClient}>
       <ApiProvider session={session} platformFetch={fetch} origin="http://portal.test">
@@ -614,5 +622,23 @@ describe('a workflow that is not there', () => {
 
   it('offers Try again when the platform had a problem', () => {
     expect(text(mainOf(render({ useCase: new ApiError(503, null) })))).toContain('Try again')
+  })
+})
+
+describe('a draft tried on practice systems (ADR 0054)', () => {
+  const DONE = (simulated as DraftedWorkflowView).simulation as SimulationView
+  const DRAFT: UseCaseView = { ...AGENTS, state: 'draft' }
+
+  it('shows its Check’s result on its page, beside Test run, for whoever reads it', () => {
+    for (const me of [ALICE, BOB]) {
+      const words = text(mainOf(render({ me, useCase: DRAFT, simulation: DONE })))
+      expect(words).toContain('Tried 5 cases on practice systems: 4 passed.')
+      expect(words).toContain('Turn on still runs the real test, which writes nothing.')
+    }
+  })
+
+  it('shows nothing of practice systems once the workflow is on, or when there is nothing to try', () => {
+    expect(text(mainOf(render({ useCase: { ...AGENTS, state: 'on' }, simulation: DONE })))).not.toContain('practice systems')
+    expect(text(mainOf(render({ useCase: DRAFT, simulation: null })))).not.toContain('practice systems')
   })
 })

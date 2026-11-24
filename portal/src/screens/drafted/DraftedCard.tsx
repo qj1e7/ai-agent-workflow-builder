@@ -1,9 +1,9 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useErrorWords } from '../../api/context'
-import { useDoneInN8n, useDrafted, useEditInN8n, useSendDrafted, useSetUpAgain } from '../../api/draftedQueries'
+import { useDoneInN8n, useDrafted, useEditInN8n, useSendDrafted, useSetUpAgain, useSimulateAgain } from '../../api/draftedQueries'
 import { pressOnce, useLatch } from '../../api/latch'
 import { useUseCase } from '../../api/queries'
-import type { DraftedWorkflowView, UseCaseState } from '../../api/types'
+import type { DraftedWorkflowView, SimulationView, UseCaseState } from '../../api/types'
 import { useHoldTurnOn, useSetUp } from '../../api/workflowQueries'
 import { Button, ButtonAnchor, ButtonLink } from '../../ui/Button'
 import { Card } from '../../ui/Card'
@@ -232,6 +232,12 @@ function Foot({ view, life, onReport, onProblem }: { view: DraftedWorkflowView; 
   return <>{actions}</>
 }
 
+/** The newest revision tried on practice systems. Try again asks for this revision, so a newer one is never tried by it. */
+function DraftedSimulation({ view, simulation }: { view: DraftedWorkflowView; simulation: SimulationView }) {
+  const again = useSimulateAgain(view.drafted_id)
+  return <SimulationResult simulation={simulation} tryAgain={{ pending: again.isPending, press: (outcome) => again.mutate(view.revision, outcome) }} />
+}
+
 /** A revision that has been read: the step line, In short, what was added, the flags, and where it stands. */
 function Revision({ view }: { view: DraftedWorkflowView }) {
   const [shown, setShown] = useState(false)
@@ -256,7 +262,7 @@ function Revision({ view }: { view: DraftedWorkflowView }) {
           <Words segments={report.in_short} />
         </p>
       ) : null}
-      {view.simulation ? <SimulationResult simulation={view.simulation} draftedId={view.drafted_id} revision={view.revision} /> : null}
+      {view.simulation ? <DraftedSimulation view={view} simulation={view.simulation} /> : null}
       {added ? <p className={styles['note']}>{added}</p> : null}
       {view.flags > 0 ? (
         <p className={styles['said']}>

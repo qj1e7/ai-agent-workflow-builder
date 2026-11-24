@@ -251,6 +251,16 @@ class FakeDrafted:
         return DraftNotFound()
 
 
+class FakeUseCaseSimulations:
+    """No workflow has a Check to read or try again."""
+
+    async def view(self, *args: object) -> object:
+        return None
+
+    async def again(self, *args: object) -> object:
+        return None
+
+
 def app_with(
     orchestrator: object = None,
     builder: object = None,
@@ -265,6 +275,7 @@ def app_with(
     app.state.planner_front = planner_front or FakePlannerFront()
     app.state.explainer = FakeExplainer()
     app.state.drafted = FakeDrafted()
+    app.state.use_case_simulations = FakeUseCaseSimulations()
     app.state.activity_log = log or FakeLog()
     app.state.practice_jira = FakeMockJira()
     app.state.watchlist = FakeWatchlist()
