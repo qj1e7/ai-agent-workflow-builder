@@ -224,11 +224,13 @@
             "approval_requested": "#/components/schemas/ApprovalRequested",
             "execution_linked": "#/components/schemas/ExecutionLinked",
             "execution_resumed": "#/components/schemas/ExecutionResumed",
+            "fix_decided": "#/components/schemas/FixDecided",
             "fix_handed_back": "#/components/schemas/FixHandedBack",
             "fix_handoff": "#/components/schemas/FixHandoff",
             "fix_proposed": "#/components/schemas/FixProposed",
             "fix_round": "#/components/schemas/FixRound",
             "fix_started": "#/components/schemas/FixStarted",
+            "fix_tried": "#/components/schemas/FixTried",
             "leg_dispatched": "#/components/schemas/LegDispatched",
             "run_created": "#/components/schemas/RunCreated",
             "run_expired": "#/components/schemas/RunExpired",
@@ -351,6 +353,12 @@
           },
           {
             "$ref": "#/components/schemas/FixHandedBack"
+          },
+          {
+            "$ref": "#/components/schemas/FixDecided"
+          },
+          {
+            "$ref": "#/components/schemas/FixTried"
           }
         ]
       },
@@ -1824,6 +1832,10 @@
         ],
         "title": "ApprovalDecidedData",
         "type": "object"
+      },
+      "ApprovalIdText": {
+        "pattern": "^apr_[0-9A-Za-z]{1,40}$",
+        "type": "string"
       },
       "ApprovalItem": {
         "additionalProperties": false,
@@ -3346,6 +3358,85 @@
         ],
         "title": "CardView",
         "type": "object"
+      },
+      "CauseDetail": {
+        "maxLength": 64,
+        "minLength": 1,
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9_./-]*$",
+        "type": "string"
+      },
+      "CauseFound": {
+        "additionalProperties": false,
+        "properties": {
+          "detail": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CauseDetail"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "failed_part": {
+            "items": {
+              "$ref": "#/components/schemas/RunBlockName"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Failed Part",
+            "type": "array"
+          },
+          "failure_kind": {
+            "$ref": "#/components/schemas/FailureKind"
+          },
+          "kind": {
+            "const": "found",
+            "default": "found",
+            "title": "Kind",
+            "type": "string"
+          },
+          "system": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CauseSystem"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "failed_part",
+          "system",
+          "failure_kind",
+          "detail"
+        ],
+        "title": "CauseFound",
+        "type": "object"
+      },
+      "CauseSystem": {
+        "enum": [
+          "github",
+          "gitlab",
+          "bitbucket",
+          "jira",
+          "confluence",
+          "teams",
+          "slack",
+          "entra",
+          "azure",
+          "aws",
+          "docker",
+          "pypi",
+          "npm",
+          "servicenow",
+          "outlook",
+          "zendesk",
+          "gmail"
+        ],
+        "type": "string"
       },
       "Change": {
         "additionalProperties": false,
@@ -6943,6 +7034,19 @@
         "title": "FailureIn",
         "type": "object"
       },
+      "FailureKind": {
+        "enum": [
+          "not_found",
+          "refused",
+          "no_answer",
+          "wrong_value",
+          "changed_field",
+          "permission",
+          "limit",
+          "unknown"
+        ],
+        "type": "string"
+      },
       "FailureOut": {
         "additionalProperties": false,
         "properties": {
@@ -7044,6 +7148,101 @@
           }
         ]
       },
+      "FixAnswerIn": {
+        "additionalProperties": false,
+        "properties": {
+          "choice": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Choice"
+          },
+          "setting": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Setting",
+            "type": "string"
+          },
+          "typed": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Typed"
+          }
+        },
+        "required": [
+          "setting"
+        ],
+        "title": "FixAnswerIn",
+        "type": "object"
+      },
+      "FixChangeView": {
+        "additionalProperties": false,
+        "description": "One value the fix changed, from the stopped version to the fixed one, as data.",
+        "properties": {
+          "after": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "After"
+          },
+          "before": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Before"
+          },
+          "block": {
+            "title": "Block",
+            "type": "string"
+          },
+          "parameter": {
+            "description": "The parameter's path in the block, as a.b.",
+            "title": "Parameter",
+            "type": "string"
+          }
+        },
+        "required": [
+          "block",
+          "parameter",
+          "before",
+          "after"
+        ],
+        "title": "FixChangeView",
+        "type": "object"
+      },
+      "FixCheck": {
+        "enum": [
+          "inside_the_failed_part",
+          "every_scenario_passed",
+          "safety_check",
+          "settings_unchanged"
+        ],
+        "type": "string"
+      },
       "FixCheckIn": {
         "additionalProperties": false,
         "properties": {
@@ -7079,6 +7278,136 @@
           "findings"
         ],
         "title": "FixCheckOut",
+        "type": "object"
+      },
+      "FixCheckView": {
+        "additionalProperties": false,
+        "properties": {
+          "check": {
+            "$ref": "#/components/schemas/FixCheck"
+          },
+          "passed": {
+            "title": "Passed",
+            "type": "boolean"
+          },
+          "words": {
+            "description": "What code checked, in code's own words.",
+            "title": "Words",
+            "type": "string"
+          }
+        },
+        "required": [
+          "check",
+          "passed",
+          "words"
+        ],
+        "title": "FixCheckView",
+        "type": "object"
+      },
+      "FixChoiceView": {
+        "additionalProperties": false,
+        "properties": {
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "value",
+          "label"
+        ],
+        "title": "FixChoiceView",
+        "type": "object"
+      },
+      "FixDecided": {
+        "additionalProperties": false,
+        "properties": {
+          "actor": {
+            "$ref": "#/components/schemas/Actor"
+          },
+          "data": {
+            "$ref": "#/components/schemas/FixDecidedData"
+          },
+          "kind": {
+            "const": "fix_decided",
+            "default": "fix_decided",
+            "title": "Kind",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "seq": {
+            "minimum": 1.0,
+            "title": "Seq",
+            "type": "integer"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "ts": {
+            "format": "date-time",
+            "title": "Ts",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "seq",
+          "ts",
+          "actor",
+          "summary",
+          "data"
+        ],
+        "title": "FixDecided",
+        "type": "object"
+      },
+      "FixDecidedData": {
+        "additionalProperties": false,
+        "description": "An Approver's yes or no to a fix's set-up approval.",
+        "properties": {
+          "approval_id": {
+            "$ref": "#/components/schemas/ApprovalIdText"
+          },
+          "by": {
+            "title": "By",
+            "type": "string"
+          },
+          "by_name": {
+            "$ref": "#/components/schemas/ShownName"
+          },
+          "fix_id": {
+            "$ref": "#/components/schemas/FixId"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ShownName"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the Approver said no, from the short list."
+          },
+          "verdict": {
+            "$ref": "#/components/schemas/FixVerdict"
+          }
+        },
+        "required": [
+          "fix_id",
+          "approval_id",
+          "verdict",
+          "by",
+          "by_name"
+        ],
+        "title": "FixDecidedData",
         "type": "object"
       },
       "FixEventIn": {
@@ -7122,6 +7451,118 @@
           "refused"
         ],
         "title": "FixEventOut",
+        "type": "object"
+      },
+      "FixEvidenceView": {
+        "additionalProperties": false,
+        "description": "What the approval page shows of a fix (ADR 0055, section 7), all of it code's: the cause\nas code confirmed it, the change, each scenario's grade and code's checks. The report's\nreworded text is the AI's help for the reader, never the check.",
+        "properties": {
+          "answered_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The person who answered, by name.",
+            "title": "Answered By"
+          },
+          "asked_by": {
+            "description": "The name of the person who asked for the fix.",
+            "title": "Asked By",
+            "type": "string"
+          },
+          "cause": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The cause, in code's own words.",
+            "title": "Cause"
+          },
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/FixChangeView"
+            },
+            "title": "Changes",
+            "type": "array"
+          },
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/FixCheckView"
+            },
+            "title": "Checks",
+            "type": "array"
+          },
+          "failed_part": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Failed Part",
+            "type": "array"
+          },
+          "fix_id": {
+            "title": "Fix Id",
+            "type": "string"
+          },
+          "made_by": {
+            "description": "Who made the change: the Fix drafter, or a person who answered the question a hand-back asked.",
+            "enum": [
+              "fix_drafter",
+              "person"
+            ],
+            "title": "Made By",
+            "type": "string"
+          },
+          "read_list": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The repositories the fixed version reads that join the team's read list once it is turned back on, in code's words. Null when it adds none.",
+            "title": "Read List"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "scenarios": {
+            "items": {
+              "$ref": "#/components/schemas/FixScenarioView"
+            },
+            "title": "Scenarios",
+            "type": "array"
+          },
+          "use_case_id": {
+            "title": "Use Case Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "fix_id",
+          "run_id",
+          "use_case_id",
+          "asked_by",
+          "made_by",
+          "answered_by",
+          "cause",
+          "failed_part",
+          "changes",
+          "read_list",
+          "scenarios",
+          "checks"
+        ],
+        "title": "FixEvidenceView",
         "type": "object"
       },
       "FixFound": {
@@ -7386,7 +7827,6 @@
       },
       "FixKind": {
         "enum": [
-          "fix_started",
           "fix_handoff",
           "fix_round",
           "fix_proposed",
@@ -7497,6 +7937,66 @@
         "title": "FixProposedData",
         "type": "object"
       },
+      "FixQuestionView": {
+        "additionalProperties": false,
+        "description": "The one setting a handed-back fix asks a person for, in code's fixed words.",
+        "properties": {
+          "choices": {
+            "items": {
+              "$ref": "#/components/schemas/FixChoiceView"
+            },
+            "title": "Choices",
+            "type": "array"
+          },
+          "key": {
+            "description": "The short words before the question, as GitHub or Jira.",
+            "title": "Key",
+            "type": "string"
+          },
+          "setting": {
+            "title": "Setting",
+            "type": "string"
+          },
+          "typed": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The words on the button that opens a box to type in.",
+            "title": "Typed"
+          },
+          "waits": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why it can't be answered now.",
+            "title": "Waits"
+          },
+          "words": {
+            "title": "Words",
+            "type": "string"
+          }
+        },
+        "required": [
+          "setting",
+          "key",
+          "words",
+          "choices",
+          "typed",
+          "waits"
+        ],
+        "title": "FixQuestionView",
+        "type": "object"
+      },
       "FixResultOut": {
         "additionalProperties": false,
         "properties": {
@@ -7566,6 +8066,46 @@
           "note"
         ],
         "title": "FixResultOut",
+        "type": "object"
+      },
+      "FixRevisionIn": {
+        "additionalProperties": false,
+        "properties": {
+          "cause": {
+            "$ref": "#/components/schemas/CauseFound",
+            "description": "The cause code confirmed, the failed part in it."
+          },
+          "version": {
+            "$ref": "#/components/schemas/WorkflowPlan",
+            "description": "The fixed version, which code accepted."
+          }
+        },
+        "required": [
+          "version",
+          "cause"
+        ],
+        "title": "FixRevisionIn",
+        "type": "object"
+      },
+      "FixRevisionOut": {
+        "additionalProperties": false,
+        "properties": {
+          "digest": {
+            "description": "Its digest, which the fix's proposal names.",
+            "title": "Digest",
+            "type": "string"
+          },
+          "version": {
+            "description": "The version it would be once turned on.",
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version",
+          "digest"
+        ],
+        "title": "FixRevisionOut",
         "type": "object"
       },
       "FixRound": {
@@ -7651,6 +8191,69 @@
           "progress"
         ],
         "title": "FixRoundData",
+        "type": "object"
+      },
+      "FixScenarioView": {
+        "additionalProperties": false,
+        "description": "One scenario's grade on practice systems, as platform-api's own simulation gave it.",
+        "properties": {
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "step": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The block where it stopped, if one did.",
+            "title": "Step"
+          },
+          "verdict": {
+            "enum": [
+              "passed",
+              "failed",
+              "not_tried"
+            ],
+            "title": "Verdict",
+            "type": "string"
+          },
+          "why": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How a failed run ended, as code read it.",
+            "title": "Why"
+          }
+        },
+        "required": [
+          "name",
+          "kind",
+          "verdict",
+          "step",
+          "why"
+        ],
+        "title": "FixScenarioView",
         "type": "object"
       },
       "FixScenariosIn": {
@@ -7862,6 +8465,216 @@
           "ends_by"
         ],
         "title": "FixStartedData",
+        "type": "object"
+      },
+      "FixState": {
+        "enum": [
+          "drafting",
+          "waiting",
+          "approved",
+          "testing",
+          "on",
+          "test_failed",
+          "handed_back",
+          "declined",
+          "dropped"
+        ],
+        "type": "string"
+      },
+      "FixTried": {
+        "additionalProperties": false,
+        "properties": {
+          "actor": {
+            "$ref": "#/components/schemas/Actor"
+          },
+          "data": {
+            "$ref": "#/components/schemas/FixTriedData"
+          },
+          "kind": {
+            "const": "fix_tried",
+            "default": "fix_tried",
+            "title": "Kind",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "seq": {
+            "minimum": 1.0,
+            "title": "Seq",
+            "type": "integer"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "ts": {
+            "format": "date-time",
+            "title": "Ts",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "seq",
+          "ts",
+          "actor",
+          "summary",
+          "data"
+        ],
+        "title": "FixTried",
+        "type": "object"
+      },
+      "FixTriedData": {
+        "additionalProperties": false,
+        "description": "How the one real test run of a fix went, and what that did to the workflow.",
+        "properties": {
+          "approval_id": {
+            "$ref": "#/components/schemas/ApprovalIdText"
+          },
+          "approved_by": {
+            "title": "Approved By",
+            "type": "string"
+          },
+          "approved_by_name": {
+            "$ref": "#/components/schemas/ShownName"
+          },
+          "fix_id": {
+            "$ref": "#/components/schemas/FixId"
+          },
+          "pressed_by": {
+            "description": "Who pressed Turn back on.",
+            "title": "Pressed By",
+            "type": "string"
+          },
+          "result": {
+            "$ref": "#/components/schemas/FixTriedResult"
+          },
+          "test_run_id": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RunIdText"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "fix_id",
+          "approval_id",
+          "approved_by",
+          "approved_by_name",
+          "pressed_by",
+          "result"
+        ],
+        "title": "FixTriedData",
+        "type": "object"
+      },
+      "FixTriedResult": {
+        "enum": [
+          "turned_on",
+          "kept_paused",
+          "test_failed",
+          "not_put_live"
+        ],
+        "type": "string"
+      },
+      "FixVerdict": {
+        "enum": [
+          "approved",
+          "declined"
+        ],
+        "type": "string"
+      },
+      "FixView": {
+        "additionalProperties": false,
+        "properties": {
+          "approval_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Its set-up approval, once it waits for a yes.",
+            "title": "Approval Id"
+          },
+          "asked_by": {
+            "title": "Asked By",
+            "type": "string"
+          },
+          "asked_by_name": {
+            "title": "Asked By Name",
+            "type": "string"
+          },
+          "can_turn_back_on": {
+            "description": "An Approver said yes, and it isn't tried yet.",
+            "title": "Can Turn Back On",
+            "type": "boolean"
+          },
+          "ends_by": {
+            "description": "When the coordinator stops, at most 20 minutes in.",
+            "format": "date-time",
+            "title": "Ends By",
+            "type": "string"
+          },
+          "fix_id": {
+            "title": "Fix Id",
+            "type": "string"
+          },
+          "name": {
+            "description": "The workflow's name.",
+            "title": "Name",
+            "type": "string"
+          },
+          "question": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FixQuestionView"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The setting a handed-back fix asks for, which a fix never changes itself."
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "said": {
+            "description": "The state in code's own words.",
+            "title": "Said",
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/FixState"
+          },
+          "use_case_id": {
+            "title": "Use Case Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "fix_id",
+          "run_id",
+          "use_case_id",
+          "name",
+          "state",
+          "said",
+          "asked_by",
+          "asked_by_name",
+          "ends_by",
+          "approval_id",
+          "question",
+          "can_turn_back_on"
+        ],
+        "title": "FixView",
         "type": "object"
       },
       "FixWidening": {
@@ -12764,6 +13577,11 @@
         ],
         "type": "string"
       },
+      "RunBlockName": {
+        "maxLength": 200,
+        "minLength": 1,
+        "type": "string"
+      },
       "RunCreated": {
         "additionalProperties": false,
         "properties": {
@@ -12968,6 +13786,10 @@
         ],
         "title": "RunFailedData",
         "type": "object"
+      },
+      "RunIdText": {
+        "pattern": "^run_[0-9A-Za-z]{1,40}$",
+        "type": "string"
       },
       "RunList": {
         "additionalProperties": false,
@@ -13947,6 +14769,17 @@
           "drafted_id": {
             "title": "Drafted Id",
             "type": "string"
+          },
+          "fix": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FixEvidenceView"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "For a fix to a workflow (ADR 0055): its cause, change, scenarios and code's checks. Null for a drafted workflow's set-up."
           },
           "name": {
             "title": "Name",
@@ -16764,7 +17597,8 @@
           "settings_changed_in_n8n",
           "rolled_back",
           "yes_put_back",
-          "moved_to_n8n"
+          "moved_to_n8n",
+          "fixed"
         ],
         "type": "string"
       },
@@ -16889,7 +17723,7 @@
                 "type": "null"
               }
             ],
-            "description": "How a version that is not a change of when it runs came about: published_in_n8n by a person in n8n's editor; settings_changed_in_n8n, the same version in n8n with its settings saved there and nothing published, which n8n runs with the new settings at once; rolled_back to an earlier version; yes_put_back, which put Ask for a yes back before each write; or moved_to_n8n, the version that moved it from the shared n8n workflow to its own. Null otherwise."
+            "description": "How a version that is not a change of when it runs came about: published_in_n8n by a person in n8n's editor; settings_changed_in_n8n, the same version in n8n with its settings saved there and nothing published, which n8n runs with the new settings at once; rolled_back to an earlier version; yes_put_back, which put Ask for a yes back before each write; moved_to_n8n, the version that moved it from the shared n8n workflow to its own; or fixed, a fix an Approver said yes to that passed its test run (ADR 0055). Null otherwise."
           },
           "publisher_unknown": {
             "default": false,
@@ -20778,6 +21612,309 @@
         ]
       }
     },
+    "/api/v1/fixes/{fix_id}": {
+      "get": {
+        "description": "A fix as it stands, in one state with code's words for it. A handed-back fix asks for the one setting a fix never changes itself. Anyone on the team who is signed in may read it.",
+        "operationId": "read_a_fix_api_v1_fixes__fix_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "fix_id",
+            "required": true,
+            "schema": {
+              "title": "Fix Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FixView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Signed in, but not on the People list. Ask an Operator to add you"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "No such fix"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Fix it for me isn't set up here."
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Read A Fix",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/fixes/{fix_id}/answers": {
+      "post": {
+        "description": "The answer to the question a handed-back fix asks: the one setting a fix never changes itself. Code puts it in the stopped version, with no model, and the version it makes waits for an Approver's yes, as any fix does. The person who answers is a party to it.",
+        "operationId": "answer_a_fix_api_v1_fixes__fix_id__answers_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "fix_id",
+            "required": true,
+            "schema": {
+              "title": "Fix Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FixAnswerIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FixView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Only an Operator can do this, or the person is not on the People list"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "No such fix"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "There's no question to answer for this fix."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Fix it for me isn't set up here."
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Answer A Fix",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
+    "/api/v1/fixes/{fix_id}/turn-back-on": {
+      "post": {
+        "description": "Only after an Approver's yes to the fix's version: tries it with the one real test run, which stops at the yes and writes nothing, and turns the workflow back on with it only once that passed. Asking again answers the fix as it stands. A fix an Approver said no to stays off.",
+        "operationId": "turn_a_fix_back_on_api_v1_fixes__fix_id__turn_back_on_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "fix_id",
+            "required": true,
+            "schema": {
+              "title": "Fix Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FixView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Only an Operator can do this, or the person is not on the People list"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "No such fix"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "It needs an Approver's yes first."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Fix it for me isn't set up here."
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Turn A Fix Back On",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
     "/api/v1/home": {
       "get": {
         "description": "What needs the signed-in person, what they wait on, their drafts and what runs next. The platform decides each item with the same rules as the page it opens.",
@@ -22638,6 +23775,107 @@
         ]
       }
     },
+    "/api/v1/runs/{run_id}/fixes": {
+      "post": {
+        "description": "Starts Fix it for me on a stopped run (ADR 0055). platform-api writes the fix's start with who asked, from the session, mints its token only once the log took the start, and asks the agent runtime to run the coordinator. It answers at once, while the fix drafts. Only for a drafted workflow, set up as it was approved and still that version, one fix at a time, and only while FIX_MODEL is on.",
+        "operationId": "ask_for_a_fix_api_v1_runs__run_id__fixes_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FixView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not signed in: no valid access token, or in local mode no known X-Dev-User"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Only an Operator can do this, or the person is not on the People list"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "No such run"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Why no fix can start on this run now"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Fix it for me isn't set up here."
+          }
+        },
+        "security": [
+          {
+            "DevUser": []
+          },
+          {
+            "OidcBearer": []
+          }
+        ],
+        "summary": "Ask For A Fix",
+        "tags": [
+          "builder"
+        ]
+      }
+    },
     "/api/v1/runs/{run_id}/n8n": {
       "get": {
         "description": "A run as n8n carried it: the blocks and edges of the version it ran, and each block's state, from our blocks' calls and, once the run ended, n8n's own record. For people with n8n access.",
@@ -23568,6 +24806,18 @@
             "schema": {
               "title": "Approval Id",
               "type": "string"
+            }
+          },
+          {
+            "description": "For a fix, also ask the AI model to smooth the report's in-short. It is help for the reader, never the check, and stays null when any check fails.",
+            "in": "query",
+            "name": "reworded",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "For a fix, also ask the AI model to smooth the report's in-short. It is help for the reader, never the check, and stays null when any check fails.",
+              "title": "Reworded",
+              "type": "boolean"
             }
           }
         ],
@@ -28594,10 +29844,17 @@
           {
             "in": "header",
             "name": "X-Fix-Token",
-            "required": true,
+            "required": false,
             "schema": {
-              "title": "X-Fix-Token",
-              "type": "string"
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Fix-Token"
             }
           }
         ],
@@ -28651,7 +29908,7 @@
     },
     "/internal/v1/runs/{run_id}/fixes/{fix_id}/events": {
       "post": {
-        "description": "Writes one event of the fix on the stopped run, under the activity log's rules for a fix, or says why the log took none.",
+        "description": "Writes one event of the fix on the stopped run, under the activity log's rules for a fix, or says why the log took none. Never the fix's start, which platform-api writes itself. A proposal must name the version stored under the fix, and once the log takes it, the version waits for a set-up approval.",
         "operationId": "note_fix_event_internal_v1_runs__run_id__fixes__fix_id__events_post",
         "parameters": [
           {
@@ -28676,10 +29933,17 @@
           {
             "in": "header",
             "name": "X-Fix-Token",
-            "required": true,
+            "required": false,
             "schema": {
-              "title": "X-Fix-Token",
-              "type": "string"
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Fix-Token"
             }
           }
         ],
@@ -28731,6 +29995,115 @@
         ]
       }
     },
+    "/internal/v1/runs/{run_id}/fixes/{fix_id}/revisions": {
+      "post": {
+        "description": "Stores the fixed version under the fix's id, once: asking again with the same version answers the same. Only while the fix runs, with no setting changed, the failed part where the run stopped, the checker's pass, and a simulation here that every scenario passed. It waits for an Approver only once the fix's proposal names it.",
+        "operationId": "store_fix_internal_v1_runs__run_id__fixes__fix_id__revisions_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "fix_id",
+            "required": true,
+            "schema": {
+              "pattern": "^fix_[0-9A-Za-z]{1,40}$",
+              "title": "Fix Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Fix-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Fix-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FixRevisionIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FixRevisionOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The fix's token is not valid for this run and fix"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The fix ended, or nothing here proved the version"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "A fix can't change a setting."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Fixes aren't set up here."
+          }
+        },
+        "summary": "Store Fix",
+        "tags": [
+          "internal"
+        ]
+      }
+    },
     "/internal/v1/runs/{run_id}/fixes/{fix_id}/scenarios": {
       "post": {
         "description": "Scenarios for the stopped version: code's template for each kind that applies, or the Scenario writer's when Simulation mode's model is on and the fix can pay for it.",
@@ -28758,10 +30131,17 @@
           {
             "in": "header",
             "name": "X-Fix-Token",
-            "required": true,
+            "required": false,
             "schema": {
-              "title": "X-Fix-Token",
-              "type": "string"
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Fix-Token"
             }
           }
         ],
@@ -28850,10 +30230,17 @@
           {
             "in": "header",
             "name": "X-Fix-Token",
-            "required": true,
+            "required": false,
             "schema": {
-              "title": "X-Fix-Token",
-              "type": "string"
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Fix-Token"
             }
           }
         ],

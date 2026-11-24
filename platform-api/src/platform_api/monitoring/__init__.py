@@ -51,11 +51,14 @@ from platform_api.monitoring.events import (
 )
 from platform_api.monitoring.fix_events import (
     FixData,
+    FixDecidedData,
     FixHandedBackData,
     FixHandoffData,
+    FixOutcomeData,
     FixProposedData,
     FixRoundData,
     FixStartedData,
+    FixTriedData,
     fix_summary,
 )
 from platform_api.monitoring.log import ActivityLog, FixRefused
@@ -125,6 +128,9 @@ __all__ = [
     "FixRefused",
     "FixRoundData",
     "FixStartedData",
+    "FixDecidedData",
+    "FixOutcomeData",
+    "FixTriedData",
     "FoundCause",
     "LangfuseScores",
     "LegDispatchedData",

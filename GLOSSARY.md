@@ -62,7 +62,7 @@ Opening a drafted workflow in your own n8n space, without its keys, to change it
 _Avoid_: Open in n8n (that is a set-up workflow's)
 
 **Set-up approval**:
-An Approver's yes to set up one revision of a drafted workflow, bound to its digest. Any Approver who is not a party decides it: not the person who described it, changed it, answered its questions or sent it. It comes to Teams with a link to its own page, and is in Needs you for each Approver who may decide it (ADR 0051). The app calls it the one-time check: one line on the drafted workflow's card, which Turn on asks for (ADR 0053).
+An Approver's yes to set up one revision of a drafted workflow, bound to its digest. Any Approver who is not a party decides it: not the person who described it, changed it, answered its questions or sent it. It comes to Teams with a link to its own page, and is in Needs you for each Approver who may decide it (ADR 0051). The app calls it the one-time check: one line on the drafted workflow's card, which Turn on asks for (ADR 0053). A fix needs one too, whatever its flags, and the person who asked for the fix is a party to it (ADR 0055).
 _Avoid_: Approval (that is a run's yes to a write)
 
 **Workflow report**:
@@ -416,6 +416,10 @@ One pass of draft, check and simulate in a fix. A round makes progress only when
 
 **Hand back**:
 How a fix ends without a fix: the person gets the cause and what was tried, and the workflow is as it was (ADR 0055).
+
+**Turn back on**:
+What an Operator presses once an Approver said yes to a fix. Code tries the fixed version with the one real test run, which writes nothing, and only then puts it live (ADR 0055).
+_Avoid_: Resume (that is a paused workflow's)
 
 **Scope check**:
 Code's check that a fix's draft changes only the blocks the coordinator asked for, and there only the parameters each block's type lists. It refuses anything else, code, a query, an expression it can't read, and a change that adds a write, a system or a key, moves an Ask for a yes, lets a block go past a failure or changes a person's setting (ADR 0055).

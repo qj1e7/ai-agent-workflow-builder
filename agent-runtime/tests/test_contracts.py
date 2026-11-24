@@ -44,6 +44,7 @@ from agent_runtime.contract import (
 )
 from agent_runtime.contracts import answer_request
 from agent_runtime.explain_wording import explain_guard, fact_check
+from agent_runtime.fixing.starter import FixAccepted, FixStart
 from agent_runtime.monitoring.masking import KEY_SHAPE_SOURCES, KEY_SHAPES
 
 FIXTURES = Path(__file__).resolve().parents[2] / "contracts" / "fixtures" / "agent"
@@ -114,6 +115,8 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "planner-check-part-cant.json": check_part_result_adapter,
     "planner-check-part-fits.json": check_part_result_adapter,
     "key-shapes.json": TypeAdapter(KeyShapes),
+    "fix-start-request.json": TypeAdapter(FixStart),
+    "fix-accepted.json": TypeAdapter(FixAccepted),
 }
 
 

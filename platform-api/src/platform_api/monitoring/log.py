@@ -13,6 +13,7 @@ from platform_api.db import Database, UnitOfWork, json
 from platform_api.monitoring.agent_events import AgentEvent
 from platform_api.monitoring.events import (
     COORDINATOR,
+    PLATFORM,
     ActivityEvent,
     FixHandedBack,
     FixProposed,
@@ -27,10 +28,15 @@ from platform_api.monitoring.events import (
 from platform_api.monitoring.fix_events import (
     FIX_TIME_LIMIT,
     FixData,
+    FixDecidedData,
     FixHandedBackData,
+    FixOutcomeData,
     FixStartedData,
     fix_dedupe_key,
     fix_kind,
+    fix_outcome_key,
+    fix_outcome_kind,
+    fix_outcome_summary,
     fix_summary,
 )
 from platform_api.shared import RunId, TaskId, UserId
@@ -360,6 +366,42 @@ class ActivityLog:
             if why is not None:
                 return FixRefused(why)
             event = PendingEvent(COORDINATOR, fix_kind(data), fix_summary(data), data, key)
+            await self.append(uow, run_id, [event])
+        return None
+
+    async def note_fix_outcome(self, run_id: RunId, data: FixOutcomeData) -> FixRefused | None:
+        """Writes what happened to a fix after it was handed in (ADR 0055, section 8): the
+        Approver's yes or no, and how its test run went, each once. Only for a fix this run's log
+        started, whether or not the run is still stopped. A yes comes from the Approver; how the
+        test run went, from the platform. A repeat writes nothing, and other data is refused."""
+        key = fix_outcome_key(data)
+        async with self._db.transaction("monitoring") as uow:
+            await uow.conn.execute(
+                "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", (run_id,)
+            )
+            written = await (
+                await uow.conn.execute(
+                    "SELECT data FROM monitoring.run_events WHERE run_id = %s AND dedupe_key = %s",
+                    (run_id, key),
+                )
+            ).fetchone()
+            if written is not None:
+                same = written["data"] == data.model_dump(mode="json")
+                return None if same else FixRefused("conflict")
+            started = await (
+                await uow.conn.execute(
+                    "SELECT 1 FROM monitoring.run_events WHERE run_id = %s AND dedupe_key = %s",
+                    (run_id, f"fix:{data.fix_id}:started"),
+                )
+            ).fetchone()
+            if started is None:
+                return FixRefused("not_started")
+            actor = (
+                user_actor(data.by, data.by_name) if isinstance(data, FixDecidedData) else PLATFORM
+            )
+            event = PendingEvent(
+                actor, fix_outcome_kind(data), fix_outcome_summary(data), data, key
+            )
             await self.append(uow, run_id, [event])
         return None
 

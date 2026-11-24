@@ -182,10 +182,10 @@ class Checker(Protocol):
 
 
 class Revisions(Protocol):
-    """Stores a fixed version as a new revision of the workflow, which waits for a yes. It turns
-    nothing on and approves nothing."""
+    """Stores a fixed version under the fix's id, with the cause code confirmed. It waits for a
+    yes only once the fix's proposal names it. It turns nothing on and approves nothing."""
 
-    def store(self, fixed: WorkflowPlan, seconds: float) -> StoredRevision: ...
+    def store(self, fixed: WorkflowPlan, cause: CauseFound, seconds: float) -> StoredRevision: ...
 
 
 @dataclass(frozen=True)

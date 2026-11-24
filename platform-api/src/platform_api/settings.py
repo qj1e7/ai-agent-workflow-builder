@@ -204,6 +204,10 @@ class Settings:
     simulation: SimulationSettings | None = None
     """SIMULATION_URL and SIMULATION_START_SECRET. Without them there is no simulation n8n here,
     and the drafted card says so."""
+    fix_model: bool = False
+    """FIX_MODEL. Off, nobody can start Fix it for me (ADR 0055), so its coordinator makes no paid
+    call. On, an Operator may ask for a fix on a stopped run. The coordinator holds each fix to
+    $2 in the runtime, and platform-api to one Scenario writer call and 4 explainer calls."""
 
 
 def _required(env: Mapping[str, str], name: str) -> str:
@@ -606,6 +610,7 @@ def settings_from_env(env: Mapping[str, str]) -> Settings:
         langfuse=langfuse_from_env(env),
         trace_pseudonym_key=_secret(env, "TRACE_PSEUDONYM_KEY"),
         simulation=simulation_from_env(env),
+        fix_model=fix_model_from_env(env),
     )
 
 
@@ -632,6 +637,16 @@ def simulation_from_env(env: Mapping[str, str]) -> SimulationSettings | None:
         )
     url = _stack_or_https("SIMULATION_URL", raw_url)
     return SimulationSettings(url, secret, uses_model)
+
+
+def fix_model_from_env(env: Mapping[str, str]) -> bool:
+    match env.get("FIX_MODEL", "").strip().lower() or "off":
+        case "on":
+            return True
+        case "off":
+            return False
+        case other:
+            raise ConfigError(f"FIX_MODEL takes on or off, not {other!r}.")
 
 
 def answers_per_minute_from_env(env: Mapping[str, str]) -> int:

@@ -332,6 +332,13 @@ def test_the_simulation_gateway_and_its_start_secret_turn_simulation_on_with_no_
     assert SIM_SECRET not in repr(simulation)
 
 
+def test_fix_it_for_me_stays_off_unless_its_setting_is_on():
+    assert settings_from_env(LOCAL_ENV).fix_model is False
+    assert settings_from_env({**LOCAL_ENV, "FIX_MODEL": "on"}).fix_model is True
+    with pytest.raises(ConfigError, match="on or off"):
+        settings_from_env({**LOCAL_ENV, "FIX_MODEL": "yes"})
+
+
 def test_the_model_writes_and_explains_cases_only_when_its_setting_is_on():
     env = {
         **LOCAL_ENV,

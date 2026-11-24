@@ -22,10 +22,13 @@ from platform_api.builder import fix_http
 from platform_api.builder.fix_parts import (
     FIX_TOKEN_GRACE,
     FIX_TOKEN_HEADER,
+    MOST_CALLS,
+    MOST_SCENARIOS,
     FixLayouts,
     FixParts,
     FixScenariosIn,
     FixSimulationIn,
+    ModelCall,
     fix_token,
     fix_token_ok,
 )
@@ -153,13 +156,34 @@ class FakeN8n:
         return ERROR_WORKFLOW
 
 
+class FakeRecords:
+    """platform-api's own count of each fix's model calls, and its record of each simulation."""
+
+    def __init__(self) -> None:
+        self.calls: dict[tuple[str, ModelCall], int] = {}
+        self.simulated: list[tuple[str, WorkflowPlan, dict[str, Any]]] = []
+
+    async def take_call(self, fix_id: str, kind: ModelCall) -> bool:
+        taken = self.calls.get((fix_id, kind), 0)
+        if taken >= MOST_CALLS[kind]:
+            return False
+        self.calls[(fix_id, kind)] = taken + 1
+        return True
+
+    async def simulated_on(
+        self, fix_id: str, plan: WorkflowPlan, results: Mapping[str, Any]
+    ) -> None:
+        self.simulated.append((fix_id, plan, dict(results)))
+
+
 class Parts:
     def __init__(self, model: bool = False) -> None:
         self.gateway = FakeGateway()
         self.model = FakeModel() if model else None
         self.log = FakeLog()
+        self.records = FakeRecords()
         layouts = FixLayouts(FakeFacts(), FakeN8n(), "https://portal.example", ZONE)
-        self.parts = FixParts(layouts, self.gateway, self.model, self.log)
+        self.parts = FixParts(layouts, self.gateway, self.model, self.log, self.records)
 
 
 def plan() -> WorkflowPlan:
@@ -402,7 +426,7 @@ def test_every_route_needs_the_fix_s_own_token() -> None:
             ("/simulations", asked_simulation().model_dump(mode="json")),
             ("/checks", {"version": plan().model_dump(mode="json")}),
         ]:
-            assert http.post(base() + path, json=body).status_code == 422
+            assert http.post(base() + path, json=body).status_code == 401
             assert http.post(base() + path, json=body, headers=headers(other)).status_code == 401
     assert parts.log.noted == []
     assert parts.gateway.planned == parts.gateway.simulated == []
@@ -461,3 +485,88 @@ def test_the_routes_answer_scenarios_a_simulation_and_a_grade() -> None:
             base() + "/checks", json={"version": plan().model_dump(mode="json")}, headers=headers()
         )
         assert graded.json() == {"passes": True, "findings": []}
+
+
+# PR 6: what the token holder may no longer do, and what platform-api counts itself
+
+
+def test_the_token_holder_can_t_write_the_fix_s_start() -> None:
+    parts = Parts()
+    start = {
+        "kind": "fix_started",
+        "data": {
+            "fix_id": FIX,
+            "asked_by": "mallory",
+            "asked_by_name": "Mallory",
+            "ends_by": (datetime.now(UTC) + timedelta(minutes=10)).isoformat(),
+        },
+    }
+    with client(parts) as http:
+        assert http.post(base() + "/events", json=start, headers=headers()).status_code == 422
+    assert parts.log.noted == []
+
+
+def test_a_simulation_runs_at_most_20_scenarios_as_the_coordinator_holds_at_most_20() -> None:
+    parts = Parts()
+    many = [{"kind": "happy_path", "name": f"Case {n}"} for n in range(MOST_SCENARIOS + 1)]
+    with client(parts) as http:
+        too_many = asked_simulation(scenarios=many[:MOST_SCENARIOS]).model_dump(mode="json")
+        too_many["scenarios"] = many
+        refused = http.post(base() + "/simulations", json=too_many, headers=headers())
+        assert refused.status_code == 422
+        enough = asked_simulation(scenarios=many[:MOST_SCENARIOS]).model_dump(mode="json")
+        assert http.post(base() + "/simulations", json=enough, headers=headers()).is_success
+    assert MOST_SCENARIOS == 20
+    assert len(parts.gateway.simulated) == 1
+
+
+@pytest.mark.anyio
+async def test_the_writer_is_asked_once_in_a_fix_whatever_the_runtime_says_it_can_pay() -> None:
+    parts = Parts(model=True)
+    first = await parts.parts.scenarios(FIX, asked_scenarios(may_ask_model=True))
+    again = await parts.parts.scenarios(FIX, asked_scenarios(may_ask_model=True))
+    other = await parts.parts.scenarios("fix_01OTHER", asked_scenarios(may_ask_model=True))
+    assert not isinstance(first, NotSimulated) and first.asked_model is True
+    assert not isinstance(again, NotSimulated) and again.asked_model is False
+    assert [s.name for s in again.scenarios] == KINDS
+    assert not isinstance(other, NotSimulated) and other.asked_model is True
+    assert parts.model is not None and len(parts.model.wrote) == 2
+    assert MOST_CALLS["writer"] == 1
+
+
+@pytest.mark.anyio
+async def test_the_explainer_is_asked_a_few_times_in_a_fix_at_most() -> None:
+    parts = Parts(model=True)
+    parts.gateway.answer = simulation_out(
+        result("replay_the_stop", "failed", stopped_at="Read new releases")
+    )
+    asked = [
+        await parts.parts.simulate(FIX, asked_simulation(may_ask_model=True))
+        for _ in range(MOST_CALLS["explainer"] + 2)
+    ]
+    explained = [a.asked_model for a in asked if not isinstance(a, NotSimulated)]
+    assert explained == [True] * MOST_CALLS["explainer"] + [False, False]
+    assert parts.model is not None and len(parts.model.noted) == MOST_CALLS["explainer"]
+    assert 1 < MOST_CALLS["explainer"] <= 4
+
+
+@pytest.mark.anyio
+async def test_each_simulation_is_kept_with_its_plan_so_a_stored_fix_needs_one_that_passed() -> (
+    None
+):
+    parts = Parts()
+    parts.gateway.answer = simulation_out(
+        result("happy_path"), result("replay_the_stop", "failed", stopped_at="Read new releases")
+    )
+    await parts.parts.simulate(FIX, asked_simulation())
+    [(fix_id, kept_plan, results)] = parts.records.simulated
+    assert (fix_id, kept_plan) == (FIX, plan())
+    assert results == {
+        "happy_path": {"kind": "happy_path", "verdict": "passed", "step": None, "why": None},
+        "replay_the_stop": {
+            "kind": None,
+            "verdict": "failed",
+            "step": "Read new releases",
+            "why": "reached_yes",
+        },
+    }

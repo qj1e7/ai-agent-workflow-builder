@@ -4,6 +4,7 @@ from typing import Annotated, Any, Final, Literal, Protocol, Self
 
 import httpx
 from pydantic import (
+    AwareDatetime,
     Field,
     JsonValue,
     StringConstraints,
@@ -1223,6 +1224,45 @@ type WorkflowDraftResult = Annotated[
 workflow_draft_result_adapter: TypeAdapter[WorkflowDraftResult] = TypeAdapter(WorkflowDraftResult)
 
 
+# Fix it for me (ADR 0055, PR 6): the runtime's POST /v1/fixes, as this side sends it.
+# platform-api wrote the fix's start and minted its token first. The runtime answers at once.
+
+type FixIdText = Annotated[str, StringConstraints(pattern=r"^fix_[0-9A-Za-z]{1,40}$")]
+
+
+class FixAsked(WireModel):
+    """One press of Fix it for me, as the coordinator takes it."""
+
+    fix_id: FixIdText
+    asked_by: str = Field(min_length=1)
+    asked_by_name: str = Field(min_length=1, max_length=80)
+    ends_by: AwareDatetime
+    stop: StoppedRun
+    version: WorkflowPlan = Field(description="The stopped version, with each key kept out.")
+    stopped_at: list[RunBlockName] = Field(min_length=1)
+
+
+class FixStartRequest(WireModel):
+    run_id: str
+    request: FixAsked
+    events: list[Annotated[str, Field(max_length=EVENT_SUMMARY_LIMIT)]] = Field(
+        max_length=MOST_EVENTS
+    )
+    facts: DrafterFacts
+    model: ModelAccess
+    platform_url: str
+    token: str
+
+
+class FixAccepted(WireModel):
+    fix_id: FixIdText
+    started: bool
+
+
+fix_accepted_adapter: TypeAdapter[FixAccepted] = TypeAdapter(FixAccepted)
+FIX_START_WAIT_SECONDS: Final = 10.0
+
+
 class AgentCard(WireModel):
     id: str
     display: str
@@ -1373,6 +1413,13 @@ class HttpAgentRuntime:
     ) -> WorkflowDraftResult | AgentUnavailable | AgentRejected:
         return await self._model_call(
             "/v1/workflows/draft", request, workflow_draft_result_adapter, DRAFT_WAIT_SECONDS
+        )
+
+    async def start_fix(
+        self, request: FixStartRequest
+    ) -> FixAccepted | AgentUnavailable | AgentRejected:
+        return await self._model_call(
+            "/v1/fixes", request, fix_accepted_adapter, FIX_START_WAIT_SECONDS
         )
 
     async def capabilities(self) -> CapabilityList | AgentUnavailable | AgentRejected:

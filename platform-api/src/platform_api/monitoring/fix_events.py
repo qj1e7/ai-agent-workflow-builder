@@ -314,3 +314,70 @@ def fix_summary(data: FixData) -> str:
             )
         case FixHandedBackData():
             return f"I couldn't fix this. {HANDED_BACK[data.why]} Nothing was changed."
+
+
+# What happens to a fix after it is handed in (ADR 0055, section 8): the decision with the
+# Approver, and how its test run went. A person or the platform writes these, never the
+# coordinator, after the fix's own events have ended.
+
+type ApprovalIdText = Annotated[str, StringConstraints(pattern=r"^apr_[0-9A-Za-z]{1,40}$")]
+type RunIdText = Annotated[str, StringConstraints(pattern=r"^run_[0-9A-Za-z]{1,40}$")]
+type FixVerdict = Literal["approved", "declined"]
+type FixTriedResult = Literal["turned_on", "kept_paused", "test_failed", "not_put_live"]
+
+
+class FixDecidedData(WireModel):
+    """An Approver's yes or no to a fix's set-up approval."""
+
+    fix_id: FixId
+    approval_id: ApprovalIdText
+    verdict: FixVerdict
+    by: UserId
+    by_name: ShownName
+    reason: ShownName | None = Field(
+        default=None, description="Why the Approver said no, from the short list."
+    )
+
+
+class FixTriedData(WireModel):
+    """How the one real test run of a fix went, and what that did to the workflow."""
+
+    fix_id: FixId
+    approval_id: ApprovalIdText
+    approved_by: UserId
+    approved_by_name: ShownName
+    pressed_by: UserId = Field(description="Who pressed Turn back on.")
+    result: FixTriedResult
+    test_run_id: RunIdText | None = None
+
+
+type FixOutcomeData = FixDecidedData | FixTriedData
+
+TRIED: Final[Mapping[FixTriedResult, str]] = {
+    "turned_on": "The fix passed its test run, so the workflow is back on with it.",
+    "kept_paused": "The fix passed its test run and is saved. The workflow stays paused.",
+    "test_failed": "The fix's test run didn't pass, so the workflow stays as it was.",
+    "not_put_live": (
+        "The fix passed its test run, but the platform couldn't put it live. The workflow stays "
+        "as it was."
+    ),
+}
+
+
+def fix_outcome_kind(data: FixOutcomeData) -> str:
+    return "fix_decided" if isinstance(data, FixDecidedData) else "fix_tried"
+
+
+def fix_outcome_key(data: FixOutcomeData) -> str:
+    return f"fix:{data.fix_id}:{'decided' if isinstance(data, FixDecidedData) else 'tried'}"
+
+
+def fix_outcome_summary(data: FixOutcomeData) -> str:
+    match data:
+        case FixDecidedData(verdict="approved"):
+            return f"{data.by_name} said yes to the fix."
+        case FixDecidedData():
+            reason = f": {data.reason}" if data.reason else ""
+            return f"{data.by_name} said no to the fix{reason}. The workflow stays as it was."
+        case FixTriedData():
+            return f"{TRIED[data.result]} {data.approved_by_name} said yes to it."
