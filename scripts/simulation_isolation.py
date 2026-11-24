@@ -8,6 +8,8 @@ With no argument it checks deploy/compose.simulation.yaml, as compose renders it
 - every key, password and secret comes from its own SIM_ setting, never from a value in the file;
 - every address a service holds names a service on the simulation's own network: its database,
   its mocks, itself, or the simulation gateway;
+- the simulation gateway runs platform-api's image as its own service, with its own command, on
+  the simulation's network alone, so only the simulation n8n can reach it;
 - every network is internal, nothing publishes a port, no service joins another network or the
   host's, and no volume belongs to another stack;
 - it runs the platform n8n's image, task runner, PostgreSQL and bootstrap, with the same guards
@@ -21,8 +23,8 @@ With --project NAME, the compose project scripts/simulation.sh started, it also 
   token, secret, password, webhook or database address in the caller's environment;
 - every key n8n holds is a mock key: none holds a platform key's value, and each address in one
   names a service on the simulation's network;
-- from inside n8n the internet, the host and the platform's stack are out of reach, and the mocks
-  are in reach, which shows the check can see a route;
+- from inside n8n and the gateway the internet, the host and the platform's stack are out of
+  reach, and the simulation's own services are in reach, which shows the check can see a route;
 - the project's networks are internal, and only the project's own containers sit on them.
 
 It prints names and addresses, never a key's value, as the CI log is public.
@@ -134,16 +136,46 @@ SERVICES = {
         },
         frozenset({"sim"}),
     ),
+    "gateway": Service(
+        frozenset(
+            {
+                "WAB_NODE_KEY",
+                "WAB_START_SECRET",
+                "N8N_BASE_URL",
+                "N8N_OWNER_EMAIL",
+                "N8N_OWNER_PASSWORD",
+                "MOCK_GITHUB_URL",
+            }
+        ),
+        frozenset({"sim"}),
+    ),
     "mock-github": Service(frozenset(), frozenset({"sim"})),
     "mock-slack": Service(frozenset(), frozenset({"sim"})),
 }
 """Every service the simulation runs, the settings it may hold, and the networks it sits on."""
 
 GATEWAY = "gateway"
-"""Where the simulation n8n's blocks and bootstrap send the platform's calls. ADR 0054's PR 3 adds
-the simulation gateway there."""
-SAME_AS_PLATFORM = ("postgres", "n8n", "n8n-runners", "bootstrap")
-"""Services that run the platform's own image, or build it from the same sources."""
+"""Where the simulation n8n's blocks and bootstrap send the platform's calls: the simulation
+gateway (ADR 0054, PR 3)."""
+GATEWAY_COMMAND = [
+    "uvicorn",
+    "platform_api.orchestration.simulation_gateway:create_app",
+    "--factory",
+    "--host",
+    "0.0.0.0",
+    "--port",
+    "8600",
+]
+"""The gateway runs platform-api's image, but only the gateway's own app, never the platform's."""
+SAME_AS_PLATFORM = {
+    "postgres": "postgres",
+    "n8n": "n8n",
+    "n8n-runners": "n8n-runners",
+    "bootstrap": "bootstrap",
+    "gateway": "platform-api",
+}
+"""Services that run the platform's own image, or build it from the same sources, by the name the
+platform's compose file gives that service."""
 SIM_TAG = "sim"
 """The tag of every image the simulation builds, so it never replaces one the platform runs."""
 MOUNTS = {
@@ -166,7 +198,18 @@ OUT_OF_REACH = (
     "http://platform-api:8000/healthz",
     "http://wab-platform-api-1:8000/healthz",
 )
-IN_REACH = ("http://mock-github:8200/healthz", "https://slack.com/api/api.test")
+ROUTES = {
+    "n8n": (
+        OUT_OF_REACH,
+        (
+            "http://mock-github:8200/healthz",
+            "https://slack.com/api/api.test",
+            "http://gateway:8600/healthz",
+        ),
+    ),
+    "gateway": (OUT_OF_REACH, ("http://n8n:5678/healthz", "http://mock-github:8200/healthz")),
+}
+"""What each service that calls out may not reach, and what it must reach."""
 PROBE = """
 const url = process.argv[1];
 fetch(url, { signal: AbortSignal.timeout(5000) }).then(
@@ -177,6 +220,19 @@ fetch(url, { signal: AbortSignal.timeout(5000) }).then(
   },
 );
 """
+PYTHON_PROBE = """
+import sys, urllib.error, urllib.request
+try:
+    answer = urllib.request.urlopen(sys.argv[1], timeout=5)
+    print(f"answered {answer.status}")
+except urllib.error.HTTPError as error:
+    print(f"answered {error.code}")
+except Exception as error:
+    reason = getattr(error, "reason", error)
+    print(reason if isinstance(reason, str) else type(reason).__name__)
+    sys.exit(1)
+"""
+PROBES = {"n8n": ("node", "-e", PROBE), "gateway": ("python", "-I", "-c", PYTHON_PROBE)}
 
 
 class CheckError(Exception):
@@ -287,8 +343,8 @@ def platform_findings(sim: Mapping[str, Any], platform: Mapping[str, Any]) -> li
     sim_services = sim.get("services", {})
     platform_services = platform.get("services", {})
     findings: list[str] = []
-    for name in SAME_AS_PLATFORM:
-        ours, theirs = sim_services.get(name, {}), platform_services.get(name, {})
+    for name, platform_name in SAME_AS_PLATFORM.items():
+        ours, theirs = sim_services.get(name, {}), platform_services.get(platform_name, {})
         if "build" not in theirs and ours.get("image") != theirs.get("image"):
             findings.append(
                 f"{name} runs {ours.get('image')}, not the platform's {theirs.get('image')}"
@@ -333,6 +389,9 @@ def compose_findings(sim: Mapping[str, Any], platform: Mapping[str, Any]) -> lis
     hosts = sim_hosts(sim)
     for name in sorted(set(services) & set(SERVICES)):
         findings += service_findings(name, services[name], hosts)
+    gateway = services.get(GATEWAY)
+    if gateway is not None and gateway.get("command") != GATEWAY_COMMAND:
+        findings.append(f"the gateway runs {gateway.get('command')}, not the simulation gateway")
     return findings + network_findings(sim) + platform_findings(sim, platform)
 
 
@@ -393,18 +452,17 @@ def credential_findings(
     return findings
 
 
-def route_findings(reached: Mapping[str, tuple[bool, str]]) -> list[str]:
+def route_findings(service: str, reached: Mapping[str, tuple[bool, str]]) -> list[str]:
+    out_of_reach, in_reach = ROUTES[service]
     findings: list[str] = []
-    for url in OUT_OF_REACH:
+    for url in out_of_reach:
         ok, how = reached[url]
         if ok:
-            findings.append(f"n8n reaches {url} ({how})")
-    for url in IN_REACH:
+            findings.append(f"{service} reaches {url} ({how})")
+    for url in in_reach:
         ok, how = reached[url]
         if not ok:
-            findings.append(
-                f"n8n can't reach the mock at {url} ({how}), so the check sees no route"
-            )
+            findings.append(f"{service} can't reach {url} ({how}), so the check sees no route")
     return findings
 
 
@@ -528,8 +586,8 @@ def n8n_credentials(container: str) -> list[dict[str, Any]]:
         docker("exec", container, "rm", "-f", path)
 
 
-def reach(container: str, url: str) -> tuple[bool, str]:
-    run = docker("exec", container, "node", "-e", PROBE, url)
+def reach(container: str, service: str, url: str) -> tuple[bool, str]:
+    run = docker("exec", container, *PROBES[service], url)
     return run.returncode == 0, (run.stdout.strip() or run.stderr.strip())[:80]
 
 
@@ -568,20 +626,35 @@ def live_findings(project: str) -> list[str]:
     secrets = secret_values(env_file, os.environ)
     findings += container_findings(containers, networks, image_env, secrets)
 
-    n8n = by_service.get("n8n")
-    if n8n is None or not n8n["State"].get("Running"):
-        return [*findings, "n8n is not running"]
+    gateway = by_service.get(GATEWAY)
+    if gateway is not None and gateway["Config"].get("Cmd") != GATEWAY_COMMAND:
+        findings.append(
+            f"the gateway runs {gateway['Config'].get('Cmd')}, not the simulation gateway"
+        )
+    running = {
+        service: container
+        for service, container in by_service.items()
+        if service in ROUTES and container["State"].get("Running")
+    }
+    findings += [f"{service} is not running" for service in sorted(set(ROUTES) - set(running))]
+    if "n8n" not in running:
+        return findings
     hosts = sim_hosts(render(SIM_FILE, insisted(SIM_FILE.read_text())))
-    credentials = n8n_credentials(n8n["Id"])
+    credentials = n8n_credentials(running["n8n"]["Id"])
     findings += credential_findings(credentials, secrets, hosts)
-    reached = {url: reach(n8n["Id"], url) for url in (*OUT_OF_REACH, *IN_REACH)}
-    findings += route_findings(reached)
+    routes = 0
+    for service, container in sorted(running.items()):
+        out_of_reach, in_reach = ROUTES[service]
+        reached = {url: reach(container["Id"], service, url) for url in (*out_of_reach, *in_reach)}
+        findings += route_findings(service, reached)
+        routes += len(reached)
+        for url, (ok, how) in reached.items():
+            print(f"  from {service}, {url}: {'reached' if ok else 'not reached'} ({how})")
     print(
         f"checked {len(containers)} containers, {len(networks)} networks, {len(credentials)} keys "
-        f"in n8n, and {len(reached)} routes from n8n, against {len(secrets)} of the platform's keys"
+        f"in n8n, and {routes} routes from n8n and the gateway, against {len(secrets)} of the "
+        "platform's keys"
     )
-    for url, (ok, how) in reached.items():
-        print(f"  {url}: {'reached' if ok else 'not reached'} ({how})")
     return findings
 
 

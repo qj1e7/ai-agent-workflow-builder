@@ -240,7 +240,7 @@ run "simulation_on_holds_no_real_key_and_reaches_only_its_own_subnet" {
   assert {
     condition = (
       local.simulation_apps["sim-gateway"].image == local.jobs.bootstrap.image &&
-      local.simulation_apps["sim-gateway"].command == tolist(["uvicorn", "platform_api.orchestration.simulation_gateway:create_app", "--factory", "--host", "0.0.0.0", "--port", "8600"]) &&
+      jsonencode(local.simulation_apps["sim-gateway"].command) == jsonencode(["uvicorn", "platform_api.orchestration.simulation_gateway:create_app", "--factory", "--host", "0.0.0.0", "--port", "8600"]) &&
       local.simulation_apps["sim-gateway"].ingress.target_port == 8600 &&
       local.simulation_apps["sim-gateway"].env.N8N_BASE_URL == "https://sim-n8n.internal.sim.southeastasia.azurecontainerapps.io" &&
       local.simulation_apps["sim-gateway"].env.MOCK_GITHUB_URL == "https://sim-mock-github.internal.sim.southeastasia.azurecontainerapps.io"

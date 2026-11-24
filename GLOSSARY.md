@@ -231,6 +231,14 @@ _Avoid_: Dry run
 A second n8n, on the same pinned image, node pack and guards as the platform's n8n, where a workflow version is tried against mock systems before its test run. It holds only mock keys, has its own database and encryption key, and reaches only the mocks and the simulation gateway (ADR 0054).
 _Avoid_: Test n8n, sandbox
 
+**Simulation gateway**:
+The service our blocks in the simulation n8n call in place of platform-api. It answers them from a scenario: recorded or mock reads, a recorded agent reply, and the scenario's yes or no for Ask for a yes, which asks nobody. It refuses every write and keeps what it would have written, and Tell sends nothing. It holds no real key and no database (ADR 0054).
+_Avoid_: Mock API, fake platform
+
+**Simulated run**:
+One run of one scenario through the simulation gateway. It is kept apart from runs: it is never in Recent runs or the activity log, and never counts as a test run (ADR 0054).
+_Avoid_: Test run, dry run
+
 **Skipped**:
 A run that n8n started while an earlier run of the same workflow was still waiting for a yes. It stops at its first step and does nothing, so Approvers never see two requests for one change. The Portal says "An earlier run is still waiting for a yes."
 

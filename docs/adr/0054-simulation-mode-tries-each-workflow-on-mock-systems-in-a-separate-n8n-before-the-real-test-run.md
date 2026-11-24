@@ -111,6 +111,13 @@ What the results change in this ADR:
 4. **Sections 5 and 7, coverage gaps.** The refused write ends the run, so a block after Make the approved changes, such as Tell, never runs in a simulation. Code reports it as not tried for that reason, or the gateway answers a write with "would have made", as Tell answers "would have sent" (PR 3 chooses). Code also keeps its own list of the blocks it pinned.
 5. **Section 2, Azure.** The simulation n8n, the mocks and the gateway's address need their own Container Apps environment and subnet. Isolation rests on holding no real key. The outbound service tags that subnet must allow, `AzureContainerRegistry`, `Storage.<region>` and `AzureFrontDoor.FirstParty`, also cover other Azure customers' endpoints, so on Azure isolation still rests on holding no real key. PR 2 and PR 3 choose whether the gateway runs in that environment or stays in platform-api, where the simulation's node key would be the only guard on the real API.
 
+#### What PR 3 chose, 24 Nov 2026
+
+- **Where the gateway runs.** As its own service in the simulation's network: `gateway` in `deploy/compose.simulation.yaml`, and `sim-gateway` in the simulation's Container Apps environment. It runs platform-api's image with its own command, and mounts platform-api's router for our blocks, so each block gets the same answers and refusals. It is not a mode of platform-api, which holds real keys and the real database, and which the platform's n8n reaches.
+- **Writes.** Every write is refused with 403 "A simulation never writes.", and the gateway keeps what it would have written. So a block after a write never runs in a simulation, and PR 5 reports it as not tried for that reason (point 4 above).
+- **Records.** The gateway keeps its simulated runs in memory, not in tables, because the simulation's own PostgreSQL is in memory too. A restart of either forgets the simulation under way, so PR 5 must start it again.
+- **Starts.** The gateway issues each start's nonce for one scenario. The driver's two routes, a start and a record read, are signed with the simulation's start secret, which our blocks never hold, so a workflow under simulation can't start or read a simulated run.
+
 Outside this ADR: no real workflow has a time limit of its own (no `EXECUTIONS_TIMEOUT` and no `executionTimeout`), so a hung source holds a real run for 300 s for each try of the block. Whether real workflows get a shorter one is for the team lead.
 
 ### Pull requests, in order

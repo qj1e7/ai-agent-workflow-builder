@@ -14,7 +14,6 @@ from typing import Any
 import httpx
 import pytest
 from fastapi import FastAPI
-from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 
 from platform_api.auth import ConfigError
@@ -34,7 +33,6 @@ from platform_api.orchestration.n8n_calls import (
     AskCall,
     NodeCall,
     ProposeCall,
-    ReadCall,
     ReadFailed,
     ReadItems,
     Waiting,
@@ -214,26 +212,29 @@ def test_a_start_signed_with_the_simulations_own_secret_is_taken(gw: Gateway) ->
     assert started["item"] == {"nonce": started["nonce"], "kind": "test", "workflow_id": WORKFLOW}
 
 
+STARTS = "/simulation/v1/starts"
+
+
 @pytest.mark.parametrize(
     "headers",
     [
-        pytest.param(lambda body: signed("POST", "/simulation/v1/starts", body, OTHER_SECRET), id="other-secret"),  # fmt: skip
+        pytest.param(lambda body: signed("POST", STARTS, body, OTHER_SECRET), id="other-secret"),
         pytest.param(lambda body: {"Content-Type": "application/json"}, id="unsigned"),
-        pytest.param(lambda body: signed("POST", "/simulation/v1/starts", body + b" "), id="changed"),  # fmt: skip
+        pytest.param(lambda body: signed("POST", STARTS, body + b" "), id="changed"),
         pytest.param(lambda body: signed("POST", "/simulation/v1/runs", body), id="other-path"),
         pytest.param(
-            lambda body: signed("POST", "/simulation/v1/starts", body, expires=int(time.time()) - 120),
+            lambda body: signed("POST", STARTS, body, expires=int(time.time()) - 120),
             id="expired",
-        ),  # fmt: skip
+        ),
         pytest.param(
-            lambda body: signed("POST", "/simulation/v1/starts", body, expires=int(time.time()) + 3600),
+            lambda body: signed("POST", STARTS, body, expires=int(time.time()) + 3600),
             id="too-far-ahead",
-        ),  # fmt: skip
+        ),
     ],
 )
 def test_any_other_start_is_refused(gw: Gateway, headers: Any) -> None:
     body = json.dumps({"workflow_id": WORKFLOW, "scenario": scenario()}).encode()
-    answer = gw.client.post("/simulation/v1/starts", content=body, headers=headers(body))
+    answer = gw.client.post(STARTS, content=body, headers=headers(body))
     assert answer.status_code == 401
     assert set(answer.json()) == {"detail"}
 
@@ -281,7 +282,8 @@ def test_every_call_links_to_the_run_by_its_start_nonce(gw: Gateway) -> None:
         ("Read releases", "read", "answered", 1),
         ("Compare", "agent", "answered", 1),
     ]
-    assert record["calls"][0]["asked"] == {"source": "github_releases", "place": "a/b", "query": None}  # fmt: skip
+    asked = {"source": "github_releases", "place": "a/b", "query": None}
+    assert record["calls"][0]["asked"] == asked
 
 
 def test_an_execution_the_gateway_did_not_start_is_refused(gw: Gateway) -> None:
@@ -472,9 +474,7 @@ async def test_the_wake_goes_only_to_the_simulation_n8n_with_its_node_key() -> N
     assert isinstance(asked, Waiting)
     await calls.settle()
     await client.aclose()
-    assert [str(r.url) for r in sent] == [
-        "http://n8n:5678/webhook-waiting/41?signature=made-up"
-    ]
+    assert [str(r.url) for r in sent] == ["http://n8n:5678/webhook-waiting/41?signature=made-up"]
     body = json.loads(sent[0].content)
     assert body["decision"] == "no"
     assert body["mac"] == wake_mac(NODE_KEY, execution, asked.request_id, "no")
@@ -629,17 +629,27 @@ def test_the_gateway_reads_only_its_own_settings() -> None:
     for name in ("WAB_NODE_KEY", "WAB_START_SECRET", "N8N_BASE_URL", "N8N_OWNER_PASSWORD"):
         with pytest.raises(ConfigError, match=name):
             gateway_settings_from_env({k: v for k, v in env.items() if k != name})
-    assert gateway_settings_from_env(
-        {k: v for k, v in env.items() if k != "MOCK_GITHUB_URL"}
-    ).mock_github_url is None
+    assert (
+        gateway_settings_from_env(
+            {k: v for k, v in env.items() if k != "MOCK_GITHUB_URL"}
+        ).mock_github_url
+        is None
+    )
 
 
 def test_the_gateway_has_only_its_own_routes(gw: Gateway) -> None:
     app = gw.client.app
     assert isinstance(app, FastAPI)
-    ours = {route.path for route in app.routes if isinstance(route, APIRoute)}
-    real = {route.path for route in n8n_calls_http.router.routes if isinstance(route, APIRoute)}
-    assert ours == {"/healthz", "/simulation/v1/starts", "/simulation/v1/runs/{nonce}", *real}
+    platform = FastAPI()
+    platform.include_router(n8n_calls_http.router)
+    real = set(platform.openapi()["paths"])
+    assert len(real) == 8
+    assert set(app.openapi()["paths"]) == {
+        "/healthz",
+        "/simulation/v1/starts",
+        "/simulation/v1/runs/{nonce}",
+        *real,
+    }
 
 
 def real_refusal(refused: Any) -> httpx.Response:

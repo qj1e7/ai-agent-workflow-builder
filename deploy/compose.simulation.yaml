@@ -3,6 +3,7 @@
 # - its own PostgreSQL, in memory, so it keeps nothing after it stops;
 # - our n8n image with the platform n8n's guards and bootstrap, its own encryption key, node key
 #   and start secret, and only mock keys;
+# - the simulation gateway, which answers our blocks in place of platform-api;
 # - mock GitHub, and mock Slack under the name slack.com, as in deploy/compose.e2e.yaml.
 # Both networks are internal, and nothing publishes a port, so nothing here reaches the internet,
 # the host or the platform's stack. Every setting it reads starts SIM_, and scripts/simulation.sh
@@ -73,8 +74,7 @@ services:
       N8N_DISABLED_MODULES: mcp-registry
       N8N_RUNNERS_AUTH_TOKEN: ${SIM_RUNNERS_TOKEN:?run scripts/simulation.sh}
       EXECUTIONS_DATA_SAVE_ON_SUCCESS: all
-      # Our blocks call the simulation gateway, never the platform's API. ADR 0054's PR 3 adds it
-      # as the service gateway on the sim network. Until then nothing answers there.
+      # Our blocks call the simulation gateway, never the platform's API.
       WAB_API_URL: http://gateway:8600
       WAB_NODE_KEY: ${SIM_NODE_KEY:?run scripts/simulation.sh}
       WAB_START_SECRET: ${SIM_START_SECRET:?run scripts/simulation.sh}
@@ -141,6 +141,41 @@ services:
       PLATFORM_INTERNAL_URL: http://gateway:8600
       TEAM_TIME_ZONE: Asia/Singapore
     networks: [sim]
+
+  # The simulation gateway (ADR 0054, PR 3): our blocks here call it in place of platform-api. It
+  # runs platform-api's image, but only its own app, and holds only the simulation's node key and
+  # start secret and the simulation n8n's owner. It has no database and no Jira, Teams, Slack or
+  # model key. It sits on the sim network alone, so the platform's n8n can never reach it.
+  gateway:
+    build:
+      context: ../platform-api
+      target: runtime
+    image: wab/platform-api:sim
+    command:
+      - uvicorn
+      - platform_api.orchestration.simulation_gateway:create_app
+      - --factory
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8600"
+    environment:
+      WAB_NODE_KEY: ${SIM_NODE_KEY:?run scripts/simulation.sh}
+      WAB_START_SECRET: ${SIM_START_SECRET:?run scripts/simulation.sh}
+      N8N_BASE_URL: http://n8n:5678
+      N8N_OWNER_EMAIL: owner@simulation.example
+      N8N_OWNER_PASSWORD: ${SIM_N8N_OWNER_PASSWORD:?run scripts/simulation.sh}
+      MOCK_GITHUB_URL: http://mock-github:8200
+    networks: [sim]
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8600/healthz', timeout=2)
+      interval: 2s
+      timeout: 3s
+      retries: 15
 
   mock-github:
     build:
