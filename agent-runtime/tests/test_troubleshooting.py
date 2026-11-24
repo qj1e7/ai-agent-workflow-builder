@@ -57,7 +57,9 @@ REQUEST = CauseRequest(
     events=EVENTS,
     blocks=BLOCKS,
     stopped_at=["Read releases"],
+    within_seconds=9.0,
 )
+PART = ["Read releases"]
 CAUSE = "GitHub can't find the repository fastapi/fastapy that the Read releases block reads."
 CLEAN = Verdict(says_it_happened=False, skips_a_yes=False, claims_unbuilt=False)
 
@@ -124,11 +126,26 @@ def test_code_checks_every_block_the_model_names(part: list[str], why: str):
         ("GitHub can't find the repository " + "fastapi/fastapy " * 20 + "today.", "shape"),
         ("The **Read releases** block can't find the repository fastapi/fastapy.", "plain_text"),
         ("I fixed the repository that the Read releases block reads.", "claims_done"),
-        ("The version 9.9.9 of the repository is missing from GitHub.", "made_up"),
         ("Remove the Ask for a yes block, then retry the run.", "gives_advice"),
         ("Please rename the repository that the Read releases block reads.", "gives_advice"),
         ("An Operator should change the repository that the block reads.", "gives_advice"),
         ("The repository the Read releases block reads must be renamed.", "gives_advice"),
+        ("Make the approved changes by hand.", "gives_advice"),
+        ("Ask for a yes again after GitHub finds the repository.", "gives_advice"),
+        ("Start from the Portal again with admin rights.", "gives_advice"),
+        ("GitHub can't find the repository, so make the approved changes by hand.", "gives_advice"),
+        (
+            "The Read releases block is fine and the Ask for a yes block is the real cause.",
+            "names_another_block",
+        ),
+        (
+            "GitHub can't find the repository fastapi/fastapi that the Read releases block reads.",
+            "not_in_the_facts",
+        ),
+        ("Jira can't find the project that the Read releases block reads.", "not_in_the_facts"),
+        ("The Read releases block can't reach slack, which refuses it.", "not_in_the_facts"),
+        ("Bob renamed the repository that the Read releases block reads.", "not_in_the_facts"),
+        ("The version 9.9.9 of the repository is missing from GitHub.", "not_in_the_facts"),
     ],
     ids=[
         "empty",
@@ -136,15 +153,24 @@ def test_code_checks_every_block_the_model_names(part: list[str], why: str):
         "too-long",
         "markdown",
         "claims-a-fix",
-        "made-up-version",
         "removes-the-yes",
         "please",
         "should",
         "must",
+        "block-name-as-an-order",
+        "ask-for-a-yes-again",
+        "start-again",
+        "order-after-so",
+        "blames-another-block",
+        "another-repository",
+        "another-system",
+        "another-system-in-lowercase",
+        "a-person",
+        "a-version",
     ],
 )
 def test_a_cause_that_fails_a_check_keeps_the_rule_table(cause: str, why: str):
-    assert cause_guard(cause, REQUEST) == why
+    assert cause_guard(cause, REQUEST, PART) == why
     shown, chat = asked_with(found(cause))
     assert shown == CauseKept(why=why)
     assert asked_shapes(chat) == ["ModelCause"]
@@ -152,7 +178,27 @@ def test_a_cause_that_fails_a_check_keeps_the_rule_table(cause: str, why: str):
 
 def test_the_limit_is_one_short_sentence():
     assert CAUSE_LIMIT <= 200
-    assert cause_guard(CAUSE, REQUEST) is None
+    assert cause_guard(CAUSE, REQUEST, PART) is None
+
+
+@pytest.mark.parametrize(
+    "cause",
+    [
+        "The Make the approved changes block can't reach Jira, which refuses it.",
+        "Alice's run can't read the releases of fastapi/fastapy from GitHub in the Read releases "
+        "block.",
+    ],
+    ids=["a-block-named-as-a-block", "names-from-the-facts"],
+)
+def test_names_the_facts_hold_and_a_block_called_a_block_pass(cause: str):
+    request = REQUEST.model_copy(
+        update={
+            "stop": STOP.model_copy(update={"message": f"{STOP.message}. Jira refused."}),
+            "stopped_at": ["Read releases", "Make the approved changes"],
+        }
+    )
+    part = ["Make the approved changes"] if "Make" in cause else PART
+    assert cause_guard(cause, request, part) is None
 
 
 @pytest.mark.parametrize(
@@ -174,6 +220,40 @@ def test_the_cause_and_its_check_fit_the_adrs_ten_seconds():
     assert CAUSE_TIMEOUT_SECONDS + CAUSE_VERIFY_SECONDS < 10
 
 
+class Ticks:
+    """A clock that moves on by a fixed step each time it is read."""
+
+    def __init__(self, step: float) -> None:
+        self.now = 0.0
+        self.step = step
+
+    def __call__(self) -> float:
+        self.now += self.step
+        return self.now
+
+
+def test_both_calls_end_by_the_time_the_platform_gives():
+    clock = Ticks(0.5)
+    ends: list[float] = []
+    chat = ScriptedChat(structured=[found(), CLEAN])
+
+    def chat_for(timeout: float) -> ScriptedChat:
+        ends.append(clock.now + timeout)
+        return chat
+
+    short = REQUEST.model_copy(update={"within_seconds": 4.5})
+    shown = find_cause(short, chat_for, clock=clock)
+    assert shown == CauseFound(cause=CAUSE, failed_part=PART)
+    assert len(ends) == 2 and max(ends) <= 0.5 + 4.5, "the clock is first read on arrival"
+
+
+def test_too_little_time_left_for_the_verifier_keeps_the_rule_table():
+    shown = find_cause(
+        REQUEST, lambda timeout: ScriptedChat(structured=[found()]), clock=Ticks(8.5)
+    )
+    assert shown == CauseKept(why="slow")
+
+
 def test_the_verifier_runs_on_its_own_chat_when_given():
     writer = ScriptedChat(structured=[found()])
     verifier = ScriptedChat(structured=[CLEAN])
@@ -188,7 +268,7 @@ def test_the_log_holds_the_answer_id_and_the_check_never_the_words(
     with caplog.at_level(logging.WARNING):
         asked_with(found("The version 9.9.9 of SECRET-REPO is missing from GitHub."))
     logged = caplog.text
-    assert "troubleshooter" in logged and "made_up" in logged
+    assert "troubleshooter" in logged and "not_in_the_facts" in logged
     assert "SECRET-REPO" not in logged and "fastapy" not in logged
 
 
@@ -196,6 +276,12 @@ def test_the_log_holds_the_answer_id_and_the_check_never_the_words(
 def test_a_request_whose_stop_is_outside_the_version_is_refused(stopped: list[str]):
     with pytest.raises(ValidationError):
         CauseRequest.model_validate({**REQUEST.model_dump(), "stopped_at": stopped})
+
+
+@pytest.mark.parametrize("seconds", [0, 10.5], ids=["none", "past-the-adrs-ten"])
+def test_a_request_gives_the_runtime_some_time_and_never_more_than_ten_seconds(seconds: float):
+    with pytest.raises(ValidationError):
+        CauseRequest.model_validate({**REQUEST.model_dump(), "within_seconds": seconds})
 
 
 def client_with(chat: ScriptedChat | None) -> TestClient:

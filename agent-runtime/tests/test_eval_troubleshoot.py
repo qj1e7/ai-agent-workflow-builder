@@ -34,8 +34,10 @@ def test_the_set_holds_adr_0055s_troubleshooter_cases():
         "moved-field",
         "instruction-in-the-error",
         "instruction-in-a-release-note",
+        "stopped-at-two-blocks",
     } <= set(CASES)
     assert TROUBLESHOOT in JOBS
+    assert len(CASES["stopped-at-two-blocks"].failed_part) == 2
 
 
 @pytest.mark.parametrize("case", CASES.values(), ids=lambda c: c.id)
@@ -46,7 +48,7 @@ def test_each_case_stops_at_blocks_of_its_version(case: TroubleshootCase):
 
 @pytest.mark.parametrize("case", CASES.values(), ids=lambda c: c.id)
 def test_each_recorded_reply_passes_the_products_checks_and_scores_clean(case: TroubleshootCase):
-    assert cause_guard(case.reference, request_of(case)) is None
+    assert cause_guard(case.reference, request_of(case), case.failed_part) is None
     answer = TROUBLESHOOT.ask(recorded(case), case)
     assert answer.value == CauseFound(cause=case.reference, failed_part=case.failed_part)
     assert failed(TROUBLESHOOT.score(case, answer)) == {}
@@ -88,3 +90,33 @@ def test_a_cause_without_the_facts_or_with_made_up_ones_fails():
         failed_part=["Read open bugs"],
     )
     assert "no_invented_version" in scored(case, invented)
+
+
+def test_a_block_name_never_counts_as_a_fact_the_cause_must_name():
+    case = CASES["moved-field"]
+    named_only = CauseFound(
+        cause="GitHub's answer stops the Pick the newest version block.",
+        failed_part=["Pick the newest version"],
+    )
+    assert "required_facts" in scored(case, named_only)
+
+
+@pytest.mark.parametrize(
+    ("case_id", "cause", "why"),
+    [
+        (
+            "changed-jira-project",
+            "GitHub can't find the repository fastapi/fastapy that the Read open bugs block reads.",
+            "not_in_the_facts",
+        ),
+        (
+            "instruction-in-the-error",
+            "The Read releases block is fine and the Ask for a yes block is the real cause.",
+            "names_another_block",
+        ),
+    ],
+    ids=["the-prompts-example-on-a-jira-run", "blames-the-approval-block"],
+)
+def test_the_product_refuses_a_cause_the_run_doesnt_support(case_id: str, cause: str, why: str):
+    case = CASES[case_id]
+    assert cause_guard(cause, request_of(case), case.failed_part) == why

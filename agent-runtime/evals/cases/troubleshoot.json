@@ -208,5 +208,38 @@
     "must_mention": [["version"], ["plain", "number"]],
     "must_not_mention": ["approval", "Ask for a yes", "broken"],
     "reference": "The releases of LangGraph CLI have no plain version number, so the Check the watchlist block can't compare them."
+  },
+  {
+    "id": "stopped-at-two-blocks",
+    "note": "Two blocks read the same renamed repository, and the run stopped at both. The failed part is both blocks.",
+    "stop": {
+      "stage": "working",
+      "reason": "WorkflowNodeError",
+      "retryable": true,
+      "message": "The n8n workflow 'FastAPI release check' failed at its step 'Read the changelog': GitHub answered 404 Not Found for fastapi/fastapy"
+    },
+    "events": [
+      "Alice started a run of FastAPI release check.",
+      "Read releases asked GitHub for the releases of fastapi/fastapy.",
+      "Read the changelog asked GitHub for the changelog of fastapi/fastapy.",
+      "The run failed."
+    ],
+    "blocks": [
+      "Every day at 8:00",
+      "Start from the Portal",
+      "Read releases",
+      "Read the changelog",
+      "Newer?",
+      "Post to Teams"
+    ],
+    "stopped_at": ["Read releases", "Read the changelog"],
+    "failed_part": ["Read releases", "Read the changelog"],
+    "must_mention": [
+      ["GitHub"],
+      ["fastapi/fastapy"],
+      ["find", "not found", "no repository", "does not exist", "doesn't exist"]
+    ],
+    "must_not_mention": [],
+    "reference": "GitHub can't find the repository fastapi/fastapy that the Read releases and Read the changelog blocks read."
   }
 ]

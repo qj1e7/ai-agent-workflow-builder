@@ -4,7 +4,7 @@ and the model's cause and failed part ride beside it only when code checked them
 
 import asyncio
 import json
-from collections.abc import AsyncIterator, Mapping, Sequence
+from collections.abc import AsyncIterator, Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -15,6 +15,7 @@ from fastapi import FastAPI
 from platform_api.monitoring import (
     PLATFORM,
     ActivityLog,
+    AskedCause,
     FoundCause,
     PendingEvent,
     RunCreatedData,
@@ -26,7 +27,7 @@ from platform_api.orchestration.run_causes import RunCauses
 from platform_api.shared import RunId, UserId
 from platform_api.wire import FailureReason, FailureStage
 from tests.conftest import PostgresUrls
-from tests.test_monitoring_http import ALICE, RUN, app_for, append
+from tests.test_monitoring_http import ALICE, RUN, app_for, append, pending
 
 pytestmark = pytest.mark.anyio
 
@@ -87,16 +88,12 @@ class Record:
 
 
 class Raises:
-    async def find(
-        self, run_id: RunId, failure: RunFailedData, events: Sequence[str]
-    ) -> FoundCause | None:
+    async def find(self, asked: AskedCause) -> FoundCause | None:
         raise RuntimeError("the finder broke")
 
 
 class Slow:
-    async def find(
-        self, run_id: RunId, failure: RunFailedData, events: Sequence[str]
-    ) -> FoundCause | None:
+    async def find(self, asked: AskedCause) -> FoundCause | None:
         await asyncio.sleep(5)
         return FoundCause(cause=CAUSE, failed_part=["Read releases"])
 
@@ -212,6 +209,8 @@ async def test_the_runtime_gets_the_stop_the_blocks_where_it_stopped_and_the_act
     await troubleshoot(client, find_cause=True)
     [(path, body)] = runtime.asked
     assert path == "/v1/troubleshooter/cause"
+    within = body.pop("within_seconds")
+    assert 2 <= within < 10, "the runtime gets what is left of the ten seconds"
     assert body == {
         "model": ACCESS.model_dump(mode="json"),
         "stop": {
@@ -286,3 +285,49 @@ async def test_finding_the_cause_writes_nothing(client: httpx.AsyncClient, app: 
     await troubleshoot(client, find_cause=True)
     assert await log.read_after(RUN, 0) == before
     assert [path for path, _ in runtime.asked] == ["/v1/troubleshooter/cause"]
+
+
+async def test_the_model_is_asked_once_for_each_stop(client: httpx.AsyncClient, app: FastAPI):
+    runtime = finds(app)
+    await append(app, RUN, stop())
+    first = await troubleshoot(client, find_cause=True)
+    assert await troubleshoot(client, find_cause=True) == first
+    assert first["found"] is not None
+    assert len(runtime.asked) == 1
+
+
+async def test_a_kept_answer_is_not_asked_for_again(client: httpx.AsyncClient, app: FastAPI):
+    runtime = finds(app, Runtime(answer={"kind": "kept", "why": "made_up"}))
+    await append(app, RUN, stop())
+    await troubleshoot(client, find_cause=True)
+    await troubleshoot(client, find_cause=True)
+    assert len(runtime.asked) == 1
+
+
+async def test_a_call_that_failed_is_asked_again(client: httpx.AsyncClient, app: FastAPI):
+    runtime = finds(app, Runtime(status=500))
+    await append(app, RUN, stop())
+    await troubleshoot(client, find_cause=True)
+    await troubleshoot(client, find_cause=True)
+    assert len(runtime.asked) == 2
+
+
+async def test_a_new_stop_after_a_retry_is_asked_about_again(
+    client: httpx.AsyncClient, app: FastAPI
+):
+    runtime = finds(app)
+    await append(app, RUN, stop())
+    await troubleshoot(client, find_cause=True)
+    await append(app, RUN, pending(2), stop())
+    await troubleshoot(client, find_cause=True)
+    assert len(runtime.asked) == 2
+
+
+async def test_too_little_of_the_ten_seconds_left_asks_no_model(
+    client: httpx.AsyncClient, app: FastAPI
+):
+    runtime = finds(app)
+    app.state.cause_wait_seconds = 1.0
+    await append(app, RUN, stop())
+    assert (await troubleshoot(client, find_cause=True))["found"] is None
+    assert runtime.asked == []
