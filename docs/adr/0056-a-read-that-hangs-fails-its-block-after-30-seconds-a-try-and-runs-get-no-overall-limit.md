@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 ---
 
 # A read that hangs fails its block after 30 seconds a try, and runs get no overall limit
