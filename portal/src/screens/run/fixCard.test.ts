@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import type { FixView } from '../../api/types'
-import { askFix, fixLine, fixStageOf, handedBackWords, NO_AI_MODEL, ONLY_OPERATORS, TIME_LIMIT } from './fixCard'
+import { askFix, fixLeads, fixLine, fixStageOf, handedBackWords, ONLY_OPERATORS, TIME_LIMIT } from './fixCard'
 import type { FixState } from './runModel'
 
 const ASKED = Date.parse('2026-11-04T02:20:00Z')
 const ENDS = ASKED + 20 * 60_000
 const BEFORE = ENDS - 1
 
-const fix = (over: Partial<FixState> = {}): FixState => ({ id: 'fix_01FIRST', agents: [], ended: null, endsBy: ENDS as FixState['endsBy'], rounds: [], back: null, ...over })
+const fix = (over: Partial<FixState> = {}): FixState => ({ id: 'fix_01FIRST', agents: [], ended: null, endsBy: ENDS as FixState['endsBy'], rounds: [], why: null, ...over })
 const view = (over: Partial<FixView> = {}): FixView => ({
   fix_id: 'fix_01FIRST',
   run_id: 'run_01JB9',
@@ -61,9 +61,10 @@ describe('the sentence under the stop', () => {
 })
 
 describe('why a fix was handed back', () => {
-  it('is the platform’s sentence without its heading and its closing line', () => {
-    const back = fix({ ended: 'handed_back', back: "I couldn't fix this. A round made no progress. Nothing was changed." })
-    expect(handedBackWords(back, BEFORE)).toBe('A round made no progress.')
+  it('is the platform’s words for the reason code the hand-back carried', () => {
+    expect(handedBackWords(fix({ ended: 'handed_back', why: 'no_progress' }), BEFORE)).toBe('A round made no progress.')
+    expect(handedBackWords(fix({ ended: 'handed_back', why: 'cost_limit' }), BEFORE)).toBe('I reached the cost limit for one fix.')
+    expect(handedBackWords(fix({ ended: 'handed_back', why: 'not_replayed' }), BEFORE)).toBe('The practice systems couldn't replay the stop, so no fix could be proven.')
   })
 
   it('is the time limit when the deadline passed and nothing said why', () => {
@@ -77,9 +78,10 @@ describe('why a fix was handed back', () => {
 })
 
 describe('who is offered the button', () => {
-  const base = { operator: true, next: 'report' as const, stage: null, modelOff: false }
+  const CAN = { can: true, why_not: null }
+  const base = { operator: true, next: 'report' as const, offer: CAN, stage: null }
 
-  it('offers it to an Operator on a stop the platform says retry won’t fix', () => {
+  it('offers it to an Operator on a stop the platform says a fix can start on', () => {
     expect(askFix(base)).toEqual({ is: 'button' })
   })
 
@@ -88,17 +90,44 @@ describe('who is offered the button', () => {
     expect(ONLY_OPERATORS).toBe('An Operator can ask for a fix.')
   })
 
-  it('says so when no AI model is connected', () => {
-    expect(askFix({ ...base, modelOff: true })).toEqual({ is: 'note', words: NO_AI_MODEL })
+  it('shows an Operator the platform’s reason when a fix can’t start, and an Approver nothing', () => {
+    const offer = { can: false, why_not: 'It’s open in n8n, so it can’t be fixed now.' }
+    expect(askFix({ ...base, offer })).toEqual({ is: 'note', words: offer.why_not })
+    expect(askFix({ ...base, offer, operator: false })).toBeNull()
   })
 
-  it('offers nothing for an outage a retry fixes, or before the troubleshooter answers', () => {
+  it('says nothing when fixes are off here, or before the platform has said', () => {
+    expect(askFix({ ...base, offer: { can: false, why_not: 'Fix it for me is off here.' } })).toBeNull()
+    expect(askFix({ ...base, offer: undefined })).toBeNull()
+    expect(askFix({ ...base, offer: null })).toBeNull()
+  })
+
+  it('offers nothing for an outage a retry fixes', () => {
     expect(askFix({ ...base, next: 'retry' })).toBeNull()
     expect(askFix({ ...base, next: undefined })).toBeNull()
   })
 
-  it('offers nothing while a fix is under way or done, and again after one that ended without turning on', () => {
-    for (const stage of ['drafting', 'ready', 'approved', 'testing', 'on'] as const) expect(askFix({ ...base, stage })).toBeNull()
-    for (const stage of ['handed_back', 'declined', 'dropped', 'test_failed'] as const) expect(askFix({ ...base, stage })).toEqual({ is: 'button' })
+  it('offers nothing while a fix is under way or done, and again only after a no or a dropped fix', () => {
+    for (const stage of ['drafting', 'ready', 'approved', 'testing', 'on', 'handed_back', 'test_failed'] as const) expect(askFix({ ...base, stage })).toBeNull()
+    for (const stage of ['declined', 'dropped'] as const) expect(askFix({ ...base, stage })).toEqual({ is: 'button' })
+  })
+})
+
+describe('the one primary button on a stop', () => {
+  const view = (over = {}) => ({ can_turn_back_on: false, asked_by: 'alice', ...over })
+  it('is Fix it for me while it is offered', () => {
+    expect(fixLeads({ ask: { is: 'button' }, stage: null, view: undefined, operator: true, approverId: null })).toBe(true)
+    expect(fixLeads({ ask: { is: 'note', words: 'x' }, stage: null, view: undefined, operator: true, approverId: null })).toBe(false)
+  })
+
+  it('is Turn back on for an Operator once an Approver said yes', () => {
+    expect(fixLeads({ ask: null, stage: 'approved', view: view({ can_turn_back_on: true }), operator: true, approverId: null })).toBe(true)
+    expect(fixLeads({ ask: null, stage: 'approved', view: view({ can_turn_back_on: false }), operator: true, approverId: null })).toBe(false)
+    expect(fixLeads({ ask: null, stage: 'approved', view: view({ can_turn_back_on: true }), operator: false, approverId: null })).toBe(false)
+  })
+
+  it('is Review the fix for an Approver who didn’t ask for it', () => {
+    expect(fixLeads({ ask: null, stage: 'ready', view: view(), operator: false, approverId: 'bob' })).toBe(true)
+    expect(fixLeads({ ask: null, stage: 'ready', view: view(), operator: false, approverId: 'alice' })).toBe(false)
   })
 })

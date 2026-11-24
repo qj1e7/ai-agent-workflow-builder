@@ -170,7 +170,7 @@ describe('how a fix ends', () => {
 describe('what a hand-back and the later steps keep', () => {
   const round = (n: number, passed: number, summary: string) => wire('fix_round', summary, { fix_id: FIX, round: n, passed, scenarios: 3, progress: n === 1 })
 
-  it('keeps each round’s sentence and the hand-back’s, for the card', () => {
+  it('keeps each round’s sentence and the hand-back’s reason code, for the card', () => {
     const model = withFix(
       started(),
       round(1, 0, 'Round 1: 0 of 3 scenarios passed.'),
@@ -178,7 +178,7 @@ describe('what a hand-back and the later steps keep', () => {
       wire('fix_handed_back', "I couldn't fix this. A round made no progress. Nothing was changed.", { fix_id: FIX, why: 'no_progress' }),
     )
     expect(model.fix?.rounds).toEqual(['Round 1: 0 of 3 scenarios passed.', 'Round 2: 0 of 3 scenarios passed, no better than before.'])
-    expect(model.fix?.back).toBe("I couldn't fix this. A round made no progress. Nothing was changed.")
+    expect(model.fix?.why).toBe('no_progress')
   })
 
   it('puts the Approver’s yes and no in the log, a no marked as a stop', () => {

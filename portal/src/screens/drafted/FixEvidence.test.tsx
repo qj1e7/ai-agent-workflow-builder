@@ -60,7 +60,7 @@ describe('the approval page for a fix', () => {
   it('shows the cause, and the change from what it was to what it becomes', () => {
     const words = text(draw(view()))
     expect(words).toContain('The cause GitHub answered, but the “Read release” block couldn’t find the field “tag”.')
-    expect(words).toMatch(/Read release\s+field\s+tag\s+→\s+tag_name/)
+    expect(words).toMatch(/Read release\s+Field it reads\s+tag\s+→\s+tag_name/)
   })
 
   it('shows each scenario with the platform’s verdict, and why one failed', () => {
@@ -80,6 +80,18 @@ describe('the approval page for a fix', () => {
   it('says which repository joins the read list, and nothing when none does', () => {
     expect(text(draw(view()))).toContain('fastapi/fastapi')
     expect(text(draw(view({ fix: { ...EVIDENCE, read_list: null } })))).not.toContain('read list')
+  })
+
+  it('names a block’s parameter in plain words, not by its path', () => {
+    const changes = [
+      { block: 'Read release', parameter: 'place', before: 'a/b', after: 'c/d' },
+      { block: 'Make ticket', parameter: 'title', before: 'Old', after: 'New' },
+      { block: 'Tell', parameter: 'assignments.assignments[].value', before: 'x', after: 'y' },
+    ]
+    const words = text(draw(view({ fix: { ...EVIDENCE, changes } })))
+    expect(words).toContain('Read release Place it reads a/b')
+    expect(words).toContain('Make ticket Title Old')
+    expect(words).toContain('Tell Value x')
   })
 
   it('says who made the change when a person did', () => {

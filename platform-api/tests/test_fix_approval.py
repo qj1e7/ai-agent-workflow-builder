@@ -1014,6 +1014,40 @@ async def test_a_start_the_platform_couldn_t_keep_is_ended_in_the_log(
     assert again["state"] == "drafting"
 
 
+# Whether a fix can start, read before anyone presses the button
+
+
+async def test_the_offer_says_a_fix_can_start_and_writes_nothing(fix_lab: FixLab):
+    await fix_lab.set_up_and_stop()
+    offer = await fix_lab.fixes.offer(RUN)
+    assert (offer.can, offer.why_not) == (True, None)
+    assert await fix_lab.fix_events() == []
+    assert fix_lab.runtime.started == []
+
+
+async def test_the_offer_says_why_not_in_the_words_the_start_would_refuse_with(fix_lab: FixLab):
+    use_case_id = await fix_lab.set_up_and_stop()
+    fix_lab.fixes.settings = FixSettings(on=False, signing_key=KEY, platform_url="http://x")
+    assert (await fix_lab.fixes.offer(RUN)).why_not == "Fix it for me is off here."
+    fix_lab.fixes.settings = fix_lab.settings
+    fix_lab.models.access_now = None
+    assert (await fix_lab.fixes.offer(RUN)).why_not == (
+        "Fix it for me needs an AI model, and none is connected yet."
+    )
+    fix_lab.models.access_now = Models().access_now
+    await fix_lab.ask()
+    busy = await fix_lab.fixes.offer(RUN)
+    assert (busy.can, busy.why_not) == (False, "A fix for this workflow is already under way.")
+    await bump(fix_lab, use_case_id)
+    newer = await fix_lab.fixes.offer(RUN)
+    assert newer.can is False
+    assert newer.why_not is not None and "newer version" in newer.why_not
+
+
+async def test_the_offer_says_so_when_the_run_isn_t_stopped(fix_lab: FixLab):
+    assert (await fix_lab.fixes.offer(RUN)).can is False
+
+
 def workflow_digest_of(document: dict[str, Any]) -> str:
     from platform_api.orchestration import workflow_digest
 

@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter } from 'react-router'
 import { describe, expect, it } from 'vitest'
 import { ApiProvider } from '../../api/context'
-import { fixKey } from '../../api/fixQueries'
+import { fixKey, startedKey } from '../../api/fixQueries'
 import { createDevSession } from '../../api/session'
 import type { FixView } from '../../api/types'
 import { FixSection } from './FixPanel'
@@ -14,7 +14,7 @@ const ASKED = Date.parse('2026-11-04T02:20:00Z')
 const ENDS = ASKED + 20 * 60_000
 const BEFORE = ENDS - 1
 
-const fix = (over: Partial<FixState> = {}): FixState => ({ id: 'fix_01FIRST', agents: [], ended: null, endsBy: ENDS as FixState['endsBy'], rounds: [], back: null, ...over })
+const fix = (over: Partial<FixState> = {}): FixState => ({ id: 'fix_01FIRST', agents: [], ended: null, endsBy: ENDS as FixState['endsBy'], rounds: [], why: null, ...over })
 const view = (over: Partial<FixView> = {}): FixView => ({
   fix_id: 'fix_01FIRST',
   run_id: 'run_01JB9',
@@ -36,13 +36,16 @@ interface Given {
   readonly view?: FixView
   readonly operator?: boolean
   readonly next?: 'retry' | 'report' | undefined
-  readonly modelOff?: boolean
+  readonly offer?: { can: boolean; why_not: string | null } | null
+  readonly started?: FixView
+  readonly approverId?: string | null
   readonly now?: number
 }
 
 function draw(given: Given = {}): string {
   const queryClient = new QueryClient()
   if (given.view) queryClient.setQueryData(fixKey(scope, given.view.fix_id), given.view)
+  if (given.started) queryClient.setQueryData(startedKey(scope, 'run_01JB9'), given.started)
   return renderToStaticMarkup(
     <QueryClientProvider client={queryClient}>
       <ApiProvider session={createDevSession(null)} platformFetch={fetch} origin="http://portal.test">
@@ -52,7 +55,8 @@ function draw(given: Given = {}): string {
             fix={given.fix === undefined ? null : given.fix}
             operator={given.operator ?? true}
             next={'next' in given ? given.next : 'report'}
-            modelOff={given.modelOff ?? false}
+            offer={'offer' in given ? given.offer : CAN}
+            approverId={given.approverId ?? null}
             now={given.now ?? BEFORE}
           />
         </MemoryRouter>
@@ -61,6 +65,7 @@ function draw(given: Given = {}): string {
   )
 }
 
+const CAN = { can: true, why_not: null }
 const text = (html: string) => html.replace(/<[^>]*>/g, ' ').replaceAll('&#x27;', "'").replace(/\s+/g, ' ').trim()
 const buttons = (html: string) => [...html.matchAll(/<button\b[^>]*>([\s\S]*?)<\/button>/g)].map((m) => text(m[1] ?? ''))
 const links = (html: string) => [...html.matchAll(/<a\b[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/g)].map((m) => [m[1], text(m[2] ?? '')])
@@ -78,14 +83,23 @@ describe('the button on a stopped run', () => {
     expect(text(html)).toBe('An Operator can ask for a fix.')
   })
 
-  it('says no AI model is connected, with no dead button', () => {
-    const html = draw({ modelOff: true })
+  it('shows an Operator the platform’s reason when a fix can’t start, with no dead button', () => {
+    const html = draw({ offer: { can: false, why_not: 'A fix for this workflow is already under way.' } })
     expect(buttons(html)).toEqual([])
-    expect(text(html)).toBe('Fix it for me needs an AI model, and none is connected yet.')
+    expect(text(html)).toBe('A fix for this workflow is already under way.')
   })
 
-  it('shows nothing on a stop a retry fixes', () => {
+  it('shows nothing when fixes are off, before the platform has said, or on a stop a retry fixes', () => {
+    expect(draw({ offer: { can: false, why_not: 'Fix it for me is off here.' } })).toBe('')
+    expect(draw({ offer: null })).toBe('')
     expect(draw({ next: 'retry' })).toBe('')
+  })
+
+  it('hides the button once the press was answered, before the run’s own event arrives', () => {
+    const started = view({ state: 'drafting', said: 'Drafting a fix. Nothing changes until an Approver says yes.', approval_id: null })
+    const html = draw({ started })
+    expect(buttons(html)).toEqual([])
+    expect(text(html)).toBe('Drafting a fix. Nothing changes until an Approver says yes.')
   })
 })
 
@@ -101,6 +115,13 @@ describe('progress under the stop', () => {
     expect(text(html)).toContain('Waiting for a yes. Nothing changes until an Approver says yes.')
     expect(links(html)).toEqual([['/setup-approvals/apr_01A', 'Open the approval']])
     expect(buttons(html)).toEqual([])
+  })
+
+  it('gives an Approver who didn’t ask for it Review the fix as the one main button, and the person who asked the plain link', () => {
+    const ready = { fix: fix({ ended: 'proposed' }), view: view(), operator: false }
+    expect(links(draw({ ...ready, approverId: 'bob' }))).toEqual([['/setup-approvals/apr_01A', 'Review the fix']])
+    expect(draw({ ...ready, approverId: 'bob' })).toMatch(/<a [^>]*class="[^"]*primary/)
+    expect(links(draw({ ...ready, approverId: 'alice' }))).toEqual([['/setup-approvals/apr_01A', 'Open the approval']])
   })
 
   it('shows Turn back on only after the yes, to an Operator', () => {
@@ -121,7 +142,7 @@ describe('progress under the stop', () => {
     for (const [state, said] of states) {
       const html = draw({ fix: fix({ ended: 'proposed' }), view: view({ state, said }) })
       expect(text(html)).toContain(said)
-      expect(buttons(html)).toEqual(state === 'on' || state === 'testing' ? [] : ['Fix it for me'])
+      expect(buttons(html)).toEqual(state === 'declined' ? ['Fix it for me'] : [])
     }
   })
 
@@ -136,7 +157,7 @@ describe('progress under the stop', () => {
 describe('the hand-back card', () => {
   const back = fix({
     ended: 'handed_back',
-    back: "I couldn't fix this. A round made no progress. Nothing was changed.",
+    why: 'no_progress' as const,
     rounds: ['Round 1: 0 of 3 scenarios passed.', 'Round 2: 0 of 3 scenarios passed, no better than before.'],
   })
 
@@ -167,13 +188,25 @@ describe('the hand-back card', () => {
     const html = draw({ fix: back, view: view({ state: 'handed_back', approval_id: null, question }) })
     expect(text(html)).toContain('GitHub')
     expect(text(html)).toContain('Which repository should it read?')
-    expect(buttons(html)).toEqual(['fastapi/fastapi', 'Type another', 'Fix it for me'])
+    expect(buttons(html)).toEqual(['fastapi/fastapi', 'Type another'])
   })
 
   it('shows why it can’t be answered now, with no button for it', () => {
     const question = { setting: 'repo', key: 'GitHub', words: 'Which repository should it read?', choices: [], typed: null, waits: 'Waiting for an Operator to add a key' }
     const html = draw({ fix: back, view: view({ state: 'handed_back', approval_id: null, question }) })
     expect(text(html)).toContain('Waiting for an Operator to add a key')
-    expect(buttons(html)).toEqual(['Fix it for me'])
+    expect(buttons(html)).toEqual([])
+  })
+
+  it('shows someone who can’t answer a note in place of the buttons', () => {
+    const question = { setting: 'repo', key: 'GitHub', words: 'Which repository should it read?', choices: [{ value: 'a/b', label: 'a/b' }], typed: 'Type another', waits: null }
+    const html = draw({ fix: back, view: view({ state: 'handed_back', approval_id: null, question }), operator: false })
+    expect(buttons(html)).toEqual([])
+    expect(text(html)).toContain('Which repository should it read?')
+    expect(text(html)).toContain('An Operator answers this.')
+  })
+
+  it('doesn’t offer another fix after a hand-back', () => {
+    expect(buttons(draw({ fix: back, view: view({ state: 'handed_back', approval_id: null }) }))).toEqual([])
   })
 })
