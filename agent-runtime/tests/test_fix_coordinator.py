@@ -112,7 +112,7 @@ def test_a_fix_code_accepts_is_stored_once_and_proposed_with_its_version_and_dig
     read = next(b for b in outcome.plan.blocks if b.name == READ)
     assert read.parameters["place"] == "langchain-ai/langgraph-py"
     assert [(r.round, r.passed, r.scenarios, r.changed) for r in outcome.rounds] == [
-        (1, 2, 2, (READ,))
+        (1, 3, 3, (READ,))
     ]
 
 
@@ -123,7 +123,7 @@ def test_the_hand_back_gives_the_cause_and_each_round_tried():
     assert outcome.words == HAND_BACK == "I couldn't fix this. Here's the cause and what I tried."
     assert outcome.why == "no_progress"
     assert outcome.cause is not None and outcome.cause.failed_part == [READ]
-    assert [(r.round, r.passed, r.scenarios) for r in outcome.rounds] == [(1, 1, 2), (2, 1, 2)]
+    assert [(r.round, r.passed, r.scenarios) for r in outcome.rounds] == [(1, 2, 3), (2, 2, 3)]
     assert [(f.name, f.step) for f in outcome.rounds[1].failed] == [("Nothing new", READ)]
 
 

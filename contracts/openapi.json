@@ -3347,6 +3347,55 @@
         "title": "CardView",
         "type": "object"
       },
+      "Change": {
+        "additionalProperties": false,
+        "description": "A change a recorded Agent reply proposes, as a Propose a change block names one.",
+        "properties": {
+          "action": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Action",
+            "type": "string"
+          },
+          "body": {
+            "maxLength": 5000,
+            "title": "Body",
+            "type": "string"
+          },
+          "place": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Place",
+            "type": "string"
+          },
+          "subject": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject"
+          },
+          "title": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "action",
+          "place",
+          "title",
+          "body"
+        ],
+        "title": "Change",
+        "type": "object"
+      },
       "ChangeLine": {
         "additionalProperties": false,
         "properties": {
@@ -7078,6 +7127,86 @@
           }
         ]
       },
+      "FixCheckIn": {
+        "additionalProperties": false,
+        "properties": {
+          "version": {
+            "$ref": "#/components/schemas/WorkflowPlan"
+          }
+        },
+        "required": [
+          "version"
+        ],
+        "title": "FixCheckIn",
+        "type": "object"
+      },
+      "FixCheckOut": {
+        "additionalProperties": false,
+        "properties": {
+          "findings": {
+            "description": "The rule of each finding, when it didn't.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Findings",
+            "type": "array"
+          },
+          "passes": {
+            "description": "The checker graded the laid-out plan safe.",
+            "title": "Passes",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "passes",
+          "findings"
+        ],
+        "title": "FixCheckOut",
+        "type": "object"
+      },
+      "FixEventIn": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "title": "Data",
+            "type": "object"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/FixKind"
+          }
+        },
+        "required": [
+          "kind",
+          "data"
+        ],
+        "title": "FixEventIn",
+        "type": "object"
+      },
+      "FixEventOut": {
+        "additionalProperties": false,
+        "properties": {
+          "refused": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the log took no event, or null when it did.",
+            "title": "Refused"
+          }
+        },
+        "required": [
+          "refused"
+        ],
+        "title": "FixEventOut",
+        "type": "object"
+      },
       "FixFound": {
         "enum": [
           "confirmed",
@@ -7106,7 +7235,8 @@
           "handoff_limit",
           "cost_limit",
           "time_limit",
-          "gave_up"
+          "gave_up",
+          "not_replayed"
         ],
         "type": "string"
       },
@@ -7337,6 +7467,48 @@
         "title": "FixItem",
         "type": "object"
       },
+      "FixKind": {
+        "enum": [
+          "fix_started",
+          "fix_handoff",
+          "fix_round",
+          "fix_proposed",
+          "fix_handed_back"
+        ],
+        "type": "string"
+      },
+      "FixNoteOut": {
+        "additionalProperties": false,
+        "description": "The explainer's picks for one failure, checked against the scenario's facts.",
+        "properties": {
+          "block": {
+            "title": "Block",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          }
+        },
+        "required": [
+          "block",
+          "kind",
+          "source"
+        ],
+        "title": "FixNoteOut",
+        "type": "object"
+      },
       "FixProposed": {
         "additionalProperties": false,
         "properties": {
@@ -7406,6 +7578,77 @@
           "digest"
         ],
         "title": "FixProposedData",
+        "type": "object"
+      },
+      "FixResultOut": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FixNoteOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The explainer's picks, when it was asked."
+          },
+          "reached": {
+            "description": "What the run reached, as the gateway's words say it.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Reached",
+            "type": "array"
+          },
+          "step": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The block where the run stopped, if one did.",
+            "title": "Step"
+          },
+          "verdict": {
+            "enum": [
+              "passed",
+              "failed",
+              "not_tried"
+            ],
+            "title": "Verdict",
+            "type": "string"
+          },
+          "why": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How a failed run ended, as code read it.",
+            "title": "Why"
+          }
+        },
+        "required": [
+          "name",
+          "verdict",
+          "step",
+          "why",
+          "reached",
+          "note"
+        ],
+        "title": "FixResultOut",
         "type": "object"
       },
       "FixRound": {
@@ -7491,6 +7734,143 @@
           "progress"
         ],
         "title": "FixRoundData",
+        "type": "object"
+      },
+      "FixScenariosIn": {
+        "additionalProperties": false,
+        "properties": {
+          "cover": {
+            "description": "Blocks no scenario reached. The Scenario writer can't aim at a block yet, so an ask to cover blocks finds nothing new.",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "title": "Cover",
+            "type": "array"
+          },
+          "may_ask_model": {
+            "default": false,
+            "description": "Whether the fix can still pay for the writer's call at its most.",
+            "title": "May Ask Model",
+            "type": "boolean"
+          },
+          "version": {
+            "$ref": "#/components/schemas/WorkflowPlan",
+            "description": "The stopped version, with each key kept out."
+          },
+          "within_seconds": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 1200.0,
+            "title": "Within Seconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "version",
+          "within_seconds"
+        ],
+        "title": "FixScenariosIn",
+        "type": "object"
+      },
+      "FixScenariosOut": {
+        "additionalProperties": false,
+        "properties": {
+          "asked_model": {
+            "description": "Whether the Scenario writer's model was asked.",
+            "title": "Asked Model",
+            "type": "boolean"
+          },
+          "scenarios": {
+            "items": {
+              "$ref": "#/components/schemas/ScenarioSpec"
+            },
+            "title": "Scenarios",
+            "type": "array"
+          }
+        },
+        "required": [
+          "scenarios",
+          "asked_model"
+        ],
+        "title": "FixScenariosOut",
+        "type": "object"
+      },
+      "FixSimulationIn": {
+        "additionalProperties": false,
+        "properties": {
+          "may_ask_model": {
+            "default": false,
+            "description": "Whether the fix can still pay for the explainer's call at its most.",
+            "title": "May Ask Model",
+            "type": "boolean"
+          },
+          "scenarios": {
+            "items": {
+              "$ref": "#/components/schemas/ScenarioSpec"
+            },
+            "maxItems": 20,
+            "minItems": 1,
+            "title": "Scenarios",
+            "type": "array"
+          },
+          "version": {
+            "$ref": "#/components/schemas/WorkflowPlan",
+            "description": "The plan to try: a draft, or the stopped version."
+          },
+          "within_seconds": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 1200.0,
+            "title": "Within Seconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "version",
+          "scenarios",
+          "within_seconds"
+        ],
+        "title": "FixSimulationIn",
+        "type": "object"
+      },
+      "FixSimulationOut": {
+        "additionalProperties": false,
+        "properties": {
+          "asked_model": {
+            "description": "Whether the explainer's model was asked.",
+            "title": "Asked Model",
+            "type": "boolean"
+          },
+          "named": {
+            "description": "What the plan names in plain values.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Named",
+            "type": "array"
+          },
+          "not_reached": {
+            "description": "Blocks that could run, but no scenario reached.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Not Reached",
+            "type": "array"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/FixResultOut"
+            },
+            "title": "Results",
+            "type": "array"
+          }
+        },
+        "required": [
+          "results",
+          "not_reached",
+          "named",
+          "asked_model"
+        ],
+        "title": "FixSimulationOut",
         "type": "object"
       },
       "FixStarted": {
@@ -10587,6 +10967,36 @@
         "title": "PersonOut",
         "type": "object"
       },
+      "PlanBlock": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "parameters": {
+            "additionalProperties": true,
+            "title": "Parameters",
+            "type": "object"
+          },
+          "type": {
+            "title": "Type",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "number"
+          }
+        },
+        "required": [
+          "name",
+          "type",
+          "version",
+          "parameters"
+        ],
+        "title": "PlanBlock",
+        "type": "object"
+      },
       "PlanIn": {
         "additionalProperties": false,
         "properties": {
@@ -10628,6 +11038,89 @@
             "$ref": "#/components/schemas/ModelTrouble"
           }
         ]
+      },
+      "PlanSetting": {
+        "additionalProperties": false,
+        "properties": {
+          "fills": {
+            "items": {
+              "$ref": "#/components/schemas/SettingPlace"
+            },
+            "title": "Fills",
+            "type": "array"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/SettingKind"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "mark": {
+            "$ref": "#/components/schemas/SettingMark"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "label",
+          "fills",
+          "value",
+          "mark"
+        ],
+        "title": "PlanSetting",
+        "type": "object"
+      },
+      "PlanWire": {
+        "additionalProperties": false,
+        "properties": {
+          "exit": {
+            "title": "Exit",
+            "type": "string"
+          },
+          "exit_index": {
+            "minimum": 0.0,
+            "title": "Exit Index",
+            "type": "integer"
+          },
+          "from_block": {
+            "title": "From Block",
+            "type": "string"
+          },
+          "input_index": {
+            "minimum": 0.0,
+            "title": "Input Index",
+            "type": "integer"
+          },
+          "to_block": {
+            "title": "To Block",
+            "type": "string"
+          }
+        },
+        "required": [
+          "from_block",
+          "exit",
+          "to_block",
+          "exit_index",
+          "input_index"
+        ],
+        "title": "PlanWire",
+        "type": "object"
       },
       "PlannedAgent": {
         "additionalProperties": false,
@@ -10777,6 +11270,55 @@
             "$ref": "#/components/schemas/N8nReply"
           }
         ]
+      },
+      "Play": {
+        "additionalProperties": false,
+        "description": "How one read block is served.",
+        "properties": {
+          "gone": {
+            "description": "Places that answer not found, as a renamed repository does. Any other place is served as the play says. For recorded or varied only, on a read that can be not found. A fix's replay of its stop names the place the stopped run read (ADR 0055, PR 5).",
+            "items": {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 10,
+            "title": "Gone",
+            "type": "array"
+          },
+          "sample": {
+            "anyOf": [
+              {
+                "maxLength": 60,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The recorded sample to serve or vary. None serves the block's own newest, else the newest of its kind, else the made-up one.",
+            "title": "Sample"
+          },
+          "serve": {
+            "$ref": "#/components/schemas/Serve"
+          },
+          "vary": {
+            "description": "For varied only.",
+            "items": {
+              "$ref": "#/components/schemas/Variation"
+            },
+            "maxItems": 3,
+            "title": "Vary",
+            "type": "array"
+          }
+        },
+        "required": [
+          "serve"
+        ],
+        "title": "Play",
+        "type": "object"
       },
       "PracticeTicket": {
         "additionalProperties": false,
@@ -11854,6 +12396,42 @@
           "watched"
         ],
         "title": "RemoveSoftwareReply",
+        "type": "object"
+      },
+      "Reply": {
+        "additionalProperties": false,
+        "description": "What one Agent block answers.",
+        "properties": {
+          "items": {
+            "items": {
+              "additionalProperties": {
+                "$ref": "#/components/schemas/JsonValue"
+              },
+              "type": "object"
+            },
+            "maxItems": 500,
+            "title": "Items",
+            "type": "array"
+          },
+          "proposes": {
+            "items": {
+              "$ref": "#/components/schemas/Change"
+            },
+            "maxItems": 20,
+            "title": "Proposes",
+            "type": "array"
+          },
+          "serve": {
+            "default": "recorded",
+            "enum": [
+              "recorded",
+              "too_slow"
+            ],
+            "title": "Serve",
+            "type": "string"
+          }
+        },
+        "title": "Reply",
         "type": "object"
       },
       "ReplyAboutView": {
@@ -13135,6 +13713,51 @@
         ],
         "type": "string"
       },
+      "ScenarioSpec": {
+        "additionalProperties": false,
+        "description": "One scenario, as the templates and the scenario writer give it.",
+        "properties": {
+          "agents": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Reply"
+            },
+            "maxProperties": 100,
+            "propertyNames": {
+              "maxLength": 200,
+              "minLength": 1
+            },
+            "title": "Agents",
+            "type": "object"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ScenarioKind"
+          },
+          "name": {
+            "default": "",
+            "description": "Its kind, unless it names itself.",
+            "maxLength": 80,
+            "title": "Name",
+            "type": "string"
+          },
+          "reads": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Play"
+            },
+            "maxProperties": 100,
+            "propertyNames": {
+              "maxLength": 200,
+              "minLength": 1
+            },
+            "title": "Reads",
+            "type": "object"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "ScenarioSpec",
+        "type": "object"
+      },
       "ScheduleChangeView": {
         "additionalProperties": false,
         "properties": {
@@ -13329,6 +13952,16 @@
         "title": "Segment",
         "type": "object"
       },
+      "Serve": {
+        "enum": [
+          "recorded",
+          "varied",
+          "empty",
+          "not_found",
+          "too_slow"
+        ],
+        "type": "string"
+      },
       "SetUpApprovalItem": {
         "additionalProperties": false,
         "description": "A drafted workflow's set-up approval that this person may decide now (ADR 0051).",
@@ -13508,6 +14141,45 @@
           "workflow_id"
         ],
         "title": "SetUpFromN8n",
+        "type": "object"
+      },
+      "SettingKind": {
+        "enum": [
+          "run_time",
+          "jira_project",
+          "channel",
+          "address",
+          "repository",
+          "confluence_page",
+          "text"
+        ],
+        "type": "string"
+      },
+      "SettingMark": {
+        "enum": [
+          "filled",
+          "guessed",
+          "needed"
+        ],
+        "type": "string"
+      },
+      "SettingPlace": {
+        "additionalProperties": false,
+        "properties": {
+          "block": {
+            "title": "Block",
+            "type": "string"
+          },
+          "parameter": {
+            "title": "Parameter",
+            "type": "string"
+          }
+        },
+        "required": [
+          "block",
+          "parameter"
+        ],
+        "title": "SettingPlace",
         "type": "object"
       },
       "SettingsArea": {
@@ -15985,6 +16657,14 @@
         "title": "ValidationError",
         "type": "object"
       },
+      "Variation": {
+        "enum": [
+          "suffix",
+          "empty_field",
+          "long_text"
+        ],
+        "type": "string"
+      },
       "Verdict": {
         "enum": [
           "approve",
@@ -16971,6 +17651,45 @@
           "execution_url"
         ],
         "title": "WorkflowFailureIn",
+        "type": "object"
+      },
+      "WorkflowPlan": {
+        "additionalProperties": false,
+        "properties": {
+          "blocks": {
+            "items": {
+              "$ref": "#/components/schemas/PlanBlock"
+            },
+            "minItems": 1,
+            "title": "Blocks",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "settings": {
+            "items": {
+              "$ref": "#/components/schemas/PlanSetting"
+            },
+            "title": "Settings",
+            "type": "array"
+          },
+          "wires": {
+            "items": {
+              "$ref": "#/components/schemas/PlanWire"
+            },
+            "title": "Wires",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "blocks",
+          "wires",
+          "settings"
+        ],
+        "title": "WorkflowPlan",
         "type": "object"
       },
       "WorkingView": {
@@ -27593,6 +28312,354 @@
           }
         },
         "summary": "Read Page",
+        "tags": [
+          "internal"
+        ]
+      }
+    },
+    "/internal/v1/runs/{run_id}/fixes/{fix_id}/checks": {
+      "post": {
+        "description": "The checker's grade of a plan, laid out as any drafted plan is.",
+        "operationId": "fix_check_internal_v1_runs__run_id__fixes__fix_id__checks_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "fix_id",
+            "required": true,
+            "schema": {
+              "pattern": "^fix_[0-9A-Za-z]{1,40}$",
+              "title": "Fix Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Fix-Token",
+            "required": true,
+            "schema": {
+              "title": "X-Fix-Token",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FixCheckIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FixCheckOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The fix's token is not valid for this run and fix"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Fix Check",
+        "tags": [
+          "internal"
+        ]
+      }
+    },
+    "/internal/v1/runs/{run_id}/fixes/{fix_id}/events": {
+      "post": {
+        "description": "Writes one event of the fix on the stopped run, under the activity log's rules for a fix, or says why the log took none.",
+        "operationId": "note_fix_event_internal_v1_runs__run_id__fixes__fix_id__events_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "fix_id",
+            "required": true,
+            "schema": {
+              "pattern": "^fix_[0-9A-Za-z]{1,40}$",
+              "title": "Fix Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Fix-Token",
+            "required": true,
+            "schema": {
+              "title": "X-Fix-Token",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FixEventIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FixEventOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The fix's token is not valid for this run and fix"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The event is another fix's."
+          }
+        },
+        "summary": "Note Fix Event",
+        "tags": [
+          "internal"
+        ]
+      }
+    },
+    "/internal/v1/runs/{run_id}/fixes/{fix_id}/scenarios": {
+      "post": {
+        "description": "Scenarios for the stopped version: code's template for each kind that applies, or the Scenario writer's when Simulation mode's model is on and the fix can pay for it.",
+        "operationId": "fix_scenarios_internal_v1_runs__run_id__fixes__fix_id__scenarios_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "fix_id",
+            "required": true,
+            "schema": {
+              "pattern": "^fix_[0-9A-Za-z]{1,40}$",
+              "title": "Fix Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Fix-Token",
+            "required": true,
+            "schema": {
+              "title": "X-Fix-Token",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FixScenariosIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FixScenariosOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The fix's token is not valid for this run and fix"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The version can't be simulated"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The practice systems didn't answer"
+          }
+        },
+        "summary": "Fix Scenarios",
+        "tags": [
+          "internal"
+        ]
+      }
+    },
+    "/internal/v1/runs/{run_id}/fixes/{fix_id}/simulations": {
+      "post": {
+        "description": "Runs a plan in the scenarios given on practice systems, and grades each run, with what it reached. The explainer picks why each failed only when its model is on and the fix can pay for it.",
+        "operationId": "fix_simulation_internal_v1_runs__run_id__fixes__fix_id__simulations_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "fix_id",
+            "required": true,
+            "schema": {
+              "pattern": "^fix_[0-9A-Za-z]{1,40}$",
+              "title": "Fix Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Fix-Token",
+            "required": true,
+            "schema": {
+              "title": "X-Fix-Token",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FixSimulationIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FixSimulationOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The fix's token is not valid for this run and fix"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The version or a scenario can't be simulated"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "The practice systems didn't answer"
+          }
+        },
+        "summary": "Fix Simulation",
         "tags": [
           "internal"
         ]

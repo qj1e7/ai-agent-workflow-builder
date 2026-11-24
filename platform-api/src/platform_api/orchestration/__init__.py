@@ -34,6 +34,7 @@ from platform_api.orchestration.agents import (
     ExplainReworded,
     ExplainWordingResult,
     FactSection,
+    FailureNote,
     FindSoftwareResult,
     FoundSoftware,
     FreeReplyAnswer,
@@ -199,7 +200,7 @@ from platform_api.orchestration.platform_keys import KEY_FOR_TYPE, KEYS, KeySpec
 from platform_api.orchestration.run_gist import RunGist
 from platform_api.orchestration.runs import state_name
 from platform_api.orchestration.scenario_grades import WAIT_LIMIT_SECONDS
-from platform_api.orchestration.scenarios import ScenarioKind
+from platform_api.orchestration.scenarios import ScenarioKind, ScenarioSpec
 from platform_api.orchestration.schedule import (
     AT_PATTERN,
     Day,
@@ -230,13 +231,15 @@ from platform_api.orchestration.setup_approvals import Decided as SetUpDecided
 from platform_api.orchestration.setup_approvals import DecisionRefused as SetUpRefused
 from platform_api.orchestration.simulation_driver import (
     DIDNT_ANSWER,
+    DONT_FIT,
     SIMULATION_SECONDS,
     NotSimulated,
     Simulated,
     SimulationClient,
     SimulationDriver,
+    version_of,
 )
-from platform_api.orchestration.simulation_gateway import SimulationOut
+from platform_api.orchestration.simulation_gateway import PlanOut, ResultOut, SimulationOut
 from platform_api.orchestration.slack_channels import ChannelList, SlackChannels
 from platform_api.orchestration.spec import (
     CardRun,
@@ -326,11 +329,17 @@ __all__ = [
     "SIMULATION_SECONDS",
     "WAIT_LIMIT_SECONDS",
     "ScenarioKind",
+    "ScenarioSpec",
     "NotSimulated",
     "Simulated",
     "SimulationClient",
     "SimulationDriver",
     "SimulationOut",
+    "PlanOut",
+    "ResultOut",
+    "DONT_FIT",
+    "FailureNote",
+    "version_of",
     "NotKeptAsSent",
     "Approved",
     "Closed",

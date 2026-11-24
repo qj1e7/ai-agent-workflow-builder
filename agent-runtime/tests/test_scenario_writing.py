@@ -5,7 +5,6 @@ check of the rules, and code's templates run on any refusal."""
 
 import json
 from dataclasses import replace
-from pathlib import Path
 from typing import Any
 
 import pytest
@@ -24,6 +23,7 @@ from agent_runtime.contract import (
     ScenarioWriteRequest,
     scenario_write_result_adapter,
 )
+from agent_runtime.model_cost import packaged_prices
 from agent_runtime.scenario_explaining import (
     EXPLAIN_MOST_PROMPT_CHARS,
     EXPLAIN_MOST_TOKENS,
@@ -287,7 +287,7 @@ def test_the_most_a_simulation_can_spend_on_the_model_is_under_its_cap():
     """One writer call and one explainer call a simulation, each with its prompt and answer
     capped, priced at the dearest Anthropic model the evals price, with a token for every three
     characters, which overcounts English."""
-    pricing = json.loads((Path(__file__).parents[1] / "evals" / "pricing.json").read_text())
+    pricing = packaged_prices()
     dearest = max(
         (v for k, v in pricing.items() if k.startswith("anthropic:")),
         key=lambda v: v["output_usd_per_mtok"],

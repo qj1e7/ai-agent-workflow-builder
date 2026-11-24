@@ -116,6 +116,8 @@ SAMPLE_CHANGE: Final = Change(
 happy path can reach the yes."""
 
 BlockName = Annotated[str, Field(min_length=1, max_length=200)]
+MOST_GONE: Final = 10
+GONE_SERVES: Final[frozenset[Serve]] = frozenset({"recorded", "varied"})
 SampleId = Annotated[
     str, Field(min_length=1, max_length=60, pattern=r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
 ]
@@ -132,6 +134,13 @@ class Play(WireIn):
     )
     vary: list[Variation] = Field(
         default_factory=list[Variation], max_length=3, description="For varied only."
+    )
+    gone: list[BlockName] = Field(
+        default_factory=list[str],
+        max_length=MOST_GONE,
+        description="Places that answer not found, as a renamed repository does. Any other place "
+        "is served as the play says. For recorded or varied only, on a read that can be not "
+        "found. A fix's replay of its stop names the place the stopped run read (ADR 0055, PR 5).",
     )
 
 
@@ -350,6 +359,10 @@ def _play_problems(name: str, block: PlanBlock, play: Play, samples: RecordedSam
     twice = sorted({v for v in play.vary if play.vary.count(v) > 1})
     if twice:
         return [f'"{name}" names "{twice[0]}" twice.']
+    if play.gone and play.serve not in GONE_SERVES:
+        return [f'"{name}" names places that are gone, so it is served as recorded or varied.']
+    if play.gone and (why := _cannot(block, "not_found")) is not None:
+        return [f'"{name}" names places that are gone, but {why[0].lower()}{why[1:]}']
     if play.sample is not None:
         sample = samples.get(play.sample)
         if sample is None:
@@ -529,7 +542,9 @@ def stage(spec: ScenarioSpec, plan: SimulationPlan, samples: RecordedSamples) ->
         if block.mode == "ours":
             serve = {"not_found": "not_found", "too_slow": "timeout"}.get(play.serve, "recorded")
             items = [] if play.serve in FAILURES else items
-            answers[block.name] = BlockAnswer.model_validate({"serve": serve, "items": items})
+            answers[block.name] = BlockAnswer.model_validate(
+                {"serve": serve, "items": items, "gone": play.gone}
+            )
         elif block.mode == "pinned":
             if block.answer is not None or play.serve == "empty":
                 pins[block.name] = items
@@ -568,12 +583,13 @@ def plays_of(block: PlanBlock) -> tuple[Serve, ...]:
 
 
 def _github_play(play: Play, block: PlanBlock, items: list[dict[str, Any]]) -> GitHubPlay:
+    gone = tuple(play.gone)
     match play.serve:
         case "not_found":
             return GitHubPlay("not_found", None)
         case "too_slow":
             return GitHubPlay("drop", None)
         case _ if block.answer is None:
-            return GitHubPlay("ok", None)
+            return GitHubPlay("ok", None, gone)
         case _:
-            return GitHubPlay("ok", tuple(items))
+            return GitHubPlay("ok", tuple(items), gone)

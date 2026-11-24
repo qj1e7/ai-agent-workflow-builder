@@ -1147,7 +1147,8 @@
         "handoff_limit",
         "cost_limit",
         "time_limit",
-        "gave_up"
+        "gave_up",
+        "not_replayed"
       ],
       "type": "string"
     },

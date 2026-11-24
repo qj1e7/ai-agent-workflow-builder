@@ -15,7 +15,13 @@ it, and each round tried.
 
 Each hand-off runs in a thread of its own, and code waits for it only until the fix's deadline:
 a sub-agent still working then is left behind, and its answer is never used. Each one is told the
-seconds left, and the Fix drafter the dollars left, so it can stop by then itself.
+seconds left, and every one that may ask a model the dollars left, so it can stop by then itself.
+
+Before a draft's first simulation, code adds its own replay of the stop to the scenarios
+(`replay.py`) and tries the stopped version in each scenario it hasn't tried yet. The replay must
+fail there, or no fix can be proven, and the fix is handed back. Each simulated run says what it
+reached, and a draft whose run reaches anything the stopped version neither names nor reached
+widens the change, since the scope check reads each block alone and can't see data flow.
 
 Each hand-off goes to the activity log as an event of #369's contract, through `FixRecorder`.
 Nothing here writes to a real system or a live workflow, approves anything or turns anything on.
@@ -39,7 +45,7 @@ from langgraph.graph import END, START, StateGraph
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from agent_runtime.contract import CauseFound, StoppedRun, WireModel, WorkflowPlan
-from agent_runtime.fixing.cost import FixCost, Price, counted
+from agent_runtime.fixing.cost import FixCost, Price, counted, prices_by_model
 from agent_runtime.fixing.events import (
     MOST_BLOCKS,
     MOST_HANDOFFS,
@@ -74,8 +80,11 @@ from agent_runtime.fixing.ports import (
     NotDrafted,
     Scenario,
     ScenarioResult,
+    Simulated,
     StoredRevision,
 )
+from agent_runtime.fixing.replay import REPLAY, replay_of
+from agent_runtime.model_cost import packaged_prices
 from agent_runtime.monitoring.masking import MASKED, MASKED_SHAPES
 from agent_runtime.summary import ChatFor
 from agent_runtime.workflow_drafter import Tool, offered
@@ -88,6 +97,8 @@ MOST_DOLLARS: Final = 2.0
 MOST_TURNS: Final = 20
 TURN_TIMEOUT_SECONDS: Final = 60.0
 RESULT_LIMIT: Final = 20_000
+UNKNOWN: Final = "unknown:"
+"""How platform-api marks a reach it couldn't read, as `unknown:<block>`."""
 HAND_BACK: Final = "I couldn't fix this. Here's the cause and what I tried."
 """The team lead's own words for a hand-back (ADR 0055, section 5)."""
 
@@ -239,15 +250,21 @@ class HandedBack:
     rounds: tuple[RoundTried, ...]
     unlogged: tuple[Unlogged, ...]
     words: str = HAND_BACK
+    stored: StoredRevision | None = None
+    """A revision code stored before the fix ran out of time, which nothing proposed."""
 
 
 @dataclass(frozen=True)
 class Stopped:
     """The platform stopped the fix, or never let it start: the run isn't stopped any more,
-    another fix runs on it, or the log couldn't be reached to start it."""
+    another fix runs on it, or the log couldn't be reached to start it or to take the
+    proposal."""
 
     why: FixRefusal | Literal["failed"]
     unlogged: tuple[Unlogged, ...] = ()
+    stored: StoredRevision | None = None
+    """The revision code stored before the log refused or never took its proposal. Storing and
+    proposing are two steps, so whoever ran the fix cleans it up: nothing proposed it."""
 
 
 type FixOutcome = HandedIn | HandedBack | Stopped
@@ -487,7 +504,8 @@ class _Fix:
         version = self._request.version
         writer = self._parts.scenario_writer
         handed = self._handoff(
-            "scenario_writer", lambda seconds: writer.write(version, args.cover, seconds)
+            "scenario_writer",
+            lambda seconds: writer.write(version, args.cover, seconds, self._dollars_left),
         )
         if not isinstance(handed, Handed):
             return self._end(handed)
@@ -499,12 +517,14 @@ class _Fix:
 
     def _keep(self, written: list[Scenario] | None) -> FixFound:
         """Kept only when every scenario names only the version's blocks, under a name no other
-        scenario has, and the fix holds at most 100. Otherwise none is kept."""
+        scenario has, nor code's replay of the stop, and the fix holds at most 100. Otherwise none
+        is kept."""
         if not written:
             return "no_answer"
         names = [scenario.name for scenario in written]
         fits = all(scenario.blocks() <= self.ledger.blocks for scenario in written)
-        fresh = len(set(names)) == len(names) and not set(names) & set(self.ledger.scenarios)
+        taken = {*self.ledger.scenarios, REPLAY}
+        fresh = len(set(names)) == len(names) and not set(names) & taken
         if not fits or not fresh or len(self.ledger.scenarios) + len(names) > MOST_SCENARIOS:
             return "refused"
         self.ledger.scenarios |= {scenario.name: scenario for scenario in written}
@@ -601,18 +621,34 @@ class _Fix:
         if draft is None or draft.plan is None:
             return self._then(state, call_id, _NO_DRAFT, error=True)
         plan = draft.plan
+        if REPLAY not in ledger.scenarios and ledger.cause is not None:
+            request = self._request
+            ledger.scenarios[REPLAY] = replay_of(request.version, request.stopped_at, ledger.cause)
         closes_round = not draft.results
         asked = list(ledger.scenarios)
         if not closes_round and args.scenarios:
             asked = list(dict.fromkeys(args.scenarios))
         scenarios = [ledger.scenarios[name] for name in asked]
-        simulation = self._parts.simulation
-        handed = self._handoff(
-            "simulation", lambda seconds: simulation.run(plan, scenarios, seconds)
-        )
+        untried = [scenario for scenario in scenarios if scenario.name not in ledger.baseline]
+        stopped, simulation = self._request.version, self._parts.simulation
+
+        def simulate(seconds: float) -> tuple[Simulated | None, Simulated | None]:
+            """The stopped version first, in each scenario it hasn't been tried in, with no
+            dollars so no model is asked, then the draft."""
+            baseline = simulation.run(stopped, untried, seconds, _no_dollars) if untried else None
+            if untried and baseline is None:
+                return None, None
+            return baseline, simulation.run(
+                plan, scenarios, self._seconds_left(), self._dollars_left
+            )
+
+        handed = self._handoff("simulation", simulate)
         if not isinstance(handed, Handed):
             return self._end(handed)
-        simulated, n = handed.result, handed.number
+        baseline, simulated = handed.result or (None, None)
+        n = handed.number
+        if baseline is not None:
+            self._keep_baseline(baseline, [scenario.name for scenario in untried])
         results = self._graded(simulated.results if simulated else [], asked, plan)
         if not results:
             stop = self._noted(n, "simulation", "no_answer")
@@ -622,6 +658,12 @@ class _Fix:
         stop = self._noted(n, "simulation", "ran", passed=passed, scenarios=len(results))
         if stop is not None:
             return self._end(stop)
+        if self._reaches_more(results, simulated.named if simulated else []):
+            draft.found, draft.widened_by = "widened", "adds_a_system"
+            return self._end(self._hand_back("widened"))
+        replay = ledger.baseline.get(REPLAY)
+        if replay is not None and replay.verdict != "failed":
+            return self._end(self._hand_back("not_replayed"))
         if closes_round and (stop := self._close_round(draft)) is not None:
             return self._end(stop)
         reached = (
@@ -638,6 +680,23 @@ class _Fix:
             "still_needed": ledger.done_needs(),
         }
         return self._then(state, call_id, answer)
+
+    def _keep_baseline(self, baseline: Simulated, tried: list[str]) -> None:
+        """The stopped version's grade in each scenario tried, and what it names and reached."""
+        ledger = self.ledger
+        graded = {r.name: r for r in baseline.results if r.name in tried}
+        ledger.baseline |= graded
+        ledger.allowed |= {*baseline.named, *(x for r in graded.values() for x in r.reached)}
+
+    def _reaches_more(self, results: Mapping[str, ScenarioResult], named: Sequence[str]) -> bool:
+        """Whether the draft's runs reached, or its plan names, anything the stopped version
+        neither names nor reached in the same scenarios. A reach the platform couldn't read
+        always counts, even when the stopped version had one: it fails closed."""
+        words = {x for result in results.values() for x in result.reached} | set(named)
+        more = {w for w in words if w.startswith(UNKNOWN) or w not in self.ledger.allowed}
+        if more:
+            log.warning("fix %s: a draft reached %d more", self._fix_id, len(more))
+        return bool(more)
 
     def _graded(
         self, results: list[ScenarioResult], asked: list[str], plan: WorkflowPlan
@@ -682,7 +741,9 @@ class _Fix:
         if draft is None or draft.plan is None:
             return self._then(state, call_id, _NO_DRAFT, error=True)
         plan, checker = draft.plan, self._parts.checker
-        handed = self._handoff("checker", lambda seconds: checker.passes(plan, seconds))
+        handed = self._handoff(
+            "checker", lambda seconds: checker.passes(plan, seconds, self._dollars_left)
+        )
         if not isinstance(handed, Handed):
             return self._end(handed)
         draft.checker = passes = handed.result is True
@@ -716,14 +777,19 @@ class _Fix:
             ledger.refused.append("hand_in")
             said = "Not handed in: the platform couldn't store the fix. Try hand_in again."
             return self._then(state, call_id, said, error=True)
-        stop = self._record(
+        refused = self._note(
             lambda: FixProposedData(
                 fix_id=self._request.fix_id, version=stored.version, digest=stored.digest
             ),
             "fix_proposed",
+            end=True,
         )
-        if stop is not None:
-            return self._end(stop)
+        if refused == "ended":
+            return self._end(self._hand_back("time_limit", stored))
+        if refused is not None:
+            # Storing and proposing are two steps: a proposal the log never took leaves the
+            # stored revision unproposed, so the outcome carries it to be cleaned up.
+            return self._end(Stopped(refused, tuple(ledger.unlogged), stored))
         return self._end(
             HandedIn(
                 version=stored.version,
@@ -835,12 +901,13 @@ class _Fix:
             return None
 
     def _note(
-        self, make: Callable[[], FixData], kind: str, handoff: int | None = None
-    ) -> FixRefusal | None:
+        self, make: Callable[[], FixData], kind: str, handoff: int | None = None, end: bool = False
+    ) -> FixRefusal | Literal["failed"] | None:
         """Hands one event to the log, and gives back the log's refusal. An event that can't be
         made in the contract's shape, such as a block whose name the log can't show, one the log
         couldn't be reached for, and a conflicting repeat are kept in the ledger and logged, and
-        the fix goes on."""
+        the fix goes on. The recorder tries an end event again before it gives up, and for an
+        `end` event that it gave up on, or that conflicts, the refusal comes back too."""
         try:
             data = make()
         except ValidationError:
@@ -851,10 +918,10 @@ class _Fix:
         except Exception as error:
             log.warning("fix %s: the log failed: %s", self._request.fix_id, type(error).__name__)
             self._unlogged(kind, handoff, "failed")
-            return None
+            return "failed" if end else None
         if refused == "conflict":
             self._unlogged(kind, handoff, refused)
-            return None
+            return refused if end else None
         return refused
 
     def _unlogged(self, kind: str, handoff: int | None, why: UnloggedWhy) -> None:
@@ -873,11 +940,12 @@ class _Fix:
             return self._hand_back("time_limit")
         return Stopped(refused, tuple(self.ledger.unlogged))
 
-    def _hand_back(self, why: FixHandBack) -> FixOutcome:
+    def _hand_back(self, why: FixHandBack, stored: StoredRevision | None = None) -> FixOutcome:
         """The hand-back, for the reason the log takes. The log ends a fix at its deadline, and
         after that takes only its hand-back for time, so when it refuses one as ended, code
         tries that one. If the log takes it, time was the reason. If it refuses that too, the
-        fix had already ended, and code stops with the log's own reason."""
+        fix had already ended, and code stops with the log's own reason. A revision code stored
+        that nothing proposed goes with the outcome."""
         fix_id = self._fix_id
         refused = self._note(lambda: FixHandedBackData(fix_id=fix_id, why=why), "fix_handed_back")
         if refused == "ended" and why != "time_limit":
@@ -887,13 +955,14 @@ class _Fix:
             if refused is None:
                 why = "time_limit"
         if refused is not None:
-            return Stopped(refused, tuple(self.ledger.unlogged))
+            return Stopped(refused, tuple(self.ledger.unlogged), stored)
         log.info("fix %s: handed back (%s)", fix_id, why)
         return HandedBack(
             why=why,
             cause=self.ledger.cause,
             rounds=self.ledger.rounds(),
             unlogged=tuple(self.ledger.unlogged),
+            stored=stored,
         )
 
     def _pending[A: _Args](self, state: FixState, shape: type[A]) -> tuple[A, str] | None:
@@ -924,6 +993,11 @@ _ONE_AT_A_TIME: Final = "Not used: one hand-off at a time. Ask again after the f
 _NOT_JSON: Final = "Not used: the arguments are not valid JSON."
 _NO_CAUSE: Final = "Not used: there is no confirmed cause yet. Use find_cause first."
 _NO_DRAFT: Final = "Not used: there is no draft inside the failed part yet."
+
+
+def _no_dollars() -> float:
+    """No dollars: a port told this asks no model."""
+    return 0.0
 
 
 def _not_done(needs: Sequence[str]) -> str:
@@ -969,12 +1043,13 @@ def coordinating(
     request: FixRequest,
     chat_for: ChatFor,
     parts: FixParts,
-    prices: Mapping[str, Price],
+    prices: Mapping[str, Price] | None = None,
     now: Callable[[], datetime] = lambda: datetime.now(UTC),
 ) -> Fixing:
     """Runs one fix from the press of the button to its hand-in or hand-back. Every model call
-    made meanwhile, in this thread, counts toward its cost."""
-    cost = FixCost(prices)
+    made meanwhile, in this thread, counts toward its cost, at the prices given or the ones the
+    runtime ships."""
+    cost = FixCost(prices_by_model(packaged_prices()) if prices is None else prices)
     fix = _Fix(request, chat_for, parts, cost, now)
     with counted(cost):
         outcome = fix.run()
@@ -985,7 +1060,7 @@ def coordinate(
     request: FixRequest,
     chat_for: ChatFor,
     parts: FixParts,
-    prices: Mapping[str, Price],
+    prices: Mapping[str, Price] | None = None,
     now: Callable[[], datetime] = lambda: datetime.now(UTC),
 ) -> FixOutcome:
     return coordinating(request, chat_for, parts, prices, now).outcome

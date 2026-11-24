@@ -85,6 +85,7 @@ type FixHandBack = Literal[
     "cost_limit",
     "time_limit",
     "gave_up",
+    "not_replayed",
 ]
 
 FOUND_BY: Final[Mapping[FixHandedTo, frozenset[FixFound]]] = {
@@ -229,6 +230,7 @@ HANDED_BACK: Final[Mapping[FixHandBack, str]] = {
     "cost_limit": "I reached the cost limit for one fix.",
     "time_limit": "I reached the time limit for one fix.",
     "gave_up": "I found no change that works.",
+    "not_replayed": "The practice systems couldn't replay the stop, so no fix could be proven.",
 }
 
 

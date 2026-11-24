@@ -200,6 +200,13 @@ class SimulationModel:
     async def explain(self, results: Sequence[ResultOut]) -> dict[str, str]:
         """A plain sentence for each failed scenario the model could explain, by its name. A
         failure with none keeps code's own words."""
+        plays = {r.name: r.plays for r in results}
+        noted = await self.notes(results)
+        return {name: note_words(note, plays[name]) for name, note in noted.items()}
+
+    async def notes(self, results: Sequence[ResultOut]) -> dict[str, FailureNote]:
+        """The picks for each failed scenario the model could explain, by its name, each checked
+        again against its scenario's facts. A fix's coordinator reads them (ADR 0055, PR 5)."""
         failed = [r for r in results if r.verdict == "failed"][:MOST_FAILED]
         if not failed:
             return {}
@@ -218,11 +225,7 @@ class SimulationModel:
             log.info("The explainer explained nothing: %s", _why(answer))
             return {}
         by_name = {r.name: r for r in failed}
-        return {
-            note.scenario: note_words(note, by_name[note.scenario].plays)
-            for note in answer.notes
-            if _fits(note, by_name)
-        }
+        return {note.scenario: note for note in answer.notes if _fits(note, by_name)}
 
 
 def _why(answer: object) -> str:

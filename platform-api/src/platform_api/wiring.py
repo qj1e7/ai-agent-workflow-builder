@@ -11,6 +11,7 @@ from platform_api.builder import Builder, Home, PlannerFront, TeamRequests, Watc
 from platform_api.builder.drafted_simulations import DraftedSimulations
 from platform_api.builder.drafted_workflows import DraftedWorkflows
 from platform_api.builder.explain import Explainer
+from platform_api.builder.fix_parts import FixLayouts, FixParts
 from platform_api.builder.key_sweep import KeySweep
 from platform_api.builder.made_in_n8n import MadeInN8n
 from platform_api.builder.n8n_holds import Holding
@@ -161,6 +162,7 @@ class Services:
     keys: PlatformKeys | None = None
     key_sweep: KeySweep | None = None
     simulation_client: SimulationClient | None = None
+    fix_parts: FixParts | None = None
 
 
 def simulations_for(
@@ -235,6 +237,7 @@ def install(app: FastAPI, services: Services) -> None:
     app.state.staff = services.staff
     app.state.in_n8n = services.in_n8n
     app.state.made_in_n8n = services.made_in_n8n
+    app.state.fix_parts = services.fix_parts
 
 
 class NoN8nReads:
@@ -600,6 +603,12 @@ async def build(settings: Settings) -> Services:
         drafted=drafted,
         simulations=simulations,
         simulation_client=simulation_client,
+        fix_parts=FixParts(
+            FixLayouts(facts, n8n.drafts, settings.public_base_url, settings.team_time_zone.key),
+            simulation_client,
+            simulation_model if settings.simulation and settings.simulation.uses_model else None,
+            activity,
+        ),
         setup_approvals=setup_approvals,
         home=home,
         watchlist=watchlist,

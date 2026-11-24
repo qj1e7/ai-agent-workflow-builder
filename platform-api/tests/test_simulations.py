@@ -12,7 +12,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from platform_api.orchestration.mock_setup import MockSetups, SetupRefused, mock_keys
-from platform_api.orchestration.n8n import ExecutionRecord, N8nError
+from platform_api.orchestration.n8n import ExecutionRecord, N8nError, NodeError, NodeRun
 from platform_api.orchestration.n8n_calls import (
     AgentCall,
     Answer,
@@ -172,7 +172,8 @@ class LineN8n(FakeSimulationN8n):
 
     def _github(self, node: Mapping[str, Any]) -> tuple[int, str | None]:
         play = self.github.now or GitHubPlay("ok", None)
-        if play.mode == "not_found":
+        p = node["parameters"]
+        if play.mode == "not_found" or f"{p.get('owner')}/{p.get('repository')}" in play.gone:
             return 0, NOT_FOUND
         if play.mode == "drop":
             return 0, DROPPED
@@ -197,6 +198,13 @@ def record(
     error: str | None = None,
     block: Mapping[str, Any] | None = None,
 ) -> ExecutionRecord:
+    """n8n's record, with each block's last try as its run data holds it. A not found came with
+    GitHub's answer, a 404, and a dropped connection with none."""
+    answer = "404" if error == NOT_FOUND else None
+    nodes = {
+        name: NodeRun(state, (NodeError(error, answer),) if name == failed and error else ())
+        for name, state in ran.items()
+    }
     return ExecutionRecord(
         execution,
         workflow,
@@ -209,6 +217,7 @@ def record(
         error,
         dict(ran),
         None if block is None else dict(block),
+        nodes,
     )
 
 
@@ -422,7 +431,19 @@ def test_the_gateway_runs_a_simulation_signed_with_the_start_secret(gw: GatewayW
         "ending",
         "stopped_at",
         "plays",
+        "reached",
     }
+    assert happy["reached"] == [
+        "agent:release_checker",
+        "propose:jira.create_ticket",
+        "read:github_releases",
+    ]
+    assert body["named"] == [
+        "agent:release_checker",
+        "propose:jira.create_ticket",
+        "read:github_releases",
+        "tell:channel",
+    ]
     assert (body["scenarios_from"], body["refused"]) == ("templates", [])
     assert body["coverage"]["not_tried"] == [
         {"block": "Tell", "why": "A simulation never writes, so a block after a write never runs."}

@@ -142,6 +142,11 @@ class BlockAnswer(WireIn):
         default_factory=list[dict[str, JsonValue]], max_length=RECORDED_LIMIT
     )
     proposes: list[Change] = Field(default_factory=list[Change], max_length=20)
+    gone: list[Name] = Field(
+        default_factory=list[str],
+        max_length=10,
+        description="For a Read, places that answer not found, as a renamed source does.",
+    )
 
 
 class Scenario(WireIn):
@@ -225,10 +230,12 @@ class ReleaseReads(Protocol):
 class GitHubPlay:
     """What mock GitHub does for one scenario (ADR 0054, PR 5): serve these releases for every
     repository, or its own when None, or answer not found, or take each request and drop the
-    connection, which plays a source that is too slow (spike S5)."""
+    connection, which plays a source that is too slow (spike S5). The repositories in `gone`
+    answer not found whatever the mode, as a renamed one does (ADR 0055, PR 5)."""
 
     mode: Literal["ok", "not_found", "drop"]
     releases: tuple[Mapping[str, Json], ...] | None
+    gone: tuple[str, ...] = ()
 
 
 REPO = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
@@ -276,13 +283,16 @@ class MockGitHub:
 
     async def play(self, play: GitHubPlay | None) -> None:
         """Steers mock GitHub for one scenario, or sets it back to its own answers with None. A
-        simulation runs one scenario at a time, so one setting serves every repository."""
+        simulation runs one scenario at a time, so one setting serves every repository. Setting
+        the mode clears each repository's own, so a gone repository is set after it."""
         given = play or GitHubPlay("ok", None)
         served = None if given.releases is None else [dict(r) for r in given.releases]
-        for path, body in (
+        steps: list[tuple[str, dict[str, Json]]] = [
             ("/_admin/mode", {"mode": given.mode}),
-            ("/_admin/releases", {"releases": served}),
-        ):
+            ("/_admin/releases", {"releases": cast(Json, served)}),
+            *(("/_admin/mode", {"mode": "not_found", "repo": repo}) for repo in given.gone),
+        ]
+        for path, body in steps:
             answer = await self._client.post(f"{self._base_url}{path}", json=body)
             answer.raise_for_status()
 
@@ -484,6 +494,8 @@ class SimulatedCalls:
         given = _given(scenario, block)
         if isinstance(given, Refused):
             return given
+        if place in given.gone:
+            return TryLater(SOURCE_NOT_FOUND)
         match given.serve:
             case "recorded":
                 items = tuple(cast(Mapping[str, Json], item) for item in given.items)

@@ -2,8 +2,11 @@
 
 `FixCost` sees every model call made while the fix is `counted`, the coordinator's and those of
 the sub-agents it hands work to, through LangChain's callbacks, as `evals/budget.py` sees an eval
-run's. It prices each call by its model's name from prices in `evals/pricing.json`'s shape. A
-call it can't price breaks the cap, since the cap can't be held without the price."""
+run's. It prices each call by its model's name from the runtime's `pricing.json`. A call it can't
+price breaks the cap, since the cap can't be held without the price.
+
+A call made outside the fix's thread, such as the Scenario writer's that platform-api asks for,
+is never seen by the callbacks. The port that asked for it `charge`s the most it can cost."""
 
 from collections.abc import Generator, Mapping
 from contextlib import contextmanager
@@ -37,6 +40,8 @@ class FixCost(BaseCallbackHandler):
         self.calls = 0
         self.dollars = 0.0
         self.unpriced: set[str] = set()
+        self.charged = 0.0
+        """What ports charged for calls made outside the fix's thread, already in `dollars`."""
         self.counted_at_start: list[float] = []
         """What the fix had spent when each call started, so a test can show none started over
         the cap."""
@@ -79,9 +84,21 @@ class FixCost(BaseCallbackHandler):
     def over(self, cap: float) -> bool:
         return bool(self.unpriced) or self.dollars >= cap
 
+    def charge(self, dollars: float) -> None:
+        self.charged += dollars
+        self.dollars += dollars
+
 
 _COUNTED: ContextVar[FixCost | None] = ContextVar("fix_cost", default=None)
 register_configure_hook(_COUNTED, inheritable=True)
+
+
+def charge(dollars: float) -> None:
+    """Counts a call the callbacks can't see toward the fix being counted, if any, at the most it
+    can cost."""
+    cost = _COUNTED.get()
+    if cost is not None:
+        cost.charge(dollars)
 
 
 @contextmanager
