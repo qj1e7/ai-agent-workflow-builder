@@ -72,6 +72,7 @@ type FixWidening = Literal[
     "moves_a_yes",
     "goes_past_a_failure",
     "changes_a_persons_setting",
+    "cant_check",
 ]
 type FixHandBack = Literal[
     "no_cause",

@@ -44,8 +44,11 @@ def fix_ask(request: FixDraftRequest, facts: DrafterFacts) -> str:
         "fix. Submit a whole new plan that changes only the blocks named below, and only as much "
         "as the run needs. Keep every other block, every wire, every setting with its id, kind, "
         "value and mark, and the workflow's name, exactly as they are. Never add a block, a "
-        f"write, a system or a key. Leave each {KEPT_KEY} where it stands: the platform keeps a "
-        f"key there.\n{request.stopped.model_dump_json()}",
+        "write, a system or a key. Change only a place, a field the run reads, or words people "
+        "see, never code, a query or a command. A new expression holds only plain words and the "
+        "item's own fields, as ={{ 'New release ' + $json.release.tag }}. Leave each "
+        f"{KEPT_KEY} where it stands: the platform keeps a key there.\n"
+        f"{request.stopped.model_dump_json()}",
         f"The blocks you may change, as data:\n{_json(list(request.change_only))}",
         "Why the run stopped, as the platform confirmed it, as data:\n"
         + request.cause.model_dump_json(exclude={"kind"}),

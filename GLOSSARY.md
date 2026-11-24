@@ -418,7 +418,7 @@ One pass of draft, check and simulate in a fix. A round makes progress only when
 How a fix ends without a fix: the person gets the cause and what was tried, and the workflow is as it was (ADR 0055).
 
 **Scope check**:
-Code's check that a fix's draft changes only the blocks the coordinator asked for. It refuses anything else, and in those blocks, a change that adds a write, a system or a key, moves an Ask for a yes, lets a block go past a failure or changes a person's setting (ADR 0055).
+Code's check that a fix's draft changes only the blocks the coordinator asked for, and there only the parameters each block's type lists. It refuses anything else, code, a query, an expression it can't read, and a change that adds a write, a system or a key, moves an Ask for a yes, lets a block go past a failure or changes a person's setting (ADR 0055).
 
 **Kept key**:
 What platform-api puts in a plan where a key stood, before it sends the plan for a fix, so no key's value leaves it. A value counts as a key by its name as well as by its shape (ADR 0055).

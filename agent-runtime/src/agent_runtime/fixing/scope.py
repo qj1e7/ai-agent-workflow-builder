@@ -1,13 +1,16 @@
 """Code's scope check of a fix (ADR 0055, sections 3 and 4): the fixed version changes only the
 blocks the coordinator named, and nothing there widens the change.
 
-It denies by default. The fixed plan may differ from the stopped one only in the parameters of
-the blocks in `change_only`. It keeps every Ask for a yes as it was and where it was, every other
-block, every wire, every setting and the workflow's name. Within a block it may change, a change
-may not touch what the block does (its type, version, resource, operation, method or action),
-where it reaches (another system, or an address on another host), a key, or what lets it go past
-its own failure. Code can't tell such a change is safe, so it counts as widening. The first
-finding, in the order `scope_of` looks, is the one given.
+It denies by default, and reads with allow-lists. The fixed plan may differ from the stopped one
+only in the blocks in `change_only`, and there only at the parameter paths their type lists in
+`MAY_CHANGE`. It keeps every Ask for a yes as it was and where it was, every other block, every
+wire, every setting and the workflow's name. A change may not touch what a block does (its type,
+version, resource, operation, method or action), where it reaches (another system, or an address
+on another host), a key, or what lets it go past its own failure. Code, a query and a command are
+never changed. An expression a fix writes must be one code can read (`READABLE`): the item's own
+fields and plain words, joined with +. An expression already in the stopped version may stay as
+it is. Code can't tell anything else is safe, so it counts as widening. The first finding, in the
+order `scope_of` and `_widening` look, is the one given.
 
 `change_only` is what the coordinator asked the Fix drafter to change, so the check holds the
 draft to the same blocks the fix_drafter event names. Pure."""
@@ -48,7 +51,48 @@ KEY_PARAMETERS: Final = frozenset(
     }
 )
 """Parameters that pick a key for the block."""
+CODE: Final = frozenset(
+    {"jsCode", "pythonCode", "functionCode", "code", "query", "sqlQuery", "command"}
+)
+"""Parameters that hold code, a query or a command, which a fix never changes."""
+_CONDITION: Final = frozenset(
+    {"conditions.conditions[].leftValue", "conditions.conditions[].rightValue"}
+)
+MAY_CHANGE: Final[Mapping[str, frozenset[str]]] = {
+    "CUSTOM.wabRead": frozenset({"place"}),
+    "CUSTOM.wabProposeChange": frozenset({"place", "title", "body", "subject"}),
+    "CUSTOM.wabTell": frozenset({"what"}),
+    "CUSTOM.wabAgent": frozenset({"inputs"}),
+    "n8n-nodes-base.httpRequest": frozenset({"url", "queryParameters.parameters[].value"}),
+    "n8n-nodes-base.github": frozenset({"owner", "repository"}),
+    "n8n-nodes-base.if": _CONDITION,
+    "n8n-nodes-base.filter": _CONDITION,
+    "n8n-nodes-base.set": frozenset({"assignments.assignments[].value"}),
+    "n8n-nodes-base.slack": frozenset({"text"}),
+}
+"""The parameter paths a fix may change, by block type: where a place, a field the run reads, or
+words people see stand. [] stands for any item of a list, and a path allows what is under it. Any
+other path, and every path of a type not listed, is one code can't check."""
+KEY_READS: Final = re.compile(
+    r"\$(?:env|credentials|secrets?|vars|node|parameter|evaluateExpression)\b|\$\("
+)
+"""What an expression reads that can hold a key: n8n's environment, keys and variables, and
+another block, whose parameters it can read."""
+_WORDS: Final = r"[A-Za-z0-9 .,!?#()_\-]*"
+_FIELD: Final = (
+    r"\$json(?:\.[A-Za-z_][A-Za-z0-9_]*|\[(?:'[A-Za-z0-9 _\-]+'|\"[A-Za-z0-9 _\-]+\")\])+"
+)
+_TERM: Final = rf"(?:{_FIELD}|'{_WORDS}'|\"{_WORDS}\")"
+READABLE: Final = re.compile(
+    rf"={_WORDS}(?:\{{\{{\s*{_TERM}(?:\s*\+\s*{_TERM})*\s*\}}\}}{_WORDS})*"
+)
+"""An expression code can read: plain words, and between braces the item's own fields and plain
+words joined with +. It calls nothing, reads nothing else, and can't spell an address."""
+NAME_VALUE: Final = re.compile(r"[\"']?([A-Za-z0-9_.\-]+)[\"']?\s*[:=]\s*(?!<<)[\"']?[^\s\"',}&/]")
+"""A name, then : or =, then a value that isn't a setting's placeholder, as in token=abc or
+"Authorization": "Basic abc"."""
 URL: Final = re.compile(r"[a-z][a-z0-9+.\-]*://[^\s\"'<>]+", re.IGNORECASE)
+_INDEX: Final = re.compile(r"\[\d+\]")
 
 type Leaves = dict[str, Any]
 
@@ -60,6 +104,8 @@ class Leaf:
     """The name the value goes by: its key, or for n8n's name and value pairs, as a header's or
     a query parameter's, the pair's name."""
     value: Any
+    secret: bool
+    """Whether its name, or the name of anything it sits under, is a key's."""
 
 
 class PlanScope:
@@ -118,10 +164,14 @@ def _widening(before: PlanBlock, after: PlanBlock) -> FixWidening | None:
         _holds_a_key(leaf) for leaf in [*touched, *gone]
     ):
         return "adds_a_key"
+    if any(_expression(leaf.value) and not READABLE.fullmatch(leaf.value) for leaf in touched):
+        return "cant_check"
     if any(was.get(k) != now.get(k) for k in WHERE_IT_GOES) or _hosts(new) - _hosts(old):
         return "adds_a_system"
     if any(_names_an_address(leaf.name) and _unread(leaf.value) for leaf in touched):
         return "adds_a_system"
+    if not all(_may_change(after.type, leaf.path) for leaf in [*touched, *gone]):
+        return "cant_check"
     return None
 
 
@@ -129,13 +179,34 @@ def _past_a_failure(value: object) -> bool:
     return value not in (None, False, "") and value not in STOPS_ON_FAILURE
 
 
+def _expression(value: object) -> bool:
+    """Whether n8n may read the value as an expression. Braces without the mark count too."""
+    return isinstance(value, str) and (value.startswith("=") or "{{" in value)
+
+
+def _may_change(node_type: str, path: str) -> bool:
+    """Whether a fix may change the value at `path` of a block of this type."""
+    if path.split(".", 1)[0].split("[", 1)[0] in CODE:
+        return False
+    general = _INDEX.sub("[]", path)
+    return any(
+        general == allowed or general.startswith((f"{allowed}.", f"{allowed}["))
+        for allowed in MAY_CHANGE.get(node_type, frozenset())
+    )
+
+
 def _holds_a_key(leaf: Leaf) -> bool:
     """A value under a key's name, the platform's stand-in for a key, anything shaped like a key,
-    or an address with a name and password in it."""
-    if names_a_secret(leaf.name) and leaf.value not in (None, ""):
+    an expression that reads where keys are, a key's name with a value after it, or an address
+    with a name and password or a key in it."""
+    if leaf.secret and leaf.value not in (None, ""):
         return True
     text = leaf.value if isinstance(leaf.value, str) else ""
     if KEPT_KEY in text or MASKED_SHAPES.search(text):
+        return True
+    if _expression(text) and KEY_READS.search(text):
+        return True
+    if any(names_a_secret(found.group(1)) for found in NAME_VALUE.finditer(text)):
         return True
     for found in URL.finditer(text):
         parts = urlsplit(found.group())
@@ -169,22 +240,23 @@ def _unread(value: object) -> bool:
 
 
 def _leaves(parameters: Mapping[str, Any]) -> Leaves:
-    return {leaf.path: leaf for leaf in _walk(parameters, "", "")}
+    return {leaf.path: leaf for leaf in _walk(parameters, "", "", False)}
 
 
-def _walk(value: Any, path: str, name: str) -> Iterator[Leaf]:
+def _walk(value: Any, path: str, name: str, secret: bool) -> Iterator[Leaf]:
     match value:
         case dict():
             fields = cast(dict[str, Any], value)
             paired = fields.get("name") if "value" in fields else None
             for key, inner in fields.items():
                 said = str(paired) if key == "value" and isinstance(paired, str) else key
-                yield from _walk(inner, f"{path}.{key}" if path else key, said)
+                inside = f"{path}.{key}" if path else key
+                yield from _walk(inner, inside, said, secret or names_a_secret(said))
         case list():
             for index, inner in enumerate(cast(list[Any], value)):
-                yield from _walk(inner, f"{path}[{index}]", name)
+                yield from _walk(inner, f"{path}[{index}]", name, secret)
         case _:
-            yield Leaf(path, name, value)
+            yield Leaf(path, name, value, secret)
 
 
 def _wires(plan: WorkflowPlan) -> set[tuple[str, str, int, int]]:
@@ -206,7 +278,7 @@ def _placeholders(plan: WorkflowPlan) -> set[tuple[str, str, str]]:
     return {
         (block.name, leaf.path, found)
         for block in plan.blocks
-        for leaf in _walk(block.parameters, "", "")
+        for leaf in _walk(block.parameters, "", "", False)
         if isinstance(leaf.value, str)
         for found in PLACEHOLDER.findall(leaf.value)
     }

@@ -7466,7 +7466,8 @@
           "removes_a_yes",
           "moves_a_yes",
           "goes_past_a_failure",
-          "changes_a_persons_setting"
+          "changes_a_persons_setting",
+          "cant_check"
         ],
         "type": "string"
       },

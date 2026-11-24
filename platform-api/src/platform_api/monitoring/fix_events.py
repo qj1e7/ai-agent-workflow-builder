@@ -73,6 +73,7 @@ type FixWidening = Literal[
     "moves_a_yes",
     "goes_past_a_failure",
     "changes_a_persons_setting",
+    "cant_check",
 ]
 type FixHandBack = Literal[
     "no_cause",
@@ -215,6 +216,7 @@ WIDENED: Final[Mapping[FixWidening, str]] = {
     "moves_a_yes": "moves an Ask for a yes",
     "goes_past_a_failure": "lets a block go past a failure",
     "changes_a_persons_setting": "changes a setting a person filled in",
+    "cant_check": "is one the platform can't check",
 }
 
 HANDED_BACK: Final[Mapping[FixHandBack, str]] = {
