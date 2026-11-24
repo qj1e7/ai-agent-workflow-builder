@@ -8,16 +8,23 @@ answers, refusals and checks, and SimulatedCalls answers them from the scenario
 (simulated_calls.py).
 
 It is not a mode of platform-api. It runs from the same image as its own process, and reads only
-the settings below: the simulation's own node key and start secret, and the simulation n8n's
-address and owner, whose executions it reads to link each call. It has no database, and no Jira,
-Teams, Slack or model key.
+the settings below: the simulation's own node key and start secret, the simulation n8n's address
+and owner, whose executions it reads to link each call and where it makes each version's copy,
+and the mocks there. It has no database, and no real Jira, Teams, Slack or model key.
 
-The simulation's driver uses two more routes. Each is signed with the simulation's start secret,
-which our blocks never hold, so a workflow under simulation can't start or read a simulated run:
+The simulation's driver uses three more routes, each signed with the simulation's start secret:
 
+- `POST /simulation/v1/copies` takes a workflow version, makes its copy in the simulation n8n with
+  only mock keys (mock_setup.py), and answers the copy's id and how each block runs in it.
 - `POST /simulation/v1/starts` takes a workflow id and a scenario, and answers the start item for
   n8n's run by hand.
 - `GET /simulation/v1/runs/{nonce}` answers that run's record for the grader.
+
+The simulation n8n's own environment holds the start secret, since Start from the Portal checks a
+start with it. A workflow under simulation can't read it, or call these routes: n8n blocks
+expressions from reading its environment (N8N_BLOCK_ENV_ACCESS_IN_NODE), Code runs in the
+external task runner, which holds none of n8n's settings, and the mock setup refuses HTTP Request
+and Code, as the class file turns both off.
 
 A request is signed in X-Wab-Signature: HMAC-SHA256, hex-encoded, with the start secret, over the
 method, the path, X-Wab-Expires (Unix seconds) and the body, each of the first three followed by a
@@ -33,19 +40,20 @@ import sys
 import time
 from collections.abc import AsyncGenerator, Awaitable, Callable, Mapping, Sequence
 from contextlib import asynccontextmanager
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from pydantic import Field, ValidationError
+from pydantic import Field, JsonValue, ValidationError
 
 from platform_api.auth import ConfigError
 from platform_api.body_guard import RefuseDeepJson, refuse_invalid_request
 from platform_api.nul_guard import RefuseNul
 from platform_api.orchestration import n8n_calls_http
 from platform_api.orchestration.dispatch import N8nWaker
+from platform_api.orchestration.mock_setup import MockSetups, Mode, SetupRefused, mock_keys
 from platform_api.orchestration.n8n import N8nApi
 from platform_api.orchestration.simulated_calls import (
     MockGitHub,
@@ -77,7 +85,14 @@ class GatewaySettings:
     n8n_owner: N8nOwner
     """N8N_OWNER_EMAIL and N8N_OWNER_PASSWORD: the simulation n8n's owner, as its bootstrap made."""
     mock_github_url: str | None = None
-    """MOCK_GITHUB_URL: mock GitHub, for a Read the scenario serves from the mock."""
+    """MOCK_GITHUB_URL: mock GitHub, for a Read the scenario serves from the mock, and for n8n's
+    own GitHub block in a copy."""
+    mock_jira_url: str | None = None
+    """MOCK_JIRA_URL: a mock Jira for n8n's own Jira block in a copy. None runs here yet, so such
+    a block is pinned."""
+    mock_slack_token: str | None = field(default=None, repr=False)
+    """MOCK_SLACK_TOKEN: the key mock Slack takes, which its stack makes up at each start. Set only
+    where mock Slack answers as slack.com, so n8n's own Slack block in a copy posts to it."""
 
 
 def gateway_settings_from_env(env: Mapping[str, str]) -> GatewaySettings:
@@ -95,6 +110,8 @@ def gateway_settings_from_env(env: Mapping[str, str]) -> GatewaySettings:
         n8n_base_url=required("N8N_BASE_URL").rstrip("/"),
         n8n_owner=N8nOwner(required("N8N_OWNER_EMAIL"), required("N8N_OWNER_PASSWORD")),
         mock_github_url=env.get("MOCK_GITHUB_URL", "").strip().rstrip("/") or None,
+        mock_jira_url=env.get("MOCK_JIRA_URL", "").strip().rstrip("/") or None,
+        mock_slack_token=env.get("MOCK_SLACK_TOKEN", "").strip() or None,
     )
 
 
@@ -135,6 +152,62 @@ def current_calls(request: Request) -> SimulatedCalls:
 CurrentCalls = Annotated[SimulatedCalls, Depends(current_calls)]
 
 
+def current_setups(request: Request) -> MockSetups:
+    setups: MockSetups = request.app.state.setups
+    return setups
+
+
+CurrentSetups = Annotated[MockSetups, Depends(current_setups)]
+BlockName = Annotated[str, Field(min_length=1, max_length=200)]
+
+
+class VersionIn(WireIn):
+    """A workflow version as n8n's public API holds one, with its pinned output if it has any."""
+
+    name: str = Field(min_length=1, max_length=200)
+    nodes: list[dict[str, JsonValue]] = Field(min_length=1, max_length=200)
+    connections: dict[str, JsonValue]
+    settings: dict[str, JsonValue] = Field(default_factory=dict[str, JsonValue])
+    pin_data: dict[str, JsonValue] | None = Field(default=None, alias="pinData")
+
+
+class CopyIn(WireIn):
+    version: VersionIn
+    pins: dict[BlockName, list[dict[str, JsonValue]]] = Field(
+        default_factory=dict[str, list[dict[str, JsonValue]]],
+        max_length=100,
+        description="A scenario's own output for blocks with no mock, by block name (PR 5).",
+    )
+
+
+class BlockModeOut(WireModel):
+    block: str
+    node_type: str
+    mode: Mode = Field(
+        description="ours: the gateway answers it. runs: it runs as it is. mock: it runs against "
+        "a mock with a mock key. pinned: its output is pinned, so its failures are not tried."
+    )
+    mock: str | None = None
+    why: str | None = Field(default=None, description="Why a pinned block has no mock.")
+
+
+class CopyOut(WireModel):
+    workflow_id: str = Field(description="The copy's id in the simulation n8n.")
+    blocks: list[BlockModeOut]
+    not_tried: list[str] = Field(description="The pinned blocks, whose failures are not tried.")
+
+
+class RefusedBlockOut(WireModel):
+    block: str
+    node_type: str
+    why: str
+
+
+class CopyRefused(WireModel):
+    detail: str
+    blocks: list[RefusedBlockOut]
+
+
 class StartIn(WireIn):
     workflow_id: str = Field(
         min_length=1, max_length=128, pattern=r"^[A-Za-z0-9_.:-]+$", description="n8n's id."
@@ -164,6 +237,41 @@ REFUSED = {401: error_response("Not signed with the simulation's start secret")}
 control = APIRouter(prefix="/simulation/v1", tags=["simulation"])
 
 
+def _problems(error: ValidationError) -> JSONResponse:
+    """A refusal that names each field and never echoes what was sent."""
+    problems = [{"type": e["type"], "loc": list(e["loc"]), "msg": e["msg"]} for e in error.errors()]
+    return JSONResponse(status_code=422, content={"detail": problems})
+
+
+@control.post(
+    "/copies",
+    status_code=201,
+    response_model=CopyOut,
+    description="Makes a workflow version's copy in the simulation n8n, with only mock keys, and "
+    "pinned output for each block with no mock. A block the class file does not turn on is "
+    "refused, and nothing is made.",
+    responses={**REFUSED, 422: {"model": CopyRefused, "description": "A block is not on"}},
+)
+async def copy(body: SignedBody, setups: CurrentSetups) -> CopyOut | JSONResponse:
+    try:
+        given = CopyIn.model_validate_json(body)
+    except ValidationError as error:
+        return _problems(error)
+    version = given.version.model_dump(by_alias=True, exclude_none=True)
+    copied = await setups.copy(version, given.pins)
+    if isinstance(copied, SetupRefused):
+        refused = CopyRefused(
+            detail="The simulation can't run every block of this version.",
+            blocks=[RefusedBlockOut(**asdict(block)) for block in copied.blocks],
+        )
+        return JSONResponse(status_code=422, content=refused.model_dump())
+    return CopyOut(
+        workflow_id=copied.workflow_id,
+        blocks=[BlockModeOut(**asdict(block)) for block in copied.blocks],
+        not_tried=list(copied.not_tried),
+    )
+
+
 @control.post(
     "/starts",
     status_code=201,
@@ -176,10 +284,7 @@ async def start(body: SignedBody, calls: CurrentCalls) -> StartOut | JSONRespons
     try:
         given = StartIn.model_validate_json(body)
     except ValidationError as error:
-        problems = [
-            {"type": e["type"], "loc": list(e["loc"]), "msg": e["msg"]} for e in error.errors()
-        ]
-        return JSONResponse(status_code=422, content={"detail": problems})
+        return _problems(error)
     run = calls.start(given.workflow_id, given.scenario)
     return StartOut(nonce=run.nonce, item=StartItem(nonce=run.nonce, workflow_id=run.workflow_id))
 
@@ -201,6 +306,7 @@ async def record(nonce: str, _: SignedBody, calls: CurrentCalls) -> SimulatedRun
 def gateway_app(
     settings: GatewaySettings,
     calls: SimulatedCalls,
+    setups: MockSetups,
     closers: Sequence[Callable[[], Awaitable[None]]] = (),
 ) -> FastAPI:
     @asynccontextmanager
@@ -219,6 +325,7 @@ def gateway_app(
     # n8n_calls_http reads the node key from settings.node_key and the calls from node_calls.
     app.state.settings = settings
     app.state.node_calls = calls
+    app.state.setups = setups
     app.add_middleware(RefuseNul)
     app.add_middleware(RefuseDeepJson, max_bytes=MAX_BODY_BYTES_DEFAULT)
     app.add_exception_handler(RequestValidationError, refuse_invalid_request)
@@ -239,9 +346,12 @@ def create_app(env: Mapping[str, str] | None = None) -> FastAPI:
     waker = N8nWaker(settings.n8n_base_url, settings.node_key, Unsealed())
     github = None if settings.mock_github_url is None else MockGitHub(settings.mock_github_url)
     calls = SimulatedCalls(n8n, waker, github)
+    # The copies go to the simulation n8n alone, through its own owner's API key.
+    keys = mock_keys(settings.mock_github_url, settings.mock_jira_url, settings.mock_slack_token)
+    setups = MockSetups(n8n, keys)
     closers = [n8n.close, waker.close, *([] if github is None else [github.close])]
     log.info("the simulation gateway answers the simulation n8n at %s", settings.n8n_base_url)
-    return gateway_app(settings, calls, closers)
+    return gateway_app(settings, calls, setups, closers)
 
 
 def _log() -> None:

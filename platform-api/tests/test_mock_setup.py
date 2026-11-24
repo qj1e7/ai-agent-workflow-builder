@@ -292,6 +292,7 @@ def test_mock_keys_point_at_the_mocks_with_made_up_values() -> None:
     assert data["jiraSoftwareCloudApi"]["apiToken"].startswith("made-up-")
     assert data["jiraSoftwareServerPatApi"]["personalAccessToken"].startswith("made-up-")
     assert all(key.id.startswith("sim-mock-") and key.kind == kind for kind, key in made.items())
+    assert all(len(key.id) <= 16 for key in made.values()), "n8n takes ids of 16 at most"
     assert SLACK_TOKEN not in repr(made)
     assert set(mock_keys(None, None, None)) == set()
     first = mock_keys(GITHUB, None, None)["githubApi"].data["accessToken"]

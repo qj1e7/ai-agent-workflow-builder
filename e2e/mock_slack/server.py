@@ -40,9 +40,11 @@ CHANNELS = [
 
 
 class State:
-    def __init__(self) -> None:
+    def __init__(self, token: str = TOKEN) -> None:
         self.lock = threading.Lock()
         self.sent: list[dict[str, Any]] = []
+        self.token = token
+        """The one key it takes. The simulation's stack makes one up at each start (ADR 0054)."""
 
     def record(self, method: str, token: str, body: dict[str, Any]) -> None:
         with self.lock:
@@ -134,7 +136,7 @@ def make_handler(state: State) -> type[BaseHTTPRequestHandler]:
             token = (self.headers.get("Authorization") or "").removeprefix("Bearer ").strip()
             if method in SENT:
                 state.record(method, token, body)
-            if token != TOKEN:
+            if token != state.token:
                 self.send_json(200, {"ok": False, "error": "invalid_auth"})
                 return
             match method:
@@ -198,7 +200,7 @@ def serve_tls(state: State, port: int, cert: Path, key: Path) -> ThreadingHTTPSe
 
 
 if __name__ == "__main__":
-    shared = State()
+    shared = State(os.environ.get("MOCK_SLACK_TOKEN") or TOKEN)
     cert, key = certificates(CA_DIR, KEYS_DIR)
     tls = serve_tls(shared, int(os.environ.get("TLS_PORT", "443")), cert, key)
     threading.Thread(target=tls.serve_forever, daemon=True).start()

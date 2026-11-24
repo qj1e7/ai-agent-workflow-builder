@@ -27,6 +27,7 @@ from platform_api.orchestration.dispatch import (
     WakeDecision,
     wake_mac,
 )
+from platform_api.orchestration.mock_setup import MockSetups, mock_keys
 from platform_api.orchestration.n8n import ExecutionRecord
 from platform_api.orchestration.n8n_calls import (
     TEST_RUN_WRITES_NOTHING,
@@ -38,7 +39,6 @@ from platform_api.orchestration.n8n_calls import (
     Waiting,
     WriteCall,
 )
-from platform_api.orchestration.mock_setup import MockSetups, mock_keys
 from platform_api.orchestration.simulated_calls import (
     MockGitHub,
     Scenario,
@@ -591,7 +591,7 @@ async def test_a_run_that_sends_too_much_is_stopped() -> None:
     record = calls.run(run.nonce)
     assert record is not None
     assert len(record.calls) == 2
-    assert len(record.model_dump_json()) < 3000 + 2000
+    assert len(record.model_dump_json()) < 2 * 3000, "past the limit by one call at most"
 
 
 @pytest.mark.anyio
@@ -664,7 +664,7 @@ def test_a_signed_request_makes_the_versions_copy_in_the_simulation_n8n(gw: Gate
         "Post in Teams": ("pinned", None),
     }
     assert copied["not_tried"] == ["Read issues", "Post in Teams"]
-    slack = gw.simulation_n8n.keys["sim-mock-slackApi"]
+    slack = gw.simulation_n8n.keys["sim-mock-slack"]
     assert slack[2] == {"accessToken": SLACK_TOKEN}
     assert SLACK_TOKEN not in answer.text
 

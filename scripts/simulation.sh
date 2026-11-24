@@ -6,7 +6,8 @@
 #   scripts/simulation.sh drive   runs our blocks through the simulation gateway, one scenario at
 #                                 a time (scripts/simulation_drive.py)
 #   scripts/simulation.sh down    removes the stack's containers, networks and volumes
-#   scripts/simulation.sh test    up, check, drive and down, as CI runs it
+#   scripts/simulation.sh test    up, drive, check and down, as CI runs it. The check comes after
+#                                 the drive, so it also sees the mock keys the copies made
 # SIM_PROJECT names the compose project, wab-sim unless set. SIM_BUILD=0 starts from the sim
 # images an earlier start built, and builds nothing.
 # Each key is made up here with openssl and lives only in the containers' settings, never in a
@@ -87,8 +88,8 @@ case "${1:-}" in
   test)
     trap 'status=$?; [ "$status" = 0 ] || show_logs; down >/dev/null 2>&1 || true; exit "$status"' EXIT
     up
-    check
     drive
+    check
     ;;
   *)
     echo "usage: scripts/simulation.sh up|check|drive|down|test" >&2

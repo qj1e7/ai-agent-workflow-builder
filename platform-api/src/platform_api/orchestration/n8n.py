@@ -1299,6 +1299,11 @@ class N8nApi:
             for p in _parse(_Rest[list[_ProjectOut]], response).data
         ]
 
+    async def personal_project(self) -> str:
+        """/rest: the signed-in owner's own project, where its API key makes keys and workflows."""
+        response = _expect(await self._rest("GET", "/projects/personal"))
+        return _parse(_Rest[_ProjectOut], response).data.id
+
     async def invite(self, email: str) -> Invited | None:
         """A member account with this email, through the public API, which answers its invite
         link on the free edition (P7 Q9). None when n8n made none, as when it already has an

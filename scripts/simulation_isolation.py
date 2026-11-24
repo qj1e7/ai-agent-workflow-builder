@@ -145,12 +145,13 @@ SERVICES = {
                 "N8N_OWNER_EMAIL",
                 "N8N_OWNER_PASSWORD",
                 "MOCK_GITHUB_URL",
+                "MOCK_SLACK_TOKEN",
             }
         ),
         frozenset({"sim"}),
     ),
     "mock-github": Service(frozenset(), frozenset({"sim"})),
-    "mock-slack": Service(frozenset(), frozenset({"sim"})),
+    "mock-slack": Service(frozenset({"MOCK_SLACK_TOKEN"}), frozenset({"sim"})),
 }
 """Every service the simulation runs, the settings it may hold, and the networks it sits on."""
 

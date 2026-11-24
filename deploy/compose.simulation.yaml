@@ -163,7 +163,10 @@ services:
       N8N_BASE_URL: http://n8n:5678
       N8N_OWNER_EMAIL: owner@simulation.example
       N8N_OWNER_PASSWORD: ${SIM_N8N_OWNER_PASSWORD:?run scripts/simulation.sh}
+      # The mocks n8n's own blocks reach in a copy (ADR 0054, PR 4). Mock Slack has no address:
+      # it answers as slack.com, with the key made up here.
       MOCK_GITHUB_URL: http://mock-github:8200
+      MOCK_SLACK_TOKEN: ${SIM_MOCK_SLACK_TOKEN:?run scripts/simulation.sh}
     networks: [sim]
     healthcheck:
       test:
@@ -198,6 +201,8 @@ services:
       context: ../e2e/mock_slack
       target: runtime
     image: wab/mock-slack:sim
+    environment:
+      MOCK_SLACK_TOKEN: ${SIM_MOCK_SLACK_TOKEN:?run scripts/simulation.sh}
     volumes:
       - slack-ca:/ca
     networks:
