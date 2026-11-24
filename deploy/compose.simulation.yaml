@@ -5,11 +5,14 @@
 #   and start secret, and only mock keys;
 # - the simulation gateway, which answers our blocks in place of platform-api;
 # - mock GitHub, and mock Slack under the name slack.com, as in deploy/compose.e2e.yaml.
-# Both networks are internal, and nothing publishes a port, so nothing here reaches the internet,
-# the host or the platform's stack. Every setting it reads starts SIM_, and scripts/simulation.sh
-# makes each up at every start, so no key from deploy/.env can reach it. It builds the platform's
-# images from the same sources under its own tag, sim, so a start never replaces the images the
-# platform's stack runs.
+# Every network is internal, and nothing publishes a port, so nothing here reaches the internet,
+# the host or the platform's stack. The gateway alone also sits on the link, which platform-api
+# joins when deploy/compose.simulation-link.yaml is laid over the platform's stack, so platform-api
+# can drive a simulation and the simulation n8n still reaches nothing of the platform's. Every
+# setting it reads starts SIM_, and scripts/simulation.sh makes each up at every start, so no key
+# from deploy/.env can reach it. Linked, the start secret is the one value both sides hold
+# (SIM_LINK in scripts/simulation.sh). It builds the platform's images from the same sources under
+# its own tag, sim, so a start never replaces the images the platform's stack runs.
 # scripts/simulation_isolation.py checks all of this. Start it with scripts/simulation.sh up.
 name: wab-sim
 
@@ -147,8 +150,9 @@ services:
   # The simulation gateway (ADR 0054, PR 3): our blocks here call it in place of platform-api. It
   # runs platform-api's image, but only its own app, and holds only the simulation's node key and
   # start secret and the simulation n8n's owner. It has no database and no Jira, Teams, Slack or
-  # model key. It sits on the sim network alone, so the platform's n8n can never reach it. It runs
-  # the image bootstrap builds, so the image is built once.
+  # model key. It sits on the sim network and on the link, which only platform-api joins, so the
+  # platform's n8n can never reach it. It runs the image bootstrap builds, so the image is built
+  # once.
   gateway:
     image: wab/platform-api:sim
     command:
@@ -169,7 +173,11 @@ services:
       # it answers as slack.com, with the key made up here.
       MOCK_GITHUB_URL: http://mock-github:8200
       MOCK_SLACK_TOKEN: ${SIM_MOCK_SLACK_TOKEN:?run scripts/simulation.sh}
-    networks: [sim]
+    networks:
+      sim: {}
+      # platform-api calls it http://simulation-gateway:8600 (SIMULATION_URL).
+      link:
+        aliases: [simulation-gateway]
     healthcheck:
       test:
         - CMD
@@ -224,6 +232,10 @@ networks:
   sim:
     internal: true
   runners:
+    internal: true
+  # The gateway and platform-api alone (ADR 0054, "What the link chose"). It is named after the
+  # project, wab-sim_link, and the platform's link file joins it by that name.
+  link:
     internal: true
 
 volumes:

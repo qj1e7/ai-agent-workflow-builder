@@ -1,0 +1,22 @@
+# Links platform-api to the simulation gateway, on a laptop or in CI (ADR 0054, "What the link
+# chose"). Lay it over deploy/compose.yaml once the simulation stack runs with SIM_LINK set:
+# platform-api joins the simulation's link network, which only the gateway sits on, and drives
+# simulations there. The platform's n8n, PostgreSQL and agent runtime stay off it, so the gateway
+# can't reach them, and the simulation n8n sits on no network the platform does.
+# SIMULATION_START_SECRET comes from deploy/.env, where deploy/make-env.sh makes it, and
+# scripts/simulation.sh hands the same value to the simulation. SIMULATION_LINK_NETWORK names the
+# link of another simulation project than wab-sim. scripts/simulation_isolation.py checks that
+# this file changes platform-api alone.
+services:
+  platform-api:
+    environment:
+      SIMULATION_URL: http://simulation-gateway:8600
+      SIMULATION_START_SECRET: ${SIMULATION_START_SECRET:?run deploy/make-env.sh}
+    networks:
+      default: {}
+      simulation-link: {}
+
+networks:
+  simulation-link:
+    name: ${SIMULATION_LINK_NETWORK:-wab-sim_link}
+    external: true

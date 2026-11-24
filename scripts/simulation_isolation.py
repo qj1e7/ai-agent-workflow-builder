@@ -9,9 +9,12 @@ With no argument it checks deploy/compose.simulation.yaml, as compose renders it
 - every address a service holds names a service on the simulation's own network: its database,
   its mocks, itself, or the simulation gateway;
 - the simulation gateway runs platform-api's image as its own service, with its own command, on
-  the simulation's network alone, so only the simulation n8n can reach it;
+  the simulation's network and the link, which no other service here joins;
 - every network is internal, nothing publishes a port, no service joins another network or the
   host's, and no volume belongs to another stack;
+- deploy/compose.simulation-link.yaml, laid over deploy/compose.yaml, changes platform-api alone:
+  it joins the link the simulation makes, calls the gateway by its name there, and reads its start
+  secret from deploy/.env (ADR 0054, "What the link chose");
 - it runs the platform n8n's image, task runner, PostgreSQL and bootstrap, with the same guards
   (deploy/compose.yaml). It builds each image from the platform's sources under its own tag, sim,
   so it never replaces an image the platform's stack runs.
@@ -25,21 +28,40 @@ With --project NAME, the compose project scripts/simulation.sh started, it also 
   names a service on the simulation's network;
 - from inside n8n and the gateway the internet, the host and the platform's stack are out of
   reach, and the simulation's own services are in reach, which shows the check can see a route;
-- the project's networks are internal, and only the project's own containers sit on them.
+- from inside n8n and the gateway the host is out of reach at the address each of the project's
+  networks gives it, on the platform's ports and on each port a linked platform publishes, since
+  the name host.docker.internal never resolves on an internal network;
+- the project's networks are internal, and only the project's own containers sit on them, but for
+  a platform's platform-api on the link.
+
+With --platform NAME too, the compose project of the platform linked to the simulation, it checks
+from inside the running containers of both stacks:
+- that platform runs platform-api, PostgreSQL, n8n and the agent runtime, and its platform-api, and
+  nothing else of it, sits on the link;
+- the simulation n8n reaches none of those four at any of their addresses, and the gateway none
+  but platform-api, with which it shares the link;
+- platform-api reaches the gateway by its name on the link, and the platform's n8n and agent
+  runtime reach the gateway at none of its addresses;
+- each container that probes reaches a service of its own stack by address, which shows its probe
+  can see a route.
+The start secret is the one value the two stacks share: deploy/.env's SIMULATION_START_SECRET, of
+at least 32 characters, may be the start secret of the simulation n8n and of the gateway, and
+nothing else.
 
 It prints names and addresses, never a key's value, as the CI log is public.
 
-usage: python3 -I -B scripts/simulation_isolation.py [--project NAME]
+usage: python3 -I -B scripts/simulation_isolation.py [--project NAME [--platform NAME]]
 Exits 0 when every check passes, and 1 when one fails.
 """
 
+import argparse
 import json
 import os
 import re
 import subprocess
 import sys
 import tempfile
-from collections.abc import Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -48,6 +70,7 @@ from urllib.parse import urlsplit
 ROOT = Path(__file__).resolve().parent.parent
 SIM_FILE = ROOT / "deploy" / "compose.simulation.yaml"
 PLATFORM_FILE = ROOT / "deploy" / "compose.yaml"
+LINK_FILE = ROOT / "deploy" / "compose.simulation-link.yaml"
 PLATFORM_ENV = ROOT / "deploy" / ".env"
 
 # deploy/compose.yaml's x-n8n-guards (ADR 0051). The simulation n8n and its bootstrap must hold the
@@ -149,7 +172,7 @@ SERVICES = {
                 "MOCK_SLACK_TOKEN",
             }
         ),
-        frozenset({"sim"}),
+        frozenset({"sim", "link"}),
     ),
     "mock-github": Service(frozenset(), frozenset({"sim"})),
     "mock-slack": Service(frozenset({"MOCK_SLACK_TOKEN"}), frozenset({"sim"})),
@@ -159,6 +182,20 @@ SERVICES = {
 GATEWAY = "gateway"
 """Where the simulation n8n's blocks and bootstrap send the platform's calls: the simulation
 gateway (ADR 0054, PR 3)."""
+LINK = "link"
+"""The network the gateway shares with a linked platform's platform-api alone (ADR 0054, "What the
+link chose"). The simulation makes it, and platform-api joins it by its name."""
+LINK_ALIAS = "simulation-gateway"
+"""The gateway's name on the link, which platform-api calls."""
+LINKED = "platform-api"
+"""The one service of a platform that may sit on the link."""
+SHARED = "SIMULATION_START_SECRET"
+"""The one value a linked platform shares with the simulation, from deploy/.env: the start secret
+platform-api signs the gateway's routes with."""
+SHARED_AS = frozenset({("n8n", "WAB_START_SECRET"), ("gateway", "WAB_START_SECRET")})
+"""The settings that may hold it: the start secret of the simulation n8n and of the gateway."""
+LINK_SETTINGS = frozenset({"SIMULATION_URL", SHARED})
+"""What the link file gives platform-api."""
 GATEWAY_COMMAND = [
     "uvicorn",
     "platform_api.orchestration.simulation_gateway:create_app",
@@ -190,28 +227,40 @@ MADE_UP = "made-up-"
 KEYED = re.compile(r"(?:_KEY|_TOKEN|_SECRET|_PASSWORD)$")
 SECRET_NAME = re.compile(r"KEY|TOKEN|SECRET|PASSWORD|WEBHOOK|DATABASE_URL")
 SHORTEST_SECRET = 8
+SHORTEST_START_SECRET = 32
+"""The fewest characters the shared start secret may have, as platform-api and the gateway
+insist (platform_api.settings.SHORTEST_START_SECRET)."""
 URL = re.compile(r"[a-z][a-z0-9+.-]*://[^\s\"'<>]+", re.IGNORECASE)
 ADDRESS_FIELD = re.compile(r"host|domain|server|url", re.IGNORECASE)
 READY = "bootstrap: ready: all workflows loaded, active and linted"
-OUT_OF_REACH = (
-    "https://api.github.com/",
-    "http://1.1.1.1/",
-    "http://host.docker.internal/",
-    "http://platform-api:8000/healthz",
-    "http://wab-platform-api-1:8000/healthz",
-)
+OUT_OF_REACH = ("https://api.github.com/", "http://1.1.1.1/", "http://host.docker.internal/")
 ROUTES = {
     "n8n": (
-        OUT_OF_REACH,
+        (
+            *OUT_OF_REACH,
+            "http://platform-api:8000/healthz",
+            "http://wab-platform-api-1:8000/healthz",
+        ),
         (
             "http://mock-github:8200/healthz",
             "https://slack.com/api/api.test",
             "http://gateway:8600/healthz",
         ),
     ),
+    # The gateway shares the link with platform-api, so platform-api's name may answer it there.
+    # With --platform, the check probes every address of the linked platform's other services.
     "gateway": (OUT_OF_REACH, ("http://n8n:5678/healthz", "http://mock-github:8200/healthz")),
 }
 """What each service that calls out may not reach, and what it must reach."""
+PORTS = {"platform-api": 8000, "postgres": 5432, "n8n": 5678, "agent-runtime": 8100, GATEWAY: 8600}
+"""Where each service listens, in the platform's stack and the simulation's."""
+KEPT_FROM = {
+    "n8n": ("platform-api", "postgres", "n8n", "agent-runtime"),
+    GATEWAY: ("postgres", "n8n", "agent-runtime"),
+}
+"""What each of the simulation's services may not reach of a linked platform, at any address."""
+KEPT_OUT = ("n8n", "agent-runtime")
+"""The linked platform's services that may not reach the gateway, at any of its addresses."""
 PROBE = """
 const url = process.argv[1];
 fetch(url, { signal: AbortSignal.timeout(5000) }).then(
@@ -235,6 +284,25 @@ except Exception as error:
     sys.exit(1)
 """
 PROBES = {"n8n": ("node", "-e", PROBE), "gateway": ("python", "-I", "-c", PYTHON_PROBE)}
+CONNECT = """
+const socket = require('net').connect({ host: process.argv[1], port: Number(process.argv[2]) });
+socket.setTimeout(3000);
+socket.on('connect', () => { console.log('connected'); socket.destroy(); });
+socket.on('timeout', () => { console.log('timed out'); socket.destroy(); process.exit(1); });
+socket.on('error', (err) => { console.log(String(err.code ?? err.message)); process.exit(1); });
+"""
+PYTHON_CONNECT = """
+import socket, sys
+try:
+    socket.create_connection((sys.argv[1], int(sys.argv[2])), timeout=3).close()
+    print("connected")
+except OSError as error:
+    print(error.strerror or type(error).__name__)
+    sys.exit(1)
+"""
+CONNECTS = {"n8n": ("node", "-e", CONNECT)}
+"""How a service opens a connection to an address: node in n8n's image, python in the others."""
+PYTHON_CONNECTS = ("python", "-I", "-c", PYTHON_CONNECT)
 
 
 class CheckError(Exception):
@@ -400,6 +468,53 @@ def compose_findings(sim: Mapping[str, Any], platform: Mapping[str, Any]) -> lis
     return findings + network_findings(sim) + platform_findings(sim, platform)
 
 
+def link_findings(
+    sim: Mapping[str, Any], platform: Mapping[str, Any], linked: Mapping[str, Any]
+) -> list[str]:
+    """deploy/compose.simulation-link.yaml over deploy/compose.yaml: platform-api alone joins the
+    link the simulation makes, and is given only the gateway's name there and the start secret."""
+    link_name = ((sim.get("networks") or {}).get(LINK) or {}).get("name")
+    added = {
+        key: network or {}
+        for key, network in (linked.get("networks") or {}).items()
+        if key not in (platform.get("networks") or {})
+    }
+    findings: list[str] = []
+    others = sorted(key for key, network in added.items() if network.get("name") != link_name)
+    if others:
+        findings.append(f"the link file adds {', '.join(others)}, not only the simulation's link")
+    joins = [key for key, network in added.items() if network.get("name") == link_name]
+    for key in joins:
+        if not added[key].get("external"):
+            findings.append(f"the link file makes {link_name} itself, not the simulation's link")
+    services, before = linked.get("services", {}), platform.get("services", {})
+    changed = sorted(
+        n for n in set(services) | set(before) if n != LINKED and services.get(n) != before.get(n)
+    )
+    if changed:
+        findings.append(f"the link file changes {', '.join(changed)}, not {LINKED} alone")
+    api, api_before = services.get(LINKED, {}), before.get(LINKED, {})
+    networks = set(api.get("networks") or {})
+    if len(joins) != 1 or networks != set(api_before.get("networks") or {}) | set(joins):
+        findings.append(f"{LINKED} sits on {sorted(networks)}, not on its own and {link_name}")
+    env, env_before = api.get("environment") or {}, api_before.get("environment") or {}
+    given = {name for name in set(env) | set(env_before) if env.get(name) != env_before.get(name)}
+    if given != LINK_SETTINGS:
+        findings.append(f"the link file gives {LINKED} {', '.join(sorted(given))}")
+    gateway = sim.get("services", {}).get(GATEWAY, {})
+    names = {GATEWAY, *(((gateway.get("networks") or {}).get(LINK) or {}).get("aliases") or [])}
+    host = urlsplit(str(env.get("SIMULATION_URL") or "")).hostname
+    if host not in names:
+        findings.append(f"{LINKED}'s SIMULATION_URL points at {host}, not the gateway on the link")
+    if not str(env.get(SHARED) or "").startswith(MADE_UP + SHARED):
+        findings.append(f"{LINKED}'s {SHARED} is not read from deploy/.env")
+    rest = {k: v for k, v in api.items() if k not in ("networks", "environment")}
+    rest_before = {k: v for k, v in api_before.items() if k not in ("networks", "environment")}
+    if rest != rest_before:
+        findings.append(f"the link file changes more of {LINKED} than its networks and settings")
+    return findings
+
+
 # What runs
 
 
@@ -420,12 +535,17 @@ def secret_values(env_file: str, environ: Mapping[str, str]) -> dict[str, str]:
     }
 
 
-def held_findings(where: str, held: Mapping[str, str], secrets: Mapping[str, str]) -> list[str]:
+def held_findings(
+    where: str, held: Mapping[str, str], secrets: Mapping[str, str], *, service: str = ""
+) -> list[str]:
+    """Each platform key a value holds, but the start secret where a linked simulation's service
+    holds it as its own start secret."""
     return [
         f"{where} holds the platform's {secret} in {name}"
         for name, value in sorted(held.items())
         for secret, secret_value in sorted(secrets.items())
         if secret_value in value
+        and not (secret == SHARED and (service, name) in SHARED_AS and value == secret_value)
     ]
 
 
@@ -471,12 +591,24 @@ def route_findings(service: str, reached: Mapping[str, tuple[bool, str]]) -> lis
     return findings
 
 
+def labels(container: Mapping[str, Any]) -> tuple[str, str]:
+    """A container's compose project and service, or empty words for one compose didn't start."""
+    found = container["Config"].get("Labels") or {}
+    return found.get("com.docker.compose.project", ""), found.get("com.docker.compose.service", "")
+
+
 def container_findings(
     containers: list[Mapping[str, Any]],
     networks: list[Mapping[str, Any]],
     image_env: Mapping[str, set[str]],
     secrets: Mapping[str, str],
+    *,
+    strangers: Mapping[str, Mapping[str, Any]] | None = None,
+    platform: str | None = None,
 ) -> list[str]:
+    """strangers holds each container from outside the project on the link, by its id. Only a
+    platform's platform-api may sit there, and only the named platform's when one is named."""
+    strangers = strangers or {}
     findings: list[str] = []
     ours = {c["Id"] for c in containers}
     our_networks = {n["Name"] for n in networks}
@@ -493,7 +625,7 @@ def container_findings(
             unlisted = sorted(set(env) - allowed)
             if unlisted:
                 findings.append(f"{name} holds {', '.join(unlisted)}, which its list doesn't name")
-        findings += held_findings(name, env, secrets)
+        findings += held_findings(name, env, secrets, service=service)
         host = container["HostConfig"]
         mode = host.get("NetworkMode") or ""
         if mode not in our_networks:
@@ -506,10 +638,145 @@ def container_findings(
     for network in networks:
         if not network.get("Internal"):
             findings.append(f"the network {network['Name']} is not internal")
-        strangers = sorted(set(network.get("Containers") or {}) - ours)
-        if strangers:
+        outside = sorted(set(network.get("Containers") or {}) - ours)
+        if (network.get("Labels") or {}).get("com.docker.compose.network") == LINK:
+            for cid in outside:
+                project, service = labels(strangers[cid]) if cid in strangers else ("", "")
+                if service != LINKED or not project or (platform and project != platform):
+                    who = (
+                        f"{project}'s {service}" if service else "a container compose didn't start"
+                    )
+                    findings.append(
+                        f"{who} sits on {network['Name']}, where only the gateway and "
+                        f"{platform or 'a platform'}'s {LINKED} may"
+                    )
+        elif outside:
             findings.append(
-                f"{len(strangers)} container(s) from outside the project sit on {network['Name']}"
+                f"{len(outside)} container(s) from outside the project sit on {network['Name']}"
+            )
+    return findings
+
+
+def addresses_of(container: Mapping[str, Any]) -> list[str]:
+    networks = container["NetworkSettings"].get("Networks") or {}
+    return sorted({n["IPAddress"] for n in networks.values() if (n or {}).get("IPAddress")})
+
+
+def linked_platform_findings(
+    platform: str, by_service: Mapping[str, Mapping[str, Any]], link_name: str
+) -> list[str]:
+    findings = [
+        f"the platform {platform} runs no {service}"
+        for service in sorted(set(KEPT_FROM["n8n"]) - set(by_service))
+    ]
+    api = by_service.get(LINKED)
+    if api is not None and link_name not in (api["NetworkSettings"].get("Networks") or {}):
+        findings.append(f"{platform}'s {LINKED} is not on the link, {link_name}")
+    return findings
+
+
+@dataclass(frozen=True)
+class Probe:
+    """A connection one container opens to an address, which it must or must not reach."""
+
+    origin: str
+    container: str
+    command: tuple[str, ...]
+    host: str
+    port: int
+    target: str
+    reach: bool
+
+
+def probe_from(
+    stack: Mapping[str, Mapping[str, Any]], service: str, label: str = ""
+) -> Callable[[str, int, str, bool], Probe]:
+    """Probes from one service's container, by node in n8n's image and python in the others."""
+    container, command = stack[service]["Id"], CONNECTS.get(service, PYTHON_CONNECTS)
+    return lambda host, port, target, reach: Probe(
+        label or service, container, command, host, port, target, reach
+    )
+
+
+def own_database(stack: Mapping[str, Mapping[str, Any]]) -> str:
+    return (addresses_of(stack["postgres"]) or [""])[0] if "postgres" in stack else ""
+
+
+def host_probes(
+    sim: Mapping[str, Mapping[str, Any]], hosts: Sequence[str], ports: Sequence[int]
+) -> list[Probe]:
+    """From the simulation's n8n and gateway to the host, at the address each simulation network
+    gives it, on each port, with the simulation's own PostgreSQL as the route each must see."""
+    probes: list[Probe] = []
+    for service in sorted(set(KEPT_FROM) & set(sim)):
+        probe = probe_from(sim, service)
+        probes.append(probe(own_database(sim), PORTS["postgres"], "its own postgres", True))
+        probes += [probe(host, port, "the host", False) for host in hosts for port in ports]
+    return probes
+
+
+def platform_probes(
+    sim: Mapping[str, Mapping[str, Any]], platform: Mapping[str, Mapping[str, Any]]
+) -> list[Probe]:
+    """From the simulation's n8n and gateway into a linked platform, and back from its
+    platform-api, n8n and agent runtime, each of those with a route of its own it must see."""
+    probes: list[Probe] = []
+    for service in sorted(set(KEPT_FROM) & set(sim)):
+        probe = probe_from(sim, service)
+        for target in KEPT_FROM[service]:
+            for host in addresses_of(platform.get(target, {"NetworkSettings": {}})):
+                probes.append(probe(host, PORTS[target], f"the platform's {target}", False))
+    if LINKED in platform:
+        probe = probe_from(platform, LINKED, f"the platform's {LINKED}")
+        probes.append(probe(LINK_ALIAS, PORTS[GATEWAY], "the gateway on the link", True))
+    for service in sorted(set(KEPT_OUT) & set(platform)):
+        probe = probe_from(platform, service, f"the platform's {service}")
+        probes.append(probe(own_database(platform), PORTS["postgres"], "its own postgres", True))
+        for host in addresses_of(sim.get(GATEWAY, {"NetworkSettings": {}})):
+            probes.append(probe(host, PORTS[GATEWAY], "the gateway", False))
+    return probes
+
+
+def network_gateways(networks: list[Mapping[str, Any]]) -> list[str]:
+    """The host's address on each network, which Docker gives as the network's gateway."""
+    return sorted(
+        {
+            config["Gateway"]
+            for network in networks
+            for config in ((network.get("IPAM") or {}).get("Config") or [])
+            if config.get("Gateway")
+        }
+    )
+
+
+def host_ports(platform: Mapping[str, Mapping[str, Any]]) -> list[int]:
+    """The ports the platform's services listen on, and each a linked platform publishes."""
+    ports = {PORTS["platform-api"], PORTS["n8n"], PORTS["postgres"]}
+    for container in platform.values():
+        for bindings in ((container.get("HostConfig") or {}).get("PortBindings") or {}).values():
+            ports.update(int(b["HostPort"]) for b in bindings or [] if b.get("HostPort"))
+    return sorted(ports)
+
+
+def shared_secret_findings(secrets: Mapping[str, str]) -> list[str]:
+    """A linked platform's start secret, from deploy/.env, as long as both sides insist."""
+    secret = secrets.get(SHARED)
+    if secret is None:
+        return [f"deploy/.env has no {SHARED}. Run deploy/make-env.sh."]
+    if len(secret) < SHORTEST_START_SECRET:
+        return [f"deploy/.env's {SHARED} is shorter than {SHORTEST_START_SECRET} characters"]
+    return []
+
+
+def probe_findings(results: list[tuple[Probe, bool, str]]) -> list[str]:
+    findings: list[str] = []
+    for probe, ok, how in results:
+        where = f"{probe.target} at {probe.host}:{probe.port}"
+        if ok and not probe.reach:
+            findings.append(f"{probe.origin} reaches {where} ({how})")
+        if probe.reach and not ok:
+            findings.append(
+                f"{probe.origin} can't reach {where} ({how}), so the check sees no route"
             )
     return findings
 
@@ -527,10 +794,17 @@ def must(run: subprocess.CompletedProcess[str], what: str) -> str:
     return run.stdout
 
 
-def render(path: Path, made_up: list[str]) -> dict[str, Any]:
-    """The file as compose renders it, with each setting it insists on made up as made-up-NAME.
-    Its own env file stands in for deploy/.env, and the SIM_ settings of the caller are left out."""
-    env = {k: v for k, v in os.environ.items() if not k.startswith("SIM_")}
+def render(*paths: Path) -> dict[str, Any]:
+    """The files as compose renders them, one over another, with each setting they insist on made
+    up as made-up-NAME. Its own env file stands in for deploy/.env. The caller's SIM_ settings and
+    the name of the link it uses are left out, so the files are read as written."""
+    env = {
+        k: v
+        for k, v in os.environ.items()
+        if not k.startswith("SIM_") and k != "SIMULATION_LINK_NETWORK"
+    }
+    made_up = sorted({name for path in paths for name in insisted(path.read_text())})
+    files = [arg for path in paths for arg in ("-f", str(path))]
     with tempfile.NamedTemporaryFile("w", suffix=".env") as env_file:
         env_file.write("".join(f"{name}={MADE_UP}{name}\n" for name in made_up))
         env_file.flush()
@@ -539,14 +813,13 @@ def render(path: Path, made_up: list[str]) -> dict[str, Any]:
                 "compose",
                 "--env-file",
                 env_file.name,
-                "-f",
-                str(path),
+                *files,
                 "config",
                 "--format",
                 "json",
                 env=env,
             ),
-            f"render {path.relative_to(ROOT)}",
+            f"render {', '.join(str(path.relative_to(ROOT)) for path in paths)}",
         )
     return json.loads(out)
 
@@ -556,12 +829,17 @@ def insisted(text: str) -> list[str]:
 
 
 def static_findings() -> list[str]:
-    if not SIM_FILE.exists():
-        return [f"{SIM_FILE.relative_to(ROOT)} does not exist"]
-    text = SIM_FILE.read_text()
-    sim = render(SIM_FILE, insisted(text))
-    platform = render(PLATFORM_FILE, insisted(PLATFORM_FILE.read_text()))
-    return file_findings(text) + compose_findings(sim, platform)
+    missing = [path for path in (SIM_FILE, LINK_FILE) if not path.exists()]
+    if missing:
+        return [f"{path.relative_to(ROOT)} does not exist" for path in missing]
+    sim = render(SIM_FILE)
+    platform = render(PLATFORM_FILE)
+    linked = render(PLATFORM_FILE, LINK_FILE)
+    return (
+        file_findings(SIM_FILE.read_text())
+        + compose_findings(sim, platform)
+        + link_findings(sim, platform, linked)
+    )
 
 
 def inspect(kind: str, ids: list[str]) -> list[dict[str, Any]]:
@@ -596,10 +874,28 @@ def reach(container: str, service: str, url: str) -> tuple[bool, str]:
     return run.returncode == 0, (run.stdout.strip() or run.stderr.strip())[:80]
 
 
-def live_findings(project: str) -> list[str]:
+def connect(probe: Probe) -> tuple[bool, str]:
+    run = docker("exec", probe.container, *probe.command, probe.host, str(probe.port))
+    return run.returncode == 0, (run.stdout.strip() or run.stderr.strip())[:80]
+
+
+def project_containers(project: str) -> list[dict[str, Any]]:
     label = f"label=com.docker.compose.project={project}"
-    ids = must(docker("ps", "--all", "--quiet", "--filter", label), "list the project").split()
-    containers = inspect("container", ids)
+    ids = must(docker("ps", "--all", "--quiet", "--filter", label), f"list {project}").split()
+    return inspect("container", ids)
+
+
+def probed_findings(probes: list[Probe]) -> list[str]:
+    results = [(probe, *connect(probe)) for probe in probes]
+    for probe, ok, how in results:
+        where = f"{probe.target} at {probe.host}:{probe.port}"
+        print(f"  from {probe.origin}, {where}: {'reached' if ok else 'not reached'} ({how})")
+    return probe_findings(results)
+
+
+def live_findings(project: str, platform: str | None = None) -> list[str]:
+    label = f"label=com.docker.compose.project={project}"
+    containers = project_containers(project)
     if not containers:
         return [f"the project {project} runs no container"]
     network_ids = must(
@@ -607,6 +903,13 @@ def live_findings(project: str) -> list[str]:
     ).split()
     networks = inspect("network", network_ids)
     by_service = {c["Config"]["Labels"].get("com.docker.compose.service"): c for c in containers}
+    link = next(
+        (n for n in networks if (n.get("Labels") or {}).get("com.docker.compose.network") == LINK),
+        None,
+    )
+    ours = {c["Id"] for c in containers}
+    outside = sorted(set((link or {}).get("Containers") or {}) - ours)
+    strangers = {c["Id"]: c for c in inspect("container", outside)}
     findings: list[str] = []
 
     bootstrap = by_service.get("bootstrap")
@@ -629,7 +932,9 @@ def live_findings(project: str) -> list[str]:
     }
     env_file = PLATFORM_ENV.read_text() if PLATFORM_ENV.exists() else ""
     secrets = secret_values(env_file, os.environ)
-    findings += container_findings(containers, networks, image_env, secrets)
+    findings += container_findings(
+        containers, networks, image_env, secrets, strangers=strangers, platform=platform
+    )
 
     gateway = by_service.get(GATEWAY)
     if gateway is not None and gateway["Config"].get("Cmd") != GATEWAY_COMMAND:
@@ -644,7 +949,7 @@ def live_findings(project: str) -> list[str]:
     findings += [f"{service} is not running" for service in sorted(set(ROUTES) - set(running))]
     if "n8n" not in running:
         return findings
-    hosts = sim_hosts(render(SIM_FILE, insisted(SIM_FILE.read_text())))
+    hosts = sim_hosts(render(SIM_FILE))
     credentials = n8n_credentials(running["n8n"]["Id"])
     findings += credential_findings(credentials, secrets, hosts)
     routes = 0
@@ -660,26 +965,53 @@ def live_findings(project: str) -> list[str]:
         f"in n8n, and {routes} routes from n8n and the gateway, against {len(secrets)} of the "
         "platform's keys"
     )
+    sim = {**running, **{s: c for s, c in by_service.items() if s == "postgres"}}
+    linked: dict[str, Any] = {}
+    if platform:
+        findings += shared_secret_findings(secrets)
+        linked = {
+            labels(c)[1]: c for c in project_containers(platform) if c["State"].get("Running")
+        }
+        if link is None:
+            findings.append("the simulation has no link")
+        else:
+            findings += linked_platform_findings(platform, linked, link["Name"])
+    probes = host_probes(sim, network_gateways(networks), host_ports(linked))
+    if platform:
+        probes += platform_probes(sim, linked)
+    findings += probed_findings(probes)
+    print(
+        f"probed {len(probes)} addresses: the host's on each network"
+        + (f", and those between the simulation and the platform {platform}" if platform else "")
+    )
     return findings
 
 
 def main(argv: list[str]) -> int:
-    if argv and (len(argv) != 2 or argv[0] != "--project"):
-        print(
-            "usage: python3 -I -B scripts/simulation_isolation.py [--project NAME]", file=sys.stderr
-        )
-        return 2
+    parser = argparse.ArgumentParser(
+        prog="python3 -I -B scripts/simulation_isolation.py",
+        description="Check the simulation n8n holds no real key and reaches only the mocks.",
+    )
+    parser.add_argument("--project", help="the simulation's compose project, to check it running")
+    parser.add_argument("--platform", help="the compose project of the platform linked to it")
+    args = parser.parse_args(argv)
+    if args.platform and not args.project:
+        parser.error("--platform needs --project")
     try:
         findings = static_findings()
-        if argv:
-            findings += live_findings(argv[1])
+        if args.project:
+            findings += live_findings(args.project, args.platform)
     except CheckError as error:
         findings = [str(error)]
     for finding in findings:
         print(f"FAIL: {finding}")
     if findings:
         return 1
-    where = "deploy/compose.simulation.yaml" + (f" and the project {argv[1]}" if argv else "")
+    where = "deploy/compose.simulation.yaml and its link file"
+    if args.project:
+        where += f", and the project {args.project}"
+    if args.platform:
+        where += f" linked to {args.platform}"
     print(f"PASS: {where}: the simulation n8n holds no real key and reaches only the mocks.")
     return 0
 

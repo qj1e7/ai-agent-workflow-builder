@@ -22,24 +22,47 @@ case "$seed" in
 esac
 export E2E_SEED="$seed"
 
+# E2E_SIMULATION=on starts the simulation stack first, links platform-api to its gateway
+# (deploy/compose.simulation-link.yaml, ADR 0054), runs only the test of the link, then the
+# isolation check on both stacks.
+simulation="${E2E_SIMULATION:-}"
+case "$simulation" in
+  "") ;;
+  on) default_project=wab-e2e-sim default_suites=api files+=(-f deploy/compose.simulation-link.yaml) ;;
+  *) echo "E2E_SIMULATION takes on, not '$simulation'." >&2; exit 2 ;;
+esac
+export E2E_SIMULATION="$simulation"
+
 # Its own project name, so tearing it down never touches a stack that scripts/up.sh started.
 project="${E2E_PROJECT:-$default_project}"
 suites="${E2E_SUITES:-$default_suites}"
 out="e2e/out"
 compose=(docker compose -p "$project" -f deploy/compose.yaml -f deploy/compose.e2e.yaml ${files[@]+"${files[@]}"})
+sim=(env SIM_PROJECT="$project-sim" SIM_LINK="$project" scripts/simulation.sh)
+if [ -n "$simulation" ]; then
+  export SIMULATION_LINK_NETWORK="$project-sim_link"
+  API_K="${API_K:-practice_systems}"
+fi
 mkdir -p "$out"
-rm -f "$out/e2e.log" "$out/ui.log" "$out/compose.log"
+rm -f "$out/e2e.log" "$out/ui.log" "$out/compose.log" "$out/simulation.log"
 
 if [ ! -f deploy/.env ]; then
   deploy/make-env.sh
+elif [ -n "$simulation" ]; then
+  # An older deploy/.env gains the simulation's start secret.
+  deploy/make-env.sh >/dev/null
 fi
 
 collect_and_stop() {
   "${compose[@]}" --profile e2e logs --no-color >"$out/compose.log" 2>&1 || true
+  [ -z "$simulation" ] || "${sim[@]}" logs >"$out/simulation.log" 2>&1 || true
   if [ "${KEEP:-0}" = "1" ]; then
     echo "KEEP=1: stack left running. Stop it with: ${compose[*]} --profile e2e down -v"
+    [ -z "$simulation" ] || echo "Then stop the simulation with: ${sim[*]} down"
   else
     "${compose[@]}" --profile e2e down -v --remove-orphans >/dev/null 2>&1 || true
+    # After the platform, which leaves the link the simulation made.
+    [ -z "$simulation" ] || "${sim[@]}" down >/dev/null 2>&1 || true
   fi
 }
 trap collect_and_stop EXIT
@@ -70,6 +93,12 @@ show_seed_logs() {
   "${compose[@]}" logs --no-color --tail 200 seed bootstrap platform-api >&2 || true
 }
 
+if [ -n "$simulation" ] && ! "${sim[@]}" up >"$out/simulation-up.log" 2>&1; then
+  tail -n 30 "$out/simulation-up.log" >&2
+  echo "FAIL: the simulation stack did not start. See $out/simulation-up.log." >&2
+  exit 2
+fi
+
 if ! "${compose[@]}" up --build --wait --wait-timeout "${WAIT_TIMEOUT:-300}" >"$out/up.log" 2>&1; then
   tail -n 30 "$out/up.log" >&2
   show_seed_logs
@@ -87,6 +116,16 @@ if wanted api; then
   "${compose[@]}" --profile e2e run --rm --build ${api_args[@]+"${api_args[@]}"} e2e 2>&1 | tee "$out/e2e.log"
   api_status="${PIPESTATUS[0]}"
   [ "$api_status" -eq 0 ] || show_seed_logs
+  set -e
+fi
+
+# The isolation check on the running stacks, from inside their containers: the simulation holds no
+# real key, its n8n reaches nothing of the platform's, and its gateway only platform-api.
+simulation_status=0
+if [ -n "$simulation" ]; then
+  set +e
+  "${sim[@]}" check 2>&1 | tee -a "$out/e2e.log"
+  simulation_status="${PIPESTATUS[0]}"
   set -e
 fi
 
@@ -110,7 +149,10 @@ if wanted ui; then
   if [ "$ui_status" -eq 0 ]; then echo "PASS ui:  $(summary_line "$out/ui.log")"; else echo "FAIL ui (exit $ui_status): $(summary_line "$out/ui.log")"; [ "$status" -ne 0 ] || status=$ui_status; fi
   echo "Browser evidence: portal/e2e/out/live (shots and video)"
 fi
+if [ -n "$simulation" ]; then
+  if [ "$simulation_status" -eq 0 ]; then echo "PASS simulation isolation"; else echo "FAIL simulation isolation (exit $simulation_status)"; [ "$status" -ne 0 ] || status=$simulation_status; fi
+fi
 if [ "$status" -ne 0 ]; then
-  echo "Details: $out/e2e.log, $out/ui.log and $out/compose.log"
+  echo "Details: $out/e2e.log, $out/ui.log, $out/compose.log and $out/simulation.log"
 fi
 exit "$status"

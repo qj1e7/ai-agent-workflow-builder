@@ -752,6 +752,21 @@ def test_the_gateway_reads_only_its_own_settings() -> None:
     assert (bare.mock_github_url, bare.mock_jira_url, bare.mock_slack_token) == (None, None, None)
 
 
+def test_a_start_secret_shorter_than_32_characters_is_refused() -> None:
+    env = {
+        "WAB_NODE_KEY": NODE_KEY,
+        "N8N_BASE_URL": "http://n8n:5678/",
+        "N8N_OWNER_EMAIL": "owner@simulation.example",
+        "N8N_OWNER_PASSWORD": SETTINGS.n8n_owner.password,
+    }
+    short = START_SECRET[:31]
+    with pytest.raises(ConfigError, match="WAB_START_SECRET") as refused:
+        gateway_settings_from_env({**env, "WAB_START_SECRET": short})
+    assert short not in str(refused.value)
+    held = gateway_settings_from_env({**env, "WAB_START_SECRET": START_SECRET[:32]})
+    assert held.start_secret == START_SECRET[:32]
+
+
 def test_the_gateway_has_only_its_own_routes(gw: Gateway) -> None:
     app = gw.client.app
     assert isinstance(app, FastAPI)

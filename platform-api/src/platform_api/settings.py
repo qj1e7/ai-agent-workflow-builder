@@ -45,6 +45,10 @@ class FirstPeople:
     approvers: tuple[str, str]
 
 
+SHORTEST_START_SECRET = 32
+"""The fewest characters a simulation's start secret may have, on platform-api's side and the
+gateway's. deploy/make-env.sh and scripts/simulation.sh make 64."""
+
 MAX_BODY_BYTES_DEFAULT = 2 * 1024 * 1024
 """The largest request body the API reads, unless MAX_BODY_BYTES says otherwise. The largest
 real body is a set-up card draft. Its content may be 32 KB (DRAFT_LIMIT_BYTES), which is about
@@ -621,6 +625,11 @@ def simulation_from_env(env: Mapping[str, str]) -> SimulationSettings | None:
         return None
     if not raw_url or secret is None:
         raise ConfigError("SIMULATION_URL and SIMULATION_START_SECRET go together.")
+    if len(secret) < SHORTEST_START_SECRET:
+        raise ConfigError(
+            f"SIMULATION_START_SECRET needs at least {SHORTEST_START_SECRET} characters. "
+            "Run deploy/make-env.sh for a new one."
+        )
     url = _stack_or_https("SIMULATION_URL", raw_url)
     return SimulationSettings(url, secret, uses_model)
 

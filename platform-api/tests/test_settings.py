@@ -314,7 +314,7 @@ def test_no_secret_shows_in_the_bootstrap_settings_repr():
 
 
 # Made up at run time, so no key shape sits in the file.
-SIM_SECRET = "".join(["sim", "secret", "0123456789abcdef"])
+SIM_SECRET = "".join(["sim", "secret", "0123456789abcdef" * 2])
 
 
 def test_with_no_simulation_settings_there_is_no_simulation_n8n_here():
@@ -363,6 +363,11 @@ def test_the_model_writes_and_explains_cases_only_when_its_setting_is_on():
             id="model not on or off",
         ),
         pytest.param({"SIMULATION_MODEL": "on"}, "SIMULATION_URL", id="model without a gateway"),
+        pytest.param(
+            {"SIMULATION_URL": "http://gateway:8600", "SIMULATION_START_SECRET": SIM_SECRET[:31]},
+            "SIMULATION_START_SECRET.*32",
+            id="a start secret shorter than 32 characters",
+        ),
     ],
 )
 def test_simulation_settings_that_cannot_work_refuse_to_start(env: dict[str, str], reason: str):
