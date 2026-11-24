@@ -143,6 +143,8 @@ from platform_api.orchestration.n8n import (
 )
 from platform_api.orchestration.n8n_calls import (
     GITHUB_RELEASES,
+    REPO_INPUT,
+    VERSION_CHECKER_ID,
     WATCHLIST_CHECKER,
     WATCHLIST_PLACE,
     AgentToRun,
@@ -156,6 +158,7 @@ from platform_api.orchestration.n8n_calls import (
     ReadFailed,
     ReadItems,
     WriteEntry,
+    release_of,
 )
 from platform_api.orchestration.n8n_credentials import (
     KeyRemoved,
@@ -438,6 +441,8 @@ __all__ = [
     "zone_name",
     "read_flow",
     "GITHUB_RELEASES",
+    "REPO_INPUT",
+    "VERSION_CHECKER_ID",
     "WATCHLIST_CHECKER",
     "WATCHLIST_PLACE",
     "AgentRejected",
@@ -455,6 +460,7 @@ __all__ = [
     "RanVersion",
     "ReadFailed",
     "ReadItems",
+    "release_of",
     "Grade",
     "ASK_EXITS",
     "writes",
