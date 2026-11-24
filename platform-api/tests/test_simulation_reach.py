@@ -13,7 +13,7 @@ from typing import Any
 import httpx
 import pytest
 
-from platform_api.orchestration.n8n import ExecutionRecord, NodeRun, node_runs
+from platform_api.orchestration.n8n import ExecutionRecord, NodeError, NodeRun, node_runs
 from platform_api.orchestration.reach import named, reached
 from platform_api.orchestration.recorded_samples import MADE_UP, RecordedSamples
 from platform_api.orchestration.scenarios import GitHubPlay, ScenarioSpec, check, stage
@@ -237,8 +237,10 @@ def test_a_pinned_block_reaches_nothing_and_a_block_that_never_ran_reaches_nothi
 GITHUB = "GitHub releases"
 
 
-def _github_ran(*errors: str, state: str = "success", answered: bool = False) -> ExecutionRecord:
-    return _ended(ran={GITHUB: state}, nodes={GITHUB: NodeRun(state, errors, answered=answered)})
+def _github_ran(*errors: str | NodeError, state: str = "success") -> ExecutionRecord:
+    """GitHub's block ran, with these errors. A text alone came with no answer."""
+    tried = tuple(e if isinstance(e, NodeError) else NodeError(e) for e in errors)
+    return _ended(ran={GITHUB: state}, nodes={GITHUB: NodeRun(state, tried)})
 
 
 def test_a_block_that_went_on_past_its_failure_still_counts_the_address_it_tried() -> None:
@@ -276,8 +278,15 @@ def test_an_error_the_platform_can_t_read_is_unknown_so_it_widens() -> None:
 
 def test_an_error_that_came_with_an_answer_reached_the_block_s_own_mock() -> None:
     plan = planned(release_check([github_read()]))
-    answered = _github_ran("The resource you are requesting could not be found", answered=True)
+    answered = _github_ran(NodeError("The resource you are requesting could not be found", "404"))
     assert reached(plan, None, answered) == ("mock:github",)
+
+
+def test_an_answer_counts_for_its_own_error_only() -> None:
+    """One error that came with an answer doesn't vouch for another of the same block's."""
+    plan = planned(release_check([github_read()]))
+    both = _github_ran(NodeError("Not Found", "404"), "Something nobody wrote down")
+    assert reached(plan, None, both) == ("mock:github", f"unknown:{GITHUB}")
 
 
 def test_a_dropped_connection_the_scenario_played_reached_the_block_s_own_mock() -> None:
@@ -285,6 +294,56 @@ def test_a_dropped_connection_the_scenario_played_reached_the_block_s_own_mock()
     dropped = _github_ran("The connection was aborted", state="error")
     assert reached(plan, None, dropped, failing=frozenset({GITHUB})) == ("mock:github",)
     assert reached(plan, None, dropped) == ("mock:github", f"unknown:{GITHUB}")
+
+
+def test_a_failing_block_s_error_that_isn_t_the_mock_s_is_unknown() -> None:
+    """The scenario played the block as a failure, but only mock GitHub's own words for a dropped
+    connection are the mock's."""
+    plan = planned(release_check([github_read()]))
+    other = _github_ran("Request failed for a reason nobody wrote down", state="error")
+    assert reached(plan, None, other, failing=frozenset({GITHUB})) == (
+        "mock:github",
+        f"unknown:{GITHUB}",
+    )
+
+
+# Fail closed on parameters: an address under any name counts
+
+
+def _with(**parameters: Any) -> dict[str, Any]:
+    block = github_read()
+    block["parameters"] |= parameters
+    return block
+
+
+def test_a_url_under_a_parameter_with_any_name_is_an_address() -> None:
+    plan = planned(release_check([_with(notes="see https://evil.example:8443/x for more")]))
+    assert "host:evil.example:8443" in named(plan)
+    assert "host:evil.example:8443" in reached(plan, None, _github_ran())
+
+
+def test_a_host_name_under_a_parameter_with_any_name_is_an_address() -> None:
+    plan = planned(release_check([_with(target="Evil.Example")]))
+    assert "host:evil.example" in named(plan)
+    plan = planned(release_check([_with(target="10.0.0.5:443")]))
+    assert "host:10.0.0.5:443" in named(plan)
+
+
+def test_a_proxy_is_an_address_and_one_an_expression_picks_is_unknown() -> None:
+    plan = planned(release_check([_with(options={"proxy": "evil.example:3128"})]))
+    assert "host:evil.example:3128" in named(plan)
+    plan = planned(release_check([_with(options={"proxy": "={{ $json.proxy }}"})]))
+    assert f"unknown:{GITHUB}" in named(plan)
+
+
+def test_an_expression_that_builds_an_address_is_unknown_whatever_its_name() -> None:
+    plan = planned(release_check([_with(notes="={{ 'https://' + $json.host }}")]))
+    assert f"unknown:{GITHUB}" in named(plan)
+
+
+def test_plain_words_and_versions_are_no_address() -> None:
+    plan = planned(release_check([_with(notes="Release 1.2.16 of langgraph")]))
+    assert not any(word.startswith(("host:", "unknown:")) for word in named(plan))
 
 
 def test_a_block_of_n8n_s_with_no_try_in_the_run_data_is_unknown() -> None:
@@ -334,11 +393,16 @@ def test_n8n_s_run_data_gives_each_block_s_state_errors_and_whether_an_answer_ca
         "Start from the Portal": NodeRun("success"),
         GITHUB: NodeRun(
             "error",
-            ("The resource you are requesting could not be found", "Not Found"),
-            answered=True,
+            (
+                NodeError("The resource you are requesting could not be found", "404"),
+                NodeError("Not Found", "404"),
+            ),
         ),
         "Went on": NodeRun(
             "success",
-            ("getaddrinfo ENOTFOUND evil.example", "connect ECONNREFUSED 10.0.0.5:443"),
+            (
+                NodeError("getaddrinfo ENOTFOUND evil.example"),
+                NodeError("connect ECONNREFUSED 10.0.0.5:443"),
+            ),
         ),
     }

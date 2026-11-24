@@ -12,7 +12,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from platform_api.orchestration.mock_setup import MockSetups, SetupRefused, mock_keys
-from platform_api.orchestration.n8n import ExecutionRecord, N8nError, NodeRun
+from platform_api.orchestration.n8n import ExecutionRecord, N8nError, NodeError, NodeRun
 from platform_api.orchestration.n8n_calls import (
     AgentCall,
     Answer,
@@ -200,12 +200,9 @@ def record(
 ) -> ExecutionRecord:
     """n8n's record, with each block's last try as its run data holds it. A not found came with
     GitHub's answer, a 404, and a dropped connection with none."""
+    answer = "404" if error == NOT_FOUND else None
     nodes = {
-        name: NodeRun(
-            state,
-            (error,) if name == failed and error else (),
-            answered=name == failed and error == NOT_FOUND,
-        )
+        name: NodeRun(state, (NodeError(error, answer),) if name == failed and error else ())
         for name, state in ran.items()
     }
     return ExecutionRecord(
