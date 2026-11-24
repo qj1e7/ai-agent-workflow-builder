@@ -13,8 +13,11 @@ import httpx
 import psycopg
 import pytest
 
+from platform_api.builder.moves import Restored
 from platform_api.builder.simulations import NO_SIMULATION, SIMULATING, Simulations
 from platform_api.builder.use_case_simulations import UseCaseSimulations
+from platform_api.builder.watchlist import MovedToN8n
+from platform_api.db import Database
 from platform_api.orchestration.scenario_grades import WAIT_LIMIT_SECONDS
 from platform_api.orchestration.simulation_driver import DIDNT_ANSWER, NotSimulated
 from platform_api.orchestration.version_digest import workflow_digest
@@ -24,7 +27,16 @@ from tests.test_builder_lifecycle import Lab
 from tests.test_drafted_simulations import SIX_FIVE, Driver
 from tests.test_n8n_builder import BODY, N8nLab, lab
 from tests.test_n8n_lifecycle import made, version_row
-from tests.test_n8n_versions import DAVE_IN_N8N, Accounts, Requests, at_seven_thirty, on_n8n
+from tests.test_n8n_versions import (
+    DAVE_IN_N8N,
+    Accounts,
+    Requests,
+    adding,
+    at_seven_thirty,
+    on_n8n,
+    without_yes,
+)
+from tests.test_use_case_moves import lose_n8n, moving
 
 pytestmark = pytest.mark.anyio
 
@@ -57,11 +69,7 @@ class Tried:
         )
 
     async def digests(self) -> list[str]:
-        async with self.own.lab.h.db.connection("builder") as conn:
-            rows = await (
-                await conn.execute("SELECT digest FROM builder.simulations ORDER BY started_at")
-            ).fetchall()
-        return [str(r["digest"]) for r in rows]
+        return await digests_in(self.own.lab.h.db)
 
     async def digest_of(self, use_case_id: str, version: int) -> str:
         return workflow_digest((await version_row(self.own, use_case_id, version))["document"])
@@ -76,6 +84,14 @@ class Tried:
         sweep = self.own.lab.builder.sweep
         assert sweep is not None
         return len(await sweep.sweep())
+
+
+async def digests_in(db: Database) -> list[str]:
+    async with db.connection("builder") as conn:
+        rows = await (
+            await conn.execute("SELECT digest FROM builder.simulations ORDER BY started_at")
+        ).fetchall()
+    return [str(r["digest"]) for r in rows]
 
 
 async def tried_of(lab: Lab, driver: Driver | None) -> AsyncIterator[Tried]:
@@ -193,6 +209,82 @@ async def test_a_version_published_in_n8n_is_tried_once_the_sweep_grades_it(trie
     await tried.simulations.settle()
     check = await tried.check(use_case_id)
     assert (check["version"], check["simulation"]["state"]) == (2, "done")
+
+
+@pytest.mark.parametrize(
+    ("change", "grade"),
+    [(adding("n8n-nodes-base.httpRequest"), "needs_a_fix"), (without_yes, "writes_refused")],
+)
+async def test_a_version_published_in_n8n_that_isn_t_safe_is_never_tried(
+    tried: Tried, change: Any, grade: str
+):
+    use_case_id, workflow_id = await made(tried.own, on=True)
+    await tried.simulations.settle()
+    tried.own.n8n.publish_as(workflow_id, DAVE_IN_N8N, change)
+
+    assert await tried.sweep() == 1
+
+    view = await tried.own.lab.call("alice", "GET", f"/api/v1/use-cases/{use_case_id}")
+    assert (view.json()["version"], view.json()["grade"]) == (2, grade)
+    assert await tried.digests() == [await tried.digest_of(use_case_id, 1)]
+    check = await tried.check(use_case_id)
+    assert (check["version"], check["simulation"]) == (2, None)
+    assert len(tried.driver.versions) == 1
+    nothing = await tried.again(use_case_id, 2)
+    assert nothing.status_code == 409
+
+
+async def test_settings_changed_in_n8n_are_tried_once_the_sweep_grades_them_safe(tried: Tried):
+    use_case_id, workflow_id = await made(tried.own, on=True)
+    await tried.simulations.settle()
+    tried.own.n8n.save_settings(workflow_id, lambda s: s.update(saveDataErrorExecution="all"))
+
+    assert await tried.sweep() == 1
+
+    view = await tried.own.lab.call("alice", "GET", f"/api/v1/use-cases/{use_case_id}")
+    assert (view.json()["version"], view.json()["grade"]) == (2, "safe")
+    assert await tried.digests() == [
+        await tried.digest_of(use_case_id, 1),
+        await tried.digest_of(use_case_id, 2),
+    ]
+    await tried.simulations.settle()
+    assert len(tried.driver.versions) == 2
+
+
+async def test_a_move_to_n8n_tries_the_version_it_lays_out(lab: Lab, postgres: PostgresUrls):
+    driver = Driver()
+    simulations = Simulations(lab.h.db, driver)
+    m = moving(lab, postgres.owner, UseCaseSimulations(lab.h.db, simulations))
+    use_case_id = await m.shared()
+    assert (driver.versions, await digests_in(lab.h.db)) == ([], []), "nothing to try yet"
+
+    moved = await m.moves.move(use_case_id)
+
+    assert isinstance(moved, MovedToN8n)
+    document = (await m.version(use_case_id, moved.version))["document"]
+    assert await digests_in(lab.h.db) == [workflow_digest(document)]
+    await simulations.settle()
+    assert len(driver.versions) == 1
+
+
+async def test_a_restore_tries_the_version_it_puts_back(lab: Lab, postgres: PostgresUrls):
+    driver = Driver()
+    simulations = Simulations(lab.h.db, driver)
+    m = moving(lab, postgres.owner, UseCaseSimulations(lab.h.db, simulations))
+    use_case_id = await m.shared()
+    moved = await m.moves.move(use_case_id)
+    assert isinstance(moved, MovedToN8n)
+    await simulations.settle()
+    await lose_n8n(m)
+
+    [restored] = await m.moves.restore_if_asked()
+
+    assert isinstance(restored, Restored)
+    document = (await m.version(use_case_id, moved.version))["document"]
+    tried = await digests_in(lab.h.db)
+    assert (len(tried), tried[-1]) == (2, workflow_digest(document)), "a new error workflow"
+    await simulations.settle()
+    assert len(driver.versions) == 2
 
 
 async def test_putting_an_earlier_version_back_shows_its_result_and_tries_nothing_again(

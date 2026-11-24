@@ -120,6 +120,7 @@ class Bench:
     simulations: Simulations
     driver: Driver
     client: httpx.AsyncClient
+    approvals: SetUpApprovals
 
     async def call(self, user: str, method: str, path: str, body: Any = None) -> httpx.Response:
         return await self.client.request(method, path, headers={"X-Dev-User": user}, json=body)
@@ -185,7 +186,7 @@ async def bench_of(
     app.state.drafted = drafted_workflows
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-        yield Bench(db, drafted_workflows, simulations, driver or Driver(), client)
+        yield Bench(db, drafted_workflows, simulations, driver or Driver(), client, approvals)
     if driver is not None and driver.hold is not None:
         driver.hold.set()
     await drafted_workflows.settle()
@@ -539,3 +540,38 @@ async def test_simulated_runs_never_show_as_runs_or_in_the_activity_log(bench: B
     assert runs is not None and events is not None and kept is not None
     assert (runs["n"], events["n"]) == (0, 0)
     assert await bench.digests() == [kept["digest"]]
+
+
+async def test_a_revision_never_tried_is_tried_as_the_workflow_it_is_set_up_as(
+    bench: Bench, postgres: PostgresUrls
+):
+    """Set-up grades the approved revision again and keeps it as a workflow's version 1, so a
+    digest that was never tried, such as one that waited for a write key, is tried then."""
+    view = await bench.start()
+    await bench.drafted.settle()
+    with psycopg.connect(postgres.owner, autocommit=True) as conn:
+        conn.execute("DELETE FROM builder.simulations")
+    drafted_id = view["drafted_id"]
+    sent = await bench.call(
+        "carol",
+        "POST",
+        f"/api/v1/drafted-workflows/{drafted_id}/send",
+        {"revision": view["revision"]},
+    )
+    assert sent.status_code == 200, sent.text
+    approval_id = sent.json()["approval"]["approval_id"]
+    page = (await bench.call("bob", "GET", f"/api/v1/setup-approvals/{approval_id}")).json()
+    decided = await bench.call(
+        "bob",
+        "POST",
+        f"/api/v1/setup-approvals/{approval_id}/decisions",
+        {"verdict": "approve", "digest": page["digest"]},
+    )
+    assert decided.status_code == 201, decided.text
+
+    await bench.approvals.work_once()
+
+    assert (await bench.read(drafted_id))["state"] == "approved"
+    assert await bench.digests() == [page["digest"]]
+    await bench.drafted.settle()
+    assert len(bench.driver.versions) == 2
