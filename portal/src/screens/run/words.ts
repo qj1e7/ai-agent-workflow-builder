@@ -5,7 +5,7 @@ import type { SessionKind } from '../../api/session'
 import type { ApprovalStepView, Day, Refusal, RunOutcome, RunView, UseCaseView, WriteActionView } from '../../api/types'
 import { PRODUCT } from '../../shell/product'
 import type { LiveRun } from './liveRun'
-import type { AgentRef, ChatItem, Declined, PlanBlock, RunModel } from './runModel'
+import type { AgentRef, ChatItem, Declined, FixState, PlanBlock, RunModel } from './runModel'
 
 export type NameOf = (id: string) => string
 
@@ -206,6 +206,20 @@ export function lineOf(item: ChatItem, nameOf: NameOf, declinedNext: string | nu
       return { speaker: app, text: item.text, tone: 'plain' }
     case 'told':
       return { speaker: platform, text: item.line, tone: item.bad ? 'bad' : 'plain' }
+    case 'fix':
+      return { speaker: item.speaker ? { kind: 'agent', agent: item.speaker } : app, text: item.text, tone: item.tone }
+  }
+}
+
+/** Where a fix on the stopped run stands, as the AI troubleshooter says it under the stop. */
+export function fixWords(fix: FixState): string {
+  switch (fix.ended) {
+    case null:
+      return 'Drafting a fix.'
+    case 'proposed':
+      return 'A fix is ready. Nothing changes until an Approver says yes.'
+    case 'handed_back':
+      return "I couldn't fix this."
   }
 }
 
@@ -531,7 +545,7 @@ export function logRowsOf(items: readonly ChatItem[], nameOf: NameOf, quick: rea
       default: {
         const line = lineOf(item, nameOf, null)
         text = line.text
-        tone = line.tone === 'bad' ? 'bad' : 'plain'
+        tone = line.tone === 'bad' || line.tone === 'wait' ? line.tone : 'plain'
         if (line.speaker.kind === 'agent') agent = line.speaker.agent
       }
     }

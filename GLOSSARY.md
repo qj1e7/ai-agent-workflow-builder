@@ -379,6 +379,24 @@ The blocks the AI troubleshooter names as the cause of a stop, once code confirm
 **Kind of failure**:
 What stopped a run, as the AI troubleshooter picks it from a fixed list: not found, refused, no answer, wrong value, changed field, permission, limit, or unknown. Code checks the stop shows it, or shows unknown, and writes the cause people see from it, the failed part, the system and one name from the stop (ADR 0055).
 
+**Fix**:
+A new version of a workflow that changes only the failed part, drafted by the Fix drafter and proven by simulation. A person asks for one on a stopped run, and nothing changes until an Approver says yes (ADR 0055).
+
+**Coordinator**:
+The agent that runs one fix, behind the AI troubleshooter's face. It hands work to sub-agents, and its "done" counts for nothing until code agrees. It never writes (ADR 0055).
+
+**Sub-agent**:
+An agent the coordinator hands work to: the AI troubleshooter, the Fix drafter and the Scenario writer. The live activity view shows the Fix drafter and the Scenario writer as Orbs once they are brought in (ADR 0055).
+
+**Hand-off**:
+One piece of work the coordinator gives to one sub-agent, or to the simulation or the platform's check, and what code found of the result. Each one is an activity event on the stopped run (ADR 0055).
+
+**Round**:
+One pass of draft, check and simulate in a fix. A round makes progress only when more scenarios pass than in the round before, and none that passed now fails (ADR 0055).
+
+**Hand back**:
+How a fix ends without a fix: the person gets the cause and what was tried, and the workflow is as it was (ADR 0055).
+
 **Copier**:
 The part of run monitoring that copies each new activity event from PostgreSQL to Cosmos DB. It copies a run's events in order, and only one copier works on a run at a time. PostgreSQL keeps every event, so a copy that stops halfway goes on from the copied mark.
 _Avoid_: Sync, mirror

@@ -41,8 +41,8 @@ const known: Readonly<Record<string, Omit<AgentIdentity, 'id'>>> = {
 
 export const KNOWN_AGENT_IDS: readonly string[] = Object.keys(known)
 
-/** Agents that run under another id: an agent card's run carries the card's id. */
-const SAME_AS: Readonly<Record<string, string>> = { crd_version_checker: 'version_checker' }
+/** Agents that run under another id: an agent card's run carries the card's id, and a fix's coordinator works behind the AI troubleshooter's face (ADR 0055). */
+const SAME_AS: Readonly<Record<string, string>> = { crd_version_checker: 'version_checker', coordinator: 'troubleshooter' }
 
 const OTHER_AGENT_COLOURS: readonly [Colours, ...Colours[]] = [
   { hue: 'var(--agent-1)', tint: 'var(--agent-1-tint)' },

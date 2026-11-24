@@ -1,0 +1,39 @@
+/* A fix under the stop: one line of words, then each sub-agent brought in, as an Orb and its name. */
+.fix {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.words {
+  margin: 0;
+}
+
+.crew {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.crew li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+/* Only a sub-agent brought in while the page is open moves. Reduced motion stops it (base.css). */
+.crew li[data-arrived] {
+  animation: rise var(--dur-small) var(--ease-out) backwards;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}

@@ -8,6 +8,7 @@ from platform_api.monitoring.callbacks import Callback, callback_for, verify_cal
 from platform_api.monitoring.copier import Copier
 from platform_api.monitoring.cosmos_log import CosmosEvents
 from platform_api.monitoring.events import (
+    COORDINATOR,
     PLATFORM,
     SAFETY_CHECKER,
     WORKFLOW,
@@ -45,9 +46,19 @@ from platform_api.monitoring.events import (
     activity_event_adapter,
     activity_events_adapter,
     agent_actor,
+    current_failure,
     user_actor,
 )
-from platform_api.monitoring.log import ActivityLog
+from platform_api.monitoring.fix_events import (
+    FixData,
+    FixHandedBackData,
+    FixHandoffData,
+    FixProposedData,
+    FixRoundData,
+    FixStartedData,
+    fix_summary,
+)
+from platform_api.monitoring.log import ActivityLog, FixRefused
 from platform_api.monitoring.source_stops import (
     NOTHING_READ_YET,
     REQUEST_LIMIT_SECONDS,
@@ -78,6 +89,7 @@ from platform_api.monitoring.troubleshooter import (
 )
 
 __all__ = [
+    "COORDINATOR",
     "NOTHING_READ_YET",
     "PLATFORM",
     "REQUEST_LIMIT_SECONDS",
@@ -106,6 +118,13 @@ __all__ = [
     "ExecutionLinkedData",
     "ExecutionResumedData",
     "FailureKind",
+    "FixData",
+    "FixHandedBackData",
+    "FixHandoffData",
+    "FixProposedData",
+    "FixRefused",
+    "FixRoundData",
+    "FixStartedData",
     "FoundCause",
     "LangfuseScores",
     "LegDispatchedData",
@@ -139,8 +158,10 @@ __all__ = [
     "agent_event_adapter",
     "callback_for",
     "cause_words",
+    "current_failure",
     "delay_in",
     "explain_failure",
+    "fix_summary",
     "pseudonym",
     "stop_kind",
     "stop_words",
