@@ -1,5 +1,6 @@
 import json
 import logging
+import time
 from dataclasses import replace
 from typing import Any, get_args
 
@@ -9,6 +10,7 @@ from pydantic import ValidationError
 
 from agent_runtime.api import create_app
 from agent_runtime.contract import (
+    DETAIL_LIMIT,
     CauseCheck,
     CauseFound,
     CauseKept,
@@ -20,8 +22,10 @@ from agent_runtime.contract import (
 from agent_runtime.contracts import answer_request
 from agent_runtime.troubleshooting import (
     CAUSE_TIMEOUT_SECONDS,
+    SHAPES,
     ModelCause,
     cause_messages,
+    checked,
     find_cause,
     part_check,
     systems_named,
@@ -320,6 +324,52 @@ def test_a_kind_the_stop_shows_no_sign_of_is_shown_as_unknown(
     reply = picked(system=None, failure_kind=kind, detail=None)
     shown = find_cause(request, lambda timeout: ScriptedChat(structured=[reply]))
     assert isinstance(shown, CauseFound) and shown.failure_kind == shown_kind
+
+
+NEAR_MISSES = {
+    "repository": ["a" * 50 + "/" + "a" * 48 + "!", "a-" * 49 + "/!"],
+    "key": ["A" * 99 + "!", "A_" * 49 + "a!"],
+    "field": ["a" + "Aa" * 49 + "!", "a_" * 49 + "a!"],
+    "version": ["1.0" + "a" * 96 + "!", "1" + ".1" * 49 + "!", "1.0-" + "a1" * 47 + "!!"],
+}
+"""For each shape, 100 characters that almost fit it, the input that makes a pattern with an
+ambiguous repeat backtrack for ever."""
+
+
+@pytest.mark.parametrize(
+    "near_miss", [n for misses in NEAR_MISSES.values() for n in misses], ids=lambda n: n[:8]
+)
+def test_every_shape_refuses_a_long_near_miss_at_once(near_miss: str):
+    assert len(near_miss) == 100
+    for shape in SHAPES.values():
+        started = time.perf_counter()
+        assert shape.fullmatch(near_miss) is None
+        assert time.perf_counter() - started < 0.05
+
+
+@pytest.mark.parametrize(
+    "token",
+    ["1.0" + "a" * 56 + "_", "1.0-" + "a1" * 27 + "_", "a" + "Aa" * 29 + "_", "AB" * 30 + "a"],
+    ids=lambda t: t[:8],
+)
+def test_a_near_miss_planted_in_the_stop_is_refused_at_once(token: str):
+    """A planted name the stop holds whole still reaches the shapes, so they must not backtrack."""
+    stop = STOP.model_copy(update={"message": f"GitHub answered 404 Not Found for {token}!"})
+    request = REQUEST.model_copy(update={"stop": stop})
+    started = time.perf_counter()
+    found = checked(picked(system=None, failure_kind="unknown", detail=token), request)
+    assert found == "not_a_detail"
+    assert time.perf_counter() - started < 0.05
+
+
+@pytest.mark.parametrize(("length", "fits"), [(64, True), (65, False)])
+def test_a_detail_is_at_most_64_characters(length: int, fits: bool):
+    repository = "a" * 32 + "/" + "b" * (length - 33)
+    stop = STOP.model_copy(update={"message": f"GitHub answered 404 Not Found for {repository}"})
+    request = REQUEST.model_copy(update={"stop": stop})
+    found = checked(picked(detail=repository), request)
+    assert isinstance(found, CauseFound) is fits
+    assert DETAIL_LIMIT == 64
 
 
 @pytest.mark.parametrize(
