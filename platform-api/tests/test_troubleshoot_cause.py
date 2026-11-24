@@ -23,8 +23,11 @@ from platform_api.monitoring import (
     PendingEvent,
     RunCreatedData,
     RunFailedData,
+    SourceStop,
     cause_words,
+    stop_words,
 )
+from platform_api.monitoring.source_stops import Delay
 from platform_api.orchestration.agents import HttpAgentRuntime, ModelAccess
 from platform_api.orchestration.n8n_run_view import NodeState, RunInN8n
 from platform_api.orchestration.run_causes import RunCauses
@@ -428,6 +431,42 @@ async def test_no_sentence_the_runtime_sends_reaches_anyone(
     answered = await troubleshoot(client, find_cause=True)
     assert answered["found"] is None
     assert sentence not in json.dumps(answered)
+
+
+@pytest.mark.parametrize(
+    ("delay", "kind", "words"),
+    [
+        ("no_answer", "no_answer", "because GitHub doesn't answer."),
+        ("cut_off", "no_answer", "because GitHub doesn't answer."),
+        ("unreachable", "no_answer", "because GitHub doesn't answer."),
+        ("refused", "refused", "because GitHub refuses the request."),
+        ("refused", "no_answer", "on an error from GitHub."),
+        ("no_answer", "refused", "on an error from GitHub."),
+        ("unreachable", "not_found", "on an error from GitHub."),
+        ("cut_off", "permission", "on an error from GitHub."),
+        ("refused", "unknown", "on an error from GitHub."),
+    ],
+)
+async def test_a_source_stops_own_facts_hold_the_models_kind(
+    client: httpx.AsyncClient, app: FastAPI, delay: Delay, kind: FailureKind, words: str
+):
+    """ADR 0056's stop says how the source failed. A source stop while the changes are being
+    made isn't retryable, so the rule table names no cause for it and the model is asked."""
+    said = stop_words(SourceStop("GitHub", delay, 30_000, "Read releases", 3))
+    finds(app, Runtime(answer={**FOUND, "failure_kind": kind, "detail": None}))
+    await append(app, RUN, stop(retryable=False, message=said))
+    answered = await troubleshoot(client, find_cause=True)
+    assert answered["found"]["cause"] == f"The Read releases block stopped {words}"
+
+
+async def test_a_source_stop_the_rule_table_knows_asks_no_model(
+    client: httpx.AsyncClient, app: FastAPI
+):
+    runtime = finds(app)
+    said = stop_words(SourceStop("GitHub", "no_answer", 30_000, "Read releases", 3))
+    await append(app, RUN, stop(message=said))
+    assert (await troubleshoot(client, find_cause=True))["found"] is None
+    assert runtime.asked == []
 
 
 ONE = ["Read releases"]

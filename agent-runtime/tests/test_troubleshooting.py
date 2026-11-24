@@ -293,6 +293,20 @@ def test_the_detail_has_the_shape_its_kind_takes(kind: FailureKind, shapes: set[
         assert shown == CauseKept(why="not_a_detail")
 
 
+SOURCE_STOPS = {
+    "no_answer": 'GitHub didn\'t answer within 30 seconds, so "Read releases" stopped after 3 '
+    "tries. Nothing came back in that time, so it may be down, busy or out of reach.",
+    "refused": 'GitHub refused the connection, so "Read releases" stopped. It may be down, or the '
+    "block may point at the wrong address.",
+    "cut_off": 'GitHub closed the connection, so "Read releases" stopped. It ended the connection '
+    "before a full answer came back, so it may have failed or restarted.",
+    "unreachable": 'GitHub could not be reached, so "Read releases" stopped. n8n couldn\'t reach '
+    "it, so it may be down, or its address may be wrong or blocked.",
+}
+"""platform-api's words for a source that gave no usable answer (ADR 0056, source_stops.py), as
+a run's stop carries them."""
+
+
 @pytest.mark.parametrize(
     ("kind", "said", "shown_kind"),
     [
@@ -311,6 +325,14 @@ def test_the_detail_has_the_shape_its_kind_takes(kind: FailureKind, shapes: set[
         ("changed_field", "Cannot read properties of undefined (reading 'x')", "changed_field"),
         ("changed_field", "GitHub answered 404 Not Found", "unknown"),
         ("wrong_value", "No release has a plain version number", "wrong_value"),
+        ("no_answer", SOURCE_STOPS["no_answer"], "no_answer"),
+        ("no_answer", SOURCE_STOPS["unreachable"], "no_answer"),
+        ("no_answer", SOURCE_STOPS["cut_off"], "no_answer"),
+        ("no_answer", SOURCE_STOPS["refused"], "unknown"),
+        ("refused", SOURCE_STOPS["refused"], "refused"),
+        ("refused", SOURCE_STOPS["no_answer"], "unknown"),
+        ("not_found", SOURCE_STOPS["unreachable"], "unknown"),
+        ("permission", SOURCE_STOPS["unreachable"], "unknown"),
         ("unknown", "GitHub answered 404 Not Found", "unknown"),
     ],
 )
