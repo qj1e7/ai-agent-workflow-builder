@@ -39,6 +39,7 @@ from tests.test_scenarios import (
     START,
     github_read,
     jira_read,
+    our_read,
     release_check,
 )
 from tests.test_simulation_gateway import SETTINGS, FakeWaker, no_wait, signed
@@ -410,7 +411,19 @@ def test_the_gateway_runs_a_simulation_signed_with_the_start_secret(gw: GatewayW
     assert (body["tried"], body["passed"]) == (6, 6)
     assert [r["kind"] for r in body["results"]] == list(KINDS)
     happy = body["results"][0]
-    assert set(happy) == {"name", "kind", "verdict", "expected", "happened", "ran", "not_tried"}
+    assert set(happy) == {
+        "name",
+        "kind",
+        "verdict",
+        "expected",
+        "happened",
+        "ran",
+        "not_tried",
+        "ending",
+        "stopped_at",
+        "plays",
+    }
+    assert (body["scenarios_from"], body["refused"]) == ("templates", [])
     assert body["coverage"]["not_tried"] == [
         {"block": "Tell", "why": "A simulation never writes, so a block after a write never runs."}
     ]
@@ -451,3 +464,131 @@ def test_a_simulation_the_scenarios_do_not_fit_is_refused_in_words(gw: GatewayWi
 def test_a_simulation_not_signed_with_the_start_secret_is_refused(gw: GatewayWithRuns) -> None:
     assert gw.post({"version": release_check()}, secrets.token_hex(24)).status_code == 401
     assert gw.stack.n8n.done == []
+
+
+# The scenario writer's scenarios (PR 6)
+
+UNFIT = [{"kind": "happy_path", "reads": {"Nowhere": {"serve": "recorded"}}}]
+
+
+@pytest.mark.anyio
+async def test_written_scenarios_that_do_not_fit_fall_back_to_the_templates_when_asked(
+    stack: Stack,
+) -> None:
+    given = [ScenarioSpec.model_validate(s) for s in UNFIT]
+    simulation = await stack.simulations.simulate(
+        release_check(), given, RecordedSamples(), fall_back=True
+    )
+    assert verdicts(simulation) == dict.fromkeys(KINDS, "passed")
+    assert isinstance(simulation, Simulation)
+    assert simulation.scenarios_from == "templates"
+    assert simulation.refused == (
+        'happy_path: The version has no block "Nowhere" that reads a source.',
+    )
+
+
+@pytest.mark.anyio
+async def test_written_scenarios_that_fit_run_as_given(stack: Stack) -> None:
+    given = [ScenarioSpec.model_validate({"kind": "approver_says_no"})]
+    simulation = await stack.simulations.simulate(
+        release_check(), given, RecordedSamples(), fall_back=True
+    )
+    assert verdicts(simulation) == {"approver_says_no": "passed"}
+    assert isinstance(simulation, Simulation)
+    assert (simulation.scenarios_from, simulation.refused) == ("given", ())
+
+
+@pytest.mark.anyio
+async def test_a_scenario_names_how_it_ended_where_it_stopped_and_its_plays(stack: Stack) -> None:
+    given = [
+        ScenarioSpec.model_validate(
+            {"kind": "source_not_found", "reads": {"Read releases": {"serve": "not_found"}}}
+        )
+    ]
+    simulation = await stack.simulations.simulate(release_check(), given, RecordedSamples())
+    assert isinstance(simulation, Simulation)
+    (graded,) = simulation.results
+    assert (graded.verdict, graded.ending, graded.stopped_at) == (
+        "passed",
+        "stopped",
+        "Read releases",
+    )
+    assert [(p.block, p.serve) for p in graded.plays] == [("Read releases", "not_found")]
+
+
+def test_the_gateway_falls_back_to_the_templates_and_says_why(gw: GatewayWithRuns) -> None:
+    answer = gw.post({"version": release_check(), "scenarios": UNFIT, "fall_back": True})
+    assert answer.status_code == 200, answer.text
+    body = answer.json()
+    assert (body["tried"], body["passed"]) == (6, 6)
+    assert body["scenarios_from"] == "templates"
+    assert body["refused"] == [
+        'happy_path: The version has no block "Nowhere" that reads a source.'
+    ]
+    odd = body["results"][5]
+    assert odd["plays"] == [
+        {
+            "block": "Read releases",
+            "serve": "varied",
+            "vary": ["suffix", "empty_field", "long_text"],
+        }
+    ]
+
+
+def post_plan(gw: GatewayWithRuns, body: dict[str, Any], secret: str | None = None) -> Any:
+    raw = json.dumps(body).encode()
+    path = "/simulation/v1/plans"
+    headers = signed("POST", path, raw) if secret is None else signed("POST", path, raw, secret)
+    return gw.client.post(path, content=raw, headers=headers)
+
+
+def test_the_gateway_answers_a_versions_plan_for_the_scenario_writer(gw: GatewayWithRuns) -> None:
+    who = f"person.{secrets.token_hex(4)}@example.com"
+    sample = {
+        "id": "real-1",
+        "answer": "read.release",
+        "block": "Read releases",
+        "items": [{"kind": "release", "id": "2.0.0", "name": who, "by": who}],
+    }
+    version = release_check([our_read(), github_read()])
+    answer = post_plan(gw, {"version": version, "samples": [sample]})
+    assert answer.status_code == 200, answer.text
+    body = answer.json()
+    assert body["kinds"] == list(KINDS)
+    blocks = {b["name"]: b for b in body["blocks"]}
+    assert blocks["Read releases"] == {
+        "name": "Read releases",
+        "node_type": "CUSTOM.wabRead",
+        "role": "read",
+        "mode": "ours",
+        "mock": None,
+        "answer": "read.release",
+        "plays": ["recorded", "varied", "empty", "not_found", "too_slow"],
+        "varies": ["suffix", "empty_field", "long_text"],
+    }
+    assert (blocks["Compare"]["role"], blocks["Compare"]["plays"]) == (
+        "agent",
+        ["recorded", "too_slow"],
+    )
+    assert blocks["GitHub releases"]["mode"] == "mock"
+    assert [s["id"] for s in body["samples"]] == [
+        "real-1",
+        "made_up.github.release",
+        "made_up.read.release",
+    ]
+    assert body["samples"][0]["items"] == [{"kind": "release", "id": "2.0.0", "name": "2.0.0"}]
+    assert who not in answer.text
+    assert gw.stack.n8n.done == [], "a plan makes nothing"
+
+
+def test_a_plan_is_refused_without_the_start_secret_or_for_a_version_it_cannot_run(
+    gw: GatewayWithRuns,
+) -> None:
+    assert post_plan(gw, {"version": release_check()}, secrets.token_hex(24)).status_code == 401
+    version = release_check()
+    version["nodes"].append(
+        {"name": "Call", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "parameters": {}}
+    )
+    refused = post_plan(gw, {"version": version})
+    assert refused.status_code == 422
+    assert [b["block"] for b in refused.json()["blocks"]] == ["Call"]

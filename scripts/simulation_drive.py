@@ -30,6 +30,10 @@ played by mock GitHub dropping the connection, the pinned Jira block must be nam
 every copy must be deleted and mock GitHub set back. A scenario naming a block the version doesn't
 have must be refused, with nothing made.
 
+And it has the gateway serve what the scenario writer reads (ADR 0054, PR 6): a version's plan, with
+each block's role and plays and the kinds that apply, and a simulation whose written scenario does
+not fit, which runs code's templates in its place and says why.
+
 usage: docker exec -i <gateway container> python -I - < scripts/simulation_drive.py
 Exits 0 when every check passes, and 1 when one fails.
 """
@@ -524,6 +528,26 @@ def check_simulations() -> None:
     check(
         status == 422 and "Nowhere" in json.dumps(refused),
         f"a scenario naming a block the version doesn't have is refused ({status})",
+    )
+
+    status, plan = gateway("POST", "/simulation/v1/plans", {"version": with_github()})
+    roles = {b["name"]: (b["role"], b["plays"]) for b in (plan or {}).get("blocks", [])}
+    check(
+        status == 200
+        and (plan or {}).get("kinds") == KINDS
+        and roles.get("Read the issue") == ("read", ["recorded", "varied", "empty"]),
+        f"the gateway answers a version's plan for the scenario writer ({status}, {roles})",
+    )
+    status, done = simulation(
+        {"version": release_check(), "scenarios": [scenario], "fall_back": True}
+    )
+    found = results_of(done)
+    check(
+        status == 200
+        and (done or {}).get("scenarios_from") == "templates"
+        and "Nowhere" in json.dumps((done or {}).get("refused"))
+        and {k: r["verdict"] for k, r in found.items()} == dict.fromkeys(KINDS, "passed"),
+        f"a written scenario that doesn't fit falls back to code's six templates ({status})",
     )
 
     _, after = public("GET", "/workflows")

@@ -294,6 +294,8 @@ def test_every_job_is_registered_once() -> None:
         "explain_wording",
         "workflow_draft",
         "troubleshoot",
+        "scenario_writer",
+        "scenario_explainer",
     ]
 
 

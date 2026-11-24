@@ -40,6 +40,8 @@ from evals.providers import PROVIDERS, Env, NotRun, Target, plan
 from evals.red_team import RED_TEAM
 from evals.reply import LED_TWINS, REPLY, REPLY_DEV, REPLY_GATE, SPIKE, SPIKE_DEV
 from evals.report import report
+from evals.scenario_explainer import SCENARIO_EXPLAINER
+from evals.scenario_writer import SCENARIO_WRITER
 from evals.summarise import SUMMARISE
 from evals.troubleshoot import TROUBLESHOOT
 from evals.workflow_draft import WORKFLOW_DRAFT
@@ -60,6 +62,8 @@ JOBS: tuple[Job[Any], ...] = (
     EXPLAIN_WORDING,
     WORKFLOW_DRAFT,
     TROUBLESHOOT,
+    SCENARIO_WRITER,
+    SCENARIO_EXPLAINER,
 )
 PARTS_OF_REPLY: Final = frozenset({REPLY_GATE.name, REPLY_DEV.name, SPIKE_DEV.name})
 """Jobs that run part of the reply job's cases. A run of every job leaves them out, so it runs

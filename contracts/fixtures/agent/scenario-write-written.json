@@ -1,0 +1,67 @@
+{
+  "kind": "written",
+  "scenarios": [
+    {
+      "kind": "happy_path",
+      "reads": [],
+      "slow_agents": []
+    },
+    {
+      "kind": "nothing_new",
+      "reads": [
+        {
+          "block": "Read releases",
+          "serve": "empty",
+          "sample": null,
+          "vary": []
+        }
+      ],
+      "slow_agents": []
+    },
+    {
+      "kind": "source_not_found",
+      "reads": [
+        {
+          "block": "Read releases",
+          "serve": "not_found",
+          "sample": null,
+          "vary": []
+        }
+      ],
+      "slow_agents": []
+    },
+    {
+      "kind": "timeout",
+      "reads": [
+        {
+          "block": "Read releases",
+          "serve": "too_slow",
+          "sample": null,
+          "vary": []
+        }
+      ],
+      "slow_agents": [
+        "Compare"
+      ]
+    },
+    {
+      "kind": "approver_says_no",
+      "reads": [],
+      "slow_agents": []
+    },
+    {
+      "kind": "odd_data",
+      "reads": [
+        {
+          "block": "Read releases",
+          "serve": "varied",
+          "sample": "made_up.read.release",
+          "vary": [
+            "suffix"
+          ]
+        }
+      ],
+      "slow_agents": []
+    }
+  ]
+}

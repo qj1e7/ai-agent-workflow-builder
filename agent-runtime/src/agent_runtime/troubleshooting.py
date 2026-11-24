@@ -14,7 +14,7 @@ or a failed check keeps the rule table's answer, which the platform gives."""
 import logging
 import re
 import uuid
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from typing import Final, Literal, get_args
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -156,20 +156,26 @@ def _joined_words(name: str) -> int:
     return max(len(re.findall(r"[A-Z]+(?![a-z])|[A-Z]?[a-z]+", part)) for part in name.split("/"))
 
 
-def _is_detail(detail: str, kind: FailureKind, request: CauseRequest) -> bool:
-    """One name of at most 64 characters copied whole and exactly from the stop, in a shape its
-    kind takes, of at most two joined words, and no plain word or link. The activity holds what
-    the run read, such as a release note, so a name only it holds is never a detail. The length
-    and the stop are checked before any shape."""
+def named_in(detail: str, words: str, shapes: Iterable[Shape]) -> bool:
+    """One name of at most 64 characters copied whole and exactly from the words, in one of the
+    shapes, of at most two joined words, and no plain word or link. The length and the words are
+    checked before any shape. The explainer of a simulation's failures holds its detail to the
+    same rule (scenario_explaining.py)."""
     if len(detail) > DETAIL_LIMIT:
         return False
-    if detail not in {name.rstrip("./-") for name in DETAIL.findall(request.stop.message)}:
+    if detail not in {name.rstrip("./-") for name in DETAIL.findall(words)}:
         return False
-    if not any(SHAPES[shape].fullmatch(detail) for shape in TAKES[kind]):
+    if not any(SHAPES[shape].fullmatch(detail) for shape in shapes):
         return False
     if _joined_words(detail) > MOST_JOINED_WORDS:
         return False
     return detail.casefold() not in ENGLISH and LINK.search(detail) is None
+
+
+def _is_detail(detail: str, kind: FailureKind, request: CauseRequest) -> bool:
+    """A name from the stop, in a shape its kind takes. The activity holds what the run read,
+    such as a release note, so a name only it holds is never a detail."""
+    return named_in(detail, request.stop.message, TAKES[kind])
 
 
 def checked(asked: ModelCause, request: CauseRequest) -> CauseFound | CauseCheck:

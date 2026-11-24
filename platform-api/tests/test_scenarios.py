@@ -24,6 +24,7 @@ from platform_api.orchestration.scenarios import (
     check_all,
     kinds_that_apply,
     plan_of,
+    plays_of,
     stage,
     templates,
 )
@@ -465,3 +466,26 @@ def test_a_given_sample_is_scrubbed_before_a_scenario_serves_it() -> None:
         samples,
     )
     assert who not in staged.gateway.model_dump_json()
+
+
+# What the scenario writer is offered (PR 6)
+
+
+def test_each_block_offers_the_plays_a_simulation_can_make_of_it() -> None:
+    plan = planned(release_check([our_read(), github_read(), jira_read()]))
+    every = ("recorded", "varied", "empty", "not_found", "too_slow")
+    found = {block.name: plays_of(block) for block in plan.blocks}
+    assert found["Read releases"] == every
+    assert found["GitHub releases"] == every
+    assert found["Read the issue"] == ("recorded", "varied", "empty")
+    assert found["Compare"] == ("recorded", "too_slow")
+    assert found["Ask for a yes"] == found[START] == ()
+
+
+def test_listed_samples_are_the_recorded_newest_first_then_the_made_up_ones() -> None:
+    samples = RecordedSamples()
+    first = samples.record("read.release", [{"kind": "release", "id": "1.0.0"}], "real_run")
+    second = samples.record("read.release", [{"kind": "release", "id": "1.0.1"}], "real_run")
+    samples.record("jira.issue", [{"key": "SUP-1"}], "real_run")
+    listed = samples.listed({"read.release"})
+    assert [s.id for s in listed] == [second.id, first.id, MADE_UP["read.release"].id]

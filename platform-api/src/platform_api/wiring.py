@@ -98,6 +98,7 @@ from platform_api.orchestration.runs import Leg
 from platform_api.orchestration.schedule_store import ScheduleBook
 from platform_api.orchestration.service import Orchestrator
 from platform_api.orchestration.setup_approvals import SetUpApprovals
+from platform_api.orchestration.simulation_model import SimulationModel, connected_model
 from platform_api.orchestration.slack_channels import SlackChannels
 from platform_api.orchestration.team_request_card import TeamsRequestChannel
 from platform_api.orchestration.teams import TeamsStub, TeamsWorkflowsWebhook
@@ -128,6 +129,7 @@ class Services:
     planner_front: PlannerFront
     explainer: Explainer
     cause_finder: RunCauses
+    simulation_model: SimulationModel
     drafted: DraftedWorkflows
     setup_approvals: SetUpApprovals
     home: Home
@@ -201,6 +203,7 @@ def install(app: FastAPI, services: Services) -> None:
     app.state.planner_front = services.planner_front
     app.state.explainer = services.explainer
     app.state.cause_finder = services.cause_finder
+    app.state.simulation_model = services.simulation_model
     app.state.drafted = services.drafted
     app.state.home = services.home
     app.state.watchlist = services.watchlist
@@ -571,6 +574,7 @@ async def build(settings: Settings) -> Services:
         ),
         explainer=Explainer(db, builder, ExplainWordings(db, model_settings, agents)),
         cause_finder=RunCauses(db, model_settings, agents, RunsInN8n(db, n8n.landing)),
+        simulation_model=SimulationModel(agents, connected_model(db, model_settings)),
         drafted=drafted,
         setup_approvals=setup_approvals,
         home=home,

@@ -412,3 +412,49 @@ def test_coverage_names_what_no_scenario_reached_and_what_was_not_tried() -> Non
         "timeout",
         "odd_data",
     )
+
+
+# What the explainer reads (PR 6)
+
+
+def test_a_grade_names_how_the_run_ended_and_where_it_stopped() -> None:
+    plan = planned(release_check())
+    refused = 'The scenario "happy_path" gives "Compare" no answer.'
+    run = simulated(calls=[call("Compare", "agent", "refused", refused)])
+    stopped = execution("error", (START, "Read releases", "Compare"), "Compare", refused)
+    graded = grade(plan, staged(plan)["happy_path"], run, stopped)
+    assert (graded.ending, graded.stopped_at) == ("stopped", "Compare")
+    passed = grade(plan, staged(plan)["happy_path"], reached_the_yes(), refused_write())
+    assert (passed.ending, passed.stopped_at) == ("reached_yes", None)
+
+
+def test_a_write_with_no_yes_or_with_changes_left_out_ends_as_a_wrong_write() -> None:
+    plan = planned(release_check())
+    no_yes = grade(
+        plan, staged(plan)["nothing_new"], reached_the_yes(approver=None), refused_write()
+    )
+    assert (no_yes.verdict, no_yes.ending, no_yes.stopped_at) == ("failed", "wrong_write", None)
+    fewer = simulated(
+        proposed=[change(), change(title="Second")],
+        approver="yes",
+        woke="delivered",
+        would_have_written=1,
+    )
+    left_out = grade(plan, staged(plan)["happy_path"], fewer, refused_write())
+    assert (left_out.verdict, left_out.ending) == ("failed", "wrong_write")
+
+
+def test_a_grade_carries_how_its_scenario_played_each_read_other_than_as_recorded() -> None:
+    plan = planned(release_check([our_read(), jira_read()]))
+    made = staged(plan)
+    assert [(p.block, p.serve, p.vary) for p in made["odd_data"].plays] == [
+        ("Read releases", "varied", ("suffix", "empty_field", "long_text")),
+        ("Read the issue", "varied", ("empty_field", "long_text")),
+    ]
+    assert [(p.block, p.serve) for p in made["source_not_found"].plays] == [
+        ("Read releases", "not_found")
+    ]
+    assert made["happy_path"].plays == ()
+    graded = not_tried(made["timeout"])
+    assert (graded.ending, graded.stopped_at) == (None, None)
+    assert graded.plays == made["timeout"].plays
