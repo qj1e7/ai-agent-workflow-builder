@@ -137,7 +137,7 @@ N8N_NOT_READY: Final = "I couldn't draft that. n8n is not ready yet."
 PAUSED: Final = "Drafting is paused while the platform updates."
 N8N_IMAGE: Final = "n8nio/n8n"
 """The repository of the n8n image the drafter's catalogue names (contracts/n8n/catalogue.json)."""
-CHANGED: Final = "Changed since it was approved. Send it for approval again."
+CHANGED: Final = "Changed since it was approved. Press Turn on to ask for the check again."
 NO_LONGER_PASSES: Final = (
     "It no longer passes the safety check, so it isn't set up. Ask for a change to draft it again."
 )

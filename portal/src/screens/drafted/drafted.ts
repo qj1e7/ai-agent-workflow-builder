@@ -43,6 +43,8 @@ export function draftedPill(state: DraftedWorkflowView['state'], inN8n = false, 
 export const ONE_TIME_CHECK = 'An Approver checks it once before it first runs.'
 export const checkedOnceWords = (by: string): string => `${by} checked it once.`
 export const WAITING_FOR_CHECK = 'Waiting for an Approver to check it.'
+/** A version changed after its check, in the platform's own words (`CHANGED`), which name the button beside them. */
+export const CHANGED_SINCE_CHECK = 'Changed since it was approved. Press Turn on to ask for the check again.'
 /** After the check, Turn on works as on any set-up card. */
 export const TURN_ON_NOW = 'Press Turn on. I do a test run, which writes nothing, and turn it on if the test passes.'
 
@@ -139,7 +141,7 @@ export type SetUpLine =
 export function setUpLine(setUp: DraftedSetUpView | null): SetUpLine {
   if (setUp === null || setUp.state === 'setting_up') return { kind: 'setting_up', words: 'Setting it up in n8n.' }
   if (setUp.state === 'set_up') return { kind: 'set_up', words: 'Set up as a draft.', useCaseId: setUp.use_case_id }
-  return { kind: setUp.state, words: setUp.words ?? (setUp.state === 'failed' ? 'n8n didn’t take it.' : 'It changed since it was approved. It needs a new approval.') }
+  return { kind: setUp.state, words: setUp.words ?? (setUp.state === 'failed' ? 'n8n didn’t take it.' : CHANGED_SINCE_CHECK) }
 }
 
 /** The words above the box while a change is being asked for. */

@@ -66,8 +66,8 @@ function Head({ view, revision, life }: { view: Pick<DraftedWorkflowView, 'state
 /** The workflow an approved revision was set up as, once n8n holds it, or null. */
 const setUpAs = (view: DraftedWorkflowView): string | null => (view.state === 'approved' && view.set_up?.state === 'set_up' ? view.set_up.use_case_id : null)
 
-/** Turn on works as on any set-up card once the workflow it was set up as is there and not on yet. */
-const turnsOnNow = (view: DraftedWorkflowView, life: UseCaseState | undefined): boolean => setUpAs(view) !== null && life !== 'on' && life !== 'paused'
+/** Turn on works as on any set-up card once the platform says the workflow it was set up as is a Draft: never while unread or gone. */
+const turnsOnNow = (view: DraftedWorkflowView, life: UseCaseState | undefined): boolean => setUpAs(view) !== null && life === 'draft'
 
 /** The one-time check, one line on the card (ADR 0053, item 3): that it comes before the first run, then who gave it. */
 function CheckLine({ view }: { view: DraftedWorkflowView }) {
