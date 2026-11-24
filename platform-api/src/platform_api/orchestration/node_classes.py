@@ -18,6 +18,10 @@ is to a person and to the checker (`Use`): its tag and what it does, the paramet
 where it reads or posts, and how many Approvers a change by it needs. Such a node may read, or
 post a notice when its row names where it posts, so the checker can hold it to the Tell rule. It
 never writes until the write proxy exists (ADR 0045, E18).
+
+Such a node also says how a simulation stands in for it (`simulated`, ADR 0054): a mock of its
+system, which it reaches with a mock key, or no mock yet, so a simulation pins its output, and
+why. No other node says it.
 """
 
 from collections.abc import Iterable, Mapping, Sequence
@@ -52,6 +56,10 @@ type BlockKind = Literal[
 nodes, which only reshape items (P7 Q10). `system` is one of n8n's own nodes for an outside
 system, such as Jira or Slack, which reads or posts with a key the platform made (ADR 0045).
 Every other kind is one type."""
+
+type Mock = Literal["github", "jira", "slack"]
+"""The systems a mock stands in for in a simulation (ADR 0054, spike S2). Each is a system the
+platform makes a key for, so the mock key has a credential type of the platform's key."""
 
 MANY: frozenset[BlockKind] = frozenset({"shape", "system"})
 """The kinds several types share."""
@@ -133,9 +141,20 @@ class _Row(BaseModel):
         )
 
 
+class _Mocked(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    mock: Mock
+
+
+class _Pinned(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    pinned: str = Field(min_length=1)
+
+
 class _On(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     block: BlockKind
+    simulated: _Mocked | _Pinned | None = None
     rows: tuple[_Row, ...] = Field(min_length=1)
 
 
@@ -194,6 +213,28 @@ class Use:
     """Switches a notice leaves off, such as Slack's link_names, which turns a written @channel
     into a call to everyone in it."""
 
+    @property
+    def system(self) -> str:
+        """The outside system, as the tag's last word names it: Jira in Reads Jira."""
+        return self.tag.split()[-1]
+
+
+@dataclass(frozen=True)
+class Mocked:
+    """A mock of the block's system stands in for it in a simulation."""
+
+    mock: Mock
+
+
+@dataclass(frozen=True)
+class Pinned:
+    """No mock stands in for the block yet, so a simulation pins its output."""
+
+    why: str
+
+
+type Simulated = Mocked | Pinned
+
 
 @dataclass(frozen=True)
 class OnType:
@@ -202,6 +243,15 @@ class OnType:
     """By version, written as `version_key` writes it."""
     uses: Mapping[str, Use]
     """By version, for one of n8n's own nodes for an outside system."""
+    simulated: Simulated | None = None
+    """For one of n8n's own nodes for an outside system, how a simulation stands in for it."""
+
+    @property
+    def system(self) -> str | None:
+        """The outside system one of n8n's own nodes reaches, whichever version, as its rows that
+        say what it does name it. None for any other type."""
+        named = {use.system for use in self.uses.values()}
+        return named.pop() if len(named) == 1 else None
 
 
 @dataclass(frozen=True)
@@ -276,6 +326,23 @@ class NodeClasses:
         if chosen == "off":
             return Off("operation", what)
         return Runs(chosen, entry.uses.get(str(key)))
+
+    def doing(
+        self, node_type: str, version: object, parameters: Mapping[str, object]
+    ) -> tuple[str, On] | None:
+        """What a block runs to do, as `verdict` reads it, such as ("issue getAll", "read") for a
+        Jira search. None when the file turns it off or doesn't class it."""
+        entry = self._types.get(node_type)
+        key = version_key(version)
+        classed = None if not isinstance(entry, OnType) or key is None else entry.versions.get(key)
+        if classed is None:
+            return None
+        picked = _what(classed, parameters)
+        if isinstance(picked, Off) or picked[1] == "off":
+            return None
+        what, on = picked
+        assert on != "off"
+        return what, on
 
     def unclassed(self, served: Iterable[Mapping[str, Any]]) -> list[str]:
         """Every way the node types n8n serves, as its `/types/nodes.json` lists them, and the
@@ -379,7 +446,14 @@ def _domain(entry: _On | _Off) -> OnType | OffType:
             versions[key] = classed
             if use is not None:
                 uses[key] = use
-    return OnType(entry.block, versions, uses)
+    match entry.simulated:
+        case _Mocked(mock=mock):
+            simulated: Simulated | None = Mocked(mock)
+        case _Pinned(pinned=why):
+            simulated = Pinned(why)
+        case None:
+            simulated = None
+    return OnType(entry.block, versions, uses, simulated)
 
 
 def _classes(classed: Classed) -> set[Class]:
@@ -402,6 +476,11 @@ def _check(types: Mapping[str, OnType | OffType]) -> None:
             raise ValueError(f"{name} is on, but nothing it does is: turn it off instead")
         if ("write" in classes) != (entry.block == "write"):
             raise ValueError(f"{name}: only Make the approved changes writes")
+        if (entry.simulated is None) == (entry.block == "system"):
+            raise ValueError(
+                f"{name}: a block for an outside system, and only one, says how a simulation "
+                "stands in for it"
+            )
         if not name.startswith(OURS):
             _check_n8ns_own(name, entry)
     for block, names in holders.items():

@@ -5,3 +5,4 @@
 !n8n-node-pack/tsconfig.json
 !n8n-node-pack/tsconfig.build.json
 !n8n-node-pack/src
+!deploy/n8n/request-limit.mjs

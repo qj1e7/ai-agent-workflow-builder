@@ -103,6 +103,7 @@
 
   "n8n-nodes-base.jira": {
     "block": "system",
+    "simulated": {"mock": "jira"},
     "rows": [
       {
         "versions": [1],
@@ -124,6 +125,7 @@
   },
   "n8n-nodes-base.github": {
     "block": "system",
+    "simulated": {"mock": "github"},
     "rows": [
       {
         "versions": [1, 1.1],
@@ -150,6 +152,7 @@
   },
   "n8n-nodes-base.microsoftTeams": {
     "block": "system",
+    "simulated": {"pinned": "Teams calls Microsoft at a fixed address and signs in with Microsoft, so no mock stands in for it yet."},
     "rows": [
       {
         "versions": [2],
@@ -177,6 +180,7 @@
   },
   "n8n-nodes-base.microsoftOutlook": {
     "block": "system",
+    "simulated": {"pinned": "Outlook calls Microsoft at a fixed address and signs in with Microsoft, so no mock stands in for it yet."},
     "rows": [
       {
         "versions": [2],
@@ -204,6 +208,7 @@
   },
   "n8n-nodes-base.gmail": {
     "block": "system",
+    "simulated": {"pinned": "Gmail calls Google at a fixed address and signs in with Google, so no mock stands in for it yet."},
     "rows": [
       {
         "versions": [2, 2.1, 2.2],
@@ -226,6 +231,7 @@
   },
   "n8n-nodes-base.slack": {
     "block": "system",
+    "simulated": {"mock": "slack"},
     "rows": [
       {
         "versions": [2, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7],

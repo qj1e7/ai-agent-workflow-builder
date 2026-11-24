@@ -149,6 +149,10 @@ services:
       EXECUTIONS_DATA_PRUNE: "true"
       EXECUTIONS_DATA_MAX_AGE: "720"
       EXECUTIONS_DATA_SAVE_ON_SUCCESS: all
+      # A read by n8n's own blocks gives up on a source after 30 seconds a try, not n8n's 300 (ADR
+      # 0056). Our image makes n8n read it for a GET, HEAD or OPTIONS only, and platform-api's stop
+      # words say it (scripts/n8n-guards.sh).
+      WAB_REQUEST_TIMEOUT_SECONDS: "30"
       # Our blocks call only this API, with this key, and check each start with the secret.
       WAB_API_URL: http://platform-api:8000
       WAB_NODE_KEY: ${WAB_NODE_KEY:?run deploy/make-env.sh}

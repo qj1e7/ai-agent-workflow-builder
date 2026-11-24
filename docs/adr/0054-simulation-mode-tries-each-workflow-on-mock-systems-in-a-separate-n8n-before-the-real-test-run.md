@@ -111,6 +111,21 @@ What the results change in this ADR:
 4. **Sections 5 and 7, coverage gaps.** The refused write ends the run, so a block after Make the approved changes, such as Tell, never runs in a simulation. Code reports it as not tried for that reason, or the gateway answers a write with "would have made", as Tell answers "would have sent" (PR 3 chooses). Code also keeps its own list of the blocks it pinned.
 5. **Section 2, Azure.** The simulation n8n, the mocks and the gateway's address need their own Container Apps environment and subnet. Isolation rests on holding no real key. The outbound service tags that subnet must allow, `AzureContainerRegistry`, `Storage.<region>` and `AzureFrontDoor.FirstParty`, also cover other Azure customers' endpoints, so on Azure isolation still rests on holding no real key. PR 2 and PR 3 choose whether the gateway runs in that environment or stays in platform-api, where the simulation's node key would be the only guard on the real API.
 
+#### What PR 3 chose, 24 Nov 2026
+
+- **Where the gateway runs.** As its own service in the simulation's network: `gateway` in `deploy/compose.simulation.yaml`, and `sim-gateway` in the simulation's Container Apps environment. It runs platform-api's image with its own command, and mounts platform-api's router for our blocks, so each block gets the same answers and refusals. It is not a mode of platform-api, which holds real keys and the real database, and which the platform's n8n reaches.
+- **Writes.** Every write is refused with 403 "A simulation never writes.", and the gateway keeps what it would have written. So a block after a write never runs in a simulation, and PR 5 reports it as not tried for that reason (point 4 above).
+- **Records.** The gateway keeps its simulated runs in memory, not in tables, because the simulation's own PostgreSQL is in memory too. A restart of either forgets the simulation under way, so PR 5 must start it again.
+- **Starts.** The gateway issues each start's nonce for one scenario. The driver's routes, a start and a record read, are signed with the simulation's start secret. The simulation n8n's own environment holds that secret, because Start from the Portal checks a start with it. A workflow under simulation still can't read it to start or read a simulated run: n8n keeps expressions from reading its environment (`N8N_BLOCK_ENV_ACCESS_IN_NODE`), Code runs in the external task runner, which holds none of n8n's settings, and the mock setup refuses HTTP Request and Code.
+
+#### What PR 4 chose, 24 Nov 2026
+
+- **Where the mock setup runs.** In the gateway, as a third signed route, `POST /simulation/v1/copies`. It takes a version and makes its copy in the simulation n8n, through that n8n's own owner and API key, so platform-api never holds them.
+- **The class file decides.** Each of n8n's own blocks for a system says how a simulation stands in for it (`simulated` in `node_classes.json`): a mock (GitHub, Jira, Slack) or pinned output, with why (Teams, Outlook, Gmail). Our blocks call the gateway, and n8n's other blocks run as they are. Anything else is refused, and nothing is made.
+- **Mocks that run.** Mock GitHub, through its key's server address, and mock Slack, under the name `slack.com` with a key the stack makes up at each start. No mock Jira runs in the simulation yet, so a Jira block is pinned, with that reason, until one does (`MOCK_JIRA_URL`).
+- **Keys.** The copy names only the mock keys the gateway makes, each of a type the platform's own key for that system has, with made-up values. Every key the version names is left out.
+- **Pins.** Only a block with no mock is pinned: from the scenario (PR 5), else from the version's own pin, else with an item that says it was pinned. Each block's mode is in the answer, and the pinned ones are listed as not tried.
+
 Outside this ADR: no real workflow has a time limit of its own (no `EXECUTIONS_TIMEOUT` and no `executionTimeout`), so a hung source holds a real run for 300 s for each try of the block. Whether real workflows get a shorter one is for the team lead.
 
 ### Pull requests, in order

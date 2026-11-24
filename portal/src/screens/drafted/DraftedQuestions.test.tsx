@@ -68,7 +68,7 @@ describe('the question a draft asks', () => {
     expect(text(html)).toContain('When Mondays, at what time?')
     expect(buttons(html)).toEqual(expect.arrayContaining(['8:00', '9:00', '13:00', '17:00', 'Type a time']))
     expect(text(html)).not.toContain('Who says yes')
-    expect(buttons(html)).not.toContain('Send for approval')
+    expect(buttons(html)).not.toContain('Turn on')
     expect(text(html)).toContain('Answer 2 questions first')
     expect(html).not.toContain('disabled')
   })
@@ -82,10 +82,10 @@ describe('the question a draft asks', () => {
     expect(buttons(html)).not.toContain('Type a time')
   })
 
-  it('asks nothing, and offers Send for approval, once nothing is needed', () => {
+  it('asks nothing, and offers Turn on, once nothing is needed', () => {
     const html = card(READY)
     expect(html).not.toContain('aria-label="Settings"')
-    expect(buttons(html)).toContain('Send for approval')
+    expect(buttons(html)).toContain('Turn on')
   })
 
   it('asks nothing of a draft that is waiting for a yes', () => {
@@ -124,7 +124,7 @@ describe('a guess, and a setting that waits', () => {
     const html = card({ ...READY, settings: [...READY.settings, key], question: null, needed: 1, can_send: false, why_not_send: 'Waiting for an Operator to add a key' })
     expect(text(html)).toContain('Key “The Jira write key” Waits until an Operator adds a Jira write key in Settings.')
     expect(text(html)).toContain('Waiting for an Operator to add a key')
-    expect(buttons(html)).not.toContain('Send for approval')
+    expect(buttons(html)).not.toContain('Turn on')
   })
 })
 

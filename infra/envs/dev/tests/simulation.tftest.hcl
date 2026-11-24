@@ -175,11 +175,11 @@ run "simulation_on_holds_no_real_key_and_reaches_only_its_own_subnet" {
     condition = (
       length(azurerm_virtual_network.simulation) == 1 &&
       length(module.simulation_env) == 1 &&
-      toset(keys(module.simulation_app)) == toset(["sim-postgres", "sim-n8n", "sim-mock-github"]) &&
+      toset(keys(module.simulation_app)) == toset(["sim-postgres", "sim-n8n", "sim-gateway", "sim-mock-github"]) &&
       toset(keys(module.simulation_job)) == toset(["sim-db-init", "sim-bootstrap"]) &&
       length(module.simulation_n8n_runners) == 1
     )
-    error_message = "With enable_simulation true, Terraform must make the network, the environment, its three apps, its two jobs and its task runner."
+    error_message = "With enable_simulation true, Terraform must make the network, the environment, its four apps, its two jobs and its task runner."
   }
 
   assert {
@@ -200,6 +200,7 @@ run "simulation_on_holds_no_real_key_and_reaches_only_its_own_subnet" {
         "N8N_DIAGNOSTICS_ENABLED", "N8N_VERSION_NOTIFICATIONS_ENABLED", "N8N_PERSONALIZATION_ENABLED",
         "N8N_HIRING_BANNER_ENABLED", "N8N_DISABLED_MODULES", "N8N_RUNNERS_BROKER_LISTEN_ADDRESS",
         "N8N_RUNNERS_AUTH_TOKEN", "EXECUTIONS_DATA_SAVE_ON_SUCCESS", "WAB_API_URL", "WAB_NODE_KEY", "WAB_START_SECRET",
+        "WAB_REQUEST_TIMEOUT_SECONDS",
       ]))
     )
     error_message = "The simulation n8n may hold only the settings listed here, so a real key added later fails this test."
@@ -220,6 +221,32 @@ run "simulation_on_holds_no_real_key_and_reaches_only_its_own_subnet" {
       ]))
     )
     error_message = "The simulation's PostgreSQL, mock GitHub and jobs may hold only the settings listed here."
+  }
+
+  # The simulation gateway answers our blocks in the simulation n8n (ADR 0054, PR 3). It holds no
+  # database address and no key of the platform's: only the simulation's node key and start
+  # secret, and the simulation n8n's owner, whose executions it reads.
+  assert {
+    condition = (
+      toset(concat(keys(local.simulation_apps["sim-gateway"].env), keys(local.simulation_apps["sim-gateway"].secrets))) == toset([
+        "N8N_BASE_URL", "N8N_OWNER_EMAIL", "MOCK_GITHUB_URL", "WAB_NODE_KEY", "WAB_START_SECRET", "N8N_OWNER_PASSWORD",
+      ]) &&
+      local.simulation_apps["sim-gateway"].secrets.WAB_NODE_KEY == local.simulation_apps["sim-n8n"].secrets.WAB_NODE_KEY &&
+      local.simulation_apps["sim-gateway"].secrets.WAB_START_SECRET == local.simulation_apps["sim-n8n"].secrets.WAB_START_SECRET &&
+      local.simulation_apps["sim-gateway"].secrets.N8N_OWNER_PASSWORD == local.simulation_jobs["sim-bootstrap"].secrets.N8N_OWNER_PASSWORD
+    )
+    error_message = "The simulation gateway may hold only the simulation n8n's address and owner, mock GitHub's address, and the simulation's own node key and start secret."
+  }
+
+  assert {
+    condition = (
+      local.simulation_apps["sim-gateway"].image == local.jobs.bootstrap.image &&
+      jsonencode(local.simulation_apps["sim-gateway"].command) == jsonencode(["uvicorn", "platform_api.orchestration.simulation_gateway:create_app", "--factory", "--host", "0.0.0.0", "--port", "8600"]) &&
+      local.simulation_apps["sim-gateway"].ingress.target_port == 8600 &&
+      local.simulation_apps["sim-gateway"].env.N8N_BASE_URL == "https://sim-n8n.internal.sim.southeastasia.azurecontainerapps.io" &&
+      local.simulation_apps["sim-gateway"].env.MOCK_GITHUB_URL == "https://sim-mock-github.internal.sim.southeastasia.azurecontainerapps.io"
+    )
+    error_message = "The simulation gateway must run platform-api's image as its own app on 8600, and read only the simulation n8n and mock GitHub."
   }
 
   assert {
@@ -252,6 +279,11 @@ run "simulation_on_holds_no_real_key_and_reaches_only_its_own_subnet" {
       local.simulation_jobs["sim-bootstrap"].image == local.jobs.bootstrap.image
     )
     error_message = "The simulation n8n must run the platform n8n's image and guards, and the platform's bootstrap."
+  }
+
+  assert {
+    condition     = local.simulation_apps["sim-n8n"].env.WAB_REQUEST_TIMEOUT_SECONDS == local.apps.n8n.env.WAB_REQUEST_TIMEOUT_SECONDS
+    error_message = "The simulation n8n must give up on a read as soon as the platform's n8n does (ADR 0056)."
   }
 
   assert {

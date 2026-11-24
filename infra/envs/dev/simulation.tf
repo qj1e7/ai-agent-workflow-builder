@@ -40,6 +40,7 @@ locals {
     for name, app in {
       sim-postgres = {
         image        = local.images["postgres"]
+        command      = null
         cpu          = 0.25
         memory       = "0.5Gi"
         min_replicas = 1
@@ -52,10 +53,10 @@ locals {
         secrets        = { POSTGRES_PASSWORD = "postgres-password" }
       }
 
-      # Our n8n with the platform n8n's guards and image. Our blocks call the simulation gateway,
-      # which ADR 0054's PR 3 adds as sim-gateway. Until then nothing answers there.
+      # Our n8n with the platform n8n's guards and image. Our blocks call the simulation gateway.
       sim-n8n = {
         image        = local.images["n8n"]
+        command      = null
         cpu          = 0.5
         memory       = "1Gi"
         min_replicas = 1
@@ -78,6 +79,7 @@ locals {
           N8N_DISABLED_MODULES              = "mcp-registry"
           N8N_RUNNERS_BROKER_LISTEN_ADDRESS = "0.0.0.0"
           EXECUTIONS_DATA_SAVE_ON_SUCCESS   = "all"
+          WAB_REQUEST_TIMEOUT_SECONDS       = local.n8n_request_timeout_seconds
           WAB_API_URL                       = local.simulation_url["sim-gateway"]
         })
         secrets = {
@@ -89,9 +91,36 @@ locals {
         }
       }
 
+      # The simulation gateway (ADR 0054, PR 3), which answers our blocks in the simulation n8n in
+      # place of platform-api. It runs platform-api's image, but only its own app. It holds the
+      # simulation's node key and start secret and the simulation n8n's owner, and no database
+      # address and no key of the platform's. Being in this environment, the platform's n8n can't
+      # reach it.
+      sim-gateway = {
+        image          = local.images["platform-api"]
+        command        = ["uvicorn", "platform_api.orchestration.simulation_gateway:create_app", "--factory", "--host", "0.0.0.0", "--port", "8600"]
+        cpu            = 0.25
+        memory         = "0.5Gi"
+        min_replicas   = 1
+        max_replicas   = 1
+        ingress        = { external = false, target_port = 8600 }
+        internal_ports = []
+        env = {
+          N8N_BASE_URL    = local.simulation_url["sim-n8n"]
+          N8N_OWNER_EMAIL = "owner@simulation.example"
+          MOCK_GITHUB_URL = local.simulation_url["sim-mock-github"]
+        }
+        secrets = {
+          WAB_NODE_KEY       = "node-key"
+          WAB_START_SECRET   = "start-secret"
+          N8N_OWNER_PASSWORD = "n8n-owner-password"
+        }
+      }
+
       # The deploy does not push this image yet. infra/README.md says what turning it on needs.
       sim-mock-github = {
         image          = "${module.registry.login_server}/mock-github:${var.image_tag}"
+        command        = null
         cpu            = 0.25
         memory         = "0.5Gi"
         min_replicas   = 0
@@ -336,7 +365,7 @@ module "simulation_app" {
   registry_id         = module.registry.id
   registry_server     = module.registry.login_server
   image               = each.value.image
-  command             = null
+  command             = each.value.command
   cpu                 = each.value.cpu
   memory              = each.value.memory
   min_replicas        = each.value.min_replicas

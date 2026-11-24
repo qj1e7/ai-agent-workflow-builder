@@ -269,7 +269,7 @@ With `enable_simulation = true`, `envs/dev/simulation.tf` adds:
 - **A virtual network** `vnet-wab-dev-sim`, `10.81.0.0/24`, with one subnet `snet-wab-dev-sim`, `10.81.0.0/27`, for Container Apps alone.
 - **A network security group** on that subnet. Out, it lets through the subnet itself, and port 443 to `MicrosoftContainerRegistry` and `AzureFrontDoor.FirstParty` for Azure's system images, `AzureContainerRegistry` and `Storage.<region>` for our registry, which is Basic and has no private endpoint, `AzureActiveDirectory` for the identities, and `AzureMonitor` for logs, plus port 53 to Azure's DNS. In, it lets through the subnet and Azure's load balancer. It refuses everything else both ways.
 - **A Container Apps environment** `cae-wab-dev-sim` on that subnet, with no public address, and logs to the same workspace. Apps in one environment share its subnet, so nothing of the platform's runs there.
-- **Three apps.** `sim-postgres` runs the PostgreSQL pin, reached on TCP 5432 inside the environment only. Its data lives in the container, so a restart starts it empty. `sim-n8n` runs our n8n image with the platform n8n's guards. Its blocks call `sim-gateway`, which ADR 0054's PR 3 adds. `sim-mock-github` runs mock GitHub.
+- **Four apps.** `sim-postgres` runs the PostgreSQL pin, reached on TCP 5432 inside the environment only. Its data lives in the container, so a restart starts it empty. `sim-n8n` runs our n8n image with the platform n8n's guards. Its blocks call `sim-gateway`, the simulation gateway, which runs platform-api's image with its own command and holds only the simulation's node key, start secret and n8n owner (ADR 0054, section 3). It is in this environment, so the platform's n8n can't reach it. `sim-mock-github` runs mock GitHub.
 - **The task runner** `sim-n8n-runners`, as the platform's: none of n8n's secrets, and no container gets its identity. It takes its token as a value, through azapi's `sensitive_body`, which is never stored or shown.
 - **Two jobs.** `sim-db-init` makes the two databases from `sql/db-init-simulation.sql`, then runs `sql/db-init.sql`. `sim-bootstrap` runs platform-api's bootstrap against the simulation n8n.
 - **Its own keys.** Terraform makes 12 for the simulation alone and keeps them as the apps' and jobs' own secrets. None is in Key Vault, no app or job here reads Key Vault, and each identity here may only pull images.
@@ -283,7 +283,7 @@ Every step changes cloud resources or the deploy, so a person does it, and only 
 1. **Push mock GitHub's image.** The deploy pushes our four images only. A follow-up adds `mock-github` with the same tag.
 2. **Pass the variable to the deploy.** `.github/workflows/deploy.yml` does not pass it yet. A follow-up adds `TF_VAR_enable_simulation: ${{ vars.ENABLE_SIMULATION || 'false' }}`.
 3. **Run the two jobs after the apply,** `sim-db-init` then `sim-bootstrap`, as the deploy runs the platform's. They must run again whenever `sim-postgres` restarts.
-4. **Add the simulation gateway** (ADR 0054, PR 3). Until it runs, nothing answers our blocks in the simulation n8n.
+4. **Reach the gateway from the platform.** The platform's apps run in another environment and can't reach `sim-gateway` yet. ADR 0054's PR 5 starts simulated runs and reads their records, and chooses how.
 
 Mock Slack is not on Azure. Container Apps cannot answer to `slack.com` without a private DNS zone and a certificate for that name. Slack's block is notice-only, so a run by hand pins it, as the spike found for Teams, Outlook and Gmail.
 
@@ -291,8 +291,8 @@ Mock Slack is not on Azure. Container Apps cannot answer to `slack.com` without 
 
 - The environment starts on its subnet behind these rules, and Azure pulls its system images and ours. If either fails, the security group is the first suspect: Azure's list of what a workload profiles environment needs may have changed.
 - Azure takes `Storage.<region>` written with the region's name as Terraform has it, such as `Storage.southeastasia`.
-- From `sim-n8n`, `api.github.com` and the platform's apps are out of reach, and `sim-mock-github` and `sim-postgres` are in reach.
-- What it costs. Three apps stay on all the time, `sim-postgres`, `sim-n8n` and `sim-n8n-runners`, with 1 vCPU and 2 GiB together. Nobody has priced it yet.
+- From `sim-n8n`, `api.github.com` and the platform's apps are out of reach, and `sim-mock-github`, `sim-gateway` and `sim-postgres` are in reach.
+- What it costs. Four apps stay on all the time, `sim-postgres`, `sim-n8n`, `sim-gateway` and `sim-n8n-runners`, with 1.25 vCPU and 2.5 GiB together. Nobody has priced it yet.
 
 ## Cost estimate
 

@@ -510,6 +510,7 @@ class NeedsYouFact(WireModel):
     declined: int = Field(ge=0)
     questions: int = Field(ge=0)
     fixes: int = Field(default=0, ge=0)
+    setups: int = Field(default=0, ge=0)
     total: int = Field(ge=0)
 
 

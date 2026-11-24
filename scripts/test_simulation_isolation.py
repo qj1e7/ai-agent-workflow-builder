@@ -64,6 +64,7 @@ def good_sim() -> dict[str, Any]:
                     "WAB_NODE_KEY": made_up("SIM_NODE_KEY"),
                     "WAB_START_SECRET": made_up("SIM_START_SECRET"),
                     "NODE_EXTRA_CA_CERTS": "/wab-test-ca/ca.pem",
+                    "WAB_REQUEST_TIMEOUT_SECONDS": "30",
                 },
                 "networks": {"sim": None, "runners": {"aliases": ["n8n-broker"]}},
                 "volumes": [{"type": "volume", "source": "slack-ca", "target": "/wab-test-ca"}],
@@ -94,6 +95,20 @@ def good_sim() -> dict[str, Any]:
                 },
                 "networks": {"sim": None},
             },
+            "gateway": {
+                "image": "wab/platform-api:sim",
+                "command": check.GATEWAY_COMMAND,
+                "environment": {
+                    "WAB_NODE_KEY": made_up("SIM_NODE_KEY"),
+                    "WAB_START_SECRET": made_up("SIM_START_SECRET"),
+                    "N8N_BASE_URL": "http://n8n:5678",
+                    "N8N_OWNER_EMAIL": "owner@simulation.example",
+                    "N8N_OWNER_PASSWORD": made_up("SIM_N8N_OWNER_PASSWORD"),
+                    "MOCK_GITHUB_URL": "http://mock-github:8200",
+                    "MOCK_SLACK_TOKEN": made_up("SIM_MOCK_SLACK_TOKEN"),
+                },
+                "networks": {"sim": None},
+            },
             "mock-github": {
                 "image": "wab/mock-github:sim",
                 "build": {"context": str(check.ROOT / "e2e/mock_github"), "target": "runtime"},
@@ -102,6 +117,7 @@ def good_sim() -> dict[str, Any]:
             "mock-slack": {
                 "image": "wab/mock-slack:sim",
                 "build": {"context": str(check.ROOT / "e2e/mock_slack"), "target": "runtime"},
+                "environment": {"MOCK_SLACK_TOKEN": made_up("SIM_MOCK_SLACK_TOKEN")},
                 "networks": {"sim": {"aliases": ["slack.com"]}},
                 "volumes": [{"type": "volume", "source": "slack-ca", "target": "/ca"}],
             },
@@ -118,15 +134,17 @@ def platform_of(sim: dict[str, Any]) -> dict[str, Any]:
     """deploy/compose.yaml as far as the check reads it: the same pins, sources and guards, and
     the platform's own tag on what it builds."""
     services = sim["services"]
+    builders = {s["image"]: s for s in services.values() if "build" in s}
     platform: dict[str, Any] = {"services": {}}
-    for name in check.SAME_AS_PLATFORM:
+    for name, theirs in check.SAME_AS_PLATFORM.items():
         service = {
             "image": services[name]["image"].replace(":sim", ":dev"),
             "environment": {g: services["n8n"]["environment"][g] for g in check.GUARDS},
         }
-        if "build" in services[name]:
-            service["build"] = dict(services[name]["build"])
-        platform["services"][name] = service
+        built = builders.get(services[name]["image"], services[name])
+        if "build" in built:
+            service["build"] = dict(built["build"])
+        platform["services"][theirs] = service
     return platform
 
 
@@ -157,12 +175,23 @@ class ComposeTest(unittest.TestCase):
                 sim["services"]["n8n"]["environment"][name] = made_up("SIM_X")
                 self.assertIn(name, " ".join(findings(sim)))
 
+    def test_a_real_key_or_the_platforms_database_on_the_gateway_fails(self) -> None:
+        for name in ("DATABASE_URL", "JIRA_API_TOKEN", "TEAMS_WEBHOOK_URL", "AGENT_API_KEY"):
+            with self.subTest(name=name):
+                sim = good_sim()
+                sim["services"]["gateway"]["environment"][name] = made_up("SIM_X")
+                self.assertIn(f"gateway holds {name}", " ".join(findings(sim)))
+
     def test_a_key_not_made_up_for_the_simulation_fails(self) -> None:
         for service, name, value in (
             ("n8n", "N8N_ENCRYPTION_KEY", made_up("N8N_ENCRYPTION_KEY")),
             ("n8n", "WAB_NODE_KEY", "a-key-written-in-the-file"),
             ("n8n-runners", "N8N_RUNNERS_AUTH_TOKEN", made_up("N8N_RUNNERS_AUTH_TOKEN")),
             ("bootstrap", "STEP_KEY", ""),
+            ("gateway", "WAB_START_SECRET", made_up("WAB_START_SECRET")),
+            ("gateway", "N8N_OWNER_PASSWORD", "a-password-written-in-the-file"),
+            ("gateway", "MOCK_SLACK_TOKEN", "mock-slack-token"),
+            ("mock-slack", "MOCK_SLACK_TOKEN", "mock-slack-token"),
             (
                 "bootstrap",
                 "DATABASE_URL_OWNER",
@@ -181,6 +210,8 @@ class ComposeTest(unittest.TestCase):
             ("n8n", "WEBHOOK_URL", "https://n8n.example.com/"),
             ("bootstrap", "N8N_BASE_URL", "http://wab-n8n-1:5678"),
             ("n8n-runners", "N8N_RUNNERS_TASK_BROKER_URI", "http://n8n.internal.example:5679"),
+            ("gateway", "N8N_BASE_URL", "http://wab-n8n-1:5678"),
+            ("gateway", "MOCK_GITHUB_URL", "https://api.github.com"),
         ):
             with self.subTest(name=name):
                 sim = good_sim()
@@ -206,6 +237,13 @@ class ComposeTest(unittest.TestCase):
             "the task runner beside the mocks": lambda s: s["services"]["n8n-runners"][
                 "networks"
             ].update(sim=None),
+            "the gateway beside the task runner": lambda s: s["services"]["gateway"][
+                "networks"
+            ].update(runners=None),
+            "the gateway's port published": lambda s: s["services"]["gateway"].update(
+                ports=[{"target": 8600, "published": "8600"}]
+            ),
+            "no gateway": lambda s: s["services"].pop("gateway"),
             "another service": lambda s: s["services"].update(
                 {"platform-api": {"networks": {"sim": None}}}
             ),
@@ -236,6 +274,10 @@ class ComposeTest(unittest.TestCase):
             lambda s: s["services"]["n8n"].update(image="n8nio/n8n:sim"),
             lambda s: s["services"]["n8n"]["build"].update(dockerfile="other/Dockerfile"),
             lambda s: s["services"]["bootstrap"].pop("build"),
+            lambda s: s["services"]["gateway"].update(build={"context": "e2e/mock_github"}),
+            lambda s: s["services"]["gateway"].update(image="wab/other:sim"),
+            lambda s: s["services"]["gateway"].update(image="wab/platform-api:dev"),
+            lambda s: s["services"]["bootstrap"]["build"].update(target="test"),
         ):
             sim = good_sim()
             change(sim)
@@ -321,13 +363,27 @@ class RunningTest(unittest.TestCase):
                 self.assertNotIn(PLATFORM_KEY, found)
 
     def test_a_route_out_fails_and_a_mock_out_of_reach_fails(self) -> None:
-        reached = {url: (False, "ENOTFOUND") for url in check.OUT_OF_REACH}
-        reached |= {url: (True, "answered 200") for url in check.IN_REACH}
-        self.assertEqual(check.route_findings(reached), [])
-        out = dict(reached, **{"https://api.github.com/": (True, "answered 200")})
-        self.assertIn("n8n reaches https://api.github.com/", " ".join(check.route_findings(out)))
-        blind = dict(reached, **{"http://mock-github:8200/healthz": (False, "ENOTFOUND")})
-        self.assertIn("sees no route", " ".join(check.route_findings(blind)))
+        for service, (out_of_reach, in_reach) in check.ROUTES.items():
+            with self.subTest(service=service):
+                reached = {url: (False, "ENOTFOUND") for url in out_of_reach}
+                reached |= {url: (True, "answered 200") for url in in_reach}
+                self.assertEqual(check.route_findings(service, reached), [])
+                out = dict(reached, **{"https://api.github.com/": (True, "answered 200")})
+                self.assertIn(
+                    f"{service} reaches https://api.github.com/",
+                    " ".join(check.route_findings(service, out)),
+                )
+                blind = dict(reached, **{in_reach[0]: (False, "ENOTFOUND")})
+                self.assertIn("sees no route", " ".join(check.route_findings(service, blind)))
+
+    def test_n8n_must_reach_the_gateway_and_the_gateway_only_the_simulation(self) -> None:
+        n8n_out, n8n_in = check.ROUTES["n8n"]
+        gateway_out, gateway_in = check.ROUTES["gateway"]
+        self.assertIn("http://gateway:8600/healthz", n8n_in)
+        self.assertIn("http://n8n:5678/healthz", gateway_in)
+        for out in (n8n_out, gateway_out):
+            self.assertIn("http://platform-api:8000/healthz", out)
+            self.assertIn("https://api.github.com/", out)
 
     def containers(self) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
         def container(cid: str, service: str, env: list[str], networks: list[str]) -> dict:
