@@ -628,16 +628,24 @@ class ExecutionRecord:
 
 
 @dataclass(frozen=True)
+class NodeError:
+    """One error a block's try holds, and the HTTP status it came with, if any: then an answer
+    came from where the block called."""
+
+    text: str
+    answer: str | None = None
+
+
+@dataclass(frozen=True)
 class NodeRun:
     """One block's tries, as n8n's run data holds them."""
 
     status: str | None
     """The status of its last try, such as success or error."""
-    errors: tuple[str, ...] = ()
+    errors: tuple[NodeError, ...] = ()
     """Every error its tries hold: their own, and each one an item it passed on carries, as a
-    block with continueOnFail or onError passes its error on."""
-    answered: bool = False
-    """Whether a try's own error came with an answer from where it called: an HTTP status."""
+    block with continueOnFail or onError passes its error on. An item's error came with no
+    answer the record keeps."""
 
 
 def node_runs(run_data: object) -> dict[str, NodeRun]:
@@ -646,21 +654,23 @@ def node_runs(run_data: object) -> dict[str, NodeRun]:
     for name, tries in _fields(run_data).items():
         listed = [_fields(t) for t in cast(list[object], tries)] if isinstance(tries, list) else []
         status = listed[-1].get("executionStatus") if listed else None
-        errors: list[str] = []
-        answered = False
+        errors: list[NodeError] = []
         for given in listed:
             failed = _fields(given.get("error"))
-            errors += [w for k in ("message", "description") if isinstance(w := failed.get(k), str)]
-            answered = answered or failed.get("httpCode") not in (None, "")
+            code = failed.get("httpCode")
+            answer = str(code) if isinstance(code, str | int) and str(code) else None
+            for key in ("message", "description"):
+                if isinstance(said := failed.get(key), str) and said.strip():
+                    errors.append(NodeError(said, answer))
             for output in cast(list[object], _at(given, "data", "main") or []):
                 for item in cast(list[object], output) if isinstance(output, list) else []:
                     said = _at(item, "json", "error")
                     if not isinstance(said, str):
                         said = _fields(said).get("message")
-                    if isinstance(said, str):
-                        errors.append(said)
-        kept = tuple(dict.fromkeys(e for e in errors if e.strip()))
-        runs[name] = NodeRun(status if isinstance(status, str) else None, kept, answered)
+                    if isinstance(said, str) and said.strip():
+                        errors.append(NodeError(said))
+        kept = tuple(dict.fromkeys(errors))
+        runs[name] = NodeRun(status if isinstance(status, str) else None, kept)
     return runs
 
 
