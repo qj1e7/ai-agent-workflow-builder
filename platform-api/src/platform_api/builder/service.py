@@ -17,7 +17,7 @@ from platform_api.builder.cards import (
     tool_list,
 )
 from platform_api.builder.drafts import Drafts, TooManyDrafts
-from platform_api.builder.fixes import FixTrying
+from platform_api.builder.fixes import STALE, FixTrying
 from platform_api.builder.in_n8n import put_back, write_in_n8n
 from platform_api.builder.last_run import RunHistory, last_run_view
 from platform_api.builder.layout import REPO_INPUT, LayoutPlan, PlannedAgent, lay_out
@@ -1629,12 +1629,14 @@ class Builder:
                     return await self._runs.start_run(spec, principal, idempotency_key)
 
     async def try_fixed(
-        self, use_case_id: str, document: dict[str, Any], by: Principal
+        self, use_case_id: str, document: dict[str, Any], by: Principal, stopped_version: int
     ) -> FixTrying | str:
         """A fix an Approver said yes to, tried with the one real test run (ADR 0055, section 7):
         written over n8n's draft under the version compare, beside the version in use, which
         stays live, then run by hand once as a test run that stops at the yes and writes nothing
-        (ADR 0044), whether the workflow is on or paused. Answers why not in words."""
+        (ADR 0044), whether the workflow is on or paused. Only while the version the fix was made
+        for is still in use, checked under the workflow's lock: else STALE. Answers why not in
+        words."""
         if self._n8n is None:
             return NOT_TAKEN
         rules = await self.todays_rules()
@@ -1647,6 +1649,8 @@ class Builder:
             ).fetchone()
             if row is None or not _own(row) or not isinstance(lifecycle_of(row), On | Paused):
                 return NOT_TAKEN
+            if row["current_version"] != stopped_version:
+                return STALE
             if self.holding is not None:
                 held = await self.holding.refused_while_held(uow.conn, use_case_id, by.user_id)
                 if held is not None:
@@ -1689,11 +1693,14 @@ class Builder:
         document: dict[str, Any],
         by: UserId,
         authors: frozenset[UserId],
+        stopped_version: int,
     ) -> str | None:
         """Once its test run passed, the fix goes live as a new version: n8n publishes the draft
         the test run tried, under the version compare, and the workflow is on. Its authors are
         the fix's parties and the authors of the version it replaces, so none of them approves
-        its runs. Answers why not in words."""
+        its runs. Only while the version the fix was made for is still in use, checked under the
+        workflow's lock in the transaction that adds the version: else STALE, and nothing goes
+        live. Answers why not in words."""
         assert self._n8n is not None
         async with self._db.transaction("builder") as uow:
             await hold_workflow(uow.conn, use_case_id, alone=True)
@@ -1703,6 +1710,8 @@ class Builder:
             state = None if row is None else lifecycle_of(row)
             if row is None or not isinstance(state, On | Paused):
                 return NOT_TAKEN
+            if row["current_version"] != stopped_version:
+                return STALE
             current = (await versions_of(uow.conn, use_case_id))[0]
             assert current.held is not None
             live = current.held.version_id if is_on(state) else None

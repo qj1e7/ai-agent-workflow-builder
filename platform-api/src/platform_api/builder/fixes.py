@@ -299,10 +299,12 @@ class FixRuntime(Protocol):
 
 
 class FixTries(Protocol):
-    """The builder's test run of a fixed version, and turning the workflow back on with it."""
+    """The builder's test run of a fixed version, and turning the workflow back on with it. Each
+    acts only while `stopped_version` is still the version in use, checked under the workflow's
+    lock in the same transaction, and answers STALE otherwise."""
 
     async def try_fixed(
-        self, use_case_id: str, document: dict[str, Any], by: Principal
+        self, use_case_id: str, document: dict[str, Any], by: Principal, stopped_version: int
     ) -> FixTrying | str: ...
 
     async def tried_outcome(self, run_id: str) -> Literal["passed", "failed"] | None: ...
@@ -314,6 +316,7 @@ class FixTries(Protocol):
         document: dict[str, Any],
         by: UserId,
         authors: frozenset[UserId],
+        stopped_version: int,
     ) -> str | None: ...
 
 
@@ -398,8 +401,26 @@ def proven(results: Mapping[str, Mapping[str, Any]] | None) -> bool:
     return bool(applied) and all(r.get("verdict") == "passed" for r in applied)
 
 
-def _settings_key(plan: WorkflowPlan) -> list[tuple[str, str, str | None, str]]:
-    return sorted((s.id, s.kind, s.value, s.mark) for s in plan.settings)
+def _settings_kept(stopped: WorkflowPlan, fixed: WorkflowPlan) -> bool:
+    """Every setting as it was: its id, kind, value and mark, where it says it fills, and each
+    placeholder at the same block and parameter path. A fix that moves a placeholder elsewhere,
+    and writes a value where it stood, changes a setting a person filled."""
+
+    def kept(plan: WorkflowPlan) -> object:
+        settings = sorted(
+            (s.id, s.kind, s.value, s.mark, sorted((f.block, f.parameter) for f in s.fills))
+            for s in plan.settings
+        )
+        placed = sorted(
+            (block.name, path, found)
+            for block in plan.blocks
+            for path, value in _leaves(block.parameters).items()
+            if isinstance(value, str)
+            for found in PLACEHOLDER.findall(value)
+        )
+        return settings, placed
+
+    return kept(stopped) == kept(fixed)
 
 
 def _leaves(value: object, path: str = "") -> dict[str, object]:
@@ -678,7 +699,7 @@ class Fixes:
         set_up = await self._drafted.set_up_plan(row.use_case_id)
         if set_up is None:
             raise NotStored(ENDED, 409)
-        if _settings_key(plan) != _settings_key(set_up.plan):
+        if not _settings_kept(set_up.plan, plan):
             raise NotStored(SETTING)
         part = set(cause.failed_part)
         if (
@@ -783,9 +804,12 @@ class Fixes:
             ).fetchone()
         if claimed is None:
             return await self._viewed(fix_id)
-        trying = await self._tries.try_fixed(row.use_case_id, row.document, by)
+        trying = await self._tries.try_fixed(row.use_case_id, row.document, by, row.stopped_version)
         if isinstance(trying, str):
             await self._mark(fix_id, "testing_at = NULL, testing_by = NULL")
+            if trying == STALE:
+                await self._approvals.replace_waiting(fix_id)
+                await self._drop(fix_id, "stale")
             return Refused(trying)
         async with self._db.transaction("builder") as uow:
             await uow.conn.execute(
@@ -961,7 +985,11 @@ class Fixes:
             row.document,
             row.testing_by or row.asked_by,
             await self._parties(row),
+            row.stopped_version,
         )
+        if refused == STALE:
+            await self._drop(fix_id, "stale")
+            return
         if refused is not None:
             async with self._db.transaction("builder") as uow:
                 await uow.conn.execute(
@@ -1129,9 +1157,7 @@ class Fixes:
             checks.append(("every_scenario_passed", proven(results)))
         checks.append(("safety_check", laid.grade == "safe"))
         if drafter:
-            checks.append(
-                ("settings_unchanged", _settings_key(row.plan) == _settings_key(set_up.plan))
-            )
+            checks.append(("settings_unchanged", _settings_kept(set_up.plan, row.plan)))
         names = await self._approvals.names(
             [row.asked_by, *([row.answered_by] if row.answered_by else [])]
         )

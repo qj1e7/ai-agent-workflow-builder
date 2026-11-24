@@ -23,14 +23,19 @@ NOT_HERE = "Fix it for me isn't set up here."
 FixAsker = Annotated[Principal, Depends(operators_only(ASK_FOR_FIXES))]
 
 
-def current_fixes(request: Request) -> Fixes:
-    fixes: Fixes | None = getattr(request.app.state, "fixes", None)
+def current_fixes(request: Request) -> Fixes | None:
+    return getattr(request.app.state, "fixes", None)
+
+
+CurrentFixes = Annotated[Fixes | None, Depends(current_fixes)]
+
+
+def _here(fixes: Fixes | None) -> Fixes:
+    """The fixes, once the request is valid and authorized. An app the wiring never set up
+    answers 503."""
     if fixes is None:
         raise HTTPException(503, NOT_HERE)
     return fixes
-
-
-CurrentFixes = Annotated[Fixes, Depends(current_fixes)]
 
 
 def _answered(answer: FixView | Refused | NotFound, missing: str = NO_SUCH_FIX) -> FixView:
@@ -59,7 +64,7 @@ def _answered(answer: FixView | Refused | NotFound, missing: str = NO_SUCH_FIX) 
     },
 )
 async def ask_for_a_fix(run_id: RunId, principal: FixAsker, fixes: CurrentFixes) -> FixView:
-    return _answered(await fixes.start(run_id, principal), NO_SUCH_RUN)
+    return _answered(await _here(fixes).start(run_id, principal), NO_SUCH_RUN)
 
 
 @router.get(
@@ -70,7 +75,7 @@ async def ask_for_a_fix(run_id: RunId, principal: FixAsker, fixes: CurrentFixes)
     responses={**SIGNED_IN, 404: error_response(NO_SUCH_FIX), 503: error_response(NOT_HERE)},
 )
 async def read_a_fix(fix_id: str, principal: CurrentPrincipal, fixes: CurrentFixes) -> FixView:
-    return _answered(await fixes.view(fix_id))
+    return _answered(await _here(fixes).view(fix_id))
 
 
 @router.post(
@@ -88,7 +93,7 @@ async def read_a_fix(fix_id: str, principal: CurrentPrincipal, fixes: CurrentFix
     },
 )
 async def turn_a_fix_back_on(fix_id: str, principal: FixAsker, fixes: CurrentFixes) -> FixView:
-    return _answered(await fixes.turn_back_on(fix_id, principal))
+    return _answered(await _here(fixes).turn_back_on(fix_id, principal))
 
 
 @router.post(
@@ -106,4 +111,4 @@ async def turn_a_fix_back_on(fix_id: str, principal: FixAsker, fixes: CurrentFix
 async def answer_a_fix(
     fix_id: str, body: FixAnswerIn, principal: FixAsker, fixes: CurrentFixes
 ) -> FixView:
-    return _answered(await fixes.answer(fix_id, principal, body))
+    return _answered(await _here(fixes).answer(fix_id, principal, body))

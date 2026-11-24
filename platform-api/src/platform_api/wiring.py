@@ -273,9 +273,9 @@ class BuilderTries:
         self._runs = runs
 
     async def try_fixed(
-        self, use_case_id: str, document: dict[str, Any], by: Principal
+        self, use_case_id: str, document: dict[str, Any], by: Principal, stopped_version: int
     ) -> FixTrying | str:
-        return await self._builder.try_fixed(use_case_id, document, by)
+        return await self._builder.try_fixed(use_case_id, document, by, stopped_version)
 
     async def tried_outcome(self, run_id: str) -> Literal["passed", "failed"] | None:
         """passed once the test run reached the yes, or found nothing to write. Every other end
@@ -298,8 +298,11 @@ class BuilderTries:
         document: dict[str, Any],
         by: UserId,
         authors: frozenset[UserId],
+        stopped_version: int,
     ) -> str | None:
-        return await self._builder.put_fixed_live(use_case_id, trying, document, by, authors)
+        return await self._builder.put_fixed_live(
+            use_case_id, trying, document, by, authors, stopped_version
+        )
 
 
 class NoN8nReads:
