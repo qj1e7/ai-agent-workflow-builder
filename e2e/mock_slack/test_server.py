@@ -1,5 +1,6 @@
 import http.client
 import json
+import secrets
 import ssl
 import tempfile
 import threading
@@ -13,9 +14,9 @@ import server
 
 
 @contextmanager
-def running() -> Generator[tuple[str, int, Path]]:
+def running(state: server.State | None = None) -> Generator[tuple[str, int, Path]]:
     """The mock on plain HTTP and on TLS, with its certificate authority's directory."""
-    state = server.State()
+    state = state or server.State()
     with tempfile.TemporaryDirectory() as tmp:
         ca_dir, keys_dir = Path(tmp) / "ca", Path(tmp) / "keys"
         cert, key = server.certificates(ca_dir, keys_dir)
@@ -93,6 +94,15 @@ class MockSlack(unittest.TestCase):
                 "GET", "/api/users.profile.get", headers={"Authorization": f"Bearer {server.TOKEN}"}
             )
             self.assertTrue(json.loads(connection.getresponse().read())["ok"])
+
+    def test_a_key_made_up_at_the_start_takes_the_place_of_the_test_key(self) -> None:
+        """The simulation n8n's stack makes up mock Slack's key at each start (ADR 0054)."""
+        made_up = secrets.token_hex(16)
+        with running(server.State(made_up)) as (host, _, _):
+            _, _, body = call(host, "POST", "/api/auth.test", made_up)
+            self.assertTrue(body["ok"])
+            _, _, refused = call(host, "POST", "/api/auth.test", server.TOKEN)
+            self.assertEqual(refused, {"ok": False, "error": "invalid_auth"})
 
 
 if __name__ == "__main__":

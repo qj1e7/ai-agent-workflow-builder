@@ -239,6 +239,10 @@ _Avoid_: Mock API, fake platform
 One run of one scenario through the simulation gateway. It is kept apart from runs: it is never in Recent runs or the activity log, and never counts as a test run (ADR 0054).
 _Avoid_: Test run, dry run
 
+**Mock setup**:
+The copy of one workflow version in the simulation n8n, which code builds from the node allow list. n8n's own blocks for a system with a mock get a mock key, those with no mock get pinned output and show as not tried, and any block the list doesn't turn on is refused. The copy names no real key (ADR 0054).
+_Avoid_: Test copy, sandbox workflow
+
 **Skipped**:
 A run that n8n started while an earlier run of the same workflow was still waiting for a yes. It stops at its first step and does nothing, so Approvers never see two requests for one change. The Portal says "An earlier run is still waiting for a yes."
 

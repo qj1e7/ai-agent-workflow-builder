@@ -17,6 +17,12 @@ the execution and the gateway's record of the simulated run:
 It also checks that a start signed with another secret, a record read without a signature and a
 node call without the node key are each refused with 401.
 
+Then it has the gateway make a version's copy (ADR 0054, PR 4): a version with n8n's own GitHub,
+Jira, Slack and Teams blocks, each naming one of the platform's keys. The copy must name only the
+mock keys, the GitHub block must read mock GitHub's releases, the Slack block must post to mock
+Slack with the key its stack made up, and the Jira and Teams blocks, which have no mock here, must
+run from their pins. A version with HTTP Request must be refused, with nothing made.
+
 usage: docker exec -i <gateway container> python -I - < scripts/simulation_drive.py
 Exits 0 when every check passes, and 1 when one fails.
 """
@@ -39,7 +45,7 @@ START = "Start from the Portal"
 RETRY = {"retryOnFail": True, "maxTries": 2, "waitBetweenTries": 1000}
 RELEASE = {"kind": "release", "id": "1.2.16", "name": "1.2.16", "published_at": "2026-10-28"}
 REPLY = {"serve": "recorded", "items": [{"summary": "1.2.16 is new."}]}
-SCOPES = ["workflow:create", "workflow:read", "workflow:delete", "execution:read"]
+SCOPES = ["workflow:create", "workflow:read", "workflow:list", "workflow:delete", "execution:read"]
 
 failures: list[str] = []
 cookie = ""
@@ -238,6 +244,185 @@ def first_calls(kept: dict[str, Any]) -> list[dict[str, Any]]:
     return [call for call in kept["calls"] if not call["replayed"]]
 
 
+def platform_key(kind: str, key: str) -> dict[str, Any]:
+    """What a version names for one of the platform's own keys. Its copy must name none."""
+    return {kind: {"id": key, "name": f"The platform's key {key}"}}
+
+
+def version_with_systems() -> dict[str, Any]:
+    """Start from the Portal, then n8n's own GitHub, Jira, Slack and Teams blocks."""
+    github = {
+        "resource": "release",
+        "operation": "getAll",
+        "owner": "langchain-ai",
+        "repository": "langgraph",
+        "returnAll": False,
+        "limit": 3,
+    }
+    jira = {"jiraVersion": "server", "resource": "issue", "operation": "get", "issueKey": "MOCK-1"}
+    slack = {
+        "select": "channel",
+        "channelId": {"__rl": True, "value": "C0SUPPORT", "mode": "id"},
+        "text": "A new LangGraph release is out.",
+        "otherOptions": {"includeLinkToWorkflow": False},
+    }
+    teams = {
+        "resource": "channelMessage",
+        "operation": "create",
+        "teamId": {"__rl": True, "value": "team-1", "mode": "id"},
+        "channelId": {"__rl": True, "value": "channel-1", "mode": "id"},
+        "message": "A new LangGraph release is out.",
+    }
+    nodes = [
+        node(START, "CUSTOM.wabStartFromPortal", 0, webhookId=str(uuid.uuid4())),
+        node(
+            "Read releases",
+            "n8n-nodes-base.github",
+            1,
+            github,
+            credentials=platform_key("githubApi", "wab-github-read"),
+        ),
+        node(
+            "Read the issue",
+            "n8n-nodes-base.jira",
+            2,
+            jira,
+            executeOnce=True,
+            credentials=platform_key("jiraSoftwareServerApi", "wab-jira-read"),
+        ),
+        node(
+            "Post in Slack",
+            "n8n-nodes-base.slack",
+            3,
+            slack,
+            executeOnce=True,
+            credentials=platform_key("slackApi", "wab-slack-send"),
+        ),
+        node(
+            "Post in Teams",
+            "n8n-nodes-base.microsoftTeams",
+            4,
+            teams,
+            executeOnce=True,
+            credentials=platform_key("microsoftOAuth2Api", "someones-teams-key"),
+        ),
+    ]
+    nodes[2]["typeVersion"], nodes[3]["typeVersion"], nodes[4]["typeVersion"] = 1, 2.7, 2
+    order = [n["name"] for n in nodes]
+    return {
+        "name": "Mock setup check",
+        "nodes": nodes,
+        "connections": {a: to(b) for a, b in zip(order, order[1:], strict=False)},
+        "settings": {"executionOrder": "v1", "errorWorkflow": "the-platforms-error-workflow"},
+    }
+
+
+def run_copy(workflow: str) -> dict[str, Any]:
+    """Runs the copy by hand, as a simulation runs it, and waits for it to end."""
+    item = {"nonce": "mock-setup-check", "kind": "test", "workflow_id": workflow}
+    run = {
+        "triggerToStartFrom": {
+            "name": START,
+            "data": {
+                "startTime": 0,
+                "executionTime": 0,
+                "source": [],
+                "data": {"main": [[{"json": item}]]},
+            },
+        }
+    }
+    status, answer = rest("POST", f"/workflows/{workflow}/run", run)
+    if status != 200:
+        raise SystemExit(f"FAIL: n8n did not run the copy by hand ({status}): {answer}")
+    execution = str(answer["data"]["executionId"])
+    deadline = time.time() + 120
+    while time.time() < deadline:
+        status, record = public("GET", f"/executions/{execution}?includeData=true")
+        if status == 200 and record.get("status") in ("success", "error", "crashed", "canceled"):
+            return record
+        time.sleep(0.5)
+    raise SystemExit(f"FAIL: execution {execution} of the copy did not end in 120 s")
+
+
+def output(record: dict[str, Any], block: str) -> list[dict[str, Any]]:
+    runs = ((record.get("data") or {}).get("resultData") or {}).get("runData") or {}
+    last = (runs.get(block) or [{}])[-1]
+    main = ((last.get("data") or {}).get("main") or [[]])[0] or []
+    return [item.get("json") or {} for item in main]
+
+
+def check_mock_setup() -> None:
+    status, _ = gateway("POST", "/simulation/v1/copies", {"version": version_with_systems()}, "x")
+    check(
+        status == 401, f"a copy asked for without the start secret is refused with 401 ({status})"
+    )
+
+    off = version_with_systems()
+    off["nodes"].append(node("Call anything", "n8n-nodes-base.httpRequest", 5, {"url": "x"}))
+    off["nodes"][-1]["typeVersion"] = 4.2
+    _, before = public("GET", "/workflows")
+    status, refused = gateway("POST", "/simulation/v1/copies", {"version": off})
+    _, after = public("GET", "/workflows")
+    named = [b["block"] for b in (refused or {}).get("blocks", [])]
+    check(
+        status == 422 and named == ["Call anything"],
+        f"a version with HTTP Request is refused, naming it ({status}, {named})",
+    )
+    check(len(after["data"]) == len(before["data"]), "the refused version made nothing in the n8n")
+
+    status, copied = gateway("POST", "/simulation/v1/copies", {"version": version_with_systems()})
+    if status != 201:
+        raise SystemExit(f"FAIL: the gateway did not make the copy ({status}): {copied}")
+    modes = {b["block"]: (b["mode"], b["mock"]) for b in copied["blocks"]}
+    check(
+        modes
+        == {
+            START: ("ours", None),
+            "Read releases": ("mock", "github"),
+            "Read the issue": ("pinned", None),
+            "Post in Slack": ("mock", "slack"),
+            "Post in Teams": ("pinned", None),
+        },
+        f"each block got its mode from the class file ({modes})",
+    )
+    check(
+        copied["not_tried"] == ["Read the issue", "Post in Teams"],
+        f"the blocks with no mock are named as not tried ({copied['not_tried']})",
+    )
+    workflow = copied["workflow_id"]
+    status, held = public("GET", f"/workflows/{workflow}")
+    named_keys = sorted(
+        key["id"] for n in held.get("nodes", []) for key in (n.get("credentials") or {}).values()
+    )
+    check(
+        named_keys == ["sim-mock-github", "sim-mock-slack"],
+        f"the copy names only the mock keys ({named_keys})",
+    )
+    check("wab-" not in json.dumps(held), "the copy names none of the platform's keys")
+    pinned = sorted((held.get("pinData") or {}).keys())
+    check(
+        pinned == ["Post in Teams", "Read the issue"],
+        f"only the blocks with no mock are pinned ({pinned})",
+    )
+
+    record = run_copy(workflow)
+    check(record.get("status") == "success", f"the copy ran by hand ({record.get('status')})")
+    tags = [item.get("tag_name") for item in output(record, "Read releases")]
+    check(bool(tags) and all(tags), f"GitHub's block read mock GitHub's releases ({tags})")
+    check(
+        output(record, "Read the issue") == [{"pinned": copied["blocks"][2]["why"]}],
+        "Jira's block, with no mock here, ran from its pin",
+    )
+    _, sent, _ = http("GET", "http://mock-slack:8500/_sent")
+    posts = [m for m in (sent or {}).get("sent", []) if m.get("channel") == "C0SUPPORT"]
+    check(
+        len(posts) == 1 and posts[0]["token"] == os.environ["MOCK_SLACK_TOKEN"],
+        f"Slack's block posted once to mock Slack, with its made-up key ({len(posts)})",
+    )
+    check(bool(output(record, "Post in Teams")), "Teams' block, with no mock, ran from its pin")
+    public("DELETE", f"/workflows/{workflow}")
+
+
 def main() -> int:
     other = secrets.token_hex(24)
     status, _ = gateway(
@@ -333,6 +518,8 @@ def main() -> int:
     )
 
     public("DELETE", f"/workflows/{workflow}")
+
+    check_mock_setup()
     if failures:
         print(f"FAIL: {len(failures)} check(s) of the simulation gateway failed.")
         return 1

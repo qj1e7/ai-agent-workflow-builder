@@ -27,6 +27,7 @@ from platform_api.orchestration.dispatch import (
     WakeDecision,
     wake_mac,
 )
+from platform_api.orchestration.mock_setup import MockSetups, mock_keys
 from platform_api.orchestration.n8n import ExecutionRecord
 from platform_api.orchestration.n8n_calls import (
     TEST_RUN_WRITES_NOTHING,
@@ -53,17 +54,20 @@ from platform_api.orchestration.simulation_gateway import (
 from platform_api.settings import N8nOwner
 from platform_api.shared import ApprovalId, N8nExecutionId
 from tests.declared import FakeNodeCalls
+from tests.test_mock_setup import FakeSimulationN8n, http_request, version
 
 # Made up at run time. None is a real key.
 NODE_KEY = secrets.token_hex(24)
 START_SECRET = secrets.token_hex(24)
 OTHER_SECRET = secrets.token_hex(24)
+SLACK_TOKEN = secrets.token_hex(16)
 SETTINGS = GatewaySettings(
     node_key=NODE_KEY,
     start_secret=START_SECRET,
     n8n_base_url="http://n8n:5678",
     n8n_owner=N8nOwner("owner@simulation.example", secrets.token_hex(12)),
     mock_github_url="http://mock-github:8200",
+    mock_slack_token=SLACK_TOKEN,
 )
 WORKFLOW = "wf_sim"
 RELEASE = {"kind": "release", "id": "1.2.16", "name": "1.2.16", "published_at": "2026-10-28"}
@@ -168,7 +172,10 @@ class Gateway:
         self.calls = SimulatedCalls(
             self.n8n, self.waker, self.github, clock=self.clock, sleep=no_wait
         )
-        self.client = TestClient(gateway_app(SETTINGS, self.calls))
+        self.simulation_n8n = FakeSimulationN8n()
+        keys = mock_keys(SETTINGS.mock_github_url, None, SETTINGS.mock_slack_token)
+        self.setups = MockSetups(self.simulation_n8n, keys)
+        self.client = TestClient(gateway_app(SETTINGS, self.calls, self.setups))
 
     def start(self, given: dict[str, Any] | None = None, workflow: str = WORKFLOW) -> str:
         body = json.dumps({"workflow_id": workflow, "scenario": given or scenario()}).encode()
@@ -561,6 +568,33 @@ async def test_a_run_that_calls_without_end_is_stopped() -> None:
 
 
 @pytest.mark.anyio
+async def test_a_run_that_sends_too_much_is_stopped() -> None:
+    """The record is capped by its size too, so a few large calls can't fill the gateway's
+    memory either."""
+    n8n = FakeN8n()
+    calls = SimulatedCalls(n8n, FakeWaker(), None, sleep=no_wait, byte_limit=3000)
+    run = calls.start(WORKFLOW, Scenario.model_validate(scenario()))
+    n8n.started("41", run.nonce)
+    long = "x" * 1200
+    answers = [
+        await calls.call(
+            NodeCall(
+                N8nExecutionId("41"),
+                f"Propose {n}",
+                ProposeCall("jira.create_ticket", "MOCK", "Upgrade", long, None),
+            )
+        )
+        for n in range(4)
+    ]
+    assert [getattr(a, "status", None) for a in answers] == [None, None, 409, 409]
+    assert "too much" in str(getattr(answers[2], "detail", ""))
+    record = calls.run(run.nonce)
+    assert record is not None
+    assert len(record.calls) == 2
+    assert len(record.model_dump_json()) < 2 * 3000, "past the limit by one call at most"
+
+
+@pytest.mark.anyio
 async def test_the_gateway_keeps_only_its_newest_runs() -> None:
     calls = SimulatedCalls(FakeN8n(), FakeWaker(), None, sleep=no_wait, run_limit=2)
     given = Scenario.model_validate(scenario())
@@ -603,6 +637,60 @@ async def test_mock_github_answers_as_the_read_block_expects() -> None:
     ]
 
 
+# The mock setup (ADR 0054, PR 4)
+
+COPIES = "/simulation/v1/copies"
+
+
+def ask_copy(gw: Gateway, given: dict[str, Any], secret: str = START_SECRET) -> httpx.Response:
+    body = json.dumps(given).encode()
+    return gw.client.post(COPIES, content=body, headers=signed("POST", COPIES, body, secret))
+
+
+def test_a_signed_request_makes_the_versions_copy_in_the_simulation_n8n(gw: Gateway) -> None:
+    answer = ask_copy(gw, {"version": version()})
+    assert answer.status_code == 201, answer.text
+    copied = answer.json()
+    made = [what for what, _ in gw.simulation_n8n.done]
+    assert made == ["project", "delete", "credential", "delete", "credential", "workflow"]
+    assert copied["workflow_id"] == "copy-6"
+    assert {b["block"]: (b["mode"], b["mock"]) for b in copied["blocks"]} == {
+        "Start from the Portal": ("ours", None),
+        "Read releases": ("mock", "github"),
+        "Read issues": ("pinned", None),
+        "Is it new": ("runs", None),
+        "Ask for a yes": ("ours", None),
+        "Post in Slack": ("mock", "slack"),
+        "Post in Teams": ("pinned", None),
+    }
+    assert copied["not_tried"] == ["Read issues", "Post in Teams"]
+    slack = gw.simulation_n8n.keys["sim-mock-slack"]
+    assert slack[2] == {"accessToken": SLACK_TOKEN}
+    assert SLACK_TOKEN not in answer.text
+
+
+def test_a_scenario_may_pin_a_block_with_no_mock(gw: Gateway) -> None:
+    answer = ask_copy(gw, {"version": version(), "pins": {"Read issues": [{"key": "MOCK-1"}]}})
+    assert answer.status_code == 201, answer.text
+    document = gw.simulation_n8n.done[-1][1]
+    assert document["pinData"]["Read issues"] == [{"json": {"key": "MOCK-1"}}]
+
+
+def test_a_copy_request_not_signed_with_the_start_secret_makes_nothing(gw: Gateway) -> None:
+    answer = ask_copy(gw, {"version": version()}, OTHER_SECRET)
+    assert answer.status_code == 401
+    assert gw.simulation_n8n.done == []
+
+
+def test_a_version_with_a_block_that_is_off_is_refused_and_makes_nothing(gw: Gateway) -> None:
+    answer = ask_copy(gw, {"version": version(http_request())})
+    assert answer.status_code == 422
+    refused = answer.json()
+    assert [b["block"] for b in refused["blocks"]] == ["Call anything"]
+    assert "send what a run read" in refused["blocks"][0]["why"]
+    assert gw.simulation_n8n.done == []
+
+
 # Its settings
 
 
@@ -614,6 +702,8 @@ def test_the_gateway_reads_only_its_own_settings() -> None:
         "N8N_OWNER_EMAIL": "owner@simulation.example",
         "N8N_OWNER_PASSWORD": SETTINGS.n8n_owner.password,
         "MOCK_GITHUB_URL": "http://mock-github:8200",
+        "MOCK_JIRA_URL": "http://mock-jira:8700/",
+        "MOCK_SLACK_TOKEN": SLACK_TOKEN,
         "DATABASE_URL": "postgresql://someone@elsewhere/platform",
     }
     settings = gateway_settings_from_env(env)
@@ -623,18 +713,18 @@ def test_the_gateway_reads_only_its_own_settings() -> None:
         "http://n8n:5678",
         N8nOwner("owner@simulation.example", SETTINGS.n8n_owner.password),
         "http://mock-github:8200",
+        "http://mock-jira:8700",
+        SLACK_TOKEN,
     )
     assert NODE_KEY not in repr(settings)
     assert START_SECRET not in repr(settings)
+    assert SLACK_TOKEN not in repr(settings)
     for name in ("WAB_NODE_KEY", "WAB_START_SECRET", "N8N_BASE_URL", "N8N_OWNER_PASSWORD"):
         with pytest.raises(ConfigError, match=name):
             gateway_settings_from_env({k: v for k, v in env.items() if k != name})
-    assert (
-        gateway_settings_from_env(
-            {k: v for k, v in env.items() if k != "MOCK_GITHUB_URL"}
-        ).mock_github_url
-        is None
-    )
+    mocks = ("MOCK_GITHUB_URL", "MOCK_JIRA_URL", "MOCK_SLACK_TOKEN")
+    bare = gateway_settings_from_env({k: v for k, v in env.items() if k not in mocks})
+    assert (bare.mock_github_url, bare.mock_jira_url, bare.mock_slack_token) == (None, None, None)
 
 
 def test_the_gateway_has_only_its_own_routes(gw: Gateway) -> None:
@@ -648,6 +738,7 @@ def test_the_gateway_has_only_its_own_routes(gw: Gateway) -> None:
         "/healthz",
         "/simulation/v1/starts",
         "/simulation/v1/runs/{nonce}",
+        "/simulation/v1/copies",
         *real,
     }
 

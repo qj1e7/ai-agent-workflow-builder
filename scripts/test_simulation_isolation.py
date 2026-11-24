@@ -105,6 +105,7 @@ def good_sim() -> dict[str, Any]:
                     "N8N_OWNER_EMAIL": "owner@simulation.example",
                     "N8N_OWNER_PASSWORD": made_up("SIM_N8N_OWNER_PASSWORD"),
                     "MOCK_GITHUB_URL": "http://mock-github:8200",
+                    "MOCK_SLACK_TOKEN": made_up("SIM_MOCK_SLACK_TOKEN"),
                 },
                 "networks": {"sim": None},
             },
@@ -116,6 +117,7 @@ def good_sim() -> dict[str, Any]:
             "mock-slack": {
                 "image": "wab/mock-slack:sim",
                 "build": {"context": str(check.ROOT / "e2e/mock_slack"), "target": "runtime"},
+                "environment": {"MOCK_SLACK_TOKEN": made_up("SIM_MOCK_SLACK_TOKEN")},
                 "networks": {"sim": {"aliases": ["slack.com"]}},
                 "volumes": [{"type": "volume", "source": "slack-ca", "target": "/ca"}],
             },
@@ -188,6 +190,8 @@ class ComposeTest(unittest.TestCase):
             ("bootstrap", "STEP_KEY", ""),
             ("gateway", "WAB_START_SECRET", made_up("WAB_START_SECRET")),
             ("gateway", "N8N_OWNER_PASSWORD", "a-password-written-in-the-file"),
+            ("gateway", "MOCK_SLACK_TOKEN", "mock-slack-token"),
+            ("mock-slack", "MOCK_SLACK_TOKEN", "mock-slack-token"),
             (
                 "bootstrap",
                 "DATABASE_URL_OWNER",

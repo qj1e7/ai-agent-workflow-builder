@@ -87,6 +87,7 @@ NOT_A_SIMULATION = Refused(
 START_UNKNOWN_HERE = Refused(403, "This start is not one the simulation gateway made.")
 FORGOTTEN = Refused(409, "The simulation gateway no longer keeps this simulated run.")
 TOO_MANY_CALLS = Refused(409, "This simulated run made too many calls, so the gateway stopped it.")
+TOO_MUCH = Refused(409, "This simulated run sent too much, so the gateway stopped it.")
 N8N_SILENT = TryLater("The simulation n8n did not answer.")
 SOURCE_NOT_FOUND = "The place was not found at the source."
 SOURCE_TIMED_OUT = "The source did not answer in time."
@@ -96,6 +97,9 @@ RUN_LIMIT = 200
 """The most simulated runs the gateway keeps. A new start forgets the oldest."""
 CALL_LIMIT = 1000
 """The most calls one simulated run may make, so a workflow that loops is stopped."""
+BYTE_LIMIT = 256 * 1024
+"""The most a simulated run's record may hold, as JSON, so a few large calls are stopped too. With
+RUN_LIMIT runs that is at most about 50 MB, plus the one call that crosses it in each."""
 RECORDED_LIMIT = 500
 """The most items a scenario may give one block. A Read passes on READ_LIMIT of them."""
 WAKE_DELAY = 1.0
@@ -291,6 +295,7 @@ class SimulatedCalls:
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
         run_limit: int = RUN_LIMIT,
         call_limit: int = CALL_LIMIT,
+        byte_limit: int = BYTE_LIMIT,
     ) -> None:
         self._executions = executions
         self._waker = waker
@@ -299,6 +304,9 @@ class SimulatedCalls:
         self._sleep = sleep
         self._run_limit = run_limit
         self._call_limit = call_limit
+        self._byte_limit = byte_limit
+        self._sizes: dict[str, int] = {}
+        """By run, the bytes its record holds."""
         self._runs: OrderedDict[str, SimulatedRun] = OrderedDict()
         self._scenarios: dict[str, Scenario] = {}
         self._links: dict[N8nExecutionId, str] = {}
@@ -329,19 +337,19 @@ class SimulatedCalls:
         the run the failed execution carries, and fails nothing."""
         nonce = self._links.get(failed)
         run = None if nonce is None else self._runs.get(nonce)
-        if run is not None:
-            run.calls.append(
-                CallRecord(
-                    at=self._clock(),
-                    execution_id=reporter,
-                    block="Report a failure",
-                    kind="failure",
-                    asked={"failed_execution_id": failed},
-                    outcome="left_as_is",
-                    status=200,
-                    detail=FAILS_NO_RUN,
-                )
+        if run is not None and not self._full(run):
+            reported = CallRecord(
+                at=self._clock(),
+                execution_id=reporter,
+                block="Report a failure",
+                kind="failure",
+                asked={"failed_execution_id": failed},
+                outcome="left_as_is",
+                status=200,
+                detail=FAILS_NO_RUN,
             )
+            run.calls.append(reported)
+            self._count(run, reported)
         return LeftAsIs(FAILS_NO_RUN)
 
     async def call(self, call: NodeCall) -> CallResult:
@@ -354,6 +362,8 @@ class SimulatedCalls:
         run = linked
         if len(run.calls) >= self._call_limit:
             return TOO_MANY_CALLS
+        if self._full(run):
+            return TOO_MUCH
         key = (call.execution_id, call.node_name)
         kept = self._kept.get(key)
         if kept is not None and kept[0] != call.content_hash:
@@ -375,9 +385,18 @@ class SimulatedCalls:
             task.cancel()
         await asyncio.gather(*self._wakes, return_exceptions=True)
 
+    def _full(self, run: SimulatedRun) -> bool:
+        return self._sizes.get(run.nonce, 0) >= self._byte_limit
+
+    def _count(self, run: SimulatedRun, *kept: WireModel) -> None:
+        """Counts what the run's record now holds besides, toward its byte limit."""
+        added = sum(len(model.model_dump_json()) for model in kept)
+        self._sizes[run.nonce] = self._sizes.get(run.nonce, 0) + added
+
     def _forget(self, nonce: str) -> None:
         run = self._runs.pop(nonce)
         self._scenarios.pop(nonce, None)
+        self._sizes.pop(nonce, None)
         if run.execution_id is not None:
             execution = N8nExecutionId(run.execution_id)
             self._links.pop(execution, None)
@@ -427,12 +446,14 @@ class SimulatedCalls:
                     subject=subject,
                 )
                 run.proposed.append(change)
+                self._count(run, change)
                 return Answer(())
             case AskCall(resume_url):
                 return self._ask(run, scenario, call.execution_id, resume_url)
             case WriteCall():
                 if run.would_have_written is None:
                     run.would_have_written = list(run.proposed)
+                    self._count(run, *run.proposed)
                 return NEVER_WRITES
             case TellCall():
                 return Told("would_have_sent", SENDS_NOTHING)
@@ -466,7 +487,9 @@ class SimulatedCalls:
         match given.serve:
             case "recorded":
                 for change in given.proposes:
-                    run.proposed.append(ProposedChange(block=block, **change.model_dump()))
+                    proposed = ProposedChange(block=block, **change.model_dump())
+                    run.proposed.append(proposed)
+                    self._count(run, proposed)
                 return Answer(tuple(cast(Mapping[str, Json], item) for item in given.items))
             case "timeout":
                 return TryLater(AGENT_TIMED_OUT)
@@ -513,20 +536,20 @@ class SimulatedCalls:
     ) -> CallResult:
         asked = {k: v for k, v in asdict(call.work).items() if k != "resume_url"}
         outcome, status, detail, items = _shown(answer)
-        run.calls.append(
-            CallRecord(
-                at=self._clock(),
-                execution_id=call.execution_id,
-                block=call.node_name,
-                kind=call.kind,
-                asked=cast(dict[str, JsonValue], asked),
-                outcome=outcome,
-                status=status,
-                detail=detail,
-                items=items,
-                replayed=replayed,
-            )
+        record = CallRecord(
+            at=self._clock(),
+            execution_id=call.execution_id,
+            block=call.node_name,
+            kind=call.kind,
+            asked=cast(dict[str, JsonValue], asked),
+            outcome=outcome,
+            status=status,
+            detail=detail,
+            items=items,
+            replayed=replayed,
         )
+        run.calls.append(record)
+        self._count(run, record)
         return answer
 
 
