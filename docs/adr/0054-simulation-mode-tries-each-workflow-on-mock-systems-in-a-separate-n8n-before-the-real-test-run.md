@@ -126,6 +126,15 @@ What the results change in this ADR:
 - **Keys.** The copy names only the mock keys the gateway makes, each of a type the platform's own key for that system has, with made-up values. Every key the version names is left out.
 - **Pins.** Only a block with no mock is pinned: from the scenario (PR 5), else from the version's own pin, else with an item that says it was pinned. Each block's mode is in the answer, and the pinned ones are listed as not tried.
 
+#### What PR 5 chose, 24 Nov 2026
+
+- **Where a simulation runs.** In the gateway, as a fourth signed route, `POST /simulation/v1/simulations`. Each scenario runs on a copy of its own, since its pins are part of the copy, and the copy is deleted once it is graded, whatever happened. One simulation runs at a time, since mock GitHub plays one scenario at a time.
+- **The schema.** For each block that reads a source, how it is served: recorded, varied, empty, not found or too slow. For each Agent block, a recorded reply, or one that is too slow. The Approver's answer follows from the kind. A block a scenario leaves out is served as its kind's template serves it. Code refuses a block, sample or play that doesn't fit the version or the kind. "Odd data" applies only when an allow list covers a read, since code has nothing else to vary.
+- **Timeouts.** Mock GitHub drops the connection, which stops n8n's own GitHub block in about a second, in words the troubleshooter names (spike S5). The gateway answers our Read "The source did not answer in time." at once. Mock GitHub also serves a scenario's releases, or answers not found, for every repository, until the simulation sets it back.
+- **Grading.** Each kind's expected outcome is as section 5 says. A timeout at one of n8n's own blocks passes only when the troubleshooter names the stop. A write with no yes fails any scenario. A pinned block never counts as run. A scenario no block can play, such as a timeout where every read is pinned, is not run, and shows as not tried.
+- **Recorded samples.** Allow lists for four answers: a GitHub release, our Read's release, our Read's Confluence page and a Jira issue (`recorded_samples.py` states each). Every other field is left out. A value kept must fit its shape: a version, a time, a flag, a count, a Jira key or one of a few fixed words. Text, links and page ids become fixed made-up values, a release's name is kept only when it is its tag, and key shapes are masked. The gateway keeps samples in memory for one simulation, and scrubs any it is sent. Keeping real runs' samples between simulations comes with the PR that sends them.
+- **Pins.** A copy never takes the version's own pinned output, which may be what a real run read. It takes the scenario's, from a scrubbed sample, or an item that says it was pinned.
+
 Outside this ADR: no real workflow has a time limit of its own (no `EXECUTIONS_TIMEOUT` and no `executionTimeout`), so a hung source holds a real run for 300 s for each try of the block. Whether real workflows get a shorter one is for the team lead.
 
 ### Pull requests, in order

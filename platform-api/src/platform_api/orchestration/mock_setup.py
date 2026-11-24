@@ -9,7 +9,9 @@ simulation tried and what it did not:
 - `mock`: one of n8n's own blocks for an outside system with a mock here. It runs against the
   mock, with a mock key of a type the platform's own key for that system has.
 - `pinned`: one of n8n's own blocks for a system with no mock here. Its output is pinned, so it
-  never runs, and its "not found" and "timeout" are never tried (ADR 0054, Upkeep).
+  never runs, and its "not found" and "timeout" are never tried (ADR 0054, Upkeep). The pin is the
+  scenario's own, or an item that says it was pinned. The version's own pinned output is never
+  used, since it may be what a real run read.
 
 A block the class file turns off or does not know is refused, and the setup makes nothing: it
 never passes a block through. The copy names no key the version names. A block that runs against
@@ -191,7 +193,7 @@ def plan_copy(
             **SIMULATION_SETTINGS,
         },
     }
-    pinned = _pins(cast(Mapping[str, Any], version.get("pinData") or {}), blocks, pins)
+    pinned = _pins(blocks, pins)
     if pinned:
         document["pinData"] = pinned
     return MockSetup(document, tuple(blocks), tuple(used.values()))
@@ -264,20 +266,16 @@ def _copied(node: Mapping[str, Any], mode: BlockMode, key: MockKey | None) -> di
     return copied
 
 
-def _pins(
-    given: Mapping[str, Any], blocks: Sequence[BlockMode], scenario: Mapping[str, Items]
-) -> dict[str, Any]:
-    """Output for each pinned block: the scenario's, else the version's own, else an item that
-    says it was pinned. Every other pin the version holds is left out, so each other block
-    runs."""
+def _pins(blocks: Sequence[BlockMode], scenario: Mapping[str, Items]) -> dict[str, Any]:
+    """Output for each pinned block: the scenario's, which comes from a scrubbed recorded sample
+    (recorded_samples.py), else an item that says it was pinned. No pin the version holds is
+    used, as it may be a real run's output, and each block with a mock runs."""
     pins: dict[str, Any] = {}
     for block in blocks:
         if block.mode != "pinned":
             continue
         if block.block in scenario:
             pins[block.block] = [{"json": dict(item)} for item in scenario[block.block]]
-        elif block.block in given:
-            pins[block.block] = deepcopy(given[block.block])
         else:
             pins[block.block] = [{"json": {"pinned": block.why}}]
     return pins
@@ -307,6 +305,11 @@ class MockSetups:
         self._keys = dict(keys)
         self._made: set[str] = set()
         self._lock = asyncio.Lock()
+
+    def modes(self, version: Mapping[str, Any]) -> tuple[BlockMode, ...] | SetupRefused:
+        """How a copy would run each block of the version, without making anything."""
+        setup = plan_copy(version, self._keys, {})
+        return setup if isinstance(setup, SetupRefused) else setup.blocks
 
     async def copy(
         self, version: Mapping[str, Any], pins: Mapping[str, Items]

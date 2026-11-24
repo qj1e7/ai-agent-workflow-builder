@@ -6,6 +6,7 @@ from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any
 
+from platform_api.orchestration.n8n import ExecutionRecord
 from platform_api.orchestration.recorded_samples import RecordedSamples
 from platform_api.orchestration.scenario_grades import (
     AFTER_WRITE,
@@ -24,8 +25,6 @@ from platform_api.orchestration.scenarios import (
     stage,
     templates,
 )
-
-from platform_api.orchestration.n8n import ExecutionRecord
 from platform_api.orchestration.simulated_calls import (
     SOURCE_NOT_FOUND,
     SOURCE_TIMED_OUT,
@@ -235,6 +234,20 @@ def test_source_not_found_passes_when_the_played_read_stops_it_with_a_reason() -
     graded = grade(plan, staged(plan)["source_not_found"], run, stopped)
     assert graded.verdict == "passed"
     assert graded.happened == f'"Read releases" stopped it: {SOURCE_NOT_FOUND}'
+
+
+def test_our_blocks_stop_is_told_in_the_gateways_words() -> None:
+    """For an answer to try again, n8n shows only the status our block got, as a live run shows,
+    so the words come from the gateway's record."""
+    plan = planned(release_check())
+    run = simulated(calls=[call("Read releases", "read", "try_again", SOURCE_TIMED_OUT)])
+    shown = "Our platform could not do this step (HTTP 503)."
+    stopped = execution("error", (START, "Read releases"), "Read releases", shown)
+    graded = grade(plan, staged(plan)["timeout"], run, stopped)
+    assert (graded.verdict, graded.happened) == (
+        "passed",
+        f'"Read releases" stopped it: {SOURCE_TIMED_OUT}',
+    )
 
 
 def test_a_stop_somewhere_else_is_not_the_source_not_found() -> None:

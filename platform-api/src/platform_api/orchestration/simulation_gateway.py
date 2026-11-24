@@ -12,10 +12,14 @@ the settings below: the simulation's own node key and start secret, the simulati
 and owner, whose executions it reads to link each call and where it makes each version's copy,
 and the mocks there. It has no database, and no real Jira, Teams, Slack or model key.
 
-The simulation's driver uses three more routes, each signed with the simulation's start secret:
+The simulation's driver uses four more routes, each signed with the simulation's start secret:
 
+- `POST /simulation/v1/simulations` takes a workflow version, and its scenarios or none, and runs
+  each scenario on a copy of its own, grades it and deletes the copy (simulations.py). Without
+  scenarios it runs code's templates. Recorded samples sent with it are scrubbed before use.
 - `POST /simulation/v1/copies` takes a workflow version, makes its copy in the simulation n8n with
-  only mock keys (mock_setup.py), and answers the copy's id and how each block runs in it.
+  only mock keys (mock_setup.py), and answers the copy's id and how each block runs in it. The
+  caller deletes the copy.
 - `POST /simulation/v1/starts` takes a workflow id and a scenario, and answers the start item for
   n8n's run by hand.
 - `GET /simulation/v1/runs/{nonce}` answers that run's record for the grader.
@@ -43,6 +47,7 @@ from contextlib import asynccontextmanager
 from dataclasses import asdict, dataclass, field
 from typing import Annotated, Literal
 
+import httpx
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -54,7 +59,10 @@ from platform_api.nul_guard import RefuseNul
 from platform_api.orchestration import n8n_calls_http
 from platform_api.orchestration.dispatch import N8nWaker
 from platform_api.orchestration.mock_setup import MockSetups, Mode, SetupRefused, mock_keys
-from platform_api.orchestration.n8n import N8nApi
+from platform_api.orchestration.n8n import N8nApi, N8nError
+from platform_api.orchestration.recorded_samples import SAMPLE_ITEMS, AnswerKind, RecordedSamples
+from platform_api.orchestration.scenario_grades import Verdict
+from platform_api.orchestration.scenarios import NotTried, SampleId, ScenarioKind, ScenarioSpec
 from platform_api.orchestration.simulated_calls import (
     MockGitHub,
     Scenario,
@@ -62,6 +70,7 @@ from platform_api.orchestration.simulated_calls import (
     SimulatedRun,
     Unsealed,
 )
+from platform_api.orchestration.simulations import Simulation, SimulationRefused, Simulations
 from platform_api.settings import MAX_BODY_BYTES_DEFAULT, N8nOwner
 from platform_api.wire import WireIn, WireModel, error_response
 
@@ -158,6 +167,14 @@ def current_setups(request: Request) -> MockSetups:
 
 
 CurrentSetups = Annotated[MockSetups, Depends(current_setups)]
+
+
+def current_simulations(request: Request) -> Simulations:
+    simulations: Simulations = request.app.state.simulations
+    return simulations
+
+
+CurrentSimulations = Annotated[Simulations, Depends(current_simulations)]
 BlockName = Annotated[str, Field(min_length=1, max_length=200)]
 
 
@@ -228,6 +245,58 @@ class StartOut(WireModel):
     item: StartItem
 
 
+class SampleIn(WireIn):
+    """A recorded sample, which the gateway scrubs by its allow list before any scenario serves
+    it (recorded_samples.py)."""
+
+    id: SampleId
+    answer: AnswerKind
+    block: BlockName | None = Field(default=None, description="The block it was recorded from.")
+    items: list[dict[str, JsonValue]] = Field(max_length=SAMPLE_ITEMS)
+
+
+class SimulationIn(WireIn):
+    version: VersionIn
+    scenarios: list[ScenarioSpec] | None = Field(
+        default=None, max_length=20, description="None runs code's own templates."
+    )
+    samples: list[SampleIn] = Field(default_factory=list[SampleIn], max_length=20)
+
+
+class NotTriedOut(WireModel):
+    block: str
+    why: str
+
+
+class ResultOut(WireModel):
+    name: str
+    kind: ScenarioKind
+    verdict: Verdict
+    expected: str = Field(description="What code expects of this kind, in plain words.")
+    happened: str = Field(description="What code read in the records, in plain words.")
+    ran: list[str] = Field(description="The blocks that ran, pinned ones left out.")
+    not_tried: list[NotTriedOut]
+
+
+class CoverageOut(WireModel):
+    not_reached: list[str] = Field(description="Blocks that could run, but no scenario reached.")
+    not_tried: list[NotTriedOut] = Field(description="Pinned blocks, and blocks after a write.")
+    kinds_without_a_scenario: list[ScenarioKind]
+
+
+class SimulationOut(WireModel):
+    tried: int
+    passed: int
+    results: list[ResultOut]
+    coverage: CoverageOut
+    blocks: list[BlockModeOut]
+
+
+class SimulationRefusedOut(WireModel):
+    detail: str
+    problems: list[str]
+
+
 class Health(WireModel):
     status: Literal["ok"] = "ok"
 
@@ -241,6 +310,79 @@ def _problems(error: ValidationError) -> JSONResponse:
     """A refusal that names each field and never echoes what was sent."""
     problems = [{"type": e["type"], "loc": list(e["loc"]), "msg": e["msg"]} for e in error.errors()]
     return JSONResponse(status_code=422, content={"detail": problems})
+
+
+@control.post(
+    "/simulations",
+    response_model=SimulationOut,
+    description="Runs a workflow version through its scenarios, or code's templates, each on a "
+    "copy of its own in the simulation n8n, grades each from the records and deletes each copy.",
+    responses={
+        **REFUSED,
+        422: {"model": SimulationRefusedOut, "description": "A scenario doesn't fit the version"},
+        503: error_response("The simulation n8n or a mock did not answer"),
+    },
+)
+async def simulate(
+    body: SignedBody, simulations: CurrentSimulations
+) -> SimulationOut | JSONResponse:
+    try:
+        given = SimulationIn.model_validate_json(body)
+    except ValidationError as error:
+        return _problems(error)
+    samples = RecordedSamples()
+    for sample in given.samples:
+        samples.record(
+            sample.answer, sample.items, "real_run", block=sample.block, sample_id=sample.id
+        )
+    version = given.version.model_dump(by_alias=True, exclude_none=True)
+    try:
+        done = await simulations.simulate(version, given.scenarios, samples)
+    except N8nError, httpx.HTTPError:
+        log.warning("a simulation stopped: the simulation n8n or a mock did not answer")
+        detail = "The simulation n8n or a mock did not answer, so nothing was graded."
+        return JSONResponse(status_code=503, content={"detail": detail})
+    match done:
+        case SetupRefused(blocks=blocks):
+            refused = CopyRefused(
+                detail="The simulation can't run every block of this version.",
+                blocks=[RefusedBlockOut(**asdict(block)) for block in blocks],
+            )
+            return JSONResponse(status_code=422, content=refused.model_dump())
+        case SimulationRefused(problems=problems, detail=detail):
+            out = SimulationRefusedOut(detail=detail, problems=list(problems))
+            return JSONResponse(status_code=422, content=out.model_dump())
+        case Simulation():
+            return _simulation_out(done)
+
+
+def _not_tried(found: Sequence[NotTried]) -> list[NotTriedOut]:
+    return [NotTriedOut(block=n.block, why=n.why) for n in found]
+
+
+def _simulation_out(done: Simulation) -> SimulationOut:
+    return SimulationOut(
+        tried=done.tried,
+        passed=done.passed,
+        results=[
+            ResultOut(
+                name=r.name,
+                kind=r.kind,
+                verdict=r.verdict,
+                expected=r.expected,
+                happened=r.happened,
+                ran=list(r.ran),
+                not_tried=_not_tried(r.not_tried),
+            )
+            for r in done.results
+        ],
+        coverage=CoverageOut(
+            not_reached=list(done.coverage.not_reached),
+            not_tried=_not_tried(done.coverage.not_tried),
+            kinds_without_a_scenario=list(done.coverage.kinds_without_a_scenario),
+        ),
+        blocks=[BlockModeOut(**asdict(block)) for block in done.blocks],
+    )
 
 
 @control.post(
@@ -307,6 +449,7 @@ def gateway_app(
     settings: GatewaySettings,
     calls: SimulatedCalls,
     setups: MockSetups,
+    simulations: Simulations,
     closers: Sequence[Callable[[], Awaitable[None]]] = (),
 ) -> FastAPI:
     @asynccontextmanager
@@ -326,6 +469,7 @@ def gateway_app(
     app.state.settings = settings
     app.state.node_calls = calls
     app.state.setups = setups
+    app.state.simulations = simulations
     app.add_middleware(RefuseNul)
     app.add_middleware(RefuseDeepJson, max_bytes=MAX_BODY_BYTES_DEFAULT)
     app.add_exception_handler(RequestValidationError, refuse_invalid_request)
@@ -349,9 +493,10 @@ def create_app(env: Mapping[str, str] | None = None) -> FastAPI:
     # The copies go to the simulation n8n alone, through its own owner's API key.
     keys = mock_keys(settings.mock_github_url, settings.mock_jira_url, settings.mock_slack_token)
     setups = MockSetups(n8n, keys)
+    simulations = Simulations(setups, calls, n8n, github)
     closers = [n8n.close, waker.close, *([] if github is None else [github.close])]
     log.info("the simulation gateway answers the simulation n8n at %s", settings.n8n_base_url)
-    return gateway_app(settings, calls, setups, closers)
+    return gateway_app(settings, calls, setups, simulations, closers)
 
 
 def _log() -> None:

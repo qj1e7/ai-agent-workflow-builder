@@ -24,7 +24,7 @@ import logging
 import re
 from collections import OrderedDict
 from collections.abc import Awaitable, Callable, Coroutine, Mapping
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from typing import Annotated, Any, Literal, Protocol, cast
 
@@ -189,7 +189,7 @@ class CallRecord(WireModel):
 
 class SimulatedRun(WireModel):
     """What the grader reads for one scenario (ADR 0054, PR 5): the calls in order, what was
-    proposed, what Ask for a yes got, and what Make the approved changes would have made."""
+    proposed, what Ask for a yes got, and how much Make the approved changes would have made."""
 
     nonce: str
     workflow_id: str
@@ -203,10 +203,11 @@ class SimulatedRun(WireModel):
         default=None, description="What Ask for a yes got, once it asked with a change proposed."
     )
     woke: Woke | None = Field(default=None, description="Whether the wake reached n8n.")
-    would_have_written: list[ProposedChange] | None = Field(
+    would_have_written: int | None = Field(
         default=None,
-        description="What Make the approved changes would have made when it was refused. None "
-        "when no write was asked.",
+        description="How many of the changes proposed, from the first, Make the approved changes "
+        "would have made when it was refused. None when no write was asked. A count, so the "
+        "record holds each change once.",
     )
 
 
@@ -218,6 +219,16 @@ class ExecutionReads(Protocol):
 
 class ReleaseReads(Protocol):
     async def releases(self, repo: str) -> ReadItems | ReadFailed: ...
+
+
+@dataclass(frozen=True)
+class GitHubPlay:
+    """What mock GitHub does for one scenario (ADR 0054, PR 5): serve these releases for every
+    repository, or its own when None, or answer not found, or take each request and drop the
+    connection, which plays a source that is too slow (spike S5)."""
+
+    mode: Literal["ok", "not_found", "drop"]
+    releases: tuple[Mapping[str, Json], ...] | None
 
 
 REPO = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
@@ -262,6 +273,18 @@ class MockGitHub:
                 }
             )
         return items
+
+    async def play(self, play: GitHubPlay | None) -> None:
+        """Steers mock GitHub for one scenario, or sets it back to its own answers with None. A
+        simulation runs one scenario at a time, so one setting serves every repository."""
+        given = play or GitHubPlay("ok", None)
+        served = None if given.releases is None else [dict(r) for r in given.releases]
+        for path, body in (
+            ("/_admin/mode", {"mode": given.mode}),
+            ("/_admin/releases", {"releases": served}),
+        ):
+            answer = await self._client.post(f"{self._base_url}{path}", json=body)
+            answer.raise_for_status()
 
     async def close(self) -> None:
         await self._client.aclose()
@@ -452,8 +475,7 @@ class SimulatedCalls:
                 return self._ask(run, scenario, call.execution_id, resume_url)
             case WriteCall():
                 if run.would_have_written is None:
-                    run.would_have_written = list(run.proposed)
-                    self._count(run, *run.proposed)
+                    run.would_have_written = len(run.proposed)
                 return NEVER_WRITES
             case TellCall():
                 return Told("would_have_sent", SENDS_NOTHING)

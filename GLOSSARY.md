@@ -243,6 +243,18 @@ _Avoid_: Test run, dry run
 The copy of one workflow version in the simulation n8n, which code builds from the node allow list. n8n's own blocks for a system with a mock get a mock key, those with no mock get pinned output and show as not tried, and any block the list doesn't turn on is refused. The copy names no real key (ADR 0054).
 _Avoid_: Test copy, sandbox workflow
 
+**Scenario**:
+One situation a workflow version is tried in during a simulation, as data in a schema code owns: how each block that reads a source is served (recorded, varied, empty, not found or too slow) and what each Agent block answers. There are six kinds: Happy path, Nothing new, Source not found, Timeout, Approver says no, and Odd data. Code picks the kinds that apply, builds one from a template for each, and grades each from the records. The model never grades (ADR 0054).
+_Avoid_: Test case, test
+
+**Recorded sample**:
+An answer from a system, kept only as its allow list says, that a scenario serves or varies. Names, emails, account ids and text people wrote are never kept, and key shapes are masked (ADR 0054).
+_Avoid_: Fixture, test data
+
+**Coverage gap**:
+A block that no scenario of a simulation reached, or a kind of scenario that applies to the version but has none. A pinned block, or one after a write, is not tried, never reached (ADR 0054).
+_Avoid_: Untested block
+
 **Skipped**:
 A run that n8n started while an earlier run of the same workflow was still waiting for a yes. It stops at its first step and does nothing, so Approvers never see two requests for one change. The Portal says "An earlier run is still waiting for a yes."
 

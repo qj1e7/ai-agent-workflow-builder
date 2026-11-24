@@ -10,9 +10,6 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-from platform_api.orchestration.recorded_samples import RecordedSamples
-from platform_api.orchestration.scenarios import KINDS, GitHubPlay, ScenarioSpec
-from platform_api.orchestration.simulations import Simulation, SimulationRefused, Simulations
 
 from platform_api.orchestration.mock_setup import MockSetups, SetupRefused, mock_keys
 from platform_api.orchestration.n8n import ExecutionRecord, N8nError
@@ -30,8 +27,11 @@ from platform_api.orchestration.n8n_calls import (
     Waiting,
     WriteCall,
 )
+from platform_api.orchestration.recorded_samples import RecordedSamples
+from platform_api.orchestration.scenarios import KINDS, GitHubPlay, ScenarioSpec
 from platform_api.orchestration.simulated_calls import SimulatedCalls
 from platform_api.orchestration.simulation_gateway import gateway_app
+from platform_api.orchestration.simulations import Simulation, SimulationRefused, Simulations
 from platform_api.shared import N8nExecutionId
 from tests.test_mock_setup import FakeSimulationN8n
 from tests.test_scenarios import (
@@ -135,19 +135,21 @@ class LineN8n(FakeSimulationN8n):
         assert self.calls is not None and self.waker is not None
         p = node["parameters"]
         kind = node["type"].removeprefix("CUSTOM.wab")
-        work = {
-            "StartFromPortal": None,
-            "Read": ReadCall(p.get("source", "github_releases"), p.get("place", ""), None),
-            "Agent": AgentCall(p.get("agent", ""), {}),
-            "ProposeChange": ProposeCall(
-                p["action"], p["place"], p["title"], p["body"], p.get("subject")
-            ),
-            "AskForYes": AskCall("http://n8n:5678/webhook-waiting/1?signature=made-up"),
-            "MakeApprovedChanges": WriteCall(),
-            "Tell": TellCall("channel", "result"),
-        }[kind]
-        if work is None:
-            return 1, 0, None
+        match kind:
+            case "Read":
+                work: Any = ReadCall(p.get("source", "github_releases"), p.get("place", ""), None)
+            case "Agent":
+                work = AgentCall(p.get("agent", ""), {})
+            case "ProposeChange":
+                work = ProposeCall(p["action"], p["place"], p["title"], p["body"], p.get("subject"))
+            case "AskForYes":
+                work = AskCall("http://n8n:5678/webhook-waiting/1?signature=made-up")
+            case "MakeApprovedChanges":
+                work = WriteCall()
+            case "Tell":
+                work = TellCall("channel", "result")
+            case _:
+                return 1, 0, None
         answer = await self.calls.call(NodeCall(N8nExecutionId(execution), node["name"], work))
         match answer:
             case Answer(items):
@@ -425,7 +427,8 @@ def test_a_simulation_the_scenarios_do_not_fit_is_refused_in_words(gw: GatewayWi
     assert answer.json() == {
         "detail": "The scenarios don't fit this version, so nothing ran.",
         "problems": [
-            'timeout: "Timeout" plays at least one read as too slow, and none as not found.'
+            'timeout: "Timeout" plays at least one read as too slow, and serves every other '
+            "as recorded."
         ],
     }
     assert gw.stack.n8n.done == []

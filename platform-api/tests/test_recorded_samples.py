@@ -9,6 +9,7 @@ import secrets
 from typing import Any
 
 import pytest
+
 from platform_api.orchestration.recorded_samples import (
     ALLOW_LISTS,
     FAKE_LINK,
@@ -163,7 +164,8 @@ def test_a_release_name_is_kept_only_when_it_is_its_tag() -> None:
 def test_a_jira_status_outside_the_fixed_words_becomes_to_do() -> None:
     issue = jira_issue(person())
     issue["fields"]["status"]["name"] = "Waiting on a person"
-    assert scrub("jira.issue", [issue])[0]["fields"]["status"] == {"name": "To Do"}
+    fields: Any = scrub("jira.issue", [issue])[0]["fields"]
+    assert fields["status"] == {"name": "To Do"}
 
 
 @pytest.mark.parametrize(

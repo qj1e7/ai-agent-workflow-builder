@@ -15,7 +15,6 @@ import httpx
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from platform_api.orchestration.simulations import Simulations
 
 from platform_api.auth import ConfigError
 from platform_api.orchestration import n8n_calls_http
@@ -53,6 +52,7 @@ from platform_api.orchestration.simulation_gateway import (
     gateway_app,
     gateway_settings_from_env,
 )
+from platform_api.orchestration.simulations import Simulations
 from platform_api.settings import N8nOwner
 from platform_api.shared import ApprovalId, N8nExecutionId
 from tests.declared import FakeNodeCalls
@@ -609,7 +609,8 @@ async def test_a_refused_write_counts_only_its_own_call_toward_the_size_limit() 
     large = ProposeCall("jira.create_ticket", "MOCK", "Upgrade", "x" * 1200, None)
     execution = N8nExecutionId("41")
     await calls.call(NodeCall(execution, "Propose a change", large))
-    assert (await calls.call(NodeCall(execution, "Write", WriteCall()))).status == 403
+    refused = await calls.call(NodeCall(execution, "Write", WriteCall()))
+    assert getattr(refused, "status", None) == 403
     told = await calls.call(NodeCall(execution, "Tell", TellCall("channel", "result")))
     assert getattr(told, "status", None) != 409, "counted once, the record is under its limit"
     record = calls.run(run.nonce)
@@ -763,6 +764,7 @@ def test_the_gateway_has_only_its_own_routes(gw: Gateway) -> None:
         "/simulation/v1/starts",
         "/simulation/v1/runs/{nonce}",
         "/simulation/v1/copies",
+        "/simulation/v1/simulations",
         *real,
     }
 

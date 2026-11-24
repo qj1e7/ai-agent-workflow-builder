@@ -8,6 +8,8 @@ from collections.abc import Sequence
 from typing import Any
 
 import pytest
+
+from platform_api.orchestration.mock_setup import MockSetup, mock_keys, plan_copy
 from platform_api.orchestration.recorded_samples import ALLOW_LISTS, MADE_UP, RecordedSamples, vary
 from platform_api.orchestration.scenarios import (
     KINDS,
@@ -25,8 +27,6 @@ from platform_api.orchestration.scenarios import (
     stage,
     templates,
 )
-
-from platform_api.orchestration.mock_setup import MockSetup, mock_keys, plan_copy
 
 START = "Start from the Portal"
 GITHUB_URL = "http://mock-github:8200"
@@ -288,11 +288,12 @@ def test_a_pinned_read_is_never_played_as_not_found_or_too_slow() -> None:
         ),
         (
             spec("source_not_found", reads={"Read releases": {"serve": "recorded"}}),
-            '"Source not found" plays at least one read as not found, and none as too slow.',
+            '"Source not found" plays at least one read as not found, and serves every other '
+            "as recorded.",
         ),
         (
             spec("timeout", reads={"Read releases": {"serve": "not_found"}}),
-            '"Timeout" plays at least one read as too slow, and none as not found.',
+            '"Timeout" plays at least one read as too slow, and serves every other as recorded.',
         ),
         (
             spec("happy_path", reads={"Read releases": {"serve": "empty"}}),
@@ -396,6 +397,7 @@ def test_mock_github_serves_each_scenario_or_plays_its_failure() -> None:
     staged = {k: stage(s, plan, samples) for k, s in by_kind(plan, samples).items()}
     releases = MADE_UP["github.release"].items
     varied = vary(releases, "github.release", ALLOW_LISTS["github.release"].varies)
+    assert isinstance(varied, tuple)
     assert {k: s.github for k, s in staged.items()} == {
         "happy_path": GitHubPlay("ok", releases),
         "nothing_new": GitHubPlay("ok", ()),

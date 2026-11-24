@@ -1,9 +1,10 @@
 import json
 import re
+import socket
 import threading
 from datetime import UTC, datetime, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import Any
+from typing import Any, cast
 from urllib.parse import parse_qs, urlparse
 
 REPO = "langchain-ai/langgraph"
@@ -13,7 +14,9 @@ N8N = "n8n-io/n8n"
 TERRAFORM = "hashicorp/terraform"
 OPENTOFU = "opentofu/opentofu"
 CPYTHON = "python/cpython"
-MODES = ("ok", "unavailable", "not_found")
+MODES = ("ok", "unavailable", "not_found", "drop")
+"""drop takes a request and closes the connection without a word, as a source that stops answering
+does. A simulation plays a timeout with it (ADR 0054, spike S5)."""
 REPO_NAME = re.compile(r"^[^/\s]+/[^/\s]+$")
 DEFAULT_PER_PAGE = 30
 MAX_PER_PAGE = 100
@@ -154,12 +157,26 @@ class State:
     """The mode for every repository, and each repository's own mode, which wins over it.
 
     Setting the mode for every repository clears each repository's own, so one call resets it.
+
+    A simulation may also serve releases of its own for every repository, a scenario's recorded
+    sample (ADR 0054), until it clears them. They still follow the mode.
     """
 
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self._mode = "ok"
         self._repo_modes: dict[str, str] = {}
+        self._served: list[dict[str, Any]] | None = None
+
+    @property
+    def served(self) -> list[dict[str, Any]] | None:
+        with self._lock:
+            return self._served
+
+    @served.setter
+    def served(self, value: list[dict[str, Any]] | None) -> None:
+        with self._lock:
+            self._served = value
 
     @property
     def mode(self) -> str:
@@ -208,6 +225,11 @@ def make_handler(state: State) -> type[BaseHTTPRequestHandler]:
             self.send_header("Location", where + (f"?{query}" if query else ""))
             self.send_header("Content-Length", "0")
             self.end_headers()
+
+        def drop(self) -> None:
+            """Takes the request, then closes the connection without a word."""
+            self.close_connection = True
+            self.connection.shutdown(socket.SHUT_RDWR)
 
         def send_rate_limit(self) -> None:
             """No token is anonymous. A token the mock does not know is refused, as GitHub does."""
@@ -261,13 +283,18 @@ def make_handler(state: State) -> type[BaseHTTPRequestHandler]:
             elif (match := RELEASES_PATH.match(url.path)) is not None:
                 repo = f"{match.group(1)}/{match.group(2)}"
                 mode = state.mode_of(repo)
+                if mode == "drop":
+                    self.drop()
+                    return
                 if mode == "unavailable":
                     self.send_json(503, {"message": "Service Unavailable"})
                     return
-                if mode != "not_found" and (target := renamed_to(repo)) is not None:
-                    self.redirect(target, "/releases", url.query)
+                served = state.served
+                if served is None and mode != "not_found" and renamed_to(repo) is not None:
+                    self.redirect(str(renamed_to(repo)), "/releases", url.query)
                     return
-                releases = None if mode == "not_found" else RELEASES_BY_REPO.get(repo)
+                found = RELEASES_BY_REPO.get(repo) if served is None else served
+                releases = None if mode == "not_found" else found
                 if releases is None:
                     self.send_json(404, {"message": "Not Found"})
                     return
@@ -280,6 +307,9 @@ def make_handler(state: State) -> type[BaseHTTPRequestHandler]:
             elif (match := REPO_PATH.match(url.path)) is not None:
                 repo = f"{match.group(1)}/{match.group(2)}"
                 mode = state.mode_of(repo)
+                if mode == "drop":
+                    self.drop()
+                    return
                 if mode == "unavailable":
                     self.send_json(503, {"message": "Service Unavailable"})
                     return
@@ -294,7 +324,11 @@ def make_handler(state: State) -> type[BaseHTTPRequestHandler]:
                 self.send_json(404, {"message": "Not Found"})
 
         def do_POST(self) -> None:
-            if urlparse(self.path).path != "/_admin/mode":
+            path = urlparse(self.path).path
+            if path == "/_admin/releases":
+                self.serve()
+                return
+            if path != "/_admin/mode":
                 self.send_json(404, {"message": "Not Found"})
                 return
             length = int(self.headers.get("Content-Length", 0))
@@ -314,6 +348,27 @@ def make_handler(state: State) -> type[BaseHTTPRequestHandler]:
                 self.send_json(200, {"mode": mode, "repo": repo})
             else:
                 self.send_json(400, {"message": "repo must be owner/name"})
+
+        def serve(self) -> None:
+            """Releases of a simulation's own, served for every repository, or null to clear them
+            and serve the mock's own again."""
+            length = int(self.headers.get("Content-Length", 0))
+            try:
+                asked = json.loads(self.rfile.read(length))
+            except ValueError:
+                asked = None
+            fields = cast(dict[str, object], asked) if isinstance(asked, dict) else {}
+            given: object = fields.get("releases", ...)
+            if given is None:
+                state.served = None
+                self.send_json(200, {"served": None})
+                return
+            listed = cast(list[object], given) if isinstance(given, list) else None
+            if listed is None or not all(isinstance(r, dict) for r in listed):
+                self.send_json(400, {"message": "releases must be a list of objects, or null"})
+                return
+            state.served = [cast(dict[str, Any], r) for r in listed]
+            self.send_json(200, {"served": len(listed)})
 
         def log_message(self, format: str, *args: Any) -> None:
             return
