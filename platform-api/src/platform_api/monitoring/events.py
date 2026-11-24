@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Annotated, Literal
@@ -10,6 +11,13 @@ from platform_api.monitoring.agent_events import (
     AgentMessageData,
     AgentStepFinishedData,
     AgentStepStartedData,
+)
+from platform_api.monitoring.fix_events import (
+    FixHandedBackData,
+    FixHandoffData,
+    FixProposedData,
+    FixRoundData,
+    FixStartedData,
 )
 from platform_api.shared import ApprovalId, ProposalId, RunId, UserId
 from platform_api.wire import (
@@ -357,6 +365,31 @@ class Told(_Envelope):
     data: ToldData
 
 
+class FixStarted(_Envelope):
+    kind: Literal["fix_started"] = "fix_started"
+    data: FixStartedData
+
+
+class FixHandoff(_Envelope):
+    kind: Literal["fix_handoff"] = "fix_handoff"
+    data: FixHandoffData
+
+
+class FixRound(_Envelope):
+    kind: Literal["fix_round"] = "fix_round"
+    data: FixRoundData
+
+
+class FixProposed(_Envelope):
+    kind: Literal["fix_proposed"] = "fix_proposed"
+    data: FixProposedData
+
+
+class FixHandedBack(_Envelope):
+    kind: Literal["fix_handed_back"] = "fix_handed_back"
+    data: FixHandedBackData
+
+
 type ActivityEvent = Annotated[
     RunCreated
     | LegDispatched
@@ -386,7 +419,12 @@ type ActivityEvent = Annotated[
     | ExecutionResumed
     | RunLost
     | SupportReported
-    | Told,
+    | Told
+    | FixStarted
+    | FixHandoff
+    | FixRound
+    | FixProposed
+    | FixHandedBack,
     Field(discriminator="kind"),
 ]
 
@@ -407,6 +445,8 @@ class PendingEvent:
 PLATFORM = Actor(kind="platform", id="platform", display="Platform")
 WORKFLOW = Actor(kind="workflow", id="n8n", display="Workflow engine")
 SAFETY_CHECKER = Actor(kind="safety_checker", id="safety_checker", display="Safety checker")
+COORDINATOR = Actor(kind="agent", id="coordinator", display="AI troubleshooter")
+"""The agent that runs a fix, behind the AI troubleshooter's face (ADR 0055, section 10)."""
 
 
 def user_actor(user_id: UserId, display: str) -> Actor:
@@ -415,3 +455,13 @@ def user_actor(user_id: UserId, display: str) -> Actor:
 
 def agent_actor(agent_id: str, display: str) -> Actor:
     return Actor(kind="agent", id=agent_id, display=display)
+
+
+def current_failure(events: Sequence[ActivityEvent]) -> RunFailed | None:
+    """The stop a run is at: its last failure, unless it was retried since."""
+    for event in reversed(events):
+        if isinstance(event, RunFailed):
+            return event
+        if isinstance(event, RunRetried):
+            return None
+    return None

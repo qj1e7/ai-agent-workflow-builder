@@ -123,7 +123,7 @@ Under it come the cause, as code confirmed it, and each round tried: what change
 ### 8. Logging and the live activity view
 
 - **Where events go.** Every hand-off goes in the activity log as an event on the stopped run, beside `support_reported`. The actor is the agent, and the summary says in plain words what was asked and what code found.
-- **New kinds.** `fix_started` (who asked), `fix_handoff`, `fix_round` (scenarios passed, and whether the round made progress), `fix_proposed` (the version and its digest) and `fix_handed_back` (why). Their names settle in PR 2.
+- **New kinds.** `fix_started` (who asked), `fix_handoff` (which sub-agent, the failed part it was about, and what code found), `fix_round` (how many scenarios passed of those that apply, and whether the round made progress), `fix_proposed` (the version and its digest) and `fix_handed_back` (why). PR 2 settled these names. platform-api writes them only while the run is stopped, one fix at a time on a run, and never after the fix ends. Their actor is the coordinator, shown as the AI troubleshooter. `fix_started` is written with the coordinator as its actor, the person who asked in `asked_by`, and the fix's deadline, 20 minutes after the press of the button, in `ends_by`. Once the deadline passes, the fix counts as handed back for `time_limit`: only that hand-back is still written, and a new fix may start.
 - **The decision.** The set-up approval's log records who approved, as ADR 0051 asks, and the run's log gets the decision with the Approver.
 - **The live view.** It shows each sub-agent as it is brought in and each hand-off, as it shows agents in a run today.
 - **Traces.** Model calls are traced in Langfuse, masked, as ADR 0050 says.

@@ -5,19 +5,33 @@ from collections.abc import AsyncGenerator, Callable, Collection, Iterable
 from contextlib import aclosing, asynccontextmanager, suppress
 from dataclasses import dataclass
 from datetime import datetime
-from typing import NewType, Protocol
+from typing import Literal, NewType, Protocol
 
 from psycopg import sql
 
 from platform_api.db import Database, UnitOfWork, json
 from platform_api.monitoring.agent_events import AgentEvent
 from platform_api.monitoring.events import (
+    COORDINATOR,
     ActivityEvent,
+    FixHandedBack,
+    FixProposed,
+    FixStarted,
     PendingEvent,
     SupportReportedData,
     activity_event_adapter,
     agent_actor,
+    current_failure,
     user_actor,
+)
+from platform_api.monitoring.fix_events import (
+    FIX_TIME_LIMIT,
+    FixData,
+    FixHandedBackData,
+    FixStartedData,
+    fix_dedupe_key,
+    fix_kind,
+    fix_summary,
 )
 from platform_api.shared import RunId, TaskId, UserId
 
@@ -37,6 +51,31 @@ _READ_AFTER = f"""
     SELECT {_COLUMNS} FROM monitoring.run_events
     WHERE run_id = %(run_id)s AND seq > %(after)s ORDER BY seq
 """
+
+_READ_KINDS = f"""
+    SELECT {_COLUMNS} FROM monitoring.run_events
+    WHERE run_id = %(run_id)s AND kind = ANY(%(kinds)s) ORDER BY seq
+"""
+_STOP_AND_FIX_KINDS = [
+    "run_failed",
+    "run_retried",
+    "fix_started",
+    "fix_proposed",
+    "fix_handed_back",
+]
+
+type FixRefusal = Literal[
+    "not_stopped", "another_fix", "not_started", "ended", "deadline", "conflict"
+]
+
+
+@dataclass(frozen=True)
+class FixRefused:
+    """Why the log took no event of a fix: the run isn't stopped, another fix runs on it, this
+    fix never started at this stop, it already ended or ran out of time, a start's deadline
+    isn't within 20 minutes, or this step was written before with other data."""
+
+    why: FixRefusal
 
 
 @dataclass(frozen=True)
@@ -290,6 +329,40 @@ class ActivityLog:
         async with self._db.transaction("monitoring") as uow:
             await self.append(uow, run_id, [event])
 
+    async def note_fix(self, run_id: RunId, data: FixData) -> FixRefused | None:
+        """Writes one event of a fix on the stopped run, as the coordinator (ADR 0055, section 8),
+        with the summary code writes from its fields. Only while the run is stopped, so a retry
+        ends what the fix may say. One fix at a time on a run, each from its start to its end or
+        its deadline, whichever comes first. After the deadline only its hand-back for time is
+        written. A repeat writes nothing, and the same step with other data is refused. It never
+        changes the run or any approval."""
+        key = fix_dedupe_key(data)
+        async with self._db.transaction("monitoring") as uow:
+            await uow.conn.execute(
+                "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", (run_id,)
+            )
+            written = await (
+                await uow.conn.execute(
+                    "SELECT data FROM monitoring.run_events WHERE run_id = %s AND dedupe_key = %s",
+                    (run_id, key),
+                )
+            ).fetchone()
+            if written is not None:
+                same = written["data"] == data.model_dump(mode="json")
+                return None if same else FixRefused("conflict")
+            rows = await (
+                await uow.conn.execute(
+                    _READ_KINDS, {"run_id": run_id, "kinds": _STOP_AND_FIX_KINDS}
+                )
+            ).fetchall()
+            events = [activity_event_adapter.validate_python(r) for r in rows]
+            why = _fix_refusal(events, data, uow.now)
+            if why is not None:
+                return FixRefused(why)
+            event = PendingEvent(COORDINATOR, fix_kind(data), fix_summary(data), data, key)
+            await self.append(uow, run_id, [event])
+        return None
+
     async def last_seq(self, uow: UnitOfWork, run_id: RunId) -> int:
         row = await (
             await uow.conn.execute(
@@ -390,3 +463,26 @@ class ActivityLog:
             for event in events
         ]
         return await self.append(uow, run_id, pending)
+
+
+def _fix_refusal(events: list[ActivityEvent], data: FixData, now: datetime) -> FixRefusal | None:
+    """A fix belongs to the stop it started at: its events count only after that stop's
+    failure. Past its deadline it counts as handed back for time, even with no event to say so."""
+    failure = current_failure(events)
+    if failure is None:
+        return "not_stopped"
+    since = [e for e in events if e.seq > failure.seq]
+    starts = {e.data.fix_id: e.data for e in since if isinstance(e, FixStarted)}
+    ended = {e.data.fix_id for e in since if isinstance(e, FixProposed | FixHandedBack)}
+    if isinstance(data, FixStartedData):
+        if not now < data.ends_by <= now + FIX_TIME_LIMIT:
+            return "deadline"
+        running = [f for f, start in starts.items() if f not in ended and now < start.ends_by]
+        return "another_fix" if running else None
+    start = starts.get(data.fix_id)
+    if start is None:
+        return "not_started"
+    if data.fix_id in ended:
+        return "ended"
+    for_time = isinstance(data, FixHandedBackData) and data.why == "time_limit"
+    return "ended" if now >= start.ends_by and not for_time else None

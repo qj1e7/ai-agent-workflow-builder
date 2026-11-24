@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import time
-from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import suppress
 from typing import Annotated
 
@@ -12,7 +12,7 @@ from pydantic import Field
 from platform_api.auth import SIGNED_IN, CurrentPrincipal, PeopleDirectory
 from platform_api.monitoring.agent_events import AgentEventPost
 from platform_api.monitoring.callbacks import verify_callback
-from platform_api.monitoring.events import ActivityEvent, RunFailed, RunFailedData, RunRetried
+from platform_api.monitoring.events import ActivityEvent, RunFailedData, current_failure
 from platform_api.monitoring.log import ActivityLog
 from platform_api.monitoring.troubleshooter import (
     Advice,
@@ -213,7 +213,7 @@ async def troubleshoot(
     events = await log.read_after(run_id, 0)
     if not events:
         raise HTTPException(status_code=404, detail="No such run")
-    failure = _current_failure(events)
+    failure = current_failure(events)
     if failure is None:
         raise HTTPException(status_code=409, detail="The run has not failed")
     found = None
@@ -238,15 +238,6 @@ async def _found(finder: CauseFinder, asked: AskedCause) -> FoundCause | None:
     except Exception as error:
         logger.warning("The troubleshooter's rule table answered alone: %s", type(error).__name__)
         return None
-
-
-def _current_failure(events: Sequence[ActivityEvent]) -> RunFailed | None:
-    for event in reversed(events):
-        if isinstance(event, RunFailed):
-            return event
-        if isinstance(event, RunRetried):
-            return None
-    return None
 
 
 @router.post(

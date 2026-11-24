@@ -1119,6 +1119,481 @@
       ],
       "type": "string"
     },
+    "FixFound": {
+      "enum": [
+        "confirmed",
+        "not_in_version",
+        "not_where_it_stopped",
+        "inside",
+        "widened",
+        "not_in_catalogue",
+        "kept",
+        "refused",
+        "ran",
+        "passed",
+        "failed",
+        "no_answer"
+      ],
+      "type": "string"
+    },
+    "FixHandBack": {
+      "enum": [
+        "no_cause",
+        "no_progress",
+        "widened",
+        "round_limit",
+        "handoff_limit",
+        "cost_limit",
+        "time_limit",
+        "gave_up"
+      ],
+      "type": "string"
+    },
+    "FixHandedBack": {
+      "additionalProperties": false,
+      "properties": {
+        "actor": {
+          "$ref": "#/$defs/Actor"
+        },
+        "data": {
+          "$ref": "#/$defs/FixHandedBackData"
+        },
+        "kind": {
+          "const": "fix_handed_back",
+          "default": "fix_handed_back",
+          "title": "Kind",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "seq": {
+          "minimum": 1,
+          "title": "Seq",
+          "type": "integer"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "ts": {
+          "format": "date-time",
+          "title": "Ts",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "seq",
+        "ts",
+        "actor",
+        "summary",
+        "data"
+      ],
+      "title": "FixHandedBack",
+      "type": "object"
+    },
+    "FixHandedBackData": {
+      "additionalProperties": false,
+      "properties": {
+        "fix_id": {
+          "$ref": "#/$defs/FixId"
+        },
+        "why": {
+          "$ref": "#/$defs/FixHandBack"
+        }
+      },
+      "required": [
+        "fix_id",
+        "why"
+      ],
+      "title": "FixHandedBackData",
+      "type": "object"
+    },
+    "FixHandedTo": {
+      "enum": [
+        "troubleshooter",
+        "fix_drafter",
+        "scenario_writer",
+        "simulation",
+        "checker"
+      ],
+      "type": "string"
+    },
+    "FixHandoff": {
+      "additionalProperties": false,
+      "properties": {
+        "actor": {
+          "$ref": "#/$defs/Actor"
+        },
+        "data": {
+          "$ref": "#/$defs/FixHandoffData"
+        },
+        "kind": {
+          "const": "fix_handoff",
+          "default": "fix_handoff",
+          "title": "Kind",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "seq": {
+          "minimum": 1,
+          "title": "Seq",
+          "type": "integer"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "ts": {
+          "format": "date-time",
+          "title": "Ts",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "seq",
+        "ts",
+        "actor",
+        "summary",
+        "data"
+      ],
+      "title": "FixHandoff",
+      "type": "object"
+    },
+    "FixHandoffData": {
+      "additionalProperties": false,
+      "properties": {
+        "blocks": {
+          "description": "For the AI troubleshooter, the failed part it named, only once code found each block in the version, and for the Fix drafter, the failed part it may change. Each block once. Empty for the others, and for the AI troubleshooter when it named a block the version doesn't have or gave no answer.",
+          "items": {
+            "$ref": "#/$defs/ShownName"
+          },
+          "maxItems": 10,
+          "title": "Blocks",
+          "type": "array"
+        },
+        "fix_id": {
+          "$ref": "#/$defs/FixId"
+        },
+        "found": {
+          "$ref": "#/$defs/FixFound",
+          "description": "What code found of the work that came back."
+        },
+        "handoff": {
+          "description": "Its number in the fix, from 1.",
+          "maximum": 12,
+          "minimum": 1,
+          "title": "Handoff",
+          "type": "integer"
+        },
+        "passed": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "When the simulation ran.",
+          "title": "Passed"
+        },
+        "scenarios": {
+          "anyOf": [
+            {
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "When the simulation ran.",
+          "title": "Scenarios"
+        },
+        "to": {
+          "$ref": "#/$defs/FixHandedTo"
+        },
+        "widened_by": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FixWidening"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "How the Fix drafter's change went too far, when it did."
+        }
+      },
+      "required": [
+        "fix_id",
+        "handoff",
+        "to",
+        "found"
+      ],
+      "title": "FixHandoffData",
+      "type": "object"
+    },
+    "FixId": {
+      "pattern": "^fix_[0-9A-Za-z]{1,40}$",
+      "type": "string"
+    },
+    "FixProposed": {
+      "additionalProperties": false,
+      "properties": {
+        "actor": {
+          "$ref": "#/$defs/Actor"
+        },
+        "data": {
+          "$ref": "#/$defs/FixProposedData"
+        },
+        "kind": {
+          "const": "fix_proposed",
+          "default": "fix_proposed",
+          "title": "Kind",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "seq": {
+          "minimum": 1,
+          "title": "Seq",
+          "type": "integer"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "ts": {
+          "format": "date-time",
+          "title": "Ts",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "seq",
+        "ts",
+        "actor",
+        "summary",
+        "data"
+      ],
+      "title": "FixProposed",
+      "type": "object"
+    },
+    "FixProposedData": {
+      "additionalProperties": false,
+      "properties": {
+        "digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Digest",
+          "type": "string"
+        },
+        "fix_id": {
+          "$ref": "#/$defs/FixId"
+        },
+        "version": {
+          "description": "The fixed version, which waits for a yes.",
+          "minimum": 1,
+          "title": "Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "fix_id",
+        "version",
+        "digest"
+      ],
+      "title": "FixProposedData",
+      "type": "object"
+    },
+    "FixRound": {
+      "additionalProperties": false,
+      "properties": {
+        "actor": {
+          "$ref": "#/$defs/Actor"
+        },
+        "data": {
+          "$ref": "#/$defs/FixRoundData"
+        },
+        "kind": {
+          "const": "fix_round",
+          "default": "fix_round",
+          "title": "Kind",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "seq": {
+          "minimum": 1,
+          "title": "Seq",
+          "type": "integer"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "ts": {
+          "format": "date-time",
+          "title": "Ts",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "seq",
+        "ts",
+        "actor",
+        "summary",
+        "data"
+      ],
+      "title": "FixRound",
+      "type": "object"
+    },
+    "FixRoundData": {
+      "additionalProperties": false,
+      "properties": {
+        "fix_id": {
+          "$ref": "#/$defs/FixId"
+        },
+        "passed": {
+          "minimum": 0,
+          "title": "Passed",
+          "type": "integer"
+        },
+        "progress": {
+          "description": "More scenarios passed than in the round before, and none that passed fails.",
+          "title": "Progress",
+          "type": "boolean"
+        },
+        "round": {
+          "maximum": 3,
+          "minimum": 1,
+          "title": "Round",
+          "type": "integer"
+        },
+        "scenarios": {
+          "description": "The scenarios that apply.",
+          "maximum": 100,
+          "minimum": 1,
+          "title": "Scenarios",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "fix_id",
+        "round",
+        "passed",
+        "scenarios",
+        "progress"
+      ],
+      "title": "FixRoundData",
+      "type": "object"
+    },
+    "FixStarted": {
+      "additionalProperties": false,
+      "properties": {
+        "actor": {
+          "$ref": "#/$defs/Actor"
+        },
+        "data": {
+          "$ref": "#/$defs/FixStartedData"
+        },
+        "kind": {
+          "const": "fix_started",
+          "default": "fix_started",
+          "title": "Kind",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "seq": {
+          "minimum": 1,
+          "title": "Seq",
+          "type": "integer"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "ts": {
+          "format": "date-time",
+          "title": "Ts",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "seq",
+        "ts",
+        "actor",
+        "summary",
+        "data"
+      ],
+      "title": "FixStarted",
+      "type": "object"
+    },
+    "FixStartedData": {
+      "additionalProperties": false,
+      "properties": {
+        "asked_by": {
+          "title": "Asked By",
+          "type": "string"
+        },
+        "asked_by_name": {
+          "$ref": "#/$defs/ShownName"
+        },
+        "ends_by": {
+          "description": "When the fix counts as handed back for time if nothing ended it: at most 20 minutes after the press of the button.",
+          "format": "date-time",
+          "title": "Ends By",
+          "type": "string"
+        },
+        "fix_id": {
+          "$ref": "#/$defs/FixId"
+        }
+      },
+      "required": [
+        "fix_id",
+        "asked_by",
+        "asked_by_name",
+        "ends_by"
+      ],
+      "title": "FixStartedData",
+      "type": "object"
+    },
+    "FixWidening": {
+      "enum": [
+        "outside_failed_part",
+        "adds_a_block",
+        "adds_a_write",
+        "adds_a_system",
+        "adds_a_key",
+        "removes_a_yes",
+        "moves_a_yes",
+        "goes_past_a_failure",
+        "changes_a_persons_setting"
+      ],
+      "type": "string"
+    },
     "Leg": {
       "enum": [
         "work",
@@ -1737,6 +2212,11 @@
       ],
       "title": "RunSucceededData",
       "type": "object"
+    },
+    "ShownName": {
+      "maxLength": 80,
+      "minLength": 1,
+      "type": "string"
     },
     "StepFinished": {
       "additionalProperties": false,
@@ -2377,6 +2857,11 @@
       "approval_requested": "#/$defs/ApprovalRequested",
       "execution_linked": "#/$defs/ExecutionLinked",
       "execution_resumed": "#/$defs/ExecutionResumed",
+      "fix_handed_back": "#/$defs/FixHandedBack",
+      "fix_handoff": "#/$defs/FixHandoff",
+      "fix_proposed": "#/$defs/FixProposed",
+      "fix_round": "#/$defs/FixRound",
+      "fix_started": "#/$defs/FixStarted",
       "leg_dispatched": "#/$defs/LegDispatched",
       "run_created": "#/$defs/RunCreated",
       "run_expired": "#/$defs/RunExpired",
@@ -2484,6 +2969,21 @@
     },
     {
       "$ref": "#/$defs/Told"
+    },
+    {
+      "$ref": "#/$defs/FixStarted"
+    },
+    {
+      "$ref": "#/$defs/FixHandoff"
+    },
+    {
+      "$ref": "#/$defs/FixRound"
+    },
+    {
+      "$ref": "#/$defs/FixProposed"
+    },
+    {
+      "$ref": "#/$defs/FixHandedBack"
     }
   ]
 }
