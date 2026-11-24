@@ -29,6 +29,7 @@ import { backToVersionToast, yesBackToast } from './n8nChange'
 import { StatusPills } from './Status'
 import { Versions } from './Versions'
 import { DraftActions } from './DraftActions'
+import { UseCaseSimulation } from './UseCaseSimulation'
 import { HeldInN8n, OpenInN8nEditor, WorkflowInN8n } from './InN8n'
 import { cantChangeWords, heldOf, holdOf, mayOpen, openingOf } from './n8nHold'
 import { When } from './When'
@@ -354,6 +355,7 @@ function WorkflowView({ useCase, me, now, onReread }: ViewProps) {
               )}
             </section>
           )}
+          {useCase.state === 'draft' ? <UseCaseSimulation useCaseId={id} /> : null}
           <DraftActions useCase={useCase} viewer={viewer} />
           {explainHere || useCase.version >= 2 ? (
             <details className={styles['more']}>

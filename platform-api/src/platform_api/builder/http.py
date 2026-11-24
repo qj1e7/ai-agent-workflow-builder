@@ -54,12 +54,15 @@ from platform_api.builder.service import (
     NotOnYet,
     UseCasePaused,
 )
+from platform_api.builder.simulation_views import UseCaseSimulationIn, UseCaseSimulationView
+from platform_api.builder.simulations import SIMULATING
 from platform_api.builder.team_requests import FOLLOWING_UP, FollowingUpPage
 from platform_api.builder.templates import (
     AGENT_CARDS,
     SOFTWARE_WATCHLIST,
     TEMPLATES,
 )
+from platform_api.builder.use_case_simulations import NotTried, UseCaseSimulations
 from platform_api.builder.views import template_view
 from platform_api.shared import Principal, Role, UseCaseId
 from platform_api.wire import error_response
@@ -103,6 +106,14 @@ def current_home(request: Request) -> Home:
 
 
 CurrentHome = Annotated[Home, Depends(current_home)]
+
+
+def current_use_case_simulations(request: Request) -> UseCaseSimulations:
+    simulations: UseCaseSimulations = request.app.state.use_case_simulations
+    return simulations
+
+
+CurrentUseCaseSimulations = Annotated[UseCaseSimulations, Depends(current_use_case_simulations)]
 
 
 def operators_only(refusal: str) -> Callable[[Principal], Principal]:
@@ -246,6 +257,47 @@ async def get_use_case(
     if view is None:
         raise HTTPException(404, NO_SUCH)
     return view
+
+
+@router.get(
+    "/use-cases/{use_case_id}/simulation",
+    responses={**SIGNED_IN, 404: NOT_FOUND},
+    description="The current version tried on practice systems, by its digest (ADR 0054), for "
+    "a workflow the Planner built from our blocks. The first read of a version never tried "
+    "starts its one try in the background, and answers with it running. simulation is null when "
+    "the version has nothing to try. A simulation is not a run: it is never in Recent runs or "
+    "the activity log, a pass turns nothing on, and Turn on still runs the real test run.",
+)
+async def get_use_case_simulation(
+    use_case_id: str, principal: CurrentPrincipal, simulations: CurrentUseCaseSimulations
+) -> UseCaseSimulationView:
+    view = await simulations.view(use_case_id, principal)
+    if view is None:
+        raise HTTPException(404, NO_SUCH)
+    return view
+
+
+@router.post(
+    "/use-cases/{use_case_id}/simulation",
+    responses={**OPERATORS_ONLY, 404: NOT_FOUND, 409: error_response(SIMULATING)},
+    description="Tries the current version on practice systems again, once it was never tried, "
+    "its last try wasn't run or it didn't finish. It answers at once with the simulation "
+    "running. 409, with words to show, where there is no simulation n8n, while it is being "
+    "tried, when it has nothing to try, or when the version named is not the current one.",
+)
+async def simulate_use_case_again(
+    use_case_id: str,
+    body: UseCaseSimulationIn,
+    principal: Operator,
+    simulations: CurrentUseCaseSimulations,
+) -> UseCaseSimulationView:
+    match await simulations.again(use_case_id, principal, body.version):
+        case None:
+            raise HTTPException(404, NO_SUCH)
+        case NotTried(words):
+            raise HTTPException(409, words)
+        case UseCaseSimulationView() as view:
+            return view
 
 
 @router.post(

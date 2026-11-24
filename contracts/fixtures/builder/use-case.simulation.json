@@ -1,0 +1,58 @@
+{
+  "use_case_id": "uc_01JDRAFTRELEASE",
+  "version": 1,
+  "simulation": {
+    "state": "done",
+    "started_at": "2026-11-17T01:03:00Z",
+    "case_seconds": 120,
+    "tried": 5,
+    "passed": 4,
+    "cases": [
+      {
+        "kind": "happy_path",
+        "verdict": "passed",
+        "expected": "It reaches the yes with the expected change.",
+        "happened": "It reached the yes and would have made 1 change, which the simulation refused.",
+        "note": null
+      },
+      {
+        "kind": "nothing_new",
+        "verdict": "passed",
+        "expected": "It ends as Nothing new and proposes nothing.",
+        "happened": "It ended with nothing new and proposed nothing.",
+        "note": null
+      },
+      {
+        "kind": "source_not_found",
+        "verdict": "failed",
+        "expected": "It stops with a reason when the source is not found, and writes nothing.",
+        "happened": "It failed, and n8n names no block.",
+        "note": "\"Read new releases\" stopped the run with no reason people can act on when \"Read new releases\" could not find its source."
+      },
+      {
+        "kind": "timeout",
+        "verdict": "not_tried",
+        "expected": "It stops with a reason when the source is too slow, and writes nothing.",
+        "happened": "No block here can play this case, so it was not tried.",
+        "note": null
+      },
+      {
+        "kind": "approver_says_no",
+        "verdict": "passed",
+        "expected": "It ends as Declined, with nothing written.",
+        "happened": "It ended as Declined, with nothing written.",
+        "note": null
+      },
+      {
+        "kind": "odd_data",
+        "verdict": "passed",
+        "expected": "It ends in one of the cases above, never in a failure with no reason.",
+        "happened": "It reached the yes and would have made 1 change, which the simulation refused.",
+        "note": null
+      }
+    ],
+    "not_tried": [],
+    "said": null,
+    "can_try_again": false
+  }
+}

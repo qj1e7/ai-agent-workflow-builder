@@ -44,11 +44,6 @@ from platform_api.builder.drafted_settings import (
     strays,
     with_answer,
 )
-from platform_api.builder.drafted_simulations import (
-    NO_SIMULATION,
-    SIMULATING,
-    DraftedSimulations,
-)
 from platform_api.builder.drafted_views import (
     DraftAnswerIn,
     DraftedApprovalView,
@@ -64,6 +59,12 @@ from platform_api.builder.drafted_views import (
 from platform_api.builder.explain import view_of
 from platform_api.builder.layout import DraftedLayout, lay_out_drafted
 from platform_api.builder.n8n_draft import blocks_of
+from platform_api.builder.simulations import (
+    NO_SIMULATION,
+    NOTHING_TO_TRY,
+    SIMULATING,
+    Simulations,
+)
 from platform_api.builder.sweep import grading_mark
 from platform_api.builder.templates import AGENT_CARDS
 from platform_api.builder.versions import Publication, authors_json
@@ -164,7 +165,6 @@ SAME_WORDS_WITHIN: Final = timedelta(minutes=2)
 """The same words from the same Operator within this long are one request asked twice, as a
 retried send of the chat would ask it, so they answer the drafted workflow already started."""
 STILL_DRAFTING: Final = "It's still drafting."
-NOTHING_TO_TRY: Final = "There's nothing to try again on practice systems."
 IN_N8N_NOW: Final = "It's open in n8n. Press Done in n8n first."
 NOT_IN_N8N: Final = "It isn't open in n8n."
 NO_SUCH_SETTING: Final = "It has no such setting."
@@ -392,7 +392,7 @@ class DraftedWorkflows:
         staff: Staff | None = None,
         editor_url: str | None = None,
         *,
-        simulations: DraftedSimulations | None = None,
+        simulations: Simulations | None = None,
     ) -> None:
         self._db = db
         self._drafting = drafting
@@ -406,7 +406,7 @@ class DraftedWorkflows:
         self._editor_url = None if editor_url is None else editor_url.rstrip("/")
         self._cards = CardLibrary(db)
         self._running: set[asyncio.Task[None]] = set()
-        self._simulations = simulations or DraftedSimulations(db, None)
+        self._simulations = simulations or Simulations(db, None)
 
     async def start(
         self,
@@ -756,7 +756,7 @@ class DraftedWorkflows:
         )
         if not needs_nothing(made.plan, made.sources):
             return None
-        started_at = await self._simulations.claim(conn, kept.drafted_id, number, digest, now)
+        started_at = await self._simulations.claim(conn, digest, now)
         return (
             None
             if started_at is None
@@ -988,7 +988,7 @@ class DraftedWorkflows:
         )
 
         async def claim(conn: Connection, digest: str, now: datetime) -> datetime | None:
-            return await self._simulations.claim(conn, kept.drafted_id, number, digest, now)
+            return await self._simulations.claim(conn, digest, now)
 
         started_at = await _finish(
             self._db,
@@ -1012,9 +1012,7 @@ class DraftedWorkflows:
         if claimed is None:
             return
         try:
-            await self._simulations.start(
-                claimed.drafted_id, claimed.digest, claimed.document, claimed.started_at
-            )
+            await self._simulations.start(claimed.digest, claimed.document, claimed.started_at)
         except Exception as error:
             log.error("could not start simulating %s: %s", claimed.drafted_id, type(error).__name__)
 
@@ -1037,9 +1035,7 @@ class DraftedWorkflows:
             running = simulation is not None and simulation.state == "running"
             return Refused(SIMULATING if running else NOTHING_TO_TRY)
         assert newest.document is not None and newest.digest is not None
-        if not await self._simulations.again(
-            drafted_id, newest.number, newest.digest, newest.document
-        ):
+        if not await self._simulations.again(newest.digest, newest.document):
             return Refused(SIMULATING)
         return await self._viewed(drafted_id, person)
 
@@ -1216,13 +1212,15 @@ class DraftedWorkflows:
         question = next_question(checked.settings, options) if editing else None
         if kept.in_n8n is not None:
             why = IN_N8N_NOW
+        # A blank would fail every case, so a revision that still needs a setting waits, and the
+        # one that fills it is tried (ADR 0054, "What every version chose").
         simulation = (
             None
-            if needed or newest.digest is None
+            if newest.digest is None
+            else self._simulations.waiting()
+            if needed
             else await self._simulations.view(
-                kept.drafted_id,
-                newest.digest,
-                viewer is not None and Role.OPERATOR in viewer.roles,
+                newest.digest, viewer is not None and Role.OPERATOR in viewer.roles
             )
         )
         return base.model_copy(

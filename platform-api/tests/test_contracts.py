@@ -34,7 +34,6 @@ from platform_api.builder.models import (
 )
 from platform_api.builder.n8n_http import HoldOut
 from platform_api.builder.n8n_view import RunN8nView, UseCaseN8nView
-from platform_api.builder.simulation_views import UseCaseSimulationView
 from platform_api.builder.planner import (
     AnswerIn,
     CapabilitiesView,
@@ -42,6 +41,7 @@ from platform_api.builder.planner import (
     PartChecked,
     PlannerReply,
 )
+from platform_api.builder.simulation_views import UseCaseSimulationView
 from platform_api.monitoring.agent_events import AgentEventPost
 from platform_api.monitoring.events import DeniedReason, WireVerdict, activity_events_adapter
 from platform_api.monitoring.http import TroubleshootingOut

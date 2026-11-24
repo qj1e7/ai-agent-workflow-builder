@@ -37,6 +37,8 @@ function rereadWorkflowsAndWatchlist(queryClient: QueryClient): void {
 /** The view the platform answered a change with: held for the page, put in the list, and the lists read again. */
 export function applySavedView(queryClient: QueryClient, user: string, view: UseCaseView): void {
   queryClient.setQueryData(keys.useCase(user, view.use_case_id), view)
+  // A new schedule lays the workflow out again, so its Check reads the new version's try.
+  void queryClient.invalidateQueries({ queryKey: keys.useCaseSimulation(user, view.use_case_id) })
   changeList(queryClient, user, (list) => withView(list, view))
   rereadWorkflowsAndWatchlist(queryClient)
 }
@@ -500,4 +502,33 @@ export function useSweepOnOpen(useCaseId: string): void {
   useEffect(() => {
     void sweepNow(client, queryClient, useCaseId)
   }, [client, queryClient, useCaseId])
+}
+
+const SIMULATION_POLL_MS = 2000
+
+/**
+ * The Check of a workflow the Planner built from our blocks: its current version tried on practice systems (ADR 0054). The first
+ * read of a version starts its one try, and it is read again every couple of seconds while it runs.
+ */
+export function useUseCaseSimulation(useCaseId: string) {
+  const client = useApiClient()
+  const user = useCacheScope()
+  return useQuery({
+    queryKey: keys.useCaseSimulation(user, useCaseId),
+    queryFn: async () => unwrap(await client.GET('/api/v1/use-cases/{use_case_id}/simulation', { params: { path: { use_case_id: useCaseId } } })),
+    refetchInterval: (query) => (query.state.data?.simulation?.state === 'running' ? SIMULATION_POLL_MS : false),
+    enabled: useCaseId !== '',
+  })
+}
+
+/** Tries the current version on practice systems again, once it was never tried, its last try wasn't run or it didn't finish. */
+export function useUseCaseSimulateAgain(useCaseId: string) {
+  const client = useApiClient()
+  const queryClient = useQueryClient()
+  const user = useCacheScope()
+  return useMutation({
+    mutationFn: async (version: number) =>
+      unwrap(await client.POST('/api/v1/use-cases/{use_case_id}/simulation', { params: { path: { use_case_id: useCaseId } }, body: { version } })),
+    onSuccess: (view) => queryClient.setQueryData(keys.useCaseSimulation(user, useCaseId), view),
+  })
 }

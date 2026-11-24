@@ -8,7 +8,6 @@ from fastapi import FastAPI
 
 from platform_api.auth import DEV_PEOPLE, DevAuth, OidcAuth
 from platform_api.builder import Builder, Home, PlannerFront, TeamRequests, Watchlist
-from platform_api.builder.drafted_simulations import DraftedSimulations
 from platform_api.builder.drafted_workflows import DraftedWorkflows
 from platform_api.builder.explain import Explainer
 from platform_api.builder.key_sweep import KeySweep
@@ -16,6 +15,8 @@ from platform_api.builder.made_in_n8n import MadeInN8n
 from platform_api.builder.n8n_holds import Holding
 from platform_api.builder.n8n_view import InN8nViews
 from platform_api.builder.planner_facts import PlannerFactsReader
+from platform_api.builder.simulations import Simulations
+from platform_api.builder.use_case_simulations import UseCaseSimulations
 from platform_api.builder.watchlist import OnN8n
 from platform_api.db import Database
 from platform_api.monitoring import (
@@ -133,7 +134,8 @@ class Services:
     cause_finder: RunCauses
     simulation_model: SimulationModel
     drafted: DraftedWorkflows
-    simulations: DraftedSimulations
+    simulations: Simulations
+    use_case_simulations: UseCaseSimulations
     setup_approvals: SetUpApprovals
     home: Home
     watchlist: Watchlist
@@ -165,14 +167,14 @@ class Services:
 
 def simulations_for(
     settings: Settings, db: Database, model: SimulationModel
-) -> tuple[SimulationClient | None, DraftedSimulations]:
+) -> tuple[SimulationClient | None, Simulations]:
     """The simulation gateway, where there is one (ADR 0054, PR 7). The model writes and explains
     cases only with SIMULATION_MODEL on, since each is a paid call."""
     if settings.simulation is None:
-        return None, DraftedSimulations(db, None)
+        return None, Simulations(db, None)
     client = SimulationClient(settings.simulation.url, settings.simulation.start_secret)
     driver = SimulationDriver(client, model if settings.simulation.uses_model else None)
-    return client, DraftedSimulations(db, driver)
+    return client, Simulations(db, driver)
 
 
 JIRA_TIMEOUT_SECONDS = 10.0
@@ -221,6 +223,7 @@ def install(app: FastAPI, services: Services) -> None:
     app.state.cause_finder = services.cause_finder
     app.state.simulation_model = services.simulation_model
     app.state.drafted = services.drafted
+    app.state.use_case_simulations = services.use_case_simulations
     app.state.home = services.home
     app.state.watchlist = services.watchlist
     app.state.team_requests = services.team_requests
@@ -599,6 +602,7 @@ async def build(settings: Settings) -> Services:
         simulation_model=simulation_model,
         drafted=drafted,
         simulations=simulations,
+        use_case_simulations=UseCaseSimulations(db, simulations),
         simulation_client=simulation_client,
         setup_approvals=setup_approvals,
         home=home,

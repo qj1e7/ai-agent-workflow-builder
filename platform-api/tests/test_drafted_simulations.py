@@ -18,8 +18,8 @@ import pytest
 from platform_api.app import create_app
 from platform_api.auth import DEV_PEOPLE
 from platform_api.builder.drafted_settings import ANY_APPROVER, APPROVERS
-from platform_api.builder.simulations import SIMULATING, Simulations
 from platform_api.builder.drafted_workflows import DraftedWorkflows
+from platform_api.builder.simulations import SIMULATING, Simulations
 from platform_api.db import Database
 from platform_api.orchestration.people_store import People
 from platform_api.orchestration.scenario_grades import WAIT_LIMIT_SECONDS
@@ -154,9 +154,7 @@ class Bench:
     async def digests(self) -> list[str]:
         async with self.db.connection("builder") as conn:
             rows = await (
-                await conn.execute(
-                    "SELECT digest FROM builder.simulations ORDER BY started_at"
-                )
+                await conn.execute("SELECT digest FROM builder.simulations ORDER BY started_at")
             ).fetchall()
         return [str(r["digest"]) for r in rows]
 
@@ -167,9 +165,7 @@ async def bench_of(
     people = People(db)
     assert await people.seed_dev(DEV_PEOPLE)
     approvals = SetUpApprovals(db, Channel(), people, "https://portal.example", TEAM_TIME_ZONE)
-    simulations = (
-        Simulations(db, driver) if limit is None else Simulations(db, driver, limit=limit)
-    )
+    simulations = Simulations(db, driver) if limit is None else Simulations(db, driver, limit=limit)
     drafted_workflows = DraftedWorkflows(
         db,
         Drafter(answers=[drafted(release_check()), drafted(release_check("friday 09:00"))]),
@@ -248,11 +244,13 @@ async def test_a_revision_that_still_needs_a_setting_waits_and_is_tried_once_it_
     assert refused.status_code == 409
 
     body = {"revision": first["revision"], "setting": APPROVERS, "choice": ANY_APPROVER}
+    bench.driver.hold = asyncio.Event()
     answered = await bench.call(
         "alice", "POST", f"/api/v1/drafted-workflows/{drafted_id}/answers", body
     )
     assert answered.status_code == 200, answered.text
     assert answered.json()["simulation"]["state"] == "running"
+    bench.driver.hold.set()
     await bench.drafted.settle()
 
     assert (await bench.read(drafted_id))["simulation"]["state"] == "done"

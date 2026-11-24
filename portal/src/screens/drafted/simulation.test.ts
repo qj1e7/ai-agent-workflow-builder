@@ -3,10 +3,10 @@ import ready from '../../../../contracts/fixtures/builder/drafted.ready.json'
 import simulated from '../../../../contracts/fixtures/builder/drafted.simulated.json'
 import simulating from '../../../../contracts/fixtures/builder/drafted.simulating.json'
 import { stillMoving } from '../../api/draftedQueries'
-import type { DraftedSimulationView, DraftedWorkflowView, SimulatedCaseView } from '../../api/types'
+import type { SimulationView, DraftedWorkflowView, SimulatedCaseView } from '../../api/types'
 import { caseLimitWords, casesInOrder, KIND_WORDS, simulationLead, VERDICT_WORDS } from './simulation'
 
-const done = (simulated as DraftedWorkflowView).simulation as DraftedSimulationView
+const done = (simulated as DraftedWorkflowView).simulation as SimulationView
 const one = (kind: SimulatedCaseView['kind'], verdict: SimulatedCaseView['verdict']): SimulatedCaseView => ({ kind, verdict, expected: 'e', happened: 'h', note: null })
 
 describe('simulation words (ADR 0054, PR 7)', () => {

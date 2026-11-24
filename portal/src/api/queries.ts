@@ -29,6 +29,8 @@ export const keys = {
   useCase: (user: string, useCaseId: string) => ['use-case', user, useCaseId] as const,
   /** Under the workflow's own key, so whatever reads the workflow again reads this again too. */
   useCaseInN8n: (user: string, useCaseId: string) => ['use-case', user, useCaseId, 'n8n'] as const,
+  /** Under the workflow's own key, so a workflow read again, as after a new schedule, reads its Check's try again too. */
+  useCaseSimulation: (user: string, useCaseId: string) => ['use-case', user, useCaseId, 'simulation'] as const,
   /** One per event of the run, so each new event reads the blocks' states again. */
   runInN8n: (user: string, runId: string, seq: number) => ['run', user, runId, 'n8n', seq] as const,
   /** Under the workflow's own key, so a workflow read again reads its report again. */

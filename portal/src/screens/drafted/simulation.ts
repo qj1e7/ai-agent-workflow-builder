@@ -1,4 +1,4 @@
-import type { DraftedSimulationView, SimulatedCaseView } from '../../api/types'
+import type { SimulationView, SimulatedCaseView } from '../../api/types'
 
 /** The six kinds of scenario, in the glossary's words (ADR 0054). */
 export const KIND_WORDS: Readonly<Record<SimulatedCaseView['kind'], string>> = {
@@ -15,6 +15,8 @@ export const VERDICT_WORDS: Readonly<Record<SimulatedCaseView['verdict'], string
 
 export const NOT_AVAILABLE = 'Simulation on practice systems isn’t available here.'
 export const NOT_STARTED = 'It hasn’t been tried on practice systems yet.'
+/** A revision that still needs a setting: a blank would fail every case, so it is tried once the person fills it. */
+export const WAITING = 'It will be tried on practice systems once every setting is filled.'
 /** The running state's one wording, as platform-api's refusal says it too. */
 export const SIMULATING = 'Trying it on practice systems.'
 export const NOT_FINISHED = 'It didn’t finish on practice systems in time, so there is no result.'
@@ -30,7 +32,7 @@ export const NOT_TRIED_ANYWHERE = 'Not tried in any case:'
 const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`
 
 /** The result first, as ADR 0054 words it: how many cases were tried and how many passed. Null until there is one. */
-export function simulationLead(simulation: DraftedSimulationView): string | null {
+export function simulationLead(simulation: SimulationView): string | null {
   if (simulation.state !== 'done') return null
   if (simulation.tried === 0) return 'No case could be tried on practice systems.'
   return `Tried ${plural(simulation.tried, 'case')} on practice systems: ${simulation.passed} passed.`
