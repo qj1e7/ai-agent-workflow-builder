@@ -1,6 +1,8 @@
 import json
 import re
 import time
+from collections.abc import Callable
+from functools import partial
 
 import pytest
 from pydantic import BaseModel
@@ -313,19 +315,23 @@ def test_words_like_a_glued_key_are_never_refused_but_the_masker_hides_them(text
 def test_each_shape_reads_a_long_hostile_text_in_linear_time(shape: str):
     pattern = re.compile(shape)
     for name, text in HOSTILE.items():
-        begun = time.perf_counter()
-        pattern.sub(MASKED, text)
-        took = time.perf_counter() - begun
+        took = min(_timed(partial(pattern.sub, MASKED, text)) for _ in range(3))
         assert took < 0.1, f"{name}: {took:.3f}s"
 
 
 def test_the_masker_reads_a_long_hostile_text_in_linear_time():
     masker = Masker(["callback-token-first"])
     for name, text in HOSTILE.items():
-        begun = time.perf_counter()
-        masker.mask(text)
-        took = time.perf_counter() - begun
+        took = min(_timed(partial(masker.mask, text)) for _ in range(3))
         assert took < 0.1, f"{name}: {took:.3f}s"
+
+
+def _timed(read: Callable[[], object]) -> float:
+    """One run's time. The caller keeps the best of three, so a busy machine can't fail a read
+    that stays linear, while a pattern that backtracks still takes seconds on every run."""
+    begun = time.perf_counter()
+    read()
+    return time.perf_counter() - begun
 
 
 @pytest.mark.parametrize(
