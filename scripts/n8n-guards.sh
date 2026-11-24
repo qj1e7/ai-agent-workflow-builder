@@ -8,7 +8,9 @@
 # - n8n publishes its port on the laptop only, and its task runner's broker listens only on its
 #   address on the runners network;
 # - n8n-runners runs the runner pin in infra/public-images.json, holds none of n8n's secrets, and
-#   sits only on the runners network, which has no way out.
+#   sits only on the runners network, which has no way out;
+# - n8n's limit for each try of a block's request is the one platform-api's stop words say, here
+#   and in Terraform.
 # infra/envs/dev/tests/n8n.tftest.hcl checks the same of Terraform. Needs Docker, jq and python3.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -93,6 +95,23 @@ if [ "$networks" = '["runners"]' ] && [ "$internal" = true ]; then
   pass "n8n-runners sits only on the runners network, which has no way out."
 else
   fail "n8n-runners sits on $networks, and the runners network is internal: $internal."
+fi
+
+# n8n's own blocks give up on a source after this long a try (ADR 0056), and platform-api's stop
+# words say that limit. source_stops.py reads in nothing but the standard library.
+said=$(python3 -I -c '
+import importlib.util, sys
+spec = importlib.util.spec_from_file_location("source_stops", sys.argv[1])
+stops = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(stops)
+print(stops.REQUEST_LIMIT_SECONDS)
+' platform-api/src/platform_api/monitoring/source_stops.py)
+limit=$(jq -r '.services.n8n.environment.WAB_REQUEST_TIMEOUT_SECONDS // "unset"' "$work/config.json")
+terraform=$(sed -nE 's/^ *WAB_REQUEST_TIMEOUT_SECONDS *= *"([0-9]+)".*/\1/p' infra/envs/dev/main.tf)
+if [ "$limit" = "$said" ] && [ "$terraform" = "$said" ]; then
+  pass "n8n gives up on a source after $said seconds a try, in compose and Terraform, as the stop words say."
+else
+  fail "n8n's limit a try is $limit in compose and ${terraform:-unset} in Terraform, but the stop words say $said."
 fi
 
 exit "$status"
