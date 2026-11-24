@@ -762,8 +762,6 @@ class LinkedTest(unittest.TestCase):
         self.assertEqual(
             seen,
             {
-                ("n8n", "172.40.0.2", 5432),
-                ("gateway", "172.40.0.2", 5432),
                 ("the platform's platform-api", "simulation-gateway", 8600),
                 ("the platform's n8n", "172.20.0.2", 5432),
                 ("the platform's agent-runtime", "172.20.0.2", 5432),
@@ -783,6 +781,78 @@ class LinkedTest(unittest.TestCase):
         self.assertIn("gateway reaches the platform's postgres", found)
         blind = [(p, False, "ENETUNREACH") if p.reach else (p, ok, how) for p, ok, how in answered]
         self.assertIn("sees no route", " ".join(check.probe_findings(blind)))
+
+    def test_the_start_secret_has_at_least_32_characters(self) -> None:
+        self.assertEqual(check.shared_secret_findings(self.secrets()), [])
+        for env_file, said in (
+            ("SIMULATION_START_SECRET=" + "a1" * 15 + "b\n", "shorter than 32"),
+            ("SIMULATION_START_SECRET=\n", "no SIMULATION_START_SECRET"),
+            ("", "no SIMULATION_START_SECRET"),
+        ):
+            with self.subTest(said=said):
+                found = check.shared_secret_findings(check.secret_values(env_file, {}))
+                self.assertIn(said, " ".join(found))
+                self.assertNotIn("a1" * 15, " ".join(found))
+
+
+def simulation_networks() -> list[dict[str, Any]]:
+    def network(name: str, gateway: str) -> dict[str, Any]:
+        return {"Name": name, "Internal": True, "IPAM": {"Config": [{"Gateway": gateway}]}}
+
+    return [
+        network("simn8n_sim", "172.40.0.1"),
+        network("simn8n_runners", "172.41.0.1"),
+        network("simn8n_link", "172.30.0.1"),
+    ]
+
+
+class HostTest(unittest.TestCase):
+    """The host, at the address each of the simulation's networks gives it, is out of reach of
+    the simulation n8n and the gateway, linked or not. host.docker.internal never resolves on an
+    internal network, so its name alone proves nothing."""
+
+    def test_each_networks_gateway_is_the_hosts_address(self) -> None:
+        self.assertEqual(
+            check.network_gateways(simulation_networks()),
+            ["172.30.0.1", "172.40.0.1", "172.41.0.1"],
+        )
+        bare = [{"Name": "x", "IPAM": {"Config": [{"Subnet": "10.0.0.0/24"}]}}]
+        self.assertEqual(check.network_gateways(bare), [])
+
+    def test_the_platforms_ports_and_those_a_linked_platform_publishes_are_probed(self) -> None:
+        self.assertEqual(check.host_ports({}), [5432, 5678, 8000])
+        platform = linked_platform()
+        platform["platform-api"]["HostConfig"] = {
+            "PortBindings": {"8000/tcp": [{"HostIp": "", "HostPort": "18000"}]}
+        }
+        platform["n8n"]["HostConfig"] = {
+            "PortBindings": {"5678/tcp": [{"HostIp": "127.0.0.1", "HostPort": "25678"}]}
+        }
+        self.assertEqual(check.host_ports(platform), [5432, 5678, 8000, 18000, 25678])
+
+    def test_the_host_is_probed_from_n8n_and_the_gateway_at_each_address(self) -> None:
+        hosts = check.network_gateways(simulation_networks())
+        probes = check.host_probes(simulation_running(), hosts, [5432, 8000])
+        kept = {(p.origin, p.host, p.port) for p in probes if not p.reach}
+        self.assertEqual(
+            kept,
+            {
+                (origin, host, port)
+                for origin in ("n8n", "gateway")
+                for host in hosts
+                for port in (5432, 8000)
+            },
+        )
+        self.assertTrue(all(p.target == "the host" for p in probes if not p.reach))
+        seen = {(p.origin, p.host, p.port) for p in probes if p.reach}
+        self.assertEqual(seen, {("n8n", "172.40.0.2", 5432), ("gateway", "172.40.0.2", 5432)})
+
+    def test_the_host_in_reach_fails(self) -> None:
+        probes = check.host_probes(simulation_running(), ["172.40.0.1"], [8000])
+        answered = [(p, True, "connected") for p in probes]
+        found = " ".join(check.probe_findings(answered))
+        self.assertIn("n8n reaches the host at 172.40.0.1:8000", found)
+        self.assertIn("gateway reaches the host at 172.40.0.1:8000", found)
 
 
 if __name__ == "__main__":
