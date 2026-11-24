@@ -377,12 +377,14 @@ def test_a_new_port_is_a_new_host():
 @pytest.mark.parametrize("name", ["secretKey", "signingKey", "encryptionKey", "masterKey"])
 def test_a_key_named_for_what_it_signs_or_opens_is_a_key(name: str):
     assert names_a_secret(name)
-    assert widened(fixed(**{name: "plain"})) == "adds_a_key"
+    parameters: dict[str, Any] = {name: "plain"}
+    assert widened(fixed(**parameters)) == "adds_a_key"
 
 
 @pytest.mark.parametrize("name", ["link", "href", "replyAddress", "path", "webhook"])
 def test_an_address_code_can_t_read_under_any_address_name_adds_a_system(name: str):
-    assert widened(fixed(PROPOSE, **{name: "={{ $json.where }}"}), (PROPOSE,)) == "adds_a_system"
+    parameters: dict[str, Any] = {name: "={{ $json.where }}"}
+    assert widened(fixed(PROPOSE, **parameters), (PROPOSE,)) == "adds_a_system"
 
 
 def test_code_is_one_list_the_scope_check_and_the_key_keeper_share():
