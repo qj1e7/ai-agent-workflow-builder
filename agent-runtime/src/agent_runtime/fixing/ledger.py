@@ -18,8 +18,10 @@ class DraftTried:
 
     round: int
     failed_part: tuple[str, ...]
-    """The failed part the scope check held it to."""
+    """The failed part of the cause it was drafted for."""
     found: FixFound
+    change_only: tuple[str, ...] = ()
+    """The blocks the Fix drafter was asked to change, which the scope check held it to."""
     plan: WorkflowPlan | None = None
     widened_by: FixWidening | None = None
     changed: tuple[str, ...] = ()

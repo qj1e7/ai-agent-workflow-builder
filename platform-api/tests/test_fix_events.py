@@ -293,6 +293,10 @@ async def test_a_fix_never_changes_the_run_it_is_on(postgres: PostgresUrls):
             "I named a block that isn't in this workflow, so the platform didn't use it.",
         ),
         (
+            handoff(to="troubleshooter", found="too_wide", blocks=[]),
+            "I named more than 10 blocks, too many for one fix, so the platform didn't use them.",
+        ),
+        (
             handoff(to="troubleshooter", found="no_answer", blocks=[]),
             "I looked for the cause, but got no answer.",
         ),
@@ -300,6 +304,11 @@ async def test_a_fix_never_changes_the_run_it_is_on(postgres: PostgresUrls):
             handoff(found="widened", widened_by="removes_a_yes"),
             "I asked the Fix drafter to change only the “Read releases” block, but its change "
             "removes an Ask for a yes, so the platform refused it.",
+        ),
+        (
+            handoff(found="widened", widened_by="cant_check"),
+            "I asked the Fix drafter to change only the “Read releases” block, but its change "
+            "is one the platform can't check, so the platform refused it.",
         ),
         (
             handoff(found="not_in_catalogue"),
@@ -336,6 +345,10 @@ async def test_a_fix_never_changes_the_run_it_is_on(postgres: PostgresUrls):
         (
             round_(3, passed=1, progress=False),
             "Round 3: 1 of 3 scenarios passed, no better than before.",
+        ),
+        (
+            FixHandedBackData(fix_id=FIX, why="no_answer"),
+            "I couldn't fix this. The Fix drafter didn't answer. Nothing was changed.",
         ),
         (
             FixHandedBackData(fix_id=FIX, why="widened"),

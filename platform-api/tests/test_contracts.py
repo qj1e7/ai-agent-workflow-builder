@@ -147,7 +147,9 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "agent/card-task-finished.json": task_result_adapter,
     "agent/card-draft-request.json": TypeAdapter(DraftRequest),
     "agent/card-drafted.json": draft_result_adapter,
-    "agent/key-shapes.json": TypeAdapter(dict[Literal["shapes"], list[str]]),
+    "agent/key-shapes.json": TypeAdapter(
+        dict[Literal["shapes", "kept", "secret_name_ends", "code_parameters"], list[str] | str]
+    ),
     "agent/planner-choose-request.json": TypeAdapter(ChooseRequest),
     "agent/planner-chosen.json": choose_result_adapter,
     "agent/software-find-request.json": TypeAdapter(FindSoftwareRequest),

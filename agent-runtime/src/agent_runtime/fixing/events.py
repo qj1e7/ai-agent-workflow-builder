@@ -51,6 +51,7 @@ type FixFound = Literal[
     "confirmed",
     "not_in_version",
     "not_where_it_stopped",
+    "too_wide",
     "inside",
     "widened",
     "not_in_catalogue",
@@ -71,10 +72,12 @@ type FixWidening = Literal[
     "moves_a_yes",
     "goes_past_a_failure",
     "changes_a_persons_setting",
+    "cant_check",
 ]
 type FixHandBack = Literal[
     "no_cause",
     "no_progress",
+    "no_answer",
     "widened",
     "round_limit",
     "handoff_limit",
@@ -85,7 +88,7 @@ type FixHandBack = Literal[
 
 FOUND_BY: Final[Mapping[FixHandedTo, frozenset[FixFound]]] = {
     "troubleshooter": frozenset(
-        {"confirmed", "not_in_version", "not_where_it_stopped", "no_answer"}
+        {"confirmed", "not_in_version", "not_where_it_stopped", "too_wide", "no_answer"}
     ),
     "fix_drafter": frozenset({"inside", "widened", "not_in_catalogue", "no_answer"}),
     "scenario_writer": frozenset({"kept", "refused", "no_answer"}),

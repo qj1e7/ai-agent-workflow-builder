@@ -89,6 +89,52 @@ MASKED_SHAPES: Final = re.compile("|".join([*KEY_SHAPE_SOURCES, GLUED_SK_KEY]))
 """What the masker and the eval runner's redaction hide: every key shape, and an sk- key glued to a
 letter."""
 
+KEPT_KEY: Final = "<<kept by the platform>>"
+"""What platform-api puts in a plan where a key stood, so the value never leaves it: in a block's
+parameters, or as a setting's value. It is no setting's placeholder, so the drafter keeps it as it
+is, and the fix's scope check refuses a change that touches it (ADR 0055)."""
+SECRET_NAME_ENDS: Final = (
+    "apikey",
+    "accesskey",
+    "privatekey",
+    "secret",
+    "password",
+    "passwd",
+    "passphrase",
+    "token",
+    "bearer",
+    "authorization",
+    "cookie",
+    "credential",
+    "credentials",
+    "signature",
+    "sessionid",
+    "secretkey",
+    "signingkey",
+    "encryptionkey",
+    "masterkey",
+)
+"""How the name of a parameter, a header or a query parameter that holds a key ends, once its
+case and its separators are gone: accessToken, x-api-key and Authorization all do. A key needs
+no known shape to be one, so platform-api keeps out the value under such a name too."""
+CODE_PARAMETERS: Final = (
+    "jsCode",
+    "pythonCode",
+    "functionCode",
+    "code",
+    "query",
+    "sqlQuery",
+    "command",
+)
+"""Parameters that hold code, a query or a command. A fix never changes one, and platform-api
+keeps each out of a plan whole, as anything can stand in it, a key included."""
+_SEPARATORS: Final = re.compile(r"[\s_.\-]")
+
+
+def names_a_secret(name: str) -> bool:
+    """Whether a parameter, header or query parameter with this name holds a key."""
+    return _SEPARATORS.sub("", name).lower().endswith(SECRET_NAME_ENDS)
+
 
 type Held = tuple[str, ...]
 
