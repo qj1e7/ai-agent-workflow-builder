@@ -10,6 +10,7 @@ import pytest
 
 from platform_api.builder.fixes import FixTrying
 from platform_api.shared import RunId, UserId
+from tests import support
 from tests.test_n8n_lifecycle import made, version_row
 from tests.test_n8n_versions import Versions, lab, v
 
@@ -18,6 +19,7 @@ pytestmark = pytest.mark.anyio
 __all__ = ["lab", "v"]
 
 ALICE, CAROL = UserId("alice"), UserId("carol")
+CAROL_ON = support.CAROL
 
 
 def with_a_new_note(document: dict[str, Any]) -> dict[str, Any]:
@@ -35,7 +37,7 @@ async def test_the_fix_is_tried_as_a_test_run_that_stops_at_the_yes_while_the_ol
     live = v.n8n.workflows[workflow_id]["activeVersionId"]
     first = await version_row(v.own, use_case_id, 1)
 
-    trying = await v.builder.try_fixed(use_case_id, with_a_new_note(first["document"]), CAROL)
+    trying = await v.builder.try_fixed(use_case_id, with_a_new_note(first["document"]), CAROL_ON)
     assert isinstance(trying, FixTrying), trying
 
     held = v.n8n.workflows[workflow_id]
@@ -53,7 +55,7 @@ async def test_only_then_the_fix_goes_live_as_a_new_version_with_the_fix_s_parti
     use_case_id, workflow_id = await made(v.own, on=True)
     first = await version_row(v.own, use_case_id, 1)
     fixed = with_a_new_note(first["document"])
-    trying = await v.builder.try_fixed(use_case_id, fixed, CAROL)
+    trying = await v.builder.try_fixed(use_case_id, fixed, CAROL_ON)
     assert isinstance(trying, FixTrying)
 
     refused = await v.builder.put_fixed_live(

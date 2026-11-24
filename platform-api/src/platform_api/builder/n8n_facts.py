@@ -65,7 +65,17 @@ _PLACES = """
     WHERE u.deleted_at IS NULL AND d.set_up_at IS NOT NULL
       AND n ->> 'type' = %(read)s AND n -> 'parameters' ->> 'source' = %(source)s
       AND n -> 'parameters' ->> 'place' IS NOT NULL
+    UNION
+    SELECT n -> 'parameters' ->> 'place', n -> 'parameters' ->> 'place'
+    FROM builder.fixes f
+    JOIN builder.use_cases u ON u.use_case_id = f.use_case_id
+    CROSS JOIN LATERAL jsonb_array_elements(f.document -> 'nodes') AS n
+    WHERE u.deleted_at IS NULL AND f.approved_at IS NOT NULL AND f.dropped_at IS NULL
+      AND n ->> 'type' = %(read)s AND n -> 'parameters' ->> 'source' = %(source)s
+      AND n -> 'parameters' ->> 'place' IS NOT NULL
 """
+"""A fix an Approver said yes to adds what its version reads, as a set-up revision does (ADR
+0055, PR 6), so its test run and its runs may read a repository a person renamed."""
 
 
 NOTHING_ON_THE_LIST = "Nothing on the list to check."

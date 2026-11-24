@@ -1,7 +1,9 @@
-"""The routes a fix's coordinator in the agent runtime calls (ADR 0055, PR 5). Each needs the
-fix's own token, for one fix on one stopped run. None writes to a real system, stores a version
-or turns anything on: the events route writes only the fix's own events, under the activity log's
-rules for a fix."""
+"""The routes a fix's coordinator in the agent runtime calls (ADR 0055, PR 5 and PR 6). Each needs
+the fix's own token, for one fix on one stopped run, and a call without one answers 401. None
+writes to a real system or turns anything on. The events route writes only the fix's own events,
+under the activity log's rules for a fix, and never its start: platform-api writes that itself,
+with who asked from their session. The revisions route stores the fixed version under the fix's
+id, which waits for a yes only once the fix's proposal names it."""
 
 from datetime import UTC, datetime
 from typing import Annotated, Any, Literal
@@ -15,19 +17,21 @@ from platform_api.builder.fix_parts import (
     FixCheckOut,
     FixId,
     FixParts,
+    FixRevisionIn,
+    FixRevisionOut,
     FixScenariosIn,
     FixScenariosOut,
     FixSimulationIn,
     FixSimulationOut,
     fix_token_ok,
 )
+from platform_api.builder.fixes import Fixes, NotStored
 from platform_api.monitoring import (
     FixData,
     FixHandedBackData,
     FixHandoffData,
     FixProposedData,
     FixRoundData,
-    FixStartedData,
 )
 from platform_api.orchestration import NotSimulated, WorkflowPlan
 from platform_api.shared import RunId
@@ -35,9 +39,8 @@ from platform_api.wire import WireIn, WireModel, error_response
 
 router = APIRouter(prefix="/internal/v1/runs/{run_id}/fixes/{fix_id}", tags=["internal"])
 
-type FixKind = Literal["fix_started", "fix_handoff", "fix_round", "fix_proposed", "fix_handed_back"]
+type FixKind = Literal["fix_handoff", "fix_round", "fix_proposed", "fix_handed_back"]
 FIX_DATA: dict[str, type[FixData]] = {
-    "fix_started": FixStartedData,
     "fix_handoff": FixHandoffData,
     "fix_round": FixRoundData,
     "fix_proposed": FixProposedData,
@@ -70,10 +73,17 @@ async def _authorized(
     run_id: RunId,
     fix_id: FixId,
     key: Annotated[str, Depends(_key)],
-    token: Annotated[str, Header(alias=FIX_TOKEN_HEADER)],
+    token: Annotated[str | None, Header(alias=FIX_TOKEN_HEADER)] = None,
 ) -> None:
-    if not fix_token_ok(key, run_id, fix_id, token, datetime.now(UTC)):
+    if token is None or not fix_token_ok(key, run_id, fix_id, token, datetime.now(UTC)):
         raise HTTPException(status_code=401, detail="Unauthorized")
+
+
+def _fixes(request: Request) -> Fixes | None:
+    return getattr(request.app.state, "fixes", None)
+
+
+AllFixes = Annotated[Fixes | None, Depends(_fixes)]
 
 
 Authorized = Annotated[None, Depends(_authorized)]
@@ -104,7 +114,9 @@ def _not_simulated(not_simulated: NotSimulated) -> JSONResponse:
     "/events",
     response_model=FixEventOut,
     description="Writes one event of the fix on the stopped run, under the activity log's rules "
-    "for a fix, or says why the log took none.",
+    "for a fix, or says why the log took none. Never the fix's start, which platform-api writes "
+    "itself. A proposal must name the version stored under the fix, and once the log takes it, "
+    "the version waits for a set-up approval.",
     responses={**REFUSED, 422: error_response(NOT_THIS_FIX)},
 )
 async def note_fix_event(
@@ -116,7 +128,35 @@ async def note_fix_event(
         raise HTTPException(status_code=422, detail=[e["msg"] for e in error.errors()]) from None
     if data.fix_id != fix_id:
         raise HTTPException(status_code=422, detail=NOT_THIS_FIX)
-    return FixEventOut(refused=await _here(parts).note(run_id, data))
+    try:
+        return FixEventOut(refused=await _here(parts).note(run_id, data))
+    except NotStored as not_stored:
+        raise HTTPException(status_code=422, detail=not_stored.words) from None
+
+
+@router.post(
+    "/revisions",
+    response_model=FixRevisionOut,
+    description="Stores the fixed version under the fix's id, once: asking again with the same "
+    "version answers the same. Only while the fix runs, with no setting changed, the failed "
+    "part where the run stopped, the checker's pass, and a simulation here that every scenario "
+    "passed. It waits for an Approver only once the fix's proposal names it.",
+    responses={
+        **REFUSED,
+        409: error_response("The fix ended, or nothing here proved the version"),
+        422: error_response("A fix can't change a setting."),
+        503: error_response(NOT_SET_UP),
+    },
+)
+async def store_fix(
+    run_id: RunId, fix_id: FixId, body: FixRevisionIn, _: Authorized, fixes: AllFixes
+) -> FixRevisionOut:
+    if fixes is None:
+        raise HTTPException(status_code=503, detail=NOT_SET_UP)
+    try:
+        return await fixes.store(run_id, fix_id, body.version, body.cause)
+    except NotStored as refused:
+        raise HTTPException(status_code=refused.status, detail=refused.words) from None
 
 
 @router.post(

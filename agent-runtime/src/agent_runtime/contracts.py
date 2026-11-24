@@ -51,6 +51,7 @@ from agent_runtime.contract import (
     DraftApproval,
     DraftBlock,
     Drafted,
+    DrafterFacts,
     DraftInput,
     DraftRequest,
     ExplainFact,
@@ -107,10 +108,13 @@ from agent_runtime.contract import (
     WatchlistScheduleFact,
     WireModel,
     WorkflowFact,
+    WorkflowPlan,
     WrittenRead,
     WrittenScenario,
     agent_event_adapter,
 )
+from agent_runtime.fixing.coordinator import FixRequest
+from agent_runtime.fixing.starter import FixAccepted, FixStart
 from agent_runtime.free_reply import answer_of_envelope
 from agent_runtime.github import TOKEN_REFUSED
 from agent_runtime.model_access import KEY_REFUSED
@@ -1125,6 +1129,53 @@ def cause_request() -> CauseRequest:
     )
 
 
+def fix_start_request() -> FixStart:
+    """platform-api's ask to run a fix it started: the log took the start, and the token is for
+    the same deadline (ADR 0055, PR 6)."""
+    asked = cause_request()
+    version = WorkflowPlan.model_validate(
+        {
+            "name": "FastAPI release check",
+            "blocks": [
+                {
+                    "name": "Read releases",
+                    "type": "CUSTOM.wabRead",
+                    "version": 1,
+                    "parameters": {"source": "github_releases", "place": "<<repository>>"},
+                }
+            ],
+            "wires": [],
+            "settings": [
+                {
+                    "id": "repository",
+                    "kind": "repository",
+                    "label": "repository",
+                    "fills": [{"block": "Read releases", "parameter": "place"}],
+                    "value": "fastapi/fastapy",
+                    "mark": "filled",
+                }
+            ],
+        }
+    )
+    return FixStart(
+        run_id="run_01JB8FIXSTOP",
+        request=FixRequest(
+            fix_id="fix_01JB8EXAMPLE",
+            asked_by="alice",
+            asked_by_name="Alice",
+            ends_by=datetime(2026, 11, 25, 6, 20, tzinfo=UTC),
+            stop=asked.stop,
+            version=version,
+            stopped_at=["Read releases"],
+        ),
+        events=asked.events,
+        facts=DrafterFacts(repositories=["fastapi/fastapi"], jira_projects=["MOCK"]),
+        model=asked.model,
+        platform_url="http://platform-api:8000",
+        token="1999999999." + "0" * 64,
+    )
+
+
 def explain_wording_request() -> ExplainWordingRequest:
     facts = [
         ExplainFact(kind="runs", together=["day", "8:00"], negated=False),
@@ -1319,6 +1370,8 @@ def fixtures() -> dict[str, WireModel]:
             ],
             kept=[],
         ),
+        "fix-start-request.json": fix_start_request(),
+        "fix-accepted.json": FixAccepted(fix_id="fix_01JB8EXAMPLE", started=True),
         "planner-check-part-request.json": CheckPartRequest(kind="do", text="Email the list"),
         "planner-check-part-cant.json": check_one_part(
             CheckPartRequest(kind="do", text="Email the list")

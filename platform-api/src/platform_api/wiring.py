@@ -1,7 +1,9 @@
 import asyncio
 import logging
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, replace
 from datetime import datetime
+from typing import Any, Literal
 
 import httpx
 from fastapi import FastAPI
@@ -12,6 +14,7 @@ from platform_api.builder.drafted_simulations import DraftedSimulations
 from platform_api.builder.drafted_workflows import DraftedWorkflows
 from platform_api.builder.explain import Explainer
 from platform_api.builder.fix_parts import FixLayouts, FixParts
+from platform_api.builder.fixes import Fixes, FixSettings, FixTrying
 from platform_api.builder.key_sweep import KeySweep
 from platform_api.builder.made_in_n8n import MadeInN8n
 from platform_api.builder.n8n_holds import Holding
@@ -29,7 +32,7 @@ from platform_api.monitoring import (
     callback_for,
 )
 from platform_api.orchestration import self_test
-from platform_api.orchestration.agents import HttpAgentRuntime, PlatformReady
+from platform_api.orchestration.agents import HttpAgentRuntime, ModelAccess, PlatformReady
 from platform_api.orchestration.confluence_rest import (
     CONFLUENCE_PAGE,
     ConfluencePages,
@@ -96,7 +99,16 @@ from platform_api.orchestration.planning import (
     WorkflowDrafting,
 )
 from platform_api.orchestration.run_causes import RunCauses
-from platform_api.orchestration.runs import Leg
+from platform_api.orchestration.runs import (
+    Expired,
+    Failed,
+    Leg,
+    Lost,
+    Outcome,
+    Rejected,
+    Skipped,
+    Succeeded,
+)
 from platform_api.orchestration.schedule_store import ScheduleBook
 from platform_api.orchestration.service import Orchestrator
 from platform_api.orchestration.setup_approvals import SetUpApprovals
@@ -116,7 +128,7 @@ from platform_api.practice_jira import (
     practice_token,
 )
 from platform_api.settings import KeySystem, N8nKey, Settings
-from platform_api.shared import N8nExecutionId, RunId, TaskId
+from platform_api.shared import N8nExecutionId, Principal, RunId, TaskId, UserId
 
 log = logging.getLogger(__name__)
 
@@ -163,6 +175,7 @@ class Services:
     key_sweep: KeySweep | None = None
     simulation_client: SimulationClient | None = None
     fix_parts: FixParts | None = None
+    fixes: Fixes | None = None
 
 
 def simulations_for(
@@ -238,6 +251,55 @@ def install(app: FastAPI, services: Services) -> None:
     app.state.in_n8n = services.in_n8n
     app.state.made_in_n8n = services.made_in_n8n
     app.state.fix_parts = services.fix_parts
+    app.state.fixes = services.fixes
+
+
+class ConnectedModel:
+    """The model connected in Settings, read afresh for each fix."""
+
+    def __init__(self, access: Callable[[], Awaitable[ModelAccess | None]]) -> None:
+        self._access = access
+
+    async def access(self) -> ModelAccess | None:
+        return await self._access()
+
+
+class BuilderTries:
+    """Turn back on (ADR 0055, section 7): the builder tries a fix with the one real test run
+    and puts it live, and the orchestrator says how that test run ended."""
+
+    def __init__(self, builder: Builder, runs: Orchestrator) -> None:
+        self._builder = builder
+        self._runs = runs
+
+    async def try_fixed(
+        self, use_case_id: str, document: dict[str, Any], by: Principal
+    ) -> FixTrying | str:
+        return await self._builder.try_fixed(use_case_id, document, by)
+
+    async def tried_outcome(self, run_id: str) -> Literal["passed", "failed"] | None:
+        """passed once the test run reached the yes, or found nothing to write. Every other end
+        is failed, and a run still going is None."""
+        detail = await self._runs.get_run(RunId(run_id))
+        if detail is None:
+            return "failed"
+        match detail.record.state:
+            case Succeeded(outcome=Outcome.TEST_PASSED | Outcome.NOTHING_TO_WRITE):
+                return "passed"
+            case Succeeded() | Failed() | Rejected() | Skipped() | Expired() | Lost():
+                return "failed"
+            case _:
+                return None
+
+    async def put_live(
+        self,
+        use_case_id: str,
+        trying: FixTrying,
+        document: dict[str, Any],
+        by: UserId,
+        authors: frozenset[UserId],
+    ) -> str | None:
+        return await self._builder.put_fixed_live(use_case_id, trying, document, by, authors)
 
 
 class NoN8nReads:
@@ -577,6 +639,23 @@ async def build(settings: Settings) -> Services:
         simulations=simulations,
     )
     setup_approvals.serve(drafted)
+    fixes = Fixes(
+        db,
+        activity,
+        RunsInN8n(db, n8n.landing),
+        drafted,
+        setup_approvals,
+        agents,
+        ConnectedModel(connected_model(db, model_settings)),
+        BuilderTries(builder, orchestrator),
+        FixSettings(
+            on=settings.fix_model,
+            signing_key=settings.callback_signing_key,
+            platform_url=settings.platform_internal_url,
+        ),
+        ExplainWordings(db, model_settings, agents),
+    )
+    drafted.serve_fixes(fixes)
     return Services(
         settings=settings,
         db=db,
@@ -607,8 +686,10 @@ async def build(settings: Settings) -> Services:
             FixLayouts(facts, n8n.drafts, settings.public_base_url, settings.team_time_zone.key),
             simulation_client,
             simulation_model if settings.simulation and settings.simulation.uses_model else None,
-            activity,
+            fixes,
+            fixes,
         ),
+        fixes=fixes,
         setup_approvals=setup_approvals,
         home=home,
         watchlist=watchlist,
@@ -691,6 +772,8 @@ class Runner:
         self._tasks.append(
             asyncio.create_task(self._services.setup_approvals.work_forever(self._stop))
         )
+        if (fixes := self._services.fixes) is not None:
+            self._tasks.append(asyncio.create_task(fixes.work_forever(self._stop)))
 
     async def stop(self) -> None:
         self._stop.set()

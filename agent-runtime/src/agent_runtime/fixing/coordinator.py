@@ -50,7 +50,6 @@ from agent_runtime.fixing.events import (
     MOST_BLOCKS,
     MOST_HANDOFFS,
     MOST_ROUNDS,
-    MOST_SCENARIOS,
     FixData,
     FixFound,
     FixHandBack,
@@ -61,7 +60,6 @@ from agent_runtime.fixing.events import (
     FixProposedData,
     FixRefusal,
     FixRoundData,
-    FixStartedData,
     FixWidening,
     ShownName,
 )
@@ -95,6 +93,9 @@ DEFAULT_COORDINATOR_MODEL: Final = "claude-sonnet-5-5"
 """Until the eval picks the cheapest model that meets every bar (ADR 0055, section 11)."""
 MOST_DOLLARS: Final = 2.0
 MOST_TURNS: Final = 20
+MOST_SCENARIOS_TRIED: Final = 20
+"""The scenarios a fix holds, its replay of the stop included: as many as platform-api's
+simulation route takes in one call."""
 TURN_TIMEOUT_SECONDS: Final = 60.0
 RESULT_LIMIT: Final = 20_000
 UNKNOWN: Final = "unknown:"
@@ -105,7 +106,8 @@ HAND_BACK: Final = "I couldn't fix this. Here's the cause and what I tried."
 
 class FixRequest(WireModel):
     """One press of Fix it for me on a stopped run: who asked, the fix's deadline, the stop, the
-    version that ran and the blocks where it stopped."""
+    version that ran and the blocks where it stopped. platform-api wrote the fix's start from
+    these, with who asked from their session, before it minted the fix's token."""
 
     fix_id: FixId
     asked_by: str = Field(min_length=1)
@@ -330,21 +332,10 @@ class _Fix:
         self._graph = self._build()
 
     def run(self) -> FixOutcome:
+        """platform-api wrote the fix's start, with who asked from their session, before it
+        minted the token, so the coordinator never writes it. The log takes nothing of a fix it
+        never started, so the first event refused as not_started stops it."""
         request = self._request
-        started = FixStartedData(
-            fix_id=request.fix_id,
-            asked_by=request.asked_by,
-            asked_by_name=request.asked_by_name,
-            ends_by=request.ends_by,
-        )
-        # The log takes nothing else of a fix it never took the start of, so nothing runs.
-        try:
-            refused = self._parts.recorder.note(started)
-        except Exception as error:
-            log.warning("fix %s: the log failed: %s", request.fix_id, type(error).__name__)
-            return Stopped("failed")
-        if refused is not None:
-            return Stopped(refused)
         first = FixState(messages=[HumanMessage(masked(self._facts()))])
         final = self._graph.invoke(first, {"recursion_limit": 3 * MOST_TURNS})
         outcome = cast(FixOutcome, final["outcome"])
@@ -517,15 +508,18 @@ class _Fix:
 
     def _keep(self, written: list[Scenario] | None) -> FixFound:
         """Kept only when every scenario names only the version's blocks, under a name no other
-        scenario has, nor code's replay of the stop, and the fix holds at most 100. Otherwise none
-        is kept."""
+        scenario has, nor code's replay of the stop, and the fix holds at most
+        MOST_SCENARIOS_TRIED, its replay of the stop included, as platform-api's simulation route
+        takes no more. Otherwise none is kept."""
         if not written:
             return "no_answer"
         names = [scenario.name for scenario in written]
         fits = all(scenario.blocks() <= self.ledger.blocks for scenario in written)
         taken = {*self.ledger.scenarios, REPLAY}
         fresh = len(set(names)) == len(names) and not set(names) & taken
-        if not fits or not fresh or len(self.ledger.scenarios) + len(names) > MOST_SCENARIOS:
+        replay = 0 if REPLAY in self.ledger.scenarios else 1
+        held = len(self.ledger.scenarios) + len(names) + replay
+        if not fits or not fresh or held > MOST_SCENARIOS_TRIED:
             return "refused"
         self.ledger.scenarios |= {scenario.name: scenario for scenario in written}
         return "kept"
@@ -770,7 +764,7 @@ class _Fix:
             return self._then(state, call_id, _not_done(needs or ["a draft"]), error=True)
         plan, cause = draft.plan, ledger.cause
         revisions = self._parts.revisions
-        stored = self._in_time("revisions", lambda seconds: revisions.store(plan, seconds))
+        stored = self._in_time("revisions", lambda seconds: revisions.store(plan, cause, seconds))
         if isinstance(stored, _Late) or self._past_deadline():
             return self._end(self._hand_back("time_limit"))
         if not isinstance(stored, StoredRevision):

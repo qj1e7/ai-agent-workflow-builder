@@ -648,6 +648,15 @@ class NodeRun:
     answer the record keeps."""
 
 
+def _http_status(code: object) -> str | None:
+    """An HTTP status, only when n8n's httpCode is a three-digit number. n8n puts a Node error
+    code there too, such as ECONNREFUSED, when nothing answered, and that is no answer."""
+    if isinstance(code, bool) or not isinstance(code, str | int):
+        return None
+    text = str(code)
+    return text if len(text) == 3 and text.isascii() and text.isdigit() else None
+
+
 def node_runs(run_data: object) -> dict[str, NodeRun]:
     """Each block's tries from n8n's `resultData.runData`."""
     runs: dict[str, NodeRun] = {}
@@ -657,8 +666,7 @@ def node_runs(run_data: object) -> dict[str, NodeRun]:
         errors: list[NodeError] = []
         for given in listed:
             failed = _fields(given.get("error"))
-            code = failed.get("httpCode")
-            answer = str(code) if isinstance(code, str | int) and str(code) else None
+            answer = _http_status(failed.get("httpCode"))
             for key in ("message", "description"):
                 if isinstance(said := failed.get(key), str) and said.strip():
                     errors.append(NodeError(said, answer))

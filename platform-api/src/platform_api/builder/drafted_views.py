@@ -221,6 +221,57 @@ class DraftedWorkflowView(WireModel):
     )
 
 
+class FixChangeView(WireModel):
+    """One value the fix changed, from the stopped version to the fixed one, as data."""
+
+    block: str
+    parameter: str = Field(description="The parameter's path in the block, as a.b.")
+    before: str | None
+    after: str | None
+
+
+class FixScenarioView(WireModel):
+    """One scenario's grade on practice systems, as platform-api's own simulation gave it."""
+
+    name: str
+    kind: str | None
+    verdict: Literal["passed", "failed", "not_tried"]
+    step: str | None = Field(description="The block where it stopped, if one did.")
+    why: str | None = Field(description="How a failed run ended, as code read it.")
+
+
+type FixCheck = Literal[
+    "inside_the_failed_part", "every_scenario_passed", "safety_check", "settings_unchanged"
+]
+
+
+class FixCheckView(WireModel):
+    check: FixCheck
+    passed: bool
+    words: str = Field(description="What code checked, in code's own words.")
+
+
+class FixEvidenceView(WireModel):
+    """What the approval page shows of a fix (ADR 0055, section 7), all of it code's: the cause
+    as code confirmed it, the change, each scenario's grade and code's checks. The report's
+    reworded text is the AI's help for the reader, never the check."""
+
+    fix_id: str
+    run_id: str
+    use_case_id: str
+    asked_by: str = Field(description="The name of the person who asked for the fix.")
+    made_by: Literal["fix_drafter", "person"] = Field(
+        description="Who made the change: the Fix drafter, or a person who answered the question "
+        "a hand-back asked."
+    )
+    answered_by: str | None = Field(description="The person who answered, by name.")
+    cause: str | None = Field(description="The cause, in code's own words.")
+    failed_part: list[str]
+    changes: list[FixChangeView]
+    scenarios: list[FixScenarioView]
+    checks: list[FixCheckView]
+
+
 class SetUpApprovalView(WireModel):
     """A set-up approval as the approval page shows it: code's report of the exact revision the
     digest binds, and whether this person may decide it now, by the run gate's own rule."""
@@ -236,6 +287,11 @@ class SetUpApprovalView(WireModel):
     why_not: str | None = Field(description="Why this person can't decide it now.")
     decline_reasons: list[str]
     set_up: DraftedSetUpView | None
+    fix: FixEvidenceView | None = Field(
+        default=None,
+        description="For a fix to a workflow (ADR 0055): its cause, change, scenarios and code's "
+        "checks. Null for a drafted workflow's set-up.",
+    )
 
 
 class DraftWorkflowIn(WireIn):

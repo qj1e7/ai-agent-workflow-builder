@@ -489,10 +489,12 @@ class FakeRevisions:
     def __init__(self, played: Played, clock: Clock) -> None:
         self.played, self.clock = played, clock
         self.stored: list[WorkflowPlan] = []
+        self.causes: list[CauseFound] = []
 
-    def store(self, fixed: WorkflowPlan, seconds: float) -> StoredRevision:
+    def store(self, fixed: WorkflowPlan, cause: CauseFound, seconds: float) -> StoredRevision:
         self.played.calls.append(("revisions", self.clock()))
         self.stored.append(fixed)
+        self.causes.append(cause)
         digest = hashlib.sha256(fixed.model_dump_json().encode()).hexdigest()
         return StoredRevision(version=len(self.stored) + 1, digest=f"sha256:{digest}")
 
@@ -500,12 +502,20 @@ class FakeRevisions:
 class FakeLog:
     """The activity log's rules for a fix's events, as `ActivityLog.note_fix` keeps them: only
     while the run is stopped, one fix at a time from its start to its end or its deadline, only
-    the hand-back for time after the deadline, and a repeat writes nothing."""
+    the hand-back for time after the deadline, and a repeat writes nothing. It holds the fix's
+    start from the first, as platform-api writes it before the coordinator runs."""
 
     def __init__(self, clock: Clock) -> None:
         self.clock = clock
         self.stopped = True
-        self.events: list[FixData] = []
+        self.events: list[FixData] = [
+            FixStartedData(
+                fix_id=FIX_ID,
+                asked_by="alice",
+                asked_by_name="Alice",
+                ends_by=STARTED + FIX_TIME_LIMIT,
+            )
+        ]
         self.refused: list[tuple[str, FixRefusal]] = []
 
     def kinds(self) -> list[str]:

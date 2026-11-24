@@ -17,6 +17,7 @@ from platform_api.builder.cards import (
     tool_list,
 )
 from platform_api.builder.drafts import Drafts, TooManyDrafts
+from platform_api.builder.fixes import FixTrying
 from platform_api.builder.in_n8n import put_back, write_in_n8n
 from platform_api.builder.last_run import RunHistory, last_run_view
 from platform_api.builder.layout import REPO_INPUT, LayoutPlan, PlannedAgent, lay_out
@@ -474,6 +475,8 @@ def _planned(card: CardView, values: Mapping[str, str]) -> PlannedAgent:
 
 
 NOT_TAKEN = "n8n did not take the change. Nothing changed. Try again."
+NOT_SAFE_TO_TRY = "It no longer passes the safety check, so it was not tried. Ask for a fix again."
+CHANGED_IN_N8N = "Changed again since, in n8n, so nothing changed."
 DELETED_IN_N8N = (
     "This workflow was deleted in n8n, so it can't run again. Its runs and versions are kept."
 )
@@ -1624,6 +1627,116 @@ class Builder:
                     return await self._runs.start_run(trial, principal, idempotency_key)
                 case On():
                     return await self._runs.start_run(spec, principal, idempotency_key)
+
+    async def try_fixed(
+        self, use_case_id: str, document: dict[str, Any], by: Principal
+    ) -> FixTrying | str:
+        """A fix an Approver said yes to, tried with the one real test run (ADR 0055, section 7):
+        written over n8n's draft under the version compare, beside the version in use, which
+        stays live, then run by hand once as a test run that stops at the yes and writes nothing
+        (ADR 0044), whether the workflow is on or paused. Answers why not in words."""
+        if self._n8n is None:
+            return NOT_TAKEN
+        rules = await self.todays_rules()
+        if grade(document, rules.error_workflow, rules.time_zone, rules.known).grade != "safe":
+            return NOT_SAFE_TO_TRY
+        async with self._db.transaction("builder") as uow:
+            await hold_workflow(uow.conn, use_case_id, alone=True)
+            row = await (
+                await uow.conn.execute(_USE_CASE_ROW + " FOR UPDATE", (use_case_id,))
+            ).fetchone()
+            if row is None or not _own(row) or not isinstance(lifecycle_of(row), On | Paused):
+                return NOT_TAKEN
+            if self.holding is not None:
+                held = await self.holding.refused_while_held(uow.conn, use_case_id, by.user_id)
+                if held is not None:
+                    return held.words
+            current = (await versions_of(uow.conn, use_case_id))[0].held
+            if current is None:
+                return NOT_TAKEN
+            live = current.version_id if is_on(lifecycle_of(row)) else None
+            expected = Expected(row["n8n_draft_id"] or current.version_id, live)
+            try:
+                put = await self._n8n.put_back(row["n8n_workflow_id"], expected, document, False)
+            except (N8nError, httpx.HTTPError) as error:
+                log.warning("n8n did not take the fix of %s: %s", use_case_id, type(error).__name__)
+                return NOT_TAKEN
+            if isinstance(put, ChangedInN8n):
+                return CHANGED_IN_N8N
+            await uow.conn.execute(
+                "UPDATE builder.use_cases SET n8n_draft_id = %s WHERE use_case_id = %s",
+                (put.draft, use_case_id),
+            )
+        view = await self.get_use_case(use_case_id)
+        if view is None:
+            return NOT_TAKEN
+        spec = await self._spec_of(view)
+        if isinstance(spec, NothingToCheck) or spec.n8n is None:
+            return NOT_TAKEN
+        tried = await self._checked_draft(use_case_id, spec.n8n)
+        if isinstance(tried, NoTestRun):
+            return tried.words
+        trial = replace(
+            spec, test=True, stops_at_gate=True, n8n=replace(spec.n8n, draft_version=tried)
+        )
+        started = await self._runs.start_run(trial, by, f"fix-test:{tried}")
+        return FixTrying(started.run_id, tried)
+
+    async def put_fixed_live(
+        self,
+        use_case_id: str,
+        trying: FixTrying,
+        document: dict[str, Any],
+        by: UserId,
+        authors: frozenset[UserId],
+    ) -> str | None:
+        """Once its test run passed, the fix goes live as a new version: n8n publishes the draft
+        the test run tried, under the version compare, and the workflow is on. Its authors are
+        the fix's parties and the authors of the version it replaces, so none of them approves
+        its runs. Answers why not in words."""
+        assert self._n8n is not None
+        async with self._db.transaction("builder") as uow:
+            await hold_workflow(uow.conn, use_case_id, alone=True)
+            row = await (
+                await uow.conn.execute(_USE_CASE_ROW + " FOR UPDATE", (use_case_id,))
+            ).fetchone()
+            state = None if row is None else lifecycle_of(row)
+            if row is None or not isinstance(state, On | Paused):
+                return NOT_TAKEN
+            current = (await versions_of(uow.conn, use_case_id))[0]
+            assert current.held is not None
+            live = current.held.version_id if is_on(state) else None
+            expected = Expected(trying.draft, live)
+            try:
+                put = await self._n8n.put_back(
+                    row["n8n_workflow_id"], expected, document, True, held=trying.draft
+                )
+            except (N8nError, httpx.HTTPError) as error:
+                log.warning("n8n did not publish the fix of %s: %s", use_case_id, error)
+                return NOT_TAKEN
+            if isinstance(put, ChangedInN8n):
+                return CHANGED_IN_N8N
+            fixed = Held(put.version_id, put.document, "safe")
+            also = [*(Publication(a, "portal") for a in sorted(authors)), *authors_of(current)]
+            await add_version(
+                uow,
+                use_case_id,
+                current.number,
+                current.number,
+                fixed,
+                Made("fixed", by, "page"),
+                Publication(by, "portal"),
+                list(dict.fromkeys(also)),
+                put.draft,
+            )
+            if isinstance(state, Paused):
+                await uow.conn.execute(
+                    "UPDATE builder.use_cases SET paused_at = NULL, paused_by = NULL"
+                    " WHERE use_case_id = %s",
+                    (use_case_id,),
+                )
+        log.info("put the fix of %s live, on %s's press", use_case_id, by)
+        return None
 
     async def _checked_draft(self, use_case_id: str, target: N8nTarget) -> NoTestRun | str:
         """The version id of the draft a test run would run, once n8n would run nothing in it

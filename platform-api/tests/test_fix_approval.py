@@ -12,7 +12,7 @@ a setting: when the cause needs one, the hand-back asks the person for it."""
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 import httpx
 import pytest
@@ -32,10 +32,11 @@ from platform_api.builder.fixes import (
     HANDED_BACK,
     NEVER_PROPOSED,
     STALE,
-    FixSettings,
     Fixes,
+    FixSettings,
     FixTrying,
 )
+from platform_api.builder.n8n_facts import BuilderWorkflowFacts, Specs
 from platform_api.db import Database
 from platform_api.monitoring import (
     PLATFORM,
@@ -47,17 +48,19 @@ from platform_api.monitoring import (
     RunRetriedData,
 )
 from platform_api.orchestration import (
+    GITHUB_RELEASES,
     AgentRejected,
     AgentUnavailable,
     FixAccepted,
     FixStartRequest,
     ModelAccess,
+    NodeState,
     RunInN8n,
     WorkflowPlan,
 )
 from platform_api.orchestration.people_store import People
 from platform_api.orchestration.setup_approvals import SetUpApprovals
-from platform_api.shared import TEAM_TIME_ZONE, RunId, UserId
+from platform_api.shared import TEAM_TIME_ZONE, Principal, RunId, UserId
 from tests.conftest import PostgresUrls
 from tests.support import LOCAL_ENV
 from tests.test_drafted_layout import release_check
@@ -129,7 +132,7 @@ class Records:
     stopped_at: str = PROPOSE
 
     async def read(self, run_id: RunId) -> RunInN8n | None:
-        nodes = {
+        nodes: dict[str, NodeState] = {
             name: ("failed" if name == self.stopped_at else "done")
             for name in ("Every Monday", READ, PROPOSE)
         }
@@ -140,7 +143,12 @@ class Records:
 class Models:
     access_now: ModelAccess | None = field(
         default_factory=lambda: ModelAccess.model_validate(
-            {"provider": "anthropic", "model": "claude-haiku-4-5", "api_key": "x" * 8}
+            {
+                "style": "anthropic",
+                "base_url": "https://model.example",
+                "model": "m",
+                "api_key": "x" * 8,
+            }
         )
     )
 
@@ -157,7 +165,7 @@ class Tries:
     tried: list[dict[str, Any]] = field(default_factory=list[dict[str, Any]])
 
     async def try_fixed(
-        self, use_case_id: str, document: dict[str, Any], by: UserId
+        self, use_case_id: str, document: dict[str, Any], by: Principal
     ) -> FixTrying | str:
         self.done.append("test run")
         self.tried.append(document)
@@ -341,7 +349,6 @@ async def fix_lab(postgres: PostgresUrls, db: Database) -> AsyncIterator[FixLab]
             log,
             records,
             drafted,
-            layouts,
             approvals,
             runtime,
             models,
@@ -734,6 +741,13 @@ async def test_a_hand_back_asks_for_the_setting_a_fix_may_not_change(fix_lab: Fi
             "after": "langchain-ai/langgraph-py",
         }
     ]
+
+    facts = BuilderWorkflowFacts(fix_lab.db, cast(Specs, None), None, ())
+    assert "langchain-ai/langgraph-py" not in {o.id for o in await facts.places(GITHUB_RELEASES)}
+    assert (await fix_lab.decide(answered.json()["approval_id"], "bob")).status_code == 201
+    await fix_lab.lab.approvals.work_once()
+    readable = {o.id for o in await facts.places(GITHUB_RELEASES)}
+    assert "langchain-ai/langgraph-py" in readable, "its test run may read it after the yes"
 
 
 async def test_only_the_fix_s_own_start_is_written_by_the_platform(fix_lab: FixLab):
