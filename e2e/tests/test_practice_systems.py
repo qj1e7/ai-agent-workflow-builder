@@ -2,8 +2,8 @@
 drafts the release check with the mock model, which waits while it needs a setting, and answers
 its one question. platform-api's driver then sends that revision to the simulation gateway, which
 runs code's six templates in the simulation n8n with no model, and the drafted card reads back
-code's grades. A release check the Planner builds from our blocks is tried the same way, the
-first time its Check is read. Nothing is written and no run is made.
+code's grades. A release check the Planner builds from our blocks is tried the same way, once
+the safety checker grades it at Set up. Nothing is written and no run is made.
 
 It runs only on a stack that `E2E_SIMULATION=on scripts/e2e.sh` starts, where platform-api shares
 a network with the simulation gateway alone. Every other stack skips it."""
@@ -107,7 +107,7 @@ def test_a_workflow_the_planner_builds_from_our_blocks_is_tried_on_practice_syst
 
     first = api.get("bob", path)
     assert first["version"] == 1, first
-    assert first["simulation"]["state"] in ("running", *ENDED), "its first read starts its try"
+    assert first["simulation"]["state"] in ("running", *ENDED), "Set up started its try"
     simulation = ended(lambda: api.get("carol", path)["simulation"], use_case_id)
     graded(simulation)
     assert simulation["tried"] >= 1, simulation
