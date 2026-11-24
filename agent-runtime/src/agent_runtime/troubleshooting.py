@@ -51,10 +51,12 @@ SHAPES: Final[Mapping[Shape, re.Pattern[str]]] = {
     "repository": re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*/[A-Za-z0-9][A-Za-z0-9_.-]*"),
     "key": re.compile(r"[A-Z][A-Z0-9_]{1,9}"),
     "field": re.compile(r"[a-z][a-z0-9]*(?:_[a-z0-9]+|[A-Z][a-z0-9]*)+"),
-    "version": re.compile(r"v?\d+(?:\.\d+)+(?:[-.]?[A-Za-z0-9]+)*"),
+    "version": re.compile(r"v?\d+(?:\.\d+)+(?:[-.][A-Za-z0-9]+)*"),
 }
 """What a detail can look like: a repository as owner/name, a Jira project's key in capitals, a
-field's name in two joined words, as tag_name or tagName, or a version, as 1.2.16."""
+field's name in two joined words, as tag_name or tagName, or a version, as 1.2.16 or 1.0.0-rc1.
+Each repeated part starts with its own mark, a dot, a dash, an underscore or a capital, so a name
+that almost fits fails at once and never backtracks."""
 TAKES: Final[Mapping[FailureKind, frozenset[Shape]]] = {
     "not_found": frozenset({"repository", "key", "version"}),
     "refused": frozenset({"repository", "key"}),
@@ -153,18 +155,19 @@ def _joined_words(name: str) -> int:
 
 
 def _is_detail(detail: str, kind: FailureKind, request: CauseRequest) -> bool:
-    """One name copied whole and exactly from the stop, in a shape its kind takes, of at most two
-    joined words, and no plain word or link. The activity holds what the run read, such as a
-    release note, so a name only it holds is never a detail."""
-    if len(detail) > DETAIL_LIMIT or DETAIL.fullmatch(detail) is None:
+    """One name of at most 64 characters copied whole and exactly from the stop, in a shape its
+    kind takes, of at most two joined words, and no plain word or link. The activity holds what
+    the run read, such as a release note, so a name only it holds is never a detail. The length
+    and the stop are checked before any shape."""
+    if len(detail) > DETAIL_LIMIT:
+        return False
+    if detail not in {name.rstrip("./-") for name in DETAIL.findall(request.stop.message)}:
         return False
     if not any(SHAPES[shape].fullmatch(detail) for shape in TAKES[kind]):
         return False
     if _joined_words(detail) > MOST_JOINED_WORDS:
         return False
-    if detail.casefold() in ENGLISH or LINK.search(detail):
-        return False
-    return detail in {name.rstrip("./-") for name in DETAIL.findall(request.stop.message)}
+    return detail.casefold() not in ENGLISH and LINK.search(detail) is None
 
 
 def checked(asked: ModelCause, request: CauseRequest) -> CauseFound | CauseCheck:

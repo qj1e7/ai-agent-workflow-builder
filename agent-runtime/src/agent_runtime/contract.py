@@ -1675,7 +1675,7 @@ type FailureKind = Literal[
     "limit",
     "unknown",
 ]
-DETAIL_LIMIT: Final = 100
+DETAIL_LIMIT: Final = 64
 DETAIL_NAME: Final = r"[A-Za-z0-9][A-Za-z0-9_./-]*"
 type CauseDetail = Annotated[
     str, Field(min_length=1, max_length=DETAIL_LIMIT, pattern=f"^{DETAIL_NAME}$")

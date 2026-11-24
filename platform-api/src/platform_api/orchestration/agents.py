@@ -903,7 +903,7 @@ MOST_RUN_BLOCKS: Final = 100
 
 type RunBlockName = Annotated[str, Field(min_length=1, max_length=RUN_BLOCK_NAME_LIMIT)]
 type CauseDetail = Annotated[
-    str, StringConstraints(min_length=1, max_length=100, pattern=r"^[A-Za-z0-9][A-Za-z0-9_./-]*$")
+    str, StringConstraints(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9][A-Za-z0-9_./-]*$")
 ]
 type CauseCheck = Literal[
     "call", "not_a_block", "not_where_it_stopped", "not_a_system", "not_a_detail"
