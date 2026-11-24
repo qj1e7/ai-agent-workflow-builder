@@ -6,6 +6,7 @@ Every person here is made up at run time, and none is a real person."""
 
 import json
 import secrets
+import time
 from typing import Any
 
 import pytest
@@ -181,6 +182,36 @@ def test_a_jira_status_outside_the_fixed_words_becomes_to_do() -> None:
 def test_a_value_that_breaks_its_fields_shape_is_left_out(field: str, value: object) -> None:
     [kept] = scrub("github.release", [{**github_release(), field: value}])
     assert field not in kept
+
+
+@pytest.mark.parametrize(
+    ("answer", "path", "value"),
+    [
+        ("github.release", "tag_name", "1" * 100_000),
+        ("github.release", "tag_name", "1" * 100_000 + " "),
+        ("github.release", "tag_name", "1." * 50_000),
+        ("github.release", "published_at", "2026-10-28T" + "0" * 100_000),
+        ("read.release", "id", "1" * 100_000),
+        ("jira.issue", "key", "A" * 100_000 + "-1"),
+        ("jira.issue", "key", "A-" + "1" * 100_000),
+    ],
+    ids=["digits", "digits-then-space", "dotted", "time", "read-id", "key-letters", "key-digits"],
+)
+def test_a_long_value_is_refused_at_once_whatever_its_shape(
+    answer: AnswerKind, path: str, value: str
+) -> None:
+    """A value longer than its field ever is is left out before any pattern reads it, so a long
+    run of digits can't make a pattern take long. The body may be 2 MB."""
+    *parents, last = path.split(".")
+    item: dict[str, Any] = {}
+    where = item
+    for part in parents:
+        where = where.setdefault(part, {})
+    where[last] = value
+    started = time.perf_counter()
+    [kept] = scrub(answer, [item])
+    assert time.perf_counter() - started < 0.05
+    assert last not in json.dumps(kept)
 
 
 def test_a_value_with_the_shape_of_a_key_is_masked() -> None:

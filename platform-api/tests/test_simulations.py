@@ -77,6 +77,7 @@ class LineN8n(FakeSimulationN8n):
         self.deleted: list[str] = []
         self.served: dict[str, list[Any]] = {}
         self.fail_runs = False
+        self.fail_deletes = False
 
     async def create(self, document: Mapping[str, Any]) -> Any:
         made = await super().create(document)
@@ -85,6 +86,8 @@ class LineN8n(FakeSimulationN8n):
 
     async def delete(self, workflow_id: str) -> None:
         self.deleted.append(workflow_id)
+        if self.fail_deletes:
+            raise RuntimeError("something nobody expected")
         self.copies.pop(workflow_id, None)
 
     async def execution(self, execution_id: str, data: bool = True) -> ExecutionRecord | None:
@@ -288,6 +291,17 @@ async def test_the_copy_is_deleted_and_mock_github_set_back_even_when_a_run_fail
         await stack.simulate(release_check([github_read()]))
     assert len(stack.n8n.deleted) == 1
     assert stack.n8n.copies == {}
+    assert stack.github.played[-1] is None
+
+
+@pytest.mark.anyio
+async def test_mock_github_is_set_back_even_when_the_delete_fails_unexpectedly(
+    stack: Stack,
+) -> None:
+    stack.n8n.fail_deletes = True
+    with pytest.raises(RuntimeError):
+        await stack.simulate(release_check([github_read()]))
+    assert len(stack.n8n.deleted) == 1
     assert stack.github.played[-1] is None
 
 

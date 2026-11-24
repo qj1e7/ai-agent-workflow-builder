@@ -346,6 +346,29 @@ def test_odd_data_fails_on_a_failure_with_no_reason() -> None:
     assert silent.happened == 'It failed at "Tidy" with no words for why.'
 
 
+def test_odd_data_fails_when_a_read_block_throws_on_it() -> None:
+    """A read block that throws on the odd data it got is a failure the troubleshooter can't
+    name, not a stop with a reason."""
+    plan = planned(release_check([github_read()]))
+    odd = staged(plan)["odd_data"]
+    words = "Cannot read properties of undefined (reading 'tag_name')"
+    threw = execution("error", (START, "GitHub releases"), "GitHub releases", words, github_read())
+    graded = grade(plan, odd, simulated(), threw)
+    assert graded.verdict == "failed"
+    assert graded.happened == (
+        f'It failed at "GitHub releases", which is not a stop with a reason: {words}'
+    )
+
+
+def test_odd_data_passes_on_a_stop_the_troubleshooter_names() -> None:
+    plan = planned(release_check([github_read()]))
+    odd = staged(plan)["odd_data"]
+    named = execution(
+        "error", (START, "GitHub releases"), "GitHub releases", DROPPED, github_read()
+    )
+    assert grade(plan, odd, simulated(), named).verdict == "passed"
+
+
 # What was not tried
 
 
