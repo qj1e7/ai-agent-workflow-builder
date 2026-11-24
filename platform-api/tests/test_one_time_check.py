@@ -3,6 +3,7 @@ the chat counts it as Home does (ADR 0053, item 3)."""
 
 from datetime import UTC, datetime
 
+from platform_api.builder.drafted_workflows import CHANGED
 from platform_api.builder.home import SetUpApprovalItem
 from platform_api.builder.planner_facts import needs_you_fact
 from platform_api.contracts.home_stories import DAY_ONE
@@ -24,3 +25,7 @@ def test_the_chat_counts_a_one_time_check_as_home_does():
     assert fact.total == quiet.total + 1
     parts = fact.model_dump(exclude={"total"})
     assert sum(parts.values()) == fact.total, f"every part of the total is named: {parts}"
+
+
+def test_a_version_changed_after_the_check_names_the_button_beside_it():
+    assert CHANGED == "Changed since it was approved. Press Turn on to ask for the check again."

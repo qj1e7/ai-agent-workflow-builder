@@ -3,7 +3,7 @@ import ready from '../../../../contracts/fixtures/builder/drafted.ready.json'
 import type { DraftedWorkflowView } from '../../api/types'
 import { EMPTY_DESK, desksReducer } from '../home/chatState'
 import { EMPTY, threadReducer } from '../home/threadState'
-import { addedWords, changingWords, checkedOnceWords, declinedWords, draftedPill, draftedTitle, ONE_TIME_CHECK, setUpLine, settledWords, stationsOf, TURN_ON_NOW, WAITING_FOR_CHECK } from './drafted'
+import { addedWords, CHANGED_SINCE_CHECK, changingWords, checkedOnceWords, declinedWords, draftedPill, draftedTitle, ONE_TIME_CHECK, setUpLine, settledWords, stationsOf, TURN_ON_NOW, WAITING_FOR_CHECK } from './drafted'
 import { stillMoving } from '../../api/draftedQueries'
 
 describe('drafted workflow words', () => {
@@ -51,6 +51,11 @@ describe('drafted workflow words', () => {
   it('reads an approved draft as setting up until n8n holds it', () => {
     expect(setUpLine(null).words).toBe('Setting it up in n8n.')
     expect(setUpLine({ state: 'set_up', use_case_id: 'uc', words: null })).toMatchObject({ kind: 'set_up', words: 'Set up as a draft.' })
+  })
+
+  it('says a version changed after the check in the platform’s own words, which name the button beside them', () => {
+    expect(CHANGED_SINCE_CHECK).toBe('Changed since it was approved. Press Turn on to ask for the check again.')
+    expect(setUpLine({ state: 'refused', use_case_id: null, words: null }).words).toBe(CHANGED_SINCE_CHECK)
   })
 
   it('keeps reading while the platform moves it, and stops once it settles', () => {

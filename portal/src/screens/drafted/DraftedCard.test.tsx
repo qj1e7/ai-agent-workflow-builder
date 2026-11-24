@@ -24,6 +24,7 @@ import { Answer, type Page } from '../home/AnswerCards'
 import { ChatProvider } from '../home/ChatProvider'
 import { CardLive } from '../home/primary'
 import { DraftedCard } from './DraftedCard'
+import { CHANGED_SINCE_CHECK } from './drafted'
 import { SetUpApproval } from './SetUpApprovalPage'
 
 const PAGE: Page = { ask: () => undefined, edit: () => undefined, box: () => undefined }
@@ -97,11 +98,11 @@ describe('the drafted workflow card', () => {
       state: 'draft',
       can_send: true,
       why_not_send: null,
-      set_up: { state: 'refused', use_case_id: null, words: 'Changed since it was approved. Send it for approval again.' },
+      set_up: { state: 'refused', use_case_id: null, words: CHANGED_SINCE_CHECK },
     } as DraftedWorkflowView
     const html = card(refused)
     expect(text(html)).toContain('Revision 2 Draft')
-    expect(text(html)).toContain('Changed since it was approved. Send it for approval again.')
+    expect(text(html)).toContain('Changed since it was approved. Press Turn on to ask for the check again.')
     expect(buttons(html)).toEqual(['See the report', 'Ask for a change', 'Turn on'])
   })
 
@@ -144,6 +145,13 @@ describe('the drafted workflow card', () => {
     expect(text(html)).toContain('Building')
     expect(text(html)).not.toContain('Revision 2')
     expect(buttons(html)).not.toContain('Turn on')
+  })
+
+  it('offers Turn on only once the platform says the workflow it was set up as is a Draft, never while unread or gone', () => {
+    const html = render(<DraftedCard draftedId={SET_UP.drafted_id} revision={SET_UP.card_revision} />, { view: SET_UP })
+    expect(text(html)).toContain('Bob checked it once.')
+    expect(text(html)).not.toContain(TURN_ON_NOW)
+    expect(buttons(html)).toEqual(['See the report', 'Open it'])
   })
 
   it('reads On once the workflow is on, with nothing left to press but Open it', () => {
