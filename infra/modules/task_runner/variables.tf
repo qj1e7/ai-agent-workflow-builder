@@ -49,11 +49,24 @@ variable "broker_uri" {
 }
 
 variable "auth_token" {
-  description = "The Key Vault secret both n8n and the runner read as N8N_RUNNERS_AUTH_TOKEN: its versionless URL and its resource ID."
+  description = "The Key Vault secret both n8n and the runner read as N8N_RUNNERS_AUTH_TOKEN: its versionless URL and its resource ID. Null when auth_token_value gives the token."
   type = object({
     url   = string
     scope = string
   })
+  default = null
+}
+
+variable "auth_token_value" {
+  description = "The token itself, for a runner that reads no Key Vault, as the simulation n8n's does (ADR 0054). Null when auth_token names the secret."
+  type        = string
+  default     = null
+  sensitive   = true
+
+  validation {
+    condition     = (var.auth_token == null) != (var.auth_token_value == null)
+    error_message = "Give the runner's token one way: auth_token or auth_token_value."
+  }
 }
 
 variable "time_zone" {

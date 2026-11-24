@@ -182,20 +182,20 @@ test('bob sees who may approve and the recent runs, with no Run now, Pause or De
   await context.close()
 })
 
-test('the Software watchlist opens on the Software page, from its row and from its old address', async ({ browser, backend }) => {
+test('the Software watchlist opens on its workflow page, from its row and from its old address', async ({ browser, backend }) => {
   const watchlist = await backend.freshWatchlist('alice')
   const context = await devContext(browser, 'alice')
   const page = await context.newPage()
   await page.goto('/workflows')
   const link = ownLink(rowOf(page, watchlist))
   await expect(link).toContainText('Software watchlist')
-  await expect(link).toHaveAttribute('href', '/software')
+  await expect(link).toHaveAttribute('href', `/workflows/${watchlist}`)
   await link.click()
-  await expect(page).toHaveURL(/\/software$/)
-  await expect(heading(page)).toHaveText('Watchlist')
-  await page.goto(`/workflows/${watchlist}`)
-  await expect(page).toHaveURL(/\/software$/)
-  await expect(heading(page)).toHaveText('Watchlist')
+  await expect(page).toHaveURL(new RegExp(`/workflows/${watchlist}$`))
+  await expect(heading(page)).toHaveText('Software watchlist')
+  await page.goto('/software')
+  await expect(page).toHaveURL(new RegExp(`/workflows/${watchlist}$`))
+  await expect(heading(page)).toHaveText('Software watchlist')
   await context.close()
 })
 

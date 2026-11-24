@@ -18,7 +18,8 @@ import { App } from '../../App'
 import { ApiError, type ApiClient } from '../../api/client'
 import { ApiProvider } from '../../api/context'
 import { createDevSession } from '../../api/session'
-import type { Me, PersonOut, RunView, TroubleshootingOut, UseCaseView, VersionView } from '../../api/types'
+import type { Me, PersonOut, RunView, TroubleshootingOut, UseCaseView, VersionView, WatchlistView } from '../../api/types'
+import statuses from '../../../../contracts/fixtures/watchlist/statuses.json'
 import type { LastRun } from './workflow'
 import { formatterFactory } from './workflow'
 import { saveScheduleOptions } from '../../api/workflowQueries'
@@ -47,9 +48,12 @@ interface Setup {
   readonly advice?: TroubleshootingOut
   /** The versions the platform lists for the workflow at its version. */
   readonly versions?: VersionView[]
+  /** The watchlist as the platform answers it, for the watchlist's own page. */
+  readonly watchlist?: WatchlistView
+  readonly path?: string | undefined
 }
 
-function render({ me = ALICE, useCase: given = AGENTS, runs = [], id, advice, last, versions }: Setup = {}): string {
+function render({ me = ALICE, useCase: given = AGENTS, runs = [], id, advice, last, versions, watchlist, path }: Setup = {}): string {
   const useCase = last && !(given instanceof Error) ? { ...given, last_run: { ...STOPPED, ...last } } : given
   const session = createDevSession(null)
   const scope = session.cacheScope()
@@ -59,6 +63,7 @@ function render({ me = ALICE, useCase: given = AGENTS, runs = [], id, advice, la
   queryClient.setQueryData(['dev-users'], [ALICE, BOB])
   queryClient.setQueryData(['people', scope], TEAM)
   queryClient.setQueryData(['runs', scope], runs)
+  if (watchlist) queryClient.setQueryData(['watchlist', scope], watchlist)
   const stopped = runs.find((run) => run.use_case_id === useCaseId && run.state === 'failed')
   if (advice && stopped?.state === 'failed') queryClient.setQueryData(['troubleshoot', scope, stopped.run_id, stopped.last_seq], advice)
   const key = ['use-case', scope, useCaseId]
@@ -68,7 +73,7 @@ function render({ me = ALICE, useCase: given = AGENTS, runs = [], id, advice, la
   return renderToStaticMarkup(
     <QueryClientProvider client={queryClient}>
       <ApiProvider session={session} platformFetch={fetch} origin="http://portal.test">
-        <MemoryRouter initialEntries={[`/workflows/${useCaseId}`]}>
+        <MemoryRouter initialEntries={[path ?? `/workflows/${useCaseId}`]}>
           <App now={() => NOW} />
         </MemoryRouter>
       </ApiProvider>
@@ -528,12 +533,75 @@ describe('Explain on the workflow page', () => {
 })
 
 describe('the Software watchlist', () => {
-  it('has no workflow page of its own, so its address sends the person to the Software page', () => {
-    for (const me of [ALICE, BOB]) {
-      const main = mainOf(render({ me, useCase: WATCHLIST }))
-      expect(main).not.toMatch(/<h1\b/)
-      expect(buttons(main)).toEqual([])
-    }
+  const watched = { ...(statuses as WatchlistView), use_case_id: WATCHLIST.use_case_id }
+  const own = (extra: Partial<UseCaseView> = {}, me: Me = ALICE, path?: string) => render({ me, useCase: { ...WATCHLIST, ...extra }, watchlist: watched, path })
+
+  it('has a workflow page like any other, with its name, one of the four states and the list of its software', () => {
+    const html = own()
+    expect(text(/<h1\b[^>]*>([\s\S]*?)<\/h1>/.exec(html)?.[1] ?? '')).toBe(WATCHLIST.name)
+    expect(text(mainOf(html))).toContain('On')
+    for (const row of watched.software) expect(text(mainOf(html))).toContain(row.name)
+  })
+
+  it('gives an Operator Run now and Pause as any workflow has them, and no Check now and no Delete', () => {
+    const main = mainOf(own())
+    expect(buttons(main)).toContain('Pause')
+    expect(buttons(main)).toContain('Run now')
+    expect(buttons(main)).not.toContain('Check now')
+    expect(buttons(main)).not.toContain('Delete')
+    expect(main).not.toContain('Delete workflow')
+  })
+
+  it('gives Run now the quiet look, since the list is the page and a waiting yes leads it', () => {
+    expect(mainOf(own())).not.toMatch(/<button[^>]*primary[^>]*>(?:<svg[\s\S]*?<\/svg>)?\s*Run now/)
+  })
+
+  it('shows no Run now while the list is empty, and none for a paused watchlist or an Approver', () => {
+    const empty = { ...watched, software: [] }
+    expect(buttons(mainOf(render({ useCase: WATCHLIST, watchlist: empty })))).not.toContain('Run now')
+    expect(buttons(mainOf(own({ state: 'paused' })))).not.toContain('Run now')
+    expect(buttons(mainOf(own({}, BOB)))).not.toContain('Run now')
+  })
+
+  it('says a stopped check once: one Open the run, not a second from the list', () => {
+    const stopped = { ...watched, last_check: { ...statuses.last_check, state: 'failed' as const, run_id: STOPPED.run_id } } as WatchlistView
+    const html = render({ useCase: WATCHLIST, last: {}, watchlist: stopped })
+    expect(text(mainOf(html)).match(/Open the run/g)).toHaveLength(1)
+  })
+
+  it('says the n8n hold once, in the page’s own banner, and not again under the schedule', () => {
+    const held = { ...WATCHLIST, held_in_n8n: { id: 'carol', name: 'Carol', since: '2026-11-04T05:40:00Z' } } as UseCaseView
+    const html = render({ useCase: held, watchlist: watched })
+    expect(html.match(/data-held/g)).toHaveLength(1)
+    expect(text(mainOf(html))).not.toContain('Can’t change it while Carol has it open in n8n.')
+    expect(buttons(mainOf(html))).not.toContain('Change schedule')
+  })
+
+  it('says it is moving to n8n once', () => {
+    const html = render({ useCase: { ...WATCHLIST, moving_to_n8n: true } as UseCaseView, watchlist: { ...watched, moving_to_n8n: true } })
+    expect(text(mainOf(html)).match(/Moving to n8n after this run\./g)).toHaveLength(1)
+  })
+
+  it('keeps the list in one column, with no empty half beside it', () => {
+    expect(own()).not.toMatch(/class="[^"]*pair/)
+  })
+
+  it('gives an Operator Resume while it is paused, once', () => {
+    const resumes = buttons(mainOf(own({ state: 'paused' }, ALICE))).filter((label) => label === 'Resume')
+    expect(resumes).toHaveLength(1)
+  })
+
+  it('keeps adding and removing software on its page', () => {
+    expect(text(mainOf(own()))).toContain('Add software')
+    const row = watched.software[0]!
+    expect(buttons(mainOf(own({}, ALICE, `/workflows/${WATCHLIST.use_case_id}?software=${row.id}`))).some((label) => label.startsWith('Remove from watchlist'))).toBe(true)
+  })
+
+  it('gives an Approver the list and no button', () => {
+    const main = mainOf(own({}, BOB))
+    expect(buttons(main)).not.toContain('Pause')
+    expect(buttons(main)).not.toContain('Add software')
+    expect(text(main)).toContain(watched.software[0]!.name)
   })
 })
 

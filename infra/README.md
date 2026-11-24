@@ -28,6 +28,7 @@ One environment, `dev`, in the resource group `rg-wab-dev`. The region is Southe
 | Container Apps Job | `bootstrap` | Migrations again, which finds nothing to do on Azure, then n8n owner, workflow load and lint. Runs on every deploy |
 | Managed identities | `id-<app>-wab-dev`, one per app and job | AcrPull on the registry, and Key Vault Secrets User on each secret it reads. platform-api's also has Cosmos DB's built-in Data Contributor role on the `activity` database |
 | Langfuse VM and its parts | `vm-langfuse-wab-dev` and others | Only while `langfuse_enabled` is `true`. Off by default ([Langfuse](#langfuse)) |
+| The simulation n8n and its parts | `cae-wab-dev-sim`, `sim-n8n` and others | Only while `enable_simulation` is `true`. Off by default ([The simulation n8n](#the-simulation-n8n)) |
 
 PostgreSQL 17 matches Compose and is listed as supported in [Azure's version list](https://learn.microsoft.com/en-us/azure/postgresql/configure-maintain/concepts-supported-versions). We did not check that the Southeast Asia region offers it, because nothing here contacts Azure. If the first deploy says it does not, set `version = "16"` in `modules/postgres/main.tf`.
 
@@ -51,6 +52,7 @@ infra/
     langfuse_vm/       the Langfuse VM, its network, storage, alerts and compose file (ADR 0050)
   sql/db-init.sql      the role setup that the db-init job runs
   sql/db-init-langfuse.sql  Langfuse's role, added to the db-init job only while Langfuse is on
+  sql/db-init-simulation.sql  the simulation's two databases, which its own db-init job makes first
   public-images.json   the pins of n8n, its task runner and PostgreSQL. The runner and PostgreSQL are copied into our registry; our n8n image builds on the n8n pin
   bootstrap/           one-time setup by a person: state storage and the deploy identity
   scripts/             the offline checks, and the job runner the deploy workflow uses
@@ -255,6 +257,42 @@ The offline checks cannot show these:
 - A Planner turn in the Portal shows up as a trace, which proves the apps' outbound addresses are the ones the security group lets in.
 - `az vm run-command invoke` works for the deploy identity, and `Perf` in the Log Analytics workspace gets the root disk's `% Used Space` every 5 minutes.
 - The VM's peak memory under `docker stats` stays under 6 GiB. ADR 0050 moves it to `Standard_B4as_v2` if not.
+
+## The simulation n8n
+
+[ADR 0054](../docs/adr/0054-simulation-mode-tries-each-workflow-on-mock-systems-in-a-separate-n8n-before-the-real-test-run.md) tries each workflow version against mock systems in a second n8n, before its test run. **On Azure it is off.** `enable_simulation` defaults to `false`, and then Terraform makes none of it. **Nothing here is applied until the team lead turns it on.** `deploy/compose.simulation.yaml` is the same stack on a laptop and in CI.
+
+### What it creates
+
+With `enable_simulation = true`, `envs/dev/simulation.tf` adds:
+
+- **A virtual network** `vnet-wab-dev-sim`, `10.81.0.0/24`, with one subnet `snet-wab-dev-sim`, `10.81.0.0/27`, for Container Apps alone.
+- **A network security group** on that subnet. Out, it lets through the subnet itself, and port 443 to `MicrosoftContainerRegistry` and `AzureFrontDoor.FirstParty` for Azure's system images, `AzureContainerRegistry` and `Storage.<region>` for our registry, which is Basic and has no private endpoint, `AzureActiveDirectory` for the identities, and `AzureMonitor` for logs, plus port 53 to Azure's DNS. In, it lets through the subnet and Azure's load balancer. It refuses everything else both ways.
+- **A Container Apps environment** `cae-wab-dev-sim` on that subnet, with no public address, and logs to the same workspace. Apps in one environment share its subnet, so nothing of the platform's runs there.
+- **Three apps.** `sim-postgres` runs the PostgreSQL pin, reached on TCP 5432 inside the environment only. Its data lives in the container, so a restart starts it empty. `sim-n8n` runs our n8n image with the platform n8n's guards. Its blocks call `sim-gateway`, which ADR 0054's PR 3 adds. `sim-mock-github` runs mock GitHub.
+- **The task runner** `sim-n8n-runners`, as the platform's: none of n8n's secrets, and no container gets its identity. It takes its token as a value, through azapi's `sensitive_body`, which is never stored or shown.
+- **Two jobs.** `sim-db-init` makes the two databases from `sql/db-init-simulation.sql`, then runs `sql/db-init.sql`. `sim-bootstrap` runs platform-api's bootstrap against the simulation n8n.
+- **Its own keys.** Terraform makes 12 for the simulation alone and keeps them as the apps' and jobs' own secrets. None is in Key Vault, no app or job here reads Key Vault, and each identity here may only pull images.
+
+The service tags cover every Azure customer's registries and storage, not only ours, so the network cannot narrow the simulation to the mocks alone. Isolation rests on holding no real key, and the network rules are a second layer (ADR 0054, spike item S6). `tests/simulation.tftest.hcl` checks both states against mocked providers: off makes nothing, and on holds only the settings it lists, only its own keys, only addresses in its own environment, and only the network rules above, even with the platform's real keys set.
+
+### How a person turns it on
+
+Every step changes cloud resources or the deploy, so a person does it, and only after the team lead's OK.
+
+1. **Push mock GitHub's image.** The deploy pushes our four images only. A follow-up adds `mock-github` with the same tag.
+2. **Pass the variable to the deploy.** `.github/workflows/deploy.yml` does not pass it yet. A follow-up adds `TF_VAR_enable_simulation: ${{ vars.ENABLE_SIMULATION || 'false' }}`.
+3. **Run the two jobs after the apply,** `sim-db-init` then `sim-bootstrap`, as the deploy runs the platform's. They must run again whenever `sim-postgres` restarts.
+4. **Add the simulation gateway** (ADR 0054, PR 3). Until it runs, nothing answers our blocks in the simulation n8n.
+
+Mock Slack is not on Azure. Container Apps cannot answer to `slack.com` without a private DNS zone and a certificate for that name. Slack's block is notice-only, so a run by hand pins it, as the spike found for Teams, Outlook and Gmail.
+
+### What the first apply must confirm
+
+- The environment starts on its subnet behind these rules, and Azure pulls its system images and ours. If either fails, the security group is the first suspect: Azure's list of what a workload profiles environment needs may have changed.
+- Azure takes `Storage.<region>` written with the region's name as Terraform has it, such as `Storage.southeastasia`.
+- From `sim-n8n`, `api.github.com` and the platform's apps are out of reach, and `sim-mock-github` and `sim-postgres` are in reach.
+- What it costs. Three apps stay on all the time, `sim-postgres`, `sim-n8n` and `sim-n8n-runners`, with 1 vCPU and 2 GiB together. Nobody has priced it yet.
 
 ## Cost estimate
 

@@ -227,6 +227,10 @@ _Avoid_: Job, execution (n8n uses "execution" for its own internal runs)
 A run an Operator starts by hand to try a workflow. On a workflow that is on, it asks for a yes and writes like any other run. On a draft, it stops at the approval gate: it asks nobody for a yes and writes nothing (ADR 0044).
 _Avoid_: Dry run
 
+**Simulation n8n**:
+A second n8n, on the same pinned image, node pack and guards as the platform's n8n, where a workflow version is tried against mock systems before its test run. It holds only mock keys, has its own database and encryption key, and reaches only the mocks and the simulation gateway (ADR 0054).
+_Avoid_: Test n8n, sandbox
+
 **Skipped**:
 A run that n8n started while an earlier run of the same workflow was still waiting for a yes. It stops at its first step and does nothing, so Approvers never see two requests for one change. The Portal says "An earlier run is still waiting for a yes."
 

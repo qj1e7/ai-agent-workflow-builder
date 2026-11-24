@@ -445,9 +445,9 @@ describe('the button at the end of a row', () => {
 })
 
 describe('where a row opens', () => {
-  it('opens the Software page for the Software watchlist, as the prototype does', () => {
-    expect(workflowPath(WATCHLIST)).toBe('/software')
-    expect(workflowPath(PAUSED)).toBe('/software')
+  it('opens the workflow page for the Software watchlist, like any other workflow', () => {
+    expect(workflowPath(WATCHLIST)).toBe('/workflows/uc_01JB7')
+    expect(workflowPath(PAUSED)).toBe(`/workflows/${PAUSED.use_case_id}`)
   })
 
   it('opens the workflow page for any other workflow', () => {
@@ -504,11 +504,11 @@ describe('the manage controls of a workflow page', () => {
     expect(placeAfterRedraw(PLACES_IN_PAGE_ORDER, placeOf('pause'), shown({ ...AGENTS, state: 'paused' }))).toBe('switch')
   })
 
-  it('give nobody any for the Software watchlist, which is looked after on the Software page', () => {
-    for (const viewer of [ALICE, BOB, CAROL]) {
-      expect(controlsOf(WATCHLIST, viewer)).toEqual([])
-      expect(controlsOf(PAUSED, viewer)).toEqual([])
-    }
+  it('give the Software watchlist the same Pause and Resume as any workflow, and no Delete, and Run now like any workflow', () => {
+    expect(controlsOf(WATCHLIST, ALICE)).toEqual(['run', 'pause'])
+    expect(controlsOf(PAUSED, ALICE)).toEqual(['resume'])
+    expect(controlsOf({ ...WATCHLIST, state: 'paused' }, ALICE)).toEqual(['resume'])
+    expect(controlsOf(WATCHLIST, BOB)).toEqual([])
   })
 })
 
@@ -778,9 +778,17 @@ describe('the More actions menu', () => {
     expect(menuActionsOf(useCase, ALICE)).toContain('run')
   })
 
-  it('is empty for an Approver who is not an Operator, and for the Software watchlist', () => {
+  it('is empty for an Approver who is not an Operator, and never holds Delete for the Software watchlist', () => {
     expect(menuActionsOf(AGENTS, BOB)).toEqual([])
+    expect(menuActionsOf(WATCHLIST, ALICE)).not.toContain('delete')
+  })
+
+  it('leads the Software watchlist’s page with Run now, scheduled or not, so it is never inside the menu', () => {
+    expect(mainActionOf(WATCHLIST, ALICE)).toBe('run')
+    expect(mainActionOf({ ...WATCHLIST, schedule: null }, ALICE)).toBe('run')
     expect(menuActionsOf(WATCHLIST, ALICE)).toEqual([])
+    expect(mainActionOf(WATCHLIST, BOB)).toBeNull()
+    expect(mainActionOf({ ...WATCHLIST, state: 'paused' }, ALICE)).toBeNull()
   })
 })
 

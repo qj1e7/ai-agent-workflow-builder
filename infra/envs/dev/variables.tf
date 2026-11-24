@@ -611,3 +611,13 @@ variable "langfuse_alert_email" {
     error_message = "langfuse_alert_email must be empty or one email address."
   }
 }
+
+# The simulation n8n (ADR 0054, simulation.tf). Off, Terraform makes none of it. Turning it on
+# also needs the deploy to push mock GitHub's image and run the simulation's jobs, which it does
+# not do yet. infra/README.md lists the steps.
+
+variable "enable_simulation" {
+  description = "True makes the simulation n8n: its own network, Container Apps environment, PostgreSQL, n8n, task runner, mock GitHub and jobs, with keys of its own and none of the platform's. False makes none of them."
+  type        = bool
+  default     = false
+}

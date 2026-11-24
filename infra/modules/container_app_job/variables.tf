@@ -72,6 +72,13 @@ variable "secrets" {
   }))
 }
 
+variable "inline_secrets" {
+  description = "Environment variables kept as the job's own secrets, by variable name, for values Terraform makes that are not in Key Vault, such as the simulation n8n's (ADR 0054)."
+  type        = map(string)
+  default     = {}
+  sensitive   = true
+}
+
 variable "tags" {
   description = "Tags for every resource."
   type        = map(string)

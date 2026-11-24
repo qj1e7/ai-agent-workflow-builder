@@ -143,10 +143,10 @@ describe('the message after a change to the list', () => {
     expect(noticeWords({ kind: 'restored', row: LANGGRAPH }, on)).toBe('Put LangGraph back on the list.')
     expect(noticeWords({ kind: 'gone', name: 'LangGraph' }, on)).toBe('LangGraph was already removed.')
     expect(noticeWords({ kind: 'added', name: 'Redis' }, on)).toBe('Added Redis. It is checked at the next check.')
-    expect(noticeWords({ kind: 'added', name: 'Redis' }, { scheduled: false, paused: false })).toBe('Added Redis. Press Check now to check it.')
+    expect(noticeWords({ kind: 'added', name: 'Redis' }, { scheduled: false, paused: false })).toBe('Added Redis. Press Run now to check it.')
   })
 
-  it('does not point to Check now while the watchlist is paused, since the page hides it', () => {
+  it('does not point to Run now while the watchlist is paused, since the page hides it', () => {
     expect(noticeWords({ kind: 'added', name: 'Redis' }, { scheduled: true, paused: true })).toBe('Added Redis. It is checked at the next check once an Operator resumes the watchlist.')
     expect(noticeWords({ kind: 'added', name: 'Redis' }, { scheduled: false, paused: true })).toBe('Added Redis. It can be checked once an Operator resumes the watchlist.')
   })
@@ -204,19 +204,6 @@ describe('Escape on the Software page', () => {
   })
 })
 
-describe('resuming the watchlist', () => {
-  it('says it resumed, and what checks it next', () => {
-    const h = harness()
-    h.dispatch({ type: 'resumed' })
-    const { notice } = h.state()
-    if (!notice) throw new Error('no notice')
-    expect(noticeWords(notice, { scheduled: true, paused: false })).toBe('Resumed. Checks run on the schedule again.')
-    expect(noticeWords(notice, { scheduled: false, paused: false })).toBe('Resumed. Press Check now to check by hand.')
-    expect(noticeButtons(notice)).toEqual(['Dismiss'])
-    expect(h.state().focusTargetId).toBeNull()
-  })
-})
-
 
 describe('using the new address', () => {
   const FASTAPI = { id: 'sw_fast', name: 'FastAPI', ref: 'tiangolo/fastapi', movedTo: 'fastapi/fastapi' }
@@ -270,7 +257,7 @@ describe('using the new address', () => {
   it('says what changed and when it is read next, and offers Undo and Dismiss', () => {
     const notice = { kind: 'switched', row: FASTAPI, from: 'tiangolo/fastapi', to: 'fastapi/fastapi' } as const
     expect(noticeWords(notice, { scheduled: true, paused: false })).toBe('FastAPI is now read from fastapi/fastapi. It is checked at the next check.')
-    expect(noticeWords(notice, { scheduled: false, paused: false })).toBe('FastAPI is now read from fastapi/fastapi. Press Check now to check it.')
+    expect(noticeWords(notice, { scheduled: false, paused: false })).toBe('FastAPI is now read from fastapi/fastapi. Press Run now to check it.')
     expect(noticeWords(notice, { scheduled: true, paused: true })).toContain('once an Operator resumes the watchlist')
     expect(noticeButtons(notice)).toEqual(['Undo', 'Dismiss'])
   })

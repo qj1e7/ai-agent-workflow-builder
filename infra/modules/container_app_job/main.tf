@@ -43,6 +43,15 @@ resource "azurerm_container_app_job" "this" {
     }
   }
 
+  # The names are plain and the values stay sensitive, as in modules/container_app.
+  dynamic "secret" {
+    for_each = toset(nonsensitive(keys(var.inline_secrets)))
+    content {
+      name  = lower(replace(secret.value, "_", "-"))
+      value = var.inline_secrets[secret.value]
+    }
+  }
+
   template {
     container {
       name    = var.name
@@ -64,6 +73,14 @@ resource "azurerm_container_app_job" "this" {
         content {
           name        = env.key
           secret_name = lower(replace(env.key, "_", "-"))
+        }
+      }
+
+      dynamic "env" {
+        for_each = toset(nonsensitive(keys(var.inline_secrets)))
+        content {
+          name        = env.value
+          secret_name = lower(replace(env.value, "_", "-"))
         }
       }
     }

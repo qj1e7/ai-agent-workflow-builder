@@ -2,7 +2,8 @@ import { isOperator } from '../../api/me'
 import { useMe, useWatchlist } from '../../api/queries'
 import { Button } from '../../ui/Button'
 import { Link } from '../../ui/Link'
-import { CHECKER, checksOnItsOwn, nextCheckWords, NOT_AUTOMATIC, noScheduleWords, REFRESH_MS, scheduleWords, sentenceFor, stateOf, WATCHLIST_PATH } from './software'
+import { CHECKER, checksOnItsOwn, nextCheckWords, NOT_AUTOMATIC, noScheduleWords, REFRESH_MS, scheduleWords, sentenceFor, stateOf } from './software'
+import { workflowPath } from '../workflows/workflow'
 import workflowStyles from '../workflows/Workflows.module.css'
 import styles from './Software.module.css'
 
@@ -43,7 +44,7 @@ export function SoftwarePanel({ id }: { id: string }) {
       <dl className={workflowStyles['factrows']}>
         <div>
           <dt>Checked by</dt>
-          <dd>{checksOnItsOwn(view) ? <Link to={WATCHLIST_PATH}>{CHECKER}</Link> : NOT_AUTOMATIC}</dd>
+          <dd>{checksOnItsOwn(view) ? <Link to={workflowPath(view)}>{CHECKER}</Link> : NOT_AUTOMATIC}</dd>
         </div>
         <div>
           <dt>When</dt>
