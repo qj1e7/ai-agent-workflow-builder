@@ -7,7 +7,7 @@ import { IconChevronLeft } from '../../ui/icons'
 import { backTitle, InSidePanel, isWide, panelKey, wrapTab, type PanelHead, type PanelItem } from '../../ui/sidePanel'
 import { cx } from '../../ui/cx'
 import { SoftwarePanel } from '../software/SoftwarePanel'
-import { softwarePath } from '../software/software'
+import { softwareInWorkflow } from '../software/software'
 import { ExplainPanel } from '../explain/ExplainPanel'
 import { explainPath, explainTitle } from '../explain/explain'
 import { workflowPath } from '../workflows/workflow'
@@ -35,7 +35,7 @@ const TAB_STOPS = 'a[href], button:not([disabled]), input:not([disabled]), selec
 function useHead(item: PanelItem): PanelHead {
   const useCase = useUseCase(item.kind === 'workflow' || item.kind === 'build' ? item.id : '')
   const run = useRun(item.kind === 'run' || item.kind === 'approval' ? item.id : '')
-  const watchlist = useWatchlist({ enabled: item.kind === 'software' })
+  const watchlist = useWatchlist({ enabled: item.kind === 'software' || item.kind === 'watchlist' })
   const home = useHome({ enabled: item.kind === 'connection' })
   switch (item.kind) {
     case 'needs':
@@ -43,7 +43,7 @@ function useHead(item: PanelItem): PanelHead {
     case 'workflows':
       return { title: 'Workflows', page: '/workflows' }
     case 'watchlist':
-      return { title: 'Watchlist', page: '/software' }
+      return { title: 'Watchlist', page: watchlist.data ? workflowPath(watchlist.data) : null }
     case 'build':
       return { title: useCase.data?.name ?? 'Build', page: null }
     case 'workflow': {
@@ -59,7 +59,7 @@ function useHead(item: PanelItem): PanelHead {
     }
     case 'software': {
       const row = watchlist.data?.software.find((software) => software.id === item.id)
-      return row ? { title: row.name, page: softwarePath(row.id) } : { title: 'Software', page: null }
+      return row ? { title: row.name, page: watchlist.data ? softwareInWorkflow(watchlist.data.use_case_id, row.id) : null } : { title: 'Software', page: null }
     }
     case 'connection': {
       const connection = home.data?.connections.find((found) => found.id === item.id)

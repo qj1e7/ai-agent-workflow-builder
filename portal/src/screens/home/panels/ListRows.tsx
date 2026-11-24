@@ -6,7 +6,7 @@ import type { PanelItem } from '../../../ui/sidePanel'
 import { CHECKER, checksOnItsOwn, softwareLine, softwarePath, stateOf, watchRank } from '../../software/software'
 import { ExplainButton } from '../../explain/ExplainButton'
 import { StatusPills } from '../../workflows/Status'
-import { rowLine, SOFTWARE_PAGE, workflowPath } from '../../workflows/workflow'
+import { isWatchlist, rowLine, workflowPath } from '../../workflows/workflow'
 import type { NameOf } from '../../run/words'
 import { decisionSub } from '../decided'
 import styles from './Lists.module.css'
@@ -38,7 +38,7 @@ export function WorkflowRows({ useCases, label, now }: { useCases: readonly UseC
       {useCases.map((useCase) => (
         <Row
           key={useCase.use_case_id}
-          item={workflowPath(useCase) === SOFTWARE_PAGE ? { kind: 'watchlist' } : { kind: 'workflow', id: useCase.use_case_id }}
+          item={isWatchlist(useCase) ? { kind: 'watchlist' } : { kind: 'workflow', id: useCase.use_case_id }}
           to={workflowPath(useCase)}
           name={useCase.name}
           line={rowLine(useCase, now, nameOf)}

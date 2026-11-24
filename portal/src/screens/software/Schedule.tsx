@@ -4,13 +4,9 @@ import { useErrorWords } from '../../api/context'
 import { pressOnce, useLatch } from '../../api/latch'
 import { useSaveSchedule, useTurnOffSchedule } from '../../api/queries'
 import type { Day, ScheduleSaveIn, ScheduleView } from '../../api/types'
-import { useMoveWorkflow, useRereadWorkflow } from '../../api/workflowQueries'
 import { Button } from '../../ui/Button'
 import { ConfirmLine } from '../../ui/ConfirmLine'
-import { useFocusAfterReread } from '../../ui/focus'
-import { IconPlay } from '../../ui/icons'
-import { CHANGED_SINCE_OPENED, changedSinceOpened, rereadWhenOutOfDate } from '../workflows/workflow'
-import { pressResume, SCHEDULE_PLACES_IN_PAGE_ORDER, schedulePlaces, type SchedulePlace } from './resume'
+import { CHANGED_SINCE_OPENED, changedSinceOpened } from '../workflows/workflow'
 import { checkClock, DAYS, dayOption, nextCheckWords, noScheduleWords, ONE_APPROVAL, scheduleOwnerWords, scheduleWords } from './software'
 import styles from './Software.module.css'
 import { teamPlace } from '../workflows/times'
@@ -136,34 +132,6 @@ export function useEditorThatRefocusesItsOpener() {
   return { editing, opener, open, close }
 }
 
-function useResume(useCaseId: string, shown: readonly SchedulePlace[], answeredAt: number, onResumed: () => void) {
-  const move = useMoveWorkflow()
-  const reread = useRereadWorkflow()
-  const latch = useLatch()
-  const words = useErrorWords()
-  const [problem, setProblem] = useState<string | null>(null)
-  const refocus = useFocusAfterReread(SCHEDULE_PLACES_IN_PAGE_ORDER, shown, answeredAt)
-  const rereadIfOutOfDate = rereadWhenOutOfDate(useCaseId, refocus, reread)
-  const press = () =>
-    pressResume(
-      latch,
-      (outcome) => move.mutate({ move: 'resume', useCaseId }, outcome),
-      {
-        resumed: () => {
-          setProblem(null)
-          refocus('resume')
-          onResumed()
-        },
-        refused: (said, error) => {
-          setProblem(said)
-          rereadIfOutOfDate('resume')(error)
-        },
-      },
-      words,
-    )
-  return { press, pending: move.isPending, problem }
-}
-
 interface TurnOffProps {
   readonly confirming: boolean
   readonly busy: boolean
@@ -200,14 +168,11 @@ interface ScheduleProps {
   readonly version: number
   readonly operator: boolean
   readonly paused: boolean
-  readonly useCaseId: string
-  readonly answeredAt: number
-  readonly onResumed: () => void
-  /** Why nothing here can change now: someone has the watchlist open in n8n, so the platform would refuse it. */
-  readonly held: string | null
+  /** Someone has the watchlist open in n8n, so nothing here can change now and the platform would refuse it. The page says who. */
+  readonly held: boolean
 }
 
-export function Schedule({ schedule, version, operator, paused, useCaseId, answeredAt, onResumed, held }: ScheduleProps) {
+export function Schedule({ schedule, version, operator, paused, held }: ScheduleProps) {
   const { editing, opener, open, close } = useEditorThatRefocusesItsOpener()
   const [refused, setRefused] = useState<string | null>(null)
   const stale = () => {
@@ -232,7 +197,6 @@ export function Schedule({ schedule, version, operator, paused, useCaseId, answe
     if (wasConfirming.current && !confirming && fell) (offButton.current ?? opener.current)?.focus()
     wasConfirming.current = confirming
   }, [confirming, opener])
-  const resume = useResume(useCaseId, schedulePlaces({ paused, scheduled: schedule !== null }), answeredAt, onResumed)
   const words = useErrorWords()
   return (
     <section className={styles['schedule']} aria-labelledby="schedule-heading">
@@ -242,15 +206,8 @@ export function Schedule({ schedule, version, operator, paused, useCaseId, answe
       <div className={styles['scheduleText']}>
         <ScheduleNote schedule={schedule} operator={operator} paused={paused} />
       </div>
-      {operator && held ? (
-        <p className="muted">{held}</p>
-      ) : operator && !editing ? (
+      {operator && held ? null : operator && !editing ? (
         <div className={styles['actions']}>
-          {paused ? (
-            <Button data-place="resume" icon={IconPlay} loading={resume.pending} onClick={resume.press}>
-              Resume
-            </Button>
-          ) : null}
           {confirming ? null : (
             <Button
               ref={opener}
@@ -274,11 +231,6 @@ export function Schedule({ schedule, version, operator, paused, useCaseId, answe
             />
           ) : null}
         </div>
-      ) : null}
-      {resume.problem ? (
-        <p className={styles['error']} role="alert">
-          {resume.problem}
-        </p>
       ) : null}
       {off.isError ? (
         <p className={styles['error']} role="alert">

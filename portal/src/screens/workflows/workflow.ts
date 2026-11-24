@@ -225,12 +225,12 @@ export function runsOf(runs: readonly RunView[], useCaseId: string): RunView[] {
 
 const VERSION_CHECKER_CARD = 'crd_version_checker'
 const WATCHLIST_TEMPLATE = 'software_watchlist'
-export const SOFTWARE_PAGE = '/software'
 
-const looksAfterOnSoftwarePage = (useCase: Pick<UseCaseView, 'template'>) => useCase.template === WATCHLIST_TEMPLATE
+/** The Software watchlist is one workflow that checks a list on one schedule. Its page is the workflow page, and its schedule is saved there with the list. */
+export const isWatchlist = (useCase: Pick<UseCaseView, 'template'>): boolean => useCase.template === WATCHLIST_TEMPLATE
 
-export function workflowPath(useCase: Pick<UseCaseView, 'template' | 'use_case_id'>): string {
-  return looksAfterOnSoftwarePage(useCase) ? SOFTWARE_PAGE : `/workflows/${useCase.use_case_id}`
+export function workflowPath(useCase: Pick<UseCaseView, 'use_case_id'>): string {
+  return `/workflows/${useCase.use_case_id}`
 }
 
 export type Control = 'run' | 'pause' | 'resume' | 'delete' | 'test' | 'turn_on'
@@ -243,7 +243,7 @@ export const placeOf = (control: Control): Place => PLACE_OF[control]
 
 /** Only an Operator changes a schedule. The Software watchlist's is changed on the Software page, and one made in n8n is changed in n8n (ENGINE-PLAN section 12). */
 export function mayChangeSchedule(useCase: Pick<UseCaseView, 'template'> & Partial<Pick<UseCaseView, 'made_in_n8n_by'>>, viewer: Viewer): boolean {
-  return viewer.operator && !looksAfterOnSoftwarePage(useCase) && !useCase.made_in_n8n_by
+  return viewer.operator && !isWatchlist(useCase) && !useCase.made_in_n8n_by
 }
 
 /** The toast after a save: when it runs next. The owner is named under When, so the toast does not repeat it. */
@@ -372,7 +372,8 @@ type ActionFacts = Pick<UseCaseView, 'template' | 'state' | 'schedule'> &
  * whose run can't go as asked: a version that needs a fix or has its writes refused, one deleted in n8n, or one that couldn't move to n8n.
  */
 export function mainActionOf(useCase: ActionFacts, viewer: Viewer): 'run' | null {
-  const runs = !useCase.schedule && !needsFix(useCase) && !useCase.deleted_in_n8n_at
+  // The watchlist has one list on one schedule, and Run now is how it is checked by hand, so it leads the page scheduled or not.
+  const runs = (isWatchlist(useCase) || !useCase.schedule) && !needsFix(useCase) && !useCase.deleted_in_n8n_at
   return runs && controlsOf(useCase, viewer).includes('run') ? 'run' : null
 }
 
@@ -393,7 +394,7 @@ export function menuActionsOf(useCase: ActionFacts, viewer: Viewer): readonly Me
  * once a test run passed (ADR 0044). Pausing a draft would change nothing, so it has no Pause.
  */
 export function controlsOf(useCase: Pick<UseCaseView, 'template' | 'state'> & Partial<Pick<UseCaseView, 'last_run' | 'start_refused'>>, viewer: Viewer): readonly Control[] {
-  if (!viewer.operator || looksAfterOnSoftwarePage(useCase)) return []
+  if (!viewer.operator) return []
   const offered: readonly Control[] =
     useCase.state === 'draft'
       ? testPassed(useCase.last_run ?? null)
@@ -402,7 +403,9 @@ export function controlsOf(useCase: Pick<UseCaseView, 'template' | 'state'> & Pa
       : useCase.state === 'paused'
         ? ['resume', 'delete']
         : ['run', 'pause', 'delete']
-  return useCase.start_refused ? offered.filter((control) => control !== 'run' && control !== 'test') : offered
+  const allowed = useCase.start_refused ? offered.filter((control) => control !== 'run' && control !== 'test') : offered
+  // Deleting the workflow would delete the list it checks, so the watchlist keeps no Delete.
+  return isWatchlist(useCase) ? allowed.filter((control) => control !== 'delete') : allowed
 }
 
 /** The agent cards a workflow runs. The Software watchlist's is the Version checker. */

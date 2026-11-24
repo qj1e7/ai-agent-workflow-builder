@@ -123,7 +123,7 @@ function LiveRunPage({ run, fromApproval }: { run: RunView; fromApproval: boolea
 }
 
 function backTo(useCase: UseCaseView | undefined): string {
-  return useCase?.template === 'software_watchlist' ? '/software' : '/workflows'
+  return useCase?.template === 'software_watchlist' ? `/workflows/${useCase.use_case_id}` : '/workflows'
 }
 
 function useFollowUntilScrolled(newest: number, loadedUpTo: number, list: RefObject<HTMLOListElement | null>): void {

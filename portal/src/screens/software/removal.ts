@@ -14,7 +14,6 @@ type Notice =
   | { readonly kind: 'removed'; readonly row: Named }
   | { readonly kind: 'restored'; readonly row: Named }
   | { readonly kind: 'gone'; readonly name: string }
-  | { readonly kind: 'resumed' }
 
 export interface ChangeFeedback {
   readonly notice: Notice | null
@@ -30,7 +29,7 @@ export type FeedbackEvent =
   | { readonly type: 'switched'; readonly row: Named; readonly from: string; readonly to: string }
   | { readonly type: 'switchedBack'; readonly row: Named; readonly to: string }
   | { readonly type: 'failed' | 'refused'; readonly words: string }
-  | { readonly type: 'resumed' | 'dismissed' }
+  | { readonly type: 'dismissed' }
 
 export const NO_FEEDBACK: ChangeFeedback = { notice: null, problem: null, busy: null, focusTargetId: null }
 
@@ -69,8 +68,6 @@ export function changeFeedback(state: ChangeFeedback, event: FeedbackEvent): Cha
       return { ...state, problem: event.words, busy: null, focusTargetId: null }
     case 'refused':
       return { notice: null, problem: event.words, busy: null, focusTargetId: PROBLEM_ID }
-    case 'resumed':
-      return { ...state, notice: { kind: 'resumed' }, problem: null, focusTargetId: null }
     case 'dismissed':
       return { ...state, notice: null, focusTargetId: null }
   }
@@ -83,12 +80,12 @@ interface Checking {
 
 function nextCheckWords({ scheduled, paused }: Checking): string {
   if (paused) return 'It is checked at the next check once an Operator resumes the watchlist.'
-  return scheduled ? 'It is checked at the next check.' : 'Press Check now to check it.'
+  return scheduled ? 'It is checked at the next check.' : 'Press Run now to check it.'
 }
 
 function addedWords(name: string, { scheduled, paused }: Checking): string {
   if (paused) return scheduled ? `Added ${name}. It is checked at the next check once an Operator resumes the watchlist.` : `Added ${name}. It can be checked once an Operator resumes the watchlist.`
-  return scheduled ? `Added ${name}. It is checked at the next check.` : `Added ${name}. Press Check now to check it.`
+  return scheduled ? `Added ${name}. It is checked at the next check.` : `Added ${name}. Press Run now to check it.`
 }
 
 type RemovalNotice = Extract<Notice, { readonly kind: 'removed' | 'restored' | 'gone' }>
@@ -116,8 +113,6 @@ export function noticeWords(notice: Notice, checking: Checking): string {
       return `${notice.row.name} is now read from ${notice.to}. ${nextCheckWords(checking)}`
     case 'switchedBack':
       return `Put back. ${notice.row.name} is read from ${notice.to} again.`
-    case 'resumed':
-      return checking.scheduled ? 'Resumed. Checks run on the schedule again.' : 'Resumed. Press Check now to check by hand.'
   }
 }
 

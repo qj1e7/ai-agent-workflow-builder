@@ -12,9 +12,9 @@ import { dateAndClock } from '../workflows/times'
 import workflowStyles from '../workflows/Workflows.module.css'
 import styles from './Software.module.css'
 
-export function BackToWatchlist() {
+export function BackToWatchlist({ to = WATCHLIST_PATH }: { to?: string | undefined }) {
   return (
-    <Link to={WATCHLIST_PATH} className={workflowStyles['back']}>
+    <Link to={to} className={workflowStyles['back']}>
       <IconChevronLeft size={16} />
       Watchlist
     </Link>
@@ -23,6 +23,8 @@ export function BackToWatchlist() {
 
 interface ItemProps {
   readonly row: WatchedSoftwareView
+  /** Where Watchlist leads back to: the watchlist's workflow page. */
+  readonly back?: string | undefined
   readonly operator: boolean
   readonly scheduled: boolean
   readonly paused: boolean
@@ -57,7 +59,7 @@ export function SoftwareItem(props: ItemProps) {
   const checked = row.checked_at ? `last checked ${dateAndClock(row.checked_at)}${lastCheckStopped ? ', didn’t finish' : ''}` : 'Not checked yet'
   return (
     <div id={rowDomId(row.id)} tabIndex={-1} className={styles['item']} data-status={row.status}>
-      <BackToWatchlist />
+      <BackToWatchlist to={props.back} />
       <div className={workflowStyles['head']}>
         <div>
           <p className={workflowStyles['kind']}>Watchlist</p>
@@ -103,7 +105,7 @@ export function SoftwareItem(props: ItemProps) {
           <dt>Checked by</dt>
           <dd>
             {checkedBy ? (
-              <Link to={WATCHLIST_PATH} className={styles['checker']}>
+              <Link to={props.back ?? WATCHLIST_PATH} className={styles['checker']}>
                 {checkedBy}
               </Link>
             ) : (

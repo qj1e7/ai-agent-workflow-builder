@@ -174,10 +174,10 @@ describe('the Workflows list', () => {
     expect(subOf(render({ me: BOB, useCases: [DECLINED_WATCHLIST] }), 'uc_01JB7')).toBe(subOf(render({ me: ALICE, useCases: [DECLINED_WATCHLIST] }), 'uc_01JB7'))
   })
 
-  it('is one link for the whole row: the workflow’s page, and the Software page for the watchlist', () => {
+  it('is one link for the whole row: the workflow’s page, the watchlist’s too', () => {
     const html = render()
     expect(rowOf(html, 'uc_bugs')).toMatch(/<a[^>]*href="\/workflows\/uc_bugs"[^>]*>/)
-    expect(rowOf(html, 'uc_01JB7')).toMatch(/<a[^>]*href="\/software"[^>]*>/)
+    expect(rowOf(html, 'uc_01JB7')).toMatch(/<a[^>]*href="\/workflows\/uc_01JB7"[^>]*>/)
     expect(rowOf(html, 'uc_bugs')).not.toContain('<button')
   })
 
@@ -293,7 +293,7 @@ describe('Explain beside each row', () => {
     expect(row).toMatch(/<a\b[^>]*href="\/workflows\/uc_bugs"/)
   })
 
-  it('gives the Software watchlist its Explain too, while its row still opens the Software page', () => {
+  it('gives the Software watchlist its Explain too, and its row opens its workflow page', () => {
     const html = render({ useCases: [WAITING_WATCHLIST] })
     expect(explains(html, 'uc_01JB7')).toEqual([[`Explain ${WAITING_WATCHLIST.name}`, '/workflows/uc_01JB7/explain']])
   })
