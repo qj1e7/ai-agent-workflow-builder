@@ -37,6 +37,26 @@ The copier checks the copy every 5 seconds, even when nothing new is logged. If 
 
 At each start, the emulator's own start script upgrades its packages from packages.microsoft.com (`tdnf distro-sync`). That needs the internet, which DevNet does not have. It also writes about 585 MB into the container, and it means the image digest no longer pins what runs. So compose points packages.microsoft.com at 127.0.0.1 for the `cosmos` service (`extra_hosts`). The upgrade then finds nothing to do, and the emulator runs exactly the pinned image. CI's emulator gets the same mapping.
 
+## The simulation n8n
+
+The simulation n8n (ADR 0054) is a second n8n where a workflow version will be tried against mock systems before its test run. `compose.simulation.yaml` runs it as a stack of its own, never as part of the platform's:
+
+- its own PostgreSQL, in memory, so it keeps nothing after it stops;
+- our n8n image and its task runner, with the platform n8n's guards and bootstrap, its own encryption key, node key and start secret, and only mock keys;
+- mock GitHub, and mock Slack under the name `slack.com`, as in `compose.e2e.yaml`.
+
+Both of its networks are internal and nothing publishes a port, so nothing in it reaches the internet, the host or the platform's stack. Our blocks in it call `http://gateway:8600`, where the simulation gateway goes in ADR 0054's PR 3. Until then nothing answers there.
+
+```sh
+scripts/simulation.sh up      # makes up every key, starts it and waits for bootstrap
+scripts/simulation.sh check   # checks it holds no real key and reaches only the mocks
+scripts/simulation.sh down    # removes its containers, networks and volumes
+```
+
+`scripts/simulation.sh` makes up each key with `openssl` at every start and never writes one to a file. It never reads `deploy/.env`. The compose project is `wab-sim` unless `SIM_PROJECT` names another, and `SIM_BUILD=0` starts from the images an earlier start built. It builds the platform's images from the same sources under their own tag, `sim`, so starting it never replaces an image the platform's stack runs. Docker shares the layers that match, so the extra disk is mostly what differs between the two builds.
+
+`scripts/simulation_isolation.py` is the check. It reads this file as compose renders it, and, with `--project`, the running stack: each service's settings against an allow list, the keys n8n holds, n8n's routes out, and who sits on its networks. It compares every value with the platform's keys in `deploy/.env`. CI runs it in the `checks` job, and starts the stack and runs it there in the `simulation` job.
+
 ## Langfuse
 
 The agent runtime traces each Planner turn and agent task in Langfuse, which we host ourselves (ADR 0050). Langfuse is off by default, behind the `langfuse` profile. Its images are about 2.6 GB on disk, and the profile peaked at 3.3 GiB of memory beside the stack's 1.3 GiB, so check `docker system df` first.

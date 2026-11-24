@@ -9,6 +9,10 @@
 # without it, so the whole app is one azapi_resource.
 #
 # It has no ingress: the runner calls n8n's broker, and nothing calls the runner.
+#
+# The simulation n8n's runner (ADR 0054) reads no Key Vault, so its token comes as a value. It goes
+# in sensitive_body, which azapi sends but never stores or shows, and body keeps only the secret's
+# name, which is all Azure gives back.
 
 module "identity" {
   source = "../workload_identity"
@@ -17,7 +21,7 @@ module "identity" {
   location            = var.location
   resource_group_name = var.resource_group_name
   registry_id         = var.registry_id
-  secret_scopes       = { N8N_RUNNERS_AUTH_TOKEN = var.auth_token.scope }
+  secret_scopes       = var.auth_token == null ? {} : { N8N_RUNNERS_AUTH_TOKEN = var.auth_token.scope }
   tags                = var.tags
 }
 
@@ -49,9 +53,12 @@ resource "azapi_resource" "this" {
         registries = [
           { server = var.registry_server, identity = module.identity.id },
         ]
-        secrets = [
-          { name = local.token_secret, keyVaultUrl = var.auth_token.url, identity = module.identity.id },
-        ]
+        secrets = concat(
+          var.auth_token == null ? [] : [
+            { name = local.token_secret, keyVaultUrl = var.auth_token.url, identity = module.identity.id },
+          ],
+          var.auth_token == null ? [{ name = local.token_secret }] : [],
+        )
       }
       template = {
         containers = [
@@ -70,6 +77,14 @@ resource "azapi_resource" "this" {
         ]
         # The launcher holds the broker connection, so it never scales to zero.
         scale = { minReplicas = 1, maxReplicas = 1 }
+      }
+    }
+  }
+
+  sensitive_body = var.auth_token_value == null ? null : {
+    properties = {
+      configuration = {
+        secrets = [{ name = local.token_secret, value = var.auth_token_value }]
       }
     }
   }
