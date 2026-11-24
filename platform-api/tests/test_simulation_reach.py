@@ -13,7 +13,7 @@ from typing import Any
 import httpx
 import pytest
 
-from platform_api.orchestration.n8n import ExecutionRecord
+from platform_api.orchestration.n8n import ExecutionRecord, NodeRun, node_runs
 from platform_api.orchestration.reach import named, reached
 from platform_api.orchestration.recorded_samples import MADE_UP, RecordedSamples
 from platform_api.orchestration.scenarios import GitHubPlay, ScenarioSpec, check, stage
@@ -156,9 +156,11 @@ async def test_each_run_names_what_it_reached_and_the_simulation_what_the_versio
     assert simulation.named == (
         "agent:release_checker",
         "mock:github",
+        "outbound:GitHub releases@n8n-nodes-base.github",
         "propose:jira.create_ticket",
         "tell:channel",
     )
+    assert not any(word.startswith("unknown:") for r in simulation.results for word in r.reached)
 
 
 def _run(*calls: tuple[str, str, dict[str, Any]]) -> SimulatedRun:
@@ -183,8 +185,18 @@ def _run(*calls: tuple[str, str, dict[str, Any]]) -> SimulatedRun:
     )
 
 
-def _ended(error: str | None = None, ran: dict[str, str] | None = None) -> ExecutionRecord:
-    return ExecutionRecord("1", "w", "error", "manual", None, "v1", "n", None, error, ran or {})
+def _ended(
+    error: str | None = None,
+    ran: dict[str, str] | None = None,
+    nodes: dict[str, NodeRun] | None = None,
+) -> ExecutionRecord:
+    """n8n's record, with each block's last try. Unless a test gives them, each try holds no
+    error."""
+    ran = ran or {}
+    tries = {name: NodeRun(state) for name, state in ran.items()} if nodes is None else nodes
+    return ExecutionRecord(
+        "1", "w", "error", "manual", None, "v1", "n", None, error, ran, None, tries
+    )
 
 
 def test_a_system_an_expression_picks_is_reached_but_never_named() -> None:
@@ -218,3 +230,115 @@ def test_a_pinned_block_reaches_nothing_and_a_block_that_never_ran_reaches_nothi
     assert reached(plan, None, _ended(ran={"Read the issue": "success"})) == ()
     assert reached(plan, None, _ended(ran={"GitHub releases": "success"})) == ("mock:github",)
     assert "mock:jira" not in named(plan), "a pinned block never runs"
+
+
+# Fail closed: each of n8n's own blocks that calls out, from its own try in the run data
+
+GITHUB = "GitHub releases"
+
+
+def _github_ran(*errors: str, state: str = "success", answered: bool = False) -> ExecutionRecord:
+    return _ended(ran={GITHUB: state}, nodes={GITHUB: NodeRun(state, errors, answered=answered)})
+
+
+def test_a_block_that_went_on_past_its_failure_still_counts_the_address_it_tried() -> None:
+    """With continueOnFail or onError, the run goes on, and the execution's own error is empty:
+    the error stands in the block's own try, or in the items it passed on."""
+    went_on = github_read()
+    went_on["continueOnFail"] = True
+    plan = planned(release_check([went_on]))
+    ended = _github_ran("getaddrinfo ENOTFOUND evil.example")
+    assert ended.error is None
+    assert reached(plan, None, ended) == ("host:evil.example", "mock:github")
+
+
+def test_a_successful_call_to_an_address_a_block_names_counts_as_reached_and_named() -> None:
+    elsewhere = github_read()
+    elsewhere["parameters"]["baseUrl"] = "https://evil.example/api/v3"
+    plan = planned(release_check([elsewhere]))
+    assert "host:evil.example" in named(plan)
+    assert reached(plan, None, _github_ran()) == ("host:evil.example", "mock:github")
+
+
+def test_an_address_an_expression_picks_is_unknown_so_it_widens() -> None:
+    picked = github_read()
+    picked["parameters"]["baseUrl"] = "={{ $json.where }}"
+    plan = planned(release_check([picked]))
+    assert f"unknown:{GITHUB}" in named(plan)
+    assert f"unknown:{GITHUB}" in reached(plan, None, _github_ran())
+
+
+def test_an_error_the_platform_can_t_read_is_unknown_so_it_widens() -> None:
+    plan = planned(release_check([github_read()]))
+    odd = _github_ran("Something went wrong in a way nobody wrote down", state="error")
+    assert reached(plan, None, odd) == ("mock:github", f"unknown:{GITHUB}")
+
+
+def test_an_error_that_came_with_an_answer_reached_the_block_s_own_mock() -> None:
+    plan = planned(release_check([github_read()]))
+    answered = _github_ran("The resource you are requesting could not be found", answered=True)
+    assert reached(plan, None, answered) == ("mock:github",)
+
+
+def test_a_dropped_connection_the_scenario_played_reached_the_block_s_own_mock() -> None:
+    plan = planned(release_check([github_read()]))
+    dropped = _github_ran("The connection was aborted", state="error")
+    assert reached(plan, None, dropped, failing=frozenset({GITHUB})) == ("mock:github",)
+    assert reached(plan, None, dropped) == ("mock:github", f"unknown:{GITHUB}")
+
+
+def test_a_block_of_n8n_s_with_no_try_in_the_run_data_is_unknown() -> None:
+    plan = planned(release_check([github_read()]))
+    missing = _ended(ran={GITHUB: "success"}, nodes={})
+    assert reached(plan, None, missing) == ("mock:github", f"unknown:{GITHUB}")
+
+
+def test_each_block_of_n8n_s_that_calls_out_is_named_so_a_new_one_widens() -> None:
+    plan = planned(release_check([github_read(), jira_read()]))
+    assert {w for w in named(plan) if w.startswith("outbound:")} == {
+        "outbound:GitHub releases@n8n-nodes-base.github",
+        "outbound:Read the issue@n8n-nodes-base.jira",
+    }
+
+
+def test_n8n_s_run_data_gives_each_block_s_state_errors_and_whether_an_answer_came() -> None:
+    run_data = {
+        "Start from the Portal": [{"executionStatus": "success"}],
+        GITHUB: [
+            {"executionStatus": "error"},
+            {
+                "executionStatus": "error",
+                "error": {
+                    "message": "The resource you are requesting could not be found",
+                    "description": "Not Found",
+                    "httpCode": "404",
+                },
+            },
+        ],
+        "Went on": [
+            {
+                "executionStatus": "success",
+                "data": {
+                    "main": [
+                        [
+                            {"json": {"error": "getaddrinfo ENOTFOUND evil.example"}},
+                            {"json": {"error": {"message": "connect ECONNREFUSED 10.0.0.5:443"}}},
+                            {"json": {"tag_name": "1.2.16"}},
+                        ]
+                    ]
+                },
+            }
+        ],
+    }
+    assert node_runs(run_data) == {
+        "Start from the Portal": NodeRun("success"),
+        GITHUB: NodeRun(
+            "error",
+            ("The resource you are requesting could not be found", "Not Found"),
+            answered=True,
+        ),
+        "Went on": NodeRun(
+            "success",
+            ("getaddrinfo ENOTFOUND evil.example", "connect ECONNREFUSED 10.0.0.5:443"),
+        ),
+    }

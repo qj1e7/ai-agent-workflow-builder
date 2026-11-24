@@ -219,6 +219,31 @@ def test_a_system_the_stopped_version_names_is_no_widening():
     assert isinstance(run.fixing.outcome, HandedIn)
 
 
+def test_a_reach_the_platform_couldn_t_read_widens_even_when_the_stopped_version_had_it():
+    """Fail closed: an unknown is never matched against the stopped version's."""
+    unknown = "unknown:GitHub releases"
+    run = run_case(
+        case(
+            RENAMED,
+            named=[unknown],
+            baseline_reached=[unknown],
+            reached=[{"New release": [unknown]}],
+        )
+    )
+    outcome = run.fixing.outcome
+    assert isinstance(outcome, HandedBack) and outcome.why == "widened"
+    assert outcome.rounds[-1].widened_by == "adds_a_system"
+
+
+def test_a_block_of_n8n_s_that_calls_out_and_the_stopped_version_lacks_widens_the_fix():
+    old = "outbound:GitHub releases@n8n-nodes-base.github"
+    new = "outbound:Post to Slack@n8n-nodes-base.slack"
+    run = run_case(case(RENAMED, named=[old], draft_named=[old, new]))
+    outcome = run.fixing.outcome
+    assert isinstance(outcome, HandedBack) and outcome.why == "widened"
+    assert run.fakes.revisions.stored == []
+
+
 # Seconds and dollars
 
 

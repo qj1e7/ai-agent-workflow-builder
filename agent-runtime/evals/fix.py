@@ -269,6 +269,8 @@ class FixCase(Case):
     """What the stopped version reached in every scenario."""
     named: list[str] = []
     """The systems the stopped version names."""
+    draft_named: list[str] | None = None
+    """What each draft names, when not what the stopped version names."""
     checks: list[bool] = []
     replies: list[RecordedTurn]
     seconds: dict[str, float] = {}
@@ -467,7 +469,8 @@ class FakeSimulation:
             for name, said in graded.items()
             if name in asked
         ]
-        return Simulated(results=results, named=list(self.case.named))
+        named = self.case.named if self.case.draft_named is None else self.case.draft_named
+        return Simulated(results=results, named=list(named))
 
 
 class FakeChecker:
