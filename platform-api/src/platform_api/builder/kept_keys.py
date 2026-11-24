@@ -9,7 +9,7 @@ would send it on. So a value counts as a key by where it stands as well as by it
 - in code or a free-text body (`CARRIES_KEYS`), which can hold anything, so it is kept out whole;
 - with a key's shape (`KEY_SHAPE`), or after a key's name, as in token=abc or "Authorization":
   "Basic abc";
-- in an address with a name and password, or a key in its query;
+- in an address with a user name or a password, or a key in its query;
 - in JSON text that holds one, also inside an expression.
 
 Each such value becomes `KEPT`, which is no setting's placeholder, so the drafter leaves it where
@@ -178,7 +178,7 @@ class _Walk:
         return text
 
     def _holds_a_key(self, text: str) -> bool:
-        """A key's shape, a key's name with a value after it, an address with a name and
+        """A key's shape, a key's name with a value after it, an address with a user name, a
         password or a key in it, or JSON that holds one."""
         if KEY_SHAPE.search(text):
             return True
@@ -186,7 +186,9 @@ class _Walk:
             return True
         for found in _URL.finditer(text):
             parts = urlsplit(found.group())
-            if parts.password and not PLACEHOLDER.fullmatch(parts.password):
+            if (parts.username and not PLACEHOLDER.fullmatch(parts.username)) or (
+                parts.password and not PLACEHOLDER.fullmatch(parts.password)
+            ):
                 return True
             if any(
                 names_a_secret(name) and not PLACEHOLDER.fullmatch(said)
