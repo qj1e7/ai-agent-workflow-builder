@@ -86,6 +86,8 @@ class Graded:
     """The block that stopped the run, when one did."""
     plays: tuple[Played, ...] = ()
     """How the scenario played each block other than as recorded."""
+    reached: tuple[str, ...] = ()
+    """What the run reached, from the gateway's record and n8n's (reach.py)."""
 
 
 @dataclass(frozen=True)

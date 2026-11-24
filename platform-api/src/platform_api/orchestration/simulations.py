@@ -20,13 +20,14 @@ import asyncio
 import logging
 import time
 from collections.abc import Awaitable, Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Final, Literal, Protocol
 
 import httpx
 
 from platform_api.orchestration.mock_setup import BlockMode, MockSetups, SetupRefused
 from platform_api.orchestration.n8n import ExecutionRecord, N8nError
+from platform_api.orchestration.reach import named, reached
 from platform_api.orchestration.recorded_samples import RecordedSamples
 from platform_api.orchestration.scenario_grades import (
     ENDED,
@@ -85,6 +86,8 @@ class Simulation:
     scenarios_from: Literal["given", "templates"] = "templates"
     refused: tuple[str, ...] = ()
     """The problems of the scenarios given, when code's templates ran in their place."""
+    named: tuple[str, ...] = ()
+    """What the version names in plain values (reach.py)."""
 
     @property
     def tried(self) -> int:
@@ -154,7 +157,7 @@ class Simulations:
         found = coverage(plan, results, kinds_that_apply(plan))
         blocks = tuple(BlockMode(b.name, b.node_type, b.mode, b.mock, b.why) for b in plan.blocks)
         source: Literal["given", "templates"] = "given" if given else "templates"
-        return Simulation(tuple(results), found, blocks, source, refused)
+        return Simulation(tuple(results), found, blocks, source, refused, named(plan))
 
     async def _one(
         self, version: Mapping[str, Any], plan: SimulationPlan, staged: Staged
@@ -172,7 +175,9 @@ class Simulations:
             item = {"nonce": run.nonce, "kind": "test", "workflow_id": copied.workflow_id}
             execution = await self._n8n.run_draft(copied.workflow_id, item)
             ended = await self._ended(execution)
-            return grade(plan, staged, self._calls.run(run.nonce), ended)
+            record = self._calls.run(run.nonce)
+            graded = grade(plan, staged, record, ended)
+            return replace(graded, reached=reached(plan, record, ended))
         finally:
             try:
                 await self._remove(copied.workflow_id)

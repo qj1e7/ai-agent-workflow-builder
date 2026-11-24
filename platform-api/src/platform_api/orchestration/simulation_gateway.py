@@ -348,6 +348,13 @@ class ResultOut(WireModel):
     plays: list[PlayOut] = Field(
         description="How the scenario played each block other than as recorded."
     )
+    reached: list[str] = Field(
+        default_factory=list[str],
+        description="What the run reached, from the gateway's record and n8n's: the source, card, "
+        "change or place to tell each of our blocks asked for, each mock a block of n8n's ran "
+        "against, and any address n8n could not reach, such as read:github_releases, mock:github "
+        "or host:example.com.",
+    )
 
 
 class CoverageOut(WireModel):
@@ -365,6 +372,11 @@ class SimulationOut(WireModel):
     scenarios_from: Literal["given", "templates"]
     refused: list[str] = Field(
         description="Why the scenarios given didn't fit, when code's templates ran in their place."
+    )
+    named: list[str] = Field(
+        default_factory=list[str],
+        description="What the version names in plain values, in the words `reached` uses. An "
+        "expression names nothing, and a pinned block never runs.",
     )
 
 
@@ -456,6 +468,7 @@ def _result_out(r: Graded) -> ResultOut:
         ending=r.ending,
         stopped_at=r.stopped_at,
         plays=[PlayOut(block=p.block, serve=p.serve, vary=list(p.vary)) for p in r.plays],
+        reached=list(r.reached),
     )
 
 
@@ -472,6 +485,7 @@ def _simulation_out(done: Simulation) -> SimulationOut:
         blocks=[BlockModeOut(**asdict(block)) for block in done.blocks],
         scenarios_from=done.scenarios_from,
         refused=list(done.refused),
+        named=list(done.named),
     )
 
 
