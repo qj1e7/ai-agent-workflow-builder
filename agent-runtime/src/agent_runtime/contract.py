@@ -576,9 +576,13 @@ class ExampleSpec(WireModel):
 
 class KeyShapes(WireModel):
     """The shapes of keys the masker knows, as regular expressions. platform-api refuses each
-    of them in a person's words, answers and what comes back from n8n (ADR 0051)."""
+    of them in a person's words, answers and what comes back from n8n (ADR 0051). For a fix, it
+    puts `kept` where a key stood in the plan it sends, by its shape or by a name that ends as
+    one of `secret_name_ends` (ADR 0055)."""
 
     shapes: list[str]
+    kept: str
+    secret_name_ends: list[str]
 
 
 class CapabilityList(WireModel):

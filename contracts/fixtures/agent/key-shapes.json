@@ -29,5 +29,23 @@
     "-----BEGIN [A-Z ]*PRIVATE KEY-----(?:[^\"\\\\-]|\\\\(?!\")|-(?!----END))*+(?:-----END [A-Z ]*PRIVATE KEY-----|(?:(?:\\\\[nr]|[\\s\",+])++[A-Za-z0-9+/=]{16,}+(?!\\\\?\"\\s*:))*+)",
     "(?i:bearer)\\s+(?=[A-Za-z._~\\-]*[0-9+/=]|[A-Za-z]{24})[A-Za-z0-9._~+/=\\-]{8,}",
     "(?i:basic)\\s+(?=[A-Za-z]*[0-9+/=])[A-Za-z0-9+/=]{8,}"
+  ],
+  "kept": "<<kept by the platform>>",
+  "secret_name_ends": [
+    "apikey",
+    "accesskey",
+    "privatekey",
+    "secret",
+    "password",
+    "passwd",
+    "passphrase",
+    "token",
+    "bearer",
+    "authorization",
+    "cookie",
+    "credential",
+    "credentials",
+    "signature",
+    "sessionid"
   ]
 }

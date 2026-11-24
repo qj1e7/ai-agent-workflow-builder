@@ -52,6 +52,7 @@ type FixFound = Literal[
     "confirmed",
     "not_in_version",
     "not_where_it_stopped",
+    "too_wide",
     "inside",
     "widened",
     "not_in_catalogue",
@@ -76,6 +77,7 @@ type FixWidening = Literal[
 type FixHandBack = Literal[
     "no_cause",
     "no_progress",
+    "no_answer",
     "widened",
     "round_limit",
     "handoff_limit",
@@ -86,7 +88,7 @@ type FixHandBack = Literal[
 
 FOUND_BY: Final[Mapping[FixHandedTo, frozenset[FixFound]]] = {
     "troubleshooter": frozenset(
-        {"confirmed", "not_in_version", "not_where_it_stopped", "no_answer"}
+        {"confirmed", "not_in_version", "not_where_it_stopped", "too_wide", "no_answer"}
     ),
     "fix_drafter": frozenset({"inside", "widened", "not_in_catalogue", "no_answer"}),
     "scenario_writer": frozenset({"kept", "refused", "no_answer"}),
@@ -218,6 +220,7 @@ WIDENED: Final[Mapping[FixWidening, str]] = {
 HANDED_BACK: Final[Mapping[FixHandBack, str]] = {
     "no_cause": "The cause couldn't be confirmed.",
     "no_progress": "A round made no progress.",
+    "no_answer": "The Fix drafter didn't answer.",
     "widened": "The change went further than the failed part.",
     "round_limit": f"I reached the limit of {MOST_ROUNDS} rounds.",
     "handoff_limit": f"I reached the limit of {MOST_HANDOFFS} hand-offs.",
@@ -249,6 +252,11 @@ def _handoff_words(data: FixHandoffData) -> str:
             return f"I named {_blocks(data.blocks)}, but the run didn't stop there."
         case "troubleshooter", "not_in_version":
             return "I named a block that isn't in this workflow, so the platform didn't use it."
+        case "troubleshooter", "too_wide":
+            return (
+                f"I named more than {MOST_BLOCKS} blocks, too many for one fix, so the platform "
+                "didn't use them."
+            )
         case "troubleshooter", _:
             return "I looked for the cause, but got no answer."
         case "fix_drafter", found:

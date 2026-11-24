@@ -357,23 +357,30 @@ def drafting(
     chat_for: ChatFor,
     catalogue: Catalogue,
     clock: Callable[[], float] = time.monotonic,
+    *,
+    asked: str | None = None,
+    most_seconds: float = MOST_SECONDS,
+    go_on: Callable[[], bool] = lambda: True,
 ) -> tuple[WorkflowDraftResult, Draft]:
-    """The answer, with the draft as it went, which the eval reads."""
+    """The answer, with the draft as it went, which the eval reads. `asked` stands in for the
+    person's part, as the Fix drafter's ask does. The draft stops at `most_seconds`, at most
+    `MOST_SECONDS`, and before a turn once `go_on` says no, as when a fix's cost cap is spent."""
     draft = Draft(catalogue, request)
-    asked = person_part(request)
+    asked = person_part(request) if asked is None else asked
     # Everything the model would read: the words, the facts and the current plan.
     if KEY_SHAPES.search(asked):
         return KeyPasted(), draft
+    most_seconds = min(most_seconds, MOST_SECONDS)
     started = clock()
     try:
-        model = chat_for(TURN_TIMEOUT_SECONDS)
+        model = chat_for(max(0.0, min(TURN_TIMEOUT_SECONDS, most_seconds)))
         bound = _bound(model)
         system = _system(model)
     except Exception as error:
         log.warning("drafter: the model could not be built: %s", type(error).__name__)
         return problem_for(error, runs_fall_back=False), draft
     messages: list[BaseMessage] = [HumanMessage(asked)]
-    while draft.turns < MOST_TURNS and clock() - started < MOST_SECONDS:
+    while draft.turns < MOST_TURNS and clock() - started < most_seconds and go_on():
         try:
             reply = bound.invoke([system, *messages])
         except Exception as error:

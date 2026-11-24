@@ -1124,6 +1124,7 @@
         "confirmed",
         "not_in_version",
         "not_where_it_stopped",
+        "too_wide",
         "inside",
         "widened",
         "not_in_catalogue",
@@ -1140,6 +1141,7 @@
       "enum": [
         "no_cause",
         "no_progress",
+        "no_answer",
         "widened",
         "round_limit",
         "handoff_limit",

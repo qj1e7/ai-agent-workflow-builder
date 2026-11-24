@@ -1,12 +1,17 @@
 """What the coordinator hands work to (ADR 0055, section 3), each behind a port.
 
 The AI troubleshooter, the Fix drafter and the Scenario writer are sub-agents. The simulation, the
-scope check, the checker and the store of revisions are code. In PR 3 each one is a fake: the Fix
-drafter and the scope check join in PR 4, and the simulation and the checker in PR 5. None of them
-writes to a real system or a live workflow. Each takes data and gives data back, and the
-coordinator's code checks what comes back before the model reads it."""
+scope check, the checker and the store of revisions are code. The Fix drafter
+(`fixing/drafter.py`) and the scope check (`fixing/scope.py`) are built. The simulation and the
+checker join in PR 5. None of them writes to a real system or a live workflow. Each takes data and
+gives data back, and the coordinator's code checks what comes back before the model reads it.
 
-from collections.abc import Sequence
+Every port but the scope check, which is pure code, gets `seconds`: what is left before the fix's
+deadline. It must stop by then. The coordinator stops waiting for it at the deadline anyway. The
+Fix drafter also gets `dollars_left`, what is left of the fix's cost cap as code counts it while
+the drafter works, and stops when nothing is left."""
+
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Annotated, Literal, Protocol
 
@@ -70,7 +75,7 @@ type NotDrafted = Literal["not_in_catalogue", "no_answer"]
 
 @dataclass(frozen=True)
 class Inside:
-    """The change stays inside the failed part. `changed` names the blocks it changed."""
+    """The change stays inside the blocks named. `changed` names the blocks it changed."""
 
     changed: tuple[str, ...]
 
@@ -92,44 +97,53 @@ class StoredRevision:
 class Troubleshooter(Protocol):
     """Names the cause and the failed part of the stopped run, or looks again at one block."""
 
-    def find_cause(self, look_at: str | None) -> CauseFound | None: ...
+    def find_cause(self, look_at: str | None, seconds: float) -> CauseFound | None: ...
 
 
 class FixDrafter(Protocol):
-    def draft(self, request: FixDraftRequest) -> WorkflowPlan | NotDrafted: ...
+    """Drafts the stopped version again, changing only `request.change_only`."""
+
+    def draft(
+        self, request: FixDraftRequest, seconds: float, dollars_left: Callable[[], float]
+    ) -> WorkflowPlan | NotDrafted: ...
 
 
 class ScenarioWriter(Protocol):
     """Writes scenarios for the version, or more that reach the blocks in `cover`."""
 
-    def write(self, version: WorkflowPlan, cover: Sequence[str]) -> list[Scenario] | None: ...
+    def write(
+        self, version: WorkflowPlan, cover: Sequence[str], seconds: float
+    ) -> list[Scenario] | None: ...
 
 
 class Simulation(Protocol):
     """Runs scenarios on a version in the simulation n8n, which holds no real key (ADR 0054)."""
 
-    def run(self, version: WorkflowPlan, scenarios: Sequence[Scenario]) -> Simulated | None: ...
+    def run(
+        self, version: WorkflowPlan, scenarios: Sequence[Scenario], seconds: float
+    ) -> Simulated | None: ...
 
 
 class ScopeCheck(Protocol):
-    """Code's check that a fixed version changes only the failed part of the stopped one."""
+    """Code's check that a fixed version changes only the blocks the coordinator named, which are
+    all in the failed part of the stopped one."""
 
     def check(
-        self, stopped: WorkflowPlan, fixed: WorkflowPlan, failed_part: Sequence[str]
+        self, stopped: WorkflowPlan, fixed: WorkflowPlan, change_only: Sequence[str]
     ) -> Scope: ...
 
 
 class Checker(Protocol):
     """The platform's grade of a version: the node allow list and the safety checker."""
 
-    def passes(self, version: WorkflowPlan) -> bool: ...
+    def passes(self, version: WorkflowPlan, seconds: float) -> bool: ...
 
 
 class Revisions(Protocol):
     """Stores a fixed version as a new revision of the workflow, which waits for a yes. It turns
     nothing on and approves nothing."""
 
-    def store(self, fixed: WorkflowPlan) -> StoredRevision: ...
+    def store(self, fixed: WorkflowPlan, seconds: float) -> StoredRevision: ...
 
 
 @dataclass(frozen=True)
