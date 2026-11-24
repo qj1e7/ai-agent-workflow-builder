@@ -178,6 +178,11 @@ run "n8n_and_bootstrap_get_the_same_guards_and_n8n_has_no_allow_list" {
     condition     = local.internal_ports.n8n == [5679] && local.apps.n8n.env.N8N_RUNNERS_BROKER_LISTEN_ADDRESS == "0.0.0.0"
     error_message = "n8n's broker must listen on 5679, open only inside the environment."
   }
+
+  assert {
+    condition     = local.apps.n8n.env.WAB_REQUEST_TIMEOUT_SECONDS == "30"
+    error_message = "n8n's own blocks must give up on a read after 30 seconds a try, as platform-api's stop words say (ADR 0056)."
+  }
 }
 
 run "the_task_runner_holds_none_of_n8n_s_secrets_and_no_identity" {

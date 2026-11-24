@@ -37,6 +37,7 @@ UNREACHABLE = "The host is unreachable, perhaps the server is offline"
 FACTS = ExecutionFacts("wf1", "trigger", None, None, "v1")
 RETRIED: dict[str, Any] = {"retryOnFail": True, "maxTries": 3, "waitBetweenTries": 2000}
 NO_ANSWER_CAUSE = "Nothing came back in that time, so it may be down, busy or out of reach."
+HTTP = "n8n-nodes-base.httpRequest"
 
 
 def block(
@@ -70,6 +71,7 @@ GITHUB = block(
     **RETRIED,
 )
 JIRA = block("Find tickets", "n8n-nodes-base.jira", 1, {"resource": "issue", "operation": "getAll"})
+"""A search, which n8n 2.42.6's Jira block sends as a POST (Jira.node.js, /api/2/search/jql)."""
 
 
 def test_the_per_try_limit_is_thirty_seconds():
@@ -80,6 +82,45 @@ def test_github_that_does_not_answer_is_named_with_its_block_the_limit_and_the_t
     assert stopped(GITHUB, ABORTED) == (
         'GitHub didn\'t answer within 30 seconds, so "Get releases" stopped after 3 tries. '
         f"{NO_ANSWER_CAUSE}"
+    )
+
+
+def test_a_read_sent_as_a_post_keeps_n8n_s_own_five_minutes():
+    """Only GET, HEAD and OPTIONS get the 30 seconds, so nothing that could have landed is sent
+    again by Retry On Fail after a short wait."""
+    assert stopped(JIRA, ABORTED).startswith(
+        'Jira didn\'t answer within 5 minutes, so "Find tickets" stopped.'
+    )
+
+
+def test_a_jira_read_sent_as_a_get_has_the_thirty_seconds():
+    ticket = block(
+        "Get ticket", "n8n-nodes-base.jira", 1, {"resource": "issue", "operation": "get"}
+    )
+    assert stopped(ticket, ABORTED).startswith(
+        'Jira didn\'t answer within 30 seconds, so "Get ticket" stopped.'
+    )
+
+
+@pytest.mark.parametrize(
+    ("node_type", "version", "parameters", "system"),
+    [
+        ("n8n-nodes-base.slack", 2.3, {"operation": "post"}, "Slack"),
+        (
+            "n8n-nodes-base.microsoftTeams",
+            2,
+            {"resource": "channelMessage", "operation": "create"},
+            "Teams",
+        ),
+        ("n8n-nodes-base.gmail", 2.1, {"resource": "message", "operation": "send"}, "Gmail"),
+    ],
+)
+def test_a_post_keeps_n8n_s_own_five_minutes(
+    node_type: str, version: float, parameters: dict[str, Any], system: str
+):
+    post = block("Tell the team", node_type, version, parameters)
+    assert stopped(post, ABORTED).startswith(
+        f'{system} didn\'t answer within 5 minutes, so "Tell the team" stopped.'
     )
 
 
@@ -151,6 +192,71 @@ def test_an_http_request_whose_host_is_not_written_out_is_the_source(url: str):
     )
 
 
+@pytest.mark.parametrize(
+    ("method", "timeout", "limit"),
+    [
+        ("POST", None, "5 minutes"),
+        ("PUT", None, "5 minutes"),
+        ("HEAD", None, "30 seconds"),
+        ("GET", 300000, "30 seconds"),
+        ("POST", 300000, "5 minutes"),
+        ("POST", 20000, "20 seconds"),
+    ],
+)
+def test_an_http_request_s_limit_follows_its_method(method: str, timeout: int | None, limit: str):
+    """n8n gives HTTP Request 3 to 4.5 a limit of 300 s when its Timeout is empty
+    (HttpRequestV3.node.js), and our image cuts that limit to 30 s only for a read."""
+    options = {} if timeout is None else {"timeout": timeout}
+    parameters = {"method": method, "url": "https://hooks.example.com/x", "options": options}
+    http = block("Send", HTTP, 4.2, parameters)
+    assert stopped(http, ABORTED).startswith(
+        f'hooks.example.com didn\'t answer within {limit}, so "Send" stopped.'
+    )
+
+
+@pytest.mark.parametrize("version", [1, 2])
+def test_an_old_http_request_keeps_its_own_hour(version: int):
+    """HTTP Request 1 and 2 wait an hour when their Timeout is empty (HttpRequestV1.node.js)."""
+    http = block("Old call", HTTP, version, {"url": "https://old.example.com/a"})
+    assert stopped(http, ABORTED).startswith(
+        'old.example.com didn\'t answer within 1 hour, so "Old call" stopped.'
+    )
+
+
+@pytest.mark.parametrize(
+    "parameters",
+    [
+        {"url": "https://api.example.com/a", "options": {"timeout": "={{ $json.wait }}"}},
+        {"url": "https://api.example.com/a", "method": "={{ $json.method }}"},
+    ],
+)
+def test_a_limit_or_method_set_by_an_expression_is_not_said(parameters: dict[str, Any]):
+    http = block("Call out", HTTP, 4.2, parameters)
+    assert stopped(http, ABORTED) == (
+        f'api.example.com didn\'t answer in time, so "Call out" stopped. {NO_ANSWER_CAUSE}'
+    )
+
+
+@pytest.mark.parametrize(
+    ("url", "host"),
+    [
+        ("https://a.example.com\\@b.example.com/x", "The source"),
+        ("https://user@b.example.com/x", "The source"),
+        ("https://user:pass@b.example.com/x", "The source"),
+        ("https://b.example.com:notaport/x", "The source"),
+        ("https://b_example.com/x", "The source"),
+        ("https://API.Example.com:8443/x", "api.example.com"),
+        ("http://10.0.0.5:8080/health", "10.0.0.5"),
+        ("http://[fd00::1]:8080/health", "fd00::1"),
+    ],
+)
+def test_only_a_plain_host_name_or_address_is_named(url: str, host: str):
+    """n8n reads a.example.com\\@b.example.com as a.example.com, so a parser that reads
+    b.example.com would name the wrong system. Anything but a plain host is the source."""
+    http = block("Call out", HTTP, 4.2, {"url": url})
+    assert stopped(http, ABORTED).startswith(f"{host} didn't answer within 30 seconds,")
+
+
 def test_a_block_the_registry_does_not_name_is_the_source():
     notion = block("Notion", "n8n-nodes-base.notion", 2.2, {"resource": "page"})
     assert stopped(notion, NOT_FOUND) == (
@@ -159,9 +265,16 @@ def test_a_block_the_registry_does_not_name_is_the_source():
     )
 
 
+def test_a_block_whose_method_is_not_known_says_no_limit():
+    notion = block("Notion", "n8n-nodes-base.notion", 2.2, {"resource": "page"})
+    assert stopped(notion, ABORTED).startswith(
+        'The source didn\'t answer in time, so "Notion" stopped.'
+    )
+
+
 def test_a_failure_with_no_record_of_its_block_still_names_the_block():
     assert stopped(None, ABORTED) == (
-        f'The source didn\'t answer within 30 seconds, so "Get releases" stopped. {NO_ANSWER_CAUSE}'
+        f'The source didn\'t answer in time, so "Get releases" stopped. {NO_ANSWER_CAUSE}'
     )
 
 
@@ -178,7 +291,8 @@ def test_a_failure_with_no_record_of_its_block_still_names_the_block():
 def test_the_tries_are_the_ones_n8n_makes_for_the_blocks_settings(
     settings: dict[str, Any], tries: str
 ):
-    github = block("Get releases", "n8n-nodes-base.github", 1.1, {}, **settings)
+    releases = {"resource": "release", "operation": "getAll"}
+    github = block("Get releases", "n8n-nodes-base.github", 1.1, releases, **settings)
     assert stopped(github, ABORTED).startswith(
         f'GitHub didn\'t answer within 30 seconds, so "Get releases" stopped{tries}.'
     )
@@ -244,6 +358,9 @@ def test_the_troubleshooter_keeps_its_advice_for_any_other_block_failure():
     [
         SourceStop("GitHub", "no_answer", 30_000, "Get releases", 3),
         SourceStop("status.example.com", "no_answer", 1_500, "Check status", 2),
+        SourceStop("Jira", "no_answer", 300_000, "Find tickets", 3),
+        SourceStop("old.example.com", "no_answer", 3_600_000, "Old call", 1),
+        SourceStop("api.example.com", "no_answer", None, "Call out", 1),
         SourceStop("Jira", "refused", 30_000, 'The "big" search', 1),
         SourceStop(None, "cut_off", 30_000, "Notion", 5),
         SourceStop("Slack", "unreachable", 30_000, "Post in Slack", 1),
@@ -252,6 +369,20 @@ def test_the_troubleshooter_keeps_its_advice_for_any_other_block_failure():
 def test_the_words_give_back_the_facts_they_were_made_from(stop: SourceStop):
     assert read_stop(stop_words(stop)) == stop
     assert read_stop(f"Stopped before it read anything. {stop_words(stop)}") == stop
+
+
+def test_a_limit_is_said_in_minutes_or_hours_when_it_is_whole_ones():
+    said = [
+        stop_words(SourceStop("X", "no_answer", ms, "B", 1)).split(", so")[0]
+        for ms in (60_000, 90_000, 120_000, 3_600_000, 7_200_000)
+    ]
+    assert said == [
+        "X didn't answer within 1 minute",
+        "X didn't answer within 90 seconds",
+        "X didn't answer within 2 minutes",
+        "X didn't answer within 1 hour",
+        "X didn't answer within 2 hours",
+    ]
 
 
 def test_a_limit_under_a_second_is_said_as_it_is():
@@ -282,3 +413,18 @@ def test_an_agent_whose_source_did_not_answer_names_that_source(said: str, sourc
     10 seconds a try and says which source it was."""
     failure = RunFailedData(stage="working", reason="AgentError", retryable=True, message=said)
     assert what_happened(failure) == f"{source} didn't answer."
+
+
+@pytest.mark.parametrize(
+    "said",
+    [
+        "UpstreamUnavailable: Could not check LangGraph: Acme could not be reached.",
+        "UpstreamUnavailable: The Platform could not be reached.",
+        "UpstreamUnavailable: Our Jira could not be reached.",
+        "UpstreamUnavailable: GitHubby returned 503 three times",
+    ],
+)
+def test_an_agent_stop_names_only_a_source_the_runtime_s_own_sentences_name(said: str):
+    """Only the runtime's fixed sentences, at the start of a sentence, name the source."""
+    failure = RunFailedData(stage="working", reason="AgentError", retryable=True, message=said)
+    assert what_happened(failure) == explain_failure(failure).explanation

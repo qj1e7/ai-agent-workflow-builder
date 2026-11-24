@@ -9,8 +9,8 @@
 #   address on the runners network;
 # - n8n-runners runs the runner pin in infra/public-images.json, holds none of n8n's secrets, and
 #   sits only on the runners network, which has no way out;
-# - n8n's limit for each try of a block's request is the one platform-api's stop words say, here
-#   and in Terraform.
+# - n8n's limit for each try of a block's read is the one platform-api's stop words say, here, in
+#   deploy/compose.simulation.yaml and in Terraform.
 # infra/envs/dev/tests/n8n.tftest.hcl checks the same of Terraform. Needs Docker, jq and python3.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -107,11 +107,18 @@ spec.loader.exec_module(stops)
 print(stops.REQUEST_LIMIT_SECONDS)
 ' platform-api/src/platform_api/monitoring/source_stops.py)
 limit=$(jq -r '.services.n8n.environment.WAB_REQUEST_TIMEOUT_SECONDS // "unset"' "$work/config.json")
-terraform=$(sed -nE 's/^ *WAB_REQUEST_TIMEOUT_SECONDS *= *"([0-9]+)".*/\1/p' infra/envs/dev/main.tf)
-if [ "$limit" = "$said" ] && [ "$terraform" = "$said" ]; then
-  pass "n8n gives up on a source after $said seconds a try, in compose and Terraform, as the stop words say."
+# The simulation n8n (ADR 0054) renders with its own made-up SIM_ settings, as
+# scripts/simulation_isolation.py renders it.
+grep -oE '\$\{[A-Z0-9_]+:\?' deploy/compose.simulation.yaml | sort -u | sed -E 's/^\$\{([A-Z0-9_]+):\?$/\1=made-up/' >"$work/sim.env"
+docker compose --env-file "$work/sim.env" -f deploy/compose.simulation.yaml config --format json >"$work/sim.json"
+sim=$(jq -r '.services.n8n.environment.WAB_REQUEST_TIMEOUT_SECONDS // "unset"' "$work/sim.json")
+# Terraform's n8n and simulation n8n both read the one local.
+terraform=$(sed -nE 's/^ *n8n_request_timeout_seconds *= *"([0-9]+)".*/\1/p' infra/envs/dev/main.tf)
+used=$(cat infra/envs/dev/main.tf infra/envs/dev/simulation.tf | grep -cE '^ *WAB_REQUEST_TIMEOUT_SECONDS *= *local\.n8n_request_timeout_seconds$' || true)
+if [ "$limit" = "$said" ] && [ "$sim" = "$said" ] && [ "$terraform" = "$said" ] && [ "$used" = 2 ]; then
+  pass "n8n and the simulation n8n give up on a read after $said seconds a try, in compose and Terraform, as the stop words say."
 else
-  fail "n8n's limit a try is $limit in compose and ${terraform:-unset} in Terraform, but the stop words say $said."
+  fail "The stop words say $said seconds a try, but n8n has $limit and the simulation n8n $sim in compose, and Terraform has ${terraform:-unset} for $used of its 2 n8n apps."
 fi
 
 exit "$status"
