@@ -34,6 +34,7 @@ from platform_api.builder.models import (
 )
 from platform_api.builder.n8n_http import HoldOut
 from platform_api.builder.n8n_view import RunN8nView, UseCaseN8nView
+from platform_api.builder.simulation_views import UseCaseSimulationView
 from platform_api.builder.planner import (
     AnswerIn,
     CapabilitiesView,
@@ -351,6 +352,7 @@ PARSERS: dict[str, TypeAdapter[Any]] = {
     "people/me-n8n.ready.json": TypeAdapter(MyN8nOut),
     "builder/use-case.n8n.json": TypeAdapter(UseCaseN8nView),
     "builder/use-case.n8n.held.json": TypeAdapter(UseCaseN8nView),
+    "builder/use-case.simulation.json": TypeAdapter(UseCaseSimulationView),
     "builder/opened-in-n8n.json": TypeAdapter(HoldOut),
     "builder/run.n8n.waiting.json": TypeAdapter(RunN8nView),
     "builder/run.n8n.ended.json": TypeAdapter(RunN8nView),

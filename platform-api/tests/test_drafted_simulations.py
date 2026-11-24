@@ -2,7 +2,8 @@
 graded a drafted revision with nothing still needed, code runs it through its scenarios in the
 background. The card leads with the result, code's grade comes first and the explainer's sentence
 only helps. A failed case doesn't block Turn on, and a result belongs to its version's digest.
-Where there is no simulation n8n the card says so, and it never shows running past the limit."""
+Where there is no simulation n8n the card says so, and it never shows running past the limit.
+A revision that still needs a setting says it will be tried once every setting is filled."""
 
 import asyncio
 from collections.abc import AsyncIterator, Mapping
@@ -17,7 +18,7 @@ import pytest
 from platform_api.app import create_app
 from platform_api.auth import DEV_PEOPLE
 from platform_api.builder.drafted_settings import ANY_APPROVER, APPROVERS
-from platform_api.builder.drafted_simulations import SIMULATING, DraftedSimulations
+from platform_api.builder.simulations import SIMULATING, Simulations
 from platform_api.builder.drafted_workflows import DraftedWorkflows
 from platform_api.db import Database
 from platform_api.orchestration.people_store import People
@@ -116,7 +117,7 @@ class Driver:
 class Bench:
     db: Database
     drafted: DraftedWorkflows
-    simulations: DraftedSimulations
+    simulations: Simulations
     driver: Driver
     client: httpx.AsyncClient
 
@@ -129,7 +130,8 @@ class Bench:
         assert r.status_code == 202, r.text
         await self.drafted.settle()
         first = await self.read(r.json()["drafted_id"], user)
-        assert first["simulation"] is None, "a revision still needing a setting isn't simulated"
+        waits = "waiting" if self.simulations.available else "unavailable"
+        assert first["simulation"]["state"] == waits, "a revision still needing a setting waits"
         body = {"revision": first["revision"], "setting": APPROVERS, "choice": ANY_APPROVER}
         path = f"/api/v1/drafted-workflows/{first['drafted_id']}/answers"
         r = await self.call(user, "POST", path, body)
@@ -153,7 +155,7 @@ class Bench:
         async with self.db.connection("builder") as conn:
             rows = await (
                 await conn.execute(
-                    "SELECT digest FROM builder.drafted_simulations ORDER BY started_at"
+                    "SELECT digest FROM builder.simulations ORDER BY started_at"
                 )
             ).fetchall()
         return [str(r["digest"]) for r in rows]
@@ -166,9 +168,7 @@ async def bench_of(
     assert await people.seed_dev(DEV_PEOPLE)
     approvals = SetUpApprovals(db, Channel(), people, "https://portal.example", TEAM_TIME_ZONE)
     simulations = (
-        DraftedSimulations(db, driver)
-        if limit is None
-        else DraftedSimulations(db, driver, limit=limit)
+        Simulations(db, driver) if limit is None else Simulations(db, driver, limit=limit)
     )
     drafted_workflows = DraftedWorkflows(
         db,
@@ -216,6 +216,60 @@ async def test_once_a_graded_revision_needs_nothing_it_is_simulated_in_the_backg
     assert sim["case_seconds"] == WAIT_LIMIT_SECONDS
     assert [c["kind"] for c in sim["cases"]][:2] == ["happy_path", "nothing_new"]
     assert sim["said"] is None
+
+
+WAITING = {
+    "state": "waiting",
+    "started_at": None,
+    "case_seconds": WAIT_LIMIT_SECONDS,
+    "tried": 0,
+    "passed": 0,
+    "cases": [],
+    "not_tried": [],
+    "said": None,
+    "can_try_again": False,
+}
+
+
+async def test_a_revision_that_still_needs_a_setting_waits_and_is_tried_once_it_is_filled(
+    bench: Bench,
+):
+    r = await bench.call("alice", "POST", "/api/v1/drafted-workflows", {"words": WORDS})
+    assert r.status_code == 202, r.text
+    await bench.drafted.settle()
+    drafted_id = r.json()["drafted_id"]
+
+    for user in ("alice", "bob"):
+        first = await bench.read(drafted_id, user)
+        assert first["needed"] == 1
+        assert first["simulation"] == WAITING, "it waits: never not available, never running"
+    assert (bench.driver.versions, await bench.digests()) == ([], [])
+    refused = await bench.again(drafted_id, first["revision"])
+    assert refused.status_code == 409
+
+    body = {"revision": first["revision"], "setting": APPROVERS, "choice": ANY_APPROVER}
+    answered = await bench.call(
+        "alice", "POST", f"/api/v1/drafted-workflows/{drafted_id}/answers", body
+    )
+    assert answered.status_code == 200, answered.text
+    assert answered.json()["simulation"]["state"] == "running"
+    await bench.drafted.settle()
+
+    assert (await bench.read(drafted_id))["simulation"]["state"] == "done"
+    assert len(bench.driver.versions) == 1
+
+
+async def test_where_there_is_no_simulation_n8n_a_revision_needing_a_setting_promises_no_try(
+    postgres: PostgresUrls, db: Database
+):
+    async for bench in bench_of(db, None):
+        r = await bench.call("alice", "POST", "/api/v1/drafted-workflows", {"words": WORDS})
+        assert r.status_code == 202, r.text
+        await bench.drafted.settle()
+
+        sim = (await bench.read(r.json()["drafted_id"]))["simulation"]
+
+        assert sim == {**WAITING, "state": "unavailable"}
 
 
 async def test_a_failed_case_leads_with_code_s_grade_and_the_explainer_only_helps_and_turn_on_stays(
@@ -396,7 +450,7 @@ async def test_the_running_row_is_kept_with_the_revision_so_a_poll_never_sees_it
     async def stopped(*_: object, **__: object) -> None:
         return None
 
-    monkeypatch.setattr(DraftedSimulations, "start", stopped)
+    monkeypatch.setattr(Simulations, "start", stopped)
     driver = Driver()
     async for bench in bench_of(db, driver):
         view = await bench.start()
@@ -414,9 +468,7 @@ async def test_a_revision_never_tried_says_so_and_an_operator_can_try_it_now(
         await bench.drafted.settle()
         drafted_id = view["drafted_id"]
         with psycopg.connect(postgres.owner, autocommit=True) as conn:
-            conn.execute(
-                "DELETE FROM builder.drafted_simulations WHERE drafted_id = %s", (drafted_id,)
-            )
+            conn.execute("DELETE FROM builder.simulations")
 
         alice = (await bench.read(drafted_id, "alice"))["simulation"]
         bob = (await bench.read(drafted_id, "bob"))["simulation"]
