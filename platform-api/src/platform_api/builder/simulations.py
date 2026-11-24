@@ -16,6 +16,7 @@ running for good."""
 import asyncio
 import logging
 from collections.abc import Mapping
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, Final, Protocol, cast
 
@@ -32,6 +33,7 @@ from platform_api.orchestration import (
     NotSimulated,
     Simulated,
     SimulationOut,
+    workflow_digest,
 )
 
 log = logging.getLogger(__name__)
@@ -40,6 +42,15 @@ NO_SIMULATION: Final = "Simulation on practice systems isn't available here."
 SIMULATING: Final = "Trying it on practice systems."
 """The running state's one wording, which the card shows too."""
 NOTHING_TO_TRY: Final = "There's nothing to try again on practice systems."
+
+
+@dataclass(frozen=True)
+class Claimed:
+    """A version's try, claimed in the transaction that keeps the version and started after."""
+
+    digest: str
+    document: Mapping[str, Any]
+    started_at: datetime
 
 
 class Simulating(Protocol):
@@ -78,24 +89,35 @@ class Simulations:
         task, started_at = going
         return not task.done() and self._db.clock() - started_at <= self._limit
 
-    async def claim(self, conn: Connection, digest: str, now: datetime) -> datetime | None:
-        """The running row for a digest's first try, in the transaction that keeps its version.
-        None where there is no simulation n8n, once shutdown began, or when the digest has a try
-        already. The caller starts it once the transaction commits."""
+    async def claim(
+        self, conn: Connection, document: Mapping[str, Any], now: datetime
+    ) -> Claimed | None:
+        """The one claim for every version, a drafted revision's and a workflow's: the running
+        row for its digest's first try, in the transaction that keeps the version. None where
+        there is no simulation n8n, once shutdown began, or when the digest has a try already.
+        The caller starts it once the transaction commits."""
         if self._driver is None or self._closed:
             return None
-        return await _insert(conn, digest, now)
+        digest = workflow_digest(document)
+        started_at = await _insert(conn, digest, now)
+        return None if started_at is None else Claimed(digest, dict(document), started_at)
 
-    async def start(self, digest: str, document: Mapping[str, Any], started_at: datetime) -> None:
-        """Runs the try its claim began, in the background."""
+    async def start(self, claimed: Claimed | None) -> None:
+        """Runs the try a claim began, in the background. Should that fail, its row reads as not
+        finished once past the limit, with Try again."""
         driver = self._driver
-        if driver is None or self._closed:
+        if claimed is None or driver is None or self._closed:
             return
-        if (older := self._running.get(digest)) is not None:
-            older[0].cancel()
-        task = asyncio.create_task(self._run(driver, digest, dict(document), started_at))
-        self._running[digest] = (task, started_at)
-        task.add_done_callback(lambda _: self._forget(digest, task))
+        digest = claimed.digest
+        try:
+            if (older := self._running.get(digest)) is not None:
+                older[0].cancel()
+            run = self._run(driver, digest, dict(claimed.document), claimed.started_at)
+            task = asyncio.create_task(run)
+            self._running[digest] = (task, claimed.started_at)
+            task.add_done_callback(lambda _: self._forget(digest, task))
+        except Exception as error:
+            log.error("could not start simulating %s: %s", _short(digest), type(error).__name__)
 
     async def again(self, digest: str, document: Mapping[str, Any]) -> bool:
         """Tries the version again when it was never tried, wasn't run or ran past its limit.
@@ -118,7 +140,7 @@ class Simulations:
                 started_at = None if row is None else cast(datetime, row["started_at"])
         if started_at is None:
             return False
-        await self.start(digest, document, started_at)
+        await self.start(Claimed(digest, dict(document), started_at))
         return True
 
     def _forget(self, digest: str, task: asyncio.Task[None]) -> None:

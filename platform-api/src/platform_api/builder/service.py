@@ -90,7 +90,7 @@ from platform_api.builder.planning import (
     RuntimeNotAnswering,
     plan,
 )
-from platform_api.builder.simulations import Simulations
+from platform_api.builder.simulations import Claimed, Simulations
 from platform_api.builder.sweep import N8nAccounts, NoN8nAccounts, OpenRequests, VersionsSweep
 from platform_api.builder.templates import (
     AGENT_CARDS,
@@ -98,7 +98,7 @@ from platform_api.builder.templates import (
     TEMPLATES,
     suggest_template,
 )
-from platform_api.builder.use_case_simulations import ClaimedVersion, UseCaseSimulations
+from platform_api.builder.use_case_simulations import UseCaseSimulations
 from platform_api.builder.versions import (
     AlreadyUndone,
     ChangedSince,
@@ -960,7 +960,7 @@ class Builder:
         only when it grades safe against what the editor's lists hold now. Its source's
         publisher is kept with it, because its runs are their work too (ADR 0026). Asked again
         once done, it answers the same."""
-        claimed: ClaimedVersion | None = None
+        claimed: Claimed | None = None
         async with self._db.transaction("builder") as uow:
             await hold_workflow(uow.conn, use_case_id, alone=True)
             row = await (
@@ -1457,7 +1457,7 @@ class Builder:
         body: CreateAgentUseCase,
         chosen: Sequence[tuple[CardView, Mapping[str, str]]],
         drafted: InN8n | None,
-    ) -> ClaimedVersion | None:
+    ) -> Claimed | None:
         """With its version laid out in n8n and graded, its try on practice systems is claimed
         in the same transaction."""
         engine = "shared_run" if drafted is None else "own"
