@@ -27,5 +27,6 @@
   ],
   "stopped_at": [
     "Read releases"
-  ]
+  ],
+  "within_seconds": 9.0
 }

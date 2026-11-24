@@ -1288,6 +1288,13 @@
           "minItems": 1,
           "title": "Stopped At",
           "type": "array"
+        },
+        "within_seconds": {
+          "description": "How long the runtime has, counted from when it gets the request. Both model calls end by then, as after it the platform's rule table answers alone (ADR 0032).",
+          "exclusiveMinimum": 0,
+          "maximum": 10,
+          "title": "Within Seconds",
+          "type": "number"
         }
       },
       "required": [
@@ -1295,7 +1302,8 @@
         "stop",
         "events",
         "blocks",
-        "stopped_at"
+        "stopped_at",
+        "within_seconds"
       ],
       "title": "CauseRequest",
       "type": "object"

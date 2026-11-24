@@ -1011,6 +1011,7 @@ def cause_request() -> CauseRequest:
             "Make the approved changes",
         ],
         stopped_at=["Read releases"],
+        within_seconds=9.0,
     )
 
 

@@ -1,5 +1,6 @@
 import re
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Final, Literal, Protocol
 
@@ -223,13 +224,25 @@ class FoundCause(WireModel):
     )
 
 
+@dataclass(frozen=True)
+class AskedCause:
+    """One stop, for the model to name its cause."""
+
+    run_id: RunId
+    seq: int
+    """The run_failed event's sequence number, so a later stop of the same run is a new one."""
+    failure: RunFailedData
+    events: Sequence[str]
+    """The run's activity, each event's plain summary, oldest first."""
+    seconds: float
+    """How long the finder has before the rule table answers alone."""
+
+
 class CauseFinder(Protocol):
     """The troubleshooter's model version. None whenever it has no checked answer, and the rule
     table answers alone."""
 
-    async def find(
-        self, run_id: RunId, failure: RunFailedData, events: Sequence[str]
-    ) -> FoundCause | None: ...
+    async def find(self, asked: AskedCause) -> FoundCause | None: ...
 
 
 def asks_the_model(failure: RunFailedData) -> bool:

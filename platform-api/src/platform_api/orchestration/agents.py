@@ -920,6 +920,7 @@ class CauseRequest(WireModel):
     )
     blocks: list[RunBlockName] = Field(min_length=1, max_length=MOST_RUN_BLOCKS)
     stopped_at: list[RunBlockName] = Field(min_length=1, max_length=MOST_RUN_BLOCKS)
+    within_seconds: float = Field(gt=0, le=10)
 
     @model_validator(mode="after")
     def _stopped_in_the_version(self) -> Self:
@@ -1084,6 +1085,8 @@ AGENT_TIMEOUT_SECONDS = 60.0
 RUNTIME_SMOOTHS_IN_SECONDS = 8.0
 RUNTIME_VERIFIES_IN_SECONDS = 8.0
 EXPLAIN_WAIT_SECONDS = RUNTIME_SMOOTHS_IN_SECONDS + RUNTIME_VERIFIES_IN_SECONDS + 4.0
+RUNTIME_ANSWERS_IN_SECONDS = 1.0
+"""Past the time a cause request gives the runtime, for its answer to come back."""
 DRAFT_WAIT_SECONDS = 200.0
 """The drafter stops itself at 170 seconds (ADR 0051, amended for step 5), with room to answer."""
 
@@ -1167,7 +1170,12 @@ class HttpAgentRuntime:
     async def find_cause(
         self, request: CauseRequest
     ) -> CauseResult | AgentUnavailable | AgentRejected:
-        return await self._model_call("/v1/troubleshooter/cause", request, cause_result_adapter)
+        return await self._model_call(
+            "/v1/troubleshooter/cause",
+            request,
+            cause_result_adapter,
+            request.within_seconds + RUNTIME_ANSWERS_IN_SECONDS,
+        )
 
     async def draft_workflow(
         self, request: WorkflowDraftRequest

@@ -17,6 +17,7 @@ from platform_api.monitoring.log import ActivityLog
 from platform_api.monitoring.troubleshooter import (
     Advice,
     Answers,
+    AskedCause,
     CauseFinder,
     FoundCause,
     answers,
@@ -27,7 +28,7 @@ from platform_api.settings import Settings
 from platform_api.shared import RunId, TaskId
 from platform_api.wire import WireModel, error_response
 
-log = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 KEEP_ALIVE_SECONDS = 15.0
 PERSON_RECHECK_SECONDS = 60.0
@@ -217,7 +218,8 @@ async def troubleshoot(
         raise HTTPException(status_code=409, detail="The run has not failed")
     found = None
     if find_cause and finder is not None and asks_the_model(failure.data):
-        found = await _found(finder, run_id, failure.data, events, wait)
+        summaries = [e.summary for e in events]
+        found = await _found(finder, AskedCause(run_id, failure.seq, failure.data, summaries, wait))
     return TroubleshootingOut(
         run_id=run_id,
         failure=failure.data,
@@ -227,20 +229,14 @@ async def troubleshoot(
     )
 
 
-async def _found(
-    finder: CauseFinder,
-    run_id: RunId,
-    failure: RunFailedData,
-    events: Sequence[ActivityEvent],
-    wait: float,
-) -> FoundCause | None:
+async def _found(finder: CauseFinder, asked: AskedCause) -> FoundCause | None:
     """The model's checked cause, or None, so the rule table answers alone whatever goes wrong:
     the finder failing, or taking longer than the wait."""
     try:
-        async with asyncio.timeout(wait):
-            return await finder.find(run_id, failure, [e.summary for e in events])
+        async with asyncio.timeout(asked.seconds):
+            return await finder.find(asked)
     except Exception as error:
-        log.warning("The troubleshooter's rule table answered alone: %s", type(error).__name__)
+        logger.warning("The troubleshooter's rule table answered alone: %s", type(error).__name__)
         return None
 
 

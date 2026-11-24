@@ -59,6 +59,7 @@ from platform_api.monitoring.traces import (
 )
 from platform_api.monitoring.troubleshooter import (
     Advice,
+    AskedCause,
     CauseFinder,
     FoundCause,
     explain_failure,
@@ -73,6 +74,7 @@ __all__ = [
     "ActivityEvent",
     "ActivityLog",
     "Advice",
+    "AskedCause",
     "Actor",
     "AgentEvent",
     "AgentEventPost",

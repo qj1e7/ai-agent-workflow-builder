@@ -1675,6 +1675,12 @@ class CauseRequest(WireModel):
         max_length=MOST_RUN_BLOCKS,
         description="The blocks where the run stopped, as code read them. Each is one of blocks.",
     )
+    within_seconds: float = Field(
+        gt=0,
+        le=10,
+        description="How long the runtime has, counted from when it gets the request. Both model "
+        "calls end by then, as after it the platform's rule table answers alone (ADR 0032).",
+    )
 
     @model_validator(mode="after")
     def _stopped_in_the_version(self) -> CauseRequest:

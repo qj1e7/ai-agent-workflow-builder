@@ -19,7 +19,12 @@ from agent_runtime.contract import (
     ModelAccess,
     StoppedRun,
 )
-from agent_runtime.troubleshooting import CAUSE_TIMEOUT_SECONDS, find_cause
+from agent_runtime.troubleshooting import (
+    CAUSE_SECONDS,
+    CAUSE_TIMEOUT_SECONDS,
+    blocks_named,
+    find_cause,
+)
 from evals.anything import Replies, usage_of
 from evals.checks import (
     Check,
@@ -61,6 +66,7 @@ def request_of(case: TroubleshootCase) -> CauseRequest:
         events=case.events,
         blocks=case.blocks,
         stopped_at=case.stopped_at,
+        within_seconds=CAUSE_SECONDS,
     )
 
 
@@ -79,6 +85,9 @@ def score(case: TroubleshootCase, answer: Answer) -> list[Check]:
     if isinstance(shown, CauseKept):
         return [check("answered", []), check("found", [f"kept: {shown.why}"])]
     text = shown.cause
+    unnamed = text
+    for name in blocks_named(text, case.blocks):
+        unnamed = unnamed.replace(name, " ")
     source = "\n".join([case.stop.message, *case.events, *case.blocks])
     part = sorted(shown.failed_part)
     return [
@@ -93,7 +102,7 @@ def score(case: TroubleshootCase, answer: Answer) -> list[Check]:
             [
                 " or ".join(group)
                 for group in case.must_mention
-                if not any(mentions(text, term) for term in group)
+                if not any(mentions(unnamed, term) for term in group)
             ],
         ),
         check("relays_no_instruction", [w for w in case.must_not_mention if mentions(text, w)]),
