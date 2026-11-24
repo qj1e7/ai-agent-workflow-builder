@@ -10,13 +10,15 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-from pydantic import ValidationError
+from pydantic import JsonValue, ValidationError
 
 from agent_runtime.api import create_app
 from agent_runtime.contract import (
     ModelAccess,
     ScenarioBlock,
+    ScenarioCheck,
     ScenarioSample,
+    ScenarioServe,
     ScenariosKept,
     ScenariosWritten,
     ScenarioWriteRequest,
@@ -41,8 +43,8 @@ from tests.test_free_reply import api_runtime, prompt_of
 
 ACCESS = ModelAccess(style="openai", base_url="http://eval.invalid", model="eval", api_key="-")
 KINDS = ["happy_path", "nothing_new", "source_not_found", "timeout", "approver_says_no", "odd_data"]
-ALL_PLAYS = ["recorded", "varied", "empty", "not_found", "too_slow"]
-RELEASES = [
+ALL_PLAYS: list[ScenarioServe] = ["recorded", "varied", "empty", "not_found", "too_slow"]
+RELEASES: list[dict[str, JsonValue]] = [
     {"kind": "release", "id": "1.2.16", "name": "1.2.16", "published_at": "2026-10-28"},
     {"kind": "release", "id": "1.2.15", "name": "1.2.15", "published_at": "2026-10-27"},
 ]
@@ -160,7 +162,7 @@ def test_a_reply_picked_from_what_was_offered_is_written_as_it_is():
         (with_scenario(3, slow_agents=["Ask for a yes"]), "not_an_agent"),
         (with_scenario(3, slow_agents=["Compare", "Compare"]), "not_an_agent"),
         ({"scenarios": reply()["scenarios"][:5]}, "not_the_kinds"),
-        ({"scenarios": [*reply()["scenarios"], reply()["scenarios"][0]]}, "not_the_kinds"),
+        ({"scenarios": [*reply()["scenarios"][:5], reply()["scenarios"][0]]}, "not_the_kinds"),
     ],
     ids=[
         "a-block-it-made-up",
@@ -174,7 +176,9 @@ def test_a_reply_picked_from_what_was_offered_is_written_as_it_is():
         "a-kind-twice",
     ],
 )
-def test_a_reply_that_names_anything_it_was_not_offered_is_refused(bad: dict[str, Any], why: str):
+def test_a_reply_that_names_anything_it_was_not_offered_is_refused(
+    bad: dict[str, Any], why: ScenarioCheck
+):
     shown, _ = written(bad)
     assert shown == ScenariosKept(why=why)
 
@@ -231,16 +235,14 @@ def test_the_prompt_offers_the_blocks_the_kinds_and_the_samples_as_data():
 
 
 def test_a_prompt_too_big_for_the_cost_cap_is_never_sent():
+    item: dict[str, JsonValue] = {"kind": "release", "id": "1.2.16", "text": "Long. " * 300}
     many = [
-        ScenarioBlock(
-            name=f"Read {n} " + "x" * 180, role="read", answer="read.release", plays=["recorded"]
-        )
-        for n in range(100)
+        ScenarioSample(id=f"smp_{n}", answer="read.release", items=[item] * 3) for n in range(20)
     ]
-    shown, chat = written(reply(), blocks=many)
+    shown, chat = written(reply(), samples=many)
     assert shown == ScenariosKept(why="too_big")
     assert chat.calls == []
-    assert len("".join(scenario_messages(request(blocks=many)))) > WRITE_MOST_PROMPT_CHARS
+    assert len("".join(scenario_messages(request(samples=many)))) > WRITE_MOST_PROMPT_CHARS
 
 
 def test_a_key_shape_anywhere_in_the_prompt_is_never_sent():

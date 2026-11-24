@@ -34,7 +34,7 @@ import hashlib
 import json
 import re
 from collections import OrderedDict
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Final, Literal, cast
 
@@ -427,6 +427,12 @@ class RecordedSamples:
         if found is not None:
             return found
         return next((s for s in MADE_UP.values() if s.id == sample_id), None)
+
+    def listed(self, answers: Collection[AnswerKind]) -> tuple[Sample, ...]:
+        """The samples of these answers a scenario may serve: those recorded, newest first, then
+        the made-up ones."""
+        recorded = [s for s in reversed(self._recorded.values()) if s.answer in answers]
+        return (*recorded, *(s for s in MADE_UP.values() if s.answer in answers))
 
     def for_block(self, block: str, answer: AnswerKind) -> Sample:
         """The newest sample recorded from this block, else the newest of its kind, else the

@@ -1,8 +1,8 @@
-"""The scenario writer and the explainer as a simulation's driver asks them (ADR 0054, PR 6). Each is
-off unless a caller asks, and needs a connected model. The writer's picks become scenarios in PR 5's
-schema, and the gateway checks them with PR 5's own check, running code's templates on any refusal.
-The explainer's picks are checked again here, and code writes the sentence. The grade stays the
-verdict."""
+"""The scenario writer and the explainer as a simulation's driver asks them (ADR 0054, PR 6).
+Each is off unless a caller asks, and needs a connected model. The writer's picks become scenarios
+in PR 5's schema, and the gateway checks them with PR 5's own check, running code's templates on
+any refusal. The explainer's picks are checked again here, and code writes the sentence. The grade
+stays the verdict."""
 
 from collections.abc import Sequence
 from dataclasses import dataclass, field
@@ -82,7 +82,9 @@ WRITTEN = ScenariosWritten.model_validate(
 class FakeAgents:
     """The agent runtime's two simulation routes."""
 
-    write_answer: ScenarioWriteResult | AgentUnavailable | AgentRejected = WRITTEN
+    write_answer: ScenarioWriteResult | AgentUnavailable | AgentRejected = field(
+        default_factory=lambda: WRITTEN
+    )
     explain_answer: ScenarioExplainResult | AgentUnavailable | AgentRejected = field(
         default_factory=lambda: ScenariosExplained(notes=[], kept=[])
     )

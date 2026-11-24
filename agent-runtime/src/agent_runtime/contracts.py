@@ -3,6 +3,9 @@ import shutil
 import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Final
+
+from pydantic import JsonValue
 
 from agent_runtime.abilities import CAPABILITY_LIST
 from agent_runtime.answers import SkipRead, TaskRead, answer_of, check_one_part, parts_of
@@ -54,6 +57,8 @@ from agent_runtime.contract import (
     ExplainKept,
     ExplainReworded,
     ExplainWordingRequest,
+    FailedScenario,
+    FailureNote,
     Finding,
     FindSoftwareRequest,
     FoundModel,
@@ -79,6 +84,15 @@ from agent_runtime.contract import (
     ReplyAbout,
     ReplyEnvelope,
     RoomAddressee,
+    ScenarioBlock,
+    ScenarioExplainRequest,
+    ScenarioPlay,
+    ScenarioSample,
+    ScenarioServe,
+    ScenariosExplained,
+    ScenariosKept,
+    ScenariosWritten,
+    ScenarioWriteRequest,
     SoftwareMatch,
     SoftwareToCheck,
     StoppedRun,
@@ -93,6 +107,8 @@ from agent_runtime.contract import (
     WatchlistScheduleFact,
     WireModel,
     WorkflowFact,
+    WrittenRead,
+    WrittenScenario,
     agent_event_adapter,
 )
 from agent_runtime.free_reply import answer_of_envelope
@@ -986,6 +1002,95 @@ def answered_explain() -> Answered:
     return Answered(answer=answer, parts=parts_of(read, task, answer, facts))
 
 
+RELEASES_READ: Final[list[dict[str, JsonValue]]] = [
+    {"kind": "release", "id": "1.2.16", "name": "1.2.16", "published_at": "2026-10-28"},
+    {"kind": "release", "id": "1.2.15", "name": "1.2.15", "published_at": "2026-10-27"},
+]
+
+
+def scenario_write_request() -> ScenarioWriteRequest:
+    every: list[ScenarioServe] = ["recorded", "varied", "empty", "not_found", "too_slow"]
+    return ScenarioWriteRequest(
+        model=draft_request().model,
+        blocks=[
+            ScenarioBlock(name="Start from the Portal", role="start"),
+            ScenarioBlock(
+                name="Read releases",
+                role="read",
+                answer="read.release",
+                plays=every,
+                varies=["suffix", "empty_field", "long_text"],
+            ),
+            ScenarioBlock(name="Compare", role="agent", plays=["recorded", "too_slow"]),
+            ScenarioBlock(name="Propose a change", role="propose"),
+            ScenarioBlock(name="Ask for a yes", role="ask"),
+            ScenarioBlock(name="Make the approved changes", role="write"),
+        ],
+        kinds=[
+            "happy_path",
+            "nothing_new",
+            "source_not_found",
+            "timeout",
+            "approver_says_no",
+            "odd_data",
+        ],
+        samples=[
+            ScenarioSample(id="made_up.read.release", answer="read.release", items=RELEASES_READ)
+        ],
+        within_seconds=30,
+    )
+
+
+def scenarios_written() -> ScenariosWritten:
+    read = "Read releases"
+    return ScenariosWritten(
+        scenarios=[
+            WrittenScenario(kind="happy_path"),
+            WrittenScenario(kind="nothing_new", reads=[WrittenRead(block=read, serve="empty")]),
+            WrittenScenario(
+                kind="source_not_found", reads=[WrittenRead(block=read, serve="not_found")]
+            ),
+            WrittenScenario(
+                kind="timeout",
+                reads=[WrittenRead(block=read, serve="too_slow")],
+                slow_agents=["Compare"],
+            ),
+            WrittenScenario(kind="approver_says_no"),
+            WrittenScenario(
+                kind="odd_data",
+                reads=[
+                    WrittenRead(
+                        block=read,
+                        serve="varied",
+                        sample="made_up.read.release",
+                        vary=["suffix"],
+                    )
+                ],
+            ),
+        ]
+    )
+
+
+def scenario_explain_request() -> ScenarioExplainRequest:
+    return ScenarioExplainRequest(
+        model=draft_request().model,
+        failed=[
+            FailedScenario(
+                name="odd_data",
+                kind="odd_data",
+                ending="failed",
+                stopped_at="Compare",
+                expected="It ends in one of the cases above, never in a failure with no reason.",
+                happened='It failed at "Compare", which is not a stop with a reason: Cannot read '
+                "properties of undefined (reading 'tag_name')",
+                ran=["Start from the Portal", "Read releases", "Compare"],
+                plays=[ScenarioPlay(block="Read releases", serve="varied", vary=["suffix"])],
+            )
+        ],
+        within_seconds=15,
+    )
+
+
 def cause_request() -> CauseRequest:
     return CauseRequest(
         model=draft_request().model,
@@ -1193,6 +1298,22 @@ def fixtures() -> dict[str, WireModel]:
             detail="fastapi/fastapy",
         ),
         "troubleshooter-cause-kept.json": CauseKept(why="not_where_it_stopped"),
+        "scenario-write-request.json": scenario_write_request(),
+        "scenario-write-written.json": scenarios_written(),
+        "scenario-write-kept.json": ScenariosKept(why="not_a_read"),
+        "scenario-explain-request.json": scenario_explain_request(),
+        "scenario-explain-explained.json": ScenariosExplained(
+            notes=[
+                FailureNote(
+                    scenario="odd_data",
+                    block="Compare",
+                    kind="stopped",
+                    source="Read releases",
+                    detail="tag_name",
+                )
+            ],
+            kept=[],
+        ),
         "planner-check-part-request.json": CheckPartRequest(kind="do", text="Email the list"),
         "planner-check-part-cant.json": check_one_part(
             CheckPartRequest(kind="do", text="Email the list")

@@ -12,11 +12,17 @@ the settings below: the simulation's own node key and start secret, the simulati
 and owner, whose executions it reads to link each call and where it makes each version's copy,
 and the mocks there. It has no database, and no real Jira, Teams, Slack or model key.
 
-The simulation's driver uses four more routes, each signed with the simulation's start secret:
+The simulation's driver uses five more routes, each signed with the simulation's start secret:
 
 - `POST /simulation/v1/simulations` takes a workflow version, and its scenarios or none, and runs
   each scenario on a copy of its own, grades it and deletes the copy (simulations.py). Without
-  scenarios it runs code's templates. Recorded samples sent with it are scrubbed before use.
+  scenarios it runs code's templates. With fall_back, scenarios that don't fit are refused and
+  code's templates run in their place, as for the scenario writer's. Recorded samples sent with
+  it are scrubbed before use.
+- `POST /simulation/v1/plans` takes a workflow version and its recorded samples, and answers the
+  version as a simulation sees it: each block's role and the plays a simulation can make of it,
+  the kinds that apply and the samples, scrubbed. The scenario writer is offered this (PR 6).
+  It makes nothing.
 - `POST /simulation/v1/copies` takes a workflow version, makes its copy in the simulation n8n with
   only mock keys (mock_setup.py), and answers the copy's id and how each block runs in it. The
   caller deletes the copy.
@@ -45,7 +51,7 @@ import time
 from collections.abc import AsyncGenerator, Awaitable, Callable, Mapping, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import asdict, dataclass, field
-from typing import Annotated, Literal
+from typing import Annotated, Literal, cast
 
 import httpx
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
@@ -60,9 +66,25 @@ from platform_api.orchestration import n8n_calls_http
 from platform_api.orchestration.dispatch import N8nWaker
 from platform_api.orchestration.mock_setup import MockSetups, Mode, SetupRefused, mock_keys
 from platform_api.orchestration.n8n import N8nApi, N8nError
-from platform_api.orchestration.recorded_samples import SAMPLE_ITEMS, AnswerKind, RecordedSamples
-from platform_api.orchestration.scenario_grades import Verdict
-from platform_api.orchestration.scenarios import NotTried, SampleId, ScenarioKind, ScenarioSpec
+from platform_api.orchestration.recorded_samples import (
+    ALLOW_LISTS,
+    SAMPLE_ITEMS,
+    AnswerKind,
+    RecordedSamples,
+    Variation,
+)
+from platform_api.orchestration.scenario_grades import Ending, Graded, Verdict
+from platform_api.orchestration.scenarios import (
+    NotTried,
+    Role,
+    SampleId,
+    ScenarioKind,
+    ScenarioSpec,
+    Serve,
+    SimulationPlan,
+    kinds_that_apply,
+    plays_of,
+)
 from platform_api.orchestration.simulated_calls import (
     MockGitHub,
     Scenario,
@@ -261,11 +283,54 @@ class SimulationIn(WireIn):
         default=None, max_length=20, description="None runs code's own templates."
     )
     samples: list[SampleIn] = Field(default_factory=list[SampleIn], max_length=20)
+    fall_back: bool = Field(
+        default=False,
+        description="When a scenario doesn't fit, run code's templates in place of the scenarios "
+        "and say why, rather than refuse. The scenario writer's scenarios are sent so.",
+    )
+
+
+class PlanIn(WireIn):
+    version: VersionIn
+    samples: list[SampleIn] = Field(default_factory=list[SampleIn], max_length=20)
+
+
+class PlanBlockOut(WireModel):
+    name: str
+    node_type: str
+    role: Role
+    mode: Mode
+    mock: str | None
+    answer: AnswerKind | None = Field(description="For a read, what it gives, when covered.")
+    plays: list[Serve] = Field(description="How a simulation can play the block.")
+    varies: list[Variation] = Field(description="The variations its answer takes.")
+
+
+class SampleOut(WireModel):
+    id: str
+    answer: AnswerKind
+    block: str | None
+    items: list[dict[str, JsonValue]] = Field(description="As its allow list keeps them.")
+
+
+class PlanOut(WireModel):
+    blocks: list[PlanBlockOut]
+    kinds: list[ScenarioKind] = Field(description="The kinds that apply, as code picks them.")
+    samples: list[SampleOut] = Field(
+        description="The samples of what the version reads, recorded ones newest first, then the "
+        "made-up ones."
+    )
 
 
 class NotTriedOut(WireModel):
     block: str
     why: str
+
+
+class PlayOut(WireModel):
+    block: str
+    serve: Serve
+    vary: list[Variation] = Field(default_factory=list[Variation])
 
 
 class ResultOut(WireModel):
@@ -276,6 +341,11 @@ class ResultOut(WireModel):
     happened: str = Field(description="What code read in the records, in plain words.")
     ran: list[str] = Field(description="The blocks that ran, pinned ones left out.")
     not_tried: list[NotTriedOut]
+    ending: Ending | None = Field(description="How code read the run's end. None when not run.")
+    stopped_at: str | None = Field(description="The block that stopped the run, when one did.")
+    plays: list[PlayOut] = Field(
+        description="How the scenario played each block other than as recorded."
+    )
 
 
 class CoverageOut(WireModel):
@@ -290,6 +360,10 @@ class SimulationOut(WireModel):
     results: list[ResultOut]
     coverage: CoverageOut
     blocks: list[BlockModeOut]
+    scenarios_from: Literal["given", "templates"]
+    refused: list[str] = Field(
+        description="Why the scenarios given didn't fit, when code's templates ran in their place."
+    )
 
 
 class SimulationRefusedOut(WireModel):
@@ -330,14 +404,12 @@ async def simulate(
         given = SimulationIn.model_validate_json(body)
     except ValidationError as error:
         return _problems(error)
-    samples = RecordedSamples()
-    for sample in given.samples:
-        samples.record(
-            sample.answer, sample.items, "real_run", block=sample.block, sample_id=sample.id
-        )
+    samples = _samples(given.samples)
     version = given.version.model_dump(by_alias=True, exclude_none=True)
     try:
-        done = await simulations.simulate(version, given.scenarios, samples)
+        done = await simulations.simulate(
+            version, given.scenarios, samples, fall_back=given.fall_back
+        )
     except N8nError, httpx.HTTPError:
         log.warning("a simulation stopped: the simulation n8n or a mock did not answer")
         detail = "The simulation n8n or a mock did not answer, so nothing was graded."
@@ -356,33 +428,109 @@ async def simulate(
             return _simulation_out(done)
 
 
+def _samples(given: Sequence[SampleIn]) -> RecordedSamples:
+    """The samples sent, each scrubbed by its allow list as the store keeps it."""
+    samples = RecordedSamples()
+    for sample in given:
+        samples.record(
+            sample.answer, sample.items, "real_run", block=sample.block, sample_id=sample.id
+        )
+    return samples
+
+
 def _not_tried(found: Sequence[NotTried]) -> list[NotTriedOut]:
     return [NotTriedOut(block=n.block, why=n.why) for n in found]
+
+
+def _result_out(r: Graded) -> ResultOut:
+    return ResultOut(
+        name=r.name,
+        kind=r.kind,
+        verdict=r.verdict,
+        expected=r.expected,
+        happened=r.happened,
+        ran=list(r.ran),
+        not_tried=_not_tried(r.not_tried),
+        ending=r.ending,
+        stopped_at=r.stopped_at,
+        plays=[PlayOut(block=p.block, serve=p.serve, vary=list(p.vary)) for p in r.plays],
+    )
 
 
 def _simulation_out(done: Simulation) -> SimulationOut:
     return SimulationOut(
         tried=done.tried,
         passed=done.passed,
-        results=[
-            ResultOut(
-                name=r.name,
-                kind=r.kind,
-                verdict=r.verdict,
-                expected=r.expected,
-                happened=r.happened,
-                ran=list(r.ran),
-                not_tried=_not_tried(r.not_tried),
-            )
-            for r in done.results
-        ],
+        results=[_result_out(r) for r in done.results],
         coverage=CoverageOut(
             not_reached=list(done.coverage.not_reached),
             not_tried=_not_tried(done.coverage.not_tried),
             kinds_without_a_scenario=list(done.coverage.kinds_without_a_scenario),
         ),
         blocks=[BlockModeOut(**asdict(block)) for block in done.blocks],
+        scenarios_from=done.scenarios_from,
+        refused=list(done.refused),
     )
+
+
+def plan_out(plan: SimulationPlan, samples: RecordedSamples) -> PlanOut:
+    """The version as a simulation sees it, for the scenario writer: code's facts only."""
+    answers: set[AnswerKind] = {b.answer for b in plan.reads if b.answer is not None}
+    return PlanOut(
+        blocks=[
+            PlanBlockOut(
+                name=b.name,
+                node_type=b.node_type,
+                role=b.role,
+                mode=b.mode,
+                mock=b.mock,
+                answer=b.answer,
+                plays=list(plays_of(b)),
+                varies=[] if b.answer is None else list(ALLOW_LISTS[b.answer].varies),
+            )
+            for b in plan.blocks
+        ],
+        kinds=list(kinds_that_apply(plan)),
+        samples=[
+            SampleOut(
+                id=s.id,
+                answer=s.answer,
+                block=s.block,
+                items=[cast(dict[str, JsonValue], dict(item)) for item in s.items],
+            )
+            for s in samples.listed(answers)
+        ],
+    )
+
+
+@control.post(
+    "/plans",
+    response_model=PlanOut,
+    description="A workflow version as a simulation sees it, for the scenario writer: each block's "
+    "role and plays, the kinds that apply and the samples, scrubbed. It makes nothing.",
+    responses={
+        **REFUSED,
+        422: {"model": CopyRefused, "description": "A block is not on, or there is no start"},
+    },
+)
+async def plan(body: SignedBody, simulations: CurrentSimulations) -> PlanOut | JSONResponse:
+    try:
+        given = PlanIn.model_validate_json(body)
+    except ValidationError as error:
+        return _problems(error)
+    version = given.version.model_dump(by_alias=True, exclude_none=True)
+    match simulations.plan(version):
+        case SetupRefused(blocks=blocks):
+            refused = CopyRefused(
+                detail="The simulation can't run every block of this version.",
+                blocks=[RefusedBlockOut(**asdict(block)) for block in blocks],
+            )
+            return JSONResponse(status_code=422, content=refused.model_dump())
+        case SimulationRefused(problems=problems):
+            out = SimulationRefusedOut(detail=problems[0], problems=list(problems))
+            return JSONResponse(status_code=422, content=out.model_dump())
+        case found:
+            return plan_out(found, _samples(given.samples))
 
 
 @control.post(

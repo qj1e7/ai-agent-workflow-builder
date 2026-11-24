@@ -765,6 +765,7 @@ def test_the_gateway_has_only_its_own_routes(gw: Gateway) -> None:
         "/simulation/v1/runs/{nonce}",
         "/simulation/v1/copies",
         "/simulation/v1/simulations",
+        "/simulation/v1/plans",
         *real,
     }
 

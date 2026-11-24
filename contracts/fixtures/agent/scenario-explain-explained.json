@@ -1,0 +1,13 @@
+{
+  "kind": "explained",
+  "notes": [
+    {
+      "scenario": "odd_data",
+      "block": "Compare",
+      "kind": "stopped",
+      "source": "Read releases",
+      "detail": "tag_name"
+    }
+  ],
+  "kept": []
+}

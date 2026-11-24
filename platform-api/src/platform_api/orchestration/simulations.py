@@ -21,7 +21,7 @@ import logging
 import time
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, Final, Protocol
+from typing import Any, Final, Literal, Protocol
 
 import httpx
 
@@ -82,6 +82,9 @@ class Simulation:
     coverage: Coverage
     blocks: tuple[BlockMode, ...]
     """How the copies ran each block of the version."""
+    scenarios_from: Literal["given", "templates"] = "templates"
+    refused: tuple[str, ...] = ()
+    """The problems of the scenarios given, when code's templates ran in their place."""
 
     @property
     def tried(self) -> int:
@@ -113,22 +116,35 @@ class Simulations:
         self._wait_limit = wait_limit
         self._lock = asyncio.Lock()
 
+    def plan(self, version: Mapping[str, Any]) -> SimulationPlan | SimulationRefused | SetupRefused:
+        """The version as a simulation sees it, without making anything."""
+        modes = self._setups.modes(version)
+        if isinstance(modes, SetupRefused):
+            return modes
+        plan = plan_of(version, modes)
+        return SimulationRefused((plan,)) if isinstance(plan, str) else plan
+
     async def simulate(
         self,
         version: Mapping[str, Any],
         scenarios: Sequence[ScenarioSpec] | None,
         samples: RecordedSamples,
+        *,
+        fall_back: bool = False,
     ) -> Simulation | SimulationRefused | SetupRefused:
         """Runs the given scenarios, or code's templates when None. Nothing is made when the
-        mock setup refuses the version or a scenario doesn't fit it."""
-        modes = self._setups.modes(version)
-        if isinstance(modes, SetupRefused):
-            return modes
-        plan = plan_of(version, modes)
-        if isinstance(plan, str):
-            return SimulationRefused((plan,))
-        specs = templates(plan, samples) if scenarios is None else tuple(scenarios)
+        mock setup refuses the version or a scenario doesn't fit it, unless fall_back asks for
+        code's templates in place of scenarios that don't fit, as the scenario writer's do."""
+        plan = self.plan(version)
+        if not isinstance(plan, SimulationPlan):
+            return plan
+        given = scenarios is not None
+        specs = tuple(scenarios) if scenarios is not None else templates(plan, samples)
         problems = check_all(specs, plan, samples) if specs else (NOTHING_TO_RUN,)
+        refused: tuple[str, ...] = ()
+        if problems and given and fall_back:
+            refused, given, specs = problems, False, templates(plan, samples)
+            problems = check_all(specs, plan, samples)
         if problems:
             return SimulationRefused(problems)
         async with self._lock:
@@ -136,7 +152,9 @@ class Simulations:
             for spec in specs:
                 results.append(await self._one(version, plan, stage(spec, plan, samples)))
         found = coverage(plan, results, kinds_that_apply(plan))
-        return Simulation(tuple(results), found, modes)
+        blocks = tuple(BlockMode(b.name, b.node_type, b.mode, b.mock, b.why) for b in plan.blocks)
+        source: Literal["given", "templates"] = "given" if given else "templates"
+        return Simulation(tuple(results), found, blocks, source, refused)
 
     async def _one(
         self, version: Mapping[str, Any], plan: SimulationPlan, staged: Staged

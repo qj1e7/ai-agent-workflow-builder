@@ -1,0 +1,33 @@
+{
+  "model": {
+    "style": "anthropic",
+    "base_url": "https://llm-gateway.example",
+    "model": "claude-sonnet-5-5",
+    "api_key": "example-key-not-a-secret"
+  },
+  "failed": [
+    {
+      "name": "odd_data",
+      "kind": "odd_data",
+      "ending": "failed",
+      "stopped_at": "Compare",
+      "expected": "It ends in one of the cases above, never in a failure with no reason.",
+      "happened": "It failed at \"Compare\", which is not a stop with a reason: Cannot read properties of undefined (reading 'tag_name')",
+      "ran": [
+        "Start from the Portal",
+        "Read releases",
+        "Compare"
+      ],
+      "plays": [
+        {
+          "block": "Read releases",
+          "serve": "varied",
+          "vary": [
+            "suffix"
+          ]
+        }
+      ]
+    }
+  ],
+  "within_seconds": 15.0
+}

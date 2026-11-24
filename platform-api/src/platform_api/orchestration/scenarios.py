@@ -80,6 +80,7 @@ KIND_SAID: Final[Mapping[ScenarioKind, str]] = {
     "approver_says_no": "Approver says no",
     "odd_data": "Odd data",
 }
+SERVES: Final[tuple[Serve, ...]] = ("recorded", "varied", "empty", "not_found", "too_slow")
 HOW: Final[Mapping[Serve, str]] = {
     "recorded": "recorded",
     "varied": "varied",
@@ -443,6 +444,16 @@ class NotTried:
 
 
 @dataclass(frozen=True)
+class Played:
+    """How a scenario played one block, when not as recorded: a read served another way, or an
+    Agent block that is too slow. The explainer reads these (PR 6)."""
+
+    block: str
+    serve: Serve
+    vary: tuple[Variation, ...] = ()
+
+
+@dataclass(frozen=True)
 class Staged:
     """One scenario, ready to run."""
 
@@ -458,6 +469,8 @@ class Staged:
     """Blocks the scenario can't play as it asks."""
     runs: bool
     """Whether any block plays what the kind is about. When none can, it is not run."""
+    plays: tuple[Played, ...] = ()
+    """How it played each block other than as recorded, in the version's order."""
 
 
 def _items(
@@ -531,7 +544,27 @@ def stage(spec: ScenarioSpec, plan: SimulationPlan, samples: RecordedSamples) ->
         )
     approver = "no" if spec.kind == "approver_says_no" else "yes"
     gateway = Scenario(name=spec.name, blocks=answers, approver=approver)
-    return Staged(spec.kind, spec.name, gateway, pins, github, tuple(not_tried), played)
+    plays = _plays(filled, plan)
+    return Staged(spec.kind, spec.name, gateway, pins, github, tuple(not_tried), played, plays)
+
+
+def _plays(filled: ScenarioSpec, plan: SimulationPlan) -> tuple[Played, ...]:
+    reads = [(b.name, filled.reads[b.name]) for b in plan.reads]
+    slow = [b.name for b in plan.agents if filled.agents[b.name].serve == "too_slow"]
+    return (
+        *(Played(n, p.serve, tuple(p.vary)) for n, p in reads if p.serve != "recorded"),
+        *(Played(n, "too_slow") for n in slow),
+    )
+
+
+def plays_of(block: PlanBlock) -> tuple[Serve, ...]:
+    """How a simulation can play the block: each way a read can be served, or recorded and too
+    slow for an Agent block. None for any other block. The scenario writer is offered these."""
+    if block.role == "agent":
+        return ("recorded", "too_slow")
+    if block.role != "read":
+        return ()
+    return tuple(serve for serve in SERVES if _cannot(block, serve) is None)
 
 
 def _github_play(play: Play, block: PlanBlock, items: list[dict[str, Any]]) -> GitHubPlay:

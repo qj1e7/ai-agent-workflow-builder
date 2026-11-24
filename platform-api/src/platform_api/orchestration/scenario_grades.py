@@ -31,6 +31,7 @@ from platform_api.orchestration.n8n import ExecutionRecord
 from platform_api.orchestration.node_classes import OURS
 from platform_api.orchestration.scenarios import (
     NotTried,
+    Played,
     ScenarioKind,
     SimulationPlan,
     Staged,
@@ -46,6 +47,7 @@ type Ending = Literal[
     "no_answer",
     "stopped",
     "failed",
+    "wrong_write",
     "did_not_end",
 ]
 
@@ -78,6 +80,12 @@ class Graded:
     ran: tuple[str, ...]
     """The blocks that ran, pinned ones left out."""
     not_tried: tuple[NotTried, ...]
+    ending: Ending | None = None
+    """How code read the run's end. None for a scenario that never ran."""
+    stopped_at: str | None = None
+    """The block that stopped the run, when one did."""
+    plays: tuple[Played, ...] = ()
+    """How the scenario played each block other than as recorded."""
 
 
 @dataclass(frozen=True)
@@ -116,10 +124,11 @@ def _seen(
         return _Seen("failed", "The simulation gateway no longer keeps this run.")
     written = run.would_have_written
     if written is not None and run.approver != "yes":
-        return _Seen("failed", "It asked to make changes with no yes from an Approver.")
+        return _Seen("wrong_write", "It asked to make changes with no yes from an Approver.")
     if written is not None and written < len(run.proposed):
         proposed = len(run.proposed)
-        return _Seen("failed", f"It would have made {written} of the {proposed} changes proposed.")
+        made = f"It would have made {written} of the {proposed} changes proposed."
+        return _Seen("wrong_write", made)
     match execution.status:
         case "crashed":
             return _Seen("failed", "n8n crashed while it ran.")
@@ -252,7 +261,7 @@ def grade(
 ) -> Graded:
     """One scenario's verdict, from the gateway's record and n8n's."""
     seen = _seen(plan, run, execution)
-    failed = seen.ending in ("failed", "did_not_end")
+    failed = seen.ending in ("failed", "wrong_write", "did_not_end")
     problem = seen.happened if failed else _problem(plan, staged, run, seen)
     pinned = {b.name for b in plan.blocks if b.mode == "pinned"}
     ran = () if execution is None else tuple(n for n in execution.ran if n not in pinned)
@@ -261,13 +270,34 @@ def grade(
         expected = NO_ASK_EXPECTED
     verdict: Verdict = "passed" if problem is None else "failed"
     happened = seen.happened if problem is None else problem
-    return Graded(staged.name, staged.kind, verdict, expected, happened, ran, staged.not_tried)
+    stopped_at = seen.at if seen.ending in ("stopped", "failed") else None
+    return Graded(
+        staged.name,
+        staged.kind,
+        verdict,
+        expected,
+        happened,
+        ran,
+        staged.not_tried,
+        seen.ending,
+        stopped_at,
+        staged.plays,
+    )
 
 
 def not_tried(staged: Staged) -> Graded:
     """A scenario no block could play, which never ran."""
     expected = EXPECTED[staged.kind]
-    return Graded(staged.name, staged.kind, "not_tried", expected, NOT_PLAYED, (), staged.not_tried)
+    return Graded(
+        staged.name,
+        staged.kind,
+        "not_tried",
+        expected,
+        NOT_PLAYED,
+        (),
+        staged.not_tried,
+        plays=staged.plays,
+    )
 
 
 def coverage(

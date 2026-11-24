@@ -247,6 +247,14 @@ _Avoid_: Test copy, sandbox workflow
 One situation a workflow version is tried in during a simulation, as data in a schema code owns: how each block that reads a source is served (recorded, varied, empty, not found or too slow) and what each Agent block answers. There are six kinds: Happy path, Nothing new, Source not found, Timeout, Approver says no, and Odd data. Code picks the kinds that apply, builds one from a template for each, and grades each from the records. The model never grades (ADR 0054).
 _Avoid_: Test case, test
 
+**Scenario writer**:
+The model in the agent runtime that picks how each scenario of a simulation serves a version's blocks, one scenario for each kind that applies. It writes no words and can name only blocks, samples and plays it was offered. Code checks every scenario it writes, and runs its own templates on any refusal or with no model (ADR 0054).
+_Avoid_: Test generator
+
+**Failure note**:
+The explainer's picks for one failed scenario: the block, a kind of failure, the play that led to it and at most one name from what happened. Code checks each pick and writes the one plain sentence people see from it. It helps the reader, and code's grade stays the verdict (ADR 0054).
+_Avoid_: AI verdict, diagnosis
+
 **Recorded sample**:
 An answer from a system, kept only as its allow list says, that a scenario serves or varies. Names, emails, account ids and text people wrote are never kept, and key shapes are masked (ADR 0054).
 _Avoid_: Fixture, test data

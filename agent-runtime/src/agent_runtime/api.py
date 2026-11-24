@@ -53,6 +53,10 @@ from agent_runtime.contract import (
     ModelTestResult,
     ReadReleasesRequest,
     ReadReleasesResult,
+    ScenarioExplainRequest,
+    ScenarioExplainResult,
+    ScenarioWriteRequest,
+    ScenarioWriteResult,
     TaskError,
     TaskFailed,
     TaskRequest,
@@ -76,6 +80,8 @@ from agent_runtime.origins import Origin, origin_of, parse_origin_list
 from agent_runtime.planner import FixedPlanner, Planner, run_cards, run_task
 from agent_runtime.planner_led import PLANNER_MODES, PlannerMode, led
 from agent_runtime.release_source import ReleaseSource, releases_of
+from agent_runtime.scenario_explaining import explain_failures
+from agent_runtime.scenario_writing import write_scenarios
 from agent_runtime.summary import (
     ChatFor,
     ModelSummarizer,
@@ -573,6 +579,20 @@ def create_app(
         if chat is None:
             return NO_MODEL
         return find_cause(body, chat)
+
+    @app.post("/v1/simulation/scenarios", dependencies=[Depends(require_key)])
+    def simulation_scenarios(body: ScenarioWriteRequest) -> ScenarioWriteResult:
+        chat = active.chat_source(body.model)
+        if chat is None:
+            return NO_MODEL
+        return write_scenarios(body, chat)
+
+    @app.post("/v1/simulation/explain", dependencies=[Depends(require_key)])
+    def simulation_explain(body: ScenarioExplainRequest) -> ScenarioExplainResult:
+        chat = active.chat_source(body.model)
+        if chat is None:
+            return NO_MODEL
+        return explain_failures(body, chat)
 
     @app.post("/v1/workflows/draft", dependencies=[Depends(require_key)])
     def draft_a_workflow(body: WorkflowDraftRequest) -> WorkflowDraftResult:
