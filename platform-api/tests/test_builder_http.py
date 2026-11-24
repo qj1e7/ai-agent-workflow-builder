@@ -25,6 +25,7 @@ from platform_api.builder.models import (
     CreateAgentUseCase,
     UseCaseCreated,
 )
+from platform_api.builder.planner import RegistryUnavailable
 from platform_api.builder.planner_facts import STATUS_WORDS, PlannerFactsReader
 from platform_api.db import Database
 from platform_api.orchestration import (
@@ -2328,3 +2329,48 @@ def test_the_limit_is_a_setting():
     for bad in ("0", "-3", "lots"):
         with pytest.raises(ConfigError):
             answers_per_minute_from_env({"PLANNER_ANSWERS_PER_MINUTE": bad})
+
+
+SIMULATE = spec(
+    "workflows.simulate",
+    kind="none",
+    system=None,
+    connection=None,
+    tools=[],
+    platform=True,
+    plain="Try each new workflow on practice systems before its test run",
+)
+
+
+@pytest.mark.parametrize("simulation", [False, True], ids=["no simulation n8n", "simulation n8n"])
+async def test_trying_a_workflow_on_practice_systems_needs_the_simulation_n8n(
+    db: Database, simulation: bool
+):
+    """The registry declares Simulation mode built (ADR 0054). Where there is no simulation n8n,
+    the platform says it needs setup, as the drafted card says it isn't available here."""
+    watchlist = Watchlist(db, NothingLearned(), ScheduleBook(db))
+    builder = Builder(
+        db, SecondCallRepeats(), watchlist, "http://localhost:8000", history=RunBook()
+    )
+    front = PlannerFront(
+        FakeAnswers(),
+        builder,
+        watchlist,
+        FakeRegistry(CapabilityList(capabilities=[SIMULATE], examples=[])),
+        FakeStates(a_check("model")),
+        PlannerFactsReader(watchlist, builder, FakeHome()),
+        simulation=simulation,
+    )
+
+    listed = await front.capabilities()
+
+    assert not isinstance(listed, RegistryUnavailable)
+    [entry] = listed.capabilities
+    if simulation:
+        assert (entry.state, entry.why, entry.fix) == ("ready", None, None)
+    else:
+        assert (entry.state, entry.why, entry.fix) == (
+            "needs_setup",
+            planner_module.NO_SIMULATION,
+            planner_module.SET_UP_SIMULATION,
+        )

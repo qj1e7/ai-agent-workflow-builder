@@ -47,6 +47,7 @@ ROUTES = {
     ("POST", "/api/v1/drafted-workflows/{drafted_id}/answers"),
     ("POST", "/api/v1/drafted-workflows/{drafted_id}/n8n"),
     ("POST", "/api/v1/drafted-workflows/{drafted_id}/n8n/done"),
+    ("POST", "/api/v1/drafted-workflows/{drafted_id}/simulation"),
     ("POST", "/api/v1/drafted-workflows/{drafted_id}/set-up"),
     ("GET", "/api/v1/setup-approvals/{approval_id}"),
     ("POST", "/api/v1/setup-approvals/{approval_id}/decisions"),

@@ -75,6 +75,7 @@ def test_only_the_platform_duty_is_ready_without_an_ability_line():
         "workflows.change",
         "workflows.draft",
         "workflows.explain",
+        "workflows.simulate",
         "watchlist.remove",
     ]
 
@@ -236,3 +237,12 @@ def test_reading_confluence_is_ready_only_through_the_confluence_connection():
     assert entry.tools == ["confluence.read_page"]
     assert (entry.focus, entry.short) == (False, None)
     assert BY_ID["confluence.change"].state == "planned"
+
+
+def test_simulation_mode_is_a_built_duty_of_the_platform_that_needs_no_model():
+    """ADR 0054, PR 7. platform-api says it needs setup where there is no simulation n8n. It has
+    no short words, so the chat's What I can do card stays as the sketch draws it."""
+    entry = BY_ID["workflows.simulate"]
+    assert (entry.state, entry.platform, entry.needs_model) == ("ready", True, False)
+    assert (entry.tools, entry.connection, entry.short) == ([], None, None)
+    assert entry.plain == "Try each new workflow on practice systems before its test run"

@@ -7,6 +7,7 @@ from platform_api.auth import ConfigError
 from platform_api.settings import (
     CosmosSettings,
     LangfuseSettings,
+    SimulationSettings,
     bootstrap_settings_from_env,
     settings_from_env,
 )
@@ -310,3 +311,60 @@ def test_no_secret_shows_in_the_bootstrap_settings_repr():
         "PLATFORM_INTERNAL_URL": "http://platform-api:8000",
     }
     assert "-secret" not in repr(bootstrap_settings_from_env(env))
+
+
+# Made up at run time, so no key shape sits in the file.
+SIM_SECRET = "".join(["sim", "secret", "0123456789abcdef"])
+
+
+def test_with_no_simulation_settings_there_is_no_simulation_n8n_here():
+    assert settings_from_env(LOCAL_ENV).simulation is None
+
+
+def test_the_simulation_gateway_and_its_start_secret_turn_simulation_on_with_no_model():
+    env = {
+        **LOCAL_ENV,
+        "SIMULATION_URL": "http://gateway:8600/",
+        "SIMULATION_START_SECRET": SIM_SECRET,
+    }
+    simulation = settings_from_env(env).simulation
+    assert simulation == SimulationSettings("http://gateway:8600", SIM_SECRET, uses_model=False)
+    assert SIM_SECRET not in repr(simulation)
+
+
+def test_the_model_writes_and_explains_cases_only_when_its_setting_is_on():
+    env = {
+        **LOCAL_ENV,
+        "SIMULATION_URL": "http://gateway:8600",
+        "SIMULATION_START_SECRET": SIM_SECRET,
+        "SIMULATION_MODEL": "on",
+    }
+    simulation = settings_from_env(env).simulation
+    assert simulation is not None and simulation.uses_model is True
+
+
+@pytest.mark.parametrize(
+    ("env", "reason"),
+    [
+        pytest.param({"SIMULATION_URL": "http://gateway:8600"}, "go together", id="no secret"),
+        pytest.param({"SIMULATION_START_SECRET": SIM_SECRET}, "go together", id="no address"),
+        pytest.param(
+            {"SIMULATION_URL": "ftp://gateway", "SIMULATION_START_SECRET": SIM_SECRET},
+            "SIMULATION_URL",
+            id="not http",
+        ),
+        pytest.param(
+            {
+                "SIMULATION_URL": "http://gateway:8600",
+                "SIMULATION_START_SECRET": SIM_SECRET,
+                "SIMULATION_MODEL": "yes",
+            },
+            "on or off",
+            id="model not on or off",
+        ),
+        pytest.param({"SIMULATION_MODEL": "on"}, "SIMULATION_URL", id="model without a gateway"),
+    ],
+)
+def test_simulation_settings_that_cannot_work_refuse_to_start(env: dict[str, str], reason: str):
+    with pytest.raises(ConfigError, match=reason):
+        settings_from_env({**LOCAL_ENV, **env})
