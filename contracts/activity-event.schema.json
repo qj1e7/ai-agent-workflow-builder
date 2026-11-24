@@ -1119,16 +1119,11 @@
       ],
       "type": "string"
     },
-    "FixBlockName": {
-      "maxLength": 200,
-      "minLength": 1,
-      "pattern": "^[^\\x00-\\x1f\\x7f]+$",
-      "type": "string"
-    },
     "FixFound": {
       "enum": [
         "confirmed",
-        "not_confirmed",
+        "not_in_version",
+        "not_where_it_stopped",
         "inside",
         "widened",
         "not_in_catalogue",
@@ -1275,9 +1270,9 @@
       "additionalProperties": false,
       "properties": {
         "blocks": {
-          "description": "For the AI troubleshooter, the failed part it named, and for the Fix drafter, the failed part it may change. Empty for the others, and for the AI troubleshooter when it gave no answer.",
+          "description": "For the AI troubleshooter, the failed part it named, only once code found each block in the version, and for the Fix drafter, the failed part it may change. Each block once. Empty for the others, and for the AI troubleshooter when it named a block the version doesn't have or gave no answer.",
           "items": {
-            "$ref": "#/$defs/FixBlockName"
+            "$ref": "#/$defs/ShownName"
           },
           "maxItems": 10,
           "title": "Blocks",
@@ -1564,9 +1559,12 @@
           "type": "string"
         },
         "asked_by_name": {
-          "maxLength": 200,
-          "minLength": 1,
-          "title": "Asked By Name",
+          "$ref": "#/$defs/ShownName"
+        },
+        "ends_by": {
+          "description": "When the fix counts as handed back for time if nothing ended it: at most 20 minutes after the press of the button.",
+          "format": "date-time",
+          "title": "Ends By",
           "type": "string"
         },
         "fix_id": {
@@ -1576,7 +1574,8 @@
       "required": [
         "fix_id",
         "asked_by",
-        "asked_by_name"
+        "asked_by_name",
+        "ends_by"
       ],
       "title": "FixStartedData",
       "type": "object"
@@ -2213,6 +2212,11 @@
       ],
       "title": "RunSucceededData",
       "type": "object"
+    },
+    "ShownName": {
+      "maxLength": 80,
+      "minLength": 1,
+      "type": "string"
     },
     "StepFinished": {
       "additionalProperties": false,

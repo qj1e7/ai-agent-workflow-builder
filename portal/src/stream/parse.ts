@@ -72,7 +72,7 @@ const REQUIRED_KEYS = {
   run_lost: ['approval_id', 'why'],
   support_reported: ['request_id', 'reported_by'],
   told: ['status', 'line'],
-  fix_started: ['fix_id', 'asked_by'],
+  fix_started: ['fix_id', 'asked_by', 'ends_by'],
   fix_handoff: ['fix_id', 'to', 'found'],
   fix_round: ['fix_id', 'round', 'passed', 'scenarios', 'progress'],
   fix_proposed: ['fix_id', 'version', 'digest'],

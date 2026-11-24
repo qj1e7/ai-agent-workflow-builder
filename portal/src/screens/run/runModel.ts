@@ -66,11 +66,21 @@ export interface BroughtIn {
   readonly seq: number
 }
 
-/** A fix on the stopped run (ADR 0055): the sub-agents it brought in, in order, and how it ended, or null while it runs. */
+/**
+ * A fix on the stopped run (ADR 0055): the sub-agents it brought in, in order, how an event ended it, or null, and when it runs
+ * out of time. Read where it stands with fixEnd, which counts the deadline.
+ */
 export interface FixState {
   readonly id: string
   readonly agents: readonly BroughtIn[]
   readonly ended: 'proposed' | 'handed_back' | null
+  readonly endsBy: RunTime
+}
+
+/** How a fix ended by now: as an event said, or handed back once its deadline passed with no event, as the platform counts it. */
+export function fixEnd(fix: FixState, now: number): 'proposed' | 'handed_back' | null {
+  if (fix.ended !== null) return fix.ended
+  return now >= fix.endsBy ? 'handed_back' : null
 }
 
 /** One entry in the run's log, placed and timed by the event that made it. */
@@ -325,12 +335,12 @@ const SUB_AGENTS: Readonly<Partial<Record<DataOf<'fix_handoff'>['to'], AgentRef>
 }
 
 /** What the platform found that the fix can't use. */
-const REFUSED: ReadonlySet<DataOf<'fix_handoff'>['found']> = new Set(['not_confirmed', 'widened', 'not_in_catalogue', 'refused', 'failed', 'no_answer'])
+const REFUSED: ReadonlySet<DataOf<'fix_handoff'>['found']> = new Set(['not_in_version', 'not_where_it_stopped', 'widened', 'not_in_catalogue', 'refused', 'failed', 'no_answer'])
 
 type FixEvent = EventOf<'fix_started' | 'fix_handoff' | 'fix_round' | 'fix_proposed' | 'fix_handed_back'>
 
 function fixOf(fix: FixState | null, event: FixEvent): FixState | null {
-  if (event.kind === 'fix_started') return { id: event.data.fix_id, agents: [], ended: null }
+  if (event.kind === 'fix_started') return { id: event.data.fix_id, agents: [], ended: null, endsBy: Date.parse(event.data.ends_by) as RunTime }
   if (fix === null || fix.id !== event.data.fix_id) return fix
   switch (event.kind) {
     case 'fix_handoff': {

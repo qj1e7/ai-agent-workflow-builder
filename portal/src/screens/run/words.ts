@@ -5,7 +5,7 @@ import type { SessionKind } from '../../api/session'
 import type { ApprovalStepView, Day, Refusal, RunOutcome, RunView, UseCaseView, WriteActionView } from '../../api/types'
 import { PRODUCT } from '../../shell/product'
 import type { LiveRun } from './liveRun'
-import type { AgentRef, ChatItem, Declined, FixState, PlanBlock, RunModel } from './runModel'
+import { fixEnd, type AgentRef, type ChatItem, type Declined, type FixState, type PlanBlock, type RunModel } from './runModel'
 
 export type NameOf = (id: string) => string
 
@@ -211,9 +211,9 @@ export function lineOf(item: ChatItem, nameOf: NameOf, declinedNext: string | nu
   }
 }
 
-/** Where a fix on the stopped run stands, as the AI troubleshooter says it under the stop. */
-export function fixWords(fix: FixState): string {
-  switch (fix.ended) {
+/** Where a fix on the stopped run stands by now, as the AI troubleshooter says it under the stop. */
+export function fixWords(fix: FixState, now: number): string {
+  switch (fixEnd(fix, now)) {
     case null:
       return 'Drafting a fix.'
     case 'proposed':

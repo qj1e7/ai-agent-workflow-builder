@@ -4,30 +4,54 @@ which are code. Each event holds only bounded fields that code chose, and code w
 from them, so no words of a model reach the log. A block's name is copied from the workflow, and
 stays a name whatever it says."""
 
+import unicodedata
 from collections.abc import Mapping, Sequence
+from datetime import timedelta
 from typing import Annotated, Final, Literal, Self
 
-from pydantic import Field, StringConstraints, model_validator
+from pydantic import AfterValidator, AwareDatetime, Field, StringConstraints, model_validator
 
 from platform_api.shared import UserId
 from platform_api.wire import WireModel
 
 MOST_ROUNDS: Final = 3
 MOST_HANDOFFS: Final = 12
-"""ADR 0055, section 5: at most 3 rounds and 12 hand-offs in one fix."""
+FIX_TIME_LIMIT: Final = timedelta(minutes=20)
+"""ADR 0055, section 5: at most 3 rounds, 12 hand-offs and 20 minutes in one fix."""
 MOST_BLOCKS: Final = 10
 MOST_SCENARIOS: Final = 100
+NAME_LIMIT: Final = 80
+"""As long as the builder lets a name be, once trimmed (CreateAgentUseCase.name)."""
+
+UNSHOWN: Final = frozenset({"Cc", "Cf", "Zl", "Zp"})
+"""Control and format characters, and line and paragraph separators: they hide text, reorder it
+or break a line, so a name could pass as the platform's own words."""
+QUOTES: Final = "\u201c\u201d"
+"""The marks a name is shown in, so a name can't close its own quote."""
+
+
+def _shown_as_written(name: str) -> str:
+    if any(unicodedata.category(c) in UNSHOWN or c in QUOTES for c in name):
+        raise ValueError("a name has no control, format or separator characters, and no quotes")
+    if not any(unicodedata.category(c)[0] in "LNPS" for c in name):
+        raise ValueError("a name has something to see")
+    return name
+
 
 type FixId = Annotated[str, StringConstraints(pattern=r"^fix_[0-9A-Za-z]{1,40}$")]
-type FixBlockName = Annotated[
-    str, StringConstraints(min_length=1, max_length=200, pattern=r"^[^\x00-\x1f\x7f]+$")
+type ShownName = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, min_length=1, max_length=NAME_LIMIT),
+    AfterValidator(_shown_as_written),
 ]
+"""A name people see in a sentence: a block's, or a person's."""
 type FixHandedTo = Literal[
     "troubleshooter", "fix_drafter", "scenario_writer", "simulation", "checker"
 ]
 type FixFound = Literal[
     "confirmed",
-    "not_confirmed",
+    "not_in_version",
+    "not_where_it_stopped",
     "inside",
     "widened",
     "not_in_catalogue",
@@ -61,7 +85,9 @@ type FixHandBack = Literal[
 ]
 
 FOUND_BY: Final[Mapping[FixHandedTo, frozenset[FixFound]]] = {
-    "troubleshooter": frozenset({"confirmed", "not_confirmed", "no_answer"}),
+    "troubleshooter": frozenset(
+        {"confirmed", "not_in_version", "not_where_it_stopped", "no_answer"}
+    ),
     "fix_drafter": frozenset({"inside", "widened", "not_in_catalogue", "no_answer"}),
     "scenario_writer": frozenset({"kept", "refused", "no_answer"}),
     "simulation": frozenset({"ran", "no_answer"}),
@@ -73,19 +99,24 @@ FOUND_BY: Final[Mapping[FixHandedTo, frozenset[FixFound]]] = {
 class FixStartedData(WireModel):
     fix_id: FixId
     asked_by: UserId
-    asked_by_name: str = Field(min_length=1, max_length=200)
+    asked_by_name: ShownName
+    ends_by: AwareDatetime = Field(
+        description="When the fix counts as handed back for time if nothing ended it: at most 20 "
+        "minutes after the press of the button."
+    )
 
 
 class FixHandoffData(WireModel):
     fix_id: FixId
     handoff: int = Field(ge=1, le=MOST_HANDOFFS, description="Its number in the fix, from 1.")
     to: FixHandedTo
-    blocks: list[FixBlockName] = Field(
+    blocks: list[ShownName] = Field(
         default_factory=list[str],
         max_length=MOST_BLOCKS,
-        description="For the AI troubleshooter, the failed part it named, and for the Fix "
-        "drafter, the failed part it may change. Empty for the others, and for the AI "
-        "troubleshooter when it gave no answer.",
+        description="For the AI troubleshooter, the failed part it named, only once code found "
+        "each block in the version, and for the Fix drafter, the failed part it may change. Each "
+        "block once. Empty for the others, and for the AI troubleshooter when it named a block "
+        "the version doesn't have or gave no answer.",
     )
     found: FixFound = Field(description="What code found of the work that came back.")
     widened_by: FixWidening | None = Field(
@@ -100,9 +131,11 @@ class FixHandoffData(WireModel):
     def _fits(self) -> Self:
         if self.found not in FOUND_BY[self.to]:
             raise ValueError(f"{self.found} isn't something code finds of {self.to}")
-        named = self.to == "fix_drafter" or self.found in ("confirmed", "not_confirmed")
+        named = self.to == "fix_drafter" or self.found in ("confirmed", "not_where_it_stopped")
         if named != bool(self.blocks):
             raise ValueError("blocks name the failed part, only for the hand-offs about it")
+        if len(set(self.blocks)) != len(self.blocks):
+            raise ValueError("each block is named once")
         if (self.found == "widened") != (self.widened_by is not None):
             raise ValueError("widened_by says how a widened change went too far, and only that")
         if self.found != "ran":
@@ -195,7 +228,8 @@ HANDED_BACK: Final[Mapping[FixHandBack, str]] = {
 
 
 def _blocks(names: Sequence[str]) -> str:
-    *before, last = names
+    """The blocks by name, each in quotes, so a name never reads as the platform's words."""
+    *before, last = [f"\u201c{name}\u201d" for name in names]
     joined = f"{', '.join(before)} and {last}" if before else last
     return f"the {joined} block{'s' if before else ''}"
 
@@ -211,8 +245,10 @@ def _handoff_words(data: FixHandoffData) -> str:
                 f"I found the cause in {_blocks(data.blocks)}, and the platform checked the run "
                 "stopped there."
             )
-        case "troubleshooter", "not_confirmed":
+        case "troubleshooter", "not_where_it_stopped":
             return f"I named {_blocks(data.blocks)}, but the run didn't stop there."
+        case "troubleshooter", "not_in_version":
+            return "I named a block that isn't in this workflow, so the platform didn't use it."
         case "troubleshooter", _:
             return "I looked for the cause, but got no answer."
         case "fix_drafter", found:

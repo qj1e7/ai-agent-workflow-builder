@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router'
 import { ApiError } from '../../api/client'
 import { useSession } from '../../api/context'
 import { useApproval, useRun, useUseCase } from '../../api/queries'
+import { useNow } from '../../api/ticking'
 import type { RunView, UseCaseView } from '../../api/types'
 import { PageHead } from '../../shell/PageHead'
 import { PRODUCT } from '../../shell/product'
@@ -187,6 +188,8 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
   const heading = useRef<HTMLHeadingElement>(null)
   const n8nAccess = me?.n8n_access === true
   const [view, showView] = useView()
+  /** Redrawn each minute, so a fix whose twenty minutes run out stops showing as at work. */
+  const now = useNow(() => new Date()).getTime()
   const shownView = n8nAccess ? view : 'main'
 
   const waiting = shown.phase.state === 'awaiting_approval'
@@ -263,13 +266,13 @@ function RunView({ run, useCase, live, fromApproval, detail }: RunViewProps) {
     ) : null
   const failure = shown.phase.state === 'failed' ? shown.phase : null
   const safeId = `${run.run_id}-safe`
-  const troubleFace = troubleFaceOf(facts.state, shown.fix)
+  const troubleFace = troubleFaceOf(facts.state, shown.fix, now)
   const trouble =
     failure ? (
       <DecisionArea label="Why it stopped">
         <TroubleshooterBlock face={troubleFace}>
           <StopAnswers failure={failure} {...story.stopped} safeId={safeId} />
-          {shown.fix ? <FixCrew fix={shown.fix} loadedUpTo={loadedUpTo} /> : null}
+          {shown.fix ? <FixCrew fix={shown.fix} now={now} loadedUpTo={loadedUpTo} /> : null}
         </TroubleshooterBlock>
       </DecisionArea>
     ) : story.answers.length > 0 && !waiting ? (
