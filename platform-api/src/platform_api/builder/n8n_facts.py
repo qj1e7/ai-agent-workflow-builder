@@ -10,14 +10,15 @@ from collections.abc import Iterable, Mapping, Sequence
 from typing import Protocol
 
 from platform_api.builder.card_store import CardLibrary
-from platform_api.builder.cards import VERSION_CHECKER_ID, card_spec
-from platform_api.builder.layout import REPO_INPUT
+from platform_api.builder.cards import card_spec
 from platform_api.builder.templates import SOFTWARE_WATCHLIST, TAG_PATTERN
 from platform_api.builder.versions import authors_from
 from platform_api.db import Database
 from platform_api.orchestration import (
     GITHUB_RELEASES,
+    REPO_INPUT,
     TYPE_OF,
+    VERSION_CHECKER_ID,
     WATCHLIST_CHECKER,
     WATCHLIST_PLACE,
     AgentRejected,
@@ -42,6 +43,7 @@ from platform_api.orchestration import (
     WriteEntry,
     card_bindings,
     known_options,
+    release_of,
 )
 from platform_api.shared import UseCaseId, UserId
 
@@ -65,7 +67,21 @@ _PLACES = """
     WHERE u.deleted_at IS NULL AND d.set_up_at IS NOT NULL
       AND n ->> 'type' = %(read)s AND n -> 'parameters' ->> 'source' = %(source)s
       AND n -> 'parameters' ->> 'place' IS NOT NULL
+    UNION
+    SELECT n -> 'parameters' ->> 'place', n -> 'parameters' ->> 'place'
+    FROM builder.fixes f
+    JOIN builder.use_cases u ON u.use_case_id = f.use_case_id
+    CROSS JOIN LATERAL jsonb_array_elements(f.document -> 'nodes') AS n
+    WHERE u.deleted_at IS NULL
+      AND (f.turned_on_at IS NOT NULL
+           OR (f.testing_at IS NOT NULL AND f.test_failed_at IS NULL AND f.dropped_at IS NULL))
+      AND n ->> 'type' = %(read)s AND n -> 'parameters' ->> 'source' = %(source)s
+      AND n -> 'parameters' ->> 'place' IS NOT NULL
 """
+"""A fix an Approver said yes to adds what its version reads once Turn back on began its test
+run, and keeps it once it is the version in use (ADR 0055, PR 6), so its test run and its runs
+may read a repository a person renamed. A test run that failed, a fix dropped, or one nobody
+turned back on adds nothing."""
 
 
 NOTHING_ON_THE_LIST = "Nothing on the list to check."
@@ -221,8 +237,7 @@ class BuilderWorkflowFacts:
             bindings = card_bindings(spec, values)
         except ValueError:
             return CannotRun(missing_target(spec.name, spec.inputs, values))
-        release_of = values.get(REPO_INPUT) if agent_id == VERSION_CHECKER_ID else None
-        return AgentToRun(CardRun(spec, dict(values), bindings), release_of)
+        return AgentToRun(CardRun(spec, dict(values), bindings), release_of(agent_id, values))
 
     async def places(self, source: str) -> Sequence[NodeOption]:
         """GitHub releases: the watched software, the repositories the Version checker

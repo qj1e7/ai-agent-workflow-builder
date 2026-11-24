@@ -36,6 +36,7 @@ from agent_runtime.fixing import coordinator
 from agent_runtime.fixing.coordinator import (
     HAND_BACK,
     MOST_DOLLARS,
+    MOST_SCENARIOS_TRIED,
     HandedBack,
     HandedIn,
     Stopped,
@@ -107,6 +108,7 @@ def test_a_fix_code_accepts_is_stored_once_and_proposed_with_its_version_and_dig
     outcome = run.fixing.outcome
     assert isinstance(outcome, HandedIn)
     assert run.fakes.revisions.stored == [outcome.plan]
+    assert run.fakes.revisions.causes == [outcome.cause]
     [proposed] = [e for e in run.fakes.log.events if isinstance(e, FixProposedData)]
     assert (proposed.version, proposed.digest) == (outcome.version, outcome.digest)
     read = next(b for b in outcome.plan.blocks if b.name == READ)
@@ -168,21 +170,46 @@ def test_a_block_name_the_log_can_t_show_is_kept_as_not_logged_and_the_fix_goes_
     assert quoted not in caplog.text
 
 
-def test_nothing_runs_when_the_log_refuses_the_start():
+def test_the_coordinator_never_writes_the_fix_s_start_platform_api_wrote_it():
     base = CASES["fixable-renamed-repository"]
     clock = Clock(STARTED)
     fakes = Fakes(base, clock)
-    fakes.log.events.append(
+    note = fakes.log.note
+    noted: list[FixData] = []
+
+    def kept(data: FixData) -> FixRefusal | None:
+        noted.append(data)
+        return note(data)
+
+    fakes.log.note = kept  # type: ignore[method-assign]
+    fixing, _ = fixed_with(base, clock, fakes)
+    assert isinstance(fixing.outcome, HandedIn)
+    assert not any(isinstance(data, FixStartedData) for data in noted)
+    assert [e for e in fakes.log.events if isinstance(e, FixStartedData)] == [
         FixStartedData(
-            fix_id="fix_01OTHER",
-            asked_by="bob",
-            asked_by_name="Bob",
-            ends_by=STARTED + timedelta(minutes=5),
+            fix_id=FIX_ID, asked_by="alice", asked_by_name="Alice", ends_by=STARTED + FIX_TIME_LIMIT
         )
-    )
-    fixing, chat = fixed_with(base, clock, fakes)
-    assert fixing.outcome == Stopped("another_fix")
-    assert chat.seen == [] and fakes.played.calls == []
+    ]
+
+
+def test_a_fix_the_log_never_started_runs_nothing_past_its_first_event():
+    base = CASES["fixable-renamed-repository"]
+    clock = Clock(STARTED)
+    fakes = Fakes(base, clock)
+    fakes.log.events.clear()
+    fixing, _ = fixed_with(base, clock, fakes)
+    assert fixing.outcome == Stopped("not_started")
+    assert [name for name, _ in fakes.played.calls] == ["troubleshooter"]
+
+
+@pytest.mark.parametrize(("written", "found"), [(19, "kept"), (20, "refused")])
+def test_a_fix_holds_at_most_20_scenarios_its_replay_of_the_stop_included(written: int, found: str):
+    base = CASES["fixable-renamed-repository"]
+    many = [[{"name": f"Case {n}", "reads": [READ]} for n in range(written)]]
+    run = run_case(case(base.id, scenarios=many))
+    [writer] = [e for e in handoffs_of(run.fakes) if e.to == "scenario_writer"]
+    assert writer.found == found
+    assert len(run.fixing.ledger.scenarios) <= MOST_SCENARIOS_TRIED == 20
 
 
 def test_a_run_retried_during_the_fix_stops_it():

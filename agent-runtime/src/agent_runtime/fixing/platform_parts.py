@@ -1,5 +1,5 @@
-"""The fix's parts that platform-api answers (ADR 0055, PR 5): the Scenario writer, the
-simulation, the checker and the recorder of the fix's events.
+"""The fix's parts that platform-api answers (ADR 0055, PR 5 and PR 6): the Scenario writer, the
+simulation, the checker, the store of revisions and the recorder of the fix's events.
 
 The runtime holds no simulation secret and can't reach the simulation gateway, so each part is a
 call to platform-api's routes for one fix on one stopped run, with the fix's own token. Each call
@@ -23,7 +23,7 @@ from typing import Any, Final
 import httpx
 from pydantic import Field, ValidationError
 
-from agent_runtime.contract import WireModel, WorkflowPlan
+from agent_runtime.contract import CauseFound, WireModel, WorkflowPlan
 from agent_runtime.fixing.cost import charge
 from agent_runtime.fixing.events import (
     FixData,
@@ -32,7 +32,7 @@ from agent_runtime.fixing.events import (
     FixRefusal,
     fix_kind,
 )
-from agent_runtime.fixing.ports import Scenario, ScenarioResult, Simulated
+from agent_runtime.fixing.ports import Scenario, ScenarioResult, Simulated, StoredRevision
 from agent_runtime.model_cost import dollars_for, packaged_prices
 from agent_runtime.scenario_explaining import EXPLAIN_MOST_PROMPT_CHARS, EXPLAIN_MOST_TOKENS
 from agent_runtime.scenario_writing import WRITE_MOST_PROMPT_CHARS, WRITE_MOST_TOKENS
@@ -77,6 +77,11 @@ class _Checked(WireModel):
 
 class _Noted(WireModel):
     refused: FixRefusal | None
+
+
+class _Stored(WireModel):
+    version: int = Field(ge=1)
+    digest: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
 
 
 class PlatformParts:
@@ -145,6 +150,18 @@ class PlatformParts:
             "checks", {"version": version.model_dump(mode="json")}, seconds, _Checked
         )
         return checked is not None and checked.passes
+
+    def store(self, fixed: WorkflowPlan, cause: CauseFound, seconds: float) -> StoredRevision:
+        """The fixed version, stored under the fix's id with the cause code confirmed. It raises
+        when platform-api refused it or didn't answer, so the coordinator may hand it in again."""
+        body = {
+            "version": fixed.model_dump(mode="json"),
+            "cause": cause.model_dump(mode="json", exclude={"kind"}),
+        }
+        answer = self._post("revisions", body, _within(seconds))
+        answer.raise_for_status()
+        stored = _Stored.model_validate_json(answer.content)
+        return StoredRevision(stored.version, stored.digest)
 
     def note(self, data: FixData) -> FixRefusal | None:
         """The log's refusal, or None when it took the event. Raises when the log couldn't be

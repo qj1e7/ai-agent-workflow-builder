@@ -13,7 +13,7 @@ from typing import Any
 import httpx
 import pytest
 
-from agent_runtime.contract import WorkflowPlan
+from agent_runtime.contract import CauseFound, WorkflowPlan
 from agent_runtime.fixing.cost import FixCost, counted, prices_by_model
 from agent_runtime.fixing.events import (
     FixHandedBackData,
@@ -27,7 +27,13 @@ from agent_runtime.fixing.platform_parts import (
     WRITE_CHARGE,
     PlatformParts,
 )
-from agent_runtime.fixing.ports import Scenario, ScenarioNote, ScenarioResult, Simulated
+from agent_runtime.fixing.ports import (
+    Scenario,
+    ScenarioNote,
+    ScenarioResult,
+    Simulated,
+    StoredRevision,
+)
 from agent_runtime.model_cost import packaged_prices
 
 BASE = "http://platform-api:8000"
@@ -312,6 +318,38 @@ def test_a_refusal_is_never_tried_again():
     assert len(platform.asked) == 1
 
 
+# The store of revisions
+
+CAUSE = CauseFound(
+    failed_part=["Read new releases"],
+    system="github",
+    failure_kind="not_found",
+    detail="langchain-ai/langgraph",
+)
+DIGEST = "sha256:" + "c" * 64
+
+
+def test_a_fix_is_stored_under_its_fix_id_with_the_cause_code_confirmed():
+    platform = Platform()
+    platform.answer("revisions", ok({"version": 3, "digest": DIGEST}))
+    assert parts(platform).store(VERSION, CAUSE, 20.0) == StoredRevision(3, DIGEST)
+    [(_, body, request)] = platform.asked
+    assert str(request.url) == f"{BASE}/internal/v1/runs/{RUN}/fixes/{FIX}/revisions"
+    assert request.headers[FIX_TOKEN_HEADER] == TOKEN
+    assert body == {
+        "version": VERSION.model_dump(mode="json"),
+        "cause": CAUSE.model_dump(mode="json", exclude={"kind"}),
+    }
+
+
+@pytest.mark.parametrize("answer", [httpx.Response(409), httpx.ConnectError("down")])
+def test_a_store_platform_api_refused_or_never_answered_raises(answer: Any):
+    platform = Platform()
+    platform.answer("revisions", answer)
+    with pytest.raises(httpx.HTTPError):
+        parts(platform).store(VERSION, CAUSE, 20.0)
+
+
 # platform-api's contract
 
 OPENAPI = Path(__file__).resolve().parents[2] / "contracts" / "openapi.json"
@@ -320,6 +358,7 @@ ROUTES = {
     "scenarios": ("FixScenariosIn", "FixScenariosOut"),
     "simulations": ("FixSimulationIn", "FixSimulationOut"),
     "checks": ("FixCheckIn", "FixCheckOut"),
+    "revisions": ("FixRevisionIn", "FixRevisionOut"),
 }
 
 
@@ -334,11 +373,13 @@ def test_each_call_sends_what_platform_api_publishes_and_reads_what_it_answers()
         "simulations", ok({"results": [], "not_reached": [], "named": [], "asked_model": False})
     )
     platform.answer("checks", ok({"passes": True, "findings": []}))
+    platform.answer("revisions", ok({"version": 3, "digest": DIGEST}))
     recorder = parts(platform)
     recorder.note(HANDOFF)
     recorder.write(VERSION, [], 30.0, plenty)
     recorder.run(VERSION, [HAPPY], 60.0, plenty)
     recorder.passes(VERSION, 10.0, plenty)
+    recorder.store(VERSION, CAUSE, 10.0)
     assert [route for route, _, _ in platform.asked] == list(ROUTES)
     for route, body, request in platform.asked:
         sent, answered = ROUTES[route]

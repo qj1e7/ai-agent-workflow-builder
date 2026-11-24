@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response
 
 from platform_api.auth import OPERATORS_ONLY, SIGNED_IN, CurrentPrincipal
 from platform_api.builder.drafted_views import (
@@ -246,9 +246,18 @@ async def set_up_drafted_again(
     responses={**SIGNED_IN, 404: error_response(NO_SUCH_SET_UP)},
 )
 async def read_set_up_approval(
-    approval_id: str, principal: CurrentPrincipal, drafted: CurrentDrafted
+    approval_id: str,
+    principal: CurrentPrincipal,
+    drafted: CurrentDrafted,
+    reworded: Annotated[
+        bool,
+        Query(
+            description="For a fix, also ask the AI model to smooth the report's in-short. It "
+            "is help for the reader, never the check, and stays null when any check fails."
+        ),
+    ] = False,
 ) -> SetUpApprovalView:
-    view = await drafted.approval(approval_id, principal)
+    view = await drafted.approval(approval_id, principal, reworded)
     if view is None:
         raise HTTPException(404, NO_SUCH_SET_UP)
     return view

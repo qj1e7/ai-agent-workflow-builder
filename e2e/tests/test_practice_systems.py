@@ -110,7 +110,11 @@ def test_a_workflow_the_planner_builds_from_our_blocks_is_tried_on_practice_syst
     assert first["simulation"]["state"] in ("running", *ENDED), "Set up started its try"
     simulation = ended(lambda: api.get("carol", path)["simulation"], use_case_id)
     graded(simulation)
-    assert simulation["tried"] >= 1, simulation
+    verdicts = {case["kind"]: case["verdict"] for case in simulation["cases"]}
+    # Its Version checker proposes the ticket, and Newer? goes on to the yes only when the
+    # checker's answer says newer, as platform-api's does.
+    assert verdicts.get("happy_path") == "passed", simulation["cases"]
+    assert verdicts.get("approver_says_no") == "passed", simulation["cases"]
 
     assert api.get("carol", f"/api/v1/use-cases/{use_case_id}")["state"] == "draft"
     assert len(api.tickets()) == tickets, "a simulation writes nothing"

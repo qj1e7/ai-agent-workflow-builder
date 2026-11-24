@@ -61,7 +61,7 @@ scripts/simulation.sh down    # removes its containers, networks and volumes
 Our blocks in the simulation n8n call `http://gateway:8600` (ADR 0054, section 3). The gateway is its own service. It runs platform-api's image, but only its own app (`platform_api.orchestration.simulation_gateway`), and mounts platform-api's own router for our blocks, so each block gets the same answers, refusals and checks as from platform-api. It answers them from the simulated run's scenario:
 
 - Read gets recorded items, mock GitHub's releases, or a source that is not found or does not answer in time.
-- Agent gets a recorded reply. The gateway calls no model.
+- Agent gets a recorded reply. The gateway calls no model. As from platform-api, the Version checker's answer also says whether it found a newer release (`newer` when the reply proposes a change) and the newest release the run read, so the release check's Newer? block goes on to Ask for a yes.
 - Ask for a yes gets the scenario's yes, no or no answer, and asks nobody. Only the simulation n8n is woken.
 - Every write is refused with 403 "A simulation never writes.", as the write gateway refuses a test run's write. The gateway keeps how many of the changes proposed it would have made.
 - Tell answers `would_have_sent` and sends nothing.
@@ -73,6 +73,8 @@ The simulation's driver uses four more routes, each signed with the simulation's
 The simulation n8n's own environment holds the start secret too, because Start from the Portal checks a start with it. A workflow there can't read it: n8n keeps expressions from reading its environment, Code runs in the task runner, which holds none of n8n's settings, and the copies route refuses HTTP Request and Code.
 
 platform-api drives the gateway only when `SIMULATION_URL` and `SIMULATION_START_SECRET` are set (ADR 0054, PR 7). Then it tries each drafted revision with nothing still needed, and the drafted card shows the result. `SIMULATION_MODEL=on` lets the model write the cases and explain each failure, which are paid calls, so it stays off until the team lead sets a budget. Only a stack linked to the simulation sets the first two (below). Anywhere else the card says simulation isn't available here.
+
+`FIX_MODEL=on` lets an Operator ask for Fix it for me on a stopped run (ADR 0055). Each fix makes paid calls, so it stays off until the team lead sets a budget. The cap has two parts. In the agent runtime, the coordinator counts every call it makes, with the AI troubleshooter's and the Fix drafter's, and stops the fix at $2. It also counts each call it asks platform-api to make at that call's most. In platform-api, each fix may ask the Scenario writer once and the explainer at most 4 times, whatever the runtime says. A fix proves its change on the simulation, so it needs the stack linked to the simulation too.
 
 `scripts/simulation.sh` makes up each key with `openssl` at every start and never writes one to a file. It reads `deploy/.env` only for the start secret of a linked simulation. The compose project is `wab-sim` unless `SIM_PROJECT` names another, and `SIM_BUILD=0` starts from the images an earlier start built. It builds the platform's images from the same sources under their own tag, `sim`, so starting it never replaces an image the platform's stack runs. Docker shares the layers that match, so the extra disk is mostly what differs between the two builds.
 

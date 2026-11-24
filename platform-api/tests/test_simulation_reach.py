@@ -360,6 +360,26 @@ def test_each_block_of_n8n_s_that_calls_out_is_named_so_a_new_one_widens() -> No
     }
 
 
+@pytest.mark.parametrize(
+    ("code", "answer"),
+    [
+        ("404", "404"),
+        (502, "502"),
+        ("ECONNREFUSED", None),
+        ("ETIMEDOUT", None),
+        ("4040", None),
+        ("40", None),
+        (True, None),
+        ("", None),
+    ],
+)
+def test_only_a_three_digit_http_code_counts_as_an_answer(code: object, answer: str | None) -> None:
+    """A Node error code n8n puts where the HTTP status goes, such as ECONNREFUSED, means nothing
+    answered, so what the block reached stays unknown."""
+    run_data = {GITHUB: [{"executionStatus": "error", "error": {"message": "x", "httpCode": code}}]}
+    assert node_runs(run_data)[GITHUB].errors == (NodeError("x", answer),)
+
+
 def test_n8n_s_run_data_gives_each_block_s_state_errors_and_whether_an_answer_came() -> None:
     run_data = {
         "Start from the Portal": [{"executionStatus": "success"}],

@@ -1,0 +1,73 @@
+{
+  "run_id": "run_01JB8FIXSTOP",
+  "request": {
+    "fix_id": "fix_01JB8EXAMPLE",
+    "asked_by": "alice",
+    "asked_by_name": "Alice",
+    "ends_by": "2026-11-25T06:20:00Z",
+    "stop": {
+      "stage": "working",
+      "reason": "WorkflowNodeError",
+      "retryable": true,
+      "message": "The n8n workflow 'FastAPI release check' failed at its step 'Read releases': GitHub answered 404 Not Found for fastapi/fastapy"
+    },
+    "version": {
+      "name": "FastAPI release check",
+      "blocks": [
+        {
+          "name": "Read releases",
+          "type": "CUSTOM.wabRead",
+          "version": 1.0,
+          "parameters": {
+            "source": "github_releases",
+            "place": "<<repository>>"
+          }
+        }
+      ],
+      "wires": [],
+      "settings": [
+        {
+          "id": "repository",
+          "kind": "repository",
+          "label": "repository",
+          "fills": [
+            {
+              "block": "Read releases",
+              "parameter": "place"
+            }
+          ],
+          "value": "fastapi/fastapy",
+          "mark": "filled"
+        }
+      ]
+    },
+    "stopped_at": [
+      "Read releases"
+    ]
+  },
+  "events": [
+    "Alice started a run of FastAPI release check.",
+    "Read releases asked GitHub for the releases of fastapi/fastapy.",
+    "The run failed."
+  ],
+  "facts": {
+    "jira_projects": [
+      "MOCK"
+    ],
+    "confluence_pages": [],
+    "repositories": [
+      "fastapi/fastapi"
+    ],
+    "channels": [],
+    "agent_cards": [],
+    "write_keys": []
+  },
+  "model": {
+    "style": "anthropic",
+    "base_url": "https://llm-gateway.example",
+    "model": "claude-sonnet-5-5",
+    "api_key": "example-key-not-a-secret"
+  },
+  "platform_url": "http://platform-api:8000",
+  "token": "1999999999.0000000000000000000000000000000000000000000000000000000000000000"
+}

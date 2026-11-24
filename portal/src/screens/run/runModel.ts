@@ -477,6 +477,8 @@ function apply(model: RunModel, event: RunEvent): RunModel {
     case 'step_started':
     case 'step_retried':
     case 'approval_outcome_not_posted':
+    case 'fix_decided':
+    case 'fix_tried':
     case 'opaque':
       return model
   }

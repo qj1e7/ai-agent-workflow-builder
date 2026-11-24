@@ -51,12 +51,13 @@ from platform_api.builder.drafted_views import (
     DraftedSetUpView,
     DraftedState,
     DraftedWorkflowView,
+    FixEvidenceView,
     SetUpApprovalView,
     SetUpDecisionIn,
     report_settings,
     setting_views,
 )
-from platform_api.builder.explain import view_of
+from platform_api.builder.explain import WorkflowExplained, view_of
 from platform_api.builder.layout import DraftedLayout, lay_out_drafted
 from platform_api.builder.n8n_draft import blocks_of
 from platform_api.builder.simulations import (
@@ -380,6 +381,55 @@ class Checked:
     names: Mapping[UserId, str] = field(default_factory=dict[UserId, str])
 
 
+@dataclass(frozen=True)
+class SetUpPlan:
+    """The drafted revision a workflow was set up from, as a fix starts from it (ADR 0055)."""
+
+    drafted_id: str
+    use_case_id: str
+    revision: int
+    plan: WorkflowPlan
+    digest: str
+    sources: Sources
+
+
+@dataclass(frozen=True)
+class FixLaid:
+    """A fixed plan laid out as the drafted workflow's next version, and checked today."""
+
+    document: dict[str, Any]
+    grade: str
+    report: WorkflowReport
+    changes_access: bool
+
+
+@dataclass(frozen=True)
+class FixApproval:
+    """What the approval page shows of a fix, which the fix's side works out."""
+
+    name: str
+    use_case_id: str
+    report: WorkflowExplained
+    held: str | None
+    """Why a yes can't be taken on it today, or None."""
+    fix: FixEvidenceView
+
+
+class FixSide(Protocol):
+    """Fix it for me's side of set-up approvals (ADR 0055, section 7): a fix's approval is keyed
+    by its fix id where a drafted workflow's is keyed by its drafted id."""
+
+    def owns(self, drafted_id: str) -> bool: ...
+
+    async def approval(
+        self, state: SetUpState, viewer: Principal, reworded: bool
+    ) -> FixApproval | None: ...
+
+    async def held_now(self, state: SetUpState) -> str | None: ...
+
+    async def approved(self, approved: ApprovedSetUp) -> None: ...
+
+
 class DraftedWorkflows:
     def __init__(
         self,
@@ -410,6 +460,62 @@ class DraftedWorkflows:
         self._running: set[asyncio.Task[None]] = set()
         self._simulations = simulations or Simulations(db, None)
         self._versions = UseCaseSimulations(db, self._simulations)
+        self._fixes: FixSide | None = None
+
+    def serve_fixes(self, fixes: FixSide) -> None:
+        """Fix it for me's side, bound once both are built."""
+        self._fixes = fixes
+
+    async def set_up_plan(self, use_case_id: str) -> SetUpPlan | None:
+        """The drafted revision the workflow was set up from, or None for a workflow no drafted
+        workflow set up."""
+        async with self._db.connection("builder") as conn:
+            row = await (
+                await conn.execute(
+                    "SELECT drafted_id, set_up_revision FROM builder.drafted_workflows"
+                    " WHERE use_case_id = %s AND set_up_at IS NOT NULL",
+                    (use_case_id,),
+                )
+            ).fetchone()
+            kept = None if row is None else await _kept(conn, str(row["drafted_id"]))
+        if row is None or kept is None or row["set_up_revision"] is None:
+            return None
+        revision = kept.revision(int(row["set_up_revision"]))
+        if revision.plan is None or revision.digest is None:
+            return None
+        return SetUpPlan(
+            kept.drafted_id,
+            kept.use_case_id,
+            revision.number,
+            revision.plan,
+            revision.digest,
+            revision.sources,
+        )
+
+    async def drafter_facts(self) -> DrafterFacts:
+        """The team's facts, as the drafter gets them."""
+        return await self._facts_for()
+
+    async def fix_laid(
+        self,
+        drafted_id: str,
+        plan: WorkflowPlan,
+        sources: Sources,
+        document: Mapping[str, Any] | None = None,
+    ) -> FixLaid | None:
+        """A fixed plan laid out as the drafted workflow's next version, with the yes before
+        each write and the platform's keys, or the `document` stored for it, graded and reported
+        under today's rules. None while n8n's error workflow isn't loaded."""
+        async with self._db.connection("builder") as conn:
+            kept = await _kept(conn, drafted_id)
+        error_workflow = None if self._n8n is None else await self._n8n.error_workflow_id()
+        if kept is None or error_workflow is None:
+            return None
+        if document is None:
+            document = await self._check(kept, plan, error_workflow)
+        graded = grade(dict(document), error_workflow, self._zone, await self._known(plan))
+        report, access, _, _ = await self._report(document, plan, sources, None)
+        return FixLaid(dict(document), graded.grade, report, access)
 
     async def start(
         self,
@@ -778,10 +884,14 @@ class DraftedWorkflows:
         log.info("%s asked to set %s up again", asker.user_id, drafted_id)
         return await self._viewed(drafted_id, asker)
 
-    async def approval(self, approval_id: str, viewer: Principal) -> SetUpApprovalView | None:
+    async def approval(
+        self, approval_id: str, viewer: Principal, reworded: bool = False
+    ) -> SetUpApprovalView | None:
         state = await self._approvals.get(ApprovalId(approval_id))
         if state is None:
             return None
+        if self._fixes is not None and self._fixes.owns(state.request.drafted_id):
+            return await self._fix_approval(state, viewer, reworded)
         async with self._db.connection("builder") as conn:
             kept = await _kept(conn, state.request.drafted_id)
         assert kept is not None
@@ -802,6 +912,32 @@ class DraftedWorkflows:
             why_not=why_not,
             decline_reasons=list(DECLINE_REASONS),
             set_up=_set_up_view(kept, state),
+        )
+
+    async def _fix_approval(
+        self, state: SetUpState, viewer: Principal, reworded: bool
+    ) -> SetUpApprovalView | None:
+        """A fix's set-up approval (ADR 0055, section 7): the fixed version's report and the
+        fix's evidence, which the fix's side works out, under the gate's own rule."""
+        assert self._fixes is not None
+        shown = await self._fixes.approval(state, viewer, reworded)
+        if shown is None:
+            return None
+        refusal = await self._approvals.why_not(state, viewer)
+        why_not = WHY_NOT[refusal] if refusal is not None else shown.held
+        return SetUpApprovalView(
+            approval_id=state.request.id,
+            drafted_id=state.request.drafted_id,
+            revision=state.request.revision,
+            name=shown.name,
+            digest=state.request.digest,
+            approval=_approval_view(state),
+            report=shown.report,
+            you_can_decide=why_not is None,
+            why_not=why_not,
+            decline_reasons=list(DECLINE_REASONS),
+            set_up=None,
+            fix=shown.fix,
         )
 
     async def decide(
@@ -831,7 +967,11 @@ class DraftedWorkflows:
     async def set_up(self, approved: ApprovedSetUp) -> SetUpFinished | TryAgain:
         """The approved revision as a Draft in the platform's n8n project (flow step 9): created
         through n8n's API, read back, and kept only when its digest equals the approved one. It
-        is the builder's half of the set-up approval, asked once for each approval."""
+        is the builder's half of the set-up approval, asked once for each approval. A fix's yes
+        sets nothing up: Turn back on tries it with the test run first (ADR 0055, section 7)."""
+        if self._fixes is not None and self._fixes.owns(approved.drafted_id):
+            await self._fixes.approved(approved)
+            return SetUpFinished()
         claimed: Claimed | None = None
         async with self._db.transaction("builder") as uow:
             await hold_workflow(uow.conn, f"drafted:{approved.drafted_id}", alone=True)
@@ -1059,15 +1199,29 @@ class DraftedWorkflows:
         the builder sees it and where each value came from, in words for this viewer."""
         plan, document = revision.plan, revision.document
         assert plan is not None and document is not None
+        report, access, settings, names = await self._report(
+            document, plan, revision.sources, viewer
+        )
+        return Checked(dict(document), report, access, settings, names)
+
+    async def _report(
+        self,
+        document: Mapping[str, Any],
+        plan: WorkflowPlan,
+        sources: Sources,
+        viewer: UserId | None,
+    ) -> tuple[WorkflowReport, bool, tuple[SettingNow, ...], Mapping[UserId, str]]:
+        """Code's report of a laid-out plan under today's rules, and whether it changes someone's
+        access: a write whose yes needs two Approvers on each run."""
         error_workflow = None if self._n8n is None else await self._n8n.error_workflow_id()
         known = await self._known(plan)
         cards = {c.card_id: c for c in await self._cards.list()}
-        settings = settings_of(plan, revision.sources)
+        settings = settings_of(plan, sources)
         givers = [s.source.by for s in settings if s.source is not None and s.source.by]
         names = await self._approvals.names(givers) if givers else {}
         report = workflow_report(
             Drafted(
-                document,
+                dict(document),
                 cards,
                 report_settings(settings, viewer, names),
             ),
@@ -1077,7 +1231,7 @@ class DraftedWorkflows:
             isinstance(write.decides, EachRun) and write.decides.approvers >= 2
             for write in report.approves
         )
-        return Checked(dict(document), report, access, settings, names)
+        return report, access, settings, names
 
     async def _known(self, plan: WorkflowPlan) -> KnownOptions:
         """The team's options, with each repository the plan reads, as a Planner's layout adds
@@ -1097,6 +1251,8 @@ class DraftedWorkflows:
         state = await self._approvals.get(ApprovalId(approval_id))
         if state is None:
             return NotFound()
+        if self._fixes is not None and self._fixes.owns(state.request.drafted_id):
+            return await self._fixes.held_now(state)
         async with self._db.connection("builder") as conn:
             kept = await _kept(conn, state.request.drafted_id)
         assert kept is not None
