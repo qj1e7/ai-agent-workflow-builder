@@ -46,12 +46,13 @@ The simulation n8n (ADR 0054) is a second n8n where a workflow version will be t
 - the simulation gateway, which our blocks there call in place of platform-api;
 - mock GitHub, and mock Slack under the name `slack.com`, as in `compose.e2e.yaml`.
 
-Both of its networks are internal and nothing publishes a port, so nothing in it reaches the internet, the host or the platform's stack, and the platform's n8n can't reach the gateway.
+Every network in it is internal and nothing publishes a port, so nothing in it reaches the internet, the host or the platform's stack. The gateway also sits on `link`, a network that only platform-api joins, and only when you link the two stacks (below). The platform's n8n can never reach the gateway.
 
 ```sh
 scripts/simulation.sh up      # makes up every key, starts it and waits for bootstrap
 scripts/simulation.sh check   # checks it holds no real key and reaches only the mocks
 scripts/simulation.sh drive   # runs our blocks through the gateway, one scenario at a time
+scripts/simulation.sh logs    # prints its logs
 scripts/simulation.sh down    # removes its containers, networks and volumes
 ```
 
@@ -71,11 +72,42 @@ The simulation's driver uses four more routes, each signed with the simulation's
 
 The simulation n8n's own environment holds the start secret too, because Start from the Portal checks a start with it. A workflow there can't read it: n8n keeps expressions from reading its environment, Code runs in the task runner, which holds none of n8n's settings, and the copies route refuses HTTP Request and Code.
 
-platform-api drives the gateway only when `SIMULATION_URL` and `SIMULATION_START_SECRET` are set (ADR 0054, PR 7). Then it tries each drafted revision with nothing still needed, and the drafted card shows the result. `SIMULATION_MODEL=on` lets the model write the cases and explain each failure, which are paid calls, so it stays off until the team lead sets a budget. No stack sets these yet, because the simulation stack shares no network with the platform's, so the card says simulation isn't available here.
+platform-api drives the gateway only when `SIMULATION_URL` and `SIMULATION_START_SECRET` are set (ADR 0054, PR 7). Then it tries each drafted revision with nothing still needed, and the drafted card shows the result. `SIMULATION_MODEL=on` lets the model write the cases and explain each failure, which are paid calls, so it stays off until the team lead sets a budget. Only a stack linked to the simulation sets the first two (below). Anywhere else the card says simulation isn't available here.
 
-`scripts/simulation.sh` makes up each key with `openssl` at every start and never writes one to a file. It never reads `deploy/.env`. The compose project is `wab-sim` unless `SIM_PROJECT` names another, and `SIM_BUILD=0` starts from the images an earlier start built. It builds the platform's images from the same sources under their own tag, `sim`, so starting it never replaces an image the platform's stack runs. Docker shares the layers that match, so the extra disk is mostly what differs between the two builds.
+`scripts/simulation.sh` makes up each key with `openssl` at every start and never writes one to a file. It reads `deploy/.env` only for the start secret of a linked simulation. The compose project is `wab-sim` unless `SIM_PROJECT` names another, and `SIM_BUILD=0` starts from the images an earlier start built. It builds the platform's images from the same sources under their own tag, `sim`, so starting it never replaces an image the platform's stack runs. Docker shares the layers that match, so the extra disk is mostly what differs between the two builds.
 
-`scripts/simulation_isolation.py` is the check. It reads this file as compose renders it, and, with `--project`, the running stack: each service's settings against an allow list, the keys n8n holds, the routes out of n8n and the gateway, and who sits on its networks. It compares every value with the platform's keys in `deploy/.env`. CI runs it in the `checks` job, and starts the stack, runs it and drives the gateway in the `simulation` job.
+`scripts/simulation_isolation.py` is the check. It reads this file and `compose.simulation-link.yaml` as compose renders them, and, with `--project`, the running stack: each service's settings against an allow list, the keys n8n holds, the routes out of n8n and the gateway, and who sits on its networks. It compares every value with the platform's keys in `deploy/.env`. With `--platform` too, it probes the linked platform from inside both stacks' containers (below). CI runs it in the `checks` job, starts the stack, runs it and drives the gateway in the `simulation` job, and runs it on both linked stacks in the `simulation-link` job.
+
+### Linking platform-api to the gateway
+
+On a laptop and in CI, platform-api can drive the gateway, so the Check card shows a real result, such as "Tried 6 cases on practice systems: 6 passed." (ADR 0054, "What the link chose"). Azure stays unlinked.
+
+- The simulation makes `link`, its network for the gateway alone. `compose.simulation-link.yaml` joins platform-api to it, gives platform-api `SIMULATION_URL=http://simulation-gateway:8600`, and changes nothing else. The platform's n8n, PostgreSQL and agent runtime never join it, and the simulation n8n never leaves its own networks.
+- The start secret is the one value both stacks hold. `deploy/make-env.sh` adds `SIMULATION_START_SECRET` to `deploy/.env`. The link file gives it to platform-api, and `SIM_LINK=<platform's project> scripts/simulation.sh up` gives the same value to the simulation n8n and the gateway. Nothing prints it.
+- `SIMULATION_MODEL` stays off, so code's six templates run and no model is asked.
+
+To link the team lead's `wab` stack, run these from the checkout it runs from, once this change is in that checkout:
+
+```sh
+deploy/make-env.sh                         # adds SIMULATION_START_SECRET to deploy/.env, once
+SIM_LINK=wab scripts/simulation.sh up      # starts wab-sim, with the link wab-sim_link
+docker compose -p wab -f deploy/compose.yaml -f deploy/compose.simulation-link.yaml \
+  up --detach --no-deps --build platform-api
+SIM_LINK=wab scripts/simulation.sh check   # proves the link from inside both stacks
+```
+
+The third command builds platform-api from the checkout and starts it again on the link. The rest of `wab` keeps running. To unlink, start platform-api again without the link file first, because the simulation can't remove its link while platform-api sits on it:
+
+```sh
+docker compose -p wab -f deploy/compose.yaml up --detach --no-deps platform-api
+scripts/simulation.sh down
+```
+
+`scripts/up.sh` also starts platform-api without the link, so run the third command again after it. To start the simulation again, unlink, then run the link commands again from the second. A simulation project other than `wab-sim` has the link `<project>_link`, which the link file reads from `SIMULATION_LINK_NETWORK`.
+
+With `SIM_LINK` set, `check` adds `--platform`. From inside the simulation n8n it tries every address of the platform's platform-api, PostgreSQL, n8n and agent runtime, and from inside the gateway every address but platform-api's. Each must fail. platform-api must reach the gateway by its name on the link, and the platform's n8n and agent runtime must reach none of the gateway's addresses. Each container that probes must reach a service of its own stack, so a blind probe can't pass. It allows the start secret only as the start secret of the simulation n8n and the gateway, and only the named platform's platform-api on the link.
+
+`E2E_SIMULATION=on scripts/e2e.sh` does all of this on stacks of its own, as the `simulation-link` CI job runs it: it starts the simulation, then the platform with the link file, drafts the release check with the mock model, waits for the card's result, runs the check on both stacks, and removes both, the platform first.
 
 ## Langfuse
 

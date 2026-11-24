@@ -55,11 +55,11 @@ def test_a_drafted_workflow_is_tried_on_practice_systems_through_the_link(
     view = drafted_now(api, drafted_id, SETTLED)
     assert view["state"] == "draft", view.get("said")
     assert view["needed"] == 1, view["report"]
-    assert view["simulation"]["state"] != "unavailable", "platform-api has no simulation gateway"
-    assert view["simulation"]["state"] == "not_started", "a revision with a blank isn't tried"
+    assert view["simulation"] is None, "a revision with a blank isn't tried"
 
     view = answer(api, "carol", view, APPROVERS, choice=ANY_APPROVER)
     assert (view["needed"], view["can_send"]) == (0, True), view["report"]
+    assert view["simulation"]["state"] != "unavailable", "platform-api has no simulation gateway"
 
     simulation = simulated(api, drafted_id)
     print(f"\n{lead(simulation)}")
