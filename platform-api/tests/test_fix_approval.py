@@ -31,6 +31,7 @@ from platform_api.builder.fixes import (
     DECLINED,
     HANDED_BACK,
     NEVER_PROPOSED,
+    SETTING,
     STALE,
     Fixes,
     FixSettings,
@@ -163,10 +164,14 @@ class Tries:
     done: list[str] = field(default_factory=list[str])
     outcome: Literal["passed", "failed"] | None = None
     tried: list[dict[str, Any]] = field(default_factory=list[dict[str, Any]])
+    db: Database | None = None
+    """Where the builder reads the version in use, under the workflow's lock."""
 
     async def try_fixed(
-        self, use_case_id: str, document: dict[str, Any], by: Principal
+        self, use_case_id: str, document: dict[str, Any], by: Principal, stopped_version: int
     ) -> FixTrying | str:
+        if await self._newer(use_case_id, stopped_version):
+            return STALE
         self.done.append("test run")
         self.tried.append(document)
         return FixTrying(run_id="run_01TEST", draft="v2")
@@ -181,9 +186,23 @@ class Tries:
         document: dict[str, Any],
         by: UserId,
         authors: frozenset[UserId],
+        stopped_version: int,
     ) -> str | None:
+        if await self._newer(use_case_id, stopped_version):
+            return STALE
         self.done.append("turned on")
         return None
+
+    async def _newer(self, use_case_id: str, stopped_version: int) -> bool:
+        assert self.db is not None
+        async with self.db.connection("builder") as conn:
+            row = await (
+                await conn.execute(
+                    "SELECT current_version FROM builder.use_cases WHERE use_case_id = %s",
+                    (use_case_id,),
+                )
+            ).fetchone()
+        return row is None or row["current_version"] != stopped_version
 
 
 @dataclass
@@ -342,7 +361,7 @@ async def fix_lab(postgres: PostgresUrls, db: Database) -> AsyncIterator[FixLab]
         approvals.serve(drafted)
         log = ActivityLog(timed)
         layouts = FixLayouts(Facts(), n8n, "https://portal.example", TEAM_TIME_ZONE.key)
-        runtime, records, models, tries = Runtime(), Records(), Models(), Tries()
+        runtime, records, models, tries = Runtime(), Records(), Models(), Tries(db=timed)
         settings = FixSettings(on=True, signing_key=KEY, platform_url="http://platform-api:8000")
         fixes = Fixes(
             timed,
@@ -764,6 +783,69 @@ async def test_only_the_fix_s_own_start_is_written_by_the_platform(fix_lab: FixL
     )
     assert answer.status_code == 422
     assert [e.kind for e in await fix_lab.fix_events()] == ["fix_started"]
+
+
+# From the security review of the first push
+
+
+async def bump(fix_lab: FixLab, use_case_id: str) -> None:
+    """A person makes a new version of the workflow."""
+    async with fix_lab.db.transaction("builder") as uow:
+        await uow.conn.execute(
+            "UPDATE builder.use_cases SET current_version = current_version + 1"
+            " WHERE use_case_id = %s",
+            (use_case_id,),
+        )
+
+
+async def test_a_version_a_person_made_after_the_proposal_never_lets_the_fix_go_live(
+    fix_lab: FixLab,
+):
+    use_case_id = await fix_lab.set_up_and_stop()
+    before = await fix_lab.handed_in()
+    await bump(fix_lab, use_case_id)
+    assert (await fix_lab.decide(before["approval_id"], "bob")).status_code == 403
+    await fix_lab.fixes.work_once()
+    assert (await fix_lab.turn_back_on(before["fix_id"])).status_code == 409
+    assert fix_lab.tries.done == []
+
+
+async def test_a_version_a_person_made_while_the_fix_is_tried_keeps_it_from_going_live(
+    fix_lab: FixLab,
+):
+    use_case_id = await fix_lab.set_up_and_stop()
+    during = await fix_lab.handed_in()
+    assert (await fix_lab.decide(during["approval_id"], "bob")).status_code == 201
+    await fix_lab.lab.approvals.work_once()
+    assert (await fix_lab.turn_back_on(during["fix_id"])).status_code == 202
+    await bump(fix_lab, use_case_id)
+    fix_lab.tries.outcome = "passed"
+    await fix_lab.fixes.work_once()
+    assert fix_lab.tries.done == ["test run"]
+    after = await fix_lab.view(during["fix_id"])
+    assert (after["state"], after["said"]) == ("dropped", STALE)
+
+
+async def test_a_fix_that_moves_a_setting_s_place_is_refused(fix_lab: FixLab):
+    fix_lab.records.stopped_at = READ
+    await fix_lab.set_up_and_stop()
+    await fix_lab.ask()
+    stopped = fix_lab.stopped()
+    moved_blocks = []
+    for block in stopped.blocks:
+        parameters = dict(block.parameters)
+        if block.name == READ:
+            parameters["place"] = "langchain-ai/langgraph"
+        if block.name == PROPOSE:
+            parameters["title"] = "<<repository>>"
+        moved_blocks.append(block.model_copy(update={"parameters": parameters}))
+    moved = stopped.model_copy(update={"blocks": moved_blocks})
+    await fix_lab.proven(moved)
+    cause = {**CAUSE, "failed_part": [READ]}
+    refused = await fix_lab.internal(
+        "/revisions", {"version": moved.model_dump(mode="json"), "cause": cause}
+    )
+    assert (refused.status_code, refused.json()["detail"]) == (422, SETTING)
 
 
 def workflow_digest_of(document: dict[str, Any]) -> str:

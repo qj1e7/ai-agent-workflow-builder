@@ -8,10 +8,10 @@ from typing import Any
 
 import pytest
 
-from platform_api.builder.fixes import FixTrying
+from platform_api.builder.fixes import STALE, FixTrying
 from platform_api.shared import RunId, UserId
 from tests import support
-from tests.test_n8n_lifecycle import made, version_row
+from tests.test_n8n_lifecycle import MONDAY_NINE, made, version_row
 from tests.test_n8n_versions import Versions, lab, v
 
 pytestmark = pytest.mark.anyio
@@ -37,7 +37,9 @@ async def test_the_fix_is_tried_as_a_test_run_that_stops_at_the_yes_while_the_ol
     live = v.n8n.workflows[workflow_id]["activeVersionId"]
     first = await version_row(v.own, use_case_id, 1)
 
-    trying = await v.builder.try_fixed(use_case_id, with_a_new_note(first["document"]), CAROL_ON)
+    trying = await v.builder.try_fixed(
+        use_case_id, with_a_new_note(first["document"]), CAROL_ON, stopped_version=1
+    )
     assert isinstance(trying, FixTrying), trying
 
     held = v.n8n.workflows[workflow_id]
@@ -55,11 +57,11 @@ async def test_only_then_the_fix_goes_live_as_a_new_version_with_the_fix_s_parti
     use_case_id, workflow_id = await made(v.own, on=True)
     first = await version_row(v.own, use_case_id, 1)
     fixed = with_a_new_note(first["document"])
-    trying = await v.builder.try_fixed(use_case_id, fixed, CAROL_ON)
+    trying = await v.builder.try_fixed(use_case_id, fixed, CAROL_ON, stopped_version=1)
     assert isinstance(trying, FixTrying)
 
     refused = await v.builder.put_fixed_live(
-        use_case_id, trying, fixed, CAROL, frozenset({ALICE, CAROL})
+        use_case_id, trying, fixed, CAROL, frozenset({ALICE, CAROL}), stopped_version=1
     )
     assert refused is None
     view = await v.view(use_case_id)
@@ -67,3 +69,29 @@ async def test_only_then_the_fix_goes_live_as_a_new_version_with_the_fix_s_parti
     second = await version_row(v.own, use_case_id, 2)
     assert v.n8n.workflows[workflow_id]["activeVersionId"] == second["n8n_version_id"]
     assert {ALICE, CAROL} <= await v.parties(use_case_id, 2, workflow_id)
+
+
+async def test_a_version_a_person_made_meanwhile_keeps_the_fix_from_being_tried_or_going_live(
+    v: Versions,
+):
+    """The check and the act are one, under the workflow's lock: a fix made for version 1 never
+    goes live over a version 2 a person made while it waited or was tried."""
+    use_case_id, workflow_id = await made(v.own, on=True)
+    first = await version_row(v.own, use_case_id, 1)
+    fixed = with_a_new_note(first["document"])
+    trying = await v.builder.try_fixed(use_case_id, fixed, CAROL_ON, stopped_version=1)
+    assert isinstance(trying, FixTrying)
+
+    path = f"/api/v1/use-cases/{use_case_id}/schedule"
+    saved = await v.call("carol", "PUT", path, {**MONDAY_NINE, "expected_version": 1})
+    assert saved.status_code == 200, saved.text
+    live = v.n8n.workflows[workflow_id]["activeVersionId"]
+
+    refused = await v.builder.put_fixed_live(
+        use_case_id, trying, fixed, CAROL, frozenset({ALICE, CAROL}), stopped_version=1
+    )
+    assert refused == STALE
+    assert v.n8n.workflows[workflow_id]["activeVersionId"] == live
+    assert (await v.view(use_case_id))["version"] == 2
+    again = await v.builder.try_fixed(use_case_id, fixed, CAROL_ON, stopped_version=1)
+    assert again == STALE
