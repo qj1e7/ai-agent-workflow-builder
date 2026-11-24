@@ -28,7 +28,7 @@ from platform_api.monitoring import (
     callback_for,
 )
 from platform_api.orchestration import self_test
-from platform_api.orchestration.agents import HttpAgentRuntime
+from platform_api.orchestration.agents import HttpAgentRuntime, PlatformReady
 from platform_api.orchestration.confluence_rest import (
     CONFLUENCE_PAGE,
     ConfluencePages,
@@ -558,6 +558,8 @@ async def build(settings: Settings) -> Services:
     trace_scores = trace_scores_for(settings)
     simulation_model = SimulationModel(agents, connected_model(db, model_settings))
     simulation_client, simulations = simulations_for(settings, db, simulation_model)
+    # One fact for the card, the capabilities and the Planner's prompts (ADR 0054, PR 7).
+    ready_here: tuple[PlatformReady, ...] = ("workflows.simulate",) if simulations.available else ()
     drafted = DraftedWorkflows(
         db,
         WorkflowDrafting(db, model_settings, agents),
@@ -580,7 +582,7 @@ async def build(settings: Settings) -> Services:
         node_calls=node_calls,
         builder=builder,
         planner_front=PlannerFront(
-            PlannerAnswers(db, model_settings, agents),
+            PlannerAnswers(db, model_settings, agents, ready_here),
             builder,
             watchlist,
             CapabilityRegistry(agents),
@@ -590,7 +592,7 @@ async def build(settings: Settings) -> Services:
             scores=trace_scores,
             pseudonym_key=settings.trace_pseudonym_key,
             drafted=drafted,
-            simulation=simulations.available,
+            ready_here=ready_here,
         ),
         explainer=Explainer(db, builder, ExplainWordings(db, model_settings, agents)),
         cause_finder=RunCauses(db, model_settings, agents, RunsInN8n(db, n8n.landing)),

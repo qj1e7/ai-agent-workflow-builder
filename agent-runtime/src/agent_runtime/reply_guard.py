@@ -380,6 +380,11 @@ NOT_READY: Final[dict[str, Callable[[str], bool]]] = {
             re.IGNORECASE,
         )
     ),
+    # Planned in the registry. The guard holds a reply to that even where the platform turned it
+    # on, which only ever says less than it could.
+    "workflows.simulate": _found(
+        re.compile(r"\bsimulat\w*|\bpractice\s+systems?\b|\bmock\s+systems?\b", re.IGNORECASE)
+    ),
     "github.issues": _found(
         re.compile(
             r"\bgithub\s+issues?\b|\bissues?\s+(?:on|in|from)\s+github\b|\bpull\s+requests?\b",

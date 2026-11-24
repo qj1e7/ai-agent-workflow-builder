@@ -5,7 +5,7 @@ import { pressOnce, useLatch } from '../../api/latch'
 import type { DraftedSimulationView, SimulatedCaseView } from '../../api/types'
 import { Button } from '../../ui/Button'
 import { IconCheck, IconX } from '../../ui/icons'
-import { AI_NOTE, caseLimitWords, casesInOrder, EXPECTED, HAPPENED, KIND_WORDS, NOT_AVAILABLE, NOT_FINISHED, NOT_TRIED_ANYWHERE, SIMULATING, simulationLead, STILL_TESTS, VERDICT_WORDS, YOU_DECIDE } from './simulation'
+import { AI_NOTE, caseLimitWords, casesInOrder, EXPECTED, HAPPENED, KIND_WORDS, NOT_AVAILABLE, NOT_FINISHED, NOT_STARTED, NOT_TRIED_ANYWHERE, SIMULATING, simulationLead, STILL_TESTS, VERDICT_WORDS, YOU_DECIDE } from './simulation'
 import styles from './Drafted.module.css'
 
 function Mark({ verdict }: { verdict: SimulatedCaseView['verdict'] }) {
@@ -46,7 +46,7 @@ function Case({ found }: { found: SimulatedCaseView }) {
   )
 }
 
-function TryAgain({ draftedId, revision }: { draftedId: string; revision: number }) {
+function TryAgain({ draftedId, revision, label }: { draftedId: string; revision: number; label: string }) {
   const words = useErrorWords()
   const again = useSimulateAgain(draftedId)
   const latch = useLatch()
@@ -55,7 +55,7 @@ function TryAgain({ draftedId, revision }: { draftedId: string; revision: number
     <>
       <p>
         <Button loading={again.isPending} onClick={() => pressOnce(latch, (outcome) => again.mutate(revision, outcome), { onSuccess: () => setProblem(null), onError: (error) => setProblem(words(error)) })}>
-          Try again
+          {label}
         </Button>
       </p>
       {problem ? (
@@ -72,13 +72,20 @@ function TryAgain({ draftedId, revision }: { draftedId: string; revision: number
  * blocks Turn on, and a pass never stands in for the real test run Turn on starts. It never claims a result it doesn't have.
  */
 export function SimulationResult({ simulation, draftedId, revision }: { simulation: DraftedSimulationView; draftedId: string; revision: number }) {
-  const again = simulation.can_try_again ? <TryAgain draftedId={draftedId} revision={revision} /> : null
+  const again = (label: string) => (simulation.can_try_again ? <TryAgain draftedId={draftedId} revision={revision} label={label} /> : null)
   switch (simulation.state) {
     case 'unavailable':
       return (
         <p className={styles['note']} data-simulation>
           {NOT_AVAILABLE} {STILL_TESTS}
         </p>
+      )
+    case 'not_started':
+      return (
+        <div className={styles['simulation']} data-simulation>
+          <p className={styles['said']}>{NOT_STARTED}</p>
+          {again('Try it now')}
+        </div>
       )
     case 'running':
       return (
@@ -91,7 +98,7 @@ export function SimulationResult({ simulation, draftedId, revision }: { simulati
       return (
         <div className={styles['simulation']} data-simulation>
           <p className={styles['said']}>{simulation.state === 'not_run' ? simulation.said : NOT_FINISHED}</p>
-          {again}
+          {again('Try again')}
         </div>
       )
     case 'done': {

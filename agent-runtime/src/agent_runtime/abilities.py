@@ -8,6 +8,7 @@ a note that says what the platform can't do yet. A new tool is one more line."""
 
 import re
 import unicodedata
+from collections.abc import Collection
 from dataclasses import dataclass
 from functools import cache
 from itertools import pairwise
@@ -288,16 +289,17 @@ CAPABILITIES: Final = (
         platform=True,
         short="Explain any workflow",
     ),
-    # Simulation mode (ADR 0054). No short words, so the chat's What I can do card is unchanged.
-    # platform-api shows it as needing setup where there is no simulation n8n.
-    _ready(
+    # Simulation mode (ADR 0054). Planned here, since most places have no simulation n8n. It is
+    # Ready only where platform-api says it turned it on (capabilities_here). No short words, so
+    # the chat's What I can do card is unchanged.
+    _not_yet(
         "workflows.simulate",
         "Try each new workflow on practice systems before its test run",
         "none",
         None,
         None,
-        [],
-        platform=True,
+        "try a workflow on practice systems before its test run",
+        "Practice systems aren't set up here.",
     ),
     _ready(
         "watchlist.remove",
@@ -474,6 +476,24 @@ EXAMPLES: Final = (
     ),
     ExampleSpec(text="What can you do?", kind="learn", needs=[]),
 )
+TURNED_ON_HERE: Final = frozenset({"workflows.simulate"})
+"""The planned capabilities the platform may turn on where it has what they need."""
+
+
+def capabilities_here(ready_here: Collection[str] = ()) -> tuple[CapabilitySpec, ...]:
+    """The registry where the platform runs: a planned capability it turned on here is Ready, a
+    duty of the platform. Everything else is as the registry says."""
+    on = TURNED_ON_HERE & set(ready_here)
+    if not on:
+        return CAPABILITIES
+    return tuple(
+        c.model_copy(update={"state": "ready", "cant": None, "why": None, "platform": True})
+        if c.id in on
+        else c
+        for c in CAPABILITIES
+    )
+
+
 CAPABILITY_LIST: Final = CapabilityList(capabilities=list(CAPABILITIES), examples=list(EXAMPLES))
 
 WEEKLY_BUGS: Final = "Every Monday at 9am, list last week's new bugs in one new Jira ticket"

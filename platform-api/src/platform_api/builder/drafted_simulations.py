@@ -3,10 +3,14 @@ graded a revision with nothing still needed, code runs it through its scenarios 
 n8n, in the background, and keeps code's grades by the revision's digest. The card reads them
 back for the newest revision's digest only, so a changed version never shows an older result.
 
+The running row is written in the revision's own transaction (`claim`), and the simulation starts
+once it commits (`start`), so a poll never reads a new revision as untried.
+
 A simulation is not a run. It never writes a run or an activity event, and never stands in for
 the test run that Turn on starts. A failed case blocks nothing: the card leads with it, and the
 person decides. Where there is no simulation n8n, the card says so and claims no result, and a
-try that runs past its limit shows as not finished, never as running for good."""
+try that runs past its limit counts as ended: the card shows it as not finished, never as
+running for good."""
 
 import asyncio
 import logging
@@ -31,9 +35,9 @@ from platform_api.orchestration import (
 
 log = logging.getLogger(__name__)
 
-NOT_TRIED_YET: Final = "It hasn't been tried on practice systems yet."
 NO_SIMULATION: Final = "Simulation on practice systems isn't available here."
-TRYING_NOW: Final = "It's being tried on practice systems now."
+SIMULATING: Final = "Trying it on practice systems."
+"""The running state's one wording, which the card shows too."""
 
 
 class Simulating(Protocol):
@@ -51,7 +55,8 @@ class DraftedSimulations:
         self._db = db
         self._driver = driver
         self._limit = limit
-        self._running: dict[tuple[str, str], asyncio.Task[None]] = {}
+        self._closed = False
+        self._running: dict[tuple[str, str], tuple[asyncio.Task[None], datetime]] = {}
 
     @property
     def available(self) -> bool:
@@ -59,26 +64,49 @@ class DraftedSimulations:
         return self._driver is not None
 
     def _going(self, drafted_id: str, digest: str) -> bool:
-        task = self._running.get((drafted_id, digest))
-        return task is not None and not task.done()
+        """A try still under way. Past its limit it counts as ended, whatever its task does."""
+        going = self._running.get((drafted_id, digest))
+        if going is None:
+            return False
+        task, started_at = going
+        return not task.done() and self._db.clock() - started_at <= self._limit
 
-    async def begin(
-        self,
-        drafted_id: str,
-        revision: int,
-        digest: str,
-        document: Mapping[str, Any],
-        *,
-        again: bool = False,
-    ) -> bool:
-        """Starts trying the version in the background, once for its digest, or again when the
-        last try wasn't run or ran past its limit. False when nothing was started."""
+    async def claim(
+        self, conn: Connection, drafted_id: str, revision: int, digest: str, now: datetime
+    ) -> datetime | None:
+        """The running row for a revision's first try, in the transaction that keeps the
+        revision. None where there is no simulation n8n, once shutdown began, or when the digest
+        has a try already. The caller starts it once the transaction commits."""
+        if self._driver is None or self._closed:
+            return None
+        return await _insert(conn, drafted_id, revision, digest, now)
+
+    async def start(
+        self, drafted_id: str, digest: str, document: Mapping[str, Any], started_at: datetime
+    ) -> None:
+        """Runs the try its claim began, in the background."""
         driver = self._driver
-        if driver is None or self._going(drafted_id, digest):
+        if driver is None or self._closed:
+            return
+        key = (drafted_id, digest)
+        if (older := self._running.get(key)) is not None:
+            older[0].cancel()
+        task = asyncio.create_task(
+            self._run(driver, drafted_id, digest, dict(document), started_at)
+        )
+        self._running[key] = (task, started_at)
+        task.add_done_callback(lambda _: self._forget(key, task))
+
+    async def again(
+        self, drafted_id: str, revision: int, digest: str, document: Mapping[str, Any]
+    ) -> bool:
+        """Tries the version again when it was never tried, wasn't run or ran past its limit.
+        False when nothing was started."""
+        if self._driver is None or self._closed or self._going(drafted_id, digest):
             return False
         async with self._db.transaction("builder") as uow:
             started_at = await _insert(uow.conn, drafted_id, revision, digest, uow.now)
-            if started_at is None and again:
+            if started_at is None:
                 row = await (
                     await uow.conn.execute(
                         "UPDATE builder.drafted_simulations SET state = 'running',"
@@ -92,26 +120,24 @@ class DraftedSimulations:
                 started_at = None if row is None else cast(datetime, row["started_at"])
         if started_at is None:
             return False
-        task = asyncio.create_task(
-            self._run(driver, drafted_id, digest, dict(document), started_at)
-        )
-        self._running[(drafted_id, digest)] = task
-        task.add_done_callback(lambda _: self._forget(drafted_id, digest, task))
+        await self.start(drafted_id, digest, document, started_at)
         return True
 
-    def _forget(self, drafted_id: str, digest: str, task: asyncio.Task[None]) -> None:
-        if self._running.get((drafted_id, digest)) is task:
-            del self._running[(drafted_id, digest)]
+    def _forget(self, key: tuple[str, str], task: asyncio.Task[None]) -> None:
+        going = self._running.get(key)
+        if going is not None and going[0] is task:
+            del self._running[key]
 
     def cancel(self) -> None:
-        """Stops every simulation this process started, as a shutdown does. Each stays running
-        in the table, so past its limit the card shows it as not finished."""
-        for task in self._running.values():
+        """Stops every simulation this process started and refuses new ones, as a shutdown does.
+        Each stays running in the table, so past its limit the card shows it as not finished."""
+        self._closed = True
+        for task, _ in self._running.values():
             task.cancel()
 
     async def settle(self) -> None:
         """Waits for every simulation this process started, as a test or a shutdown does."""
-        while going := [task for task in self._running.values() if not task.done()]:
+        while going := [task for task, _ in self._running.values() if not task.done()]:
             await asyncio.gather(*going, return_exceptions=True)
 
     async def _run(
@@ -186,16 +212,15 @@ class DraftedSimulations:
                     (drafted_id, digest),
                 )
             ).fetchone()
+        can_start = operator and not self._closed
         if row is None:
-            return empty.model_copy(
-                update={"state": "not_run", "said": NOT_TRIED_YET, "can_try_again": operator}
-            )
+            return empty.model_copy(update={"state": "not_started", "can_try_again": can_start})
         started_at = cast(datetime, row["started_at"])
         at = {"started_at": started_at}
         match row["state"]:
             case "running" if self._db.clock() - started_at > self._limit:
                 return empty.model_copy(
-                    update={**at, "state": "not_finished", "can_try_again": operator}
+                    update={**at, "state": "not_finished", "can_try_again": can_start}
                 )
             case "running":
                 return empty.model_copy(update={**at, "state": "running"})
@@ -205,7 +230,7 @@ class DraftedSimulations:
                         **at,
                         "state": "not_run",
                         "said": row["said"],
-                        "can_try_again": operator and bool(row["again"]),
+                        "can_try_again": can_start and bool(row["again"]),
                     }
                 )
             case _:

@@ -46,7 +46,7 @@ from platform_api.builder.drafted_settings import (
 )
 from platform_api.builder.drafted_simulations import (
     NO_SIMULATION,
-    TRYING_NOW,
+    SIMULATING,
     DraftedSimulations,
 )
 from platform_api.builder.drafted_views import (
@@ -571,7 +571,7 @@ class DraftedWorkflows:
             how: How = "chose" if answer.choice is not None else "typed"
             given = {setting.id: Source(read.value, how, person.user_id)} if read.filled else {}
             before = {k: v for k, v in newest.sources.items() if k != setting.id}
-            await self._keep(
+            claimed = await self._keep(
                 uow.conn,
                 kept,
                 Made(
@@ -585,7 +585,7 @@ class DraftedWorkflows:
                 await self._laid(kept, plan, error_workflow),
                 uow.now,
             )
-        await self._simulate_newest(drafted_id)
+        await self._start(claimed)
         return await self._viewed(drafted_id, person)
 
     async def open_in_n8n(
@@ -685,7 +685,7 @@ class DraftedWorkflows:
             if isinstance(read, NotReadBack):
                 return Refused(read.words)
             plan = never_guessed(read.plan)
-            await self._keep(
+            claimed = await self._keep(
                 uow.conn,
                 kept,
                 Made(
@@ -707,7 +707,7 @@ class DraftedWorkflows:
             # The revision is kept. A copy n8n kept is the person's own, and holds no key.
             log.warning("n8n kept %s after Done in n8n: %s", held.workflow_id, type(error).__name__)
         log.info("%s read %s back from n8n", person.user_id, drafted_id)
-        await self._simulate_newest(drafted_id)
+        await self._start(claimed)
         return await self._viewed(drafted_id, person)
 
     async def _not_a_draft(self, kept: Kept, person: Principal, revision: int) -> Refused | None:
@@ -726,8 +726,11 @@ class DraftedWorkflows:
 
     async def _keep(
         self, conn: Connection, kept: Kept, made: Made, laid: Laid, now: datetime
-    ) -> None:
-        """A revision code made, with no model: from an answer or read back from n8n."""
+    ) -> Claimed | None:
+        """A revision code made, with no model: from an answer or read back from n8n. With
+        nothing still needed, its simulation's running row goes in the same transaction."""
+        number = kept.newest.number + 1
+        digest = workflow_digest(laid.document)
         await conn.execute(
             "INSERT INTO builder.drafted_revisions (drafted_id, revision, asked_by, words,"
             " started_at, state, finished_at, plan, catalogue, document, digest, grade,"
@@ -735,7 +738,7 @@ class DraftedWorkflows:
             " VALUES (%s, %s, %s, %s, %s, 'drafted', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
             (
                 kept.drafted_id,
-                kept.newest.number + 1,
+                number,
                 made.by,
                 made.words,
                 now,
@@ -743,13 +746,21 @@ class DraftedWorkflows:
                 json(made.plan.model_dump(mode="json")),
                 made.catalogue,
                 json(laid.document),
-                workflow_digest(laid.document),
+                digest,
                 laid.grade,
                 json(laid.findings),
                 made.how,
                 _sources_json(made.sources),
                 json(list(made.notes)),
             ),
+        )
+        if not needs_nothing(made.plan, made.sources):
+            return None
+        started_at = await self._simulations.claim(conn, kept.drafted_id, number, digest, now)
+        return (
+            None
+            if started_at is None
+            else Claimed(kept.drafted_id, digest, laid.document, started_at)
         )
 
     async def set_up_again(
@@ -972,7 +983,14 @@ class DraftedWorkflows:
         plan = never_guessed(plan)
         laid = await self._laid(kept, plan, error_workflow)
         before = _drafted_before(kept, number)
-        await _finish(
+        sources = carried(
+            {} if before is None else before.sources, plan, {}, kept.revision(number).asked_by
+        )
+
+        async def claim(conn: Connection, digest: str, now: datetime) -> datetime | None:
+            return await self._simulations.claim(conn, kept.drafted_id, number, digest, now)
+
+        started_at = await _finish(
             self._db,
             kept.drafted_id,
             number,
@@ -981,42 +999,30 @@ class DraftedWorkflows:
             document=laid.document,
             grade=laid.grade,
             findings=laid.findings,
-            sources=carried(
-                {} if before is None else before.sources,
-                plan,
-                {},
-                kept.revision(number).asked_by,
-            ),
+            sources=sources,
+            claim=claim if needs_nothing(plan, sources) else None,
         )
-        await self._simulate_newest(kept.drafted_id)
+        if started_at is not None:
+            digest = workflow_digest(laid.document)
+            await self._start(Claimed(kept.drafted_id, digest, laid.document, started_at))
 
-    async def _simulate_newest(self, drafted_id: str) -> None:
-        """Once the checker graded the newest revision and nothing is still needed, code tries it
-        on practice systems in the background (ADR 0054, PR 7), once for its digest."""
-        if not self._simulations.available:
+    async def _start(self, claimed: Claimed | None) -> None:
+        """Starts the simulation a new revision claimed, once its transaction committed. Should
+        that fail, its row reads as not finished once past the limit, with Try again."""
+        if claimed is None:
             return
         try:
-            async with self._db.connection("builder") as conn:
-                kept = await _kept(conn, drafted_id)
-            if kept is None:
-                return
-            newest = kept.newest
-            if newest.document is None or newest.digest is None:
-                return
-            view = await self._view(kept)
-            if view.state == "draft" and view.needed == 0:
-                await self._simulations.begin(
-                    drafted_id, newest.number, newest.digest, newest.document
-                )
+            await self._simulations.start(
+                claimed.drafted_id, claimed.digest, claimed.document, claimed.started_at
+            )
         except Exception as error:
-            # The revision is kept. With no try begun, the card offers Try again.
-            log.error("could not start simulating %s: %s", drafted_id, type(error).__name__)
+            log.error("could not start simulating %s: %s", claimed.drafted_id, type(error).__name__)
 
     async def simulate_again(
         self, drafted_id: str, person: Principal, revision: int
     ) -> DraftedWorkflowView | Refused | NotFound:
-        """Tries the newest revision on practice systems again, once its last try wasn't run or
-        didn't finish."""
+        """Tries the newest revision on practice systems, once it was never tried, its last try
+        wasn't run or it didn't finish."""
         async with self._db.connection("builder") as conn:
             kept = await _kept(conn, drafted_id)
         if kept is None:
@@ -1029,11 +1035,12 @@ class DraftedWorkflows:
         simulation = (await self._view(kept, person)).simulation
         if simulation is None or not simulation.can_try_again:
             running = simulation is not None and simulation.state == "running"
-            return Refused(TRYING_NOW if running else NOTHING_TO_TRY)
+            return Refused(SIMULATING if running else NOTHING_TO_TRY)
         assert newest.document is not None and newest.digest is not None
-        await self._simulations.begin(
-            drafted_id, newest.number, newest.digest, newest.document, again=True
-        )
+        if not await self._simulations.again(
+            drafted_id, newest.number, newest.digest, newest.document
+        ):
+            return Refused(SIMULATING)
         return await self._viewed(drafted_id, person)
 
     async def _laid(self, kept: Kept, plan: WorkflowPlan, error_workflow: str) -> Laid:
@@ -1485,10 +1492,13 @@ async def _finish(
     grade: str | None = None,
     findings: list[dict[str, Any]] | None = None,
     sources: Sources | None = None,
-) -> None:
+    claim: Callable[[Connection, str, datetime], Awaitable[datetime | None]] | None = None,
+) -> datetime | None:
+    """Ends a drafting revision. With claim, a drafted one's simulation row goes in the same
+    transaction, and its start time comes back."""
     drafted = document is not None
     async with db.transaction("builder") as uow:
-        await uow.conn.execute(
+        finished = await uow.conn.execute(
             "UPDATE builder.drafted_revisions SET state = %s, finished_at = %s, plan = %s,"
             " catalogue = %s, document = %s, digest = %s, grade = %s, findings = %s, said = %s,"
             " sources = %s WHERE drafted_id = %s AND revision = %s AND state = 'drafting'",
@@ -1507,6 +1517,26 @@ async def _finish(
                 number,
             ),
         )
+        if claim is None or document is None or finished.rowcount != 1:
+            return None
+        return await claim(uow.conn, workflow_digest(document), uow.now)
+
+
+@dataclass(frozen=True)
+class Claimed:
+    """A new revision's simulation, claimed in its transaction and started after it."""
+
+    drafted_id: str
+    digest: str
+    document: Mapping[str, Any]
+    started_at: datetime
+
+
+def needs_nothing(plan: WorkflowPlan, sources: Sources) -> bool:
+    """No setting is still needed, by the count the card shows. Only then is it simulated,
+    since a blank would fail every case."""
+    needed = sum(s.mark == "needed" for s in settings_of(plan, sources))
+    return needed + len(strays(plan)) == 0
 
 
 @dataclass(frozen=True)

@@ -199,6 +199,7 @@ from platform_api.orchestration.platform_keys import KEY_FOR_TYPE, KEYS, KeySpec
 from platform_api.orchestration.run_gist import RunGist
 from platform_api.orchestration.runs import state_name
 from platform_api.orchestration.scenario_grades import WAIT_LIMIT_SECONDS
+from platform_api.orchestration.scenarios import ScenarioKind
 from platform_api.orchestration.schedule import (
     AT_PATTERN,
     Day,
@@ -324,6 +325,7 @@ __all__ = [
     "DIDNT_ANSWER",
     "SIMULATION_SECONDS",
     "WAIT_LIMIT_SECONDS",
+    "ScenarioKind",
     "NotSimulated",
     "Simulated",
     "SimulationClient",

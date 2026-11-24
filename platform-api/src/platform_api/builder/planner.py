@@ -12,7 +12,7 @@ import asyncio
 import logging
 import re
 import secrets
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Annotated, Final, Literal, Protocol, Self
@@ -102,10 +102,6 @@ from platform_api.wire import WireIn, WireModel
 
 log = logging.getLogger(__name__)
 
-SIMULATE: Final = "workflows.simulate"
-"""Simulation mode (ADR 0054). The registry declares it built. It needs the simulation n8n."""
-NO_SIMULATION: Final = "There is no simulation n8n here."
-SET_UP_SIMULATION: Final = "Ask whoever set up the platform to turn on simulation."
 ANSWER_LIMIT_SECONDS: Final = 35.0
 """The model gets 8 seconds for each of its calls in the runtime: the reading, the answer to a
 question about the person's data (ADR 0042), and at a dead end the free reply and its verifier
@@ -1114,10 +1110,12 @@ class PlannerFront:
         scores: TraceScores | None = None,
         pseudonym_key: str | None = None,
         drafted: DraftedWorkflows | None = None,
-        simulation: bool = False,
+        ready_here: Collection[str] = (),
     ) -> None:
         self._drafted = drafted
-        self._simulation = simulation
+        self._ready_here = frozenset(ready_here)
+        """The planned capabilities the platform turned on here, which read as Ready, by the same
+        rule the Planner's prompts follow."""
         self._scores = scores or NoTraceScores()
         self._pseudonym_key = pseudonym_key
         # Without the key, ids are signed with one this process makes, so a typed-again flag needs
@@ -1559,7 +1557,7 @@ class PlannerFront:
         uses = await self._cards_by_tool()
         return CapabilitiesView(
             capabilities=[
-                _capability(spec, checks, uses, self._simulation) for spec in registry.capabilities
+                _capability(spec, checks, uses, self._ready_here) for spec in registry.capabilities
             ],
             examples=[_example(e) for e in registry.examples],
         )
@@ -1604,28 +1602,28 @@ def _capability(
     spec: CapabilitySpec,
     checks: dict[ConnectionId, ConnectionCheck],
     uses: dict[str, list[str]],
-    simulation: bool = False,
+    ready_here: frozenset[str] = frozenset(),
 ) -> CapabilityView:
     own = checks.get(spec.connection) if spec.connection else None
     agents = list(dict.fromkeys(card for tool in spec.tools for card in uses.get(tool, [])))
     state: CapabilityState = spec.state
-    why = spec.why
+    why, cant, platform = spec.why, spec.cant, spec.platform
     fix = None
-    if spec.state == "ready":
+    if spec.state == "planned" and spec.id in ready_here:
+        state, why, cant, platform = "ready", None, None, True
+    if state == "ready":
         needed = [c for c in (own, checks.get("model") if spec.needs_model else None) if c]
         broken = next((c for c in needed if c.state not in ("working", "not_checked")), None)
         if broken is not None:
             state = "needs_setup" if broken.state == "not_set_up" else "down"
             why, fix = broken.problem, broken.fix
-        if spec.id == SIMULATE and not simulation:
-            state, why, fix = "needs_setup", NO_SIMULATION, SET_UP_SIMULATION
     return CapabilityView(
         id=spec.id,
         plain=spec.plain,
         kind=spec.kind,
         system=spec.system,
         state=state,
-        cant=spec.cant,
+        cant=cant,
         short=spec.short,
         instead=spec.instead,
         why=why,
@@ -1633,7 +1631,7 @@ def _capability(
         connection=spec.connection,
         last_ok_at=own.last_ok_at if own else None,
         needs_model=spec.needs_model,
-        platform=spec.platform,
+        platform=platform,
         focus=spec.focus,
         tools=list(spec.tools),
         agents=agents,

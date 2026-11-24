@@ -3347,17 +3347,6 @@
         "title": "CardView",
         "type": "object"
       },
-      "CaseKind": {
-        "enum": [
-          "happy_path",
-          "nothing_new",
-          "source_not_found",
-          "timeout",
-          "approver_says_no",
-          "odd_data"
-        ],
-        "type": "string"
-      },
       "ChangeLine": {
         "additionalProperties": false,
         "properties": {
@@ -5566,7 +5555,7 @@
         "description": "The newest revision tried on practice systems, by its digest (ADR 0054, PR 7). A result\nbelongs to one digest, so a changed version never shows an older one. A simulation is not a\nrun, and never stands in for the test run Turn on starts.",
         "properties": {
           "can_try_again": {
-            "description": "Whether this person can start it again now: an Operator, once it was not run or didn't finish, and only where there is a simulation n8n.",
+            "description": "Whether this person can start it now: an Operator, once it was never tried, was not run or didn't finish, and only where there is a simulation n8n.",
             "title": "Can Try Again",
             "type": "boolean"
           },
@@ -5622,7 +5611,7 @@
           },
           "state": {
             "$ref": "#/components/schemas/SimulationState",
-            "description": "unavailable: there is no simulation n8n here. running: it is being tried now. done: code graded each case. not_run: nothing was tried, with said. not_finished: it ran past its limit, so there is no result."
+            "description": "unavailable: there is no simulation n8n here. not_started: it was never tried. running: it is being tried now. done: code graded each case. not_run: nothing was tried, with said. not_finished: it ran past its limit, so there is no result."
           },
           "tried": {
             "description": "The cases that ran, leaving out those not tried.",
@@ -13132,6 +13121,17 @@
         "title": "SavedOut",
         "type": "object"
       },
+      "ScenarioKind": {
+        "enum": [
+          "happy_path",
+          "nothing_new",
+          "source_not_found",
+          "timeout",
+          "approver_says_no",
+          "odd_data"
+        ],
+        "type": "string"
+      },
       "ScheduleChangeView": {
         "additionalProperties": false,
         "properties": {
@@ -13764,7 +13764,7 @@
             "type": "string"
           },
           "kind": {
-            "$ref": "#/components/schemas/CaseKind"
+            "$ref": "#/components/schemas/ScenarioKind"
           },
           "note": {
             "anyOf": [
@@ -13802,6 +13802,7 @@
       "SimulationState": {
         "enum": [
           "unavailable",
+          "not_started",
           "running",
           "done",
           "not_run",

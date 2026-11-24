@@ -14,6 +14,8 @@ export const KIND_WORDS: Readonly<Record<SimulatedCaseView['kind'], string>> = {
 export const VERDICT_WORDS: Readonly<Record<SimulatedCaseView['verdict'], string>> = { passed: 'Passed', failed: 'Failed', not_tried: 'Not tried' }
 
 export const NOT_AVAILABLE = 'Simulation on practice systems isn’t available here.'
+export const NOT_STARTED = 'It hasn’t been tried on practice systems yet.'
+/** The running state's one wording, as platform-api's refusal says it too. */
 export const SIMULATING = 'Trying it on practice systems.'
 export const NOT_FINISHED = 'It didn’t finish on practice systems in time, so there is no result.'
 /** A pass never stands in for the real test run, so every result says what Turn on still does. */

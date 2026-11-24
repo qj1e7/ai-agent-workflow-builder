@@ -20,14 +20,13 @@ from platform_api.builder.workflow_report import (
     Words,
     quoted,
 )
-from platform_api.orchestration import DrafterFacts, SetUpDeclineReason
+from platform_api.orchestration import DrafterFacts, ScenarioKind, SetUpDeclineReason
 from platform_api.shared import UserId
 from platform_api.wire import WireIn, WireModel
 
 type DraftedState = Literal["drafting", "not_drafted", "draft", "waiting", "approved", "declined"]
-type SimulationState = Literal["unavailable", "running", "done", "not_run", "not_finished"]
-type CaseKind = Literal[
-    "happy_path", "nothing_new", "source_not_found", "timeout", "approver_says_no", "odd_data"
+type SimulationState = Literal[
+    "unavailable", "not_started", "running", "done", "not_run", "not_finished"
 ]
 
 
@@ -39,7 +38,7 @@ class SimulatedBlockView(WireModel):
 class SimulatedCaseView(WireModel):
     """One scenario of a simulation, as code graded it (ADR 0054, section 5)."""
 
-    kind: CaseKind
+    kind: ScenarioKind
     verdict: Literal["passed", "failed", "not_tried"] = Field(
         description="Code's grade, the verdict. not_tried: no block could play it, so it never "
         "ran and never counts as passed."
@@ -58,9 +57,9 @@ class DraftedSimulationView(WireModel):
     run, and never stands in for the test run Turn on starts."""
 
     state: SimulationState = Field(
-        description="unavailable: there is no simulation n8n here. running: it is being tried "
-        "now. done: code graded each case. not_run: nothing was tried, with said. not_finished: "
-        "it ran past its limit, so there is no result."
+        description="unavailable: there is no simulation n8n here. not_started: it was never "
+        "tried. running: it is being tried now. done: code graded each case. not_run: nothing "
+        "was tried, with said. not_finished: it ran past its limit, so there is no result."
     )
     started_at: datetime | None = Field(description="When this try began. Null when unavailable.")
     case_seconds: int = Field(description="The most each case may take to end.")
@@ -72,8 +71,8 @@ class DraftedSimulationView(WireModel):
     )
     said: str | None = Field(description="Why nothing was tried, in words to show.")
     can_try_again: bool = Field(
-        description="Whether this person can start it again now: an Operator, once it was not "
-        "run or didn't finish, and only where there is a simulation n8n."
+        description="Whether this person can start it now: an Operator, once it was never tried, "
+        "was not run or didn't finish, and only where there is a simulation n8n."
     )
 
 
